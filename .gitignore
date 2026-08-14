@@ -1,0 +1,21 @@
+# Application (Symfony)
+/app/vendor/
+/app/var/
+/app/.env.local
+/app/.env.*.local
+/app/public/bundles/
+/app/config/secrets/*/*.php
+
+# Docker / DB
+/docker/data/
+
+# OS / IDE
+Thumbs.db
+Desktop.ini
+.DS_Store
+.idea/
+.vscode/
+*.log
+
+# Node (outillage build artefacts éventuel)
+node_modules/

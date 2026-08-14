@@ -1,0 +1,539 @@
+<title>Backlog — User Stories (MVP)</title>
+<style>
+  :root{--bg:#f1f5f6;--surface:#fff;--surface-2:#e9f0f1;--ink:#12262d;--ink-soft:#4d626b;--ink-faint:#7a8d94;--line:#d6e0e2;--accent:#0d7d88;--accent-2:#094f57;--warm:#d9702f;--good:#2f9e68;--good-bg:#e4f3ea;--watch:#b07d00;--watch-bg:#f6eed6;--crit:#cc4634;--crit-bg:#f7e3df;--shadow:0 1px 2px rgba(18,38,45,.06),0 6px 20px rgba(18,38,45,.05)}
+  :root:not([data-theme="light"]){@media(prefers-color-scheme:dark){--bg:#0b1417;--surface:#121f24;--surface-2:#182a30;--ink:#e8eff1;--ink-soft:#a2b5bc;--ink-faint:#6f858d;--line:#253840;--accent:#37b4be;--accent-2:#7ad3db;--warm:#ef9459;--good:#46b884;--good-bg:#163027;--watch:#e0ad3d;--watch-bg:#322a12;--crit:#e86a58;--crit-bg:#341d19;--shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.28)}}
+  :root[data-theme="dark"]{--bg:#0b1417;--surface:#121f24;--surface-2:#182a30;--ink:#e8eff1;--ink-soft:#a2b5bc;--ink-faint:#6f858d;--line:#253840;--accent:#37b4be;--accent-2:#7ad3db;--warm:#ef9459;--good:#46b884;--good-bg:#163027;--watch:#e0ad3d;--watch-bg:#322a12;--crit:#e86a58;--crit-bg:#341d19;--shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.28)}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;line-height:1.55;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:980px;margin:0 auto;padding:0 20px 72px}
+  h1,h2,h3{margin:0;font-weight:700;letter-spacing:-.01em;text-wrap:balance}
+  .eyebrow{font-family:ui-monospace,Menlo,monospace;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);font-weight:600}
+  .hero{padding:40px 0 14px}
+  .hero h1{font-size:clamp(24px,3.6vw,36px);margin:12px 0 0}
+  .hero p{color:var(--ink-soft);max-width:66ch;margin:12px 0 0;font-size:16px}
+  .tabnav{position:sticky;top:0;z-index:5;display:flex;gap:4px;flex-wrap:wrap;padding:10px 0;margin-top:22px;background:var(--bg);border-bottom:1px solid var(--line)}
+  .tab{font-family:ui-monospace,Menlo,monospace;font-size:12.5px;border:1px solid transparent;background:transparent;color:var(--ink-soft);padding:7px 12px;border-radius:8px;cursor:pointer;font-weight:600}
+  .tab:hover{color:var(--ink);background:var(--surface-2)}
+  .tab[aria-selected="true"]{color:var(--accent-2);background:color-mix(in srgb,var(--accent) 14%,var(--surface));border-color:color-mix(in srgb,var(--accent) 30%,var(--line))}
+  .tab:disabled{opacity:.45;cursor:not-allowed}
+  .panel{padding-top:24px}
+  .panel[hidden]{display:none}
+  .sub-h{font-family:ui-monospace,Menlo,monospace;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-faint);font-weight:700;margin:26px 0 12px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+  .note{font-size:13px;color:var(--ink-soft);background:var(--surface-2);border:1px dashed var(--line);border-radius:9px;padding:12px 15px;margin-bottom:16px}
+  .note b{color:var(--ink)}
+  .us{border:1px solid var(--line);border-radius:10px;padding:13px 15px;margin-bottom:10px;background:var(--surface);box-shadow:var(--shadow)}
+  .us-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:7px}
+  .us-id{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--accent-2);font-weight:700;background:color-mix(in srgb,var(--accent) 12%,var(--surface));padding:2px 7px;border-radius:5px}
+  .us-t{font-weight:650;font-size:14.5px}
+  .us-sp{margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:11px;font-weight:700;color:var(--warm);border:1px solid color-mix(in srgb,var(--warm) 35%,var(--line));border-radius:999px;padding:2px 9px}
+  .us-story{font-size:13.5px;color:var(--ink-soft);margin:0 0 8px}
+  .us-story b{color:var(--ink);font-weight:600}
+  .us-ac{font-size:13px;color:var(--ink-soft)}
+  .us-ac b{color:var(--ink)}
+  .us-ac ul{margin:5px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:3px}
+  .us-ref{font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--ink-faint);margin-top:7px}
+  .badge{display:inline-flex;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;text-transform:uppercase;letter-spacing:.03em}
+  .badge.good{background:var(--good-bg);color:var(--good)}.badge.watch{background:var(--watch-bg);color:var(--watch)}.badge.crit{background:var(--crit-bg);color:var(--crit)}.badge.acc{background:color-mix(in srgb,var(--accent) 14%,var(--surface));color:var(--accent-2)}
+  footer{margin-top:36px;padding-top:18px;border-top:1px solid var(--line);color:var(--ink-faint);font-size:13px}
+  .themebtn{position:fixed;right:16px;bottom:16px;width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--ink-soft);cursor:pointer;box-shadow:var(--shadow);font-size:16px}
+</style>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Backlog de développement · MVP</div>
+    <h1>User Stories — MVP</h1>
+    <p>Découpage des lots du MVP (L0 → L7) en <b>user stories</b> prêtes à estimer et à prendre en sprint. Format « En tant que… je veux… afin de… » + critères d'acceptation + points (Fibonacci) + référence aux règles de gestion du cahier détaillé.</p>
+  </header>
+  <nav class="tabnav" role="tablist" aria-label="Lots">
+    <button class="tab" role="tab" id="t-l0" aria-controls="p-l0" aria-selected="true">L0 · Socle technique</button>
+    <button class="tab" role="tab" id="t-l1" aria-controls="p-l1" aria-selected="false">L1 · Offre &amp; Tarif</button>
+    <button class="tab" role="tab" id="t-l2" aria-controls="p-l2" aria-selected="false">L2 · Vente &amp; Caisse</button>
+    <button class="tab" role="tab" id="t-l3" aria-controls="p-l3" aria-selected="false">L3 · Contrôle d'accès</button>
+    <button class="tab" role="tab" id="t-l4" aria-controls="p-l4" aria-selected="false">L4 · Compta &amp; Régie</button>
+    <button class="tab" role="tab" id="t-l5" aria-controls="p-l5" aria-selected="false">L5 · CRM noyau</button>
+    <button class="tab" role="tab" id="t-l6" aria-controls="p-l6" aria-selected="false">L6 · Piscine</button>
+    <button class="tab" role="tab" id="t-l7" aria-controls="p-l7" aria-selected="false">L7 · Back-office &amp; Droits</button>
+    <button class="tab" role="tab" disabled>V1 / V2 à venir</button>
+  </nav>
+  
+  <section class="panel" id="p-l0" role="tabpanel" aria-labelledby="t-l0" hidden>
+<div class="sub-h">Lot L0 · Socle technique &amp; architecture — 11 user stories · 74 pts</div>
+<div class="note"><b>Objectif :</b> poser les fondations techniques réutilisables (API, sécurité, multi-entités, droits, RGPD, audit, CI/CD, UI, offline) sur lesquelles s'appuieront tous les modules métier. <b>Rôles :</b> Développeur/Système, Administrateur.</div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L0-01</span><span class="us-t">Contrat &amp; versioning de l'API REST cœur</span><span class="us-sp">8 pts</span></div>
+<p class="us-story"><b>En tant que</b> Développeur/Système, <b>je veux</b> une API REST versionnée avec un contrat documenté (OpenAPI), <b>afin de</b> garantir la stabilité des intégrations et l'évolutivité des modules métier.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Toutes les routes sont préfixées par une version (ex. /api/v1) ; une montée de version majeure n'altère pas le contrat existant.</li><li>Une spécification OpenAPI est générée et accessible en environnement de dev/recette.</li><li>Les réponses d'erreur suivent un format standard commun (code, message, détails).</li><li>Codes HTTP normalisés (200/201/400/401/403/404/409/422/500) vérifiés par tests d'intégration.</li></ul></div>
+<div class="us-ref">Réf : RG-M8-* · exigences non-fonctionnelles (interopérabilité) · dépendance socle de toutes les US métier</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L0-02</span><span class="us-t">Connexion utilisateur</span><span class="us-sp">5 pts</span></div>
+<p class="us-story"><b>En tant que</b> Administrateur, <b>je veux</b> me connecter avec identifiant et mot de passe via un écran de login sécurisé, <b>afin de</b> accéder à l'application de façon authentifiée.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Les mots de passe sont stockés hachés (algorithme fort, salage) et jamais en clair.</li><li>Un compte est verrouillé temporairement après N tentatives échouées.</li><li>La session expire après inactivité et se ferme sur déconnexion.</li><li>Une politique de complexité minimale du mot de passe est appliquée à la saisie.</li></ul></div>
+<div class="us-ref">Réf : écran Login · RG-M8-* (sécurité) · dépendance US-L0-05 (droits)</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L0-03</span><span class="us-t">Mot de passe oublié &amp; MFA</span><span class="us-sp">5 pts</span></div>
+<p class="us-story"><b>En tant que</b> Administrateur, <b>je veux</b> réinitialiser mon mot de passe par e-mail et activer une authentification à deux facteurs, <b>afin de</b> sécuriser l'accès et récupérer mon compte de façon autonome.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Le lien de réinitialisation est à usage unique et expire (durée bornée).</li><li>Le MFA (TOTP) peut être activé/désactivé par l'utilisateur et exigé par politique administrateur.</li><li>Une tentative de connexion MFA échouée est journalisée (voir US-L0-08).</li><li>Aucun message ne révèle l'existence ou non d'un compte pour une adresse donnée.</li></ul></div>
+<div class="us-ref">Réf : écran « Mot de passe oublié » / MFA · RG-M8-* · dépendance US-L0-02</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L0-04</span><span class="us-t">Modèle multi-entités Groupe › Région › Établissement › Espaces</span><span class="us-sp">8 pts</span></div>
+<p class="us-story"><b>En tant que</b> Développeur/Système, <b>je veux</b> un modèle hiérarchique d'entités (Groupe, Région, Établissement, Espaces), <b>afin de</b> supporter les organisations en régie, DSP et groupes multi-sites.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Chaque entité référence son parent ; l'intégrité de la hiérarchie est garantie en base.</li><li>Un Établissement contient un ou plusieurs Espaces ; suppression protégée si des données y sont rattachées.</li><li>Toute donnée métier est rattachable à un niveau d'entité (cloisonnement).</li><li>Un jeu de données de démonstration multi-sites est fourni et testé.</li></ul></div>
+<div class="us-ref">Réf : RG-M8-* (modèle organisationnel) · dépendance US-L0-05, US-L0-06</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L0-05</span><span class="us-t">Sélection de l'établissement actif</span><span class="us-sp">3 pts</span></div>
+<p class="us-story"><b>En tant que</b> Administrateur, <b>je veux</b> sélectionner l'établissement (et l'espace) actif dans lequel je travaille, <b>afin de</b> cadrer toutes mes actions au bon périmètre.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Un sélecteur affiche uniquement les établissements autorisés pour l'utilisateur.</li><li>Le contexte actif est conservé pendant la session et reflété dans l'en-tête.</li><li>Les données affichées sont filtrées par l'établissement actif.</li></ul></div>
+<div class="us-ref">Réf : écran En-tête / sélecteur · dépendance US-L0-04, US-L0-06</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L0-06</span><span class="us-t">Socle de droits : rôle → permission (module × action)</span><span class="us-sp">13 pts</span></div>
+<p class="us-story"><b>En tant que</b> Administrateur, <b>je veux</b> gérer des rôles associant des permissions par couple module × action, <b>afin de</b> contrôler finement ce que chaque utilisateur peut faire, par établissement.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Une permission est définie par un couple module × action (ex. billetterie×créer).</li><li>Un utilisateur peut avoir des rôles différents selon l'établissement.</li><li>Toute route API et action UI vérifie la permission ; un refus renvoie 403 et est journalisé.</li><li>Un rôle « Administrateur » par défaut et un rôle « lecture seule » sont fournis et testés.</li></ul></div>
+<div class="us-ref">Réf : RG-M8-* (droits) · dépendance US-L0-01, US-L0-04 · socle de tous les modules</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L0-07</span><span class="us-t">Hébergement France &amp; conformité RGPD</span><span class="us-sp">8 pts</span></div>
+<p class="us-story"><b>En tant que</b> Développeur/Système, <b>je veux</b> garantir la résidence des données en France avec chiffrement au repos et en transit, <b>afin de</b> respecter le RGPD et les exigences des collectivités.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>L'ensemble des données (base, sauvegardes, fichiers) est hébergé sur des infrastructures situées en France.</li><li>Le transport est chiffré (HTTPS/TLS) ; le chiffrement au repos est activé sur base et stockage.</li><li>Une base de registre des traitements et une procédure d'export/suppression des données personnelles existent.</li><li>Les secrets (clés, mots de passe techniques) ne sont pas versionnés en clair.</li></ul></div>
+<div class="us-ref">Réf : RG-M8-* · exigences non-fonctionnelles (RGPD, souveraineté)</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L0-08</span><span class="us-t">Journalisation &amp; piste d'audit inaltérable</span><span class="us-sp">8 pts</span></div>
+<p class="us-story"><b>En tant que</b> Administrateur, <b>je veux</b> une piste d'audit inaltérable des actions sensibles, <b>afin de</b> assurer la traçabilité et répondre aux contrôles (régie/DSP).</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Chaque action sensible (connexion, modification de droits, opérations financières) est journalisée avec horodatage, auteur, établissement.</li><li>Les entrées d'audit ne peuvent être ni modifiées ni supprimées via l'application.</li><li>Une consultation filtrable (date, utilisateur, type) est disponible pour l'Administrateur.</li><li>La rétention des journaux est paramétrable et documentée.</li></ul></div>
+<div class="us-ref">Réf : RG-M8-* (traçabilité) · dépendance US-L0-01, US-L0-06</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L0-09</span><span class="us-t">Environnements, CI/CD &amp; sauvegardes quotidiennes</span><span class="us-sp">8 pts</span></div>
+<p class="us-story"><b>En tant que</b> Développeur/Système, <b>je veux</b> des environnements séparés, un pipeline CI/CD et des sauvegardes quotidiennes, <b>afin de</b> livrer de façon fiable et pouvoir restaurer les données.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Environnements dev, recette et production isolés avec configuration dédiée.</li><li>Le pipeline exécute build, tests automatisés et déploiement ; un échec de tests bloque la mise en production.</li><li>Une sauvegarde complète est réalisée chaque jour et sa restauration est testée au moins une fois.</li><li>La procédure de restauration est documentée (RPO/RTO cibles définis).</li></ul></div>
+<div class="us-ref">Réf : exigences non-fonctionnelles (disponibilité, sauvegarde) · RG-M8-*</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L0-10</span><span class="us-t">Socle UI : design system, thème clair/sombre, responsive</span><span class="us-sp">5 pts</span></div>
+<p class="us-story"><b>En tant que</b> Développeur/Système, <b>je veux</b> un design system commun avec thème clair/sombre et affichage responsive, <b>afin de</b> assurer une cohérence visuelle et l'usage sur poste de caisse comme sur tablette.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Une bibliothèque de composants réutilisables (boutons, formulaires, tableaux, notifications) est disponible.</li><li>Les couleurs passent par des variables de thème ; le basculement clair/sombre est fonctionnel.</li><li>Les écrans s'adaptent aux résolutions poste fixe, tablette et petit écran.</li><li>Les composants respectent des règles d'accessibilité de base (contraste, focus clavier).</li></ul></div>
+<div class="us-ref">Réf : socle UI · dépendance de tous les écrans métier</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L0-11</span><span class="us-t">Mode hors-ligne &amp; file de synchronisation</span><span class="us-sp">3 pts</span></div>
+<p class="us-story"><b>En tant que</b> Développeur/Système, <b>je veux</b> un principe de fonctionnement hors-ligne avec file de synchronisation, <b>afin de</b> assurer la continuité du contrôle d'accès et de la caisse en cas de coupure réseau.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Les opérations critiques restent possibles hors-ligne et sont mises en file localement.</li><li>À la reconnexion, la file se synchronise automatiquement et signale les conflits.</li><li>L'état de connexion (en ligne / hors-ligne / synchro en cours) est visible dans l'interface.</li></ul></div>
+<div class="us-ref">Réf : exigences non-fonctionnelles (résilience) · dépendance US-L0-01</div></div>
+
+<footer>Récapitulatif : 11 user stories · 74 points · Lot L0 Socle technique &amp; architecture (fondations réutilisables pour l'ensemble des modules).</footer>
+</section>
+
+  <section class="panel" id="p-l1" role="tabpanel" aria-labelledby="t-l1" hidden><div class="sub-h">Lot L1 · M1 Offre &amp; Tarification — 11 user stories · 59 pts</div><div class="note"><b>Objectif</b> : permettre au métier de créer et faire évoluer toute l'offre (produits, tarifs, abonnements, cartes) sans intervention d'un développeur. · Rôles : Gestionnaire d'offre, Comptable.</div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L1-01</span><span class="us-t">Catalogue produits</span><span class="us-sp">5 pts</span></div>
+<p class="us-story"><b>En tant que</b> Gestionnaire d'offre, <b>je veux</b> une liste des produits avec recherche, filtres et actions de masse, <b>afin de</b> retrouver et gérer rapidement une offre volumineuse.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Recherche plein texte sur libellé et code produit, résultats sous 1 s.</li><li>Filtres cumulables : type, statut (brouillon/publié/archivé), catégorie, saison.</li><li>Sélection multiple + actions de masse : archiver, publier, changer de catégorie.</li><li>Colonnes triables (libellé, prix, statut, date de modification).</li></ul></div>
+<div class="us-ref">Réf : Écran « Catalogue » · dépend de US-L1-09 (statuts), US-L1-08 (catégories).</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L1-02</span><span class="us-t">Créer un produit piloté par le type</span><span class="us-sp">5 pts</span></div>
+<p class="us-story"><b>En tant que</b> Gestionnaire d'offre, <b>je veux</b> que le choix du type de produit pré-configure et masque les onglets inutiles, <b>afin de</b> ne saisir que les champs pertinents et éviter les erreurs.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Le type sélectionné (entrée simple, abonnement, carte…) applique RG-M1-02 : onglets affichés/masqués et valeurs par défaut.</li><li>Un onglet masqué n'expose ni ne conserve de saisie orpheline.</li><li>Le type n'est plus modifiable directement après enregistrement (voir US-L1-10).</li></ul></div>
+<div class="us-ref">Réf : RG-M1-02 · Écran « Fiche produit ».</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L1-03</span><span class="us-t">Grille tarifaire tarif × saison</span><span class="us-sp">8 pts</span></div>
+<p class="us-story"><b>En tant que</b> Gestionnaire d'offre, <b>je veux</b> saisir les prix dans une grille croisant types de tarifs et saisons, <b>afin de</b> fixer un prix précis pour chaque combinaison en une seule vue.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Grille éditable en lignes (tarifs) × colonnes (saisons) conforme à RG-M1-01.</li><li>Une case vide vaut « non commercialisé » et non « gratuit ».</li><li>Contrôle de cohérence : montant ≥ 0, chevauchement de saisons interdit.</li><li>Historisation : un prix modifié conserve sa valeur passée pour l'audit.</li></ul></div>
+<div class="us-ref">Réf : RG-M1-01 · dépend de US-L1-07 (référentiels).</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L1-04</span><span class="us-t">Quotient familial</span><span class="us-sp">5 pts</span></div>
+<p class="us-story"><b>En tant que</b> Gestionnaire d'offre, <b>je veux</b> définir des tranches de quotient familial associées à des tarifs, <b>afin de</b> proposer une tarification sociale automatique.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Création de tranches bornées (min–max) sans trou ni chevauchement.</li><li>Chaque tranche pointe vers un type de tarif de la grille.</li><li>Une valeur de QF donnée résout toujours vers une et une seule tranche.</li></ul></div>
+<div class="us-ref">Réf : RG-M1-01 · dépend de US-L1-03, US-L1-07.</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L1-05</span><span class="us-t">Formule d'abonnement à services inclus</span><span class="us-sp">8 pts</span></div>
+<p class="us-story"><b>En tant que</b> Gestionnaire d'offre, <b>je veux</b> composer un abonnement avec des services inclus limités par un quota sur semaine calendaire, <b>afin de</b> vendre des formules à droits périodiques maîtrisés.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Ajout de services inclus avec quota et unité conformes à RG-M1-12.</li><li>Le quota se réinitialise sur la semaine calendaire (lundi–dimanche), pas sur une fenêtre glissante.</li><li>Configuration de la durée de validité et des dates de début/fin de l'abonnement.</li><li>Simulation affichant les droits d'une semaine type avant publication.</li></ul></div>
+<div class="us-ref">Réf : RG-M1-12 · dépend de US-L1-02 (type abonnement).</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L1-06</span><span class="us-t">Carte multi-entrées à bonus</span><span class="us-sp">8 pts</span></div>
+<p class="us-story"><b>En tant que</b> Gestionnaire d'offre, <b>je veux</b> paramétrer une carte multi-entrées avec bonus (10=12) matérialisé par un stock de compostages, <b>afin de</b> vendre des carnets prépayés avec entrées offertes.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Saisie du nombre payé et du nombre total crédité (ex. 10 payées, 12 créditées) selon RG-M1-13.</li><li>Le stock de compostages initial vaut le total crédité, décrémenté à chaque passage.</li><li>Règles de validité (durée, date butoir) paramétrables.</li><li>Contrôle : total crédité ≥ total payé, valeurs entières &gt; 0.</li></ul></div>
+<div class="us-ref">Réf : RG-M1-13 · dépend de US-L1-02 (type carte).</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L1-07</span><span class="us-t">Référentiels tarifs / saisons / promotions</span><span class="us-sp">3 pts</span></div>
+<p class="us-story"><b>En tant que</b> Gestionnaire d'offre, <b>je veux</b> gérer les référentiels des types de tarifs, saisons et promotions, <b>afin de</b> disposer de valeurs cohérentes réutilisées par toute l'offre.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>CRUD sur chaque référentiel avec libellé unique.</li><li>Une saison porte des bornes de dates sans chevauchement avec une autre.</li><li>Un référentiel utilisé par un produit publié ne peut être supprimé (désactivation seule).</li></ul></div>
+<div class="us-ref">Réf : RG-M1-01 · Écran « Référentiels ».</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L1-08</span><span class="us-t">Plan de catégories multi-axes</span><span class="us-sp">5 pts</span></div>
+<p class="us-story"><b>En tant que</b> Comptable, <b>je veux</b> classer chaque produit selon plusieurs axes (marketing, comptable, rayon), <b>afin de</b> garantir un rattachement comptable fiable et des analyses croisées.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Trois axes indépendants disponibles : marketing, comptable, rayon.</li><li>L'axe comptable est obligatoire à la publication (RG-M1-05) ; les autres sont facultatifs.</li><li>Publication bloquée tant que la catégorie comptable n'est pas renseignée.</li></ul></div>
+<div class="us-ref">Réf : RG-M1-05 · dépend de US-L1-09 (conditions de publication).</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L1-09</span><span class="us-t">Cycle de vie brouillon → publié → archivé</span><span class="us-sp">5 pts</span></div>
+<p class="us-story"><b>En tant que</b> Gestionnaire d'offre, <b>je veux</b> faire évoluer un produit à travers les statuts brouillon, publié et archivé avec des conditions de publication, <b>afin de</b> ne mettre en vente que des offres complètes.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Transitions autorisées conformes à RG-M1-09 : brouillon→publié, publié→archivé ; pas de retour direct publié→brouillon.</li><li>La publication vérifie les conditions (au moins un prix valide, catégorie comptable renseignée) et liste les blocages.</li><li>Un produit archivé n'est plus vendable mais reste consultable et historisé.</li></ul></div>
+<div class="us-ref">Réf : RG-M1-09, RG-M1-05 · Écran « Fiche produit ».</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L1-10</span><span class="us-t">Conversion assistée de type</span><span class="us-sp">5 pts</span></div>
+<p class="us-story"><b>En tant que</b> Gestionnaire d'offre, <b>je veux</b> convertir un produit d'un type vers un autre via un assistant, <b>afin de</b> réutiliser une fiche existante sans la recréer et sans perte de données involontaire.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>L'assistant applique RG-M1-11 : mapping des champs conservés, ajoutés et abandonnés affiché avant validation.</li><li>Confirmation explicite listant les données qui seront perdues.</li><li>Conversion journalisée (ancien type, nouveau type, utilisateur, date).</li></ul></div>
+<div class="us-ref">Réf : RG-M1-11 · dépend de US-L1-02.</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L1-11</span><span class="us-t">Duplication de produit</span><span class="us-sp">2 pts</span></div>
+<p class="us-story"><b>En tant que</b> Gestionnaire d'offre, <b>je veux</b> dupliquer un produit existant, <b>afin de</b> créer rapidement une variante en repartant d'une base complète.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>La copie reprend type, tarifs et catégories ; le code produit est régénéré unique.</li><li>La copie est créée au statut brouillon quel que soit le statut de l'original.</li><li>Le libellé est suffixé (« – copie ») et modifiable immédiatement.</li></ul></div>
+<div class="us-ref">Réf : RG-M1-09 (statut initial) · dépend de US-L1-02.</div></div>
+
+<footer>Récap : 11 user stories · 59 points au total (Fibonacci).</footer></section>
+
+  <section class="panel" id="p-l2" role="tabpanel" aria-labelledby="t-l2" hidden><div class="sub-h">Lot L2 · M2 Vente &amp; Caisse — 12 user stories · 80 pts</div><div class="note"><b>Objectif :</b> encaisser au guichet dans une session conforme (NF525), du fond de caisse jusqu'à la clôture Z. · Rôles : Agent de caisse, Régisseur.</div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L2-01</span><span class="us-t">Ouvrir une session de caisse</span><span class="us-sp">5 pts</span></div>
+<p class="us-story"><b>En tant que</b> agent de caisse, <b>je veux</b> ouvrir une session sur un point de vente en saisissant le fond de caisse, le régisseur responsable et mon code, <b>afin de</b> commencer à encaisser dans un cadre traçable et rattaché à une régie.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>La session mémorise point de vente, opérateur, régisseur, fond de caisse initial, date/heure d'ouverture.</li><li>Aucune vente n'est possible tant qu'une session n'est pas ouverte (message bloquant).</li><li>Une seule session active par point de vente à un instant donné.</li><li>Le code opérateur/régisseur est validé avant ouverture.</li></ul></div>
+<div class="us-ref">Réf : écran Ouverture de session · dépendance M1 (référentiel points de vente/opérateurs)</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L2-02</span><span class="us-t">Écran de caisse (rayons, favoris, recherche, panier)</span><span class="us-sp">8 pts</span></div>
+<p class="us-story"><b>En tant que</b> agent de caisse, <b>je veux</b> un écran tactile avec rayons, favoris, recherche produit et panier en direct, <b>afin de</b> composer une vente rapidement sans erreur.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Navigation par rayons et par favoris paramétrables du point de vente.</li><li>Recherche produit par libellé, code ou code-barres avec résultats instantanés.</li><li>Le panier affiche lignes, quantités, total en temps réel et permet de modifier/supprimer une ligne.</li><li>Vider le panier demande une confirmation.</li></ul></div>
+<div class="us-ref">Réf : écran Caisse · dépendance M1 (catalogue produits/tarifs)</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L2-03</span><span class="us-t">Ajouter au panier (quantité, bénéficiaire, promotions)</span><span class="us-sp">5 pts</span></div>
+<p class="us-story"><b>En tant que</b> agent de caisse, <b>je veux</b> ajouter un produit avec quantité, bénéficiaire et promotions applicables, <b>afin de</b> vendre le bon tarif à la bonne personne.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>La quantité est modifiable ligne par ligne, minimum 1.</li><li>Un bénéficiaire peut être rattaché à une ligne quand le produit le requiert (ex. abonnement nominatif).</li><li>Les promotions éligibles s'appliquent automatiquement et sont visibles sur la ligne.</li><li>Le total recalcule immédiatement remises comprises.</li></ul></div>
+<div class="us-ref">Réf : écran Caisse · règles tarifaires/promotions M1</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L2-04</span><span class="us-t">Blocage d'un produit sans stock</span><span class="us-sp">2 pts</span></div>
+<p class="us-story"><b>En tant que</b> régisseur, <b>je veux</b> qu'un produit à stock épuisé ne puisse pas être vendu, <b>afin de</b> garantir la cohérence stock/vente.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Un produit géré en stock à quantité 0 est visuellement grisé et non ajoutable.</li><li>Une tentative d'ajout affiche un message explicite « stock épuisé ».</li><li>Les produits non gérés en stock ne sont jamais bloqués.</li></ul></div>
+<div class="us-ref">Réf : RG-M2-04</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L2-05</span><span class="us-t">Rattacher un client à la vente</span><span class="us-sp">3 pts</span></div>
+<p class="us-story"><b>En tant que</b> agent de caisse, <b>je veux</b> rechercher et rattacher un client à la vente, <b>afin de</b> tracer l'achat, appliquer ses droits et lui adresser son ticket.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Recherche client par nom, e-mail ou n° de compte, avec création rapide si absent.</li><li>Le client rattaché apparaît sur l'en-tête de la vente et sur le ticket.</li><li>Le rattachement est optionnel (vente comptoir anonyme possible).</li></ul></div>
+<div class="us-ref">Réf : écran Caisse · dépendance module Clients M1</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L2-06</span><span class="us-t">Paiement scindé multi-moyens &amp; rendu de monnaie</span><span class="us-sp">8 pts</span></div>
+<p class="us-story"><b>En tant que</b> agent de caisse, <b>je veux</b> encaisser un même panier avec plusieurs moyens de paiement jusqu'à reste dû = 0, <b>afin de</b> couvrir tous les cas d'encaissement.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Plusieurs lignes de règlement (espèces, CB, chèque, chèque-vacances…) s'additionnent jusqu'à reste = 0.</li><li>La vente n'est validée que lorsque le reste dû atteint 0.</li><li>Le rendu de monnaie n'est calculé et autorisé que pour les espèces.</li><li>Chaque moyen de paiement et son montant sont journalisés sur la vente.</li></ul></div>
+<div class="us-ref">Réf : RG-M2-03, RG-M2-05</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L2-07</span><span class="us-t">Intégration TPE (Ingenico / Nayax / PAX)</span><span class="us-sp">5 pts</span></div>
+<p class="us-story"><b>En tant que</b> agent de caisse, <b>je veux</b> déclencher le paiement CB directement sur le TPE connecté, <b>afin de</b> supprimer la ressaisie et les écarts de montant.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Le montant est envoyé automatiquement au TPE (Ingenico, Nayax ou PAX selon le point de vente).</li><li>Le résultat (accepté / refusé / annulé) revient dans la caisse et met à jour le règlement.</li><li>Un refus ou timeout n'ajoute aucun règlement et laisse le reste dû inchangé.</li><li>Le n° de transaction TPE est conservé sur la ligne de règlement.</li></ul></div>
+<div class="us-ref">Réf : RG-M2-03 · connecteurs TPE</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L2-08</span><span class="us-t">Ticket paramétrable, renvoi e-mail/SMS &amp; appairage support</span><span class="us-sp">5 pts</span></div>
+<p class="us-story"><b>En tant que</b> agent de caisse, <b>je veux</b> imprimer le ticket au-delà d'un seuil paramétrable, le renvoyer par e-mail/SMS et appairer le support d'accès à la validation, <b>afin de</b> remettre au client son justificatif et son droit d'entrée.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>L'impression du ticket se déclenche automatiquement au-dessus d'un montant paramétrable ; en dessous elle reste possible à la demande.</li><li>Le ticket peut être renvoyé par e-mail et/ou SMS au client rattaché.</li><li>À la validation, le support (carte/QR/bracelet) est appairé aux droits vendus et devient actif.</li><li>Un échec d'appairage bloque la remise du support et est journalisé.</li></ul></div>
+<div class="us-ref">Réf : décision actée (seuil impression) · écran Validation vente</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L2-09</span><span class="us-t">Remboursement, avoir &amp; annulation tracés</span><span class="us-sp">8 pts</span></div>
+<p class="us-story"><b>En tant que</b> régisseur, <b>je veux</b> rembourser, émettre un avoir ou annuler une vente selon mes droits et avec trace, <b>afin de</b> corriger une opération sans casser la piste d'audit.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Remboursement / avoir / annulation nécessitent un droit spécifique (contrôle du profil).</li><li>Chaque opération est horodatée, motivée et rattachée à l'opérateur et à la vente d'origine.</li><li>Une annulation après impression génère un avoir et invalide le billet/support émis.</li><li>Aucune ligne d'origine n'est supprimée : les mouvements sont ajoutés en contre-passation.</li></ul></div>
+<div class="us-ref">Réf : RG-M2-07</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L2-10</span><span class="us-t">Clôture Z &amp; état de régie</span><span class="us-sp">5 pts</span></div>
+<p class="us-story"><b>En tant que</b> régisseur, <b>je veux</b> clôturer la session par un Z produisant l'état de régie, <b>afin de</b> arrêter la caisse et justifier les recettes.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Le Z totalise ventes, moyens de paiement, remboursements/avoirs et écart de caisse théorique vs compté.</li><li>La clôture est irréversible et interdit toute vente sur la session close.</li><li>L'état de régie est archivé et ré-imprimable.</li><li>Le fond de caisse est reporté ou repris selon paramétrage.</li></ul></div>
+<div class="us-ref">Réf : RG-M2-06</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L2-11</span><span class="us-t">Conformité NF525 (inaltérabilité &amp; chaînage)</span><span class="us-sp">13 pts</span></div>
+<p class="us-story"><b>En tant que</b> direction/régisseur, <b>je veux</b> que chaque opération d'encaissement soit inaltérable et chaînée, <b>afin de</b> respecter l'obligation NF525.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Chaque ticket/opération porte une signature et est chaîné au précédent (rupture détectable).</li><li>Aucune modification ni suppression d'une opération validée n'est possible (corrections par contre-passation uniquement).</li><li>Clôtures périodiques (Z, mensuelle, annuelle) et journal inaltérable disponibles à l'archivage.</li><li>Un test de rupture de chaîne remonte une alerte de contrôle.</li></ul></div>
+<div class="us-ref">Réf : NF525 · dépendance US-L2-06/09/10</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L2-12</span><span class="us-t">Mode dégradé hors-ligne &amp; synchronisation</span><span class="us-sp">13 pts</span></div>
+<p class="us-story"><b>En tant que</b> agent de caisse, <b>je veux</b> continuer à encaisser hors-ligne puis synchroniser au retour du réseau, <b>afin de</b> ne jamais interrompre l'accueil du public.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>En perte de réseau, la caisse bascule en mode dégradé et poursuit les ventes localement.</li><li>Les opérations hors-ligne restent chaînées/inaltérables (conformité maintenue).</li><li>Au retour réseau, la synchronisation remonte les ventes sans doublon ni perte.</li><li>Un indicateur d'état (en ligne / dégradé / synchro en cours) est visible en permanence.</li></ul></div>
+<div class="us-ref">Réf : RG-M2-08 · dépendance US-L2-11</div></div>
+
+<footer>Récapitulatif : 12 user stories · 80 points.</footer></section>
+
+  <section class="panel" id="p-l3" role="tabpanel" aria-labelledby="t-l3" hidden><div class="sub-h">Lot L3 · Contrôle d'accès — 12 user stories · 78 pts</div><div class="note"><b>Objectif :</b> piloter le matériel d'accès, valider les entrées en temps réel, compter la fréquentation, gérer la jauge FMI et garantir la continuité de service hors-ligne. · <b>Rôles :</b> Administrateur, Agent d'accueil, Agent de contrôle, Système.</div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L3-01</span><span class="us-t">Configurer l'arbre Espace › Contrôleur › Équipement</span><span class="us-sp">8 pts</span></div>
+<p class="us-story"><b>En tant que</b> Administrateur, <b>je veux</b> modéliser la topologie Espace › Contrôleur › Équipement avec le sens de passage, l'anti-passback, les marges et le seuil FMI, <b>afin de</b> refléter fidèlement l'installation physique du site.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Chaque équipement porte un sens (entrée/sortie/bidirectionnel) et est rattaché à un contrôleur puis à un espace.</li><li>L'anti-passback est paramétrable au niveau espace et surchargeable au niveau équipement.</li><li>Les marges (avant/après validité) et le seuil FMI sont saisissables et persistés.</li><li>Une topologie incohérente (équipement orphelin, sens manquant) est bloquée à l'enregistrement.</li></ul></div>
+<div class="us-ref">Réf : RG-ACC · Écran « Topologie d'accès » · dépend de L1 (référentiel espaces)</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L3-02</span><span class="us-t">Appairer un support à un droit</span><span class="us-sp">5 pts</span></div>
+<p class="us-story"><b>En tant que</b> Agent d'accueil, <b>je veux</b> associer un support (QR, RFID, wallet) à un droit d'accès, <b>afin de</b> permettre au porteur de passer aux équipements autorisés.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>L'appairage relie un support à un droit issu de A-02 et enregistre le type de support.</li><li>Un même support ne peut être appairé qu'à un seul droit actif à la fois.</li><li>Un support déjà appairé ou blacklisté est refusé avec un message explicite.</li></ul></div>
+<div class="us-ref">Réf : A-02 · Écran « Appairage support » · dépend de US-L3-01</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L3-03</span><span class="us-t">Valider un passage au tourniquet</span><span class="us-sp">13 pts</span></div>
+<p class="us-story"><b>En tant que</b> Système, <b>je veux</b> valider un passage en vérifiant droit, marges et anti-passback puis décompter le crédit, <b>afin d'</b>autoriser ou refuser l'entrée en moins d'une seconde.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Un passage n'est accepté que si le droit est valide, dans les marges et sans violation d'anti-passback.</li><li>Le crédit (nombre d'entrées ou temps) est décompté atomiquement lors de l'acceptation.</li><li>Chaque décision (accepté/refusé) est horodatée et motivée.</li><li>La réponse au contrôleur est rendue en moins d'une seconde en conditions nominales.</li></ul></div>
+<div class="us-ref">Réf : RG-ACC · dépend de US-L3-01, US-L3-02</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L3-04</span><span class="us-t">Comptage non nominatif (sans support / bébé)</span><span class="us-sp">3 pts</span></div>
+<p class="us-story"><b>En tant que</b> Agent d'accueil, <b>je veux</b> enregistrer un passage sans support (accompagnant, bébé) comme comptage non nominatif, <b>afin de</b> compter la présence réelle sans rattacher de droit.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Un passage non nominatif incrémente la fréquentation et la jauge sans décompter de crédit.</li><li>Le motif (accompagnant, bébé, exonéré) est saisi et tracé.</li><li>Le passage apparaît distinctement dans le journal et la supervision.</li></ul></div>
+<div class="us-ref">Réf : RG-ACC · dépend de US-L3-03</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L3-05</span><span class="us-t">Jauge FMI : blocage ou alerte au seuil</span><span class="us-sp">8 pts</span></div>
+<p class="us-story"><b>En tant que</b> Administrateur, <b>je veux</b> gérer une jauge FMI distincte du cumul, déclenchant blocage ou alerte au seuil, <b>afin de</b> respecter la Fréquentation Maximale Instantanée réglementaire.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>La jauge FMI compte les présents (entrées moins sorties) indépendamment du cumul journalier.</li><li>Au seuil, le mode configuré s'applique : blocage des entrées ou alerte sans blocage.</li><li>La jauge décrémente à chaque sortie et se recale à l'ouverture/fermeture du site.</li></ul></div>
+<div class="us-ref">Réf : RG-ACC (seuil FMI) · dépend de US-L3-01, US-L3-03</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L3-06</span><span class="us-t">Supervision temps réel</span><span class="us-sp">8 pts</span></div>
+<p class="us-story"><b>En tant que</b> Agent de contrôle, <b>je veux</b> superviser en temps réel jauge, passages et incidents avec ouverture manuelle, <b>afin de</b> piloter l'affluence et intervenir immédiatement.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>La jauge FMI, le flux des passages et les incidents s'actualisent en direct.</li><li>Une ouverture manuelle d'équipement est possible, tracée et attribuée à l'agent.</li><li>Un incident (refus, matériel hors-ligne, seuil atteint) est signalé visuellement.</li></ul></div>
+<div class="us-ref">Réf : Écran « Supervision live » · dépend de US-L3-03, US-L3-05</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L3-07</span><span class="us-t">Fonctionnement hors-ligne avec liste de révocation</span><span class="us-sp">13 pts</span></div>
+<p class="us-story"><b>En tant que</b> Système, <b>je veux</b> continuer à valider les passages hors-ligne grâce à une liste de révocation embarquée, <b>afin de</b> garantir la continuité de service en cas de coupure réseau.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Le contrôleur embarque et applique une liste de révocation à jour hors-ligne.</li><li>Les passages hors-ligne sont validés localement et mémorisés pour rejeu.</li><li>Un support révoqué embarqué est refusé même sans réseau.</li><li>Le basculement online/offline est automatique et signalé en supervision.</li></ul></div>
+<div class="us-ref">Réf : RG-ACC · dépend de US-L3-03, US-L3-09</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L3-08</span><span class="us-t">Synchro : rejeu chronologique et recalage FMI</span><span class="us-sp">8 pts</span></div>
+<p class="us-story"><b>En tant que</b> Système, <b>je veux</b> rejouer chronologiquement les passages hors-ligne à la reconnexion et recaler la jauge FMI, <b>afin de</b> reconstituer un état serveur cohérent.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Les passages différés sont rejoués dans l'ordre horodaté d'origine.</li><li>Les crédits et la jauge FMI sont recalés à l'issue du rejeu.</li><li>Les conflits (double décompte, révocation postérieure) sont détectés et tracés.</li></ul></div>
+<div class="us-ref">Réf : RG-ACC · dépend de US-L3-05, US-L3-07</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L3-09</span><span class="us-t">Support perdu/volé : blocage et propagation</span><span class="us-sp">5 pts</span></div>
+<p class="us-story"><b>En tant que</b> Agent d'accueil, <b>je veux</b> déclarer un support perdu ou volé pour le bloquer côté serveur et propager la révocation à la synchro, <b>afin d'</b>empêcher tout usage frauduleux y compris hors-ligne.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Le blocage serveur est immédiat et refuse le support à tout passage online.</li><li>La révocation est ajoutée à la liste embarquée et propagée à la prochaine synchro.</li><li>La déclaration (motif, agent, horodatage) est tracée et réversible par un rôle habilité.</li></ul></div>
+<div class="us-ref">Réf : RG-ACC · dépend de US-L3-02, US-L3-07</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L3-10</span><span class="us-t">Carte épuisée : refus et proposition de recharge</span><span class="us-sp">3 pts</span></div>
+<p class="us-story"><b>En tant que</b> Client final, <b>je veux</b> être informé au passage que ma carte est épuisée avec une proposition de recharge, <b>afin de</b> régulariser rapidement mon accès.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Un crédit à zéro provoque un refus explicite « carte épuisée ».</li><li>Une proposition de recharge est présentée (orientation caisse ou lien) sans décompte.</li><li>L'événement est tracé au journal comme refus pour crédit insuffisant.</li></ul></div>
+<div class="us-ref">Réf : RG-ACC · dépend de US-L3-03</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L3-11</span><span class="us-t">Journal des passages horodaté</span><span class="us-sp">5 pts</span></div>
+<p class="us-story"><b>En tant que</b> Administrateur, <b>je veux</b> consulter un journal des passages horodaté et filtrable, <b>afin de</b> tracer, auditer et lever les litiges d'accès.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Chaque passage (accepté, refusé, non nominatif, manuel) est journalisé avec horodatage, équipement et motif.</li><li>Le journal est filtrable par période, espace, équipement et type d'événement.</li><li>Les entrées sont en lecture seule et exportables.</li></ul></div>
+<div class="us-ref">Réf : RG-ACC · dépend de US-L3-03, US-L3-04</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L3-12</span><span class="us-t">Sous-réseau et accès fédéré configurable</span><span class="us-sp">8 pts</span></div>
+<p class="us-story"><b>En tant que</b> Administrateur, <b>je veux</b> configurer un accès fédéré entre sous-réseaux d'espaces, <b>afin d'</b>autoriser un droit à franchir plusieurs sites ou zones selon les règles définies.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Un sous-réseau regroupe plusieurs espaces/contrôleurs partageant des règles d'accès.</li><li>La fédération est activable/désactivable et précise les droits éligibles.</li><li>Un passage fédéré applique la jauge FMI et l'anti-passback du sous-réseau concerné.</li></ul></div>
+<div class="us-ref">Réf : RG-ACC · dépend de US-L3-01, US-L3-03</div></div>
+
+<footer>Récap : 12 user stories · 78 pts</footer></section>
+
+  <section class="panel" id="p-l4" role="tabpanel" aria-labelledby="t-l4" hidden>
+<div class="sub-h">Lot L4 · M6 Compta &amp; Régie (profil régie) — 10 user stories · 63 pts</div>
+<div class="note"><b>Objectif :</b> comptabilité publique conforme, reconnaissance du revenu et exports légaux pour une régie de recettes directe. · Rôles : <b>Comptable</b>, <b>Régisseur</b>. SPIC/M57, TVA réduite et PCA public restent <span class="badge watch">paramétrables — à confirmer expert</span>.</div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L4-01</span><span class="us-t">Profil exploitant + plan de comptes</span><span class="us-sp">8 pts</span></div>
+<p class="us-story"><b>En tant que</b> Comptable, <b>je veux</b> paramétrer le profil d'exploitant (régie directe) et rattacher un plan de comptes normalisé (M57 ou M4 SPIC), <b>afin de</b> que toutes les écritures s'appuient sur un référentiel comptable conforme.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Sélection du référentiel M57 / M4 SPIC au niveau de l'exploitant, verrouillable après première clôture.</li><li>Import et édition du plan de comptes (n° compte, libellé, sens, actif/inactif).</li><li>Chaque article/famille de vente est mappable à un compte de produit ; un mapping incomplet bloque la génération d'écritures.</li><li>Piste d'audit horodatée sur toute modification du plan de comptes.</li></ul></div>
+<div class="us-ref">Réf : RG-COMPTA-01 · écran Paramétrage exploitant · dépend de M1 (référentiel articles).</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L4-02</span><span class="us-t">Module régie de recettes</span><span class="us-sp">8 pts</span></div>
+<p class="us-story"><b>En tant que</b> Régisseur, <b>je veux</b> configurer ma régie (modes de paiement autorisés, plafond d'encaisse, périodicité de versement, justificatifs), <b>afin de</b> respecter mon acte de nomination et l'arrêté de création de régie.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Paramétrage des modes autorisés (numéraire, CB, chèque, PayFiP) et d'un plafond d'encaisse déclenchant une alerte.</li><li>Suivi du fonds de caisse et du montant à verser au comptable public.</li><li>Génération d'un bordereau de versement daté avec pièces justificatives rattachées.</li><li>Un mode non autorisé est refusé à l'encaissement en caisse.</li></ul></div>
+<div class="us-ref">Réf : RG-REGIE-02 · écran Régie de recettes · dépend de M4 (caisse).</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L4-03</span><span class="us-t">Articulation PayFiP (encaissement en ligne)</span><span class="us-sp">5 pts</span></div>
+<p class="us-story"><b>En tant que</b> Régisseur, <b>je veux</b> encaisser les ventes en ligne via PayFiP et rapprocher automatiquement les paiements, <b>afin de</b> disposer d'un encaissement dématérialisé conforme DGFiP.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Redirection PayFiP avec référence de transaction stockée sur la vente.</li><li>Retour de paiement (OK/échec/annulé) traité et statut de la vente mis à jour.</li><li>Rapprochement automatique des encaissements PayFiP avec les ventes correspondantes.</li><li>Journalisation des transactions pour contrôle et rejeu en cas de retour manquant.</li></ul></div>
+<div class="us-ref">Réf : RG-PAYFIP-03 · écran Paiement en ligne · dépend de US-L4-02.</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L4-04</span><span class="us-t">Journal &amp; écritures générées par les ventes</span><span class="us-sp">8 pts</span></div>
+<p class="us-story"><b>En tant que</b> Comptable, <b>je veux</b> que chaque vente génère automatiquement les écritures comptables dans un journal, <b>afin de</b> tenir une comptabilité équilibrée sans ressaisie.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Toute vente validée produit une écriture équilibrée (débit encaissement / crédit produit + TVA).</li><li>Écritures regroupées par journal (ventes, encaissements) et par période.</li><li>Aucune écriture n'est modifiable après génération ; correction uniquement par écriture d'extourne.</li><li>Consultation et export du journal filtrables par date, journal et compte.</li></ul></div>
+<div class="us-ref">Réf : RG-COMPTA-04 · écran Journal comptable · dépend de US-L4-01.</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L4-05</span><span class="us-t">Assistant PCA (produits constatés d'avance)</span><span class="us-sp">8 pts</span></div>
+<p class="us-story"><b>En tant que</b> Comptable, <b>je veux</b> un assistant de reconnaissance du revenu (étalement d'abonnement dans le temps, à la consommation pour les cartes), <b>afin de</b> rattacher le produit au bon exercice via le compte 487.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Abonnement : étalement linéaire sur la durée, écritures 487 générées par période.</li><li>Carte multi-entrées : constatation du produit au fil des consommations (décompte des entrées).</li><li>Solde du 487 rapprochable avec le reste à consommer/à étaler à tout instant.</li><li>Méthode de reconnaissance <span class="badge watch">paramétrable, à confirmer expert</span> par type de produit.</li></ul></div>
+<div class="us-ref">Réf : RG-PCA-05 · écran Reconnaissance du revenu · dépend de US-L4-04 et M2 (abonnements/cartes).</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L4-06</span><span class="us-t">TVA multi-taux &amp; paniers mixtes</span><span class="us-sp">5 pts</span></div>
+<p class="us-story"><b>En tant que</b> Comptable, <b>je veux</b> gérer un taux de TVA par article et les paniers mixtes, <b>afin de</b> ventiler correctement la TVA collectée et produire les états par taux.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Taux de TVA affecté par article (dont taux réduit <span class="badge watch">paramétrable</span>).</li><li>Un panier mixte ventile automatiquement la TVA par taux ligne à ligne.</li><li>État de TVA collectée par taux et par période, avec base HT et montant de taxe.</li><li>Cohérence contrôlée : total TTC panier = somme des lignes ventilées.</li></ul></div>
+<div class="us-ref">Réf : RG-TVA-06 · écran États TVA · dépend de M1 (articles).</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L4-07</span><span class="us-t">Exports FEC, PES V2/Hélios &amp; états de régie</span><span class="us-sp">8 pts</span></div>
+<p class="us-story"><b>En tant que</b> Comptable, <b>je veux</b> générer les exports légaux (FEC, PES V2/Hélios) et les états de régie, <b>afin de</b> transmettre les données au comptable public et à l'administration fiscale.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Export FEC conforme au format légal (18 champs), sur une période choisie, contrôlé équilibré.</li><li>Génération de flux PES V2 / Hélios pour transmission au Trésor.</li><li>États de régie éditables (encaissements par mode, versements, restes).</li><li>Un export en échec de contrôle est bloqué avec liste des anomalies.</li></ul></div>
+<div class="us-ref">Réf : RG-EXPORT-07 · écran Exports légaux · dépend de US-L4-04.</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L4-08</span><span class="us-t">e-reporting agrégé au SIREN &amp; marquage ImpayeRegie</span><span class="us-sp">5 pts</span></div>
+<p class="us-story"><b>En tant que</b> Comptable, <b>je veux</b> produire l'e-reporting agrégé au niveau du SIREN et marquer les impayés de régie, <b>afin de</b> répondre aux obligations de facturation électronique et tracer les créances non recouvrées.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Agrégation des transactions B2C par période au niveau du SIREN de l'exploitant.</li><li>Ventilation par taux de TVA dans l'agrégat transmis.</li><li>Marquage <span class="badge crit">ImpayeRegie</span> sur les ventes non encaissées, exclues ou signalées dans l'e-reporting.</li><li>Traçabilité de l'état d'envoi (préparé / transmis / rejeté).</li></ul></div>
+<div class="us-ref">Réf : RG-EREPORT-08 · écran e-reporting · dépend de US-L4-06.</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L4-09</span><span class="us-t">Certification NF525 (préparation)</span><span class="us-sp">5 pts</span></div>
+<p class="us-story"><b>En tant que</b> Comptable, <b>je veux</b> que le logiciel garantisse inaltérabilité, sécurisation, conservation et archivage des données de caisse, <b>afin de</b> préparer la conformité NF525.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Chaînage inaltérable des transactions (signature/empreinte) détectant toute rupture.</li><li>Journalisation des événements (ouverture/clôture caisse, corrections) horodatée et non modifiable.</li><li>Archivage périodique avec restitution sur demande de contrôle.</li><li>Jeu d'archives de test généré et vérifiable <span class="badge watch">en préparation certification</span>.</li></ul></div>
+<div class="us-ref">Réf : RG-NF525-09 · écran Sécurisation caisse · dépend de US-L4-04.</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L4-10</span><span class="us-t">Clôture de période</span><span class="us-sp">3 pts</span></div>
+<p class="us-story"><b>En tant que</b> Comptable, <b>je veux</b> clôturer une période comptable, <b>afin de</b> figer les écritures et interdire toute modification rétroactive.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Contrôles pré-clôture (journal équilibré, versements de régie soldés, PCA à jour) bloquants si en échec.</li><li>Après clôture, aucune écriture antérieure n'est modifiable ; corrections sur période ouverte uniquement.</li><li>Édition d'un état de clôture récapitulatif (produits, TVA, encaissements, PCA).</li><li>Clôture réservée au rôle Comptable et tracée dans la piste d'audit.</li></ul></div>
+<div class="us-ref">Réf : RG-CLOTURE-10 · écran Clôture de période · dépend de US-L4-05 et US-L4-07.</div></div>
+
+<footer>Récap : 10 user stories · 63 points · Lot L4 M6 Compta &amp; Régie (profil régie directe).</footer>
+</section>
+
+  <section class="panel" id="p-l5" role="tabpanel" aria-labelledby="t-l5" hidden><div class="sub-h">Lot L5 · M4 CRM noyau — 10 user stories · 58 pts</div><div class="note"><b>Objectif :</b> constituer une fiche client unique, enrichie automatiquement à chaque vente, avec familles (payeur ≠ bénéficiaire), porte-monnaie virtuel (PMV) et conformité RGPD native. · <b>Rôles :</b> Agent d'accueil/caisse, Client final, Comptable, Administrateur.</div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L5-01</span><span class="us-t">Rechercher & lister les clients</span><span class="us-sp">5 pts</span></div>
+<p class="us-story"><b>En tant que</b> Agent d'accueil, <b>je veux</b> rechercher un client par nom, e-mail, téléphone ou n° de carte et filtrer la liste par segments simples (actif/inactif, avec PMV, mineur/majeur), <b>afin de</b> retrouver la bonne fiche en quelques secondes au guichet.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Recherche multi-critères tolérante à la casse et aux accents, résultats paginés.</li><li>Filtres par segment combinables, compteur de résultats affiché.</li><li>Clic sur une ligne ouvre la fiche 360° (US-L5-02).</li><li>Aucun doublon masqué : les fiches candidates à fusion restent visibles.</li></ul></div>
+<div class="us-ref">Réf : écran « Clients » · dépend de US-L5-02</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L5-02</span><span class="us-t">Fiche client 360° enrichie automatiquement</span><span class="us-sp">8 pts</span></div>
+<p class="us-story"><b>En tant que</b> Agent d'accueil, <b>je veux</b> une fiche client unique enrichie automatiquement à chaque vente (coordonnées, historique d'achats, PMV, famille, consentements), <b>afin de</b> disposer d'une vue complète sans ressaisie.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Chaque encaissement M2 rattaché à un client met à jour son historique et ses agrégats (CA, dernière visite).</li><li>Les blocs Coordonnées, Achats, PMV, Famille et RGPD sont visibles sur un seul écran.</li><li>Enrichissement conforme à la RG-M4-14 (règles de complétion/priorité des champs).</li><li>Toute modification est horodatée et attribuée à un utilisateur.</li></ul></div>
+<div class="us-ref">Réf : RG-M4-14 · écran « Fiche client » · dépend du module M2</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L5-03</span><span class="us-t">Gérer une famille (payeur ≠ bénéficiaire)</span><span class="us-sp">8 pts</span></div>
+<p class="us-story"><b>En tant que</b> Agent d'accueil, <b>je veux</b> constituer une famille avec ses membres, désigner un payeur distinct des bénéficiaires et gérer les autorisations, <b>afin de</b> permettre à un parent de payer et d'autoriser les prestations de ses enfants.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Un membre peut être payeur pour un ou plusieurs bénéficiaires du foyer.</li><li>Ajout/retrait d'un membre tracé et réversible.</li><li>Les autorisations (ex. entrée seul, activité encadrée) sont portées par bénéficiaire.</li><li>Un même client ne peut appartenir à deux familles actives sans alerte.</li></ul></div>
+<div class="us-ref">Réf : écran « Famille » · dépend de US-L5-02</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L5-04</span><span class="us-t">PMV — recharge, solde & échéance</span><span class="us-sp">5 pts</span></div>
+<p class="us-story"><b>En tant que</b> Client final, <b>je veux</b> disposer d'un porte-monnaie virtuel que je peux recharger et dont je consulte le solde et l'échéance, <b>afin de</b> prépayer mes entrées et suivre mon crédit.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Recharge crédite le solde et journalise le mouvement (montant, date, canal).</li><li>Chaque PMV porte une date d'échéance calculée selon le paramétrage établissement.</li><li>Solde et échéance affichés sur la fiche client et le ticket de recharge.</li><li>Un relevé des mouvements est consultable et exportable.</li></ul></div>
+<div class="us-ref">Réf : écran « PMV » · dépend de US-L5-02</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L5-05</span><span class="us-t">PMV — paiement en caisse, solde négatif interdit</span><span class="us-sp">5 pts</span></div>
+<p class="us-story"><b>En tant que</b> Agent de caisse, <b>je veux</b> régler une vente M2 par le PMV du client tout en interdisant tout solde négatif, <b>afin de</b> sécuriser l'encaissement sans avance de crédit.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Le PMV apparaît comme moyen de paiement M2 avec le solde disponible.</li><li>Un débit supérieur au solde est refusé ; paiement partiel + complément autre moyen possible.</li><li>Un PMV expiré n'est pas proposé au paiement.</li><li>Chaque débit est réversible via annulation de vente et re-crédite le solde.</li></ul></div>
+<div class="us-ref">Réf : écran « Caisse M2 » · dépend de US-L5-04</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L5-06</span><span class="us-t">Recharge d'un PMV expiré — paramétrable</span><span class="us-sp">3 pts</span></div>
+<p class="us-story"><b>En tant que</b> Administrateur, <b>je veux</b> paramétrer par établissement si la recharge d'un PMV expiré est autorisée (et sa règle de réactivation), <b>afin de</b> respecter la politique commerciale locale.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Réglage établissement : recharge d'un PMV expiré autorisée / interdite.</li><li>Si autorisée, la recharge réactive le PMV avec une nouvelle échéance calculée.</li><li>Si interdite, la caisse bloque la recharge et affiche le motif.</li><li>Le comportement retenu est journalisé au niveau du mouvement.</li></ul></div>
+<div class="us-ref">Réf : décision produit · paramétrage établissement · dépend de US-L5-04</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L5-07</span><span class="us-t">Solde résiduel à l'expiration — paramétrable</span><span class="us-sp">5 pts</span></div>
+<p class="us-story"><b>En tant que</b> Comptable, <b>je veux</b> paramétrer par établissement le traitement du solde résiduel à l'expiration d'un PMV (conservation, remise à zéro, provision), <b>afin de</b> traiter comptablement les crédits non consommés.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Option par établissement : solde conservé, annulé ou passé en produit à l'expiration.</li><li>Le traitement s'exécute automatiquement à la date d'échéance et génère une écriture traçable.</li><li>Le mouvement d'expiration est daté, motivé et exportable en comptabilité.</li><li>Un solde annulé reste consultable dans l'historique (non supprimé).</li></ul></div>
+<div class="us-ref">Réf : décision produit · paramétrage établissement · dépend de US-L5-04</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L5-08</span><span class="us-t">Fusion de doublons tracée & réversible</span><span class="us-sp">8 pts</span></div>
+<p class="us-story"><b>En tant que</b> Agent d'accueil, <b>je veux</b> fusionner deux fiches clients en doublon de façon tracée et réversible, <b>afin de</b> consolider l'historique sans perte de données.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Prévisualisation des champs conservés (fiche maître) avant validation.</li><li>Historiques d'achats, PMV et consentements sont rattachés à la fiche maître.</li><li>La fusion est journalisée et annulable (restauration des deux fiches d'origine).</li><li>Deux fiches ne sont fusionnables que par un utilisateur habilité.</li></ul></div>
+<div class="us-ref">Réf : écran « Fusion doublons » · dépend de US-L5-02</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L5-09</span><span class="us-t">Consentements RGPD par canal & droit à l'effacement</span><span class="us-sp">8 pts</span></div>
+<p class="us-story"><b>En tant que</b> Client final, <b>je veux</b> gérer mes consentements par canal (e-mail, SMS, courrier) et exercer mon droit à l'effacement/anonymisation, <b>afin de</b> maîtriser l'usage de mes données personnelles.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Consentement recueilli et révocable par canal, avec date et source horodatées.</li><li>Une demande d'effacement anonymise la fiche tout en préservant les obligations comptables/légales.</li><li>Les canaux non consentis sont exclus des envois par le système.</li><li>L'historique des consentements est conservé à des fins de preuve.</li></ul></div>
+<div class="us-ref">Réf : RGPD · écran « Consentements » · dépend de US-L5-02</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L5-10</span><span class="us-t">Passage à la majorité → renouvellement du consentement</span><span class="us-sp">3 pts</span></div>
+<p class="us-story"><b>En tant que</b> Administrateur, <b>je veux</b> qu'au passage à la majorité d'un bénéficiaire le consentement soit invalidé et un renouvellement demandé, <b>afin de</b> recueillir le consentement propre du client devenu majeur.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>À la date de majorité, les consentements portés par le représentant passent en « à renouveler ».</li><li>Une relance de renouvellement est déclenchée sur les canaux autorisés.</li><li>Tant que le renouvellement n'est pas obtenu, les envois non essentiels sont suspendus.</li><li>Le changement d'état et sa cause (majorité) sont journalisés.</li></ul></div>
+<div class="us-ref">Réf : RGPD · dépend de US-L5-03 et US-L5-09</div></div>
+
+<footer>Récap : 10 user stories · 58 pts (Fibonacci) — CRM noyau : fiche 360° auto-enrichie, familles payeur ≠ bénéficiaire, PMV paramétrable par établissement, fusion réversible et conformité RGPD.</footer></section>
+
+  <section class="panel" id="p-l6" role="tabpanel" aria-labelledby="t-l6" hidden>
+<div class="sub-h">Lot L6 · Verticale Piscine — 10 user stories · 55 pts</div>
+<div class="note">Configurer le socle standard pour un établissement aquatique et couvrir ses spécificités réglementaires (FMI/POSS), organisationnelles (lignes d'eau, créneaux mutualisés, encadrement) et matérielles (casiers connectés, RFID étanche). <b>Rôles :</b> Gestionnaire d'offre, Agent d'accueil/caisse, Encadrant (MNS/BNSSA), Système.</div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L6-01</span><span class="us-t">Offre piscine type (paramétrage)</span><span class="us-sp">5 pts</span></div>
+<p class="us-story"><b>En tant que</b> Gestionnaire d'offre, <b>je veux</b> instancier un catalogue piscine type (entrée unitaire adulte/enfant, carte 10 entrées, abonnements Gold et Classique, cours), <b>afin de</b> mettre l'établissement en vente sans repartir de zéro.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Un modèle « piscine type » génère les produits entrées, carte 10, abo Gold/Classique et cours en un clic.</li><li>Chaque produit reste éditable (tarif, TVA, validité, quotas) sans casser le modèle.</li><li>La carte 10 décrémente un solde à chaque passage ; l'abonnement contrôle une période de validité.</li><li>Le catalogue généré est publiable et achetable en caisse et en ligne.</li></ul></div>
+<div class="us-ref">Réf : RG-PISC (catalogue type), socle L1 catalogue produits · écran « Nouvelle offre »</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L6-02</span><span class="us-t">FMI/POSS — blocage & régulation sortie=entrée</span><span class="us-sp">8 pts</span></div>
+<p class="us-story"><b>En tant que</b> Encadrant MNS, <b>je veux</b> que la Fréquentation Maximale Instantanée (FMI/POSS) bloque toute nouvelle entrée à l'atteinte du seuil et rétablisse une place à chaque sortie, <b>afin de</b> respecter la réglementation de sécurité des bassins.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Un compteur temps réel des présents par établissement est maintenu (entrée +1, sortie −1).</li><li>Au seuil FMI atteint, tout scan d'entrée est refusé avec message explicite au contrôle.</li><li>La règle « une sortie = une entrée » libère exactement une place à chaque sortie validée.</li><li>Le seuil FMI est paramétrable par établissement et journalisé (qui, quand, valeur).</li></ul></div>
+<div class="us-ref">Réf : RG-PISC (POSS/FMI), L5 contrôle d'accès · dépend US-L6-08</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L6-03</span><span class="us-t">Pré-alerte FMI à X% & priorité réservations</span><span class="us-sp">5 pts</span></div>
+<p class="us-story"><b>En tant que</b> Agent d'accueil, <b>je veux</b> être pré-alerté quand la fréquentation atteint X% de la FMI et voir les réservations prioritaires protégées, <b>afin de</b> réguler les entrées avant la saturation.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Un seuil de pré-alerte (X%, ex. 80%) est paramétrable et déclenche un signal visible au poste.</li><li>Les places correspondant aux réservations à venir sont réservées et non attribuables aux entrées libres.</li><li>Le tableau de bord affiche présents / FMI / places réservées restantes en temps réel.</li></ul></div>
+<div class="us-ref">Réf : RG-PISC (régulation), module réservation · dépend US-L6-02</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L6-04</span><span class="us-t">Encadrant qualifié requis selon activité</span><span class="us-sp">5 pts</span></div>
+<p class="us-story"><b>En tant que</b> Gestionnaire d'offre, <b>je veux</b> exiger la présence d'un encadrant qualifié (MNS/BNSSA) selon l'activité, <b>afin de</b> ne pas ouvrir un créneau surveillé sans surveillance conforme.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Chaque activité/créneau porte une exigence de qualification (MNS, BNSSA, ou aucune).</li><li>L'ouverture ou la validation d'un créneau est bloquée si aucun encadrant qualifié n'est affecté.</li><li>Les qualifications et leur date de validité sont gérées par agent ; une qualification expirée n'est plus prise en compte.</li></ul></div>
+<div class="us-ref">Réf : RG-PISC (encadrement), socle RH/agents · écran « Affectation créneau »</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L6-05</span><span class="us-t">Lignes d'eau & capacité par bassin</span><span class="us-sp">8 pts</span></div>
+<p class="us-story"><b>En tant que</b> Gestionnaire d'offre, <b>je veux</b> réserver des lignes d'eau et tenir un compteur de capacité par bassin en plus de la séance, <b>afin de</b> gérer finement l'occupation de chaque plan d'eau.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>L'établissement se décompose en bassins, chacun avec un nombre de lignes et une capacité propre.</li><li>Une réservation peut bloquer une ou plusieurs lignes d'eau sur un créneau donné.</li><li>Le compteur de capacité par bassin est distinct du compteur de séance et de la FMI globale.</li><li>Une réservation dépassant les lignes ou la capacité disponibles est refusée.</li></ul></div>
+<div class="us-ref">Réf : RG-PISC (bassins/lignes) · dépend US-L6-02 · écran « Plan des bassins »</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L6-06</span><span class="us-t">Créneaux publics multiples sur lignes distinctes</span><span class="us-sp">5 pts</span></div>
+<p class="us-story"><b>En tant que</b> Gestionnaire d'offre, <b>je veux</b> configurer plusieurs publics simultanés (grand public, scolaires, clubs) sur des lignes distinctes du même créneau, <b>afin de</b> mutualiser le bassin entre usages.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Un même créneau horaire peut porter plusieurs publics affectés chacun à des lignes précises.</li><li>Une ligne ne peut être affectée qu'à un seul public à un instant donné (pas de chevauchement).</li><li>Chaque public a sa propre jauge, indépendante des autres publics du créneau.</li></ul></div>
+<div class="us-ref">Réf : RG-PISC (créneaux mutualisés) · dépend US-L6-05</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L6-07</span><span class="us-t">Jauge grand public au prorata des lignes club</span><span class="us-sp">5 pts</span></div>
+<p class="us-story"><b>En tant que</b> Système, <b>je veux</b> réduire automatiquement la jauge grand public au prorata des lignes occupées par un club, <b>afin de</b> refléter la surface d'eau réellement disponible.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>La jauge grand public d'un créneau se recalcule dès qu'un club réserve/libère des lignes du bassin.</li><li>Le prorata suit une règle paramétrable (ex. capacité restante = capacité × lignes libres / lignes totales).</li><li>La jauge recalculée s'applique en temps réel à la vente en ligne et au contrôle d'accès.</li></ul></div>
+<div class="us-ref">Réf : RG-PISC (prorata lignes) · dépend US-L6-05, US-L6-06</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L6-08</span><span class="us-t">Bébés & accompagnants comptés dans la FMI</span><span class="us-sp">3 pts</span></div>
+<p class="us-story"><b>En tant que</b> Agent d'accueil, <b>je veux</b> que les bébés et accompagnants soient comptabilisés dans la FMI même sans billet payant, <b>afin de</b> que le compteur reflète le nombre réel de personnes présentes.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Les catégories bébé et accompagnant sont enregistrées à l'entrée même si gratuites.</li><li>Chaque personne présente, payante ou non, incrémente le compteur FMI.</li><li>La sortie d'un bébé/accompagnant décrémente le compteur au même titre qu'un entrant payant.</li></ul></div>
+<div class="us-ref">Réf : RG-PISC (comptage réel) · dépend US-L6-02</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L6-09</span><span class="us-t">Casiers connectés (option bracelet)</span><span class="us-sp">8 pts</span></div>
+<p class="us-story"><b>En tant que</b> Agent d'accueil, <b>je veux</b> associer un bracelet servant à la fois d'accès et d'ouverture de casier, avec caution, relance et forçage, <b>afin de</b> gérer les vestiaires connectés en option.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Un bracelet peut être lié à un casier ; le même support ouvre l'accès et le casier attribué.</li><li>Une caution est encaissée à l'attribution et libérée à la restitution du bracelet/casier.</li><li>Un casier non restitué déclenche une relance et un état « en retard » suivi à l'accueil.</li><li>Un agent habilité peut forcer l'ouverture d'un casier, action journalisée (agent, motif, horodatage).</li></ul></div>
+<div class="us-ref">Réf : RG-PISC (casiers connectés), socle caution/dépôt · dépend US-L6-10</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L6-10</span><span class="us-t">Support bracelet RFID étanche</span><span class="us-sp">3 pts</span></div>
+<p class="us-story"><b>En tant que</b> Système, <b>je veux</b> prendre en charge le bracelet RFID étanche comme support d'accès en milieu humide, <b>afin de</b> permettre le contrôle et les casiers sans papier ni QR fragile.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Un bracelet RFID peut être encodé et rattaché à un titre/client puis lu au contrôle d'accès.</li><li>La lecture RFID fonctionne aux points d'accès et casiers avec un temps de réponse acceptable en usage réel.</li><li>Un bracelet peut être désactivé/réattribué et son historique de rattachement est tracé.</li></ul></div>
+<div class="us-ref">Réf : RG-PISC (support RFID étanche), L5 contrôle d'accès · pré-requis US-L6-09</div></div>
+
+<footer>Lot L6 · Verticale Piscine : 10 user stories · 55 pts au total.</footer>
+</section>
+
+  <section class="panel" id="p-l7" role="tabpanel" aria-labelledby="t-l7" hidden>
+<div class="sub-h">Lot L7 · Back-office unifié + M8 Droits — 9 user stories · 55 pts</div>
+<div class="note"><b>Objectif :</b> une seule application admin + caisse dont l'UI s'adapte aux droits (masquer plutôt que désactiver), avec gestion fine des utilisateurs, rôles, entités et audit. · <b>Rôles :</b> Administrateur, Agent d'accueil/caisse, Régisseur, Direction, tous les rôles porteurs de droits.</div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L7-01</span><span class="us-t">Navigation unifiée back-office (bascule admin ↔ caisse)</span><span class="us-sp">5 pts</span></div>
+<p class="us-story"><b>En tant que</b> Administrateur cumulant des fonctions de caisse, <b>je veux</b> basculer entre le mode administration et le mode caisse sans changer d'application ni me reconnecter, <b>afin de</b> travailler dans un environnement unique et cohérent.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Un sélecteur de mode (admin/caisse) est visible en permanence et conserve la session active.</li><li>La bascule est possible uniquement vers les modes autorisés par les droits de l'utilisateur.</li><li>Le mode actif est mémorisé au rechargement de la page.</li><li>Aucune ressaisie d'identifiant n'est requise lors du changement de mode.</li></ul></div>
+<div class="us-ref">Réf : RG-M8 · Écran shell back-office · dépend de M8 authentification</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L7-02</span><span class="us-t">UI adaptative aux droits (masquer, pas seulement désactiver)</span><span class="us-sp">8 pts</span></div>
+<p class="us-story"><b>En tant que</b> utilisateur du back-office, <b>je veux</b> que l'interface n'affiche que les modules, menus et actions qui me sont autorisés, <b>afin de</b> ne pas être exposé à des fonctions interdites ni induit en erreur.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Les éléments non autorisés sont masqués (retirés du DOM), pas seulement grisés (RG-M8-33).</li><li>Un accès direct par URL à une fonction interdite renvoie un refus contrôlé (403), sans fuite d'information.</li><li>Le rendu du menu est recalculé à chaque changement de rôle ou d'établissement.</li></ul></div>
+<div class="us-ref">Réf : RG-M8-33 · dépend de US-L7-04 (rôles &amp; permissions)</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L7-03</span><span class="us-t">Gérer les utilisateurs (invitation, statut, MFA imposé)</span><span class="us-sp">5 pts</span></div>
+<p class="us-story"><b>En tant que</b> Administrateur, <b>je veux</b> inviter des utilisateurs, gérer leur statut (actif/suspendu) et imposer le MFA aux rôles à privilèges, <b>afin de</b> maîtriser les accès et sécuriser les comptes sensibles.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>L'invitation se fait par e-mail avec un lien à durée de validité limitée.</li><li>Un utilisateur suspendu perd immédiatement l'accès à toutes ses sessions.</li><li>Les rôles à privilèges ne peuvent être activés sans MFA configuré.</li><li>La liste affiche le statut, le dernier accès et l'état du MFA.</li></ul></div>
+<div class="us-ref">Réf : RG-M8 · Écran gestion utilisateurs</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L7-04</span><span class="us-t">Rôles &amp; permissions (matrice module × action, héritage, multi-établissement)</span><span class="us-sp">13 pts</span></div>
+<p class="us-story"><b>En tant que</b> Administrateur, <b>je veux</b> définir des rôles via une matrice module × action avec héritage par niveau, et affecter à un même utilisateur des rôles différents selon l'établissement, <b>afin de</b> modéliser précisément les responsabilités de l'organisation.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Chaque permission est une paire module × action activable/désactivable dans la matrice.</li><li>L'héritage par niveau propage les droits du niveau parent vers l'enfant, avec surcharge possible.</li><li>Un utilisateur peut porter des rôles distincts par établissement, appliqués selon le contexte actif.</li><li>Toute modification de rôle est versionnée et tracée.</li></ul></div>
+<div class="us-ref">Réf : RG-M8 · dépend de US-L7-06 (entités &amp; établissements)</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L7-05</span><span class="us-t">Aperçu de l'UI résultante d'un rôle</span><span class="us-sp">5 pts</span></div>
+<p class="us-story"><b>En tant que</b> Administrateur, <b>je veux</b> prévisualiser l'interface telle qu'un rôle donné la verra, <b>afin de</b> valider la configuration des droits avant de l'attribuer.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>La sélection d'un rôle et d'un établissement affiche les menus et actions réellement visibles.</li><li>L'aperçu applique les mêmes règles de masquage que l'UI de production (RG-M8-33).</li><li>Le mode aperçu est en lecture seule et n'exécute aucune action réelle.</li></ul></div>
+<div class="us-ref">Réf : RG-M8-33 · dépend de US-L7-02 et US-L7-04</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L7-06</span><span class="us-t">Gérer les entités &amp; établissements (arbre, exploitant, points de vente)</span><span class="us-sp">8 pts</span></div>
+<p class="us-story"><b>En tant que</b> Administrateur, <b>je veux</b> gérer l'arborescence des entités et établissements, le profil de l'exploitant et les points de vente/caisses, <b>afin de</b> refléter la structure réelle (régie, DSP, groupes) et rattacher les droits au bon niveau.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>L'arbre supporte plusieurs niveaux (entité → établissement → point de vente/caisse).</li><li>Chaque établissement porte un profil exploitant (type de gestion : régie/DSP).</li><li>Un point de vente est rattaché à un établissement et référencé par la caisse.</li><li>La suppression d'un nœud rattaché est bloquée tant que des dépendances existent.</li></ul></div>
+<div class="us-ref">Réf : RG-M8 · Écran organisation · socle des rôles multi-établissement</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L7-07</span><span class="us-t">Délégation temporaire de droits (fin obligatoire + révocation auto)</span><span class="us-sp">5 pts</span></div>
+<p class="us-story"><b>En tant que</b> Administrateur, <b>je veux</b> déléguer temporairement des droits à un utilisateur avec une date de fin obligatoire, <b>afin de</b> couvrir les absences sans laisser d'accès permanents non contrôlés.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>La création d'une délégation exige une date de fin ; elle est refusée sans cette date.</li><li>Les droits délégués sont révoqués automatiquement à l'échéance, sans intervention manuelle.</li><li>Une révocation anticipée est possible à tout moment par l'Administrateur.</li><li>La délégation active est visible sur la fiche de l'utilisateur concerné.</li></ul></div>
+<div class="us-ref">Réf : RG-M8 · dépend de US-L7-04</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L7-08</span><span class="us-t">Conflit de rôles : la règle la plus restrictive l'emporte</span><span class="us-sp">3 pts</span></div>
+<p class="us-story"><b>En tant que</b> système de droits, <b>je veux</b> résoudre les conflits entre plusieurs rôles d'un utilisateur en appliquant la règle la plus restrictive, <b>afin de</b> garantir une sécurité prévisible et sans surprise.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Quand deux rôles divergent sur une action, l'interdiction l'emporte sur l'autorisation.</li><li>La résolution est appliquée de façon identique à l'UI (masquage) et aux appels serveur (403).</li><li>Un cas de conflit résolu est consultable dans l'aperçu (US-L7-05).</li></ul></div>
+<div class="us-ref">Réf : RG-M8 · dépend de US-L7-04</div></div>
+
+<div class="us"><div class="us-h"><span class="us-id">US-L7-09</span><span class="us-t">Journal d'audit des actions sensibles</span><span class="us-sp">3 pts</span></div>
+<p class="us-story"><b>En tant que</b> Direction, <b>je veux</b> consulter un journal horodaté des actions sensibles (droits, utilisateurs, entités, délégations), <b>afin de</b> assurer la traçabilité et répondre aux exigences de contrôle.</p>
+<div class="us-ac"><b>Critères d'acceptation :</b><ul><li>Chaque action sensible est journalisée avec auteur, cible, date/heure et valeur avant/après.</li><li>Le journal est consultable, filtrable (par utilisateur, type d'action, période) et non modifiable.</li><li>L'accès au journal est lui-même réservé aux rôles autorisés.</li></ul></div>
+<div class="us-ref">Réf : RG-M8 · Écran audit · dépend de US-L7-03, US-L7-04, US-L7-07</div></div>
+
+<footer>Récap : 9 user stories · total 55 pts (Fibonacci) — Lot L7 Back-office unifié + M8 Droits.</footer>
+</section>
+
+</div>
+<button class="themebtn" id="themeBtn" aria-label="Thème">◐</button>
+<script>
+  (function(){
+    var tabs=[].slice.call(document.querySelectorAll('.tab[role="tab"]:not([disabled])'));
+    var panels=tabs.map(function(t){return document.getElementById(t.getAttribute('aria-controls'));});
+    function sel(i){tabs.forEach(function(t,j){var on=i===j;t.setAttribute('aria-selected',on?'true':'false');if(panels[j])panels[j].hidden=!on;});window.scrollTo({top:0});}
+    tabs.forEach(function(t,i){t.addEventListener('click',function(){sel(i);});});
+    sel(0);
+    var tb=document.getElementById('themeBtn');tb&&tb.addEventListener('click',function(){var r=document.documentElement;r.setAttribute('data-theme',r.getAttribute('data-theme')==='dark'?'light':'dark');});
+  })();
+</script>

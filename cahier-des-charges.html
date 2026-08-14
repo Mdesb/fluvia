@@ -1,0 +1,1514 @@
+<title>Cahier des charges — Socle standard</title>
+<style>
+  :root {
+    --bg: #f1f5f6; --surface: #ffffff; --surface-2: #e9f0f1;
+    --ink: #12262d; --ink-soft: #4d626b; --ink-faint: #7a8d94; --line: #d6e0e2;
+    --accent: #0d7d88; --accent-strong: #094f57; --warm: #d9702f;
+    --good: #2f9e68; --good-bg: #e4f3ea; --watch: #b07d00; --watch-bg: #f6eed6;
+    --crit: #cc4634; --crit-bg: #f7e3df;
+    --shadow: 0 1px 2px rgba(18,38,45,.06), 0 6px 20px rgba(18,38,45,.05);
+  }
+  :root:not([data-theme="light"]) { @media (prefers-color-scheme: dark) {
+    --bg: #0b1417; --surface: #121f24; --surface-2: #182a30;
+    --ink: #e8eff1; --ink-soft: #a2b5bc; --ink-faint: #6f858d; --line: #253840;
+    --accent: #37b4be; --accent-strong: #7ad3db; --warm: #ef9459;
+    --good: #46b884; --good-bg: #163027; --watch: #e0ad3d; --watch-bg: #322a12;
+    --crit: #e86a58; --crit-bg: #341d19;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.28);
+  } }
+  :root[data-theme="dark"] {
+    --bg: #0b1417; --surface: #121f24; --surface-2: #182a30;
+    --ink: #e8eff1; --ink-soft: #a2b5bc; --ink-faint: #6f858d; --line: #253840;
+    --accent: #37b4be; --accent-strong: #7ad3db; --warm: #ef9459;
+    --good: #46b884; --good-bg: #163027; --watch: #e0ad3d; --watch-bg: #322a12;
+    --crit: #e86a58; --crit-bg: #341d19;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.28);
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--bg); color: var(--ink); font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.55; -webkit-font-smoothing: antialiased; margin: 0; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 20px 72px; }
+  .eyebrow { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); font-weight: 600; }
+  h1, h2, h3, h4 { text-wrap: balance; margin: 0; font-weight: 700; letter-spacing: -.01em; }
+
+  .hero { padding: 40px 0 18px; }
+  .hero h1 { font-size: clamp(24px, 3.6vw, 38px); line-height: 1.07; margin: 12px 0 0; }
+  .hero .lead { font-size: clamp(15px, 1.9vw, 18px); color: var(--ink-soft); max-width: 64ch; margin: 13px 0 0; }
+  .hero .lead b { color: var(--ink); }
+  .rule { margin-top: 20px; border-radius: 12px; padding: 14px 18px; display: flex; gap: 13px; align-items: center; background: color-mix(in srgb, var(--warm) 12%, var(--surface)); border: 1px solid color-mix(in srgb, var(--warm) 34%, var(--line)); }
+  .rule .star { flex:none; font-size:19px; } .rule .txt { font-size:14.5px; color: var(--ink-soft); } .rule .txt b { color: var(--warm); } .rule .txt strong { color: var(--ink); font-weight:650; }
+
+  .tabnav { position: sticky; top: 0; z-index: 5; display: flex; gap: 4px; flex-wrap: wrap; padding: 10px 0; margin-top: 24px; background: var(--bg); border-bottom: 1px solid var(--line); }
+  .tab { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; border: 1px solid transparent; background: transparent; color: var(--ink-soft); padding: 7px 12px; border-radius: 8px; cursor: pointer; font-weight: 600; }
+  .tab:hover { color: var(--ink); background: var(--surface-2); }
+  .tab[aria-selected="true"] { color: var(--accent-strong); background: color-mix(in srgb, var(--accent) 14%, var(--surface)); border-color: color-mix(in srgb, var(--accent) 30%, var(--line)); }
+  .tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .tab.mod::before { content: attr(data-n) " "; color: var(--ink-faint); }
+
+  .panel { padding-top: 28px; }
+  .panel[hidden] { display: none; }
+  @media (prefers-reduced-motion: no-preference) { .panel:not([hidden]) { animation: fade .22s ease; } @keyframes fade { from { opacity:0; transform: translateY(4px);} to {opacity:1; transform:none;} } }
+
+  .h2row { display:flex; align-items:baseline; gap:12px; margin-bottom:6px; flex-wrap:wrap; }
+  .h2row h2 { font-size: clamp(20px, 2.6vw, 28px); }
+  .h2row .tagm { font-family: ui-monospace, monospace; font-size:12px; color: var(--ink-faint); border:1px solid var(--line); border-radius:6px; padding:2px 8px; }
+  .lead-sub { color: var(--ink-soft); margin: 0 0 20px; max-width: 70ch; }
+
+  .grid { display:grid; gap:16px; } .g2 { grid-template-columns: repeat(2,1fr);} .g3 { grid-template-columns: repeat(3,1fr);} .g4 { grid-template-columns: repeat(4,1fr);}
+  @media (max-width:860px){ .g3,.g4 { grid-template-columns: repeat(2,1fr);} }
+  @media (max-width:640px){ .g2,.g3,.g4 { grid-template-columns: 1fr;} }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; box-shadow: var(--shadow); }
+  .card h3 { font-size: 16px; margin-bottom: 6px; }
+  .card h4 { font-size: 13px; font-family: ui-monospace, Menlo, monospace; letter-spacing:.04em; text-transform:uppercase; color: var(--accent); margin-bottom: 8px; }
+  .card p.k { color: var(--ink-soft); font-size:14px; margin:2px 0 10px; }
+
+  ul.clean { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px; }
+  ul.clean li { font-size:14px; color: var(--ink-soft); padding-left:17px; position:relative; }
+  ul.clean li::before { content:""; position:absolute; left:0; top:.55em; width:6px; height:6px; border-radius:50%; background: var(--accent); }
+  ul.clean li b { color: var(--ink); font-weight:600; }
+  ul.clean li.key::before { background: var(--warm); box-shadow:0 0 0 3px color-mix(in srgb, var(--warm) 20%, transparent); }
+
+  .chip { display:inline-flex; align-items:center; gap:6px; font-family: ui-monospace, Menlo, monospace; font-size:11px; letter-spacing:.04em; text-transform:uppercase; font-weight:600; padding:3px 9px; border-radius:999px; }
+  .chip.good { background: var(--good-bg); color: var(--good);} .chip.watch { background: var(--watch-bg); color: var(--watch);} .chip.crit { background: var(--crit-bg); color: var(--crit);} .chip.acc { background: color-mix(in srgb, var(--accent) 14%, var(--surface)); color: var(--accent-strong);}
+
+  .sub-h { font-family: ui-monospace, Menlo, monospace; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color: var(--ink-faint); font-weight:700; margin: 26px 0 12px; padding-bottom:6px; border-bottom:1px solid var(--line); }
+
+  /* screen list */
+  .screens { display:flex; flex-direction:column; gap:0; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+  .scr { display:flex; gap:12px; padding:12px 15px; border-bottom:1px solid var(--line); background: var(--surface); }
+  .scr:last-child { border-bottom:none; }
+  .scr .id { font-family: ui-monospace, monospace; font-size:12px; color: var(--accent-strong); font-weight:700; flex:none; width:52px; }
+  .scr .nm { font-weight:650; font-size:14px; }
+  .scr .ds { font-size:13px; color: var(--ink-soft); margin-top:2px; }
+
+  /* wireframe */
+  .wf { border:1px solid var(--line); border-radius:11px; overflow:hidden; background: var(--surface); box-shadow: var(--shadow); }
+  .wf .top { background: var(--surface-2); border-bottom:1px solid var(--line); padding:8px 12px; display:flex; align-items:center; gap:8px; }
+  .wf .top .dots { display:flex; gap:5px; } .wf .top .dots i { width:9px; height:9px; border-radius:50%; background: var(--line); display:block; }
+  .wf .top .cap { font-family: ui-monospace, monospace; font-size:12px; color: var(--ink-soft); }
+  .wf .screen { padding:14px; display:flex; flex-direction:column; gap:10px; }
+  .wfrow { display:flex; gap:10px; } .wfrow.wrap { flex-wrap:wrap; }
+  .blk { border:1px dashed var(--line); border-radius:8px; padding:10px 12px; font-size:12.5px; color: var(--ink-soft); background: color-mix(in srgb, var(--accent) 3%, var(--surface)); flex:1; }
+  .blk .bt { font-weight:700; color: var(--ink); font-size:12px; display:block; margin-bottom:5px; font-family: ui-monospace, monospace; letter-spacing:.02em; }
+  .blk small { display:block; color: var(--ink-faint); font-size:11.5px; }
+  .blk.acc { background: color-mix(in srgb, var(--accent) 12%, var(--surface)); border-style:solid; border-color: color-mix(in srgb, var(--accent) 30%, var(--line)); color: var(--ink); }
+  .blk.warm { background: color-mix(in srgb, var(--warm) 10%, var(--surface)); border-color: color-mix(in srgb, var(--warm) 34%, var(--line)); }
+  .blk.side { flex:0 0 190px; }
+  .pill { display:inline-block; font-size:11px; font-family: ui-monospace, monospace; background: var(--surface-2); border:1px solid var(--line); border-radius:5px; padding:3px 7px; margin:2px 3px 0 0; color: var(--ink-soft); }
+  .cap-wf { font-size:12.5px; color: var(--ink-faint); margin-top:8px; }
+
+  /* rules table */
+  .rules { display:flex; flex-direction:column; gap:8px; }
+  .ru { display:flex; gap:11px; font-size:13.5px; }
+  .ru .rn { font-family: ui-monospace, monospace; font-size:11px; color: var(--warm); font-weight:700; flex:none; width:34px; padding-top:1px; }
+  .ru .rt { color: var(--ink-soft); } .ru .rt b { color: var(--ink); }
+
+  /* architecture diagram */
+  .arch { display:flex; flex-direction:column; gap:10px; }
+  .arow { display:flex; gap:10px; flex-wrap:wrap; }
+  .abox { border:1px solid var(--line); border-radius:10px; padding:12px 14px; background: var(--surface); flex:1; min-width:150px; }
+  .abox .al { font-family: ui-monospace, monospace; font-size:11px; letter-spacing:.06em; text-transform:uppercase; font-weight:700; color: var(--ink-faint); }
+  .abox .ai { font-size:13.5px; color: var(--ink); margin-top:5px; font-weight:600; }
+  .abox .ax { font-size:12.5px; color: var(--ink-soft); margin-top:3px; }
+  .abox.surf { background: color-mix(in srgb, var(--accent) 9%, var(--surface)); border-color: color-mix(in srgb, var(--accent) 28%, var(--line)); }
+  .abox.core { background: color-mix(in srgb, var(--accent) 16%, var(--surface)); border-color: color-mix(in srgb, var(--accent) 34%, var(--line)); }
+  .abox.acc2 { background: color-mix(in srgb, var(--warm) 11%, var(--surface)); border-color: color-mix(in srgb, var(--warm) 34%, var(--line)); }
+  .aband { text-align:center; font-family: ui-monospace, monospace; font-size:11.5px; letter-spacing:.1em; color: var(--ink-faint); }
+
+  .note { font-size:13px; color: var(--ink-soft); background: var(--surface-2); border:1px dashed var(--line); border-radius:9px; padding:12px 15px; }
+  .note b { color: var(--ink); }
+
+  /* option analysis rows */
+  .opt { display:flex; gap:11px; align-items:flex-start; padding:9px 0; border-bottom:1px solid var(--line); }
+  .opt:last-child { border-bottom:none; }
+  .opt .v { flex:none; margin-top:1px; }
+  .opt .oc { font-size:13.5px; color: var(--ink-soft); }
+  .opt .oc b { color: var(--ink); font-weight:650; }
+  .vlegend { display:flex; flex-wrap:wrap; gap:14px; margin:2px 0 18px; font-size:12.5px; color:var(--ink-soft); }
+
+  footer { margin-top: 44px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--ink-faint); font-size: 13px; }
+</style>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Nouveau logiciel · billetterie &amp; contrôle d'accès · IT Cotation</div>
+    <h1>Cahier des charges — Socle standard</h1>
+    <p class="lead">Structuration <b>module par module</b> : objectif, périmètre fonctionnel, <b>écrans proposés</b>, règles de gestion et objets de données. Architecture d'abord, puis chaque module du socle réutilisable.</p>
+    <div class="rule"><span class="star">⭐</span><div class="txt"><b>Règle d'or —</b> <strong>l'expérience reste simple pour tout le monde.</strong> La complexité du moteur (tarifs, PCA, accès, régie) est absorbée par le logiciel, jamais reportée sur l'utilisateur.</div></div>
+  </header>
+
+  <nav class="tabnav" role="tablist" aria-label="Sections du cahier des charges">
+    <button class="tab" role="tab" id="t-arch" aria-controls="p-arch" aria-selected="true">Architecture</button>
+    <button class="tab mod" data-n="M1" role="tab" id="t-offre" aria-controls="p-offre" aria-selected="false">Offre &amp; Tarification</button>
+    <button class="tab" role="tab" id="t-fiche" aria-controls="p-fiche" aria-selected="false">🧩 Fiche produit (analyse)</button>
+    <button class="tab mod" data-n="M2" role="tab" id="t-vente" aria-controls="p-vente" aria-selected="false">Vente &amp; Caisse</button>
+    <button class="tab mod" data-n="M3" role="tab" id="t-boutique" aria-controls="p-boutique" aria-selected="false">Boutique &amp; App client</button>
+    <button class="tab mod" data-n="M4" role="tab" id="t-crm" aria-controls="p-crm" aria-selected="false">CRM 360°</button>
+    <button class="tab mod" data-n="M5" role="tab" id="t-planning" aria-controls="p-planning" aria-selected="false">Planning &amp; Réservation</button>
+    <button class="tab" role="tab" id="t-groupes" aria-controls="p-groupes" aria-selected="false">🏫 Groupes &amp; scolaires</button>
+    <button class="tab mod" data-n="M6" role="tab" id="t-compta" aria-controls="p-compta" aria-selected="false">Compta &amp; Régie</button>
+    <button class="tab mod" data-n="M7" role="tab" id="t-report" aria-controls="p-report" aria-selected="false">Reporting</button>
+    <button class="tab mod" data-n="M8" role="tab" id="t-admin" aria-controls="p-admin" aria-selected="false">Admin &amp; Droits</button>
+    <button class="tab" role="tab" id="t-acces" aria-controls="p-acces" aria-selected="false">🎯 Contrôle d'accès</button>
+    <button class="tab" role="tab" id="t-piscine" aria-controls="p-piscine" aria-selected="false">🏊 Piscine</button>
+    <button class="tab" role="tab" id="t-patinoire" aria-controls="p-patinoire" aria-selected="false">⛸️ Patinoire</button>
+    <button class="tab" role="tab" id="t-sport" aria-controls="p-sport" aria-selected="false">🏋️ Salle de sport</button>
+    <button class="tab" role="tab" id="t-padel" aria-controls="p-padel" aria-selected="false">🎾 Padel</button>
+    <button class="tab" role="tab" id="t-musee" aria-controls="p-musee" aria-selected="false">🏛️ Musée</button>
+    <button class="tab" role="tab" id="t-parcours" aria-controls="p-parcours" aria-selected="false">👥 Parcours</button>
+    <button class="tab" role="tab" id="t-simpli" aria-controls="p-simpli" aria-selected="false">✨ Simplifier &amp; idées</button>
+    <button class="tab" role="tab" id="t-idees" aria-controls="p-idees" aria-selected="false">💡 Idées détaillées</button>
+    <button class="tab" role="tab" id="t-finance" aria-controls="p-finance" aria-selected="false">💶 Finance &amp; quick wins</button>
+    <button class="tab" role="tab" id="t-avance" aria-controls="p-avance" aria-selected="false">🚀 Idées avancées</button>
+    <button class="tab" role="tab" id="t-qualite" aria-controls="p-qualite" aria-selected="false">🔒 Qualité &amp; conformité</button>
+    <button class="tab" role="tab" id="t-factu" aria-controls="p-factu" aria-selected="false">📄 Facturation &amp; international</button>
+    <button class="tab" role="tab" id="t-roadmap" aria-controls="p-roadmap" aria-selected="false">Feuille de route</button>
+  </nav>
+
+  <!-- ARCHITECTURE -->
+  <section class="panel" id="p-arch" role="tabpanel" aria-labelledby="t-arch" tabindex="0">
+    <div class="h2row"><h2>Architecture globale</h2></div>
+    <p class="lead-sub">Une seule plateforme, plusieurs surfaces d'usage posées sur un cœur commun (API + socle métier), avec une couche contrôle d'accès dédiée. Le tout multi-établissements et multi-profils d'exploitant.</p>
+
+    <div class="sub-h">Les surfaces d'usage (applications)</div>
+    <div class="arch" style="margin-bottom:8px">
+      <div class="arow">
+        <div class="abox surf"><div class="al">Web</div><div class="ai">Back-office unifié</div><div class="ax">Admin + Caisse fusionnés. UI adaptative aux droits (gestionnaire, accueil, comptable…).</div></div>
+        <div class="abox surf"><div class="al">Mobile / PWA</div><div class="ai">App client final</div><div class="ax">Achat, réservation, badge d'accès + wallet, rechargement, historique.</div></div>
+        <div class="abox surf"><div class="al">Mobile</div><div class="ai">App staff / encadrant</div><div class="ax">Contrôle d'accès mobile (coupe-file), séances, compte-rendu.</div></div>
+      </div>
+      <div class="arow">
+        <div class="abox surf"><div class="al">Web responsive</div><div class="ai">Boutique en ligne</div><div class="ax">Vitrine white-label par établissement, tunnel de commande, espace client.</div></div>
+        <div class="abox surf"><div class="al">Borne</div><div class="ai">Self-service</div><div class="ax">Achat / retrait / réservation autonome.</div></div>
+      </div>
+    </div>
+    <div class="aband">▽ toutes appuyées sur ▽</div>
+
+    <div class="sub-h" style="margin-top:14px">Le cœur : API + socle métier</div>
+    <div class="arch">
+      <div class="arow"><div class="abox core" style="flex-basis:100%"><div class="al">API REST — cœur unique</div><div class="ax">Toutes les surfaces consomment la même API. Règles métier centralisées (une seule vérité).</div></div></div>
+      <div class="arow">
+        <div class="abox"><div class="ai">M1 · Offre &amp; Tarification</div></div>
+        <div class="abox"><div class="ai">M2 · Vente &amp; Caisse</div></div>
+        <div class="abox"><div class="ai">M3 · Boutique &amp; App client</div></div>
+        <div class="abox"><div class="ai">M4 · CRM 360°</div></div>
+      </div>
+      <div class="arow">
+        <div class="abox"><div class="ai">M5 · Planning &amp; Réservation</div></div>
+        <div class="abox"><div class="ai">M6 · Compta &amp; Régie</div></div>
+        <div class="abox"><div class="ai">M7 · Reporting &amp; Analyse</div></div>
+        <div class="abox"><div class="ai">M8 · Admin &amp; Droits</div></div>
+      </div>
+    </div>
+    <div class="aband" style="margin-top:10px">▽ pilote la ▽</div>
+
+    <div class="sub-h" style="margin-top:14px">Couche contrôle d'accès (verticale — matériel IT Cotation)</div>
+    <div class="arch">
+      <div class="arow">
+        <div class="abox acc2"><div class="al">Concentrateur</div><div class="ai">ITBOX</div><div class="ax">Intelligence embarquée, <b>mode hors-ligne</b>, liaison OSDP / API.</div></div>
+        <div class="abox acc2"><div class="al">Lecteurs</div><div class="ai">QR · RFID (iDTRONIC)</div><div class="ax">Compostage, appairage support.</div></div>
+        <div class="abox acc2"><div class="al">Obstacles</div><div class="ai">Tripodes · portillons · couloirs</div><div class="ax">+ caméras de comptage (FMI).</div></div>
+      </div>
+    </div>
+
+    <div class="sub-h">Modèle multi-établissements &amp; profils</div>
+    <div class="grid g2">
+      <div class="card">
+        <h4>Hiérarchie des entités</h4>
+        <div class="wfrow wrap" style="gap:6px"><span class="pill">Groupe</span><span class="pill">→ Région</span><span class="pill">→ Établissement / site</span><span class="pill">→ Espaces</span><span class="pill">→ Points de vente / Caisses</span></div>
+        <p class="k" style="margin-top:10px">Chaque donnée (vente, entrée, écriture) est rattachée à ce chemin → consolidation site → région → direction générale, droits par niveau.</p>
+      </div>
+      <div class="card">
+        <h4>Profil d'exploitant (commute la compta)</h4>
+        <ul class="clean">
+          <li><b>Régie directe</b> (administration) — compta publique, PayFiP, PES/Hélios</li>
+          <li><b>DSP / délégataire</b> — compta privée + RAD + redevances</li>
+          <li><b>Groupe privé</b> — analytique + consolidation</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="sub-h">Socle technique &amp; intégrations</div>
+    <div class="grid g4">
+      <div class="card"><h4>Stack</h4><ul class="clean"><li><b>PHP 8.4</b></li><li><b>MariaDB</b></li><li>API REST</li><li>Hébergement <b>France</b> / RGPD</li></ul></div>
+      <div class="card"><h4>Paiement</h4><ul class="clean"><li>TPE : Ingenico · Nayax · PAX</li><li>En ligne + <b>PayFiP</b></li><li>SEPA (mandats)</li></ul></div>
+      <div class="card"><h4>Périphériques</h4><ul class="clean"><li>Imprimantes : HP · Aures · OXHOO</li><li>Caisse : PC</li><li>Lecteurs / bornes</li></ul></div>
+      <div class="card"><h4>Écosystème</h4><ul class="clean"><li>Wallet Apple / Google</li><li>Exports compta &amp; FEC</li><li>Connecteurs OTA</li></ul></div>
+    </div>
+
+    <div class="sub-h">Feuille de route des modules</div>
+    <div class="note">Le cahier des charges se remplit <b>module par module</b> (onglets M1 → M8), puis les <b>modules verticaux</b> (Contrôle d'accès, Piscine, Patinoire, Sport, Musée). Chaque onglet module suit le même plan : <b>Objectif · Périmètre fonctionnel · Écrans proposés (avec maquette) · Règles de gestion · Objets de données</b>. Priorité de rédaction : M1 Offre &amp; Tarification et M2 Vente &amp; Caisse (fondations), puis Contrôle d'accès.</div>
+  </section>
+
+  <!-- M1 — OFFRE & TARIFICATION -->
+  <section class="panel" id="p-offre" role="tabpanel" aria-labelledby="t-offre" tabindex="0" hidden>
+    <div class="h2row"><h2>M1 · Offre &amp; Tarification</h2><span class="tagm">Socle · fondation</span></div>
+    <p class="lead-sub">Le moteur qui décrit <b>tout ce qui est vendable</b> et <b>à quel prix</b>. Un modèle générique unique couvre les 4 métiers : entrée, abonnement, cours, carte multi-entrées, boutique…</p>
+
+    <div class="sub-h">Objectif</div>
+    <div class="note" style="margin-bottom:8px">Permettre à un gestionnaire de <b>créer et faire évoluer l'offre sans développeur</b> : produits, tarifs par public et par saison, formules d'abonnement à droits inclus, cartes multi-entrées, promotions — le tout catégorisé sur plusieurs axes d'analyse.</div>
+
+    <div class="sub-h">Périmètre fonctionnel</div>
+    <div class="grid g3" style="margin-bottom:8px">
+      <div class="card">
+        <h4>Produits</h4>
+        <ul class="clean">
+          <li><b>Types de produits</b> (billet daté / non daté, abonnement, cours/séance, carte multi-entrées, boutique, location, bon…)</li>
+          <li>Fiche produit : libellé, description, visuels, TVA, stock (dédié / partagé), visibilité (guichet / en ligne)</li>
+          <li><b>Catégorisation multi-axes</b> : marketing, comptable, rayon caisse</li>
+          <li>Champs personnalisés, étiquettes</li>
+          <li>Multilingue, multi-sites</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4>Tarification</h4>
+        <ul class="clean">
+          <li><b>Types de tarifs</b> (adulte, réduit, enfant, PMR, RSA, scolaire…)</li>
+          <li><b>Saisons</b> (périodes tarifaires)</li>
+          <li><b>Grille = tarif × saison</b> (matrice de prix)</li>
+          <li>Tarif social / <b>quotient familial</b></li>
+          <li>Visibilité par canal (guichet / internet)</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4>Formules, cartes &amp; promos</h4>
+        <ul class="clean">
+          <li class="key"><b>Formules d'abonnement à niveaux</b> (Gold / Classique) : accès + <b>services inclus</b> (quotas de cours)</li>
+          <li>Périodicité + <b>SEPA</b> + renouvellement</li>
+          <li class="key"><b>Cartes multi-entrées</b> (« 10 entrées », bonus 10=12)</li>
+          <li>Promotions (%, montant, offres groupées)</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="sub-h">Écrans proposés</div>
+    <div class="screens" style="margin-bottom:18px">
+      <div class="scr"><div class="id">M1-01</div><div><div class="nm">Catalogue produits</div><div class="ds">Liste filtrable (type, catégorie, site, statut), recherche, actions de masse, brouillon/publié.</div></div></div>
+      <div class="scr"><div class="id">M1-02</div><div><div class="nm">Fiche produit</div><div class="ds">Édition complète : infos, grille tarifaire, stock, catégories multi-axes, champs perso, canaux.</div></div></div>
+      <div class="scr"><div class="id">M1-03</div><div><div class="nm">Constructeur de formule d'abonnement</div><div class="ds">Niveau, droits d'accès (illimité/quota), services inclus (X cours/semaine), prix récurrent, règles SEPA.</div></div></div>
+      <div class="scr"><div class="id">M1-04</div><div><div class="nm">Référentiels tarifaires</div><div class="ds">Types de tarifs · Saisons · Promotions (gérés une fois, réutilisés partout).</div></div></div>
+      <div class="scr"><div class="id">M1-05</div><div><div class="nm">Plan de catégories (arborescence)</div><div class="ds">Axes marketing / comptable / rayon — pour l'analyse et la compta.</div></div></div>
+    </div>
+
+    <div class="sub-h">Maquette — M1-02 Fiche produit</div>
+    <div class="wf" style="margin-bottom:6px">
+      <div class="top"><span class="dots"><i></i><i></i><i></i></span><span class="cap">Back-office › Offre › Fiche produit — « Abonnement Gold »</span></div>
+      <div class="screen">
+        <div class="wfrow">
+          <div class="blk acc" style="flex:2"><span class="bt">En-tête produit</span>Libellé · type = Abonnement · statut (brouillon/publié) · sites concernés · visibilité guichet/en ligne</div>
+          <div class="blk side"><span class="bt">Actions</span><small>Enregistrer · Dupliquer · Aperçu en ligne · Archiver</small></div>
+        </div>
+        <div class="wfrow">
+          <div class="blk"><span class="bt">Onglet Général</span><small>Description, visuels, TVA, champs perso, étiquettes</small></div>
+          <div class="blk warm"><span class="bt">Onglet Grille tarifaire</span><small>Matrice tarif × saison — clic sur une cellule = prix</small><span class="pill">Adulte</span><span class="pill">Réduit</span><span class="pill">RSA</span></div>
+        </div>
+        <div class="wfrow">
+          <div class="blk warm"><span class="bt">Onglet Formule (si abonnement)</span><small>Droits d'accès : illimité · Services inclus : 1 aquagym/sem · Périodicité : mensuel · SEPA : oui · Renouvellement auto</small></div>
+          <div class="blk"><span class="bt">Onglet Catégories</span><small>Marketing : Aquatique › Abonnements · Comptable : 706-Piscine · Rayon caisse : Abonnements</small></div>
+        </div>
+        <div class="wfrow"><div class="blk"><span class="bt">Onglet Stock &amp; canaux</span><small>Stock dédié/partagé · quotas · dates de mise en vente · canaux (guichet, en ligne, borne)</small></div></div>
+      </div>
+    </div>
+    <p class="cap-wf">Principe UX : une fiche = des onglets simples ; la complexité (grille, formule, PCA) est rangée dans son onglet, jamais imposée d'un bloc.</p>
+
+    <div class="sub-h">Règles de gestion (extrait)</div>
+    <div class="rules" style="margin-bottom:18px">
+      <div class="ru"><span class="rn">RG-01</span><span class="rt">Un <b>prix</b> résulte toujours d'un croisement <b>produit × type de tarif × saison</b> (+ éventuel quotient familial). Aucune saisie de prix « libre » hors grille, sauf droit spécifique.</span></div>
+      <div class="ru"><span class="rn">RG-02</span><span class="rt">Une <b>formule d'abonnement</b> porte des <b>droits</b> (accès) ET des <b>services inclus</b> à quota (ex. 1 cours/semaine) — le quota est décompté à la réservation/consommation.</span></div>
+      <div class="ru"><span class="rn">RG-03</span><span class="rt">Une <b>carte multi-entrées</b> est un stock de passages ; une promo « 10=12 » ajoute 2 passages bonus au crédit, avec date de validité.</span></div>
+      <div class="ru"><span class="rn">RG-04</span><span class="rt">Tout produit doit porter une valeur sur <b>chaque axe de catégorie obligatoire</b> (comptable au minimum) — garantit la ventilation analytique et les exports.</span></div>
+      <div class="ru"><span class="rn">RG-05</span><span class="rt">Un produit vendu d'avance (abonnement, carte) déclenche la logique <b>PCA</b> (voir M6) : le revenu n'est pas reconnu à la vente.</span></div>
+    </div>
+
+    <div class="sub-h">Objets de données (principaux)</div>
+    <div class="wfrow wrap">
+      <span class="pill">Produit</span><span class="pill">TypeProduit</span><span class="pill">Catégorie (axe, valeur)</span><span class="pill">TypeTarif</span><span class="pill">Saison</span><span class="pill">GrilleTarifaire (produit × tarif × saison → prix)</span><span class="pill">Formule (niveau, droits, servicesInclus)</span><span class="pill">CarteMultiEntrées (crédit, bonus, validité)</span><span class="pill">Promotion</span><span class="pill">Stock</span>
+    </div>
+  </section>
+
+  <!-- FICHE PRODUIT — ANALYSE -->
+  <section class="panel" id="p-fiche" role="tabpanel" aria-labelledby="t-fiche" tabindex="0" hidden>
+    <div class="h2row"><h2>🧩 Fiche produit — analyse option par option</h2><span class="tagm">existant AWOO → cible</span></div>
+    <p class="lead-sub">La fiche produit de l'ancien logiciel est <b>très puissante</b> (~40 options en 8 onglets) mais <b>tout est affiché d'un coup, pour tous les types</b> → c'est le symbole même du « moteur complexe non caché ». On garde ~90 % des capacités, on transforme l'expérience.</p>
+
+    <div class="banner" style="margin-bottom:18px"><span class="dot"></span><div><div class="big" style="font-size:19px">Le vrai problème n'est pas la puissance, c'est l'exposition</div><div class="sub">Un vendeur de boutique voit les marges de compostage RFID ; un gestionnaire d'abonnement cherche « Services » parmi 8 onglets. La cible : <b>le type de produit pré-configure et masque le non pertinent</b>.</div></div></div>
+
+    <div class="sub-h">5 principes pour la nouvelle fiche produit</div>
+    <div class="rules" style="margin-bottom:20px">
+      <div class="ru"><span class="rn">F-1</span><span class="rt"><b>Le type pré-configure</b> — choisir « Abonnement » active Services + Renouvellement et masque les tranches horaires ; « Boutique » masque tout le contrôle d'accès.</span></div>
+      <div class="ru"><span class="rn">F-2</span><span class="rt"><b>Divulgation progressive</b> — 3 niveaux : Essentiel (nom, prix, visuel, canaux) · Standard (stock, compta, accès) · Avancé (marges, sous-réseau, imports).</span></div>
+      <div class="ru"><span class="rn">F-3</span><span class="rt"><b>Défauts hérités</b> — marges de compostage, code comptable, TVA : pré-remplis depuis la catégorie / la structure, modifiables seulement si besoin.</span></div>
+      <div class="ru"><span class="rn">F-4</span><span class="rt"><b>Regrouper les redondances</b> — les 3-4 cases « canaux » dispersées (borne / guichet / en ligne) → <b>un seul sélecteur de canaux</b>.</span></div>
+      <div class="ru"><span class="rn">F-5</span><span class="rt"><b>Renommer en langage métier</b> — « compostage » → « contrôle à l'entrée », « rayonnage » → « rangement caisse ». Le jargon reste sous le capot.</span></div>
+    </div>
+
+    <div class="sub-h">Analyse par onglet</div>
+    <div class="vlegend"><span class="chip good">✅ Garder</span><span class="chip acc">🔧 Simplifier</span><span class="chip watch">🔀 Fusionner / repenser</span><span class="chip crit">❌ Retirer</span></div>
+
+    <div class="grid g2" style="margin-bottom:16px">
+      <div class="card"><h4>Contenu (blocs WYSIWYG)</h4>
+        <div class="opt"><span class="chip good v">✅</span><div class="oc"><b>Description · Photos/vidéos · Pièces jointes</b> — essentiels boutique en ligne.</div></div>
+        <div class="opt"><span class="chip good v">✅</span><div class="oc"><b>Produits associés</b> — cross-sell (audioguide, boisson…).</div></div>
+        <div class="opt"><span class="chip acc v">🔧</span><div class="oc"><b>Conseils · Instructions de vente · Régie commerciale</b> — fusionner en « note interne / note de vente ».</div></div>
+        <div class="opt"><span class="chip acc v">🔧</span><div class="oc"><b>Édition « cliquez sur la zone »</b> — bonne idée, à moderniser en éditeur de blocs.</div></div>
+      </div>
+      <div class="card"><h4>Général &amp; Vente</h4>
+        <div class="opt"><span class="chip good v">✅</span><div class="oc"><b>Couleur</b> du produit — repère visuel caisse.</div></div>
+        <div class="opt"><span class="chip good v">✅</span><div class="oc"><b>Seuil participants min · Max panier</b> — utile cours/groupes (affiché selon type).</div></div>
+        <div class="opt"><span class="chip watch v">🔀</span><div class="oc"><b>Vendre sur borne / au guichet / produit associé</b> — regrouper en un <b>sélecteur de canaux</b> unique.</div></div>
+        <div class="opt"><span class="chip good v">✅</span><div class="oc"><b>Consommateur requis · Payeur obligatoire · Vente par mandat</b> — clés (nominatif, régie publique).</div></div>
+        <div class="opt"><span class="chip acc v">🔧</span><div class="oc"><b>Paiement optionnel en caisse</b> — garder (paiement différé) mais renommer clairement.</div></div>
+        <div class="opt"><span class="chip good v">✅</span><div class="oc"><b>Code-barres · Code article (stock)</b> — garder.</div></div>
+        <div class="opt"><span class="chip crit v">❌</span><div class="oc"><b>Numéro d'exploitation</b> — legacy ; à retirer sauf usage compta confirmé.</div></div>
+      </div>
+      <div class="card"><h4>Accès (dans « Vente » &amp; « Documents »)</h4>
+        <div class="opt"><span class="chip good v">✅</span><div class="oc"><b>Début d'activation du billet</b> (création / 1ᵉʳ paiement) — <b>lié à la reconnaissance PCA</b> (M6), à garder et exploiter.</div></div>
+        <div class="opt"><span class="chip acc v">🔧</span><div class="oc"><b>Marges de compostage (avance/retard)</b> — garder, mais <b>défaut hérité</b> de la structure (rarement à toucher).</div></div>
+        <div class="opt"><span class="chip good v">✅</span><div class="oc"><b>Nombre de compostages</b> — le cœur des <b>cartes multi-entrées</b> (10=12).</div></div>
+        <div class="opt"><span class="chip good v">✅</span><div class="oc"><b>Appairage RFID · Caisse composte auto</b> — garder.</div></div>
+        <div class="opt"><span class="chip good v">✅</span><div class="oc"><b>Sous-réseau habilité à composter</b> — puissant (fédération d'accès entre entités), à garder.</div></div>
+        <div class="opt"><span class="chip acc v">🔧</span><div class="oc"><b>Modèle billet A4</b> — moderniser (modèles de documents + <b>wallet</b>).</div></div>
+      </div>
+      <div class="card"><h4>E-commerce · Stock · Compta</h4>
+        <div class="opt"><span class="chip good v">✅</span><div class="oc"><b>Fenêtre de vente en ligne</b> (ouverture résa, début/arrêt de vente, quantité min) — regrouper en un bloc lisible.</div></div>
+        <div class="opt"><span class="chip good v">✅</span><div class="oc"><b>Stock dédié / partagé (pools)</b> — puissant, à garder (mutualisation entre produits).</div></div>
+        <div class="opt"><span class="chip watch v">🔀</span><div class="oc"><b>Comptabilité = « code comptable » seul</b> — <b>trop pauvre</b> : élargir à TVA multi-taux + axes analytiques + règle PCA (M6).</div></div>
+      </div>
+      <div class="card"><h4>Documents contractuels &amp; champs</h4>
+        <div class="opt"><span class="chip good v">✅</span><div class="oc"><b>Formulaires/contrats associés</b> (autorisation parentale, CGV, contrat location) — à garder et <b>ajouter la signature électronique</b>.</div></div>
+        <div class="opt"><span class="chip good v">✅</span><div class="oc"><b>Champs personnalisés</b> demandés à l'achat — très utile (données groupe/scolaire).</div></div>
+        <div class="opt"><span class="chip acc v">🔧</span><div class="oc"><b>Import de références de billet</b> — garder mais reléguer en « Avancé » (niche).</div></div>
+      </div>
+      <div class="card"><h4>Abonnement (Services · Renouvellement · Tarif)</h4>
+        <div class="opt"><span class="chip good v">✅</span><div class="oc"><b>Services inclus</b> — c'est le cœur des <b>formules à droits</b> (Gold = 1 aquagym/sem). À rendre central.</div></div>
+        <div class="opt"><span class="chip good v">✅</span><div class="oc"><b>Renouvellement</b> (auto, jour, durée, prix fixe/évolutif, nb, mail) — moteur d'abo, à garder et enrichir (pause, résiliation, <b>anti-impayés</b>).</div></div>
+        <div class="opt"><span class="chip good v">✅</span><div class="oc"><b>Prix dédié / Grille (saisons × tarifs)</b> — le cœur tarifaire. Ajouter <b>quotient familial</b> et option tarif dynamique.</div></div>
+        <div class="opt"><span class="chip acc v">🔧</span><div class="oc"><b>Étiquettes</b> code-barres — garder (niche boutique), en « Avancé ».</div></div>
+        <div class="opt"><span class="chip crit v">❌</span><div class="oc"><b>Forum</b> (barre d'actions) — retirer (inutilisé).</div></div>
+      </div>
+    </div>
+
+    <div class="sub-h">Ce qui manque dans l'ancienne fiche — et qu'on ajoute</div>
+    <div class="grid g4" style="margin-bottom:8px">
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">Compta</div><h3 style="font-size:14px">TVA multi-taux + règle PCA</h3><p class="k" style="margin-bottom:0">Au-delà du simple « code comptable ».</p></div>
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">Légal</div><h3 style="font-size:14px">Signature électronique</h3><p class="k" style="margin-bottom:0">Des contrats/autorisations rattachés.</p></div>
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">Mobile</div><h3 style="font-size:14px">Génération wallet</h3><p class="k" style="margin-bottom:0">Pass Apple/Google en plus du billet A4.</p></div>
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">Accès</div><h3 style="font-size:14px">Jauge / quota par créneau</h3><p class="k" style="margin-bottom:0">Timed-entry explicite (musée, cours).</p></div>
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">Inclusion</div><h3 style="font-size:14px">Accessibilité du contenu</h3><p class="k" style="margin-bottom:0">Descriptions alternatives, langues.</p></div>
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">Éco</div><h3 style="font-size:14px">Option zéro papier</h3><p class="k" style="margin-bottom:0">Billet 100 % dématérialisé par défaut.</p></div>
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">Facturation</div><h3 style="font-size:14px">Facture électronique</h3><p class="k" style="margin-bottom:0">Factur-X pour le B2B/B2G (voir onglet dédié).</p></div>
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">Revenu</div><h3 style="font-size:14px">Tarif dynamique (option)</h3><p class="k" style="margin-bottom:0">Heures creuses — privé/DSP uniquement.</p></div>
+    </div>
+    <div class="note"><b>Conclusion</b> : la nouvelle fiche produit garde toute la richesse d'AWOO (compostage, stock partagé, sous-réseau, renouvellement, grille) mais la rend <b>invisible tant qu'elle n'est pas utile</b>. Résultat attendu : un « Billet daté » se crée en 4 champs ; un « Abonnement Gold » se configure sans jamais voir une option de boutique.</div>
+  </section>
+
+  <!-- M2 — VENTE & CAISSE -->
+  <section class="panel" id="p-vente" role="tabpanel" aria-labelledby="t-vente" tabindex="0" hidden>
+    <div class="h2row"><h2>M2 · Vente &amp; Caisse</h2><span class="tagm">Socle · fondation</span></div>
+    <p class="lead-sub">Le guichet unifié : vendre vite, encaisser (multi-moyens, TPE), gérer la session de caisse. <b>Admin et caisse fusionnés</b> — on bascule de mode, on ne change pas d'application.</p>
+
+    <div class="sub-h">Objectif</div>
+    <div class="note" style="margin-bottom:8px">Encaisser une vente en quelques gestes, avec un panier clair, des moyens de paiement combinables, une session de caisse conforme (fond, clôture) et l'édition automatique des billets/tickets — le tout relié au client et au contrôle d'accès.</div>
+
+    <div class="sub-h">Périmètre fonctionnel</div>
+    <div class="grid g3" style="margin-bottom:8px">
+      <div class="card">
+        <h4>Vente au guichet</h4>
+        <ul class="clean">
+          <li>Grille produits par <b>rayons</b> + favoris + recherche</li>
+          <li>Panier : quantité, <b>bénéficiaires</b>, notes, remises</li>
+          <li><b>Mode vente rapide</b></li>
+          <li>Rattacher un client / une famille</li>
+          <li>Groupes, devis, réservations</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4>Paiement</h4>
+        <ul class="clean">
+          <li class="key"><b>Paiement scindé</b> multi-moyens</li>
+          <li>Espèces, CB (<b>TPE intégré</b>), chèque, virement</li>
+          <li>Chèques Vacances / Culture / Loisirs</li>
+          <li><b>PMV</b> (porte-monnaie), avoir, paiement différé</li>
+          <li>Lien de paiement (Click &amp; Pay)</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4>Session &amp; édition</h4>
+        <ul class="clean">
+          <li><b>Session de caisse</b> : fond, ouverture, clôture (Z)</li>
+          <li>Mouvements d'espèces, versement</li>
+          <li>Impression auto billet / ticket (seuil)</li>
+          <li><b>Appairage RFID / wallet</b> à la validation</li>
+          <li>Duplicata, remboursement, annulation</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="sub-h">Écrans proposés</div>
+    <div class="screens" style="margin-bottom:18px">
+      <div class="scr"><div class="id">M2-01</div><div><div class="nm">Sélection / ouverture de caisse</div><div class="ds">Choix du point de vente + caisse, saisie du fond, code régisseur, états (ouverte / sécurisée).</div></div></div>
+      <div class="scr"><div class="id">M2-02</div><div><div class="nm">Écran de caisse (vente)</div><div class="ds">Rayons + grille produits, panier, client, recherches (article / ticket / commande / QR).</div></div></div>
+      <div class="scr"><div class="id">M2-03</div><div><div class="nm">Quantité &amp; options produit</div><div class="ds">Quantité / nb de personnes, tarif, bénéficiaire, promotions et options.</div></div></div>
+      <div class="scr"><div class="id">M2-04</div><div><div class="nm">Paiement scindé</div><div class="ds">Saisie des montants par moyen jusqu'à « reste à payer = 0 », TPE, justificatif.</div></div></div>
+      <div class="scr"><div class="id">M2-05</div><div><div class="nm">Clôture de caisse (Z)</div><div class="ds">Comptage, écarts, versement, édition de l'état de régie / journal.</div></div></div>
+    </div>
+
+    <div class="sub-h">Maquette — M2-02 Écran de caisse</div>
+    <div class="wf" style="margin-bottom:6px">
+      <div class="top"><span class="dots"><i></i><i></i><i></i></span><span class="cap">Caisse › Piscine municipale — session ouverte (régisseur : M. Durand)</span></div>
+      <div class="screen">
+        <div class="wfrow">
+          <div class="blk side acc"><span class="bt">Panier</span><small>1× Adulte — 4,50 €<br>1× Abonnement Gold — 39 €<br>———<br><b>Total 43,50 €</b></small><small style="margin-top:6px">Client : Famille Martin<br>+ Ajouter client · Note</small></div>
+          <div class="blk" style="flex:2"><span class="bt">Rayons &amp; produits</span><small>Onglets : Favoris · Droits d'entrée · Abonnements · Cours · Boutique</small><div style="margin-top:6px"><span class="pill">Entrée adulte</span><span class="pill">Entrée enfant</span><span class="pill">Carte 10</span><span class="pill">Abo Gold</span><span class="pill">Aquabike</span><span class="pill">Bonnet</span></div></div>
+        </div>
+        <div class="wfrow">
+          <div class="blk"><span class="bt">Recherches</span><small>Client · Article · Ticket · Commande · Scan QR</small></div>
+          <div class="blk warm"><span class="bt">Encaisser →</span><small>Ouvre M2-04 Paiement scindé</small></div>
+        </div>
+      </div>
+    </div>
+    <p class="cap-wf">Barre haute (non représentée) : compteurs Tickets / Vente € / Encaissé €, utilisateur, caisse active, jauge FMI en temps réel.</p>
+
+    <div class="sub-h">Règles de gestion (extrait)</div>
+    <div class="rules" style="margin-bottom:18px">
+      <div class="ru"><span class="rn">RG-06</span><span class="rt">Aucune vente possible sans <b>session de caisse ouverte</b> (fond saisi, régisseur identifié). Les moyens de paiement autorisés dépendent de l'acte de régie (profil régie).</span></div>
+      <div class="ru"><span class="rn">RG-07</span><span class="rt">Le <b>paiement peut être scindé</b> sur plusieurs moyens ; la commande n'est validée que si le total encaissé = total dû (sauf paiement différé autorisé).</span></div>
+      <div class="ru"><span class="rn">RG-08</span><span class="rt">Un produit <b>sans stock</b> ne peut être vendu (blocage) ; un billet/abonnement émis génère son <b>support d'accès</b> (QR / RFID / wallet) et, si activé, ouvre la popup d'appairage.</span></div>
+      <div class="ru"><span class="rn">RG-09</span><span class="rt">La <b>clôture (Z)</b> fige les ventes de la session, calcule les écarts de caisse et produit l'<b>état de régie</b> (par nature de recette et par moyen de paiement).</span></div>
+    </div>
+
+    <div class="sub-h">Objets de données (principaux)</div>
+    <div class="wfrow wrap">
+      <span class="pill">SessionCaisse (fond, régisseur, état)</span><span class="pill">Commande</span><span class="pill">LigneCommande (produit, tarif, bénéficiaire)</span><span class="pill">Paiement (moyen, montant)</span><span class="pill">Billet / Support</span><span class="pill">MouvementCaisse</span><span class="pill">Clôture Z</span>
+    </div>
+  </section>
+
+  <!-- M3 — BOUTIQUE & APP CLIENT -->
+  <section class="panel" id="p-boutique" role="tabpanel" aria-labelledby="t-boutique" tabindex="0" hidden>
+    <div class="h2row"><h2>M3 · Boutique en ligne &amp; App client</h2><span class="tagm">Socle</span></div>
+    <p class="lead-sub">Vendre 24/7 et donner au client une <b>app self-service</b> : acheter, réserver un cours, entrer avec son téléphone (badge + wallet), recharger. Zéro papier, expérience mobile simple.</p>
+
+    <div class="sub-h">Objectif</div>
+    <div class="note" style="margin-bottom:8px">Prolonger le guichet sur le web et le mobile, avec une vitrine <b>aux couleurs de chaque établissement</b> (white-label), un tunnel de commande court, et une app qui remplace la carte plastique par le smartphone.</div>
+
+    <div class="sub-h">Périmètre fonctionnel</div>
+    <div class="grid g3" style="margin-bottom:8px">
+      <div class="card"><h4>Boutique en ligne</h4><ul class="clean"><li><b>Vitrine white-label</b> par établissement</li><li>Catalogue, filtres, tri</li><li class="key"><b>Timed-entry</b> : créneau choisi à l'achat</li><li>Bénéficiaires par article</li><li>Paiement en ligne + <b>PayFiP</b></li><li>Connecteurs <b>OTA</b></li></ul></div>
+      <div class="card"><h4>App client (mobile)</h4><ul class="clean"><li>Mes billets / abonnements</li><li class="key"><b>Badge d'accès</b> : QR dynamique + <b>wallet</b></li><li>Réserver / annuler un cours</li><li>Recharger PMV / carte</li><li>Notifications push</li></ul></div>
+      <div class="card"><h4>Espace client (web)</h4><ul class="clean"><li>Historique achats &amp; passages</li><li>Suivi des <b>prélèvements SEPA</b></li><li>Gestion de la <b>famille</b></li><li>Justificatifs, factures</li><li>Consentements (RGPD)</li></ul></div>
+    </div>
+
+    <div class="sub-h">Écrans proposés</div>
+    <div class="screens" style="margin-bottom:18px">
+      <div class="scr"><div class="id">M3-01</div><div><div class="nm">Vitrine boutique</div><div class="ds">Catalogue white-label, filtres, tri, promos.</div></div></div>
+      <div class="scr"><div class="id">M3-02</div><div><div class="nm">Fiche produit + choix de créneau</div><div class="ds">Description, disponibilité, sélection d'un créneau horaire, ajout au panier.</div></div></div>
+      <div class="scr"><div class="id">M3-03</div><div><div class="nm">Tunnel de commande</div><div class="ds">Identification / création compte · bénéficiaires · paiement · confirmation.</div></div></div>
+      <div class="scr"><div class="id">M3-04</div><div><div class="nm">App — Mes billets &amp; badge</div><div class="ds">Billets/abos, QR d'accès, ajout au wallet.</div></div></div>
+      <div class="scr"><div class="id">M3-05</div><div><div class="nm">App — Réserver un cours</div><div class="ds">Planning, place dispo, réservation qui décompte le quota de la formule.</div></div></div>
+      <div class="scr"><div class="id">M3-06</div><div><div class="nm">Espace client — abonnement &amp; prélèvements</div><div class="ds">Abo en cours, échéances SEPA, famille, historique.</div></div></div>
+    </div>
+
+    <div class="sub-h">Maquette — M3-04 App client « Mes billets &amp; badge »</div>
+    <div class="wf" style="max-width:340px; margin-bottom:6px">
+      <div class="top"><span class="dots"><i></i></span><span class="cap">📱 App — Piscine de Belle Ville</span></div>
+      <div class="screen">
+        <div class="blk acc"><span class="bt">Badge d'accès</span><small>▢ QR dynamique (change toutes les 30 s)<br>« Approchez du tourniquet »</small></div>
+        <div class="blk warm"><span class="bt">＋ Ajouter à Apple / Google Wallet</span></div>
+        <div class="blk"><span class="bt">Mon abonnement</span><small>Gold — illimité · 1 aquagym/sem<br>Cours restants cette semaine : 1</small></div>
+        <div class="blk"><span class="bt">Ma carte 10 entrées</span><small>Passages restants : 6 / 12</small></div>
+        <div class="wfrow"><div class="blk"><span class="bt">Réserver</span></div><div class="blk"><span class="bt">Recharger</span></div></div>
+      </div>
+    </div>
+    <p class="cap-wf">Le téléphone devient le support d'accès. Le QR dynamique + le wallet suppriment la carte plastique et la fraude au partage.</p>
+
+    <div class="sub-h">Règles de gestion (extrait)</div>
+    <div class="rules" style="margin-bottom:18px">
+      <div class="ru"><span class="rn">RG-10</span><span class="rt">La vitrine est <b>white-label</b> : logo, couleurs, mentions par établissement ; un même catalogue peut être exposé sur plusieurs vitrines.</span></div>
+      <div class="ru"><span class="rn">RG-11</span><span class="rt">Pour un produit à jauge (musée, cours), l'achat en ligne impose le choix d'un <b>créneau</b> (timed-entry) ; le stock du créneau est décrémenté.</span></div>
+      <div class="ru"><span class="rn">RG-12</span><span class="rt">Le <b>badge mobile</b> est un QR <b>dynamique</b> lié à l'appareil (anti-partage), doublé d'un pass <b>wallet</b> ; il fonctionne en <b>hors-ligne</b> côté tourniquet.</span></div>
+      <div class="ru"><span class="rn">RG-13</span><span class="rt">Une <b>réservation de cours</b> décompte le quota inclus de la formule (M1) ou déclenche une vente à l'unité si le quota est épuisé.</span></div>
+    </div>
+    <div class="sub-h">Objets de données (principaux)</div>
+    <div class="wfrow wrap"><span class="pill">Vitrine</span><span class="pill">PanierEnLigne</span><span class="pill">CompteClient</span><span class="pill">Billet / PassWallet</span><span class="pill">Créneau</span><span class="pill">Réservation</span></div>
+  </section>
+
+  <!-- M4 — CRM -->
+  <section class="panel" id="p-crm" role="tabpanel" aria-labelledby="t-crm" tabindex="0" hidden>
+    <div class="h2row"><h2>M4 · CRM 360°</h2><span class="tagm">Socle</span></div>
+    <p class="lead-sub">Une <b>fiche client unique</b>, enrichie automatiquement à chaque vente, qui porte les familles, le porte-monnaie prépayé, l'historique d'accès et sert de base au marketing.</p>
+
+    <div class="sub-h">Objectif</div>
+    <div class="note" style="margin-bottom:8px">Connaître chaque usager (et sa famille), sans double saisie : toute vente, réservation ou passage alimente la fiche. Cette base propre alimente la segmentation, la fidélité et les campagnes.</div>
+
+    <div class="sub-h">Périmètre fonctionnel</div>
+    <div class="grid g3" style="margin-bottom:8px">
+      <div class="card"><h4>Fiche 360°</h4><ul class="clean"><li>Identité (physique / morale), coordonnées</li><li>Historique achats, <b>passages</b>, réservations</li><li>Abonnements &amp; cartes en cours</li><li>Documents, notes, consentements</li></ul></div>
+      <div class="card"><h4>Familles &amp; PMV</h4><ul class="clean"><li class="key"><b>Payeur ≠ bénéficiaire</b>, comptes famille</li><li class="key"><b>Porte-monnaie virtuel</b> prépayé (recharge, échéance)</li><li>Réseau / multi-entités</li></ul></div>
+      <div class="card"><h4>Marketing &amp; qualité</h4><ul class="clean"><li><b>Segments dynamiques</b> (profil + comportement)</li><li>Campagnes email / SMS / push</li><li>Fidélité, parrainage</li><li><b>Fusion de doublons</b>, RGPD</li></ul></div>
+    </div>
+
+    <div class="sub-h">Écrans proposés</div>
+    <div class="screens" style="margin-bottom:18px">
+      <div class="scr"><div class="id">M4-01</div><div><div class="nm">Recherche &amp; liste clients</div><div class="ds">Filtres, segments, export.</div></div></div>
+      <div class="scr"><div class="id">M4-02</div><div><div class="nm">Fiche client 360°</div><div class="ds">Vue unifiée : identité, historique, abos, famille, PMV, marketing.</div></div></div>
+      <div class="scr"><div class="id">M4-03</div><div><div class="nm">Gestion de la famille</div><div class="ds">Membres, bénéficiaires, autorisations, rattachement des achats.</div></div></div>
+      <div class="scr"><div class="id">M4-04</div><div><div class="nm">Segments &amp; campagnes</div><div class="ds">Constructeur de segment, envoi email/SMS, suivi.</div></div></div>
+      <div class="scr"><div class="id">M4-05</div><div><div class="nm">Fusion de doublons</div><div class="ds">Détection, rapprochement, fusion réversible.</div></div></div>
+    </div>
+
+    <div class="sub-h">Maquette — M4-02 Fiche client 360°</div>
+    <div class="wf" style="margin-bottom:6px">
+      <div class="top"><span class="dots"><i></i><i></i><i></i></span><span class="cap">Back-office › Clients › Famille Martin</span></div>
+      <div class="screen">
+        <div class="wfrow">
+          <div class="blk side acc"><span class="bt">Identité</span><small>Famille Martin<br>2 adultes · 2 enfants<br>member depuis 2023<br>PMV : 24,00 €</small></div>
+          <div class="blk"><span class="bt">Abonnements &amp; cartes</span><small>Gold (Sophie) — actif · SEPA<br>Carte 10 (famille) — 6 restants</small></div>
+          <div class="blk"><span class="bt">Segments</span><small>Abonné actif · Aquagym<br>Panier moyen 38 €</small></div>
+        </div>
+        <div class="wfrow">
+          <div class="blk" style="flex:2"><span class="bt">Historique (achats · passages · réservations)</span><small>12/08 Entrée piscine ×2 · 10/08 Aquabike réservé · 01/08 Recharge PMV 20 €…</small></div>
+          <div class="blk warm side"><span class="bt">Actions</span><small>Vendre · Recharger PMV · Envoyer un message · Gérer la famille</small></div>
+        </div>
+      </div>
+    </div>
+    <p class="cap-wf">Tout est sur une page : l'agent d'accueil voit l'essentiel en un coup d'œil et agit (vendre, recharger) sans changer d'écran.</p>
+
+    <div class="sub-h">Règles de gestion (extrait)</div>
+    <div class="rules" style="margin-bottom:18px">
+      <div class="ru"><span class="rn">RG-14</span><span class="rt">Toute transaction (guichet, en ligne, borne) <b>enrichit automatiquement</b> la fiche — aucune re-saisie.</span></div>
+      <div class="ru"><span class="rn">RG-15</span><span class="rt">Un achat a un <b>payeur</b> et un ou plusieurs <b>bénéficiaires</b> (potentiellement d'une même famille) ; les droits/abos sont portés par le bénéficiaire.</span></div>
+      <div class="ru"><span class="rn">RG-16</span><span class="rt">Le <b>PMV</b> est un solde prépayé avec date de validité ; utilisable comme moyen de paiement (M2).</span></div>
+      <div class="ru"><span class="rn">RG-17</span><span class="rt">Un <b>segment dynamique</b> est réévalué en continu ; la fusion de doublons est <b>traçable et réversible</b>.</span></div>
+    </div>
+    <div class="sub-h">Objets de données (principaux)</div>
+    <div class="wfrow wrap"><span class="pill">Client (physique/morale)</span><span class="pill">Famille</span><span class="pill">Bénéficiaire</span><span class="pill">PMV</span><span class="pill">Segment</span><span class="pill">Campagne</span><span class="pill">Consentement</span></div>
+  </section>
+
+  <!-- M5 — PLANNING & RESERVATION -->
+  <section class="panel" id="p-planning" role="tabpanel" aria-labelledby="t-planning" tabindex="0" hidden>
+    <div class="h2row"><h2>M5 · Planning &amp; Réservation</h2><span class="tagm">Socle</span></div>
+    <p class="lead-sub">Gérer les <b>séances liées à un planning</b> (aquagym, aquabike, aquazumba, leçons…), leurs <b>ressources</b> (encadrant, bassin, matériel) et les <b>réservations</b> — au guichet comme en ligne.</p>
+
+    <div class="sub-h">Objectif</div>
+    <div class="note" style="margin-bottom:8px">Publier un planning d'activités, gérer les capacités et les listes d'attente, et articuler la réservation avec les formules d'abonnement (quota inclus) et la vente à l'unité.</div>
+
+    <div class="sub-h">Périmètre fonctionnel</div>
+    <div class="grid g3" style="margin-bottom:8px">
+      <div class="card"><h4>Activités &amp; séances</h4><ul class="clean"><li>Types d'activité (aquagym, aquabike…)</li><li><b>Séances</b> datées, récurrence</li><li>Capacité, niveau, durée</li></ul></div>
+      <div class="card"><h4>Ressources</h4><ul class="clean"><li><b>Encadrants</b> (compétences, dispo)</li><li>Espaces (bassin, salle, ligne d'eau)</li><li>Matériel (vélos, etc.)</li><li>Détection de <b>conflits</b></li></ul></div>
+      <div class="card"><h4>Réservation</h4><ul class="clean"><li>En ligne / app / guichet</li><li class="key">Décompte du <b>quota formule</b> ou vente à l'unité</li><li><b>Liste d'attente</b></li><li>Annulation selon délai</li></ul></div>
+    </div>
+
+    <div class="sub-h">Écrans proposés</div>
+    <div class="screens" style="margin-bottom:18px">
+      <div class="scr"><div class="id">M5-01</div><div><div class="nm">Calendrier des séances</div><div class="ds">Vue jour/semaine, occupation, taux de remplissage.</div></div></div>
+      <div class="scr"><div class="id">M5-02</div><div><div class="nm">Fiche activité / séance</div><div class="ds">Capacité, encadrant, espace, prix, récurrence.</div></div></div>
+      <div class="scr"><div class="id">M5-03</div><div><div class="nm">Réserver (guichet + client)</div><div class="ds">Choix séance, place, décompte quota ou vente.</div></div></div>
+      <div class="scr"><div class="id">M5-04</div><div><div class="nm">Ressources &amp; encadrants</div><div class="ds">Plannings des ressources, conflits, disponibilités.</div></div></div>
+      <div class="scr"><div class="id">M5-05</div><div><div class="nm">Liste des inscrits (app encadrant)</div><div class="ds">Émargement, présents/absents, compte-rendu.</div></div></div>
+    </div>
+
+    <div class="sub-h">Maquette — M5-01 Calendrier des séances</div>
+    <div class="wf" style="margin-bottom:6px">
+      <div class="top"><span class="dots"><i></i><i></i><i></i></span><span class="cap">Back-office › Planning — semaine du 17 août</span></div>
+      <div class="screen">
+        <div class="wfrow wrap">
+          <div class="blk"><span class="bt">Lun 09:00</span><small>Aquagym · Bassin 1<br>Marie · 12/15 ▓▓▓░</small></div>
+          <div class="blk acc"><span class="bt">Lun 10:00</span><small>Aquabike · Bassin 2<br>Karim · 15/15 — complet<br>Liste d'attente : 3</small></div>
+          <div class="blk"><span class="bt">Mar 18:30</span><small>Aquazumba · Bassin 1<br>Léa · 8/20 ▓░░░</small></div>
+          <div class="blk"><span class="bt">Mer 09:00</span><small>Leçon enfants · Ligne 3<br>Marie · 4/6</small></div>
+        </div>
+        <div class="wfrow"><div class="blk warm"><span class="bt">＋ Nouvelle séance</span><small>ou glisser pour dupliquer / décaler</small></div></div>
+      </div>
+    </div>
+    <p class="cap-wf">Le remplissage et la liste d'attente sont visibles directement sur la case ; la jauge colore la disponibilité.</p>
+
+    <div class="sub-h">Règles de gestion (extrait)</div>
+    <div class="rules" style="margin-bottom:18px">
+      <div class="ru"><span class="rn">RG-19</span><span class="rt">Une séance a une <b>capacité</b> ; au-delà, les demandes basculent en <b>liste d'attente</b> (promotion automatique si désistement).</span></div>
+      <div class="ru"><span class="rn">RG-20</span><span class="rt">Une réservation <b>décompte le quota inclus</b> de la formule du bénéficiaire ; à défaut, elle déclenche une vente à l'unité (M2).</span></div>
+      <div class="ru"><span class="rn">RG-21</span><span class="rt">Un <b>conflit de ressource</b> (encadrant ou espace déjà pris) est bloqué à la création de la séance.</span></div>
+      <div class="ru"><span class="rn">RG-22</span><span class="rt">L'<b>annulation</b> par le client est possible selon un délai paramétrable ; au-delà, le quota/la place est perdu.</span></div>
+    </div>
+    <div class="sub-h">Objets de données (principaux)</div>
+    <div class="wfrow wrap"><span class="pill">Activité</span><span class="pill">Séance (date, capacité)</span><span class="pill">Ressource (encadrant/espace/matériel)</span><span class="pill">Réservation</span><span class="pill">ListeAttente</span><span class="pill">Émargement</span></div>
+  </section>
+
+  <!-- GROUPES & SCOLAIRES -->
+  <section class="panel" id="p-groupes" role="tabpanel" aria-labelledby="t-groupes" tabindex="0" hidden>
+    <div class="h2row"><h2>🏫 Groupes, scolaires &amp; associations</h2><span class="tagm">B2B / B2G · flux dédié</span></div>
+    <p class="lead-sub">Un flux à part entière, différent du guichet individuel : réservation à l'avance, devis, facturation différée, référent unique, listes de participants. Fort volume, forte récurrence — souvent mal outillé chez les concurrents.</p>
+
+    <div class="sub-h">Ce qu'avait déjà AWOO (à conserver)</div>
+    <div class="note" style="margin-bottom:18px">Type produit <b>« Module Groupe »</b> · <b>planning groupe par client</b> · <b>Devis</b> convertible en commande (+ acompte) · <b>ClickAndPay</b> (lien de paiement à distance) · <b>Vouchers</b> (bons CE) · tarifs dédiés <b>Groupe / Scolaire / Établissement scolaire / Association / Entreprise</b> · facturation riche (devis, bon de réservation, facture d'acompte, proforma…). Base solide — on la modernise et on ajoute le self-service + Chorus Pro.</div>
+
+    <div class="sub-h">3 profils, 3 logiques</div>
+    <div class="grid g3" style="margin-bottom:18px">
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">Éducation</div><h3 style="font-size:15px">Scolaires</h3><ul class="clean">
+        <li>Réservation à l'avance sur <b>créneaux dédiés</b></li>
+        <li>Tarif scolaire · <b>gratuité des accompagnateurs</b> (ratio configurable)</li>
+        <li><b>Facturation à l'établissement</b> (Chorus Pro / mandat administratif)</li>
+        <li>Liste d'élèves, encadrants, <b>autorisation parentale</b></li>
+        <li>Accès <b>groupé</b> (1 passage pour la classe, comptage)</li></ul></div>
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">Loisirs / CE / tourisme</div><h3 style="font-size:15px">Groupes</h3><ul class="clean">
+        <li><b>Devis</b> → acompte → solde, <b>paiement différé</b></li>
+        <li>Tarif groupe (à partir de N personnes)</li>
+        <li>Référent unique, <b>ClickAndPay</b></li>
+        <li><b>Bons / vouchers</b> (comités d'entreprise)</li>
+        <li>Agences / OTA</li></ul></div>
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">Sport</div><h3 style="font-size:15px">Associations / clubs</h3><ul class="clean">
+        <li><b>Créneaux récurrents</b> (lignes d'eau, terrains, glace)</li>
+        <li><b>Convention annuelle</b> + facturation périodique</li>
+        <li>Accès des <b>licenciés / membres</b> (listes)</li>
+        <li>Subvention / tarif association</li>
+        <li>Suivi d'occupation des créneaux réservés</li></ul></div>
+    </div>
+
+    <div class="sub-h">Le flux type (dossier groupe)</div>
+    <div class="wf" style="margin-bottom:18px">
+      <div class="top"><span class="dots"><i></i><i></i><i></i></span><span class="cap">De la demande à l'encaissement</span></div>
+      <div class="screen"><div class="wfrow wrap">
+        <div class="blk acc"><span class="bt">1 · Demande</span><small>Référent (enseignant, CE, club) — en ligne ou au téléphone</small></div>
+        <div class="blk"><span class="bt">2 · Devis</span><small>Créneau réservé (jauge dédiée), tarif groupe, gratuités auto</small></div>
+        <div class="blk"><span class="bt">3 · Acompte</span><small>ClickAndPay ; documents (convention, autorisation) signés</small></div>
+        <div class="blk"><span class="bt">4 · Réalisation</span><small>Accès groupé au tourniquet, liste émargée</small></div>
+        <div class="blk warm"><span class="bt">5 · Facturation</span><small>Facture → Chorus Pro (école) / convention (club) / solde (CE)</small></div>
+      </div></div>
+    </div>
+
+    <div class="sub-h">Ce qu'on ajoute / améliore</div>
+    <div class="grid g4" style="margin-bottom:8px">
+      <div class="card"><div class="chip crit" style="margin-bottom:8px">Fort</div><h3 style="font-size:14px">Portail référent self-service</h3><p class="k" style="margin-bottom:0">L'enseignant / le CE / le club réserve, dépose sa <b>liste</b> et ses documents, paie — sans appeler l'accueil.</p></div>
+      <div class="card"><div class="chip crit" style="margin-bottom:8px">Public</div><h3 style="font-size:14px">Facturation Chorus Pro</h3><p class="k" style="margin-bottom:0">Facturer un établissement scolaire / une mairie via Chorus Pro (B2G obligatoire).</p></div>
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">Accès</div><h3 style="font-size:14px">Entrée groupée simplifiée</h3><p class="k" style="margin-bottom:0"><b>1 passage pour 30 élèves</b> (comptage), sans QR individuel — relié au « passage sans support ».</p></div>
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">Règles</div><h3 style="font-size:14px">Gratuités &amp; ratios</h3><p class="k" style="margin-bottom:0">Ex. 1 accompagnateur gratuit pour 8 élèves — <b>calcul automatique</b>.</p></div>
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">Légal</div><h3 style="font-size:14px">Signature électronique</h3><p class="k" style="margin-bottom:0">Convention, autorisation parentale, CGV.</p></div>
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">Sport</div><h3 style="font-size:14px">Créneaux récurrents + convention</h3><p class="k" style="margin-bottom:0">Réservation hebdo à l'année, facturation périodique automatique.</p></div>
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">Data</div><h3 style="font-size:14px">Listes de participants</h3><p class="k" style="margin-bottom:0">Import Excel, nominatif ou non, réutilisable d'une visite à l'autre.</p></div>
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">Pilotage</div><h3 style="font-size:14px">Reporting groupes</h3><p class="k" style="margin-bottom:0">CA scolaires/groupes/clubs, occupation des créneaux dédiés.</p></div>
+    </div>
+
+    <div class="sub-h">Écrans proposés</div>
+    <div class="screens" style="margin-bottom:8px">
+      <div class="scr"><div class="id">G-01</div><div><div class="nm">Planning des créneaux dédiés</div><div class="ds">Vue des créneaux groupes/scolaires/clubs, jauge réservée, récurrence.</div></div></div>
+      <div class="scr"><div class="id">G-02</div><div><div class="nm">Devis groupe</div><div class="ds">Composition (produits, effectifs, gratuités auto), acompte, conversion en commande.</div></div></div>
+      <div class="scr"><div class="id">G-03</div><div><div class="nm">Dossier groupe / scolaire</div><div class="ds">Référent, liste de participants, documents signés, paiement, historique.</div></div></div>
+      <div class="scr"><div class="id">G-04</div><div><div class="nm">Portail référent (self-service)</div><div class="ds">Réserver, déposer sa liste, signer, payer en ligne.</div></div></div>
+      <div class="scr"><div class="id">G-05</div><div><div class="nm">Facturation groupe</div><div class="ds">Facture → Chorus Pro / convention / solde ; acomptes, avoirs.</div></div></div>
+    </div>
+    <div class="note"><b>Règles clés</b> — RG-40 : un créneau dédié réserve une <b>part de la jauge</b> (ex. 30 places bloquées pour une classe) · RG-41 : les <b>gratuités accompagnateurs</b> se calculent par ratio configurable · RG-42 : la facturation s'adapte au profil (Chorus Pro pour le public, convention périodique pour les clubs, solde/bon pour les CE) · RG-43 : l'<b>accès groupé</b> valide N entrées en un geste, rattachées au dossier.</div>
+  </section>
+
+  <!-- M6 — COMPTA & REGIE -->
+  <section class="panel" id="p-compta" role="tabpanel" aria-labelledby="t-compta" tabindex="0" hidden>
+    <div class="h2row"><h2>M6 · Compta &amp; Régie</h2><span class="tagm">Socle · bi-régime</span></div>
+    <p class="lead-sub">Le module <b>bi-régime</b> : un « profil d'exploitant » commute le plan de comptes, la régie, les exports et le reporting. Il gère la <b>reconnaissance du revenu (PCA)</b>, la <b>TVA multi-taux</b> et la conformité (NF525).</p>
+
+    <div class="sub-h">Objectif</div>
+    <div class="note" style="margin-bottom:8px">Produire une comptabilité juste et conforme quel que soit l'exploitant (administration, DSP, groupe), étaler correctement le revenu des ventes d'avance, et générer les exports attendus par chaque interlocuteur (comptable public, délégant, expert-comptable).</div>
+
+    <div class="sub-h">Périmètre fonctionnel</div>
+    <div class="grid g3" style="margin-bottom:8px">
+      <div class="card"><h4>Bi-régime &amp; régie</h4><ul class="clean"><li class="key"><b>Profil exploitant</b> (régie / DSP / groupe)</li><li>Plan de comptes <b>M57 / M4</b> (public) ou <b>PCG</b> (privé)</li><li><b>Régie de recettes</b> : modes autorisés, plafond, versement, justificatifs</li><li><b>PayFiP · PES V2 / Hélios</b>, titres de recettes</li></ul></div>
+      <div class="card"><h4>PCA &amp; revenu</h4><ul class="clean"><li class="key">Vente d'avance → compte <b>487</b></li><li>Abonnement = <b>étalement</b> prorata temporis</li><li>Carte 10 = reconnaissance <b>à la consommation</b> (chaque passage)</li><li><b>Écritures &amp; fichiers générés automatiquement</b></li></ul></div>
+      <div class="card"><h4>TVA &amp; exports</h4><ul class="clean"><li><b>TVA multi-taux</b> par article + paniers mixtes + états par taux</li><li>Exports privé : CIEL · EBP · Sage · Cegid · <b>FEC</b></li><li>Export public : PES V2 / Hélios + états de régie</li><li class="key"><b>RAD délégataire</b> + calcul des redevances</li></ul></div>
+    </div>
+
+    <div class="sub-h">Écrans proposés</div>
+    <div class="screens" style="margin-bottom:18px">
+      <div class="scr"><div class="id">M6-01</div><div><div class="nm">Profil exploitant &amp; plan de comptes</div><div class="ds">Choix régie/DSP/groupe, nomenclature, comptes de rattachement produits/TVA.</div></div></div>
+      <div class="scr"><div class="id">M6-02</div><div><div class="nm">Journal &amp; écritures</div><div class="ds">Écritures générées par les ventes/encaissements, lettrage, contrôle.</div></div></div>
+      <div class="scr"><div class="id">M6-03</div><div><div class="nm">Assistant PCA</div><div class="ds">Calcul des produits constatés d'avance : dotations &amp; reprises, génération des écritures.</div></div></div>
+      <div class="scr"><div class="id">M6-04</div><div><div class="nm">États de TVA</div><div class="ds">TVA collectée par taux, base de la déclaration.</div></div></div>
+      <div class="scr"><div class="id">M6-05</div><div><div class="nm">Exports comptables</div><div class="ds">Génération commutée par profil (public / privé), planifiable.</div></div></div>
+      <div class="scr"><div class="id">M6-06</div><div><div class="nm">Reporting délégant (RAD) &amp; redevances</div><div class="ds">Compte d'exploitation, CA/fréquentation ventilés, calcul des reversements.</div></div></div>
+    </div>
+
+    <div class="sub-h">Maquette — M6-03 Assistant PCA</div>
+    <div class="wf" style="margin-bottom:6px">
+      <div class="top"><span class="dots"><i></i><i></i><i></i></span><span class="cap">Back-office › Compta › Produits constatés d'avance — clôture août</span></div>
+      <div class="screen">
+        <div class="wfrow">
+          <div class="blk acc" style="flex:2"><span class="bt">À étaler (abonnements)</span><small>128 abonnements mensuels · 4 320 € encaissés en août<br>→ part reconnue août · part reportée sept. (compte 487)</small></div>
+          <div class="blk"><span class="bt">À la consommation (cartes 10)</span><small>312 passages contrôlés en août<br>→ 312 entrées reconnues (bascule 487 → produit)</small></div>
+        </div>
+        <div class="wfrow">
+          <div class="blk"><span class="bt">Écritures proposées</span><small>Dotation PCA · Reprise PCA · par site &amp; par activité</small></div>
+          <div class="blk warm side"><span class="bt">Valider &amp; générer</span><small>→ Journal + fichier d'export</small></div>
+        </div>
+      </div>
+    </div>
+    <p class="cap-wf">Le contrôle d'accès (chaque passage) est la source de la reconnaissance « à la consommation » — l'assistant relie entrées et comptabilité automatiquement.</p>
+
+    <div class="sub-h">Règles de gestion (extrait)</div>
+    <div class="rules" style="margin-bottom:18px">
+      <div class="ru"><span class="rn">RG-23</span><span class="rt">Le <b>profil d'exploitant</b> commute le plan de comptes, le module régie, les formats d'export et le reporting tiers.</span></div>
+      <div class="ru"><span class="rn">RG-24</span><span class="rt">Une vente encaissée d'avance crédite le <b>487</b> ; le revenu est reconnu <b>au prorata temporis</b> (abonnement) ou <b>au passage</b> (carte), via écritures automatiques.</span></div>
+      <div class="ru"><span class="rn">RG-25</span><span class="rt">Chaque ligne porte son <b>taux de TVA</b> et ses <b>axes analytiques</b> ; les paniers mixtes ventilent la TVA par taux.</span></div>
+      <div class="ru"><span class="rn">RG-26</span><span class="rt">Le logiciel doit être <b>certifié NF525</b> (inaltérabilité, sécurisation, conservation, archivage).</span></div>
+    </div>
+    <div class="sub-h">Objets de données (principaux)</div>
+    <div class="wfrow wrap"><span class="pill">ProfilExploitant</span><span class="pill">PlanDeComptes</span><span class="pill">Écriture</span><span class="pill">PCA (487)</span><span class="pill">TauxTVA</span><span class="pill">ExportCompta</span><span class="pill">RAD</span><span class="pill">Redevance</span></div>
+  </section>
+
+  <!-- M7 — REPORTING -->
+  <section class="panel" id="p-report" role="tabpanel" aria-labelledby="t-report" tabindex="0" hidden>
+    <div class="h2row"><h2>M7 · Reporting &amp; Analyse</h2><span class="tagm">Socle · multi-niveaux</span></div>
+    <p class="lead-sub">Piloter à trois niveaux — <b>établissement → région → direction générale</b> — sur les mêmes axes analytiques, chacun ne voyant que son périmètre.</p>
+
+    <div class="sub-h">Objectif</div>
+    <div class="note" style="margin-bottom:8px">Donner à chaque responsable le bon tableau de bord : opérationnel et temps réel au site, comparatif en région, consolidé au siège — à partir d'une source unique et d'axes analytiques cohérents (site / activité / produit / région).</div>
+
+    <div class="sub-h">Périmètre fonctionnel</div>
+    <div class="grid g3" style="margin-bottom:8px">
+      <div class="card"><h4>Tableaux de bord par niveau</h4><ul class="clean"><li><b>Site</b> : CA du jour, fréquentation, jauge, fond de caisse</li><li><b>Région</b> : comparaison inter-sites, remplissage, impayés</li><li><b>DG</b> : consolidé, benchmarks, saisonnalité</li></ul></div>
+      <div class="card"><h4>Analyses multi-axes</h4><ul class="clean"><li>CA par activité / tarif / produit</li><li>Fréquentation (attention <b>FMI ≠ cumul</b>)</li><li>Encaissements par moyen de paiement</li><li>PCA · abonnements actifs · impayés</li></ul></div>
+      <div class="card"><h4>Diffusion</h4><ul class="clean"><li><b>Consolidation ascendante</b> automatique</li><li>Exports (Excel, PDF)</li><li><b>Rapports planifiés</b> (envoi périodique)</li></ul></div>
+    </div>
+
+    <div class="sub-h">Écrans proposés</div>
+    <div class="screens" style="margin-bottom:18px">
+      <div class="scr"><div class="id">M7-01</div><div><div class="nm">Dashboard établissement</div><div class="ds">Temps réel : CA, entrées, jauge, caisse.</div></div></div>
+      <div class="scr"><div class="id">M7-02</div><div><div class="nm">Dashboard région</div><div class="ds">Comparaison inter-sites, classements, écarts.</div></div></div>
+      <div class="scr"><div class="id">M7-03</div><div><div class="nm">Dashboard direction générale</div><div class="ds">Consolidé groupe, tendances, benchmarks.</div></div></div>
+      <div class="scr"><div class="id">M7-04</div><div><div class="nm">Explorateur d'analyses</div><div class="ds">Croisement libre par axes (site/activité/produit/période).</div></div></div>
+      <div class="scr"><div class="id">M7-05</div><div><div class="nm">Rapports planifiés</div><div class="ds">Modèles, destinataires, périodicité.</div></div></div>
+    </div>
+
+    <div class="sub-h">Maquette — M7-02 Dashboard région</div>
+    <div class="wf" style="margin-bottom:6px">
+      <div class="top"><span class="dots"><i></i><i></i><i></i></span><span class="cap">Reporting › Région Grand-Est — août 2026</span></div>
+      <div class="screen">
+        <div class="wfrow wrap">
+          <div class="blk acc"><span class="bt">CA région</span><small>412 k€ · +6 % vs n-1</small></div>
+          <div class="blk acc"><span class="bt">Fréquentation</span><small>84 200 entrées</small></div>
+          <div class="blk acc"><span class="bt">Abonnés actifs</span><small>3 940</small></div>
+          <div class="blk acc"><span class="bt">Impayés</span><small>2,1 %</small></div>
+        </div>
+        <div class="wfrow"><div class="blk" style="flex:2"><span class="bt">Comparaison inter-sites</span><small>Metz ▓▓▓▓▓ 128 k€ · Nancy ▓▓▓▓ 104 k€ · Épinal ▓▓▓ 92 k€ · Thionville ▓▓ 88 k€</small></div><div class="blk warm side"><span class="bt">Filtrer / exporter</span><small>Par activité · période · site</small></div></div>
+      </div>
+    </div>
+    <p class="cap-wf">Un directeur régional voit ses sites côte à côte ; un clic descend au détail d'un site (drill-down). Le siège a la même vue, consolidée sur toutes les régions.</p>
+
+    <div class="sub-h">Règles de gestion (extrait)</div>
+    <div class="rules" style="margin-bottom:18px">
+      <div class="ru"><span class="rn">RG-28</span><span class="rt">Chaque utilisateur ne voit que <b>son périmètre</b> (site / région / groupe) — droits hérités du niveau d'entité (M8).</span></div>
+      <div class="ru"><span class="rn">RG-29</span><span class="rt">Toute mesure s'<b>agrège</b> sur les axes analytiques (site → région → groupe ; par activité ; par produit) depuis une source unique.</span></div>
+      <div class="ru"><span class="rn">RG-30</span><span class="rt">La <b>FMI</b> (présence simultanée, sécurité ERP) est distincte de la <b>fréquentation cumulée</b> (pilotage) — les deux sont produites.</span></div>
+    </div>
+    <div class="sub-h">Objets de données (principaux)</div>
+    <div class="wfrow wrap"><span class="pill">Indicateur</span><span class="pill">TableauDeBord</span><span class="pill">AxeAnalytique</span><span class="pill">RapportPlanifié</span></div>
+  </section>
+
+  <!-- M8 — ADMIN & DROITS -->
+  <section class="panel" id="p-admin" role="tabpanel" aria-labelledby="t-admin" tabindex="0" hidden>
+    <div class="h2row"><h2>M8 · Administration &amp; Droits</h2><span class="tagm">Socle · transverse</span></div>
+    <p class="lead-sub">Le socle transverse : utilisateurs, <b>droits fins</b> (par module, action et établissement), entités multi-niveaux, référentiels/paramètres et journal d'audit. C'est ce qui rend l'<b>UI adaptative</b> possible.</p>
+
+    <div class="sub-h">Objectif</div>
+    <div class="note" style="margin-bottom:8px">Permettre à chaque organisation (mairie, DSP, groupe) de définir finement qui peut faire quoi, où — et faire en sorte que l'interface <b>ne montre à chacun que ce qui le concerne</b> (simplicité par le droit).</div>
+
+    <div class="sub-h">Périmètre fonctionnel</div>
+    <div class="grid g3" style="margin-bottom:8px">
+      <div class="card"><h4>Utilisateurs &amp; rôles</h4><ul class="clean"><li class="key">Permissions fines <b>module × action</b></li><li>Rôles composables, héritage par niveau</li><li class="key">Rôle <b>différent selon l'établissement</b></li><li>SSO / MFA (option)</li></ul></div>
+      <div class="card"><h4>Entités &amp; sites</h4><ul class="clean"><li>Groupe · région · établissement · espaces</li><li><b>Profil d'exploitant</b> par entité</li><li>Points de vente / caisses</li><li>Réseau / partage de fichier</li></ul></div>
+      <div class="card"><h4>Paramètres &amp; sécurité</h4><ul class="clean"><li>Référentiels (tarifs, TVA, moyens de paiement)</li><li><b>Matériel &amp; périphériques</b> (TPE, imprimantes, lecteurs)</li><li><b>Journal d'audit</b> inaltérable</li><li>RGPD (consentements, purge, export)</li></ul></div>
+    </div>
+
+    <div class="sub-h">Écrans proposés</div>
+    <div class="screens" style="margin-bottom:18px">
+      <div class="scr"><div class="id">M8-01</div><div><div class="nm">Utilisateurs</div><div class="ds">Comptes, rôles par établissement, statut, invitations.</div></div></div>
+      <div class="scr"><div class="id">M8-02</div><div><div class="nm">Rôles &amp; permissions</div><div class="ds">Matrice module × action, héritage, modèles de rôles.</div></div></div>
+      <div class="scr"><div class="id">M8-03</div><div><div class="nm">Entités &amp; établissements</div><div class="ds">Arbre groupe/région/site, profil exploitant, points de vente.</div></div></div>
+      <div class="scr"><div class="id">M8-04</div><div><div class="nm">Paramètres généraux &amp; matériel</div><div class="ds">Référentiels, périphériques, moyens de paiement.</div></div></div>
+      <div class="scr"><div class="id">M8-05</div><div><div class="nm">Journal d'audit</div><div class="ds">Traçabilité des actions sensibles.</div></div></div>
+    </div>
+
+    <div class="sub-h">Maquette — M8-02 Rôles &amp; permissions</div>
+    <div class="wf" style="margin-bottom:6px">
+      <div class="top"><span class="dots"><i></i><i></i><i></i></span><span class="cap">Admin › Rôles — « Agent d'accueil »</span></div>
+      <div class="screen">
+        <div class="wfrow"><div class="blk side acc"><span class="bt">Rôle</span><small>Agent d'accueil<br>Portée : Piscine de Belle Ville</small></div>
+          <div class="blk"><span class="bt">Permissions (module × action)</span><small>Caisse : vendre ✓ · rembourser ✗<br>Client : voir ✓ · fusionner ✗<br>Offre : voir ✓ · éditer ✗<br>Compta : ✗ · Reporting : site seul ✓</small></div></div>
+        <div class="wfrow"><div class="blk warm"><span class="bt">Aperçu de l'UI résultante</span><small>Les menus Compta et Admin sont masqués ; l'écran de caisse est complet.</small></div></div>
+      </div>
+    </div>
+    <p class="cap-wf">Le droit pilote directement l'interface : ce qui n'est pas permis n'apparaît pas → moins de boutons, moins de risque d'erreur, plus de simplicité.</p>
+
+    <div class="sub-h">Règles de gestion (extrait)</div>
+    <div class="rules" style="margin-bottom:18px">
+      <div class="ru"><span class="rn">RG-31</span><span class="rt">Une <b>permission</b> = un couple <b>module × action</b> ; les rôles la composent et l'<b>héritent par niveau d'entité</b>.</span></div>
+      <div class="ru"><span class="rn">RG-32</span><span class="rt">Un utilisateur peut avoir des <b>rôles différents selon l'établissement</b> (agent ici, responsable là).</span></div>
+      <div class="ru"><span class="rn">RG-33</span><span class="rt">L'<b>interface s'adapte aux droits</b> : ce qui n'est pas autorisé est masqué, pas seulement désactivé.</span></div>
+      <div class="ru"><span class="rn">RG-34</span><span class="rt">Les actions sensibles (remboursement, fusion, export, clôture) sont <b>tracées</b> dans un journal inaltérable.</span></div>
+    </div>
+    <div class="sub-h">Objets de données (principaux)</div>
+    <div class="wfrow wrap"><span class="pill">Utilisateur</span><span class="pill">Rôle</span><span class="pill">Permission (module×action)</span><span class="pill">Entité (groupe/région/site)</span><span class="pill">Paramètre</span><span class="pill">Périphérique</span><span class="pill">JournalAudit</span></div>
+  </section>
+
+  <!-- CONTRÔLE D'ACCÈS -->
+  <section class="panel" id="p-acces" role="tabpanel" aria-labelledby="t-acces" tabindex="0" hidden>
+    <div class="h2row"><h2>🎯 Contrôle d'accès</h2><span class="tagm">Vertical · cœur de valeur</span></div>
+    <p class="lead-sub">Piloter le matériel IT Cotation (ITBOX + tourniquets + lecteurs), <b>valider les entrées</b>, <b>compter les passages</b>, gérer la <b>jauge/FMI</b> — y compris hors-ligne et pour les personnes sans support scannable.</p>
+
+    <div class="sub-h">Objectif</div>
+    <div class="note" style="margin-bottom:8px">Faire du contrôle d'accès un service fiable et simple : le bon droit ouvre le bon tourniquet, chaque passage est compté et rattaché, la sécurité (jauge) est respectée, et rien ne s'arrête si le réseau tombe.</div>
+
+    <div class="sub-h">Périmètre fonctionnel</div>
+    <div class="grid g3" style="margin-bottom:8px">
+      <div class="card"><h4>Configuration</h4><ul class="clean"><li><b>Espace → Contrôleur → Équipement</b></li><li>Sens (entrée / sortie), anti-passback</li><li><b>Marges de validation</b> (avance/retard horaire)</li><li>Seuil de <b>jauge / FMI</b> par espace</li></ul></div>
+      <div class="card"><h4>Validation &amp; supports</h4><ul class="clean"><li>QR (dynamique), RFID, <b>wallet</b></li><li><b>Appairage</b> support ↔ droit (carte 10, abo)</li><li class="key"><b>Passage sans support</b> (bébé, accompagnant) : comptage non nominatif</li><li>Contrôle <b>mobile</b> (app staff) + coupe-file</li></ul></div>
+      <div class="card"><h4>Supervision &amp; comptage</h4><ul class="clean"><li>État temps réel des accès</li><li class="key"><b>Jauge live</b> (présence) + <b>passages cumulés</b></li><li><b>Mode hors-ligne</b> + liste de révocation + synchro</li><li>Journal des passages horodaté</li></ul></div>
+    </div>
+
+    <div class="sub-h">Écrans proposés</div>
+    <div class="screens" style="margin-bottom:18px">
+      <div class="scr"><div class="id">A-01</div><div><div class="nm">Configuration espaces &amp; contrôleurs</div><div class="ds">Arbre Espace/Contrôleur/Équipement, sens, marges, seuil FMI.</div></div></div>
+      <div class="scr"><div class="id">A-02</div><div><div class="nm">Appairage support</div><div class="ds">Associer une carte/bracelet RFID à un droit (à la caisse ou en autonome).</div></div></div>
+      <div class="scr"><div class="id">A-03</div><div><div class="nm">Supervision temps réel</div><div class="ds">Jauge par espace, passages, incidents, ouverture manuelle.</div></div></div>
+      <div class="scr"><div class="id">A-04</div><div><div class="nm">Contrôle mobile (app staff)</div><div class="ds">Scan smartphone, coupe-file, passage sans support.</div></div></div>
+      <div class="scr"><div class="id">A-05</div><div><div class="nm">Journal des passages</div><div class="ds">Historique horodaté, rattaché droit / espace / support.</div></div></div>
+    </div>
+
+    <div class="sub-h">Maquette — A-03 Supervision temps réel</div>
+    <div class="wf" style="margin-bottom:6px">
+      <div class="top"><span class="dots"><i></i><i></i><i></i></span><span class="cap">Contrôle d'accès › Piscine de Belle Ville — temps réel</span></div>
+      <div class="screen">
+        <div class="wfrow wrap">
+          <div class="blk acc"><span class="bt">Jauge bassin (FMI)</span><small>▓▓▓▓▓▓▓░░░ 214 / 300<br>présence simultanée · sécurité OK</small></div>
+          <div class="blk"><span class="bt">Passages du jour</span><small>1 128 entrées cumulées</small></div>
+          <div class="blk warm"><span class="bt">Statut réseau</span><small>Tourniquet 2 : hors-ligne<br>→ validation locale + synchro en attente</small></div>
+        </div>
+        <div class="wfrow">
+          <div class="blk" style="flex:2"><span class="bt">Contrôleurs</span><small>Entrée principale ✓ · Entrée groupes ✓ · Sortie ✓ · Accès aquagym (marge ±15 min) ✓</small></div>
+          <div class="blk side"><span class="bt">Actions</span><small>Ouverture manuelle · Passage sans support (+1 compté) · Fermer un accès</small></div>
+        </div>
+      </div>
+    </div>
+    <p class="cap-wf">Deux compteurs distincts : la <b>jauge</b> (présents maintenant = sécurité) et les <b>passages cumulés</b> (pilotage / compta). Le bouton « passage sans support » gère le bébé/accompagnant.</p>
+
+    <div class="sub-h">Règles de gestion (extrait)</div>
+    <div class="rules" style="margin-bottom:18px">
+      <div class="ru"><span class="rn">RG-35</span><span class="rt">Un <b>passage valide</b> vérifie le droit (billet / abo / carte), applique les <b>marges horaires</b> et l'<b>anti-passback</b>, puis décompte le crédit si nécessaire (carte 10, quota).</span></div>
+      <div class="ru"><span class="rn">RG-36</span><span class="rt">Une personne <b>sans support</b> (bébé, accompagnant gratuit) passe via un <b>comptage non nominatif</b> (bouton agent / coupe-file) — la fréquentation reste juste sans exiger de QR.</span></div>
+      <div class="ru"><span class="rn">RG-37</span><span class="rt">La <b>FMI</b> est un seuil de <b>présence simultanée</b> : à l'atteinte, l'entrée peut être bloquée (sécurité) — distincte du <b>cumul</b> de passages.</span></div>
+      <div class="ru"><span class="rn">RG-38</span><span class="rt">Le contrôle fonctionne <b>hors-ligne</b> (liste de révocation embarquée) puis <b>synchronise</b> les passages au retour du réseau — l'accueil ne s'arrête jamais.</span></div>
+      <div class="ru"><span class="rn">RG-39</span><span class="rt">Chaque passage est <b>horodaté</b> et rattaché (espace, contrôleur, support, droit) — c'est la source du comptage, de la compta « à la consommation » (M6) et du reporting (M7).</span></div>
+    </div>
+    <div class="sub-h">Objets de données (principaux)</div>
+    <div class="wfrow wrap"><span class="pill">Espace</span><span class="pill">Contrôleur</span><span class="pill">Équipement</span><span class="pill">Support (QR/RFID/wallet)</span><span class="pill">Appairage</span><span class="pill">Passage (horodaté)</span><span class="pill">Jauge / FMI</span></div>
+  </section>
+
+  <!-- VERTICALE PISCINE -->
+  <section class="panel" id="p-piscine" role="tabpanel" aria-labelledby="t-piscine" tabindex="0" hidden>
+    <div class="h2row"><h2>🏊 Verticale Piscine</h2><span class="tagm">Métier · 1ʳᵉ verticale</span></div>
+    <p class="lead-sub">La démonstration de la stratégie « socle d'abord » : une piscine, c'est <b>~85 % de configuration du socle</b> et <b>~15 % de spécificités métier</b>. Aucune ré-écriture, juste du paramétrage + quelques briques propres.</p>
+
+    <div class="sub-h">Une piscine = le socle configuré</div>
+    <div class="grid g2" style="margin-bottom:8px">
+      <div class="card"><h4>M1 · Offre &amp; tarifs</h4><ul class="clean">
+        <li>Produits : <b>entrée unitaire</b>, <b>carte 10 (=12 en promo)</b>, <b>abonnement</b>, <b>cours</b>, boutique</li>
+        <li>Tarifs : adulte, réduit, enfant, <b>quotient familial</b>, scolaire</li></ul></div>
+      <div class="card"><h4>M1 · Formules d'abonnement</h4><ul class="clean">
+        <li class="key"><b>Gold</b> = accès illimité + <b>1 aquagym/semaine</b> inclus</li>
+        <li class="key"><b>Classique</b> = accès bassin seul</li>
+        <li>Mensuel · SEPA · renouvellement</li></ul></div>
+      <div class="card"><h4>M5 · Planning</h4><ul class="clean">
+        <li>Activités : <b>aquagym, aquabike, aquazumba</b>, leçons</li>
+        <li>Ressources : <b>bassins, lignes d'eau</b>, encadrants</li>
+        <li>Réservation qui décompte le quota Gold</li></ul></div>
+      <div class="card"><h4>Contrôle d'accès</h4><ul class="clean">
+        <li>Tripodes + comptage des passages</li>
+        <li class="key"><b>Bébé / accompagnant sans support</b> → passage compté</li>
+        <li><b>Marges horaires</b> pour l'accès aux cours</li></ul></div>
+      <div class="card"><h4>M6 · Compta</h4><ul class="clean">
+        <li><b>PCA</b> : abonnement étalé + <b>carte 10 à la consommation</b> (au passage)</li>
+        <li>TVA 20 % (entrées/sport) · régie (si municipale)</li></ul></div>
+      <div class="card"><h4>M7 · Reporting</h4><ul class="clean">
+        <li><b>Arborescence multi-axes</b> : marketing + comptable</li>
+        <li><b>FMI</b> (présence) vs entrées cumulées</li></ul></div>
+    </div>
+
+    <div class="sub-h">Les ~15 % vraiment spécifiques à la piscine</div>
+    <div class="grid g3" style="margin-bottom:18px">
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">Sécurité</div><h3 style="font-size:14.5px">FMI réglementaire</h3><p class="k" style="margin-bottom:0">Capacité d'accueil (POSS) : blocage d'entrée à l'atteinte du seuil de présence simultanée.</p></div>
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">Ressources</div><h3 style="font-size:14.5px">Encadrants qualifiés</h3><p class="k" style="margin-bottom:0">MNS / BNSSA : compétences requises par activité, planning de surveillance.</p></div>
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">Créneaux</div><h3 style="font-size:14.5px">Publics multiples</h3><p class="k" style="margin-bottom:0">Grand public · scolaires · clubs — réservation de <b>lignes d'eau</b>, créneaux dédiés.</p></div>
+      <div class="card"><div class="chip watch" style="margin-bottom:8px">Option</div><h3 style="font-size:14.5px">Casiers &amp; cabines</h3><p class="k" style="margin-bottom:0">Casiers connectés (bracelet), gestion des cabines.</p></div>
+      <div class="card"><div class="chip watch" style="margin-bottom:8px">Option</div><h3 style="font-size:14.5px">Contrôle des douches</h3><p class="k" style="margin-bottom:0">Temps de douche piloté (relais), confort/économie d'eau.</p></div>
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">Support</div><h3 style="font-size:14.5px">Bracelet étanche</h3><p class="k" style="margin-bottom:0">Support RFID adapté au milieu humide (au lieu du smartphone au bord du bassin).</p></div>
+    </div>
+
+    <div class="sub-h">Parcours type — la famille Martin</div>
+    <div class="wf" style="margin-bottom:6px">
+      <div class="top"><span class="dots"><i></i><i></i><i></i></span><span class="cap">Exemple de bout en bout</span></div>
+      <div class="screen">
+        <div class="wfrow wrap">
+          <div class="blk acc"><span class="bt">1 · En ligne</span><small>Sophie souscrit l'abo <b>Gold</b> (SEPA) + une <b>carte 10</b> pour la famille</small></div>
+          <div class="blk"><span class="bt">2 · App</span><small>Elle <b>réserve un aquabike</b> → décompte son quota (1/sem)</small></div>
+          <div class="blk"><span class="bt">3 · Accès</span><small>Elle entre avec son <b>badge wallet</b> ; les 2 enfants avec la carte 10 ; le <b>bébé passe sans scan</b> (compté)</small></div>
+        </div>
+        <div class="wfrow wrap">
+          <div class="blk warm"><span class="bt">4 · Compta</span><small>Chaque passage carte 10 = 1 entrée <b>reconnue</b> (PCA → produit) ; l'abo s'étale sur le mois</small></div>
+          <div class="blk"><span class="bt">5 · Pilotage</span><small>Le passage alimente la <b>jauge FMI</b> et la fréquentation cumulée du site</small></div>
+        </div>
+      </div>
+    </div>
+    <p class="cap-wf">Un seul parcours mobilise M1, M3, M5, M6, M7 et le contrôle d'accès — sans que l'usager ni l'agent ne voient la complexité.</p>
+  </section>
+
+  <!-- VERTICALE PATINOIRE -->
+  <section class="panel" id="p-patinoire" role="tabpanel" aria-labelledby="t-patinoire" tabindex="0" hidden>
+    <div class="h2row"><h2>⛸️ Verticale Patinoire</h2><span class="tagm">Métier</span></div>
+    <p class="lead-sub">Même socle, décor différent. La patinoire ajoute surtout la <b>location de matériel</b>, le <b>comptage par zone</b> (glace / gradins) et la gestion de <b>créneaux de glace</b> partagés.</p>
+    <div class="sub-h">Le socle configuré</div>
+    <div class="grid g2" style="margin-bottom:8px">
+      <div class="card"><h4>M1 · Offre &amp; tarifs</h4><ul class="clean"><li>Entrée <b>patineur</b> / <b>spectateur</b>, <b>location de patins</b>, abonnements, cours</li><li>Tarifs sociaux, scolaires, familles</li></ul></div>
+      <div class="card"><h4>M5 · Planning</h4><ul class="clean"><li>Cours de patinage, <b>créneaux de glace</b></li><li>Ressources : surface, encadrants</li></ul></div>
+      <div class="card"><h4>Contrôle d'accès</h4><ul class="clean"><li class="key"><b>Comptage par zone</b> (glace vs gradins)</li><li>Tourniquet + jauge glace</li></ul></div>
+      <div class="card"><h4>M6 · Compta</h4><ul class="clean"><li>TVA · régie (si municipale)</li><li><b>Caution</b> de location (patins)</li></ul></div>
+    </div>
+    <div class="sub-h">Spécificités propres</div>
+    <div class="grid g3" style="margin-bottom:8px">
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">Location</div><h3 style="font-size:14.5px">Patins &amp; matériel</h3><p class="k" style="margin-bottom:0">Stock par pointure, caution, sortie/retour, état, affûtage.</p></div>
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">Créneaux</div><h3 style="font-size:14.5px">Publics de la glace</h3><p class="k" style="margin-bottom:0">Public · hockey · patinage artistique · écoles — réservation de la surface.</p></div>
+      <div class="card"><div class="chip watch" style="margin-bottom:8px">Contexte</div><h3 style="font-size:14.5px">Saisonnalité</h3><p class="k" style="margin-bottom:0">Patinoires éphémères / hivernales : offre à durée limitée, montage/démontage.</p></div>
+    </div>
+    <div class="note">Réutilisation : location de patins = brique <b>« location »</b> du socle (stock + caution + retour), réutilisable pour la location de raquettes (padel) ou d'audioguides (musée).</div>
+  </section>
+
+  <!-- VERTICALE SALLE DE SPORT -->
+  <section class="panel" id="p-sport" role="tabpanel" aria-labelledby="t-sport" tabindex="0" hidden>
+    <div class="h2row"><h2>🏋️ Verticale Salle de sport / Fitness</h2><span class="tagm">Métier</span></div>
+    <p class="lead-sub">Le terrain du privé et des franchises. La spécificité forte : l'<b>abonnement récurrent</b> avec <b>prélèvement SEPA</b>, le <b>moteur anti-impayés couplé à l'accès</b>, et l'<b>accès 24/7 sans personnel</b>.</p>
+    <div class="sub-h">Le socle configuré</div>
+    <div class="grid g2" style="margin-bottom:8px">
+      <div class="card"><h4>M1 · Offre &amp; formules</h4><ul class="clean"><li>Abonnements <b>mensuel / annuel</b>, illimité / cours inclus</li><li>Entrées à l'unité, coaching, boutique</li></ul></div>
+      <div class="card"><h4>M5 · Planning</h4><ul class="clean"><li>Cours collectifs (fitness, cross-training…)</li><li>Coachs, réservation + liste d'attente</li></ul></div>
+      <div class="card"><h4>Contrôle d'accès</h4><ul class="clean"><li class="key"><b>24/7 sans personnel</b> (badge, hors-ligne)</li><li>Refus d'accès si abonnement inactif</li></ul></div>
+      <div class="card"><h4>M6 · Compta / CRM</h4><ul class="clean"><li><b>SEPA récurrent</b>, échéanciers</li><li>Rétention, engagement (app membre)</li></ul></div>
+    </div>
+    <div class="sub-h">Spécificités propres</div>
+    <div class="grid g3" style="margin-bottom:8px">
+      <div class="card"><div class="chip crit" style="margin-bottom:8px">Différenciateur</div><h3 style="font-size:14.5px">Anti-impayés ↔ accès</h3><p class="k" style="margin-bottom:0">Détection impayé → <b>représentation SEPA</b> + refus de badge avec <b>notification &amp; résolution dans l'app</b>.</p></div>
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">Contrat</div><h3 style="font-size:14.5px">Cycle de vie abonnement</h3><p class="k" style="margin-bottom:0">Engagement, pause/suspension, résiliation, réengagement, parrainage.</p></div>
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">Engagement</div><h3 style="font-size:14.5px">App membre</h3><p class="k" style="margin-bottom:0">Réservation, badge, suivi de perf, gamification, coaching.</p></div>
+    </div>
+    <div class="note">C'est la verticale qui justifie le <b>moteur anti-impayés</b> (V2 de la feuille de route) — repris du meilleur des concurrents fitness (Sportigo/Deciplus), en le <b>couplant à l'accès</b>.</div>
+  </section>
+
+  <!-- VERTICALE PADEL -->
+  <section class="panel" id="p-padel" role="tabpanel" aria-labelledby="t-padel" tabindex="0" hidden>
+    <div class="h2row"><h2>🎾 Verticale Centre de padel</h2><span class="tagm">Métier · nouveau</span></div>
+    <p class="lead-sub">Le padel change la logique : on ne vend pas surtout des entrées mais des <b>réservations de terrain à l'heure</b>. Le cœur devient le <b>moteur de réservation de ressources</b> (M5), enrichi de matching de joueurs et de tournois.</p>
+    <div class="sub-h">Le socle configuré</div>
+    <div class="grid g2" style="margin-bottom:8px">
+      <div class="card"><h4>M5 · Réservation de terrain <span class="chip acc">cœur</span></h4><ul class="clean"><li class="key"><b>Terrain = ressource</b>, créneaux 60 / 90 min</li><li><b>Prix variable</b> heure pleine / creuse, membre / non-membre</li><li>Réservation en ligne / app, récurrence (créneau fixe hebdo)</li></ul></div>
+      <div class="card"><h4>M1 · Offre &amp; formules</h4><ul class="clean"><li>Adhésions (accès tarif membre), abonnements créneau</li><li><b>Location de raquettes</b>, cours, stages, boutique</li></ul></div>
+      <div class="card"><h4>Contrôle d'accès</h4><ul class="clean"><li>Accès club / terrain par badge à l'heure réservée</li><li><b>Allumage de l'éclairage</b> du terrain à la réservation (relais)</li></ul></div>
+      <div class="card"><h4>M6 / M4 · Compta &amp; CRM</h4><ul class="clean"><li>Privé (PCG) le plus souvent · TVA</li><li>Membres, <b>niveau de jeu</b></li></ul></div>
+    </div>
+    <div class="sub-h">Spécificités propres</div>
+    <div class="grid g3" style="margin-bottom:8px">
+      <div class="card"><div class="chip crit" style="margin-bottom:8px">Cœur padel</div><h3 style="font-size:14.5px">Réservation à l'heure</h3><p class="k" style="margin-bottom:0">Calendrier des terrains, créneaux, annulation, no-show, <b>paiement partagé</b> entre les 4 joueurs.</p></div>
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">Communauté</div><h3 style="font-size:14.5px">Matching de joueurs</h3><p class="k" style="margin-bottom:0"><b>Parties ouvertes</b> : rejoindre une réservation pour compléter à 4, par <b>niveau</b>.</p></div>
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">Compétition</div><h3 style="font-size:14.5px">Tournois &amp; ligues</h3><p class="k" style="margin-bottom:0">Inscription, poules, classement, calendrier.</p></div>
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">Confort</div><h3 style="font-size:14.5px">Éclairage &amp; portes</h3><p class="k" style="margin-bottom:0">Allumage automatique du terrain réservé, accès au club en autonomie.</p></div>
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">Services</div><h3 style="font-size:14.5px">Location &amp; coaching</h3><p class="k" style="margin-bottom:0">Raquettes, balles, réservation avec coach.</p></div>
+      <div class="card"><div class="chip watch" style="margin-bottom:8px">Réutilise</div><h3 style="font-size:14.5px">Terrains = ressources</h3><p class="k" style="margin-bottom:0">Le même moteur sert tennis, squash, terrains multisports.</p></div>
+    </div>
+    <div class="note">Le padel valide que le socle gère aussi bien la <b>billetterie à l'entrée</b> (piscine/musée) que la <b>réservation de ressources à l'heure</b> (padel) — deux logiques, un seul moteur (M5).</div>
+  </section>
+
+  <!-- VERTICALE MUSEE -->
+  <section class="panel" id="p-musee" role="tabpanel" aria-labelledby="t-musee" tabindex="0" hidden>
+    <div class="h2row"><h2>🏛️ Verticale Musée / Culture</h2><span class="tagm">Métier</span></div>
+    <p class="lead-sub">Ici priment les <b>billets horodatés</b>, la <b>gestion de jauge par exposition</b>, les <b>visites guidées</b> et <b>groupes/scolaires</b>, et la <b>distribution en ligne (OTA)</b>.</p>
+    <div class="sub-h">Le socle configuré</div>
+    <div class="grid g2" style="margin-bottom:8px">
+      <div class="card"><h4>M1 · Offre &amp; tarifs</h4><ul class="clean"><li>Billets datés / <b>horodatés</b>, expositions, <b>pass annuel</b> (amis du musée)</li><li>Audioguide, boutique, catalogue</li></ul></div>
+      <div class="card"><h4>M5 · Planning</h4><ul class="clean"><li><b>Visites guidées</b> (guide = ressource, langues)</li><li>Créneaux (timed-entry), <b>groupes / scolaires</b></li></ul></div>
+      <div class="card"><h4>Contrôle d'accès</h4><ul class="clean"><li>Scan QR à l'entrée, <b>jauge par salle / expo</b></li><li>Contrôle mobile, coupe-file</li></ul></div>
+      <div class="card"><h4>M3 / M6 · En ligne &amp; compta</h4><ul class="clean"><li class="key"><b>Connecteurs OTA</b> (GetYourGuide, Tiqets…)</li><li>TVA <b>10 %</b> (culturel) · régie ou DSP</li></ul></div>
+    </div>
+    <div class="sub-h">Spécificités propres</div>
+    <div class="grid g3" style="margin-bottom:8px">
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">Flux</div><h3 style="font-size:14.5px">Timed-entry &amp; jauge expo</h3><p class="k" style="margin-bottom:0">Créneau obligatoire à l'achat, quota par tranche horaire et par exposition.</p></div>
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">Groupes</div><h3 style="font-size:14.5px">Scolaires &amp; groupes</h3><p class="k" style="margin-bottom:0">Réservation à l'avance, paiement différé, gratuités, coordination des guides.</p></div>
+      <div class="card"><div class="chip good" style="margin-bottom:8px">Distribution</div><h3 style="font-size:14.5px">Vente OTA</h3><p class="k" style="margin-bottom:0">Revendeurs / plateformes touristiques avec contrôle de l'inventaire et reversements.</p></div>
+    </div>
+    <div class="note">Le musée apporte au socle la brique <b>OTA</b> et le <b>timed-entry avancé</b> — réutilisables par les autres verticales (créneaux piscine, cours).</div>
+  </section>
+
+  <!-- PARCOURS -->
+  <section class="panel" id="p-parcours" role="tabpanel" aria-labelledby="t-parcours" tabindex="0" hidden>
+    <div class="h2row"><h2>👥 Parcours utilisateurs</h2></div>
+    <p class="lead-sub">Le même moteur, vu par chaque persona. Chaque parcours doit rester <b>simple bout en bout</b> — c'est le test de la règle d'or.</p>
+
+    <div class="sub-h">Client final — de la découverte à l'entrée</div>
+    <div class="wf" style="margin-bottom:16px">
+      <div class="top"><span class="dots"><i></i></span><span class="cap">Boutique en ligne + App client</span></div>
+      <div class="screen"><div class="wfrow wrap">
+        <div class="blk acc"><span class="bt">1 · Découvre</span><small>Vitrine white-label, choisit un produit / créneau</small></div>
+        <div class="blk"><span class="bt">2 · Crée son compte</span><small>Identité, famille, consentement RGPD</small></div>
+        <div class="blk"><span class="bt">3 · Achète</span><small>Abo (SEPA), carte, billet — paiement en ligne / PayFiP</small></div>
+        <div class="blk"><span class="bt">4 · Réserve</span><small>Cours / terrain / créneau (décompte quota)</small></div>
+        <div class="blk warm"><span class="bt">5 · Entre</span><small>Badge wallet / QR ; gère sa famille, recharge, renouvelle</small></div>
+      </div></div>
+    </div>
+
+    <div class="sub-h">Agent d'accueil / caisse — vendre &amp; encaisser</div>
+    <div class="wf" style="margin-bottom:16px">
+      <div class="top"><span class="dots"><i></i></span><span class="cap">Back-office · mode caisse</span></div>
+      <div class="screen"><div class="wfrow wrap">
+        <div class="blk acc"><span class="bt">1 · Ouvre la caisse</span><small>Point de vente, fond, régisseur</small></div>
+        <div class="blk"><span class="bt">2 · Vend</span><small>Rayons / recherche, panier, bénéficiaires, client</small></div>
+        <div class="blk"><span class="bt">3 · Encaisse</span><small>Paiement scindé, TPE, justificatif</small></div>
+        <div class="blk"><span class="bt">4 · Appaire</span><small>Support RFID / wallet ↔ droit</small></div>
+        <div class="blk warm"><span class="bt">5 · Clôture</span><small>Comptage, écarts, état de régie (Z)</small></div>
+      </div></div>
+    </div>
+
+    <div class="sub-h">Administrateur / gestionnaire — construire &amp; piloter</div>
+    <div class="wf" style="margin-bottom:16px">
+      <div class="top"><span class="dots"><i></i></span><span class="cap">Back-office · administration</span></div>
+      <div class="screen"><div class="wfrow wrap">
+        <div class="blk acc"><span class="bt">1 · Configure l'offre</span><small>Produits, grille tarifaire, formules, promos</small></div>
+        <div class="blk"><span class="bt">2 · Publie le planning</span><small>Activités, séances, ressources, encadrants</small></div>
+        <div class="blk"><span class="bt">3 · Paramètre l'accès</span><small>Espaces, contrôleurs, marges, seuil FMI</small></div>
+        <div class="blk"><span class="bt">4 · Gère les droits</span><small>Utilisateurs, rôles par établissement</small></div>
+        <div class="blk warm"><span class="bt">5 · Pilote</span><small>Tableaux de bord, alertes, décisions</small></div>
+      </div></div>
+    </div>
+
+    <div class="sub-h">Encadrant / maître-nageur / coach — sur le terrain</div>
+    <div class="wf" style="margin-bottom:16px">
+      <div class="top"><span class="dots"><i></i></span><span class="cap">App staff (mobile)</span></div>
+      <div class="screen"><div class="wfrow wrap">
+        <div class="blk acc"><span class="bt">1 · Consulte</span><small>Ses séances du jour, ses inscrits</small></div>
+        <div class="blk"><span class="bt">2 · Accueille</span><small>Contrôle coupe-file mobile (scan)</small></div>
+        <div class="blk"><span class="bt">3 · Émarge</span><small>Présents / absents, gère la liste d'attente</small></div>
+        <div class="blk warm"><span class="bt">4 · Clôt</span><small>Compte-rendu de séance</small></div>
+      </div></div>
+    </div>
+
+    <div class="sub-h">Comptable / régisseur — de la vente à l'écriture</div>
+    <div class="wf" style="margin-bottom:16px">
+      <div class="top"><span class="dots"><i></i></span><span class="cap">Back-office · compta</span></div>
+      <div class="screen"><div class="wfrow wrap">
+        <div class="blk acc"><span class="bt">1 · Suit la régie</span><small>Encaissements, versements, justificatifs</small></div>
+        <div class="blk"><span class="bt">2 · Clôture les PCA</span><small>Étalement abo + conso cartes → écritures</small></div>
+        <div class="blk"><span class="bt">3 · Édite la TVA</span><small>États par taux</small></div>
+        <div class="blk"><span class="bt">4 · Exporte</span><small>PES/Hélios (public) ou CIEL/EBP/FEC (privé)</small></div>
+        <div class="blk warm"><span class="bt">5 · (DSP)</span><small>Produit le RAD, calcule les redevances</small></div>
+      </div></div>
+    </div>
+
+    <div class="sub-h">Direction régionale / générale — consolider</div>
+    <div class="wf" style="margin-bottom:6px">
+      <div class="top"><span class="dots"><i></i></span><span class="cap">Reporting · niveaux région / DG</span></div>
+      <div class="screen"><div class="wfrow wrap">
+        <div class="blk acc"><span class="bt">1 · Consulte</span><small>Dashboard consolidé de son périmètre</small></div>
+        <div class="blk"><span class="bt">2 · Compare</span><small>Sites entre eux, vs objectifs, vs n-1</small></div>
+        <div class="blk"><span class="bt">3 · Explore</span><small>Drill-down par axe (activité, produit)</small></div>
+        <div class="blk warm"><span class="bt">4 · Diffuse</span><small>Rapports planifiés aux équipes</small></div>
+      </div></div>
+    </div>
+    <p class="cap-wf">Chaque persona a son surface (app client, mode caisse, app staff, back-office) mais tous s'appuient sur le même cœur et les mêmes données — d'où la cohérence.</p>
+  </section>
+
+  <!-- SIMPLIFIER & IDEES -->
+  <section class="panel" id="p-simpli" role="tabpanel" aria-labelledby="t-simpli" tabindex="0" hidden>
+    <div class="h2row"><h2>✨ Simplifier le quotidien &amp; idées à ajouter</h2></div>
+    <div class="rule" style="margin-bottom:22px"><span class="star">⭐</span><div class="txt"><b>Le principe —</b> <strong>le logiciel fait le travail invisible ; l'humain ne fait que décider.</strong> Chaque écran doit retirer des étapes, jamais en ajouter.</div></div>
+
+    <div class="sub-h">8 principes de simplicité (règles de conception)</div>
+    <div class="rules" style="margin-bottom:22px">
+      <div class="ru"><span class="rn">S-1</span><span class="rt"><b>Zéro double saisie</b> — une information entrée une fois se propage partout (vente → client → compta → accès).</span></div>
+      <div class="ru"><span class="rn">S-2</span><span class="rt"><b>Défauts intelligents</b> — le bon choix est déjà pré-rempli (tarif du jour, saison en cours, dernier moyen de paiement).</span></div>
+      <div class="ru"><span class="rn">S-3</span><span class="rt"><b>Reconnaître plutôt que saisir</b> — scanner, chercher, suggérer au lieu de taper (client reconnu au scan de son badge).</span></div>
+      <div class="ru"><span class="rn">S-4</span><span class="rt"><b>Le logiciel calcule, l'humain valide</b> — prix, PCA, clôture, redevances, écarts de caisse : proposés, jamais à calculer à la main.</span></div>
+      <div class="ru"><span class="rn">S-5</span><span class="rt"><b>Proactif plutôt que réactif</b> — les alertes viennent à toi (impayé, jauge atteinte, abo qui expire, panne matériel).</span></div>
+      <div class="ru"><span class="rn">S-6</span><span class="rt"><b>Self-service partout</b> — l'usager fait lui-même ce qu'il peut (acheter, réserver, recharger, s'enregistrer).</span></div>
+      <div class="ru"><span class="rn">S-7</span><span class="rt"><b>Une surface taillée aux droits</b> — chacun ne voit que ses fonctions ; moins de boutons = moins d'erreurs.</span></div>
+      <div class="ru"><span class="rn">S-8</span><span class="rt"><b>Jamais bloqué</b> — hors-ligne, mode dégradé : l'accueil et la caisse ne s'arrêtent jamais.</span></div>
+    </div>
+
+    <div class="sub-h">Le quotidien simplifié — persona par persona</div>
+    <div class="grid g3" style="margin-bottom:22px">
+      <div class="card"><h4>Client</h4><ul class="clean"><li><b>Zéro carte</b> : badge dans le wallet</li><li><b>Zéro file</b> : self-check-in QR</li><li>Réserver en <b>2 taps</b></li><li>Recharge &amp; renouvellement <b>auto</b></li><li>Notifications <b>utiles seulement</b></li></ul></div>
+      <div class="card"><h4>Agent d'accueil / caisse</h4><ul class="clean"><li><b>Un seul écran</b>, pas 3 apps</li><li>Client <b>reconnu au scan</b> (dossier, famille, impayés)</li><li>Vente en <b>2 clics</b> (favoris qui apprennent)</li><li>Encaissement TPE <b>automatique</b></li><li><b>Clôture où le logiciel compte</b> à sa place</li></ul></div>
+      <div class="card"><h4>Administrateur</h4><ul class="clean"><li>« <b>Dupliquer la saison dernière</b> » en 1 clic</li><li>Gabarits de produits / tarifs</li><li><b>Aperçu live</b> de ce que verra le client</li><li>Automatisations <b>no-code</b></li><li>Les chiffres <b>viennent à lui</b></li></ul></div>
+      <div class="card"><h4>Encadrant / MNS / coach</h4><ul class="clean"><li>Sa journée sur <b>un écran</b></li><li>Émargement en <b>1 tap</b></li><li>Coupe-file <b>au scan</b></li><li><b>Zéro paperasse</b></li></ul></div>
+      <div class="card"><h4>Comptable / régisseur</h4><ul class="clean"><li><b>Clôture PCA + TVA en 1 clic</b> (le moteur calcule)</li><li>Exports <b>envoyés tout seuls</b> (planifiés)</li><li><b>RAD généré</b>, redevances calculées</li><li>Rapprochement <b>automatique</b></li></ul></div>
+      <div class="card"><h4>Direction région / DG</h4><ul class="clean"><li>Le rapport <b>arrive chaque lundi</b> sans le demander</li><li><b>Alerte sur les écarts</b> (pas de chasse aux chiffres)</li><li>Drill-down site en un clic</li></ul></div>
+    </div>
+
+    <div class="sub-h">Ce que j'ajouterais (au-delà du périmètre actuel)</div>
+    <div class="grid g2" style="margin-bottom:8px">
+      <div class="card"><div class="chip crit" style="margin-bottom:8px">Coup de cœur</div><h3 style="font-size:15px">🤖 Copilote IA</h3><p class="k" style="margin-bottom:0">Back-office : poser une question en langage naturel (« CA d'hier par activité ? »), générer un produit ou une campagne, pré-remplir. Côté usager : <b>assistant</b> horaires / tarifs / réservation.</p></div>
+      <div class="card"><div class="chip crit" style="margin-bottom:8px">Coup de cœur</div><h3 style="font-size:15px">⚙️ Automatisations no-code (si → alors)</h3><p class="k" style="margin-bottom:0">Relance d'impayé, réengagement des inactifs, alerte jauge, message d'anniversaire, seuil de stock — <b>configurées sans développeur</b>.</p></div>
+      <div class="card"><div class="chip crit" style="margin-bottom:8px">Coup de cœur</div><h3 style="font-size:15px">📥 Reprise de données assistée</h3><p class="k" style="margin-bottom:0">Assistant d'import guidé depuis <b>Elisath / AwoO / Excel</b> : la migration devient un self-service — casse le verrou du concurrent.</p></div>
+      <div class="card"><div class="chip crit" style="margin-bottom:8px">Coup de cœur</div><h3 style="font-size:15px">📲 Self-check-in / bornes QR</h3><p class="k" style="margin-bottom:0">L'usager s'enregistre seul en scannant : <b>file quasi nulle</b>, personnel recentré sur le conseil.</p></div>
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">Idée</div><h3 style="font-size:15px">🔔 Notifications proactives</h3><p class="k" style="margin-bottom:0">Créneau bientôt complet, abo qui expire, <b>cours annulé → report / remboursement automatique</b> proposé.</p></div>
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">Idée</div><h3 style="font-size:15px">🛠️ Supervision matériel proactive</h3><p class="k" style="margin-bottom:0">Monitoring tourniquets / TPE / imprimantes : <b>alerte panne avant l'incident</b> (maintenance prédictive).</p></div>
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">Idée</div><h3 style="font-size:15px">🔌 API ouverte + marketplace d'intégrations</h3><p class="k" style="margin-bottom:0">Compta, SMS, wallet, OTA, domotique : l'écosystème se branche seul, via webhooks.</p></div>
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">Idée</div><h3 style="font-size:15px">🖥️ Écran « santé du site » temps réel</h3><p class="k" style="margin-bottom:0">Affluence, files, jauge, incidents — un tableau mural pour l'accueil et la direction.</p></div>
+      <div class="card"><div class="chip watch" style="margin-bottom:8px">Collectivités</div><h3 style="font-size:15px">🌱 Pilotage énergétique</h3><p class="k" style="margin-bottom:0">Lier l'affluence au chauffage / éclairage — économies et argument fort en marché public.</p></div>
+      <div class="card"><div class="chip watch" style="margin-bottom:8px">Secteur public</div><h3 style="font-size:15px">♿ Accessibilité &amp; multilingue « by design »</h3><p class="k" style="margin-bottom:0">PMR, langues, lisibilité — obligatoire dans le public, souvent négligé par les concurrents.</p></div>
+    </div>
+    <div class="note">Les <b>4 coups de cœur</b> (copilote IA, automatisations no-code, reprise assistée, self-check-in) sont ceux qui <b>simplifient le plus le quotidien</b> pour un coût de développement raisonnable — bons candidats à intégrer tôt (V1) pour marquer la différence.</div>
+  </section>
+
+  <!-- IDEES DETAILLEES -->
+  <section class="panel" id="p-idees" role="tabpanel" aria-labelledby="t-idees" tabindex="0" hidden>
+    <div class="h2row"><h2>💡 Idées détaillées — les 4 coups de cœur</h2></div>
+    <p class="lead-sub">Chaque idée poussée en mini-spec : ce qu'elle fait, comment ça marche, exemples concrets, valeur et effort de développement.</p>
+
+    <!-- Copilote IA -->
+    <div class="card" style="margin-bottom:16px">
+      <div class="h2row" style="margin-bottom:4px"><h3 style="font-size:18px">🤖 Copilote IA</h3><span class="chip crit">Différenciateur fort</span><span class="chip watch">Effort : moyen</span></div>
+      <p class="k">Rendre le logiciel « parlant » : obtenir une info ou réaliser une action en langage naturel — côté équipe ET côté usager.</p>
+      <div class="grid g3">
+        <div class="card" style="box-shadow:none"><h4>Comment ça marche</h4><ul class="clean">
+          <li><b>Copilote gestionnaire</b> (back-office) : une barre « Demander »</li>
+          <li>Questions → réponse + graphique + <b>export</b></li>
+          <li>Actions <b>assistées</b> (toujours validées par l'humain)</li>
+          <li><b>Assistant usager</b> (chat sur boutique / app)</li>
+          <li>Respecte les <b>droits</b> : ne voit que l'autorisé</li></ul></div>
+        <div class="card" style="box-shadow:none"><h4>Exemples concrets</h4><ul class="clean">
+          <li>« CA d'hier par activité ? »</li>
+          <li>« Crée un tarif scolaire -50 % en juin »</li>
+          <li>« Rédige la relance des abos qui expirent »</li>
+          <li>Briefing du matin auto (entrées, impayés, pannes)</li>
+          <li>Usager : « réserve un aquabike jeudi »</li></ul></div>
+        <div class="card" style="box-shadow:none"><h4>Valeur &amp; effort</h4><ul class="clean">
+          <li><b>Personne ne l'a</b> sur ce marché</li>
+          <li>Démocratise les stats (plus besoin de savoir faire un rapport)</li>
+          <li>Décharge l'accueil (moins d'appels / mails)</li>
+          <li>Effort <b>moyen</b> : LLM + API en lecture ; actions confirmées</li></ul></div>
+      </div>
+    </div>
+
+    <!-- Automatisations -->
+    <div class="card" style="margin-bottom:16px">
+      <div class="h2row" style="margin-bottom:4px"><h3 style="font-size:18px">⚙️ Automatisations no-code</h3><span class="chip crit">Rétention &amp; cash</span><span class="chip watch">Effort : moyen</span></div>
+      <p class="k">Chaque établissement crée ses automatismes sans développeur, sur le modèle <b>Déclencheur → Condition → Action</b>.</p>
+      <div class="grid g3">
+        <div class="card" style="box-shadow:none"><h4>Déclencheurs</h4><ul class="clean">
+          <li>Impayé détecté</li><li>Abo expire dans X jours</li><li>Jauge / stock &gt; seuil</li><li>X jours sans venir (inactif)</li><li>Anniversaire · cours annulé</li></ul></div>
+        <div class="card" style="box-shadow:none"><h4>Actions</h4><ul class="clean">
+          <li>Email / SMS / push</li><li>Représenter le SEPA</li><li>Bloquer / débloquer un accès</li><li>Appliquer une remise / coupon</li><li>Notifier un responsable · créer une tâche</li></ul></div>
+        <div class="card" style="box-shadow:none"><h4>Recettes prêtes à activer</h4><ul class="clean">
+          <li>Impayé → représenter + notifier + refuser badge</li>
+          <li>Abo J-7 → email + renouvellement 1 clic</li>
+          <li>Inactif 60 j → SMS + coupon retour</li>
+          <li>Jauge 90 % → alerte + fermer ventes en ligne</li></ul></div>
+      </div>
+      <div class="note" style="margin-top:12px">Livré avec une <b>bibliothèque de recettes</b> activables en 1 clic + un <b>journal d'exécution</b> (ce qui s'est déclenché, pour qui). Le moteur d'envoi (email/SMS/push) existe déjà — c'est surtout un moteur de règles à ajouter.</div>
+    </div>
+
+    <!-- Reprise de données -->
+    <div class="card" style="margin-bottom:16px">
+      <div class="h2row" style="margin-bottom:4px"><h3 style="font-size:18px">📥 Reprise de données assistée</h3><span class="chip crit">Anti-verrou concurrent</span><span class="chip watch">Effort : moyen</span></div>
+      <p class="k">Faire de la migration un <b>self-service guidé</b> — enlever la friction n°1 du changement de logiciel et casser le verrou Elisath / AwoO.</p>
+      <div class="grid g3">
+        <div class="card" style="box-shadow:none"><h4>Assistant en 5 étapes</h4><ul class="clean">
+          <li>1 · Charger (Excel / CSV / export concurrent)</li>
+          <li>2 · <b>Mapping auto</b> des colonnes (ajustable)</li>
+          <li>3 · <b>Contrôle qualité</b> (doublons, dates, incohérences)</li>
+          <li>4 · Simulation / aperçu</li>
+          <li>5 · Import <b>réversible</b> + rapport</li></ul></div>
+        <div class="card" style="box-shadow:none"><h4>Ce qu'on reprend</h4><ul class="clean">
+          <li>Clients &amp; familles</li>
+          <li><b>Abonnements en cours</b> (solde, échéances)</li>
+          <li><b>Cartes multi-entrées</b> (crédits restants)</li>
+          <li>Soldes <b>PMV</b>, historique</li>
+          <li>Catalogue &amp; tarifs</li></ul></div>
+        <div class="card" style="box-shadow:none"><h4>Valeur &amp; effort</h4><ul class="clean">
+          <li>Argument commercial massif : « on reprend tout, sans douleur »</li>
+          <li>Accélère le déploiement</li>
+          <li>Effort <b>moyen</b> : socle d'import générique réutilisable + 1 connecteur par concurrent</li></ul></div>
+      </div>
+    </div>
+
+    <!-- Self-check-in -->
+    <div class="card" style="margin-bottom:8px">
+      <div class="h2row" style="margin-bottom:4px"><h3 style="font-size:18px">📲 Self-check-in / bornes QR</h3><span class="chip crit">Zéro file</span><span class="chip good">Effort : faible-moyen</span></div>
+      <p class="k">Supprimer la file : l'usager s'enregistre, achète ou retire seul.</p>
+      <div class="grid g3">
+        <div class="card" style="box-shadow:none"><h4>3 modes</h4><ul class="clean">
+          <li><b>Self-check-in accès</b> : scan wallet/QR au portique</li>
+          <li><b>Borne</b> : acheter, retirer, recharger, réserver</li>
+          <li><b>Pré-enregistrement en ligne</b> (dossier prêt avant la venue)</li></ul></div>
+        <div class="card" style="box-shadow:none"><h4>Soigné pour tous</h4><ul class="clean">
+          <li>Grosses cibles tactiles</li>
+          <li><b>Multilingue</b>, <b>PMR</b></li>
+          <li>Retrait par QR de la commande en ligne</li></ul></div>
+        <div class="card" style="box-shadow:none"><h4>Valeur &amp; effort</h4><ul class="clean">
+          <li>File quasi nulle en heure de pointe</li>
+          <li>Personnel recentré sur le conseil</li>
+          <li>Effort <b>faible-moyen</b> : réutilise le tunnel de vente + le module accès (UI borne = variante épurée)</li></ul></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FINANCE & QUICK WINS -->
+  <section class="panel" id="p-finance" role="tabpanel" aria-labelledby="t-finance" tabindex="0" hidden>
+    <div class="h2row"><h2>💶 Gestion financière facile &amp; quick wins</h2></div>
+    <p class="lead-sub">Rendre la finance <b>évidente</b> pour un non-financier, et l'export des chiffres <b>instantané</b> — plus une série de petites fonctions à fort impact et faibles à développer.</p>
+
+    <div class="sub-h">Gestion financière facile — les principes</div>
+    <div class="grid g3" style="margin-bottom:18px">
+      <div class="card"><h4>Exports prêts à l'emploi</h4><ul class="clean"><li>Journal des ventes, encaissements par moyen, <b>TVA par taux</b>, état de régie, PCA, CA par activité/produit/site, fréquentation</li><li>En <b>Excel &amp; PDF</b>, filtrables période / site</li><li>Aucun rapport à construire</li></ul></div>
+      <div class="card"><h4>Exports envoyés tout seuls</h4><ul class="clean"><li class="key"><b>Planifiés</b> : « chaque 1ᵉʳ du mois, le journal + la TVA arrivent par email »</li><li>Destinataires : comptable, trésorerie, DAF</li><li>Formats compta commutés par profil (CIEL/EBP/Sage/Cegid/FEC · PES/Hélios)</li></ul></div>
+      <div class="card"><h4>Bouton « Exporter » universel</h4><ul class="clean"><li class="key">Sur <b>toute liste / tout tableau</b> de l'appli</li><li>Excel · PDF · CSV</li><li>Principe transversal, zéro écran spécial à apprendre</li></ul></div>
+      <div class="card"><h4>Tableau de bord financier lisible</h4><ul class="clean"><li>CA, encaissé, impayés, PCA, comparaison n-1</li><li>Gros chiffres, clairs, pour un <b>non-financier</b></li></ul></div>
+      <div class="card"><h4>Revenu récurrent prévisible</h4><ul class="clean"><li class="key">Les abonnements SEPA = <b>revenu prévisionnel</b> (type « MRR »)</li><li>« Vous encaisserez ~X € le mois prochain »</li><li>Très parlant pour un directeur</li></ul></div>
+      <div class="card"><h4>Rapprochement automatique</h4><ul class="clean"><li>Caisse ↔ TPE ↔ banque rapprochés seuls</li><li><b>Signale les écarts</b> uniquement</li></ul></div>
+    </div>
+
+    <div class="sub-h">Maquette — Centre financier</div>
+    <div class="wf" style="margin-bottom:18px">
+      <div class="top"><span class="dots"><i></i><i></i><i></i></span><span class="cap">Back-office › Finance — vue directeur · août 2026</span></div>
+      <div class="screen">
+        <div class="wfrow wrap">
+          <div class="blk acc"><span class="bt">CA du mois</span><small>128 400 € · +6 % vs n-1</small></div>
+          <div class="blk acc"><span class="bt">Encaissé</span><small>124 900 €</small></div>
+          <div class="blk warm"><span class="bt">Revenu récurrent prévu (sept.)</span><small>~41 200 € (abos SEPA)</small></div>
+          <div class="blk"><span class="bt">Impayés</span><small>2,1 % · 18 dossiers</small></div>
+        </div>
+        <div class="wfrow">
+          <div class="blk" style="flex:2"><span class="bt">Exports en 1 clic</span><small>Journal des ventes · TVA par taux · État de régie · PCA · Export compta (FEC/CIEL) · Fréquentation</small></div>
+          <div class="blk warm side"><span class="bt">Planifier l'envoi</span><small>Mensuel → comptable + trésorerie</small></div>
+        </div>
+      </div>
+    </div>
+    <p class="cap-wf">Un directeur voit sa santé financière et exporte tout en un clic ; le comptable reçoit ses fichiers sans les demander.</p>
+
+    <div class="sub-h">Quick wins — simples à développer, fort impact</div>
+    <div class="grid g4" style="margin-bottom:8px">
+      <div class="card"><div class="chip good" style="margin-bottom:8px">Faible</div><h3 style="font-size:14px">Recherche universelle</h3><p class="k" style="margin-bottom:0">Une barre qui trouve client, produit, commande, billet.</p></div>
+      <div class="card"><div class="chip good" style="margin-bottom:8px">Faible</div><h3 style="font-size:14px">Dupliquer partout</h3><p class="k" style="margin-bottom:0">Produit, séance, grille, saison — en 1 clic.</p></div>
+      <div class="card"><div class="chip good" style="margin-bottom:8px">Faible</div><h3 style="font-size:14px">Renvoi billet / facture</h3><p class="k" style="margin-bottom:0">Par email / SMS en un geste.</p></div>
+      <div class="card"><div class="chip good" style="margin-bottom:8px">Faible</div><h3 style="font-size:14px">Favoris &amp; raccourcis</h3><p class="k" style="margin-bottom:0">Personnalisables par utilisateur.</p></div>
+      <div class="card"><div class="chip good" style="margin-bottom:8px">Faible</div><h3 style="font-size:14px">Annuler (undo)</h3><p class="k" style="margin-bottom:0">Corriger la dernière action sans stress.</p></div>
+      <div class="card"><div class="chip good" style="margin-bottom:8px">Faible</div><h3 style="font-size:14px">Notes &amp; étiquettes</h3><p class="k" style="margin-bottom:0">Post-it sur un client / une commande.</p></div>
+      <div class="card"><div class="chip good" style="margin-bottom:8px">Faible</div><h3 style="font-size:14px">Modèles de documents</h3><p class="k" style="margin-bottom:0">Ticket, facture, email avec logo, personnalisables.</p></div>
+      <div class="card"><div class="chip good" style="margin-bottom:8px">Faible</div><h3 style="font-size:14px">Aide contextuelle</h3><p class="k" style="margin-bottom:0">Bulle « ? » sur chaque écran + onboarding guidé.</p></div>
+      <div class="card"><div class="chip good" style="margin-bottom:8px">Faible</div><h3 style="font-size:14px">Interface multilingue</h3><p class="k" style="margin-bottom:0">Bascule de langue côté usager &amp; borne.</p></div>
+      <div class="card"><div class="chip watch" style="margin-bottom:8px">Faible-moyen</div><h3 style="font-size:14px">Widgets d'accueil</h3><p class="k" style="margin-bottom:0">Chacun compose son tableau de bord.</p></div>
+      <div class="card"><div class="chip watch" style="margin-bottom:8px">Faible-moyen</div><h3 style="font-size:14px">Cartes cadeaux / bons</h3><p class="k" style="margin-bottom:0">Émission, solde, utilisation.</p></div>
+      <div class="card"><div class="chip watch" style="margin-bottom:8px">Faible-moyen</div><h3 style="font-size:14px">Alertes par seuil</h3><p class="k" style="margin-bottom:0">Jauge, stock, fond de caisse → email/SMS.</p></div>
+    </div>
+    <div class="note">Ces quick wins ne changent pas l'architecture : ce sont des <b>touches transverses</b> (export universel, recherche, duplication, undo…) qui, mises bout à bout, donnent l'impression d'un logiciel « qui pense à tout » — exactement l'inverse de l'ancien.</div>
+  </section>
+
+  <!-- IDEES AVANCEES -->
+  <section class="panel" id="p-avance" role="tabpanel" aria-labelledby="t-avance" tabindex="0" hidden>
+    <div class="h2row"><h2>🚀 Idées avancées</h2></div>
+    <p class="lead-sub">Une deuxième vague, plus ambitieuse : des leviers propres au <b>secteur public</b>, des fonctions <b>intelligentes</b>, et de quoi fidéliser et ouvrir l'écosystème.</p>
+
+    <div class="sub-h">Secteur public &amp; usager — supprimer la paperasse</div>
+    <div class="grid g4" style="margin-bottom:18px">
+      <div class="card"><div class="chip crit" style="margin-bottom:8px">Fort</div><h3 style="font-size:14px">FranceConnect</h3><p class="k" style="margin-bottom:0">Connexion usager <b>sans créer de compte</b> (identité vérifiée), pré-remplissage. Énorme simplificateur en ligne.</p></div>
+      <div class="card"><div class="chip crit" style="margin-bottom:8px">Fort</div><h3 style="font-size:14px">Tarif social automatique</h3><p class="k" style="margin-bottom:0">Récupérer le <b>quotient familial</b> (CAF) pour appliquer le bon tarif <b>sans justificatif papier</b>.</p></div>
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">Aide</div><h3 style="font-size:14px">Pass'Sport · Pass Culture</h3><p class="k" style="margin-bottom:0">Prise en charge des dispositifs d'aide (au-delà des chèques Vacances/Culture déjà gérés).</p></div>
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">Scolaire</div><h3 style="font-size:14px">Portail scolaire / groupes</h3><p class="k" style="margin-bottom:0">Inscription des classes simplifiée, gestion enseignant, facturation établissement.</p></div>
+    </div>
+
+    <div class="sub-h">Intelligence &amp; data</div>
+    <div class="grid g4" style="margin-bottom:18px">
+      <div class="card"><div class="chip crit" style="margin-bottom:8px">Fort</div><h3 style="font-size:14px">Prévision d'affluence</h3><p class="k" style="margin-bottom:0">IA : prévoir la fréquentation (historique, météo, vacances) pour <b>dimensionner le personnel</b> et les créneaux.</p></div>
+      <div class="card"><div class="chip watch" style="margin-bottom:8px">Privé/DSP</div><h3 style="font-size:14px">Tarification dynamique (yield)</h3><p class="k" style="margin-bottom:0">Remplir les <b>heures creuses</b> (padel, cours, musée) par des prix incitatifs. <em>À réserver au privé — tarifs votés en régie.</em></p></div>
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">Idée</div><h3 style="font-size:14px">Recommandations</h3><p class="k" style="margin-bottom:0">« Vous aimez l'aquabike, essayez… » — up-sell / cross-sell personnalisé.</p></div>
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">Contrôle</div><h3 style="font-size:14px">Détection d'anomalies</h3><p class="k" style="margin-bottom:0">Écarts de caisse, fraude, comportements inhabituels signalés automatiquement.</p></div>
+    </div>
+
+    <div class="sub-h">Fidélité &amp; communication</div>
+    <div class="grid g4" style="margin-bottom:18px">
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">Rétention</div><h3 style="font-size:14px">Fidélité &amp; gamification</h3><p class="k" style="margin-bottom:0">Points, paliers, défis, badges — transversal aux 4 métiers.</p></div>
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">Acquisition</div><h3 style="font-size:14px">Parrainage</h3><p class="k" style="margin-bottom:0">Intégré, avec récompense automatique.</p></div>
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">Com</div><h3 style="font-size:14px">Centre de communication</h3><p class="k" style="margin-bottom:0">Email / SMS / push + <b>affichage dynamique</b> sur écrans du site.</p></div>
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">E-réputation</div><h3 style="font-size:14px">Avis &amp; NPS</h3><p class="k" style="margin-bottom:0">Solliciter un avis post-visite (QR sur ticket), remonter la satisfaction.</p></div>
+    </div>
+
+    <div class="sub-h">Écosystème &amp; RSE</div>
+    <div class="grid g3" style="margin-bottom:8px">
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">Réseau</div><h3 style="font-size:14px">Pass territorial / réseau</h3><p class="k" style="margin-bottom:0">Un abonnement utilisable sur <b>plusieurs sites</b> du réseau (intercommunalité, groupe).</p></div>
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">IoT</div><h3 style="font-size:14px">Domotique &amp; objets connectés</h3><p class="k" style="margin-bottom:0">Éclairage terrain (padel), douches (piscine), casiers — pilotés par la réservation / l'accès.</p></div>
+      <div class="card"><div class="chip watch" style="margin-bottom:8px">RSE</div><h3 style="font-size:14px">Zéro papier &amp; bilan carbone</h3><p class="k" style="margin-bottom:0">Dématérialisation totale, éco-conception, indicateurs RSE (argument marchés publics).</p></div>
+    </div>
+    <div class="note"><b>Les 3 leviers publics à prioriser</b> : <b>FranceConnect</b> (inscription sans friction), <b>tarif social automatique</b> (fin du justificatif papier) et <b>prévision d'affluence</b> (pilotage RH) — ils frappent là où les concurrents n'ont rien, et parlent directement aux collectivités.</div>
+  </section>
+
+  <!-- QUALITE & CONFORMITE -->
+  <section class="panel" id="p-qualite" role="tabpanel" aria-labelledby="t-qualite" tabindex="0" hidden>
+    <div class="h2row"><h2>🔒 Qualité, sécurité &amp; conformité</h2><span class="tagm">Exigences non-fonctionnelles</span></div>
+    <p class="lead-sub">Le pilier invisible mais <b>non négociable</b> pour vendre à des collectivités : ce qui n'est pas une fonctionnalité mais conditionne la confiance — et l'admissibilité aux appels d'offres.</p>
+
+    <div class="grid g2" style="margin-bottom:16px">
+      <div class="card"><h4>🛡️ Sécurité</h4><ul class="clean">
+        <li>Chiffrement <b>au repos &amp; en transit</b></li>
+        <li>Authentification forte (<b>MFA</b>), SSO</li>
+        <li>Cloisonnement <b>multi-entités</b> strict</li>
+        <li>Tests d'intrusion réguliers, gestion des secrets</li></ul></div>
+      <div class="card"><h4>⚖️ RGPD</h4><ul class="clean">
+        <li>Consentements, <b>minimisation</b>, durées de conservation</li>
+        <li>Droit d'accès / rectification / <b>effacement</b>, portabilité</li>
+        <li>Registre des traitements, purge automatique</li>
+        <li>Données <b>mineurs</b> (familles) : vigilance renforcée</li></ul></div>
+      <div class="card"><h4>🇫🇷 Hébergement &amp; souveraineté</h4><ul class="clean">
+        <li>Hébergement <b>France</b>, données non transférées hors UE</li>
+        <li>Visée <b>SecNumCloud</b> pour les marchés sensibles</li>
+        <li class="key"><b>Réversibilité</b> : récupération complète des données en sortie (anti-verrou)</li></ul></div>
+      <div class="card"><h4>♿ Accessibilité RGAA</h4><ul class="clean">
+        <li class="key">Conformité <b>RGAA</b> (obligation légale du secteur public)</li>
+        <li>Interfaces usager &amp; bornes accessibles (WCAG)</li>
+        <li>Multilingue, contrastes, navigation clavier / lecteur d'écran</li></ul></div>
+      <div class="card"><h4>⏱️ Disponibilité &amp; continuité</h4><ul class="clean">
+        <li><b>SLA</b> d'uptime, redondance</li>
+        <li><b>Mode hors-ligne</b> (accueil/caisse ne s'arrêtent jamais)</li>
+        <li>Sauvegardes chiffrées quotidiennes + <b>test de restauration</b></li>
+        <li>Plan de reprise (PRA/PCA)</li></ul></div>
+      <div class="card"><h4>⚡ Performance &amp; exploitation</h4><ul class="clean">
+        <li>Temps de réponse tenus en <b>heure de pointe</b> (rentrée, vacances)</li>
+        <li>Montée en charge multi-sites</li>
+        <li><b>Mises à jour sans interruption</b>, supervision, journalisation</li>
+        <li>Support &amp; maintien en condition (MCO)</li></ul></div>
+    </div>
+
+    <div class="grid g3" style="margin-bottom:8px">
+      <div class="card"><div class="chip crit" style="margin-bottom:8px">Accès marché</div><h3 style="font-size:14.5px">NF525</h3><p class="k" style="margin-bottom:0">Certification caisse (rappel M6) — condition d'entrée sur le privé et la DSP.</p></div>
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">Confiance</div><h3 style="font-size:14.5px">Auditabilité</h3><p class="k" style="margin-bottom:0">Journal d'audit inaltérable des actions sensibles (rappel M8).</p></div>
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">Ouverture</div><h3 style="font-size:14.5px">Interopérabilité</h3><p class="k" style="margin-bottom:0">API ouverte, formats standards, connecteurs — pas de dépendance fermée.</p></div>
+    </div>
+    <div class="note">Ces exigences sont des <b>critères d'appel d'offres</b> autant que des choix techniques. Les afficher clairement (là où les concurrents restent flous) est un <b>argument commercial</b> — surtout la <b>réversibilité</b>, la <b>souveraineté</b> et l'<b>accessibilité RGAA</b>, sur lesquelles les acheteurs publics sont désormais très attentifs.</div>
+  </section>
+
+  <!-- FACTURATION & INTERNATIONAL -->
+  <section class="panel" id="p-factu" role="tabpanel" aria-labelledby="t-factu" tabindex="0" hidden>
+    <div class="h2row"><h2>📄 Facturation électronique &amp; conformité internationale</h2></div>
+    <p class="lead-sub">Deux sujets liés : la <b>facturation électronique française</b> (réforme 2026-2027) et la <b>conformité multi-pays</b> pour aller à l'international dès le départ. La clé : ne jamais coder la conformité « en dur » — l'isoler dans des couches enfichables par pays.</p>
+
+    <div class="sub-h">France — l'essentiel (⚠️ contre-intuitif)</div>
+    <div class="banner alert" style="margin-bottom:16px"><span class="dot"></span><div><div class="big" style="font-size:19px">La billetterie est B2C → l'obligation clé est l'e-reporting, pas la facture Factur-X</div><div class="sub">On ne facture pas des entreprises : on <b>déclare à la DGFiP les ventes agrégées</b> (par jour × taux de TVA) via une <b>plateforme agréée (PDP)</b>. Le PPF gratuit n'existe plus.</div></div></div>
+    <div class="grid g3" style="margin-bottom:12px">
+      <div class="card"><h4>① e-reporting B2C</h4><ul class="clean"><li class="key">Le <b>circuit principal</b> pour la billetterie/caisse</li><li>Données agrégées <b>par jour &amp; par taux de TVA</b></li><li>e-reporting « paiement » (TVA exigible à l'encaissement)</li><li>Périodicité selon le régime de TVA du client</li></ul></div>
+      <div class="card"><h4>② Chorus Pro (B2G)</h4><ul class="clean"><li>Facturer <b>écoles / collectivités / EPCI</b></li><li>Déjà obligatoire, <b>reste la référence</b> après 2026</li><li>Factur-X / CII / UBL + n° d'engagement</li></ul></div>
+      <div class="card"><h4>③ Régie de recette</h4><ul class="clean"><li class="key">C'est <b>le logiciel de la régie</b> qui porte l'e-reporting</li><li><b>Un seul flux agrégé au SIREN</b> de la collectivité</li><li>Marquage « ImpayeRegie » (éviter la double compta)</li><li>Compatible <b>PayFiP</b> + PES/Hélios</li></ul></div>
+    </div>
+    <div class="wfrow wrap" style="gap:8px; margin-bottom:8px">
+      <span class="mod" style="background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 11px;font-size:13px"><b>1ᵉʳ sept. 2026</b> — réception oblig. (toutes) + émission/e-reporting GE &amp; ETI</span>
+      <span class="mod" style="background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 11px;font-size:13px"><b>1ᵉʳ sept. 2027</b> — émission/e-reporting PME &amp; TPE (la plupart de tes clients)</span>
+    </div>
+    <div class="note" style="margin-bottom:18px"><b>Ce que le module doit faire</b> : agréger les ventes par jour × taux de TVA (caisse + en ligne) · se connecter à une <b>PDP agréée</b> (s'interfacer plutôt que devenir PDP — ISO 27001 lourd) · émettre du <b>Factur-X</b> pour le B2B/B2G · acheminer vers <b>Chorus Pro</b> · gérer le flux régie unique au SIREN · <b>archivage 10 ans</b>. Format pivot : <b>EN 16931</b>. ⚠️ Calendrier déjà repoussé plusieurs fois → veille impots.gouv.fr.</div>
+
+    <div class="sub-h">International — 2 familles de conformité par pays</div>
+    <p class="sec-sub" style="color:var(--ink-soft);margin:-6px 0 14px;font-size:14px">(a) <b>Fiscalisation caisse</b> (sécuriser l'encaissement B2C) et (b) <b>facture électronique / e-reporting</b>. Un pays peut imposer les deux.</p>
+    <div class="grid g4" style="margin-bottom:12px">
+      <div class="card"><h3 style="font-size:14px">🇫🇷 France</h3><p class="k" style="margin:2px 0 0"><b>Caisse</b> : NF525 (ISCA)<br><b>Facture</b> : e-reporting / Factur-X 2026-27</p></div>
+      <div class="card"><h3 style="font-size:14px">🇩🇪 Allemagne</h3><p class="k" style="margin:2px 0 0"><b>Caisse</b> : KassenSichV + <b>TSE</b> + DSFinV-K (déclaration 2025)<br><b>Facture</b> : réception EN 16931 depuis 2025</p></div>
+      <div class="card"><h3 style="font-size:14px">🇦🇹 Autriche</h3><p class="k" style="margin:2px 0 0"><b>Caisse</b> : <b>RKSV</b> (signature + chaînage + QR)<br><em>proche de l'Allemagne → effet de levier</em></p></div>
+      <div class="card"><h3 style="font-size:14px">🇮🇹 Italie</h3><p class="k" style="margin:2px 0 0"><b>Caisse</b> : RT — <b>fenêtre cloud/software 2026</b> (sans matériel !)<br><b>Facture</b> : SdI (depuis 2019)</p></div>
+      <div class="card"><h3 style="font-size:14px">🇪🇸 Espagne</h3><p class="k" style="margin:2px 0 0"><b>Caisse</b> : VeriFactu (2027) + <b>TicketBAI</b> (Pays basque)<br><b>Facture</b> : Crea y Crece</p></div>
+      <div class="card"><h3 style="font-size:14px">🇵🇹 Portugal</h3><p class="k" style="margin:2px 0 0"><b>Caisse</b> : logiciel certifié AT + <b>ATCUD + QR</b> + SAF-T<br><em>modèle 100 % logiciel → idéal SaaS</em></p></div>
+      <div class="card"><h3 style="font-size:14px">🇵🇱 Pologne</h3><p class="k" style="margin:2px 0 0"><b>Caisse</b> : caisses en ligne (CRK, temps réel)<br><b>Facture</b> : KSeF (2026)</p></div>
+      <div class="card"><h3 style="font-size:14px">🇭🇷🇭🇺🇷🇴🇨🇿</h3><p class="k" style="margin:2px 0 0">Temps réel B2C (JIR/ZKI, Online Számla) + e-invoicing (HR 2026, RO e-Factura, CZ EET 2.0 en 2027)</p></div>
+    </div>
+    <div class="note" style="margin-bottom:18px"><b>3 primitives reviennent partout</b> → à concevoir comme points d'extension, pas en ad hoc : (1) <b>signature / chaînage inaltérable</b> des transactions · (2) <b>remontée temps réel</b> à l'administration · (3) <b>codes de vérification imprimés</b> (QR / ATCUD / JIR). Au-dessus, <b>ViDA</b> (réforme UE) fera converger l'e-invoicing intra-UE vers <b>EN 16931 + réseau Peppol</b> d'ici 2030-2035.</div>
+
+    <div class="sub-h">TVA multi-pays · prix · accessibilité · données</div>
+    <div class="grid g4" style="margin-bottom:18px">
+      <div class="card"><h4>TVA multi-pays</h4><ul class="clean"><li>Taux <b>réduits</b> fréquents (culture/sport)</li><li><b>Territorialité</b> : événement physique = lieu ; virtuel B2C = résidence client (depuis 2025)</li><li><b>OSS</b> : seuil 10 000 € puis pays de destination</li><li>Arrondis par juridiction</li></ul></div>
+      <div class="card"><h4>Prix &amp; devise</h4><ul class="clean"><li><b>Prix TTC</b> obligatoire (dir. 98/6/CE)</li><li>Multi-devise (facturation + affichage)</li><li>Langue nationale pour CGV / mentions</li></ul></div>
+      <div class="card"><h4>Accessibilité</h4><ul class="clean"><li class="key"><b>EAA</b> (28 juin 2025) : e-commerce <b>ET bornes self-service</b></li><li>Socle <b>EN 301 549 + WCAG 2.2 AA</b></li><li>Couvre aussi <b>ADA / 508</b> (USA)</li></ul></div>
+      <div class="card"><h4>Données</h4><ul class="clean"><li><b>RGPD</b> baseline (le plus strict)</li><li>UK GDPR · Suisse nFADP · US (CPRA)</li><li class="key"><b>Résidence des données configurable</b> par pays</li></ul></div>
+    </div>
+
+    <div class="sub-h">🎯 Architecture « conforme partout » — la règle d'or</div>
+    <div class="banner" style="margin-bottom:14px"><span class="dot"></span><div><div class="big" style="font-size:18px">Le cœur produit ne contient aucune logique pays codée en dur</div><div class="sub">Ajouter un pays = brancher un module (fiscal + règles TVA + templates), <b>sans toucher au cœur</b> billetterie/caisse/accès.</div></div></div>
+    <div class="grid g3" style="margin-bottom:8px">
+      <div class="card"><h4>Couche fiscale abstraite</h4><p class="k" style="margin-bottom:0">Interface unique (signer, chaîner, code de vérif, remontée, export) + <b>modules pays</b> (FR-NF525, DE-TSE, AT-RKSV, IT, PT…). Envisager une <b>fiscalisation-as-a-service</b> (fiskaly/efsta) pour absorber les certifs.</p></div>
+      <div class="card"><h4>Moteur TVA + e-invoicing pivot</h4><p class="k" style="margin-bottom:0">Règles (pays × prestation × physique/virtuel) → taux + territorialité. Facture pivot <b>EN 16931</b> + adaptateurs de format (Factur-X, SdI, KSeF…) + transport <b>Peppol</b>.</p></div>
+      <div class="card"><h4>Documents · accessibilité · données</h4><p class="k" style="margin-bottom:0">Templates par pays/langue, multi-devise, prix TTC. Accessibilité <b>WCAG 2.2 AA</b> transverse. Hébergement <b>multi-région</b>.</p></div>
+    </div>
+
+    <div class="sub-h">Par où commencer (effort vs opportunité)</div>
+    <div class="grid g3" style="margin-bottom:8px">
+      <div class="card"><div class="chip crit" style="margin-bottom:8px">Socle</div><h3 style="font-size:14.5px">1. France</h3><p class="k" style="margin-bottom:0">NF525 + e-reporting/Chorus Pro — muscle l'architecture ISCA.</p></div>
+      <div class="card"><div class="chip watch" style="margin-bottom:8px">Vague 1</div><h3 style="font-size:14.5px">2. Allemagne + 3. Autriche</h3><p class="k" style="margin-bottom:0">Le régime le plus dur (TSE) <b>valide l'abstraction</b> ; l'Autriche suit presque gratuitement (même logique signature/QR).</p></div>
+      <div class="card"><div class="chip acc" style="margin-bottom:8px">Vague 2</div><h3 style="font-size:14.5px">4. Portugal + 5. Italie</h3><p class="k" style="margin-bottom:0">Modèles <b>logiciels / cloud</b> (sans matériel) → idéaux pour un SaaS. Italie : fenêtre cloud 2026.</p></div>
+    </div>
+    <div class="note">Espagne (report 2027) et l'Europe centrale (Pologne/Croatie/Hongrie/Roumanie) en vagues suivantes, module par module. ⚠️ Les dates bougent (plusieurs reports en 2025) et les taux de TVA exacts par pays restent à cartographier — <b>à faire valider par un conseil fiscal local</b> avant chaque ouverture de pays.</div>
+  </section>
+
+  <!-- FEUILLE DE ROUTE -->
+  <section class="panel" id="p-roadmap" role="tabpanel" aria-labelledby="t-roadmap" tabindex="0" hidden>
+    <div class="h2row"><h2>Feuille de route — MVP → V1 → V2</h2></div>
+    <p class="lead-sub">Livrer vite un socle réellement utilisable (ouvrir un guichet + un accès de piscine en régie), puis étendre les canaux, les niveaux et les métiers. Le <b>contrôle d'accès est dans le MVP</b> — c'est le cœur de valeur.</p>
+
+    <div class="grid g3" style="margin-bottom:18px">
+      <div class="card">
+        <div class="chip crit" style="margin-bottom:10px">MVP — ouvrir un site</div>
+        <p class="k">Objectif : exploiter <b>une piscine en régie</b> de bout en bout (guichet + accès + compta de base).</p>
+        <ul class="clean">
+          <li><b>M1</b> Offre &amp; tarifs (produits, grille, formules, cartes)</li>
+          <li><b>M2</b> Vente &amp; Caisse + session/clôture</li>
+          <li><b>M8</b> Admin &amp; droits (base) + 1 établissement</li>
+          <li>🎯 <b>Contrôle d'accès</b> (tripode, comptage, bébé, hors-ligne, FMI)</li>
+          <li><b>M6</b> Compta régie + <b>NF525</b> + PCA + export FEC</li>
+          <li><b>M4</b> CRM (fiche, famille, PMV) — noyau</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="chip watch" style="margin-bottom:10px">V1 — canaux &amp; réseau</div>
+        <p class="k">Objectif : vendre en ligne, mobiliser, piloter un <b>groupe multi-sites</b>, adresser DSP.</p>
+        <ul class="clean">
+          <li><b>M3</b> Boutique en ligne + <b>App client</b> (wallet) + espace client</li>
+          <li><b>M5</b> Planning &amp; réservation (cours, ressources)</li>
+          <li><b>M7</b> Reporting <b>multi-niveaux</b> (site→région→DG)</li>
+          <li><b>M6</b> profils <b>DSP &amp; groupe</b> (RAD, redevances, conso)</li>
+          <li><b>M8</b> droits fins multi-entités, app staff mobile</li>
+          <li>Verticale <b>Piscine</b> complète (FMI POSS, MNS, lignes d'eau)</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="chip good" style="margin-bottom:10px">V2 — étendre &amp; différencier</div>
+        <p class="k">Objectif : couvrir les autres métiers et les différenciateurs avancés.</p>
+        <ul class="clean">
+          <li>Verticales <b>Patinoire · Sport · Musée</b></li>
+          <li><b>Anti-impayés</b> couplé à l'accès (fitness)</li>
+          <li><b>Casiers connectés</b> · contrôle douches</li>
+          <li><b>Connecteurs OTA</b> (musées/tourisme)</li>
+          <li>Optimisation <b>énergétique</b> (option)</li>
+          <li>Marketing automation avancé</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="sub-h">Principes de séquencement</div>
+    <div class="rules" style="margin-bottom:18px">
+      <div class="ru"><span class="rn">P-1</span><span class="rt"><b>Un site complet avant le multi-sites</b> : prouver la chaîne guichet → accès → compta sur une piscine avant d'industrialiser la consolidation.</span></div>
+      <div class="ru"><span class="rn">P-2</span><span class="rt"><b>Le contrôle d'accès dès le MVP</b> : c'est le cœur de valeur et le différenciateur — pas une option de fin de projet.</span></div>
+      <div class="ru"><span class="rn">P-3</span><span class="rt"><b>NF525 avant toute mise en production payante</b> : condition d'accès au marché (M6).</span></div>
+      <div class="ru"><span class="rn">P-4</span><span class="rt"><b>API-first</b> : le cœur expose tout via l'API dès le MVP → l'app client et les bornes (V1) se branchent sans refonte.</span></div>
+      <div class="ru"><span class="rn">P-5</span><span class="rt"><b>Régie d'abord, DSP/groupe ensuite</b> : le profil administration ouvre le marché collectivités ; DSP et consolidation viennent en V1.</span></div>
+    </div>
+    <div class="note">⚠️ <b>Jalons à valider avec un expert avant le MVP</b> (cf. onglet analyse Compta) : périmètre NF525 en régie, plan de comptes M57/M4 par équipement, mécanique PCA en compta publique. Ces réponses conditionnent des choix d'architecture du module M6.</div>
+  </section>
+
+  <footer>Cahier des charges — socle (M1→M8) · analyse fiche produit · groupes &amp; scolaires · contrôle d'accès · 5 verticales · parcours · simplification &amp; idées · finance · idées avancées · qualité &amp; conformité · facturation &amp; international · feuille de route. À venir : détail écran-par-écran des modules prioritaires et lots de développement chiffrés.</footer>
+</div>
+
+<script>
+  (function () {
+    var tabs = Array.prototype.slice.call(document.querySelectorAll('.tab'));
+    var panels = tabs.map(function (t){ return document.getElementById(t.getAttribute('aria-controls')); });
+    function select(i){ tabs.forEach(function(t,j){ var on=i===j; t.setAttribute('aria-selected', on?'true':'false'); t.tabIndex=on?0:-1; if(panels[j]) panels[j].hidden=!on; }); }
+    tabs.forEach(function(t,i){
+      t.addEventListener('click', function(){ select(i); window.scrollTo({top:0, behavior:'instant'}); });
+      t.addEventListener('keydown', function(e){ var d=e.key==='ArrowRight'?1:e.key==='ArrowLeft'?-1:0; if(!d) return; e.preventDefault(); var n=(i+d+tabs.length)%tabs.length; tabs[n].focus(); select(n); });
+    });
+    select(0);
+  })();
+</script>

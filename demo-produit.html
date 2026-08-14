@@ -1,0 +1,977 @@
+<title>Fluvia — démonstration produit</title>
+<style>
+  :root{
+    --bg:#eef2f4; --panel:#ffffff; --panel-2:#f4f7f8; --line:#dbe4e7;
+    --ink:#122229; --ink-soft:#51666f; --ink-faint:#80939b;
+    --accent:#0d7d88; --accent-2:#0a5b64; --accent-soft:#e2f1f2;
+    --warm:#d9702f; --good:#2f9e68; --good-bg:#e4f3ea; --warn:#b7860a; --warn-bg:#f7efd7; --crit:#cf4636; --crit-bg:#f8e2de;
+    --side-bg:#0e2a30; --side-ink:#cfe3e6; --side-ink-soft:#7fa2a8; --side-active:#0d7d88; --side-line:#1c3d44;
+    --shadow:0 1px 2px rgba(18,34,41,.05),0 8px 24px rgba(18,34,41,.06);
+    --radius:12px;
+  }
+  :root:not([data-theme="light"]){ @media (prefers-color-scheme:dark){
+    --bg:#0a1215; --panel:#111d21; --panel-2:#16262b; --line:#22383e;
+    --ink:#e7eef0; --ink-soft:#9db0b7; --ink-faint:#6d848b;
+    --accent:#37b4be; --accent-2:#63c9d1; --accent-soft:#123339;
+    --warm:#ef9459; --good:#46b884; --good-bg:#152f26; --warn:#e0ad3d; --warn-bg:#2f2913; --crit:#e86a58; --crit-bg:#331d19;
+    --side-bg:#081619; --side-ink:#bcd6da; --side-ink-soft:#6f9298; --side-active:#0d7d88; --side-line:#152b30;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 28px rgba(0,0,0,.3);
+  }}
+  :root[data-theme="dark"]{
+    --bg:#0a1215; --panel:#111d21; --panel-2:#16262b; --line:#22383e;
+    --ink:#e7eef0; --ink-soft:#9db0b7; --ink-faint:#6d848b;
+    --accent:#37b4be; --accent-2:#63c9d1; --accent-soft:#123339;
+    --warm:#ef9459; --good:#46b884; --good-bg:#152f26; --warn:#e0ad3d; --warn-bg:#2f2913; --crit:#e86a58; --crit-bg:#331d19;
+    --side-bg:#081619; --side-ink:#bcd6da; --side-ink-soft:#6f9298; --side-active:#0d7d88; --side-line:#152b30;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 28px rgba(0,0,0,.3);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;line-height:1.5;-webkit-font-smoothing:antialiased}
+  h1,h2,h3,h4{margin:0;font-weight:700;letter-spacing:-.01em}
+  .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+
+  /* ---- App layout ---- */
+  .app{display:grid;grid-template-columns:246px 1fr;min-height:100vh}
+  .sidebar{background:var(--side-bg);color:var(--side-ink);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto}
+  .side-brand{display:flex;align-items:center;gap:10px;padding:18px 18px 14px;font-weight:800;font-size:18px;color:#fff;letter-spacing:-.02em}
+  .side-brand .logo{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,var(--accent),#38b7c0);display:flex;align-items:center;justify-content:center;color:#fff;font-size:15px;flex:none}
+  .side-tenant{margin:0 14px 12px;padding:8px 10px;border:1px solid var(--side-line);border-radius:9px;font-size:12.5px;color:var(--side-ink-soft)}
+  .side-tenant b{color:var(--side-ink);display:block;font-size:13px}
+  .side-nav{padding:6px 10px;display:flex;flex-direction:column;gap:2px}
+  .side-sec{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--side-ink-soft);padding:14px 12px 6px;font-weight:700}
+  .side-link{display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:9px;color:var(--side-ink);text-decoration:none;font-size:14px;cursor:pointer;border:none;background:none;width:100%;text-align:left;font-family:inherit}
+  .side-link .ic{width:18px;text-align:center;flex:none;opacity:.9}
+  .side-link:hover{background:rgba(255,255,255,.05)}
+  .side-link.active{background:var(--side-active);color:#fff;font-weight:600}
+  .side-foot{margin-top:auto;padding:14px;border-top:1px solid var(--side-line);font-size:12px;color:var(--side-ink-soft);display:flex;align-items:center;gap:10px}
+  .side-foot .av{width:30px;height:30px;border-radius:50%;background:#2a4c53;color:#cfe3e6;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex:none}
+
+  .main{min-width:0;display:flex;flex-direction:column}
+  .topbar{position:sticky;top:0;z-index:10;background:color-mix(in srgb,var(--panel) 88%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:14px;padding:11px 22px}
+  .ask{flex:1;max-width:520px;display:flex;align-items:center;gap:9px;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:9px 13px;color:var(--ink-faint);font-size:13.5px;cursor:text}
+  .ask .k{margin-left:auto;font-size:11px;border:1px solid var(--line);border-radius:5px;padding:1px 6px;color:var(--ink-faint)}
+  .topbar-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+  .icon-btn{width:36px;height:36px;border-radius:9px;border:1px solid var(--line);background:var(--panel);color:var(--ink-soft);cursor:pointer;font-size:15px}
+  .icon-btn:hover{background:var(--panel-2)}
+
+  .view{padding:24px 26px 60px;max-width:1240px}
+  .view[hidden]{display:none}
+  @media (prefers-reduced-motion:no-preference){.view:not([hidden]){animation:vin .24s ease}@keyframes vin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}}
+  .view-head{display:flex;align-items:flex-end;gap:14px;margin-bottom:20px;flex-wrap:wrap}
+  .view-head .ttl h1{font-size:24px}
+  .view-head .ttl p{margin:4px 0 0;color:var(--ink-soft);font-size:14px}
+  .view-head .actions{margin-left:auto;display:flex;gap:9px;flex-wrap:wrap}
+
+  /* ---- Components ---- */
+  .btn{display:inline-flex;align-items:center;gap:7px;border-radius:9px;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:9px 14px;font-size:13.5px;font-weight:600;cursor:pointer;font-family:inherit;text-decoration:none}
+  .btn:hover{background:var(--panel-2)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.primary:hover{background:var(--accent-2)}
+  .btn.sm{padding:6px 10px;font-size:12.5px}
+  .btn.ghost{background:none;border-color:transparent}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+  .card-h{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}
+  .card-h h3{font-size:15px}
+  .card-h .sub{color:var(--ink-faint);font-size:12.5px}
+  .card-h .r{margin-left:auto;display:flex;gap:8px;align-items:center}
+  .card-b{padding:16px}
+
+  .grid{display:grid;gap:16px}
+  .g2{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:repeat(3,1fr)}.g4{grid-template-columns:repeat(4,1fr)}
+  @media(max-width:1000px){.g4{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:1fr}}
+  @media(max-width:720px){.app{grid-template-columns:1fr}.g2,.g4{grid-template-columns:1fr}}
+
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow)}
+  .kpi .lbl{font-size:12.5px;color:var(--ink-soft);display:flex;align-items:center;gap:7px}
+  .kpi .val{font-size:26px;font-weight:800;margin-top:7px;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  .kpi .delta{font-size:12px;font-weight:700;margin-top:5px}
+  .delta.up{color:var(--good)}.delta.down{color:var(--crit)}
+
+  .badge{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:999px;letter-spacing:.02em}
+  .badge.good{background:var(--good-bg);color:var(--good)}.badge.warn{background:var(--warn-bg);color:var(--warn)}.badge.crit{background:var(--crit-bg);color:var(--crit)}.badge.info{background:var(--accent-soft);color:var(--accent-2)}.badge.mut{background:var(--panel-2);color:var(--ink-soft)}
+
+  table.tbl{width:100%;border-collapse:collapse;font-size:13.5px}
+  table.tbl th{text-align:left;font-size:11.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-faint);font-weight:700;padding:10px 14px;border-bottom:1px solid var(--line)}
+  table.tbl td{padding:11px 14px;border-bottom:1px solid var(--line);color:var(--ink-soft)}
+  table.tbl tr:last-child td{border-bottom:none}
+  table.tbl td b,table.tbl td .nm{color:var(--ink);font-weight:600}
+  table.tbl tbody tr:hover{background:var(--panel-2)}
+  .num{font-variant-numeric:tabular-nums;text-align:right}
+
+  .field{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+  .field label{font-size:12.5px;font-weight:600;color:var(--ink-soft)}
+  .input,.select{border:1px solid var(--line);border-radius:9px;padding:9px 12px;background:var(--panel);color:var(--ink);font-size:14px;font-family:inherit;width:100%}
+  .input:focus,.select:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
+  .seg{display:inline-flex;background:var(--panel-2);border:1px solid var(--line);border-radius:9px;padding:3px;gap:3px}
+  .seg button{border:none;background:none;padding:6px 12px;border-radius:7px;font-size:13px;font-weight:600;color:var(--ink-soft);cursor:pointer;font-family:inherit}
+  .seg button.on{background:var(--panel);color:var(--ink);box-shadow:var(--shadow)}
+  .toggle{width:38px;height:22px;border-radius:999px;background:var(--line);position:relative;cursor:pointer;border:none;flex:none}
+  .toggle.on{background:var(--accent)}
+  .toggle::after{content:"";position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;transition:transform .15s}
+  .toggle.on::after{transform:translateX(16px)}
+
+  .tabs2{display:flex;gap:3px;border-bottom:1px solid var(--line);margin-bottom:18px;flex-wrap:wrap}
+  .tab2{border:none;background:none;padding:10px 14px;font-size:13.5px;font-weight:600;color:var(--ink-soft);cursor:pointer;border-bottom:2px solid transparent;font-family:inherit;margin-bottom:-1px}
+  .tab2.on{color:var(--accent-2);border-bottom-color:var(--accent)}
+
+  .bar{height:8px;border-radius:999px;background:var(--panel-2);overflow:hidden}
+  .bar>i{display:block;height:100%;background:var(--accent);border-radius:999px}
+  .chip{display:inline-block;font-size:12px;background:var(--panel-2);border:1px solid var(--line);border-radius:7px;padding:4px 9px;color:var(--ink);margin:2px 3px 0 0}
+
+  .empty{color:var(--ink-faint);font-size:13.5px;padding:20px;text-align:center}
+  .hint{font-size:12.5px;color:var(--ink-faint);margin-top:8px}
+  .demo-note{background:var(--warn-bg);color:var(--warn);border-radius:9px;padding:8px 12px;font-size:12.5px;font-weight:600;display:inline-flex;gap:7px;align-items:center}
+  .burger{display:none;width:38px;height:38px;border-radius:9px;border:1px solid var(--line);background:var(--panel);color:var(--ink);font-size:17px;cursor:pointer;flex:none;align-items:center;justify-content:center}
+  .nav-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.42);z-index:40}
+  @media(max-width:720px){
+    .sidebar{position:fixed;left:0;top:0;height:100dvh;width:264px;transform:translateX(-100%);transition:transform .22s ease;z-index:50}
+    .app.nav-open .sidebar{transform:none}
+    .app.nav-open .nav-backdrop{display:block}
+    .burger{display:inline-flex}
+    .view{padding:18px 15px 66px}
+    .topbar{padding:10px 14px;gap:10px}
+    .ask{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+    .ask .k{display:none}
+    .card-b{overflow-x:auto}
+    .view [style*="grid-template-columns"]{grid-template-columns:1fr !important}
+  }
+  .cline{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line);font-size:13.5px}
+  .cline:last-child{border-bottom:none}
+  .prodtile{text-align:left;cursor:pointer;border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:12px;font-family:inherit;color:var(--ink);transition:background .1s,border-color .1s}
+  .prodtile:hover{background:var(--panel-2);border-color:var(--accent)}
+  .prodtile:active{transform:scale(.98)}
+  .prodtile .pn{font-weight:600;font-size:13.5px}
+  .prodtile .pp{color:var(--ink-soft);font-size:13px;margin-top:2px}
+  .pmodal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center;padding:16px}
+  .pcard{background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);width:100%;max-width:470px;max-height:92vh;overflow:auto}
+  .pcard .ph{padding:15px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
+  .pcard .ph h3{font-size:17px}
+  .pcard .pb{padding:18px}
+  .means-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:12px 0}
+</style>
+
+<div class="app">
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="side-brand"><span class="logo">◈</span> Fluvia</div>
+    <div class="side-tenant"><b>Ville de Belle Ville</b>Piscine municipale · Régie</div>
+    <nav class="side-nav" id="nav">
+      <div class="side-sec">Pilotage</div>
+      <button class="side-link active" data-go="dashboard"><span class="ic">▣</span> Tableau de bord</button>
+      <button class="side-link" data-go="copilote"><span class="ic">✨</span> Copilote IA</button>
+      <button class="side-link" data-go="reporting"><span class="ic">▧</span> Reporting</button>
+      <button class="side-link" data-go="acces"><span class="ic">⛬</span> Contrôle d'accès</button>
+      <button class="side-link" data-go="finance"><span class="ic">€</span> Finance</button>
+      <div class="side-sec">Exploitation</div>
+      <button class="side-link" data-go="caisse"><span class="ic">▤</span> Caisse</button>
+      <button class="side-link" data-go="planning"><span class="ic">▦</span> Planning</button>
+      <button class="side-link" data-go="groupes"><span class="ic">◭</span> Groupes &amp; scolaires</button>
+      <button class="side-link" data-go="clients"><span class="ic">☺</span> Clients</button>
+      <div class="side-sec">Offre</div>
+      <button class="side-link" data-go="catalogue"><span class="ic">▥</span> Catalogue</button>
+      <button class="side-link" data-go="fiche"><span class="ic">◨</span> Fiche produit</button>
+      <button class="side-link" data-go="tarification"><span class="ic">◧</span> Tarifs &amp; saisons</button>
+      <button class="side-link" data-go="marketing"><span class="ic">◎</span> Marketing</button>
+      <div class="side-sec">Vente en ligne</div>
+      <button class="side-link" data-go="boutique"><span class="ic">◫</span> Boutique en ligne</button>
+      <button class="side-link" data-go="borne"><span class="ic">◱</span> Borne self-service</button>
+      <div class="side-sec">Comptabilité</div>
+      <button class="side-link" data-go="compta"><span class="ic">€</span> Compta &amp; Régie</button>
+      <div class="side-sec">Administration</div>
+      <button class="side-link" data-go="admin"><span class="ic">⚿</span> Utilisateurs &amp; droits</button>
+      <button class="side-link" data-go="reglages"><span class="ic">⚙</span> Réglages</button>
+      <div class="side-sec">Mobile</div>
+      <button class="side-link" data-go="appclient"><span class="ic">▢</span> App client</button>
+      <button class="side-link" data-go="appstaff"><span class="ic">◲</span> App staff</button>
+    </nav>
+    <div class="side-foot"><span class="av">JD</span><div>Julien Dupond<br><span style="color:var(--side-ink-soft)">Administrateur</span></div></div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="nav-backdrop" id="navbd"></div>
+    <div class="main">
+    <div class="topbar"><button class="burger" id="burger" aria-label="Menu">☰</button>
+      <div class="ask"><span>✨</span> Demander à Fluvia — « CA d'hier par activité ? »<span class="k">⌘K</span></div>
+      <div class="topbar-right">
+        <button class="icon-btn" id="themeBtn" title="Thème">◐</button>
+        <button class="icon-btn" title="Notifications">◔</button>
+      </div>
+    </div>
+
+    <!-- ============ VIEWS ============ -->
+
+    <!-- DASHBOARD (référence de style — écrit à la main) -->
+    <section class="view" id="v-dashboard">
+      <div class="view-head">
+        <div class="ttl"><h1>Tableau de bord</h1><p>Vue du jour · jeudi 13 août 2026 · Piscine de Belle Ville</p></div>
+        <div class="actions"><span class="demo-note">◐ Démo — données fictives</span><button class="btn sm">Exporter</button><button class="btn primary sm">＋ Vendre</button></div>
+      </div>
+      <div class="grid g4" style="margin-bottom:16px">
+        <div class="kpi"><div class="lbl">Recettes du jour</div><div class="val">4 812 €</div><div class="delta up">▲ 6 % vs jeudi dernier</div></div>
+        <div class="kpi"><div class="lbl">Entrées</div><div class="val">1 128</div><div class="delta up">▲ 4 %</div></div>
+        <div class="kpi"><div class="lbl">Jauge bassin (FMI)</div><div class="val">214 / 300</div><div class="bar" style="margin-top:8px"><i style="width:71%"></i></div></div>
+        <div class="kpi"><div class="lbl">Impayés à traiter</div><div class="val">18</div><div class="delta down">3 nouveaux</div></div>
+      </div>
+      <div class="grid g3">
+        <div class="card" style="grid-column:span 2">
+          <div class="card-h"><h3>Affluence de la journée</h3><span class="sub">temps réel</span><div class="r"><span class="badge good">Ouvert</span></div></div>
+          <div class="card-b">
+            <svg viewBox="0 0 600 150" style="width:100%;height:140px" preserveAspectRatio="none">
+              <polyline fill="none" stroke="var(--accent)" stroke-width="2.5" points="0,120 60,110 120,80 180,60 240,70 300,45 360,55 420,30 480,50 540,75 600,60"/>
+              <polyline fill="var(--accent-soft)" stroke="none" opacity=".6" points="0,150 0,120 60,110 120,80 180,60 240,70 300,45 360,55 420,30 480,50 540,75 600,60 600,150"/>
+            </svg>
+            <div class="hint">Pic à 11 h et 18 h · prévision : forte affluence 17 h-19 h (vacances)</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-h"><h3>À faire</h3></div>
+          <div class="card-b" style="display:flex;flex-direction:column;gap:11px">
+            <div style="display:flex;gap:10px;align-items:flex-start"><span class="badge crit">Panne</span><div style="font-size:13.5px">Tourniquet 2 hors-ligne — <b>validation locale active</b></div></div>
+            <div style="display:flex;gap:10px;align-items:flex-start"><span class="badge warn">Impayé</span><div style="font-size:13.5px">18 dossiers → relance SEPA proposée</div></div>
+            <div style="display:flex;gap:10px;align-items:flex-start"><span class="badge info">Abo</span><div style="font-size:13.5px">7 abonnements expirent cette semaine</div></div>
+            <div style="display:flex;gap:10px;align-items:flex-start"><span class="badge good">Régie</span><div style="font-size:13.5px">Clôture d'hier validée</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="grid g4" style="margin-top:16px">
+        <button class="card" style="cursor:pointer;text-align:left" data-go="caisse"><div class="card-b"><div class="lbl" style="color:var(--ink-faint);font-size:12px">Raccourci</div><div style="font-weight:700;margin-top:4px">Ouvrir la caisse →</div></div></button>
+        <button class="card" style="cursor:pointer;text-align:left" data-go="planning"><div class="card-b"><div class="lbl" style="color:var(--ink-faint);font-size:12px">Raccourci</div><div style="font-weight:700;margin-top:4px">Planning du jour →</div></div></button>
+        <button class="card" style="cursor:pointer;text-align:left" data-go="acces"><div class="card-b"><div class="lbl" style="color:var(--ink-faint);font-size:12px">Raccourci</div><div style="font-weight:700;margin-top:4px">Supervision accès →</div></div></button>
+        <button class="card" style="cursor:pointer;text-align:left" data-go="finance"><div class="card-b"><div class="lbl" style="color:var(--ink-faint);font-size:12px">Raccourci</div><div style="font-weight:700;margin-top:4px">Centre financier →</div></div></button>
+      </div>
+    </section>
+
+    <section class="view" id="v-acces" hidden><div class="view-head"><div class="ttl"><h1>Contrôle d'accès</h1><p>Supervision temps réel · Piscine de Belle Ville</p></div><div class="actions"><span class="demo-note">◐ Démo — données fictives</span><button class="btn sm">Ouverture manuelle</button><button class="btn primary sm">Passage sans support +1</button></div></div>
+
+<div class="grid g4" style="margin-bottom:16px">
+  <div class="kpi"><div class="lbl">Jauge bassin (FMI)</div><div class="val">214 / 300</div><div class="bar" style="margin-top:8px"><i style="width:71%"></i></div><div class="hint" style="margin-top:6px">Présence simultanée · sécurité</div></div>
+  <div class="kpi"><div class="lbl">Passages cumulés (jour)</div><div class="val">1 128</div><div class="delta up">▲ 9 %</div></div>
+  <div class="kpi"><div class="lbl">Statut réseau</div><div class="val" style="font-size:15px;line-height:1.3"><span class="badge crit">Tourniquet 2 hors-ligne</span></div><div class="hint" style="margin-top:8px">Validation locale + synchro en attente</div></div>
+  <div class="kpi"><div class="lbl">Dernier passage</div><div class="val">il y a 4 s</div><div class="hint" style="margin-top:6px">Entrée principale</div></div>
+</div>
+
+<div class="grid g2" style="margin-bottom:16px">
+  <div class="card">
+    <div class="card-h"><h3>Points de contrôle</h3><div class="r"><span class="badge good">4 actifs</span></div></div>
+    <div class="card-b">
+      <table class="tbl">
+        <thead><tr><th>Point</th><th>Sens</th><th>État</th><th class="num">Dernier passage</th></tr></thead>
+        <tbody>
+          <tr><td><span class="nm">Entrée principale</span></td><td>Entrée</td><td><span class="badge good">En ligne</span></td><td class="num">09:41:12</td></tr>
+          <tr><td><span class="nm">Entrée groupes</span></td><td>Entrée</td><td><span class="badge good">En ligne</span></td><td class="num">09:38</td></tr>
+          <tr><td><span class="nm">Sortie</span></td><td>Sortie</td><td><span class="badge good">En ligne</span></td><td class="num">09:41</td></tr>
+          <tr><td><span class="nm">Accès aquagym</span></td><td>Entrée</td><td><span class="badge warn">Marge ±15 min</span></td><td class="num">09:30</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-h"><h3>Derniers passages</h3><span class="sub">flux temps réel</span></div>
+    <div class="card-b">
+      <table class="tbl">
+        <thead><tr><th>Heure</th><th>Support</th><th>Droit</th><th>Résultat</th></tr></thead>
+        <tbody>
+          <tr><td class="num">09:41</td><td>Wallet</td><td><span class="nm">Abo Gold</span></td><td><span class="badge good">Validé</span></td></tr>
+          <tr><td class="num">09:41</td><td>Carte RFID</td><td><span class="nm">Carte 10</span> <span class="hint">(6 rest.)</span></td><td><span class="badge good">Validé</span></td></tr>
+          <tr><td class="num">09:40</td><td>QR</td><td><span class="nm">Entrée adulte</span></td><td><span class="badge good">Validé</span></td></tr>
+          <tr><td class="num">09:39</td><td>Sans support</td><td><span class="nm">Accompagnant bébé</span></td><td><span class="badge info">Compté</span></td></tr>
+          <tr><td class="num">09:38</td><td>Wallet</td><td><span class="nm">Abo Classique</span></td><td><span class="badge crit">Refusé — impayé</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-h"><h3>Configuration</h3><span class="sub">modèle Espace › Contrôleur › Équipement</span></div>
+  <div class="card-b">
+    <div data-tabs>
+      <div class="tabs2"><button class="tab2 on" data-t="s">Supervision</button><button class="tab2" data-t="e">Espaces</button></div>
+      <div data-panel="s">
+        <div class="grid g2">
+          <div>
+            <p class="hint" style="margin:0 0 8px">Deux indicateurs distincts, à ne pas confondre :</p>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--panel-2)"><span class="badge good">Jauge</span><span><span class="nm">Présence simultanée</span> <span class="hint">— sécurité (FMI). Entrée +1 / Sortie −1.</span></span></div>
+              <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--panel-2)"><span class="badge info">Passages</span><span><span class="nm">Cumul du jour</span> <span class="hint">— fréquentation. Toujours croissant, jamais décrémenté.</span></span></div>
+            </div>
+          </div>
+          <div>
+            <p class="hint" style="margin:0 0 8px">Chaîne de supervision surveillée :</p>
+            <div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px">
+              <span class="chip">Espace</span><span class="hint">›</span><span class="chip">Contrôleur</span><span class="hint">›</span><span class="chip">Équipement</span>
+            </div>
+            <div class="hint" style="margin-top:12px">Synchro : <span class="chip">Tourniquet 2</span> en file d'attente locale · 12 passages à remonter dès le retour réseau.</div>
+          </div>
+        </div>
+      </div>
+      <div data-panel="e" hidden>
+        <div class="grid g3">
+          <div>
+            <div style="margin-bottom:6px"><span class="badge info">Espace</span> <span class="nm">Bassin sportif</span></div>
+            <div class="hint" style="margin:8px 0 4px">Contrôleurs</div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"><span class="chip">CTRL-01</span><span class="chip">CTRL-02</span></div>
+            <div class="hint" style="margin:0 0 4px">Équipements</div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px"><span class="chip">Tourniquet 1</span><span class="chip">Tourniquet 2</span><span class="chip">Lecteur QR A</span></div>
+          </div>
+          <div>
+            <div style="margin-bottom:6px"><span class="badge info">Espace</span> <span class="nm">Bassin ludique</span></div>
+            <div class="hint" style="margin:8px 0 4px">Contrôleurs</div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"><span class="chip">CTRL-03</span></div>
+            <div class="hint" style="margin:0 0 4px">Équipements</div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px"><span class="chip">Portillon Groupes</span><span class="chip">Lecteur RFID B</span></div>
+          </div>
+          <div>
+            <div style="margin-bottom:6px"><span class="badge info">Espace</span> <span class="nm">Pataugeoire</span></div>
+            <div class="hint" style="margin:8px 0 4px">Contrôleurs</div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"><span class="chip">CTRL-04</span></div>
+            <div class="hint" style="margin:0 0 4px">Équipements</div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px"><span class="chip">Lecteur Wallet C</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div></section>
+    <section class="view" id="v-finance" hidden><div class="view-head"><div class="ttl"><h1>Finance</h1><p>Vue directeur · août 2026</p></div><div class="actions"><span class="demo-note">◐ Démo — données fictives</span><div class="seg"><button class="on">Mois</button><button>Trimestre</button><button>Année</button></div><button class="btn sm">Planifier l'envoi</button><button class="btn primary sm">⭳ Exporter</button></div></div>
+<div class="grid g4" style="margin-bottom:16px">
+  <div class="kpi"><div class="lbl">CA du mois</div><div class="val">128 400 €</div><div class="delta up">▲ 6 %</div></div>
+  <div class="kpi"><div class="lbl">Encaissé</div><div class="val">124 900 €</div><div class="hint" style="margin-top:6px">97,3 % du CA facturé</div></div>
+  <div class="kpi"><div class="lbl">Revenu récurrent prévu (sept.)</div><div class="val">41 200 €</div><div style="margin-top:6px"><span class="badge info">abos SEPA</span></div></div>
+  <div class="kpi"><div class="lbl">Impayés</div><div class="val">2,1 %</div><div class="delta down">▼ 18 dossiers</div></div>
+</div>
+<div class="grid g3" style="margin-bottom:16px">
+  <div class="card" style="grid-column:span 2"><div class="card-h"><h3>Répartition du CA par activité</h3><span class="sub">août 2026</span><div class="r"><span class="chip">125 300 € au total</span></div></div><div class="card-b">
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:12px"><span class="nm" style="width:150px">Entrées</span><div class="bar" style="flex:1"><i style="width:42%"></i></div><span class="num" style="width:80px;text-align:right">52 400 €</span></div>
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:12px"><span class="nm" style="width:150px">Abonnements</span><div class="bar" style="flex:1"><i style="width:33%"></i></div><span class="num" style="width:80px;text-align:right">41 200 €</span></div>
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:12px"><span class="nm" style="width:150px">Cours aquatiques</span><div class="bar" style="flex:1"><i style="width:17%"></i></div><span class="num" style="width:80px;text-align:right">21 800 €</span></div>
+    <div style="display:flex;align-items:center;gap:14px"><span class="nm" style="width:150px">Boutique</span><div class="bar" style="flex:1"><i style="width:8%"></i></div><span class="num" style="width:80px;text-align:right">9 900 €</span></div>
+  </div></div>
+  <div class="card"><div class="card-h"><h3>Rapprochement</h3><span class="sub">au 13/08</span></div><div class="card-b">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line)"><span class="nm">Caisse</span><span class="badge good">Rapproché</span></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line)"><span class="nm">TPE</span><span class="badge good">Rapproché</span></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0"><span class="nm">Banque</span><span class="badge warn">1 écart : 12,50 €</span></div>
+    <p class="hint" style="margin-top:10px">Dernier import bancaire : 12/08 à 06:15</p>
+  </div></div>
+</div>
+<div class="grid g2">
+  <div class="card"><div class="card-h"><h3>Exports en 1 clic</h3><span class="sub">format PDF / CSV</span></div><div class="card-b" style="display:flex;flex-direction:column;gap:8px">
+    <button class="btn" style="width:100%;justify-content:space-between">Journal des ventes <span>⭳</span></button>
+    <button class="btn" style="width:100%;justify-content:space-between">TVA par taux <span>⭳</span></button>
+    <button class="btn" style="width:100%;justify-content:space-between">État de régie <span>⭳</span></button>
+    <button class="btn" style="width:100%;justify-content:space-between">PCA — produits constatés d'avance <span>⭳</span></button>
+    <button class="btn" style="width:100%;justify-content:space-between">Export compta (FEC / CIEL) <span>⭳</span></button>
+    <button class="btn" style="width:100%;justify-content:space-between">Fréquentation <span>⭳</span></button>
+  </div></div>
+  <div class="card"><div class="card-h"><h3>Facturation électronique</h3><div class="r"><span class="badge good">À jour</span></div></div><div class="card-b">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line)"><span class="nm">Statut e-reporting</span><span class="badge good">À jour</span></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line)"><span class="nm">Prochaine transmission</span><span class="num">20/08 (régime réel mensuel)</span></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0"><span class="nm">Chorus Pro</span><span class="chip">3 factures écoles envoyées</span></div>
+    <p class="hint" style="margin-top:10px">Flux unique au SIREN de la collectivité</p>
+  </div></div>
+</div></section>
+    <section class="view" id="v-caisse" hidden><div class="view-head"><div class="ttl"><h1>Caisse</h1><p>Session ouverte · régisseur M. Durand · fond 150 €</p></div><div class="actions"><span class="demo-note">◐ Démo interactive — cliquez les produits</span><button class="btn sm">Clôturer (Z)</button></div></div><div class="grid g4" style="margin-bottom:16px"><div class="kpi"><div class="lbl">Tickets</div><div class="val">42</div></div><div class="kpi"><div class="lbl">Vente</div><div class="val">1 240 €</div></div><div class="kpi"><div class="lbl">Encaissé</div><div class="val">1 180 €</div></div><div class="kpi"><div class="lbl">Jauge FMI</div><div class="val">214 / 300</div><div class="bar" style="margin-top:8px"><i style="width:71%"></i></div></div></div><div style="display:grid;grid-template-columns:340px 1fr;gap:16px"><div class="card"><div class="card-h"><h3>Panier</h3><div class="r"><button class="btn ghost sm" id="btn-clear">Vider</button></div></div><div class="card-b"><div id="cart-lines"></div><div class="cline" style="font-weight:800;font-size:15px;border-top:2px solid var(--line);margin-top:6px;padding-top:10px"><span>Total</span><span class="num" id="cart-total">0,00 €</span></div><div class="hint" style="margin:10px 0 12px">Client : Famille Martin · <a href="#" style="color:var(--accent)">changer</a></div><button class="btn primary" style="width:100%" id="btn-encaisser" disabled>Encaisser 0,00 €</button></div></div><div class="card"><div class="card-h"><div class="seg"><button class="on">Favoris</button><button>Droits d'entrée</button><button>Abonnements</button><button>Cours</button><button>Boutique</button></div></div><div class="card-b"><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px"><button class="prodtile" data-name="Entrée adulte" data-price="4.50"><div class="pn">Entrée adulte</div><div class="pp">4,50 €</div></button><button class="prodtile" data-name="Entrée enfant" data-price="3.00"><div class="pn">Entrée enfant</div><div class="pp">3,00 €</div></button><button class="prodtile" data-name="Tarif réduit" data-price="3.50"><div class="pn">Tarif réduit</div><div class="pp">3,50 €</div></button><button class="prodtile" data-name="Carte 10 entrées" data-price="40.00"><div class="pn">Carte 10 entrées</div><div class="pp">40,00 €</div></button><button class="prodtile" data-name="Abonnement Gold" data-price="39.00"><div class="pn">Abonnement Gold</div><div class="pp">39,00 €</div></button><button class="prodtile" data-name="Abonnement Classique" data-price="25.00"><div class="pn">Abonnement Classique</div><div class="pp">25,00 €</div></button><button class="prodtile" data-name="Aquabike" data-price="8.00"><div class="pn">Aquabike</div><div class="pp">8,00 €</div></button><button class="prodtile" data-name="Aquagym" data-price="7.00"><div class="pn">Aquagym</div><div class="pp">7,00 €</div></button><button class="prodtile" data-name="Bonnet de bain" data-price="6.00"><div class="pn">Bonnet de bain</div><div class="pp">6,00 €</div></button></div><div class="hint" style="margin-top:12px">Cliquez un produit pour l'ajouter · scan QR / recherche client · appairage support à la validation</div></div></div></div><div class="pmodal" id="pay-modal"><div class="pcard"><div class="ph"><h3>Paiement</h3><div class="r" style="margin-left:auto"><span class="badge mut">paiement scindé possible</span></div></div><div class="pb"><div class="cline" style="font-size:15px"><span>Total dû</span><span class="num" id="pay-total">0,00 €</span></div><div class="cline" style="font-size:15px;font-weight:800"><span>Reste à payer</span><span class="num" id="pay-reste" style="color:var(--crit)">0,00 €</span></div><div class="field" style="margin-top:12px"><label>Montant à encaisser</label><div style="display:flex;gap:8px"><input class="input" id="pay-amount" inputmode="decimal"><button class="btn sm" id="pay-quick">= reste</button></div></div><p class="hint" style="margin:2px 0 0">Choisissez un moyen de paiement pour encaisser ce montant :</p><div class="means-grid"><button class="btn pay-means" data-means="Espèces">Espèces</button><button class="btn pay-means" data-means="Carte bancaire">Carte bancaire</button><button class="btn pay-means" data-means="Chèque Vacances">Chèque Vacances</button><button class="btn pay-means" data-means="Chèque Culture">Chèque Culture</button><button class="btn pay-means" data-means="Porte-monnaie">Porte-monnaie (PMV)</button><button class="btn pay-means" data-means="Avoir">Avoir</button></div><div id="pay-list" style="margin:6px 0 12px"></div><div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn" id="pay-annuler">Annuler</button><button class="btn primary" id="pay-valider" disabled>Valider l'encaissement</button></div></div></div></div><div class="pmodal" id="done-modal"><div class="pcard"><div class="ph"><span style="width:30px;height:30px;border-radius:50%;background:var(--good-bg);color:var(--good);display:flex;align-items:center;justify-content:center;font-weight:800">✓</span><h3>Vente encaissée</h3></div><div class="pb"><div style="display:flex;gap:16px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><div id="done-list"></div><div style="margin-top:10px" id="done-pay"></div></div><div style="text-align:center"><div style="width:96px;height:96px;background:repeating-conic-gradient(var(--ink) 0% 25%, var(--panel) 0% 50%);background-size:14px 14px;border-radius:8px;margin:0 auto"></div><div class="hint" style="margin-top:6px">Billet + QR édités</div></div></div><div style="background:var(--accent-soft);border-radius:9px;padding:10px 12px;margin-top:14px;font-size:13px;color:var(--ink)">◉ Popup d'appairage RFID — approchez la carte / le bracelet du lecteur…</div><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button class="btn" id="done-close">Fermer</button><button class="btn primary" id="done-new">Nouvelle vente</button></div></div></div></div></section>
+    <section class="view" id="v-planning" hidden><div id="planning-root"></div></section>
+    <section class="view" id="v-clients" hidden><div id="clients-root"></div></section>
+    <section class="view" id="v-catalogue" hidden><div id="cat-root"></div></section>
+    <section class="view" id="v-fiche" hidden><div id="fiche-root"></div></section>
+    <section class="view" id="v-appclient" hidden><div class="view-head"><div class="ttl"><h1>App client</h1><p>Aperçu de l'application mobile de l'usager</p></div><div class="actions"><span class="demo-note">◐ Démo — données fictives</span></div></div>
+<div style="display:flex;gap:28px;flex-wrap:wrap;justify-content:center;padding-top:10px">
+  <div style="width:320px;background:var(--panel);border:1px solid var(--line);border-radius:26px;box-shadow:var(--shadow);overflow:hidden">
+    <div style="background:var(--accent);color:#fff;padding:12px 16px;font-weight:700;display:flex;justify-content:space-between;align-items:center"><span>Piscine de Belle Ville</span><span>9:41</span></div>
+    <div style="padding:16px;display:flex;flex-direction:column;gap:12px">
+      <div class="card"><div class="card-h"><h3>Badge d'accès</h3></div><div class="card-b">
+        <div style="width:120px;height:120px;margin:6px auto;background:repeating-conic-gradient(var(--ink) 0% 25%, var(--panel) 0% 50%);background-size:16px 16px;border-radius:8px"></div>
+        <p style="text-align:center;font-weight:600;margin:6px 0 2px">Approchez du tourniquet</p>
+        <p class="hint" style="text-align:center">QR dynamique · change toutes les 30 s</p>
+      </div></div>
+      <button class="btn primary" style="width:100%">＋ Ajouter à Apple Wallet</button>
+      <div class="card"><div class="card-h"><h3>Mon abonnement</h3><div class="r"><span class="badge good">Actif</span></div></div><div class="card-b">
+        <p style="font-weight:600;margin-bottom:4px">Gold — accès illimité</p>
+        <p class="hint" style="margin-bottom:6px">Aquagym cette semaine : 1 restant</p>
+        <div class="bar"><i style="width:50%"></i></div>
+      </div></div>
+      <div class="card"><div class="card-h"><h3>Ma carte 10 entrées</h3></div><div class="card-b">
+        <p style="font-weight:600;margin-bottom:6px">6 / 12 passages</p>
+        <div class="bar"><i style="width:50%"></i></div>
+      </div></div>
+    </div>
+  </div>
+  <div style="width:320px;background:var(--panel);border:1px solid var(--line);border-radius:26px;box-shadow:var(--shadow);overflow:hidden">
+    <div style="background:var(--accent);color:#fff;padding:12px 16px;font-weight:700;display:flex;justify-content:space-between;align-items:center"><span>Piscine de Belle Ville</span><span>9:41</span></div>
+    <div style="padding:16px;display:flex;flex-direction:column;gap:12px">
+      <h3 style="margin:0">Cours à venir</h3>
+      <div class="card"><div class="card-b">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <div><p style="font-weight:600">Aquabike</p><p class="hint">Jeu 20/08 · 18:30</p></div>
+          <div style="text-align:right"><span class="chip">3 places</span></div>
+        </div>
+        <button class="btn sm" style="margin-top:10px">Réserver</button>
+      </div></div>
+      <div class="card"><div class="card-b">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <div><p style="font-weight:600">Aquagym</p><p class="hint">Ven 21/08 · 09:00</p></div>
+          <div style="text-align:right"><span class="chip">8 places</span></div>
+        </div>
+        <button class="btn sm" style="margin-top:10px">Réserver</button>
+      </div></div>
+      <div class="card"><div class="card-b">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <div><p style="font-weight:600">Aquazumba</p><p class="hint">Mar 18/08 · 18:30</p></div>
+          <div style="text-align:right"><span class="badge warn">Complet</span></div>
+        </div>
+        <button class="btn sm" style="margin-top:10px">Liste d'attente</button>
+      </div></div>
+      <div class="card"><div class="card-h"><h3>Porte-monnaie</h3><div class="r"><span style="font-weight:700">24,00 €</span></div></div><div class="card-b">
+        <button class="btn" style="width:100%">Recharger</button>
+      </div></div>
+    </div>
+  </div>
+</div>
+<p class="hint" style="text-align:center">Le téléphone remplace la carte plastique : badge wallet, réservation en 2 taps, rechargement — zéro file, zéro papier.</p></section>
+    <section class="view" id="v-copilote" hidden><div class="view-head"><div class="ttl"><h1>Copilote IA</h1><p>Posez une question ou demandez une action — en langage naturel</p></div><div class="actions"><span class="demo-note">◐ Démo — données fictives</span></div></div>
+<div class="card"><div class="card-h"><h3>Conversation</h3><span class="sub">Fluvia · Piscine de Belle Ville</span><div class="r"><span class="badge info">Assistant</span></div></div><div class="card-b" style="display:flex;flex-direction:column;gap:14px;max-width:820px;margin:0 auto">
+<div style="align-self:flex-end;background:var(--accent);color:#fff;padding:10px 14px;border-radius:14px 14px 4px 14px;max-width:75%">CA d'hier par activité ?</div>
+<div style="align-self:flex-start;background:var(--panel-2);border:1px solid var(--line);padding:12px 14px;border-radius:14px 14px 14px 4px;max-width:85%"><p style="margin:0 0 10px">Voici le chiffre d'affaires du 12 août par activité — total <strong>5 330 €</strong> :</p>
+<div style="display:flex;flex-direction:column;gap:8px">
+<div style="display:flex;align-items:center;gap:10px"><span style="width:110px;color:var(--ink-soft)">Entrées</span><div class="bar" style="flex:1"><i style="width:100%"></i></div><span class="num" style="width:70px;text-align:right;font-weight:600">2 480 €</span></div>
+<div style="display:flex;align-items:center;gap:10px"><span style="width:110px;color:var(--ink-soft)">Abonnements</span><div class="bar" style="flex:1"><i style="width:66%"></i></div><span class="num" style="width:70px;text-align:right;font-weight:600">1 640 €</span></div>
+<div style="display:flex;align-items:center;gap:10px"><span style="width:110px;color:var(--ink-soft)">Cours</span><div class="bar" style="flex:1"><i style="width:36%"></i></div><span class="num" style="width:70px;text-align:right;font-weight:600">890 €</span></div>
+<div style="display:flex;align-items:center;gap:10px"><span style="width:110px;color:var(--ink-soft)">Boutique</span><div class="bar" style="flex:1"><i style="width:13%"></i></div><span class="num" style="width:70px;text-align:right;font-weight:600">320 €</span></div>
+</div>
+<div style="margin-top:12px"><button class="btn sm">⭳ Exporter</button></div></div>
+<div style="align-self:flex-end;background:var(--accent);color:#fff;padding:10px 14px;border-radius:14px 14px 4px 14px;max-width:75%">Relance les abonnés qui expirent cette semaine</div>
+<div style="align-self:flex-start;background:var(--panel-2);border:1px solid var(--line);padding:12px 14px;border-radius:14px 14px 14px 4px;max-width:85%"><p style="margin:0 0 10px">J'ai préparé une relance ciblée :</p>
+<div style="border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--panel)"><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span class="badge warn">7 abonnés</span><span style="color:var(--ink-soft)">e-mail de renouvellement prêt</span></div><p style="margin:0 0 10px;color:var(--ink-soft)">Abonnements arrivant à échéance entre le 13 et le 17 août.</p><div style="display:flex;gap:8px"><button class="btn primary sm">Valider l'envoi</button><button class="btn sm">Modifier</button></div><p class="hint" style="margin:10px 0 0">Action soumise à votre validation (droits respectés).</p></div></div>
+<div style="align-self:flex-end;background:var(--accent);color:#fff;padding:10px 14px;border-radius:14px 14px 4px 14px;max-width:75%">Crée un tarif scolaire -50 % pour juin</div>
+<div style="align-self:flex-start;background:var(--panel-2);border:1px solid var(--line);padding:12px 14px;border-radius:14px 14px 14px 4px;max-width:85%"><p style="margin:0 0 10px">Récapitulatif du nouveau produit à créer :</p>
+<div style="border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--panel);margin-bottom:10px"><div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><span class="nm">Scolaire juin</span><span class="badge crit">-50 %</span><span class="badge info">Saison Haute</span><span class="badge good">Visible guichet</span></div></div>
+<button class="btn primary sm">Créer le produit</button></div>
+</div></div>
+<div style="display:flex;gap:8px;max-width:820px;margin:16px auto 0"><input class="input" placeholder="Demander à Fluvia…" style="flex:1"><button class="btn primary">Envoyer</button></div></section>
+    <section class="view" id="v-reporting" hidden><div class="view-head"><div class="ttl"><h1>Reporting</h1><p>Consolidation site → région → direction générale</p></div><div class="actions"><span class="demo-note">◐ Démo — données fictives</span><div class="seg"><button>Établissement</button><button class="on">Région</button><button>Direction générale</button></div><button class="btn sm">Rapports planifiés</button><button class="btn primary sm">⭳ Exporter</button></div></div>
+<div class="grid g4" style="margin-bottom:16px"><div class="kpi"><div class="lbl">CA région</div><div class="val">412 000 €</div><div class="delta up">▲ 6 %</div></div><div class="kpi"><div class="lbl">Fréquentation</div><div class="val">84 200 entrées</div><div class="delta up">▲ 3 %</div></div><div class="kpi"><div class="lbl">Abonnés actifs</div><div class="val">3 940</div><div class="delta up">▲ 2 %</div></div><div class="kpi"><div class="lbl">Impayés</div><div class="val">2,1 %</div><div class="delta down">▼ 0,4 pt</div></div></div>
+<div class="grid g3"><div class="card" style="grid-column:span 2"><div class="card-h"><h3>Comparaison inter-sites</h3><span class="sub">Région Grand-Est · août 2026</span><div class="r"><span class="badge info">4 sites</span></div></div><div class="card-b"><table class="tbl"><thead><tr><th>Site</th><th class="num">CA</th><th class="num">Fréquentation</th><th class="num">Occupation</th></tr></thead><tbody><tr><td><span class="nm">Metz</span><div class="bar" style="margin-top:6px"><i style="width:100%"></i></div></td><td class="num">128 000 €</td><td class="num">26 400</td><td class="num">88 %</td></tr><tr><td><span class="nm">Nancy</span><div class="bar" style="margin-top:6px"><i style="width:81%"></i></div></td><td class="num">104 000 €</td><td class="num">21 300</td><td class="num">79 %</td></tr><tr><td><span class="nm">Épinal</span><div class="bar" style="margin-top:6px"><i style="width:72%"></i></div></td><td class="num">92 000 €</td><td class="num">18 100</td><td class="num">71 %</td></tr><tr><td><span class="nm">Thionville</span><div class="bar" style="margin-top:6px"><i style="width:69%"></i></div></td><td class="num">88 000 €</td><td class="num">18 400</td><td class="num">74 %</td></tr></tbody></table></div></div><div class="card"><div class="card-h"><h3>Évolution 12 mois</h3><span class="sub">CA région</span><div class="r"><span class="badge good">▲ 6 %</span></div></div><div class="card-b"><svg viewBox="0 0 300 100" style="width:100%;height:auto" preserveAspectRatio="none"><polygon points="0,72 27,68 54,60 82,55 109,48 136,52 163,64 190,70 218,58 245,44 272,36 300,28 300,100 0,100" fill="var(--accent-soft)"></polygon><polyline points="0,72 27,68 54,60 82,55 109,48 136,52 163,64 190,70 218,58 245,44 272,36 300,28" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></polyline></svg><div class="hint" style="margin-top:10px">Creux estival marqué en juin-juillet, reprise à la rentrée.</div></div></div></div>
+<div class="card" style="margin-top:16px"><div class="card-h"><h3>Rapports planifiés</h3><span class="sub">Diffusion automatique par périmètre</span><div class="r"><button class="btn ghost sm">＋ Nouveau</button></div></div><div class="card-b"><table class="tbl"><thead><tr><th>Rapport</th><th>Destinataires</th><th>Fréquence</th><th>Statut</th></tr></thead><tbody><tr><td><span class="nm">Synthèse mensuelle</span></td><td>DR + siège</td><td>Le 1er du mois</td><td><span class="badge good">Actif</span></td></tr><tr><td><span class="nm">Fréquentation hebdo</span></td><td>Directeurs de site</td><td>Lundi 08:00</td><td><span class="badge good">Actif</span></td></tr><tr><td><span class="nm">Impayés</span></td><td>Comptabilité</td><td>Vendredi 17:00</td><td><span class="badge good">Actif</span></td></tr></tbody></table><div class="hint" style="margin-top:12px">Chaque responsable ne voit que son périmètre · clic sur un site = drill-down</div></div></div></section>
+    <section class="view" id="v-groupes" hidden><div class="view-head"><div class="ttl"><h1>Groupes &amp; scolaires</h1><p>Dossiers B2B / B2G</p></div><div class="actions"><span class="demo-note">◐ Démo — données fictives</span><button class="btn primary sm">＋ Nouveau dossier</button></div></div>
+<div style="display:grid;grid-template-columns:300px 1fr;gap:16px">
+<div class="card"><div class="card-h"><h3>Dossiers</h3><div class="r"><div class="seg"><button class="on">Tous</button><button>Scolaires</button><button>Clubs</button></div></div></div><div class="card-b" style="padding:0">
+<div style="padding:11px 14px;border-bottom:1px solid var(--line);background:var(--panel-2);display:flex;justify-content:space-between;align-items:center;cursor:pointer"><span class="nm">École J. Ferry</span><span class="badge info">Scolaire</span></div>
+<div style="padding:11px 14px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;cursor:pointer"><span class="nm">Collège Voltaire</span><span class="badge info">Scolaire</span></div>
+<div style="padding:11px 14px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;cursor:pointer"><span class="nm">Assoc. Les Dauphins</span><span class="badge info">Club</span></div>
+<div style="padding:11px 14px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;cursor:pointer"><span class="nm">CE Renault</span><span class="badge mut">CE</span></div>
+<div style="padding:11px 14px;display:flex;justify-content:space-between;align-items:center;cursor:pointer"><span class="nm">Centre de loisirs La Ruche</span><span class="badge mut">Groupe</span></div>
+</div></div>
+<div>
+<div class="card"><div class="card-h"><h3>École J. Ferry — dossier</h3><div class="r"><span class="badge warn">Devis envoyé</span></div></div><div class="card-b">
+<div class="grid g3" style="margin-bottom:16px">
+<div><div class="lbl">Référent</div><div style="margin-top:4px"><span class="nm">Mme Leroy</span><div class="hint" style="margin-top:2px">tél. 04 78 12 34 56</div></div></div>
+<div><div class="lbl">Créneau réservé</div><div style="margin-top:4px"><span class="nm">Jeu 20/08 · 10:00</span><div class="hint" style="margin-top:2px">30 places bloquées</div></div></div>
+<div><div class="lbl">Statut</div><div style="margin-top:6px"><span class="badge warn">Devis envoyé</span></div></div>
+</div>
+<div class="card" style="margin-bottom:16px"><div class="card-h"><h3>Composition</h3></div><div class="card-b" style="padding:0">
+<table class="tbl"><thead><tr><th>Participants</th><th>Tarif</th><th class="num">Montant</th></tr></thead><tbody>
+<tr><td><span class="nm">28 élèves</span></td><td>Tarif scolaire · 6,00 €</td><td class="num">168,00 €</td></tr>
+<tr><td><span class="nm">3 accompagnateurs</span></td><td>Gratuit (ratio 1/10)</td><td class="num">0,00 €</td></tr>
+<tr><td><span class="nm">Total devis</span></td><td></td><td class="num"><strong>168,00 €</strong></td></tr>
+</tbody></table>
+</div></div>
+<div style="margin-bottom:16px"><div class="lbl" style="margin-bottom:8px">Documents</div><div style="display:flex;flex-wrap:wrap;gap:8px"><span class="chip">Autorisation parentale ✓</span><span class="chip">Convention</span><span class="chip">CGV ✓</span></div></div>
+<div style="margin-bottom:16px"><div class="lbl" style="margin-bottom:8px">Facturation</div><div style="display:flex;align-items:center;gap:8px"><span class="nm">Facture → Chorus Pro (établissement)</span><span class="badge info">Chorus Pro</span></div></div>
+<div style="display:flex;flex-wrap:wrap;gap:8px"><button class="btn primary sm">Convertir en commande</button><button class="btn sm">Envoyer lien de paiement</button><button class="btn sm">Éditer la liste</button></div>
+</div></div>
+<div class="hint" style="margin-top:10px">Entrée groupée : 1 passage valide les 28 entrées d'un coup (comptées).</div>
+</div>
+</div></section>
+    <section class="view" id="v-tarification" hidden><div class="view-head"><div class="ttl"><h1>Tarifs &amp; saisons</h1><p>Référentiels centraux — réutilisés dans toutes les grilles</p></div><div class="actions"><span class="demo-note">◐ Démo — données fictives</span><button class="btn primary sm">＋ Ajouter</button></div></div>
+<div class="hint" style="margin-bottom:16px">Un prix = produit × type de tarif × saison. Ces référentiels se gèrent une fois et alimentent toutes les fiches produit.</div>
+<div class="grid g2">
+<div class="card">
+<div class="card-h"><h3>Types de tarifs</h3><span class="sub">8 tarifs actifs</span><div class="r"><button class="btn ghost sm">＋ Nouveau tarif</button></div></div>
+<div class="card-b">
+<table class="tbl">
+<thead><tr><th>Tarif</th><th>Description</th><th>Visibilité</th></tr></thead>
+<tbody>
+<tr><td><span class="nm">Adulte</span></td><td>dès 18 ans</td><td><span class="chip">Guichet</span> <span class="chip">En ligne</span></td></tr>
+<tr><td><span class="nm">Réduit</span></td><td>étudiants, seniors</td><td><span class="chip">Guichet</span> <span class="chip">En ligne</span></td></tr>
+<tr><td><span class="nm">Enfant</span></td><td>-12 ans</td><td><span class="chip">Guichet</span> <span class="chip">En ligne</span></td></tr>
+<tr><td><span class="nm">Tarif social (QF)</span></td><td>quotient familial <span class="badge info">Justificatif</span></td><td><span class="chip">Guichet</span></td></tr>
+<tr><td><span class="nm">PMR</span> <span class="badge info">Badge</span></td><td>accès adapté, accompagnant</td><td><span class="chip">Guichet</span></td></tr>
+<tr><td><span class="nm">Scolaire</span></td><td>groupes scolaires</td><td><span class="chip">Guichet</span></td></tr>
+<tr><td><span class="nm">Groupe</span></td><td>dès 10 pers.</td><td><span class="chip">Guichet</span></td></tr>
+<tr><td><span class="nm">Gratuité RSA</span> <span class="badge mut">Gratuit</span></td><td>bénéficiaires RSA, justificatif</td><td><span class="chip">Guichet</span></td></tr>
+</tbody>
+</table>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:16px">
+<div class="card">
+<div class="card-h"><h3>Saisons</h3><span class="sub">Calendrier tarifaire</span><div class="r"><span class="badge good">À jour</span></div></div>
+<div class="card-b">
+<table class="tbl">
+<thead><tr><th>Saison</th><th>Période</th></tr></thead>
+<tbody>
+<tr><td><span class="nm">Basse saison</span></td><td>01/09 → 30/06</td></tr>
+<tr><td><span class="nm">Haute saison</span></td><td>01/07 → 31/08</td></tr>
+<tr><td><span class="nm">Vacances scolaires</span></td><td><span class="badge info">Calendrier zone B</span></td></tr>
+</tbody>
+</table>
+</div>
+</div>
+<div class="card">
+<div class="card-h"><h3>Grille tarifaire — exemple (Entrée)</h3><span class="sub">Produit « Entrée unitaire »</span></div>
+<div class="card-b">
+<table class="tbl">
+<thead><tr><th>Tarif</th><th class="num">Basse</th><th class="num">Haute</th></tr></thead>
+<tbody>
+<tr><td><span class="nm">Adulte</span></td><td class="num">4,50 €</td><td class="num">5,50 €</td></tr>
+<tr><td><span class="nm">Réduit</span></td><td class="num">3,50 €</td><td class="num">4,00 €</td></tr>
+<tr><td><span class="nm">Enfant</span></td><td class="num">3,00 €</td><td class="num">3,50 €</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</div></section>
+    <section class="view" id="v-marketing" hidden><div class="view-head"><div class="ttl"><h1>Marketing</h1><p>Campagnes, promotions, fidélité et automatisations</p></div><div class="actions"><span class="demo-note">◐ Démo — données fictives</span><button class="btn primary sm">＋ Nouvelle campagne</button></div></div>
+<div class="grid g3" style="margin-bottom:16px"><div class="kpi"><div class="lbl">Taux d'ouverture</div><div class="val">42 %</div><div class="delta up">▲ 4 pts</div></div><div class="kpi"><div class="lbl">Réengagés (30 j)</div><div class="val">128</div><div class="delta up">▲ 11 %</div></div><div class="kpi"><div class="lbl">Impayés récupérés</div><div class="val">3 240 €</div><div class="delta up">▲ 8 %</div></div></div>
+<div class="grid g2" style="margin-bottom:16px"><div class="card"><div class="card-h"><h3>Campagnes récentes</h3><span class="sub">4 campagnes</span></div><div class="card-b"><table class="tbl"><thead><tr><th>Campagne</th><th>Canal</th><th>Statut</th><th>Résultat</th></tr></thead><tbody><tr><td><span class="nm">Relance abo expirants</span></td><td>Email</td><td><span class="badge good">Active</span></td><td>7 ciblés</td></tr><tr><td><span class="nm">Bienvenue nouveaux</span></td><td>Email+SMS</td><td><span class="badge good">Active</span></td><td>auto</td></tr><tr><td><span class="nm">Réengagement inactifs</span></td><td>SMS</td><td><span class="badge mut">Planifiée</span></td><td>—</td></tr><tr><td><span class="nm">Offre rentrée</span></td><td>Email</td><td><span class="badge good">Envoyée</span></td><td>1 240 ouverts</td></tr></tbody></table></div></div><div class="card"><div class="card-h"><h3>Promotions &amp; fidélité</h3><span class="sub">3 dispositifs</span></div><div class="card-b"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 12px;border:1px solid var(--line);border-radius:9px;margin-bottom:8px"><span class="nm">Carte 10 = 12 (bonus)</span><span class="badge good">Active</span></div><div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 12px;border:1px solid var(--line);border-radius:9px;margin-bottom:8px"><span class="nm">Offre famille −15 %</span><span class="badge good">Active</span></div><div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 12px;border:1px solid var(--line);border-radius:9px"><span class="nm">Programme fidélité : 1 pt / € · paliers Bronze/Argent/Or</span><span class="badge info">Actif</span></div></div></div></div>
+<div class="grid"><div class="card"><div class="card-h"><h3>🎯 Automatisations</h3><span class="sub">Déclencheur → Action</span><div class="r"><button class="btn sm">＋ Nouvelle règle</button></div></div><div class="card-b"><div style="display:flex;align-items:center;gap:10px;padding:11px 12px;border:1px solid var(--line);border-radius:9px;margin-bottom:8px"><button class="toggle on"></button><span class="badge crit">Impayé détecté</span><span class="hint">→</span><span class="nm">Représenter le SEPA + notifier + refuser le badge</span></div><div style="display:flex;align-items:center;gap:10px;padding:11px 12px;border:1px solid var(--line);border-radius:9px;margin-bottom:8px"><button class="toggle on"></button><span class="badge warn">Abo expire J-7</span><span class="hint">→</span><span class="nm">E-mail de renouvellement en 1 clic</span></div><div style="display:flex;align-items:center;gap:10px;padding:11px 12px;border:1px solid var(--line);border-radius:9px;margin-bottom:8px"><button class="toggle on"></button><span class="badge info">Inactif 60 j</span><span class="hint">→</span><span class="nm">SMS + coupon retour</span></div><p class="hint" style="margin-top:6px">Sans développeur — bibliothèque de recettes prêtes à activer.</p></div></div></div></section>
+    <section class="view" id="v-boutique" hidden><div class="view-head"><div class="ttl"><h1>Boutique en ligne</h1><p>Aperçu de la vitrine publique (personnalisable par établissement)</p></div><div class="actions"><span class="demo-note">◐ Démo — données fictives</span><button class="btn sm">Personnaliser</button></div></div>
+<div style="border:1px solid var(--line);border-radius:12px;overflow:hidden;box-shadow:var(--shadow)"><div style="background:var(--panel-2);border-bottom:1px solid var(--line);padding:8px 12px;font-size:12px;color:var(--ink-soft)">🔒 billetterie.belleville.fr</div><div style="padding:18px;background:var(--panel)"><div style="display:flex;align-items:center;gap:12px;margin-bottom:18px"><div style="width:38px;height:38px;border-radius:8px;background:var(--accent)"></div><div style="font-weight:700;font-size:18px;color:var(--ink)">Piscine de Belle Ville</div><div style="margin-left:auto"><span class="chip">🛒 Panier (2)</span></div></div>
+<div style="font-weight:700;font-size:15px;color:var(--ink);margin-bottom:12px">Choisissez votre entrée</div>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px"><div class="card"><div class="card-b"><div style="height:90px;border-radius:8px;background:var(--accent-soft);margin-bottom:10px"></div><div style="font-weight:700;color:var(--ink)">Entrée adulte</div><div style="color:var(--ink-soft);margin:4px 0 10px">4,50 €</div><button class="btn primary sm" style="width:100%">Réserver</button></div></div><div class="card"><div class="card-b"><div style="height:90px;border-radius:8px;background:var(--accent-soft);margin-bottom:10px"></div><div style="font-weight:700;color:var(--ink)">Entrée enfant</div><div style="color:var(--ink-soft);margin:4px 0 10px">3,00 €</div><button class="btn primary sm" style="width:100%">Réserver</button></div></div><div class="card"><div class="card-b"><div style="height:90px;border-radius:8px;background:var(--accent-soft);margin-bottom:10px"></div><div style="font-weight:700;color:var(--ink)">Carte 10 entrées</div><div style="color:var(--ink-soft);margin:4px 0 10px">40,00 €</div><button class="btn primary sm" style="width:100%">Réserver</button></div></div><div class="card"><div class="card-b"><div style="height:90px;border-radius:8px;background:var(--accent-soft);margin-bottom:10px"></div><div style="font-weight:700;color:var(--ink)">Abonnement Gold</div><div style="color:var(--ink-soft);margin:4px 0 10px">39 €/mois</div><button class="btn primary sm" style="width:100%">Réserver</button></div></div><div class="card"><div class="card-b"><div style="height:90px;border-radius:8px;background:var(--accent-soft);margin-bottom:10px"></div><div style="font-weight:700;color:var(--ink)">Cours Aquabike</div><div style="color:var(--ink-soft);margin:4px 0 10px">8,00 €</div><button class="btn primary sm" style="width:100%">Réserver</button></div></div><div class="card"><div class="card-b"><div style="height:90px;border-radius:8px;background:var(--accent-soft);margin-bottom:10px"></div><div style="font-weight:700;color:var(--ink)">Baptême plongée</div><div style="color:var(--ink-soft);margin:4px 0 10px">45,00 €</div><button class="btn primary sm" style="width:100%">Réserver</button></div></div></div>
+<div class="card"><div class="card-h"><h3>Votre panier</h3><span class="sub">2 articles</span></div><div class="card-b"><table class="tbl"><tbody><tr><td><span class="nm">Entrée adulte</span> <span class="badge mut">×2</span></td><td class="num">9,00 €</td></tr><tr><td><span class="nm">Cours Aquabike</span> <span class="badge mut">×1</span></td><td class="num">8,00 €</td></tr><tr><td><span class="nm" style="font-weight:700">Total</span></td><td class="num" style="font-weight:700">17,00 €</td></tr></tbody></table><div style="margin-top:14px"><button class="btn primary" style="width:100%">Réserver un créneau &amp; payer</button></div></div></div>
+</div></div>
+<p class="hint" style="margin-top:12px">Vitrine aux couleurs de l'établissement · timed-entry (choix du créneau) · paiement en ligne + PayFiP · connecteurs OTA.</p></section>
+    <section class="view" id="v-borne" hidden><div class="view-head"><div class="ttl"><h1>Borne self-service</h1><p>Interface tactile — accessible (RGAA) et multilingue</p></div><div class="actions"><span class="demo-note">◐ Démo — données fictives</span></div></div>
+<div style="max-width:440px;margin:0 auto;border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);overflow:hidden;background:var(--panel)">
+<div style="background:var(--accent);color:#fff;padding:18px;display:flex;align-items:center;justify-content:space-between;gap:12px">
+<div style="text-align:left"><div style="font-size:22px;font-weight:800;line-height:1.1">Bienvenue</div><div style="font-size:13px;opacity:.9;margin-top:4px">Piscine de Belle Ville</div></div>
+<div style="display:flex;gap:6px"><span class="chip">FR</span><span class="chip">EN</span><span class="chip">ES</span></div>
+</div>
+<div style="padding:20px;display:flex;flex-direction:column;gap:14px">
+<button class="btn" style="width:100%;padding:22px;font-size:16px;justify-content:flex-start;gap:14px"><span style="font-size:26px">🎟️</span><span style="text-align:left;line-height:1.25"><span style="display:block;font-weight:700">Acheter une entrée</span><span style="display:block;font-size:12px;color:var(--ink-faint)">adulte, enfant, réduit</span></span></button>
+<button class="btn" style="width:100%;padding:22px;font-size:16px;justify-content:flex-start;gap:14px"><span style="font-size:26px">⭳</span><span style="text-align:left;line-height:1.25"><span style="display:block;font-weight:700">Retirer ma commande</span><span style="display:block;font-size:12px;color:var(--ink-faint)">scannez votre QR</span></span></button>
+<button class="btn" style="width:100%;padding:22px;font-size:16px;justify-content:flex-start;gap:14px"><span style="font-size:26px">↻</span><span style="text-align:left;line-height:1.25"><span style="display:block;font-weight:700">Recharger ma carte</span><span style="display:block;font-size:12px;color:var(--ink-faint)">carte 10 entrées / abonnement</span></span></button>
+<button class="btn" style="width:100%;padding:22px;font-size:16px;justify-content:flex-start;gap:14px"><span style="font-size:26px">🗓️</span><span style="text-align:left;line-height:1.25"><span style="display:block;font-weight:700">Réserver un créneau</span><span style="display:block;font-size:12px;color:var(--ink-faint)">aquagym, aquabike…</span></span></button>
+</div>
+<div style="padding:14px;text-align:center;border-top:1px solid var(--line)"><span class="hint">Grands boutons · retour audio · hauteur PMR — conforme European Accessibility Act.</span></div>
+</div>
+<p class="hint" style="text-align:center">Réutilise le tunnel de vente + le module d'accès — moins de file, personnel recentré sur le conseil.</p></section>
+    <section class="view" id="v-compta" hidden><div class="view-head"><div class="ttl"><h1>Compta &amp; Régie</h1><p>Profil : Régie directe (M57) · Ville de Belle Ville</p></div><div class="actions"><span class="demo-note">◐ Démo — données fictives</span><select class="select" style="width:auto"><option>Régie directe</option><option>DSP / délégataire</option><option>Groupe privé</option></select><button class="btn primary sm">⭳ Exporter</button></div></div>
+<div class="card"><div class="card-h"><h3>Compta &amp; Régie</h3><span class="sub">Module bi-régime · Exercice 2026</span><div class="r"><span class="badge good">Écritures à jour</span></div></div><div class="card-b"><div data-tabs><div class="tabs2"><button class="tab2 on" data-t="j">Journal</button><button class="tab2" data-t="p">PCA</button><button class="tab2" data-t="t">TVA</button><button class="tab2" data-t="e">e-reporting</button><button class="tab2" data-t="x">Exports</button></div>
+<div data-panel="j"><table class="tbl"><thead><tr><th>Date</th><th>Libellé</th><th>Compte</th><th class="num">Débit</th><th class="num">Crédit</th></tr></thead><tbody><tr><td>12/08</td><td><span class="nm">Ventes guichet</span></td><td>7061</td><td class="num">—</td><td class="num">4 812,00 €</td></tr><tr><td>12/08</td><td><span class="nm">Encaissement CB</span></td><td>512</td><td class="num">3 100,00 €</td><td class="num">—</td></tr><tr><td>12/08</td><td><span class="nm">Espèces régie</span></td><td>530</td><td class="num">1 200,00 €</td><td class="num">—</td></tr><tr><td>12/08</td><td><span class="nm">Abonnements (PCA)</span></td><td>487</td><td class="num">—</td><td class="num">3 900,00 €</td></tr></tbody></table></div>
+<div data-panel="p" hidden><div class="grid g2" style="margin-bottom:14px"><div class="card"><div class="card-h"><h3>À étaler (abonnements)</h3><div class="r"><span class="badge info">Compte 487</span></div></div><div class="card-b">128 abos · 4 320 € encaissés → part août reconnue, reste au 487</div></div><div class="card"><div class="card-h"><h3>À la consommation (cartes 10)</h3><div class="r"><span class="badge good">Contrôle d'accès</span></div></div><div class="card-b">312 passages contrôlés → 312 entrées reconnues (bascule 487→produit)</div></div></div><button class="btn primary sm">Valider &amp; générer les écritures</button><p class="hint" style="margin-top:12px">Le contrôle d'accès (chaque passage) alimente la reconnaissance à la consommation.</p></div>
+<div data-panel="t" hidden><table class="tbl"><thead><tr><th>Taux</th><th class="num">Base HT</th><th class="num">TVA</th></tr></thead><tbody><tr><td><span class="nm">Taux 20 %</span></td><td class="num">18 400,00 €</td><td class="num">3 680,00 €</td></tr><tr><td><span class="nm">Taux 10 % (culturel)</span></td><td class="num">2 100,00 €</td><td class="num">210,00 €</td></tr><tr><td><span class="nm">Taux 5,5 %</span></td><td class="num">0,00 €</td><td class="num">0,00 €</td></tr><tr><td><span class="nm"><strong>Total</strong></span></td><td class="num"><strong>20 500,00 €</strong></td><td class="num"><strong>3 890,00 €</strong></td></tr></tbody></table></div>
+<div data-panel="e" hidden><div class="grid g2" style="margin-bottom:14px"><div class="card"><div class="card-h"><h3>État e-reporting</h3><div class="r"><span class="badge good">À jour</span></div></div><div class="card-b">Prochaine transmission : 20/08 (régime réel mensuel)<br><span class="hint">Flux e-reporting unique au SIREN de la collectivité</span></div></div><div class="card"><div class="card-h"><h3>Chorus Pro</h3><div class="r"><span class="badge info">Facturation publique</span></div></div><div class="card-b">3 factures écoles envoyées ✓</div></div></div><p class="hint">Billetterie B2C → e-reporting agrégé (jour × taux de TVA).</p></div>
+<div data-panel="x" hidden><div style="display:flex;flex-direction:column;gap:10px"><button class="btn" style="width:100%;justify-content:space-between">PES V2 / Hélios (titres + régie)<span>⭳</span></button><button class="btn" style="width:100%;justify-content:space-between">FEC (légal)<span>⭳</span></button><button class="btn" style="width:100%;justify-content:space-between">CIEL / EBP / Sage<span>⭳</span></button><button class="btn" style="width:100%;justify-content:space-between">État de régie<span>⭳</span></button><button class="btn" style="width:100%;justify-content:space-between">Journal des ventes<span>⭳</span></button></div></div>
+</div></div></div></section>
+    <section class="view" id="v-admin" hidden><div class="view-head"><div class="ttl"><h1>Utilisateurs &amp; droits</h1><p>L'interface s'adapte aux droits de chacun</p></div><div class="actions"><span class="demo-note">◐ Démo — données fictives</span><button class="btn primary sm">＋ Inviter</button></div></div>
+<div style="display:grid;grid-template-columns:320px 1fr;gap:16px">
+<div class="card"><div class="card-h"><h3>Utilisateurs</h3><span class="sub">5 comptes</span></div><div class="card-b" style="display:flex;flex-direction:column;gap:4px">
+<div style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:10px;background:var(--accent-soft);border:1px solid var(--line)"><span style="display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:var(--accent);color:#fff;font-weight:700;font-size:12px;flex:0 0 auto">JD</span><div style="flex:1;min-width:0"><div class="nm">Julien Dupond</div><span class="badge info">Administrateur</span></div></div>
+<div style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:10px"><span style="display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:var(--panel-2);color:var(--ink-soft);font-weight:700;font-size:12px;flex:0 0 auto">MD</span><div style="flex:1;min-width:0"><div class="nm">M. Durand</div><span class="badge mut">Agent de caisse</span></div></div>
+<div style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:10px"><span style="display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:var(--panel-2);color:var(--ink-soft);font-weight:700;font-size:12px;flex:0 0 auto">MN</span><div style="flex:1;min-width:0"><div class="nm">Marie Nogues</div><span class="badge mut">Encadrant</span></div></div>
+<div style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:10px"><span style="display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:var(--panel-2);color:var(--ink-soft);font-weight:700;font-size:12px;flex:0 0 auto">SC</span><div style="flex:1;min-width:0"><div class="nm">S. Comte</div><span class="badge mut">Comptable</span></div></div>
+<div style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:10px"><span style="display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:var(--panel-2);color:var(--ink-soft);font-weight:700;font-size:12px;flex:0 0 auto">DR</span><div style="flex:1;min-width:0"><div class="nm">DR Grand-Est</div><span class="badge info">Direction régionale</span></div></div>
+</div></div>
+<div class="card"><div class="card-h"><h3>Rôle : Agent d'accueil — permissions</h3><div class="r"><span class="badge info">Modèle standard</span></div></div><div class="card-b">
+<table class="tbl"><thead><tr><th>Module</th><th>Voir</th><th>Créer</th><th>Modifier</th><th>Rembourser</th></tr></thead><tbody>
+<tr><td><span class="nm">Caisse</span></td><td><button class="toggle on"></button></td><td><button class="toggle on"></button></td><td><button class="toggle on"></button></td><td><button class="toggle"></button></td></tr>
+<tr><td><span class="nm">Clients</span></td><td><button class="toggle on"></button></td><td><button class="toggle on"></button></td><td><button class="toggle on"></button></td><td><span class="ink-faint" style="color:var(--ink-faint)">—</span></td></tr>
+<tr><td><span class="nm">Offre</span></td><td><button class="toggle on"></button></td><td><button class="toggle"></button></td><td><button class="toggle"></button></td><td><span style="color:var(--ink-faint)">—</span></td></tr>
+<tr><td><span class="nm">Compta</span></td><td><button class="toggle"></button></td><td><button class="toggle"></button></td><td><button class="toggle"></button></td><td><button class="toggle"></button></td></tr>
+<tr><td><span class="nm">Reporting</span></td><td><button class="toggle on"></button> <span class="chip">site seul</span></td><td><span style="color:var(--ink-faint)">—</span></td><td><span style="color:var(--ink-faint)">—</span></td><td><span style="color:var(--ink-faint)">—</span></td></tr>
+</tbody></table>
+<div style="border:1px solid var(--line);padding:14px;background:var(--panel-2);border-radius:10px;margin-top:16px"><div style="font-weight:700;margin-bottom:6px">Aperçu de l'UI résultante</div><p style="margin:0;color:var(--ink-soft)">Les menus Compta, Marketing et Administration sont masqués. L'agent voit une caisse complète.</p></div>
+<div style="display:flex;align-items:center;gap:8px;margin-top:16px;flex-wrap:wrap"><span style="font-weight:700;color:var(--ink-soft)">Périmètre</span><span class="chip">Groupe Belle Ville</span><span style="color:var(--ink-faint)">›</span><span class="chip">Région —</span><span style="color:var(--ink-faint)">›</span><span class="chip">Site : Piscine centrale</span></div>
+<p class="hint" style="margin-top:12px">Un même utilisateur peut avoir des rôles différents selon l'établissement.</p>
+</div></div>
+</div></section>
+    <section class="view" id="v-reglages" hidden><div class="view-head"><div class="ttl"><h1>Réglages</h1><p>Établissement, matériel, paiements, sécurité</p></div><div class="actions"><span class="demo-note">◐ Démo — données fictives</span><button class="btn primary sm">Enregistrer</button></div></div>
+<div class="grid g2">
+<div class="card"><div class="card-h"><h3>Établissement</h3><span class="sub">Identité & exploitation</span></div><div class="card-b"><div style="display:flex;flex-direction:column;gap:14px"><div style="display:flex;justify-content:space-between;align-items:center;gap:16px"><span style="color:var(--ink-soft)">Nom</span><span class="nm">Piscine de Belle Ville</span></div><div style="display:flex;justify-content:space-between;align-items:center;gap:16px"><span style="color:var(--ink-soft)">Profil d'exploitant</span><span class="nm">Régie directe (M57)</span></div><div style="display:flex;justify-content:space-between;align-items:center;gap:16px"><span style="color:var(--ink-soft)">Hébergement</span><span style="display:flex;align-items:center;gap:8px"><span class="nm">France · RGPD</span><span class="badge good">Conforme</span></span></div><div style="display:flex;justify-content:space-between;align-items:center;gap:16px"><span style="color:var(--ink-soft)">Fuseau / Langue</span><span class="nm">FR</span></div></div></div></div>
+<div class="card"><div class="card-h"><h3>Matériel & périphériques</h3><span class="sub">6 équipements</span></div><div class="card-b"><table class="tbl"><thead><tr><th>Équipement</th><th>Marque</th><th>État</th></tr></thead><tbody><tr><td><span class="nm">Concentrateur</span></td><td>ITBOX</td><td><span class="badge good">Connecté</span></td></tr><tr><td><span class="nm">Tourniquets</span></td><td>iDTRONIC</td><td><span class="badge good">Connecté</span></td></tr><tr><td><span class="nm">Lecteurs QR/RFID</span></td><td>iDTRONIC</td><td><span class="badge good">Connecté</span></td></tr><tr><td><span class="nm">TPE</span></td><td>Ingenico</td><td><span class="badge good">Connecté</span></td></tr><tr><td><span class="nm">Imprimante tickets</span></td><td>Aures</td><td><span class="badge good">Connecté</span></td></tr><tr><td><span class="nm">Imprimante</span></td><td>OXHOO</td><td><span class="badge mut">Inactif</span></td></tr></tbody></table><p class="hint" style="margin-top:12px">Communication OSDP / API · mode hors-ligne.</p></div></div>
+<div class="card"><div class="card-h"><h3>Moyens de paiement</h3><span class="sub">7 actifs</span></div><div class="card-b"><div style="display:flex;flex-direction:column;gap:2px"><div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 0;border-bottom:1px solid var(--line)"><span style="display:flex;align-items:center;gap:10px"><button class="toggle on"></button><span class="nm">Espèces</span></span><span class="chip">Compte 530</span></div><div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 0;border-bottom:1px solid var(--line)"><span style="display:flex;align-items:center;gap:10px"><button class="toggle on"></button><span class="nm">Carte bancaire</span></span><span class="chip">Compte 512</span></div><div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 0;border-bottom:1px solid var(--line)"><span style="display:flex;align-items:center;gap:10px"><button class="toggle on"></button><span class="nm">Chèques Vacances</span></span><span class="badge info">ANCV</span></div><div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 0;border-bottom:1px solid var(--line)"><span style="display:flex;align-items:center;gap:10px"><button class="toggle on"></button><span class="nm">Chèques Culture</span></span><span class="badge info">Titre</span></div><div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 0;border-bottom:1px solid var(--line)"><span style="display:flex;align-items:center;gap:10px"><button class="toggle on"></button><span class="nm">Porte-monnaie virtuel</span></span><span class="badge info">Compte usager</span></div><div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 0;border-bottom:1px solid var(--line)"><span style="display:flex;align-items:center;gap:10px"><button class="toggle on"></button><span class="nm">Prélèvement SEPA</span></span><span class="badge info">Mandat</span></div><div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 0"><span style="display:flex;align-items:center;gap:10px"><button class="toggle on"></button><span class="nm">PayFiP</span></span><span class="badge info">DGFiP</span></div></div></div></div>
+<div class="card"><div class="card-h"><h3>Sécurité & conformité</h3><span class="sub">Contrôles</span></div><div class="card-b"><div style="display:flex;flex-direction:column;gap:2px"><div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 0;border-bottom:1px solid var(--line)"><span class="nm">Authentification MFA</span><span class="badge good">Activée</span></div><div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 0;border-bottom:1px solid var(--line)"><span class="nm">Sauvegardes quotidiennes</span><span class="badge good">Actives</span></div><div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 0;border-bottom:1px solid var(--line)"><span class="nm">RGPD / registre</span><span class="badge good">À jour</span></div><div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 0;border-bottom:1px solid var(--line)"><span class="nm">NF525</span><span class="badge good">Certifié</span></div><div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 0"><span class="nm">Accessibilité RGAA</span><span class="badge good">Conforme</span></div></div></div></div>
+</div></section>
+    <section class="view" id="v-appstaff" hidden><div class="view-head"><div class="ttl"><h1>App staff</h1><p>Application mobile encadrant — séances, contrôle, émargement</p></div><div class="actions"><span class="demo-note">◐ Démo — données fictives</span></div></div>
+<div style="display:flex;gap:28px;flex-wrap:wrap;justify-content:center;padding-top:10px">
+<div style="width:320px;background:var(--panel);border:1px solid var(--line);border-radius:26px;box-shadow:var(--shadow);overflow:hidden">
+<div style="background:var(--accent);color:#fff;padding:12px 16px;font-weight:700;display:flex;justify-content:space-between;align-items:center"><span>Fluvia Staff · Marie</span><span style="font-size:12px;opacity:.85">09:12</span></div>
+<div style="padding:16px;display:flex;flex-direction:column;gap:12px">
+<div style="display:flex;justify-content:space-between;align-items:center"><strong style="color:var(--ink)">Mes séances aujourd'hui</strong><span class="chip">3 séances · 24 inscrits</span></div>
+<div style="border:1px solid var(--line);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:6px">
+<div style="display:flex;justify-content:space-between;align-items:center"><span class="nm">Aquagym</span><span class="badge good">12/15</span></div>
+<div style="color:var(--ink-soft);font-size:13px">09:00 · Bassin 1</div>
+<div class="bar" style="margin-top:2px"><i style="width:80%"></i></div>
+</div>
+<div style="border:1px solid var(--line);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:6px">
+<div style="display:flex;justify-content:space-between;align-items:center"><span class="nm">Aquabike</span><span class="badge warn">Complet · +3</span></div>
+<div style="color:var(--ink-soft);font-size:13px">10:30 · Bassin 2</div>
+<div class="bar" style="margin-top:2px"><i style="width:100%"></i></div>
+</div>
+<div style="border:1px solid var(--line);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:6px">
+<div style="display:flex;justify-content:space-between;align-items:center"><span class="nm">Leçon enfants</span><span class="badge good">4/6</span></div>
+<div style="color:var(--ink-soft);font-size:13px">14:00 · Ligne 3</div>
+<div class="bar" style="margin-top:2px"><i style="width:67%"></i></div>
+</div>
+</div>
+</div>
+<div style="width:320px;background:var(--panel);border:1px solid var(--line);border-radius:26px;box-shadow:var(--shadow);overflow:hidden">
+<div style="background:var(--accent);color:#fff;padding:12px 16px;font-weight:700;display:flex;justify-content:space-between;align-items:center"><span>Fluvia Staff · Marie</span><span style="font-size:12px;opacity:.85">09:12</span></div>
+<div style="padding:16px;display:flex;flex-direction:column;gap:12px">
+<div style="display:flex;flex-direction:column;gap:2px"><strong style="color:var(--ink)">Séance : Aquagym 09:00</strong><span style="color:var(--ink-soft);font-size:13px">Émargement · Bassin 1 · 12 inscrits</span></div>
+<button class="btn primary" style="width:100%">⧉ Scanner (coupe-file)</button>
+<div style="display:flex;flex-direction:column;gap:8px">
+<div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center"><span class="nm">Sophie Martin</span><button class="toggle on"></button></div>
+<div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center"><span class="nm">Karim Baz</span><button class="toggle on"></button></div>
+<div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center"><span style="display:flex;flex-direction:column;gap:3px"><span class="nm">Léa Bonnet</span><span class="badge mut">Absent</span></span><button class="toggle"></button></div>
+<div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center"><span class="nm">P. Roy</span><button class="toggle on"></button></div>
+<div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center"><span class="nm">N. Fabre</span><button class="toggle on"></button></div>
+</div>
+<button class="btn" style="width:100%">Clôturer & envoyer le compte-rendu</button>
+</div>
+</div>
+</div>
+<p class="hint" style="text-align:center">Sa journée sur un écran · émargement en 1 tap · coupe-file au scan · zéro paperasse.</p></section>
+
+  </div>
+</div>
+
+<script>
+(function(){
+  function go(id){
+    document.querySelectorAll('.view').forEach(function(v){v.hidden=v.id!=='v-'+id;});
+    document.querySelectorAll('.side-link').forEach(function(l){l.classList.toggle('active',l.getAttribute('data-go')===id);});
+    window.scrollTo({top:0}); var _ap=document.querySelector('.app'); if(_ap) _ap.classList.remove('nav-open');
+  }
+  var tc=document.createElement('div');
+  tc.style.cssText='position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:9999;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none';
+  document.body.appendChild(tc);
+  function toast(msg){
+    var t=document.createElement('div');
+    t.textContent=msg;
+    t.style.cssText='background:var(--ink);color:var(--panel);padding:10px 16px;border-radius:10px;font-size:13.5px;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,.28);opacity:0;transform:translateY(6px);transition:opacity .18s,transform .18s;max-width:82vw;text-align:center';
+    tc.appendChild(t);
+    requestAnimationFrame(function(){t.style.opacity='1';t.style.transform='none';});
+    setTimeout(function(){t.style.opacity='0';t.style.transform='translateY(6px)';setTimeout(function(){t.remove();},220);},1900);
+  }
+  var NAVMAP=[[/vendre|ouvrir la caisse|encaisser/,"caisse"],[/planning du jour|voir le planning/,"planning"],[/supervision acc/,"acces"],[/centre financier/,"finance"],[/g\u00e9rer la famille|nouveau client/,"clients"]];
+  document.addEventListener('click',function(e){
+    var el; el=e.target.closest('#burger'); if(el){var _a=document.querySelector('.app'); if(_a)_a.classList.toggle('nav-open'); return;} el=e.target.closest('#navbd'); if(el){var _b=document.querySelector('.app'); if(_b)_b.classList.remove('nav-open'); return;}
+    el=e.target.closest('[data-go]'); if(el){e.preventDefault();go(el.getAttribute('data-go'));return;}
+    el=e.target.closest('.tab2'); if(el){var w=el.closest('[data-tabs]'); if(w){w.querySelectorAll('.tab2').forEach(function(x){x.classList.toggle('on',x===el);});var tg=el.getAttribute('data-t');w.querySelectorAll('[data-panel]').forEach(function(pp){pp.hidden=pp.getAttribute('data-panel')!==tg;});}return;}
+    el=e.target.closest('#themeBtn'); if(el){var r=document.documentElement;r.setAttribute('data-theme',r.getAttribute('data-theme')==='dark'?'light':'dark');return;}
+    el=e.target.closest('.seg button'); if(el){var sg=el.closest('.seg');sg.querySelectorAll('button').forEach(function(b){b.classList.toggle('on',b===el);});toast('Filtre : '+el.textContent.trim());return;}
+    el=e.target.closest('.toggle'); if(el){el.classList.toggle('on');return;}
+    el=e.target.closest('button, .btn, a[href="#"], [role="button"]');
+    if(el){
+      var label=(el.textContent||'').replace(/\s+/g,' ').trim();
+      var lc=label.toLowerCase();
+      for(var i=0;i<NAVMAP.length;i++){ if(NAVMAP[i][0].test(lc)){ go(NAVMAP[i][1]); return; } }
+      if(!label){ toast('Action simul\u00e9e (d\u00e9mo)'); return; }
+      if(label.length>44) label=label.slice(0,44)+'\u2026';
+      toast('\u00ab '+label+' \u00bb \u2014 action simul\u00e9e (d\u00e9mo)');
+      return;
+    }
+    el=e.target.closest('[style*="cursor:pointer"]'); if(el){ toast('S\u00e9lection (d\u00e9mo)'); return; }
+  });
+})();
+</script>
+<script>
+(function(){
+  var cart=[], payments=[];
+  function money(n){return n.toFixed(2).replace('.',',')+' \u20ac';}
+  function total(){return cart.reduce(function(a,i){return a+i.price*i.qty;},0);}
+  function paid(){return payments.reduce(function(a,p){return a+p.amount;},0);}
+  function reste(){return Math.max(0,total()-paid());}
+  function $(id){return document.getElementById(id);}
+  function renderCart(){
+    var box=$('cart-lines'); if(!box)return;
+    if(!cart.length){box.innerHTML='<div class="empty">Panier vide \u2014 cliquez un produit \u2192</div>';}
+    else{box.innerHTML=cart.map(function(it,i){
+      return '<div class="cline"><div><span class="nm">'+it.name+'</span> <span class="hint">\u00d7'+it.qty+'</span></div><div style="display:flex;align-items:center;gap:10px"><span class="num">'+money(it.price*it.qty)+'</span><button class="btn ghost sm cart-rm" data-i="'+i+'" aria-label="Retirer">\u2715</button></div></div>';
+    }).join('');}
+    $('cart-total').textContent=money(total());
+    var e=$('btn-encaisser'); if(e){e.disabled=!cart.length; e.textContent='Encaisser '+money(total());}
+  }
+  function add(n,pr){var f=cart.filter(function(x){return x.name===n;})[0]; if(f)f.qty++; else cart.push({name:n,price:pr,qty:1}); renderCart();}
+  function renderPay(){
+    $('pay-total').textContent=money(total()); $('pay-reste').textContent=money(reste());
+    var a=$('pay-amount'); if(a)a.value=reste().toFixed(2);
+    var l=$('pay-list'); l.innerHTML=payments.length?payments.map(function(p){return '<div class="cline"><span>'+p.means+'</span><span class="num">'+money(p.amount)+'</span></div>';}).join(''):'<div class="hint">Aucun paiement saisi</div>';
+    $('pay-valider').disabled=reste()>0.001;
+  }
+  function openPay(){payments=[]; $('pay-modal').style.display='flex'; renderPay();}
+  function closePay(){$('pay-modal').style.display='none';}
+  function addPayment(m){
+    var v=parseFloat(($('pay-amount').value||'0').replace(',','.'))||0;
+    v=Math.min(v,reste()); if(v<=0)v=reste(); if(v<=0)return;
+    payments.push({means:m,amount:v}); renderPay();
+  }
+  function valider(){
+    closePay();
+    $('done-list').innerHTML=cart.map(function(it){return '<div class="cline"><span>'+it.name+' \u00d7'+it.qty+'</span><span class="num">'+money(it.price*it.qty)+'</span></div>';}).join('')+'<div class="cline" style="font-weight:800;border-top:1px solid var(--line);margin-top:4px;padding-top:8px"><span>Total pay\u00e9</span><span class="num">'+money(total())+'</span></div>';
+    $('done-pay').innerHTML=payments.map(function(p){return '<span class="chip">'+p.means+' \u00b7 '+money(p.amount)+'</span>';}).join('');
+    $('done-modal').style.display='flex';
+  }
+  function newSale(){cart=[];payments=[];renderCart();$('done-modal').style.display='none';}
+  document.addEventListener('click',function(e){
+    var t;
+    t=e.target.closest('.prodtile'); if(t){e.stopPropagation(); add(t.getAttribute('data-name'),parseFloat(t.getAttribute('data-price'))); return;}
+    t=e.target.closest('.cart-rm'); if(t){e.stopPropagation(); var i=+t.getAttribute('data-i'); if(cart[i]){cart[i].qty--; if(cart[i].qty<=0)cart.splice(i,1);} renderCart(); return;}
+    t=e.target.closest('#btn-encaisser'); if(t){e.stopPropagation(); if(cart.length)openPay(); return;}
+    t=e.target.closest('#btn-clear'); if(t){e.stopPropagation(); cart=[]; renderCart(); return;}
+    t=e.target.closest('#pay-quick'); if(t){e.stopPropagation(); $('pay-amount').value=reste().toFixed(2); return;}
+    t=e.target.closest('.pay-means'); if(t){e.stopPropagation(); addPayment(t.getAttribute('data-means')); return;}
+    t=e.target.closest('#pay-valider'); if(t){e.stopPropagation(); if(reste()<=0.001)valider(); return;}
+    t=e.target.closest('#pay-annuler'); if(t){e.stopPropagation(); closePay(); return;}
+    t=e.target.closest('#done-new'); if(t){e.stopPropagation(); newSale(); return;}
+    t=e.target.closest('#done-close'); if(t){e.stopPropagation(); $('done-modal').style.display='none'; return;}
+  },true);
+  renderCart();
+})();
+</script>
+<script>
+(function () {
+  var TYPES = ['Billet daté', 'Billet non daté', 'Carte 10', 'Abonnement', 'Adhésion', 'Cours', 'Séance', 'Boutique', 'Location', 'Stage', 'Visite guidée'];
+  var products = [
+    { id: 1, name: 'Entrée adulte', type: 'Billet non daté', cat: "Droits d'entrée", canaux: ['Guichet', 'En ligne', 'Borne'], etat: 'Publié', grid: g(4.5, 5.5, 3.5, 4, 3, 3.5) },
+    { id: 2, name: 'Carte 10 entrées', type: 'Carte 10', cat: "Droits d'entrée", canaux: ['Guichet', 'En ligne'], etat: 'Publié', grid: g(40, 40, 40, 40, 40, 40) },
+    { id: 3, name: 'Abonnement Gold', type: 'Abonnement', cat: 'Abonnements', canaux: ['Guichet', 'En ligne'], etat: 'Publié', grid: g(39, 42, 29, 32, 25, 27) },
+    { id: 4, name: 'Abonnement Classique', type: 'Abonnement', cat: 'Abonnements', canaux: ['Guichet', 'En ligne'], etat: 'Publié', grid: g(25, 27, 19, 21, 15, 17) },
+    { id: 5, name: 'Cours Aquagym', type: 'Cours', cat: 'Activités', canaux: ['Guichet', 'En ligne'], etat: 'Publié', grid: g(7, 8, 6, 7, 5, 6) },
+    { id: 6, name: 'Bonnet de bain', type: 'Boutique', cat: 'Boutique', canaux: ['Guichet'], etat: 'Publié', grid: g(6, 6, 6, 6, 6, 6) },
+    { id: 7, name: 'Stage vacances', type: 'Stage', cat: 'Activités', canaux: ['En ligne'], etat: 'Brouillon', grid: g(60, 60, 50, 50, 45, 45) }
+  ];
+  var nextId = 100, current = null, catFilter = 'Tous';
+
+  function g(ab, ah, rb, rh, eb, eh) { return { Adulte: { Basse: ab, Haute: ah }, Réduit: { Basse: rb, Haute: rh }, Enfant: { Basse: eb, Haute: eh } }; }
+  function money(n) { return (Math.round(n * 100) / 100).toFixed(2).replace('.', ',') + ' €'; }
+  function el(id) { return document.getElementById(id); }
+  function esc(s) { return (s || '').replace(/"/g, '&quot;'); }
+
+  function priceDisplay(p) {
+    var vals = [];
+    Object.keys(p.grid).forEach(function (r) { ['Basse', 'Haute'].forEach(function (s) { var v = parseFloat(String(p.grid[r][s]).replace(',', '.')) || 0; if (v > 0) vals.push(v); }); });
+    if (!vals.length) return '—';
+    var mn = Math.min.apply(null, vals), mx = Math.max.apply(null, vals);
+    var suf = (p.type === 'Abonnement' || p.type === 'Adhésion') ? ' /mois' : '';
+    return (mn === mx ? money(mn) : money(mn) + ' – ' + money(mx)) + suf;
+  }
+
+  function renderCat() {
+    var root = el('cat-root'); if (!root) return;
+    var rows = products.filter(function (p) { return catFilter === 'Tous' || (catFilter === 'Publiés' && p.etat === 'Publié') || (catFilter === 'Brouillons' && p.etat === 'Brouillon'); });
+    var h = '';
+    h += '<div class="view-head"><div class="ttl"><h1>Catalogue</h1><p>' + products.length + ' produits · démo interactive</p></div><div class="actions"><span class="demo-note">◐ Démo interactive</span><div class="seg" id="cat-seg"><button class="' + (catFilter === 'Tous' ? 'on' : '') + '" data-flt="Tous">Tous</button><button class="' + (catFilter === 'Publiés' ? 'on' : '') + '" data-flt="Publiés">Publiés</button><button class="' + (catFilter === 'Brouillons' ? 'on' : '') + '" data-flt="Brouillons">Brouillons</button></div><button class="btn primary sm" id="cat-new">＋ Nouveau produit</button></div></div>';
+    h += '<div class="card"><div class="card-b" style="overflow-x:auto"><table class="tbl"><thead><tr><th>Produit</th><th>Catégorie</th><th>Prix</th><th>Canaux</th><th>État</th><th></th></tr></thead><tbody>';
+    rows.forEach(function (p) {
+      h += '<tr><td><span class="nm">' + p.name + '</span><br><span class="badge mut" style="font-size:10px">' + p.type + '</span></td>'
+        + '<td>' + p.cat + '</td><td>' + priceDisplay(p) + '</td>'
+        + '<td>' + p.canaux.map(function (c) { return '<span class="chip">' + c + '</span>'; }).join('') + '</td>'
+        + '<td><span class="badge ' + (p.etat === 'Publié' ? 'good' : 'warn') + '">' + p.etat + '</span></td>'
+        + '<td><button class="btn ghost sm cat-edit" data-id="' + p.id + '">Modifier</button></td></tr>';
+    });
+    if (!rows.length) h += '<tr><td colspan="6" class="empty">Aucun produit</td></tr>';
+    h += '</tbody></table></div></div>';
+    root.innerHTML = h;
+  }
+
+  function blank() { return { id: ++nextId, name: '', type: 'Billet non daté', cat: "Droits d'entrée", canaux: ['Guichet'], etat: 'Brouillon', grid: g(4.5, 5.5, 3.5, 4, 3, 3.5) }; }
+
+  var TABLABEL = { g: 'Général', t: 'Tarifs', f: 'Formule', a: 'Accès', s: 'Stock', c: 'Compta' };
+  function tabsFor(type) {
+    var t = ['g', 't'];
+    if (type === 'Abonnement' || type === 'Adhésion') t.push('f');
+    if (type !== 'Boutique' && type !== 'Location') t.push('a');
+    if (type === 'Boutique' || type === 'Location') t.push('s');
+    t.push('c');
+    return t;
+  }
+
+  function panel(t, p) {
+    if (t === 'g') return '<div class="grid g2"><div class="field"><label>Description</label><input class="input" placeholder="Description courte"></div><div class="field"><label>Couleur (repère caisse)</label><input class="input" value="Bleu"></div></div><p class="hint">Photos / vidéos, pièces jointes, produits associés, note interne… (démo)</p>';
+    if (t === 't') {
+      var rows = ['Adulte', 'Réduit', 'Enfant'];
+      var x = '<p class="hint" style="margin:0 0 10px">Grille tarifaire — modifiez un prix, il se répercute au catalogue.</p><div style="overflow-x:auto"><table class="tbl" style="min-width:380px"><thead><tr><th>Tarif</th><th>Basse saison</th><th>Haute saison</th></tr></thead><tbody>';
+      rows.forEach(function (r) {
+        var b = p.grid[r] ? p.grid[r].Basse : 0, hh = p.grid[r] ? p.grid[r].Haute : 0;
+        x += '<tr><td><span class="nm">' + r + '</span></td>'
+          + '<td><input class="input f-grid" data-tarif="' + r + '" data-saison="Basse" value="' + b + '" inputmode="decimal" style="width:104px;padding:6px 8px"></td>'
+          + '<td><input class="input f-grid" data-tarif="' + r + '" data-saison="Haute" value="' + hh + '" inputmode="decimal" style="width:104px;padding:6px 8px"></td></tr>';
+      });
+      x += '</tbody></table></div><div style="margin-top:12px;display:flex;align-items:center;gap:8px"><button class="toggle on" type="button"></button><span style="font-size:13.5px">Quotient familial (tarif social automatique)</span></div>';
+      return x;
+    }
+    if (t === 'f') return '<div class="grid g2"><div class="field"><label>Droit d\'accès</label><select class="select"><option>Illimité</option><option>Quota de passages</option></select></div><div class="field"><label>Services inclus</label><div style="padding-top:6px"><span class="chip">Aquagym · 1 / semaine</span><button class="btn ghost sm" style="margin-left:4px">＋ Ajouter</button></div></div></div><div class="grid g3"><div class="field"><label>Périodicité</label><select class="select"><option>Mensuel</option><option>Annuel</option></select></div><div style="display:flex;align-items:center;gap:8px;padding-top:24px"><button class="toggle on" type="button"></button><span style="font-size:13.5px">Prélèvement SEPA</span></div><div style="display:flex;align-items:center;gap:8px;padding-top:24px"><button class="toggle on" type="button"></button><span style="font-size:13.5px">Renouvellement auto</span></div></div><p class="hint">Sans engagement · résiliable à tout moment.</p>';
+    if (t === 'a') return '<div class="field"><label>Nombre de compostages</label><select class="select"><option>Illimité (durée de l\'abonnement)</option><option>1 (entrée simple)</option><option>10 (carte)</option></select></div><div style="display:flex;gap:24px;flex-wrap:wrap"><div style="display:flex;align-items:center;gap:8px"><button class="toggle on" type="button"></button><span style="font-size:13.5px">Appairage RFID / bracelet</span></div><div style="display:flex;align-items:center;gap:8px"><button class="toggle on" type="button"></button><span style="font-size:13.5px">Badge mobile (wallet)</span></div></div><div class="grid g2" style="margin-top:12px"><div class="field"><label>Marge d\'avance</label><input class="input" value="15 min"></div><div class="field"><label>Marge de retard</label><input class="input" value="15 min"></div></div><p class="hint">Marges héritées des réglages de la structure.</p>';
+    if (t === 's') return '<div class="grid g2"><div class="field"><label>Type de stock</label><select class="select"><option>Stock dédié</option><option>Stock partagé (pool)</option></select></div><div class="field"><label>Disponibilité</label><input class="input" value="84"></div></div>';
+    if (t === 'c') return '<div class="grid g3"><div class="field"><label>Taux de TVA</label><select class="select"><option>20 %</option><option>10 %</option><option>5,5 %</option></select></div><div class="field"><label>Compte comptable</label><input class="input" value="7061"></div><div class="field"><label>Reconnaissance (PCA)</label><select class="select"><option>Étalement mensuel</option><option>À la consommation</option><option>À la vente</option></select></div></div><div style="margin-top:4px"><span class="chip">Site : Belle Ville</span><span class="chip">Activité : Aquatique</span><span class="chip">Marketing : Abonnements</span></div>';
+    return '';
+  }
+
+  function renderFiche() {
+    var root = el('fiche-root'); if (!root || !current) return;
+    var p = current, tabs = tabsFor(p.type), h = '';
+    h += '<div class="view-head"><div class="ttl"><h1>' + (p.name || 'Nouveau produit') + '</h1><p>' + p.type + ' · <span class="badge ' + (p.etat === 'Publié' ? 'good' : 'warn') + '">' + p.etat + '</span></p></div><div class="actions"><span class="demo-note">◐ Démo interactive</span><button class="btn sm" id="f-cancel">Annuler</button><button class="btn primary sm" id="f-save">Enregistrer</button></div></div>';
+    h += '<div class="card"><div class="card-b"><div class="grid g3" style="grid-template-columns:2fr 1fr 1fr">';
+    h += '<div class="field"><label>Libellé</label><input class="input" id="f-name" value="' + esc(p.name) + '" placeholder="Nom du produit"></div>';
+    h += '<div class="field"><label>Type</label><select class="select" id="f-type">' + TYPES.map(function (t) { return '<option' + (t === p.type ? ' selected' : '') + '>' + t + '</option>'; }).join('') + '</select></div>';
+    h += '<div class="field"><label>Statut</label><select class="select" id="f-etat"><option' + (p.etat === 'Brouillon' ? ' selected' : '') + '>Brouillon</option><option' + (p.etat === 'Publié' ? ' selected' : '') + '>Publié</option></select></div>';
+    h += '</div>';
+    h += '<div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap"><span style="font-size:13px;color:var(--ink-soft);font-weight:600">Canaux :</span>' + ['Guichet', 'En ligne', 'Borne'].map(function (c) { return '<span style="display:flex;align-items:center;gap:7px;font-size:13.5px"><button class="toggle f-canal ' + (p.canaux.indexOf(c) >= 0 ? 'on' : '') + '" data-canal="' + c + '" type="button"></button>' + c + '</span>'; }).join('') + '</div>';
+    h += '</div></div>';
+    h += '<div class="card"><div class="card-b"><div data-tabs><div class="tabs2">' + tabs.map(function (t, i) { return '<button class="tab2 ' + (i === 0 ? 'on' : '') + '" data-t="' + t + '">' + TABLABEL[t] + '</button>'; }).join('') + '</div>';
+    tabs.forEach(function (t, i) { h += '<div data-panel="' + t + '"' + (i === 0 ? '' : ' hidden') + '>' + panel(t, p) + '</div>'; });
+    h += '</div></div></div>';
+    root.innerHTML = h;
+  }
+
+  function readFiche() {
+    var p = current;
+    if (el('f-name')) p.name = el('f-name').value.trim();
+    if (el('f-type')) p.type = el('f-type').value;
+    if (el('f-etat')) p.etat = el('f-etat').value;
+    var on = [].slice.call(document.querySelectorAll('.f-canal.on')).map(function (b) { return b.getAttribute('data-canal'); });
+    if (on.length) p.canaux = on;
+    document.querySelectorAll('.f-grid').forEach(function (inp) { var r = inp.getAttribute('data-tarif'), s = inp.getAttribute('data-saison'); if (!p.grid[r]) p.grid[r] = {}; p.grid[r][s] = parseFloat(inp.value.replace(',', '.')) || 0; });
+    if (p.type === 'Boutique') p.cat = 'Boutique'; else if (p.type === 'Abonnement' || p.type === 'Adhésion') p.cat = 'Abonnements'; else if (p.type === 'Cours' || p.type === 'Séance' || p.type === 'Stage' || p.type === 'Visite guidée') p.cat = 'Activités'; else p.cat = "Droits d'entrée";
+  }
+
+  function save() {
+    readFiche();
+    if (!current.name) { toast('Renseignez un libellé.'); return; }
+    if (priceDisplay(current) === '—') { toast('Renseignez au moins un prix.'); return; }
+    var idx = products.map(function (x) { return x.id; }).indexOf(current.id);
+    if (idx >= 0) products[idx] = current; else products.push(current);
+    toast('« ' + current.name + ' » enregistré (' + current.etat + ')');
+    renderCat(); nav('catalogue');
+  }
+
+  function nav(id) { var l = document.querySelector('.side-link[data-go="' + id + '"]'); if (l) l.click(); }
+  function toast(m) { var d = document.createElement('div'); d.textContent = m; d.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--panel);padding:10px 16px;border-radius:10px;font-size:13.5px;font-weight:600;z-index:9999;box-shadow:0 8px 24px rgba(0,0,0,.28)'; document.body.appendChild(d); setTimeout(function () { d.remove(); }, 1900); }
+
+  document.addEventListener('click', function (e) {
+    var t;
+    t = e.target.closest('#cat-new'); if (t) { e.stopPropagation(); current = blank(); renderFiche(); nav('fiche'); return; }
+    t = e.target.closest('.cat-edit'); if (t) { e.stopPropagation(); var id = +t.getAttribute('data-id'); var p = products.filter(function (x) { return x.id === id; })[0]; if (p) { current = JSON.parse(JSON.stringify(p)); renderFiche(); nav('fiche'); } return; }
+    t = e.target.closest('#cat-seg button'); if (t) { e.stopPropagation(); catFilter = t.getAttribute('data-flt'); renderCat(); return; }
+    t = e.target.closest('#f-cancel'); if (t) { e.stopPropagation(); nav('catalogue'); return; }
+    t = e.target.closest('#f-save'); if (t) { e.stopPropagation(); save(); return; }
+    t = e.target.closest('.f-canal'); if (t) { e.stopPropagation(); t.classList.toggle('on'); return; }
+  }, true);
+
+  document.addEventListener('change', function (e) {
+    var t = e.target.closest('#f-type'); if (t) { readFiche(); renderFiche(); }
+  }, true);
+
+  renderCat();
+})();
+
+</script>
+<script>
+(function () {
+  function money(n) { return (Math.round(n * 100) / 100).toFixed(2).replace('.', ',') + ' €'; }
+  function el(id) { return document.getElementById(id); }
+  function toast(m) { var d = document.createElement('div'); d.textContent = m; d.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--panel);padding:10px 16px;border-radius:10px;font-size:13.5px;font-weight:600;z-index:9999;box-shadow:0 8px 24px rgba(0,0,0,.28)'; document.body.appendChild(d); setTimeout(function () { d.remove(); }, 1900); }
+
+  /* ---------------- CLIENTS (CRM) ---------------- */
+  var clients = [
+    { id: 1, name: 'Famille Martin', type: 'Abonné', ini: 'FM', pmv: 24, membre: '2023', compo: '2 adultes · 2 enfants', abos: [['Abonnement Gold — Sophie', 'Actif · SEPA', 'good'], ['Carte 10 — famille', '6 restants', 'mut']], segs: ['Abonné actif', 'Aquagym', 'Panier moyen 38 €'], hist: ['12/08 · Entrée piscine ×2', '10/08 · Aquabike réservé', '01/08 · Recharge PMV 20 €'] },
+    { id: 2, name: 'Sophie Martin', type: 'Abonné', ini: 'SM', pmv: 0, membre: '2023', compo: 'Individuel', abos: [['Abonnement Gold', 'Actif · SEPA', 'good']], segs: ['Abonné Gold', 'Aquagym'], hist: ['12/08 · Aquagym', '05/08 · Entrée piscine'] },
+    { id: 3, name: 'Karim Baz', type: 'Impayé', ini: 'KB', pmv: 0, membre: '2024', compo: 'Individuel', abos: [['Abonnement Classique', 'Impayé', 'crit']], segs: ['Impayé', 'Relance en cours'], hist: ['08/08 · Prélèvement rejeté', '01/08 · Entrée piscine'] },
+    { id: 4, name: 'Assoc. Les Dauphins', type: 'Club', ini: 'LD', pmv: 0, membre: '2019', compo: 'Club · 45 licenciés', abos: [["Convention lignes d'eau", 'Active', 'good']], segs: ['Club', 'Créneau hebdo'], hist: ['Jeu 18:00 · Créneau club', 'Facture mensuelle'] },
+    { id: 5, name: 'École J. Ferry', type: 'Scolaire', ini: 'JF', pmv: 0, membre: '—', compo: 'Établissement scolaire', abos: [['Créneaux scolaires', 'Réservés', 'mut']], segs: ['Scolaire', 'Chorus Pro'], hist: ['Devis 168 € envoyé', 'Créneau Jeu 10:00'] },
+    { id: 6, name: 'Léa Bonnet', type: 'Occasionnel', ini: 'LB', pmv: 12.5, membre: '2025', compo: 'Individuel', abos: [['Carte 10 entrées', '3 restants', 'mut']], segs: ['Occasionnel'], hist: ['09/08 · Entrée piscine', '20/07 · Carte 10 achetée'] }
+  ];
+  var sel = 1, cfilter = 'Tous';
+  function bcls(t) { return t === 'Impayé' ? 'crit' : (t === 'Abonné' ? 'good' : ((t === 'Club' || t === 'Scolaire') ? 'info' : 'mut')); }
+  function renderClients() {
+    var root = el('clients-root'); if (!root) return;
+    var list = clients.filter(function (c) { return cfilter === 'Tous' || (cfilter === 'Abonnés' && c.type === 'Abonné') || (cfilter === 'Impayés' && c.type === 'Impayé'); });
+    var c = clients.filter(function (x) { return x.id === sel; })[0] || clients[0];
+    var h = '<div class="view-head"><div class="ttl"><h1>Clients</h1><p>' + clients.length + ' fiches · démo interactive — cliquez un client</p></div><div class="actions"><span class="demo-note">◐ Démo interactive</span><button class="btn primary sm">＋ Nouveau</button></div></div>';
+    h += '<div style="display:grid;grid-template-columns:300px 1fr;gap:16px">';
+    h += '<div class="card"><div class="card-h"><div class="seg" id="cli-seg"><button class="' + (cfilter === 'Tous' ? 'on' : '') + '" data-f="Tous">Tous</button><button class="' + (cfilter === 'Abonnés' ? 'on' : '') + '" data-f="Abonnés">Abonnés</button><button class="' + (cfilter === 'Impayés' ? 'on' : '') + '" data-f="Impayés">Impayés</button></div></div><div class="card-b" style="padding:0">';
+    list.forEach(function (x) {
+      h += '<div class="cli-item" data-id="' + x.id + '" style="display:flex;gap:10px;align-items:center;padding:11px 14px;border-bottom:1px solid var(--line);cursor:pointer;' + (x.id === sel ? 'background:var(--panel-2)' : '') + '"><span style="width:32px;height:32px;border-radius:50%;background:var(--accent-soft);color:var(--accent-2);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px">' + x.ini + '</span><div style="flex:1"><div class="nm" style="font-size:13.5px">' + x.name + '</div></div><span class="badge ' + bcls(x.type) + '">' + x.type + '</span></div>';
+    });
+    h += '</div></div>';
+    h += '<div class="card"><div class="card-h"><h3>' + c.name + ' — fiche 360°</h3><div class="r"><span class="badge ' + bcls(c.type) + '">' + c.type + '</span></div></div><div class="card-b">';
+    h += '<div class="grid g3"><div class="kpi"><div class="lbl">Identité</div><div style="font-size:13.5px;margin-top:6px">' + c.compo + '<br>membre depuis ' + c.membre + '</div></div><div class="kpi"><div class="lbl">Porte-monnaie</div><div class="val">' + money(c.pmv) + '</div></div><div class="kpi"><div class="lbl">Segments</div><div style="margin-top:6px">' + c.segs.map(function (s) { return '<span class="chip">' + s + '</span>'; }).join('') + '</div></div></div>';
+    h += '<div class="card" style="box-shadow:none;margin-top:14px"><div class="card-h"><h3 style="font-size:14px">Abonnements &amp; cartes</h3></div><div class="card-b" style="padding:10px 16px"><table class="tbl"><tbody>' + c.abos.map(function (a) { return '<tr><td><span class="nm">' + a[0] + '</span></td><td style="text-align:right"><span class="badge ' + a[2] + '">' + a[1] + '</span></td></tr>'; }).join('') + '</tbody></table></div></div>';
+    h += '<div class="card" style="box-shadow:none;margin-top:12px"><div class="card-h"><h3 style="font-size:14px">Historique récent</h3></div><div class="card-b" style="padding:12px 16px"><ul class="clean" style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px">' + c.hist.map(function (x) { return '<li style="font-size:13.5px;color:var(--ink-soft)">' + x + '</li>'; }).join('') + '</ul></div></div>';
+    h += '<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap"><button class="btn primary sm">Vendre</button><button class="btn sm">Recharger PMV</button><button class="btn sm">Message</button><button class="btn sm">Gérer la famille</button></div>';
+    h += '</div></div></div>';
+    root.innerHTML = h;
+  }
+
+  /* ---------------- PLANNING ---------------- */
+  var sessions = [
+    { id: 1, d: 0, t: '09:00', n: 'Aquagym', r: 'Bassin 1', c: 'Marie', cap: 15, taken: 12, wait: 0 },
+    { id: 2, d: 0, t: '10:30', n: 'Aquabike', r: 'Bassin 2', c: 'Karim', cap: 15, taken: 15, wait: 3 },
+    { id: 3, d: 1, t: '18:30', n: 'Aquazumba', r: 'Bassin 1', c: 'Léa', cap: 20, taken: 8, wait: 0 },
+    { id: 4, d: 2, t: '09:00', n: 'Leçon enfants', r: 'Ligne 3', c: 'Marie', cap: 6, taken: 4, wait: 0 },
+    { id: 5, d: 3, t: '18:30', n: 'Aquabike', r: 'Bassin 2', c: 'Karim', cap: 15, taken: 15, wait: 1 },
+    { id: 6, d: 4, t: '09:00', n: 'Aquagym', r: 'Bassin 1', c: 'Marie', cap: 15, taken: 10, wait: 0 }
+  ];
+  var days = ['Lun 17', 'Mar 18', 'Mer 19', 'Jeu 20', 'Ven 21', 'Sam 22'];
+  var times = ['09:00', '10:30', '18:30'];
+  var curSess = null;
+  function renderPlanning() {
+    var root = el('planning-root'); if (!root) return;
+    var h = '<div class="view-head"><div class="ttl"><h1>Planning</h1><p>Semaine du 17 au 23 août · démo interactive — cliquez une séance</p></div><div class="actions"><span class="demo-note">◐ Démo interactive</span><button class="btn primary sm">＋ Nouvelle séance</button></div></div>';
+    h += '<div class="card"><div class="card-b" style="overflow-x:auto"><div style="display:grid;grid-template-columns:64px repeat(6,minmax(118px,1fr));gap:8px;min-width:770px">';
+    h += '<div></div>' + days.map(function (d) { return '<div style="font-size:12px;font-weight:700;color:var(--ink-soft);text-align:center">' + d + '</div>'; }).join('');
+    times.forEach(function (t) {
+      h += '<div style="font-size:12px;color:var(--ink-faint);font-family:ui-monospace,monospace;padding-top:8px">' + t + '</div>';
+      for (var d = 0; d < 6; d++) {
+        var s = sessions.filter(function (x) { return x.d === d && x.t === t; })[0];
+        if (s) {
+          var full = s.taken >= s.cap;
+          var pct = Math.round(s.taken / s.cap * 100);
+          h += '<button class="sess" data-id="' + s.id + '" style="text-align:left;border:1px solid ' + (full ? 'color-mix(in srgb,var(--warn) 40%,var(--line))' : 'var(--line)') + ';border-radius:8px;padding:8px;font-size:11.5px;cursor:pointer;color:var(--ink);background:' + (full ? 'var(--warn-bg)' : 'var(--accent-soft)') + '"><div style="font-weight:700">' + s.n + '</div><div style="color:var(--ink-soft)">' + s.r + ' · ' + s.c + '</div><div class="bar" style="margin-top:5px"><i style="width:' + pct + '%"></i></div><div style="margin-top:3px">' + (full ? '<span class="badge warn">Complet · +' + s.wait + '</span>' : s.taken + '/' + s.cap) + '</div></button>';
+        } else {
+          h += '<div style="border:1px dashed var(--line);border-radius:8px;min-height:64px"></div>';
+        }
+      }
+    });
+    h += '</div></div></div>';
+    h += '<div class="pmodal" id="sess-modal"><div class="pcard"><div class="ph"><h3 id="sess-title">Séance</h3></div><div class="pb"><div id="sess-body"></div><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button class="btn" id="sess-close">Fermer</button><button class="btn primary" id="sess-book">Réserver une place</button></div></div></div></div>';
+    root.innerHTML = h;
+  }
+  function openSess(id) {
+    var s = sessions.filter(function (x) { return x.id === id; })[0]; if (!s) return;
+    curSess = id;
+    var full = s.taken >= s.cap;
+    el('sess-title').textContent = s.n + ' · ' + days[s.d] + ' ' + s.t;
+    el('sess-body').innerHTML = '<div class="cline"><span>Bassin / ligne</span><span class="nm">' + s.r + '</span></div><div class="cline"><span>Encadrant</span><span class="nm">' + s.c + '</span></div><div class="cline"><span>Places</span><span class="nm">' + s.taken + ' / ' + s.cap + (full ? " · liste d'attente " + s.wait : '') + '</span></div>';
+    el('sess-book').textContent = full ? "Rejoindre la liste d'attente" : 'Réserver une place';
+    el('sess-modal').style.display = 'flex';
+  }
+  function bookSess() {
+    var s = sessions.filter(function (x) { return x.id === curSess; })[0]; if (!s) return;
+    if (s.taken >= s.cap) { s.wait++; toast("Ajouté à la liste d'attente — " + s.n); }
+    else { s.taken++; toast('Place réservée — ' + s.n + ' (' + s.taken + '/' + s.cap + ')'); }
+    el('sess-modal').style.display = 'none';
+    renderPlanning();
+  }
+
+  document.addEventListener('click', function (e) {
+    var t;
+    t = e.target.closest('.cli-item'); if (t) { e.stopPropagation(); sel = +t.getAttribute('data-id'); renderClients(); return; }
+    t = e.target.closest('#cli-seg button'); if (t) { e.stopPropagation(); cfilter = t.getAttribute('data-f'); renderClients(); return; }
+    t = e.target.closest('.sess'); if (t) { e.stopPropagation(); openSess(+t.getAttribute('data-id')); return; }
+    t = e.target.closest('#sess-close'); if (t) { e.stopPropagation(); el('sess-modal').style.display = 'none'; return; }
+    t = e.target.closest('#sess-book'); if (t) { e.stopPropagation(); bookSess(); return; }
+  }, true);
+
+  renderClients();
+  renderPlanning();
+})();
+
+</script>

@@ -1,0 +1,684 @@
+<title>Refonte billetterie & contrôle d'accès — tableau de bord</title>
+<style>
+  :root {
+    --bg: #f1f5f6;
+    --surface: #ffffff;
+    --surface-2: #e9f0f1;
+    --ink: #12262d;
+    --ink-soft: #4d626b;
+    --ink-faint: #7a8d94;
+    --line: #d6e0e2;
+    --accent: #0d7d88;
+    --accent-strong: #094f57;
+    --warm: #d9702f;
+    --good: #2f9e68;
+    --good-bg: #e4f3ea;
+    --watch: #b07d00;
+    --watch-bg: #f6eed6;
+    --crit: #cc4634;
+    --crit-bg: #f7e3df;
+    --shadow: 0 1px 2px rgba(18,38,45,.06), 0 6px 20px rgba(18,38,45,.05);
+  }
+  :root:not([data-theme="light"]) {
+    @media (prefers-color-scheme: dark) {
+      --bg: #0b1417; --surface: #121f24; --surface-2: #182a30;
+      --ink: #e8eff1; --ink-soft: #a2b5bc; --ink-faint: #6f858d; --line: #253840;
+      --accent: #37b4be; --accent-strong: #7ad3db; --warm: #ef9459;
+      --good: #46b884; --good-bg: #163027; --watch: #e0ad3d; --watch-bg: #322a12;
+      --crit: #e86a58; --crit-bg: #341d19;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.28);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0b1417; --surface: #121f24; --surface-2: #182a30;
+    --ink: #e8eff1; --ink-soft: #a2b5bc; --ink-faint: #6f858d; --line: #253840;
+    --accent: #37b4be; --accent-strong: #7ad3db; --warm: #ef9459;
+    --good: #46b884; --good-bg: #163027; --watch: #e0ad3d; --watch-bg: #322a12;
+    --crit: #e86a58; --crit-bg: #341d19;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.28);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.55; -webkit-font-smoothing: antialiased; margin: 0;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px 72px; }
+  .eyebrow { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); font-weight: 600; }
+  h1, h2, h3 { text-wrap: balance; margin: 0; font-weight: 700; letter-spacing: -.01em; }
+
+  /* Hero */
+  .hero { padding: 44px 0 22px; }
+  .hero h1 { font-size: clamp(25px, 3.8vw, 40px); line-height: 1.07; margin: 12px 0 0; }
+  .hero .lead { font-size: clamp(15px, 1.9vw, 19px); color: var(--ink-soft); max-width: 62ch; margin: 14px 0 0; }
+  .hero .lead b { color: var(--ink); font-weight: 650; }
+
+  /* Golden rule banner */
+  .rule {
+    margin-top: 22px; border-radius: 12px; padding: 16px 20px; display: flex; gap: 14px; align-items: center;
+    background: color-mix(in srgb, var(--warm) 12%, var(--surface));
+    border: 1px solid color-mix(in srgb, var(--warm) 34%, var(--line));
+  }
+  .rule .star { flex: none; font-size: 20px; }
+  .rule .txt b { color: var(--warm); }
+  .rule .txt { font-size: 15px; color: var(--ink-soft); }
+  .rule .txt strong { color: var(--ink); font-weight: 650; }
+
+  /* Tabs */
+  .tabnav {
+    position: sticky; top: 0; z-index: 5; display: flex; gap: 4px; flex-wrap: wrap;
+    padding: 10px 0; margin-top: 26px; background: var(--bg); border-bottom: 1px solid var(--line);
+  }
+  .tab {
+    font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; letter-spacing: .02em;
+    border: 1px solid transparent; background: transparent; color: var(--ink-soft);
+    padding: 8px 13px; border-radius: 8px; cursor: pointer; font-weight: 600;
+  }
+  .tab:hover { color: var(--ink); background: var(--surface-2); }
+  .tab[aria-selected="true"] { color: var(--accent-strong); background: color-mix(in srgb, var(--accent) 14%, var(--surface)); border-color: color-mix(in srgb, var(--accent) 30%, var(--line)); }
+  .tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .panel { padding-top: 30px; }
+  .panel[hidden] { display: none; }
+  @media (prefers-reduced-motion: no-preference) {
+    .panel:not([hidden]) { animation: fade .22s ease; }
+    @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  }
+
+  .lead-sub { color: var(--ink-soft); margin: 0 0 22px; max-width: 66ch; }
+  .h2row { display: flex; align-items: baseline; gap: 12px; margin-bottom: 8px; }
+  .h2row h2 { font-size: clamp(20px, 2.6vw, 27px); }
+
+  .grid { display: grid; gap: 16px; }
+  .g2 { grid-template-columns: repeat(2, 1fr); }
+  .g3 { grid-template-columns: repeat(3, 1fr); }
+  @media (max-width: 720px){ .g2, .g3 { grid-template-columns: 1fr; } }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; box-shadow: var(--shadow); }
+  .card h3 { font-size: 16.5px; margin-bottom: 4px; }
+  .card p.k { color: var(--ink-soft); font-size: 14px; margin: 2px 0 10px; }
+
+  ul.clean { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+  ul.clean li { font-size: 14.5px; color: var(--ink-soft); padding-left: 18px; position: relative; }
+  ul.clean li::before { content: ""; position: absolute; left: 0; top: .55em; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  ul.clean li b { color: var(--ink); font-weight: 600; }
+  ul.clean li.star::before { background: var(--warm); box-shadow: 0 0 0 3px color-mix(in srgb, var(--warm) 22%, transparent); }
+
+  .chip { display: inline-flex; align-items: center; gap: 6px; font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; letter-spacing: .04em; text-transform: uppercase; font-weight: 600; padding: 3px 9px; border-radius: 999px; }
+  .chip.good { background: var(--good-bg); color: var(--good); }
+  .chip.watch { background: var(--watch-bg); color: var(--watch); }
+  .chip.crit { background: var(--crit-bg); color: var(--crit); }
+
+  /* stack */
+  .stack { display: flex; flex-direction: column; gap: 10px; }
+  .layer { border-radius: 10px; padding: 16px 18px; border: 1px solid var(--line); }
+  .layer .lab { font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; letter-spacing: .1em; text-transform: uppercase; font-weight: 600; }
+  .layer .mods { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+  .mod { font-size: 13px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; color: var(--ink); }
+  .layer.vert { background: color-mix(in srgb, var(--warm) 12%, var(--surface)); border-color: color-mix(in srgb, var(--warm) 35%, var(--line)); }
+  .layer.vert .lab { color: var(--warm); }
+  .layer.vert .mod { border-color: color-mix(in srgb, var(--warm) 30%, var(--line)); }
+  .layer.socle { background: color-mix(in srgb, var(--accent) 12%, var(--surface)); border-color: color-mix(in srgb, var(--accent) 32%, var(--line)); }
+  .layer.socle .lab { color: var(--accent-strong); }
+  .layer.socle .mod { border-color: color-mix(in srgb, var(--accent) 26%, var(--line)); }
+  .stack .arrow { text-align: center; color: var(--ink-faint); font-size: 12px; font-family: ui-monospace, monospace; letter-spacing:.1em; }
+
+  .banner { border-radius: 12px; padding: 20px 22px; display: flex; gap: 16px; align-items: flex-start; background: color-mix(in srgb, var(--accent) 10%, var(--surface)); border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line)); }
+  .banner.alert { background: var(--crit-bg); border-color: color-mix(in srgb, var(--crit) 40%, var(--line)); }
+  .banner .big { font-size: clamp(17px, 2.3vw, 23px); font-weight: 700; line-height: 1.15; }
+  .banner .sub { color: var(--ink-soft); font-size: 14.5px; margin-top: 6px; }
+  .banner .sub b { color: var(--ink); }
+  .banner .dot { flex: none; width: 12px; height: 12px; border-radius: 50%; margin-top: 7px; background: var(--accent); }
+  .banner.alert .dot { background: var(--crit); }
+
+  .compgroup { display: flex; flex-direction: column; gap: 8px; }
+  .compgroup .glab { font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; letter-spacing:.08em; text-transform: uppercase; color: var(--ink-faint); font-weight: 600; }
+  .names { display: flex; flex-wrap: wrap; gap: 7px; }
+  .name { font-size: 13.5px; padding: 5px 11px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface-2); }
+  .name.lead { border-color: var(--crit); color: var(--ink); font-weight: 650; }
+  .name.lead::after { content: " ← n°1"; color: var(--crit); font-size: 11px; font-family: ui-monospace, monospace; }
+
+  .col { border-radius: 10px; border: 1px solid var(--line); overflow: hidden; }
+  .col > .top { padding: 13px 16px; font-weight: 700; font-size: 15px; }
+  .col.stake > .top { background: var(--watch-bg); color: var(--watch); }
+  .col.win > .top { background: var(--good-bg); color: var(--good); }
+  .col .body { padding: 14px 16px 16px; background: var(--surface); }
+
+  .sell { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 720px){ .sell { grid-template-columns: 1fr; } }
+  .sellcard { border: 1px solid var(--line); border-radius: 9px; padding: 13px 15px; background: var(--surface); }
+  .sellcard .t { font-weight: 650; font-size: 14.5px; margin-bottom: 3px; }
+  .sellcard .d { font-size: 13.5px; color: var(--ink-soft); }
+  .sellcard .d b { color: var(--ink); }
+  .flag { border-left: 3px solid var(--warm); background: color-mix(in srgb, var(--warm) 8%, var(--surface)); padding: 12px 15px; border-radius: 0 9px 9px 0; }
+  .flag .t { color: var(--warm); font-weight: 700; font-size: 14px; }
+  .flag .d { font-size: 13.5px; color: var(--ink-soft); margin-top: 3px; }
+
+  footer { margin-top: 44px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--ink-faint); font-size: 13px; }
+
+  /* domain clusters */
+  .dom { }
+  .dom h3 { font-size: 15px; display:flex; align-items:center; gap:8px; margin-bottom: 8px; }
+  .dom h3 .dot { width:8px; height:8px; border-radius:50%; background: var(--accent); flex:none; }
+  .objs { display:flex; flex-wrap:wrap; gap:6px; }
+  .obj { font-size: 12.5px; background: var(--surface-2); border:1px solid var(--line); border-radius:6px; padding:4px 9px; color: var(--ink); }
+  .obj.key { border-color: var(--warm); color: var(--ink); background: color-mix(in srgb, var(--warm) 10%, var(--surface)); }
+
+  /* access chain flow */
+  .flow { display:flex; flex-wrap:wrap; align-items:center; gap:7px; }
+  .flow .node { background: var(--surface); border:1px solid color-mix(in srgb, var(--accent) 28%, var(--line)); border-radius:8px; padding:8px 12px; font-size:13.5px; font-weight:600; }
+  .flow .sep { color: var(--accent); font-family: ui-monospace, monospace; font-weight:700; }
+  .flow .node.warm { border-color: color-mix(in srgb, var(--warm) 40%, var(--line)); }
+
+  /* roles */
+  .role .who { font-family: ui-monospace, Menlo, monospace; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color: var(--ink-faint); }
+  .role h3 { font-size: 15.5px; margin: 3px 0 8px; }
+  .steps { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px; counter-reset: s; }
+  .steps li { font-size:13.5px; color: var(--ink-soft); padding-left:26px; position:relative; }
+  .steps li::before { counter-increment:s; content: counter(s); position:absolute; left:0; top:0; width:18px; height:18px; border-radius:50%; background: color-mix(in srgb, var(--accent) 16%, var(--surface)); color: var(--accent-strong); font-family: ui-monospace, monospace; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+
+  /* matrix */
+  .matrixwrap { overflow-x: auto; border:1px solid var(--line); border-radius:10px; }
+  table.matrix { width:100%; border-collapse: collapse; font-size:13.5px; min-width: 640px; }
+  table.matrix th, table.matrix td { border-bottom:1px solid var(--line); border-right:1px solid var(--line); padding:10px 12px; text-align:center; }
+  table.matrix th:last-child, table.matrix td:last-child { border-right:none; }
+  table.matrix tr:last-child td { border-bottom:none; }
+  table.matrix thead th { background: var(--surface-2); font-family: ui-monospace, Menlo, monospace; font-size:11.5px; letter-spacing:.03em; position: sticky; top:0; }
+  table.matrix thead th.us { color: var(--accent-strong); background: color-mix(in srgb, var(--accent) 16%, var(--surface-2)); }
+  table.matrix td.cap { text-align:left; font-weight:600; color: var(--ink); background: var(--surface); }
+  table.matrix td.us { background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
+  .mk { font-weight:700; }
+  .mk.y { color: var(--good); }
+  .mk.n { color: var(--crit); }
+  .mk.p { color: var(--watch); }
+  .legend { display:flex; gap:16px; flex-wrap:wrap; margin-top:12px; font-size:12.5px; color: var(--ink-soft); }
+  .legend span b { font-family: ui-monospace, monospace; }
+
+  /* consolidation pyramid */
+  .pyr { display:flex; flex-direction:column; align-items:center; gap:7px; }
+  .tier { border-radius:10px; padding:12px 16px; text-align:center; border:1px solid var(--line); width:100%; }
+  .tier .tl { font-family: ui-monospace, Menlo, monospace; font-size:11.5px; letter-spacing:.08em; text-transform:uppercase; font-weight:700; color: var(--accent-strong); }
+  .tier .td { font-size:12.5px; color: var(--ink-soft); margin-top:2px; }
+  .tier.dg { width:56%; background: color-mix(in srgb, var(--accent) 20%, var(--surface)); border-color: color-mix(in srgb, var(--accent) 36%, var(--line)); }
+  .tier.reg { width:78%; background: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
+  .tier.site { width:100%; background: var(--surface); }
+  .pyr .up { color: var(--ink-faint); font-family: ui-monospace, monospace; font-size:12px; letter-spacing:.1em; }
+  @media (max-width:720px){ .tier.dg, .tier.reg { width:100%; } }
+
+  .note { font-size:13px; color: var(--ink-soft); background: var(--surface-2); border:1px dashed var(--line); border-radius:9px; padding:12px 15px; }
+  .note b { color: var(--ink); }
+</style>
+
+<div class="wrap">
+
+  <header class="hero">
+    <div class="eyebrow">Billetterie &amp; contrôle d'accès · avec IT Cotation</div>
+    <h1>Tableau de bord du projet</h1>
+    <p class="lead"><b>Un socle unifié, moderne et mobile-first</b> pour les établissements publics — piscine · patinoire · salle de sport · musée. Une seule base, du guichet au tourniquet.</p>
+    <div class="rule">
+      <span class="star">⭐</span>
+      <div class="txt"><b>Règle d'or —</b> <strong>l'expérience doit être simple pour tout le monde.</strong> Le moteur derrière est complexe : il reste invisible.</div>
+    </div>
+  </header>
+
+  <nav class="tabnav" role="tablist" aria-label="Sections">
+    <button class="tab" role="tab" id="t-vision" aria-controls="p-vision" aria-selected="true">Vision</button>
+    <button class="tab" role="tab" id="t-existant" aria-controls="p-existant" aria-selected="false">L'existant</button>
+    <button class="tab" role="tab" id="t-concurrence" aria-controls="p-concurrence" aria-selected="false">Concurrence</button>
+    <button class="tab" role="tab" id="t-diff" aria-controls="p-diff" aria-selected="false">Différenciation</button>
+    <button class="tab" role="tab" id="t-piscine" aria-controls="p-piscine" aria-selected="false">Besoins piscine</button>
+    <button class="tab" role="tab" id="t-materiel" aria-controls="p-materiel" aria-selected="false">Matériel</button>
+    <button class="tab" role="tab" id="t-modele" aria-controls="p-modele" aria-selected="false">Modèle métier</button>
+    <button class="tab" role="tab" id="t-roles" aria-controls="p-roles" aria-selected="false">Rôles &amp; parcours</button>
+    <button class="tab" role="tab" id="t-matrice" aria-controls="p-matrice" aria-selected="false">Nous vs concurrents</button>
+    <button class="tab" role="tab" id="t-compta" aria-controls="p-compta" aria-selected="false">Compta &amp; conso</button>
+  </nav>
+
+  <!-- VISION -->
+  <section class="panel" id="p-vision" role="tabpanel" aria-labelledby="t-vision" tabindex="0">
+    <div class="h2row"><h2>La stratégie de construction</h2></div>
+    <p class="lead-sub">On bâtit d'abord un cœur réutilisable partout, puis on empile les métiers par-dessus. Le décor change, le moteur reste le même.</p>
+    <div class="stack">
+      <div class="layer vert">
+        <div class="lab">▲ Modules verticaux — les métiers</div>
+        <div class="mods">
+          <span class="mod">🎯 Contrôle d'accès</span><span class="mod">Piscine</span><span class="mod">Patinoire</span><span class="mod">Salle de sport</span><span class="mod">Musée</span>
+        </div>
+      </div>
+      <div class="arrow">▽ posés sur ▽</div>
+      <div class="layer socle">
+        <div class="lab">■ Socle standard — réutilisable partout</div>
+        <div class="mods">
+          <span class="mod">Offre &amp; Tarification</span><span class="mod">Vente &amp; Caisse (fusionnées)</span><span class="mod">Boutique en ligne</span><span class="mod">CRM 360°</span><span class="mod">Marketing</span><span class="mod">Gestion</span><span class="mod">Compta &amp; Régie publique</span><span class="mod">Utilisateurs &amp; Droits</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- EXISTANT -->
+  <section class="panel" id="p-existant" role="tabpanel" aria-labelledby="t-existant" tabindex="0" hidden>
+    <div class="h2row"><h2>Ton logiciel actuel (AWOO)</h2></div>
+    <div class="banner" style="margin-bottom:16px">
+      <span class="dot"></span>
+      <div>
+        <div class="big">Il ne perd pas sur le fond. Il perd sur la forme.</div>
+        <div class="sub">Le moteur métier est riche et souvent supérieur à la moyenne. Ce qui pèche : 3 applications séparées, une interface datée, pas d'app mobile. La refonte modernise et unifie — elle ne repart pas de zéro.</div>
+      </div>
+    </div>
+    <div class="grid g3" style="margin-bottom:16px">
+      <div class="card"><h3>Club Manager</h3><p class="k" style="margin-bottom:0">L'administration : offre, clients, compta, droits.</p></div>
+      <div class="card"><h3>La Caisse</h3><p class="k" style="margin-bottom:0">La vente rapide au guichet (POS).</p></div>
+      <div class="card"><h3>Boutique en ligne</h3><p class="k" style="margin-bottom:0">La vente sur internet.</p></div>
+    </div>
+    <div class="grid g2">
+      <div class="card">
+        <div class="chip good" style="margin-bottom:10px">À garder — c'est fort</div>
+        <ul class="clean">
+          <li><b>Moteur produit ultra-générique</b> (22 types) — déjà unifié</li>
+          <li><b>Tarification riche</b> : grille tarifs × saisons, tarifs sociaux</li>
+          <li><b>Régie secteur public</b> : Trésor Public, SEPA, CIEL/EBP</li>
+          <li><b>Contrôle d'accès intégré</b> : scan QR, RFID, ITBOX</li>
+          <li><b>CRM 360°</b> avec porte-monnaie prépayé (PMV)</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="chip watch" style="margin-bottom:10px">À corriger — c'est la forme</div>
+        <ul class="clean">
+          <li><b>3 apps cloisonnées</b> → à fusionner (admin + caisse)</li>
+          <li><b>Interface datée</b>, navigation lourde</li>
+          <li><b>Pas d'app mobile</b> client ni staff</li>
+          <li><b>Pas de wallet</b> (Apple / Google)</li>
+          <li><b>Droits trop grossiers</b> (5 rôles seulement)</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- CONCURRENCE -->
+  <section class="panel" id="p-concurrence" role="tabpanel" aria-labelledby="t-concurrence" tabindex="0" hidden>
+    <div class="h2row"><h2>La concurrence</h2></div>
+    <div class="banner alert" style="margin-bottom:18px">
+      <span class="dot"></span>
+      <div>
+        <div class="big">Le marché se concentre : Ekkio détient Elisath + Heitz + SLH</div>
+        <div class="sub">Trois des plus gros acteurs piscine/collectivité passent sous un même propriétaire. Un géant plus lent, plus cher, moins local — et un argument fort pour toi : « ne dépendez pas du fournisseur unique dominant ».</div>
+      </div>
+    </div>
+    <div class="grid g3" style="margin-bottom:18px">
+      <div class="card compgroup">
+        <div class="glab">Frontaux (logiciel + accès)</div>
+        <div class="names"><span class="name lead">Elisath</span><span class="name">Horanet</span><span class="name">Gantner / Vintia</span><span class="name">Omniris</span><span class="name">Qweekle</span></div>
+      </div>
+      <div class="card compgroup">
+        <div class="glab">SaaS culture (UX/CRM, sans accès)</div>
+        <div class="names"><span class="name">Mapado</span><span class="name">SecuTix</span><span class="name">DIPTICK</span></div>
+      </div>
+      <div class="card compgroup">
+        <div class="glab">Fitness (abonnement/SEPA)</div>
+        <div class="names"><span class="name">Resamania</span><span class="name">Deciplus</span><span class="name">Sportigo</span></div>
+      </div>
+    </div>
+    <div class="banner">
+      <span class="dot" style="background:var(--warm)"></span>
+      <div>
+        <div class="big" style="font-size:19px">Le trou du marché = ta place</div>
+        <div class="sub">Les leaders de l'accès ont un <b>back-office daté</b> (Elisath ne montre même pas son logiciel). Les SaaS modernes n'ont <b>ni matériel d'accès ni régie publique</b>. <b>Personne ne fait bien les deux, unifié sur les 4 métiers.</b></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DIFFERENCIATION -->
+  <section class="panel" id="p-diff" role="tabpanel" aria-labelledby="t-diff" tabindex="0" hidden>
+    <div class="h2row"><h2>Se différencier</h2></div>
+    <div class="grid g2">
+      <div class="col stake">
+        <div class="top">⚖️ À égaler — sinon hors-jeu</div>
+        <div class="body">
+          <ul class="clean">
+            <li class="star"><b>NF525</b> — conformité caisse (priorité forte)</li>
+            <li><b>Régie publique</b> : PayFiP / DGFiP</li>
+            <li><b>FMI</b> + gestion des familles / quotient familial</li>
+            <li><b>App client aboutie</b> (billet + badge mobile + recharge)</li>
+            <li><b>Support 7j/7</b> + hébergement France</li>
+            <li><b>Prélèvement SEPA</b> récurrent</li>
+          </ul>
+        </div>
+      </div>
+      <div class="col win">
+        <div class="top">🏆 Pour gagner — la rupture</div>
+        <div class="body">
+          <ul class="clean">
+            <li><b>UX moderne</b> (le point faible n°1 d'Elisath)</li>
+            <li class="star"><b>Reprise de données</b> facile (migration depuis Elisath)</li>
+            <li><b>Socle vraiment unifié</b> (complexe municipal mixte)</li>
+            <li><b>App staff mobile</b> (« le prof qui valide ») + <b>wallet</b></li>
+            <li class="star"><b>Anti-impayés couplé à l'accès</b> (refus de badge + résolution)</li>
+            <li class="star"><b>Casiers connectés</b> + mode hors-ligne</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- BESOINS PISCINE -->
+  <section class="panel" id="p-piscine" role="tabpanel" aria-labelledby="t-piscine" tabindex="0" hidden>
+    <div class="h2row"><h2>Besoins métier — Piscine</h2></div>
+    <p class="lead-sub">Ce que le terrain vend et attend réellement (dicté par ton expérience). Point de départ du cahier des charges.</p>
+    <div class="eyebrow" style="margin-bottom:10px">Ce qu'une piscine vend</div>
+    <div class="sell" style="margin-bottom:22px">
+      <div class="sellcard"><div class="t">Abonnements mensuels (SEPA) à niveaux</div><div class="d"><b>Gold</b> = accès illimité + X cours d'aquagym/semaine inclus. <b>Classique</b> = accès seul. → une formule = accès + services inclus.</div></div>
+      <div class="sellcard"><div class="t">Entrées unitaires</div><div class="d">Plusieurs tarifs (adulte, réduit, enfant, social…).</div></div>
+      <div class="sellcard"><div class="t">Cartes multi-entrées</div><div class="d">« Carte de 10 » — avec opérations commerciales : <b>10 payées = 12 données</b>.</div></div>
+      <div class="sellcard"><div class="t">Cours à l'unité</div><div class="d">Aquagym, <b>aquabike, aquazumba</b>… liés à un <b>planning</b> (séance à date, capacité).</div></div>
+    </div>
+    <div class="grid g3">
+      <div class="card">
+        <div class="chip crit" style="margin-bottom:10px">Contrôle d'accès</div>
+        <h3 style="font-size:15px">Compter les passages</h3>
+        <p class="k">Le scan au tripode est central : chaque entrée = un passage décompté.</p>
+        <div class="flag" style="margin-top:10px"><div class="t">⚠️ Le cas du bébé de 3 ans</div><div class="d">Il ne scanne pas de QR. Il faut un mode « passage sans scan » et distinguer entrées nominatives vs comptées.</div></div>
+      </div>
+      <div class="card">
+        <div class="chip watch" style="margin-bottom:10px">Reporting</div>
+        <h3 style="font-size:15px">Analyse multi-niveaux</h3>
+        <p class="k">Compta globale + analyses par <b>arborescence</b> (catégories de produits).</p>
+        <ul class="clean" style="margin-top:10px"><li>Axe <b>marketing</b></li><li>Axe <b>comptable</b></li><li>→ un produit classé sur <b>plusieurs axes</b></li></ul>
+      </div>
+      <div class="card">
+        <div class="chip watch" style="margin-bottom:10px">Comptabilité</div>
+        <h3 style="font-size:15px">PCA — produits constatés d'avance</h3>
+        <p class="k">Un abonnement/carte vendu n'est pas du CA d'un coup : il s'étale sur la période / à la consommation.</p>
+        <ul class="clean" style="margin-top:10px"><li><b>Calcul automatique</b></li><li><b>Génération des fichiers</b></li><li>Rare chez les concurrents → <b>différenciateur</b></li></ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- MATERIEL -->
+  <section class="panel" id="p-materiel" role="tabpanel" aria-labelledby="t-materiel" tabindex="0" hidden>
+    <div class="h2row"><h2>Matériel &amp; décisions</h2></div>
+    <div class="grid g2">
+      <div class="card">
+        <div class="chip good" style="margin-bottom:10px">Contrôle d'accès</div>
+        <h3 style="font-size:15px">Uniquement IT Cotation</h3>
+        <p class="k">Le matériel d'accès = maison IT Cotation (base <b>iDTRONIC</b>, plus PERCo) : tripodes, tambours, portillons, couloirs rapides + lecteurs QR/RFID, concentrateur <b>ITBOX</b>, <b>SmartAccess</b>.</p>
+        <ul class="clean" style="margin-top:8px"><li>Communication via <b>OSDP / API</b>, mode <b>hors-ligne</b></li></ul>
+      </div>
+      <div class="card">
+        <div class="chip watch" style="margin-bottom:10px">Périphériques (multi-marques)</div>
+        <h3 style="font-size:15px">À faire dialoguer</h3>
+        <ul class="clean" style="margin-top:8px">
+          <li><b>Caisse</b> : PC classique</li>
+          <li><b>TPE</b> : Ingenico · Nayax · PAX</li>
+          <li><b>Imprimantes thermiques</b> : HP · Aures · OXHOO</li>
+          <li>→ <b>implémenter les protocoles</b> de chaque matériel</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="chip good" style="margin-bottom:10px">Socle technique</div>
+        <h3 style="font-size:15px">Hébergement France + RGPD</h3>
+        <p class="k" style="margin-bottom:0">En France, toujours : argument de vente (collectivités) et choix d'architecture, avec PHP 8.4 / MariaDB.</p>
+      </div>
+      <div class="card">
+        <div class="chip crit" style="margin-bottom:10px">À éviter</div>
+        <h3 style="font-size:15px">Ne pas s'y battre</h3>
+        <ul class="clean" style="margin-top:8px"><li>Ski / stades (SKIDATA, Axess)</li><li>Musées nationaux grands comptes (SecuTix)</li><li>Biométrie / reconnaissance faciale (CNIL)</li></ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- MODELE METIER -->
+  <section class="panel" id="p-modele" role="tabpanel" aria-labelledby="t-modele" tabindex="0" hidden>
+    <div class="h2row"><h2>Le modèle métier</h2></div>
+    <p class="lead-sub">Les grands concepts derrière la simplicité — en langage métier, pas technique. C'est ce moteur qui reste invisible pour l'utilisateur.</p>
+
+    <div class="grid g3" style="margin-bottom:16px">
+      <div class="card dom">
+        <h3><span class="dot"></span>Offre &amp; catalogue</h3>
+        <div class="objs"><span class="obj">Produit</span><span class="obj">Type (billet daté, abonnement, cours…)</span><span class="obj key">Catégories multi-axes</span><span class="obj">Support / univers</span></div>
+      </div>
+      <div class="card dom">
+        <h3><span class="dot"></span>Tarification</h3>
+        <div class="objs"><span class="obj">Type de tarif (adulte, réduit, RSA…)</span><span class="obj">Saison</span><span class="obj key">Grille = tarif × saison</span><span class="obj">Promotion (10=12)</span></div>
+      </div>
+      <div class="card dom">
+        <h3><span class="dot"></span>Formules d'abonnement</h3>
+        <div class="objs"><span class="obj key">Niveau (Gold / Classique)</span><span class="obj">Droits d'accès (illimité / quota)</span><span class="obj key">Services inclus (X cours/sem)</span><span class="obj">SEPA + renouvellement</span></div>
+      </div>
+      <div class="card dom">
+        <h3><span class="dot"></span>Client &amp; bénéficiaires</h3>
+        <div class="objs"><span class="obj key">Payeur ≠ Bénéficiaire</span><span class="obj">Famille</span><span class="obj">Porte-monnaie (PMV)</span><span class="obj">Réseau</span></div>
+      </div>
+      <div class="card dom">
+        <h3><span class="dot"></span>Planning &amp; ressources</h3>
+        <div class="objs"><span class="obj key">Séance / créneau</span><span class="obj">Capacité</span><span class="obj">Encadrant · salle · matériel</span><span class="obj">Réservation</span></div>
+      </div>
+      <div class="card dom">
+        <h3><span class="dot"></span>Vente &amp; compta</h3>
+        <div class="objs"><span class="obj">Commande</span><span class="obj">Paiement multi-moyens</span><span class="obj">Facture / justificatif</span><span class="obj">Régie · TVA</span><span class="obj key">PCA</span></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="eyebrow" style="margin-bottom:12px">La chaîne d'accès — le fil rouge du produit</div>
+      <div class="flow">
+        <span class="node">Vente</span><span class="sep">→</span>
+        <span class="node">Billet (QR) / Support (RFID)</span><span class="sep">→</span>
+        <span class="node warm">Appairage</span><span class="sep">→</span>
+        <span class="node">Passage (compostage)</span><span class="sep">→</span>
+        <span class="node">Espace › Contrôleur › Équipement</span>
+      </div>
+    </div>
+
+    <div class="card dom">
+      <h3><span class="dot" style="background:var(--warm)"></span>Organisation &amp; consolidation <span class="chip watch" style="margin-left:6px">clé pour la compta</span></h3>
+      <p class="k">Une même base doit se piloter à plusieurs niveaux, selon le type d'exploitant.</p>
+      <div class="objs" style="margin-bottom:8px"><span class="obj key">Établissement / site</span><span class="obj key">Région</span><span class="obj key">Direction générale (groupe)</span></div>
+      <div class="objs"><span class="obj">Exploitant : Administration (régie)</span><span class="obj">DSP / délégataire</span><span class="obj">Grand groupe</span></div>
+      <p class="k" style="margin:10px 0 0">→ Détail dans l'onglet <b>Compta &amp; conso</b>.</p>
+    </div>
+  </section>
+
+  <!-- ROLES -->
+  <section class="panel" id="p-roles" role="tabpanel" aria-labelledby="t-roles" tabindex="0" hidden>
+    <div class="h2row"><h2>Rôles &amp; parcours</h2></div>
+    <p class="lead-sub">Même moteur, interfaces adaptées au rôle : chacun ne voit que ce dont il a besoin. C'est ça, la simplicité concrète.</p>
+    <div class="grid g3">
+      <div class="card role">
+        <div class="who">Back-office</div>
+        <h3>Gestionnaire / Admin</h3>
+        <ol class="steps"><li>Crée l'offre, les tarifs, le planning</li><li>Configure droits, sites, matériel</li><li>Suit l'activité (tableaux de bord)</li></ol>
+      </div>
+      <div class="card role">
+        <div class="who">Guichet</div>
+        <h3>Agent d'accueil / caisse</h3>
+        <ol class="steps"><li>Vend vite (entrée, carte, abo)</li><li>Encaisse (multi-moyens, TPE)</li><li>Gère le client au comptoir</li></ol>
+      </div>
+      <div class="card role">
+        <div class="who">Terrain</div>
+        <h3>Agent de contrôle / encadrant</h3>
+        <ol class="steps"><li>Valide les entrées (scan mobile)</li><li>Voit sa séance &amp; ses inscrits</li><li>Fait son compte-rendu</li></ol>
+      </div>
+      <div class="card role">
+        <div class="who">Finances</div>
+        <h3>Comptable</h3>
+        <ol class="steps"><li>Suit encaissements &amp; régie</li><li>Gère TVA &amp; PCA</li><li>Exporte / consolide</li></ol>
+      </div>
+      <div class="card role">
+        <div class="who">Mobile / web</div>
+        <h3>Client final</h3>
+        <ol class="steps"><li>Achète en ligne, réserve un cours</li><li>Recharge son abo / sa carte</li><li>Entre avec son badge mobile</li></ol>
+      </div>
+      <div class="card role">
+        <div class="who">Self-service</div>
+        <h3>Borne</h3>
+        <ol class="steps"><li>Achat / retrait autonome</li><li>Réservation de créneau</li><li>Moins de file, moins de personnel</li></ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- MATRICE -->
+  <section class="panel" id="p-matrice" role="tabpanel" aria-labelledby="t-matrice" tabindex="0" hidden>
+    <div class="h2row"><h2>Nous vs concurrents</h2></div>
+    <p class="lead-sub">Capacité par capacité. La colonne « Nous » est la cible du nouveau produit — les lignes vertes sont nos différenciateurs.</p>
+    <div class="matrixwrap">
+      <table class="matrix">
+        <thead>
+          <tr><th style="text-align:left">Capacité</th><th class="us">Nous (cible)</th><th>Elisath</th><th>Horanet</th><th>SaaS culture</th><th>Fitness</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="cap">UX moderne / mobile-first</td><td class="us"><span class="mk y">✓</span></td><td><span class="mk n">✗</span></td><td><span class="mk p">~</span></td><td><span class="mk y">✓</span></td><td><span class="mk y">✓</span></td></tr>
+          <tr><td class="cap">Socle unifié 4 métiers</td><td class="us"><span class="mk y">✓</span></td><td><span class="mk p">~</span></td><td><span class="mk p">~</span></td><td><span class="mk n">✗</span></td><td><span class="mk n">✗</span></td></tr>
+          <tr><td class="cap">Contrôle d'accès matériel</td><td class="us"><span class="mk y">✓</span></td><td><span class="mk y">✓</span></td><td><span class="mk y">✓</span></td><td><span class="mk n">✗</span></td><td><span class="mk p">~</span></td></tr>
+          <tr><td class="cap">Régie publique + NF525</td><td class="us"><span class="mk y">✓</span></td><td><span class="mk y">✓</span></td><td><span class="mk y">✓</span></td><td><span class="mk p">~</span></td><td><span class="mk n">✗</span></td></tr>
+          <tr><td class="cap">App client aboutie</td><td class="us"><span class="mk y">✓</span></td><td><span class="mk y">✓</span></td><td><span class="mk p">~</span></td><td><span class="mk p">~</span></td><td><span class="mk y">✓</span></td></tr>
+          <tr><td class="cap">App staff mobile</td><td class="us"><span class="mk y">✓</span></td><td><span class="mk p">~</span></td><td><span class="mk n">✗</span></td><td><span class="mk p">~</span></td><td><span class="mk n">✗</span></td></tr>
+          <tr><td class="cap">Wallet (Apple / Google)</td><td class="us"><span class="mk y">✓</span></td><td><span class="mk n">✗</span></td><td><span class="mk n">✗</span></td><td><span class="mk n">✗</span></td><td><span class="mk n">✗</span></td></tr>
+          <tr><td class="cap">Anti-impayés couplé accès</td><td class="us"><span class="mk y">✓</span></td><td><span class="mk n">✗</span></td><td><span class="mk n">✗</span></td><td><span class="mk n">✗</span></td><td><span class="mk y">✓</span></td></tr>
+          <tr><td class="cap">Casiers connectés</td><td class="us"><span class="mk y">✓</span></td><td><span class="mk n">✗</span></td><td><span class="mk p">~</span></td><td><span class="mk n">✗</span></td><td><span class="mk n">✗</span></td></tr>
+          <tr><td class="cap">Mode hors-ligne</td><td class="us"><span class="mk y">✓</span></td><td><span class="mk p">~</span></td><td><span class="mk y">✓</span></td><td><span class="mk n">✗</span></td><td><span class="mk p">~</span></td></tr>
+          <tr><td class="cap">PCA automatisés</td><td class="us"><span class="mk y">✓</span></td><td><span class="mk p">~</span></td><td><span class="mk p">~</span></td><td><span class="mk n">✗</span></td><td><span class="mk n">✗</span></td></tr>
+          <tr><td class="cap">Consolidation multi-niveaux</td><td class="us"><span class="mk y">✓</span></td><td><span class="mk p">~</span></td><td><span class="mk y">✓</span></td><td><span class="mk n">✗</span></td><td><span class="mk p">~</span></td></tr>
+          <tr><td class="cap">Connectivité OTA</td><td class="us"><span class="mk y">✓</span></td><td><span class="mk n">✗</span></td><td><span class="mk n">✗</span></td><td><span class="mk y">✓</span></td><td><span class="mk n">✗</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="legend"><span><b class="mk y">✓</b> présent</span><span><b class="mk p">~</b> partiel / à confirmer</span><span><b class="mk n">✗</b> absent</span><span style="color:var(--ink-faint)">« SaaS culture » = Mapado/SecuTix · « Fitness » = Resamania/Deciplus/Sportigo</span></div>
+  </section>
+
+  <!-- COMPTA & CONSOLIDATION -->
+  <section class="panel" id="p-compta" role="tabpanel" aria-labelledby="t-compta" tabindex="0" hidden>
+    <div class="h2row"><h2>Compta &amp; consolidation</h2></div>
+    <div class="banner" style="margin-bottom:18px">
+      <span class="dot"></span>
+      <div>
+        <div class="big">La compta n'est pas la même selon le client</div>
+        <div class="sub">Le module doit être <b>bi-régime</b> : un « profil d'exploitant » commute le plan de comptes, les exports, le destinataire des données et la gestion de la régie. C'est un point structurant du cahier des charges.</div>
+      </div>
+    </div>
+
+    <div class="eyebrow" style="margin-bottom:10px">Les 3 types d'exploitants</div>
+    <div class="grid g3" style="margin-bottom:22px">
+      <div class="card">
+        <div class="chip watch" style="margin-bottom:10px">A · Régie directe</div>
+        <h3 style="font-size:15px">Administration (collectivité)</h3>
+        <p class="k">Comptabilité publique.</p>
+        <ul class="clean" style="margin-top:8px">
+          <li>Plan de comptes <b>M57</b> (ou <b>M4</b> si SPIC : budget annexe)</li>
+          <li><b>Régie de recettes</b> + justificatifs + versement au comptable</li>
+          <li><b>PayFiP</b> · <b>PES V2 / Hélios</b> · titres de recettes</li>
+          <li>Sépare l'ordonnateur (mairie) du comptable (DGFiP)</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="chip watch" style="margin-bottom:10px">B · DSP / délégataire</div>
+        <h3 style="font-size:15px">Vert Marine, Récréa, UCPA…</h3>
+        <p class="k">Compta privée + reporting au délégant.</p>
+        <ul class="clean" style="margin-top:8px">
+          <li><b>Rapport Annuel du Délégataire (RAD)</b> avant le 1ᵉʳ juin</li>
+          <li>CA &amp; fréquentation ventilés par activité/tarif</li>
+          <li><b>Redevances / reversements</b> à calculer</li>
+          <li>Contrôlé par la Chambre régionale des comptes</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="chip watch" style="margin-bottom:10px">C · Grand groupe</div>
+        <h3 style="font-size:15px">Exploitant privé multi-sites</h3>
+        <p class="k">Consolidation &amp; analytique.</p>
+        <ul class="clean" style="margin-top:8px">
+          <li>Comptabilité <b>analytique multi-axes</b></li>
+          <li>Reporting <b>consolidé</b> vers le siège</li>
+          <li>Source de la donnée (CA, fréquentation) par site et agrégée</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="grid g2" style="margin-bottom:22px">
+      <div class="card">
+        <div class="eyebrow" style="margin-bottom:14px">Remontée à 3 niveaux</div>
+        <div class="pyr">
+          <div class="tier dg"><div class="tl">Direction générale</div><div class="td">Consolidé groupe · benchmarks</div></div>
+          <div class="up">▲ agrège ▲</div>
+          <div class="tier reg"><div class="tl">Région</div><div class="td">Comparaison inter-sites</div></div>
+          <div class="up">▲ agrège ▲</div>
+          <div class="tier site"><div class="tl">Établissement / site</div><div class="td">CA · fréquentation · encaissements · régie (fin)</div></div>
+        </div>
+        <p class="k" style="margin:12px 0 0">Chacun ne voit que son périmètre (droits par niveau). Tout s'agrège sur les mêmes <b>axes analytiques</b> : site · activité · produit · région.</p>
+      </div>
+      <div class="card">
+        <div class="eyebrow" style="margin-bottom:12px">Ce qui remonte &amp; se consolide</div>
+        <ul class="clean">
+          <li><b>CA</b> par activité / tarif / produit</li>
+          <li><b>Fréquentation</b> — attention : <b>FMI</b> (présence simultanée, sécurité) ≠ entrées cumulées (pilotage)</li>
+          <li><b>Encaissements</b> par moyen de paiement</li>
+          <li><b>PCA</b> (produits constatés d'avance)</li>
+          <li><b>Abonnements actifs</b> &amp; <b>impayés</b></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="eyebrow" style="margin-bottom:10px">Exigences non négociables du moteur compta</div>
+    <div class="grid g3" style="margin-bottom:18px">
+      <div class="card">
+        <div class="chip crit" style="margin-bottom:8px">Accès au marché</div>
+        <h3 style="font-size:14.5px">Certification NF525</h3>
+        <p class="k" style="margin-bottom:0">Obligatoire (auto-attestation supprimée depuis 09/2025, généralisation 09/2026, amende 7 500 €/logiciel).</p>
+      </div>
+      <div class="card">
+        <div class="chip good" style="margin-bottom:8px">Différenciateur</div>
+        <h3 style="font-size:14.5px">Moteur PCA automatique</h3>
+        <p class="k" style="margin-bottom:0">Abonnement = étalé sur la durée ; carte 10 = à la consommation (chaque passage). Écritures &amp; fichiers générés automatiquement.</p>
+      </div>
+      <div class="card">
+        <div class="chip watch" style="margin-bottom:8px">Conformité</div>
+        <h3 style="font-size:14.5px">TVA multi-taux</h3>
+        <p class="k" style="margin-bottom:0">20 % entrées piscine/sport · 10 % culturel/musées · restauration/boutique variables. Paniers mixtes + états par taux.</p>
+      </div>
+      <div class="card">
+        <div class="chip good" style="margin-bottom:8px">Interop</div>
+        <h3 style="font-size:14.5px">Exports commutés par profil</h3>
+        <p class="k" style="margin-bottom:0">Public : PES V2 / Hélios + états de régie. Privé : CIEL · EBP · Sage · Cegid · <b>FEC</b> (légal).</p>
+      </div>
+      <div class="card">
+        <div class="chip good" style="margin-bottom:8px">Fondation</div>
+        <h3 style="font-size:14.5px">Analytique multi-axes</h3>
+        <p class="k" style="margin-bottom:0">Chaque vente porte des axes (site/activité/produit/région) — la base de toute la remontée.</p>
+      </div>
+      <div class="card">
+        <div class="chip good" style="margin-bottom:8px">Secteur public</div>
+        <h3 style="font-size:14.5px">Module Régie conforme</h3>
+        <p class="k" style="margin-bottom:0">Modes de paiement autorisés, plafond d'encaisse, versement, justificatifs, articulation PayFiP.</p>
+      </div>
+    </div>
+
+    <div class="note">⚠️ <b>À faire valider par un expert avant de figer le cahier des charges</b> (zones à risque) : qualification SPIC/M4 vs SPA/M57 par équipement · application du taux réduit TVA 2025 aux cours/accès sportifs · périmètre exact NF525 pour les régies publiques · mécanique PCA en compta publique. Ce sont les points où une mauvaise hypothèse coûterait des développements.</div>
+  </section>
+
+  <footer>Tableau de bord évolutif — de nouveaux onglets s'ajoutent au fil du projet. Prochains : patinoire · sport · musée · cahier des charges.</footer>
+
+</div>
+
+<script>
+  (function () {
+    var tabs = Array.prototype.slice.call(document.querySelectorAll('.tab'));
+    var panels = tabs.map(function (t) { return document.getElementById(t.getAttribute('aria-controls')); });
+    function select(i) {
+      tabs.forEach(function (t, j) {
+        var on = i === j;
+        t.setAttribute('aria-selected', on ? 'true' : 'false');
+        t.tabIndex = on ? 0 : -1;
+        if (panels[j]) panels[j].hidden = !on;
+      });
+    }
+    tabs.forEach(function (t, i) {
+      t.addEventListener('click', function () { select(i); });
+      t.addEventListener('keydown', function (e) {
+        var d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+        if (!d) return;
+        e.preventDefault();
+        var n = (i + d + tabs.length) % tabs.length;
+        tabs[n].focus(); select(n);
+      });
+    });
+    select(0);
+  })();
+</script>

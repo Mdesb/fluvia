@@ -1,0 +1,12 @@
+# Normalisation des fins de ligne : LF partout (le code tourne dans des conteneurs Linux)
+* text=auto eol=lf
+
+# Binaires : ne pas normaliser
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary

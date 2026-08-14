@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/mdesb/Downloads/**)",
+      "Bash(mkdir -p \"/c/Users/mdesb/AppData/Local/Temp/claude/C--Users-mdesb-OneDrive-Desktop-Claude-COde/c4976fe9-1119-4969-8d1e-9606983076e4/scratchpad/kit-extract\")",
+      "Bash(unzip -o kit-sdd-claude-code.zip -d \"/c/Users/mdesb/AppData/Local/Temp/claude/C--Users-mdesb-OneDrive-Desktop-Claude-COde/c4976fe9-1119-4969-8d1e-9606983076e4/scratchpad/kit-extract\")"
+    ]
+  }
+}
