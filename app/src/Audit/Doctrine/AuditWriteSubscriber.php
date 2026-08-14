@@ -46,6 +46,17 @@ final class AuditWriteSubscriber
         \App\Vente\Entity\Paiement::class,
         \App\Vente\Entity\Avoir::class,
         \App\Vente\Nf525\Entity\OperationScellee::class,
+        // Module L3 Contrôle d'accès : traçabilité des actions sensibles (topologie, appairage,
+        // blocage support, journal des passages).
+        \App\Acces\Entity\EspaceAcces::class,
+        \App\Acces\Entity\Controleur::class,
+        \App\Acces\Entity\Equipement::class,
+        \App\Acces\Entity\Support::class,
+        \App\Acces\Entity\Appairage::class,
+        \App\Acces\Entity\Passage::class,
+        \App\Acces\Entity\DeclarationPerteVol::class,
+        \App\Acces\Entity\ListeRevocation::class,
+        \App\Acces\Entity\SousReseau::class,
     ];
 
     public function __construct(

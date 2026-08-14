@@ -37,3 +37,19 @@ services:
     App\Vente\Tpe\TerminalPaiementInterface: '@App\Vente\Tpe\TpeMock'
     # Signataire NF525 enfichable — chaînage sha256 + HMAC placeholder (US-L2-11, procédé à valider).
     App\Vente\Nf525\SignataireOperation: '@App\Vente\Nf525\HashChainSignataire'
+
+    # --- L3 Contrôle d'accès : ports & adaptateurs (§2 du plan) ---
+    # Pilote matériel enfichable (OSDP/API ITBOX/SmartAccess non cadrés, point ouvert n°1) : simulateur
+    # logiciel en dev/test, ItboxAdapter/SmartAccessAdapter restent des squelettes (à cadrer IT Cotation).
+    App\Acces\Port\PiloteAcces: '@App\Acces\Adapter\SimulateurAccesAdapter'
+    # Projection locale d'un droit vendu M1/M2 (point ouvert n°9) — stub L3, consommateur d'événements
+    # réel à l'intégration L4. Public : accessible depuis les tests (App\Acces\State\AppairageProcessor
+    # l'utilise aussi lorsqu'un appairage référence un support M2 non encore projeté).
+    App\Acces\Port\ProjectionDroitInterface:
+        alias: App\Acces\Projection\StubProjectionDroit
+        public: true
+
+    # Recalage FMI (§4.5/4.6) : public pour accès direct depuis les tests (RecalageFmiHandler est
+    # utilisé en production par App\Acces\Service\SynchroPassageHandler).
+    App\Acces\Service\RecalageFmiHandler:
+        public: true
