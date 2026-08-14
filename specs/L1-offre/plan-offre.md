@@ -202,3 +202,17 @@ T1 référentiels & enums → T2 Produit + facettes → T3 grille/QF/résolveur 
 8. **Stock partagé (pool)** : décrément mutualisé modélisé ; la concurrence à la vente (rupture simultanée) est un sujet **M2**, pas L1.
 9. **Persistance des filtres catalogue entre visites** (CA-1) : côté UI, pas d'API — à confirmer avec M8.
 10. **`ServiceInclus.activiteRef`** : référence logique vers Activité (M5) sans FK dure (module hors périmètre) — intégrité applicative, à consolider à l'intégration M5.
+
+---
+
+## 8. Notes d'implémentation L1 (divergences consignées)
+
+Écarts assumés lors de la réalisation, conformes à l'esprit de la spec :
+
+1. **Chevauchement de saisons (réconciliation CA-5/CA-9 vs CA-12/RG-M1-06)** : le refus de chevauchement (`SaisonSansChevauchement`) ne s'applique qu'entre saisons **de même priorité**. Les chevauchements de priorités distinctes sont autorisés et départagés par la priorité au moment de la résolution de prix (`ResolveurPrix`). Sans cette nuance, CA-9 (refus) et CA-12 (départage par priorité) seraient contradictoires.
+2. **Unicité des libellés de référentiels (CA-9)** : enforced au niveau applicatif via `#[UniqueEntity]` sur `TypeTarif.nom` et `Saison.nom` (pas d'index unique en base ; ajoutable ultérieurement si besoin de garantie concurrente).
+3. **Filtres catalogue et identifiants UUID (CA-1)** : les `SearchFilter` sur associations se comportent mal avec des identifiants UUID binaires. Deux colonnes **projetées scalaires** ont été ajoutées sur `Produit` — `libelleRecherche` (recherche texte du libellé i18n) et `typeCode` (filtre par type) — synchronisées à l'écriture. Les filtres `statut`/`code`/`libelleRecherche`/`typeCode` (+ `OrderFilter`) couvrent la recherche/tri catalogue de façon fiable.
+4. **Enregistrement des `#[ApiFilter]`** : `config/packages/api_platform.yaml` déclare désormais `mapping.paths` vers les répertoires `src/<Module>/Entity`, sinon le compilateur d'API Platform (`resource_class_directories` par défaut = `src/Entity`, `src/ApiResource`) n'enregistre pas les filtres portés par les entités par domaine.
+5. **Unicité de la grille (RG-M1-01)** : l'index unique porte sur `(produit, typeTarif, saison, trancheQf)` pour autoriser une case par tranche de QF. Limite MariaDB connue : plusieurs lignes à `trancheQf = NULL` restent possibles pour un même triplet (NULL distinct en index unique) — à durcir si nécessaire.
+6. **Audit** : les entités M1 sensibles (`Produit`, `GrilleTarifaire`, `TypeTarif`, `Saison`, `Categorie`, `Promotion`) ont été ajoutées à la liste surveillée de l'`AuditWriteSubscriber` du socle (réutilisation, pas de ré-implémentation). Les conversions sont en plus journalisées dans `ConversionType` (append-only).
+7. **Onglet Compta** : opération dédiée `PATCH /produits/{id}/compta` (groupe `produit:compta`, `security` `offre.modifier_compta`) isolant `reglePca`/`compteComptable`/`tauxTva` de l'écriture commerciale (`produit:write`).

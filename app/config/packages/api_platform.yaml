@@ -1,6 +1,14 @@
 api_platform:
     title: Hello API Platform
     version: 1.0.0
+    # Répertoires de ressources par domaine (App\<Module>\Entity). Nécessaire pour que les
+    # attributs #[ApiFilter] des entités hors src/Entity soient enregistrés (resource_class_directories).
+    mapping:
+        paths:
+            - '%kernel.project_dir%/src/Organisation/Entity'
+            - '%kernel.project_dir%/src/Securite/Entity'
+            - '%kernel.project_dir%/src/Audit/Entity'
+            - '%kernel.project_dir%/src/Offre/Entity'
     defaults:
         stateless: true
         cache_headers:

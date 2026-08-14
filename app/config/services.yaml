@@ -21,3 +21,6 @@ services:
 
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones
+
+    # Port Vente/Réservation (M2/M5) : stub L1 « aucune dépendance active » (plan L1 §7, T13).
+    App\Offre\Port\DependanceVenteInterface: '@App\Offre\Port\DependanceVenteStub'

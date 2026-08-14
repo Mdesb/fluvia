@@ -31,6 +31,13 @@ final class AuditWriteSubscriber
         \App\Securite\Entity\Role::class,
         \App\Securite\Entity\Permission::class,
         \App\Securite\Entity\Affectation::class,
+        // Module M1 Offre & Tarification (L1) : traçabilité des actions sensibles sur l'offre.
+        \App\Offre\Entity\Produit::class,
+        \App\Offre\Entity\GrilleTarifaire::class,
+        \App\Offre\Entity\TypeTarif::class,
+        \App\Offre\Entity\Saison::class,
+        \App\Offre\Entity\Categorie::class,
+        \App\Offre\Entity\Promotion::class,
     ];
 
     public function __construct(
