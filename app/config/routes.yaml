@@ -9,3 +9,8 @@
 
 controllers:
     resource: routing.controllers
+
+# Point d'entrée de connexion JWT (json_login). Le firewall « auth » traite la requête.
+api_login_check:
+    path: /auth
+    methods: ['POST']
