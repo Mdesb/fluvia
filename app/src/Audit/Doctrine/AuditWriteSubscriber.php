@@ -38,6 +38,14 @@ final class AuditWriteSubscriber
         \App\Offre\Entity\Saison::class,
         \App\Offre\Entity\Categorie::class,
         \App\Offre\Entity\Promotion::class,
+        // Module M2 Vente & Caisse (L2) : entités sensibles (régie, encaissement, NF525).
+        \App\Caisse\Entity\SessionCaisse::class,
+        \App\Caisse\Entity\MouvementCaisse::class,
+        \App\Caisse\Entity\ClotureZ::class,
+        \App\Vente\Entity\Vente::class,
+        \App\Vente\Entity\Paiement::class,
+        \App\Vente\Entity\Avoir::class,
+        \App\Vente\Nf525\Entity\OperationScellee::class,
     ];
 
     public function __construct(

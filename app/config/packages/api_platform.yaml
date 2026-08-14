@@ -9,6 +9,10 @@ api_platform:
             - '%kernel.project_dir%/src/Securite/Entity'
             - '%kernel.project_dir%/src/Audit/Entity'
             - '%kernel.project_dir%/src/Offre/Entity'
+            - '%kernel.project_dir%/src/Caisse/Entity'
+            - '%kernel.project_dir%/src/Vente/Entity'
+            - '%kernel.project_dir%/src/Vente/Nf525/Entity'
+            - '%kernel.project_dir%/src/Vente/ApiResource'
     defaults:
         stateless: true
         cache_headers:
