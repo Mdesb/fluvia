@@ -106,20 +106,20 @@
     <div class="eyebrow">Billetterie &amp; contrôle d'accès · Chantier logiciel</div>
     <h1>Avancement du développement</h1>
     <p>Le MVP se construit lot par lot, chacun spécifié puis implémenté et testé avant d'être intégré. Voici l'état réel du code — pas une estimation, ce qui est écrit, testé et versionné à ce jour.</p>
-    <div class="stamp">Mise à jour : 14 août 2026 · socle <b>opérationnel</b> · <b>54 tests verts</b></div>
+    <div class="stamp">Mise à jour : 15 août 2026 · cœur du MVP <b>opérationnel</b> · <b>99 tests verts</b></div>
   </header>
 
   <section>
     <div class="kpis">
-      <div class="kpi"><div class="n good">3<span style="color:var(--ink-faint);font-size:18px">/8</span></div><div class="l">Lots MVP livrés (+ 1 en cours)</div></div>
-      <div class="kpi"><div class="n">54</div><div class="l">Tests automatisés au vert</div></div>
-      <div class="kpi"><div class="n">401</div><div class="l">Assertions vérifiées</div></div>
-      <div class="kpi"><div class="n">4</div><div class="l">Livraisons versionnées (git)</div></div>
+      <div class="kpi"><div class="n good">4<span style="color:var(--ink-faint);font-size:18px">/8</span></div><div class="l">Lots MVP livrés (+ 1 en cours)</div></div>
+      <div class="kpi"><div class="n">99</div><div class="l">Tests automatisés au vert</div></div>
+      <div class="kpi"><div class="n">652</div><div class="l">Assertions vérifiées</div></div>
+      <div class="kpi"><div class="n">5</div><div class="l">Livraisons versionnées (git)</div></div>
     </div>
     <div class="barwrap">
-      <div class="top"><b>Progression du MVP</b><span>3 livrés · 1 en cours · 4 à venir</span></div>
+      <div class="top"><b>Progression du MVP</b><span>4 livrés · 1 en cours · 3 à venir</span></div>
       <div class="bar">
-        <i class="done" style="width:37.5%"></i>
+        <i class="done" style="width:50%"></i>
         <i class="doing" style="width:12.5%"></i>
       </div>
       <div class="legend">
@@ -148,20 +148,20 @@
         <div class="body"><h3>Vente &amp; Caisse</h3><p>Session de caisse, paiement scindé + TPE, avoirs, clôture Z, inaltérabilité NF525, mode hors-ligne.</p></div>
         <div class="meta"><span class="pill done">Livré</span><span class="tests"><b>29</b> tests</span></div>
       </div>
-      <div class="lane doing">
+      <div class="lane">
         <div class="lot">L3</div>
         <div class="body"><h3>Contrôle d'accès</h3><p>Tourniquets iDTRONIC/ITBOX (couche enfichable), validation de passage, jauge FMI, anti-passback, fonctionnement hors-ligne.</p></div>
-        <div class="meta"><span class="pill doing">En cours</span><span class="tests">spec + plan ✓</span></div>
+        <div class="meta"><span class="pill done">Livré</span><span class="tests"><b>45</b> tests</span></div>
       </div>
-      <div class="lane">
+      <div class="lane doing">
         <div class="lot">L4</div>
-        <div class="body"><h3>Compta &amp; Régie</h3><p>Régie de recettes (M57/M4), PayFiP, PCA, TVA multi-taux, exports FEC / PES-Hélios, e-reporting.</p></div>
-        <div class="meta"><span class="pill todo">À venir</span></div>
+        <div class="body"><h3>Compta &amp; Régie</h3><p>Moteur bi-régime (régie M57/M4 · DSP · groupe), écritures en partie double, PCA, TVA multi-taux, export FEC, PayFiP, e-reporting.</p></div>
+        <div class="meta"><span class="pill doing">En cours</span><span class="tests">spec + plan ✓</span></div>
       </div>
       <div class="lane">
         <div class="lot">L5</div>
         <div class="body"><h3>CRM noyau</h3><p>Fiche client 360°, familles (payeur ≠ bénéficiaire), porte-monnaie virtuel.</p></div>
-        <div class="meta"><span class="pill todo">À venir</span></div>
+        <div class="meta"><span class="pill todo">Planifié</span><span class="tests">spec + plan ✓</span></div>
       </div>
       <div class="lane">
         <div class="lot">L6</div>
@@ -174,7 +174,7 @@
         <div class="meta"><span class="pill todo">À venir</span></div>
       </div>
     </div>
-    <div class="note">Les lots à venir sont déjà <b>en avance de phase</b> : le contrôle d'accès (L3) est entièrement spécifié et planifié pendant que la vente se codait. Chaque module qui se construit prépare le suivant.</div>
+    <div class="note">Les lots à venir sont déjà <b>en avance de phase</b> : la compta (L4) et le CRM (L5) sont entièrement spécifiés et planifiés pendant que le contrôle d'accès se codait. Chaque module qui se construit prépare le suivant.</div>
   </section>
 
   <section>
@@ -222,7 +222,7 @@
     <div class="watchbox"><h3>Comptabilité publique — comptable/fiscaliste</h3><p>SPIC/M57 vs M4, TVA réduite, produits constatés d'avance en régie : à confirmer avant de figer le module Compta (L4).</p></div>
   </section>
 
-  <footer>4 commits sur main · env + L0 socle + M1 offre + M2 vente · méthode SDD, agents de concert.</footer>
+  <footer>5 commits sur main · env + L0 socle + M1 offre + M2 vente + L3 accès · méthode SDD, agents de concert.</footer>
 </div>
 <button class="themebtn" id="themeBtn" aria-label="Changer de thème">◐</button>
 <script>

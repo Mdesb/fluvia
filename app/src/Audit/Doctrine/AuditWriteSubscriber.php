@@ -57,6 +57,19 @@ final class AuditWriteSubscriber
         \App\Acces\Entity\DeclarationPerteVol::class,
         \App\Acces\Entity\ListeRevocation::class,
         \App\Acces\Entity\SousReseau::class,
+        // Module M6 Comptabilité & Régie (L4) : entités sensibles (profil exploitant, plan de comptes,
+        // écritures scellées NF525, régie de recettes, exports, clôture).
+        \App\Compta\Entity\ProfilExploitant::class,
+        \App\Compta\Entity\QualificationEquipement::class,
+        \App\Compta\Entity\CompteComptable::class,
+        \App\Compta\Entity\MappingComptable::class,
+        \App\Compta\Entity\EcritureComptable::class,
+        \App\Compta\Entity\PeriodeComptable::class,
+        \App\Compta\Entity\RegieRecettes::class,
+        \App\Compta\Entity\BordereauVersement::class,
+        \App\Compta\Entity\ExportComptable::class,
+        \App\Compta\Entity\DeclarationEReporting::class,
+        \App\Compta\Entity\VenteImpayeeRegie::class,
     ];
 
     public function __construct(

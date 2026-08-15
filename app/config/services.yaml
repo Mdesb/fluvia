@@ -27,8 +27,9 @@ services:
     App\Offre\Port\DependanceVenteInterface: '@App\Vente\Service\DependanceVenteM2'
 
     # --- M2 Vente & Caisse : liaisons des ports (stubs L2, à câbler aux modules réels) ---
-    # Référentiel des moyens de paiement & acte de régie (frontière M6, RG-M2-02).
-    App\Vente\Port\ReferentielReglementInterface: '@App\Vente\Port\ReferentielReglementStub'
+    # Référentiel des moyens de paiement & acte de régie (frontière M6, RG-M2-02) : câblé au
+    # référentiel réel M6 (L4, §3 du plan-compta) — remplace le stub L2, aucune modification de M2.
+    App\Vente\Port\ReferentielReglementInterface: '@App\Compta\Adapter\ReferentielReglementDoctrineAdapter'
     # Rattachement/création client (frontière M4, US-L2-05).
     App\Vente\Port\ClientM4Interface: '@App\Vente\Port\ClientM4Stub'
     # Appairage/invalidation des supports d'accès (frontière module Accès L3, US-L2-08/09).
@@ -53,3 +54,13 @@ services:
     # utilisé en production par App\Acces\Service\SynchroPassageHandler).
     App\Acces\Service\RecalageFmiHandler:
         public: true
+
+    # --- M6 Comptabilité & Régie (L4) : liaisons des ports (§3/§4/§7 du plan-compta) ---
+    App\Compta\Port\ProjectionVenteInterface: '@App\Compta\Adapter\ProjectionVenteDoctrineAdapter'
+    App\Compta\Port\ProjectionPassageInterface: '@App\Compta\Adapter\ProjectionPassageDoctrineAdapter'
+    # PayFiP (US-L4-03) : protocole exact non détaillé dans les sources (⚠ HYPOTHÈSE) — stub par défaut.
+    App\Compta\Port\PayFipInterface: '@App\Compta\Adapter\PayFipStubAdapter'
+    # e-reporting (US-L4-08) : canal PDP non nommé dans les sources (⚠ HYPOTHÈSE) — stub par défaut.
+    App\Compta\Port\PdpInterface: '@App\Compta\Adapter\PdpStubAdapter'
+    # Chorus Pro B2G (§4.7 spec) : format exact non détaillé (⚠ HYPOTHÈSE) — stub par défaut.
+    App\Compta\Port\ChorusProInterface: '@App\Compta\Adapter\ChorusProStubAdapter'
