@@ -35,8 +35,12 @@ abstract class SepaApiTestCase extends ApiTestCase
 
         $tool = new SchemaTool($em);
         $metadata = $em->getMetadataFactory()->getAllMetadata();
+        // FK_CHECKS désactivé le temps du drop/create (nombreuses tables inter-référencées) : évite les
+        // échecs d'ordonnancement DROP/CREATE observés après l'introduction du schéma recouvrement_*.
+        $em->getConnection()->executeStatement('SET FOREIGN_KEY_CHECKS=0');
         $tool->dropSchema($metadata);
         $tool->createSchema($metadata);
+        $em->getConnection()->executeStatement('SET FOREIGN_KEY_CHECKS=1');
 
         foreach ([SocleFixtures::class, OffreFixtures::class, ComptaFixtures::class, CrmFixtures::class, SepaFixtures::class] as $classe) {
             $fixture = $container->get($classe);

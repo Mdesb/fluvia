@@ -12,10 +12,15 @@ use App\Sport\Enum\MotifInactiviteAccesFitness;
 use Doctrine\ORM\EntityManagerInterface;
 
 /**
- * Seul point d'écriture Sport sur `DroitAcces.statutProjection` (§0 point 2 du plan). Aucun fichier
- * `App\Acces\*` n'est modifié : Sport devient un second producteur légitime de cette transition,
- * exactement comme M2 (« devalide consomme une dévalidation M2 »). Le hors-ligne/synchro (CA-9/CA-10)
- * est hérité intégralement du mécanisme générique L3 — aucun développement supplémentaire ici.
+ * Point d'écriture Sport sur `DroitAcces.statutProjection` pour les motifs propres à Sport (pause,
+ * résiliation, et rejeu de l'état courant lors du rattachement d'un droit d'accès). Le motif « impayé »
+ * est désormais piloté par le moteur de recouvrement partagé
+ * (`App\Recouvrement\Service\PropagationAccesHandler`, refactor extraction) : Sport ne fait qu'observer
+ * ses conséquences via `App\Sport\EventListener\SynchroniserImpayeFitnessListener`. Aucun fichier
+ * `App\Acces\*` n'est modifié : Sport et Recouvrement sont deux producteurs légitimes de cette
+ * transition, exactement comme M2 (« devalide consomme une dévalidation M2 »). Le hors-ligne/synchro
+ * (CA-9/CA-10) est hérité intégralement du mécanisme générique L3 — aucun développement supplémentaire
+ * ici.
  */
 final class PropagationAccesFitnessHandler
 {

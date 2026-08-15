@@ -17,7 +17,8 @@ use Symfony\Component\Uid\Uuid;
  * Couplage statut de paiement ↔ droit d'accès, hors-ligne (US-SPORT-08, RG-SPORT-04, CA-9/CA-10).
  * Réutilise **intégralement** le mécanisme générique L3 (`DroitAcces.statutProjection`, `POST
  * /acces/synchro`) : aucun développement Sport supplémentaire n'est requis pour le hors-ligne — le
- * point de couplage est uniquement l'écriture faite par `PropagationAccesFitnessHandler`.
+ * point de couplage est uniquement l'écriture faite par `App\Recouvrement\Service\PropagationAccesHandler`
+ * (moteur de recouvrement partagé, refactor extraction depuis `App\Sport`).
  */
 final class AccesHorsLigneTest extends SportApiTestCase
 {
@@ -63,8 +64,8 @@ final class AccesHorsLigneTest extends SportApiTestCase
 
         $incident = $this->creerIncidentEtEchecRepresentation($client, $entete);
 
-        // Régularisation confirmée côté serveur (résolution 1 clic) : le statut est restauré.
-        $client->request('POST', '/api/sport/impayes/' . $incident . '/resoudre', $entete);
+        // Régularisation confirmée côté serveur (résolution 1 clic, moteur générique de recouvrement).
+        $client->request('POST', '/api/recouvrement/incidents/' . $incident . '/resoudre', $entete);
         self::assertResponseIsSuccessful();
 
         // « Nouveau passage de badge » (re-badge) après la synchro suivante : accepté normalement,
@@ -101,8 +102,8 @@ final class AccesHorsLigneTest extends SportApiTestCase
         ]);
         $incidentId = $client->getResponse()->toArray()['id'];
 
-        $representation = $em->getRepository(\App\Sport\Entity\RepresentationSepa::class)->findOneBy(['incident' => $incidentId]);
-        $client->request('POST', '/api/sport/representations/' . $representation->getId() . '/enregistrer-resultat', $entete + [
+        $representation = $em->getRepository(\App\Recouvrement\Entity\RepresentationSepa::class)->findOneBy(['incident' => $incidentId]);
+        $client->request('POST', '/api/recouvrement/representations/' . $representation->getId() . '/enregistrer-resultat', $entete + [
             'json' => ['resultat' => 'echouee'],
         ]);
         self::assertResponseIsSuccessful();

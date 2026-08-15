@@ -15,12 +15,13 @@ use App\Offre\DataFixtures\OffreFixtures;
 use App\Offre\Entity\Formule;
 use App\Offre\Entity\Produit;
 use App\Organisation\Entity\Etablissement;
+use App\Recouvrement\DataFixtures\RecouvrementFixtures;
+use App\Recouvrement\Entity\PolitiqueRecouvrement;
+use App\Recouvrement\Enum\MomentRefusAcces;
 use App\Securite\Entity\Permission;
 use App\Securite\Entity\Role;
 use App\Sport\Entity\ConfigAccesNocturne;
-use App\Sport\Entity\PolitiqueAntiImpayes;
 use App\Sport\Entity\StatutAccesFitness;
-use App\Sport\Enum\MomentRefusBadge;
 use App\Sport\Enum\PeriodiciteAbonnementFitness;
 use App\Sport\Service\SouscriptionAbonnementHandler;
 use Doctrine\Bundle\FixturesBundle\Fixture;
@@ -30,8 +31,9 @@ use Doctrine\Persistence\ObjectManager;
 /**
  * Jeu de données de la verticale Sport/Fitness (US-SPORT-*) : permissions `sport.*` accordées à
  * l'administrateur, 1 abonnement fitness avec engagement + mandat SEPA (IBAN tokenisé) sur
- * l'établissement A, rattaché au droit d'accès L3 de démonstration, 1 politique anti-impayés
- * (défaut établissement), 1 config d'accès nocturne sur l'espace d'accès L3 de démonstration.
+ * l'établissement A, rattaché au droit d'accès L3 de démonstration, 1 politique de recouvrement
+ * (moteur partagé `App\Recouvrement`, défaut établissement), 1 config d'accès nocturne sur l'espace
+ * d'accès L3 de démonstration.
  */
 final class SportFixtures extends Fixture implements DependentFixtureInterface
 {
@@ -46,16 +48,18 @@ final class SportFixtures extends Fixture implements DependentFixtureInterface
 
     public function getDependencies(): array
     {
-        return [SocleFixtures::class, OffreFixtures::class, CrmFixtures::class, AccesFixtures::class];
+        return [SocleFixtures::class, OffreFixtures::class, CrmFixtures::class, AccesFixtures::class, RecouvrementFixtures::class];
     }
 
     public function load(ObjectManager $manager): void
     {
         // --- Permissions sport.* + octroi à l'administrateur (RG-SOCLE-02/03) ---
+        // Le pilotage des impayés (piloter_impayes/forcer_acces/parametrer/resoudre_impaye_soi) a été
+        // extrait vers les permissions `recouvrement.*` (RecouvrementFixtures, refactor extraction).
         $perms = [];
         foreach ([
-            'gerer_abonnement', 'piloter_impayes', 'forcer_acces', 'lire', 'parametrer',
-            'configurer_nocturne', 'superviser_nocturne', 'lire_soi', 'resoudre_impaye_soi',
+            'gerer_abonnement', 'lire',
+            'configurer_nocturne', 'superviser_nocturne', 'lire_soi',
             'pause_demander_soi', 'resilier_demander_soi',
         ] as $action) {
             $perm = (new Permission())->setModule('sport')->setAction($action);
@@ -84,12 +88,12 @@ final class SportFixtures extends Fixture implements DependentFixtureInterface
             return;
         }
 
-        // --- Politique anti-impayés par défaut (établissement A) ---
-        $politique = (new PolitiqueAntiImpayes())
+        // --- Politique de recouvrement par défaut (établissement A, moteur partagé App\Recouvrement) ---
+        $politique = (new PolitiqueRecouvrement())
             ->setEtablissement($etabA)
             ->setNbRepresentationsMax(1)
             ->setCalendrierRepresentationJours([5])
-            ->setMomentRefusBadge(MomentRefusBadge::ApresRepresentationEchouee);
+            ->setMomentRefusAcces(MomentRefusAcces::ApresRepresentationEchouee);
         $manager->persist($politique);
         $manager->flush();
 

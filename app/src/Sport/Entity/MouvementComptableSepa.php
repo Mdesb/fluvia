@@ -26,8 +26,8 @@ use Symfony\Component\Uid\Uuid;
 #[ApiResource(
     shortName: 'MouvementComptableSepa',
     operations: [
-        new GetCollection(security: "is_granted('PERM', 'compta.lire') or is_granted('PERM', 'sport.piloter_impayes')"),
-        new Get(security: "is_granted('PERM', 'compta.lire') or is_granted('PERM', 'sport.piloter_impayes')"),
+        new GetCollection(security: "is_granted('PERM', 'compta.lire') or is_granted('PERM', 'recouvrement.piloter')"),
+        new Get(security: "is_granted('PERM', 'compta.lire') or is_granted('PERM', 'recouvrement.piloter')"),
     ],
     normalizationContext: ['groups' => ['mouvement_compta:read']],
 )]

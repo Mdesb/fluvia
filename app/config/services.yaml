@@ -78,8 +78,6 @@ services:
     App\Compta\Port\ChorusProInterface: '@App\Compta\Adapter\ChorusProStubAdapter'
 
     # --- Verticale Sport/Fitness : ports & adaptateurs (§2 du plan-sport) ---
-    # Encaissement CB immédiat (résolution 1 clic, RG-SPORT-03) : PSP non nommé par les sources (Risque n°4) — stub par défaut.
-    App\Sport\Paiement\Port\EncaissementImmediatInterface: '@App\Sport\Paiement\Adapter\EncaissementImmediatStubAdapter'
     # Projection comptable des encaissements/impayés SEPA : file d'attente append-only (Risque n°1,
     # aucun fichier App\Compta\* modifié — aucune écriture NF525 scellée produite par ce lot).
     App\Sport\Compta\Port\ProjectionEcritureSepaInterface: '@App\Sport\Compta\Adapter\MouvementComptableSepaQueueAdapter'
@@ -87,6 +85,11 @@ services:
     # `App\Sepa\Service\CompositeEcheanceSepaSource` (point d'entrée générique `/sepa/remises/generer`).
     App\Sport\Sepa\SportEcheanceSepaSource:
         tags: ['sepa.echeance_source']
+    # Port `RedevablePort` fourni PAR Sport AU moteur de recouvrement partagé App\Recouvrement (refactor
+    # extraction) : agrégé par `App\Recouvrement\Service\RedevableRegistry` (même patron que
+    # `SportEcheanceSepaSource`/`CompositeEcheanceSepaSource` ci-dessus).
+    App\Sport\Recouvrement\AbonnementFitnessRedevablePort:
+        tags: ['recouvrement.redevable_port']
     # Public pour accès direct depuis les tests (preuve du recâblage Sport → module SEPA partagé,
     # même patron que `App\Acces\Service\RecalageFmiHandler`) — aucune route Sport dédiée ne le consomme
     # plus (la génération de remise passe désormais par le point d'entrée générique
@@ -116,3 +119,9 @@ services:
     App\Sepa\Adapter\TokenisationIbanHmacAdapter:
         arguments:
             $cle: '%env(SEPA_IBAN_HMAC_KEY)%'
+
+    # --- Module de recouvrement partagé App\Recouvrement (refactor extraction depuis App\Sport,
+    # réutilisable par toute activité à abonnement : Sport, Piscine en régie, futures) : ports & adaptateurs ---
+    # Encaissement CB immédiat (résolution 1 clic) : PSP non nommé par les sources (Risque n°4, repris
+    # de App\Sport, généralisé) — stub par défaut.
+    App\Recouvrement\Port\EncaissementImmediatInterface: '@App\Recouvrement\Adapter\EncaissementImmediatStubAdapter'

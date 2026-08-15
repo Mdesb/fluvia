@@ -15,13 +15,9 @@ use App\Sport\Entity\AlertePresenceIsolee;
 use App\Sport\Entity\ConfigAccesNocturne;
 use App\Sport\Entity\EcheanceSepa;
 use App\Sport\Entity\EvenementSOS;
-use App\Sport\Entity\IncidentPrelevement;
 use App\Sport\Entity\MouvementComptableSepa;
 use App\Sport\Entity\PauseAbonnement;
-use App\Sport\Entity\PolitiqueAntiImpayes;
 use App\Sport\Entity\Reengagement;
-use App\Sport\Entity\RejetPrelevement;
-use App\Sport\Entity\RepresentationSepa;
 use App\Sport\Entity\Resiliation;
 use App\Sport\Entity\StatutAccesFitness;
 use Doctrine\ORM\Query\Expr\Join;
@@ -31,22 +27,20 @@ use Symfony\Bundle\SecurityBundle\Security;
 /**
  * Cloisonnement multi-entités des ressources Sport (RG-SOCLE-05), même pattern que
  * `App\Piscine\Doctrine\PerimetrePiscineExtension`/`App\Acces\Doctrine\PerimetreAccesExtension`.
+ * Le moteur anti-impayés (politique, incident, représentation, tableau de bord) a été extrait vers
+ * `App\Recouvrement\Doctrine\PerimetreRecouvrementExtension` (refactor extraction) : plus référencé ici.
  */
 final class PerimetreSportExtension implements QueryCollectionExtensionInterface, QueryItemExtensionInterface
 {
     /** @var array<class-string, list<string>> Relations à joindre depuis la racine jusqu'à « etablissement ». */
     private const CHAINES = [
         AbonnementFitness::class => [],
-        PolitiqueAntiImpayes::class => [],
         MouvementComptableSepa::class => [],
         EcheanceSepa::class => ['abonnement'],
         StatutAccesFitness::class => ['abonnement'],
         PauseAbonnement::class => ['abonnement'],
         Resiliation::class => ['abonnement'],
         Reengagement::class => ['ancienAbonnement'],
-        IncidentPrelevement::class => ['abonnement'],
-        RepresentationSepa::class => ['incident', 'abonnement'],
-        RejetPrelevement::class => ['echeance', 'abonnement'],
         ConfigAccesNocturne::class => ['espaceAcces'],
         EvenementSOS::class => ['espaceAcces'],
         AlertePresenceIsolee::class => ['espaceAcces'],

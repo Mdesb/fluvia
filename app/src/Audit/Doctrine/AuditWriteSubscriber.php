@@ -93,17 +93,22 @@ final class AuditWriteSubscriber
         \App\Piscine\Entity\QualificationEncadrant::class,
         // L7 Back-office & Droits : délégations temporaires de droits (RG-M8-05, §8 plan-backoffice.md).
         \App\Securite\Entity\DelegationDroit::class,
-        // Verticale Sport/Fitness : entités sensibles (abonnement, résiliation, politique anti-impayés,
-        // événements SOS) — plan-sport.md §5, T15.
+        // Verticale Sport/Fitness : entités sensibles (abonnement, résiliation, événements SOS) —
+        // plan-sport.md §5, T15. La politique/les incidents anti-impayés ont été extraits vers le
+        // moteur de recouvrement partagé (§ ci-dessous, refactor extraction).
         \App\Sport\Entity\AbonnementFitness::class,
         \App\Sport\Entity\Resiliation::class,
-        \App\Sport\Entity\PolitiqueAntiImpayes::class,
         \App\Sport\Entity\EvenementSOS::class,
         // Module SEPA partagé (plan-sepa.md §2) : mandat, configuration créancier, remise — IBAN
         // (jetons) exclus de l'instantané (CHAMPS_SENSIBLES ci-dessous, §4 spec).
         \App\Sepa\Entity\MandatSepa::class,
         \App\Sepa\Entity\ConfigCreancierSepa::class,
         \App\Sepa\Entity\RemiseSepa::class,
+        // Module de recouvrement partagé App\Recouvrement (refactor extraction depuis App\Sport,
+        // réutilisable par toute activité à abonnement) : politique et dossiers d'impayés, sensibles
+        // (déclenchent une coupure d'accès).
+        \App\Recouvrement\Entity\PolitiqueRecouvrement::class,
+        \App\Recouvrement\Entity\IncidentImpaye::class,
     ];
 
     /**

@@ -35,8 +35,12 @@ final class PossProrataCalculatorTest extends KernelTestCase
 
         $tool = new SchemaTool($this->em);
         $metadata = $this->em->getMetadataFactory()->getAllMetadata();
+        // FK_CHECKS désactivé le temps du drop/create (nombreuses tables inter-référencées) : évite les
+        // échecs d'ordonnancement DROP/CREATE observés après l'introduction du schéma recouvrement_*.
+        $this->em->getConnection()->executeStatement('SET FOREIGN_KEY_CHECKS=0');
         $tool->dropSchema($metadata);
         $tool->createSchema($metadata);
+        $this->em->getConnection()->executeStatement('SET FOREIGN_KEY_CHECKS=1');
 
         /** @var \App\DataFixtures\SocleFixtures $socle */
         $socle = $container->get(SocleFixtures::class);

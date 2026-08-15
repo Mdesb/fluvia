@@ -22,6 +22,8 @@ api_platform:
             - '%kernel.project_dir%/src/Sport/Entity'
             - '%kernel.project_dir%/src/Sport/ApiResource'
             - '%kernel.project_dir%/src/Sepa/Entity'
+            - '%kernel.project_dir%/src/Recouvrement/Entity'
+            - '%kernel.project_dir%/src/Recouvrement/ApiResource'
     defaults:
         stateless: true
         cache_headers:

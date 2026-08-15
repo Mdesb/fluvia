@@ -14,11 +14,12 @@ use App\Crm\DataFixtures\CrmFixtures;
 use App\DataFixtures\SocleFixtures;
 use App\Offre\DataFixtures\OffreFixtures;
 use App\Organisation\Entity\Etablissement;
+use App\Recouvrement\DataFixtures\RecouvrementFixtures;
+use App\Recouvrement\Entity\PolitiqueRecouvrement;
 use App\Securite\Service\ContexteEtablissement;
 use App\Sepa\DataFixtures\SepaFixtures;
 use App\Sport\DataFixtures\SportFixtures;
 use App\Sport\Entity\AbonnementFitness;
-use App\Sport\Entity\PolitiqueAntiImpayes;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 
@@ -41,12 +42,16 @@ abstract class SportApiTestCase extends ApiTestCase
 
         $tool = new SchemaTool($em);
         $metadata = $em->getMetadataFactory()->getAllMetadata();
+        // FK_CHECKS désactivé le temps du drop/create (nombreuses tables inter-référencées) : évite les
+        // échecs d'ordonnancement DROP/CREATE observés après l'introduction du schéma recouvrement_*.
+        $em->getConnection()->executeStatement('SET FOREIGN_KEY_CHECKS=0');
         $tool->dropSchema($metadata);
         $tool->createSchema($metadata);
+        $em->getConnection()->executeStatement('SET FOREIGN_KEY_CHECKS=1');
 
         foreach ([
             SocleFixtures::class, OffreFixtures::class, ComptaFixtures::class, AccesFixtures::class,
-            CrmFixtures::class, SepaFixtures::class, SportFixtures::class,
+            CrmFixtures::class, SepaFixtures::class, RecouvrementFixtures::class, SportFixtures::class,
         ] as $classe) {
             $fixture = $container->get($classe);
             $fixture->load($em);
@@ -120,8 +125,8 @@ abstract class SportApiTestCase extends ApiTestCase
         /** @var EntityManagerInterface $em */
         $em = static::getContainer()->get('doctrine')->getManager();
         $etab = $em->getRepository(Etablissement::class)->findOneBy(['nom' => SocleFixtures::ETAB_A_NOM]);
-        $politique = $em->getRepository(PolitiqueAntiImpayes::class)->findOneBy(['etablissement' => $etab]);
-        self::assertNotNull($politique, 'Politique anti-impayés de démonstration introuvable.');
+        $politique = $em->getRepository(PolitiqueRecouvrement::class)->findOneBy(['etablissement' => $etab]);
+        self::assertNotNull($politique, 'Politique de recouvrement de démonstration introuvable.');
 
         return (string) $politique->getId();
     }

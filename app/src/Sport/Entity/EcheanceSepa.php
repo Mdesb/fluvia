@@ -8,6 +8,7 @@ use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Post;
+use App\Recouvrement\Entity\IncidentImpaye;
 use App\Sepa\Entity\RemiseSepa;
 use App\Sport\Enum\StatutEcheanceSepa;
 use App\Sport\State\SimulerRejetProcessor;
@@ -29,9 +30,9 @@ use Symfony\Component\Validator\Constraints as Assert;
             uriTemplate: '/sport/echeances/{id}/simuler-rejet',
             read: true,
             input: false,
-            security: "is_granted('PERM', 'sport.piloter_impayes')",
+            security: "is_granted('PERM', 'recouvrement.piloter')",
             processor: SimulerRejetProcessor::class,
-            output: \App\Sport\Entity\IncidentPrelevement::class,
+            output: IncidentImpaye::class,
             normalizationContext: ['groups' => ['incident:read']],
         ),
     ],

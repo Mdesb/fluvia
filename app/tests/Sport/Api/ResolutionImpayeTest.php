@@ -4,19 +4,22 @@ declare(strict_types=1);
 
 namespace App\Tests\Sport\Api;
 
+use App\Sport\Entity\AbonnementFitness;
 use App\Sport\Entity\EcheanceSepa;
-use App\Sport\Entity\IncidentPrelevement;
 use App\Sport\Entity\StatutAccesFitness;
 use App\Tests\Sport\SportApiTestCase;
 use Doctrine\ORM\EntityManagerInterface;
 
 /**
- * Résolution 1 clic & restauration de l'accès (US-SPORT-07, RG-SPORT-03, CA-8) : incident résolu
- * (canal app_1_clic), abonnement réactivé, droit d'accès restauré **sans intervention d'un agent**.
+ * Résolution 1 clic & restauration de l'accès (US-SPORT-07, RG-SPORT-03, CA-8) : le moteur générique
+ * (`App\Recouvrement`) restaure `DroitAcces` automatiquement dès l'encaissement confirmé, **sans
+ * intervention d'un agent** ; ce test vérifie la conséquence propre à Sport
+ * (`AbonnementFitness.statut` + `StatutAccesFitness`), tenue à jour via
+ * `SynchroniserImpayeFitnessListener` (refactor extraction).
  */
 final class ResolutionImpayeTest extends SportApiTestCase
 {
-    public function testCa8ResolutionUnClicRestaureAutomatiquementLacces(): void
+    public function testCa8ResolutionUnClicRestaureAutomatiquementLaccesFitness(): void
     {
         [$client, $entete] = $this->adminSurA();
 
@@ -25,30 +28,31 @@ final class ResolutionImpayeTest extends SportApiTestCase
         $abonnement = $this->abonnementDemo();
         $echeance = $em->getRepository(EcheanceSepa::class)->findOneBy(['abonnement' => $abonnement], ['dateProgrammee' => 'ASC']);
 
-        // Rejet + échec de représentation → badge refusé (chemin déjà couvert par AntiImpayesTest).
+        // Rejet + échec de représentation → accès coupé (chemin générique déjà couvert par
+        // App\Tests\Recouvrement\Api\MoteurRecouvrementTest).
         $client->request('POST', '/api/sport/echeances/' . $echeance->getId() . '/simuler-rejet', $entete + [
             'json' => ['codeRetour' => 'AM04'],
         ]);
         $incidentId = $client->getResponse()->toArray()['id'];
-        $representation = $em->getRepository(\App\Sport\Entity\RepresentationSepa::class)->findOneBy(['incident' => $incidentId]);
-        $client->request('POST', '/api/sport/representations/' . $representation->getId() . '/enregistrer-resultat', $entete + [
+        $representation = $em->getRepository(\App\Recouvrement\Entity\RepresentationSepa::class)->findOneBy(['incident' => $incidentId]);
+        $client->request('POST', '/api/recouvrement/representations/' . $representation->getId() . '/enregistrer-resultat', $entete + [
             'json' => ['resultat' => 'echouee'],
         ]);
         self::assertResponseIsSuccessful();
 
         $em->clear();
         $statutAcces = $em->getRepository(StatutAccesFitness::class)->findOneBy(['abonnement' => $abonnement->getId()]);
-        self::assertFalse($statutAcces->isActif(), 'Badge refusé après échec de représentation (pré-condition du test).');
+        self::assertFalse($statutAcces->isActif(), 'Accès coupé après échec de représentation (pré-condition du test).');
 
         // Résolution 1 clic (agent ici pour simplifier ; le flux self-service `_soi` est équivalent).
-        $client->request('POST', '/api/sport/impayes/' . $incidentId . '/resoudre', $entete);
+        $client->request('POST', '/api/recouvrement/incidents/' . $incidentId . '/resoudre', $entete);
         self::assertResponseIsSuccessful();
         $incident = $client->getResponse()->toArray();
         self::assertSame('resolu', $incident['statut']);
         self::assertSame('app_1_clic', $incident['canalResolution']);
 
         $em->clear();
-        $abonnementRafraichi = $em->getRepository(\App\Sport\Entity\AbonnementFitness::class)->find($abonnement->getId());
+        $abonnementRafraichi = $em->getRepository(AbonnementFitness::class)->find($abonnement->getId());
         self::assertSame('actif', $abonnementRafraichi->getStatut()->value);
 
         $statutAccesRestaure = $em->getRepository(StatutAccesFitness::class)->findOneBy(['abonnement' => $abonnement->getId()]);
@@ -57,7 +61,7 @@ final class ResolutionImpayeTest extends SportApiTestCase
         self::assertSame('valide', $statutAccesRestaure->getDroitAcces()->getStatutProjection()->value);
     }
 
-    public function testResolutionRefuseeSiIncidentDejaResolu(): void
+    public function testForcerReouvertureRestaureLabonnementFitnessSansEncaissement(): void
     {
         [$client, $entete] = $this->adminSurA();
 
@@ -71,31 +75,14 @@ final class ResolutionImpayeTest extends SportApiTestCase
         ]);
         $incidentId = $client->getResponse()->toArray()['id'];
 
-        $client->request('POST', '/api/sport/impayes/' . $incidentId . '/resoudre', $entete);
+        $client->request('POST', '/api/recouvrement/incidents/' . $incidentId . '/forcer-reouverture', $entete + ['json' => ['motif' => 'Geste commercial exceptionnel']]);
         self::assertResponseIsSuccessful();
 
-        $client->request('POST', '/api/sport/impayes/' . $incidentId . '/resoudre', $entete);
-        self::assertResponseStatusCodeSame(422);
-    }
+        $em->clear();
+        $abonnementRafraichi = $em->getRepository(AbonnementFitness::class)->find($abonnement->getId());
+        self::assertSame('actif', $abonnementRafraichi->getStatut()->value, 'Réouverture forcée : abonnement réactivé sans que le dossier impayé soit résolu.');
 
-    public function testForcerReouvertureExigeUnMotif(): void
-    {
-        [$client, $entete] = $this->adminSurA();
-
-        /** @var EntityManagerInterface $em */
-        $em = static::getContainer()->get('doctrine')->getManager();
-        $abonnement = $this->abonnementDemo();
-        $echeance = $em->getRepository(EcheanceSepa::class)->findOneBy(['abonnement' => $abonnement], ['dateProgrammee' => 'ASC']);
-
-        $client->request('POST', '/api/sport/echeances/' . $echeance->getId() . '/simuler-rejet', $entete + [
-            'json' => ['codeRetour' => 'AM04'],
-        ]);
-        $incidentId = $client->getResponse()->toArray()['id'];
-
-        $client->request('POST', '/api/sport/impayes/' . $incidentId . '/forcer-reouverture', $entete + ['json' => ['motif' => '']]);
-        self::assertResponseStatusCodeSame(422, 'RG-SOCLE-07 : le motif est requis pour une réouverture forcée journalisée.');
-
-        $client->request('POST', '/api/sport/impayes/' . $incidentId . '/forcer-reouverture', $entete + ['json' => ['motif' => 'Geste commercial exceptionnel']]);
-        self::assertResponseIsSuccessful();
+        $incidentEncore = $em->getRepository(\App\Recouvrement\Entity\IncidentImpaye::class)->find($incidentId);
+        self::assertNotSame('resolu', $incidentEncore->getStatut()->value, 'Le dossier impayé reste ouvert après une réouverture forcée (RG-SOCLE-07).');
     }
 }
