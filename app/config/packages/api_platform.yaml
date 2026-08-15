@@ -19,6 +19,8 @@ api_platform:
             - '%kernel.project_dir%/src/Crm/Entity'
             - '%kernel.project_dir%/src/Piscine/Entity'
             - '%kernel.project_dir%/src/Piscine/ApiResource'
+            - '%kernel.project_dir%/src/Sport/Entity'
+            - '%kernel.project_dir%/src/Sport/ApiResource'
     defaults:
         stateless: true
         cache_headers:

@@ -76,3 +76,22 @@ services:
     App\Compta\Port\PdpInterface: '@App\Compta\Adapter\PdpStubAdapter'
     # Chorus Pro B2G (§4.7 spec) : format exact non détaillé (⚠ HYPOTHÈSE) — stub par défaut.
     App\Compta\Port\ChorusProInterface: '@App\Compta\Adapter\ChorusProStubAdapter'
+
+    # --- Verticale Sport/Fitness : ports & adaptateurs (§2 du plan-sport) ---
+    # Collecte bancaire SEPA (remise/retours) : aucun moteur d'exécution SEPA n'existe ailleurs dans le
+    # dépôt (spec §8 point 3, gap confirmé) — stub par défaut, public pour injection de retours en test.
+    App\Sport\Sepa\Port\CollecteurSepaInterface:
+        alias: App\Sport\Sepa\Adapter\CollecteurSepaStubAdapter
+        public: true
+    App\Sport\Sepa\Adapter\CollecteurSepaStubAdapter:
+        public: true
+    # Tokenisation IBAN — HMAC applicatif (Risque n°3, ⚠ non un vrai coffre-fort PCI-DSS).
+    App\Sport\Sepa\Port\TokenisationIbanInterface: '@App\Sport\Sepa\Adapter\TokenisationIbanHmacAdapter'
+    App\Sport\Sepa\Adapter\TokenisationIbanHmacAdapter:
+        arguments:
+            $cle: '%env(SPORT_IBAN_HMAC_KEY)%'
+    # Encaissement CB immédiat (résolution 1 clic, RG-SPORT-03) : PSP non nommé par les sources (Risque n°4) — stub par défaut.
+    App\Sport\Paiement\Port\EncaissementImmediatInterface: '@App\Sport\Paiement\Adapter\EncaissementImmediatStubAdapter'
+    # Projection comptable des encaissements/impayés SEPA : file d'attente append-only (Risque n°1,
+    # aucun fichier App\Compta\* modifié — aucune écriture NF525 scellée produite par ce lot).
+    App\Sport\Compta\Port\ProjectionEcritureSepaInterface: '@App\Sport\Compta\Adapter\MouvementComptableSepaQueueAdapter'

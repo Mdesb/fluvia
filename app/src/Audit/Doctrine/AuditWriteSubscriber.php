@@ -93,6 +93,13 @@ final class AuditWriteSubscriber
         \App\Piscine\Entity\QualificationEncadrant::class,
         // L7 Back-office & Droits : délégations temporaires de droits (RG-M8-05, §8 plan-backoffice.md).
         \App\Securite\Entity\DelegationDroit::class,
+        // Verticale Sport/Fitness : entités sensibles (abonnement, résiliation, mandat SEPA, politique
+        // anti-impayés, événements SOS) — plan-sport.md §5, T15.
+        \App\Sport\Entity\AbonnementFitness::class,
+        \App\Sport\Entity\Resiliation::class,
+        \App\Sport\Entity\MandatSepaFitness::class,
+        \App\Sport\Entity\PolitiqueAntiImpayes::class,
+        \App\Sport\Entity\EvenementSOS::class,
     ];
 
     /**

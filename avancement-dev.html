@@ -106,26 +106,24 @@
     <div class="eyebrow">Billetterie &amp; contrôle d'accès · Chantier logiciel</div>
     <h1>Avancement du développement</h1>
     <p>Le MVP se construit lot par lot, chacun spécifié puis implémenté et testé avant d'être intégré. Voici l'état réel du code — pas une estimation, ce qui est écrit, testé et versionné à ce jour.</p>
-    <div class="stamp">Mise à jour : 15 août 2026 · cœur du MVP <b>opérationnel</b> · <b>99 tests verts</b></div>
+    <div class="stamp">Mise à jour : 15 août 2026 · <b>MVP back-end complet</b> · <b>227 tests verts</b></div>
   </header>
 
   <section>
     <div class="kpis">
-      <div class="kpi"><div class="n good">4<span style="color:var(--ink-faint);font-size:18px">/8</span></div><div class="l">Lots MVP livrés (+ 1 en cours)</div></div>
-      <div class="kpi"><div class="n">99</div><div class="l">Tests automatisés au vert</div></div>
-      <div class="kpi"><div class="n">652</div><div class="l">Assertions vérifiées</div></div>
-      <div class="kpi"><div class="n">5</div><div class="l">Livraisons versionnées (git)</div></div>
+      <div class="kpi"><div class="n good">8<span style="color:var(--ink-faint);font-size:18px">/8</span></div><div class="l">Lots MVP livrés &amp; testés</div></div>
+      <div class="kpi"><div class="n">227</div><div class="l">Tests automatisés au vert</div></div>
+      <div class="kpi"><div class="n">1589</div><div class="l">Assertions vérifiées</div></div>
+      <div class="kpi"><div class="n">9</div><div class="l">Livraisons versionnées (git)</div></div>
     </div>
     <div class="barwrap">
-      <div class="top"><b>Progression du MVP</b><span>4 livrés · 1 en cours · 3 à venir</span></div>
+      <div class="top"><b>Progression du MVP back-end</b><span>8 livrés · MVP complet ✓</span></div>
       <div class="bar">
-        <i class="done" style="width:50%"></i>
-        <i class="doing" style="width:12.5%"></i>
+        <i class="done" style="width:100%"></i>
       </div>
       <div class="legend">
         <span><i class="dot done"></i> Livré &amp; testé</span>
-        <span><i class="dot doing"></i> En cours</span>
-        <span><i class="dot todo"></i> À venir</span>
+        <span><i class="dot doing"></i> Verticale en cours (hors MVP)</span>
       </div>
     </div>
   </section>
@@ -153,28 +151,44 @@
         <div class="body"><h3>Contrôle d'accès</h3><p>Tourniquets iDTRONIC/ITBOX (couche enfichable), validation de passage, jauge FMI, anti-passback, fonctionnement hors-ligne.</p></div>
         <div class="meta"><span class="pill done">Livré</span><span class="tests"><b>45</b> tests</span></div>
       </div>
-      <div class="lane doing">
+      <div class="lane">
         <div class="lot">L4</div>
         <div class="body"><h3>Compta &amp; Régie</h3><p>Moteur bi-régime (régie M57/M4 · DSP · groupe), écritures en partie double, PCA, TVA multi-taux, export FEC, PayFiP, e-reporting.</p></div>
-        <div class="meta"><span class="pill doing">En cours</span><span class="tests">spec + plan ✓</span></div>
+        <div class="meta"><span class="pill done">Livré</span><span class="tests"><b>36</b> tests</span></div>
       </div>
       <div class="lane">
         <div class="lot">L5</div>
-        <div class="body"><h3>CRM noyau</h3><p>Fiche client 360°, familles (payeur ≠ bénéficiaire), porte-monnaie virtuel.</p></div>
-        <div class="meta"><span class="pill todo">Planifié</span><span class="tests">spec + plan ✓</span></div>
+        <div class="body"><h3>CRM noyau</h3><p>Fiche client 360°, familles (payeur ≠ bénéficiaire), porte-monnaie virtuel, RGPD (consentement, anonymisation).</p></div>
+        <div class="meta"><span class="pill done">Livré</span><span class="tests"><b>26</b> tests</span></div>
       </div>
       <div class="lane">
         <div class="lot">L6</div>
-        <div class="body"><h3>Verticale Piscine</h3><p>POSS/FMI réglementaire, encadrants MNS, lignes d'eau, casiers connectés.</p></div>
-        <div class="meta"><span class="pill todo">À venir</span></div>
+        <div class="body"><h3>Verticale Piscine</h3><p>POSS/FMI réglementaire, encadrants MNS, lignes d'eau public/club, casiers &amp; caution.</p></div>
+        <div class="meta"><span class="pill done">Livré</span><span class="tests"><b>32</b> tests</span></div>
       </div>
       <div class="lane">
         <div class="lot">L7</div>
-        <div class="body"><h3>Back-office &amp; Droits</h3><p>Navigation unifiée caisse↔admin, UI adaptative aux droits, gestion utilisateurs/rôles.</p></div>
+        <div class="body"><h3>Back-office &amp; Droits</h3><p>MFA, mot de passe oublié, délégation temporaire, garde-fous d'admin, audit avant/après. (Le back-office visuel reste côté interface.)</p></div>
+        <div class="meta"><span class="pill done">Livré</span><span class="tests"><b>34</b> tests</span></div>
+      </div>
+    </div>
+    <div class="note">🎉 <b>MVP back-end complet</b> : les 8 lots sont écrits, testés et versionnés. Le moteur couvre toute la chaîne — offre → vente → accès → compta → client — plus la première verticale (piscine) et l'administration. Reste l'habillage <b>front-end</b> (interfaces caisse, admin, boutique) qui consomme cette API.</div>
+  </section>
+
+  <section>
+    <h2 class="sec-h">Au-delà du MVP — verticales métier</h2>
+    <div class="lanes">
+      <div class="lane doing">
+        <div class="lot">🏋️</div>
+        <div class="body"><h3>Salle de sport / Fitness</h3><p>Anti-impayés couplé à l'accès (échec de prélèvement SEPA → refus de badge), engagement, pause, accès nocturne autonome.</p></div>
+        <div class="meta"><span class="pill doing">En cours</span><span class="tests">spec + plan ✓</span></div>
+      </div>
+      <div class="lane">
+        <div class="lot">🎾</div>
+        <div class="body"><h3>Padel · Patinoire · Musée</h3><p>Réservation de terrain, location de patins, jauge timed-entry &amp; gratuités scolaires.</p></div>
         <div class="meta"><span class="pill todo">À venir</span></div>
       </div>
     </div>
-    <div class="note">Les lots à venir sont déjà <b>en avance de phase</b> : la compta (L4) et le CRM (L5) sont entièrement spécifiés et planifiés pendant que le contrôle d'accès se codait. Chaque module qui se construit prépare le suivant.</div>
   </section>
 
   <section>
@@ -219,10 +233,11 @@
     <h2 class="sec-h">Points à valider avec un expert (avant de figer)</h2>
     <div class="watchbox"><h3>NF525 — référent conformité</h3><p>Le mécanisme d'inaltérabilité est en place et enfichable ; le procédé cryptographique exact, le périmètre de certification (auto-attestation vs LNE/INFOCERT) et les clôtures périodiques restent à arbitrer.</p></div>
     <div class="watchbox"><h3>Protocoles matériel — IT Cotation</h3><p>Contrat d'échange avec les tourniquets iDTRONIC / concentrateur ITBOX / SmartAccess (OSDP ou API, remontée d'événements, liste de révocation embarquée) à cadrer pour brancher l'adaptateur réel.</p></div>
-    <div class="watchbox"><h3>Comptabilité publique — comptable/fiscaliste</h3><p>SPIC/M57 vs M4, TVA réduite, produits constatés d'avance en régie : à confirmer avant de figer le module Compta (L4).</p></div>
+    <div class="watchbox"><h3>Comptabilité publique — comptable/fiscaliste</h3><p>SPIC/M57 vs M4, TVA réduite, produits constatés d'avance en régie : implémentés en paramètres (défauts prudents), à confirmer pour figer la conformité du module Compta.</p></div>
+    <div class="watchbox"><h3>Collecte SEPA &amp; coffre IBAN — banque / PSP (verticale Sport)</h3><p>Le cycle d'impayés et la tokenisation IBAN sont en place derrière une interface ; la remise bancaire réelle (pain.008, retours) et un coffre IBAN conforme PCI-DSS restent à brancher.</p></div>
   </section>
 
-  <footer>5 commits sur main · env + L0 socle + M1 offre + M2 vente + L3 accès · méthode SDD, agents de concert.</footer>
+  <footer>9 commits sur main · 8 lots du MVP (L0 socle → L7 back-office) · méthode SDD, agents de concert · verticale Sport en cours.</footer>
 </div>
 <button class="themebtn" id="themeBtn" aria-label="Changer de thème">◐</button>
 <script>
