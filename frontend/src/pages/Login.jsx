@@ -43,9 +43,8 @@ export default function Login({ onConnecte }) {
   return (
     <div className="login-wrap">
       <form className="login-card" onSubmit={soumettre}>
-        <div className="brand">
-          <span className="brand-dot">B</span>
-          <span className="brand-name">Billetterie</span>
+        <div className="side-brand">
+          <span className="logo">◈</span> Fluvia
         </div>
         <h1>Connexion</h1>
         <p className="login-sub">Accédez à la caisse et au catalogue.</p>
@@ -57,6 +56,7 @@ export default function Login({ onConnecte }) {
           <label htmlFor="email">Adresse e-mail</label>
           <input
             id="email"
+            className="input"
             type="email"
             autoComplete="username"
             value={email}
@@ -68,6 +68,7 @@ export default function Login({ onConnecte }) {
           <label htmlFor="mdp">Mot de passe</label>
           <input
             id="mdp"
+            className="input"
             type="password"
             autoComplete="current-password"
             value={motDePasse}
@@ -76,7 +77,7 @@ export default function Login({ onConnecte }) {
           />
         </div>
 
-        <button className="btn btn-lg" type="submit" disabled={enCours}>
+        <button className="btn primary lg" type="submit" disabled={enCours}>
           {enCours ? 'Connexion…' : 'Se connecter'}
         </button>
 

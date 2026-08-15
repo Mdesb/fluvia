@@ -61,94 +61,106 @@ export default function Catalogue({ etabActif }) {
   }
 
   return (
-    <div className="page">
-      <div className="page-head">
-        <div>
-          <h2>Catalogue</h2>
-          <div className="sub">{produits.length} produit(s)</div>
+    <div className="view">
+      <div className="view-head">
+        <div className="ttl">
+          <h1>Catalogue</h1>
+          <p>{produits.length} produit(s)</p>
         </div>
       </div>
 
       {erreur && <div className="banner banner-error">{erreur}</div>}
       {succes && <div className="banner banner-ok">{succes}</div>}
 
-      <form className="form-card" onSubmit={creer}>
-        <h3>Nouveau produit</h3>
-        <div className="form-row">
-          <div className="field" style={{ margin: 0 }}>
-            <label htmlFor="lib">Libellé *</label>
-            <input
-              id="lib"
-              value={libelle}
-              onChange={(e) => setLibelle(e.target.value)}
-              placeholder="Ex. Entrée adulte"
-              required
-            />
+      <form className="card" onSubmit={creer} style={{ marginBottom: 16 }}>
+        <div className="card-h"><h3>Nouveau produit</h3></div>
+        <div className="card-b">
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '2fr 1fr 1fr auto',
+              gap: 12,
+              alignItems: 'end',
+            }}
+            className="cat-form-row"
+          >
+            <div className="field" style={{ margin: 0 }}>
+              <label htmlFor="lib">Libellé *</label>
+              <input
+                id="lib"
+                className="input"
+                value={libelle}
+                onChange={(e) => setLibelle(e.target.value)}
+                placeholder="Ex. Entrée adulte"
+                required
+              />
+            </div>
+            <div className="field" style={{ margin: 0 }}>
+              <label htmlFor="code">Code</label>
+              <input
+                id="code"
+                className="input"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                placeholder="Ex. ENT-ADU"
+              />
+            </div>
+            <div className="field" style={{ margin: 0 }}>
+              <label htmlFor="type">Type *</label>
+              <select id="type" className="select" value={typeId} onChange={(e) => setTypeId(e.target.value)}>
+                {types.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.libelle}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button className="btn primary" type="submit" disabled={enCours}>
+              {enCours ? 'Création…' : '＋ Créer'}
+            </button>
           </div>
-          <div className="field" style={{ margin: 0 }}>
-            <label htmlFor="code">Code</label>
-            <input
-              id="code"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              placeholder="Ex. ENT-ADU"
-            />
-          </div>
-          <div className="field" style={{ margin: 0 }}>
-            <label htmlFor="type">Type *</label>
-            <select id="type" value={typeId} onChange={(e) => setTypeId(e.target.value)}>
-              {types.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.libelle}
-                </option>
-              ))}
-            </select>
-          </div>
-          <button className="btn" type="submit" disabled={enCours}>
-            {enCours ? 'Création…' : 'Créer'}
-          </button>
         </div>
       </form>
 
-      <div className="table-card">
+      <div className="card">
         {chargement ? (
           <div className="center" style={{ minHeight: 160 }}>
             <div className="spinner" />
           </div>
         ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Libellé</th>
-                <th>Code</th>
-                <th>Type</th>
-                <th>Statut</th>
-                <th style={{ textAlign: 'right' }}>Tarif</th>
-              </tr>
-            </thead>
-            <tbody>
-              {produits.map((p) => (
-                <tr key={p.id}>
-                  <td>{libelleProduit(p)}</td>
-                  <td>{p.code || '—'}</td>
-                  <td>{p.typeCode || '—'}</td>
-                  <td>
-                    <span className={`tag ${p.statut === 'publie' ? '' : 'tag-muted'}`}>
-                      {p.statut || '—'}
-                    </span>
-                  </td>
-                  <td style={{ textAlign: 'right' }}>{euros(prixIndicatif(p))}</td>
-                </tr>
-              ))}
-              {produits.length === 0 && (
+          <div className="card-b" style={{ overflowX: 'auto' }}>
+            <table className="tbl">
+              <thead>
                 <tr>
-                  <td colSpan={5} style={{ textAlign: 'center', color: 'var(--muted)' }}>
-                    Aucun produit.
-                  </td>
+                  <th>Libellé</th>
+                  <th>Code</th>
+                  <th>Type</th>
+                  <th>État</th>
+                  <th className="num">Tarif</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {produits.map((p) => (
+                  <tr key={p.id}>
+                    <td><span className="nm">{libelleProduit(p)}</span></td>
+                    <td>{p.code || '—'}</td>
+                    <td>{p.typeCode || '—'}</td>
+                    <td>
+                      <span className={`badge ${p.statut === 'publie' ? 'good' : 'mut'}`}>
+                        {p.statut || '—'}
+                      </span>
+                    </td>
+                    <td className="num">{euros(prixIndicatif(p))}</td>
+                  </tr>
+                ))}
+                {produits.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="empty">Aucun produit.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>
