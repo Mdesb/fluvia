@@ -9,9 +9,9 @@ use App\Crm\Entity\Beneficiaire;
 use App\Crm\Entity\Client;
 use App\Offre\DataFixtures\OffreFixtures;
 use App\Offre\Entity\Produit;
+use App\Sepa\Entity\MandatSepa;
 use App\Sport\Entity\AbonnementFitness;
 use App\Sport\Entity\EcheanceSepa;
-use App\Sport\Entity\MandatSepaFitness;
 use App\Sport\Entity\StatutAccesFitness;
 use App\Tests\Sport\SportApiTestCase;
 use Doctrine\ORM\EntityManagerInterface;
@@ -88,7 +88,7 @@ final class SouscriptionTest extends SportApiTestCase
         self::assertTrue($statutAcces->isActif());
 
         // IBAN jamais persisté en clair.
-        $mandatEntite = $em->getRepository(MandatSepaFitness::class)->find($mandat['id']);
+        $mandatEntite = $em->getRepository(MandatSepa::class)->find($mandat['id']);
         self::assertNotNull($mandatEntite);
         self::assertStringNotContainsString('FR7630006000011234567890189', $mandatEntite->getIbanToken());
     }

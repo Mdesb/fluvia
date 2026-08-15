@@ -8,6 +8,7 @@ use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Post;
+use App\Sepa\Entity\RemiseSepa;
 use App\Sport\Enum\StatutEcheanceSepa;
 use App\Sport\State\SimulerRejetProcessor;
 use Doctrine\ORM\Mapping as ORM;

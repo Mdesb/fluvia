@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Sport\Doctrine;
+namespace App\Sepa\Doctrine;
 
 use ApiPlatform\Doctrine\Orm\Extension\QueryCollectionExtensionInterface;
 use ApiPlatform\Doctrine\Orm\Extension\QueryItemExtensionInterface;
@@ -10,46 +10,30 @@ use ApiPlatform\Doctrine\Orm\Util\QueryNameGeneratorInterface;
 use ApiPlatform\Metadata\Operation;
 use App\Securite\Entity\Affectation;
 use App\Securite\Entity\Utilisateur;
-use App\Sport\Entity\AbonnementFitness;
-use App\Sport\Entity\AlertePresenceIsolee;
-use App\Sport\Entity\ConfigAccesNocturne;
-use App\Sport\Entity\EcheanceSepa;
-use App\Sport\Entity\EvenementSOS;
-use App\Sport\Entity\IncidentPrelevement;
-use App\Sport\Entity\MouvementComptableSepa;
-use App\Sport\Entity\PauseAbonnement;
-use App\Sport\Entity\PolitiqueAntiImpayes;
-use App\Sport\Entity\Reengagement;
-use App\Sport\Entity\RejetPrelevement;
-use App\Sport\Entity\RepresentationSepa;
-use App\Sport\Entity\Resiliation;
-use App\Sport\Entity\StatutAccesFitness;
+use App\Sepa\Entity\ConfigCreancierSepa;
+use App\Sepa\Entity\LigneRemiseSepa;
+use App\Sepa\Entity\MandatSepa;
+use App\Sepa\Entity\RejetSepa;
+use App\Sepa\Entity\RemiseSepa;
 use Doctrine\ORM\Query\Expr\Join;
 use Doctrine\ORM\QueryBuilder;
 use Symfony\Bundle\SecurityBundle\Security;
 
 /**
- * Cloisonnement multi-entités des ressources Sport (RG-SOCLE-05), même pattern que
- * `App\Piscine\Doctrine\PerimetrePiscineExtension`/`App\Acces\Doctrine\PerimetreAccesExtension`.
+ * Cloisonnement multi-entités des ressources SEPA (RG-SOCLE-05), même patron que
+ * `App\Sport\Doctrine\PerimetreSportExtension`. `MandatSepa`/`RemiseSepa`/`ConfigCreancierSepa`
+ * portent directement leur `etablissement` (contrairement à l'ancien `MandatSepaFitness`, qui ne
+ * l'obtenait qu'en remontant jusqu'à l'abonnement Sport).
  */
-final class PerimetreSportExtension implements QueryCollectionExtensionInterface, QueryItemExtensionInterface
+final class PerimetreSepaExtension implements QueryCollectionExtensionInterface, QueryItemExtensionInterface
 {
     /** @var array<class-string, list<string>> Relations à joindre depuis la racine jusqu'à « etablissement ». */
     private const CHAINES = [
-        AbonnementFitness::class => [],
-        PolitiqueAntiImpayes::class => [],
-        MouvementComptableSepa::class => [],
-        EcheanceSepa::class => ['abonnement'],
-        StatutAccesFitness::class => ['abonnement'],
-        PauseAbonnement::class => ['abonnement'],
-        Resiliation::class => ['abonnement'],
-        Reengagement::class => ['ancienAbonnement'],
-        IncidentPrelevement::class => ['abonnement'],
-        RepresentationSepa::class => ['incident', 'abonnement'],
-        RejetPrelevement::class => ['echeance', 'abonnement'],
-        ConfigAccesNocturne::class => ['espaceAcces'],
-        EvenementSOS::class => ['espaceAcces'],
-        AlertePresenceIsolee::class => ['espaceAcces'],
+        ConfigCreancierSepa::class => [],
+        MandatSepa::class => [],
+        RemiseSepa::class => [],
+        LigneRemiseSepa::class => ['remise'],
+        RejetSepa::class => ['ligne', 'remise'],
     ];
 
     public function __construct(
@@ -94,7 +78,7 @@ final class PerimetreSportExtension implements QueryCollectionExtensionInterface
 
         $alias = $queryBuilder->getRootAliases()[0];
         foreach (self::CHAINES[$resourceClass] as $i => $relation) {
-            $nouvelAlias = 'sport_perimetre_' . $i;
+            $nouvelAlias = 'sepa_perimetre_' . $i;
             $queryBuilder->innerJoin($alias . '.' . $relation, $nouvelAlias);
             $alias = $nouvelAlias;
         }
@@ -102,14 +86,14 @@ final class PerimetreSportExtension implements QueryCollectionExtensionInterface
         $queryBuilder
             ->innerJoin(
                 Affectation::class,
-                'aff_perimetre_sport',
+                'aff_perimetre_sepa',
                 Join::WITH,
                 sprintf(
-                    'IDENTITY(aff_perimetre_sport.etablissement) = IDENTITY(%s.etablissement) AND IDENTITY(aff_perimetre_sport.utilisateur) = :perimetre_sport_utilisateur',
+                    'IDENTITY(aff_perimetre_sepa.etablissement) = IDENTITY(%s.etablissement) AND IDENTITY(aff_perimetre_sepa.utilisateur) = :perimetre_sepa_utilisateur',
                     $alias,
                 ),
             )
-            ->setParameter('perimetre_sport_utilisateur', $utilisateur->getId(), 'uuid')
+            ->setParameter('perimetre_sepa_utilisateur', $utilisateur->getId(), 'uuid')
             ->distinct();
     }
 }

@@ -7,6 +7,7 @@ namespace App\Sport\Entity;
 use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
+use App\Sepa\Entity\MandatSepa;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
@@ -44,10 +45,10 @@ class Reengagement
     #[Groups(['reengagement:read'])]
     private ?AbonnementFitness $nouvelAbonnement = null;
 
-    #[ORM\ManyToOne(targetEntity: MandatSepaFitness::class)]
+    #[ORM\ManyToOne(targetEntity: MandatSepa::class)]
     #[ORM\JoinColumn(nullable: false)]
     #[Groups(['reengagement:read'])]
-    private ?MandatSepaFitness $nouveauMandat = null;
+    private ?MandatSepa $nouveauMandat = null;
 
     #[ORM\Column(type: 'date_immutable')]
     #[Groups(['reengagement:read'])]
@@ -87,12 +88,12 @@ class Reengagement
         return $this;
     }
 
-    public function getNouveauMandat(): ?MandatSepaFitness
+    public function getNouveauMandat(): ?MandatSepa
     {
         return $this->nouveauMandat;
     }
 
-    public function setNouveauMandat(?MandatSepaFitness $nouveauMandat): self
+    public function setNouveauMandat(?MandatSepa $nouveauMandat): self
     {
         $this->nouveauMandat = $nouveauMandat;
 

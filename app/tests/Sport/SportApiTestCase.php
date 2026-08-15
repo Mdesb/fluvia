@@ -9,11 +9,13 @@ use ApiPlatform\Symfony\Bundle\Test\Client;
 use App\Acces\DataFixtures\AccesFixtures;
 use App\Acces\Entity\DroitAcces;
 use App\Acces\Entity\EspaceAcces;
+use App\Compta\DataFixtures\ComptaFixtures;
 use App\Crm\DataFixtures\CrmFixtures;
 use App\DataFixtures\SocleFixtures;
 use App\Offre\DataFixtures\OffreFixtures;
 use App\Organisation\Entity\Etablissement;
 use App\Securite\Service\ContexteEtablissement;
+use App\Sepa\DataFixtures\SepaFixtures;
 use App\Sport\DataFixtures\SportFixtures;
 use App\Sport\Entity\AbonnementFitness;
 use App\Sport\Entity\PolitiqueAntiImpayes;
@@ -22,7 +24,8 @@ use Doctrine\ORM\Tools\SchemaTool;
 
 /**
  * Base des tests d'API de la verticale Sport/Fitness : schéma recréé et fixtures socle + offre +
- * vente + accès + CRM + sport rechargées avant chaque test.
+ * compta (ConfigCreancierSepa régie sur A, requis par le recâblage SEPA partagé) + accès + CRM +
+ * SEPA (config créancier) + sport rechargées avant chaque test.
  */
 abstract class SportApiTestCase extends ApiTestCase
 {
@@ -41,7 +44,10 @@ abstract class SportApiTestCase extends ApiTestCase
         $tool->dropSchema($metadata);
         $tool->createSchema($metadata);
 
-        foreach ([SocleFixtures::class, OffreFixtures::class, AccesFixtures::class, CrmFixtures::class, SportFixtures::class] as $classe) {
+        foreach ([
+            SocleFixtures::class, OffreFixtures::class, ComptaFixtures::class, AccesFixtures::class,
+            CrmFixtures::class, SepaFixtures::class, SportFixtures::class,
+        ] as $classe) {
             $fixture = $container->get($classe);
             $fixture->load($em);
         }

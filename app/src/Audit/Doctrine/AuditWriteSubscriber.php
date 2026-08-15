@@ -93,13 +93,17 @@ final class AuditWriteSubscriber
         \App\Piscine\Entity\QualificationEncadrant::class,
         // L7 Back-office & Droits : délégations temporaires de droits (RG-M8-05, §8 plan-backoffice.md).
         \App\Securite\Entity\DelegationDroit::class,
-        // Verticale Sport/Fitness : entités sensibles (abonnement, résiliation, mandat SEPA, politique
-        // anti-impayés, événements SOS) — plan-sport.md §5, T15.
+        // Verticale Sport/Fitness : entités sensibles (abonnement, résiliation, politique anti-impayés,
+        // événements SOS) — plan-sport.md §5, T15.
         \App\Sport\Entity\AbonnementFitness::class,
         \App\Sport\Entity\Resiliation::class,
-        \App\Sport\Entity\MandatSepaFitness::class,
         \App\Sport\Entity\PolitiqueAntiImpayes::class,
         \App\Sport\Entity\EvenementSOS::class,
+        // Module SEPA partagé (plan-sepa.md §2) : mandat, configuration créancier, remise — IBAN
+        // (jetons) exclus de l'instantané (CHAMPS_SENSIBLES ci-dessous, §4 spec).
+        \App\Sepa\Entity\MandatSepa::class,
+        \App\Sepa\Entity\ConfigCreancierSepa::class,
+        \App\Sepa\Entity\RemiseSepa::class,
     ];
 
     /**
@@ -109,6 +113,10 @@ final class AuditWriteSubscriber
      */
     private const CHAMPS_SENSIBLES = [
         Utilisateur::class => ['motDePasse', 'jetonInvitation', 'mfaSecret', 'mfaCodesRecuperation'],
+        // IBAN — garde de sécurité applicative (spec §4, plan-sepa.md §2) : jamais dans l'instantané
+        // d'audit, même si le champ n'a pas de #[Groups] (l'audit ne sérialise pas via le normalizer).
+        \App\Sepa\Entity\MandatSepa::class => ['ibanToken'],
+        \App\Sepa\Entity\ConfigCreancierSepa::class => ['creancierIbanToken'],
     ];
 
     public function __construct(

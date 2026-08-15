@@ -8,13 +8,13 @@ use App\Crm\Entity\Beneficiaire;
 use App\Crm\Entity\Client;
 use App\Offre\Entity\Formule;
 use App\Organisation\Entity\Etablissement;
+use App\Sepa\Entity\MandatSepa;
+use App\Sepa\Enum\StatutMandatSepa;
+use App\Sepa\Port\TokenisationIbanInterface;
 use App\Sport\Entity\AbonnementFitness;
-use App\Sport\Entity\MandatSepaFitness;
 use App\Sport\Entity\StatutAccesFitness;
 use App\Sport\Enum\PeriodiciteAbonnementFitness;
 use App\Sport\Enum\StatutAbonnementFitness;
-use App\Sport\Enum\StatutMandatSepaFitness;
-use App\Sport\Sepa\Port\TokenisationIbanInterface;
 use Doctrine\ORM\EntityManagerInterface;
 
 /**
@@ -58,19 +58,19 @@ final class SouscriptionAbonnementHandler
         $preavis = (int) ($engagement['resiliation'] ?? 30);
         $abonnement->setPreavisResiliationJours($preavis);
 
-        // Ordre d'insertion contraint par le cycle 1:1 requis des deux côtés (`AbonnementFitness.
-        // mandatSepa` ↔ `MandatSepaFitness.abonnementRattache`, cf. commentaire sur ce dernier champ) :
-        // le mandat est d'abord inséré sans référence retour, puis l'abonnement (référence le mandat
-        // déjà existant), puis le mandat est mis à jour avec la référence retour.
+        // `MandatSepa` (module partagé `App\Sepa`) est générique : rattaché au client + établissement
+        // directement, plus de cycle 1:1 à casser côté mandat (contrairement à l'ancien
+        // `MandatSepaFitness.abonnementRattache`) — le mandat est inséré une seule fois.
         $token = $this->tokenisation->tokeniser($ibanClair);
-        $mandat = new MandatSepaFitness();
+        $mandat = new MandatSepa();
         $mandat->setRum($this->genererRum($abonnement))
             ->setIbanToken($token->token)
             ->setIban4Derniers($token->quatreDerniers)
-            ->setTitulaire($titulaireMandat)
+            ->setDebiteurNom($titulaireMandat)
             ->setDateSignature($dateSouscription)
-            ->setStatut(StatutMandatSepaFitness::Actif)
-            ->setPayeur($payeur);
+            ->setStatut(StatutMandatSepa::Actif)
+            ->setClient($payeur)
+            ->setEtablissement($etablissement);
         $this->em->persist($mandat);
         $this->em->flush();
 
@@ -83,9 +83,6 @@ final class SouscriptionAbonnementHandler
         $statutAcces->setAbonnement($abonnement)->setActif(true);
         $this->em->persist($statutAcces);
 
-        $this->em->flush();
-
-        $mandat->setAbonnementRattache($abonnement);
         $this->em->flush();
 
         return $abonnement;

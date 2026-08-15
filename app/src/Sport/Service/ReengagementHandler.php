@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace App\Sport\Service;
 
+use App\Sepa\Entity\MandatSepa;
+use App\Sepa\Enum\StatutMandatSepa;
+use App\Sepa\Port\TokenisationIbanInterface;
 use App\Sport\Entity\AbonnementFitness;
-use App\Sport\Entity\MandatSepaFitness;
 use App\Sport\Entity\Reengagement;
 use App\Sport\Entity\StatutAccesFitness;
 use App\Sport\Enum\StatutAbonnementFitness;
-use App\Sport\Enum\StatutMandatSepaFitness;
-use App\Sport\Sepa\Port\TokenisationIbanInterface;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
@@ -53,17 +53,18 @@ final class ReengagementHandler
             ->setPreavisResiliationJours($ancien->getPreavisResiliationJours());
 
         // Nouveau mandat SEPA **toujours** requis (décision actée), même si l'ancien n'est pas révoqué.
-        // Ordre d'insertion contraint par le cycle 1:1 requis des deux côtés, cf. commentaire sur
-        // `MandatSepaFitness.abonnementRattache` (même contrainte qu'à la souscription).
+        // `MandatSepa` (module partagé `App\Sepa`) est générique : plus de cycle 1:1 à casser côté
+        // mandat (contrairement à l'ancien `MandatSepaFitness.abonnementRattache`).
         $token = $this->tokenisation->tokeniser($ibanClair);
-        $nouveauMandat = new MandatSepaFitness();
+        $nouveauMandat = new MandatSepa();
         $nouveauMandat->setRum($this->genererRum($nouvel))
             ->setIbanToken($token->token)
             ->setIban4Derniers($token->quatreDerniers)
-            ->setTitulaire($titulaireMandat)
+            ->setDebiteurNom($titulaireMandat)
             ->setDateSignature($dateReengagement)
-            ->setStatut(StatutMandatSepaFitness::Actif)
-            ->setPayeur($ancien->getPayeur());
+            ->setStatut(StatutMandatSepa::Actif)
+            ->setClient($ancien->getPayeur())
+            ->setEtablissement($ancien->getEtablissement());
         $this->em->persist($nouveauMandat);
         $this->em->flush();
 
@@ -83,9 +84,6 @@ final class ReengagementHandler
             ->setDateReengagement($dateReengagement);
         $this->em->persist($reengagement);
 
-        $this->em->flush();
-
-        $nouveauMandat->setAbonnementRattache($nouvel);
         $this->em->flush();
 
         return $reengagement;

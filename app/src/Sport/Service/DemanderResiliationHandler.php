@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace App\Sport\Service;
 
 use App\Securite\Entity\Utilisateur;
+use App\Sepa\Enum\StatutMandatSepa;
 use App\Sport\Entity\AbonnementFitness;
 use App\Sport\Entity\Resiliation;
 use App\Sport\Enum\MotifInactiviteAccesFitness;
 use App\Sport\Enum\StatutAbonnementFitness;
-use App\Sport\Enum\StatutMandatSepaFitness;
 use App\Sport\Enum\StatutResiliation;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
@@ -80,7 +80,7 @@ final class DemanderResiliationHandler
         $abonnement->setStatut(StatutAbonnementFitness::Resilie);
 
         $mandat = $abonnement->getMandatSepa();
-        $mandat?->setStatut(StatutMandatSepaFitness::Revoque);
+        $mandat?->setStatut(StatutMandatSepa::Revoque);
 
         $this->em->flush();
 

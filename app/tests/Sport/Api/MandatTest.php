@@ -31,13 +31,13 @@ final class MandatTest extends SportApiTestCase
         self::assertSame('en_preavis', $resiliation->getStatut()->value);
 
         // Avant la date d'effet : le mandat reste actif (RG-SPORT-06, pas avant).
-        $client->request('GET', '/api/mandat_sepa_fitnesses/' . $mandatId, $entete);
+        $client->request('GET', '/api/mandat_sepas/' . $mandatId, $entete);
         self::assertSame('actif', $client->getResponse()->toArray()['statut']);
 
         $handler->executerEffet($resiliation);
         $em->clear();
 
-        $client->request('GET', '/api/mandat_sepa_fitnesses/' . $mandatId, $entete);
+        $client->request('GET', '/api/mandat_sepas/' . $mandatId, $entete);
         self::assertResponseIsSuccessful();
         self::assertSame('revoque', $client->getResponse()->toArray()['statut'], 'Visible révoqué sur l\'écran de gestion des mandats.');
     }
@@ -47,13 +47,13 @@ final class MandatTest extends SportApiTestCase
         [$client, $entete] = $this->adminSurA();
         $mandatId = (string) $this->abonnementDemo()->getMandatSepa()->getId();
 
-        $client->request('GET', '/api/mandat_sepa_fitnesses/' . $mandatId, $entete);
+        $client->request('GET', '/api/mandat_sepas/' . $mandatId, $entete);
         self::assertResponseIsSuccessful();
         $corps = $client->getResponse()->getContent();
         self::assertStringNotContainsString('ibanToken', $corps);
         self::assertStringNotContainsString('FR76', $corps, 'Aucun IBAN en clair (préfixe pays) dans la réponse API.');
 
-        $client->request('GET', '/api/mandat_sepa_fitnesses', $entete);
+        $client->request('GET', '/api/mandat_sepas', $entete);
         self::assertResponseIsSuccessful();
         $corpsCollection = $client->getResponse()->getContent();
         self::assertStringNotContainsString('ibanToken', $corpsCollection);

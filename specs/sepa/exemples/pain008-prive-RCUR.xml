@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ÉCHANTILLON ANONYMISÉ — variante PRIVÉ (aucune donnée réelle).
+  Repère de format uniquement. Particularité privé : Cdtr = l'entité elle-même,
+  PAS de UltmtCdtr. AmdmntInd absent. SeqTp RCUR (récurrent).
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.008.001.02" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <CstmrDrctDbtInitn>
+    <GrpHdr>
+      <MsgId>EXEMPLE-PRIVE-SDD-0001</MsgId>
+      <CreDtTm>2026-01-05T14:00:00.000</CreDtTm>
+      <NbOfTxs>2</NbOfTxs>
+      <CtrlSum>87.40</CtrlSum>
+      <InitgPty>
+        <Nm>CLUB EXEMPLE FITNESS</Nm>
+      </InitgPty>
+    </GrpHdr>
+    <PmtInf>
+      <PmtInfId>PAYINF-RCUR</PmtInfId>
+      <PmtMtd>DD</PmtMtd>
+      <BtchBookg>false</BtchBookg>
+      <NbOfTxs>2</NbOfTxs>
+      <CtrlSum>87.40</CtrlSum>
+      <PmtTpInf>
+        <SvcLvl><Cd>SEPA</Cd></SvcLvl>
+        <LclInstrm><Cd>CORE</Cd></LclInstrm>
+        <SeqTp>RCUR</SeqTp>
+      </PmtTpInf>
+      <ReqdColltnDt>2026-01-08</ReqdColltnDt>
+      <Cdtr>
+        <Nm>CLUB EXEMPLE FITNESS</Nm>
+      </Cdtr>
+      <CdtrAcct>
+        <Id><IBAN>FR7600000000000000000000399</IBAN></Id>
+      </CdtrAcct>
+      <CdtrAgt>
+        <FinInstnId><BIC>CMCIFRPPXXX</BIC></FinInstnId>
+      </CdtrAgt>
+      <ChrgBr>SLEV</ChrgBr>
+      <CdtrSchmeId>
+        <Id>
+          <PrvtId>
+            <Othr>
+              <Id>FR00ZZZ111111</Id>
+              <SchmeNm><Prtry>SEPA</Prtry></SchmeNm>
+            </Othr>
+          </PrvtId>
+        </Id>
+      </CdtrSchmeId>
+      <DrctDbtTxInf>
+        <PmtId>
+          <InstrId>1000001</InstrId>
+          <EndToEndId>1000001</EndToEndId>
+        </PmtId>
+        <InstdAmt Ccy="EUR">40.30</InstdAmt>
+        <DrctDbtTx>
+          <MndtRltdInf>
+            <MndtId>1000001</MndtId>
+            <DtOfSgntr>2025-12-01</DtOfSgntr>
+          </MndtRltdInf>
+        </DrctDbtTx>
+        <DbtrAgt>
+          <FinInstnId><BIC>CCBPFRPPXXX</BIC></FinInstnId>
+        </DbtrAgt>
+        <Dbtr><Nm>Prenom-Exemple Trois</Nm></Dbtr>
+        <DbtrAcct>
+          <Id><IBAN>FR7600000000000000000000502</IBAN></Id>
+        </DbtrAcct>
+        <RmtInf><Ustrd>Facture EX250000101</Ustrd></RmtInf>
+      </DrctDbtTxInf>
+      <DrctDbtTxInf>
+        <PmtId>
+          <InstrId>1000002</InstrId>
+          <EndToEndId>1000002</EndToEndId>
+        </PmtId>
+        <InstdAmt Ccy="EUR">47.10</InstdAmt>
+        <DrctDbtTx>
+          <MndtRltdInf>
+            <MndtId>1000002</MndtId>
+            <DtOfSgntr>2025-12-01</DtOfSgntr>
+          </MndtRltdInf>
+        </DrctDbtTx>
+        <DbtrAgt>
+          <FinInstnId><BIC>AGRIFRPPXXX</BIC></FinInstnId>
+        </DbtrAgt>
+        <Dbtr><Nm>Prenom-Exemple Quatre</Nm></Dbtr>
+        <DbtrAcct>
+          <Id><IBAN>FR7600000000000000000000603</IBAN></Id>
+        </DbtrAcct>
+        <RmtInf><Ustrd>Facture EX250000102</Ustrd></RmtInf>
+      </DrctDbtTxInf>
+    </PmtInf>
+  </CstmrDrctDbtInitn>
+</Document>

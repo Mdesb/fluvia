@@ -7,6 +7,7 @@ namespace App\Sport\Entity;
 use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
+use App\Sepa\Entity\RemiseSepa;
 use App\Sport\Enum\StatutRejetPrelevement;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;

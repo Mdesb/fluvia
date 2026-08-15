@@ -12,6 +12,7 @@ use App\Crm\Entity\Client;
 use App\Offre\Entity\Formule;
 use App\Organisation\Entity\Etablissement;
 use App\Securite\Entity\Utilisateur;
+use App\Sepa\Entity\MandatSepa;
 use App\Sport\Enum\PeriodiciteAbonnementFitness;
 use App\Sport\Enum\StatutAbonnementFitness;
 use App\Sport\State\DemanderPauseProcessor;
@@ -132,10 +133,10 @@ class AbonnementFitness
     #[Groups(['abonnement:read'])]
     private int $preavisResiliationJours = 30;
 
-    #[ORM\OneToOne(targetEntity: MandatSepaFitness::class)]
+    #[ORM\OneToOne(targetEntity: MandatSepa::class)]
     #[ORM\JoinColumn(name: 'mandat_sepa_id', nullable: false)]
     #[Groups(['abonnement:read'])]
-    private ?MandatSepaFitness $mandatSepa = null;
+    private ?MandatSepa $mandatSepa = null;
 
     #[ORM\ManyToOne(targetEntity: Etablissement::class)]
     #[ORM\JoinColumn(nullable: false)]
@@ -266,12 +267,12 @@ class AbonnementFitness
         return $this;
     }
 
-    public function getMandatSepa(): ?MandatSepaFitness
+    public function getMandatSepa(): ?MandatSepa
     {
         return $this->mandatSepa;
     }
 
-    public function setMandatSepa(?MandatSepaFitness $mandatSepa): self
+    public function setMandatSepa(?MandatSepa $mandatSepa): self
     {
         $this->mandatSepa = $mandatSepa;
 
