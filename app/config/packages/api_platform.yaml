@@ -16,6 +16,7 @@ api_platform:
             - '%kernel.project_dir%/src/Acces/Entity'
             - '%kernel.project_dir%/src/Acces/ApiResource'
             - '%kernel.project_dir%/src/Compta/Entity'
+            - '%kernel.project_dir%/src/Crm/Entity'
     defaults:
         stateless: true
         cache_headers:

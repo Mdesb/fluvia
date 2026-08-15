@@ -7,6 +7,7 @@ namespace App\Vente\Service;
 use App\Vente\Entity\Paiement;
 use App\Vente\Entity\Vente;
 use App\Vente\Enum\StatutTPE;
+use App\Vente\Port\PorteMonnaieVirtuelInterface;
 use App\Vente\Port\ReferentielReglementInterface;
 use App\Vente\Tpe\TerminalPaiementInterface;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
@@ -28,6 +29,10 @@ final class PaiementHandler
         private readonly ReferentielReglementInterface $referentiel,
         private readonly TerminalPaiementInterface $tpe,
         private readonly PanierCalculateur $calculateur,
+        // Frontière M4 (RG-M4-03, CA-8, §2.3 plan-crm.md) : nullable pour préserver le comportement
+        // d'origine (moyen `pmv` traité comme un code de règlement ordinaire) si aucun port n'est
+        // câblé — ne casse aucun test M2 existant qui n'exerce pas le moyen `pmv` en détail.
+        private readonly ?PorteMonnaieVirtuelInterface $pmv = null,
     ) {
     }
 
@@ -74,6 +79,21 @@ final class PaiementHandler
                 throw new UnprocessableEntityHttpException('Aucun rendu de monnaie possible sur ce moyen (RG-M2-05).');
             }
             $rendu = $montantCentimes - $resteCentimes;
+        }
+
+        // PMV comme moyen de paiement en caisse (RG-M4-03, CA-8, frontière M4 §2.3 plan-crm.md) :
+        // débit atomique avant tout enregistrement de règlement ; un refus (solde insuffisant, PMV
+        // expiré/inexistant) bloque le règlement sans créer de Paiement (un paiement partiel PMV +
+        // complément par un autre moyen reste possible : c'est l'appelant qui scinde le montant).
+        if ($code === 'pmv' && $this->pmv !== null) {
+            $clientId = $vente->getClient();
+            if ($clientId === null) {
+                throw new UnprocessableEntityHttpException('PMV indisponible : aucun client rattaché à la vente (RG-M4-03).');
+            }
+            $resultatPmv = $this->pmv->debiter($clientId, $this->calculateur->decimal($montantCentimes), $vente->getId());
+            if (!$resultatPmv->reussi) {
+                throw new UnprocessableEntityHttpException($resultatPmv->motifRefus ?? 'Débit PMV refusé (RG-M4-03).');
+            }
         }
 
         $paiement = new Paiement();

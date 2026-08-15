@@ -30,10 +30,22 @@ services:
     # Référentiel des moyens de paiement & acte de régie (frontière M6, RG-M2-02) : câblé au
     # référentiel réel M6 (L4, §3 du plan-compta) — remplace le stub L2, aucune modification de M2.
     App\Vente\Port\ReferentielReglementInterface: '@App\Compta\Adapter\ReferentielReglementDoctrineAdapter'
-    # Rattachement/création client (frontière M4, US-L2-05).
+    # Rattachement/création client (frontière M4, US-L2-05) : `App\Crm\Adapter\ClientM4Adapter` (L5)
+    # est livré et testé isolément, mais **non câblé ici** — le remplacer casserait des tests M2
+    # existants qui documentent explicitement le contrat du stub (recherche toujours positive,
+    # ex. `App\Tests\Vente\Api\PanierTest::testCa7RattachementClientOuAnonyme`) ; les faire évoluer
+    # relève d'une coordination M2/M4 hors périmètre de ce lot (priorité « zéro régression M2 »).
     App\Vente\Port\ClientM4Interface: '@App\Vente\Port\ClientM4Stub'
     # Appairage/invalidation des supports d'accès (frontière module Accès L3, US-L2-08/09).
     App\Vente\Port\AppairageAccesInterface: '@App\Vente\Port\AppairageAccesStub'
+    # Porte-monnaie virtuel (frontière M4, RG-M4-03, §2.1 plan-crm.md) : câblé à l'adaptateur réel
+    # (débit atomique) — remplace le stub L2. Modification prudente de PaiementHandler/
+    # ContrePassationHandler (T9) : comportement par défaut inchangé si aucun port n'est fourni.
+    App\Vente\Port\PorteMonnaieVirtuelInterface: '@App\Crm\Adapter\PorteMonnaieVirtuelAdapter'
+    # Recherche client par n° de support/carte (frontière M4, CA-1, §2.3 plan-crm.md).
+    App\Vente\Port\RechercheSupportInterface: '@App\Vente\Adapter\RechercheSupportParSupport'
+    # Historique d'achats par client (frontière M4, fiche 360°, §2.4 plan-crm.md).
+    App\Vente\Port\HistoriqueVenteInterface: '@App\Vente\Adapter\HistoriqueVenteParClient'
     # Connecteur TPE (Ingenico/Nayax/PAX) — mock en L2 (US-L2-07).
     App\Vente\Tpe\TerminalPaiementInterface: '@App\Vente\Tpe\TpeMock'
     # Signataire NF525 enfichable — chaînage sha256 + HMAC placeholder (US-L2-11, procédé à valider).

@@ -6,12 +6,14 @@ namespace App\Vente\Service;
 
 use App\Securite\Entity\Utilisateur;
 use App\Vente\Entity\Avoir;
+use App\Vente\Entity\Paiement;
 use App\Vente\Entity\Vente;
 use App\Vente\Enum\StatutVente;
 use App\Vente\Enum\TypeOperationScellee;
 use App\Vente\Nf525\OperationAScellerDto;
 use App\Vente\Nf525\ScellementHandler;
 use App\Vente\Port\AppairageAccesInterface;
+use App\Vente\Port\PorteMonnaieVirtuelInterface;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
@@ -28,6 +30,9 @@ final class ContrePassationHandler
         private readonly ScellementHandler $scellement,
         private readonly AppairageAccesInterface $appairage,
         private readonly PanierCalculateur $calc,
+        // Frontière M4 (RG-M4-03, CA-9, §2.3 plan-crm.md) : nullable, même précaution que
+        // `PaiementHandler` — ne casse aucun test M2 existant si aucun port n'est câblé.
+        private readonly ?PorteMonnaieVirtuelInterface $pmv = null,
     ) {
     }
 
@@ -44,6 +49,7 @@ final class ContrePassationHandler
             $avoir->setSupportInvalide(true);
         }
 
+        $this->recrediterPmv($vente);
         $vente->setStatut(StatutVente::Annulee);
 
         return $avoir;
@@ -59,9 +65,32 @@ final class ContrePassationHandler
         }
 
         $avoir = $this->creerAvoir($vente, $montantAvoir, $motif, $auteur, 'remboursement');
+        // Recrédit PMV (RG-M4-03) : le cahier ne détaille pas la ventilation d'un remboursement
+        // partiel entre moyens — ⚠ HYPOTHÈSE, simplification retenue : recrédit intégral de la part
+        // PMV de la vente (comme pour une annulation complète), quel que soit le montant partiel
+        // demandé ; à affiner si un besoin de ventilation proportionnelle par moyen se confirme.
+        $this->recrediterPmv($vente);
         $vente->setStatut(StatutVente::AvoirEmis);
 
         return $avoir;
+    }
+
+    /** Recrédite intégralement la part PMV d'une vente annulée/remboursée (RG-M4-03, CA-9). */
+    private function recrediterPmv(Vente $vente): void
+    {
+        if ($this->pmv === null) {
+            return;
+        }
+        $clientId = $vente->getClient();
+        if ($clientId === null) {
+            return;
+        }
+        foreach ($vente->getPaiements() as $paiement) {
+            \assert($paiement instanceof Paiement);
+            if ($paiement->getMoyenCode() === 'pmv') {
+                $this->pmv->crediter($clientId, $paiement->getMontant(), $vente->getId(), 'remboursement_vente');
+            }
+        }
     }
 
     private function creerAvoir(Vente $vente, string $montant, string $motif, Utilisateur $auteur, string $nature): Avoir

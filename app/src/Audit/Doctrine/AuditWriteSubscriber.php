@@ -70,6 +70,17 @@ final class AuditWriteSubscriber
         \App\Compta\Entity\ExportComptable::class,
         \App\Compta\Entity\DeclarationEReporting::class,
         \App\Compta\Entity\VenteImpayeeRegie::class,
+        // Module M4 CRM noyau (L5) : entités sensibles (données personnelles, PMV, RGPD, fusion).
+        \App\Crm\Entity\Client::class,
+        \App\Crm\Entity\Famille::class,
+        \App\Crm\Entity\Beneficiaire::class,
+        \App\Crm\Entity\PorteMonnaieVirtuel::class,
+        \App\Crm\Entity\MouvementPmv::class,
+        \App\Crm\Entity\ParametrePmvEtablissement::class,
+        \App\Crm\Entity\Consentement::class,
+        \App\Crm\Entity\DemandeRGPD::class,
+        \App\Crm\Entity\RegleConservation::class,
+        \App\Crm\Entity\JournalFusion::class,
     ];
 
     public function __construct(

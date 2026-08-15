@@ -87,6 +87,15 @@ class Utilisateur implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column(nullable: true)]
     private ?\DateTimeImmutable $verrouilleJusqua = null;
 
+    /**
+     * Réf. logique `App\Crm\Entity\Client` (M4) — lie un compte back-office/espace client (M3, non
+     * spécifié dans ce dépôt) à sa fiche CRM, pour les permissions `crm.*_soi` (⚠ HYPOTHÈSE, §6/§10.8
+     * plan-crm.md, à confirmer avec M8). Pas de FK dure : M4 peut anonymiser sans casser ce lien.
+     */
+    #[ORM\Column(type: UuidType::NAME, nullable: true)]
+    #[Groups(['utilisateur:read', 'utilisateur:write'])]
+    private ?Uuid $clientLie = null;
+
     public function __construct()
     {
         $this->id = Uuid::v4();
@@ -203,6 +212,18 @@ class Utilisateur implements UserInterface, PasswordAuthenticatedUserInterface
     public function estVerrouille(): bool
     {
         return $this->verrouilleJusqua !== null && $this->verrouilleJusqua > new \DateTimeImmutable();
+    }
+
+    public function getClientLie(): ?Uuid
+    {
+        return $this->clientLie;
+    }
+
+    public function setClientLie(?Uuid $clientLie): self
+    {
+        $this->clientLie = $clientLie;
+
+        return $this;
     }
 
     // --- UserInterface / PasswordAuthenticatedUserInterface ---
