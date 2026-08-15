@@ -17,6 +17,8 @@ api_platform:
             - '%kernel.project_dir%/src/Acces/ApiResource'
             - '%kernel.project_dir%/src/Compta/Entity'
             - '%kernel.project_dir%/src/Crm/Entity'
+            - '%kernel.project_dir%/src/Piscine/Entity'
+            - '%kernel.project_dir%/src/Piscine/ApiResource'
     defaults:
         stateless: true
         cache_headers:

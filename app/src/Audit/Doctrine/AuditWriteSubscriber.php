@@ -81,6 +81,15 @@ final class AuditWriteSubscriber
         \App\Crm\Entity\DemandeRGPD::class,
         \App\Crm\Entity\RegleConservation::class,
         \App\Crm\Entity\JournalFusion::class,
+        // Verticale Piscine (L6) : entités sensibles (POSS, bassins, créneaux, casiers/caution,
+        // forçage, qualifications MNS/BNSSA) — plan-piscine.md §5.
+        \App\Piscine\Entity\Poss::class,
+        \App\Piscine\Entity\Bassin::class,
+        \App\Piscine\Entity\CreneauBassin::class,
+        \App\Piscine\Entity\Casier::class,
+        \App\Piscine\Entity\CautionCasier::class,
+        \App\Piscine\Entity\ForcageCasier::class,
+        \App\Piscine\Entity\QualificationEncadrant::class,
     ];
 
     public function __construct(
