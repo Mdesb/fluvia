@@ -25,6 +25,10 @@ doit rester **invisible** pour l'utilisateur. Toute complexité exposée à l'é
 1. **API-first** — chaque fonctionnalité est une ressource/opération API documentée (OpenAPI générée).
 2. **Multi-entités natif** — tout objet métier est rattaché à la hiérarchie
    **Groupe › Région › Établissement › Espace** ; cloisonnement des données par entité.
+   **Multi-tenant mutualisé** (décision 15/08) : **une base partagée**, isolation **logique** par la
+   hiérarchie (filtres de requête + droits), testée. L'option **base/instance dédiée par client**
+   (isolation physique) reste possible **sans réécriture** — même code, `DATABASE_URL`/instance
+   différente + outillage de provisioning — pour les clients qui l'exigent (souveraineté, gros comptes, DSP).
 3. **Droits fins** — permission = couple `module × action` ; l'UI **masque** ce qui n'est pas autorisé
    (pas seulement désactivé). Un utilisateur peut avoir des rôles différents par établissement.
 4. **Aucune logique pays/métier codée en dur** — couche de configuration ; les spécificités
