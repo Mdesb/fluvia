@@ -16,6 +16,8 @@ security:
             security: false
 
         # Connexion JWT : POST /auth { "email": ..., "motDePasse": ... } -> jeton (US-L0-02, CA-2).
+        # Connexion à 2 étapes si MFA actif (RG-M8-06, §2.3 plan-backoffice.md) : le success_handler
+        # décore lexik (jeton complet si MFA inactif, jeton pré-auth « mfaEnAttente » sinon).
         auth:
             pattern: ^/auth$
             stateless: true
@@ -25,7 +27,7 @@ security:
                 check_path: /auth
                 username_path: email
                 password_path: motDePasse
-                success_handler: lexik_jwt_authentication.handler.authentication_success
+                success_handler: App\Securite\Security\GestionnaireSuccesConnexionMfa
                 failure_handler: lexik_jwt_authentication.handler.authentication_failure
 
         # API protégée par jeton JWT.
@@ -38,11 +40,19 @@ security:
 
     access_control:
         - { path: ^/health, roles: PUBLIC_ACCESS }
+        # AVANT la règle générique ^/auth (PUBLIC_ACCESS) : /auth/mfa-verifier exige le jeton
+        # pré-authentifié (§2.3 plan-backoffice.md, CA-5).
+        - { path: ^/auth/mfa-verifier, roles: IS_AUTHENTICATED_FULLY }
         - { path: ^/auth, roles: PUBLIC_ACCESS }
         - { path: ^/docs, roles: PUBLIC_ACCESS }
         - { path: ^/index\.(json|jsonld|html)$, roles: PUBLIC_ACCESS }
         - { path: ^/$, roles: PUBLIC_ACCESS }
         - { path: ^/me, roles: IS_AUTHENTICATED_FULLY }
+        # Cycle de vie / MFA / mot de passe oublié (RG-M8-01, US-L7-03, US-L0-03 différée).
+        - { path: ^/utilisateurs/activation, roles: PUBLIC_ACCESS }
+        - { path: ^/mot-de-passe/oublie, roles: PUBLIC_ACCESS }
+        - { path: ^/mot-de-passe/reinitialiser, roles: PUBLIC_ACCESS }
+        - { path: ^/audit/export, roles: IS_AUTHENTICATED_FULLY }
 
 when@test:
     security:

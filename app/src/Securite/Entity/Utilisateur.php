@@ -9,6 +9,13 @@ use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
+use App\Securite\Enum\StatutUtilisateur;
+use App\Securite\State\MfaActivationProcessor;
+use App\Securite\State\MfaConfirmationProcessor;
+use App\Securite\State\MfaDesactivationProcessor;
+use App\Securite\State\MfaReinitialisationProcessor;
+use App\Securite\State\ReinvitationProcessor;
+use App\Securite\State\SuspensionUtilisateurProcessor;
 use App\Securite\State\UtilisateurProcessor;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
@@ -37,6 +44,65 @@ use Symfony\Component\Validator\Constraints as Assert;
         new Patch(
             security: "is_granted('PERM', 'securite.gerer')",
             processor: UtilisateurProcessor::class,
+        ),
+        // Cycle de vie (RG-M8-01, US-L7-03) : suspension à effet immédiat (garde dernier admin,
+        // tokenVersion++), réactivation, ré-invitation (nouveau jeton).
+        new Post(
+            uriTemplate: '/utilisateurs/{id}/suspendre',
+            read: true,
+            input: false,
+            security: "is_granted('PERM', 'securite.gerer')",
+            processor: SuspensionUtilisateurProcessor::class,
+            normalizationContext: ['groups' => ['utilisateur:read']],
+        ),
+        new Post(
+            uriTemplate: '/utilisateurs/{id}/reactiver',
+            read: true,
+            input: false,
+            security: "is_granted('PERM', 'securite.gerer')",
+            processor: SuspensionUtilisateurProcessor::class,
+            normalizationContext: ['groups' => ['utilisateur:read']],
+        ),
+        new Post(
+            uriTemplate: '/utilisateurs/{id}/reinviter',
+            read: true,
+            input: false,
+            security: "is_granted('PERM', 'securite.gerer')",
+            processor: ReinvitationProcessor::class,
+            normalizationContext: ['groups' => ['utilisateur:read']],
+        ),
+        // MFA (RG-M8-06, US-L7-03) : activation en 2 temps (self), désactivation (self, garde
+        // rôle à privilèges), réinitialisation par un administrateur (perte d'appareil).
+        new Post(
+            uriTemplate: '/utilisateurs/{id}/mfa/activer',
+            read: true,
+            input: false,
+            security: "is_granted('IS_AUTHENTICATED_FULLY') and object == user",
+            processor: MfaActivationProcessor::class,
+        ),
+        new Post(
+            uriTemplate: '/utilisateurs/{id}/mfa/confirmer',
+            read: true,
+            input: false,
+            security: "is_granted('IS_AUTHENTICATED_FULLY') and object == user",
+            processor: MfaConfirmationProcessor::class,
+            normalizationContext: ['groups' => ['utilisateur:read']],
+        ),
+        new Post(
+            uriTemplate: '/utilisateurs/{id}/mfa/desactiver',
+            read: true,
+            input: false,
+            security: "is_granted('IS_AUTHENTICATED_FULLY') and object == user",
+            processor: MfaDesactivationProcessor::class,
+            normalizationContext: ['groups' => ['utilisateur:read']],
+        ),
+        new Post(
+            uriTemplate: '/utilisateurs/{id}/mfa/reinitialiser',
+            read: true,
+            input: false,
+            security: "is_granted('PERM', 'securite.gerer')",
+            processor: MfaReinitialisationProcessor::class,
+            normalizationContext: ['groups' => ['utilisateur:read']],
         ),
     ],
     normalizationContext: ['groups' => ['utilisateur:read']],
@@ -72,9 +138,45 @@ class Utilisateur implements UserInterface, PasswordAuthenticatedUserInterface
     #[Groups(['utilisateur:read', 'utilisateur:write', 'me:read'])]
     private string $nom = '';
 
-    #[ORM\Column]
-    #[Groups(['utilisateur:read', 'utilisateur:write', 'me:read'])]
-    private bool $actif = true;
+    /**
+     * Cycle de vie du compte (RG-M8-01). Remplace l'ancien booléen persisté `actif` — voir
+     * `isActif()`/`setActif()` ci-dessous pour la compatibilité ascendante (fixtures socle/CRM).
+     */
+    #[ORM\Column(length: 12, enumType: StatutUtilisateur::class)]
+    #[Groups(['utilisateur:read', 'me:read'])]
+    private StatutUtilisateur $statut = StatutUtilisateur::Invite;
+
+    /** Jeton d'invitation haché (sha256), consommé à l'activation (CA-1/CA-2). Jamais exposé. */
+    #[ORM\Column(length: 255, nullable: true, unique: true)]
+    private ?string $jetonInvitation = null;
+
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $jetonInvitationExpire = null;
+
+    /** Mis à jour à chaque connexion réussie (2ᵉ facteur inclus), RG-M8-01. */
+    #[ORM\Column(nullable: true)]
+    #[Groups(['utilisateur:read'])]
+    private ?\DateTimeImmutable $dernierAcces = null;
+
+    #[ORM\Column(options: ['default' => false])]
+    #[Groups(['utilisateur:read', 'me:read'])]
+    private bool $mfaActif = false;
+
+    /** Secret TOTP chiffré au repos (libsodium) — jamais exposé en lecture API. */
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $mfaSecret = null;
+
+    /** @var list<string>|null Codes de récupération, hachés (sha256), usage unique chacun. */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $mfaCodesRecuperation = null;
+
+    /**
+     * Invalidation de session/JWT (§2.2 plan) : incrémenté à la suspension et à la
+     * réinitialisation de mot de passe ; vérifié à chaque requête authentifiée contre le claim
+     * du JWT.
+     */
+    #[ORM\Column(options: ['default' => 0])]
+    private int $tokenVersion = 0;
 
     /** @var list<string> Rôles de sécurité Symfony (techniques). */
     #[ORM\Column]
@@ -159,14 +261,118 @@ class Utilisateur implements UserInterface, PasswordAuthenticatedUserInterface
         return $this;
     }
 
+    public function getStatut(): StatutUtilisateur
+    {
+        return $this->statut;
+    }
+
+    public function setStatut(StatutUtilisateur $statut): self
+    {
+        $this->statut = $statut;
+
+        return $this;
+    }
+
+    /**
+     * Compatibilité ascendante (§2.1 plan-backoffice.md) : `isActif()`/`setActif()` restent
+     * disponibles pour ne rien casser côté `VerificateurUtilisateur`, `MeController`, fixtures
+     * socle/CRM déjà existantes. Non persisté — dérivé de `statut`.
+     */
+    #[Groups(['utilisateur:read', 'utilisateur:write', 'me:read'])]
     public function isActif(): bool
     {
-        return $this->actif;
+        return $this->statut === StatutUtilisateur::Actif;
     }
 
     public function setActif(bool $actif): self
     {
-        $this->actif = $actif;
+        $this->statut = $actif ? StatutUtilisateur::Actif : StatutUtilisateur::Suspendu;
+
+        return $this;
+    }
+
+    public function getJetonInvitation(): ?string
+    {
+        return $this->jetonInvitation;
+    }
+
+    public function setJetonInvitation(?string $jetonInvitation): self
+    {
+        $this->jetonInvitation = $jetonInvitation;
+
+        return $this;
+    }
+
+    public function getJetonInvitationExpire(): ?\DateTimeImmutable
+    {
+        return $this->jetonInvitationExpire;
+    }
+
+    public function setJetonInvitationExpire(?\DateTimeImmutable $jetonInvitationExpire): self
+    {
+        $this->jetonInvitationExpire = $jetonInvitationExpire;
+
+        return $this;
+    }
+
+    public function getDernierAcces(): ?\DateTimeImmutable
+    {
+        return $this->dernierAcces;
+    }
+
+    public function setDernierAcces(?\DateTimeImmutable $dernierAcces): self
+    {
+        $this->dernierAcces = $dernierAcces;
+
+        return $this;
+    }
+
+    public function isMfaActif(): bool
+    {
+        return $this->mfaActif;
+    }
+
+    public function setMfaActif(bool $mfaActif): self
+    {
+        $this->mfaActif = $mfaActif;
+
+        return $this;
+    }
+
+    public function getMfaSecret(): ?string
+    {
+        return $this->mfaSecret;
+    }
+
+    public function setMfaSecret(?string $mfaSecret): self
+    {
+        $this->mfaSecret = $mfaSecret;
+
+        return $this;
+    }
+
+    /** @return list<string>|null */
+    public function getMfaCodesRecuperation(): ?array
+    {
+        return $this->mfaCodesRecuperation;
+    }
+
+    /** @param list<string>|null $mfaCodesRecuperation */
+    public function setMfaCodesRecuperation(?array $mfaCodesRecuperation): self
+    {
+        $this->mfaCodesRecuperation = $mfaCodesRecuperation;
+
+        return $this;
+    }
+
+    public function getTokenVersion(): int
+    {
+        return $this->tokenVersion;
+    }
+
+    public function setTokenVersion(int $tokenVersion): self
+    {
+        $this->tokenVersion = $tokenVersion;
 
         return $this;
     }

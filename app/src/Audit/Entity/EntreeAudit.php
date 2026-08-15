@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Audit\Entity;
 
+use ApiPlatform\Doctrine\Orm\Filter\DateFilter;
+use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
+use ApiPlatform\Metadata\ApiFilter;
 use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
@@ -15,6 +18,11 @@ use Symfony\Component\Uid\Uuid;
 /**
  * Journal d'audit des actions sensibles (RG-SOCLE-07). Append-only :
  * l'API n'expose QUE des opérations de lecture (pas de POST/PATCH/DELETE) — CA-6.
+ *
+ * RG-M8-05 (US-L7-09) : porte les valeurs avant/après du changement (`valeurAvant`/`valeurApres`),
+ * filtrable par auteur/action/cibleType/établissement/période — CA-14, CA-15. Accessible à
+ * `securite.gerer` (gestion complète) ou `securite.lire` (consultation seule, ex. Responsable
+ * sécurité).
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'audit_entree')]
@@ -22,11 +30,15 @@ use Symfony\Component\Uid\Uuid;
 #[ApiResource(
     shortName: 'EntreeAudit',
     operations: [
-        new GetCollection(security: "is_granted('PERM', 'securite.gerer')"),
-        new Get(security: "is_granted('PERM', 'securite.gerer')"),
+        new GetCollection(security: "is_granted('PERM', 'securite.gerer') or is_granted('PERM', 'securite.lire')"),
+        new Get(security: "is_granted('PERM', 'securite.gerer') or is_granted('PERM', 'securite.lire')"),
     ],
     normalizationContext: ['groups' => ['audit:read']],
 )]
+#[ApiFilter(SearchFilter::class, properties: [
+    'auteur' => 'partial', 'action' => 'exact', 'cibleType' => 'exact', 'etablissement' => 'exact',
+])]
+#[ApiFilter(DateFilter::class, properties: ['dateHeure'])]
 class EntreeAudit
 {
     #[ORM\Id]
@@ -58,6 +70,16 @@ class EntreeAudit
     #[ORM\Column(type: UuidType::NAME, nullable: true)]
     #[Groups(['audit:read'])]
     private ?Uuid $etablissement = null;
+
+    /** Snapshot des champs scalaires avant modification (RG-M8-05). `null` en création. */
+    #[ORM\Column(type: 'json', nullable: true)]
+    #[Groups(['audit:read'])]
+    private ?array $valeurAvant = null;
+
+    /** Snapshot des champs scalaires après modification (RG-M8-05). `null` en suppression. */
+    #[ORM\Column(type: 'json', nullable: true)]
+    #[Groups(['audit:read'])]
+    private ?array $valeurApres = null;
 
     public function __construct()
     {
@@ -131,6 +153,34 @@ class EntreeAudit
     public function setEtablissement(?Uuid $etablissement): self
     {
         $this->etablissement = $etablissement;
+
+        return $this;
+    }
+
+    /** @return array<string, mixed>|null */
+    public function getValeurAvant(): ?array
+    {
+        return $this->valeurAvant;
+    }
+
+    /** @param array<string, mixed>|null $valeurAvant */
+    public function setValeurAvant(?array $valeurAvant): self
+    {
+        $this->valeurAvant = $valeurAvant;
+
+        return $this;
+    }
+
+    /** @return array<string, mixed>|null */
+    public function getValeurApres(): ?array
+    {
+        return $this->valeurApres;
+    }
+
+    /** @param array<string, mixed>|null $valeurApres */
+    public function setValeurApres(?array $valeurApres): self
+    {
+        $this->valeurApres = $valeurApres;
 
         return $this;
     }

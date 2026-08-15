@@ -5,13 +5,16 @@ declare(strict_types=1);
 namespace App\Securite\Service;
 
 use App\Securite\Entity\Affectation;
+use App\Securite\Entity\DelegationDroit;
 use App\Securite\Entity\Utilisateur;
+use App\Securite\Enum\StatutDelegation;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Uid\Uuid;
 
 /**
  * Calcule les droits effectifs d'un utilisateur (RG-SOCLE-04) : union des permissions des
- * affectations sur l'établissement actif. Supporte les jokers (`*.lire`, `organisation.*`).
+ * affectations, ET des délégations actives non expirées (§2.5 plan-backoffice.md, US-L7-07), sur
+ * l'établissement actif. Supporte les jokers (`*.lire`, `organisation.*`).
  *
  * NB « conflit → plus restrictive » : le modèle ne connaît que des permissions accordées
  * (pas de refus explicite), l'union est donc additive ; aucune permission ne peut en révoquer
@@ -32,6 +35,7 @@ final class CalculateurDroits
     public function codesEffectifs(Utilisateur $utilisateur, ?Uuid $etablissementActif): array
     {
         $criteres = ['utilisateur' => $utilisateur];
+        $etablissement = null;
         if ($etablissementActif !== null) {
             $etablissement = $this->em->getRepository(\App\Organisation\Entity\Etablissement::class)->find($etablissementActif);
             if ($etablissement === null) {
@@ -46,6 +50,32 @@ final class CalculateurDroits
         $codes = [];
         foreach ($affectations as $affectation) {
             $role = $affectation->getRole();
+            if ($role === null) {
+                continue;
+            }
+            foreach ($role->getPermissions() as $permission) {
+                $codes[$permission->getCode()] = true;
+            }
+        }
+
+        // Délégations actives (§2.5) : même symétrie que les affectations — si aucun établissement
+        // actif n'est fourni, les délégations actives de tous les établissements sont incluses.
+        $criteresDelegation = ['beneficiaire' => $utilisateur, 'statut' => StatutDelegation::Active];
+        if ($etablissement !== null) {
+            $criteresDelegation['etablissement'] = $etablissement;
+        }
+
+        /** @var list<DelegationDroit> $delegations */
+        $delegations = $this->em->getRepository(DelegationDroit::class)->findBy($criteresDelegation);
+
+        $maintenant = new \DateTimeImmutable();
+        foreach ($delegations as $delegation) {
+            // Double garde défensive (statut déjà mis à jour par la commande planifiée en cas
+            // normal) contre un retard d'exécution de `securite:delegations:expirer`.
+            if (!$delegation->estActiveMaintenant($maintenant)) {
+                continue;
+            }
+            $role = $delegation->getRole();
             if ($role === null) {
                 continue;
             }

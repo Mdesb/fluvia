@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Audit\Doctrine;
 
 use App\Audit\Entity\EntreeAudit;
+use App\Audit\Service\InstantaneEntiteBuilder;
 use App\Organisation\Entity\Etablissement;
 use App\Securite\Entity\Utilisateur;
 use Doctrine\Bundle\DoctrineBundle\Attribute\AsDoctrineListener;
@@ -90,10 +91,22 @@ final class AuditWriteSubscriber
         \App\Piscine\Entity\CautionCasier::class,
         \App\Piscine\Entity\ForcageCasier::class,
         \App\Piscine\Entity\QualificationEncadrant::class,
+        // L7 Back-office & Droits : délégations temporaires de droits (RG-M8-05, §8 plan-backoffice.md).
+        \App\Securite\Entity\DelegationDroit::class,
+    ];
+
+    /**
+     * Champs sensibles JAMAIS exposés en clair dans l'audit avant/après (RG-M8-05, §2.10/§1.6 plan).
+     *
+     * @var array<class-string, list<string>>
+     */
+    private const CHAMPS_SENSIBLES = [
+        Utilisateur::class => ['motDePasse', 'jetonInvitation', 'mfaSecret', 'mfaCodesRecuperation'],
     ];
 
     public function __construct(
         private readonly Security $security,
+        private readonly InstantaneEntiteBuilder $instantane,
     ) {
     }
 
@@ -105,13 +118,13 @@ final class AuditWriteSubscriber
 
         $entrees = [];
         foreach ($uow->getScheduledEntityInsertions() as $entity) {
-            $entrees[] = $this->creerEntree($entity, 'creation', $auteur);
+            $entrees[] = $this->creerEntree($entity, 'creation', $auteur, null);
         }
         foreach ($uow->getScheduledEntityUpdates() as $entity) {
-            $entrees[] = $this->creerEntree($entity, 'modification', $auteur);
+            $entrees[] = $this->creerEntree($entity, 'modification', $auteur, $uow->getEntityChangeSet($entity));
         }
         foreach ($uow->getScheduledEntityDeletions() as $entity) {
-            $entrees[] = $this->creerEntree($entity, 'suppression', $auteur);
+            $entrees[] = $this->creerEntree($entity, 'suppression', $auteur, null);
         }
 
         $entrees = array_filter($entrees);
@@ -126,7 +139,8 @@ final class AuditWriteSubscriber
         }
     }
 
-    private function creerEntree(object $entity, string $action, ?string $auteur): ?EntreeAudit
+    /** @param array<string, array{0: mixed, 1: mixed}>|null $changeSet */
+    private function creerEntree(object $entity, string $action, ?string $auteur, ?array $changeSet): ?EntreeAudit
     {
         if ($entity instanceof EntreeAudit) {
             return null;
@@ -135,12 +149,27 @@ final class AuditWriteSubscriber
             return null;
         }
 
+        $champsExclus = self::CHAMPS_SENSIBLES[$entity::class] ?? [];
+
         $entree = new EntreeAudit();
         $entree->setAction($action);
         $entree->setCibleType($entity::class);
         $entree->setCibleId($this->cibleId($entity));
         $entree->setEtablissement($this->etablissement($entity));
         $entree->setAuteur($auteur);
+
+        // RG-M8-05 (CA-14) : valeurs avant/après (champs scalaires uniquement, sensibles exclus).
+        if ($action === 'creation') {
+            $entree->setValeurAvant(null);
+            $entree->setValeurApres($this->instantane->capturer($entity, $champsExclus));
+        } elseif ($action === 'suppression') {
+            $entree->setValeurAvant($this->instantane->capturer($entity, $champsExclus));
+            $entree->setValeurApres(null);
+        } elseif ($changeSet !== null) {
+            [$avant, $apres] = $this->instantane->depuisChangeSet($changeSet, $champsExclus);
+            $entree->setValeurAvant($avant);
+            $entree->setValeurApres($apres);
+        }
 
         return $entree;
     }
