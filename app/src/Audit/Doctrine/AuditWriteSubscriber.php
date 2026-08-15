@@ -109,6 +109,9 @@ final class AuditWriteSubscriber
         // (déclenchent une coupure d'accès).
         \App\Recouvrement\Entity\PolitiqueRecouvrement::class,
         \App\Recouvrement\Entity\IncidentImpaye::class,
+        // Profil de fonctionnalités par établissement (App\Fonctionnalite) : traçabilité de
+        // l'activation/désactivation/paramétrage des capacités par établissement.
+        \App\Fonctionnalite\Entity\FonctionnaliteEtablissement::class,
     ];
 
     /**

@@ -24,6 +24,8 @@ api_platform:
             - '%kernel.project_dir%/src/Sepa/Entity'
             - '%kernel.project_dir%/src/Recouvrement/Entity'
             - '%kernel.project_dir%/src/Recouvrement/ApiResource'
+            - '%kernel.project_dir%/src/Fonctionnalite/Entity'
+            - '%kernel.project_dir%/src/Fonctionnalite/ApiResource'
     defaults:
         stateless: true
         cache_headers:
