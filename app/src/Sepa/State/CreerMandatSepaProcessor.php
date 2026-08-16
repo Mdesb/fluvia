@@ -11,6 +11,7 @@ use App\Organisation\Entity\Etablissement;
 use App\Sepa\Entity\MandatSepa;
 use App\Sepa\Enum\StatutMandatSepa;
 use App\Sepa\Port\TokenisationIbanInterface;
+use App\Sepa\Service\ChiffreurIbanInterface;
 use App\Securite\Service\ContexteEtablissement;
 use App\Vente\Service\LecteurCorps;
 use Doctrine\ORM\EntityManagerInterface;
@@ -21,8 +22,9 @@ use Symfony\Component\Uid\Uuid;
  * POST /sepa/mandats (plan §2/§6). Corps :
  *   { "client": iri|uuid, "etablissement"?: iri|uuid, "iban": string, "bicDebiteur": string,
  *     "debiteurNom": string, "dateSignature"?: "AAAA-MM-JJ" }
- * L'IBAN en clair transite uniquement ici (jamais mappé Doctrine, tokenisé avant persistance, §4 spec).
- * `etablissement` par défaut = établissement actif (en-tête `X-Etablissement`).
+ * L'IBAN en clair transite uniquement ici (jamais mappé Doctrine) : tokenisé (non réversible,
+ * `ibanToken`) **et** chiffré de façon réversible (`ibanChiffre`, coffre IBAN `ChiffreurIbanInterface`)
+ * avant persistance (§4 spec). `etablissement` par défaut = établissement actif (en-tête `X-Etablissement`).
  *
  * @implements ProcessorInterface<mixed, MandatSepa>
  */
@@ -32,6 +34,7 @@ final class CreerMandatSepaProcessor implements ProcessorInterface
         private readonly EntityManagerInterface $em,
         private readonly LecteurCorps $lecteur,
         private readonly TokenisationIbanInterface $tokenisation,
+        private readonly ChiffreurIbanInterface $chiffreur,
         private readonly ContexteEtablissement $contexte,
     ) {
     }
@@ -64,11 +67,13 @@ final class CreerMandatSepaProcessor implements ProcessorInterface
             : new \DateTimeImmutable('today');
 
         $token = $this->tokenisation->tokeniser($iban);
+        $ibanChiffre = $this->chiffreur->chiffrer($iban);
 
         $mandat = new MandatSepa();
         $mandat->setRum($this->genererRum())
             ->setIbanToken($token->token)
             ->setIban4Derniers($token->quatreDerniers)
+            ->setIbanChiffre($ibanChiffre)
             ->setBicDebiteur($bic)
             ->setDebiteurNom($nom)
             ->setDateSignature($dateSignature)

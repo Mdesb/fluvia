@@ -60,6 +60,7 @@ final class SouscriptionTest extends SportApiTestCase
         self::assertSame('actif', $abonnement['mandatSepa']['statut']);
         self::assertSame('0189', $abonnement['mandatSepa']['iban4Derniers']);
         self::assertArrayNotHasKey('ibanToken', $abonnement['mandatSepa']);
+        self::assertArrayNotHasKey('ibanChiffre', $abonnement['mandatSepa']);
 
         $mandatIri = $abonnement['mandatSepa']['@id'];
         $client->request('GET', $mandatIri, $entete);
@@ -68,6 +69,7 @@ final class SouscriptionTest extends SportApiTestCase
         self::assertSame('actif', $mandat['statut']);
         self::assertSame('0189', $mandat['iban4Derniers']);
         self::assertArrayNotHasKey('ibanToken', $mandat);
+        self::assertArrayNotHasKey('ibanChiffre', $mandat);
         self::assertArrayNotHasKey('iban', $mandat);
 
         // Échéancier mensuel généré jusqu'à la fin d'engagement (12 échéances).
@@ -87,10 +89,16 @@ final class SouscriptionTest extends SportApiTestCase
         self::assertNotNull($statutAcces);
         self::assertTrue($statutAcces->isActif());
 
-        // IBAN jamais persisté en clair.
+        // IBAN jamais persisté en clair (jeton HMAC), mais bien chiffré de façon réversible (coffre
+        // IBAN) — nécessaire pour que le pain.008 porte le vrai IBAN lors d'une remise réelle.
         $mandatEntite = $em->getRepository(MandatSepa::class)->find($mandat['id']);
         self::assertNotNull($mandatEntite);
         self::assertStringNotContainsString('FR7630006000011234567890189', $mandatEntite->getIbanToken());
+        self::assertNotNull($mandatEntite->getIbanChiffre());
+        self::assertStringNotContainsString('FR7630006000011234567890189', (string) $mandatEntite->getIbanChiffre());
+        /** @var \App\Sepa\Service\ChiffreurIbanInterface $chiffreur */
+        $chiffreur = static::getContainer()->get(\App\Sepa\Service\ChiffreurIbanInterface::class);
+        self::assertSame('FR7630006000011234567890189', $chiffreur->dechiffrer((string) $mandatEntite->getIbanChiffre()));
     }
 
     public function testDroitAccesActifDesLeRattachementSynchrone(): void

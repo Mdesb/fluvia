@@ -53,6 +53,27 @@ Un seul format (pain.008.001.02), **une seule différence structurante = le bloc
 - Non-régression Sport (le recâblage ne casse aucun test Sport) — vérifier PAR LOTS (OOM).
 
 ## 9. Risques / hors périmètre
-- Remise bancaire réelle (EBICS/SFTP), coffre IBAN PCI-DSS, PSP CB : hors périmètre (derrière les ports).
+- Remise bancaire réelle (EBICS/SFTP), coffre IBAN **certifié PCI-DSS**, PSP CB : hors périmètre (derrière les ports). Un coffre IBAN réversible applicatif existe (§10) mais n'a **pas** de certification PCI-DSS — insuffisant pour une remise bancaire réelle de production.
 - Parser pain.002/CAMT.054 réel : **non fait** (pas de fichier retour client) — port prêt.
 - Validation XSD stricte pain.008.001.02 : viser la conformité structurelle aux échantillons ; une validation XSD complète peut être ajoutée si le schéma officiel est fourni.
+
+## 10. Divergence — Coffre IBAN réversible (post-lot initial)
+Le lot initial ne portait, dans le XML pain.008, qu'un **IBAN placeholder** (préfixe pays + zéros + 4
+derniers chiffres), le jeton `TokenisationIbanInterface` (HMAC) n'étant pas réversible. Ceci a été
+complété par un **coffre IBAN réversible** applicatif :
+- **`App\Sepa\Service\ChiffreurIbanInterface`** + impl `ChiffreurIban` (libsodium `crypto_secretbox`,
+  même patron que `App\Securite\Crypto\ChiffreurSecret` pour le secret MFA). Clé 32 octets base64, env
+  `SEPA_IBAN_KEY` — **secret/vault en production**, jamais committée en clair.
+- Nouvelle colonne texte **non sérialisée** (`#[Groups]` absent, comme `ibanToken`) : `ibanChiffre` sur
+  `MandatSepa`, `creancierIbanChiffre` sur `ConfigCreancierSepa`. L'IBAN en clair transite toujours
+  uniquement en entrée de processor/handler (`CreerMandatSepaProcessor`, `ConfigCreancierSepaProcessor`,
+  et côté Sport `SouscriptionAbonnementHandler`/`ReengagementHandler`) : il y est **tokenisé** (non
+  réversible, affichage/recherche des 4 derniers) **et** chiffré (réversible) avant persistance.
+- **`Pain008Generator`** déchiffre désormais `ibanChiffre`/`creancierIbanChiffre` **côté serveur**, au
+  moment strict de construire le XML de remise, pour porter le **véritable IBAN** — l'IBAN placeholder
+  reste un repli si `ibanChiffre` est absent (donnée non migrée). §9 ci-dessus reste valable : ce n'est
+  **pas** un coffre PCI-DSS certifié.
+- Garde inchangée : l'IBAN (chiffré ou clair) n'apparaît **jamais** dans une réponse API JSON
+  (`MandatSepa`/`ConfigCreancierSepa`), testé négativement. Seul le fichier pain.008 téléchargé
+  (`GET /sepa/remises/{id}/pain008`) porte désormais le véritable IBAN — c'est un fichier de remise
+  bancaire, pas une ressource API JSON.

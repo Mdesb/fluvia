@@ -11,6 +11,7 @@ use App\Organisation\Entity\Etablissement;
 use App\Sepa\Entity\MandatSepa;
 use App\Sepa\Enum\StatutMandatSepa;
 use App\Sepa\Port\TokenisationIbanInterface;
+use App\Sepa\Service\ChiffreurIbanInterface;
 use App\Sport\Entity\AbonnementFitness;
 use App\Sport\Entity\StatutAccesFitness;
 use App\Sport\Enum\PeriodiciteAbonnementFitness;
@@ -27,6 +28,7 @@ final class SouscriptionAbonnementHandler
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly TokenisationIbanInterface $tokenisation,
+        private readonly ChiffreurIbanInterface $chiffreur,
         private readonly GenerateurEcheancierHandler $echeancier,
     ) {
     }
@@ -66,6 +68,7 @@ final class SouscriptionAbonnementHandler
         $mandat->setRum($this->genererRum($abonnement))
             ->setIbanToken($token->token)
             ->setIban4Derniers($token->quatreDerniers)
+            ->setIbanChiffre($this->chiffreur->chiffrer($ibanClair))
             ->setDebiteurNom($titulaireMandat)
             ->setDateSignature($dateSouscription)
             ->setStatut(StatutMandatSepa::Actif)

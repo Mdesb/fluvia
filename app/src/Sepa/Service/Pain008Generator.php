@@ -19,15 +19,22 @@ use App\Sepa\Enum\VarianteCreancierSepa;
  * (somme en centimes convertie en décimal 2 chiffres), au niveau `GrpHdr` (toute la remise) et de
  * chaque `PmtInf` (son sous-groupe de `SeqTp`).
  *
- * ⚠ IBAN : ni l'IBAN créancier ni les IBAN débiteurs ne sont stockés en clair (garde §4 de la spec,
- * jetons non réversibles) — les IBAN portés par le XML généré sont des **placeholders structurellement
- * valides** (préfixe pays + zéros + 4 derniers chiffres connus), à l'image des échantillons de
- * référence eux-mêmes (dont les IBAN sont déjà fictifs, zero-paddés). Une remise bancaire réelle
- * nécessiterait un coffre IBAN PCI-DSS complet — hors périmètre (§9 du plan).
+ * ⚠ IBAN : ni l'IBAN créancier ni les IBAN débiteurs ne sont stockés en clair en base — ils sont
+ * tokenisés (jeton HMAC non réversible, affichage/recherche) **et** chiffrés de façon réversible
+ * (coffre IBAN `ChiffreurIbanInterface`, libsodium). Ce générateur **déchiffre côté serveur** les
+ * IBAN créancier/débiteurs au moment strict de construire le XML de remise, afin qu'il porte le
+ * **véritable IBAN** — jamais renvoyé en réponse API (garde §4 de la spec, testée). Si un IBAN chiffré
+ * est absent (donnée non migrée), un placeholder structurellement valide (préfixe pays + zéros + 4
+ * derniers chiffres connus) est utilisé en repli, afin de ne jamais faire échouer une génération.
  */
 final class Pain008Generator
 {
     private const NAMESPACE_URI = 'urn:iso:std:iso:20022:tech:xsd:pain.008.001.02';
+
+    public function __construct(
+        private readonly ChiffreurIbanInterface $chiffreur,
+    ) {
+    }
 
     public function generer(RemiseSepa $remise, ConfigCreancierSepa $config): string
     {
@@ -125,7 +132,7 @@ final class Pain008Generator
         $cdtr->appendChild($document->createElement('Nm', $nomCdtr));
         $pmtInf->appendChild($cdtr);
 
-        $pmtInf->appendChild($this->construireCompteIban($document, 'CdtrAcct', $this->ibanPlaceholder($config->getCreancierIban4Derniers())));
+        $pmtInf->appendChild($this->construireCompteIban($document, 'CdtrAcct', $this->resoudreIban($config->getCreancierIbanChiffre(), $config->getCreancierIban4Derniers())));
 
         $cdtrAgt = $document->createElement('CdtrAgt');
         $finInstnId = $document->createElement('FinInstnId');
@@ -204,7 +211,7 @@ final class Pain008Generator
         $dbtr->appendChild($document->createElement('Nm', $mandat->getDebiteurNom()));
         $txInf->appendChild($dbtr);
 
-        $txInf->appendChild($this->construireCompteIban($document, 'DbtrAcct', $this->ibanPlaceholder($mandat->getIban4Derniers())));
+        $txInf->appendChild($this->construireCompteIban($document, 'DbtrAcct', $this->resoudreIban($mandat->getIbanChiffre(), $mandat->getIban4Derniers())));
 
         $rmtInf = $document->createElement('RmtInf');
         $rmtInf->appendChild($document->createElement('Ustrd', $ligne->getLibelle()));
@@ -223,7 +230,25 @@ final class Pain008Generator
         return $compte;
     }
 
-    /** IBAN placeholder structurellement valide (27 caractères, FR) — jamais l'IBAN réel (§4 spec). */
+    /**
+     * Déchiffre le véritable IBAN via le coffre (`ChiffreurIbanInterface`) — au moment strict de
+     * construire le XML de remise, jamais renvoyé en dehors de ce générateur. Replie sur un
+     * placeholder structurellement valide si l'IBAN chiffré est absent (donnée non migrée).
+     */
+    private function resoudreIban(?string $ibanChiffre, string $quatreDerniers): string
+    {
+        if ($ibanChiffre === null || $ibanChiffre === '') {
+            return $this->ibanPlaceholder($quatreDerniers);
+        }
+
+        try {
+            return $this->chiffreur->dechiffrer($ibanChiffre);
+        } catch (\RuntimeException) {
+            return $this->ibanPlaceholder($quatreDerniers);
+        }
+    }
+
+    /** IBAN placeholder structurellement valide (27 caractères, FR) — repli si l'IBAN chiffré est absent. */
     private function ibanPlaceholder(string $quatreDerniers): string
     {
         $derniers = str_pad(substr($quatreDerniers, -4), 4, '0', STR_PAD_LEFT);

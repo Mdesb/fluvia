@@ -17,6 +17,7 @@ use App\Sepa\Enum\StatutMandatSepa;
 use App\Sepa\Enum\VarianteCreancierSepa;
 use App\Sepa\Port\EcheanceSepaSource;
 use App\Sepa\Port\TokenisationIbanInterface;
+use App\Sepa\Service\ChiffreurIbanInterface;
 use App\Sepa\Service\GenerationRemiseHandler;
 use App\Securite\Entity\Permission;
 use App\Securite\Entity\Role;
@@ -39,6 +40,7 @@ final class SepaFixtures extends Fixture implements DependentFixtureInterface
 
     public function __construct(
         private readonly TokenisationIbanInterface $tokenisation,
+        private readonly ChiffreurIbanInterface $chiffreur,
         private readonly GenerationRemiseHandler $generationRemiseHandler,
     ) {
     }
@@ -83,7 +85,8 @@ final class SepaFixtures extends Fixture implements DependentFixtureInterface
         }
 
         // --- Configuration créancier RÉGIE (établissement A, ProfilExploitant régie directe) ---
-        $tokenIbanA = $this->tokenisation->tokeniser('FR7600000000000000000000097');
+        $ibanConfigA = 'FR7600000000000000000000097';
+        $tokenIbanA = $this->tokenisation->tokeniser($ibanConfigA);
         $configRegie = new ConfigCreancierSepa();
         $configRegie->setEtablissement($etabA)
             ->setVariante(VarianteCreancierSepa::Regie)
@@ -91,6 +94,7 @@ final class SepaFixtures extends Fixture implements DependentFixtureInterface
             ->setCreancierNom('REGIE PISCINE A')
             ->setCreancierIbanToken($tokenIbanA->token)
             ->setCreancierIban4Derniers($tokenIbanA->quatreDerniers)
+            ->setCreancierIbanChiffre($this->chiffreur->chiffrer($ibanConfigA))
             ->setCreancierBic('BDFEFRPPCCT')
             ->setCollectiviteNom('COLLECTIVITE DEMO / VILLE-MODELE')
             ->setUltimateCreancierNom('REGIE PISCINE A')
@@ -98,7 +102,8 @@ final class SepaFixtures extends Fixture implements DependentFixtureInterface
         $manager->persist($configRegie);
 
         // --- Configuration créancier PRIVÉ (établissement B — variante surchargée, pas de ProfilExploitant) ---
-        $tokenIbanB = $this->tokenisation->tokeniser('FR7600000000000000000000399');
+        $ibanConfigB = 'FR7600000000000000000000399';
+        $tokenIbanB = $this->tokenisation->tokeniser($ibanConfigB);
         $configPrive = new ConfigCreancierSepa();
         $configPrive->setEtablissement($etabB)
             ->setVariante(VarianteCreancierSepa::Prive)
@@ -106,15 +111,17 @@ final class SepaFixtures extends Fixture implements DependentFixtureInterface
             ->setCreancierNom('PATINOIRE B PRIVEE')
             ->setCreancierIbanToken($tokenIbanB->token)
             ->setCreancierIban4Derniers($tokenIbanB->quatreDerniers)
+            ->setCreancierIbanChiffre($this->chiffreur->chiffrer($ibanConfigB))
             ->setCreancierBic('CMCIFRPPXXX');
         $manager->persist($configPrive);
 
-        // --- Mandats SEPA de démonstration (IBAN tokenisé, données fictives) — 1 par variante ---
+        // --- Mandats SEPA de démonstration (IBAN tokenisé + chiffré, données fictives) — 1 par variante ---
         $tokenMandatRegie = $this->tokenisation->tokeniser(self::REGIE_IBAN_DEMO);
         $mandatRegie = new MandatSepa();
         $mandatRegie->setRum('RUM-DEMO-REGIE-0001')
             ->setIbanToken($tokenMandatRegie->token)
             ->setIban4Derniers($tokenMandatRegie->quatreDerniers)
+            ->setIbanChiffre($this->chiffreur->chiffrer(self::REGIE_IBAN_DEMO))
             ->setBicDebiteur('AGRIFRPPXXX')
             ->setDebiteurNom('Usager Démo Régie')
             ->setDateSignature(new \DateTimeImmutable('-1 month'))
@@ -128,6 +135,7 @@ final class SepaFixtures extends Fixture implements DependentFixtureInterface
         $mandatPrive->setRum('RUM-DEMO-PRIVE-0001')
             ->setIbanToken($tokenMandatPrive->token)
             ->setIban4Derniers($tokenMandatPrive->quatreDerniers)
+            ->setIbanChiffre($this->chiffreur->chiffrer(self::PRIVE_IBAN_DEMO))
             ->setBicDebiteur('CCBPFRPPXXX')
             ->setDebiteurNom('Usager Démo Privé')
             ->setDateSignature(new \DateTimeImmutable('-1 month'))

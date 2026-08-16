@@ -23,10 +23,13 @@ use Symfony\Component\Uid\Uuid;
  * réutilisable par toute verticale : Sport, Piscine…). Rattaché à un `Client` (M4) et à un
  * établissement (cloisonnement multi-entités, `App\Sepa\Doctrine\PerimetreSepaExtension`).
  *
- * ⚠ IBAN — garde de sécurité applicative (spec §4, plan §2) : `ibanToken` n'est **jamais** porté par un
- * groupe de sérialisation (aucun `#[Groups]` dessus), donc jamais exposé en API quel que soit le
- * contexte demandé. Seul `iban4Derniers` est lisible. L'IBAN en clair ne transite qu'en entrée d'un
- * processor, tokenisé avant persistance (`TokenisationIbanInterface`) — jamais mappé Doctrine.
+ * ⚠ IBAN — garde de sécurité applicative (spec §4, plan §2) : `ibanToken` et `ibanChiffre` ne sont
+ * **jamais** portés par un groupe de sérialisation (aucun `#[Groups]` dessus), donc jamais exposés en
+ * API quel que soit le contexte demandé. Seul `iban4Derniers` est lisible. L'IBAN en clair ne transite
+ * qu'en entrée d'un processor : tokenisé (`TokenisationIbanInterface`, non réversible, affichage/
+ * recherche) **et** chiffré (`ChiffreurIbanInterface`, réversible, libsodium) avant persistance —
+ * jamais mappé Doctrine en clair. Le déchiffrement (`ibanChiffre`) n'a lieu que côté serveur, au
+ * moment strict où `Pain008Generator` construit la remise pain.008.
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'sepa_mandat')]
@@ -67,6 +70,14 @@ class MandatSepa
     #[ORM\Column(length: 4)]
     #[Groups(['mandat_sepa:read', 'abonnement:read'])]
     private string $iban4Derniers = '';
+
+    /**
+     * Coffre IBAN réversible (`ChiffreurIbanInterface`, libsodium) — nonce+cipher base64. Volontairement
+     * **sans** `#[Groups]`, comme `ibanToken` : ne doit jamais apparaître dans une réponse API. Ne
+     * déchiffré que côté serveur par `Pain008Generator` au moment strict de générer la remise.
+     */
+    #[ORM\Column(type: 'text', nullable: true)]
+    private ?string $ibanChiffre = null;
 
     #[ORM\Column(length: 11)]
     #[Groups(['mandat_sepa:read'])]
@@ -146,6 +157,18 @@ class MandatSepa
     public function setIban4Derniers(string $iban4Derniers): self
     {
         $this->iban4Derniers = $iban4Derniers;
+
+        return $this;
+    }
+
+    public function getIbanChiffre(): ?string
+    {
+        return $this->ibanChiffre;
+    }
+
+    public function setIbanChiffre(?string $ibanChiffre): self
+    {
+        $this->ibanChiffre = $ibanChiffre;
 
         return $this;
     }

@@ -119,6 +119,9 @@ services:
     App\Sepa\Adapter\TokenisationIbanHmacAdapter:
         arguments:
             $cle: '%env(SEPA_IBAN_HMAC_KEY)%'
+    # Coffre IBAN réversible (libsodium crypto_secretbox) — permet à `Pain008Generator` de reconstruire
+    # le véritable IBAN pour la remise pain.008 (⚠ clé `SEPA_IBAN_KEY` : secret/vault en production).
+    App\Sepa\Service\ChiffreurIbanInterface: '@App\Sepa\Service\ChiffreurIban'
 
     # --- Module de recouvrement partagé App\Recouvrement (refactor extraction depuis App\Sport,
     # réutilisable par toute activité à abonnement : Sport, Piscine en régie, futures) : ports & adaptateurs ---

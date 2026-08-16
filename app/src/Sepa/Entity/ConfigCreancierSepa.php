@@ -24,10 +24,13 @@ use Symfony\Component\Validator\Constraints as Assert;
  * (régie) est injecté ou non (privé). Dérivée par défaut du `ProfilExploitant.type` de l'établissement
  * (`ConfigCreancierSepaProcessor`), surchargeable explicitement à la création/modification.
  *
- * ⚠ IBAN — garde de sécurité applicative (spec §4, plan §2) : `creancierIbanToken` n'est **jamais**
- * porté par un groupe de sérialisation, donc jamais exposé en API. Seul `creancierIban4Derniers` est
- * lisible. L'IBAN en clair ne transite qu'en entrée du processor (`creancierIbanClair`, transitoire,
- * jamais mappé Doctrine), tokenisé avant persistance (`TokenisationIbanInterface`).
+ * ⚠ IBAN — garde de sécurité applicative (spec §4, plan §2) : `creancierIbanToken` et
+ * `creancierIbanChiffre` ne sont **jamais** portés par un groupe de sérialisation, donc jamais exposés
+ * en API. Seul `creancierIban4Derniers` est lisible. L'IBAN en clair ne transite qu'en entrée du
+ * processor (`creancierIbanClair`, transitoire, jamais mappé Doctrine) : tokenisé (non réversible,
+ * affichage/recherche) **et** chiffré (réversible, `ChiffreurIbanInterface`, libsodium) avant
+ * persistance. Le déchiffrement n'a lieu que côté serveur, au moment strict où `Pain008Generator`
+ * construit la remise pain.008.
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'sepa_config_creancier')]
@@ -79,6 +82,13 @@ class ConfigCreancierSepa
     #[ORM\Column(length: 4, options: ['default' => ''])]
     #[Groups(['config_creancier:read'])]
     private string $creancierIban4Derniers = '';
+
+    /**
+     * Coffre IBAN réversible (`ChiffreurIbanInterface`, libsodium) — nonce+cipher base64. Volontairement
+     * **sans** `#[Groups]`, comme `creancierIbanToken` : ne doit jamais apparaître dans une réponse API.
+     */
+    #[ORM\Column(type: 'text', nullable: true)]
+    private ?string $creancierIbanChiffre = null;
 
     #[ORM\Column(length: 11)]
     #[Assert\NotBlank]
@@ -187,6 +197,18 @@ class ConfigCreancierSepa
     public function setCreancierIban4Derniers(string $creancierIban4Derniers): self
     {
         $this->creancierIban4Derniers = $creancierIban4Derniers;
+
+        return $this;
+    }
+
+    public function getCreancierIbanChiffre(): ?string
+    {
+        return $this->creancierIbanChiffre;
+    }
+
+    public function setCreancierIbanChiffre(?string $creancierIbanChiffre): self
+    {
+        $this->creancierIbanChiffre = $creancierIbanChiffre;
 
         return $this;
     }

@@ -51,12 +51,14 @@ final class MandatTest extends SportApiTestCase
         self::assertResponseIsSuccessful();
         $corps = $client->getResponse()->getContent();
         self::assertStringNotContainsString('ibanToken', $corps);
+        self::assertStringNotContainsString('ibanChiffre', $corps);
         self::assertStringNotContainsString('FR76', $corps, 'Aucun IBAN en clair (préfixe pays) dans la réponse API.');
 
         $client->request('GET', '/api/mandat_sepas', $entete);
         self::assertResponseIsSuccessful();
         $corpsCollection = $client->getResponse()->getContent();
         self::assertStringNotContainsString('ibanToken', $corpsCollection);
+        self::assertStringNotContainsString('ibanChiffre', $corpsCollection);
     }
 
     public function testIbanJamaisPersisteEnClairEnBase(): void

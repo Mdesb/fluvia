@@ -7,6 +7,7 @@ namespace App\Sport\Service;
 use App\Sepa\Entity\MandatSepa;
 use App\Sepa\Enum\StatutMandatSepa;
 use App\Sepa\Port\TokenisationIbanInterface;
+use App\Sepa\Service\ChiffreurIbanInterface;
 use App\Sport\Entity\AbonnementFitness;
 use App\Sport\Entity\Reengagement;
 use App\Sport\Entity\StatutAccesFitness;
@@ -24,6 +25,7 @@ final class ReengagementHandler
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly TokenisationIbanInterface $tokenisation,
+        private readonly ChiffreurIbanInterface $chiffreur,
         private readonly GenerateurEcheancierHandler $echeancier,
     ) {
     }
@@ -60,6 +62,7 @@ final class ReengagementHandler
         $nouveauMandat->setRum($this->genererRum($nouvel))
             ->setIbanToken($token->token)
             ->setIban4Derniers($token->quatreDerniers)
+            ->setIbanChiffre($this->chiffreur->chiffrer($ibanClair))
             ->setDebiteurNom($titulaireMandat)
             ->setDateSignature($dateReengagement)
             ->setStatut(StatutMandatSepa::Actif)

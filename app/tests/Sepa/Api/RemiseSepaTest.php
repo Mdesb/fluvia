@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Sepa\Api;
 
+use App\Sepa\DataFixtures\SepaFixtures;
 use App\Sepa\Entity\LigneRemiseSepa;
 use App\Sepa\Entity\MandatSepa;
 use App\Sepa\Entity\RemiseSepa;
@@ -52,8 +53,12 @@ final class RemiseSepaTest extends SepaApiTestCase
         self::assertStringContainsString('<AmdmntInd>false</AmdmntInd>', $xml);
         self::assertStringContainsString('urn:iso:std:iso:20022:tech:xsd:pain.008.001.02', $xml);
 
-        // IBAN réel jamais présent dans le fichier téléchargé (placeholder uniquement, garde §4 spec).
-        self::assertStringNotContainsString('FR7630006000011234567890189', $xml);
+        // Coffre IBAN réversible (§4 spec) : le fichier de remise transmis à la banque porte le
+        // véritable IBAN (fictif, données de démonstration), déchiffré côté serveur — plus un
+        // placeholder. Reste néanmoins absent de toute réponse API JSON (MandatSepa/ConfigCreancierSepa,
+        // cf. `MandatSepaTest`/`ConfigCreancierSepaTest`) : seul ce fichier XML de remise le porte.
+        self::assertStringContainsString(SepaFixtures::REGIE_IBAN_DEMO, $xml, 'IBAN débiteur réel (fictif) du mandat démo.');
+        self::assertStringContainsString('FR7600000000000000000000097', $xml, 'IBAN créancier réel (fictif) de la config démo.');
     }
 
     public function testTelechargementPain008RefuseHorsPerimetreEtablissement(): void

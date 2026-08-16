@@ -10,6 +10,7 @@ use App\Sepa\Entity\MandatSepa;
 use App\Sepa\Entity\RemiseSepa;
 use App\Sepa\Enum\SeqTpSepa;
 use App\Sepa\Enum\VarianteCreancierSepa;
+use App\Sepa\Service\ChiffreurIban;
 use App\Sepa\Service\Pain008Generator;
 use PHPUnit\Framework\TestCase;
 
@@ -17,10 +18,25 @@ use PHPUnit\Framework\TestCase;
  * `Pain008Generator` (plan §1/§3/§8) : conformité structurelle aux échantillons de référence anonymisés
  * (`specs/sepa/exemples/pain008-{regie,prive}-*.xml`) — seule différence structurante = le bloc
  * créancier bi-régime (`UltmtCdtr`/`AmdmntInd`). `NbOfTxs`/`CtrlSum` exacts, un `PmtInf` par `SeqTp`.
+ *
+ * Coffre IBAN réversible (`ChiffreurIbanInterface`) : le générateur déchiffre côté serveur pour porter
+ * le **véritable IBAN** (fictif) dans le XML — repli sur un placeholder si l'IBAN chiffré est absent.
  */
 final class Pain008GeneratorTest extends TestCase
 {
     private const NS = 'urn:iso:std:iso:20022:tech:xsd:pain.008.001.02';
+
+    private ChiffreurIban $chiffreur;
+
+    protected function setUp(): void
+    {
+        $this->chiffreur = new ChiffreurIban('cle-test-pain008-chiffrement-iban');
+    }
+
+    private function generator(): Pain008Generator
+    {
+        return new Pain008Generator($this->chiffreur);
+    }
 
     public function testVarianteRegieContientUltmtCdtrEtAmdmntIndCdtrEstLaCollectivite(): void
     {
@@ -30,7 +46,7 @@ final class Pain008GeneratorTest extends TestCase
             $this->ligne($this->mandat('0201'), SeqTpSepa::Frst, 6300, 'EX00000000000002'),
         ], 'EXEMPLE-REGIE-SDD-0001');
 
-        $xml = (new Pain008Generator())->generer($remise, $config);
+        $xml = $this->generator()->generer($remise, $config);
         $xpath = $this->xpath($xml);
 
         self::assertSame('urn:iso:std:iso:20022:tech:xsd:pain.008.001.02', $this->racine($xml)->namespaceURI);
@@ -53,7 +69,7 @@ final class Pain008GeneratorTest extends TestCase
             $this->ligne($this->mandat('0603'), SeqTpSepa::Rcur, 4710, '1000002'),
         ], 'EXEMPLE-PRIVE-SDD-0001');
 
-        $xml = (new Pain008Generator())->generer($remise, $config);
+        $xml = $this->generator()->generer($remise, $config);
         $xpath = $this->xpath($xml);
 
         self::assertSame('87.40', $this->valeur($xpath, '//p:GrpHdr/p:CtrlSum'));
@@ -72,7 +88,7 @@ final class Pain008GeneratorTest extends TestCase
             $this->ligne($this->mandat('0333'), SeqTpSepa::Rcur, 3000, 'E3'),
         ], 'MIXTE-0001');
 
-        $xml = (new Pain008Generator())->generer($remise, $config);
+        $xml = $this->generator()->generer($remise, $config);
         $xpath = $this->xpath($xml);
 
         self::assertSame('3', $this->valeur($xpath, '//p:GrpHdr/p:NbOfTxs'));
@@ -95,12 +111,34 @@ final class Pain008GeneratorTest extends TestCase
         self::assertSame(['1', '2'], $nbOfTxsParPmtInf);
     }
 
-    public function testIbanJamaisReelDansLeXmlSeulementUnPlaceholderAvecLes4Derniers(): void
+    public function testIbanReelDechiffreEstPorteParLeXmlQuandUnIbanChiffreEstDisponible(): void
     {
+        $ibanDebiteur = 'FR7630006000011234567890189';
+        $ibanCreancier = 'FR7630004000031234567890143';
+
+        $config = $this->configPrive();
+        $config->setCreancierIbanChiffre($this->chiffreur->chiffrer($ibanCreancier));
+        $mandat = $this->mandat('0189');
+        $mandat->setIbanChiffre($this->chiffreur->chiffrer($ibanDebiteur));
+        $remise = $this->remise([$this->ligne($mandat, SeqTpSepa::Frst, 100, 'E1')], 'IBAN-TEST');
+
+        $xml = $this->generator()->generer($remise, $config);
+        $xpath = $this->xpath($xml);
+
+        self::assertStringContainsString($ibanDebiteur, $xml, 'IBAN débiteur réel (fictif) porté par le XML, pas un placeholder.');
+        self::assertStringContainsString($ibanCreancier, $xml, 'IBAN créancier réel (fictif) porté par le XML, pas un placeholder.');
+        self::assertSame($ibanCreancier, $this->valeur($xpath, '//p:PmtInf/p:CdtrAcct/p:Id/p:IBAN'));
+        self::assertSame($ibanDebiteur, $this->valeur($xpath, '//p:DrctDbtTxInf/p:DbtrAcct/p:Id/p:IBAN'));
+    }
+
+    public function testIbanPlaceholderStructurellementValideEnReplisQuandAucunIbanChiffre(): void
+    {
+        // Aucun `ibanChiffre` fourni (donnée non migrée) : repli sur un placeholder structurellement
+        // valide portant les 4 derniers chiffres connus, jamais un IBAN réel inventé.
         $config = $this->configPrive();
         $remise = $this->remise([$this->ligne($this->mandat('0502'), SeqTpSepa::Frst, 100, 'E1')], 'IBAN-TEST');
 
-        $xml = (new Pain008Generator())->generer($remise, $config);
+        $xml = $this->generator()->generer($remise, $config);
 
         self::assertStringNotContainsString('FR7630006000011234567890189', $xml);
         self::assertStringContainsString('0502', $xml, 'Les 4 derniers chiffres connus restent dans le placeholder IBAN.');

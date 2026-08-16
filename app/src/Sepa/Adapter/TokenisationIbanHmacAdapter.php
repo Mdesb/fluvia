@@ -11,13 +11,11 @@ use App\Sepa\Port\TokenisationIbanInterface;
  * Adaptateur de tokenisation par défaut — HMAC-SHA256 avec clé d'application (repris de
  * `App\Sport\Sepa\Adapter\TokenisationIbanHmacAdapter`, Risque n°3 du plan-sport).
  * ⚠ **Non un vrai coffre-fort de paiement (PCI-DSS)** — suffisant pour ne jamais exposer l'IBAN en
- * clair (garde testée), insuffisant pour une protection cryptographique de niveau production réelle.
- *
- * Le jeton n'étant pas réversible, `Pain008Generator` ne peut pas reconstruire l'IBAN réel pour le
- * contenu du fichier XML : il reconstruit un IBAN de type placeholder (préfixe pays + zéros + 4
- * derniers chiffres connus), à l'image des échantillons de référence anonymisés eux-mêmes (dont les
- * IBAN sont déjà fictifs, zero-paddés). Une remise bancaire réelle nécessiterait un coffre IBAN
- * PCI-DSS complet — explicitement hors périmètre (§9 du plan).
+ * clair en API (garde testée), insuffisant pour une protection cryptographique de niveau production
+ * réelle. Ce jeton n'est **pas réversible** — il sert uniquement à l'affichage/recherche (4 derniers
+ * chiffres). La reconstruction du véritable IBAN pour le contenu du fichier pain.008 est assurée
+ * séparément par un coffre **réversible** (`App\Sepa\Service\ChiffreurIbanInterface`, libsodium), dont
+ * la valeur chiffrée est déchiffrée uniquement par `Pain008Generator`, côté serveur.
  */
 final class TokenisationIbanHmacAdapter implements TokenisationIbanInterface
 {

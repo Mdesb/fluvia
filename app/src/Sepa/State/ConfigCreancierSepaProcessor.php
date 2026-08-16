@@ -12,6 +12,7 @@ use App\Organisation\Entity\Etablissement;
 use App\Sepa\Entity\ConfigCreancierSepa;
 use App\Sepa\Enum\VarianteCreancierSepa;
 use App\Sepa\Port\TokenisationIbanInterface;
+use App\Sepa\Service\ChiffreurIbanInterface;
 use Doctrine\ORM\EntityManagerInterface;
 
 /**
@@ -27,6 +28,7 @@ final class ConfigCreancierSepaProcessor implements ProcessorInterface
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly TokenisationIbanInterface $tokenisation,
+        private readonly ChiffreurIbanInterface $chiffreur,
     ) {
     }
 
@@ -41,7 +43,9 @@ final class ConfigCreancierSepaProcessor implements ProcessorInterface
         $ibanClair = $data->getCreancierIbanClair();
         if (trim($ibanClair) !== '') {
             $token = $this->tokenisation->tokeniser($ibanClair);
-            $data->setCreancierIbanToken($token->token)->setCreancierIban4Derniers($token->quatreDerniers);
+            $data->setCreancierIbanToken($token->token)
+                ->setCreancierIban4Derniers($token->quatreDerniers)
+                ->setCreancierIbanChiffre($this->chiffreur->chiffrer($ibanClair));
         }
         $data->setCreancierIbanClair('');
 

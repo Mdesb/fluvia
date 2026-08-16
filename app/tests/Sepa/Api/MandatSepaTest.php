@@ -36,6 +36,7 @@ final class MandatSepaTest extends SepaApiTestCase
         self::assertSame('actif', $mandat['statut']);
         self::assertSame('0987', $mandat['iban4Derniers']);
         self::assertArrayNotHasKey('ibanToken', $mandat);
+        self::assertArrayNotHasKey('ibanChiffre', $mandat);
         self::assertArrayNotHasKey('iban', $mandat);
         self::assertStringStartsWith('RUM-', $mandat['rum']);
 
@@ -43,6 +44,14 @@ final class MandatSepaTest extends SepaApiTestCase
         self::assertNotNull($mandatEntite);
         self::assertStringNotContainsString('FR7630006000099876543210987', $mandatEntite->getIbanToken());
         self::assertNotSame('FR7630006000099876543210987', $mandatEntite->getIbanToken());
+
+        // Coffre IBAN réversible : l'IBAN chiffré est bien stocké (permet à Pain008Generator de
+        // reconstruire le vrai IBAN), mais n'est jamais l'IBAN en clair ni exposé en API (ci-dessus).
+        self::assertNotNull($mandatEntite->getIbanChiffre());
+        self::assertStringNotContainsString('FR7630006000099876543210987', (string) $mandatEntite->getIbanChiffre());
+        /** @var \App\Sepa\Service\ChiffreurIbanInterface $chiffreur */
+        $chiffreur = static::getContainer()->get(\App\Sepa\Service\ChiffreurIbanInterface::class);
+        self::assertSame('FR7630006000099876543210987', $chiffreur->dechiffrer((string) $mandatEntite->getIbanChiffre()));
     }
 
     public function testIbanJamaisExposeSurLesReponsesMandatDeDemo(): void
@@ -54,11 +63,13 @@ final class MandatSepaTest extends SepaApiTestCase
         self::assertResponseIsSuccessful();
         $corps = $client->getResponse()->getContent();
         self::assertStringNotContainsString('ibanToken', $corps);
+        self::assertStringNotContainsString('ibanChiffre', $corps);
         self::assertStringNotContainsString('FR76', $corps);
 
         $client->request('GET', '/api/mandat_sepas', $entete);
         self::assertResponseIsSuccessful();
         self::assertStringNotContainsString('ibanToken', $client->getResponse()->getContent());
+        self::assertStringNotContainsString('ibanChiffre', $client->getResponse()->getContent());
     }
 
     public function testCloisonnementUnAgentDunAutreGroupeNeVoitAucunMandatDeAOuB(): void

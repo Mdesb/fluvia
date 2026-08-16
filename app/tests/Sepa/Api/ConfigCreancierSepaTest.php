@@ -55,8 +55,28 @@ final class ConfigCreancierSepaTest extends SepaApiTestCase
         self::assertResponseIsSuccessful();
         $corps = $client->getResponse()->getContent();
         self::assertStringNotContainsString('creancierIbanToken', $corps);
+        self::assertStringNotContainsString('creancierIbanChiffre', $corps);
         self::assertStringNotContainsString('FR76', $corps, 'Aucun IBAN en clair dans la réponse API.');
         self::assertStringContainsString('0097', $corps, '4 derniers chiffres lisibles.');
+    }
+
+    public function testIbanCreancierChiffreEstStockeEtReversibleMaisJamaisRenvoyeEnApi(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+
+        $etabA = $this->entite(Etablissement::class, ['nom' => \App\DataFixtures\SocleFixtures::ETAB_A_NOM]);
+        $configEntite = $this->entite(ConfigCreancierSepa::class, ['etablissement' => $etabA]);
+        self::assertNotNull($configEntite->getCreancierIbanChiffre());
+
+        /** @var \App\Sepa\Service\ChiffreurIbanInterface $chiffreur */
+        $chiffreur = static::getContainer()->get(\App\Sepa\Service\ChiffreurIbanInterface::class);
+        self::assertSame('FR7600000000000000000000097', $chiffreur->dechiffrer((string) $configEntite->getCreancierIbanChiffre()));
+
+        $client->request('GET', '/api/config_creancier_sepas/' . $configEntite->getId(), $entete);
+        self::assertResponseIsSuccessful();
+        $corps = $client->getResponse()->getContent();
+        self::assertStringNotContainsString('creancierIbanChiffre', $corps);
+        self::assertStringNotContainsString('FR7600000000000000000000097', $corps);
     }
 
     public function testVarianteDeriveeParDefautDuProfilExploitantQuandNonFournie(): void
