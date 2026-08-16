@@ -127,6 +127,12 @@ final class AuditWriteSubscriber
         \App\Musee\Entity\PartenaireOTA::class,
         \App\Musee\Entity\AllocationQuotaOTA::class,
         \App\Musee\Entity\PassAnnuel::class,
+        // Module M3 Boutique en ligne (L8, plan-boutique.md T14) : entités sensibles (compte client
+        // final, demandes de remboursement, retraits click & collect, partenaires OTA génériques).
+        \App\Boutique\Entity\CompteClient::class,
+        \App\Boutique\Entity\DemandeRemboursement::class,
+        \App\Boutique\Entity\RetraitClickCollect::class,
+        \App\Boutique\Entity\PartenaireOTA::class,
     ];
 
     /**

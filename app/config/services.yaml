@@ -201,3 +201,23 @@ services:
     # `App\Reservation\Service\RecurrenceReportHandler`).
     App\Musee\Service\PrioriteOtaResolver:
         public: true
+
+    # --- Module M3 Boutique en ligne (plan-boutique.md §2) : ports & adaptateurs ---
+    # FranceConnect : protocole OIDC exact non détaillé dans les sources (⚠ HYPOTHÈSE, Risque n°4) —
+    # stub par défaut, public pour injection de codes déterministes en test.
+    App\Boutique\Identite\FournisseurIdentiteInterface:
+        alias: App\Boutique\Identite\FournisseurIdentiteStubAdapter
+        public: true
+    App\Boutique\Identite\FournisseurIdentiteStubAdapter:
+        public: true
+    # Paiement en ligne commuté PayFiP/PSP CB (RG-M3-11) : résolu via l'itérateur taggé
+    # `boutique.paiement_en_ligne` (auto-tag `#[AutoconfigureTag]`, aucun binding d'interface unique
+    # nécessaire ici — même patron que `App\Compta\Regime\RegimeComptableResolver`).
+    # Connecteur OTA générique L8 : aucune intégration technique par plateforme (Risque n°6) — stub
+    # par défaut, public pour introspection du journal en test (même patron que
+    # `App\Musee\Port\ConnecteurOtaInterface`/`StubConnecteurOtaAdapter`).
+    App\Boutique\Ota\ConnecteurOtaInterface:
+        alias: App\Boutique\Ota\StubConnecteurOtaAdapter
+        public: true
+    App\Boutique\Ota\StubConnecteurOtaAdapter:
+        public: true

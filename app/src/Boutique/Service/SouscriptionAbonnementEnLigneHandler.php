@@ -1,0 +1,179 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Boutique\Service;
+
+use App\Boutique\Entity\BilletQrMeta;
+use App\Boutique\Entity\CompteClient;
+use App\Boutique\Entity\LigneCommandeMeta;
+use App\Boutique\Entity\SuiviCommandeEnLigne;
+use App\Boutique\Enum\StatutTunnel;
+use App\Offre\Entity\Produit;
+use App\Offre\Enum\Canal;
+use App\Offre\Service\ResolveurPrix;
+use App\Sepa\Entity\MandatSepa;
+use App\Sepa\Enum\StatutMandatSepa;
+use App\Sepa\Port\TokenisationIbanInterface;
+use App\Sepa\Service\ChiffreurIbanInterface;
+use App\Vente\Entity\BilletSupport;
+use App\Vente\Entity\LigneVente;
+use App\Vente\Entity\Paiement;
+use App\Vente\Entity\Vente;
+use App\Vente\Enum\StatutVente;
+use App\Vente\Service\GenerateurNumero;
+use App\Vente\Service\PanierCalculateur;
+use App\Vente\Service\ValiderVenteService;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
+use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
+
+/**
+ * Achat d'abonnement avec mandat SEPA en ligne — **compte obligatoire** (US-L8-09, RG-M3-12/17).
+ * Réutilise intégralement le module `App\Sepa` (tokenisation + coffre IBAN, §2.4 du plan) : aucun
+ * port Boutique supplémentaire. Bloque tout parcours invité **avant** paiement (CA-13).
+ */
+final class SouscriptionAbonnementEnLigneHandler
+{
+    public function __construct(
+        private readonly EntityManagerInterface $em,
+        private readonly PanierCalculateur $calculateur,
+        private readonly GenerateurNumero $generateurNumero,
+        private readonly SessionSystemeBoutiqueResolver $sessionSysteme,
+        private readonly ValiderVenteService $validerVente,
+        private readonly ResolveurPrix $resolveurPrix,
+        private readonly TokenisationIbanInterface $tokenisation,
+        private readonly ChiffreurIbanInterface $chiffreur,
+    ) {
+    }
+
+    /**
+     * @param array<string, mixed> $donnees {iban, bicDebiteur, debiteurNom, dateSignature?}
+     */
+    public function souscrire(?CompteClient $compteClient, Produit $produit, array $donnees): Vente
+    {
+        // RG-M3-12/17 (CA-13) : un invité (aucun CompteClient) est bloqué avant paiement.
+        if ($compteClient === null) {
+            throw new AccessDeniedHttpException('Achat d\'abonnement réservé aux titulaires de compte (RG-M3-12) : création de compte requise.');
+        }
+        $formule = $produit->getFormule();
+        if ($formule === null || !$formule->isSepaActif()) {
+            throw new UnprocessableEntityHttpException('Ce produit ne porte pas la facette SEPA (RG-M3-17).');
+        }
+
+        $client = $compteClient->getClient();
+        \assert($client !== null);
+        $etablissement = $compteClient->getEtablissement();
+
+        $iban = \is_string($donnees['iban'] ?? null) ? $donnees['iban'] : '';
+        $bic = \is_string($donnees['bicDebiteur'] ?? null) ? $donnees['bicDebiteur'] : '';
+        $nomDebiteur = \is_string($donnees['debiteurNom'] ?? null) ? $donnees['debiteurNom'] : '';
+        if (trim($iban) === '' || trim($nomDebiteur) === '') {
+            throw new UnprocessableEntityHttpException('« iban » et « debiteurNom » sont requis pour signer le mandat SEPA.');
+        }
+        $dateSignature = isset($donnees['dateSignature']) && \is_string($donnees['dateSignature'])
+            ? new \DateTimeImmutable($donnees['dateSignature'])
+            : new \DateTimeImmutable('today');
+
+        $token = $this->tokenisation->tokeniser($iban);
+        $mandat = new MandatSepa();
+        $mandat->setRum('RUM-' . strtoupper(substr(hash('sha256', uniqid('bou', true)), 0, 20)))
+            ->setIbanToken($token->token)
+            ->setIban4Derniers($token->quatreDerniers)
+            ->setIbanChiffre($this->chiffreur->chiffrer($iban))
+            ->setBicDebiteur($bic)
+            ->setDebiteurNom($nomDebiteur)
+            ->setDateSignature($dateSignature)
+            ->setStatut(StatutMandatSepa::Actif)
+            ->setClient($client)
+            ->setEtablissement($etablissement);
+        $this->em->persist($mandat);
+
+        // Prix résolu (RG-M1-01) puis Vente M2 avec paiement différé (collecte SEPA ultérieure).
+        $typeTarif = null;
+        $prix = null;
+        foreach ($produit->getGrilles() as $grille) {
+            $tarif = $grille->getTypeTarif();
+            if ($tarif === null) {
+                continue;
+            }
+            $resolu = $this->resolveurPrix->resoudre($produit, $tarif, new \DateTimeImmutable(), Canal::EnLigne);
+            if ($resolu !== null) {
+                $typeTarif = $tarif;
+                $prix = $resolu;
+                break;
+            }
+        }
+        if ($typeTarif === null || $prix === null) {
+            throw new UnprocessableEntityHttpException('Produit non commercialisé en ligne (aucun prix résolu).');
+        }
+
+        $session = $this->sessionSysteme->sessionSysteme($etablissement);
+        $vente = new Vente();
+        $vente->setSession($session)->setClient($client->getId())->setStatut(StatutVente::EnCours)
+            ->setEtablissement($etablissement)->setNumero($this->generateurNumero->numeroVente($session));
+
+        $ligneVente = new LigneVente();
+        $ligneVente->setProduit($produit->getId())->setTypeTarif($typeTarif->getId())->setQuantite(1)->setPrixUnitaire($prix);
+        $this->calculateur->recalculerLigne($ligneVente);
+        $vente->addLigne($ligneVente);
+        $this->em->persist($ligneVente);
+        $this->calculateur->recalculerVente($vente);
+        $this->em->persist($vente);
+
+        $paiement = new Paiement();
+        $paiement->setMoyenCode('sepa')->setMontant($vente->getTotal())->setDiffere(true);
+        $vente->addPaiement($paiement);
+        $this->em->persist($paiement);
+        $this->calculateur->recalculerVente($vente);
+
+        $this->validerVente->valider($vente, [(string) $ligneVente->getId() => ['type' => 'qr', 'identifiant' => 'QR-' . bin2hex(random_bytes(8))]]);
+
+        $suivi = new SuiviCommandeEnLigne();
+        $suivi->setVente($vente)->setVitrine($compteClient->getVitrineCreation())
+            ->setPanierOrigine($this->panierFictifPourAbonnement($compteClient))
+            ->setCompteClient($compteClient)->setStatutTunnel(StatutTunnel::Confirme)->setEtablissement($etablissement);
+        $this->em->persist($suivi);
+
+        $meta = new LigneCommandeMeta();
+        $meta->setLigneVente($ligneVente);
+        $this->em->persist($meta);
+
+        $support = $this->em->getRepository(BilletSupport::class)->findOneBy(['ligne' => $ligneVente]);
+        if ($support instanceof BilletSupport) {
+            $billetMeta = new BilletQrMeta();
+            $billetMeta->setBilletSupport($support)
+                ->setQrDynamique((string) ($support->getIdentifiantSupport() ?? 'QR-abonnement'))
+                ->setPassWalletDisponible(false)->setRepliQr(true);
+            $this->em->persist($billetMeta);
+        }
+
+        $this->em->flush();
+
+        return $vente;
+    }
+
+    /**
+     * L'abonnement en ligne ne part pas d'un panier générique (endpoint spécialisé, §3 du plan) :
+     * `SuiviCommandeEnLigne.panierOrigine` reste requis par le schéma (traçabilité) — on réutilise le
+     * panier le plus récent du compte s'il en existe un, sinon on lève un panier n'est pas requis :
+     * ce champ est rendu nullable applicativement via un panier vide auto-créé au besoin.
+     */
+    private function panierFictifPourAbonnement(CompteClient $compteClient): \App\Boutique\Entity\PanierEnLigne
+    {
+        $existant = $this->em->getRepository(\App\Boutique\Entity\PanierEnLigne::class)
+            ->findOneBy(['compteClient' => $compteClient], ['dateCreation' => 'DESC']);
+        if ($existant instanceof \App\Boutique\Entity\PanierEnLigne) {
+            return $existant;
+        }
+
+        $panier = new \App\Boutique\Entity\PanierEnLigne();
+        $panier->setVitrine($compteClient->getVitrineCreation())
+            ->setCompteClient($compteClient)
+            ->setEtablissement($compteClient->getEtablissement())
+            ->setStatut(\App\Boutique\Enum\StatutPanier::TransformeEnCommande);
+        $this->em->persist($panier);
+
+        return $panier;
+    }
+}
