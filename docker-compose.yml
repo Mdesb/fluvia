@@ -7,6 +7,8 @@ services:
       - ./app:/app
       # Volume dédié pour var/ (cache, logs) : évite la lenteur du bind mount OneDrive
       - app_var:/app/var
+      # memory_limit relevé (évite l'OOM de la suite de tests qui grossit)
+      - ./docker/php/conf.d/zz-memory.ini:/usr/local/etc/php/conf.d/zz-memory.ini:ro
     depends_on:
       db:
         condition: service_healthy
