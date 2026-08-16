@@ -196,6 +196,38 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 .login-sub { color: var(--ink-soft); font-size: 14px; margin: 4px 0 22px; }
 .login-hint { margin-top: 18px; font-size: 12px; color: var(--ink-faint); text-align: center; }
 
+/* ---- Encaissement : moyens de paiement & paiement scindé ---- */
+.reste-box { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; font-weight: 600; font-size: 14px; color: var(--ink-soft); }
+.reste-box .reste-val { font-size: 20px; font-weight: 800; color: var(--ink); }
+.reste-box .reste-val.paye { color: var(--good); }
+.pay-list { display: flex; flex-direction: column; gap: 2px; }
+.pay-row { display: flex; justify-content: space-between; font-size: 13px; color: var(--ink-soft); padding: 5px 0; border-bottom: 1px dashed var(--line); }
+.pay-row:last-child { border-bottom: none; }
+.pay-moyens { display: flex; flex-wrap: wrap; gap: 6px; }
+.pay-chip { border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 8px; padding: 7px 12px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
+.pay-chip:hover { background: var(--panel-2); }
+.pay-chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* ---- Session / Clôture Z ---- */
+.deflist { margin: 0; display: flex; flex-direction: column; gap: 0; }
+.deflist > div { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+.deflist > div:last-child { border-bottom: none; }
+.deflist dt { color: var(--ink-soft); margin: 0; }
+.deflist dd { margin: 0; color: var(--ink); font-weight: 600; text-align: right; }
+.field-lbl { font-size: 12.5px; font-weight: 600; color: var(--ink-soft); display: block; margin-bottom: 8px; }
+.cz-row { display: grid; grid-template-columns: 1fr 130px auto; gap: 8px; align-items: center; margin-bottom: 8px; }
+.cz-row .rm { border: none; background: none; color: var(--ink-faint); font-size: 18px; cursor: pointer; }
+.ticket-ok { width: 26px; height: 26px; border-radius: 50%; background: var(--good-bg); color: var(--good); display: inline-flex; align-items: center; justify-content: center; font-weight: 800; flex: none; }
+
+/* ---- Clients / Fiche 360 ---- */
+.clients-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 16px; align-items: start; }
+@media (max-width: 900px) { .clients-grid { grid-template-columns: 1fr; } }
+.row-click { cursor: pointer; }
+.row-click.row-active { background: var(--accent-soft) !important; }
+.fiche-sec { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-faint); font-weight: 700; margin-bottom: 8px; }
+.pmv-box { display: flex; align-items: center; justify-content: space-between; background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 10px; padding: 12px 14px; }
+.pmv-solde { font-size: 22px; font-weight: 800; color: var(--accent-2); letter-spacing: -.02em; }
+
 /* ---- Divers ---- */
 .center { display: grid; place-items: center; min-height: 60vh; color: var(--ink-soft); }
 .spinner { width: 28px; height: 28px; border: 3px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }

@@ -10,6 +10,8 @@ import Login from './pages/Login.jsx'
 import AppShell from './components/AppShell.jsx'
 import Caisse from './pages/Caisse.jsx'
 import Catalogue from './pages/Catalogue.jsx'
+import SessionCaisse from './pages/SessionCaisse.jsx'
+import Clients from './pages/Clients.jsx'
 
 export default function App() {
   const [booting, setBooting] = useState(true)
@@ -18,6 +20,7 @@ export default function App() {
   const [etablissements, setEtablissements] = useState([])
   const [etabActif, setEtabActif] = useState(etablissementStore.get() || '')
   const [onglet, setOnglet] = useState('caisse')
+  const [session, setSession] = useState(null) // session de caisse ouverte (partagée)
 
   const deconnexion = useCallback(() => {
     tokenStore.clear()
@@ -78,6 +81,21 @@ export default function App() {
     etablissementStore.set(id)
   }
 
+  // Session de caisse ouverte sur le périmètre courant (partagée entre Caisse et l'écran Session/Z).
+  const rechargerSession = useCallback(async () => {
+    try {
+      const liste = membres(await api.sessionsCaisse())
+      setSession(liste.find((s) => s.etat === 'ouverte') || null)
+    } catch {
+      setSession(null)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (authed && etabActif) rechargerSession()
+    else setSession(null)
+  }, [authed, etabActif, rechargerSession])
+
   if (booting) {
     return (
       <div className="center">
@@ -100,11 +118,21 @@ export default function App() {
       onNav={setOnglet}
       onLogout={deconnexion}
     >
-      {onglet === 'caisse' ? (
-        <Caisse me={me} etabActif={etabActif} etablissements={etablissements} />
-      ) : (
-        <Catalogue etabActif={etabActif} />
+      {onglet === 'caisse' && (
+        <Caisse
+          me={me}
+          etabActif={etabActif}
+          etablissements={etablissements}
+          session={session}
+          capacites={me?.capacitesActives || []}
+          onNav={setOnglet}
+        />
       )}
+      {onglet === 'session' && (
+        <SessionCaisse me={me} etabActif={etabActif} session={session} onRefresh={rechargerSession} />
+      )}
+      {onglet === 'catalogue' && <Catalogue etabActif={etabActif} />}
+      {onglet === 'clients' && <Clients etabActif={etabActif} />}
     </AppShell>
   )
 }

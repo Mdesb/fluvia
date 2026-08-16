@@ -44,8 +44,23 @@ export class ApiError extends Error {
   }
 }
 
-async function request(path, { method = 'GET', body, ld = false, auth = true } = {}) {
-  const headers = {}
+// Construit une query string à partir d'un objet (ignore null/undefined/'').
+function qs(params) {
+  if (!params) return ''
+  const usp = new URLSearchParams()
+  for (const [k, v] of Object.entries(params)) {
+    if (v === null || v === undefined || v === '') continue
+    usp.append(k, String(v))
+  }
+  const s = usp.toString()
+  return s ? `?${s}` : ''
+}
+
+async function request(
+  path,
+  { method = 'GET', body, ld = false, auth = true, headers: extra = {}, query } = {},
+) {
+  const headers = { ...extra }
   if (body !== undefined) {
     headers['Content-Type'] = ld ? 'application/ld+json' : 'application/json'
   }
@@ -55,6 +70,7 @@ async function request(path, { method = 'GET', body, ld = false, auth = true } =
     const etab = etablissementStore.get()
     if (etab) headers['X-Etablissement'] = etab
   }
+  if (query) path += qs(query)
 
   let res
   try {
@@ -113,17 +129,30 @@ export const api = {
 
   pointDeVentes: () => request('/api/point_de_ventes'),
   caisses: () => request('/api/caisses'),
+  moyensPaiement: () => request('/api/moyen_paiements'),
+
+  // Sessions de caisse (M2).
   sessionsCaisse: () => request('/api/session_caisses'),
   ouvrirSession: (corps) =>
     request('/api/sessions-caisse/ouvrir', { method: 'POST', body: corps }),
+  cloturerSession: (id, corps) =>
+    request(`/api/sessions-caisse/${id}/cloturer`, { method: 'POST', body: corps }),
 
+  // Vente + encaissement.
   creerVente: (corps) => request('/api/ventes', { method: 'POST', body: corps }),
   ajouterLigne: (venteId, corps) =>
     request(`/api/ventes/${venteId}/lignes`, { method: 'POST', body: corps }),
-  payer: (venteId, corps) =>
-    request(`/api/ventes/${venteId}/paiements`, { method: 'POST', body: corps }),
+  // Un règlement CB/chèque peut être simulé via l'en-tête X-Tpe-Simule (accepte|refuse|annule|timeout).
+  payer: (venteId, corps, headers) =>
+    request(`/api/ventes/${venteId}/paiements`, { method: 'POST', body: corps, headers }),
+  annulerVente: (venteId) =>
+    request(`/api/ventes/${venteId}/annuler`, { method: 'POST', body: {} }),
   valider: (venteId) =>
     request(`/api/ventes/${venteId}/valider`, { method: 'POST', body: {} }),
   ticket: (venteId, mode = 'imprimer') =>
     request(`/api/ventes/${venteId}/ticket`, { method: 'POST', body: { mode } }),
+
+  // CRM (lecture seule cette tranche).
+  rechercheClients: (params) => request('/api/crm/clients/recherche', { query: params }),
+  ficheClient: (id) => request(`/api/clients/${id}/fiche-360`),
 }

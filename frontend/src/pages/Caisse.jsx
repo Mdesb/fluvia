@@ -9,15 +9,27 @@ import {
   euros,
 } from '../api/produit.js'
 
-export default function Caisse({ me, etabActif, etablissements }) {
+// Ordre de présentation préféré des moyens de paiement au guichet.
+const ORDRE_MOYENS = ['especes', 'cb', 'cheque', 'pmv']
+
+export default function Caisse({ me, etabActif, etablissements, session, capacites = [], onNav }) {
   const [produits, setProduits] = useState([])
+  const [moyens, setMoyens] = useState([])
+  const [pdvs, setPdvs] = useState([])
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
 
   const [panier, setPanier] = useState([]) // { produit, quantite }
-  const [montantRecu, setMontantRecu] = useState('')
-  const [encaissement, setEncaissement] = useState(false)
   const [ticket, setTicket] = useState(null)
+
+  // Phase de paiement (encaissement scindé sur une vente ouverte).
+  const [vente, setVente] = useState(null) // { id, reste }
+  const [paiements, setPaiements] = useState([]) // règlements acceptés
+  const [moyenSel, setMoyenSel] = useState('especes')
+  const [montant, setMontant] = useState('')
+  const [tpeSimule, setTpeSimule] = useState('accepte')
+  const [busy, setBusy] = useState(false)
+  const [avis, setAvis] = useState(null) // message TPE refusé, etc.
 
   const nomEtab = etablissements.find((e) => e.id === etabActif)?.nom || ''
 
@@ -27,17 +39,17 @@ export default function Caisse({ me, etabActif, etablissements }) {
     setErreur(null)
     setPanier([])
     setTicket(null)
-    api
-      .produits()
-      .then((c) => {
-        if (!annule) setProduits(membres(c))
+    setVente(null)
+    setPaiements([])
+    Promise.all([api.produits(), api.moyensPaiement(), api.pointDeVentes()])
+      .then(([pc, mc, dc]) => {
+        if (annule) return
+        setProduits(membres(pc))
+        setMoyens(membres(mc).filter((m) => m.actif !== false))
+        setPdvs(membres(dc))
       })
-      .catch((e) => {
-        if (!annule) setErreur(e.message)
-      })
-      .finally(() => {
-        if (!annule) setChargement(false)
-      })
+      .catch((e) => !annule && setErreur(e.message))
+      .finally(() => !annule && setChargement(false))
     return () => {
       annule = true
     }
@@ -52,6 +64,24 @@ export default function Caisse({ me, etabActif, etablissements }) {
     [panier],
   )
 
+  // Moyens réellement proposables : actifs et autorisés sur le point de vente de la session.
+  const moyensDispo = useMemo(() => {
+    const pdvId = session?.pointDeVente?.id || session?.pointDeVente
+    const pdv = pdvs.find((p) => p.id === pdvId)
+    const autorises = pdv?.moyensAutorises || []
+    let liste = moyens.filter((m) => autorises.length === 0 || autorises.includes(m.code))
+    // PMV : uniquement si la capacité porte-monnaie est active sur l'établissement.
+    if (!capacites.includes('porte_monnaie')) liste = liste.filter((m) => m.code !== 'pmv')
+    return liste.sort((a, b) => {
+      const ia = ORDRE_MOYENS.indexOf(a.code)
+      const ib = ORDRE_MOYENS.indexOf(b.code)
+      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib)
+    })
+  }, [moyens, pdvs, session, capacites])
+
+  const moyenCourant = moyensDispo.find((m) => m.code === moyenSel) || null
+  const reste = vente ? parseFloat(vente.reste || '0') : total
+
   function ajouter(produit) {
     setTicket(null)
     setPanier((p) => {
@@ -64,82 +94,85 @@ export default function Caisse({ me, etabActif, etablissements }) {
       return [...p, { produit, quantite: 1 }]
     })
   }
-
   function changerQte(id, delta) {
     setPanier((p) =>
-      p
-        .map((l) => (l.produit.id === id ? { ...l, quantite: l.quantite + delta } : l))
-        .filter((l) => l.quantite > 0),
+      p.map((l) => (l.produit.id === id ? { ...l, quantite: l.quantite + delta } : l)).filter((l) => l.quantite > 0),
     )
   }
-
   function retirer(id) {
     setPanier((p) => p.filter((l) => l.produit.id !== id))
   }
 
-  async function trouverOuOuvrirSession() {
-    // Réutilise une session déjà ouverte sur le périmètre courant si possible.
-    const sessions = membres(await api.sessionsCaisse())
-    const ouverte = sessions.find((s) => s.etat === 'ouverte')
-    if (ouverte) return ouverte.id
-
-    // Sinon on ouvre une session : point de vente + caisse du périmètre, régisseur = utilisateur courant.
-    const pdvs = membres(await api.pointDeVentes())
-    if (pdvs.length === 0) {
-      throw new Error(`Aucun point de vente configuré pour « ${nomEtab} ». Vente impossible ici.`)
-    }
-    const pdv = pdvs[0]
-    const caisses = membres(await api.caisses())
-    const caisse =
-      caisses.find((c) => (c.pointDeVente?.id || c.pointDeVente) === pdv.id) || caisses[0]
-    if (!caisse) {
-      throw new Error(`Aucune caisse configurée pour « ${nomEtab} ». Vente impossible ici.`)
-    }
-    const session = await api.ouvrirSession({
-      pointDeVente: pdv.id,
-      caisse: caisse.id,
-      fondDeCaisse: '50.00',
-      regisseur: me.id,
-      codeRegisseur: '0000',
-    })
-    return session.id
-  }
-
-  async function encaisser() {
-    if (panier.length === 0) return
-    setEncaissement(true)
+  // Démarre l'encaissement : crée la vente, ajoute les lignes, passe en phase paiement.
+  async function demarrerPaiement() {
+    if (panier.length === 0 || !session) return
+    setBusy(true)
     setErreur(null)
+    setAvis(null)
     setTicket(null)
     try {
-      const sessionId = await trouverOuOuvrirSession()
-
-      const vente = await api.creerVente({ session: sessionId })
-      const venteId = vente.id
-
+      const v = await api.creerVente({ session: session.id })
+      let courant = v
       for (const l of panier) {
         const tarif = typeTarifId(l.produit)
-        if (!tarif) {
-          throw new Error(`« ${libelleProduit(l.produit)} » n'a pas de tarif au guichet.`)
-        }
-        await api.ajouterLigne(venteId, {
-          produit: l.produit.id,
-          typeTarif: tarif,
-          quantite: l.quantite,
-        })
+        if (!tarif) throw new Error(`« ${libelleProduit(l.produit)} » n'a pas de tarif au guichet.`)
+        courant = await api.ajouterLigne(v.id, { produit: l.produit.id, typeTarif: tarif, quantite: l.quantite })
       }
+      // Le total et le reste font foi côté serveur : le tarif réellement appliqué peut différer du
+      // prix indicatif affiché (grilles, remises). On s'aligne dessus pour l'encaissement.
+      const totalServeur = courant?.total ?? total.toFixed(2)
+      const resteServeur = courant?.resteAPayer ?? totalServeur
+      setVente({ id: v.id, reste: resteServeur, total: totalServeur })
+      setPaiements([])
+      setMoyenSel(moyensDispo[0]?.code || 'especes')
+      setMontant(parseFloat(resteServeur) > 0 ? parseFloat(resteServeur).toFixed(2) : '')
+    } catch (e) {
+      setErreur(e.message || "Impossible d'ouvrir la vente.")
+    } finally {
+      setBusy(false)
+    }
+  }
 
-      // Paiement espèces : si le montant reçu couvre le dû, on le transmet (rendu calculé par l'API),
-      // sinon on règle le montant exact.
-      const recu = parseFloat(montantRecu)
-      const corpsPaiement = { moyen: 'especes' }
-      if (!Number.isNaN(recu) && recu >= total && total > 0) {
-        corpsPaiement.montant = recu.toFixed(2)
+  // Ajoute un règlement (paiement scindé). CB/chèque exigeant une référence => passage TPE simulé.
+  async function reglerUnMoyen() {
+    if (!vente || !moyenCourant) return
+    setBusy(true)
+    setErreur(null)
+    setAvis(null)
+    try {
+      const corps = { moyen: moyenCourant.code }
+      const m = parseFloat(montant)
+      if (!Number.isNaN(m) && m > 0) corps.montant = m.toFixed(2)
+      const headers = moyenCourant.exigeReference ? { 'X-Tpe-Simule': tpeSimule } : undefined
+      const res = await api.payer(vente.id, corps, headers)
+
+      if (!res.reglementEnregistre) {
+        // TPE refusé / timeout : aucun règlement ajouté, reste inchangé.
+        setAvis(`Transaction ${moyenCourant.libelle} ${res.statutTPE || 'refusée'} — aucun règlement enregistré.`)
+        return
       }
-      const paiement = await api.payer(venteId, corpsPaiement)
+      setPaiements((p) => [
+        ...p,
+        { moyen: res.moyen, libelle: moyenCourant.libelle, montant: res.montant, rendu: res.rendu, statutTPE: res.statutTPE },
+      ])
+      const nouveauReste = res.resteAPayer ?? '0.00'
+      setVente((v) => ({ ...v, reste: nouveauReste }))
+      setMontant(parseFloat(nouveauReste) > 0 ? parseFloat(nouveauReste).toFixed(2) : '')
+    } catch (e) {
+      setErreur(e.message || 'Règlement refusé.')
+    } finally {
+      setBusy(false)
+    }
+  }
 
-      const venteValidee = await api.valider(venteId)
-      const infoTicket = await api.ticket(venteId, 'imprimer')
-
+  // Finalise : valide la vente et édite le ticket.
+  async function validerVente() {
+    if (!vente) return
+    setBusy(true)
+    setErreur(null)
+    try {
+      const venteValidee = await api.valider(vente.id)
+      const infoTicket = await api.ticket(vente.id, 'imprimer')
       setTicket({
         numero: infoTicket.numero || venteValidee.numero,
         lignes: panier.map((l) => ({
@@ -148,25 +181,66 @@ export default function Caisse({ me, etabActif, etablissements }) {
           pu: prixIndicatif(l.produit),
         })),
         total: venteValidee.total ?? total.toFixed(2),
-        moyen: 'Espèces',
-        montant: paiement.montant,
-        rendu: paiement.rendu,
+        paiements,
       })
       setPanier([])
-      setMontantRecu('')
+      setVente(null)
+      setPaiements([])
+      setAvis(null)
     } catch (e) {
-      setErreur(e.message || "Échec de l'encaissement.")
+      setErreur(e.message || 'Échec de la validation.')
     } finally {
-      setEncaissement(false)
+      setBusy(false)
     }
   }
+
+  async function abandonner() {
+    if (!vente) return
+    setBusy(true)
+    try {
+      await api.annulerVente(vente.id)
+    } catch {
+      /* on réinitialise l'UI quoi qu'il arrive */
+    } finally {
+      setVente(null)
+      setPaiements([])
+      setAvis(null)
+      setBusy(false)
+    }
+  }
+
+  // --- Rendu : pas de session ouverte ---
+  if (!chargement && !session) {
+    return (
+      <div className="view">
+        <div className="view-head">
+          <div className="ttl"><h1>Caisse</h1><p>{nomEtab}</p></div>
+        </div>
+        {erreur && <div className="banner banner-error">{erreur}</div>}
+        <div className="card">
+          <div className="card-b" style={{ textAlign: 'center', padding: '40px 20px' }}>
+            <div style={{ fontSize: 40, marginBottom: 8 }}>🔒</div>
+            <h3 style={{ marginBottom: 6 }}>Aucune session de caisse ouverte</h3>
+            <p className="hint" style={{ marginBottom: 18 }}>
+              Ouvrez une session (point de vente, fond de caisse, régisseur) pour encaisser.
+            </p>
+            <button className="btn primary" onClick={() => onNav?.('session')}>Ouvrir une session</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const enPaiement = !!vente
 
   return (
     <div className="view">
       <div className="view-head">
         <div className="ttl">
           <h1>Caisse</h1>
-          <p>Session au guichet · {nomEtab}</p>
+          <p>
+            Session {session?.numero ? `n° ${session.numero}` : 'au guichet'} · {nomEtab}
+          </p>
         </div>
       </div>
 
@@ -176,15 +250,15 @@ export default function Caisse({ me, etabActif, etablissements }) {
         <aside style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div className="card">
             <div className="card-h">
-              <h3>Panier</h3>
-              {panier.length > 0 && (
+              <h3>{enPaiement ? 'Encaissement' : 'Panier'}</h3>
+              {!enPaiement && panier.length > 0 && (
                 <div className="r">
                   <button className="btn ghost sm" onClick={() => setPanier([])}>Vider</button>
                 </div>
               )}
             </div>
             <div className="card-b">
-              {panier.length === 0 ? (
+              {panier.length === 0 && !enPaiement ? (
                 <div className="empty">Cliquez un produit pour l'ajouter.</div>
               ) : (
                 <>
@@ -196,90 +270,57 @@ export default function Caisse({ me, etabActif, etablissements }) {
                           <span className="nm">{libelleProduit(l.produit)}</span>
                           <div className="cp">{euros(pu)}</div>
                         </div>
-                        <div className="qty">
-                          <button onClick={() => changerQte(l.produit.id, -1)}>−</button>
-                          <span>{l.quantite}</span>
-                          <button onClick={() => changerQte(l.produit.id, 1)}>+</button>
-                        </div>
-                        <span className="num" style={{ minWidth: 58, fontWeight: 600 }}>
-                          {euros(pu * l.quantite)}
-                        </span>
-                        <button className="rm" onClick={() => retirer(l.produit.id)} title="Retirer">×</button>
+                        {!enPaiement ? (
+                          <div className="qty">
+                            <button onClick={() => changerQte(l.produit.id, -1)}>−</button>
+                            <span>{l.quantite}</span>
+                            <button onClick={() => changerQte(l.produit.id, 1)}>+</button>
+                          </div>
+                        ) : (
+                          <span style={{ color: 'var(--ink-soft)' }}>× {l.quantite}</span>
+                        )}
+                        <span className="num" style={{ minWidth: 58, fontWeight: 600 }}>{euros(pu * l.quantite)}</span>
+                        {!enPaiement && (
+                          <button className="rm" onClick={() => retirer(l.produit.id)} title="Retirer">×</button>
+                        )}
                       </div>
                     )
                   })}
 
                   <div className="cline cart-total">
                     <span>Total</span>
-                    <span className="num">{euros(total)}</span>
+                    <span className="num">{euros(enPaiement && vente?.total != null ? vente.total : total)}</span>
                   </div>
 
-                  <div className="field" style={{ marginTop: 12 }}>
-                    <label htmlFor="recu">Montant reçu (espèces, optionnel)</label>
-                    <input
-                      id="recu"
-                      className="input"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      placeholder={`${total.toFixed(2)}`}
-                      value={montantRecu}
-                      onChange={(e) => setMontantRecu(e.target.value)}
+                  {!enPaiement ? (
+                    <button className="btn primary lg" onClick={demarrerPaiement} disabled={busy}>
+                      {busy ? 'Ouverture…' : `Encaisser ${euros(total)}`}
+                    </button>
+                  ) : (
+                    <PanneauPaiement
+                      moyensDispo={moyensDispo}
+                      moyenSel={moyenSel}
+                      setMoyenSel={(c) => { setMoyenSel(c); setAvis(null) }}
+                      moyenCourant={moyenCourant}
+                      montant={montant}
+                      setMontant={setMontant}
+                      tpeSimule={tpeSimule}
+                      setTpeSimule={setTpeSimule}
+                      reste={reste}
+                      paiements={paiements}
+                      avis={avis}
+                      busy={busy}
+                      onRegler={reglerUnMoyen}
+                      onValider={validerVente}
+                      onAbandon={abandonner}
                     />
-                  </div>
-
-                  <button className="btn primary lg" onClick={encaisser} disabled={encaissement}>
-                    {encaissement ? 'Encaissement…' : `Encaisser ${euros(total)}`}
-                  </button>
+                  )}
                 </>
               )}
             </div>
           </div>
 
-          {ticket && (
-            <div className="ticket">
-              <div className="th">
-                <span className="ok">✓</span>
-                <h3>Vente encaissée</h3>
-              </div>
-              <div className="tb">
-                <div className="tnum">Ticket {ticket.numero}</div>
-                {ticket.lignes.map((l, i) => (
-                  <div className="trow" key={i}>
-                    <span>{l.quantite} × {l.libelle}</span>
-                    <span className="num">{euros(parseFloat(l.pu || '0') * l.quantite)}</span>
-                  </div>
-                ))}
-                <div className="trow tt">
-                  <span>Total</span>
-                  <span className="num">{euros(ticket.total)}</span>
-                </div>
-                <div className="trow">
-                  <span>Règlement ({ticket.moyen})</span>
-                  <span className="num">{euros(ticket.montant)}</span>
-                </div>
-                {parseFloat(ticket.rendu || '0') > 0 && (
-                  <div className="trow">
-                    <span>Rendu</span>
-                    <span className="num">{euros(ticket.rendu)}</span>
-                  </div>
-                )}
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 12,
-                    marginTop: 14,
-                    paddingTop: 14,
-                    borderTop: '1px solid var(--line)',
-                  }}
-                >
-                  <div className="qr" />
-                  <div className="hint" style={{ margin: 0 }}>Billet + QR édités · appairage support à la validation</div>
-                </div>
-              </div>
-            </div>
-          )}
+          {ticket && <TicketVente ticket={ticket} />}
         </aside>
 
         <section className="card">
@@ -289,15 +330,13 @@ export default function Caisse({ me, etabActif, etablissements }) {
           </div>
           <div className="card-b">
             {chargement ? (
-              <div className="center" style={{ minHeight: 200 }}>
-                <div className="spinner" />
-              </div>
+              <div className="center" style={{ minHeight: 200 }}><div className="spinner" /></div>
             ) : produits.length === 0 ? (
               <div className="empty">Aucun produit disponible.</div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10 }}>
                 {produits.map((p) => {
-                  const vendable = estVendable(p)
+                  const vendable = estVendable(p) && !enPaiement
                   const raison = raisonNonVendable(p)
                   return (
                     <button
@@ -305,23 +344,151 @@ export default function Caisse({ me, etabActif, etablissements }) {
                       className="prodtile"
                       disabled={!vendable}
                       onClick={() => ajouter(p)}
-                      title={vendable ? 'Ajouter au panier' : raison || ''}
+                      title={enPaiement ? 'Encaissement en cours' : vendable ? 'Ajouter au panier' : raison || ''}
                     >
                       <span className="pn">{libelleProduit(p)}</span>
                       {p.code && <span className="pc">{p.code}</span>}
-                      {raison ? (
-                        <span className="pw">{raison}</span>
-                      ) : (
-                        <span className="pp">{euros(prixIndicatif(p))}</span>
-                      )}
+                      {raison ? <span className="pw">{raison}</span> : <span className="pp">{euros(prixIndicatif(p))}</span>}
                     </button>
                   )
                 })}
               </div>
             )}
-            <div className="hint">Cliquez un produit pour l'ajouter · scan QR / recherche client · appairage support à la validation</div>
+            <div className="hint">
+              {enPaiement ? 'Encaissement en cours — finalisez ou abandonnez la vente.' : 'Cliquez un produit pour l\'ajouter · paiement scindé et rendu à l\'encaissement'}
+            </div>
           </div>
         </section>
+      </div>
+    </div>
+  )
+}
+
+function PanneauPaiement({
+  moyensDispo, moyenSel, setMoyenSel, moyenCourant, montant, setMontant,
+  tpeSimule, setTpeSimule, reste, paiements, avis, busy, onRegler, onValider, onAbandon,
+}) {
+  const solde = parseFloat((reste || 0).toFixed ? reste.toFixed(2) : reste) || 0
+  const paye = solde <= 0.0001
+
+  return (
+    <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div className="reste-box">
+        <span>Reste à payer</span>
+        <span className={`num reste-val${paye ? ' paye' : ''}`}>{euros(Math.max(0, solde))}</span>
+      </div>
+
+      {paiements.length > 0 && (
+        <div className="pay-list">
+          {paiements.map((p, i) => (
+            <div className="pay-row" key={i}>
+              <span>{p.libelle || p.moyen}</span>
+              <span className="num">{euros(p.montant)}{parseFloat(p.rendu || '0') > 0 ? ` (rendu ${euros(p.rendu)})` : ''}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {avis && <div className="banner banner-error" style={{ margin: 0 }}>{avis}</div>}
+
+      {!paye && (
+        <>
+          <div className="pay-moyens">
+            {moyensDispo.map((m) => (
+              <button
+                key={m.code}
+                className={`pay-chip${moyenSel === m.code ? ' on' : ''}`}
+                onClick={() => setMoyenSel(m.code)}
+                type="button"
+              >
+                {m.libelle}
+              </button>
+            ))}
+          </div>
+
+          <div className="field" style={{ margin: 0 }}>
+            <label htmlFor="mtt">Montant{moyenCourant?.autoriseRendu ? ' (rendu possible)' : ''}</label>
+            <input
+              id="mtt"
+              className="input"
+              type="number"
+              step="0.01"
+              min="0"
+              value={montant}
+              onChange={(e) => setMontant(e.target.value)}
+              placeholder={Math.max(0, solde).toFixed(2)}
+            />
+          </div>
+
+          {moyenCourant?.exigeReference && (
+            <div className="field" style={{ margin: 0 }}>
+              <label>Simulation TPE</label>
+              <div className="seg">
+                {['accepte', 'refuse', 'timeout'].map((s) => (
+                  <button key={s} type="button" className={tpeSimule === s ? 'on' : ''} onClick={() => setTpeSimule(s)}>
+                    {s === 'accepte' ? 'Accepté' : s === 'refuse' ? 'Refusé' : 'Timeout'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <button className="btn primary lg" onClick={onRegler} disabled={busy}>
+            {busy ? 'Traitement…' : `Régler ${moyenCourant?.libelle || ''}`}
+          </button>
+        </>
+      )}
+
+      {paye && (
+        <button className="btn primary lg" onClick={onValider} disabled={busy}>
+          {busy ? 'Validation…' : 'Valider & imprimer'}
+        </button>
+      )}
+
+      <button className="btn ghost sm" onClick={onAbandon} disabled={busy} style={{ alignSelf: 'center' }}>
+        Abandonner la vente
+      </button>
+    </div>
+  )
+}
+
+function TicketVente({ ticket }) {
+  return (
+    <div className="ticket">
+      <div className="th">
+        <span className="ok">✓</span>
+        <h3>Vente encaissée</h3>
+      </div>
+      <div className="tb">
+        <div className="tnum">Ticket {ticket.numero}</div>
+        {ticket.lignes.map((l, i) => (
+          <div className="trow" key={i}>
+            <span>{l.quantite} × {l.libelle}</span>
+            <span className="num">{euros(parseFloat(l.pu || '0') * l.quantite)}</span>
+          </div>
+        ))}
+        <div className="trow tt">
+          <span>Total</span>
+          <span className="num">{euros(ticket.total)}</span>
+        </div>
+        {ticket.paiements.map((p, i) => (
+          <div className="trow" key={`p${i}`}>
+            <span>Règlement · {p.libelle || p.moyen}</span>
+            <span className="num">{euros(p.montant)}</span>
+          </div>
+        ))}
+        {ticket.paiements.some((p) => parseFloat(p.rendu || '0') > 0) && (
+          <div className="trow">
+            <span>Rendu</span>
+            <span className="num">
+              {euros(ticket.paiements.reduce((s, p) => s + (parseFloat(p.rendu || '0') || 0), 0))}
+            </span>
+          </div>
+        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
+          <div className="qr" />
+          <div className="hint" style={{ margin: 0 }}>Billet + QR édités · appairage support à la validation</div>
+        </div>
       </div>
     </div>
   )
