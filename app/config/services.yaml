@@ -184,3 +184,17 @@ services:
         public: true
     App\Padel\Command\CommanderEclairageCommand:
         public: true
+
+    # --- Verticale Musée (plan-musee.md) : port & adaptateur OTA (§1.8, décision structurante n°4) ---
+    # Connecteur OTA : aucune intégration technique par plateforme (Tiqets, Weezevent…) — stub par
+    # défaut, public pour introspection du journal en test (même patron que
+    # `App\Acces\Port\ProjectionDroitInterface`/`StubProjectionDroit`).
+    App\Musee\Port\ConnecteurOtaInterface:
+        alias: App\Musee\Adapter\StubConnecteurOtaAdapter
+        public: true
+    App\Musee\Adapter\StubConnecteurOtaAdapter:
+        public: true
+    # Service applicatif public pour accès direct depuis les tests (même patron que
+    # `App\Reservation\Service\RecurrenceReportHandler`).
+    App\Musee\Service\PrioriteOtaResolver:
+        public: true

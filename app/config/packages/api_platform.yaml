@@ -31,6 +31,8 @@ api_platform:
             - '%kernel.project_dir%/src/Padel/ApiResource'
             - '%kernel.project_dir%/src/Patinoire/Entity'
             - '%kernel.project_dir%/src/Patinoire/ApiResource'
+            - '%kernel.project_dir%/src/Musee/Entity'
+            - '%kernel.project_dir%/src/Musee/ApiResource'
     defaults:
         stateless: true
         cache_headers:

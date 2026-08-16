@@ -40,11 +40,16 @@ final class AnnulationNoShowTest extends ReservationApiTestCase
         $tokenClient = $this->jeton($client, \App\Reservation\DataFixtures\ReservationFixtures::CLIENT_EMAIL, \App\Reservation\DataFixtures\ReservationFixtures::CLIENT_MDP);
         $enteteOrg = ['auth_bearer' => $tokenClient, 'headers' => $entete['headers']];
 
-        // Créneau dans 30 minutes : hors délai franc de 24h dès la création.
-        $debut = (new \DateTimeImmutable('+30 minutes'))->format(\DateTimeInterface::ATOM);
-        $fin = (new \DateTimeImmutable('+90 minutes'))->format(\DateTimeInterface::ATOM);
-        $idCreneau = $this->creerCreneau($client, $entete, $debut, $fin);
+        // Créneau à date fixe lointaine (évite tout chevauchement avec le créneau des fixtures), puis
+        // délai d'annulation forcé dans le passé : « hors délai franc » de façon déterministe.
+        $idCreneau = $this->creerCreneau($client, $entete, '2027-06-02T10:00:00+00:00', '2027-06-02T11:00:00+00:00');
         $idReservation = $this->reserver($client, $entete, $idCreneau, $this->idBeneficiairePayeur());
+
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $reservationHorsDelai = $em->getRepository(Reservation::class)->find($idReservation);
+        $reservationHorsDelai->setDateLimiteAnnulation((new \DateTimeImmutable())->modify('-5 minutes'));
+        $em->flush();
 
         // Le client (annuler_soi) ne peut plus annuler lui-même hors délai.
         $client->request('POST', '/api/reservation/reservations/' . $idReservation . '/annuler', $enteteOrg);
@@ -67,10 +72,9 @@ final class AnnulationNoShowTest extends ReservationApiTestCase
         [$client, $entete] = $this->adminSurA();
         $client->disableReboot();
 
-        // Créneau exactement 24h + quelques secondes après maintenant : borne inclusive.
-        $debut = (new \DateTimeImmutable('+1441 minutes'))->format(\DateTimeInterface::ATOM);
-        $fin = (new \DateTimeImmutable('+1500 minutes'))->format(\DateTimeInterface::ATOM);
-        $idCreneau = $this->creerCreneau($client, $entete, $debut, $fin);
+        // Créneau à date fixe lointaine (évite tout chevauchement avec le créneau des fixtures
+        // « next monday »). La borne inclusive du délai franc est éprouvée via dateLimiteAnnulation ci-dessous.
+        $idCreneau = $this->creerCreneau($client, $entete, '2027-06-01T10:00:00+00:00', '2027-06-01T11:00:00+00:00');
         $idReservation = $this->reserver($client, $entete, $idCreneau, $this->idBeneficiairePayeur());
 
         /** @var EntityManagerInterface $em */
