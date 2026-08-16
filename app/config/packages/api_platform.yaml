@@ -35,6 +35,7 @@ api_platform:
             - '%kernel.project_dir%/src/Musee/ApiResource'
             - '%kernel.project_dir%/src/Boutique/Entity'
             - '%kernel.project_dir%/src/Boutique/ApiResource'
+            - '%kernel.project_dir%/src/Reporting/Entity'
     defaults:
         stateless: true
         cache_headers:

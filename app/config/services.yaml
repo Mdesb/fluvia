@@ -202,6 +202,30 @@ services:
     App\Musee\Service\PrioriteOtaResolver:
         public: true
 
+    # --- M7 Reporting & pilotage multi-niveaux (plan-reporting.md §2.1) : projections en lecture ---
+    App\Reporting\Projection\ProjectionVenteInterface: '@App\Reporting\Projection\Doctrine\ProjectionVenteDoctrine'
+    App\Reporting\Projection\ProjectionAccesInterface: '@App\Reporting\Projection\Doctrine\ProjectionAccesDoctrine'
+    App\Reporting\Projection\ProjectionComptaInterface: '@App\Reporting\Projection\Doctrine\ProjectionComptaDoctrine'
+    App\Reporting\Projection\ProjectionReservationInterface: '@App\Reporting\Projection\Doctrine\ProjectionReservationDoctrine'
+    App\Reporting\Projection\ProjectionRecouvrementInterface: '@App\Reporting\Projection\Doctrine\ProjectionRecouvrementDoctrine'
+    # Générateurs d'export par format (§2.8) : CSV réel, PDF/XLSX stubs (échouent proprement).
+    App\Reporting\Service\Export\CsvGenerateurExport:
+        tags: ['reporting.generateur_export']
+    App\Reporting\Service\Export\PdfGenerateurExportStub:
+        tags: ['reporting.generateur_export']
+    App\Reporting\Service\Export\XlsxGenerateurExportStub:
+        tags: ['reporting.generateur_export']
+    App\Reporting\Service\ResolveurGenerateurExport:
+        arguments:
+            $generateurs: !tagged_iterator reporting.generateur_export
+    App\Reporting\Service\StockageExportInterface: '@App\Reporting\Service\Export\StockageExportLocal'
+    # Commandes planifiées publiques pour accès direct depuis les tests (même patron que
+    # `App\Reservation\Command\BasculerNoShowCommand`).
+    App\Reporting\Command\AgregerMesuresCommand:
+        public: true
+    App\Reporting\Command\ExecuterRapportsCommand:
+        public: true
+
     # --- Module M3 Boutique en ligne (plan-boutique.md §2) : ports & adaptateurs ---
     # FranceConnect : protocole OIDC exact non détaillé dans les sources (⚠ HYPOTHÈSE, Risque n°4) —
     # stub par défaut, public pour injection de codes déterministes en test.
