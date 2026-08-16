@@ -125,3 +125,42 @@ services:
     # Encaissement CB immédiat (résolution 1 clic) : PSP non nommé par les sources (Risque n°4, repris
     # de App\Sport, généralisé) — stub par défaut.
     App\Recouvrement\Port\EncaissementImmediatInterface: '@App\Recouvrement\Adapter\EncaissementImmediatStubAdapter'
+
+    # --- Module socle M5 App\Reservation (plan-reservation.md) : ports & stratégies ---
+    # Frontière M1/M4 (Risque n°5 du plan) : aucun rattachement bénéficiaire↔formule modélisé à ce
+    # jour — stub public (tests injectent un scénario via `definir()`, patron `RetourSepaStubAdapter`).
+    App\Reservation\Port\FormuleBeneficiaireInterface:
+        alias: App\Reservation\Port\Adapter\FormuleBeneficiaireStub
+        public: true
+    App\Reservation\Port\Adapter\FormuleBeneficiaireStub:
+        public: true
+    # Notification du bénéficiaire (promotion liste d'attente, arbitrage récurrence) : aucun canal
+    # email/SMS/push spécifié dans ce dépôt — journalisation par défaut.
+    App\Reservation\Port\NotificationReservationInterface: '@App\Reservation\Port\Adapter\NotificationReservationLogAdapter'
+    # Stratégies de facturation no-show (décision structurante n°4 du plan), agrégées par
+    # `ResolveurStrategieFacturation` via le tag `reservation.strategie_facturation_no_show`.
+    App\Reservation\Facturation\VenteDiffereeAgentStrategie:
+        tags: ['reservation.strategie_facturation_no_show']
+    App\Reservation\Facturation\DebitPmvStrategie:
+        tags: ['reservation.strategie_facturation_no_show']
+    App\Reservation\Facturation\PrelevementDiffereStrategie:
+        tags: ['reservation.strategie_facturation_no_show']
+    App\Reservation\Facturation\FactureAEncaisserStrategie:
+        tags: ['reservation.strategie_facturation_no_show']
+    App\Reservation\Facturation\ResolveurStrategieFacturation:
+        arguments:
+            $strategies: !tagged_iterator reservation.strategie_facturation_no_show
+    # Port SEPA fourni PAR Reservation AU module partagé App\Sepa (squelette `prelevement_differe`,
+    # Risque n°1 du plan) — même patron que `App\Sport\Sepa\SportEcheanceSepaSource`. Public pour accès
+    # direct depuis les tests (même patron que `RecalageFmiHandler`/`GenererRemiseSepaHandler`).
+    App\Reservation\Sepa\ReservationEcheanceSepaSource:
+        tags: ['sepa.echeance_source']
+        public: true
+    # Services applicatifs publics pour accès direct depuis les tests (report de récurrence, promotion
+    # de liste d'attente, bascule no-show planifiée — même patron que `RecalageFmiHandler`).
+    App\Reservation\Service\RecurrenceReportHandler:
+        public: true
+    App\Reservation\Service\PromotionListeAttenteHandler:
+        public: true
+    App\Reservation\Command\BasculerNoShowCommand:
+        public: true

@@ -26,6 +26,7 @@ api_platform:
             - '%kernel.project_dir%/src/Recouvrement/ApiResource'
             - '%kernel.project_dir%/src/Fonctionnalite/Entity'
             - '%kernel.project_dir%/src/Fonctionnalite/ApiResource'
+            - '%kernel.project_dir%/src/Reservation/Entity'
     defaults:
         stateless: true
         cache_headers:

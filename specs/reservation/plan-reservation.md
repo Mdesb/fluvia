@@ -321,3 +321,42 @@ restent en place, ce module ne les modifie pas.
    active ne facture réellement (cas limite §7) : le libellé du statut réservation ne reflète pas
    toujours un encaissement effectif ; la granularité réelle est portée par `FacturationNoShow.statut`
    (ou son absence). Point de vigilance UX à signaler (constitution §2, règle d'or de simplicité).
+
+## 9. Divergences d'implémentation (constaté à l'exécution, DoD constitution §8.5)
+
+1. **`Activite.tarifReferenceMontant`** (decimal, en plus de `produitTarifReference: ref Produit`) —
+   la résolution complète du prix via la grille M1 (`ResolveurPrix` + `TypeTarif` + `Saison`, §4.3) est
+   hors périmètre de ce lot socle : ce montant simple sert de base à la vente à l'unité et au calcul
+   du montant d'un no-show. `produitTarifReference` reste porté (référence FK réelle) pour un câblage
+   futur au moteur de prix M1 complet.
+2. **`VenteReservationHandler`** construit directement `Vente`/`LigneVente` (prix forcé) plutôt que de
+   passer par `AjoutLigneHandler`/`ResolveurPrix` (M2) : la résolution de grille tarifaire complète
+   n'était pas nécessaire pour ce socle (le montant vient de `RegleAnnulation.montantCalcule()` ou de
+   `Activite.tarifReferenceMontant`). La `Vente` produite reste une entité M2 réelle, traçable, scellée
+   (NF525) dans le cas `debit_pmv`.
+3. **Routes API des sous-ressources** — `POST /reservation/creneaux/{id}/liste-attente` (crée une
+   `ListeAttente`) et `POST /reservation/reservations/{id}/emarger` (crée un `Emargement`) sont
+   déclarées comme opérations sur l'entité **parente** (`Creneau`, `Reservation`) plutôt que sur
+   l'entité créée, `{id}` correspondant alors à l'identifiant propre de la ressource parente : API
+   Platform (version utilisée) ne résout pas nativement une variable d'URI secondaire
+   (`{creneauId}`, `{reservationId}`) sans `Link` explicite déclaré côté ressource cible, ce qui
+   provoquait une erreur « Invalid uri variables. ». Documenté dans le code (commentaires) sur les
+   deux entités concernées. De même, `POST /reservation/participants/{id}/payer` (paiement partagé)
+   a été simplifié pour ne porter qu'un seul identifiant (celui du participant), sans
+   `{reservationId}` redondant.
+4. **`SessionSystemeResolver`** (Risque n°1 du plan) est bien implémenté tel qu'anticipé : une
+   `SessionCaisse`/`PointDeVente`/`Caisse`/`Utilisateur` techniques permanentes par établissement,
+   créées à la demande, portent le débit PMV automatique sans agent présent. Confirmé fonctionnel par
+   les tests (`FacturationNoShowStrategiesTest::testCa11DebitPmvAutomatiqueSansAgent`) — la réserve
+   NF525/comptable du plan (vente sans opérateur humain identifié) reste d'actualité et **doit être
+   validée avec un expert compta avant mise en production**.
+5. **Comportement Doctrine DBAL constaté (non modifié, hors périmètre)** — le type `datetime_immutable`
+   du DBAL (config par défaut de ce dépôt) sérialise une date avec offset (ex. `+02:00`) sans la
+   convertir en UTC ; à la relecture (PHP `date_default_timezone_get() === 'UTC'` dans ce
+   conteneur), l'heure murale est réinterprétée telle quelle en UTC — un décalage de l'ordre de
+   l'offset d'origine peut apparaître entre une valeur fraîchement construite en PHP et la même valeur
+   après un aller-retour base de données. Comportement déjà présent et accepté ailleurs dans le dépôt
+   (ex. fixtures/tests Piscine utilisant aussi `+02:00`) ; non corrigé ici (hors périmètre, module
+   partagé DBAL). Les tests de ce lot utilisent des horodatages `+00:00` pour éviter toute ambiguïté
+   lorsqu'une comparaison mélange une valeur fraîche et une valeur relue depuis la base (notamment
+   `BasculerNoShowCommand` appelé directement en test, hors cycle requête/réponse complet).

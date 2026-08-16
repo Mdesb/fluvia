@@ -1,0 +1,60 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Reservation\State;
+
+use ApiPlatform\Metadata\Operation;
+use ApiPlatform\State\ProcessorInterface;
+use App\Reservation\Entity\Creneau;
+use App\Reservation\Entity\Reservation;
+use App\Reservation\Entity\Ressource;
+use App\Reservation\Port\NotificationReservationInterface;
+use App\Vente\Service\LecteurCorps;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\Uid\Uuid;
+
+/**
+ * Validation manuelle d'un conflit de récurrence (RG-M5-11, CA-7) : un rôle habilité
+ * (`reservation.arbitrer_recurrence`) tranche — soit en réaffectant une ressource (même si moins
+ * équivalente), soit en confirmant le créneau tel quel — et le(s) bénéficiaire(s) sont notifiés.
+ *
+ * @implements ProcessorInterface<mixed, Creneau>
+ */
+final class ArbitrerConflitRecurrenceProcessor implements ProcessorInterface
+{
+    public function __construct(
+        private readonly EntityManagerInterface $em,
+        private readonly LecteurCorps $lecteur,
+        private readonly NotificationReservationInterface $notification,
+    ) {
+    }
+
+    public function process(mixed $data, Operation $operation, array $uriVariables = [], array $context = []): Creneau
+    {
+        \assert($data instanceof Creneau);
+
+        $corps = $this->lecteur->corps();
+        if (isset($corps['ressource']) && \is_string($corps['ressource'])) {
+            $segment = str_contains($corps['ressource'], '/') ? basename($corps['ressource']) : $corps['ressource'];
+            if (Uuid::isValid($segment)) {
+                $ressource = $this->em->getRepository(Ressource::class)->find(Uuid::fromString($segment));
+                if ($ressource instanceof Ressource) {
+                    $data->setRessource($ressource);
+                    $data->setOccurrenceModifiee(true);
+                }
+            }
+        }
+
+        $data->setEnAttenteArbitrage(false);
+        $this->em->flush();
+
+        /** @var list<Reservation> $reservations */
+        $reservations = $this->em->getRepository(Reservation::class)->findBy(['creneau' => $data]);
+        foreach ($reservations as $reservation) {
+            $this->notification->notifierArbitrageRecurrence($reservation, 'Conflit de récurrence arbitré manuellement (RG-M5-11).');
+        }
+
+        return $data;
+    }
+}
