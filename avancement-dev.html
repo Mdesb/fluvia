@@ -106,15 +106,15 @@
     <div class="eyebrow">Billetterie &amp; contrôle d'accès · Chantier logiciel</div>
     <h1>Avancement du développement</h1>
     <p>Le MVP se construit lot par lot, chacun spécifié puis implémenté et testé avant d'être intégré. Voici l'état réel du code — pas une estimation, ce qui est écrit, testé et versionné à ce jour.</p>
-    <div class="stamp">Mise à jour : 15 août 2026 · <b>MVP back-end complet</b> · <b>227 tests verts</b></div>
+    <div class="stamp">Mise à jour : 16 août 2026 · <b>MVP + 5 verticales + front-end</b> · <b>425 tests verts</b></div>
   </header>
 
   <section>
     <div class="kpis">
-      <div class="kpi"><div class="n good">8<span style="color:var(--ink-faint);font-size:18px">/8</span></div><div class="l">Lots MVP livrés &amp; testés</div></div>
-      <div class="kpi"><div class="n">227</div><div class="l">Tests automatisés au vert</div></div>
-      <div class="kpi"><div class="n">1589</div><div class="l">Assertions vérifiées</div></div>
-      <div class="kpi"><div class="n">9</div><div class="l">Livraisons versionnées (git)</div></div>
+      <div class="kpi"><div class="n good">5<span style="color:var(--ink-faint);font-size:18px">/5</span></div><div class="l">Verticales métier livrées</div></div>
+      <div class="kpi"><div class="n">425</div><div class="l">Tests automatisés au vert</div></div>
+      <div class="kpi"><div class="n">21</div><div class="l">Livraisons versionnées (git)</div></div>
+      <div class="kpi"><div class="n good">1</div><div class="l">Interface web utilisable (caisse)</div></div>
     </div>
     <div class="barwrap">
       <div class="top"><b>Progression du MVP back-end</b><span>8 livrés · MVP complet ✓</span></div>
@@ -123,7 +123,7 @@
       </div>
       <div class="legend">
         <span><i class="dot done"></i> Livré &amp; testé</span>
-        <span><i class="dot doing"></i> Verticale en cours (hors MVP)</span>
+        <span>Socle + 5 verticales + front-end · tout vert</span>
       </div>
     </div>
   </section>
@@ -172,23 +172,29 @@
         <div class="meta"><span class="pill done">Livré</span><span class="tests"><b>34</b> tests</span></div>
       </div>
     </div>
-    <div class="note">🎉 <b>MVP back-end complet</b> : les 8 lots sont écrits, testés et versionnés. Le moteur couvre toute la chaîne — offre → vente → accès → compta → client — plus la première verticale (piscine) et l'administration. Reste l'habillage <b>front-end</b> (interfaces caisse, admin, boutique) qui consomme cette API.</div>
+    <div class="note">🎉 <b>MVP back-end complet</b> : les 8 lots sont écrits, testés et versionnés. Le moteur couvre toute la chaîne — offre → vente → accès → compta → client — plus l'administration. Une <b>première interface web</b> (caisse + catalogue, habillée Fluvia) le consomme déjà.</div>
   </section>
 
   <section>
-    <h2 class="sec-h">Au-delà du MVP — verticales métier</h2>
+    <h2 class="sec-h">Capacités socle ajoutées (transverses)</h2>
     <div class="lanes">
-      <div class="lane doing">
-        <div class="lot">🏋️</div>
-        <div class="body"><h3>Salle de sport / Fitness</h3><p>Anti-impayés couplé à l'accès (échec de prélèvement SEPA → refus de badge), engagement, pause, accès nocturne autonome.</p></div>
-        <div class="meta"><span class="pill doing">En cours</span><span class="tests">spec + plan ✓</span></div>
-      </div>
-      <div class="lane">
-        <div class="lot">🎾</div>
-        <div class="body"><h3>Padel · Patinoire · Musée</h3><p>Réservation de terrain, location de patins, jauge timed-entry &amp; gratuités scolaires.</p></div>
-        <div class="meta"><span class="pill todo">À venir</span></div>
-      </div>
+      <div class="lane"><div class="lot">📅</div><div class="body"><h3>Réservation &amp; no-show</h3><p>Ressource réservable à l'heure (type paramétrable), créneaux, quotas, liste d'attente, annulation tardive facturée — réutilisée par padel, patinoire, musée, lignes d'eau.</p></div><div class="meta"><span class="pill done">Livré</span></div></div>
+      <div class="lane"><div class="lot">🏦</div><div class="body"><h3>SEPA (prélèvement)</h3><p>Mandats + remises pain.008 bi-régime (régie/privé) — partagé entre sport, piscine régie, futures verticales.</p></div><div class="meta"><span class="pill done">Livré</span></div></div>
+      <div class="lane"><div class="lot">🔁</div><div class="body"><h3>Recouvrement / anti-impayés</h3><p>Échec de prélèvement → refus de badge automatique, représentations, régularisation → ré-accès. Commun à tout abonnement.</p></div><div class="meta"><span class="pill done">Livré</span></div></div>
+      <div class="lane"><div class="lot">🧩</div><div class="body"><h3>Profil de fonctionnalités</h3><p>Chaque établissement active les capacités dont il a besoin (presets par métier) ; l'UI n'affiche que le pertinent.</p></div><div class="meta"><span class="pill done">Livré</span></div></div>
     </div>
+  </section>
+
+  <section>
+    <h2 class="sec-h">Verticales métier — les 5 livrées</h2>
+    <div class="lanes">
+      <div class="lane"><div class="lot">🏊</div><div class="body"><h3>Piscine</h3><p>POSS/FMI, encadrants MNS, lignes d'eau public/club, casiers &amp; caution.</p></div><div class="meta"><span class="pill done">Livré</span><span class="tests"><b>32</b> tests</span></div></div>
+      <div class="lane"><div class="lot">🏋️</div><div class="body"><h3>Salle de sport / Fitness</h3><p>Anti-impayés couplé au badge, engagement/pause/résiliation, accès nocturne autonome.</p></div><div class="meta"><span class="pill done">Livré</span><span class="tests"><b>37</b> tests</span></div></div>
+      <div class="lane"><div class="lot">🎾</div><div class="body"><h3>Padel</h3><p>Terrain à l'heure, parties 3/4 maintenues à 3, niveau validé club, tournois, relais d'éclairage.</p></div><div class="meta"><span class="pill done">Livré</span><span class="tests"><b>22</b> tests</span></div></div>
+      <div class="lane"><div class="lot">⛸️</div><div class="body"><h3>Patinoire</h3><p>Location de patins (pointures/retenue), surbooking toléré, affûtage, réservation de la glace.</p></div><div class="meta"><span class="pill done">Livré</span><span class="tests"><b>29</b> tests</span></div></div>
+      <div class="lane"><div class="lot">🏛️</div><div class="body"><h3>Musée</h3><p>Timed-entry, sous-quota par salle, gratuités scolaires, sur-vente OTA, visites guidées/audioguide.</p></div><div class="meta"><span class="pill done">Livré</span><span class="tests"><b>22</b> tests</span></div></div>
+    </div>
+    <div class="note">Chaque verticale <b>réutilise le moteur commun</b> et n'ajoute que ses règles propres — <b>sans modifier une ligne</b> des modules socle. Voir la carte <b>« Moteur global &amp; modules par secteur »</b>.</div>
   </section>
 
   <section>
@@ -237,7 +243,7 @@
     <div class="watchbox"><h3>Collecte SEPA &amp; coffre IBAN — banque / PSP (verticale Sport)</h3><p>Le cycle d'impayés et la tokenisation IBAN sont en place derrière une interface ; la remise bancaire réelle (pain.008, retours) et un coffre IBAN conforme PCI-DSS restent à brancher.</p></div>
   </section>
 
-  <footer>9 commits sur main · 8 lots du MVP (L0 socle → L7 back-office) · méthode SDD, agents de concert · verticale Sport en cours.</footer>
+  <footer>21 commits sur main · 8 lots MVP + capacités socle (réservation/SEPA/recouvrement/fonctionnalités) + 5 verticales + front-end · méthode SDD, agents de concert.</footer>
 </div>
 <button class="themebtn" id="themeBtn" aria-label="Changer de thème">◐</button>
 <script>
