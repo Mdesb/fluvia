@@ -58,7 +58,7 @@ function qs(params) {
 
 async function request(
   path,
-  { method = 'GET', body, ld = false, auth = true, headers: extra = {}, query } = {},
+  { method = 'GET', body, ld = false, auth = true, headers: extra = {}, query, timeoutMs } = {},
 ) {
   const headers = { ...extra }
   if (body !== undefined) {
@@ -72,19 +72,38 @@ async function request(
   }
   if (query) path += qs(query)
 
+  // Coupe-circuit optionnel : certaines opérations d'écriture peuvent traîner côté back ;
+  // on préfère un message clair plutôt qu'un spinner infini.
+  let abort
+  let timer
+  if (timeoutMs) {
+    abort = new AbortController()
+    timer = setTimeout(() => abort.abort(), timeoutMs)
+  }
+
   let res
   try {
     res = await fetch(path, {
       method,
       headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal: abort?.signal,
     })
   } catch (e) {
+    if (abort?.signal.aborted) {
+      throw new ApiError(
+        "Le serveur n'a pas répondu à temps (délai dépassé). Réessayez dans un instant.",
+        0,
+        null,
+      )
+    }
     throw new ApiError(
       "Impossible de joindre l'API. Vérifiez que le back tourne sur http://localhost:8080.",
       0,
       null,
     )
+  } finally {
+    if (timer) clearTimeout(timer)
   }
 
   if (res.status === 401 && auth) {
@@ -155,4 +174,25 @@ export const api = {
   // CRM (lecture seule cette tranche).
   rechercheClients: (params) => request('/api/crm/clients/recherche', { query: params }),
   ficheClient: (id) => request(`/api/clients/${id}/fiche-360`),
+
+  // --- Tranche 3 ---
+
+  // Réservation / Planning (M5).
+  reservationRessources: () => request('/api/reservation_ressources', { query: { itemsPerPage: 100 } }),
+  reservationCreneaux: () => request('/api/reservation_creneaus', { query: { itemsPerPage: 200 } }),
+  reservationActivites: () => request('/api/reservation_activites', { query: { itemsPerPage: 100 } }),
+  reservations: () => request('/api/reservations', { query: { itemsPerPage: 200 } }),
+  beneficiaires: () => request('/api/beneficiaires', { query: { itemsPerPage: 100 } }),
+  // Écriture : réserver un créneau (créneau + organisateur en IRI). Coupe-circuit 25 s.
+  reserverCreneau: (corps) =>
+    request('/api/reservation/reservations', { method: 'POST', body: corps, timeoutMs: 25000 }),
+
+  // Supervision accès / FMI (M3).
+  supervisionAcces: () => request('/api/acces/supervision'),
+  jaugesFmi: () => request('/api/jauge_fmis', { query: { itemsPerPage: 100 } }),
+  passages: () =>
+    request('/api/passages', { query: { itemsPerPage: 20, 'order[horodatage]': 'desc' } }),
+
+  // Reporting / Pilotage (M7). Route hors /api (proxifiée via /reporting).
+  dashboardEtablissement: (id) => request(`/reporting/dashboards/etablissement/${id}`),
 }

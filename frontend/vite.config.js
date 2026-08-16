@@ -10,7 +10,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const target = env.VITE_API_URL || 'http://localhost:8080'
   const proxy = {}
-  for (const path of ['/auth', '/me', '/api']) {
+  for (const path of ['/auth', '/me', '/api', '/reporting']) {
     proxy[path] = { target, changeOrigin: true, secure: false }
   }
   return {

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 
+// `cap` = capacité requise (capacitesActives de /me) ; sans `cap`, l'entrée est toujours visible.
 const NAV = [
   {
     section: 'Exploitation',
@@ -7,6 +8,19 @@ const NAV = [
       { id: 'caisse', ic: '▤', label: 'Caisse' },
       { id: 'session', ic: '◱', label: 'Caisse : session / Z' },
       { id: 'catalogue', ic: '▥', label: 'Catalogue' },
+      { id: 'reservation', ic: '◷', label: 'Réservation', cap: 'reservation' },
+    ],
+  },
+  {
+    section: 'Contrôle d’accès',
+    items: [
+      { id: 'supervision', ic: '◉', label: 'Supervision', cap: 'controle_acces' },
+    ],
+  },
+  {
+    section: 'Pilotage',
+    items: [
+      { id: 'pilotage', ic: '◨', label: 'Reporting' },
     ],
   },
   {
@@ -31,8 +45,16 @@ export default function AppShell({
   onglet,
   onNav,
   onLogout,
+  capacites = [],
   children,
 }) {
+  // Filtre les entrées selon les capacités actives de l'établissement courant.
+  const nav = NAV
+    .map((grp) => ({
+      ...grp,
+      items: grp.items.filter((it) => !it.cap || capacites.includes(it.cap)),
+    }))
+    .filter((grp) => grp.items.length > 0)
   const [theme, setTheme] = useState(() => document.documentElement.getAttribute('data-theme') || '')
   const [navOpen, setNavOpen] = useState(false)
 
@@ -68,7 +90,7 @@ export default function AppShell({
         <div className="side-brand"><span className="logo">◈</span> Fluvia</div>
         <div className="side-tenant"><b>{nomEtab}</b>Billetterie · Contrôle d'accès</div>
         <nav className="side-nav">
-          {NAV.map((grp) => (
+          {nav.map((grp) => (
             <div key={grp.section}>
               <div className="side-sec">{grp.section}</div>
               {grp.items.map((it) => (

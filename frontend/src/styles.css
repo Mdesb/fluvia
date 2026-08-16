@@ -228,6 +228,27 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 .pmv-box { display: flex; align-items: center; justify-content: space-between; background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 10px; padding: 12px 14px; }
 .pmv-solde { font-size: 22px; font-weight: 800; color: var(--accent-2); letter-spacing: -.02em; }
 
+/* ---- Tranche 3 : Réservation / Supervision / Pilotage ---- */
+.resa-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 900px) { .resa-grid { grid-template-columns: 1fr; } }
+
+.creneau { border: 1px solid var(--line); border-radius: 10px; padding: 13px 14px; background: var(--panel); display: flex; flex-direction: column; gap: 10px; }
+.creneau-h { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.creneau-sub { color: var(--ink-faint); font-size: 12px; margin-top: 2px; }
+.creneau-time { display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: var(--ink-soft); font-weight: 600; }
+.creneau-tarif { color: var(--accent-2); font-weight: 700; }
+.creneau-places { display: flex; flex-direction: column; gap: 5px; }
+.creneau-places .places { font-size: 12px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.creneau-places .places.full { color: var(--crit); font-weight: 700; }
+.creneau-btn { justify-content: center; width: 100%; }
+.creneau-resa { display: flex; flex-direction: column; gap: 8px; }
+.creneau-resa-act { display: flex; gap: 8px; }
+.creneau-resa-act .btn { flex: 1; justify-content: center; }
+
+.jauge-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.jauge-f { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--ink-soft); margin-top: 5px; }
+.mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12.5px; }
+
 /* ---- Divers ---- */
 .center { display: grid; place-items: center; min-height: 60vh; color: var(--ink-soft); }
 .spinner { width: 28px; height: 28px; border: 3px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
