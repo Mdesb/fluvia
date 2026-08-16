@@ -27,6 +27,8 @@ api_platform:
             - '%kernel.project_dir%/src/Fonctionnalite/Entity'
             - '%kernel.project_dir%/src/Fonctionnalite/ApiResource'
             - '%kernel.project_dir%/src/Reservation/Entity'
+            - '%kernel.project_dir%/src/Padel/Entity'
+            - '%kernel.project_dir%/src/Padel/ApiResource'
     defaults:
         stateless: true
         cache_headers:

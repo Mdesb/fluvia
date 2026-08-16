@@ -112,6 +112,12 @@ final class AuditWriteSubscriber
         // Profil de fonctionnalités par établissement (App\Fonctionnalite) : traçabilité de
         // l'activation/désactivation/paramétrage des capacités par établissement.
         \App\Fonctionnalite\Entity\FonctionnaliteEtablissement::class,
+        // Verticale Padel (plan-padel.md §4) : niveau de jeu (validation club), tournois, caution
+        // matériel, relais d'éclairage — traçabilité des actions sensibles (RG-SOCLE-07).
+        \App\Padel\Entity\NiveauJoueur::class,
+        \App\Padel\Entity\Tournoi::class,
+        \App\Padel\Entity\CautionMateriel::class,
+        \App\Padel\Entity\RelaisEclairageTerrain::class,
     ];
 
     /**

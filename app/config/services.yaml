@@ -164,3 +164,23 @@ services:
         public: true
     App\Reservation\Command\BasculerNoShowCommand:
         public: true
+
+    # --- Verticale Padel (plan-padel.md) : ports & adaptateurs (§2) ---
+    # Relais d'éclairage (capacité nouvelle, non couverte par L3) : simulateur logiciel en dev/test,
+    # même patron que `App\Acces\Port\PiloteAcces`. Public pour accès direct depuis les tests
+    # (`forcerDefaut()`, CA-11 repli manuel).
+    App\Padel\Port\PiloteEclairage:
+        alias: App\Padel\Adapter\SimulateurEclairageAdapter
+        public: true
+    App\Padel\Adapter\SimulateurEclairageAdapter:
+        public: true
+    # Statut membre/non-membre (Risque n°3 du plan-padel, hérite du Risque n°5 plan-reservation) :
+    # stub par défaut (non_membre), public pour injection en test (`definir()`).
+    App\Padel\Service\ResolveurStatutJoueurTarif:
+        public: true
+    # Commandes planifiées publiques pour accès direct depuis les tests (même patron que
+    # `BasculerNoShowCommand`).
+    App\Padel\Command\MaintienPartieA3Command:
+        public: true
+    App\Padel\Command\CommanderEclairageCommand:
+        public: true
