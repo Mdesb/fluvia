@@ -226,6 +226,15 @@ services:
     App\Reporting\Command\ExecuterRapportsCommand:
         public: true
 
+    # --- Module Personnel & planning (plan-personnel.md) : services applicatifs publics pour accès
+    # direct depuis les tests (même patron que `App\Acces\Service\RecalageFmiHandler`) ---
+    App\Personnel\Service\RecalculFenetreBadgeHandler:
+        public: true
+    App\Personnel\Command\RecalculerFenetresBadgesCommand:
+        public: true
+    App\Personnel\Command\TraiterEcheancesSortieCommand:
+        public: true
+
     # --- Module M3 Boutique en ligne (plan-boutique.md §2) : ports & adaptateurs ---
     # FranceConnect : protocole OIDC exact non détaillé dans les sources (⚠ HYPOTHÈSE, Risque n°4) —
     # stub par défaut, public pour injection de codes déterministes en test.
