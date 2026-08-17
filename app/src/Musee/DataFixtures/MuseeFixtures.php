@@ -55,13 +55,13 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 final class MuseeFixtures extends Fixture implements DependentFixtureInterface
 {
     public const GESTIONNAIRE_EMAIL = 'gestionnaire.musee@itcotation.com';
-    public const GESTIONNAIRE_MDP = 'GestionMusee#2026';
+    public const GESTIONNAIRE_MDP = 'aaa';
     public const COORDINATEUR_EMAIL = 'coordinateur.visites@itcotation.com';
-    public const COORDINATEUR_MDP = 'CoordoVisites#2026';
+    public const COORDINATEUR_MDP = 'aaa';
     public const AGENT_EMAIL = 'agent.accueil.musee@itcotation.com';
-    public const AGENT_MDP = 'AgentAccueilMusee#2026';
+    public const AGENT_MDP = 'aaa';
     public const GESTIONNAIRE_OTA_EMAIL = 'gestionnaire.ota@itcotation.com';
-    public const GESTIONNAIRE_OTA_MDP = 'GestionOta#2026';
+    public const GESTIONNAIRE_OTA_MDP = 'aaa';
 
     public const EXPOSITION_LIBELLE = 'Trésors d\'Égypte';
     public const SALLE_LIBELLE = 'Salle des sarcophages';

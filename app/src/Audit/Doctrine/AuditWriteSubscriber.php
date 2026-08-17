@@ -143,6 +143,12 @@ final class AuditWriteSubscriber
         \App\Stock\Entity\MouvementStock::class,
         \App\Stock\Entity\TransfertStock::class,
         \App\Stock\Entity\Inventaire::class,
+        // Module Base de connaissance & Support (plan-support.md §6, RG-SUP-15) : publication/
+        // archivage d'article, cycle de vie/escalade/réaffectation de ticket — traçabilité des
+        // actions sensibles. `CategorieAide`/`VersionArticle`/`MessageTicket` volontairement exclus
+        // (volumétrie/bruit, cf. plan §6).
+        \App\Support\Entity\ArticleAide::class,
+        \App\Support\Entity\TicketSupport::class,
     ];
 
     /**

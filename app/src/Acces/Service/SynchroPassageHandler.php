@@ -22,10 +22,13 @@ use Symfony\Component\Uid\Uuid;
  * Généralisation `Controleur` → `Terminal` (plan-acces-terminal.md §4.3) : `synchroniser()` (contrat
  * `/acces/synchro` historique) et `synchroniserPourTerminal()` (contrat `/terminal/passages/lot`,
  * plusieurs `Controleur`/`Equipement` d'un même `itboxRef`) partagent le même cœur de boucle
- * (`rejouer()`) — seule diffère la valeur de `autoriserCreditNegatifSiHorsLigne` (jamais activée pour
- * `/acces/synchro`, garantissant un comportement strictement inchangé) et le périmètre du recalage FMI
- * de fin de rejeu (1 espace pour `synchroniser()`, comme aujourd'hui ; tous les espaces effectivement
- * touchés par le lot pour `synchroniserPourTerminal()`).
+ * (`rejouer()`) — seul diffère le périmètre du recalage FMI de fin de rejeu (1 espace pour
+ * `synchroniser()`, comme aujourd'hui ; tous les espaces effectivement touchés par le lot pour
+ * `synchroniserPourTerminal()`). `autoriserCreditNegatifSiHorsLigne` (CA-8) reste `false` dans les
+ * **deux** méthodes : la réconciliation gracieuse du crédit négatif est implémentée (cf.
+ * `ValidationPassageHandler`) mais volontairement non activée sur ce chemin non plus, en attendant
+ * validation IT Cotation (Risque R-6 du plan, alternative de repli documentée) — voir le commentaire
+ * de `synchroniserPourTerminal()` ci-dessous.
  */
 final class SynchroPassageHandler
 {
@@ -75,10 +78,21 @@ final class SynchroPassageHandler
 
     /**
      * Contrat `/terminal/passages/lot` (US-TERM-06/07/08, plan-acces-terminal.md §2.4/§4.3) : même
-     * cœur de rejeu, mais (1) active la réconciliation gracieuse du crédit épuisé hors-ligne (CA-8,
-     * flag porté par chaque `EvenementPassageDto` construit ici — jamais par `synchroniser()`) et (2)
-     * recale la jauge FMI de **chaque espace distinct** effectivement touché par le lot (potentiellement
-     * plusieurs `Controleur`/`Equipement` d'un même `itboxRef`), au lieu d'un seul espace.
+     * cœur de rejeu, et recale la jauge FMI de **chaque espace distinct** effectivement touché par le
+     * lot (potentiellement plusieurs `Controleur`/`Equipement` d'un même `itboxRef`), au lieu d'un seul
+     * espace comme `synchroniser()`.
+     *
+     * ⚠ **Réconciliation gracieuse du crédit épuisé hors-ligne (CA-8) — implémentée mais VOLONTAIREMENT
+     * NON ACTIVÉE dans ce lot** (écart assumé avec le plan §4.3, qui active le flag ici par défaut) :
+     * ce changement de comportement métier (accepter un dépassement au lieu de le refuser, Risque R-6
+     * du plan) doit être validé explicitement par IT Cotation avant mise en production — cf. l'alternative
+     * de repli documentée par le plan lui-même (§8 Risque R-6 : « Lot D livré avec
+     * `autoriserCreditNegatifSiHorsLigne` toujours `false` »). `/terminal/passages/lot` se comporte donc
+     * aujourd'hui **exactement comme `/acces/synchro`** sur ce point précis (refus au rejeu si crédit
+     * épuisé) ; activer la réconciliation gracieuse se limite à passer `true` ci-dessous, une fois
+     * validé (le reste du mécanisme — `ValidationPassageHandler`, `JournalReconciliation`,
+     * `CodeMotifRefus::CreditEpuiseHorsLigneLitige` — est déjà testé et opérationnel,
+     * cf. `ValidationPassageHandlerCreditNegatifTest`).
      *
      * @param list<array<string, mixed>> $lot
      *
@@ -89,7 +103,7 @@ final class SynchroPassageHandler
      */
     public function synchroniserPourTerminal(array $lot, bool $origineTerminal = true): array
     {
-        $resultat = $this->rejouer($lot, autoriserCreditNegatifSiHorsLigne: true);
+        $resultat = $this->rejouer($lot, autoriserCreditNegatifSiHorsLigne: false);
 
         /** @var array<string, EspaceAcces> $espaces */
         $espaces = [];

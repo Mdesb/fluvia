@@ -25,9 +25,9 @@ final class SocleFixtures extends Fixture
     public const ETAB_A_NOM = 'Piscine A';
     public const ETAB_B_NOM = 'Patinoire B';
     public const ADMIN_EMAIL = 'admin@itcotation.com';
-    public const ADMIN_MDP = 'AdminSocle#2026';
+    public const ADMIN_MDP = 'aaa';
     public const LECTEUR_EMAIL = 'lecteur@itcotation.com';
-    public const LECTEUR_MDP = 'LecteurSocle#2026';
+    public const LECTEUR_MDP = 'aaa';
 
     public function __construct(
         private readonly UserPasswordHasherInterface $hasher,

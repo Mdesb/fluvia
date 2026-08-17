@@ -51,13 +51,13 @@ final class ReservationFixtures extends Fixture implements DependentFixtureInter
     public const ACTIVITE_VISITE_LIBELLE = 'Visite guidée musée';
 
     public const AGENT_EMAIL = 'agent.reservation@itcotation.com';
-    public const AGENT_MDP = 'AgentReservation#2026';
+    public const AGENT_MDP = 'aaa';
     public const GESTIONNAIRE_EMAIL = 'gestionnaire.planning@itcotation.com';
-    public const GESTIONNAIRE_MDP = 'GestionPlanning#2026';
+    public const GESTIONNAIRE_MDP = 'aaa';
     public const OPERATEUR_EMAIL = 'operateur.ressource@itcotation.com';
-    public const OPERATEUR_MDP = 'OperateurRessource#2026';
+    public const OPERATEUR_MDP = 'aaa';
     public const CLIENT_EMAIL = 'client.organisateur@itcotation.com';
-    public const CLIENT_MDP = 'ClientOrganisateur#2026';
+    public const CLIENT_MDP = 'aaa';
 
     public function __construct(
         private readonly UserPasswordHasherInterface $hasher,

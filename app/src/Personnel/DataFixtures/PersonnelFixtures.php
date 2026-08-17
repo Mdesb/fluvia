@@ -40,7 +40,7 @@ final class PersonnelFixtures extends Fixture
     public const ETAB_A_NOM = 'Site A Personnel';
     public const ETAB_B_NOM = 'Site B Personnel';
 
-    public const MDP = 'PersonnelDemo#2026';
+    public const MDP = 'aaa';
     public const EMAIL_RH = 'personnel.rh@itcotation.com';
     public const EMAIL_PLANNING = 'personnel.planning@itcotation.com';
     public const EMAIL_LECTURE = 'personnel.lecture@itcotation.com';
@@ -100,13 +100,11 @@ final class PersonnelFixtures extends Fixture
             $manager->persist($perm);
             $perms[$action] = $perm;
         }
-        $permBloquerSupport = (new Permission())->setModule('acces')->setAction('bloquer_support');
-        $manager->persist($permBloquerSupport);
+        $permBloquerSupport = $this->permissionAcces($manager, 'bloquer_support');
         // `acces.ingestion` : permet aux tests de passage badge staff (CA-9) de soumettre un
         // événement `POST /acces/passages` avec le compte RH, même moteur qu'un contrôleur réel
         // (RG-PERSO-07) — en production, ce compte technique serait dédié au contrôleur/ITBOX.
-        $permIngestion = (new Permission())->setModule('acces')->setAction('ingestion');
-        $manager->persist($permIngestion);
+        $permIngestion = $this->permissionAcces($manager, 'ingestion');
 
         $roleRh = (new Role())->setNom('Personnel Administrateur RH');
         $roleRh->addPermission($perms['gerer_employe'])->addPermission($perms['gerer_qualification'])
@@ -145,6 +143,28 @@ final class PersonnelFixtures extends Fixture
         $manager->persist((new Affectation())->setUtilisateur($utilisateurSoi)->setRole($roleEmploye)->setEtablissement($etabA));
 
         $manager->flush();
+    }
+
+    /**
+     * Permission du module Accès dont cette fixture a besoin, mais qu'`AccesFixtures` crée aussi.
+     *
+     * Cette fixture est volontairement autonome (cf. docblock de classe) : elle doit savoir créer
+     * la permission si elle tourne seule. Mais lors d'un `doctrine:fixtures:load` complet,
+     * `AccesFixtures` s'exécute avant et l'a déjà insérée — la recréer violait la contrainte
+     * `uniq_permission_module_action` et faisait échouer tout le chargement.
+     */
+    private function permissionAcces(ObjectManager $manager, string $action): Permission
+    {
+        $existante = $manager->getRepository(Permission::class)
+            ->findOneBy(['module' => 'acces', 'action' => $action]);
+        if ($existante instanceof Permission) {
+            return $existante;
+        }
+
+        $permission = (new Permission())->setModule('acces')->setAction($action);
+        $manager->persist($permission);
+
+        return $permission;
     }
 
     private function creerUtilisateur(ObjectManager $manager, string $email, string $nom): Utilisateur

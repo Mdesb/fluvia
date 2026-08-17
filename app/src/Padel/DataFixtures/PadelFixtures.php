@@ -54,7 +54,7 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 final class PadelFixtures extends Fixture implements DependentFixtureInterface
 {
     public const GESTIONNAIRE_EMAIL = 'gestionnaire.padel@itcotation.com';
-    public const GESTIONNAIRE_MDP = 'GestionPadel#2026';
+    public const GESTIONNAIRE_MDP = 'aaa';
     public const JOUEUR_EMAIL_PREFIX = 'joueur';
     public const JOUEUR_DOMAINE = '@padel.test';
     public const NB_JOUEURS = 8;

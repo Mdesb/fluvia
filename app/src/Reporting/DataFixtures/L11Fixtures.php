@@ -63,7 +63,7 @@ final class L11Fixtures extends Fixture
     public const SITE_A2_NOM = 'Site A2 Reporting';
     public const SITE_B1_NOM = 'Site B1 Reporting';
 
-    public const MDP = 'ReportingDemo#2026';
+    public const MDP = 'aaa';
     public const EMAIL_SITE = 'reporting.site@itcotation.com';
     public const EMAIL_REGION = 'reporting.region@itcotation.com';
     public const EMAIL_GROUPE = 'reporting.groupe@itcotation.com';

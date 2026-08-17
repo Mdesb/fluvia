@@ -33,7 +33,7 @@ final class L7Fixtures extends Fixture implements DependentFixtureInterface
     public const ADMIN2_MDP = 'Admin2EtabA#2026';
 
     public const RESP_A_EMAIL = 'respa.etaba@itcotation.com';
-    public const RESP_A_MDP = 'RespEtabA#2026';
+    public const RESP_A_MDP = 'aaa';
     public const ROLE_RESP_A_NOM = 'Administrateur établissement A (test)';
     public const ROLE_TROP_PUISSANT_NOM = 'Rôle trop puissant (test)';
     public const PERMISSION_DEMO_MODULE = 'demo';

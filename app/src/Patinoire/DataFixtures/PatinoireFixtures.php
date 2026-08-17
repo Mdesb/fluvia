@@ -43,11 +43,11 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 final class PatinoireFixtures extends Fixture implements DependentFixtureInterface
 {
     public const AGENT_EMAIL = 'agent.comptoir@patinoire.itcotation.com';
-    public const AGENT_MDP = 'AgentComptoir#2026';
+    public const AGENT_MDP = 'aaa';
     public const TECHNICIEN_EMAIL = 'technicien.atelier@patinoire.itcotation.com';
-    public const TECHNICIEN_MDP = 'TechnicienAtelier#2026';
+    public const TECHNICIEN_MDP = 'aaa';
     public const GESTIONNAIRE_GLACE_EMAIL = 'gestionnaire.glace@patinoire.itcotation.com';
-    public const GESTIONNAIRE_GLACE_MDP = 'GestionGlace#2026';
+    public const GESTIONNAIRE_GLACE_MDP = 'aaa';
     public const POINTURE_DEMO = 42;
 
     public function __construct(

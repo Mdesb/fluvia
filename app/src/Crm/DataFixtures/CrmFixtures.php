@@ -42,11 +42,11 @@ final class CrmFixtures extends Fixture implements DependentFixtureInterface
     public const CONJOINT_PRENOM = 'Marie';
     public const FAMILLE_LIBELLE = 'Famille Dupont';
     public const AGENT_EMAIL = 'agent.crm@itcotation.com';
-    public const AGENT_MDP = 'AgentCrm#2026';
+    public const AGENT_MDP = 'aaa';
     public const GROUPE_B_NOM = 'Groupe Second Loisirs';
     public const ETAB_C_NOM = 'Musée C';
     public const AGENT_B_EMAIL = 'agent.groupeb@itcotation.com';
-    public const AGENT_B_MDP = 'AgentGroupeB#2026';
+    public const AGENT_B_MDP = 'aaa';
 
     public function __construct(
         private readonly UserPasswordHasherInterface $hasher,

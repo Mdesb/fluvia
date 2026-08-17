@@ -56,11 +56,11 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 final class BoutiqueFixtures extends Fixture implements DependentFixtureInterface
 {
     public const GESTIONNAIRE_EMAIL = 'gestionnaire.boutique@itcotation.com';
-    public const GESTIONNAIRE_MDP = 'GestionBoutique#2026';
+    public const GESTIONNAIRE_MDP = 'aaa';
     public const RESPONSABLE_EMAIL = 'responsable.boutique@itcotation.com';
-    public const RESPONSABLE_MDP = 'ResponsableBoutique#2026';
+    public const RESPONSABLE_MDP = 'aaa';
     public const CLIENT_EMAIL = 'client.boutique@itcotation.com';
-    public const CLIENT_MDP = 'ClientBoutique#2026';
+    public const CLIENT_MDP = 'aaa';
 
     public const PRODUIT_SIMPLE_CODE = 'PRD-BOU-SIMPLE';
     public const PRODUIT_TIMED_ENTRY_CODE = 'PRD-BOU-TIMED';
