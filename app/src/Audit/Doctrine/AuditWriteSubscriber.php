@@ -133,6 +133,16 @@ final class AuditWriteSubscriber
         \App\Boutique\Entity\DemandeRemboursement::class,
         \App\Boutique\Entity\RetraitClickCollect::class,
         \App\Boutique\Entity\PartenaireOTA::class,
+        // Module Stock & Inventaire boutique (plan-stock.md §6, T16) : entités sensibles (fournisseurs,
+        // commandes/réceptions d'achat, couches de coût, mouvements append-only, transferts,
+        // inventaires) — traçabilité RG-SOCLE-07/RG-STOCK-15.
+        \App\Stock\Entity\Fournisseur::class,
+        \App\Stock\Entity\CommandeAchat::class,
+        \App\Stock\Entity\ReceptionAchat::class,
+        \App\Stock\Entity\LotStock::class,
+        \App\Stock\Entity\MouvementStock::class,
+        \App\Stock\Entity\TransfertStock::class,
+        \App\Stock\Entity\Inventaire::class,
     ];
 
     /**
