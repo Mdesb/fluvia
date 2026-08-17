@@ -199,4 +199,86 @@ export const api = {
 
   // Reporting / Pilotage (M7). Route hors /api (proxifiée via /reporting).
   dashboardEtablissement: (id) => request(`/reporting/dashboards/etablissement/${id}`),
+
+  // --- Paramètres (référentiels, lecture) ---
+  espaces: () => request('/api/espaces', { query: { itemsPerPage: 200 } }),
+  regions: () => request('/api/regions', { query: { itemsPerPage: 100 } }),
+  categories: () => request('/api/categories', { query: { itemsPerPage: 200 } }),
+  typeTarifs: () => request('/api/type_tarifs', { query: { itemsPerPage: 100 } }),
+  grilleTarifaires: () => request('/api/grille_tarifaires', { query: { itemsPerPage: 200 } }),
+  saisons: () => request('/api/saisons', { query: { itemsPerPage: 100 } }),
+  tauxTvas: () => request('/api/taux_tvas', { query: { itemsPerPage: 100 } }),
+
+  // Comptes / rôles & droits (M8, lecture seule côté front).
+  utilisateurs: () => request('/api/utilisateurs', { query: { itemsPerPage: 100 } }),
+  roles: () => request('/api/roles', { query: { itemsPerPage: 100 } }),
+  permissions: () => request('/api/permissions', { query: { itemsPerPage: 300 } }),
+  affectations: () => request('/api/affectations', { query: { itemsPerPage: 200 } }),
+
+  // Capacités activables (feature flags par établissement).
+  catalogueCapacites: () => request('/api/fonctionnalites/catalogue'),
+  fonctionnalitesEtablissement: (id) => request(`/api/etablissements/${id}/fonctionnalites`),
+
+  // --- Comptabilité / Régie (M6) ---
+  journaux: () => request('/api/journals', { query: { itemsPerPage: 100 } }),
+  ecrituresComptables: () =>
+    request('/api/ecriture_comptables', { query: { itemsPerPage: 100 } }),
+  regieRecettes: () => request('/api/regie_recettes', { query: { itemsPerPage: 100 } }),
+  ventesImpayeesRegie: () =>
+    request('/api/vente_impayee_regies', { query: { itemsPerPage: 100 } }),
+  bordereauxVersement: () =>
+    request('/api/bordereau_versements', { query: { itemsPerPage: 100 } }),
+  comptesComptables: () =>
+    request('/api/compte_comptables', { query: { itemsPerPage: 200 } }),
+  cautions: () => request('/api/cautions', { query: { itemsPerPage: 100 } }),
+
+  // SEPA : remises de prélèvement (pain.008), mandats, rejets.
+  remisesSepa: () => request('/api/remise_sepas', { query: { itemsPerPage: 100 } }),
+  mandatsSepa: () => request('/api/mandat_sepas', { query: { itemsPerPage: 100 } }),
+  rejetsSepa: () => request('/api/rejet_sepas', { query: { itemsPerPage: 100 } }),
+
+  // Recouvrement / impayés.
+  incidentsImpayes: () => request('/api/incident_impayes', { query: { itemsPerPage: 100 } }),
+
+  // --- Boutique en ligne (M3, vue admin) ---
+  // Les paniers en ligne ne sont pas listables (accès par id) : la vue admin s'appuie sur les
+  // demandes de remboursement (listables) et les comptes clients boutique.
+  demandesRemboursement: () =>
+    request('/api/boutique/demandes-remboursement', { query: { itemsPerPage: 100 } }),
+  comptesClientBoutique: () =>
+    request('/api/compte_clients', { query: { itemsPerPage: 100 } }),
+  vitrines: () => request('/api/boutique/vitrines', { query: { itemsPerPage: 100 } }),
+  accepterRemboursement: (id) =>
+    request(`/api/boutique/demandes-remboursement/${id}/accepter`, { method: 'POST', body: {}, ld: true }),
+  refuserRemboursement: (id, motif) =>
+    request(`/api/boutique/demandes-remboursement/${id}/refuser`, { method: 'POST', body: { motifRefus: motif }, ld: true }),
+
+  // --- Personnel ---
+  employes: () => request('/api/employes', { query: { itemsPerPage: 200 } }),
+  roster: () => request('/api/personnel/roster'),
+  badgeStaffs: () => request('/api/badge_staffs', { query: { itemsPerPage: 200 } }),
+  revoquerBadgeStaff: (id, motif) =>
+    request(`/api/personnel/badges/${id}/revoquer`, { method: 'POST', body: { motif }, ld: true }),
+
+  // --- Verticales (routes explicites privilégiées) ---
+  // Piscine
+  bassins: () => request('/api/bassins', { query: { itemsPerPage: 100 } }),
+  creneauxBassin: () => request('/api/creneau_bassins', { query: { itemsPerPage: 200 } }),
+  jaugesGrandPublic: () =>
+    request('/api/jauge_grand_public_calculees', { query: { itemsPerPage: 100 } }),
+  // Patinoire
+  patinoireConflits: () => request('/api/patinoire/conflits-glace'),
+  patinoireLocations: () =>
+    request('/api/patinoire_location_patins', { query: { itemsPerPage: 100 } }),
+  patinoireAffutages: () =>
+    request('/api/patinoire_affutages', { query: { itemsPerPage: 100 } }),
+  // Padel
+  padelTerrains: () => request('/api/padel/terrains', { query: { itemsPerPage: 100 } }),
+  // Pas de collection listable pour les tournois (seulement des routes custom
+  // /api/padel/tournois/{id}/...) : on renvoie un état vide propre.
+  padelTournois: () => Promise.resolve({ 'hydra:member': [] }),
+  // Musée
+  museeExpositions: () => request('/api/musee_expositions', { query: { itemsPerPage: 100 } }),
+  museeVisitesGuidees: () =>
+    request('/api/musee_visite_guidees', { query: { itemsPerPage: 100 } }),
 }

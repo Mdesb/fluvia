@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
-// `cap` = capacité requise (capacitesActives de /me) ; sans `cap`, l'entrée est toujours visible.
+// `cap` = capacité requise (capacitesActives de /me) ; `perm` = permission requise (droits de /me).
+// Sans `cap` ni `perm`, l'entrée est toujours visible. `disabled` = présente mais grisée (« bientôt »).
 const NAV = [
   {
     section: 'Exploitation',
@@ -18,15 +19,44 @@ const NAV = [
     ],
   },
   {
+    section: 'Boutique',
+    items: [
+      { id: 'boutique', ic: '▦', label: 'Boutique en ligne', cap: 'boutique_en_ligne' },
+    ],
+  },
+  {
+    section: 'Verticales',
+    items: [
+      { id: 'piscine', ic: '≈', label: 'Piscine', perm: 'piscine.lire' },
+      { id: 'patinoire', ic: '❆', label: 'Patinoire', perm: 'patinoire.lire' },
+      { id: 'padel', ic: '◍', label: 'Padel', perm: 'padel.lire' },
+      { id: 'musee', ic: '⛫', label: 'Musée', perm: 'musee.lire' },
+    ],
+  },
+  {
     section: 'Pilotage',
     items: [
       { id: 'pilotage', ic: '◨', label: 'Reporting' },
+      { id: 'comptabilite', ic: '▧', label: 'Comptabilité / Régie', perm: 'compta.lire' },
     ],
   },
   {
     section: 'Relation client',
     items: [
       { id: 'clients', ic: '☺', label: 'Clients' },
+    ],
+  },
+  {
+    section: 'Ressources',
+    items: [
+      { id: 'personnel', ic: '☰', label: 'Personnel', perm: 'personnel.lire' },
+      { id: 'stock', ic: '▣', label: 'Stock', disabled: true },
+    ],
+  },
+  {
+    section: 'Administration',
+    items: [
+      { id: 'parametres', ic: '⚙', label: 'Paramètres' },
     ],
   },
 ]
@@ -46,13 +76,16 @@ export default function AppShell({
   onNav,
   onLogout,
   capacites = [],
+  droits = [],
   children,
 }) {
-  // Filtre les entrées selon les capacités actives de l'établissement courant.
+  // Filtre les entrées selon les capacités actives ET les droits effectifs de l'établissement courant.
   const nav = NAV
     .map((grp) => ({
       ...grp,
-      items: grp.items.filter((it) => !it.cap || capacites.includes(it.cap)),
+      items: grp.items.filter(
+        (it) => (!it.cap || capacites.includes(it.cap)) && (!it.perm || droits.includes(it.perm)),
+      ),
     }))
     .filter((grp) => grp.items.length > 0)
   const [theme, setTheme] = useState(() => document.documentElement.getAttribute('data-theme') || '')
@@ -97,9 +130,13 @@ export default function AppShell({
                 <button
                   key={it.id}
                   className={`side-link${onglet === it.id ? ' active' : ''}`}
-                  onClick={() => aller(it.id)}
+                  onClick={() => !it.disabled && aller(it.id)}
+                  disabled={it.disabled}
+                  title={it.disabled ? 'Bientôt disponible' : undefined}
+                  style={it.disabled ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
                 >
                   <span className="ic">{it.ic}</span> {it.label}
+                  {it.disabled && <span className="badge mut" style={{ marginLeft: 'auto', fontSize: 10 }}>bientôt</span>}
                 </button>
               ))}
             </div>

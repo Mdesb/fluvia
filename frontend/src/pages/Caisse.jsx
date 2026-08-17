@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api, membres } from '../api/client.js'
+import Qr from '../components/Qr.jsx'
 import {
   libelleProduit,
   prixIndicatif,
@@ -173,6 +174,8 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
     try {
       const venteValidee = await api.valider(vente.id)
       const infoTicket = await api.ticket(vente.id, 'imprimer')
+      // Code de support signé (HMAC) émis à la validation : 1er support porteur d'un identifiant.
+      const support = (venteValidee.supports || []).find((s) => s.identifiantSupport)
       setTicket({
         numero: infoTicket.numero || venteValidee.numero,
         lignes: panier.map((l) => ({
@@ -182,6 +185,7 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
         })),
         total: venteValidee.total ?? total.toFixed(2),
         paiements,
+        codeSupport: support?.identifiantSupport || null,
       })
       setPanier([])
       setVente(null)
@@ -491,8 +495,17 @@ function TicketVente({ ticket }) {
           </div>
         )}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
-          <div className="qr" />
-          <div className="hint" style={{ margin: 0 }}>Billet + QR édités · appairage support à la validation</div>
+          <Qr value={ticket.codeSupport} size={84} title={`QR billet ${ticket.numero}`} />
+          <div className="hint" style={{ margin: 0 }}>
+            {ticket.codeSupport ? (
+              <>Billet + QR édités · support appairé
+                <br />
+                <span className="mono" style={{ fontSize: 10.5, wordBreak: 'break-all' }}>{ticket.codeSupport}</span>
+              </>
+            ) : (
+              'Billet édité · aucun support QR sur cette vente'
+            )}
+          </div>
         </div>
       </div>
     </div>

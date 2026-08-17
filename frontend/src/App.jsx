@@ -15,6 +15,14 @@ import Clients from './pages/Clients.jsx'
 import Reservation from './pages/Reservation.jsx'
 import Supervision from './pages/Supervision.jsx'
 import Pilotage from './pages/Pilotage.jsx'
+import Boutique from './pages/Boutique.jsx'
+import Comptabilite from './pages/Comptabilite.jsx'
+import Personnel from './pages/Personnel.jsx'
+import Parametres from './pages/Parametres.jsx'
+import Piscine from './pages/Piscine.jsx'
+import Patinoire from './pages/Patinoire.jsx'
+import Padel from './pages/Padel.jsx'
+import Musee from './pages/Musee.jsx'
 
 export default function App() {
   const [booting, setBooting] = useState(true)
@@ -98,11 +106,17 @@ export default function App() {
     if (authed && etabActif) rafraichirProfil()
   }, [authed, etabActif, rafraichirProfil])
 
-  // Si l'onglet courant dépend d'une capacité désormais absente, on retombe sur la Caisse.
+  // Si l'onglet courant dépend d'une capacité ou d'une permission désormais absente, retour Caisse.
   useEffect(() => {
     const caps = me?.capacitesActives || []
-    const requis = { reservation: 'reservation', supervision: 'controle_acces' }
-    if (requis[onglet] && !caps.includes(requis[onglet])) setOnglet('caisse')
+    const droits = me?.droits || []
+    const capRequise = { reservation: 'reservation', supervision: 'controle_acces', boutique: 'boutique_en_ligne' }
+    const permRequise = {
+      piscine: 'piscine.lire', patinoire: 'patinoire.lire', padel: 'padel.lire',
+      musee: 'musee.lire', comptabilite: 'compta.lire', personnel: 'personnel.lire',
+    }
+    if (capRequise[onglet] && !caps.includes(capRequise[onglet])) setOnglet('caisse')
+    else if (permRequise[onglet] && !droits.includes(permRequise[onglet])) setOnglet('caisse')
   }, [me, onglet])
 
   function changerEtablissement(id) {
@@ -138,6 +152,7 @@ export default function App() {
   }
 
   const capacites = me?.capacitesActives || []
+  const droits = me?.droits || []
 
   return (
     <AppShell
@@ -149,6 +164,7 @@ export default function App() {
       onNav={setOnglet}
       onLogout={deconnexion}
       capacites={capacites}
+      droits={droits}
     >
       {onglet === 'caisse' && (
         <Caisse
@@ -169,7 +185,17 @@ export default function App() {
       {onglet === 'pilotage' && (
         <Pilotage etabActif={etabActif} etablissements={etablissements} />
       )}
+      {onglet === 'comptabilite' && <Comptabilite etabActif={etabActif} />}
       {onglet === 'clients' && <Clients etabActif={etabActif} />}
+      {onglet === 'boutique' && <Boutique etabActif={etabActif} />}
+      {onglet === 'piscine' && <Piscine etabActif={etabActif} />}
+      {onglet === 'patinoire' && <Patinoire etabActif={etabActif} />}
+      {onglet === 'padel' && <Padel etabActif={etabActif} />}
+      {onglet === 'musee' && <Musee etabActif={etabActif} />}
+      {onglet === 'personnel' && <Personnel etabActif={etabActif} />}
+      {onglet === 'parametres' && (
+        <Parametres etabActif={etabActif} etablissements={etablissements} />
+      )}
     </AppShell>
   )
 }
