@@ -254,3 +254,20 @@ services:
         public: true
     App\Boutique\Ota\StubConnecteurOtaAdapter:
         public: true
+
+    # --- Module Base de connaissance & Support (plan-support.md) ---
+    # Doc vivante docs/aide/<module>/<slug>.md (§5.1 plan) : ⚠ écart au plan (contrainte
+    # d'environnement docker-compose.yml, seul ./app est bind-monté dans le conteneur php) — placée
+    # sous app/docs/aide plutôt qu'à la racine du dépôt, cf. commentaire `ImporterAideCommand`.
+    App\Support\Command\ImporterAideCommand:
+        public: true
+        arguments:
+            $cheminAideParDefaut: '%kernel.project_dir%/docs/aide'
+    App\Support\State\ImportExecuterProcessor:
+        arguments:
+            $cheminAideParDefaut: '%kernel.project_dir%/docs/aide'
+    # Délai de réouverture d'un ticket fermé (RG-SUP-11, ⚠ non chiffré par les sources, Risque n°4 du
+    # plan) — paramètre applicatif plutôt qu'une valeur en dur (constitution §4 point 4).
+    App\Support\State\RouvrirTicketProcessor:
+        arguments:
+            $delaiReouvertureJours: 15

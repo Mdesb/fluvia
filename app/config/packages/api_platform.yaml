@@ -40,6 +40,7 @@ api_platform:
             - '%kernel.project_dir%/src/Personnel/ApiResource'
             - '%kernel.project_dir%/src/Stock/Entity'
             - '%kernel.project_dir%/src/Stock/ApiResource'
+            - '%kernel.project_dir%/src/Support/Entity'
     defaults:
         stateless: true
         cache_headers:
