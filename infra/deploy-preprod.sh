@@ -9,6 +9,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 REPO_ROOT="$(pwd)"
+WEB_ROOT="${WEB_ROOT:-/var/www/smartaccess}"   # racine servie par le Nginx de l'hôte
 COMPOSE=(docker compose -f infra/compose.preprod.yaml --env-file infra/.env.preprod)
 
 log() { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
@@ -45,6 +46,19 @@ log "Droits sur var/"
 # sans redémarrage du master FPM, le code servi resterait celui d'avant le déploiement.
 log "Redémarrage de PHP-FPM (opcache)"
 "${COMPOSE[@]}" restart php
+
+# Le frontend est construit dans un conteneur jetable : pas de Node.js à
+# installer ni à maintenir sur l'hôte, et la version du builder est figée.
+# -u évite que node_modules/ et dist/ appartiennent à root.
+log "Construction du frontend (React / Vite)"
+docker run --rm \
+    -v "$REPO_ROOT/frontend":/app -w /app \
+    -u "$(id -u):$(id -g)" \
+    -e HOME=/tmp -e npm_config_cache=/tmp/.npm \
+    node:20-alpine sh -c 'npm ci --no-audit --no-fund && npm run build'
+
+log "Publication du frontend"
+rsync -a --delete frontend/dist/ "$WEB_ROOT/"
 
 log "État de la stack"
 "${COMPOSE[@]}" ps
