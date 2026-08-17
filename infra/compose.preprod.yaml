@@ -32,6 +32,9 @@ services:
       # Symfony est derrière le Nginx de l'hôte : sans ça les URL générées et le
       # détection HTTPS sont fausses.
       TRUSTED_PROXIES: "127.0.0.1,REMOTE_ADDR"
+      # Phrase secrète protégeant la clé privée JWT. Propre à la préprod : celle
+      # de app/.env est une valeur de développement, publique dans le dépôt.
+      JWT_PASSPHRASE: ${JWT_PASSPHRASE:?JWT_PASSPHRASE manquant dans .env.preprod}
     depends_on:
       db:
         condition: service_healthy

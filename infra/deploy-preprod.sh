@@ -29,6 +29,18 @@ log "Construction / démarrage des conteneurs"
 log "Dépendances Composer (sans les paquets de dev)"
 "${COMPOSE[@]}" exec -T php composer install --no-dev --optimize-autoloader --no-interaction
 
+# Les clés JWT ne sont pas versionnées (et ne doivent pas l'être) : elles
+# n'arrivent donc jamais par git sur un serveur neuf. Sans elles, toute
+# connexion echoue en 500 (JWTEncodeFailureException). Génération au premier
+# déploiement uniquement — les regénérer invaliderait tous les jetons émis.
+if ! "${COMPOSE[@]}" exec -T php test -f config/jwt/private.pem; then
+    log "Génération des clés JWT (premier déploiement)"
+    "${COMPOSE[@]}" exec -T php php bin/console lexik:jwt:generate-keypair --no-interaction
+    # Les workers FPM tournent en www-data et doivent pouvoir lire les clés.
+    "${COMPOSE[@]}" exec -T php chown -R www-data:www-data config/jwt
+    "${COMPOSE[@]}" exec -T php chmod 640 config/jwt/private.pem config/jwt/public.pem
+fi
+
 log "Migrations de base"
 "${COMPOSE[@]}" exec -T php php bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration
 
