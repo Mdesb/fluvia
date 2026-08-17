@@ -106,15 +106,15 @@
     <div class="eyebrow">Billetterie &amp; contrôle d'accès · Chantier logiciel</div>
     <h1>Avancement du développement</h1>
     <p>Le MVP se construit lot par lot, chacun spécifié puis implémenté et testé avant d'être intégré. Voici l'état réel du code — pas une estimation, ce qui est écrit, testé et versionné à ce jour.</p>
-    <div class="stamp">Mise à jour : 16 août 2026 · <b>MVP + 5 verticales + front-end</b> · <b>425 tests verts</b></div>
+    <div class="stamp">Mise à jour : 17 août 2026 · <b>+ boutique en ligne · reporting · IBAN · caution · front ×3</b> · <b>~515 tests verts</b></div>
   </header>
 
   <section>
     <div class="kpis">
       <div class="kpi"><div class="n good">5<span style="color:var(--ink-faint);font-size:18px">/5</span></div><div class="l">Verticales métier livrées</div></div>
-      <div class="kpi"><div class="n">425</div><div class="l">Tests automatisés au vert</div></div>
-      <div class="kpi"><div class="n">21</div><div class="l">Livraisons versionnées (git)</div></div>
-      <div class="kpi"><div class="n good">1</div><div class="l">Interface web utilisable (caisse)</div></div>
+      <div class="kpi"><div class="n">~515</div><div class="l">Tests automatisés au vert</div></div>
+      <div class="kpi"><div class="n">29</div><div class="l">Livraisons versionnées (git)</div></div>
+      <div class="kpi"><div class="n good">3</div><div class="l">Tranches d'interface web</div></div>
     </div>
     <div class="barwrap">
       <div class="top"><b>Progression du MVP back-end</b><span>8 livrés · MVP complet ✓</span></div>
@@ -198,6 +198,17 @@
   </section>
 
   <section>
+    <h2 class="sec-h">Canaux, pilotage &amp; finitions</h2>
+    <div class="lanes">
+      <div class="lane"><div class="lot">🛒</div><div class="body"><h3>Boutique en ligne (M3)</h3><p>Vitrine white-label, tunnel panier → créneau timed-entry → paiement (PayFiP/CB) → billet QR, compte client, click&amp;collect — la commande réutilise la vente/caisse.</p></div><div class="meta"><span class="pill done">Livré</span></div></div>
+      <div class="lane"><div class="lot">📊</div><div class="body"><h3>Reporting multi-niveaux (M7)</h3><p>Tableaux de bord site → région → DG, analytique multi-axes, FMI vs fréquentation cumulée, rapports planifiés &amp; export.</p></div><div class="meta"><span class="pill done">Livré</span></div></div>
+      <div class="lane"><div class="lot">🔐</div><div class="body"><h3>Coffre IBAN réversible</h3><p>L'IBAN est chiffré au repos ; la remise SEPA pain.008 porte le vrai IBAN (à compléter par un coffre PCI pour la prod).</p></div><div class="meta"><span class="pill done">Livré</span></div></div>
+      <div class="lane"><div class="lot">🧾</div><div class="body"><h3>Caution générique</h3><p>Un seul moteur de consigne/retenue, réutilisé par casiers piscine, matériel padel, patins patinoire (plus de duplication).</p></div><div class="meta"><span class="pill done">Livré</span></div></div>
+    </div>
+    <div class="note">Interface web : <b>3 tranches livrées</b> — caisse complète (paiements, scindé, clôture Z), catalogue, clients (fiche 360°), réservation/planning, supervision accès (FMI en direct), pilotage. Ouvrable sur <b>localhost:5173</b>.</div>
+  </section>
+
+  <section>
     <h2 class="sec-h">Sous le capot</h2>
     <div class="grid2">
       <div class="card">
@@ -243,7 +254,7 @@
     <div class="watchbox"><h3>Collecte SEPA &amp; coffre IBAN — banque / PSP (verticale Sport)</h3><p>Le cycle d'impayés et la tokenisation IBAN sont en place derrière une interface ; la remise bancaire réelle (pain.008, retours) et un coffre IBAN conforme PCI-DSS restent à brancher.</p></div>
   </section>
 
-  <footer>21 commits sur main · 8 lots MVP + capacités socle (réservation/SEPA/recouvrement/fonctionnalités) + 5 verticales + front-end · méthode SDD, agents de concert.</footer>
+  <footer>29 commits sur main · socle + compta bi-régime + 5 verticales + réservation/SEPA/recouvrement/caution/fonctionnalités + boutique + reporting + front ×3 · méthode SDD, agents de concert.</footer>
 </div>
 <button class="themebtn" id="themeBtn" aria-label="Changer de thème">◐</button>
 <script>
