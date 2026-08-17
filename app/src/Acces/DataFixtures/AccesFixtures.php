@@ -9,14 +9,19 @@ use App\Acces\Entity\Controleur;
 use App\Acces\Entity\DroitAcces;
 use App\Acces\Entity\Equipement;
 use App\Acces\Entity\EspaceAcces;
+use App\Acces\Entity\JetonTerminal;
 use App\Acces\Entity\Support;
+use App\Acces\Entity\Terminal;
 use App\Acces\Enum\ModeAppairage;
 use App\Acces\Enum\ModeSeuil;
 use App\Acces\Enum\SensEquipement;
+use App\Acces\Enum\StatutJetonTerminal;
 use App\Acces\Enum\StatutProjectionDroit;
+use App\Acces\Enum\StatutTerminal;
 use App\Acces\Enum\TypeDroitAcces;
 use App\Acces\Enum\TypeEquipement;
 use App\Acces\Enum\TypeSupport;
+use App\Acces\Service\VersionSnapshotSequencer;
 use App\DataFixtures\SocleFixtures;
 use App\Offre\DataFixtures\OffreFixtures;
 use App\Offre\Entity\Produit;
@@ -41,6 +46,14 @@ final class AccesFixtures extends Fixture implements DependentFixtureInterface
     public const ITBOX_REF = 'ITBOX-A1';
     public const SUPPORT_IDENTIFIANT = 'QR-DEMO-0001';
     public const SEUIL_FMI = 50;
+    public const TERMINAL_NOM = 'ITBOX Démo Entrée A1';
+    /** Secret en clair du jeton terminal de démonstration (tests, plan-acces-terminal.md §7 Lot E T19). */
+    public const TERMINAL_SECRET = 'demo-terminal-secret-0001-do-not-use-in-prod';
+
+    public function __construct(
+        private readonly VersionSnapshotSequencer $sequencer,
+    ) {
+    }
 
     public function getDependencies(): array
     {
@@ -49,9 +62,16 @@ final class AccesFixtures extends Fixture implements DependentFixtureInterface
 
     public function load(ObjectManager $manager): void
     {
+        // Séquence native MariaDB du curseur de snapshot terminal (US-TERM-03/04, plan-acces-terminal.md
+        // §1.4). `AccesApiTestCase` reconstruit le schéma via `SchemaTool` (métadonnées ORM), qui
+        // n'inclut pas les objets créés en base par une migration `CREATE SEQUENCE` (hors mapping
+        // Doctrine) : recréée ici de façon idempotente pour que les tests disposent de la séquence
+        // sans dépendre du rejeu des migrations.
+        $manager->getConnection()->executeStatement('CREATE SEQUENCE IF NOT EXISTS acces_snapshot_seq START WITH 1 INCREMENT BY 1');
+
         // --- Permissions acces.* + octroi à l'administrateur (RG-SOCLE-02/03) ---
         $perms = [];
-        foreach (['gerer', 'lire', 'superviser', 'appairer', 'ouvrir_manuel', 'controler', 'bloquer_support', 'ingestion'] as $action) {
+        foreach (['gerer', 'lire', 'superviser', 'appairer', 'ouvrir_manuel', 'controler', 'bloquer_support', 'ingestion', 'snapshot'] as $action) {
             $perm = (new Permission())->setModule('acces')->setAction($action);
             $manager->persist($perm);
             $perms[$action] = $perm;
@@ -125,6 +145,25 @@ final class AccesFixtures extends Fixture implements DependentFixtureInterface
             ->setActif(true)
             ->setEtablissement($etabA);
         $manager->persist($appairage);
+        // Reflète ce qu'un appairage réel produirait via App\Acces\Service\AppairageHandler (bypassée
+        // ici, fixture = persistance directe) : un curseur de version réel (US-TERM-03/04, §1.4 du plan).
+        $support->setVersionMaj($this->sequencer->suivant());
+
+        // --- Terminal de démonstration (US-TERM-01/09, plan-acces-terminal.md §7 Lot E T19) : couvre
+        // la portée de l'ITBOX de la fixture ci-dessus, jeton actif de secret connu (tests). ---
+        $terminal = (new Terminal())
+            ->setNom(self::TERMINAL_NOM)
+            ->setItboxRef(self::ITBOX_REF)
+            ->setEtablissement($etabA)
+            ->setStatut(StatutTerminal::Actif);
+        $manager->persist($terminal);
+
+        $jetonTerminal = (new JetonTerminal())
+            ->setTerminal($terminal)
+            ->setSecretHash(hash('sha256', self::TERMINAL_SECRET))
+            ->setStatut(StatutJetonTerminal::Actif)
+            ->setEtablissement($etabA);
+        $manager->persist($jetonTerminal);
 
         $manager->flush();
     }

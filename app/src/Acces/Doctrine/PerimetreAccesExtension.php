@@ -15,9 +15,12 @@ use App\Acces\Entity\DroitAcces;
 use App\Acces\Entity\Equipement;
 use App\Acces\Entity\EspaceAcces;
 use App\Acces\Entity\JaugeFmi;
+use App\Acces\Entity\JetonTerminal;
+use App\Acces\Entity\JournalReconciliation;
 use App\Acces\Entity\ListeRevocation;
 use App\Acces\Entity\Passage;
 use App\Acces\Entity\Support;
+use App\Acces\Entity\Terminal;
 use App\Securite\Entity\Affectation;
 use App\Securite\Entity\Utilisateur;
 use Doctrine\ORM\Query\Expr\Join;
@@ -43,6 +46,13 @@ final class PerimetreAccesExtension implements QueryCollectionExtensionInterface
         DeclarationPerteVol::class => '{root}.etablissement',
         JaugeFmi::class => 'jfmi_esp.etablissement',
         ListeRevocation::class => 'jfmi_ctrl.etablissement',
+        // plan-acces-terminal.md §3.3 : ajout additif — Terminal porte des opérations Get/GetCollection
+        // administrateur (`/acces/terminaux*`) passant par l'extension standard. JetonTerminal/
+        // JournalReconciliation n'ont pas d'opération API exposée dans ce lot (inerte ici, tracé pour
+        // cohérence/complétude si un écran de lecture leur est ajouté ultérieurement).
+        Terminal::class => '{root}.etablissement',
+        JetonTerminal::class => '{root}.etablissement',
+        JournalReconciliation::class => '{root}.etablissement',
     ];
 
     public function __construct(

@@ -25,6 +25,7 @@ final class AppairageHandler
 {
     public function __construct(
         private readonly EntityManagerInterface $em,
+        private readonly VersionSnapshotSequencer $sequencer,
     ) {
     }
 
@@ -65,6 +66,9 @@ final class AppairageHandler
             ->setEtablissement($etablissement);
 
         $this->em->persist($appairage);
+        // Curseur delta snapshot terminal (US-TERM-03/04, plan-acces-terminal.md §1.4) : un nouvel
+        // appairage change la projection du support (portes éligibles/droit).
+        $support->setVersionMaj($this->sequencer->suivant());
         $this->em->flush();
 
         return $appairage;
@@ -73,6 +77,10 @@ final class AppairageHandler
     public function revoquer(Appairage $appairage): Appairage
     {
         $appairage->setActif(false);
+        $support = $appairage->getSupport();
+        if ($support instanceof Support) {
+            $support->setVersionMaj($this->sequencer->suivant());
+        }
         $this->em->flush();
 
         return $appairage;

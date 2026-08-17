@@ -18,6 +18,7 @@ use App\Acces\State\PassageExportProvider;
 use App\Acces\State\PassageIngestionProcessor;
 use App\Acces\State\PassageManuelProcessor;
 use App\Acces\State\PassageNonNominatifProcessor;
+use App\Acces\State\TerminalPassageProcessor;
 use App\Organisation\Entity\Etablissement;
 use App\Securite\Entity\Utilisateur;
 use Doctrine\ORM\Mapping as ORM;
@@ -49,6 +50,17 @@ use Symfony\Component\Uid\Uuid;
             input: false,
             security: "is_granted('PERM', 'acces.ingestion')",
             processor: PassageIngestionProcessor::class,
+        ),
+        // Nouvelle opération terminal (US-TERM-02, plan-acces-terminal.md §2.2) : facade authentifiée-
+        // terminal (`PERM_TERMINAL`, firewall dédié `terminal`), délègue au même moteur
+        // `ValidationPassageHandler` via `TerminalPassageProcessor`. `POST /acces/passages` ci-dessus
+        // reste strictement inchangé (opération/security/processor/réponse).
+        new Post(
+            uriTemplate: '/terminal/passages',
+            read: false,
+            input: false,
+            security: "is_granted('PERM_TERMINAL', 'acces.ingestion')",
+            processor: TerminalPassageProcessor::class,
         ),
         new Post(
             uriTemplate: '/acces/passages/manuel',

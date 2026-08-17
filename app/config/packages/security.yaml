@@ -30,6 +30,19 @@ security:
                 success_handler: App\Securite\Security\GestionnaireSuccesConnexionMfa
                 failure_handler: lexik_jwt_authentication.handler.authentication_failure
 
+        # Authentification machine d'un Terminal (borne/ITBOX, US-TERM-01/02, plan-acces-terminal.md
+        # §3.1) : firewall dédié, placé AVANT « api », isolé de l'authentification JWT humaine.
+        # `pattern` couvre `/api/terminal/*` (préfixe `/api` de toutes les routes API Platform, cf.
+        # config/routes/api_platform.yaml) — Symfony évalue les firewalls dans l'ordre et s'arrête au
+        # premier `pattern` qui matche : isolation garantie par construction, zéro risque de collision
+        # avec l'authenticator JWT du firewall « api » ci-dessous, qui continue de gérer tout le reste
+        # (dont `/acces/*`), strictement inchangé.
+        terminal:
+            pattern: ^/api/terminal
+            stateless: true
+            custom_authenticators:
+                - App\Acces\Security\TerminalAuthenticator
+
         # API protégée par jeton JWT.
         api:
             pattern: ^/

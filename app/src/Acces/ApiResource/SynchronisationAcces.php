@@ -10,6 +10,7 @@ use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\Post;
 use App\Acces\State\EtatSynchroAccesProvider;
 use App\Acces\State\SynchroProcessor;
+use App\Acces\State\TerminalSynchroProcessor;
 use Symfony\Component\Serializer\Attribute\Groups;
 
 /**
@@ -31,6 +32,16 @@ use Symfony\Component\Serializer\Attribute\Groups;
             input: false,
             security: "is_granted('PERM', 'acces.ingestion')",
             processor: SynchroProcessor::class,
+        ),
+        // Nouvelle opération terminal (US-TERM-06/07/08, plan-acces-terminal.md §2.4) : généralise
+        // `SynchroPassageHandler::synchroniser()` au niveau `Terminal` (plusieurs Controleur/Equipement
+        // d'un même itboxRef). `POST /acces/synchro` ci-dessus reste strictement inchangé.
+        new Post(
+            uriTemplate: '/terminal/passages/lot',
+            read: false,
+            input: false,
+            security: "is_granted('PERM_TERMINAL', 'acces.ingestion')",
+            processor: TerminalSynchroProcessor::class,
         ),
     ],
 )]

@@ -113,6 +113,17 @@ abstract class AccesApiTestCase extends ApiTestCase
         return (string) $this->entite(Utilisateur::class, ['email' => SocleFixtures::ADMIN_EMAIL])->getId();
     }
 
+    /** En-tête d'authentification du `Terminal` de démonstration (plan-acces-terminal.md §7 Lot E T19). */
+    protected function terminalEntete(?string $secret = null): array
+    {
+        return ['headers' => ['Authorization' => 'Bearer ' . ($secret ?? AccesFixtures::TERMINAL_SECRET)]];
+    }
+
+    protected function idTerminal(): string
+    {
+        return (string) $this->entite(\App\Acces\Entity\Terminal::class, ['nom' => AccesFixtures::TERMINAL_NOM])->getId();
+    }
+
     /**
      * @template T of object
      *

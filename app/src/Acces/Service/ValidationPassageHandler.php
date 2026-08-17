@@ -10,6 +10,7 @@ use App\Acces\Entity\Appairage;
 use App\Acces\Entity\DroitAcces;
 use App\Acces\Entity\Equipement;
 use App\Acces\Entity\JaugeFmi;
+use App\Acces\Entity\JournalReconciliation;
 use App\Acces\Entity\Passage;
 use App\Acces\Entity\Support;
 use App\Acces\Enum\CodeMotifRefus;
@@ -23,6 +24,7 @@ use App\Acces\Port\PiloteAcces;
 use App\Vente\Service\GenerateurCodeSupport;
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
 /**
@@ -40,6 +42,13 @@ final class ValidationPassageHandler
         private readonly ResolveurMarges $marges,
         private readonly PiloteAcces $pilote,
         private readonly GenerateurCodeSupport $generateurCode,
+        private readonly VersionSnapshotSequencer $sequencer,
+        /**
+         * Plancher du crédit négatif borné (CA-8, plan-acces-terminal.md §4.2) — global MVP, pas encore
+         * par établissement (§8 spec pt.5). N'a d'effet que si
+         * `EvenementPassageDto::autoriserCreditNegatifSiHorsLigne = true` (flag hors-ligne uniquement).
+         */
+        #[Autowire(env: 'int:ACCES_PLANCHER_CREDIT_NEGATIF')] private readonly int $plancherCreditNegatif,
     ) {
     }
 
@@ -165,18 +174,33 @@ final class ValidationPassageHandler
         // Étapes 7-8-9 — décompte crédit + FMI + enregistrement, atomiques (rollback SQL sur refus).
         try {
             $passage = $this->connection->transactional(function () use ($droit, $sens, $espace, $controleur, $equipement, $support, $evt, $enConflit): Passage {
+                // Réconciliation gracieuse du crédit épuisé hors-ligne (CA-8, plan-acces-terminal.md
+                // §4.2) : le plancher n'est abaissé sous 0 que si `autoriserCreditNegatifSiHorsLigne`
+                // est explicitement positionné (jamais par le chemin en ligne, défaut `false` = plancher
+                // 0 = comportement strictement inchangé, zéro régression sur /acces/passages et
+                // /terminal/passages).
+                $enConflitCredit = false;
                 if ($droit->getSourceType() === TypeDroitAcces::CarteQuota) {
-                    if (($droit->getCreditRestant() ?? 0) <= 0) {
+                    $plancher = $evt->autoriserCreditNegatifSiHorsLigne ? $this->plancherCreditNegatif : 0;
+                    if (!$evt->autoriserCreditNegatifSiHorsLigne && ($droit->getCreditRestant() ?? 0) <= 0) {
                         throw new PassageRefuseException(CodeMotifRefus::CreditEpuise, 'Carte épuisée.');
                     }
                     $affectees = (int) $this->connection->executeStatement(
-                        'UPDATE acces_droit_acces SET credit_restant = credit_restant - 1 WHERE id = UNHEX(:hex) AND credit_restant > 0',
-                        ['hex' => bin2hex($droit->getId()->toBinary())],
+                        'UPDATE acces_droit_acces SET credit_restant = credit_restant - 1 WHERE id = UNHEX(:hex) AND credit_restant > :plancher',
+                        ['hex' => bin2hex($droit->getId()->toBinary()), 'plancher' => $plancher],
                     );
                     if ($affectees === 0) {
                         throw new PassageRefuseException(CodeMotifRefus::CreditEpuise, 'Carte épuisée (course concurrente).');
                     }
                     $droit->setCreditRestant(($droit->getCreditRestant() ?? 1) - 1);
+                    if ($support instanceof Support) {
+                        // Curseur delta snapshot (US-TERM-03/04, §1.4 du plan) : le compostagesRestants
+                        // remonté au prochain snapshot doit refléter le solde réel.
+                        $support->setVersionMaj($this->sequencer->suivant());
+                    }
+                    if ($evt->autoriserCreditNegatifSiHorsLigne && ($droit->getCreditRestant() ?? 0) < 0) {
+                        $enConflitCredit = true;
+                    }
                 }
 
                 // Le SGBD reste la source de vérité (UPDATE atomique) ; on mire le résultat sur l'objet
@@ -213,11 +237,27 @@ final class ValidationPassageHandler
 
                 $passage = $this->construirePassage($espace, $controleur, $equipement, $support, $droit, $sens, $evt);
                 $passage->setResultat(ResultatPassage::Valide);
-                $passage->setEnConflit($enConflit);
-                if ($enConflit) {
+                $passage->setEnConflit($enConflit || $enConflitCredit);
+                if ($enConflitCredit) {
+                    // Dérogation documentée (§4.2 du plan) : `Passage.codeMotif` est en temps normal
+                    // réservé aux refus (`refuser()`), positionné ici sur un passage ACCEPTÉ pour
+                    // caractériser le litige (Risque R-6, non activé par défaut — cf. flag ci-dessus).
+                    $passage->setCodeMotif(CodeMotifRefus::CreditEpuiseHorsLigneLitige);
+                    $passage->setMotif('Crédit négatif accepté malgré dépassement (réconciliation hors-ligne, litige tracé, CA-8).');
+                } elseif ($enConflit) {
                     $passage->setMotif('Support révoqué après ce passage (conflit détecté au rejeu, RG-ACC-07).');
                 }
                 $this->em->persist($passage);
+
+                if ($enConflitCredit) {
+                    $journal = new JournalReconciliation();
+                    $journal->setPassage($passage)
+                        ->setDroit($droit)
+                        ->setEcart($droit->getCreditRestant() ?? 0)
+                        ->setEtablissement($passage->getEtablissement());
+                    $this->em->persist($journal);
+                }
+
                 $this->em->flush();
 
                 return $passage;

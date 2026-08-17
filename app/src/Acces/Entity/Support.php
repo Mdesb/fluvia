@@ -28,6 +28,7 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ORM\Entity]
 #[ORM\Table(name: 'acces_support')]
 #[ORM\UniqueConstraint(name: 'uniq_support_identifiant', columns: ['identifiant'])]
+#[ORM\Index(columns: ['version_maj'], name: 'idx_support_version_maj')]
 #[ApiResource(
     shortName: 'Support',
     operations: [
@@ -71,6 +72,18 @@ class Support
     #[ORM\JoinColumn(nullable: false)]
     #[Groups(['support:read'])]
     private ?Etablissement $etablissement = null;
+
+    /**
+     * Curseur monotone du snapshot terminal (US-TERM-03/04, plan-acces-terminal.md §1.4) : horodate
+     * logiquement la dernière mutation affectant la projection de ce support (blocage/déblocage,
+     * appairage/révocation, décompte crédit du `DroitAcces` appairé). Alimenté par
+     * `App\Acces\Service\VersionSnapshotSequencer` (séquence native MariaDB `acces_snapshot_seq`).
+     * Backfill à `0` uniforme sur les supports existants (correct : le premier snapshot complet sans
+     * `depuis` renvoie tout indépendamment de la valeur).
+     */
+    #[ORM\Column(options: ['default' => 0])]
+    #[Groups(['support:read'])]
+    private int $versionMaj = 0;
 
     public function __construct()
     {
@@ -126,6 +139,18 @@ class Support
     public function setEtablissement(?Etablissement $etablissement): self
     {
         $this->etablissement = $etablissement;
+
+        return $this;
+    }
+
+    public function getVersionMaj(): int
+    {
+        return $this->versionMaj;
+    }
+
+    public function setVersionMaj(int $versionMaj): self
+    {
+        $this->versionMaj = $versionMaj;
 
         return $this;
     }

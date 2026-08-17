@@ -22,6 +22,7 @@ final class BlocageSupportHandler
 {
     public function __construct(
         private readonly EntityManagerInterface $em,
+        private readonly VersionSnapshotSequencer $sequencer,
     ) {
     }
 
@@ -32,6 +33,8 @@ final class BlocageSupportHandler
         }
 
         $support->setStatut(StatutSupport::Bloque);
+        // Curseur delta snapshot terminal (US-TERM-03/06, CA-6) : tombstone au prochain delta.
+        $support->setVersionMaj($this->sequencer->suivant());
 
         $declaration = new DeclarationPerteVol();
         $declaration->setSupport($support)
@@ -55,6 +58,7 @@ final class BlocageSupportHandler
         $support = $declaration->getSupport();
         if ($support instanceof Support) {
             $support->setStatut(StatutSupport::Actif);
+            $support->setVersionMaj($this->sequencer->suivant());
         }
 
         $this->em->flush();
