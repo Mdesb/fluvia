@@ -158,16 +158,18 @@ export const api = {
     request(`/api/sessions-caisse/${id}/cloturer`, { method: 'POST', body: corps }),
 
   // Vente + encaissement.
-  creerVente: (corps) => request('/api/ventes', { method: 'POST', body: corps }),
+  creerVente: (corps) => request('/api/ventes', { method: 'POST', body: corps, timeoutMs: 20000 }),
   ajouterLigne: (venteId, corps) =>
-    request(`/api/ventes/${venteId}/lignes`, { method: 'POST', body: corps }),
+    request(`/api/ventes/${venteId}/lignes`, { method: 'POST', body: corps, timeoutMs: 20000 }),
   // Un règlement CB/chèque peut être simulé via l'en-tête X-Tpe-Simule (accepte|refuse|annule|timeout).
+  // Le dialogue TPE peut prendre plusieurs secondes : coupe-circuit large (45 s) pour éviter le
+  // spinner infini si le TPE ne répond pas, sans couper une transaction encore en cours.
   payer: (venteId, corps, headers) =>
-    request(`/api/ventes/${venteId}/paiements`, { method: 'POST', body: corps, headers }),
+    request(`/api/ventes/${venteId}/paiements`, { method: 'POST', body: corps, headers, timeoutMs: 45000 }),
   annulerVente: (venteId) =>
-    request(`/api/ventes/${venteId}/annuler`, { method: 'POST', body: {} }),
+    request(`/api/ventes/${venteId}/annuler`, { method: 'POST', body: {}, timeoutMs: 20000 }),
   valider: (venteId) =>
-    request(`/api/ventes/${venteId}/valider`, { method: 'POST', body: {} }),
+    request(`/api/ventes/${venteId}/valider`, { method: 'POST', body: {}, timeoutMs: 30000 }),
   ticket: (venteId, mode = 'imprimer') =>
     request(`/api/ventes/${venteId}/ticket`, { method: 'POST', body: { mode } }),
 
@@ -183,9 +185,11 @@ export const api = {
   reservationActivites: () => request('/api/reservation_activites', { query: { itemsPerPage: 100 } }),
   reservations: () => request('/api/reservations', { query: { itemsPerPage: 200 } }),
   beneficiaires: () => request('/api/beneficiaires', { query: { itemsPerPage: 100 } }),
-  // Écriture : réserver un créneau (créneau + organisateur en IRI). Coupe-circuit 25 s.
+  // Écriture : réserver un créneau (créneau + organisateur en IRI). L'opération API Platform
+  // n'accepte que le format JSON-LD (application/ld+json) — sans `ld`, le back répond 415.
+  // Coupe-circuit 25 s.
   reserverCreneau: (corps) =>
-    request('/api/reservation/reservations', { method: 'POST', body: corps, timeoutMs: 25000 }),
+    request('/api/reservation/reservations', { method: 'POST', body: corps, ld: true, timeoutMs: 25000 }),
 
   // Supervision accès / FMI (M3).
   supervisionAcces: () => request('/api/acces/supervision'),

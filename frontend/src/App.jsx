@@ -39,18 +39,22 @@ export default function App() {
     setUnauthorizedHandler(() => setAuthed(false))
   }, [])
 
-  // Charge le contexte (profil + établissements) après connexion.
+  // Charge le contexte (établissements + profil) après connexion.
+  // On récupère d'abord la liste réelle des établissements pour VALIDER l'établissement mémorisé
+  // en localStorage : un identifiant périmé (établissement supprimé, accès retiré) est réécrit sur
+  // le 1er établissement valide AVANT tout autre appel. Ainsi le X-Etablissement envoyé à /me (et
+  // ensuite au CRM / reporting) est toujours sain — plus de 403 ni de capacités vides sur un état sale.
   const chargerContexte = useCallback(async () => {
-    const profil = await api.me()
-    setMe(profil)
     const liste = membres(await api.etablissements())
     setEtablissements(liste)
-    // Établissement actif : celui mémorisé s'il existe encore, sinon celui du profil, sinon le 1er.
     const memorise = etablissementStore.get()
     const valide = liste.find((e) => e.id === memorise)
-    const choisi = valide?.id || profil?.etablissementActif || liste[0]?.id || ''
-    setEtabActif(choisi)
+    const choisi = valide?.id || liste[0]?.id || ''
     if (choisi) etablissementStore.set(choisi)
+    else etablissementStore.clear()
+    setEtabActif(choisi)
+    // /me est désormais appelé avec l'établissement corrigé : capacitesActives correctes dès le 1er rendu.
+    setMe(await api.me())
   }, [])
 
   useEffect(() => {

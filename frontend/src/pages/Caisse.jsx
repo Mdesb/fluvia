@@ -436,6 +436,11 @@ function PanneauPaiement({
           <button className="btn primary lg" onClick={onRegler} disabled={busy}>
             {busy ? 'Traitement…' : `Régler ${moyenCourant?.libelle || ''}`}
           </button>
+          {busy && moyenCourant?.exigeReference && (
+            <div className="hint" style={{ margin: 0, textAlign: 'center' }}>
+              Transaction en cours au terminal de paiement… (quelques secondes)
+            </div>
+          )}
         </>
       )}
 
