@@ -6,6 +6,8 @@ namespace App\Padel\State;
 
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
+use App\Caution\Entity\Caution;
+use App\Caution\Service\GestionCaution;
 use App\Padel\Entity\CautionMateriel;
 use App\Padel\Entity\LocationMateriel;
 use App\Padel\Enum\StatutCautionMateriel;
@@ -21,16 +23,22 @@ use Symfony\Component\Uid\Uuid;
  * Loue du matériel (raquette/balles) rattaché à une réservation (POST /padel/locations, US-PADEL-08,
  * CA-9). Corps : { "reservation": iri|uuid, "article": uuid, "quantite": int, "caution"?: decimal }.
  * Route « flat » plutôt que nested `/padel/reservations/{id}/materiel` (`Reservation` appartient à
- * `App\Reservation`, non modifiable — divergence documentée vs. plan §3).
+ * `App\Reservation`, non modifiable — divergence documentée vs. plan §3). La consignation de la
+ * caution est déléguée à `App\Caution\Service\GestionCaution` (refactor caution générique) ;
+ * `CautionMateriel` reste l'entité locale exposée par `/api/padel_caution_materiels` (contrat
+ * inchangé), miroir de la caution générique `App\Caution\Entity\Caution` (cible `padel.materiel`).
  *
  * @implements ProcessorInterface<mixed, LocationMateriel>
  */
 final class LouerMaterielProcessor implements ProcessorInterface
 {
+    public const TYPE_CIBLE = 'padel.materiel';
+
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly LecteurCorps $lecteur,
         private readonly Security $security,
+        private readonly GestionCaution $gestionCaution,
     ) {
     }
 
@@ -67,9 +75,16 @@ final class LouerMaterielProcessor implements ProcessorInterface
         $this->em->flush();
 
         if (isset($corps['caution']) && (float) $corps['caution'] > 0.0) {
+            $montantDecimal = number_format((float) $corps['caution'], 2, '.', '');
+
+            $etablissement = $reservation->getEtablissement();
+            if ($etablissement !== null) {
+                $this->gestionCaution->consigner($etablissement, self::TYPE_CIBLE, $location->getId(), Caution::decimalVersCentimes($montantDecimal));
+            }
+
             $caution = new CautionMateriel();
             $caution->setLocation($location)
-                ->setMontant(number_format((float) $corps['caution'], 2, '.', ''))
+                ->setMontant($montantDecimal)
                 ->setStatut(StatutCautionMateriel::Encaissee)
                 ->setDateEncaissement(new \DateTimeImmutable());
             $this->em->persist($caution);

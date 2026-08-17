@@ -9,7 +9,6 @@ use ApiPlatform\Doctrine\Orm\Extension\QueryItemExtensionInterface;
 use ApiPlatform\Doctrine\Orm\Util\QueryNameGeneratorInterface;
 use ApiPlatform\Metadata\Operation;
 use App\Padel\Entity\CautionMateriel;
-use App\Padel\Entity\GrilleRetenueMateriel;
 use App\Padel\Entity\GrilleTarifaireTerrain;
 use App\Padel\Entity\HistoriqueNiveauJoueur;
 use App\Padel\Entity\InscriptionTournoi;
@@ -62,7 +61,6 @@ final class PerimetrePadelExtension implements QueryCollectionExtensionInterface
         MatchTournoi::class => 'tour.etablissement',
         LocationMateriel::class => 'res.etablissement',
         CautionMateriel::class => 'res.etablissement',
-        GrilleRetenueMateriel::class => '{root}.etablissement',
         RelaisEclairageTerrain::class => 'ress.etablissement',
     ];
 

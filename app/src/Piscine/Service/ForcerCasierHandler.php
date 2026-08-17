@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Piscine\Service;
 
+use App\Caution\Service\GestionCaution;
 use App\Piscine\Entity\Casier;
 use App\Piscine\Entity\CautionCasier;
 use App\Piscine\Entity\ForcageCasier;
@@ -16,12 +17,16 @@ use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
 /**
  * Forçage administratif d'un casier non rendu, après délai (US-L6-09, CA-9, décision actée). Action
- * journalisée (agent, motif, horodatage) ; la caution passe en `retenue`.
+ * journalisée (agent, motif, horodatage) ; la caution passe en `retenue`. La retenue totale (montant,
+ * ledger) est déléguée à `GestionCaution::forcer()` sur la caution générique liée (refactor caution
+ * générique) ; `ForcageCasier` reste le journal local exposé côté Piscine (délai de forçage
+ * spécifique à la verticale, non repris par le patron générique).
  */
 final class ForcerCasierHandler
 {
     public function __construct(
         private readonly EntityManagerInterface $em,
+        private readonly GestionCaution $gestionCaution,
     ) {
     }
 
@@ -60,6 +65,11 @@ final class ForcerCasierHandler
             ->getQuery()->getOneOrNullResult();
         if ($caution instanceof CautionCasier) {
             $caution->setStatut(StatutCaution::Retenue);
+        }
+
+        $cautionGenerique = $this->gestionCaution->cautionActivePour(AttribuerCasierHandler::TYPE_CIBLE, $casier->getId());
+        if ($cautionGenerique !== null) {
+            $this->gestionCaution->forcer($cautionGenerique, $agent, $motif);
         }
 
         $casier->setEtat(EtatCasier::Libre)->setBracelet(null);

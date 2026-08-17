@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Piscine\Service;
 
+use App\Caution\Service\GestionCaution;
 use App\Piscine\Entity\Casier;
 use App\Piscine\Entity\CautionCasier;
 use App\Piscine\Enum\EtatCasier;
@@ -11,11 +12,15 @@ use App\Piscine\Enum\StatutCaution;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
-/** Restitution d'un casier (US-L6-09, CA-9) : caution libérée, casier repasse libre. */
+/**
+ * Restitution d'un casier (US-L6-09, CA-9) : caution libérée, casier repasse libre. Restitution
+ * déléguée à `GestionCaution::restituer()` sur la caution générique liée (refactor caution générique).
+ */
 final class LibererCasierHandler
 {
     public function __construct(
         private readonly EntityManagerInterface $em,
+        private readonly GestionCaution $gestionCaution,
     ) {
     }
 
@@ -31,6 +36,11 @@ final class LibererCasierHandler
             ->getQuery()->getOneOrNullResult();
         if (!$caution instanceof CautionCasier) {
             throw new UnprocessableEntityHttpException('Aucune caution active pour ce casier.');
+        }
+
+        $cautionGenerique = $this->gestionCaution->cautionActivePour(AttribuerCasierHandler::TYPE_CIBLE, $casier->getId());
+        if ($cautionGenerique !== null) {
+            $this->gestionCaution->restituer($cautionGenerique);
         }
 
         $caution->setStatut(StatutCaution::Liberee)->setDateLiberation(new \DateTimeImmutable());

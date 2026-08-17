@@ -10,6 +10,7 @@ use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Post;
+use App\Caution\Entity\GrilleRetenue;
 use App\Organisation\Entity\Etablissement;
 use App\Patinoire\State\ValiderRetenueProcessor;
 use App\Securite\Entity\Utilisateur;
@@ -25,7 +26,12 @@ use Symfony\Component\Validator\Constraints as Assert;
  * (`RetournerPatinsProcessor`), puis **validée** (montant confirmé ou modifié, trace comptable
  * `mouvementRegieRef`) via `ValiderRetenueProcessor`. `forcee=true` si le montant validé diffère du
  * montant par défaut proposé par la grille — réservé à `patinoire.forcer_retenue` (garde-fou §3 du
- * plan, pas de Voter dédié).
+ * plan, pas de Voter dédié). Reste l'entité locale exposée par `/api/patinoire_retenue_cautions`
+ * (contrat inchangé) mais **miroir** du mouvement générique `App\Caution\Entity\MouvementCaution`
+ * (`mouvementGeneriqueRef`, référence logique non-FK), source de la logique de
+ * proposition/validation/garde-fou RG-SOCLE-07 (`App\Caution\Service\GestionCaution`, refactor
+ * caution générique). `grilleAppliquee` référence désormais la grille générique (cible
+ * `patinoire.patins`).
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'patin_retenue_caution')]
@@ -90,6 +96,11 @@ class RetenueCaution
     #[ORM\Column(options: ['default' => false])]
     #[Groups(['retenue:read'])]
     private bool $forcee = false;
+
+    /** Référence logique (non-FK) vers le `MouvementCaution` générique porteur de cette retenue. */
+    #[ORM\Column(type: UuidType::NAME, nullable: true)]
+    #[Groups(['retenue:read'])]
+    private ?Uuid $mouvementGeneriqueRef = null;
 
     public function __construct()
     {
@@ -194,6 +205,18 @@ class RetenueCaution
     public function setForcee(bool $forcee): self
     {
         $this->forcee = $forcee;
+
+        return $this;
+    }
+
+    public function getMouvementGeneriqueRef(): ?Uuid
+    {
+        return $this->mouvementGeneriqueRef;
+    }
+
+    public function setMouvementGeneriqueRef(?Uuid $mouvementGeneriqueRef): self
+    {
+        $this->mouvementGeneriqueRef = $mouvementGeneriqueRef;
 
         return $this;
     }

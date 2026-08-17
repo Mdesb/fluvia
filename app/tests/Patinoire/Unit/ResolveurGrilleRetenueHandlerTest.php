@@ -4,20 +4,26 @@ declare(strict_types=1);
 
 namespace App\Tests\Patinoire\Unit;
 
+use App\Caution\Entity\GrilleRetenue as GrilleRetenueGenerique;
+use App\Caution\Enum\ModeRetenue as ModeRetenueGenerique;
+use App\Caution\Service\GestionCaution;
 use App\Crm\DataFixtures\CrmFixtures;
 use App\DataFixtures\SocleFixtures;
 use App\Organisation\Entity\Etablissement;
 use App\Patinoire\DataFixtures\PatinoireFixtures;
-use App\Patinoire\Entity\GrilleRetenue;
 use App\Patinoire\Entity\ParcPatins;
-use App\Patinoire\Enum\ModeRetenue;
 use App\Patinoire\Enum\MotifRetenue;
-use App\Patinoire\Service\ResolveurGrilleRetenueHandler;
+use App\Patinoire\State\GrilleRetenueProvider;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
-/** Résolution de la grille de retenue applicable (§4.4) : priorité pointure > établissement. */
+/**
+ * Résolution de la grille de retenue applicable (§4.4) : priorité pointure > établissement. Depuis le
+ * refactor caution générique, la résolution est portée par `App\Caution\Service\GestionCaution::
+ * resoudreGrille()` (patron générique, `App\Patinoire\Service\ResolveurGrilleRetenueHandler` retiré,
+ * fine délégation `App\Patinoire\ApiResource\GrilleRetenue`).
+ */
 final class ResolveurGrilleRetenueHandlerTest extends KernelTestCase
 {
     public function testPrioritePointureSurEtablissement(): void
@@ -43,29 +49,29 @@ final class ResolveurGrilleRetenueHandlerTest extends KernelTestCase
         $parc42 = $em->getRepository(ParcPatins::class)->findOneBy(['etablissement' => $etablissement, 'pointure' => 42]);
         self::assertNotNull($parc42);
 
-        /** @var ResolveurGrilleRetenueHandler $resolveur */
-        $resolveur = $container->get(ResolveurGrilleRetenueHandler::class);
+        /** @var GestionCaution $gestion */
+        $gestion = $container->get(GestionCaution::class);
 
         // Seule la grille générale établissement (fixture, motif casse, 15.00) existe : c'est elle qui s'applique.
-        $grille = $resolveur->resoudre($etablissement, $parc42, MotifRetenue::Casse);
+        $grille = $gestion->resoudreGrille($etablissement, GrilleRetenueProvider::TYPE_CIBLE, MotifRetenue::Casse->value);
         self::assertNotNull($grille);
-        self::assertSame('15.00', $grille->getMontantOuTaux());
-        self::assertNull($grille->getParcPatins(), 'Sans règle spécifique, la règle générale établissement s\'applique.');
+        self::assertSame('15.00', $grille->getMontantDecimal());
+        self::assertNull($grille->getSousCible(), 'Sans règle spécifique, la règle générale établissement s\'applique.');
 
         // Ajout d'une règle spécifique à la pointure 42 (montant supérieur) : elle doit primer.
-        $grilleSpecifique = (new GrilleRetenue())->setEtablissement($etablissement)->setMotif(MotifRetenue::Casse)
-            ->setMode(ModeRetenue::Forfait)->setMontantOuTaux('30.00')->setParcPatins($parc42);
+        $grilleSpecifique = (new GrilleRetenueGenerique())->setEtablissement($etablissement)
+            ->setTypeCible(GrilleRetenueProvider::TYPE_CIBLE)->setSousCible((string) $parc42->getId())
+            ->setMotif(MotifRetenue::Casse->value)->setMode(ModeRetenueGenerique::Forfait)->setMontantCentimes(3000);
         $em->persist($grilleSpecifique);
         $em->flush();
 
-        $grillePrioritaire = $resolveur->resoudre($etablissement, $parc42, MotifRetenue::Casse);
+        $grillePrioritaire = $gestion->resoudreGrille($etablissement, GrilleRetenueProvider::TYPE_CIBLE, MotifRetenue::Casse->value, (string) $parc42->getId());
         self::assertNotNull($grillePrioritaire);
-        self::assertSame('30.00', $grillePrioritaire->getMontantOuTaux(), 'Priorité pointure > établissement (§4.4).');
-        self::assertSame($parc42->getId(), $grillePrioritaire->getParcPatins()?->getId());
+        self::assertSame('30.00', $grillePrioritaire->getMontantDecimal(), 'Priorité pointure > établissement (§4.4).');
+        self::assertSame((string) $parc42->getId(), $grillePrioritaire->getSousCible());
 
-        // Aucune règle pour un autre motif : résolution null, montant proposé = repli caution par défaut.
-        $sansGrille = $resolveur->resoudre($etablissement, $parc42, MotifRetenue::Perte);
+        // Aucune règle pour un autre motif : résolution null.
+        $sansGrille = $gestion->resoudreGrille($etablissement, GrilleRetenueProvider::TYPE_CIBLE, MotifRetenue::Perte->value, (string) $parc42->getId());
         self::assertNull($sansGrille);
-        self::assertSame('15.00', $resolveur->montantPropose($sansGrille, '15.00'));
     }
 }

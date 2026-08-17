@@ -6,8 +6,9 @@ namespace App\Patinoire\State;
 
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
+use App\Caution\Entity\Caution;
+use App\Caution\Service\GestionCaution;
 use App\Patinoire\Entity\CautionLocationPatins;
-use App\Patinoire\Entity\GrilleRetenue;
 use App\Patinoire\Entity\LocationPatins;
 use App\Patinoire\Entity\RetenueCaution;
 use App\Patinoire\Enum\EtatRetourPatins;
@@ -15,7 +16,6 @@ use App\Patinoire\Enum\MotifRetenue;
 use App\Patinoire\Enum\StatutCaution as StatutCautionLocation;
 use App\Patinoire\Enum\StatutLocationPatins;
 use App\Patinoire\Service\PromotionListeAttenteHandler;
-use App\Patinoire\Service\ResolveurGrilleRetenueHandler;
 use App\Vente\Service\LecteurCorps;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
@@ -27,7 +27,10 @@ use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
  * pointure (état bon) ou le fait sortir définitivement du parc (casse/non-rendu → hors service,
  * RG-PAT-06). Si bon, restitue intégralement la caution et promeut la liste d'attente (§4.5) ; sinon,
  * propose le montant par défaut de la grille de retenue (§4.4, `RetenueCaution` créée *proposée*,
- * validée séparément par `ValiderRetenueProcessor`).
+ * validée séparément par `ValiderRetenueProcessor`). Résolution de grille et calcul du montant
+ * proposé délégués à `App\Caution\Service\GestionCaution::proposerRetenue()` (refactor caution
+ * générique, cible `patinoire.patins`, sous-cible l'UUID du `ParcPatins`) ; `RetenueCaution` reste
+ * l'entité locale exposée par l'API, miroir du mouvement générique (`mouvementGeneriqueRef`).
  *
  * @implements ProcessorInterface<LocationPatins, LocationPatins>
  */
@@ -36,8 +39,8 @@ final class RetournerPatinsProcessor implements ProcessorInterface
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly LecteurCorps $lecteur,
-        private readonly ResolveurGrilleRetenueHandler $resolveurGrille,
         private readonly PromotionListeAttenteHandler $promotion,
+        private readonly GestionCaution $gestionCaution,
     ) {
     }
 
@@ -67,9 +70,13 @@ final class RetournerPatinsProcessor implements ProcessorInterface
             'location' => $data,
             'locationActive' => $data->getId(),
         ]);
+        $cautionGenerique = $this->gestionCaution->cautionActivePour(SortirPatinsProcessor::TYPE_CIBLE, $data->getId());
 
         if ($etat === EtatRetourPatins::Bon) {
             $data->setStatut(StatutLocationPatins::Retournee);
+            if ($cautionGenerique instanceof Caution) {
+                $this->gestionCaution->restituer($cautionGenerique);
+            }
             if ($caution instanceof CautionLocationPatins) {
                 $caution->setStatut(StatutCautionLocation::Liberee)->setDateLiberation(new \DateTimeImmutable());
             }
@@ -92,16 +99,26 @@ final class RetournerPatinsProcessor implements ProcessorInterface
             $etat === EtatRetourPatins::Casse => MotifRetenue::Casse,
             default => MotifRetenue::NonRendu,
         };
-        $etablissement = $data->getEtablissement();
-        $grille = $etablissement !== null ? $this->resolveurGrille->resoudre($etablissement, $parcPatins, $motif) : null;
-        $montantCautionDefaut = $caution?->getMontant() ?? '0.00';
-        $montantPropose = $this->resolveurGrille->montantPropose($grille, $montantCautionDefaut);
+        $texteMotif = \is_string($corps['motif'] ?? null) ? $corps['motif'] : $motif->value;
+
+        $grilleAppliquee = null;
+        $montantPropose = $caution?->getMontant() ?? '0.00';
+        $mouvementGeneriqueRef = null;
+
+        if ($cautionGenerique instanceof Caution) {
+            $mouvement = $this->gestionCaution->proposerRetenue($cautionGenerique, $motif->value, (string) $parcPatins->getId());
+            $mouvement->setMotif($texteMotif);
+            $montantPropose = $mouvement->getMontantDecimal() ?? $montantPropose;
+            $grilleAppliquee = $mouvement->getGrilleAppliquee();
+            $mouvementGeneriqueRef = $mouvement->getId();
+        }
 
         $retenue = new RetenueCaution();
         $retenue->setLocation($data)
-            ->setGrilleAppliquee($grille)
+            ->setGrilleAppliquee($grilleAppliquee)
             ->setMontantRetenu($montantPropose)
-            ->setMotif(\is_string($corps['motif'] ?? null) ? $corps['motif'] : $motif->value);
+            ->setMotif($texteMotif)
+            ->setMouvementGeneriqueRef($mouvementGeneriqueRef);
         $this->em->persist($retenue);
 
         $this->em->flush();

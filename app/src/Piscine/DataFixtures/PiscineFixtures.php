@@ -8,6 +8,8 @@ use App\Acces\DataFixtures\AccesFixtures;
 use App\Acces\Entity\EspaceAcces;
 use App\Acces\Entity\Support;
 use App\Acces\Enum\TypeSupport;
+use App\Caution\Entity\Caution;
+use App\Caution\Enum\StatutCaution as StatutCautionGenerique;
 use App\DataFixtures\SocleFixtures;
 use App\Offre\DataFixtures\OffreFixtures;
 use App\Organisation\Entity\Espace;
@@ -125,6 +127,17 @@ final class PiscineFixtures extends Fixture implements DependentFixtureInterface
             ->setStatut(StatutCaution::Encaissee)
             ->setDateEncaissement(new \DateTimeImmutable());
         $manager->persist($caution);
+
+        // Caution générique miroir (refactor caution générique, `App\Caution\Service\GestionCaution`
+        // désormais source de la logique de consignation/restitution/retenue).
+        $cautionGenerique = (new Caution())
+            ->setEtablissement($etabA)
+            ->setTypeCible(\App\Piscine\Service\AttribuerCasierHandler::TYPE_CIBLE)
+            ->setReferenceCible((string) $casier->getId())
+            ->setMontantCentimes(1000)
+            ->setStatut(StatutCautionGenerique::Consignee)
+            ->setDateConsignation(new \DateTimeImmutable());
+        $manager->persist($cautionGenerique);
 
         // --- Encadrant MNS à diplôme valide (rattaché à l'administrateur, hypothèse spec §3) ---
         $admin = $manager->getRepository(Utilisateur::class)->findOneBy(['email' => SocleFixtures::ADMIN_EMAIL]);

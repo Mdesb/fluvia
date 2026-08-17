@@ -12,13 +12,15 @@ use App\DataFixtures\SocleFixtures;
 use App\Offre\Entity\Saison;
 use App\Organisation\Entity\Espace;
 use App\Organisation\Entity\Etablissement;
+use App\Caution\Entity\Caution;
+use App\Caution\Entity\GrilleRetenue as GrilleRetenueGenerique;
+use App\Caution\Enum\ModeRetenue as ModeRetenueGenerique;
+use App\Caution\Enum\StatutCaution as StatutCautionGenerique;
 use App\Patinoire\Entity\Affutage;
-use App\Patinoire\Entity\GrilleRetenue;
 use App\Patinoire\Entity\LocationPatins;
 use App\Patinoire\Entity\ParcPatins;
 use App\Patinoire\Entity\SaisonEphemere;
 use App\Patinoire\Entity\ZonePatinoire;
-use App\Patinoire\Enum\ModeRetenue;
 use App\Patinoire\Enum\MotifRetenue;
 use App\Patinoire\Enum\StatutAffutage;
 use App\Patinoire\Enum\TypeAffutage;
@@ -136,8 +138,12 @@ final class PatinoireFixtures extends Fixture implements DependentFixtureInterfa
         }
 
         // --- Grille de retenue démo (établissement, motif casse, forfait 15 €) ---
-        $grille = (new GrilleRetenue())->setEtablissement($etabA)->setMotif(MotifRetenue::Casse)
-            ->setMode(ModeRetenue::Forfait)->setMontantOuTaux('15.00');
+        // Fine délégation (refactor caution générique) : portée par `App\Caution\Entity\GrilleRetenue`
+        // (cible `patinoire.patins`), résolue par `App\Caution\Service\GestionCaution::resoudreGrille()`.
+        $grille = (new GrilleRetenueGenerique())->setEtablissement($etabA)
+            ->setTypeCible(\App\Patinoire\State\GrilleRetenueProvider::TYPE_CIBLE)
+            ->setMotif(MotifRetenue::Casse->value)
+            ->setMode(ModeRetenueGenerique::Forfait)->setMontantCentimes(1500);
         $manager->persist($grille);
 
         // --- Bénéficiaire démo (réutilise la famille Dupont de CrmFixtures) ---
@@ -155,6 +161,16 @@ final class PatinoireFixtures extends Fixture implements DependentFixtureInterfa
             $caution = (new \App\Patinoire\Entity\CautionLocationPatins())->setLocation($location)->setMontant('15.00')
                 ->setStatut(\App\Patinoire\Enum\StatutCaution::Encaissee)->setDateEncaissement(new \DateTimeImmutable());
             $manager->persist($caution);
+
+            // Caution générique miroir (refactor caution générique).
+            $cautionGenerique = (new Caution())
+                ->setEtablissement($etabA)
+                ->setTypeCible(\App\Patinoire\State\SortirPatinsProcessor::TYPE_CIBLE)
+                ->setReferenceCible((string) $location->getId())
+                ->setMontantCentimes(1500)
+                ->setStatut(StatutCautionGenerique::Consignee)
+                ->setDateConsignation(new \DateTimeImmutable());
+            $manager->persist($cautionGenerique);
         }
 
         // --- Affûtage démo (maintenance du parc, pointure 41) ---

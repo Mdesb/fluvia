@@ -6,8 +6,9 @@ namespace App\Padel\State;
 
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
+use App\Caution\Entity\Caution;
+use App\Caution\Service\GestionCaution;
 use App\Padel\Entity\CautionMateriel;
-use App\Padel\Entity\GrilleRetenueMateriel;
 use App\Padel\Entity\LocationMateriel;
 use App\Padel\Enum\StatutCautionMateriel;
 use App\Padel\Enum\StatutRetourMateriel;
@@ -16,7 +17,11 @@ use Doctrine\ORM\EntityManagerInterface;
 
 /**
  * Retour de matériel loué (POST /padel/locations/{id}/retour, US-PADEL-08, CA-9). Si `non_rendu`,
- * applique la `GrilleRetenueMateriel` paramétrée (§4.7) sur la caution active, sinon la libère.
+ * applique la grille de retenue générique paramétrée (§4.7, `App\Caution\Entity\GrilleRetenue`,
+ * cible `padel.materiel`, sous-cible `typeArticle`) sur la caution active, sinon la libère. Montant
+ * résolu/appliqué délégué à `App\Caution\Service\GestionCaution::retenirImmediat()`/`restituer()`
+ * (refactor caution générique) — pas de phase de validation séparée côté padel (retenue en un temps,
+ * contrairement au patron patinoire).
  * Corps : { "statutRetour": "rendu"|"non_rendu", "typeArticle"?: string, "motif"?: string }.
  *
  * @implements ProcessorInterface<mixed, LocationMateriel>
@@ -26,6 +31,7 @@ final class RetournerMaterielProcessor implements ProcessorInterface
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly LecteurCorps $lecteur,
+        private readonly GestionCaution $gestionCaution,
     ) {
     }
 
@@ -38,18 +44,25 @@ final class RetournerMaterielProcessor implements ProcessorInterface
         $data->setStatutRetour($statut);
 
         $caution = $this->em->getRepository(CautionMateriel::class)->findOneBy(['location' => $data, 'locationActive' => $data->getId()]);
+        $cautionGenerique = $this->gestionCaution->cautionActivePour(LouerMaterielProcessor::TYPE_CIBLE, $data->getId());
+
         if ($caution instanceof CautionMateriel) {
             if ($statut === StatutRetourMateriel::NonRendu) {
-                $etablissement = $data->getReservation()?->getEtablissement();
                 $typeArticle = \is_string($corps['typeArticle'] ?? null) ? $corps['typeArticle'] : '';
                 $motif = \is_string($corps['motif'] ?? null) ? $corps['motif'] : '';
-                $grille = $etablissement !== null
-                    ? $this->em->getRepository(GrilleRetenueMateriel::class)->findOneBy(['etablissement' => $etablissement, 'typeArticle' => $typeArticle, 'motif' => $motif])
-                    : null;
-                $montantRetenu = $grille?->getMontantRetenue() ?? $caution->getMontant();
+
+                $montantRetenu = $caution->getMontant();
+                if ($cautionGenerique instanceof Caution) {
+                    $mouvement = $this->gestionCaution->retenirImmediat($cautionGenerique, $motif, $typeArticle);
+                    $montantRetenu = $mouvement->getMontantDecimal() ?? $montantRetenu;
+                }
+
                 $caution->setStatut(StatutCautionMateriel::Retenue)
                     ->setMontantRetenu($montantRetenu);
             } else {
+                if ($cautionGenerique instanceof Caution) {
+                    $this->gestionCaution->restituer($cautionGenerique);
+                }
                 $caution->setStatut(StatutCautionMateriel::Liberee)
                     ->setDateLiberation(new \DateTimeImmutable());
             }

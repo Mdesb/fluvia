@@ -6,6 +6,8 @@ namespace App\Patinoire\State;
 
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
+use App\Caution\Entity\Caution;
+use App\Caution\Service\GestionCaution;
 use App\Crm\Entity\Beneficiaire;
 use App\Patinoire\Entity\CautionLocationPatins;
 use App\Patinoire\Entity\LocationPatins;
@@ -24,18 +26,23 @@ use Symfony\Component\Uid\Uuid;
  * article de la pointure demandée (compteur caché, plan §0 point 2), encaisse la caution (montant
  * paramétrable, ⚠ défaut « 15.00 » non chiffré par les sources — spec §4.2/§7). Si la pointure
  * demandée est en rupture (disponibilité nulle), refuse la sortie (409) en indiquant la pointure
- * voisine disponible si trouvée (bascule CA-5, `ProposeurPointureVoisineHandler`).
+ * voisine disponible si trouvée (bascule CA-5, `ProposeurPointureVoisineHandler`). La consignation
+ * de la caution est déléguée à `App\Caution\Service\GestionCaution` (refactor caution générique) ;
+ * `CautionLocationPatins` reste l'entité locale exposée par `/api/patinoire_caution_location_patins`
+ * (contrat inchangé), miroir de la caution générique (cible `patinoire.patins`).
  *
  * @implements ProcessorInterface<mixed, LocationPatins>
  */
 final class SortirPatinsProcessor implements ProcessorInterface
 {
+    public const TYPE_CIBLE = 'patinoire.patins';
     private const MONTANT_CAUTION_DEFAUT = '15.00';
 
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly LecteurCorps $lecteur,
         private readonly ProposeurPointureVoisineHandler $proposeur,
+        private readonly GestionCaution $gestionCaution,
     ) {
     }
 
@@ -78,11 +85,18 @@ final class SortirPatinsProcessor implements ProcessorInterface
         $this->em->persist($location);
 
         $montant = isset($corps['caution']) ? (string) $corps['caution'] : self::MONTANT_CAUTION_DEFAUT;
+        $moyenEncaissement = isset($corps['moyenEncaissement']) ? (string) $corps['moyenEncaissement'] : null;
+
+        $etablissement = $location->getEtablissement();
+        if ($etablissement !== null) {
+            $this->gestionCaution->consigner($etablissement, self::TYPE_CIBLE, $location->getId(), Caution::decimalVersCentimes($montant), $moyenEncaissement);
+        }
+
         $caution = new CautionLocationPatins();
         $caution->setLocation($location)
             ->setMontant($montant)
             ->setStatut(StatutCautionLocation::Encaissee)
-            ->setMoyenEncaissement(isset($corps['moyenEncaissement']) ? (string) $corps['moyenEncaissement'] : null)
+            ->setMoyenEncaissement($moyenEncaissement)
             ->setDateEncaissement(new \DateTimeImmutable());
         $this->em->persist($caution);
 
