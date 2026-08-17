@@ -20,6 +20,7 @@ use App\Acces\Enum\StatutProjectionDroit;
 use App\Acces\Enum\StatutSupport;
 use App\Acces\Enum\TypeDroitAcces;
 use App\Acces\Port\PiloteAcces;
+use App\Vente\Service\GenerateurCodeSupport;
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
@@ -38,6 +39,7 @@ final class ValidationPassageHandler
         private readonly ResolveurAntiPassback $antiPassback,
         private readonly ResolveurMarges $marges,
         private readonly PiloteAcces $pilote,
+        private readonly GenerateurCodeSupport $generateurCode,
     ) {
     }
 
@@ -67,6 +69,17 @@ final class ValidationPassageHandler
         if ($evt->identifiantSupport === null) {
             return $this->refuser($espace, $controleur, $equipement, null, null, $sens, $evt, CodeMotifRefus::DroitInvalide, 'Support requis.');
         }
+
+        // Étape 1bis — vérification cryptographique (CA-12/RG-ACC-07) : un code au format d'un code
+        // de support signé (`App\Vente\Service\GenerateurCodeSupport` — billet/carte/abonnement/billet
+        // boutique) doit porter une signature HMAC valide, sinon il s'agit d'un code forgé/altéré —
+        // refusé avant même la résolution en base (aucune fuite d'info « support inconnu » vs
+        // « signature invalide »). Les identifiants historiques/manuels (RFID, QR de démonstration…)
+        // ne correspondent pas à ce format et ne sont pas concernés (rétrocompatibilité totale).
+        if ($this->generateurCode->estCodeSigne($evt->identifiantSupport) && !$this->generateurCode->verifier($evt->identifiantSupport)) {
+            return $this->refuser($espace, $controleur, $equipement, null, null, $sens, $evt, CodeMotifRefus::SignatureInvalide, 'Code de support forgé ou altéré (signature invalide).');
+        }
+
         $support = $this->em->getRepository(Support::class)->findOneBy(['identifiant' => $evt->identifiantSupport]);
         if (!$support instanceof Support) {
             return $this->refuser($espace, $controleur, $equipement, null, null, $sens, $evt, CodeMotifRefus::DroitInvalide, 'Support inconnu.');

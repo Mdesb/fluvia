@@ -112,6 +112,12 @@ final class TunnelAchatSimpleTest extends BoutiqueApiTestCase
         self::assertTrue($meta->isRepliQr(), 'CA-12 : repli QR proposé (aucun wallet réel intégré, MVP).');
         self::assertNotEmpty($meta->getQrDynamique());
 
+        // Le billet boutique porte le code de support unique et signé (CA-12), généré automatiquement
+        // (aucun override manuel côté tunnel Boutique) — même code que `qrDynamique`.
+        self::assertNotEmpty($support->getIdentifiantSupport());
+        self::assertSame($support->getIdentifiantSupport(), $meta->getQrDynamique());
+        self::assertMatchesRegularExpression('/^QRC-[0-9A-HJKMNP-TV-Z]{16}-[0-9A-F]{10}$/', $support->getIdentifiantSupport());
+
         $panierFinal = $this->em()->getRepository(PanierEnLigne::class)->find($panierId);
         self::assertSame(StatutPanier::TransformeEnCommande, $panierFinal->getStatut());
     }

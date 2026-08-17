@@ -21,4 +21,7 @@ enum CodeMotifRefus: string
     case NonNominatif = 'non_nominatif';
     case OuvertureManuelle = 'ouverture_manuelle';
     case FederationInactive = 'federation_inactive';
+    /** Code de support signé (format `App\Vente\Service\GenerateurCodeSupport`) dont la signature HMAC
+     *  ne correspond pas : code forgé/altéré, refusé avant toute résolution en base. */
+    case SignatureInvalide = 'signature_invalide';
 }

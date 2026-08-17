@@ -36,6 +36,7 @@ final class ValiderVenteService
         private readonly DecrementStockHandler $stock,
         private readonly ScellementHandler $scellement,
         private readonly AppairageAccesInterface $appairage,
+        private readonly GenerateurCodeSupport $generateurCode,
     ) {
     }
 
@@ -126,14 +127,36 @@ final class ValiderVenteService
         } elseif ($type->aFacette(TypeProduit::FACETTE_CARNET)) {
             $support->setType(TypeSupport::Carte);
         }
-        if (isset($override['identifiant']) && \is_string($override['identifiant'])) {
+        if (isset($override['identifiant']) && \is_string($override['identifiant']) && trim($override['identifiant']) !== '') {
             $support->setIdentifiantSupport($override['identifiant']);
+        } else {
+            // Aucun identifiant fourni : génère un code de support unique et signé (CA-12, cf.
+            // App\Vente\Service\GenerateurCodeSupport) pour tout support émis — billet, carte,
+            // abonnement, billet boutique.
+            $support->setIdentifiantSupport($this->genererIdentifiantUnique($support->getType()));
         }
         if ($produit->getCarte() !== null) {
             $support->setNbCompostages($produit->getCarte()->getStockCompostagesInitial());
         }
 
         return $support;
+    }
+
+    /**
+     * Génère un code signé et retente en cas de collision (probabilité négligeable, ~80 bits
+     * d'entropie) — défense en profondeur, la contrainte unique en base reste la garantie ultime.
+     */
+    private function genererIdentifiantUnique(TypeSupport $type): string
+    {
+        $repository = $this->em->getRepository(BilletSupport::class);
+        for ($tentative = 0; $tentative < 5; ++$tentative) {
+            $code = $this->generateurCode->genererPourType($type);
+            if ($repository->findOneBy(['identifiantSupport' => $code]) === null) {
+                return $code;
+            }
+        }
+
+        throw new ConflictHttpException('Impossible de générer un code de support unique après plusieurs tentatives.');
     }
 
     private function emetSupport(TypeProduit $type): bool

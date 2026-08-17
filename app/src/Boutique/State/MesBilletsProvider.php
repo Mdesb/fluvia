@@ -54,6 +54,7 @@ final class MesBilletsProvider implements ProviderInterface
                 $meta = $this->em->getRepository(BilletQrMeta::class)->findOneBy(['billetSupport' => $support]);
                 $billets[] = [
                     'billetSupport' => (string) $support->getId(),
+                    'identifiantSupport' => $support->getIdentifiantSupport(),
                     'vente' => (string) $vente->getId(),
                     'qrDynamique' => $meta?->getQrDynamique(),
                     'passWalletDisponible' => $meta?->isPassWalletDisponible() ?? false,

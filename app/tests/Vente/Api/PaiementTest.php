@@ -134,6 +134,21 @@ final class PaiementTest extends VenteApiTestCase
         self::assertNotEmpty($valide['supports']);
         self::assertSame(StatutAppairage::Actif->value, $valide['supports'][0]['statutAppairage']);
 
+        // Code de support généré automatiquement (CA-12) : unique, non vide, signé HMAC.
+        $identifiant = $valide['supports'][0]['identifiantSupport'];
+        self::assertNotEmpty($identifiant, 'Un code de support doit être généré automatiquement sans override.');
+        self::assertMatchesRegularExpression('/^CAR-[0-9A-HJKMNP-TV-Z]{16}-[0-9A-F]{10}$/', $identifiant);
+
+        /** @var \App\Vente\Service\GenerateurCodeSupport $generateur */
+        $generateur = static::getContainer()->get(\App\Vente\Service\GenerateurCodeSupport::class);
+        self::assertTrue($generateur->verifier($identifiant), 'Le code généré doit être signé de manière vérifiable.');
+
+        // Une seconde vente génère un code distinct (unicité, retry en cas de collision).
+        [$venteId3] = $this->venteCarteAvecLigne($client, $entete, $session['id']);
+        $client->request('POST', '/api/ventes/' . $venteId3 . '/paiements', $entete + ['json' => ['moyen' => 'especes', 'montant' => '45.00']]);
+        $valide3 = $client->request('POST', '/api/ventes/' . $venteId3 . '/valider', $entete + ['json' => []])->toArray();
+        self::assertNotSame($identifiant, $valide3['supports'][0]['identifiantSupport']);
+
         // Échec d'appairage simulé (identifiant préfixé ECHEC) : support non actif.
         [$venteId2, $ligneId2] = $this->venteCarteAvecLigne($client, $entete, $session['id']);
         $client->request('POST', '/api/ventes/' . $venteId2 . '/paiements', $entete + ['json' => ['moyen' => 'especes', 'montant' => '45.00']]);

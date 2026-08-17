@@ -127,7 +127,9 @@ final class SouscriptionAbonnementEnLigneHandler
         $this->em->persist($paiement);
         $this->calculateur->recalculerVente($vente);
 
-        $this->validerVente->valider($vente, [(string) $ligneVente->getId() => ['type' => 'qr', 'identifiant' => 'QR-' . bin2hex(random_bytes(8))]]);
+        // Code de support (unique, signé HMAC — CA-12) généré automatiquement par
+        // `ValiderVenteService::creerSupport()` ; seul le type « qr » est forcé ici.
+        $this->validerVente->valider($vente, [(string) $ligneVente->getId() => ['type' => 'qr']]);
 
         $suivi = new SuiviCommandeEnLigne();
         $suivi->setVente($vente)->setVitrine($compteClient->getVitrineCreation())
@@ -143,7 +145,7 @@ final class SouscriptionAbonnementEnLigneHandler
         if ($support instanceof BilletSupport) {
             $billetMeta = new BilletQrMeta();
             $billetMeta->setBilletSupport($support)
-                ->setQrDynamique((string) ($support->getIdentifiantSupport() ?? 'QR-abonnement'))
+                ->setQrDynamique((string) $support->getIdentifiantSupport())
                 ->setPassWalletDisponible(false)->setRepliQr(true);
             $this->em->persist($billetMeta);
         }

@@ -176,9 +176,12 @@ final class ConfirmerCommandeHandler
         $this->em->persist($paiement);
         $this->calculateur->recalculerVente($vente);
 
+        // Le code de support (unique, signé HMAC — CA-12) est généré automatiquement par
+        // `ValiderVenteService::creerSupport()` (`App\Vente\Service\GenerateurCodeSupport`) : seul le
+        // type « qr » est forcé ici (billet boutique dématérialisé).
         $overrides = [];
         foreach ($vente->getLignes() as $ligneVente) {
-            $overrides[(string) $ligneVente->getId()] = ['type' => 'qr', 'identifiant' => 'QR-' . bin2hex(random_bytes(8))];
+            $overrides[(string) $ligneVente->getId()] = ['type' => 'qr'];
         }
 
         try {
@@ -248,7 +251,7 @@ final class ConfirmerCommandeHandler
 
         $billetMeta = new BilletQrMeta();
         $billetMeta->setBilletSupport($support)
-            ->setQrDynamique((string) ($support->getIdentifiantSupport() ?? ('QR-' . bin2hex(random_bytes(8)))))
+            ->setQrDynamique((string) $support->getIdentifiantSupport())
             ->setPassWalletDisponible(false)
             ->setRepliQr(true) // ⚠ HYPOTHÈSE MVP : aucun pass wallet réel intégré, repli systématique (RG-M3-14).
             ->setValiditeDebut($meta?->getCreneau()?->getDebut())

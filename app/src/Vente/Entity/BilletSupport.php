@@ -18,6 +18,7 @@ use Symfony\Component\Uid\Uuid;
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'vente_billet_support')]
+#[ORM\UniqueConstraint(name: 'uniq_billet_support_identifiant', columns: ['identifiant_support'])]
 class BilletSupport
 {
     #[ORM\Id]
@@ -38,8 +39,9 @@ class BilletSupport
     #[Groups(['vente:read'])]
     private TypeSupport $type = TypeSupport::Billet;
 
+    /** Code de support unique et signé HMAC (CA-12) — cf. `App\Vente\Service\GenerateurCodeSupport`. */
     #[ORM\Column(length: 128, nullable: true)]
-    #[Groups(['vente:read'])]
+    #[Groups(['vente:read', 'billet:read'])]
     private ?string $identifiantSupport = null;
 
     #[ORM\Column(length: 12, enumType: StatutAppairage::class, options: ['default' => 'en_attente'])]
