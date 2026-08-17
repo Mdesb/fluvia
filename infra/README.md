@@ -27,7 +27,7 @@ ssh vps-preprod 'cd ~/billetterie && ./infra/deploy-preprod.sh'
 ```
 
 Préprod en ligne : **https://smartaccess.hector-conseil.com**
-(Basic Auth, utilisateur `itcotation` — protégée par `X-Robots-Tag: noindex` et
+(Basic Auth, utilisateur `aaa` — protégée par `X-Robots-Tag: noindex` et
 un `robots.txt` interdisant tout).
 
 Certificat Let's Encrypt émis le 17/08/2026, expire le 15/11/2026, renouvellement
@@ -36,7 +36,7 @@ automatique par `certbot.timer`. Contact d'expiration : mdesbonnet1@gmail.com.
 Changer le mot de passe d'accès :
 
 ```bash
-ssh vps-preprod 'sudo htpasswd /etc/nginx/.htpasswd-preprod itcotation'
+ssh vps-preprod 'sudo htpasswd /etc/nginx/.htpasswd-preprod aaa'
 ```
 
 Accès sans passer par le domaine (tunnel SSH, utile si le DNS pose problème) —
