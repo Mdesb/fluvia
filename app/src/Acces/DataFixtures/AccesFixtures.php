@@ -72,9 +72,7 @@ final class AccesFixtures extends Fixture implements DependentFixtureInterface
         // --- Permissions acces.* + octroi à l'administrateur (RG-SOCLE-02/03) ---
         $perms = [];
         foreach (['gerer', 'lire', 'superviser', 'appairer', 'ouvrir_manuel', 'controler', 'bloquer_support', 'ingestion', 'snapshot'] as $action) {
-            $perm = (new Permission())->setModule('acces')->setAction($action);
-            $manager->persist($perm);
-            $perms[$action] = $perm;
+            $perms[$action] = $this->permissionAcces($manager, $action);
         }
 
         $roleAdmin = $manager->getRepository(Role::class)->findOneBy(['nom' => 'Administrateur groupe']);
@@ -166,5 +164,27 @@ final class AccesFixtures extends Fixture implements DependentFixtureInterface
         $manager->persist($jetonTerminal);
 
         $manager->flush();
+    }
+
+    /**
+     * Permission `acces.*`, réutilisée si elle existe déjà.
+     *
+     * `PersonnelFixtures` a besoin de `acces.bloquer_support` et `acces.ingestion` et sait les
+     * créer, car elle doit rester exécutable seule. L'ordre entre fixtures sans dépendance
+     * déclarée n'est pas garanti : sans cette réutilisation des deux côtés, celle qui passe en
+     * second viole `uniq_permission_module_action` et fait échouer tout le chargement.
+     */
+    private function permissionAcces(ObjectManager $manager, string $action): Permission
+    {
+        $existante = $manager->getRepository(Permission::class)
+            ->findOneBy(['module' => 'acces', 'action' => $action]);
+        if ($existante instanceof Permission) {
+            return $existante;
+        }
+
+        $permission = (new Permission())->setModule('acces')->setAction($action);
+        $manager->persist($permission);
+
+        return $permission;
     }
 }
