@@ -9,6 +9,8 @@ services:
       - app_var:/app/var
       # memory_limit relevé (évite l'OOM de la suite de tests qui grossit)
       - ./docker/php/conf.d/zz-memory.ini:/usr/local/etc/php/conf.d/zz-memory.ini:ro
+      # opcache prod-like FPM (bind-mount OneDrive lent) : n'affecte pas le CLI/phpunit
+      - ./docker/php/conf.d/zz-opcache.ini:/usr/local/etc/php/conf.d/zz-opcache.ini:ro
     depends_on:
       db:
         condition: service_healthy
