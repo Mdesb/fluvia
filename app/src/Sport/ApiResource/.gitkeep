@@ -1,0 +1,5 @@
+# Dossier référencé par config/packages/api_platform.yaml (mapping.paths).
+# Git ne versionne pas les dossiers vides : sans ce fichier, un clone propre
+# échoue au cache:clear avec
+#   Could not open file or directory "/app/src/Sport/ApiResource"
+# Supprimer ce fichier dès qu'une vraie ressource API y est ajoutée.
