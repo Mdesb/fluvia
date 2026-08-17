@@ -67,7 +67,21 @@ final class AccesFixtures extends Fixture implements DependentFixtureInterface
         // n'inclut pas les objets créés en base par une migration `CREATE SEQUENCE` (hors mapping
         // Doctrine) : recréée ici de façon idempotente pour que les tests disposent de la séquence
         // sans dépendre du rejeu des migrations.
-        $manager->getConnection()->executeStatement('CREATE SEQUENCE IF NOT EXISTS acces_snapshot_seq START WITH 1 INCREMENT BY 1');
+        // La séquence native est créée par la migration Version20260817192240, mais les tests
+        // construisent leur schéma sans passer par les migrations : la fixture doit savoir la
+        // créer elle-même.
+        //
+        // /!\ On ne lance le DDL que si elle manque vraiment. En MariaDB, un CREATE SEQUENCE
+        // provoque un commit implicite qui détruit les points de sauvegarde de la transaction
+        // ouverte par l'exécuteur de fixtures : sur une base déjà migrée, l'exécuter quand même
+        // faisait échouer tout le chargement avec « SAVEPOINT DOCTRINE_2 does not exist ».
+        $connection = $manager->getConnection();
+        $sequenceExiste = (bool) $connection->fetchOne(
+            "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'acces_snapshot_seq'"
+        );
+        if (!$sequenceExiste) {
+            $connection->executeStatement('CREATE SEQUENCE acces_snapshot_seq START WITH 1 INCREMENT BY 1');
+        }
 
         // --- Permissions acces.* + octroi à l'administrateur (RG-SOCLE-02/03) ---
         $perms = [];
