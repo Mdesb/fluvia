@@ -1,0 +1,70 @@
+# Stack de préprod de la billetterie.
+# Mêmes images que le dev (php:8.4-fpm, mariadb:11.4, nginx) => parité réelle.
+#
+# Différences volontaires avec le compose de dev :
+#   - APP_ENV=prod, secrets lus depuis .env.preprod (jamais versionnés)
+#   - MariaDB n'expose AUCUN port : accessible uniquement via le réseau Docker
+#   - Nginx du conteneur publie sur 127.0.0.1 seulement (le Nginx natif de l'hôte
+#     fait le reverse proxy + TLS). Publier sur 0.0.0.0 court-circuiterait UFW.
+#   - Limites mémoire : la préprod ne doit pas étouffer les agents IA du VPS.
+#
+# Usage :
+#   docker compose -f infra/compose.preprod.yaml --env-file infra/.env.preprod up -d
+
+name: billetterie-preprod
+
+services:
+  php:
+    build:
+      context: ../docker/php
+    restart: unless-stopped
+    mem_limit: 1g
+    volumes:
+      - ../app:/app
+      - app_var:/app/var
+      - ../docker/php/conf.d/zz-memory.ini:/usr/local/etc/php/conf.d/zz-memory.ini:ro
+      - ../docker/php/conf.d/zz-opcache.ini:/usr/local/etc/php/conf.d/zz-opcache.ini:ro
+    environment:
+      APP_ENV: prod
+      APP_DEBUG: "0"
+      APP_SECRET: ${APP_SECRET:?APP_SECRET manquant dans .env.preprod}
+      DATABASE_URL: "mysql://${DB_USER}:${DB_PASSWORD}@db:3306/${DB_NAME}?serverVersion=11.4.2-MariaDB&charset=utf8mb4"
+      # Symfony est derrière le Nginx de l'hôte : sans ça les URL générées et le
+      # détection HTTPS sont fausses.
+      TRUSTED_PROXIES: "127.0.0.1,REMOTE_ADDR"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    mem_limit: 128m
+    ports:
+      - "127.0.0.1:8081:80"
+    volumes:
+      - ../app:/app:ro
+      - ../docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - php
+
+  db:
+    image: mariadb:11.4
+    restart: unless-stopped
+    mem_limit: 1500m
+    environment:
+      MARIADB_DATABASE: ${DB_NAME}
+      MARIADB_USER: ${DB_USER}
+      MARIADB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD manquant dans .env.preprod}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD manquant dans .env.preprod}
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  db_data:
+  app_var:

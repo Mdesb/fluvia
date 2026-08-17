@@ -9,6 +9,10 @@
 # Docker / DB
 /docker/data/
 
+# Infra : secrets serveur (jamais versionnés)
+/infra/.env.*
+!/infra/env.*.example
+
 # OS / IDE
 Thumbs.db
 Desktop.ini
