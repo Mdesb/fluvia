@@ -1,0 +1,191 @@
+import { useEffect, useState } from 'react'
+import { boutique } from '../api/boutiqueClient.js'
+import { libelleProduit, libelleCreneau } from '../lib/format.js'
+import { Chargement, Erreur } from '../components/Etats.jsx'
+
+// Fiche produit : détail + choix de créneau (timed-entry) + quantité + ajout au panier.
+// `produit` = entrée du catalogue { produit(id), code, libelle, timedEntry, disponibilite }.
+export default function FicheProduit({ produit, langue, onAjouter, onNaviguer }) {
+  const [creneaux, setCreneaux] = useState(null)
+  const [chargementCr, setChargementCr] = useState(false)
+  const [erreurCr, setErreurCr] = useState(null)
+  const [creneauChoisi, setCreneauChoisi] = useState(null)
+  const [quantite, setQuantite] = useState(1)
+  const [ajout, setAjout] = useState(false)
+  const [erreurAjout, setErreurAjout] = useState(null)
+
+  const timedEntry = !!produit?.timedEntry
+  const nom = libelleProduit(produit, langue)
+  const enRupture = typeof produit?.disponibilite === 'number' && produit.disponibilite <= 0
+
+  // Produit inconnu (lien périmé ou catalogue non chargé) : message clair plutôt qu'un écran cassé.
+  if (!produit) {
+    return (
+      <section>
+        <button type="button" className="btn ghost pub-retour" onClick={() => onNaviguer({ vue: 'vitrine' })}>
+          ← Retour à la boutique
+        </button>
+        <Erreur message="Ce billet n'est plus disponible ou le lien est incorrect." />
+      </section>
+    )
+  }
+
+  useEffect(() => {
+    if (!timedEntry || !produit?.produit) return
+    let annule = false
+    setChargementCr(true)
+    setErreurCr(null)
+    boutique
+      .creneaux(produit.produit)
+      .then((r) => {
+        if (!annule) setCreneaux(r?.creneaux || [])
+      })
+      .catch((e) => {
+        if (!annule) setErreurCr(e?.message || 'Impossible de charger les horaires.')
+      })
+      .finally(() => {
+        if (!annule) setChargementCr(false)
+      })
+    return () => {
+      annule = true
+    }
+  }, [timedEntry, produit?.produit])
+
+  async function ajouter() {
+    setErreurAjout(null)
+    if (timedEntry && !creneauChoisi) {
+      setErreurAjout('Veuillez choisir un horaire avant d\'ajouter au panier.')
+      return
+    }
+    setAjout(true)
+    try {
+      const cr = creneauChoisi ? creneaux?.find((c) => c.creneau === creneauChoisi) : null
+      await onAjouter(
+        {
+          produit: produit.produit,
+          quantite,
+          creneau: creneauChoisi || undefined,
+        },
+        cr ? { creneau: cr.creneau, debut: cr.debut, fin: cr.fin } : undefined,
+      )
+      onNaviguer({ vue: 'panier' })
+    } catch (e) {
+      setErreurAjout(e?.message || "L'ajout au panier a échoué.")
+    } finally {
+      setAjout(false)
+    }
+  }
+
+  const resteCreneau =
+    timedEntry && creneauChoisi
+      ? creneaux?.find((c) => c.creneau === creneauChoisi)?.reste
+      : null
+
+  return (
+    <section aria-labelledby="pub-fp-titre">
+      <button type="button" className="btn ghost pub-retour" onClick={() => onNaviguer({ vue: 'vitrine' })}>
+        ← Retour à la boutique
+      </button>
+
+      <div className="pub-fiche">
+        <div className="pub-fiche-media" aria-hidden="true">
+          <span>{nom.slice(0, 1).toUpperCase()}</span>
+        </div>
+
+        <div className="pub-fiche-info">
+          <h1 id="pub-fp-titre">{nom}</h1>
+          {produit?.code && <p className="pub-carte-code">{produit.code}</p>}
+          <div className="pub-carte-tags" style={{ marginTop: 10 }}>
+            {timedEntry && <span className="badge info">Horaire à choisir</span>}
+            {enRupture && <span className="badge crit">Épuisé</span>}
+          </div>
+
+          <p className="pub-sub" style={{ marginTop: 14 }}>
+            Le tarif applicable est calculé et confirmé à l'étape de paiement.
+          </p>
+
+          {timedEntry && (
+            <fieldset className="pub-fieldset">
+              <legend>Choisissez votre horaire</legend>
+              {chargementCr ? (
+                <Chargement texte="Chargement des horaires…" />
+              ) : erreurCr ? (
+                <Erreur message={erreurCr} />
+              ) : (creneaux || []).length === 0 ? (
+                <p className="empty" style={{ padding: 0, textAlign: 'left' }}>
+                  Aucun horaire disponible pour ce billet actuellement.
+                </p>
+              ) : (
+                <ul className="pub-creneaux" role="radiogroup" aria-label="Horaires disponibles">
+                  {creneaux.map((c) => {
+                    const plein = typeof c.reste === 'number' && c.reste <= 0
+                    const actif = creneauChoisi === c.creneau
+                    return (
+                      <li key={c.creneau}>
+                        <button
+                          type="button"
+                          role="radio"
+                          aria-checked={actif}
+                          className={`pub-creneau${actif ? ' on' : ''}`}
+                          disabled={plein}
+                          onClick={() => setCreneauChoisi(c.creneau)}
+                        >
+                          <span className="pub-creneau-h">{libelleCreneau(c.debut, c.fin)}</span>
+                          <span className={`pub-creneau-r${plein ? ' full' : ''}`}>
+                            {plein ? 'Complet' : `Reste ${c.reste}`}
+                          </span>
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+            </fieldset>
+          )}
+
+          <div className="pub-qte">
+            <label htmlFor="pub-qte-input">Quantité</label>
+            <div className="pub-qte-ctrl">
+              <button
+                type="button"
+                aria-label="Diminuer la quantité"
+                onClick={() => setQuantite((n) => Math.max(1, n - 1))}
+                disabled={quantite <= 1}
+              >
+                −
+              </button>
+              <input
+                id="pub-qte-input"
+                className="input"
+                type="number"
+                min="1"
+                value={quantite}
+                onChange={(e) => setQuantite(Math.max(1, parseInt(e.target.value, 10) || 1))}
+              />
+              <button
+                type="button"
+                aria-label="Augmenter la quantité"
+                onClick={() => setQuantite((n) => n + 1)}
+                disabled={typeof resteCreneau === 'number' && quantite >= resteCreneau}
+              >
+                +
+              </button>
+            </div>
+          </div>
+
+          <Erreur message={erreurAjout} id="pub-fp-err" />
+
+          <button
+            type="button"
+            className="btn primary lg"
+            onClick={ajouter}
+            disabled={ajout || enRupture || (timedEntry && !creneauChoisi)}
+            aria-describedby={erreurAjout ? 'pub-fp-err' : undefined}
+          >
+            {ajout ? 'Ajout…' : 'Ajouter au panier'}
+          </button>
+        </div>
+      </div>
+    </section>
+  )
+}
