@@ -62,7 +62,13 @@ async function request(
 ) {
   const headers = { ...extra }
   if (body !== undefined) {
-    headers['Content-Type'] = ld ? 'application/ld+json' : 'application/json'
+    // API Platform impose `application/merge-patch+json` sur les PATCH (sinon 415) ; les autres
+    // écritures acceptent JSON simple, ou JSON-LD quand l'opération l'exige (`ld: true`).
+    headers['Content-Type'] = method === 'PATCH'
+      ? 'application/merge-patch+json'
+      : ld
+        ? 'application/ld+json'
+        : 'application/json'
   }
   if (auth) {
     const token = tokenStore.get()
@@ -149,6 +155,11 @@ export const api = {
   pointDeVentes: () => request('/api/point_de_ventes'),
   caisses: () => request('/api/caisses'),
   moyensPaiement: () => request('/api/moyen_paiements'),
+  // Moyens de paiement — écriture (source M6, sécurité `compta.gerer`).
+  creerMoyenPaiement: (corps) =>
+    request('/api/moyen_paiements', { method: 'POST', body: corps }),
+  majMoyenPaiement: (id, corps) =>
+    request(`/api/moyen_paiements/${id}`, { method: 'PATCH', body: corps }),
 
   // Sessions de caisse (M2).
   sessionsCaisse: () => request('/api/session_caisses'),
@@ -199,6 +210,8 @@ export const api = {
 
   // Reporting / Pilotage (M7). Route hors /api (proxifiée via /reporting).
   dashboardEtablissement: (id) => request(`/reporting/dashboards/etablissement/${id}`),
+  // Référentiel des indicateurs (M7).
+  indicateurs: () => request('/api/indicateurs', { query: { itemsPerPage: 100 } }),
 
   // --- Paramètres (référentiels, lecture) ---
   espaces: () => request('/api/espaces', { query: { itemsPerPage: 200 } }),
@@ -209,11 +222,29 @@ export const api = {
   saisons: () => request('/api/saisons', { query: { itemsPerPage: 100 } }),
   tauxTvas: () => request('/api/taux_tvas', { query: { itemsPerPage: 100 } }),
 
-  // Comptes / rôles & droits (M8, lecture seule côté front).
+  // Comptes / rôles & droits (M8).
   utilisateurs: () => request('/api/utilisateurs', { query: { itemsPerPage: 100 } }),
   roles: () => request('/api/roles', { query: { itemsPerPage: 100 } }),
   permissions: () => request('/api/permissions', { query: { itemsPerPage: 300 } }),
   affectations: () => request('/api/affectations', { query: { itemsPerPage: 200 } }),
+  // Création de compte : sans mot de passe, le back génère un jeton d'invitation et passe le
+  // compte en `statut = invite` (UtilisateurProcessor, RG-M8-01).
+  creerUtilisateur: (corps) =>
+    request('/api/utilisateurs', { method: 'POST', body: corps }),
+  // Cycle de vie (RG-M8-01). Le back refuse (422) toute opération laissant un établissement sans
+  // administrateur (RG-M8-07) : l'erreur est remontée telle quelle.
+  suspendreUtilisateur: (id) =>
+    request(`/api/utilisateurs/${id}/suspendre`, { method: 'POST', body: {} }),
+  reactiverUtilisateur: (id) =>
+    request(`/api/utilisateurs/${id}/reactiver`, { method: 'POST', body: {} }),
+  reinviterUtilisateur: (id) =>
+    request(`/api/utilisateurs/${id}/reinviter`, { method: 'POST', body: {} }),
+  // Affectation d'un rôle sur un établissement (utilisateur/role/etablissement en IRI).
+  creerAffectation: (corps) =>
+    request('/api/affectations', { method: 'POST', body: corps }),
+  // Aperçu des droits conférés par un rôle (matrice « vivante », US-L7-05).
+  apercuDroitsRole: (id, etablissement) =>
+    request(`/api/roles/${id}/apercu-droits`, { query: { etablissement } }),
 
   // Capacités activables (feature flags par établissement).
   catalogueCapacites: () => request('/api/fonctionnalites/catalogue'),

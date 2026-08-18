@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 
-// `cap` = capacité requise (capacitesActives de /me) ; `perm` = permission requise (droits de /me).
-// Sans `cap` ni `perm`, l'entrée est toujours visible. `disabled` = présente mais grisée (« bientôt »).
+// `cap` = capacité requise (capacitesActives de /me) ; `perm` = permission requise (droits de /me) ;
+// `admin` = réservé aux profils administrateur (droits d'administration du socle). Sans contrainte,
+// l'entrée est toujours visible. `disabled` = présente mais grisée (« bientôt »).
 const NAV = [
   {
     section: 'Exploitation',
     items: [
+      { id: 'dashboard', ic: '⌂', label: 'Tableau de bord', admin: true },
       { id: 'caisse', ic: '▤', label: 'Caisse' },
       { id: 'catalogue', ic: '▥', label: 'Catalogue' },
       { id: 'reservation', ic: '◷', label: 'Réservation', cap: 'reservation' },
@@ -62,14 +64,19 @@ export default function AppShell({
   onLogout,
   capacites = [],
   droits = [],
+  estAdmin = false,
   children,
 }) {
-  // Filtre les entrées selon les capacités actives ET les droits effectifs de l'établissement courant.
+  // Filtre les entrées selon les capacités actives, les droits effectifs de l'établissement courant
+  // et le statut administrateur.
   const nav = NAV
     .map((grp) => ({
       ...grp,
       items: grp.items.filter(
-        (it) => (!it.cap || capacites.includes(it.cap)) && (!it.perm || droits.includes(it.perm)),
+        (it) =>
+          (!it.cap || capacites.includes(it.cap)) &&
+          (!it.perm || droits.includes(it.perm)) &&
+          (!it.admin || estAdmin),
       ),
     }))
     .filter((grp) => grp.items.length > 0)

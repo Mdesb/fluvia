@@ -8,6 +8,7 @@ import {
 } from './api/client.js'
 import Login from './pages/Login.jsx'
 import AppShell from './components/AppShell.jsx'
+import Dashboard from './pages/Dashboard.jsx'
 import Caisse from './pages/Caisse.jsx'
 import Catalogue from './pages/Catalogue.jsx'
 import Clients from './pages/Clients.jsx'
@@ -23,6 +24,14 @@ import Patinoire from './pages/Patinoire.jsx'
 import Padel from './pages/Padel.jsx'
 import Musee from './pages/Musee.jsx'
 
+// Un compte est « administrateur » s'il porte l'un des droits d'administration du socle sur
+// l'établissement actif (matérialisés dans `me.droits`). Gouverne l'atterrissage sur le tableau
+// de bord et la visibilité de son entrée de menu.
+export function estAdministrateur(me) {
+  const droits = me?.droits || []
+  return droits.includes('securite.gerer') || droits.includes('organisation.gerer')
+}
+
 export default function App() {
   const [booting, setBooting] = useState(true)
   const [authed, setAuthed] = useState(!!tokenStore.get())
@@ -30,6 +39,7 @@ export default function App() {
   const [etablissements, setEtablissements] = useState([])
   const [etabActif, setEtabActif] = useState(etablissementStore.get() || '')
   const [onglet, setOnglet] = useState('caisse')
+  const [landingApplique, setLandingApplique] = useState(false)
   const [session, setSession] = useState(null) // session de caisse ouverte (partagée)
 
   const deconnexion = useCallback(() => {
@@ -39,6 +49,8 @@ export default function App() {
     setMe(null)
     setEtablissements([])
     setEtabActif('')
+    setOnglet('caisse')
+    setLandingApplique(false)
   }, [])
 
   // 401 côté client => retour login.
@@ -105,6 +117,15 @@ export default function App() {
     if (authed && etabActif) rafraichirProfil()
   }, [authed, etabActif, rafraichirProfil])
 
+  // Onglet d'arrivée : un profil administrateur atterrit sur le tableau de bord (au lieu de la
+  // caisse). Appliqué une seule fois par session, après le 1er chargement du profil.
+  useEffect(() => {
+    if (me && !landingApplique) {
+      if (estAdministrateur(me)) setOnglet('dashboard')
+      setLandingApplique(true)
+    }
+  }, [me, landingApplique])
+
   // Si l'onglet courant dépend d'une capacité ou d'une permission désormais absente, retour Caisse.
   useEffect(() => {
     const caps = me?.capacitesActives || []
@@ -114,7 +135,8 @@ export default function App() {
       piscine: 'piscine.lire', patinoire: 'patinoire.lire', padel: 'padel.lire',
       musee: 'musee.lire', comptabilite: 'compta.lire', personnel: 'personnel.lire',
     }
-    if (capRequise[onglet] && !caps.includes(capRequise[onglet])) setOnglet('caisse')
+    if (onglet === 'dashboard' && me && !estAdministrateur(me)) setOnglet('caisse')
+    else if (capRequise[onglet] && !caps.includes(capRequise[onglet])) setOnglet('caisse')
     else if (permRequise[onglet] && !droits.includes(permRequise[onglet])) setOnglet('caisse')
   }, [me, onglet])
 
@@ -152,6 +174,7 @@ export default function App() {
 
   const capacites = me?.capacitesActives || []
   const droits = me?.droits || []
+  const estAdmin = estAdministrateur(me)
 
   return (
     <AppShell
@@ -164,7 +187,11 @@ export default function App() {
       onLogout={deconnexion}
       capacites={capacites}
       droits={droits}
+      estAdmin={estAdmin}
     >
+      {onglet === 'dashboard' && estAdmin && (
+        <Dashboard etabActif={etabActif} etablissements={etablissements} />
+      )}
       {onglet === 'caisse' && (
         <Caisse
           me={me}
