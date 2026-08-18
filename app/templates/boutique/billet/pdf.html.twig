@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Billet {{ numeroCommande }}</title>
+    <style>
+        body { font-family: DejaVu Sans, sans-serif; color: #1a1a1a; font-size: 12px; }
+        h1 { font-size: 16px; margin-bottom: 0; }
+        .etablissement { font-size: 14px; font-weight: bold; margin-bottom: 4px; }
+        .commande { color: #555; margin-bottom: 16px; }
+        .billet {
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 16px;
+            page-break-inside: avoid;
+        }
+        .billet table { width: 100%; border-collapse: collapse; }
+        .billet td { vertical-align: top; padding: 4px; }
+        .billet .qr { width: 130px; text-align: center; }
+        .billet .qr img { width: 120px; height: 120px; }
+        .numero-support { font-family: DejaVu Sans Mono, monospace; font-size: 11px; color: #333; }
+        .mention { font-size: 10px; color: #777; margin-top: 4px; }
+        .repli { display: inline-block; background: #fff3cd; color: #7a5b00; padding: 2px 6px; border-radius: 3px; font-size: 10px; }
+        .retrait { display: inline-block; background: #e2e3ff; color: #2b2b8f; padding: 2px 6px; border-radius: 3px; font-size: 10px; }
+    </style>
+</head>
+<body>
+    <div class="etablissement">{{ etablissementNom }}</div>
+    <h1>Vos billets — commande n°{{ numeroCommande }}</h1>
+    <div class="commande">Émis le {{ dateCommande|date('d/m/Y H:i') }}</div>
+
+    {% for billet in billets %}
+        <div class="billet">
+            <table>
+                <tr>
+                    <td class="qr">
+                        <img src="{{ billet.qrDataUri }}" alt="QR billet">
+                    </td>
+                    <td>
+                        <strong>{{ billet.produit }}</strong><br>
+                        {% if billet.beneficiaire %}Bénéficiaire : {{ billet.beneficiaire }}<br>{% endif %}
+                        {% if billet.creneau %}Créneau : {{ billet.creneau }}<br>{% endif %}
+                        <span class="numero-support">N° {{ billet.numeroSupport }}</span><br>
+                        {% if billet.repliQr %}<span class="repli">Repli QR (pass wallet indisponible)</span>{% endif %}
+                        {% if billet.supportPhysique %}
+                            <span class="retrait">À retirer{% if billet.codeRetrait %} — code {{ billet.codeRetrait }}{% endif %}</span>
+                        {% endif %}
+                        <div class="mention">Billet nominatif, non cessible. Présentez ce QR à l'accès.</div>
+                    </td>
+                </tr>
+            </table>
+        </div>
+    {% endfor %}
+</body>
+</html>

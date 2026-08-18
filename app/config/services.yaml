@@ -271,3 +271,13 @@ services:
     App\Support\State\RouvrirTicketProcessor:
         arguments:
             $delaiReouvertureJours: 15
+
+# --- Test uniquement : collecteur d'e-mails L8 Boutique (billet PDF/QR + e-mails HTML, cf.
+# app/tests/Boutique/Support/MailCollector.php) — écoute `Symfony\Component\Mailer\Event\MessageEvent`,
+# dispatché par `AbstractTransport::send()` indépendamment du DSN (`null://null` en test), sans
+# nécessiter le profiler (non installé dans ce dépôt).
+when@test:
+    services:
+        App\Tests\Boutique\Support\MailCollector:
+            public: true
+            tags: ['kernel.event_subscriber']

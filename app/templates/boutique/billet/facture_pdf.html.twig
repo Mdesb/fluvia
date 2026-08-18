@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Facture {{ numero }}</title>
+    <style>
+        body { font-family: DejaVu Sans, sans-serif; color: #1a1a1a; font-size: 12px; }
+        h1 { font-size: 16px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+        th, td { border-bottom: 1px solid #ddd; padding: 6px; text-align: left; }
+        .totaux { margin-top: 12px; text-align: right; }
+        .acquittee { color: #1a7a1a; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>Facture {{ numero }}</h1>
+    {% if dateEmission %}<p>Émise le {{ dateEmission|date('d/m/Y') }}</p>{% endif %}
+    {% if destinataire %}<p>Destinataire : {{ destinataire }}</p>{% endif %}
+
+    <table>
+        <thead>
+            <tr><th>Désignation</th><th>Qté</th><th>PU HT</th><th>TTC</th></tr>
+        </thead>
+        <tbody>
+        {% for ligne in lignes %}
+            <tr>
+                <td>{{ ligne.designation }}</td>
+                <td>{{ ligne.quantite }}</td>
+                <td>{{ ligne.prixUnitaireHT }} €</td>
+                <td>{{ ligne.montantTTC }} €</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="totaux">
+        <p>Total HT : {{ totalHT }} €</p>
+        <p>Total TVA : {{ totalTVA }} €</p>
+        <p><strong>Total TTC : {{ totalTTC }} €</strong></p>
+        {% if mentionAcquittee %}<p class="acquittee">Facture acquittée</p>{% endif %}
+    </div>
+</body>
+</html>

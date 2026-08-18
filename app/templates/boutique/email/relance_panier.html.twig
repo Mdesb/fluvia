@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Votre panier a expiré</title>
+</head>
+<body style="font-family: Arial, sans-serif; color: #222222; margin: 0; padding: 0; background: #f4f4f4;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background: #f4f4f4; padding: 24px 0;">
+        <tr>
+            <td align="center">
+                <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="background: #ffffff; border-radius: 8px; overflow: hidden;">
+                    <tr>
+                        <td style="background: #7a4b00; color: #ffffff; padding: 20px 24px;">
+                            <h1 style="margin: 0; font-size: 18px;">Votre panier a expiré</h1>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 24px;">
+                            <p>Bonjour,</p>
+                            <p>
+                                Votre panier ({{ nbLignes }} article{{ nbLignes > 1 ? 's' : '' }}) a expiré faute de
+                                paiement dans le délai imparti : les places/articles réservés ont été libérés.
+                            </p>
+                            <p>Vous pouvez recommencer votre achat à tout moment depuis la boutique en ligne.</p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
