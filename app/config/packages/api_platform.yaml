@@ -41,6 +41,7 @@ api_platform:
             - '%kernel.project_dir%/src/Stock/Entity'
             - '%kernel.project_dir%/src/Stock/ApiResource'
             - '%kernel.project_dir%/src/Support/Entity'
+            - '%kernel.project_dir%/src/Facturation/Entity'
     defaults:
         stateless: true
         cache_headers:
