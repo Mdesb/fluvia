@@ -7,7 +7,6 @@ const NAV = [
     section: 'Exploitation',
     items: [
       { id: 'caisse', ic: '▤', label: 'Caisse' },
-      { id: 'session', ic: '◱', label: 'Caisse : session / Z' },
       { id: 'catalogue', ic: '▥', label: 'Catalogue' },
       { id: 'reservation', ic: '◷', label: 'Réservation', cap: 'reservation' },
     ],

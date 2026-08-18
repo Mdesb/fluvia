@@ -249,6 +249,17 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 .jauge-f { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--ink-soft); margin-top: 5px; }
 .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12.5px; }
 
+/* ---- Modale réutilisable ---- */
+.modal-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, .45); z-index: 60; display: flex; align-items: flex-start; justify-content: center; padding: 40px 16px; overflow-y: auto; }
+.modal { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); width: 100%; }
+.modal-sm { max-width: 440px; } .modal-md { max-width: 640px; } .modal-lg { max-width: 900px; }
+@media (prefers-reduced-motion: no-preference) { .modal { animation: modal-in .16s ease; } @keyframes modal-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } } }
+.modal-h { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.modal-h h3 { font-size: 16px; }
+.modal-x { margin-left: auto; background: none; border: none; color: var(--ink-soft); font-size: 22px; line-height: 1; cursor: pointer; padding: 2px 8px; border-radius: 8px; font-family: inherit; }
+.modal-x:hover { background: var(--panel-2); color: var(--ink); }
+.modal-b { padding: 18px; }
+
 /* ---- Divers ---- */
 .center { display: grid; place-items: center; min-height: 60vh; color: var(--ink-soft); }
 .spinner { width: 28px; height: 28px; border: 3px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }

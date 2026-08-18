@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import Liste, { euroCentimes, dateFr, dateHeureFr } from '../components/Liste.jsx'
+import Tabs from '../components/Tabs.jsx'
 import { api } from '../api/client.js'
 
 // Comptabilité / Régie (M6) + SEPA + impayés + cautions. Consultation multi-onglets.
@@ -15,17 +16,17 @@ export default function Comptabilite({ etabActif }) {
         </div>
       </div>
 
-      <div className="seg" style={{ marginBottom: 16 }}>
-        {[
+      <Tabs
+        onglets={[
           ['journaux', 'Journaux & écritures'],
           ['regie', 'Régie & versements'],
           ['sepa', 'SEPA'],
           ['impayes', 'Impayés'],
           ['cautions', 'Cautions'],
-        ].map(([k, l]) => (
-          <button key={k} className={sousOnglet === k ? 'on' : ''} onClick={() => setSousOnglet(k)}>{l}</button>
-        ))}
-      </div>
+        ]}
+        actif={sousOnglet}
+        onChange={setSousOnglet}
+      />
 
       {sousOnglet === 'journaux' && (
         <div className="resa-grid">

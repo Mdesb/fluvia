@@ -10,7 +10,6 @@ import Login from './pages/Login.jsx'
 import AppShell from './components/AppShell.jsx'
 import Caisse from './pages/Caisse.jsx'
 import Catalogue from './pages/Catalogue.jsx'
-import SessionCaisse from './pages/SessionCaisse.jsx'
 import Clients from './pages/Clients.jsx'
 import Reservation from './pages/Reservation.jsx'
 import Supervision from './pages/Supervision.jsx'
@@ -173,11 +172,8 @@ export default function App() {
           etablissements={etablissements}
           session={session}
           capacites={me?.capacitesActives || []}
-          onNav={setOnglet}
+          onSessionRefresh={rechargerSession}
         />
-      )}
-      {onglet === 'session' && (
-        <SessionCaisse me={me} etabActif={etabActif} session={session} onRefresh={rechargerSession} />
       )}
       {onglet === 'catalogue' && <Catalogue etabActif={etabActif} />}
       {onglet === 'reservation' && <Reservation etabActif={etabActif} />}

@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import Liste, { texte, dateHeureFr } from '../components/Liste.jsx'
+import Tabs from '../components/Tabs.jsx'
 import { api, membres } from '../api/client.js'
 
 const SOUS = [
@@ -24,11 +25,7 @@ export default function Parametres({ etabActif, etablissements }) {
         </div>
       </div>
 
-      <div className="seg" style={{ marginBottom: 16, flexWrap: 'wrap' }}>
-        {SOUS.map(([k, l]) => (
-          <button key={k} className={sousOnglet === k ? 'on' : ''} onClick={() => setSousOnglet(k)}>{l}</button>
-        ))}
-      </div>
+      <Tabs onglets={SOUS} actif={sousOnglet} onChange={setSousOnglet} />
 
       {sousOnglet === 'entites' && (
         <div className="resa-grid">

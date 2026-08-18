@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import Liste, { dateHeureFr, texte } from '../components/Liste.jsx'
+import Tabs from '../components/Tabs.jsx'
 import { api } from '../api/client.js'
 
 const STATUT_REMB = {
@@ -20,15 +21,15 @@ export default function Boutique({ etabActif }) {
         </div>
       </div>
 
-      <div className="seg" style={{ marginBottom: 16 }}>
-        {[
+      <Tabs
+        onglets={[
           ['remboursements', 'Remboursements'],
           ['comptes', 'Comptes clients'],
           ['vitrines', 'Vitrines'],
-        ].map(([k, l]) => (
-          <button key={k} className={sousOnglet === k ? 'on' : ''} onClick={() => setSousOnglet(k)}>{l}</button>
-        ))}
-      </div>
+        ]}
+        actif={sousOnglet}
+        onChange={setSousOnglet}
+      />
 
       {sousOnglet === 'remboursements' && (
         <Liste

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import Qr from '../components/Qr.jsx'
+import Modal from '../components/Modal.jsx'
+import SessionCaisse from './SessionCaisse.jsx'
 import {
   libelleProduit,
   prixIndicatif,
@@ -13,7 +15,8 @@ import {
 // Ordre de présentation préféré des moyens de paiement au guichet.
 const ORDRE_MOYENS = ['especes', 'cb', 'cheque', 'pmv']
 
-export default function Caisse({ me, etabActif, etablissements, session, capacites = [], onNav }) {
+export default function Caisse({ me, etabActif, etablissements, session, capacites = [], onSessionRefresh }) {
+  const [caisseModale, setCaisseModale] = useState(false)
   const [produits, setProduits] = useState([])
   const [moyens, setMoyens] = useState([])
   const [pdvs, setPdvs] = useState([])
@@ -213,6 +216,26 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
     }
   }
 
+  // Modale d'ouverture / clôture Z, déclenchée depuis l'écran Caisse. Réutilise SessionCaisse
+  // et ses appels API existants ; se ferme seule après ouverture, laisse le récap Z après clôture.
+  const modaleSession = (
+    <Modal
+      open={caisseModale}
+      onClose={() => setCaisseModale(false)}
+      taille={session ? 'lg' : 'md'}
+      titre={session ? 'Clôture de caisse (Z)' : 'Ouvrir la caisse'}
+    >
+      <SessionCaisse
+        modale
+        me={me}
+        etabActif={etabActif}
+        session={session}
+        onRefresh={onSessionRefresh}
+        onClose={() => setCaisseModale(false)}
+      />
+    </Modal>
+  )
+
   // --- Rendu : pas de session ouverte ---
   if (!chargement && !session) {
     return (
@@ -228,9 +251,10 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
             <p className="hint" style={{ marginBottom: 18 }}>
               Ouvrez une session (point de vente, fond de caisse, régisseur) pour encaisser.
             </p>
-            <button className="btn primary" onClick={() => onNav?.('session')}>Ouvrir une session</button>
+            <button className="btn primary" onClick={() => setCaisseModale(true)}>Ouvrir la caisse</button>
           </div>
         </div>
+        {modaleSession}
       </div>
     )
   }
@@ -245,6 +269,9 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
           <p>
             Session {session?.numero ? `n° ${session.numero}` : 'au guichet'} · {nomEtab}
           </p>
+        </div>
+        <div className="actions">
+          <button className="btn" onClick={() => setCaisseModale(true)} disabled={enPaiement}>Clôture Z</button>
         </div>
       </div>
 
@@ -364,6 +391,7 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
           </div>
         </section>
       </div>
+      {modaleSession}
     </div>
   )
 }
