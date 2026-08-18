@@ -78,6 +78,21 @@ class LigneVente
     #[Groups(['vente:read'])]
     private ?array $promotionsAppliquees = null;
 
+    /**
+     * Sélection d'options (App\OptionProduit) figée à l'ajout au panier (RG-OPT-09), même patron que
+     * `promotionsAppliquees`.
+     *
+     * @var list<array{groupeOptionId: string, valeurOptionId: string, libelle: string, impactType: string, impactValeur: string, montantUnitaireApplique: string}>|null
+     */
+    #[ORM\Column(nullable: true)]
+    #[Groups(['vente:read'])]
+    private ?array $optionsSelectionnees = null;
+
+    /** Σ des impacts unitaires des options sélectionnées (RG-OPT-04), ajoutée à `prixUnitaire`. */
+    #[ORM\Column(type: 'decimal', precision: 10, scale: 2, options: ['default' => '0.00'])]
+    #[Groups(['vente:read'])]
+    private string $impactOptionsUnitaire = '0.00';
+
     #[ORM\Column(type: 'decimal', precision: 10, scale: 2, options: ['default' => '0.00'])]
     #[Groups(['vente:read'])]
     private string $montantLigne = '0.00';
@@ -243,6 +258,32 @@ class LigneVente
     public function setPromotionsAppliquees(?array $promotionsAppliquees): self
     {
         $this->promotionsAppliquees = $promotionsAppliquees;
+
+        return $this;
+    }
+
+    /** @return list<array{groupeOptionId: string, valeurOptionId: string, libelle: string, impactType: string, impactValeur: string, montantUnitaireApplique: string}>|null */
+    public function getOptionsSelectionnees(): ?array
+    {
+        return $this->optionsSelectionnees;
+    }
+
+    /** @param list<array{groupeOptionId: string, valeurOptionId: string, libelle: string, impactType: string, impactValeur: string, montantUnitaireApplique: string}>|null $optionsSelectionnees */
+    public function setOptionsSelectionnees(?array $optionsSelectionnees): self
+    {
+        $this->optionsSelectionnees = $optionsSelectionnees;
+
+        return $this;
+    }
+
+    public function getImpactOptionsUnitaire(): string
+    {
+        return $this->impactOptionsUnitaire;
+    }
+
+    public function setImpactOptionsUnitaire(string $impactOptionsUnitaire): self
+    {
+        $this->impactOptionsUnitaire = $impactOptionsUnitaire;
 
         return $this;
     }

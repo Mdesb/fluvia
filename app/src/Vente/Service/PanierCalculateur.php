@@ -19,7 +19,9 @@ final class PanierCalculateur
     /** Recalcule le montant d'une ligne (remise + promotions comprises) en centimes puis en decimal. */
     public function recalculerLigne(LigneVente $ligne): void
     {
-        $brut = $this->centimes($ligne->getPrixUnitaire()) * $ligne->getQuantite();
+        // App\OptionProduit (RG-OPT-04) : l'impact unitaire des options s'ajoute au prix de base avant
+        // remise/promotion. '0.00' par défaut ⇒ centimes('0.00') === 0, calcul inchangé sans option.
+        $brut = ($this->centimes($ligne->getPrixUnitaire()) + $this->centimes($ligne->getImpactOptionsUnitaire())) * $ligne->getQuantite();
 
         $remise = 0;
         if ($ligne->getRemiseLigne() !== null && $ligne->getRemiseType() !== null) {
@@ -40,7 +42,7 @@ final class PanierCalculateur
         $total = 0;
         $remises = 0;
         foreach ($vente->getLignes() as $ligne) {
-            $brut = $this->centimes($ligne->getPrixUnitaire()) * $ligne->getQuantite();
+            $brut = ($this->centimes($ligne->getPrixUnitaire()) + $this->centimes($ligne->getImpactOptionsUnitaire())) * $ligne->getQuantite();
             $total += $this->centimes($ligne->getMontantLigne());
             $remises += max(0, $brut - $this->centimes($ligne->getMontantLigne()));
         }

@@ -11,6 +11,10 @@ use App\Offre\Entity\TypeTarif;
 use App\Offre\Enum\Canal;
 use App\Offre\Enum\TypePromotion;
 use App\Offre\Service\ResolveurPrix;
+use App\OptionProduit\Entity\OptionProduit;
+use App\OptionProduit\Entity\ValeurOption;
+use App\OptionProduit\Enum\ImpactOptionType;
+use App\OptionProduit\Enum\ModeSelectionOption;
 use App\Vente\Entity\LigneVente;
 use App\Vente\Entity\Vente;
 use App\Vente\Enum\RemiseType;
@@ -104,6 +108,11 @@ final class AjoutLigneHandler
             $ligne->setSaison($this->saisonResolue($produit, $typeTarif, $vente->getDate(), $qf));
         }
 
+        // App\OptionProduit (RG-OPT-03/04/05/07/08) — options sélectionnées, snapshot figé (RG-OPT-09).
+        [$snapshotOptions, $impactOptionsCentimes] = $this->resoudreOptions($produit, $donnees['options'] ?? [], $ligne, $vente);
+        $ligne->setOptionsSelectionnees($snapshotOptions);
+        $ligne->setImpactOptionsUnitaire($this->calculateur->decimal($impactOptionsCentimes));
+
         // CA-4 — promotions éligibles appliquées automatiquement et visibles sur la ligne.
         $ligne->setPromotionsAppliquees($this->promotionsAuto($produit, $vente->getDate()));
 
@@ -185,6 +194,103 @@ final class AjoutLigneHandler
         }
 
         return null;
+    }
+
+    /**
+     * Résout et valide les options sélectionnées (App\OptionProduit) pour la ligne en cours de
+     * composition : filtre les rattachements actifs/disponibles pour ce produit et cet établissement
+     * (RG-OPT-07/08), rejette les références invalides ou hors périmètre (422), applique RG-OPT-05
+     * (choix unique) et RG-OPT-03 (obligatoire), puis calcule l'impact tarifaire unitaire (RG-OPT-04).
+     * Le snapshot retourné est figé sur la ligne (RG-OPT-09) ; aucune vérification de stock ici
+     * (Risque n°1 du plan, hors périmètre de ce lot).
+     *
+     * @param list<mixed> $refs UUID ou IRI de ValeurOption envoyés par le client
+     *
+     * @return array{0: list<array{groupeOptionId: string, valeurOptionId: string, libelle: string, impactType: string, impactValeur: string, montantUnitaireApplique: string}>, 1: int}
+     */
+    private function resoudreOptions(Produit $produit, array $refs, LigneVente $ligne, Vente $vente): array
+    {
+        /** @var list<OptionProduit> $liaisons */
+        $liaisons = $this->em->getRepository(OptionProduit::class)->findBy(['produit' => $produit, 'actif' => true]);
+
+        $etablissement = $vente->getEtablissement();
+        $disponibles = [];
+        foreach ($liaisons as $liaison) {
+            $groupe = $liaison->getGroupeOption();
+            if ($groupe === null || !$groupe->isActif()) {
+                continue;
+            }
+            $restrictions = $liaison->getEtablissementsRestriction();
+            if (!$restrictions->isEmpty() && ($etablissement === null || !$restrictions->contains($etablissement))) {
+                continue; // RG-OPT-07 : hors établissement actif.
+            }
+            $disponibles[] = $liaison;
+        }
+
+        /** @var array<string, array{groupe: \App\OptionProduit\Entity\GroupeOption, valeurs: list<ValeurOption>}> $valeursParGroupe */
+        $valeursParGroupe = [];
+        foreach ($refs as $ref) {
+            $uuid = $this->uuidOuNull($ref);
+            $valeur = $uuid !== null ? $this->em->getRepository(ValeurOption::class)->find($uuid) : null;
+            if (!$valeur instanceof ValeurOption || !$valeur->isActif()) {
+                throw new UnprocessableEntityHttpException('Option indisponible ou inconnue (RG-OPT-08).');
+            }
+            $groupe = $valeur->getGroupeOption();
+            $liaisonTrouvee = null;
+            foreach ($disponibles as $liaison) {
+                if ($groupe !== null && $liaison->getGroupeOption() === $groupe) {
+                    $liaisonTrouvee = $liaison;
+                    break;
+                }
+            }
+            if ($groupe === null || $liaisonTrouvee === null) {
+                throw new UnprocessableEntityHttpException('Option indisponible ou inconnue pour ce produit/cet établissement (RG-OPT-07).');
+            }
+            $groupeId = (string) $groupe->getId();
+            $valeursParGroupe[$groupeId] ??= ['groupe' => $groupe, 'valeurs' => []];
+            $valeursParGroupe[$groupeId]['valeurs'][] = $valeur;
+        }
+
+        // RG-OPT-05 — choix unique : une seule valeur retenue par groupe « unique ».
+        foreach ($valeursParGroupe as $entree) {
+            if ($entree['groupe']->getModeSelection() === ModeSelectionOption::Unique && \count($entree['valeurs']) > 1) {
+                throw new UnprocessableEntityHttpException(sprintf('Un seul choix autorisé pour le groupe « %s » (RG-OPT-05).', $entree['groupe']->getLibelle()));
+            }
+        }
+
+        // RG-OPT-03 — groupe obligatoire : au moins une valeur retenue.
+        foreach ($disponibles as $liaison) {
+            if (!$liaison->isObligatoire()) {
+                continue;
+            }
+            $groupeId = (string) $liaison->getGroupeOption()?->getId();
+            if (($valeursParGroupe[$groupeId]['valeurs'] ?? []) === []) {
+                throw new UnprocessableEntityHttpException(sprintf('Option obligatoire manquante : %s (RG-OPT-03).', $liaison->getGroupeOption()?->getLibelle()));
+            }
+        }
+
+        // RG-OPT-04 — impact unitaire = Σ(montants fixes) + prixBase × Σ(pourcentages), figé (RG-OPT-09).
+        $prixBaseCentimes = $this->calculateur->centimes($ligne->getPrixUnitaire());
+        $impactTotal = 0;
+        $snapshot = [];
+        foreach ($valeursParGroupe as $entree) {
+            foreach ($entree['valeurs'] as $valeur) {
+                $impactUnitaire = $valeur->getImpactType() === ImpactOptionType::Pourcentage
+                    ? intdiv($prixBaseCentimes * $this->calculateur->centimes($valeur->getImpactValeur()), 100 * 100)
+                    : $this->calculateur->centimes($valeur->getImpactValeur());
+                $impactTotal += $impactUnitaire;
+                $snapshot[] = [
+                    'groupeOptionId' => (string) $valeur->getGroupeOption()?->getId(),
+                    'valeurOptionId' => (string) $valeur->getId(),
+                    'libelle' => $valeur->getLibelle(),
+                    'impactType' => $valeur->getImpactType()->value,
+                    'impactValeur' => $valeur->getImpactValeur(),
+                    'montantUnitaireApplique' => $this->calculateur->decimal($impactUnitaire),
+                ];
+            }
+        }
+
+        return [$snapshot, $impactTotal];
     }
 
     /**
