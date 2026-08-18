@@ -38,21 +38,25 @@ final class SessionTest extends VenteApiTestCase
         self::assertResponseStatusCodeSame(409);
     }
 
-    /** CA-1 — Ouverture sans fond ou sans code régisseur : refusée. */
-    public function testCa1OuvertureExigeFondEtCode(): void
+    /** CA-1 — Ouverture : le fond est requis, mais PAS le code régisseur (code réservé aux manips sensibles). */
+    public function testCa1OuvertureExigeFondPasDeCodeRegisseur(): void
     {
         [$client, $entete] = $this->adminSurA();
+        $base = [
+            'pointDeVente' => '/api/point_de_ventes/' . $this->idPointDeVente(),
+            'caisse' => '/api/caisses/' . $this->idCaisse(),
+        ];
 
-        $client->request('POST', '/api/sessions-caisse/ouvrir', $entete + [
-            'json' => [
-                'pointDeVente' => '/api/point_de_ventes/' . $this->idPointDeVente(),
-                'caisse' => '/api/caisses/' . $this->idCaisse(),
-                'regisseur' => '/api/utilisateurs/' . $this->idAdmin(),
-                'fondDeCaisse' => '10.00',
-                // codeRegisseur manquant
-            ],
-        ]);
+        // Sans fond de caisse : refusée (422).
+        $client->request('POST', '/api/sessions-caisse/ouvrir', $entete + ['json' => $base]);
         self::assertResponseStatusCodeSame(422);
+
+        // Avec fond mais SANS code régisseur ni régisseur explicite : acceptée ;
+        // l'opérateur connecté devient régisseur par défaut (même sur une caisse fermée « securisee »).
+        $client->request('POST', '/api/sessions-caisse/ouvrir', $entete + [
+            'json' => $base + ['fondDeCaisse' => '10.00'],
+        ]);
+        self::assertResponseIsSuccessful();
     }
 
     /** CA-1 — Une vente est impossible sur une session close (hors session ouverte). */

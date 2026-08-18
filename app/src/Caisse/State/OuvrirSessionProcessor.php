@@ -46,18 +46,17 @@ final class OuvrirSessionProcessor implements ProcessorInterface
         \assert($pdv instanceof PointDeVente);
         $caisse = $this->resoudre(Caisse::class, $corps['caisse'] ?? null, 'caisse');
         \assert($caisse instanceof Caisse);
-        $regisseur = $this->resoudre(Utilisateur::class, $corps['regisseur'] ?? null, 'regisseur');
+        $operateur = $this->security->getUser();
+        \assert($operateur instanceof Utilisateur);
+
+        // L'ouverture d'une caisse ne demande PAS de code régisseur : le régisseur par défaut est
+        // l'opérateur qui ouvre. Une caisse fermée est en état « securisee », c'est normal — l'ouverture
+        // reste une opération courante. Le code régisseur n'est exigé que pour une RÉOUVERTURE forcée
+        // d'une caisse bloquée, via l'endpoint dédié `/sessions-caisse/{id}/rouvrir`.
+        $regisseur = isset($corps['regisseur'])
+            ? $this->resoudre(Utilisateur::class, $corps['regisseur'], 'regisseur')
+            : $operateur;
         \assert($regisseur instanceof Utilisateur);
-
-        $code = \is_string($corps['codeRegisseur'] ?? null) ? trim($corps['codeRegisseur']) : '';
-        if ($code === '') {
-            throw new UnprocessableEntityHttpException('Code régisseur requis à l\'ouverture (RG-M2-01).');
-        }
-
-        // CA-2 — une caisse sécurisée exige le code régisseur pour être rouverte (déjà vérifié ci-dessus).
-        if ($caisse->getEtat() === EtatCaisse::Securisee && $code === '') {
-            throw new UnprocessableEntityHttpException('Caisse sécurisée : code régisseur requis pour rouvrir (CA-2).');
-        }
 
         if (!isset($corps['fondDeCaisse'])) {
             throw new UnprocessableEntityHttpException('Fond de caisse requis à l\'ouverture (US-L2-01).');
@@ -79,9 +78,6 @@ final class OuvrirSessionProcessor implements ProcessorInterface
         if ($active !== null) {
             throw new ConflictHttpException('Une session est déjà active sur ce point de vente (RG-M2-01).');
         }
-
-        $operateur = $this->security->getUser();
-        \assert($operateur instanceof Utilisateur);
 
         $caisse->setEtat(EtatCaisse::Ouverte);
 

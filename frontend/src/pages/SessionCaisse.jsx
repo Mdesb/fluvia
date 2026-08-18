@@ -16,7 +16,6 @@ export default function SessionCaisse({ me, etabActif, session, onRefresh, modal
   const [pdvId, setPdvId] = useState('')
   const [caisseId, setCaisseId] = useState('')
   const [fond, setFond] = useState('50.00')
-  const [codeReg, setCodeReg] = useState('')
   const [ouverture, setOuverture] = useState(false)
 
   // Clôture
@@ -72,10 +71,8 @@ export default function SessionCaisse({ me, etabActif, session, onRefresh, modal
         pointDeVente: pdvId,
         caisse: caisseId,
         fondDeCaisse: Number(fond || 0).toFixed(2),
-        regisseur: me.id,
-        codeRegisseur: codeReg.trim(),
+        // Pas de code régisseur à l'ouverture : l'opérateur connecté est le régisseur par défaut.
       })
-      setCodeReg('')
       await onRefresh()
       // En modale : une fois la session ouverte, on rend la main à l'écran Caisse.
       if (modale) onClose?.()
@@ -148,23 +145,16 @@ export default function SessionCaisse({ me, etabActif, session, onRefresh, modal
           ))}
         </select>
       </div>
-      <div className="grid g2">
-        <div className="field" style={{ margin: 0 }}>
-          <label htmlFor="fond">Fond de caisse</label>
-          <input id="fond" className="input" type="number" step="0.01" min="0"
-            value={fond} onChange={(e) => setFond(e.target.value)} required />
-        </div>
-        <div className="field" style={{ margin: 0 }}>
-          <label htmlFor="code">Code régisseur</label>
-          <input id="code" className="input" type="password" autoComplete="off"
-            placeholder="••••" value={codeReg} onChange={(e) => setCodeReg(e.target.value)} required />
-        </div>
+      <div className="field">
+        <label htmlFor="fond">Fond de caisse</label>
+        <input id="fond" className="input" type="number" step="0.01" min="0"
+          value={fond} onChange={(e) => setFond(e.target.value)} required />
       </div>
       <div className="hint" style={{ marginBottom: 14 }}>
-        Régisseur : <b>{me?.nom || me?.email}</b> · une caisse sécurisée exige le code régisseur (CA-2).
+        Régisseur : <b>{me?.nom || me?.email}</b>. Aucun code n'est requis à l'ouverture.
       </div>
       <button className="btn primary lg" type="submit" disabled={ouverture}>
-        {ouverture ? 'Ouverture…' : 'Ouvrir la session'}
+        {ouverture ? 'Ouverture…' : 'Ouvrir la caisse'}
       </button>
     </>
   )
