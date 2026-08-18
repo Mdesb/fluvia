@@ -105,9 +105,11 @@ class LimiteAutorisation
     #[Groups(['limite:read'])]
     private \DateTimeImmutable $dateCreation;
 
+    /** Assigné inconditionnellement par `LimiteAutorisationProcessor` à l'auteur courant — lecture
+     * seule côté API (jamais dans `limite:write`) pour empêcher toute usurpation de signature. */
     #[ORM\ManyToOne(targetEntity: Utilisateur::class)]
     #[ORM\JoinColumn(nullable: false)]
-    #[Groups(['limite:read', 'limite:write'])]
+    #[Groups(['limite:read'])]
     private ?Utilisateur $auteur = null;
 
     public function __construct()

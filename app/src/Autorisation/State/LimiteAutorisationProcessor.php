@@ -67,9 +67,10 @@ final class LimiteAutorisationProcessor implements ProcessorInterface
 
         if ($auteurCourant instanceof Utilisateur) {
             $this->verificateur->verifier($auteurCourant, $etablissement);
-            if ($data->getAuteur() === null) {
-                $data->setAuteur($auteurCourant);
-            }
+            // `auteur` est en lecture seule côté API (hors groupe `limite:write`) : assigné ici
+            // inconditionnellement à l'appelant réel, à chaque create/update, pour empêcher toute
+            // usurpation de signature (défaut majeur revue de cohérence).
+            $data->setAuteur($auteurCourant);
         }
 
         // Garde applicative « au plus une limite par (opération, cible, établissement) » (§1 plan).

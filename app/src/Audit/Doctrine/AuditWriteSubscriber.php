@@ -149,6 +149,12 @@ final class AuditWriteSubscriber
         // (volumétrie/bruit, cf. plan §6).
         \App\Support\Entity\ArticleAide::class,
         \App\Support\Entity\TicketSupport::class,
+        // Module Autorisations graduées (App\Autorisation) : traçabilité de la configuration des
+        // plafonds/périmètres et du catalogue des opérations sensibles (défaut majeur revue de
+        // cohérence — la config n'était pas auditée alors que ce mécanisme protège des opérations
+        // sensibles, RG-SOCLE-07).
+        \App\Autorisation\Entity\LimiteAutorisation::class,
+        \App\Autorisation\Entity\OperationSensible::class,
     ];
 
     /**
