@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Facturation\Service;
 
+use App\Compta\Entity\ProfilExploitant;
 use App\Compta\Entity\TauxTva;
 use App\Facturation\Entity\DestinataireFacturation;
 use App\Facturation\Entity\Facture;
@@ -82,7 +83,7 @@ final class FactureDirecteBuilder
             $ligne->setDesignation(\is_string($donneesLigne['designation'] ?? null) ? $donneesLigne['designation'] : '');
             $ligne->setQuantite(\is_int($donneesLigne['quantite'] ?? null) ? $donneesLigne['quantite'] : (int) ($donneesLigne['quantite'] ?? 1));
             $ligne->setPrixUnitaireHT((string) ($donneesLigne['prixUnitaireHT'] ?? '0.00'));
-            $ligne->setTauxTva($this->resoudreTauxTva($donneesLigne['tauxTva'] ?? null));
+            $ligne->setTauxTva($this->resoudreTauxTva($donneesLigne['tauxTva'] ?? null, $facture->getProfilExploitant()));
 
             if (isset($donneesLigne['categorieComptable']) && \is_string($donneesLigne['categorieComptable']) && Uuid::isValid($donneesLigne['categorieComptable'])) {
                 $ligne->setCategorieComptable(Uuid::fromString($donneesLigne['categorieComptable']));
@@ -95,12 +96,17 @@ final class FactureDirecteBuilder
         $facture->recalculerTotaux();
     }
 
-    private function resoudreTauxTva(mixed $reference): TauxTva
+    private function resoudreTauxTva(mixed $reference, ?ProfilExploitant $profil): TauxTva
     {
         $uuid = $this->uuidDepuis($reference);
         $taux = $uuid !== null ? $this->em->getRepository(TauxTva::class)->find($uuid) : null;
         if (!$taux instanceof TauxTva) {
             throw new UnprocessableEntityHttpException('Taux de TVA obligatoire et valide pour chaque ligne (RG-M6-05).');
+        }
+        // Cloisonnement (RG-SOCLE-05) : un taux de TVA d'un autre exploitant ne peut pas être utilisé
+        // sur cette facture.
+        if ($profil !== null && $taux->getProfilExploitant()?->getId()?->equals($profil->getId()) !== true) {
+            throw new UnprocessableEntityHttpException('Ce taux de TVA n\'appartient pas à l\'exploitant de cette facture.');
         }
 
         return $taux;

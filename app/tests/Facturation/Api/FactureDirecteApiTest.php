@@ -4,7 +4,13 @@ declare(strict_types=1);
 
 namespace App\Tests\Facturation\Api;
 
+use App\Compta\Entity\ProfilExploitant;
+use App\Compta\Entity\TauxTva;
+use App\Compta\Enum\ReferentielComptable;
+use App\Compta\Enum\TypeExploitant;
+use App\DataFixtures\SocleFixtures;
 use App\Facturation\Entity\ParametreFacturationEtablissement;
+use App\Organisation\Entity\Etablissement;
 use App\Tests\Facturation\FacturationApiTestCase;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -86,5 +92,40 @@ final class FactureDirecteApiTest extends FacturationApiTestCase
 
         $reponse = $client->request('POST', '/api/factures/' . $brouillon['id'] . '/emettre', $entete);
         self::assertSame(422, $reponse->getStatusCode(), 'Compte produit indéterminable : rejet explicite, pas de crash.');
+    }
+
+    /**
+     * Correctif revue de cohérence (minor) : `FactureDirecteBuilder::resoudreTauxTva` doit rejeter un
+     * taux de TVA appartenant à un autre exploitant (RG-SOCLE-05).
+     */
+    public function testTauxTvaAutreExploitantRejeteExplicitement(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $etabB = $em->getRepository(Etablissement::class)->findOneBy(['nom' => SocleFixtures::ETAB_B_NOM]);
+        self::assertNotNull($etabB);
+
+        $profilB = new ProfilExploitant();
+        $profilB->setType(TypeExploitant::RegieDirecte);
+        $profilB->setReferentielComptable(ReferentielComptable::M57);
+        $profilB->setSiren('888888888');
+        $profilB->setEtablissementPrincipal($etabB);
+        $em->persist($profilB);
+
+        $tauxB = new TauxTva();
+        $tauxB->setProfilExploitant($profilB);
+        $tauxB->setTaux('20.00');
+        $tauxB->setLibelle('Taux normal 20 % (profil B)');
+        $tauxB->setActif(true);
+        $em->persist($tauxB);
+        $em->flush();
+
+        $corps = $this->corpsFactureDirecte(60.0);
+        $corps['lignes'][0]['tauxTva'] = '/api/taux_tvas/' . $tauxB->getId();
+
+        $reponse = $client->request('POST', '/api/factures', $entete + ['json' => $corps]);
+        self::assertSame(422, $reponse->getStatusCode(), 'Taux de TVA d\'un autre exploitant : rejet explicite.');
     }
 }

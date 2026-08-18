@@ -11,6 +11,7 @@ use App\Compta\Nf525\ScellementEcritureHandler;
 use App\Facturation\Entity\Facture;
 use App\Facturation\Enum\StatutFacture;
 use App\Facturation\Nf525\ScellementFactureHandler;
+use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
@@ -26,6 +27,14 @@ use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
  * Idempotence (CA-4) : la transition `brouillon → émise` est gardée par le statut — une facture déjà
  * scellée ne peut plus être ré-émise. Numérotation + écriture + scellement s'exécutent dans **une
  * seule transaction** (`wrapInTransaction`), fermant la fenêtre « numéro consommé sans écriture ».
+ *
+ * Concurrence (correctif revue de cohérence, défaut 2) : le garde `estBrouillon()`/`estScellee()`
+ * ci-dessous est évalué **avant** l'ouverture de la transaction (fail-fast + résolution des comptes
+ * hors verrou) — insuffisant seul : deux `POST /factures/{id}/emettre` concurrents le franchiraient
+ * tous les deux. La facture est donc **verrouillée** (`LockMode::PESSIMISTIC_WRITE`) tout au début de
+ * la fermeture transactionnelle, puis le garde est **revérifié après verrou**, avant toute écriture :
+ * la seconde requête, une fois le verrou obtenu, constate l'émission déjà faite par la première et
+ * échoue proprement (pas de seconde `EcritureComptable`).
  */
 final class EmettreFactureDirecteHandler
 {
@@ -63,6 +72,13 @@ final class EmettreFactureDirecteHandler
 
         /** @var Facture $resultat */
         $resultat = $this->em->wrapInTransaction(function () use ($facture, $profil, $comptesLignes, $compteClient, $compteTva, $journal): Facture {
+            // Verrou pessimiste posé en tout premier, puis revérification du garde : ferme la fenêtre
+            // de concurrence entre le contrôle initial (hors transaction) et l'écriture.
+            $this->em->lock($facture, LockMode::PESSIMISTIC_WRITE);
+            if (!$facture->estBrouillon() || $facture->estScellee() || $facture->getNumero() !== null) {
+                throw new ConflictHttpException('Ré-émission interdite : cette facture est déjà émise (RG-FACT-03, CA-4).');
+            }
+
             $dateEmission = new \DateTimeImmutable();
             $periode = $this->comptes->periodePour($profil, $dateEmission);
             $facture->setPeriode($periode);

@@ -60,6 +60,7 @@ use Symfony\Component\Uid\Uuid;
 #[ORM\Table(name: 'facturation_facture')]
 #[ORM\UniqueConstraint(name: 'uniq_facture_numero', columns: ['numero'])]
 #[ORM\UniqueConstraint(name: 'uniq_facture_vente_origine', columns: ['vente_origine_id'])]
+#[ORM\UniqueConstraint(name: 'uniq_facturation_facture_corrigee', columns: ['facture_corrigee_id'])]
 #[ORM\Index(name: 'idx_facture_chaine', columns: ['profil_exploitant_id', 'nature', 'numero_sequence'])]
 #[ApiResource(
     shortName: 'Facture',

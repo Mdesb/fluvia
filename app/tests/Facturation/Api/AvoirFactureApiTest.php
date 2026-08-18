@@ -5,8 +5,12 @@ declare(strict_types=1);
 namespace App\Tests\Facturation\Api;
 
 use App\Compta\Entity\EcritureComptable;
+use App\Facturation\Entity\Facture;
+use App\Facturation\Enum\NatureFacture;
 use App\Tests\Facturation\FacturationApiTestCase;
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\Uid\Uuid;
 
 /**
  * US-FACT-05, RG-FACT-05 (CA-6) : l'avoir est la seule voie de correction — écriture d'extourne
@@ -61,6 +65,76 @@ final class AvoirFactureApiTest extends FacturationApiTestCase
         $nbEcrituresApres = (int) $em->getRepository(EcritureComptable::class)->createQueryBuilder('e')
             ->select('COUNT(e.id)')->getQuery()->getSingleScalarResult();
         self::assertSame($nbEcrituresAvant, $nbEcrituresApres);
+    }
+
+    /**
+     * Correctif revue de cohérence (défaut 1, BLOQUANT) : un second appel de `POST /factures/{id}/avoir`
+     * ne doit créer ni un second avoir, ni une seconde extourne (double crédit 411 / double débit
+     * produit). `AvoirFactureHandler::genererAvoir()` renvoie l'avoir déjà généré.
+     */
+    public function testCa6DoubleAppelAvoirNeCreePasSecondAvoirNiSecondeExtourne(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+
+        $brouillon = $client->request('POST', '/api/factures', $entete + [
+            'json' => $this->corpsFactureDirecte(100.0),
+        ])->toArray();
+        $client->request('POST', '/api/factures/' . $brouillon['id'] . '/emettre', $entete);
+
+        $premier = $client->request('POST', '/api/factures/' . $brouillon['id'] . '/avoir', $entete)->toArray();
+        $second = $client->request('POST', '/api/factures/' . $brouillon['id'] . '/avoir', $entete)->toArray();
+
+        self::assertSame($premier['id'], $second['id'], 'Idempotence : le second appel renvoie le même avoir, jamais un doublon.');
+        self::assertSame($premier['numero'], $second['numero']);
+
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+
+        $nbAvoirs = (int) $em->getRepository(Facture::class)->createQueryBuilder('f')
+            ->select('COUNT(f.id)')
+            ->andWhere('f.factureCorrigee = :corrigee')
+            ->setParameter('corrigee', Uuid::fromString($brouillon['id']), 'uuid')
+            ->getQuery()->getSingleScalarResult();
+        self::assertSame(1, $nbAvoirs, 'Un seul avoir en base pour cette facture corrigée.');
+
+        $nbExtournes = (int) $em->getRepository(EcritureComptable::class)->createQueryBuilder('e')
+            ->select('COUNT(e.id)')
+            ->andWhere('e.pieceExtourneDe IS NOT NULL')
+            ->getQuery()->getSingleScalarResult();
+        self::assertSame(1, $nbExtournes, 'Une seule écriture d\'extourne, pas de double débit/crédit.');
+    }
+
+    /** Garde-fou base (complément de l'idempotence applicative) : `uniq_facturation_facture_corrigee`. */
+    public function testUniciteFactureCorrigeeEnBase(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+
+        $brouillon = $client->request('POST', '/api/factures', $entete + [
+            'json' => $this->corpsFactureDirecte(100.0),
+        ])->toArray();
+        $client->request('POST', '/api/factures/' . $brouillon['id'] . '/emettre', $entete);
+        $client->request('POST', '/api/factures/' . $brouillon['id'] . '/avoir', $entete);
+
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $factureCorrigee = $em->getRepository(Facture::class)->find(Uuid::fromString($brouillon['id']));
+        self::assertInstanceOf(Facture::class, $factureCorrigee);
+
+        $destinataire = $factureCorrigee->getDestinataire();
+        self::assertNotNull($destinataire);
+
+        $doublon = new Facture();
+        $doublon->setNature(NatureFacture::Avoir);
+        $doublon->setFactureCorrigee($factureCorrigee);
+        $doublon->setEtablissement($factureCorrigee->getEtablissement());
+        $doublon->setProfilExploitant($factureCorrigee->getProfilExploitant());
+        $doublon->setDestinataire($destinataire->copier());
+        $doublon->setCreePar($factureCorrigee->getCreePar());
+
+        $em->persist($doublon);
+
+        $this->expectException(UniqueConstraintViolationException::class);
+        $em->flush();
     }
 
     /** Extrait un identifiant, que la référence soit une IRI (string) ou une ressource imbriquée (array). */

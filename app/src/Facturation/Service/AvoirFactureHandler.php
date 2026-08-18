@@ -16,6 +16,7 @@ use App\Facturation\Enum\NatureFacture;
 use App\Facturation\Enum\StatutFacture;
 use App\Facturation\Nf525\ScellementFactureHandler;
 use App\Securite\Entity\Utilisateur;
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
@@ -53,8 +54,23 @@ final class AvoirFactureHandler
             throw new ConflictHttpException('Impossible de générer un avoir sur un avoir.');
         }
 
+        // Idempotence : un second appel sur la même facture corrigée renvoie l'avoir déjà généré,
+        // jamais un doublon (double extourne / double crédit 411) — même patron que
+        // `EmissionFactureJustificativeHandler::emettre()` pour `venteOrigine` (CA-2).
+        $existant = $this->em->getRepository(Facture::class)->findOneBy(['factureCorrigee' => $factureCorrigee]);
+        if ($existant instanceof Facture) {
+            return $existant;
+        }
+
         /** @var Facture $avoir */
         $avoir = $this->em->wrapInTransaction(function () use ($factureCorrigee, $auteur): Facture {
+            // Revérification sous transaction : ferme la fenêtre de concurrence entre le premier
+            // contrôle et l'écriture.
+            $existant = $this->em->getRepository(Facture::class)->findOneBy(['factureCorrigee' => $factureCorrigee]);
+            if ($existant instanceof Facture) {
+                return $existant;
+            }
+
             $profil = $factureCorrigee->getProfilExploitant();
             \assert($profil !== null);
             $etablissement = $factureCorrigee->getEtablissement();
@@ -108,7 +124,19 @@ final class AvoirFactureHandler
             $this->scellementFacture->sceller($avoir);
 
             $this->em->persist($avoir);
-            $this->em->flush();
+            try {
+                $this->em->flush();
+            } catch (UniqueConstraintViolationException $exception) {
+                // Deux requêtes concurrentes ont franchi la vérification ci-dessus avant ce flush : la
+                // contrainte UNIQUE (base, `uniq_facturation_facture_corrigee`) a tranché — récupération
+                // gracieuse de l'avoir gagnant plutôt qu'une erreur 500.
+                $existant = $this->em->getRepository(Facture::class)->findOneBy(['factureCorrigee' => $factureCorrigee]);
+                if ($existant instanceof Facture) {
+                    return $existant;
+                }
+
+                throw $exception;
+            }
 
             return $avoir;
         });

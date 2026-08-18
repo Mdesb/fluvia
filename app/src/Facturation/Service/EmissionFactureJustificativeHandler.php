@@ -23,6 +23,7 @@ use App\Offre\Enum\AxeCategorie;
 use App\Securite\Entity\Utilisateur;
 use App\Vente\Entity\LigneVente;
 use App\Vente\Entity\Vente;
+use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\Uid\Uuid;
@@ -65,11 +66,22 @@ final class EmissionFactureJustificativeHandler
 
         /** @var Facture $facture */
         $facture = $this->em->wrapInTransaction(function () use ($vente, $destinataireDonnees, $auteur): Facture {
+            // Verrou pessimiste sur la vente : même durcissement que
+            // `EmettreFactureDirecteHandler::emettre()` (défaut 2, revue de cohérence) — les gardes
+            // ci-dessous n'étaient évalués qu'avant l'ouverture de la transaction.
+            $this->em->lock($vente, LockMode::PESSIMISTIC_WRITE);
+
             // Revérification sous transaction : ferme la fenêtre de concurrence entre le premier
             // contrôle et l'écriture (idempotence CA-2, doublée par `uniq_facture_vente_origine`).
             $existante = $this->em->getRepository(Facture::class)->findOneBy(['venteOrigine' => $vente]);
             if ($existante instanceof Facture) {
                 return $existante;
+            }
+            if (!$vente->estScellee()) {
+                throw new ConflictHttpException("La vente n'est pas validée : émission d'une facture justificative impossible (RG-FACT-03.1).");
+            }
+            if ((float) $vente->getResteAPayer() > 0.0) {
+                throw new ConflictHttpException('La vente n\'est pas intégralement payée : émission d\'une facture justificative impossible (RG-FACT-03.1).');
             }
 
             $etablissement = $vente->getEtablissement();
