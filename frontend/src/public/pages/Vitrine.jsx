@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react'
-import { libelleProduit } from '../lib/format.js'
+import { libelleProduit, libellePrix } from '../lib/format.js'
 import { Vide } from '../components/Etats.jsx'
 
 // Catalogue public d'une vitrine (GET /boutique/vitrines/{id}/catalogue).
-// Le back renvoie par produit : { produit(id), code, libelle, timedEntry, disponibilite(int|null) }.
-// Ni prix ni image ne sont exposés par ce endpoint (cf. rapport) — on affiche le libellé, la
-// disponibilité et un visuel générique ; le montant réel est confirmé à l'étape de paiement.
+// Le back renvoie par produit : { produit(id), code, libelle, timedEntry, disponibilite(int|null),
+// visuel(string|null), prix({min,max}|null) }. On affiche le libellé, la disponibilité, le prix
+// (« À partir de … » si fourchette) et le visuel (avec repli générique).
 export default function Vitrine({ catalogue, langue, onNaviguer }) {
   const [q, setQ] = useState('')
   const [dispoSeule, setDispoSeule] = useState(false)
@@ -76,15 +76,21 @@ function ProduitCarte({ produit, langue, onNaviguer }) {
   const nom = libelleProduit(produit, langue)
   const enRupture = typeof produit.disponibilite === 'number' && produit.disponibilite <= 0
   const dispoConnue = typeof produit.disponibilite === 'number'
+  const prix = libellePrix(produit.prix)
 
   return (
     <article className="pub-carte">
-      <div className="pub-carte-img" aria-hidden="true">
-        <span>{nom.slice(0, 1).toUpperCase()}</span>
+      <div className="pub-carte-img">
+        {produit.visuel ? (
+          <img src={produit.visuel} alt={nom} loading="lazy" />
+        ) : (
+          <span aria-hidden="true">{nom.slice(0, 1).toUpperCase()}</span>
+        )}
       </div>
       <div className="pub-carte-b">
         <h2 className="pub-carte-t">{nom}</h2>
         {produit.code && <p className="pub-carte-code">{produit.code}</p>}
+        {prix && <p className="pub-carte-prix">{prix}</p>}
         <div className="pub-carte-tags">
           {produit.timedEntry && <span className="badge info">Horaire à choisir</span>}
           {enRupture ? (

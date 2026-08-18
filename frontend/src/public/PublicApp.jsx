@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { boutique, panierStore, clientTokenStore, vitrineStore } from './api/boutiqueClient.js'
-import { iriId } from './lib/format.js'
 import PublicHeader from './components/PublicHeader.jsx'
 import PublicFooter from './components/PublicFooter.jsx'
 import { Chargement, Erreur } from './components/Etats.jsx'
@@ -126,8 +125,7 @@ export default function PublicApp() {
     [panier],
   )
 
-  // Modification de quantité : le back n'a pas d'opération dédiée ; on retire puis on ré-ajoute
-  // la ligne avec la nouvelle quantité (mêmes produit/créneau).
+  // Modification de quantité : opération dédiée côté back (ajustement direct de la ligne).
   const modifierQuantite = useCallback(
     async (ligne, delta) => {
       if (!panier) return
@@ -136,12 +134,7 @@ export default function PublicApp() {
       setBusyPanier(true)
       setErreurPanier(null)
       try {
-        await boutique.retirerLigne(panier.id, ligne.id)
-        const maj = await boutique.ajouterLigne(panier.id, {
-          produit: iriId(ligne.produit),
-          quantite: nouvelle,
-          creneau: ligne.creneau ? iriId(ligne.creneau) : undefined,
-        })
+        const maj = await boutique.ajusterQuantite(panier.id, ligne.id, nouvelle)
         setPanier(maj)
       } catch (e) {
         setErreurPanier(e?.message || 'La mise à jour de la quantité a échoué.')

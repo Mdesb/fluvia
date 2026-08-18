@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { boutique } from '../api/boutiqueClient.js'
-import { libelleProduit, libelleCreneau } from '../lib/format.js'
+import { libelleProduit, libelleCreneau, libellePrix } from '../lib/format.js'
 import { Chargement, Erreur } from '../components/Etats.jsx'
 
 // Fiche produit : détail + choix de créneau (timed-entry) + quantité + ajout au panier.
@@ -16,6 +16,7 @@ export default function FicheProduit({ produit, langue, onAjouter, onNaviguer })
 
   const timedEntry = !!produit?.timedEntry
   const nom = libelleProduit(produit, langue)
+  const prix = libellePrix(produit?.prix)
   const enRupture = typeof produit?.disponibilite === 'number' && produit.disponibilite <= 0
 
   // Produit inconnu (lien périmé ou catalogue non chargé) : message clair plutôt qu'un écran cassé.
@@ -88,8 +89,12 @@ export default function FicheProduit({ produit, langue, onAjouter, onNaviguer })
       </button>
 
       <div className="pub-fiche">
-        <div className="pub-fiche-media" aria-hidden="true">
-          <span>{nom.slice(0, 1).toUpperCase()}</span>
+        <div className="pub-fiche-media">
+          {produit.visuel ? (
+            <img src={produit.visuel} alt={nom} />
+          ) : (
+            <span aria-hidden="true">{nom.slice(0, 1).toUpperCase()}</span>
+          )}
         </div>
 
         <div className="pub-fiche-info">
@@ -100,9 +105,13 @@ export default function FicheProduit({ produit, langue, onAjouter, onNaviguer })
             {enRupture && <span className="badge crit">Épuisé</span>}
           </div>
 
-          <p className="pub-sub" style={{ marginTop: 14 }}>
-            Le tarif applicable est calculé et confirmé à l'étape de paiement.
-          </p>
+          {prix ? (
+            <p className="pub-fiche-prix">{prix}</p>
+          ) : (
+            <p className="pub-sub" style={{ marginTop: 14 }}>
+              Le tarif applicable est calculé et confirmé à l'étape de paiement.
+            </p>
+          )}
 
           {timedEntry && (
             <fieldset className="pub-fieldset">

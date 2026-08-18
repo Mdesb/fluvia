@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { boutique, clientTokenStore } from '../api/boutiqueClient.js'
-import { libelleProduit, libelleCreneau, iriId, eurosCentimes } from '../lib/format.js'
+import { boutique, clientTokenStore, panierStore } from '../api/boutiqueClient.js'
+import { libelleProduit, libelleCreneau, iriId, eurosCentimes, euros } from '../lib/format.js'
 import { Etapes, Erreur, Chargement } from '../components/Etats.jsx'
 import Qr from '../../components/Qr.jsx'
 
@@ -22,6 +22,9 @@ export default function Tunnel({
 }) {
   const [etape, setEtape] = useState(0)
   const [resultatPaiement, setResultatPaiement] = useState(null) // réponse de /payer
+  // Contexte panier (id + jeton) mémorisé au moment du paiement : le panier est purgé du stockage
+  // local par onCommandeConfirmee, mais on en a encore besoin pour récupérer les billets invité.
+  const [infoBillets, setInfoBillets] = useState(null)
 
   const lignes = panier?.lignes || []
 
@@ -78,6 +81,8 @@ export default function Tunnel({
           resultat={resultatPaiement}
           setResultat={setResultatPaiement}
           onConfirme={() => {
+            // On capture id + jeton AVANT la purge du panier, pour les billets invité.
+            setInfoBillets({ panierId: panier?.id, panierToken: panierStore.getToken() })
             onCommandeConfirmee()
             setEtape(4)
           }}
@@ -86,6 +91,7 @@ export default function Tunnel({
       {etape === 4 && (
         <EtapeConfirmation
           resultat={resultatPaiement}
+          infoBillets={infoBillets}
           connecte={connecte}
           onNaviguer={onNaviguer}
         />
@@ -303,6 +309,9 @@ function EtapeBeneficiaires({ panier, metaProduits, metaCreneaux, langue, onReto
                   {nom}
                   {(l.quantite || 1) > 1 ? ` ×${l.quantite}` : ''}
                   {cr && <span className="pub-benef-cr"> · {libelleCreneau(cr.debut, cr.fin)}</span>}
+                  {l.montantLigne != null && (
+                    <span className="pub-benef-montant"> · {euros(l.montantLigne)}</span>
+                  )}
                 </p>
                 <div className="pub-benef-grid">
                   <div className="field">
@@ -344,6 +353,12 @@ function EtapeBeneficiaires({ panier, metaProduits, metaCreneaux, langue, onReto
             )
           })}
         </ul>
+        {panier?.total != null && (
+          <div className="pub-recap-row pub-recap-total" style={{ marginTop: 12 }}>
+            <span>Total</span>
+            <strong>{euros(panier.total)}</strong>
+          </div>
+        )}
         <div className="pub-etape-actions">
           <button type="button" className="btn" onClick={onRetour}>
             Retour
@@ -567,25 +582,25 @@ function EtapePaiement({ panier, resultat, setResultat, onConfirme }) {
 }
 
 /* ----------------------------- Étape 5 : confirmation ----------------------------- */
-function EtapeConfirmation({ resultat, connecte, onNaviguer }) {
+function EtapeConfirmation({ resultat, infoBillets, connecte, onNaviguer }) {
   const [billets, setBillets] = useState(null)
-  const [chargement, setChargement] = useState(false)
-  const [erreur, setErreur] = useState(null)
+  const [chargement, setChargement] = useState(!!infoBillets?.panierId)
   const conflit = resultat?.retour?.statut === 'conflit_inventaire'
 
   useEffect(() => {
-    // Les billets QR ne sont accessibles que pour un titulaire de compte connecté
-    // (GET /boutique/comptes/me/billets). Pour un invité, ils sont envoyés par e-mail.
-    if (!connecte || !clientTokenStore.get()) return
+    // Les billets à QR sont désormais accessibles à l'invité via X-Panier-Token (GET
+    // /boutique/paniers/{id}/billets) — plus besoin de compte. En cas d'échec ou de liste vide,
+    // le rendu bascule sur le repli « billets envoyés par e-mail ».
+    if (!infoBillets?.panierId) return
     let annule = false
     setChargement(true)
     boutique
-      .mesBillets()
+      .panierBillets(infoBillets.panierId, infoBillets.panierToken)
       .then((r) => {
         if (!annule) setBillets(r?.billets || [])
       })
-      .catch((e) => {
-        if (!annule) setErreur(e?.message || 'Billets indisponibles pour le moment.')
+      .catch(() => {
+        if (!annule) setBillets([])
       })
       .finally(() => {
         if (!annule) setChargement(false)
@@ -593,7 +608,9 @@ function EtapeConfirmation({ resultat, connecte, onNaviguer }) {
     return () => {
       annule = true
     }
-  }, [connecte])
+  }, [infoBillets])
+
+  const aDesBillets = (billets || []).length > 0
 
   return (
     <div className="pub-conf">
@@ -615,43 +632,35 @@ function EtapeConfirmation({ resultat, connecte, onNaviguer }) {
         </div>
       )}
 
-      {connecte ? (
-        <section aria-label="Mes billets" style={{ marginTop: 20 }}>
-          <h3 className="pub-conf-sec">Vos billets</h3>
-          {chargement ? (
-            <Chargement texte="Chargement de vos billets…" />
-          ) : erreur ? (
-            <Erreur message={erreur} />
-          ) : (billets || []).length === 0 ? (
-            <p className="empty" style={{ textAlign: 'left', padding: 0 }}>
-              Vos billets seront disponibles ici dans un instant, et vous sont aussi envoyés par e-mail.
-            </p>
-          ) : (
-            <ul className="pub-billets">
-              {billets.map((b) => (
-                <li key={b.billetSupport} className="pub-billet card">
-                  <div className="card-b pub-billet-b">
-                    <Qr value={b.qrDynamique || b.identifiantSupport} size={110} title="QR du billet" />
-                    <div>
-                      <p className="pub-billet-id mono">{b.identifiantSupport}</p>
-                      {b.passWalletDisponible && <span className="badge info">Wallet disponible</span>}
-                    </div>
+      <section aria-label="Vos billets" style={{ marginTop: 20 }}>
+        <h3 className="pub-conf-sec">Vos billets</h3>
+        {chargement ? (
+          <Chargement texte="Chargement de vos billets…" />
+        ) : aDesBillets ? (
+          <ul className="pub-billets">
+            {billets.map((b) => (
+              <li key={b.billetSupport || b.identifiantSupport} className="pub-billet card">
+                <div className="card-b pub-billet-b">
+                  <Qr value={b.qrDynamique || b.identifiantSupport} size={110} title="QR du billet" />
+                  <div>
+                    <p className="pub-billet-id mono">{b.identifiantSupport}</p>
+                    {b.passWalletDisponible && <span className="badge info">Wallet disponible</span>}
                   </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      ) : (
-        <div className="card" style={{ marginTop: 20 }}>
-          <div className="card-b">
-            <p style={{ margin: 0 }}>
-              Vos billets à présenter (QR) vous ont été envoyés par e-mail. Créez un compte pour les
-              retrouver à tout moment dans votre espace.
-            </p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="card">
+            <div className="card-b">
+              <p style={{ margin: 0 }}>
+                Vos billets à présenter (QR) vous ont été envoyés par e-mail.
+                {!connecte && ' Créez un compte pour les retrouver à tout moment dans votre espace.'}
+              </p>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </section>
 
       <div className="pub-etape-actions" style={{ marginTop: 20 }}>
         <button type="button" className="btn primary" onClick={() => onNaviguer({ vue: 'vitrine' })}>

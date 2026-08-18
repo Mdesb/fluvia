@@ -1,9 +1,9 @@
-import { libelleProduit, libelleCreneau, iriId } from '../lib/format.js'
+import { libelleProduit, libelleCreneau, iriId, euros } from '../lib/format.js'
 import { Erreur, Vide } from '../components/Etats.jsx'
 
 // Panier : récap des lignes, modification de quantité, retrait, total.
-// Le back n'expose pas de prix par ligne ni de total sur le panier (cf. rapport) : le montant
-// définitif est affiché et confirmé à l'étape de paiement. On présente donc le détail article/quantité.
+// Le back enrichit désormais le panier : `total` (string) et, par ligne, `prixUnitaire` +
+// `montantLigne`. On affiche le prix unitaire, le montant par ligne et le total en euros.
 export default function Panier({
   panier,
   metaProduits,
@@ -17,6 +17,7 @@ export default function Panier({
 }) {
   const lignes = panier?.lignes || []
   const nbArticles = lignes.reduce((n, l) => n + (l.quantite || 1), 0)
+  const total = panier?.total
 
   if (lignes.length === 0) {
     return (
@@ -51,6 +52,9 @@ export default function Panier({
                 <div className="pub-panier-info">
                   <p className="pub-panier-nom">{nom}</p>
                   {cr && <p className="pub-panier-cr">{libelleCreneau(cr.debut, cr.fin)}</p>}
+                  {l.prixUnitaire != null && (
+                    <p className="pub-panier-pu">{euros(l.prixUnitaire)} l'unité</p>
+                  )}
                   {l.autorisationParentaleRequise && (
                     <span className="badge warn">Autorisation parentale requise</span>
                   )}
@@ -74,6 +78,11 @@ export default function Panier({
                     +
                   </button>
                 </div>
+                {l.montantLigne != null && (
+                  <p className="pub-panier-montant" aria-label={`Montant pour ${nom}`}>
+                    {euros(l.montantLigne)}
+                  </p>
+                )}
                 <button
                   type="button"
                   className="pub-panier-rm"
@@ -94,9 +103,16 @@ export default function Panier({
               <span>Articles</span>
               <strong>{nbArticles}</strong>
             </div>
-            <p className="hint" style={{ marginTop: 4 }}>
-              Le montant total sera calculé et affiché à l'étape de paiement.
-            </p>
+            {total != null ? (
+              <div className="pub-recap-row pub-recap-total" style={{ marginTop: 8 }}>
+                <span>Total</span>
+                <strong>{euros(total)}</strong>
+              </div>
+            ) : (
+              <p className="hint" style={{ marginTop: 4 }}>
+                Le montant total sera calculé et affiché à l'étape de paiement.
+              </p>
+            )}
             <button
               type="button"
               className="btn primary lg"

@@ -32,6 +32,17 @@ export function euros(v) {
   return n.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })
 }
 
+// Prix d'un produit du catalogue : le back renvoie `prix: { min, max } | null` (montants décimaux).
+// « À partir de X € » lorsque min ≠ max, sinon le prix unique. `null` si le prix est indisponible.
+export function libellePrix(prix) {
+  if (!prix || prix.min == null) return null
+  const min = Number(prix.min)
+  const max = prix.max == null ? min : Number(prix.max)
+  if (Number.isNaN(min)) return null
+  if (!Number.isNaN(max) && max > min) return `À partir de ${euros(min)}`
+  return euros(min)
+}
+
 // Créneau « lun. 12 mai, 14:00 → 15:00 ».
 export function libelleCreneau(debut, fin) {
   if (!debut) return ''

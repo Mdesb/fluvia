@@ -315,13 +315,26 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 /* ---- Grille catalogue ---- */
 .pub-grille { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 18px; }
 .pub-carte { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; height: 100%; display: flex; flex-direction: column; }
-.pub-carte-img { aspect-ratio: 16 / 9; background: linear-gradient(135deg, var(--accent-soft), var(--panel-2)); display: flex; align-items: center; justify-content: center; }
+.pub-carte-img { aspect-ratio: 16 / 9; background: linear-gradient(135deg, var(--accent-soft), var(--panel-2)); display: flex; align-items: center; justify-content: center; overflow: hidden; }
 .pub-carte-img span { font-size: 40px; font-weight: 800; color: var(--accent-2); opacity: .55; }
+.pub-carte-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .pub-carte-b { padding: 15px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
 .pub-carte-t { font-size: 16px; font-weight: 700; }
 .pub-carte-code { font-size: 12px; color: var(--ink-faint); margin: 0; }
+.pub-carte-prix { font-size: 15px; font-weight: 800; color: var(--accent-2); margin: 0; }
 .pub-carte-tags { display: flex; gap: 6px; flex-wrap: wrap; }
 .pub-carte-cta { margin-top: auto; justify-content: center; }
+
+/* ---- Choix de la vitrine (amorçage sans ?vitrine=) ---- */
+.pub-vitrines { list-style: none; margin: 0 0 22px; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+.pub-vitrine-carte { width: 100%; display: flex; align-items: center; gap: 14px; text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px 16px; cursor: pointer; font-family: inherit; color: var(--ink); }
+.pub-vitrine-carte:hover { border-color: var(--accent); background: var(--panel-2); }
+.pub-vitrine-logo { width: 46px; height: 46px; border-radius: 10px; overflow: hidden; flex: none; background: linear-gradient(135deg, var(--accent-soft), var(--panel-2)); display: flex; align-items: center; justify-content: center; font-weight: 800; color: var(--accent-2); }
+.pub-vitrine-logo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pub-vitrine-nom { flex: 1; font-weight: 700; font-size: 15px; }
+.pub-vitrine-go { color: var(--accent); font-size: 20px; font-weight: 800; }
+.pub-manuel { margin-top: 8px; }
+.pub-manuel summary { cursor: pointer; font-size: 14px; color: var(--ink-soft); font-weight: 600; }
 
 /* ---- Etat vide ---- */
 .pub-vide { text-align: center; padding: 44px 20px; border: 1px dashed var(--line); border-radius: var(--radius); background: var(--panel); margin: 12px 0; }
@@ -331,9 +344,11 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 .pub-retour { margin-bottom: 12px; }
 .pub-fiche { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 26px; align-items: start; }
 @media (max-width: 780px) { .pub-fiche { grid-template-columns: 1fr; } }
-.pub-fiche-media { aspect-ratio: 4 / 3; border-radius: var(--radius); background: linear-gradient(135deg, var(--accent-soft), var(--panel-2)); display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow); }
+.pub-fiche-media { aspect-ratio: 4 / 3; border-radius: var(--radius); background: linear-gradient(135deg, var(--accent-soft), var(--panel-2)); display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow); overflow: hidden; }
 .pub-fiche-media span { font-size: 76px; font-weight: 800; color: var(--accent-2); opacity: .5; }
+.pub-fiche-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .pub-fiche-info h1 { font-size: 27px; }
+.pub-fiche-prix { font-size: 22px; font-weight: 800; color: var(--accent-2); margin: 14px 0 0; }
 .pub-fieldset { border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px 6px; margin: 18px 0; }
 .pub-fieldset legend { font-size: 13px; font-weight: 700; color: var(--ink-soft); padding: 0 6px; }
 
@@ -364,6 +379,8 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 .pub-panier-info { flex: 1; min-width: 140px; }
 .pub-panier-nom { font-weight: 600; margin: 0 0 2px; }
 .pub-panier-cr { font-size: 12.5px; color: var(--ink-soft); margin: 0 0 4px; }
+.pub-panier-pu { font-size: 12.5px; color: var(--ink-soft); margin: 0 0 4px; }
+.pub-panier-montant { font-weight: 800; font-variant-numeric: tabular-nums; margin: 0; min-width: 72px; text-align: right; }
 .pub-panier-qty { display: inline-flex; align-items: center; gap: 8px; }
 .pub-panier-qty button { width: 32px; height: 32px; border: 1px solid var(--line); background: var(--panel); border-radius: 8px; font-size: 17px; font-weight: 700; color: var(--accent); cursor: pointer; }
 .pub-panier-qty button:disabled { opacity: .4; cursor: not-allowed; }
@@ -373,6 +390,8 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 .pub-panier-recap { position: sticky; top: 84px; }
 .pub-recap-row { display: flex; justify-content: space-between; align-items: baseline; font-size: 15px; }
 .pub-recap-row strong { font-size: 18px; font-variant-numeric: tabular-nums; }
+.pub-recap-total { padding-top: 8px; border-top: 1px solid var(--line); }
+.pub-recap-total strong { font-size: 20px; color: var(--accent-2); }
 
 /* ---- Fil d'etapes ---- */
 .pub-steps ol { list-style: none; margin: 0 0 24px; padding: 0; display: flex; gap: 6px; flex-wrap: wrap; }
@@ -393,6 +412,7 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 .pub-benef-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 18px; }
 .pub-benef-t { font-weight: 700; margin: 0 0 10px; }
 .pub-benef-cr { font-weight: 500; color: var(--ink-soft); }
+.pub-benef-montant { font-weight: 800; color: var(--accent-2); }
 .pub-benef-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
 .pub-benef-grid .field { margin-bottom: 0; }
 .pub-consent { display: flex; align-items: flex-start; gap: 11px; padding: 10px 0; font-size: 14px; color: var(--ink); cursor: pointer; }

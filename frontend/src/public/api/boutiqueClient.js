@@ -110,6 +110,9 @@ async function request(path, { method = 'GET', body, auth = false, panierToken, 
 
 export const boutique = {
   // --- Vitrine / catalogue (public) ---
+  // Liste publique des vitrines ouvertes (sans auth) : sert d'écran de choix quand aucune
+  // vitrine n'est passée dans l'URL (?vitrine=<id>).
+  vitrinesPubliques: () => request('/api/boutique/vitrines-publiques'),
   vitrine: (id) => request(`/api/boutique/vitrines/${id}`),
   catalogue: (id) => request(`/api/boutique/vitrines/${id}/catalogue`),
   creneaux: (produitId) => request(`/api/boutique/produits/${produitId}/creneaux`),
@@ -117,12 +120,25 @@ export const boutique = {
   // --- Panier (invité, jeton applicatif) ---
   ouvrirPanier: (vitrineId, email) =>
     request('/api/boutique/paniers', { method: 'POST', body: { vitrine: vitrineId, email } }),
+  // GET panier enrichi (total + prix par ligne). Le back exige désormais X-Panier-Token,
+  // que request() ajoute automatiquement depuis panierStore.
   panier: (id) => request(`/api/boutique/paniers/${id}`),
   ajouterLigne: (id, corps) =>
     request(`/api/boutique/paniers/${id}/lignes`, { method: 'POST', body: corps, timeoutMs: 20000 }),
   retirerLigne: (id, ligneId) =>
     request(`/api/boutique/paniers/${id}/lignes/${ligneId}/retirer`, { method: 'POST', body: {} }),
+  // Ajustement direct de la quantité d'une ligne (remplace le retrait + ré-ajout).
+  ajusterQuantite: (id, ligneId, quantite) =>
+    request(`/api/boutique/paniers/${id}/lignes/${ligneId}/quantite`, {
+      method: 'POST',
+      body: { quantite },
+    }),
   viderPanier: (id) => request(`/api/boutique/paniers/${id}/vider`, { method: 'POST', body: {} }),
+  // Billets à QR du panier, accessibles à l'invité via X-Panier-Token (pas besoin de compte).
+  // Le jeton est passé explicitement car le panier peut déjà avoir été purgé du stockage local
+  // après confirmation de la commande.
+  panierBillets: (id, panierToken) =>
+    request(`/api/boutique/paniers/${id}/billets`, { panierToken }),
 
   // --- Tunnel ---
   identifier: (id, corps) =>
