@@ -1,0 +1,52 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Autorisation\State;
+
+use ApiPlatform\Metadata\Operation;
+use ApiPlatform\State\ProcessorInterface;
+use App\Autorisation\Entity\DemandeEscalade;
+use App\Autorisation\Service\GestionnaireEscalade;
+use App\Autorisation\Service\VerificateurPerimetreLimite;
+use App\Securite\Entity\Utilisateur;
+use App\Vente\Service\LecteurCorps;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\SecurityBundle\Security;
+
+/**
+ * `POST /demandes-escalade/{id}/rejeter { motif }` (§4.1/§6.3 plan, RG-AUTZ-06, CA-4). Même garde
+ * établissement précis que `ApprouverEscaladeProcessor`. Réutilise `App\Vente\Service\LecteurCorps`
+ * en lecture seule (même patron que `RevocationDelegationProcessor`), aucune modification du service.
+ *
+ * @implements ProcessorInterface<DemandeEscalade, DemandeEscalade>
+ */
+final class RejeterEscaladeProcessor implements ProcessorInterface
+{
+    public function __construct(
+        private readonly EntityManagerInterface $em,
+        private readonly LecteurCorps $lecteur,
+        private readonly GestionnaireEscalade $gestionnaire,
+        private readonly VerificateurPerimetreLimite $verificateur,
+        private readonly Security $security,
+    ) {
+    }
+
+    public function process(mixed $data, Operation $operation, array $uriVariables = [], array $context = []): DemandeEscalade
+    {
+        \assert($data instanceof DemandeEscalade);
+        $superviseur = $this->security->getUser();
+        \assert($superviseur instanceof Utilisateur);
+
+        $etablissement = $data->getEtablissement();
+        if ($etablissement !== null) {
+            $this->verificateur->verifier($superviseur, $etablissement, 'approuver');
+        }
+
+        $motif = $this->lecteur->corps()['motif'] ?? null;
+        $this->gestionnaire->rejeter($data, $superviseur, \is_string($motif) ? $motif : null);
+        $this->em->flush();
+
+        return $data;
+    }
+}
