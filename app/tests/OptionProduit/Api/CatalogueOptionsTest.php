@@ -144,7 +144,16 @@ final class CatalogueOptionsTest extends VenteApiTestCase
     {
         [$client, $entete, $idA] = $this->adminSurA();
         $idB = $this->idEtablissement(SocleFixtures::ETAB_B_NOM);
-        $idProduit = $this->idProduit(OffreFixtures::PRODUIT_ENTREE);
+        // Produit disponible sur A ET B (produit partagé) : la restriction porte sur l'OPTION, pas
+        // sur l'accès au produit. Sans rattachement à B, la requête sur B serait un 404 de
+        // cloisonnement (garde-fou OptionsDisponiblesProvider), pas une liste d'options vide.
+        [$produit] = $this->creerProduitBase();
+        $etabB = $this->em()->getRepository(\App\Organisation\Entity\Etablissement::class)
+            ->findOneBy(['nom' => SocleFixtures::ETAB_B_NOM]);
+        self::assertInstanceOf(\App\Organisation\Entity\Etablissement::class, $etabB);
+        $produit->addEtablissement($etabB);
+        $this->em()->flush();
+        $idProduit = (string) $produit->getId();
 
         $groupe = $this->creerGroupeOption($client, $entete, 'Casier restreint', 'unique');
         $groupeIri = '/api/groupe_options/' . $groupe['id'];

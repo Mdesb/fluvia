@@ -42,6 +42,14 @@ final class OptionsDisponiblesProvider implements ProviderInterface
 
         $etablissement = $this->contexteEtablissement->etablissementActif();
 
+        // Cloisonnement : ce Provider custom résout le produit par un find() direct, ce qui
+        // court-circuite PerimetreProduitExtension. On vérifie donc explicitement que le produit
+        // appartient à l'établissement actif — sinon un agent pourrait lire les options d'un produit
+        // d'un autre établissement (fuite inter-établissements, revue de cohérence RG-SOCLE-05).
+        if ($etablissement === null || !$produit->getEtablissements()->contains($etablissement)) {
+            throw new NotFoundHttpException('Produit introuvable.');
+        }
+
         /** @var list<OptionProduit> $liaisons */
         $liaisons = $this->em->getRepository(OptionProduit::class)->findBy(
             ['produit' => $produit, 'actif' => true],
