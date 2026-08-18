@@ -188,7 +188,8 @@ final class BoutiqueFixtures extends Fixture implements DependentFixtureInterfac
         if ($typeEntree instanceof TypeProduit && $tarifPlein instanceof TypeTarif && $saison instanceof \App\Offre\Entity\Saison) {
             $simple = (new Produit())->setType($typeEntree)
                 ->setLibelle(['fr' => 'Billet simple boutique'])->setLibelleRecherche('Billet simple boutique')
-                ->setCode(self::PRODUIT_SIMPLE_CODE)->setCanaux(['guichet', 'en_ligne'])->setStatut(StatutProduit::Publie);
+                ->setCode(self::PRODUIT_SIMPLE_CODE)->setCanaux(['guichet', 'en_ligne'])
+                ->setChampsPerso(['visuelUrl' => '/assets/produits/billet-simple.jpg'])->setStatut(StatutProduit::Publie);
             $simple->addEtablissement($etabA);
             $manager->persist($simple);
             $simple->addGrille((new GrilleTarifaire())->setProduit($simple)->setTypeTarif($tarifPlein)->setSaison($saison)->setPrix('12.00'));

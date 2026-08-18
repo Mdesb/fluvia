@@ -61,6 +61,12 @@ final class PanierProprietaireGuard
 
     public static function estUuid(mixed $valeur): ?Uuid
     {
+        // Un `uriVariables['id']` peut déjà arriver typé `Uuid` (résolu par API Platform depuis la
+        // propriété d'identifiant Doctrine `Symfony\Component\Uid\Uuid` d'une entité, contrairement
+        // aux ressources autonomes à identifiant `string` comme `CatalogueVitrine`/`CreneauxProduit`).
+        if ($valeur instanceof Uuid) {
+            return $valeur;
+        }
         if (!\is_string($valeur) || $valeur === '') {
             return null;
         }

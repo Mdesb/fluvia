@@ -6,11 +6,10 @@ namespace App\Boutique\State;
 
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProviderInterface;
-use App\Boutique\Entity\BilletQrMeta;
 use App\Boutique\Entity\CompteClient;
 use App\Boutique\Entity\SuiviCommandeEnLigne;
+use App\Boutique\Service\BilletsCommandeHandler;
 use App\Securite\Entity\Utilisateur;
-use App\Vente\Entity\BilletSupport;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -27,6 +26,7 @@ final class MesBilletsProvider implements ProviderInterface
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly Security $security,
+        private readonly BilletsCommandeHandler $billetsHandler,
     ) {
     }
 
@@ -49,19 +49,7 @@ final class MesBilletsProvider implements ProviderInterface
             if ($vente === null) {
                 continue;
             }
-            foreach ($this->em->getRepository(BilletSupport::class)->findBy(['vente' => $vente]) as $support) {
-                \assert($support instanceof BilletSupport);
-                $meta = $this->em->getRepository(BilletQrMeta::class)->findOneBy(['billetSupport' => $support]);
-                $billets[] = [
-                    'billetSupport' => (string) $support->getId(),
-                    'identifiantSupport' => $support->getIdentifiantSupport(),
-                    'vente' => (string) $vente->getId(),
-                    'qrDynamique' => $meta?->getQrDynamique(),
-                    'passWalletDisponible' => $meta?->isPassWalletDisponible() ?? false,
-                    'repliQr' => $meta?->isRepliQr() ?? true,
-                    'statutRetraitPhysique' => $meta?->getStatutRetraitPhysique()?->value,
-                ];
-            }
+            array_push($billets, ...$this->billetsHandler->listerPourVente($vente));
         }
 
         return new JsonResponse(['billets' => $billets]);

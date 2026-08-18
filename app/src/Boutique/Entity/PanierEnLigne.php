@@ -12,7 +12,10 @@ use App\Boutique\State\AjouterBeneficiairesPanierProcessor;
 use App\Boutique\State\AjouterLignePanierProcessor;
 use App\Boutique\State\EnregistrerConsentementPanierProcessor;
 use App\Boutique\State\IdentifierPanierProcessor;
+use App\Boutique\State\ModifierQuantiteLignePanierProcessor;
 use App\Boutique\State\OuvrirPanierProcessor;
+use App\Boutique\State\PanierAvecTotalProvider;
+use App\Boutique\State\PanierBilletsProvider;
 use App\Boutique\State\PayerPanierProcessor;
 use App\Boutique\State\RetirerLignePanierProcessor;
 use App\Boutique\State\RetourPaiementProcessor;
@@ -47,6 +50,15 @@ use Symfony\Component\Uid\Uuid;
         new Get(
             uriTemplate: '/boutique/paniers/{id}',
             security: "is_granted('PUBLIC_ACCESS')",
+            provider: PanierAvecTotalProvider::class,
+        ),
+        // Comble des manques boutique : billets QR d'une commande payée, accessibles à un acheteur
+        // invité via le seul jeton de panier (aucun compte requis) — même contrôle de propriété que
+        // les autres actions `/boutique/paniers/{id}/*`.
+        new Get(
+            uriTemplate: '/boutique/paniers/{id}/billets',
+            security: "is_granted('PUBLIC_ACCESS')",
+            provider: PanierBilletsProvider::class,
         ),
         new Post(
             uriTemplate: '/boutique/paniers/{id}/lignes',
@@ -55,12 +67,24 @@ use Symfony\Component\Uid\Uuid;
             security: "is_granted('PUBLIC_ACCESS')",
             processor: AjouterLignePanierProcessor::class,
         ),
+        // ⚠ Fix (comble des manques boutique) : `read: true` avec **deux** variables d'URI (`{id}` et
+        // `{ligneId}`) ne résout pas fiablement l'entité principale via le provider Doctrine par
+        // défaut (seule la première correspond à une propriété de `PanierEnLigne`) — `read: false` +
+        // résolution manuelle dans le processeur, comme les autres actions à un seul identifiant.
         new Post(
             uriTemplate: '/boutique/paniers/{id}/lignes/{ligneId}/retirer',
-            read: true,
+            read: false,
             input: false,
             security: "is_granted('PUBLIC_ACCESS')",
             processor: RetirerLignePanierProcessor::class,
+        ),
+        // Comble des manques boutique : modifie la quantité d'une ligne sans retrait + ré-ajout.
+        new Post(
+            uriTemplate: '/boutique/paniers/{id}/lignes/{ligneId}/quantite',
+            read: false,
+            input: false,
+            security: "is_granted('PUBLIC_ACCESS')",
+            processor: ModifierQuantiteLignePanierProcessor::class,
         ),
         new Post(
             uriTemplate: '/boutique/paniers/{id}/vider',
@@ -168,6 +192,14 @@ class PanierEnLigne
     /** Jeton de session en clair — présent uniquement dans la réponse de création (non persisté). */
     #[Groups(['panier:creation'])]
     private ?string $jetonSession = null;
+
+    /**
+     * Total du panier — transitoire, calculé à la lecture (`GET /boutique/paniers/{id}`) par
+     * `App\Boutique\Service\PanierTarificationHandler` (moteur `ResolveurPrix`/`PanierCalculateur`
+     * M1/M2 réutilisé, aucun prix recodé), jamais persisté.
+     */
+    #[Groups(['panier:read'])]
+    private ?string $total = null;
 
     public function __construct()
     {
@@ -345,5 +377,17 @@ class PanierEnLigne
     public function estExpire(\DateTimeImmutable $reference = new \DateTimeImmutable()): bool
     {
         return $this->dateExpiration <= $reference;
+    }
+
+    public function getTotal(): ?string
+    {
+        return $this->total;
+    }
+
+    public function setTotal(?string $total): self
+    {
+        $this->total = $total;
+
+        return $this;
     }
 }

@@ -72,6 +72,18 @@ class LignePanierEnLigne
     #[Groups(['panier:read'])]
     private \DateTimeImmutable $expirationA;
 
+    /**
+     * Prix unitaire public résolu (`App\Boutique\Service\PanierTarificationHandler`, moteur
+     * `ResolveurPrix` M1 réutilisé) — transitoire, calculé à la lecture du panier, jamais persisté
+     * (même patron que `PanierEnLigne::jetonSession`).
+     */
+    #[Groups(['panier:read'])]
+    private ?string $prixUnitaire = null;
+
+    /** Montant de la ligne (prixUnitaire × quantité) — transitoire, cf. `prixUnitaire`. */
+    #[Groups(['panier:read'])]
+    private ?string $montantLigne = null;
+
     public function __construct()
     {
         $this->id = Uuid::v4();
@@ -210,5 +222,29 @@ class LignePanierEnLigne
     public function aBeneficiaire(): bool
     {
         return $this->beneficiaireRef !== null || $this->beneficiaireSimple !== null;
+    }
+
+    public function getPrixUnitaire(): ?string
+    {
+        return $this->prixUnitaire;
+    }
+
+    public function setPrixUnitaire(?string $prixUnitaire): self
+    {
+        $this->prixUnitaire = $prixUnitaire;
+
+        return $this;
+    }
+
+    public function getMontantLigne(): ?string
+    {
+        return $this->montantLigne;
+    }
+
+    public function setMontantLigne(?string $montantLigne): self
+    {
+        $this->montantLigne = $montantLigne;
+
+        return $this;
     }
 }
