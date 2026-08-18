@@ -9,6 +9,11 @@ const NAV = [
       { id: 'caisse', ic: '▤', label: 'Caisse' },
       { id: 'catalogue', ic: '▥', label: 'Catalogue' },
       { id: 'reservation', ic: '◷', label: 'Réservation', cap: 'reservation' },
+      // Écran métier de l'établissement (une seule entrée visible selon le type de site).
+      { id: 'piscine', ic: '≈', label: 'Piscine', perm: 'piscine.lire' },
+      { id: 'patinoire', ic: '❆', label: 'Patinoire', perm: 'patinoire.lire' },
+      { id: 'padel', ic: '◍', label: 'Padel', perm: 'padel.lire' },
+      { id: 'musee', ic: '⛫', label: 'Musée', perm: 'musee.lire' },
     ],
   },
   {
@@ -18,38 +23,19 @@ const NAV = [
     ],
   },
   {
-    section: 'Boutique',
+    section: 'Gestion',
     items: [
+      { id: 'clients', ic: '☺', label: 'Clients' },
+      { id: 'comptabilite', ic: '▧', label: 'Comptabilité', perm: 'compta.lire' },
       { id: 'boutique', ic: '▦', label: 'Boutique en ligne', cap: 'boutique_en_ligne' },
-    ],
-  },
-  {
-    section: 'Verticales',
-    items: [
-      { id: 'piscine', ic: '≈', label: 'Piscine', perm: 'piscine.lire' },
-      { id: 'patinoire', ic: '❆', label: 'Patinoire', perm: 'patinoire.lire' },
-      { id: 'padel', ic: '◍', label: 'Padel', perm: 'padel.lire' },
-      { id: 'musee', ic: '⛫', label: 'Musée', perm: 'musee.lire' },
+      { id: 'personnel', ic: '☰', label: 'Personnel', perm: 'personnel.lire' },
+      { id: 'stock', ic: '▣', label: 'Stock', disabled: true },
     ],
   },
   {
     section: 'Pilotage',
     items: [
       { id: 'pilotage', ic: '◨', label: 'Reporting' },
-      { id: 'comptabilite', ic: '▧', label: 'Comptabilité / Régie', perm: 'compta.lire' },
-    ],
-  },
-  {
-    section: 'Relation client',
-    items: [
-      { id: 'clients', ic: '☺', label: 'Clients' },
-    ],
-  },
-  {
-    section: 'Ressources',
-    items: [
-      { id: 'personnel', ic: '☰', label: 'Personnel', perm: 'personnel.lire' },
-      { id: 'stock', ic: '▣', label: 'Stock', disabled: true },
     ],
   },
   {

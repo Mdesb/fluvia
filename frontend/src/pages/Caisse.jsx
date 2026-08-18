@@ -247,9 +247,9 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
         <div className="card">
           <div className="card-b" style={{ textAlign: 'center', padding: '40px 20px' }}>
             <div style={{ fontSize: 40, marginBottom: 8 }}>🔒</div>
-            <h3 style={{ marginBottom: 6 }}>Aucune session de caisse ouverte</h3>
+            <h3 style={{ marginBottom: 6 }}>Aucune caisse ouverte</h3>
             <p className="hint" style={{ marginBottom: 18 }}>
-              Ouvrez une session (point de vente, fond de caisse, régisseur) pour encaisser.
+              Ouvrez la caisse (point de vente, fond de caisse, régisseur) pour encaisser.
             </p>
             <button className="btn primary" onClick={() => setCaisseModale(true)}>Ouvrir la caisse</button>
           </div>
