@@ -8,6 +8,7 @@ use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProviderInterface;
 use App\Boutique\Entity\Vitrine;
 use App\Boutique\Security\PanierProprietaireGuard;
+use App\Boutique\Security\VitrineAccessibleGuard;
 use App\Boutique\Service\DisponibiliteAffichageHandler;
 use App\Offre\Entity\Produit;
 use App\Offre\Enum\Canal;
@@ -34,6 +35,7 @@ final class CatalogueVitrineProvider implements ProviderInterface
         private readonly EntityManagerInterface $em,
         private readonly DisponibiliteAffichageHandler $disponibilite,
         private readonly ResolveurPrix $resolveurPrix,
+        private readonly VitrineAccessibleGuard $vitrineGuard,
     ) {
     }
 
@@ -44,6 +46,9 @@ final class CatalogueVitrineProvider implements ProviderInterface
         if (!$vitrine instanceof Vitrine) {
             throw new NotFoundHttpException('Vitrine introuvable.');
         }
+        // Revue de sécurité — faille majeure : établissement inactif ou canal `en_ligne` coupé ->
+        // catalogue jamais exposé publiquement (même règle que `VitrinesPubliquesProvider`).
+        $this->vitrineGuard->verifier($vitrine);
         $etablissement = $vitrine->getEtablissement();
 
         $produits = $this->em->getRepository(Produit::class)->createQueryBuilder('p')

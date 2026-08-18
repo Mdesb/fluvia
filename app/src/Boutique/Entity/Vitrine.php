@@ -9,6 +9,7 @@ use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
+use App\Boutique\State\VitrinePubliqueProvider;
 use App\Organisation\Entity\Etablissement;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
@@ -28,7 +29,11 @@ use Symfony\Component\Validator\Constraints as Assert;
     shortName: 'BoutiqueVitrine',
     operations: [
         new GetCollection(uriTemplate: '/boutique/vitrines', security: "is_granted('PERM', 'boutique.lire')"),
-        new Get(uriTemplate: '/boutique/vitrines/{id}', security: "is_granted('PUBLIC_ACCESS')"),
+        new Get(
+            uriTemplate: '/boutique/vitrines/{id}',
+            security: "is_granted('PUBLIC_ACCESS')",
+            provider: VitrinePubliqueProvider::class,
+        ),
         new Post(uriTemplate: '/boutique/vitrines', security: "is_granted('PERM', 'boutique.gerer_vitrine')"),
         new Patch(uriTemplate: '/boutique/vitrines/{id}', security: "is_granted('PERM', 'boutique.gerer_vitrine')"),
     ],

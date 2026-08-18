@@ -9,7 +9,9 @@ use ApiPlatform\State\ProcessorInterface;
 use App\Boutique\Entity\LignePanierEnLigne;
 use App\Boutique\Entity\PanierEnLigne;
 use App\Boutique\Enum\StatutPanier;
+use App\Boutique\Security\BeneficiaireProprieteGuard;
 use App\Boutique\Security\PanierProprietaireGuard;
+use App\Boutique\Security\ProduitEtablissementGuard;
 use App\Boutique\Service\DisponibiliteAffichageHandler;
 use App\Crm\Entity\Beneficiaire;
 use App\Offre\Entity\Produit;
@@ -36,6 +38,8 @@ final class AjouterLignePanierProcessor implements ProcessorInterface
         private readonly LecteurCorps $lecteur,
         private readonly PanierProprietaireGuard $guard,
         private readonly DisponibiliteAffichageHandler $disponibilite,
+        private readonly ProduitEtablissementGuard $etablissementGuard,
+        private readonly BeneficiaireProprieteGuard $beneficiaireGuard,
     ) {
     }
 
@@ -56,6 +60,10 @@ final class AjouterLignePanierProcessor implements ProcessorInterface
         if ($produit->getStatut() !== StatutProduit::Publie || !$produit->aCanal(Canal::EnLigne)) {
             throw new UnprocessableEntityHttpException('Produit non publié ou non visible au canal en ligne (RG-M1-07/09).');
         }
+        // Revue de sécurité — faille bloquante : le produit doit être rattaché à l'établissement du
+        // panier (cloisonnement établissement, sinon un produit d'un tiers exploitant est achetable).
+        $etablissementPanier = $data->getEtablissement() ?? $data->getVitrine()?->getEtablissement();
+        $this->etablissementGuard->verifier($produit, $etablissementPanier);
 
         $quantite = \is_int($corps['quantite'] ?? null) ? max(1, $corps['quantite']) : 1;
 
@@ -81,6 +89,11 @@ final class AjouterLignePanierProcessor implements ProcessorInterface
         }
 
         $beneficiaireRef = isset($corps['beneficiaireRef']) ? $this->resoudre(Beneficiaire::class, $corps['beneficiaireRef']) : null;
+        if ($beneficiaireRef instanceof Beneficiaire) {
+            // Revue de sécurité — faille majeure : un bénéficiaire référencé doit appartenir au foyer
+            // du payeur identifié du panier (RG-M4-02), sinon fuite de PII d'un tiers.
+            $this->beneficiaireGuard->verifier($data, $beneficiaireRef);
+        }
         /** @var array<string, mixed>|null $beneficiaireSimple */
         $beneficiaireSimple = \is_array($corps['beneficiaireSimple'] ?? null) ? $corps['beneficiaireSimple'] : null;
 

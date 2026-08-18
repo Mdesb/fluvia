@@ -11,6 +11,7 @@ use App\Boutique\Entity\PanierEnLigne;
 use App\Boutique\Enum\TypeSessionClient;
 use App\Boutique\Identite\FournisseurIdentiteInterface;
 use App\Boutique\Security\PanierProprietaireGuard;
+use App\Boutique\Security\TentativeIdentificationLimiter;
 use App\Securite\Entity\Utilisateur;
 use App\Vente\Service\LecteurCorps;
 use Doctrine\ORM\EntityManagerInterface;
@@ -34,6 +35,7 @@ final class IdentifierPanierProcessor implements ProcessorInterface
         private readonly PanierProprietaireGuard $guard,
         private readonly UserPasswordHasherInterface $hasher,
         private readonly FournisseurIdentiteInterface $fournisseurIdentite,
+        private readonly TentativeIdentificationLimiter $limiter,
     ) {
     }
 
@@ -62,8 +64,14 @@ final class IdentifierPanierProcessor implements ProcessorInterface
         $email = \is_string($corps['email'] ?? null) ? $corps['email'] : '';
         $motDePasse = \is_string($corps['motDePasse'] ?? null) ? $corps['motDePasse'] : '';
 
+        // Revue de sécurité — faille majeure (anti-bruteforce) : ce mode valide un mot de passe hors
+        // firewall Symfony Security (aucun throttling natif applicable ici) — cf.
+        // `TentativeIdentificationLimiter` pour le détail du repli (composant rate-limiter absent).
+        $this->limiter->verifierAvantTentative($email);
+
         $utilisateur = $this->em->getRepository(Utilisateur::class)->findOneBy(['email' => $email]);
         if (!$utilisateur instanceof Utilisateur || !$this->hasher->isPasswordValid($utilisateur, $motDePasse)) {
+            $this->limiter->enregistrerEchec($email);
             throw new UnauthorizedHttpException('', 'Identifiants invalides.');
         }
         $compte = $this->em->getRepository(CompteClient::class)->findOneBy(['utilisateur' => $utilisateur]);
@@ -71,6 +79,7 @@ final class IdentifierPanierProcessor implements ProcessorInterface
             throw new UnprocessableEntityHttpException('Ce compte ne porte pas d\'espace boutique.');
         }
 
+        $this->limiter->reinitialiser($email);
         $panier->setCompteClient($compte)->setContactConnu($email);
     }
 

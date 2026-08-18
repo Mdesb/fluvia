@@ -65,7 +65,17 @@ final class GenerateurPdfBillet
         $meta = $this->em->getRepository(BilletQrMeta::class)->findOneBy(['billetSupport' => $support]);
         $retrait = $this->em->getRepository(RetraitClickCollect::class)->findOneBy(['billetSupport' => $support]);
 
-        $payload = $support->getIdentifiantSupport() ?? (string) $support->getId();
+        $payload = $support->getIdentifiantSupport();
+        if ($payload === null || $payload === '') {
+            // Revue de sécurité — faille mineure : jamais de repli sur l'UUID brut du support (non
+            // signé HMAC, prévisible/énumérable) dans le QR d'un billet — cf.
+            // `App\Vente\Service\GenerateurCodeSupport` (CA-12). Anomalie de données à corriger plutôt
+            // qu'à masquer silencieusement.
+            throw new \RuntimeException(sprintf(
+                'Support de billet %s sans identifiant signé (RG-M3-14/CA-12) : génération du QR refusée.',
+                (string) $support->getId(),
+            ));
+        }
         $image = $this->generateurQr->generer($payload);
 
         return [

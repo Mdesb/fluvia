@@ -44,6 +44,13 @@ abstract class BoutiqueApiTestCase extends ApiTestCase
         $tool->createSchema($metadata);
         $em->getConnection()->executeStatement('SET FOREIGN_KEY_CHECKS=1');
 
+        // Isolation entre tests : vide le pool cache.app (utilisé par le limiter anti-bruteforce
+        // d'identification), sinon le compteur d'échecs d'un test fuit vers le suivant (même IP+email).
+        $cacheApp = $container->get('cache.app');
+        if (\is_object($cacheApp) && method_exists($cacheApp, 'clear')) {
+            $cacheApp->clear();
+        }
+
         foreach ([
             SocleFixtures::class, OffreFixtures::class, ComptaFixtures::class, VenteFixtures::class,
             CrmFixtures::class, SepaFixtures::class, AccesFixtures::class, ReservationFixtures::class,

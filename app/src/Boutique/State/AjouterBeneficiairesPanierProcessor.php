@@ -8,6 +8,7 @@ use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
 use App\Boutique\Entity\LignePanierEnLigne;
 use App\Boutique\Entity\PanierEnLigne;
+use App\Boutique\Security\BeneficiaireProprieteGuard;
 use App\Boutique\Security\PanierProprietaireGuard;
 use App\Crm\Entity\Beneficiaire;
 use App\Vente\Service\LecteurCorps;
@@ -27,6 +28,7 @@ final class AjouterBeneficiairesPanierProcessor implements ProcessorInterface
         private readonly EntityManagerInterface $em,
         private readonly LecteurCorps $lecteur,
         private readonly PanierProprietaireGuard $guard,
+        private readonly BeneficiaireProprieteGuard $beneficiaireGuard,
     ) {
     }
 
@@ -53,6 +55,9 @@ final class AjouterBeneficiairesPanierProcessor implements ProcessorInterface
             $beneficiaireSimple = \is_array($entree['beneficiaireSimple'] ?? null) ? $entree['beneficiaireSimple'] : null;
 
             if ($beneficiaireRef instanceof Beneficiaire) {
+                // Revue de sécurité — faille majeure : un bénéficiaire référencé doit appartenir au
+                // foyer du payeur identifié du panier (RG-M4-02), sinon fuite de PII d'un tiers.
+                $this->beneficiaireGuard->verifier($data, $beneficiaireRef);
                 $ligne->setBeneficiaireRef($beneficiaireRef)->setBeneficiaireSimple(null);
                 $ligne->setAutorisationParentaleRequise($beneficiaireRef->getClient()?->estMineur() ?? false);
             } elseif ($beneficiaireSimple !== null) {

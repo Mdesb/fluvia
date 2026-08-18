@@ -11,6 +11,7 @@ use App\Boutique\Entity\SessionClient;
 use App\Boutique\Entity\Vitrine;
 use App\Boutique\Enum\TypeSessionClient;
 use App\Boutique\Security\PanierProprietaireGuard;
+use App\Boutique\Security\VitrineAccessibleGuard;
 use App\Vente\Service\LecteurCorps;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
@@ -27,6 +28,7 @@ final class OuvrirPanierProcessor implements ProcessorInterface
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly LecteurCorps $lecteur,
+        private readonly VitrineAccessibleGuard $vitrineGuard,
     ) {
     }
 
@@ -63,6 +65,9 @@ final class OuvrirPanierProcessor implements ProcessorInterface
         if (!$vitrine instanceof Vitrine) {
             throw new UnprocessableEntityHttpException('« vitrine » est requise et doit référencer une vitrine existante.');
         }
+        // Revue de sécurité — faille majeure : établissement inactif ou canal `en_ligne` coupé -> aucune
+        // ouverture de panier possible (même règle que `VitrinesPubliquesProvider`/`CatalogueVitrineProvider`).
+        $this->vitrineGuard->verifier($vitrine);
 
         return $vitrine;
     }

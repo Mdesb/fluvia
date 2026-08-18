@@ -9,6 +9,8 @@ use ApiPlatform\State\ProviderInterface;
 use App\Boutique\Security\PanierProprietaireGuard;
 use App\Boutique\Service\DisponibiliteAffichageHandler;
 use App\Offre\Entity\Produit;
+use App\Offre\Enum\Canal;
+use App\Offre\Enum\StatutProduit;
 use App\Reservation\Entity\Creneau;
 use App\Reservation\Enum\StatutCreneau;
 use Doctrine\ORM\EntityManagerInterface;
@@ -37,6 +39,11 @@ final class CreneauxProduitProvider implements ProviderInterface
         $produitId = PanierProprietaireGuard::estUuid($uriVariables['id'] ?? null);
         $produit = $produitId !== null ? $this->em->getRepository(Produit::class)->find($produitId) : null;
         if (!$produit instanceof Produit) {
+            throw new NotFoundHttpException('Produit introuvable.');
+        }
+        // Revue de sécurité — faille majeure : un produit non publié ou non visible au canal en ligne
+        // ne doit jamais exposer ses créneaux publiquement (même garde qu'à l'ajout au panier).
+        if ($produit->getStatut() !== StatutProduit::Publie || !$produit->aCanal(Canal::EnLigne)) {
             throw new NotFoundHttpException('Produit introuvable.');
         }
 

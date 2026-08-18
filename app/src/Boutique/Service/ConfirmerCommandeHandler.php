@@ -16,6 +16,7 @@ use App\Boutique\Enum\StatutRetraitPhysique;
 use App\Boutique\Enum\StatutTunnel;
 use App\Boutique\Entity\DemandeRemboursement;
 use App\Boutique\Notification\ConfirmationCommandeMailer;
+use App\Boutique\Security\ProduitEtablissementGuard;
 use App\Crm\Adapter\ClientM4Adapter;
 use App\Crm\Entity\Beneficiaire;
 use App\Crm\Entity\Client;
@@ -65,6 +66,7 @@ final class ConfirmerCommandeHandler
         private readonly JaugeCreneauGuard $jauge,
         private readonly ProjectionAccesReservationHandler $projectionAcces,
         private readonly ConfirmationCommandeMailer $mailer,
+        private readonly ProduitEtablissementGuard $etablissementGuard,
     ) {
     }
 
@@ -125,6 +127,11 @@ final class ConfirmerCommandeHandler
             ->setNumero($this->generateurNumero->numeroVente($session));
 
         foreach ($panier->getLignes() as $ligne) {
+            // Revue de sécurité — faille bloquante, défense en profondeur : revérifie le cloisonnement
+            // établissement juste avant la construction de la Vente (même garde qu'à l'ajout au
+            // panier, `AjouterLignePanierProcessor`), au cas où une ligne aurait été insérée par un
+            // autre chemin que le processeur public.
+            $this->etablissementGuard->verifier($ligne->getProduit(), $etablissement);
             [$typeTarif, $prix] = $this->resoudrePrix($ligne->getProduit());
 
             $ligneVente = new LigneVente();
