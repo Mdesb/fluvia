@@ -61,6 +61,22 @@ class LigneEcriture
     #[Groups(['ecriture:read', 'ligne:read'])]
     private ?string $libelle = null;
 
+    // --- Compte auxiliaire / tiers (extension additive FIN-1, RG-M6-13) ---
+    // Référence logique (pas de FK dure, même patron que `MappingComptable.categorie`) : ne couple pas
+    // durement `App\Compta` à `App\Stock`/`App\Personnel`/`App\Crm`. Toujours nullable : une ligne sans
+    // tiers (ex. contrepartie 512 banque) reste valide (aucune régression sur les écritures existantes).
+    #[ORM\Column(length: 32, nullable: true)]
+    #[Groups(['ecriture:read', 'ligne:read'])]
+    private ?string $counterpartyType = null;
+
+    #[ORM\Column(type: UuidType::NAME, nullable: true)]
+    #[Groups(['ecriture:read', 'ligne:read'])]
+    private ?Uuid $counterpartyId = null;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    #[Groups(['ecriture:read', 'ligne:read'])]
+    private ?string $counterpartyLabel = null;
+
     public function __construct()
     {
         $this->id = Uuid::v4();
@@ -175,6 +191,42 @@ class LigneEcriture
     public function setLibelle(?string $libelle): self
     {
         $this->libelle = $libelle;
+
+        return $this;
+    }
+
+    public function getCounterpartyType(): ?string
+    {
+        return $this->counterpartyType;
+    }
+
+    public function setCounterpartyType(?string $counterpartyType): self
+    {
+        $this->counterpartyType = $counterpartyType;
+
+        return $this;
+    }
+
+    public function getCounterpartyId(): ?Uuid
+    {
+        return $this->counterpartyId;
+    }
+
+    public function setCounterpartyId(?Uuid $counterpartyId): self
+    {
+        $this->counterpartyId = $counterpartyId;
+
+        return $this;
+    }
+
+    public function getCounterpartyLabel(): ?string
+    {
+        return $this->counterpartyLabel;
+    }
+
+    public function setCounterpartyLabel(?string $counterpartyLabel): self
+    {
+        $this->counterpartyLabel = $counterpartyLabel;
 
         return $this;
     }

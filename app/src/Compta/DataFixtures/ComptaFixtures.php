@@ -46,7 +46,10 @@ final class ComptaFixtures extends Fixture implements DependentFixtureInterface
         // --- Permissions compta.* + caisse.versement + octroi à l'administrateur ---
         $permComptaTout = (new Permission())->setModule('compta')->setAction('*');
         $manager->persist($permComptaTout);
-        foreach (['lire', 'lettrer', 'valider', 'exporter', 'cloturer', 'gerer', 'lire_rad', 'lire_consolide'] as $action) {
+        // `record_manual_entry` (FIN-1, US-L4-11) : nouvelle action, couverte par le joker `compta.*`
+        // déjà accordé à l'Administrateur groupe ; créée explicitement ici comme toute autre action du
+        // référentiel (§3 spec-comptabilite-generale.md), pour un octroi fin à un rôle non-wildcard.
+        foreach (['lire', 'lettrer', 'valider', 'exporter', 'cloturer', 'gerer', 'lire_rad', 'lire_consolide', 'record_manual_entry'] as $action) {
             $manager->persist((new Permission())->setModule('compta')->setAction($action));
         }
         $permVersement = (new Permission())->setModule('caisse')->setAction('versement');
@@ -82,6 +85,10 @@ final class ComptaFixtures extends Fixture implements DependentFixtureInterface
             'REG' => 'Journal de la régie',
             'PCA' => 'Opérations diverses — PCA',
             'EXT' => 'Journal des extournes',
+            // Journal dédié « opérations diverses » (FIN-1, RG-M6-11, §7 point 5 du plan) : recommandé
+            // pour la saisie manuelle libre — aucune contrainte technique ne l'impose (n'importe quel
+            // journal du profil peut être référencé par `POST /compta/journal-entries/manual`).
+            'OD' => 'Journal des opérations diverses',
         ];
         foreach ($journaux as $code => $libelle) {
             $manager->persist((new Journal())->setProfilExploitant($profil)->setCode($code)->setLibelle($libelle));
@@ -89,11 +96,15 @@ final class ComptaFixtures extends Fixture implements DependentFixtureInterface
 
         // --- Plan de comptes de base (M57, jeu minimal de démarrage) ---
         $comptes = [
+            '401000' => ['Fournisseurs', SensCompte::Credit],
             '411000' => ['Redevables', SensCompte::Debit],
             '4457100' => ['TVA collectée', SensCompte::Credit],
             '487000' => ['Produits constatés d\'avance', SensCompte::Credit],
             '511000' => ['Recettes à classer / encaissements régie', SensCompte::Debit],
             '512000' => ['Banque', SensCompte::Debit],
+            // Compte non commercial (FIN-1, §4.1 spec) : illustre une ligne hors champ (taux TVA
+            // « Hors champ » déjà seedé, réutilisé tel quel, pas de nouveau taux « néant » créé).
+            '627000' => ['Frais bancaires', SensCompte::Debit],
             '706100' => ['Redevances billetterie piscine', SensCompte::Credit],
             '706200' => ['Redevances activités culturelles', SensCompte::Credit],
         ];

@@ -13,6 +13,7 @@ use ApiPlatform\Metadata\Post;
 use App\Compta\Enum\StatutEcriture;
 use App\Compta\State\ExtourneEcritureProcessor;
 use App\Compta\State\GenererEcrituresProcessor;
+use App\Compta\State\SaisirEcritureManuelleProcessor;
 use App\Compta\State\ValiderEcritureProcessor;
 use App\Compta\State\VerifierChaineEcritureProcessor;
 use Doctrine\Common\Collections\ArrayCollection;
@@ -43,6 +44,13 @@ use Symfony\Component\Uid\Uuid;
             security: "is_granted('PERM', 'compta.valider')",
             processor: GenererEcrituresProcessor::class,
             output: false,
+        ),
+        new Post(
+            uriTemplate: '/compta/journal-entries/manual',
+            read: false,
+            input: false,
+            security: "is_granted('PERM', 'compta.record_manual_entry')",
+            processor: SaisirEcritureManuelleProcessor::class,
         ),
         new Post(
             uriTemplate: '/compta/ecritures/{id}/valider',

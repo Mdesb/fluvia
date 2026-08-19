@@ -42,8 +42,11 @@ final class ExportFecAdapter implements ExportComptableInterface
                     $ecriture->getDateEcriture()->format('Ymd'),
                     $ligne->getCompte()?->getNumero() ?? '',
                     $ligne->getCompte()?->getLibelle() ?? '',
-                    '',
-                    '',
+                    // Compte auxiliaire / tiers (RG-M6-13, extension additive) : peuplé uniquement si
+                    // la ligne porte un `counterparty*` ; une ligne sans tiers (y compris toute
+                    // écriture historique scellée avant ce lot) reste strictement '' / '' — CA-4/CA-7.
+                    $ligne->getCounterpartyId() !== null ? (string) $ligne->getCounterpartyId() : '',
+                    $ligne->getCounterpartyLabel() ?? '',
                     (string) $ecriture->getId(),
                     $ecriture->getDateEcriture()->format('Ymd'),
                     $ecriture->getLibelle() ?? '',

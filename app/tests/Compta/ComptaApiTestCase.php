@@ -10,7 +10,10 @@ use App\Acces\DataFixtures\AccesFixtures;
 use App\Caisse\Entity\Caisse;
 use App\Caisse\Entity\PointDeVente;
 use App\Compta\DataFixtures\ComptaFixtures;
+use App\Compta\Entity\CompteComptable;
+use App\Compta\Entity\Journal;
 use App\Compta\Entity\ProfilExploitant;
+use App\Compta\Entity\TauxTva;
 use App\DataFixtures\SocleFixtures;
 use App\Offre\DataFixtures\OffreFixtures;
 use App\Offre\Entity\Produit;
@@ -102,6 +105,45 @@ abstract class ComptaApiTestCase extends ApiTestCase
     protected function idAdmin(): string
     {
         return (string) $this->entite(Utilisateur::class, ['email' => SocleFixtures::ADMIN_EMAIL])->getId();
+    }
+
+    protected function idJournal(string $code): string
+    {
+        return (string) $this->entite(Journal::class, ['profilExploitant' => $this->profilExploitant()->getId(), 'code' => $code])->getId();
+    }
+
+    protected function idCompte(string $numero): string
+    {
+        return (string) $this->entite(CompteComptable::class, ['profilExploitant' => $this->profilExploitant()->getId(), 'numero' => $numero])->getId();
+    }
+
+    protected function idTauxTva(string $taux): string
+    {
+        return (string) $this->entite(TauxTva::class, ['profilExploitant' => $this->profilExploitant()->getId(), 'taux' => $taux])->getId();
+    }
+
+    protected function idTauxHorsChamp(): string
+    {
+        return (string) $this->entite(TauxTva::class, ['profilExploitant' => $this->profilExploitant()->getId(), 'libelle' => TauxTva::LIBELLE_HORS_CHAMP])->getId();
+    }
+
+    /**
+     * Ouvre une période comptable (US-L4-10) couvrant les dates données — préalable exigé par la
+     * saisie manuelle (§0.3 : contrairement au moteur ventes, aucune création silencieuse).
+     *
+     * @param array<string, mixed> $entete
+     *
+     * @return array<string, mixed>
+     */
+    protected function ouvrirPeriode(Client $client, array $entete, string $dateDebut, string $dateFin): array
+    {
+        return $client->request('POST', '/api/periode_comptables', $entete + [
+            'json' => [
+                'profilExploitant' => '/api/profil_exploitants/' . $this->idProfilExploitant(),
+                'dateDebut' => $dateDebut,
+                'dateFin' => $dateFin,
+            ],
+        ])->toArray();
     }
 
     protected function idProduit(string $libelleRecherche): string
