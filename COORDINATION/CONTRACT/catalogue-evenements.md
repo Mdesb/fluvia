@@ -27,6 +27,7 @@ The first-class events published on the bus by the core and the modules. An even
 | `cart.abandoned` | Shop | amount, customer | Revenue Recovery |
 | `payment.succeeded` | Payment | amount, method | Accounting, Invoicing |
 | `payment.failed` | Payment / SEPA | amount, cause | **Revenue Recovery**, dunning |
+| `payment.incident_reopened` | Dunning | amount | **Revenue Recovery**, dunning |
 | `refund.issued` | POS/Invoicing | amount, credit_note? | Accounting |
 | `invoice.issued` | Invoicing | number, total_incl_tax | Accounting, Communication |
 | `invoice.overdue` | Invoicing | amount, days_late | **Revenue Recovery** |
@@ -45,6 +46,7 @@ The first-class events published on the bus by the core and the modules. An even
 | `quote.expired` | Quote | amount | **Revenue Recovery** |
 | `quote.accepted` | Quote | amount | Invoicing |
 | `customer.inactive` | CRM | last_contact | Revenue Recovery (win-back) |
+| `customer.came_of_age` | CRM | channels_to_renew | Communication, CRM (consent renewal) |
 | `lead.unanswered` | CRM/Sales | channel, delay | Revenue Recovery (lead recovery) |
 | `supplier_invoice.recorded` | Finance | supplier, amount, ocr? | Accounting, Treasury |
 | `expense_report.submitted` | Expenses | employee, amount | Authorization, Accounting |
