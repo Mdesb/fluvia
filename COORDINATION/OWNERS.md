@@ -40,8 +40,11 @@ OptionProduit, Stock, Personnel, Boutique, Support, Reporting, verticales (Pisci
 | **Smart Flow** | `app/src/SmartFlow/**` | *à assigner* | contrat d'abord |
 | **Revenue Recovery** | `app/src/RevenueRecovery/**` | *à assigner* | contrat d'abord |
 
-## Autres dépôts (fédérés, stacks distinctes — hors coquille pour l'instant)
-| Projet | Stack | Rôle dans la plateforme |
-|---|---|---|
-| **Vespera** | Next.js / Prisma / PostgreSQL | Domaine créatrices — à re-loger en modules ou fédérer par API/événements |
-| **OFS Global** | PHP 8.1 sans framework / MariaDB | Domaine vending/salles — idem, gros & mature, retrofit prudent |
+## Hors périmètre — ne pas y toucher (D9)
+| Projet | Statut |
+|---|---|
+| **Vespera** | Produit tiers. Aucun rôle dans la plateforme. Source d'inspiration fonctionnelle uniquement. |
+| **OFS Global** | Société et produit tiers. Idem : on s'inspire des fonctionnalités, on n'absorbe rien. |
+
+Ces dépôts existent sur le VPS ; **personne n'écrit dedans depuis ce projet**, et aucun module de la
+plateforme ne doit en dépendre.

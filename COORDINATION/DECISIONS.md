@@ -74,3 +74,27 @@ protection a été contournée. claude-C l'a confirmé le 19/08 en calibrant le 
 exploitables sur des chemins argent (`POST /mouvements-caisse`, rejets SEPA), et 37 fichiers sur 116 sans
 contrôle visible. Un mécanisme de sécurité dont l'absence est invisible n'est pas un mécanisme de
 sécurité : d'où la règle explicite, et le garde-fou CI qui la rend exécutable.
+
+### 2026-08-20 · D9 — OFS et Vespera sont hors périmètre
+Ni absorbés en modules, ni fédérés par API, ni portés. Ce sont des **sociétés et produits tiers** ; leurs
+documents ne servent que de source d'inspiration fonctionnelle. **Rectifie D1**, qui annonçait
+« domaines OFS/Vespera = modules », et le tableau « autres dépôts » d'OWNERS.
+**Raison :** décision du client (20/08). Les documents OFS et Vespera avaient été fournis pour en tirer
+des idées de fonctionnalités, et le PLAYBOOK les avait transformés en feuille de route d'absorption —
+une roadmap fondée sur un malentendu coûte plus cher qu'une absente.
+
+### 2026-08-20 · D10 — Le tunnel d'acquisition démarre en prélèvement SEPA seul
+Pas de carte bancaire au lancement. Le tunnel s'appuie sur le module `Sepa` existant (mandats, remises,
+rejets) ; l'encaissement carte sera ajouté quand le volume le justifiera.
+**Raison :** le module mandats est déjà construit et testé, là où la carte impose un prestataire, des
+webhooks et un tunnel hébergé chez un tiers. On échange un peu de conversion contre un lancement
+nettement plus tôt. **Invariant à tenir le jour où la carte arrive : le formulaire de paiement est
+hébergé par le prestataire, jamais par nous** — les données de carte ne traversent pas la plateforme.
+
+### 2026-08-20 · D11 — La démo est un bac à sable jetable, mais le paramétrage est repris
+Le prospect explore sur des données fictives ; à la souscription, ce qu'il a configuré (offres, tarifs,
+horaires) est exporté et rejoué sur son établissement réel, qui démarre propre.
+**Raison :** faire de la démo le compte réel supprimerait la friction, mais imposerait de gérer le cycle
+de vie de milliers d'établissements fantômes (expiration, purge RGPD des non-convertis). Repartir de
+zéro après paiement est l'endroit où l'on perd les clients. La reprise du paramétrage prend le meilleur
+des deux, au prix d'un format d'export à définir.
