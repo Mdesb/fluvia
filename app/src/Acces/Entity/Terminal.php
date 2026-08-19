@@ -28,6 +28,14 @@ use Symfony\Component\Uid\Uuid;
 #[ORM\Table(name: 'acces_terminal')]
 #[ORM\Index(columns: ['itbox_ref'], name: 'idx_terminal_itbox_ref')]
 #[ORM\Index(columns: ['etablissement_id'], name: 'idx_terminal_etablissement')]
+/*
+ * Durcissement revue sécurité (double-enrôlement non révocable) : un même matériel (`itboxRef`) ne
+ * peut jamais porter plus d'un `Terminal` au sein d'un même établissement — sinon deux `JetonTerminal`
+ * valides simultanément pour le même matériel, et révoquer l'un ne coupe pas l'autre. Contrainte
+ * unique en base (filet de sécurité, garantit l'invariant même en cas de course) doublée d'un contrôle
+ * applicatif explicite (409) dans `EnrolerTerminalProcessor` (message clair, pas une erreur SQL brute).
+ */
+#[ORM\UniqueConstraint(name: 'uniq_terminal_itbox_etablissement', columns: ['itbox_ref', 'etablissement_id'])]
 #[ApiResource(
     shortName: 'Terminal',
     operations: [

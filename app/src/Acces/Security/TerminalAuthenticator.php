@@ -36,6 +36,9 @@ final class TerminalAuthenticator extends AbstractAuthenticator
 {
     private const MESSAGE_GENERIQUE = 'Jeton terminal invalide, inconnu ou révoqué.';
 
+    /** Throttle de l'écriture `dernierAppel` (§3.1 du plan) : au plus 1 UPDATE / 30 s par terminal. */
+    private const INTERVALLE_THROTTLE_SECONDES = 30;
+
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly Connection $connection,
@@ -84,12 +87,25 @@ final class TerminalAuthenticator extends AbstractAuthenticator
             return null;
         }
 
+        $maintenant = new \DateTimeImmutable();
+
+        // Throttle best-effort : une borne peut appeler `/terminal/snapshot`/`/terminal/passages` très
+        // fréquemment (polling) — sans throttle, chaque appel déclenche un UPDATE synchrone. La valeur
+        // observée provient de l'entité déjà chargée par `authenticate()` (avant tout écriture de cette
+        // méthode), donc représentative du dernier appel réellement journalisé.
+        $dernierAppel = $user->terminal->getDernierAppel();
+        if ($dernierAppel instanceof \DateTimeImmutable
+            && $dernierAppel > $maintenant->modify(sprintf('-%d seconds', self::INTERVALLE_THROTTLE_SECONDES))
+        ) {
+            return null;
+        }
+
         // Écriture best-effort (§3.1 du plan) : ne bloque jamais la réponse HTTP, échec silencieux.
         try {
             $this->connection->executeStatement(
                 'UPDATE acces_terminal SET dernier_appel = :now, dernier_appel_reussi = 1 WHERE id = UNHEX(:hex)',
                 [
-                    'now' => (new \DateTimeImmutable())->format('Y-m-d H:i:s'),
+                    'now' => $maintenant->format('Y-m-d H:i:s'),
                     'hex' => bin2hex($user->terminal->getId()->toBinary()),
                 ],
             );

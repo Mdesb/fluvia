@@ -13,6 +13,7 @@ use App\Acces\Enum\StatutTerminal;
 use App\Securite\Entity\Utilisateur;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
  * Révocation d'un `Terminal` (POST /acces/terminaux/{id}/revoquer, US-TERM-09, CA-11). `Terminal.statut
@@ -32,7 +33,13 @@ final class RevoquerTerminalProcessor implements ProcessorInterface
 
     public function process(mixed $data, Operation $operation, array $uriVariables = [], array $context = []): Terminal
     {
-        \assert($data instanceof Terminal);
+        // Durcissement revue sécurité (cloisonnement) : un `Terminal` d'un autre établissement est
+        // filtré par `PerimetreAccesExtension` en amont (RG-SOCLE-05) — `$data` vaut alors `null`
+        // plutôt qu'une instance `Terminal`. Un `assert()` brut produisait un 500 (AssertionError) au
+        // lieu d'un 404 propre, révélant potentiellement l'existence de l'objet hors périmètre.
+        if (!$data instanceof Terminal) {
+            throw new NotFoundHttpException('Terminal introuvable.');
+        }
 
         $agent = $this->security->getUser();
         $agent = $agent instanceof Utilisateur ? $agent : null;

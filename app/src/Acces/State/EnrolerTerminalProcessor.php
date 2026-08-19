@@ -13,6 +13,7 @@ use App\Securite\Service\ContexteEtablissement;
 use App\Vente\Service\LecteurCorps;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
 /**
@@ -46,6 +47,19 @@ final class EnrolerTerminalProcessor implements ProcessorInterface
         $etablissement = $this->contexte->etablissementActif();
         if ($etablissement === null) {
             throw new UnprocessableEntityHttpException('Établissement actif requis (en-tête X-Etablissement).');
+        }
+
+        // Durcissement (double-enrôlement non révocable) : un même matériel (itboxRef) ne peut porter
+        // qu'un seul Terminal au sein d'un même établissement — sinon deux JetonTerminal valides
+        // simultanément pour le même matériel, révoquer l'un ne coupant pas l'autre. Vérification
+        // applicative avant tentative d'insertion (409 explicite plutôt qu'une violation SQL brute de
+        // la contrainte unique `uniq_terminal_itbox_etablissement`, filet de sécurité en base).
+        $existant = $this->em->getRepository(Terminal::class)->findOneBy([
+            'itboxRef' => $itboxRef,
+            'etablissement' => $etablissement,
+        ]);
+        if ($existant instanceof Terminal) {
+            throw new ConflictHttpException('Un terminal est déjà enrôlé pour cette référence ITBOX sur cet établissement.');
         }
 
         $terminal = new Terminal();

@@ -17,6 +17,7 @@ use App\Acces\Enum\StatutSupport;
 use App\Acces\Enum\TypeDroitAcces;
 use App\Acces\Security\TerminalPorteeChecker;
 use App\Acces\Security\TerminalUtilisateur;
+use App\Vente\Entity\BilletSupport;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\RequestStack;
@@ -141,12 +142,21 @@ final class SnapshotTerminalProvider implements ProviderInterface
             $portesEligibles[] = (string) $equipement->getId();
         }
 
+        // Numéro de billet dérivé du `BilletSupport` référencé, même patron que
+        // `AffichagePorteurResolver::resoudre()` (cohérence du contrat §5 entre le flux en ligne et le
+        // snapshot hors-ligne).
+        $numeroBillet = null;
+        if ($droit->getBilletSupportRef() !== null) {
+            $billetSupport = $this->em->getRepository(BilletSupport::class)->find($droit->getBilletSupportRef());
+            $numeroBillet = $billetSupport?->getVente()?->getNumero();
+        }
+
         return new EntreeSnapshotDto(
             identifiant: $support->getIdentifiant(),
             revoque: false,
             versionMaj: $support->getVersionMaj(),
             nomPorteur: null,
-            numeroBillet: null,
+            numeroBillet: $numeroBillet,
             typeSupport: $support->getType()?->value,
             typeDroit: $droit->getSourceType()->value,
             compostagesRestants: $droit->getSourceType() === TypeDroitAcces::CarteQuota ? $droit->getCreditRestant() : null,

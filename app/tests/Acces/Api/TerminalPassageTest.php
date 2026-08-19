@@ -134,6 +134,51 @@ final class TerminalPassageTest extends AccesApiTestCase
         self::assertSame($avant, $apres, 'Aucune trace de passage créée pour un équipement hors portée.');
     }
 
+    public function testCleIdempotenceAbsenteRefuse422(): void
+    {
+        $reponse = static::createClient()->request('POST', '/api/terminal/passages', $this->terminalEntete() + [
+            'json' => [
+                'equipementId' => $this->idEquipement(),
+                'identifiantSupport' => AccesFixtures::SUPPORT_IDENTIFIANT,
+            ],
+        ]);
+
+        self::assertSame(422, $reponse->getStatusCode(), (string) $reponse->getContent(false));
+    }
+
+    public function testMemeCleIdempotenceUnSeulPassageEnregistre(): void
+    {
+        $entete = $this->terminalEntete();
+        $client = static::createClient();
+        $cle = (string) Uuid::v4();
+        $corps = [
+            'equipementId' => $this->idEquipement(),
+            'identifiantSupport' => AccesFixtures::SUPPORT_IDENTIFIANT,
+            'cleIdempotence' => $cle,
+        ];
+
+        $premiere = $client->request('POST', '/api/terminal/passages', $entete + ['json' => $corps]);
+        self::assertSame(200, $premiere->getStatusCode(), (string) $premiere->getContent(false));
+        $corpsPremiere = $premiere->toArray();
+        self::assertSame('valide', $corpsPremiere['resultat']);
+
+        // Retransmission réseau (même cleIdempotence) : rejoue la même réponse, aucun second décompte.
+        $seconde = $client->request('POST', '/api/terminal/passages', $entete + ['json' => $corps]);
+        self::assertSame(200, $seconde->getStatusCode(), (string) $seconde->getContent(false));
+        self::assertSame($corpsPremiere['resultat'], $seconde->toArray()['resultat']);
+
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $nb = (int) $em->getRepository(\App\Acces\Entity\Passage::class)->createQueryBuilder('p')
+            ->select('COUNT(p.id)')
+            ->andWhere('p.cleIdempotence = :cle')->setParameter('cle', $cle, 'uuid')
+            ->getQuery()->getSingleScalarResult();
+        self::assertSame(1, $nb, 'Un seul Passage enregistré malgré la retransmission (idempotence).');
+
+        $droit = $this->entite(DroitAcces::class, []);
+        self::assertSame(11, $droit->getCreditRestant(), 'Un seul décompte de crédit malgré la retransmission.');
+    }
+
     /** @return array{0: Equipement, 1: string} */
     private function creerSupportAppaireAvecCodeSigne(): array
     {

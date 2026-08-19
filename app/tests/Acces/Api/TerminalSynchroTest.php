@@ -103,6 +103,31 @@ final class TerminalSynchroTest extends AccesApiTestCase
         self::assertSame('accepte', $parCle[$cleValide]['statut'], 'Les autres entrées du lot restent traitées normalement.');
     }
 
+    /**
+     * Durcissement revue sécurité : `equipementId` transmis en IRI (`/api/equipements/{uuid}`) doit
+     * être normalisé vers l'UUID avant comparaison à la portée du terminal — sans normalisation,
+     * l'entrée était rejetée à tort `hors_portee` (faux négatif).
+     */
+    public function testEquipementIdEnIriEstNormaliseEtTraiteSansFauxHorsPortee(): void
+    {
+        $entete = $this->terminalEntete();
+        $client = static::createClient();
+
+        $lot = [
+            'lot' => [[
+                'equipementId' => '/api/equipements/' . $this->idEquipement(),
+                'identifiantSupport' => AccesFixtures::SUPPORT_IDENTIFIANT,
+                'sens' => 'entree',
+                'horodatageBorne' => (new \DateTimeImmutable('2026-06-01T09:00:00+00:00'))->format(DATE_ATOM),
+                'cleIdempotence' => (string) Uuid::v4(),
+            ]],
+        ];
+
+        $reponse = $client->request('POST', '/api/terminal/passages/lot', $entete + ['json' => $lot])->toArray();
+        self::assertSame('accepte', $reponse['resultats'][0]['statut'], 'equipementId en IRI doit être normalisé et traité, pas rejeté hors_portee.');
+        self::assertNotSame('hors_portee', $reponse['resultats'][0]['codeMotif']);
+    }
+
     public function testCa10EcartHorlogeSuspectSignaleSansBloquerLaJournalisation(): void
     {
         $entete = $this->terminalEntete();

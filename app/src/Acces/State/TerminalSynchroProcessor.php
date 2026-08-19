@@ -14,6 +14,7 @@ use App\Vente\Service\LecteurCorps;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
+use Symfony\Component\Uid\Uuid;
 
 /**
  * Remontée d'un lot hors-ligne au niveau `Terminal` (POST /terminal/passages/lot, US-TERM-06/07/08,
@@ -62,7 +63,12 @@ final class TerminalSynchroProcessor implements ProcessorInterface
                 continue;
             }
             $cle = (string) ($entree['cleIdempotence'] ?? '');
-            $equipementId = (string) ($entree['equipementId'] ?? '');
+            // Normalisation IRI→UUID (même patron que `TerminalPassageProcessor::uuid()`) : une borne
+            // peut légitimement transmettre `equipementId` sous forme d'IRI (`/api/equipements/{uuid}`)
+            // — sans cette normalisation, la comparaison avec `$equipementsPortee` (indexé par UUID nu)
+            // échouait à tort et l'entrée était rejetée `hors_portee` (faux négatif).
+            $equipementId = $this->normaliserEquipementId((string) ($entree['equipementId'] ?? ''));
+            $entree['equipementId'] = $equipementId;
 
             if (!isset($equipementsPortee[$equipementId])) {
                 $rejetesHorsPortee[] = $cle;
@@ -111,5 +117,20 @@ final class TerminalSynchroProcessor implements ProcessorInterface
             'recus' => \count($lot),
             'resultats' => $resultats,
         ], JsonResponse::HTTP_OK);
+    }
+
+    /**
+     * Normalise `equipementId` — IRI (`/api/equipements/{uuid}`) ou UUID nu — vers l'UUID canonique
+     * (même patron que `TerminalPassageProcessor::uuid()`). Retourne la chaîne d'origine si elle n'est
+     * ni une IRI ni un UUID valide (le rejet `hors_portee` s'applique alors normalement en aval).
+     */
+    private function normaliserEquipementId(string $reference): string
+    {
+        if ($reference === '') {
+            return $reference;
+        }
+        $segment = str_contains($reference, '/') ? basename($reference) : $reference;
+
+        return Uuid::isValid($segment) ? (string) Uuid::fromString($segment) : $reference;
     }
 }

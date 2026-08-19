@@ -108,4 +108,24 @@ final class TerminalEnrolementTest extends AccesApiTestCase
         $terminal = $this->entite(Terminal::class, ['nom' => AccesFixtures::TERMINAL_NOM]);
         self::assertSame('actif', $terminal->getStatut()->value);
     }
+
+    /**
+     * Durcissement revue sécurité (double-enrôlement non révocable) : deux `Terminal` actifs sur le
+     * même `itboxRef`/établissement produiraient deux `JetonTerminal` valides pour le même matériel —
+     * révoquer l'un ne coupant pas l'autre. Le second enrôlement doit être refusé (409).
+     */
+    public function testDoubleEnrolementMemeItboxRefMemeEtablissementRefuse409(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+
+        $premier = $client->request('POST', '/api/acces/terminaux', $entete + [
+            'json' => ['nom' => 'ITBOX Doublon 1', 'itboxRef' => 'ITBOX-DOUBLON-01'],
+        ]);
+        self::assertSame(201, $premier->getStatusCode(), (string) $premier->getContent(false));
+
+        $second = $client->request('POST', '/api/acces/terminaux', $entete + [
+            'json' => ['nom' => 'ITBOX Doublon 2', 'itboxRef' => 'ITBOX-DOUBLON-01'],
+        ]);
+        self::assertSame(409, $second->getStatusCode(), (string) $second->getContent(false));
+    }
 }

@@ -15,6 +15,7 @@ use App\Acces\Service\AffichagePorteurResolver;
 use App\Acces\Service\CatalogueMessageAffichage;
 use App\Acces\Service\ValidationPassageHandler;
 use App\Vente\Service\LecteurCorps;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
@@ -41,6 +42,7 @@ final class TerminalPassageProcessor implements ProcessorInterface
         private readonly TerminalPorteeChecker $porteeChecker,
         private readonly CatalogueMessageAffichage $catalogue,
         private readonly AffichagePorteurResolver $affichageResolver,
+        private readonly EntityManagerInterface $em,
     ) {
     }
 
@@ -58,8 +60,25 @@ final class TerminalPassageProcessor implements ProcessorInterface
             throw new UnprocessableEntityHttpException('Référence d\'équipement obligatoire.');
         }
 
+        // `cleIdempotence` obligatoire (durcissement revue sécurité) : une clé générée côté serveur ne
+        // protège pas contre une retransmission réseau (chaque tentative recevrait une clé différente,
+        // cassant l'anti-doublon). La borne doit fournir sa propre clé stable, rejouée à l'identique en
+        // cas de retransmission.
+        $cleIdempotence = $this->uuid($corps['cleIdempotence'] ?? null);
+        if ($cleIdempotence === null) {
+            throw new UnprocessableEntityHttpException('Clé d\'idempotence obligatoire.');
+        }
+
         // Résolution de portée AVANT tout appel moteur (§4.1/4.2 spec) : refus sans fuite d'info.
         $this->porteeChecker->verifierEquipement($terminalUtilisateur, $equipementId);
+
+        // Idempotence (retransmission réseau) : une clé déjà vue rejoue la même réponse sans
+        // reconsommer le crédit/la jauge (mêmes garanties que `/terminal/passages/lot`, CA-7) — évite
+        // aussi la violation de la contrainte unique `uniq_passage_cle_idempotence` en base.
+        $existant = $this->em->getRepository(Passage::class)->findOneBy(['cleIdempotence' => $cleIdempotence]);
+        if ($existant instanceof Passage) {
+            return $this->reponse($existant);
+        }
 
         $horodatageBorne = isset($corps['horodatageBorne']) ? new \DateTimeImmutable((string) $corps['horodatageBorne']) : null;
 
@@ -68,7 +87,7 @@ final class TerminalPassageProcessor implements ProcessorInterface
             identifiantSupport: isset($corps['identifiantSupport']) ? (string) $corps['identifiantSupport'] : null,
             sens: isset($corps['sens']) ? SensPassage::tryFrom((string) $corps['sens']) : null,
             horodatage: $horodatageBorne ?? new \DateTimeImmutable(),
-            cleIdempotence: $this->uuid($corps['cleIdempotence'] ?? null) ?? Uuid::v4(),
+            cleIdempotence: $cleIdempotence,
             horodatageBorne: $horodatageBorne,
         );
 
