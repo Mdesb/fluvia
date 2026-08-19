@@ -16,7 +16,24 @@ function dateFr(v) {
   return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('fr-FR')
 }
 
-// Écran Clients (CRM, lecture seule) : liste + recherche et fiche client 360°.
+function dateHeureFr(v) {
+  if (!v) return '—'
+  const d = new Date(v)
+  return Number.isNaN(d.getTime())
+    ? '—'
+    : d.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
+// Adresse structurée côté back : { rue, complement, cp, ville, pays }.
+function formatAdresse(a) {
+  if (!a) return null
+  if (typeof a === 'string') return a
+  const l1 = [a.rue, a.complement].filter(Boolean).join(', ')
+  const l2 = [a.cp, a.ville].filter(Boolean).join(' ')
+  return [l1, l2, a.pays].filter(Boolean).join(' · ') || null
+}
+
+// Écran Clients (CRM) : liste + recherche et fiche client 360° enrichie.
 export default function Clients({ etabActif }) {
   const [q, setQ] = useState('')
   const [items, setItems] = useState([])
@@ -26,26 +43,24 @@ export default function Clients({ etabActif }) {
 
   const [selId, setSelId] = useState(null)
   const [fiche, setFiche] = useState(null)
+  const [mouvements, setMouvements] = useState(null) // null = non chargé, [] = vide
   const [ficheLoading, setFicheLoading] = useState(false)
   const [ficheErr, setFicheErr] = useState(null)
 
-  const rechercher = useCallback(
-    async (terme) => {
-      setChargement(true)
-      setErreur(null)
-      try {
-        const res = await api.rechercheClients({ q: terme || '', itemsPerPage: 30 })
-        setItems(res.items || [])
-        setTotal(res.total ?? (res.items || []).length)
-      } catch (e) {
-        setErreur(e.message)
-        setItems([])
-      } finally {
-        setChargement(false)
-      }
-    },
-    [],
-  )
+  const rechercher = useCallback(async (terme) => {
+    setChargement(true)
+    setErreur(null)
+    try {
+      const res = await api.rechercheClients({ q: terme || '', itemsPerPage: 30 })
+      setItems(res.items || [])
+      setTotal(res.total ?? (res.items || []).length)
+    } catch (e) {
+      setErreur(e.message)
+      setItems([])
+    } finally {
+      setChargement(false)
+    }
+  }, [])
 
   // Recherche initiale + à chaque changement d'établissement.
   useEffect(() => {
@@ -63,11 +78,23 @@ export default function Clients({ etabActif }) {
   async function ouvrirFiche(id) {
     setSelId(id)
     setFiche(null)
+    setMouvements(null)
     setFicheErr(null)
     setFicheLoading(true)
     try {
       const f = await api.ficheClient(id)
       setFiche(f)
+      // Relevé PMV chargé séparément (US-L5-04) uniquement si un porte-monnaie existe.
+      if (f?.pmv) {
+        try {
+          const mv = await api.pmvMouvements(id)
+          setMouvements(mv?.mouvements || [])
+        } catch {
+          setMouvements([])
+        }
+      } else {
+        setMouvements([])
+      }
     } catch (e) {
       setFicheErr(e.message || 'Fiche indisponible.')
     } finally {
@@ -80,7 +107,7 @@ export default function Clients({ etabActif }) {
       <div className="view-head">
         <div className="ttl">
           <h1>Clients</h1>
-          <p>{total} fiche(s) · CRM lecture seule</p>
+          <p>{total} fiche(s) · CRM</p>
         </div>
       </div>
 
@@ -157,7 +184,7 @@ export default function Clients({ etabActif }) {
             ) : ficheErr ? (
               <div className="banner banner-error">{ficheErr}</div>
             ) : fiche ? (
-              <FicheContenu fiche={fiche} />
+              <FicheContenu fiche={fiche} mouvements={mouvements} />
             ) : null}
           </div>
         </section>
@@ -166,37 +193,101 @@ export default function Clients({ etabActif }) {
   )
 }
 
-function FicheContenu({ fiche }) {
+function FicheContenu({ fiche, mouvements }) {
   const c = fiche.client || {}
+  const historique = fiche.historique || []
+  const famille = fiche.famille || []
+  const consentements = fiche.consentements || []
+  const adresse = formatAdresse(c.adresse)
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-      {/* Coordonnées */}
+      {/* En-tête identité */}
+      <div className="fiche-ident">
+        <div className="fiche-avatar" aria-hidden="true">
+          {(nomClient(c)[0] || '?').toUpperCase()}
+        </div>
+        <div style={{ minWidth: 0 }}>
+          <div className="fiche-nom">{nomClient(c)}</div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+            <span className="badge mut">{c.type === 'morale' ? 'Personne morale' : 'Particulier'}</span>
+            <span className={`badge ${c.statut === 'actif' ? 'good' : 'mut'}`}>{c.statut || '—'}</span>
+            {c.estMineur && <span className="badge warn">mineur</span>}
+          </div>
+        </div>
+      </div>
+
+      {/* Indicateurs clés */}
+      <div className="fiche-stats">
+        <div className="stat-tile">
+          <div className="st-val num">{euros(c.caCumule)}</div>
+          <div className="st-lbl">CA cumulé</div>
+        </div>
+        <div className="stat-tile">
+          <div className="st-val num">{historique.length}</div>
+          <div className="st-lbl">Achats</div>
+        </div>
+        <div className="stat-tile">
+          <div className="st-val">{dateFr(c.dateDerniereVisite)}</div>
+          <div className="st-lbl">Dernière visite</div>
+        </div>
+        <div className="stat-tile">
+          <div className="st-val num">{fiche.pmv ? euros(fiche.pmv.solde) : '—'}</div>
+          <div className="st-lbl">Solde PMV</div>
+        </div>
+      </div>
+
+      {/* Coordonnées (toutes les lignes, état vide propre) */}
       <div>
         <div className="fiche-sec">Coordonnées</div>
         <dl className="deflist">
-          <div><dt>Nom</dt><dd>{nomClient(c)}</dd></div>
-          {c.email && <div><dt>E-mail</dt><dd>{c.email}</dd></div>}
-          {c.telephone && <div><dt>Téléphone</dt><dd>{c.telephone}</dd></div>}
-          {c.adresse && <div><dt>Adresse</dt><dd>{typeof c.adresse === 'string' ? c.adresse : [c.adresse?.voie, c.adresse?.codePostal, c.adresse?.ville].filter(Boolean).join(', ')}</dd></div>}
-          <div><dt>Statut</dt><dd><span className={`badge ${c.statut === 'actif' ? 'good' : 'mut'}`}>{c.statut}</span></dd></div>
-          <div><dt>Dernière visite</dt><dd>{dateFr(c.dateDerniereVisite)}</dd></div>
-          <div><dt>CA cumulé</dt><dd className="num">{euros(c.caCumule)}</dd></div>
+          <div><dt>E-mail</dt><dd>{c.email || '—'}</dd></div>
+          <div><dt>Téléphone</dt><dd>{c.telephone || '—'}</dd></div>
+          <div><dt>Adresse</dt><dd>{adresse || '—'}</dd></div>
         </dl>
       </div>
 
-      {/* Porte-monnaie PMV */}
+      {/* Porte-monnaie PMV + mouvements */}
       <div>
         <div className="fiche-sec">Porte-monnaie (PMV)</div>
         {fiche.pmv ? (
-          <div className="pmv-box">
-            <div>
-              <div className="pmv-solde">{euros(fiche.pmv.solde)}</div>
-              <div className="hint" style={{ margin: 0 }}>
-                {fiche.pmv.statut}
-                {fiche.pmv.dateEcheance ? ` · échéance ${dateFr(fiche.pmv.dateEcheance)}` : ''}
+          <>
+            <div className="pmv-box" style={{ marginBottom: 12 }}>
+              <div>
+                <div className="pmv-solde">{euros(fiche.pmv.solde)}</div>
+                <div className="hint" style={{ margin: 0 }}>
+                  {fiche.pmv.statut}
+                  {fiche.pmv.dateEcheance ? ` · échéance ${dateFr(fiche.pmv.dateEcheance)}` : ''}
+                </div>
               </div>
             </div>
-          </div>
+            {mouvements === null ? (
+              <div className="center" style={{ minHeight: 80 }}><div className="spinner" /></div>
+            ) : mouvements.length > 0 ? (
+              <div style={{ overflowX: 'auto' }}>
+                <table className="tbl">
+                  <thead>
+                    <tr><th>Date</th><th>Type</th><th className="num">Montant</th><th className="num">Solde</th></tr>
+                  </thead>
+                  <tbody>
+                    {mouvements.map((m) => (
+                      <tr key={m.id}>
+                        <td>{dateHeureFr(m.dateMouvement)}</td>
+                        <td>
+                          <span className="badge mut">{m.type}</span>
+                          {m.motif ? <span className="hint" style={{ margin: 0, marginLeft: 6 }}>{m.motif}</span> : null}
+                        </td>
+                        <td className="num">{euros(m.montant)}</td>
+                        <td className="num">{euros(m.soldeApres)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="empty" style={{ padding: 12 }}>Aucun mouvement enregistré.</div>
+            )}
+          </>
         ) : (
           <div className="empty" style={{ padding: 12 }}>Aucun porte-monnaie.</div>
         )}
@@ -205,9 +296,9 @@ function FicheContenu({ fiche }) {
       {/* Famille / bénéficiaires */}
       <div>
         <div className="fiche-sec">Famille / bénéficiaires</div>
-        {(fiche.famille || []).length > 0 ? (
+        {famille.length > 0 ? (
           <div>
-            {fiche.famille.map((f, i) => (
+            {famille.map((f, i) => (
               <span key={i} className="chip">
                 {f.libelle} · {f.role}{f.actif === false ? ' (inactif)' : ''}
               </span>
@@ -219,30 +310,32 @@ function FicheContenu({ fiche }) {
       </div>
 
       {/* Consentements RGPD */}
-      {(fiche.consentements || []).length > 0 && (
-        <div>
-          <div className="fiche-sec">Consentements</div>
+      <div>
+        <div className="fiche-sec">Consentements RGPD</div>
+        {consentements.length > 0 ? (
           <div>
-            {fiche.consentements.map((c2, i) => (
-              <span key={i} className={`badge ${c2.exploitable ? 'good' : 'mut'}`} style={{ marginRight: 6 }}>
+            {consentements.map((c2, i) => (
+              <span key={i} className={`badge ${c2.exploitable ? 'good' : 'mut'}`} style={{ marginRight: 6, marginBottom: 4 }}>
                 {c2.canal} : {c2.etat}
               </span>
             ))}
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="empty" style={{ padding: 12 }}>Aucun consentement enregistré.</div>
+        )}
+      </div>
 
       {/* Historique d'achats */}
       <div>
-        <div className="fiche-sec">Historique ({(fiche.historique || []).length})</div>
-        {(fiche.historique || []).length > 0 ? (
+        <div className="fiche-sec">Historique d'achats ({historique.length})</div>
+        {historique.length > 0 ? (
           <div style={{ overflowX: 'auto' }}>
             <table className="tbl">
               <thead>
                 <tr><th>Date</th><th>Ticket</th><th className="num">Montant</th></tr>
               </thead>
               <tbody>
-                {fiche.historique.map((h, i) => (
+                {historique.map((h, i) => (
                   <tr key={i}>
                     <td>{dateFr(h.date)}</td>
                     <td className="mono">{h.numero || '—'}</td>

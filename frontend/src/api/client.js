@@ -184,9 +184,45 @@ export const api = {
   ticket: (venteId, mode = 'imprimer') =>
     request(`/api/ventes/${venteId}/ticket`, { method: 'POST', body: { mode } }),
 
-  // CRM (lecture seule cette tranche).
+  // CRM.
   rechercheClients: (params) => request('/api/crm/clients/recherche', { query: params }),
   ficheClient: (id) => request(`/api/clients/${id}/fiche-360`),
+  // Relevé de mouvements du porte-monnaie virtuel (US-L5-04). Renvoie { mouvements: [...] }.
+  pmvMouvements: (id) => request(`/api/clients/${id}/pmv/mouvements`),
+  // Création rapide d'une fiche client (US-L5-02). L'établissement de création / le groupe sont
+  // fixés côté back depuis l'établissement actif (en-tête X-Etablissement).
+  creerClient: (corps) => request('/api/clients', { method: 'POST', body: corps }),
+  // Rattache (ou crée) un client sur une vente ouverte (M2, CA-7). Corps : un de
+  // { client: uuid } | { recherche: "..." } | { creer: { nom, prenom, email, telephone } }.
+  rattacherClientVente: (venteId, corps) =>
+    request(`/api/ventes/${venteId}/client`, { method: 'POST', body: corps, timeoutMs: 20000 }),
+
+  // --- Options produits (App\OptionProduit) ---
+  // Groupes d'options (choix unique/multiple) — référentiel réutilisable (RG-OPT-01).
+  groupeOptions: () => request('/api/groupe_options', { query: { itemsPerPage: 200 } }),
+  creerGroupeOption: (corps) => request('/api/groupe_options', { method: 'POST', body: corps }),
+  majGroupeOption: (id, corps) =>
+    request(`/api/groupe_options/${id}`, { method: 'PATCH', body: corps }),
+  // Valeurs d'un groupe (impact prix fixe/%). Filtrable par groupe (SearchFilter exact).
+  valeurOptions: (groupeId) =>
+    request('/api/valeur_options', {
+      query: { itemsPerPage: 300, ...(groupeId ? { groupeOption: groupeId } : {}) },
+    }),
+  creerValeurOption: (corps) => request('/api/valeur_options', { method: 'POST', body: corps }),
+  majValeurOption: (id, corps) =>
+    request(`/api/valeur_options/${id}`, { method: 'PATCH', body: corps }),
+  // Rattachements groupe↔produit (pivot). Filtrable par produit (SearchFilter exact).
+  optionProduits: (produitId) =>
+    request('/api/option_produits', {
+      query: { itemsPerPage: 300, ...(produitId ? { produit: produitId } : {}) },
+    }),
+  creerOptionProduit: (corps) => request('/api/option_produits', { method: 'POST', body: corps }),
+  majOptionProduit: (id, corps) =>
+    request(`/api/option_produits/${id}`, { method: 'PATCH', body: corps }),
+  supprimerOptionProduit: (id) =>
+    request(`/api/option_produits/${id}`, { method: 'DELETE' }),
+  // Options proposables à la vente pour un produit sur l'établissement actif (RG-OPT-07/08).
+  optionsDisponibles: (produitId) => request(`/api/produits/${produitId}/options-disponibles`),
 
   // --- Tranche 3 ---
 

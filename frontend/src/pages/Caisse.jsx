@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import Qr from '../components/Qr.jsx'
 import Modal from '../components/Modal.jsx'
+import ClientPicker, { nomClient } from '../components/ClientPicker.jsx'
 import SessionCaisse from './SessionCaisse.jsx'
 import {
   libelleProduit,
@@ -26,6 +27,11 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   const [panier, setPanier] = useState([]) // { produit, quantite }
   const [ticket, setTicket] = useState(null)
 
+  // Client rattaché à la vente (bénéficiaire des produits nominatifs, RG-M2-04 / CA-7).
+  const [client, setClient] = useState(null)
+  const [pickerOuvert, setPickerOuvert] = useState(false)
+  const [besoinClient, setBesoinClient] = useState(false)
+
   // Phase de paiement (encaissement scindé sur une vente ouverte).
   const [vente, setVente] = useState(null) // { id, reste }
   const [paiements, setPaiements] = useState([]) // règlements acceptés
@@ -45,6 +51,8 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
     setTicket(null)
     setVente(null)
     setPaiements([])
+    setClient(null)
+    setBesoinClient(false)
     Promise.all([api.produits(), api.moyensPaiement(), api.pointDeVentes()])
       .then(([pc, mc, dc]) => {
         if (annule) return
@@ -113,14 +121,26 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
     setBusy(true)
     setErreur(null)
     setAvis(null)
+    setBesoinClient(false)
     setTicket(null)
     try {
       const v = await api.creerVente({ session: session.id })
+      // Rattache le client à la vente (M2, CA-7) — préalable au bénéficiaire des lignes nominatives.
+      if (client) {
+        try {
+          await api.rattacherClientVente(v.id, { client: client.id })
+        } catch {
+          /* le rattachement échoue silencieusement : la garde bénéficiaire ci-dessous prendra le relais */
+        }
+      }
       let courant = v
       for (const l of panier) {
         const tarif = typeTarifId(l.produit)
         if (!tarif) throw new Error(`« ${libelleProduit(l.produit)} » n'a pas de tarif au guichet.`)
-        courant = await api.ajouterLigne(v.id, { produit: l.produit.id, typeTarif: tarif, quantite: l.quantite })
+        const corps = { produit: l.produit.id, typeTarif: tarif, quantite: l.quantite }
+        // Bénéficiaire requis pour les produits nominatifs (RG-M2-04) : on passe le client rattaché.
+        if (client) corps.beneficiaire = client.id
+        courant = await api.ajouterLigne(v.id, corps)
       }
       // Le total et le reste font foi côté serveur : le tarif réellement appliqué peut différer du
       // prix indicatif affiché (grilles, remises). On s'aligne dessus pour l'encaissement.
@@ -131,7 +151,15 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
       setMoyenSel(moyensDispo[0]?.code || 'especes')
       setMontant(parseFloat(resteServeur) > 0 ? parseFloat(resteServeur).toFixed(2) : '')
     } catch (e) {
-      setErreur(e.message || "Impossible d'ouvrir la vente.")
+      const msg = e.message || "Impossible d'ouvrir la vente."
+      // Garde « bénéficiaire requis » (RG-M2-04) : on invite à rattacher un client via la modale.
+      if (/b[ée]n[ée]ficiaire/i.test(msg)) {
+        setBesoinClient(true)
+        setErreur('Ce panier contient un produit nominatif : rattachez un client bénéficiaire pour encaisser.')
+        setPickerOuvert(true)
+      } else {
+        setErreur(msg)
+      }
     } finally {
       setBusy(false)
     }
@@ -194,6 +222,8 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
       setVente(null)
       setPaiements([])
       setAvis(null)
+      setClient(null)
+      setBesoinClient(false)
     } catch (e) {
       setErreur(e.message || 'Échec de la validation.')
     } finally {
@@ -216,6 +246,14 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
     }
   }
 
+  // Retenu depuis la modale : rattache le client (bénéficiaire) et lève la garde nominative.
+  function choisirClient(c) {
+    setClient(c)
+    setPickerOuvert(false)
+    setBesoinClient(false)
+    if (besoinClient) setErreur(null)
+  }
+
   // Modale d'ouverture / clôture Z, déclenchée depuis l'écran Caisse. Réutilise SessionCaisse
   // et ses appels API existants ; se ferme seule après ouverture, laisse le récap Z après clôture.
   const modaleSession = (
@@ -234,6 +272,14 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
         onClose={() => setCaisseModale(false)}
       />
     </Modal>
+  )
+
+  const modaleClient = (
+    <ClientPicker
+      open={pickerOuvert}
+      onClose={() => setPickerOuvert(false)}
+      onSelect={choisirClient}
+    />
   )
 
   // --- Rendu : pas de session ouverte ---
@@ -289,6 +335,36 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
               )}
             </div>
             <div className="card-b">
+              <div className={`client-bar${besoinClient ? ' besoin' : ''}`}>
+                {client ? (
+                  <>
+                    <span className="cb-info">
+                      <span className="cb-ic" aria-hidden="true">👤</span>
+                      <span className="nm">{nomClient(client)}</span>
+                    </span>
+                    {!enPaiement && (
+                      <button className="btn ghost sm" type="button" onClick={() => setClient(null)}>
+                        Retirer
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <span className="cb-info hint" style={{ margin: 0 }}>
+                      Vente au comptoir — aucun client rattaché
+                    </span>
+                    <button
+                      className={`btn sm${besoinClient ? ' primary' : ''}`}
+                      type="button"
+                      onClick={() => setPickerOuvert(true)}
+                      disabled={enPaiement}
+                    >
+                      ＋ Rattacher un client
+                    </button>
+                  </>
+                )}
+              </div>
+
               {panier.length === 0 && !enPaiement ? (
                 <div className="empty">Cliquez un produit pour l'ajouter.</div>
               ) : (
@@ -392,6 +468,7 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
         </section>
       </div>
       {modaleSession}
+      {modaleClient}
     </div>
   )
 }
