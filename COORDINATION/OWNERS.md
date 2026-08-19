@@ -12,14 +12,14 @@ ouvrir une entrée dans [TASKS.md](TASKS.md) et se coordonner, ne pas éditer en
 > Convention : les fichiers de coordination (MESSAGES/TASKS/OWNERS/DECISIONS) peuvent être committés
 > directement sur `main` par tous ; le **code** et `CONTRACT/` passent par l'intégrateur.
 
-## Noyau commun (core) — `app/src/{Securite,Etablissement,Audit,...}`
+## Noyau commun (core) — `app/src/{Securite,Organisation,Fonctionnalite,Audit,Platform}`
 | Domaine | Chemin | Instance |
 |---|---|---|
-| Identité / Auth / Permissions | `app/src/Securite/**` | *à assigner (intégrateur)* |
-| Organisations / Établissements / Contexte | `app/src/Etablissement/**` | *intégrateur* |
-| Capacités & Features | `app/src/*Capacite*`, profil d'établissement | *intégrateur* |
-| Audit | subscribers d'audit | *intégrateur* |
-| **Bus d'événements + Manifeste de module** *(à créer)* | `app/src/Platform/**` | *intégrateur* |
+| Identité / Auth / Permissions | `app/src/Securite/**` | **claude-A** |
+| Organisations / Établissements / Contexte | `app/src/Organisation/**` + `app/src/Securite/Service/ContexteEtablissement.php` | **claude-A** |
+| Capacités & Features | `app/src/Fonctionnalite/**` | **claude-A** |
+| Audit | `app/src/Audit/**` | **claude-A** |
+| **Bus d'événements + Manifeste de module** *(à créer)* | `app/src/Platform/**` | **claude-A** |
 
 ## Modules existants (billetterie) — propriété actuelle = nous
 Offre, Vente/Caisse, Acces, Reservation, Facturation, Compta/Régie, SEPA, Caution, Autorisation,

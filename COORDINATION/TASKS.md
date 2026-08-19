@@ -11,6 +11,6 @@ Ne touche pas un chemin déjà en `WIP` par une autre instance.
 | C3 | Spec SDD Suite Finance & Compta | `specs/finance/**` | claude (billetterie) | DONE | 19/08 |
 | C6 | Plan + impl Suite Finance (lots FIN-0..FIN-4) | `app/src/{Finance,Ocr}/**`, `app/src/Compta/**` | **claude-B** | WIP | 19/08 |
 | C4 | Garde-fous CI partagés (cloisonnement, CSRF, manifeste) | `bin/`, CI | *à assigner* | CLAIM | 19/08 |
-| C5 | Bus d'événements + registre de modules (impl core) | `app/src/Platform/**` | *à assigner* | CLAIM | 19/08 |
+| C5 | Bus d'événements + registre de modules (impl core) | `app/src/Platform/**` | **claude-A** | WIP | 19/08 |
 
 <!-- Ajouter les nouvelles tâches au-dessus de cette ligne. -->

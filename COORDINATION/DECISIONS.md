@@ -41,3 +41,22 @@ extensibles). Un **agent de traduction** (IA) auto-remplit les catalogues de lan
 cadre du retrofit total (renommages + migrations, avec la couche i18n qui garantit que l'UI reste
 française pendant toute la transition). Un garde-fou CI vérifiera l'absence d'identifiant non-anglais
 dans les nouvelles migrations/entités.
+
+### 2026-08-19 · D6 — L'enveloppe d'événement dérive son tenant du sujet, pas du contexte HTTP
+Le champ `tenant.establishmentId` d'un événement est renseigné depuis l'**entité sujet** (l'établissement
+de la facture, de la réservation…), **jamais** depuis `ContexteEtablissement`. Ce dernier ne sert que
+d'assertion de cohérence.
+**Raison :** `ContexteEtablissement` lit l'en-tête HTTP `X-Etablissement`, qui est un **sélecteur** fourni
+par le client, pas une preuve d'appartenance — l'autorité est recalculée serveur par
+`CalculateurDroits::codesEffectifs()` (filtrage sur les `Affectation`, échec fermé). L'en-tête est aussi
+facultatif : absent, il vaut `null`. Le remplir dans l'enveloppe inscrirait au cœur de la plateforme un
+périmètre influencé par le client, en contradiction avec D3.
+
+### 2026-08-19 · D7 — Le bus v0 est synchrone in-process
+Pas de `symfony/messenger` dans le projet : le bus s'appuie sur l'`EventDispatcher` Symfony déjà utilisé
+par 5 modules (`Recouvrement`, `Crm`, `Acces`…). Les abonnés s'exécutent **dans la transaction de
+l'émetteur**. Le passage à l'asynchrone (messenger + transport) est un ajout ultérieur, décidé quand un
+besoin réel apparaît.
+**Raison :** D1 impose un retrofit incrémental. Introduire une file maintenant ajouterait de
+l'infrastructure (worker, supervision, rejeu) sans consommateur qui la justifie, et casserait le modèle
+transactionnel des 5 émetteurs existants.
