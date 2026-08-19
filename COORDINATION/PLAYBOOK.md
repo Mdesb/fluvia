@@ -29,8 +29,8 @@ Cibles = **tout le monde** ; on construit ensuite des verticales/horizontales m�
 
 **Décisions actées** (journal complet dans [DECISIONS.md](DECISIONS.md)) :
 - **D1 — Socle unique.** Le core **Symfony 7 / API Platform / Doctrine / MariaDB** de la billetterie
-  devient LA coquille. Finance, Smart Flow, Revenue Recovery, puis domaines OFS/Vespera = modules.
-  Retrofit **incrémental**, jamais big-bang.
+  devient LA coquille. Finance, Smart Flow, Revenue Recovery = modules. Retrofit **incrémental**,
+  jamais big-bang. *(Rectifié le 20/08 : OFS et Vespera ne sont pas absorbés — voir D9.)*
 - **D2 — Contract-first.** Pas de module avant son manifeste + ses événements. Communication **par
   événements**, jamais d'appel direct module→module.
 - **D3 — Cloisonnement.** Périmètre (tenant) toujours dérivé de la **session serveur**, jamais d'un id
@@ -41,9 +41,10 @@ Cibles = **tout le monde** ; on construit ensuite des verticales/horizontales m�
   l'UI via **clés i18n** (FR défaut) + **agent de traduction IA au build**. Existant FR migré
   incrémentalement.
 
-**Les 3 projets du contexte** (même ADN, 3 stacks) : Billetterie (Symfony/MariaDB → la coquille) ·
-Vespera (Next.js/Prisma/PostgreSQL) · OFS Global (PHP 8.1/MariaDB). Vespera & OFS re-logés en modules
-ou fédérés par API, progressivement.
+**Périmètre** : la billetterie (Symfony/MariaDB) est la coquille, et c'est le **seul** produit
+construit ici. **Vespera et OFS Global sont des sociétés et des produits tiers** : ils ne sont ni
+absorbés, ni fédérés, ni portés. Leurs documents servent uniquement de **source d'inspiration
+fonctionnelle** — on y pioche des idées de modules, jamais du code ni des données (D9).
 
 ---
 
