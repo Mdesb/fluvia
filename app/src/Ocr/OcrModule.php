@@ -28,9 +28,15 @@ final class OcrModule
         return '0.1.0';
     }
 
-    public function capacite(): string
+    /**
+     * `null` : `App\Ocr` est un **service transverse partagé**, pas une capacité activable par tenant
+     * (COORDINATION/DECISIONS.md D4, spec-ocr.md §2) — au même titre que Communication/Automation.
+     * Contrairement à un module métier (Finance…), OCR ne s'active/désactive pas par établissement :
+     * il est toujours disponible. Un futur registre `App\Platform\Module` doit donc lire `null` ici.
+     */
+    public function capacite(): ?string
     {
-        return 'ocr';
+        return null;
     }
 
     /** @return list<string> */

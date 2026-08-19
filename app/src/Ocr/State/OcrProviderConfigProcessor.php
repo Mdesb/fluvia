@@ -10,6 +10,7 @@ use ApiPlatform\State\ProcessorInterface;
 use App\Ocr\Entity\OcrProviderConfig;
 use App\Ocr\Service\ChiffreurApiKeyOcr;
 use App\Securite\Service\ContexteEtablissement;
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -68,7 +69,14 @@ final class OcrProviderConfigProcessor implements ProcessorInterface
 
         $data->touchUpdatedAt();
         $this->em->persist($data);
-        $this->em->flush();
+        try {
+            $this->em->flush();
+        } catch (UniqueConstraintViolationException $e) {
+            // Course POST/POST concurrente sur le même établissement : la contrainte unique
+            // (1 configuration/établissement, RG-OCR-06) tranche en base — on renvoie le 409 attendu
+            // plutôt qu'une 500 non gérée.
+            throw new ConflictHttpException('ocr.error.config_already_exists', $e);
+        }
 
         return $data;
     }
