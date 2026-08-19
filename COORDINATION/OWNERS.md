@@ -21,6 +21,11 @@ ouvrir une entrée dans [TASKS.md](TASKS.md) et se coordonner, ne pas éditer en
 | Audit | `app/src/Audit/**` | **claude-A** |
 | **Bus d'événements + Manifeste de module** *(à créer)* | `app/src/Platform/**` | **claude-A** |
 
+## Outillage transverse (aucun module — pas de conflit possible)
+| Domaine | Chemin | Instance |
+|---|---|---|
+| **Garde-fous CI** (cloisonnement D3, nommage D5, i18n, CSRF) | `bin/**`, `.github/workflows/**` | **claude-C** |
+
 ## Modules existants (billetterie) — propriété actuelle = nous
 Offre, Vente/Caisse, Acces, Reservation, Facturation, Compta/Régie, SEPA, Caution, Autorisation,
 OptionProduit, Stock, Personnel, Boutique, Support, Reporting, verticales (Piscine/Padel/Patinoire/Musée/Sport).
