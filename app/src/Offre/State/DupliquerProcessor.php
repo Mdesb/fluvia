@@ -9,6 +9,7 @@ use ApiPlatform\State\ProcessorInterface;
 use App\Offre\Entity\GrilleTarifaire;
 use App\Offre\Entity\Produit;
 use App\Offre\Enum\StatutProduit;
+use App\Offre\Service\GenerateurCodeProduit;
 use Doctrine\ORM\EntityManagerInterface;
 
 /**
@@ -22,6 +23,7 @@ final class DupliquerProcessor implements ProcessorInterface
 {
     public function __construct(
         private readonly EntityManagerInterface $em,
+        private readonly GenerateurCodeProduit $generateurCode,
     ) {
     }
 
@@ -32,7 +34,7 @@ final class DupliquerProcessor implements ProcessorInterface
         $copie = new Produit();
         $copie->setType($data->getType());
         $copie->setStatut(StatutProduit::Brouillon);
-        $copie->setCode($this->genererCode());
+        $copie->setCode($this->generateurCode->generer());
         $copie->setLibelle($this->suffixerLibelle($data->getLibelle()));
         $copie->setLibelleRecherche($data->getLibelleRecherche());
         $copie->setCanaux($data->getCanaux());
@@ -79,14 +81,5 @@ final class DupliquerProcessor implements ProcessorInterface
         }
 
         return array_map(static fn (string $valeur): string => $valeur . ' – copie', $libelle);
-    }
-
-    private function genererCode(): string
-    {
-        do {
-            $code = 'PRD-' . strtoupper(bin2hex(random_bytes(4)));
-        } while ($this->em->getRepository(Produit::class)->findOneBy(['code' => $code]) !== null);
-
-        return $code;
     }
 }

@@ -7,8 +7,8 @@ namespace App\Offre\State;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
 use App\Offre\Entity\Produit;
+use App\Offre\Service\GenerateurCodeProduit;
 use App\Offre\Service\ResolveurFacettes;
-use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 /**
@@ -27,7 +27,7 @@ final class ProduitProcessor implements ProcessorInterface
         #[Autowire(service: 'api_platform.doctrine.orm.state.persist_processor')]
         private readonly ProcessorInterface $persistProcessor,
         private readonly ResolveurFacettes $facettes,
-        private readonly EntityManagerInterface $em,
+        private readonly GenerateurCodeProduit $generateurCode,
     ) {
     }
 
@@ -35,7 +35,7 @@ final class ProduitProcessor implements ProcessorInterface
     {
         if ($data instanceof Produit) {
             if ($data->getCode() === '') {
-                $data->setCode($this->genererCode());
+                $data->setCode($this->generateurCode->generer());
             }
             $data->setLibelleRecherche($this->projeterLibelle($data));
             $this->facettes->purgerOrphelins($data);
@@ -53,14 +53,5 @@ final class ProduitProcessor implements ProcessorInterface
         }
 
         return mb_substr(implode(' ', array_map('strval', $valeurs)), 0, 512);
-    }
-
-    private function genererCode(): string
-    {
-        do {
-            $code = 'PRD-' . strtoupper(bin2hex(random_bytes(4)));
-        } while ($this->em->getRepository(Produit::class)->findOneBy(['code' => $code]) !== null);
-
-        return $code;
     }
 }
