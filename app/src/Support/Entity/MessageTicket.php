@@ -6,6 +6,7 @@ namespace App\Support\Entity;
 
 use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\GetCollection;
+use ApiPlatform\Metadata\Link;
 use ApiPlatform\Metadata\Post;
 use App\Securite\Entity\Utilisateur;
 use App\Support\Enum\AuteurTypeMessage;
@@ -28,11 +29,19 @@ use Symfony\Component\Validator\Constraints as Assert;
     operations: [
         new GetCollection(
             uriTemplate: '/support/tickets/{ticketId}/messages',
+            // `ticketId` designe le ticket parent, pas une propriete de MessageTicket : sans cette
+            // declaration API Platform ne sait pas resoudre la variable et repond 404 « Invalid uri
+            // variables ». Le provider et le processeur consomment la valeur brute.
+            uriVariables: ['ticketId' => new Link(fromClass: TicketSupport::class, identifiers: ['id'])],
             security: "is_granted('PERM', 'support.ouvrir_ticket') or is_granted('PERM', 'support.lire_ticket_etablissement') or is_granted('PERM', 'support.traiter_ticket_n1') or is_granted('PERM', 'support.traiter_ticket_n2') or is_granted('PERM', 'support.administrer')",
             provider: MessageTicketProvider::class,
         ),
         new Post(
             uriTemplate: '/support/tickets/{ticketId}/messages',
+            // `ticketId` designe le ticket parent, pas une propriete de MessageTicket : sans cette
+            // declaration API Platform ne sait pas resoudre la variable et repond 404 « Invalid uri
+            // variables ». Le provider et le processeur consomment la valeur brute.
+            uriVariables: ['ticketId' => new Link(fromClass: TicketSupport::class, identifiers: ['id'])],
             security: "is_granted('PERM', 'support.ouvrir_ticket') or is_granted('PERM', 'support.traiter_ticket_n1') or is_granted('PERM', 'support.traiter_ticket_n2')",
             processor: MessageTicketProcessor::class,
             denormalizationContext: ['groups' => ['message:write']],
