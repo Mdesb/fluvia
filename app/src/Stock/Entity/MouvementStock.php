@@ -39,12 +39,14 @@ use Symfony\Component\Uid\Uuid;
         new Get(security: "is_granted('PERM', 'stock.lire')"),
         new Post(
             uriTemplate: '/stock/mouvements/ajustement',
-            security: "is_granted('PERM', 'stock.ajuster')",
+            input: false,
+            security: "is_granted('PERM', 'stock.ajuster') or is_granted('PERM', 'stock.gerer')",
             processor: AjustementMouvementProcessor::class,
         ),
         new Post(
             uriTemplate: '/stock/mouvements/reintegration-retour',
-            security: "is_granted('PERM', 'stock.ajuster')",
+            input: false,
+            security: "is_granted('PERM', 'stock.ajuster') or is_granted('PERM', 'stock.gerer')",
             processor: ReintegrationRetourProcessor::class,
         ),
     ],

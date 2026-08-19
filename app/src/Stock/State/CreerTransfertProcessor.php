@@ -9,6 +9,7 @@ use ApiPlatform\State\ProcessorInterface;
 use App\Securite\Entity\Utilisateur;
 use App\Stock\Entity\ArticleStock;
 use App\Stock\Entity\TransfertStock;
+use App\Stock\Security\PerimetreEtablissementVerificateur;
 use App\Vente\Service\LecteurCorps;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
@@ -27,6 +28,7 @@ final class CreerTransfertProcessor implements ProcessorInterface
         private readonly EntityManagerInterface $em,
         private readonly LecteurCorps $lecteur,
         private readonly Security $security,
+        private readonly PerimetreEtablissementVerificateur $perimetre,
     ) {
     }
 
@@ -39,6 +41,10 @@ final class CreerTransfertProcessor implements ProcessorInterface
         if ($source === null || $destination === null) {
             throw new UnprocessableEntityHttpException('Champs « articleStockSource »/« articleStockDestination » obligatoires.');
         }
+        // Défense en profondeur (RG-SOCLE-05) : les deux côtés doivent être dans le périmètre de
+        // l'appelant, résolution manuelle par find() hors filtre `PerimetreStockExtension`.
+        $this->perimetre->verifier($source->getEtablissement(), 'Article source hors du périmètre de l\'appelant (RG-SOCLE-05).');
+        $this->perimetre->verifier($destination->getEtablissement(), 'Article destination hors du périmètre de l\'appelant (RG-SOCLE-05).');
         if ((string) $source->getId() === (string) $destination->getId()) {
             throw new UnprocessableEntityHttpException('La source et la destination doivent être des articles distincts.');
         }

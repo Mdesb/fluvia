@@ -9,11 +9,16 @@ use ApiPlatform\Symfony\Bundle\Test\Client;
 use App\DataFixtures\SocleFixtures;
 use App\Offre\DataFixtures\OffreFixtures;
 use App\Organisation\Entity\Etablissement;
+use App\Securite\Entity\Affectation;
+use App\Securite\Entity\Permission;
+use App\Securite\Entity\Role;
+use App\Securite\Entity\Utilisateur;
 use App\Securite\Service\ContexteEtablissement;
 use App\Stock\DataFixtures\StockFixtures;
 use App\Vente\DataFixtures\VenteFixtures;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
+use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 
 /** Base des tests d'API du module `App\Stock` : schéma recréé, fixtures socle + offre + vente + stock. */
 abstract class StockApiTestCase extends ApiTestCase
@@ -69,6 +74,54 @@ abstract class StockApiTestCase extends ApiTestCase
         $entete = ['auth_bearer' => $token, 'headers' => [ContexteEtablissement::HEADER => $idB]];
 
         return [$client, $entete, $idB];
+    }
+
+    /**
+     * Crée un utilisateur affecté **uniquement** sur l'établissement donné, avec un rôle ne portant
+     * que les codes `stock.<action>` demandés (RG-SOCLE-03/05) — sert à reproduire l'IDOR cross-tenant
+     * (un opérateur affecté à un seul établissement ne doit jamais pouvoir agir sur l'autre via un
+     * identifiant deviné/connu dans le corps de la requête).
+     *
+     * @param list<string> $actions codes « action » du module `stock` (ex. 'transferer', 'gerer')
+     *
+     * @return array{0: Client, 1: array<string, mixed>, 2: string} client, entête auth+étab, id établissement
+     */
+    protected function operateurStockSur(string $nomEtab, array $actions): array
+    {
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        /** @var UserPasswordHasherInterface $hasher */
+        $hasher = static::getContainer()->get(UserPasswordHasherInterface::class);
+
+        $etab = $em->getRepository(Etablissement::class)->findOneBy(['nom' => $nomEtab]);
+        self::assertNotNull($etab, sprintf('Établissement « %s » introuvable.', $nomEtab));
+
+        $suffixe = bin2hex(random_bytes(4));
+
+        $role = (new Role())->setNom('Opérateur Stock ' . $nomEtab . ' ' . $suffixe);
+        foreach ($actions as $action) {
+            $permission = $em->getRepository(Permission::class)->findOneBy(['module' => 'stock', 'action' => $action]);
+            self::assertNotNull($permission, sprintf('Permission stock.%s introuvable (StockFixtures).', $action));
+            $role->addPermission($permission);
+        }
+        $em->persist($role);
+
+        $email = 'operateur.' . $suffixe . '@itcotation.com';
+        $motDePasse = 'Operateur#2026';
+        $utilisateur = (new Utilisateur())->setEmail($email)->setNom('Opérateur Stock ' . $suffixe)->setActif(true);
+        $utilisateur->setMotDePasse($hasher->hashPassword($utilisateur, $motDePasse));
+        $em->persist($utilisateur);
+
+        $affectation = (new Affectation())->setUtilisateur($utilisateur)->setRole($role)->setEtablissement($etab);
+        $em->persist($affectation);
+
+        $em->flush();
+
+        $client = static::createClient();
+        $token = $this->jeton($client, $email, $motDePasse);
+        $entete = ['auth_bearer' => $token, 'headers' => [ContexteEtablissement::HEADER => (string) $etab->getId()]];
+
+        return [$client, $entete, (string) $etab->getId()];
     }
 
     protected function idEtablissement(string $nom): string

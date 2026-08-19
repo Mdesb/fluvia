@@ -31,13 +31,13 @@ use Symfony\Component\Validator\Constraints as Assert;
     operations: [
         new GetCollection(security: "is_granted('PERM', 'stock.lire')"),
         new Get(security: "is_granted('PERM', 'stock.lire')"),
-        new Post(security: "is_granted('PERM', 'stock.receptionner')"),
-        new Patch(security: "is_granted('PERM', 'stock.receptionner')"),
+        new Post(security: "is_granted('PERM', 'stock.receptionner') or is_granted('PERM', 'stock.gerer')"),
+        new Patch(security: "is_granted('PERM', 'stock.receptionner') or is_granted('PERM', 'stock.gerer')"),
         new Post(
             uriTemplate: '/stock/receptions-achat/{id}/valider',
             read: true,
             input: false,
-            security: "is_granted('PERM', 'stock.receptionner')",
+            security: "is_granted('PERM', 'stock.receptionner') or is_granted('PERM', 'stock.gerer')",
             processor: ValiderReceptionAchatProcessor::class,
         ),
     ],

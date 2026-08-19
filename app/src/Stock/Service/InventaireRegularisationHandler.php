@@ -18,6 +18,7 @@ use App\Stock\Enum\TypeMouvementStock;
 use App\Organisation\Entity\Etablissement;
 use App\Securite\Entity\Utilisateur;
 use Doctrine\ORM\EntityManagerInterface;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
@@ -38,6 +39,7 @@ final class InventaireRegularisationHandler
         private readonly MoteurValorisationFifoLifo $moteur,
         private readonly ResolveurMethodeValorisation $resolveur,
         private readonly DisponibiliteStockHandler $disponibilite,
+        private readonly LoggerInterface $logger,
     ) {
     }
 
@@ -182,6 +184,17 @@ final class InventaireRegularisationHandler
                 ->setQuantiteImputee($imputation->quantite)
                 ->setCoutUnitaire($imputation->coutUnitaire);
             $this->em->persist($ligneImputation);
+        }
+
+        // §2.1 du plan : rupture de couches FIFO/LIFO — imputation partielle, non bloquante, mais
+        // journalisée (ne doit pas passer silencieusement inaperçue).
+        if ($resultat->quantiteNonCouverte !== null) {
+            $this->logger->warning('stock.consommation.rupture_couches', [
+                'articleStock' => (string) $article->getId(),
+                'mouvementStock' => (string) $mouvement->getId(),
+                'ligneInventaire' => (string) $ligne->getId(),
+                'quantiteNonCouverte' => $resultat->quantiteNonCouverte,
+            ]);
         }
 
         $etablissement = $article->getEtablissement();

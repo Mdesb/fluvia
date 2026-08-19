@@ -23,8 +23,8 @@ use Symfony\Component\Validator\Constraints as Assert;
     operations: [
         new GetCollection(security: "is_granted('PERM', 'stock.lire')"),
         new Get(security: "is_granted('PERM', 'stock.lire')"),
-        new Post(security: "is_granted('PERM', 'stock.gerer_achat')"),
-        new Patch(security: "is_granted('PERM', 'stock.gerer_achat')"),
+        new Post(security: "is_granted('PERM', 'stock.gerer_achat') or is_granted('PERM', 'stock.gerer')"),
+        new Patch(security: "is_granted('PERM', 'stock.gerer_achat') or is_granted('PERM', 'stock.gerer')"),
     ],
     normalizationContext: ['groups' => ['ligne_commande_achat:read']],
     denormalizationContext: ['groups' => ['ligne_commande_achat:write']],

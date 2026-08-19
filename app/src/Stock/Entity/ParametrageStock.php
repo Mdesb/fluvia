@@ -31,8 +31,8 @@ use Symfony\Component\Validator\Constraints as Assert;
     operations: [
         new GetCollection(security: "is_granted('PERM', 'stock.lire')"),
         new Get(security: "is_granted('PERM', 'stock.lire')"),
-        new Post(security: "is_granted('PERM', 'stock.parametrer')"),
-        new Patch(security: "is_granted('PERM', 'stock.parametrer')"),
+        new Post(security: "is_granted('PERM', 'stock.parametrer') or is_granted('PERM', 'stock.gerer')"),
+        new Patch(security: "is_granted('PERM', 'stock.parametrer') or is_granted('PERM', 'stock.gerer')"),
     ],
     normalizationContext: ['groups' => ['parametrage:read']],
     denormalizationContext: ['groups' => ['parametrage:write']],

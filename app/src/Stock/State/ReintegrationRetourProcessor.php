@@ -9,6 +9,7 @@ use ApiPlatform\State\ProcessorInterface;
 use App\Securite\Entity\Utilisateur;
 use App\Stock\Entity\ArticleStock;
 use App\Stock\Entity\MouvementStock;
+use App\Stock\Security\PerimetreEtablissementVerificateur;
 use App\Stock\Service\ReintegrationRetourHandler;
 use App\Vente\Entity\Avoir;
 use App\Vente\Service\LecteurCorps;
@@ -31,6 +32,7 @@ final class ReintegrationRetourProcessor implements ProcessorInterface
         private readonly LecteurCorps $lecteur,
         private readonly ReintegrationRetourHandler $handler,
         private readonly Security $security,
+        private readonly PerimetreEtablissementVerificateur $perimetre,
     ) {
     }
 
@@ -42,10 +44,13 @@ final class ReintegrationRetourProcessor implements ProcessorInterface
         if (!$avoir instanceof Avoir) {
             throw new UnprocessableEntityHttpException('Champ « avoirId » obligatoire (avoir introuvable).');
         }
+        $this->perimetre->verifier($avoir->getEtablissement(), 'Avoir hors du périmètre de l\'appelant (RG-SOCLE-05).');
+
         $article = $this->resoudre(ArticleStock::class, $corps['articleStock'] ?? null);
         if (!$article instanceof ArticleStock) {
             throw new UnprocessableEntityHttpException('Champ « articleStock » obligatoire.');
         }
+        $this->perimetre->verifier($article->getEtablissement(), 'Article de stock hors du périmètre de l\'appelant (RG-SOCLE-05).');
         $quantite = \is_scalar($corps['quantite'] ?? null) ? (string) $corps['quantite'] : '';
         if ($quantite === '') {
             throw new UnprocessableEntityHttpException('Champ « quantite » obligatoire.');

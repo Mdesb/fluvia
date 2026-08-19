@@ -17,6 +17,7 @@ use Doctrine\Bundle\DoctrineBundle\Attribute\AsDoctrineListener;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Event\OnFlushEventArgs;
 use Doctrine\ORM\Events;
+use Psr\Log\LoggerInterface;
 
 /**
  * Journalise le mouvement de sortie de stock détaillé (coût FIFO/LIFO, lots imputés) à la validation
@@ -31,6 +32,7 @@ final class SortieVenteStockSubscriber
     public function __construct(
         private readonly MoteurValorisationFifoLifo $moteur,
         private readonly ResolveurMethodeValorisation $resolveur,
+        private readonly LoggerInterface $logger,
     ) {
     }
 
@@ -93,6 +95,17 @@ final class SortieVenteStockSubscriber
             ->setReferenceId($ligne->getId());
         $em->persist($mouvement);
         $uow->computeChangeSet($em->getClassMetadata(MouvementStock::class), $mouvement);
+
+        // §2.1 du plan : rupture de couches FIFO/LIFO — imputation partielle, non bloquante, mais
+        // journalisée (ne doit pas passer silencieusement inaperçue).
+        if ($resultat->quantiteNonCouverte !== null) {
+            $this->logger->warning('stock.consommation.rupture_couches', [
+                'articleStock' => (string) $article->getId(),
+                'mouvementStock' => (string) $mouvement->getId(),
+                'ligneVente' => (string) $ligne->getId(),
+                'quantiteNonCouverte' => $resultat->quantiteNonCouverte,
+            ]);
+        }
 
         foreach ($resultat->imputations as $imputation) {
             $ligneImputation = new ImputationLotStock();

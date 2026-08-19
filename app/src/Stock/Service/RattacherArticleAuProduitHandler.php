@@ -7,6 +7,7 @@ namespace App\Stock\Service;
 use App\Offre\Entity\Produit;
 use App\Offre\Entity\Stock;
 use App\Offre\Entity\TypeProduit;
+use App\Organisation\Entity\Etablissement;
 use App\Stock\Entity\ArticleStock;
 use App\Stock\Entity\LotStock;
 use Doctrine\ORM\EntityManagerInterface;
@@ -31,6 +32,16 @@ final class RattacherArticleAuProduitHandler
         $type = $produit->getType();
         if (!$type instanceof TypeProduit || !$type->aFacette(TypeProduit::FACETTE_STOCK)) {
             throw new UnprocessableEntityHttpException('Le produit doit porter la facette « stock » pour être rattaché (RG-M1-02).');
+        }
+
+        // Cloisonnement (RG-SOCLE-05) : le Produit M1 (multi-établissements) résolu côté API doit
+        // couvrir l'établissement de l'ArticleStock, sinon un article de A pourrait être rattaché à un
+        // produit qui n'existe que sur B (fuite cross-tenant de la disponibilité M1 partagée).
+        $etablissementArticle = $article->getEtablissement();
+        if ($etablissementArticle === null || !$produit->getEtablissements()->exists(
+            static fn (int $i, Etablissement $e): bool => $e->getId()->equals($etablissementArticle->getId()),
+        )) {
+            throw new UnprocessableEntityHttpException('Le produit doit être rattaché à l\'établissement de l\'article de stock (RG-SOCLE-05).');
         }
 
         $dejaRattache = $this->em->getRepository(ArticleStock::class)->findOneBy(['produit' => $produit->getId()]);

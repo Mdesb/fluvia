@@ -42,19 +42,19 @@ use Symfony\Component\Validator\Constraints as Assert;
     operations: [
         new GetCollection(security: "is_granted('PERM', 'stock.lire')"),
         new Get(security: "is_granted('PERM', 'stock.lire')"),
-        new Post(security: "is_granted('PERM', 'stock.gerer_article')"),
-        new Patch(security: "is_granted('PERM', 'stock.gerer_article')"),
+        new Post(security: "is_granted('PERM', 'stock.gerer_article') or is_granted('PERM', 'stock.gerer')"),
+        new Patch(security: "is_granted('PERM', 'stock.gerer_article') or is_granted('PERM', 'stock.gerer')"),
         new Post(
             uriTemplate: '/stock/articles/{id}/rattacher-produit',
             read: true,
-            security: "is_granted('PERM', 'stock.gerer_article')",
+            security: "is_granted('PERM', 'stock.gerer_article') or is_granted('PERM', 'stock.gerer')",
             processor: RattacherProduitProcessor::class,
         ),
         new Post(
             uriTemplate: '/stock/articles/{id}/detacher-produit',
             read: true,
             input: false,
-            security: "is_granted('PERM', 'stock.gerer_article')",
+            security: "is_granted('PERM', 'stock.gerer_article') or is_granted('PERM', 'stock.gerer')",
             processor: DetacherProduitProcessor::class,
         ),
     ],

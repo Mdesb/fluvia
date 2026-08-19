@@ -8,6 +8,7 @@ use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProviderInterface;
 use App\Stock\ApiResource\ValorisationArticle;
 use App\Stock\Entity\ArticleStock;
+use App\Stock\Security\PerimetreEtablissementVerificateur;
 use App\Stock\Service\MoteurValorisationFifoLifo;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\RequestStack;
@@ -26,6 +27,7 @@ final class ValorisationArticleProvider implements ProviderInterface
         private readonly EntityManagerInterface $em,
         private readonly MoteurValorisationFifoLifo $moteur,
         private readonly RequestStack $requestStack,
+        private readonly PerimetreEtablissementVerificateur $perimetre,
     ) {
     }
 
@@ -33,7 +35,9 @@ final class ValorisationArticleProvider implements ProviderInterface
     {
         $id = $uriVariables['id'] ?? null;
         $article = \is_string($id) && Uuid::isValid($id) ? $this->em->getRepository(ArticleStock::class)->find($id) : null;
-        if (!$article instanceof ArticleStock) {
+        // 404 (pas 403) : ne pas laisser fuiter l'existence d'un article hors périmètre (RG-SOCLE-05),
+        // résolution manuelle par find() hors filtre `PerimetreStockExtension`.
+        if (!$article instanceof ArticleStock || !$this->perimetre->estDansLePerimetre($article->getEtablissement())) {
             throw new NotFoundHttpException('Article de stock introuvable.');
         }
 

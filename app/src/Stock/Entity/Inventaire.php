@@ -31,12 +31,12 @@ use Symfony\Component\Uid\Uuid;
     operations: [
         new GetCollection(security: "is_granted('PERM', 'stock.lire')"),
         new Get(security: "is_granted('PERM', 'stock.lire')"),
-        new Post(security: "is_granted('PERM', 'stock.inventorier')", processor: LancerInventaireProcessor::class),
+        new Post(security: "is_granted('PERM', 'stock.inventorier') or is_granted('PERM', 'stock.gerer')", processor: LancerInventaireProcessor::class),
         new Post(
             uriTemplate: '/stock/inventaires/{id}/cloturer',
             read: true,
             input: false,
-            security: "is_granted('PERM', 'stock.inventorier')",
+            security: "is_granted('PERM', 'stock.inventorier') or is_granted('PERM', 'stock.gerer')",
             processor: ClorurerInventaireProcessor::class,
         ),
     ],

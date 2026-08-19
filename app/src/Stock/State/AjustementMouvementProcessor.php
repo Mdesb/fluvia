@@ -11,6 +11,7 @@ use App\Stock\Entity\ArticleStock;
 use App\Stock\Entity\MouvementStock;
 use App\Stock\Entity\ReceptionAchat;
 use App\Stock\Enum\TypeMouvementStock;
+use App\Stock\Security\PerimetreEtablissementVerificateur;
 use App\Stock\Service\AjustementStockHandler;
 use App\Vente\Service\LecteurCorps;
 use Doctrine\ORM\EntityManagerInterface;
@@ -32,6 +33,7 @@ final class AjustementMouvementProcessor implements ProcessorInterface
         private readonly LecteurCorps $lecteur,
         private readonly AjustementStockHandler $handler,
         private readonly Security $security,
+        private readonly PerimetreEtablissementVerificateur $perimetre,
     ) {
     }
 
@@ -43,6 +45,7 @@ final class AjustementMouvementProcessor implements ProcessorInterface
         if (!$article instanceof ArticleStock) {
             throw new UnprocessableEntityHttpException('Champ « articleStock » obligatoire.');
         }
+        $this->perimetre->verifier($article->getEtablissement(), 'Article de stock hors du périmètre de l\'appelant (RG-SOCLE-05).');
 
         $type = TypeMouvementStock::tryFrom(\is_string($corps['type'] ?? null) ? $corps['type'] : '');
         if ($type === null) {
@@ -55,7 +58,11 @@ final class AjustementMouvementProcessor implements ProcessorInterface
         $receptionOrigine = null;
         if (isset($corps['receptionOrigine'])) {
             $reception = $this->resoudre(ReceptionAchat::class, $corps['receptionOrigine']);
-            $receptionOrigine = $reception instanceof ReceptionAchat ? $reception : null;
+            if (!$reception instanceof ReceptionAchat) {
+                throw new UnprocessableEntityHttpException('Champ « receptionOrigine » invalide (réception introuvable).');
+            }
+            $this->perimetre->verifier($reception->getEtablissement(), 'Réception d\'achat hors du périmètre de l\'appelant (RG-SOCLE-05).');
+            $receptionOrigine = $reception;
         }
 
         $utilisateur = $this->security->getUser();

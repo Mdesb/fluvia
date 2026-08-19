@@ -28,14 +28,14 @@ use Symfony\Component\Uid\Uuid;
         new Get(security: "is_granted('PERM', 'stock.lire')"),
         new Patch(
             uriTemplate: '/stock/lignes-inventaire/{id}',
-            security: "is_granted('PERM', 'stock.inventorier')",
+            security: "is_granted('PERM', 'stock.inventorier') or is_granted('PERM', 'stock.gerer')",
             processor: SaisirComptageInventaireProcessor::class,
         ),
         new Post(
             uriTemplate: '/stock/lignes-inventaire/{id}/regulariser',
             read: true,
             input: false,
-            security: "is_granted('PERM', 'stock.inventorier') or is_granted('PERM', 'stock.valider_ecart')",
+            security: "is_granted('PERM', 'stock.inventorier') or is_granted('PERM', 'stock.valider_ecart') or is_granted('PERM', 'stock.gerer')",
             processor: RegulariserLigneInventaireProcessor::class,
         ),
     ],

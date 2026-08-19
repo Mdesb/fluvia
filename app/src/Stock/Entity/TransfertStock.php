@@ -30,19 +30,23 @@ use Symfony\Component\Uid\Uuid;
     operations: [
         new GetCollection(security: "is_granted('PERM', 'stock.lire')"),
         new Get(security: "is_granted('PERM', 'stock.lire')"),
-        new Post(security: "is_granted('PERM', 'stock.transferer')", processor: CreerTransfertProcessor::class),
+        new Post(
+            input: false,
+            security: "is_granted('PERM', 'stock.transferer') or is_granted('PERM', 'stock.gerer')",
+            processor: CreerTransfertProcessor::class,
+        ),
         new Post(
             uriTemplate: '/stock/transferts/{id}/expedier',
             read: true,
             input: false,
-            security: "is_granted('PERM', 'stock.transferer')",
+            security: "is_granted('PERM', 'stock.transferer') or is_granted('PERM', 'stock.gerer')",
             processor: ExpedierTransfertProcessor::class,
         ),
         new Post(
             uriTemplate: '/stock/transferts/{id}/recevoir',
             read: true,
             input: false,
-            security: "is_granted('PERM', 'stock.transferer')",
+            security: "is_granted('PERM', 'stock.transferer') or is_granted('PERM', 'stock.gerer')",
             processor: RecevoirTransfertProcessor::class,
         ),
     ],

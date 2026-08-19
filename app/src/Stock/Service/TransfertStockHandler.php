@@ -12,6 +12,7 @@ use App\Stock\Enum\OrigineLotStock;
 use App\Stock\Enum\StatutTransfertStock;
 use App\Stock\Enum\TypeMouvementStock;
 use Doctrine\ORM\EntityManagerInterface;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
 /**
@@ -27,6 +28,7 @@ final class TransfertStockHandler
         private readonly MoteurValorisationFifoLifo $moteur,
         private readonly ResolveurMethodeValorisation $resolveur,
         private readonly DisponibiliteStockHandler $disponibilite,
+        private readonly LoggerInterface $logger,
     ) {
     }
 
@@ -60,6 +62,17 @@ final class TransfertStockHandler
                 ->setQuantiteImputee($imputation->quantite)
                 ->setCoutUnitaire($imputation->coutUnitaire);
             $this->em->persist($ligneImputation);
+        }
+
+        // §2.1 du plan : rupture de couches FIFO/LIFO — imputation partielle, non bloquante, mais
+        // journalisée (ne doit pas passer silencieusement inaperçue).
+        if ($resultat->quantiteNonCouverte !== null) {
+            $this->logger->warning('stock.consommation.rupture_couches', [
+                'articleStock' => (string) $source->getId(),
+                'mouvementStock' => (string) $mouvement->getId(),
+                'transfertStock' => (string) $transfert->getId(),
+                'quantiteNonCouverte' => $resultat->quantiteNonCouverte,
+            ]);
         }
 
         $this->disponibilite->decrementer($source, $transfert->getQuantite());
