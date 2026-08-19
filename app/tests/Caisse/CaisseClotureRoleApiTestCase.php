@@ -15,6 +15,7 @@ use App\Organisation\Entity\Etablissement;
 use App\Securite\Entity\Utilisateur;
 use App\Securite\Service\ContexteEtablissement;
 use App\Vente\DataFixtures\VenteFixtures;
+use App\Tests\DdlHorsMapping;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 
@@ -43,6 +44,8 @@ abstract class CaisseClotureRoleApiTestCase extends ApiTestCase
         $tool->dropSchema($metadata);
         $tool->createSchema($metadata);
         $em->getConnection()->executeStatement('SET FOREIGN_KEY_CHECKS=1');
+
+        DdlHorsMapping::appliquer($em);
 
         foreach ([SocleFixtures::class, OffreFixtures::class, VenteFixtures::class, CaisseClotureRoleFixtures::class] as $classe) {
             $fixture = $container->get($classe);

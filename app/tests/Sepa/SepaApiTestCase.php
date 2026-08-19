@@ -14,6 +14,7 @@ use App\Organisation\Entity\Etablissement;
 use App\Securite\Service\ContexteEtablissement;
 use App\Sepa\DataFixtures\SepaFixtures;
 use App\Sepa\Entity\MandatSepa;
+use App\Tests\DdlHorsMapping;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 
@@ -41,6 +42,8 @@ abstract class SepaApiTestCase extends ApiTestCase
         $tool->dropSchema($metadata);
         $tool->createSchema($metadata);
         $em->getConnection()->executeStatement('SET FOREIGN_KEY_CHECKS=1');
+
+        DdlHorsMapping::appliquer($em);
 
         foreach ([SocleFixtures::class, OffreFixtures::class, ComptaFixtures::class, CrmFixtures::class, SepaFixtures::class] as $classe) {
             $fixture = $container->get($classe);

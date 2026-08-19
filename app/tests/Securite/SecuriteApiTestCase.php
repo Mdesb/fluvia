@@ -12,6 +12,7 @@ use App\Securite\DataFixtures\L7Fixtures;
 use App\Securite\Entity\Role;
 use App\Securite\Entity\Utilisateur;
 use App\Securite\Service\ContexteEtablissement;
+use App\Tests\DdlHorsMapping;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 
@@ -39,6 +40,8 @@ abstract class SecuriteApiTestCase extends ApiTestCase
         $tool->dropSchema($metadata);
         $tool->createSchema($metadata);
         $em->getConnection()->executeStatement('SET FOREIGN_KEY_CHECKS=1');
+
+        DdlHorsMapping::appliquer($em);
 
         foreach ([SocleFixtures::class, L7Fixtures::class] as $classe) {
             $fixture = $container->get($classe);

@@ -19,6 +19,7 @@ use App\Sepa\DataFixtures\SepaFixtures;
 use App\Sport\DataFixtures\SportFixtures;
 use App\Sport\Entity\AbonnementFitness;
 use App\Sport\Entity\EcheanceSepa;
+use App\Tests\DdlHorsMapping;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 
@@ -52,6 +53,8 @@ abstract class RecouvrementApiTestCase extends ApiTestCase
         $tool->dropSchema($metadata);
         $tool->createSchema($metadata);
         $connexion->executeStatement('SET FOREIGN_KEY_CHECKS=1');
+
+        DdlHorsMapping::appliquer($em);
 
         foreach ([
             SocleFixtures::class, OffreFixtures::class, ComptaFixtures::class, AccesFixtures::class,
