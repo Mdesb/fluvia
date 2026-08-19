@@ -33,7 +33,12 @@ final class MessageTicketProvider implements ProviderInterface
     public function provide(Operation $operation, array $uriVariables = [], array $context = []): array
     {
         $ticketId = $uriVariables['ticketId'] ?? null;
-        $ticket = \is_string($ticketId) ? $this->em->getRepository(TicketSupport::class)->find($ticketId) : null;
+        // API Platform type la variable d'apres l'identifiant de l'entite liee : c'est un `Uuid`,
+        // pas une chaine. On accepte les deux plutot que de dependre de la forme exacte produite —
+        // un `\is_string()` seul echouait ici en silence, et se lisait comme un ticket inexistant.
+        $ticket = (\is_string($ticketId) || $ticketId instanceof \Stringable)
+            ? $this->em->getRepository(TicketSupport::class)->find((string) $ticketId)
+            : null;
         if (!$ticket instanceof TicketSupport) {
             return [];
         }

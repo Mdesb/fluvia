@@ -9,6 +9,7 @@ use ApiPlatform\Symfony\Bundle\Test\Client;
 use App\Organisation\Entity\Etablissement;
 use App\Securite\Service\ContexteEtablissement;
 use App\Support\DataFixtures\SupportFixtures;
+use App\Tests\DdlHorsMapping;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 
@@ -31,6 +32,8 @@ abstract class SupportApiTestCase extends ApiTestCase
         $tool->dropSchema($metadata);
         $tool->createSchema($metadata);
         $em->getConnection()->executeStatement('SET FOREIGN_KEY_CHECKS=1');
+
+        DdlHorsMapping::appliquer($em);
 
         $container->get(SupportFixtures::class)->load($em);
 

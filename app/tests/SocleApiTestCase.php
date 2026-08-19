@@ -36,6 +36,8 @@ abstract class SocleApiTestCase extends ApiTestCase
         $tool->createSchema($metadata);
         $em->getConnection()->executeStatement('SET FOREIGN_KEY_CHECKS=1');
 
+        DdlHorsMapping::appliquer($em);
+
         /** @var SocleFixtures $fixtures */
         $fixtures = $container->get(SocleFixtures::class);
         $fixtures->load($em);

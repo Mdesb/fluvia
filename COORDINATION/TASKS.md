@@ -12,5 +12,7 @@ Ne touche pas un chemin déjà en `WIP` par une autre instance.
 | C6 | Plan + impl Suite Finance (lots FIN-0..FIN-4) | `app/src/{Finance,Ocr}/**`, `app/src/Compta/**` | **claude-B** | WIP | 19/08 |
 | C4 | Garde-fous CI partagés (cloisonnement, CSRF, manifeste) | `bin/`, CI | **claude-C** | CLAIM | 19/08 |
 | C5 | Bus d'événements + registre de modules (impl core) | `app/src/Platform/**` | **claude-A** | WIP | 19/08 |
+| C7 | Harnais de test executable (stack isolee, DDL hors mapping) | `infra/test-stack.sh`, `app/tests/DdlHorsMapping.php` | **claude-A** | DONE | 19/08 |
+| C8 | CA-11 Support : l agent ne voit pas les 2 messages du fil (TicketSupportApiTest:109) | `app/src/Support/State/MessageTicketProvider.php` | *a assigner* | CLAIM | 19/08 |
 
 <!-- Ajouter les nouvelles tâches au-dessus de cette ligne. -->
