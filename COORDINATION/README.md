@@ -4,8 +4,9 @@ Ce dossier est le **point de rendez-vous** des différentes instances Claude (et
 construisent la plateforme. Les instances **ne partagent pas de mémoire vive** : elles se
 coordonnent **par ce dépôt git**, de façon explicite et asynchrone — comme une équipe distribuée.
 
-> 👉 **Nouvelle session ? Lis [HANDBOOK.md](HANDBOOK.md) d'abord** — méthode commune + toutes les
-> commandes en un seul doc. Puis laisse/lis un mot dans [MESSAGES.md](MESSAGES.md).
+> 👉 **Nouvelle session ? Lis [PLAYBOOK.md](PLAYBOOK.md) — le document unique** : vision, décisions,
+> architecture, contrat, méthode et **toutes les commandes**. Puis laisse/lis un mot dans
+> [MESSAGES.md](MESSAGES.md) et claim ta tâche dans [TASKS.md](TASKS.md).
 
 ## Décision fondatrice (19/08/2026)
 Convergence en **socle unique**. Le core **Symfony 7 / API Platform / Doctrine / MariaDB** de la
