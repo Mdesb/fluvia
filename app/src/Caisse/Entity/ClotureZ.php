@@ -23,11 +23,15 @@ use Symfony\Component\Uid\Uuid;
 #[ApiResource(
     shortName: 'ClotureZ',
     operations: [
-        new GetCollection(security: "is_granted('PERM', 'caisse.lire')"),
-        new Get(security: "is_granted('PERM', 'caisse.lire')"),
+        // RG-CAISSEZ-03 : le Z (attendu/écart/détail par moyen/état de régie) exige désormais
+        // `caisse.voir_z` (au lieu de `caisse.lire`, trop large — aurait laissé un profil « lecture
+        // seule » voir le Z). Un porteur de `caisse.*` (wildcard, ex. admin) reste couvert
+        // automatiquement (RG-CAISSEZ-09, cf. `CalculateurDroits::autorise()`).
+        new GetCollection(security: "is_granted('PERM', 'caisse.voir_z')"),
+        new Get(security: "is_granted('PERM', 'caisse.voir_z')"),
         new Get(
             uriTemplate: '/clotures-z/{id}/etat-regie',
-            security: "is_granted('PERM', 'caisse.lire')",
+            security: "is_granted('PERM', 'caisse.voir_z')",
             normalizationContext: ['groups' => ['cloture:read', 'cloture:etat']],
         ),
     ],

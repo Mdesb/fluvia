@@ -85,6 +85,17 @@ class PointDeVente
     #[Groups(['pdv:read', 'pdv:write'])]
     private array $moyensAutorises = [];
 
+    /**
+     * Tolérance d'écart de caisse (RG-CAISSEZ-08) : en dessous de ce seuil (valeur absolue), aucune
+     * `AlerteEcartCaisse` n'est créée à la clôture. Défaut 0,00 € : tout écart non nul déclenche une
+     * alerte tant qu'aucune tolérance n'est paramétrée explicitement. Même patron que `seuilImpression`
+     * (colonne NOT NULL DEFAULT '0.00', pas nullable contrairement à `seuilAlerteRetrait`).
+     */
+    #[ORM\Column(type: 'decimal', precision: 10, scale: 2, options: ['default' => '0.00'])]
+    #[Assert\PositiveOrZero]
+    #[Groups(['pdv:read', 'pdv:write'])]
+    private string $toleranceEcartCaisse = '0.00';
+
     public function __construct()
     {
         $this->id = Uuid::v4();
@@ -202,5 +213,17 @@ class PointDeVente
     public function autoriseMoyen(string $code): bool
     {
         return \in_array($code, $this->moyensAutorises, true);
+    }
+
+    public function getToleranceEcartCaisse(): string
+    {
+        return $this->toleranceEcartCaisse;
+    }
+
+    public function setToleranceEcartCaisse(string $toleranceEcartCaisse): self
+    {
+        $this->toleranceEcartCaisse = $toleranceEcartCaisse;
+
+        return $this;
     }
 }
