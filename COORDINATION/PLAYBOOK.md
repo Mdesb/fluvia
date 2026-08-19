@@ -152,12 +152,32 @@ git push origin claude-A
 ```
 
 ### 7.3 Tests isolés (token distinct par Claude, sinon les bases de test s'écrasent)
+
+Un worktree neuf **n'est pas testable en l'état** : `vendor/` n'y est pas, les clés JWT non plus
+(`config/jwt/*.pem` est ignoré par git), et la base de test n'existe pas. Sans ces trois étapes on
+obtient des `JWTEncodeFailureException` et des `TableNotFoundException` en cascade — symptômes
+bruyants, cause invisible. D'où un script unique, `infra/test-stack.sh`, à préférer aux commandes
+manuelles :
+
 ```bash
-docker compose exec -T -e TEST_TOKEN=claudeA php php bin/console doctrine:database:create --env=test
-docker compose exec -T -e TEST_TOKEN=claudeA php php bin/console doctrine:schema:create   --env=test
-docker compose exec -T -e TEST_TOKEN=claudeA php vendor/bin/phpunit tests/<Module>
-docker compose exec -T -e TEST_TOKEN=claudeA php php bin/console doctrine:database:drop --force --env=test
+# une fois par worktree — dépendances dev (phpunit n'est pas dans le vendor de préprod)
+docker run --rm -u "$(id -u):$(id -g)" -e COMPOSER_HOME=/tmp/composer \
+  -v "$PWD/app:/app" -w /app billetterie-preprod-php composer install --no-scripts
+
+# réseau + base + droits + clés JWT + schéma de test, isolés par token
+./infra/test-stack.sh up claudeA
+
+# la suite, ou un module seulement
+./infra/test-stack.sh run claudeA
+./infra/test-stack.sh run claudeA tests/Platform
+
+# libérer réseau et base (les clés JWT du worktree sont conservées)
+./infra/test-stack.sh down claudeA
 ```
+
+**Un token par Claude** (`claudeA`, `claudeB`, `claudeC`) : le token nomme le réseau, le conteneur de
+base et la base elle-même (`app_test<TOKEN>`). Deux instances peuvent donc tester en même temps sans
+que la suite de l'une détruise les fixtures de l'autre.
 
 ### 7.4 Intégration & déploiement (intégrateur uniquement)
 ```bash
