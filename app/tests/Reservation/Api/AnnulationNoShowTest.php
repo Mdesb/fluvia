@@ -9,6 +9,7 @@ use App\Reservation\DataFixtures\ReservationFixtures;
 use App\Reservation\Entity\Reservation;
 use App\Reservation\Enum\SourcePresence;
 use App\Tests\Reservation\ReservationApiTestCase;
+use App\Vente\Entity\Vente;
 use Doctrine\ORM\EntityManagerInterface;
 
 /** Annulation / no-show — délai franc paramétrable (RG-M5-04/09, CA-8/9/10). */
@@ -27,6 +28,31 @@ final class AnnulationNoShowTest extends ReservationApiTestCase
         self::assertResponseIsSuccessful();
         $donnees = $client->getResponse()->toArray();
         self::assertSame('annulee_libre', $donnees['statut'], 'CA-8 : annulation gratuite dans le délai franc.');
+
+        // Renforcement additif (plan reservation-encaissement, G2) : la réservation elle-même reste
+        // gratuite « quota » côté libellé de test, mais l'activité PADEL utilisée par `reserver()` est
+        // payante et une session de caisse est toujours fournie -> une Vente rattachée `en_cours`
+        // (jamais réglée) existe et doit être nettoyée par l'annulation, sans casser ce test déjà vert.
+        $idVente = $this->extraireIdVente($donnees['venteRattachee'] ?? null);
+        if ($idVente !== null) {
+            /** @var EntityManagerInterface $em */
+            $em = static::getContainer()->get('doctrine')->getManager();
+            $vente = $em->getRepository(Vente::class)->find($idVente);
+            self::assertNotNull($vente);
+            self::assertSame('annulee', $vente->getStatut()->value, 'G2 : la Vente pendante rattachée est nettoyée à l\'annulation.');
+        }
+    }
+
+    private function extraireIdVente(mixed $iriOuTableau): ?string
+    {
+        if ($iriOuTableau === null) {
+            return null;
+        }
+        if (\is_array($iriOuTableau)) {
+            return isset($iriOuTableau['id']) ? (string) $iriOuTableau['id'] : null;
+        }
+
+        return basename((string) $iriOuTableau);
     }
 
     public function testCa8AnnulationRefuseeHorsDelaiFrancEnLibreService(): void

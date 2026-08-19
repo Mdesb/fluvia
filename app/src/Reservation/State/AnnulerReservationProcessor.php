@@ -8,9 +8,11 @@ use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
 use App\Reservation\Entity\Reservation;
 use App\Reservation\Enum\StatutReservation;
+use App\Reservation\Service\AnnulationVenteReservationHandler;
 use App\Reservation\Service\DeclencherFacturationNoShowHandler;
 use App\Reservation\Service\JaugeRessourceMereHandler;
 use App\Reservation\Service\PromotionListeAttenteHandler;
+use App\Securite\Entity\Utilisateur;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
@@ -32,6 +34,7 @@ final class AnnulerReservationProcessor implements ProcessorInterface
         private readonly JaugeRessourceMereHandler $jaugeMere,
         private readonly PromotionListeAttenteHandler $promotion,
         private readonly DeclencherFacturationNoShowHandler $facturationHandler,
+        private readonly AnnulationVenteReservationHandler $annulationVente,
     ) {
     }
 
@@ -62,6 +65,13 @@ final class AnnulerReservationProcessor implements ProcessorInterface
         } else {
             $this->facturationHandler->declencher($data, StatutReservation::AnnuleeTardiveFacturee);
         }
+
+        // --- ajout G1/G2 (RG-RESAENC-09/10) : avoir de remboursement (délai franc, Vente validee) ou
+        // nettoyage d'une Vente pendante jamais réglée (les deux branches), effet de bord additif.
+        $utilisateur = $this->security->getUser();
+        \assert($utilisateur instanceof Utilisateur);
+        $this->annulationVente->traiter($data, $utilisateur, remboursementAutorise: $dansDelai);
+        $this->em->flush();
 
         if ($ressource !== null) {
             $this->jaugeMere->decrementer($ressource);

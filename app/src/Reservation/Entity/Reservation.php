@@ -15,6 +15,7 @@ use App\Offre\Entity\ServiceInclus;
 use App\Organisation\Entity\Etablissement;
 use App\Reservation\Enum\ModeDecompteReservation;
 use App\Reservation\Enum\SourcePresence;
+use App\Reservation\Enum\StatutPaiementReservation;
 use App\Reservation\Enum\StatutReservation;
 use App\Reservation\Security\ReservationSoiVoter;
 use App\Reservation\State\AjouterParticipantProcessor;
@@ -22,6 +23,7 @@ use App\Reservation\State\AnnulerReservationProcessor;
 use App\Reservation\State\EmargerProcessor;
 use App\Reservation\State\ReserverProcessor;
 use App\Vente\Entity\Vente;
+use App\Vente\Enum\StatutVente;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
@@ -329,5 +331,28 @@ class Reservation
         $this->sourcePresence = $source;
 
         return $this;
+    }
+
+    /**
+     * Statut de paiement observable, dérivé de `modeDecompte` + `venteRattachee.statut` (RG-RESAENC-03) :
+     * jamais persisté, source de vérité toujours `Vente.statut`.
+     */
+    public function statutPaiement(): StatutPaiementReservation
+    {
+        if ($this->modeDecompte !== ModeDecompteReservation::VenteUnite || $this->venteRattachee === null) {
+            return StatutPaiementReservation::SansObjet; // gratuit / quota_formule (G3 préservé)
+        }
+
+        return match ($this->venteRattachee->getStatut()) {
+            StatutVente::EnCours => StatutPaiementReservation::APayer,
+            StatutVente::Validee, StatutVente::AvoirEmis => StatutPaiementReservation::Payee, // §4.3 : avoir_emis reste "payée" (payée puis remboursée)
+            StatutVente::Annulee => StatutPaiementReservation::Annulee,
+        };
+    }
+
+    #[Groups(['reservation:read'])]
+    public function getStatutPaiement(): string
+    {
+        return $this->statutPaiement()->value;
     }
 }
