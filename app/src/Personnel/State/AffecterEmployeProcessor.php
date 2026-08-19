@@ -12,11 +12,15 @@ use App\Personnel\Entity\Employe;
 use App\Personnel\Entity\Qualification;
 use App\Personnel\Enum\StatutAffectationTravail;
 use App\Personnel\Enum\StatutCreneauTravail;
+use App\Personnel\Security\EtablissementCibleVerificateur;
 use App\Personnel\Service\AbsenceConflitGuard;
 use App\Personnel\Service\ChevauchementTravailGuard;
 use App\Personnel\Service\RecalculFenetreBadgeHandler;
+use App\Securite\Entity\Utilisateur;
 use App\Vente\Service\LecteurCorps;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\SecurityBundle\Security;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\Uid\Uuid;
@@ -26,6 +30,12 @@ use Symfony\Component\Uid\Uuid;
  * bloque le conflit de chevauchement (même établissement ou établissement différent), refuse en
  * l'absence d'une Qualification valide si le créneau l'exige, refuse si l'employé est en Absence
  * validée sur la période (CA-7).
+ *
+ * Le `creneauTravail` du corps est un UUID/IRI brut résolu par `find()` : recoupé contre
+ * l'établissement actif ou les droits directs de l'agent sur l'établissement du créneau
+ * (`EtablissementCibleVerificateur`), sinon 403 — sans ce recoupement, un agent autorisé sur son seul
+ * établissement actif A pourrait affecter un employé à un créneau d'un établissement B où il n'a
+ * aucun droit (RG-SOCLE-05).
  *
  * @implements ProcessorInterface<mixed, AffectationTravail>
  */
@@ -37,17 +47,29 @@ final class AffecterEmployeProcessor implements ProcessorInterface
         private readonly ChevauchementTravailGuard $chevauchementGuard,
         private readonly AbsenceConflitGuard $absenceGuard,
         private readonly RecalculFenetreBadgeHandler $recalculFenetre,
+        private readonly Security $security,
+        private readonly EtablissementCibleVerificateur $verificateurCible,
     ) {
     }
 
     public function process(mixed $data, Operation $operation, array $uriVariables = [], array $context = []): AffectationTravail
     {
+        $agent = $this->security->getUser();
+        if (!$agent instanceof Utilisateur) {
+            throw new UnprocessableEntityHttpException('Agent authentifié requis.');
+        }
+
         $corps = $this->lecteur->corps();
 
         $creneau = $this->resoudre(CreneauTravail::class, $corps['creneauTravail'] ?? null, 'creneauTravail');
         \assert($creneau instanceof CreneauTravail);
         $employe = $this->resoudre(Employe::class, $corps['employe'] ?? null, 'employe');
         \assert($employe instanceof Employe);
+
+        $etablissementCreneau = $creneau->getEtablissement();
+        if ($etablissementCreneau === null || !$this->verificateurCible->autorise($etablissementCreneau, $agent, 'personnel', 'gerer_planning')) {
+            throw new AccessDeniedHttpException('Ce créneau appartient à un établissement hors du périmètre de l\'agent (RG-SOCLE-05).');
+        }
 
         if ($creneau->getStatut() === StatutCreneauTravail::Annule) {
             throw new ConflictHttpException('Ce créneau est annulé.');

@@ -31,8 +31,8 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ApiResource(
     shortName: 'AffectationTravail',
     operations: [
-        new GetCollection(security: "is_granted('PERM', 'personnel.lire')"),
-        new Get(security: "is_granted('PERM', 'personnel.lire')"),
+        new GetCollection(security: "is_granted('PERM', 'personnel.lire') or is_granted('PERM', 'personnel.lire_soi')"),
+        new Get(security: "is_granted('PERM', 'personnel.lire') or is_granted('EMPLOYE_SOI', object.getEmploye())"),
         new Post(
             uriTemplate: '/personnel/affectations',
             read: false,

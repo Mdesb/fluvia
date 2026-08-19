@@ -11,11 +11,13 @@ use App\Organisation\Entity\Etablissement;
 use App\Personnel\Entity\BadgeStaff;
 use App\Personnel\Entity\Employe;
 use App\Personnel\Enum\ModeHoraireBadge;
+use App\Personnel\Security\EtablissementCibleVerificateur;
 use App\Personnel\Service\EmissionBadgeStaffHandler;
 use App\Securite\Entity\Utilisateur;
 use App\Vente\Service\LecteurCorps;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\Uid\Uuid;
 
@@ -23,6 +25,12 @@ use Symfony\Component\Uid\Uuid;
  * Émet un badge staff (POST /personnel/employes/{id}/badges, RG-PERSO-06). Corps :
  * { "etablissement": IRI, "modeHoraire": "shifts_uniquement"|"permanent", "margeAvantApres": int?,
  *   "espacesAutorises": [IRI, ...] }.
+ *
+ * Le champ « etablissement » du corps est un UUID/IRI brut fourni par le client : recoupé contre
+ * l'établissement actif (`X-Etablissement`) ou les droits directs de l'agent sur cette cible
+ * précise (`EtablissementCibleVerificateur`), sinon 403 — sans ce recoupement, un agent authentifié
+ * avec `personnel.gerer_badge` sur son établissement actif A pourrait émettre un badge sur un
+ * établissement B où il n'a aucun droit (RG-SOCLE-05).
  *
  * @implements ProcessorInterface<mixed, BadgeStaff>
  */
@@ -33,6 +41,7 @@ final class EmissionBadgeStaffProcessor implements ProcessorInterface
         private readonly LecteurCorps $lecteur,
         private readonly EmissionBadgeStaffHandler $handler,
         private readonly Security $security,
+        private readonly EtablissementCibleVerificateur $verificateurCible,
     ) {
     }
 
@@ -56,6 +65,10 @@ final class EmissionBadgeStaffProcessor implements ProcessorInterface
 
         $etablissement = $this->resoudre(Etablissement::class, $corps['etablissement'] ?? null, 'etablissement');
         \assert($etablissement instanceof Etablissement);
+
+        if (!$this->verificateurCible->autorise($etablissement, $agent, 'personnel', 'gerer_badge')) {
+            throw new AccessDeniedHttpException('L\'établissement ciblé ne correspond pas à l\'établissement actif et l\'agent ne détient pas personnel.gerer_badge sur cet établissement (RG-SOCLE-05).');
+        }
 
         $modeHoraire = ModeHoraireBadge::tryFrom((string) ($corps['modeHoraire'] ?? ''));
         if ($modeHoraire === null) {

@@ -22,6 +22,7 @@ final class BadgeStaffTest extends PersonnelApiTestCase
         $idEmploye = $clientRh->request('POST', '/api/employes', $enteteRh + [
             'json' => ['nom' => 'Shift', 'prenom' => 'Test', 'poste' => 'Agent', 'typeContrat' => 'cdi', 'dateEntree' => '2024-01-01'],
         ])->toArray()['id'];
+        $this->rattacher($clientRh, $enteteRh, $idEmploye, $this->idEtablissementA());
 
         $badge = $clientRh->request('POST', '/api/personnel/employes/' . $idEmploye . '/badges', $enteteRh + [
             'json' => [
@@ -68,6 +69,7 @@ final class BadgeStaffTest extends PersonnelApiTestCase
         $idEmploye = $clientRh->request('POST', '/api/employes', $enteteRh + [
             'json' => ['nom' => 'Permanent', 'prenom' => 'Test', 'poste' => 'Responsable', 'typeContrat' => 'cdi', 'dateEntree' => '2024-01-01'],
         ])->toArray()['id'];
+        $this->rattacher($clientRh, $enteteRh, $idEmploye, $this->idEtablissementA());
 
         $badge = $clientRh->request('POST', '/api/personnel/employes/' . $idEmploye . '/badges', $enteteRh + [
             'json' => [
@@ -90,6 +92,7 @@ final class BadgeStaffTest extends PersonnelApiTestCase
         $idEmploye = $clientRh->request('POST', '/api/employes', $enteteRh + [
             'json' => ['nom' => 'Unique', 'prenom' => 'Badge', 'poste' => 'Agent', 'typeContrat' => 'cdi', 'dateEntree' => '2024-01-01'],
         ])->toArray()['id'];
+        $this->rattacher($clientRh, $enteteRh, $idEmploye, $this->idEtablissementA());
 
         $corps = [
             'etablissement' => '/api/etablissements/' . $this->idEtablissementA(),
@@ -102,6 +105,24 @@ final class BadgeStaffTest extends PersonnelApiTestCase
 
         $clientRh->request('POST', '/api/personnel/employes/' . $idEmploye . '/badges', $enteteRh + ['json' => $corps]);
         self::assertResponseStatusCodeSame(409, 'décision n°2 du plan : 1 badge actif par couple (Employé, Établissement).');
+    }
+
+    /**
+     * RG-PERSO-09 : un badge ne peut être émis que pour un employé ayant un rattachement actif sur
+     * l'établissement ciblé (correctif cloisonnement, cf. rapport de revue).
+     *
+     * @param array<string, mixed> $entete
+     */
+    private function rattacher(\ApiPlatform\Symfony\Bundle\Test\Client $client, array $entete, string $idEmploye, string $idEtablissement): void
+    {
+        $client->request('POST', '/api/rattachement_employes', $entete + [
+            'json' => [
+                'employe' => '/api/employes/' . $idEmploye,
+                'etablissement' => '/api/etablissements/' . $idEtablissement,
+                'debut' => '2024-01-01',
+            ],
+        ]);
+        self::assertResponseIsSuccessful();
     }
 
     private function droitDuBadge(string $idBadge): \App\Acces\Entity\DroitAcces

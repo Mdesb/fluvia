@@ -18,6 +18,9 @@ use App\Personnel\Entity\Qualification;
 use App\Personnel\Entity\RattachementEmploye;
 use App\Securite\Entity\Affectation;
 use App\Securite\Entity\Utilisateur;
+use App\Securite\Service\CalculateurDroits;
+use App\Securite\Service\ContexteEtablissement;
+use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Query\Expr\Join;
 use Doctrine\ORM\QueryBuilder;
 use Symfony\Bundle\SecurityBundle\Security;
@@ -33,7 +36,15 @@ use Symfony\Bundle\SecurityBundle\Security;
  * rattaché à aucun site, RG-PERSO-09). La restriction stricte par jointure INNER rendrait un tel
  * Employé invisible à **tout le monde**, y compris son créateur (chicken-and-egg bloquant CA-1) —
  * ces 3 entités sont donc visibles si (a) l'employé n'a **aucun** rattachement, **ou** (b) il a au
- * moins un rattachement sur un établissement où l'utilisateur possède une affectation.
+ * moins un rattachement sur un établissement où l'utilisateur possède une affectation. Pour `Employe`
+ * spécifiquement, le cas (a) — employé orphelin — est réservé aux détenteurs de
+ * `personnel.gerer_employe` (défaut sinon : invisible) : la visibilité inconditionnelle d'un employé
+ * orphelin à quiconque détient `personnel.lire`, sans le moindre lien d'établissement, exposait des
+ * fiches RH à des utilisateurs totalement étrangers.
+ *
+ * `Qualification`/`CreneauTravail`/`AffectationTravail` supportent en outre `personnel.lire_soi`
+ * (RG-PERSO §5) : un détenteur de ce seul droit (sans `personnel.lire`) ne voit que les
+ * enregistrements liés à son propre `Employe` (`Employe.utilisateur` = utilisateur courant).
  */
 final class PerimetrePersonnelExtension implements QueryCollectionExtensionInterface, QueryItemExtensionInterface
 {
@@ -49,8 +60,14 @@ final class PerimetrePersonnelExtension implements QueryCollectionExtensionInter
     /** @var list<class-string> Entités multi-site restreintes via l'employé (visibilité conditionnelle). */
     private const CIBLES_VIA_EMPLOYE = [Employe::class, Qualification::class, Absence::class];
 
+    /** @var list<class-string> Entités supportant `personnel.lire_soi` (filtrage par employé propriétaire). */
+    private const CIBLES_LIRE_SOI = [Qualification::class, CreneauTravail::class, AffectationTravail::class];
+
     public function __construct(
         private readonly Security $security,
+        private readonly EntityManagerInterface $em,
+        private readonly ContexteEtablissement $contexte,
+        private readonly CalculateurDroits $calculateur,
     ) {
     }
 
@@ -83,6 +100,12 @@ final class PerimetrePersonnelExtension implements QueryCollectionExtensionInter
     {
         $utilisateur = $this->security->getUser();
         if (!$utilisateur instanceof Utilisateur) {
+            return;
+        }
+
+        if (\in_array($resourceClass, self::CIBLES_LIRE_SOI, true) && $this->doitFiltrerParEmployeSoi($utilisateur)) {
+            $this->restreindreParEmployeSoi($queryBuilder, $resourceClass, $utilisateur);
+
             return;
         }
 
@@ -125,7 +148,8 @@ final class PerimetrePersonnelExtension implements QueryCollectionExtensionInter
 
     /**
      * Visible si l'employé n'a aucun `RattachementEmploye` (état transitoire/définitif, §1 du plan)
-     * OU s'il en a au moins un sur un établissement où l'utilisateur possède une affectation.
+     * OU s'il en a au moins un sur un établissement où l'utilisateur possède une affectation. Pour
+     * `Employe`, le cas orphelin est en outre réservé aux détenteurs de `personnel.gerer_employe`.
      */
     private function restreindreViaEmploye(QueryBuilder $queryBuilder, string $resourceClass, Utilisateur $utilisateur): void
     {
@@ -134,20 +158,85 @@ final class PerimetrePersonnelExtension implements QueryCollectionExtensionInter
         // l'identifiant de la racine elle-même pour `Employe`, sinon l'association `employe`.
         $employeIdExpr = $resourceClass === Employe::class ? $rootAlias . '.id' : 'IDENTITY(' . $rootAlias . '.employe)';
 
+        $orphelinVisible = $resourceClass === Employe::class
+            ? $this->orphelinReserveAuxGestionnaires($employeIdExpr, $utilisateur)
+            : sprintf('NOT EXISTS (SELECT 1 FROM %s pp_rc WHERE IDENTITY(pp_rc.employe) = %s)', RattachementEmploye::class, $employeIdExpr);
+
         $queryBuilder
             ->andWhere(sprintf(
-                '(NOT EXISTS (SELECT 1 FROM %s pp_rc WHERE IDENTITY(pp_rc.employe) = %s))'
+                '(%s)'
                 . ' OR EXISTS ('
                 . 'SELECT 1 FROM %s pp_rv '
                 . 'INNER JOIN %s aff_pv WITH IDENTITY(aff_pv.etablissement) = IDENTITY(pp_rv.etablissement) '
                 . 'WHERE IDENTITY(pp_rv.employe) = %s AND IDENTITY(aff_pv.utilisateur) = :perimetre_personnel_utilisateur'
                 . ')',
-                RattachementEmploye::class,
-                $employeIdExpr,
+                $orphelinVisible,
                 RattachementEmploye::class,
                 Affectation::class,
                 $employeIdExpr,
             ))
             ->setParameter('perimetre_personnel_utilisateur', $utilisateur->getId(), 'uuid');
+    }
+
+    /**
+     * Fragment DQL couvrant le cas « employé orphelin » (`Employe` uniquement) — vrai (visible) si
+     * l'employé n'a aucun rattachement **et** que l'utilisateur détient `personnel.gerer_employe`
+     * sur son établissement actif ; toujours faux sinon (`1 = 0`, pas de fuite vers un simple
+     * lecteur).
+     */
+    private function orphelinReserveAuxGestionnaires(string $employeIdExpr, Utilisateur $utilisateur): string
+    {
+        $codes = $this->calculateur->codesEffectifs($utilisateur, $this->contexte->idActif());
+        if (!$this->calculateur->autorise($codes, 'personnel', 'gerer_employe')) {
+            return '1 = 0';
+        }
+
+        return sprintf('NOT EXISTS (SELECT 1 FROM %s pp_rc WHERE IDENTITY(pp_rc.employe) = %s)', RattachementEmploye::class, $employeIdExpr);
+    }
+
+    /**
+     * Vrai si l'utilisateur détient `personnel.lire_soi` mais **pas** `personnel.lire` sur
+     * l'établissement actif (le droit plus large prévaut : filtrage standard, pas de restriction
+     * supplémentaire par employé propriétaire).
+     */
+    private function doitFiltrerParEmployeSoi(Utilisateur $utilisateur): bool
+    {
+        $codes = $this->calculateur->codesEffectifs($utilisateur, $this->contexte->idActif());
+
+        return !$this->calculateur->autorise($codes, 'personnel', 'lire')
+            && $this->calculateur->autorise($codes, 'personnel', 'lire_soi');
+    }
+
+    /**
+     * Restreint `Qualification`/`AffectationTravail` (association `employe` directe) et
+     * `CreneauTravail` (via `AffectationTravail`) aux enregistrements liés à l'`Employe` dont
+     * `utilisateur` est l'utilisateur courant. Aucun `Employe` lié → aucun résultat (`1 = 0`).
+     */
+    private function restreindreParEmployeSoi(QueryBuilder $queryBuilder, string $resourceClass, Utilisateur $utilisateur): void
+    {
+        $rootAlias = $queryBuilder->getRootAliases()[0];
+
+        $employe = $this->em->getRepository(Employe::class)->findOneBy(['utilisateur' => $utilisateur]);
+        if (!$employe instanceof Employe) {
+            $queryBuilder->andWhere('1 = 0');
+
+            return;
+        }
+
+        if ($resourceClass === CreneauTravail::class) {
+            $queryBuilder
+                ->andWhere(sprintf(
+                    'EXISTS (SELECT 1 FROM %s pp_at_soi WHERE IDENTITY(pp_at_soi.creneauTravail) = %s.id AND IDENTITY(pp_at_soi.employe) = :perimetre_personnel_soi_employe)',
+                    AffectationTravail::class,
+                    $rootAlias,
+                ))
+                ->setParameter('perimetre_personnel_soi_employe', $employe->getId(), 'uuid');
+
+            return;
+        }
+
+        $queryBuilder
+            ->andWhere(sprintf('IDENTITY(%s.employe) = :perimetre_personnel_soi_employe', $rootAlias))
+            ->setParameter('perimetre_personnel_soi_employe', $employe->getId(), 'uuid');
     }
 }

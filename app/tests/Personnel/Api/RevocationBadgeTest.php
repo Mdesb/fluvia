@@ -25,6 +25,7 @@ final class RevocationBadgeTest extends PersonnelApiTestCase
         $idEmploye = $clientRh->request('POST', '/api/employes', $enteteRh + [
             'json' => ['nom' => 'Sortant', 'prenom' => 'Test', 'poste' => 'Agent', 'typeContrat' => 'cdi', 'dateEntree' => '2024-01-01'],
         ])->toArray()['id'];
+        $this->rattacher($clientRh, $enteteRh, $idEmploye, $this->idEtablissementA());
 
         $badge = $clientRh->request('POST', '/api/personnel/employes/' . $idEmploye . '/badges', $enteteRh + [
             'json' => [
@@ -58,6 +59,7 @@ final class RevocationBadgeTest extends PersonnelApiTestCase
         $idEmploye = $clientRh->request('POST', '/api/employes', $enteteRh + [
             'json' => ['nom' => 'Perte', 'prenom' => 'Test', 'poste' => 'Agent', 'typeContrat' => 'cdi', 'dateEntree' => '2024-01-01'],
         ])->toArray()['id'];
+        $this->rattacher($clientRh, $enteteRh, $idEmploye, $this->idEtablissementA());
 
         $badge = $clientRh->request('POST', '/api/personnel/employes/' . $idEmploye . '/badges', $enteteRh + [
             'json' => [
@@ -100,6 +102,7 @@ final class RevocationBadgeTest extends PersonnelApiTestCase
         $idEmploye = $clientRh->request('POST', '/api/employes', $enteteRh + [
             'json' => ['nom' => 'Suspendu', 'prenom' => 'Test', 'poste' => 'Agent', 'typeContrat' => 'cdi', 'dateEntree' => '2024-01-01'],
         ])->toArray()['id'];
+        $this->rattacher($clientRh, $enteteRh, $idEmploye, $this->idEtablissementA());
 
         $badge = $clientRh->request('POST', '/api/personnel/employes/' . $idEmploye . '/badges', $enteteRh + [
             'json' => [
@@ -131,6 +134,24 @@ final class RevocationBadgeTest extends PersonnelApiTestCase
         self::assertSame(StatutBadgeStaff::Actif, $badgeFinal->getStatut());
         // Le MÊME Support est réutilisé — aucun nouvel appairage (décision n°7 du plan).
         self::assertSame($idSupportInitial, (string) $badgeFinal->getSupport()->getId());
+    }
+
+    /**
+     * RG-PERSO-09 : un badge ne peut être émis que pour un employé ayant un rattachement actif sur
+     * l'établissement ciblé (correctif cloisonnement, cf. rapport de revue).
+     *
+     * @param array<string, mixed> $entete
+     */
+    private function rattacher(\ApiPlatform\Symfony\Bundle\Test\Client $client, array $entete, string $idEmploye, string $idEtablissement): void
+    {
+        $client->request('POST', '/api/rattachement_employes', $entete + [
+            'json' => [
+                'employe' => '/api/employes/' . $idEmploye,
+                'etablissement' => '/api/etablissements/' . $idEtablissement,
+                'debut' => '2024-01-01',
+            ],
+        ]);
+        self::assertResponseIsSuccessful();
     }
 
     private function executerCommandeEcheances(): void

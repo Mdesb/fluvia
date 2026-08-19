@@ -14,6 +14,7 @@ use App\Organisation\Entity\Etablissement;
 use App\Personnel\Entity\BadgeStaff;
 use App\Personnel\Entity\Employe;
 use App\Personnel\Entity\PorteeAccesEmploye;
+use App\Personnel\Entity\RattachementEmploye;
 use App\Personnel\Enum\ModeHoraireBadge;
 use App\Personnel\Enum\StatutBadgeStaff;
 use App\Personnel\Enum\StatutEmploye;
@@ -53,6 +54,10 @@ final class EmissionBadgeStaffHandler
     ): BadgeStaff {
         if ($employe->getStatut() !== StatutEmploye::Actif) {
             throw new UnprocessableEntityHttpException('Un badge ne peut être émis que pour un employé actif (RG-PERSO-06).');
+        }
+
+        if (!$this->rattachementActifSurEtablissement($employe, $etablissement)) {
+            throw new UnprocessableEntityHttpException('L\'employé n\'a aucun rattachement actif sur cet établissement (RG-PERSO-09) : impossible d\'émettre un badge.');
         }
 
         $existant = $this->em->getRepository(BadgeStaff::class)->findOneBy([
@@ -113,5 +118,24 @@ final class EmissionBadgeStaffHandler
         $this->recalculFenetre->recalculer($badge);
 
         return $badge;
+    }
+
+    /** RG-PERSO-09 : un employé sans rattachement actif sur l'établissement ne peut détenir de badge. */
+    private function rattachementActifSurEtablissement(Employe $employe, Etablissement $etablissement): bool
+    {
+        /** @var list<RattachementEmploye> $rattachements */
+        $rattachements = $this->em->getRepository(RattachementEmploye::class)->findBy([
+            'employe' => $employe,
+            'etablissement' => $etablissement,
+        ]);
+
+        $maintenant = new \DateTimeImmutable();
+        foreach ($rattachements as $rattachement) {
+            if ($rattachement->estActifA($maintenant)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

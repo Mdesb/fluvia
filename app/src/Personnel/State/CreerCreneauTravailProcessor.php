@@ -12,8 +12,12 @@ use App\Personnel\Entity\CreneauTravail;
 use App\Personnel\Enum\MotifRecurrenceTravail;
 use App\Personnel\Enum\StatutCreneauTravail;
 use App\Personnel\Enum\TypeQualification;
+use App\Personnel\Security\EtablissementCibleVerificateur;
+use App\Securite\Entity\Utilisateur;
 use App\Vente\Service\LecteurCorps;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\SecurityBundle\Security;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
@@ -24,6 +28,10 @@ use Symfony\Component\Validator\Validator\ValidatorInterface;
  * `App\Reservation\State\CreerCreneauProcessor`). Les occurrences en conflit ne sont pas contrôlées
  * ici (le conflit se détecte à l'affectation d'un employé, RG-PERSO-04).
  *
+ * L'`etablissement` du corps est un UUID/IRI brut fourni par le client : recoupé contre
+ * l'établissement actif ou les droits directs de l'agent sur cette cible
+ * (`EtablissementCibleVerificateur`), sinon 403 (RG-SOCLE-05).
+ *
  * @implements ProcessorInterface<mixed, CreneauTravail>
  */
 final class CreerCreneauTravailProcessor implements ProcessorInterface
@@ -32,15 +40,26 @@ final class CreerCreneauTravailProcessor implements ProcessorInterface
         private readonly EntityManagerInterface $em,
         private readonly LecteurCorps $lecteur,
         private readonly ValidatorInterface $validator,
+        private readonly Security $security,
+        private readonly EtablissementCibleVerificateur $verificateurCible,
     ) {
     }
 
     public function process(mixed $data, Operation $operation, array $uriVariables = [], array $context = []): CreneauTravail
     {
+        $agent = $this->security->getUser();
+        if (!$agent instanceof Utilisateur) {
+            throw new UnprocessableEntityHttpException('Agent authentifié requis.');
+        }
+
         $corps = $this->lecteur->corps();
 
         $etablissement = $this->resoudre(Etablissement::class, $corps['etablissement'] ?? null, 'etablissement');
         \assert($etablissement instanceof Etablissement);
+
+        if (!$this->verificateurCible->autorise($etablissement, $agent, 'personnel', 'gerer_planning')) {
+            throw new AccessDeniedHttpException('L\'établissement ciblé ne correspond pas à l\'établissement actif et l\'agent ne détient pas personnel.gerer_planning sur cet établissement (RG-SOCLE-05).');
+        }
 
         $espace = null;
         if (isset($corps['espace'])) {

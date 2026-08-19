@@ -22,6 +22,7 @@ final class BadgeStaffPassageTest extends PersonnelApiTestCase
         $idEmploye = $clientRh->request('POST', '/api/employes', $enteteRh + [
             'json' => ['nom' => 'Passage', 'prenom' => 'Test', 'poste' => 'Agent', 'typeContrat' => 'cdi', 'dateEntree' => '2024-01-01'],
         ])->toArray()['id'];
+        $this->rattacher($clientRh, $enteteRh, $idEmploye, $this->idEtablissementA());
 
         $badge = $clientRh->request('POST', '/api/personnel/employes/' . $idEmploye . '/badges', $enteteRh + [
             'json' => [
@@ -68,6 +69,7 @@ final class BadgeStaffPassageTest extends PersonnelApiTestCase
         $idEmploye = $clientRh->request('POST', '/api/employes', $enteteRh + [
             'json' => ['nom' => 'HorsFenetre', 'prenom' => 'Test', 'poste' => 'Agent', 'typeContrat' => 'cdi', 'dateEntree' => '2024-01-01'],
         ])->toArray()['id'];
+        $this->rattacher($clientRh, $enteteRh, $idEmploye, $this->idEtablissementA());
 
         // Aucun shift : la fenêtre est mise dans le passé (décision n°3) — le badge existe mais ne
         // peut jamais valider un passage tant qu'aucun shift n'est planifié.
@@ -91,6 +93,24 @@ final class BadgeStaffPassageTest extends PersonnelApiTestCase
 
         self::assertResponseIsSuccessful();
         self::assertSame('refuse', $clientRh->getResponse()->toArray()['resultat'], 'CA-9 : hors fenêtre horaire, le passage est refusé.');
+    }
+
+    /**
+     * RG-PERSO-09 : un badge ne peut être émis que pour un employé ayant un rattachement actif sur
+     * l'établissement ciblé (correctif cloisonnement, cf. rapport de revue).
+     *
+     * @param array<string, mixed> $entete
+     */
+    private function rattacher(\ApiPlatform\Symfony\Bundle\Test\Client $client, array $entete, string $idEmploye, string $idEtablissement): void
+    {
+        $client->request('POST', '/api/rattachement_employes', $entete + [
+            'json' => [
+                'employe' => '/api/employes/' . $idEmploye,
+                'etablissement' => '/api/etablissements/' . $idEtablissement,
+                'debut' => '2024-01-01',
+            ],
+        ]);
+        self::assertResponseIsSuccessful();
     }
 
     private function identifiantSupport(string $idBadge): string

@@ -11,10 +11,12 @@ use App\Personnel\Entity\Employe;
 use App\Personnel\Enum\StatutAbsence;
 use App\Personnel\Enum\TypeAbsence;
 use App\Personnel\Security\EmployeSoiVoter;
+use App\Personnel\Security\PerimetreEmployeVerificateur;
 use App\Securite\Entity\Utilisateur;
 use App\Vente\Service\LecteurCorps;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\Uid\Uuid;
 
@@ -22,6 +24,13 @@ use Symfony\Component\Uid\Uuid;
  * Déclare une Absence (POST /personnel/absences, RG-PERSO-05) : statut forcé à `declaree` quel que
  * soit l'appelant. Un employé sans permission `personnel.gerer_planning` ne peut déclarer que sa
  * propre absence (`personnel.declarer_absence_soi` + `EmployeSoiVoter`).
+ *
+ * L'`employe` du corps est un UUID/IRI brut résolu par `find()` : pour un appelant
+ * `personnel.gerer_planning` (pas d'auto-déclaration), recoupé contre le périmètre de l'agent
+ * (`PerimetreEmployeVerificateur`, même patron que `PerimetrePersonnelExtension`) — sinon 403. Sans
+ * ce recoupement, un agent autorisé sur son seul établissement actif pourrait déclarer une absence
+ * pour n'importe quel employé d'un établissement étranger, en connaissant seulement son UUID
+ * (RG-SOCLE-05).
  *
  * @implements ProcessorInterface<mixed, Absence>
  */
@@ -31,6 +40,7 @@ final class DeclarerAbsenceProcessor implements ProcessorInterface
         private readonly EntityManagerInterface $em,
         private readonly LecteurCorps $lecteur,
         private readonly Security $security,
+        private readonly PerimetreEmployeVerificateur $verificateurPerimetre,
     ) {
     }
 
@@ -41,8 +51,14 @@ final class DeclarerAbsenceProcessor implements ProcessorInterface
         $employe = $this->resoudre(Employe::class, $corps['employe'] ?? null, 'employe');
         \assert($employe instanceof Employe);
 
-        if (!$this->security->isGranted('PERM', 'personnel.gerer_planning') && !$this->security->isGranted(EmployeSoiVoter::ATTRIBUTE, $employe)) {
+        $estSoi = $this->security->isGranted(EmployeSoiVoter::ATTRIBUTE, $employe);
+        if (!$this->security->isGranted('PERM', 'personnel.gerer_planning') && !$estSoi) {
             throw new UnprocessableEntityHttpException('Un employé ne peut déclarer qu\'une absence pour lui-même (personnel.declarer_absence_soi).');
+        }
+
+        $agent = $this->security->getUser();
+        if (!$estSoi && $agent instanceof Utilisateur && !$this->verificateurPerimetre->estDansLePerimetre($employe, $agent)) {
+            throw new AccessDeniedHttpException('Cet employé est rattaché à un établissement hors du périmètre de l\'agent (RG-SOCLE-05).');
         }
 
         $debut = $this->dateTime($corps['debut'] ?? null, 'debut');

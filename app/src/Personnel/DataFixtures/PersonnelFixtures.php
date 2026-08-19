@@ -58,6 +58,8 @@ final class PersonnelFixtures extends Fixture
 
     public function load(ObjectManager $manager): void
     {
+        $this->creerSequenceSnapshotSiManquante($manager);
+
         $groupe = (new Groupe())->setNom(self::GROUPE_NOM);
         $manager->persist($groupe);
         $region = (new Region())->setNom(self::REGION_NOM)->setGroupe($groupe);
@@ -143,6 +145,27 @@ final class PersonnelFixtures extends Fixture
         $manager->persist((new Affectation())->setUtilisateur($utilisateurSoi)->setRole($roleEmploye)->setEtablissement($etabA));
 
         $manager->flush();
+    }
+
+    /**
+     * Séquence native MariaDB du curseur de version des supports (`App\Acces\Service\
+     * VersionSnapshotSequencer`, consommée par `AppairageHandler::appairer()` — donc par
+     * `EmissionBadgeStaffHandler`, RG-PERSO-06). Créée par la migration `Version20260817192240`, mais
+     * `PersonnelApiTestCase` reconstruit le schéma via `SchemaTool` (métadonnées ORM), qui n'inclut pas
+     * les objets créés hors mapping Doctrine par une migration. Cette fixture est volontairement
+     * autonome (cf. docblock de classe) — sans rejeu de `AccesFixtures`, l'émission de badge staff
+     * échouait en base isolée (« Unknown SEQUENCE: acces_snapshot_seq ») ; même patron défensif
+     * qu'`App\Acces\DataFixtures\AccesFixtures::load()`.
+     */
+    private function creerSequenceSnapshotSiManquante(ObjectManager $manager): void
+    {
+        $connection = $manager->getConnection();
+        $sequenceExiste = (bool) $connection->fetchOne(
+            "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'acces_snapshot_seq'"
+        );
+        if (!$sequenceExiste) {
+            $connection->executeStatement('CREATE SEQUENCE acces_snapshot_seq START WITH 1 INCREMENT BY 1');
+        }
     }
 
     /**

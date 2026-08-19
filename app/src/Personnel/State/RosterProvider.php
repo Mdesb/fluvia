@@ -12,21 +12,34 @@ use App\Personnel\Entity\AffectationTravail;
 use App\Personnel\Entity\CreneauTravail;
 use App\Personnel\Enum\StatutAffectationTravail;
 use App\Personnel\Enum\StatutCreneauTravail;
+use App\Securite\Entity\Affectation;
+use App\Securite\Entity\Utilisateur;
+use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\RequestStack;
+use Symfony\Component\Uid\Uuid;
 
 /**
  * GET /personnel/roster (§4.5 spec, CA-6) : agrège `CreneauTravail`+`AffectationTravail`+
  * `Qualification.estValideA()`. Filtres en query string : `etablissement`, `espace`, `poste`,
  * `employe`, `debut[after]`/`debut[before]` (période).
  *
+ * Le paramètre `etablissement` est fourni par le client et **ne peut pas**, à lui seul, servir de
+ * périmètre de sécurité (RG-SOCLE-05) : le filtrage est systématiquement borné aux établissements où
+ * l'utilisateur possède effectivement une `Affectation`, indépendamment de ce paramètre — un
+ * établissement demandé hors périmètre ne renvoie donc jamais de résultat.
+ *
  * @implements ProviderInterface<list<RosterHebdomadaire>>
  */
 final class RosterProvider implements ProviderInterface
 {
+    private const UUID_IMPOSSIBLE = '00000000-0000-0000-0000-000000000000';
+
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly RequestStack $requestStack,
+        private readonly Security $security,
     ) {
     }
 
@@ -37,6 +50,8 @@ final class RosterProvider implements ProviderInterface
         $qb = $this->em->getRepository(CreneauTravail::class)->createQueryBuilder('c')
             ->andWhere('c.statut != :annule')
             ->setParameter('annule', StatutCreneauTravail::Annule->value)
+            ->andWhere('c.etablissement IN (:etablissementsAutorises)')
+            ->setParameter('etablissementsAutorises', $this->etablissementsAutorises(), ArrayParameterType::BINARY)
             ->orderBy('c.debut', 'ASC');
 
         if ($request !== null) {
@@ -128,5 +143,32 @@ final class RosterProvider implements ProviderInterface
         }
 
         return $vues;
+    }
+
+    /**
+     * Établissements où l'utilisateur courant possède effectivement une `Affectation` (RG-SOCLE-05).
+     * Toujours non vide côté SQL (sentinelle impossible) pour éviter un `IN ()` vide invalide.
+     *
+     * @return list<string>
+     */
+    private function etablissementsAutorises(): array
+    {
+        $utilisateur = $this->security->getUser();
+        if (!$utilisateur instanceof Utilisateur) {
+            return [Uuid::fromString(self::UUID_IMPOSSIBLE)->toBinary()];
+        }
+
+        /** @var list<Affectation> $affectations */
+        $affectations = $this->em->getRepository(Affectation::class)->findBy(['utilisateur' => $utilisateur]);
+
+        $ids = [];
+        foreach ($affectations as $affectation) {
+            $etablissement = $affectation->getEtablissement();
+            if ($etablissement !== null) {
+                $ids[(string) $etablissement->getId()] = $etablissement->getId()->toBinary();
+            }
+        }
+
+        return $ids === [] ? [Uuid::fromString(self::UUID_IMPOSSIBLE)->toBinary()] : array_values($ids);
     }
 }
