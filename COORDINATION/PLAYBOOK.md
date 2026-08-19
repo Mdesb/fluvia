@@ -175,6 +175,11 @@ docker run --rm -u "$(id -u):$(id -g)" -e COMPOSER_HOME=/tmp/composer \
 ./infra/test-stack.sh down claudeA
 ```
 
+**Repasse par `up` avant de tester un autre module.** Les classes de base font `dropSchema` puis
+`createSchema`, et ce couple ne nettoie pas toujours une base laissée par un module différent : le
+premier `setUp` échoue alors en « Base table or view already exists ». Ça ressemble à une régression,
+ça n'en est pas une.
+
 **Un token par Claude** (`claudeA`, `claudeB`, `claudeC`) : le token nomme le réseau, le conteneur de
 base et la base elle-même (`app_test<TOKEN>`). Deux instances peuvent donc tester en même temps sans
 que la suite de l'une détruise les fixtures de l'autre.

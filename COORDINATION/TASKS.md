@@ -16,4 +16,5 @@ Ne touche pas un chemin déjà en `WIP` par une autre instance.
 | C8 | CA-11 Support : l agent ne voit pas les 2 messages du fil (TicketSupportApiTest:109) | `app/src/Support/State/MessageTicketProvider.php` | **claude-A** | DONE | 19/08 |
 | C9 | Hygiene du conteneur : `App\: resource '../src/'` sans exclude (entites enregistrees comme services partages) | `app/config/services.yaml` | *a assigner* | CLAIM | 19/08 |
 
+| C10 | Tests de non-regression IDOR Caisse/SEPA (etendre CaisseClotureRoleFixtures : caisse.mouvement absente des fixtures) | `app/tests/Caisse`, `app/src/Caisse/DataFixtures` | *a assigner* | CLAIM | 19/08 |
 <!-- Ajouter les nouvelles tâches au-dessus de cette ligne. -->

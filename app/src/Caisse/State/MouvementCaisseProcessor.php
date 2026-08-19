@@ -11,10 +11,12 @@ use App\Caisse\Entity\SessionCaisse;
 use App\Caisse\Enum\EtatSession;
 use App\Caisse\Enum\TypeMouvement;
 use App\Securite\Entity\Utilisateur;
+use App\Securite\Service\CalculateurDroits;
 use App\Vente\Service\LecteurCorps;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\Uid\Uuid;
 
@@ -31,6 +33,7 @@ final class MouvementCaisseProcessor implements ProcessorInterface
         private readonly EntityManagerInterface $em,
         private readonly LecteurCorps $lecteur,
         private readonly Security $security,
+        private readonly CalculateurDroits $calculateur,
     ) {
     }
 
@@ -92,6 +95,36 @@ final class MouvementCaisseProcessor implements ProcessorInterface
             throw new UnprocessableEntityHttpException('Session introuvable.');
         }
 
+        $this->assertSessionDansLePerimetre($session);
+
         return $session;
+    }
+
+    /**
+     * Cloisonnement du mouvement d'espèces (D3, D8).
+     *
+     * L'autorité se recalcule contre l'établissement de la **session visée**, jamais contre l'en-tête
+     * `X-Etablissement` : celui-ci est un sélecteur fourni par le client, pas une preuve
+     * d'appartenance. C'est la même règle que D6 applique aux événements, appliquée ici en écriture.
+     *
+     * Ce contrôle ne peut pas être délégué aux extensions Doctrine : elles ne s'exécutent que sur les
+     * opérations de **lecture** d'API Platform, or celle-ci est un POST qui résout sa cible depuis le
+     * corps de la requête. Sans cette vérification, un utilisateur autorisé sur l'établissement A qui
+     * connaît l'UUID d'une session de l'établissement B peut y enregistrer un retrait d'espèces.
+     */
+    private function assertSessionDansLePerimetre(SessionCaisse $session): void
+    {
+        $utilisateur = $this->security->getUser();
+        $etablissement = $session->getEtablissement();
+
+        $codes = $utilisateur instanceof Utilisateur && $etablissement !== null
+            ? $this->calculateur->codesEffectifs($utilisateur, $etablissement->getId())
+            : [];
+
+        // Échec fermé. 404 et non 403 : confirmer l'existence d'une session hors périmètre
+        // renseignerait déjà l'appelant sur l'activité d'un autre établissement.
+        if (!$this->calculateur->autorise($codes, 'caisse', 'mouvement')) {
+            throw new NotFoundHttpException('Session introuvable.');
+        }
     }
 }

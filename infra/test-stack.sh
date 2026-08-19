@@ -8,6 +8,11 @@
 #   ./infra/test-stack.sh run     claudeA   # lance la suite (arguments supplémentaires transmis)
 #   ./infra/test-stack.sh down    claudeA   # supprime réseau + base (les clés JWT restent)
 #
+# ⚠ Repasse par `up` avant de tester un AUTRE module. Les classes de base font `dropSchema` puis
+#   `createSchema`, et ce couple ne nettoie pas toujours une base laissée par un autre module : on
+#   obtient alors « Base table or view already exists » au premier setUp. Le symptôme ressemble à une
+#   régression du code ; ce n'en est pas une. `up` remet la base à plat en une vingtaine de secondes.
+#
 # Le worktree courant est déduit de l'emplacement du script — pas de chemin en dur, le script marche
 # à l'identique depuis /home/debian/wt/claude-A, .../claude-B, etc.
 
