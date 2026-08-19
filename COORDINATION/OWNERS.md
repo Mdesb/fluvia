@@ -23,8 +23,9 @@ OptionProduit, Stock, Personnel, Boutique, Support, Reporting, verticales (Pisci
 ## Modules à venir
 | Module | Chemin cible | Instance | Statut |
 |---|---|---|---|
-| **Suite Finance** (Factures fourn., Compta/FEC, Trésorerie) | `app/src/Finance/**` | *à assigner* | spec en cours |
-| **OCR** (service transverse) | `app/src/Ocr/**` | *à assigner* | à spécifier |
+| **Suite Finance** (Factures fourn., Compta/FEC, Trésorerie, Notes de frais) | `app/src/Finance/**` | **claude-B** | spec faite → plan |
+| **OCR** (service transverse) | `app/src/Ocr/**` | **claude-B** | spec faite → plan |
+| _extension additive_ `App\Compta` (lot FIN-1) | `app/src/Compta/**` | **claude-B** (coord. dossier partagé) | spec faite → plan |
 | **Notes de frais** | `app/src/NoteDeFrais/**` | *à assigner* | à spécifier |
 | **Smart Flow** | `app/src/SmartFlow/**` | *à assigner* | contrat d'abord |
 | **Revenue Recovery** | `app/src/RevenueRecovery/**` | *à assigner* | contrat d'abord |
