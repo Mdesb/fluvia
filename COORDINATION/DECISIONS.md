@@ -60,3 +60,17 @@ besoin réel apparaît.
 **Raison :** D1 impose un retrofit incrémental. Introduire une file maintenant ajouterait de
 l'infrastructure (worker, supervision, rejeu) sans consommateur qui la justifie, et casserait le modèle
 transactionnel des 5 émetteurs existants.
+
+### 2026-08-19 · D8 — Toute entité résolue depuis un identifiant client porte son propre contrôle de périmètre
+Un `Processor`, un `Provider` ou un contrôleur qui charge une entité à partir d'un identifiant venu de la
+requête (corps, query, en-tête) **doit vérifier explicitement l'appartenance au périmètre de la session
+serveur**, et refuser en échec fermé (403/404) sinon. Ce contrôle ne peut pas être délégué aux extensions
+Doctrine.
+**Raison :** le cloisonnement du projet repose aujourd'hui sur des extensions API Platform
+(`QueryCollectionExtensionInterface`, `QueryItemExtensionInterface`) qui ne s'exécutent que sur les
+opérations de **lecture**. Une opération déclarée `read: false`, ou un Processor qui appelle
+`$repository->find($uuidDuCorps)`, sort du filet **en silence** : rien dans le code ne signale que la
+protection a été contournée. claude-C l'a confirmé le 19/08 en calibrant le garde-fou C4 — deux cas
+exploitables sur des chemins argent (`POST /mouvements-caisse`, rejets SEPA), et 37 fichiers sur 116 sans
+contrôle visible. Un mécanisme de sécurité dont l'absence est invisible n'est pas un mécanisme de
+sécurité : d'où la règle explicite, et le garde-fou CI qui la rend exécutable.
