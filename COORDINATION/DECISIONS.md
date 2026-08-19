@@ -28,4 +28,16 @@ Factures (client + fournisseur), Comptabilité (plan comptable, FEC), Trésoreri
 se construisent sur le core billetterie (là où vivent déjà `Facturation` + Compta/Régie + `SEPA`).
 **OCR** est un **service transverse partagé**, pas un module métier (alimente Factures fourn. + Notes de frais).
 
-<!-- Décision ouverte à trancher : langue canonique des noms d'événements (FR vs EN) — voir CONTRACT/catalogue-evenements.md -->
+### 2026-08-19 · D5 — Anglais pour tout le technique, i18n pour l'affichage
+**Tous les identifiants techniques sont en anglais** (standard international) : entités, tables,
+colonnes, propriétés, valeurs d'enum, champs d'API/DTO, **codes de permission** (`finance.read`),
+**noms d'événements** (`payment.failed`). Les libellés visibles par l'utilisateur ne sont **jamais**
+en dur : ce sont des **clés de traduction** résolues par la couche i18n (français par défaut, langues
+extensibles). Un **agent de traduction** (IA) auto-remplit les catalogues de langues.
+**Raison :** standard de l'industrie + interop propre entre les 3 projets ; sépare le technique
+(anglais, stable) de la présentation (traduite).
+**Portée / retrofit :** tout nouveau code est en anglais dès maintenant. L'existant billetterie
+(français : `Etablissement`, `Facturation`…) sera migré **incrémentalement** vers l'anglais dans le
+cadre du retrofit total (renommages + migrations, avec la couche i18n qui garantit que l'UI reste
+française pendant toute la transition). Un garde-fou CI vérifiera l'absence d'identifiant non-anglais
+dans les nouvelles migrations/entités.

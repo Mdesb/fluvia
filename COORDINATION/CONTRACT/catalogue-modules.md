@@ -15,6 +15,7 @@ Billing & Features · Communication · Automation/Scheduler · **Bus d'événeme
 | **GED interne** | Stockage / versioning / droits / recherche de documents | Intervention (PV, photos), Appels d'offres, Finance, Formation | ◆ |
 | **Signature électronique** | Signature client/interne horodatée sur un document | Intervention (PV réception), Devis, Contrats | ◆ |
 | **Communication** | Email / SMS / WhatsApp / push + templates | tous | ~ (mailer existant à étendre) |
+| **i18n / Traduction** | Clés de traduction + catalogues par langue (FR défaut) + **agent de traduction** (IA) | tout libellé visible | ◆ |
 
 ## C. Vente & Offre
 Offre/Catalogue ✓ · Vente/Caisse ✓ · Boutique en ligne ✓ · Options produit ✓ ·

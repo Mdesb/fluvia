@@ -1,54 +1,62 @@
-# Catalogue d'événements métier — v0
+# Domain event catalog — v0
 
-Les événements de **premier rang** que le core et les modules publient sur le bus. Un événement est
-un **fait passé** (nommé au passé). Les modules s'y abonnent ; personne n'appelle personne directement.
+The first-class events published on the bus by the core and the modules. An event is a **past fact**
+(named in the past tense). Modules subscribe to events; nobody calls anybody directly.
 
-> ⚠️ **À trancher (D-ouverte) :** langue canonique des noms. Le doc SmartFlow utilise l'anglais
-> (`payment.failed`), notre code est en français. **Proposition v0 :** noms canoniques **français**
-> `domaine.fait` (cohérent avec le code billetterie), un alias EN documenté pour l'interop OFS/Vespera.
+> **Naming decision (D5, 19/08/2026): all technical identifiers are in ENGLISH** — event names,
+> entities, tables, columns, enum values, API/DTO fields, permission codes. User-facing strings are
+> **never** hardcoded: they are translation keys resolved by the i18n layer (French default).
 
-## Enveloppe commune (tout événement)
+## Common envelope (every event)
 ```
 {
-  "name": "paiement.echoue",
+  "name": "payment.failed",
   "occurredAt": "2026-08-19T10:00:00Z",
-  "tenant":  { "etablissementId": "…" },     // périmètre — toujours présent
-  "actor":   { "userId": "…" | null },        // qui a déclenché (null = système)
-  "subject": { "type": "Paiement", "id": "…" },// l'entité concernée
-  "payload": { … }                             // données spécifiques à l'événement
+  "tenant":  { "establishmentId": "…" },      // scope — always present
+  "actor":   { "userId": "…" | null },         // who triggered it (null = system)
+  "subject": { "type": "Payment", "id": "…" }, // the entity concerned
+  "payload": { … }                             // event-specific data (ids + minimum, no secrets/PII)
 }
 ```
 
-## Événements v0 par domaine
-| Événement | Émis par | Charge utile clé | Consommateurs probables |
+## v0 events by domain
+| Event | Emitted by | Key payload | Likely consumers |
 |---|---|---|---|
-| `vente.validee` | Vente/Caisse | montant, lignes, client? | Reporting, Revenue Recovery |
-| `vente.annulee` | Vente/Caisse | motif, montant | Compta, Autorisation |
-| `panier.abandonne` | Boutique | montant, client | Revenue Recovery |
-| `paiement.reussi` | Paiement | montant, moyen | Compta, Facturation |
-| `paiement.echoue` | Paiement / SEPA | montant, cause | **Revenue Recovery**, anti-impayés |
-| `remboursement.emis` | Caisse/Facturation | montant, avoir? | Compta |
-| `facture.emise` | Facturation | numéro, montant TTC | Compta, Communication |
-| `facture.echue` | Facturation | montant, retard | **Revenue Recovery** |
-| `facture.payee` | Facturation | montant, date | Compta |
-| `avoir.emis` | Facturation | montant | Compta |
-| `reservation.creee` | Reservation | créneau, ressource | Smart Flow |
-| `reservation.annulee` | Reservation | créneau, délai | **Smart Flow**, Revenue Recovery |
-| `rdv.no_show` | Reservation | client, montant à risque | **Revenue Recovery**, Smart Flow |
-| `rdv.termine` | Reservation | durée | Reporting |
-| `creneau.libere` | Smart Flow | créneau, ressource | **Smart Flow** (slot recovery), liste d'attente |
-| `abonnement.cree` | SEPA/Abonnement | montant récurrent | Compta |
-| `abonnement.suspendu` | SEPA/Abonnement | motif | Revenue Recovery |
-| `acces.enregistre` | Contrôle d'accès | porte, support | Reporting, Smart Flow (affluence) |
-| `acces.refuse` | Contrôle d'accès | motif | Supervision |
-| `devis.envoye` | Devis | montant, échéance | Revenue Recovery |
-| `devis.expire` | Devis | montant | **Revenue Recovery** (quote recovery) |
-| `client.inactif` | CRM | dernier contact | Revenue Recovery (win-back) |
-| `lead.sans_reponse` | CRM/Commercial | canal, délai | Revenue Recovery (lead recovery) |
-| `facture_fournisseur.enregistree` | Finance | fournisseur, montant, OCR? | Compta, Trésorerie |
-| `note_de_frais.soumise` | Notes de frais | salarié, montant | Autorisation, Compta |
+| `sale.completed` | Sale/POS | amount, lines, customer? | Reporting, Revenue Recovery |
+| `sale.cancelled` | Sale/POS | reason, amount | Accounting, Authorization |
+| `cart.abandoned` | Shop | amount, customer | Revenue Recovery |
+| `payment.succeeded` | Payment | amount, method | Accounting, Invoicing |
+| `payment.failed` | Payment / SEPA | amount, cause | **Revenue Recovery**, dunning |
+| `refund.issued` | POS/Invoicing | amount, credit_note? | Accounting |
+| `invoice.issued` | Invoicing | number, total_incl_tax | Accounting, Communication |
+| `invoice.overdue` | Invoicing | amount, days_late | **Revenue Recovery** |
+| `invoice.paid` | Invoicing | amount, date | Accounting |
+| `credit_note.issued` | Invoicing | amount | Accounting |
+| `booking.created` | Reservation | slot, resource | Smart Flow |
+| `booking.cancelled` | Reservation | slot, lead_time | **Smart Flow**, Revenue Recovery |
+| `booking.no_show` | Reservation | customer, amount_at_risk | **Revenue Recovery**, Smart Flow |
+| `booking.completed` | Reservation | duration | Reporting |
+| `slot.released` | Smart Flow | slot, resource | **Smart Flow** (slot recovery), waitlist |
+| `subscription.created` | SEPA/Subscription | recurring_amount | Accounting |
+| `subscription.suspended` | SEPA/Subscription | reason | Revenue Recovery |
+| `access.recorded` | Access control | door, credential | Reporting, Smart Flow (footfall) |
+| `access.denied` | Access control | reason | Supervision |
+| `quote.sent` | Quote | amount, due_date | Revenue Recovery |
+| `quote.expired` | Quote | amount | **Revenue Recovery** |
+| `quote.accepted` | Quote | amount | Invoicing |
+| `customer.inactive` | CRM | last_contact | Revenue Recovery (win-back) |
+| `lead.unanswered` | CRM/Sales | channel, delay | Revenue Recovery (lead recovery) |
+| `supplier_invoice.recorded` | Finance | supplier, amount, ocr? | Accounting, Treasury |
+| `expense_report.submitted` | Expenses | employee, amount | Authorization, Accounting |
+| `feasibility.assessed` | Pre-sales | outcome (go/no-go) | Quote, Sales |
+| `intervention.scheduled` | Field service | technician, site | Personnel, Calendar |
+| `intervention.validated` | Field service | signed_report, photos | DMS, Invoicing |
+| `tender.analyzed` | Tender | requirements | Sales |
+| `tender.draft_generated` | Tender | draft_ref | Sales (human review required) |
+| `training.completed` | Training | employee, course | Personnel |
 
-## Règles de nommage
-- `domaine.fait_au_passe`, minuscules, `snake_case` pour le fait.
-- Un événement ne porte **jamais** de secret ni de PII inutile ; il porte des **références** (ids) + le minimum.
-- Ajouter un événement = 1 ligne ici + le déclarer dans le manifeste du module émetteur.
+## Naming rules
+- `domain.fact_past_tense`, lowercase, `snake_case` for the fact.
+- English only. Domain nouns in English (Invoice, Ledger, Booking, ExpenseReport…).
+- An event carries **references** (ids) + the minimum — never a secret or unnecessary PII.
+- Adding an event = 1 row here + declare it in the emitting module's manifest.

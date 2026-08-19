@@ -12,6 +12,7 @@ il les consomme. La colonne « Chez nous » pointe vers l'existant billetterie �
 | **Audit** | Journal append-only inaltérable | subscribers d'audit | Vespera `/activite` ; OFS journal |
 | **Billing & Features** | Capacités activables par tenant **+ features activables dans un module** | Profil de capacités par établissement | SmartFlow `hasModule`+`hasFeature` |
 | **Communication** | Email / SMS / WhatsApp / push + templates | `symfony/mailer` (à étendre) | SmartFlow « Communication Core » |
+| **i18n / Traduction** | Clés de traduction + catalogues par langue (FR défaut) ; **agent de traduction** (IA) remplit les catalogues | tout libellé visible | OFS `ui_string_translations.json` ; Vespera FR/ES |
 | **Automation / Scheduler** | Déclencheurs, tâches différées, CRON | à créer (VPS permet le CRON) | SmartFlow « Automation » ; OFS sweeps CRON |
 | **Bus d'événements** | Publier / distribuer les événements métier | **à créer** (`App\Platform\Event`) | SmartFlow « Event Engine » |
 | **Registre de modules** | Découverte + activation des modules via manifeste | **à créer** (`App\Platform\Module`) | SmartFlow « Module Registry » |
@@ -23,6 +24,9 @@ il les consomme. La colonne « Chez nous » pointe vers l'existant billetterie �
 4. **Chiffrement au repos** des secrets (IBAN, jetons OAuth) — clé dédiée par usage.
 5. **Dégradation propre** — une intégration externe non configurée = no-op explicite, jamais de crash.
 6. **Notifications best-effort** — un échec e-mail/push ne casse jamais l'action métier.
+7. **Nommage anglais** (D5) — tout identifiant technique (entité, table, colonne, enum, champ API,
+   permission, événement) est en **anglais** ; les libellés utilisateur passent par des clés i18n
+   (jamais de chaîne en dur). Garde-fou CI à venir.
 
 ## Modèle Tenant (à généraliser — ⚠️ à trancher)
 Aujourd'hui : `Groupe → Région → Établissement → Espace`. Pour accueillir Vespera (Org→Creator) et
