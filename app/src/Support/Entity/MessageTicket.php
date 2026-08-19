@@ -43,6 +43,10 @@ use Symfony\Component\Validator\Constraints as Assert;
             // variables ». Le provider et le processeur consomment la valeur brute.
             uriVariables: ['ticketId' => new Link(fromClass: TicketSupport::class, identifiers: ['id'])],
             security: "is_granted('PERM', 'support.ouvrir_ticket') or is_granted('PERM', 'support.traiter_ticket_n1') or is_granted('PERM', 'support.traiter_ticket_n2')",
+            // Sans ceci, la presence de uriVariables amene API Platform a LIRE une ressource
+            // existante et a la peupler : les deux messages postes recevaient le meme identifiant,
+            // le second ecrasant le premier. Un POST cree, il ne met pas a jour.
+            read: false,
             processor: MessageTicketProcessor::class,
             denormalizationContext: ['groups' => ['message:write']],
         ),
