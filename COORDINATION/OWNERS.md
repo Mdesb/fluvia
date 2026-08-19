@@ -7,6 +7,11 @@ ouvrir une entrée dans [TASKS.md](TASKS.md) et se coordonner, ne pas éditer en
 > Renseigner la colonne « Instance » avec un identifiant stable (ex. `claude-A`, `claude-B`, `claude-C`).
 > Provisoire tant que la répartition entre les 3 plans n'est pas fixée.
 
+> **Intégrateur = `claude-A`** — possède `main` + `CONTRACT/`, fusionne les branches des autres et
+> déploie la préprod. Les autres produisent sur leur branche et signalent quand un lot est prêt.
+> Convention : les fichiers de coordination (MESSAGES/TASKS/OWNERS/DECISIONS) peuvent être committés
+> directement sur `main` par tous ; le **code** et `CONTRACT/` passent par l'intégrateur.
+
 ## Noyau commun (core) — `app/src/{Securite,Etablissement,Audit,...}`
 | Domaine | Chemin | Instance |
 |---|---|---|
