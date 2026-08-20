@@ -1,0 +1,58 @@
+# Garde-fous partagés (C4) — voir COORDINATION/PLAYBOOK.md §9.
+#
+# ⚠ Ce workflow ne tourne nulle part aujourd'hui : `origin` est un dépôt bare local
+# (/home/debian/billetterie.git), il n'y a pas de remote GitHub. Il est écrit pour être prêt le jour
+# où le dépôt y sera poussé, et il est volontairement redondant avec `bin/garde-fous.sh`, qui, lui,
+# marche dès maintenant en local. Question posée à l'intégrateur dans MESSAGES.md : si le
+# déclencheur retenu est un hook `pre-receive` sur le bare, seul ce fichier change — pas les scripts.
+
+name: Garde-fous
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  cloisonnement:
+    name: Cloisonnement (D3/D8)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Historique complet : le cliquet relit le plafond sur la branche cible, donc il faut
+          # pouvoir la résoudre. Sans ça, `--contre` dégrade silencieusement en « pas de cliquet ».
+          fetch-depth: 0
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+
+      - name: Contrôle avec cliquet contre la branche cible
+        run: |
+          REFERENCE="origin/${{ github.base_ref || 'main' }}"
+          php bin/garde-fou-cloisonnement.php "--contre=$REFERENCE"
+
+  manifeste:
+    name: Manifeste vs catalogue (RG-PLAT-06)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+
+      - name: Dépendances
+        working-directory: app
+        run: composer install --no-interaction --no-scripts --no-progress
+
+      # Le contrôle du manifeste n'est pas réimplémenté ici : il vit dans le noyau
+      # (App\Tests\Platform\Unit\ManifestCatalogueTest), la CI ne fait que l'appeler.
+      # Il lit COORDINATION/CONTRACT/catalogue-evenements.md, hors de app/ — d'où le checkout
+      # complet du dépôt et l'exécution depuis app/ sans monter uniquement ce répertoire.
+      - name: Le contrat est-il respecté par les manifestes ?
+        working-directory: app
+        run: vendor/bin/phpunit --filter ManifestCatalogueTest
