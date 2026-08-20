@@ -29,9 +29,12 @@ final class OcrModule implements ModuleManifest
         return '0.1.0';
     }
 
-    public function capability(): string
+    public function capability(): ?string
     {
-        return 'ocr';
+        // `null` = service transverse partagé (D4, entériné par A : `ModuleManifest::capability(): ?string`).
+        // OCR n'est ni vendu ni activable par établissement — consommé en PHP par les modules Finance.
+        // `ModuleAccess::hasFeature()` garde alors les features par leur seule activation propre.
+        return null;
     }
 
     /** @return list<string> */

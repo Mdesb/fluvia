@@ -6,6 +6,7 @@ namespace App\Compta\Nf525;
 
 use App\Compta\Entity\EcritureComptable;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 /**
  * Prolongement du chaînage NF525 côté écritures comptables (US-L4-09, CA-13). Réutilise le **procédé**
@@ -21,7 +22,12 @@ final class ScellementEcritureHandler
 {
     public function __construct(
         private readonly EntityManagerInterface $em,
-        private readonly string $cleScellement = 'nf525-compta-placeholder-key',
+        // Clé HMAC de scellement NF525 injectée depuis l'environnement, SANS valeur par défaut : son
+        // absence empêche le démarrage (échec fermé). Une clé publique/codée en dur casserait
+        // l'inaltérabilité légale NF525 (on pourrait altérer une écriture puis re-signer). Chaîne
+        // dédiée Compta, distincte de `NF525_SEAL_KEY` (Vente).
+        #[Autowire(env: 'NF525_COMPTA_SEAL_KEY')]
+        private readonly string $cleScellement,
     ) {
     }
 
