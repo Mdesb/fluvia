@@ -1,0 +1,143 @@
+# Lexique français du garde-fou de nommage (D5) — bin/garde-fou-nommage-anglais.php
+#
+# Un jeton par ligne. Les identifiants déclarés dans un fichier AJOUTÉ sont découpés
+# (camelCase / PascalCase / snake_case) et confrontés à cette liste.
+#
+# RÈGLE D'ENTRÉE — n'ajoute ici qu'un mot SANS AMBIGUÏTÉ.
+# Beaucoup de mots s'écrivent à l'identique dans les deux langues : date, type, code, format,
+# version, service, interface, message, session, total, export, role, agent, terminal, article,
+# mode, support, client, public, extension, adapter, provider, journal, quota, projection,
+# reference, reservation, caution, terrain, passage, badge, personnel, stock, revocation…
+# Ils sont VOLONTAIREMENT absents : les signaler produirait des faux positifs sur du code
+# anglais correct, et un garde-fou qui se trompe se fait désactiver.
+#
+# Ces jetons viennent d'un relevé de fréquence des identifiants réellement déclarés dans app/src
+# au 20/08/2026 — pas d'une liste inventée.
+
+# --- structure & organisation
+etablissement
+espace
+groupe
+perimetre
+contexte
+exploitant
+regie
+niveau
+categorie
+ressource
+
+# --- vente, caisse, argent
+vente
+montant
+centimes
+prix
+tarif
+unitaire
+paiement
+encaissement
+caisse
+panier
+remise
+facture
+facturation
+ecriture
+comptable
+compta
+achat
+commande
+fournisseur
+creancier
+echeance
+impaye
+recouvrement
+avoir
+reglement
+versement
+retrait
+apport
+solde
+taux
+ecart
+seuil
+
+# --- offre & produits
+produit
+libelle
+quantite
+creneau
+abonnement
+adherent
+sejour
+
+# --- accès & équipement
+acces
+controleur
+equipement
+jauge
+delestage
+casier
+bracelet
+salle
+bassin
+
+# --- personnes
+utilisateur
+beneficiaire
+employe
+auteur
+profil
+droit
+demandeur
+
+# --- temps & état
+statut
+etat
+actif
+debut
+fin
+delai
+duree
+periode
+jours
+attente
+horodatage
+entree
+sortie
+
+# --- verbes & actions
+resoudre
+generer
+creer
+verifier
+restreindre
+calculer
+enregistrer
+supprimer
+modifier
+rechercher
+valider
+
+# --- divers, fréquents dans ce code
+motif
+nom
+numero
+cle
+jeton
+valeur
+resultat
+regle
+grille
+moyen
+canal
+alerte
+retour
+origine
+cible
+mouvement
+ligne
+lignes
+defaut
+compte
+poule
+tournoi
+patins

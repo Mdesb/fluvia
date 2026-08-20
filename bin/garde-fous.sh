@@ -87,7 +87,11 @@ else
     echo "         ./infra/test-stack.sh up <token>"
 fi
 
-# 3. Nommage anglais (D5)  — à venir
+# 3. Nommage anglais (D5) — uniquement sur les fichiers AJOUTÉS : l'existant est français et le
+#    reste jusqu'au retrofit. Contrairement au n°1, celui-ci n'a pas eu besoin de ligne de base :
+#    il ne trouve rien sur le neuf existant, donc il s'installe au vert.
+executer "Nommage anglais (D5)" php_racine bin/garde-fou-nommage-anglais.php "--contre=${REFERENCE:-origin/main}"
+
 # 4. i18n : pas de chaîne d'UI en dur — à venir
 # 5. CSRF / sécurité de base — à venir
 
