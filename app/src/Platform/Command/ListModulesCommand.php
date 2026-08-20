@@ -48,7 +48,7 @@ final class ListModulesCommand extends Command
                 static fn (ModuleManifest $m): array => [
                     $m->id(),
                     $m->version(),
-                    $m->capability(),
+                    $m->capability() ?? '— (transverse)',
                     implode(', ', $m->dependencies()) ?: '—',
                     implode(', ', $m->eventsEmitted()) ?: '—',
                     implode(', ', $m->eventsConsumed()) ?: '—',
