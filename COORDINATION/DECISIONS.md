@@ -123,3 +123,33 @@ troisième devient une fonctionnalité auditée au lieu d'une exception d'archit
 rôle qui voit tous les établissements par défaut.
 
 Spec : `specs/editeur/spec-editeur.md`.
+
+### 2026-08-20 · D13 — Le moins d'écrans possible : la modale est le défaut
+Une action se fait **dans une modale, au-dessus du contexte où l'utilisateur se trouve**. Créer un
+écran est l'exception, et l'exception se justifie.
+
+**Raison :** chaque écran supplémentaire est une navigation, une perte de contexte et une occasion
+d'abandonner. Un exploitant qui gère une caisse ou une réservation ne veut pas naviguer, il veut agir
+et revenir à ce qu'il faisait. La modale garde le contexte visible derrière elle — c'est exactement ce
+qui rend un processus court perçu comme simple.
+
+**En pratique**
+- Une action depuis une liste (créer, éditer, valider, annuler) ouvre une **modale**. Pas de page de
+  détail en lecture seule quand une modale suffit.
+- Un processus en plusieurs étapes est **une modale à étapes**, pas N routes.
+- Pas de modale au-dessus d'une modale. Si le besoin apparaît, c'est que l'étape méritait un écran.
+
+**Un nouvel écran se justifie par l'une de ces trois raisons, et on l'écrit dans le plan :**
+1. **espace de travail durable** — on y reste (caisse, contrôle d'accès, planning) ;
+2. **contenu qui ne tient pas** — un tableau large, un comparatif, une édition longue ;
+3. **lien partageable ou reprise après interruption** — l'utilisateur doit pouvoir revenir par une URL.
+
+**Exceptions nommées, pour que la règle ne devienne pas un dogme nuisible :**
+- Le **tunnel de souscription public** reste en pages : il est parcouru au mobile, doit être repris
+  après abandon et partagé par lien. Une modale y perdrait l'utilisateur, pas l'inverse.
+- Les **écrans de terminal** (caisse, contrôle d'accès) restent plein écran : ce sont des postes de
+  travail, pas des actions.
+
+**Ce qu'une modale doit tenir, sans quoi elle est pire que l'écran qu'elle remplace :** le focus est
+piégé puis restitué à la fermeture, `Échap` ferme, et un formulaire long ne doit pas pouvoir être
+perdu par un rafraîchissement. Une modale mal faite transforme une simplification en piège.

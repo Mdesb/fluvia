@@ -1,6 +1,9 @@
 # Spec — Administration de l'éditeur & tunnel de souscription (`ED`)
 
-- **Lot / module :** `ED` — `App\Editeur` (nouveau) + activation de modules existants
+- **Lot / module :** `ED` — `App\Subscription` (nouveau) + activation de modules existants
+- **Nommage :** le module s'appelle `App\Subscription`, en anglais (D5, qui s'applique à tout code
+  neuf). C'est l'abonnement qui porte le catalogue d'offres, le cycle de vie et le provisioning ;
+  l'administration de l'éditeur n'est que l'usage qu'on en fait.
 - **Contrat source :** `COORDINATION/CONTRACT/{noyau-commun,manifeste-module,catalogue-evenements}.md`
 - **Décisions :** D2 (contract-first), D3 (cloisonnement), D6 (tenant du sujet), D10 (SEPA d'abord),
   D11 (démo jetable + reprise), D12 (l'éditeur est un établissement de la plateforme)

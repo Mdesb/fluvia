@@ -214,6 +214,12 @@ git push origin main
 
 ---
 
+## 9 bis. INTERFACE — le moins d'écrans possible (D13)
+Une action se fait **dans une modale**, au-dessus du contexte courant. Créer un écran est l'exception,
+et le plan doit dire laquelle des trois raisons la justifie : espace de travail durable, contenu qui ne
+tient pas, ou besoin d'un lien partageable. Exceptions actées : le tunnel de souscription public (en
+pages) et les écrans de terminal (plein écran). Détail et garde-fous d'accessibilité : D13.
+
 ## 10. CHECKLISTS
 **Avant de pousser sa branche :** tests du module verts (token isolé) · staging explicite ·
 identifiants anglais · libellés en clés i18n · événements déclarés au manifeste · TASKS.md à jour.
