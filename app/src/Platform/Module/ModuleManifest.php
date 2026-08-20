@@ -31,8 +31,18 @@ interface ModuleManifest
     /** Version SemVer du module (ex. « 0.1.0 »). */
     public function version(): string;
 
-    /** Capacité activable qui porte le module — code du catalogue `App\Fonctionnalite`. */
-    public function capability(): string;
+    /**
+     * Capacité activable qui porte le module — code du catalogue `App\Fonctionnalite`.
+     *
+     * **`null` désigne un service transverse** : une brique partagée que les autres modules consomment
+     * en PHP (OCR, GED, signature, i18n), qui n'est ni vendue ni activable par établissement.
+     *
+     * La distinction n'est pas cosmétique. Renvoyer un code inventé pour « satisfaire le type » créerait
+     * une capacité absente du catalogue : `ModuleAccess::hasModule()` répondrait toujours `false` et le
+     * catalogue d'offres refuserait de la vendre — le module serait présent et inaccessible, sans que
+     * rien ne le signale.
+     */
+    public function capability(): ?string;
 
     /**
      * `id` des modules requis. Le registre refuse de démarrer si l'un d'eux est inconnu (RG-PLAT-07).

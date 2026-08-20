@@ -63,7 +63,11 @@ final class ModuleAccess
             return false;
         }
 
-        if (!$this->hasModule($etablissement, $module->capability())) {
+        $capacite = $module->capability();
+
+        // Un service transverse (capacité `null`) est toujours présent : ses fonctionnalités ne sont
+        // donc gardées que par leur propre activation, pas par celle d'un module qu'on ne vend pas.
+        if ($capacite !== null && !$this->hasModule($etablissement, $capacite)) {
             return false;
         }
 

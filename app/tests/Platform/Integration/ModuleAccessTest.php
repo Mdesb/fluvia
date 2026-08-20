@@ -70,6 +70,41 @@ final class ModuleAccessTest extends SocleApiTestCase
         self::assertFalse($this->moduleAccess()->hasFeature($etablissement, self::FEATURE));
     }
 
+    /**
+     * Un **service transverse** (capacité `null`) est toujours présent : OCR, GED, signature.
+     *
+     * Ses fonctionnalités ne sont donc gardées que par leur propre activation — il n'y a pas de module
+     * vendable au-dessus d'elles. Sans cette règle, un service transverse serait présent et
+     * définitivement inaccessible, puisque sa « capacité » n'existerait dans aucun catalogue.
+     */
+    public function testServiceTransverseNestPasGardeParUnModuleVendable(): void
+    {
+        $etablissement = $this->etablissementA();
+        $this->activer($etablissement, self::CAPACITE_MODULE, false);
+        $this->activer($etablissement, self::FEATURE, true);
+
+        $acces = new ModuleAccess(
+            new ModuleRegistry([$this->manifeste('ocr', null, [self::FEATURE])]),
+            $this->fonctionnalites(),
+        );
+
+        self::assertTrue($acces->hasFeature($etablissement, self::FEATURE));
+    }
+
+    /** Même transverse, une fonctionnalité éteinte reste éteinte. */
+    public function testUneFeatureTransverseEteinteResteEteinte(): void
+    {
+        $etablissement = $this->etablissementA();
+        $this->activer($etablissement, self::FEATURE, false);
+
+        $acces = new ModuleAccess(
+            new ModuleRegistry([$this->manifeste('ocr', null, [self::FEATURE])]),
+            $this->fonctionnalites(),
+        );
+
+        self::assertFalse($acces->hasFeature($etablissement, self::FEATURE));
+    }
+
     /** Échec fermé : une feature que personne ne déclare n'ouvre rien, même activée. */
     public function testFeatureInconnueDuRegistreRefusee(): void
     {
@@ -77,24 +112,37 @@ final class ModuleAccessTest extends SocleApiTestCase
         $this->activer($etablissement, self::CAPACITE_MODULE, true);
         $this->activer($etablissement, self::FEATURE, true);
 
-        $registreVide = new ModuleRegistry([]);
-        $acces = new ModuleAccess($registreVide, $this->fonctionnalites());
+        $acces = new ModuleAccess(new ModuleRegistry([]), $this->fonctionnalites());
 
         self::assertFalse($acces->hasFeature($etablissement, self::FEATURE));
     }
 
     private function moduleAccess(): ModuleAccess
     {
-        return new ModuleAccess(new ModuleRegistry([$this->manifesteDeTest()]), $this->fonctionnalites());
+        $manifeste = $this->manifeste('access-control', self::CAPACITE_MODULE, [self::FEATURE]);
+
+        return new ModuleAccess(new ModuleRegistry([$manifeste]), $this->fonctionnalites());
     }
 
-    /** Manifeste minimal : le registre n'a pas besoin d'un vrai module pour répondre sur les features. */
-    private function manifesteDeTest(): ModuleManifest
+    /**
+     * Manifeste minimal : le registre n'a besoin que de l'identité, de la capacité et des features.
+     *
+     * @param list<string> $features
+     */
+    private function manifeste(string $id, ?string $capacite, array $features): ModuleManifest
     {
-        return new class implements ModuleManifest {
+        return new class($id, $capacite, $features) implements ModuleManifest {
+            /** @param list<string> $features */
+            public function __construct(
+                private readonly string $identifiant,
+                private readonly ?string $capacite,
+                private readonly array $features,
+            ) {
+            }
+
             public function id(): string
             {
-                return 'access-control';
+                return $this->identifiant;
             }
 
             public function version(): string
@@ -102,9 +150,9 @@ final class ModuleAccessTest extends SocleApiTestCase
                 return '0.1.0';
             }
 
-            public function capability(): string
+            public function capability(): ?string
             {
-                return ModuleAccessTest::capaciteModule();
+                return $this->capacite;
             }
 
             /** @return list<string> */
@@ -134,7 +182,7 @@ final class ModuleAccessTest extends SocleApiTestCase
             /** @return list<string> */
             public function features(): array
             {
-                return [ModuleAccessTest::feature()];
+                return $this->features;
             }
 
             /** @return list<string> */
@@ -149,16 +197,6 @@ final class ModuleAccessTest extends SocleApiTestCase
                 return [];
             }
         };
-    }
-
-    public static function capaciteModule(): string
-    {
-        return self::CAPACITE_MODULE;
-    }
-
-    public static function feature(): string
-    {
-        return self::FEATURE;
     }
 
     private function activer(Etablissement $etablissement, string $code, bool $actif): void

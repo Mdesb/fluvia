@@ -9,7 +9,7 @@ dépendances et les droits. Aligné sur le Module Registry du doc SmartFlow.
 |---|---|---|
 | `id` | Identifiant unique du module | `finance` |
 | `version` | SemVer, gestion des évolutions | `0.1.0` |
-| `capability` | Capacité activable qui porte le module | `finance` |
+| `capability` | Capacité activable qui porte le module — **`null` = service transverse** (ni vendu, ni activable par établissement : OCR, GED, signature) | `finance` · `null` |
 | `dependencies` | Modules requis (par `id`) | `["invoicing","accounting"]` |
 | `permissions` | Droits exposés (module × action) | `finance.read`, `finance.reconcile` |
 | `events_emitted` | Événements publiés | `supplier_invoice.recorded` |
@@ -29,7 +29,7 @@ final class FinanceModule implements ModuleManifest
 {
     public function id(): string { return 'finance'; }
     public function version(): string { return '0.1.0'; }
-    public function capability(): string { return 'finance'; }
+    public function capability(): ?string { return 'finance'; }   // null si service transverse
     public function dependencies(): array { return ['invoicing', 'accounting']; }
     public function permissions(): array { return ['finance.read', 'finance.write', 'finance.reconcile']; }
     public function eventsEmitted(): array { return ['supplier_invoice.recorded', 'payment.succeeded']; }
@@ -47,3 +47,14 @@ final class FinanceModule implements ModuleManifest
 - **Identifiants en anglais (D5)** — `id`, `capability`, permissions, événements et features. Les `id`
   des modules billetterie existants restent en français (`facturation`, `compta`) jusqu'au retrofit D5 ;
   l'exemple ci-dessus vise la cible (`invoicing`, `accounting`). Tout **nouveau** module est en anglais.
+
+## Modules vendables et services transverses
+
+Un module **vendable** porte une `capability` du catalogue : elle est activable par établissement, et
+c'est elle que le catalogue d'offres facture (RG-ED-03). Un **service transverse** renvoie `null` :
+il est consommé en PHP par les autres modules, jamais vendu ni activé séparément.
+
+La distinction n'est pas cosmétique. Renvoyer un code inventé pour « satisfaire le type » créerait une
+capacité absente du catalogue : `ModuleAccess::hasModule()` répondrait toujours `false` et l'offre
+refuserait de la vendre — le module serait présent et définitivement inaccessible, sans que rien ne le
+signale. Les `features` d'un service transverse restent gardées par leur propre activation.
