@@ -26,4 +26,6 @@ Ne touche pas un chemin déjà en `WIP` par une autre instance.
 | ED-3 | Tunnel de souscription SEPA + provisioning idempotent | `app/src/Editeur/**` | **claude-A** | WIP | 20/08 |
 | ED-4 | Acces dassistance borne et audite (RG-ED-07) | `app/src/Editeur/**`, `app/src/Audit/**` | *a assigner* | CLAIM | 20/08 |
 | C14 | Declarer au mapping ORM les index ecrits en SQL brut, pour que migrations:diff cesse de proposer leur suppression | `app/src/*/Entity`, `app/migrations` | *a assigner* | CLAIM | 20/08 |
+| C15 | NF525 : cle de scellement en dur dans ScellementEcritureHandler (conformite legale) | `app/src/Compta/Nf525` | **claude-B** | CLAIM | 20/08 |
+| C16 | Declencher les garde-fous : le depot na ni remote ni hook, le workflow CI na jamais tourne | `hooks/`, `bin/` | **claude-C** | CLAIM | 20/08 |
 <!-- Ajouter les nouvelles tâches au-dessus de cette ligne. -->
