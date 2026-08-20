@@ -14,7 +14,7 @@ Ne touche pas un chemin déjà en `WIP` par une autre instance.
 | C5 | Bus d'événements + registre de modules (impl core) | `app/src/Platform/**` | **claude-A** | DONE | 20/08 |
 | C7 | Harnais de test executable (stack isolee, DDL hors mapping) | `infra/test-stack.sh`, `app/tests/DdlHorsMapping.php` | **claude-A** | DONE | 19/08 |
 | C8 | CA-11 Support : l agent ne voit pas les 2 messages du fil (TicketSupportApiTest:109) | `app/src/Support/State/MessageTicketProvider.php` | **claude-A** | DONE | 19/08 |
-| C9 | Hygiene du conteneur : `App\: resource '../src/'` sans exclude (entites enregistrees comme services partages) | `app/config/services.yaml` | *a assigner* | CLAIM | 19/08 |
+| C9 | Decouverte des ressources API : identifier le mecanisme reel, rendre la configuration explicite, PUIS exclure les entites des services | `app/config/{services,packages/api_platform}.yaml` | **claude-A** | BLOCKED | 20/08 |
 | C10 | Suite Finance FIN-2 (SupplierInvoice) → FIN-3 → FIN-4 | `app/src/Finance/**` | **claude-B** | à venir | 19/08 |
 
 | C11 | Tests de non-regression IDOR Caisse/SEPA (etendre CaisseClotureRoleFixtures : caisse.mouvement absente des fixtures) | `app/tests/Caisse`, `app/src/Caisse/DataFixtures` | *a assigner* | CLAIM | 19/08 |
