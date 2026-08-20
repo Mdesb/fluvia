@@ -4,19 +4,20 @@ declare(strict_types=1);
 
 namespace App\Ocr;
 
+use App\Platform\Module\ModuleManifest;
+
 /**
- * Manifeste du service transverse `App\Ocr` (COORDINATION/CONTRACT/manifeste-module.md). Aucune
- * interface `ModuleManifest`/registre `App\Platform\Module` n'existe encore dans ce dépôt (brique
- * « à créer » du noyau commun, cf. noyau-commun.md — hors périmètre de ce lot) : cette classe respecte
- * déjà la « forme cible » documentée (mêmes noms de méthode), prête à implémenter l'interface dès
- * qu'elle existera, sans changement de signature attendu.
+ * Manifeste du service transverse `App\Ocr` — implémente `App\Platform\Module\ModuleManifest`
+ * (registre du noyau, `da3cb6d`), donc enregistré automatiquement par le tag de l'interface.
  *
- * `App\Ocr` est un **service partagé** (pas un module métier activable par tenant au sens strict, au
- * même titre que « Communication »/« Automation ») : consommé en PHP par les modules Finance
- * (FIN-2 Supplier invoices, FIN-3 Expense reports) via l'interface `DocumentExtractor`, sans
- * dépendance dure dans l'autre sens (spec-ocr.md §2/§8). Aucun événement émis (§7 catalogue-evenements.md).
+ * `App\Ocr` est un **service partagé** (consommé en PHP par les modules Finance via `DocumentExtractor`,
+ * spec-ocr.md §2/§8 ; aucun événement émis). ⚠ **Point à arbitrer par l'intégrateur (D4)** :
+ * `capability()` renvoie ici `'ocr'` pour satisfaire la signature `string` de l'interface, mais D4 pose
+ * qu'OCR est transverse et non activable par tenant. Si le registre doit distinguer les services
+ * transverses des modules métier (capacité nulle / marqueur dédié), c'est un ajustement de contrat côté
+ * `App\Platform` — je m'aligne sur ta décision.
  */
-final class OcrModule
+final class OcrModule implements ModuleManifest
 {
     public function id(): string
     {
@@ -28,15 +29,9 @@ final class OcrModule
         return '0.1.0';
     }
 
-    /**
-     * `null` : `App\Ocr` est un **service transverse partagé**, pas une capacité activable par tenant
-     * (COORDINATION/DECISIONS.md D4, spec-ocr.md §2) — au même titre que Communication/Automation.
-     * Contrairement à un module métier (Finance…), OCR ne s'active/désactive pas par établissement :
-     * il est toujours disponible. Un futur registre `App\Platform\Module` doit donc lire `null` ici.
-     */
-    public function capacite(): ?string
+    public function capability(): string
     {
-        return null;
+        return 'ocr';
     }
 
     /** @return list<string> */

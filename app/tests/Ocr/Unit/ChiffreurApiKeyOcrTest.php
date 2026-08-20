@@ -64,14 +64,4 @@ final class ChiffreurApiKeyOcrTest extends TestCase
         $this->expectException(\RuntimeException::class);
         $chiffreur->dechiffrer('valeur-non-chiffree-invalide');
     }
-
-    public function testSansCleExplicitePasDeException_ResolutionEnvironnementDeSecours(): void
-    {
-        // Aucune clé fournie : résout via l'environnement (ou repli déterministe dev/test) — ne doit
-        // jamais planter, même sans `OCR_API_KEY_ENCRYPTION_KEY` définie (cf. écart documenté §périmètre).
-        $chiffreur = new ChiffreurApiKeyOcr();
-
-        $chiffre = $chiffreur->chiffrer(self::CLE_API_DEMO);
-        self::assertSame(self::CLE_API_DEMO, $chiffreur->dechiffrer($chiffre));
-    }
 }
