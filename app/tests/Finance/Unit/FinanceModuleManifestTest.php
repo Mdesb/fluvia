@@ -44,10 +44,45 @@ final class FinanceModuleManifestTest extends TestCase
         self::assertNotEmpty($manifest->eventsEmitted());
         foreach ($manifest->eventsEmitted() as $evenement) {
             self::assertMatchesRegularExpression(EventName::PATTERN, $evenement);
-            self::assertStringStartsWith('supplier_invoice.', $evenement);
+            // Fichier partagé FIN-2/FIN-3 (§0.10/§7 point 3 du plan FIN-3) : deux domaines légitimes.
+            self::assertTrue(
+                str_starts_with($evenement, 'supplier_invoice.') || str_starts_with($evenement, 'expense_report.'),
+                sprintf('Événement inattendu hors des domaines supplier_invoice./expense_report. : « %s ».', $evenement),
+            );
         }
 
-        self::assertSame([], $manifest->eventsConsumed(), 'Ce lot ne consomme aucun événement (§0.4 du plan : appel direct, pas un abonnement).');
+        self::assertSame([], $manifest->eventsConsumed(), 'Ni FIN-2 ni FIN-3 ne consomment un événement (appel direct, pas un abonnement).');
+    }
+
+    /** §0.10/§0.4 du plan FIN-3 — non-régression sur le fichier partagé : les 4 permissions et 3 événements de cette brique sont bien présents, sans supprimer ceux de FIN-2. */
+    public function testPermissionsEtEvenementsExpenseReportPresents(): void
+    {
+        $manifest = new FinanceModule();
+
+        foreach ([
+            'finance.expense_report_submit',
+            'finance.expense_report_read_own',
+            'finance.expense_report_post_to_ledger',
+            'finance.expense_report_approve',
+        ] as $permission) {
+            self::assertContains($permission, $manifest->permissions());
+        }
+
+        foreach ([
+            'expense_report.submitted',
+            'expense_report.approved',
+            'expense_report.reimbursed',
+        ] as $evenement) {
+            self::assertContains($evenement, $manifest->eventsEmitted());
+        }
+
+        foreach (['expense_reports', 'ocr_expense_reports'] as $feature) {
+            self::assertContains($feature, $manifest->features());
+        }
+
+        // Non-régression FIN-2 : rien supprimé par l'extension FIN-3.
+        self::assertContains('finance.supplier_invoice_approve', $manifest->permissions());
+        self::assertContains('supplier_invoice.recorded', $manifest->eventsEmitted());
     }
 
     /**
