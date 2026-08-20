@@ -20,17 +20,39 @@ TOTAL=0
 # le dépôt principal par chemin absolu ; monter seulement le worktree rend donc `git` inopérant à
 # l'intérieur, et le cliquet `--contre` ne peut plus lire sa référence. On monte le répertoire courant
 # à son chemin réel (et non sous /repo) et, s'il s'agit d'un worktree, le dépôt commun avec lui.
-if command -v php >/dev/null 2>&1; then
-    PHP="php"
-else
-    RACINE="$(pwd)"
+RACINE="$(pwd)"
+SANS_PHP_LOCAL=0
+
+if ! command -v php >/dev/null 2>&1; then
+    SANS_PHP_LOCAL=1
     MONTAGES="-v $RACINE:$RACINE"
     if [ -f .git ]; then
         COMMUN="$(sed -n 's/^gitdir: //p' .git | sed 's#/worktrees/.*##')"
         [ -n "$COMMUN" ] && MONTAGES="$MONTAGES -v $COMMUN:$COMMUN"
     fi
-    PHP="docker run --rm --network none -u $(id -u):$(id -g) $MONTAGES -w $RACINE billetterie-preprod-php php"
+    # Sans le nom de l'image : il doit rester le DERNIER argument de `docker run`, sinon les options
+    # qui suivent (`-w`) sont passées à la commande du conteneur au lieu de docker.
+    DOCKER_BASE="docker run --rm --network none -u $(id -u):$(id -g) $MONTAGES"
+    IMAGE="billetterie-preprod-php"
 fi
+
+# Deux répertoires de travail : le garde-fou tourne depuis la racine (il lit app/src et bin/),
+# phpunit depuis app/ (sa configuration y vit). D'où deux lanceurs plutôt qu'un `cd` global.
+php_racine() {
+    if [ "$SANS_PHP_LOCAL" -eq 1 ]; then
+        $DOCKER_BASE -w "$RACINE" "$IMAGE" php "$@"
+    else
+        (cd "$RACINE" && php "$@")
+    fi
+}
+
+php_app() {
+    if [ "$SANS_PHP_LOCAL" -eq 1 ]; then
+        $DOCKER_BASE -w "$RACINE/app" "$IMAGE" php "$@"
+    else
+        (cd "$RACINE/app" && php "$@")
+    fi
+}
 
 executer() {
     local nom="$1"; shift
@@ -47,16 +69,16 @@ executer() {
 
 # 1. Cloisonnement (D3/D8) — le garde-fou n°1.
 if [ -n "$REFERENCE" ]; then
-    executer "Cloisonnement (D3/D8)" $PHP bin/garde-fou-cloisonnement.php "--contre=$REFERENCE"
+    executer "Cloisonnement (D3/D8)" php_racine bin/garde-fou-cloisonnement.php "--contre=$REFERENCE"
 else
-    executer "Cloisonnement (D3/D8)" $PHP bin/garde-fou-cloisonnement.php
+    executer "Cloisonnement (D3/D8)" php_racine bin/garde-fou-cloisonnement.php
 fi
 
 # 2. Manifeste (RG-PLAT-06) — déjà couvert côté noyau par ManifestCatalogueTest : on l'appelle,
 #    on ne le réimplémente pas (consigne de l'intégrateur, MESSAGES.md du 19/08).
 if [ -f app/vendor/bin/phpunit ]; then
     executer "Manifeste vs catalogue (RG-PLAT-06)" \
-        bash -c 'cd app && vendor/bin/phpunit --filter ManifestCatalogueTest'
+        php_app vendor/bin/phpunit --filter ManifestCatalogueTest
 else
     echo "─────────────────────────────────────────────────────────────"
     echo "▶ Manifeste vs catalogue (RG-PLAT-06)"
