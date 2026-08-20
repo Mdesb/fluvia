@@ -33,9 +33,10 @@ use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
  * §0.2 point 2), `businessProfile` via `couvre()` (IDOR inter-profils, 404), `supplier`/`purchaseOrder`/
  * `goodsReceipt` doivent appartenir au **même** établissement (404 sinon).
  *
- * Émet `supplier_invoice.recorded` (D6/D7, CA-9) à la fin de la création, dans la même transaction
- * implicite que le `flush()` (le tenant est dérivé de `SupplierInvoice.establishment`, jamais du
- * contexte HTTP).
+ * Émet `supplier_invoice.recorded` (D6/D7, CA-9) à la fin de la création, dans la **même transaction**
+ * que le `flush()` (correctif revue de cohérence, défaut 4 : `flush()` + `publish()` réunis dans un seul
+ * `wrapInTransaction()` — un abonné qui lève annule la création, aucune facture orpheline. Le tenant est
+ * dérivé de `SupplierInvoice.establishment`, jamais du contexte HTTP).
  *
  * @implements ProcessorInterface<SupplierInvoice, SupplierInvoice>
  */
@@ -95,12 +96,14 @@ final class SupplierInvoiceProcessor implements ProcessorInterface
             }
         }
 
-        $this->em->persist($data);
-        $this->em->flush();
+        $this->em->wrapInTransaction(function () use ($data, $creation, $acteur, $etablissement): void {
+            $this->em->persist($data);
+            $this->em->flush();
 
-        if ($creation) {
-            $this->publierRecorded($data, $acteur, $etablissement);
-        }
+            if ($creation) {
+                $this->publierRecorded($data, $acteur, $etablissement);
+            }
+        });
 
         return $data;
     }

@@ -20,6 +20,10 @@ use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
  * Ouverture/clôture d'un litige (RG-SINV-08) : motif obligatoire, gèle les règlements tant qu'ouvert.
  * L'écriture déjà générée n'est **jamais** extournée automatiquement (§4.7 spec) — le litige est un
  * état documentaire, distinct de la comptabilisation, corrigée le cas échéant par un avoir (§4.8).
+ *
+ * Correctif revue de cohérence (défaut 4) : `ouvrir()` réunit `flush()` et la publication de
+ * `supplier_invoice.disputed` dans un seul `wrapInTransaction()` — un abonné qui lève annule le passage
+ * en litige (D7), au lieu de laisser la facture `disputed` en base alors que l'événement n'a pas abouti.
  */
 final class SupplierInvoiceDisputeHandler
 {
@@ -39,17 +43,19 @@ final class SupplierInvoiceDisputeHandler
             throw new UnprocessableEntityHttpException('Le motif du litige est obligatoire (RG-SINV-08, CA-7).');
         }
 
-        $facture->setStatus(SupplierInvoiceStatus::Disputed);
-        $facture->setDisputeReason($motif);
-        $this->em->flush();
+        $this->em->wrapInTransaction(function () use ($facture, $motif, $acteur): void {
+            $facture->setStatus(SupplierInvoiceStatus::Disputed);
+            $facture->setDisputeReason($motif);
+            $this->em->flush();
 
-        $this->eventBus->publish(new DomainEvent(
-            'supplier_invoice.disputed',
-            new EventTenant($facture->getEtablissement()->getId()),
-            new EventSubject('SupplierInvoice', (string) $facture->getId()),
-            ['reason' => $motif],
-            $acteur instanceof Utilisateur ? new EventActor($acteur->getId()) : null,
-        ));
+            $this->eventBus->publish(new DomainEvent(
+                'supplier_invoice.disputed',
+                new EventTenant($facture->getEtablissement()->getId()),
+                new EventSubject('SupplierInvoice', (string) $facture->getId()),
+                ['reason' => $motif],
+                $acteur instanceof Utilisateur ? new EventActor($acteur->getId()) : null,
+            ));
+        });
 
         return $facture;
     }

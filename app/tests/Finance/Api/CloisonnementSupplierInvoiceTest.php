@@ -8,6 +8,7 @@ use App\Compta\Entity\ProfilExploitant;
 use App\Compta\Enum\ReferentielComptable;
 use App\Compta\Enum\TypeExploitant;
 use App\Finance\DataFixtures\FinanceFixtures;
+use App\Finance\SupplierInvoice\Entity\ReconciliationSettings;
 use App\Organisation\Entity\Etablissement;
 use App\Tests\Finance\FinanceApiTestCase;
 
@@ -134,6 +135,50 @@ final class CloisonnementSupplierInvoiceTest extends FinanceApiTestCase
         // explicite (D8 : jamais délégué à une extension Doctrine) pour les cas où la résolution d'IRI
         // aboutirait quand même (ex. `find()` brut, patron D8 explicitement visé par la mission).
         self::assertContains($reponse->getStatusCode(), [400, 404], 'Échec fermé attendu (ni la ligne ni la facture ne doivent être accessibles hors périmètre).');
+    }
+
+    /**
+     * Correctif revue de cohérence (défaut 2) : `ReconciliationSettings` n'était protégé que par
+     * `finance.read` (permission), sans filtre de périmètre — absent de
+     * `PerimetreFinanceExtension::CHAINES`/`RESOURCES_VIA_PROFIL`, un utilisateur d'un autre
+     * établissement pouvait lire le réglage de rapprochement d'un tiers (collection et item).
+     */
+    public function testReconciliationSettingsCloisonneParEtablissementCollectionEtItem(): void
+    {
+        // Profil couvrant UNIQUEMENT B (comme `testBusinessProfileAutreEtablissementRefuse`) : le
+        // réglage de rapprochement lié à ce profil ne doit être visible qu'à un utilisateur affecté sur B.
+        $profilB = $this->creerProfilScopeSurB();
+        $idSettingsB = $this->creerReglageRapprochement($profilB, '3.00');
+
+        [$clientOperateurA, $enteteOperateurA] = $this->operateurFinanceSur('Piscine A', ['read']);
+
+        $collection = $clientOperateurA->request('GET', '/api/reconciliation_settings', $enteteOperateurA)->toArray();
+        $idsVisibles = array_map(
+            static fn (array $membre): string => basename((string) $membre['@id']),
+            $collection['member'] ?? [],
+        );
+        self::assertNotContains($idSettingsB, $idsVisibles, 'Le réglage de B ne doit pas fuiter en collection pour un opérateur limité à A.');
+
+        $reponseItem = $clientOperateurA->request('GET', '/api/reconciliation_settings/' . $idSettingsB, $enteteOperateurA);
+        self::assertContains($reponseItem->getStatusCode(), [403, 404], 'Fuite cross-tenant en lecture item (D8).');
+
+        // Contre-preuve : un opérateur affecté sur B voit bien le réglage (le filtre ne bloque pas tout).
+        [$clientOperateurB, $enteteOperateurB] = $this->operateurFinanceSur('Patinoire B', ['read']);
+        $reponseItemB = $clientOperateurB->request('GET', '/api/reconciliation_settings/' . $idSettingsB, $enteteOperateurB);
+        self::assertSame(200, $reponseItemB->getStatusCode());
+    }
+
+    private function creerReglageRapprochement(ProfilExploitant $profil, string $seuil): string
+    {
+        $em = static::getContainer()->get('doctrine')->getManager();
+
+        $reglage = new ReconciliationSettings();
+        $reglage->setBusinessProfile($profil);
+        $reglage->setToleranceThresholdPercent($seuil);
+        $em->persist($reglage);
+        $em->flush();
+
+        return (string) $reglage->getId();
     }
 
     /** @return list<array<string, mixed>> */

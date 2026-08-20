@@ -4,10 +4,14 @@ declare(strict_types=1);
 
 namespace App\Tests\Finance\Api;
 
+use App\Compta\Entity\EcritureComptable;
 use App\Finance\DataFixtures\FinanceFixtures;
+use App\Finance\SupplierInvoice\Entity\SupplierInvoice;
+use App\Finance\SupplierInvoice\Entity\SupplierPayment;
 use App\Platform\Event\DomainEvent;
 use App\Securite\Service\ContexteEtablissement;
 use App\Tests\Finance\FinanceApiTestCase;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 
 /**
@@ -119,6 +123,115 @@ final class SupplierInvoiceEventTest extends FinanceApiTestCase
             ],
         ]);
         self::assertCount(1, $capturesPaid, 'supplier_invoice.paid ne doit être émis qu\'au règlement qui solde la facture.');
+    }
+
+    /**
+     * Correctif revue de cohérence (défaut 4) : `recorded`/`disputed`/`paid` réunissent désormais
+     * `flush()` et `publish()` dans un seul `wrapInTransaction()` (déjà le cas pour `approved`) — un
+     * abonné qui lève doit annuler l'écriture en base, pas laisser une facture orpheline (D7).
+     */
+    public function testRecordedRollbackSiUnAbonneLeveUneException(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $client->disableReboot();
+        $idFournisseur = $this->idFournisseur(FinanceFixtures::FOURNISSEUR_ACTIF);
+
+        /** @var EventDispatcherInterface $dispatcher */
+        $dispatcher = static::getContainer()->get(EventDispatcherInterface::class);
+        $listener = static function (): void {
+            throw new \RuntimeException('Abonné en échec (recorded).');
+        };
+        $dispatcher->addListener('supplier_invoice.recorded', $listener);
+
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $avant = (int) $em->getRepository(SupplierInvoice::class)->count([]);
+
+        try {
+            $reponse = $client->request('POST', '/api/supplier_invoices', $entete + [
+                'json' => [
+                    'establishment' => '/api/etablissements/' . $this->idEtablissement('Piscine A'),
+                    'businessProfile' => '/api/profil_exploitants/' . $this->idProfilExploitant(),
+                    'supplier' => '/api/stock_fournisseurs/' . $idFournisseur,
+                    'supplierInvoiceNumber' => 'FACT-EVT-ROLLBACK-001',
+                    'invoiceDate' => '2026-08-01',
+                    'dueDate' => '2026-09-01',
+                ],
+            ]);
+
+            self::assertSame(500, $reponse->getStatusCode());
+            self::assertSame($avant, (int) $em->getRepository(SupplierInvoice::class)->count([]), 'Aucune facture orpheline si l\'abonné `recorded` échoue.');
+        } finally {
+            $dispatcher->removeListener('supplier_invoice.recorded', $listener);
+        }
+    }
+
+    public function testDisputedRollbackSiUnAbonneLeveUneException(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $client->disableReboot();
+        $idFournisseur = $this->idFournisseur(FinanceFixtures::FOURNISSEUR_ACTIF);
+        $facture = $this->creerFactureAvecLigne($client, $entete, $idFournisseur, [], 'FACT-EVT-ROLLBACK-002');
+        $client->request('POST', '/api/finance/supplier-invoices/' . $facture['id'] . '/approve', $entete);
+
+        /** @var EventDispatcherInterface $dispatcher */
+        $dispatcher = static::getContainer()->get(EventDispatcherInterface::class);
+        $listener = static function (): void {
+            throw new \RuntimeException('Abonné en échec (disputed).');
+        };
+        $dispatcher->addListener('supplier_invoice.disputed', $listener);
+
+        try {
+            $reponse = $client->request('POST', '/api/finance/supplier-invoices/' . $facture['id'] . '/dispute', $entete + ['json' => ['reason' => 'Litige test rollback']]);
+            self::assertSame(500, $reponse->getStatusCode());
+        } finally {
+            $dispatcher->removeListener('supplier_invoice.disputed', $listener);
+        }
+
+        $rechargee = $client->request('GET', '/api/supplier_invoices/' . $facture['id'], $entete)->toArray();
+        self::assertSame('to_pay', $rechargee['status'], 'Le statut ne doit pas basculer à `disputed` si l\'abonné a fait échouer la transaction.');
+    }
+
+    public function testPaidRollbackSiUnAbonneLeveUneException(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $client->disableReboot();
+        $idFournisseur = $this->idFournisseur(FinanceFixtures::FOURNISSEUR_ACTIF);
+        $facture = $this->creerFactureAvecLigne($client, $entete, $idFournisseur, [], 'FACT-EVT-ROLLBACK-003');
+        $client->request('POST', '/api/finance/supplier-invoices/' . $facture['id'] . '/approve', $entete);
+        $facture = $client->request('GET', '/api/supplier_invoices/' . $facture['id'], $entete)->toArray();
+
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $avantEcritures = (int) $em->getRepository(EcritureComptable::class)->count([]);
+        $avantReglements = (int) $em->getRepository(SupplierPayment::class)->count([]);
+
+        /** @var EventDispatcherInterface $dispatcher */
+        $dispatcher = static::getContainer()->get(EventDispatcherInterface::class);
+        $listener = static function (): void {
+            throw new \RuntimeException('Abonné en échec (paid).');
+        };
+        $dispatcher->addListener('supplier_invoice.paid', $listener);
+
+        try {
+            $reponse = $client->request('POST', '/api/supplier_payments', $entete + [
+                'json' => [
+                    'supplierInvoice' => '/api/supplier_invoices/' . $facture['id'],
+                    'date' => '2026-09-01',
+                    'amount' => $facture['amountInclTax'],
+                    'paymentMethod' => '/api/moyen_paiements/' . $this->idMoyenPaiement('virement'),
+                ],
+            ]);
+            self::assertSame(500, $reponse->getStatusCode());
+        } finally {
+            $dispatcher->removeListener('supplier_invoice.paid', $listener);
+        }
+
+        self::assertSame($avantEcritures, (int) $em->getRepository(EcritureComptable::class)->count([]), 'Aucune écriture de règlement orpheline si l\'abonné `paid` échoue.');
+        self::assertSame($avantReglements, (int) $em->getRepository(SupplierPayment::class)->count([]), 'Aucun `SupplierPayment` orphelin.');
+
+        $rechargee = $client->request('GET', '/api/supplier_invoices/' . $facture['id'], $entete)->toArray();
+        self::assertSame('to_pay', $rechargee['status'], 'Le statut ne doit pas basculer à `paid` si l\'abonné a fait échouer la transaction.');
     }
 
     /**

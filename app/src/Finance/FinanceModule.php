@@ -21,9 +21,7 @@ use App\Platform\Module\ModuleManifest;
  * l'intégrateur A **avant** merge.
  *
  * Événements émis : les 4 événements `supplier_invoice.*` réellement publiés par ce lot (§0.6 du plan).
- * `supplier_invoice.recorded` est déjà catalogué (`CONTRACT/catalogue-evenements.md`) ; les 3 autres
- * (`approved`/`paid`/`disputed`) ne le sont **pas encore** — écart signalé à l'intégrateur (rapport
- * final), pas une omission silencieuse.
+ * Les 4 (`recorded`/`approved`/`paid`/`disputed`) sont catalogués (`CONTRACT/catalogue-evenements.md`).
  */
 final class FinanceModule implements ModuleManifest
 {
