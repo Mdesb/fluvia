@@ -89,6 +89,8 @@ final class EscaladeExpenseReportResolver
             return;
         }
 
-        $this->submitHandler->marquerApprouve($report, $acteur);
+        // `approverId` = le superviseur qui a réellement tranché l'escalade (§0.7), jamais l'appelant de
+        // `finalize-escalade`/de la commande CLI (qui peut être le salarié lui-même).
+        $this->submitHandler->marquerApprouve($report, $acteur, $demande->getSuperviseur());
     }
 }
