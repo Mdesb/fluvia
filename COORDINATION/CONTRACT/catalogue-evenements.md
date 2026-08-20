@@ -49,6 +49,9 @@ The first-class events published on the bus by the core and the modules. An even
 | `customer.came_of_age` | CRM | channels_to_renew | Communication, CRM (consent renewal) |
 | `lead.unanswered` | CRM/Sales | channel, delay | Revenue Recovery (lead recovery) |
 | `supplier_invoice.recorded` | Finance | supplier, amount, ocr? | Accounting, Treasury |
+| `supplier_invoice.approved` | Finance | invoice, amount | Accounting, Treasury |
+| `supplier_invoice.paid` | Finance | invoice, amount, method | Accounting, Treasury |
+| `supplier_invoice.disputed` | Finance | invoice, reason | Accounting |
 | `expense_report.submitted` | Expenses | employee, amount | Authorization, Accounting |
 | `feasibility.assessed` | Pre-sales | outcome (go/no-go) | Quote, Sales |
 | `intervention.scheduled` | Field service | technician, site | Personnel, Calendar |
