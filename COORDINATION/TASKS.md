@@ -9,7 +9,7 @@ Ne touche pas un chemin déjà en `WIP` par une autre instance.
 | C1 | Contrat de plateforme v0 (noyau, manifeste, événements) | `COORDINATION/CONTRACT/**` | **claude-A** | DONE | 20/08 |
 | C2 | Échafaudage de coordination (ce dossier) | `COORDINATION/**` | claude (billetterie) | DONE | 19/08 |
 | C3 | Spec SDD Suite Finance & Compta | `specs/finance/**` | claude (billetterie) | DONE | 19/08 |
-| C6 | Suite Finance FIN-0 (OCR) + FIN-1 (Compta) | `app/src/{Ocr,Compta}/**` | **claude-B** | BLOCKED | 20/08 |
+| C6 | Suite Finance FIN-0 (OCR) + FIN-1 (Compta) | `app/src/{Ocr,Compta}/**` | **claude-B** | 3 conditions faites, VERT → prêt merge A (`39e36d1`) | 20/08 |
 | C4 | Garde-fous CI partagés (cloisonnement, CSRF, manifeste) | `bin/`, `.github/workflows/` | **claude-C** | WIP | 19/08 |
 | C5 | Bus d'événements + registre de modules (impl core) | `app/src/Platform/**` | **claude-A** | DONE | 20/08 |
 | C7 | Harnais de test executable (stack isolee, DDL hors mapping) | `infra/test-stack.sh`, `app/tests/DdlHorsMapping.php` | **claude-A** | DONE | 19/08 |
