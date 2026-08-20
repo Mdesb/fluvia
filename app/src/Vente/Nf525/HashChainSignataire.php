@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Vente\Nf525;
 
 use App\Vente\Nf525\Entity\OperationScellee;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 /**
  * Implémentation par défaut du signataire NF525 (US-L2-11). Chaînage type « blockchain léger » :
@@ -22,7 +23,11 @@ use App\Vente\Nf525\Entity\OperationScellee;
 final class HashChainSignataire implements SignataireOperation
 {
     public function __construct(
-        private readonly string $cleScellement = 'nf525-placeholder-key',
+        // Aucune valeur par defaut : la cle vient de l'environnement, et son absence doit empecher le
+        // demarrage plutot que produire des scellements signes avec une cle connue de tous. Un bouchon
+        // qu'aucun mecanisme n'oblige a retirer finit toujours par partir en production.
+        #[Autowire(env: 'NF525_SEAL_KEY')]
+        private readonly string $cleScellement,
     ) {
     }
 
