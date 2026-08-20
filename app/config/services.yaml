@@ -18,6 +18,15 @@ services:
     # this creates a service per class whose id is the fully-qualified class name
     App\:
         resource: '../src/'
+        # Les entites, enums et le Kernel ne sont pas des services (recette Symfony standard, absente
+        # ici jusqu'au 20/08). Sans cette exclusion, chaque entite Doctrine recevait une definition de
+        # service partagee : un objet de domaine transforme en singleton est exactement ce qui fabrique
+        # des fuites d'etat entre requetes. Verifie : aucune entite n'est injectee dans le projet.
+        exclude:
+            - '../src/Kernel.php'
+            - '../src/Entity/'
+            - '../src/*/Entity/'
+            - '../src/*/Enum/'
 
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones

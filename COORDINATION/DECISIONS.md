@@ -98,3 +98,28 @@ horaires) est exporté et rejoué sur son établissement réel, qui démarre pro
 de vie de milliers d'établissements fantômes (expiration, purge RGPD des non-convertis). Repartir de
 zéro après paiement est l'endroit où l'on perd les clients. La reprise du paramétrage prend le meilleur
 des deux, au prix d'un format d'export à définir.
+
+### 2026-08-20 · D12 — L'administration de l'éditeur vit dans la plateforme
+L'éditeur est un `Etablissement` comme un autre, avec les modules CRM, Devis, Facturation, SEPA et
+Recouvrement activés. Ses prospects, devis, factures et abonnements sont **ses propres données**, dans
+**son** établissement. Il n'y a pas de seconde application.
+**Raison :** les quatre modules commerciaux existent déjà — les redévelopper ailleurs reviendrait à
+maintenir deux fois le même métier. Et l'éditeur devient le premier utilisateur de son produit : il
+rencontre ses propres défauts avant ses clients.
+
+**Le point difficile, et sa résolution.** On objecte que l'administration de l'éditeur doit « voir tous
+les établissements », ce que D3 interdit par construction. L'objection confond trois besoins distincts :
+
+1. **Facturer** ne demande aucun accès inter-établissement. Les données commerciales appartiennent à
+   l'éditeur, D3 s'applique tel quel.
+2. **Provisionner** est une écriture **système**, déclenchée par un paiement confirmé — pas une
+   navigation humaine. Elle passe par un service dédié, idempotent et journalisé.
+3. **Assister un client** est le seul vrai besoin de lecture inter-établissement. Il devient un
+   **accès d'assistance** explicite : borné dans le temps, attribué à une personne nommée, tracé à
+   l'audit.
+
+Donc **on ne perce pas le cloisonnement** : deux des trois besoins n'en ont jamais eu besoin, et le
+troisième devient une fonctionnalité auditée au lieu d'une exception d'architecture. Il n'existe aucun
+rôle qui voit tous les établissements par défaut.
+
+Spec : `specs/editeur/spec-editeur.md`.
