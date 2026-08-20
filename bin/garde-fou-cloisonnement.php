@@ -219,18 +219,42 @@ foreach ($options as $option) {
     }
 
     $ref = substr($option, strlen('--contre='));
-    $commande = sprintf('git show %s:%s 2>/dev/null', escapeshellarg($ref), escapeshellarg(LIGNE_DE_BASE));
-    $brut = shell_exec($commande);
+
+    // La révision doit d'abord être résoluble. Sans cette étape, une référence inconnue, un `git`
+    // absent ou un dépôt inaccessible produiraient le même résultat qu'une première introduction :
+    // le cliquet serait ignoré et le contrôle passerait au vert. Un garde-fou qu'on a demandé et qui
+    // ne s'applique pas doit échouer bruyamment — c'est tout l'intérêt de l'avoir demandé.
+    exec(sprintf('git rev-parse --verify %s 2>/dev/null', escapeshellarg($ref)), $sortie, $code);
+
+    if ($code !== 0) {
+        fwrite(STDERR, sprintf(
+            "\n=== ERREUR — référence « %s » non résoluble ===\n"
+            . "  Le cliquet a été demandé mais ne peut pas s'appliquer : la ligne de base pourrait\n"
+            . "  grossir sans que rien ne l'arrête. Refus de continuer plutôt que de rendre un vert\n"
+            . "  qui ne veut rien dire.\n\n"
+            . "  Causes habituelles : `git` absent de l'environnement, révision inconnue (un\n"
+            . "  `git fetch` manque ?), ou dépôt hors de portée — typiquement un worktree monté dans\n"
+            . "  un conteneur sans son répertoire `.git`.\n\n",
+            $ref
+        ));
+        exit(2);
+    }
+
+    $brut = shell_exec(sprintf('git show %s:%s 2>/dev/null', escapeshellarg($ref), escapeshellarg(LIGNE_DE_BASE)));
 
     if (!is_string($brut) || trim($brut) === '') {
-        echo sprintf("Référence %s : pas de ligne de base (première introduction) — cliquet non applicable.\n", $ref);
+        // Cas légitime, et le seul : la révision existe, mais le fichier n'y est pas encore.
+        echo sprintf("Référence %s résolue, ligne de base absente : première introduction — cliquet sans objet.\n", $ref);
         break;
     }
 
     $donneesRef = json_decode($brut, true);
-    if (is_array($donneesRef) && isset($donneesRef['scelle']['plafond'])) {
-        $plafondReference = (int) $donneesRef['scelle']['plafond'];
+    if (!is_array($donneesRef) || !isset($donneesRef['scelle']['plafond'])) {
+        fwrite(STDERR, sprintf("\n=== ERREUR — ligne de base illisible sur %s ===\n\n", $ref));
+        exit(2);
     }
+
+    $plafondReference = (int) $donneesRef['scelle']['plafond'];
     break;
 }
 

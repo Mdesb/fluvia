@@ -15,10 +15,21 @@ ECHECS=0
 TOTAL=0
 
 # PHP : binaire local s'il existe, sinon l'image du projet (le VPS n'a pas de PHP hors conteneur).
+#
+# Le montage conteneur n'est pas anodin. Dans un worktree git, `.git` est un *fichier* qui pointe vers
+# le dépôt principal par chemin absolu ; monter seulement le worktree rend donc `git` inopérant à
+# l'intérieur, et le cliquet `--contre` ne peut plus lire sa référence. On monte le répertoire courant
+# à son chemin réel (et non sous /repo) et, s'il s'agit d'un worktree, le dépôt commun avec lui.
 if command -v php >/dev/null 2>&1; then
     PHP="php"
 else
-    PHP="docker run --rm --network none -u $(id -u):$(id -g) -v $(pwd):/repo -w /repo billetterie-preprod-php php"
+    RACINE="$(pwd)"
+    MONTAGES="-v $RACINE:$RACINE"
+    if [ -f .git ]; then
+        COMMUN="$(sed -n 's/^gitdir: //p' .git | sed 's#/worktrees/.*##')"
+        [ -n "$COMMUN" ] && MONTAGES="$MONTAGES -v $COMMUN:$COMMUN"
+    fi
+    PHP="docker run --rm --network none -u $(id -u):$(id -g) $MONTAGES -w $RACINE billetterie-preprod-php php"
 fi
 
 executer() {
