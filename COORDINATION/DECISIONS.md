@@ -198,3 +198,39 @@ post a fait 4 000 vues. Il ne dira jamais s'il a rempli le cours d'aquagym du sa
 les réservations, la billetterie et le Reporting dans la même base : croiser la publication et la
 fréquentation est ce qu'aucun outil du marché ne peut faire, faute d'avoir les ventes. C'est là qu'est
 la valeur, pas dans la publication elle-même.
+
+### 2026-08-21 · D7-bis — L'asynchrone arrive, en complément du bus synchrone et non à sa place
+`symfony/messenger` est ajouté, avec le **transport Doctrine**. Un worker unique, supervisé par
+systemd. **D7 n'est pas annulée** : le bus d'événements reste synchrone et in-process.
+
+**La ligne de partage, et c'est tout l'objet de cette décision.**
+- Le **bus d'événements** transporte des **faits**, dans la transaction de l'émetteur. C'est ce qui
+  garantit qu'un fait et ses conséquences internes sont cohérents : `payment.failed` et la suspension
+  qu'il déclenche réussissent ou échouent ensemble. Rien ne change.
+- **Messenger** transporte du **travail sortant** : appeler cinq API sociales avec quotas et reprises,
+  provisionner un établissement après confirmation d'un paiement, envoyer un e-mail. Ce travail est
+  lent, faillible pour des raisons extérieures, et n'a aucune raison de tenir la transaction d'un
+  utilisateur qui vient de cliquer.
+
+Un abonné au bus **peut** publier un message asynchrone. C'est le pont, et c'est le seul.
+
+**Pourquoi le transport Doctrine et pas Redis ou AMQP.** Aucun transport n'est disponible : le Redis de
+la machine appartient à Vespera, hors périmètre depuis D9. Le transport Doctrine n'ajoute **aucun
+composant d'infrastructure** — la base existe déjà, elle est sauvegardée, et la file vit dedans. Sur un
+VPS unique sans équipe d'exploitation, un composant de moins à surveiller vaut mieux qu'un gain de
+débit dont personne n'a besoin. Le jour où le volume le justifiera, changer de transport est une ligne
+de configuration : c'est précisément ce que messenger abstrait.
+
+**Le piège à ne pas manquer : publier après le commit.** Un message envoyé à l'intérieur d'une
+transaction qui déroule ensuite met en file du travail pour un fait qui n'a jamais eu lieu — on
+provisionne un établissement pour un paiement annulé. Les messages sont donc dépêchés **après le
+commit**, jamais pendant.
+
+**Le coût, qu'on assume plutôt que de le découvrir.** L'asynchrone déplace les échecs hors du champ de
+vision de l'utilisateur. Une erreur synchrone se voit ; un message qui échoue en silence dans une file
+que personne ne regarde, non. Deux exigences en découlent, non négociables : un **transport d'échec**
+distinct, et un moyen de le consulter. Un worker est aussi un processus de plus à superviser et à
+redémarrer — c'est de la surface d'exploitation nouvelle, et c'est le vrai prix de cette décision.
+
+**Ce que ça débloque :** SOC-2 (publication sociale), ED-3 (provisionnement sur paiement confirmé), et
+plus tard toute notification sortante.
