@@ -153,3 +153,48 @@ qui rend un processus court perçu comme simple.
 **Ce qu'une modale doit tenir, sans quoi elle est pire que l'écran qu'elle remplace :** le focus est
 piégé puis restitué à la fermeture, `Échap` ferme, et un formulaire long ne doit pas pouvoir être
 perdu par un rafraîchissement. Une modale mal faite transforme une simplification en piège.
+
+### 2026-08-21 · D14 — Module de publication sociale : un seul module, deux usages, trois contraintes
+Un module `App\Social` permet de rédiger un message et de le publier sur plusieurs réseaux, puis d'en
+collecter les statistiques. Il sert **l'éditeur et les clients avec le même code** : l'éditeur étant un
+établissement de la plateforme (D12), « l'éditeur publie sur ses réseaux » est ce module activé sur son
+propre établissement. Aucun second développement.
+
+**Modèle : un post, N publications.** Un message part vers cinq réseaux ; trois réussissent, un dépasse
+son quota, un cinquième échoue sur un jeton expiré. Chaque réseau a donc sa propre ligne, son état, son
+identifiant distant et son erreur. Modéliser « un post publié ou non » perdrait l'information exacte
+qui compte le jour de l'incident — et c'est aussi cette ligne qui portera les statistiques, donc la
+jointure entre ce qu'on a publié et ce que ça a produit.
+
+**Contrainte 1 — l'entité juridique porteuse.** L'application destinée aux **clients** appartient à la
+société créée pour ce projet, et à aucune autre. Trois raisons : transférer une application entre
+comptes Business est laborieux et se fait mal une fois des clients connectés ; le responsable de
+traitement RGPD doit être l'entité qui signe le contrat, sinon le décalage se découvre pendant une
+négociation ; et la vérification d'entreprise porte sur des documents légaux. Une application distincte
+sous une société existante, réservée à l'usage interne de l'éditeur, est en revanche sans conséquence.
+
+**Contrainte 2 — les plateformes ne conservent pas l'historique.** Les statistiques ne remontent que
+sur une fenêtre limitée et leurs définitions changent entre versions d'API. On prend donc des
+**instantanés planifiés dès le premier jour**, et on stocke la charge brute **en plus** de la vue
+normalisée : sans instantanés, l'historique n'existera pas et sera irrattrapable ; sans charge brute,
+une redéfinition de « portée » rendra le passé incomparable.
+
+**Contrainte 3 — ce module rouvre D7.** Appeler cinq API externes, avec quotas, reprises et délais,
+dans la transaction d'un utilisateur qui clique sur « Publier », est exactement ce que le bus synchrone
+ne permet pas. D7 disait « on ajoutera une file quand un besoin réel apparaîtra » : le voici. La
+décision se prend **avant** d'écrire le module, pas pendant.
+
+**Séquencement.** On construit contre des réseaux ouverts (Mastodon, Bluesky) qui n'exigent aucune
+autorisation : toute la mécanique — file, reprises, chiffrement et cloisonnement des jetons, collecte
+planifiée — est prouvée pendant que les revues applicatives sont en cours. Chaque réseau devient
+ensuite un adaptateur enfichable, comme le socle le fait déjà pour le signataire NF525 et l'extracteur
+OCR.
+
+**Dépendance à signaler :** publier une image sur Instagram exige une URL publiquement accessible —
+donc la GED, qui n'existe pas encore. Le module démarre sans média, ou avec un hébergement temporaire.
+
+**Ce que ça vaut, et pourquoi ce n'est pas une commodité.** Un outil de publication générique dit qu'un
+post a fait 4 000 vues. Il ne dira jamais s'il a rempli le cours d'aquagym du samedi. La plateforme a
+les réservations, la billetterie et le Reporting dans la même base : croiser la publication et la
+fréquentation est ce qu'aucun outil du marché ne peut faire, faute d'avoir les ventes. C'est là qu'est
+la valeur, pas dans la publication elle-même.
