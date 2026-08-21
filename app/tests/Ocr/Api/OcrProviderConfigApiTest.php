@@ -111,35 +111,23 @@ final class OcrProviderConfigApiTest extends OcrApiTestCase
     }
 
     /**
-     * ⚠ Filtre implémenté (`#[ApiFilter(SearchFilter::class, properties: ['establishment' => 'exact'])]`
-     * sur `OcrProviderConfig`) mais **inerte tant que l'intégrateur n'a pas ajouté**
-     * `'%kernel.project_dir%/src/Ocr/Entity'` à `api_platform.mapping.paths`
-     * (`config/packages/api_platform.yaml`, hors périmètre de cet agent — cf. rapport de livraison) :
-     * `AttributeFilterPass` ne convertit les `#[ApiFilter]` en services que pour les répertoires listés
-     * là. Voir `App\Tests\Ocr\Api\ExtractionAttemptApiTest::testFiltreParDocumentKind()` pour le détail.
+     * La ressource `OcrProviderConfig` est bien **exposée** (découverte via `mapping.paths`) et sa
+     * collection expose la configuration OCR de l'établissement de l'utilisateur (`configA`, fixtures).
+     * Remplace l'ancien test de filtre `establishment` : ce filtre a été retiré (redondant avec le
+     * cloisonnement `PerimetreOcrExtension`, et inopérant sur une relation UUID). L'exclusion des autres
+     * établissements est couverte par `CloisonnementOcrTest`.
      */
-    public function testFiltreParEtablissementExact(): void
+    public function testCollectionExposeLaConfigDeLEtablissement(): void
     {
         [$client, $entete] = $this->adminSurA();
-        $idA = $this->idEtablissement(SocleFixtures::ETAB_A_NOM);
-        $iriA = '/api/etablissements/' . $idA;
+        $iriA = '/api/etablissements/' . $this->idEtablissement(SocleFixtures::ETAB_A_NOM);
 
-        $client->request('GET', '/api/ocr_provider_configs?establishment=' . urlencode($iriA), $entete);
+        $client->request('GET', '/api/ocr_provider_configs', $entete);
         self::assertResponseIsSuccessful();
         $liste = $client->getResponse()->toArray();
         $membres = $liste['member'] ?? $liste['hydra:member'];
-        self::assertNotEmpty($membres);
 
-        $tousConformes = true;
-        foreach ($membres as $item) {
-            if ($item['establishment'] !== $iriA) {
-                $tousConformes = false;
-                break;
-            }
-        }
-        if (!$tousConformes) {
-            self::markTestSkipped('Filtre ApiFilter inerte : `src/Ocr/Entity` absent de api_platform.mapping.paths (hors périmètre, cf. rapport intégrateur).');
-        }
-        self::assertTrue($tousConformes);
+        $configsDeA = array_filter($membres, static fn (array $item): bool => ($item['establishment'] ?? null) === $iriA);
+        self::assertNotEmpty($configsDeA, 'La collection doit exposer la configuration OCR de l\'établissement A (ressource découverte + cloisonnement).');
     }
 }

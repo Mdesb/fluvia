@@ -104,6 +104,8 @@ final class ExpenseReportEventTest extends ExpenseReportApiTestCase
         /** @var DomainEvent $evenement */
         $evenement = $captures[0];
         self::assertSame(4000, $evenement->payload['amountCents']);
+        // §0.7 / RG-AUTZ-13 : auto-approbation sous plafond -> approverId null, jamais le salarié soumettant.
+        self::assertNull($evenement->payload['approverId'], 'Sous plafond = auto-approuvé : approverId doit être null.');
     }
 
     public function testSubmittedRollbackSiUnAbonneLeveUneException(): void

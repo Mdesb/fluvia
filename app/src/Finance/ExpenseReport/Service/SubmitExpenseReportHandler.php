@@ -117,7 +117,7 @@ final class SubmitExpenseReportHandler
             ));
 
             match ($decision->resultat) {
-                ResultatDecision::Autorise => $this->marquerApprouve($report, $acteur),
+                ResultatDecision::Autorise => $this->marquerApprouve($report, $acteur, null),
                 ResultatDecision::EscaladeRequise => $report->setEscalationRequest($decision->demandeEscalade),
                 ResultatDecision::Refuse => $report->setStatus(ExpenseReportStatus::Rejected)->setRejectionReason($decision->motif),
             };
@@ -135,8 +135,13 @@ final class SubmitExpenseReportHandler
      * `Approuvee` après escalade, `EscaladeExpenseReportResolver`, §0.3.2) — service partagé, aucune
      * logique dupliquée. Ne gère ni transaction ni `flush()` : l'appelant porte les deux (patron
      * constant du dépôt).
+     *
+     * `$acteur` = qui a déclenché la transition (EventActor, peut être le salarié ou une commande CLI).
+     * `$approbateur` = qui a réellement autorisé (payload `approverId`, §0.7) : **`null` en auto-approbation
+     * sous plafond** (aucun humain n'a validé), **le superviseur** en sortie d'escalade — jamais l'appelant
+     * HTTP/CLI, sous peine de trace d'audit trompeuse (RG-AUTZ-13 interdit l'auto-approbation).
      */
-    public function marquerApprouve(ExpenseReport $report, ?Utilisateur $acteur): void
+    public function marquerApprouve(ExpenseReport $report, ?Utilisateur $acteur, ?Utilisateur $approbateur): void
     {
         $report->setStatus(ExpenseReportStatus::Approved);
         $report->setApprovedAt(new \DateTimeImmutable());
@@ -155,7 +160,7 @@ final class SubmitExpenseReportHandler
             new EventSubject('ExpenseReport', (string) $report->getId()),
             [
                 'amountCents' => $this->centimes($report->getTotalAmount()),
-                'approverId' => $acteur instanceof Utilisateur ? (string) $acteur->getId() : null,
+                'approverId' => $approbateur instanceof Utilisateur ? (string) $approbateur->getId() : null,
             ],
             $acteur instanceof Utilisateur ? new EventActor($acteur->getId()) : null,
         ));

@@ -9,6 +9,7 @@ use ApiPlatform\State\ProcessorInterface;
 use App\Finance\ExpenseReport\Entity\ExpenseReport;
 use App\Finance\ExpenseReport\Enum\ExpenseReportStatus;
 use App\Finance\ExpenseReport\Service\ExpenseReportLedgerPoster;
+use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
@@ -34,17 +35,25 @@ final class PostToLedgerExpenseReportProcessor implements ProcessorInterface
     {
         \assert($data instanceof ExpenseReport);
 
-        if ($data->getStatus() !== ExpenseReportStatus::Approved || $data->getLedgerEntry() !== null) {
-            throw new ConflictHttpException('Note non approuvée, ou déjà déversée en comptabilité.');
-        }
+        /** @var ExpenseReport $resultat */
+        $resultat = $this->em->wrapInTransaction(function () use ($data): ExpenseReport {
+            // Verrou pessimiste EN PREMIER (même patron que Submit/Reimburse) : deux rejeux concurrents
+            // liraient sinon tous deux `ledgerEntry === null` et déverseraient chacun une écriture
+            // comptable scellée — la seconde resterait orpheline (double charge non tracée).
+            $this->em->lock($data, LockMode::PESSIMISTIC_WRITE);
 
-        $anomalies = $this->poster->poster($data);
-        if ($anomalies !== []) {
-            throw new UnprocessableEntityHttpException(implode(' ', $anomalies));
-        }
+            if ($data->getStatus() !== ExpenseReportStatus::Approved || $data->getLedgerEntry() !== null) {
+                throw new ConflictHttpException('Note non approuvée, ou déjà déversée en comptabilité.');
+            }
 
-        $this->em->flush();
+            $anomalies = $this->poster->poster($data);
+            if ($anomalies !== []) {
+                throw new UnprocessableEntityHttpException(implode(' ', $anomalies));
+            }
 
-        return $data;
+            return $data;
+        });
+
+        return $resultat;
     }
 }

@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace App\Ocr\Entity;
 
-use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
-use ApiPlatform\Metadata\ApiFilter;
 use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
@@ -50,7 +48,10 @@ use Symfony\Component\Validator\Constraints as Assert;
     normalizationContext: ['groups' => ['ocr_config:read']],
     denormalizationContext: ['groups' => ['ocr_config:write']],
 )]
-#[ApiFilter(SearchFilter::class, properties: ['establishment' => 'exact'])]
+// Pas de filtre `establishment` : redondant avec le cloisonnement (`PerimetreOcrExtension` restreint
+// déjà la collection au périmètre de l'utilisateur) et il n'existe qu'UNE config par établissement
+// (contrainte unique). Le SearchFilter `exact` sur une relation UUID était de surcroît inopérant
+// (résolution IRI→BINARY(16) côté MariaDB). Le scoping par établissement est prouvé par le cloisonnement.
 class OcrProviderConfig
 {
     #[ORM\Id]
