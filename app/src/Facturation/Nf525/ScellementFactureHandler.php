@@ -6,6 +6,7 @@ namespace App\Facturation\Nf525;
 
 use App\Facturation\Entity\Facture;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 /**
  * Chaînage NF525 des documents commerciaux (`plan-facturation.md` §0.3, constitution §4.5).
@@ -30,7 +31,12 @@ final class ScellementFactureHandler
 {
     public function __construct(
         private readonly EntityManagerInterface $em,
-        private readonly string $cleScellement = 'nf525-facturation-placeholder-key',
+        // Aucune valeur par defaut : la cle vient de l'environnement, et son absence doit empecher le
+        // demarrage plutot que produire des factures scellees avec une cle que n'importe qui peut lire
+        // dans le code. Troisieme occurrence du meme motif en trois jours - le garde-fou des secrets
+        // en dur existe desormais pour qu'il n'y en ait pas de quatrieme.
+        #[Autowire(env: 'NF525_FACTURATION_SEAL_KEY')]
+        private readonly string $cleScellement,
     ) {
     }
 
