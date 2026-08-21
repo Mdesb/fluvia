@@ -53,6 +53,8 @@ The first-class events published on the bus by the core and the modules. An even
 | `supplier_invoice.paid` | Finance | invoice, amount, method | Accounting, Treasury |
 | `supplier_invoice.disputed` | Finance | invoice, reason | Accounting |
 | `expense_report.submitted` | Expenses | employee, amount | Authorization, Accounting |
+| `treasury.reconciliation_completed` | Treasury | statement, matched_count | Accounting, Reporting |
+| `treasury.discrepancy_detected` | Treasury | amount, statement | Accounting, Supervision |
 | `expense_report.approved` | Expenses | report, amount | Accounting |
 | `expense_report.reimbursed` | Expenses | report, amount, method | Accounting, Treasury |
 | `feasibility.assessed` | Pre-sales | outcome (go/no-go) | Quote, Sales |

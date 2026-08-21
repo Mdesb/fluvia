@@ -28,12 +28,12 @@ Ne touche pas un chemin déjà en `WIP` par une autre instance.
 | C14 | Declarer au mapping ORM les index ecrits en SQL brut, pour que migrations:diff cesse de proposer leur suppression | `app/src/*/Entity`, `app/migrations` | *a assigner* | CLAIM | 20/08 |
 | C15 | NF525 : cle de scellement en dur dans ScellementEcritureHandler (conformite legale) | `app/src/Compta/Nf525` | **claude-B** | DONE | 20/08 |
 | C16 | Declencher les garde-fous : le depot na ni remote ni hook, le workflow CI na jamais tourne | `hooks/`, `bin/` | **claude-C** | CLAIM | 20/08 |
-| D7-bis | Rouvrir D7 : choisir le mode asynchrone (messenger + transport) avant decrire le module social | `app/config`, `COORDINATION/DECISIONS.md` | **claude-A** | CLAIM | 21/08 |
+| D7-bis | Asynchrone : messenger + transport Doctrine, worker systemd, transport dechec | `app/config`, `infra/` | **claude-A** | WIP | 21/08 |
 | SOC-0 | Spec SDD du module de publication sociale | `specs/social/**` | **claude-A** | CLAIM | 21/08 |
 | SOC-1 | Modele post/publications + coffre a jetons chiffre et cloisonne | `app/src/Social/**` | *a assigner* | CLAIM | 21/08 |
 | SOC-2 | Adaptateur reseau ouvert (Mastodon/Bluesky) + file, reprises, quotas | `app/src/Social/**` | *a assigner* | CLAIM | 21/08 |
 | SOC-3 | Collecte planifiee des statistiques : instantanes + charge brute conservee | `app/src/Social/**` | *a assigner* | CLAIM | 21/08 |
 | SOC-4 | Adaptateurs Meta (Page + Instagram), apres verification dentreprise et revue applicative | `app/src/Social/**` | *a assigner* | BLOCKED | 21/08 |
-| DMS-0 | GED : spec SDD (cloisonnement, URL signees expirantes, retention legale, versionnement) | `specs/dms/**` | **claude-B** | CLAIM | 21/08 |
+| DMS-0 | GED : spec SDD (cloisonnement, URL signees expirantes, retention legale, versionnement) | `specs/dms/**` | **claude-B** | WIP | 21/08 |
 | DMS-1 | GED : implementation du stockage, des versions et des acces | `app/src/Dms/**` | **claude-B** | CLAIM | 21/08 |
 <!-- Ajouter les nouvelles tâches au-dessus de cette ligne. -->

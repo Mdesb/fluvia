@@ -1,0 +1,49 @@
+# Travail sortant asynchrone (D7-bis).
+#
+# Le bus d'événements (`App\Platform\Event\EventBus`) reste synchrone et in-process : il transporte
+# des **faits**, dans la transaction de l'émetteur. Messenger transporte du **travail sortant** —
+# appeler une API externe, provisionner, notifier — qui est lent, faillible pour des raisons
+# extérieures, et n'a aucune raison de tenir la transaction d'un utilisateur qui vient de cliquer.
+#
+# Transport Doctrine et non Redis ou AMQP : aucun composant d'infrastructure en plus, la base existe
+# déjà et elle est sauvegardée. Sur un VPS unique sans équipe d'exploitation, un composant de moins à
+# surveiller vaut mieux qu'un débit dont personne n'a besoin. Changer de transport plus tard est une
+# ligne de configuration — c'est précisément ce que messenger abstrait.
+framework:
+    messenger:
+        # Sans transport d'échec, un message qui échoue disparaît en silence. L'asynchrone déplace les
+        # erreurs hors du champ de vision de l'utilisateur : il faut donc un endroit où elles
+        # s'accumulent visiblement, et une commande pour les relire (`messenger:failed:show`).
+        failure_transport: failed
+
+        transports:
+            async:
+                dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
+                retry_strategy:
+                    # Cinq tentatives espacées : une API sociale qui refuse pour dépassement de quota
+                    # ne redeviendra pas disponible en trois secondes. On attend 10 s, puis 30 s, 1 min
+                    # 30, 4 min 30, 13 min 30 — plafonné à une heure.
+                    max_retries: 5
+                    delay: 10000
+                    multiplier: 3
+                    max_delay: 3600000
+
+            failed: 'doctrine://default?queue_name=failed'
+
+            sync: 'sync://'
+
+        routing:
+            # Tout message porteur du marqueur part en asynchrone. Un marqueur plutôt qu'une liste de
+            # classes : la liste se périme dès qu'un module ajoute un message et oublie de l'inscrire,
+            # et l'oubli se traduit par un appel d'API externe exécuté dans la transaction d'un clic.
+            'App\Platform\Message\AsyncMessage': async
+
+when@test:
+    framework:
+        messenger:
+            transports:
+                # En test, rien ne part réellement : les messages restent inspectables en mémoire.
+                # Un worker à lancer pour faire passer une suite de tests serait un harnais que
+                # personne ne saurait faire tourner.
+                async: 'in-memory://'
+                failed: 'in-memory://'
