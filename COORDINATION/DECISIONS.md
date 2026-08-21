@@ -234,3 +234,58 @@ redémarrer — c'est de la surface d'exploitation nouvelle, et c'est le vrai pr
 
 **Ce que ça débloque :** SOC-2 (publication sociale), ED-3 (provisionnement sur paiement confirmé), et
 plus tard toute notification sortante.
+
+### 2026-08-22 · D15 — Un établissement compose des activités ; l'énumération `Metier` disparaît
+`App\Fonctionnalite\Enum\Metier` et la table figée `PresetVerticale` sont remplacés par une
+**composition d'activités**. Un établissement n'a plus *un* métier : il compose ce qu'il exerce.
+
+**Raison :** un camping a un bar, un restaurant, des hébergements, une piscine et un bowling. Une
+station de ski a des forfaits, de la location, une école et de la restauration. Ce ne sont pas des
+verticales, ce sont des **compositions** — et l'énumération les rend inexprimables. Accessoirement,
+ajouter un métier modifiait jusqu'ici le noyau (`App\Fonctionnalite`), donc chaque nouveau client
+exotique était une migration et un conflit de fusion potentiel.
+
+**Neuf types d'activité couvrent l'ensemble des métiers évoqués** — billetterie/entrée, réservation de
+ressource, abonnement, location de matériel, vente de produits, cours/encadrement, prestation sur
+rendez-vous, hébergement, restauration. Vingt métiers deviennent des combinaisons de neuf briques.
+Sept existent déjà ; **hébergement et restauration sont les deux seuls vrais manques**.
+
+**Une verticale devient un paquet rédigé, pas un module développé** : manifeste, activités composées,
+données de départ à identifiants stables (avec non-écrasement à la mise à jour, faute de quoi une
+montée de version écrase les tarifs du client), et **clés de vocabulaire** — un « créneau » est un
+*rendez-vous* chez le coiffeur et une *réservation de terrain* au padel. Même concept, mots
+différents. Un module de code ne subsiste que si la verticale apporte une règle réellement nouvelle.
+
+**Ce qui est repris d'Odoo, et ce qui ne l'est pas.** On reprend les **modules de colle à installation
+automatique** (le code qui n'a de sens que si deux modules coexistent a enfin un domicile), les
+**identifiants externes stables** et le drapeau de non-écrasement, et l'idée de **points d'extension
+d'interface**. On ne reprend **pas** l'héritage de modèle en place (`_inherit`) : qu'un module puisse
+redéfinir silencieusement le modèle et les méthodes d'un autre est contraire à D2 et à la propriété
+disjointe des dossiers — sur cet axe notre conception est meilleure, l'adopter serait une régression.
+
+### 2026-08-22 · D16 — Réserver est un acte unique, paramétré ; seules les conséquences diffèrent
+Une table de 8, une chambre de 4, un court de padel, un cours d'aquagym et une séance de massage sont
+**le même acte de réservation**. Ce qui varie, c'est l'unité de temps, le mode de capacité, et surtout
+ce qui se produit **après** — une addition, un séjour, un accès, une feuille d'émargement. Les
+conséquences passent par le bus d'événements ; l'acte reste unique.
+
+Le modèle existant en exprime déjà l'essentiel : `Ressource` porte `capacitePropre`, `partageable`,
+`codeType`, `ressourceMere` et `competenceRequise` ; `Creneau` porte début, fin, `capacite` et
+récurrence. **Trois manques précis**, et rien de plus :
+
+1. **Une réservation consomme N unités, pas 1.** Une table de 8 consomme huit couverts sur les
+   soixante du service. Aujourd'hui les participants sont des lignes individuelles — juste pour un
+   cours, faux pour des couverts.
+2. **On réserve un type, l'instance est affectée plus tard.** Personne ne réserve « la chambre 214 » :
+   on réserve *une chambre double*. Le `codeType` existe mais n'est pas une unité réservable.
+3. **Deux niveaux de capacité imbriqués.** Une table libre ne suffit pas si le service n'a plus de
+   couverts ; un moniteur libre ne suffit pas si l'école est complète.
+
+L'hébergement ajoute par-dessus la sémantique de la **nuitée** (tarif par nuit, calendrier
+d'occupation, chambre libérée le matin et relouable le soir) — une couche mince, pas un module
+parallèle.
+
+**Et le concept qui rend l'ensemble utilisable : le séjour.** Un client, une période, et tout ce qu'il
+consomme sur place — emplacement, entrées piscine, additions du bar, parties de bowling — sur un même
+compte, réglé une fois. C'est ce qui transforme « six modules » en « un logiciel », et c'est la
+réponse à l'exigence « simple et hyper clair ». Le porte-monnaie et le contrôle d'accès existent déjà.

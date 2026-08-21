@@ -37,4 +37,9 @@ Ne touche pas un chemin déjà en `WIP` par une autre instance.
 | DMS-0 | GED : spec SDD (cloisonnement, URL signees expirantes, retention legale, versionnement) | `specs/dms/**` | **claude-B** | WIP | 21/08 |
 | DMS-1 | GED : implementation du stockage, des versions et des acces | `app/src/Dms/**` | **claude-B** | CLAIM | 21/08 |
 | C17 | NF525 : troisieme chaine (Facturation) — cle obligatoire depuis lenvironnement | `app/src/Facturation/Nf525` | **claude-A** | DONE | 22/08 |
+| ACT-0 | Spec SDD : composition dactivites, format de paquet verticale, remplacement de Metier | `specs/activites/**` | **claude-A** | CLAIM | 22/08 |
+| ACT-1 | Reservation : quantite consommee, reservation par type, quota de second niveau | `app/src/Reservation/**` | *a assigner* | CLAIM | 22/08 |
+| ACT-2 | Module hebergement : nuitee, calendrier doccupation, arrivee et depart | `app/src/Lodging/**` | *a assigner* | CLAIM | 22/08 |
+| ACT-3 | Concept de sejour : compte unique sur place, regle une fois au depart | `app/src/Stay/**` | *a assigner* | CLAIM | 22/08 |
+| ACT-4 | Module restauration : service a table, addition, envoi cuisine | `app/src/Dining/**` | *a assigner* | CLAIM | 22/08 |
 <!-- Ajouter les nouvelles tâches au-dessus de cette ligne. -->
