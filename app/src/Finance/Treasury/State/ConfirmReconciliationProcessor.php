@@ -30,6 +30,12 @@ use Symfony\Component\Uid\Uuid;
  *
  * @implements ProcessorInterface<BankStatementLine, BankStatementLine>
  */
+/**
+ * @cloisonnement-verifie : la ligne d'écriture résolue depuis `ledgerLineIds` doit appartenir au même
+ *   **compte comptable** que le compte bancaire du relevé — contrôle plus strict que l'appartenance à
+ *   l'établissement, et échec fermé en 404. Le garde-fou ne reconnaît que les contrôles par
+ *   établissement, d'où cette déclaration. Écrit par claude-B (FIN-4), vérifié par claude-A le 22/08.
+ */
 final class ConfirmReconciliationProcessor implements ProcessorInterface
 {
     public function __construct(

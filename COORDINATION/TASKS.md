@@ -10,7 +10,7 @@ Ne touche pas un chemin déjà en `WIP` par une autre instance.
 | C2 | Échafaudage de coordination (ce dossier) | `COORDINATION/**` | claude (billetterie) | DONE | 19/08 |
 | C3 | Spec SDD Suite Finance & Compta | `specs/finance/**` | claude (billetterie) | DONE | 19/08 |
 | C6 | Suite Finance FIN-0 (OCR) + FIN-1 (Compta) | `app/src/{Ocr,Compta}/**` | **claude-B** | DONE | 21/08 |
-| C4 | Garde-fous CI partagés (cloisonnement, CSRF, manifeste) | `bin/`, `.github/workflows/` | **claude-C** | WIP | 19/08 |
+| C4 | Garde-fous CI : cloisonnement, nommage, secrets — i18n et CSRF sans objet | `bin/` | **claude-C** | DONE | 22/08 |
 | C5 | Bus d'événements + registre de modules (impl core) | `app/src/Platform/**` | **claude-A** | DONE | 20/08 |
 | C7 | Harnais de test executable (stack isolee, DDL hors mapping) | `infra/test-stack.sh`, `app/tests/DdlHorsMapping.php` | **claude-A** | DONE | 19/08 |
 | C8 | CA-11 Support : l agent ne voit pas les 2 messages du fil (TicketSupportApiTest:109) | `app/src/Support/State/MessageTicketProvider.php` | **claude-A** | DONE | 19/08 |
@@ -27,8 +27,8 @@ Ne touche pas un chemin déjà en `WIP` par une autre instance.
 | ED-4 | Acces dassistance borne et audite (RG-ED-07) | `app/src/Editeur/**`, `app/src/Audit/**` | *a assigner* | CLAIM | 20/08 |
 | C14 | Declarer au mapping ORM les index ecrits en SQL brut, pour que migrations:diff cesse de proposer leur suppression | `app/src/*/Entity`, `app/migrations` | *a assigner* | CLAIM | 20/08 |
 | C15 | NF525 : cle de scellement en dur dans ScellementEcritureHandler (conformite legale) | `app/src/Compta/Nf525` | **claude-B** | DONE | 20/08 |
-| C16 | Declencher les garde-fous : le depot na ni remote ni hook, le workflow CI na jamais tourne | `hooks/`, `bin/` | **claude-C** | CLAIM | 20/08 |
-| D7-bis | Asynchrone : messenger + transport Doctrine, worker systemd, transport dechec | `app/config`, `infra/` | **claude-A** | WIP | 21/08 |
+| C16 | Declencheur : hook pre-receive installe sur le bare, garde-fous actifs | `hooks/` | **claude-C** | DONE | 22/08 |
+| D7-bis | Asynchrone : messenger + transport Doctrine, worker systemd, transport dechec | `app/config`, `infra/` | **claude-A** | DONE | 21/08 |
 | SOC-0 | Spec SDD du module de publication sociale | `specs/social/**` | **claude-A** | CLAIM | 21/08 |
 | SOC-1 | Modele post/publications + coffre a jetons chiffre et cloisonne | `app/src/Social/**` | *a assigner* | CLAIM | 21/08 |
 | SOC-2 | Adaptateur reseau ouvert (Mastodon/Bluesky) + file, reprises, quotas | `app/src/Social/**` | *a assigner* | CLAIM | 21/08 |
@@ -36,4 +36,5 @@ Ne touche pas un chemin déjà en `WIP` par une autre instance.
 | SOC-4 | Adaptateurs Meta (Page + Instagram), apres verification dentreprise et revue applicative | `app/src/Social/**` | *a assigner* | BLOCKED | 21/08 |
 | DMS-0 | GED : spec SDD (cloisonnement, URL signees expirantes, retention legale, versionnement) | `specs/dms/**` | **claude-B** | WIP | 21/08 |
 | DMS-1 | GED : implementation du stockage, des versions et des acces | `app/src/Dms/**` | **claude-B** | CLAIM | 21/08 |
+| C17 | NF525 : troisieme chaine (Facturation) — cle obligatoire depuis lenvironnement | `app/src/Facturation/Nf525` | **claude-A** | DONE | 22/08 |
 <!-- Ajouter les nouvelles tâches au-dessus de cette ligne. -->
