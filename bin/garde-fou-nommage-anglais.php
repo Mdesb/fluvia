@@ -112,11 +112,34 @@ function fichiersAjoutes(string $ref): array
         exit(2);
     }
 
+    $jusqua = $GLOBALS['jusqua'] ?? 'HEAD';
     $sortie = [];
+    $code = 0;
+
+    // Pas de `2>/dev/null` ici : une liste vide parce que git a échoué et une liste vide parce que
+    // rien n'a été ajouté se ressemblent, et la première passerait pour un succès. On distingue.
     exec(
-        sprintf('git diff --diff-filter=A --name-only %s...HEAD 2>/dev/null', escapeshellarg($ref)),
-        $sortie
+        sprintf(
+            'git diff --diff-filter=A --name-only %s...%s 2>&1',
+            escapeshellarg($ref),
+            escapeshellarg($jusqua)
+        ),
+        $sortie,
+        $code
     );
+
+    if ($code !== 0) {
+        fwrite(STDERR, sprintf(
+            "\n=== ERREUR — `git diff %s...%s` a échoué (code %d) ===\n  %s\n\n"
+            . "  Sans cette comparaison, le garde-fou ne sait pas ce qui est nouveau : il ne peut rien\n"
+            . "  contrôler, donc il refuse plutôt que de rendre un vert qui ne veut rien dire.\n\n",
+            $ref,
+            $jusqua,
+            $code,
+            implode("\n  ", $sortie)
+        ));
+        exit(2);
+    }
 
     return array_values(array_filter($sortie, static function (string $chemin): bool {
         if (!str_ends_with($chemin, '.php')) {
@@ -142,7 +165,14 @@ function analyser(string $fichier, array $lexique): array
 {
     $source = @file_get_contents($fichier);
     if ($source === false) {
-        return [];
+        // Un fichier annoncé comme ajouté mais illisible n'est pas « rien à signaler » : c'est un
+        // contrôle qui n'a pas eu lieu. On le dit, plutôt que de le compter comme conforme.
+        fwrite(STDERR, sprintf(
+            "\n=== ERREUR — fichier annoncé ajouté mais illisible : %s ===\n"
+            . "  Le contrôle n'a pas pu porter dessus. Refus plutôt que silence.\n\n",
+            $fichier
+        ));
+        exit(2);
     }
 
     $trouvailles = [];
@@ -183,9 +213,15 @@ $options = array_slice($argv, 1);
 $reference = REFERENCE_DEFAUT;
 $fichiers = null;
 
+// Révision de fin de comparaison. Vaut HEAD en local ; le hook `pre-receive` la fixe explicitement,
+// car côté serveur le commit poussé n'est encore référencé par aucun HEAD.
+$GLOBALS['jusqua'] = 'HEAD';
+
 foreach ($options as $option) {
     if (str_starts_with($option, '--contre=')) {
         $reference = substr($option, strlen('--contre='));
+    } elseif (str_starts_with($option, '--jusqua=')) {
+        $GLOBALS['jusqua'] = substr($option, strlen('--jusqua='));
     } elseif (str_starts_with($option, '--fichiers=')) {
         $fichiers = array_values(array_filter(explode(',', substr($option, strlen('--fichiers=')))));
     }
