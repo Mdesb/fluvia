@@ -16,6 +16,7 @@ use App\Platform\Event\EventBus;
 use App\Platform\Event\EventSubject;
 use App\Platform\Event\EventTenant;
 use App\Securite\Entity\Utilisateur;
+use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
@@ -72,11 +73,23 @@ final class BankReconciliationHandler
 
         if (\count($ledgerLines) === 1) {
             $ligneEcriture = $ledgerLines[0];
-            $this->refuserSiDejaLettree($ligneEcriture);
-
             $reconciliationCode = Uuid::v4()->toRfc4122();
 
             $this->em->wrapInTransaction(function () use ($ligne, $ligneEcriture, $auteur, $reconciliationCode, $bankAccount): void {
+                // Verrous pessimistes posés EN PREMIER, avant tout contrôle d'unicité (même patron que
+                // FIN-2 `SupplierPaymentHandler::enregistrer()` et FIN-3 `PostToLedgerExpenseReportProcessor`) :
+                // - `$ligne` (BankStatementLine) ferme la course d'un double-rapprochement de la MÊME ligne ;
+                // - `$ligneEcriture` (LigneEcriture) est la ressource PARTAGÉE — sans ce verrou, deux lignes
+                //   de relevé DISTINCTES pointant la même écriture 512 scellée passaient toutes deux
+                //   `refuserSiDejaLettree()` (simple SELECT hors transaction) et créaient chacune un lettrage.
+                $this->em->lock($ligne, LockMode::PESSIMISTIC_WRITE);
+                $this->em->lock($ligneEcriture, LockMode::PESSIMISTIC_WRITE);
+
+                if ($ligne->getStatus() === BankStatementLineStatus::Reconciled) {
+                    throw new ConflictHttpException('Cette ligne de relevé est déjà rapprochée.');
+                }
+                $this->refuserSiDejaLettree($ligneEcriture);
+
                 $lettrage = $this->lettrageHandler->lettrer($ligneEcriture, $auteur);
                 $lettrage->setReconciliationCode($reconciliationCode);
 
@@ -97,6 +110,17 @@ final class BankReconciliationHandler
         $ligneCorrespondante = $this->trouverLigneDuCompteBancaire($ledgerLines, $bankAccount);
 
         $this->em->wrapInTransaction(function () use ($ligne, $ledgerLines, $auteur, $ligneCorrespondante, $bankAccount): void {
+            // Mêmes verrous que le cas mono-ligne : la ligne de relevé + CHAQUE ligne d'écriture du groupe
+            // (ressources partagées), avant que `lettrerGroupe()` ne relise leur état de lettrage.
+            $this->em->lock($ligne, LockMode::PESSIMISTIC_WRITE);
+            foreach ($ledgerLines as $ligneAVerrouiller) {
+                $this->em->lock($ligneAVerrouiller, LockMode::PESSIMISTIC_WRITE);
+            }
+
+            if ($ligne->getStatus() === BankStatementLineStatus::Reconciled) {
+                throw new ConflictHttpException('Cette ligne de relevé est déjà rapprochée.');
+            }
+
             $lettrages = $this->lettrageHandler->lettrerGroupe($ledgerLines, $auteur);
             $reconciliationCode = $lettrages[0]->getReconciliationCode();
             \assert(\is_string($reconciliationCode));

@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace App\Finance\Treasury\Service;
 
-use Symfony\Component\Uid\Uuid;
-
 /**
  * Prévisionnel simple (§0.8 du plan, RG-TRE-08) — `projectedBalance = position(aujourd'hui).balance +
  * Σ entries[≤ horizon] − Σ exits[≤ horizon]` : **projection arithmétique brute**, aucune pondération de
@@ -22,7 +20,7 @@ final class CashflowForecastCalculator
     }
 
     /**
-     * @param list<Uuid> $etablissements
+     * @param list<string> $etablissements identifiants **binaires** (`Uuid::toBinary()`), comme `TreasuryPositionCalculator::position()`
      *
      * @return array{asOfDate: string, horizonDays: int, projectedBalanceCents: int}
      */
