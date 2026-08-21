@@ -34,6 +34,6 @@ Ne touche pas un chemin déjà en `WIP` par une autre instance.
 | SOC-2 | Adaptateur reseau ouvert (Mastodon/Bluesky) + file, reprises, quotas | `app/src/Social/**` | *a assigner* | CLAIM | 21/08 |
 | SOC-3 | Collecte planifiee des statistiques : instantanes + charge brute conservee | `app/src/Social/**` | *a assigner* | CLAIM | 21/08 |
 | SOC-4 | Adaptateurs Meta (Page + Instagram), apres verification dentreprise et revue applicative | `app/src/Social/**` | *a assigner* | BLOCKED | 21/08 |
-| DMS-0 | GED : spec SDD (cloisonnement, URL signees expirantes, retention legale, versionnement) | `specs/dms/**` | **claude-B** | CLAIM | 21/08 |
+| DMS-0 | GED : spec SDD (cloisonnement, URL signees expirantes, retention legale, versionnement) | `specs/dms/**` | **claude-B** | WIP | 21/08 |
 | DMS-1 | GED : implementation du stockage, des versions et des acces | `app/src/Dms/**` | **claude-B** | CLAIM | 21/08 |
 <!-- Ajouter les nouvelles tâches au-dessus de cette ligne. -->
