@@ -50,6 +50,18 @@ const MOTIFS_CONTROLE = [
     'ContexteEtablissement'   => '/ContexteEtablissement/',
     'extension Perimetre'     => '/Perimetre\w*/',
     'getEtablissement()'      => '/->getEtablissement\(\)/',
+    // Declaration explicite : le fichier porte un controle de perimetre d'une forme que les motifs
+    // ci-dessus ne savent pas reconnaitre. Le message du garde-fou promettait deja cette porte de
+    // sortie (« documente-le dans le fichier lui-meme ») sans qu'elle existe — la voici.
+    //
+    // Elle est preferable a l'elargissement des motifs : une exemption declaree est greppable,
+    // datee et attribuable, alors qu'une detection assouplie ouvre un trou pour tout le monde et
+    // sans trace. L'annotation doit porter une raison — le deux-points suivi de texte est exige.
+    //
+    //     @cloisonnement-verifie : <pourquoi ce fichier est controle, et par qui>
+    //
+    // Pour auditer les exemptions : grep -rn "@cloisonnement-verifie" app/src
+    'annotation explicite'    => '/@cloisonnement-verifie\s*:\s*\S/',
 ];
 
 const AIDE_CORRECTION = <<<'TXT'
