@@ -27,9 +27,20 @@ use App\Platform\Module\ModuleManifest;
  * moment de l'implémentation de FIN-3 ; `expense_report.approved`/`.reimbursed` sont à ajouter au
  * contrat par l'intégrateur avant merge, RG-PLAT-06).
  *
- * ⚠ **Coordination de merge FIN-2/FIN-3 (§7 point 3 du plan FIN-3)** : ce fichier est modifié par les
- * deux lots. Le second lot mergé doit **étendre** (concaténation simple) les tableaux déjà posés par le
- * premier — jamais réécrire la classe.
+ * ⚠ **Coordination de merge FIN-2/FIN-3/FIN-4 (§7 point 3 du plan FIN-3, §0.11/§7 point 4 du plan FIN-4)**
+ * : ce fichier est modifié par trois lots. Chaque lot mergé doit **étendre** (concaténation simple) les
+ * tableaux déjà posés par les précédents — jamais réécrire la classe.
+ *
+ * **FIN-4 (`App\Finance\Treasury`, §0.11 de son plan)** — 3ᵉ extension de ce fichier partagé, relue
+ * avant d'étendre (état réel constaté : 6 permissions FIN-2 + 4 FIN-3, 4 événements FIN-2 + 3 FIN-3,
+ * `features()` ne portant que `expense_reports`/`ocr_expense_reports`, `routes()` portant déjà
+ * `/finance/supplier-invoices` + `/finance/expense-reports`) : ajoute 3 permissions
+ * (`finance.treasury_manage_account`, `finance.treasury_import_statement`, `finance.treasury_reconcile`),
+ * 2 événements (`treasury.reconciliation_completed`, `treasury.discrepancy_detected` — ⚠ absents du
+ * catalogue partagé au moment de la rédaction du plan FIN-4, à ajouter par l'intégrateur, RG-PLAT-06),
+ * 2 features (`treasury`, `bank_reconciliation`), 1 route (`/finance/treasury`) ; `eventsConsumed()`
+ * inchangé (Treasury n'écoute rien, agrégation par lecture directe des entités FIN-2/`App\Facturation`/
+ * `App\Sepa`, jamais par le bus). Rien retiré des extensions précédentes.
  */
 final class FinanceModule implements ModuleManifest
 {
@@ -73,6 +84,11 @@ final class FinanceModule implements ModuleManifest
             'finance.expense_report_read_own',
             'finance.expense_report_post_to_ledger',
             'finance.expense_report_approve',
+            // FIN-4 (§0.11 de son plan) — aucune permission défensive supplémentaire (Treasury ne
+            // s'appuie pas sur `App\Autorisation`, contrairement à FIN-3 §0.4).
+            'finance.treasury_manage_account',
+            'finance.treasury_import_statement',
+            'finance.treasury_reconcile',
         ];
     }
 
@@ -89,6 +105,11 @@ final class FinanceModule implements ModuleManifest
             'expense_report.submitted',
             'expense_report.approved',
             'expense_report.reimbursed',
+            // FIN-4 (§0.10 de son plan) — tenant toujours dérivé de `BankAccount.establishment`, jamais
+            // du contexte HTTP (D6) ; `discrepancy_detected` émis par la commande planifiée
+            // `finance:treasury:detecter-ecarts` (acteur `null`, comme `expense_report.approved`).
+            'treasury.reconciliation_completed',
+            'treasury.discrepancy_detected',
         ];
     }
 
@@ -105,13 +126,16 @@ final class FinanceModule implements ModuleManifest
             // FIN-3 (§0.10 de son plan, déjà nommées par `spec-finance-suite.md` §3.1).
             'expense_reports',
             'ocr_expense_reports',
+            // FIN-4 (§0.11 de son plan, déjà nommées par `spec-finance-suite.md` §2/§3.1).
+            'treasury',
+            'bank_reconciliation',
         ];
     }
 
     /** @return list<string> */
     public function routes(): array
     {
-        return ['/finance/supplier-invoices', '/finance/expense-reports'];
+        return ['/finance/supplier-invoices', '/finance/expense-reports', '/finance/treasury'];
     }
 
     /** @return array<string, mixed> */
