@@ -92,8 +92,16 @@ fi
 #    il ne trouve rien sur le neuf existant, donc il s'installe au vert.
 executer "Nommage anglais (D5)" php_racine bin/garde-fou-nommage-anglais.php "--contre=${REFERENCE:-origin/main}"
 
-# 4. i18n : pas de chaîne d'UI en dur — à venir
-# 5. CSRF / sécurité de base — à venir
+# 4. Aucun secret cryptographique en valeur par défaut.
+#    Contrairement au n°1, celui-ci n'a pas de ligne de base et n'en aura pas : une clé en dur n'est
+#    pas une dette qu'on étale, c'est un secret publié. Il est ROUGE tant que
+#    Facturation/Nf525/ScellementFactureHandler n'est pas passé à #[Autowire(env:)] — c'est voulu.
+executer "Secrets en dur" php_racine bin/garde-fou-secrets.php
+
+# 5. i18n : pas de chaîne d'UI en dur — SANS OBJET tant que la couche i18n n'existe pas (aucun
+#    catalogue, aucun usage du traducteur dans app/src). Acté par l'intégrateur le 21/08.
+# 6. CSRF — SANS OBJET : tous les pare-feux sont `stateless: true` et l'authentification est un JWT
+#    en en-tête, qui n'est pas un identifiant ambiant. Acté par l'intégrateur le 21/08.
 
 echo "─────────────────────────────────────────────────────────────"
 if [ "$ECHECS" -gt 0 ]; then

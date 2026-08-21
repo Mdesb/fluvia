@@ -1,0 +1,132 @@
+#!/usr/bin/env bash
+#
+# Hook `pre-receive` — fait exécuter les garde-fous (C4/C16).
+#
+# Le dépôt n'a ni remote GitHub ni CI : `origin` est un bare local. Ce hook est donc le SEUL endroit
+# où les garde-fous s'exécutent sans dépendre de la bonne volonté de qui pousse. Un push refusé ici
+# ne l'est pour personne d'autre : rien n'entre dans le dépôt partagé.
+#
+# Il ne lance que les trois contrôles **statiques** (aucune dépendance Composer, aucune base) :
+# cloisonnement, nommage anglais, secrets en dur. Le contrôle du manifeste passe par PHPUnit et donc
+# par `vendor/` — trop lourd pour un hook, il reste à `./infra/test-stack.sh`.
+#
+# ── INTERRUPTEUR ────────────────────────────────────────────────────────────────────────────────
+# Créer le fichier `hooks/GARDE-FOUS-DESACTIVES` dans le dépôt bare désactive ce hook. C'est
+# volontaire : un hook serveur qui se tromperait bloquerait TOUT LE MONDE, sans recours côté client
+# (`--no-verify` n'agit pas sur `pre-receive`). L'interrupteur est la sortie de secours, pas une
+# invitation — s'il sert, il faut dire pourquoi dans MESSAGES.md.
+# ────────────────────────────────────────────────────────────────────────────────────────────────
+
+set -uo pipefail
+
+BARE="$(pwd)"                       # git place le hook dans le répertoire du dépôt bare
+BRANCHE_REFERENCE="refs/heads/main"
+ZERO="0000000000000000000000000000000000000000"
+IMAGE="billetterie-preprod-php"
+
+if [ -f "$BARE/hooks/GARDE-FOUS-DESACTIVES" ]; then
+    echo "⚠ Garde-fous DÉSACTIVÉS ($BARE/hooks/GARDE-FOUS-DESACTIVES). Push accepté sans contrôle."
+    exit 0
+fi
+
+# Sans docker ni image, on ne peut rien contrôler. On refuse plutôt que de laisser passer en
+# silence : un garde-fou qui s'efface quand l'outillage manque n'en est pas un.
+if ! command -v docker >/dev/null 2>&1 || ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
+    echo "✗ Garde-fous : docker ou l'image « $IMAGE » sont indisponibles — impossible de contrôler ce push."
+    echo "  Corrige l'outillage, ou pose $BARE/hooks/GARDE-FOUS-DESACTIVES en le justifiant dans MESSAGES.md."
+    exit 1
+fi
+
+ECHEC_GLOBAL=0
+
+while read -r ancien nouveau ref; do
+    # Suppression de branche : rien à contrôler.
+    [ "$nouveau" = "$ZERO" ] && continue
+    # Tags et refs techniques : hors périmètre.
+    case "$ref" in refs/heads/*) ;; *) continue ;; esac
+
+    # Base de comparaison : pour un push sur main, l'état précédent de main ; pour une branche, le
+    # main courant. C'est ce qui donne au cliquet une référence que l'auteur du push ne contrôle pas.
+    if [ "$ref" = "$BRANCHE_REFERENCE" ] && [ "$ancien" != "$ZERO" ]; then
+        BASE="$ancien"
+    elif git --git-dir="$BARE" rev-parse --verify "$BRANCHE_REFERENCE" >/dev/null 2>&1; then
+        BASE="$(git --git-dir="$BARE" rev-parse "$BRANCHE_REFERENCE")"
+    else
+        echo "· $ref : pas de branche de référence, contrôles ignorés (dépôt naissant)."
+        continue
+    fi
+
+    echo "═══ Garde-fous sur ${ref#refs/heads/} (${nouveau:0:8}, référence ${BASE:0:8}) ═══"
+
+    # Le commit poussé n'est encore rattaché à aucune branche : on l'extrait pour disposer d'un
+    # arbre de travail à analyser.
+    ARBRE="$(mktemp -d)"
+    trap 'rm -rf "$ARBRE"' EXIT
+    if ! git --git-dir="$BARE" archive "$nouveau" | tar -x -C "$ARBRE"; then
+        echo "✗ Extraction impossible du commit $nouveau."
+        ECHEC_GLOBAL=1
+        continue
+    fi
+
+    if [ ! -f "$ARBRE/bin/garde-fous.sh" ]; then
+        echo "· Ce commit ne contient pas encore les garde-fous — contrôles ignorés."
+        rm -rf "$ARBRE"
+        continue
+    fi
+
+    # GIT_DIR pointe le bare : les garde-fous y lisent la référence du cliquet et la liste des
+    # fichiers ajoutés, alors que le répertoire courant est l'arbre extrait.
+    php_dans_arbre() {
+        docker run --rm --network none \
+            -u "$(id -u):$(id -g)" \
+            -v "$ARBRE:$ARBRE" -v "$BARE:$BARE:ro" \
+            -e GIT_DIR="$BARE" \
+            -w "$ARBRE" "$IMAGE" php "$@"
+    }
+
+    ECHEC_REF=0
+
+    echo "── Cloisonnement (D3/D8)"
+    php_dans_arbre bin/garde-fou-cloisonnement.php "--contre=$BASE" || ECHEC_REF=1
+
+    if [ -f "$ARBRE/bin/garde-fou-nommage-anglais.php" ]; then
+        echo "── Nommage anglais (D5)"
+
+        # ⚠ Quarantaine d'objets. Pendant un `pre-receive`, git range les objets reçus dans un dépôt
+        # temporaire et ne les migre qu'après succès du hook. Le processus du hook les voit — git lui
+        # transmet `GIT_QUARANTINE_PATH` et consorts — mais un CONTENEUR lancé depuis le hook ne les
+        # voit pas : il ne reçoit que `GIT_DIR`, et le commit poussé y est introuvable
+        # (« Invalid symmetric difference expression »).
+        #
+        # On calcule donc la liste des fichiers ajoutés ICI, sur l'hôte, où la quarantaine s'applique,
+        # et on la passe au garde-fou. Il n'a alors plus besoin de git du tout : les contenus, eux,
+        # sont dans l'arbre extrait.
+        AJOUTES="$(git --git-dir="$BARE" diff --diff-filter=A --name-only "$BASE...$nouveau" \
+                    -- 'app/src' 'app/migrations' 2>/dev/null | paste -sd, -)"
+
+        if [ -z "$AJOUTES" ]; then
+            echo "Nommage anglais : OK — aucun fichier ajouté sous app/src ou app/migrations."
+        else
+            php_dans_arbre bin/garde-fou-nommage-anglais.php "--fichiers=$AJOUTES" || ECHEC_REF=1
+        fi
+    fi
+
+    if [ -f "$ARBRE/bin/garde-fou-secrets.php" ]; then
+        echo "── Secrets en dur"
+        php_dans_arbre bin/garde-fou-secrets.php || ECHEC_REF=1
+    fi
+
+    rm -rf "$ARBRE"
+    trap - EXIT
+
+    if [ "$ECHEC_REF" -ne 0 ]; then
+        echo
+        echo "✗ Push de ${ref#refs/heads/} REFUSÉ : au moins un garde-fou a échoué."
+        echo "  Reproduis en local : ./bin/garde-fous.sh origin/main"
+        ECHEC_GLOBAL=1
+    else
+        echo "✓ ${ref#refs/heads/} : garde-fous OK."
+    fi
+done
+
+exit "$ECHEC_GLOBAL"
