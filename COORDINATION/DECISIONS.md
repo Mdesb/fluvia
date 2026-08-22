@@ -412,3 +412,26 @@ en percentile** — pas sur un tir unique au milieu d'une suite. C21 ouvre ce ch
 **Et la leçon de méthode, qui a coûté une heure :** en cherchant l'échec, j'avais filtré la sortie des
 tests pour retirer le bruit applicatif — le filtre a emporté le bloc d'échec avec lui, et j'ai perdu le
 nom du test. **On ne filtre jamais la sortie d'une suite dont on cherche l'échec.**
+
+### 2026-08-22 · D21 — Une amélioration de garde-fou se fusionne avant tout le reste
+Le hook `pre-receive` analyse l'arbre poussé, mais exécute le `bin/` que contient **`main`**. Une
+branche qui améliore un garde-fou est donc jugée par l'ancienne version : **tant qu'elle n'est pas
+fusionnée, elle ne protège personne**. claude-C l'a établi par la mesure, pas par le raisonnement — même
+fichier de test, deux verdicts opposés selon la version exécutée.
+
+**Ce que ça inverse.** Pour du code applicatif, l'ordre normal est : on développe sur une branche, on
+valide, on fusionne — la valeur existe dès la branche et la fusion la publie. Pour un outil de contrôle,
+la valeur **n'existe qu'après** la fusion. Une amélioration de garde-fou non fusionnée n'est pas « du
+travail en attente d'intégration », c'est **du travail sans effet**.
+
+**Règle :** un lot qui améliore un garde-fou, un hook ou le harnais de test passe **avant** un lot
+fonctionnel dans la file d'intégration, à qualité de revue égale. Ce n'est pas une préférence pour
+l'outillage, c'est la conséquence de son mode de fonctionnement.
+
+**Et l'aveu qui va avec.** J'ai laissé dix commits de claude-C attendre douze heures, dont ceux qui
+ajoutaient précisément la règle attrapant la forme des cinq IDOR du projet. Pendant ces douze heures,
+deux IDOR ont été corrigés à la main — alors que la détection automatique dormait sur une branche.
+Vérifié après fusion, sur un clone jetable : le garde-fou de `main` **refuse** désormais un Processor
+qui résout une entité depuis le corps sans contrôle (code de sortie 1), et son message cite l'IDOR
+d'appairage en exemple. C'était vrai avant la fusion aussi — sur la branche de C, où ça ne servait à
+personne.
