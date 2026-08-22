@@ -48,7 +48,9 @@ final class TerminalPassageTest extends AccesApiTestCase
         self::assertNotEmpty($corps['horodatageServeur']);
         self::assertIsArray($corps['affichage']);
         self::assertSame(11, $corps['affichage']['compostagesRestants']);
-        self::assertLessThan(1.0, $duree, 'Réponse attendue en moins de 1 s (RG-ACC-01).');
+        // D20 — seuil de garde, pas de mesure de performance (voir ValidationPassageTest).
+        // L'exigence RG-ACC-01 se verifie sur materiel representatif (C21), pas ici.
+        self::assertLessThan(5.0, $duree, 'Regression pathologique : reponse au-dela de 5 s (RG-ACC-01, seuil de garde D20).');
     }
 
     public function testCa3SignatureInvalideMessageGeneriqueSansAffichage(): void

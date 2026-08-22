@@ -389,3 +389,26 @@ il ne reste qu'un adaptateur à écrire.
 **Conséquence sur la conception :** quand une fonctionnalité dépend d'un tiers, le premier livrable
 n'est jamais l'intégration — c'est le port et son adaptateur factice. Ce qui se teste sans le tiers
 doit être écrit avant lui, pas après.
+
+### 2026-08-22 · D20 — Aucune assertion d'horloge dans la suite fonctionnelle
+Une suite complète de 1 149 tests a échoué une fois, puis repassé au vert **sur exactement le même
+code**. Ce n'était pas une régression : c'était une assertion de durée. Trois existaient — 1 s sur deux
+routes d'accès, 50 ms sur un adaptateur OCR.
+
+**Le défaut de conception :** un `assertLessThan` sur un chronomètre, exécuté au milieu d'une suite qui
+tourne deux heures sur un VPS partagé sous Docker, **mesure la charge de la machine, pas le code**. Il
+passe en module isolé, où la machine est au repos, et saute en suite complète. Le symptôme est le pire
+qui soit : un échec qui ne se reproduit pas, donc qu'on finit par ignorer — et le jour où la suite
+signale une vraie régression, plus personne ne la croit.
+
+**Règle :** la suite fonctionnelle ne contient pas d'assertion de temps écoulé. Ce qui subsiste est un
+**seuil de garde** volontairement large (5 s là où l'exigence est à 1 s), dont le seul rôle est
+d'attraper une régression pathologique — un N+1, un appel bloquant — sans dépendre du voisin.
+
+**Ce qui n'est pas abandonné :** les exigences de performance elles-mêmes. US-L3-03 et RG-ACC-01 restent
+entières, mais elles se vérifient **sur matériel représentatif, à chaud, sur plusieurs échantillons et
+en percentile** — pas sur un tir unique au milieu d'une suite. C21 ouvre ce chantier.
+
+**Et la leçon de méthode, qui a coûté une heure :** en cherchant l'échec, j'avais filtré la sortie des
+tests pour retirer le bruit applicatif — le filtre a emporté le bloc d'échec avec lui, et j'ai perdu le
+nom du test. **On ne filtre jamais la sortie d'une suite dont on cherche l'échec.**
