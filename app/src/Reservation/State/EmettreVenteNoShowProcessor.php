@@ -11,10 +11,12 @@ use App\Reservation\Entity\FacturationNoShow;
 use App\Reservation\Enum\StatutFacturationNoShow;
 use App\Reservation\Facturation\ResolveurStrategieFacturation;
 use App\Securite\Entity\Utilisateur;
+use App\Securite\Service\ContexteEtablissement;
 use App\Vente\Service\LecteurCorps;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\Uid\Uuid;
 
@@ -32,6 +34,7 @@ final class EmettreVenteNoShowProcessor implements ProcessorInterface
         private readonly LecteurCorps $lecteur,
         private readonly Security $security,
         private readonly ResolveurStrategieFacturation $strategies,
+        private readonly ContexteEtablissement $contexte,
     ) {
     }
 
@@ -58,7 +61,29 @@ final class EmettreVenteNoShowProcessor implements ProcessorInterface
         if (isset($corps['session']) && \is_string($corps['session'])) {
             $segment = str_contains($corps['session'], '/') ? basename($corps['session']) : $corps['session'];
             if (Uuid::isValid($segment)) {
-                $contexte['session'] = $this->em->getRepository(SessionCaisse::class)->find(Uuid::fromString($segment));
+                $session = $this->em->getRepository(SessionCaisse::class)->find(Uuid::fromString($segment));
+
+                // D8 — « session » est un identifiant fourni par le client : il n'est jamais
+                // l'autorisation. `read: true` protege bien la `FacturationNoShow`, mais la session de
+                // caisse n'en depend pas et echappait donc a tout controle. La suite du traitement
+                // verifie que la session existe et qu'elle est ouverte (RG-M2-01), jamais a qui elle
+                // appartient : un agent portant `reservation.facturer` sur A, connaissant l'UUID d'une
+                // session ouverte de B, encaissait dans la caisse de B.
+                //
+                // Cinquieme IDOR de la meme famille — une entite resolue depuis le corps de la requete
+                // et jamais confrontee au perimetre. Trouve par claude-C en auditant la ligne de base
+                // du garde-fou.
+                //
+                // Echec ferme en 404 et non 403 : un 403 confirmerait l'existence de la session
+                // ailleurs et ferait de la route un oracle d'enumeration. Une session sans
+                // etablissement echoue aussi — fermeture par defaut.
+                $actif = $this->contexte->etablissementActif();
+                if ($session instanceof SessionCaisse
+                    && (string) $session->getEtablissement()?->getId() !== (string) $actif?->getId()) {
+                    throw new NotFoundHttpException('Session de caisse introuvable.');
+                }
+
+                $contexte['session'] = $session;
             }
         }
 
