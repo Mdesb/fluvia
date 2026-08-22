@@ -51,4 +51,5 @@ Ne touche pas un chemin déjà en `WIP` par une autre instance.
 | C20 | IDOR appairage corrige — test de non-regression a ecrire (agent scope B vs droit de A = 404) | `app/tests/Acces/**` | *a assigner* | CLAIM | 22/08 |
 | C21 | Performance : verifier US-L3-03 et RG-ACC-01 hors suite fonctionnelle (materiel representatif, a chaud, percentile) | `infra/**` | *a assigner* | CLAIM | 22/08 |
 | C22 | OCR mode degrade : assertion sur labsence dappel reseau plutot que sur le chronometre | `app/tests/Ocr/**` | *a assigner* | CLAIM | 22/08 |
+| C23 | Tests : remplacer les createMock() sans attente par createStub() (5 notices, meme famille) | `app/tests/**` | **claude-C** | CLAIM | 22/08 |
 <!-- Ajouter les nouvelles tâches au-dessus de cette ligne. -->
