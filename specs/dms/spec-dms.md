@@ -11,8 +11,37 @@
   seules deux US mentionnent un « justificatif » sans lien avec ce lot). Numérotation proposée :
   **US-DMS-01 à US-DMS-06** (à faire valider si le backlog doit les accueillir formellement).
 - **Règles de gestion :** **RG-DMS-01 à RG-DMS-26** (nouvelles).
-- **Statut :** brouillon — étape 1 du pipeline SDD ; un `sdd-architecte` produira ensuite le plan
-  technique. Cette spec ne code rien et reste orientée comportement observable.
+- **Statut :** **arbitrée** — l'intégrateur a tranché les 8 points ouverts (D18, 2026-08-22, voir bloc
+  ci-dessous). Étape 1 du pipeline SDD close ; le plan technique (`sdd-architecte`) et l'implémentation
+  (DMS-1) partent de cette version. Cette spec ne code rien et reste orientée comportement observable.
+
+## Arbitrages intégrateur (D18) — décisions fermes
+
+Les huit points ouverts de la première rédaction ont été tranchés par l'intégrateur (D18). Ce sont des
+**bornes fermes** pour le plan et l'implémentation, pas des pistes :
+
+1. **`dms.manage_public_link` = rôle dédié** (pas une permission parmi d'autres) : c'est la seule
+   capacité qui **fabrique un accès non authentifié** (jeton au porteur, même famille que la carte
+   cadeau et le badge) ; elle ne doit **jamais** être héritée par un rôle générique d'administration.
+2. **Stockage = système de fichiers du VPS derrière le port `Storage`** (pas de S3 en v1). **Condition
+   de mise en production ajoutée (RG-DMS-27)** : la sauvegarde des fichiers et celle de la base doivent
+   être **cohérentes** — une restauration ne doit jamais laisser un `Document` pointer vers un fichier
+   absent.
+3. **Chiffrement au repos = oui**, clé `DMS_ENCRYPTION_KEY` depuis l'environnement, **sans valeur par
+   défaut** (échec fermé). **À écrire noir sur blanc (RG-DMS-25)** : la mesure protège d'un **disque ou
+   d'une sauvegarde exfiltrés**, **pas** d'une application compromise (qui détient la clé).
+4. **Chiffrement EN FLUX obligatoire (RG-DMS-28)** : le conteneur PHP est plafonné à 512 Mo
+   (`docker/php/conf.d/zz-memory.ini`) ; ne jamais charger le fichier entier en mémoire pour le
+   chiffrer/déchiffrer (`crypto_secretstream` XChaCha20 par blocs, pas `crypto_secretbox` d'un coup).
+   Le plafond de taille d'upload sera proposé **une fois le flux en place**.
+5. **Durée des liens publics : 7 jours par défaut, plafond configuré 30 jours** (RG-DMS-06 mis à jour).
+6. **Délai de grâce avant purge physique : 30 jours** (RG-DMS-15), confirmé tel quel.
+7. **Numérotation `US-DMS-01..06`** validée ; **`RetentionPolicy` en catalogue fixe v1** validé (pas de
+   configuration par établissement).
+8. **Antivirus hors v1 : accepté avec réserve consignée (RG-DMS-29)** — tenable **uniquement** parce que
+   les liens publics sont émis par des utilisateurs **habilités** ; le jour où l'émission deviendrait
+   libre-service, un fichier malveillant téléversé deviendrait publiquement distribuable : **risque
+   connu à rouvrir à ce moment-là**, pas un sujet clos.
 
 ## 1. Objectif
 
@@ -111,9 +140,9 @@ qu'une simple permission, pour qu'aucun rôle « générique » ne l'obtienne pa
   (`dms.manage_public_link`), pour un document et **une version précise, épinglée au moment de
   l'émission** — jamais « toujours la version courante » (cohérent §4.4, RG-DMS-20).
 - **RG-DMS-06** — Expiration obligatoire. `DocumentPublicLink.expiresAt` est **requis** ; il ne peut être ni
-  nul ni « sans limite ». Une durée maximale par défaut est imposée par configuration (⚠ HYPOTHÈSE : 30
-  jours par défaut, paramétrable, plafonné à une valeur elle-même configurée — jamais un lien signé
-  permanent).
+  nul ni « sans limite ». **Arbitré D18 : 7 jours par défaut, plafond configuré à 30 jours** — jamais un
+  lien signé permanent, jamais au-delà du plafond. L'usage réel (envoyer un devis à un client) tient en une
+  semaine ; 30 jours par défaut serait un mois d'exposition offert par commodité.
 - **RG-DMS-07** — Révocation à tout moment. Un utilisateur habilité peut révoquer un lien avant son
   expiration naturelle ; la révocation est **immédiate et définitive** (pas de « dé-révocation » — il faut
   émettre un nouveau lien si l'accès doit être rétabli).
@@ -213,11 +242,29 @@ qu'une simple permission, pour qu'aucun rôle « générique » ne l'obtienne pa
   port `Storage` (interface enfichable, même patron que `App\Vente\Nf525\SignataireOperation` ou
   `App\Ocr\DocumentExtractor`) : aucune dépendance directe à un SDK de stockage dans les entités/services
   métier (détail au §9.1).
-- **RG-DMS-25** — Si le chiffrement au repos est retenu (§9.2), la clé est injectée **exclusivement** via
+- **RG-DMS-25** — Chiffrement au repos **retenu (arbitré D18)**. La clé est injectée **exclusivement** via
   une variable d'environnement dédiée + `#[Autowire(env: 'DMS_ENCRYPTION_KEY')]`, **sans valeur par défaut
   codée en dur** ; son absence empêche le démarrage du conteneur (échec fermé) — même patron que
-  `App\Ocr\Service\ChiffreurApiKeyOcr` / `App\Sepa\Service\ChiffreurIban`. Deux clés en dur ont déjà été
-  trouvées en deux jours de revue de cohérence sur ce dépôt : ce lot n'en fabrique pas une troisième.
+  `App\Ocr\Service\ChiffreurApiKeyOcr` / `App\Sepa\Service\ChiffreurIban`. Trois chaînes de clés NF525 en
+  dur ont déjà été trouvées sur ce dépôt : ce lot n'en fabrique pas une quatrième (le garde-fou de
+  claude-C le vérifie automatiquement). **Périmètre explicite de la mesure** : elle protège d'un **disque
+  ou d'une sauvegarde exfiltrés**, **pas** d'une application compromise (qui détient la clé et déchiffre à
+  la volée). À écrire tel quel dans le module.
+- **RG-DMS-27** — **Cohérence de sauvegarde (condition de mise en production, arbitré D18).** Des fichiers
+  sur le système de fichiers ne sont pas dans la sauvegarde de la base : la sauvegarde des fichiers et
+  celle de la base doivent être **cohérentes**. Une restauration ne doit **jamais** laisser un `Document`/
+  `DocumentVersion` pointer vers un `storageKey` absent. C'est une exigence d'exploitation à porter au plan
+  (procédure de sauvegarde conjointe) et à documenter, pas une simple recommandation.
+- **RG-DMS-28** — **Chiffrement en flux obligatoire (arbitré D18).** Le conteneur PHP est plafonné à 512 Mo
+  (`docker/php/conf.d/zz-memory.ini`). Le chiffrement/déchiffrement ne charge **jamais** le fichier entier
+  en mémoire : traitement **par blocs en flux** (`sodium_crypto_secretstream_xchacha20poly1305_*`), sinon
+  un téléversement volumineux fait tomber le conteneur. Diffère de `ChiffreurIban`/`ChiffreurApiKeyOcr` qui
+  chiffrent de courtes chaînes en une opération mémoire — ne pas les réutiliser tels quels pour un fichier.
+  Le plafond de taille d'upload est proposé **une fois le flux en place** (§10).
+- **RG-DMS-29** — **Antivirus/scan de contenu hors v1, avec réserve consignée (arbitré D18).** Tenable
+  **uniquement** parce que les liens publics sont émis par des utilisateurs **habilités** (RG-DMS-05). Si
+  l'émission devenait un jour libre-service, un fichier malveillant téléversé deviendrait publiquement
+  distribuable : **risque connu à rouvrir à ce moment-là**, à ne pas traiter comme un sujet clos.
 
 ### 4.7 Interface — le moins d'écrans possible (D13)
 
