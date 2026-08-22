@@ -17,6 +17,7 @@ use App\Securite\Service\ContexteEtablissement;
 use App\Vente\Service\LecteurCorps;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\Uid\Uuid;
 
@@ -62,6 +63,23 @@ final class AppairageProcessor implements ProcessorInterface
 
         $droitId = $this->uuid($corps['droit'] ?? null);
         $droit = $droitId !== null ? $this->em->getRepository(DroitAcces::class)->find($droitId) : null;
+
+        // D8 — « droit » est un identifiant fourni par le client : il n'est jamais l'autorisation.
+        // `PerimetreAccesExtension` ne s'applique qu'aux requetes API Platform (Get/GetCollection) et
+        // ne couvre donc pas ce `find()` direct : sans ce controle, un agent scope sur l'etablissement
+        // B pouvait appairer un support a un `DroitAcces` de l'etablissement A — c'est-a-dire lier son
+        // propre badge au droit d'acces d'autrui.
+        //
+        // Echec ferme en 404 et non 403 : un 403 confirmerait au demandeur que ce droit existe
+        // ailleurs, ce qui transforme la route en oracle d'enumeration.
+        //
+        // Comparaison sur la representation textuelle : `getId()` rend des objets Uuid, qu'une
+        // comparaison stricte d'objets distinguerait a tort. Un droit sans etablissement echoue
+        // egalement — fermeture par defaut.
+        if ($droit instanceof DroitAcces
+            && (string) $droit->getEtablissement()?->getId() !== (string) $etablissement->getId()) {
+            throw new NotFoundHttpException('Droit introuvable.');
+        }
 
         if (!$droit instanceof DroitAcces) {
             $billetSupportRef = $this->uuid($corps['billetSupportRef'] ?? null);
