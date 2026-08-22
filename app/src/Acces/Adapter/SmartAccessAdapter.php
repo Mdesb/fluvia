@@ -11,6 +11,7 @@ use App\Acces\Dto\ResultatCommande;
 use App\Acces\Entity\Controleur;
 use App\Acces\Entity\Equipement;
 use App\Acces\Entity\ListeRevocation;
+use App\Acces\Port\AccessDriverCapabilities;
 use App\Acces\Port\PiloteAcces;
 
 /**
@@ -20,6 +21,13 @@ use App\Acces\Port\PiloteAcces;
  */
 final class SmartAccessAdapter implements PiloteAcces
 {
+    public function capabilities(): AccessDriverCapabilities
+    {
+        // Protocole non cadre par IT Cotation (E-4 du registre des bloqueurs externes, D19) : les
+        // quatre operations levent une exception. Declarer au plus pessimiste est la seule honnetete
+        // possible — supposer des capacites non verifiees reproduirait le defaut que D17 corrige.
+        return AccessDriverCapabilities::unspecified();
+    }
     public function ouvrir(Equipement $equipement, OuvertureContexte $contexte): ResultatCommande
     {
         throw new \RuntimeException('SmartAccessAdapter : protocole OSDP/API non cadré (à confirmer avec IT Cotation).');

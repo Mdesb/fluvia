@@ -12,6 +12,11 @@ use App\Acces\Entity\Controleur;
 use App\Acces\Entity\Equipement;
 use App\Acces\Entity\ListeRevocation;
 use App\Acces\Enum\EtatControleur;
+use App\Acces\Port\AccessDriverCapabilities;
+use App\Acces\Enum\CredentialEncoding;
+use App\Acces\Enum\DecisionPoint;
+use App\Acces\Enum\PassageReporting;
+use App\Acces\Enum\RevocationCapability;
 use App\Acces\Port\PiloteAcces;
 
 /**
@@ -21,6 +26,18 @@ use App\Acces\Port\PiloteAcces;
  */
 final class SimulateurAccesAdapter implements PiloteAcces
 {
+    public function capabilities(): AccessDriverCapabilities
+    {
+        // Le simulateur tranche en memoire, cote serveur : il peut donc tout, immediatement. Il
+        // n'encode rien en revanche — ecrire une autorisation sur un medium suppose un encodeur
+        // physique, que rien ne simule utilement (ACC-2).
+        return new AccessDriverCapabilities(
+            DecisionPoint::Server,
+            RevocationCapability::Immediate,
+            CredentialEncoding::None,
+            PassageReporting::RealTime,
+        );
+    }
     /** @var list<array{equipement: string, manuelle: bool}> Journal des ouvertures, pour les tests. */
     private array $ouvertures = [];
 
