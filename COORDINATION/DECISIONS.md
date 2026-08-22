@@ -362,3 +362,30 @@ ne vend pas cette mesure pour ce qu'elle n'est pas.
 **4. Durée par défaut des liens publics ramenée à 7 jours, plafond 30.** L'usage réel est d'envoyer un
 devis ou une facture à un client, et sept jours y suffisent. Trente jours par défaut, c'est un mois
 d'exposition non authentifiée pour une commodité que presque personne n'utilise.
+
+### 2026-08-22 · D19 — Ce qui dépend d'un tiers est consigné, jamais attendu
+**Aucun développement ne s'arrête en attendant une vérification externe, un accès API, un agrément ou
+un contrat.** Le besoin est inscrit au registre `COORDINATION/BLOQUEURS-EXTERNES.md`, la tâche prend le
+statut `EXTERNE`, et l'instance passe **immédiatement** à un autre module. On ne planifie pas autour
+d'une date qu'on ne maîtrise pas.
+
+**Distinction à ne jamais confondre**, faute de quoi cette décision devient une excuse :
+
+- **Bloqueur externe** — un tiers doit agir et nous ne pouvons rien faire d'autre qu'attendre
+  (vérification d'entreprise, agrément de programme, contrat bancaire, matériel d'un fournisseur).
+  Statut `EXTERNE`. Il **sort des points horaires** et vit au registre, parce que le répéter chaque
+  heure ne le fait pas avancer d'une minute et noie ce qui bouge vraiment.
+- **Bloqueur interne** — nous *pourrions* le résoudre, nous ne l'avons pas encore fait (C9 et le
+  mécanisme réel de découverte des ressources API en est l'exemple). Statut `BLOCKED`. Il **reste**
+  dans les points horaires, parce que c'est une dette et qu'elle doit démanger.
+
+**Le motif technique qui rend la règle applicable est déjà notre pratique** : un port, un adaptateur
+factice, et l'intégration réelle repoussée. `CollecteurSepaInterface` avec son
+`CollecteurSepaStubAdapter`, `PiloteAcces` avec son `SimulateurAccesAdapter`, `SOC-2` qui vise
+Mastodon et Bluesky — des réseaux ouverts, sans vérification d'entreprise — plutôt que d'attendre
+Meta. Le contrat se développe et se teste **entièrement** sans le tiers ; le jour où l'accès arrive,
+il ne reste qu'un adaptateur à écrire.
+
+**Conséquence sur la conception :** quand une fonctionnalité dépend d'un tiers, le premier livrable
+n'est jamais l'intégration — c'est le port et son adaptateur factice. Ce qui se teste sans le tiers
+doit être écrit avant lui, pas après.
