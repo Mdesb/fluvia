@@ -289,3 +289,47 @@ parallèle.
 consomme sur place — emplacement, entrées piscine, additions du bar, parties de bowling — sur un même
 compte, réglé une fois. C'est ce qui transforme « six modules » en « un logiciel », et c'est la
 réponse à l'exigence « simple et hyper clair ». Le porte-monnaie et le contrôle d'accès existent déjà.
+
+### 2026-08-22 · D17 — Un pilote d'accès déclare ses capacités ; la plateforme ne promet que ce qu'il sait tenir
+`PiloteAcces` expose quatre opérations — `ouvrir`, `recevoirEvenement`, `heartbeat`,
+`pousserListeRevocation` — et le port **suppose que tout pilote sait les quatre**. Les trois
+adaptateurs existants (Itbox, SmartAccess, Simulateur) les implémentent d'ailleurs à l'identique.
+C'est vrai pour la topologie que nous connaissons, et faux pour toutes les autres.
+
+**Le mode de défaillance que cela crée est le pire possible en contrôle d'accès :** la plateforme
+appelle `pousserListeRevocation`, l'adaptateur ne sait pas le faire, et *personne ne l'apprend*. On
+croit avoir révoqué un accès. La porte s'ouvre quand même. Aucune trace, aucune alerte, et la
+découverte se fait sur incident.
+
+**Décision : chaque pilote déclare ses capacités**, sur le modèle exact de `ModuleManifest` — même
+motif, même étiquette de service, même test de catalogue. Quatre axes, parce que ce sont les quatre
+qui changent d'une topologie à l'autre :
+
+1. **Où se prend la décision** — au serveur, dans l'unité de traitement, ou sur la carte elle-même.
+2. **La révocation** — immédiate, différée à la prochaine synchronisation, ou impossible.
+3. **L'encodage** — le pilote sait-il écrire une autorisation sur un médium, ou seulement lire un
+   identifiant.
+4. **Les passages** — remontés en temps réel, ou seulement relus à la synchronisation.
+
+**Conséquence directe et non négociable :** une opération non déclarée n'est pas silencieusement
+ignorée, elle **échoue explicitement**. Et l'exploitant doit voir dans l'interface que *ce site-là* ne
+sait pas révoquer immédiatement — c'est une promesse commerciale, pas un détail technique.
+
+**Pourquoi maintenant, avant tout nouveau matériel.** Les topologies que nous ne couvrons pas encore
+arrivent toutes par le même chemin : lecteur IP qui est sa propre unité de traitement, serrure
+autonome sur pile, donnée portée par la carte avec point de mise à jour, téléphone servant de mule en
+Bluetooth, et accès sans support du tout (plaque d'immatriculation à la barrière, QR lu par caméra).
+Avec la déclaration de capacités, chacune devient **un adaptateur qui déclare autre chose**. Sans
+elle, chacune est une refonte du port.
+
+**Un second port est ouvert : l'encodage.** Appairer associe un identifiant à un droit ; encoder
+**écrit le droit sur le médium**. Deux sémantiques différentes, deux ports différents — les mélanger
+reproduirait exactement le défaut que cette décision corrige.
+
+**Ce qui n'est pas décidé ici, et ne doit pas l'être en code :** devenir nous-mêmes l'unité de
+traitement en pilotant des lecteurs OSDP. C'est un autre métier — vendre du matériel, tenir un site
+sans internet, et répondre d'une porte qui ne s'ouvre pas, sachant que le déverrouillage d'urgence
+relève de la réglementation incendie et reste mécanique. La décision d'aujourd'hui **préserve cette
+option sans l'engager**. La seule mesure à prendre dès maintenant est contractuelle et gratuite :
+**exiger des lecteurs OSDP plutôt que Wiegand** dans les cahiers des charges, Wiegand étant en clair,
+unidirectionnel et rejouable.
