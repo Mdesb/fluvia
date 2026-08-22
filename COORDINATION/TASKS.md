@@ -49,4 +49,6 @@ Ne touche pas un chemin déjà en `WIP` par une autre instance.
 | C18 | Tests : afficher le detail des 5 notices PHPUnit (config actuelle ne donne que le compte) | `app/phpunit.dist.xml` | **claude-C** | WIP | 22/08 |
 | C19 | Garde-fou : detecter les find()/findOneBy() directs en Processor non confrontes au perimetre (angle mort revele par lIDOR dappairage) | `bin/garde-fou-cloisonnement.php` | **claude-C** | DONE | 22/08 |
 | C20 | IDOR appairage corrige — test de non-regression a ecrire (agent scope B vs droit de A = 404) | `app/tests/Acces/**` | *a assigner* | CLAIM | 22/08 |
+| C21 | Performance : verifier US-L3-03 et RG-ACC-01 hors suite fonctionnelle (materiel representatif, a chaud, percentile) | `infra/**` | *a assigner* | CLAIM | 22/08 |
+| C22 | OCR mode degrade : assertion sur labsence dappel reseau plutot que sur le chronometre | `app/tests/Ocr/**` | *a assigner* | CLAIM | 22/08 |
 <!-- Ajouter les nouvelles tâches au-dessus de cette ligne. -->
