@@ -19,8 +19,8 @@ final class RedevableRegistryTest extends TestCase
 {
     public function testResoutLePortCorrespondantAuTypeRedevable(): void
     {
-        $droitA = $this->createMock(DroitAcces::class);
-        $etabA = $this->createMock(Etablissement::class);
+        $droitA = $this->createStub(DroitAcces::class);
+        $etabA = $this->createStub(Etablissement::class);
 
         $portA = new class($droitA, $etabA) implements RedevablePort {
             public function __construct(private DroitAcces $droit, private Etablissement $etab)
