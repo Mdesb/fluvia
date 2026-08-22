@@ -13,6 +13,11 @@ namespace App\Acces\Enum;
  * qu'une fois, pour le décompte crédit `CarteQuota` (étape 7) — un droit `Personnel` suit exactement
  * le chemin d'un `Billet` (pas de décompte). Aucune migration de schéma requise (`source_type` déjà
  * `VARCHAR(24)`).
+ *
+ * `Booking` (ProjectionAccesReservationHandler, module socle Réservation, RG-ACC3-01/02/03,
+ * plan-acc3.md §1) : deuxième extension additive coordonnée du même genre — un droit issu d'une
+ * réservation suit lui aussi le chemin générique (pas de décompte crédit). Nommage anglais (D5),
+ * aucune migration de schéma requise.
  */
 enum TypeDroitAcces: string
 {
@@ -20,4 +25,5 @@ enum TypeDroitAcces: string
     case Abonnement = 'abonnement';
     case CarteQuota = 'carte_quota';
     case Personnel = 'personnel';
+    case Booking = 'booking';
 }

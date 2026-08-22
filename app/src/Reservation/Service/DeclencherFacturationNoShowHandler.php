@@ -18,6 +18,10 @@ use Doctrine\ORM\EntityManagerInterface;
  * active ne couvre le créneau, aucune `FacturationNoShow` n'est créée (§7 cas limite : comportement
  * historique, place/quota perdu sans facturation). Pour les modes réellement branchés qui ne
  * nécessitent aucun agent (`debit_pmv`), l'application de la stratégie est tentée automatiquement.
+ *
+ * Point de passage partagé (RG-ACC3-05, plan-acc3.md §5.3) : couvre à la fois la branche tardive de
+ * `AnnulerReservationProcessor` et la branche no-show de `BasculerNoShowCommand` — la révocation du
+ * `DroitAcces` éventuellement projeté est câblée ici une seule fois pour les deux appelants.
  */
 final class DeclencherFacturationNoShowHandler
 {
@@ -25,6 +29,7 @@ final class DeclencherFacturationNoShowHandler
         private readonly EntityManagerInterface $em,
         private readonly ResolveurRegleAnnulation $resolveur,
         private readonly ResolveurStrategieFacturation $strategies,
+        private readonly ProjectionAccesReservationHandler $projectionAcces,
     ) {
     }
 
@@ -34,6 +39,7 @@ final class DeclencherFacturationNoShowHandler
         $regle = $creneau !== null ? $this->resolveur->resoudre($creneau) : null;
 
         $reservation->setStatut($statutCible);
+        $this->projectionAcces->revoquerSiProjete($reservation);
 
         if ($regle === null) {
             $this->em->flush();

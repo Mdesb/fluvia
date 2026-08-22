@@ -288,3 +288,14 @@ comportement côté service (`ProjectionAccesReservationHandler`) et une valeur 
 - **Référencé par** : toute verticale qui active `Ressource.ouvreAcces = true` (Padel confirmé via
   `AccesBadgeTest`, potentiellement Sport/Piscine/Musée plus tard) — consomme ce lot sans redéfinition,
   comme documenté dans `spec-reservation.md` §9.
+
+- **⚠ Couplage obligatoire création ↔ révocation (dette de vigilance, revue de cohérence).** Trois
+  chemins créent aujourd'hui une réservation occupant une place **sans** appeler `projeterSiApplicable()`
+  — donc sans accès projeté, sans risque actuel : promotion de liste d'attente
+  (`PromotionListeAttenteHandler`), perdant d'arbitrage OTA (`PrioriteOtaResolver` /
+  `CreerReservationOtaProcessor`), et la réservation secondaire du coach (`ReserverTerrainProcessor`,
+  seule la principale est projetée). **Règle pour tout lot futur** : ajouter `projeterSiApplicable()` à
+  l'un de ces flux (ou à un nouveau) **impose** de câbler simultanément `revoquerSiProjete()` sur tous
+  ses chemins de sortie de `occupePlace()`, sous peine d'accès fantôme silencieux. La garde `occupePlace()`
+  de `projeterSiApplicable()` (RG-ACC3-01) limite le risque, mais ne dispense pas de la révocation
+  symétrique. Un test de garde vérifiant ce couplage est recommandé au lot qui touchera ces flux.
