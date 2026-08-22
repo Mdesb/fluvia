@@ -46,4 +46,5 @@ Ne touche pas un chemin déjà en `WIP` par une autre instance.
 | ACC-1 | Echec explicite sur operation non declaree + restitution a lexploitant | `app/src/Acces/**` | *a assigner* | CLAIM | 22/08 |
 | ACC-2 | Second port : encodage dune autorisation sur un medium (distinct de lappairage) | `app/src/Acces/Port/**` | *a assigner* | CLAIM | 22/08 |
 | ACC-3 | Projection reelle : une reservation ouvre un acces (remplace le no-op documente) | `app/src/Reservation/ProjectionAcces**` | *a assigner* | CLAIM | 22/08 |
+| C18 | Tests : afficher le detail des 5 notices PHPUnit (config actuelle ne donne que le compte) | `app/phpunit.dist.xml` | *a assigner* | CLAIM | 22/08 |
 <!-- Ajouter les nouvelles tâches au-dessus de cette ligne. -->
