@@ -50,6 +50,10 @@ class DroitAcces
     #[Groups(['droit:read'])]
     private ?Uuid $produitRef = null;
 
+    #[ORM\Column(type: UuidType::NAME, nullable: true)]
+    #[Groups(['droit:read'])]
+    private ?Uuid $reservationRef = null;
+
     #[ORM\Column(type: 'datetime_immutable', nullable: true)]
     #[Groups(['droit:read'])]
     private ?\DateTimeImmutable $fenetreDebut = null;
@@ -130,6 +134,18 @@ class DroitAcces
     public function setProduitRef(?Uuid $produitRef): self
     {
         $this->produitRef = $produitRef;
+
+        return $this;
+    }
+
+    public function getReservationRef(): ?Uuid
+    {
+        return $this->reservationRef;
+    }
+
+    public function setReservationRef(?Uuid $reservationRef): self
+    {
+        $this->reservationRef = $reservationRef;
 
         return $this;
     }

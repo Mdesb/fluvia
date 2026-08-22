@@ -11,6 +11,7 @@ use App\Reservation\Enum\StatutReservation;
 use App\Reservation\Service\AnnulationVenteReservationHandler;
 use App\Reservation\Service\DeclencherFacturationNoShowHandler;
 use App\Reservation\Service\JaugeRessourceMereHandler;
+use App\Reservation\Service\ProjectionAccesReservationHandler;
 use App\Reservation\Service\PromotionListeAttenteHandler;
 use App\Securite\Entity\Utilisateur;
 use Doctrine\ORM\EntityManagerInterface;
@@ -35,6 +36,7 @@ final class AnnulerReservationProcessor implements ProcessorInterface
         private readonly PromotionListeAttenteHandler $promotion,
         private readonly DeclencherFacturationNoShowHandler $facturationHandler,
         private readonly AnnulationVenteReservationHandler $annulationVente,
+        private readonly ProjectionAccesReservationHandler $projectionAcces,
     ) {
     }
 
@@ -62,7 +64,11 @@ final class AnnulerReservationProcessor implements ProcessorInterface
         if ($dansDelai) {
             $data->setStatut(StatutReservation::AnnuleeLibre);
             $this->em->flush();
+            $this->projectionAcces->revoquerSiProjete($data);
         } else {
+            // Branche tardive (RG-ACC3-05) : la révocation est câblée dans
+            // DeclencherFacturationNoShowHandler::declencher(), point de passage partagé avec la
+            // branche no-show de BasculerNoShowCommand.
             $this->facturationHandler->declencher($data, StatutReservation::AnnuleeTardiveFacturee);
         }
 
