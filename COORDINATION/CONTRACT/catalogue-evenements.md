@@ -63,6 +63,14 @@ The first-class events published on the bus by the core and the modules. An even
 | `tender.analyzed` | Tender | requirements | Sales |
 | `tender.draft_generated` | Tender | draft_ref | Sales (human review required) |
 | `training.completed` | Training | employee, course | Personnel |
+| `document.stored` | DMS | category, version_id, mime, size, source_module? | Accounting/Finance, Reporting |
+| `document.version_added` | DMS | version_id, version_number, previous_version_id, mime, size | consuming module (e.g. Field service) |
+| `document.retention_set` | DMS | retention_policy_code, retain_until | Accounting (legal audit) |
+| `document.deletion_refused` | DMS | retain_until, reason_code | Audit, Supervision |
+| `document.deleted` | DMS | category | Audit |
+| `document.purged` | DMS | category, retain_until_was | Audit |
+| `document.public_link_issued` | DMS | version_id, public_link_id, expires_at (never the token) | Social/Marketing, Audit |
+| `document.public_link_revoked` | DMS | public_link_id | Social/Marketing, Audit |
 
 ## Naming rules
 - `domain.fact_past_tense`, lowercase, `snake_case` for the fact.
