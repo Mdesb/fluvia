@@ -1,10 +1,15 @@
-# Garde-fous partagés (C4) — voir COORDINATION/PLAYBOOK.md §9.
+# Garde-fous partagés (C4/C16/C19) — voir COORDINATION/PLAYBOOK.md §9.
 #
 # ⚠ Ce workflow ne tourne nulle part aujourd'hui : `origin` est un dépôt bare local
-# (/home/debian/billetterie.git), il n'y a pas de remote GitHub. Il est écrit pour être prêt le jour
-# où le dépôt y sera poussé, et il est volontairement redondant avec `bin/garde-fous.sh`, qui, lui,
-# marche dès maintenant en local. Question posée à l'intégrateur dans MESSAGES.md : si le
-# déclencheur retenu est un hook `pre-receive` sur le bare, seul ce fichier change — pas les scripts.
+# (/home/debian/billetterie.git), il n'y a pas de remote GitHub. Ce qui protège réellement le dépôt,
+# c'est le hook `pre-receive` (C16). Ce fichier est prêt pour le jour où le dépôt sera poussé sur
+# GitHub, et sert de documentation exécutable de ce que la CI devrait faire.
+#
+# **Il délègue entièrement à `bin/garde-fous.sh`, et c'est délibéré.** Sa version précédente
+# réimplémentait les appels : elle lançait le cloisonnement et le manifeste, mais ni le nommage
+# anglais ni les secrets — écrits après elle. Un workflow nommé « Garde-fous » qui n'en lance que la
+# moitié est pire qu'aucun workflow : il rend un vert au nom de contrôles qu'il n'a pas exécutés.
+# En passant par le lanceur, il ne peut plus diverger de ce qui tourne en local et dans le hook.
 
 name: Garde-fous
 
@@ -14,45 +19,52 @@ on:
     branches: [main]
 
 jobs:
-  cloisonnement:
-    name: Cloisonnement (D3/D8)
+  garde-fous:
+    name: Cloisonnement · C19 · Nommage · Secrets · Manifeste
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
         with:
-          # Historique complet : le cliquet relit le plafond sur la branche cible, donc il faut
-          # pouvoir la résoudre. Sans ça, `--contre` dégrade silencieusement en « pas de cliquet ».
+          # Historique complet : le cliquet relit le plafond de la ligne de base sur la branche
+          # cible, et le contrôle de nommage compare les fichiers ajoutés. Sans l'historique, le
+          # premier échoue bruyamment (c'est voulu) et le second n'a rien à comparer.
           fetch-depth: 0
 
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.2'
+          # 8.4 comme l'image de préprod, pas 8.2 (le plancher déclaré par composer.json) : une CI
+          # qui ne tourne pas sur la version de production valide autre chose que ce qui sera livré.
+          php-version: '8.4'
           coverage: none
 
-      - name: Contrôle avec cliquet contre la branche cible
-        run: |
-          REFERENCE="origin/${{ github.base_ref || 'main' }}"
-          php bin/garde-fou-cloisonnement.php "--contre=$REFERENCE"
-
-  manifeste:
-    name: Manifeste vs catalogue (RG-PLAT-06)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.2'
-          coverage: none
-
+      # Nécessaire au seul contrôle du manifeste, qui passe par PHPUnit. Sans lui, `garde-fous.sh`
+      # l'annonce ignoré au lieu de le rendre faussement vert — mais autant l'exécuter vraiment.
       - name: Dépendances
         working-directory: app
         run: composer install --no-interaction --no-scripts --no-progress
 
-      # Le contrôle du manifeste n'est pas réimplémenté ici : il vit dans le noyau
-      # (App\Tests\Platform\Unit\ManifestCatalogueTest), la CI ne fait que l'appeler.
-      # Il lit COORDINATION/CONTRACT/catalogue-evenements.md, hors de app/ — d'où le checkout
-      # complet du dépôt et l'exécution depuis app/ sans monter uniquement ce répertoire.
-      - name: Le contrat est-il respecté par les manifestes ?
-        working-directory: app
-        run: vendor/bin/phpunit --filter ManifestCatalogueTest
+      - name: Tous les garde-fous
+        run: ./bin/garde-fous.sh "origin/${{ github.base_ref || 'main' }}"
+
+  # Le banc d'essai des garde-fous eux-mêmes : ils sont du code qui juge du code, et deux faux
+  # négatifs silencieux y ont déjà été trouvés. Il tourne sur un clone jetable du dépôt courant.
+  banc:
+    name: Banc d'essai des garde-fous
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+
+      - name: Les garde-fous refusent-ils vraiment ce qu'ils prétendent refuser ?
+        env:
+          # Sur GitHub le dépôt cloné EST la source ; en local le banc part du bare partagé.
+          DEPOT_SOURCE: ${{ github.workspace }}/.git
+        run: ./bin/essai-garde-fous.sh

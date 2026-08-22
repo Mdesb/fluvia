@@ -21,7 +21,7 @@ final class TerminalAuthenticatorThrottleTest extends TestCase
 {
     public function testEcritureIgnoreeSiDernierAppelRecent(): void
     {
-        $em = $this->createMock(EntityManagerInterface::class);
+        $em = $this->createStub(EntityManagerInterface::class);
         $connection = $this->createMock(Connection::class);
         $connection->expects(self::never())->method('executeStatement');
 
@@ -36,7 +36,7 @@ final class TerminalAuthenticatorThrottleTest extends TestCase
 
     public function testEcritureDeclencheeSiDernierAppelAncienOuAbsent(): void
     {
-        $em = $this->createMock(EntityManagerInterface::class);
+        $em = $this->createStub(EntityManagerInterface::class);
         $connection = $this->createMock(Connection::class);
         $connection->expects(self::once())->method('executeStatement');
 
@@ -51,7 +51,7 @@ final class TerminalAuthenticatorThrottleTest extends TestCase
 
     public function testEcritureDeclencheeSiDernierAppelJamaisEnregistre(): void
     {
-        $em = $this->createMock(EntityManagerInterface::class);
+        $em = $this->createStub(EntityManagerInterface::class);
         $connection = $this->createMock(Connection::class);
         $connection->expects(self::once())->method('executeStatement');
 

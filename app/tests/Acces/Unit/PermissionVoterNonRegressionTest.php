@@ -26,7 +26,7 @@ final class PermissionVoterNonRegressionTest extends TestCase
 {
     public function testTerminalNeDebloquePasPermUtilisateur(): void
     {
-        $em = $this->createMock(EntityManagerInterface::class);
+        $em = $this->createStub(EntityManagerInterface::class);
         $voter = new PermissionVoter(
             new ContexteEtablissement(new RequestStack(), $em),
             new CalculateurDroits($em),
