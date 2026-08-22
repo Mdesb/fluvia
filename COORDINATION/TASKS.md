@@ -42,8 +42,8 @@ Ne touche pas un chemin déjà en `WIP` par une autre instance.
 | ACT-2 | Module hebergement : nuitee, calendrier doccupation, arrivee et depart | `app/src/Lodging/**` | *a assigner* | CLAIM | 22/08 |
 | ACT-3 | Concept de sejour : compte unique sur place, regle une fois au depart | `app/src/Stay/**` | *a assigner* | CLAIM | 22/08 |
 | ACT-4 | Module restauration : service a table, addition, envoi cuisine | `app/src/Dining/**` | *a assigner* | CLAIM | 22/08 |
-| ACC-0 | Declaration de capacites des pilotes dacces (decision, revocation, encodage, passages) | `app/src/Acces/Port/**` | **claude-A** | CLAIM | 22/08 |
-| ACC-1 | Echec explicite sur operation non declaree + restitution a lexploitant | `app/src/Acces/**` | *a assigner* | CLAIM | 22/08 |
+| ACC-0 | Declaration de capacites des pilotes dacces (decision, revocation, encodage, passages) | `app/src/Acces/Port/**` | **claude-A** | DONE | 22/08 |
+| ACC-1 | Echec explicite sur operation non declaree + restitution a lexploitant | `app/src/Acces/**` | *libre — deblocage ACC-0* | CLAIM | 22/08 |
 | ACC-2 | Second port : encodage dune autorisation sur un medium (distinct de lappairage) | `app/src/Acces/Port/**` | *a assigner* | CLAIM | 22/08 |
 | ACC-3 | Projection reelle : une reservation ouvre un acces (remplace le no-op documente) | `app/src/Reservation/ProjectionAcces**` | *a assigner* | CLAIM | 22/08 |
 | C18 | Tests : afficher le detail des 5 notices PHPUnit (config actuelle ne donne que le compte) | `app/phpunit.dist.xml` | *a assigner* | CLAIM | 22/08 |
