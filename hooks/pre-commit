@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+#
+# Hook `pre-commit` — pour le worktree d'intégration (C16 bis).
+#
+# **Pourquoi il existe.** Le hook `pre-receive` ne s'exécute que sur un *push*. Or `main` est
+# désormais **checked out** dans un worktree du dépôt bare (`/home/debian/wt/main`) : qui y commite
+# met à jour la référence `main` sans push, donc **sans que `pre-receive` ne voie jamais rien**.
+#
+# Concrètement, les branches de claude-B et claude-C sont contrôlées, et les intégrations — celles
+# qui fusionnent tout le reste — ne le sont pas. Ce n'est pas un reproche : c'est une conséquence
+# mécanique de la topologie, et elle est invisible tant qu'on ne la cherche pas. Aujourd'hui l'arbre
+# de `main` passe les garde-fous ; ce hook fait que ça continue d'être vrai par construction plutôt
+# que par vigilance.
+#
+# ── INSTALLATION ────────────────────────────────────────────────────────────────────────────────
+#   ./bin/installer-hooks.sh /home/debian/wt/main --pre-commit
+# ── INTERRUPTEUR ────────────────────────────────────────────────────────────────────────────────
+#   touch <worktree>/.git/GARDE-FOUS-DESACTIVES     ou     git commit --no-verify
+# Contrairement à `pre-receive`, un `pre-commit` se contourne côté client par `--no-verify` : c'est
+# un garde-fou de confort, pas une barrière. La barrière reste `pre-receive` pour qui pousse.
+# ────────────────────────────────────────────────────────────────────────────────────────────────
+
+set -uo pipefail
+
+RACINE="$(git rev-parse --show-toplevel)"
+INTERRUPTEUR="$(git rev-parse --git-dir)/GARDE-FOUS-DESACTIVES"
+IMAGE="billetterie-preprod-php"
+
+if [ -f "$INTERRUPTEUR" ]; then
+    echo "⚠ Garde-fous désactivés ($INTERRUPTEUR) — commit non contrôlé."
+    exit 0
+fi
+
+[ -f "$RACINE/bin/garde-fou-cloisonnement.php" ] || exit 0   # commit antérieur aux garde-fous
+
+if command -v php >/dev/null 2>&1; then
+    lancer() { (cd "$RACINE" && php "$@"); }
+elif command -v docker >/dev/null 2>&1 && docker image inspect "$IMAGE" >/dev/null 2>&1; then
+    lancer() {
+        docker run --rm --network none -u "$(id -u):$(id -g)" \
+            -v "$RACINE:$RACINE" -w "$RACINE" "$IMAGE" php "$@"
+    }
+else
+    echo "✗ Ni php ni l'image « $IMAGE » : impossible de contrôler ce commit."
+    echo "  Corrige l'outillage, ou pose $INTERRUPTEUR en le justifiant dans MESSAGES.md."
+    exit 1
+fi
+
+ECHEC=0
+
+# Cloisonnement + C19 : sur l'arbre de travail. Pas de `--contre` ici — il n'y a pas encore de
+# branche cible à comparer ; la ligne de base et son plafond suffisent à refuser tout cas nouveau.
+lancer bin/garde-fou-cloisonnement.php || ECHEC=1
+
+# Secrets : sur l'arbre de travail également.
+[ -f "$RACINE/bin/garde-fou-secrets.php" ] && { lancer bin/garde-fou-secrets.php || ECHEC=1; }
+
+# Nommage : sur les fichiers **indexés** et ajoutés. `--cached` est ce qui sera réellement commité,
+# et c'est aussi ce qui évite de dépendre d'une révision de référence inexistante à ce stade.
+if [ -f "$RACINE/bin/garde-fou-nommage-anglais.php" ]; then
+    AJOUTES="$(git diff --cached --diff-filter=A --name-only -- 'app/src' 'app/migrations' | paste -sd, -)"
+    [ -n "$AJOUTES" ] && { lancer bin/garde-fou-nommage-anglais.php "--fichiers=$AJOUTES" || ECHEC=1; }
+fi
+
+if [ "$ECHEC" -ne 0 ]; then
+    echo
+    echo "✗ Commit refusé : au moins un garde-fou a échoué."
+    echo "  Reproduis : ./bin/garde-fous.sh"
+    echo "  Si tu dois vraiment passer outre : git commit --no-verify, et dis pourquoi dans MESSAGES.md."
+    exit 1
+fi
+
+exit 0
