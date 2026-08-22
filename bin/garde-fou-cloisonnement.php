@@ -140,6 +140,104 @@ function violations(string $racine): array
     return $resultat;
 }
 
+// ------------------------------------------------- règle n°2 (C19) : contrôle LIÉ à l'entité
+//
+// L'IDOR d'appairage du 22/08 a montré la limite de la règle n°1 : elle constate la *présence* d'un
+// motif de périmètre dans le fichier, pas le fait qu'il porte sur **l'entité résolue depuis l'entrée
+// client**. `AppairageProcessor` appelait `etablissementActif()` pour tout autre chose, et résolvait
+// `$droit` depuis le corps de la requête sans rien comparer. Le fichier paraissait contrôlé.
+//
+// Cette règle-ci lie les deux : elle capture la variable issue du `find()` alimenté par l'entrée
+// client, puis exige qu'un contrôle mentionne **cette variable**. C'est plus étroit qu'une analyse
+// de flot de données — un contrôle indirect via une variable intermédiaire lui échappe encore — mais
+// ça ferme le cas concret qui a produit quatre IDOR sur ce projet.
+
+/** `$x = …->find($…)` / `findOneBy` / `getReference`, avec la variable et les arguments. */
+const MOTIF_RESOLUTION_LIEE = '/\$(\w+)\s*=\s*[^;]*?->(?:find|findOneBy|getReference)\s*\((.*?)\)\s*;/s';
+
+/** L'argument vient-il de l'entrée client ? */
+const MOTIF_ARG_CLIENT = '/\$corps|\$uriVariables|\$donnees|\$payload|\$request->|\$data->|->corps\(\)/';
+
+/**
+ * Le périmètre est-il confronté à CETTE variable ? Les formes acceptées sont celles réellement
+ * employées dans le dépôt après les quatre correctifs d'IDOR.
+ */
+function controleLieA(string $variable, string $source): bool
+{
+    $v = preg_quote($variable, '/');
+
+    $formes = [
+        '/\$' . $v . '->getEtablissement\(\)/',                    // comparaison directe
+        '/codesEffectifs\([^)]*\$' . $v . '/',                     // autorité recalculée sur elle
+        '/(?:verifier|autorise|assert)\w*\([^)]*\$' . $v . '/',    // passée à un vérificateur
+        '/\w*(?:Verificateur|Guard)\w*->\w+\([^)]*\$' . $v . '/',
+        '/@cloisonnement-verifie\s*:\s*\S/',                       // exemption déclarée, greppable
+    ];
+
+    foreach ($formes as $forme) {
+        if (preg_match($forme, $source) === 1) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * @return list<string> identités « fichier:ligne:$variable », triées — une résolution, pas un fichier :
+ *                     un même fichier peut en porter plusieurs, et n'en corriger qu'une doit se voir.
+ */
+function resolutionsNonLiees(string $racine): array
+{
+    $resultat = [];
+
+    foreach (fichiersHttp($racine) as $relatif) {
+        $source = (string) file_get_contents($racine . '/' . $relatif);
+
+        if (preg_match_all(MOTIF_RESOLUTION_LIEE, $source, $correspondances, PREG_SET_ORDER | PREG_OFFSET_CAPTURE) === false) {
+            continue;
+        }
+
+        foreach ($correspondances as $jeu) {
+            [$variable, $decalage] = $jeu[1];
+            $arguments = $jeu[2][0];
+
+            if (preg_match(MOTIF_ARG_CLIENT, $arguments) !== 1) {
+                continue;
+            }
+            if (controleLieA($variable, $source)) {
+                continue;
+            }
+
+            $ligne = substr_count(substr($source, 0, (int) $decalage), "\n") + 1;
+            $resultat[] = sprintf('%s:%d:$%s', $relatif, $ligne, $variable);
+        }
+    }
+
+    sort($resultat);
+
+    return $resultat;
+}
+
+const AIDE_RESOLUTION = <<<'TXT'
+    Ici le fichier contient peut-être déjà un contrôle de périmètre — mais il ne porte pas sur
+    l'entité que tu viens de résoudre depuis l'entrée client. C'est exactement ce qui a produit
+    l'IDOR d'appairage du 22/08 : `etablissementActif()` était appelé six lignes plus haut, pour
+    autre chose, et `$droit` n'était comparé à rien.
+
+        $droit = $this->em->getRepository(DroitAcces::class)->find($corps['droit']);
+        // ⚠ à partir d'ici, $droit peut appartenir à n'importe quel établissement
+
+        $codes = $this->calculateur->codesEffectifs($utilisateur, $droit->getEtablissement()?->getId());
+        if (!$this->calculateur->autorise($codes, '<module>', '<action>')) {
+            throw new NotFoundHttpException('… introuvable.');
+        }
+
+    Le contrôle doit nommer la variable résolue. Si ton contrôle passe par une forme que ce garde-fou
+    ne sait pas lire, pose l'annotation `@cloisonnement-verifie : <raison>` — elle est greppable et
+    attribuable, contrairement à un assouplissement de la détection.
+    TXT;
+
 // ---------------------------------------------------------------- ligne de base
 
 /** @return array{scelle: array{plafond: int, gelee_le: string}, entrees: array<string, array{depuis: string, accorde_par: string, raison: string}>} */
@@ -188,33 +286,60 @@ $base = lireLigneDeBase(LIGNE_DE_BASE);
 $entrees = $base['entrees'];
 $plafond = (int) $base['scelle']['plafond'];
 
+// Règle n°2 (C19). Ligne de base distincte : c'est une autre règle, avec sa propre dette et son
+// propre cliquet. Les mélanger permettrait de « payer » une régression de l'une avec une correction
+// de l'autre.
+$resolutions = resolutionsNonLiees($racine);
+$entreesResolution = $base['entrees_resolution'] ?? [];
+$plafondResolution = (int) ($base['scelle_resolution']['plafond'] ?? count($entreesResolution));
+
 if (in_array('--liste', $options, true)) {
-    echo sprintf("Violations actuelles : %d\n", count($actuelles));
+    echo sprintf("Règle n°1 — fichiers sans contrôle de périmètre : %d\n", count($actuelles));
     foreach ($actuelles as $v) {
         $etat = isset($entrees[$v]) ? 'ligne de base' : 'NOUVELLE';
         echo sprintf("  [%-13s] %s\n", $etat, $v);
+    }
+    echo sprintf("\nRègle n°2 (C19) — contrôle non lié à l'entité résolue : %d\n", count($resolutions));
+    foreach ($resolutions as $r) {
+        $etat = isset($entreesResolution[$r]) ? 'ligne de base' : 'NOUVELLE';
+        echo sprintf("  [%-13s] %s\n", $etat, $r);
     }
     exit(0);
 }
 
 if (in_array('--nettoyer', $options, true)) {
     $corrigees = array_values(array_diff(array_keys($entrees), $actuelles));
+    $corrigeesResolution = array_values(array_diff(array_keys($entreesResolution), $resolutions));
 
-    if ($corrigees === []) {
-        echo "Rien à nettoyer : toutes les entrées de la ligne de base sont encore en violation.\n";
+    if ($corrigees === [] && $corrigeesResolution === []) {
+        echo "Rien à nettoyer : toutes les entrées des deux lignes de base sont encore en violation.\n";
         exit(0);
     }
 
     foreach ($corrigees as $c) {
         unset($entrees[$c]);
     }
+    foreach ($corrigeesResolution as $c) {
+        unset($entreesResolution[$c]);
+    }
 
     $base['entrees'] = $entrees;
     $base['scelle']['plafond'] = count($entrees);   // le plafond ne remonte jamais
+    if ($entreesResolution !== [] || isset($base['entrees_resolution'])) {
+        $base['entrees_resolution'] = $entreesResolution;
+        $base['scelle_resolution']['plafond'] = count($entreesResolution);
+    }
     ecrireLigneDeBase(LIGNE_DE_BASE, $base);
 
-    bloc(sprintf("%d entrée(s) corrigée(s), retirée(s) de la ligne de base :", count($corrigees)), $corrigees);
-    echo sprintf("\nPlafond abaissé à %d. Commite %s.\n", count($entrees), LIGNE_DE_BASE);
+    if ($corrigees !== []) {
+        bloc(sprintf("Règle n°1 — %d entrée(s) retirée(s) :", count($corrigees)), $corrigees);
+        echo sprintf("  Plafond abaissé à %d.\n", count($entrees));
+    }
+    if ($corrigeesResolution !== []) {
+        bloc(sprintf("Règle n°2 (C19) — %d résolution(s) retirée(s) :", count($corrigeesResolution)), $corrigeesResolution);
+        echo sprintf("  Plafond abaissé à %d.\n", count($entreesResolution));
+    }
+    echo sprintf("\nCommite %s.\n", LIGNE_DE_BASE);
     exit(0);
 }
 
@@ -305,6 +430,32 @@ if ($nouvelles !== []) {
     echo "\n" . AIDE_CORRECTION . "\n";
 }
 
+// ---- règle n°2 (C19) : le contrôle porte-t-il sur l'entité résolue ? ----
+
+$nouvellesResolutions = array_values(array_diff($resolutions, array_keys($entreesResolution)));
+$resolutionsCorrigees = array_values(array_diff(array_keys($entreesResolution), $resolutions));
+
+if (count($entreesResolution) > $plafondResolution) {
+    $echec = true;
+    echo "\n=== ÉCHEC — la ligne de base « résolution liée » a grossi ===\n";
+    echo sprintf("  %d entrées pour un plafond de %d.\n", count($entreesResolution), $plafondResolution);
+}
+
+if ($nouvellesResolutions !== []) {
+    $echec = true;
+    echo "\n=== ÉCHEC — le contrôle de périmètre ne porte pas sur l'entité résolue ===\n";
+    bloc(sprintf("%d résolution(s) concernée(s) :", count($nouvellesResolutions)), $nouvellesResolutions);
+    echo "\n" . AIDE_RESOLUTION . "\n";
+}
+
+if ($resolutionsCorrigees !== []) {
+    bloc(
+        sprintf("Bonne nouvelle : %d résolution(s) de la ligne de base sont désormais liées.", count($resolutionsCorrigees)),
+        $resolutionsCorrigees
+    );
+    echo "\n  Retire-les : php bin/garde-fou-cloisonnement.php --nettoyer\n";
+}
+
 if ($corrigees !== []) {
     bloc(
         sprintf("Bonne nouvelle : %d entrée(s) de la ligne de base ne sont plus en violation.", count($corrigees)),
@@ -322,5 +473,10 @@ echo sprintf(
     "Cloisonnement : OK — aucune nouvelle résolution non contrôlée. Dette gelée : %d entrée(s), plafond %d.\n",
     count($entrees),
     $plafond
+);
+echo sprintf(
+    "Résolution liée (C19) : OK — le contrôle porte sur l'entité résolue. Dette gelée : %d, plafond %d.\n",
+    count($entreesResolution),
+    $plafondResolution
 );
 exit(0);
