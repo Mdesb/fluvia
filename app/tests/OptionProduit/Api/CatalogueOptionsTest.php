@@ -147,12 +147,20 @@ final class CatalogueOptionsTest extends VenteApiTestCase
         // Produit disponible sur A ET B (produit partagé) : la restriction porte sur l'OPTION, pas
         // sur l'accès au produit. Sans rattachement à B, la requête sur B serait un 404 de
         // cloisonnement (garde-fou OptionsDisponiblesProvider), pas une liste d'options vide.
-        [$produit] = $this->creerProduitBase();
-        $etabB = $this->em()->getRepository(\App\Organisation\Entity\Etablissement::class)
-            ->findOneBy(['nom' => SocleFixtures::ETAB_B_NOM]);
-        self::assertInstanceOf(\App\Organisation\Entity\Etablissement::class, $etabB);
+        // `creerProduitBase()` et `em()` n'existent ni ici ni sur VenteApiTestCase : ce test n'avait
+        // donc jamais pu s'executer. Reecrit avec les assistants reels de la hierarchie.
+        $produit = $this->entite(
+            \App\Offre\Entity\Produit::class,
+            ['id' => $this->idProduit(OffreFixtures::PRODUIT_ENTREE)],
+        );
+        $etabB = $this->entite(
+            \App\Organisation\Entity\Etablissement::class,
+            ['nom' => SocleFixtures::ETAB_B_NOM],
+        );
         $produit->addEtablissement($etabB);
-        $this->em()->flush();
+        /** @var \Doctrine\ORM\EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $em->flush();
         $idProduit = (string) $produit->getId();
 
         $groupe = $this->creerGroupeOption($client, $entete, 'Casier restreint', 'unique');
