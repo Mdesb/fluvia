@@ -152,8 +152,24 @@ function violations(string $racine): array
 // de flot de données — un contrôle indirect via une variable intermédiaire lui échappe encore — mais
 // ça ferme le cas concret qui a produit quatre IDOR sur ce projet.
 
-/** `$x = …->find($…)` / `findOneBy` / `getReference`, avec la variable et les arguments. */
-const MOTIF_RESOLUTION_LIEE = '/\$(\w+)\s*=\s*[^;]*?->(?:find|findOneBy|getReference)\s*\((.*?)\)\s*;/s';
+/**
+ * Une **instruction** contenant une résolution, affectée ou non.
+ *
+ * La première version exigeait `$x = …->find(…)`. Or `return $this->em->…->find($data->getRef());`
+ * est une façon parfaitement naturelle d'écrire la même chose, et elle échappait entièrement à la
+ * règle : sans variable, rien à lier, donc rien à signaler. Le banc d'essai l'a montré dès le premier
+ * lancement du croisement `read: false`.
+ *
+ * Une résolution non affectée est d'ailleurs le cas le plus net : il n'existe *aucune* variable à
+ * laquelle un contrôle pourrait se rattacher, donc le contrôle n'existe pas.
+ */
+const MOTIF_INSTRUCTION_RESOLUTION = '/[^;{}]*->(?:find|findOneBy|getReference)\s*\([^;]*?\)\s*;/s';
+
+/** L'instruction commence-t-elle par une affectation ? */
+const MOTIF_AFFECTATION = '/^\s*\$(\w+)\s*=/';
+
+/** Les arguments passés à la résolution, dans une instruction. */
+const MOTIF_ARGUMENTS = '/->(?:find|findOneBy|getReference)\s*\((.*)\)\s*;/s';
 
 /**
  * L'argument vient-il de l'entrée client ?
@@ -200,33 +216,118 @@ function controleLieA(string $variable, string $source): bool
 }
 
 /**
+ * Processors qui servent au moins une opération déclarée `read: false`.
+ *
+ * Chez eux — et seulement chez eux — `$data` provient du corps de la requête et non du provider
+ * Doctrine : il redevient une entrée client. La déclaration vit dans l'entité, pas dans le Processor,
+ * d'où ce croisement entre fichiers. Sans lui, le garde-fou a un angle mort exactement là où le
+ * cloisonnement automatique ne s'applique pas.
+ *
+ * Aujourd'hui ce croisement ne révèle aucune résolution supplémentaire : il est posé pendant qu'il
+ * coûte zéro dette, plutôt qu'après l'incident qui l'aurait rendu évident.
+ *
+ * @return array<string, true> indexé par nom court de classe
+ */
+function processorsSansLecture(string $racine): array
+{
+    $sansLecture = [];
+    $iterateur = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($racine, FilesystemIterator::SKIP_DOTS));
+
+    /** @var SplFileInfo $fichier */
+    foreach ($iterateur as $fichier) {
+        if (!$fichier->isFile() || $fichier->getExtension() !== 'php') {
+            continue;
+        }
+
+        $source = (string) file_get_contents($fichier->getPathname());
+        if (!str_contains($source, 'ApiResource')) {
+            continue;
+        }
+
+        // Chaque `new Get(`, `new Post(`… jusqu'à sa parenthèse fermante appariée : une opération se
+        // lit comme un bloc, et un `read: false` d'une opération ne dit rien de la suivante.
+        if (preg_match_all('/new\s+(?:Get|GetCollection|Post|Put|Patch|Delete)\s*\(/', $source, $debuts, PREG_OFFSET_CAPTURE) === false) {
+            continue;
+        }
+
+        foreach ($debuts[0] as $debut) {
+            $i = (int) $debut[1] + strlen($debut[0]) - 1;
+            $profondeur = 0;
+            $j = $i;
+            $longueur = strlen($source);
+
+            while ($j < $longueur) {
+                if ($source[$j] === '(') {
+                    ++$profondeur;
+                } elseif ($source[$j] === ')') {
+                    --$profondeur;
+                    if ($profondeur === 0) {
+                        break;
+                    }
+                }
+                ++$j;
+            }
+
+            $bloc = substr($source, $i, $j - $i);
+
+            if (preg_match('/read:\s*false/', $bloc) === 1
+                && preg_match('/processor:\s*(\w+)::class/', $bloc, $nom) === 1) {
+                $sansLecture[$nom[1]] = true;
+            }
+        }
+    }
+
+    return $sansLecture;
+}
+
+/**
  * @return list<string> identités « fichier:ligne:$variable », triées — une résolution, pas un fichier :
  *                     un même fichier peut en porter plusieurs, et n'en corriger qu'une doit se voir.
  */
 function resolutionsNonLiees(string $racine): array
 {
     $resultat = [];
+    $sansLecture = processorsSansLecture($racine);
 
     foreach (fichiersHttp($racine) as $relatif) {
         $source = (string) file_get_contents($racine . '/' . $relatif);
 
-        if (preg_match_all(MOTIF_RESOLUTION_LIEE, $source, $correspondances, PREG_SET_ORDER | PREG_OFFSET_CAPTURE) === false) {
+        // `$data->` ne compte comme entrée client que chez un Processor dont l'opération ne lit pas
+        // la ressource — ailleurs, l'entité est déjà passée par les extensions de périmètre.
+        $classe = basename($relatif, '.php');
+        $motifClient = isset($sansLecture[$classe])
+            ? '/' . substr(MOTIF_ARG_CLIENT, 1, -1) . '|\$data->/'
+            : MOTIF_ARG_CLIENT;
+
+        if (preg_match_all(MOTIF_INSTRUCTION_RESOLUTION, $source, $correspondances, PREG_OFFSET_CAPTURE) === false) {
             continue;
         }
 
-        foreach ($correspondances as $jeu) {
-            [$variable, $decalage] = $jeu[1];
-            $arguments = $jeu[2][0];
+        foreach ($correspondances[0] as $capture) {
+            [$instruction, $decalage] = $capture;
 
-            if (preg_match(MOTIF_ARG_CLIENT, $arguments) !== 1) {
-                continue;
-            }
-            if (controleLieA($variable, $source)) {
+            if (preg_match(MOTIF_ARGUMENTS, $instruction, $args) !== 1
+                || preg_match($motifClient, $args[1]) !== 1) {
                 continue;
             }
 
             $ligne = substr_count(substr($source, 0, (int) $decalage), "\n") + 1;
-            $resultat[] = sprintf('%s:%d:$%s', $relatif, $ligne, $variable);
+
+            if (preg_match(MOTIF_AFFECTATION, $instruction, $nom) === 1) {
+                if (controleLieA($nom[1], $source)) {
+                    continue;
+                }
+                $resultat[] = sprintf('%s:%d:$%s', $relatif, $ligne, $nom[1]);
+                continue;
+            }
+
+            // Aucune affectation : il n'y a pas de variable à laquelle rattacher un contrôle. Seule
+            // l'annotation explicite peut lever le signalement — et elle laisse une trace greppable.
+            if (preg_match('/@cloisonnement-verifie\s*:\s*\S/', $source) === 1) {
+                continue;
+            }
+
+            $resultat[] = sprintf('%s:%d:(résolution non affectée)', $relatif, $ligne);
         }
     }
 

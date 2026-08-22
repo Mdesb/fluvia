@@ -54,6 +54,14 @@ essai() { # essai <libellé> <refus|acceptation>
     local code=0
     git push "$BARE" main >/dev/null 2>&1 || code=$?
     verdict "$1" "$2" "$code"
+
+    # Chaque cas repart de l'état réel du dépôt, quelle que soit l'issue du précédent. Sans ça, un cas
+    # accepté à tort fait avancer le distant, la copie locale diverge, et **tous les cas suivants sont
+    # rejetés en non-fast-forward** — donc comptés comme des refus qui n'en sont pas. Un banc doit
+    # échouer sur un seul cas quand un seul cas est cassé.
+    git fetch -q "$BARE" main
+    git reset -q --hard FETCH_HEAD
+    git clean -qfd
 }
 
 commiter() { git add -A >/dev/null; git commit -q -m "$1"; }
@@ -108,7 +116,6 @@ final class BancRegleUnProcessor
 PHP
 commiter "banc : règle 1"
 essai "cloisonnement — aucun contrôle de périmètre" refus
-git reset -q --hard HEAD~1
 
 # Règle n°2 (C19) — un marqueur de périmètre EXISTE, mais il ne porte pas sur l'entité résolue.
 # C'est le motif exact de l'IDOR d'appairage du 22/08 : la règle n°1 accepte ce fichier.
@@ -134,7 +141,80 @@ final class BancRegleDeuxProcessor
 PHP
 commiter "banc : règle 2"
 essai "C19 — contrôle non lié à l'entité résolue" refus
-git reset -q --hard HEAD~1
+
+# C19, croisement avec la déclaration de l'opération. Quand celle-ci est `read: false`, `$data` vient
+# du corps de la requête et non du provider Doctrine : il redevient une entrée client. Les deux cas
+# qui suivent sont le même code, à `read:` près — c'est ce qui prouve que le croisement discrimine et
+# ne se contente pas de tout signaler.
+mkdir -p app/src/Offre/Entity
+cat > app/src/Offre/Entity/BancSondeResource.php <<'PHP'
+<?php
+declare(strict_types=1);
+namespace App\Offre\Entity;
+use ApiPlatform\Metadata\ApiResource;
+use ApiPlatform\Metadata\Post;
+use App\Offre\State\BancSansLectureProcessor;
+#[ApiResource(operations: [
+    new Post(
+        uriTemplate: '/banc/sonde',
+        read: false,
+        input: false,
+        processor: BancSansLectureProcessor::class,
+    ),
+])]
+class BancSondeResource {}
+PHP
+cat > app/src/Offre/State/BancSansLectureProcessor.php <<'PHP'
+<?php
+declare(strict_types=1);
+namespace App\Offre\State;
+use Doctrine\ORM\EntityManagerInterface;
+final class BancSansLectureProcessor
+{
+    public function __construct(private readonly EntityManagerInterface $em) {}
+    public function process(mixed $data): mixed
+    {
+        return $this->em->getRepository(\App\Offre\Entity\Produit::class)->find($data->getProduitRef());
+    }
+}
+PHP
+commiter "banc : C19 read false"
+essai "C19 — \$data d'une opération read: false" refus
+
+mkdir -p app/src/Offre/Entity app/src/Offre/State
+cat > app/src/Offre/Entity/BancSondeResource.php <<'PHP'
+<?php
+declare(strict_types=1);
+namespace App\Offre\Entity;
+use ApiPlatform\Metadata\ApiResource;
+use ApiPlatform\Metadata\Post;
+use App\Offre\State\BancSansLectureProcessor;
+#[ApiResource(operations: [
+    new Post(
+        uriTemplate: '/banc/sonde',
+        read: true,
+        input: false,
+        processor: BancSansLectureProcessor::class,
+    ),
+])]
+class BancSondeResource {}
+PHP
+cat > app/src/Offre/State/BancSansLectureProcessor.php <<'PHP'
+<?php
+declare(strict_types=1);
+namespace App\Offre\State;
+use Doctrine\ORM\EntityManagerInterface;
+final class BancSansLectureProcessor
+{
+    public function __construct(private readonly EntityManagerInterface $em) {}
+    public function process(mixed $data): mixed
+    {
+        return $this->em->getRepository(\App\Offre\Entity\Produit::class)->find($data->getProduitRef());
+    }
+}
+PHP
+commiter "banc : C19 read true"
+essai "C19 — le même code en read: true n'est pas signalé" acceptation
 
 # Nommage anglais (D5) — c'est ce cas que la quarantaine d'objets faisait passer en silence.
 cat > app/src/Offre/State/BancFactureRemiseProcessor.php <<'PHP'
@@ -147,7 +227,6 @@ final class BancFactureRemiseProcessor
 PHP
 commiter "banc : nommage"
 essai "nommage — identifiant français dans un fichier ajouté" refus
-git reset -q --hard HEAD~1
 
 # Secrets — une clé en valeur par défaut.
 mkdir -p app/src/Offre/Service
@@ -162,7 +241,6 @@ final class BancSignataire
 PHP
 commiter "banc : secret"
 essai "secrets — clé cryptographique en valeur par défaut" refus
-git reset -q --hard HEAD~1
 
 # ─────────────────────────────────────────────────────────── remise en état
 
