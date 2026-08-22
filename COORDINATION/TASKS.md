@@ -35,7 +35,7 @@ Ne touche pas un chemin déjà en `WIP` par une autre instance.
 | SOC-3 | Collecte planifiee des statistiques : instantanes + charge brute conservee | `app/src/Social/**` | *a assigner* | CLAIM | 21/08 |
 | SOC-4 | Adaptateurs Meta (Page + Instagram), apres verification dentreprise et revue applicative | `app/src/Social/**` | *a assigner* | BLOCKED | 21/08 |
 | DMS-0 | GED : spec SDD (cloisonnement, URL signees expirantes, retention legale, versionnement) | `specs/dms/**` | **claude-B** | DONE | 21/08 |
-| DMS-1 | GED : implementation du stockage, des versions et des acces | `app/src/Dms/**` | **claude-B** | CLAIM | 21/08 |
+| DMS-1 | GED : implementation du stockage, des versions et des acces — **selon spec arbitree D18** | `app/src/Dms/**` | **claude-B** | CLAIM | 22/08 |
 | C17 | NF525 : troisieme chaine (Facturation) — cle obligatoire depuis lenvironnement | `app/src/Facturation/Nf525` | **claude-A** | DONE | 22/08 |
 | ACT-0 | Spec SDD : composition dactivites, format de paquet verticale, remplacement de Metier | `specs/activites/**` | **claude-A** | CLAIM | 22/08 |
 | ACT-1 | Reservation : quantite consommee, reservation par type, quota de second niveau | `app/src/Reservation/**` | *a assigner* | CLAIM | 22/08 |
@@ -46,5 +46,4 @@ Ne touche pas un chemin déjà en `WIP` par une autre instance.
 | ACC-1 | Echec explicite sur operation non declaree + restitution a lexploitant | `app/src/Acces/**` | *a assigner* | CLAIM | 22/08 |
 | ACC-2 | Second port : encodage dune autorisation sur un medium (distinct de lappairage) | `app/src/Acces/Port/**` | *a assigner* | CLAIM | 22/08 |
 | ACC-3 | Projection reelle : une reservation ouvre un acces (remplace le no-op documente) | `app/src/Reservation/ProjectionAcces**` | *a assigner* | CLAIM | 22/08 |
-| DMS-1 | GED : implementation App\Dms selon spec arbitree (D18) — role dedie, flux chiffre, sauvegarde coherente | `app/src/Dms/**` | **claude-B** | CLAIM | 22/08 |
 <!-- Ajouter les nouvelles tâches au-dessus de cette ligne. -->
