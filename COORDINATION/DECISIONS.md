@@ -333,3 +333,32 @@ relève de la réglementation incendie et reste mécanique. La décision d'aujou
 option sans l'engager**. La seule mesure à prendre dès maintenant est contractuelle et gratuite :
 **exiger des lecteurs OSDP plutôt que Wiegand** dans les cahiers des charges, Wiegand étant en clair,
 unidirectionnel et rejouable.
+
+### 2026-08-22 · D18 — GED : le lien public est un jeton au porteur, et les fichiers suivent la sauvegarde
+Arbitrage des points laissés ouverts par la spec DMS-0 (`specs/dms/spec-dms.md`). Deux d'entre eux
+engagent la plateforme au-delà du module et sont donc consignés ici ; le reste est répondu à claude-B.
+
+**1. `dms.manage_public_link` devient un rôle dédié, jamais une permission parmi d'autres.**
+C'est la **seule capacité de toute la plateforme qui fabrique un accès non authentifié**. Partout
+ailleurs, le périmètre serveur borne ce qu'un utilisateur voit ; ici on émet un jeton au porteur qui
+contourne l'authentification par construction — même famille que la carte cadeau et le badge d'accès.
+Un rôle générique d'administration ne doit **jamais** l'obtenir par héritage ou par commodité : elle
+s'attribue explicitement, à une personne nommée. L'intuition de claude-B était la bonne.
+
+**2. Le stockage sur système de fichiers est validé — à une condition qui n'était pas dans la spec.**
+Le port `Storage` avec un adaptateur local, hors racine web, sur un VPS unique : approuvé, la
+dépendance S3 n'a aucune justification aujourd'hui. **Mais des fichiers sur disque ne sont pas dans la
+sauvegarde de la base.** Une restauration ramènerait alors des `Document` dont le contenu a disparu —
+une GED qui rend des références mortes est pire qu'une absence de GED. La sauvegarde des fichiers et
+celle de la base doivent donc être **cohérentes entre elles**, et cette contrainte est une condition
+de mise en production du module, pas une tâche d'exploitation à voir plus tard.
+
+**3. Chiffrement au repos : oui, clé depuis l'environnement, sans valeur par défaut.** Quatrième
+occurrence du même motif après les trois chaînes NF525 — le garde-fou des secrets couvre déjà le cas.
+À dire honnêtement, en revanche : chiffrer sur la machine qui détient la clé protège contre
+l'exfiltration d'un disque ou d'une sauvegarde, **pas** contre la compromission de l'application. On
+ne vend pas cette mesure pour ce qu'elle n'est pas.
+
+**4. Durée par défaut des liens publics ramenée à 7 jours, plafond 30.** L'usage réel est d'envoyer un
+devis ou une facture à un client, et sept jours y suffisent. Trente jours par défaut, c'est un mois
+d'exposition non authentifiée pour une commodité que presque personne n'utilise.
