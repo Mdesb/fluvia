@@ -44,6 +44,7 @@ api_platform:
             - '%kernel.project_dir%/src/Autorisation/Entity'
             - '%kernel.project_dir%/src/Facturation/Entity'
             - '%kernel.project_dir%/src/Ocr/Entity'
+            - '%kernel.project_dir%/src/Dms/Entity'
     defaults:
         stateless: true
         cache_headers:
