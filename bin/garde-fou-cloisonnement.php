@@ -155,8 +155,24 @@ function violations(string $racine): array
 /** `$x = …->find($…)` / `findOneBy` / `getReference`, avec la variable et les arguments. */
 const MOTIF_RESOLUTION_LIEE = '/\$(\w+)\s*=\s*[^;]*?->(?:find|findOneBy|getReference)\s*\((.*?)\)\s*;/s';
 
-/** L'argument vient-il de l'entrée client ? */
-const MOTIF_ARG_CLIENT = '/\$corps|\$uriVariables|\$donnees|\$payload|\$request->|\$data->|->corps\(\)/';
+/**
+ * L'argument vient-il de l'entrée client ?
+ *
+ * **`$data->` n'en fait volontairement pas partie.** Dans un Processor API Platform, `$data` est la
+ * *ressource chargée* par l'opération, pas le corps de la requête : quand celle-ci est déclarée
+ * `read: true`, l'entité est passée par le provider Doctrine et les extensions `Perimetre*` s'y sont
+ * appliquées — elle est donc déjà cloisonnée. Le compter comme entrée client produisait **dix faux
+ * positifs sur dix** au gel du 22/08 (Patinoire, Stock, Padel, Compta, Personnel, Autorisation),
+ * vérifiés un par un sur deux modules indépendants.
+ *
+ * ⚠ **Angle mort assumé, et il faut le connaître.** Si une opération est déclarée `read: false`,
+ * `$data` provient bien du corps. Ce garde-fou ne le voit pas : la déclaration vit dans l'entité, pas
+ * dans le Processor, et une règle par fichier ne peut pas la lire. En pratique ces Processors lisent
+ * aussi le corps par `LecteurCorps` — c'est le cas de `MouvementCaisseProcessor`, qui reste détecté.
+ * Un Processor `read: false` s'appuyant *uniquement* sur `$data->` échapperait au contrôle.
+ * Une règle qui croiserait la déclaration de l'opération le fermerait ; elle reste à écrire.
+ */
+const MOTIF_ARG_CLIENT = '/\$corps|\$uriVariables\s*\[|\$payload|\$request->(?:query|request|attributes)->get\(|->corps\(\)/';
 
 /**
  * Le périmètre est-il confronté à CETTE variable ? Les formes acceptées sont celles réellement
