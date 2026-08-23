@@ -518,3 +518,53 @@ lecteur possible, mais une route qui ne décrémente rien et ne journalise pas u
 **L'écran est une modale, pas une page (D13).** Scan → modale portant le solde, l'identité du porteur
 et **deux boutons d'ajout rapide** : recharger le forfait courant, ou ajouter des entrées à l'unité.
 L'agent de caisse ne doit pas naviguer pour répondre à « combien me reste-t-il ? ».
+
+### 2026-08-23 · D24 — Carte de séances nominative : un quota de stock, et un no-show qui ne se facture pas
+Complément de D23, demandé par Maxime : cartes de séances liées à un planning et à une personne
+(salon de massage), et traitement du no-show sur une prestation **déjà payée**.
+
+**1. La validité après recharge devient un paramètre de la recharge**, comme demandé — pas une règle
+globale. Deux exploitants du même logiciel n'ont pas la même politique commerciale, et le même
+exploitant peut vouloir prolonger sur une offre d'appel et pas sur une autre.
+
+**2. Le quota qui existe n'est pas celui qu'il nous faut, et il ne faut pas les confondre.**
+`QuotaFormuleResolver` et `SimulateurQuota` implémentent déjà un quota **périodique** : « deux
+aquagym par semaine incluses dans l'abonnement », semaine calendaire, **sans report** (RG-M1-12). Il
+est résolu à la réservation dans `ReserverProcessor`.
+
+La carte de dix séances est un quota de **stock** : il ne se recharge pas au calendrier, il s'épuise.
+Un même client peut parfaitement porter les deux — un abonnement avec deux séances hebdomadaires
+incluses, *et* une carte de dix massages achetée à part. Les fusionner produirait des décomptes faux
+dans les deux sens. Ce sont deux notions distinctes qui partagent le même point de consommation.
+
+**3. Nominatif : la structure existe.** `Reservation` porte un `organisateur` (`Beneficiaire`) et une
+collection de participants. Une carte de séances nominative se rattache donc à un bénéficiaire
+identifié — contrairement à la carte d'entrées piscine, qui reste volontiers au porteur. C'est
+pourquoi le rattachement du droit à un porteur (CQ-0) est **facultatif au niveau du modèle**, mais
+**obligatoire pour ce type de carte**.
+
+**4. Le point qui bloque réellement : le no-show d'une prestation déjà payée est inexprimable.**
+`ModeFacturationNoShow` propose quatre issues — vente différée, débit du porte-monnaie, prélèvement,
+facture à encaisser. **Les quatre répondent à la question « combien facture-t-on ? ».** Or sur une
+carte de dix séances, le client a déjà payé : il n'y a rien à facturer. La vraie question commerciale
+est ailleurs, et le modèle actuel ne sait pas la poser :
+
+> La séance manquée est-elle **décomptée** du solde, ou **restituée** au client ?
+
+**Décision : le no-show gagne une seconde dimension, indépendante de la facturation.** `RegleAnnulation`
+porte déjà la portée (établissement, type de ressource, ressource, **activité**), le délai franc, le
+mode de montant et les exonérations. On lui ajoute l'**issue sur le crédit** :
+
+- **décompté** — la séance est perdue, c'est la politique stricte du praticien dont l'agenda est rare ;
+- **restitué** — le crédit revient au solde, le client reprend rendez-vous librement ;
+- **restitué avec report proposé** — le crédit revient *et* un nouveau créneau est proposé, ce qui
+  transforme un incident en réengagement.
+
+Ces trois issues se paramètrent **aux quatre portées existantes**, ce qui permet à un salon de massage
+d'être strict là où une piscine sera indulgente, dans le même établissement.
+
+**Pourquoi une dimension séparée et non une cinquième valeur de `ModeFacturationNoShow`.** Parce que
+les deux questions sont orthogonales : une séance peut être décomptée *et* facturée (carte épuisée,
+créneau réservé quand même), ou restituée *et* non facturée. Les mélanger dans une seule énumération
+produirait le produit cartésien des cas, et l'un des deux axes finirait par être oublié — c'est
+exactement ce qui s'est produit avec les pilotes d'accès avant D17.

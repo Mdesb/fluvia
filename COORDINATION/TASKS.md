@@ -63,4 +63,7 @@ Ne touche pas un chemin déjà en `WIP` par une autre instance.
 | CQ-2 | Consultation du solde en lecture seule (ne consomme rien) + modale de caisse avec ajout rapide | `app/src/Acces/**` | **claude-A** | CLAIM | 23/08 |
 | CQ-3 | Carte de N reservations : ouvrir creditRestant sur les droits de type Booking | `app/src/Reservation/**` | *a assigner* | CLAIM | 23/08 |
 | CQ-4 | propositionRecharge : ne designer que des canaux reellement implementes | `app/src/Acces/State/PassageIngestionProcessor.php` | *a assigner* | CLAIM | 23/08 |
+| CQ-5 | No-show : issue sur le credit (decompte / restitue / restitue avec report), orthogonale a la facturation | `app/src/Reservation/**` | **claude-B** | CLAIM | 23/08 |
+| CQ-6 | Carte de seances nominative : quota de STOCK, distinct du quota periodique des formules | `app/src/{Reservation,Acces}/**` | *a assigner* | CLAIM | 23/08 |
+| CQ-7 | Parametres de recharge : la validite apres recharge se configure (conserver / prolonger) | `app/src/Offre/**` | *a assigner* | CLAIM | 23/08 |
 <!-- Ajouter les nouvelles tâches au-dessus de cette ligne. -->
