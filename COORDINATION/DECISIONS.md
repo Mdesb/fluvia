@@ -435,3 +435,36 @@ Vérifié après fusion, sur un clone jetable : le garde-fou de `main` **refuse*
 qui résout une entité depuis le corps sans contrôle (code de sortie 1), et son message cite l'IDOR
 d'appairage en exemple. C'était vrai avant la fusion aussi — sur la branche de C, où ça ne servait à
 personne.
+
+### 2026-08-23 · D22 — Revenue Recovery et Smart Flow passent en tête ; leurs déclencheurs d'abord
+Priorité donnée par Maxime. Les deux modules étaient au **point 5** de l'ordre conseillé du PLAYBOOK,
+derrière le bus d'événements, les services transverses, la suite Finance et les garde-fous — tous
+livrés depuis. Leur tour est donc venu sans qu'aucune séquence ne soit forcée.
+
+**Le constat qui commande la façon de s'y prendre.** Ces deux modules ne font rien par eux-mêmes : ils
+**réagissent à des événements**. Le catalogue leur en attribue quatorze. Vérification faite dans le
+code : **deux existent**, `payment.failed` et `payment.incident_reopened`, et encore, uniquement
+republiés par le pont d'événements historiques. Les douze autres — panier abandonné, facture échue,
+devis expiré, client inactif, réservation annulée, no-show, passage enregistré — **ne sont émis nulle
+part**.
+
+**Conséquence : construire les modules avant leurs déclencheurs produirait deux coquilles inertes.**
+Nous avons déjà ce précédent exact, à plus petite échelle, avec `ProjectionAccesReservation` : une
+projection écrite, documentée, testée… et sans effet, parce que rien ne l'alimentait. Le no-op a
+survécu des semaines. On ne le refait pas à l'échelle d'un module.
+
+**Donc l'ordre est : émettre, puis réagir.** Les tâches RR-1 et SF-1 (émission des événements
+manquants depuis les modules qui les produisent) sont des **préalables**, pas des dépendances
+optionnelles. Elles traversent Boutique, Facturation, Réservation, CRM et Devis — donc l'intégrateur.
+
+**Revenue Recovery ne part pas de zéro, et il faut le dire.** Le module `Recouvrement` implémente déjà
+le cœur du dunning : `PolitiqueRecouvrement` (calendrier de représentation, nombre maximal, moment du
+refus d'accès, blocage après N échecs), `MoteurRecouvrementHandler`, `IncidentImpaye`,
+`RepresentationSepa`. Ce qui manque n'est pas le moteur de relance — c'est **l'élargissement des
+déclencheurs** au-delà du seul impayé SEPA : panier abandonné, devis expiré, client inactif, no-show.
+La première question de la spec est donc « étend-on `Recouvrement` ou crée-t-on `RevenueRecovery` ? »,
+et non « comment relancer un client ? ».
+
+**Smart Flow, lui, part vraiment de zéro** — retards, créneaux libérés, liste d'attente, affluence.
+Mais il se branche sur `Reservation`, qui est mature et dont les événements manquants sont les plus
+simples à émettre.
