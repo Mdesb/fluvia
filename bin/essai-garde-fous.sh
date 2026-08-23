@@ -64,7 +64,15 @@ essai() { # essai <libellé> <refus|acceptation>
     git clean -qfd
 }
 
-commiter() { git add -A >/dev/null; git commit -q -m "$1"; }
+commiter() {
+    git add -A >/dev/null
+    # `--allow-empty` : quand tout le travail est déjà fusionné dans le dépôt, copier l'arbre courant
+    # dans le clone ne produit aucune différence. Sans cette option le commit échoue, `set -e` tue le
+    # banc, et on croit à une régression alors que tout va bien. Constaté le 23/08, une fois le lot de
+    # garde-fous intégré à `main` — le banc supposait que mon worktree diverge, ce qui n'est vrai que
+    # tant que le travail n'est pas fusionné.
+    git commit -q --allow-empty -m "$1"
+}
 
 # ─────────────────────────────────────────────────────────── préparation
 
