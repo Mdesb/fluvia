@@ -10,8 +10,10 @@ use App\Caisse\Entity\SessionCaisse;
 use App\Vente\Entity\Vente;
 use App\Vente\Service\GenerateurNumero;
 use App\Vente\Service\LecteurCorps;
+use App\Securite\Service\ContexteEtablissement;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\Uid\Uuid;
 
@@ -28,6 +30,7 @@ final class CreerVenteProcessor implements ProcessorInterface
         private readonly EntityManagerInterface $em,
         private readonly LecteurCorps $lecteur,
         private readonly GenerateurNumero $generateur,
+        private readonly ContexteEtablissement $contexte,
     ) {
     }
 
@@ -39,6 +42,25 @@ final class CreerVenteProcessor implements ProcessorInterface
         $cle = $this->uuid($corps['cleIdempotence'] ?? null);
         if ($cle !== null) {
             $existante = $this->em->getRepository(Vente::class)->findOneBy(['cleIdempotence' => $cle]);
+
+            // D8 — trouve par le garde-fou de cloisonnement le 23/08, **pendant** que je corrigeais la
+            // resolution de session dans ce meme fichier : mon correctif a rendu la seconde resolution
+            // visible a la regle « le controle porte sur l'entite resolue ».
+            //
+            // La cle d'idempotence vient du corps, la colonne n'est pas unique en base, et la vente
+            // trouvee etait **renvoyee telle quelle** : connaitre la cle d'une vente d'un autre
+            // etablissement en rendait le contenu — montant, lignes, client.
+            //
+            // On ignore une vente hors perimetre plutot que de refuser : le comportement devient
+            // identique a celui d'une cle inconnue, et la creation se poursuit normalement. Refuser en
+            // 404 aurait distingue « cle inconnue » de « cle utilisee ailleurs », donc renseigne
+            // l'appelant sur l'existence d'une vente qu'il n'a pas le droit de voir.
+            if ($existante !== null
+                && (string) $existante->getEtablissement()?->getId()
+                   !== (string) $this->contexte->etablissementActif()?->getId()) {
+                $existante = null;
+            }
+
             if ($existante !== null) {
                 return $existante;
             }
@@ -79,6 +101,21 @@ final class CreerVenteProcessor implements ProcessorInterface
         $session = $this->em->getRepository(SessionCaisse::class)->find($uuid);
         if ($session === null) {
             throw new UnprocessableEntityHttpException('Session introuvable.');
+        }
+
+        // D8 — la session vient d'un identifiant fourni par le client et etait resolue par un `find()`
+        // direct, sans aucun controle. Ce n'est pas qu'une fuite : plus bas, **l'etablissement de la
+        // session determine celui de l'objet cree**. Passer la session d'un autre etablissement n'y
+        // donnait donc pas seulement acces — cela y creait une ecriture.
+        //
+        // Troisieme et derniere porte de la meme famille (n10) : les deux autres,
+        // `MouvementCaisseProcessor` et `EmettreVenteNoShowProcessor`, ont ete fermees le 19 et le 23/08.
+        //
+        // Echec ferme en 404 : un 403 confirmerait l'existence de la session ailleurs. Une session sans
+        // etablissement echoue aussi — fermeture par defaut.
+        $actif = $this->contexte->etablissementActif();
+        if ((string) $session->getEtablissement()?->getId() !== (string) $actif?->getId()) {
+            throw new NotFoundHttpException('Session introuvable.');
         }
 
         return $session;
