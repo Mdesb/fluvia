@@ -4,11 +4,19 @@
     "Chaque entree est une entite exposee par l'API que rien ne permet de cloisonner :",
     "ni champ etablissement, ni extension Perimetre* qui la nomme.",
     "",
-    "Ce n'est pas une autorisation. Une extension manquante expose une COLLECTION entiere,",
-    "la ou un Processor mal garde expose un enregistrement a la fois.",
+    "Ce n'est pas une autorisation. Une extension manquante expose une COLLECTION entiere.",
     "",
-    "Cette liste ne peut que RETRECIR. Corriger une entree puis :",
-    "  php bin/garde-fou-couverture-perimetre.php --nettoyer"
+    "Depuis le 24/08 chaque entree porte un champ « traitement » : ce n'est plus une liste",
+    "de choses que l'outil ne sait pas lire, c'est un plan de travail. Les groupes :",
+    "",
+    "  A   la cible d'une relation est DEJA cloisonnee -> ajouter le chemin a l'extension.",
+    "      Verifie le 24/08 sur le nom reel de la propriete ET sur le cloisonnement effectif",
+    "      de la cible : une jointure vers une entite elle-meme non cloisonnee ne corrige rien.",
+    "  A2  meme chose, mais la cible est elle-meme dans cette liste -> ORDONNE, apres elle.",
+    "  B   referentiel presume global. Ce n'est PAS un defaut — mais tant que l'integrateur",
+    "      ne l'a pas confirme, l'entree reste comptee. Le silence ne vaut pas accord.",
+    "  B?  doute explicite, non tranche.",
+    "  C   aucun rattachement possible : il manque le champ. Migration, pas une ligne."
   ],
   "scelle": {
     "gelee_le": "2026-08-23",
@@ -30,7 +38,13 @@
         "compta.lire",
         "compta.valider"
       ],
-      "sensibilite": "argent"
+      "sensibilite": "argent",
+      "traitement": {
+        "groupe": "C",
+        "chemin": "",
+        "cible": "",
+        "note": "Enregistrement financier par etablissement sans aucun rattachement. Migration, pas une ligne."
+      }
     },
     "Compta/Entity/FactureB2G.php": {
       "depuis": "2026-08-23",
@@ -46,7 +60,13 @@
         "compta.gerer",
         "compta.lire"
       ],
-      "sensibilite": "argent"
+      "sensibilite": "argent",
+      "traitement": {
+        "groupe": "C",
+        "chemin": "",
+        "cible": "",
+        "note": "Facture Chorus Pro sans rattachement. Migration."
+      }
     },
     "Compta/Entity/LettrageEcriture.php": {
       "depuis": "2026-08-23",
@@ -61,7 +81,13 @@
         "compta.lettrer",
         "compta.lire"
       ],
-      "sensibilite": "argent"
+      "sensibilite": "argent",
+      "traitement": {
+        "groupe": "A",
+        "chemin": "ligne.ecriture.profilExploitant",
+        "cible": "EcritureComptable",
+        "note": "ATTENTION : la Compta ne se cloisonne PAS sur etablissement mais sur profilExploitant (AccountingScopeExtension:68) ; getEtablissement() y est derive de profilExploitant->getEtablissementPrincipal(). Trois sauts, et sur un autre axe que le reste du depot."
+      }
     },
     "Compta/Entity/MoyenPaiement.php": {
       "depuis": "2026-08-23",
@@ -78,7 +104,13 @@
         "compta.gerer",
         "compta.lire"
       ],
-      "sensibilite": "argent"
+      "sensibilite": "argent",
+      "traitement": {
+        "groupe": "B?",
+        "chemin": "",
+        "cible": "",
+        "note": "Peut-etre global, peut-etre par etablissement. Doute explicite, non tranche par claude-C."
+      }
     },
     "Compta/Entity/QualificationEquipement.php": {
       "depuis": "2026-08-23",
@@ -95,7 +127,13 @@
         "compta.gerer",
         "compta.lire"
       ],
-      "sensibilite": "argent"
+      "sensibilite": "argent",
+      "traitement": {
+        "groupe": "B",
+        "chemin": "",
+        "cible": "",
+        "note": "Referentiel presume global. NON CONFIRME par l'integrateur au 24/08 — tant que ce mot manque, l'entree reste comptee."
+      }
     },
     "Compta/Entity/VenteImpayeeRegie.php": {
       "depuis": "2026-08-23",
@@ -111,7 +149,13 @@
         "compta.gerer",
         "compta.lire"
       ],
-      "sensibilite": "argent"
+      "sensibilite": "argent",
+      "traitement": {
+        "groupe": "C",
+        "chemin": "",
+        "cible": "",
+        "note": "Signalee le 23/08. Migration."
+      }
     },
     "Padel/Entity/EvenementEclairage.php": {
       "depuis": "2026-08-23",
@@ -125,7 +169,13 @@
       "permissions": [
         "padel.lire"
       ],
-      "sensibilite": "argent"
+      "sensibilite": "argent",
+      "traitement": {
+        "groupe": "A",
+        "chemin": "terrain",
+        "cible": "TerrainPadel",
+        "note": "Porte aussi $reservation, egalement cloisonnee : deux chemins possibles, prendre le plus court."
+      }
     },
     "Vente/Nf525/Entity/OperationScellee.php": {
       "depuis": "2026-08-23",
@@ -140,7 +190,13 @@
       "permissions": [
         "caisse.lire"
       ],
-      "sensibilite": "argent"
+      "sensibilite": "argent",
+      "traitement": {
+        "groupe": "A",
+        "chemin": "pointDeVente",
+        "cible": "PointDeVente",
+        "note": "Chaine NF525 brute, listable d'un etablissement a l'autre en caisse.lire. Le plus urgent des 36."
+      }
     },
     "Acces/Entity/SousReseau.php": {
       "depuis": "2026-08-23",
@@ -157,7 +213,13 @@
         "acces.gerer",
         "acces.lire"
       ],
-      "sensibilite": "acces"
+      "sensibilite": "acces",
+      "traitement": {
+        "groupe": "B?",
+        "chemin": "",
+        "cible": "",
+        "note": "Peut-etre global, peut-etre par etablissement. Doute explicite, non tranche par claude-C."
+      }
     },
     "Autorisation/Entity/OperationSensible.php": {
       "depuis": "2026-08-23",
@@ -174,7 +236,13 @@
         "autorisation.gerer",
         "autorisation.lire"
       ],
-      "sensibilite": "acces"
+      "sensibilite": "acces",
+      "traitement": {
+        "groupe": "B?",
+        "chemin": "",
+        "cible": "",
+        "note": "Peut-etre global, peut-etre par etablissement. Doute explicite, non tranche par claude-C."
+      }
     },
     "Securite/Entity/Permission.php": {
       "depuis": "2026-08-23",
@@ -191,7 +259,13 @@
       "permissions": [
         "securite.gerer"
       ],
-      "sensibilite": "acces"
+      "sensibilite": "acces",
+      "traitement": {
+        "groupe": "B",
+        "chemin": "",
+        "cible": "",
+        "note": "Referentiel presume global. NON CONFIRME par l'integrateur au 24/08 — tant que ce mot manque, l'entree reste comptee."
+      }
     },
     "Securite/Entity/Role.php": {
       "depuis": "2026-08-23",
@@ -208,7 +282,13 @@
       "permissions": [
         "securite.gerer"
       ],
-      "sensibilite": "acces"
+      "sensibilite": "acces",
+      "traitement": {
+        "groupe": "B",
+        "chemin": "",
+        "cible": "",
+        "note": "Referentiel presume global. NON CONFIRME par l'integrateur au 24/08 — tant que ce mot manque, l'entree reste comptee."
+      }
     },
     "Securite/Entity/Utilisateur.php": {
       "depuis": "2026-08-23",
@@ -224,7 +304,13 @@
       "permissions": [
         "securite.gerer"
       ],
-      "sensibilite": "acces"
+      "sensibilite": "acces",
+      "traitement": {
+        "groupe": "B",
+        "chemin": "",
+        "cible": "",
+        "note": "Referentiel presume global. NON CONFIRME par l'integrateur au 24/08 — tant que ce mot manque, l'entree reste comptee."
+      }
     },
     "Dms/Entity/RetentionPolicy.php": {
       "depuis": "2026-08-23",
@@ -238,7 +324,13 @@
       "permissions": [
         "dms.read"
       ],
-      "sensibilite": "donnees-personnelles"
+      "sensibilite": "donnees-personnelles",
+      "traitement": {
+        "groupe": "B",
+        "chemin": "",
+        "cible": "",
+        "note": "Referentiel presume global. NON CONFIRME par l'integrateur au 24/08 — tant que ce mot manque, l'entree reste comptee."
+      }
     },
     "Support/Entity/CategorieAide.php": {
       "depuis": "2026-08-23",
@@ -254,7 +346,13 @@
       "permissions": [
         "support.gerer_categorie"
       ],
-      "sensibilite": "donnees-personnelles"
+      "sensibilite": "donnees-personnelles",
+      "traitement": {
+        "groupe": "B",
+        "chemin": "",
+        "cible": "",
+        "note": "Referentiel presume global. NON CONFIRME par l'integrateur au 24/08 — tant que ce mot manque, l'entree reste comptee."
+      }
     },
     "Support/Entity/JournalImportAide.php": {
       "depuis": "2026-08-23",
@@ -269,7 +367,12 @@
       "permissions": [
         "support.administrer"
       ],
-      "sensibilite": "donnees-personnelles"
+      "sensibilite": "donnees-personnelles",
+      "traitement": {
+        "groupe": "A",
+        "chemin": "article",
+        "cible": "ArticleAide"
+      }
     },
     "Support/Entity/MessageTicket.php": {
       "depuis": "2026-08-23",
@@ -287,7 +390,12 @@
         "support.traiter_ticket_n1",
         "support.traiter_ticket_n2"
       ],
-      "sensibilite": "donnees-personnelles"
+      "sensibilite": "donnees-personnelles",
+      "traitement": {
+        "groupe": "A",
+        "chemin": "ticket",
+        "cible": "TicketSupport"
+      }
     },
     "Support/Entity/PieceJointeAide.php": {
       "depuis": "2026-08-23",
@@ -306,7 +414,12 @@
         "support.gerer_kb_locale",
         "support.lire"
       ],
-      "sensibilite": "donnees-personnelles"
+      "sensibilite": "donnees-personnelles",
+      "traitement": {
+        "groupe": "A",
+        "chemin": "article",
+        "cible": "ArticleAide"
+      }
     },
     "Support/Entity/PieceJointeTicket.php": {
       "depuis": "2026-08-23",
@@ -325,7 +438,13 @@
         "support.traiter_ticket_n1",
         "support.traiter_ticket_n2"
       ],
-      "sensibilite": "donnees-personnelles"
+      "sensibilite": "donnees-personnelles",
+      "traitement": {
+        "groupe": "A2",
+        "chemin": "message.ticket",
+        "cible": "MessageTicket",
+        "note": "A traiter APRES MessageTicket : la cible immediate n'est pas encore cloisonnee."
+      }
     },
     "Support/Entity/VersionArticle.php": {
       "depuis": "2026-08-23",
@@ -342,7 +461,12 @@
         "support.gerer_kb_locale",
         "support.lire"
       ],
-      "sensibilite": "donnees-personnelles"
+      "sensibilite": "donnees-personnelles",
+      "traitement": {
+        "groupe": "A",
+        "chemin": "article",
+        "cible": "ArticleAide"
+      }
     },
     "Offre/Entity/Categorie.php": {
       "depuis": "2026-08-23",
@@ -360,7 +484,13 @@
         "offre.gerer",
         "offre.lire"
       ],
-      "sensibilite": "autre"
+      "sensibilite": "autre",
+      "traitement": {
+        "groupe": "B",
+        "chemin": "",
+        "cible": "",
+        "note": "Referentiel presume global. NON CONFIRME par l'integrateur au 24/08 — tant que ce mot manque, l'entree reste comptee."
+      }
     },
     "Offre/Entity/ConversionType.php": {
       "depuis": "2026-08-23",
@@ -374,7 +504,12 @@
       "permissions": [
         "offre.lire"
       ],
-      "sensibilite": "autre"
+      "sensibilite": "autre",
+      "traitement": {
+        "groupe": "A",
+        "chemin": "produit",
+        "cible": "Produit"
+      }
     },
     "Offre/Entity/GrilleTarifaire.php": {
       "depuis": "2026-08-23",
@@ -392,7 +527,12 @@
         "offre.lire",
         "offre.modifier"
       ],
-      "sensibilite": "autre"
+      "sensibilite": "autre",
+      "traitement": {
+        "groupe": "A",
+        "chemin": "produit",
+        "cible": "Produit"
+      }
     },
     "Offre/Entity/PrixHistorique.php": {
       "depuis": "2026-08-23",
@@ -406,7 +546,13 @@
       "permissions": [
         "offre.lire"
       ],
-      "sensibilite": "autre"
+      "sensibilite": "autre",
+      "traitement": {
+        "groupe": "A2",
+        "chemin": "grille.produit",
+        "cible": "GrilleTarifaire",
+        "note": "A traiter APRES GrilleTarifaire : la cible immediate n'est pas encore cloisonnee."
+      }
     },
     "Offre/Entity/Promotion.php": {
       "depuis": "2026-08-23",
@@ -424,7 +570,13 @@
         "offre.gerer",
         "offre.lire"
       ],
-      "sensibilite": "autre"
+      "sensibilite": "autre",
+      "traitement": {
+        "groupe": "B",
+        "chemin": "",
+        "cible": "",
+        "note": "Referentiel presume global. NON CONFIRME par l'integrateur au 24/08 — tant que ce mot manque, l'entree reste comptee."
+      }
     },
     "Offre/Entity/Saison.php": {
       "depuis": "2026-08-23",
@@ -442,7 +594,13 @@
         "offre.gerer",
         "offre.lire"
       ],
-      "sensibilite": "autre"
+      "sensibilite": "autre",
+      "traitement": {
+        "groupe": "B",
+        "chemin": "",
+        "cible": "",
+        "note": "Referentiel presume global. NON CONFIRME par l'integrateur au 24/08 — tant que ce mot manque, l'entree reste comptee."
+      }
     },
     "Offre/Entity/TrancheQuotientFamilial.php": {
       "depuis": "2026-08-23",
@@ -460,7 +618,13 @@
         "offre.gerer",
         "offre.lire"
       ],
-      "sensibilite": "autre"
+      "sensibilite": "autre",
+      "traitement": {
+        "groupe": "B",
+        "chemin": "",
+        "cible": "",
+        "note": "Referentiel presume global. NON CONFIRME par l'integrateur au 24/08 — tant que ce mot manque, l'entree reste comptee."
+      }
     },
     "Offre/Entity/TypeProduit.php": {
       "depuis": "2026-08-23",
@@ -474,7 +638,13 @@
       "permissions": [
         "offre.lire"
       ],
-      "sensibilite": "autre"
+      "sensibilite": "autre",
+      "traitement": {
+        "groupe": "B",
+        "chemin": "",
+        "cible": "",
+        "note": "Referentiel presume global. NON CONFIRME par l'integrateur au 24/08 — tant que ce mot manque, l'entree reste comptee."
+      }
     },
     "Offre/Entity/TypeTarif.php": {
       "depuis": "2026-08-23",
@@ -492,7 +662,13 @@
         "offre.gerer",
         "offre.lire"
       ],
-      "sensibilite": "autre"
+      "sensibilite": "autre",
+      "traitement": {
+        "groupe": "B",
+        "chemin": "",
+        "cible": "",
+        "note": "Referentiel presume global. NON CONFIRME par l'integrateur au 24/08 — tant que ce mot manque, l'entree reste comptee."
+      }
     },
     "OptionProduit/Entity/GroupeOption.php": {
       "depuis": "2026-08-23",
@@ -509,7 +685,13 @@
         "offre.lire",
         "offre.modifier"
       ],
-      "sensibilite": "autre"
+      "sensibilite": "autre",
+      "traitement": {
+        "groupe": "B",
+        "chemin": "",
+        "cible": "",
+        "note": "Referentiel presume global. NON CONFIRME par l'integrateur au 24/08 — tant que ce mot manque, l'entree reste comptee."
+      }
     },
     "OptionProduit/Entity/ValeurOption.php": {
       "depuis": "2026-08-23",
@@ -526,7 +708,12 @@
         "offre.lire",
         "offre.modifier"
       ],
-      "sensibilite": "autre"
+      "sensibilite": "autre",
+      "traitement": {
+        "groupe": "A",
+        "chemin": "articleStock",
+        "cible": "ArticleStock"
+      }
     },
     "Organisation/Entity/Groupe.php": {
       "depuis": "2026-08-23",
@@ -543,7 +730,13 @@
       "permissions": [
         "organisation.gerer"
       ],
-      "sensibilite": "autre"
+      "sensibilite": "autre",
+      "traitement": {
+        "groupe": "B",
+        "chemin": "",
+        "cible": "",
+        "note": "Referentiel presume global. NON CONFIRME par l'integrateur au 24/08 — tant que ce mot manque, l'entree reste comptee."
+      }
     },
     "Reporting/Entity/AxeAnalytique.php": {
       "depuis": "2026-08-23",
@@ -560,7 +753,13 @@
         "reporting.configurer",
         "reporting.lire"
       ],
-      "sensibilite": "autre"
+      "sensibilite": "autre",
+      "traitement": {
+        "groupe": "B?",
+        "chemin": "",
+        "cible": "",
+        "note": "Peut-etre global, peut-etre par etablissement. Doute explicite, non tranche par claude-C."
+      }
     },
     "Reporting/Entity/Indicateur.php": {
       "depuis": "2026-08-23",
@@ -577,7 +776,13 @@
         "reporting.configurer",
         "reporting.lire"
       ],
-      "sensibilite": "autre"
+      "sensibilite": "autre",
+      "traitement": {
+        "groupe": "B?",
+        "chemin": "",
+        "cible": "",
+        "note": "Peut-etre global, peut-etre par etablissement. Doute explicite, non tranche par claude-C."
+      }
     },
     "Reservation/Entity/DisponibiliteRessource.php": {
       "depuis": "2026-08-23",
@@ -595,7 +800,12 @@
         "reservation.gerer_ressource",
         "reservation.lire"
       ],
-      "sensibilite": "autre"
+      "sensibilite": "autre",
+      "traitement": {
+        "groupe": "A",
+        "chemin": "ressource",
+        "cible": "Ressource"
+      }
     },
     "Reservation/Entity/IndisponibiliteRessource.php": {
       "depuis": "2026-08-23",
@@ -613,7 +823,12 @@
         "reservation.gerer_ressource",
         "reservation.lire"
       ],
-      "sensibilite": "autre"
+      "sensibilite": "autre",
+      "traitement": {
+        "groupe": "A",
+        "chemin": "ressource",
+        "cible": "Ressource"
+      }
     }
   }
 }
