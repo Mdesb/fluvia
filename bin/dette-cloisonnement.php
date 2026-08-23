@@ -31,6 +31,48 @@ const FICHIERS = [
     'entité exposée non cloisonnable (règle n°5)' => ['bin/couverture-perimetre.ligne-de-base.json', 'entrees'],
 ];
 
+/**
+ * Sensibilité déduite de **l'entité résolue**, et non du dossier.
+ *
+ * Deux fois le classement par module s'est révélé faux : `EmettreVenteNoShowProcessor` rangé sous
+ * `Reservation` alors qu'il touche une `SessionCaisse`, et `ActionsDeMasseProcessor` rangé en
+ * « autre » alors qu'il modifie un catalogue en masse. Ce que le code **fait** compte plus que
+ * l'endroit où il vit.
+ *
+ * Cette table vient des treize cas réellement instruits entre le 20 et le 23/08, pas d'une théorie.
+ */
+const ENTITES_SENSIBLES = [
+    'argent' => [
+        'SessionCaisse', 'MouvementCaisse', 'Vente', 'VenteImpayeeRegie', 'Facture', 'FactureB2G',
+        'Caution', 'CautionCasier', 'CautionMateriel', 'CautionLocationPatins', 'MouvementCaution',
+        'BordereauPayFiP', 'BordereauVersement', 'EcritureComptable', 'LigneEcriture', 'Journal',
+        'PorteMonnaieVirtuel', 'MouvementPmv', 'Produit', 'Categorie', 'CatalogueFournisseur',
+        'CommandeAchat', 'EtalementPca', 'MouvementPca', 'ProfilExploitant', 'ExportComptable',
+    ],
+    'acces' => [
+        'DroitAcces', 'EspaceAcces', 'BadgeStaff', 'Controleur', 'Equipement', 'BraceletEtanche',
+        'Utilisateur', 'Affectation', 'DeclarationPerteVol', 'SousReseau', 'OperationSensible',
+    ],
+    'donnees-personnelles' => [
+        'Client', 'Beneficiaire', 'Consentement', 'TicketSupport', 'MessageTicket', 'Employe',
+        'CompteClient', 'DemandeRGPD',
+    ],
+];
+
+/**
+ * @param list<string> $entites
+ */
+function sensibiliteReelle(array $entites, string $moduleParDefaut): string
+{
+    foreach (ENTITES_SENSIBLES as $niveau => $noms) {
+        if (array_intersect($entites, $noms) !== []) {
+            return $niveau;
+        }
+    }
+
+    return $moduleParDefaut;
+}
+
 /** Ordre d'urgence. Il vient de l'expérience, pas d'une théorie : les huit défauts trouvés du 20 au 23/08 sont tous sortis des deux premiers. */
 const ORDRE = ['argent' => 0, 'acces' => 1, 'donnees-personnelles' => 2, 'autre' => 3, '(non classé)' => 4];
 
@@ -47,7 +89,18 @@ function collecter(): array
 
         $donnees = json_decode((string) file_get_contents($chemin), true, 512, JSON_THROW_ON_ERROR);
         foreach ($donnees[$cle] ?? [] as $entree => $meta) {
-            $sensibilite = $meta['sensibilite'] ?? '(non classé)';
+            // On recalcule au moment du rapport plutôt que de croire le champ gelé : les lignes
+            // de base ont été écrites avant qu'on sache que le module est un mauvais indicateur.
+            // Les entités résolues ne sont enregistrées que pour la règle n°1. Pour la règle n°5,
+            // l'entrée EST une entité : son nom se lit dans le chemin, `…/Entity/EcritureComptable.php`.
+            // Sans ce rattrapage, la moitié de la dette resterait classée par module — c'est-à-dire
+            // par l'indicateur dont on vient d'établir qu'il trompe.
+            $entites = $meta['entites_resolues'] ?? [];
+            if ($entites === [] && preg_match('#/Entity/(\w+)\.php$#', $entree, $nomEntite) === 1) {
+                $entites = [$nomEntite[1]];
+            }
+
+            $sensibilite = sensibiliteReelle($entites, $meta['sensibilite'] ?? '(non classé)');
             $module = $meta['module'] ?? explode('/', $entree)[0];
             $tout[$sensibilite][$regle][] = ['entree' => $entree, 'module' => $module];
         }
