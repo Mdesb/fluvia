@@ -42,6 +42,25 @@ final class CreerVenteProcessor implements ProcessorInterface
         $cle = $this->uuid($corps['cleIdempotence'] ?? null);
         if ($cle !== null) {
             $existante = $this->em->getRepository(Vente::class)->findOneBy(['cleIdempotence' => $cle]);
+
+            // D8 — trouve par le garde-fou de cloisonnement le 23/08, **pendant** que je corrigeais la
+            // resolution de session dans ce meme fichier : mon correctif a rendu la seconde resolution
+            // visible a la regle « le controle porte sur l'entite resolue ».
+            //
+            // La cle d'idempotence vient du corps, la colonne n'est pas unique en base, et la vente
+            // trouvee etait **renvoyee telle quelle** : connaitre la cle d'une vente d'un autre
+            // etablissement en rendait le contenu — montant, lignes, client.
+            //
+            // On ignore une vente hors perimetre plutot que de refuser : le comportement devient
+            // identique a celui d'une cle inconnue, et la creation se poursuit normalement. Refuser en
+            // 404 aurait distingue « cle inconnue » de « cle utilisee ailleurs », donc renseigne
+            // l'appelant sur l'existence d'une vente qu'il n'a pas le droit de voir.
+            if ($existante !== null
+                && (string) $existante->getEtablissement()?->getId()
+                   !== (string) $this->contexte->etablissementActif()?->getId()) {
+                $existante = null;
+            }
+
             if ($existante !== null) {
                 return $existante;
             }
