@@ -54,7 +54,7 @@ use Symfony\Bundle\SecurityBundle\Security;
  * `VenteImpayeeRegie` l'est par conception. Inventer un chemin non vérifié produirait un cloisonnement
  * qui filtre à côté — pire qu'une absence de filtre, parce qu'il rassure.
  */
-final class PerimetreComptaExtension implements QueryCollectionExtensionInterface, QueryItemExtensionInterface
+final class AccountingScopeExtension implements QueryCollectionExtensionInterface, QueryItemExtensionInterface
 {
     /**
      * Propriété menant au `ProfilExploitant`, par classe de ressource. `ExpenseAccountMapping` porte le
@@ -130,13 +130,13 @@ final class PerimetreComptaExtension implements QueryCollectionExtensionInterfac
             // Seule entité du module portant l'établissement directement.
             $chemin = $racine . '.etablissementPrincipal';
         } elseif (isset(self::VIA_PROFIL[$resourceClass])) {
-            $queryBuilder->innerJoin($racine . '.' . self::VIA_PROFIL[$resourceClass], 'pe_compta');
-            $chemin = 'pe_compta.etablissementPrincipal';
+            $queryBuilder->innerJoin($racine . '.' . self::VIA_PROFIL[$resourceClass], 'pe_scope');
+            $chemin = 'pe_scope.etablissementPrincipal';
         } elseif (isset(self::VIA_RELATION[$resourceClass])) {
             $queryBuilder
-                ->innerJoin($racine . '.' . self::VIA_RELATION[$resourceClass], 'rel_compta')
-                ->innerJoin('rel_compta.profilExploitant', 'pe_compta');
-            $chemin = 'pe_compta.etablissementPrincipal';
+                ->innerJoin($racine . '.' . self::VIA_RELATION[$resourceClass], 'rel_scope')
+                ->innerJoin('rel_scope.profilExploitant', 'pe_scope');
+            $chemin = 'pe_scope.etablissementPrincipal';
         } else {
             return;
         }
@@ -147,14 +147,14 @@ final class PerimetreComptaExtension implements QueryCollectionExtensionInterfac
         $queryBuilder
             ->innerJoin(
                 Affectation::class,
-                'aff_perimetre_compta',
+                'aff_accounting_scope',
                 Join::WITH,
                 sprintf(
-                    'IDENTITY(aff_perimetre_compta.etablissement) = IDENTITY(%s) AND IDENTITY(aff_perimetre_compta.utilisateur) = :perimetre_compta_utilisateur',
+                    'IDENTITY(aff_accounting_scope.etablissement) = IDENTITY(%s) AND IDENTITY(aff_accounting_scope.utilisateur) = :accounting_scope_user',
                     $chemin,
                 ),
             )
-            ->setParameter('perimetre_compta_utilisateur', $utilisateur->getId(), 'uuid')
+            ->setParameter('accounting_scope_user', $utilisateur->getId(), 'uuid')
             ->distinct();
     }
 }
