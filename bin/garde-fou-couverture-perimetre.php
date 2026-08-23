@@ -35,16 +35,34 @@ declare(strict_types=1);
 const RACINE_SRC = 'app/src';
 const LIGNE_DE_BASE = 'bin/couverture-perimetre.ligne-de-base.json';
 
-const MOTIF_ENTITE = '/#\[ORM\\\\Entity/';
-const MOTIF_EXPOSEE = '/#\[ApiResource/';
+/**
+ * Les attributs doivent être en **début de ligne**. Sans cette ancre, un `#[ApiResource]` cité dans
+ * un commentaire compte comme une exposition : c'est ce qui a fait signaler `DestinataireRapport`,
+ * dont le docblock dit précisément qu'elle **n'est pas** exposée en ressource propre.
+ */
+const MOTIF_ENTITE = '/^\s*#\[ORM\\\\Entity/m';
+const MOTIF_EXPOSEE = '/^\s*#\[ApiResource/m';
 const MOTIF_CLASSE = '/(?:final\s+)?class\s+(\w+)/';
+
+/**
+ * Une extension peut filtrer sur une **interface** plutôt que sur des classes nommées —
+ * `PerimetreReportingExtension` le fait via `RattachementNiveauInterface`, ce qui couvre d'un coup
+ * toutes les entités Reporting sans qu'aucune n'apparaisse en `X::class`. Ne chercher que les
+ * `::class` faisait passer sept entités correctement cloisonnées pour des trous.
+ */
+const MOTIF_INTERFACE = '/\b(\w+Interface)\b/';
 
 /** Rattachement direct : une propriété `$etablissement`, ou une relation vers `Etablissement`. */
 const MOTIF_ETABLISSEMENT = '/(?:private|protected|public)[^;\n]*\$etablissement\b|targetEntity:\s*Etablissement::class/';
 
 // ------------------------------------------------------------------ analyse
 
-/** @return array<string, true> toutes les classes nommées par une extension de périmètre */
+/**
+ * Tout ce qu'une extension de périmètre sait filtrer : les classes qu'elle nomme (`X::class`) et les
+ * **interfaces** sur lesquelles elle s'appuie.
+ *
+ * @return array<string, true>
+ */
 function classesCouvertesParExtension(string $racine): array
 {
     $couvertes = [];
@@ -57,16 +75,42 @@ function classesCouvertesParExtension(string $racine): array
         }
 
         $source = (string) file_get_contents($fichier->getPathname());
-        if (preg_match_all('/(\w+)::class/', $source, $noms) === false) {
-            continue;
+
+        if (preg_match_all('/(\w+)::class/', $source, $noms) !== false) {
+            foreach ($noms[1] as $nom) {
+                $couvertes[$nom] = true;
+            }
         }
 
-        foreach ($noms[1] as $nom) {
-            $couvertes[$nom] = true;
+        if (preg_match_all(MOTIF_INTERFACE, $source, $interfaces) !== false) {
+            foreach ($interfaces[1] as $nom) {
+                $couvertes[$nom] = true;
+            }
         }
     }
 
     return $couvertes;
+}
+
+/**
+ * L'entité implémente-t-elle une interface qu'une extension sait filtrer ?
+ *
+ * @param array<string, true> $couvertes
+ */
+function implementeUneInterfaceCouverte(string $source, array $couvertes): bool
+{
+    if (preg_match('/\bclass\s+\w+[^{]*\bimplements\b([^{]+)\{/s', $source, $clause) !== 1) {
+        return false;
+    }
+
+    foreach (preg_split('/\s*,\s*/', trim($clause[1])) ?: [] as $nom) {
+        $court = trim(substr(strrchr('\\' . $nom, '\\') ?: '', 1));
+        if ($court !== '' && isset($couvertes[$court])) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 /** @return list<string> chemins des entités exposées et non cloisonnables, triés */
@@ -96,7 +140,9 @@ function violations(string $racine): array
         if (preg_match(MOTIF_CLASSE, $source, $classe) !== 1) {
             continue;
         }
-        if (preg_match(MOTIF_ETABLISSEMENT, $source) === 1 || isset($couvertes[$classe[1]])) {
+        if (preg_match(MOTIF_ETABLISSEMENT, $source) === 1
+            || isset($couvertes[$classe[1]])
+            || implementeUneInterfaceCouverte($source, $couvertes)) {
             continue;
         }
 
