@@ -242,6 +242,28 @@ PHP
 commiter "banc : secret"
 essai "secrets — clé cryptographique en valeur par défaut" refus
 
+# Couverture de perimetre : une entite exposee que rien ne peut filtrer. C'est le trou par lequel
+# `GET /ecritures-comptables` renvoyait le grand livre de tous les etablissements.
+mkdir -p app/src/Offre/Entity
+cat > app/src/Offre/Entity/BancSansTenant.php <<'PHP'
+<?php
+declare(strict_types=1);
+namespace App\Offre\Entity;
+use ApiPlatform\Metadata\ApiResource;
+use ApiPlatform\Metadata\GetCollection;
+use Doctrine\ORM\Mapping as ORM;
+#[ORM\Entity]
+#[ApiResource(operations: [new GetCollection(security: "is_granted('PERM', 'offre.lire')")])]
+class BancSansTenant
+{
+    #[ORM\Id]
+    #[ORM\Column]
+    private int $id = 0;
+}
+PHP
+commiter "banc : entite sans tenant"
+essai "couverture — entité exposée sans cloisonnement possible" refus
+
 # ─────────────────────────────────────────────────────────── remise en état
 
 echo

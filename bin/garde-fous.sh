@@ -98,6 +98,12 @@ executer "Nommage anglais (D5)" php_racine bin/garde-fou-nommage-anglais.php "--
 #    Facturation/Nf525/ScellementFactureHandler n'est pas passé à #[Autowire(env:)] — c'est voulu.
 executer "Secrets en dur" php_racine bin/garde-fou-secrets.php
 
+# 5. Couverture de périmètre en LECTURE. Les quatre précédents surveillent les écritures ; celui-ci
+#    surveille ce qu'aucun d'eux ne pouvait voir — une entité exposée que rien ne permet de filtrer.
+#    C'est ce trou qui laissait `GET /ecritures-comptables` renvoyer le grand livre de tous les
+#    établissements : pas de Processor fautif, juste aucune extension.
+executer "Couverture de périmètre (lecture)" php_racine bin/garde-fou-couverture-perimetre.php
+
 # 5. i18n : pas de chaîne d'UI en dur — SANS OBJET tant que la couche i18n n'existe pas (aucun
 #    catalogue, aucun usage du traducteur dans app/src). Acté par l'intégrateur le 21/08.
 # 6. CSRF — SANS OBJET : tous les pare-feux sont `stateless: true` et l'authentification est un JWT
