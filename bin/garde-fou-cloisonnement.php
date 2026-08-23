@@ -46,7 +46,11 @@ const MOTIF_RESOLUTION = '/->find\(|->findOneBy\(|->getReference\(/';
  */
 const MOTIFS_CONTROLE = [
     'codesEffectifs()'        => '/codesEffectifs\s*\(/',
-    'Verificateur/Guard'      => '/Verificateur|Guard/',
+    // `verifierAcces*` rejoint `Verificateur`/`Guard` : ce sont trois façons de nommer la même
+    // chose — un assistant de garde. Ajouté après le correctif du 23/08 (n°11), où le contrôle a
+    // été posé dans `ResolutionClientSoiTrait::verifierAccesSoi()` : les trois Providers CRM
+    // étaient corrigés et restaient signalés, faute que le motif reconnaisse cette forme.
+    'Verificateur/Guard'      => '/Verificateur|Guard|verifierAcces/',
     'ContexteEtablissement'   => '/ContexteEtablissement/',
     'extension Perimetre'     => '/Perimetre\w*/',
     'getEtablissement()'      => '/->getEtablissement\(\)/',
