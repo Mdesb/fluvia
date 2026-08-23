@@ -21,9 +21,11 @@ use App\Reservation\Service\ResolveurRegleAnnulation;
 use App\Reservation\Service\VenteReservationHandler;
 use App\Securite\Entity\Utilisateur;
 use App\Vente\Service\LecteurCorps;
+use App\Securite\Service\ContexteEtablissement;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\Uid\Uuid;
 
@@ -47,6 +49,7 @@ final class ReserverProcessor implements ProcessorInterface
         private readonly ResolveurRegleAnnulation $resolveurRegle,
         private readonly VenteReservationHandler $venteHandler,
         private readonly ProjectionAccesReservationHandler $projectionAcces,
+        private readonly ContexteEtablissement $contexte,
     ) {
     }
 
@@ -134,7 +137,27 @@ final class ReserverProcessor implements ProcessorInterface
             return null;
         }
 
-        return $this->em->getRepository(SessionCaisse::class)->find($uuid);
+        $session = $this->em->getRepository(SessionCaisse::class)->find($uuid);
+        if ($session === null) {
+            return null;
+        }
+
+        // D8 — la session vient d'un identifiant fourni par le client et etait resolue par un `find()`
+        // direct, sans aucun controle. Ce n'est pas qu'une fuite : plus bas, **l'etablissement de la
+        // session determine celui de l'objet cree**. Passer la session d'un autre etablissement n'y
+        // donnait donc pas seulement acces — cela y creait une ecriture.
+        //
+        // Troisieme et derniere porte de la meme famille (n10) : les deux autres,
+        // `MouvementCaisseProcessor` et `EmettreVenteNoShowProcessor`, ont ete fermees le 19 et le 23/08.
+        //
+        // Echec ferme en 404 : un 403 confirmerait l'existence de la session ailleurs. Une session sans
+        // etablissement echoue aussi — fermeture par defaut.
+        $actif = $this->contexte->etablissementActif();
+        if ((string) $session->getEtablissement()?->getId() !== (string) $actif?->getId()) {
+            throw new NotFoundHttpException('Session introuvable.');
+        }
+
+        return $session;
     }
 
     /**
