@@ -104,6 +104,17 @@ executer "Secrets en dur" php_racine bin/garde-fou-secrets.php
 #    établissements : pas de Processor fautif, juste aucune extension.
 executer "Couverture de périmètre (lecture)" php_racine bin/garde-fou-couverture-perimetre.php
 
+# 6. Événements du catalogue sans émetteur (D2/D22). Deux régimes délibérément distincts : un abonné
+#    qui écoute un événement que personne német est un ÉCHEC DUR, sans ligne de base — cest le seul
+#    défaut du projet quaucun test ne peut attraper, parce quun abonné inerte ne casse rien, il ne
+#    fait rien. Le stock de noms déclarés-mais-pas-encore-émis, lui, est légitime (D2, le contrat
+#    précède le code) : on le gèle et on le fait décroître. RR-1 et SF-1 sont ce décompte.
+if [ -n "${REFERENCE:-}" ]; then
+    executer "Événements orphelins (D2/D22)" php_racine bin/garde-fou-evenements-orphelins.php "--contre=$REFERENCE"
+else
+    executer "Événements orphelins (D2/D22)" php_racine bin/garde-fou-evenements-orphelins.php
+fi
+
 # 5. i18n : pas de chaîne d'UI en dur — SANS OBJET tant que la couche i18n n'existe pas (aucun
 #    catalogue, aucun usage du traducteur dans app/src). Acté par l'intégrateur le 21/08.
 # 6. CSRF — SANS OBJET : tous les pare-feux sont `stateless: true` et l'authentification est un JWT
