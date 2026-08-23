@@ -294,9 +294,28 @@ if ($echec) {
     exit(1);
 }
 
+// Répartition par traitement. Un décompte brut ne dit pas si la dette est traitable ; la
+// répartition, si. « 36 » se lit comme un mur, « 12 jointures + 3 migrations + 19 référentiels
+// à confirmer » se lit comme un plan.
+$parGroupe = [];
+foreach ($entrees as $entree) {
+    $groupe = $entree['traitement']['groupe'] ?? '?';
+    $parGroupe[$groupe] = ($parGroupe[$groupe] ?? 0) + 1;
+}
+ksort($parGroupe);
+
+$repartition = [];
+foreach ($parGroupe as $groupe => $nombre) {
+    $repartition[] = sprintf('%s=%d', $groupe, $nombre);
+}
+
 echo sprintf(
     "Couverture de périmètre : OK — aucune nouvelle entité exposée sans cloisonnement. Dette gelée : %d, plafond %d.\n",
     count($entrees),
     $plafond
+);
+echo sprintf(
+    "  Traitement : %s  (A jointure directe · A2 ordonnée · B référentiel présumé · B? à trancher · C migration)\n",
+    implode('  ', $repartition)
 );
 exit(0);
