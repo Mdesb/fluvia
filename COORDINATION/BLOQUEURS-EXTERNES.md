@@ -16,6 +16,7 @@
 | E-5 | Cartes en portefeuille Apple/Google | Agrément de programme, obtenu via les fabricants de serrures | Non engagé | `TypeSupport::Wallet` existe comme valeur, rien derrière | Aucun aujourd'hui — à rouvrir seulement si un client le demande |
 | E-6 | Lecteurs OSDP plutôt que Wiegand | Exigence à porter dans les cahiers des charges | Maxime, à l'écrit, dès maintenant | — | Aucun sur l'existant ; conditionne l'indépendance matérielle future (D17) |
 
+| E-7 | Authenticité des rappels PayFiP (`POST /compta/payfip/retour`) | Le schéma de signature de la DGFiP — inconnu de nous | DGFiP, via Maxime | Route fermée par la permission `compta.valider` et cloisonnée par la vente d'origine (23/08) | **Aucun aujourd'hui** : Maxime a confirmé le 23/08 que rien n'appelle cette route |
 ## Ce qui débloque quoi
 
 - **E-1** part dès que la société est immatriculée. C'est le seul de la liste dont la date dépend
@@ -26,3 +27,9 @@
   installé qui décidera du premier adaptateur, pas notre préférence.
 - **E-6** ne coûte rien et n'attend personne d'autre que nous : c'est une phrase à ajouter aux
   cahiers des charges, aujourd'hui.
+
+- **E-7** n'est pas un blocage de développement mais une **limite de ce qui est corrigé**. Un rappel de
+  prestataire n'est pas un utilisateur connecté : la permission posée le 23/08 est un repli, valable
+  tant que la route n'est appelée par personne. Le jour où l'intégration devient réelle, la garde doit
+  devenir une **preuve d'authenticité du message** — signature, empreinte ou liste d'adresses — et la
+  permission n'aura plus de sens. À rouvrir **avant** le premier rappel réel, pas après.
