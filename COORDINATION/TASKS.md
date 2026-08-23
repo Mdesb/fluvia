@@ -66,4 +66,5 @@ Ne touche pas un chemin déjà en `WIP` par une autre instance.
 | CQ-5 | No-show : issue sur le credit (decompte / restitue / restitue avec report), orthogonale a la facturation | `app/src/Reservation/**` | **claude-B** | CLAIM | 23/08 |
 | CQ-6 | Carte de seances nominative : quota de STOCK, distinct du quota periodique des formules | `app/src/{Reservation,Acces}/**` | *a assigner* | CLAIM | 23/08 |
 | CQ-7 | Parametres de recharge : la validite apres recharge se configure (conserver / prolonger) | `app/src/Offre/**` | *a assigner* | CLAIM | 23/08 |
+| ACC-4 | Resolution du pilote dacces **par etablissement** — lalias DI unique rend les capacites globales et vide D17 dune partie de son sens | `app/src/Acces/**` | *a assigner* | CLAIM | 23/08 |
 <!-- Ajouter les nouvelles tâches au-dessus de cette ligne. -->
