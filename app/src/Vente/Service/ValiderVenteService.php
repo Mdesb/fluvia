@@ -6,6 +6,8 @@ namespace App\Vente\Service;
 
 use App\Offre\Entity\Produit;
 use App\Offre\Entity\TypeProduit;
+use App\Platform\Event\DomainEvent;
+use App\Platform\Event\EventBus;
 use App\Vente\Entity\BilletSupport;
 use App\Vente\Entity\LigneVente;
 use App\Vente\Entity\Vente;
@@ -16,8 +18,11 @@ use App\Vente\Nf525\Entity\OperationScellee;
 use App\Vente\Nf525\OperationAScellerDto;
 use App\Vente\Nf525\ScellementHandler;
 use App\Vente\Port\AppairageAccesInterface;
+use App\Vente\Port\CardRechargeInterface;
+use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\Uid\Uuid;
 
@@ -25,18 +30,51 @@ use Symfony\Component\Uid\Uuid;
  * Cœur de la validation d'une vente (CA-8/11/12/15, §2/§6 du plan), réutilisé par le guichet et par
  * la resynchro hors-ligne. Refuse si le reste dû > 0 (sauf paiement différé autorisé, RG-M2-03),
  * décrémente le stock atomiquement (§6), scelle l'opération dans la chaîne NF525 (§2), émet et
- * appaire les supports d'accès (CA-12), applique le seuil d'impression (CA-11). Ne flush pas :
- * l'appelant porte la transaction pour garantir l'atomicité scellement/stock.
+ * appaire les supports d'accès (CA-12), applique le seuil d'impression (CA-11).
+ *
+ * **CQ-1, RG-CQ1-08 (point critique d'atomicité recharge ⇄ vente).** Le corps de la méthode (décrément
+ * de stock, création/recharge des supports, scellement, flush) s'exécute désormais dans une
+ * transaction DBAL explicite (`Connection::transactional()`, PAS `EntityManagerInterface::wrapInTransaction()`
+ * — celle-ci fermerait l'`EntityManager` sur TOUTE exception, y compris un refus métier ordinaire que
+ * plusieurs appelants de `valider()` catchent pour continuer d'utiliser `$em` ensuite, ex.
+ * `App\Boutique\Service\ConfirmerCommandeHandler::confirmerApresPaiementReussi()`). Toute transaction
+ * imbriquée ouverte plus bas (`CardRechargeHandler`, `DecrementStockHandler`) rejoint cette même
+ * transaction DBAL (comptage d'imbrication de `Doctrine\DBAL\Connection`, aucun COMMIT physique avant
+ * la sortie de CETTE méthode) : l'incrément de crédit d'une recharge de carte ne peut donc jamais
+ * rester acquis si le scellement NF525 de la même vente échoue ensuite — corrige un risque déjà
+ * documenté (accepté jusqu'ici) sur le décrément de stock, qui committait en SQL brut hors de toute
+ * transaction avant ce correctif.
+ *
+ * **CQ-1, D7-bis (correctif revue de cohérence) — publication différée après commit réel.** Le bus
+ * d'événements est synchrone (`SymfonyEventBus::publish()` dispatche immédiatement). `CardRechargeInterface::recharge()`
+ * ne publie donc plus elle-même `access.card_recharged` (elle s'exécute imbriquée dans la transaction
+ * ci-dessous, avant le commit racine réel) : elle **retourne** l'événement, `creerSupport()` le
+ * collecte dans `$this->evenementsEnAttente`, et `valider()` ne le publie qu'**après** le retour de
+ * `$this->connection->transactional(...)` — donc après le commit physique réel. Si la transaction
+ * échoue (exception), le `return` n'est jamais atteint : la liste accumulée est simplement abandonnée
+ * (jamais publiée), et sera de toute façon réinitialisée au tout début du prochain appel à `valider()`.
  */
 final class ValiderVenteService
 {
+    /**
+     * Événements de recharge collectés PENDANT la transaction courante (RG-CQ1-*, D7-bis), publiés
+     * seulement après son commit réel — jamais en cas de rollback. Réinitialisée en tête de chaque
+     * `valider()` pour ne jamais fuiter d'une vente à l'autre.
+     *
+     * @var list<DomainEvent>
+     */
+    private array $evenementsEnAttente = [];
+
     public function __construct(
         private readonly EntityManagerInterface $em,
+        private readonly Connection $connection,
         private readonly PanierCalculateur $calculateur,
         private readonly DecrementStockHandler $stock,
         private readonly ScellementHandler $scellement,
         private readonly AppairageAccesInterface $appairage,
         private readonly GenerateurCodeSupport $generateurCode,
+        private readonly CardRechargeInterface $cardRecharge,
+        private readonly EventBus $eventBus,
     ) {
     }
 
@@ -45,6 +83,11 @@ final class ValiderVenteService
      */
     public function valider(Vente $vente, array $supportsOverride = []): OperationScellee
     {
+        // D7-bis — repart toujours d'une liste vide : un appel précédent qui aurait échoué en cours de
+        // route (donc jamais parvenu jusqu'à la publication post-commit ci-dessous) ne doit rien laisser
+        // traîner pour CET appel-ci.
+        $this->evenementsEnAttente = [];
+
         if ($vente->getStatut() !== StatutVente::EnCours) {
             throw new ConflictHttpException('Seule une vente en cours peut être validée (NF525).');
         }
@@ -57,40 +100,58 @@ final class ValiderVenteService
             throw new UnprocessableEntityHttpException('Reste dû non nul : validation impossible sans paiement différé (RG-M2-03).');
         }
 
-        // §6 — décrément de stock atomique (peut lever 422 « stock épuisé »), avant scellement.
-        $this->stock->decrementer($vente);
-
-        // CA-12 — émission et appairage des supports pour les lignes concernées.
-        foreach ($vente->getLignes() as $ligne) {
-            $support = $this->creerSupport($ligne, $supportsOverride[(string) $ligne->getId()] ?? null);
-            if ($support === null) {
-                continue;
-            }
-            $vente->addSupport($support);
-            $this->em->persist($support);
-            $this->appairage->appairer($support); // un échec laisse le support en « echec » (remise bloquée).
-        }
-
-        $vente->setStatut(StatutVente::Validee);
-
-        // §2 — scellement NF525 dans la transaction de validation.
         $pdv = $vente->getSession()?->getPointDeVente();
         if ($pdv === null) {
             throw new UnprocessableEntityHttpException('Point de vente introuvable pour le scellement.');
         }
-        $operation = $this->scellement->sceller(new OperationAScellerDto(
-            $pdv,
-            TypeOperationScellee::Vente,
-            'Vente',
-            $vente->getId(),
-            $this->payload($vente),
-        ));
 
-        // CA-11 — impression automatique au-dessus du seuil.
-        $seuil = $this->calculateur->centimes($pdv->getSeuilImpression());
-        if ($this->calculateur->centimes($vente->getTotal()) >= $seuil) {
-            $vente->setImprime(true);
+        // Voir le docblock de classe (RG-CQ1-08) : cette transaction englobe le décrément de stock, la
+        // création/recharge des supports ET le flush qui scelle l'OperationScellee.
+        $operation = $this->connection->transactional(function () use ($vente, $supportsOverride, $pdv): OperationScellee {
+            // §6 — décrément de stock atomique (peut lever 422 « stock épuisé »), avant scellement.
+            $this->stock->decrementer($vente);
+
+            // CA-12 — émission et appairage des supports pour les lignes concernées.
+            foreach ($vente->getLignes() as $ligne) {
+                $support = $this->creerSupport($vente, $ligne, $supportsOverride[(string) $ligne->getId()] ?? null);
+                if ($support === null) {
+                    continue;
+                }
+                $vente->addSupport($support);
+                $this->em->persist($support);
+                $this->appairage->appairer($support); // un échec laisse le support en « echec » (remise bloquée).
+            }
+
+            $vente->setStatut(StatutVente::Validee);
+
+            // §2 — scellement NF525 dans la transaction de validation.
+            $operation = $this->scellement->sceller(new OperationAScellerDto(
+                $pdv,
+                TypeOperationScellee::Vente,
+                'Vente',
+                $vente->getId(),
+                $this->payload($vente),
+            ));
+
+            // CA-11 — impression automatique au-dessus du seuil.
+            $seuil = $this->calculateur->centimes($pdv->getSeuilImpression());
+            if ($this->calculateur->centimes($vente->getTotal()) >= $seuil) {
+                $vente->setImprime(true);
+            }
+
+            $this->em->flush();
+
+            return $operation;
+        });
+
+        // D7-bis — publié ICI, après le retour de `transactional()` : la transaction externe a alors
+        // réellement committé (sinon une exception aurait déjà interrompu `valider()` plus haut, et ce
+        // point ne serait jamais atteint). Aucun abonné synchrone ne peut donc jamais voir une recharge
+        // que la vente finira par annuler.
+        foreach ($this->evenementsEnAttente as $evenement) {
+            $this->eventBus->publish($evenement);
         }
+        $this->evenementsEnAttente = [];
 
         return $operation;
     }
@@ -109,7 +170,7 @@ final class ValiderVenteService
     /**
      * @param array{type?: string, identifiant?: string}|null $override
      */
-    private function creerSupport(LigneVente $ligne, ?array $override): ?BilletSupport
+    private function creerSupport(Vente $vente, LigneVente $ligne, ?array $override): ?BilletSupport
     {
         $produit = $this->em->getRepository(Produit::class)->find($ligne->getProduit());
         if (!$produit instanceof Produit) {
@@ -120,6 +181,70 @@ final class ValiderVenteService
             return null;
         }
 
+        $identifiantOverride = isset($override['identifiant'])
+            && \is_string($override['identifiant'])
+            && trim($override['identifiant']) !== ''
+                ? trim($override['identifiant'])
+                : null;
+
+        // RG-CQ1-01 — un identifiant déjà connu, sur une ligne portant une carte multi-entrées, bascule
+        // l'opération en recharge (Option A, §6 de la spec) au lieu d'une émission. Rien ne change si
+        // l'identifiant est absent ou inédit (CA-10, non-régression) : on tombe dans le code existant.
+        if ($identifiantOverride !== null && $produit->getCarte() !== null) {
+            $existant = $this->em->getRepository(BilletSupport::class)
+                ->findOneBy(['identifiantSupport' => $identifiantOverride]);
+
+            if ($existant instanceof BilletSupport) {
+                // RG-CQ1-06 — cloisonnement, échec fermé : un identifiant qui existe mais appartient à
+                // un autre établissement échoue COMME s'il n'existait pas (même 404 que
+                // `AppairageProcessor`) — jamais un oracle cross-tenant, et surtout jamais une tentative
+                // d'émission avec un identifiant déjà pris ailleurs (qui crasherait sur la contrainte
+                // unique globale).
+                $etabVente = $vente->getEtablissement();
+                $etabExistant = $existant->getVente()?->getEtablissement();
+                if ($etabVente === null || $etabExistant === null
+                    || (string) $etabExistant->getId() !== (string) $etabVente->getId()) {
+                    throw new NotFoundHttpException('Support introuvable.');
+                }
+
+                // RG-CQ1-07 (bullet 2) — conflit explicite au lieu du crash de contrainte unique.
+                // N'arrive que si l'identifiant scanné est un billet/abonnement, pas une carte.
+                if ($existant->getType() !== TypeSupport::Carte) {
+                    throw new ConflictHttpException(
+                        'Cet identifiant est déjà utilisé par un support qui n\'est pas une carte multi-entrées.'
+                    );
+                }
+
+                // RG-CQ1-07 (cas limite §10 spec, arbitrage claude-A) — une ligne de recharge à
+                // quantité > 1 facturerait plusieurs fois (`PanierCalculateur` multiplie le prix par la
+                // quantité) pour un seul crédit (la recharge ne crédite le droit qu'UNE fois,
+                // indépendamment de `quantite` — même règle que l'émission). Refus explicite AVANT tout
+                // UPDATE de crédit, plutôt que multiplier le crédit (choix retenu pour ce premier lot :
+                // plus simple, défendable). N'affecte pas l'émission normale à quantite > 1 (même
+                // défaut, mais hors périmètre CQ-1 — CQ-8).
+                if ($ligne->getQuantite() > 1) {
+                    throw new UnprocessableEntityHttpException(
+                        'Une ligne de recharge ne peut pas porter une quantité supérieure à 1 (RG-CQ1-07).'
+                    );
+                }
+
+                // RG-CQ1-02/08 — crédit ajouté = stock initial du produit VENDU pour cette recharge,
+                // même règle que l'émission (ligne ~163, non multiplié par la quantité — cas limite).
+                $credits = $produit->getCarte()->getStockCompostagesInitial();
+                // D7-bis — l'événement retourné n'est PAS publié ici : collecté, il ne partira qu'après
+                // le commit réel de la transaction englobante (cf. docblock de classe et `valider()`).
+                $evenement = $this->cardRecharge->recharge($existant, $credits);
+                if ($evenement instanceof DomainEvent) {
+                    $this->evenementsEnAttente[] = $evenement;
+                }
+
+                // RG-CQ1-05 — aucun nouveau BilletSupport : la ligne de recharge n'en produit pas (même
+                // branche que le cas déjà géré ci-dessous, `if ($support === null) { continue; }`).
+                return null;
+            }
+            // Identifiant inédit : comportement actuel inchangé, on continue ci-dessous (CA-8).
+        }
+
         $support = new BilletSupport();
         $support->setLigne($ligne);
         if (isset($override['type']) && ($enum = TypeSupport::tryFrom($override['type'])) !== null) {
@@ -127,8 +252,8 @@ final class ValiderVenteService
         } elseif ($type->aFacette(TypeProduit::FACETTE_CARNET)) {
             $support->setType(TypeSupport::Carte);
         }
-        if (isset($override['identifiant']) && \is_string($override['identifiant']) && trim($override['identifiant']) !== '') {
-            $support->setIdentifiantSupport($override['identifiant']);
+        if ($identifiantOverride !== null) {
+            $support->setIdentifiantSupport($identifiantOverride);
         } else {
             // Aucun identifiant fourni : génère un code de support unique et signé (CA-12, cf.
             // App\Vente\Service\GenerateurCodeSupport) pour tout support émis — billet, carte,
