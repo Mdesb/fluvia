@@ -87,6 +87,8 @@ Détail : [CONTRACT/catalogue-modules.md](CONTRACT/catalogue-modules.md).
 
 ---
 
+> **Cadence (D25).** Pousse sur ta branche **au moins une fois par heure**, même incomplet, en prefixant le sujet par `WIP :`. Rien n'entre dans `main` sans fusion de l'integrateur, donc un commit intermediaire ne met rien en danger.
+
 ## 4. LE CONTRAT
 
 ### 4.1 Noyau commun (tout module peut le supposer présent)

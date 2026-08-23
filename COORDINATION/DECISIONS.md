@@ -568,3 +568,36 @@ les deux questions sont orthogonales : une séance peut être décomptée *et* f
 créneau réservé quand même), ou restituée *et* non facturée. Les mélanger dans une seule énumération
 produirait le produit cartésien des cas, et l'un des deux axes finirait par être oublié — c'est
 exactement ce qui s'est produit avec les pilotes d'accès avant D17.
+
+### 2026-08-23 · D25 — On pousse au moins une fois par heure, même incomplet
+Règle de Maxime. Chaque instance pousse sur **sa propre branche** au minimum une fois par heure, y
+compris un travail en cours qui ne compile pas ou dont les tests ne passent pas encore.
+
+**Rien n'est mis en danger :** une branche n'entre dans `main` que par une fusion de l'intégrateur,
+après revue et suite verte. Un commit intermédiaire ne casse donc rien, et le hook `pre-receive`
+continue de refuser ce qui doit l'être.
+
+**Raison :** l'absence de poussée était devenue ma seule mesure d'activité, et elle ne mesure rien.
+Vérifié le 23/08 : aucune instance ne s'exécute sur le VPS — les worktrees officiels sont figés
+(celui de claude-B date du 19/08), les lanceurs n'ont pas servi, aucun processus n'y tourne. Chacun
+travaille ailleurs et pousse par SSH. J'ai donc écrit « X heures de silence » dans une douzaine de
+rapports en laissant entendre une inactivité que je n'avais **aucun moyen d'observer**.
+
+**Convention :** préfixer le sujet d'un commit intermédiaire par `WIP :`. L'intégrateur ne fusionne
+jamais un `WIP :` — il attend le commit qui le remplace ou le complète.
+
+### 2026-08-23 · D26 — Une recharge prolonge la validité, et c'est configurable
+Décision de Maxime, complément de D23. La date de validité d'une carte multi-entrées est **prolongée**
+par une recharge. C'est le **défaut livré** ; le comportement reste une **option du produit-carte**,
+pour l'exploitant qui préfère que la validité d'origine tienne.
+
+**Prolongée à partir de quelle date — l'ambiguïté qu'il faut lever ici plutôt qu'à l'implémentation.**
+Retenu : **une période complète à compter de la recharge**, et non un ajout à l'échéance existante.
+C'est la lecture qu'un client comprend au comptoir — « vous rechargez, vous repartez pour un an » — et
+c'est celle qui se dit en une phrase.
+
+**Le risque assumé, écrit pour qu'il ne soit pas découvert plus tard :** cette règle permet de
+recharger **une seule entrée** pour repartir sur une période entière. Sur une carte à validité longue,
+c'est ouvert au grignotage. Deux garde-fous sont possibles si le cas se présente — un minimum de
+recharge pour déclencher la prolongation, ou un plafond de prolongations cumulées — et **aucun n'est
+implémenté pour l'instant**. On les ajoutera sur constat, pas par précaution.
