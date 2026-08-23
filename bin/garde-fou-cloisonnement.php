@@ -169,6 +169,20 @@ const MOTIF_INSTRUCTION_RESOLUTION = '/[^;{}]*->(?:find|findOneBy|getReference)\
 const MOTIF_AFFECTATION = '/^\s*\$(\w+)\s*=/';
 
 /** Les arguments passés à la résolution, dans une instruction. */
+/**
+ * Les arguments de la résolution.
+ *
+ * ⚠ **N'élargissez pas ce motif sans faire tourner `bin/essai-garde-fous.sh`.** J'ai tenté trois fois
+ * de le détendre pour rattraper la forme ternaire de l'IDOR n°7
+ * (`$x = cond ? …->find($id) : null;`, où `: null` s'intercale avant le `;`). Chaque tentative a
+ * empiré : la dernière, avec `(.*)` glouton et une fin d'instruction permissive, faisait passer les
+ * signalements de 17 à 32 et cassait 3 cas du banc. Le `(.*)` glouton traverse les instructions
+ * suivantes dès qu'on ne borne plus la fin.
+ *
+ * La forme ternaire reste donc un angle mort **connu et assumé**. La rattraper demande d'analyser la
+ * structure du code, pas d'étirer une expression régulière — et une règle qui signale 32 endroits
+ * dont la moitié à tort ne serait pas un progrès.
+ */
 const MOTIF_ARGUMENTS = '/->(?:find|findOneBy|getReference)\s*\((.*)\)\s*;/s';
 
 /**
@@ -284,6 +298,32 @@ function processorsSansLecture(string $racine): array
  * @return list<string> identités « fichier:ligne:$variable », triées — une résolution, pas un fichier :
  *                     un même fichier peut en porter plusieurs, et n'en corriger qu'une doit se voir.
  */
+/**
+ * Variables affectées depuis une entrée client, dans ce fichier.
+ *
+ * On lit chaque instruction `$x = …` et on retient `x` si la partie droite contient une entrée
+ * client. C'est un unique saut : `$a = $uriVariables['id']; $b = $a;` ne teinte pas `$b`. Assumé —
+ * au-delà, il faudrait une vraie analyse de flot, et le rapport coût/prise ne le justifie pas ici.
+ *
+ * @return list<string> noms de variables, sans le `$`
+ */
+function variablesIssuesDuClient(string $source, string $motifClient): array
+{
+    if (preg_match_all('/\$(\w+)\s*=\s*([^;]+);/s', $source, $affectations, PREG_SET_ORDER) === false) {
+        return [];
+    }
+
+    $teintees = [];
+
+    foreach ($affectations as $affectation) {
+        if (preg_match($motifClient, $affectation[2]) === 1) {
+            $teintees[$affectation[1]] = true;
+        }
+    }
+
+    return array_keys($teintees);
+}
+
 function resolutionsNonLiees(string $racine): array
 {
     $resultat = [];
@@ -298,6 +338,21 @@ function resolutionsNonLiees(string $racine): array
         $motifClient = isset($sansLecture[$classe])
             ? '/' . substr(MOTIF_ARG_CLIENT, 1, -1) . '|\$data->/'
             : MOTIF_ARG_CLIENT;
+
+        // Un saut d'affectation. L'IDOR n°7 (23/08) est passé parce que l'identifiant client
+        // transitait par une variable :
+        //
+        //     $ticketId = $uriVariables['ticketId'] ?? null;      // l'entrée client est ICI
+        //     … ->find((string) $ticketId)                        // et plus visible LÀ
+        //
+        // On repère donc les variables alimentées par une entrée client et on les traite comme telles.
+        // **Un seul saut, délibérément** : une analyse de flot complète serait hors de proportion, et
+        // cette forme-là — lire l'identifiant, le valider, puis résoudre — est de loin la plus courante.
+        $variablesTeintees = variablesIssuesDuClient($source, $motifClient);
+        if ($variablesTeintees !== []) {
+            $motifClient = '/' . substr($motifClient, 1, -1)
+                . '|\$(?:' . implode('|', array_map('preg_quote', $variablesTeintees)) . ')\b/';
+        }
 
         if (preg_match_all(MOTIF_INSTRUCTION_RESOLUTION, $source, $correspondances, PREG_OFFSET_CAPTURE) === false) {
             continue;
