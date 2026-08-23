@@ -116,6 +116,13 @@ while read -r ancien nouveau ref; do
         php_dans_arbre bin/garde-fou-secrets.php || ECHEC_REF=1
     fi
 
+    # Couverture de perimetre en lecture : une entite exposee que rien ne peut filtrer. Aucun des
+    # controles ci-dessus ne pouvait la voir — ils surveillent les ecritures, pas les collections.
+    if [ -f "$ARBRE/bin/garde-fou-couverture-perimetre.php" ]; then
+        echo "── Couverture de périmètre (lecture)"
+        php_dans_arbre bin/garde-fou-couverture-perimetre.php || ECHEC_REF=1
+    fi
+
     rm -rf "$ARBRE"
     trap - EXIT
 

@@ -55,6 +55,9 @@ lancer bin/garde-fou-cloisonnement.php || ECHEC=1
 # Secrets : sur l'arbre de travail également.
 [ -f "$RACINE/bin/garde-fou-secrets.php" ] && { lancer bin/garde-fou-secrets.php || ECHEC=1; }
 
+# Couverture de perimetre en lecture (voir hooks/pre-receive).
+[ -f "$RACINE/bin/garde-fou-couverture-perimetre.php" ] && { lancer bin/garde-fou-couverture-perimetre.php || ECHEC=1; }
+
 # Nommage : sur les fichiers **indexés** et ajoutés. `--cached` est ce qui sera réellement commité,
 # et c'est aussi ce qui évite de dépendre d'une révision de référence inexistante à ce stade.
 if [ -f "$RACINE/bin/garde-fou-nommage-anglais.php" ]; then
