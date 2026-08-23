@@ -11,8 +11,10 @@ use App\Acces\Enum\SensPassage;
 use App\Acces\Service\OuvertureManuelleHandler;
 use App\Securite\Entity\Utilisateur;
 use App\Vente\Service\LecteurCorps;
+use App\Securite\Service\ContexteEtablissement;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\Uid\Uuid;
 
@@ -29,6 +31,7 @@ final class PassageManuelProcessor implements ProcessorInterface
         private readonly OuvertureManuelleHandler $handler,
         private readonly EntityManagerInterface $em,
         private readonly Security $security,
+        private readonly ContexteEtablissement $contexte,
     ) {
     }
 
@@ -41,6 +44,25 @@ final class PassageManuelProcessor implements ProcessorInterface
             throw new UnprocessableEntityHttpException('Référence d\'équipement obligatoire.');
         }
         $equipement = $this->em->getRepository(Equipement::class)->find($equipementId);
+
+        // D8 — « equipement » vient du corps de la requete et etait resolu par un `find()` direct, sans
+        // aucun controle. La permission `acces.ouvrir_manuel` dit ce que l'agent a le droit de faire,
+        // jamais **sur quel equipement**.
+        //
+        // Signale par claude-C comme **defaut latent**, et la nuance vaut d'etre gardee : aujourd'hui
+        // `PiloteAcces` est cable globalement sur le simulateur, donc aucune porte physique ne s'ouvre.
+        // Le jour ou un adaptateur reel est branche — c'est l'objet d'ACC-4 — la meme requete ouvre une
+        // vraie porte dans un autre etablissement. **La gravite augmente sans que personne ne touche au
+        // code**, ce qui est le pire moment pour decouvrir un defaut : personne ne relit un fichier
+        // qu'on n'a pas modifie.
+        //
+        // Echec ferme en 404 : un 403 confirmerait l'existence de l'equipement ailleurs.
+        if ($equipement instanceof Equipement
+            && (string) $equipement->getEtablissement()?->getId()
+               !== (string) $this->contexte->etablissementActif()?->getId()) {
+            throw new NotFoundHttpException('Equipement introuvable.');
+        }
+
         if (!$equipement instanceof Equipement) {
             throw new UnprocessableEntityHttpException('Équipement introuvable.');
         }
