@@ -13,15 +13,13 @@
         "que ce controle ne le signalera jamais."
     ],
     "scelle": {
-        "plafond": 28
+        "plafond": 26
     },
     "entrees": [
         "access.denied",
         "access.recorded",
-        "booking.cancelled",
         "booking.completed",
         "booking.created",
-        "booking.no_show",
         "cart.abandoned",
         "credit_note.issued",
         "customer.inactive",

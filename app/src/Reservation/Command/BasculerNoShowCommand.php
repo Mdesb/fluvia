@@ -5,6 +5,10 @@ declare(strict_types=1);
 namespace App\Reservation\Command;
 
 use App\Reservation\Entity\Creneau;
+use App\Platform\Event\DomainEvent;
+use App\Platform\Event\EventBus;
+use App\Platform\Event\EventSubject;
+use App\Platform\Event\EventTenant;
 use App\Reservation\Entity\Reservation;
 use App\Reservation\Enum\StatutCreneau;
 use App\Reservation\Enum\StatutPaiementParticipant;
@@ -34,6 +38,7 @@ final class BasculerNoShowCommand extends Command
         private readonly EntityManagerInterface $em,
         private readonly ResolveurRegleAnnulation $resolveurRegle,
         private readonly DeclencherFacturationNoShowHandler $facturationHandler,
+        private readonly EventBus $eventBus,
         private readonly JaugeRessourceMereHandler $jaugeMere,
     ) {
         parent::__construct();
@@ -75,6 +80,26 @@ final class BasculerNoShowCommand extends Command
                     $reservation->setStatut(StatutReservation::Honoree);
                 } else {
                     $this->facturationHandler->declencher($reservation, StatutReservation::NoShowFacture);
+
+                    // SF-1 / D22 — `booking.no_show`. Emis **ici seulement**, dans la branche qui
+                    // constate l'absence : la branche voisine marque une presence confirmee et n'a
+                    // rien a annoncer. Le handler partage ne saurait pas les distinguer.
+                    //
+                    // `amountAtRisk` est le montant du au moment du constat : c'est ce que Revenue
+                    // Recovery relance, et ce que D27 restitue ou decompte selon la regle.
+                    $etablissementNoShow = $reservation->getEtablissement();
+                    if ($etablissementNoShow !== null) {
+                        $this->eventBus->publish(new DomainEvent(
+                            'booking.no_show',
+                            new EventTenant($etablissementNoShow->getId()),
+                            new EventSubject('Reservation', (string) $reservation->getId()),
+                            [
+                                'customerId' => (string) $reservation->getOrganisateur()?->getId(),
+                                'amountAtRisk' => $reservation->getMontantDu(),
+                                'slotId' => (string) $creneau->getId(),
+                            ],
+                        ));
+                    }
                 }
 
                 if ($creneau->getRessource() !== null) {
