@@ -6,6 +6,11 @@ namespace App\Reservation\State;
 
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
+use App\Platform\Event\DomainEvent;
+use App\Platform\Event\EventActor;
+use App\Platform\Event\EventBus;
+use App\Platform\Event\EventSubject;
+use App\Platform\Event\EventTenant;
 use App\Reservation\Entity\Reservation;
 use App\Reservation\Enum\StatutReservation;
 use App\Reservation\Service\AnnulationVenteReservationHandler;
@@ -37,6 +42,7 @@ final class AnnulerReservationProcessor implements ProcessorInterface
         private readonly DeclencherFacturationNoShowHandler $facturationHandler,
         private readonly AnnulationVenteReservationHandler $annulationVente,
         private readonly ProjectionAccesReservationHandler $projectionAcces,
+        private readonly EventBus $eventBus,
     ) {
     }
 
@@ -86,6 +92,36 @@ final class AnnulerReservationProcessor implements ProcessorInterface
 
         if ($creneau !== null) {
             $this->promotion->promouvoirSiPlaceDisponible($creneau);
+        }
+
+        // SF-1 / D22 — `booking.cancelled`, declare au catalogue depuis l'origine et publie par
+        // personne jusqu'ici. Smart Flow en depend pour reproposer un creneau libere, et Revenue
+        // Recovery pour la relance.
+        //
+        // Emis depuis **les deux branches** — annulation libre et annulation tardive facturee — parce
+        // que les deux sont des annulations : ce qui les distingue est la facturation, pas la nature
+        // de l'acte. Et emis **ici** plutot que depuis `DeclencherFacturationNoShowHandler`, qui est
+        // pourtant le point de passage commode : ce handler recoit le statut cible **en argument**, il
+        // ne sait donc pas lequel de `booking.cancelled` ou `booking.no_show` il est en train de
+        // produire. Emettre depuis lui confondrait les deux (remarque de claude-C, 24/08).
+        //
+        // `leadTimeMinutes` est la charge utile qui compte : c'est le delai entre l'annulation et le
+        // debut du creneau, donc ce qui permet a Smart Flow de decider si la place est revendable.
+        $etablissement = $data->getEtablissement();
+        if ($creneau !== null && $etablissement !== null) {
+            $this->eventBus->publish(new DomainEvent(
+                'booking.cancelled',
+                new EventTenant($etablissement->getId()),
+                new EventSubject('Reservation', (string) $data->getId()),
+                [
+                    'slotId' => (string) $creneau->getId(),
+                    'leadTimeMinutes' => max(0, (int) round(
+                        ($creneau->getDebut()->getTimestamp() - $maintenant->getTimestamp()) / 60
+                    )),
+                    'withinFreeWindow' => $dansDelai,
+                ],
+                new EventActor($utilisateur->getId()),
+            ));
         }
 
         return $data;
