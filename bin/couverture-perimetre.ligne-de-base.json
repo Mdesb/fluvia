@@ -1,583 +1,619 @@
 {
-    "_lisez_moi": [
-        "Ligne de base GELEE du garde-fou de couverture de perimetre en LECTURE.",
-        "Chaque entree est une entite exposee par l'API que rien ne permet de cloisonner :",
-        "ni champ etablissement, ni extension Perimetre* qui la nomme.",
-        "",
-        "Ce n'est pas une autorisation. Une extension manquante expose une COLLECTION entiere,",
-        "la ou un Processor mal garde expose un enregistrement a la fois.",
-        "",
-        "Cette liste ne peut que RETRECIR. Corriger une entree puis :",
-        "  php bin/garde-fou-couverture-perimetre.php --nettoyer"
-    ],
-    "scelle": {
-        "gelee_le": "2026-08-23",
-        "plafond": 36,
-        "reference": "MESSAGES.md — claude-C, 23/08 : le module Compta est entier hors du cloisonnement"
+  "_lisez_moi": [
+    "Ligne de base GELEE du garde-fou de couverture de perimetre en LECTURE.",
+    "Chaque entree est une entite exposee par l'API que rien ne permet de cloisonner :",
+    "ni champ etablissement, ni extension Perimetre* qui la nomme.",
+    "",
+    "Ce n'est pas une autorisation. Une extension manquante expose une COLLECTION entiere,",
+    "la ou un Processor mal garde expose un enregistrement a la fois.",
+    "",
+    "Cette liste ne peut que RETRECIR. Corriger une entree puis :",
+    "  php bin/garde-fou-couverture-perimetre.php --nettoyer"
+  ],
+  "scelle": {
+    "gelee_le": "2026-08-23",
+    "plafond": 36,
+    "reference": "MESSAGES.md — claude-C, 23/08 : le module Compta est entier hors du cloisonnement"
+  },
+  "entrees": {
+    "Compta/Entity/BordereauPayFiP.php": {
+      "depuis": "2026-08-23",
+      "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
+      "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
+      "module": "Compta",
+      "operations": [
+        "Get",
+        "GetCollection",
+        "Post"
+      ],
+      "permissions": [
+        "compta.lire",
+        "compta.valider"
+      ],
+      "sensibilite": "argent"
     },
-    "entrees": {
-        "Acces/Entity/SousReseau.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Acces",
-            "operations": [
-                "Get",
-                "GetCollection",
-                "Patch",
-                "Post"
-            ],
-            "permissions": [
-                "acces.gerer",
-                "acces.lire"
-            ]
-        },
-        "Autorisation/Entity/OperationSensible.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Autorisation",
-            "operations": [
-                "Get",
-                "GetCollection",
-                "Patch",
-                "Post"
-            ],
-            "permissions": [
-                "autorisation.gerer",
-                "autorisation.lire"
-            ]
-        },
-        "Compta/Entity/BordereauPayFiP.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Compta",
-            "operations": [
-                "Get",
-                "GetCollection",
-                "Post"
-            ],
-            "permissions": [
-                "compta.lire",
-                "compta.valider"
-            ]
-        },
-        "Compta/Entity/FactureB2G.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Compta",
-            "operations": [
-                "Get",
-                "GetCollection",
-                "Post"
-            ],
-            "permissions": [
-                "compta.gerer",
-                "compta.lire"
-            ]
-        },
-        "Compta/Entity/LettrageEcriture.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Compta",
-            "operations": [
-                "GetCollection",
-                "Post"
-            ],
-            "permissions": [
-                "compta.lettrer",
-                "compta.lire"
-            ]
-        },
-        "Compta/Entity/MoyenPaiement.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Compta",
-            "operations": [
-                "Get",
-                "GetCollection",
-                "Patch",
-                "Post"
-            ],
-            "permissions": [
-                "compta.gerer",
-                "compta.lire"
-            ]
-        },
-        "Compta/Entity/QualificationEquipement.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Compta",
-            "operations": [
-                "Get",
-                "GetCollection",
-                "Patch",
-                "Post"
-            ],
-            "permissions": [
-                "compta.gerer",
-                "compta.lire"
-            ]
-        },
-        "Compta/Entity/VenteImpayeeRegie.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Compta",
-            "operations": [
-                "Get",
-                "GetCollection",
-                "Post"
-            ],
-            "permissions": [
-                "compta.gerer",
-                "compta.lire"
-            ]
-        },
-        "Dms/Entity/RetentionPolicy.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Dms",
-            "operations": [
-                "Get",
-                "GetCollection"
-            ],
-            "permissions": [
-                "dms.read"
-            ]
-        },
-        "Offre/Entity/Categorie.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Offre",
-            "operations": [
-                "Delete",
-                "Get",
-                "GetCollection",
-                "Patch",
-                "Post"
-            ],
-            "permissions": [
-                "offre.gerer",
-                "offre.lire"
-            ]
-        },
-        "Offre/Entity/ConversionType.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Offre",
-            "operations": [
-                "Get",
-                "GetCollection"
-            ],
-            "permissions": [
-                "offre.lire"
-            ]
-        },
-        "Offre/Entity/GrilleTarifaire.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Offre",
-            "operations": [
-                "Get",
-                "GetCollection",
-                "Patch",
-                "Post"
-            ],
-            "permissions": [
-                "offre.creer",
-                "offre.lire",
-                "offre.modifier"
-            ]
-        },
-        "Offre/Entity/PrixHistorique.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Offre",
-            "operations": [
-                "Get",
-                "GetCollection"
-            ],
-            "permissions": [
-                "offre.lire"
-            ]
-        },
-        "Offre/Entity/Promotion.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Offre",
-            "operations": [
-                "Delete",
-                "Get",
-                "GetCollection",
-                "Patch",
-                "Post"
-            ],
-            "permissions": [
-                "offre.gerer",
-                "offre.lire"
-            ]
-        },
-        "Offre/Entity/Saison.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Offre",
-            "operations": [
-                "Delete",
-                "Get",
-                "GetCollection",
-                "Patch",
-                "Post"
-            ],
-            "permissions": [
-                "offre.gerer",
-                "offre.lire"
-            ]
-        },
-        "Offre/Entity/TrancheQuotientFamilial.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Offre",
-            "operations": [
-                "Delete",
-                "Get",
-                "GetCollection",
-                "Patch",
-                "Post"
-            ],
-            "permissions": [
-                "offre.gerer",
-                "offre.lire"
-            ]
-        },
-        "Offre/Entity/TypeProduit.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Offre",
-            "operations": [
-                "Get",
-                "GetCollection"
-            ],
-            "permissions": [
-                "offre.lire"
-            ]
-        },
-        "Offre/Entity/TypeTarif.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Offre",
-            "operations": [
-                "Delete",
-                "Get",
-                "GetCollection",
-                "Patch",
-                "Post"
-            ],
-            "permissions": [
-                "offre.gerer",
-                "offre.lire"
-            ]
-        },
-        "OptionProduit/Entity/GroupeOption.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "OptionProduit",
-            "operations": [
-                "Get",
-                "GetCollection",
-                "Patch",
-                "Post"
-            ],
-            "permissions": [
-                "offre.lire",
-                "offre.modifier"
-            ]
-        },
-        "OptionProduit/Entity/ValeurOption.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "OptionProduit",
-            "operations": [
-                "Get",
-                "GetCollection",
-                "Patch",
-                "Post"
-            ],
-            "permissions": [
-                "offre.lire",
-                "offre.modifier"
-            ]
-        },
-        "Organisation/Entity/Groupe.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Organisation",
-            "operations": [
-                "Delete",
-                "Get",
-                "GetCollection",
-                "Patch",
-                "Post"
-            ],
-            "permissions": [
-                "organisation.gerer"
-            ]
-        },
-        "Padel/Entity/EvenementEclairage.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Padel",
-            "operations": [
-                "Get",
-                "GetCollection"
-            ],
-            "permissions": [
-                "padel.lire"
-            ]
-        },
-        "Reporting/Entity/AxeAnalytique.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Reporting",
-            "operations": [
-                "Get",
-                "GetCollection",
-                "Patch",
-                "Post"
-            ],
-            "permissions": [
-                "reporting.configurer",
-                "reporting.lire"
-            ]
-        },
-        "Reporting/Entity/Indicateur.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Reporting",
-            "operations": [
-                "Get",
-                "GetCollection",
-                "Patch",
-                "Post"
-            ],
-            "permissions": [
-                "reporting.configurer",
-                "reporting.lire"
-            ]
-        },
-        "Reservation/Entity/DisponibiliteRessource.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Reservation",
-            "operations": [
-                "Delete",
-                "Get",
-                "GetCollection",
-                "Patch",
-                "Post"
-            ],
-            "permissions": [
-                "reservation.gerer_ressource",
-                "reservation.lire"
-            ]
-        },
-        "Reservation/Entity/IndisponibiliteRessource.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Reservation",
-            "operations": [
-                "Delete",
-                "Get",
-                "GetCollection",
-                "Patch",
-                "Post"
-            ],
-            "permissions": [
-                "reservation.gerer_ressource",
-                "reservation.lire"
-            ]
-        },
-        "Securite/Entity/Permission.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Securite",
-            "operations": [
-                "Delete",
-                "Get",
-                "GetCollection",
-                "Patch",
-                "Post"
-            ],
-            "permissions": [
-                "securite.gerer"
-            ]
-        },
-        "Securite/Entity/Role.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Securite",
-            "operations": [
-                "Delete",
-                "Get",
-                "GetCollection",
-                "Patch",
-                "Post"
-            ],
-            "permissions": [
-                "securite.gerer"
-            ]
-        },
-        "Securite/Entity/Utilisateur.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Securite",
-            "operations": [
-                "Get",
-                "GetCollection",
-                "Patch",
-                "Post"
-            ],
-            "permissions": [
-                "securite.gerer"
-            ]
-        },
-        "Support/Entity/CategorieAide.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Support",
-            "operations": [
-                "Get",
-                "GetCollection",
-                "Patch",
-                "Post"
-            ],
-            "permissions": [
-                "support.gerer_categorie"
-            ]
-        },
-        "Support/Entity/JournalImportAide.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Support",
-            "operations": [
-                "Get",
-                "GetCollection",
-                "Post"
-            ],
-            "permissions": [
-                "support.administrer"
-            ]
-        },
-        "Support/Entity/MessageTicket.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Support",
-            "operations": [
-                "GetCollection",
-                "Post"
-            ],
-            "permissions": [
-                "support.administrer",
-                "support.lire_ticket_etablissement",
-                "support.ouvrir_ticket",
-                "support.traiter_ticket_n1",
-                "support.traiter_ticket_n2"
-            ]
-        },
-        "Support/Entity/PieceJointeAide.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Support",
-            "operations": [
-                "Delete",
-                "Get",
-                "GetCollection",
-                "Post"
-            ],
-            "permissions": [
-                "support.administrer",
-                "support.gerer_kb_globale",
-                "support.gerer_kb_locale",
-                "support.lire"
-            ]
-        },
-        "Support/Entity/PieceJointeTicket.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Support",
-            "operations": [
-                "Get",
-                "GetCollection",
-                "Post"
-            ],
-            "permissions": [
-                "support.administrer",
-                "support.lire_ticket_etablissement",
-                "support.ouvrir_ticket",
-                "support.traiter_ticket_n1",
-                "support.traiter_ticket_n2"
-            ]
-        },
-        "Support/Entity/VersionArticle.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Support",
-            "operations": [
-                "Get",
-                "GetCollection"
-            ],
-            "permissions": [
-                "support.administrer",
-                "support.gerer_kb_globale",
-                "support.gerer_kb_locale",
-                "support.lire"
-            ]
-        },
-        "Vente/Nf525/Entity/OperationScellee.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Vente",
-            "operations": [
-                "Get",
-                "GetCollection",
-                "Post"
-            ],
-            "permissions": [
-                "caisse.lire"
-            ]
-        }
+    "Compta/Entity/FactureB2G.php": {
+      "depuis": "2026-08-23",
+      "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
+      "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
+      "module": "Compta",
+      "operations": [
+        "Get",
+        "GetCollection",
+        "Post"
+      ],
+      "permissions": [
+        "compta.gerer",
+        "compta.lire"
+      ],
+      "sensibilite": "argent"
+    },
+    "Compta/Entity/LettrageEcriture.php": {
+      "depuis": "2026-08-23",
+      "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
+      "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
+      "module": "Compta",
+      "operations": [
+        "GetCollection",
+        "Post"
+      ],
+      "permissions": [
+        "compta.lettrer",
+        "compta.lire"
+      ],
+      "sensibilite": "argent"
+    },
+    "Compta/Entity/MoyenPaiement.php": {
+      "depuis": "2026-08-23",
+      "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
+      "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
+      "module": "Compta",
+      "operations": [
+        "Get",
+        "GetCollection",
+        "Patch",
+        "Post"
+      ],
+      "permissions": [
+        "compta.gerer",
+        "compta.lire"
+      ],
+      "sensibilite": "argent"
+    },
+    "Compta/Entity/QualificationEquipement.php": {
+      "depuis": "2026-08-23",
+      "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
+      "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
+      "module": "Compta",
+      "operations": [
+        "Get",
+        "GetCollection",
+        "Patch",
+        "Post"
+      ],
+      "permissions": [
+        "compta.gerer",
+        "compta.lire"
+      ],
+      "sensibilite": "argent"
+    },
+    "Compta/Entity/VenteImpayeeRegie.php": {
+      "depuis": "2026-08-23",
+      "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
+      "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
+      "module": "Compta",
+      "operations": [
+        "Get",
+        "GetCollection",
+        "Post"
+      ],
+      "permissions": [
+        "compta.gerer",
+        "compta.lire"
+      ],
+      "sensibilite": "argent"
+    },
+    "Padel/Entity/EvenementEclairage.php": {
+      "depuis": "2026-08-23",
+      "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
+      "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
+      "module": "Padel",
+      "operations": [
+        "Get",
+        "GetCollection"
+      ],
+      "permissions": [
+        "padel.lire"
+      ],
+      "sensibilite": "argent"
+    },
+    "Vente/Nf525/Entity/OperationScellee.php": {
+      "depuis": "2026-08-23",
+      "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
+      "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
+      "module": "Vente",
+      "operations": [
+        "Get",
+        "GetCollection",
+        "Post"
+      ],
+      "permissions": [
+        "caisse.lire"
+      ],
+      "sensibilite": "argent"
+    },
+    "Acces/Entity/SousReseau.php": {
+      "depuis": "2026-08-23",
+      "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
+      "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
+      "module": "Acces",
+      "operations": [
+        "Get",
+        "GetCollection",
+        "Patch",
+        "Post"
+      ],
+      "permissions": [
+        "acces.gerer",
+        "acces.lire"
+      ],
+      "sensibilite": "acces"
+    },
+    "Autorisation/Entity/OperationSensible.php": {
+      "depuis": "2026-08-23",
+      "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
+      "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
+      "module": "Autorisation",
+      "operations": [
+        "Get",
+        "GetCollection",
+        "Patch",
+        "Post"
+      ],
+      "permissions": [
+        "autorisation.gerer",
+        "autorisation.lire"
+      ],
+      "sensibilite": "acces"
+    },
+    "Securite/Entity/Permission.php": {
+      "depuis": "2026-08-23",
+      "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
+      "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
+      "module": "Securite",
+      "operations": [
+        "Delete",
+        "Get",
+        "GetCollection",
+        "Patch",
+        "Post"
+      ],
+      "permissions": [
+        "securite.gerer"
+      ],
+      "sensibilite": "acces"
+    },
+    "Securite/Entity/Role.php": {
+      "depuis": "2026-08-23",
+      "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
+      "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
+      "module": "Securite",
+      "operations": [
+        "Delete",
+        "Get",
+        "GetCollection",
+        "Patch",
+        "Post"
+      ],
+      "permissions": [
+        "securite.gerer"
+      ],
+      "sensibilite": "acces"
+    },
+    "Securite/Entity/Utilisateur.php": {
+      "depuis": "2026-08-23",
+      "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
+      "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
+      "module": "Securite",
+      "operations": [
+        "Get",
+        "GetCollection",
+        "Patch",
+        "Post"
+      ],
+      "permissions": [
+        "securite.gerer"
+      ],
+      "sensibilite": "acces"
+    },
+    "Dms/Entity/RetentionPolicy.php": {
+      "depuis": "2026-08-23",
+      "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
+      "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
+      "module": "Dms",
+      "operations": [
+        "Get",
+        "GetCollection"
+      ],
+      "permissions": [
+        "dms.read"
+      ],
+      "sensibilite": "donnees-personnelles"
+    },
+    "Support/Entity/CategorieAide.php": {
+      "depuis": "2026-08-23",
+      "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
+      "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
+      "module": "Support",
+      "operations": [
+        "Get",
+        "GetCollection",
+        "Patch",
+        "Post"
+      ],
+      "permissions": [
+        "support.gerer_categorie"
+      ],
+      "sensibilite": "donnees-personnelles"
+    },
+    "Support/Entity/JournalImportAide.php": {
+      "depuis": "2026-08-23",
+      "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
+      "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
+      "module": "Support",
+      "operations": [
+        "Get",
+        "GetCollection",
+        "Post"
+      ],
+      "permissions": [
+        "support.administrer"
+      ],
+      "sensibilite": "donnees-personnelles"
+    },
+    "Support/Entity/MessageTicket.php": {
+      "depuis": "2026-08-23",
+      "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
+      "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
+      "module": "Support",
+      "operations": [
+        "GetCollection",
+        "Post"
+      ],
+      "permissions": [
+        "support.administrer",
+        "support.lire_ticket_etablissement",
+        "support.ouvrir_ticket",
+        "support.traiter_ticket_n1",
+        "support.traiter_ticket_n2"
+      ],
+      "sensibilite": "donnees-personnelles"
+    },
+    "Support/Entity/PieceJointeAide.php": {
+      "depuis": "2026-08-23",
+      "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
+      "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
+      "module": "Support",
+      "operations": [
+        "Delete",
+        "Get",
+        "GetCollection",
+        "Post"
+      ],
+      "permissions": [
+        "support.administrer",
+        "support.gerer_kb_globale",
+        "support.gerer_kb_locale",
+        "support.lire"
+      ],
+      "sensibilite": "donnees-personnelles"
+    },
+    "Support/Entity/PieceJointeTicket.php": {
+      "depuis": "2026-08-23",
+      "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
+      "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
+      "module": "Support",
+      "operations": [
+        "Get",
+        "GetCollection",
+        "Post"
+      ],
+      "permissions": [
+        "support.administrer",
+        "support.lire_ticket_etablissement",
+        "support.ouvrir_ticket",
+        "support.traiter_ticket_n1",
+        "support.traiter_ticket_n2"
+      ],
+      "sensibilite": "donnees-personnelles"
+    },
+    "Support/Entity/VersionArticle.php": {
+      "depuis": "2026-08-23",
+      "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
+      "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
+      "module": "Support",
+      "operations": [
+        "Get",
+        "GetCollection"
+      ],
+      "permissions": [
+        "support.administrer",
+        "support.gerer_kb_globale",
+        "support.gerer_kb_locale",
+        "support.lire"
+      ],
+      "sensibilite": "donnees-personnelles"
+    },
+    "Offre/Entity/Categorie.php": {
+      "depuis": "2026-08-23",
+      "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
+      "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
+      "module": "Offre",
+      "operations": [
+        "Delete",
+        "Get",
+        "GetCollection",
+        "Patch",
+        "Post"
+      ],
+      "permissions": [
+        "offre.gerer",
+        "offre.lire"
+      ],
+      "sensibilite": "autre"
+    },
+    "Offre/Entity/ConversionType.php": {
+      "depuis": "2026-08-23",
+      "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
+      "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
+      "module": "Offre",
+      "operations": [
+        "Get",
+        "GetCollection"
+      ],
+      "permissions": [
+        "offre.lire"
+      ],
+      "sensibilite": "autre"
+    },
+    "Offre/Entity/GrilleTarifaire.php": {
+      "depuis": "2026-08-23",
+      "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
+      "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
+      "module": "Offre",
+      "operations": [
+        "Get",
+        "GetCollection",
+        "Patch",
+        "Post"
+      ],
+      "permissions": [
+        "offre.creer",
+        "offre.lire",
+        "offre.modifier"
+      ],
+      "sensibilite": "autre"
+    },
+    "Offre/Entity/PrixHistorique.php": {
+      "depuis": "2026-08-23",
+      "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
+      "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
+      "module": "Offre",
+      "operations": [
+        "Get",
+        "GetCollection"
+      ],
+      "permissions": [
+        "offre.lire"
+      ],
+      "sensibilite": "autre"
+    },
+    "Offre/Entity/Promotion.php": {
+      "depuis": "2026-08-23",
+      "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
+      "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
+      "module": "Offre",
+      "operations": [
+        "Delete",
+        "Get",
+        "GetCollection",
+        "Patch",
+        "Post"
+      ],
+      "permissions": [
+        "offre.gerer",
+        "offre.lire"
+      ],
+      "sensibilite": "autre"
+    },
+    "Offre/Entity/Saison.php": {
+      "depuis": "2026-08-23",
+      "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
+      "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
+      "module": "Offre",
+      "operations": [
+        "Delete",
+        "Get",
+        "GetCollection",
+        "Patch",
+        "Post"
+      ],
+      "permissions": [
+        "offre.gerer",
+        "offre.lire"
+      ],
+      "sensibilite": "autre"
+    },
+    "Offre/Entity/TrancheQuotientFamilial.php": {
+      "depuis": "2026-08-23",
+      "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
+      "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
+      "module": "Offre",
+      "operations": [
+        "Delete",
+        "Get",
+        "GetCollection",
+        "Patch",
+        "Post"
+      ],
+      "permissions": [
+        "offre.gerer",
+        "offre.lire"
+      ],
+      "sensibilite": "autre"
+    },
+    "Offre/Entity/TypeProduit.php": {
+      "depuis": "2026-08-23",
+      "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
+      "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
+      "module": "Offre",
+      "operations": [
+        "Get",
+        "GetCollection"
+      ],
+      "permissions": [
+        "offre.lire"
+      ],
+      "sensibilite": "autre"
+    },
+    "Offre/Entity/TypeTarif.php": {
+      "depuis": "2026-08-23",
+      "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
+      "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
+      "module": "Offre",
+      "operations": [
+        "Delete",
+        "Get",
+        "GetCollection",
+        "Patch",
+        "Post"
+      ],
+      "permissions": [
+        "offre.gerer",
+        "offre.lire"
+      ],
+      "sensibilite": "autre"
+    },
+    "OptionProduit/Entity/GroupeOption.php": {
+      "depuis": "2026-08-23",
+      "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
+      "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
+      "module": "OptionProduit",
+      "operations": [
+        "Get",
+        "GetCollection",
+        "Patch",
+        "Post"
+      ],
+      "permissions": [
+        "offre.lire",
+        "offre.modifier"
+      ],
+      "sensibilite": "autre"
+    },
+    "OptionProduit/Entity/ValeurOption.php": {
+      "depuis": "2026-08-23",
+      "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
+      "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
+      "module": "OptionProduit",
+      "operations": [
+        "Get",
+        "GetCollection",
+        "Patch",
+        "Post"
+      ],
+      "permissions": [
+        "offre.lire",
+        "offre.modifier"
+      ],
+      "sensibilite": "autre"
+    },
+    "Organisation/Entity/Groupe.php": {
+      "depuis": "2026-08-23",
+      "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
+      "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
+      "module": "Organisation",
+      "operations": [
+        "Delete",
+        "Get",
+        "GetCollection",
+        "Patch",
+        "Post"
+      ],
+      "permissions": [
+        "organisation.gerer"
+      ],
+      "sensibilite": "autre"
+    },
+    "Reporting/Entity/AxeAnalytique.php": {
+      "depuis": "2026-08-23",
+      "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
+      "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
+      "module": "Reporting",
+      "operations": [
+        "Get",
+        "GetCollection",
+        "Patch",
+        "Post"
+      ],
+      "permissions": [
+        "reporting.configurer",
+        "reporting.lire"
+      ],
+      "sensibilite": "autre"
+    },
+    "Reporting/Entity/Indicateur.php": {
+      "depuis": "2026-08-23",
+      "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
+      "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
+      "module": "Reporting",
+      "operations": [
+        "Get",
+        "GetCollection",
+        "Patch",
+        "Post"
+      ],
+      "permissions": [
+        "reporting.configurer",
+        "reporting.lire"
+      ],
+      "sensibilite": "autre"
+    },
+    "Reservation/Entity/DisponibiliteRessource.php": {
+      "depuis": "2026-08-23",
+      "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
+      "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
+      "module": "Reservation",
+      "operations": [
+        "Delete",
+        "Get",
+        "GetCollection",
+        "Patch",
+        "Post"
+      ],
+      "permissions": [
+        "reservation.gerer_ressource",
+        "reservation.lire"
+      ],
+      "sensibilite": "autre"
+    },
+    "Reservation/Entity/IndisponibiliteRessource.php": {
+      "depuis": "2026-08-23",
+      "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
+      "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
+      "module": "Reservation",
+      "operations": [
+        "Delete",
+        "Get",
+        "GetCollection",
+        "Patch",
+        "Post"
+      ],
+      "permissions": [
+        "reservation.gerer_ressource",
+        "reservation.lire"
+      ],
+      "sensibilite": "autre"
     }
+  }
 }
