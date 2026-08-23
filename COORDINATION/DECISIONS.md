@@ -468,3 +468,53 @@ et non « comment relancer un client ? ».
 **Smart Flow, lui, part vraiment de zéro** — retards, créneaux libérés, liste d'attente, affluence.
 Mais il se branche sur `Reservation`, qui est mature et dont les événements manquants sont les plus
 simples à émettre.
+
+### 2026-08-23 · D23 — La carte multi-entrées : recharger sans changer de support, consulter sans consommer
+Demande de Maxime. Vérification faite dans le code avant toute conception : **la moitié du chemin
+existe déjà et fonctionne**.
+
+**Ce qui marche aujourd'hui.** Vendre un produit-carte alimente `BilletSupport.nbCompostages` depuis
+`CarteMultiEntrees.stockCompostagesInitial` (`ValiderVenteService`). La projection construit un
+`DroitAcces` de type `CarteQuota` portant `creditRestant`. Chaque passage le décrémente
+(`ValidationPassageHandler`). Le solde est déjà calculé et renvoyé au terminal
+(`AffichagePorteurResolver`, `SnapshotTerminalProvider` → `compostagesRestants`). L'appairage
+support ↔ droit existe, avec un seul appairage actif par support.
+
+**Quatre manques, tous vérifiés.**
+
+**1. Aucune recharge d'entrées n'existe.** « Recharge » n'existe que pour le porte-monnaie
+(`PmvRechargeHandler`). Pire : `PassageIngestionProcessor` renvoie déjà
+`propositionRecharge: ['caisse','borne','app']` quand le crédit est épuisé — **trois canaux promis à
+l'interface pour une opération qui n'a aucun point d'entrée**. C'est la même famille de promesse
+creuse que le no-op de `ProjectionAccesReservation`.
+
+**2. Consulter un solde le consomme.** Le seul moyen de connaître le crédit restant est de tenter un
+passage — qui décrémente. Or la demande la plus fréquente en caisse est précisément « combien me
+reste-t-il ? ». Il faut une route de **consultation en lecture seule**, distincte du passage.
+
+**3. Un droit d'accès n'est rattaché à aucun client.** `DroitAcces` porte `billetSupportRef`,
+`produitRef`, `reservationRef` — des UUID libres, et **aucune relation vers `Crm`** (vérifié : zéro
+occurrence de `DroitAcces` dans `src/Crm`). « Afficher le solde avec la fiche client » est donc
+aujourd'hui structurellement impossible : c'est le maillon à créer avant tout le reste.
+
+**4. Une carte de dix réservations n'est pas possible.** `TypeDroitAcces::Booking` existe (ACC-3) mais
+`ProjectionAccesReservationHandler` pose explicitement `setCreditRestant(null)`. Le mécanisme de
+décompte est pourtant identique — c'est un paramètre à ouvrir, pas une mécanique à écrire.
+
+**Décisions de conception.**
+
+**La recharge incrémente le droit existant ; elle n'en crée jamais un second.** Ce n'est pas un détail
+d'implémentation, c'est ce qui garantit l'exigence « pas de changement de support » : un support n'a
+qu'un appairage actif, donc créer un nouveau droit imposerait de révoquer l'appairage et d'en refaire
+un — c'est-à-dire, pour le client, **une nouvelle carte physique**. Incrémenter préserve la carte.
+
+**Toute recharge incrémente `Support.versionMaj`.** C'est cette version qui pilote le delta du
+snapshot terminal : sans elle, un lecteur hors ligne continuerait de refuser une carte qu'on vient de
+recharger à la caisse.
+
+**Le scan de consultation est une opération distincte, jamais un passage.** Même identifiant lu, même
+lecteur possible, mais une route qui ne décrémente rien et ne journalise pas un franchissement.
+
+**L'écran est une modale, pas une page (D13).** Scan → modale portant le solde, l'identité du porteur
+et **deux boutons d'ajout rapide** : recharger le forfait courant, ou ajouter des entrées à l'unité.
+L'agent de caisse ne doit pas naviguer pour répondre à « combien me reste-t-il ? ».

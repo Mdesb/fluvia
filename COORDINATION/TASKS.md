@@ -58,4 +58,9 @@ Ne touche pas un chemin déjà en `WIP` par une autre instance.
 | SF-0 | Spec SDD Smart Flow — retards, creneaux liberes, liste dattente, affluence | `specs/smart-flow/**` | **claude-B** | CLAIM | 23/08 |
 | RR-2 | Moteur de relance pilote par evenements (apres RR-0 et RR-1) | `app/src/RevenueRecovery/**` | *a assigner* | CLAIM | 23/08 |
 | SF-2 | Creneau libere, liste dattente, revente du creneau (apres SF-0 et SF-1) | `app/src/SmartFlow/**` | *a assigner* | CLAIM | 23/08 |
+| CQ-0 | **PREALABLE** — rattacher un DroitAcces a un porteur (facultatif : la carte au porteur reste possible) | `app/src/{Acces,Crm}/**` | **claude-C** | CLAIM | 23/08 |
+| CQ-1 | Recharge dune carte multi-entrees : increment du droit existant, bascule versionMaj, vente rattachee | `app/src/Acces/**` | **claude-B** | CLAIM | 23/08 |
+| CQ-2 | Consultation du solde en lecture seule (ne consomme rien) + modale de caisse avec ajout rapide | `app/src/Acces/**` | **claude-A** | CLAIM | 23/08 |
+| CQ-3 | Carte de N reservations : ouvrir creditRestant sur les droits de type Booking | `app/src/Reservation/**` | *a assigner* | CLAIM | 23/08 |
+| CQ-4 | propositionRecharge : ne designer que des canaux reellement implementes | `app/src/Acces/State/PassageIngestionProcessor.php` | *a assigner* | CLAIM | 23/08 |
 <!-- Ajouter les nouvelles tâches au-dessus de cette ligne. -->
