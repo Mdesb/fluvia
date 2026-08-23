@@ -601,3 +601,28 @@ recharger **une seule entrée** pour repartir sur une période entière. Sur une
 c'est ouvert au grignotage. Deux garde-fous sont possibles si le cas se présente — un minimum de
 recharge pour déclencher la prolongation, ou un plafond de prolongations cumulées — et **aucun n'est
 implémenté pour l'instant**. On les ajoutera sur constat, pas par précaution.
+
+### 2026-08-23 · D27 — Un no-show sur séance prépayée restitue le crédit et propose un report
+Décision de Maxime, complément de D24. Des trois issues possibles sur le crédit — décomptée,
+restituée, restituée avec report proposé — la valeur **livrée par défaut** est **restituée avec
+report**. Le comportement reste paramétrable aux quatre portées de `RegleAnnulation`, dont l'activité.
+
+**C'est le défaut le plus généreux des trois, et c'est un choix assumé** : un client qui ne vient pas
+ne perd rien et se voit proposer un autre créneau. Ce qui protège le praticien dont l'agenda est rare,
+c'est le **paramétrage par activité** — un salon de massage peut basculer sur « décomptée » là où la
+piscine du même établissement reste indulgente. La générosité est le défaut, pas la règle.
+
+**La conséquence qu'il faut voir venir : ce défaut s'appuie sur un module qui n'existe pas.** D24 pose
+que « restituée avec report » **émet un événement** plutôt que d'ouvrir un écran — c'est Smart Flow
+qui propose le créneau. Or Smart Flow n'est ni écrit ni spécifié (SF-0, SF-2).
+
+**Dégradation choisie, en attendant.** Le crédit est restitué — cette moitié fonctionne dès CQ-5 — et
+l'événement est publié. Aucun créneau n'est proposé tant que SF-2 n'existe pas. Ce n'est donc pas
+cassé, c'est incomplet, et la différence doit être visible : **l'exploitant ne doit pas voir promis à
+son client un report que personne ne lui enverra**. Tant que Smart Flow n'est pas livré, l'interface
+annonce la restitution du crédit, rien de plus.
+
+**Ce que ça change dans les priorités.** Smart Flow cesse d'être un module « à faire un jour » : il
+porte désormais la moitié du comportement par défaut de la plateforme sur le no-show. C'est le
+premier cas d'usage concret de SF-2, et il rend la question posée à Maxime — quel usage de Smart Flow
+compte en premier — largement tranchée par les faits.
