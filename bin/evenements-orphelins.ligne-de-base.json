@@ -1,0 +1,48 @@
+{
+    "_lisez_moi": [
+        "Ligne de base GELEE du garde-fou n6 — evenements du catalogue sans emetteur.",
+        "",
+        "Ce n est PAS une liste de defauts. Le contrat precede le code (D2) : un nom inscrit au",
+        "catalogue que personne n emet encore est la methode normale du projet. Ce fichier existe",
+        "pour que le STOCK ne grossisse pas, et pour qu il decroisse de facon mesurable.",
+        "",
+        "RR-1 et SF-1 sont exactement ce decompte. Chaque emission livree retire une ligne ici.",
+        "",
+        "La regle A (abonne qui consomme un evenement que rien n emet) n a deliberement PAS de",
+        "ligne de base : un abonne inerte ne casse aucun test, il ne fait rien — donc rien d autre",
+        "que ce controle ne le signalera jamais."
+    ],
+    "scelle": {
+        "plafond": 28
+    },
+    "entrees": [
+        "access.denied",
+        "access.recorded",
+        "booking.cancelled",
+        "booking.completed",
+        "booking.created",
+        "booking.no_show",
+        "cart.abandoned",
+        "credit_note.issued",
+        "customer.inactive",
+        "feasibility.assessed",
+        "intervention.scheduled",
+        "intervention.validated",
+        "invoice.issued",
+        "invoice.overdue",
+        "invoice.paid",
+        "lead.unanswered",
+        "quote.accepted",
+        "quote.expired",
+        "quote.sent",
+        "refund.issued",
+        "sale.cancelled",
+        "sale.completed",
+        "slot.released",
+        "subscription.created",
+        "subscription.suspended",
+        "tender.analyzed",
+        "tender.draft_generated",
+        "training.completed"
+    ]
+}

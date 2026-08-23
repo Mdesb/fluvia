@@ -52,8 +52,8 @@ Ne touche pas un chemin déjà en `WIP` par une autre instance.
 | C21 | Performance : verifier US-L3-03 et RG-ACC-01 hors suite fonctionnelle (materiel representatif, a chaud, percentile) | `infra/**` | *a assigner* | CLAIM | 22/08 |
 | C22 | OCR mode degrade : assertion sur labsence dappel reseau plutot que sur le chronometre | `app/tests/Ocr/**` | *a assigner* | CLAIM | 22/08 |
 | C23 | Tests : remplacer les createMock() sans attente par createStub() (5 notices, meme famille) | `app/tests/**` | **claude-C** | DONE | 22/08 |
-| RR-1 | **PREALABLE** — emettre les evenements declencheurs manquants (panier abandonne, facture echue, devis expire, client inactif) | `app/src/{Boutique,Facturation,Crm}/**` | **claude-C** | CLAIM | 23/08 |
-| SF-1 | **PREALABLE** — emettre booking.cancelled, booking.no_show, access.recorded | `app/src/{Reservation,Acces}/**` | **claude-C** | CLAIM | 23/08 |
+| RR-1 | **PREALABLE** — emettre les evenements declencheurs manquants (panier abandonne, facture echue, devis expire, client inactif) | `app/src/{Boutique,Facturation,Crm}/**` | *a assigner* | CLAIM | 23/08 |
+| SF-1 | **PREALABLE** — emettre booking.cancelled, booking.no_show, access.recorded | `app/src/{Reservation,Acces}/**` | *a assigner* | CLAIM | 23/08 |
 | RR-0 | Spec SDD Revenue Recovery — trancher dabord : etendre Recouvrement ou module neuf | `specs/revenue-recovery/**` | **claude-C** | CLAIM | 23/08 |
 | SF-0 | Spec SDD Smart Flow — retards, creneaux liberes, liste dattente, affluence | `specs/smart-flow/**` | **claude-B** | CLAIM | 23/08 |
 | RR-2 | Moteur de relance pilote par evenements (apres RR-0 et RR-1) | `app/src/RevenueRecovery/**` | *a assigner* | CLAIM | 23/08 |
