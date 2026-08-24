@@ -13,6 +13,7 @@
 | 21:45 | Verification des points d-affichage des 12 cles de vocabulaire contre le frontend reel. **Quatre cles sont vivantes, toutes les quatre dans `Reservation.jsx`** (Ressource, Reservation, Capacite, Acces) — quatre libelles, un fichier, et l-ecran cesse d-etre ecrit pour un metier generique que personne n-exerce. Les huit autres n-ont aucun point d-affichage : les ecrans de verticale sont des souches de 46 a 69 lignes. Ta correction sur l-alias SSH est lue — j-avais trouve `vps-preprod` de mon cote, c-est coherent. | Je passe a la relecture des cinq paquets pour en extraire ce qui est deja portable sans installateur. | **Un trou de propriete** : `frontend/` n-est attribue ni par FLOTTE.md ni par OWNERS.md. Detail ci-dessous. |
 | 21:45 | D34 lue et appliquee. **Presentation horaire mise en place** : Maxime me demande de me presenter a toi toutes les heures quoi qu-il arrive — tache en cours si j-en ai une, demande de tache sinon. C-est desormais dans ma boucle, au meme titre que le battement. | Presentation 21:45 ci-dessous. Tache en cours : relecture des cinq paquets pour extraire ce qui est portable sans installateur. | **Ta session n-est pas joignable depuis ce poste** — detail ci-dessous. |
 | 22:20 | **Cinq manifestes de module livres** (`PiscineModule`, `PadelModule`, `PatinoireModule`, `SportModule`, `MuseeModule`) — aucune des cinq verticales n-en avait, alors que Dms, Finance, Ocr, SmartFlow, Social et Stay en ont un. D2 est contract-first : ces cinq modules etaient invisibles au registre. `tests/Platform` **58/58 vert** sur pile isolee `claudeI` (VPS). D35 lue. | Suites des cinq modules en cours d-execution. | Rien. Trois constats a arbitrer ci-dessous — dont un qui donne enfin un point de chute a la suppression de `PresetVerticale`. |
+| 22:40 | Suites des cinq verticales passees. Piscine, Patinoire, Sport, Musee **vertes**. Padel : **1 echec, preexistant sur `origin/main`** (verifie en rejouant le test sur main, pas suppose) — et je tiens la cause exacte : le test ne tombe **que le lundi**. Diagnostic complet ci-dessous. Pile `claudeI` demontee, worktree VPS rendu a sa branche. | Je prepare le correctif ; il touche du code de production, donc je te laisse une fenetre d-objection avant de le poser. | Rien. |
 
 ---
 
@@ -183,3 +184,43 @@ bien quatre evenements de `App\Recouvrement` (`IncidentImpayeDetecteEvent` et su
 des evenements Symfony herites, absents du catalogue de domaine — RG-PLAT-06 refuserait la poussee.
 C-est la dette que C13 vise. Meme prudence que `StayModule` : on declare ce qu-on fait, pas ce qu-on
 prevoit.
+
+---
+
+## 2026-08-24 22:40 · Padel : un test rouge sur `main` qui ne tombe que le lundi (D20)
+
+**L-echec.** `EclairageTest::testCa11AllumageEtExtinctionAutomatiquesSurFenetreReservee` :
+« Failed asserting that 3 is identical to 1 ». Il est **sur `main`**, pas chez moi : je l-ai rejoue
+sur `origin/main` dans mon worktree avant de te l-annoncer, meme echec au caractere pres.
+
+**La cause, et elle est jolie.** Le test construit sa reservation a `next monday 19:00`, puis appelle
+`commander($debut + 1 minute)`. Les fixtures padel posent une reservation de demonstration a
+`next tuesday 09:00`. Selon le jour ou la suite tourne, `next tuesday` tombe **avant** ou **apres**
+`next monday` :
+
+| Jour d-execution | `next tuesday` | `next monday` | Reservation demo balayee ? | Resultat |
+|---|---|---|---|---|
+| Lundi (aujourd-hui) | demain | dans 7 jours | **oui** — allumage + extinction | 3, echec |
+| Mardi a dimanche | dans 1 a 6 j | avant elle | non | 1, vert |
+
+**Le test est donc rouge un jour sur sept**, et c-est aujourd-hui. C-est exactement ce que D20 interdit
+— une assertion dont le resultat depend de l-horloge. Six jours sur sept, personne ne le voit.
+
+**Mais le test a raison, et c-est le code qui a tort.** `CommanderEclairageCommand::commander()`
+balaie **toutes** les `ReservationPadel` sans aucune borne inferieure : sa seule condition est
+`creneau.debut <= maintenant`. Autrement dit, il commande l-allumage de **toute reservation passee**
+qui n-a pas encore d-evenement d-allumage. En production, cela veut dire qu-un terrain s-allume
+physiquement pour une partie de la semaine derniere — et le fait a chaque passage tant que
+l-evenement n-a pas ete cree.
+
+**Ce que je propose**, et pourquoi je ne l-ai pas encore pose : une **borne inferieure de tolerance**
+sur `commander()` — on ne commande que si `debut` est dans une fenetre recente (l-ordre de grandeur
+de la periode du planificateur, quelques minutes), jamais retroactivement. Le test redevient
+deterministe sans qu-on touche a son assertion, qui exprime la bonne intention.
+
+C-est du **code de production dans mon perimetre**, mais le choix de la fenetre est un arbitrage
+(D2 : arbitrer avant d-implementer). **Je le pose au prochain battement sauf objection de ta part** —
+je ne m-arrete pas pour attendre, et un terrain qui s-allume tout seul pour une partie passee ne
+merite pas d-attendre demain.
+
+Les quatre autres suites sont vertes : Piscine, Patinoire, Sport, Musee. `tests/Platform` 58/58.
