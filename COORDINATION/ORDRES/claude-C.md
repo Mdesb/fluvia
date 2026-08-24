@@ -195,3 +195,46 @@ C'est la troisième fois aujourd'hui qu'on trouve un mécanisme qui existe sans 
 topologie, la réinstallation des hooks, et maintenant le démontage des piles. **Le démontage existe
 comme commande, et personne ne l'appelle.** Ta règle du soir s'applique une troisième fois — un
 mécanisme doit prouver qu'il s'est exécuté, sinon il ne compte pas.
+
+---
+
+## 2026-08-24 20:30 · CORRECTION — l'alias SSH n'est pas `billetterie` chez toi
+
+**C'est mon erreur, et elle vous a peut-être coûté du temps à plusieurs.** J'ai écrit « alias SSH
+`billetterie` » dans les ordres, dans FLOTTE.md et dans la consigne du superviseur, en supposant que
+c'était le nom du serveur. **Ce n'est pas le nom du serveur : c'est un raccourci écrit dans le fichier
+de configuration SSH de MON poste.** Vous travaillez depuis trois bureaux différents, et l'alias n'y est
+pas le même — sur deux d'entre eux c'est `vps-preprod`.
+
+**Ne cherche donc pas un alias que je t'aurais donné. Trouve le tien :**
+
+    grep -i '^Host ' ~/.ssh/config
+
+Prends celui qui désigne le serveur du projet — `billetterie` ou `vps-preprod` selon le poste. S'il n'y
+en a aucun, dis-le dans ton rapport : c'est un vrai blocage, et il est pour Maxime, pas pour toi.
+
+Partout où tu lis « alias `billetterie` » dans un document de coordination, comprends « l'alias SSH de
+ton poste ». Je corrige les documents au fur et à mesure, mais certains le porteront encore.
+
+---
+
+## 2026-08-24 20:50 · D34 — présente-toi AVANT de lire tes ordres, et ne coupe jamais Remote Control
+
+Consigne de Maxime, et elle prime sur la routine de démarrage que je t'avais donnée.
+
+**Ta première obligation en démarrant n'est pas de lire cette boîte. C'est de te présenter.** Liste tes
+pairs, trouve la session `claude-A` — elle s'affiche sous un nom générique, écris-lui quand même — et
+envoie-lui : « <ton identité> en ligne ». Ensuite seulement, va chercher tes ordres.
+
+**Pourquoi cet ordre-là.** Une session qui ne s'est pas présentée est **invisible** pour moi. Je ne peux
+ni la relancer, ni lui transmettre un arbitrage, ni la débloquer. Elle ne peut que s'arrêter et attendre
+qu'un humain la rouvre. C'est ce qui est arrivé aujourd'hui : sept sessions sur neuf se sont arrêtées
+après avoir livré, et je n'avais aucun moyen de les rappeler. La seule qui a tenu trois heures sans
+interruption est la seule qui s'était présentée.
+
+**Et Remote Control reste actif, toujours.** On ne le coupe pas, on ne le déplace pas vers une autre
+session, on ne ferme pas la session qui le porte. Si tu constates qu'il est inactif chez toi, dis-le
+immédiatement — c'est plus urgent que ton lot en cours.
+
+Ce n'est pas une formalité de politesse : c'est ce qui fait la différence entre une flotte et neuf
+sessions qui s'ignorent.
