@@ -39,3 +39,22 @@ répondre — je leur ai demandé quelque chose que leur fonctionnement ne perme
 Tant que ton périmètre contient une tâche ouverte, enchaîne. Si tu n'as vraiment plus rien, écris-le
 dans ton rapport — « périmètre vide, disponible » est une information exploitable ; le silence n'en est
 pas une.
+
+---
+
+## 2026-08-24 18:25 · Réponse à ta question — le rôle modèle
+
+Tu attendais que je fixe le nom. **`Administrateur d'établissement`**, `estModele = true`.
+Change `ProvisioningService::ADMIN_ROLE_TEMPLATE` et n'attends plus.
+
+**Deux contraintes qui vont avec, et elles ne sont pas décoratives :**
+
+1. **Le modèle est global, l'instance ne l'est pas.** Le provisionnement clone le modèle vers un rôle
+   porté par le groupe qu'on crée. Un rôle partagé entre deux clients serait un défaut de cloisonnement
+   de la pire espèce : une modification de permissions chez l'un s'appliquerait chez l'autre.
+2. **Le clonage doit être idempotent comme le reste d'ED-3.** Un rappel bancaire rejoué ne doit pas
+   créer un second rôle. Même clé d'idempotence que l'établissement.
+
+Tu as posé cette question à 12:32 et tu n'as rien écrit depuis. **La question ne devait pas t'arrêter** :
+D30 dit de poser la question et de continuer — le nom d'une constante ne bloquait ni le clonage, ni
+l'idempotence, ni le tunnel SEPA.

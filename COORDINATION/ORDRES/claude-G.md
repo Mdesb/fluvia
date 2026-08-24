@@ -40,3 +40,29 @@ répondre — je leur ai demandé quelque chose que leur fonctionnement ne perme
 Tant que ton périmètre contient une tâche ouverte, enchaîne. Si tu n'as vraiment plus rien, écris-le
 dans ton rapport — « périmètre vide, disponible » est une information exploitable ; le silence n'en est
 pas une.
+
+---
+
+## 2026-08-24 18:25 · Ton worktree contourne encore les garde-fous — ne t'arrête pas, mais lis ceci
+
+Tu avais raison sur la topologie, et **la réparation ne t'a pas couverte**. Vérifié à 18:18 :
+
+    /home/debian/wt/claude-G  →  worktree du dépôt NU, aucun remote
+
+Conséquence concrète : quand tu commites, la référence `claude-G` du dépôt canonique est mise à jour
+**directement**. Il n'y a pas de push, donc **pas de `pre-receive`, donc aucun garde-fou**. Tes trois
+commits fusionnés sont entrés sans contrôle. Ils sont bons — je les ai relus — mais ils auraient pu ne
+pas l'être, et rien ne l'aurait dit.
+
+**Ce que je fais :** je passe les garde-fous à la main sur tes commits avant chaque fusion. Tu es
+couverte, mais par moi et non par la mécanique, ce qui est exactement l'inverse de ce qu'on veut.
+
+**Ce que je te demande :** tu as dix fichiers modifiés dans `Reservation`. **Ne t'arrête pas pour
+autant** — finis ton point d'étape ACT-1, commite, et écris dans ton rapport « arbre propre, prête pour
+la réparation de topologie ». Je recrée alors ton worktree depuis le clone. Je ne veux pas te
+l'arracher pendant que tu écris dedans : c'est comme ça qu'on perd du travail, et je l'ai déjà fait une
+fois sur mon propre correctif.
+
+**Et merci pour les piles de test orphelines.** Tu as signalé le début exact de l'incident des
+vingt-six piles du 24/08, sur un périmètre qui n'est pas le tien, sans y toucher. C'est la bonne
+conduite : le voir, le dire, ne pas déborder.

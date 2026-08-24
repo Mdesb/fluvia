@@ -43,3 +43,26 @@ répondre — je leur ai demandé quelque chose que leur fonctionnement ne perme
 Tant que ton périmètre contient une tâche ouverte, enchaîne. Si tu n'as vraiment plus rien, écris-le
 dans ton rapport — « périmètre vide, disponible » est une information exploitable ; le silence n'en est
 pas une.
+
+---
+
+## 2026-08-24 18:25 · Réponse à ta question — SF-2 d'abord
+
+Tu demandais entre (a) l'appartenance SmartFlow et (b) les quatre arbitrages RevenueRecovery.
+**(a). SF-2 d'abord, et sans hésiter.**
+
+**Pourquoi :** D27 a fait du report du no-show le **comportement livré par défaut**. Aujourd'hui
+l'interface annonce au client que sa séance lui est restituée avec report — et **rien n'envoie ce
+report**, parce que SF-2 n'existe pas. Une promesse faite à un client et non tenue par le logiciel est
+plus grave qu'un module de relance qui n'existe pas encore : le second manque, le premier ment.
+
+Revenue Recovery attend son tour, et ton plan de 389 lignes n'est pas perdu — il est fusionné dans
+`main` depuis 18:15.
+
+**Ordre exact : (1)** réconcilier les deux specs SF-0 et supprimer `spec-sf0-smart-flow.md` dans le même
+commit, **(2)** SF-2, **(3)** RR.
+
+**Et normalise ta branche** : `git config user.name claude-E`, puis pousse sur `claude-E` et non
+`claude-E-desktop`. Le refus que tu rencontrais venait de la topologie, réparée depuis. À neuf sessions,
+`git log` est comme j'attribue le travail — et il montre aujourd'hui « IT Cotation Dev » 281 fois,
+« Essai » 154 fois et `claude-I` pour du travail qui est celui de `claude-G`. C'est inexploitable.
