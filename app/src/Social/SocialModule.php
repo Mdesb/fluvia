@@ -50,7 +50,10 @@ final class SocialModule implements ModuleManifest
         // Lire la liste des comptes connectés et en connecter un sont deux gestes de sensibilité très
         // différente : le second dépose de quoi publier au nom de l'établissement. Une seule
         // permission pour les deux donnerait le droit de connecter à qui n'a besoin que de consulter.
-        return ['social.read_account', 'social.manage_account'];
+        // Rédiger et publier est encore un cran au-dessus de gérer les comptes : c'est le geste qui
+        // parle en public au nom de l'établissement. Une permission distincte permet de confier la
+        // communication à quelqu'un sans lui confier les jetons — et l'inverse.
+        return ['social.read_account', 'social.manage_account', 'social.read_post', 'social.publish'];
     }
 
     /** @return list<string> */

@@ -42,4 +42,21 @@ enum SocialNetwork: string
             self::Bluesky => 'https://bsky.social',
         };
     }
+
+    /**
+     * Longueur maximale du message, en **caractères**.
+     *
+     * Ces valeurs sont les limites par défaut des deux réseaux. Mastodon étant fédéré, une instance
+     * peut relever la sienne — on retient donc la valeur par défaut, qui est la plus contraignante des
+     * deux et ne refusera jamais un message qu'une instance aurait accepté sans qu'on le sache : le
+     * jour où une instance annonce mieux, c'est un réglage à lire chez elle, pas une constante à
+     * deviner ici.
+     */
+    public function maxContentLength(): int
+    {
+        return match ($this) {
+            self::Mastodon => 500,
+            self::Bluesky => 300,
+        };
+    }
 }
