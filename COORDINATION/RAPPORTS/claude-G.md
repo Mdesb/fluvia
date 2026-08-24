@@ -289,6 +289,7 @@ lui fait porter le risque. La prochaine fois je donne les deux, ou je dis que je
 | 00:22 | **IDOR RÉEL TROUVÉ ET FERMÉ** dans `ArbitrerConflitRecurrenceProcessor` : la ressource venait du corps de la requête et n'était résolue que par son identifiant — on pouvait déplacer le créneau d'un établissement sur la ressource d'un autre. Test rouge **vérifié sans la garde** avant d'être déclaré vert, preuve d'exploitation dans le rapport. | Padel : tu me l'ouvres pour rendre `EclairageTest` vert, je m'y mets tout de suite — `main` rouge passe avant ma dette. | Rien. |
 | 00:28 | **`main` EST RÉPARÉ — `tests/Padel` 23/23.** Et la cause n'est pas celle qu'on cherchait : **aucune ligne de code n'a changé, c'est le calendrier qui a changé.** Le test était rouge deux jours par semaine depuis toujours. Démonstration chiffrée sous le tableau. | Retour à la dette de cloisonnement de mon module. | Rien. |
 | 00:38 | **SECOND IDOR FERMÉ, et celui-là fait plus mal** : l'action de masse du catalogue permettait d'**archiver — irréversiblement — le produit d'un autre établissement**, à qui savait deviner des UUID. Vérifié sans la garde : `nbTraites=1`, le produit étranger était bien archivé. `tests/Offre` 26/26. | Reste de la dette : `Emarger`, `AjouterParticipant`, `InscrireListeAttente`, `Convertir`. Mon audit en cours dit que plusieurs sont de la **fausse** dette — je te le démontrerai plutôt que d'ajouter des gardes décoratives. | Rien. |
+| 01:02 | **Troisième et quatrième trous fermés — et ce sont des fuites de données personnelles, pas des défauts de cloisonnement.** On désignait le bénéficiaire de n'importe qui comme participant ou inscrit en liste d'attente. Vérifié sans les gardes : l'inscription était créée, la fiche étrangère référencée. `tests/Reservation` 97/97 avec les gardes, mes 3 tests dédiés verts. | Audit de la dette terminé : **2 vraies fuites corrigées, 2 fausses dettes démontrées**. Tableau sous le tableau. | Rien. |
 
 ## Nouvelle règle de Maxime — présentation horaire à `claude-A`
 
@@ -775,3 +776,61 @@ dessus. C'est le seul montage qui teste le périmètre plutôt que la chance.
 
 **`Categorie` n'est pas concernée** — vérifié : l'entité ne porte aucun établissement, c'est un
 référentiel global. La résoudre sans contrôle de périmètre n'est donc pas une fuite de cloisonnement.
+
+
+## Audit terminé de la dette de cloisonnement de mon périmètre
+
+Tu m'avais dit : ne me donne que ce que le garde-fou constate. Voici les quatre entrées restantes,
+tranchées sur pièce et pas au jugé.
+
+| Entrée gelée | Verdict | Pourquoi |
+|---|---|---|
+| `Offre/ConvertirProcessor` | **fausse dette** | `TypeProduit` ne porte aucun établissement — référentiel global, comme `Categorie`. Le produit converti, lui, arrive déjà filtré par `PerimetreProduitExtension`. |
+| `Reservation/EmargerProcessor` | **fausse dette** | L'émargement est résolu *depuis* la réservation (`findOneBy(['reservation' => …])`), elle-même filtrée. Résolution dérivée, jamais une entrée client. |
+| `Reservation/AjouterParticipantProcessor` | **vraie fuite** | corrigée |
+| `Reservation/InscrireListeAttenteProcessor` | **vraie fuite** | corrigée |
+
+**Sur les deux fausses dettes, je n'ai rien écrit.** Ajouter une garde là où il n'y a rien à garder
+donnerait l'illusion d'un durcissement et coûterait une lecture à chaque relecture future. Elles
+restent à retirer des lignes de base, pas à « corriger » — c'est ton geste, pas le mien.
+
+**Le garde-fou avait raison de sonner, mais pas sur le bon objet.** Sur les deux vraies, il pointait
+`ListeAttente` et une liste d'entités vide. Le trou, lui, était le **`Beneficiaire`** — que ce
+garde-fou ne surveille pas, parce qu'il appartient au CRM. Il a détecté la bonne famille de code pour
+la mauvaise raison. Ça vaut peut-être une remarque à `claude-C` : le contrôle porte sur les entités du
+module, pas sur celles qu'on résout **chez les autres**.
+
+## Ce que ces deux trous permettaient réellement
+
+Ce n'est pas « voir » une donnée d'un autre établissement, c'est **l'attacher à soi**. On désignait la
+fiche de n'importe qui comme participant d'une réservation — elle apparaît ensuite dans la liste avec
+son identité et sa part de paiement — ou on l'inscrivait en liste d'attente, où le rang obtenu
+confirme son existence. **Une fuite de données personnelles**, et un levier de nuisance : inscrire un
+inconnu à un créneau qu'il n'a jamais demandé.
+
+**Vérifié sans les gardes**, comme pour les deux IDOR précédents. Réponse obtenue, en 201 :
+
+```json
+"@type": "ReservationListeAttente",
+"beneficiaire": "/api/beneficiaires/4d0143c7-…"   ← fiche d'un autre groupe
+```
+
+**La règle appliquée est celle de `PerimetreCrmExtension`**, mot pour mot : le groupe du client
+porteur doit être celui d'une région d'un établissement où l'utilisateur possède une affectation. Un
+seul résolveur partagé (`ScopedBeneficiaryFinder`), deux points d'appel.
+
+**Ce que j'ai vérifié avant d'écrire, et qui aurait pu tout casser :** je craignais de couper le
+libre-service — un client d'espace personnel sans affectation aurait perdu l'accès à ses propres
+bénéficiaires. Vérifié dans les fixtures : le rôle client **porte une affectation** sur son
+établissement. Le contrôle `reserver_soi` reste par-dessus : l'un borne au groupe, l'autre à la fiche.
+Et un troisième test vérifie qu'un bénéficiaire du périmètre passe toujours — sans lui, j'aurais pu
+livrer un mur au lieu d'une garde, avec une suite verte pour le prouver.
+
+## Et un cinquième trou, identique, que je n'ai pas touché
+
+`ReserverProcessor` résout l'**organisateur** exactement de la même manière, et le garde-fou ne l'a
+**jamais** signalé. C'est le chemin principal de réservation.
+
+Je ne l'ai pas emporté dans ce lot : c'est le cœur du module, il mérite son propre commit et sa
+propre suite verte plutôt que d'être corrigé à une heure du matin dans un lot de dette. Le résolveur
+est écrit, le branchement est d'une ligne. Dis-moi si tu veux que je le prenne au prochain battement.
