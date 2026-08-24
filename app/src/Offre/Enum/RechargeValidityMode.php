@@ -5,24 +5,21 @@ declare(strict_types=1);
 namespace App\Offre\Enum;
 
 /**
- * Ce qu'une recharge fait à la validité d'une carte multi-entrées (D26, CQ-7).
- *
- * C'est un paramètre du **produit-carte**, et pas une règle globale : deux exploitants du même
- * logiciel n'ont pas la même politique commerciale, et le même exploitant peut vouloir prolonger
- * sur une offre d'appel et pas sur une autre.
+ * Mode de renouvellement de la validité d'une carte multi-entrées **à la recharge** (CQ-7,
+ * `RG-CQ7-01`). Paramétré par produit-carte (`CarteMultiEntrees`). Sans effet sur l'émission initiale,
+ * qui calcule toujours la validité de départ normalement.
  */
 enum RechargeValidityMode: string
 {
     /**
-     * Défaut livré (D26). La recharge repart pour **une période complète à compter de la recharge**
-     * — « vous rechargez, vous repartez pour un an » —, et non pour un ajout à l'échéance existante.
-     * Le plafond `dateButoir`, lui, continue de s'appliquer.
+     * Défaut — comportement livré par CQ-1 (D26) : la recharge repousse l'échéance à « maintenant + une
+     * période complète » (`validiteDuree`), plafonnée par `dateButoir`. Non-régression.
      */
     case Extend = 'extend';
 
     /**
-     * La validité d'origine tient : la recharge ajoute du crédit et ne touche pas à l'échéance.
-     * C'est l'option prévue par D26 pour l'exploitant qui ne veut pas de prolongation.
+     * La recharge **conserve** l'échéance existante : elle ajoute des crédits sans repousser la date
+     * d'expiration. `dateButoir` devient sans objet à la recharge (rien n'est recalculé, RG-CQ7-05).
      */
     case Keep = 'keep';
 }

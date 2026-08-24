@@ -16,9 +16,6 @@ use Symfony\Component\Validator\Constraints as Assert;
  * Carte multi-entrées : stock de N compostages (RG-M1-04). Une promo « 10=12 » crédite des
  * compostages bonus valables jusqu'à l'expiration de la carte (RG-M1-13 / CA-8).
  * Le stock initial de compostages vaut nbCredite.
- *
- * Une recharge (CQ-1) ajoute du crédit sur le droit existant ; ce que cette recharge fait à la
- * validité de la carte se paramètre ici (CQ-7, D26 : `rechargeValidityMode`).
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'off_carte_multi_entrees')]
@@ -49,12 +46,10 @@ class CarteMultiEntrees
     private ?\DateTimeImmutable $dateButoir = null;
 
     /**
-     * CQ-7 / D26 — ce qu'une recharge fait à l'échéance de la carte. Le défaut livré est la
-     * prolongation ; `Keep` est l'option pour l'exploitant qui veut que la validité d'origine tienne.
-     * Colonne nommée en anglais (D5) alors que ses voisines sont historiquement en français :
-     * le retrofit prendra les anciennes ; il n'y a pas de raison d'en ajouter une neuvième à reprendre.
+     * CQ-7 (RG-CQ7-01) — que devient l'échéance de validité à la recharge : `Extend` (défaut, repousse
+     * d'une période complète, comportement CQ-1/D26) ou `Keep` (conserve l'échéance existante).
      */
-    #[ORM\Column(name: 'recharge_validity_mode', length: 12, enumType: RechargeValidityMode::class, options: ['default' => 'extend'])]
+    #[ORM\Column(type: 'string', length: 16, enumType: RechargeValidityMode::class, options: ['default' => 'extend'])]
     #[Groups(['produit:read', 'produit:write', 'carte:read', 'carte:write'])]
     private RechargeValidityMode $rechargeValidityMode = RechargeValidityMode::Extend;
 
@@ -133,18 +128,5 @@ class CarteMultiEntrees
         $this->rechargeValidityMode = $rechargeValidityMode;
 
         return $this;
-    }
-
-    /**
-     * D26 — vrai quand une recharge ne doit PAS toucher à l'échéance en cours.
-     *
-     * Expose la question plutôt que l'énumération : c'est le module qui exécute la recharge
-     * (`Acces`) qui interroge l'offre, jamais l'inverse, et il n'a à connaître que la réponse.
-     * Ne vaut **que pour une recharge** : à l'émission initiale d'un droit, il n'y a pas
-     * d'échéance à conserver, et ce prédicat n'a rien à y dire.
-     */
-    public function keepsValidityOnRecharge(): bool
-    {
-        return $this->rechargeValidityMode === RechargeValidityMode::Keep;
     }
 }

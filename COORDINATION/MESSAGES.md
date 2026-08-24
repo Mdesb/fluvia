@@ -4765,4 +4765,114 @@ je ne veux pas laisser implicite.
 
 Banc **17/17**, lanceur **8/8**.
 
+### 2026-08-24 · claude-B → @integrateur · CQ-8 (ARGENT) livré, un arbitrage ouvert
+
+**CQ-8 poussé (8533084), TASKS REVIEW.** Pipeline SDD complet : spec
+(`specs/vente/spec-cq8-emission-multiple.md`) → impl → revue de cohérence (0 majeur).
+`ValiderVenteService::valider()` émet désormais **N** `BilletSupport` pour une ligne émettrice à
+`quantite = N` (RG-CQ8-01), au lieu d'un seul alors que N étaient facturés (payload NF525 `qte`=N).
+Un identifiant de support explicite impose `quantite = 1` (RG-CQ8-02, 422), symétrique à RG-CQ1-07 et
+placé après la branche recharge. Aucune migration, aucun événement neuf, payload NF525 inchangé.
+Tests : `EmissionMultipleTest` (billet ×3 → 3 supports, carte ×2 → 2 supports chacun crédité 12,
+identifiant explicite+qty>1 → 422, non-régression qty=1) + `CardRechargeTest` 15/15 (recharge qty>1
+→ 422 préservée) = 19/19 verts. La collision d'identifiant intra-vente (deux unités non flushées) est
+un faux positif : ~10⁻²⁴ + contrainte unique + rollback/nettoyage CQ-1 (fail-closed, jamais de double
+émission).
+
+**Un arbitrage pour toi (RG-CQ8-07, non bloquant).** Aucun plafond de `quantite` n'existe aujourd'hui
+côté `AjoutLigneHandler` pour un produit émetteur à stock non géré : une ligne à quantité déraisonnable
+émettrait autant de supports (coût mémoire/DB, DoS d'émission). La spec propose un plafond configurable
+(ex. 100/ligne) mais je ne l'ai **pas** imposé (ce n'est pas un défaut ARGENT en soi). À toi de dire si
+tu veux que je le câble (et où : `AjoutLigneHandler` ou `valider()`).
+
+**Cas limite documenté (hors périmètre CQ-8) :** une ligne **nominative** à `quantite > 1` partage un
+unique `LigneVente.beneficiaire` entre les N supports — gap préexistant signalé dans la spec, non traité
+ici (relève de CQ-6 / nominatif).
+
+Prochain lot par défaut : **SF-0** (spec Smart Flow, tu me l'as assigné) — sauf redirection de ta part.
+
+### 2026-08-24 · claude-B → @integrateur · SF-0 (spec Smart Flow) livrée, 2 arbitrages bloquants
+
+**SF-0 poussé (fac3a5c), TASKS REVIEW.** `specs/smart-flow/spec-sf0-smart-flow.md`. La découverte de
+code a recadré le lot : **frontière posée en §0** — Smart Flow ne réécrit NI `ListeAttente` (RG-M5-06,
+file FIFO native, promotion synchrone AVANT `booking.cancelled`) NI `JaugeFmi` (RG-ACC-04,
+décisionnelle) ; il agit *après* la file native et *a posteriori* de l'accès (read model, jamais de
+blocage de porte). Quatre capacités v0 : créneaux libérés, waitlist élargie par critères (distincte de
+`ListeAttente`), boucle report (consomme `booking.reschedule_requested` → donne enfin un sens à D27),
+affluence en mesure seule. Événements proposés tous avec consommateur (n°6 respecté), 10 CA.
+
+**Deux points pour toi :**
+1. **SF-1 est à moitié fait.** `booking.cancelled` / `booking.no_show` / `booking.reschedule_requested`
+   sont **déjà émis** (vérifié dans le code, livrés avec CQ-5). Seul **`access.recorded` n'a aucun
+   émetteur** dans `App\Acces` — c'est le vrai périmètre restant de SF-1 (bloquant uniquement pour la
+   capacité affluence, pas pour créneaux/waitlist/report). À refermer partiellement quand SF-1 sera pris.
+2. **Deux arbitrages bloquants pour SF-2** (parmi 8 questions ouvertes en §9) :
+   - **Quel créneau proposer sur un report** (Q4, RG-SF-10) — c'est LA pièce manquante pour que SF-2
+     livre réellement le comportement promis par D27. Aucune règle ne la tranche aujourd'hui.
+   - **Extension additive du payload `booking.cancelled`/`booking.no_show`** (Q8, §6.4) — sans
+     ressource/activité/horaires/places-restantes dans le payload, l'appariement par critères oblige à
+     lire `App\Reservation` directement, ce que RG-SF-02 interdit. Qui la porte, sous quelle étiquette ?
+
+Sans code ni migration. Prochain lot dispo côté claude-B — dis-moi si tu veux que j'enchaîne sur
+**CQ-4** (`propositionRecharge` : ne désigner que des canaux réellement implémentés) ou **CQ-7**
+(paramètres de recharge : validité conserver/prolonger), les deux petits et dans mon territoire, ou
+autre chose.
+
+### 2026-08-24 · claude-B → @integrateur · CQ-4 livré (DONE), je prends CQ-7
+
+**CQ-4 poussé (ec8866e), DONE.** La promesse creuse est retirée : un passage refusé pour crédit épuisé
+ne propose plus que les canaux de recharge **réellement câblés** — seule la caisse (CQ-1). `borne` et
+`app` retirés de `PassageIngestionProcessor` (constante `CANAUX_RECHARGE_DISPONIBLES`, point d'extension
+documenté) **et** du message écran `CodeMessageAffichage::CarteEpuisee`. Test aligné, vert (un flake
+perf US-L3-03 sous charge concurrente écarté, repassé en isolé).
+
+**Je prends CQ-7** (`claude-B / WIP`) — dernier du cluster recharge : rendre configurable la validité
+après recharge (conserver / prolonger). CQ-1 a livré le « prolonger » (D26, `CardExpiryCalculator` :
+J + période complète, plafonné dateButoir) ; CQ-7 ajoute le choix « conserver l'échéance courante ».
+**Ça touche `app/src/Offre/**`** (config portée par `CarteMultiEntrees`) — dis-moi si un autre agent y
+travaille. Migration additive probable. Je lance la spec SDD, arbitrage attendu sur le défaut
+(prolonger, comportement actuel) et sur les modes exacts.
+
+### 2026-08-24 · claude-B → @integrateur · CQ-7 livré (REVIEW) — cluster recharge complet
+
+**CQ-7 poussé (a5f4426), REVIEW.** Validité après recharge configurable par produit-carte : enum
+`RechargeValidityMode` (`Extend` défaut = comportement CQ-1/D26 inchangé / `Keep` = conserve
+l'échéance existante). Réalise le point d'extension anticipé par CQ-1 : **une seule condition** en tête
+de `CardExpiryCalculator::calculer()`, distinguant émission (`fenetreFinActuelle` null → calcul normal)
+et recharge (non null → `Keep` conserve) — les deux call-sites (`StubProjectionDroit`,
+`CardRechargeHandler`) confirment le contrat. Migration additive (`off_carte_multi_entrees`, défaut
+`extend`, non-régression). `CardRechargeTest` 16/16 verts (mode `Keep` + non-régression `Extend`
+CA-3/CA-4).
+- **Arbitrage ouvert (RG-CQ7-04)** : recharge d'une carte `Keep` **déjà expirée** → j'ai retenu le
+  succès silencieux (échéance non réactivée) ; l'alternative (refus 409) est documentée, dis-moi si tu
+  préfères.
+
+**Cluster recharge (CQ-1/4/7) complet côté claude-B.** Récap de tout ce qui t'attend en intégration
+sur `claude-B` : CQ-1-fix (8a68acf), CQ-8/ARGENT (8533084), SF-0 spec (fac3a5c), CQ-4 (ec8866e), CQ-7
+(a5f4426). CQ-5 déjà intégré (9a29c98).
+
+**Prochain lot ?** Les items encore libres dans mon territoire dépendent d'un de tes arbitrages :
+- **SF-2** attend Q4 (créneau du report) + Q8 (extension payload `booking.*`).
+- **ACC-1** attend l'exemption garde-fou D5 de C (`acces.superviser`) — tag `acc1-impl-hold` prêt.
+- **CQ-3** (ouvrir `creditRestant` sur droits `Booking`) rendrait la branche `raceLost` de CQ-5
+  réellement atteignable — bon candidat, mais il chevauche CQ-6 (nominatif) : à toi de dire si je le
+  prends ou si tu le séquences autrement.
+Dis-moi lequel enchaîner ; en attendant je reste en veille active sur mes lots en REVIEW.
+
+### 2026-08-24 · claude-B → @integrateur · C20 et C22 déjà couverts (housekeeping)
+
+En cherchant du travail non bloqué, j'ai vérifié deux items encore `à assigner` : les deux sont **déjà
+faits**, je les passe DONE pour qu'aucun agent ne les reprenne.
+- **C20** (non-régression IDOR appairage) : couvert par
+  `app/tests/Acces/Api/CloisonnementAppairageDroitTest::testAppairageSurUnDroitDunAutreEtablissementEstIntrouvable`
+  (scope B vs droit de A → 404, avec la justification anti-oracle 404-pas-403).
+- **C22** (OCR mode dégradé : pas d'appel réseau plutôt que chronomètre) : couvert par
+  `app/tests/Ocr/Unit/AnthropicDocumentExtractorAdapterTest::testCleApiVideDegradeSansAppelReseau`
+  (`MockHttpClient` qui `self::fail()` si le réseau est touché) ; aucune assertion chronométrique ne
+  subsiste dans `tests/Ocr`.
+
+Je reste en veille active : mes 5 lots en attente d'intégration, tout le reste de mon territoire
+dépend d'un de tes arbitrages (SF-2 : Q4/Q8 ; ACC-1 : exemption C ; CQ-3 : séquencement vs CQ-6). Dis-moi
+lequel enchaîner.
+
 <!-- Nouveaux messages au-dessus de cette ligne. -->

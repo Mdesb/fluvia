@@ -21,6 +21,32 @@ if [ -z "$BARE" ]; then
     exit 2
 fi
 
+# ─── Qui est réellement couvert ? ───────────────────────────────────────────────────────────
+#
+# ⚠ Ce VPS héberge DEUX dépôts, et la distinction n'est pas cosmétique :
+#
+#   /home/debian/billetterie.git       le dépôt nu (origin) — `wt/main` en est un worktree
+#   /home/debian/billetterie/.git      un clone du précédent — `wt/claude-*` en sont les worktrees
+#
+# Les hooks vivent dans le répertoire COMMUN du dépôt, et git ne lit jamais ceux d'un autre. Un
+# `pre-commit` posé sur le nu couvre donc `wt/main` et personne d'autre ; posé sur le clone, il
+# couvre les worktrees des instances et pas `main`. Le 24/08 j'ai annoncé à l'intégrateur que
+# l'installation engagerait claude-B : c'était faux, faute d'avoir vu qu'il y a deux dépôts.
+#
+# D'où cette fonction : ne jamais annoncer « installé » sans dire pour qui.
+worktrees_couverts() { # worktrees_couverts <repertoire-commun>
+    local commun="$1" w liste=""
+    for w in /home/debian/wt/*/; do
+        [ -d "$w" ] || continue
+        local c; c="$(git -C "$w" rev-parse --git-common-dir 2>/dev/null)" || continue
+        case "$c" in /*) ;; *) c="$w$c" ;; esac
+        if [ "$(readlink -f "$c")" = "$(readlink -f "$commun")" ]; then
+            liste="$liste $(basename "$w")"
+        fi
+    done
+    [ -n "$liste" ] && echo "$liste" || echo " (aucun worktree connu)"
+}
+
 # ─── pre-commit : pour un WORKTREE, pas pour le bare ───────────────────────────────────────────
 # `pre-receive` ne s'exécute que sur un push. Quand une branche est checked out dans un worktree du
 # bare, qui y commite met à jour la référence sans push — donc sans contrôle. C'est le cas de `main`
@@ -55,6 +81,8 @@ if [ "$ACTION" = "--pre-commit" ]; then
     cp "$SOURCE_PC" "$CIBLE_PC"
     chmod +x "$CIBLE_PC"
     echo "✓ pre-commit installé : $CIBLE_PC"
+    echo "  Worktrees couverts :$(worktrees_couverts "$GITDIR")"
+    echo "  Les autres appartiennent à l'AUTRE dépôt et ne sont pas concernés — voir l'en-tête."
     echo
     echo "  Il contrôle les commits faits dans les worktrees de ce dépôt — ceux que pre-receive"
     echo "  ne voit jamais, faute de push. Pour t'en retirer sans priver les autres :"
@@ -79,6 +107,24 @@ INTERRUPTEUR="$BARE/hooks/GARDE-FOUS-DESACTIVES"
 
 case "$ACTION" in
     --etat)
+        # ⚠ Sans ce contrôle, `--etat` lancé sur un worktree lit le dossier `hooks/` VERSIONNÉ du
+        # projet — la source — et annonce « hook installé ». C'est un faux positif du genre que
+        # ces scripts existent pour éliminer : il rend un vert au nom d'une installation qui n'a
+        # pas eu lieu. Les hooks serveur ne vivent que sur un dépôt nu.
+        if [ "$(git -C "$BARE" rev-parse --is-bare-repository 2>/dev/null)" != "true" ]; then
+            echo "cible     : $BARE n'est pas un dépôt nu."
+            echo "            pre-receive et post-receive n'y existent pas — ils vivent sur le dépôt nu."
+            COMMUN_WT="$(git -C "$BARE" rev-parse --git-common-dir 2>/dev/null)"
+            case "$COMMUN_WT" in /*) ;; *) COMMUN_WT="$BARE/$COMMUN_WT" ;; esac
+            if [ -f "$COMMUN_WT/hooks/pre-commit" ]; then
+                echo "pre-commit: installé ($COMMUN_WT/hooks/pre-commit)"
+                echo "            couvre :$(worktrees_couverts "$COMMUN_WT")"
+            else
+                echo "pre-commit: absent pour ce dépôt — les commits faits sans push ne sont pas contrôlés."
+                echo "            couvrirait :$(worktrees_couverts "$COMMUN_WT")"
+            fi
+            exit 0
+        fi
         if [ -f "$CIBLE" ]; then
             echo "hook      : installé ($CIBLE)"
             if cmp -s "$SOURCE" "$CIBLE"; then
@@ -97,6 +143,14 @@ case "$ACTION" in
             fi
         else
             echo "post-recv : absent — la réinstallation automatique (D28) ne tourne pas"
+        fi
+        COMMUN_ETAT="$(git -C "$BARE" rev-parse --git-common-dir 2>/dev/null)"
+        case "$COMMUN_ETAT" in /*) ;; *) COMMUN_ETAT="$BARE/$COMMUN_ETAT" ;; esac
+        if [ -f "$COMMUN_ETAT/hooks/pre-commit" ]; then
+            echo "pre-commit: installé ($COMMUN_ETAT/hooks/pre-commit)"
+            echo "            couvre :$(worktrees_couverts "$COMMUN_ETAT")"
+        else
+            echo "pre-commit: absent — les commits faits sans push ne sont pas contrôlés"
         fi
         if [ -f "$INTERRUPTEUR" ]; then
             echo "état      : DÉSACTIVÉ par $INTERRUPTEUR"
