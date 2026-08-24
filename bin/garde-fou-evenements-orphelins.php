@@ -231,18 +231,52 @@ if ($nouveaux !== []) {
         echo sprintf("  %s\n", $nom);
     }
     echo "\n  Déclarer un nom au catalogue avant de l'émettre est la méthode (D2) — mais le stock\n";
-    echo "  d'événements en attente ne doit pas grossir. Émets-le, ou assume-le explicitement :\n";
-    echo sprintf("  php %s --nettoyer\n", $argv[0]);
+    echo "  d'événements en attente ne doit pas grossir.\n";
+    echo "\n";
+    echo "  Un événement entre au catalogue DANS LE MÊME COMMIT que son émetteur. C'est la seule\n";
+    echo "  issue qui passe ici.\n";
+    echo "\n";
+    echo "  « --nettoyer » n'en est pas une, contrairement à ce que ce message disait avant le\n";
+    echo "  24/08 : il recalcule le plafond sur l'état courant, donc il le ferait MONTER, et le\n";
+    echo "  contrôle contre la référence le refuserait aussitôt. Il ne sert qu'à résorber un\n";
+    echo "  stock qui a déjà baissé.\n";
 }
 
 if (count($sansEmetteur) > $plafond) {
     $echec = true;
     echo sprintf("\n=== ÉCHEC — la ligne de base a grossi (%d pour un plafond de %d) ===\n", count($sansEmetteur), $plafond);
+    // Les deux blocs se déclenchent presque toujours ensemble — un nom nouveau fait aussi monter
+    // le compte. Répéter la même explication à trois lignes d'intervalle la fait lire comme du
+    // remplissage, et on cesse alors de lire les deux.
+    if ($nouveaux === []) {
+    echo "\n"
+            . "  Un cliquet ne monte pas — c'est exactement ce qui lui donne sa valeur.\n"
+            . "\n"
+            . "  « --nettoyer » n'est PAS l'issue : il recalcule le plafond sur l'état courant, donc\n"
+            . "  il le ferait monter, et le contrôle contre la référence le refuserait aussitôt. Il ne\n"
+            . "  sert qu'à RÉSORBER un stock qui a déjà baissé.\n"
+            . "\n"
+            . "  Les deux seules issues :\n"
+            . "    · corriger ce qui a fait monter le compte — l'endroit exact est listé ci-dessus ;\n"
+            . "    · si la hausse est délibérée, elle demande l'accord de l'intégrateur : le plafond\n"
+            . "      de référence se change sur « main », pas ici.\n";
+    }
 }
 
 if ($plafondReference !== null && $plafond > $plafondReference) {
     $echec = true;
     echo sprintf("\n=== ÉCHEC — plafond relevé : %d sur la référence, %d proposé ===\n", $plafondReference, $plafond);
+    echo "\n"
+        . "  Un cliquet ne monte pas — c'est exactement ce qui lui donne sa valeur.\n"
+        . "\n"
+        . "  « --nettoyer » n'est PAS l'issue : il recalcule le plafond sur l'état courant, donc\n"
+        . "  il le ferait monter, et le contrôle contre la référence le refuserait aussitôt. Il ne\n"
+        . "  sert qu'à RÉSORBER un stock qui a déjà baissé.\n"
+        . "\n"
+        . "  Les deux seules issues :\n"
+        . "    · corriger ce qui a fait monter le compte — l'endroit exact est listé ci-dessus ;\n"
+        . "    · si la hausse est délibérée, elle demande l'accord de l'intégrateur : le plafond\n"
+        . "      de référence se change sur « main », pas ici.\n";
 }
 
 if ($echec) {

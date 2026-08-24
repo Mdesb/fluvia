@@ -258,11 +258,33 @@ if ($nouveaux !== []) {
 if (count($ecarts) > $plafond) {
     $echec = true;
     echo sprintf("\n=== ÉCHEC — la ligne de base a grossi (%d pour un plafond de %d) ===\n", count($ecarts), $plafond);
+    echo "\n"
+        . "  Un cliquet ne monte pas — c'est exactement ce qui lui donne sa valeur.\n"
+        . "\n"
+        . "  « --nettoyer » n'est PAS l'issue : il recalcule le plafond sur l'état courant, donc\n"
+        . "  il le ferait monter, et le contrôle contre la référence le refuserait aussitôt. Il ne\n"
+        . "  sert qu'à RÉSORBER un stock qui a déjà baissé.\n"
+        . "\n"
+        . "  Les deux seules issues :\n"
+        . "    · corriger ce qui a fait monter le compte — l'endroit exact est listé ci-dessus ;\n"
+        . "    · si la hausse est délibérée, elle demande l'accord de l'intégrateur : le plafond\n"
+        . "      de référence se change sur « main », pas ici.\n";
 }
 
 if ($plafondReference !== null && $plafond > $plafondReference) {
     $echec = true;
     echo sprintf("\n=== ÉCHEC — plafond relevé : %d sur la référence, %d proposé ===\n", $plafondReference, $plafond);
+    echo "\n"
+        . "  Un cliquet ne monte pas — c'est exactement ce qui lui donne sa valeur.\n"
+        . "\n"
+        . "  « --nettoyer » n'est PAS l'issue : il recalcule le plafond sur l'état courant, donc\n"
+        . "  il le ferait monter, et le contrôle contre la référence le refuserait aussitôt. Il ne\n"
+        . "  sert qu'à RÉSORBER un stock qui a déjà baissé.\n"
+        . "\n"
+        . "  Les deux seules issues :\n"
+        . "    · corriger ce qui a fait monter le compte — l'endroit exact est listé ci-dessus ;\n"
+        . "    · si la hausse est délibérée, elle demande l'accord de l'intégrateur : le plafond\n"
+        . "      de référence se change sur « main », pas ici.\n";
 }
 
 if ($echec) {
