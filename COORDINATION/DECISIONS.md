@@ -859,3 +859,72 @@ session hors de portée ne reçoit ni arbitrage, ni correction, ni relance. List
 **Ce que cela ne fait pas :** Remote Control n'empêche pas une session bureau de s'arrêter quand elle a
 fini de répondre. Il la rend *rappelable*. La différence est décisive — un mur qu'on peut franchir de
 l'extérieur n'est plus un mur.
+
+### 2026-08-24 21:00 · D35 — Présentation horaire à l'intégrateur, quoi qu'il arrive
+Consigne de Maxime, donnée directement aux neuf sessions le 24/08 au soir. Elle complète D34 et la
+rend opérante.
+
+**Toutes les heures, quoi que tu fasses, tu écris à `claude-A`.** Deux cas, deux contenus :
+- **tâche en cours** → tu dis laquelle et où tu en es, en deux lignes ;
+- **rien en cours** → tu demandes une tâche. Tu ne cherches pas à t'en inventer une, et tu ne t'arrêtes
+  pas non plus : tu demandes.
+
+**Pourquoi cette règle et pas un simple battement dans le rapport.** Un rapport est un fichier : je dois
+aller le lire, et je ne sais pas qu'il a changé. Un message me réveille. Surtout, **la liaison ne
+s'établit que dans ce sens-là** — je ne peux pas appeler une session qui ne s'est jamais annoncée. Le
+message horaire est donc ce qui crée et entretient la joignabilité, pas seulement ce qui informe.
+
+**Sa limite, qu'il faut connaître pour ne pas s'y fier seule.** Une session bureau arrêtée ne se
+réveille pas toute seule au bout d'une heure : la règle vaut tant qu'elle tourne. Ce qu'elle garantit
+vraiment, c'est qu'une session **redémarrée se re-présente**, et que je peux la relancer ensuite.
+D34 + D35 forment donc une boucle : elle se présente, je peux la joindre, je la relance, elle se
+re-présente. Chacune seule ne suffit pas.
+
+**Corollaire pour moi.** Une présentation appelle une réponse. Une session qui écrit et ne reçoit rien
+apprend que l'exercice est inutile, et cessera. Je réponds à chacune, même brièvement — et si elle
+demande une tâche, elle en repart avec une.
+
+### 2026-08-24 22:00 · D36 — Dix-sept commandes de domaine, et rien pour les exécuter
+`claude-H` demandait où brancher deux entrées de planification pour son module. **Il n'y a nulle part
+où les brancher.** Vérifié : le dépôt contient dix-sept commandes de domaine et **aucun ordonnanceur** —
+ni Symfony Scheduler, ni cron dans les conteneurs, ni entrée sur l'hôte. Les seules occurrences de
+« Scheduler » sont dans du JavaScript vendu avec API Platform et dans un fichier généré.
+
+**Ce ne sont pas des tâches de confort.** Deux au moins sont des défauts de sécurité :
+
+| Commande | Ce qui ne se produit jamais |
+|---|---|
+| `ExpirerEscalades` | une élévation **temporaire** de privilèges est en fait permanente |
+| `ExpirerDelegations` | une délégation de droits n'expire jamais |
+| `BasculerNoShow` | le no-show ne bascule jamais — D27 promet au client une séance restituée avec report, et rien ne l'exécute |
+| `AppliquerConservation` | la conservation des données ne s'applique jamais |
+| `ExpirerPmv` | le porte-monnaie virtuel n'expire jamais |
+| `LibererPaniersExpires` | un panier abandonné retient sa place indéfiniment |
+| `PurgeDocuments`, `RecalculerFenetresBadges`, `TraiterEcheancesSortie`, `AgregerMesures`, `ExecuterRapports`, … | — |
+
+**C'est le quatrième mécanisme du jour qui existe sans tourner**, après le garde-fou de topologie, la
+réinstallation des hooks et le démontage des piles de test. Mais celui-ci n'est pas de l'outillage :
+c'est **toute la couche batch du produit**. On a écrit dix-sept fois « et ensuite une commande passe et
+fait le nécessaire », et la commande ne passe jamais.
+
+**La règle que j'en tire, et elle vaut au-delà de l'ordonnanceur :** une commande qui doit s'exécuter
+périodiquement entre dans le dépôt **avec sa planification**, dans le même lot — exactement comme un
+événement entre avec son émetteur (D22) et une entité neuve avec sa migration (D32). Écrire l'exécutant
+sans l'exécution, c'est écrire du code mort qui a l'air vivant.
+
+**Périmètre : `claude-A`.** L'ordonnanceur touche Platform et l'infrastructure, et il ne doit pas être
+fait à moitié — une commande branchée deux fois est pire qu'une commande jamais branchée.
+
+### 2026-08-24 22:00 · D36-bis — Le front n'appartenait à personne, et cela se voit
+`frontend/**` **n'apparaît pas une seule fois** dans FLOTTE.md. J'ai réparti neuf périmètres — accès,
+GED, réservation, séjour, social, verticales, administration, outillage, intégration — et j'ai oublié
+l'interface.
+
+**Conséquence mesurée** : le dernier commit touchant `frontend/` date du **19/08 à 02:26**. Cinq jours.
+Aucune source du front n'a été modifiée depuis, donc le build n'est pas périmé : c'est le développement
+qui s'est arrêté. Neuf sessions construisent une API que rien n'affiche.
+
+**Attribution provisoire à `claude-H`**, qui vient de terminer SOC-1 à SOC-3 et dont le périmètre est
+vide. Ce n'est pas un déplacement de périmètre — `frontend/**` n'appartenait à personne, je ne prends
+rien à personne. **Maxime tranche** : s'il préfère que le front revienne à `claude-I`, encore à ouvrir,
+`claude-H` repasse sur le social sans discuter.

@@ -16,7 +16,7 @@
 | **claude-E** | Revenue Recovery & Smart Flow | `app/src/RevenueRecovery/**`, `app/src/SmartFlow/**` | RR-0 à RR-2, SF-0 à SF-2 — priorité posée par Maxime (D22). **SF-2 porte la moitié du comportement par défaut du no-show** (D27) : ce n'est pas un module optionnel. |
 | **claude-F** | Hébergement, restauration & séjour | `app/src/Lodging/**`, `app/src/Dining/**`, `app/src/Stay/**` | ACT-2, ACT-3, ACT-4 — les deux seuls vrais manques pour couvrir camping, hôtellerie et CHR (D15). Le **séjour** est ce qui transforme « six modules » en « un logiciel ». |
 | **claude-G** | Réservation paramétrée & offre | `app/src/Reservation/**`, `app/src/Offre/**` | ACT-1, CQ-3, CQ-6, CQ-7 — quantité consommée, réservation par type, quota de second niveau, carte de N réservations. **Prise de périmètre séquencée par claude-A** : claude-B y a des lots en vol. |
-| **claude-H** | Publication sociale | `app/src/Social/**` | SOC-0 à SOC-3 — modèle de publication, coffre à jetons chiffré, adaptateurs de réseaux **ouverts** (Mastodon, Bluesky), collecte de statistiques. SOC-4 (Meta) est `EXTERNE`, n'y touche pas. |
+| **claude-H** | Publication sociale **et interface** | `app/src/Social/**`, `frontend/**` *(provisoire, D36-bis — le front n'appartenait à personne ; Maxime tranche)* | SOC-0 à SOC-3 — modèle de publication, coffre à jetons chiffré, adaptateurs de réseaux **ouverts** (Mastodon, Bluesky), collecte de statistiques. SOC-4 (Meta) est `EXTERNE`, n'y touche pas. |
 | **claude-I** | Verticales métier & vocabulaire | `app/src/{Piscine,Padel,Patinoire,Sport,Musee}/**`, `specs/verticales/**` | ACT-0 appliqué aux verticales existantes : composition d'activités, paquets de démarrage, clés de vocabulaire (un « créneau » est un *rendez-vous* chez le coiffeur, une *réservation de terrain* au padel). |
 
 ## Le battement
@@ -99,3 +99,14 @@ Et sache que **sept garde-fous s'exécutent à chaque poussée**. Ils refusent :
 depuis l'entrée client sans contrôle de périmètre, un identifiant français dans un fichier neuf,
 une clé cryptographique en dur, un événement absent du catalogue. Ils ne se contournent pas — ils
 s'écoutent.
+
+### Règle de présentation (D34, D35) — elle prime sur la routine de démarrage
+
+1. **Au démarrage, avant même de lire ta boîte** : liste tes pairs, trouve `claude-A` (elle s'affiche
+   sous un nom générique — écris-lui quand même) et envoie « <ton identité> en ligne ». Tant que tu ne
+   l'as pas fait, tu es invisible : ni relançable, ni corrigeable, ni débloquable.
+2. **Toutes les heures, quoi que tu fasses**, tu lui écris. Tâche en cours → tu dis laquelle et où tu en
+   es. Rien en cours → **tu demandes une tâche**. Tu ne t'en inventes pas, et tu ne t'arrêtes pas.
+3. **Remote Control reste actif en permanence.** On ne le coupe pas, on ne le déplace pas vers une autre
+   session, on ne ferme pas la session qui le porte. S'il est inactif chez toi, dis-le tout de suite :
+   c'est plus urgent que ton lot en cours.

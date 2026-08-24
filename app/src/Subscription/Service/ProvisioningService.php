@@ -57,7 +57,10 @@ final class ProvisioningService
      * modèle existant, exactement comme le fait `DuplicationRoleProcessor`, et échoue bruyamment si
      * ce modèle n'a pas été posé.
      */
-    public const ADMIN_ROLE_TEMPLATE = 'Administrateur etablissement';
+    public const ADMIN_ROLE_TEMPLATE = 'Administrateur d\'établissement';
+
+    /** Longueur de `sec_role.nom`. Dépasser ne lève pas d'avertissement : la ligne est refusée. */
+    private const ROLE_NAME_MAX_LENGTH = 120;
 
     private const INVITATION_HOURS = 72;
 
@@ -237,21 +240,58 @@ final class ProvisioningService
     }
 
     /**
-     * Le nom du rôle livré au client — unique, et lisible par l'exploitant.
+     * Le nom du rôle livré au client — unique, borné à la colonne, et lisible par l'exploitant.
      *
-     * `Role.nom` porte une contrainte d'unicité **globale** (`uniq_role_nom`) : reprendre le nom du
-     * modèle ferait échouer le deuxième client provisionné, et le premier ne l'aurait pas révélé. Le
-     * nom de l'établissement seul ne suffit pas non plus — deux « Camping des Pins » sont plausibles.
-     * D'où le préfixe de l'identifiant, court, qui rend le nom unique sans le rendre illisible.
+     * Trois contraintes se croisent ici, et chacune a déjà cassé quelque chose :
+     *
+     * 1. **`Role.nom` est unique globalement** (`uniq_role_nom`). Reprendre le nom du modèle faisait
+     *    échouer le *deuxième* client provisionné — le premier ne révélait rien.
+     * 2. **La colonne fait 120 caractères.** Une raison sociale longue déborde, et le débordement
+     *    n'arrive qu'en production, chez le client qui a le nom le plus long.
+     * 3. **Tronquer par la fin annulerait le point 1** : deux raisons sociales qui ne diffèrent
+     *    qu'au-delà de la coupe produiraient le même nom. On tronque donc **le milieu**, ce qui
+     *    préserve à la fois le début lisible et le suffixe qui porte l'unicité.
+     *
+     * Le suffixe est l'identifiant **complet** de l'établissement, pas un préfixe de huit caractères :
+     * huit caractères hexadécimaux, c'est trente-deux bits, et une collision d'anniversaire y devient
+     * plausible bien avant qu'on ait épuisé les clients. Un nom de rôle en doublon ferait échouer le
+     * provisionnement d'un client qui a déjà payé — le prix de la garantie est ici quelques caractères
+     * de lisibilité.
      */
     private function administratorRoleName(Etablissement $establishment): string
     {
-        return sprintf(
-            '%s — %s (%s)',
-            self::ADMIN_ROLE_TEMPLATE,
-            $establishment->getNom(),
-            substr($establishment->getId()->toRfc4122(), 0, 8),
-        );
+        $prefix = 'Administrateur — ';
+        $suffix = ' — '.$establishment->getId()->toRfc4122();
+
+        $available = self::ROLE_NAME_MAX_LENGTH - mb_strlen($prefix) - mb_strlen($suffix);
+
+        return $prefix.$this->truncateMiddle($establishment->getNom(), $available).$suffix;
+    }
+
+    /**
+     * Raccourcit en retirant le milieu : « Camping municipal … des Pins » plutôt qu'une coupe nette.
+     *
+     * Garder les deux extrémités n'est pas cosmétique — c'est ce qui laisse deux noms voisins
+     * distinguables à l'œil, là où une coupe par la fin les rendrait identiques à l'écran.
+     */
+    private function truncateMiddle(string $value, int $max): string
+    {
+        if ($max <= 0) {
+            return '';
+        }
+
+        if (mb_strlen($value) <= $max) {
+            return $value;
+        }
+
+        if ($max <= 1) {
+            return mb_substr($value, 0, $max);
+        }
+
+        $head = (int) ceil(($max - 1) / 2);
+        $tail = $max - 1 - $head;
+
+        return mb_substr($value, 0, $head).'…'.($tail > 0 ? mb_substr($value, -$tail) : '');
     }
 
     private function establishmentName(Client $client): string

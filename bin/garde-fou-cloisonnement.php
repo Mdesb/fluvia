@@ -50,7 +50,10 @@ const MOTIFS_CONTROLE = [
     // chose — un assistant de garde. Ajouté après le correctif du 23/08 (n°11), où le contrôle a
     // été posé dans `ResolutionClientSoiTrait::verifierAccesSoi()` : les trois Providers CRM
     // étaient corrigés et restaient signalés, faute que le motif reconnaisse cette forme.
-    'Verificateur/Guard'      => '/Verificateur|Guard|verifierAcces/',
+    // `guard` en minuscules autant qu'en capitales : `$this->guard` est le nom anglais le plus
+    // naturel et il echouait, la casse etant significative. Sans risque de collision — `guard`
+    // n'est pas un mot francais, et `garde`/`regarde` ne le contiennent pas.
+    'Verificateur/Guard'      => '/Verificateur|[Gg]uard|verifierAcces/',
     'ContexteEtablissement'   => '/ContexteEtablissement/',
     'extension Perimetre'     => '/Perimetre\w*/',
     'getEtablissement()'      => '/->getEtablissement\(\)/',
@@ -409,9 +412,25 @@ const AIDE_RESOLUTION = <<<'TXT'
             throw new NotFoundHttpException('… introuvable.');
         }
 
-    Le contrôle doit nommer la variable résolue. Si ton contrôle passe par une forme que ce garde-fou
-    ne sait pas lire, pose l'annotation `@cloisonnement-verifie : <raison>` — elle est greppable et
-    attribuable, contrairement à un assouplissement de la détection.
+    Le contrôle doit nommer la variable résolue.
+
+    Les formes que ce garde-fou sait lire — la liste manquait ici, et claude-F a perdu du temps le
+    25/08 à la deviner en renommant au hasard :
+
+        codesEffectifs(…)                    l'appel canonique
+        Verificateur… / …Guard / guard…      un assistant de garde, quelle que soit la casse
+        ContexteEtablissement                le périmètre de la session
+        Perimetre…                           une extension Doctrine
+        ->getEtablissement()                 la comparaison directe
+
+    ⚠ `verify()` n'en fait PAS partie, et c'est délibéré : le même nom sert à vérifier une signature,
+    un jeton ou un mot de passe. Le reconnaître comme un contrôle de périmètre masquerait de vrais
+    défauts ailleurs. Si ton contrôle s'appelle ainsi, nomme la propriété qui le porte (`$scopeGuard`)
+    ou pose l'annotation ci-dessous.
+
+    Si ton contrôle passe par une forme que ce garde-fou ne sait toujours pas lire, pose
+    `@cloisonnement-verifie : <raison>` — elle est greppable, datée et attribuable, contrairement à
+    un assouplissement de la détection qui ouvre un trou pour tout le monde et sans trace.
     TXT;
 
 // ---------------------------------------------------------------- ligne de base
