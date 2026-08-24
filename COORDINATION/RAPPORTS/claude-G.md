@@ -278,6 +278,7 @@ corriger sans effet de bord. Une remontée qui décrit le symptôme et laisse le
 lui fait porter le risque. La prochaine fois je donne les deux, ou je dis que je ne sais pas.
 
 | 21:48 | **D32 point 5 soldé sur ACT-1** : chaîne complète rejouée sur une base vidée — **75 migrations, 1153 requêtes, `[OK] Successfully migrated`** jusqu'à `Version20260824200000`. Ma `Version20260824182500` s'applique dans l'ordre, entre `181500` et `190000` : horodatée en heure locale comme D32 l'exige, pas en UTC. | CQ-3 : lecture faite, et il manque une spec — voir la question ci-dessous, je ne bloque pas dessus. | Rien. |
+| 22:10 | **Correctif de jauge livré, seul et vert** : la promotion de liste d'attente prend désormais sa place sur `Ressource.occupationCourante`, l'expiration de promotion la rend, et la promotion contrôle enfin la jauge mère. `tests/Reservation` **87/87** (1042 assertions). **Je me corrige : ce défaut n'était pas un sous-comptage, il libérait des places qui ne sont pas libres** — détail sous le tableau. | ACT-1 point 3, avec la distinction de D33 : créneau visé unique, créneaux consommés stockés. Le résolveur est écrit et attendait que ce commit parte seul. | Rien. |
 
 ## Nouvelle règle de Maxime — présentation horaire à `claude-A`
 
@@ -331,3 +332,38 @@ tout seul — c'est la règle 2, et c'est `claude-C` qui a eu raison de la tenir
 **En attendant, je ne m'arrête pas** : je prépare la spec en brouillon dans mon rapport plutôt que
 dans `specs/`, ce qui ne prend de périmètre à personne et te donne quelque chose à trancher plutôt
 qu'une question sèche.
+
+
+## Le défaut de la promotion — requalifié, parce que ma première description était fausse
+
+**Ce que j'avais écrit :** « la promotion n'incrémente pas la jauge, c'est symétrique, ça ne fuit
+pas, la jauge sous-compte ». `claude-A` l'a repris tel quel dans son arbitrage. C'était faux, et
+c'est moi qui l'ai induit en erreur.
+
+**Ce qui se passait réellement.** La promotion créait une réservation sans incrémenter
+`Ressource.occupationCourante`. Mais cette réservation-là s'annule ensuite par les chemins
+ordinaires — `AnnulerReservationProcessor`, `AnnulerCreneauProcessor`, `BasculerNoShowCommand` — qui
+**décrémentent tous**. La jauge perdait donc une unité qu'elle n'avait jamais prise pour cette
+réservation : une unité appartenant à **une autre**.
+
+**Le nom correct n'est pas « la jauge sous-compte », c'est « la jauge libère des places qui ne sont
+pas libres ».** C'est du surbooking silencieux, sur un compteur qui a l'air cohérent parce qu'il ne
+descend jamais sous zéro. Le symptôme visible est un client qui se présente et dont la place a été
+revendue — à un moment et sur une ressource qui n'ont aucun rapport avec la promotion qui l'a causé.
+
+**Les trois changements, et pourquoi chacun :**
+
+1. **La promotion incrémente**, de la quantité de l'inscription. C'est le correctif.
+2. **`expirerPromotionsDepassees()` décrémente.** C'est le point que `claude-A` m'avait demandé de
+   vérifier avant de pousser, et il avait raison de le demander : c'est **la seule sortie qui ne
+   passe par aucun autre service**. Sans elle, incrémenter à la promotion aurait transformé un
+   défaut inoffensif en fuite active — pire qu'avant.
+3. **La promotion contrôle la jauge mère** avant de promouvoir. Elle ne vérifiait que la capacité du
+   créneau : c'était le seul chemin capable de faire déborder la jauge globale (RG-M5-08, CA-14).
+
+**Ce que je n'ai pas touché**, et qui reste à confier : `JaugeRessourceMereHandler` n'est appelé que
+depuis `app/src/Reservation`. `Padel\State\ReserverTerrainProcessor` et
+`Padel\Service\GenererPoulesEtBlocageHandler` créent des réservations confirmées sans l'appeler ;
+`Musee\Service\PrioriteOtaResolver` en passe en `AnnuleeLibre` sans l'appeler non plus. Même
+famille exactement. Je n'ai pas vérifié comment les réservations OTA du musée sont créées, donc je
+ne l'affirme pas — `claude-A` a pris le signalement, ces périmètres n'étant attribués à personne.
