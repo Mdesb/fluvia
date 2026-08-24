@@ -19,6 +19,7 @@ use App\Reservation\Enum\StatutPaiementReservation;
 use App\Reservation\Enum\StatutReservation;
 use App\Reservation\Security\ReservationSoiVoter;
 use App\Reservation\State\AjouterParticipantProcessor;
+use App\Reservation\State\AssignResourceProcessor;
 use App\Reservation\State\AnnulerReservationProcessor;
 use App\Reservation\State\EmargerProcessor;
 use App\Reservation\State\ReserverProcessor;
@@ -54,6 +55,17 @@ use Symfony\Component\Uid\Uuid;
             input: false,
             security: "is_granted('PERM', 'reservation.annuler') or (is_granted('PERM', 'reservation.annuler_soi') and is_granted('" . ReservationSoiVoter::ATTRIBUTE . "', object))",
             processor: AnnulerReservationProcessor::class,
+        ),
+        // ACT-1 point 2 / D16 — affectation de l'instance à une réservation faite sur un type.
+        // Droit `reservation.reserver` et non `gerer_ressource` : affecter une chambre est un acte
+        // d'exploitation courant, fait au comptoir par qui prend les réservations, pas une
+        // administration du référentiel des ressources.
+        new Post(
+            uriTemplate: '/reservation/reservations/{id}/affecter',
+            read: true,
+            input: false,
+            security: "is_granted('PERM', 'reservation.reserver')",
+            processor: AssignResourceProcessor::class,
         ),
         new Post(
             uriTemplate: '/reservation/reservations/{id}/participants',
@@ -171,6 +183,19 @@ class Reservation
     private ?Etablissement $etablissement = null;
 
     /**
+     * ACT-1 point 2 / D16 — l'**instance** affectée à une réservation faite sur un **type**.
+     *
+     * « Personne ne réserve la chambre 214 : on réserve une chambre double. » Le type est la
+     * `Ressource` du créneau ; les instances sont ses enfants (`ressourceMere`). Réserver l'enfant,
+     * c'est choisir une instance précise et ce champ reste `null` ; réserver le parent, c'est
+     * réserver un type, et l'instance arrive ici — plus tard, parfois à l'arrivée du client.
+     */
+    #[ORM\ManyToOne(targetEntity: Ressource::class)]
+    #[ORM\JoinColumn(nullable: true)]
+    #[Groups(['reservation:read'])]
+    private ?Ressource $ressourceAffectee = null;
+
+    /**
      * ACT-1 point 3 / D33 — les créneaux que cette réservation **consomme** : le créneau visé, plus
      * ceux des ressources ancêtres qui le couvrent dans le temps (le service du soir de la salle
      * au-dessus de la table, le créneau de l'école au-dessus du moniteur).
@@ -222,6 +247,18 @@ class Reservation
         if (!$this->consumedSlots->contains($creneau)) {
             $this->consumedSlots->add($creneau);
         }
+
+        return $this;
+    }
+
+    public function getRessourceAffectee(): ?Ressource
+    {
+        return $this->ressourceAffectee;
+    }
+
+    public function setRessourceAffectee(?Ressource $ressourceAffectee): self
+    {
+        $this->ressourceAffectee = $ressourceAffectee;
 
         return $this;
     }
