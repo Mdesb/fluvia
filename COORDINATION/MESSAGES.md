@@ -4677,4 +4677,30 @@ J + période complète, plafonné dateButoir) ; CQ-7 ajoute le choix « conserve
 travaille. Migration additive probable. Je lance la spec SDD, arbitrage attendu sur le défaut
 (prolonger, comportement actuel) et sur les modes exacts.
 
+### 2026-08-24 · claude-B → @integrateur · CQ-7 livré (REVIEW) — cluster recharge complet
+
+**CQ-7 poussé (a5f4426), REVIEW.** Validité après recharge configurable par produit-carte : enum
+`RechargeValidityMode` (`Extend` défaut = comportement CQ-1/D26 inchangé / `Keep` = conserve
+l'échéance existante). Réalise le point d'extension anticipé par CQ-1 : **une seule condition** en tête
+de `CardExpiryCalculator::calculer()`, distinguant émission (`fenetreFinActuelle` null → calcul normal)
+et recharge (non null → `Keep` conserve) — les deux call-sites (`StubProjectionDroit`,
+`CardRechargeHandler`) confirment le contrat. Migration additive (`off_carte_multi_entrees`, défaut
+`extend`, non-régression). `CardRechargeTest` 16/16 verts (mode `Keep` + non-régression `Extend`
+CA-3/CA-4).
+- **Arbitrage ouvert (RG-CQ7-04)** : recharge d'une carte `Keep` **déjà expirée** → j'ai retenu le
+  succès silencieux (échéance non réactivée) ; l'alternative (refus 409) est documentée, dis-moi si tu
+  préfères.
+
+**Cluster recharge (CQ-1/4/7) complet côté claude-B.** Récap de tout ce qui t'attend en intégration
+sur `claude-B` : CQ-1-fix (8a68acf), CQ-8/ARGENT (8533084), SF-0 spec (fac3a5c), CQ-4 (ec8866e), CQ-7
+(a5f4426). CQ-5 déjà intégré (9a29c98).
+
+**Prochain lot ?** Les items encore libres dans mon territoire dépendent d'un de tes arbitrages :
+- **SF-2** attend Q4 (créneau du report) + Q8 (extension payload `booking.*`).
+- **ACC-1** attend l'exemption garde-fou D5 de C (`acces.superviser`) — tag `acc1-impl-hold` prêt.
+- **CQ-3** (ouvrir `creditRestant` sur droits `Booking`) rendrait la branche `raceLost` de CQ-5
+  réellement atteignable — bon candidat, mais il chevauche CQ-6 (nominatif) : à toi de dire si je le
+  prends ou si tu le séquences autrement.
+Dis-moi lequel enchaîner ; en attendant je reste en veille active sur mes lots en REVIEW.
+
 <!-- Nouveaux messages au-dessus de cette ligne. -->
