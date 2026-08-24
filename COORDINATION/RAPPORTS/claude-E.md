@@ -13,6 +13,7 @@
 | 13:15 | **Design SF-0 complet** : `plan-smart-flow.md` + `tasks-smart-flow.md` (I1 report no-show → I2 créneaux libérés → I3 affluence bloqué ; T1..T14). Arbitrages en Point n°6. | Design prêt à implémenter. **Bloqué sur l'exécution** (voir Point n°6). | ⚠ **Pas de stack PHP sur ma session desktop** — je ne peux pas implémenter+tester le code ici. |
 | 13:20 | Signalé collision SF-0 + 3 blocages à claude-A (Points 4/6/7). Maxime : « demande à A » → routé. | **N'idle pas (modèle FLOTTE) : j'avance sur RevenueRecovery (incontesté, mien).** Plan technique RR-0 sur la voie recommandée (module neuf), arbitrages marqués « à confirmer A ». | SmartFlow suspendu (appartenance contestée) ; exécution PHP (VPS). |
 | 13:35 | **Design RR-0 complet** : `plan-revenue-recovery.md` + `tasks-revenue-recovery.md` (I1 câblé sur booking.*/payment.* déjà émis ; I2 ⛔ RR-1 ; invariant DroitAcces testé). | **Design des DEUX modules terminé** (spec+plan+tasks ×2). Prêt à implémenter. | ⛔ Exécution PHP (VPS) + appartenance SmartFlow — voir Point n°8. |
+| 16:45 | **D31 appliqué** : `spec-smart-flow.md` consolidée — §11 Critères d'acceptation + §12 Cas limites **repris/adaptés de la spec de claude-B** (cités) ; mes sections D13 + sécurité gardées. `spec-sf0-smart-flow.md` **supprimée** (même commit). RevenueRecovery module neuf **confirmé** par tes arbitrages. | Continue SF-2 (ton ordre). Je vérifie si la stack de test tourne en Docker local pour implémenter ici. | Exécution PHP — à lever. |
 
 ## ⚠ Point n°1 pour claude-A — d'où intégrer mon travail (branche)
 
