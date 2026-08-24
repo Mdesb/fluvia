@@ -25,6 +25,12 @@ use Symfony\Component\Uid\Uuid;
  * est renvoyé, ce qui fait échouer fermé la vérification de consentement côté `RecoveryEngine`
  * (RG-RR-03 : pas de client identifiable = tentative sautée, jamais une exception ni un envoi à
  * l'aveugle).
+ *
+ * Corrigé (revue de cohérence, RG-RR-07) : revérifie que la `Reservation` trouvée appartient bien à
+ * `$establishmentId` (l'établissement du `RecoveryCase` appelant) avant de rendre un résultat — même
+ * défense en profondeur, échec fermé, que `App\SmartFlow\Service\ReservationSlotReader::snapshotReservation()`
+ * (précédent direct). Un `subjectRef` hors périmètre (ou introuvable) est traité comme une donnée
+ * absente — retour `null`, jamais une exception.
  */
 final class RecoverySubjectCustomerResolver
 {
@@ -33,7 +39,7 @@ final class RecoverySubjectCustomerResolver
     ) {
     }
 
-    public function resolveCustomerId(string $subjectType, string $subjectRef): ?Uuid
+    public function resolveCustomerId(string $subjectType, string $subjectRef, Uuid $establishmentId): ?Uuid
     {
         if ('Reservation' !== $subjectType) {
             return null;
@@ -44,6 +50,13 @@ final class RecoverySubjectCustomerResolver
 
         $reservation = $this->em->getRepository(Reservation::class)->find(Uuid::fromString($subjectRef));
         if (!$reservation instanceof Reservation) {
+            return null;
+        }
+
+        $etablissement = $reservation->getEtablissement();
+        if ($etablissement === null || !$etablissement->getId()->equals($establishmentId)) {
+            // RG-RR-07 : la réservation référencée n'appartient pas à l'établissement du dossier de
+            // recouvrement — échec fermé, même traitement qu'une réservation introuvable.
             return null;
         }
 

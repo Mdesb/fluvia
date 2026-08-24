@@ -273,9 +273,15 @@ class RecoveryEngine
 
     private function isChannelConsented(RecoveryCase $case, RecoveryChannel $channel): bool
     {
-        $clientId = $this->customerResolver->resolveCustomerId($case->getSubjectType(), $case->getSubjectRef());
+        $establishment = $case->getEstablishment();
+        if ($establishment === null) {
+            return false;
+        }
+
+        $clientId = $this->customerResolver->resolveCustomerId($case->getSubjectType(), $case->getSubjectRef(), $establishment->getId());
         if ($clientId === null) {
-            // Pas de client identifiable : échec fermé (RG-RR-03), jamais un envoi à l'aveugle.
+            // Pas de client identifiable (ou hors périmètre établissement, RG-RR-07) : échec fermé
+            // (RG-RR-03), jamais un envoi à l'aveugle.
             return false;
         }
 

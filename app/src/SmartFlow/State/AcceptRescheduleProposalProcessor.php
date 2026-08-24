@@ -11,6 +11,7 @@ use App\SmartFlow\Enum\RescheduleProposalStatus;
 use App\SmartFlow\Service\ReservationSlotReader;
 use App\Vente\Service\LecteurCorps;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\Uid\Uuid;
 
@@ -20,6 +21,11 @@ use Symfony\Component\Uid\Uuid;
  * D2/§2 de la spec). Le client crée sa nouvelle réservation par le chemin normal
  * (`POST /reservation/reservations`, API existante, non modifiée), puis appelle cette route avec
  * `{ confirmedReservationRef: <iri|uuid> }` pour clore la proposition.
+ *
+ * Garde d'état (même patron que `App\RevenueRecovery\Service\RecoveryEngine::stopManually()`) : seule
+ * une proposition `proposed` peut être acceptée — `searching` (aucun créneau trouvé), `confirmed`
+ * (déjà acceptée) ou `expired` (déjà déclinée/expirée) renvoient 409, jamais un changement d'état
+ * silencieux.
  *
  * Revérifie, via `ReservationSlotReader` (lecture seule), que la réservation référencée existe,
  * appartient au même établissement **et** au même `customerId` que la proposition — sinon 422 (IDOR,
@@ -39,6 +45,10 @@ final class AcceptRescheduleProposalProcessor implements ProcessorInterface
     public function process(mixed $data, Operation $operation, array $uriVariables = [], array $context = []): RescheduleProposal
     {
         \assert($data instanceof RescheduleProposal);
+
+        if (RescheduleProposalStatus::Proposed !== $data->getStatus()) {
+            throw new ConflictHttpException('smart_flow.error.reschedule_proposal_not_proposed');
+        }
 
         $corps = $this->lecteur->corps();
         $reservationId = $this->uuid($corps['confirmedReservationRef'] ?? null);

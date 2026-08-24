@@ -33,7 +33,12 @@ final class RecoveryAttemptMailer
     /** `false` si aucun destinataire connu (pas une erreur — §11 spec, contact non identifié). */
     public function send(RecoveryCase $case, RecoveryAttempt $attempt): bool
     {
-        $clientId = $this->customerResolver->resolveCustomerId($case->getSubjectType(), $case->getSubjectRef());
+        $etablissement = $case->getEstablishment();
+        if ($etablissement === null) {
+            return false;
+        }
+
+        $clientId = $this->customerResolver->resolveCustomerId($case->getSubjectType(), $case->getSubjectRef(), $etablissement->getId());
         if ($clientId === null) {
             return false;
         }
