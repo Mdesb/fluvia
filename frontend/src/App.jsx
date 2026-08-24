@@ -39,6 +39,14 @@ export default function App() {
   const [etablissements, setEtablissements] = useState([])
   const [etabActif, setEtabActif] = useState(etablissementStore.get() || '')
   const [onglet, setOnglet] = useState('caisse')
+  // Enregistrement à ouvrir en arrivant sur l'écran, quand la navigation vient d'une recherche.
+  // Consommé puis oublié par l'écran destinataire : le garder ferait rouvrir la même fiche à chaque
+  // retour sur l'onglet, ce qui est déroutant et impossible à annuler.
+  const [cible, setCible] = useState(null)
+  const naviguer = (id, c = null) => {
+    setOnglet(id)
+    setCible(c)
+  }
   const [landingApplique, setLandingApplique] = useState(false)
   const [session, setSession] = useState(null) // session de caisse ouverte (partagée)
 
@@ -183,7 +191,7 @@ export default function App() {
       etabActif={etabActif}
       onChangeEtab={changerEtablissement}
       onglet={onglet}
-      onNav={setOnglet}
+      onNav={naviguer}
       onLogout={deconnexion}
       capacites={capacites}
       droits={droits}
@@ -202,14 +210,14 @@ export default function App() {
           onSessionRefresh={rechargerSession}
         />
       )}
-      {onglet === 'catalogue' && <Catalogue etabActif={etabActif} />}
+      {onglet === 'catalogue' && <Catalogue etabActif={etabActif} cible={cible} onCibleConsommee={() => setCible(null)} />}
       {onglet === 'reservation' && <Reservation etabActif={etabActif} />}
       {onglet === 'supervision' && <Supervision etabActif={etabActif} />}
       {onglet === 'pilotage' && (
         <Pilotage etabActif={etabActif} etablissements={etablissements} />
       )}
       {onglet === 'comptabilite' && <Comptabilite etabActif={etabActif} />}
-      {onglet === 'clients' && <Clients etabActif={etabActif} />}
+      {onglet === 'clients' && <Clients etabActif={etabActif} cible={cible} onCibleConsommee={() => setCible(null)} />}
       {onglet === 'boutique' && <Boutique etabActif={etabActif} />}
       {onglet === 'piscine' && <Piscine etabActif={etabActif} />}
       {onglet === 'patinoire' && <Patinoire etabActif={etabActif} />}
