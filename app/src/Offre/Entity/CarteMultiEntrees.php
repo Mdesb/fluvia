@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Offre\Entity;
 
+use App\Offre\Enum\RechargeValidityMode;
 use App\Offre\Validator as OffreAssert;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
@@ -43,6 +44,14 @@ class CarteMultiEntrees
     #[ORM\Column(type: 'date_immutable', nullable: true)]
     #[Groups(['produit:read', 'produit:write', 'carte:read', 'carte:write'])]
     private ?\DateTimeImmutable $dateButoir = null;
+
+    /**
+     * CQ-7 (RG-CQ7-01) — que devient l'échéance de validité à la recharge : `Extend` (défaut, repousse
+     * d'une période complète, comportement CQ-1/D26) ou `Keep` (conserve l'échéance existante).
+     */
+    #[ORM\Column(type: 'string', length: 16, enumType: RechargeValidityMode::class, options: ['default' => 'extend'])]
+    #[Groups(['produit:read', 'produit:write', 'carte:read', 'carte:write'])]
+    private RechargeValidityMode $rechargeValidityMode = RechargeValidityMode::Extend;
 
     public function __construct()
     {
@@ -105,6 +114,18 @@ class CarteMultiEntrees
     public function setDateButoir(?\DateTimeImmutable $dateButoir): self
     {
         $this->dateButoir = $dateButoir;
+
+        return $this;
+    }
+
+    public function getRechargeValidityMode(): RechargeValidityMode
+    {
+        return $this->rechargeValidityMode;
+    }
+
+    public function setRechargeValidityMode(RechargeValidityMode $rechargeValidityMode): self
+    {
+        $this->rechargeValidityMode = $rechargeValidityMode;
 
         return $this;
     }
