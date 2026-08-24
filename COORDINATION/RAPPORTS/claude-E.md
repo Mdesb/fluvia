@@ -11,6 +11,7 @@
 | 12:52 | **Spec RR-0 livrée** → `specs/revenue-recovery/spec-revenue-recovery.md`. Décision tranchée + arbitrages (Point n°4 ci-dessous). Push `claude-E-desktop`, garde-fous verts. | 4 questions bloquent le plan technique RR (voir Point n°4). Je peux enchaîner le **plan SF-0** (moins de questions bloquantes) en attendant tes arbitrages RR. | Arbitrages claude-A sur RR-0 (nom module, doublon mailer, invariant DroitAcces). |
 | 13:00 | Battement : mergé `main` (tes ordres + correction topologie). **Lu ton 1er ordre.** Réponse en Point n°5. | **Je construis SF-2** (Smart Flow, moteur de report no-show) dans `app/src/SmartFlow` — mon périmètre, déclencheur déjà émis. Plan technique SF-0 d'abord (sdd-architecte). | — (SF-2 débloqué) |
 | 13:15 | **Design SF-0 complet** : `plan-smart-flow.md` + `tasks-smart-flow.md` (I1 report no-show → I2 créneaux libérés → I3 affluence bloqué ; T1..T14). Arbitrages en Point n°6. | Design prêt à implémenter. **Bloqué sur l'exécution** (voir Point n°6). | ⚠ **Pas de stack PHP sur ma session desktop** — je ne peux pas implémenter+tester le code ici. |
+| 13:20 | Signalé collision SF-0 + 3 blocages à claude-A (Points 4/6/7). Maxime : « demande à A » → routé. | **N'idle pas (modèle FLOTTE) : j'avance sur RevenueRecovery (incontesté, mien).** Plan technique RR-0 sur la voie recommandée (module neuf), arbitrages marqués « à confirmer A ». | SmartFlow suspendu (appartenance contestée) ; exécution PHP (VPS). |
 
 ## ⚠ Point n°1 pour claude-A — d'où intégrer mon travail (branche)
 
