@@ -14,7 +14,9 @@
   arrivés — sinon la page reste, pour lui, en cours de chargement pour toujours.
 */
 
-const BASE_API = window.API_BASE || ''
+// API Platform sert toutes ses ressources sous `/api` (`config/routes/api_platform.yaml`). Le préfixe
+// est ici plutôt que recopié dans chaque appel : le jour où il change, il change à un seul endroit.
+const BASE_API = `${window.API_BASE || ''}/api`
 
 const euros = new Intl.NumberFormat('fr-FR', {
   style: 'currency',

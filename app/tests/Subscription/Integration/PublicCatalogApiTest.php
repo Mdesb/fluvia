@@ -31,10 +31,10 @@ final class PublicCatalogApiTest extends SocleApiTestCase
 
         $client = static::createClient();
 
-        $formules = $client->request('GET', '/editor/plans')->toArray();
+        $formules = $client->request('GET', '/api/editor/plans')->toArray();
         self::assertResponseIsSuccessful();
 
-        $options = $client->request('GET', '/editor/plan-options')->toArray();
+        $options = $client->request('GET', '/api/editor/plan-options')->toArray();
         self::assertResponseIsSuccessful();
 
         self::assertSame('essentiel', $this->premier($formules)['code']);
@@ -65,7 +65,7 @@ final class PublicCatalogApiTest extends SocleApiTestCase
         $this->plan('retire', 'Retiré', 9900, [self::COMPRISE])->setActive(false);
         $this->em()->flush();
 
-        $codes = array_column($this->membres(static::createClient()->request('GET', '/editor/plans')->toArray()), 'code');
+        $codes = array_column($this->membres(static::createClient()->request('GET', '/api/editor/plans')->toArray()), 'code');
 
         self::assertContains('essentiel', $codes);
         self::assertNotContains('retire', $codes);
@@ -84,7 +84,7 @@ final class PublicCatalogApiTest extends SocleApiTestCase
         $this->plan('essentiel', 'Essentiel', 4900, [self::COMPRISE]);
         $this->plan('fantome', 'Fantôme', 9900, ['capacite_qui_nexiste_pas']);
 
-        $codes = array_column($this->membres(static::createClient()->request('GET', '/editor/plans')->toArray()), 'code');
+        $codes = array_column($this->membres(static::createClient()->request('GET', '/api/editor/plans')->toArray()), 'code');
 
         self::assertContains('essentiel', $codes);
         self::assertNotContains('fantome', $codes);
@@ -102,7 +102,7 @@ final class PublicCatalogApiTest extends SocleApiTestCase
         $this->sauterSiRouteAbsente();
         $this->plan('essentiel', 'Essentiel', 4900, [self::COMPRISE]);
 
-        $membre = $this->premier(static::createClient()->request('GET', '/editor/plans')->toArray());
+        $membre = $this->premier(static::createClient()->request('GET', '/api/editor/plans')->toArray());
 
         self::assertSame(
             ['code', 'label', 'monthlyPriceCents', 'includedCapabilities'],
@@ -124,6 +124,17 @@ final class PublicCatalogApiTest extends SocleApiTestCase
      * On saute **explicitement** plutôt que de laisser quatre tests rouges sur la branche : un test
      * rouge qu'on apprend à ignorer ne protège plus rien. Le jour où la ligne est ajoutée, ils se
      * rallument seuls, sans que personne n'ait à y penser.
+     *
+     * **Le piège de ce dispositif, rencontré pour de vrai.** La première version comparait le chemin
+     * à `/editor/plans`, alors qu'API Platform préfixe tout par `/api`. La condition était donc
+     * toujours fausse : les tests se sont sautés *après* que la ligne eut été ajoutée, et un test
+     * sauté ne signale rien. On avait évité le rouge qu'on apprend à ignorer, on avait produit un
+     * vert qui ne teste rien — ce qui est pire, parce qu'il est silencieux.
+     *
+     * D'où la comparaison par **suffixe** : elle ne dépend plus d'un préfixe de routage que ce test
+     * n'a aucune raison de connaître. La leçon générale vaut d'être écrite ici, à l'endroit où
+     * quelqu'un réécrira une garde de ce genre : **la condition de saut mérite autant de soin que le
+     * test**, parce qu'elle décide si le test existe.
      */
     private function sauterSiRouteAbsente(): void
     {
@@ -133,7 +144,7 @@ final class PublicCatalogApiTest extends SocleApiTestCase
         $routeur = static::getContainer()->get('router');
 
         foreach ($routeur->getRouteCollection() as $route) {
-            if ('/editor/plans' === $route->getPath()) {
+            if (str_ends_with($route->getPath(), '/editor/plans')) {
                 return;
             }
         }
