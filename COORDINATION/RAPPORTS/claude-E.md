@@ -7,6 +7,7 @@
 |---|---|---|---|
 | 12:20 | Prise de poste claude-E, aligné sur `vps/main` (`30e600c`). Lu FLOTTE, D22, D24, D27, TASKS. `RevenueRecovery`/`SmartFlow` absents ; `Recouvrement` mature. | Je prends **RR-0** et **SF-0**. | — |
 | 12:30 | Specs SDD **SF-0** (Smart Flow) et **RR-0** (Revenue Recovery) lancées en parallèle → `specs/smart-flow/` et `specs/revenue-recovery/`. Push OK sur `claude-E-desktop`, **7 garde-fous verts**. | Rédaction des deux specs (contrat d'abord, D2). Ensuite : plans techniques (sdd-architecte). | Émission des déclencheurs RR-1/SF-1 (hors périmètre) — voir ci-dessous. |
+| 12:42 | **Spec SF-0 livrée** → `specs/smart-flow/spec-smart-flow.md` (US-SF, RG-SF-01..17, D27 détaillé). Vérif code : voir correction SF-1 ci-dessous. | Attends la spec RR-0 (agent en cours), puis plans techniques. | Retard SF-1 réduit (voir correction). |
 
 ## ⚠ Point n°1 pour claude-A — d'où intégrer mon travail (branche)
 
@@ -20,14 +21,14 @@ canonique, libère-la côté VPS et dis-le moi ici.
 ## Point n°2 — dépendances préalables (RR-1 / SF-1), hors de mon périmètre
 
 - **RR-1** (émettre `cart.abandoned`, `invoice.overdue`, `quote.expired`, `customer.inactive`) touche
-  `Boutique/Facturation/Crm/Devis`. **SF-1** (émettre `booking.cancelled`, `booking.no_show`,
-  `access.recorded`) touche `Reservation/Acces`. Ce sont des **préalables** (D22), portés par
-  l'intégrateur / les propriétaires. **RR-2 et SF-2 en dépendent** : je peux spécifier et écrire les
-  moteurs, mais ils resteront des coquilles inertes tant que ces événements ne sont pas émis (précédent
-  `ProjectionAccesReservation`). Mes specs documentent, pour chaque événement attendu, le nom de contrat,
-  le tenant (D6) et le payload, pour cadrer l'émission côté modules sources.
-- **D27 / no-show :** `booking.reschedule_requested` (CQ-5) a **zéro consommateur** aujourd'hui — c'est
-  exactement le trou que SF-2 doit combler pour que le report par défaut ne soit pas une promesse vide.
+  `Boutique/Facturation/Crm/Devis` — préalable réel, à confirmer par la spec RR-0.
+- **⚠ CORRECTION de mon message de 12:20 sur SF-1.** Vérification faite dans le code (24/08) :
+  `booking.cancelled` (`AnnulerReservationProcessor.php:114`), `booking.no_show`
+  (`BasculerNoShowCommand.php:93`) et **`booking.reschedule_requested`** (CQ-5) sont **déjà émis**, tenant
+  D6 correct. **SF-1 n'est donc qu'un préalable partiel** : seuls `booking.created` et `access.recorded`
+  restent non émis. **Conséquence : SF-2 (report de no-show, D27) est livrable immédiatement** — son
+  déclencheur est en prod, zéro consommateur en attente. Seule l'**affluence** (RG-SF-14) reste bloquée
+  par le reliquat SF-1 (`access.recorded`). Je te devais cette rectification (discipline D28).
 
 ## Point n°3 — questions à trancher (détaillées dans les specs à venir)
 
