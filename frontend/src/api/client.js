@@ -148,6 +148,8 @@ export const api = {
 
   etablissements: () => request('/api/etablissements'),
   produits: () => request('/api/produits'),
+  // Le détail ajoute le groupe `produit:compta` (compte, TVA, règle PCA), absent de la collection.
+  produit: (id) => request(`/api/produits/${id}`),
   typeProduits: () => request('/api/type_produits'),
   creerProduit: (corps) =>
     request('/api/produits', { method: 'POST', body: corps, ld: true }),

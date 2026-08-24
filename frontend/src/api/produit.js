@@ -121,3 +121,20 @@ export function actionsStatut(statut) {
       return []
   }
 }
+
+// Pourquoi un produit ne peut pas être vendu, en disant quoi faire.
+//
+// « Pas de tarif au guichet » nomme ce qui manque sans dire où le corriger : quelqu'un qui découvre
+// le logiciel cherche alors dans la caisse, où il n'y a rien à trouver. L'infobulle envoie au bon
+// endroit. C'est la différence entre un message juste et un message utile.
+export function expliqueNonVendable(p) {
+  const raison = raisonNonVendable(p)
+  if (!raison) return null
+  if (raison === 'Pas de tarif au guichet') {
+    return "Ce produit n'a pas de tarif pour le canal guichet. Ajoutez-lui une grille tarifaire depuis le Catalogue."
+  }
+  if (raison === 'Rupture de stock') {
+    return 'La quantité disponible est épuisée. Réapprovisionnez depuis le module Stock, ou retirez le suivi de stock sur ce produit.'
+  }
+  return raison
+}

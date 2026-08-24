@@ -3,6 +3,7 @@ import { api, membres } from '../api/client.js'
 import { libelleProduit, prixIndicatif, euros, statutProduit, actionsStatut } from '../api/produit.js'
 import Tabs from '../components/Tabs.jsx'
 import ProduitOptionsModal from '../components/ProduitOptionsModal.jsx'
+import ProduitFicheModal from '../components/ProduitFicheModal.jsx'
 
 export default function Catalogue({ etabActif }) {
   const [tab, setTab] = useState('produits')
@@ -42,6 +43,7 @@ function OngletProduits({ etabActif }) {
 
   const [produitOptions, setProduitOptions] = useState(null) // produit dont on gère les options
   const [actionEnCours, setActionEnCours] = useState(null) // id du produit dont une action tourne
+  const [produitFiche, setProduitFiche] = useState(null) // produit dont on consulte la fiche
 
   const recharger = useCallback(async () => {
     setChargement(true)
@@ -172,7 +174,27 @@ function OngletProduits({ etabActif }) {
               <tbody>
                 {produits.map((p) => (
                   <tr key={p.id}>
-                    <td><span className="nm">{libelleProduit(p)}</span></td>
+                    <td>
+                      <button
+                        type="button"
+                        className="lnk"
+                        onClick={() => setProduitFiche(p)}
+                        title="Ouvrir la fiche du produit"
+                        style={{
+                          background: 'none',
+                          border: 0,
+                          padding: 0,
+                          font: 'inherit',
+                          color: 'inherit',
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                          textDecoration: 'underline',
+                          textUnderlineOffset: 3,
+                        }}
+                      >
+                        <span className="nm">{libelleProduit(p)}</span>
+                      </button>
+                    </td>
                     <td>{p.typeCode || '—'}</td>
                     <td>
                       <span className={`badge ${statutProduit(p).ton}`} title={statutProduit(p).aide}>
@@ -214,6 +236,12 @@ function OngletProduits({ etabActif }) {
         open={!!produitOptions}
         produit={produitOptions}
         onClose={() => setProduitOptions(null)}
+      />
+
+      <ProduitFicheModal
+        open={!!produitFiche}
+        produit={produitFiche}
+        onClose={() => setProduitFiche(null)}
       />
     </>
   )
