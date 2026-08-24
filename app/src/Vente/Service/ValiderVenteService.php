@@ -117,14 +117,26 @@ final class ValiderVenteService
 
                 // CA-12 — émission et appairage des supports pour les lignes concernées.
                 foreach ($vente->getLignes() as $ligne) {
-                    $support = $this->creerSupport($vente, $ligne, $supportsOverride[(string) $ligne->getId()] ?? null);
-                    if ($support === null) {
-                        continue;
+                    $override = $supportsOverride[(string) $ligne->getId()] ?? null;
+
+                    // RG-CQ8-01 (ARGENT) — une ligne émettrice à quantite = N doit émettre N supports,
+                    // chacun avec son identifiant propre (et, pour une carte, chacun avec le stock de
+                    // compostages initial). Correction du défaut préexistant : la vente facturait N
+                    // (PanierCalculateur, payload NF525 `qte`=N) mais n'émettait qu'UN support.
+                    // La recharge (creerSupport retourne null après avoir crédité, RG-CQ1-05) et les
+                    // produits non émetteurs retournent null dès la 1re itération -> break, aucune
+                    // répétition. L'identifiant explicite + quantite > 1 est refusé dans creerSupport
+                    // (RG-CQ8-02), donc la boucle ne peut jamais réémettre deux fois le même code.
+                    for ($unite = 0, $quantite = max(1, $ligne->getQuantite()); $unite < $quantite; ++$unite) {
+                        $support = $this->creerSupport($vente, $ligne, $override);
+                        if ($support === null) {
+                            break;
+                        }
+                        $vente->addSupport($support);
+                        $this->em->persist($support);
+                        $supportsCrees[] = $support;
+                        $this->appairage->appairer($support); // un échec laisse le support en « echec » (remise bloquée).
                     }
-                    $vente->addSupport($support);
-                    $this->em->persist($support);
-                    $supportsCrees[] = $support;
-                    $this->appairage->appairer($support); // un échec laisse le support en « echec » (remise bloquée).
                 }
 
                 $vente->setStatut(StatutVente::Validee);
@@ -271,6 +283,17 @@ final class ValiderVenteService
                 return null;
             }
             // Identifiant inédit : comportement actuel inchangé, on continue ci-dessous (CA-8).
+        }
+
+        // RG-CQ8-02 — un identifiant de support explicite (fourni par l'appelant) ne peut désigner
+        // qu'UN seul support : la contrainte d'unicité globale sur `identifiantSupport` interdit de le
+        // réutiliser pour les N unités d'une ligne à quantite > 1. Refus explicite (422), symétrique au
+        // refus de recharge à quantite > 1 (RG-CQ1-07). L'émission sans identifiant (auto-génération)
+        // n'est pas concernée : chaque unité reçoit un code unique distinct.
+        if ($identifiantOverride !== null && $ligne->getQuantite() > 1) {
+            throw new UnprocessableEntityHttpException(
+                'Un identifiant de support explicite impose une quantité de 1 (RG-CQ8-02).'
+            );
         }
 
         $support = new BilletSupport();
