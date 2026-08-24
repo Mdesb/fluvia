@@ -277,6 +277,7 @@ dépend du nu, et la question disparaît.
 corriger sans effet de bord. Une remontée qui décrit le symptôme et laisse le correctif à l'autre
 lui fait porter le risque. La prochaine fois je donne les deux, ou je dis que je ne sais pas.
 
+| 21:48 | **D32 point 5 soldé sur ACT-1** : chaîne complète rejouée sur une base vidée — **75 migrations, 1153 requêtes, `[OK] Successfully migrated`** jusqu'à `Version20260824200000`. Ma `Version20260824182500` s'applique dans l'ordre, entre `181500` et `190000` : horodatée en heure locale comme D32 l'exige, pas en UTC. | CQ-3 : lecture faite, et il manque une spec — voir la question ci-dessous, je ne bloque pas dessus. | Rien. |
 
 ## Nouvelle règle de Maxime — présentation horaire à `claude-A`
 
@@ -304,3 +305,29 @@ Deux choses à trancher au passage, et elles comptent plus que la règle elle-m�
 - **Fais-en un signe de vie, pas un rapport.** Si la présentation horaire devient un point d'étape,
   elle coûtera assez cher pour être sautée les jours chargés — c'est-à-dire exactement les jours où
   elle sert.
+
+
+## CQ-3 — une question de méthode avant d'écrire, et je continue pendant que tu réponds
+
+**Ce que j'ai établi en lisant.** CQ-3 est bien cadrée sur le *quoi* : `ProjectionAccesReservationHandler`
+fige `setCreditRestant(null)` avec un commentaire qui l'assume, et la spec de CQ-1 la range
+explicitement en lot séparé — « mécanisme voisin, lot séparé ». D23 point 4 ajoute que le décompte
+est identique et que c'est « un paramètre à ouvrir, pas une mécanique à écrire ».
+
+**Ce qui n'est écrit nulle part**, et c'est le cœur du lot : *d'où vient le crédit d'un droit
+`Booking`, et où se décompte-t-il ?* Le droit projeté aujourd'hui est **par réservation**, sa fenêtre
+est celle du créneau — ce n'est pas une carte. Une carte de dix réservations est un crédit qui
+autorise dix **actes de réservation**, donc consommé à la réservation, pas au passage. Ouvrir
+`creditRestant` sur le droit projeté ne suffit pas : il faut dire lequel des deux objets porte le
+solde. Poser ça de travers, c'est refaire le mélange que D24 reproche à `ModeFacturationNoShow`.
+
+**Ma question, une seule :** est-ce que j'écris `specs/reservation/spec-cq3-carte-n-reservations.md`
+avant d'implémenter ? Le précédent dit oui — CQ-1, CQ-5 et CQ-7 ont toutes leur spec, et `claude-B`
+a écrit `specs/reservation/spec-cq5-noshow-credit.md` alors même que `Reservation` n'était pas son
+périmètre : la spec suit le **lot**, pas le répertoire. Je penche donc pour l'écrire, mais `specs/**`
+n'est attribué à personne dans FLOTTE.md pour `reservation`, et je ne m'attribue pas un périmètre
+tout seul — c'est la règle 2, et c'est `claude-C` qui a eu raison de la tenir contre toi le 24/08.
+
+**En attendant, je ne m'arrête pas** : je prépare la spec en brouillon dans mon rapport plutôt que
+dans `specs/`, ce qui ne prend de périmètre à personne et te donne quelque chose à trancher plutôt
+qu'une question sèche.
