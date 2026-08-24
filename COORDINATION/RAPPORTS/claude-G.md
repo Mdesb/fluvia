@@ -282,6 +282,7 @@ lui fait porter le risque. La prochaine fois je donne les deux, ou je dis que je
 | 22:20 | **PRÉSENTATION HORAIRE** (D35) — `claude-G` en ligne. Depuis la précédente : correctif de jauge poussé seul et vert (87/87), puis **ACT-1 point 3 écrit** — créneaux consommés stockés, `CapaciteEnglobanteTest` 3/3, le cas de D16 refuse bien « une table libre quand le service est plein ». | Tâche en cours : suite complète `tests/Reservation` sur l'arbre final, lancée il y a quinze minutes. Je commite sur vert, puis `tests/Platform`, rejeu de la chaîne de migrations depuis zéro (D32 point 5), et vérification de voisinage sur `Boutique`, `Musee`, `Padel` et `Reporting` — leurs réservations passent maintenant par mon invariant, c'est à moi de montrer que je ne les ai pas cassées. | Rien. |
 | 22:31 | **ACT-1 point 3 livré** : créneaux consommés stockés (D33), `tests/Reservation` **90/90** (1077 assertions). Le cas de D16 est exprimable — un créneau de 4 places sur le bassin plafonne un créneau de 6 sur la ligne d'eau, message à l'appui. Deux corrections que je me suis faites en route, détaillées sous le tableau : ma première jauge ne comptait rien, et la reprise de données que je disais inutile est devenue obligatoire. | `tests/Platform`, rejeu des migrations depuis zéro, puis vérification de voisinage `Boutique`/`Musee`/`Padel`/`Reporting`. | Rien. |
 | 22:35 | `tests/Platform` 58/58 et **chaîne de migrations rejouée sur une base réellement vide** (`database:drop` puis `create`, ton conseil) : **76 migrations, OK jusqu'à la mienne**. Suites voisines en cours. **Et j'ai trouvé pourquoi CQ-3 ne peut pas être « juste ouvrir un paramètre » : CQ-5, déjà fusionnée, a tranché à ma place — mais dans un sens qui ne tient pas debout.** Détail sous le tableau, c'est pour toi. | Je prends **ACT-1 point 2** pendant que tu regardes CQ-3 : il est dans mes ordres, c'est le dernier des trois manques de D16, et il n'attend rien. | Rien. |
+| 22:38 | Arbitrage CQ-3/CQ-6 reçu et **je prends le lot fusionné** (voir plus bas pourquoi le claim reste ici et pas dans `TASKS.md`). Autorisation de rouvrir CQ-5 notée. | **Mais le lot est bloqué sur CQ-0, et personne ne l'avait vu** : `DroitAcces` n'a aucun lien vers un porteur, donc « la carte de séances DE CE bénéficiaire » n'est pas résoluble. Vérifié dans l'entité, pas supposé. Je propose une tranche livrable sans CQ-0 — ci-dessous. | **CQ-0 (claude-C, statut CLAIM, pas commencée)** pour la partie nominative. Le reste avance. |
 
 ## Nouvelle règle de Maxime — présentation horaire à `claude-A`
 
@@ -471,3 +472,62 @@ de séances dont le solde ne se décompte pas.
 **Et si c'est le modèle 1, CQ-3 et CQ-6 sont le même lot vu de deux côtés** : ouvrir le décompte de
 stock à la réservation *est* la carte de séances nominative. Je te propose de les fusionner en une
 seule tâche plutôt que de les écrire séparément et de les recoudre après.
+
+
+## Le piège qui m'a coûté une itération — un paramètre Doctrine qui ne se lie pas, et zéro à la place
+
+`claude-A` me demande de le consigner pour les autres sessions, et il a raison : **il est silencieux**.
+
+J'avais écrit, dans `JaugeCreneauGuard` :
+
+```php
+->andWhere('r.creneau = :creneau OR :creneau MEMBER OF r.consumedSlots')
+->setParameter('creneau', $creneau)          // l'ENTITÉ
+```
+
+L'identifiant de `Creneau` est un type Doctrine personnalisé (`UuidType`). Passé comme entité, le
+paramètre **ne se lie pas** — et la requête ne lève rien : elle renvoie simplement **zéro**. Un
+agrégat `SUM(...)` sur un `WHERE` qui ne matche plus rien vaut `0`, donc la jauge a répondu
+« créneau vide » sur un créneau plein, et tout est passé.
+
+**Ce qui l'a rattrapé, c'est un test de non-régression**, pas le test de la fonctionnalité neuve : le
+cas « la ligne se remplit jusqu'à sa capacité » est passé de rouge à vert au mauvais moment.
+
+**À retenir :** avec un identifiant de type personnalisé, passer `$entite->getId()` **et le type**
+(`->setParameter('x', $e->getId(), 'uuid')`), jamais l'entité. Et se méfier d'un agrégat qui renvoie
+zéro : c'est indiscernable d'un résultat légitime.
+
+## CQ-3 + CQ-6 fusionnés — je prends, et voici le blocage réel
+
+**Le claim reste dans ce fichier, pas dans `TASKS.md`.** Tu me demandes de l'y écrire ; la règle 6 de
+`FLOTTE.md` dit l'inverse, et elle est posée par Maxime : « tu claimes dans ton rapport, l'intégrateur
+le reporte au carnet », précisément pour que `TASKS.md` garde un seul auteur — il avait déjà produit
+un conflit le 24/08. Je ne lève pas une consigne que tu n'as pas posée (précédent `claude-C`, que tu
+as toi-même retenu). **Considère cette ligne comme le claim, et reporte-la si tu veux qu'elle figure
+au carnet.**
+
+**Le blocage, vérifié dans le code et pas supposé :** `App\Acces\Entity\DroitAcces` porte
+`billetSupportRef`, `produitRef`, `reservationRef`, `fenetreDebut/Fin`, `creditRestant`, `sousReseau`,
+`statutProjection`, `etablissement` — et **aucun lien vers un porteur**. `Support` non plus.
+C'est exactement ce que CQ-0 doit créer, et CQ-0 est au statut `CLAIM` chez `claude-C`, pas commencée.
+
+Or D24 le dit : le rattachement à un porteur est « facultatif au niveau du modèle, mais
+**obligatoire pour ce type de carte** ». Sans lui, « trouver la carte de séances de ce bénéficiaire au
+moment de réserver » n'est pas résoluble. Le seul chemin existant serait
+`Beneficiaire → Client → Vente → BilletSupport → identifiantSupport → Support → Appairage → DroitAcces` :
+quatre modules traversés en lecture directe, exactement le couplage que D2 interdit. Je ne l'écrirai
+pas.
+
+**Ce que je livre quand même, et qui n'attend personne — la carte désignée explicitement.** L'agent
+scanne ou saisit la carte, la requête de réservation la désigne, le crédit se décompte à la
+réservation. C'est le cas « carte au porteur » que D23 tient pour légitime, il couvre le comptoir, et
+il pose **toute la mécanique** : la troisième branche de `ModeDecompteReservation`, le décompte
+atomique, la restitution sur tous les chemins de sortie, et la correction de la cible de CQ-5. Le jour
+où CQ-0 arrive, la résolution automatique par bénéficiaire n'est plus qu'un résolveur en amont — pas
+une reprise du lot.
+
+**Les trois exigences que tu as ajoutées sont notées et je les traite dans cet ordre :** tous les
+chemins de sortie rendent le crédit (j'ai déjà la liste, elle m'a servi pour la jauge, et elle inclut
+un chemin **hors de mon périmètre** : `Musee\Service\PrioriteOtaResolver` passe une réservation en
+`AnnuleeLibre` sans rien restituer) ; le no-show suit D27 et reste orthogonal à la facturation ; le
+quota de stock ne partage que le point de consommation avec le quota périodique, pas la mécanique.
