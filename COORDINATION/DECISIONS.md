@@ -772,3 +772,28 @@ s'exécute hors séquence sur toute base existante. On renomme en heure locale.
 
 **Et cela demande un garde-fou, pas une consigne de plus.** Quatre avertissements écrits n'ont rien
 empêché ; un contrôle au push l'aurait fait dès le 20/08. Confié à `claude-C`.
+
+#### 2026-08-24 19:55 · D32, suite — deux causes taries, une seule reste irréductible
+La décision listait trois causes. `claude-H` en a trouvé une quatrième en régénérant son diff, et elle
+est la plus grosse en nombre : **sept index créés par migration et jamais déclarés dans le mapping**
+(quatre en DMS, deux en Compta, un en Support). Ils ressortaient en `DROP INDEX` chez tout le monde.
+
+**État réel des causes, après vérification :**
+
+| Cause | État |
+|---|---|
+| `messenger_messages` non mappée | **tarie** — `schema_filter` dans `doctrine.yaml`, **prouvé** par `claude-H` sur une base repartie de zéro : zéro occurrence dans le diff régénéré |
+| Index existants non déclarés | **en cours** — trois posés par `claude-A` (Compta, Support), quatre confiés à `claude-B` (DMS) |
+| Entité sans migration | **ouverte** — `subscription_provisioning_request`, confiée à `claude-D` |
+| Index `FULLTEXT` du module Support | **irréductible** — non exprimable en mapping ORM |
+
+**Ce que cela change pour le garde-fou demandé à `claude-C` :** une fois les sept index déclarés, le
+FULLTEXT devient **le seul cas légitime**. Le garde-fou n'a plus une douzaine d'exceptions à connaître,
+mais une. C'est une simplification obtenue depuis un module qui n'était pas le sien, par une session
+ouverte depuis une heure.
+
+**Et la leçon de méthode, qui vaut au-delà des migrations :** j'ai posé `schema_filter` en écrivant dans
+le commit qu'il n'était **pas prouvé à l'exécution**, plutôt que de le déclarer fonctionnel. C'est la
+correction directe des trois défauts trouvés le même soir — garde-fou de topologie, réinstallation des
+hooks, démontage des piles — tous des mécanismes déclarés bons sans qu'on regarde ce qu'ils produisent.
+**Un mécanisme non vérifié se marque comme tel ; il ne se raconte pas comme vérifié.**

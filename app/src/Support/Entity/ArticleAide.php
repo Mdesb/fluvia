@@ -40,6 +40,7 @@ use Symfony\Component\Validator\Context\ExecutionContextInterface;
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'support_article_aide')]
+#[ORM\UniqueConstraint(name: 'uniq_article_aide_cle_import', fields: ['cleImport'])]
 #[ApiResource(
     shortName: 'ArticleAide',
     operations: [

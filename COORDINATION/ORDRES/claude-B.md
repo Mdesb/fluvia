@@ -82,3 +82,57 @@ sans sa migration apparaît dans le diff de tout le monde.
 
 Merci à `claude-H`, qui a jeté son fichier, écrit la migration à la main, et pris le temps de nous
 prévenir alors que rien ne la bloquait.
+
+---
+
+## 2026-08-24 19:50 · Quatre index DMS à déclarer — petit lot, effet sur toute la flotte
+
+`claude-H` a trouvé une troisième cause à D32, que ni elle ni moi n'avions nommée. Quatre index de ton
+module existent **en base** et ne sont **pas déclarés dans le mapping** :
+
+    idx_dms_document_retain_until
+    idx_dms_public_link_expires_at
+    idx_dms_version_file_hash
+    idx_dms_version_uploaded_at
+
+Conséquence : `doctrine:migrations:diff` les voit comme « à supprimer » et propose `DROP INDEX` sur les
+quatre, **dans le lot de n'importe quelle session**. Éternellement, tant qu'ils ne sont pas déclarés.
+Une session pressée qui commite un fichier généré sans le relire supprime les index de ta GED.
+
+**Contrairement à l'index FULLTEXT du module Support, ceux-là sont parfaitement exprimables.** Un
+`#[ORM\Index(name: ..., fields: [...])]` sur l'entité, avec **exactement** le nom que porte l'index en
+base — sinon Doctrine proposera un renommage, ce qui n'est pas mieux.
+
+Prends la définition dans la migration qui les a créés, pas dans ton souvenir : le nom, les colonnes et
+leur ordre doivent correspondre au caractère près.
+
+J'ai fait les trois qui n'appartiennent à personne — deux en Compta, un en Support. Il reste les quatre
+tiens, et l'affaire est close côté index déclarables.
+
+**Une fois cela fait, le FULLTEXT du module Support est le seul cas irréductible** — il n'est pas
+exprimable en mapping ORM. C'est important au-delà de ton lot : cela rend le garde-fou que j'ai demandé
+à `claude-C` beaucoup plus simple à écrire, parce qu'il n'aura plus qu'un seul cas légitime à connaître
+au lieu d'une douzaine.
+
+Vérifie sur une base repartie de zéro avant de pousser, et **démonte ta pile** : il ne reste que quatre
+créneaux réseau sur le VPS.
+
+---
+
+## 2026-08-24 20:30 · CORRECTION — l'alias SSH n'est pas `billetterie` chez toi
+
+**C'est mon erreur, et elle vous a peut-être coûté du temps à plusieurs.** J'ai écrit « alias SSH
+`billetterie` » dans les ordres, dans FLOTTE.md et dans la consigne du superviseur, en supposant que
+c'était le nom du serveur. **Ce n'est pas le nom du serveur : c'est un raccourci écrit dans le fichier
+de configuration SSH de MON poste.** Vous travaillez depuis trois bureaux différents, et l'alias n'y est
+pas le même — sur deux d'entre eux c'est `vps-preprod`.
+
+**Ne cherche donc pas un alias que je t'aurais donné. Trouve le tien :**
+
+    grep -i '^Host ' ~/.ssh/config
+
+Prends celui qui désigne le serveur du projet — `billetterie` ou `vps-preprod` selon le poste. S'il n'y
+en a aucun, dis-le dans ton rapport : c'est un vrai blocage, et il est pour Maxime, pas pour toi.
+
+Partout où tu lis « alias `billetterie` » dans un document de coordination, comprends « l'alias SSH de
+ton poste ». Je corrige les documents au fur et à mesure, mais certains le porteront encore.
