@@ -86,8 +86,17 @@ while read -r ancien nouveau ref; do
 
     ECHEC_REF=0
 
+    # Liste des garde-fous effectivement lances, pour le filet de completude en fin de boucle.
+    LANCES=""
+
+    lancer() {
+        nom="$1"; shift
+        LANCES="$LANCES $nom"
+        php_dans_arbre "bin/$nom" "$@" || ECHEC_REF=1
+    }
+
     echo "── Cloisonnement (D3/D8)"
-    php_dans_arbre bin/garde-fou-cloisonnement.php "--contre=$BASE" || ECHEC_REF=1
+    lancer garde-fou-cloisonnement.php "--contre=$BASE"
 
     if [ -f "$ARBRE/bin/garde-fou-nommage-anglais.php" ]; then
         echo "── Nommage anglais (D5)"
@@ -105,23 +114,72 @@ while read -r ancien nouveau ref; do
                     -- 'app/src' 'app/migrations' 2>/dev/null | paste -sd, -)"
 
         if [ -z "$AJOUTES" ]; then
+            # Rien a comparer : le controle est traite. On l'enregistre quand meme, sinon le
+            # filet de completude le croirait oublie.
+            LANCES="$LANCES garde-fou-nommage-anglais.php"
             echo "Nommage anglais : OK — aucun fichier ajouté sous app/src ou app/migrations."
         else
-            php_dans_arbre bin/garde-fou-nommage-anglais.php "--fichiers=$AJOUTES" || ECHEC_REF=1
+            lancer garde-fou-nommage-anglais.php "--fichiers=$AJOUTES"
         fi
     fi
 
     if [ -f "$ARBRE/bin/garde-fou-secrets.php" ]; then
         echo "── Secrets en dur"
-        php_dans_arbre bin/garde-fou-secrets.php || ECHEC_REF=1
+        lancer garde-fou-secrets.php
     fi
 
     # Couverture de perimetre en lecture : une entite exposee que rien ne peut filtrer. Aucun des
     # controles ci-dessus ne pouvait la voir — ils surveillent les ecritures, pas les collections.
     if [ -f "$ARBRE/bin/garde-fou-couverture-perimetre.php" ]; then
         echo "── Couverture de périmètre (lecture)"
-        php_dans_arbre bin/garde-fou-couverture-perimetre.php || ECHEC_REF=1
+        lancer garde-fou-couverture-perimetre.php
     fi
+
+    # Evenements du catalogue (D2/D22) : abonne inerte, emission hors contrat, cliquet.
+    if [ -f "$ARBRE/bin/garde-fou-evenements-orphelins.php" ]; then
+        echo "── Événements orphelins (D2/D22)"
+        lancer garde-fou-evenements-orphelins.php "--contre=$BASE"
+    fi
+
+    # Conformite des charges utiles a ce que le catalogue annonce (D2).
+    if [ -f "$ARBRE/bin/garde-fou-charges-utiles.php" ]; then
+        echo "── Charges utiles vs catalogue (D2)"
+        lancer garde-fou-charges-utiles.php "--contre=$BASE"
+    fi
+
+    # Ecriture qui traverse la frontiere (D3/D8) : proprietaire non cloisonne portant une
+    # relation ecrivable vers du cloisonne.
+    if [ -f "$ARBRE/bin/garde-fou-ecriture-transfrontiere.php" ]; then
+        echo "── Écriture transfrontière (D3/D8)"
+        lancer garde-fou-ecriture-transfrontiere.php "--contre=$BASE"
+    fi
+
+    # ⚠ FILET DE COMPLÉTUDE — la leçon du 24/08, et elle a coûté cher.
+    #
+    # Ce hook n'appelle pas `bin/garde-fous.sh` : il doit calculer les fichiers ajoutés sur
+    # l'hôte (quarantaine d'objets, voir plus haut) et pointer `--contre` sur la base réelle du
+    # push. Il REDIT donc la liste des garde-fous — et une liste redite se désynchronise. Les
+    # garde-fous n°6, n°7 et n°8 ont été écrits, câblés au lanceur, annoncés livrés, et n'ont
+    # JAMAIS tourné à la poussée : personne ne les avait ajoutés ici. Le même défaut avait déjà
+    # été corrigé dans le workflow GitHub le 22/08, avec le commentaire qui l'expliquait — et
+    # laissé intact dans le hook, c'est-à-dire dans le seul des deux qui tourne vraiment.
+    #
+    # Désormais l'oubli n'est plus possible : tout `garde-fou-*.php` présent dans l'arbre poussé
+    # doit avoir été lancé. Ajouter un garde-fou sans l'appeler ici fait refuser le push qui
+    # l'ajoute — donc l'erreur se voit à la seconde où elle est commise.
+    for chemin in "$ARBRE"/bin/garde-fou-*.php; do
+        [ -f "$chemin" ] || continue
+        nom="$(basename "$chemin")"
+        case " $LANCES " in
+            *" $nom "*) ;;
+            *)
+                echo "✗ Garde-fou présent dans l'arbre mais jamais lancé par ce hook : $nom"
+                echo "  Ajoute son appel dans hooks/pre-receive — un contrôle qui ne tourne pas"
+                echo "  rend un vert au nom d'une vérification qui n'a pas eu lieu."
+                ECHEC_REF=1
+                ;;
+        esac
+    done
 
     rm -rf "$ARBRE"
     trap - EXIT

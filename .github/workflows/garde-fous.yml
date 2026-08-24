@@ -20,7 +20,10 @@ on:
 
 jobs:
   garde-fous:
-    name: Cloisonnement · C19 · Nommage · Secrets · Manifeste
+    # Intitulé volontairement générique : la version précédente énumérait cinq contrôles alors
+    # que le lanceur en exécute huit. Un nom qui liste ce qui tourne se périme au garde-fou
+    # suivant, et un intitulé périmé annonce un vert plus étroit que la réalité — ou plus large.
+    name: Tous les garde-fous du lanceur
     runs-on: ubuntu-latest
 
     steps:
