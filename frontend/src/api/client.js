@@ -164,6 +164,8 @@ export const api = {
   reactiverProduit: (id) => request(`/api/produits/${id}/reactiver`, { method: 'POST' }),
 
   pointDeVentes: () => request('/api/point_de_ventes'),
+  creerPointDeVente: (corps) => request('/api/point_de_ventes', { method: 'POST', body: corps }),
+  majPointDeVente: (id, corps) => request(`/api/point_de_ventes/${id}`, { method: 'PATCH', body: corps }),
   caisses: () => request('/api/caisses'),
   moyensPaiement: () => request('/api/moyen_paiements'),
   // Moyens de paiement — écriture (source M6, sécurité `compta.gerer`).

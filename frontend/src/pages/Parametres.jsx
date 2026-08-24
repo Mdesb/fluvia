@@ -5,6 +5,7 @@ import Modal from '../components/Modal.jsx'
 import ReferentielEditable from '../components/ReferentielEditable.jsx'
 import PretAVendre from '../components/PretAVendre.jsx'
 import { aLeDroit } from '../api/droits.js'
+import { mot } from '../api/vocabulaire.js'
 import { api, membres } from '../api/client.js'
 
 const SOUS = [
@@ -283,6 +284,51 @@ function descripteurSaisons(api) {
   }
 }
 
+function descripteurPointsDeVente(api, etabActif) {
+  return {
+    titre: 'Points de vente',
+    aQuoiCaSert:
+      'Les endroits où vous encaissez : un guichet, une borne, un comptoir. Une caisse s’ouvre '
+      + 'toujours sur un point de vente.',
+    siVide:
+      "Vous n'avez aucun point de vente. Tant qu'il n'y en a pas, aucune caisse ne peut être ouverte "
+      + 'et rien ne peut être encaissé. Commencez par « Guichet principal ».',
+    consequenceSuppression: '',
+    charger: api.pointDeVentes,
+    // L'établissement n'est pas un champ du formulaire : il vient du contexte de travail, jamais
+    // d'une saisie. Le proposer à choisir serait offrir de créer un point de vente chez quelqu'un
+    // d'autre.
+    creer: (corps) => api.creerPointDeVente({ ...corps, etablissement: `/api/etablissements/${etabActif}` }),
+    modifier: api.majPointDeVente,
+    supprimer: null,
+    champs: [
+      {
+        nom: 'libelle',
+        libelle: 'Nom',
+        type: 'text',
+        requis: true,
+        exemple: 'Guichet principal',
+        aide: 'Le nom que verra le caissier en ouvrant sa caisse.',
+      },
+    ],
+    colonnes: [
+      { cle: 'libelle', titre: 'Nom', rendu: (r) => <span className="nm">{r.libelle || '—'}</span> },
+      {
+        cle: 'tpe',
+        titre: 'Terminal de paiement',
+        aide: 'Un terminal bancaire est-il rattaché à ce point de vente ?',
+        rendu: (r) => (r.tpe ? 'oui' : '—'),
+      },
+      {
+        cle: 'moyensAutorises',
+        titre: 'Paiements acceptés',
+        rendu: (r) =>
+          Array.isArray(r.moyensAutorises) && r.moyensAutorises.length ? r.moyensAutorises.join(', ') : 'tous',
+      },
+    ],
+  }
+}
+
 export default function Parametres({ etabActif, etablissements, droits = [] }) {
   const [sousOnglet, setSousOnglet] = useState('entites')
 
@@ -324,7 +370,7 @@ export default function Parametres({ etabActif, etablissements, droits = [] }) {
             vide="Aucun espace."
             colonnes={[
               { cle: 'nom', entete: 'Espace', rendu: (r) => <span className="nm">{r.nom || '—'}</span> },
-              { cle: 'type', entete: 'Type', rendu: (r) => r.type || '—' },
+              { cle: 'type', entete: 'Nature', rendu: (r) => mot(r.type) },
             ]}
           />
         </div>
@@ -364,16 +410,9 @@ export default function Parametres({ etabActif, etablissements, droits = [] }) {
 
       {sousOnglet === 'caisse' && (
         <div className="resa-grid">
-          <Liste
-            titre="Points de vente"
-            deps={[etabActif]}
-            charger={api.pointDeVentes}
-            vide="Aucun point de vente."
-            colonnes={[
-              { cle: 'libelle', entete: 'Point de vente', rendu: (r) => <span className="nm">{r.libelle || '—'}</span> },
-              { cle: 'tpe', entete: 'TPE', rendu: (r) => (r.tpe ? 'oui' : '—') },
-              { cle: 'moyensAutorises', entete: 'Moyens', rendu: (r) => (Array.isArray(r.moyensAutorises) && r.moyensAutorises.length ? r.moyensAutorises.join(', ') : 'tous') },
-            ]}
+          <ReferentielEditable
+            descripteur={descripteurPointsDeVente(api, etabActif)}
+            peutEcrire={droits.includes('caisse.gerer')}
           />
           <Liste
             titre="Caisses"
