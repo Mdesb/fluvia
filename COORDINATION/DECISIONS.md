@@ -626,3 +626,31 @@ annonce la restitution du crédit, rien de plus.
 porte désormais la moitié du comportement par défaut de la plateforme sur le no-show. C'est le
 premier cas d'usage concret de SF-2, et il rend la question posée à Maxime — quel usage de Smart Flow
 compte en premier — largement tranchée par les faits.
+
+### 2026-08-24 · D28 — Le hook se réinstalle à chaque fusion, et il doit le vérifier lui-même
+Le hook `pre-receive` existe en deux exemplaires : **versionné** dans `hooks/` et **installé** sur le
+dépôt nu. J'ai fusionné chaque mise à jour du premier sans jamais réinstaller le second. Résultat
+mesuré par claude-C le 24/08 : **quatre garde-fous sur sept ne s'exécutaient pas à la poussée**, alors
+que je les rapportais comme actifs depuis deux jours.
+
+**Ce qui était vrai et ce qui ne l'était pas.** Les cliquets lancés à la main donnaient des chiffres
+justes — la dette était bien mesurée. Mais **l'application** ne l'était pas : une poussée fautive sur
+l'un des quatre contrôles manquants passait sans être refusée. La mesure fonctionnait, la barrière
+non.
+
+**C'est D21 appliquée à moi.** J'avais écrit qu'une amélioration de garde-fou ne protège personne tant
+qu'elle n'est pas fusionnée. Le corollaire m'a échappé : **elle ne protège personne non plus tant
+qu'elle n'est pas installée.** Fusionner un hook donne le sentiment d'avoir agi, et c'est précisément
+ce sentiment qui a masqué deux jours d'inaction.
+
+**Règle : toute fusion touchant `hooks/` est suivie de la réinstallation, dans le même geste.**
+
+**Et parce qu'une règle que je dois me rappeler est exactement ce qui vient d'échouer, elle ne suffit
+pas.** Le contrôle doit être porté par l'outil : le hook installé compare son propre contenu à la
+version présente dans l'arbre poussé, et **avertit bruyamment** s'il est périmé. Un hook capable de
+signaler sa propre obsolescence ne dépend plus de la mémoire de l'intégrateur. Demandé à claude-C, à
+qui `hooks/` appartient.
+
+**Portée du contrôle : avertir, pas refuser.** Refuser une poussée parce que le hook est périmé
+bloquerait justement la poussée qui apporte sa mise à jour. L'avertissement suffit : il est visible de
+qui pousse, donc de moi, à chaque intégration.
