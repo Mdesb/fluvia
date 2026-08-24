@@ -372,4 +372,9 @@ export const api = {
   museeExpositions: () => request('/api/musee_expositions', { query: { itemsPerPage: 100 } }),
   museeVisitesGuidees: () =>
     request('/api/musee_visite_guidees', { query: { itemsPerPage: 100 } }),
+
+  // Administration de l'éditeur (ED-6). Le serveur répond 404 si la session n'est pas celle de
+  // l'éditeur : le contrôle est une identité de tenant, pas une permission, et il n'est pas rejoué
+  // ici (D39).
+  editorSubscriptions: () => request('/api/editor/subscriptions'),
 }
