@@ -84,6 +84,24 @@ executer() {
     return 1
 }
 
+# 0. TOPOLOGIE — il passe avant les autres parce qu'il conditionne leur existence.
+#
+# Les sept contrôles suivants ne valent que s'ils sont TRAVERSÉS. Le 24/08, six sessions de la
+# flotte étaient des worktrees du dépôt nu : leurs commits entraient dans les refs partagées sans
+# push, donc sans `pre-receive`. Sept garde-fous verts, et rien qui les exécute.
+#
+# Il refuse de démarrer plutôt que d'avertir : une session qui écrit sans barrière est pire
+# qu'une session à l'arrêt, elle donne l'illusion du contrôle. Demandé par l'intégrateur le 24/08.
+if [ -x "$RACINE/bin/garde-fou-topologie.sh" ]; then
+    if ! executer "Topologie (D28/D29)" bash "$RACINE/bin/garde-fou-topologie.sh"; then
+        echo
+        echo "─────────────────────────────────────────────────────────────"
+        echo "✗ Arrêt immédiat : la topologie ne garantit pas que les contrôles seront exécutés."
+        echo "  Les lancer maintenant produirait un vert qui ne protège personne."
+        exit 1
+    fi
+fi
+
 # 1. Cloisonnement (D3/D8) — le garde-fou n°1.
 if [ -n "$REFERENCE" ]; then
     executer "Cloisonnement (D3/D8)" php_racine bin/garde-fou-cloisonnement.php "--contre=$REFERENCE"

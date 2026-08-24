@@ -25,7 +25,14 @@
     "Ces cas echappent par construction au garde-fou n1 : il cherche find()/findOneBy() depuis",
     "l'entree client dans un Processor, or il n'y a pas de Processor du tout — le serialiseur",
     "d'API Platform denormalise l'IRI directement dans l'entite. Aucun code de module ne resout",
-    "quoi que ce soit, donc il n'y a rien a detecter par ce motif."
+    "quoi que ce soit, donc il n'y a rien a detecter par ce motif.",
+    "",
+    "Preuve empirique du 24/08 sur le groupe B : aucune des 18 entites n'est creee dans une boucle",
+    "par etablissement dans les 30 fichiers de fixtures du depot. La presomption « global » tient",
+    "donc pour la plupart — mais elle ne remplace pas la confirmation de l'integrateur.",
+    "",
+    "Elle ne tenait PAS pour Utilisateur, reclassee en A : le lien passe par Affectation, que ma",
+    "premiere lecture n'avait pas cherche parce que l'entite elle-meme ne porte aucune relation."
   ],
   "scelle": {
     "gelee_le": "2026-08-23",
@@ -297,7 +304,7 @@
         "groupe": "B",
         "chemin": "",
         "cible": "",
-        "note": "Referentiel presume global. NON CONFIRME par l'integrateur au 24/08 — tant que ce mot manque, l'entree reste comptee."
+        "note": "Referentiel presume global, avec une raison verifiee le 24/08 plutot que supposee : la DEFINITION d'un role est partagee, c'est son ATTRIBUTION qui est par etablissement et elle vit dans Affectation. NON CONFIRME par l'integrateur."
       }
     },
     "Securite/Entity/Utilisateur.php": {
@@ -316,10 +323,10 @@
       ],
       "sensibilite": "acces",
       "traitement": {
-        "groupe": "B",
-        "chemin": "",
-        "cible": "",
-        "note": "Referentiel presume global. NON CONFIRME par l'integrateur au 24/08 — tant que ce mot manque, l'entree reste comptee."
+        "groupe": "A",
+        "chemin": "Affectation.etablissement (jointure inverse)",
+        "cible": "Affectation",
+        "note": "RECLASSE de B en A le 24/08 — mon classement precedent etait faux. Ce n'est PAS un referentiel : Securite/Entity/Affectation porte (Utilisateur, Role, Etablissement), donc un utilisateur EST rattachable. GetCollection en securite.gerer expose aujourd'hui, d'un etablissement a l'autre : email, nom, statut, dernierAcces, rolesSecurite, clientLie et mfaActif. Ce dernier est un indicateur de posture : il permet de lister les comptes SANS second facteur avant de les viser. Le cloisonnement demande une extension avec jointure inverse sur Affectation, pas une simple entree de table."
       }
     },
     "Dms/Entity/RetentionPolicy.php": {
@@ -747,7 +754,7 @@
         "groupe": "B",
         "chemin": "",
         "cible": "",
-        "note": "Referentiel presume global. NON CONFIRME par l'integrateur au 24/08 — tant que ce mot manque, l'entree reste comptee."
+        "note": "Entite de STRUCTURE et non referentiel : Organisation/Entity/Groupe est au-dessus de Region, elle-meme au-dessus d'Etablissement. Elle est globale par construction, pas par convention. NON CONFIRME par l'integrateur."
       }
     },
     "Reporting/Entity/AxeAnalytique.php": {
