@@ -115,6 +115,19 @@ else
     executer "Événements orphelins (D2/D22)" php_racine bin/garde-fou-evenements-orphelins.php
 fi
 
+# 7. Conformité des charges utiles au catalogue (D2). Le n°6 vérifie qu'un événement annoncé finit
+#    par être émis ; celui-ci vérifie qu'il est émis avec ce qui a été promis. La panne visée est la
+#    même famille, silencieuse : un abonné codé contre le catalogue qui lit `null` parce que la clé
+#    ne porte pas le nom annoncé. Aucun test ne peut l'attraper — RG-PLAT-06 ne lit que les noms
+#    d'événements, jamais la colonne charge utile.
+#    La comparaison se fait sur une forme canonique : le catalogue est en snake_case et le code en
+#    camelCase sur TOUT le dépôt, refuser cet écart rendrait le contrôle insatisfaisable.
+if [ -n "${REFERENCE:-}" ]; then
+    executer "Charges utiles vs catalogue (D2)" php_racine bin/garde-fou-charges-utiles.php "--contre=$REFERENCE"
+else
+    executer "Charges utiles vs catalogue (D2)" php_racine bin/garde-fou-charges-utiles.php
+fi
+
 # 5. i18n : pas de chaîne d'UI en dur — SANS OBJET tant que la couche i18n n'existe pas (aucun
 #    catalogue, aucun usage du traducteur dans app/src). Acté par l'intégrateur le 21/08.
 # 6. CSRF — SANS OBJET : tous les pare-feux sont `stateless: true` et l'authentification est un JWT
