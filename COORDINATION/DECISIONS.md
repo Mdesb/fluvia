@@ -713,3 +713,29 @@ dans son propre rapport et non dans `TASKS.md` (dernier fichier partagé en écr
 le 24/08) ; une pile de test par identité et démontée en sortant (vingt-six piles oubliées ont saturé
 Docker le 24/08) ; et **jamais la suite complète**, qui coûte deux heures et appartient à
 l'intégrateur.
+
+### 2026-08-24 · D31 — Collision SF-0 : la spec canonique est celle du propriétaire du périmètre
+Deux specs SF-0 vivent sur `main` : `spec-sf0-smart-flow.md` (415 lignes, claude-B) et
+`spec-smart-flow.md` (345 lignes, claude-E). Même périmètre, écrites en parallèle, **et j'ai intégré
+les deux sans le voir**. C'est `claude-E` qui l'a découverte en fusionnant `main`, et qui me l'a
+remontée plutôt que de choisir seule.
+
+**La cause est mienne et elle est simple** : `TASKS.md` portait encore SF-0 au nom de `claude-B`
+quand j'ai donné Smart Flow à `claude-E` dans le document de flotte. Deux sources de vérité sur la
+même tâche, et personne n'avait tort.
+
+**Arbitrage : `spec-smart-flow.md` (claude-E) devient la spec canonique.** Non parce qu'elle est
+meilleure — les deux sont solides, 22 et 23 règles nommées — mais parce que **le périmètre décide, pas
+la qualité**. Smart Flow appartient à `claude-E` par le document de flotte, que Maxime a posé. Choisir
+sur la qualité ouvrirait la porte à ce que chacun écrive partout en espérant gagner l'arbitrage.
+
+**Rien du travail de claude-B n'est jeté.** Sa spec porte deux sections que celle de E n'a pas :
+**critères d'acceptation** et **cas limites**. Celle de E porte deux sections que B n'a pas :
+**écrans-ou-modales (D13)** et **sécurité & cloisonnement** — deux invariants du projet. Les deux
+manques sont réels : `claude-E` reprend les critères d'acceptation et les cas limites de B dans la
+spec canonique, et cite leur origine.
+
+**La leçon d'organisation, qui vaut plus que l'arbitrage** : à trois instances, une tâche assignée dans
+deux endroits se voyait. À neuf, non. **Une tâche n'a qu'un seul propriétaire, et `TASKS.md` en est la
+seule source** — le document de flotte fixe les périmètres, le carnet fixe les tâches, et c'est à moi
+de les tenir cohérents. Je ne l'ai pas fait, et cela a coûté 415 lignes de travail parallèle.
