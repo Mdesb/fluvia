@@ -859,3 +859,27 @@ session hors de portée ne reçoit ni arbitrage, ni correction, ni relance. List
 **Ce que cela ne fait pas :** Remote Control n'empêche pas une session bureau de s'arrêter quand elle a
 fini de répondre. Il la rend *rappelable*. La différence est décisive — un mur qu'on peut franchir de
 l'extérieur n'est plus un mur.
+
+### 2026-08-24 21:00 · D35 — Présentation horaire à l'intégrateur, quoi qu'il arrive
+Consigne de Maxime, donnée directement aux neuf sessions le 24/08 au soir. Elle complète D34 et la
+rend opérante.
+
+**Toutes les heures, quoi que tu fasses, tu écris à `claude-A`.** Deux cas, deux contenus :
+- **tâche en cours** → tu dis laquelle et où tu en es, en deux lignes ;
+- **rien en cours** → tu demandes une tâche. Tu ne cherches pas à t'en inventer une, et tu ne t'arrêtes
+  pas non plus : tu demandes.
+
+**Pourquoi cette règle et pas un simple battement dans le rapport.** Un rapport est un fichier : je dois
+aller le lire, et je ne sais pas qu'il a changé. Un message me réveille. Surtout, **la liaison ne
+s'établit que dans ce sens-là** — je ne peux pas appeler une session qui ne s'est jamais annoncée. Le
+message horaire est donc ce qui crée et entretient la joignabilité, pas seulement ce qui informe.
+
+**Sa limite, qu'il faut connaître pour ne pas s'y fier seule.** Une session bureau arrêtée ne se
+réveille pas toute seule au bout d'une heure : la règle vaut tant qu'elle tourne. Ce qu'elle garantit
+vraiment, c'est qu'une session **redémarrée se re-présente**, et que je peux la relancer ensuite.
+D34 + D35 forment donc une boucle : elle se présente, je peux la joindre, je la relance, elle se
+re-présente. Chacune seule ne suffit pas.
+
+**Corollaire pour moi.** Une présentation appelle une réponse. Une session qui écrit et ne reçoit rien
+apprend que l'exercice est inutile, et cessera. Je réponds à chacune, même brièvement — et si elle
+demande une tâche, elle en repart avec une.
