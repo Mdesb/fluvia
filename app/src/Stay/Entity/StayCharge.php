@@ -26,6 +26,8 @@ use Symfony\Component\Uid\Uuid;
 #[ORM\Entity]
 #[ORM\Table(name: 'stay_charge')]
 #[ORM\Index(columns: ['establishment_id', 'occurred_at'], name: 'IDX_STAY_CHARGE_ETAB_OCCURRED')]
+// Meme raison que sur `Stay` : l'index de cle etrangere est nomme ici, pas laisse a Doctrine.
+#[ORM\Index(columns: ['stay_id'], name: 'IDX_STAY_CHARGE_STAY')]
 #[ORM\UniqueConstraint(
     name: 'UNIQ_STAY_CHARGE_SOURCE',
     columns: ['stay_id', 'source_event', 'source_subject_id'],
