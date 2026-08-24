@@ -41,8 +41,8 @@ function descripteurTypesTarif(api) {
       "Vous n'avez aucun type de tarif. Tant qu'il n'y en a pas, vos produits ne peuvent recevoir "
       + 'aucun prix, donc rien ne peut être vendu ni publié. Commencez par « Plein tarif ».',
     consequenceSuppression:
-      'Les produits qui utilisent ce type de tarif perdront le prix correspondant. '
-      + "S'il s'agit de leur seul prix, ils ne seront plus vendables.",
+      "Si ce type de tarif est utilise par le prix d'un produit, la suppression sera refusee : "
+      + 'vous pourrez alors le rendre inutilisable plutot que de le supprimer.',
     charger: api.typeTarifs,
     creer: api.creerTypeTarif,
     modifier: api.majTypeTarif,
@@ -144,6 +144,144 @@ function descripteurTva(api) {
   }
 }
 
+const AXES = [
+  { valeur: 'marketing', libelle: 'Regroupement commercial' },
+  { valeur: 'comptable', libelle: 'Ventilation comptable' },
+  { valeur: 'rayon', libelle: 'Rayon en boutique' },
+]
+
+function descripteurCategories(api) {
+  return {
+    titre: 'Catégories',
+    aQuoiCaSert:
+      'Des regroupements de produits. Ils servent à retrouver un produit plus vite en caisse, à '
+      + 'organiser votre boutique en ligne, ou à ventiler votre chiffre d’affaires en comptabilité.',
+    siVide:
+      "Vous n'avez aucune catégorie. Ce n'est pas bloquant : vos produits restent vendables. Mais "
+      + 'au-delà d’une trentaine de produits, une caisse sans catégories devient difficile à utiliser.',
+    consequenceSuppression:
+      'Les produits rattachés à cette catégorie ne seront pas supprimés — ils perdront simplement ce '
+      + 'regroupement.',
+    charger: api.categories,
+    creer: api.creerCategorie,
+    modifier: api.majCategorie,
+    supprimer: api.supprimerCategorie,
+    champs: [
+      {
+        nom: 'libelle',
+        libelle: 'Nom',
+        type: 'text',
+        requis: true,
+        exemple: 'Activités aquatiques',
+        aide: 'Le nom tel qu’il apparaîtra dans les écrans.',
+      },
+      {
+        nom: 'axe',
+        libelle: 'À quoi elle sert',
+        type: 'choix',
+        options: AXES,
+        aide:
+          'Un regroupement commercial sert à la vente ; une ventilation comptable sert à vos écritures ; '
+          + 'un rayon organise votre boutique. Un même produit peut appartenir à plusieurs catégories '
+          + 'd’axes différents.',
+      },
+    ],
+    colonnes: [
+      { cle: 'libelle', titre: 'Nom', rendu: (r) => <span className="nm">{texte(r.libelle, '—')}</span> },
+      {
+        cle: 'axe',
+        titre: 'Sert à',
+        rendu: (r) => AXES.find((a) => a.valeur === r.axe)?.libelle || r.axe || '—',
+      },
+      { cle: 'chemin', titre: 'Rattachée à', rendu: (r) => <span className="mono">{r.chemin || '—'}</span> },
+    ],
+  }
+}
+
+function descripteurSaisons(api) {
+  return {
+    titre: 'Saisons',
+    aQuoiCaSert:
+      'Des périodes de l’année pendant lesquelles vos prix changent : haute saison, vacances '
+      + 'scolaires, hors saison. Un produit peut avoir un prix différent par saison.',
+    siVide:
+      "Aucune saison n'est définie. Ce n'est pas bloquant : vos prix s'appliquent alors toute l'année "
+      + 'de la même façon.',
+    consequenceSuppression:
+      'Les prix définis pour cette saison ne s’appliqueront plus. Les produits reviendront à leur prix '
+      + 'habituel.',
+    charger: api.saisons,
+    creer: api.creerSaison,
+    modifier: api.majSaison,
+    supprimer: api.supprimerSaison,
+    champs: [
+      {
+        nom: 'nom',
+        libelle: 'Nom',
+        type: 'text',
+        requis: true,
+        exemple: 'Haute saison',
+      },
+      {
+        nom: 'dateDebut',
+        libelle: 'Du',
+        type: 'date',
+        requis: true,
+        aide: 'Premier jour où les prix de cette saison s’appliquent.',
+      },
+      {
+        nom: 'dateFin',
+        libelle: 'Au',
+        type: 'date',
+        requis: true,
+        aide: 'Dernier jour inclus.',
+      },
+      {
+        nom: 'priorite',
+        libelle: 'Priorité',
+        type: 'nombre',
+        defaut: 0,
+        aide:
+          'Départage deux saisons qui se recouvrent : la plus haute l’emporte. Deux saisons de même '
+          + 'priorité ne peuvent pas se chevaucher — l’enregistrement sera refusé.',
+      },
+      {
+        nom: 'recurrenceAnnuelle',
+        libelle: 'Chaque année',
+        type: 'bool',
+        defaut: false,
+        libelleCase: 'Cette période revient tous les ans',
+        aide: 'Évite de recréer la même saison chaque année.',
+      },
+      {
+        nom: 'actif',
+        libelle: 'Utilisable',
+        type: 'bool',
+        libelleCase: 'Cette saison est appliquée',
+        aide: 'Décocher suspend ses prix sans supprimer la saison ni son paramétrage.',
+      },
+    ],
+    colonnes: [
+      { cle: 'nom', titre: 'Nom', rendu: (r) => <span className="nm">{r.nom || '—'}</span> },
+      {
+        cle: 'periode',
+        titre: 'Période',
+        rendu: (r) => {
+          const d = (r.dateDebut || '').slice(0, 10)
+          const f = (r.dateFin || '').slice(0, 10)
+          return d && f ? `${d} → ${f}` : '—'
+        },
+      },
+      { cle: 'priorite', titre: 'Priorité', num: true, rendu: (r) => r.priorite ?? '—' },
+      {
+        cle: 'actif',
+        titre: 'État',
+        rendu: (r) => <span className={`badge ${r.actif ? 'good' : 'mut'}`}>{r.actif ? 'appliquée' : 'suspendue'}</span>,
+      },
+    ],
+  }
+}
+
 export default function Parametres({ etabActif, etablissements, droits = [] }) {
   const [sousOnglet, setSousOnglet] = useState('entites')
 
@@ -207,42 +345,19 @@ export default function Parametres({ etabActif, etablissements, droits = [] }) {
           />
 
           <div className="fiche-sec" style={{ margin: '24px 0 10px' }}>Pour aller plus loin</div>
-          {/* Ces deux-là restent en consultation, et je préfère le dire que le laisser deviner :
-              créer une catégorie demande de choisir un « axe », qui est lui-même un référentiel non
-              encore exposé ; une saison demande deux dates dont le format attendu par le serveur
-              n'est pas encore éprouvé. Les brancher à moitié ferait échouer l'enregistrement sans
-              que l'utilisateur comprenne pourquoi — ce qui est pire que de ne pas les proposer. */}
-          <div className="hint" style={{ marginBottom: 10 }}>
-            Ces deux listes sont consultables mais pas encore modifiables depuis cet écran.
-          </div>
-          <div className="resa-grid">
-            <Liste
-              titre="Catégories"
-              deps={[etabActif]}
-              charger={api.categories}
-              vide="Aucune catégorie. Les catégories servent à regrouper vos produits pour les retrouver plus vite."
-              colonnes={[
-                { cle: 'libelle', entete: 'Catégorie', rendu: (r) => <span className="nm">{texte(r.libelle, '—')}</span> },
-                { cle: 'chemin', entete: 'Rattachée à', rendu: (r) => <span className="mono">{r.chemin || '—'}</span> },
-              ]}
-            />
-            <Liste
-              titre="Saisons"
-              deps={[etabActif]}
-              charger={api.saisons}
-              vide="Aucune saison. Une saison permet d'appliquer des prix différents selon la période de l'année."
-              colonnes={[
-                { cle: 'nom', entete: 'Saison', rendu: (r) => <span className="nm">{r.nom || '—'}</span> },
-                {
-                  cle: 'priorite',
-                  entete: 'Priorité',
-                  num: true,
-                  rendu: (r) => r.priorite ?? '—',
-                },
-                { cle: 'actif', entete: 'État', rendu: (r) => <span className={`badge ${r.actif ? 'good' : 'mut'}`}>{r.actif ? 'utilisable' : 'masquée'}</span> },
-              ]}
-            />
-          </div>
+          {/* Ces deux-là ne bloquent pas la vente, d'où leur place ici plutôt qu'au-dessus. Elles
+              sont modifiables au même titre que les autres : je les avais laissées en consultation
+              en croyant qu'un « axe » était un référentiel à exposer et que le format de date était
+              incertain. Les deux étaient faux — l'axe est une énumération de trois valeurs, et le
+              format `AAAA-MM-JJ` est celui qu'utilise la suite de tests du serveur. */}
+          <ReferentielEditable
+            descripteur={descripteurCategories(api)}
+            peutEcrire={droits.includes('offre.gerer')}
+          />
+          <ReferentielEditable
+            descripteur={descripteurSaisons(api)}
+            peutEcrire={droits.includes('offre.gerer')}
+          />
         </>
       )}
 

@@ -264,6 +264,9 @@ export const api = {
   espaces: () => request('/api/espaces', { query: { itemsPerPage: 200 } }),
   regions: () => request('/api/regions', { query: { itemsPerPage: 100 } }),
   categories: () => request('/api/categories', { query: { itemsPerPage: 200 } }),
+  creerCategorie: (corps) => request('/api/categories', { method: 'POST', body: corps }),
+  majCategorie: (id, corps) => request(`/api/categories/${id}`, { method: 'PATCH', body: corps }),
+  supprimerCategorie: (id) => request(`/api/categories/${id}`, { method: 'DELETE' }),
   typeTarifs: () => request('/api/type_tarifs', { query: { itemsPerPage: 100 } }),
   // Référentiels modifiables : les opérations existaient côté serveur depuis le début, le front ne
   // les appelait simplement pas.
@@ -272,6 +275,9 @@ export const api = {
   supprimerTypeTarif: (id) => request(`/api/type_tarifs/${id}`, { method: 'DELETE' }),
   grilleTarifaires: () => request('/api/grille_tarifaires', { query: { itemsPerPage: 200 } }),
   saisons: () => request('/api/saisons', { query: { itemsPerPage: 100 } }),
+  creerSaison: (corps) => request('/api/saisons', { method: 'POST', body: corps }),
+  majSaison: (id, corps) => request(`/api/saisons/${id}`, { method: 'PATCH', body: corps }),
+  supprimerSaison: (id) => request(`/api/saisons/${id}`, { method: 'DELETE' }),
   tauxTvas: () => request('/api/taux_tvas', { query: { itemsPerPage: 100 } }),
   creerTauxTva: (corps) => request('/api/taux_tvas', { method: 'POST', body: corps }),
   majTauxTva: (id, corps) => request(`/api/taux_tvas/${id}`, { method: 'PATCH', body: corps }),

@@ -55,6 +55,7 @@ export default function ReferentielEditable({ descripteur, peutEcrire }) {
       if (c.defaut !== undefined) valeurs[c.nom] = c.defaut
       else if (c.type === 'bool') valeurs[c.nom] = true
       else if (c.type === 'choix-multiples') valeurs[c.nom] = []
+      else if (c.type === 'choix') valeurs[c.nom] = c.options[0]?.valeur ?? ''
       else valeurs[c.nom] = ''
     })
     setEdition({ ligne: null, valeurs })
@@ -64,6 +65,7 @@ export default function ReferentielEditable({ descripteur, peutEcrire }) {
     const valeurs = {}
     champs.forEach((c) => {
       if (c.type === 'choix-multiples') valeurs[c.nom] = Array.isArray(ligne[c.nom]) ? [...ligne[c.nom]] : []
+      else if (c.type === 'date') valeurs[c.nom] = (ligne[c.nom] || '').slice(0, 10)
       else valeurs[c.nom] = ligne[c.nom] ?? (c.type === 'bool' ? false : '')
     })
     setEdition({ ligne, valeurs })
@@ -81,6 +83,9 @@ export default function ReferentielEditable({ descripteur, peutEcrire }) {
         if (c.type === 'nombre') corps[c.nom] = Number(v)
         else if (c.type === 'bool') corps[c.nom] = !!v
         else if (c.type === 'choix-multiples') corps[c.nom] = Array.isArray(v) ? v : []
+        // Une date laissee vide part a `null` et non en chaine vide : le serveur rejette la seconde
+        // avec un message de deserialisation que personne ne peut interpreter.
+        else if (c.type === 'date') corps[c.nom] = v ? v : null
         else corps[c.nom] = v
       })
       if (edition.ligne) await modifier(edition.ligne.id, corps)
@@ -204,7 +209,20 @@ export default function ReferentielEditable({ descripteur, peutEcrire }) {
                   {c.libelle}
                   {c.requis && ' *'}
                 </label>
-                {c.type === 'choix-multiples' ? (
+                {c.type === 'choix' ? (
+                  <select
+                    id={`ref-${c.nom}`}
+                    className="select"
+                    value={edition.valeurs[c.nom]}
+                    onChange={(e) =>
+                      setEdition((s) => ({ ...s, valeurs: { ...s.valeurs, [c.nom]: e.target.value } }))
+                    }
+                  >
+                    {c.options.map((o) => (
+                      <option key={o.valeur} value={o.valeur}>{o.libelle}</option>
+                    ))}
+                  </select>
+                ) : c.type === 'choix-multiples' ? (
                   <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
                     {c.options.map((o) => (
                       <label key={o.valeur} style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 400 }}>
@@ -241,7 +259,7 @@ export default function ReferentielEditable({ descripteur, peutEcrire }) {
                   <input
                     id={`ref-${c.nom}`}
                     className="input"
-                    type={c.type === 'nombre' ? 'number' : 'text'}
+                    type={c.type === 'nombre' ? 'number' : c.type === 'date' ? 'date' : 'text'}
                     step={c.pas}
                     required={c.requis}
                     value={edition.valeurs[c.nom]}

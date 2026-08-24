@@ -22,7 +22,7 @@ import { api, membres } from '../api/client.js'
 // vente » à quelqu'un qui n'a simplement pas le droit de les lire serait un mensonge, et il chercherait
 // longtemps.
 
-export default function PretAVendre({ etabActif, droits = [], onAller }) {
+export default function PretAVendre({ etabActif, droits = [], onAller, masquerSiComplet = false }) {
   const [etat, setEtat] = useState(null)
   const [deplie, setDeplie] = useState(false)
 
@@ -96,6 +96,10 @@ export default function PretAVendre({ etabActif, droits = [], onAller }) {
   const faits = etat.filter((c) => c.fait).length
   const total = etat.length
   const complet = faits === total
+
+  // Sur un ecran d'accueil, un bandeau qui repete « tout va bien » est du mobilier. On ne s'y
+  // affiche que tant qu'il reste quelque chose a faire.
+  if (complet && masquerSiComplet) return null
 
   if (complet && !deplie) {
     return (
