@@ -287,6 +287,7 @@ lui fait porter le risque. La prochaine fois je donne les deux, ou je dis que je
 | 23:40 | **PRÉSENTATION HORAIRE + CQ-3 & CQ-6 LIVRÉS** (tranche « carte désignée », sans CQ-0). `tests/Reservation` **93/93** (1095 assertions), `tests/Platform` **58/58**, chaîne de migrations rejouée depuis une base vide jusqu'à `Version20260824230500`. Les 10 échecs rencontrés en route étaient **exactement ceux que le recentrage devait produire** — détail sous le tableau. | Prêt à fusionner. Ensuite ACT-1 point 2 (réserver un type), sauf ordre contraire. | Rien. **Un arbitrage commercial t'attend** : la carte désignée l'emporte aujourd'hui sur un quota de formule éventuel. |
 | 00:13 | **ACT-1 EST COMPLET — les trois manques de D16 sont couverts.** Point 2 livré : on réserve un type, l'instance s'affecte plus tard. `tests/Reservation` **96/96** (1138 assertions), `tests/Platform` **58/58**, migrations rejouées depuis une base vide jusqu'à `Version20260824234300`. | Prêt à fusionner. Périmètre : il me reste CQ-4 côté `Acces` (pas à moi) et la moitié nominative de CQ-3/CQ-6 (bloquée sur CQ-0). **Donne-moi la suite** — sinon je prends la dette de mon module. | Rien. |
 | 00:22 | **IDOR RÉEL TROUVÉ ET FERMÉ** dans `ArbitrerConflitRecurrenceProcessor` : la ressource venait du corps de la requête et n'était résolue que par son identifiant — on pouvait déplacer le créneau d'un établissement sur la ressource d'un autre. Test rouge **vérifié sans la garde** avant d'être déclaré vert, preuve d'exploitation dans le rapport. | Padel : tu me l'ouvres pour rendre `EclairageTest` vert, je m'y mets tout de suite — `main` rouge passe avant ma dette. | Rien. |
+| 00:28 | **`main` EST RÉPARÉ — `tests/Padel` 23/23.** Et la cause n'est pas celle qu'on cherchait : **aucune ligne de code n'a changé, c'est le calendrier qui a changé.** Le test était rouge deux jours par semaine depuis toujours. Démonstration chiffrée sous le tableau. | Retour à la dette de cloisonnement de mon module. | Rien. |
 
 ## Nouvelle règle de Maxime — présentation horaire à `claude-A`
 
@@ -694,3 +695,49 @@ celui du créneau, jamais celui de l'utilisateur.
 **Ce que je n'ai pas fait** : toucher aux lignes de base. Elles vivent dans `bin/`, périmètre de
 `claude-C`. Je te donnerai la liste de ce que le garde-fou constate réellement résorbé — pas ce que
 je pense avoir résorbé.
+
+
+## `EclairageTest` — personne n'avait rien cassé, c'était le calendrier
+
+Tu m'avais donné le bon point de départ : `CommanderEclairageCommand::commander()` balaie **toutes**
+les `ReservationPadel` sans borne de date, et deux réservations étaient devenues éligibles. Restait
+à savoir lesquelles, et pourquoi maintenant.
+
+**Ce n'est ni `ReserverTerrainProcessor`, ni `GenererPoulesEtBlocageHandler`, ni mon correctif de
+jauge.** C'est la réservation de démonstration des fixtures.
+
+**Les dates, calculées dans le conteneur et non déduites :**
+
+```
+conteneur               : Mon 24/08/2026 22:23 (UTC)
+créneau démo (fixtures) : Tue 25/08/2026 09:00   ← « next tuesday »
+créneau du test         : Mon 31/08/2026 19:00   ← « next monday »
+horloge simulée du test : Mon 31/08/2026 19:01
+démo éligible ?           OUI → 2 commandes parasites
+```
+
+La démo précède l'horloge simulée de six jours : son créneau a donc **commencé et fini**, ce qui
+déclenche un allumage **et** une extinction. Deux, plus la commande légitime du test : **trois**.
+C'est exactement le « 3 au lieu de 1 » observé.
+
+**Pourquoi c'est arrivé « tout seul ».** Le commentaire de la fixture annonçait un créneau
+« délibérément distinct des scénarios de test ». Il l'était par le **jour de la semaine**, pas dans
+le **temps**. Or `next tuesday` ne tombe après `next monday` que cinq jours sur sept : lancée un
+dimanche ou un lundi, la suite devient rouge. Nous étions lundi soir côté conteneur — 22h23 UTC pour
+00h23 chez nous, le décalage de deux heures dont parle D32, qui frappe ici sous un autre déguisement.
+
+**Ce test était donc rouge deux jours par semaine depuis son écriture.** Personne ne l'a vu parce que
+personne ne lance `Padel` : `claude-I` n'est pas ouverte, et la règle 8 veut — à juste titre — que
+chacun ne lance que son module.
+
+**Le correctif, une ligne** : ancrer la démo sur `next monday +1 semaine`. Elle est ainsi toujours
+huit à quatorze jours devant, donc toujours après l'horloge de n'importe quel test, quel que soit le
+jour de lancement. J'ai gardé le créneau matinal en heure creuse, qui est ce que la fixture voulait.
+
+**`tests/Padel` 23/23.**
+
+**Ce que je n'ai pas fait, et que je te signale** : `commander()` reste sans borne de date. Il
+rattrape tout le passé à chaque exécution — c'est inoffensif aujourd'hui grâce au contrôle
+d'événement déjà émis, mais c'est la cause structurelle. La borner serait un vrai lot, dans un
+périmètre qui n'est pas le mien : tu m'as ouvert Padel pour rendre ce test vert, pas pour le
+refondre.
