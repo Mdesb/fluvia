@@ -198,7 +198,7 @@ export default function App() {
       estAdmin={estAdmin}
     >
       {onglet === 'dashboard' && estAdmin && (
-        <Dashboard etabActif={etabActif} etablissements={etablissements} />
+        <Dashboard etabActif={etabActif} etablissements={etablissements} droits={droits} onNav={naviguer} />
       )}
       {onglet === 'caisse' && (
         <Caisse
