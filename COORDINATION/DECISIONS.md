@@ -883,3 +883,84 @@ re-présente. Chacune seule ne suffit pas.
 **Corollaire pour moi.** Une présentation appelle une réponse. Une session qui écrit et ne reçoit rien
 apprend que l'exercice est inutile, et cessera. Je réponds à chacune, même brièvement — et si elle
 demande une tâche, elle en repart avec une.
+
+### 2026-08-24 22:00 · D36 — Dix-sept commandes de domaine, et rien pour les exécuter
+`claude-H` demandait où brancher deux entrées de planification pour son module. **Il n'y a nulle part
+où les brancher.** Vérifié : le dépôt contient dix-sept commandes de domaine et **aucun ordonnanceur** —
+ni Symfony Scheduler, ni cron dans les conteneurs, ni entrée sur l'hôte. Les seules occurrences de
+« Scheduler » sont dans du JavaScript vendu avec API Platform et dans un fichier généré.
+
+**Ce ne sont pas des tâches de confort.** Deux au moins sont des défauts de sécurité :
+
+| Commande | Ce qui ne se produit jamais |
+|---|---|
+| `ExpirerEscalades` | une élévation **temporaire** de privilèges est en fait permanente |
+| `ExpirerDelegations` | une délégation de droits n'expire jamais |
+| `BasculerNoShow` | le no-show ne bascule jamais — D27 promet au client une séance restituée avec report, et rien ne l'exécute |
+| `AppliquerConservation` | la conservation des données ne s'applique jamais |
+| `ExpirerPmv` | le porte-monnaie virtuel n'expire jamais |
+| `LibererPaniersExpires` | un panier abandonné retient sa place indéfiniment |
+| `PurgeDocuments`, `RecalculerFenetresBadges`, `TraiterEcheancesSortie`, `AgregerMesures`, `ExecuterRapports`, … | — |
+
+**C'est le quatrième mécanisme du jour qui existe sans tourner**, après le garde-fou de topologie, la
+réinstallation des hooks et le démontage des piles de test. Mais celui-ci n'est pas de l'outillage :
+c'est **toute la couche batch du produit**. On a écrit dix-sept fois « et ensuite une commande passe et
+fait le nécessaire », et la commande ne passe jamais.
+
+**La règle que j'en tire, et elle vaut au-delà de l'ordonnanceur :** une commande qui doit s'exécuter
+périodiquement entre dans le dépôt **avec sa planification**, dans le même lot — exactement comme un
+événement entre avec son émetteur (D22) et une entité neuve avec sa migration (D32). Écrire l'exécutant
+sans l'exécution, c'est écrire du code mort qui a l'air vivant.
+
+**Périmètre : `claude-A`.** L'ordonnanceur touche Platform et l'infrastructure, et il ne doit pas être
+fait à moitié — une commande branchée deux fois est pire qu'une commande jamais branchée.
+
+### 2026-08-24 22:00 · D36-bis — Le front n'appartenait à personne, et cela se voit
+`frontend/**` **n'apparaît pas une seule fois** dans FLOTTE.md. J'ai réparti neuf périmètres — accès,
+GED, réservation, séjour, social, verticales, administration, outillage, intégration — et j'ai oublié
+l'interface.
+
+**Conséquence mesurée** : le dernier commit touchant `frontend/` date du **19/08 à 02:26**. Cinq jours.
+Aucune source du front n'a été modifiée depuis, donc le build n'est pas périmé : c'est le développement
+qui s'est arrêté. Neuf sessions construisent une API que rien n'affiche.
+
+**Attribution provisoire à `claude-H`**, qui vient de terminer SOC-1 à SOC-3 et dont le périmètre est
+vide. Ce n'est pas un déplacement de périmètre — `frontend/**` n'appartenait à personne, je ne prends
+rien à personne. **Maxime tranche** : s'il préfère que le front revienne à `claude-I`, encore à ouvrir,
+`claude-H` repasse sur le social sans discuter.
+
+### 2026-08-24 23:15 · D37 — L'instant métier d'un événement ne se devine pas
+`claude-D` a trouvé, en testant le chemin complet plutôt que l'abonné isolément, que
+`SubscriptionActivator` publiait `subscription.activated` **sans horodater l'événement**. `DomainEvent`
+tombait donc sur son défaut documenté — `null` = maintenant — et l'abonné calculait les capacités
+actives à l'instant d'**exécution** au lieu de l'instant **métier**.
+
+**Ce que cela produisait :** un abonnement prenant effet plus tard était provisionné **sans les options
+achetées** — la formule seule, parce que les lignes n'étaient pas encore actives à la date du calcul.
+Aucune erreur, aucune trace, un établissement livré incomplet. Personne ne l'aurait vu avant que le
+client ne cherche son module.
+
+**Ce n'est pas un cas isolé. J'ai compté : vingt et un fichiers émettent un `DomainEvent`, et un seul
+passe un instant explicite — celui que `claude-D` vient de corriger.** Les vingt autres reposent sur le
+défaut, y compris deux que j'ai écrits moi-même en SF-1 (`AnnulerReservationProcessor`,
+`BasculerNoShowCommand`).
+
+**Le défaut du contrat est le vrai coupable.** `?\DateTimeImmutable $occurredAt = null` se lit comme
+« optionnel », alors qu'il signifie « je certifie que l'instant métier est maintenant ». Pour une
+annulation traitée dans la seconde, c'est vrai. Pour une activation différée, une bascule de no-show
+nocturne ou une purge, c'est faux — et faux silencieusement.
+
+**Traitement : un cliquet, pas un grand soir.** Rendre le paramètre obligatoire casserait vingt et un
+appels d'un coup, répartis sur sept périmètres, et bloquerait tout le monde une soirée. On applique donc
+ce que ce dépôt fait déjà six fois : **la dette est gelée à 20, et elle ne peut que descendre.** Toute
+émission **neuve** doit passer son instant métier explicitement ; les vingt existantes se corrigent au
+fil de l'eau, par le propriétaire de chaque module, quand il repasse dessus.
+
+Garde-fou demandé à `claude-C`. Et la règle de lecture, pour ceux qui corrigeront : l'instant métier est
+celui où **le fait s'est produit pour le client** — la date d'effet de l'abonnement, l'heure du créneau
+manqué, la date de la demande de purge — jamais l'heure à laquelle le code s'exécute.
+
+**Ce que `claude-D` en tire et que je reprends :** ce défaut n'était visible qu'en testant **à travers le
+bus**. Ses tests du provisionnement seul passaient, parce qu'ils appelaient l'abonné à la main avec le
+bon instant. Un abonné testé isolément prouve que l'abonné est juste, pas que l'émetteur lui dit la
+vérité.

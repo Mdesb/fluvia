@@ -4,11 +4,20 @@ declare(strict_types=1);
 
 namespace App\Stay\Entity;
 
+use ApiPlatform\Metadata\ApiResource;
+use ApiPlatform\Metadata\Get;
+use ApiPlatform\Metadata\GetCollection;
+use ApiPlatform\Metadata\Post;
 use App\Crm\Entity\Client;
 use App\Organisation\Entity\Etablissement;
 use App\Stay\Enum\StayStatus;
+use App\Stay\State\AddStayChargeProcessor;
+use App\Stay\State\CloseStayProcessor;
+use App\Stay\State\OpenStayProcessor;
+use App\Stay\State\SettleStayProcessor;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
+use Symfony\Component\Serializer\Attribute\Groups;
 use Symfony\Component\Uid\Uuid;
 
 /**
@@ -22,10 +31,11 @@ use Symfony\Component\Uid\Uuid;
  * cumuler quatre. C'est aussi pourquoi ce module n'appelle jamais `App\Reservation` directement
  * (D2) : il écoute des faits.
  *
- * **Pas encore d'`ApiResource`, volontairement.** Exposer une collection avant d'avoir son provider
- * cloisonné reviendrait à publier un IDOR — précisément ce que D3/D8 et le garde-fou de cloisonnement
- * interdisent. La surface API arrive au lot suivant, avec son provider et ses tests de non-régression
- * de périmètre.
+ * **Le cloisonnement de cette ressource tient a deux mecanismes, pas un.**
+ * `App\Stay\Doctrine\StayScopeExtension` restreint la requete elle-meme : c'est le seul rempart
+ * d'un `GetCollection`, qui ne traverse aucun processor. `App\Stay\Security\StayScopeGuard` protege
+ * les ecritures et les entites resolues depuis le corps de la requete (D8). Retirer l'un des deux
+ * laisse une moitie de la surface ouverte.
  *
  * **Le total n'est pas stocké.** Le solde se dérive des lignes (`StayCharge`), il n'est pas
  * dénormalisé ici. Un compteur entretenu à la main dérive dès la première ligne annulée, corrigée ou
@@ -35,11 +45,54 @@ use Symfony\Component\Uid\Uuid;
 #[ORM\Table(name: 'stay_stay')]
 #[ORM\Index(columns: ['establishment_id', 'status'], name: 'IDX_STAY_ETAB_STATUS')]
 #[ORM\Index(columns: ['establishment_id', 'arrival_date'], name: 'IDX_STAY_ETAB_ARRIVAL')]
+// Index de cle etrangere declare explicitement : sans lui, Doctrine en genere un au nom calcule
+// et `migrations:diff` propose un renommage dans le lot de CHAQUE session (D32). La dette
+// d'index Stay signalee le 24/08 vient de la, et elle s'arrete ici.
+#[ORM\Index(columns: ['customer_id'], name: 'IDX_STAY_CUSTOMER')]
 #[ORM\UniqueConstraint(name: 'UNIQ_STAY_ETAB_REFERENCE', columns: ['establishment_id', 'reference'])]
+#[ApiResource(
+    shortName: 'Stay',
+    operations: [
+        new GetCollection(security: "is_granted('PERM', 'stay.read')"),
+        new Get(security: "is_granted('PERM', 'stay.read')"),
+        // `input: false` + corps lu dans le processor : idiome du depot (aucun precedent de DTO
+        // d'entree auto-deserialise), cf. `App\Vente\Service\LecteurCorps`.
+        new Post(
+            uriTemplate: '/stays',
+            security: "is_granted('PERM', 'stay.write')",
+            read: false,
+            input: false,
+            processor: OpenStayProcessor::class,
+        ),
+        new Post(
+            uriTemplate: '/stays/{id}/charges',
+            security: "is_granted('PERM', 'stay.charge')",
+            read: false,
+            input: false,
+            processor: AddStayChargeProcessor::class,
+        ),
+        new Post(
+            uriTemplate: '/stays/{id}/close',
+            security: "is_granted('PERM', 'stay.write')",
+            read: false,
+            input: false,
+            processor: CloseStayProcessor::class,
+        ),
+        new Post(
+            uriTemplate: '/stays/{id}/settle',
+            security: "is_granted('PERM', 'stay.settle')",
+            read: false,
+            input: false,
+            processor: SettleStayProcessor::class,
+        ),
+    ],
+    normalizationContext: ['groups' => ['stay:read']],
+)]
 class Stay
 {
     #[ORM\Id]
     #[ORM\Column(type: UuidType::NAME, unique: true)]
+    #[Groups(['stay:read'])]
     private Uuid $id;
 
     /**
@@ -60,9 +113,11 @@ class Stay
 
     /** Référence lisible par l'exploitant, unique par établissement (affichée au comptoir). */
     #[ORM\Column(length: 32)]
+    #[Groups(['stay:read'])]
     private string $reference;
 
     #[ORM\Column(type: 'date_immutable')]
+    #[Groups(['stay:read'])]
     private \DateTimeImmutable $arrivalDate;
 
     /**
@@ -70,20 +125,29 @@ class Stay
      * inventée obligerait à la corriger tous les matins. Le départ réel est `closedAt`.
      */
     #[ORM\Column(type: 'date_immutable', nullable: true)]
+    #[Groups(['stay:read'])]
     private ?\DateTimeImmutable $expectedDepartureDate = null;
 
-    #[ORM\Column(length: 16, enumType: StayStatus::class)]
+    // `options: default` est declare ici parce que la migration pose bien un DEFAULT en base, et
+    // qu'un mapping qui l'ignore fait proposer un CHANGE a chaque `schema:update --complete` —
+    // c'est-a-dire dans le diff de toutes les sessions (D32). Le DEFAULT SQL est voulu : une ligne
+    // inseree hors ORM (reprise, correctif manuel) nait ouverte plutot qu'avec un statut vide.
+    #[ORM\Column(length: 16, enumType: StayStatus::class, options: ['default' => 'open'])]
+    #[Groups(['stay:read'])]
     private StayStatus $status = StayStatus::Open;
 
     #[ORM\Column(type: 'datetime_immutable')]
+    #[Groups(['stay:read'])]
     private \DateTimeImmutable $openedAt;
 
     /** Départ réel. Renseigné au passage en `Closed`, jamais avant. */
     #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    #[Groups(['stay:read'])]
     private ?\DateTimeImmutable $closedAt = null;
 
     /** Règlement du solde. Peut être postérieur à `closedAt` — voir `StayStatus`. */
     #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    #[Groups(['stay:read'])]
     private ?\DateTimeImmutable $settledAt = null;
 
     public function __construct(

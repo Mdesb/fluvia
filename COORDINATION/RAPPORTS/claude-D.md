@@ -10,6 +10,9 @@
 | 18:18 | **ED-3 testé, tout vert** : `ProvisioningServiceTest` — 6 tests, 29 assertions, dont CA-1 (établissement + administrateur invité + seuls les modules souscrits exposés) et CA-2 (le même événement rejoué trois fois : une demande, un établissement, un administrateur, `attempts = 3`). Plus `tests/Platform` : 58 tests, 221 assertions, verts. **Un vrai défaut trouvé par le test** : `Role.nom` porte une unicité **globale** (`uniq_role_nom`) et je donnais au rôle livré le nom du rôle modèle — ça passait au premier client et cassait au second. Corrigé (nom = modèle + établissement + préfixe d id) et **test de non-régression à deux clients de même raison sociale** ajouté : aucun test à un seul client ne pouvait le voir. | J écris l abonné `subscription.activated` et j ajoute ses deux lignes au catalogue **dans le même commit**, selon ta méthode. | B-3 (rôle modèle), B-1.3 (identité de commit) |
 | 18:28 | **B-2 consommé selon ta méthode.** `SubscriptionActivator` (émetteur), `ProvisionOnSubscriptionActivated` (abonné) et la ligne `subscription.activated` au catalogue, **dans le même commit**. Je suis le **premier consommateur de `DomainEvent` du dépôt** — il n en existait aucun, d où tes 26 sans preneur. Tests : `tests/Subscription` 51 verts / 274 assertions, dont la chaîne activation → bus → provisioning par le vrai bus et le vrai abonné ; `tests/Platform` 58 verts (221 → 222 assertions : `ManifestCatalogueTest` a pris ma ligne). | Le tunnel lui-même : composition du panier, mandat SEPA, confirmation. | B-3 (rôle modèle), B-1.3 (identité), **Q-1 ci-dessous** |
 | 18:29 | Pile `claudeD` démontée après usage. | Reprise du tunnel (ce qui ne dépend pas de Q-1). | **Alerte, pas un blocage** : 23 piles de test tournent et 23 réseaux Docker avec (`FIX`, `FIX2`, `CQ1`, `CQ5`, `CQ5B`, `SF1`, `SF1B`, `N8`, `N10`, `N11`, `N11T`, `N12`, `N12T`, `N15`, `N16`, `NT`, `SOIR`, `GL`, `FLOTTE`, `claudeA`, `claudeA2`, `claudeC`, `claudeG`). Le 24/08 la saturation des plages réseau est arrivée à 26. Aucune n est à moi — je ne démonte pas les piles des autres. |
+| 21:50 | **Migration écrite à la main (D32) et vérifiée sur base repartie de zéro.** Le brouillon `doctrine:migrations:diff` contenait **104 instructions dont 6 à moi** ; il proposait `DROP INDEX support_ft_article_recherche`, soit la suppression de l index FULLTEXT de la recherche d aide, dans un lot ne créant qu une table. Jeté. `Version20260824213600` ne porte que ma table, ses deux clés étrangères et l unicité `uniq_provisioning_subscription` qui porte RG-ED-05. Horodatage local : le brouillon naissait `193818` (UTC) et se serait classé **avant** `Version20260824200000`, déjà appliquée. Plus : `ADMIN_ROLE_TEMPLATE` = `Administrateur d établissement` comme tu l as fixé, et **troncature par le milieu** avec l identifiant complet en suffixe — ton point était juste, une coupe par la fin aurait recréé la collision d unicité par un autre chemin. Tests : `tests/Subscription` 52 verts / 282 assertions, `tests/Platform` 58 verts (222 → 232). | Le tunnel : composition du panier, puis mandat SEPA. | Q-1 (désignation de l éditeur) — tu la prends, je continue jusqu au point où l anonymat commence |
+| 22:08 | **Le tunnel de souscription est livré de bout en bout** (spec §2) : `SubscriptionFunnel` — panier, mandat SEPA, confirmation — branché sur `EditorTenantResolver` que tu viens de livrer. L activateur ne déduit plus le tenant de la fiche client, il le résout. **Un second défaut trouvé par le test** : l activateur publiait `subscription.activated` **sans horodater l événement**, donc l abonné provisionnait avec « maintenant » au lieu de l instant métier — un abonnement prenant effet plus tard aurait été livré **sans les options achetées**, et personne ne l aurait vu avant que le client ne cherche son module. Corrigé : l événement porte `occurredAt = $at`. Tests : `tests/Subscription` 57 verts / 303 assertions, `tests/Platform` 58 verts. | Reste d ED-3 : reprise du paramétrage de démo (RG-ED-08, D11). Puis ED-4. | Rien |
+| 22:32 | **ED-3 est complet** : reprise du paramétrage de démo livrée (RG-ED-08, CA-7, D11). Choix d architecture que je te soumets : **un port chez moi, les implémentations chez chacun** — `App\Subscription\Port\ConfigurationSnapshotProvider`, collecté par `AutoconfigureTag`. Écrire l export des offres dans mon module supposerait qu il connaisse le modèle de `Offre`, et le casserait à chaque évolution de `claude-G` dans un fichier qu il n a pas le droit de corriger. La règle qui compte est encodée et testée : **le rejeu n allume jamais un module non souscrit**. Migration `Version20260824224000` (colonne JSON sur l abonnement), écrite à la main, vérifiée sur base neuve. Tests : `tests/Subscription` 64 verts / 320 assertions, `tests/Platform` 58 verts. | **Plus de tâche assignée dans mon périmètre.** ED-0 à ED-4 : ED-0 REVIEW chez toi, ED-1/ED-2 DONE, ED-3 complet. Je prends ED-4 sauf contre-ordre — mais voir ci-dessous. | Rien |
 
 ---
 
@@ -95,3 +98,37 @@ ce soit, et un événement sans tenant est refusé par le contrat.
 éditeur — paramètre de configuration, drapeau sur `Etablissement`, ou constante de référentiel. Je
 n en choisis aucune, c est du noyau (`Organisation`), donc ton périmètre. Dis-moi laquelle et je m y
 branche ; en attendant je continue sur ce qui n en dépend pas.
+
+**Note d exploitation, pour tout le monde** — `doctrine:schema:drop --force --full-database` **ne
+suffit pas** à repartir de zéro : il laisse `hot_seq` derrière lui, et la migration suivante échoue
+sur « hot_seq already exists ». Le symptôme ressemble à une migration cassée ; ce n en est pas une.
+Il faut `doctrine:database:drop --force` puis `doctrine:database:create`, puis migrer.
+
+**Choix de conception du tunnel, pour ta revue.** La référence de mandat (RUM) est **dérivée de
+l identifiant de l abonnement**, pas tirée au hasard. Un prospect qui se trompe d IBAN resigne, et un
+formulaire renvoyé deux fois arrive deux fois : avec un RUM aléatoire, chaque passage créerait un
+mandat de plus pour le même client, et la remise suivante ne saurait pas lequel présenter. Dérivé, il
+désigne toujours le même mandat — on le met à jour. C est le même identifiant que celui qui porte
+l idempotence du provisionnement, donc deux mécanismes qui ne peuvent pas se désynchroniser. Test
+dédié : resigner avec un autre IBAN laisse **un seul** mandat, porteur du nouveau.
+
+**Ce que le port attend de chaque module** (à répartir par toi, ce n est pas à moi de le demander).
+Un module qui porte de la configuration reprenable implémente
+`App\Subscription\Port\ConfigurationSnapshotProvider` : trois méthodes — `capability()`,
+`capture(Etablissement)`, `replay(Etablissement, array)`. Le tag est posé par `AutoconfigureTag` sur
+l interface, donc **rien à déclarer dans `services.yaml`** et rien à toucher chez moi.
+
+Deux contraintes à leur transmettre : l instantané ne porte **que de la configuration**, jamais de
+données personnelles (RG-ED-08) ; et `replay()` doit être **idempotent**, parce que le provisionnement
+l est par construction — un rejeu qui dupliquerait les offres livrerait un catalogue en double le jour
+où un rappel bancaire arrive deux fois.
+
+Le premier concerné est `Offre` (`claude-G`), qui porte les tarifs. Je ne le lui demande pas
+directement : la règle 2 dit qu un pair ne déplace pas un périmètre, et je m y tiens.
+
+**ED-4 touche ton périmètre, dis-moi qui le prend.** Le lot est « accès d assistance borné et audité »
+(RG-ED-07). `SupportAccess` — le titulaire, l établissement visé, la fenêtre, le motif — est chez moi.
+Mais tracer la tentative refusée à l audit, c est `app/src/Audit/**`, donc toi. Je peux écrire
+l entité, la fenêtre de validité et le refus en échec fermé sans y toucher, et te laisser le
+raccordement à l audit. Je démarre là-dessus ; si tu préfères prendre le lot entier, dis-le et je
+prends autre chose.

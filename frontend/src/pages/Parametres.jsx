@@ -6,9 +6,11 @@ import { api, membres } from '../api/client.js'
 
 const SOUS = [
   ['entites', 'Établissement & entités'],
-  ['referentiels', 'Référentiels (M1)'],
-  ['caisse', 'Caisse & paiement (M2)'],
-  ['droits', 'Comptes & droits (M8)'],
+  // Les suffixes « (M1) », « (M2) », « (M8) » étaient nos codes de modules internes. Un exploitant
+  // n'a aucune raison de les connaître, et ils n'apportaient rien à ceux qui les connaissent.
+  ['referentiels', 'Catalogue & référentiels'],
+  ['caisse', 'Caisse & moyens de paiement'],
+  ['droits', 'Utilisateurs & droits'],
   ['capacites', 'Capacités activables'],
 ]
 
@@ -24,7 +26,7 @@ export default function Parametres({ etabActif, etablissements }) {
       <div className="view-head">
         <div className="ttl">
           <h1>Paramètres</h1>
-          <p>Référentiels, entités, caisse, comptes &amp; droits</p>
+          <p>Ce que vous vendez, comment vous encaissez, et qui a le droit de faire quoi</p>
         </div>
       </div>
 

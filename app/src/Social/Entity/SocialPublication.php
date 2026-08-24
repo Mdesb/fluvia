@@ -90,6 +90,32 @@ class SocialPublication
     #[Groups(['social_publication:read', 'social_post:read'])]
     private ?\DateTimeImmutable $publishedAt = null;
 
+    /**
+     * Instant où la publication a été confiée à la file.
+     *
+     * Sert de garde contre la double mise en file : l'ordonnanceur ne reprend que ce qui n'a jamais
+     * été confié. Sans elle, deux passages rapprochés de l'ordonnanceur, ou un worker en retard,
+     * feraient publier deux fois le même message — et un doublon paru en public ne se rattrape pas.
+     */
+    #[ORM\Column(name: 'queued_at', type: 'datetime_immutable', nullable: true)]
+    #[Groups(['social_publication:read', 'social_post:read'])]
+    private ?\DateTimeImmutable $queuedAt = null;
+
+    /**
+     * Instant où l'on a cessé de collecter les statistiques, et pourquoi.
+     *
+     * Un statut supprimé chez le réseau ne réapparaîtra pas : sans cette borne, la collecte planifiée
+     * le redemanderait à chaque passage, pour toujours, en consommant le quota de l'établissement.
+     * On garde la publication et son historique — on arrête seulement d'interroger.
+     */
+    #[ORM\Column(name: 'metrics_stopped_at', type: 'datetime_immutable', nullable: true)]
+    #[Groups(['social_publication:read', 'social_post:read'])]
+    private ?\DateTimeImmutable $metricsStoppedAt = null;
+
+    #[ORM\Column(name: 'metrics_stopped_reason', length: 64, nullable: true)]
+    #[Groups(['social_publication:read', 'social_post:read'])]
+    private ?string $metricsStoppedReason = null;
+
     #[ORM\Column(name: 'created_at', type: 'datetime_immutable')]
     #[Groups(['social_publication:read'])]
     private \DateTimeImmutable $createdAt;
@@ -209,6 +235,36 @@ class SocialPublication
     public function setPublishedAt(?\DateTimeImmutable $publishedAt): self
     {
         $this->publishedAt = $publishedAt;
+
+        return $this;
+    }
+
+    public function getQueuedAt(): ?\DateTimeImmutable
+    {
+        return $this->queuedAt;
+    }
+
+    public function setQueuedAt(?\DateTimeImmutable $queuedAt): self
+    {
+        $this->queuedAt = $queuedAt;
+
+        return $this;
+    }
+
+    public function getMetricsStoppedAt(): ?\DateTimeImmutable
+    {
+        return $this->metricsStoppedAt;
+    }
+
+    public function getMetricsStoppedReason(): ?string
+    {
+        return $this->metricsStoppedReason;
+    }
+
+    public function stopMetrics(string $reason): self
+    {
+        $this->metricsStoppedAt = new \DateTimeImmutable();
+        $this->metricsStoppedReason = $reason;
 
         return $this;
     }

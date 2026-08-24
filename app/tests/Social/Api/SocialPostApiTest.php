@@ -172,6 +172,56 @@ final class SocialPostApiTest extends SocialApiTestCase
         self::assertStringNotContainsString(\App\Social\DataFixtures\SocialFixtures::DEMO_ACCESS_TOKEN, $corps);
     }
 
+    /**
+     * Le marqueur `AsyncMessage` et le routage de `messenger.yaml` ne se voient nulle part dans le
+     * code du module : si l'un des deux lâche, la publication partirait **dans la transaction du
+     * clic** — appel d'API externe compris. Le symptôme serait un ralentissement inexplicable, pas une
+     * erreur. D'où ce test sur le transport lui-même.
+     */
+    public function testUnMessageNonDateMetSesPublicationsEnFile(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $compteA = $this->compteDe(SocleFixtures::ETAB_A_NOM);
+
+        $client->request('POST', '/api/social_posts', [
+            'json' => [
+                'body' => 'A publier tout de suite.',
+                'targetAccounts' => ['/api/social_accounts/' . $compteA->getId()],
+            ],
+        ] + $entete);
+        self::assertResponseStatusCodeSame(201, (string) $client->getResponse()->getContent(false));
+
+        /** @var \Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport $transport */
+        $transport = static::getContainer()->get('messenger.transport.async');
+        $envoyes = $transport->getSent();
+        self::assertCount(1, $envoyes);
+        self::assertInstanceOf(\App\Social\Message\PublishSocialPublication::class, $envoyes[0]->getMessage());
+    }
+
+    /**
+     * Un message daté attend son heure : l'ordonnanceur qui le réveillera vient avec SOC-3. Il reste
+     * `scheduled` plutôt que de partir tout de suite — l'état dit la vérité.
+     */
+    public function testUnMessageDateNePartPasTOutDeSuite(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $compteA = $this->compteDe(SocleFixtures::ETAB_A_NOM);
+
+        $reponse = $client->request('POST', '/api/social_posts', [
+            'json' => [
+                'body' => 'A publier plus tard.',
+                'scheduledFor' => '2026-12-24T10:00:00+00:00',
+                'targetAccounts' => ['/api/social_accounts/' . $compteA->getId()],
+            ],
+        ] + $entete);
+        self::assertResponseStatusCodeSame(201, (string) $client->getResponse()->getContent(false));
+        self::assertSame('scheduled', $reponse->toArray()['status']);
+
+        /** @var \Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport $transport */
+        $transport = static::getContainer()->get('messenger.transport.async');
+        self::assertCount(0, $transport->getSent());
+    }
+
     public function testEtatRecalculeDepuisLesPublications(): void
     {
         $post = new SocialPost();

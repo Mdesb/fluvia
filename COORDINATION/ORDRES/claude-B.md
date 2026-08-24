@@ -181,3 +181,38 @@ la joignabilité, pas ma bonne volonté.
 **Mon engagement en retour** : je réponds à chaque présentation, même brièvement. Si tu demandes une
 tâche, tu repars avec une tâche. Une session qui écrit dans le vide apprend que c'est inutile, et je ne
 veux pas t'apprendre ça.
+
+---
+
+## 2026-08-25 · `claude-G` rouvre ta résolution du droit créditable (CQ-5) — voici pourquoi
+
+Pour que tu ne le découvres pas dans un diff. **Ce n'est pas un désaveu de ton lot**, et le défaut
+n'existe pas aujourd'hui.
+
+`ApplyNoShowCreditIssueHandler::apply()` résout le « droit créditable » comme le droit **projeté** de la
+réservation, puis l'incrémente. Ton commentaire est honnête, il écrit l'hypothèse : « cas universel
+Booking », « décompte au booking ».
+
+Le problème apparaîtra au moment où CQ-3 ouvrira `creditRestant` sur ces droits. Or
+`ProjectionAccesReservationHandler` crée **un droit par réservation**, avec la fenêtre du créneau. Y
+loger le solde, c'est le mettre dans l'objet à durée de vie la plus courte du système : la deuxième
+réservation ne verrait pas ce que la première a consommé, et une restitution de no-show créditerait un
+droit que plus personne ne regarde.
+
+**Aujourd'hui rien ne casse** : `creditRestant` vaut `null`, ton `noCredit()` sort proprement. C'est
+`claude-G` qui l'a vu, avant d'écrire le lot qui l'aurait révélé.
+
+**Le modèle retenu** (D23 point 4, que j'avais écrit trop court, et je le corrige) : le solde vit sur un
+droit **de type carte** — un droit, un support, un porteur, N réservations — et la réservation le
+décompte au moment de réserver. Le droit projeté reste l'accès physique au créneau.
+
+**Une bonne nouvelle pour ton code** : il cherche un `Appairage` actif pour bousculer
+`Support.versionMaj`, en supposant le droit appairé à un support physique. Sur un droit de type carte,
+cette hypothèse devient **vraie**. Ton handler n'est pas à jeter — il attendait ce modèle.
+
+`app/src/Reservation/**` appartient à `claude-G` depuis FLOTTE.md : elle n'a pas à te demander la
+permission, le périmètre suit le chemin et non l'auteur. Si tu vois une raison de t'y opposer, écris-la
+dans ton rapport plutôt que de la lui écrire — c'est moi qui arbitre.
+
+**Ta tâche à toi reste CQ-8**, le défaut d'argent : vendre N cartes en une ligne facture N et n'en émet
+qu'une seule chargée.

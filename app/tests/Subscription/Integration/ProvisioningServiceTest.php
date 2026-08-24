@@ -20,6 +20,7 @@ use App\Subscription\Entity\ProvisioningRequest;
 use App\Subscription\Entity\Subscription;
 use App\Subscription\Enum\ProvisioningStatus;
 use App\Subscription\Enum\SubscriptionStatus;
+use App\Subscription\Service\DemoConfiguration;
 use App\Subscription\Service\ProvisioningService;
 use App\Tests\SocleApiTestCase;
 use Doctrine\ORM\EntityManagerInterface;
@@ -199,6 +200,48 @@ final class ProvisioningServiceTest extends SocleApiTestCase
         self::assertSame(2, \count($this->em()->getRepository(Etablissement::class)->findBy(['nom' => 'Camping des Pins'])));
     }
 
+    /**
+     * Deux raisons sociales très longues qui ne diffèrent qu'en leur milieu.
+     *
+     * `sec_role.nom` fait 120 caractères et son unicité est globale : une troncature naïve par la fin
+     * produirait deux noms identiques et ferait échouer le provisionnement d'un client qui a déjà
+     * payé. Le cas est artificiel à l'œil, pas en base — une raison sociale complète avec forme
+     * juridique et mentions dépasse couramment la centaine de caractères.
+     */
+    public function testDeuxRaisonsSocialesTresLonguesNeProduisentPasLeMemeNomDeRole(): void
+    {
+        $modele = $this->roleTemplate();
+
+        $prefixe = str_repeat('Camping municipal des Pins ', 4); // ~108 caractères communs
+        $suffixe = str_repeat(' et de la mer', 4);
+
+        $premier = $this->service()->provision(
+            $this->subscription($this->prospect('long1@exemple.test', $prefixe.'ALPHA'.$suffixe)),
+            $this->at(),
+        );
+        $second = $this->service()->provision(
+            $this->subscription($this->prospect('long2@exemple.test', $prefixe.'OMEGA'.$suffixe)),
+            $this->at(),
+        );
+
+        self::assertSame(ProvisioningStatus::Completed, $premier->request->getStatus());
+        self::assertSame(ProvisioningStatus::Completed, $second->request->getStatus());
+
+        // Les rôles issus de *ce* modèle, et eux seuls : les fixtures du socle en portent d'autres,
+        // non modèles, qui n'ont rien à voir avec le provisionnement.
+        $noms = array_map(
+            static fn (Role $role): string => $role->getNom(),
+            $this->em()->getRepository(Role::class)->findBy(['roleModeleOrigine' => $modele]),
+        );
+
+        self::assertCount(2, $noms);
+        self::assertCount(2, array_unique($noms), 'deux clients ne doivent jamais porter le même nom de rôle');
+
+        foreach ($noms as $nom) {
+            self::assertLessThanOrEqual(120, mb_strlen($nom), 'le nom doit tenir dans sec_role.nom');
+        }
+    }
+
     // ---------------------------------------------------------------- montage
 
     private function at(): \DateTimeImmutable
@@ -213,7 +256,9 @@ final class ProvisioningServiceTest extends SocleApiTestCase
         /** @var Fonctionnalites $features */
         $features = static::getContainer()->get(Fonctionnalites::class);
 
-        return new ProvisioningService($this->em(), $hasher, $features);
+        // Aucun fournisseur d'instantané : ces tests portent sur le provisionnement, pas sur la
+        // reprise de démo, qui a ses propres cas dans SubscriptionFunnelTest.
+        return new ProvisioningService($this->em(), $hasher, $features, new DemoConfiguration([]));
     }
 
     /**
