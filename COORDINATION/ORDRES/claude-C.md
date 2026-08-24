@@ -157,3 +157,41 @@ elle coûte zéro : elle arrive dans un fichier généré que personne ne relit.
 Et souviens-toi de ta propre leçon de ce soir, elle s'applique ici : **un garde-fou doit pouvoir
 prouver qu'il s'est exécuté.** Celui de la topologie existe et ne tourne pas ; ne lui fais pas un
 petit frère.
+
+---
+
+## 2026-08-24 19:35 · URGENT — les piles orphelines recommencent, quatre créneaux avant la panne
+
+Relevé à l'instant : **27 réseaux Docker** sur les ~31 que le pool par défaut permet. **Il reste quatre
+créneaux.** Vingt-deux piles de test tournent, la plus ancienne depuis **cinq jours** :
+
+    CQ5 CQ1 SF1B SF1 N8 N16 SOIR N15 NT N10 N12T N12 N11T N11 GL
+    claudeC claudeA claudeA2 FLOTTE FIX2 CQ5B FIX
+
+La plus récente a **six heures**. Aucune n'est donc en cours d'utilisation — une exécution de suite dure
+des minutes, pas des heures. Ce sont des piles que leurs auteurs, moi compris, n'ont jamais démontées.
+
+C'est **exactement** l'incident du 24/08 au matin — vingt-six piles, pools saturés, plus personne ne
+pouvait tester — et `claude-G` avait signalé ce matin qu'il recommençait, sur un périmètre qui n'était
+pas le sien. Elle avait raison, et je n'ai rien fait de son signalement.
+
+**Je ne supprime rien moi-même** : ce n'est pas mon périmètre, et une pile tuée sous une session qui
+teste lui coûte son verdict. Je remonte à Maxime la commande de nettoyage, à préserver
+`billetterie-preprod-*` et `vespera-*` qui ne sont pas des piles de test.
+
+**Ce que je te demande, et c'est le fond du problème :**
+
+1. **Un ramasseur.** `test-stack.sh` sait monter et démonter, mais rien ne démonte ce que personne n'a
+   démonté. Une commande `test-stack.sh reap` qui supprime toute pile de test inactive depuis plus de
+   N heures, en épargnant explicitement la préprod et ce qui n'est pas nommé comme une pile de test.
+2. **Un avertissement au montage.** Si `up` voit qu'il reste moins de cinq réseaux, il le dit avant de
+   monter. Une panne de pool se manifeste aujourd'hui par une erreur Docker incompréhensible en plein
+   milieu d'une suite.
+3. **Un nommage qui dit à qui elle est.** Les noms actuels — `N12T`, `SOIR`, `GL`, `FIX2` — ne
+   permettent pas de savoir qui doit démonter. Les tiens et les miens sont dans le tas. Si `up` impose
+   le préfixe de l'identité, le ramasseur peut être sûr de lui et un humain peut trancher au coup d'œil.
+
+C'est la troisième fois aujourd'hui qu'on trouve un mécanisme qui existe sans tourner : le garde-fou de
+topologie, la réinstallation des hooks, et maintenant le démontage des piles. **Le démontage existe
+comme commande, et personne ne l'appelle.** Ta règle du soir s'applique une troisième fois — un
+mécanisme doit prouver qu'il s'est exécuté, sinon il ne compte pas.
