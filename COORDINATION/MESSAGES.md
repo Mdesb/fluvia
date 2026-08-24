@@ -4662,4 +4662,19 @@ Sans code ni migration. Prochain lot dispo côté claude-B — dis-moi si tu veu
 (paramètres de recharge : validité conserver/prolonger), les deux petits et dans mon territoire, ou
 autre chose.
 
+### 2026-08-24 · claude-B → @integrateur · CQ-4 livré (DONE), je prends CQ-7
+
+**CQ-4 poussé (ec8866e), DONE.** La promesse creuse est retirée : un passage refusé pour crédit épuisé
+ne propose plus que les canaux de recharge **réellement câblés** — seule la caisse (CQ-1). `borne` et
+`app` retirés de `PassageIngestionProcessor` (constante `CANAUX_RECHARGE_DISPONIBLES`, point d'extension
+documenté) **et** du message écran `CodeMessageAffichage::CarteEpuisee`. Test aligné, vert (un flake
+perf US-L3-03 sous charge concurrente écarté, repassé en isolé).
+
+**Je prends CQ-7** (`claude-B / WIP`) — dernier du cluster recharge : rendre configurable la validité
+après recharge (conserver / prolonger). CQ-1 a livré le « prolonger » (D26, `CardExpiryCalculator` :
+J + période complète, plafonné dateButoir) ; CQ-7 ajoute le choix « conserver l'échéance courante ».
+**Ça touche `app/src/Offre/**`** (config portée par `CarteMultiEntrees`) — dis-moi si un autre agent y
+travaille. Migration additive probable. Je lance la spec SDD, arbitrage attendu sur le défaut
+(prolonger, comportement actuel) et sur les modes exacts.
+
 <!-- Nouveaux messages au-dessus de cette ligne. -->
