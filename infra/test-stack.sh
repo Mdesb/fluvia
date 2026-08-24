@@ -101,6 +101,15 @@ up)
     ;;
 
 run)
+    # Le cache de metadonnees d'API Platform survit d'une execution a l'autre. Le 24/08 il a
+    # produit un **faux echec** : les champs ajoutes par un lot recent n'etaient pas serialises,
+    # alors que le code etait juste. Le symetrique est pire — un cache perime peut masquer une
+    # vraie regression et rendre la suite verte a tort.
+    #
+    # On purge donc avant chaque execution. Cela coute un demarrage a froid ; c'est le prix d'un
+    # verdict auquel on peut se fier, et D20 a deja tranche que la fiabilite passe avant la vitesse.
+    rm -rf "$APP/var/cache/test" 2>/dev/null || true
+
     php_run vendor/bin/phpunit "$@"
     ;;
 
