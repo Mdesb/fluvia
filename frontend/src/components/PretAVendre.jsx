@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, membres } from '../api/client.js'
+import { aLeDroit } from '../api/droits.js'
 
 // « Avant de pouvoir vendre » — les trois conditions techniques, cochées automatiquement.
 //
@@ -26,9 +27,9 @@ export default function PretAVendre({ etabActif, droits = [], onAller, masquerSi
   const [etat, setEtat] = useState(null)
   const [deplie, setDeplie] = useState(false)
 
-  const peutLireOffre = droits.includes('offre.lire')
-  const peutLireCompta = droits.includes('compta.lire')
-  const peutLireCaisse = droits.includes('caisse.lire')
+  const peutLireOffre = aLeDroit(droits, 'offre.lire')
+  const peutLireCompta = aLeDroit(droits, 'compta.lire')
+  const peutLireCaisse = aLeDroit(droits, 'caisse.lire')
 
   const verifier = useCallback(async () => {
     const [tarifs, taux, points] = await Promise.all([

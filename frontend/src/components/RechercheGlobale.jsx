@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { libelleProduit, prixIndicatif, euros, statutProduit } from '../api/produit.js'
+import { aLeDroit } from '../api/droits.js'
 
 // Recherche globale de la barre du haut.
 //
@@ -33,8 +34,8 @@ export default function RechercheGlobale({ droits = [], onNav }) {
   const boite = useRef(null)
   const cacheProduits = useRef(null)
 
-  const peutClients = droits.includes('crm.lire')
-  const peutProduits = droits.includes('offre.lire')
+  const peutClients = aLeDroit(droits, 'crm.lire')
+  const peutProduits = aLeDroit(droits, 'offre.lire')
 
   const resultats = useMemo(() => {
     const l = []
