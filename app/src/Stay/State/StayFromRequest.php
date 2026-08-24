@@ -21,7 +21,7 @@ final class StayFromRequest
 {
     public function __construct(
         private readonly EntityManagerInterface $em,
-        private readonly StayScopeGuard $garde,
+        private readonly StayScopeGuard $scopeGuard,
     ) {
     }
 
@@ -37,7 +37,7 @@ final class StayFromRequest
         }
 
         $sejour = $this->em->getRepository(Stay::class)->find(Uuid::fromString($id));
-        $this->garde->verify($sejour?->getEstablishment());
+        $this->scopeGuard->verify($sejour?->getEstablishment());
 
         \assert($sejour instanceof Stay);
 

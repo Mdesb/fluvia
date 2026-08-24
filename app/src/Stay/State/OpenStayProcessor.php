@@ -38,7 +38,7 @@ final class OpenStayProcessor implements ProcessorInterface
         private readonly EntityManagerInterface $em,
         private readonly LecteurCorps $lecteur,
         private readonly ContexteEtablissement $contexte,
-        private readonly StayScopeGuard $garde,
+        private readonly StayScopeGuard $scopeGuard,
     ) {
     }
 
@@ -46,7 +46,7 @@ final class OpenStayProcessor implements ProcessorInterface
     {
         $corps = $this->lecteur->corps();
 
-        $etablissement = $this->garde->verify($this->contexte->etablissementActif());
+        $etablissement = $this->scopeGuard->verify($this->contexte->etablissementActif());
 
         $idClient = $corps['customer'] ?? null;
         if (!is_string($idClient) || !Uuid::isValid($idClient)) {
@@ -56,7 +56,7 @@ final class OpenStayProcessor implements ProcessorInterface
         $client = $this->em->getRepository(Client::class)->find(Uuid::fromString($idClient));
         // Confrontation au périmètre de l'entité résolue depuis l'entrée client (D8, garde-fou C19) :
         // 404 uniforme, indiscernable de « ce client n'existe pas ».
-        $this->garde->verify($client?->getEtablissementCreation(), 'stay.error.customer_not_found');
+        $this->scopeGuard->verify($client?->getEtablissementCreation(), 'stay.error.customer_not_found');
 
         $arrivee = $this->date($corps['arrivalDate'] ?? null, 'arrivalDate');
         $depart = isset($corps['expectedDepartureDate'])

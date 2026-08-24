@@ -24,17 +24,17 @@ use Symfony\Bundle\SecurityBundle\Security;
  * qu'API Platform ne materialise quoi que ce soit. Les deux sont nécessaires : un `GetCollection` ne
  * passe par aucun processor, et un séjour absent de la requête ne peut pas fuiter par un oubli plus haut.
  *
- * **`CHAINES` doit lister toute entité du module exposée en `ApiResource`.** En oublier une ne casse
+ * **`CHAINS` doit lister toute entité du module exposée en `ApiResource`.** En oublier une ne casse
  * rien de visible — la ressource répond, simplement sans filtre, c'est-à-dire en IDOR. C'est pourquoi
- * `PerimetreStayExtensionTest` compare cette table à ce qui est réellement exposé, par réflexion :
+ * `StayScopeExtensionTest` compare cette table à ce qui est réellement exposé, par réflexion :
  * l'oubli devient un test rouge au lieu d'une faille silencieuse.
  *
  * @see \App\Stay\Security\StayScopeGuard pour le versant écriture
  */
-final class PerimetreStayExtension implements QueryCollectionExtensionInterface, QueryItemExtensionInterface
+final class StayScopeExtension implements QueryCollectionExtensionInterface, QueryItemExtensionInterface
 {
     /** @var array<class-string, list<string>> Relations à joindre depuis la racine jusqu'à « establishment ». */
-    public const CHAINES = [
+    public const CHAINS = [
         Stay::class => [],
     ];
 
@@ -49,7 +49,7 @@ final class PerimetreStayExtension implements QueryCollectionExtensionInterface,
         ?Operation $operation = null,
         array $context = [],
     ): void {
-        $this->restreindre($queryBuilder, $resourceClass);
+        $this->restrict($queryBuilder, $resourceClass);
     }
 
     /**
@@ -64,12 +64,12 @@ final class PerimetreStayExtension implements QueryCollectionExtensionInterface,
         ?Operation $operation = null,
         array $context = [],
     ): void {
-        $this->restreindre($queryBuilder, $resourceClass);
+        $this->restrict($queryBuilder, $resourceClass);
     }
 
-    private function restreindre(QueryBuilder $queryBuilder, string $resourceClass): void
+    private function restrict(QueryBuilder $queryBuilder, string $resourceClass): void
     {
-        if (!isset(self::CHAINES[$resourceClass])) {
+        if (!isset(self::CHAINS[$resourceClass])) {
             return;
         }
 
@@ -79,23 +79,23 @@ final class PerimetreStayExtension implements QueryCollectionExtensionInterface,
         }
 
         $alias = $queryBuilder->getRootAliases()[0];
-        foreach (self::CHAINES[$resourceClass] as $i => $relation) {
-            $nouvelAlias = 'stay_perimetre_' . $i;
-            $queryBuilder->innerJoin($alias . '.' . $relation, $nouvelAlias);
-            $alias = $nouvelAlias;
+        foreach (self::CHAINS[$resourceClass] as $i => $relation) {
+            $nextAlias = 'stay_scope_' . $i;
+            $queryBuilder->innerJoin($alias . '.' . $relation, $nextAlias);
+            $alias = $nextAlias;
         }
 
         $queryBuilder
             ->innerJoin(
                 Affectation::class,
-                'aff_perimetre_stay',
+                'aff_scope_stay',
                 Join::WITH,
                 sprintf(
-                    'IDENTITY(aff_perimetre_stay.etablissement) = IDENTITY(%s.establishment) AND IDENTITY(aff_perimetre_stay.utilisateur) = :perimetre_stay_utilisateur',
+                    'IDENTITY(aff_scope_stay.etablissement) = IDENTITY(%s.establishment) AND IDENTITY(aff_scope_stay.utilisateur) = :scope_stay_user',
                     $alias,
                 ),
             )
-            ->setParameter('perimetre_stay_utilisateur', $utilisateur->getId(), 'uuid')
+            ->setParameter('scope_stay_user', $utilisateur->getId(), 'uuid')
             ->distinct();
     }
 }

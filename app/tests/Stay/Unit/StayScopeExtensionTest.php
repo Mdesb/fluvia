@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace App\Tests\Stay\Unit;
 
 use ApiPlatform\Metadata\ApiResource;
-use App\Stay\Doctrine\PerimetreStayExtension;
+use App\Stay\Doctrine\StayScopeExtension;
 use PHPUnit\Framework\TestCase;
 
 /**
  * **Le test qui empêche la faille silencieuse.**
  *
- * `PerimetreStayExtension::CHAINES` doit lister toute entité du module exposée en `ApiResource`. En
+ * `StayScopeExtension::CHAINS` doit lister toute entité du module exposée en `ApiResource`. En
  * oublier une ne casse rien de visible : la ressource répond, simplement sans filtre d'établissement,
  * c'est-à-dire en IDOR. Aucun test fonctionnel du module ne s'en apercevrait — il faudrait un test
  * écrit exprès avec deux établissements.
@@ -20,7 +20,7 @@ use PHPUnit\Framework\TestCase;
  * toucher à la table de cloisonnement. C'est le même esprit que le garde-fou « couverture de
  * périmètre », mais à l'échelle du module, et sans attendre la poussée.
  */
-final class PerimetreStayExtensionTest extends TestCase
+final class StayScopeExtensionTest extends TestCase
 {
     /** @return list<class-string> */
     private static function entitesExposees(): array
@@ -53,9 +53,9 @@ final class PerimetreStayExtensionTest extends TestCase
         foreach (self::entitesExposees() as $classe) {
             self::assertArrayHasKey(
                 $classe,
-                PerimetreStayExtension::CHAINES,
+                StayScopeExtension::CHAINS,
                 sprintf(
-                    'L\'entité « %s » est exposée en ApiResource mais absente de PerimetreStayExtension::CHAINES : '
+                    'L\'entité « %s » est exposée en ApiResource mais absente de StayScopeExtension::CHAINS : '
                     . 'sa collection répondrait sans filtre d\'établissement (IDOR).',
                     $classe,
                 ),
@@ -67,9 +67,9 @@ final class PerimetreStayExtensionTest extends TestCase
     {
         // L'inverse compte aussi : une entrée qui ne correspond plus à rien laisse croire à une
         // protection qui ne s'applique nulle part.
-        foreach (array_keys(PerimetreStayExtension::CHAINES) as $classe) {
+        foreach (array_keys(StayScopeExtension::CHAINS) as $classe) {
             self::assertContains($classe, self::entitesExposees(), sprintf(
-                'PerimetreStayExtension::CHAINES déclare « %s », qui n\'est plus exposée.',
+                'StayScopeExtension::CHAINS déclare « %s », qui n\'est plus exposée.',
                 $classe,
             ));
         }

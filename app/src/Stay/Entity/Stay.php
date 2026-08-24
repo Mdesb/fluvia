@@ -32,7 +32,7 @@ use Symfony\Component\Uid\Uuid;
  * (D2) : il écoute des faits.
  *
  * **Le cloisonnement de cette ressource tient a deux mecanismes, pas un.**
- * `App\Stay\Doctrine\PerimetreStayExtension` restreint la requete elle-meme : c'est le seul rempart
+ * `App\Stay\Doctrine\StayScopeExtension` restreint la requete elle-meme : c'est le seul rempart
  * d'un `GetCollection`, qui ne traverse aucun processor. `App\Stay\Security\StayScopeGuard` protege
  * les ecritures et les entites resolues depuis le corps de la requete (D8). Retirer l'un des deux
  * laisse une moitie de la surface ouverte.
