@@ -26,7 +26,16 @@ fi
 # bare, qui y commite met à jour la référence sans push — donc sans contrôle. C'est le cas de `main`
 # depuis qu'il vit dans /home/debian/wt/main.
 if [ "$ACTION" = "--pre-commit" ]; then
-    GITDIR="$(git -C "$BARE" rev-parse --git-dir 2>/dev/null)" || {
+    # ⚠ Le répertoire COMMUN, pas `--git-dir`. Pour un worktree, `--git-dir` renvoie
+    # `<bare>/worktrees/<nom>`, et git n'y cherche JAMAIS les hooks : il les lit dans le
+    # répertoire commun. Un `pre-commit` posé à l'ancien emplacement était installé, visible,
+    # documenté — et silencieusement ignoré. Vérifié le 24/08 sur un dépôt jetable : le hook
+    # per-worktree laisse passer le commit, celui du répertoire commun s'exécute.
+    #
+    # Conséquence assumée : le hook devient commun à tous les worktrees du dépôt. L'interrupteur
+    # reste per-worktree — `$(git rev-parse --git-dir)/GARDE-FOUS-DESACTIVES` — donc chacun peut
+    # se retirer sans priver les autres.
+    GITDIR="$(git -C "$BARE" rev-parse --git-common-dir 2>/dev/null)" || {
         echo "✗ $BARE n'est pas un dépôt git." >&2
         exit 2
     }
@@ -47,7 +56,9 @@ if [ "$ACTION" = "--pre-commit" ]; then
     chmod +x "$CIBLE_PC"
     echo "✓ pre-commit installé : $CIBLE_PC"
     echo
-    echo "  Il contrôle les commits faits DANS ce worktree — ceux que pre-receive ne voit jamais."
+    echo "  Il contrôle les commits faits dans les worktrees de ce dépôt — ceux que pre-receive"
+    echo "  ne voit jamais, faute de push. Pour t'en retirer sans priver les autres :"
+    echo "      touch \$(git rev-parse --git-dir)/GARDE-FOUS-DESACTIVES"
     echo "  Contournable par « git commit --no-verify » : c'est un filet, pas une barrière."
     exit 0
 fi

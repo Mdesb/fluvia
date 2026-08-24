@@ -11,6 +11,23 @@
 set -uo pipefail
 
 REFERENCE="${1:-}"
+
+# Référence du contrôle de nommage. `origin/main` n'existe pas partout : un worktree du dépôt nu
+# — `/home/debian/wt/main`, là où se font les intégrations — n'a aucun remote. Le garde-fou
+# refusait alors de s'exécuter, à juste titre (il ne veut pas rendre un vert qui ne veut rien
+# dire), mais le résultat était un lanceur inutilisable à l'endroit qui compte le plus. On prend
+# la première référence qui existe réellement, et on dit laquelle.
+REFERENCE_NOMMAGE="$REFERENCE"
+if [ -z "$REFERENCE_NOMMAGE" ]; then
+    for candidat in origin/main main HEAD; do
+        if git rev-parse --verify --quiet "$candidat" >/dev/null 2>&1; then
+            REFERENCE_NOMMAGE="$candidat"
+            break
+        fi
+    done
+    [ "$REFERENCE_NOMMAGE" != "origin/main" ] && [ -n "$REFERENCE_NOMMAGE" ] \
+        && echo "· Nommage : « origin/main » introuvable ici, référence retenue : « $REFERENCE_NOMMAGE »."
+fi
 ECHECS=0
 TOTAL=0
 
@@ -90,7 +107,7 @@ fi
 # 3. Nommage anglais (D5) — uniquement sur les fichiers AJOUTÉS : l'existant est français et le
 #    reste jusqu'au retrofit. Contrairement au n°1, celui-ci n'a pas eu besoin de ligne de base :
 #    il ne trouve rien sur le neuf existant, donc il s'installe au vert.
-executer "Nommage anglais (D5)" php_racine bin/garde-fou-nommage-anglais.php "--contre=${REFERENCE:-origin/main}"
+executer "Nommage anglais (D5)" php_racine bin/garde-fou-nommage-anglais.php "--contre=$REFERENCE_NOMMAGE"
 
 # 4. Aucun secret cryptographique en valeur par défaut.
 #    Contrairement au n°1, celui-ci n'a pas de ligne de base et n'en aura pas : une clé en dur n'est
