@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { libelleProduit, prixIndicatif, euros, statutProduit } from '../api/produit.js'
 import Modal from './Modal.jsx'
+import { humaniser, mot } from '../api/vocabulaire.js'
 
 // Fiche produit détaillée — même niveau de détail que la fiche 360° client, en modale (D13 : la
 // modale est le défaut, créer un écran est l'exception ; consulter un produit depuis sa liste ne
@@ -77,7 +78,7 @@ export default function ProduitFicheModal({ open, produit, onClose }) {
         <div>
           <div className="fiche-nom">{libelleProduit(p)}</div>
           <div className="sub">
-            {p.code || '—'} · {p.typeCode || 'Type inconnu'}
+            {p.code || '—'} · {p.type?.libelle || humaniser(p.typeCode)}
           </div>
         </div>
         <span className={`badge ${st.ton}`} title={st.aide} style={{ marginLeft: 'auto' }}>
@@ -92,8 +93,8 @@ export default function ProduitFicheModal({ open, produit, onClose }) {
           <div className="st-val num">{euros(base)}</div>
         </div>
         <div>
-          <div className="st-lib">Canaux</div>
-          <div className="st-val">{(p.canaux || []).join(', ') || '—'}</div>
+          <div className="st-lib" title="Les endroits où ce produit peut être vendu.">Vendu</div>
+          <div className="st-val">{(p.canaux || []).map(mot).join(', ') || '—'}</div>
         </div>
         <div>
           <div className="st-lib" title="Quantité disponible à la vente, tenue par le module Stock.">

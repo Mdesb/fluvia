@@ -4,6 +4,7 @@ import { libelleProduit, prixIndicatif, euros, statutProduit, actionsStatut } fr
 import Tabs from '../components/Tabs.jsx'
 import ProduitOptionsModal from '../components/ProduitOptionsModal.jsx'
 import ProduitFicheModal from '../components/ProduitFicheModal.jsx'
+import { humaniser } from '../api/vocabulaire.js'
 
 export default function Catalogue({ etabActif, cible = null, onCibleConsommee }) {
   const [tab, setTab] = useState('produits')
@@ -215,7 +216,7 @@ function OngletProduits({ etabActif, cible = null, onCibleConsommee }) {
                         <span className="nm">{libelleProduit(p)}</span>
                       </button>
                     </td>
-                    <td>{p.typeCode || '—'}</td>
+                    <td>{p.type?.libelle || humaniser(p.typeCode)}</td>
                     <td>
                       <span className={`badge ${statutProduit(p).ton}`} title={statutProduit(p).aide}>
                         {statutProduit(p).libelle}
