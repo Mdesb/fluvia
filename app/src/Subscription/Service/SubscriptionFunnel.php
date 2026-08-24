@@ -6,6 +6,7 @@ namespace App\Subscription\Service;
 
 use App\Crm\Entity\Client;
 use App\Crm\Enum\TypeClient;
+use App\Organisation\Entity\Etablissement;
 use App\Organisation\Service\EditorTenantResolver;
 use App\Sepa\Entity\MandatSepa;
 use App\Sepa\Enum\StatutMandatSepa;
@@ -46,6 +47,7 @@ final class SubscriptionFunnel
         private readonly SubscriptionActivator $activator,
         private readonly TokenisationIbanInterface $tokenisation,
         private readonly ChiffreurIbanInterface $chiffreur,
+        private readonly DemoConfiguration $demoConfiguration,
     ) {
     }
 
@@ -70,6 +72,7 @@ final class SubscriptionFunnel
         string $planCode,
         array $capabilities,
         \DateTimeImmutable $at,
+        ?Etablissement $demo = null,
     ): Subscription {
         $editor = $this->editorTenant->resolve();
 
@@ -94,6 +97,13 @@ final class SubscriptionFunnel
         $subscription = (new Subscription())
             ->setCustomerReference($prospect->getId()->toRfc4122())
             ->setPlan($plan);
+
+        // Le paramétrage de démo est prélevé **maintenant**, pas au provisionnement (RG-ED-08, D11) :
+        // entre les deux, le prospect peut abandonner et son bac à sable être détruit. Ce qu'on range
+        // ici est un document autonome, qui survit à sa source.
+        if (null !== $demo) {
+            $subscription->setDemoConfiguration($this->demoConfiguration->capture($demo));
+        }
 
         foreach ($extras as $capability) {
             $subscription->addOption($capability, $options[$capability]->getMonthlyPriceCents(), $at);
