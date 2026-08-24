@@ -79,7 +79,7 @@ final class BasculerNoShowCommand extends Command
                 if ($reservation->isPresenceConfirmee()) {
                     $reservation->setStatut(StatutReservation::Honoree);
                 } else {
-                    $this->facturationHandler->declencher($reservation, StatutReservation::NoShowFacture);
+                    $facturation = $this->facturationHandler->declencher($reservation, StatutReservation::NoShowFacture);
 
                     // SF-1 / D22 — `booking.no_show`. Emis **ici seulement**, dans la branche qui
                     // constate l'absence : la branche voisine marque une presence confirmee et n'a
@@ -95,7 +95,21 @@ final class BasculerNoShowCommand extends Command
                             new EventSubject('Reservation', (string) $reservation->getId()),
                             [
                                 'customerId' => (string) $reservation->getOrganisateur()?->getId(),
-                                'amountAtRisk' => $reservation->getMontantDu(),
+                                // Revue de claude-C (24/08) : j'avais pris `Reservation::getMontantDu()`,
+                                // qui vaut **`0.00` sur toute seance deja payee** — quota de formule,
+                                // gratuite, commande boutique, dossier groupe. Six chemins d'ecriture
+                                // le mettent a zero, et ce sont exactement les cas de D27. L'evenement
+                                // annoncait donc « rien en jeu » precisement quand quelque chose
+                                // l'etait.
+                                //
+                                // Le montant en jeu n'est pas ce que le client doit encore, c'est ce
+                                // que la regle d'annulation facture pour l'absence. `declencher()`
+                                // rend la `FacturationNoShow` : on prend la sienne.
+                                'amountAtRisk' => $facturation?->getMontant() ?? '0.00',
+                                // Distingue « 0 parce qu'aucune regle ne s'applique » de « 0 parce que
+                                // la regle ne facture rien ». Sans cela, un abonne ne peut pas savoir
+                                // s'il doit relancer ou se taire.
+                                'hasBillingRule' => $facturation !== null,
                                 'slotId' => (string) $creneau->getId(),
                             ],
                         ));
