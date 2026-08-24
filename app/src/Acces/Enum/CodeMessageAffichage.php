@@ -31,7 +31,7 @@ enum CodeMessageAffichage: string
             self::PassageCompte => 'Passage enregistré',
             self::HorsMarge => 'Hors horaires autorisés',
             self::DejaPasse => 'Déjà passé, veuillez patienter',
-            self::CarteEpuisee => 'Carte épuisée — rechargez à la caisse, à la borne ou dans l\'application',
+            self::CarteEpuisee => 'Carte épuisée — rechargez à la caisse',
             self::SupportBloque => 'Support bloqué, présentez-vous à l\'accueil',
             self::JaugeAtteinte => 'Capacité maximale atteinte',
             self::DroitInvalide => 'Accès non valide',
