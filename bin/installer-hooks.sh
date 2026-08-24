@@ -103,6 +103,10 @@ CIBLE="$BARE/hooks/pre-receive"
 # sinon le hook censé corriger « versionné mais jamais installé » souffre de ce défaut même.
 SOURCE_POST="$RACINE_HOOKS/post-receive"
 CIBLE_POST="$BARE/hooks/post-receive"
+# `post-commit` et `post-merge` couvrent le chemin que `post-receive` ne voit pas : l'intégrateur
+# fusionne dans `wt/main`, ce qui met `main` à jour SANS réception. Le reflog du 25/08 ne contient
+# que des `merge` — c'est le chemin normal, et il était sans réinstallation automatique.
+HOOKS_AUTO="post-receive post-commit post-merge"
 INTERRUPTEUR="$BARE/hooks/GARDE-FOUS-DESACTIVES"
 
 case "$ACTION" in
@@ -135,15 +139,17 @@ case "$ACTION" in
         else
             echo "hook      : absent"
         fi
-        if [ -f "$CIBLE_POST" ]; then
-            if cmp -s "$SOURCE_POST" "$CIBLE_POST"; then
-                echo "post-recv : installé, à jour"
+        for h in $HOOKS_AUTO; do
+            if [ -f "$BARE/hooks/$h" ]; then
+                if cmp -s "$RACINE_HOOKS/$h" "$BARE/hooks/$h"; then
+                    printf "%-10s: installé, à jour\n" "$h"
+                else
+                    printf "%-10s: installé, DIFFÉRENT de hooks/%s\n" "$h" "$h"
+                fi
             else
-                echo "post-recv : installé, DIFFÉRENT de hooks/post-receive"
+                printf "%-10s: absent — la réinstallation automatique (D28) est incomplète\n" "$h"
             fi
-        else
-            echo "post-recv : absent — la réinstallation automatique (D28) ne tourne pas"
-        fi
+        done
         COMMUN_ETAT="$(git -C "$BARE" rev-parse --git-common-dir 2>/dev/null)"
         case "$COMMUN_ETAT" in /*) ;; *) COMMUN_ETAT="$BARE/$COMMUN_ETAT" ;; esac
         if [ -f "$COMMUN_ETAT/hooks/pre-commit" ]; then
@@ -161,7 +167,8 @@ case "$ACTION" in
         ;;
 
     --retirer)
-        rm -f "$CIBLE" "$CIBLE_POST"
+        rm -f "$CIBLE"
+        for h in $HOOKS_AUTO; do rm -f "$BARE/hooks/$h"; done
         echo "✓ Hooks retirés. Les push ne sont plus contrôlés, et la réinstallation"
         echo "  automatique (D28) ne tourne plus non plus."
         ;;
@@ -174,11 +181,13 @@ case "$ACTION" in
         cp "$SOURCE" "$CIBLE"
         chmod +x "$CIBLE"
         echo "✓ Hook installé : $CIBLE"
-        if [ -f "$SOURCE_POST" ]; then
-            cp "$SOURCE_POST" "$CIBLE_POST"
-            chmod +x "$CIBLE_POST"
-            echo "✓ Hook installé : $CIBLE_POST (réinstallation automatique, D28)"
-        fi
+        for h in $HOOKS_AUTO; do
+            if [ -f "$RACINE_HOOKS/$h" ]; then
+                cp "$RACINE_HOOKS/$h" "$BARE/hooks/$h"
+                chmod +x "$BARE/hooks/$h"
+                echo "✓ Hook installé : $BARE/hooks/$h (réinstallation automatique, D28)"
+            fi
+        done
         echo
         echo "  Il refuse un push dont les garde-fous échouent — pour tout le monde, sans recours"
         echo "  côté client (--no-verify n'agit pas sur pre-receive)."

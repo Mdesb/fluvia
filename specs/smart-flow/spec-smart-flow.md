@@ -336,6 +336,76 @@ publication d'événement).
    avant figement, notamment la distinction lecture (`smart_flow.read`) / gestion opérationnelle
    (`smart_flow.reschedule_manage`) / paramétrage (`smart_flow.manage`).
 
+## 11. Critères d'acceptation
+
+> Repris et **adaptés de la spec `spec-sf0-smart-flow.md` de claude-B** (arbitrage **D31** : ma spec est
+> canonique car SmartFlow est le périmètre claude-E, mais ses critères d'acceptation et ses cas limites
+> manquaient à la mienne). Transposés au modèle du présent document (`RescheduleProposal`,
+> `SlotWaitlistEntry`, `FootfallAggregate`, RG-SF-01..17) et à ses événements — les événements
+> `slot.offered`/`slot.offer_accepted` propres à la spec de B ne sont **pas** repris (mon modèle notifie
+> hors bus, RG-SF-10, et n'émet que `slot.released`).
+
+- **CA-1** — *Étant donné* un établissement où la feature Smart Flow n'est pas activée, *quand*
+  `booking.cancelled` est publié, *alors* aucun `RescheduleProposal`, `SlotWaitlistEntry` ni
+  `slot.released` n'est produit.
+- **CA-2** — *Étant donné* un créneau complet avec un candidat en liste d'attente **interne**
+  (`App\Reservation`, RG-M5-06), *quand* une réservation est annulée dans le délai franc, *alors* la
+  promotion native de `Reservation` a lieu **en premier** (bus synchrone) et Smart Flow, en réagissant
+  ensuite à `booking.cancelled`, **relit la disponibilité réelle** et ne publie pas `slot.released` si la
+  place est déjà reprise (RG-SF-02).
+- **CA-3** — *Étant donné* un créneau libéré sans candidat interne et une `SlotWaitlistEntry` `waiting`
+  couvrant la ressource, *quand* `slot.released` est publié, *alors* une `RescheduleProposal` est
+  matérialisée pour le candidat le plus ancien (FIFO, RG-SF-06).
+- **CA-4** — *Étant donné* `booking.reschedule_requested` publié pour un no-show restitué-avec-report,
+  *quand* Smart Flow le consomme, *alors* une `RescheduleProposal` `searching` est créée ; si un créneau
+  compatible existe (RG-SF-09), elle passe `proposed` et le client est notifié (RG-SF-08..10).
+- **CA-5** — *Étant donné* une `RescheduleProposal` `proposed`/`searching` dont `expiresAt` est dépassé
+  sans confirmation, *quand* la tâche planifiée d'expiration s'exécute, *alors* elle passe `expired`
+  (RG-SF-11/12) ; s'il s'agissait d'une promotion de liste d'attente, l'inscription suivante est tentée.
+- **CA-6** — *Étant donné* une `RescheduleProposal` `proposed`, *quand* le client crée sa réservation par
+  le chemin normal de `Reservation` puis appelle `POST /smart-flow/reschedule-proposals/{id}/accept`,
+  *alors* la proposition passe `confirmed` ; un `accept` référençant une réservation d'un autre
+  établissement **ou** d'un autre `customerId` est refusé 422 (IDOR, RG-SF-16, §0.9 du plan).
+- **CA-7** — *Étant donné* `access.recorded` **non émis** (état réel du code, SF-1), *quand* on interroge
+  `GET /smart-flow/footfall`, *alors* la réponse est un état vide **documenté comme bloqué par une
+  dépendance non livrée**, jamais une donnée simulée ni une erreur silencieuse (même discipline que D27
+  pour le report ; RG-SF-14).
+- **CA-8** — *Étant donné* deux établissements A et B, *quand* un créneau se libère chez A, *alors* seul
+  le périmètre de A voit les `RescheduleProposal`/`SlotWaitlistEntry` correspondants — jamais de fuite
+  cross-établissement (D3/D8, RG-SF-15/16).
+- **CA-9** — *Étant donné* un même `booking.cancelled` publié deux fois (rejeu, remontée hors-ligne
+  différée), *quand* Smart Flow le consomme la seconde fois, *alors* aucun `slot.released` en double
+  n'est publié (idempotence par `(slotId, subject.id)` via `SlotReleaseTrace`, RG-SF-04).
+- **CA-10** — *Étant donné* le manifeste `App\SmartFlow`, *quand* la suite s'exécute, *alors* chaque
+  événement de `eventsEmitted()` figure au catalogue (RG-PLAT-06, `ManifestCatalogueTest`).
+
+## 12. Cas limites
+
+> Même origine que la §11 (spec de claude-B, arbitrage D31), adaptés au présent modèle.
+
+- **Plusieurs places libérées d'un coup** (créneau à capacité > 1) : chaque libération constatée donne
+  une trace et un traitement **distincts** (RG-SF-04), jamais une proposition fusionnée à deux places.
+- **Le créneau redevient complet entre la proposition et la confirmation.** La garde de capacité reste
+  chez `Reservation` (`JaugeCreneauGuard`, source de vérité, RG-SF-01) : la création de la réservation de
+  report échoue côté `Reservation`, la proposition n'est jamais confirmée et expire, puis RG-SF-06/11
+  relance. Assumé en v0 — la capacité n'est jamais dupliquée chez Smart Flow.
+- **Acceptation explicite plutôt que corrélation.** Contrairement à la spec de B (qui corrélait un
+  `booking.created` au créneau offert, avec un risque de faux positif de conversion), mon modèle confirme
+  par un **appel explicite** `POST .../accept` (§0.9 du plan) : pas de faux positif de corrélation, au
+  prix d'un appel API de plus — écart de conception assumé et signalé.
+- **`SlotWaitlistEntry` aux critères trop larges** : peut recevoir une proposition sur un créneau peu
+  pertinent. Garde-fou v0 minimal = `searchWindowStart`/`searchWindowEnd` obligatoires (RG-SF-05) ;
+  affinage laissé à SF-2 (⚠ hypothèse).
+- **Désactivation de la feature Smart Flow avec des `RescheduleProposal` en cours** : aucune donnée
+  supprimée, mais la tâche planifiée d'expiration/promotion **vérifie l'activation par établissement**
+  avant de traiter chacun — pas une fois globalement au démarrage.
+- **Réentrance du bus (D7)** : `slot.released` → promotion → notification ne doit jamais reboucler vers un
+  événement déjà en cours de publication ; la profondeur est bornée par le noyau
+  (`SymfonyEventBus`) — ne pas republier un déclencheur depuis son propre traitement.
+- **Volume de `access.recorded`** (footfall, I3) : agréger par événement plutôt que par lot est simple
+  mais coûteux à fort trafic — question de performance explicitement **différée à l'incrément I3**, non
+  tranchée ici.
+
 ---
 
 **Prochaine étape :** plan technique `SF-0→plan` (sdd-architecte), qui devra notamment (a) trancher le

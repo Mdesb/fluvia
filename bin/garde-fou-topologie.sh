@@ -67,16 +67,34 @@ if [ "$EST_NU" = "true" ]; then
         exit 1
     fi
 
+    # Ce qui reste comme contrôle dépend d'un fait, pas d'une supposition : y a-t-il un `pre-commit`
+    # installé sur ce dépôt ? Le 25/08 ce message annonçait « aucune barrière » dans les deux cas,
+    # alors que `pre-commit` s'exécutait bel et bien pour claude-G — sept garde-fous, code 0. Le refus
+    # restait juste, la raison était fausse, et un garde-fou qui exagère son constat use la confiance
+    # qu'on lui accorde autant que celui qui donne un mauvais conseil.
     echo
-    echo "=== ÉCHEC — cette session écrit sans franchir aucune barrière ==="
+    if [ -x "$COMMUN/hooks/pre-commit" ]; then
+        echo "=== ÉCHEC — cette session contourne la seule barrière non contournable ==="
+    else
+        echo "=== ÉCHEC — cette session écrit sans franchir aucune barrière ==="
+    fi
     echo
     echo "  Worktree      : $RACINE (branche $BRANCHE)"
     echo "  Dépôt commun  : $COMMUN  ← c'est le dépôt NU"
     echo "  origin        : ${ORIGINE:-aucun}"
     echo
     echo "  Commiter ici met à jour la ref partagée immédiatement, sans push. \`pre-receive\` ne"
-    echo "  s'exécute donc JAMAIS, et aucun des garde-fous n'est traversé — ils sont verts et"
-    echo "  personne ne les lance. C'est ce qui est arrivé à six sessions le 24/08."
+    echo "  s'exécute donc JAMAIS. C'est ce qui est arrivé à six sessions le 24/08."
+    echo
+    if [ -x "$COMMUN/hooks/pre-commit" ]; then
+        echo "  Ce qui reste : \`pre-commit\` EST installé sur ce dépôt et il tourne. Mais il se"
+        echo "  contourne côté client — \`git commit --no-verify\` suffit — là où \`pre-receive\` ne se"
+        echo "  contourne pas. Et il ne lance ni le contrôle de topologie ni celui du manifeste."
+    else
+        echo "  Et RIEN ne le remplace : aucun \`pre-commit\` sur ce dépôt. Ce que tu écris entre dans"
+        echo "  les refs partagées sans qu'aucun garde-fou ne tourne — ils sont verts et personne ne"
+        echo "  les lance."
+    fi
     echo
     echo "  Une session de travail doit être un worktree d'un CLONE, dont l'origine est le dépôt nu."
     echo "  Seul le worktree d'intégration (\`main\`) a le droit d'être sur le nu, et il est contrôlé"
