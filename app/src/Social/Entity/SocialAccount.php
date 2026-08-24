@@ -16,6 +16,7 @@ use App\Social\State\SocialAccountProcessor;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
+use Symfony\Component\Serializer\Attribute\SerializedName;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Validator\Constraints as Assert;
 
@@ -81,7 +82,7 @@ class SocialAccount
      * quand le client ne le fournit pas et que le réseau en admet un.
      */
     #[ORM\Column(name: 'host', length: 255, nullable: true)]
-    #[Assert\Url(protocols: ['https'], message: 'social.error.host_must_be_https')]
+    #[Assert\Url(requireTld: true, protocols: ['https'], message: 'social.error.host_must_be_https')]
     #[Groups(['social_account:read', 'social_account:write'])]
     private ?string $host = null;
 
@@ -261,14 +262,21 @@ class SocialAccount
     /**
      * Seule fenêtre lisible sur le coffre : « y a-t-il un jeton », jamais lequel. C'est ce qu'une
      * interface a besoin de savoir pour afficher « reconnecter ».
+     *
+     * `SerializedName` n'est pas cosmétique : sans lui, le sérialiseur retire le préfixe `has` et
+     * publie ce booléen sous le nom `accessToken`. Une réponse d'API contiendrait alors un champ
+     * portant le nom exact du secret — un lecteur pressé, une capture d'écran dans un ticket, et on
+     * croit à une fuite ; pire, un client pourrait le prendre pour le jeton lui-même.
      */
     #[Groups(['social_account:read'])]
+    #[SerializedName('hasAccessToken')]
     public function hasAccessToken(): bool
     {
         return $this->accessTokenEncrypted !== null && $this->accessTokenEncrypted !== '';
     }
 
     #[Groups(['social_account:read'])]
+    #[SerializedName('hasRefreshToken')]
     public function hasRefreshToken(): bool
     {
         return $this->refreshTokenEncrypted !== null && $this->refreshTokenEncrypted !== '';
