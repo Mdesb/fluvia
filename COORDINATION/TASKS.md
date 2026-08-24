@@ -35,7 +35,7 @@ Ne touche pas un chemin déjà en `WIP` par une autre instance.
 | SOC-3 | Collecte planifiee des statistiques : instantanes + charge brute conservee | `app/src/Social/**` | *a assigner* | CLAIM | 21/08 |
 | SOC-4 | Adaptateurs Meta (Page + Instagram), apres verification dentreprise et revue applicative | `app/src/Social/**` | *a assigner* | EXTERNE | 21/08 |
 | DMS-0 | GED : spec SDD (cloisonnement, URL signees expirantes, retention legale, versionnement) | `specs/dms/**` | **claude-B** | DONE | 21/08 |
-| DMS-1 | GED : implementation du stockage, des versions et des acces — **selon spec arbitree D18** | `app/src/Dms/**` | **claude-B** | CLAIM | 22/08 |
+| DMS-1 | GED : implementation du stockage, des versions et des acces — **selon spec arbitree D18** | `app/src/Dms/**` | **claude-B** | DONE | 24/08 |
 | C17 | NF525 : troisieme chaine (Facturation) — cle obligatoire depuis lenvironnement | `app/src/Facturation/Nf525` | **claude-A** | DONE | 22/08 |
 | ACT-0 | Spec SDD : composition dactivites, format de paquet verticale, remplacement de Metier | `specs/activites/**` | **claude-A** | CLAIM | 22/08 |
 | ACT-1 | Reservation : quantite consommee, reservation par type, quota de second niveau | `app/src/Reservation/**` | *a assigner* | CLAIM | 22/08 |
@@ -52,12 +52,12 @@ Ne touche pas un chemin déjà en `WIP` par une autre instance.
 | C21 | Performance : verifier US-L3-03 et RG-ACC-01 hors suite fonctionnelle (materiel representatif, a chaud, percentile) | `infra/**` | *a assigner* | CLAIM | 22/08 |
 | C22 | OCR mode degrade : assertion sur labsence dappel reseau plutot que sur le chronometre | `app/tests/Ocr/**` | **claude-B** (verif) | DONE | 24/08 |
 | C23 | Tests : remplacer les createMock() sans attente par createStub() (5 notices, meme famille) | `app/tests/**` | **claude-C** | DONE | 22/08 |
-| RR-1 | **PREALABLE** — emettre les evenements declencheurs manquants (panier abandonne, facture echue, devis expire, client inactif) | `app/src/{Boutique,Facturation,Crm}/**` | *a assigner* | CLAIM | 23/08 |
-| SF-1 | **PREALABLE** — emettre booking.cancelled, booking.no_show, access.recorded | `app/src/{Reservation,Acces}/**` | *a assigner* | CLAIM | 23/08 |
-| RR-0 | Spec SDD Revenue Recovery — trancher dabord : etendre Recouvrement ou module neuf | `specs/revenue-recovery/**` | *a assigner* | CLAIM | 23/08 |
-| SF-0 | Spec SDD Smart Flow — retards, creneaux liberes, liste dattente, affluence | `specs/smart-flow/**` | **claude-B** | REVIEW | 24/08 |
-| RR-2 | Moteur de relance pilote par evenements (apres RR-0 et RR-1) | `app/src/RevenueRecovery/**` | *a assigner* | CLAIM | 23/08 |
-| SF-2 | Creneau libere, liste dattente, revente du creneau (apres SF-0 et SF-1) | `app/src/SmartFlow/**` | *a assigner* | CLAIM | 23/08 |
+| RR-1 | **PREALABLE** — emettre les evenements declencheurs manquants (panier abandonne, facture echue, devis expire, client inactif) | `app/src/{Boutique,Facturation,Crm}/**` | **claude-E** | CLAIM | 23/08 |
+| SF-1 | **PREALABLE** — emettre booking.cancelled, booking.no_show, access.recorded | `app/src/{Reservation,Acces}/**` | **claude-E** | CLAIM | 23/08 |
+| RR-0 | Spec SDD Revenue Recovery — trancher dabord : etendre Recouvrement ou module neuf | `specs/revenue-recovery/**` | **claude-E** | CLAIM | 23/08 |
+| SF-0 | Spec SDD Smart Flow — retards, creneaux liberes, liste dattente, affluence | `specs/smart-flow/**` | **claude-E** | REVIEW | 24/08 |
+| RR-2 | Moteur de relance pilote par evenements (apres RR-0 et RR-1) | `app/src/RevenueRecovery/**` | **claude-E** | CLAIM | 23/08 |
+| SF-2 | Creneau libere, liste dattente, revente du creneau (apres SF-0 et SF-1) | `app/src/SmartFlow/**` | **claude-E** | CLAIM | 23/08 |
 | CQ-0 | **PREALABLE** — rattacher un DroitAcces a un porteur (facultatif : la carte au porteur reste possible) | `app/src/{Acces,Crm}/**` | **claude-C** | CLAIM | 23/08 |
 | CQ-1 | Recharge dune carte multi-entrees : increment du droit existant, bascule versionMaj, vente rattachee | `app/src/Acces/**` | **claude-B** | DONE | 24/08 |
 | CQ-2 | Consultation du solde en lecture seule (ne consomme rien) + modale de caisse avec ajout rapide | `app/src/Acces/**` | **claude-A** | CLAIM | 23/08 |
@@ -65,7 +65,7 @@ Ne touche pas un chemin déjà en `WIP` par une autre instance.
 | CQ-4 | propositionRecharge : ne designer que des canaux reellement implementes | `app/src/Acces/State/PassageIngestionProcessor.php` | **claude-B** | DONE | 24/08 |
 | CQ-5 | No-show : issue sur le credit (decompte / restitue / restitue avec report), orthogonale a la facturation | `app/src/Reservation/**` | **claude-B** | DONE | 24/08 |
 | CQ-6 | Carte de seances nominative : quota de STOCK, distinct du quota periodique des formules | `app/src/{Reservation,Acces}/**` | *a assigner* | CLAIM | 23/08 |
-| CQ-7 | Parametres de recharge : la validite apres recharge se configure (conserver / prolonger) | `app/src/Offre/**` | **claude-B** | REVIEW | 24/08 |
+| CQ-7 | Parametres de recharge : la validite apres recharge se configure (conserver / prolonger) | `app/src/Offre/**` | **claude-G** | DONE | 24/08 |
 | ACC-4 | Resolution du pilote dacces **par etablissement** — lalias DI unique rend les capacites globales et vide D17 dune partie de son sens | `app/src/Acces/**` | *a assigner* | CLAIM | 23/08 |
 | CQ-8 | **ARGENT** — vendre N cartes en une ligne facture N et nemet quune seule chargee (defaut preexistant, revele par CQ-1) | `app/src/Vente/Service/ValiderVenteService.php` | **claude-B** | REVIEW | 24/08 |
 | C24 | Le hook installe compare son contenu a la version poussee et avertit sil est perime (D28) | `hooks/pre-receive` | **claude-C** | CLAIM | 24/08 |
