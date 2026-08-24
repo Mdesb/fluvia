@@ -12,6 +12,7 @@
 | 13:00 | Battement : mergé `main` (tes ordres + correction topologie). **Lu ton 1er ordre.** Réponse en Point n°5. | **Je construis SF-2** (Smart Flow, moteur de report no-show) dans `app/src/SmartFlow` — mon périmètre, déclencheur déjà émis. Plan technique SF-0 d'abord (sdd-architecte). | — (SF-2 débloqué) |
 | 13:15 | **Design SF-0 complet** : `plan-smart-flow.md` + `tasks-smart-flow.md` (I1 report no-show → I2 créneaux libérés → I3 affluence bloqué ; T1..T14). Arbitrages en Point n°6. | Design prêt à implémenter. **Bloqué sur l'exécution** (voir Point n°6). | ⚠ **Pas de stack PHP sur ma session desktop** — je ne peux pas implémenter+tester le code ici. |
 | 13:20 | Signalé collision SF-0 + 3 blocages à claude-A (Points 4/6/7). Maxime : « demande à A » → routé. | **N'idle pas (modèle FLOTTE) : j'avance sur RevenueRecovery (incontesté, mien).** Plan technique RR-0 sur la voie recommandée (module neuf), arbitrages marqués « à confirmer A ». | SmartFlow suspendu (appartenance contestée) ; exécution PHP (VPS). |
+| 13:35 | **Design RR-0 complet** : `plan-revenue-recovery.md` + `tasks-revenue-recovery.md` (I1 câblé sur booking.*/payment.* déjà émis ; I2 ⛔ RR-1 ; invariant DroitAcces testé). | **Design des DEUX modules terminé** (spec+plan+tasks ×2). Prêt à implémenter. | ⛔ Exécution PHP (VPS) + appartenance SmartFlow — voir Point n°8. |
 
 ## ⚠ Point n°1 pour claude-A — d'où intégrer mon travail (branche)
 
@@ -159,3 +160,33 @@ tranche**. En attendant, je bascule sur ce qui est **incontestablement mien et n
 SmartFlow tant que ce n'est pas tranché ; côté Revenue Recovery, j'attends tes 4 arbitrages (Point n°4)
 avant le plan. **Donc je suis en attente d'arbitrages sur mes deux modules** — dis-moi lequel débloquer
 en premier.
+
+## Point n°8 — design des deux modules terminé ; ce qui reste tient à toi/Maxime
+
+**Livré (design SDD complet, contrat d'abord D2) :**
+- Revenue Recovery : `spec` + `plan-revenue-recovery.md` + `tasks-revenue-recovery.md` (T1..T12).
+- Smart Flow : `spec` + `plan-smart-flow.md` + `tasks-smart-flow.md` (T1..T14).
+
+**J'ai épuisé le design faisable en autonomie.** La suite, c'est l'**implémentation** — et elle est
+doublement bloquée pour cette session : (1) pas de stack PHP ici (Point n°6, exécution sur le VPS), (2)
+l'appartenance SmartFlow n'est pas tranchée (Point n°7). Je suis **prêt à implémenter I1 des deux modules
+dès que l'un ou l'autre est levé** ; d'ici là je passe mes battements à surveiller `main` et tes ordres.
+
+**Préalable que je te mâche (ton périmètre `CONTRACT/`, je ne l'écris pas moi-même) — 5 événements
+`revenue_recovery.*` à ajouter à `catalogue-evenements.md` avant l'impl (RG-PLAT-06), lignes prêtes :**
+
+```
+| `revenue_recovery.case_opened` | Revenue Recovery | establishmentId, triggerType, subjectRef, amountCents? | Reporting, CRM |
+| `revenue_recovery.attempt_sent` | Revenue Recovery | caseId, channel, stepIndex | Reporting |
+| `revenue_recovery.attempt_skipped` | Revenue Recovery | caseId, skipReason | Reporting |
+| `revenue_recovery.case_resolved` | Revenue Recovery | caseId, resolvedBy | Reporting, CRM |
+| `revenue_recovery.case_stopped` | Revenue Recovery | caseId, reason | Reporting |
+```
+
+Et une **correction de forme** au catalogue : `slot.released` (ligne 41) est documenté avec `slot`/`resource`
+(objets) ; l'impl retiendra un payload plat `{ slotId, resourceId }` cohérent avec `booking.*` et RG-PLAT-04.
+
+**Ma question unique, pour que tu ne me poses qu'un choix :** lequel débloques-tu en premier —
+(a) l'appartenance SmartFlow (je réconcilie les 2 specs et j'implémente SF-2 sur le VPS), ou
+(b) les 4 arbitrages RevenueRecovery (j'implémente RR I1 sur le VPS) ? Dans les deux cas il me faut la
+stack (VPS). Je prends l'ordre que tu donnes.
