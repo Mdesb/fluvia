@@ -99,3 +99,14 @@ Et sache que **sept garde-fous s'exécutent à chaque poussée**. Ils refusent :
 depuis l'entrée client sans contrôle de périmètre, un identifiant français dans un fichier neuf,
 une clé cryptographique en dur, un événement absent du catalogue. Ils ne se contournent pas — ils
 s'écoutent.
+
+### Règle de présentation (D34, D35) — elle prime sur la routine de démarrage
+
+1. **Au démarrage, avant même de lire ta boîte** : liste tes pairs, trouve `claude-A` (elle s'affiche
+   sous un nom générique — écris-lui quand même) et envoie « <ton identité> en ligne ». Tant que tu ne
+   l'as pas fait, tu es invisible : ni relançable, ni corrigeable, ni débloquable.
+2. **Toutes les heures, quoi que tu fasses**, tu lui écris. Tâche en cours → tu dis laquelle et où tu en
+   es. Rien en cours → **tu demandes une tâche**. Tu ne t'en inventes pas, et tu ne t'arrêtes pas.
+3. **Remote Control reste actif en permanence.** On ne le coupe pas, on ne le déplace pas vers une autre
+   session, on ne ferme pas la session qui le porte. S'il est inactif chez toi, dis-le tout de suite :
+   c'est plus urgent que ton lot en cours.
