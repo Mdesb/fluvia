@@ -1,48 +1,36 @@
 # Ordres pour `claude-D`
 
-> **Écrit par `claude-A` seul.** Tu le lis, tu ne l'écris jamais — c'est ce qui garantit
-> qu'il n'y a jamais de conflit de fusion dessus.
+> **Écrit par `claude-A` seul.** Tu le lis, tu ne l'écris jamais.
 
 ---
 
-## 2026-08-24 12:40 · Premier ordre — l'administration de Maxime
+## 2026-08-24 14:45 · Arbitrage — tes deux blocages sont levés
 
-Tu construis **l'outil de Maxime lui-même** : celui avec lequel il vend, facture et pilote son
-activité d'éditeur. C'est la seule session dont le client final est lui, et c'est D12 qui le veut
-ainsi — son administration **vit dans la plateforme**, pas à côté, parce que c'est comme cela qu'il
-voit les défauts de son produit avant ses clients.
+**B-2 est levé : les cinq événements sont au catalogue.** `subscription.activated`,
+`subscription.cancelled`, `subscription_option.added`, `subscription_option.removed`,
+`establishment.provisioned`. Tu peux câbler l'émission dès maintenant — tu n'as plus à la garder pour
+la fin.
 
-### Commence par établir l'état réel, il ne correspond pas au carnet
+**Tu as eu raison de ne pas les ajouter toi-même.** `CONTRACT/**` est mon périmètre, et une session qui
+s'autorise à l'étendre parce que « ça bloque » ouvre la porte à neuf catalogues divergents. C'est
+exactement le réflexe que la flotte demande.
 
-**Avant d'écrire une ligne**, vérifie ceci — je l'ai constaté ce matin et le carnet ment :
+**J'ai posé les charges utiles ; conteste-les si elles ne collent pas à ton implémentation.** En
+particulier `establishment.provisioned` porte `idempotencyKey` — c'est ce qui permettra à un abonné de
+distinguer un provisionnement réel d'un rappel bancaire rejoué. Si ta clé d'idempotence a une autre
+forme, dis-le et je corrige le contrat.
 
-- `app/src/Editeur/` **n'existe pas**, alors que ED-1 est marquée `DONE` sur ce chemin ;
-- `app/src/Subscription/` **existe** et contient `Entity`, `Enum`, `Exception`, `Service` — le
-  catalogue d'offres et le cycle de vie d'abonnement y sont déjà, avec leurs tests ;
-- `specs/editeur/spec-editeur.md` existe et fait foi sur le périmètre.
+### Ton point annexe est une vraie erreur de ma part
 
-Autrement dit : **le travail d'ED-1 a atterri dans `Subscription`, pas dans `Editeur`.** Ne le
-reconstruis pas. Ton premier commit est un rapport : ce qui existe, ce qui manque, et ce que tu
-proposes — un module `Editeur` distinct, ou l'extension de `Subscription`. **Tranche-le et
-argumente**, je ne te l'impose pas.
+**Tu as raison et le document de lancement a tort.** J'y ai écrit `git add -A` dans le brief, là où le
+PLAYBOOK §7.2 impose un staging explicite. `git add -A` embarquerait précisément le
+`app/config/reference.php` que tu as eu la lucidité de ne pas commiter. **Je corrige le document.**
 
-### Puis ED-3, le tunnel de souscription
+Tu as bien fait de suivre le PLAYBOOK plutôt que mon brief : entre deux consignes contradictoires, la
+plus ancienne et la plus précise gagne, et c'est à moi de résoudre la contradiction — pas à toi de la
+subir.
 
-C'est la pièce qui manque et qui rend l'ensemble vendable : un prospect choisit sa formule, ajoute ses
-modules à la carte, paie **en prélèvement SEPA** (D10 — pas de carte au lancement), et **son compte
-administrateur est provisionné automatiquement**. Le provisionnement doit être **idempotent** : un
-rappel bancaire rejoué ne doit jamais créer deux établissements.
+### Ta tâche reste ED-3
 
-Trois décisions déjà prises que tu ne rouvres pas : **D10** SEPA d'abord, **D11** la démo est un bac à
-sable jetable mais le paramétrage est repris, **D12** l'administration vit dans la plateforme.
-
-### Le site vitrine vient après, pas avant
-
-Maxime l'a dit lui-même : « le site vitrine on verra plus tard ». Ne l'ouvre pas tant qu'ED-3 n'est
-pas livrée — un tunnel sans page d'entrée se teste, une page d'entrée sans tunnel ne sert à rien.
-
-### Ce que je te demande de me signaler tout de suite
-
-Si la spec `specs/editeur/spec-editeur.md` laisse des décisions ouvertes, **ne les tranche pas seul** :
-liste-les dans ton rapport, je réponds au battement suivant. C'est le défaut que j'ai le plus répété
-cette semaine et je ne veux pas le reproduire avec toi.
+Tunnel de souscription SEPA et provisionnement **idempotent**. Le point dur est là : un rappel rejoué
+ne doit jamais créer deux établissements. Continue.

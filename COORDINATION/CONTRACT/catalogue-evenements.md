@@ -41,6 +41,11 @@ The first-class events published on the bus by the core and the modules. An even
 | `slot.released` | Smart Flow | slot, resource | **Smart Flow** (slot recovery), waitlist |
 | `subscription.created` | SEPA/Subscription | recurring_amount | Accounting |
 | `subscription.suspended` | SEPA/Subscription | reason | Revenue Recovery |
+| `subscription.activated` | Editeur/Subscription | planCode, options, effectiveFrom | Provisioning, Accounting |
+| `subscription.cancelled` | Editeur/Subscription | reason, effectiveTo | Revenue Recovery, Accounting |
+| `subscription_option.added` | Editeur/Subscription | optionCode, proratedAmount | Accounting |
+| `subscription_option.removed` | Editeur/Subscription | optionCode, effectiveTo | Accounting |
+| `establishment.provisioned` | Editeur | establishmentId, adminUserId, idempotencyKey | Audit, Reporting |
 | `access.recorded` | Access control | door, credential | Reporting, Smart Flow (footfall) |
 | `access.denied` | Access control | reason | Supervision |
 | `access.card_recharged` | Access control (`CardRechargeHandler`, CQ-1) | droitId, supportId, creditsAdded, creditBalanceAfter, newExpiryAt?, saleId | Reporting, CRM, Smart Flow |
