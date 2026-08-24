@@ -16,6 +16,7 @@ use App\Caisse\Enum\EtatCaisse;
 use App\DataFixtures\SocleFixtures;
 use App\Offre\DataFixtures\OffreFixtures;
 use App\Offre\Entity\Produit;
+use App\Offre\Enum\RechargeValidityMode;
 use App\Organisation\Entity\Etablissement;
 use App\Securite\Entity\Utilisateur;
 use App\Securite\Service\ContexteEtablissement;
@@ -153,6 +154,46 @@ final class CardRechargeTest extends AccesApiTestCase
         $droitApres = $em->getRepository(DroitAcces::class)->find(Uuid::fromString($idDroit));
         self::assertInstanceOf(DroitAcces::class, $droitApres);
         self::assertSame($butoir->format('Y-m-d'), $droitApres->getFenetreFin()?->format('Y-m-d'), 'Plafonné à dateButoir.');
+    }
+
+    /**
+     * CQ-7 (RG-CQ7-03) — mode `Keep` : la recharge ajoute des crédits mais **conserve** l'échéance
+     * existante, jamais repoussée (contraste avec CA-3 en mode `Extend` par défaut).
+     */
+    public function testCq7ModeKeepConserveEcheanceALaRecharge(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $em = $this->em();
+
+        // Carte avec une durée de validité ET le mode Keep.
+        $produit = $this->entite(Produit::class, ['libelleRecherche' => OffreFixtures::PRODUIT_CARTE]);
+        $carte = $produit->getCarte();
+        self::assertNotNull($carte);
+        $carte->setValiditeDuree(new \DateInterval('P1Y'))->setRechargeValidityMode(RechargeValidityMode::Keep);
+        $em->flush();
+
+        $session = $this->ouvrirSession($client, $entete);
+        [$identifiant, $idDroit] = $this->emettreEtAppairerCarte($client, $entete, $session['id']);
+
+        // Fixe une échéance connue et arbitraire, distincte de « maintenant + 1 an ».
+        $droit = $em->getRepository(DroitAcces::class)->find(Uuid::fromString($idDroit));
+        self::assertInstanceOf(DroitAcces::class, $droit);
+        $echeanceFigee = new \DateTimeImmutable('2027-03-15');
+        $droit->setFenetreFin($echeanceFigee);
+        $em->flush();
+
+        $reponse = $this->rechargerCarte($client, $entete, $session['id'], $identifiant);
+        self::assertResponseIsSuccessful((string) $reponse->getContent(false));
+
+        $em->clear();
+        $droitApres = $em->getRepository(DroitAcces::class)->find(Uuid::fromString($idDroit));
+        self::assertInstanceOf(DroitAcces::class, $droitApres);
+        self::assertSame(24, $droitApres->getCreditRestant(), 'La recharge a bien crédité (12 + 12).');
+        self::assertSame(
+            $echeanceFigee->format('Y-m-d'),
+            $droitApres->getFenetreFin()?->format('Y-m-d'),
+            'RG-CQ7-03 : mode Keep -> échéance existante conservée, jamais repoussée à J + 1 an.',
+        );
     }
 
     /** CA-5 (RG-CQ1-05) — la recharge est une vente standard, scellée NF525, chaînée. */

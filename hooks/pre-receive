@@ -217,6 +217,10 @@ while read -r ancien nouveau ref; do
     # Désormais l'oubli n'est plus possible : tout `garde-fou-*.php` présent dans l'arbre poussé
     # doit avoir été lancé. Ajouter un garde-fou sans l'appeler ici fait refuser le push qui
     # l'ajoute — donc l'erreur se voit à la seconde où elle est commise.
+    # Le glob s'arrête à `.php`, et c'est délibéré : le garde-fou de topologie est un `.sh` qui
+    # répond à « par où passent mes commits ». Dans un hook, la question n'a pas de sens — on
+    # analyse un arbre extrait dans un `mktemp`, sans remote ni worktree. Sa complétude est donc
+    # assurée par le filet de `bin/garde-fous.sh`, qui lui globe sans extension.
     for chemin in "$ARBRE"/bin/garde-fou-*.php; do
         [ -f "$chemin" ] || continue
         nom="$(basename "$chemin")"

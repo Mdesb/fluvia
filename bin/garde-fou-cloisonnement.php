@@ -579,6 +579,17 @@ $echec = false;
 if (count($entrees) > $plafond) {
     $echec = true;
     echo "\n=== ÉCHEC — la ligne de base a grossi ===\n";
+    echo "\n"
+        . "  Un cliquet ne monte pas — c'est exactement ce qui lui donne sa valeur.\n"
+        . "\n"
+        . "  « --nettoyer » n'est PAS l'issue : il recalcule le plafond sur l'état courant, donc\n"
+        . "  il le ferait monter, et le contrôle contre la référence le refuserait aussitôt. Il ne\n"
+        . "  sert qu'à RÉSORBER un stock qui a déjà baissé.\n"
+        . "\n"
+        . "  Les deux seules issues :\n"
+        . "    · corriger ce qui a fait monter le compte — l'endroit exact est listé ci-dessus ;\n"
+        . "    · si la hausse est délibérée, elle demande l'accord de l'intégrateur : le plafond\n"
+        . "      de référence se change sur « main », pas ici.\n";
     echo sprintf(
         "  Elle contient %d entrées pour un plafond scellé à %d (gelé le %s).\n",
         count($entrees),

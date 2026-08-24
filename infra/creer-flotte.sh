@@ -13,6 +13,7 @@
 set -uo pipefail
 
 BARE="/home/debian/billetterie.git"
+CLONE="/home/debian/billetterie"
 WT="/home/debian/wt"
 CFG="/home/debian/claude-cfg"
 LANCEURS="/home/debian"
@@ -60,9 +61,9 @@ for L in $NOUVELLES; do
     # La branche part de `main` : chaque session démarre sur l'état intégré, jamais sur une autre
     # branche de travail dont elle hériterait les lots en vol.
     if git --git-dir="$BARE" show-ref --verify --quiet "refs/heads/$ID"; then
-        git --git-dir="$BARE" worktree add "$CHEMIN" "$ID" >/dev/null 2>&1
+        git -C "$CLONE" worktree add "$CHEMIN" "$ID" >/dev/null 2>&1
     else
-        git --git-dir="$BARE" worktree add "$CHEMIN" -b "$ID" main >/dev/null 2>&1
+        git -C "$CLONE" worktree add "$CHEMIN" -b "$ID" main >/dev/null 2>&1
     fi
 
     if [ -d "$CHEMIN" ]; then

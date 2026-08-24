@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Acces\Service;
 
 use App\Offre\Entity\CarteMultiEntrees;
+use App\Offre\Enum\RechargeValidityMode;
 
 /**
  * Calcule la nouvelle échéance de validité d'une carte multi-entrées (RG-CQ1-04, D26 — défaut livré :
@@ -15,17 +16,22 @@ use App\Offre\Entity\CarteMultiEntrees;
 final class CardExpiryCalculator
 {
     /**
-     * `$fenetreFinActuelle` n'intervient dans AUCUNE branche du calcul par défaut (CA-3 : « J + 1 an »,
-     * pas « ancienne échéance + 1 an ») — il n'existe que comme point d'extension CQ-7 (paramétrage
-     * « conserver la validité d'origine », hors périmètre de ce lot) : un futur appelant pourrait
-     * court-circuiter cette méthode en amont pour retourner `$fenetreFinActuelle` telle quelle sans
-     * jamais avoir à réécrire ce calcul.
+     * CQ-7 (RG-CQ7-03) — le point d'extension anticipé par CQ-1 est réalisé ici : en mode `Keep`, la
+     * recharge **conserve** l'échéance existante (`$fenetreFinActuelle` retournée telle quelle). Le
+     * garde `$fenetreFinActuelle !== null` limite le mode à la RECHARGE : à l'émission initiale, où
+     * `$fenetreFinActuelle` est `null` par construction (aucune échéance préalable), le calcul normal
+     * ci-dessous s'applique quel que soit le mode. Une carte `Keep` déjà expirée reste expirée (succès
+     * silencieux, échéance non réactivée — RG-CQ7-04, arbitrage A : recommandé plutôt qu'un refus).
      */
     public function calculer(
         CarteMultiEntrees $carte,
         ?\DateTimeImmutable $fenetreFinActuelle,
         \DateTimeImmutable $maintenant,
     ): ?\DateTimeImmutable {
+        if ($carte->getRechargeValidityMode() === RechargeValidityMode::Keep && $fenetreFinActuelle !== null) {
+            return $fenetreFinActuelle;
+        }
+
         $duree = $carte->getValiditeDuree();
         $butoir = $carte->getDateButoir();
 

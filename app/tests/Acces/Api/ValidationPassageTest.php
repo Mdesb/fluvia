@@ -109,7 +109,9 @@ final class ValidationPassageTest extends AccesApiTestCase
         $reponse = $client->getResponse()->toArray();
         self::assertSame('refuse', $reponse['resultat']);
         self::assertSame('credit_epuise', $reponse['codeMotif']);
-        self::assertSame(['caisse', 'borne', 'app'], $reponse['propositionRecharge']);
+        // CQ-4 — seuls les canaux de recharge réellement implémentés sont proposés : la recharge au
+        // guichet (caisse, CQ-1) existe ; la borne libre-service et l'application ne sont pas câblées.
+        self::assertSame(['caisse'], $reponse['propositionRecharge']);
 
         $droitApres = $this->entite(DroitAcces::class, []);
         self::assertSame(0, $droitApres->getCreditRestant(), 'Aucun décompte supplémentaire sur refus (CA-11).');
