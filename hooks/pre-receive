@@ -6,9 +6,14 @@
 # où les garde-fous s'exécutent sans dépendre de la bonne volonté de qui pousse. Un push refusé ici
 # ne l'est pour personne d'autre : rien n'entre dans le dépôt partagé.
 #
-# Il ne lance que les trois contrôles **statiques** (aucune dépendance Composer, aucune base) :
-# cloisonnement, nommage anglais, secrets en dur. Le contrôle du manifeste passe par PHPUnit et donc
-# par `vendor/` — trop lourd pour un hook, il reste à `./infra/test-stack.sh`.
+# Il lance **tous** les garde-fous statiques présents dans l'arbre poussé — ceux qui n'ont besoin ni
+# de Composer ni de base de données. Le nombre n'est volontairement pas écrit ici : cette ligne a
+# annoncé « trois contrôles » pendant que le hook en lançait sept, et une documentation qui se périme
+# est ce qui a permis au trou du 24/08 de passer inaperçu. Le filet de complétude en fin de boucle
+# est désormais l'énoncé faisant foi : tout `bin/garde-fou-*.php` de l'arbre doit avoir été lancé.
+#
+# Le contrôle du manifeste passe par PHPUnit et donc par `vendor/` — trop lourd pour un hook, il
+# reste à `./infra/test-stack.sh`.
 #
 # ── INTERRUPTEUR ────────────────────────────────────────────────────────────────────────────────
 # Créer le fichier `hooks/GARDE-FOUS-DESACTIVES` dans le dépôt bare désactive ce hook. C'est
@@ -38,6 +43,51 @@ if ! command -v docker >/dev/null 2>&1 || ! docker image inspect "$IMAGE" >/dev/
 fi
 
 ECHEC_GLOBAL=0
+
+# ── D28 : le hook installé sait-il qu'il est périmé ? ────────────────────────────────────────
+#
+# Ce fichier existe en deux exemplaires : versionné dans `hooks/` et installé ici, sur le dépôt nu.
+# Fusionner le premier ne met pas à jour le second, et c'est ainsi que quatre garde-fous sur sept
+# ont cessé d'être opposables pendant deux jours sans que personne ne le voie (D28).
+#
+# La comparaison se fait contre `main`, PAS contre la branche poussée. Comparer à la branche
+# ferait crier le hook chaque fois qu'une branche est simplement en retard sur `hooks/` — un
+# avertissement qui se déclenche à tort finit ignoré, donc inutile. `main` est la référence que
+# celui qui pousse ne choisit pas.
+#
+# On avertit sans refuser : refuser bloquerait précisément la poussée qui apporte la mise à jour.
+HOOK_PERIME=0
+HOOK_LANCES_INSTALLE=0
+HOOK_LANCES_REFERENCE=0
+
+compter_garde_fous() {
+    grep -o 'garde-fou-[a-z-]*\.php' 2>/dev/null | sort -u | wc -l | tr -d ' '
+}
+
+if git --git-dir="$BARE" rev-parse --verify "$BRANCHE_REFERENCE" >/dev/null 2>&1 \
+   && git --git-dir="$BARE" cat-file -e "$BRANCHE_REFERENCE:hooks/pre-receive" 2>/dev/null; then
+    REFERENCE_HOOK="$(git --git-dir="$BARE" show "$BRANCHE_REFERENCE:hooks/pre-receive" 2>/dev/null)"
+    if [ -n "$REFERENCE_HOOK" ] \
+       && ! printf '%s\n' "$REFERENCE_HOOK" | cmp -s - "$BARE/hooks/pre-receive"; then
+        HOOK_PERIME=1
+        HOOK_LANCES_INSTALLE="$(compter_garde_fous < "$BARE/hooks/pre-receive")"
+        HOOK_LANCES_REFERENCE="$(printf '%s\n' "$REFERENCE_HOOK" | compter_garde_fous)"
+    fi
+fi
+
+avertir_si_hook_perime() {
+    [ "$HOOK_PERIME" -eq 0 ] && return 0
+    echo ""
+    echo "⚠ ─────────────────────────────────────────────────────────────────────────────"
+    echo "⚠  LE HOOK INSTALLÉ N'EST PAS CELUI DE main — les contrôles ci-dessus ne sont"
+    echo "⚠  pas forcément ceux que le dépôt croit appliquer (D28)."
+    echo "⚠"
+    echo "⚠  Garde-fous référencés : $HOOK_LANCES_INSTALLE installé(s), $HOOK_LANCES_REFERENCE sur main."
+    echo "⚠"
+    echo "⚠  Réinstalle dans le même geste que la fusion :"
+    echo "⚠      bash bin/installer-hooks.sh $BARE"
+    echo "⚠ ─────────────────────────────────────────────────────────────────────────────"
+}
 
 while read -r ancien nouveau ref; do
     # Suppression de branche : rien à contrôler.
@@ -192,6 +242,10 @@ while read -r ancien nouveau ref; do
     else
         echo "✓ ${ref#refs/heads/} : garde-fous OK."
     fi
+
+    # En DERNIER, après le verdict : la sortie d'un push est longue et défile. Un avertissement
+    # placé en tête serait vrai et invisible.
+    avertir_si_hook_perime
 done
 
 exit "$ECHEC_GLOBAL"
