@@ -150,6 +150,7 @@ export const api = {
   produits: () => request('/api/produits'),
   // Le détail ajoute le groupe `produit:compta` (compte, TVA, règle PCA), absent de la collection.
   produit: (id) => request(`/api/produits/${id}`),
+  majProduit: (id, corps) => request(`/api/produits/${id}`, { method: 'PATCH', body: corps }),
   typeProduits: () => request('/api/type_produits'),
   creerProduit: (corps) =>
     request('/api/produits', { method: 'POST', body: corps, ld: true }),
@@ -200,6 +201,9 @@ export const api = {
   // CRM.
   rechercheClients: (params) => request('/api/crm/clients/recherche', { query: params }),
   ficheClient: (id) => request(`/api/clients/${id}/fiche-360`),
+  // La fiche 360 ne porte qu'un sous-ensemble des champs : pour modifier, il faut le client entier.
+  client: (id) => request(`/api/clients/${id}`),
+  majClient: (id, corps) => request(`/api/clients/${id}`, { method: 'PATCH', body: corps }),
   // Relevé de mouvements du porte-monnaie virtuel (US-L5-04). Renvoie { mouvements: [...] }.
   pmvMouvements: (id) => request(`/api/clients/${id}/pmv/mouvements`),
   // Création rapide d'une fiche client (US-L5-02). L'établissement de création / le groupe sont
