@@ -45,6 +45,10 @@ use Symfony\Component\Uid\Uuid;
 #[ORM\Table(name: 'stay_stay')]
 #[ORM\Index(columns: ['establishment_id', 'status'], name: 'IDX_STAY_ETAB_STATUS')]
 #[ORM\Index(columns: ['establishment_id', 'arrival_date'], name: 'IDX_STAY_ETAB_ARRIVAL')]
+// Index de cle etrangere declare explicitement : sans lui, Doctrine en genere un au nom calcule
+// et `migrations:diff` propose un renommage dans le lot de CHAQUE session (D32). La dette
+// d'index Stay signalee le 24/08 vient de la, et elle s'arrete ici.
+#[ORM\Index(columns: ['customer_id'], name: 'IDX_STAY_CUSTOMER')]
 #[ORM\UniqueConstraint(name: 'UNIQ_STAY_ETAB_REFERENCE', columns: ['establishment_id', 'reference'])]
 #[ApiResource(
     shortName: 'Stay',
