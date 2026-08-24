@@ -288,6 +288,7 @@ lui fait porter le risque. La prochaine fois je donne les deux, ou je dis que je
 | 00:13 | **ACT-1 EST COMPLET — les trois manques de D16 sont couverts.** Point 2 livré : on réserve un type, l'instance s'affecte plus tard. `tests/Reservation` **96/96** (1138 assertions), `tests/Platform` **58/58**, migrations rejouées depuis une base vide jusqu'à `Version20260824234300`. | Prêt à fusionner. Périmètre : il me reste CQ-4 côté `Acces` (pas à moi) et la moitié nominative de CQ-3/CQ-6 (bloquée sur CQ-0). **Donne-moi la suite** — sinon je prends la dette de mon module. | Rien. |
 | 00:22 | **IDOR RÉEL TROUVÉ ET FERMÉ** dans `ArbitrerConflitRecurrenceProcessor` : la ressource venait du corps de la requête et n'était résolue que par son identifiant — on pouvait déplacer le créneau d'un établissement sur la ressource d'un autre. Test rouge **vérifié sans la garde** avant d'être déclaré vert, preuve d'exploitation dans le rapport. | Padel : tu me l'ouvres pour rendre `EclairageTest` vert, je m'y mets tout de suite — `main` rouge passe avant ma dette. | Rien. |
 | 00:28 | **`main` EST RÉPARÉ — `tests/Padel` 23/23.** Et la cause n'est pas celle qu'on cherchait : **aucune ligne de code n'a changé, c'est le calendrier qui a changé.** Le test était rouge deux jours par semaine depuis toujours. Démonstration chiffrée sous le tableau. | Retour à la dette de cloisonnement de mon module. | Rien. |
+| 00:38 | **SECOND IDOR FERMÉ, et celui-là fait plus mal** : l'action de masse du catalogue permettait d'**archiver — irréversiblement — le produit d'un autre établissement**, à qui savait deviner des UUID. Vérifié sans la garde : `nbTraites=1`, le produit étranger était bien archivé. `tests/Offre` 26/26. | Reste de la dette : `Emarger`, `AjouterParticipant`, `InscrireListeAttente`, `Convertir`. Mon audit en cours dit que plusieurs sont de la **fausse** dette — je te le démontrerai plutôt que d'ajouter des gardes décoratives. | Rien. |
 
 ## Nouvelle règle de Maxime — présentation horaire à `claude-A`
 
@@ -741,3 +742,36 @@ rattrape tout le passé à chaque exécution — c'est inoffensif aujourd'hui gr
 d'événement déjà émis, mais c'est la cause structurelle. La borner serait un vrai lot, dans un
 périmètre qui n'est pas le mien : tu m'as ouvert Padel pour rendre ce test vert, pas pour le
 refondre.
+
+
+## Second IDOR — l'action de masse du catalogue archivait le produit des autres
+
+`app/src/Offre/State/ActionsDeMasseProcessor.php`, entrée gelée le 20/08, sensibilité « autre ».
+**Elle est mal classée : archiver est irréversible, et l'action porte sur une liste entière.**
+
+**Ce qui était possible.** Le corps de la requête donne `{"action": "archiver", "produits": [...],
+"confirmer": true}`. Chaque identifiant était résolu par un `find()` sec. Aucune confrontation au
+périmètre. Qui savait deviner des UUID pouvait donc archiver le catalogue d'un autre établissement —
+et l'archivage ne se défait pas.
+
+**Vérifié sans la garde**, comme pour le précédent : `nbTraites = 1`, le produit d'un établissement
+où l'utilisateur n'a aucune affectation était bel et bien archivé. Avec la garde : `nbTraites = 0`,
+et le produit n'a pas changé de statut — c'est la seconde assertion du test.
+
+**La restriction est celle de `PerimetreProduitExtension`, mot pour mot** : le produit doit être
+commercialisé dans un établissement où l'utilisateur possède une affectation. Je l'ai recopiée plutôt
+que d'inventer plus strict — refuser un cas que la lecture autorise aurait été une régression
+déguisée en durcissement.
+
+**Un détail qui n'en est pas un :** un produit hors périmètre retourne `null`, donc rejoint les échecs
+« introuvable » **déjà prévus** par le processor. Même forme de réponse qu'un identifiant inexistant,
+donc aucun oracle d'énumération. Il n'y avait pas besoin d'inventer un code d'erreur : le bon
+comportement existait déjà, il n'était simplement jamais atteint.
+
+**Le montage du test mérite d'être dit**, parce qu'un test mal monté aurait « passé » sans rien
+prouver : l'admin de démonstration est affecté à **A et à B**. Un produit rattaché à B lui est donc
+légitimement accessible. J'ai créé un établissement neuf, sans affectation, et déplacé le produit
+dessus. C'est le seul montage qui teste le périmètre plutôt que la chance.
+
+**`Categorie` n'est pas concernée** — vérifié : l'entité ne porte aucun établissement, c'est un
+référentiel global. La résoudre sans contrôle de périmètre n'est donc pas une fuite de cloisonnement.
