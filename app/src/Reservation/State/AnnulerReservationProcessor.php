@@ -89,7 +89,8 @@ final class AnnulerReservationProcessor implements ProcessorInterface
         $this->em->flush();
 
         if ($ressource !== null) {
-            $this->jaugeMere->decrementer($ressource);
+            // ACT-1 — on rend exactement ce qui avait été pris, pas une unité.
+            $this->jaugeMere->decrementer($ressource, $data->getQuantity());
             $this->em->flush();
         }
 

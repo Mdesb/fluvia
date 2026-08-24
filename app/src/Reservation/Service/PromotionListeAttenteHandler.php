@@ -52,11 +52,20 @@ final class PromotionListeAttenteHandler
             return null;
         }
 
+        // ACT-1 — le premier de la liste peut demander plus que ce qui vient de se libérer. On ne
+        // promeut alors PERSONNE : sauter au suivant qui « rentre » romprait le premier arrivé
+        // premier servi de RG-M5-06, et ce n'est pas à moi d'arbitrer une politique commerciale que
+        // ni D16 ni RG-M5-06 ne posent. Question ouverte à claude-A dans mon rapport.
+        if (!$this->jauge->peutAccueillir($creneau, $inscription->getQuantity())) {
+            return null;
+        }
+
         $reservation = new Reservation();
         $reservation->setCreneau($creneau)
             ->setOrganisateur($inscription->getBeneficiaire())
             ->setEtablissement($creneau->getEtablissement())
             ->setModeDecompte(ModeDecompteReservation::Gratuit)
+            ->setQuantity($inscription->getQuantity())
             ->setMontantDu('0.00');
         $this->em->persist($reservation);
 
