@@ -156,6 +156,29 @@ class Reservation
     #[Groups(['reservation:read'])]
     private ?Etablissement $etablissement = null;
 
+    /**
+     * ACT-1 point 3 / D33 — les créneaux que cette réservation **consomme** : le créneau visé, plus
+     * ceux des ressources ancêtres qui le couvrent dans le temps (le service du soir de la salle
+     * au-dessus de la table, le créneau de l'école au-dessus du moniteur).
+     *
+     * **Le créneau VISÉ reste `$creneau`, et il reste unique** : c'est celui que le client choisit,
+     * celui qui s'affiche, celui dont parle RG-M5-01 — elle n'est pas réinterprétée. Ce qui est neuf
+     * est la consommation, qui n'était écrite nulle part.
+     *
+     * **Stocké et non dérivé** (D33) : remonter l'arbre des ressources à chaque contrôle serait plus
+     * léger et faux. Ce qu'on relâche doit être exactement ce qu'on a pris, et un contrôle dérivé
+     * d'un parcours se course avec lui-même dès deux réservations simultanées sur la même salle.
+     *
+     * @var Collection<int, Creneau>
+     */
+    #[ORM\ManyToMany(targetEntity: Creneau::class)]
+    #[ORM\JoinTable(name: 'reservation_consumed_slot')]
+    // Volontairement hors groupe de sérialisation : personne n'en a besoin côté client aujourd'hui,
+    // et l'exposer ferait grossir chaque ligne de liste de réservations d'un créneau imbriqué par
+    // ancêtre. On l'ouvrira le jour où un écran le demande (D13 — on n'ajoute pas de surface « au
+    // cas où »).
+    private Collection $consumedSlots;
+
     /** @var Collection<int, ParticipantReservation> */
     #[ORM\OneToMany(targetEntity: ParticipantReservation::class, mappedBy: 'reservation', cascade: ['persist'])]
     #[Groups(['reservation:read'])]
@@ -166,11 +189,27 @@ class Reservation
         $this->id = Uuid::v4();
         $this->dateCreation = new \DateTimeImmutable();
         $this->participants = new ArrayCollection();
+        $this->consumedSlots = new ArrayCollection();
     }
 
     public function getId(): Uuid
     {
         return $this->id;
+    }
+
+    /** @return Collection<int, Creneau> */
+    public function getConsumedSlots(): Collection
+    {
+        return $this->consumedSlots;
+    }
+
+    public function addConsumedSlot(Creneau $creneau): self
+    {
+        if (!$this->consumedSlots->contains($creneau)) {
+            $this->consumedSlots->add($creneau);
+        }
+
+        return $this;
     }
 
     public function getQuantity(): int
@@ -193,6 +232,14 @@ class Reservation
     public function setCreneau(?Creneau $creneau): self
     {
         $this->creneau = $creneau;
+        // D33 — le créneau visé fait TOUJOURS partie des créneaux consommés. L'enregistrer ici plutôt
+        // qu'au point d'appel n'est pas une commodité : `Padel` et `Musee` créent des `Reservation`
+        // sans passer par `ReserverProcessor`, et une réservation absente de `consumedSlots` serait
+        // invisible à la jauge — c'est-à-dire du surbooking. L'invariant tenu par l'entité vaut pour
+        // tous les chemins, y compris ceux qui n'existent pas encore.
+        if ($creneau !== null) {
+            $this->addConsumedSlot($creneau);
+        }
 
         return $this;
     }

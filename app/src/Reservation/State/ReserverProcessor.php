@@ -13,6 +13,7 @@ use App\Reservation\Entity\Creneau;
 use App\Reservation\Entity\Reservation;
 use App\Reservation\Enum\ModeDecompteReservation;
 use App\Reservation\Enum\StatutCreneau;
+use App\Reservation\Service\ConsumedSlotResolver;
 use App\Reservation\Service\JaugeCreneauGuard;
 use App\Reservation\Service\JaugeRessourceMereHandler;
 use App\Reservation\Service\RequestedQuantityReader;
@@ -45,6 +46,7 @@ final class ReserverProcessor implements ProcessorInterface
         private readonly LecteurCorps $lecteur,
         private readonly Security $security,
         private readonly JaugeCreneauGuard $jauge,
+        private readonly ConsumedSlotResolver $creneauxConsommes,
         private readonly JaugeRessourceMereHandler $jaugeMere,
         private readonly RequestedQuantityReader $quantiteDemandee,
         private readonly QuotaFormuleResolver $quotaResolver,
@@ -102,11 +104,33 @@ final class ReserverProcessor implements ProcessorInterface
             ));
         }
 
+        // ACT-1 point 3 / D33 — le créneau visé reste unique, mais la réservation consomme aussi les
+        // créneaux des ressources ancêtres qui le couvrent : une table libre ne suffit pas si le
+        // service n'a plus de couverts. Résolus ici, contrôlés ici, et stockés plus bas — jamais
+        // redérivés au contrôle suivant.
+        $consommes = $this->creneauxConsommes->resolve($creneau);
+        foreach ($consommes as $consomme) {
+            if ($this->jauge->peutAccueillir($consomme, $quantite)) {
+                continue;
+            }
+            $englobant = $consomme->getRessource();
+
+            throw new ConflictHttpException(sprintf(
+                'Capacité englobante atteinte sur « %s » : %d demandée(s), %d restante(s) (RG-M5-08, D33).',
+                $englobant?->getLibelle() ?? 'créneau englobant',
+                $quantite,
+                $this->jauge->placesRestantes($consomme),
+            ));
+        }
+
         $reservation = new Reservation();
         $reservation->setCreneau($creneau)
             ->setOrganisateur($organisateur)
             ->setQuantity($quantite)
             ->setEtablissement($creneau->getEtablissement());
+        foreach ($consommes as $consomme) {
+            $reservation->addConsumedSlot($consomme);
+        }
 
         $activite = $creneau->getActivite();
         $service = $activite !== null ? $this->quotaResolver->resoudre($organisateur->getId(), $activite, new \DateTimeImmutable()) : null;
