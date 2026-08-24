@@ -126,6 +126,20 @@ class Reservation
     #[Groups(['reservation:read'])]
     private ?ServiceInclus $serviceInclusRef = null;
 
+    /**
+     * CQ-3 + CQ-6 — identifiant du droit d'accès de type carte qui a été débité d'une unité à la
+     * réservation, ou `null` si la réservation ne consomme pas de carte.
+     *
+     * **Sans ce champ, aucune restitution n'est possible.** Le décompte a lieu à la réservation ;
+     * une annulation doit rendre l'unité, et rien d'autre ne dit sur QUELLE carte la rendre — le
+     * porteur peut en avoir plusieurs, et retrouver « celle qui a servi » par déduction serait une
+     * devinette. Référence libre (`Uuid`) et non relation : `Reservation` (M5) ne possède pas
+     * `App\Acces\Entity\DroitAcces`, même patron que `billetSupportRef`/`produitRef` côté Accès.
+     */
+    #[ORM\Column(type: UuidType::NAME, nullable: true)]
+    #[Groups(['reservation:read'])]
+    private ?Uuid $creditDroitRef = null;
+
     #[ORM\ManyToOne(targetEntity: Vente::class)]
     #[ORM\JoinColumn(nullable: true)]
     #[Groups(['reservation:read'])]
@@ -208,6 +222,18 @@ class Reservation
         if (!$this->consumedSlots->contains($creneau)) {
             $this->consumedSlots->add($creneau);
         }
+
+        return $this;
+    }
+
+    public function getCreditDroitRef(): ?Uuid
+    {
+        return $this->creditDroitRef;
+    }
+
+    public function setCreditDroitRef(?Uuid $creditDroitRef): self
+    {
+        $this->creditDroitRef = $creditDroitRef;
 
         return $this;
     }
