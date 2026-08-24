@@ -10,6 +10,7 @@ import {
   typeTarifId,
   estVendable,
   raisonNonVendable,
+  expliqueNonVendable,
   euros,
 } from '../api/produit.js'
 
@@ -308,7 +309,7 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   const enPaiement = !!vente
 
   return (
-    <div className="view">
+    <div className="view large">
       <div className="view-head">
         <div className="ttl">
           <h1>Caisse</h1>
@@ -451,7 +452,13 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
                       className="prodtile"
                       disabled={!vendable}
                       onClick={() => ajouter(p)}
-                      title={enPaiement ? 'Encaissement en cours' : vendable ? 'Ajouter au panier' : raison || ''}
+                      title={
+                        enPaiement
+                          ? 'Encaissement en cours'
+                          : vendable
+                            ? 'Ajouter au panier'
+                            : expliqueNonVendable(p) || ''
+                      }
                     >
                       <span className="pn">{libelleProduit(p)}</span>
                       {p.code && <span className="pc">{p.code}</span>}
