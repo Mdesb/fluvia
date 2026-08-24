@@ -47,23 +47,67 @@ else
 fi
 
 ECHEC=0
+LANCES=""
+
+# `lancer` est déjà défini plus haut selon php local / docker ; on l'enveloppe pour tenir la
+# liste sans toucher aux deux définitions.
+lancer_gf() { # lancer_gf <nom-du-script> [args...]
+    nom="$1"; shift
+    LANCES="$LANCES $nom"
+    lancer "bin/$nom" "$@"
+}
 
 # Cloisonnement + C19 : sur l'arbre de travail. Pas de `--contre` ici — il n'y a pas encore de
 # branche cible à comparer ; la ligne de base et son plafond suffisent à refuser tout cas nouveau.
-lancer bin/garde-fou-cloisonnement.php || ECHEC=1
+lancer_gf garde-fou-cloisonnement.php || ECHEC=1
 
 # Secrets : sur l'arbre de travail également.
-[ -f "$RACINE/bin/garde-fou-secrets.php" ] && { lancer bin/garde-fou-secrets.php || ECHEC=1; }
+[ -f "$RACINE/bin/garde-fou-secrets.php" ] && { lancer_gf garde-fou-secrets.php || ECHEC=1; }
 
 # Couverture de perimetre en lecture (voir hooks/pre-receive).
-[ -f "$RACINE/bin/garde-fou-couverture-perimetre.php" ] && { lancer bin/garde-fou-couverture-perimetre.php || ECHEC=1; }
+[ -f "$RACINE/bin/garde-fou-couverture-perimetre.php" ] && { lancer_gf garde-fou-couverture-perimetre.php || ECHEC=1; }
+
+# Événements du catalogue (D2/D22) : abonné inerte, émission hors contrat, cliquet.
+[ -f "$RACINE/bin/garde-fou-evenements-orphelins.php" ] && { lancer_gf garde-fou-evenements-orphelins.php || ECHEC=1; }
+
+# Conformité des charges utiles au catalogue (D2).
+[ -f "$RACINE/bin/garde-fou-charges-utiles.php" ] && { lancer_gf garde-fou-charges-utiles.php || ECHEC=1; }
+
+# Écriture qui traverse la frontière (D3/D8).
+[ -f "$RACINE/bin/garde-fou-ecriture-transfrontiere.php" ] && { lancer_gf garde-fou-ecriture-transfrontiere.php || ECHEC=1; }
 
 # Nommage : sur les fichiers **indexés** et ajoutés. `--cached` est ce qui sera réellement commité,
 # et c'est aussi ce qui évite de dépendre d'une révision de référence inexistante à ce stade.
 if [ -f "$RACINE/bin/garde-fou-nommage-anglais.php" ]; then
     AJOUTES="$(git diff --cached --diff-filter=A --name-only -- 'app/src' 'app/migrations' | paste -sd, -)"
-    [ -n "$AJOUTES" ] && { lancer bin/garde-fou-nommage-anglais.php "--fichiers=$AJOUTES" || ECHEC=1; }
+    if [ -n "$AJOUTES" ]; then
+        lancer_gf garde-fou-nommage-anglais.php "--fichiers=$AJOUTES" || ECHEC=1
+    else
+        # Rien d'ajouté : le contrôle est traité, on l'enregistre pour le filet.
+        LANCES="$LANCES garde-fou-nommage-anglais.php"
+    fi
 fi
+
+# ⚠ FILET DE COMPLÉTUDE — même leçon que `pre-receive`, même remède.
+#
+# Ce hook redit la liste des garde-fous au lieu d'appeler `bin/garde-fous.sh`, parce qu'il n'a ni
+# révision de référence ni `--contre` à fournir. Une liste redite se désynchronise : celle-ci en
+# appelait quatre sur sept le 24/08, et c'est le SEUL contrôle des commits d'intégration sur
+# `main`, qui ne passent jamais par `pre-receive`.
+#
+# Tout `bin/garde-fou-*.php` non appelé fait échouer le commit qui l'ajoute.
+for chemin in "$RACINE"/bin/garde-fou-*.php; do
+    [ -f "$chemin" ] || continue
+    nom="$(basename "$chemin")"
+    case " $LANCES " in
+        *" $nom "*) ;;
+        *)
+            echo "✗ Garde-fou présent dans l'arbre mais jamais lancé par ce hook : $nom"
+            echo "  Ajoute son appel dans hooks/pre-commit."
+            ECHEC=1
+            ;;
+    esac
+done
 
 if [ "$ECHEC" -ne 0 ]; then
     echo
