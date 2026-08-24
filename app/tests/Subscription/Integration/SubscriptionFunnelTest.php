@@ -27,6 +27,7 @@ use App\Subscription\Enum\ProvisioningStatus;
 use App\Subscription\Enum\SubscriptionStatus;
 use App\Subscription\Exception\InvalidOfferException;
 use App\Subscription\Exception\MissingMandateException;
+use App\Subscription\Service\DemoConfiguration;
 use App\Subscription\Service\OfferCatalog;
 use App\Subscription\Service\ProvisioningService;
 use App\Subscription\Service\SubscriptionActivator;
@@ -161,6 +162,28 @@ final class SubscriptionFunnelTest extends SocleApiTestCase
         }
     }
 
+    /**
+     * Le paramétrage de démo est prélevé au panier, pas au provisionnement (RG-ED-08, D11).
+     *
+     * Le moment compte : entre le panier et le paiement, le prospect peut abandonner et son bac à
+     * sable être détruit. Prélever plus tard reviendrait à perdre ce qu'il a configuré — c'est-à-dire
+     * exactement l'endroit où D11 dit qu'on perd les clients.
+     */
+    public function testLeParametrageDeDemoEstPreleveDesLefPanier(): void
+    {
+        $this->offre();
+
+        $sansDemo = $this->funnel()->openCart('Sans démo', self::EMAIL, self::PLAN_CODE, [self::COMPRISE], $this->at());
+        self::assertNull($sansDemo->getDemoConfiguration(), 'pas de démo, pas de document');
+
+        $avecDemo = $this->funnel()->openCart('Avec démo', 'demo@exemple.test', self::PLAN_CODE, [self::COMPRISE], $this->at(), $this->editeur());
+
+        $document = $avecDemo->getDemoConfiguration();
+        self::assertIsArray($document);
+        self::assertSame(DemoConfiguration::FORMAT_VERSION, $document['version']);
+        self::assertArrayHasKey('modules', $document);
+    }
+
     // ---------------------------------------------------------------- montage
 
     private function at(): \DateTimeImmutable
@@ -184,6 +207,7 @@ final class SubscriptionFunnelTest extends SocleApiTestCase
             new SubscriptionActivator($this->em(), $bus, $this->editorTenant()),
             $tokenisation,
             $chiffreur,
+            new DemoConfiguration([]),
         );
     }
 
