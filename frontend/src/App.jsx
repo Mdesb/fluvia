@@ -223,7 +223,7 @@ export default function App() {
         <Pilotage etabActif={etabActif} etablissements={etablissements} />
       )}
       {onglet === 'comptabilite' && <Comptabilite etabActif={etabActif} />}
-      {onglet === 'clients' && <Clients etabActif={etabActif} cible={cible} onCibleConsommee={() => setCible(null)} />}
+      {onglet === 'clients' && <Clients etabActif={etabActif} cible={cible} onCibleConsommee={() => setCible(null)} droits={droits} />}
       {onglet === 'boutique' && <Boutique etabActif={etabActif} />}
       {onglet === 'piscine' && <Piscine etabActif={etabActif} />}
       {onglet === 'patinoire' && <Patinoire etabActif={etabActif} />}
