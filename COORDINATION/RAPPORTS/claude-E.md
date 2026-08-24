@@ -9,6 +9,8 @@
 | 12:30 | Specs SDD **SF-0** (Smart Flow) et **RR-0** (Revenue Recovery) lancées en parallèle → `specs/smart-flow/` et `specs/revenue-recovery/`. Push OK sur `claude-E-desktop`, **7 garde-fous verts**. | Rédaction des deux specs (contrat d'abord, D2). Ensuite : plans techniques (sdd-architecte). | Émission des déclencheurs RR-1/SF-1 (hors périmètre) — voir ci-dessous. |
 | 12:42 | **Spec SF-0 livrée** → `specs/smart-flow/spec-smart-flow.md` (US-SF, RG-SF-01..17, D27 détaillé). Vérif code : voir correction SF-1 ci-dessous. | Attends la spec RR-0 (agent en cours), puis plans techniques. | Retard SF-1 réduit (voir correction). |
 | 12:52 | **Spec RR-0 livrée** → `specs/revenue-recovery/spec-revenue-recovery.md`. Décision tranchée + arbitrages (Point n°4 ci-dessous). Push `claude-E-desktop`, garde-fous verts. | 4 questions bloquent le plan technique RR (voir Point n°4). Je peux enchaîner le **plan SF-0** (moins de questions bloquantes) en attendant tes arbitrages RR. | Arbitrages claude-A sur RR-0 (nom module, doublon mailer, invariant DroitAcces). |
+| 13:00 | Battement : mergé `main` (tes ordres + correction topologie). **Lu ton 1er ordre.** Réponse en Point n°5. | **Je construis SF-2** (Smart Flow, moteur de report no-show) dans `app/src/SmartFlow` — mon périmètre, déclencheur déjà émis. Plan technique SF-0 d'abord (sdd-architecte). | — (SF-2 débloqué) |
+| 13:15 | **Design SF-0 complet** : `plan-smart-flow.md` + `tasks-smart-flow.md` (I1 report no-show → I2 créneaux libérés → I3 affluence bloqué ; T1..T14). Arbitrages en Point n°6. | Design prêt à implémenter. **Bloqué sur l'exécution** (voir Point n°6). | ⚠ **Pas de stack PHP sur ma session desktop** — je ne peux pas implémenter+tester le code ici. |
 
 ## ⚠ Point n°1 pour claude-A — d'où intégrer mon travail (branche)
 
@@ -69,3 +71,90 @@ Les 5 événements produits `revenue_recovery.*` devront entrer au catalogue ava
 
 **Je n'attends pas, bloqué :** j'enchaîne le **plan technique SF-0** (sdd-architecte) — SF-2 est livrable
 (déclencheur déjà émis) et a moins de questions bloquantes. Le plan RR-0 attend tes arbitrages ci-dessus.
+
+## Point n°5 — réponse à ton premier ordre (SF-1/RR-1 vs mon périmètre)
+
+Bien reçu, et d'accord sur le fond (« émettre puis réagir », D22 ; ne pas construire des coquilles qui
+écoutent le silence). Mais un point de périmètre, que je te signale au lieu de le franchir :
+
+- **SF-1 restant = `access.recorded` + `access.denied` → `app/src/Acces/**` = périmètre claude-B.**
+  **RR-1 = 6 événements → `Boutique/Facturation/Crm/Devis`** = autres périmètres. **Aucun n'est dans le
+  mien** (`app/src/{RevenueRecovery,SmartFlow}/**`). D22 attribue d'ailleurs ces préalables à
+  l'intégrateur. Par **règle 2 FLOTTE**, je ne les touche pas — même sur ton ordre ; seul Maxime déplace
+  un périmètre (précédent claude-C que la FLOTTE cite). Ton propre ordre le dit pour `access.recorded` :
+  4 points de retour, à lire en entier — c'est du code d'`Acces`, pas de Smart Flow.
+- **Ce que je fais à la place, et qui sert exactement ta priorité :** SF-2 (report de no-show) — son
+  déclencheur `booking.reschedule_requested` est **déjà émis** (CQ-5, constat de ma spec SF-0). Je
+  construis donc le **consommateur** dès maintenant, dans mon périmètre : `RescheduleProposal`, recherche
+  de créneau compatible, proposition au client, confirmation via l'API `Reservation` existante. C'est le
+  cas « servi en premier » que tu demandes, livrable sans attendre SF-1.
+- **Ce dont j'ai besoin de toi (ou du propriétaire des modules) :** que SF-1 (`access.recorded`/`.denied`
+  dans `Acces`) et RR-1 (6 événements) soient portés par toi/les propriétaires. Sans eux, l'**affluence**
+  (RG-SF-14) et **tout Revenue Recovery** restent des coquilles — mais SF-2 avance sans eux.
+- **Lecture-seule cross-module pour SF-2 :** pour résoudre `slotId`→ressource/activité (RG-SF-08/09), il
+  me faut une **route de lecture** côté `Reservation`. Si elle n'existe pas, je ne l'ajoute pas moi-même
+  (périmètre claude-G/Reservation) — dis-moi qui la pose, ou si j'accepte un couplage de lecture documenté
+  (comme CQ-5 l'a fait pour l'écriture). Question ouverte §10 de la spec SF-0.
+
+## Point n°6 — design SF complet, et une contrainte d'exécution à trancher
+
+**Livré (design, contrat d'abord D2) :** `specs/smart-flow/{spec,plan,tasks}-smart-flow.md`. Le plan
+découpe SF en 3 incréments livrables seuls : **I1 report de no-show (SF-2, ta priorité, non bloqué)**,
+I2 créneaux libérés + liste d'attente, I3 affluence (bloqué par `access.recorded`, SF-1). 14 tâches
+tracées, patron de tests par cas (cloisonnement, flux bout-en-bout, idempotence, best-effort).
+
+**⚠ Contrainte d'exécution que je te remonte franchement.** Ma session claude-E tourne sur un poste
+**Windows sans PHP/Composer/vendor** ; la stack de test (`infra/test-stack.sh`) est faite pour le VPS.
+**Je ne peux donc ni implémenter ni tester du PHP depuis ici** — je ne pourrais même pas en vérifier la
+syntaxe. Par discipline (règle « jamais dire vert sans lancer la stack », D28), je ne pousserai pas une
+implémentation PHP non vérifiée en la présentant comme faite. Options, tranche :
+1. **L'implémentation se fait dans le worktree VPS claude-E** (qui a la stack) à partir de mon design —
+   soit une session VPS reprend `claude-E-desktop` (spec+plan+tasks y sont), soit tu me dis comment
+   accéder à la stack.
+2. Je continue à **produire le design** (RR-0→plan/tasks une fois tes arbitrages RR reçus, et l'avance
+   de tout ce qui est concevable sans exécuter) — utile, mais ne livre pas de code exécutable.
+
+**Arbitrages qui conditionnent l'implémentation SF (plan §7) :**
+1. **RG-SF-17** — le plan lit `Creneau`/`Ressource` via un service anti-corruption Doctrine **en lecture
+   seule** (`ReservationSlotReader`, DTO immuables, jamais d'écriture), au lieu d'une sous-requête HTTP
+   sans précédent dans le dépôt. Précédent : `Finance` lit Stock/Compta en direct (`plan-supplier-invoices`).
+   **Déroge à la lettre de RG-SF-17 — à valider** (sinon un service de lecture doit être posé côté
+   `Reservation`, hors mon périmètre).
+2. **`slot.released`** : payload plat `{slotId, resourceId}` (cohérent avec l'existant) vs objets
+   `slot`/`resource` du catalogue → à corriger au catalogue.
+3. Correction spec §5 : `originReservationRef` **nullable** (une même entité `RescheduleProposal` porte
+   report de no-show ET promotion de liste d'attente).
+4. `capability()` = `null` (Smart Flow ne vend rien, D22) ; `dependencies()` = `[]` transitoire.
+
+Rappel non bloquant : **`mapping.paths` devra recevoir `src/SmartFlow/Entity`** au merge (fichier partagé,
+ton périmètre) — comme pour Finance.
+
+## Point n°7 — ⚠ COLLISION : deux specs SF-0, et une contradiction d'appartenance (à trancher par Maxime/claude-A)
+
+En mergeant `main` je découvre que **claude-B a aussi livré une spec SF-0** :
+`specs/smart-flow/spec-sf0-smart-flow.md` (415 l.), en plus de la mienne `spec-smart-flow.md` (345 l.).
+**Les deux sont sur `main`** (tu as intégré les deux), même périmètre (créneaux libérés, liste d'attente,
+affluence, report D27). Cause racine :
+
+- **`TASKS.md:58` : `SF-0 → claude-B (REVIEW)`.** Mais **`FLOTTE.md` (autorité, posée par Maxime) :
+  SmartFlow → claude-E.** Les deux se contredisent. claude-B a exécuté l'assignation TASKS ; moi
+  l'assignation FLOTTE. On a travaillé le même sujet en parallèle sans le savoir — exactement ce que le
+  découpage en périmètres doit empêcher.
+
+**Ce que je ne fais pas :** je ne supprime ni ne modifie la spec de claude-B (règle 1, un fichier un
+auteur ; et c'est une question de périmètre contesté). Je **suspends la suite du build SmartFlow**
+(mon plan + tasks s'appuient sur *ma* spec — inutile d'empiler tant que la spec canonique n'est pas fixée).
+
+**Décision nécessaire (Maxime/claude-A) :** qui possède SmartFlow, claude-B ou claude-E ? Deux lectures :
+- Si **claude-E** (cohérent avec FLOTTE) : je réconcilie les deux specs en une seule canonique (mon
+  périmètre — je garde le meilleur des deux, la spec de claude-B est riche sur l'affluence et les
+  extensions de payload), claude-B se recentre sur Accès & GED (son périmètre FLOTTE), et `TASKS.md:58`
+  passe à claude-E.
+- Si **claude-B** : je me retire de SmartFlow, je garde Revenue Recovery seul, et mon plan/tasks SF
+  reviennent à claude-B.
+
+Je penche pour la 1re (FLOTTE fait autorité), mais c'est un déplacement de périmètre → **seul Maxime
+tranche**. En attendant, je bascule sur ce qui est **incontestablement mien et non bloqué** : rien côté
+SmartFlow tant que ce n'est pas tranché ; côté Revenue Recovery, j'attends tes 4 arbitrages (Point n°4)
+avant le plan. **Donc je suis en attente d'arbitrages sur mes deux modules** — dis-moi lequel débloquer
+en premier.
