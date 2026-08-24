@@ -128,3 +128,33 @@ implémentation PHP non vérifiée en la présentant comme faite. Options, tranc
 
 Rappel non bloquant : **`mapping.paths` devra recevoir `src/SmartFlow/Entity`** au merge (fichier partagé,
 ton périmètre) — comme pour Finance.
+
+## Point n°7 — ⚠ COLLISION : deux specs SF-0, et une contradiction d'appartenance (à trancher par Maxime/claude-A)
+
+En mergeant `main` je découvre que **claude-B a aussi livré une spec SF-0** :
+`specs/smart-flow/spec-sf0-smart-flow.md` (415 l.), en plus de la mienne `spec-smart-flow.md` (345 l.).
+**Les deux sont sur `main`** (tu as intégré les deux), même périmètre (créneaux libérés, liste d'attente,
+affluence, report D27). Cause racine :
+
+- **`TASKS.md:58` : `SF-0 → claude-B (REVIEW)`.** Mais **`FLOTTE.md` (autorité, posée par Maxime) :
+  SmartFlow → claude-E.** Les deux se contredisent. claude-B a exécuté l'assignation TASKS ; moi
+  l'assignation FLOTTE. On a travaillé le même sujet en parallèle sans le savoir — exactement ce que le
+  découpage en périmètres doit empêcher.
+
+**Ce que je ne fais pas :** je ne supprime ni ne modifie la spec de claude-B (règle 1, un fichier un
+auteur ; et c'est une question de périmètre contesté). Je **suspends la suite du build SmartFlow**
+(mon plan + tasks s'appuient sur *ma* spec — inutile d'empiler tant que la spec canonique n'est pas fixée).
+
+**Décision nécessaire (Maxime/claude-A) :** qui possède SmartFlow, claude-B ou claude-E ? Deux lectures :
+- Si **claude-E** (cohérent avec FLOTTE) : je réconcilie les deux specs en une seule canonique (mon
+  périmètre — je garde le meilleur des deux, la spec de claude-B est riche sur l'affluence et les
+  extensions de payload), claude-B se recentre sur Accès & GED (son périmètre FLOTTE), et `TASKS.md:58`
+  passe à claude-E.
+- Si **claude-B** : je me retire de SmartFlow, je garde Revenue Recovery seul, et mon plan/tasks SF
+  reviennent à claude-B.
+
+Je penche pour la 1re (FLOTTE fait autorité), mais c'est un déplacement de périmètre → **seul Maxime
+tranche**. En attendant, je bascule sur ce qui est **incontestablement mien et non bloqué** : rien côté
+SmartFlow tant que ce n'est pas tranché ; côté Revenue Recovery, j'attends tes 4 arbitrages (Point n°4)
+avant le plan. **Donc je suis en attente d'arbitrages sur mes deux modules** — dis-moi lequel débloquer
+en premier.
