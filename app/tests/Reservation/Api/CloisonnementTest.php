@@ -31,6 +31,58 @@ final class CloisonnementTest extends ReservationApiTestCase
         self::assertResponseStatusCodeSame(403, 'RG-SOCLE-05 : aucun accès hors périmètre affecté.');
     }
 
+    /**
+     * D3/D8 — arbitrer un conflit de récurrence ne doit pas permettre de déplacer un créneau sur la
+     * ressource d'un AUTRE établissement.
+     *
+     * Le cas est vicieux : l'admin de démonstration est affecté à A **et** à B, donc la ressource de
+     * B lui est légitimement visible. Ce qui doit être refusé n'est pas la lecture, c'est le
+     * rapprochement — le périmètre qui compte est celui du créneau, pas celui de l'utilisateur.
+     * Avant ce correctif, la ressource n'était résolue que par son identifiant, et l'arbitrage
+     * l'acceptait.
+     */
+    public function testArbitrageNePeutPasDeplacerUnCreneauSurLaRessourceDunAutreEtablissement(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $client->disableReboot();
+
+        $client->request('POST', '/api/reservation/creneaux', $entete + [
+            'json' => [
+                'ressource' => '/api/reservation_ressources/' . $this->idRessource(\App\Reservation\DataFixtures\ReservationFixtures::RESSOURCE_TERRAIN_LIBELLE),
+                'debut' => '2026-09-18T09:00:00+00:00',
+                'fin' => '2026-09-18T10:00:00+00:00',
+                'capacite' => 4,
+            ],
+        ]);
+        self::assertResponseIsSuccessful();
+        $idCreneau = $client->getResponse()->toArray()['id'];
+        $ressourceInitiale = $client->getResponse()->toArray()['ressource']['id'] ?? null;
+        self::assertNotNull($ressourceInitiale);
+
+        /** @var \Doctrine\ORM\EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $etabB = $em->getRepository(\App\Organisation\Entity\Etablissement::class)
+            ->findOneBy(['nom' => SocleFixtures::ETAB_B_NOM]);
+        self::assertNotNull($etabB);
+        $ressourceB = (new \App\Reservation\Entity\Ressource())->setEtablissement($etabB)
+            ->setCodeType('terrain')->setLibelle('Terrain B ' . uniqid())->setCapacitePropre(4);
+        $em->persist($ressourceB);
+        $em->flush();
+
+        $client->request('POST', '/api/reservation/creneaux/' . $idCreneau . '/arbitrer', $entete + [
+            'json' => ['ressource' => '/api/reservation_ressources/' . $ressourceB->getId()],
+        ]);
+        // 404 et non 403 : répondre « interdit » confirmerait que cet identifiant existe ailleurs.
+        self::assertResponseStatusCodeSame(404);
+
+        // Et surtout : le créneau n'a pas bougé. Un refus qui laisserait l'écriture faite serait pire
+        // qu'une absence de refus, parce qu'il aurait l'air d'avoir protégé quelque chose.
+        $em->clear();
+        $creneau = $em->getRepository(\App\Reservation\Entity\Creneau::class)->find($idCreneau);
+        self::assertNotNull($creneau);
+        self::assertSame($ressourceInitiale, (string) $creneau->getRessource()?->getId());
+    }
+
     public function testAdminNeVoitPasLesRessourcesDunAutreGroupe(): void
     {
         [$client, $entete] = $this->adminSurA();
