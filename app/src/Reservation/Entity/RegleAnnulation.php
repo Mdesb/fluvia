@@ -12,6 +12,7 @@ use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\Organisation\Entity\Etablissement;
+use App\Reservation\Enum\IssueCreditNoShow;
 use App\Reservation\Enum\ModeFacturationNoShow;
 use App\Reservation\Enum\ModeMontantAnnulation;
 use App\Reservation\Enum\PorteeRegleAnnulation;
@@ -93,6 +94,17 @@ class RegleAnnulation
     #[ORM\Column(length: 20, enumType: ModeFacturationNoShow::class)]
     #[Groups(['regle_annulation:read', 'regle_annulation:write', 'facturation_no_show:read'])]
     private ModeFacturationNoShow $modeFacturation = ModeFacturationNoShow::FactureAEncaisser;
+
+    /**
+     * Second axe orthogonal (D24, RG-CQ5-01) : la séance manquée est-elle décomptée du crédit,
+     * restituée, ou restituée avec un report proposé ? Défaut le plus généreux (D27), même rang que
+     * `modeFacturation`. `facturation_no_show:read` permet à `FacturationNoShow.regleAppliquee` de
+     * projeter ce que dirait la règle aujourd'hui, distinctement de ce qui a réellement été décidé
+     * (`FacturationNoShow.issueCreditNoShow`, RG-CQ5-06).
+     */
+    #[ORM\Column(length: 24, enumType: IssueCreditNoShow::class)]
+    #[Groups(['regle_annulation:read', 'regle_annulation:write', 'facturation_no_show:read'])]
+    private IssueCreditNoShow $issueCreditNoShow = IssueCreditNoShow::RestoredWithReschedule;
 
     #[ORM\Column(type: 'integer', options: ['default' => 0])]
     #[Assert\PositiveOrZero]
@@ -231,6 +243,18 @@ class RegleAnnulation
     public function setModeFacturation(ModeFacturationNoShow $modeFacturation): self
     {
         $this->modeFacturation = $modeFacturation;
+
+        return $this;
+    }
+
+    public function getIssueCreditNoShow(): IssueCreditNoShow
+    {
+        return $this->issueCreditNoShow;
+    }
+
+    public function setIssueCreditNoShow(IssueCreditNoShow $issueCreditNoShow): self
+    {
+        $this->issueCreditNoShow = $issueCreditNoShow;
 
         return $this;
     }

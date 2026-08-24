@@ -12,6 +12,7 @@ use App\Platform\Event\EventBus;
 use App\Platform\Event\EventSubject;
 use App\Platform\Event\EventTenant;
 use App\Reservation\Entity\Reservation;
+use App\Reservation\Enum\IssueCreditNoShow;
 use App\Reservation\Enum\StatutReservation;
 use App\Reservation\Service\AnnulationVenteReservationHandler;
 use App\Reservation\Service\DeclencherFacturationNoShowHandler;
@@ -67,6 +68,7 @@ final class AnnulerReservationProcessor implements ProcessorInterface
         $creneau = $data->getCreneau();
         $ressource = $creneau?->getRessource();
 
+        $facturationNoShow = null;
         if ($dansDelai) {
             $data->setStatut(StatutReservation::AnnuleeLibre);
             $this->em->flush();
@@ -74,8 +76,9 @@ final class AnnulerReservationProcessor implements ProcessorInterface
         } else {
             // Branche tardive (RG-ACC3-05) : la révocation est câblée dans
             // DeclencherFacturationNoShowHandler::declencher(), point de passage partagé avec la
-            // branche no-show de BasculerNoShowCommand.
-            $this->facturationHandler->declencher($data, StatutReservation::AnnuleeTardiveFacturee);
+            // branche no-show de BasculerNoShowCommand. Retour capturé (RG-CQ5-08) pour construire le
+            // payload étendu de booking.cancelled / publier booking.reschedule_requested ci-dessous.
+            $facturationNoShow = $this->facturationHandler->declencher($data, StatutReservation::AnnuleeTardiveFacturee);
         }
 
         // --- ajout G1/G2 (RG-RESAENC-09/10) : avoir de remboursement (délai franc, Vente validee) ou
@@ -119,9 +122,34 @@ final class AnnulerReservationProcessor implements ProcessorInterface
                         ($creneau->getDebut()->getTimestamp() - $maintenant->getTimestamp()) / 60
                     )),
                     'withinFreeWindow' => $dansDelai,
+                    // RG-CQ5-08 — extension additive (plan-cq5.md §3.8), branche tardive uniquement :
+                    // la branche libre n'a jamais résolu de RegleAnnulation.
+                    ...(!$dansDelai && $facturationNoShow !== null ? [
+                        'creditIssue' => $facturationNoShow->getIssueCreditNoShow()?->value,
+                        'creditRestoredAmount' => ($facturationNoShow->isCreditActionne() && $facturationNoShow->isCreditRestitue()) ? 1 : 0,
+                    ] : []),
                 ],
                 new EventActor($utilisateur->getId()),
             ));
+
+            // RG-CQ5-08 — même condition et même acteur que booking.cancelled ci-dessus, cohérence
+            // avec BasculerNoShowCommand.
+            if (!$dansDelai
+                && $facturationNoShow?->getIssueCreditNoShow() === IssueCreditNoShow::RestoredWithReschedule
+                && $facturationNoShow->isCreditActionne() && $facturationNoShow->isCreditRestitue()) {
+                $this->eventBus->publish(new DomainEvent(
+                    'booking.reschedule_requested',
+                    new EventTenant($etablissement->getId()),
+                    new EventSubject('Reservation', (string) $data->getId()),
+                    [
+                        'customerId' => (string) $data->getOrganisateur()?->getId(),
+                        'reservationRef' => (string) $data->getId(),
+                        'slotId' => (string) $creneau->getId(),
+                        'droitId' => (string) $facturationNoShow->getDroitAccesRestitueRef(),
+                    ],
+                    new EventActor($utilisateur->getId()),
+                ));
+            }
         }
 
         return $data;

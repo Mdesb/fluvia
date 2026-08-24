@@ -131,17 +131,21 @@ séances de D24 (quota de **stock**, ce que CQ-6 construira) est décrite comme 
 stock doit être vérifié **et décrémenté à la réservation**, sinon rien n'empêche de réserver plus de
 séances que la carte n'en contient.
 
-⚠ **HYPOTHÈSE (informe le sens des 3 issues, à confirmer par la spec CQ-3/CQ-6 elle-même) :** le futur
-crédit d'une carte de séances (droit `Booking` à `creditRestant` non nul, ou équivalent CQ-6) sera
-décrémenté **à la confirmation de la réservation** (`ReserverProcessor`, par analogie avec
-`QuotaFormuleResolver`), **pas** au passage physique — une prestation sur rendez-vous (massage) n'a pas
-nécessairement de badge/portillon. C'est cette hypothèse qui donne son sens à D24 : « décompté » n'est
-pas une action supplémentaire au no-show, c'est **l'absence** d'action — le crédit, déjà pris à la
-réservation, **reste pris**. « Restitué » **est** une action — rendre ce qui avait déjà été prélevé. Si
-cette hypothèse s'avérait fausse (décompte au passage plutôt qu'au booking), le sens des deux issues
-s'inverserait et `RG-CQ5-05` devrait être revu — c'est pourquoi ce lot conçoit les deux issues comme
-symétriques et indépendantes du point de décompte réel plutôt que de figer une hypothèse dans le nom des
-opérations SQL (§4).
+✔ **TRANCHÉ (arbitrage intégrateur, 24/08/2026 — vaut pour le périmètre de ce lot) :** le critère du
+point de décompte est **l'acte de réservation**. Pour une activité **réservable**, le crédit d'une carte
+de séances (droit `Booking` à `creditRestant` non nul, ou équivalent CQ-6) est **engagé à la
+confirmation de la réservation** (`ReserverProcessor`, par analogie avec `QuotaFormuleResolver`) ;
+le décompte « au passage » ne concerne que les activités **non réservables** (portillon sans réservation
+préalable). Or **un no-show n'existe que là où il y a eu réservation** — le périmètre de CQ-5 est donc
+**intégralement** celui du décompte-à-la-réservation, sans zone grise : l'hypothèse antérieure est,
+pour ce lot, un fait. C'est ce qui donne son sens à D24 : « décompté » n'est pas une action
+supplémentaire au no-show, c'est **l'absence** d'action — le crédit, déjà engagé à la réservation,
+**reste engagé**. « Restitué » **est** une action — rendre ce qui avait déjà été prélevé.
+
+Ce lot conçoit néanmoins les deux issues comme **symétriques et indépendantes du point de décompte réel**
+(aucune hypothèse figée dans le nom des opérations SQL, §4) : si une activité future sortait du critère
+ci-dessus, seule la `RegleAnnulation` associée changerait d'`IssueCreditNoShow`, sans retoucher le
+handler.
 
 ## 4. La dimension `IssueCreditNoShow`
 
@@ -401,6 +405,9 @@ où un crédit bougerait sans règle de sortie déterministe.
    d'`App\Acces` si l'intention est de centraliser toutes les opérations de crédit côté Accès (au risque
    d'inverser la direction de dépendance établie par ACC-3). Argumenté en faveur de Réservation dans ce
    lot ; à confirmer en plan.
-6. **Confirmation du point de décompte réel** (§3.3, hypothèse structurante) — le sens de `Decremented`
-   vs `Restored` dépend entièrement de l'hypothèse « décompte au booking, pas au passage ». Si la spec
-   CQ-3/CQ-6 tranche différemment, `RG-CQ5-05` doit être relu avant implémentation, pas après.
+6. ~~**Confirmation du point de décompte réel**~~ — **TRANCHÉ (arbitrage intégrateur, 24/08/2026, cf.
+   §3.3)** : critère = l'acte de réservation ; le crédit d'une activité réservable est engagé à la
+   confirmation, et un no-show n'existe que là où il y a eu réservation. Le périmètre de CQ-5 est donc
+   intégralement celui du décompte-à-la-réservation ; `RG-CQ5-05` est confirmé, `Decremented` = crédit
+   engagé qui reste engagé (aucune écriture). Le handler reste néanmoins agnostique du point de décompte
+   (§4), donc robuste si un futur produit sortait du critère.
