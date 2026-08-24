@@ -24,4 +24,15 @@ final class StayFolio
     {
         return StayBalance::fromAmounts($this->lookup->amountsOf($stay));
     }
+
+    /**
+     * Les lignes de la note. Le solde correspondant se calcule depuis elles sans seconde requete :
+     * `StayBalance::fromAmounts(array_column($lignes, 'amount'))`.
+     *
+     * @return list<array{label: string, amount: string, occurredAt: \DateTimeImmutable, sourceModule: string}>
+     */
+    public function linesOf(Stay $stay): array
+    {
+        return $this->lookup->linesOf($stay);
+    }
 }

@@ -29,4 +29,14 @@ interface StayChargeLookup
      * @return list<string>
      */
     public function amountsOf(Stay $stay): array;
+
+    /**
+     * Les lignes du séjour telles qu'elles s'impriment sur la note, dans l'ordre chronologique.
+     *
+     * Distincte de `amountsOf()` volontairement : le règlement n'a besoin que des montants, et lui
+     * faire charger des libellés qu'il n'affichera pas serait payer l'affichage à chaque clôture.
+     *
+     * @return list<array{label: string, amount: string, occurredAt: \DateTimeImmutable, sourceModule: string}>
+     */
+    public function linesOf(Stay $stay): array;
 }
