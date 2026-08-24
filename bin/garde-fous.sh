@@ -128,6 +128,18 @@ else
     executer "Charges utiles vs catalogue (D2)" php_racine bin/garde-fou-charges-utiles.php
 fi
 
+# 8. Écriture qui traverse la frontière (D3/D8). Une entité que rien ne permet de cloisonner ne doit
+#    pas porter une relation ÉCRIVABLE vers une entité qui, elle, l'est : il n'y a alors de frontière
+#    ni en lecture ni en écriture. Ces cas échappent au n°1 par construction — il cherche un `find()`
+#    depuis l'entrée client dans un Processor, or il n'y a pas de Processor : le sérialiseur
+#    désérialise l'IRI directement dans l'entité. Né de `SousReseau`, un accès fédéré dont la
+#    ManyToMany vers `EspaceAcces` est écrivable et pilote un franchissement de porte.
+if [ -n "${REFERENCE:-}" ]; then
+    executer "Écriture transfrontière (D3/D8)" php_racine bin/garde-fou-ecriture-transfrontiere.php "--contre=$REFERENCE"
+else
+    executer "Écriture transfrontière (D3/D8)" php_racine bin/garde-fou-ecriture-transfrontiere.php
+fi
+
 # 5. i18n : pas de chaîne d'UI en dur — SANS OBJET tant que la couche i18n n'existe pas (aucun
 #    catalogue, aucun usage du traducteur dans app/src). Acté par l'intégrateur le 21/08.
 # 6. CSRF — SANS OBJET : tous les pare-feux sont `stateless: true` et l'authentification est un JWT
