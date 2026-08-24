@@ -32,6 +32,7 @@ Deux constats vérifiés sur `claude-G` (valables pour **D, E, F, G, H, I** — 
    - le filet de complétude et l'avertissement D28 de `pre-receive` ne s'exécutent plus pour elles.
    Rien à faire de mon côté : je te le signale, tu arbitres.
 
+| 12:55 | Pile de test `claudeG` démontée (règle 7). Lecture d'ACT-1 faite **sans rien écrire dans `Reservation`** : les trois manques de D16 confrontés au code réel, note ci-dessous. | Rien — j'attends la migration de mon worktree et ton séquencement sur `Reservation`. | Ni l'un ni l'autre ne me bloque pour lire ; les deux me bloquent pour écrire. |
 
 ## ⚠ CQ-7 — SECTION PÉRIMÉE, ne la lis pas comme un ordre de travail
 
@@ -95,3 +96,49 @@ pas dans le calcul.
 anti-grignotage que D26 évoque (minimum de recharge pour déclencher la prolongation, plafond de
 prolongations cumulées). D26 dit « on les ajoutera sur constat, pas par précaution » — je m'y tiens,
 et le test `testDeuxModesEtPasDavantage` est là pour que leur ajout soit une décision visible.
+
+
+## ACT-1 — les trois manques de D16 confrontés au code (lecture seule, avant ton séquencement)
+
+Rien d'écrit, rien de commencé. C'est de la matière pour ton arbitrage, pas une prise de périmètre.
+
+**1. « Une réservation consomme N unités, pas 1 » — confirmé, et c'est deux lignes de compteur.**
+`JaugeCreneauGuard::placesOccupees()` fait un `COUNT(r.id)` sur les réservations du créneau, et
+`JaugeRessourceMereHandler::incrementer()` fait `+1`. Une table de huit consomme donc **une** place
+sur soixante. Le champ n'existe pas sur `Reservation` : il faut l'ajouter, puis passer le `COUNT` en
+`SUM` et l'incrément en `+ $quantite`. Les `ParticipantReservation` existent et restent justes pour
+un cours (une ligne = une personne nommée, qui paie sa part) ; ils ne peuvent pas servir de quantité
+pour des couverts, où personne ne nomme les convives. **Les deux notions coexistent**, elles ne
+fusionnent pas.
+
+**2. « On réserve un type, l'instance est affectée plus tard » — confirmé, et c'est le plus lourd.**
+`Creneau.ressource` pointe une `Ressource` **concrète**. `codeType` existe sur la ressource mais
+n'est qu'une étiquette de configuration : il n'y a aucun moyen de réserver « une chambre double »
+sans désigner la 214. Il faut une unité réservable au niveau du type et une affectation d'instance
+postérieure — c'est un changement de modèle, pas un champ.
+
+**3. « Deux niveaux de capacité imbriqués » — le second niveau existe, mais il ne répond pas à la
+question de D16.** `Ressource.occupationCourante` + `capacitePropre` sur la ressource porteuse
+donnent bien un second niveau (RG-M5-08/CA-14), incrémenté à la réservation et relâché après le
+créneau par `BasculerNoShowCommand` — **vérifié : le décrément est hors du if/else, donc les
+réservations honorées libèrent bien la jauge**, il n'y a pas de fuite de compteur (je l'ai soupçonné,
+c'est faux).
+
+Mais ce compteur est **global et aveugle au temps** : il compte les réservations en cours sur tout
+l'arbre de ressources, pas « soixante couverts **sur le service de 20 h** ». L'exemple de D16 — « une
+table libre ne suffit pas si le service n'a plus de couverts » — est un quota **sur une fenêtre**, et
+il n'est pas exprimable aujourd'hui. C'est, à mon avis, le vrai contenu du point 3, et il est plus
+proche du point 1 (une capacité qui se consomme par quantité sur une période) que du compteur
+existant.
+
+**Ce que je te demande de trancher, dans cet ordre :** (a) quand j'entre dans `Reservation` sans
+marcher sur `claude-B` ; (b) si le point 2 se fait dans ACT-1 ou se sépare, parce qu'il change le
+modèle là où les points 1 et 3 l'étendent.
+
+## Hygiène du VPS — 29 conteneurs et 22 réseaux Docker en ce moment
+
+Ma pile est démontée (`down claudeG`). Il reste **29 conteneurs** et **22 réseaux** : `FLOTTE-db`,
+`FIX-db`, `FIX2-db`, `CQ5-db`, `CQ5B-db`, `CQ1-db`, `SF1-db`, `SF1B-db`, `N8-db`… Ce sont des jetons
+de test qui ne portent le nom de personne — donc que personne ne démontera. Ce n'est pas mon
+périmètre et je n'y touche pas : c'est le début exact de l'incident des vingt-six piles du 24/08,
+et il vaut mieux le voir maintenant qu'à la première session qui ne pourra plus tester.
