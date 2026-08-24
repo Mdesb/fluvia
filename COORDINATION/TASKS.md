@@ -59,13 +59,14 @@ Ne touche pas un chemin déjà en `WIP` par une autre instance.
 | RR-2 | Moteur de relance pilote par evenements (apres RR-0 et RR-1) | `app/src/RevenueRecovery/**` | *a assigner* | CLAIM | 23/08 |
 | SF-2 | Creneau libere, liste dattente, revente du creneau (apres SF-0 et SF-1) | `app/src/SmartFlow/**` | *a assigner* | CLAIM | 23/08 |
 | CQ-0 | **PREALABLE** — rattacher un DroitAcces a un porteur (facultatif : la carte au porteur reste possible) | `app/src/{Acces,Crm}/**` | **claude-C** | CLAIM | 23/08 |
-| CQ-1 | Recharge dune carte multi-entrees : increment du droit existant, bascule versionMaj, vente rattachee | `app/src/Acces/**` | **claude-B** | CLAIM | 23/08 |
+| CQ-1 | Recharge dune carte multi-entrees : increment du droit existant, bascule versionMaj, vente rattachee | `app/src/Acces/**` | **claude-B** | DONE | 24/08 |
 | CQ-2 | Consultation du solde en lecture seule (ne consomme rien) + modale de caisse avec ajout rapide | `app/src/Acces/**` | **claude-A** | CLAIM | 23/08 |
 | CQ-3 | Carte de N reservations : ouvrir creditRestant sur les droits de type Booking | `app/src/Reservation/**` | *a assigner* | CLAIM | 23/08 |
 | CQ-4 | propositionRecharge : ne designer que des canaux reellement implementes | `app/src/Acces/State/PassageIngestionProcessor.php` | *a assigner* | CLAIM | 23/08 |
-| CQ-5 | No-show : issue sur le credit (decompte / restitue / restitue avec report), orthogonale a la facturation | `app/src/Reservation/**` | **claude-B** | CLAIM | 23/08 |
+| CQ-5 | No-show : issue sur le credit (decompte / restitue / restitue avec report), orthogonale a la facturation | `app/src/Reservation/**` | **claude-B** | DONE | 24/08 |
 | CQ-6 | Carte de seances nominative : quota de STOCK, distinct du quota periodique des formules | `app/src/{Reservation,Acces}/**` | *a assigner* | CLAIM | 23/08 |
 | CQ-7 | Parametres de recharge : la validite apres recharge se configure (conserver / prolonger) | `app/src/Offre/**` | *a assigner* | CLAIM | 23/08 |
 | ACC-4 | Resolution du pilote dacces **par etablissement** — lalias DI unique rend les capacites globales et vide D17 dune partie de son sens | `app/src/Acces/**` | *a assigner* | CLAIM | 23/08 |
-| CQ-8 | **ARGENT** — vendre N cartes en une ligne facture N et nemet quune seule chargee (defaut preexistant, revele par CQ-1) | `app/src/Vente/Service/ValiderVenteService.php` | *a assigner* | CLAIM | 24/08 |
+| CQ-8 | **ARGENT** — vendre N cartes en une ligne facture N et nemet quune seule chargee (defaut preexistant, revele par CQ-1) | `app/src/Vente/Service/ValiderVenteService.php` | **claude-B** | WIP | 24/08 |
+| C24 | Le hook installe compare son contenu a la version poussee et avertit sil est perime (D28) | `hooks/pre-receive` | **claude-C** | CLAIM | 24/08 |
 <!-- Ajouter les nouvelles tâches au-dessus de cette ligne. -->
