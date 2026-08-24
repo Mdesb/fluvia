@@ -34,7 +34,7 @@ function formatAdresse(a) {
 }
 
 // Écran Clients (CRM) : liste + recherche et fiche client 360° enrichie.
-export default function Clients({ etabActif }) {
+export default function Clients({ etabActif, cible = null, onCibleConsommee }) {
   const [q, setQ] = useState('')
   const [items, setItems] = useState([])
   const [total, setTotal] = useState(0)
@@ -101,6 +101,15 @@ export default function Clients({ etabActif }) {
       setFicheLoading(false)
     }
   }
+
+  // Fiche demandee par la recherche globale. On la consomme immediatement : la garder ferait rouvrir
+  // la meme fiche a chaque retour sur l'onglet, sans moyen de l'en empecher.
+  useEffect(() => {
+    if (cible?.type !== 'client') return
+    ouvrirFiche(cible.id)
+    onCibleConsommee?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cible])
 
   return (
     <div className="view">

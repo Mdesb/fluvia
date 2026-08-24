@@ -5,8 +5,14 @@ import Tabs from '../components/Tabs.jsx'
 import ProduitOptionsModal from '../components/ProduitOptionsModal.jsx'
 import ProduitFicheModal from '../components/ProduitFicheModal.jsx'
 
-export default function Catalogue({ etabActif }) {
+export default function Catalogue({ etabActif, cible = null, onCibleConsommee }) {
   const [tab, setTab] = useState('produits')
+
+  // Une cible « produit » arrive de la recherche globale : on s'assure d'être sur le bon onglet
+  // avant que la liste ne tente de l'ouvrir.
+  useEffect(() => {
+    if (cible?.type === 'produit') setTab('produits')
+  }, [cible])
 
   return (
     <div className="view">
@@ -23,14 +29,18 @@ export default function Catalogue({ etabActif }) {
         onChange={setTab}
       />
 
-      {tab === 'produits' ? <OngletProduits etabActif={etabActif} /> : <OngletOptions />}
+      {tab === 'produits' ? (
+        <OngletProduits etabActif={etabActif} cible={cible} onCibleConsommee={onCibleConsommee} />
+      ) : (
+        <OngletOptions />
+      )}
     </div>
   )
 }
 
 /* ------------------------------------------------------------------ Produits */
 
-function OngletProduits({ etabActif }) {
+function OngletProduits({ etabActif, cible = null, onCibleConsommee }) {
   const [produits, setProduits] = useState([])
   const [types, setTypes] = useState([])
   const [chargement, setChargement] = useState(true)
@@ -64,6 +74,16 @@ function OngletProduits({ etabActif }) {
   useEffect(() => {
     recharger()
   }, [etabActif, recharger])
+
+  // Ouverture de la fiche demandée par la recherche globale. On prend l'objet complet s'il est déjà
+  // chargé, sinon on ouvre avec le seul identifiant : la fiche va chercher le détail de toute façon,
+  // et attendre la liste entière pour afficher un nom ferait patienter sans raison.
+  useEffect(() => {
+    if (cible?.type !== 'produit') return
+    const connu = produits.find((p) => String(p.id) === String(cible.id))
+    setProduitFiche(connu || { id: cible.id })
+    onCibleConsommee?.()
+  }, [cible, produits, onCibleConsommee])
 
   async function creer(e) {
     e.preventDefault()

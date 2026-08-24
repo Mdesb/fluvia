@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { api, membres } from '../api/client.js'
+import RechercheGlobale from './RechercheGlobale.jsx'
 
 // `cap` = capacité requise (capacitesActives de /me) ; `perm` = permission requise (droits de /me) ;
 // `perms` = liste dont AU MOINS UNE suffit — pour les écrans qui servent plusieurs métiers, où
@@ -106,6 +108,32 @@ export default function AppShell({
   estAdmin = false,
   children,
 }) {
+  // État de la session de caisse, affiché en permanence dans la barre du haut.
+  //
+  // L'appel est silencieux et facultatif : il est gardé par le droit de lecture, et toute erreur est
+  // avalée. Une barre de navigation ne doit jamais faire échouer une page — si l'information n'est
+  // pas disponible, on n'affiche rien plutôt qu'un état faux ou un message d'erreur permanent.
+  const [caisseOuverte, setCaisseOuverte] = useState(null)
+  useEffect(() => {
+    if (!droits.includes('caisse.lire') || !etabActif) {
+      setCaisseOuverte(null)
+      return undefined
+    }
+    let annule = false
+    api
+      .sessionsCaisse()
+      .then((c) => {
+        if (annule) return
+        setCaisseOuverte(membres(c).some((s) => s.etat === 'ouverte' || s.statut === 'ouverte'))
+      })
+      .catch(() => {
+        if (!annule) setCaisseOuverte(null)
+      })
+    return () => {
+      annule = true
+    }
+  }, [droits, etabActif, onglet])
+
   // Filtre les entrées selon les capacités actives, les droits effectifs de l'établissement courant
   // et le statut administrateur.
   const nav = NAV
@@ -184,38 +212,61 @@ export default function AppShell({
             </div>
           ))}
         </nav>
-        <div className="side-foot">
-          <span className="av">{initiales(me)}</span>
-          <div>
-            {me?.nom || me?.email || 'Utilisateur'}
-            <br />
-            <span style={{ color: 'var(--side-ink-soft)' }}>{me?.role || 'Régisseur'}</span>
-          </div>
-          <button className="logout" title="Déconnexion" onClick={onLogout}>⏻</button>
-        </div>
+        {/* L'identité et la déconnexion sont remontées dans la barre du haut : le bas de la colonne
+            de gauche est l'endroit qu'on regarde le moins, pour une information qu'on veut sous les
+            yeux en permanence. La colonne se termine donc sur la navigation — l'établissement est
+            déjà rappelé en tête du menu, le répéter deux centimètres plus bas n'aiderait personne. */}
       </aside>
 
       <div className="main">
         <div className="topbar">
           <button className="burger" aria-label="Menu" onClick={() => setNavOpen((v) => !v)}>☰</button>
+          {/* Le contexte d'établissement reste, en compact : le libellé « Établissement » disparaît,
+              le sélecteur se suffit à lui-même et le nom est déjà rappelé dans la colonne. */}
           <div className="topbar-tenant">
-            <span>Établissement</span>
             <select
               className="select"
               value={etabActif}
               onChange={(e) => onChangeEtab(e.target.value)}
+              aria-label="Établissement actif"
+              title="Établissement sur lequel vous travaillez"
             >
               {etablissements.map((e) => (
                 <option key={e.id} value={e.id}>{e.nom}</option>
               ))}
             </select>
           </div>
+
+          <RechercheGlobale droits={droits} onNav={onNav} />
+
           <div className="topbar-right">
+            {caisseOuverte !== null && (
+              <button
+                type="button"
+                className={`badge ${caisseOuverte ? 'good' : 'mut'} topbar-caisse`}
+                onClick={() => onNav('caisse')}
+                title={
+                  caisseOuverte
+                    ? 'Une session de caisse est ouverte. Cliquez pour aller à la caisse.'
+                    : "Aucune session de caisse ouverte : les encaissements sont impossibles tant qu'une session n'est pas ouverte."
+                }
+              >
+                {caisseOuverte ? 'Caisse ouverte' : 'Caisse fermée'}
+              </button>
+            )}
             <button
               className="icon-btn"
               title={theme === 'dark' ? 'Passer en clair' : 'Passer en sombre'}
               onClick={toggleTheme}
             >◐</button>
+            <div className="topbar-who" title={me?.email || ''}>
+              <span className="av">{initiales(me)}</span>
+              <span className="tw-txt">
+                <b>{me?.nom || me?.email || 'Utilisateur'}</b>
+                <span className="sub">{me?.role || 'Régisseur'}</span>
+              </span>
+            </div>
+            <button className="icon-btn" title="Déconnexion" onClick={onLogout}>⏻</button>
           </div>
         </div>
         {children}
