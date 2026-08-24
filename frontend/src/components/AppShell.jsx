@@ -1,21 +1,46 @@
 import { useEffect, useState } from 'react'
 
 // `cap` = capacité requise (capacitesActives de /me) ; `perm` = permission requise (droits de /me) ;
+// `perms` = liste dont AU MOINS UNE suffit — pour les écrans qui servent plusieurs métiers, où
+// exiger un droit unique retirerait l'écran à quelqu'un qui s'en sert légitimement ;
 // `admin` = réservé aux profils administrateur (droits d'administration du socle). Sans contrainte,
-// l'entrée est toujours visible. `disabled` = présente mais grisée (« bientôt »).
+// l'entrée est toujours visible. `disabled` = présente mais grisée, avec la raison en infobulle.
+//
+// POURQUOI DES ENTRÉES GRISÉES POUR DES ÉCRANS QUI N'EXISTENT PAS.
+//
+// Au 24/08/2026, 32 modules exposent une API et ce menu comptait 16 entrées. Treize modules — Stock,
+// Finance, Facturation, SEPA, Recouvrement, GED, Support, Cautions, Sport, Autorisations, Séjours,
+// Publication sociale — avaient une API complète et AUCUN endroit où aller, soit près de trois
+// ressources sur dix.
+//
+// Le point qui a coûté cher : « Stock — bientôt » était le SEUL manque visible, parce que c'était le
+// seul qu'on avait affiché. Les douze autres n'étaient pas grisés, ils étaient absents — donc
+// personne ne pouvait constater qu'ils manquaient, pas même en regardant l'écran attentivement. Un
+// menu incomplet se lit comme un produit complet.
+//
+// Ces entrées ne livrent aucune fonctionnalité. Elles rendent le manque VISIBLE et donc arbitrable :
+// on voit ce qui reste à construire, et dans quel ordre le demander. Chacune disparaîtra de cette
+// liste le jour où son écran existera — c'est le seul entretien qu'elles demandent.
+//
+// Ne figurent pas ici les services transverses sans usage direct (OCR, Audit) : ils sont consommés
+// par d'autres modules et n'ont pas vocation à un écran propre. Une entrée pour eux serait une
+// promesse qu'on n'a pas l'intention de tenir.
 const NAV = [
   {
     section: 'Exploitation',
     items: [
       { id: 'dashboard', ic: '⌂', label: 'Tableau de bord', admin: true },
-      { id: 'caisse', ic: '▤', label: 'Caisse' },
-      { id: 'catalogue', ic: '▥', label: 'Catalogue' },
+      // La caisse sert le caissier comme le responsable : encaisser, ouvrir une session, consulter.
+      // Exiger le seul `caisse.lire` retirerait l'écran à un caissier qui n'a que les droits de vente.
+      { id: 'caisse', ic: '▤', label: 'Caisse', perms: ['caisse.lire', 'caisse.ouvrir', 'vente.creer', 'vente.encaisser'] },
+      { id: 'catalogue', ic: '▥', label: 'Catalogue', perms: ['offre.lire', 'offre.gerer', 'offre.creer', 'offre.modifier'] },
       { id: 'reservation', ic: '◷', label: 'Réservation', cap: 'reservation' },
       // Écran métier de l'établissement (une seule entrée visible selon le type de site).
       { id: 'piscine', ic: '≈', label: 'Piscine', perm: 'piscine.lire' },
       { id: 'patinoire', ic: '❆', label: 'Patinoire', perm: 'patinoire.lire' },
       { id: 'padel', ic: '◍', label: 'Padel', perm: 'padel.lire' },
       { id: 'musee', ic: '⛫', label: 'Musée', perm: 'musee.lire' },
+      { id: 'sport', ic: '⬤', label: 'Sport & fitness', perm: 'sport.lire', disabled: true, absent: true },
     ],
   },
   {
@@ -27,23 +52,37 @@ const NAV = [
   {
     section: 'Gestion',
     items: [
-      { id: 'clients', ic: '☺', label: 'Clients' },
+      { id: 'clients', ic: '☺', label: 'Clients', perms: ['crm.lire', 'crm.creer', 'crm.modifier'] },
       { id: 'comptabilite', ic: '▧', label: 'Comptabilité', perm: 'compta.lire' },
       { id: 'boutique', ic: '▦', label: 'Boutique en ligne', cap: 'boutique_en_ligne' },
       { id: 'personnel', ic: '☰', label: 'Personnel', perm: 'personnel.lire' },
-      { id: 'stock', ic: '▣', label: 'Stock', disabled: true },
+      { id: 'stock', ic: '▣', label: 'Stock', perm: 'stock.lire', disabled: true, absent: true },
+      { id: 'facturation', ic: '▤', label: 'Facturation', perm: 'facturation.lire', disabled: true, absent: true },
+      { id: 'finance', ic: '€', label: 'Achats & trésorerie', perm: 'finance.read', disabled: true, absent: true },
+      { id: 'sepa', ic: '⇄', label: 'Prélèvements SEPA', perm: 'sepa.lire', disabled: true, absent: true },
+      { id: 'recouvrement', ic: '⚠', label: 'Recouvrement', perm: 'recouvrement.lire', disabled: true, absent: true },
+      { id: 'caution', ic: '⛨', label: 'Cautions', perm: 'caution.lire', disabled: true, absent: true },
+      { id: 'documents', ic: '🗎', label: 'Documents', perm: 'dms.read', disabled: true, absent: true },
+      { id: 'social', ic: '◎', label: 'Publication sociale', perm: 'social.read_post', disabled: true, absent: true },
     ],
   },
   {
     section: 'Pilotage',
     items: [
-      { id: 'pilotage', ic: '◨', label: 'Reporting' },
+      { id: 'pilotage', ic: '◨', label: 'Reporting', perms: ['reporting.lire', 'reporting.configurer', 'reporting.planifier'] },
+      { id: 'support', ic: '?', label: 'Assistance', perm: 'support.lire', disabled: true, absent: true },
     ],
   },
   {
     section: 'Administration',
     items: [
-      { id: 'parametres', ic: '⚙', label: 'Paramètres' },
+      {
+        id: 'parametres',
+        ic: '⚙',
+        label: 'Paramètres',
+        perms: ['securite.gerer', 'securite.lire', 'organisation.gerer', 'offre.gerer', 'caisse.gerer', 'crm.parametrer'],
+      },
+      { id: 'autorisations', ic: '⚿', label: 'Autorisations', perm: 'autorisation.lire', disabled: true, absent: true },
     ],
   },
 ]
@@ -76,6 +115,7 @@ export default function AppShell({
         (it) =>
           (!it.cap || capacites.includes(it.cap)) &&
           (!it.perm || droits.includes(it.perm)) &&
+          (!it.perms || it.perms.some((p) => droits.includes(p))) &&
           (!it.admin || estAdmin),
       ),
     }))
@@ -124,11 +164,21 @@ export default function AppShell({
                   className={`side-link${onglet === it.id ? ' active' : ''}`}
                   onClick={() => !it.disabled && aller(it.id)}
                   disabled={it.disabled}
-                  title={it.disabled ? 'Bientôt disponible' : undefined}
+                  title={
+                    it.absent
+                      ? `${it.label} : le module existe côté serveur, son écran n'est pas encore construit.`
+                      : it.disabled
+                        ? 'Bientôt disponible'
+                        : undefined
+                  }
                   style={it.disabled ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
                 >
                   <span className="ic">{it.ic}</span> {it.label}
-                  {it.disabled && <span className="badge mut" style={{ marginLeft: 'auto', fontSize: 10 }}>bientôt</span>}
+                  {it.disabled && (
+                    <span className="badge mut" style={{ marginLeft: 'auto', fontSize: 10 }}>
+                      {it.absent ? 'sans écran' : 'bientôt'}
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
