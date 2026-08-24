@@ -654,3 +654,39 @@ qui `hooks/` appartient.
 **Portée du contrôle : avertir, pas refuser.** Refuser une poussée parce que le hook est périmé
 bloquerait justement la poussée qui apporte sa mise à jour. L'avertissement suffit : il est visible de
 qui pousse, donc de moi, à chaque intégration.
+
+### 2026-08-24 · D29 — La flotte : une boîte aux lettres par instance, un battement de quinze minutes
+Maxime lance **six sessions supplémentaires**. À neuf instances, deux mécanismes qui tenaient à trois
+cassent, et il faut les remplacer avant d'ouvrir les vannes.
+
+**1. Plus jamais de fichier partagé en écriture.** `MESSAGES.md` a produit **deux conflits de fusion en
+une seule journée** à trois instances. À neuf, ce serait permanent. Chaque instance a donc désormais
+deux fichiers qui n'appartiennent qu'à elle :
+
+- `COORDINATION/ORDRES/<id>.md` — **écrit par claude-A seul**, lu par l'instance ;
+- `COORDINATION/RAPPORTS/<id>.md` — **écrit par l'instance seule**, lu par claude-A.
+
+Un fichier n'a jamais deux auteurs, donc il n'a jamais de conflit. `MESSAGES.md` reste pour les
+annonces générales, écrites par l'intégrateur uniquement.
+
+**2. Le battement de quinze minutes remplace la bonne volonté.** Une instance ne « pense » pas à
+regarder si on lui a écrit. Elle exécute une boucle : tirer `main`, lire ses ordres, agir, écrire une
+ligne de rapport, pousser. Toutes les quinze à vingt minutes, y compris quand il n'y a rien à dire —
+une ligne « rien de neuf » est une information, le silence n'en est pas une. C'est le prolongement de
+D25, qui avait déjà retiré au silence sa valeur de signal.
+
+**3. Le périmètre vient de Maxime, jamais de moi.** claude-C a refusé le 24/08 de travailler hors de
+son périmètre malgré mon accord explicite, et **il avait raison** : un pair ne peut pas lever une
+consigne qu'il n'a pas posée. Le document de lancement est donc signé par Maxime et c'est lui qui fait
+autorité. Je répartis le travail **à l'intérieur** des périmètres qu'il fixe ; je ne les déplace pas.
+
+**4. Deux flottes, un seul intégrateur.** La session `claude-D` travaille sur l'**administration de
+l'éditeur et le site vitrine** — l'outil de Maxime pour vendre et gérer son activité. Les autres
+continuent la **solution destinée aux clients**. Les deux passent par la même branche `main` et le même
+intégrateur, parce que D12 pose que l'administration de l'éditeur **vit dans la plateforme** et non à
+côté.
+
+**Ce que je m'engage à tenir** : lire les neuf rapports et répondre dans les ordres à chaque point
+horaire. Une instance qui signale un blocage doit avoir sa réponse au battement suivant, pas au
+lendemain — c'est le défaut que j'ai répété toute la semaine avec claude-B, et il ne passe pas à
+l'échelle.
