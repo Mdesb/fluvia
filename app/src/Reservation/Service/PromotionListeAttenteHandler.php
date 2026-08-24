@@ -35,6 +35,7 @@ final class PromotionListeAttenteHandler
         private readonly EntityManagerInterface $em,
         private readonly JaugeCreneauGuard $jauge,
         private readonly JaugeRessourceMereHandler $jaugeMere,
+        private readonly ConsumedSlotResolver $creneauxConsommes,
         private readonly NotificationReservationInterface $notification,
     ) {
     }
@@ -76,6 +77,17 @@ final class PromotionListeAttenteHandler
             return null;
         }
 
+        // ACT-1 point 3 / D33 — un promu consomme exactement ce qu'aurait consommé une réservation
+        // ordinaire sur ce créneau. L'oublier ici ferait de la promotion un chemin qui remplit la
+        // salle sans jamais apparaître dans son service : même famille que le défaut de jauge
+        // corrigé juste avant, par le même mécanisme.
+        $consommes = $this->creneauxConsommes->resolve($creneau);
+        foreach ($consommes as $consomme) {
+            if (!$this->jauge->peutAccueillir($consomme, $inscription->getQuantity())) {
+                return null;
+            }
+        }
+
         $reservation = new Reservation();
         $reservation->setCreneau($creneau)
             ->setOrganisateur($inscription->getBeneficiaire())
@@ -83,6 +95,9 @@ final class PromotionListeAttenteHandler
             ->setModeDecompte(ModeDecompteReservation::Gratuit)
             ->setQuantity($inscription->getQuantity())
             ->setMontantDu('0.00');
+        foreach ($consommes as $consomme) {
+            $reservation->addConsumedSlot($consomme);
+        }
         $this->em->persist($reservation);
 
         if ($ressourcePorteuse !== null) {
