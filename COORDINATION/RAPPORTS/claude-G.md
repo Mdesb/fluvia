@@ -281,6 +281,9 @@ lui fait porter le risque. La prochaine fois je donne les deux, ou je dis que je
 | 22:10 | **Correctif de jauge livré, seul et vert** : la promotion de liste d'attente prend désormais sa place sur `Ressource.occupationCourante`, l'expiration de promotion la rend, et la promotion contrôle enfin la jauge mère. `tests/Reservation` **87/87** (1042 assertions). **Je me corrige : ce défaut n'était pas un sous-comptage, il libérait des places qui ne sont pas libres** — détail sous le tableau. | ACT-1 point 3, avec la distinction de D33 : créneau visé unique, créneaux consommés stockés. Le résolveur est écrit et attendait que ce commit parte seul. | Rien. |
 | 22:20 | **PRÉSENTATION HORAIRE** (D35) — `claude-G` en ligne. Depuis la précédente : correctif de jauge poussé seul et vert (87/87), puis **ACT-1 point 3 écrit** — créneaux consommés stockés, `CapaciteEnglobanteTest` 3/3, le cas de D16 refuse bien « une table libre quand le service est plein ». | Tâche en cours : suite complète `tests/Reservation` sur l'arbre final, lancée il y a quinze minutes. Je commite sur vert, puis `tests/Platform`, rejeu de la chaîne de migrations depuis zéro (D32 point 5), et vérification de voisinage sur `Boutique`, `Musee`, `Padel` et `Reporting` — leurs réservations passent maintenant par mon invariant, c'est à moi de montrer que je ne les ai pas cassées. | Rien. |
 | 22:31 | **ACT-1 point 3 livré** : créneaux consommés stockés (D33), `tests/Reservation` **90/90** (1077 assertions). Le cas de D16 est exprimable — un créneau de 4 places sur le bassin plafonne un créneau de 6 sur la ligne d'eau, message à l'appui. Deux corrections que je me suis faites en route, détaillées sous le tableau : ma première jauge ne comptait rien, et la reprise de données que je disais inutile est devenue obligatoire. | `tests/Platform`, rejeu des migrations depuis zéro, puis vérification de voisinage `Boutique`/`Musee`/`Padel`/`Reporting`. | Rien. |
+| 22:35 | `tests/Platform` 58/58 et **chaîne de migrations rejouée sur une base réellement vide** (`database:drop` puis `create`, ton conseil) : **76 migrations, OK jusqu'à la mienne**. Suites voisines en cours. **Et j'ai trouvé pourquoi CQ-3 ne peut pas être « juste ouvrir un paramètre » : CQ-5, déjà fusionnée, a tranché à ma place — mais dans un sens qui ne tient pas debout.** Détail sous le tableau, c'est pour toi. | Je prends **ACT-1 point 2** pendant que tu regardes CQ-3 : il est dans mes ordres, c'est le dernier des trois manques de D16, et il n'attend rien. | Rien. |
+| 22:38 | Arbitrage CQ-3/CQ-6 reçu et **je prends le lot fusionné** (voir plus bas pourquoi le claim reste ici et pas dans `TASKS.md`). Autorisation de rouvrir CQ-5 notée. | **Mais le lot est bloqué sur CQ-0, et personne ne l'avait vu** : `DroitAcces` n'a aucun lien vers un porteur, donc « la carte de séances DE CE bénéficiaire » n'est pas résoluble. Vérifié dans l'entité, pas supposé. Je propose une tranche livrable sans CQ-0 — ci-dessous. | **CQ-0 (claude-C, statut CLAIM, pas commencée)** pour la partie nominative. Le reste avance. |
+| 23:01 | **Voisinage vérifié sur ACT-1 point 3** : `Boutique` 56/56, `Musee` 22/22, `Reporting` 46/46. **`Padel` a un échec — et il n'est pas de moi : il existe déjà sur `main`, et même à `79cbf20`, avant que je ne touche quoi que ce soit aujourd'hui.** Démonstration sous le tableau. | Le lot CQ-3+CQ-6 (tranche « carte désignée »). | Rien. |
 
 ## Nouvelle règle de Maxime — présentation horaire à `claude-A`
 
@@ -418,3 +421,144 @@ ce serait inventer rétroactivement une consommation jamais contrôlée, sur des
 **DDL non deviné** : relevé par `SHOW CREATE TABLE` sur la table que Doctrine crée réellement depuis
 le mapping, noms d'index et de contraintes compris, pour qu'un futur `migrations:diff` ne propose pas
 de les renommer. Migration écrite à la main, horodatée en heure locale (D32).
+
+
+## CQ-3 — le modèle est déjà contraint par du code fusionné, et la contrainte est incohérente
+
+Tu m'as dit d'aller au code sans spec. J'y suis allé, et le code m'a appris quelque chose que ni D23
+ni D24 ne disent.
+
+**Ce que fait CQ-5, aujourd'hui, dans `main`.** `ApplyNoShowCreditIssueHandler::apply()` résout le
+« droit créditable » d'une réservation ainsi : `ProjectionAccesReservation` → `droitAccesRef` →
+`DroitAcces`. C'est-à-dire **le droit projeté de cette réservation-là**, celui que
+`ProjectionAccesReservationHandler` crée à raison d'**un par réservation**, avec la fenêtre du
+créneau. Puis il fait `credit_restant = credit_restant + 1` dessus, et va chercher un `Appairage`
+actif pour bousculer `Support.versionMaj` — donc il suppose ce droit **appairé à un support
+physique**.
+
+Le commentaire du code le dit lui-même : il retourne `noCredit()` quand `creditRestant === null`,
+avec la mention « cas universel Booking ». Autrement dit : **CQ-5 attend que CQ-3 ouvre `creditRestant`
+sur ce droit-là**, et l'hypothèse est écrite noir sur blanc — « §3.3, décompte au booking ».
+
+**Pourquoi ça ne tient pas.** Une carte de dix réservations est un solde qui survit aux dix
+réservations. Un droit projeté meurt avec sa réservation : il en existe un par réservation, et il
+n'est appairé à aucune carte. Mettre le solde dessus, c'est mettre le compteur dans l'objet qui a la
+durée de vie la plus courte du système. Concrètement : la deuxième réservation ne verrait pas ce que
+la première a consommé, et la restitution d'un no-show créditerait un droit que plus personne ne
+regarde.
+
+**Rien n'est cassé aujourd'hui** — `creditRestant` étant `null` sur les droits `Booking`, CQ-5 sort
+proprement par `noCredit()`. Le défaut n'apparaîtrait qu'au moment où CQ-3 ouvre le champ, c'est-à-
+dire dans le lot que tu viens de me confier.
+
+**Les deux modèles possibles, et il faut choisir avant que j'écrive une ligne :**
+
+1. **Le solde vit sur un droit de type carte** (comme `CarteQuota` aujourd'hui : un droit, un
+   support, un porteur, N réservations). La réservation le décompte au moment de réserver — quatrième
+   branche de `ModeDecompteReservation`, à côté de `QuotaFormule` et `VenteUnite`, exactement le
+   « même point de consommation » que décrit D24. Le droit `Booking` projeté reste ce qu'il est :
+   l'accès physique au créneau, `creditRestant` à `null`. **Conséquence : CQ-5 doit changer de
+   cible** — sa résolution du droit créditable est à revoir, et c'est du code de `claude-B` déjà
+   fusionné.
+
+2. **On garde la cible de CQ-5** et le droit projeté porte un solde. Il faut alors expliquer d'où il
+   vient à chaque projection, et ce que veut dire restituer un crédit sur un objet qui ne survit pas
+   à la réservation. Je ne vois pas de réponse, mais je peux me tromper — c'est ton arbitrage, pas
+   le mien.
+
+**Ma recommandation est le modèle 1**, et la conséquence assumée est qu'il faut rouvrir une partie
+de CQ-5. Mieux vaut le voir maintenant, sur un champ encore à `null`, qu'après avoir livré une carte
+de séances dont le solde ne se décompte pas.
+
+**Et si c'est le modèle 1, CQ-3 et CQ-6 sont le même lot vu de deux côtés** : ouvrir le décompte de
+stock à la réservation *est* la carte de séances nominative. Je te propose de les fusionner en une
+seule tâche plutôt que de les écrire séparément et de les recoudre après.
+
+
+## Le piège qui m'a coûté une itération — un paramètre Doctrine qui ne se lie pas, et zéro à la place
+
+`claude-A` me demande de le consigner pour les autres sessions, et il a raison : **il est silencieux**.
+
+J'avais écrit, dans `JaugeCreneauGuard` :
+
+```php
+->andWhere('r.creneau = :creneau OR :creneau MEMBER OF r.consumedSlots')
+->setParameter('creneau', $creneau)          // l'ENTITÉ
+```
+
+L'identifiant de `Creneau` est un type Doctrine personnalisé (`UuidType`). Passé comme entité, le
+paramètre **ne se lie pas** — et la requête ne lève rien : elle renvoie simplement **zéro**. Un
+agrégat `SUM(...)` sur un `WHERE` qui ne matche plus rien vaut `0`, donc la jauge a répondu
+« créneau vide » sur un créneau plein, et tout est passé.
+
+**Ce qui l'a rattrapé, c'est un test de non-régression**, pas le test de la fonctionnalité neuve : le
+cas « la ligne se remplit jusqu'à sa capacité » est passé de rouge à vert au mauvais moment.
+
+**À retenir :** avec un identifiant de type personnalisé, passer `$entite->getId()` **et le type**
+(`->setParameter('x', $e->getId(), 'uuid')`), jamais l'entité. Et se méfier d'un agrégat qui renvoie
+zéro : c'est indiscernable d'un résultat légitime.
+
+## CQ-3 + CQ-6 fusionnés — je prends, et voici le blocage réel
+
+**Le claim reste dans ce fichier, pas dans `TASKS.md`.** Tu me demandes de l'y écrire ; la règle 6 de
+`FLOTTE.md` dit l'inverse, et elle est posée par Maxime : « tu claimes dans ton rapport, l'intégrateur
+le reporte au carnet », précisément pour que `TASKS.md` garde un seul auteur — il avait déjà produit
+un conflit le 24/08. Je ne lève pas une consigne que tu n'as pas posée (précédent `claude-C`, que tu
+as toi-même retenu). **Considère cette ligne comme le claim, et reporte-la si tu veux qu'elle figure
+au carnet.**
+
+**Le blocage, vérifié dans le code et pas supposé :** `App\Acces\Entity\DroitAcces` porte
+`billetSupportRef`, `produitRef`, `reservationRef`, `fenetreDebut/Fin`, `creditRestant`, `sousReseau`,
+`statutProjection`, `etablissement` — et **aucun lien vers un porteur**. `Support` non plus.
+C'est exactement ce que CQ-0 doit créer, et CQ-0 est au statut `CLAIM` chez `claude-C`, pas commencée.
+
+Or D24 le dit : le rattachement à un porteur est « facultatif au niveau du modèle, mais
+**obligatoire pour ce type de carte** ». Sans lui, « trouver la carte de séances de ce bénéficiaire au
+moment de réserver » n'est pas résoluble. Le seul chemin existant serait
+`Beneficiaire → Client → Vente → BilletSupport → identifiantSupport → Support → Appairage → DroitAcces` :
+quatre modules traversés en lecture directe, exactement le couplage que D2 interdit. Je ne l'écrirai
+pas.
+
+**Ce que je livre quand même, et qui n'attend personne — la carte désignée explicitement.** L'agent
+scanne ou saisit la carte, la requête de réservation la désigne, le crédit se décompte à la
+réservation. C'est le cas « carte au porteur » que D23 tient pour légitime, il couvre le comptoir, et
+il pose **toute la mécanique** : la troisième branche de `ModeDecompteReservation`, le décompte
+atomique, la restitution sur tous les chemins de sortie, et la correction de la cible de CQ-5. Le jour
+où CQ-0 arrive, la résolution automatique par bénéficiaire n'est plus qu'un résolveur en amont — pas
+une reprise du lot.
+
+**Les trois exigences que tu as ajoutées sont notées et je les traite dans cet ordre :** tous les
+chemins de sortie rendent le crédit (j'ai déjà la liste, elle m'a servi pour la jauge, et elle inclut
+un chemin **hors de mon périmètre** : `Musee\Service\PrioriteOtaResolver` passe une réservation en
+`AnnuleeLibre` sans rien restituer) ; le no-show suit D27 et reste orthogonal à la facturation ; le
+quota de stock ne partage que le point de consommation avec le quota périodique, pas la mécanique.
+
+
+## `main` porte un test rouge dans `Padel`, et il n'a rien à voir avec moi
+
+**Le fait.** `App\Tests\Padel\Api\EclairageTest::testCa11AllumageEtExtinctionAutomatiquesSurFenetreReservee`
+échoue : « CA-11 : allumage déclenché à l'heure de début. Failed asserting that **3** is identical to
+**1** ». La commande d'éclairage traite trois fenêtres là où le test en attend une.
+
+**Comment je sais que ce n'est pas moi**, plutôt que de l'affirmer parce que ça m'arrange. Je l'ai
+rejoué en détachant mon worktree sur deux points d'histoire :
+
+| Révision | Contient mon travail ? | `EclairageTest` |
+|---|---|---|
+| `claude-G` (ma branche) | tout | rouge |
+| `main` (`7a37f83`) | ACT-1 points 1 et 3, correctif de jauge — tous fusionnés | rouge |
+| **`79cbf20`** | **rien de moi ce jour** | **rouge** |
+
+`79cbf20` date de ce matin, avant ma première ligne. L'échec est donc **préexistant**, et il ne vient
+ni de la quantité consommée, ni des créneaux consommés, ni du correctif de jauge.
+
+**Ce que ça dit de plus, et qui me paraît le vrai sujet :** personne ne l'a vu. La règle 8 veut que
+chaque session ne lance que la suite de son module plus `tests/Platform` — c'est la bonne règle, la
+suite complète coûte deux heures — mais la conséquence est qu'un module **sans session ouverte** n'est
+lancé par personne. `Padel` est précisément dans ce cas : `claude-I`, qui porte les verticales, n'est
+pas ouverte. Le rouge peut donc dormir indéfiniment.
+
+Je n'y touche pas — ce n'est pas mon périmètre, et je n'ai pas cherché la cause au-delà de la
+constatation. Deux pistes gratuites pour qui le prendra : le compteur vaut 3 et pas 2, donc ce n'est
+probablement pas un simple doublon de fixture ; et `ReserverTerrainProcessor` crée une réservation de
+coach **en plus** de la réservation de terrain, ce qui fait deux réservations pour un acte.
