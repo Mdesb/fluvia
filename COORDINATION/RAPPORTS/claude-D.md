@@ -18,6 +18,7 @@
 | 23:34 | **Ton défaut trouvé était plus large que ma garde** : API Platform préfixe par `/api`, donc mes tests **et le site livré** appelaient la mauvaise URL. Les trois corrigés. La garde compare désormais par **suffixe** : elle ne dépend plus d un préfixe de routage qu un test n a aucune raison de connaître. Ta remarque est écrite dans le fichier — *la condition de saut mérite autant de soin que le test, parce qu elle décide si le test existe*. **Les quatre tests tournent pour de vrai** : 76 verts, 0 sauté, 334 → 354 assertions. Plus la migration `Version20260824233000` qui crée le rôle modèle « Administrateur d établissement », vérifiée sur base construite uniquement par les migrations. | Exposer `openCart` en PUBLIC_ACCESS avec le limiteur. | Rien |
 | 23:53 | **ED-5 complet : le tunnel est relié à la vitrine.** `POST /api/editor/carts` en PUBLIC_ACCESS, avec ton limiteur — 5 paniers par heure et par adresse, fenêtre glissante. Je construis la fabrique dans mon propre service plutôt que dans `framework.yaml`, qui nest pas mon périmètre : la limite se lit ainsi dans le même fichier que sa raison. **Deux défauts trouvés par les tests, pas par relecture.** (1) Je relayais le message d `InvalidOfferException` en 422 en le croyant écrit pour un humain — il l est, mais pour **l éditeur** : « Ajoute-la au catalogue d options avant de la proposer », au tutoiement, servi à un prospect. Message public réécrit, exception d origine chaînée vers les journaux, test qui vérifie labsence de fuite. (2) Le limiteur mordait entre mes tests : cinq tests partageaient un compteur. C était la preuve quil marche et que mes tests nétaient pas isolés. Compteur remis à zéro entre tests, et test du refus ajouté. Tests : `tests/Subscription` **82 verts / 375 assertions**, `tests/Platform` 58 verts. | Rien en cours — je te demande la suite. | Rien |
 | 00:22 | **ED-6 — première brique de ladministration éditeur : Maxime a enfin un écran.** `GET /api/editor/subscriptions` plus lécran qui laffiche. Le contrôle nest **pas une permission mais une identité de tenant** : une permission se délègue, shérite, se recopie dans un rôle modèle ; lappartenance au tenant éditeur, non. **404 et non 403**, pour ne pas confirmer à un client curieux que cet écran existe. Côté écran, D39 appliqué dans sa forme la plus sûre : **aucune règle dautorisation nest rejouée** — le serveur refuse, lécran lexplique. Ce que lécran crie en premier nest pas le chiffre daffaires mais les abonnements **actifs dont le provisionnement a échoué** : un client qui a payé et na rien, que rien ne signale ailleurs. Troisième branche dans `Root.jsx`, chargée à la demande : **EditeurApp pèse 4,6 ko** dans son propre paquet, le caissier ne le télécharge pas. Tests : `tests/Subscription` **85 verts / 388 assertions**, `tests/Platform` 58 verts, et `npm run build` passe. | Suite de ladministration : les offres, puis la fiche client 360 sur le modèle de `Clients.jsx`. | Rien |
+| 01:05 | **ED-6, deuxième écran : le catalogue d'offres, modifiable** — formules et options en création, modification, suppression, pilotées par ton `ReferentielEditable`. Contrôle d'accès factorisé dans `EditorOnly` : lecture des offres, écriture des offres, liste des abonnements — trois chemins, un seul contrôle, parce qu'une règle recopiée diverge. **Le garde-fou de couverture de périmètre a refusé ma première version, et il avait deux raisons meilleures que la mienne** — détail ci-dessous. Tests : `tests/Subscription` 89 verts, `tests/Platform` 58 verts, build front OK. `EditeurApp` = 8,8 ko ; `ReferentielEditable` extrait en paquet partagé, donc le back-office **maigrit** de 6,5 ko. | Fiche client 360 sur le modèle de `Clients.jsx`. | Rien |
 
 ---
 
@@ -171,3 +172,40 @@ C'est un contournement local et explicite, sans effet le jour où le service sau
 
 **La correction de fond t'appartient** : faire reconnaître `*` par `RoleAPrivileges`, ou décider que le
 joker implique les privilèges. Je n'y touche pas.
+
+**Le garde-fou de couverture de périmètre a refusé ma première version, et il avait raison.**
+
+J'avais exposé `Plan` et `PlanOption` directement en `#[ApiResource]`. Refus :
+
+```
+=== ÉCHEC — entité exposée sans cloisonnement possible ===
+  - Subscription/Entity/Plan.php
+  - Subscription/Entity/PlanOption.php
+```
+
+Deux raisons, et la seconde ne m'était pas venue :
+
+1. **Une entité exposée dont la collection ne se filtre pas est lisible d'un tenant à l'autre.** Ces
+   deux-là n'ont pas d'établissement — c'est un catalogue global, à dessein — donc rien ne pourrait
+   les cloisonner si quelqu'un ajoutait demain une opération sans passer par mon fournisseur.
+2. **Une entité exposée rend modifiable tout ce qu'elle sait écrire.** Une ressource dédiée n'expose
+   que les cinq champs que l'administration doit toucher, aujourd'hui et quand l'entité aura gagné
+   des colonnes.
+
+Le garde-fou **offrait l'exemption** — « si l'entité est globale à dessein, ce n'est pas à la ligne de
+base de l'absorber : dis-le dans MESSAGES.md ». Je ne l'ai pas prise. Corriger la conception a coûté
+une heure et supprime la question ; l'exemption l'aurait laissée ouverte pour toujours, dans un
+fichier que personne ne relit. Le commit fautif n'a jamais été poussé : je l'ai défait plutôt que de
+laisser dans l'historique un état que les garde-fous refusent.
+
+**Second refus, plus intéressant : la résolution par identifiant client.** Le cliquet C19 exige qu'une
+entité résolue depuis l'URL soit confrontée au périmètre. Ici il n'y a pas d'établissement d'entité à
+confronter — le contrôle est en amont, une fois, par `EditorOnly::assertEditor()`. J'ai utilisé
+l'**annotation déclarée** que le script prévoit, `@cloisonnement-verifie:` avec sa raison obligatoire,
+plutôt que de demander un relèvement de plafond. Le commentaire du script explique pourquoi elle
+existe et il a raison : *« une exemption déclarée est greppable »*. `grep -rn "@cloisonnement-verifie"
+app/src` la retrouvera le jour où quelqu'un auditera.
+
+**Ce que j'en retiens.** Un garde-fou qui propose une porte de sortie n'est pas un garde-fou qu'il
+faut franchir. Les deux fois, la porte existait ; les deux fois, la refuser a produit un meilleur
+code — une ressource qui n'expose que le nécessaire, et une exemption qu'on peut retrouver.

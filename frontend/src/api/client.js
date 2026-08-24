@@ -150,6 +150,7 @@ export const api = {
   produits: () => request('/api/produits'),
   // Le détail ajoute le groupe `produit:compta` (compte, TVA, règle PCA), absent de la collection.
   produit: (id) => request(`/api/produits/${id}`),
+  majProduit: (id, corps) => request(`/api/produits/${id}`, { method: 'PATCH', body: corps }),
   typeProduits: () => request('/api/type_produits'),
   creerProduit: (corps) =>
     request('/api/produits', { method: 'POST', body: corps, ld: true }),
@@ -200,6 +201,9 @@ export const api = {
   // CRM.
   rechercheClients: (params) => request('/api/crm/clients/recherche', { query: params }),
   ficheClient: (id) => request(`/api/clients/${id}/fiche-360`),
+  // La fiche 360 ne porte qu'un sous-ensemble des champs : pour modifier, il faut le client entier.
+  client: (id) => request(`/api/clients/${id}`),
+  majClient: (id, corps) => request(`/api/clients/${id}`, { method: 'PATCH', body: corps }),
   // Relevé de mouvements du porte-monnaie virtuel (US-L5-04). Renvoie { mouvements: [...] }.
   pmvMouvements: (id) => request(`/api/clients/${id}/pmv/mouvements`),
   // Création rapide d'une fiche client (US-L5-02). L'établissement de création / le groupe sont
@@ -379,4 +383,17 @@ export const api = {
   // l'éditeur : le contrôle est une identité de tenant, pas une permission, et il n'est pas rejoué
   // ici (D39).
   editorSubscriptions: () => request('/api/editor/subscriptions'),
+
+  // Catalogue d'offres, côté administration éditeur (ED-6). Ces routes rendent AUSSI ce que la
+  // vitrine cache — formules retirées de la vente, formules incohérentes — parce que c'est le seul
+  // écran où on peut les corriger.
+  editorPlans: () => request('/api/editor/catalog/plans'),
+  creerEditorPlan: (corps) => request('/api/editor/catalog/plans', { method: 'POST', body: corps }),
+  majEditorPlan: (id, corps) => request(`/api/editor/catalog/plans/${id}`, { method: 'PATCH', body: corps }),
+  supprimerEditorPlan: (id) => request(`/api/editor/catalog/plans/${id}`, { method: 'DELETE' }),
+
+  editorOptions: () => request('/api/editor/catalog/options'),
+  creerEditorOption: (corps) => request('/api/editor/catalog/options', { method: 'POST', body: corps }),
+  majEditorOption: (id, corps) => request(`/api/editor/catalog/options/${id}`, { method: 'PATCH', body: corps }),
+  supprimerEditorOption: (id) => request(`/api/editor/catalog/options/${id}`, { method: 'DELETE' }),
 }

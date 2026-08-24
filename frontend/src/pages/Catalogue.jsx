@@ -5,8 +5,9 @@ import Tabs from '../components/Tabs.jsx'
 import ProduitOptionsModal from '../components/ProduitOptionsModal.jsx'
 import ProduitFicheModal from '../components/ProduitFicheModal.jsx'
 import { humaniser } from '../api/vocabulaire.js'
+import { aLeDroit } from '../api/droits.js'
 
-export default function Catalogue({ etabActif, cible = null, onCibleConsommee }) {
+export default function Catalogue({ etabActif, cible = null, onCibleConsommee, droits = [] }) {
   const [tab, setTab] = useState('produits')
 
   // Une cible « produit » arrive de la recherche globale : on s'assure d'être sur le bon onglet
@@ -31,7 +32,7 @@ export default function Catalogue({ etabActif, cible = null, onCibleConsommee })
       />
 
       {tab === 'produits' ? (
-        <OngletProduits etabActif={etabActif} cible={cible} onCibleConsommee={onCibleConsommee} />
+        <OngletProduits etabActif={etabActif} cible={cible} onCibleConsommee={onCibleConsommee} droits={droits} />
       ) : (
         <OngletOptions />
       )}
@@ -41,7 +42,7 @@ export default function Catalogue({ etabActif, cible = null, onCibleConsommee })
 
 /* ------------------------------------------------------------------ Produits */
 
-function OngletProduits({ etabActif, cible = null, onCibleConsommee }) {
+function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = [] }) {
   const [produits, setProduits] = useState([])
   const [types, setTypes] = useState([])
   const [chargement, setChargement] = useState(true)
@@ -262,6 +263,8 @@ function OngletProduits({ etabActif, cible = null, onCibleConsommee }) {
       <ProduitFicheModal
         open={!!produitFiche}
         produit={produitFiche}
+        peutModifier={aLeDroit(droits, 'offre.modifier') || aLeDroit(droits, 'offre.gerer')}
+        onModifie={recharger}
         onClose={() => setProduitFiche(null)}
       />
     </>

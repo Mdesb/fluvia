@@ -216,14 +216,14 @@ export default function App() {
           onSessionRefresh={rechargerSession}
         />
       )}
-      {onglet === 'catalogue' && <Catalogue etabActif={etabActif} cible={cible} onCibleConsommee={() => setCible(null)} />}
+      {onglet === 'catalogue' && <Catalogue etabActif={etabActif} cible={cible} onCibleConsommee={() => setCible(null)} droits={droits} />}
       {onglet === 'reservation' && <Reservation etabActif={etabActif} />}
       {onglet === 'supervision' && <Supervision etabActif={etabActif} />}
       {onglet === 'pilotage' && (
         <Pilotage etabActif={etabActif} etablissements={etablissements} />
       )}
       {onglet === 'comptabilite' && <Comptabilite etabActif={etabActif} />}
-      {onglet === 'clients' && <Clients etabActif={etabActif} cible={cible} onCibleConsommee={() => setCible(null)} />}
+      {onglet === 'clients' && <Clients etabActif={etabActif} cible={cible} onCibleConsommee={() => setCible(null)} droits={droits} />}
       {onglet === 'boutique' && <Boutique etabActif={etabActif} />}
       {onglet === 'piscine' && <Piscine etabActif={etabActif} />}
       {onglet === 'patinoire' && <Patinoire etabActif={etabActif} />}

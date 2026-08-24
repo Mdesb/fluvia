@@ -14,7 +14,15 @@ import { humaniser, mot } from '../api/vocabulaire.js'
 // seconde sur un fond vide alors qu'on avait déjà 80 % de la réponse est une seconde perdue à chaque
 // ouverture.
 
-export default function ProduitFicheModal({ open, produit, onClose }) {
+const CANAUX_PRODUIT = [
+  { valeur: 'guichet', libelle: 'Au guichet' },
+  { valeur: 'en_ligne', libelle: 'En ligne' },
+  { valeur: 'borne', libelle: 'Sur borne' },
+]
+
+export default function ProduitFicheModal({ open, produit, onClose, peutModifier = false, onModifie }) {
+  const [edition, setEdition] = useState(null)
+  const [enregistrement, setEnregistrement] = useState(false)
   const [detail, setDetail] = useState(null)
   const [liaisons, setLiaisons] = useState([])
   const [valeurs, setValeurs] = useState({}) // groupeId -> valeurs
@@ -28,6 +36,7 @@ export default function ProduitFicheModal({ open, produit, onClose }) {
     let annule = false
 
     setDetail(null)
+    setEdition(null)
     setLiaisons([])
     setValeurs({})
     setErreur(null)
@@ -70,6 +79,128 @@ export default function ProduitFicheModal({ open, produit, onClose }) {
   const grilles = p.grilles || []
   const base = prixIndicatif(p)
 
+  function ouvrirEdition() {
+    setEdition({
+      libelle: libelleProduit(p),
+      canaux: Array.isArray(p.canaux) ? [...p.canaux] : [],
+      couleurCaisse: p.couleurCaisse || '',
+      noteInterne: p.noteInterne || '',
+    })
+  }
+
+  async function enregistrer(e) {
+    e.preventDefault()
+    setErreur(null)
+    setEnregistrement(true)
+    try {
+      await api.majProduit(produitId, {
+        // Le libelle est multilingue cote serveur : on ne remplace que le francais, sinon une
+        // traduction existante disparaitrait sans que personne ne l'ait demande.
+        libelle: { ...(p.libelle && typeof p.libelle === 'object' ? p.libelle : {}), fr: edition.libelle.trim() },
+        canaux: edition.canaux,
+        couleurCaisse: edition.couleurCaisse || null,
+        noteInterne: edition.noteInterne.trim() || null,
+      })
+      const rafraichi = await api.produit(produitId)
+      setDetail(rafraichi)
+      setEdition(null)
+      onModifie?.()
+    } catch (err) {
+      setErreur(err.message || "L'enregistrement n'a pas abouti.")
+    } finally {
+      setEnregistrement(false)
+    }
+  }
+
+  if (edition) {
+    return (
+      <Modal open={open} onClose={onClose} titre={`Modifier — ${libelleProduit(p)}`} taille="lg">
+        {erreur && <div className="banner banner-error">{erreur}</div>}
+        <form onSubmit={enregistrer}>
+          <div className="field">
+            <label htmlFor="pr-lib">Nom du produit *</label>
+            <input
+              id="pr-lib"
+              className="input"
+              required
+              value={edition.libelle}
+              onChange={(e) => setEdition((s) => ({ ...s, libelle: e.target.value }))}
+            />
+            <div className="hint">C'est ce que verront le vendeur en caisse et le client en ligne.</div>
+          </div>
+
+          <div className="field">
+            <label>Où ce produit est vendu</label>
+            <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+              {CANAUX_PRODUIT.map((c) => (
+                <label key={c.valeur} style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 400 }}>
+                  <input
+                    type="checkbox"
+                    checked={edition.canaux.includes(c.valeur)}
+                    onChange={(ev) =>
+                      setEdition((s) => ({
+                        ...s,
+                        canaux: ev.target.checked
+                          ? [...s.canaux, c.valeur]
+                          : s.canaux.filter((x) => x !== c.valeur),
+                      }))
+                    }
+                  />
+                  {c.libelle}
+                </label>
+              ))}
+            </div>
+            <div className="hint">
+              Si vous ne cochez rien, le produit ne sera vendable nulle part, même une fois publié.
+            </div>
+          </div>
+
+          <div className="field">
+            <label htmlFor="pr-coul">Couleur en caisse</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <input
+                id="pr-coul"
+                type="color"
+                value={edition.couleurCaisse || '#cccccc'}
+                onChange={(e) => setEdition((s) => ({ ...s, couleurCaisse: e.target.value }))}
+                style={{ width: 48, height: 34, padding: 2 }}
+              />
+              {edition.couleurCaisse && (
+                <button
+                  className="btn ghost sm"
+                  type="button"
+                  onClick={() => setEdition((s) => ({ ...s, couleurCaisse: '' }))}
+                >
+                  Retirer la couleur
+                </button>
+              )}
+            </div>
+            <div className="hint">Aide le vendeur à repérer le produit d'un coup d'œil. Facultatif.</div>
+          </div>
+
+          <div className="field">
+            <label htmlFor="pr-note">Note interne</label>
+            <textarea
+              id="pr-note"
+              className="input"
+              rows={3}
+              value={edition.noteInterne}
+              onChange={(e) => setEdition((s) => ({ ...s, noteInterne: e.target.value }))}
+            />
+            <div className="hint">Visible de votre équipe seulement. Jamais affichée au client.</div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
+            <button className="btn" type="button" onClick={() => setEdition(null)}>Annuler</button>
+            <button className="btn primary" type="submit" disabled={enregistrement}>
+              {enregistrement ? 'Enregistrement…' : 'Enregistrer'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+    )
+  }
+
   return (
     <Modal open={open} onClose={onClose} titre={libelleProduit(p)} taille="lg">
       {erreur && <div className="banner banner-error">{erreur}</div>}
@@ -84,6 +215,11 @@ export default function ProduitFicheModal({ open, produit, onClose }) {
         <span className={`badge ${st.ton}`} title={st.aide} style={{ marginLeft: 'auto' }}>
           {st.libelle}
         </span>
+        {peutModifier && (
+          <button className="btn ghost sm" type="button" onClick={ouvrirEdition} style={{ marginLeft: 10 }}>
+            Modifier
+          </button>
+        )}
       </div>
 
       {/* Ce que l'exploitant cherche en premier : combien, où, et combien il en reste. */}

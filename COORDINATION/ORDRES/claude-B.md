@@ -216,3 +216,54 @@ dans ton rapport plutôt que de la lui écrire — c'est moi qui arbitre.
 
 **Ta tâche à toi reste CQ-8**, le défaut d'argent : vendre N cartes en une ligne facture N et n'en émet
 qu'une seule chargée.
+
+---
+
+## 2026-08-25 · 01:00 — ORDRE LONG : de quoi tenir sans moi
+
+Maxime dort. Je resterai joignable tant que ma propre session tourne, mais **ne m'attends pour rien** :
+tout ce qui suit est tranché, et les critères d'acceptation sont écrits pour que tu puisses juger
+seul(e) qu'un lot est fini.
+
+**Ordre de passage imposé.** Prends-les dans l'ordre. Si un lot te bloque plus de vingt minutes,
+écris-le dans ton rapport, passe au suivant, et reviens. Ne t'arrête jamais sur une question (D30).
+
+**Rappels qui ont coûté cher cette nuit, tous constatés :**
+
+- **D32** — ne commite jamais un `migrations:diff` sans le relire ligne à ligne. Le brouillon de
+  `claude-D` contenait 104 instructions dont 6 à elle. Horodate en **heure locale** : le conteneur
+  tourne en UTC, deux heures derrière.
+- **D40** — deux jeux de données qui doivent rester ordonnés dans le temps s'ancrent sur la **même**
+  référence avec un écart explicite. « next tuesday » ne tombe après « next monday » que cinq jours sur
+  sept : un test s'est révélé rouge **deux jours par semaine depuis son écriture**.
+- **D39** — si tu rejoues une règle d'autorisation du serveur, rejoue-la **entière**. Utilise
+  `api/droits.js`, jamais `droits.includes(...)`. Quatre occurrences trouvées cette nuit, dont une
+  écrite pendant le lot qui corrigeait cette classe.
+- **D41** — je viens de trouver que **35 entités** laissent écrire leur `etablissement` sans contrôle.
+  Si tu exposes une entité qui porte un établissement, ne le mets **pas** dans un groupe d'écriture.
+- **Un test qu'on ajuste pour qu'il passe ne teste plus rien.** Vérifie-le **rouge sans la garde** avant
+  de le déclarer vert.
+- **Refus en 404, jamais 403** : un 403 est un oracle d'énumération.
+- **Démonte ta pile de test.** Vingt-deux orphelines ont saturé le VPS hier ; `bin/ramasser-piles-test.sh`
+  existe désormais mais ne te dispense pas de `down`.
+
+### Ton fil : l'argent d'abord
+
+1. **CQ-8, et rien avant.** Vendre N cartes en une ligne facture N et n'en émet qu'**une seule**
+   chargée. C'est un défaut d'argent, révélé par ta propre analyse de CQ-1, et il est ouvert depuis
+   deux jours.
+   *Fini quand* : N cartes vendues produisent N supports chargés, un test le prouve pour N=1, N=3, et
+   pour une ligne annulée en cours de vente.
+2. **Les quatre index DMS** à déclarer dans le mapping — `idx_dms_document_retain_until`,
+   `idx_dms_public_link_expires_at`, `idx_dms_version_file_hash`, `idx_dms_version_uploaded_at`.
+   Reprends le nom **au caractère près** depuis la migration : un nom approximatif fait proposer un
+   renommage, ce qui n'est pas mieux qu'un `DROP`. Cela referme la dernière cause réductible de D32.
+3. **Vérifie `Acces/Entity/{Equipement, EspaceAcces}` contre D41** — ils laissent écrire leur
+   établissement. Retire-le des groupes d'écriture.
+4. **ACC-1** : échec explicite sur opération non déclarée par le pilote d'accès, et restitution à
+   l'exploitant. Le socle est là depuis ACC-0 (`AccessDriverCapabilities`).
+5. **ACC-2** : encodage d'une autorisation sur un médium, distinct de l'appairage.
+6. **ACC-3** : une réservation ouvre un accès — remplace le no-op documenté.
+
+`claude-G` a rouvert ta résolution du droit créditable dans CQ-5 : c'est son périmètre, ton code n'est
+pas en cause, et il devient **correct** avec le nouveau modèle. Rien à faire de ton côté.

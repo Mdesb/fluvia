@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { api, tokenStore, etablissementStore, setUnauthorizedHandler } from '../api/client.js'
 import Login from '../pages/Login.jsx'
 import Abonnements from './pages/Abonnements.jsx'
+import Offres from './pages/Offres.jsx'
 
 // Administration de l'éditeur (ED-6) — l'outil avec lequel l'éditeur pilote ses clients, ses offres
 // et ses abonnements.
@@ -56,6 +57,7 @@ export default function EditeurApp() {
 
   const onglets = [
     { id: 'abonnements', ic: '≡', label: 'Abonnements' },
+    { id: 'offres', ic: '▥', label: 'Offres' },
   ]
 
   return (
@@ -102,7 +104,10 @@ export default function EditeurApp() {
             </p>
           </div>
         ) : (
-          onglet === 'abonnements' && <Abonnements onRefus={() => setRefuse(true)} />
+          <>
+            {onglet === 'abonnements' && <Abonnements onRefus={() => setRefuse(true)} />}
+            {onglet === 'offres' && <Offres />}
+          </>
         )}
       </main>
     </div>
