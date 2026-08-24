@@ -48,6 +48,30 @@ verdict() { # verdict <libellé> <refus|acceptation> <code>
     fi
 }
 
+# Certains contrôles doivent LAISSER PASSER tout en disant quelque chose — l'avertissement
+# d'obsolescence du hook (D28) en est un. `essai` ne juge que le code de sortie ; celui-ci lit
+# aussi ce que le push a imprimé, sinon un avertissement muet passerait pour un succès.
+essai_avertissement() { # essai_avertissement <libellé> <motif attendu dans la sortie>
+    local libelle="$1" motif="$2" code=0
+    local sortie="$ESSAI/sortie-push.txt"
+    git push "$BARE" main >"$sortie" 2>&1 || code=$?
+
+    if [ "$code" -ne 0 ]; then
+        printf '  \033[31m✗\033[0m %-52s refus (attendu : acceptation avec avertissement)\n' "$libelle"
+        KO=$((KO + 1))
+    elif grep -q "$motif" "$sortie"; then
+        printf '  \033[32m✓\033[0m %-52s acceptation + avertissement\n' "$libelle"
+        OK=$((OK + 1))
+    else
+        printf '  \033[31m✗\033[0m %-52s accepté SANS avertissement (attendu : « %s »)\n' "$libelle" "$motif"
+        KO=$((KO + 1))
+    fi
+
+    git fetch -q "$BARE" main
+    git reset -q --hard FETCH_HEAD
+    git clean -qfd
+}
+
 # Le push qui échoue EST le comportement attendu dans la moitié des cas : on capture son code sans
 # laisser `set -e` interrompre le banc — sinon le premier refus, qui est une réussite, arrête tout.
 essai() { # essai <libellé> <refus|acceptation>
@@ -375,6 +399,17 @@ echo
 echo "Et il doit laisser passer ce qui est propre :"
 echo "// banc encore" >> README.md; commiter "banc : commit propre"
 essai "commit propre après neuf refus" acceptation
+
+# --- D28 : le hook installé doit signaler qu'il n'est plus celui de main ------------------------
+# On périme volontairement le hook INSTALLÉ sur le bare. La poussée doit être acceptée — refuser
+# bloquerait justement celle qui apporte la mise à jour — et dire qu'elle ne contrôle peut-être
+# pas ce que le dépôt croit.
+printf '\n# ligne qui périme le hook installé (banc D28)\n' >> "$BARE/hooks/pre-receive"
+echo "// banc d28" >> README.md; commiter "banc : hook installe perime"
+essai_avertissement "D28 — le hook installé signale son obsolescence" "LE HOOK INSTALLÉ"
+
+# Remise en état : les cas suivants doivent repartir d'un hook à jour.
+bash bin/installer-hooks.sh "$BARE" >/dev/null
 
 echo "// banc interrupteur" >> README.md
 cat > app/src/Offre/Service/BancSignataire.php <<'PHP'
