@@ -12,6 +12,16 @@ declare(strict_types=1);
  * jamais. Le module qui en dépend est silencieusement mort, et rien dans la suite de tests ne le
  * dira — un abonné qui ne tourne pas ne casse aucun test, il ne fait rien.
  *
+ * RÈGLE C — émission hors contrat. Un événement **publié par le code** dont le nom n'est **pas au
+ * catalogue** : échec dur, sans ligne de base. Le sens est l'inverse de la règle B — là c'est le
+ * contrat qui attend le code, ici c'est le code qui a doublé le contrat.
+ *
+ * Ce contrôle comble un trou réel : `ManifestCatalogueTest` (RG-PLAT-06) vérifie que tout événement
+ * déclaré par un **manifeste** figure au catalogue, mais rien ne vérifie ceux que le **code** publie.
+ * Un module peut donc émettre un fait que personne n'a versé au contrat, et aucun test ne le dira.
+ * Au 24/08 la discipline avait tenu — 19 émissions, 0 hors catalogue — d'où une règle sans dette :
+ * on ferme la porte pendant qu'elle est encore fermée.
+ *
  * RÈGLE B — événement déclaré sans émetteur, avec cliquet. Le contrat précède le code (D2) : un nom
  * inscrit au catalogue que personne n'émet encore est **normal**, c'est même la méthode. Mais le
  * stock ne doit pas grossir. On le gèle et on le fait décroître ; RR-1 et SF-1 sont exactement ce
@@ -36,6 +46,8 @@ const LIGNE_DE_BASE = 'bin/evenements-orphelins.ligne-de-base.json';
 const MOTIF_CATALOGUE = '/^\|\s*`([a-z][a-z0-9_]*\.[a-z][a-z0-9_]*)`\s*\|/m';
 const MOTIF_ABONNEMENT = '/AsEventListener|getSubscribedEvents|addListener/';
 const MOTIF_PUBLICATION = '/publier\s*\(|publish\s*\(|DomainEvent/';
+/** Nom passé en 1er argument de `new DomainEvent(...)` — ce que le code publie réellement. */
+const MOTIF_EMISSION = '/new DomainEvent\(\s*[\'"]([a-z][a-z0-9_]*\.[a-z][a-z0-9_]*)[\'"]/';
 
 /**
  * @return list<string>
@@ -56,7 +68,7 @@ function evenementsDuCatalogue(string $chemin): array
  * @param  list<string> $evenements
  * @return array<string, array{emis: list<string>, consomme: list<string>}>
  */
-function usages(string $racine, array $evenements): array
+function usages(string $racine, array $evenements, array &$horsCatalogue = []): array
 {
     $usages = [];
     foreach ($evenements as $nom) {
@@ -83,6 +95,16 @@ function usages(string $racine, array $evenements): array
         $publie = preg_match(MOTIF_PUBLICATION, $source) === 1;
         $ecoute = preg_match(MOTIF_ABONNEMENT, $source) === 1;
 
+        // Règle C : ce que le code publie, confronté au catalogue. On lit le nom là où il est
+        // certain — 1er argument de `new DomainEvent(` — et non n'importe quelle chaîne du fichier.
+        if (preg_match_all(MOTIF_EMISSION, $source, $emissions) > 0) {
+            foreach ($emissions[1] as $nomEmis) {
+                if (!in_array($nomEmis, $evenements, true)) {
+                    $horsCatalogue[$nomEmis][] = $relatif;
+                }
+            }
+        }
+
         foreach ($evenements as $nom) {
             if (!str_contains($source, "'" . $nom . "'") && !str_contains($source, '"' . $nom . '"')) {
                 continue;
@@ -105,7 +127,9 @@ function usages(string $racine, array $evenements): array
 $options = array_slice($argv, 1);
 
 $evenements = evenementsDuCatalogue(CATALOGUE);
-$usages = usages(RACINE_SRC, $evenements);
+$horsCatalogue = [];
+$usages = usages(RACINE_SRC, $evenements, $horsCatalogue);
+ksort($horsCatalogue);
 
 $abonnesOrphelins = [];
 $sansEmetteur = [];
@@ -184,6 +208,19 @@ if ($abonnesOrphelins !== []) {
     echo "  Corrige en émettant l'événement depuis l'endroit qui sait — pas depuis un endroit commode.\n";
 }
 
+// --- RÈGLE C : émission hors contrat — échec dur, hors ligne de base ----------------------------
+if ($horsCatalogue !== []) {
+    $echec = true;
+    echo "\n=== ÉCHEC — événement publié hors du contrat ===\n\n";
+    foreach ($horsCatalogue as $nom => $fichiers) {
+        echo sprintf("  %-32s publié par %s\n", $nom, implode(', ', array_unique($fichiers)));
+    }
+    echo "\n  Ce nom n'est nulle part dans CONTRACT/catalogue-evenements.md. RG-PLAT-06 ne l'attrape\n";
+    echo "  pas : il ne contrôle que les événements déclarés par un MANIFESTE, jamais ceux que le\n";
+    echo "  code publie. Verse-le au catalogue avant de l'émettre — c'est l'ordre qu'impose D2, et\n";
+    echo "  c'est ce qui rend l'ajout d'un fait visible de tous plutôt que décidé dans un module.\n";
+}
+
 // --- RÈGLE B : cliquet sur le stock -------------------------------------------------------------
 $nouveaux = array_values(array_diff($sansEmetteur, $base['entrees']));
 
@@ -214,7 +251,7 @@ if ($echec) {
 
 $resorbes = count($base['entrees']) - count($sansEmetteur);
 echo sprintf(
-    "Événements orphelins : OK — aucun abonné inerte, aucun nouveau nom sans émetteur. En attente : %d, plafond %d.%s\n",
+    "Événements orphelins : OK — aucun abonné inerte, aucune émission hors contrat, aucun nouveau nom sans émetteur. En attente : %d, plafond %d.%s\n",
     count($sansEmetteur),
     $plafond,
     $resorbes > 0 ? sprintf(' %d résorbé(s) — pense à --nettoyer.', $resorbes) : ''
