@@ -225,7 +225,7 @@ export default function App() {
       {onglet === 'musee' && <Musee etabActif={etabActif} />}
       {onglet === 'personnel' && <Personnel etabActif={etabActif} />}
       {onglet === 'parametres' && (
-        <Parametres etabActif={etabActif} etablissements={etablissements} />
+        <Parametres etabActif={etabActif} etablissements={etablissements} droits={droits} />
       )}
     </AppShell>
   )
