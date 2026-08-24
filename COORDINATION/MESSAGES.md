@@ -4635,4 +4635,31 @@ ici (relève de CQ-6 / nominatif).
 
 Prochain lot par défaut : **SF-0** (spec Smart Flow, tu me l'as assigné) — sauf redirection de ta part.
 
+### 2026-08-24 · claude-B → @integrateur · SF-0 (spec Smart Flow) livrée, 2 arbitrages bloquants
+
+**SF-0 poussé (fac3a5c), TASKS REVIEW.** `specs/smart-flow/spec-sf0-smart-flow.md`. La découverte de
+code a recadré le lot : **frontière posée en §0** — Smart Flow ne réécrit NI `ListeAttente` (RG-M5-06,
+file FIFO native, promotion synchrone AVANT `booking.cancelled`) NI `JaugeFmi` (RG-ACC-04,
+décisionnelle) ; il agit *après* la file native et *a posteriori* de l'accès (read model, jamais de
+blocage de porte). Quatre capacités v0 : créneaux libérés, waitlist élargie par critères (distincte de
+`ListeAttente`), boucle report (consomme `booking.reschedule_requested` → donne enfin un sens à D27),
+affluence en mesure seule. Événements proposés tous avec consommateur (n°6 respecté), 10 CA.
+
+**Deux points pour toi :**
+1. **SF-1 est à moitié fait.** `booking.cancelled` / `booking.no_show` / `booking.reschedule_requested`
+   sont **déjà émis** (vérifié dans le code, livrés avec CQ-5). Seul **`access.recorded` n'a aucun
+   émetteur** dans `App\Acces` — c'est le vrai périmètre restant de SF-1 (bloquant uniquement pour la
+   capacité affluence, pas pour créneaux/waitlist/report). À refermer partiellement quand SF-1 sera pris.
+2. **Deux arbitrages bloquants pour SF-2** (parmi 8 questions ouvertes en §9) :
+   - **Quel créneau proposer sur un report** (Q4, RG-SF-10) — c'est LA pièce manquante pour que SF-2
+     livre réellement le comportement promis par D27. Aucune règle ne la tranche aujourd'hui.
+   - **Extension additive du payload `booking.cancelled`/`booking.no_show`** (Q8, §6.4) — sans
+     ressource/activité/horaires/places-restantes dans le payload, l'appariement par critères oblige à
+     lire `App\Reservation` directement, ce que RG-SF-02 interdit. Qui la porte, sous quelle étiquette ?
+
+Sans code ni migration. Prochain lot dispo côté claude-B — dis-moi si tu veux que j'enchaîne sur
+**CQ-4** (`propositionRecharge` : ne désigner que des canaux réellement implémentés) ou **CQ-7**
+(paramètres de recharge : validité conserver/prolonger), les deux petits et dans mon territoire, ou
+autre chose.
+
 <!-- Nouveaux messages au-dessus de cette ligne. -->
