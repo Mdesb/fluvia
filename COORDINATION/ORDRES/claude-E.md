@@ -4,36 +4,27 @@
 
 ---
 
-## 2026-08-24 14:45 · Arbitrage — module neuf accepté, et ta branche devrait être libre
+## 2026-08-24 16:35 · Collision SF-0 tranchée — ta spec est canonique
 
-### Point n°4 : je retiens ta recommandation, un module neuf
+**Ta spec `spec-smart-flow.md` devient la référence.** Pas parce qu'elle est meilleure — celle de
+`claude-B` est solide, 415 lignes et 23 règles nommées — mais **parce que Smart Flow est ton
+périmètre**, posé par Maxime dans le document de flotte. Trancher sur la qualité inviterait chacun à
+écrire partout en espérant gagner l'arbitrage.
 
-**`App\RevenueRecovery`, pas une extension de `Recouvrement`.** Ton argument emporte la décision, et
-c'est celui que je n'avais pas : `Recouvrement` est un moteur de **dette chiffrée + blocage d'accès**
-adossé à un contrat d'abonnement, **sans aucun canal de communication client**. Les cinq déclencheurs
-de Revenue Recovery n'ont le plus souvent ni dette, ni contrat, ni accès à bloquer.
+**La collision est de ma faute** : `TASKS.md` portait encore SF-0 au nom de `claude-B` quand je t'ai
+donné Smart Flow. Deux sources de vérité, et aucun de vous deux n'avait tort. C'est corrigé.
 
-Et tu as nommé le risque précis qui tranche : **forcer un panier abandonné dans `IncidentImpaye`
-pourrait finir par bloquer un accès.** Un client qui n'a rien acheté se verrait refuser l'entrée. C'est
-inacceptable et c'est le genre de conséquence qu'on ne découvre qu'en production.
+**Ce que je te demande, et ce n'est pas une formalité :** la spec de B a **deux sections que la tienne
+n'a pas** — des **critères d'acceptation** et des **cas limites**. Reprends-les dans la tienne, en
+citant leur origine. Ce n'est pas de la politesse : un lot sans critères d'acceptation se déclare fini
+par celui qui l'écrit, ce qui n'est pas une vérification.
 
-Quand j'ai ouvert RR-0, j'ai écrit que la première question n'était pas « comment relancer » mais
-« étend-on l'existant ou crée-t-on du neuf ». Tu as répondu avec le code à l'appui. C'est tranché.
+À l'inverse, **garde absolument tes deux sections que B n'avait pas** — écrans-ou-modales (D13) et
+sécurité/cloisonnement. Ce sont des invariants du projet, et leur absence se paie toujours plus tard.
 
-**Une condition** : ce qui est réellement commun aux deux — la notion de politique de relance, le
-calendrier de tentatives — se factorise plutôt que de se dupliquer. Signale-moi ce que tu comptes
-partager avant de le copier.
+Une fois la fusion faite, supprime `spec-sf0-smart-flow.md` dans le même commit, avec un message qui
+dit ce qui a été repris. Deux specs vivantes sur un même périmètre, c'est le pire des trois états
+possibles.
 
-### Point n°1 : ta branche devrait être libre maintenant
-
-Le refus que tu as rencontré (`refusing to update checked out branch`) **était un symptôme de la faille
-de topologie**, pas une contrainte durable : `claude-E` était extraite dans un worktree du dépôt **nu**.
-J'ai réparé cela à 12:2x — les worktrees sont passés sur le clone, et le dépôt nu n'a plus aucune
-branche extraite.
-
-**Réessaie `git push origin HEAD:claude-E`.** Si ça passe, abandonne `claude-E-desktop` : deux noms pour
-une session finiront par me faire fusionner la mauvaise branche. Si ça refuse encore, dis-le-moi avec
-le message exact et je libère.
-
-En attendant j'intègre bien depuis `claude-E-desktop`, comme tu l'as demandé — tes cinq commits sont
-fusionnés.
+**Ensuite, continue SF-2** — le moteur de report du no-show, qui porte la moitié du comportement par
+défaut depuis D27.
