@@ -116,7 +116,7 @@ export default function AppShell({
   // pas disponible, on n'affiche rien plutôt qu'un état faux ou un message d'erreur permanent.
   const [caisseOuverte, setCaisseOuverte] = useState(null)
   useEffect(() => {
-    if (!droits.includes('caisse.lire') || !etabActif) {
+    if (!aLeDroit(droits, 'caisse.lire') || !etabActif) {
       setCaisseOuverte(null)
       return undefined
     }
