@@ -10,7 +10,6 @@ use App\Acces\Port\ProjectionDroitInterface;
 use App\Offre\DataFixtures\OffreFixtures;
 use App\Organisation\Entity\Etablissement;
 use App\Tests\Acces\AccesApiTestCase;
-use App\Vente\DataFixtures\VenteFixtures;
 use Symfony\Component\Uid\Uuid;
 
 /**
@@ -68,25 +67,5 @@ final class ProjectionDroitTest extends AccesApiTestCase
         self::assertSame(TypeDroitAcces::CarteQuota, $droit->getSourceType());
         self::assertSame(12, $droit->getCreditRestant(), 'Stock initial de la carte 10=12 (RG-M1-04/13).');
         self::assertSame(StatutProjectionDroit::Valide, $droit->getStatutProjection());
-    }
-
-    private function idPointDeVente(): string
-    {
-        return (string) $this->entite(\App\Caisse\Entity\PointDeVente::class, ['libelle' => VenteFixtures::PDV_LIBELLE])->getId();
-    }
-
-    private function idCaisse(): string
-    {
-        return (string) $this->entite(\App\Caisse\Entity\Caisse::class, ['libelle' => VenteFixtures::CAISSE_LIBELLE])->getId();
-    }
-
-    private function idProduit(string $libelleRecherche): string
-    {
-        return (string) $this->entite(\App\Offre\Entity\Produit::class, ['libelleRecherche' => $libelleRecherche])->getId();
-    }
-
-    private function idTarif(string $nom): string
-    {
-        return (string) $this->entite(\App\Offre\Entity\TypeTarif::class, ['nom' => $nom])->getId();
     }
 }

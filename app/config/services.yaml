@@ -66,6 +66,9 @@ services:
     # utilisé en production par App\Acces\Service\SynchroPassageHandler).
     App\Acces\Service\RecalageFmiHandler:
         public: true
+    # Recharge de carte multi-entrées (frontière module Accès, US-CQ1, RG-CQ1-09) : implémentation
+    # réelle dès ce lot — pas de stub, Accès est propriétaire de DroitAcces/Support/Appairage.
+    App\Vente\Port\CardRechargeInterface: '@App\Acces\Service\CardRechargeHandler'
 
     # --- M6 Comptabilité & Régie (L4) : liaisons des ports (§3/§4/§7 du plan-compta) ---
     App\Compta\Port\ProjectionVenteInterface: '@App\Compta\Adapter\ProjectionVenteDoctrineAdapter'
@@ -279,5 +282,10 @@ services:
 when@test:
     services:
         App\Tests\Boutique\Support\MailCollector:
+            public: true
+            tags: ['kernel.event_subscriber']
+        # Collecteur `access.card_recharged` (CQ-1, tests d'atomicité recharge ⇄ vente, D7-bis) — même
+        # patron que MailCollector ci-dessus.
+        App\Tests\Acces\Support\CardRechargedEventCollector:
             public: true
             tags: ['kernel.event_subscriber']

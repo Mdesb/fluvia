@@ -12,8 +12,12 @@ use App\Acces\Entity\DroitAcces;
 use App\Acces\Entity\Equipement;
 use App\Acces\Entity\EspaceAcces;
 use App\Acces\Entity\Support;
+use App\Caisse\Entity\Caisse;
+use App\Caisse\Entity\PointDeVente;
 use App\DataFixtures\SocleFixtures;
 use App\Offre\DataFixtures\OffreFixtures;
+use App\Offre\Entity\Produit;
+use App\Offre\Entity\TypeTarif;
 use App\Organisation\Entity\Etablissement;
 use App\Securite\Entity\Utilisateur;
 use App\Securite\Service\ContexteEtablissement;
@@ -122,6 +126,64 @@ abstract class AccesApiTestCase extends ApiTestCase
     protected function idTerminal(): string
     {
         return (string) $this->entite(\App\Acces\Entity\Terminal::class, ['nom' => AccesFixtures::TERMINAL_NOM])->getId();
+    }
+
+    // --- Raccourcis M2 (Vente & Caisse) — même patron que `App\Tests\Vente\VenteApiTestCase`, dupliqué
+    // ici (comme `App\Tests\Crm\CrmApiTestCase`) pour composer un scénario « vente → appairage →
+    // recharge » (CQ-1) sans faire dépendre les tests L3 de la base de tests L2. ---
+
+    protected function idPointDeVente(): string
+    {
+        return (string) $this->entite(PointDeVente::class, ['libelle' => VenteFixtures::PDV_LIBELLE])->getId();
+    }
+
+    protected function idCaisse(): string
+    {
+        return (string) $this->entite(Caisse::class, ['libelle' => VenteFixtures::CAISSE_LIBELLE])->getId();
+    }
+
+    protected function idProduit(string $libelleRecherche): string
+    {
+        return (string) $this->entite(Produit::class, ['libelleRecherche' => $libelleRecherche])->getId();
+    }
+
+    protected function idTarif(string $nom): string
+    {
+        return (string) $this->entite(TypeTarif::class, ['nom' => $nom])->getId();
+    }
+
+    /**
+     * Ouvre une session de caisse et renvoie sa représentation JSON.
+     *
+     * @param array<string, mixed> $entete
+     *
+     * @return array<string, mixed>
+     */
+    protected function ouvrirSession(Client $client, array $entete, string $fond = '50.00'): array
+    {
+        return $client->request('POST', '/api/sessions-caisse/ouvrir', $entete + [
+            'json' => [
+                'pointDeVente' => '/api/point_de_ventes/' . $this->idPointDeVente(),
+                'caisse' => '/api/caisses/' . $this->idCaisse(),
+                'regisseur' => '/api/utilisateurs/' . $this->idAdmin(),
+                'codeRegisseur' => 'CODE-REGIE-2026',
+                'fondDeCaisse' => $fond,
+            ],
+        ])->toArray();
+    }
+
+    /**
+     * Ouvre un panier (vente) sur une session.
+     *
+     * @param array<string, mixed> $entete
+     *
+     * @return array<string, mixed>
+     */
+    protected function creerVente(Client $client, array $entete, string $sessionId): array
+    {
+        return $client->request('POST', '/api/ventes', $entete + [
+            'json' => ['session' => '/api/session_caisses/' . $sessionId],
+        ])->toArray();
     }
 
     /**
