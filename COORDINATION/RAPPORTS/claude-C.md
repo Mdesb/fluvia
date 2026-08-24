@@ -14,6 +14,7 @@
 | 18:00 | **`claude-G` est toujours sur le dépôt nu** — et tu viens de lui donner du travail dans `Reservation`. Il a commité il y a 13 min directement dans les refs. Faits vérifiés ci-dessous. **Et j'ai corrigé mon propre message**, qui exagérait le constat. Lanceur 9/9, banc 17/17. | les 13 jointures de la règle n°5 | rien |
 | 19:00 | **Ma réinstallation automatique n'avait jamais servi** : `post-receive` ne voit que les push, or tu fusionnes dans `wt/main` — le reflog ne contient que des `merge`. Corrigé par `post-commit`/`post-merge` + un script partagé. Deuxième bogue trouvé au passage : `GIT_DIR` l'emporte sur `git -C`. | les 13 jointures de la règle n°5 | rien |
 | 21:00 | **Ramasseur livré** (`bin/ramasser-piles-test.sh`), fondé sur l'activité InnoDB et non sur l'âge — ta date de création surestimait l'abandon **de deux jours**. Ma pile démontée : 27→26. Les 21 autres ne sont pas à moi, commande vérifiée ci-dessous. Points 2 et 3 dans `infra/`, patch fourni. | règle n°5 | rien |
+| 22:00 | **`schema_filter` prouvé à l'exécution** — tu l'avais posé en écrivant qu'il ne l'était pas. Preuve avec témoin : une table non mappée sans exemption ressort en `DROP`, `messenger_messages` non. Pile montée puis **démontée** (27→27). Deux fausses preuves écartées en chemin. | garde-fou n°10 des migrations (D32) | 4 index DMS pas encore déclarés (claude-B) |
 
 ---
 
@@ -534,3 +535,65 @@ tourner. C'est le quatrième : entre-temps j'ai trouvé que ma **réinstallation
 n'avait jamais tourné non plus — `post-receive` ne voit que les push, et ton reflog ne contient que
 des `merge`. Corrigé ce soir. Le motif est le même à chaque fois, et il vaut pour moi autant que pour
 toi : on vérifie qu'une chose *fonctionne quand on la lance*, jamais qu'elle *sera lancée*.
+
+
+---
+
+### 2026-08-25 · 22:00 — `schema_filter` fonctionne, et voici pourquoi je peux le dire
+
+Tu as écrit, dans le commit qui le pose : *« pas prouvé à l'exécution »*, plutôt que de le déclarer
+fonctionnel. C'est exactement la bonne façon de livrer, et c'est aussi une invitation — un mécanisme
+non vérifié attend quelqu'un pour le vérifier. Je l'ai fait.
+
+**Le résultat : il fonctionne.** Preuve avec témoin, sur une pile montée pour l'occasion :
+
+| Table en base, non mappée | Exemptée ? | Ce que propose `schema:update --dump-sql --complete` |
+|---|---|---|
+| `zz_temoin_claudec` | non | `DROP TABLE zz_temoin_claudec;` |
+| `messenger_messages` | oui, par `schema_filter` | **rien** |
+
+Le témoin est ce qui rend la preuve valable : il montre que le mécanisme **propose bel et bien des
+suppressions** dans ces conditions. Sans lui, l'absence de `messenger_messages` aurait pu venir de
+n'importe quoi.
+
+**Deux fausses preuves écartées en chemin, et je les note parce qu'elles étaient convaincantes.**
+
+1. **Premier essai : « 0 occurrence de `messenger_messages` ».** Je l'ai presque rapporté comme une
+   preuve. En réalité `infra/test-stack.sh run` lance **PHPUnit**, pas une commande arbitraire : ma
+   console ne s'était jamais exécutée, la sortie disait `Test file "php" not found`. Un zéro obtenu
+   parce que rien n'a tourné.
+2. **Deuxième essai : « Nothing to update ».** Vrai, mais sans valeur : `doctrine:schema:update` **ne
+   supprime pas de tables** sans `--complete`. Le silence ne venait pas du filtre, il venait de la
+   prudence de la commande.
+
+C'est le même motif que ce que tu as trouvé toi-même dans les migrations : une sortie qu'on lit comme
+une réponse alors qu'elle répond à une autre question. Deux fois de suite ici, sur une vérification que
+j'avais entreprise **précisément** pour ne pas commettre cette faute.
+
+**Coût en réseaux : nul.** Pile montée, utilisée, **démontée** dans le même tour — 27 réseaux avant,
+27 après. C'est ce que le ramasseur d'hier soir sert à rendre normal.
+
+---
+
+**Ce que ça change pour le garde-fou n°10 que tu m'as demandé.** Ta simplification tient : avec
+`schema_filter` prouvé, `messenger_messages` **n'a plus besoin d'être une exception du garde-fou** —
+elle ne remonte plus dans les diffs, donc il n'a rien à connaître d'elle. Restent :
+
+- **le `FULLTEXT` `support_ft_article_recherche`** — irréductible, non exprimable en mapping ORM, ce
+  sera l'exception unique que tu annonçais ;
+- **les quatre index DMS** confiés à claude-B, encore non déclarés. Tant qu'ils ne le sont pas, ils
+  ressortiront en `DROP INDEX` chez tout le monde et le garde-fou devrait les geler — ce qui ferait
+  une ligne de base de cinq exceptions au lieu d'une.
+
+**Je préfère donc attendre les quatre index avant de figer la ligne de base**, sinon je scelle une
+dette qui va disparaître d'elle-même dans les heures qui viennent, et le plafond ne redescendra que
+par un `--nettoyer` que personne ne pensera à lancer. Dis-moi si tu préfères que je le livre tout de
+suite avec les cinq.
+
+**Vérifié aussi, sans rapport avec ce qui précède :** `#[ORM\UniqueConstraint(name:
+'uniq_article_aide_cle_import')]` et les deux index Compta que tu as posés sont bien dans le mapping.
+
+**Un détail dans ton fichier d'ordres**, puisque tu es le seul à pouvoir le corriger : la section
+« Le garde-fou de topologie est écrit » apparaît **deux fois** dans `ORDRES/claude-C.md`, et la
+première s'interrompt au milieu d'une phrase — *« Ce que ça a coûté aujourd'hui, concrètement : est un
+worktree du dépôt »*. Rien de grave, mais la phrase tronquée portait un constat que je n'ai jamais lu.
