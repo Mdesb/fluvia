@@ -11,6 +11,7 @@ use App\Reservation\Entity\Reservation;
 use App\Reservation\Enum\StatutCreneau;
 use App\Reservation\Enum\StatutReservation;
 use App\Reservation\Service\JaugeRessourceMereHandler;
+use App\Reservation\Service\StockCardCreditHandler;
 use App\Reservation\Service\ProjectionAccesReservationHandler;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -26,6 +27,7 @@ final class AnnulerCreneauProcessor implements ProcessorInterface
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly JaugeRessourceMereHandler $jaugeMere,
+        private readonly StockCardCreditHandler $carteStock,
         private readonly ProjectionAccesReservationHandler $projectionAcces,
     ) {
     }
@@ -43,6 +45,10 @@ final class AnnulerCreneauProcessor implements ProcessorInterface
                 if ($data->getRessource() !== null) {
                     $this->jaugeMere->decrementer($data->getRessource(), $reservation->getQuantity());
                 }
+                // CQ-3 + CQ-6 — c'est l'exploitant qui annule le créneau : le client n'y est pour
+                // rien, sa séance lui revient toujours. Aucune issue commerciale à arbitrer ici,
+                // contrairement au no-show (D27).
+                $this->carteStock->restituer($reservation->getCreditDroitRef());
             }
         }
 

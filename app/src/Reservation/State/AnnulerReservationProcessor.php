@@ -17,6 +17,7 @@ use App\Reservation\Enum\StatutReservation;
 use App\Reservation\Service\AnnulationVenteReservationHandler;
 use App\Reservation\Service\DeclencherFacturationNoShowHandler;
 use App\Reservation\Service\JaugeRessourceMereHandler;
+use App\Reservation\Service\StockCardCreditHandler;
 use App\Reservation\Service\ProjectionAccesReservationHandler;
 use App\Reservation\Service\PromotionListeAttenteHandler;
 use App\Securite\Entity\Utilisateur;
@@ -39,6 +40,7 @@ final class AnnulerReservationProcessor implements ProcessorInterface
         private readonly EntityManagerInterface $em,
         private readonly Security $security,
         private readonly JaugeRessourceMereHandler $jaugeMere,
+        private readonly StockCardCreditHandler $carteStock,
         private readonly PromotionListeAttenteHandler $promotion,
         private readonly DeclencherFacturationNoShowHandler $facturationHandler,
         private readonly AnnulationVenteReservationHandler $annulationVente,
@@ -73,6 +75,11 @@ final class AnnulerReservationProcessor implements ProcessorInterface
             $data->setStatut(StatutReservation::AnnuleeLibre);
             $this->em->flush();
             $this->projectionAcces->revoquerSiProjete($data);
+            // CQ-3 + CQ-6 — le décompte a lieu à la réservation : une annulation dans les délais qui
+            // ne rendrait pas l'unité volerait une séance au client. Uniquement dans cette branche :
+            // la branche tardive relève de l'issue sur le crédit (D27, CQ-5), qui est une décision
+            // commerciale et non une symétrie comptable — les recoller effacerait D27.
+            $this->carteStock->restituer($data->getCreditDroitRef());
         } else {
             // Branche tardive (RG-ACC3-05) : la révocation est câblée dans
             // DeclencherFacturationNoShowHandler::declencher(), point de passage partagé avec la
