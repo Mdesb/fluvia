@@ -54,6 +54,9 @@ final class CaisseClotureRoleFixtures extends Fixture implements DependentFixtur
         $permCloturer = $manager->getRepository(Permission::class)->findOneBy(['module' => 'caisse', 'action' => 'cloturer']);
         $permLireCaisse = $manager->getRepository(Permission::class)->findOneBy(['module' => 'caisse', 'action' => 'lire']);
         $permLireVente = $manager->getRepository(Permission::class)->findOneBy(['module' => 'vente', 'action' => 'lire']);
+        // caisse.mouvement (semée par VenteFixtures) : nécessaire pour exercer POST /mouvements-caisse et
+        // ainsi couvrir la non-régression de l'IDOR de cloisonnement (C11, MouvementCaisseProcessor).
+        $permMouvement = $manager->getRepository(Permission::class)->findOneBy(['module' => 'caisse', 'action' => 'mouvement']);
 
         // --- Rôle « Caissier » = caisse.cloturer uniquement (comptage aveugle) ---
         $roleCaissier = (new Role())->setNom('Caissier');
@@ -74,6 +77,9 @@ final class CaisseClotureRoleFixtures extends Fixture implements DependentFixtur
         if ($permLireVente instanceof Permission) {
             $roleRegisseur->addPermission($permLireVente);
         }
+        if ($permMouvement instanceof Permission) {
+            $roleRegisseur->addPermission($permMouvement);
+        }
         $manager->persist($roleRegisseur);
 
         // --- Rôle « Régisseur B » — mêmes permissions, affecté uniquement sur l'établissement B (CA-7) ---
@@ -87,6 +93,9 @@ final class CaisseClotureRoleFixtures extends Fixture implements DependentFixtur
         }
         if ($permLireVente instanceof Permission) {
             $roleRegisseurB->addPermission($permLireVente);
+        }
+        if ($permMouvement instanceof Permission) {
+            $roleRegisseurB->addPermission($permMouvement);
         }
         $manager->persist($roleRegisseurB);
 
