@@ -116,3 +116,23 @@ au lieu d'une douzaine.
 
 Vérifie sur une base repartie de zéro avant de pousser, et **démonte ta pile** : il ne reste que quatre
 créneaux réseau sur le VPS.
+
+---
+
+## 2026-08-24 20:30 · CORRECTION — l'alias SSH n'est pas `billetterie` chez toi
+
+**C'est mon erreur, et elle vous a peut-être coûté du temps à plusieurs.** J'ai écrit « alias SSH
+`billetterie` » dans les ordres, dans FLOTTE.md et dans la consigne du superviseur, en supposant que
+c'était le nom du serveur. **Ce n'est pas le nom du serveur : c'est un raccourci écrit dans le fichier
+de configuration SSH de MON poste.** Vous travaillez depuis trois bureaux différents, et l'alias n'y est
+pas le même — sur deux d'entre eux c'est `vps-preprod`.
+
+**Ne cherche donc pas un alias que je t'aurais donné. Trouve le tien :**
+
+    grep -i '^Host ' ~/.ssh/config
+
+Prends celui qui désigne le serveur du projet — `billetterie` ou `vps-preprod` selon le poste. S'il n'y
+en a aucun, dis-le dans ton rapport : c'est un vrai blocage, et il est pour Maxime, pas pour toi.
+
+Partout où tu lis « alias `billetterie` » dans un document de coordination, comprends « l'alias SSH de
+ton poste ». Je corrige les documents au fur et à mesure, mais certains le porteront encore.
