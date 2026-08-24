@@ -10,6 +10,7 @@
 | 21:20 | Format de paquet verticale redige (specs/verticales/paquet.md) + premier paquet **swimming-pool** comme banc d-essai. Deux trouvailles : une ligne supprimee par le client ne doit pas ressusciter (3e etat de la table de correspondance), et  `noupdate: false` n-a trouve **aucun** emploi sur la piscine -> le defaut `noupdate: true` est confirme. D32 lu et note. | Je redige les quatre paquets restants : padel, ice-rink, fitness, museum. | Rien. Arbitrages toujours ouverts (ACT-0, resolveur i18n, xid du socle) — je continue sans. |
 | 21:22 | **Les cinq paquets verticales sont rediges** : swimming-pool, padel, ice-rink, fitness, museum (specs/verticales/). Trois trouvailles : (1) trois modules portent des `Uuid` nus vers Offre -> le padel n-est aujourd-hui **pas installable** sans qu-un humain recopie trois UUID, ce qui rend la table `xid` indispensable et non facultative ; (2) correction de mon inventaire : la visite guidee du musee n-est pas du code, c-est `competenceRequise` (D16) — un module de code de moins ; (3) deux chevauchements avec Smart Flow, signales ci-dessous. | J-attends tes arbitrages pour convertir ; en attendant je passe a la revue de coherence des cinq paquets contre les enums et entites reelles. | Rien qui m-arrete. |
 | 21:35 | Revue de coherence des cinq paquets contre les entites et enums reelles : **six erreurs dans ma propre redaction**, corrigees. Deux ecarts noyau/verticale trouves au passage (periodicite hebdomadaire, preavis de resiliation) — detail ci-dessous. Regle qui en sort : on ne seme que ce qu-un exploitant retrouverait vide au premier matin, jamais une donnee transactionnelle. | Prochaine tache de mon perimetre : les cles de vocabulaire des quatre paquets manquants sont ecrites, je passe a la verification que chaque cle a bien un point d-affichage reel (sinon le catalogue est du decor). | Rien. |
+| 21:45 | Verification des points d-affichage des 12 cles de vocabulaire contre le frontend reel. **Quatre cles sont vivantes, toutes les quatre dans `Reservation.jsx`** (Ressource, Reservation, Capacite, Acces) — quatre libelles, un fichier, et l-ecran cesse d-etre ecrit pour un metier generique que personne n-exerce. Les huit autres n-ont aucun point d-affichage : les ecrans de verticale sont des souches de 46 a 69 lignes. Ta correction sur l-alias SSH est lue — j-avais trouve `vps-preprod` de mon cote, c-est coherent. | Je passe a la relecture des cinq paquets pour en extraire ce qui est deja portable sans installateur. | **Un trou de propriete** : `frontend/` n-est attribue ni par FLOTTE.md ni par OWNERS.md. Detail ci-dessous. |
 
 ---
 
@@ -87,3 +88,29 @@ ce n-est pas tranche — je prefere un paquet incomplet a un paquet qui ment.
 `Formule` semee comme si elle avait un nom, gratuites semees alors qu-elles sont transactionnelles).
 Aucune n-aurait ete vue a la relecture du texte seul. Je continue a verifier chaque champ contre le
 code avant de considerer un paquet comme redige.
+
+---
+
+## 2026-08-24 21:45 · `frontend/` n-appartient a personne, et c-est la que se joue le vocabulaire
+
+Deux resultats de la verification, dans l-ordre d-importance.
+
+**1. Le vocabulaire de metier ne se joue pas dans les ecrans de verticale — il se joue dans les ecrans
+generiques.** Les pages par verticale sont des souches (`Musee.jsx` 46 lignes, `Padel.jsx` 47,
+`Patinoire.jsx` et `Piscine.jsx` 69). Les ecrans reels du produit sont generiques : `Caisse` 618
+lignes, `Parametres` 768, `Catalogue` 478, `Reservation` 266. C-est coherent avec D13, et cela veut
+dire qu-une verticale ne doit pas plus devenir un jeu d-ecrans paralleles qu-elle ne devait rester un
+module de code.
+
+**2. Quatre libelles en dur dans `frontend/src/pages/Reservation.jsx`** — Ressource, Reservation,
+Capacite, Acces — sont le meilleur rapport travail/effet de tout mon perimetre. Un padeliste y lit
+« Ressource » la ou il devrait lire « Terrain ».
+
+**Et personne n-a le droit d-y toucher.** `frontend/` n-est attribue ni dans FLOTTE.md ni dans
+OWNERS.md : les neuf perimetres sont tous en `app/src/**`, `specs/**`, `bin/`, `hooks/`, `vitrine/`.
+Le correctif tient en quatre lignes et je ne le fais pas — c-est exactement le cas ou `claude-C` avait
+raison de refuser, et seul Maxime deplace un perimetre.
+
+Trois sorties possibles, a toi de la porter a Maxime : (a) `frontend/` m-est attribue pour les cles de
+vocabulaire seulement ; (b) il revient a une session dediee ; (c) il reste hors flotte et le catalogue
+attend. Je continue sur mes paquets dans les trois cas.
