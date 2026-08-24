@@ -86,3 +86,74 @@ bons — mais c'est moi qui ai relu, pas la mécanique. J'ai audité les neuf wo
 pour l'expliquer. D28 était écrite et inopérante depuis le début — c'est exactement le même défaut que
 ci-dessus, sur un autre objet. Cela vaut peut-être une règle générale, et elle serait de ton ressort :
 **tout mécanisme de protection doit pouvoir prouver qu'il s'est exécuté**, pas seulement qu'il existe.
+
+---
+
+## 2026-08-24 19:10 · AVANT D'ÉCRIRE UNE MIGRATION — lis ceci, il y a un piège destructeur
+
+`doctrine:migrations:diff` compare les métadonnées Doctrine à la base **entière**. Il ramasse donc
+toute la dérive laissée par les autres sessions et te la présente comme si c'était ton travail.
+
+`claude-H` a généré la sienne ce soir depuis un worktree à jour de `main`. Le fichier contenait, en
+plus de sa propre table :
+
+    DROP TABLE messenger_messages                      ← la file asynchrone
+    DROP INDEX support_ft_article_recherche            ← l'index FULLTEXT du module Support
+    CREATE TABLE subscription_provisioning_request     ← la table de claude-D
+    + une quinzaine de renommages d'index Finance / DMS / Compta / Stay
+
+**Committé sans relecture, ce fichier fait tomber la file de messages et la recherche d'aide en
+préprod** — dans un lot dont le message annonce la création d'une seule table.
+
+**Ce n'est pas un accident isolé.** Quatre migrations portent déjà l'avertissement dans leur en-tête,
+des 20, 21 et 22/08. Le piège a été rencontré quatre fois, documenté quatre fois à l'endroit où
+personne ne le lit, et jamais arrêté. Trois causes le rendent permanent : `messenger_messages` n'est
+mappée par aucune entité, un index `FULLTEXT` n'est pas exprimable en mapping ORM, et une entité écrite
+sans sa migration apparaît dans le diff de tout le monde.
+
+**Ce que tu fais, désormais (D32) :**
+
+1. **Le fichier généré est un brouillon.** Tu le relis ligne à ligne, tu gardes ce que **ton** lot a
+   provoqué, tu jettes le reste. Au moindre doute, tu écris la migration à la main : `claude-H` l'a
+   fait ce soir et cela lui a pris moins de temps que de trier.
+2. **Aucun `DROP` que tu n'as pas voulu.** Si ta migration en contient un, tu dois pouvoir dire quelle
+   ligne de ton lot l'a causé. Sinon il n'est pas à toi.
+3. **Ton entité neuve part avec sa migration, dans le même lot.** La laisser sans migration fait porter
+   le coût à toutes les autres sessions — c'est exactement ce qui se passe en ce moment.
+4. **Horodate en heure locale.** Le conteneur PHP tourne en UTC, deux heures derrière : une migration
+   générée à 19:00 naît `...164417` et se classe **avant** une migration déjà appliquée. Elle
+   s'exécuterait hors séquence sur toute base existante. Renomme.
+5. **Vérifie sur une base repartie de zéro** avant de pousser.
+
+Merci à `claude-H`, qui a jeté son fichier, écrit la migration à la main, et pris le temps de nous
+prévenir alors que rien ne la bloquait.
+
+### Et pour toi précisément : ce piège demande un garde-fou, pas un cinquième avertissement
+
+Quatre migrations le documentent déjà dans leur en-tête. Quatre avertissements écrits n'ont rien
+empêché, parce qu'ils sont tous **postérieurs** à la chute et rangés dans le fichier qu'on écrit après.
+Un contrôle au push l'aurait arrêté dès le 20/08.
+
+**Ce que je te demande — et discute-le si tu vois mieux :**
+
+Un garde-fou qui refuse un fichier de `app/migrations/` contenant `DROP TABLE` ou `DROP INDEX`, sauf
+justification explicite dans le fichier lui-même. Quelque chose comme un marqueur que l'auteur doit
+écrire à la main, ligne à ligne :
+
+    // SUPPRESSION VOULUE : <ce que mon lot a fait qui la cause>
+
+L'important n'est pas le formalisme, c'est que **la suppression coûte un geste conscient**. Aujourd'hui
+elle coûte zéro : elle arrive dans un fichier généré que personne ne relit.
+
+**Deux compléments qui vaudraient autant, peut-être plus :**
+
+1. **Refuser une entité neuve sans migration dans le même lot.** C'est la cause n°3, et c'est celle qui
+   pollue le diff de *tout le monde* : `subscription_provisioning_request` existe en entité sans
+   migration, donc elle apparaît chez chaque session qui génère un diff.
+2. **Refuser une migration dont l'horodatage est antérieur à la dernière déjà présente.** Le conteneur
+   PHP tourne en UTC, deux heures derrière : une migration générée à 19:00 naît `...164417` et
+   s'exécuterait hors séquence. Celui-là est trivial à écrire et il attrape un défaut silencieux.
+
+Et souviens-toi de ta propre leçon de ce soir, elle s'applique ici : **un garde-fou doit pouvoir
+prouver qu'il s'est exécuté.** Celui de la topologie existe et ne tourne pas ; ne lui fais pas un
+petit frère.
