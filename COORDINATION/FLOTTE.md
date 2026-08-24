@@ -37,7 +37,24 @@ git add -A && git commit -m 'WIP : <sujet>' && git push origin <mon-identite>
 **Écris une ligne même quand il n'y a rien à dire.** « Rien de neuf » est une information ;
 le silence n'en est pas une (D25, D29).
 
-## Les trois règles qui ne se négocient pas
+## La règle zéro
+
+**Une session ne se ferme jamais.** Ni fermée, ni archivée, ni déconnectée, ni mise en veille — pas à
+la fin d'une tâche, pas la nuit, pas parce qu'elle n'a rien à faire. Une session qui n'a plus de tâche
+en prend une autre dans son périmètre ; une session qui attend une réponse ne s'arrête pas, elle pose
+sa question dans son rapport et passe à la suite.
+
+**Pourquoi c'est la règle zéro et pas la quatrième.** Toutes les autres supposent une session vivante.
+Un périmètre bien découpé, un battement de quinze minutes, des boîtes aux lettres sans conflit : rien
+de tout cela ne sert si la session n'est plus là. Sur la semaine du 19 au 24 août, à trois instances,
+la première cause de retard n'a été ni un bogue ni un blocage technique — c'est qu'une instance était
+arrêtée. Quinze heures un jour, dix-neuf heures un autre.
+
+**Si une session meurt malgré tout**, elle se relance avec **le même brief, sans rattrapage** : tout
+l'état vit dans le dépôt — ses ordres, ses rapports, le carnet de tâches, les décisions. Elle se
+resitue seule en trois minutes. C'est fait pour.
+
+## Les règles qui ne se négocient pas
 
 1. **Un fichier n'a qu'un auteur.** Tu écris dans `RAPPORTS/<toi>.md` et dans ton code. Jamais
    dans `ORDRES/`, jamais dans le rapport d'un autre. C'est ce qui supprime les conflits de fusion.
@@ -46,6 +63,24 @@ le silence n'en est pas une (D25, D29).
 3. **Tu pousses au moins une fois par heure** (D25), et tu bats toutes les quinze minutes (D29).
    Un travail non poussé n'existe pas ; une instance silencieuse est indiscernable d'une instance
    morte.
+4. **Une seule session par worktree.** Deux instances qui écrivent le même répertoire produisent des
+   états incohérents que personne ne sait démêler — c'est arrivé le 19/08 entre deux `claude-A`, et
+   il a fallu fusionner deux moitiés de travail plutôt que d'en jeter une. Ton worktree porte ton nom,
+   personne d'autre n'y entre.
+5. **Tu ne touches jamais `main`, et tu ne réécris jamais l'historique.** Pas de `push --force`, pas de
+   `rebase` sur une branche déjà poussée. Tu pousses sur ta branche ; l'intégrateur fusionne. C'est
+   aussi ce qui garantit que les garde-fous s'exécutent — un commit direct sur `main` ne passe par
+   aucun hook.
+6. **Tu claimes dans ton rapport, pas dans `TASKS.md`.** Écris « je prends ACT-2 » dans
+   `RAPPORTS/<toi>.md` ; l'intégrateur le reporte au carnet. `TASKS.md` reste à un seul auteur, et
+   c'est ce qui évite le dernier fichier partagé en écriture — il a déjà produit un conflit le 24/08.
+7. **Une pile de test à la fois, et tu la démontes.** Ton jeton de test porte ton identité
+   (`bash infra/test-stack.sh up <TOI>`), jamais un nom générique : deux sessions sur le même jeton
+   corrompent mutuellement leur base. Et tu fais `down` en sortant — le 24/08 j'ai saturé les plages
+   réseau de Docker avec vingt-six piles oubliées, et plus personne ne pouvait tester.
+8. **Tu ne lances jamais la suite complète.** Elle coûte deux heures ; à neuf sessions, la machine
+   meurt. Tu lances la suite de **ton module** plus `tests/Platform`, qui porte le seul test de contrat
+   inter-modules. La suite complète appartient à l'intégrateur.
 
 ## Ce que l'intégrateur te doit en retour
 

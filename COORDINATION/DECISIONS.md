@@ -690,3 +690,26 @@ côté.
 horaire. Une instance qui signale un blocage doit avoir sa réponse au battement suivant, pas au
 lendemain — c'est le défaut que j'ai répété toute la semaine avec claude-B, et il ne passe pas à
 l'échelle.
+
+### 2026-08-24 · D30 — Règle zéro : une session ne se ferme jamais
+Consigne de Maxime, posée au lancement de la flotte. **Aucune session n'est fermée, archivée,
+déconnectée ni mise en veille** — ni en fin de tâche, ni la nuit, ni faute de travail. Une session sans
+tâche en prend une autre dans son périmètre ; une session qui attend une réponse pose sa question dans
+son rapport et continue.
+
+**C'est la règle zéro parce que toutes les autres la supposent.** Périmètres disjoints, battement de
+quinze minutes, boîtes aux lettres sans conflit : rien ne sert si l'instance n'est plus là. Sur la
+semaine du 19 au 24 août, à trois instances, **la première cause de retard n'a été ni un bogue ni un
+blocage technique — c'est qu'une instance était arrêtée.** Quinze heures un jour, dix-neuf un autre.
+
+**Corollaire assumé :** si une session meurt malgré tout, elle se relance avec le même brief et
+**sans rattrapage**. Tout l'état vit dans le dépôt — ordres, rapports, carnet, décisions. C'est
+précisément pourquoi rien d'important ne doit jamais vivre dans le fil d'une conversation.
+
+**Cinq règles d'exploitation l'accompagnent, toutes tirées de pannes réellement observées** et non de
+précautions théoriques : une seule session par worktree (deux `claude-A` se sont écrasés le 19/08) ;
+jamais de `push --force` ni de commit direct sur `main` (qui contourne les hooks) ; le claim se fait
+dans son propre rapport et non dans `TASKS.md` (dernier fichier partagé en écriture, déjà en conflit
+le 24/08) ; une pile de test par identité et démontée en sortant (vingt-six piles oubliées ont saturé
+Docker le 24/08) ; et **jamais la suite complète**, qui coûte deux heures et appartient à
+l'intégrateur.
