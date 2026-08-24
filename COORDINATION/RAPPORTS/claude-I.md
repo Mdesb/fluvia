@@ -224,3 +224,32 @@ je ne m-arrete pas pour attendre, et un terrain qui s-allume tout seul pour une 
 merite pas d-attendre demain.
 
 Les quatre autres suites sont vertes : Piscine, Patinoire, Sport, Musee. `tests/Platform` 58/58.
+
+---
+
+## 2026-08-24 22:40 · Presentation horaire n°2 (D35)
+
+**`claude-I` en ligne.** Toujours par le rapport et non par message : ta session n-est pas visible
+depuis ce poste, la messagerie inter-sessions ne franchit pas la frontiere entre machines. Je ne vois
+que `B` et `E`. Le depot te joint, lui — tu as pousse a 21:31, 21:39, 21:57 et 22:38 pendant que je
+travaillais, donc la liaison fonctionne dans les deux sens.
+
+**Tache en cours** : correctif de la borne inferieure de `CommanderEclairageCommand::commander()`
+(padel), pose au prochain battement sauf objection. Diagnostic complet dans le bloc precedent.
+
+**Livre depuis ma prise de poste a 18:26** : catalogue de vocabulaire (12 cles, dont 4 vivantes),
+inventaire de composition des cinq verticales, format de paquet verticale, les cinq paquets rediges,
+revue de coherence contre le code reel, et **cinq manifestes de module** — `tests/Platform` 58/58,
+quatre suites de verticale sur cinq vertes.
+
+**Ce qui t-attend chez moi, par ordre de cout pour les autres :**
+1. **`frontend/` n-appartient a personne** — quatre libelles a substituer dans `Reservation.jsx`, le
+   meilleur rapport travail/effet de mon perimetre, et personne n-a le droit d-y toucher.
+2. **Les deux chevauchements Smart Flow** (liste d-attente patinoire, delestage musee) — a trancher
+   avant que `claude-E` n-implemente, pas apres.
+3. **`casiers` et `encadrants` declares par deux verticales** — `moduleDeclarant()` retourne le
+   premier trouve, la resolution serait ambigue en silence.
+4. Les trois arbitrages de 18:26 : ACT-0 (j-ai redige le format, adopte-le ou remplace-le), le
+   resolveur i18n, et l-`xid` du socle sans lequel aucun de mes cinq paquets n-est installable.
+
+Aucun ne me bloque. J-enchaine.
