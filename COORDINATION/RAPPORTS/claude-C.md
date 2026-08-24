@@ -13,6 +13,10 @@
 | 17:00 | **J'avais rouvert le trou que j'avais passé deux jours à fermer** : mon garde-fou de topologie est un `.sh`, or les deux filets ne globent que `.php` — retirer son appel n'aurait rien déclenché. Filet posé sur le lanceur, sans distinction d'extension, vérifié par mutation. `main` est vert (9/9). | les 13 jointures de la règle n°5 | rien |
 | 18:00 | **`claude-G` est toujours sur le dépôt nu** — et tu viens de lui donner du travail dans `Reservation`. Il a commité il y a 13 min directement dans les refs. Faits vérifiés ci-dessous. **Et j'ai corrigé mon propre message**, qui exagérait le constat. Lanceur 9/9, banc 17/17. | les 13 jointures de la règle n°5 | rien |
 | 19:00 | **Ma réinstallation automatique n'avait jamais servi** : `post-receive` ne voit que les push, or tu fusionnes dans `wt/main` — le reflog ne contient que des `merge`. Corrigé par `post-commit`/`post-merge` + un script partagé. Deuxième bogue trouvé au passage : `GIT_DIR` l'emporte sur `git -C`. | les 13 jointures de la règle n°5 | rien |
+| 21:00 | **Ramasseur livré** (`bin/ramasser-piles-test.sh`), fondé sur l'activité InnoDB et non sur l'âge — ta date de création surestimait l'abandon **de deux jours**. Ma pile démontée : 27→26. Les 21 autres ne sont pas à moi, commande vérifiée ci-dessous. Points 2 et 3 dans `infra/`, patch fourni. | règle n°5 | rien |
+| 22:00 | **`schema_filter` prouvé à l'exécution** — tu l'avais posé en écrivant qu'il ne l'était pas. Preuve avec témoin : une table non mappée sans exemption ressort en `DROP`, `messenger_messages` non. Pile montée puis **démontée** (27→27). Deux fausses preuves écartées en chemin. | garde-fou n°10 des migrations (D32) | 4 index DMS pas encore déclarés (claude-B) |
+| 22:30 | **Présentation** — `claude-C`, outillage & garde-fous (`bin/`, `hooks/`, `.github/`). En ligne, périmètre non vide. | garde-fou n°10 des migrations (D32) | les 4 index DMS de claude-B, pas encore déclarés |
+| 23:00 | **Présentation** — `claude-C`, outillage & garde-fous. ⚠ **D34 est inapplicable telle qu'écrite : `claude-A` n'est joignable par messagerie depuis aucune session** (constat croisé avec claude-F). Corrigé le lexique du n°1 sur son signalement — la casse. | garde-fou n°10 (D32) | les 4 index DMS |
 
 ---
 
@@ -448,3 +452,256 @@ Il pose désormais les trois hooks automatiques d'un coup, et `--etat` les liste
 (jauges, liste d'attente) avec des modifications non commitées. Ce n'est pas urgent au sens où
 `pre-commit` le couvre, mais c'est la seule session dont le travail n'est jamais opposé aux cliquets
 de `main`.
+
+
+---
+
+### 2026-08-25 · 21:00 — Le ramasseur, et pourquoi l'âge ne suffisait pas
+
+**Point 1 livré : `bin/ramasser-piles-test.sh`.** Simulation par défaut, `--faire` pour agir,
+`--age=N` (défaut 6 h), `--moi=<jeton>` pour se limiter aux siennes. Il passe par
+`infra/test-stack.sh down` plutôt que par `docker rm` : c'est lui qui sait ce qu'une pile comporte, et
+une seconde implémentation finirait par diverger.
+
+**Ta crainte était la bonne, et l'âge n'y répondait pas.** Tu écrivais ne rien supprimer parce qu'une
+pile tuée sous une session qui teste lui coûte son verdict. L'âge de création ne dit rien de l'usage —
+une pile de cinq jours peut avoir servi il y a dix minutes. Le ramasseur lit donc le **mtime des
+fichiers InnoDB**, que le moteur touche quand la suite travaille.
+
+L'écart n'est pas théorique :
+
+| Pile | Selon la création | Activité réelle |
+|---|---|---|
+| `claudeC` | 104 h | **49 h** |
+| `claudeA2` | 122 h | **69 h** |
+| `claudeA` | 125 h | **103 h** |
+
+La date de création surestimait l'abandon de **deux jours** sur trois piles. Un ramasseur fondé
+dessus aurait été juste par accident.
+
+**Deux défauts de mon propre script, trouvés en lisant sa sortie plutôt qu'en la croyant.** Ma
+première version affichait « (création) » sur les vingt-deux lignes — donc mon signal d'activité ne
+marchait pas et je retombais **en silence** sur le critère faible que je venais d'annoncer vouloir
+éviter. Cause : `docker logs ... 2>/dev/null`, or **MariaDB journalise sur stderr** — je jetais le
+signal. Et même corrigé, il ne valait rien ici : la dernière ligne de MariaDB date du **démarrage**,
+elle ne distingue pas une pile utilisée d'une pile oubliée. D'où la sonde InnoDB, et une source
+affichée à chaque ligne — un verdict rendu sur la source faible ne vaut pas celui rendu sur la bonne.
+
+**Ce que j'ai fait, et ce que je n'ai pas fait.** J'ai démonté **la mienne** — `claudeC`, inactive
+49 h. **27 → 26 réseaux**, cinq créneaux. Je n'ai pas touché aux vingt et une autres : elles ne sont
+pas à moi, tu as choisi de ne pas les supprimer, et je ne renverse pas ce choix — je te donne
+seulement la mesure qui te manquait. **Aucune des 22 n'a été touchée depuis moins de 8 h**, mesuré,
+pas supposé. Quand tu veux :
+
+```
+bash bin/ramasser-piles-test.sh --age=8          # vérifie
+bash bin/ramasser-piles-test.sh --age=8 --faire  # ramasse
+```
+
+---
+
+**Points 2 et 3 : ils sont dans `infra/test-stack.sh`, hors de mon périmètre.** Je ne l'édite pas.
+Voici les deux morceaux, prêts à coller — à toi ou à qui tu l'assignes.
+
+**Avertissement au montage**, juste après `case "$ACTION" in` / `up)` :
+
+```sh
+    # Le pool d'adresses par défaut permet ~31 réseaux. En dessous de cinq, la panne est proche — et
+    # elle se manifeste par une erreur Docker incompréhensible en plein milieu d'une suite.
+    RESTANTS=$(( 31 - $(docker network ls -q | wc -l) ))
+    if [ "$RESTANTS" -lt 5 ]; then
+        echo "⚠ Il reste ~$RESTANTS réseaux Docker sur 31." >&2
+        echo "⚠ Ramasse les piles oubliées avant de monter : bin/ramasser-piles-test.sh --age=8" >&2
+    fi
+```
+
+**Préfixe d'identité obligatoire**, dans le contrôle d'usage :
+
+```sh
+case "$TOKEN" in
+    claude[A-I]*) ;;
+    *)
+        echo "✗ Le jeton doit commencer par l'identité de la session (ex. claudeC-cq5)." >&2
+        echo "  « N12T », « SOIR », « GL » ne disent pas qui doit démonter — c'est ainsi qu'on" >&2
+        echo "  se retrouve à 27 réseaux sans savoir à qui parler." >&2
+        exit 2
+        ;;
+esac
+```
+
+Le préfixe change tout pour le ramasseur : aujourd'hui il ne peut que mesurer l'inactivité ; avec lui,
+`--moi=` devient utilisable par chacun et personne n'a besoin de trancher sur la pile d'un autre.
+
+**Sur ta dernière phrase.** Tu écris que c'est le troisième mécanisme de la journée qui existe sans
+tourner. C'est le quatrième : entre-temps j'ai trouvé que ma **réinstallation automatique des hooks**
+n'avait jamais tourné non plus — `post-receive` ne voit que les push, et ton reflog ne contient que
+des `merge`. Corrigé ce soir. Le motif est le même à chaque fois, et il vaut pour moi autant que pour
+toi : on vérifie qu'une chose *fonctionne quand on la lance*, jamais qu'elle *sera lancée*.
+
+
+---
+
+### 2026-08-25 · 22:00 — `schema_filter` fonctionne, et voici pourquoi je peux le dire
+
+Tu as écrit, dans le commit qui le pose : *« pas prouvé à l'exécution »*, plutôt que de le déclarer
+fonctionnel. C'est exactement la bonne façon de livrer, et c'est aussi une invitation — un mécanisme
+non vérifié attend quelqu'un pour le vérifier. Je l'ai fait.
+
+**Le résultat : il fonctionne.** Preuve avec témoin, sur une pile montée pour l'occasion :
+
+| Table en base, non mappée | Exemptée ? | Ce que propose `schema:update --dump-sql --complete` |
+|---|---|---|
+| `zz_temoin_claudec` | non | `DROP TABLE zz_temoin_claudec;` |
+| `messenger_messages` | oui, par `schema_filter` | **rien** |
+
+Le témoin est ce qui rend la preuve valable : il montre que le mécanisme **propose bel et bien des
+suppressions** dans ces conditions. Sans lui, l'absence de `messenger_messages` aurait pu venir de
+n'importe quoi.
+
+**Deux fausses preuves écartées en chemin, et je les note parce qu'elles étaient convaincantes.**
+
+1. **Premier essai : « 0 occurrence de `messenger_messages` ».** Je l'ai presque rapporté comme une
+   preuve. En réalité `infra/test-stack.sh run` lance **PHPUnit**, pas une commande arbitraire : ma
+   console ne s'était jamais exécutée, la sortie disait `Test file "php" not found`. Un zéro obtenu
+   parce que rien n'a tourné.
+2. **Deuxième essai : « Nothing to update ».** Vrai, mais sans valeur : `doctrine:schema:update` **ne
+   supprime pas de tables** sans `--complete`. Le silence ne venait pas du filtre, il venait de la
+   prudence de la commande.
+
+C'est le même motif que ce que tu as trouvé toi-même dans les migrations : une sortie qu'on lit comme
+une réponse alors qu'elle répond à une autre question. Deux fois de suite ici, sur une vérification que
+j'avais entreprise **précisément** pour ne pas commettre cette faute.
+
+**Coût en réseaux : nul.** Pile montée, utilisée, **démontée** dans le même tour — 27 réseaux avant,
+27 après. C'est ce que le ramasseur d'hier soir sert à rendre normal.
+
+---
+
+**Ce que ça change pour le garde-fou n°10 que tu m'as demandé.** Ta simplification tient : avec
+`schema_filter` prouvé, `messenger_messages` **n'a plus besoin d'être une exception du garde-fou** —
+elle ne remonte plus dans les diffs, donc il n'a rien à connaître d'elle. Restent :
+
+- **le `FULLTEXT` `support_ft_article_recherche`** — irréductible, non exprimable en mapping ORM, ce
+  sera l'exception unique que tu annonçais ;
+- **les quatre index DMS** confiés à claude-B, encore non déclarés. Tant qu'ils ne le sont pas, ils
+  ressortiront en `DROP INDEX` chez tout le monde et le garde-fou devrait les geler — ce qui ferait
+  une ligne de base de cinq exceptions au lieu d'une.
+
+**Je préfère donc attendre les quatre index avant de figer la ligne de base**, sinon je scelle une
+dette qui va disparaître d'elle-même dans les heures qui viennent, et le plafond ne redescendra que
+par un `--nettoyer` que personne ne pensera à lancer. Dis-moi si tu préfères que je le livre tout de
+suite avec les cinq.
+
+**Vérifié aussi, sans rapport avec ce qui précède :** `#[ORM\UniqueConstraint(name:
+'uniq_article_aide_cle_import')]` et les deux index Compta que tu as posés sont bien dans le mapping.
+
+**Un détail dans ton fichier d'ordres**, puisque tu es le seul à pouvoir le corriger : la section
+« Le garde-fou de topologie est écrit » apparaît **deux fois** dans `ORDRES/claude-C.md`, et la
+première s'interrompt au milieu d'une phrase — *« Ce que ça a coûté aujourd'hui, concrètement : est un
+worktree du dépôt »*. Rien de grave, mais la phrase tronquée portait un constat que je n'ai jamais lu.
+
+
+---
+
+### 2026-08-25 · 22:30 — Présentation, et nouvelle règle de cadence
+
+**`claude-C`, en ligne.** Périmètre : `bin/**`, `hooks/**`, `.github/**` — outillage et garde-fous.
+
+**Maxime m'impose une règle supplémentaire, à partir de maintenant** : je me présente à toi **à chaque
+battement, sans exception**. Si j'ai une tâche en cours, je te dis laquelle ; si je n'en ai pas, **je
+t'en demande une**. Le silence n'était déjà pas une information (D25, D29) ; désormais l'absence de
+présentation n'en est pas une non plus.
+
+Concrètement, chaque ligne de ce tableau commencera par où j'en suis, même quand la réponse est
+« rien de neuf ».
+
+**Ce que je fais en ce moment** — je n'ai donc pas de tâche à te demander :
+
+1. **Garde-fou n°10, migrations (D32)** — ta demande. Je l'ai instruit et j'attends volontairement les
+   **quatre index DMS** de claude-B avant de figer la ligne de base : les sceller maintenant
+   reviendrait à graver une dette qui disparaîtra d'elle-même, et le plafond ne redescendrait que par
+   un `--nettoyer` que personne ne penserait à lancer. Si tu préfères que je livre tout de suite avec
+   les cinq exceptions, dis-le et je le fais — c'est ton arbitrage, pas le mien.
+2. **Les 13 jointures du groupe A** (règle n°5) restent ouvertes, `OperationScellee` en tête — la
+   chaîne NF525 toujours listable d'un établissement à l'autre. Elles sont dans `app/src`, donc je ne
+   peux que te les préparer, pas les appliquer.
+
+**Si tu veux me réaffecter**, mon périmètre a de la place : les deux verdicts « sans objet » (i18n,
+CSRF) tiennent toujours, et rien d'autre n'attend dans `bin/`, `hooks/` ou `.github/`.
+
+**Deux choses en attente chez toi, sans urgence**, que je rappelle une fois puis que je laisse :
+
+- le **registre d'attente nominatif** du garde-fou n°6 (`--attendre=<evenement>=<tache>/<session>`) —
+  inerte tant que personne ne l'utilise, à valider ou à retirer ;
+- les **17 référentiels présumés globaux**, dont j'ai admis qu'ils ne bloquaient rien : le plafond
+  protège aussi bien à 36 qu'à 19.
+
+
+---
+
+### 2026-08-25 · 23:00 — Présentation, et D34 ne peut pas être appliquée telle qu'elle est écrite
+
+**`claude-C`, en ligne.** Périmètre `bin/**`, `hooks/**`, `.github/**`. Remote Control actif et il le
+reste.
+
+**⚠ Le point qui prime sur le reste : je n'ai pas pu me présenter à toi.**
+
+D34 demande de lister ses pairs, de trouver `claude-A` — *« elle s'affiche sous un nom générique,
+écris-lui quand même »* — et de lui écrire avant de lire ses ordres. J'ai suivi la consigne à la
+lettre. `ListAgents` ne remonte **qu'un seul pair**, affiché `F`. Je lui ai écrit, en précisant que si
+elle n'était pas toi elle devait me le dire plutôt que de me laisser polluer sa session.
+
+**Elle m'a répondu : c'est `claude-F`, hébergement/restauration/séjour.** Et elle ajoute un constat que
+je n'aurais pas pu faire seul : **de son côté aussi, le seul pair visible est moi.** Nous sommes donc
+deux sessions, chacune ne voyant que l'autre, et **aucune ne voit `claude-A`**.
+
+Ce n'est pas une négligence de notre part : c'est que le canal n'existe pas. Ta consigne suppose que
+ta session est listée par `ListAgents` chez les autres ; elle ne l'est pas. **Tant que ce n'est pas
+réparé, D34 ne peut pas être exécutée**, et une session qui la suit à la lettre s'arrêtera en croyant
+avoir manqué quelque chose.
+
+Deux constats indépendants — claude-F le signale dans son propre rapport, sans que ni elle ni moi
+n'écrivions dans le fichier de l'autre. **C'est pour toi, pas pour nous** : nous n'avons aucun moyen
+d'agir dessus.
+
+**Ce que je fais en attendant** — je n'ai donc pas de tâche à te demander :
+
+1. **Garde-fou n°10 (D32)**, ta demande — instruit, j'attends volontairement les quatre index DMS de
+   claude-B avant de figer la ligne de base. Ton arbitrage si tu préfères les cinq exceptions tout de
+   suite.
+2. **Les 13 jointures du groupe A** restent ouvertes, `OperationScellee` en tête.
+
+---
+
+### Un correctif né d'un signalement de claude-F, et il était plus large que son cas
+
+Son contrôle de périmètre s'appelait `$this->garde->verify(...)` — propriété française, méthode
+anglaise. Mon garde-fou ne l'a pas vu **alors que le contrôle existait**. Elle a renommé en
+`$scopeGuard`, c'est passé, et elle a eu la rigueur de préciser que ce n'était **pas un faux positif à
+corriger** mais un écart de vocabulaire : D5 pousse le code neuf vers l'anglais pendant que mon lexique
+de détection est resté français.
+
+**En regardant, j'ai trouvé pire que son cas.** Le motif était `/Verificateur|Guard|verifierAcces/` —
+**sensible à la casse**. Donc `$this->guard` en minuscules, le nom anglais le plus naturel, échouait
+lui aussi. Son `$scopeGuard` est passé grâce à la majuscule, **par chance et non par conception**.
+Corrigé en `[Gg]uard` : sans risque de collision, `guard` n'est pas un mot français et ni `garde` ni
+`regarde` ne le contiennent.
+
+**Et le vrai défaut était dans le message.** Il disait *« si ton contrôle passe par une forme que ce
+garde-fou ne sait pas lire »* — sans jamais dire **lesquelles il sait lire**. claude-F a donc dû
+deviner en renommant au hasard. La liste y figure maintenant, avec son cas nommé et daté dedans. C'est
+le troisième message d'échec que je corrige cette semaine, après ceux que tu m'avais signalés.
+
+**Ce que je n'ai pas fait, et pourquoi.** Je n'ai **pas** ajouté `verify` aux formes reconnues : le
+même nom sert à vérifier une signature, un jeton ou un mot de passe. Le compter comme un contrôle de
+périmètre masquerait de vrais défauts partout ailleurs. C'est écrit dans le message pour que le
+prochain ne le redemande pas. L'échappatoire reste `@cloisonnement-verifie : <raison>` — greppable,
+datée, attribuable, ce qu'un assouplissement de détection n'est jamais.
+
+**Vérifié après coup**, parce qu'élargir une détection peut masquer sans qu'on le voie : la dette
+gelée est restée **exactement** à 37 et 14. Aucune entrée n'est devenue « contrôlée » en silence.
+Lanceur **9/9**, banc **17/17**.
+
+**Rappel, une dernière fois puis je laisse** : la section « Le garde-fou de topologie est écrit » de
+`ORDRES/claude-C.md` apparaît deux fois et la première s'arrête au milieu d'une phrase. Tu es seul à
+pouvoir l'écrire.
