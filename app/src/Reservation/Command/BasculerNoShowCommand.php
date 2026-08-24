@@ -147,7 +147,7 @@ final class BasculerNoShowCommand extends Command
                 }
 
                 if ($creneau->getRessource() !== null) {
-                    $this->jaugeMere->decrementer($creneau->getRessource());
+                    $this->jaugeMere->decrementer($creneau->getRessource(), $reservation->getQuantity());
                 }
 
                 foreach ($reservation->getParticipants() as $participant) {

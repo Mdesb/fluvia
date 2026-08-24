@@ -41,7 +41,7 @@ final class AnnulerCreneauProcessor implements ProcessorInterface
                 $reservation->setStatut(StatutReservation::AnnuleeLibre);
                 $this->projectionAcces->revoquerSiProjete($reservation);
                 if ($data->getRessource() !== null) {
-                    $this->jaugeMere->decrementer($data->getRessource());
+                    $this->jaugeMere->decrementer($data->getRessource(), $reservation->getQuantity());
                 }
             }
         }
