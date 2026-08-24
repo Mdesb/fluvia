@@ -16,7 +16,16 @@
     "  B   referentiel presume global. Ce n'est PAS un defaut — mais tant que l'integrateur",
     "      ne l'a pas confirme, l'entree reste comptee. Le silence ne vaut pas accord.",
     "  B?  doute explicite, non tranche.",
-    "  C   aucun rattachement possible : il manque le champ. Migration, pas une ligne."
+    "  C   aucun rattachement possible : il manque le champ. Migration, pas une ligne.",
+    "",
+    "Champ « risque_ecriture » (24/08) : sur cinq entrees, le defaut n'est pas seulement en LECTURE.",
+    "Le proprietaire n'est pas cloisonne ET il porte une relation ECRIVABLE vers une entite qui,",
+    "elle, l'est. Il n'y a donc aucune frontiere dans les deux sens.",
+    "",
+    "Ces cas echappent par construction au garde-fou n1 : il cherche find()/findOneBy() depuis",
+    "l'entree client dans un Processor, or il n'y a pas de Processor du tout — le serialiseur",
+    "d'API Platform denormalise l'IRI directement dans l'entite. Aucun code de module ne resout",
+    "quoi que ce soit, donc il n'y a rien a detecter par ce motif."
   ],
   "scelle": {
     "gelee_le": "2026-08-23",
@@ -106,10 +115,10 @@
       ],
       "sensibilite": "argent",
       "traitement": {
-        "groupe": "B?",
+        "groupe": "B",
         "chemin": "",
         "cible": "",
-        "note": "Peut-etre global, peut-etre par etablissement. Doute explicite, non tranche par claude-C."
+        "note": "Definition de moyen de paiement (code, autorise le rendu, exige une reference). Referentiel. Doute leve le 24/08 par lecture des champs. NON CONFIRME par l'integrateur — tant que ce mot manque, l'entree reste comptee."
       }
     },
     "Compta/Entity/QualificationEquipement.php": {
@@ -215,11 +224,12 @@
       ],
       "sensibilite": "acces",
       "traitement": {
-        "groupe": "B?",
-        "chemin": "",
-        "cible": "",
-        "note": "Peut-etre global, peut-etre par etablissement. Doute explicite, non tranche par claude-C."
-      }
+        "groupe": "A",
+        "chemin": "espaces.etablissement",
+        "cible": "EspaceAcces",
+        "note": "Reclasse de B? en A le 24/08 : ce n'est pas un referentiel. Voir risque_ecriture — la ManyToMany vers EspaceAcces est ecrivable et pilote un franchissement d'acces. Le cloisonnement passe par ses espaces."
+      },
+      "risque_ecriture": "ManyToMany EspaceAcces (groupe sous_reseau:write), Post et Patch en acces.gerer. GRAVE : un sous-reseau est un ACCES FEDERE (US-L3-12) — ValidationPassageHandler:125-128 autorise le franchissement quand le droit et l'espace partagent le sous-reseau. Y rattacher l'EspaceAcces d'un autre etablissement federe les acces par-dessus la frontiere. Aucun processor, aucun validateur : le serialiseur denormalise l'IRI tel quel."
     },
     "Autorisation/Entity/OperationSensible.php": {
       "depuis": "2026-08-23",
@@ -238,10 +248,10 @@
       ],
       "sensibilite": "acces",
       "traitement": {
-        "groupe": "B?",
+        "groupe": "B",
         "chemin": "",
         "cible": "",
-        "note": "Peut-etre global, peut-etre par etablissement. Doute explicite, non tranche par claude-C."
+        "note": "Catalogue des operations soumises a autorisation (code, module/action). Referentiel. Doute leve le 24/08 par lecture des champs. NON CONFIRME par l'integrateur — tant que ce mot manque, l'entree reste comptee."
       }
     },
     "Securite/Entity/Permission.php": {
@@ -419,7 +429,8 @@
         "groupe": "A",
         "chemin": "article",
         "cible": "ArticleAide"
-      }
+      },
+      "risque_ecriture": "ManyToOne ArticleAide ecrivable : on attache une piece jointe a l'article d'un autre etablissement."
     },
     "Support/Entity/PieceJointeTicket.php": {
       "depuis": "2026-08-23",
@@ -713,7 +724,8 @@
         "groupe": "A",
         "chemin": "articleStock",
         "cible": "ArticleStock"
-      }
+      },
+      "risque_ecriture": "ManyToOne ArticleStock ecrivable : on rattache une valeur d'option a l'article de stock d'un autre etablissement."
     },
     "Organisation/Entity/Groupe.php": {
       "depuis": "2026-08-23",
@@ -755,10 +767,10 @@
       ],
       "sensibilite": "autre",
       "traitement": {
-        "groupe": "B?",
+        "groupe": "B",
         "chemin": "",
         "cible": "",
-        "note": "Peut-etre global, peut-etre par etablissement. Doute explicite, non tranche par claude-C."
+        "note": "Definition d'axe de reporting (code, libelle, type, granularites). Referentiel. Doute leve le 24/08 par lecture des champs. NON CONFIRME par l'integrateur — tant que ce mot manque, l'entree reste comptee."
       }
     },
     "Reporting/Entity/Indicateur.php": {
@@ -778,10 +790,10 @@
       ],
       "sensibilite": "autre",
       "traitement": {
-        "groupe": "B?",
+        "groupe": "B",
         "chemin": "",
         "cible": "",
-        "note": "Peut-etre global, peut-etre par etablissement. Doute explicite, non tranche par claude-C."
+        "note": "Definition de KPI (code, unite, mode de calcul, nature, module source). Referentiel. Doute leve le 24/08 par lecture des champs. NON CONFIRME par l'integrateur — tant que ce mot manque, l'entree reste comptee."
       }
     },
     "Reservation/Entity/DisponibiliteRessource.php": {
@@ -805,7 +817,8 @@
         "groupe": "A",
         "chemin": "ressource",
         "cible": "Ressource"
-      }
+      },
+      "risque_ecriture": "ManyToOne Ressource ecrivable : on declare une disponibilite sur la ressource d'un autre etablissement."
     },
     "Reservation/Entity/IndisponibiliteRessource.php": {
       "depuis": "2026-08-23",
@@ -828,7 +841,8 @@
         "groupe": "A",
         "chemin": "ressource",
         "cible": "Ressource"
-      }
+      },
+      "risque_ecriture": "ManyToOne Ressource ecrivable : on ferme la ressource d'un autre etablissement."
     }
   }
 }
