@@ -14,6 +14,7 @@
 | 21:45 | D34 lue et appliquee. **Presentation horaire mise en place** : Maxime me demande de me presenter a toi toutes les heures quoi qu-il arrive — tache en cours si j-en ai une, demande de tache sinon. C-est desormais dans ma boucle, au meme titre que le battement. | Presentation 21:45 ci-dessous. Tache en cours : relecture des cinq paquets pour extraire ce qui est portable sans installateur. | **Ta session n-est pas joignable depuis ce poste** — detail ci-dessous. |
 | 22:20 | **Cinq manifestes de module livres** (`PiscineModule`, `PadelModule`, `PatinoireModule`, `SportModule`, `MuseeModule`) — aucune des cinq verticales n-en avait, alors que Dms, Finance, Ocr, SmartFlow, Social et Stay en ont un. D2 est contract-first : ces cinq modules etaient invisibles au registre. `tests/Platform` **58/58 vert** sur pile isolee `claudeI` (VPS). D35 lue. | Suites des cinq modules en cours d-execution. | Rien. Trois constats a arbitrer ci-dessous — dont un qui donne enfin un point de chute a la suppression de `PresetVerticale`. |
 | 22:40 | Suites des cinq verticales passees. Piscine, Patinoire, Sport, Musee **vertes**. Padel : **1 echec, preexistant sur `origin/main`** (verifie en rejouant le test sur main, pas suppose) — et je tiens la cause exacte : le test ne tombe **que le lundi**. Diagnostic complet ci-dessous. Pile `claudeI` demontee, worktree VPS rendu a sa branche. | Je prepare le correctif ; il touche du code de production, donc je te laisse une fenetre d-objection avant de le poser. | Rien. |
+| 23:00 | **Padel repasse au vert** : 23 tests, 228 assertions. `tests/Platform` toujours 58/58. Le correctif ne prend aucune constante de reglage — deux regles physiques suffisaient, detail ci-dessous. Les cinq verticales sont donc vertes, manifestes compris. Pile demontee, worktree VPS rendu. | Je reprends le fil des paquets : ce qui est livrable sans installateur. | Rien. |
 
 ---
 
@@ -253,3 +254,31 @@ quatre suites de verticale sur cinq vertes.
    resolveur i18n, et l-`xid` du socle sans lequel aucun de mes cinq paquets n-est installable.
 
 Aucun ne me bloque. J-enchaine.
+
+---
+
+## 2026-08-24 23:00 · Le correctif eclairage : deux regles physiques, aucune constante
+
+J-avais annonce une « borne inferieure de tolerance » avec une fenetre a regler — donc un arbitrage a
+te demander. **En ecrivant le correctif, j-ai trouve mieux : il n-y a rien a regler.** Deux regles
+suffisent, et aucune des deux n-a de parametre :
+
+1. **On n-allume pas une partie deja finie** — `debut <= maintenant && fin > maintenant`.
+2. **On n-eteint que ce qu-on a allume** — l-evenement d-allumage doit exister.
+
+Elles sont evidentes une fois ecrites, et c-est ce qui les rend defendables : un exploitant n-a jamais
+a choisir combien de minutes de retard justifient d-allumer un terrain pour une partie terminee. La
+reponse est zero.
+
+La seconde regle a un effet que je n-avais pas cherche : elle empeche de produire un evenement
+`extinction` sans `allumage` correspondant. L-historique d-un terrain devient lisible pour
+l-exploitant qui cherche une panne — avant, il pouvait y lire des extinctions orphelines par
+dizaines.
+
+**Une erreur de ma part, corrigee** : mon premier passage de test a tourne sur le commit d-avant le
+correctif — le worktree VPS etait sur une branche locale que `checkout` ne met pas a jour apres
+`fetch`. J-ai cru une seconde que mon diagnostic etait faux. Il ne l-etait pas ; c-est la
+verification qui l-etait. Je fais desormais `merge --ff-only origin/<branche>` avant de tester, et je
+verifie le `%h` affiche avant de lire un resultat.
+
+**Etat de mon perimetre** : cinq verticales vertes, cinq manifestes livres, `tests/Platform` 58/58.
