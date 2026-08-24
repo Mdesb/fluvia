@@ -8,6 +8,7 @@ use App\Crm\Entity\Client;
 use App\Crm\Enum\TypeClient;
 use App\DataFixtures\SocleFixtures;
 use App\Organisation\Entity\Etablissement;
+use App\Organisation\Service\EditorTenantResolver;
 use App\Platform\Event\EventBus;
 use App\Securite\Entity\Permission;
 use App\Securite\Entity\Role;
@@ -87,7 +88,20 @@ final class SubscriptionActivationTest extends SocleApiTestCase
         /** @var EventBus $bus */
         $bus = static::getContainer()->get(EventBus::class);
 
-        return new SubscriptionActivator($this->em(), $bus);
+        return new SubscriptionActivator($this->em(), $bus, $this->editorTenant());
+    }
+
+    /**
+     * La désignation de l'éditeur, construite ici plutôt que lue dans l'environnement.
+     *
+     * `EDITOR_TENANT_ID` est vide par défaut et se renseigne dans `.env.local`, qui n'est pas
+     * versionné : un test qui en dépendrait passerait chez moi et échouerait chez tout le monde.
+     * Le service accepte sa valeur par constructeur — on la lui donne, et le refus délibéré de tout
+     * repli (D36) reste intact.
+     */
+    private function editorTenant(): EditorTenantResolver
+    {
+        return new EditorTenantResolver($this->em(), $this->editeur()->getId()->toRfc4122());
     }
 
     private function editeur(): Etablissement
