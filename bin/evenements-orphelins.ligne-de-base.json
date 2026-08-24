@@ -13,7 +13,7 @@
         "que ce controle ne le signalera jamais."
     ],
     "scelle": {
-        "plafond": 26
+        "plafond": 31
     },
     "entrees": [
         "access.denied",
@@ -23,6 +23,7 @@
         "cart.abandoned",
         "credit_note.issued",
         "customer.inactive",
+        "establishment.provisioned",
         "feasibility.assessed",
         "intervention.scheduled",
         "intervention.validated",
@@ -37,8 +38,12 @@
         "sale.cancelled",
         "sale.completed",
         "slot.released",
+        "subscription.activated",
+        "subscription.cancelled",
         "subscription.created",
         "subscription.suspended",
+        "subscription_option.added",
+        "subscription_option.removed",
         "tender.analyzed",
         "tender.draft_generated",
         "training.completed"
