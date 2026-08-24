@@ -377,4 +377,17 @@ export const api = {
   // l'éditeur : le contrôle est une identité de tenant, pas une permission, et il n'est pas rejoué
   // ici (D39).
   editorSubscriptions: () => request('/api/editor/subscriptions'),
+
+  // Catalogue d'offres, côté administration éditeur (ED-6). Ces routes rendent AUSSI ce que la
+  // vitrine cache — formules retirées de la vente, formules incohérentes — parce que c'est le seul
+  // écran où on peut les corriger.
+  editorPlans: () => request('/api/editor/catalog/plans'),
+  creerEditorPlan: (corps) => request('/api/editor/catalog/plans', { method: 'POST', body: corps }),
+  majEditorPlan: (id, corps) => request(`/api/editor/catalog/plans/${id}`, { method: 'PATCH', body: corps }),
+  supprimerEditorPlan: (id) => request(`/api/editor/catalog/plans/${id}`, { method: 'DELETE' }),
+
+  editorOptions: () => request('/api/editor/catalog/options'),
+  creerEditorOption: (corps) => request('/api/editor/catalog/options', { method: 'POST', body: corps }),
+  majEditorOption: (id, corps) => request(`/api/editor/catalog/options/${id}`, { method: 'PATCH', body: corps }),
+  supprimerEditorOption: (id) => request(`/api/editor/catalog/options/${id}`, { method: 'DELETE' }),
 }

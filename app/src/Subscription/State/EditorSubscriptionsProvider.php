@@ -7,14 +7,12 @@ namespace App\Subscription\State;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProviderInterface;
 use App\Crm\Entity\Client;
-use App\Organisation\Service\EditorTenantResolver;
-use App\Securite\Service\ContexteEtablissement;
 use App\Subscription\ApiResource\EditorSubscription;
+use App\Subscription\Security\EditorOnly;
 use App\Subscription\Entity\ProvisioningRequest;
 use App\Subscription\Entity\Subscription;
 use App\Subscription\Service\OfferCatalog;
 use Doctrine\ORM\EntityManagerInterface;
-use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
  * Les abonnements de l'éditeur, et le contrôle qui décide qui peut les voir (ED-6, RG-ED-01).
@@ -35,8 +33,7 @@ final class EditorSubscriptionsProvider implements ProviderInterface
 {
     public function __construct(
         private readonly EntityManagerInterface $em,
-        private readonly ContexteEtablissement $contexte,
-        private readonly EditorTenantResolver $editorTenant,
+        private readonly EditorOnly $editorOnly,
         private readonly OfferCatalog $catalog,
     ) {
     }
@@ -44,9 +41,7 @@ final class EditorSubscriptionsProvider implements ProviderInterface
     /** @return list<EditorSubscription> */
     public function provide(Operation $operation, array $uriVariables = [], array $context = []): array
     {
-        if (!$this->editorTenant->isEditor($this->contexte->etablissementActif())) {
-            throw new NotFoundHttpException();
-        }
+        $this->editorOnly->assertEditor();
 
         $lignes = [];
 
