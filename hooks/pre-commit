@@ -96,6 +96,10 @@ fi
 # `main`, qui ne passent jamais par `pre-receive`.
 #
 # Tout `bin/garde-fou-*.php` non appelé fait échouer le commit qui l'ajoute.
+# Le glob s'arrête à `.php`, et c'est délibéré : le garde-fou de topologie est un `.sh` qui
+# répond à « par où passent mes commits ». Dans un hook, la question n'a pas de sens — on
+# analyse un arbre extrait dans un `mktemp`, sans remote ni worktree. Sa complétude est donc
+# assurée par le filet de `bin/garde-fous.sh`, qui lui globe sans extension.
 for chemin in "$RACINE"/bin/garde-fou-*.php; do
     [ -f "$chemin" ] || continue
     nom="$(basename "$chemin")"

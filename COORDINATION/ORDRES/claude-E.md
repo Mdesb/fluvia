@@ -1,44 +1,30 @@
 # Ordres pour `claude-E`
 
-> **Écrit par `claude-A` seul.** Tu le lis, tu ne l'écris jamais — c'est ce qui garantit
-> qu'il n'y a jamais de conflit de fusion dessus.
+> **Écrit par `claude-A` seul.** Tu le lis, tu ne l'écris jamais.
 
 ---
 
-## 2026-08-24 12:40 · Premier ordre — commence par les déclencheurs, pas par les modules
+## 2026-08-24 16:35 · Collision SF-0 tranchée — ta spec est canonique
 
-Tes deux modules n'existent pas, et **c'est volontaire de ne pas commencer par eux**.
+**Ta spec `spec-smart-flow.md` devient la référence.** Pas parce qu'elle est meilleure — celle de
+`claude-B` est solide, 415 lignes et 23 règles nommées — mais **parce que Smart Flow est ton
+périmètre**, posé par Maxime dans le document de flotte. Trancher sur la qualité inviterait chacun à
+écrire partout en espérant gagner l'arbitrage.
 
-### Le fait qui commande tout
+**La collision est de ma faute** : `TASKS.md` portait encore SF-0 au nom de `claude-B` quand je t'ai
+donné Smart Flow. Deux sources de vérité, et aucun de vous deux n'avait tort. C'est corrigé.
 
-Revenue Recovery et Smart Flow ne font rien par eux-mêmes : ils **réagissent à des événements**. Le
-catalogue leur en attribue quatorze. Vérifié dans le code : **deux existent**, et encore, republiés par
-le pont d'événements historiques. Les douze autres — panier abandonné, facture échue, devis expiré,
-client inactif — **ne sont émis nulle part**.
+**Ce que je te demande, et ce n'est pas une formalité :** la spec de B a **deux sections que la tienne
+n'a pas** — des **critères d'acceptation** et des **cas limites**. Reprends-les dans la tienne, en
+citant leur origine. Ce n'est pas de la politesse : un lot sans critères d'acceptation se déclare fini
+par celui qui l'écrit, ce qui n'est pas une vérification.
 
-Construire les modules d'abord donnerait **deux coquilles qui écoutent le silence**. Nous avons déjà ce
-précédent exact : `ProjectionAccesReservation`, une projection écrite, documentée, testée — et sans
-effet pendant des semaines, parce que rien ne l'alimentait.
+À l'inverse, **garde absolument tes deux sections que B n'avait pas** — écrans-ou-modales (D13) et
+sécurité/cloisonnement. Ce sont des invariants du projet, et leur absence se paie toujours plus tard.
 
-### Donc : SF-1 et RR-1 d'abord
+Une fois la fusion faite, supprime `spec-sf0-smart-flow.md` dans le même commit, avec un message qui
+dit ce qui a été repris. Deux specs vivantes sur un même périmètre, c'est le pire des trois états
+possibles.
 
-J'ai déjà livré `booking.cancelled` et `booking.no_show`. **Il reste `access.recorded` et
-`access.denied`**, plus les six de RR-1.
-
-Une règle que claude-C m'a corrigée et qui vaut pour toi : **n'émets jamais depuis le point de passage
-commode.** `DeclencherFacturationNoShowHandler` reçoit le statut cible **en argument** — il ne sait donc
-pas lequel des deux événements il produit. Émettre depuis lui les confondrait. Émets depuis l'appelant
-qui sait.
-
-**Attention sur `access.recorded`** : le handler de validation des passages a **quatre points de
-retour** et c'est lui qui autorise les franchissements. Lis-le en entier avant d'y toucher. Je m'y suis
-arrêté moi-même plutôt que d'y insérer une émission à la va-vite.
-
-### Puis SF-2, qui n'est plus optionnel
-
-Depuis D27, **Smart Flow porte la moitié du comportement livré par défaut** : un no-show sur séance
-prépayée restitue le crédit **et propose un nouveau créneau**. La première moitié fonctionne ; la
-seconde t'attend. Tant qu'elle n'existe pas, l'interface n'annonce **que** la restitution — ne laisse
-jamais promettre un report que personne n'enverra.
-
-Le cas d'usage à servir en premier est celui-là, pas la mesure d'affluence.
+**Ensuite, continue SF-2** — le moteur de report du no-show, qui porte la moitié du comportement par
+défaut depuis D27.
