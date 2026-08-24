@@ -423,6 +423,19 @@ class Vente
         return $this;
     }
 
+    /**
+     * Retire un support de la collection. Utilisé par `ValiderVenteService::valider()` pour couper la
+     * cascade `persist` lorsqu'un support cree dans la transaction de validation doit etre abandonne
+     * apres un rollback SQL (l'UnitOfWork ne se vide pas tout seul) — sinon un flush ulterieur de
+     * l'appelant reinsererait un support orphelin.
+     */
+    public function removeSupport(BilletSupport $support): self
+    {
+        $this->supports->removeElement($support);
+
+        return $this;
+    }
+
     public function estScellee(): bool
     {
         return $this->statut->estScellee();

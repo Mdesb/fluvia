@@ -107,42 +107,82 @@ final class ValiderVenteService
 
         // Voir le docblock de classe (RG-CQ1-08) : cette transaction englobe le décrément de stock, la
         // création/recharge des supports ET le flush qui scelle l'OperationScellee.
-        $operation = $this->connection->transactional(function () use ($vente, $supportsOverride, $pdv): OperationScellee {
-            // §6 — décrément de stock atomique (peut lever 422 « stock épuisé »), avant scellement.
-            $this->stock->decrementer($vente);
+        // Supports créés dans la transaction, suivis pour un nettoyage précis de l'UnitOfWork en cas
+        // d'échec (voir le `catch` ci-dessous, correctif revue de cohérence).
+        $supportsCrees = [];
+        try {
+            $operation = $this->connection->transactional(function () use ($vente, $supportsOverride, $pdv, &$supportsCrees): OperationScellee {
+                // §6 — décrément de stock atomique (peut lever 422 « stock épuisé »), avant scellement.
+                $this->stock->decrementer($vente);
 
-            // CA-12 — émission et appairage des supports pour les lignes concernées.
-            foreach ($vente->getLignes() as $ligne) {
-                $support = $this->creerSupport($vente, $ligne, $supportsOverride[(string) $ligne->getId()] ?? null);
-                if ($support === null) {
-                    continue;
+                // CA-12 — émission et appairage des supports pour les lignes concernées.
+                foreach ($vente->getLignes() as $ligne) {
+                    $override = $supportsOverride[(string) $ligne->getId()] ?? null;
+
+                    // RG-CQ8-01 (ARGENT) — une ligne émettrice à quantite = N doit émettre N supports,
+                    // chacun avec son identifiant propre (et, pour une carte, chacun avec le stock de
+                    // compostages initial). Correction du défaut préexistant : la vente facturait N
+                    // (PanierCalculateur, payload NF525 `qte`=N) mais n'émettait qu'UN support.
+                    // La recharge (creerSupport retourne null après avoir crédité, RG-CQ1-05) et les
+                    // produits non émetteurs retournent null dès la 1re itération -> break, aucune
+                    // répétition. L'identifiant explicite + quantite > 1 est refusé dans creerSupport
+                    // (RG-CQ8-02), donc la boucle ne peut jamais réémettre deux fois le même code.
+                    for ($unite = 0, $quantite = max(1, $ligne->getQuantite()); $unite < $quantite; ++$unite) {
+                        $support = $this->creerSupport($vente, $ligne, $override);
+                        if ($support === null) {
+                            break;
+                        }
+                        $vente->addSupport($support);
+                        $this->em->persist($support);
+                        $supportsCrees[] = $support;
+                        $this->appairage->appairer($support); // un échec laisse le support en « echec » (remise bloquée).
+                    }
                 }
-                $vente->addSupport($support);
-                $this->em->persist($support);
-                $this->appairage->appairer($support); // un échec laisse le support en « echec » (remise bloquée).
+
+                $vente->setStatut(StatutVente::Validee);
+
+                // §2 — scellement NF525 dans la transaction de validation.
+                $operation = $this->scellement->sceller(new OperationAScellerDto(
+                    $pdv,
+                    TypeOperationScellee::Vente,
+                    'Vente',
+                    $vente->getId(),
+                    $this->payload($vente),
+                ));
+
+                // CA-11 — impression automatique au-dessus du seuil.
+                $seuil = $this->calculateur->centimes($pdv->getSeuilImpression());
+                if ($this->calculateur->centimes($vente->getTotal()) >= $seuil) {
+                    $vente->setImprime(true);
+                }
+
+                $this->em->flush();
+
+                return $operation;
+            });
+        } catch (\Throwable $e) {
+            // RG-CQ1-08 (correctif revue de cohérence) — `Connection::transactional()` fait un ROLLBACK
+            // SQL *pur* : il ne vide PAS l'UnitOfWork Doctrine. Les BilletSupport créés ci-dessus restent
+            // « scheduled for insert » et, comme `Vente->supports` est en `cascade: persist`, un appelant
+            // qui catche l'exception pour continuer d'utiliser `$em` (ex.
+            // `App\Boutique\Service\ConfirmerCommandeHandler::confirmerApresPaiementReussi()`) les
+            // insèrerait au prochain `flush()` : support/billet orphelin d'une vente jamais scellée.
+            // On restaure donc l'état mémoire à l'identique du rollback SQL — sans `em->clear()` global
+            // (qui détacherait aussi la Vente et le Paiement de l'appelant) :
+            //   1. retrait de la collection (coupe la cascade) + detach des supports créés ICI ;
+            //   2. restauration du statut EnCours (le passage à Validee n'a pas été committé) ;
+            //   3. abandon des événements de recharge accumulés (jamais publiés sur échec).
+            foreach ($supportsCrees as $support) {
+                $vente->removeSupport($support);
+                if ($this->em->contains($support)) {
+                    $this->em->detach($support);
+                }
             }
+            $vente->setStatut(StatutVente::EnCours);
+            $this->evenementsEnAttente = [];
 
-            $vente->setStatut(StatutVente::Validee);
-
-            // §2 — scellement NF525 dans la transaction de validation.
-            $operation = $this->scellement->sceller(new OperationAScellerDto(
-                $pdv,
-                TypeOperationScellee::Vente,
-                'Vente',
-                $vente->getId(),
-                $this->payload($vente),
-            ));
-
-            // CA-11 — impression automatique au-dessus du seuil.
-            $seuil = $this->calculateur->centimes($pdv->getSeuilImpression());
-            if ($this->calculateur->centimes($vente->getTotal()) >= $seuil) {
-                $vente->setImprime(true);
-            }
-
-            $this->em->flush();
-
-            return $operation;
-        });
+            throw $e;
+        }
 
         // D7-bis — publié ICI, après le retour de `transactional()` : la transaction externe a alors
         // réellement committé (sinon une exception aurait déjà interrompu `valider()` plus haut, et ce
@@ -243,6 +283,17 @@ final class ValiderVenteService
                 return null;
             }
             // Identifiant inédit : comportement actuel inchangé, on continue ci-dessous (CA-8).
+        }
+
+        // RG-CQ8-02 — un identifiant de support explicite (fourni par l'appelant) ne peut désigner
+        // qu'UN seul support : la contrainte d'unicité globale sur `identifiantSupport` interdit de le
+        // réutiliser pour les N unités d'une ligne à quantite > 1. Refus explicite (422), symétrique au
+        // refus de recharge à quantite > 1 (RG-CQ1-07). L'émission sans identifiant (auto-génération)
+        // n'est pas concernée : chaque unité reçoit un code unique distinct.
+        if ($identifiantOverride !== null && $ligne->getQuantite() > 1) {
+            throw new UnprocessableEntityHttpException(
+                'Un identifiant de support explicite impose une quantité de 1 (RG-CQ8-02).'
+            );
         }
 
         $support = new BilletSupport();

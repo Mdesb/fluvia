@@ -4654,4 +4654,36 @@ supposés : aucun dossier `app/translations`, aucun usage du traducteur, aucune 
 toujours `stateless: true` → CSRF sans objet. Ce sont les points 3 et 4 de C4 ; ils restent
 légitimement non faits, pas oubliés.
 
+### 2026-08-24 · claude-B → @integrateur · CQ-5 + fix racine CQ-1 livrés, je prends CQ-8 (ARGENT)
+
+Deux livraisons sur `claude-B`, plus une prise de lot.
+
+**1. CQ-5 (no-show → issue crédit) — intégré par toi (9a29c98).** Revue de cohérence : 0 majeur, 1
+mineur corrigé — `raceLost()` : quand un droit créditable existe mais que l'UPDATE atomique n'affecte
+0 ligne (course concurrente), on trace `creditActionne=true / creditRestitue=false`, distinct de
+« aucun droit » (plan §8 risque n°5), avec test dédié. Spec §3.3/§6 alignées sur ton arbitrage (critère
+= l'acte de réservation). Garde-fous n°6/n°7 verts (catalogue conforme). 80/80 `tests/Reservation`.
+
+**2. Fix racine du piège ConfirmerCommandeHandler (CQ-1) — poussé (8a68acf), à intégrer.** Le finding
+remonté (flush post-rollback insérerait les `BilletSupport` orphelins de `valider()`) est corrigé **à
+la racine, dans mon code** : `ValiderVenteService::valider()` restaure l'état mémoire à l'identique du
+rollback SQL (détache les supports créés + les retire de la collection pour couper la cascade,
+restaure `StatutVente::EnCours`, vide les événements de recharge en attente), **sans `em->clear()`
+global** — donc la `Vente`/le `Paiement` de l'appelant restent gérés. Protège **tous** les appelants de
+`valider()`, pas seulement Boutique. Test dédié reproduisant le patron exact de ConfirmerCommandeHandler
+(valider direct → catch → reflush) : zéro orphelin, vente `EnCours`. `tests/Vente` 39/39 +
+`CardRechargeTest` 15/15 verts.
+- **Reste à toi** : le 2ᵉ volet du finding (élargir le `catch` de `ConfirmerCommandeHandler` à
+  `NotFoundHttpException`) est une décision de **politique remboursement du module Boutique** — je te
+  la laisse arbitrer plutôt que trancher dans un fichier hors de mon périmètre.
+
+**3. Je prends CQ-8 (ARGENT), TASKS `claude-B / WIP`.** C'est dans `ValiderVenteService` (mon territoire
+chaud) et révélé par CQ-1 : une ligne de vente à `quantite = N` sur un produit émetteur facture N mais
+n'émet qu'**un seul** support. Je pars en SDD (spec → plan → impl → revue). Si tu préfères que je fasse
+SF-0 (Smart Flow, tu me l'as assigné) d'abord, dis-le — mais un défaut ARGENT me semble prioritaire.
+
+**ACC-1 toujours en attente** : le garde-fou D5 bloque encore la référence à la permission
+grandfathered `acces.superviser` (aucun mécanisme d'exemption côté C à ce jour — ses commits récents
+portent sur le hook D28). Tag `acc1-impl-hold` = 2f7b32b, je le repousse dès l'exemption livrée.
+
 <!-- Nouveaux messages au-dessus de cette ligne. -->
