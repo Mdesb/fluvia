@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import Liste, { texte, dateHeureFr } from '../components/Liste.jsx'
 import Tabs from '../components/Tabs.jsx'
 import Modal from '../components/Modal.jsx'
+import ReferentielEditable from '../components/ReferentielEditable.jsx'
 import { api, membres } from '../api/client.js'
 
 const SOUS = [
@@ -18,7 +19,131 @@ const STATUT_BADGE = { actif: 'good', invite: 'warn', suspendu: 'crit' }
 
 // Paramètres : hub d'administration du socle. Consultation des référentiels, édition simple là où
 // l'API le permet (moyens de paiement, comptes & droits), lecture ailleurs.
-export default function Parametres({ etabActif, etablissements }) {
+// Descripteurs des référentiels modifiables.
+//
+// Chaque champ dit sa CONSÉQUENCE et non sa nature : « ce qui change pour le client ou pour la
+// caisse », jamais « ce qui est stocké ». Un régisseur de piscine n'a pas à deviner ce qu'est un
+// « canal de visibilité » — il a besoin de savoir où le tarif apparaîtra.
+const CANAUX = [
+  { valeur: 'guichet', libelle: 'Au guichet' },
+  { valeur: 'en_ligne', libelle: 'En ligne' },
+  { valeur: 'borne', libelle: 'Sur borne' },
+]
+
+function descripteurTypesTarif(api) {
+  return {
+    titre: 'Types de tarif',
+    aQuoiCaSert:
+      "Les catégories de prix que vous proposez : plein tarif, tarif réduit, enfant, abonné… "
+      + 'Chaque produit porte un prix par type de tarif.',
+    siVide:
+      "Vous n'avez aucun type de tarif. Tant qu'il n'y en a pas, vos produits ne peuvent recevoir "
+      + 'aucun prix, donc rien ne peut être vendu ni publié. Commencez par « Plein tarif ».',
+    consequenceSuppression:
+      'Les produits qui utilisent ce type de tarif perdront le prix correspondant. '
+      + "S'il s'agit de leur seul prix, ils ne seront plus vendables.",
+    charger: api.typeTarifs,
+    creer: api.creerTypeTarif,
+    modifier: api.majTypeTarif,
+    supprimer: api.supprimerTypeTarif,
+    champs: [
+      {
+        nom: 'nom',
+        libelle: 'Nom du tarif',
+        type: 'text',
+        requis: true,
+        exemple: 'Plein tarif',
+        aide: "C'est ce que verra le vendeur au moment de choisir un prix.",
+      },
+      {
+        nom: 'visibiliteCanal',
+        libelle: 'Où ce tarif est proposé',
+        type: 'choix-multiples',
+        options: CANAUX,
+        aide: "Si vous ne cochez rien, le tarif n'apparaîtra nulle part — ni en caisse, ni en ligne.",
+      },
+      {
+        nom: 'actif',
+        libelle: 'Utilisable',
+        type: 'bool',
+        libelleCase: 'Ce tarif peut être utilisé',
+        aide: 'Décocher masque le tarif pour les nouvelles ventes sans toucher aux ventes passées.',
+      },
+    ],
+    colonnes: [
+      { cle: 'nom', titre: 'Nom du tarif', rendu: (r) => <span className="nm">{r.nom || '—'}</span> },
+      {
+        cle: 'visibiliteCanal',
+        titre: 'Proposé',
+        aide: 'Les endroits où ce tarif peut être choisi.',
+        rendu: (r) => {
+          const l = Array.isArray(r.visibiliteCanal) ? r.visibiliteCanal : []
+          if (l.length === 0) return <span className="badge crit" title="Ce tarif n apparait nulle part.">nulle part</span>
+          return l.map((c) => CANAUX.find((x) => x.valeur === c)?.libelle || c).join(', ')
+        },
+      },
+      {
+        cle: 'actif',
+        titre: 'État',
+        rendu: (r) => <span className={`badge ${r.actif ? 'good' : 'mut'}`}>{r.actif ? 'utilisable' : 'masqué'}</span>,
+      },
+    ],
+  }
+}
+
+function descripteurTva(api) {
+  return {
+    titre: 'Taux de TVA',
+    aQuoiCaSert:
+      'Les taux appliqués à vos ventes. Chaque produit porte un taux, qui détermine la TVA facturée '
+      + 'et ce qui remonte en comptabilité.',
+    siVide:
+      "Aucun taux de TVA n'est enregistré. Vos produits ne pourront pas être rattachés à un taux, et "
+      + 'la comptabilité ne pourra pas être tenue correctement.',
+    consequenceSuppression: '',
+    charger: api.tauxTvas,
+    creer: api.creerTauxTva,
+    modifier: api.majTauxTva,
+    supprimer: null,
+    champs: [
+      {
+        nom: 'libelle',
+        libelle: 'Nom',
+        type: 'text',
+        requis: true,
+        exemple: 'Taux normal',
+        aide: 'Le nom que vous lui donnez, pour le reconnaître dans la liste.',
+      },
+      {
+        nom: 'taux',
+        libelle: 'Pourcentage',
+        type: 'nombre',
+        pas: '0.01',
+        requis: true,
+        exemple: '20',
+        aide: 'Le pourcentage appliqué au prix hors taxes. Saisissez 20 pour 20 %.',
+      },
+      {
+        nom: 'actif',
+        libelle: 'Utilisable',
+        type: 'bool',
+        libelleCase: 'Ce taux peut être choisi',
+        aide: 'Décocher empêche de le choisir sur un nouveau produit, sans rien changer aux ventes passées.',
+      },
+    ],
+    colonnes: [
+      { cle: 'libelle', titre: 'Nom', rendu: (r) => <span className="nm">{r.libelle || '—'}</span> },
+      { cle: 'taux', titre: 'Pourcentage', num: true, rendu: (r) => (r.taux != null ? `${r.taux} %` : '—') },
+      {
+        cle: 'actif',
+        titre: 'État',
+        rendu: (r) => <span className={`badge ${r.actif ? 'good' : 'mut'}`}>{r.actif ? 'utilisable' : 'masqué'}</span>,
+      },
+    ],
+  }
+}
+
+export default function Parametres({ etabActif, etablissements, droits = [] }) {
   const [sousOnglet, setSousOnglet] = useState('entites')
 
   return (
@@ -61,51 +186,58 @@ export default function Parametres({ etabActif, etablissements }) {
       )}
 
       {sousOnglet === 'referentiels' && (
-        <div className="resa-grid">
-          <Liste
-            titre="Taux de TVA"
-            deps={[etabActif]}
-            charger={api.tauxTvas}
-            vide="Aucun taux."
-            colonnes={[
-              { cle: 'libelle', entete: 'Libellé', rendu: (r) => <span className="nm">{r.libelle || '—'}</span> },
-              { cle: 'taux', entete: 'Taux', num: true, rendu: (r) => (r.taux != null ? `${r.taux} %` : '—') },
-              { cle: 'actif', entete: 'État', rendu: (r) => <span className={`badge ${r.actif ? 'good' : 'mut'}`}>{r.actif ? 'actif' : 'inactif'}</span> },
-            ]}
+        <>
+          {/* Ce qu'il FAUT régler avant de pouvoir vendre, séparé de ce qu'on PEUT régler ensuite.
+              Un débutant ne sait pas par où commencer, et une liste de cinq blocs équivalents ne le
+              lui dit pas. */}
+          <div className="fiche-sec" style={{ marginBottom: 10 }}>Indispensable pour vendre</div>
+          <ReferentielEditable
+            descripteur={descripteurTypesTarif(api)}
+            peutEcrire={droits.includes('offre.gerer')}
           />
-          <Liste
-            titre="Catégories"
-            deps={[etabActif]}
-            charger={api.categories}
-            vide="Aucune catégorie."
-            colonnes={[
-              { cle: 'libelle', entete: 'Catégorie', rendu: (r) => <span className="nm">{texte(r.libelle, '—')}</span> },
-              { cle: 'chemin', entete: 'Chemin', rendu: (r) => <span className="mono">{r.chemin || '—'}</span> },
-            ]}
+          <ReferentielEditable
+            descripteur={descripteurTva(api)}
+            peutEcrire={droits.includes('compta.gerer')}
           />
-          <Liste
-            titre="Types de tarif"
-            deps={[etabActif]}
-            charger={api.typeTarifs}
-            vide="Aucun type de tarif."
-            colonnes={[
-              { cle: 'nom', entete: 'Type', rendu: (r) => <span className="nm">{r.nom || '—'}</span> },
-              { cle: 'visibiliteCanal', entete: 'Canal', rendu: (r) => (Array.isArray(r.visibiliteCanal) ? r.visibiliteCanal.join(', ') : r.visibiliteCanal || '—') },
-              { cle: 'actif', entete: 'État', rendu: (r) => <span className={`badge ${r.actif ? 'good' : 'mut'}`}>{r.actif ? 'actif' : 'inactif'}</span> },
-            ]}
-          />
-          <Liste
-            titre="Saisons"
-            deps={[etabActif]}
-            charger={api.saisons}
-            vide="Aucune saison."
-            colonnes={[
-              { cle: 'nom', entete: 'Saison', rendu: (r) => <span className="nm">{r.nom || '—'}</span> },
-              { cle: 'priorite', entete: 'Priorité', num: true, rendu: (r) => r.priorite ?? '—' },
-              { cle: 'actif', entete: 'État', rendu: (r) => <span className={`badge ${r.actif ? 'good' : 'mut'}`}>{r.actif ? 'actif' : 'inactif'}</span> },
-            ]}
-          />
-        </div>
+
+          <div className="fiche-sec" style={{ margin: '24px 0 10px' }}>Pour aller plus loin</div>
+          {/* Ces deux-là restent en consultation, et je préfère le dire que le laisser deviner :
+              créer une catégorie demande de choisir un « axe », qui est lui-même un référentiel non
+              encore exposé ; une saison demande deux dates dont le format attendu par le serveur
+              n'est pas encore éprouvé. Les brancher à moitié ferait échouer l'enregistrement sans
+              que l'utilisateur comprenne pourquoi — ce qui est pire que de ne pas les proposer. */}
+          <div className="hint" style={{ marginBottom: 10 }}>
+            Ces deux listes sont consultables mais pas encore modifiables depuis cet écran.
+          </div>
+          <div className="resa-grid">
+            <Liste
+              titre="Catégories"
+              deps={[etabActif]}
+              charger={api.categories}
+              vide="Aucune catégorie. Les catégories servent à regrouper vos produits pour les retrouver plus vite."
+              colonnes={[
+                { cle: 'libelle', entete: 'Catégorie', rendu: (r) => <span className="nm">{texte(r.libelle, '—')}</span> },
+                { cle: 'chemin', entete: 'Rattachée à', rendu: (r) => <span className="mono">{r.chemin || '—'}</span> },
+              ]}
+            />
+            <Liste
+              titre="Saisons"
+              deps={[etabActif]}
+              charger={api.saisons}
+              vide="Aucune saison. Une saison permet d'appliquer des prix différents selon la période de l'année."
+              colonnes={[
+                { cle: 'nom', entete: 'Saison', rendu: (r) => <span className="nm">{r.nom || '—'}</span> },
+                {
+                  cle: 'priorite',
+                  entete: 'Priorité',
+                  num: true,
+                  rendu: (r) => r.priorite ?? '—',
+                },
+                { cle: 'actif', entete: 'État', rendu: (r) => <span className={`badge ${r.actif ? 'good' : 'mut'}`}>{r.actif ? 'utilisable' : 'masquée'}</span> },
+              ]}
+            />
+          </div>
+        </>
       )}
 
       {sousOnglet === 'caisse' && (

@@ -265,9 +265,16 @@ export const api = {
   regions: () => request('/api/regions', { query: { itemsPerPage: 100 } }),
   categories: () => request('/api/categories', { query: { itemsPerPage: 200 } }),
   typeTarifs: () => request('/api/type_tarifs', { query: { itemsPerPage: 100 } }),
+  // Référentiels modifiables : les opérations existaient côté serveur depuis le début, le front ne
+  // les appelait simplement pas.
+  creerTypeTarif: (corps) => request('/api/type_tarifs', { method: 'POST', body: corps }),
+  majTypeTarif: (id, corps) => request(`/api/type_tarifs/${id}`, { method: 'PATCH', body: corps }),
+  supprimerTypeTarif: (id) => request(`/api/type_tarifs/${id}`, { method: 'DELETE' }),
   grilleTarifaires: () => request('/api/grille_tarifaires', { query: { itemsPerPage: 200 } }),
   saisons: () => request('/api/saisons', { query: { itemsPerPage: 100 } }),
   tauxTvas: () => request('/api/taux_tvas', { query: { itemsPerPage: 100 } }),
+  creerTauxTva: (corps) => request('/api/taux_tvas', { method: 'POST', body: corps }),
+  majTauxTva: (id, corps) => request(`/api/taux_tvas/${id}`, { method: 'PATCH', body: corps }),
 
   // Comptes / rôles & droits (M8).
   utilisateurs: () => request('/api/utilisateurs', { query: { itemsPerPage: 100 } }),
