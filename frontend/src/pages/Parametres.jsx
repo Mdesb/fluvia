@@ -4,6 +4,7 @@ import Tabs from '../components/Tabs.jsx'
 import Modal from '../components/Modal.jsx'
 import ReferentielEditable from '../components/ReferentielEditable.jsx'
 import PretAVendre from '../components/PretAVendre.jsx'
+import { aLeDroit } from '../api/droits.js'
 import { api, membres } from '../api/client.js'
 
 const SOUS = [
@@ -337,11 +338,11 @@ export default function Parametres({ etabActif, etablissements, droits = [] }) {
           <div className="fiche-sec" style={{ marginBottom: 10 }}>Indispensable pour vendre</div>
           <ReferentielEditable
             descripteur={descripteurTypesTarif(api)}
-            peutEcrire={droits.includes('offre.gerer')}
+            peutEcrire={aLeDroit(droits, 'offre.gerer')}
           />
           <ReferentielEditable
             descripteur={descripteurTva(api)}
-            peutEcrire={droits.includes('compta.gerer')}
+            peutEcrire={aLeDroit(droits, 'compta.gerer')}
           />
 
           <div className="fiche-sec" style={{ margin: '24px 0 10px' }}>Pour aller plus loin</div>
@@ -352,11 +353,11 @@ export default function Parametres({ etabActif, etablissements, droits = [] }) {
               format `AAAA-MM-JJ` est celui qu'utilise la suite de tests du serveur. */}
           <ReferentielEditable
             descripteur={descripteurCategories(api)}
-            peutEcrire={droits.includes('offre.gerer')}
+            peutEcrire={aLeDroit(droits, 'offre.gerer')}
           />
           <ReferentielEditable
             descripteur={descripteurSaisons(api)}
-            peutEcrire={droits.includes('offre.gerer')}
+            peutEcrire={aLeDroit(droits, 'offre.gerer')}
           />
         </>
       )}

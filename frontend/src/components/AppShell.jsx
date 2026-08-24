@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import RechercheGlobale from './RechercheGlobale.jsx'
+import { aLeDroit, aUnDesDroits } from '../api/droits.js'
 
 // `cap` = capacité requise (capacitesActives de /me) ; `perm` = permission requise (droits de /me) ;
 // `perms` = liste dont AU MOINS UNE suffit — pour les écrans qui servent plusieurs métiers, où
@@ -142,12 +143,28 @@ export default function AppShell({
       items: grp.items.filter(
         (it) =>
           (!it.cap || capacites.includes(it.cap)) &&
-          (!it.perm || droits.includes(it.perm)) &&
-          (!it.perms || it.perms.some((p) => droits.includes(p))) &&
+          (!it.perm || aLeDroit(droits, it.perm)) &&
+          (!it.perms || aUnDesDroits(droits, it.perms)) &&
           (!it.admin || estAdmin),
       ),
     }))
     .filter((grp) => grp.items.length > 0)
+
+  // PLANCHER DE SÛRETÉ. Si le filtrage ne laisse RIEN, on retombe sur les entrées sans contrainte de
+  // capacité ni de statut administrateur.
+  //
+  // Ce n'est pas de la timidité : un menu vide enferme quelqu'un hors de son propre logiciel, sans
+  // aucun moyen d'en sortir ni de comprendre pourquoi. Un menu trop permissif, lui, se corrige tout
+  // seul — l'API refuse, et le refus est lisible. Entre les deux erreurs possibles, celle-ci est la
+  // moins coûteuse, et c'est exactement celle que j'ai commise en production ce soir.
+  const navFinale = nav.length > 0
+    ? nav
+    : NAV
+        .map((grp) => ({
+          ...grp,
+          items: grp.items.filter((it) => !it.cap && !it.admin),
+        }))
+        .filter((grp) => grp.items.length > 0)
   const [theme, setTheme] = useState(() => document.documentElement.getAttribute('data-theme') || '')
   const [navOpen, setNavOpen] = useState(false)
 
@@ -183,7 +200,7 @@ export default function AppShell({
         <div className="side-brand"><span className="logo">◈</span> Fluvia</div>
         <div className="side-tenant"><b>{nomEtab}</b>Billetterie · Contrôle d'accès</div>
         <nav className="side-nav">
-          {nav.map((grp) => (
+          {navFinale.map((grp) => (
             <div key={grp.section}>
               <div className="side-sec">{grp.section}</div>
               {grp.items.map((it) => (
