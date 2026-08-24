@@ -29,6 +29,7 @@ if [ -z "$REFERENCE_NOMMAGE" ]; then
         && echo "· Nommage : « origin/main » introuvable ici, référence retenue : « $REFERENCE_NOMMAGE »."
 fi
 ECHECS=0
+LANCES=""
 TOTAL=0
 
 # PHP : binaire local s'il existe, sinon l'image du projet (le VPS n'a pas de PHP hors conteneur).
@@ -74,6 +75,17 @@ php_app() {
 executer() {
     local nom="$1"; shift
     TOTAL=$((TOTAL + 1))
+
+    # Trace du SCRIPT réellement lancé, pour le filet de complétude en fin de course. On lit les
+    # arguments plutôt que le libellé : le libellé est décoratif, le chemin ne ment pas.
+    local arg
+    for arg in "$@"; do
+        case "$arg" in
+            */garde-fou-*|garde-fou-*|bin/garde-fou-*)
+                LANCES="$LANCES $(basename "$arg")"
+                ;;
+        esac
+    done
     echo "─────────────────────────────────────────────────────────────"
     echo "▶ $nom"
     echo "─────────────────────────────────────────────────────────────"
@@ -179,6 +191,30 @@ fi
 #    catalogue, aucun usage du traducteur dans app/src). Acté par l'intégrateur le 21/08.
 # 6. CSRF — SANS OBJET : tous les pare-feux sont `stateless: true` et l'authentification est un JWT
 #    en en-tête, qui n'est pas un identifiant ambiant. Acté par l'intégrateur le 21/08.
+
+# ⚠ FILET DE COMPLÉTUDE DU LANCEUR — et il couvre TOUTES les extensions.
+#
+# Les deux hooks ont déjà ce filet, mais ils globent `bin/garde-fou-*.php`. Le garde-fou de
+# topologie est un `.sh` — il n'entrait donc dans aucun des deux, et le lanceur, seul endroit où
+# il s'exécute, n'avait pas de filet du tout. Retirer son appel n'aurait rien déclenché.
+#
+# C'est la classe de défaut corrigée les 24/08 dans `pre-receive` puis `pre-commit`, et je l'ai
+# réintroduite le lendemain en choisissant une extension. D'où le glob sans `.php` ici : un
+# garde-fou est un garde-fou, quel que soit le langage dans lequel il est écrit.
+for chemin in "$RACINE"/bin/garde-fou-*; do
+    [ -f "$chemin" ] || continue
+    nom="$(basename "$chemin")"
+    case " $LANCES " in
+        *" $nom "*) ;;
+        *)
+            echo "─────────────────────────────────────────────────────────────"
+            echo "✗ Garde-fou présent dans bin/ mais jamais lancé par ce script : $nom"
+            echo "  Ajoute son appel dans bin/garde-fous.sh — un contrôle qui ne tourne pas rend"
+            echo "  un vert au nom d'une vérification qui n'a pas eu lieu."
+            ECHECS=$((ECHECS + 1))
+            ;;
+    esac
+done
 
 echo "─────────────────────────────────────────────────────────────"
 if [ "$ECHECS" -gt 0 ]; then

@@ -10,6 +10,7 @@
 | 14:05 | Règle n°5 reprise. **Vérifié que le cliquet récompense le correctif** (simulé sur `OperationScellee` : sort de la dette, plafond baisse). **Et j'ai corrigé mon propre classement** : `Utilisateur` n'est pas un référentiel, c'est une fuite de données personnelles — détail ci-dessous. | les 13 jointures restantes | les 17 référentiels attendent ton mot |
 | 15:00 | **Message corrigé** (ton ordre) : le n°6 ne propose plus `--nettoyer` comme issue. J'ai aussi trouvé **sept autres messages de plafond qui ne disaient rien du tout** — même cul-de-sac, par omission. Les neuf disent maintenant la marche à suivre. Rejoué ton scénario. | les 13 jointures de la règle n°5 | les 17 référentiels attendent ton mot |
 | 16:00 | **Tu n'avais pas tort de vouloir déclarer sans émettre — c'est D2.** Ma règle confondait dette anonyme et travail engagé. Livré un **registre d'attente nominatif** : hors plafond, mais affiché à chaque exécution et refusé sans preneur. Inerte par défaut, tu peux l'ignorer. | les 13 jointures de la règle n°5 | rien |
+| 17:00 | **J'avais rouvert le trou que j'avais passé deux jours à fermer** : mon garde-fou de topologie est un `.sh`, or les deux filets ne globent que `.php` — retirer son appel n'aurait rien déclenché. Filet posé sur le lanceur, sans distinction d'extension, vérifié par mutation. `main` est vert (9/9). | les 13 jointures de la règle n°5 | rien |
 
 ---
 
@@ -296,3 +297,44 @@ trois fois. En y regardant : les faire tomber de 36 à 19 **n'ajoute aucune prot
 protège contre l'apparition d'une entité *nouvelle* non cloisonnée, et il le fait aussi bien à 36 qu'à
 19. Ce n'était donc pas un blocage, c'était de l'esthétique de compteur, et j'ai eu tort de le
 présenter comme urgent. Quand tu auras un moment.
+
+
+---
+
+### 2026-08-24 · 17:00 — Le filet que je n'avais pas mis sous mon propre garde-fou
+
+**Le défaut, et il est de moi.** J'ai passé les 24 et 25/08 à poser des filets de complétude : dans
+`pre-receive` d'abord, puis dans `pre-commit`. Les deux énumèrent `bin/garde-fou-*.php` et refusent si
+l'un n'a pas été lancé.
+
+Le garde-fou de topologie que je t'ai livré hier est un **`.sh`**. Il n'entre donc dans aucun des deux.
+Et le lanceur — le **seul** endroit où il s'exécute — n'avait pas de filet du tout. **Retirer son appel
+de `bin/garde-fous.sh` n'aurait rien déclenché nulle part.** C'est exactement la classe de défaut que
+je venais de corriger deux fois, réintroduite le lendemain par un choix d'extension.
+
+**Corrigé** : `bin/garde-fous.sh` porte maintenant son propre filet, et il globe `bin/garde-fou-*`
+**sans distinction d'extension** — un garde-fou est un garde-fou, quel que soit le langage. Le nom du
+script est relevé dans les arguments réellement passés à `executer`, pas dans le libellé : le libellé
+est décoratif, le chemin ne ment pas.
+
+**Vérifié par mutation, dans les deux sens**, sur une copie jetable :
+
+- appel de la topologie retiré → `✗ Garde-fou présent dans bin/ mais jamais lancé : garde-fou-topologie.sh` ;
+- garde-fou fantôme ajouté sans appel → même refus sur son nom.
+
+**Et j'ai inscrit pourquoi les hooks, eux, gardent le glob `.php`** — parce que sans cette note la
+différence ressemble à un oubli, et quelqu'un l'« harmoniserait ». La topologie répond à « par où
+passent mes commits » : dans un hook, la question n'a pas de sens, on analyse un arbre extrait dans un
+`mktemp`, sans remote ni worktree. Exiger son exécution là ferait échouer toutes les poussées.
+
+**Ce que j'en tire, et c'est la deuxième fois cette semaine.** Mes filets protègent ce que j'ai pensé à
+protéger. J'ai vérifié que le garde-fou de topologie *fonctionne* — trois chemins testés, la flotte
+entière passée en revue — sans vérifier qu'il *sera lancé*. C'est la distinction exacte que le filet
+de `pre-receive` existe pour porter, et je ne l'ai pas appliquée à ma propre livraison.
+
+**Vérifications de routine** : `main` est vert, **9/9**, je l'ai relancé chez toi. Banc **17/17**.
+Aucun empiètement sur `bin/`, `hooks/` ou `.github/`.
+
+**En attente chez toi, sans urgence** : le registre d'attente nominatif proposé à 16:00 — il est inerte
+tant que personne n'écrit `--attendre`, donc rien ne presse. Et les 13 jointures du groupe A, dont
+`OperationScellee`.
