@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Subscription\Dto;
 
 use App\Subscription\Entity\ProvisioningRequest;
+use Symfony\Component\Uid\Uuid;
 
 /**
  * Le résultat d'un provisioning, et le seul endroit où le jeton d'invitation existe en clair (ED-3).
@@ -23,6 +24,7 @@ final readonly class ProvisioningOutcome
     public function __construct(
         public ProvisioningRequest $request,
         public ?string $invitationToken = null,
+        public ?Uuid $administratorId = null,
     ) {
     }
 

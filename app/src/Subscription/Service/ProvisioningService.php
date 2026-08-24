@@ -125,7 +125,11 @@ final class ProvisioningService
         }
 
         $establishment = $this->createEstablishmentTree($this->establishmentName($client));
-        $token = $this->createAdministrator($client, $email, $establishment, $template);
+
+        // Le jeton naît ici et non dans la méthode qui crée le compte : la base n'en garde que le
+        // sha256, et l'appelant a besoin de la valeur en clair pour l'envoyer une fois, tout de suite.
+        $token = bin2hex(random_bytes(32));
+        $administrator = $this->createAdministrator($client, $email, $establishment, $template, $token);
 
         // Les modules souscrits, et eux seuls (CA-1). `activeCapabilities` fait déjà la somme de la
         // formule et des options en cours à cet instant : la reproduire ici la ferait diverger.
@@ -136,7 +140,7 @@ final class ProvisioningService
         $request->recordAttempt()->complete($establishment);
         $this->em->flush();
 
-        return new ProvisioningOutcome($request, $token);
+        return new ProvisioningOutcome($request, $token, $administrator->getId());
     }
 
     /**
@@ -194,10 +198,15 @@ final class ProvisioningService
      * l'envoyer serait un secret transmis par courriel, et un compte qui reste ouvert si le courriel
      * fuite.
      *
-     * @return string le jeton d'activation en clair — il n'existe qu'ici, la base n'en a que le sha256
+     * @param string $clearToken le jeton d'activation ; seul son sha256 est écrit en base
      */
-    private function createAdministrator(Client $client, string $email, Etablissement $establishment, Role $template): string
-    {
+    private function createAdministrator(
+        Client $client,
+        string $email,
+        Etablissement $establishment,
+        Role $template,
+        string $clearToken,
+    ): Utilisateur {
         $role = (new Role())
             ->setNom($this->administratorRoleName($establishment))
             ->setEstModele(false)
@@ -206,8 +215,6 @@ final class ProvisioningService
             $role->addPermission($permission);
         }
         $this->em->persist($role);
-
-        $clearToken = bin2hex(random_bytes(32));
 
         $administrator = new Utilisateur();
         $administrator->setEmail($email)
@@ -226,7 +233,7 @@ final class ProvisioningService
             ->setEtablissement($establishment);
         $this->em->persist($affectation);
 
-        return $clearToken;
+        return $administrator;
     }
 
     /**

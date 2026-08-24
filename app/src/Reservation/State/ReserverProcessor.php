@@ -15,6 +15,7 @@ use App\Reservation\Enum\ModeDecompteReservation;
 use App\Reservation\Enum\StatutCreneau;
 use App\Reservation\Service\JaugeCreneauGuard;
 use App\Reservation\Service\JaugeRessourceMereHandler;
+use App\Reservation\Service\RequestedQuantityReader;
 use App\Reservation\Service\ProjectionAccesReservationHandler;
 use App\Reservation\Service\QuotaFormuleResolver;
 use App\Reservation\Service\ResolveurRegleAnnulation;
@@ -45,6 +46,7 @@ final class ReserverProcessor implements ProcessorInterface
         private readonly Security $security,
         private readonly JaugeCreneauGuard $jauge,
         private readonly JaugeRessourceMereHandler $jaugeMere,
+        private readonly RequestedQuantityReader $quantiteDemandee,
         private readonly QuotaFormuleResolver $quotaResolver,
         private readonly ResolveurRegleAnnulation $resolveurRegle,
         private readonly VenteReservationHandler $venteHandler,
@@ -75,14 +77,35 @@ final class ReserverProcessor implements ProcessorInterface
             }
         }
 
+        $quantite = $this->quantiteDemandee->read($corps);
+
         $ressource = $creneau->getRessource();
         if ($this->jauge->estComplet($creneau) || ($ressource !== null && $this->jaugeMere->jaugeDepassee($ressource))) {
             throw new ConflictHttpException('Créneau complet : seule l\'inscription en liste d\'attente est proposée (RG-M5-01, CA-4).');
         }
 
+        // ACT-1 / D16 — le créneau n'est pas complet, et il peut malgré tout ne pas rester assez de
+        // place POUR CETTE demande : trois couverts libres refusent une table de huit. Les deux
+        // refus sont distincts, et leur message aussi — « complet » appelle la liste d'attente,
+        // « places insuffisantes » appelle une table plus petite ou un autre service.
+        if (!$this->jauge->peutAccueillir($creneau, $quantite)) {
+            throw new ConflictHttpException(sprintf(
+                'Places insuffisantes : %d demandée(s), %d restante(s) sur ce créneau (RG-M5-01, ACT-1).',
+                $quantite,
+                $this->jauge->placesRestantes($creneau),
+            ));
+        }
+        if ($ressource !== null && $this->jaugeMere->jaugeDepassee($ressource, $quantite)) {
+            throw new ConflictHttpException(sprintf(
+                'Jauge globale de la ressource dépassée : %d unité(s) demandée(s) (RG-M5-08, CA-14).',
+                $quantite,
+            ));
+        }
+
         $reservation = new Reservation();
         $reservation->setCreneau($creneau)
             ->setOrganisateur($organisateur)
+            ->setQuantity($quantite)
             ->setEtablissement($creneau->getEtablissement());
 
         $activite = $creneau->getActivite();
@@ -121,7 +144,7 @@ final class ReserverProcessor implements ProcessorInterface
 
         $this->em->persist($reservation);
         if ($ressource !== null) {
-            $this->jaugeMere->incrementer($ressource);
+            $this->jaugeMere->incrementer($ressource, $quantite);
         }
         $this->em->flush();
 

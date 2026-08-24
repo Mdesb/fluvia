@@ -10,6 +10,7 @@ use App\Crm\Entity\Beneficiaire;
 use App\Reservation\Entity\Creneau;
 use App\Reservation\Entity\ListeAttente;
 use App\Reservation\Enum\StatutListeAttente;
+use App\Reservation\Service\RequestedQuantityReader;
 use App\Vente\Service\LecteurCorps;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
@@ -26,6 +27,7 @@ final class InscrireListeAttenteProcessor implements ProcessorInterface
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly LecteurCorps $lecteur,
+        private readonly RequestedQuantityReader $quantiteDemandee,
     ) {
     }
 
@@ -48,6 +50,8 @@ final class InscrireListeAttenteProcessor implements ProcessorInterface
         $inscription->setCreneau($creneau)
             ->setBeneficiaire($beneficiaire)
             ->setRang($rangMax + 1)
+            // ACT-1 — on attend pour N unités : une table de huit ne se contente pas d'une place.
+            ->setQuantity($this->quantiteDemandee->read($corps))
             ->setStatut(StatutListeAttente::EnAttente);
 
         $this->em->persist($inscription);

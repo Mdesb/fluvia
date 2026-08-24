@@ -107,6 +107,20 @@ class Reservation
     #[Groups(['reservation:read'])]
     private ModeDecompteReservation $modeDecompte = ModeDecompteReservation::Gratuit;
 
+    /**
+     * ACT-1 / D16 point 1 — nombre d'unités consommées sur la capacité du créneau : huit couverts
+     * pour une table de huit, une place pour un cours. **Distinct des `participants`**, et ils ne
+     * doivent pas fusionner : un participant est une personne nommée qui peut payer sa part, une
+     * unité est une place occupée. Un restaurant a huit unités et zéro participant nommé.
+     *
+     * Défaut 1 : c'est ce que valait implicitement chaque réservation avant ce lot, donc l'existant
+     * est juste sans reprise de données.
+     */
+    #[ORM\Column(options: ['default' => 1])]
+    #[Assert\Positive(message: 'La quantité réservée doit être un entier strictement positif.')]
+    #[Groups(['reservation:read'])]
+    private int $quantity = 1;
+
     #[ORM\ManyToOne(targetEntity: ServiceInclus::class)]
     #[ORM\JoinColumn(nullable: true)]
     #[Groups(['reservation:read'])]
@@ -157,6 +171,18 @@ class Reservation
     public function getId(): Uuid
     {
         return $this->id;
+    }
+
+    public function getQuantity(): int
+    {
+        return $this->quantity;
+    }
+
+    public function setQuantity(int $quantity): self
+    {
+        $this->quantity = $quantity;
+
+        return $this;
     }
 
     public function getCreneau(): ?Creneau
