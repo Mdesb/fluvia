@@ -6,6 +6,7 @@
 | Heure | Fait | En cours | Bloqué par |
 |---|---|---|---|
 | 12:15 | Topologie des hooks élucidée : **deux dépôts**, pas un. `--etat` dit désormais qui est couvert. **Je corrige une erreur que je t'ai transmise** (détail ci-dessous). C24/D28 livrée et vérifiée. | rien | rien |
+| 13:10 | **Garde-fou de topologie livré** (ton ordre) : refuse de démarrer si les commits peuvent atteindre les refs sans barrière. Vérifié sur la flotte réelle — 8 sessions OK, `main` toléré, **`claude-G` refusé**. Lanceur 9/9, banc 17/17. | les 36 entités de la règle n°5 | rien |
 
 
 ---
@@ -62,3 +63,59 @@ pas : D30 dit que le claim vit dans le rapport, pas dans le fichier partagé. À
 si tu es d'accord.
 
 **État** : lanceur **8/8**, banc **17/17**, hooks à jour sur le dépôt nu.
+
+
+---
+
+### 2026-08-24 · 13:10 — Garde-fou de topologie (n°0)
+
+**Livré, et il passe avant les autres** — c'est le point : les sept contrôles ne valent que s'ils sont
+*traversés*. Six sessions ont eu sept garde-fous verts et rien qui les exécute.
+
+**L'invariant que j'ai retenu.** Tout commit atteignant les refs partagées doit franchir une barrière,
+et il n'y a que deux chemins :
+
+1. **worktree d'un clone** → les commits n'arrivent que par `git push`, donc par `pre-receive`, non
+   contournable côté client. C'est le cas normal d'une session ;
+2. **worktree du dépôt nu** → commiter met à jour la ref partagée immédiatement. `pre-receive` ne
+   s'exécute jamais ; seul `pre-commit` peut contrôler, et il est contournable.
+
+**J'ai dû amender ta formulation, et je te le signale plutôt que de l'appliquer en silence.** Tu
+demandais de vérifier « qu'un worktree possède bien un `origin` pointant vers le dépôt nu, et refuse de
+démarrer sinon ». Pris à la lettre, ce contrôle **refuse aussi `wt/main`** : ton worktree d'intégration
+est légitimement sur le dépôt nu et n'a pas d'`origin`. Le cas 2 est donc **toléré pour `main` seul**,
+et à la condition que `pre-commit` y soit installé — sinon il échoue aussi, avec la commande pour le
+réparer. Si tu préfères la règle stricte, dis-le, mais elle t'arrêterait à chaque intégration.
+
+**Vérifié sur la flotte réelle, pas sur des cas construits** :
+
+| Worktree | Verdict |
+|---|---|
+| `claude-A/B/C/D/E/F/H/I` | OK — clone, push contrôlé par `pre-receive` |
+| `main` | OK — intégration sur le nu, contrôlé par `pre-commit` |
+| **`claude-G`** | **ÉCHEC** — session sur le dépôt nu, aucune barrière |
+
+`claude-G` est exactement celle que tu signalais comme non réparée. Le garde-fou l'isole sans que
+j'aie eu à lui dire où regarder.
+
+**Et les trois chemins testés de bout en bout** sur un dépôt jetable, parce que « ça marche sur la
+flotte » ne prouve que ce que la flotte contient aujourd'hui : session sur le nu → refus et arrêt du
+lanceur (code 1) ; intégration sur le nu avec `pre-commit` → accepté ; clone privé d'`origin` → refus.
+
+**Deux choix que j'assume et que tu peux renverser.**
+
+- **Il s'arrête, il n'avertit pas.** Continuer produirait un vert qui ne protège personne — c'est ton
+  raisonnement de D28 appliqué un cran plus tôt, comme tu l'écrivais.
+- **Il n'est pas dans `pre-receive`.** Le hook analyse un arbre extrait dans un `mktemp`, sans remotes
+  ni worktree : la question « par où passent mes commits » n'y a pas de sens. Il vit dans le lanceur,
+  qui est l'endroit où une session démarre. Conséquence assumée : une session qui ne lance jamais le
+  lanceur ne le voit pas — mais elle est alors couverte par `pre-receive` au push, sauf si elle est sur
+  le nu, cas que ton script de flotte ne recrée plus.
+
+**Ce que ça ne prétend pas faire** : il vérifie le *chemin*, pas la bonne foi. `--no-verify` sur
+`main`, ou un `push --force` (interdit par D30), restent hors de sa portée.
+
+**Suite** : je prends les 36 entités de la règle n°5, comme tu me l'as rendue. Rappel de leur état, il
+n'a pas bougé : 13 en jointure directe (dont **`OperationScellee`**, la chaîne NF525 listable d'un
+établissement à l'autre — toujours ouverte), 2 ordonnées, 18 référentiels présumés **en attente de ta
+confirmation**, 3 migrations. Un mot de ta part sur les 18 fait tomber la moitié du plafond.
