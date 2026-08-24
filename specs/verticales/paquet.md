@@ -95,9 +95,9 @@ d'où ça revient. La correspondance doit donc porter trois états : `installé`
 | Paquet | Activités composées | Module de code conservé | État |
 |---|---|---|---|
 | `swimming-pool` | entrée · réservation de ressource · encadrement · location | `pool-safety` (POSS) | [rédigé](piscine.md) |
-| `padel` | réservation de ressource · location | tournoi, éclairage | à rédiger |
-| `ice-rink` | entrée · location | saison éphémère, affûtage | à rédiger |
-| `fitness` | abonnement · entrée | sécurité du pratiquant isolé | à rédiger |
-| `museum` | entrée · rendez-vous · location · abonnement | distribution OTA | à rédiger |
+| `padel` | réservation de ressource · location | `padel-tournament`, `court-lighting` | [rédigé](padel.md) |
+| `ice-rink` | entrée · location | `ephemeral-season`, `skate-sharpening` | [rédigé](patinoire.md) |
+| `fitness` | abonnement · entrée | `lone-worker-safety` | [rédigé](sport.md) |
+| `museum` | entrée · rendez-vous · location · abonnement | `ota-distribution` | [rédigé](musee.md) |
 
 Détail de la répartition paquet/code dans [composition.md](composition.md).
