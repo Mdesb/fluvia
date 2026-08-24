@@ -53,15 +53,37 @@ seed:
       detectionPresenceIsoleeActive: true
       limiteOccupationNocturne: 15
 
+  - xid: fitness.product.monthly
+    entity: Offre\Produit
+    noupdate: true
+    data: { nom: Abonnement mensuel }
   - xid: fitness.plan.monthly
-    entity: Offre\Formule
+    entity: Offre\Formule                # facette du produit ci-dessus, elle n'a pas de nom propre
     noupdate: true
-    data: { label: Abonnement mensuel, periodicite: mensuel, preavisResiliationJours: 30 }
-  - xid: fitness.plan.weekly
-    entity: Offre\Formule
-    noupdate: true
-    data: { label: Abonnement hebdomadaire, periodicite: hebdomadaire, preavisResiliationJours: 7 }
+    data: { produit: { ref: fitness.product.monthly }, periodicite: mensuel, sepaActif: true }
 ```
+
+## Deux écarts relevés en revue de cohérence
+
+**1. `Offre\Formule` n'a pas de nom.** C'est une *facette* d'un `Produit` : le libellé vit sur le
+produit. Une ligne de départ qui croit semer « une formule nommée » sème donc deux objets liés, et
+l'ordre compte. Le format le supporte (`{ ref: … }`), mais il fallait le voir : ma première rédaction
+était fausse.
+
+**2. Le fitness sait faire de l'hebdomadaire, le noyau ne sait pas le dire.**
+`PeriodiciteAbonnementFitness` propose `mensuel` **et** `hebdomadaire` ; `Offre\PeriodiciteFormule`
+ne propose que `mensuel`, `annuel`, `personnalise`. Un abonnement hebdomadaire ne peut donc être
+exprimé côté offre que par `personnalise`, ce qui le rend invisible à tout ce qui raisonne sur la
+périodicité — facturation, relance, prorata.
+
+Ce n'est pas un défaut du paquet, c'est un écart entre la verticale et le noyau, et il préexiste à ma
+conversion. `Offre` est le périmètre de `claude-G` : je ne le corrige pas, je le signale à
+`claude-A`. Le paquet reste rédigé avec `mensuel` seul tant que l'écart n'est pas tranché.
+
+**3. Le préavis de résiliation n'est pas paramétrable par formule.** `preavisResiliationJours` est
+porté par `AbonnementFitness`, donc par **chaque abonnement souscrit**, pas par le plan. Un paquet ne
+peut pas semer « 30 jours de préavis » comme valeur par défaut de l'offre : il n'y a pas d'endroit où
+l'écrire. Signalé pour la même raison.
 
 ## Le seul cas où `noupdate: false` mérite d'être discuté
 

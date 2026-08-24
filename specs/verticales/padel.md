@@ -49,7 +49,7 @@ seed:
     data:
       echelleNiveauMin: 1
       echelleNiveauMax: 10
-      modeRepartitionSurcout: egale
+      modeRepartitionSurcout: equitable_presents
       toleranceEntreeBadgeMinutes: 15
       majorationCoachMontant: "0.00"
       produitTerrainRef: { ref: padel.product.court }

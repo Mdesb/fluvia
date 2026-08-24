@@ -76,15 +76,15 @@ seed:
   - xid: swimming-pool.tariff.adult
     entity: Offre\TypeTarif
     noupdate: true
-    data: { code: ADULT, label: Adulte }
+    data: { nom: Adulte, ordreAffichage: 1, actif: true }
   - xid: swimming-pool.tariff.child
     entity: Offre\TypeTarif
     noupdate: true
-    data: { code: CHILD, label: Enfant }
+    data: { nom: Enfant, ordreAffichage: 2, actif: true }
   - xid: swimming-pool.tariff.school
     entity: Offre\TypeTarif
     noupdate: true
-    data: { code: SCHOOL, label: Scolaire }
+    data: { nom: Scolaire, ordreAffichage: 3, actif: true }
 ```
 
 ## Deux enseignements que ce paquet apporte au format

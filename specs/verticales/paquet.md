@@ -40,7 +40,7 @@ seed:                      # données de départ — voir ci-dessous, c'est le b
   - xid: swimming-pool.tariff.adult
     entity: Offre\TypeTarif
     noupdate: true
-    data: { code: ADULT, label: Adulte, price: 5.50 }
+    data: { nom: Adulte, ordreAffichage: 1, actif: true }
 ```
 
 `activities` ne prend que les neuf types de D15. **Un paquet qui a besoin d'un dixième type est un

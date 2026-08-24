@@ -57,7 +57,7 @@ seed:
       seuilPastilleTendu: 80
       tauxRemiseAudioguideDefaut: "0.00"
       delaiOptionDossierGroupeJours: 15
-      modeSousQuotaSalleDefaut: souple
+      modeSousQuotaSalleDefaut: alerte
 
   - xid: museum.room.main
     entity: Musee\Salle
@@ -67,15 +67,17 @@ seed:
       espace: { ref: core.space.main }
       espaceAcces: { ref: core.access_space.main }
 
-  - xid: museum.free_entry.student
-    entity: Musee\Gratuite
-    noupdate: true
-    data: { motif: eleve }
-  - xid: museum.free_entry.chaperone
-    entity: Musee\Gratuite
-    noupdate: true
-    data: { motif: accompagnateur }
 ```
+
+**Ce que la revue de cohérence a retiré de ce paquet.** J'avais écrit deux lignes de départ pour les
+gratuités scolaires. C'est faux : `Musee\Gratuite` est une gratuité **accordée** — elle pointe un
+dossier de groupe et une réservation. Ce n'est pas un référentiel, c'est une écriture. Et le quota,
+`ContingentGratuite`, se rattache à une exposition ou à un créneau : il ne peut pas exister avant eux.
+
+Un paquet ne sème donc **aucune gratuité**, et c'est correct : les motifs (`eleve`, `accompagnateur`)
+sont une énumération PHP, donc du code, et le quota est un acte d'exploitation. La règle qui s'en
+dégage vaut pour les cinq paquets : **on ne sème que ce qu'un exploitant retrouverait vide au premier
+matin**, jamais une donnée transactionnelle.
 
 ## Un second signalement vers Smart Flow
 
