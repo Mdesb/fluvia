@@ -964,3 +964,31 @@ manqué, la date de la demande de purge — jamais l'heure à laquelle le code s
 bus**. Ses tests du provisionnement seul passaient, parce qu'ils appelaient l'abonné à la main avec le
 bon instant. Un abonné testé isolément prouve que l'abonné est juste, pas que l'émetteur lui dit la
 vérité.
+
+### 2026-08-25 · D38 — L'application du client final : web **et** native
+Décision de Maxime, prise après avoir constaté que ce chantier n'apparaissait **nulle part** dans la
+répartition. C'est le troisième trou du même genre en une soirée, après `frontend/**` et les dix-sept
+modules serveur sans propriétaire : ma répartition couvrait ce que j'avais pensé à lister.
+
+**Le socle est bien plus avancé qu'il n'y paraissait**, et c'est ce qui rend la décision réaliste. Il
+existe déjà : `CompteClient`, `CreationCompteHandler`, `MeCompteClientProvider`, dix-huit points
+d'entrée sous `/boutique/**` — panier, bénéficiaires, consentement, paiement, billets, commandes,
+demandes de remboursement, souscription d'abonnement — et **douze permissions en `_soi`** taillées pour
+exactement cet usage : `crm.lire_soi`, `crm.modifier_soi`, `crm.pmv_lire_soi`, `crm.pmv_recharger_soi`,
+`boutique.lire_soi`, `boutique.demander_remboursement_soi`, `facturation.lire_soi`, plus les quatre du
+padel. Le rôle « Client final » est par ailleurs **le seul du dépôt** à porter des droits par migration.
+
+**Ce qui manque n'est donc pas le moteur, c'est le produit** : un espace personnel, « mes
+réservations », « ma carte et son solde », le porte-monnaie côté client, et l'authentification du
+client — le parcours actuel est pensé pour le personnel.
+
+**Web d'abord, native ensuite, et ce n'est pas une préférence technique.** Publier une application
+native suppose des comptes développeur Apple et Google, donc **l'immatriculation de la société** —
+exactement le blocage qui tient déjà `SOC-4` (adaptateurs Meta) en statut `EXTERNE`. D19 s'applique :
+on consigne, on n'attend pas. La web app est utilisable le jour où elle est prête, sans dépendre de
+personne ; la coquille native peut être construite en parallèle mais **ne sera pas publiable** avant.
+
+**Une contrainte d'architecture qui découle des deux cibles** : tout ce que l'application client
+consomme passe par l'API publique, et **rien** par une route pensée pour le personnel. Deux clients
+différents sur la même API obligent à cette discipline dès le premier écran ; l'ignorer maintenant
+coûterait une reprise entière au moment du natif.
