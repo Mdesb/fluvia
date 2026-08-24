@@ -8,6 +8,7 @@
 | 12:22 | Situé : FLOTTE, PLAYBOOK, DECISIONS, ORDRES et `specs/editeur/spec-editeur.md` lus. Constat : ED-1 et ED-2 sont livrés dans `app/src/Subscription/`, pas dans `app/src/Editeur/` — qui n existe sur aucune branche. La spec tranche le nommage (§Nommage : le module s appelle `App\Subscription`) ; la colonne « Chemins » de ED-1/ED-3 dans TASKS.md est donc périmée, pas le code. | Je prends **ED-3** — tunnel de souscription SEPA + provisioning idempotent. Je commence par `ProvisioningRequest` et le service de provisioning, qui ne dépendent pas de B-2. | B-1, B-2 — détail ci-dessous |
 | 12:31 | **B-1 corrigé côté claude-A** : mon worktree est revenu sur le clone, à mon commit, avec un `origin` — les poussées repassent par `pre-receive`. Mon travail était intact. Reste ouvert : l identité de commit est toujours partagée (`git config user.name` = claude-I dans `/home/debian/billetterie/.git/config`) ; je commite avec `git -c user.name=claude-D`. Les cinq autres sessions auront le même défaut. | **ED-3, premier lot** : `ProvisioningRequest` (idempotence par contrainte d unicité sur `subscription_id`), `ProvisioningStatus`, `ProvisioningOutcome`, `ProvisioningService`. Les quatre passent `php -l`. Ensuite : les tests de CA-1 et CA-2. | B-2 (catalogue) pour l émission ; **B-3, nouveau** — voir ci-dessous |
 | 18:18 | **ED-3 testé, tout vert** : `ProvisioningServiceTest` — 6 tests, 29 assertions, dont CA-1 (établissement + administrateur invité + seuls les modules souscrits exposés) et CA-2 (le même événement rejoué trois fois : une demande, un établissement, un administrateur, `attempts = 3`). Plus `tests/Platform` : 58 tests, 221 assertions, verts. **Un vrai défaut trouvé par le test** : `Role.nom` porte une unicité **globale** (`uniq_role_nom`) et je donnais au rôle livré le nom du rôle modèle — ça passait au premier client et cassait au second. Corrigé (nom = modèle + établissement + préfixe d id) et **test de non-régression à deux clients de même raison sociale** ajouté : aucun test à un seul client ne pouvait le voir. | J écris l abonné `subscription.activated` et j ajoute ses deux lignes au catalogue **dans le même commit**, selon ta méthode. | B-3 (rôle modèle), B-1.3 (identité de commit) |
+| 18:28 | **B-2 consommé selon ta méthode.** `SubscriptionActivator` (émetteur), `ProvisionOnSubscriptionActivated` (abonné) et la ligne `subscription.activated` au catalogue, **dans le même commit**. Je suis le **premier consommateur de `DomainEvent` du dépôt** — il n en existait aucun, d où tes 26 sans preneur. Tests : `tests/Subscription` 51 verts / 274 assertions, dont la chaîne activation → bus → provisioning par le vrai bus et le vrai abonné ; `tests/Platform` 58 verts (221 → 222 assertions : `ManifestCatalogueTest` a pris ma ligne). | Le tunnel lui-même : composition du panier, mandat SEPA, confirmation. | B-3 (rôle modèle), B-1.3 (identité), **Q-1 ci-dessous** |
 
 ---
 
@@ -63,3 +64,33 @@ facturation, de ce qu un client a le droit de faire. Le rôle modèle relève de
 `claude-A`. **Ce qu il me faut :** un `Role` `estModele = true` nommé `Administrateur etablissement`,
 portant le bundle de permissions d un administrateur d établissement. Je m aligne sur le nom qu il
 retiendra ; seule la constante `ProvisioningService::ADMIN_ROLE_TEMPLATE` est à changer.
+
+**Ce que je retiens pour les charges utiles**, puisque tu me demandes de te le signaler.
+`subscription.activated` → `planCode`, **`capabilities`**, `effectiveFrom`. Un seul écart avec ta
+proposition : `capabilities` au lieu de `options`. `Subscription::activeCapabilities()` renvoie la
+somme de la formule **et** des options actives à l instant donné ; l appeler `options` ferait croire
+à un abonné qu il n y a là que les suppléments, et il activerait un client sans les modules compris
+dans sa formule. Le reste est repris tel quel.
+
+**`establishment.provisioned` : je ne l ai pas émis, et je te dois la raison.** C était le fait
+naturel à annoncer après le provisioning, et j avais écrit l émission. Je l ai retirée avant de
+pousser : son consommateur prévu est le courriel de bienvenue, qui relève de `Communication` et
+n existe pas. Le nom serait donc entré au catalogue **sans preneur**, et le cliquet est gelé à 26 sur
+26 — j aurais reproduit exactement ta poussée refusée de ce matin. Il viendra avec son abonné, dans
+le même commit. La règle que tu as tirée de ton échec m a évité le mien.
+
+**Q-1 — rien ne désigne l établissement éditeur, et il va falloir trancher.** D12 pose que l éditeur
+est un `Etablissement` de la plateforme, mais **aucun paramètre, aucun marqueur, aucune constante ne
+dit lequel**. J ai vérifié : rien dans `app/config/**`, rien dans `app/src/**`.
+
+En attendant, je le **déduis** de la fiche CRM du prospect (`Client::getEtablissementCreation()`) :
+c est bien l éditeur, puisque c est son CRM qui a créé le prospect, et cela me suffit pour poser le
+tenant de `subscription.activated`. **Mais la déduction ne tiendra pas pour le tunnel**, qui est le
+reste de ED-3 : la spec (§3) prévoit un **prospect anonyme** qui compose son panier et signe son
+mandat *avant* d avoir la moindre fiche. À ce moment-là il n y a pas de client d où déduire quoi que
+ce soit, et un événement sans tenant est refusé par le contrat.
+
+**Ce qu il me faut, avant d écrire le tunnel :** une désignation explicite de l établissement
+éditeur — paramètre de configuration, drapeau sur `Etablissement`, ou constante de référentiel. Je
+n en choisis aucune, c est du noyau (`Organisation`), donc ton périmètre. Dis-moi laquelle et je m y
+branche ; en attendant je continue sur ce qui n en dépend pas.
