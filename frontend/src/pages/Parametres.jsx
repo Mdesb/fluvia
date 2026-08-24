@@ -3,6 +3,7 @@ import Liste, { texte, dateHeureFr } from '../components/Liste.jsx'
 import Tabs from '../components/Tabs.jsx'
 import Modal from '../components/Modal.jsx'
 import ReferentielEditable from '../components/ReferentielEditable.jsx'
+import PretAVendre from '../components/PretAVendre.jsx'
 import { api, membres } from '../api/client.js'
 
 const SOUS = [
@@ -156,6 +157,11 @@ export default function Parametres({ etabActif, etablissements, droits = [] }) {
       </div>
 
       <Tabs onglets={SOUS} actif={sousOnglet} onChange={setSousOnglet} />
+
+      {/* En tete, avant les onglets de contenu : c'est la premiere chose que voit quelqu'un qui
+          arrive ici sans savoir par ou commencer. Il se replie tout seul des que les trois
+          conditions sont remplies. */}
+      <PretAVendre etabActif={etabActif} droits={droits} onAller={setSousOnglet} />
 
       {sousOnglet === 'entites' && (
         <div className="resa-grid">
