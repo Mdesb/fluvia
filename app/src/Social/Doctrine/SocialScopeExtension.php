@@ -11,6 +11,8 @@ use ApiPlatform\Metadata\Operation;
 use App\Securite\Entity\Affectation;
 use App\Securite\Entity\Utilisateur;
 use App\Social\Entity\SocialAccount;
+use App\Social\Entity\SocialPost;
+use App\Social\Entity\SocialPublication;
 use Doctrine\ORM\Query\Expr\Join;
 use Doctrine\ORM\QueryBuilder;
 use Symfony\Bundle\SecurityBundle\Security;
@@ -38,6 +40,11 @@ final class SocialScopeExtension implements QueryCollectionExtensionInterface, Q
      */
     private const CHAINS = [
         SocialAccount::class => [],
+        SocialPost::class => [],
+        // La publication ne porte pas d'établissement en propre : elle le tient de son message, et
+        // c'est délibéré — deux colonnes pour le même fait finissent par diverger, et le jour où elles
+        // divergent c'est le cloisonnement qui se trompe.
+        SocialPublication::class => ['post'],
     ];
 
     public function __construct(

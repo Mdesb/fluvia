@@ -49,14 +49,18 @@ final class SocialFixtures extends Fixture implements DependentFixtureInterface
 
     public function load(ObjectManager $manager): void
     {
-        $permRead = (new Permission())->setModule('social')->setAction('read_account');
-        $permManage = (new Permission())->setModule('social')->setAction('manage_account');
-        $manager->persist($permRead);
-        $manager->persist($permManage);
+        $permissions = [];
+        foreach (['read_account', 'manage_account', 'read_post', 'publish'] as $action) {
+            $permission = (new Permission())->setModule('social')->setAction($action);
+            $manager->persist($permission);
+            $permissions[] = $permission;
+        }
 
         $roleAdmin = $manager->getRepository(Role::class)->findOneBy(['nom' => 'Administrateur groupe']);
         if ($roleAdmin instanceof Role) {
-            $roleAdmin->addPermission($permRead)->addPermission($permManage);
+            foreach ($permissions as $permission) {
+                $roleAdmin->addPermission($permission);
+            }
         }
 
         $etabA = $manager->getRepository(Etablissement::class)->findOneBy(['nom' => SocleFixtures::ETAB_A_NOM]);
