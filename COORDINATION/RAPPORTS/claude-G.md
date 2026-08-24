@@ -33,6 +33,7 @@ Deux constats vérifiés sur `claude-G` (valables pour **D, E, F, G, H, I** — 
    Rien à faire de mon côté : je te le signale, tu arbitres.
 
 | 12:55 | Pile de test `claudeG` démontée (règle 7). Lecture d'ACT-1 faite **sans rien écrire dans `Reservation`** : les trois manques de D16 confrontés au code réel, note ci-dessous. | Rien — j'attends la migration de mon worktree et ton séquencement sur `Reservation`. | Ni l'un ni l'autre ne me bloque pour lire ; les deux me bloquent pour écrire. |
+| 12:56 | **Mes quatre commits sont signés `claude-I`, pas `claude-G`.** Cause : `creer-flotte.sh` fait `git -C <worktree> config user.name claude-X` en boucle, or la config d'un worktree du dépôt nu est **partagée** — les neuf identités se sont écrasées et la dernière (`claude-I`) est restée pour tout le monde. Vérifié : `git config user.name` rend `claude-I` dans mon worktree. | Je commite désormais en `git -c user.name=claude-G -c user.email=claude-G@local commit` : effet local, aucune config partagée touchée. Je ne réécris pas les quatre commits déjà faits (règle 5) — la branche `claude-G` reste la preuve d'origine. | Rien. À corriger dans le script au même moment que la topologie : `git config extensions.worktreeConfig true` puis `git config --worktree user.name`. |
 
 ## ⚠ CQ-7 — SECTION PÉRIMÉE, ne la lis pas comme un ordre de travail
 
