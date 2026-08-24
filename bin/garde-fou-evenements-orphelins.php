@@ -12,6 +12,16 @@ declare(strict_types=1);
  * jamais. Le module qui en dépend est silencieusement mort, et rien dans la suite de tests ne le
  * dira — un abonné qui ne tourne pas ne casse aucun test, il ne fait rien.
  *
+ * RÈGLE B bis — le registre d'attente. Déclarer un nom avant de l'émettre EST la méthode (D2), et
+ * la règle B ci-dessus le refusait quand même : elle empêchait la croissance du stock sans
+ * distinguer une dette anonyme d'un travail engagé. À neuf sessions, un événement déclaré par
+ * l'une et émis par l'autre est le cas normal, pas l'exception.
+ *
+ * Un événement inscrit dans « attendus » avec un ÉMETTEUR NOMMÉ (tâche + session) sort du plafond
+ * et s'affiche à chaque exécution. Il n'est pas toléré, il est suivi. Sans émetteur nommé,
+ * l'inscription est refusée — sinon le registre devient l'endroit où l'on range ce qu'on ne veut
+ * pas compter, c'est-à-dire une ligne de base sans le nom.
+ *
  * RÈGLE C — émission hors contrat. Un événement **publié par le code** dont le nom n'est **pas au
  * catalogue** : échec dur, sans ligne de base. Le sens est l'inverse de la règle B — là c'est le
  * contrat qui attend le code, ici c'est le code qui a doublé le contrat.
@@ -36,6 +46,7 @@ declare(strict_types=1);
  * Usage :
  *   php bin/garde-fou-evenements-orphelins.php
  *   php bin/garde-fou-evenements-orphelins.php --nettoyer
+ *   php bin/garde-fou-evenements-orphelins.php --attendre=subscription.renewed=ED-3/claude-D
  *   php bin/garde-fou-evenements-orphelins.php --contre=origin/main
  */
 
@@ -162,15 +173,65 @@ if (!is_array($base) || !isset($base['scelle']['plafond'], $base['entrees'])) {
 }
 
 $plafond = (int) $base['scelle']['plafond'];
+$attendus = is_array($base['attendus'] ?? null) ? $base['attendus'] : [];
 
-if (in_array('--nettoyer', $options, true)) {
-    $base['entrees'] = $sansEmetteur;
-    $base['scelle']['plafond'] = count($sansEmetteur);
+// Un registre sans émetteur nommé serait une ligne de base déguisée. On refuse d'emblée.
+$attendusSansEmetteur = [];
+foreach ($attendus as $nom => $detail) {
+    if (!is_array($detail) || trim((string) ($detail['emetteur'] ?? '')) === '') {
+        $attendusSansEmetteur[] = (string) $nom;
+    }
+}
+
+// --attendre=<evenement>=<tache>/<session>
+foreach ($options as $option) {
+    if (!str_starts_with($option, '--attendre=')) {
+        continue;
+    }
+
+    $brut = substr($option, strlen('--attendre='));
+    [$nom, $qui] = array_pad(explode('=', $brut, 2), 2, '');
+    [$tache, $session] = array_pad(explode('/', (string) $qui, 2), 2, '');
+
+    if ($nom === '' || trim($tache) === '' || trim($session) === '') {
+        fwrite(STDERR, "Usage : --attendre=<evenement>=<tache>/<session>\n"
+            . "  Exemple : --attendre=subscription.renewed=ED-3/claude-D\n"
+            . "  L'émetteur est obligatoire : un registre anonyme serait une ligne de base sans le nom.\n");
+        exit(2);
+    }
+
+    if (!in_array($nom, $evenements, true)) {
+        fwrite(STDERR, sprintf("« %s » n'est pas au catalogue : inscris-le d'abord au contrat.\n", $nom));
+        exit(2);
+    }
+
+    $base['attendus'][$nom] = ['emetteur' => trim($tache), 'session' => trim($session)];
+    ksort($base['attendus']);
     file_put_contents(
         LIGNE_DE_BASE,
         json_encode($base, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n"
     );
-    echo sprintf("Ligne de base réécrite : %d événement(s) sans émetteur, plafond %d.\n", count($sansEmetteur), count($sansEmetteur));
+    echo sprintf("« %s » inscrit au registre d'attente — émetteur %s (%s).\n", $nom, trim($tache), trim($session));
+    echo "Il reste affiché à chaque exécution jusqu'à ce que son émetteur existe.\n";
+    exit(0);
+}
+
+if (in_array('--nettoyer', $options, true)) {
+    // Un attendu dont l'émetteur existe désormais n'a plus de raison d'être au registre.
+    foreach (array_keys($attendus) as $nom) {
+        if (!in_array($nom, $sansEmetteur, true)) {
+            unset($base['attendus'][$nom]);
+            echo sprintf("« %s » a maintenant un émetteur — retiré du registre d'attente.\n", $nom);
+        }
+    }
+    $restants = array_values(array_diff($sansEmetteur, array_keys($base['attendus'] ?? [])));
+    $base['entrees'] = $restants;
+    $base['scelle']['plafond'] = count($restants);
+    file_put_contents(
+        LIGNE_DE_BASE,
+        json_encode($base, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n"
+    );
+    echo sprintf("Ligne de base réécrite : %d sans émetteur et sans preneur, plafond %d.\n", count($restants), count($restants));
     exit(0);
 }
 
@@ -195,6 +256,31 @@ foreach ($options as $option) {
 }
 
 $echec = false;
+
+// --- RÈGLE B bis : le registre d'attente, affiché à chaque exécution --------------------------
+if ($attendusSansEmetteur !== []) {
+    $echec = true;
+    echo "\n=== ÉCHEC — registre d'attente sans émetteur nommé ===\n\n";
+    foreach ($attendusSansEmetteur as $nom) {
+        echo sprintf("  %s\n", $nom);
+    }
+    echo "\n  Un attendu sans émetteur n'est pas un travail engagé, c'est une dette rangée ailleurs.\n";
+    echo "  Nomme la tâche et la session :  --attendre=<evenement>=<tache>/<session>\n";
+}
+
+if ($attendus !== []) {
+    echo sprintf("\nEn attente d'émetteur, avec preneur (%d) — hors plafond, mais suivis :\n", count($attendus));
+    foreach ($attendus as $nom => $detail) {
+        $existe = !in_array((string) $nom, $sansEmetteur, true);
+        echo sprintf(
+            "  %-34s %s (%s)%s\n",
+            $nom,
+            (string) ($detail['emetteur'] ?? '?'),
+            (string) ($detail['session'] ?? '?'),
+            $existe ? '  ← émetteur livré, retire-le : --nettoyer' : ''
+        );
+    }
+}
 
 // --- RÈGLE A : abonné orphelin — échec dur, hors ligne de base ---------------------------------
 if ($abonnesOrphelins !== []) {
@@ -222,7 +308,9 @@ if ($horsCatalogue !== []) {
 }
 
 // --- RÈGLE B : cliquet sur le stock -------------------------------------------------------------
-$nouveaux = array_values(array_diff($sansEmetteur, $base['entrees']));
+// Les attendus sortent du décompte : ils sont suivis, pas tolérés. Ils restent affichés plus bas.
+$anonymes = array_values(array_diff($sansEmetteur, array_keys($attendus)));
+$nouveaux = array_values(array_diff($anonymes, $base['entrees']));
 
 if ($nouveaux !== []) {
     $echec = true;
@@ -242,9 +330,9 @@ if ($nouveaux !== []) {
     echo "  stock qui a déjà baissé.\n";
 }
 
-if (count($sansEmetteur) > $plafond) {
+if (count($anonymes) > $plafond) {
     $echec = true;
-    echo sprintf("\n=== ÉCHEC — la ligne de base a grossi (%d pour un plafond de %d) ===\n", count($sansEmetteur), $plafond);
+    echo sprintf("\n=== ÉCHEC — la ligne de base a grossi (%d pour un plafond de %d) ===\n", count($anonymes), $plafond);
     // Les deux blocs se déclenchent presque toujours ensemble — un nom nouveau fait aussi monter
     // le compte. Répéter la même explication à trois lignes d'intervalle la fait lire comme du
     // remplissage, et on cesse alors de lire les deux.
@@ -283,10 +371,10 @@ if ($echec) {
     exit(1);
 }
 
-$resorbes = count($base['entrees']) - count($sansEmetteur);
+$resorbes = count($base['entrees']) - count($anonymes);
 echo sprintf(
-    "Événements orphelins : OK — aucun abonné inerte, aucune émission hors contrat, aucun nouveau nom sans émetteur. En attente : %d, plafond %d.%s\n",
-    count($sansEmetteur),
+    "Événements orphelins : OK — aucun abonné inerte, aucune émission hors contrat, aucun nouveau nom sans émetteur. Sans preneur : %d, plafond %d.%s\n",
+    count($anonymes),
     $plafond,
     $resorbes > 0 ? sprintf(' %d résorbé(s) — pense à --nettoyer.', $resorbes) : ''
 );
