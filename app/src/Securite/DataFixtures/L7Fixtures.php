@@ -64,12 +64,25 @@ final class L7Fixtures extends Fixture implements DependentFixtureInterface
         // --- Référentiel `securite.lire`/`securite.exporter` (§5.2 plan) — dupliqué de la
         // migration de données puisque les tests recréent le schéma sans rejouer les migrations
         // (même convention que ComptaFixtures pour `compta.*`).
-        $manager->persist((new Permission())->setModule('securite')->setAction('lire'));
-        $manager->persist((new Permission())->setModule('securite')->setAction('exporter'));
+        //
+        // IDEMPOTENT, ET CE N'EST PAS UNE PRÉCAUTION DÉCORATIVE. Ce doublon assumé rendait les deux
+        // mondes incompatibles : sur une base construite par les MIGRATIONS — c'est-à-dire toute base
+        // réelle, et la préproduction — un chargement de fixtures échouait sur
+        // « Duplicate entry 'Caissier' for key 'uniq_role_nom' ». Le défaut ne s'était jamais vu parce
+        // que personne n'avait jamais fait les deux : le harnais de test crée le schéma depuis les
+        // entités et ne rejoue pas les migrations, donc les deux chemins ne se croisaient pas.
+        // Constaté le 24/08 en voulant régénérer les données de démonstration de la préproduction.
+        foreach ([['securite', 'lire'], ['securite', 'exporter']] as [$module, $action]) {
+            if (null === $manager->getRepository(Permission::class)->findOneBy(['module' => $module, 'action' => $action])) {
+                $manager->persist((new Permission())->setModule($module)->setAction($action));
+            }
+        }
 
         // --- Rôles-modèles vides (§5.3 plan, cahier M8-02) : idem, dupliqué de la migration. ---
         foreach (['Caissier', 'Responsable de site', 'Contrôleur', 'Comptable'] as $nomRoleModele) {
-            $manager->persist((new Role())->setNom($nomRoleModele)->setEstModele(true));
+            if (null === $manager->getRepository(Role::class)->findOneBy(['nom' => $nomRoleModele])) {
+                $manager->persist((new Role())->setNom($nomRoleModele)->setEstModele(true));
+            }
         }
 
         // --- Utilisateurs invités (RG-M8-01, CA-1/CA-2) ---

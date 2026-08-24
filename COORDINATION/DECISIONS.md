@@ -964,3 +964,72 @@ manqué, la date de la demande de purge — jamais l'heure à laquelle le code s
 bus**. Ses tests du provisionnement seul passaient, parce qu'ils appelaient l'abonné à la main avec le
 bon instant. Un abonné testé isolément prouve que l'abonné est juste, pas que l'émetteur lui dit la
 vérité.
+
+### 2026-08-25 · D38 — L'application du client final : web **et** native
+Décision de Maxime, prise après avoir constaté que ce chantier n'apparaissait **nulle part** dans la
+répartition. C'est le troisième trou du même genre en une soirée, après `frontend/**` et les dix-sept
+modules serveur sans propriétaire : ma répartition couvrait ce que j'avais pensé à lister.
+
+**Le socle est bien plus avancé qu'il n'y paraissait**, et c'est ce qui rend la décision réaliste. Il
+existe déjà : `CompteClient`, `CreationCompteHandler`, `MeCompteClientProvider`, dix-huit points
+d'entrée sous `/boutique/**` — panier, bénéficiaires, consentement, paiement, billets, commandes,
+demandes de remboursement, souscription d'abonnement — et **douze permissions en `_soi`** taillées pour
+exactement cet usage : `crm.lire_soi`, `crm.modifier_soi`, `crm.pmv_lire_soi`, `crm.pmv_recharger_soi`,
+`boutique.lire_soi`, `boutique.demander_remboursement_soi`, `facturation.lire_soi`, plus les quatre du
+padel. Le rôle « Client final » est par ailleurs **le seul du dépôt** à porter des droits par migration.
+
+**Ce qui manque n'est donc pas le moteur, c'est le produit** : un espace personnel, « mes
+réservations », « ma carte et son solde », le porte-monnaie côté client, et l'authentification du
+client — le parcours actuel est pensé pour le personnel.
+
+**Web d'abord, native ensuite, et ce n'est pas une préférence technique.** Publier une application
+native suppose des comptes développeur Apple et Google, donc **l'immatriculation de la société** —
+exactement le blocage qui tient déjà `SOC-4` (adaptateurs Meta) en statut `EXTERNE`. D19 s'applique :
+on consigne, on n'attend pas. La web app est utilisable le jour où elle est prête, sans dépendre de
+personne ; la coquille native peut être construite en parallèle mais **ne sera pas publiable** avant.
+
+**Une contrainte d'architecture qui découle des deux cibles** : tout ce que l'application client
+consomme passe par l'API publique, et **rien** par une route pensée pour le personnel. Deux clients
+différents sur la même API obligent à cette discipline dès le premier écran ; l'ignorer maintenant
+coûterait une reprise entière au moment du natif.
+
+### 2026-08-25 · D39 — Qui rejoue une règle d'autorisation la rejoue **entière**
+Le 24/08 vers minuit, Maxime s'est retrouvé avec **une colonne de menu entièrement vide** sur un écran
+de caisse par ailleurs fonctionnel. Il venait de recevoir le rôle le plus puissant du logiciel.
+
+**La chaîne du défaut, bout à bout.** Le socle accorde des permissions **joker** — `*` × `lire`, dont le
+code effectif est `*.lire` ; ma migration du soir y a ajouté `*.*`. `CalculateurDroits` les rend **tels
+quels**, et `PermissionVoter` les interprète correctement : l'API répondait normalement. Mais le menu du
+front, écrit deux heures plus tôt, testait `droits.includes('caisse.lire')` — une **égalité stricte**.
+Un administrateur porte `*.*` et **jamais** `caisse.lire`. Aucune entrée ne pouvait correspondre.
+
+**Ce qui rend ce défaut instructif, c'est que la précaution avait été donnée et qu'elle n'a pas suffi.**
+J'avais écrit à `claude-H` : « vérifie chaque nom de permission contre le catalogue serveur, pas contre
+ton intuition ». Elle l'a fait. Sa propre analyse de l'échec est plus juste que ma consigne : *« j'ai
+relevé la liste des permissions DEMANDÉES par les expressions `security`, et jamais la forme des
+permissions ACCORDÉES. Ce sont deux choses différentes. »*
+
+**La règle : un client qui rejoue une règle d'autorisation du serveur la rejoue entière, ou ne filtre
+pas du tout.** Un filtrage partiel est pire qu'aucun filtrage : il produit un refus muet, à un endroit
+où personne ne cherche la cause. Cela vaudra pour l'espace client final et le tableau de bord mobile
+(D38), qui auront tous deux à filtrer sur des droits.
+
+**Et un plancher de sûreté quand le filtrage porte sur la navigation** — posé par `claude-H`, et je le
+retiens : si le filtre ne laisse rien, on retombe sur ce qui n'a pas de contrainte. Sa justification est
+la bonne : *un menu vide enferme quelqu'un hors de son propre logiciel, sans moyen d'en sortir ni de
+comprendre pourquoi ; un menu trop permissif se corrige tout seul, parce que l'API refuse et que le
+refus est lisible.* Entre deux erreurs possibles, on choisit celle qui se voit.
+
+**L'alternative écartée, pour qu'on ne la re-propose pas sans le savoir.** J'avais commencé à faire
+**développer** les jokers par `codesEffectifs()` — le serveur aurait rendu la liste concrète, et aucun
+client n'aurait eu de règle à connaître. C'est défendable, et je l'abandonne pour deux raisons : le
+contrat actuel est **explicitement affirmé par un test** (`assertSame(['*.lire'], $codes)`), et une
+permission créée après l'appel resterait couverte par le joker mais absente de la liste développée —
+donc deux vérités selon le consommateur. Si quelqu'un veut y revenir, qu'il change le test **et** la
+décision, pas seulement le service.
+
+**Le fait déclencheur compte autant que le défaut** : neuf lots de front livrés sans que personne ait
+jamais vu un écran. Ni la compilation ni la lecture ne pouvaient voir ça — une capture d'écran l'a
+montré en trois secondes. **Quand on touche à ce qui est visible, quelqu'un doit regarder, et vite.**
+Aucune session ne peut le faire : la préproduction demande des identifiants, et nous n'en saisissons
+pas. Maxime est le seul œil de la flotte, et c'est une dépendance à assumer, pas à contourner.

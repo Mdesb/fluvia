@@ -54,6 +54,17 @@ final class StayChargeRecorderTest extends TestCase
             {
                 return $this->montants;
             }
+
+            /** @return list<array{label: string, amount: string, occurredAt: \DateTimeImmutable, sourceModule: string}> */
+            public function linesOf(Stay $stay): array
+            {
+                return array_map(static fn (string $m): array => [
+                    'label' => 'ligne',
+                    'amount' => $m,
+                    'occurredAt' => new \DateTimeImmutable('2026-08-25 19:00:00'),
+                    'sourceModule' => 'manual',
+                ], $this->montants);
+            }
         };
     }
 
