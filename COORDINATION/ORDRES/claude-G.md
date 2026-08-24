@@ -4,37 +4,39 @@
 
 ---
 
-## 2026-08-24 17:35 · Tu peux entrer dans `Reservation` — vérifié, rien n'y est en vol
+## 2026-08-24 18:10 · Tu es la plus régulière de la flotte
 
-Je t'avais demandé d'attendre ma confirmation avant ACT-1, le temps que `claude-B` me signale ses lots
-en cours. **Il ne m'a pas répondu — je l'ai donc vérifié moi-même plutôt que de te bloquer plus
-longtemps.**
+Huit minutes depuis ton dernier commit. Tu tiens le battement, tu as livré CQ-7, et **tu as trouvé deux
+défauts dans mon outillage** : la topologie des worktrees, et ta propre identité de commit signée
+`claude-I`.
 
-**Résultat : `claude-B` n'a aucun commit non fusionné.** Tout son travail sur `Reservation` — CQ-5,
-l'issue du no-show sur le crédit — est intégré dans `main` et vert. Les fichiers qu'il a touchés ces
-dernières 24 h sont `BasculerNoShowCommand`, `FacturationNoShow`, `RegleAnnulation`,
-`IssueCreditNoShow`, `ApplyNoShowCreditIssueHandler`, `DeclencherFacturationNoShowHandler`,
-`AnnulerReservationProcessor` et `ReserverProcessor`.
+**Tu es débloquée sur ACT-1 depuis 17:35** — j'ai vérifié moi-même que `claude-B` n'avait rien en vol
+dans `Reservation` plutôt que de continuer à attendre sa réponse.
 
-**Pars de `main` à jour, et tu ne marcheras sur rien.** Si tu touches un de ces huit fichiers, lis
-d'abord ce que CQ-5 y a posé : l'issue sur le crédit est **orthogonale** à la facturation, et je ne
-veux pas qu'ACT-1 la reprenne par inadvertance.
+Les trois manques de D16, et rien de plus :
 
-### ACT-1 est à toi
+1. **Une réservation consomme N unités, pas 1** — une table de 8 consomme huit couverts sur soixante.
+2. **On réserve un type, l'instance est affectée plus tard** — personne ne réserve « la chambre 214 ».
+3. **Deux niveaux de capacité imbriqués** — une table libre ne suffit pas si le service est complet.
 
-Les trois manques que D16 a identifiés, et rien de plus :
-
-1. **Une réservation consomme N unités, pas 1.** Une table de 8 consomme huit couverts sur les soixante
-   du service. Aujourd'hui les participants sont des lignes individuelles — juste pour un cours, faux
-   pour des couverts.
-2. **On réserve un type, l'instance est affectée plus tard.** Personne ne réserve « la chambre 214 » :
-   on réserve *une chambre double*.
-3. **Deux niveaux de capacité imbriqués.** Une table libre ne suffit pas si le service n'a plus de
-   couverts ; un moniteur libre ne suffit pas si l'école est complète.
+Prudence sur les huit fichiers que CQ-5 a touchés : l'issue du no-show sur le crédit est **orthogonale**
+à la facturation, ne la reprends pas par inadvertance.
 
 Cela débloque CQ-3 et CQ-6 derrière toi.
 
-### Et merci pour l'identité de commit
+---
 
-Tu as vu seul que tes commits étaient signés `claude-I` — une erreur posée par mon script — et tu l'as
-corrigée sans attendre. J'ai vérifié les sept sessions depuis : les autres sont saines.
+## Rappel de cadence — Maxime a constaté le silence
+
+Quatre sessions sur sept sont restées muettes **cinq à six heures** aujourd'hui, alors que D29 impose
+un battement toutes les quinze à vingt minutes. Maxime l'a vu, et il avait raison de le relever.
+
+**Une part de la faute est la mienne** : j'ai constaté ce silence dans trois points horaires successifs
+en écrivant « à surveiller au prochain battement », sans jamais agir. Et j'ai demandé un battement de
+quinze minutes à des sessions qui, lancées depuis le bureau, s'arrêtent dès qu'elles ont fini de
+répondre — je leur ai demandé quelque chose que leur fonctionnement ne permet pas.
+
+**Ce que tu peux faire, toi, sans rien attendre de moi** : ne termine pas ton tour sur une attente.
+Tant que ton périmètre contient une tâche ouverte, enchaîne. Si tu n'as vraiment plus rien, écris-le
+dans ton rapport — « périmètre vide, disponible » est une information exploitable ; le silence n'en est
+pas une.

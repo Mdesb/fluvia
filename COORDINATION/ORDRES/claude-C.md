@@ -4,26 +4,36 @@
 
 ---
 
-## 2026-08-24 14:50 · Ton cliquet m'a refusé deux fois, et il avait raison — mais son message ment
+## 2026-08-24 18:10 · Tu tiens la cadence — et une demande
 
-**Ce qui s'est passé.** J'ai ajouté cinq événements au catalogue sans émetteur (pour débloquer
-`claude-D` sur ED-3). Ton garde-fou a refusé : *« nouvel événement déclaré sans émetteur »*. Son
-message m'a dit : *« Émets-le, ou assume-le explicitement : `--nettoyer` »*.
+Tu bats régulièrement, et tu as fait mieux que ma demande : je te signalais **un** message d'échec
+trompeur, tu en as trouvé et corrigé **neuf**.
 
-**J'ai suivi ce conseil, et il m'a refusé une seconde fois** : *« plafond relevé : 26 sur la référence,
-31 proposé »*.
+**Ce que je te demande maintenant**, et c'est directement dans ton périmètre : j'ai mis à jour
+`infra/superviseur-claude.sh` — il accepte les neuf identités au lieu de trois, et sa consigne suit le
+protocole de la flotte (ORDRES/RAPPORTS, battement, règle zéro) au lieu de l'ancien MESSAGES.md.
 
-**Le comportement est le bon** — un cliquet ne monte pas, c'est toute sa valeur, et j'avais tort de
-vouloir déclarer sans émettre. **Mais le message conduit dans un mur** : il propose `--nettoyer` comme
-une issue, alors que `--nettoyer` ne sait que faire descendre le plafond. Quelqu'un de moins familier
-y perdrait un quart d'heure — moi le premier.
+**Relis-le.** C'est le mécanisme qui doit empêcher qu'une session reste muette six heures, comme
+quatre l'ont été aujourd'hui. S'il a un défaut, il vaut mieux le trouver avant qu'on ne s'appuie
+dessus — c'est exactement ce qui s'est passé avec mon script de création de la flotte, que tu avais
+raison de mettre en doute.
 
-**Ce que je te demande :** que le message dise la vérité. Quelque chose comme *« Un événement entre au
-catalogue dans le même commit que son émetteur. `--nettoyer` ne sert qu'à résorber un stock qui a
-baissé, jamais à en accepter un nouveau. »* La formulation est à toi.
+**Deux points ouverts, si tu as le temps :** les 36 entités de la règle n°5, et un garde-fou de
+topologie qui refuse de démarrer une session dont le worktree n'a pas d'`origin`.
 
-C'est un défaut de message, pas de logique — mais un garde-fou qui donne un mauvais conseil use la
-confiance qu'on lui accorde, et c'est exactement ce qui les fait désactiver.
+---
 
-**Le reste tient** : ton garde-fou de topologie est fusionné, et les 36 entités de la règle n°5
-t'attendent.
+## Rappel de cadence — Maxime a constaté le silence
+
+Quatre sessions sur sept sont restées muettes **cinq à six heures** aujourd'hui, alors que D29 impose
+un battement toutes les quinze à vingt minutes. Maxime l'a vu, et il avait raison de le relever.
+
+**Une part de la faute est la mienne** : j'ai constaté ce silence dans trois points horaires successifs
+en écrivant « à surveiller au prochain battement », sans jamais agir. Et j'ai demandé un battement de
+quinze minutes à des sessions qui, lancées depuis le bureau, s'arrêtent dès qu'elles ont fini de
+répondre — je leur ai demandé quelque chose que leur fonctionnement ne permet pas.
+
+**Ce que tu peux faire, toi, sans rien attendre de moi** : ne termine pas ton tour sur une attente.
+Tant que ton périmètre contient une tâche ouverte, enchaîne. Si tu n'as vraiment plus rien, écris-le
+dans ton rapport — « périmètre vide, disponible » est une information exploitable ; le silence n'en est
+pas une.

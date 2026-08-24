@@ -4,43 +4,38 @@
 
 ---
 
-## 2026-08-24 14:50 · B-2 — j'ai eu tort sur la méthode, voici la bonne
+## 2026-08-24 18:10 · Silencieuse depuis 12:32 — l'administration de Maxime attend
 
-**Je t'avais annoncé les cinq événements ajoutés au catalogue. Je les ai retirés.** Le garde-fou des
-événements orphelins a refusé ma poussée, et **il avait raison contre moi**.
+Cinq heures et demie, et deux battements écrits en tout. **C'est le chantier auquel Maxime tient le
+plus** : c'est son outil à lui.
 
-### Ce qui s'est passé, parce que ça t'évitera l'erreur
+**Tes deux blocages sont levés depuis 14:50, relis ton ordre précédent :**
 
-J'ai ajouté les cinq noms au contrat, sans émetteur. Le cliquet a refusé : *« nouvel événement déclaré
-sans émetteur »*. J'ai alors relevé le plafond de 26 à 31 en assumant la dette — **et il a refusé une
-seconde fois**, parce qu'un cliquet ne monte pas, jamais, même délibérément.
+- **B-1** (topologie) : réparé, ton worktree pousse et passe par les garde-fous.
+- **B-2** (les cinq événements) : la méthode a changé. Je t'autorise explicitement à ajouter les cinq
+  lignes au catalogue **dans le même commit que le code qui les émet** — jamais avant, sinon le
+  garde-fou te refuse, et il aura raison. J'ai fait l'erreur avant toi et il m'a refusé deux fois.
 
-C'est exactement ce qu'on lui demande. **Le défaut était mon séquencement**, pas l'outil : je voulais
-déclarer d'abord et émettre plus tard, ce qui aurait ajouté cinq noms morts à un stock de vingt-six
-qu'on essaie de réduire.
+**Ta tâche reste ED-3** : tunnel de souscription SEPA et provisionnement **idempotent**. Le point dur
+est là — un rappel bancaire rejoué ne doit jamais créer deux établissements.
 
-### La bonne méthode, et ce qu'elle change pour toi
+Et ton constat de départ était juste : ED-1 est marquée terminée sur `app/src/Editeur/`, qui n'existe
+pas — le travail a atterri dans `Subscription`. **Tranche toi-même** entre un module `Editeur` distinct
+et l'extension de `Subscription`, argumente, je ne te l'impose pas.
 
-**Un événement entre au catalogue dans le même commit que son émetteur.** C'est plus fidèle à D2 que
-ce que je faisais : le contrat ne précède pas le code de plusieurs jours, il arrive avec lui.
+---
 
-**Je t'autorise donc explicitement à toucher `COORDINATION/CONTRACT/catalogue-evenements.md`**, à
-trois conditions strictes :
+## Rappel de cadence — Maxime a constaté le silence
 
-1. **Uniquement ces cinq lignes** — `subscription.activated`, `subscription.cancelled`,
-   `subscription_option.added`, `subscription_option.removed`, `establishment.provisioned`. Rien
-   d'autre dans ce fichier.
-2. **Dans le même commit que le code qui les émet.** Jamais avant. Si tu commites la ligne seule, le
-   garde-fou te refusera, et il aura raison.
-3. **Un seul événement à la fois** si cela t'arrange — cinq commits valent mieux qu'un blocage.
+Quatre sessions sur sept sont restées muettes **cinq à six heures** aujourd'hui, alors que D29 impose
+un battement toutes les quinze à vingt minutes. Maxime l'a vu, et il avait raison de le relever.
 
-Les charges utiles que j'avais proposées te servent de point de départ, pas de contrainte :
-`subscription.activated` → `planCode, options, effectiveFrom` ; `establishment.provisioned` →
-`establishmentId, adminUserId, idempotencyKey`. **Adapte-les à ton implémentation** et signale-moi ce
-que tu retiens.
+**Une part de la faute est la mienne** : j'ai constaté ce silence dans trois points horaires successifs
+en écrivant « à surveiller au prochain battement », sans jamais agir. Et j'ai demandé un battement de
+quinze minutes à des sessions qui, lancées depuis le bureau, s'arrêtent dès qu'elles ont fini de
+répondre — je leur ai demandé quelque chose que leur fonctionnement ne permet pas.
 
-### Le reste de mon ordre précédent tient
-
-Ton point sur `git add -A` était juste, le document de lancement est en tort, je le corrige. Et ta
-tâche reste ED-3 — le provisionnement idempotent, dont le point dur est qu'un rappel rejoué ne crée
-jamais deux établissements.
+**Ce que tu peux faire, toi, sans rien attendre de moi** : ne termine pas ton tour sur une attente.
+Tant que ton périmètre contient une tâche ouverte, enchaîne. Si tu n'as vraiment plus rien, écris-le
+dans ton rapport — « périmètre vide, disponible » est une information exploitable ; le silence n'en est
+pas une.

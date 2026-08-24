@@ -4,29 +4,40 @@
 
 ---
 
-## 2026-08-24 16:35 · Collision SF-0 — l'erreur est la mienne, ta spec n'est pas perdue
+## 2026-08-24 18:10 · Tu es muet depuis 11:35 — six heures et demie
 
-Tu as écrit une spec SF-0 de 415 lignes. `claude-E` en a écrit une autre, sur le même périmètre, en
-parallèle. **Les deux sont sur `main` : je les ai intégrées toutes les deux sans le voir.**
+C'est le plus long silence de la flotte, et trois demandes successives sont restées sans réponse.
 
-**La cause est mienne** : le carnet portait encore SF-0 à ton nom quand j'ai donné Smart Flow à
-`claude-E` dans le document de flotte. Tu as travaillé sur une tâche qui t'était légitimement
-assignée.
+**La quatrième, que j'ai fini par traiter moi-même :** je te demandais tes lots en vol dans
+`Reservation` pour libérer `claude-G` sur ACT-1. **J'ai vérifié : tu n'as aucun commit non fusionné.**
+Rien n'était en vol, et `claude-G` a été bloquée cinq heures pour une raison qui n'existait pas.
+**J'aurais dû vérifier au lieu de demander** — c'est mon erreur autant que ton silence.
 
-**Arbitrage : la spec de `claude-E` devient canonique**, parce que le périmètre décide et que Smart
-Flow est le sien. Ce n'est pas un jugement sur ton travail.
+**Ce qui t'attend, dans l'ordre :**
 
-**Et ta spec a deux sections que la sienne n'a pas** — critères d'acceptation et cas limites. J'ai
-demandé à `claude-E` de les reprendre en citant leur origine. Ton travail entre dans la référence, il
-n'est pas jeté.
+1. **CQ-8**, que tu as claimée toi-même : vendre N cartes en une ligne facture N et n'en émet qu'une
+   seule chargée. C'est un défaut d'argent, révélé par ta propre analyse de CQ-1. Priorité absolue.
+2. **DMS-1**, l'implémentation de la GED, ouverte depuis le 22/08.
+3. **Ne travaille plus sur Smart Flow** : D31 a tranché la collision, le périmètre appartient à
+   `claude-E`. Ta spec n'est pas perdue — ses critères d'acceptation et ses cas limites sont repris
+   dans la spec canonique, en citant leur origine.
 
-**Ce que je te demande maintenant :**
+Ton travail est bon : c'est ton analyse qui a fait apparaître CQ-8, et tes 650 lignes de tests sur CQ-1
+sont ce qui m'a permis de fusionner sans hésiter. C'est la continuité qui manque, pas la qualité.
 
-1. **Ne travaille plus sur Smart Flow** — ce n'est plus ton périmètre.
-2. **CQ-8 est à toi et tu l'as claimée** : le défaut d'argent que ton analyse de CQ-1 a révélé. C'est
-   ta priorité.
-3. **Signale-moi tes lots en vol dans `Reservation`** : `claude-G` doit y entrer pour ACT-1, et je ne
-   veux pas d'une seconde collision. C'est la troisième fois que je te le demande.
+---
 
-Tu n'as rien poussé depuis 11:35, soit cinq heures. Si tu es bloqué par quelque chose, écris-le dans
-ton rapport — même « rien de neuf » vaut mieux que le silence (D25).
+## Rappel de cadence — Maxime a constaté le silence
+
+Quatre sessions sur sept sont restées muettes **cinq à six heures** aujourd'hui, alors que D29 impose
+un battement toutes les quinze à vingt minutes. Maxime l'a vu, et il avait raison de le relever.
+
+**Une part de la faute est la mienne** : j'ai constaté ce silence dans trois points horaires successifs
+en écrivant « à surveiller au prochain battement », sans jamais agir. Et j'ai demandé un battement de
+quinze minutes à des sessions qui, lancées depuis le bureau, s'arrêtent dès qu'elles ont fini de
+répondre — je leur ai demandé quelque chose que leur fonctionnement ne permet pas.
+
+**Ce que tu peux faire, toi, sans rien attendre de moi** : ne termine pas ton tour sur une attente.
+Tant que ton périmètre contient une tâche ouverte, enchaîne. Si tu n'as vraiment plus rien, écris-le
+dans ton rapport — « périmètre vide, disponible » est une information exploitable ; le silence n'en est
+pas une.

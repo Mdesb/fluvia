@@ -4,20 +4,40 @@
 
 ---
 
-## 2026-08-24 14:45 · Ton diagnostic était juste, et il a servi
+## 2026-08-24 18:10 · Silencieuse depuis 12:29 — un seul battement écrit
 
-Tu as remonté un diagnostic d'infrastructure **avant** de coder ta tâche, en jugeant qu'il primait.
-**Tu as eu raison, et ton constat recoupe celui de `claude-G`** : la flotte D→I était créée sur le dépôt
-nu au lieu du clone, donc sans `origin`, donc **sans aucun garde-fou à la poussée**.
+Cinq heures et demie de silence, un battement en tout.
 
-C'est réparé pour les neuf sessions. Ton signalement et celui de G m'ont fait voir en dix minutes une
-faille que j'aurais mis des jours à trouver seul — parce que rien ne la signalait : les commits
-passaient, simplement sans contrôle.
+**Ton diagnostic d'infrastructure était excellent** — tu l'as fait passer avant ta propre tâche, et il
+recoupait celui de `claude-G` : la flotte était créée sur le dépôt nu, donc sans garde-fous. C'est
+réparé grâce à vous deux.
 
-**Maintenant, ACT-3 : le séjour.** C'est ta tâche et elle est la plus structurante des trois que tu
-portes. Rappel de ce qui compte : un client, une période, **tout ce qu'il consomme sur place réglé une
-fois au départ**. Tu ne réinventes ni le paiement (le porte-monnaie virtuel existe), ni l'accès (les
-droits et passages existent) — tu inventes le **fil** qui rattache une consommation à un séjour.
+**Mais depuis, rien.** Et ACT-3 est la tâche la plus structurante des trois que tu portes.
 
-Si tu butes sur une décision, mets-la dans ton rapport et continue sur autre chose. Ne t'arrête pas
-pour m'attendre.
+**Reprends le séjour.** Rappel de ce qui compte : un client, une période, **tout ce qu'il consomme sur
+place réglé une fois au départ**. Emplacement, entrées piscine, additions du bar, parties de bowling —
+un seul compte.
+
+Tu n'inventes ni le paiement — le porte-monnaie virtuel existe avec son débit atomique — ni l'accès —
+droits et passages existent. **Tu inventes le fil** qui rattache une consommation à un séjour. C'est ce
+qui transforme « six modules » en « un logiciel », et c'est la réponse directe à ce que Maxime demande
+depuis le début : « tout intégrer dans un seul logiciel simple et hyper clair ».
+
+Si tu butes, écris-le et prends ACT-2 (l'hébergement) en attendant. Ne t'arrête pas.
+
+---
+
+## Rappel de cadence — Maxime a constaté le silence
+
+Quatre sessions sur sept sont restées muettes **cinq à six heures** aujourd'hui, alors que D29 impose
+un battement toutes les quinze à vingt minutes. Maxime l'a vu, et il avait raison de le relever.
+
+**Une part de la faute est la mienne** : j'ai constaté ce silence dans trois points horaires successifs
+en écrivant « à surveiller au prochain battement », sans jamais agir. Et j'ai demandé un battement de
+quinze minutes à des sessions qui, lancées depuis le bureau, s'arrêtent dès qu'elles ont fini de
+répondre — je leur ai demandé quelque chose que leur fonctionnement ne permet pas.
+
+**Ce que tu peux faire, toi, sans rien attendre de moi** : ne termine pas ton tour sur une attente.
+Tant que ton périmètre contient une tâche ouverte, enchaîne. Si tu n'as vraiment plus rien, écris-le
+dans ton rapport — « périmètre vide, disponible » est une information exploitable ; le silence n'en est
+pas une.
