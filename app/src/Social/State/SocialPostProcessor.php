@@ -93,7 +93,12 @@ final class SocialPostProcessor implements ProcessorInterface
 
         foreach ($data->getPublications() as $publication) {
             $this->bus->dispatch(new PublishSocialPublication((string) $publication->getId()));
+            $publication->setQueuedAt(new \DateTimeImmutable());
         }
+        // La marque est posée après le dépêchage, jamais avant : marquer d'abord ferait croire à un
+        // envoi qui n'a pas eu lieu si le bus refuse. Elle ne sert ici qu'au diagnostic — un message
+        // immédiat n'est pas daté, donc l'ordonnanceur ne le reprendra jamais.
+        $this->em->flush();
     }
 
     /**

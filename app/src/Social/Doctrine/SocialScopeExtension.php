@@ -11,6 +11,7 @@ use ApiPlatform\Metadata\Operation;
 use App\Securite\Entity\Affectation;
 use App\Securite\Entity\Utilisateur;
 use App\Social\Entity\SocialAccount;
+use App\Social\Entity\SocialMetricSnapshot;
 use App\Social\Entity\SocialPost;
 use App\Social\Entity\SocialPublication;
 use Doctrine\ORM\Query\Expr\Join;
@@ -45,6 +46,9 @@ final class SocialScopeExtension implements QueryCollectionExtensionInterface, Q
         // c'est délibéré — deux colonnes pour le même fait finissent par diverger, et le jour où elles
         // divergent c'est le cloisonnement qui se trompe.
         SocialPublication::class => ['post'],
+        // Le relevé remonte au message par sa publication. Chaîne de deux jointures plutôt qu'une
+        // colonne d'établissement recopiée : une copie peut mentir, une jointure non.
+        SocialMetricSnapshot::class => ['publication', 'post'],
     ];
 
     public function __construct(
