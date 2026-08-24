@@ -199,7 +199,7 @@ final class ProvisioningService
     private function createAdministrator(Client $client, string $email, Etablissement $establishment, Role $template): string
     {
         $role = (new Role())
-            ->setNom(self::ADMIN_ROLE_TEMPLATE)
+            ->setNom($this->administratorRoleName($establishment))
             ->setEstModele(false)
             ->setRoleModeleOrigine($template);
         foreach ($template->getPermissions() as $permission) {
@@ -227,6 +227,24 @@ final class ProvisioningService
         $this->em->persist($affectation);
 
         return $clearToken;
+    }
+
+    /**
+     * Le nom du rôle livré au client — unique, et lisible par l'exploitant.
+     *
+     * `Role.nom` porte une contrainte d'unicité **globale** (`uniq_role_nom`) : reprendre le nom du
+     * modèle ferait échouer le deuxième client provisionné, et le premier ne l'aurait pas révélé. Le
+     * nom de l'établissement seul ne suffit pas non plus — deux « Camping des Pins » sont plausibles.
+     * D'où le préfixe de l'identifiant, court, qui rend le nom unique sans le rendre illisible.
+     */
+    private function administratorRoleName(Etablissement $establishment): string
+    {
+        return sprintf(
+            '%s — %s (%s)',
+            self::ADMIN_ROLE_TEMPLATE,
+            $establishment->getNom(),
+            substr($establishment->getId()->toRfc4122(), 0, 8),
+        );
     }
 
     private function establishmentName(Client $client): string
