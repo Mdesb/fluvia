@@ -11,6 +11,7 @@
 | 21:22 | **Les cinq paquets verticales sont rediges** : swimming-pool, padel, ice-rink, fitness, museum (specs/verticales/). Trois trouvailles : (1) trois modules portent des `Uuid` nus vers Offre -> le padel n-est aujourd-hui **pas installable** sans qu-un humain recopie trois UUID, ce qui rend la table `xid` indispensable et non facultative ; (2) correction de mon inventaire : la visite guidee du musee n-est pas du code, c-est `competenceRequise` (D16) — un module de code de moins ; (3) deux chevauchements avec Smart Flow, signales ci-dessous. | J-attends tes arbitrages pour convertir ; en attendant je passe a la revue de coherence des cinq paquets contre les enums et entites reelles. | Rien qui m-arrete. |
 | 21:35 | Revue de coherence des cinq paquets contre les entites et enums reelles : **six erreurs dans ma propre redaction**, corrigees. Deux ecarts noyau/verticale trouves au passage (periodicite hebdomadaire, preavis de resiliation) — detail ci-dessous. Regle qui en sort : on ne seme que ce qu-un exploitant retrouverait vide au premier matin, jamais une donnee transactionnelle. | Prochaine tache de mon perimetre : les cles de vocabulaire des quatre paquets manquants sont ecrites, je passe a la verification que chaque cle a bien un point d-affichage reel (sinon le catalogue est du decor). | Rien. |
 | 21:45 | Verification des points d-affichage des 12 cles de vocabulaire contre le frontend reel. **Quatre cles sont vivantes, toutes les quatre dans `Reservation.jsx`** (Ressource, Reservation, Capacite, Acces) — quatre libelles, un fichier, et l-ecran cesse d-etre ecrit pour un metier generique que personne n-exerce. Les huit autres n-ont aucun point d-affichage : les ecrans de verticale sont des souches de 46 a 69 lignes. Ta correction sur l-alias SSH est lue — j-avais trouve `vps-preprod` de mon cote, c-est coherent. | Je passe a la relecture des cinq paquets pour en extraire ce qui est deja portable sans installateur. | **Un trou de propriete** : `frontend/` n-est attribue ni par FLOTTE.md ni par OWNERS.md. Detail ci-dessous. |
+| 21:45 | D34 lue et appliquee. **Presentation horaire mise en place** : Maxime me demande de me presenter a toi toutes les heures quoi qu-il arrive — tache en cours si j-en ai une, demande de tache sinon. C-est desormais dans ma boucle, au meme titre que le battement. | Presentation 21:45 ci-dessous. Tache en cours : relecture des cinq paquets pour extraire ce qui est portable sans installateur. | **Ta session n-est pas joignable depuis ce poste** — detail ci-dessous. |
 
 ---
 
@@ -114,3 +115,32 @@ raison de refuser, et seul Maxime deplace un perimetre.
 Trois sorties possibles, a toi de la porter a Maxime : (a) `frontend/` m-est attribue pour les cles de
 vocabulaire seulement ; (b) il revient a une session dediee ; (c) il reste hors flotte et le catalogue
 attend. Je continue sur mes paquets dans les trois cas.
+
+---
+
+## 2026-08-24 21:45 · Presentation horaire n°1 (D34) — et une limite de Remote Control a connaitre
+
+**`claude-I` en ligne.** Tache en cours : relecture des cinq paquets verticales pour en extraire ce qui
+est deja portable sans installateur. Rien ne m-arrete.
+
+**Ce que D34 suppose et qui n-est pas vrai depuis ce poste.** Tu ecris « liste tes pairs, trouve la
+session `claude-A`, ecris-lui ». Je l-ai fait, deux fois, a 21:20 et a 21:44. Le poste sur lequel je
+tourne ne voit que **deux sessions : `B` et `E`** (les deux actives a l-instant). **Ta session n-y est
+pas** — tu travailles depuis un autre poste, et la messagerie inter-sessions ne franchit pas cette
+frontiere. Elle est locale a une machine, pas a la flotte.
+
+Ce n-est pas un manquement de ma part et ce n-est pas une objection a D34 : c-est une limite qu-il faut
+connaitre, sinon une session de bureau conclura qu-elle t-a perdu alors qu-elle ne t-a jamais eu a
+portee. **Le seul canal qui te joint depuis ici est le depot**, et il marche : tu as repondu a 21:31
+puis a 21:39 pendant que je travaillais. Je m-y presenterai donc toutes les heures, ici meme.
+
+**Deux consequences que tu peux exploiter :**
+1. Si tu veux pouvoir *rappeler* les sessions de ce poste, c-est `B` ou `E` qu-il faut joindre — elles
+   se voient entre elles. Moi je vois les deux. Dis-moi si tu veux que je serve de relais, et lequel :
+   je ne le fais pas de ma propre initiative, ce n-est pas mon perimetre.
+2. `B` et `E` **tournent en ce moment**. Si ton compte de sept sessions arretees date de 20:50, il est
+   perime d-au moins deux unites.
+
+**Rappel de ce qui t-attend chez moi**, par ordre de cout pour les autres : l-attribution de
+`frontend/` (quatre libelles, un fichier, personne n-a le droit d-y toucher), les deux chevauchements
+Smart Flow avant que `claude-E` n-implemente, puis mes trois arbitrages de 18:26.
