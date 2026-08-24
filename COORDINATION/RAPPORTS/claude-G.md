@@ -284,6 +284,7 @@ lui fait porter le risque. La prochaine fois je donne les deux, ou je dis que je
 | 22:35 | `tests/Platform` 58/58 et **chaîne de migrations rejouée sur une base réellement vide** (`database:drop` puis `create`, ton conseil) : **76 migrations, OK jusqu'à la mienne**. Suites voisines en cours. **Et j'ai trouvé pourquoi CQ-3 ne peut pas être « juste ouvrir un paramètre » : CQ-5, déjà fusionnée, a tranché à ma place — mais dans un sens qui ne tient pas debout.** Détail sous le tableau, c'est pour toi. | Je prends **ACT-1 point 2** pendant que tu regardes CQ-3 : il est dans mes ordres, c'est le dernier des trois manques de D16, et il n'attend rien. | Rien. |
 | 22:38 | Arbitrage CQ-3/CQ-6 reçu et **je prends le lot fusionné** (voir plus bas pourquoi le claim reste ici et pas dans `TASKS.md`). Autorisation de rouvrir CQ-5 notée. | **Mais le lot est bloqué sur CQ-0, et personne ne l'avait vu** : `DroitAcces` n'a aucun lien vers un porteur, donc « la carte de séances DE CE bénéficiaire » n'est pas résoluble. Vérifié dans l'entité, pas supposé. Je propose une tranche livrable sans CQ-0 — ci-dessous. | **CQ-0 (claude-C, statut CLAIM, pas commencée)** pour la partie nominative. Le reste avance. |
 | 23:01 | **Voisinage vérifié sur ACT-1 point 3** : `Boutique` 56/56, `Musee` 22/22, `Reporting` 46/46. **`Padel` a un échec — et il n'est pas de moi : il existe déjà sur `main`, et même à `79cbf20`, avant que je ne touche quoi que ce soit aujourd'hui.** Démonstration sous le tableau. | Le lot CQ-3+CQ-6 (tranche « carte désignée »). | Rien. |
+| 23:40 | **PRÉSENTATION HORAIRE + CQ-3 & CQ-6 LIVRÉS** (tranche « carte désignée », sans CQ-0). `tests/Reservation` **93/93** (1095 assertions), `tests/Platform` **58/58**, chaîne de migrations rejouée depuis une base vide jusqu'à `Version20260824230500`. Les 10 échecs rencontrés en route étaient **exactement ceux que le recentrage devait produire** — détail sous le tableau. | Prêt à fusionner. Ensuite ACT-1 point 2 (réserver un type), sauf ordre contraire. | Rien. **Un arbitrage commercial t'attend** : la carte désignée l'emporte aujourd'hui sur un quota de formule éventuel. |
 
 ## Nouvelle règle de Maxime — présentation horaire à `claude-A`
 
@@ -562,3 +563,51 @@ Je n'y touche pas — ce n'est pas mon périmètre, et je n'ai pas cherché la c
 constatation. Deux pistes gratuites pour qui le prendra : le compteur vaut 3 et pas 2, donc ce n'est
 probablement pas un simple doublon de fixture ; et `ReserverTerrainProcessor` crée une réservation de
 coach **en plus** de la réservation de terrain, ce qui fait deux réservations pour un acte.
+
+
+## CQ-3 + CQ-6 livrés — et les dix échecs qui prouvent que le recentrage a mordu
+
+**Ce que fait le lot.** Une carte de N réservations se décompte **à la réservation** :
+`ModeDecompteReservation::CarteStock`, troisième branche à côté du quota de formule et de la vente à
+l'unité. Le solde vit sur un droit de type carte, qui survit aux N réservations ; le droit `Booking`
+projeté reste l'accès physique au créneau, `creditRestant` à `null`.
+
+**La carte est désignée explicitement** dans la requête — le cas du comptoir, où l'agent la scanne.
+La résolution automatique « la carte de ce bénéficiaire » attend CQ-0, qui n'existe pas ; elle ne
+sera qu'un résolveur en amont, pas une reprise du lot.
+
+**Les dix échecs.** La suite du module est passée à 10 rouges après le recentrage de CQ-5. C'était le
+résultat **attendu** : les deux fichiers de test de CQ-5 encodaient l'ancien modèle — crédit forcé sur
+le droit projeté, restitution vérifiée là. S'ils étaient restés verts, cela aurait voulu dire que mon
+changement ne changeait rien.
+
+Je n'ai touché que **les constructeurs de scénario et la résolution du droit**. Aucune assertion
+métier n'a été affaiblie : un no-show « décompté » n'écrit toujours rien, un « restitué » incrémente
+toujours de un, le cloisonnement défensif reste un no-op silencieux, la course perdue reste distincte
+de l'absence de crédit. C'est la ligne que je me suis fixée — **un test qu'on ajuste pour qu'il passe
+ne teste plus rien**, et la tentation était réelle sur dix rouges d'un coup.
+
+**Une assertion change de statut plutôt que de contenu** : « appairage actif → `Support.versionMaj`
+bascule » passait auparavant sur un droit projeté auquel le test attachait artificiellement un
+support physique. Elle passe maintenant sur une carte — l'objet qui en porte réellement un. Tu
+l'avais pressenti : ce code n'était pas à corriger, il attendait ce modèle.
+
+**Vérifications :** `tests/Reservation` 93/93 (1095 assertions), `tests/Platform` 58/58, et la chaîne
+complète de migrations rejouée sur une base **réellement vide** (`database:drop` puis `create`)
+jusqu'à `Version20260824230500`.
+
+### L'arbitrage que je te laisse
+
+**La carte désignée l'emporte sur un quota de formule éventuel.** Si le client présente une carte
+alors qu'il a par ailleurs deux séances hebdomadaires incluses dans son abonnement, c'est la carte
+qui est débitée. Mon raisonnement : l'agent qui scanne exprime une intention, et deviner l'inverse
+serait pire.
+
+L'argument contraire se défend tout aussi bien : consommer d'abord le quota inclus — qui expire de
+toute façon en fin de semaine et **ne se reporte pas** (RG-M1-12) — est plus favorable au client, et
+lui garde sa carte pour plus tard. À bien y regarder, c'est même l'ordre que je choisirais comme
+client.
+
+Je ne l'ai pas tranché parce que c'est une politique commerciale, pas une contrainte technique. Le
+choix actuel est écrit en commentaire au point de décision, pas enfoui : inverser l'ordre est une
+ligne.
