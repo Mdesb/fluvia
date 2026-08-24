@@ -272,12 +272,109 @@ PHP
 commiter "banc : entite sans tenant"
 essai "couverture — entité exposée sans cloisonnement possible" refus
 
+# --- garde-fou n°6, règle A : un abonné que rien ne déclenchera -------------------------------
+# `sale.completed` est au catalogue et figure dans la ligne de base des orphelins : personne ne
+# l'émet. Un fichier qui l'écoute est donc du code mort silencieux.
+#
+# ⚠ Ce fichier ne doit PAS contenir le mot « DomainEvent » : le garde-fou reconnaît un émetteur à ce
+# motif, et la signature naturelle d'un écouteur (`__invoke(DomainEvent $e)`) le ferait basculer du
+# côté des publications. D'où le paramètre typé `object`.
+mkdir -p app/src/Offre/EventListener
+cat > app/src/Offre/EventListener/BancAbonneInerte.php <<'PHP'
+<?php
+declare(strict_types=1);
+namespace App\Offre\EventListener;
+use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
+#[AsEventListener(event: 'sale.completed')]
+final class BancAbonneInerte
+{
+    public function __invoke(object $evenement): void
+    {
+    }
+}
+PHP
+commiter "banc : abonne a un fait que personne n emet"
+essai "événements — abonné à un fait que personne n'émet" refus
+
+# --- garde-fou n°6, règle C : un fait publié hors du contrat -----------------------------------
+mkdir -p app/src/Offre/Service
+cat > app/src/Offre/Service/BancEmetteurHorsContrat.php <<'PHP'
+<?php
+declare(strict_types=1);
+namespace App\Offre\Service;
+use App\Platform\Event\DomainEvent;
+final class BancEmetteurHorsContrat
+{
+    public function go(object $bus, object $tenant, object $sujet): void
+    {
+        $bus->publish(new DomainEvent('banc.invente', $tenant, $sujet, []));
+    }
+}
+PHP
+commiter "banc : fait publie hors du catalogue"
+essai "événements — fait publié hors du catalogue" refus
+
+# --- garde-fou n°7 : charge utile qui ne respecte pas le contrat -------------------------------
+# `sale.completed` EST au catalogue (donc la règle C se taît) et y annonce « amount, lines,
+# customer? ». On l'émet avec une clé que le contrat n'annonce pas.
+mkdir -p app/src/Offre/Service
+cat > app/src/Offre/Service/BancChargeHorsContrat.php <<'PHP'
+<?php
+declare(strict_types=1);
+namespace App\Offre\Service;
+use App\Platform\Event\DomainEvent;
+final class BancChargeHorsContrat
+{
+    public function go(object $bus, object $tenant, object $sujet): void
+    {
+        $bus->publish(new DomainEvent('sale.completed', $tenant, $sujet, [
+            'bancCleInventee' => 1,
+        ]));
+    }
+}
+PHP
+commiter "banc : charge utile hors contrat"
+essai "charges utiles — clé absente du contrat" refus
+
+# --- garde-fou n°8 : écriture qui traverse la frontière ----------------------------------------
+# `Promotion` est dans la ligne de base du n°5 — rien ne la cloisonne — et son groupe d'écriture est
+# `ref:write`. On lui ajoute une relation écrivable vers `Ressource`, qui porte un établissement :
+# il n'y a plus de frontière ni en lecture ni en écriture.
+python3 - app/src/Offre/Entity/Promotion.php <<'PY'
+import io, sys
+p = sys.argv[1]
+s = io.open(p, encoding='utf-8').read()
+ajout = (
+    "\n    #[ORM" + chr(92) + "ManyToOne(targetEntity: Ressource::class)]\n"
+    "    #[Groups(['ref:write'])]\n"
+    "    private $bancRessource = null;\n"
+)
+i = s.rindex('}')
+io.open(p, 'w', encoding='utf-8').write(s[:i] + ajout + s[i:])
+PY
+commiter "banc : relation ecrivable vers du cloisonne"
+essai "écriture transfrontière — relation écrivable vers du cloisonné" refus
+
+# --- le filet de complétude lui-même ----------------------------------------------------------
+# C'est le mécanisme qui protège tous les autres : un garde-fou ajouté sans être appelé par le
+# hook doit faire refuser le push qui l'ajoute. Sans ce cas, le filet serait la seule pièce de
+# l'outillage dont personne ne vérifie qu'elle fonctionne — exactement la situation qui a laissé
+# les n°6, n°7 et n°8 muets pendant trois heures.
+cat > bin/garde-fou-banc-jamais-lance.php <<'PHP'
+<?php
+declare(strict_types=1);
+// Garde-fou factice : le hook ne l'appelle pas, le filet doit donc refuser le push.
+exit(0);
+PHP
+commiter "banc : garde-fou ajoute sans appel dans le hook"
+essai "filet — garde-fou présent mais jamais lancé" refus
+
 # ─────────────────────────────────────────────────────────── remise en état
 
 echo
 echo "Et il doit laisser passer ce qui est propre :"
 echo "// banc encore" >> README.md; commiter "banc : commit propre"
-essai "commit propre après quatre refus" acceptation
+essai "commit propre après neuf refus" acceptation
 
 echo "// banc interrupteur" >> README.md
 cat > app/src/Offre/Service/BancSignataire.php <<'PHP'
