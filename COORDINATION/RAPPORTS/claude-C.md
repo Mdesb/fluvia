@@ -13,6 +13,7 @@
 | 17:00 | **J'avais rouvert le trou que j'avais passé deux jours à fermer** : mon garde-fou de topologie est un `.sh`, or les deux filets ne globent que `.php` — retirer son appel n'aurait rien déclenché. Filet posé sur le lanceur, sans distinction d'extension, vérifié par mutation. `main` est vert (9/9). | les 13 jointures de la règle n°5 | rien |
 | 18:00 | **`claude-G` est toujours sur le dépôt nu** — et tu viens de lui donner du travail dans `Reservation`. Il a commité il y a 13 min directement dans les refs. Faits vérifiés ci-dessous. **Et j'ai corrigé mon propre message**, qui exagérait le constat. Lanceur 9/9, banc 17/17. | les 13 jointures de la règle n°5 | rien |
 | 19:00 | **Ma réinstallation automatique n'avait jamais servi** : `post-receive` ne voit que les push, or tu fusionnes dans `wt/main` — le reflog ne contient que des `merge`. Corrigé par `post-commit`/`post-merge` + un script partagé. Deuxième bogue trouvé au passage : `GIT_DIR` l'emporte sur `git -C`. | les 13 jointures de la règle n°5 | rien |
+| 21:00 | **Ramasseur livré** (`bin/ramasser-piles-test.sh`), fondé sur l'activité InnoDB et non sur l'âge — ta date de création surestimait l'abandon **de deux jours**. Ma pile démontée : 27→26. Les 21 autres ne sont pas à moi, commande vérifiée ci-dessous. Points 2 et 3 dans `infra/`, patch fourni. | règle n°5 | rien |
 
 ---
 
@@ -448,3 +449,88 @@ Il pose désormais les trois hooks automatiques d'un coup, et `--etat` les liste
 (jauges, liste d'attente) avec des modifications non commitées. Ce n'est pas urgent au sens où
 `pre-commit` le couvre, mais c'est la seule session dont le travail n'est jamais opposé aux cliquets
 de `main`.
+
+
+---
+
+### 2026-08-25 · 21:00 — Le ramasseur, et pourquoi l'âge ne suffisait pas
+
+**Point 1 livré : `bin/ramasser-piles-test.sh`.** Simulation par défaut, `--faire` pour agir,
+`--age=N` (défaut 6 h), `--moi=<jeton>` pour se limiter aux siennes. Il passe par
+`infra/test-stack.sh down` plutôt que par `docker rm` : c'est lui qui sait ce qu'une pile comporte, et
+une seconde implémentation finirait par diverger.
+
+**Ta crainte était la bonne, et l'âge n'y répondait pas.** Tu écrivais ne rien supprimer parce qu'une
+pile tuée sous une session qui teste lui coûte son verdict. L'âge de création ne dit rien de l'usage —
+une pile de cinq jours peut avoir servi il y a dix minutes. Le ramasseur lit donc le **mtime des
+fichiers InnoDB**, que le moteur touche quand la suite travaille.
+
+L'écart n'est pas théorique :
+
+| Pile | Selon la création | Activité réelle |
+|---|---|---|
+| `claudeC` | 104 h | **49 h** |
+| `claudeA2` | 122 h | **69 h** |
+| `claudeA` | 125 h | **103 h** |
+
+La date de création surestimait l'abandon de **deux jours** sur trois piles. Un ramasseur fondé
+dessus aurait été juste par accident.
+
+**Deux défauts de mon propre script, trouvés en lisant sa sortie plutôt qu'en la croyant.** Ma
+première version affichait « (création) » sur les vingt-deux lignes — donc mon signal d'activité ne
+marchait pas et je retombais **en silence** sur le critère faible que je venais d'annoncer vouloir
+éviter. Cause : `docker logs ... 2>/dev/null`, or **MariaDB journalise sur stderr** — je jetais le
+signal. Et même corrigé, il ne valait rien ici : la dernière ligne de MariaDB date du **démarrage**,
+elle ne distingue pas une pile utilisée d'une pile oubliée. D'où la sonde InnoDB, et une source
+affichée à chaque ligne — un verdict rendu sur la source faible ne vaut pas celui rendu sur la bonne.
+
+**Ce que j'ai fait, et ce que je n'ai pas fait.** J'ai démonté **la mienne** — `claudeC`, inactive
+49 h. **27 → 26 réseaux**, cinq créneaux. Je n'ai pas touché aux vingt et une autres : elles ne sont
+pas à moi, tu as choisi de ne pas les supprimer, et je ne renverse pas ce choix — je te donne
+seulement la mesure qui te manquait. **Aucune des 22 n'a été touchée depuis moins de 8 h**, mesuré,
+pas supposé. Quand tu veux :
+
+```
+bash bin/ramasser-piles-test.sh --age=8          # vérifie
+bash bin/ramasser-piles-test.sh --age=8 --faire  # ramasse
+```
+
+---
+
+**Points 2 et 3 : ils sont dans `infra/test-stack.sh`, hors de mon périmètre.** Je ne l'édite pas.
+Voici les deux morceaux, prêts à coller — à toi ou à qui tu l'assignes.
+
+**Avertissement au montage**, juste après `case "$ACTION" in` / `up)` :
+
+```sh
+    # Le pool d'adresses par défaut permet ~31 réseaux. En dessous de cinq, la panne est proche — et
+    # elle se manifeste par une erreur Docker incompréhensible en plein milieu d'une suite.
+    RESTANTS=$(( 31 - $(docker network ls -q | wc -l) ))
+    if [ "$RESTANTS" -lt 5 ]; then
+        echo "⚠ Il reste ~$RESTANTS réseaux Docker sur 31." >&2
+        echo "⚠ Ramasse les piles oubliées avant de monter : bin/ramasser-piles-test.sh --age=8" >&2
+    fi
+```
+
+**Préfixe d'identité obligatoire**, dans le contrôle d'usage :
+
+```sh
+case "$TOKEN" in
+    claude[A-I]*) ;;
+    *)
+        echo "✗ Le jeton doit commencer par l'identité de la session (ex. claudeC-cq5)." >&2
+        echo "  « N12T », « SOIR », « GL » ne disent pas qui doit démonter — c'est ainsi qu'on" >&2
+        echo "  se retrouve à 27 réseaux sans savoir à qui parler." >&2
+        exit 2
+        ;;
+esac
+```
+
+Le préfixe change tout pour le ramasseur : aujourd'hui il ne peut que mesurer l'inactivité ; avec lui,
+`--moi=` devient utilisable par chacun et personne n'a besoin de trancher sur la pile d'un autre.
+
+**Sur ta dernière phrase.** Tu écris que c'est le troisième mécanisme de la journée qui existe sans
+tourner. C'est le quatrième : entre-temps j'ai trouvé que ma **réinstallation automatique des hooks**
+n'avait jamais tourné non plus — `post-receive` ne voit que les push, et ton reflog ne contient que
+des `merge`. Corrigé ce soir. Le motif est le même à chaque fois, et il vaut pour moi autant que pour
+toi : on vérifie qu'une chose *fonctionne quand on la lance*, jamais qu'elle *sera lancée*.
