@@ -285,6 +285,7 @@ lui fait porter le risque. La prochaine fois je donne les deux, ou je dis que je
 | 22:38 | Arbitrage CQ-3/CQ-6 reçu et **je prends le lot fusionné** (voir plus bas pourquoi le claim reste ici et pas dans `TASKS.md`). Autorisation de rouvrir CQ-5 notée. | **Mais le lot est bloqué sur CQ-0, et personne ne l'avait vu** : `DroitAcces` n'a aucun lien vers un porteur, donc « la carte de séances DE CE bénéficiaire » n'est pas résoluble. Vérifié dans l'entité, pas supposé. Je propose une tranche livrable sans CQ-0 — ci-dessous. | **CQ-0 (claude-C, statut CLAIM, pas commencée)** pour la partie nominative. Le reste avance. |
 | 23:01 | **Voisinage vérifié sur ACT-1 point 3** : `Boutique` 56/56, `Musee` 22/22, `Reporting` 46/46. **`Padel` a un échec — et il n'est pas de moi : il existe déjà sur `main`, et même à `79cbf20`, avant que je ne touche quoi que ce soit aujourd'hui.** Démonstration sous le tableau. | Le lot CQ-3+CQ-6 (tranche « carte désignée »). | Rien. |
 | 23:40 | **PRÉSENTATION HORAIRE + CQ-3 & CQ-6 LIVRÉS** (tranche « carte désignée », sans CQ-0). `tests/Reservation` **93/93** (1095 assertions), `tests/Platform` **58/58**, chaîne de migrations rejouée depuis une base vide jusqu'à `Version20260824230500`. Les 10 échecs rencontrés en route étaient **exactement ceux que le recentrage devait produire** — détail sous le tableau. | Prêt à fusionner. Ensuite ACT-1 point 2 (réserver un type), sauf ordre contraire. | Rien. **Un arbitrage commercial t'attend** : la carte désignée l'emporte aujourd'hui sur un quota de formule éventuel. |
+| 00:13 | **ACT-1 EST COMPLET — les trois manques de D16 sont couverts.** Point 2 livré : on réserve un type, l'instance s'affecte plus tard. `tests/Reservation` **96/96** (1138 assertions), `tests/Platform` **58/58**, migrations rejouées depuis une base vide jusqu'à `Version20260824234300`. | Prêt à fusionner. Périmètre : il me reste CQ-4 côté `Acces` (pas à moi) et la moitié nominative de CQ-3/CQ-6 (bloquée sur CQ-0). **Donne-moi la suite** — sinon je prends la dette de mon module. | Rien. |
 
 ## Nouvelle règle de Maxime — présentation horaire à `claude-A`
 
@@ -611,3 +612,53 @@ client.
 Je ne l'ai pas tranché parce que c'est une politique commerciale, pas une contrainte technique. Le
 choix actuel est écrit en commentaire au point de décision, pas enfoui : inverser l'ordre est une
 ligne.
+
+
+## ACT-1 point 2 — réserver un type, affecter l'instance après
+
+**La solution n'a demandé aucune entité neuve, et c'est le point important.** Le type est une
+`Ressource` qui porte des sous-ressources ; les instances sont ses enfants. La structure existait
+déjà — ce qui change est l'usage : réserver **l'enfant**, c'est choisir une instance précise (la
+ligne d'eau 1, le court 3) ; réserver **le parent**, c'est réserver un type, et l'instance arrive
+plus tard, parfois à l'arrivée du client. C'est le même arbre de ressources qui sert la capacité
+englobante du point 3, utilisé dans l'autre sens.
+
+Aucune colonne sur `Creneau`, aucune entité créée : `Reservation.ressourceAffectee` et une opération
+`POST /reservation/reservations/{id}/affecter`. La « couche mince » de D16, littéralement.
+
+**Trois refus, dont un seul protège quelqu'un.** Instance étrangère au type réservé (422) — sinon
+« chambre double » pourrait être honorée par un emplacement de camping. Instance d'un autre
+établissement (404, échec fermé, l'instance étant désignée par le client). Et surtout : **instance
+déjà affectée sur un créneau qui chevauche** (409). C'est celui-là qui compte — sans lui, deux
+personnes reçoivent la chambre 214 pour la même nuit, et personne ne le découvre avant l'arrivée.
+
+Le chevauchement se lit sur les créneaux et non sur les journées : une chambre n'est pas libre
+« à moitié ».
+
+**Droit retenu :** `reservation.reserver` et non `gerer_ressource`. Affecter une chambre est un acte
+d'exploitation courant, fait au comptoir par qui prend les réservations, pas une administration du
+référentiel. Dis-moi si tu vois les choses autrement, c'est une ligne.
+
+## Deux fois ce soir, j'ai rendu un verdict sur un arbre qui avait bougé
+
+À consigner, parce que c'est une erreur de méthode et qu'elle est invisible dans le résultat.
+
+1. **Suite lancée, puis annotation de sérialisation retirée en cours de route** (ACT-1 point 3).
+2. **Suite lancée, puis classe renommée** après le refus du garde-fou D5 (ACT-1 point 2). Résultat :
+   trois rouges, `Processor "AffecterRessourceProcessor" not found` — la suite cherchait une classe
+   qui n'existait plus. J'ai relancé et obtenu 96/96.
+
+Les deux fois, le verdict ne valait rien. Les deux fois, j'aurais pu le prendre pour argent comptant
+si je n'avais pas su ce que j'avais touché entre-temps — et la seconde aurait été pire dans l'autre
+sens : un rouge que j'aurais pu attribuer à mon code alors qu'il ne venait que du renommage.
+
+**Règle que je m'applique désormais :** on ne modifie pas l'arbre pendant qu'une suite tourne. Si
+c'est urgent, on tue la suite et on la relance — dix minutes perdues valent mieux qu'un verdict faux.
+
+## Le garde-fou D5 m'a arrêtée, et il a eu raison
+
+Mon premier nom de classe était `AffecterRessourceProcessor`. Le hook a refusé le commit :
+« identifiant français dans un fichier nouvellement ajouté ». Renommé en `AssignResourceProcessor`.
+
+J'avais lu D5 douze heures plus tôt et je l'ai enfreinte quand même. C'est exactement l'argument que
+tu défendais ce matin : la barrière ne doit pas dépendre de la vigilance de qui écrit.
