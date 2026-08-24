@@ -928,3 +928,39 @@ qui s'est arrêté. Neuf sessions construisent une API que rien n'affiche.
 vide. Ce n'est pas un déplacement de périmètre — `frontend/**` n'appartenait à personne, je ne prends
 rien à personne. **Maxime tranche** : s'il préfère que le front revienne à `claude-I`, encore à ouvrir,
 `claude-H` repasse sur le social sans discuter.
+
+### 2026-08-24 23:15 · D37 — L'instant métier d'un événement ne se devine pas
+`claude-D` a trouvé, en testant le chemin complet plutôt que l'abonné isolément, que
+`SubscriptionActivator` publiait `subscription.activated` **sans horodater l'événement**. `DomainEvent`
+tombait donc sur son défaut documenté — `null` = maintenant — et l'abonné calculait les capacités
+actives à l'instant d'**exécution** au lieu de l'instant **métier**.
+
+**Ce que cela produisait :** un abonnement prenant effet plus tard était provisionné **sans les options
+achetées** — la formule seule, parce que les lignes n'étaient pas encore actives à la date du calcul.
+Aucune erreur, aucune trace, un établissement livré incomplet. Personne ne l'aurait vu avant que le
+client ne cherche son module.
+
+**Ce n'est pas un cas isolé. J'ai compté : vingt et un fichiers émettent un `DomainEvent`, et un seul
+passe un instant explicite — celui que `claude-D` vient de corriger.** Les vingt autres reposent sur le
+défaut, y compris deux que j'ai écrits moi-même en SF-1 (`AnnulerReservationProcessor`,
+`BasculerNoShowCommand`).
+
+**Le défaut du contrat est le vrai coupable.** `?\DateTimeImmutable $occurredAt = null` se lit comme
+« optionnel », alors qu'il signifie « je certifie que l'instant métier est maintenant ». Pour une
+annulation traitée dans la seconde, c'est vrai. Pour une activation différée, une bascule de no-show
+nocturne ou une purge, c'est faux — et faux silencieusement.
+
+**Traitement : un cliquet, pas un grand soir.** Rendre le paramètre obligatoire casserait vingt et un
+appels d'un coup, répartis sur sept périmètres, et bloquerait tout le monde une soirée. On applique donc
+ce que ce dépôt fait déjà six fois : **la dette est gelée à 20, et elle ne peut que descendre.** Toute
+émission **neuve** doit passer son instant métier explicitement ; les vingt existantes se corrigent au
+fil de l'eau, par le propriétaire de chaque module, quand il repasse dessus.
+
+Garde-fou demandé à `claude-C`. Et la règle de lecture, pour ceux qui corrigeront : l'instant métier est
+celui où **le fait s'est produit pour le client** — la date d'effet de l'abonnement, l'heure du créneau
+manqué, la date de la demande de purge — jamais l'heure à laquelle le code s'exécute.
+
+**Ce que `claude-D` en tire et que je reprends :** ce défaut n'était visible qu'en testant **à travers le
+bus**. Ses tests du provisionnement seul passaient, parce qu'ils appelaient l'abonné à la main avec le
+bon instant. Un abonné testé isolément prouve que l'abonné est juste, pas que l'émetteur lui dit la
+vérité.
