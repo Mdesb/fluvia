@@ -19,6 +19,13 @@ use Doctrine\ORM\EntityManagerInterface;
  * non chiffré par les sources) est porté par `ListeAttente.dateExpirationPromotion` ;
  * `expirerPromotionsDepassees()` matérialise l'expiration : la réservation issue de la promotion
  * (si toujours confirmée et sans présence) est libérée et le rang suivant promu.
+ *
+ * **Correctif du 24/08 (défaut préexistant, hors ACT-1).** La promotion créait une `Reservation`
+ * sans jamais incrémenter `Ressource.occupationCourante`, alors que `ReserverProcessor` le fait.
+ * Ce n'était pas un simple sous-comptage : la réservation issue d'une promotion est ensuite annulable
+ * par les chemins ordinaires, qui **décrémentent** — la jauge perdait alors une unité appartenant à
+ * une autre réservation. La promotion incrémente donc désormais, et les deux sorties propres à ce
+ * service (expiration de promotion) décrémentent, pour que ce qu'on relâche soit ce qu'on a pris.
  */
 final class PromotionListeAttenteHandler
 {
@@ -27,6 +34,8 @@ final class PromotionListeAttenteHandler
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly JaugeCreneauGuard $jauge,
+        private readonly JaugeRessourceMereHandler $jaugeMere,
+        private readonly ConsumedSlotResolver $creneauxConsommes,
         private readonly NotificationReservationInterface $notification,
     ) {
     }
@@ -60,6 +69,25 @@ final class PromotionListeAttenteHandler
             return null;
         }
 
+        // Le créneau peut avoir de la place sans que la ressource porteuse en ait (RG-M5-08, CA-14) :
+        // le même double contrôle que `ReserverProcessor`, sans quoi la promotion serait le seul
+        // chemin capable de faire déborder la jauge globale.
+        $ressourcePorteuse = $creneau->getRessource();
+        if ($ressourcePorteuse !== null && $this->jaugeMere->jaugeDepassee($ressourcePorteuse, $inscription->getQuantity())) {
+            return null;
+        }
+
+        // ACT-1 point 3 / D33 — un promu consomme exactement ce qu'aurait consommé une réservation
+        // ordinaire sur ce créneau. L'oublier ici ferait de la promotion un chemin qui remplit la
+        // salle sans jamais apparaître dans son service : même famille que le défaut de jauge
+        // corrigé juste avant, par le même mécanisme.
+        $consommes = $this->creneauxConsommes->resolve($creneau);
+        foreach ($consommes as $consomme) {
+            if (!$this->jauge->peutAccueillir($consomme, $inscription->getQuantity())) {
+                return null;
+            }
+        }
+
         $reservation = new Reservation();
         $reservation->setCreneau($creneau)
             ->setOrganisateur($inscription->getBeneficiaire())
@@ -67,7 +95,14 @@ final class PromotionListeAttenteHandler
             ->setModeDecompte(ModeDecompteReservation::Gratuit)
             ->setQuantity($inscription->getQuantity())
             ->setMontantDu('0.00');
+        foreach ($consommes as $consomme) {
+            $reservation->addConsumedSlot($consomme);
+        }
         $this->em->persist($reservation);
+
+        if ($ressourcePorteuse !== null) {
+            $this->jaugeMere->incrementer($ressourcePorteuse, $inscription->getQuantity());
+        }
 
         $inscription->setStatut(StatutListeAttente::Promue);
         $inscription->setPromueEn($reservation);
@@ -96,6 +131,14 @@ final class PromotionListeAttenteHandler
             $reservation = $inscription->getPromueEn();
             if ($reservation !== null && $reservation->getStatut() === StatutReservation::Confirmee && !$reservation->isPresenceConfirmee()) {
                 $reservation->setStatut(StatutReservation::AnnuleeLibre);
+                // Symétrie exigée par claude-A : c'est LA sortie propre à ce service, et la seule
+                // qui ne passe ni par `AnnulerReservationProcessor` ni par `BasculerNoShowCommand`.
+                // Sans elle, incrémenter à la promotion transformerait un sous-comptage inoffensif
+                // en fuite de compteur — pire qu'avant.
+                $ressourceExpiree = $reservation->getCreneau()?->getRessource();
+                if ($ressourceExpiree !== null) {
+                    $this->jaugeMere->decrementer($ressourceExpiree, $reservation->getQuantity());
+                }
             }
             $inscription->setStatut(StatutListeAttente::Expiree);
         }

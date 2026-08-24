@@ -20,6 +20,7 @@ use App\Subscription\Entity\ProvisioningRequest;
 use App\Subscription\Entity\Subscription;
 use App\Subscription\Enum\ProvisioningStatus;
 use App\Subscription\Enum\SubscriptionStatus;
+use App\Subscription\Service\DemoConfiguration;
 use App\Subscription\Service\ProvisioningService;
 use App\Tests\SocleApiTestCase;
 use Doctrine\ORM\EntityManagerInterface;
@@ -255,7 +256,9 @@ final class ProvisioningServiceTest extends SocleApiTestCase
         /** @var Fonctionnalites $features */
         $features = static::getContainer()->get(Fonctionnalites::class);
 
-        return new ProvisioningService($this->em(), $hasher, $features);
+        // Aucun fournisseur d'instantané : ces tests portent sur le provisionnement, pas sur la
+        // reprise de démo, qui a ses propres cas dans SubscriptionFunnelTest.
+        return new ProvisioningService($this->em(), $hasher, $features, new DemoConfiguration([]));
     }
 
     /**

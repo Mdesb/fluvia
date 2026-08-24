@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Subscription\Service;
 
 use App\Crm\Entity\Client;
-use App\Organisation\Entity\Etablissement;
+use App\Organisation\Service\EditorTenantResolver;
 use App\Platform\Event\DomainEvent;
 use App\Platform\Event\EventBus;
 use App\Platform\Event\EventSubject;
@@ -27,14 +27,20 @@ use Doctrine\ORM\EntityManagerInterface;
  * **Le tenant de l'événement est l'établissement de l'éditeur, pas celui du client.** Au moment où
  * l'abonnement s'active, l'établissement du client n'existe pas encore : c'est précisément ce que le
  * provisioning va créer. L'événement appartient donc au périmètre où vit le commerce — celui de
- * l'éditeur (RG-ED-01, D12) — et on le déduit de la fiche CRM du prospect, seule donnée qui le porte
- * aujourd'hui.
+ * l'éditeur (RG-ED-01, D12).
+ *
+ * **La désignation vient de {@see EditorTenantResolver}, plus d'une déduction** (Q-1, D36). On la
+ * tirait de `Client::getEtablissementCreation()`, ce qui était juste mais indirect — et surtout
+ * intenable pour le tunnel, où le prospect compose son panier avant d'avoir une fiche. La fiche
+ * reste vérifiée, mais pour ce qu'elle est : l'intégrité du rattachement (RG-ED-02), pas la source
+ * du périmètre.
  */
 final class SubscriptionActivator
 {
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly EventBus $bus,
+        private readonly EditorTenantResolver $editorTenant,
     ) {
     }
 
@@ -49,7 +55,8 @@ final class SubscriptionActivator
      */
     public function activate(Subscription $subscription, \DateTimeImmutable $at): void
     {
-        $editor = $this->editorEstablishment($subscription);
+        $this->assertCustomerExists($subscription);
+        $editor = $this->editorTenant->resolve();
 
         $subscription->transitionTo(SubscriptionStatus::Active, $at);
         $this->em->flush();
@@ -63,39 +70,33 @@ final class SubscriptionActivator
                 'capabilities' => array_values($subscription->activeCapabilities($at)),
                 'effectiveFrom' => $at->format(\DateTimeInterface::ATOM),
             ],
+            null,
+            // L'événement est horodaté à l'instant **métier**, pas à l'instant d'exécution. L'abonné
+            // s'en sert pour calculer les capacités actives : laisser « maintenant » ferait
+            // provisionner un abonnement qui prend effet plus tard sans les options qu'il a achetées,
+            // et personne ne le verrait avant que le client ne cherche son module.
+            $at,
         ));
     }
 
     /**
-     * L'établissement de l'éditeur, déduit de la fiche CRM du prospect.
+     * Un abonnement s'active toujours pour quelqu'un (RG-ED-02).
      *
-     * Rien dans le dépôt ne désigne aujourd'hui « l'établissement éditeur » : il n'existe ni
-     * paramètre, ni marqueur. `etablissementCreation` de la fiche client est la seule donnée qui le
-     * porte — c'est bien l'éditeur, puisque c'est son CRM qui a créé le prospect. La déduction est
-     * juste mais indirecte, et elle ne tiendra plus le jour où un prospect anonyme composera son
-     * panier avant d'avoir une fiche.
+     * On ne s'en sert plus pour trouver le périmètre — c'est le rôle de la désignation — mais activer
+     * un abonnement dont la référence client ne désigne rien laisserait un provisionnement condamné
+     * d'avance : il échouerait plus loin, après que le prélèvement a été accepté. Autant refuser ici.
      */
-    private function editorEstablishment(Subscription $subscription): Etablissement
+    private function assertCustomerExists(Subscription $subscription): void
     {
-        $client = $this->em->getRepository(Client::class)->find($subscription->getCustomerReference());
-        if (!$client instanceof Client) {
-            throw new UnknownCustomerException(sprintf(
-                'Abonnement « %s » : aucune fiche client « %s ». Un abonnement sans client ne peut pas '
-                .'être rattaché à un périmètre, et un événement sans tenant est refusé par le contrat.',
-                $subscription->getId()->toRfc4122(),
-                $subscription->getCustomerReference(),
-            ));
+        if (null !== $this->em->getRepository(Client::class)->find($subscription->getCustomerReference())) {
+            return;
         }
 
-        $editor = $client->getEtablissementCreation();
-        if (!$editor instanceof Etablissement) {
-            throw new UnknownCustomerException(sprintf(
-                'La fiche client « %s » n\'est rattachée à aucun établissement : impossible de savoir '
-                .'dans quel périmètre l\'abonnement est vendu.',
-                $subscription->getCustomerReference(),
-            ));
-        }
-
-        return $editor;
+        throw new UnknownCustomerException(sprintf(
+            'Abonnement « %s » : aucune fiche client « %s ». Activer un abonnement sans client '
+            .'condamne son provisionnement, après encaissement.',
+            $subscription->getId()->toRfc4122(),
+            $subscription->getCustomerReference(),
+        ));
     }
 }

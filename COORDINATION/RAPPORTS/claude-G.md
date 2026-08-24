@@ -278,6 +278,9 @@ corriger sans effet de bord. Une remontée qui décrit le symptôme et laisse le
 lui fait porter le risque. La prochaine fois je donne les deux, ou je dis que je ne sais pas.
 
 | 21:48 | **D32 point 5 soldé sur ACT-1** : chaîne complète rejouée sur une base vidée — **75 migrations, 1153 requêtes, `[OK] Successfully migrated`** jusqu'à `Version20260824200000`. Ma `Version20260824182500` s'applique dans l'ordre, entre `181500` et `190000` : horodatée en heure locale comme D32 l'exige, pas en UTC. | CQ-3 : lecture faite, et il manque une spec — voir la question ci-dessous, je ne bloque pas dessus. | Rien. |
+| 22:10 | **Correctif de jauge livré, seul et vert** : la promotion de liste d'attente prend désormais sa place sur `Ressource.occupationCourante`, l'expiration de promotion la rend, et la promotion contrôle enfin la jauge mère. `tests/Reservation` **87/87** (1042 assertions). **Je me corrige : ce défaut n'était pas un sous-comptage, il libérait des places qui ne sont pas libres** — détail sous le tableau. | ACT-1 point 3, avec la distinction de D33 : créneau visé unique, créneaux consommés stockés. Le résolveur est écrit et attendait que ce commit parte seul. | Rien. |
+| 22:20 | **PRÉSENTATION HORAIRE** (D35) — `claude-G` en ligne. Depuis la précédente : correctif de jauge poussé seul et vert (87/87), puis **ACT-1 point 3 écrit** — créneaux consommés stockés, `CapaciteEnglobanteTest` 3/3, le cas de D16 refuse bien « une table libre quand le service est plein ». | Tâche en cours : suite complète `tests/Reservation` sur l'arbre final, lancée il y a quinze minutes. Je commite sur vert, puis `tests/Platform`, rejeu de la chaîne de migrations depuis zéro (D32 point 5), et vérification de voisinage sur `Boutique`, `Musee`, `Padel` et `Reporting` — leurs réservations passent maintenant par mon invariant, c'est à moi de montrer que je ne les ai pas cassées. | Rien. |
+| 22:31 | **ACT-1 point 3 livré** : créneaux consommés stockés (D33), `tests/Reservation` **90/90** (1077 assertions). Le cas de D16 est exprimable — un créneau de 4 places sur le bassin plafonne un créneau de 6 sur la ligne d'eau, message à l'appui. Deux corrections que je me suis faites en route, détaillées sous le tableau : ma première jauge ne comptait rien, et la reprise de données que je disais inutile est devenue obligatoire. | `tests/Platform`, rejeu des migrations depuis zéro, puis vérification de voisinage `Boutique`/`Musee`/`Padel`/`Reporting`. | Rien. |
 
 ## Nouvelle règle de Maxime — présentation horaire à `claude-A`
 
@@ -331,3 +334,87 @@ tout seul — c'est la règle 2, et c'est `claude-C` qui a eu raison de la tenir
 **En attendant, je ne m'arrête pas** : je prépare la spec en brouillon dans mon rapport plutôt que
 dans `specs/`, ce qui ne prend de périmètre à personne et te donne quelque chose à trancher plutôt
 qu'une question sèche.
+
+
+## Le défaut de la promotion — requalifié, parce que ma première description était fausse
+
+**Ce que j'avais écrit :** « la promotion n'incrémente pas la jauge, c'est symétrique, ça ne fuit
+pas, la jauge sous-compte ». `claude-A` l'a repris tel quel dans son arbitrage. C'était faux, et
+c'est moi qui l'ai induit en erreur.
+
+**Ce qui se passait réellement.** La promotion créait une réservation sans incrémenter
+`Ressource.occupationCourante`. Mais cette réservation-là s'annule ensuite par les chemins
+ordinaires — `AnnulerReservationProcessor`, `AnnulerCreneauProcessor`, `BasculerNoShowCommand` — qui
+**décrémentent tous**. La jauge perdait donc une unité qu'elle n'avait jamais prise pour cette
+réservation : une unité appartenant à **une autre**.
+
+**Le nom correct n'est pas « la jauge sous-compte », c'est « la jauge libère des places qui ne sont
+pas libres ».** C'est du surbooking silencieux, sur un compteur qui a l'air cohérent parce qu'il ne
+descend jamais sous zéro. Le symptôme visible est un client qui se présente et dont la place a été
+revendue — à un moment et sur une ressource qui n'ont aucun rapport avec la promotion qui l'a causé.
+
+**Les trois changements, et pourquoi chacun :**
+
+1. **La promotion incrémente**, de la quantité de l'inscription. C'est le correctif.
+2. **`expirerPromotionsDepassees()` décrémente.** C'est le point que `claude-A` m'avait demandé de
+   vérifier avant de pousser, et il avait raison de le demander : c'est **la seule sortie qui ne
+   passe par aucun autre service**. Sans elle, incrémenter à la promotion aurait transformé un
+   défaut inoffensif en fuite active — pire qu'avant.
+3. **La promotion contrôle la jauge mère** avant de promouvoir. Elle ne vérifiait que la capacité du
+   créneau : c'était le seul chemin capable de faire déborder la jauge globale (RG-M5-08, CA-14).
+
+**Ce que je n'ai pas touché**, et qui reste à confier : `JaugeRessourceMereHandler` n'est appelé que
+depuis `app/src/Reservation`. `Padel\State\ReserverTerrainProcessor` et
+`Padel\Service\GenererPoulesEtBlocageHandler` créent des réservations confirmées sans l'appeler ;
+`Musee\Service\PrioriteOtaResolver` en passe en `AnnuleeLibre` sans l'appeler non plus. Même
+famille exactement. Je n'ai pas vérifié comment les réservations OTA du musée sont créées, donc je
+ne l'affirme pas — `claude-A` a pris le signalement, ces périmètres n'étant attribués à personne.
+
+
+## ACT-1 point 3 — ce qu'une spec aurait dit (tu m'as dit d'aller au code, le voici)
+
+**Retenu.** Une réservation garde **un seul créneau visé** (`Reservation::creneau`, inchangé,
+RG-M5-01 non réinterprétée) et porte un ensemble de **créneaux consommés** : le visé, plus ceux des
+ressources ancêtres qui le couvrent dans le temps. Résolus à la réservation par
+`ConsumedSlotResolver`, contrôlés un par un, **stockés** dans `reservation_consumed_slot`.
+
+**Écarté n°1 — dériver au lieu de stocker.** C'est ton argument, je n'y reviens pas.
+
+**Écarté n°2 — ma première implémentation, et c'est un test qui me l'a apprise.** J'avais écrit la
+jauge en `OR` : « les réservations qui **visent** ce créneau **ou** qui le **consomment** ». Deux
+défauts, dont un que je n'ai pas vu venir :
+- le paramètre était l'entité `Creneau`, dont l'identifiant est un type Doctrine personnalisé : il ne
+  se liait pas, la requête ne comptait plus **rien**, et un créneau plein acceptait tout ;
+- même corrigé, un `OR` avec jointure aurait compté **deux fois** une réservation dont le visé est
+  aussi dans les consommés.
+
+**Retenu à la place, et c'est meilleur que ce que j'avais prévu :** `Reservation::setCreneau()`
+enregistre lui-même le visé comme consommé. L'invariant vit dans **l'entité**, donc il vaut pour tous
+les chemins — j'ai relu les dix-huit points d'appel : `Boutique`, `Musee` et `Padel` créent tous
+leurs réservations par `setCreneau()`, et **aucun ne réassigne** le créneau d'une réservation
+existante (ce qui laisserait un créneau consommé fantôme). Ils sont couverts sans que j'écrive une
+ligne chez eux, et la jauge devient une jointure simple, sans `OR` et sans doublon.
+
+**Conséquence que j'avais niée et qui est vraie : la reprise de données est obligatoire.** J'avais
+écrit dans l'en-tête de ma migration qu'il n'y en avait pas besoin. Faux : la jauge comptant
+désormais par les créneaux consommés, toute réservation antérieure au lot en serait absente — donc
+invisible à la jauge, donc son créneau passerait pour libre et se revendrait. Même famille exacte que
+le défaut de promotion corrigé une heure plus tôt, mais massive et immédiate. La migration reprend
+donc le créneau visé de chaque réservation existante. Elle ne recalcule **pas** les ancêtres :
+ce serait inventer rétroactivement une consommation jamais contrôlée, sur des créneaux passés.
+
+**Deux choix mineurs, dits pour qu'ils ne soient pas découverts plus tard :**
+- **Couvrir, pas chevaucher.** Un créneau ancêtre ne compte que s'il commence au plus tard et finit
+  au plus tôt aux bornes du visé. Le chevauchement partiel ne dit pas combien d'unités lui imputer :
+  c'est une question ouverte, pas un cas à deviner.
+- **La chaîne est remontée en entier**, avec un garde-fou anti-cycle.
+  `Ressource::ressourcePorteuseJauge()` s'arrête à `ressourceMere ?? $this` — correct pour la jauge
+  globale qu'elle sert, insuffisant ici : `ressourceMere` est une auto-référence, donc une ligne d'eau
+  peut avoir un bassin qui a lui-même un espace.
+- **Les créneaux consommés ne sont pas sérialisés.** Les exposer ferait grossir chaque ligne de liste
+  d'un créneau imbriqué par ancêtre, et aucun écran ne les demande (D13). On ouvrira le jour où un
+  écran le réclame.
+
+**DDL non deviné** : relevé par `SHOW CREATE TABLE` sur la table que Doctrine crée réellement depuis
+le mapping, noms d'index et de contraintes compris, pour qu'un futur `migrations:diff` ne propose pas
+de les renommer. Migration écrite à la main, horodatée en heure locale (D32).

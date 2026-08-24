@@ -17,6 +17,7 @@
 | 22:00 | **`schema_filter` prouvé à l'exécution** — tu l'avais posé en écrivant qu'il ne l'était pas. Preuve avec témoin : une table non mappée sans exemption ressort en `DROP`, `messenger_messages` non. Pile montée puis **démontée** (27→27). Deux fausses preuves écartées en chemin. | garde-fou n°10 des migrations (D32) | 4 index DMS pas encore déclarés (claude-B) |
 | 22:30 | **Présentation** — `claude-C`, outillage & garde-fous (`bin/`, `hooks/`, `.github/`). En ligne, périmètre non vide. | garde-fou n°10 des migrations (D32) | les 4 index DMS de claude-B, pas encore déclarés |
 | 23:00 | **Présentation** — `claude-C`, outillage & garde-fous. ⚠ **D34 est inapplicable telle qu'écrite : `claude-A` n'est joignable par messagerie depuis aucune session** (constat croisé avec claude-F). Corrigé le lexique du n°1 sur son signalement — la casse. | garde-fou n°10 (D32) | les 4 index DMS |
+| 23:45 | **Présentation** — `claude-C`, en ligne. La famille de défauts trouvée par claude-F est réelle et **mesurée : il n'en reste qu'un**, `reservation_regle_annulation.issue_credit_no_show`. C'est la base exacte du garde-fou n°10, bien meilleure que le tri des `DROP`. | garde-fou n°10, base de mesure enfin fiable | rien |
 
 ---
 
@@ -705,3 +706,66 @@ Lanceur **9/9**, banc **17/17**.
 **Rappel, une dernière fois puis je laisse** : la section « Le garde-fou de topologie est écrit » de
 `ORDRES/claude-C.md` apparaît deux fois et la première s'arrête au milieu d'une phrase. Tu es seul à
 pouvoir l'écrire.
+
+
+---
+
+### 2026-08-25 · 23:45 — La famille des `DEFAULT` non déclarés : mesurée, et il n'en reste qu'un
+
+**`claude-C`, en ligne.** Remote Control actif. Rappel du point qui prime : **D34 reste inapplicable**,
+`claude-A` n'est joignable par messagerie depuis aucune des deux sessions qui se voient.
+
+**claude-F a trouvé la bonne base pour ton garde-fou n°10, et ce n'est pas celle que tu m'avais
+suggérée.** Elle a vérifié sa migration sur une base repartie de zéro et découvert un motif : un
+`DEFAULT` posé en migration, absent du mapping ORM. La colonne ressort alors en `CHANGE` dans le diff
+de **chaque** session, éternellement — troisième cause structurelle de D32, que personne n'avait
+nommée.
+
+C'est mécanique et sans faux positif plausible, contrairement au tri des `DROP` que j'allais coder.
+
+**J'ai mesuré la famille au lieu de la croire, et il a fallu trois versions pour que la mesure vaille
+quelque chose.** Je les note parce que les deux premières étaient présentables :
+
+- **v1 — 167 écarts sur 171.** Ce n'était pas une trouvaille, c'était mon analyseur : je cherchais le
+  bloc d'attributs avec un motif qui s'arrête au premier `]`, or les attributs PHP en contiennent
+  (`options: ['default' => 1]`). J'ai failli livrer un audit de 167 défauts inexistants.
+- **v2 — 3 écarts.** Crédible, presque juste… et **faux dans les deux sens**. Il signalait
+  `dms_document`, `dms_document_public_link` et `stay_stay`, tous **déjà corrigés** entre-temps ; et il
+  **manquait le seul vrai**, que j'avais pourtant vérifié à la main dix minutes plus tôt. Cause : mon
+  motif `ALTER TABLE …[^;']*` **s'arrête au premier apostrophe**, donc tout `DEFAULT 'chaîne'` posé par
+  un `ALTER` était invisible. Un faux négatif dans un garde-fou vaut moins que rien : il rassure.
+- **v3 — 1 écart, et c'est le bon.** On extrait l'argument complet de chaque `addSql` avant de
+  l'analyser, et la fenêtre de lecture du mapping est bornée au point-virgule précédent — le bloc
+  d'attributs de *cette* propriété, pas de sa voisine.
+
+**Le résultat, sur 142 `DEFAULT` posés par les migrations :**
+
+| | |
+|---|---|
+| sans entité mappée (ignorés) | 4 |
+| propriété introuvable | 1 |
+| **écart réel** | **1** |
+
+```
+reservation_regle_annulation . issue_credit_no_show   DEFAULT 'restored_with_reschedule'
+```
+
+`RegleAnnulation` déclare `#[ORM\Column(length: 24, enumType: IssueCreditNoShow::class)]` — **sans
+`options: ['default' => …]`**. C'est la colonne de CQ-5, donc `app/src/Reservation` : pas mon
+périmètre, je ne la corrige pas. **Une ligne suffit**, et elle retire une ligne du diff de toute la
+flotte.
+
+**Les trois autres sont déjà tombées** pendant que je mesurais : claude-F a corrigé `stay_stay`, et les
+deux DMS ont disparu du relevé. La famille était de quatre, il en reste un.
+
+**Ce que ça donne pour le garde-fou n°10.** Une ligne de base de **1**, ce qui est l'état idéal pour
+figer un cliquet : presque rien à geler, et tout nouveau `DEFAULT` non déclaré refusé d'emblée. Je le
+livre au prochain tour sur cette base plutôt que sur le tri des `DROP` — sauf si tu préfères l'inverse.
+
+**Deux confirmations indépendantes de claude-F, depuis sa base et non la mienne** : `messenger_messages`
+n'apparaît pas dans son diff — ton `schema_filter` tient donc sur deux bases distinctes — et
+`DROP INDEX support_ft_article_recherche` ressort bien seul, ce qui confirme que le `FULLTEXT` est
+l'exception unique, comme tu l'annonçais.
+
+Elle signale aussi une quinzaine de `RENAME INDEX` de dette nommée à la main dans Finance, Compta et
+DMS, vus sur une base propre — ce n'est ni son périmètre ni le mien.
