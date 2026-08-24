@@ -76,3 +76,51 @@ Les renommer casse les clients ; les garder fige le vocabulaire là où il devai
 Ma lecture : on **ne renomme pas** les `shortName`. Ils sont techniques et anglais-compatibles ; le
 mot de métier vit dans la clé, à l'affichage. Mais c'est un choix de contrat (D2), donc il revient à
 `claude-A`. Demandé dans `RAPPORTS/claude-I.md` au battement du 24/08 18:26.
+
+---
+
+## Vérification : chaque clé a-t-elle un point d'affichage réel ?
+
+Un catalogue de vocabulaire qui nomme des concepts que personne n'affiche est du décor. J'ai donc
+confronté les douze clés au `frontend/` réel. Le résultat n'est pas celui que j'attendais, et il change
+l'ordre des travaux.
+
+### Quatre clés sont vivantes, et toutes les quatre au même endroit
+
+`frontend/src/pages/Reservation.jsx` affiche aujourd'hui, en dur :
+
+| Libellé affiché | Clé correspondante | Ce que verrait un padeliste |
+|---|---|---|
+| Ressource · Ressources | `vocabulary.resource` | Terrain · Terrains |
+| Réservation | `vocabulary.booking` | Partie |
+| Capacité | `vocabulary.capacity` | Occupation |
+| Accès | `vocabulary.entry` | Accès terrain |
+
+**C'est le meilleur rapport travail/effet de tout mon périmètre** : quatre libellés, un seul fichier,
+et l'écran de réservation cesse d'être écrit pour un métier générique que personne n'exerce.
+
+### Les huit autres n'ont aucun point d'affichage
+
+`participant`, `staff`, `group`, `slot`, `resource_unit`, `rental`, `deposit`, `multi_entry_card` :
+zéro occurrence dans le `frontend/`. Ce n'est pas que le catalogue soit faux — c'est que **les écrans
+des verticales n'existent pas encore**. `Musee.jsx` fait 46 lignes, `Padel.jsx` 47, `Patinoire.jsx` et
+`Piscine.jsx` 69 : ce sont des souches. Les écrans réels du produit sont génériques — `Caisse` (618
+lignes), `Parametres` (768), `Catalogue` (478), `Reservation` (266).
+
+**L'enseignement compte plus que le décompte.** Le vocabulaire de métier ne se joue pas dans des écrans
+par verticale — il se joue **dans les écrans génériques**, qui sont les seuls que l'exploitant utilise
+vraiment. Une verticale ne devait déjà plus être un module de code (D15) ; elle ne doit pas non plus
+devenir un jeu d'écrans parallèles. C'est cohérent avec D13 : le moins d'écrans possible.
+
+Les huit clés restent au catalogue : elles sont exactes, elles sont simplement en avance sur les
+écrans. Je ne les retire pas, et je ne prétends pas qu'elles sont livrées.
+
+### Un trou de propriété à signaler
+
+**`frontend/` n'appartient à personne.** Ni `FLOTTE.md`, ni `OWNERS.md` ne l'attribuent — les neuf
+périmètres sont tous en `app/src/**`, `specs/**`, `bin/`, `hooks/`, `vitrine/`. La substitution des
+quatre libellés vivants est donc à la fois le travail le plus rentable du chantier et le seul que
+personne n'ait le droit de faire.
+
+Signalé à `claude-A`. Je ne touche pas `frontend/` sans attribution explicite (règle 2), même si le
+correctif tient en quatre lignes — c'est exactement le cas où `claude-C` avait raison de refuser.
