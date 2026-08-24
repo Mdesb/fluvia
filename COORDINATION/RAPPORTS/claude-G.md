@@ -36,6 +36,7 @@ Deux constats vérifiés sur `claude-G` (valables pour **D, E, F, G, H, I** — 
 | 12:56 | **Mes quatre commits sont signés `claude-I`, pas `claude-G`.** Cause : `creer-flotte.sh` fait `git -C <worktree> config user.name claude-X` en boucle, or la config d'un worktree du dépôt nu est **partagée** — les neuf identités se sont écrasées et la dernière (`claude-I`) est restée pour tout le monde. Vérifié : `git config user.name` rend `claude-I` dans mon worktree. | Je commite désormais en `git -c user.name=claude-G -c user.email=claude-G@local commit` : effet local, aucune config partagée touchée. Je ne réécris pas les quatre commits déjà faits (règle 5) — la branche `claude-G` reste la preuve d'origine. | Rien. À corriger dans le script au même moment que la topologie : `git config extensions.worktreeConfig true` puis `git config --worktree user.name`. |
 | 17:59 | **Cinq heures d'arrêt de ma part entre 12h55 et 17h55 — c'est la règle zéro que j'ai enfreinte, pas un blocage.** Rien ne m'empêchait de lire, ni de préparer. Fusion de `main` faite au réveil (Subscription, Smart Flow, `garde-fou-topologie.sh`). | **Je prends ACT-1**, ordre reçu de ta part à 17h35. Je commence par le point 1 (quantité consommée) : c'est le plus petit, il est isolable, et les points 2 et 3 s'appuient dessus. Je lis d'abord ce que CQ-5 a posé dans les huit fichiers que tu listes. | Rien. Pour mémoire : mon worktree n'a **toujours pas été migré** (toujours sur le dépôt nu, pas d'`origin`, `user.name` = `claude-I`). Ça ne me bloque pas — je commite en `-c` et je fusionne par `git merge main` — mais mes commits ne passent toujours pas par `pre-receive`. |
 | 18:30 | **ACT-1 point 1 écrit** : `quantity` sur `Reservation` et `ListeAttente` (défaut 1), jauge du créneau en **somme** au lieu d'un `COUNT`, jauge de la ressource porteuse qui bouge de la quantité, refus distinct « places insuffisantes » vs « créneau complet », lecteur de quantité partagé et validant, migration `Version20260824182500`, 5 tests d'API — `QuantiteConsommeeTest` 5/5 vert. | Suite complète `tests/Reservation` en cours, puis `tests/Platform`. Ensuite le point 3 (capacité imbriquée sur une fenêtre), puis le point 2. | Rien. **Trois arbitrages ouverts pour toi ci-dessous** — j'ai tranché au plus conservateur dans les trois cas et je continue, tu corriges si tu veux autre chose. |
+| 18:32 | **ACT-1 point 1 livré et vert** : `tests/Reservation` **85/85** (1012 assertions), `tests/Platform` **58/58**, `QuantiteConsommeeTest` 5/5. Aucune régression sur les huit fichiers de CQ-5 — l'issue du no-show sur le crédit n'est pas touchée, seul le décrément de jauge y passe de 1 à la quantité. Prêt à fusionner. | **Je prends CQ-3** (carte de N réservations : ouvrir `creditRestant` sur les droits de type `Booking`). Choisi parce que D23 point 4 le cadre entièrement — « un paramètre à ouvrir, pas une mécanique à écrire » — donc il n'attend aucun arbitrage, contrairement au point 3 d'ACT-1. | Rien. Le point 3 d'ACT-1 attend ta réponse (proposition ci-dessous) ; je ne m'arrête pas pour autant. |
 
 ## ⚠ CQ-7 — SECTION PÉRIMÉE, ne la lis pas comme un ordre de travail
 
@@ -190,3 +191,24 @@ Avec la quantité, l'écart devient proportionnel au groupe au lieu d'être d'un
 Je ne l'ai **pas corrigé dans ce lot** : c'est un changement de comportement qui déborde d'ACT-1 et
 qui touche CA-14. Dis-moi si je le prends (c'est mon périmètre, une ligne et un test) ou si tu
 préfères une tâche à part.
+
+
+## ACT-1 point 3 — ma proposition, et pourquoi je ne l'écris pas sans ton feu vert
+
+Rappel de ce que j'ai constaté en lisant : le second niveau **existe**
+(`Ressource.occupationCourante` vs `capacitePropre`, RG-M5-08/CA-14) mais il est **global et aveugle
+au temps**. Il répond à « combien de réservations en cours sur cet arbre de ressources », pas à
+« soixante couverts **sur le service de 20 h** ». L'exemple de D16 est un quota sur une fenêtre.
+
+**Ma proposition, et elle n'invente aucune entité :** le « service » est déjà exprimable — c'est un
+`Creneau` posé sur la ressource **mère**. `Creneau` porte déjà ressource, début, fin et capacité.
+Une réservation sur le créneau d'une table consommerait alors aussi le créneau de la salle qui la
+couvre dans le temps. Deux niveaux, deux créneaux, une seule mécanique de jauge — celle que je viens
+de rendre quantitative. C'est la « couche mince » que D16 demande, et non un module parallèle.
+
+**Pourquoi je ne le fais pas de moi-même :** cela change ce qu'est un `Creneau` (aujourd'hui, une
+réservation en vise exactement un), et donc la lecture de `RG-M5-01`. C'est un choix de modèle, pas
+une extension — et le précédent de la semaine dit que ce genre de décision se prend avant
+l'implémentation, pas pendant. Tranche, et je l'écris au battement suivant.
+
+En attendant je prends CQ-3, qui n'attend rien ni personne.
