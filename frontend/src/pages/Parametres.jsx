@@ -412,7 +412,7 @@ export default function Parametres({ etabActif, etablissements, droits = [] }) {
         <div className="resa-grid">
           <ReferentielEditable
             descripteur={descripteurPointsDeVente(api, etabActif)}
-            peutEcrire={droits.includes('caisse.gerer')}
+            peutEcrire={aLeDroit(droits, 'caisse.gerer')}
           />
           <Liste
             titre="Caisses"
