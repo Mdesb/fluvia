@@ -11,3 +11,145 @@
 | 19:40 | Merge de main : D32 lue, SOC-1 (coffre) fusionne, `app/tests/Social/**` confirme a moi. **CORRECTION de mon battement de 19:15 : j'ai ecrit « SOC-1 termine », c'est faux.** SOC-1 dans TASKS.md est « modele post/publications **+** coffre a jetons » : je n'ai livre que la seconde moitie. Le modele — un post, N publications — reste a ecrire, et c'est ce que je prends maintenant. Ne passe pas SOC-1 en FAIT dans le carnet. | Modele `SocialPost` / `SocialPublication` (une ligne par reseau, chacune avec son etat, son identifiant distant et son erreur), puis SOC-2. | **Rotation de `SOCIAL_TOKEN_ENCRYPTION_KEY` sans reconnexion — la matiere que tu m'as demandee pour SOC-0.** Le probleme a nommer d'abord : aujourd'hui le chiffre ne dit pas avec quelle cle il a ete produit. Changer la cle rend donc tous les jetons indechiffrables, et chaque etablissement doit repasser le parcours d'autorisation de chaque reseau. Personne ne fera jamais ca, donc la cle ne changera jamais — et une cle qu'on ne change jamais est une cle qu'on ne peut pas revoquer le jour ou elle fuit. **Le mecanisme : une version dans l'enveloppe.** Le chiffre devient `v<N>:<base64(nonce||cipher)>`. Une valeur sans prefixe est lue comme v1, donc les lignes deja ecrites par SOC-1 restent lisibles sans reprise de donnees — c'est ce qui rend le changement applicable a chaud plutot que dans une fenetre de maintenance. `SOCIAL_TOKEN_ENCRYPTION_KEY` reste la cle **active**, celle qui chiffre ; une variable `SOCIAL_TOKEN_ENCRYPTION_KEYS_RETIRED` porte les anciennes (`2:<base64>,1:<base64>`), en **dechiffrement seul**. Le coffre choisit la cle au prefixe ; un prefixe inconnu leve une exception explicite et ne tombe jamais en repli silencieux — un repli qui rechiffrerait avec la mauvaise cle transformerait une rotation ratee en perte de donnees invisible jusqu'a la premiere publication. **La rotation elle-meme** est une commande console qui parcourt les lignes non encore a la version active (`WHERE access_token_encrypted NOT LIKE 'v3:%'`), dechiffre avec l'ancienne, rechiffre avec la nouvelle, par lots. Reprise possible a tout moment, idempotente, et pilotable : le critere d'arret est un compteur qui tombe a zero, pas une duree. On ne retire l'ancienne cle de l'environnement qu'apres. Deux garde-fous non negociables : la commande ne journalise **aucun jeton**, seulement des compteurs par version ; et une commande de statut affiche la repartition par version, pour qu'on puisse verifier **avant** de retirer une cle plutot que de le decouvrir apres. **Une variante que j'ecarte, et pourquoi** : le chiffrement enveloppe (une cle de donnees par ligne, elle-meme chiffree par la cle maitresse) rend la rotation quasi gratuite puisqu'on ne rechiffre que l'enveloppe. Ici chaque ligne ne porte qu'un ou deux jetons courts : rechiffrer l'enveloppe coute exactement aussi cher que rechiffrer le jeton. On ajouterait un niveau d'indirection et un second format a auditer pour zero gain — la version dans l'enveloppe suffit. **Ce que ca implique pour toi** : c'est une modification du format stocke, donc a trancher **avant** que SOC-2 n'ecrive des jetons en volume. Dis-moi si tu le veux dans SOC-0 et je l'implemente avant les adaptateurs ; sinon je continue sur le modele et je le poserai apres. Je n'attends pas ta reponse pour avancer. |
 | 20:15 | **SOC-1 est maintenant complet — le modele, et non plus seulement le coffre.** `Entity/SocialPost` (message redige une fois, `status` recalcule depuis les lignes et jamais pose a la main), `Entity/SocialPublication` (une ligne par reseau vise : etat, identifiant distant, url, code et message d'erreur bruts du reseau, nombre de tentatives — c'est elle qui portera les stats de SOC-3), `Enum/SocialPostStatus` + `SocialPublicationStatus`, `State/SocialPostProcessor`, `SocialNetwork::maxContentLength()`, cloisonnement etendu (`SocialPost` direct, `SocialPublication` par la chaine `post`), permissions `social.read_post` + `social.publish`, migration `Version20260824200000`. **Suite : 23 tests / 104 assertions verts** (dont 9 neufs), `tests/Platform` vert (58 / 231), migration verifiee depuis une base vide, pile demontee. Trois choix que je te signale parce qu'ils se discutent : 1. **aucun PATCH ni DELETE sur un message** — modifier le texte d'un message deja parti sur trois reseaux ne le modifierait sur aucun des trois mais changerait ce que la plateforme pretend avoir publie ; la correction de brouillon viendra en SOC-2, restreinte aux messages dont aucune publication n'est engagee. 2. **aucune ecriture d'API sur une publication** : elle nait d'un message et n'evolue que par le travail sortant. 3. **la longueur est refusee a la redaction, par reseau vise** (Bluesky 300, Mastodon 500) plutot qu'a l'envoi : c'est connu d'avance, et on ne tronque jamais le texte de quelqu'un. | SOC-2 : port d'adaptateur, adaptateurs Mastodon et Bluesky, message asynchrone et reprises. | **Le point de securite du lot, pour ta revue.** Le message tient son etablissement du serveur, mais **les comptes vises arrivent du client** — c'est la porte d'entree, et c'est exactement ta mise en garde. Chaque compte vise est revirifie un par un contre le perimetre actif dans `SocialPostProcessor::resolveTargets()`, et un compte hors perimetre fait echouer la requete en **404**, pas 403. Le test `testViserLeCompteDUnAutreEtablissementEstIntrouvable` le prouve et verifie **en base** qu'aucun message ni aucune publication n'a ete cree. Je n'ai pas fait confiance au fait que la resolution des IRI passe deja par le cloisonnement : un controle qu'on ne voit pas dans le code est un controle qu'on supprimera sans le savoir. Un test verifie aussi qu'aucun jeton ne ressort par le chemin nouveau — la publication expose son compte, donc la reponse traverse `SocialAccount`. **Deux questions ouvertes, sans blocage.** (a) La rotation de cle versionnee decrite au battement precedent modifie le format stocke : si tu la veux, il vaut mieux qu'elle passe **avant** que SOC-2 n'ecrive des jetons en volume. Sans reponse de ta part, je fais SOC-2 d'abord et je la poserai apres, ce qui coutera une reprise de donnees. (b) `messenger_messages` n'est mappee par aucune entite, donc elle ressortira du prochain diff de **toutes** les sessions, D32 ou pas. Une entite Doctrine inerte qui la mappe, ou une exclusion dans la configuration `doctrine_migrations`, supprimerait la cause plutot que de la documenter — c'est ton perimetre, je te le laisse. |
 | 20:45 | **Lot de format pose, comme tu l'as tranche : le format sans le mecanisme.** La valeur stockee porte desormais l'identifiant de la cle qui l'a chiffree — `v<version>:<base64(nonce||chiffre)>`. Ajout de `Exception/SocialTokenCipherException` (exception dediee : une publication qui echoue sur un jeton illisible doit etre marquee en echec avec un motif net, pas confondue avec un refus du reseau ; son message ne contient jamais la valeur). `keyVersionOf()` expose la version sans dechiffrer — c'est ce qui permettra de compter les lignes restant a rechiffrer et de verifier la repartition AVANT de retirer une cle. **Suite : 28 tests / 112 assertions verts** (5 neufs sur le format), aucune migration necessaire (les colonnes sont du texte), pile demontee. Deux choix a te signaler : **prefixe plutot que colonne a cote** — la version voyage avec la valeur ; une colonne separee peut etre mise a jour sans l'autre, et une version qui ment sur la cle employee est pire que pas de version, puisqu'elle fait choisir la mauvaise cle en silence. Et **une valeur sans prefixe est lue comme la version 1** : les lignes ecrites par la premiere mouture de SOC-1, deja fusionnee et possiblement deployee, restent lisibles — un format cense eviter une reprise de donnees qui en imposerait une serait un comble. Un test le prouve. | SOC-2 : port d'adaptateur, Mastodon et Bluesky, message asynchrone et reprises. | **1. TA VERIFICATION, FAITE : `schema_filter` est bien honore.** Base repartie de zero, toutes les migrations appliquees, diff regenere : **zero occurrence de `messenger_messages`**. L'option fonctionne en DBAL 4.4, tu peux considerer la cause n.1 de D32 comme supprimee et non plus documentee. Mes trois tables sociales ont disparu du diff aussi, ce qui confirme au passage que mes migrations couvrent bien mes entites. **2. Mais le diff m'a montre une TROISIEME cause structurelle que ni toi ni moi n'avions nommee, et elle est reductible.** Ce que le diff propose encore, en dehors de la table sans migration de claude-D : `DROP INDEX idx_dms_document_retain_until`, `idx_dms_public_link_expires_at`, `idx_dms_version_file_hash`, `idx_dms_version_uploaded_at`, `idx_lettrage_reconciliation_code`, `idx_ligne_ecriture_counterparty`, `uniq_article_aide_cle_import`. Sept index crees par migration mais **jamais declares dans le mapping des entites** : le diff proposera leur suppression a chaque fois, eternellement, exactement comme le FULLTEXT. La difference est que ceux-la, contrairement au FULLTEXT, **sont parfaitement exprimables en mapping** — un `#[ORM\Index]` sur chaque entite concernee et la source est tarie. Le FULLTEXT reste le seul cas irreductible, donc le seul qui justifie vraiment le garde-fou de claude-C. Ce sont les perimetres de DMS, Compta et Support, pas le mien : je te le remonte, je n'y touche pas. **3. Ce que le mecanisme complet de rotation demandera, pour SOC-0** : une variable `SOCIAL_TOKEN_ENCRYPTION_KEYS_RETIRED` portant les anciennes cles en dechiffrement seul (`1:<base64>`), la bascule de `CURRENT_KEY_VERSION` dans le code — un acte delibere qui se relit et se date, pas un interrupteur d'environnement —, une commande de rechiffrement par lots reprenable et idempotente (`WHERE ... NOT LIKE 'v2:%'`), une commande de statut affichant la repartition par version, et la regle qu'on ne retire une ancienne cle qu'apres que le compteur est tombe a zero. La commande ne journalise que des compteurs, jamais un jeton. |
+| 21:00 | **SOC-2 livre : les adaptateurs, la file et les reprises.** `Port/SocialPublisher` (tag porte par l'interface via `AutoconfigureTag` — un adaptateur neuf s'enregistre sans toucher `config/services.yaml`, qui est a toi), `Dto/PublicationRequest` + `PublicationOutcome` (aucune entite Doctrine ne traverse le port : un adaptateur qui recevrait un `SocialAccount` pourrait remonter jusqu'aux jetons des autres comptes), `Exception/SocialPublishingException` (porte `errorCode` brut du reseau et surtout `retryable`), `Adapter/MastodonPublisher`, `Adapter/BlueskyPublisher`, `Service/SocialPublisherRegistry`, `Message/PublishSocialPublication`, `MessageHandler/PublishSocialPublicationHandler`, et le processor qui depeche **apres le commit**. **Suite : 55 tests / 213 assertions verts** (27 neufs), `tests/Platform` vert (58 / 232), aucune migration (aucun changement de schema), pile demontee. Quatre decisions de conception qui meritent ta relecture : 1. **le message ne porte qu'un identifiant** — y recopier le jeton le ferait dormir en clair dans la table de la file, donc dans les sauvegardes, et le message porterait un etat fige alors que le compte a pu etre revoque entre-temps ; le handler relit tout depuis la base. 2. **l'etat terminal ne depend pas de la configuration de la file** : le nombre de tentatives est compte dans la donnee (`MAX_ATTEMPTS = 6`, coherent avec `max_retries: 5` + la tentative initiale). Si on se reposait sur messenger, une publication epuisee finirait dans le transport d'echec en restant « en attente » pour toujours en base — visible nulle part, corrigeable par personne ; et un ajustement futur de `max_retries` changerait silencieusement la semantique de l'historique. 3. **`Idempotency-Key` sur Mastodon** : une coupure apres l'envoi mais avant la reponse republierait le meme message a la reprise. On y met l'identifiant de la publication, stable d'une tentative a l'autre. 4. **une erreur reessayable repasse en `Pending`, pas en `Publishing`** : si le worker meurt avant la reprise, l'etat en base doit dire qu'il reste quelque chose a faire. | Rediger la matiere de SOC-0 pour toi, puis SOC-3 (collecte planifiee des statistiques). | **1. Une limite de Bluesky a inscrire dans SOC-0, decouverte en ecrivant l'adaptateur.** Le protocole AT **n'offre aucune cle d'idempotence**, contrairement a Mastodon. Une coupure survenue apres l'ecriture mais avant la reponse peut donc produire un doublon a la reprise. J'ai limite le risque — on ne reessaie que sur transport, 429 et 5xx, jamais sur un refus applicatif — mais je ne peux pas le supprimer. C'est une propriete du reseau, pas un defaut de notre code : elle doit figurer dans la spec plutot que d'etre decouverte par un client qui verra son message en double. **2. Bluesky ne prend pas un jeton OAuth mais un mot de passe d'application**, avec ouverture de session en premier appel. C'est en realite une bonne propriete pour nous : il est revocable individuellement, donc le reprendre a l'etablissement ne coupe pas son compte. A trancher dans SOC-0 : c'est ce que le coffre stocke pour Bluesky. **3. Un manque assume dans ce lot** : un message date reste `scheduled` et ne part pas. L'ordonnanceur qui le reveillera n'existe pas — il vient avec SOC-3, qui a besoin du meme mecanisme pour la collecte planifiee. J'ai prefere un etat qui dit la verite a un envoi silencieusement immediat. Un test le prouve. **4. Rien de neuf sur les piles** : la mienne est demontee apres chaque lot. |
+| 21:20 | **Matiere de SOC-0 redigee** — je l'ai mise en annexe A LA FIN DE CE FICHIER plutot qu'en cellule de tableau : huit sections, illisibles sur une ligne. Elle couvre le modele, le coffre et sa rotation, les trois portes d'entree du cloisonnement, les regles du travail sortant, ce que Mastodon et Bluesky imposent et qui n'est pas symetrique, les statistiques, ce qui reste externe, et cinq points que la spec doit trancher et que l'implementation ne peut pas decider seule. Chaque point porte la raison qui l'a produit : sans elle une regle se relit comme une preference et se contourne a la premiere contrariete. `specs/social/**` reste a toi, je n'y ai pas touche. | SOC-3 : instantanes de statistiques + charge brute conservee, et l'ordonnanceur qui reveillera aussi les messages dates. | **Attention en relisant ce fichier : le tableau s'arrete a cette ligne, l'annexe suit.** Mes prochains battements s'inserent AVANT l'annexe, pas a la fin du fichier. Sur ta correction de 20:30 : mon alias SSH est bien `billetterie`, il fonctionne, aucun blocage de ce cote. |
+
+| 21:53 (heure serveur verifiee ; les horodatages de 19:05 a 21:20 etaient estimes et remis dans l ordre a ce battement) | **SOC-3 livre : instantanes de statistiques, charge brute, et l'ordonnanceur promis.** `Entity/SocialMetricSnapshot` (un releve date par passage, jamais un compteur ecrase — c'est la courbe qu'on cherche, et les plateformes ne la rendront pas retroactivement ; compteurs NULLABLES parce que « zero partage » et « ce reseau ne rend pas cette metrique » sont deux faits differents, et les confondre fabrique des moyennes fausses ; `raw_payload` conserve EN PLUS de la vue normalisee, faute de quoi une redefinition de « portee » rendrait tout le passe incomparable sans qu'on puisse meme le constater), `Port/SocialMetricsCollector` + registre, `Adapter/MastodonMetricsCollector`, `Adapter/BlueskyMetricsCollector`, `Message/CollectSocialMetrics` + handler, `Command/social:collect-metrics` (met en file, ne collecte pas : interroger cinq reseaux en serie ferait dependre toute la collecte du plus lent ; `--limit` borne chaque passage et **dit ce qu'elle laisse**, une borne silencieuse se lisant comme « tout est couvert »), et `Command/social:dispatch-scheduled-posts` — **le manque assume de SOC-2 est comble**. Trois colonnes ajoutees a `social_publication` : `queued_at` (garde contre la double mise en file), `metrics_stopped_at` + `metrics_stopped_reason` (borne : un statut supprime chez le reseau ne reapparaitra pas, sans borne on le redemanderait a chaque passage pour toujours en consommant le quota de l'etablissement). Migration `Version20260824223000`, brouillon relu ligne a ligne selon D32. **Suite : 71 tests / 284 assertions verts** (16 neufs), `tests/Platform` vert (58 / 232), migration verifiee depuis une base vide, pile demontee. | Point horaire a toi, puis je te demande la suite : SOC-1 a SOC-3 sont livres, SOC-4 est EXTERNE. | **1. NOUVELLE REGLE DE MAXIME, elle te concerne directement** : je dois me presenter a toi **toutes les heures**, quoi qu'il arrive — tache en cours, j'en dis l'etat ; pas de tache, je t'en demande une. Je l'applique des maintenant et je l'ai consignee hors du depot pour qu'elle survive a ma session. **2. La garde anti-doublon est le point a relire dans ce lot.** L'ordonnanceur ne reprend que les publications jamais confiees a la file, et pose la marque immediatement. Deux passages rapproches — un cron qui deborde, une execution manuelle par-dessus la planifiee — publieraient sinon deux fois le meme message sur le fil public d'un client. J'ai tranche explicitement : **en cas de doute, mieux vaut un message qui ne part pas qu'un message qui part deux fois**. Le premier se voit dans l'etat et se relance ; le second est paru et ne se rattrape pas. Un test couvre les deux passages. **3. L'heure de reference de l'ordonnanceur est un parametre, pas l'horloge** : c'est ce qui rend la commande verifiable sans assertion d'horloge (D20). **4. Il te faudra deux entrees de planification** pour que ce lot serve vraiment : `social:dispatch-scheduled-posts` (frequence courte, le quart d'heure suffit) et `social:collect-metrics` (frequence longue, une fois par heure ou moins). C'est de l'exploitation, donc ton perimetre — je ne touche a aucun fichier de planification. |
+---
+
+## Annexe — matière pour SOC-0, écrite depuis l'implémentation
+
+> Écrite par `claude-H` dans son propre fichier, comme le reste de ce rapport. `specs/social/**`
+> appartient à `claude-A` : ceci n'est pas une spécification, c'est ce que trois lots d'implémentation
+> ont appris et qu'il faut y verser. Chaque point porte la raison qui l'a produit — sans elle, une
+> règle se relit comme une préférence et se contourne à la première contrariété.
+
+### 1. Le modèle : un post, N publications
+
+Un message est rédigé une fois et porte N lignes, une par réseau visé. Chaque ligne a son état, son
+identifiant distant, son adresse web, son code d'erreur brut et son nombre de tentatives.
+
+**Pourquoi ce n'est pas négociable.** Cinq réseaux, trois qui passent, un quota dépassé, un jeton
+expiré : c'est le cas *normal*, pas l'exception. Un modèle qui ne saurait dire que « publié » ou
+« échoué » perdrait exactement l'information qu'on cherchera le jour de l'incident. Et c'est cette
+ligne qui portera les statistiques — donc la jointure entre ce qu'on a publié et ce que ça a rempli.
+
+L'état du message est un **résumé recalculé** depuis les lignes, jamais une vérité posée à la main.
+Deux sources qui peuvent diverger sur le même fait finissent toujours par diverger.
+
+### 2. Le coffre à jetons
+
+- Chiffré au repos (libsodium, nonce par message), clé dédiée `SOCIAL_TOKEN_ENCRYPTION_KEY`, **aucun
+  repli codé en dur** : conteneur qui refuse de démarrer si elle manque.
+- **Un jeton ne sort jamais** : aucun groupe de sérialisation sur les champs chiffrés, seul un booléen
+  « y a-t-il un jeton » est lisible. Le champ en clair est transitoire et vidé dans le processor.
+- **La valeur stockée porte l'identifiant de la clé qui l'a chiffrée** (`v<n>:<charge>`). Sans cela,
+  changer la clé obligerait chaque établissement à repasser l'autorisation de chaque réseau — donc
+  personne ne la changerait jamais, donc on ne pourrait pas la révoquer le jour où elle fuit.
+- **Révoquer, c'est cesser de détenir** : les jetons ne sont effacés que sur révocation explicite. Sur
+  une simple expiration on les garde — c'est le jeton de rafraîchissement qui permettra de se rétablir
+  sans redemander à l'utilisateur de tout reconnecter.
+
+**Ce que le mécanisme de rotation demandera** (le format est posé, le mécanisme ne l'est pas) :
+une variable portant les anciennes clés en déchiffrement seul ; la bascule de la version courante
+**dans le code** et non dans l'environnement, parce qu'une rotation est un acte délibéré qui se relit
+et se date ; une commande de rechiffrement par lots, reprenable et idempotente ; une commande de
+statut affichant la répartition par version, pour vérifier **avant** de retirer une clé plutôt que de
+découvrir la perte au premier envoi ; et la règle qu'on ne retire une clé qu'une fois le compteur à
+zéro. Aucune de ces commandes ne journalise un jeton — seulement des compteurs.
+
+### 3. Le cloisonnement : trois portes d'entrée, pas une
+
+C'est le point où ce module peut échouer silencieusement, et il a trois portes distinctes :
+
+1. **L'établissement d'un compte ou d'un message** : toujours dérivé de la session serveur, jamais du
+   corps de la requête. Hors de tout groupe d'écriture.
+2. **Les comptes visés par un message** : ils arrivent, eux, du client. Chacun est revérifié un par un
+   contre le périmètre actif. Ne pas se reposer sur le fait que la résolution des IRI passe déjà par le
+   cloisonnement — *un contrôle qu'on ne voit pas dans le code est un contrôle qu'on supprimera sans le
+   savoir*.
+3. **L'identifiant qui arrive dans un message asynchrone** : il n'y a là aucune session dont dériver un
+   périmètre. Le handler rétablit le contexte depuis l'entité résolue et vérifie l'invariant — le
+   compte visé appartient au même établissement que le message. Sans ce contrôle, la file devient un
+   chemin de contournement du cloisonnement.
+
+Échec en **404**, jamais 403 : un 403 distinguerait « existe, pas à toi » de « n'existe pas », donc
+énumérerait les comptes sociaux des autres établissements.
+
+### 4. Le travail sortant
+
+- Les messages sont dépêchés **après le commit**. Avant, on met en file du travail pour un fait qui
+  peut ne jamais avoir eu lieu.
+- Le message ne porte **qu'un identifiant**. Y recopier le jeton le ferait dormir en clair dans la
+  table de la file, donc dans les sauvegardes ; y recopier l'état figerait une situation que le compte
+  a pu quitter entre-temps.
+- **Rejouer ne republie pas** : une file redélivre, c'est sa nature. Une publication déjà terminale est
+  ignorée.
+- **L'état terminal ne dépend pas de la configuration de la file.** Le compte de tentatives vit dans la
+  donnée. Sinon une publication épuisée resterait « en attente » pour toujours en base, visible nulle
+  part — et un futur ajustement des reprises changerait silencieusement la sémantique de l'historique.
+- **Une erreur réessayable repasse en attente, pas « en cours »** : si le worker meurt avant la
+  reprise, l'état en base doit dire qu'il reste quelque chose à faire.
+- **Réessayable ou définitif est la distinction qui rend l'asynchrone tenable.** Réessayer cinq fois un
+  jeton révoqué ne le rendra pas valide : cela retarde de vingt minutes une erreur corrigeable tout de
+  suite et consomme le quota pour rien. À l'inverse, marquer définitivement échoué un dépassement de
+  quota perdrait une publication qui serait passée dix minutes plus tard.
+- Le code d'erreur est **celui du réseau, tel quel**. Un code réécrit en vocabulaire maison fait
+  diverger le diagnostic de ce que la documentation du réseau permet de chercher.
+
+### 5. Ce que les réseaux imposent, et qui n'est pas symétrique
+
+| | Mastodon | Bluesky |
+|---|---|---|
+| Ce que le coffre stocke | jeton d'accès OAuth | **mot de passe d'application** |
+| Hôte | **obligatoire** (fédéré : le jeton ne vaut que pour son instance) | facultatif (`https://bsky.social` par défaut) |
+| Longueur | 500 caractères | **300 caractères** |
+| Publication | un appel | **deux** (ouverture de session, puis écriture) |
+| Idempotence | `Idempotency-Key` honorée | **aucune** |
+
+**Deux conséquences à écrire noir sur blanc dans la spec :**
+
+- **Bluesky peut produire un doublon.** Sans clé d'idempotence, une coupure survenue après l'écriture
+  mais avant la réponse republie à la reprise. On limite le risque en ne réessayant que sur transport,
+  quota et panne serveur — jamais sur un refus applicatif — mais on ne le supprime pas. C'est une
+  propriété du réseau, pas un défaut de notre code : elle doit être écrite plutôt que découverte par un
+  client qui verra son message paraître deux fois.
+- **Le mot de passe d'application de Bluesky est une bonne propriété**, pas un pis-aller : il est
+  révocable individuellement, donc le retirer à un établissement ne coupe pas son compte.
+
+**La longueur est refusée à la rédaction, par réseau visé** — elle est connue d'avance. La découvrir à
+l'envoi produirait un message paru sur trois réseaux et refusé sur un quatrième pour une raison que
+l'auteur corrigeait en dix secondes. Et **on ne tronque jamais** : personne n'a le droit de raccourcir
+le texte de quelqu'un d'autre sans le lui dire.
+
+### 6. Les statistiques (SOC-3)
+
+Les plateformes ne conservent pas l'historique et redéfinissent leurs métriques entre versions d'API.
+D'où deux exigences liées : **des instantanés planifiés dès le premier jour** — sans eux l'historique
+n'existera pas et sera irrattrapable — et **la charge brute conservée en plus de la vue normalisée** —
+sans elle, une redéfinition de « portée » rendra le passé incomparable.
+
+Le nom des métriques diffère par réseau (`favourites` / `likeCount`, `reblogs` / `repostCount`). La vue
+normalisée est donc une **interprétation**, et c'est précisément pour cela qu'on garde ce qu'on a reçu.
+
+### 7. Ce qui reste dehors
+
+Les adaptateurs Meta (Page Facebook, Instagram) attendent l'immatriculation de la société : consignés
+au registre des bloqueurs externes, jamais attendus. Aucune valeur d'énumération n'est déclarée pour un
+réseau qu'aucun adaptateur ne sait servir — cela donnerait un compte connectable et jamais publiable.
+
+Publier une image sur Instagram exigera par ailleurs une URL publiquement accessible, donc la GED.
+
+### 8. Points que la spec doit trancher, et que l'implémentation ne peut pas décider seule
+
+1. **La modification d'un message déjà parti.** Aujourd'hui : interdite. Modifier le texte d'un message
+   paru sur trois réseaux ne le modifierait sur aucun des trois, mais changerait ce que la plateforme
+   prétend avoir publié. Reste à décider si un brouillon dont aucune publication n'est engagée peut
+   être corrigé — je pense que oui, et c'est un lot séparé.
+2. **La suppression d'une publication chez le réseau.** Non traitée. Supprimer chez nous sans supprimer
+   là-bas ferait mentir l'historique dans l'autre sens.
+3. **Le devenir des publications d'un compte révoqué.** Aujourd'hui elles restent, avec leur historique.
+4. **La périodicité des instantanés** et leur durée de conservation : ce sont des données personnelles
+   agrégées, la question de la purge se pose.
+5. **Ce que voit l'éditeur sur son propre établissement** par rapport à ce que voit un client : le même
+   code, mais peut-être pas les mêmes tableaux.
