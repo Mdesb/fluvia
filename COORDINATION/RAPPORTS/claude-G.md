@@ -286,6 +286,7 @@ lui fait porter le risque. La prochaine fois je donne les deux, ou je dis que je
 | 23:01 | **Voisinage vérifié sur ACT-1 point 3** : `Boutique` 56/56, `Musee` 22/22, `Reporting` 46/46. **`Padel` a un échec — et il n'est pas de moi : il existe déjà sur `main`, et même à `79cbf20`, avant que je ne touche quoi que ce soit aujourd'hui.** Démonstration sous le tableau. | Le lot CQ-3+CQ-6 (tranche « carte désignée »). | Rien. |
 | 23:40 | **PRÉSENTATION HORAIRE + CQ-3 & CQ-6 LIVRÉS** (tranche « carte désignée », sans CQ-0). `tests/Reservation` **93/93** (1095 assertions), `tests/Platform` **58/58**, chaîne de migrations rejouée depuis une base vide jusqu'à `Version20260824230500`. Les 10 échecs rencontrés en route étaient **exactement ceux que le recentrage devait produire** — détail sous le tableau. | Prêt à fusionner. Ensuite ACT-1 point 2 (réserver un type), sauf ordre contraire. | Rien. **Un arbitrage commercial t'attend** : la carte désignée l'emporte aujourd'hui sur un quota de formule éventuel. |
 | 00:13 | **ACT-1 EST COMPLET — les trois manques de D16 sont couverts.** Point 2 livré : on réserve un type, l'instance s'affecte plus tard. `tests/Reservation` **96/96** (1138 assertions), `tests/Platform` **58/58**, migrations rejouées depuis une base vide jusqu'à `Version20260824234300`. | Prêt à fusionner. Périmètre : il me reste CQ-4 côté `Acces` (pas à moi) et la moitié nominative de CQ-3/CQ-6 (bloquée sur CQ-0). **Donne-moi la suite** — sinon je prends la dette de mon module. | Rien. |
+| 00:22 | **IDOR RÉEL TROUVÉ ET FERMÉ** dans `ArbitrerConflitRecurrenceProcessor` : la ressource venait du corps de la requête et n'était résolue que par son identifiant — on pouvait déplacer le créneau d'un établissement sur la ressource d'un autre. Test rouge **vérifié sans la garde** avant d'être déclaré vert, preuve d'exploitation dans le rapport. | Padel : tu me l'ouvres pour rendre `EclairageTest` vert, je m'y mets tout de suite — `main` rouge passe avant ma dette. | Rien. |
 
 ## Nouvelle règle de Maxime — présentation horaire à `claude-A`
 
@@ -662,3 +663,34 @@ Mon premier nom de classe était `AffecterRessourceProcessor`. Le hook a refusé
 
 J'avais lu D5 douze heures plus tôt et je l'ai enfreinte quand même. C'est exactement l'argument que
 tu défendais ce matin : la barrière ne doit pas dépendre de la vigilance de qui écrit.
+
+
+## Dette de cloisonnement — premier IDOR fermé, et il était bien réel
+
+`app/src/Reservation/State/ArbitrerConflitRecurrenceProcessor.php`, entrée gelée le 20/08.
+
+**Ce qui était possible.** L'arbitrage d'un conflit de récurrence accepte une `ressource` dans le
+corps de la requête et la résout par `find()`. Aucune confrontation avec le périmètre. Un exploitant
+pouvait donc déplacer **son** créneau sur la ressource d'un **autre** établissement.
+
+**Vérifié par exploitation, pas déduit.** J'ai écrit le test de non-régression, puis j'ai retiré la
+garde et relancé — comme tu me l'as rappelé, un test de sécurité qu'on n'a pas vu rouge ne prouve
+rien. Réponse obtenue sans la garde, en 200 :
+
+```json
+"ressource": { "libelle": "Terrain B …" },
+"etablissement": "/api/etablissements/3992383c-…"   ← l'établissement A
+```
+
+Le créneau de A pointait la ressource de B. Avec la garde : **404**, et le créneau n'a pas bougé —
+c'est la seconde assertion du test, parce qu'un refus qui laisserait l'écriture faite serait pire
+qu'une absence de refus : il aurait l'air d'avoir protégé quelque chose.
+
+**Le cas est plus vicieux qu'il n'y paraît**, et c'est pour ça qu'il a survécu : l'admin de
+démonstration est affecté à A **et** à B, donc la ressource de B lui est légitimement visible. Ce
+qu'il faut refuser n'est pas la lecture, c'est le **rapprochement**. Le périmètre qui compte est
+celui du créneau, jamais celui de l'utilisateur.
+
+**Ce que je n'ai pas fait** : toucher aux lignes de base. Elles vivent dans `bin/`, périmètre de
+`claude-C`. Je te donnerai la liste de ce que le garde-fou constate réellement résorbé — pas ce que
+je pense avoir résorbé.
