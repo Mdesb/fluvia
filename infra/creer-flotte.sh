@@ -68,8 +68,14 @@ for L in $NOUVELLES; do
 
     if [ -d "$CHEMIN" ]; then
         # Identité de commit, sinon le premier commit échoue sur "empty ident name".
-        git -C "$CHEMIN" config user.name "$ID"
-        git -C "$CHEMIN" config user.email "$ID@local"
+        #
+        # `--worktree` N'EST PAS FACULTATIF. `.git/config` est PARTAGÉ par tous les worktrees d'un
+        # même dépôt : sans lui, chaque tour de boucle écrase le précédent et les neuf sessions
+        # finissent avec l'identité de la dernière. C'est arrivé le 24/08 — trente commits attribués
+        # à `claude-I` qui étaient ceux de G et de H. Trouvé par claude-H, confirmé par claude-G.
+        git -C "$CLONE" config extensions.worktreeConfig true
+        git -C "$CHEMIN" config --worktree user.name "$ID"
+        git -C "$CHEMIN" config --worktree user.email "$ID@billetterie.local"
         vert "$ID — worktree créé sur la branche $ID"
     else
         rouge "$ID — échec de création"
@@ -112,6 +118,12 @@ for L in $NOUVELLES; do
 #!/usr/bin/env bash
 # Lanceur $ID — authentification isolée + son worktree.
 export CLAUDE_CONFIG_DIR=$CFG/$L
+# L'identité de commit, en plus de la config par worktree : ces variables l'emportent sur
+# `user.name` et, contrairement à elle, survivent à un worktree recréé.
+export GIT_AUTHOR_NAME=$ID
+export GIT_AUTHOR_EMAIL=$ID@billetterie.local
+export GIT_COMMITTER_NAME=$ID
+export GIT_COMMITTER_EMAIL=$ID@billetterie.local
 cd $WT/$ID
 exec claude "\$@"
 LANCEUR

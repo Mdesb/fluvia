@@ -35,6 +35,8 @@ Deux constats vérifiés sur `claude-G` (valables pour **D, E, F, G, H, I** — 
 | 12:55 | Pile de test `claudeG` démontée (règle 7). Lecture d'ACT-1 faite **sans rien écrire dans `Reservation`** : les trois manques de D16 confrontés au code réel, note ci-dessous. | Rien — j'attends la migration de mon worktree et ton séquencement sur `Reservation`. | Ni l'un ni l'autre ne me bloque pour lire ; les deux me bloquent pour écrire. |
 | 12:56 | **Mes quatre commits sont signés `claude-I`, pas `claude-G`.** Cause : `creer-flotte.sh` fait `git -C <worktree> config user.name claude-X` en boucle, or la config d'un worktree du dépôt nu est **partagée** — les neuf identités se sont écrasées et la dernière (`claude-I`) est restée pour tout le monde. Vérifié : `git config user.name` rend `claude-I` dans mon worktree. | Je commite désormais en `git -c user.name=claude-G -c user.email=claude-G@local commit` : effet local, aucune config partagée touchée. Je ne réécris pas les quatre commits déjà faits (règle 5) — la branche `claude-G` reste la preuve d'origine. | Rien. À corriger dans le script au même moment que la topologie : `git config extensions.worktreeConfig true` puis `git config --worktree user.name`. |
 | 17:59 | **Cinq heures d'arrêt de ma part entre 12h55 et 17h55 — c'est la règle zéro que j'ai enfreinte, pas un blocage.** Rien ne m'empêchait de lire, ni de préparer. Fusion de `main` faite au réveil (Subscription, Smart Flow, `garde-fou-topologie.sh`). | **Je prends ACT-1**, ordre reçu de ta part à 17h35. Je commence par le point 1 (quantité consommée) : c'est le plus petit, il est isolable, et les points 2 et 3 s'appuient dessus. Je lis d'abord ce que CQ-5 a posé dans les huit fichiers que tu listes. | Rien. Pour mémoire : mon worktree n'a **toujours pas été migré** (toujours sur le dépôt nu, pas d'`origin`, `user.name` = `claude-I`). Ça ne me bloque pas — je commite en `-c` et je fusionne par `git merge main` — mais mes commits ne passent toujours pas par `pre-receive`. |
+| 18:30 | **ACT-1 point 1 écrit** : `quantity` sur `Reservation` et `ListeAttente` (défaut 1), jauge du créneau en **somme** au lieu d'un `COUNT`, jauge de la ressource porteuse qui bouge de la quantité, refus distinct « places insuffisantes » vs « créneau complet », lecteur de quantité partagé et validant, migration `Version20260824182500`, 5 tests d'API — `QuantiteConsommeeTest` 5/5 vert. | Suite complète `tests/Reservation` en cours, puis `tests/Platform`. Ensuite le point 3 (capacité imbriquée sur une fenêtre), puis le point 2. | Rien. **Trois arbitrages ouverts pour toi ci-dessous** — j'ai tranché au plus conservateur dans les trois cas et je continue, tu corriges si tu veux autre chose. |
+| 18:32 | **ACT-1 point 1 livré et vert** : `tests/Reservation` **85/85** (1012 assertions), `tests/Platform` **58/58**, `QuantiteConsommeeTest` 5/5. Aucune régression sur les huit fichiers de CQ-5 — l'issue du no-show sur le crédit n'est pas touchée, seul le décrément de jauge y passe de 1 à la quantité. Prêt à fusionner. | **Je prends CQ-3** (carte de N réservations : ouvrir `creditRestant` sur les droits de type `Booking`). Choisi parce que D23 point 4 le cadre entièrement — « un paramètre à ouvrir, pas une mécanique à écrire » — donc il n'attend aucun arbitrage, contrairement au point 3 d'ACT-1. | Rien. Le point 3 d'ACT-1 attend ta réponse (proposition ci-dessous) ; je ne m'arrête pas pour autant. |
 
 ## ⚠ CQ-7 — SECTION PÉRIMÉE, ne la lis pas comme un ordre de travail
 
@@ -144,3 +146,69 @@ Ma pile est démontée (`down claudeG`). Il reste **29 conteneurs** et **22 rés
 de test qui ne portent le nom de personne — donc que personne ne démontera. Ce n'est pas mon
 périmètre et je n'y touche pas : c'est le début exact de l'incident des vingt-six piles du 24/08,
 et il vaut mieux le voir maintenant qu'à la première session qui ne pourra plus tester.
+
+
+## ACT-1 point 1 — ce que j'ai fait, et les trois choses que je n'ai pas voulu décider seul
+
+**Livré.** `Reservation.quantity` et `ListeAttente.quantity` (colonne `INT DEFAULT 1 NOT NULL` :
+c'est ce que valait implicitement chaque ligne avant, donc l'historique reste juste sans reprise de
+données). `JaugeCreneauGuard::placesOccupees()` passe de `COUNT(r.id)` à `SUM(r.quantity)`, et gagne
+`peutAccueillir($creneau, $quantite)`. `JaugeRessourceMereHandler` bouge de la quantité aux quatre
+points de relâche (annulation, annulation de créneau, no-show, honorée). Refus dédoublé :
+« créneau complet » (message d'origine intact, c'est lui qui appelle la liste d'attente) et
+« places insuffisantes : 3 demandée(s), 2 restante(s) » — trois couverts libres ne sont pas la même
+information qu'un service plein.
+
+**Le contrôle de la quantité n'est pas décoratif** : les deux points d'entrée lisent le corps brut,
+donc sans validation un `0` passait en base (réservation gratuite en capacité) et un négatif
+**libérait** des places. D'où `RequestedQuantityReader`, partagé par la réservation et la liste
+d'attente pour que les deux validations ne divergent pas.
+
+### 1. Liste d'attente : un groupe qui ne rentre pas bloque-t-il la file ?
+
+Une table de huit est première en liste d'attente, quatre places se libèrent. J'ai choisi de **ne
+promouvoir personne** et de lui garder son rang, plutôt que de sauter au suivant qui rentrerait.
+Raison : sauter romprait le premier arrivé premier servi de RG-M5-06, et c'est une politique
+commerciale que ni D16 ni RG-M5-06 ne posent — ce n'est pas à moi de la choisir. Le choix est
+verrouillé par un test nommé, pour qu'un changement soit visible et non silencieux.
+
+### 2. Quantité et participants : je ne les ai pas reliés
+
+Aujourd'hui, une réservation de cours avec trois participants nommés consomme **une** unité si
+l'appelant ne précise rien. On peut soutenir que la quantité devrait être au moins le nombre de
+participants. Je ne l'ai pas écrit : D16 dit que les deux notions coexistent, pas qu'elles se
+contraignent, et une règle inventée ici casserait le cas des couverts (huit unités, zéro participant
+nommé). Si tu veux la contrainte, dis-la et je la pose ; en l'état c'est explicite et non deviné.
+
+### 3. La promotion de liste d'attente n'a jamais incrémenté la jauge de la ressource mère
+
+Défaut **préexistant**, trouvé en lisant : `PromotionListeAttenteHandler` crée une réservation sans
+appeler `JaugeRessourceMereHandler::incrementer()`, alors que `ReserverProcessor` le fait. À
+l'expiration, elle passe en `AnnuleeLibre` sans décrément non plus — c'est donc symétrique et ça ne
+fuit pas, mais la jauge globale **sous-compte** toutes les réservations issues d'une promotion.
+Avec la quantité, l'écart devient proportionnel au groupe au lieu d'être d'une unité.
+
+Je ne l'ai **pas corrigé dans ce lot** : c'est un changement de comportement qui déborde d'ACT-1 et
+qui touche CA-14. Dis-moi si je le prends (c'est mon périmètre, une ligne et un test) ou si tu
+préfères une tâche à part.
+
+
+## ACT-1 point 3 — ma proposition, et pourquoi je ne l'écris pas sans ton feu vert
+
+Rappel de ce que j'ai constaté en lisant : le second niveau **existe**
+(`Ressource.occupationCourante` vs `capacitePropre`, RG-M5-08/CA-14) mais il est **global et aveugle
+au temps**. Il répond à « combien de réservations en cours sur cet arbre de ressources », pas à
+« soixante couverts **sur le service de 20 h** ». L'exemple de D16 est un quota sur une fenêtre.
+
+**Ma proposition, et elle n'invente aucune entité :** le « service » est déjà exprimable — c'est un
+`Creneau` posé sur la ressource **mère**. `Creneau` porte déjà ressource, début, fin et capacité.
+Une réservation sur le créneau d'une table consommerait alors aussi le créneau de la salle qui la
+couvre dans le temps. Deux niveaux, deux créneaux, une seule mécanique de jauge — celle que je viens
+de rendre quantitative. C'est la « couche mince » que D16 demande, et non un module parallèle.
+
+**Pourquoi je ne le fais pas de moi-même :** cela change ce qu'est un `Creneau` (aujourd'hui, une
+réservation en vise exactement un), et donc la lecture de `RG-M5-01`. C'est un choix de modèle, pas
+une extension — et le précédent de la semaine dit que ce genre de décision se prend avant
+l'implémentation, pas pendant. Tranche, et je l'écris au battement suivant.
+
+En attendant je prends CQ-3, qui n'attend rien ni personne.
