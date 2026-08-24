@@ -10,6 +10,7 @@ use App\Platform\Event\EventBus;
 use App\Platform\Event\EventSubject;
 use App\Platform\Event\EventTenant;
 use App\Reservation\Entity\Reservation;
+use App\Reservation\Enum\IssueCreditNoShow;
 use App\Reservation\Enum\StatutCreneau;
 use App\Reservation\Enum\StatutPaiementParticipant;
 use App\Reservation\Enum\StatutReservation;
@@ -111,8 +112,37 @@ final class BasculerNoShowCommand extends Command
                                 // s'il doit relancer ou se taire.
                                 'hasBillingRule' => $facturation !== null,
                                 'slotId' => (string) $creneau->getId(),
+                                // RG-CQ5-08 — extension additive (plan-cq5.md §3.7). `creditIssue`
+                                // absent (pas juste `null` dans le JSON final : la clé n'est écrite que
+                                // si une règle a été résolue) si $facturation === null.
+                                ...($facturation !== null ? [
+                                    'creditIssue' => $facturation->getIssueCreditNoShow()?->value,
+                                    'creditRestoredAmount' => ($facturation->isCreditActionne() && $facturation->isCreditRestitue()) ? 1 : 0,
+                                ] : []),
                             ],
                         ));
+
+                        // RG-CQ5-08 — booking.reschedule_requested : publié UNIQUEMENT si issue =
+                        // RestoredWithReschedule ET creditActionne ET creditRestitue (renforcement
+                        // volontaire par rapport à la lettre stricte de RG-CQ5-08, cf. plan §8 risque
+                        // n°2 : jamais annoncer un report pour un crédit qui, en pratique, n'a pas
+                        // bougé). Émis depuis CE call site, jamais depuis
+                        // DeclencherFacturationNoShowHandler (même raison que booking.cancelled/
+                        // booking.no_show déjà actée dans AnnulerReservationProcessor).
+                        if ($facturation?->getIssueCreditNoShow() === IssueCreditNoShow::RestoredWithReschedule
+                            && $facturation->isCreditActionne() && $facturation->isCreditRestitue()) {
+                            $this->eventBus->publish(new DomainEvent(
+                                'booking.reschedule_requested',
+                                new EventTenant($etablissementNoShow->getId()),
+                                new EventSubject('Reservation', (string) $reservation->getId()),
+                                [
+                                    'customerId' => (string) $reservation->getOrganisateur()?->getId(),
+                                    'reservationRef' => (string) $reservation->getId(),
+                                    'slotId' => (string) $creneau->getId(),
+                                    'droitId' => (string) $facturation->getDroitAccesRestitueRef(),
+                                ],
+                            ));
+                        }
                     }
                 }
 

@@ -289,3 +289,8 @@ when@test:
         App\Tests\Acces\Support\CardRechargedEventCollector:
             public: true
             tags: ['kernel.event_subscriber']
+        # Collecteur `booking.no_show`/`booking.cancelled`/`booking.reschedule_requested` (CQ-5,
+        # plan-cq5.md §7 T11) — même patron que CardRechargedEventCollector ci-dessus.
+        App\Tests\Reservation\Support\NoShowCreditEventCollector:
+            public: true
+            tags: ['kernel.event_subscriber']

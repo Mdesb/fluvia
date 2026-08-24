@@ -10,6 +10,7 @@ use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Post;
+use App\Reservation\Enum\IssueCreditNoShow;
 use App\Reservation\Enum\StatutFacturationNoShow;
 use App\Reservation\State\EmettreVenteNoShowProcessor;
 use App\Reservation\State\ExonererProcessor;
@@ -93,6 +94,37 @@ class FacturationNoShow
     #[ORM\Column(length: 255, nullable: true)]
     #[Groups(['facturation_no_show:read'])]
     private ?string $motifExoneration = null;
+
+    /**
+     * Copie figée de l'`IssueCreditNoShow` réellement appliquée (RG-CQ5-06) — une règle peut être
+     * reparamétrée après coup, ce champ trace ce qui a été décidé, pas ce que dirait la règle si on la
+     * relisait aujourd'hui. `null` pour les lignes historiques (avant ce lot) et pour les no-show sans
+     * règle active (RG-CQ5-03).
+     */
+    #[ORM\Column(length: 24, nullable: true, enumType: IssueCreditNoShow::class)]
+    #[Groups(['facturation_no_show:read'])]
+    private ?IssueCreditNoShow $issueCreditNoShow = null;
+
+    /** Un `DroitAcces` créditable a-t-il été trouvé pour cette réservation ? (RG-CQ5-04) */
+    #[ORM\Column(options: ['default' => false])]
+    #[Groups(['facturation_no_show:read'])]
+    private bool $creditActionne = false;
+
+    /** `true` seulement si `Restored`/`RestoredWithReschedule` et l'`UPDATE` a effectivement affecté une ligne. */
+    #[ORM\Column(options: ['default' => false])]
+    #[Groups(['facturation_no_show:read'])]
+    private bool $creditRestitue = false;
+
+    /**
+     * Référence du `DroitAcces` effectivement restitué — TRANSIENT, jamais persisté (aucun
+     * `#[ORM\Column]`, plan-cq5.md §3.3). Peuplé uniquement dans le même appel PHP que
+     * `ApplyNoShowCreditIssueHandler::apply()` (`DeclencherFacturationNoShowHandler::declencher()`),
+     * pour que l'appelant (`BasculerNoShowCommand`/`AnnulerReservationProcessor`) puisse construire le
+     * payload de `booking.reschedule_requested` SANS relire `ProjectionAccesReservation` une seconde
+     * fois. Redevient `null` après un `find()`/`refresh()` ultérieur — usage strictement synchrone,
+     * jamais lu après un `em->clear()`.
+     */
+    private ?Uuid $droitAccesRestitueRef = null;
 
     public function __construct()
     {
@@ -198,5 +230,67 @@ class FacturationNoShow
         $this->motifExoneration = $motifExoneration;
 
         return $this;
+    }
+
+    public function getIssueCreditNoShow(): ?IssueCreditNoShow
+    {
+        return $this->issueCreditNoShow;
+    }
+
+    public function setIssueCreditNoShow(?IssueCreditNoShow $issueCreditNoShow): self
+    {
+        $this->issueCreditNoShow = $issueCreditNoShow;
+
+        return $this;
+    }
+
+    public function isCreditActionne(): bool
+    {
+        return $this->creditActionne;
+    }
+
+    public function setCreditActionne(bool $creditActionne): self
+    {
+        $this->creditActionne = $creditActionne;
+
+        return $this;
+    }
+
+    public function isCreditRestitue(): bool
+    {
+        return $this->creditRestitue;
+    }
+
+    public function setCreditRestitue(bool $creditRestitue): self
+    {
+        $this->creditRestitue = $creditRestitue;
+
+        return $this;
+    }
+
+    public function getDroitAccesRestitueRef(): ?Uuid
+    {
+        return $this->droitAccesRestitueRef;
+    }
+
+    public function setDroitAccesRestitueRef(?Uuid $droitAccesRestitueRef): self
+    {
+        $this->droitAccesRestitueRef = $droitAccesRestitueRef;
+
+        return $this;
+    }
+
+    /**
+     * RG-CQ5-09 — dégradation D27 : signale qu'un signal (`booking.reschedule_requested`) a
+     * réellement été publié pour cette facturation, jamais qu'un créneau va être proposé (Smart
+     * Flow/SF-2 absent). `true` si et seulement si l'événement a réellement été publié — miroir exact
+     * de la condition de publication côté appelant (`BasculerNoShowCommand`/`AnnulerReservationProcessor`).
+     */
+    #[Groups(['facturation_no_show:read'])]
+    public function isRescheduleRequested(): bool
+    {
+        return $this->issueCreditNoShow === IssueCreditNoShow::RestoredWithReschedule
+            && $this->creditActionne
+            && $this->creditRestitue;
     }
 }

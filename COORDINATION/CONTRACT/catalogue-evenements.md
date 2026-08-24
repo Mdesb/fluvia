@@ -34,8 +34,9 @@ The first-class events published on the bus by the core and the modules. An even
 | `invoice.paid` | Invoicing | amount, date | Accounting |
 | `credit_note.issued` | Invoicing | amount | Accounting |
 | `booking.created` | Reservation | slot, resource | Smart Flow |
-| `booking.cancelled` | Reservation | slotId, leadTimeMinutes, withinFreeWindow | **Smart Flow**, Revenue Recovery |
-| `booking.no_show` | Reservation | customerId, amountAtRisk, hasBillingRule, slotId | **Revenue Recovery**, Smart Flow |
+| `booking.cancelled` | Reservation | slotId, leadTimeMinutes, withinFreeWindow, creditIssue?, creditRestoredAmount? | **Smart Flow**, Revenue Recovery |
+| `booking.no_show` | Reservation | customerId, amountAtRisk, hasBillingRule, slotId, creditIssue?, creditRestoredAmount? | **Revenue Recovery**, Smart Flow |
+| `booking.reschedule_requested` | Reservation (CQ-5) | customerId, reservationRef, slotId, droitId | **Smart Flow** (SF-2, zéro consommateur aujourd'hui) |
 | `booking.completed` | Reservation | duration | Reporting |
 | `slot.released` | Smart Flow | slot, resource | **Smart Flow** (slot recovery), waitlist |
 | `subscription.created` | SEPA/Subscription | recurring_amount | Accounting |
