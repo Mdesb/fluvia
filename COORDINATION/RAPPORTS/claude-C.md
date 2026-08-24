@@ -7,7 +7,6 @@
 |---|---|---|---|
 | 12:15 | Topologie des hooks élucidée : **deux dépôts**, pas un. `--etat` dit désormais qui est couvert. **Je corrige une erreur que je t'ai transmise** (détail ci-dessous). C24/D28 livrée et vérifiée. | rien | rien |
 | 13:10 | **Garde-fou de topologie livré** (ton ordre) : refuse de démarrer si les commits peuvent atteindre les refs sans barrière. Vérifié sur la flotte réelle — 8 sessions OK, `main` toléré, **`claude-G` refusé**. Lanceur 9/9, banc 17/17. | les 36 entités de la règle n°5 | rien |
-
 | 14:05 | Règle n°5 reprise. **Vérifié que le cliquet récompense le correctif** (simulé sur `OperationScellee` : sort de la dette, plafond baisse). **Et j'ai corrigé mon propre classement** : `Utilisateur` n'est pas un référentiel, c'est une fuite de données personnelles — détail ci-dessous. | les 13 jointures restantes | les 17 référentiels attendent ton mot |
 
 ---
