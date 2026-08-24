@@ -57,8 +57,13 @@ if [ ! -d "$BARE" ] || [ ! -d "$BARE/hooks" ]; then
     exit 2
 fi
 
-SOURCE="$(cd "$(dirname "$0")/.." && pwd)/hooks/pre-receive"
+RACINE_HOOKS="$(cd "$(dirname "$0")/.." && pwd)/hooks"
+SOURCE="$RACINE_HOOKS/pre-receive"
 CIBLE="$BARE/hooks/pre-receive"
+# `post-receive` réinstalle `pre-receive` quand main le modifie (D28). Il doit être posé ici,
+# sinon le hook censé corriger « versionné mais jamais installé » souffre de ce défaut même.
+SOURCE_POST="$RACINE_HOOKS/post-receive"
+CIBLE_POST="$BARE/hooks/post-receive"
 INTERRUPTEUR="$BARE/hooks/GARDE-FOUS-DESACTIVES"
 
 case "$ACTION" in
@@ -73,6 +78,15 @@ case "$ACTION" in
         else
             echo "hook      : absent"
         fi
+        if [ -f "$CIBLE_POST" ]; then
+            if cmp -s "$SOURCE_POST" "$CIBLE_POST"; then
+                echo "post-recv : installé, à jour"
+            else
+                echo "post-recv : installé, DIFFÉRENT de hooks/post-receive"
+            fi
+        else
+            echo "post-recv : absent — la réinstallation automatique (D28) ne tourne pas"
+        fi
         if [ -f "$INTERRUPTEUR" ]; then
             echo "état      : DÉSACTIVÉ par $INTERRUPTEUR"
             echo "            posé le $(stat -c %y "$INTERRUPTEUR" 2>/dev/null | cut -d. -f1)"
@@ -82,8 +96,9 @@ case "$ACTION" in
         ;;
 
     --retirer)
-        rm -f "$CIBLE"
-        echo "✓ Hook retiré. Les push ne sont plus contrôlés."
+        rm -f "$CIBLE" "$CIBLE_POST"
+        echo "✓ Hooks retirés. Les push ne sont plus contrôlés, et la réinstallation"
+        echo "  automatique (D28) ne tourne plus non plus."
         ;;
 
     installer)
@@ -94,6 +109,11 @@ case "$ACTION" in
         cp "$SOURCE" "$CIBLE"
         chmod +x "$CIBLE"
         echo "✓ Hook installé : $CIBLE"
+        if [ -f "$SOURCE_POST" ]; then
+            cp "$SOURCE_POST" "$CIBLE_POST"
+            chmod +x "$CIBLE_POST"
+            echo "✓ Hook installé : $CIBLE_POST (réinstallation automatique, D28)"
+        fi
         echo
         echo "  Il refuse un push dont les garde-fous échouent — pour tout le monde, sans recours"
         echo "  côté client (--no-verify n'agit pas sur pre-receive)."

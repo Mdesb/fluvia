@@ -1,0 +1,119 @@
+#!/usr/bin/env bash
+#
+# Hook `post-receive` — réinstalle les hooks du dépôt nu quand `main` les modifie (D28).
+#
+# ── POURQUOI CE HOOK EXISTE ─────────────────────────────────────────────────────────────────────
+#
+# D28 posait deux exigences. La règle — « toute fusion touchant `hooks/` est suivie de la
+# réinstallation » — et le critère qui la juge : **« elle ne doit reposer sur personne »**.
+#
+# L'avertissement d'obsolescence livré d'abord satisfait la règle mais pas le critère : il *dit* que
+# le hook est périmé et attend qu'un humain agisse. Or c'est exactement ce qui avait échoué —
+# l'intégrateur avait la règle sous les yeux (D21) et n'en a pas tiré le geste. Un mécanisme qui
+# rappelle à quelqu'un de faire quelque chose repose sur ce quelqu'un.
+#
+# Ce hook-ci ferme la boucle. L'avertissement reste en place comme filet : si une réinstallation
+# échoue, la poussée suivante le signalera.
+#
+# **Il se réinstalle lui-même aussi**, et ce n'est pas de la coquetterie : ne traiter que
+# `pre-receive` recréerait à l'identique le défaut qu'on corrige — un hook versionné que personne
+# n'installe — simplement déplacé d'un fichier à l'autre.
+#
+# ── LE COMPROMIS, ET IL EST RÉEL ────────────────────────────────────────────────────────────────
+#
+# Un hook qui s'auto-installe supprime le temps humain entre « ce code est sur main » et « ce code
+# garde le dépôt ». C'est le but, mais il faut le dire : une erreur dans `pre-receive` fusionnée sur
+# `main` devient active tout de suite, et un `pre-receive` cassé bloque **tout le monde**, sans
+# recours côté client (`--no-verify` n'agit pas sur `pre-receive`).
+#
+# Trois garde-corps, dans cet ordre :
+#
+#   1. **Le contenu a déjà passé les garde-fous** — `post-receive` ne s'exécute qu'après acceptation.
+#   2. **Contrôle de syntaxe avant remplacement** : un candidat que `bash -n` rejette n'est pas
+#      installé, et le hook en place — périmé mais fonctionnel — est préservé.
+#   3. **Sauvegarde systématique** en `<hook>.precedent` : restaurer ne demande ni git ni ce dépôt,
+#      juste un `cp`. C'est la sortie de secours quand tout le reste a échoué.
+#
+# ── UNE PRÉCAUTION TECHNIQUE QUI N'EST PAS UN DÉTAIL ────────────────────────────────────────────
+#
+# L'installation se fait par `mv`, jamais par `cp`. Bash lit un script **au fur et à mesure** de son
+# exécution : écraser le fichier en place (`cp`) modifie l'inode que le processus courant est en train
+# de lire, et la suite du script est interprétée depuis les nouveaux octets, à l'ancien décalage. Le
+# résultat est arbitraire. `mv` depuis le même système de fichiers remplace l'entrée de répertoire
+# sans toucher à l'inode ouvert : le processus en cours finit sur l'ancienne version, intacte, et la
+# nouvelle prend effet à l'exécution suivante. C'est ce qui rend l'auto-remplacement sûr.
+#
+# L'interrupteur `hooks/GARDE-FOUS-DESACTIVES` est respecté ici aussi : s'il est posé, quelqu'un a
+# délibérément mis la barrière hors service, et ce n'est pas à ce hook de la remettre en place.
+
+set -uo pipefail
+
+BARE="$(pwd)"
+BRANCHE_REFERENCE="refs/heads/main"
+HOOKS="pre-receive post-receive"
+
+main_a_bouge=0
+while read -r _ancien _nouveau ref; do
+    [ "$ref" = "$BRANCHE_REFERENCE" ] && main_a_bouge=1
+done
+
+[ "$main_a_bouge" -eq 0 ] && exit 0
+
+if [ -f "$BARE/hooks/GARDE-FOUS-DESACTIVES" ]; then
+    echo "· Garde-fous désactivés : réinstallation automatique des hooks ignorée (D28)."
+    exit 0
+fi
+
+for nom in $HOOKS; do
+    CIBLE="$BARE/hooks/$nom"
+    SAUVEGARDE="$BARE/hooks/$nom.precedent"
+
+    # Le temporaire est créé DANS hooks/ : `mv` doit rester sur le même système de fichiers pour être
+    # atomique (sinon il dégénère en copie, et on perd la propriété qui rend l'opération sûre).
+    CANDIDAT="$(mktemp "$BARE/hooks/.$nom.nouveau.XXXXXX")" || continue
+
+    if ! git --git-dir="$BARE" show "$BRANCHE_REFERENCE:hooks/$nom" > "$CANDIDAT" 2>/dev/null \
+       || [ ! -s "$CANDIDAT" ]; then
+        rm -f "$CANDIDAT"                   # `main` ne versionne pas ce hook : ne rien installer,
+        continue                            # et surtout ne rien supprimer.
+    fi
+
+    if cmp -s "$CANDIDAT" "$CIBLE"; then
+        rm -f "$CANDIDAT"                   # déjà à jour : le cas normal, on reste silencieux.
+        continue
+    fi
+
+    if ! bash -n "$CANDIDAT" 2>/dev/null; then
+        rm -f "$CANDIDAT"
+        echo ""
+        echo "⚠ ────────────────────────────────────────────────────────────────────────────"
+        echo "⚠  RÉINSTALLATION REFUSÉE : hooks/$nom de main ne passe pas \`bash -n\`."
+        echo "⚠  Le hook actuellement installé est CONSERVÉ — périmé, mais fonctionnel."
+        echo "⚠  Corrige la syntaxe sur main : tant qu'elle est fautive, l'installation est bloquée."
+        echo "⚠ ────────────────────────────────────────────────────────────────────────────"
+        continue
+    fi
+
+    AVANT="-"
+    if [ -f "$CIBLE" ]; then
+        AVANT="$(grep -o 'garde-fou-[a-z-]*\.php' "$CIBLE" 2>/dev/null | sort -u | wc -l | tr -d ' ')"
+        cp "$CIBLE" "$SAUVEGARDE"
+    fi
+    APRES="$(grep -o 'garde-fou-[a-z-]*\.php' "$CANDIDAT" 2>/dev/null | sort -u | wc -l | tr -d ' ')"
+
+    chmod +x "$CANDIDAT"
+    if ! mv -f "$CANDIDAT" "$CIBLE"; then
+        rm -f "$CANDIDAT"
+        echo "✗ Réinstallation de hooks/$nom ÉCHOUÉE — version précédente dans $SAUVEGARDE."
+        continue                            # ne jamais faire échouer un push déjà accepté.
+    fi
+
+    echo ""
+    echo "✓ hooks/$nom réinstallé automatiquement depuis main (D28)."
+    if [ "$nom" = "pre-receive" ]; then
+        echo "  Garde-fous référencés : $AVANT → $APRES."
+    fi
+    echo "  Version précédente conservée : $SAUVEGARDE"
+done
+
+exit 0

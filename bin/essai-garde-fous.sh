@@ -72,6 +72,29 @@ essai_avertissement() { # essai_avertissement <libellé> <motif attendu dans la 
     git clean -qfd
 }
 
+# Le pendant du precedent : la poussee doit passer et NE PAS dire une certaine chose. Sert a
+# prouver qu'un avertissement a cessé — donc que ce qui le causait a été réparé.
+essai_sans_avertissement() { # essai_sans_avertissement <libellé> <motif qui ne doit PAS sortir>
+    local libelle="$1" motif="$2" code=0
+    local sortie="$ESSAI/sortie-push.txt"
+    git push "$BARE" main >"$sortie" 2>&1 || code=$?
+
+    if [ "$code" -ne 0 ]; then
+        printf '  \033[31m✗\033[0m %-52s refus (attendu : acceptation silencieuse)\n' "$libelle"
+        KO=$((KO + 1))
+    elif grep -q "$motif" "$sortie"; then
+        printf '  \033[31m✗\033[0m %-52s avertit encore (« %s »)\n' "$libelle" "$motif"
+        KO=$((KO + 1))
+    else
+        printf '  \033[32m✓\033[0m %-52s acceptation silencieuse\n' "$libelle"
+        OK=$((OK + 1))
+    fi
+
+    git fetch -q "$BARE" main
+    git reset -q --hard FETCH_HEAD
+    git clean -qfd
+}
+
 # Le push qui échoue EST le comportement attendu dans la moitié des cas : on capture son code sans
 # laisser `set -e` interrompre le banc — sinon le premier refus, qui est une réussite, arrête tout.
 essai() { # essai <libellé> <refus|acceptation>
@@ -408,8 +431,14 @@ printf '\n# ligne qui périme le hook installé (banc D28)\n' >> "$BARE/hooks/pr
 echo "// banc d28" >> README.md; commiter "banc : hook installe perime"
 essai_avertissement "D28 — le hook installé signale son obsolescence" "LE HOOK INSTALLÉ"
 
-# Remise en état : les cas suivants doivent repartir d'un hook à jour.
-bash bin/installer-hooks.sh "$BARE" >/dev/null
+# ...et `post-receive` l'a réinstallé pendant cette même poussée, après son acceptation. La
+# poussée suivante doit donc être SILENCIEUSE. C'est ce cas qui prouve que la boucle se referme
+# sans personne : sans lui, on saurait seulement que le hook sait se plaindre.
+#
+# Aucune remise en état manuelle ici, volontairement — la rétablir masquerait une panne de
+# `post-receive` en faisant le travail à sa place.
+echo "// banc d28 bis" >> README.md; commiter "banc : la poussee suivante doit etre silencieuse"
+essai_sans_avertissement "D28 — post-receive a réinstallé, plus d'avertissement" "LE HOOK INSTALLÉ"
 
 echo "// banc interrupteur" >> README.md
 cat > app/src/Offre/Service/BancSignataire.php <<'PHP'
