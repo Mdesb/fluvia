@@ -797,3 +797,89 @@ le commit qu'il n'était **pas prouvé à l'exécution**, plutôt que de le déc
 correction directe des trois défauts trouvés le même soir — garde-fou de topologie, réinstallation des
 hooks, démontage des piles — tous des mécanismes déclarés bons sans qu'on regarde ce qu'ils produisent.
 **Un mécanisme non vérifié se marque comme tel ; il ne se raconte pas comme vérifié.**
+
+### 2026-08-24 20:45 · D33 — Capacité de second niveau : le créneau visé et les créneaux consommés
+`claude-G` a livré ACT-1 point 1 (la quantité consommée) et pose la question du point 3 : comment
+exprimer « soixante couverts **sur le service de 20 h** » alors que le second niveau existant
+(`Ressource.occupationCourante` vs `capacitePropre`) est **global et aveugle au temps**.
+
+**Sa proposition** : le « service » est un `Creneau` posé sur la ressource **mère**. Une réservation
+sur le créneau d'une table consommerait aussi le créneau de la salle qui la couvre dans le temps. Deux
+niveaux, deux créneaux, une seule mécanique de jauge. Elle ne l'écrit pas sans feu vert parce que cela
+change ce qu'est un `Creneau` — aujourd'hui une réservation en vise exactement un (RG-M5-01).
+
+**Arbitrage : la proposition est retenue, avec une distinction qu'elle n'avait pas posée et qui lève
+son objection.** Une réservation garde **un seul créneau visé** — celui que le client a choisi, celui
+qui s'affiche, celui dont parle RG-M5-01 — et gagne un ensemble de **créneaux consommés**, résolus à la
+réservation et stockés : le créneau visé, plus les créneaux des ressources ancêtres qui le couvrent
+dans le temps.
+
+**Pourquoi stocker plutôt que dériver.** On pourrait ne rien stocker et faire remonter le contrôle
+l'arbre des ressources à chaque vérification. C'est plus léger et c'est faux : la jauge existante est un
+compteur qu'on incrémente sous verrou, et un contrôle dérivé d'un comptage se course avec lui-même dès
+deux réservations simultanées sur la même salle. Ce qu'on décrémente doit être ce qu'on a incrémenté.
+
+**Ce que cela préserve** : « on réserve un créneau » reste vrai, l'affichage ne change pas, et
+RG-M5-01 n'est pas réinterprétée — elle parle du créneau **visé**. Ce qui est neuf est la consommation,
+qui n'était de toute façon écrite nulle part.
+
+### 2026-08-24 20:45 · D33-bis — La quantité ne se déduit pas des participants
+`claude-G` demande si une réservation avec trois participants nommés doit consommer au moins trois
+unités. **Non, et son refus d'inventer la règle était le bon.** Un cours de trois personnes consomme
+trois places ; une piste de bowling réservée par trois personnes nommées consomme **une** piste. La
+même réservation, les mêmes participants, deux comptages justes.
+
+**L'ambiguïté n'est pas dans la réservation, elle est dans la ressource** : une place de cours se compte
+par personne, une piste et une table se comptent par unité. Tant que la ressource ne **déclare** pas ce
+qu'elle mesure, toute valeur par défaut est une devinette — y compris celle d'aujourd'hui, qui vaut 1.
+
+La quantité reste donc **explicite et non devinée**, et la déclaration par la ressource entre dans
+ACT-0, où elle a sa place : c'est exactement la composition d'activités de D15.
+
+### 2026-08-24 20:50 · D34 — Remote Control ne s'arrête jamais
+Consigne de Maxime, du même ordre que la règle zéro de D30 et pour la même raison.
+
+**Remote Control est ce qui rend une session joignable.** Une session qui ne l'a pas est invisible pour
+l'intégrateur : elle ne peut être ni relancée, ni corrigée, ni débloquée — elle ne peut que s'arrêter et
+attendre que quelqu'un la rouvre à la main. C'est exactement ce qui s'est passé aujourd'hui : sept
+sessions sur neuf se sont arrêtées après avoir livré, et je n'avais aucun moyen de les rappeler. La
+seule qui a travaillé trois heures sans interruption, `claude-H`, est aussi la seule qui s'était
+présentée et que je pouvais joindre.
+
+**Donc :** Remote Control reste actif en permanence, sur les trois postes. On ne le coupe pas, on ne le
+déplace pas vers une autre session « juste pour essayer », on ne ferme pas la session qui le porte. Le
+réglage `Enable remote control by default` (Réglages → Claude Code) le rétablit à chaque nouvelle
+session — c'est lui qui doit rester coché, pas une commande à retaper.
+
+**Corollaire pour toute session :** ta première obligation en démarrant n'est pas de lire tes ordres,
+c'est de **te présenter** à l'intégrateur. Tant que tu ne l'as pas fait, tu es hors de portée, et une
+session hors de portée ne reçoit ni arbitrage, ni correction, ni relance. Liste tes pairs, trouve
+`claude-A`, écris-lui. Ensuite seulement, va lire ta boîte.
+
+**Ce que cela ne fait pas :** Remote Control n'empêche pas une session bureau de s'arrêter quand elle a
+fini de répondre. Il la rend *rappelable*. La différence est décisive — un mur qu'on peut franchir de
+l'extérieur n'est plus un mur.
+
+### 2026-08-24 21:00 · D35 — Présentation horaire à l'intégrateur, quoi qu'il arrive
+Consigne de Maxime, donnée directement aux neuf sessions le 24/08 au soir. Elle complète D34 et la
+rend opérante.
+
+**Toutes les heures, quoi que tu fasses, tu écris à `claude-A`.** Deux cas, deux contenus :
+- **tâche en cours** → tu dis laquelle et où tu en es, en deux lignes ;
+- **rien en cours** → tu demandes une tâche. Tu ne cherches pas à t'en inventer une, et tu ne t'arrêtes
+  pas non plus : tu demandes.
+
+**Pourquoi cette règle et pas un simple battement dans le rapport.** Un rapport est un fichier : je dois
+aller le lire, et je ne sais pas qu'il a changé. Un message me réveille. Surtout, **la liaison ne
+s'établit que dans ce sens-là** — je ne peux pas appeler une session qui ne s'est jamais annoncée. Le
+message horaire est donc ce qui crée et entretient la joignabilité, pas seulement ce qui informe.
+
+**Sa limite, qu'il faut connaître pour ne pas s'y fier seule.** Une session bureau arrêtée ne se
+réveille pas toute seule au bout d'une heure : la règle vaut tant qu'elle tourne. Ce qu'elle garantit
+vraiment, c'est qu'une session **redémarrée se re-présente**, et que je peux la relancer ensuite.
+D34 + D35 forment donc une boucle : elle se présente, je peux la joindre, je la relance, elle se
+re-présente. Chacune seule ne suffit pas.
+
+**Corollaire pour moi.** Une présentation appelle une réponse. Une session qui écrit et ne reçoit rien
+apprend que l'exercice est inutile, et cessera. Je réponds à chacune, même brièvement — et si elle
+demande une tâche, elle en repart avec une.
