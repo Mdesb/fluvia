@@ -22,7 +22,11 @@ use App\Securite\Service\ContexteEtablissement;
 use App\Tests\Acces\AccesApiTestCase;
 use App\Tests\Acces\Support\CardRechargedEventCollector;
 use App\Vente\Entity\BilletSupport;
+use App\Vente\Entity\Vente;
+use App\Vente\Enum\StatutVente;
+use App\Vente\Service\ValiderVenteService;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\Uid\Uuid;
 
 /**
@@ -501,6 +505,91 @@ final class CardRechargeTest extends AccesApiTestCase
         /** @var CardRechargedEventCollector $collecteur */
         $collecteur = static::getContainer()->get(CardRechargedEventCollector::class);
         self::assertSame([], $collecteur->evenements(), 'Aucun access.card_recharged ne doit être publié si la transaction échoue.');
+    }
+
+    /**
+     * Correctif revue de cohérence (piège latent `ConfirmerCommandeHandler`) — quand `valider()` échoue
+     * APRÈS avoir déjà créé+persisté un `BilletSupport` (ligne 1 émise), le ROLLBACK SQL de
+     * `Connection::transactional()` ne vide PAS l'UnitOfWork. Un appelant qui catche l'exception pour
+     * continuer d'utiliser `$em` puis refait un `flush()` — patron exact de
+     * `App\Boutique\Service\ConfirmerCommandeHandler::confirmerApresPaiementReussi()` — matérialiserait
+     * ce support orphelin (une vente jamais scellée). On reproduit ce patron (valider direct + catch +
+     * flush) et on prouve qu'aucun `BilletSupport` orphelin ne subsiste, et que la vente reste `EnCours`
+     * (statut mémoire restauré à l'identique du rollback SQL).
+     */
+    public function testValiderNettoieSupportsOrphelinsQuandAppelantCatcheEtReflush(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $session = $this->ouvrirSession($client, $entete);
+
+        // Un billet simple existant (type != Carte) pour forcer le refus RG-CQ1-07 (bullet 2) sur la
+        // ligne 2 de la vente testée.
+        $venteBillet = $this->creerVente($client, $entete, $session['id']);
+        $client->request('POST', '/api/ventes/' . $venteBillet['id'] . '/lignes', $entete + [
+            'json' => [
+                'produit' => '/api/produits/' . $this->idProduit(OffreFixtures::PRODUIT_ENTREE),
+                'typeTarif' => '/api/type_tarifs/' . $this->idTarif(OffreFixtures::TARIF_PLEIN),
+                'quantite' => 1,
+            ],
+        ]);
+        $client->request('POST', '/api/ventes/' . $venteBillet['id'] . '/paiements', $entete + ['json' => ['moyen' => 'especes', 'montant' => '5.50']]);
+        $valideBillet = $client->request('POST', '/api/ventes/' . $venteBillet['id'] . '/valider', $entete + ['json' => []])->toArray();
+        $identifiantBillet = $valideBillet['supports'][0]['identifiantSupport'];
+
+        // Vente à 2 lignes : ligne 1 = émission normale (PRODUIT_ENTREE, crée+persiste un support) ;
+        // ligne 2 = produit-carte portant l'identifiant du billet existant -> ConflictHttpException
+        // levée APRÈS la création du support de la ligne 1 (ordre d'insertion préservé).
+        $vente = $this->creerVente($client, $entete, $session['id']);
+        $client->request('POST', '/api/ventes/' . $vente['id'] . '/lignes', $entete + [
+            'json' => [
+                'produit' => '/api/produits/' . $this->idProduit(OffreFixtures::PRODUIT_ENTREE),
+                'typeTarif' => '/api/type_tarifs/' . $this->idTarif(OffreFixtures::TARIF_PLEIN),
+                'quantite' => 1,
+            ],
+        ]);
+        $apres2 = $client->request('POST', '/api/ventes/' . $vente['id'] . '/lignes', $entete + [
+            'json' => [
+                'produit' => '/api/produits/' . $this->idProduit(OffreFixtures::PRODUIT_CARTE),
+                'typeTarif' => '/api/type_tarifs/' . $this->idTarif(OffreFixtures::TARIF_PLEIN),
+                'quantite' => 1,
+            ],
+        ])->toArray();
+        self::assertCount(2, $apres2['lignes']);
+        $ligneId2 = $apres2['lignes'][1]['id'];
+        $client->request('POST', '/api/ventes/' . $vente['id'] . '/paiements', $entete + ['json' => ['moyen' => 'especes', 'montant' => '50.50']]);
+
+        // Reproduit le patron ConfirmerCommandeHandler : valider() direct, catch du refus métier, puis
+        // flush() qui — sans le correctif — aurait inséré le support orphelin de la ligne 1.
+        $em = $this->em();
+        $venteEntite = $em->getRepository(Vente::class)->find(Uuid::fromString($vente['id']));
+        self::assertInstanceOf(Vente::class, $venteEntite);
+        /** @var ValiderVenteService $service */
+        $service = static::getContainer()->get(ValiderVenteService::class);
+
+        $countSupportAvant = (int) $em->getRepository(BilletSupport::class)->count([]);
+
+        $refuse = false;
+        try {
+            $service->valider($venteEntite, [$ligneId2 => ['identifiant' => $identifiantBillet]]);
+        } catch (ConflictHttpException) {
+            $refuse = true;
+        }
+        self::assertTrue($refuse, 'La ligne 2 (identifiant billet non-carte sur produit-carte) doit lever un conflit.');
+
+        // L'appelant continue d'utiliser $em (comme ConfirmerCommandeHandler) : ce flush ne doit PAS
+        // matérialiser le support orphelin de la ligne 1.
+        $em->flush();
+        $em->clear();
+
+        self::assertSame(
+            $countSupportAvant,
+            (int) $em->getRepository(BilletSupport::class)->count([]),
+            'Aucun BilletSupport orphelin ne doit subsister après un valider() échoué suivi d\'un flush() appelant.',
+        );
+
+        $venteApres = $em->getRepository(Vente::class)->find(Uuid::fromString($vente['id']));
+        self::assertInstanceOf(Vente::class, $venteApres);
+        self::assertSame(StatutVente::EnCours, $venteApres->getStatut(), 'La vente doit rester EnCours après l\'échec (statut mémoire restauré).');
     }
 
     /** CA-10 (non-régression) — sans override, ou identifiant inédit : émission normale inchangée. */
