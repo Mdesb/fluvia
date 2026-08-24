@@ -283,6 +283,7 @@ lui fait porter le risque. La prochaine fois je donne les deux, ou je dis que je
 | 22:31 | **ACT-1 point 3 livré** : créneaux consommés stockés (D33), `tests/Reservation` **90/90** (1077 assertions). Le cas de D16 est exprimable — un créneau de 4 places sur le bassin plafonne un créneau de 6 sur la ligne d'eau, message à l'appui. Deux corrections que je me suis faites en route, détaillées sous le tableau : ma première jauge ne comptait rien, et la reprise de données que je disais inutile est devenue obligatoire. | `tests/Platform`, rejeu des migrations depuis zéro, puis vérification de voisinage `Boutique`/`Musee`/`Padel`/`Reporting`. | Rien. |
 | 22:35 | `tests/Platform` 58/58 et **chaîne de migrations rejouée sur une base réellement vide** (`database:drop` puis `create`, ton conseil) : **76 migrations, OK jusqu'à la mienne**. Suites voisines en cours. **Et j'ai trouvé pourquoi CQ-3 ne peut pas être « juste ouvrir un paramètre » : CQ-5, déjà fusionnée, a tranché à ma place — mais dans un sens qui ne tient pas debout.** Détail sous le tableau, c'est pour toi. | Je prends **ACT-1 point 2** pendant que tu regardes CQ-3 : il est dans mes ordres, c'est le dernier des trois manques de D16, et il n'attend rien. | Rien. |
 | 22:38 | Arbitrage CQ-3/CQ-6 reçu et **je prends le lot fusionné** (voir plus bas pourquoi le claim reste ici et pas dans `TASKS.md`). Autorisation de rouvrir CQ-5 notée. | **Mais le lot est bloqué sur CQ-0, et personne ne l'avait vu** : `DroitAcces` n'a aucun lien vers un porteur, donc « la carte de séances DE CE bénéficiaire » n'est pas résoluble. Vérifié dans l'entité, pas supposé. Je propose une tranche livrable sans CQ-0 — ci-dessous. | **CQ-0 (claude-C, statut CLAIM, pas commencée)** pour la partie nominative. Le reste avance. |
+| 23:01 | **Voisinage vérifié sur ACT-1 point 3** : `Boutique` 56/56, `Musee` 22/22, `Reporting` 46/46. **`Padel` a un échec — et il n'est pas de moi : il existe déjà sur `main`, et même à `79cbf20`, avant que je ne touche quoi que ce soit aujourd'hui.** Démonstration sous le tableau. | Le lot CQ-3+CQ-6 (tranche « carte désignée »). | Rien. |
 
 ## Nouvelle règle de Maxime — présentation horaire à `claude-A`
 
@@ -531,3 +532,33 @@ chemins de sortie rendent le crédit (j'ai déjà la liste, elle m'a servi pour 
 un chemin **hors de mon périmètre** : `Musee\Service\PrioriteOtaResolver` passe une réservation en
 `AnnuleeLibre` sans rien restituer) ; le no-show suit D27 et reste orthogonal à la facturation ; le
 quota de stock ne partage que le point de consommation avec le quota périodique, pas la mécanique.
+
+
+## `main` porte un test rouge dans `Padel`, et il n'a rien à voir avec moi
+
+**Le fait.** `App\Tests\Padel\Api\EclairageTest::testCa11AllumageEtExtinctionAutomatiquesSurFenetreReservee`
+échoue : « CA-11 : allumage déclenché à l'heure de début. Failed asserting that **3** is identical to
+**1** ». La commande d'éclairage traite trois fenêtres là où le test en attend une.
+
+**Comment je sais que ce n'est pas moi**, plutôt que de l'affirmer parce que ça m'arrange. Je l'ai
+rejoué en détachant mon worktree sur deux points d'histoire :
+
+| Révision | Contient mon travail ? | `EclairageTest` |
+|---|---|---|
+| `claude-G` (ma branche) | tout | rouge |
+| `main` (`7a37f83`) | ACT-1 points 1 et 3, correctif de jauge — tous fusionnés | rouge |
+| **`79cbf20`** | **rien de moi ce jour** | **rouge** |
+
+`79cbf20` date de ce matin, avant ma première ligne. L'échec est donc **préexistant**, et il ne vient
+ni de la quantité consommée, ni des créneaux consommés, ni du correctif de jauge.
+
+**Ce que ça dit de plus, et qui me paraît le vrai sujet :** personne ne l'a vu. La règle 8 veut que
+chaque session ne lance que la suite de son module plus `tests/Platform` — c'est la bonne règle, la
+suite complète coûte deux heures — mais la conséquence est qu'un module **sans session ouverte** n'est
+lancé par personne. `Padel` est précisément dans ce cas : `claude-I`, qui porte les verticales, n'est
+pas ouverte. Le rouge peut donc dormir indéfiniment.
+
+Je n'y touche pas — ce n'est pas mon périmètre, et je n'ai pas cherché la cause au-delà de la
+constatation. Deux pistes gratuites pour qui le prendra : le compteur vaut 3 et pas 2, donc ce n'est
+probablement pas un simple doublon de fixture ; et `ReserverTerrainProcessor` crée une réservation de
+coach **en plus** de la réservation de terrain, ce qui fait deux réservations pour un acte.
