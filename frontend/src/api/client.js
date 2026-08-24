@@ -152,6 +152,15 @@ export const api = {
   creerProduit: (corps) =>
     request('/api/produits', { method: 'POST', body: corps, ld: true }),
 
+  // Cycle de vie d'un produit (Offre) : brouillon -> publié -> archivé, et la réactivation.
+  // Côté serveur ces opérations sont déclarées `input: false` : elles n'ont pas de corps, seul
+  // l'identifiant compte. Elles existent depuis des jours et n'étaient appelées de nulle part — un
+  // produit créé depuis cet écran restait donc en brouillon à vie, invendable sur tous les canaux.
+  publierProduit: (id) => request(`/api/produits/${id}/publier`, { method: 'POST' }),
+  depublierProduit: (id) => request(`/api/produits/${id}/depublier`, { method: 'POST' }),
+  archiverProduit: (id) => request(`/api/produits/${id}/archiver`, { method: 'POST' }),
+  reactiverProduit: (id) => request(`/api/produits/${id}/reactiver`, { method: 'POST' }),
+
   pointDeVentes: () => request('/api/point_de_ventes'),
   caisses: () => request('/api/caisses'),
   moyensPaiement: () => request('/api/moyen_paiements'),
