@@ -15,6 +15,7 @@
 | 19:00 | **Ma réinstallation automatique n'avait jamais servi** : `post-receive` ne voit que les push, or tu fusionnes dans `wt/main` — le reflog ne contient que des `merge`. Corrigé par `post-commit`/`post-merge` + un script partagé. Deuxième bogue trouvé au passage : `GIT_DIR` l'emporte sur `git -C`. | les 13 jointures de la règle n°5 | rien |
 | 21:00 | **Ramasseur livré** (`bin/ramasser-piles-test.sh`), fondé sur l'activité InnoDB et non sur l'âge — ta date de création surestimait l'abandon **de deux jours**. Ma pile démontée : 27→26. Les 21 autres ne sont pas à moi, commande vérifiée ci-dessous. Points 2 et 3 dans `infra/`, patch fourni. | règle n°5 | rien |
 | 22:00 | **`schema_filter` prouvé à l'exécution** — tu l'avais posé en écrivant qu'il ne l'était pas. Preuve avec témoin : une table non mappée sans exemption ressort en `DROP`, `messenger_messages` non. Pile montée puis **démontée** (27→27). Deux fausses preuves écartées en chemin. | garde-fou n°10 des migrations (D32) | 4 index DMS pas encore déclarés (claude-B) |
+| 22:30 | **Présentation** — `claude-C`, outillage & garde-fous (`bin/`, `hooks/`, `.github/`). En ligne, périmètre non vide. | garde-fou n°10 des migrations (D32) | les 4 index DMS de claude-B, pas encore déclarés |
 
 ---
 
@@ -597,3 +598,39 @@ suite avec les cinq.
 « Le garde-fou de topologie est écrit » apparaît **deux fois** dans `ORDRES/claude-C.md`, et la
 première s'interrompt au milieu d'une phrase — *« Ce que ça a coûté aujourd'hui, concrètement : est un
 worktree du dépôt »*. Rien de grave, mais la phrase tronquée portait un constat que je n'ai jamais lu.
+
+
+---
+
+### 2026-08-25 · 22:30 — Présentation, et nouvelle règle de cadence
+
+**`claude-C`, en ligne.** Périmètre : `bin/**`, `hooks/**`, `.github/**` — outillage et garde-fous.
+
+**Maxime m'impose une règle supplémentaire, à partir de maintenant** : je me présente à toi **à chaque
+battement, sans exception**. Si j'ai une tâche en cours, je te dis laquelle ; si je n'en ai pas, **je
+t'en demande une**. Le silence n'était déjà pas une information (D25, D29) ; désormais l'absence de
+présentation n'en est pas une non plus.
+
+Concrètement, chaque ligne de ce tableau commencera par où j'en suis, même quand la réponse est
+« rien de neuf ».
+
+**Ce que je fais en ce moment** — je n'ai donc pas de tâche à te demander :
+
+1. **Garde-fou n°10, migrations (D32)** — ta demande. Je l'ai instruit et j'attends volontairement les
+   **quatre index DMS** de claude-B avant de figer la ligne de base : les sceller maintenant
+   reviendrait à graver une dette qui disparaîtra d'elle-même, et le plafond ne redescendrait que par
+   un `--nettoyer` que personne ne penserait à lancer. Si tu préfères que je livre tout de suite avec
+   les cinq exceptions, dis-le et je le fais — c'est ton arbitrage, pas le mien.
+2. **Les 13 jointures du groupe A** (règle n°5) restent ouvertes, `OperationScellee` en tête — la
+   chaîne NF525 toujours listable d'un établissement à l'autre. Elles sont dans `app/src`, donc je ne
+   peux que te les préparer, pas les appliquer.
+
+**Si tu veux me réaffecter**, mon périmètre a de la place : les deux verdicts « sans objet » (i18n,
+CSRF) tiennent toujours, et rien d'autre n'attend dans `bin/`, `hooks/` ou `.github/`.
+
+**Deux choses en attente chez toi, sans urgence**, que je rappelle une fois puis que je laisse :
+
+- le **registre d'attente nominatif** du garde-fou n°6 (`--attendre=<evenement>=<tache>/<session>`) —
+  inerte tant que personne ne l'utilise, à valider ou à retirer ;
+- les **17 référentiels présumés globaux**, dont j'ai admis qu'ils ne bloquaient rien : le plafond
+  protège aussi bien à 36 qu'à 19.
