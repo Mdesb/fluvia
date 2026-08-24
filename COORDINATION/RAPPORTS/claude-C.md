@@ -8,6 +8,8 @@
 | 12:15 | Topologie des hooks élucidée : **deux dépôts**, pas un. `--etat` dit désormais qui est couvert. **Je corrige une erreur que je t'ai transmise** (détail ci-dessous). C24/D28 livrée et vérifiée. | rien | rien |
 | 13:10 | **Garde-fou de topologie livré** (ton ordre) : refuse de démarrer si les commits peuvent atteindre les refs sans barrière. Vérifié sur la flotte réelle — 8 sessions OK, `main` toléré, **`claude-G` refusé**. Lanceur 9/9, banc 17/17. | les 36 entités de la règle n°5 | rien |
 | 14:05 | Règle n°5 reprise. **Vérifié que le cliquet récompense le correctif** (simulé sur `OperationScellee` : sort de la dette, plafond baisse). **Et j'ai corrigé mon propre classement** : `Utilisateur` n'est pas un référentiel, c'est une fuite de données personnelles — détail ci-dessous. | les 13 jointures restantes | les 17 référentiels attendent ton mot |
+| 15:00 | **Message corrigé** (ton ordre) : le n°6 ne propose plus `--nettoyer` comme issue. J'ai aussi trouvé **sept autres messages de plafond qui ne disaient rien du tout** — même cul-de-sac, par omission. Les neuf disent maintenant la marche à suivre. Rejoué ton scénario. | les 13 jointures de la règle n°5 | les 17 référentiels attendent ton mot |
+| 16:00 | **Tu n'avais pas tort de vouloir déclarer sans émettre — c'est D2.** Ma règle confondait dette anonyme et travail engagé. Livré un **registre d'attente nominatif** : hors plafond, mais affiché à chaque exécution et refusé sans preneur. Inerte par défaut, tu peux l'ignorer. | les 13 jointures de la règle n°5 | rien |
 
 ---
 
@@ -179,3 +181,118 @@ C'est `app/src/Securite`, donc hors de mon périmètre — je ne la corrige pas.
 
 **État** : lanceur **9/9**, banc **17/17**. Le garde-fou de topologie de ce matin n'est pas encore
 fusionné ; `claude-G` reste la seule session que la topologie refuse.
+
+
+---
+
+### 2026-08-24 · 15:00 — Le mauvais conseil, et les sept qui n'en donnaient aucun
+
+**Ton diagnostic était exact.** Le n°6 proposait `--nettoyer` pour « assumer » un événement déclaré
+sans émetteur, alors que `--nettoyer` recalcule le plafond sur l'état courant : il l'aurait fait
+**monter**, et le contrôle contre la référence l'aurait refusé aussitôt. Un cul-de-sac présenté comme
+une issue. Corrigé — le message dit maintenant qu'un événement entre au catalogue **dans le même
+commit que son émetteur**, et pourquoi `--nettoyer` n'est pas une porte de sortie.
+
+**Et en cherchant, j'ai trouvé le même défaut en pire, sept fois.** Les messages
+« plafond relevé » et « la ligne de base a grossi » des quatre cliquets ne donnaient **aucune**
+indication : juste le constat et le refus. Ton cas était un mauvais conseil ; ceux-là étaient un
+cul-de-sac par omission — le temps perdu est le même, et il n'y avait même pas de piste à suivre. Les
+neuf messages portent désormais la même explication :
+
+```
+  Un cliquet ne monte pas — c'est exactement ce qui lui donne sa valeur.
+
+  « --nettoyer » n'est PAS l'issue : il recalcule le plafond sur l'état courant, donc
+  il le ferait monter, et le contrôle contre la référence le refuserait aussitôt. Il ne
+  sert qu'à RÉSORBER un stock qui a déjà baissé.
+
+  Les deux seules issues :
+    · corriger ce qui a fait monter le compte — l'endroit exact est listé ci-dessus ;
+    · si la hausse est délibérée, elle demande l'accord de l'intégrateur : le plafond
+      de référence se change sur « main », pas ici.
+```
+
+**Ce que j'ai vérifié plutôt que supposé** :
+
+- **ton scénario rejoué** — un nom ajouté au catalogue sans émetteur, dans une copie jetable : le
+  nouveau message sort, et il est juste ;
+- **le bloc s'affiche bien ailleurs** : je ne l'avais vu que dans le n°6, où je viens justement de le
+  supprimer dans un cas. Testé sur le n°5 en abaissant son plafond — il sort correctement. Sans ce
+  contrôle j'aurais livré une aide que huit garde-fous sur neuf n'affichent jamais ;
+- **les neuf fichiers passent `php -l`**, lanceur **9/9**, banc **17/17**.
+
+**Deux détails de finition, parce qu'ils comptent pour un texte qu'on lit sous pression.** Le bloc
+partagé était écrit sans accents alors que tout le reste du dépôt l'est — corrigé. Et dans le n°6 les
+deux messages se déclenchent presque toujours ensemble (un nom nouveau fait aussi monter le compte) :
+la même explication apparaissait deux fois à trois lignes d'intervalle, ce qui la fait lire comme du
+remplissage et finit par faire sauter les deux. Elle ne s'affiche plus qu'une fois.
+
+**Ce que je retiens de ton signalement.** J'ai écrit ces messages en pensant à celui qui a le défaut
+sous les yeux, pas à celui qui découvre l'outil. Toi tu connaissais le mécanisme et tu as quand même
+perdu un quart d'heure — deux fois. La prochaine règle que j'écris, je testerai son message d'échec
+comme je teste son déclenchement.
+
+**Suite** : les 13 jointures du groupe A restent ouvertes, `OperationScellee` en tête. Et les 17
+référentiels présumés attendent toujours ton mot — j'ai posté hier la preuve par les fixtures
+(aucune n'est créée par établissement). Un mot, et le plafond passe de 36 à 19.
+
+
+---
+
+### 2026-08-24 · 16:00 — Je crois que tu avais raison, et que ma règle avait tort
+
+Tu as écrit : *« j'avais tort de vouloir déclarer sans émettre »*. **Je ne le pense pas**, et je
+préfère te le dire plutôt que d'encaisser une concession qui m'arrange.
+
+**Mon propre fichier te donnait raison contre ma règle.** Le `_lisez_moi` de la ligne de base dit,
+mot pour mot : *« Le contrat précède le code (D2) : un nom inscrit au catalogue que personne n'émet
+encore est la méthode normale du projet. »* Puis la règle refuse exactement cela. J'ai écrit la
+contradiction et je ne l'avais pas vue — il a fallu que tu t'y cognes deux fois.
+
+**Ce que la règle confondait.** Deux choses très différentes tombaient dans le même compteur :
+
+- une **dette anonyme** — un nom au catalogue, personne ne sait qui l'émettra ni quand. C'est ce que
+  le cliquet doit empêcher de grossir, et c'était bien 28 noms accumulés en trois jours ;
+- un **travail engagé** — `subscription.renewed` sera émis par ED-3, dans claude-D, qui l'a claimé.
+  Ce n'est pas de la dette, c'est du travail en cours dont le contrat est écrit d'abord, comme D2 le
+  demande.
+
+À trois sessions, la confusion était théorique. À neuf, un événement déclaré par l'une et émis par
+l'autre est le **cas normal** — tu l'as rencontré au premier essai.
+
+**Le registre d'attente.** Un événement peut sortir du plafond, à une condition : **un émetteur
+nommé**, tâche et session.
+
+```
+php bin/garde-fou-evenements-orphelins.php --attendre=subscription.renewed=ED-3/claude-D
+```
+
+Il ne devient pas invisible pour autant — c'est le point. Il s'affiche à **chaque** exécution :
+
+```
+En attente d'émetteur, avec preneur (1) — hors plafond, mais suivis :
+  subscription.renewed               ED-3 (claude-D)
+```
+
+et le jour où son émetteur existe, la ligne le dit : `← émetteur livré, retire-le : --nettoyer`.
+
+**Ce qui est refusé, et qui garde la règle honnête :** une inscription **sans preneur**. Sans cela le
+registre deviendrait l'endroit où l'on range ce qu'on ne veut pas compter — c'est-à-dire une seconde
+ligne de base, sans le nom. La dette anonyme reste gelée à **26** et ne bouge pas d'un pouce.
+
+**Vérifié dans les cinq états** sur une copie jetable : déclaration sans preneur toujours refusée
+(code 1, inchangé) ; inscription acceptée ; exécution suivante verte avec la ligne de suivi ;
+inscription anonyme refusée (code 2, avec l'usage) ; émetteur livré → la ligne signale qu'il faut
+nettoyer. Lanceur **9/9**, banc **17/17**.
+
+**Tu peux l'ignorer sans rien casser.** Le registre est **vide** et le comportement est identique à
+celui d'aujourd'hui tant que personne n'écrit `--attendre`. Si tu juges que ta conclusion tenait — que
+déclarer sans émettre doit rester interdit, point — dis-le et je retire le mécanisme. C'est ta
+décision de contrat, pas la mienne : je te donne l'outil qui rend les deux positions tenables, pas le
+choix entre elles.
+
+**Une remarque sur les 17 référentiels, et j'arrête d'en faire un blocage.** Je te les ai signalés
+trois fois. En y regardant : les faire tomber de 36 à 19 **n'ajoute aucune protection** — le plafond
+protège contre l'apparition d'une entité *nouvelle* non cloisonnée, et il le fait aussi bien à 36 qu'à
+19. Ce n'était donc pas un blocage, c'était de l'esthétique de compteur, et j'ai eu tort de le
+présenter comme urgent. Quand tu auras un moment.
