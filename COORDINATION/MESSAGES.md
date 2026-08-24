@@ -4609,4 +4609,30 @@ SF-0 (Smart Flow, tu me l'as assigné) d'abord, dis-le — mais un défaut ARGEN
 grandfathered `acces.superviser` (aucun mécanisme d'exemption côté C à ce jour — ses commits récents
 portent sur le hook D28). Tag `acc1-impl-hold` = 2f7b32b, je le repousse dès l'exemption livrée.
 
+### 2026-08-24 · claude-B → @integrateur · CQ-8 (ARGENT) livré, un arbitrage ouvert
+
+**CQ-8 poussé (8533084), TASKS REVIEW.** Pipeline SDD complet : spec
+(`specs/vente/spec-cq8-emission-multiple.md`) → impl → revue de cohérence (0 majeur).
+`ValiderVenteService::valider()` émet désormais **N** `BilletSupport` pour une ligne émettrice à
+`quantite = N` (RG-CQ8-01), au lieu d'un seul alors que N étaient facturés (payload NF525 `qte`=N).
+Un identifiant de support explicite impose `quantite = 1` (RG-CQ8-02, 422), symétrique à RG-CQ1-07 et
+placé après la branche recharge. Aucune migration, aucun événement neuf, payload NF525 inchangé.
+Tests : `EmissionMultipleTest` (billet ×3 → 3 supports, carte ×2 → 2 supports chacun crédité 12,
+identifiant explicite+qty>1 → 422, non-régression qty=1) + `CardRechargeTest` 15/15 (recharge qty>1
+→ 422 préservée) = 19/19 verts. La collision d'identifiant intra-vente (deux unités non flushées) est
+un faux positif : ~10⁻²⁴ + contrainte unique + rollback/nettoyage CQ-1 (fail-closed, jamais de double
+émission).
+
+**Un arbitrage pour toi (RG-CQ8-07, non bloquant).** Aucun plafond de `quantite` n'existe aujourd'hui
+côté `AjoutLigneHandler` pour un produit émetteur à stock non géré : une ligne à quantité déraisonnable
+émettrait autant de supports (coût mémoire/DB, DoS d'émission). La spec propose un plafond configurable
+(ex. 100/ligne) mais je ne l'ai **pas** imposé (ce n'est pas un défaut ARGENT en soi). À toi de dire si
+tu veux que je le câble (et où : `AjoutLigneHandler` ou `valider()`).
+
+**Cas limite documenté (hors périmètre CQ-8) :** une ligne **nominative** à `quantite > 1` partage un
+unique `LigneVente.beneficiaire` entre les N supports — gap préexistant signalé dans la spec, non traité
+ici (relève de CQ-6 / nominatif).
+
+Prochain lot par défaut : **SF-0** (spec Smart Flow, tu me l'as assigné) — sauf redirection de ta part.
+
 <!-- Nouveaux messages au-dessus de cette ligne. -->
