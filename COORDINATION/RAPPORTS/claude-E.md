@@ -14,6 +14,7 @@
 | 13:20 | Signalé collision SF-0 + 3 blocages à claude-A (Points 4/6/7). Maxime : « demande à A » → routé. | **N'idle pas (modèle FLOTTE) : j'avance sur RevenueRecovery (incontesté, mien).** Plan technique RR-0 sur la voie recommandée (module neuf), arbitrages marqués « à confirmer A ». | SmartFlow suspendu (appartenance contestée) ; exécution PHP (VPS). |
 | 13:35 | **Design RR-0 complet** : `plan-revenue-recovery.md` + `tasks-revenue-recovery.md` (I1 câblé sur booking.*/payment.* déjà émis ; I2 ⛔ RR-1 ; invariant DroitAcces testé). | **Design des DEUX modules terminé** (spec+plan+tasks ×2). Prêt à implémenter. | ⛔ Exécution PHP (VPS) + appartenance SmartFlow — voir Point n°8. |
 | 16:45 | **D31 appliqué** : `spec-smart-flow.md` consolidée — §11 Critères d'acceptation + §12 Cas limites **repris/adaptés de la spec de claude-B** (cités) ; mes sections D13 + sécurité gardées. `spec-sf0-smart-flow.md` **supprimée** (même commit). RevenueRecovery module neuf **confirmé** par tes arbitrages. | Continue SF-2 (ton ordre). Je vérifie si la stack de test tourne en Docker local pour implémenter ici. | Exécution PHP — à lever. |
+| 17:30 | **Exécution débloquée par moi-même** : images Docker présentes, `composer install` fait, stack de test **montée en local** (Windows). **SF-2 incrément I1 IMPLÉMENTÉ** (`app/src/SmartFlow/`, 14 fichiers + migration) et **`tests/SmartFlow` = 13 tests / 80 assertions VERT** (2 notices cosmétiques). 1 bug de test trouvé+corrigé (assertion sur mauvais client HTTP, code de prod OK). | Commit + push I1. Ensuite incrément I2. | — (I1 vert) |
 
 ## ⚠ Point n°1 pour claude-A — d'où intégrer mon travail (branche)
 
@@ -191,3 +192,35 @@ Et une **correction de forme** au catalogue : `slot.released` (ligne 41) est doc
 (a) l'appartenance SmartFlow (je réconcilie les 2 specs et j'implémente SF-2 sur le VPS), ou
 (b) les 4 arbitrages RevenueRecovery (j'implémente RR I1 sur le VPS) ? Dans les deux cas il me faut la
 stack (VPS). Je prends l'ordre que tu donnes.
+
+## Point n°9 — SF-2 incrément I1 livré et VÉRIFIÉ en local (`tests/SmartFlow` 13/80 vert)
+
+J'ai débloqué l'exécution moi-même (images Docker déjà présentes + `composer install`), monté la stack de
+test sur Windows, et **implémenté + testé** l'incrément I1 (report de no-show). **Décompte exact :
+`tests/SmartFlow` = 13 tests, 80 assertions, 0 échec** (2 PHPUnit notices cosmétiques : mocks sans
+expectation dans `SmartFlowListenerBestEffortTest`, non bloquant).
+
+**Contenu (`app/src/SmartFlow/`, 14 fichiers + 1 migration additive `Version20260824110000`) :**
+`RescheduleProposal` (+enum), `SmartFlowScopeExtension` (cloisonnement lecture + « own » client),
+`RescheduleRequestedListener` (abonné `booking.reschedule_requested`, best-effort D7), `CompatibleSlotFinder`,
+`Accept`/`DeclineRescheduleProposalProcessor` (clôture, IDOR 422, jamais d'écriture dans `Reservation`),
+port `ClientNotificationInterface` + adaptateur log (D19), `ReservationSlotReader` (lecture seule),
+`SmartFlowModule` (manifeste : consomme `booking.reschedule_requested`, feature `no_show_reschedule`).
+
+**Deux points pour toi (intégrateur) :**
+1. **`api_platform.yaml` : j'ai ajouté `src/SmartFlow/Entity` moi-même dans ma branche** (patron atomique
+   config+code que tu as établi pour Ocr) — sans ça, mes routes n'existent pas. À valider au merge.
+2. **⚠ Défaut de conception signalé, non « papier-mâché » :** le filtre « own »
+   (`smart_flow.reschedule_read_own`) compare `RescheduleProposal.customerId` — qui vient du payload
+   événementiel et porte un **id `Beneficiaire`** (`Reservation::getOrganisateur()`) — à
+   `Utilisateur::getClientLie()` qui renvoie un **id `Client`** : entités différentes. En l'état, un
+   client ne verrait jamais ses propres propositions en prod. Documenté dans le docblock de
+   `SmartFlowScopeExtension`. C'est une question de **liaison domaine `Utilisateur↔Beneficiaire`** qui
+   dépasse mon périmètre (touche CRM/Securite) — dis-moi la règle voulue, je l'applique.
+
+**Rappels (déjà signalés, procédé dessus sans bloquer, à confirmer) :** renommages D5 imposés par le
+garde-fou (`PerimetreSmartFlowExtension`→`SmartFlowScopeExtension`, `droitId`→`entitlementRef`, documentés) ;
+`ReservationSlotReader` lit `Creneau`/`Ressource` en **lecture seule directe** (dérogation RG-SF-17, §0.3
+du plan) ; `RescheduleProposal.originReservationRef` rendu nullable (fusion report/promotion, §1 du plan).
+
+**Prochain chantier :** incrément **I2** (créneaux libérés, `slot.released` idempotent, liste d'attente).
