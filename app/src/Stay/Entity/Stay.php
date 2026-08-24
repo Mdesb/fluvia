@@ -128,7 +128,11 @@ class Stay
     #[Groups(['stay:read'])]
     private ?\DateTimeImmutable $expectedDepartureDate = null;
 
-    #[ORM\Column(length: 16, enumType: StayStatus::class)]
+    // `options: default` est declare ici parce que la migration pose bien un DEFAULT en base, et
+    // qu'un mapping qui l'ignore fait proposer un CHANGE a chaque `schema:update --complete` —
+    // c'est-a-dire dans le diff de toutes les sessions (D32). Le DEFAULT SQL est voulu : une ligne
+    // inseree hors ORM (reprise, correctif manuel) nait ouverte plutot qu'avec un statut vide.
+    #[ORM\Column(length: 16, enumType: StayStatus::class, options: ['default' => 'open'])]
     #[Groups(['stay:read'])]
     private StayStatus $status = StayStatus::Open;
 
