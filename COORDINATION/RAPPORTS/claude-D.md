@@ -6,6 +6,7 @@
 | Heure | Fait | En cours | Bloqué par |
 |---|---|---|---|
 | 12:22 | Situé : FLOTTE, PLAYBOOK, DECISIONS, ORDRES et `specs/editeur/spec-editeur.md` lus. Constat : ED-1 et ED-2 sont livrés dans `app/src/Subscription/`, pas dans `app/src/Editeur/` — qui n existe sur aucune branche. La spec tranche le nommage (§Nommage : le module s appelle `App\Subscription`) ; la colonne « Chemins » de ED-1/ED-3 dans TASKS.md est donc périmée, pas le code. | Je prends **ED-3** — tunnel de souscription SEPA + provisioning idempotent. Je commence par `ProvisioningRequest` et le service de provisioning, qui ne dépendent pas de B-2. | B-1, B-2 — détail ci-dessous |
+| 12:31 | **B-1 corrigé côté claude-A** : mon worktree est revenu sur le clone, à mon commit, avec un `origin` — les poussées repassent par `pre-receive`. Mon travail était intact. Reste ouvert : l identité de commit est toujours partagée (`git config user.name` = claude-I dans `/home/debian/billetterie/.git/config`) ; je commite avec `git -c user.name=claude-D`. Les cinq autres sessions auront le même défaut. | **ED-3, premier lot** : `ProvisioningRequest` (idempotence par contrainte d unicité sur `subscription_id`), `ProvisioningStatus`, `ProvisioningOutcome`, `ProvisioningService`. Les quatre passent `php -l`. Ensuite : les tests de CA-1 et CA-2. | B-2 (catalogue) pour l émission ; **B-3, nouveau** — voir ci-dessous |
 
 ---
 
@@ -41,3 +42,23 @@ l émission en dernier.
 (`composer install` le regénère, `messenger.enabled` false→true). Ce n est pas du travail : je ne le
 commite pas. Et le brief du document de lancement prescrit `git add -A` là où PLAYBOOK §7.2 impose un
 staging explicite ; je suis le PLAYBOOK.
+
+**B-1 — état au 24/08 12:31 : partiellement levé.** Les worktrees D→I sont passés sur le clone et
+disposent d un `origin` : le battement prescrit fonctionne, et `pre-receive` s exécute de nouveau.
+**Reste ouvert le point 3** — `git config user.name` vaut toujours `claude-I` pour tout le monde,
+désormais dans `/home/debian/billetterie/.git/config`. Le correctif tient en une ligne
+(`git config extensions.worktreeConfig true`, puis `git config --worktree user.name claude-X` dans
+chaque worktree) ; il appartient à `claude-A`. En attendant je commite avec `git -c user.name=claude-D`.
+
+**B-3 — le rôle modèle « Administrateur etablissement » n existe pas.** `ProvisioningService` duplique
+un `Role` marqué `estModele = true` pour habiliter l administrateur du client, exactement comme
+`DuplicationRoleProcessor`. Ce modèle n existe dans aucune fixture : à ce jour, CA-1 échouerait avec
+le message prévu (« Rôle modèle absent »).
+
+**C est délibéré, et je ne le contourne pas.** Composer ici la liste des permissions d un
+administrateur de client reviendrait à écrire une seconde politique d habilitation à côté de celle
+de `Securite`, qui divergerait dès la première évolution — et à décider seul, dans un module de
+facturation, de ce qu un client a le droit de faire. Le rôle modèle relève de `Securite`, donc de
+`claude-A`. **Ce qu il me faut :** un `Role` `estModele = true` nommé `Administrateur etablissement`,
+portant le bundle de permissions d un administrateur d établissement. Je m aligne sur le nom qu il
+retiendra ; seule la constante `ProvisioningService::ADMIN_ROLE_TEMPLATE` est à changer.
