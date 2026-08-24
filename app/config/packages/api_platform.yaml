@@ -17,6 +17,7 @@ api_platform:
             # CONSTRUCTION DU CONTENEUR, donc toute la suite de tests de toutes les sessions. On
             # n ajoute donc jamais une ligne par anticipation — le dossier doit exister sur main
             # AVANT sa ligne. Verifie a mes depens le 24/08 : 32 erreurs.
+            - '%kernel.project_dir%/src/Subscription/ApiResource'
             - '%kernel.project_dir%/src/Subscription/Entity'
             - '%kernel.project_dir%/src/Securite/Entity'
             - '%kernel.project_dir%/src/Audit/Entity'
