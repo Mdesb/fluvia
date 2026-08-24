@@ -1033,3 +1033,41 @@ jamais vu un écran. Ni la compilation ni la lecture ne pouvaient voir ça — u
 montré en trois secondes. **Quand on touche à ce qui est visible, quelqu'un doit regarder, et vite.**
 Aucune session ne peut le faire : la préproduction demande des identifiants, et nous n'en saisissons
 pas. Maxime est le seul œil de la flotte, et c'est une dépendance à assumer, pas à contourner.
+
+### 2026-08-25 · D40 — Une date relative n'est pas une date distincte
+`EclairageTest` était rouge sur `main`. **Aucune ligne de code n'avait changé depuis trois jours.**
+`claude-G` a trouvé la cause, et elle n'est imputable à personne : c'est le calendrier.
+
+La fixture de démonstration posait son créneau à « next tuesday », avec un commentaire annonçant un
+créneau « délibérément distinct des scénarios de test ». Le test, lui, travaille sur « next monday ».
+**Distinct par le jour de la semaine, pas distinct dans le temps** : « next tuesday » ne tombe après
+« next monday » que cinq jours sur sept. Lancée un dimanche ou un lundi, la suite devient rouge.
+
+Nous étions lundi soir — 22h23 côté conteneur pour 00h23 en heure locale, le décalage UTC de D32 qui
+frappe ici sous un autre déguisement.
+
+**Ce test était donc rouge deux jours par semaine depuis son écriture.** Personne ne l'avait vu parce
+que personne ne lance `Padel` : le module appartient à `claude-I`, que Maxime n'a jamais ouverte. Il a
+fallu qu'un lundi soir tombe pendant qu'une session regardait pour que ça se voie.
+
+**Règle : deux jeux de données qui doivent rester ordonnés dans le temps s'ancrent sur la MÊME
+référence, avec un écart explicite.** « Distinct » doit vouloir dire « distinct quel que soit le jour du
+lancement », et un décalage d'une semaine entière est le seul écart qui le garantisse. Le correctif de
+`claude-G` fait exactement cela : la démo passe à « next monday + une semaine », donc toujours huit à
+quatorze jours devant, quel que soit le jour où la suite tourne.
+
+**Deux conséquences qui dépassent ce test :**
+
+1. **Un module sans session ouverte n'est lancé par personne.** La règle 8 impose de tester son module
+   et `tests/Platform` — juste, mais elle ne couvre que les modules qui ont un propriétaire. Les cinq
+   verticales de `claude-I` n'en ont pas. Tant que cette session n'est pas ouverte, leurs tests ne sont
+   exécutés que par accident.
+2. **Une suite verte ne prouve rien sur un jour de la semaine qu'on n'a pas essayé.** C'est la
+   troisième forme que prend le temps dans ce dépôt, après les assertions à l'horloge murale (D20) et
+   l'horodatage UTC des migrations (D32). Le temps est le piège récurrent de ce projet.
+
+**Signalé sans être corrigé, et je le consigne pour ne pas le perdre** : `CommanderEclairageCommand`
+balaie **toutes** les réservations sans borne de date et rattrape donc tout le passé à chaque
+exécution. Inoffensif aujourd'hui grâce au contrôle d'événement déjà émis — c'est la cause structurelle
+du symptôme, pas le symptôme. `claude-G` ne l'a pas touché parce que je lui avais ouvert Padel pour
+rendre un test vert, pas pour le refondre. Cela revient à `claude-I`.
