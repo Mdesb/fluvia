@@ -246,9 +246,17 @@ final class PadelFixtures extends Fixture implements DependentFixtureInterface
         $manager->persist($niveau2);
 
         // --- Partie ouverte de démonstration (2 joueurs, US-PADEL-02/03) ---
-        // Créneau matinal (creuse) le mardi, délibérément distinct des scénarios de test (lundi 19h,
-        // heure pleine) pour éviter tout chevauchement fortuit avec les fixtures de démonstration.
-        $debutDemo = (new \DateTimeImmutable('next tuesday'))->setTime(9, 0);
+        // Créneau matinal (heure creuse), placé une semaine APRÈS les scénarios de test.
+        //
+        // ⚠ L'ancre précédente était « next tuesday » : distincte du « next monday » des tests par le
+        // jour de la semaine, mais pas dans le TEMPS. Lancée un dimanche ou un lundi, « next tuesday »
+        // tombe AVANT « next monday » — la réservation de démonstration devenait alors antérieure à
+        // l'horloge simulée par les tests, et `CommanderEclairageCommand`, qui balaie toutes les
+        // réservations padel sans borne de date, y déclenchait un allumage ET une extinction.
+        // `EclairageTest` comptait trois commandes au lieu d'une, deux jours par semaine, sans qu'une
+        // seule ligne de code ait changé. Ce qui compte n'est pas le jour, c'est d'être APRÈS
+        // (D20 : aucune assertion d'horloge dans la suite fonctionnelle).
+        $debutDemo = (new \DateTimeImmutable('next monday'))->modify('+1 week')->setTime(9, 0);
         $creneauDemo = (new Creneau())->setRessource($ressourceTerrain)->setDebut($debutDemo)
             ->setFin($debutDemo->modify('+90 minutes'))->setCapacite(4)->setEtablissement($etabA)
             ->setStatut(StatutCreneau::Planifie);

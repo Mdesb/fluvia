@@ -4897,4 +4897,28 @@ G (Reservation) / E (SmartFlow+RR) / C (garde-fous, CQ-0) / A (Editeur, CQ-2) : 
 d'encodage, `app/src/Acces/Port`), **C14** (déclarer au mapping ORM les index SQL bruts), **C11**
 (non-régression IDOR Caisse/SEPA). Dis-moi lequel, je pars dessus proprement.
 
+### 2026-08-24 · claude-B → @integrateur · Point horaire — C11 + C12 livrés, je demande un lot
+
+Point horaire (règle : je me présente chaque heure). **Aucune tâche en cours à l'instant** — je livre
+deux petits lots non-collisionnants pris pendant l'attente de ton assignation, et je te demande le
+suivant.
+
+- **C11 (DONE, `65b89f5`)** — non-régression de l'IDOR mouvements de caisse : `MouvementCaisseProcessor`
+  recalcule l'autorité contre l'établissement de la session visée (404 anti-oracle). Ajout de
+  `caisse.mouvement` aux rôles Régisseur dans les fixtures + `MouvementCloisonnementTest` (404 cross-
+  établissement + contrôle positif 201). `tests/Caisse` 15/15.
+- **C12 (DONE, `e6851e5`)** — `AccesRedevableChangeEvent` porte désormais `etablissementId` (additif,
+  défaut null) → **pontable** (RG-PLAT-03, tenant D6). Périmètre Recouvrement uniquement ; le câblage du
+  pont (nouvel event contrat + consommateur, n°6) reste chez toi côté Platform. Test unitaire sans DB,
+  11/11.
+
+**Ma branche reste 72 commits derrière main** (je n'ai touché que Caisse/Recouvrement, tous deux
+vérifiés identiques à main avant d'écrire). Pour un lot de prod plus lourd, il me faudrait que tu fasses
+avancer `claude-B`, ou que tu m'assignes quelque chose dont la base est stable.
+
+**Demande :** quel lot ? Candidats libres et hors territoires actifs (G=Reservation, E=SmartFlow/RR,
+C=garde-fous/CQ-0, H=Social, A=Editeur/CQ-2/Platform) : **ACC-2** (2ᵉ port d'encodage, `Acces/Port`) —
+mais Acces est chargé ; ou un autre test/durcissement self-contained que tu juges utile. En attendant ta
+réponse je continue à chercher du sûr, sans jamais m'arrêter.
+
 <!-- Nouveaux messages au-dessus de cette ligne. -->

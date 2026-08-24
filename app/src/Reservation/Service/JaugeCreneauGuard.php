@@ -17,6 +17,10 @@ use Doctrine\ORM\EntityManagerInterface;
  * Une table de huit consomme huit couverts sur les soixante d'un service, pas un. Les réservations
  * antérieures à ce lot portent `quantity = 1` (défaut de colonne), donc la somme redonne exactement
  * l'ancien comptage : la bascule est neutre sur l'existant.
+ *
+ * **ACT-1 point 3 / D33 — la jauge compte aussi les réservations qui consomment ce créneau sans le
+ * viser.** C'est ce qui rend exprimable « soixante couverts sur le service de 20 h » : le service
+ * est un `Creneau` posé sur la ressource mère, et une table réservée dessous le consomme.
  */
 final class JaugeCreneauGuard
 {
@@ -29,9 +33,16 @@ final class JaugeCreneauGuard
     {
         return (int) $this->em->getRepository(Reservation::class)->createQueryBuilder('r')
             ->select('COALESCE(SUM(r.quantity), 0)')
-            ->andWhere('r.creneau = :creneau')
-            ->andWhere('r.statut IN (:statuts)')
+            // ACT-1 point 3 / D33 — occupent ce créneau toutes les réservations qui le CONSOMMENT :
+            // celles qui le visent (le visé est toujours dans `consumedSlots`, invariant tenu par
+            // `Reservation::setCreneau()`) et celles qui le consomment sans le viser — une table
+            // réservée à 20 h consomme le service du soir de la salle. Une jointure et pas un `OR` :
+            // `cs.id` étant fixé, chaque réservation ne produit qu'une ligne, donc la somme ne
+            // double personne.
+            ->join('r.consumedSlots', 'cs')
+            ->andWhere('cs.id = :creneau')
             ->setParameter('creneau', $creneau->getId(), 'uuid')
+            ->andWhere('r.statut IN (:statuts)')
             ->setParameter('statuts', [StatutReservation::Confirmee->value, StatutReservation::Honoree->value])
             ->getQuery()
             ->getSingleScalarResult();

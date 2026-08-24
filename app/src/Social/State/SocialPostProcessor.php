@@ -10,9 +10,11 @@ use App\Securite\Service\ContexteEtablissement;
 use App\Social\Entity\SocialAccount;
 use App\Social\Entity\SocialPost;
 use App\Social\Entity\SocialPublication;
+use App\Social\Message\PublishSocialPublication;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
+use Symfony\Component\Messenger\MessageBusInterface;
 
 /**
  * Rédaction d'un message et création de ses publications (D14, SOC-1).
@@ -37,6 +39,7 @@ final class SocialPostProcessor implements ProcessorInterface
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly ContexteEtablissement $establishmentContext,
+        private readonly MessageBusInterface $bus,
     ) {
     }
 
@@ -67,7 +70,35 @@ final class SocialPostProcessor implements ProcessorInterface
         $this->em->persist($data);
         $this->em->flush();
 
+        $this->dispatchAfterCommit($data);
+
         return $data;
+    }
+
+    /**
+     * **Après le commit, jamais pendant** (D7-bis). Un message mis en file à l'intérieur d'une
+     * transaction qui déroule ensuite demanderait de publier un message qui n'existe pas — et le
+     * réseau, lui, ne saurait pas le reprendre.
+     *
+     * Un message daté n'est pas dépêché ici : il attend son heure. L'ordonnanceur qui le réveillera
+     * n'existe pas encore — il vient avec SOC-3, en même temps que la collecte planifiée des
+     * statistiques, qui a besoin du même mécanisme. En attendant, un message daté reste `Scheduled` et
+     * ne part pas : c'est visible dans son état, plutôt que silencieusement perdu.
+     */
+    private function dispatchAfterCommit(SocialPost $data): void
+    {
+        if ($data->getScheduledFor() !== null) {
+            return;
+        }
+
+        foreach ($data->getPublications() as $publication) {
+            $this->bus->dispatch(new PublishSocialPublication((string) $publication->getId()));
+            $publication->setQueuedAt(new \DateTimeImmutable());
+        }
+        // La marque est posée après le dépêchage, jamais avant : marquer d'abord ferait croire à un
+        // envoi qui n'a pas eu lieu si le bus refuse. Elle ne sert ici qu'au diagnostic — un message
+        // immédiat n'est pas daté, donc l'ordonnanceur ne le reprendra jamais.
+        $this->em->flush();
     }
 
     /**

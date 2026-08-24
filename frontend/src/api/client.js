@@ -148,11 +148,24 @@ export const api = {
 
   etablissements: () => request('/api/etablissements'),
   produits: () => request('/api/produits'),
+  // Le détail ajoute le groupe `produit:compta` (compte, TVA, règle PCA), absent de la collection.
+  produit: (id) => request(`/api/produits/${id}`),
   typeProduits: () => request('/api/type_produits'),
   creerProduit: (corps) =>
     request('/api/produits', { method: 'POST', body: corps, ld: true }),
 
+  // Cycle de vie d'un produit (Offre) : brouillon -> publié -> archivé, et la réactivation.
+  // Côté serveur ces opérations sont déclarées `input: false` : elles n'ont pas de corps, seul
+  // l'identifiant compte. Elles existent depuis des jours et n'étaient appelées de nulle part — un
+  // produit créé depuis cet écran restait donc en brouillon à vie, invendable sur tous les canaux.
+  publierProduit: (id) => request(`/api/produits/${id}/publier`, { method: 'POST' }),
+  depublierProduit: (id) => request(`/api/produits/${id}/depublier`, { method: 'POST' }),
+  archiverProduit: (id) => request(`/api/produits/${id}/archiver`, { method: 'POST' }),
+  reactiverProduit: (id) => request(`/api/produits/${id}/reactiver`, { method: 'POST' }),
+
   pointDeVentes: () => request('/api/point_de_ventes'),
+  creerPointDeVente: (corps) => request('/api/point_de_ventes', { method: 'POST', body: corps }),
+  majPointDeVente: (id, corps) => request(`/api/point_de_ventes/${id}`, { method: 'PATCH', body: corps }),
   caisses: () => request('/api/caisses'),
   moyensPaiement: () => request('/api/moyen_paiements'),
   // Moyens de paiement — écriture (source M6, sécurité `compta.gerer`).
@@ -253,10 +266,23 @@ export const api = {
   espaces: () => request('/api/espaces', { query: { itemsPerPage: 200 } }),
   regions: () => request('/api/regions', { query: { itemsPerPage: 100 } }),
   categories: () => request('/api/categories', { query: { itemsPerPage: 200 } }),
+  creerCategorie: (corps) => request('/api/categories', { method: 'POST', body: corps }),
+  majCategorie: (id, corps) => request(`/api/categories/${id}`, { method: 'PATCH', body: corps }),
+  supprimerCategorie: (id) => request(`/api/categories/${id}`, { method: 'DELETE' }),
   typeTarifs: () => request('/api/type_tarifs', { query: { itemsPerPage: 100 } }),
+  // Référentiels modifiables : les opérations existaient côté serveur depuis le début, le front ne
+  // les appelait simplement pas.
+  creerTypeTarif: (corps) => request('/api/type_tarifs', { method: 'POST', body: corps }),
+  majTypeTarif: (id, corps) => request(`/api/type_tarifs/${id}`, { method: 'PATCH', body: corps }),
+  supprimerTypeTarif: (id) => request(`/api/type_tarifs/${id}`, { method: 'DELETE' }),
   grilleTarifaires: () => request('/api/grille_tarifaires', { query: { itemsPerPage: 200 } }),
   saisons: () => request('/api/saisons', { query: { itemsPerPage: 100 } }),
+  creerSaison: (corps) => request('/api/saisons', { method: 'POST', body: corps }),
+  majSaison: (id, corps) => request(`/api/saisons/${id}`, { method: 'PATCH', body: corps }),
+  supprimerSaison: (id) => request(`/api/saisons/${id}`, { method: 'DELETE' }),
   tauxTvas: () => request('/api/taux_tvas', { query: { itemsPerPage: 100 } }),
+  creerTauxTva: (corps) => request('/api/taux_tvas', { method: 'POST', body: corps }),
+  majTauxTva: (id, corps) => request(`/api/taux_tvas/${id}`, { method: 'PATCH', body: corps }),
 
   // Comptes / rôles & droits (M8).
   utilisateurs: () => request('/api/utilisateurs', { query: { itemsPerPage: 100 } }),
@@ -348,4 +374,9 @@ export const api = {
   museeExpositions: () => request('/api/musee_expositions', { query: { itemsPerPage: 100 } }),
   museeVisitesGuidees: () =>
     request('/api/musee_visite_guidees', { query: { itemsPerPage: 100 } }),
+
+  // Administration de l'éditeur (ED-6). Le serveur répond 404 si la session n'est pas celle de
+  // l'éditeur : le contrôle est une identité de tenant, pas une permission, et il n'est pas rejoué
+  // ici (D39).
+  editorSubscriptions: () => request('/api/editor/subscriptions'),
 }

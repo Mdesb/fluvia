@@ -797,3 +797,277 @@ le commit qu'il n'était **pas prouvé à l'exécution**, plutôt que de le déc
 correction directe des trois défauts trouvés le même soir — garde-fou de topologie, réinstallation des
 hooks, démontage des piles — tous des mécanismes déclarés bons sans qu'on regarde ce qu'ils produisent.
 **Un mécanisme non vérifié se marque comme tel ; il ne se raconte pas comme vérifié.**
+
+### 2026-08-24 20:45 · D33 — Capacité de second niveau : le créneau visé et les créneaux consommés
+`claude-G` a livré ACT-1 point 1 (la quantité consommée) et pose la question du point 3 : comment
+exprimer « soixante couverts **sur le service de 20 h** » alors que le second niveau existant
+(`Ressource.occupationCourante` vs `capacitePropre`) est **global et aveugle au temps**.
+
+**Sa proposition** : le « service » est un `Creneau` posé sur la ressource **mère**. Une réservation
+sur le créneau d'une table consommerait aussi le créneau de la salle qui la couvre dans le temps. Deux
+niveaux, deux créneaux, une seule mécanique de jauge. Elle ne l'écrit pas sans feu vert parce que cela
+change ce qu'est un `Creneau` — aujourd'hui une réservation en vise exactement un (RG-M5-01).
+
+**Arbitrage : la proposition est retenue, avec une distinction qu'elle n'avait pas posée et qui lève
+son objection.** Une réservation garde **un seul créneau visé** — celui que le client a choisi, celui
+qui s'affiche, celui dont parle RG-M5-01 — et gagne un ensemble de **créneaux consommés**, résolus à la
+réservation et stockés : le créneau visé, plus les créneaux des ressources ancêtres qui le couvrent
+dans le temps.
+
+**Pourquoi stocker plutôt que dériver.** On pourrait ne rien stocker et faire remonter le contrôle
+l'arbre des ressources à chaque vérification. C'est plus léger et c'est faux : la jauge existante est un
+compteur qu'on incrémente sous verrou, et un contrôle dérivé d'un comptage se course avec lui-même dès
+deux réservations simultanées sur la même salle. Ce qu'on décrémente doit être ce qu'on a incrémenté.
+
+**Ce que cela préserve** : « on réserve un créneau » reste vrai, l'affichage ne change pas, et
+RG-M5-01 n'est pas réinterprétée — elle parle du créneau **visé**. Ce qui est neuf est la consommation,
+qui n'était de toute façon écrite nulle part.
+
+### 2026-08-24 20:45 · D33-bis — La quantité ne se déduit pas des participants
+`claude-G` demande si une réservation avec trois participants nommés doit consommer au moins trois
+unités. **Non, et son refus d'inventer la règle était le bon.** Un cours de trois personnes consomme
+trois places ; une piste de bowling réservée par trois personnes nommées consomme **une** piste. La
+même réservation, les mêmes participants, deux comptages justes.
+
+**L'ambiguïté n'est pas dans la réservation, elle est dans la ressource** : une place de cours se compte
+par personne, une piste et une table se comptent par unité. Tant que la ressource ne **déclare** pas ce
+qu'elle mesure, toute valeur par défaut est une devinette — y compris celle d'aujourd'hui, qui vaut 1.
+
+La quantité reste donc **explicite et non devinée**, et la déclaration par la ressource entre dans
+ACT-0, où elle a sa place : c'est exactement la composition d'activités de D15.
+
+### 2026-08-24 20:50 · D34 — Remote Control ne s'arrête jamais
+Consigne de Maxime, du même ordre que la règle zéro de D30 et pour la même raison.
+
+**Remote Control est ce qui rend une session joignable.** Une session qui ne l'a pas est invisible pour
+l'intégrateur : elle ne peut être ni relancée, ni corrigée, ni débloquée — elle ne peut que s'arrêter et
+attendre que quelqu'un la rouvre à la main. C'est exactement ce qui s'est passé aujourd'hui : sept
+sessions sur neuf se sont arrêtées après avoir livré, et je n'avais aucun moyen de les rappeler. La
+seule qui a travaillé trois heures sans interruption, `claude-H`, est aussi la seule qui s'était
+présentée et que je pouvais joindre.
+
+**Donc :** Remote Control reste actif en permanence, sur les trois postes. On ne le coupe pas, on ne le
+déplace pas vers une autre session « juste pour essayer », on ne ferme pas la session qui le porte. Le
+réglage `Enable remote control by default` (Réglages → Claude Code) le rétablit à chaque nouvelle
+session — c'est lui qui doit rester coché, pas une commande à retaper.
+
+**Corollaire pour toute session :** ta première obligation en démarrant n'est pas de lire tes ordres,
+c'est de **te présenter** à l'intégrateur. Tant que tu ne l'as pas fait, tu es hors de portée, et une
+session hors de portée ne reçoit ni arbitrage, ni correction, ni relance. Liste tes pairs, trouve
+`claude-A`, écris-lui. Ensuite seulement, va lire ta boîte.
+
+**Ce que cela ne fait pas :** Remote Control n'empêche pas une session bureau de s'arrêter quand elle a
+fini de répondre. Il la rend *rappelable*. La différence est décisive — un mur qu'on peut franchir de
+l'extérieur n'est plus un mur.
+
+### 2026-08-24 21:00 · D35 — Présentation horaire à l'intégrateur, quoi qu'il arrive
+Consigne de Maxime, donnée directement aux neuf sessions le 24/08 au soir. Elle complète D34 et la
+rend opérante.
+
+**Toutes les heures, quoi que tu fasses, tu écris à `claude-A`.** Deux cas, deux contenus :
+- **tâche en cours** → tu dis laquelle et où tu en es, en deux lignes ;
+- **rien en cours** → tu demandes une tâche. Tu ne cherches pas à t'en inventer une, et tu ne t'arrêtes
+  pas non plus : tu demandes.
+
+**Pourquoi cette règle et pas un simple battement dans le rapport.** Un rapport est un fichier : je dois
+aller le lire, et je ne sais pas qu'il a changé. Un message me réveille. Surtout, **la liaison ne
+s'établit que dans ce sens-là** — je ne peux pas appeler une session qui ne s'est jamais annoncée. Le
+message horaire est donc ce qui crée et entretient la joignabilité, pas seulement ce qui informe.
+
+**Sa limite, qu'il faut connaître pour ne pas s'y fier seule.** Une session bureau arrêtée ne se
+réveille pas toute seule au bout d'une heure : la règle vaut tant qu'elle tourne. Ce qu'elle garantit
+vraiment, c'est qu'une session **redémarrée se re-présente**, et que je peux la relancer ensuite.
+D34 + D35 forment donc une boucle : elle se présente, je peux la joindre, je la relance, elle se
+re-présente. Chacune seule ne suffit pas.
+
+**Corollaire pour moi.** Une présentation appelle une réponse. Une session qui écrit et ne reçoit rien
+apprend que l'exercice est inutile, et cessera. Je réponds à chacune, même brièvement — et si elle
+demande une tâche, elle en repart avec une.
+
+### 2026-08-24 22:00 · D36 — Dix-sept commandes de domaine, et rien pour les exécuter
+`claude-H` demandait où brancher deux entrées de planification pour son module. **Il n'y a nulle part
+où les brancher.** Vérifié : le dépôt contient dix-sept commandes de domaine et **aucun ordonnanceur** —
+ni Symfony Scheduler, ni cron dans les conteneurs, ni entrée sur l'hôte. Les seules occurrences de
+« Scheduler » sont dans du JavaScript vendu avec API Platform et dans un fichier généré.
+
+**Ce ne sont pas des tâches de confort.** Deux au moins sont des défauts de sécurité :
+
+| Commande | Ce qui ne se produit jamais |
+|---|---|
+| `ExpirerEscalades` | une élévation **temporaire** de privilèges est en fait permanente |
+| `ExpirerDelegations` | une délégation de droits n'expire jamais |
+| `BasculerNoShow` | le no-show ne bascule jamais — D27 promet au client une séance restituée avec report, et rien ne l'exécute |
+| `AppliquerConservation` | la conservation des données ne s'applique jamais |
+| `ExpirerPmv` | le porte-monnaie virtuel n'expire jamais |
+| `LibererPaniersExpires` | un panier abandonné retient sa place indéfiniment |
+| `PurgeDocuments`, `RecalculerFenetresBadges`, `TraiterEcheancesSortie`, `AgregerMesures`, `ExecuterRapports`, … | — |
+
+**C'est le quatrième mécanisme du jour qui existe sans tourner**, après le garde-fou de topologie, la
+réinstallation des hooks et le démontage des piles de test. Mais celui-ci n'est pas de l'outillage :
+c'est **toute la couche batch du produit**. On a écrit dix-sept fois « et ensuite une commande passe et
+fait le nécessaire », et la commande ne passe jamais.
+
+**La règle que j'en tire, et elle vaut au-delà de l'ordonnanceur :** une commande qui doit s'exécuter
+périodiquement entre dans le dépôt **avec sa planification**, dans le même lot — exactement comme un
+événement entre avec son émetteur (D22) et une entité neuve avec sa migration (D32). Écrire l'exécutant
+sans l'exécution, c'est écrire du code mort qui a l'air vivant.
+
+**Périmètre : `claude-A`.** L'ordonnanceur touche Platform et l'infrastructure, et il ne doit pas être
+fait à moitié — une commande branchée deux fois est pire qu'une commande jamais branchée.
+
+### 2026-08-24 22:00 · D36-bis — Le front n'appartenait à personne, et cela se voit
+`frontend/**` **n'apparaît pas une seule fois** dans FLOTTE.md. J'ai réparti neuf périmètres — accès,
+GED, réservation, séjour, social, verticales, administration, outillage, intégration — et j'ai oublié
+l'interface.
+
+**Conséquence mesurée** : le dernier commit touchant `frontend/` date du **19/08 à 02:26**. Cinq jours.
+Aucune source du front n'a été modifiée depuis, donc le build n'est pas périmé : c'est le développement
+qui s'est arrêté. Neuf sessions construisent une API que rien n'affiche.
+
+**Attribution provisoire à `claude-H`**, qui vient de terminer SOC-1 à SOC-3 et dont le périmètre est
+vide. Ce n'est pas un déplacement de périmètre — `frontend/**` n'appartenait à personne, je ne prends
+rien à personne. **Maxime tranche** : s'il préfère que le front revienne à `claude-I`, encore à ouvrir,
+`claude-H` repasse sur le social sans discuter.
+
+### 2026-08-24 23:15 · D37 — L'instant métier d'un événement ne se devine pas
+`claude-D` a trouvé, en testant le chemin complet plutôt que l'abonné isolément, que
+`SubscriptionActivator` publiait `subscription.activated` **sans horodater l'événement**. `DomainEvent`
+tombait donc sur son défaut documenté — `null` = maintenant — et l'abonné calculait les capacités
+actives à l'instant d'**exécution** au lieu de l'instant **métier**.
+
+**Ce que cela produisait :** un abonnement prenant effet plus tard était provisionné **sans les options
+achetées** — la formule seule, parce que les lignes n'étaient pas encore actives à la date du calcul.
+Aucune erreur, aucune trace, un établissement livré incomplet. Personne ne l'aurait vu avant que le
+client ne cherche son module.
+
+**Ce n'est pas un cas isolé. J'ai compté : vingt et un fichiers émettent un `DomainEvent`, et un seul
+passe un instant explicite — celui que `claude-D` vient de corriger.** Les vingt autres reposent sur le
+défaut, y compris deux que j'ai écrits moi-même en SF-1 (`AnnulerReservationProcessor`,
+`BasculerNoShowCommand`).
+
+**Le défaut du contrat est le vrai coupable.** `?\DateTimeImmutable $occurredAt = null` se lit comme
+« optionnel », alors qu'il signifie « je certifie que l'instant métier est maintenant ». Pour une
+annulation traitée dans la seconde, c'est vrai. Pour une activation différée, une bascule de no-show
+nocturne ou une purge, c'est faux — et faux silencieusement.
+
+**Traitement : un cliquet, pas un grand soir.** Rendre le paramètre obligatoire casserait vingt et un
+appels d'un coup, répartis sur sept périmètres, et bloquerait tout le monde une soirée. On applique donc
+ce que ce dépôt fait déjà six fois : **la dette est gelée à 20, et elle ne peut que descendre.** Toute
+émission **neuve** doit passer son instant métier explicitement ; les vingt existantes se corrigent au
+fil de l'eau, par le propriétaire de chaque module, quand il repasse dessus.
+
+Garde-fou demandé à `claude-C`. Et la règle de lecture, pour ceux qui corrigeront : l'instant métier est
+celui où **le fait s'est produit pour le client** — la date d'effet de l'abonnement, l'heure du créneau
+manqué, la date de la demande de purge — jamais l'heure à laquelle le code s'exécute.
+
+**Ce que `claude-D` en tire et que je reprends :** ce défaut n'était visible qu'en testant **à travers le
+bus**. Ses tests du provisionnement seul passaient, parce qu'ils appelaient l'abonné à la main avec le
+bon instant. Un abonné testé isolément prouve que l'abonné est juste, pas que l'émetteur lui dit la
+vérité.
+
+### 2026-08-25 · D38 — L'application du client final : web **et** native
+Décision de Maxime, prise après avoir constaté que ce chantier n'apparaissait **nulle part** dans la
+répartition. C'est le troisième trou du même genre en une soirée, après `frontend/**` et les dix-sept
+modules serveur sans propriétaire : ma répartition couvrait ce que j'avais pensé à lister.
+
+**Le socle est bien plus avancé qu'il n'y paraissait**, et c'est ce qui rend la décision réaliste. Il
+existe déjà : `CompteClient`, `CreationCompteHandler`, `MeCompteClientProvider`, dix-huit points
+d'entrée sous `/boutique/**` — panier, bénéficiaires, consentement, paiement, billets, commandes,
+demandes de remboursement, souscription d'abonnement — et **douze permissions en `_soi`** taillées pour
+exactement cet usage : `crm.lire_soi`, `crm.modifier_soi`, `crm.pmv_lire_soi`, `crm.pmv_recharger_soi`,
+`boutique.lire_soi`, `boutique.demander_remboursement_soi`, `facturation.lire_soi`, plus les quatre du
+padel. Le rôle « Client final » est par ailleurs **le seul du dépôt** à porter des droits par migration.
+
+**Ce qui manque n'est donc pas le moteur, c'est le produit** : un espace personnel, « mes
+réservations », « ma carte et son solde », le porte-monnaie côté client, et l'authentification du
+client — le parcours actuel est pensé pour le personnel.
+
+**Web d'abord, native ensuite, et ce n'est pas une préférence technique.** Publier une application
+native suppose des comptes développeur Apple et Google, donc **l'immatriculation de la société** —
+exactement le blocage qui tient déjà `SOC-4` (adaptateurs Meta) en statut `EXTERNE`. D19 s'applique :
+on consigne, on n'attend pas. La web app est utilisable le jour où elle est prête, sans dépendre de
+personne ; la coquille native peut être construite en parallèle mais **ne sera pas publiable** avant.
+
+**Une contrainte d'architecture qui découle des deux cibles** : tout ce que l'application client
+consomme passe par l'API publique, et **rien** par une route pensée pour le personnel. Deux clients
+différents sur la même API obligent à cette discipline dès le premier écran ; l'ignorer maintenant
+coûterait une reprise entière au moment du natif.
+
+### 2026-08-25 · D39 — Qui rejoue une règle d'autorisation la rejoue **entière**
+Le 24/08 vers minuit, Maxime s'est retrouvé avec **une colonne de menu entièrement vide** sur un écran
+de caisse par ailleurs fonctionnel. Il venait de recevoir le rôle le plus puissant du logiciel.
+
+**La chaîne du défaut, bout à bout.** Le socle accorde des permissions **joker** — `*` × `lire`, dont le
+code effectif est `*.lire` ; ma migration du soir y a ajouté `*.*`. `CalculateurDroits` les rend **tels
+quels**, et `PermissionVoter` les interprète correctement : l'API répondait normalement. Mais le menu du
+front, écrit deux heures plus tôt, testait `droits.includes('caisse.lire')` — une **égalité stricte**.
+Un administrateur porte `*.*` et **jamais** `caisse.lire`. Aucune entrée ne pouvait correspondre.
+
+**Ce qui rend ce défaut instructif, c'est que la précaution avait été donnée et qu'elle n'a pas suffi.**
+J'avais écrit à `claude-H` : « vérifie chaque nom de permission contre le catalogue serveur, pas contre
+ton intuition ». Elle l'a fait. Sa propre analyse de l'échec est plus juste que ma consigne : *« j'ai
+relevé la liste des permissions DEMANDÉES par les expressions `security`, et jamais la forme des
+permissions ACCORDÉES. Ce sont deux choses différentes. »*
+
+**La règle : un client qui rejoue une règle d'autorisation du serveur la rejoue entière, ou ne filtre
+pas du tout.** Un filtrage partiel est pire qu'aucun filtrage : il produit un refus muet, à un endroit
+où personne ne cherche la cause. Cela vaudra pour l'espace client final et le tableau de bord mobile
+(D38), qui auront tous deux à filtrer sur des droits.
+
+**Et un plancher de sûreté quand le filtrage porte sur la navigation** — posé par `claude-H`, et je le
+retiens : si le filtre ne laisse rien, on retombe sur ce qui n'a pas de contrainte. Sa justification est
+la bonne : *un menu vide enferme quelqu'un hors de son propre logiciel, sans moyen d'en sortir ni de
+comprendre pourquoi ; un menu trop permissif se corrige tout seul, parce que l'API refuse et que le
+refus est lisible.* Entre deux erreurs possibles, on choisit celle qui se voit.
+
+**L'alternative écartée, pour qu'on ne la re-propose pas sans le savoir.** J'avais commencé à faire
+**développer** les jokers par `codesEffectifs()` — le serveur aurait rendu la liste concrète, et aucun
+client n'aurait eu de règle à connaître. C'est défendable, et je l'abandonne pour deux raisons : le
+contrat actuel est **explicitement affirmé par un test** (`assertSame(['*.lire'], $codes)`), et une
+permission créée après l'appel resterait couverte par le joker mais absente de la liste développée —
+donc deux vérités selon le consommateur. Si quelqu'un veut y revenir, qu'il change le test **et** la
+décision, pas seulement le service.
+
+**Le fait déclencheur compte autant que le défaut** : neuf lots de front livrés sans que personne ait
+jamais vu un écran. Ni la compilation ni la lecture ne pouvaient voir ça — une capture d'écran l'a
+montré en trois secondes. **Quand on touche à ce qui est visible, quelqu'un doit regarder, et vite.**
+Aucune session ne peut le faire : la préproduction demande des identifiants, et nous n'en saisissons
+pas. Maxime est le seul œil de la flotte, et c'est une dépendance à assumer, pas à contourner.
+
+### 2026-08-25 · D40 — Une date relative n'est pas une date distincte
+`EclairageTest` était rouge sur `main`. **Aucune ligne de code n'avait changé depuis trois jours.**
+`claude-G` a trouvé la cause, et elle n'est imputable à personne : c'est le calendrier.
+
+La fixture de démonstration posait son créneau à « next tuesday », avec un commentaire annonçant un
+créneau « délibérément distinct des scénarios de test ». Le test, lui, travaille sur « next monday ».
+**Distinct par le jour de la semaine, pas distinct dans le temps** : « next tuesday » ne tombe après
+« next monday » que cinq jours sur sept. Lancée un dimanche ou un lundi, la suite devient rouge.
+
+Nous étions lundi soir — 22h23 côté conteneur pour 00h23 en heure locale, le décalage UTC de D32 qui
+frappe ici sous un autre déguisement.
+
+**Ce test était donc rouge deux jours par semaine depuis son écriture.** Personne ne l'avait vu parce
+que personne ne lance `Padel` : le module appartient à `claude-I`, que Maxime n'a jamais ouverte. Il a
+fallu qu'un lundi soir tombe pendant qu'une session regardait pour que ça se voie.
+
+**Règle : deux jeux de données qui doivent rester ordonnés dans le temps s'ancrent sur la MÊME
+référence, avec un écart explicite.** « Distinct » doit vouloir dire « distinct quel que soit le jour du
+lancement », et un décalage d'une semaine entière est le seul écart qui le garantisse. Le correctif de
+`claude-G` fait exactement cela : la démo passe à « next monday + une semaine », donc toujours huit à
+quatorze jours devant, quel que soit le jour où la suite tourne.
+
+**Deux conséquences qui dépassent ce test :**
+
+1. **Un module sans session ouverte n'est lancé par personne.** La règle 8 impose de tester son module
+   et `tests/Platform` — juste, mais elle ne couvre que les modules qui ont un propriétaire. Les cinq
+   verticales de `claude-I` n'en ont pas. Tant que cette session n'est pas ouverte, leurs tests ne sont
+   exécutés que par accident.
+2. **Une suite verte ne prouve rien sur un jour de la semaine qu'on n'a pas essayé.** C'est la
+   troisième forme que prend le temps dans ce dépôt, après les assertions à l'horloge murale (D20) et
+   l'horodatage UTC des migrations (D32). Le temps est le piège récurrent de ce projet.
+
+**Signalé sans être corrigé, et je le consigne pour ne pas le perdre** : `CommanderEclairageCommand`
+balaie **toutes** les réservations sans borne de date et rattrape donc tout le passé à chaque
+exécution. Inoffensif aujourd'hui grâce au contrôle d'événement déjà émis — c'est la cause structurelle
+du symptôme, pas le symptôme. `claude-G` ne l'a pas touché parce que je lui avais ouvert Padel pour
+rendre un test vert, pas pour le refondre. Cela revient à `claude-I`.

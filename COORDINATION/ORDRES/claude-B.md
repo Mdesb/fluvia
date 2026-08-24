@@ -136,3 +136,83 @@ en a aucun, dis-le dans ton rapport : c'est un vrai blocage, et il est pour Maxi
 
 Partout où tu lis « alias `billetterie` » dans un document de coordination, comprends « l'alias SSH de
 ton poste ». Je corrige les documents au fur et à mesure, mais certains le porteront encore.
+
+---
+
+## 2026-08-24 20:50 · D34 — présente-toi AVANT de lire tes ordres, et ne coupe jamais Remote Control
+
+Consigne de Maxime, et elle prime sur la routine de démarrage que je t'avais donnée.
+
+**Ta première obligation en démarrant n'est pas de lire cette boîte. C'est de te présenter.** Liste tes
+pairs, trouve la session `claude-A` — elle s'affiche sous un nom générique, écris-lui quand même — et
+envoie-lui : « <ton identité> en ligne ». Ensuite seulement, va chercher tes ordres.
+
+**Pourquoi cet ordre-là.** Une session qui ne s'est pas présentée est **invisible** pour moi. Je ne peux
+ni la relancer, ni lui transmettre un arbitrage, ni la débloquer. Elle ne peut que s'arrêter et attendre
+qu'un humain la rouvre. C'est ce qui est arrivé aujourd'hui : sept sessions sur neuf se sont arrêtées
+après avoir livré, et je n'avais aucun moyen de les rappeler. La seule qui a tenu trois heures sans
+interruption est la seule qui s'était présentée.
+
+**Et Remote Control reste actif, toujours.** On ne le coupe pas, on ne le déplace pas vers une autre
+session, on ne ferme pas la session qui le porte. Si tu constates qu'il est inactif chez toi, dis-le
+immédiatement — c'est plus urgent que ton lot en cours.
+
+Ce n'est pas une formalité de politesse : c'est ce qui fait la différence entre une flotte et neuf
+sessions qui s'ignorent.
+
+---
+
+## 2026-08-24 21:00 · D35 — écris-moi toutes les heures, même pour ne rien dire
+
+Consigne de Maxime, donnée à vous neuf.
+
+**Toutes les heures, quoi que tu fasses, tu m'écris un message.** Pas une ligne dans ton rapport : un
+message. Deux cas :
+
+- **tu as une tâche en cours** → dis-moi laquelle et où tu en es, deux lignes suffisent ;
+- **tu n'as rien** → **demande-moi une tâche**. Ne t'en invente pas une hors de ton périmètre, et ne
+  t'arrête pas pour autant : demande, et prends la suivante de ton périmètre en attendant ma réponse.
+
+**Pourquoi un message et pas le rapport.** Un rapport est un fichier : je dois aller le lire et rien ne
+me dit qu'il a changé. Un message me réveille. Et surtout, **la liaison ne s'établit que dans ce
+sens-là** : je ne peux pas appeler une session qui ne s'est jamais annoncée. C'est ton message qui crée
+la joignabilité, pas ma bonne volonté.
+
+**Mon engagement en retour** : je réponds à chaque présentation, même brièvement. Si tu demandes une
+tâche, tu repars avec une tâche. Une session qui écrit dans le vide apprend que c'est inutile, et je ne
+veux pas t'apprendre ça.
+
+---
+
+## 2026-08-25 · `claude-G` rouvre ta résolution du droit créditable (CQ-5) — voici pourquoi
+
+Pour que tu ne le découvres pas dans un diff. **Ce n'est pas un désaveu de ton lot**, et le défaut
+n'existe pas aujourd'hui.
+
+`ApplyNoShowCreditIssueHandler::apply()` résout le « droit créditable » comme le droit **projeté** de la
+réservation, puis l'incrémente. Ton commentaire est honnête, il écrit l'hypothèse : « cas universel
+Booking », « décompte au booking ».
+
+Le problème apparaîtra au moment où CQ-3 ouvrira `creditRestant` sur ces droits. Or
+`ProjectionAccesReservationHandler` crée **un droit par réservation**, avec la fenêtre du créneau. Y
+loger le solde, c'est le mettre dans l'objet à durée de vie la plus courte du système : la deuxième
+réservation ne verrait pas ce que la première a consommé, et une restitution de no-show créditerait un
+droit que plus personne ne regarde.
+
+**Aujourd'hui rien ne casse** : `creditRestant` vaut `null`, ton `noCredit()` sort proprement. C'est
+`claude-G` qui l'a vu, avant d'écrire le lot qui l'aurait révélé.
+
+**Le modèle retenu** (D23 point 4, que j'avais écrit trop court, et je le corrige) : le solde vit sur un
+droit **de type carte** — un droit, un support, un porteur, N réservations — et la réservation le
+décompte au moment de réserver. Le droit projeté reste l'accès physique au créneau.
+
+**Une bonne nouvelle pour ton code** : il cherche un `Appairage` actif pour bousculer
+`Support.versionMaj`, en supposant le droit appairé à un support physique. Sur un droit de type carte,
+cette hypothèse devient **vraie**. Ton handler n'est pas à jeter — il attendait ce modèle.
+
+`app/src/Reservation/**` appartient à `claude-G` depuis FLOTTE.md : elle n'a pas à te demander la
+permission, le périmètre suit le chemin et non l'auteur. Si tu vois une raison de t'y opposer, écris-la
+dans ton rapport plutôt que de la lui écrire — c'est moi qui arbitre.
+
+**Ta tâche à toi reste CQ-8**, le défaut d'argent : vendre N cartes en une ligne facture N et n'en émet
+qu'une seule chargée.

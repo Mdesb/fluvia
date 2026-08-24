@@ -17,8 +17,8 @@ Ne touche pas un chemin déjà en `WIP` par une autre instance.
 | C9 | Decouverte des ressources API : identifier le mecanisme reel, rendre la configuration explicite, PUIS exclure les entites des services | `app/config/{services,packages/api_platform}.yaml` | **claude-A** | BLOCKED | 20/08 |
 | C10 | Suite Finance FIN-2, FIN-3, FIN-4 - bloc complet | `app/src/Finance/**` | **claude-B** | DONE | 21/08 |
 
-| C11 | Tests de non-regression IDOR Caisse/SEPA (etendre CaisseClotureRoleFixtures : caisse.mouvement absente des fixtures) | `app/tests/Caisse`, `app/src/Caisse/DataFixtures` | *a assigner* | CLAIM | 19/08 |
-| C12 | Porter letablissement sur AccesRedevableChangeEvent pour quil soit pontable (RG-PLAT-03) | `app/src/Recouvrement/Event` | *a assigner* | CLAIM | 20/08 |
+| C11 | Tests de non-regression IDOR Caisse/SEPA (etendre CaisseClotureRoleFixtures : caisse.mouvement absente des fixtures) | `app/tests/Caisse`, `app/src/Caisse/DataFixtures` | **claude-B** | DONE | 24/08 |
+| C12 | Porter letablissement sur AccesRedevableChangeEvent pour quil soit pontable (RG-PLAT-03) | `app/src/Recouvrement/Event` | **claude-B** | DONE | 24/08 |
 | C13 | Retirer LegacyEventBridge quand chaque module publiera lui-meme son DomainEvent | `app/src/Platform/Event/Legacy` | *a assigner* | CLAIM | 20/08 |
 | ED-0 | Spec administration editeur + tunnel de souscription (SDD) | `specs/editeur/**` | **claude-A** | REVIEW | 20/08 |
 | ED-1 | Catalogue doffres : Plan, PlanOption adossees aux capabilities | `app/src/Editeur/**` | **claude-A** | DONE | 20/08 |
@@ -70,3 +70,9 @@ Ne touche pas un chemin déjà en `WIP` par une autre instance.
 | CQ-8 | **ARGENT** — vendre N cartes en une ligne facture N et nemet quune seule chargee (defaut preexistant, revele par CQ-1) | `app/src/Vente/Service/ValiderVenteService.php` | **claude-B** | REVIEW | 24/08 |
 | C24 | Le hook installe compare son contenu a la version poussee et avertit sil est perime (D28) | `hooks/pre-receive` | **claude-C** | CLAIM | 24/08 |
 <!-- Ajouter les nouvelles tâches au-dessus de cette ligne. -->
+
+| CLI-0 | Spec SDD de l'application client final — web et native (D38) | `specs/client/**` | **claude-A** | CLAIM | 25/08 |
+| CLI-1 | Authentification et espace personnel du client : inscription, connexion, « mon compte » | `app/src/Boutique/**` | *a assigner* | CLAIM | 25/08 |
+| CLI-2 | Mes reservations, mes billets, mes commandes — lecture cloisonnee par les droits `_soi` | `client/**` | *a assigner* | CLAIM | 25/08 |
+| CLI-3 | Ma carte et mon solde : porte-monnaie, cartes multi-entrees, recharge | `client/**` | *a assigner* | CLAIM | 25/08 |
+| CLI-4 | Coquille native (iOS/Android) — **non publiable avant immatriculation, cf. SOC-4** | `client-natif/**` | *a assigner* | EXTERNE | 25/08 |

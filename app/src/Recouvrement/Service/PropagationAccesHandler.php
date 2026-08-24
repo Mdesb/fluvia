@@ -43,11 +43,15 @@ final class PropagationAccesHandler
     private function appliquer(string $typeRedevable, string $referenceRedevable, bool $actif): void
     {
         $droit = $this->redevables->droitAcces($typeRedevable, $referenceRedevable);
+        $etablissementId = null;
         if ($droit instanceof DroitAcces) {
             $droit->setStatutProjection($actif ? StatutProjectionDroit::Valide : StatutProjectionDroit::Devalide);
             $this->em->flush();
+            // C12 (RG-PLAT-03) — l'établissement du droit résolu rend l'événement pontable (tenant D6).
+            $etablissement = $droit->getEtablissement();
+            $etablissementId = $etablissement !== null ? (string) $etablissement->getId() : null;
         }
 
-        $this->dispatcher->dispatch(new AccesRedevableChangeEvent($typeRedevable, $referenceRedevable, $actif));
+        $this->dispatcher->dispatch(new AccesRedevableChangeEvent($typeRedevable, $referenceRedevable, $actif, $etablissementId));
     }
 }
