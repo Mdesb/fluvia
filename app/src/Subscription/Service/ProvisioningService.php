@@ -68,6 +68,7 @@ final class ProvisioningService
         private readonly EntityManagerInterface $em,
         private readonly UserPasswordHasherInterface $hasher,
         private readonly Fonctionnalites $features,
+        private readonly DemoConfiguration $demoConfiguration,
     ) {
     }
 
@@ -136,9 +137,15 @@ final class ProvisioningService
 
         // Les modules souscrits, et eux seuls (CA-1). `activeCapabilities` fait déjà la somme de la
         // formule et des options en cours à cet instant : la reproduire ici la ferait diverger.
-        foreach ($subscription->activeCapabilities($at) as $capability) {
+        $capabilities = $subscription->activeCapabilities($at);
+        foreach ($capabilities as $capability) {
             $this->features->definir($establishment, $capability, true, null);
         }
+
+        // Le paramétrage de démo, rejoué **après** l'activation des modules et borné à eux (CA-7,
+        // RG-ED-08). Après, parce qu'un module éteint refuserait sa propre configuration ; borné,
+        // parce qu'un instantané ne doit jamais allumer ce qui n'a pas été acheté.
+        $this->demoConfiguration->replay($establishment, $subscription->getDemoConfiguration(), $capabilities);
 
         $request->recordAttempt()->complete($establishment);
         $this->em->flush();

@@ -63,6 +63,21 @@ class Subscription
     #[ORM\OneToMany(mappedBy: 'subscription', targetEntity: SubscriptionItem::class, cascade: ['persist'])]
     private Collection $items;
 
+    /**
+     * Le paramétrage réalisé en démo, exporté au moment de la souscription (RG-ED-08, D11).
+     *
+     * **Rangé ici et pas laissé dans l'établissement de démo**, parce que c'est un export et non une
+     * copie de base : la démo reste un bac à sable jetable, qu'on peut détruire sans que le client
+     * perde ce qu'il a configuré. C'est aussi ce qui évite d'avoir à faire expirer et purger des
+     * milliers d'établissements fantômes non convertis.
+     *
+     * Configuration seulement — offres, tarifs, horaires. Jamais de données personnelles.
+     *
+     * @var array<string, mixed>|null
+     */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $demoConfiguration = null;
+
     public function __construct()
     {
         $this->id = Uuid::v4();
@@ -246,5 +261,19 @@ class Subscription
     public function getItems(): Collection
     {
         return $this->items;
+    }
+
+    /** @return array<string, mixed>|null */
+    public function getDemoConfiguration(): ?array
+    {
+        return $this->demoConfiguration;
+    }
+
+    /** @param array<string, mixed>|null $demoConfiguration */
+    public function setDemoConfiguration(?array $demoConfiguration): self
+    {
+        $this->demoConfiguration = $demoConfiguration;
+
+        return $this;
     }
 }

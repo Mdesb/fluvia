@@ -1,11 +1,18 @@
 import { useEffect, useState, useCallback } from 'react'
 import { api, membres } from '../api/client.js'
-import { libelleProduit, prixIndicatif, euros } from '../api/produit.js'
+import { libelleProduit, prixIndicatif, euros, statutProduit, actionsStatut } from '../api/produit.js'
 import Tabs from '../components/Tabs.jsx'
 import ProduitOptionsModal from '../components/ProduitOptionsModal.jsx'
+import ProduitFicheModal from '../components/ProduitFicheModal.jsx'
 
-export default function Catalogue({ etabActif }) {
+export default function Catalogue({ etabActif, cible = null, onCibleConsommee }) {
   const [tab, setTab] = useState('produits')
+
+  // Une cible « produit » arrive de la recherche globale : on s'assure d'être sur le bon onglet
+  // avant que la liste ne tente de l'ouvrir.
+  useEffect(() => {
+    if (cible?.type === 'produit') setTab('produits')
+  }, [cible])
 
   return (
     <div className="view">
@@ -22,14 +29,18 @@ export default function Catalogue({ etabActif }) {
         onChange={setTab}
       />
 
-      {tab === 'produits' ? <OngletProduits etabActif={etabActif} /> : <OngletOptions />}
+      {tab === 'produits' ? (
+        <OngletProduits etabActif={etabActif} cible={cible} onCibleConsommee={onCibleConsommee} />
+      ) : (
+        <OngletOptions />
+      )}
     </div>
   )
 }
 
 /* ------------------------------------------------------------------ Produits */
 
-function OngletProduits({ etabActif }) {
+function OngletProduits({ etabActif, cible = null, onCibleConsommee }) {
   const [produits, setProduits] = useState([])
   const [types, setTypes] = useState([])
   const [chargement, setChargement] = useState(true)
@@ -41,6 +52,8 @@ function OngletProduits({ etabActif }) {
   const [enCours, setEnCours] = useState(false)
 
   const [produitOptions, setProduitOptions] = useState(null) // produit dont on gère les options
+  const [actionEnCours, setActionEnCours] = useState(null) // id du produit dont une action tourne
+  const [produitFiche, setProduitFiche] = useState(null) // produit dont on consulte la fiche
 
   const recharger = useCallback(async () => {
     setChargement(true)
@@ -61,6 +74,16 @@ function OngletProduits({ etabActif }) {
   useEffect(() => {
     recharger()
   }, [etabActif, recharger])
+
+  // Ouverture de la fiche demandée par la recherche globale. On prend l'objet complet s'il est déjà
+  // chargé, sinon on ouvre avec le seul identifiant : la fiche va chercher le détail de toute façon,
+  // et attendre la liste entière pour afficher un nom ferait patienter sans raison.
+  useEffect(() => {
+    if (cible?.type !== 'produit') return
+    const connu = produits.find((p) => String(p.id) === String(cible.id))
+    setProduitFiche(connu || { id: cible.id })
+    onCibleConsommee?.()
+  }, [cible, produits, onCibleConsommee])
 
   async function creer(e) {
     e.preventDefault()
@@ -83,6 +106,34 @@ function OngletProduits({ etabActif }) {
       setErreur(err.message || 'Échec de la création du produit.')
     } finally {
       setEnCours(false)
+    }
+  }
+
+  // Appels de cycle de vie, dans l'ordre exact des actions déclarées par `actionsStatut`.
+  const APPELS = {
+    publier: api.publierProduit,
+    depublier: api.depublierProduit,
+    archiver: api.archiverProduit,
+    reactiver: api.reactiverProduit,
+  }
+
+  // Une action peut échouer pour une raison métier parfaitement légitime — publier un produit sans
+  // tarif ou sans site de commercialisation. On affiche le message du serveur TEL QUEL plutôt qu'un
+  // « échec » générique : c'est lui qui dit ce qui manque, et c'est la seule chose sur laquelle
+  // l'exploitant peut agir.
+  async function agir(produit, action) {
+    if (action.confirmation && !window.confirm(action.confirmation.replace('%s', libelleProduit(produit)))) return
+    setErreur(null)
+    setSucces(null)
+    setActionEnCours(produit.id)
+    try {
+      await APPELS[action.id](produit.id)
+      setSucces(`« ${libelleProduit(produit)} » : ${action.confirme}`)
+      await recharger()
+    } catch (err) {
+      setErreur(err.message || "L'action n'a pas abouti.")
+    } finally {
+      setActionEnCours(null)
     }
   }
 
@@ -143,16 +194,52 @@ function OngletProduits({ etabActif }) {
               <tbody>
                 {produits.map((p) => (
                   <tr key={p.id}>
-                    <td><span className="nm">{libelleProduit(p)}</span></td>
+                    <td>
+                      <button
+                        type="button"
+                        className="lnk"
+                        onClick={() => setProduitFiche(p)}
+                        title="Ouvrir la fiche du produit"
+                        style={{
+                          background: 'none',
+                          border: 0,
+                          padding: 0,
+                          font: 'inherit',
+                          color: 'inherit',
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                          textDecoration: 'underline',
+                          textUnderlineOffset: 3,
+                        }}
+                      >
+                        <span className="nm">{libelleProduit(p)}</span>
+                      </button>
+                    </td>
                     <td>{p.typeCode || '—'}</td>
                     <td>
-                      <span className={`badge ${p.statut === 'publie' ? 'good' : 'mut'}`}>{p.statut || '—'}</span>
+                      <span className={`badge ${statutProduit(p).ton}`} title={statutProduit(p).aide}>
+                        {statutProduit(p).libelle}
+                      </span>
                     </td>
                     <td className="num">{euros(prixIndicatif(p))}</td>
                     <td className="num">
-                      <button className="btn ghost sm" type="button" onClick={() => setProduitOptions(p)}>
-                        Options
-                      </button>
+                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                        {actionsStatut(p.statut).map((a) => (
+                          <button
+                            key={a.id}
+                            className={`btn ${a.ton} sm`}
+                            type="button"
+                            title={a.aide}
+                            disabled={actionEnCours === p.id}
+                            onClick={() => agir(p, a)}
+                          >
+                            {actionEnCours === p.id ? '…' : a.libelle}
+                          </button>
+                        ))}
+                        <button className="btn ghost sm" type="button" onClick={() => setProduitOptions(p)}>
+                          Options
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -169,6 +256,12 @@ function OngletProduits({ etabActif }) {
         open={!!produitOptions}
         produit={produitOptions}
         onClose={() => setProduitOptions(null)}
+      />
+
+      <ProduitFicheModal
+        open={!!produitFiche}
+        produit={produitFiche}
+        onClose={() => setProduitFiche(null)}
       />
     </>
   )
