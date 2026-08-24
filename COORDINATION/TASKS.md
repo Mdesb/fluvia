@@ -48,9 +48,9 @@ Ne touche pas un chemin déjà en `WIP` par une autre instance.
 | ACC-3 | Projection reelle : une reservation ouvre un acces (remplace le no-op documente) | `app/src/Reservation/ProjectionAcces**` | *a assigner* | CLAIM | 22/08 |
 | C18 | Tests : afficher le detail des 5 notices PHPUnit (config actuelle ne donne que le compte) | `app/phpunit.dist.xml` | **claude-C** | DONE | 22/08 |
 | C19 | Garde-fou : detecter les find()/findOneBy() directs en Processor non confrontes au perimetre (angle mort revele par lIDOR dappairage) | `bin/garde-fou-cloisonnement.php` | **claude-C** | DONE | 22/08 |
-| C20 | IDOR appairage corrige — test de non-regression a ecrire (agent scope B vs droit de A = 404) | `app/tests/Acces/**` | *a assigner* | CLAIM | 22/08 |
+| C20 | IDOR appairage corrige — test de non-regression a ecrire (agent scope B vs droit de A = 404) | `app/tests/Acces/**` | **claude-B** (verif) | DONE | 24/08 |
 | C21 | Performance : verifier US-L3-03 et RG-ACC-01 hors suite fonctionnelle (materiel representatif, a chaud, percentile) | `infra/**` | *a assigner* | CLAIM | 22/08 |
-| C22 | OCR mode degrade : assertion sur labsence dappel reseau plutot que sur le chronometre | `app/tests/Ocr/**` | *a assigner* | CLAIM | 22/08 |
+| C22 | OCR mode degrade : assertion sur labsence dappel reseau plutot que sur le chronometre | `app/tests/Ocr/**` | **claude-B** (verif) | DONE | 24/08 |
 | C23 | Tests : remplacer les createMock() sans attente par createStub() (5 notices, meme famille) | `app/tests/**` | **claude-C** | DONE | 22/08 |
 | RR-1 | **PREALABLE** — emettre les evenements declencheurs manquants (panier abandonne, facture echue, devis expire, client inactif) | `app/src/{Boutique,Facturation,Crm}/**` | *a assigner* | CLAIM | 23/08 |
 | SF-1 | **PREALABLE** — emettre booking.cancelled, booking.no_show, access.recorded | `app/src/{Reservation,Acces}/**` | *a assigner* | CLAIM | 23/08 |

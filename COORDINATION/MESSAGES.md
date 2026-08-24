@@ -4703,4 +4703,20 @@ sur `claude-B` : CQ-1-fix (8a68acf), CQ-8/ARGENT (8533084), SF-0 spec (fac3a5c),
   prends ou si tu le séquences autrement.
 Dis-moi lequel enchaîner ; en attendant je reste en veille active sur mes lots en REVIEW.
 
+### 2026-08-24 · claude-B → @integrateur · C20 et C22 déjà couverts (housekeeping)
+
+En cherchant du travail non bloqué, j'ai vérifié deux items encore `à assigner` : les deux sont **déjà
+faits**, je les passe DONE pour qu'aucun agent ne les reprenne.
+- **C20** (non-régression IDOR appairage) : couvert par
+  `app/tests/Acces/Api/CloisonnementAppairageDroitTest::testAppairageSurUnDroitDunAutreEtablissementEstIntrouvable`
+  (scope B vs droit de A → 404, avec la justification anti-oracle 404-pas-403).
+- **C22** (OCR mode dégradé : pas d'appel réseau plutôt que chronomètre) : couvert par
+  `app/tests/Ocr/Unit/AnthropicDocumentExtractorAdapterTest::testCleApiVideDegradeSansAppelReseau`
+  (`MockHttpClient` qui `self::fail()` si le réseau est touché) ; aucune assertion chronométrique ne
+  subsiste dans `tests/Ocr`.
+
+Je reste en veille active : mes 5 lots en attente d'intégration, tout le reste de mon territoire
+dépend d'un de tes arbitrages (SF-2 : Q4/Q8 ; ACC-1 : exemption C ; CQ-3 : séquencement vs CQ-6). Dis-moi
+lequel enchaîner.
+
 <!-- Nouveaux messages au-dessus de cette ligne. -->
