@@ -11,10 +11,11 @@ use Doctrine\Common\DataFixtures\DependentFixtureInterface;
 use Doctrine\Persistence\ObjectManager;
 
 /**
- * Jeu de données de test du module `App\SmartFlow` (I1) : permissions `smart_flow.reschedule_manage`/
- * `smart_flow.reschedule_read_own` (RG-SOCLE-02) — même patron que `App\Dms\DataFixtures\DmsFixtures`.
- * Les tests recréent le schéma via `doctrine:schema:create` (pas de rejeu de migrations) : ce jeu
- * duplique le seed déjà posé par `Version20260824110000.php`.
+ * Jeu de données de test du module `App\SmartFlow` (I1 + I2) : permissions `smart_flow.read` (I2),
+ * `smart_flow.reschedule_manage`/`smart_flow.reschedule_read_own` (I1, RG-SOCLE-02) — même patron que
+ * `App\Dms\DataFixtures\DmsFixtures`. Les tests recréent le schéma via `doctrine:schema:create` (pas de
+ * rejeu de migrations) : ce jeu duplique le seed déjà posé par `Version20260824110000.php`/
+ * `Version20260824120100.php`.
  */
 final class SmartFlowFixtures extends Fixture implements DependentFixtureInterface
 {
@@ -25,7 +26,7 @@ final class SmartFlowFixtures extends Fixture implements DependentFixtureInterfa
 
     public function load(ObjectManager $manager): void
     {
-        foreach (['reschedule_manage', 'reschedule_read_own'] as $action) {
+        foreach (['read', 'reschedule_manage', 'reschedule_read_own'] as $action) {
             $permission = (new Permission())->setModule('smart_flow')->setAction($action);
             $manager->persist($permission);
         }

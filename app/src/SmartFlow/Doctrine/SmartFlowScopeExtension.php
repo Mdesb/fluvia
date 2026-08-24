@@ -9,6 +9,7 @@ use ApiPlatform\Doctrine\Orm\Extension\QueryItemExtensionInterface;
 use ApiPlatform\Doctrine\Orm\Util\QueryNameGeneratorInterface;
 use ApiPlatform\Metadata\Operation;
 use App\SmartFlow\Entity\RescheduleProposal;
+use App\SmartFlow\Entity\SlotWaitlistEntry;
 use App\Securite\Entity\Affectation;
 use App\Securite\Entity\Utilisateur;
 use Doctrine\ORM\Query\Expr\Join;
@@ -46,6 +47,10 @@ final class SmartFlowScopeExtension implements QueryCollectionExtensionInterface
     /** @var array<class-string, list<string>> Relations à joindre depuis la racine jusqu'à « establishment ». */
     private const CHAINES = [
         RescheduleProposal::class => [],
+        // I2 (plan §0.10) : `SlotWaitlistEntry` porte `establishment` directement, comme
+        // `RescheduleProposal` — même filtre, aucune restriction « own » (pas de notion de client sur
+        // une inscription liste d'attente créée par un agent, RG-SF-15).
+        SlotWaitlistEntry::class => [],
     ];
 
     public function __construct(

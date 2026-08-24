@@ -6,6 +6,7 @@ namespace App\SmartFlow\Service;
 
 use App\Reservation\Entity\Creneau;
 use App\Reservation\Entity\Reservation;
+use App\Reservation\Entity\Ressource;
 use App\Reservation\Enum\StatutCreneau;
 use App\Reservation\Enum\StatutReservation;
 use App\SmartFlow\Dto\ReservationSnapshot;
@@ -104,6 +105,24 @@ final class ReservationSlotReader
             customerId: $reservation->getOrganisateur()?->getId(),
             slotId: $reservation->getCreneau()?->getId(),
         );
+    }
+
+    /**
+     * Revalide qu'une `Ressource` appartient bien à `$establishmentId` (RG-SF-16, plan-smart-flow.md §3
+     * point 4 — `CreateSlotWaitlistEntryProcessor` revérifie ainsi le `resourceId` fourni par le client
+     * avant persistance, IDOR). `false` pour une ressource introuvable ou hors périmètre — jamais
+     * d'exception.
+     */
+    public function resourceExists(Uuid $resourceId, Uuid $establishmentId): bool
+    {
+        $ressource = $this->em->getRepository(Ressource::class)->find($resourceId);
+        if (!$ressource instanceof Ressource) {
+            return false;
+        }
+
+        $etablissement = $ressource->getEtablissement();
+
+        return $etablissement !== null && $etablissement->getId()->equals($establishmentId);
     }
 
     private function toSlotSnapshot(Creneau $creneau, Uuid $establishmentId): ?SlotSnapshot

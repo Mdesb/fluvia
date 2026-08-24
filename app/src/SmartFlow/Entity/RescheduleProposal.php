@@ -38,6 +38,12 @@ use Symfony\Component\Uid\Uuid;
  * conception) : une future promotion de liste d'attente Smart Flow (I2) réutilisera cette même entité
  * via `sourceWaitlistEntryRef` sans `originReservationRef`. En I1 (ce lot), seul
  * `RescheduleRequestedListener` crée des propositions et renseigne toujours `originReservationRef`.
+ *
+ * `entitlementRef` est également **nullable** depuis I2 (`Version20260824120000.php`, même correction
+ * de schéma qu'`originReservationRef` ci-dessus) : une promotion de liste d'attente Smart Flow
+ * (`App\SmartFlow\Service\SlotWaitlistPromotionService`, `sourceWaitlistEntryRef` renseigné) ne
+ * retrace aucun crédit — seule une proposition I1 issue d'un no-show restitué-avec-crédit
+ * (`originReservationRef` renseigné) porte un `entitlementRef` réel.
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'smart_flow_reschedule_proposal')]
@@ -106,9 +112,9 @@ class RescheduleProposal
     #[Groups(['reschedule_proposal:read'])]
     private Uuid $customerId;
 
-    #[ORM\Column(name: 'entitlement_id', type: UuidType::NAME)]
+    #[ORM\Column(name: 'entitlement_id', type: UuidType::NAME, nullable: true)]
     #[Groups(['reschedule_proposal:read'])]
-    private Uuid $entitlementRef;
+    private ?Uuid $entitlementRef = null;
 
     #[ORM\Column(length: 10, enumType: RescheduleProposalStatus::class, options: ['default' => 'searching'])]
     #[Groups(['reschedule_proposal:read'])]
@@ -206,12 +212,12 @@ class RescheduleProposal
         return $this;
     }
 
-    public function getEntitlementRef(): Uuid
+    public function getEntitlementRef(): ?Uuid
     {
         return $this->entitlementRef;
     }
 
-    public function setEntitlementRef(Uuid $entitlementRef): self
+    public function setEntitlementRef(?Uuid $entitlementRef): self
     {
         $this->entitlementRef = $entitlementRef;
 

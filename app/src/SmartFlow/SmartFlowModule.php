@@ -7,10 +7,11 @@ namespace App\SmartFlow;
 use App\Platform\Module\ModuleManifest;
 
 /**
- * Manifeste du module `App\SmartFlow` (plan-smart-flow.md §0.11) — incrément **I1 seulement** à ce
- * stade (report de no-show, SF-2, RG-SF-08..12) ; `permissions()`/`eventsConsumed()`/`features()`
- * seront étendus par I2 (créneaux libérés + liste d'attente) et I3 (affluence), pas anticipés ici — le
- * manifeste est une déclaration de ce qui existe réellement (même discipline que `App\Dms\DmsModule`).
+ * Manifeste du module `App\SmartFlow` (plan-smart-flow.md §0.11) — incréments **I1 + I2** à ce stade
+ * (report de no-show, SF-2, RG-SF-08..12 ; créneaux libérés + liste d'attente, RG-SF-01..07) ; les
+ * champs relatifs à I3 (affluence, `access.recorded`/`access.card_recharged`) suivront à T13, bloqués
+ * par SF-1 — le manifeste est une déclaration de ce qui existe réellement (même discipline que
+ * `App\Dms\DmsModule`).
  *
  * `capability()` → `null` : service réactif transverse, Smart Flow ne se vend pas, il réagit à des
  * événements déjà produits par des modules payants (D22 « Smart Flow ne vend rien et ne facture rien
@@ -50,6 +51,7 @@ final class SmartFlowModule implements ModuleManifest
     public function permissions(): array
     {
         return [
+            'smart_flow.read',
             'smart_flow.reschedule_manage',
             'smart_flow.reschedule_read_own',
         ];
@@ -58,8 +60,11 @@ final class SmartFlowModule implements ModuleManifest
     /** @return list<string> */
     public function eventsEmitted(): array
     {
-        // `slot.released` est posé en I2 — absent tant que I2 n'est pas livré (§0.11 du plan).
-        return [];
+        // `slot.released` (I2, RG-SF-03) — posé ici depuis T11, `SlotFreedListener` en est l'unique
+        // producteur.
+        return [
+            'slot.released',
+        ];
     }
 
     /** @return list<string> */
@@ -67,6 +72,9 @@ final class SmartFlowModule implements ModuleManifest
     {
         return [
             'booking.reschedule_requested',
+            // I2 (RG-SF-01..04) : `SlotFreedListener`.
+            'booking.cancelled',
+            'booking.no_show',
         ];
     }
 
@@ -75,6 +83,8 @@ final class SmartFlowModule implements ModuleManifest
     {
         return [
             'no_show_reschedule',
+            // I2 : créneaux libérés + liste d'attente Smart Flow (RG-SF-01..07).
+            'slot_recovery',
         ];
     }
 
@@ -90,6 +100,9 @@ final class SmartFlowModule implements ModuleManifest
         return [
             'compatibleSlotSearchWindowDays' => 14,
             'rescheduleProposalExpirationDays' => 30,
+            // I2 (§0.7 du plan, RG-SF-07) : délai de confirmation d'une promotion de liste d'attente
+            // Smart Flow avant de tenter l'inscription suivante.
+            'slotWaitlistPromotionExpirationMinutes' => 15,
             'toleranceLevel' => 'same_type',
         ];
     }
