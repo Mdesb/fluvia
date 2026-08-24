@@ -11,6 +11,7 @@
 | 15:00 | **Message corrigé** (ton ordre) : le n°6 ne propose plus `--nettoyer` comme issue. J'ai aussi trouvé **sept autres messages de plafond qui ne disaient rien du tout** — même cul-de-sac, par omission. Les neuf disent maintenant la marche à suivre. Rejoué ton scénario. | les 13 jointures de la règle n°5 | les 17 référentiels attendent ton mot |
 | 16:00 | **Tu n'avais pas tort de vouloir déclarer sans émettre — c'est D2.** Ma règle confondait dette anonyme et travail engagé. Livré un **registre d'attente nominatif** : hors plafond, mais affiché à chaque exécution et refusé sans preneur. Inerte par défaut, tu peux l'ignorer. | les 13 jointures de la règle n°5 | rien |
 | 17:00 | **J'avais rouvert le trou que j'avais passé deux jours à fermer** : mon garde-fou de topologie est un `.sh`, or les deux filets ne globent que `.php` — retirer son appel n'aurait rien déclenché. Filet posé sur le lanceur, sans distinction d'extension, vérifié par mutation. `main` est vert (9/9). | les 13 jointures de la règle n°5 | rien |
+| 18:00 | **`claude-G` est toujours sur le dépôt nu** — et tu viens de lui donner du travail dans `Reservation`. Il a commité il y a 13 min directement dans les refs. Faits vérifiés ci-dessous. **Et j'ai corrigé mon propre message**, qui exagérait le constat. Lanceur 9/9, banc 17/17. | les 13 jointures de la règle n°5 | rien |
 
 ---
 
@@ -338,3 +339,51 @@ Aucun empiètement sur `bin/`, `hooks/` ou `.github/`.
 **En attente chez toi, sans urgence** : le registre d'attente nominatif proposé à 16:00 — il est inerte
 tant que personne n'écrit `--attendre`, donc rien ne presse. Et les 13 jointures du groupe A, dont
 `OperationScellee`.
+
+
+---
+
+### 2026-08-25 · 18:00 — `claude-G` code dans `Reservation` depuis le dépôt nu
+
+**Le fait d'abord, parce qu'il est daté.** Tu as débloqué `claude-G` sur ACT-1 et il a repris : commit
+`63085f6` il y a treize minutes, et **des modifications non commitées** dans
+`Reservation/Entity/Reservation.php`, `Entity/ListeAttente.php`, `Service/JaugeCreneauGuard.php`,
+`Service/JaugeRessourceMereHandler.php`.
+
+Or sa topologie n'a pas été réparée : worktree du **dépôt nu**, sans `origin`. Son commit de tout à
+l'heure est **déjà dans les refs partagées** — vérifié, `git branch --contains` sur le nu le renvoie —
+sans être passé par un push, donc sans `pre-receive`.
+
+**Ce qui n'est PAS vrai, et que mon garde-fou affirmait à tort.** Mon message disait *« cette session
+écrit sans franchir aucune barrière »*. **Faux.** `pre-commit` est installé sur le dépôt nu depuis que
+tu l'as posé, et `claude-G` en est un worktree : je l'ai exécuté depuis chez lui comme git le lance —
+**7 garde-fous, code 0, pas d'interrupteur**. Il est couvert.
+
+**Ce qui reste vrai, et qui justifie quand même le refus** :
+
+- `pre-commit` **se contourne** — `git commit --no-verify` suffit — là où `pre-receive` ne se contourne
+  pas ; c'est toute la différence entre un filet et une barrière ;
+- il ne lance **ni la topologie ni le manifeste** (7 sur 9) ;
+- et les cliquets tournent sans `--contre` : le plafond de référence sur `main` n'est jamais opposé à
+  son travail, donc un plafond relevé chez lui passerait inaperçu.
+
+**J'ai corrigé le message.** Il distingue maintenant les deux cas et dit lequel s'applique : avec
+`pre-commit` installé, *« cette session contourne la seule barrière non contournable »* et l'explication
+qui va avec ; sans, *« RIEN ne le remplace »*. Vérifié dans les deux états — sur `claude-G` réel, et sur
+un dépôt nu jetable dont j'ai retiré le hook.
+
+C'est la leçon que tu m'as donnée hier sur les messages qui mènent dans un mur, appliquée à un message
+qui **exagérait**. Un garde-fou qui surestime son constat use la confiance exactement comme celui qui
+donne un mauvais conseil — et celui-ci criait « aucune barrière » alors qu'il y en avait une.
+
+**Ce que ça te demande, et c'est court.** Recréer le worktree de `claude-G` depuis le clone
+(`/home/debian/billetterie/.git`), comme les huit autres. Rien n'est perdu : sa branche `claude-G` est
+déjà dans le dépôt, il lui suffit de commiter son travail en cours avant. Tant que ce n'est pas fait,
+`ACT-1` avance sur du code de `Reservation` — jauges et liste d'attente — sans que la barrière
+non contournable ne le voie jamais.
+
+**Je ne le fais pas moi-même** : c'est le worktree d'une autre session, avec des modifications non
+commitées dedans. Une seule session par worktree (D30), et je ne touche pas au travail en vol de
+quelqu'un d'autre.
+
+**État** : lanceur **9/9**, banc **17/17**, `main` vert. Aucun empiètement sur mon périmètre.
