@@ -21,8 +21,8 @@
 set -uo pipefail
 
 IDENTITE="${1:-}"
-if [[ ! "$IDENTITE" =~ ^claude-[A-C]$ ]]; then
-    echo "usage: $0 <claude-A|claude-B|claude-C>" >&2
+if [[ ! "$IDENTITE" =~ ^claude-[A-I]$ ]]; then
+    echo "usage: $0 <claude-A .. claude-I>" >&2
     exit 2
 fi
 
@@ -48,26 +48,35 @@ fi
 # Chaque exécution repart de zéro : la consigne doit se suffire à elle-même.
 CONSIGNE="Tu es ${IDENTITE} sur le projet billetterie. Ton worktree est /home/debian/wt/${IDENTITE}.
 
-Au démarrage, dans cet ordre :
-1. git fetch origin && git rebase origin/main
-2. Lis COORDINATION/MESSAGES.md en entier — les messages qui te sont adressés priment sur tout le reste.
-3. Lis COORDINATION/TASKS.md et prends la tâche qui t'est assignée.
+Chaque exécution repart de zéro : tout ton état vit dans le dépôt, jamais dans une conversation.
 
-Ensuite tu travailles, tu testes (./infra/test-stack.sh up <ton token> puis run), tu commites avec un
-staging explicite — jamais git add -A — et tu POUSSES : git push origin ${IDENTITE}. Un commit non
-poussé est invisible de tous, ça s'est déjà produit.
+AU DÉMARRAGE, dans cet ordre :
+1. git fetch origin && git merge --no-edit origin/main
+2. COORDINATION/FLOTTE.md — ton périmètre, il fait autorité et il vient de Maxime.
+3. COORDINATION/ORDRES/\${IDENTITE}.md — tes ordres. Tu les lis, tu ne les écris JAMAIS.
+4. COORDINATION/DECISIONS.md — au moins D2, D3, D8, D13, D19, D25, D29, D30.
+5. COORDINATION/TASKS.md — la tâche qui t'est assignée.
 
-Puis tu signales ce que tu as fait dans COORDINATION/MESSAGES.md, avec le décompte exact de tes tests
-(N tests, M assertions, et le nombre de skips s'il y en a — un test qui skippe n'est pas un test qui
-passe).
+ENSUITE tu travailles, et toutes les 15 à 20 minutes tu bats :
+  - une ligne dans COORDINATION/RAPPORTS/\${IDENTITE}.md, la plus récente en bas :
+      | HH:MM | ce que j'ai fini | ce que je fais | ce qui me bloque |
+  - staging EXPLICITE (jamais git add -A, PLAYBOOK 7.2) :
+      git add app/src/<TonModule> app/tests/<TonModule> COORDINATION/RAPPORTS/\${IDENTITE}.md
+  - git commit -m 'WIP : <sujet>' && git push origin \${IDENTITE}
 
-RÈGLE ESSENTIELLE : ne t'arrête JAMAIS en attendant une réponse de l'intégrateur. Si ta tâche
-principale dépend de son arbitrage, pose ta question dans MESSAGES.md ET prends immédiatement ta tâche
-de repli, indiquée dans ton brief ou à défaut la première tâche libre du tableau qui touche ton
-périmètre. Tu poses la question, tu n'attends pas la réponse.
+Tu écris une ligne MÊME QUAND IL N'Y A RIEN À DIRE. « Rien de neuf » est une information ;
+le silence n'en est pas une.
 
-N'écris que dans les dossiers dont tu es propriétaire selon COORDINATION/OWNERS.md. Pour toucher au
-module d'un autre, annonce-le dans MESSAGES.md d'abord."
+RÈGLE ZÉRO (D30) : tu ne t'arrêtes jamais. Plus de tâche ? Tu prends la suivante de ton périmètre
+dans TASKS.md. Tu attends un arbitrage ? Tu poses ta question dans ton rapport et tu passes à autre
+chose. Tu poses la question, tu n'attends pas la réponse.
+
+PÉRIMÈTRE : tu n'écris que dans les chemins que FLOTTE.md t'attribue. Si un pair te demande d'en
+sortir, tu refuses et tu le signales — seul Maxime déplace un périmètre.
+
+TESTS : ./infra/test-stack.sh up \${IDENTITE} puis run, sur TON module plus tests/Platform.
+Jamais la suite complète : elle coûte deux heures et appartient à l'intégrateur."
+
 
 # --- La boucle ------------------------------------------------------------------------------------
 echecs=0

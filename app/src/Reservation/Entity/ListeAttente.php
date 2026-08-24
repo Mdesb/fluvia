@@ -15,6 +15,7 @@ use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
 use Symfony\Component\Uid\Uuid;
+use Symfony\Component\Validator\Constraints as Assert;
 
 /** Inscription en liste d'attente sur un Créneau complet (RG-M5-06), promotion automatique. */
 #[ORM\Entity]
@@ -51,6 +52,16 @@ class ListeAttente
     #[ORM\Column(type: 'smallint')]
     #[Groups(['liste_attente:read'])]
     private int $rang = 1;
+
+    /**
+     * ACT-1 / D16 point 1 — une table de huit attend pour huit couverts. Sans cette quantité, la
+     * promotion rendrait une place à un groupe qui en demande huit, et le créneau repasserait en
+     * surréservation au premier désistement.
+     */
+    #[ORM\Column(options: ['default' => 1])]
+    #[Assert\Positive(message: 'La quantité attendue doit être un entier strictement positif.')]
+    #[Groups(['liste_attente:read'])]
+    private int $quantity = 1;
 
     #[ORM\Column(type: 'datetime_immutable')]
     #[Groups(['liste_attente:read'])]
@@ -112,6 +123,18 @@ class ListeAttente
     public function setRang(int $rang): self
     {
         $this->rang = $rang;
+
+        return $this;
+    }
+
+    public function getQuantity(): int
+    {
+        return $this->quantity;
+    }
+
+    public function setQuantity(int $quantity): self
+    {
+        $this->quantity = $quantity;
 
         return $this;
     }
