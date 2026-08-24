@@ -739,3 +739,61 @@ spec canonique, et cite leur origine.
 deux endroits se voyait. À neuf, non. **Une tâche n'a qu'un seul propriétaire, et `TASKS.md` en est la
 seule source** — le document de flotte fixe les périmètres, le carnet fixe les tâches, et c'est à moi
 de les tenir cohérents. Je ne l'ai pas fait, et cela a coûté 415 lignes de travail parallèle.
+
+### 2026-08-24 · D32 — Une migration générée n'est jamais committée telle quelle
+`doctrine:migrations:diff` compare les métadonnées Doctrine à la base **entière**. Il ramasse donc
+toute la dérive laissée par les autres sessions, et il la présente comme si c'était le travail de
+l'auteur. Signalé par `claude-H` à 19:05 : sa migration, générée depuis un worktree à jour de `main`,
+proposait `DROP TABLE messenger_messages`, la suppression de l'index FULLTEXT du module Support, la
+création de la table de `claude-D`, et une quinzaine de renommages d'index Finance / DMS / Compta / Stay.
+
+**Ce n'est pas nouveau, et c'est ce qui rend la décision nécessaire.** Quatre migrations portent déjà
+l'avertissement dans leur en-tête : `Version20260820120931`, `Version20260820151917`,
+`Version20260821102107`, `Version20260822090000`. Le piège a été rencontré quatre fois en trois jours,
+documenté quatre fois **à l'endroit exact où personne ne le lit** — dans le fichier qu'on écrit après
+être tombé dedans — et jamais corrigé là où il s'arrêterait.
+
+**Trois causes structurelles, toutes permanentes :**
+1. `messenger_messages` est créée par migration et **aucune entité ne la mappe**. Le diff proposera sa
+   suppression à chaque fois, éternellement.
+2. Un index `FULLTEXT` **n'est pas exprimable** en mapping ORM (le code du module Support le dit
+   lui-même). Le diff proposera sa suppression à chaque fois, éternellement.
+3. Une entité écrite sans sa migration — c'est le cas de `subscription_provisioning_request` — apparaît
+   dans le diff de **toutes** les autres sessions.
+
+**Règle : le fichier généré est un brouillon, jamais un livrable.** On le relit ligne à ligne, on
+garde ce qu'on a soi-même provoqué, on jette le reste. Une migration ne contient que ce que son lot a
+introduit. Et **une entité neuve part avec sa migration dans le même lot** — la laisser sans migration
+fait porter le coût à toutes les autres sessions.
+
+**Horodatage en heure locale.** Le conteneur PHP tourne en UTC, deux heures derrière. Une migration
+générée à 19:00 naît `Version...164417` et se classe **avant** une migration déjà appliquée : elle
+s'exécute hors séquence sur toute base existante. On renomme en heure locale.
+
+**Et cela demande un garde-fou, pas une consigne de plus.** Quatre avertissements écrits n'ont rien
+empêché ; un contrôle au push l'aurait fait dès le 20/08. Confié à `claude-C`.
+
+#### 2026-08-24 19:55 · D32, suite — deux causes taries, une seule reste irréductible
+La décision listait trois causes. `claude-H` en a trouvé une quatrième en régénérant son diff, et elle
+est la plus grosse en nombre : **sept index créés par migration et jamais déclarés dans le mapping**
+(quatre en DMS, deux en Compta, un en Support). Ils ressortaient en `DROP INDEX` chez tout le monde.
+
+**État réel des causes, après vérification :**
+
+| Cause | État |
+|---|---|
+| `messenger_messages` non mappée | **tarie** — `schema_filter` dans `doctrine.yaml`, **prouvé** par `claude-H` sur une base repartie de zéro : zéro occurrence dans le diff régénéré |
+| Index existants non déclarés | **en cours** — trois posés par `claude-A` (Compta, Support), quatre confiés à `claude-B` (DMS) |
+| Entité sans migration | **ouverte** — `subscription_provisioning_request`, confiée à `claude-D` |
+| Index `FULLTEXT` du module Support | **irréductible** — non exprimable en mapping ORM |
+
+**Ce que cela change pour le garde-fou demandé à `claude-C` :** une fois les sept index déclarés, le
+FULLTEXT devient **le seul cas légitime**. Le garde-fou n'a plus une douzaine d'exceptions à connaître,
+mais une. C'est une simplification obtenue depuis un module qui n'était pas le sien, par une session
+ouverte depuis une heure.
+
+**Et la leçon de méthode, qui vaut au-delà des migrations :** j'ai posé `schema_filter` en écrivant dans
+le commit qu'il n'était **pas prouvé à l'exécution**, plutôt que de le déclarer fonctionnel. C'est la
+correction directe des trois défauts trouvés le même soir — garde-fou de topologie, réinstallation des
+hooks, démontage des piles — tous des mécanismes déclarés bons sans qu'on regarde ce qu'ils produisent.
+**Un mécanisme non vérifié se marque comme tel ; il ne se raconte pas comme vérifié.**

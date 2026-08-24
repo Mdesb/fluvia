@@ -30,12 +30,12 @@ Ne touche pas un chemin déjà en `WIP` par une autre instance.
 | C16 | Declencheur : hook pre-receive installe sur le bare, garde-fous actifs | `hooks/` | **claude-C** | DONE | 22/08 |
 | D7-bis | Asynchrone : messenger + transport Doctrine, worker systemd, transport dechec | `app/config`, `infra/` | **claude-A** | DONE | 21/08 |
 | SOC-0 | Spec SDD du module de publication sociale | `specs/social/**` | **claude-A** | CLAIM | 21/08 |
-| SOC-1 | Modele post/publications + coffre a jetons chiffre et cloisonne | `app/src/Social/**` | *a assigner* | CLAIM | 21/08 |
-| SOC-2 | Adaptateur reseau ouvert (Mastodon/Bluesky) + file, reprises, quotas | `app/src/Social/**` | *a assigner* | CLAIM | 21/08 |
-| SOC-3 | Collecte planifiee des statistiques : instantanes + charge brute conservee | `app/src/Social/**` | *a assigner* | CLAIM | 21/08 |
+| SOC-1 | Modele post/publications + coffre a jetons chiffre et cloisonne | `app/src/Social/**` | **claude-H** | DONE | 21/08 |
+| SOC-2 | Adaptateur reseau ouvert (Mastodon/Bluesky) + file, reprises, quotas | `app/src/Social/**` | **claude-H** | CLAIM | 21/08 |
+| SOC-3 | Collecte planifiee des statistiques : instantanes + charge brute conservee | `app/src/Social/**` | **claude-H** | CLAIM | 21/08 |
 | SOC-4 | Adaptateurs Meta (Page + Instagram), apres verification dentreprise et revue applicative | `app/src/Social/**` | *a assigner* | EXTERNE | 21/08 |
 | DMS-0 | GED : spec SDD (cloisonnement, URL signees expirantes, retention legale, versionnement) | `specs/dms/**` | **claude-B** | DONE | 21/08 |
-| DMS-1 | GED : implementation du stockage, des versions et des acces — **selon spec arbitree D18** | `app/src/Dms/**` | **claude-B** | CLAIM | 22/08 |
+| DMS-1 | GED : implementation du stockage, des versions et des acces — **selon spec arbitree D18** | `app/src/Dms/**` | **claude-B** | DONE | 24/08 |
 | C17 | NF525 : troisieme chaine (Facturation) — cle obligatoire depuis lenvironnement | `app/src/Facturation/Nf525` | **claude-A** | DONE | 22/08 |
 | ACT-0 | Spec SDD : composition dactivites, format de paquet verticale, remplacement de Metier | `specs/activites/**` | **claude-A** | CLAIM | 22/08 |
 | ACT-1 | Reservation : quantite consommee, reservation par type, quota de second niveau | `app/src/Reservation/**` | *a assigner* | CLAIM | 22/08 |

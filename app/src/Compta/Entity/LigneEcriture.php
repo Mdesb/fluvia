@@ -16,6 +16,7 @@ use Symfony\Component\Uid\Uuid;
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'compta_ligne_ecriture')]
+#[ORM\Index(name: 'idx_ligne_ecriture_counterparty', fields: ['counterpartyId'])]
 class LigneEcriture
 {
     #[ORM\Id]

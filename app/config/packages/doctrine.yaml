@@ -4,6 +4,16 @@ doctrine:
         types:
             uuid: Symfony\Bridge\Doctrine\Types\UuidType
 
+        # Tables techniques qu'aucune entite ne mappe : le comparateur de schema les verrait comme
+        # « a supprimer » et `doctrine:migrations:diff` proposerait un DROP TABLE a chaque generation,
+        # dans le lot de n'importe qui (D32). Ce n'est pas une hypothese : le fichier genere par
+        # claude-H le 24/08 contenait `DROP TABLE messenger_messages`, dans un lot de publication
+        # sociale. Quatre migrations des 20, 21 et 22/08 documentaient deja le symptome.
+        #
+        # On tarit la source plutot que de compter sur la relecture. Toute table technique future
+        # (verrous, cache, sessions) entre ici et non dans une consigne de plus.
+        schema_filter: '~^(?!messenger_messages)~'
+
         # IMPORTANT: You MUST configure your server version,
         # either here or in the DATABASE_URL env var (see .env file)
         #server_version: '16'

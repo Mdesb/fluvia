@@ -28,6 +28,7 @@ use Symfony\Component\Uid\Uuid;
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'compta_lettrage_ecriture')]
+#[ORM\Index(name: 'idx_lettrage_reconciliation_code', fields: ['reconciliationCode'])]
 #[ApiResource(
     shortName: 'LettrageEcriture',
     operations: [

@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+#
+# Hook `post-commit` — reinstalle les hooks du depot nu quand main change (D28).
+#
+# main est mis a jour de deux facons : par push, et par MERGE dans le worktree dintegration. Le
+# reflog du 25/08 ne contient que des merge — cest le chemin normal, et post-receive ny sexecute
+# jamais. Ce hook couvre ce second chemin. La logique est dans bin/reinstaller-hooks.sh : trois
+# declencheurs, un seul enonce.
+
+set -uo pipefail
+[ "$(git rev-parse --abbrev-ref HEAD 2>/dev/null)" = "main" ] || exit 0
+RACINE="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+[ -x "$RACINE/bin/reinstaller-hooks.sh" ] || exit 0
+bash "$RACINE/bin/reinstaller-hooks.sh"
+exit 0
