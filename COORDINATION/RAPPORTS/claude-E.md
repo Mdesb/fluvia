@@ -20,6 +20,7 @@
 | 19:00 | **Présentation horaire.** Mergé `main`. **D32.5 OK** : `migrations:migrate` depuis zéro = 79 migrations, succès jusqu'à `Version20260824210200` (les miennes appliquées en ordre). I2 poussé. **En cours** : implémentation **RevenueRecovery I1** (module neuf, agent en arrière-plan, **émission `revenue_recovery.*` différée** car pas encore au catalogue → je te la demande, voir ci-dessous). | Push I2 puis tester RevenueRecovery I1 en local. | RevenueRecovery : émission des 5 événements `revenue_recovery.*` en attente de leur ajout au catalogue (ton périmètre, lignes fournies au Point n°8). |
 | 19:35 | **Contact (demande de Maxime).** RevenueRecovery I1 **implémenté** (module neuf : `RecoverySequence`/`RecoveryCase`/`RecoveryAttempt`, `RecoveryEngine`, cloisonnement, RGPD, invariant DroitAcces, émission différée). 1er run `tests/RevenueRecovery` : 28 tests, 8 err + 3 éch — indice fort de **cache de test périmé** (purge Windows échouée), **re-run cache propre en cours**. | Corriger RR jusqu'au vert → merge `main` (41 commits) → push. SmartFlow I1+I2 déjà poussés (`1edfd18`). | `revenue_recovery.*` toujours absent du catalogue. |
 | 25/08 00:30 | **Présentation.** **RevenueRecovery I1 VERT : `tests/RevenueRecovery` = 28 tests / 177 assertions, 0 échec** (local). Corrigé en itérant : mock `final`, invariant/commentaires, stop-404 (+import), association inverse `resolve`, et **retrait de 3 abonnés inertes** (`quote.accepted`/`sale.completed`/`booking.created` non émis → garde-fou orphelins). | Commit RR I1 → merge `main` → vérif migrations base neuve → push garde-fous. | `revenue_recovery.*` toujours absent du catalogue (émission + résolution `quote/sale/booking.created` différées jusqu'à leurs émetteurs). |
+| 25/08 00:55 | Mergé `main`. **D32.5 OK sur base VRAIMENT neuve** : `migrations:migrate` depuis zéro applique toute la chaîne jusqu'à `Version20260824234300` (mes migrations SF 21:xx + RR 22:xx incluses). Push RR. | RevenueRecovery I1 poussé. Reste : I3 SmartFlow (⛔ `access.recorded`) et l'émission RR (⛔ catalogue). | — | 
 
 ## ⚠ Point n°1 pour claude-A — d'où intégrer mon travail (branche)
 
@@ -246,3 +247,15 @@ j'émettrais n'atteindrait pas ta session sur le VPS.
 
 Je continue à me présenter ici chaque heure, tâche en cours ou demande de tâche, comme tu l'exiges — via
 le seul tuyau qui nous relie.
+
+## Point n°11 — intel harnais (pour A/C) : `schema:drop --full-database` ne supprime pas les SEQUENCE MariaDB
+
+En vérifiant mes migrations sur base neuve (D32.5), un `migrations:migrate` **rejoué** après un
+`doctrine:schema:drop --env=test --force --full-database` échoue en
+`SQLSTATE[42S01] Table 'acces_snapshot_seq' already exists` : `schema:drop` supprime tables/vues mais
+**pas les objets SEQUENCE** (créés par `Version20260817192240`, module Acces, `CREATE SEQUENCE`). La
+séquence survit → `CREATE SEQUENCE` du migrate rejoué casse. Pas mon code (Acces), mais ça mord
+quiconque revérifie des migrations sans dropper la **base entière**. Contournement qui marche :
+`doctrine:database:drop --force && doctrine:database:create && migrations:migrate` (drop complet, pas
+seulement le schéma). Famille DdlHorsMapping — à voir si le harnais/`test-stack.sh` doit dropper les
+séquences, ou si `SchemaTool` doit les gérer. Signalé, hors mon périmètre (`bin/`/harnais).
