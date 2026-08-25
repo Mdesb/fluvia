@@ -292,6 +292,11 @@ export const api = {
   majTypeTarif: (id, corps) => request(`/api/type_tarifs/${id}`, { method: 'PATCH', body: corps }),
   supprimerTypeTarif: (id) => request(`/api/type_tarifs/${id}`, { method: 'DELETE' }),
   grilleTarifaires: () => request('/api/grille_tarifaires', { query: { itemsPerPage: 200 } }),
+  // Post et Patch existaient depuis le debut, appeles de nulle part. Pas de Delete cote serveur :
+  // un prix engage dans des ventes passees ne s'efface pas.
+  creerGrilleTarifaire: (corps) => request('/api/grille_tarifaires', { method: 'POST', body: corps }),
+  majGrilleTarifaire: (id, corps) =>
+    request(`/api/grille_tarifaires/${id}`, { method: 'PATCH', body: corps }),
   saisons: () => request('/api/saisons', { query: { itemsPerPage: 100 } }),
   creerSaison: (corps) => request('/api/saisons', { method: 'POST', body: corps }),
   majSaison: (id, corps) => request(`/api/saisons/${id}`, { method: 'PATCH', body: corps }),
