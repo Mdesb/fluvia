@@ -56,6 +56,14 @@ final class ScheduleCatalog
                 critical: true,
             ),
             new ScheduledTask(
+                'subscription:facturer-le-mois',
+                1440,
+                "Les abonnements du mois ne sont pas facturés : le client utilise le logiciel sans "
+                . "payer, et rien ne le signale. C'est le défaut des options de mi-mois — corrigé "
+                . "depuis — mais à l'échelle du mois entier et de tous les clients.",
+                critical: true,
+            ),
+            new ScheduledTask(
                 'boutique:liberer-paniers-expires',
                 5,
                 "Un panier abandonné retient sa place indéfiniment. Les billets qu'il bloque ne sont "

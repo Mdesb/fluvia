@@ -9,6 +9,7 @@ use App\Subscription\Entity\Subscription;
 use App\Subscription\Enum\SubscriptionStatus;
 use App\Subscription\Exception\InvoicingRefusedException;
 use App\Subscription\Exception\UnknownCustomerException;
+use App\Subscription\Security\BillingServiceAccount;
 use App\Subscription\Service\SubscriptionInvoicer;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -32,23 +33,17 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  *
  * ---
  *
- * **POURQUOI CETTE COMMANDE N'EST PAS DÉCLARÉE AU CATALOGUE DE L'ORDONNANCEUR.**
+ * **QUI SIGNE LES FACTURES QU'ELLE EMET.**
  *
- * Une facture est un document scellé (NF525) qui **porte le nom de qui l'a émise** : `creePar` est
- * non nullable, et ce n'est pas un oubli de modélisation. Une tâche périodique n'a pas d'utilisateur
- * connecté ; il faudrait donc lui désigner un compte, et le dépôt a bien ce précédent —
- * `SessionSystemeBoutiqueResolver` et `SessionSystemeResolver` créent un utilisateur technique. Mais
- * les deux portent le même avertissement dans leur en-tête : *vente sans opérateur humain identifié,
- * risque n°1*.
+ * Une facture NF525 porte le nom de qui l'a emise, et une tache periodique n'a personne derriere
+ * elle. Maxime a arbitre : les emissions automatiques portent un compte de service nomme
+ * « Facturation automatique », auquel personne ne peut se connecter — voir
+ * {@see BillingServiceAccount} pour les trois conditions posees.
  *
- * Attribuer des factures scellées à un robot est une décision comptable, pas une commodité
- * technique. Et c'est précisément le critère avec lequel `personnel:traiter-echeances-sortie` a été
- * retirée du catalogue : une tâche qui exige une identité humaine ne tourne pas sans surveillance.
+ * **`--auteur` reste disponible, et ce n'est pas une politesse.** L'automatisation ne remplace pas le
+ * geste humain, elle le rend inutile en temps normal. Le jour d'un incident, on veut pouvoir
+ * rattraper un mois au nom de quelqu'un — et que la facture le dise.
  *
- * D'où `--auteur`, **obligatoire** : la commande s'exécute au nom d'une personne nommée, qu'un
- * exploitant lance à la main. Le jour où la question est tranchée — compte de service désigné au
- * déploiement, ou mention explicite sur la facture — la déclaration au catalogue tiendra en quatre
- * lignes.
  */
 #[AsCommand(
     name: 'subscription:facturer-le-mois',
@@ -59,6 +54,7 @@ final class FacturerAbonnementsCommand extends Command
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly SubscriptionInvoicer $facturier,
+        private readonly BillingServiceAccount $compteDeService,
     ) {
         parent::__construct();
     }
@@ -66,7 +62,7 @@ final class FacturerAbonnementsCommand extends Command
     protected function configure(): void
     {
         $this
-            ->addOption('auteur', null, InputOption::VALUE_REQUIRED, 'Adresse e-mail de la personne au nom de qui les factures sont emises.')
+            ->addOption('auteur', null, InputOption::VALUE_REQUIRED, 'Adresse e-mail de la personne au nom de qui les factures sont emises. Sans elle : le compte de service.')
             ->addOption('mois', null, InputOption::VALUE_REQUIRED, 'Mois a facturer, au format AAAA-MM. Par defaut : le mois courant.')
             ->addOption('a-blanc', null, InputOption::VALUE_NONE, 'Montre ce qui serait facture sans rien emettre.');
     }
@@ -84,16 +80,25 @@ final class FacturerAbonnementsCommand extends Command
 
         $aBlanc = (bool) $input->getOption('a-blanc');
 
-        $auteur = $aBlanc ? null : $this->auteur($input->getOption('auteur'));
-        if (!$aBlanc && null === $auteur) {
-            // Voir l'en-tete : une facture scellee porte le nom de qui l'a emise, et ce n'est pas a
-            // cette commande d'inventer une identite.
-            $io->error(
-                'L option --auteur est obligatoire : une facture porte le nom de la personne qui l emet. '
-                .'Indiquez l adresse e-mail d un compte existant.'
-            );
+        $auteur = null;
 
-            return Command::INVALID;
+        if (!$aBlanc) {
+            $demande = $input->getOption('auteur');
+
+            if (\is_string($demande) && '' !== $demande) {
+                // Passage a la main : les factures portent le nom de la personne indiquee. C'est ce
+                // qu'on veut le jour d'un rattrapage — savoir qui a lance quoi.
+                $auteur = $this->auteur($demande);
+
+                if (null === $auteur) {
+                    $io->error(sprintf('Aucun compte ne porte l adresse « %s ».', $demande));
+
+                    return Command::INVALID;
+                }
+            } else {
+                // Passage automatique : le compte de service, nomme pour etre lu par un client.
+                $auteur = $this->compteDeService->compte();
+            }
         }
 
         $abonnements = $this->abonnementsFacturables();
