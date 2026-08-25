@@ -84,6 +84,41 @@ final class CloisonnementTest extends ReservationApiTestCase
     }
 
     /**
+     * D41 — l'établissement d'une création vient de la session serveur, jamais du corps.
+     *
+     * Le montage est délibérément *légitime* : l'admin est affecté à A **et** à B, donc rien ne lui
+     * interdit de travailler sur B. Ce que le test vérifie n'est pas un refus, c'est que le champ
+     * envoyé est **ignoré** — la ressource naît dans l'établissement du contexte, pas dans celui que
+     * le corps désigne. Un test bâti sur un établissement interdit aurait été vert grâce au garde
+     * global de D41, sans rien prouver sur la conception.
+     */
+    public function testLEtablissementDuneCreationVientDuContexteEtNonDuCorps(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $client->disableReboot();
+        $idA = $this->idEtablissement(SocleFixtures::ETAB_A_NOM);
+        $idB = $this->idEtablissement(SocleFixtures::ETAB_B_NOM);
+
+        $ressource = $client->request('POST', '/api/reservation_ressources', $entete + [
+            'json' => [
+                'etablissement' => '/api/etablissements/' . $idB,
+                'codeType' => 'table',
+                'libelle' => 'Table dont l\'etablissement est impose ' . uniqid(),
+                'capacitePropre' => 4,
+            ],
+        ])->toArray();
+        self::assertResponseIsSuccessful();
+
+        /** @var \Doctrine\ORM\EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $em->clear();
+        $entite = $em->getRepository(\App\Reservation\Entity\Ressource::class)->find($ressource['id']);
+        self::assertNotNull($entite);
+        self::assertSame($idA, (string) $entite->getEtablissement()?->getId(), 'Le contexte serveur gagne sur le corps de la requete.');
+        self::assertNotSame($idB, (string) $entite->getEtablissement()?->getId());
+    }
+
+    /**
      * RG-SOCLE-05 — les disponibilités et indisponibilités ne portent pas d'établissement : elles le
      * tiennent de leur ressource. Sans jointure, leurs collections étaient lisibles d'un
      * établissement à l'autre — on voyait les plages d'ouverture et les fermetures exceptionnelles
