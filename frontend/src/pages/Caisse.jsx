@@ -18,7 +18,7 @@ import {
 // Ordre de présentation préféré des moyens de paiement au guichet.
 const ORDRE_MOYENS = ['especes', 'cb', 'cheque', 'pmv']
 
-export default function Caisse({ me, etabActif, etablissements, session, capacites = [], onSessionRefresh }) {
+export default function Caisse({ me, etabActif, etablissements, session, capacites = [], droits = [], onSessionRefresh }) {
   const [caisseModale, setCaisseModale] = useState(false)
   const [historique, setHistorique] = useState(false)
   const [produits, setProduits] = useState([])
@@ -477,7 +477,7 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
           </div>
         </section>
       </div>
-      <HistoriqueVentesModal open={historique} onClose={() => setHistorique(false)} />
+      <HistoriqueVentesModal open={historique} onClose={() => setHistorique(false)} droits={droits} />
       {modaleSession}
       {modaleClient}
     </div>

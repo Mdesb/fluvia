@@ -213,6 +213,7 @@ export default function App() {
           etablissements={etablissements}
           session={session}
           capacites={me?.capacitesActives || []}
+          droits={droits}
           onSessionRefresh={rechargerSession}
         />
       )}

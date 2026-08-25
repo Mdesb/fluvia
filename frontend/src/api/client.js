@@ -186,6 +186,9 @@ export const api = {
   // Historique : la collection et le detail existaient et n'etaient appeles nulle part.
   ventes: (params) => request('/api/ventes', { query: params }),
   vente: (id) => request(`/api/ventes/${id}`),
+  // `input: false` cote serveur, mais le processor lit bien un corps : motif, montant partiel
+  // facultatif, et jeton de rejeu apres validation d'une escalade.
+  rembourserVente: (id, corps) => request(`/api/ventes/${id}/rembourser`, { method: 'POST', body: corps }),
   creerVente: (corps) => request('/api/ventes', { method: 'POST', body: corps, timeoutMs: 20000 }),
   ajouterLigne: (venteId, corps) =>
     request(`/api/ventes/${venteId}/lignes`, { method: 'POST', body: corps, timeoutMs: 20000 }),

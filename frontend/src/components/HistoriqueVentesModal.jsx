@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { euros, libelleProduit } from '../api/produit.js'
 import { mot } from '../api/vocabulaire.js'
+import { aLeDroit } from '../api/droits.js'
 import Modal from './Modal.jsx'
 
 // Historique des ventes — `GET /api/ventes` existait et n'était appelé nulle part. Un caissier ne
@@ -32,7 +33,7 @@ const ETATS = [
 
 const TON_ETAT = { validee: 'good', en_cours: 'warn', annulee: 'mut', avoir_emis: 'info' }
 
-export default function HistoriqueVentesModal({ open, onClose }) {
+export default function HistoriqueVentesModal({ open, onClose, droits = [] }) {
   const [numero, setNumero] = useState('')
   const [statut, setStatut] = useState('')
   const [ventes, setVentes] = useState([])
@@ -103,7 +104,16 @@ export default function HistoriqueVentesModal({ open, onClose }) {
       {erreur && <div className="banner banner-error">{erreur}</div>}
 
       {detail ? (
-        <DetailVente detail={detail} produits={produits} onRetour={() => setDetail(null)} />
+        <DetailVente
+          detail={detail}
+          produits={produits}
+          droits={droits}
+          onRetour={() => setDetail(null)}
+          onRembourse={async () => {
+            setDetail(await api.vente(detail.id).catch(() => detail))
+            charger()
+          }}
+        />
       ) : (
         <>
           <form
@@ -189,7 +199,8 @@ export default function HistoriqueVentesModal({ open, onClose }) {
   )
 }
 
-function DetailVente({ detail, produits, onRetour }) {
+function DetailVente({ detail, produits, droits, onRetour, onRembourse }) {
+  const [remboursement, setRemboursement] = useState(null)
   const lignes = detail.lignes || []
   const paiements = detail.paiements || []
 
@@ -200,7 +211,24 @@ function DetailVente({ detail, produits, onRetour }) {
         <span className={`badge ${TON_ETAT[detail.statut] || 'mut'}`} style={{ marginLeft: 'auto' }}>
           {mot(detail.statut)}
         </span>
+        {/* Le remboursement n'a de sens que sur une vente validée : proposer le bouton sur une vente
+            annulée ou déjà remboursée ferait cliquer pour rien, et le refus viendrait du serveur
+            après coup. Une action qui n'a pas de sens est absente, jamais grisée. */}
+        {detail.statut === 'validee' && aLeDroit(droits, 'vente.rembourser') && !remboursement && (
+          <button className="btn ghost sm" type="button" onClick={() => setRemboursement({ etape: 'saisie' })}>
+            Rembourser
+          </button>
+        )}
       </div>
+
+      {remboursement && (
+        <FormulaireRemboursement
+          detail={detail}
+          etat={remboursement}
+          setEtat={setRemboursement}
+          onRembourse={onRembourse}
+        />
+      )}
 
       <div className="fiche-stats">
         <div>
@@ -276,6 +304,120 @@ function DetailVente({ detail, produits, onRetour }) {
         </table>
       )}
     </>
+  )
+}
+
+// Remboursement — trois issues possibles côté serveur, et l'écran doit les distinguer.
+//
+// Accordé, refusé, ou **escalade requise** : dans ce dernier cas le serveur répond 403 avec le plafond
+// dépassé et un jeton de demande. Traiter les deux 403 de la même façon dirait à un caissier « vous
+// n'avez pas le droit » alors qu'une demande vient d'être créée et attend un responsable. Ce n'est
+// pas la même information, et ce n'est pas la même suite à donner.
+function FormulaireRemboursement({ detail, etat, setEtat, onRembourse }) {
+  const total = Number(detail.total) || 0
+  const [montant, setMontant] = useState(String(total.toFixed(2)))
+  const [motif, setMotif] = useState('')
+  const [enCours, setEnCours] = useState(false)
+
+  const moyens = (detail.paiements || []).map((p) => mot(p.moyenCode))
+  const partiel = Number(montant) > 0 && Number(montant) < total
+
+  async function envoyer(e) {
+    e.preventDefault()
+    setEnCours(true)
+    setEtat((s) => ({ ...s, erreur: null, escalade: null }))
+    try {
+      const r = await api.rembourserVente(detail.id, {
+        motif: motif.trim(),
+        montant: Number(montant).toFixed(2),
+      })
+      setEtat({ etape: 'fait', avoir: r })
+      onRembourse?.()
+    } catch (err) {
+      const p = err.payload || {}
+      if (p.decision === 'escalade_requise') {
+        setEtat({ etape: 'saisie', escalade: p })
+      } else {
+        setEtat({ etape: 'saisie', erreur: err.message || "Le remboursement n'a pas abouti." })
+      }
+    } finally {
+      setEnCours(false)
+    }
+  }
+
+  if (etat.etape === 'fait') {
+    return (
+      <div className="banner banner-ok" style={{ marginBottom: 12 }}>
+        Avoir {etat.avoir?.numero} émis pour {euros(etat.avoir?.montant)}. La vente est désormais
+        « {mot(etat.avoir?.statutVente)} ».
+      </div>
+    )
+  }
+
+  return (
+    <form onSubmit={envoyer} className="card" style={{ marginBottom: 12 }}>
+      <div className="card-b">
+        {etat.erreur && <div className="banner banner-error">{etat.erreur}</div>}
+        {etat.escalade && (
+          <div className="banner">
+            Ce remboursement dépasse votre plafond
+            {etat.escalade.plafond ? ` de ${euros(etat.escalade.plafond)}` : ''}. Une demande
+            d'autorisation a été créée : un responsable doit la valider avant que le remboursement
+            puisse être effectué.
+          </div>
+        )}
+
+        <div className="grid g2" style={{ gap: 12 }}>
+          <div className="field" style={{ margin: 0 }}>
+            <label htmlFor="rb-montant">Montant à rembourser</label>
+            <input
+              id="rb-montant"
+              className="input"
+              type="number"
+              step="0.01"
+              min="0.01"
+              max={total}
+              required
+              value={montant}
+              onChange={(e) => setMontant(e.target.value)}
+            />
+            <div className="hint">
+              {partiel
+                ? `Remboursement partiel : ${euros(montant)} sur ${euros(total)}.`
+                : `Montant total de la vente : ${euros(total)}.`}
+            </div>
+          </div>
+          <div className="field" style={{ margin: 0 }}>
+            <label htmlFor="rb-motif">Motif *</label>
+            <input
+              id="rb-motif"
+              className="input"
+              required
+              value={motif}
+              placeholder="Article rendu, erreur de caisse…"
+              onChange={(e) => setMotif(e.target.value)}
+            />
+            <div className="hint">Conservé dans le journal : c'est ce qui explique le geste plus tard.</div>
+          </div>
+        </div>
+
+        {/* Ce qui va réellement se passer, en toutes lettres. Un remboursement n'est pas un
+            re-crédit automatique du moyen de paiement : le système émet un avoir. Le dire évite
+            qu'on attende un virement qui n'arrivera pas. */}
+        <div className="hint" style={{ marginTop: 10 }}>
+          Un avoir de {euros(montant)} sera émis sur le ticket {detail.numero}
+          {moyens.length > 0 ? `, payé par ${[...new Set(moyens)].join(', ')}` : ''}. Le remboursement
+          effectif au client se fait selon vos règles de caisse ; le logiciel enregistre l'avoir.
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
+          <button className="btn" type="button" onClick={() => setEtat(null)}>Annuler</button>
+          <button className="btn primary" type="submit" disabled={enCours}>
+            {enCours ? 'En cours…' : 'Confirmer le remboursement'}
+          </button>
+        </div>
+      </div>
+    </form>
   )
 }
 
