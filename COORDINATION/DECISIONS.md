@@ -1459,3 +1459,39 @@ C'est la formulation la plus aboutie du motif qu'on suit depuis trois jours. On 
 qui dépend de la vigilance n'est pas un mécanisme »* ; on a maintenant son corollaire pratique —
 **quand la même erreur revient une troisième fois, on ne la corrige plus, on supprime ce qui la rend
 possible.**
+
+### 2026-08-25 · D48 — Les dix-sept modules orphelins reçoivent un propriétaire
+Maxime : *« vas-y, occupe-toi de tout. »* Délégation explicite après que je lui ai présenté la carte
+des affinités et le compte : **802 fichiers, 17 modules sans propriétaire** — à peu près autant que ce
+que les neuf sessions possédaient déjà.
+
+**J'avais proposé de n'en attribuer que trois et de déclarer les quatorze autres comme orphelins.
+Je change d'avis, et voici pourquoi** : un propriétaire endormi **peut être réveillé** ; un module
+orphelin ne le peut pas. Le premier est un risque visible avec un nom dessus, le second est un angle
+mort — et on sait ce que les angles morts ont coûté cette semaine : cinq jours de front sans personne,
+un test rouge vingt-quatre heures, trente-cinq entités sans protection d'écriture.
+
+**La répartition, par affinité et non par équilibrage :**
+
+| Modules | Propriétaire | Raison |
+|---|---|---|
+| `Facturation` `Compta` `Sepa` `Finance` | `claude-D` | elle y vit depuis deux jours et n'avait pas le droit d'y écrire |
+| `Vente` `Caisse` `OptionProduit` | `claude-G` | elle possède `Offre` ; produit et vente sont une seule chaîne |
+| `Crm` `Recouvrement` | `claude-E` | Revenue Recovery **est** du recouvrement |
+| `Autorisation` `Support` | `claude-B` | droits et documents, prolongement direct d'`Acces` et `Dms` |
+| `Boutique` `Stock` `Caution` | `claude-F` | boutique, stock et cautions vont avec le séjour |
+| `Personnel` `Reporting` `Ocr` | `claude-A` | **aucune affinité honnête** — je les garde plutôt que de les forcer |
+
+**Les trois derniers sont chez moi par défaut d'affinité, pas par compétence.** Je les rendrai à la
+première session dont le périmètre les touchera vraiment. Les mettre chez quelqu'un « parce qu'il reste
+de la place » serait la façon la plus sûre de recréer un orphelin avec un nom dessus.
+
+**Ce que cette décision ne résout pas, et qu'il faut dire.** Quatre des huit propriétaires dorment
+depuis six à huit heures — `B`, `C`, `E`, `F`. Leur attribuer des modules ne les réveille pas. Mais
+`FLOTTE.md` porte désormais une colonne d'état : **un propriétaire muet est un risque nommé**, pas un
+trou. C'est la même règle que les entrées de menu grisées de `claude-H` — *un manque déclaré s'arbitre,
+un manque implicite se découvre par accident.*
+
+**Trois lots deviennent débloqués immédiatement** : les trois filtres de `Vente` qui bloquent
+l'historique des ventes depuis ce matin, le moyen de paiement préféré dans `Crm` demandé par Maxime, et
+le droit d'écrire dans `Facturation` pour `claude-D`.
