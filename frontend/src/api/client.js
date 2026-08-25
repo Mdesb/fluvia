@@ -369,6 +369,11 @@ export const api = {
 
   // --- Personnel ---
   employes: () => request('/api/employes', { query: { itemsPerPage: 200 } }),
+  // Absences : declarer, accepter, refuser. Trois operations qui n'avaient aucun bouton.
+  absences: () => request('/api/absences', { query: { itemsPerPage: 200 } }),
+  declarerAbsence: (corps) => request('/api/personnel/absences', { method: 'POST', body: corps }),
+  validerAbsence: (id) => request(`/api/personnel/absences/${id}/valider`, { method: 'POST' }),
+  refuserAbsence: (id) => request(`/api/personnel/absences/${id}/refuser`, { method: 'POST' }),
   roster: () => request('/api/personnel/roster'),
   badgeStaffs: () => request('/api/badge_staffs', { query: { itemsPerPage: 200 } }),
   revoquerBadgeStaff: (id, motif) =>
