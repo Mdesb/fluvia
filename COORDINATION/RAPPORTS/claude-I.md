@@ -17,6 +17,7 @@
 | 23:00 | **Padel repasse au vert** : 23 tests, 228 assertions. `tests/Platform` toujours 58/58. Le correctif ne prend aucune constante de reglage — deux regles physiques suffisaient, detail ci-dessous. Les cinq verticales sont donc vertes, manifestes compris. Pile demontee, worktree VPS rendu. | Je reprends le fil des paquets : ce qui est livrable sans installateur. | Rien. |
 | 25/08 09:05 | **Silence de 22:52 a 09:05 : ma session ne s-est pas reveillee**, je le dis plutot que de le masquer. Reprise : ordres longs lus. Balayage D40 fait sur mes quatre autres modules — **aucun autre basculement**, detail ci-dessous. D41 verifie en profondeur : mes 9 entites exposees le sont bien, mais mes ~30 processeurs a persistance directe sont **deja corrects** via `ContexteEtablissement`. | Item 2 de mes ordres : `PrioriteOtaResolver` qui passe en `AnnuleeLibre` sans rien restituer. | Rien. |
 | 25/08 09:45 | **Item 2 livre : `PrioriteOtaResolver` restitue.** Le billet perdant recupere son credit de carte (CQ-3/CQ-6), son droit d-acces est revoque, et la jauge de la ressource mere est liberee — il ne faisait aucun des trois. Test ecrit **verifie rouge sans la garde** (0 au lieu de 1) puis vert. Musee 23/23, Platform 62/62. Pile demontee, worktree rendu. | Item 5 : reprise des paquets verticales. | Rien. |
+| 25/08 10:10 | **Chantier ferme.** Le vocabulaire des cinq verticales passe du document au **manifeste** (`settingsSchema()`, patron `SmartFlowModule`) : 51 cles declarees en code, testees. `VocabulaireManifesteTest` verifie rouge sur les cinq (« aucun vocabulaire declare ») avant d-etre vert. Verticales 5/5, Platform 62/62. Pile demontee, worktree rendu. | Rien d-assigne — **je te demande une tache** (D35). En attendant je reprends le chantier `frontend/` si tu me l-attribues, sinon la revue de mes 81 entites d-API. | Rien. |
 
 ---
 
@@ -376,3 +377,48 @@ l-historique et pas seulement dans ce rapport.
 alors que tu l-avais descendu a 33 — le garde-fou m-a refusee, il a eu raison, un `merge` a suffi. Et
 j-ai casse un docblock en le reecrivant, ce qui a fait tomber les trois tests en `ParseError` : je
 n-avais pas de `php -l` sous la main en local. Je le lance desormais sur le VPS avant de pousser du PHP.
+
+---
+
+## 2026-08-25 10:10 · Presentation horaire n°3 (D35) — chantier ferme, je demande une tache
+
+**`claude-I` en ligne.** Mes cinq items sont traites. Etat, court :
+
+| Item | Etat |
+|---|---|
+| 1 · balayage D40 sur les 4 autres modules | fait — **aucun autre basculement** |
+| 2 · `PrioriteOtaResolver` sans restitution | **livre** — 3 restitutions, pas 1 |
+| 3 · `CommanderEclairageCommand` sans borne | **livre** hier soir, sans constante de reglage |
+| 4 · D41, mes 9 entites | verifie ; ton decorateur les couvre, **mais pas mes ~30 processeurs a persistance directe** — eux sont deja sains via `ContexteEtablissement` |
+| 5 · ACT-0 sur les verticales | **livre** — 5 paquets rediges, composition inventoriee, vocabulaire en code |
+
+**Ce que j-ai fait de plus, et pourquoi.** Le vocabulaire vivait dans un tableau markdown. Un tableau
+ne se teste pas : rien n-empechait une verticale d-etre livree sans vocabulaire, ni un renommage
+d-inventer une cle que personne ne resoudrait. Je l-ai deplace dans `settingsSchema()` des cinq
+manifestes — la place que `SmartFlowModule` utilise deja pour la configuration par tenant, donc aucun
+mecanisme invente. **51 cles, verrouillees par un test** qui impose la ressource, le creneau et le
+participant (les trois que tout ecran generique affiche) et refuse toute cle hors catalogue.
+
+Corollaire pour toi : quand tu poseras le resolveur i18n, **ta source de verite existe deja et est
+testee**. Et le retrait de `PresetVerticale` a maintenant deux points de chute en code : les
+`features()` pour les capacites, `settingsSchema()['vocabulary']` pour les mots.
+
+### Ce qui reste, et qui ne depend plus de moi
+
+1. **`frontend/` n-appartient toujours a personne.** Quatre libelles en dur dans `Reservation.jsx` —
+   Ressource, Reservation, Capacite, Acces — sont les **seuls points d-affichage vivants** de mes 51
+   cles. Le correctif tient en quatre lignes et je n-ai pas le droit de le faire.
+2. **Les deux chevauchements Smart Flow** (liste d-attente patinoire, delestage musee), avant que
+   `claude-E` n-implemente.
+3. **Le resolveur i18n et l-`xid` du socle** — sans eux mes cinq paquets restent rediges et non
+   installables.
+
+**Je n-ai plus de tache assignee : donne-m-en une.** En attendant ta reponse je ne m-arrete pas — je
+prends la revue de cloisonnement de mes 81 entites d-API, qui est dans mon perimetre et que personne
+n-a jamais faite.
+
+**Une friction a te signaler** : deux poussees refusees ce matin parce que les cliquets de ma branche
+etaient plus hauts que ceux de `main` — que tu venais de faire descendre. Le garde-fou a eu raison a
+chaque fois et un `merge` a suffi. Mais a neuf sessions, chaque descente de cliquet refuse la
+prochaine poussee de tous ceux qui n-ont pas remerge dans l-intervalle. Ce n-est pas un bug, c-est un
+cout a connaitre — peut-etre a dire dans le message de refus : « remerge `main`, un cliquet a baisse ».
