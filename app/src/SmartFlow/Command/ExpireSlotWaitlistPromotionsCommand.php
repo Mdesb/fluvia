@@ -17,25 +17,32 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
 /**
- * `smart-flow:waitlist:expirer` (RG-SF-07, plan-smart-flow.md T9, patron
- * `App\Reservation\Command\BasculerNoShowCommand`) : expire toute `RescheduleProposal` issue d'une
- * promotion de liste d'attente Smart Flow (`sourceWaitlistEntryRef` renseigné) restée `proposed`
- * au-delà de `expiresAt` sans confirmation, marque la `SlotWaitlistEntry` correspondante `expired`, puis
- * tente l'inscription suivante sur la même ressource (RG-SF-07 : « sans confirmation avant expiration,
- * l'inscription suivante est tentée »).
+ * `smart-flow:waitlist:expirer` (RG-SF-07/RG-SF-11, CA-5, plan-smart-flow.md T9, patron
+ * `App\Reservation\Command\BasculerNoShowCommand`) : expire toute `RescheduleProposal` en statut
+ * `searching` ou `proposed` dont `expiresAt` est dépassé — désormais **sans distinction** d'origine
+ * (revue de cohérence, ce lot) :
  *
- * Portée volontairement limitée à I2 (`sourceWaitlistEntryRef IS NOT NULL`) : l'expiration générale
- * d'une `RescheduleProposal` I1 (report de no-show, fenêtre globale 30 jours, `originReservationRef`
- * renseigné, RG-SF-11) n'a pas de tâche planifiée dédiée à ce jour — hors périmètre de ce lot (T9),
- * signalé pour arbitrage (le client peut toujours consulter le statut via l'API de lecture existante,
- * seule l'expiration automatique est absente).
+ * - une proposition I2 (`sourceWaitlistEntryRef` renseigné, promotion de liste d'attente) marque en
+ *   plus la `SlotWaitlistEntry` correspondante `expired`, puis tente l'inscription suivante sur la même
+ *   ressource (RG-SF-07 : « sans confirmation avant expiration, l'inscription suivante est tentée ») ;
+ * - une proposition I1 (report de no-show, fenêtre globale 30 jours, `originReservationRef` renseigné,
+ *   `sourceWaitlistEntryRef` NULL) est simplement basculée `expired` (RG-SF-11/12, CA-5) — aucune liste
+ *   d'attente associée, rien d'autre à faire.
+ *
+ * Corrigé (revue de cohérence, ce lot) : jusqu'ici cette commande ne traitait que les propositions
+ * `sourceWaitlistEntryRef IS NOT NULL` (I2) — les propositions I1 `searching`/`proposed` restées échues
+ * au-delà de `expiresAt` n'étaient jamais expirées automatiquement (CA-5 non couvert). C'est maintenant
+ * couvert par le même passage de commande.
  */
 #[AsCommand(
     name: 'smart-flow:waitlist:expirer',
-    description: 'Expire les promotions de liste d\'attente Smart Flow non confirmées et tente l\'inscription suivante (RG-SF-07).',
+    description: 'Expire toute RescheduleProposal (I1 report de no-show + I2 liste d\'attente) échue sans confirmation (RG-SF-07/RG-SF-11).',
 )]
 final class ExpireSlotWaitlistPromotionsCommand extends Command
 {
+    /** @var list<RescheduleProposalStatus> statuts non terminaux, expirables (RG-SF-11/12). */
+    private const EXPIRABLE_STATUSES = [RescheduleProposalStatus::Searching, RescheduleProposalStatus::Proposed];
+
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly SlotWaitlistPromotionService $promotionService,
@@ -47,7 +54,7 @@ final class ExpireSlotWaitlistPromotionsCommand extends Command
     {
         $io = new SymfonyStyle($input, $output);
         $traites = $this->expirer(new \DateTimeImmutable());
-        $io->success(sprintf('%d promotion(s) de liste d\'attente expirée(s).', $traites));
+        $io->success(sprintf('%d proposition(s) de report expirée(s).', $traites));
 
         return Command::SUCCESS;
     }
@@ -56,10 +63,9 @@ final class ExpireSlotWaitlistPromotionsCommand extends Command
     {
         /** @var list<RescheduleProposal> $propositions */
         $propositions = $this->em->getRepository(RescheduleProposal::class)->createQueryBuilder('p')
-            ->andWhere('p.status = :status')
-            ->andWhere('p.sourceWaitlistEntryRef IS NOT NULL')
+            ->andWhere('p.status IN (:statuts)')
             ->andWhere('p.expiresAt <= :maintenant')
-            ->setParameter('status', RescheduleProposalStatus::Proposed->value)
+            ->setParameter('statuts', array_map(static fn (RescheduleProposalStatus $s): string => $s->value, self::EXPIRABLE_STATUSES))
             ->setParameter('maintenant', $maintenant, 'datetime_immutable')
             ->getQuery()
             ->getResult();
@@ -68,6 +74,9 @@ final class ExpireSlotWaitlistPromotionsCommand extends Command
         foreach ($propositions as $proposition) {
             $proposition->setStatus(RescheduleProposalStatus::Expired);
 
+            // I2 uniquement (`sourceWaitlistEntryRef` renseigné) : la SlotWaitlistEntry associée est
+            // marquée expired et l'inscription suivante est tentée (RG-SF-07). Une proposition I1
+            // (report de no-show, RG-SF-11) n'a aucune inscription à traiter ici.
             $entryRef = $proposition->getSourceWaitlistEntryRef();
             $entry = $entryRef !== null
                 ? $this->em->getRepository(SlotWaitlistEntry::class)->find($entryRef)

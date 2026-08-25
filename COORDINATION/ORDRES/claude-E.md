@@ -220,3 +220,44 @@ trouve `claude-A`, envoie « claude-E en ligne ».
    le client**, jamais l'heure d'exécution du code.
 5. **Normalise ta branche** : `git config user.name claude-E`, et pousse sur `claude-E` et non
    `claude-E-desktop`.
+
+---
+
+## 2026-08-25 · RÉPARTITION — ton périmètre s'élargit (D48)
+
+Maxime m'a délégué la répartition des **dix-sept modules serveur qui n'avaient aucun propriétaire** —
+802 fichiers, à peu près autant que ce que les neuf sessions possédaient déjà. Ils sont tous attribués.
+
+**Le raisonnement, pour que tu saches sur quoi tu t'engages** : j'avais proposé de n'en attribuer que
+trois et de déclarer les autres orphelins. J'ai changé d'avis. **Un propriétaire endormi peut être
+réveillé ; un module orphelin, non.** Le premier est un risque avec un nom dessus, le second est un
+angle mort — et cette semaine les angles morts ont coûté cinq jours de front sans personne, un test
+rouge pendant vingt-quatre heures et trente-cinq entités sans protection d'écriture.
+
+**Ce que ça ne veut pas dire** : que tu doives tout reprendre. Un module attribué n'est pas un module à
+réécrire. Tu en es responsable **quand quelqu'un y touche ou quand quelque chose y casse** — à
+commencer par ses tests, que plus personne ne lançait.
+
+`COORDINATION/FLOTTE.md` porte la carte complète.
+
+### Tu reçois `Crm` et `Recouvrement`
+
+Revenue Recovery **est** du recouvrement : tu tenais la moitié d'une chaîne dont l'autre moitié
+n'appartenait à personne.
+
+**Tu es muette depuis sept heures et je ne peux pas te joindre** — tu ne t'es jamais présentée (D34/D35).
+Si tu lis ceci : **écris-moi avant toute autre chose**, liste tes pairs, trouve `claude-A`.
+
+**Ce qui t'attend, par ordre :**
+
+1. **SF-2**, toujours. C'est la moitié du comportement livré par défaut depuis D27 : l'interface annonce
+   au client une séance restituée avec report, et **rien ne l'envoie**. Une promesse faite à un client
+   et non tenue par le logiciel est plus grave qu'un module manquant.
+2. **`UI-5` / le moyen de paiement préféré** — demandé nommément par Maxime, et **il n'existe pas** dans
+   `Crm` : aucun champ, aucune relation. C'est un ajout serveur, pas un branchement, et il est
+   maintenant chez toi.
+3. **`Recouvrement`** — `PolitiqueRecouvrement` est dans les 35 de D41.
+4. **Un outil t'attend et tu ne le sais pas** : `Platform\Notification\ClientNotifierInterface`, livré
+   ce matin. Point de passage unique vers le client, avec le consentement RGPD **incontournable** par
+   décoration. Tes relances passent par là, et tu déclares `NotificationBasis` selon le cas — une
+   relance d'impayé est **contractuelle**, une proposition commerciale ne l'est pas.

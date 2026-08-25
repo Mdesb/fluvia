@@ -24,7 +24,9 @@ use Symfony\Component\Uid\Uuid;
  * avant persistance — sinon 422 (IDOR) : cette route est `read: false` (création par corps brut), hors
  * du filet de `App\SmartFlow\Doctrine\SmartFlowScopeExtension`, d'où la revérification explicite ici.
  *
- * `rank` = `max(rank) + 1` par `resourceId` (FIFO, RG-SF-06 côté promotion).
+ * `rank` = `max(rank) + 1` par `(establishment, resourceId)` (FIFO, RG-SF-06 côté promotion) — le
+ * scope établissement (revue de cohérence, ce lot) est une défense en profondeur : `resourceId` est une
+ * colonne UUID opaque (RG-SF-17), rien ne garantit son unicité inter-établissements au niveau base.
  *
  * @implements ProcessorInterface<mixed, SlotWaitlistEntry>
  */
@@ -69,10 +71,17 @@ final class CreateSlotWaitlistEntryProcessor implements ProcessorInterface
             throw new UnprocessableEntityHttpException('smart_flow.error.search_window_invalid');
         }
 
+        // Corrigé (revue de cohérence, ce lot) : `rank` scopé établissement en plus de la ressource —
+        // `resourceId` seul (colonne UUID opaque, aucune relation Doctrine, RG-SF-17) ne suffit pas à
+        // garantir l'unicité inter-établissements si un même UUID de ressource existait par accident
+        // dans deux périmètres distincts (défense en profondeur, même discipline que RG-SF-16 partout
+        // ailleurs dans ce module).
         $rangMax = (int) $this->em->getRepository(SlotWaitlistEntry::class)->createQueryBuilder('e')
             ->select('COALESCE(MAX(e.rank), 0)')
             ->andWhere('e.resourceId = :resourceId')
+            ->andWhere('e.establishment = :establishment')
             ->setParameter('resourceId', $resourceId, 'uuid')
+            ->setParameter('establishment', $etablissement)
             ->getQuery()
             ->getSingleScalarResult();
 

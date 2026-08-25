@@ -19,6 +19,10 @@
 | 18:40 | Push I2 refusé par garde-fou **catalogue** : `slot.released` émettait `{slotId,resourceId}` ≠ contrat `{slot,resource}`. **Conformé mon émission au contrat** (producteur+consommateur+test) ; garde-fou vert en local, re-test **20/134 vert**. **D32** : mes 3 migrations I2 renommées à 21:00+ (étaient à 12:00, avant l'existant à 20:00). | Commit I2 → merge `main` → vérif `migrations:migrate` base neuve (D32.5) → push. | — |
 | 19:00 | **Présentation horaire.** Mergé `main`. **D32.5 OK** : `migrations:migrate` depuis zéro = 79 migrations, succès jusqu'à `Version20260824210200` (les miennes appliquées en ordre). I2 poussé. **En cours** : implémentation **RevenueRecovery I1** (module neuf, agent en arrière-plan, **émission `revenue_recovery.*` différée** car pas encore au catalogue → je te la demande, voir ci-dessous). | Push I2 puis tester RevenueRecovery I1 en local. | RevenueRecovery : émission des 5 événements `revenue_recovery.*` en attente de leur ajout au catalogue (ton périmètre, lignes fournies au Point n°8). |
 | 19:35 | **Contact (demande de Maxime).** RevenueRecovery I1 **implémenté** (module neuf : `RecoverySequence`/`RecoveryCase`/`RecoveryAttempt`, `RecoveryEngine`, cloisonnement, RGPD, invariant DroitAcces, émission différée). 1er run `tests/RevenueRecovery` : 28 tests, 8 err + 3 éch — indice fort de **cache de test périmé** (purge Windows échouée), **re-run cache propre en cours**. | Corriger RR jusqu'au vert → merge `main` (41 commits) → push. SmartFlow I1+I2 déjà poussés (`1edfd18`). | `revenue_recovery.*` toujours absent du catalogue. |
+| 25/08 00:30 | **Présentation.** **RevenueRecovery I1 VERT : `tests/RevenueRecovery` = 28 tests / 177 assertions, 0 échec** (local). Corrigé en itérant : mock `final`, invariant/commentaires, stop-404 (+import), association inverse `resolve`, et **retrait de 3 abonnés inertes** (`quote.accepted`/`sale.completed`/`booking.created` non émis → garde-fou orphelins). | Commit RR I1 → merge `main` → vérif migrations base neuve → push garde-fous. | `revenue_recovery.*` toujours absent du catalogue (émission + résolution `quote/sale/booking.created` différées jusqu'à leurs émetteurs). |
+| 25/08 00:55 | Mergé `main`. **D32.5 OK sur base VRAIMENT neuve** : `migrations:migrate` depuis zéro applique toute la chaîne jusqu'à `Version20260824234300` (mes migrations SF 21:xx + RR 22:xx incluses). Push RR. | RevenueRecovery I1 poussé. Reste : I3 SmartFlow (⛔ `access.recorded`) et l'émission RR (⛔ catalogue). | — |
+| 25/08 01:40 | **Revue de cohérence (adversariale) de mes 2 modules faite : AUCUN bloquant** (pas de fuite inter-établissement, RGPD/cloisonnement/invariant DroitAcces solides). Corrigé les 2 majeurs (garde d'état 409 sur accept/decline `RescheduleProposal` ; **expiration des propositions I1** CA-5) + 3 mineurs (revérif établissement `RecoverySubjectCustomerResolver` RG-RR-07 ; `rank` scopé établissement ; `smart_flow.manage` ajoutée + migration seed). **`tests/SmartFlow`+`tests/RevenueRecovery` = 56 tests / 368 assertions, 0 échec.** | Commit correctifs → merge `main` → vérif migration → push. | — |
+| 25/08 02:30 | **Lu tes ordres.** ✅ **Branche canonique `claude-E` alimentée** (`dd11c54` puis ce commit) — intègre de `claude-E`, plus de `claude-E-desktop` ; `git config user.name claude-E` fait. ✅ **D41** : mes 7 entités exposent `establishment` en `:read` seul (pas d'écriture transfrontière). 🔧 **D37** : `slot.released` porte l'instant métier (`occurredAt` de l'événement source), re-test `tests/SmartFlow` **25/177 vert**. ⚠ **Bus de messages** : je vois claude-B et claude-I (locaux, ce poste) mais **pas toi (VPS)** → je ne peux pas t'« annoncer » en live ; le dépôt (ce rapport, poussé sur `claude-E`) reste mon seul canal vers toi. Si tu veux du live, il faut relancer claude-E sur le VPS (Maxime). | Veille active : je reprends l'implémentation dès qu'un blocage tombe (catalogue `revenue_recovery.*` → émission RR ; `access.recorded` → SF I3 ; RR-1 → RR I2). | Tout le reste gated hors périmètre. | 
 
 ## ⚠ Point n°1 pour claude-A — d'où intégrer mon travail (branche)
 
@@ -245,3 +249,15 @@ j'émettrais n'atteindrait pas ta session sur le VPS.
 
 Je continue à me présenter ici chaque heure, tâche en cours ou demande de tâche, comme tu l'exiges — via
 le seul tuyau qui nous relie.
+
+## Point n°11 — intel harnais (pour A/C) : `schema:drop --full-database` ne supprime pas les SEQUENCE MariaDB
+
+En vérifiant mes migrations sur base neuve (D32.5), un `migrations:migrate` **rejoué** après un
+`doctrine:schema:drop --env=test --force --full-database` échoue en
+`SQLSTATE[42S01] Table 'acces_snapshot_seq' already exists` : `schema:drop` supprime tables/vues mais
+**pas les objets SEQUENCE** (créés par `Version20260817192240`, module Acces, `CREATE SEQUENCE`). La
+séquence survit → `CREATE SEQUENCE` du migrate rejoué casse. Pas mon code (Acces), mais ça mord
+quiconque revérifie des migrations sans dropper la **base entière**. Contournement qui marche :
+`doctrine:database:drop --force && doctrine:database:create && migrations:migrate` (drop complet, pas
+seulement le schéma). Famille DdlHorsMapping — à voir si le harnais/`test-stack.sh` doit dropper les
+séquences, ou si `SchemaTool` doit les gérer. Signalé, hors mon périmètre (`bin/`/harnais).

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import AbsencesSection from '../components/AbsencesSection.jsx'
 import Liste, { dateFr, dateHeureFr } from '../components/Liste.jsx'
 import { api } from '../api/client.js'
 
@@ -12,7 +13,7 @@ const STATUT_BADGE = { Actif: 'good', actif: 'good', Revoque: 'crit', revoque: '
 const COUV = { complet: 'good', partiel: 'warn', decouvert: 'crit', incomplet: 'crit' }
 
 // Module Personnel : employés, roster (planning), badges staff.
-export default function Personnel({ etabActif }) {
+export default function Personnel({ etabActif, droits = [] }) {
   const [sousOnglet, setSousOnglet] = useState('employes')
 
   return (
@@ -85,6 +86,10 @@ export default function Personnel({ etabActif }) {
           ]}
         />
       )}
+
+      {/* Absences : declarer, accepter, refuser. En bas de l'ecran Personnel parce que c'est une
+          decision qui porte sur les gens qu'on vient de lire, pas une activite separee. */}
+      <AbsencesSection etabActif={etabActif} droits={droits} />
     </div>
   )
 }

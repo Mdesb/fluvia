@@ -127,6 +127,10 @@ final class SlotFreedListener implements EventSubscriberInterface
                 'slot' => (string) $slotId,
                 'resource' => (string) $snapshot->resourceId,
             ],
+            // D37 : l'instant métier est le moment où le créneau s'est libéré POUR LE CLIENT — soit
+            // l'`occurredAt` de l'événement source (`booking.cancelled`/`booking.no_show`), pas l'heure
+            // d'exécution de ce listener (qui divergerait sur une remontée hors-ligne différée).
+            occurredAt: $event->occurredAt,
         ));
     }
 
