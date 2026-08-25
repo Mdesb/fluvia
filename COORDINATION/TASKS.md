@@ -87,7 +87,7 @@ Ne touche pas un chemin déjà en `WIP` par une autre instance.
 | VTE-1 | `Vente` : ajouter OrderFilter sur la date, DateFilter, SearchFilter sur le client — bloque lhistorique des ventes | `app/src/Vente/**` | *a assigner* | CLAIM | 25/08 |
 | PER-1 | `personnel:traiter-echeances-sortie` exige un agentEmail : decider quelle identite porte un traitement automatique dans laudit | `app/src/Personnel/**` | *a assigner* | CLAIM | 25/08 |
 
-| CMP-0 | Spec SDD du module de campagnes — frontiere avec Revenue Recovery, audience, consentement, attribution | `specs/campagnes/**` | **claude-A** | CLAIM | 25/08 |
+| CMP-0 | Spec SDD du module de campagnes — frontiere avec Revenue Recovery, audience, consentement, attribution | `specs/campagnes/**` | **claude-A** | REVIEW | 25/08 |
 | CMP-1 | **PREALABLE** — remonter `ClientNotificationInterface` de SmartFlow vers Platform (trois modules en dependent) | `app/src/Platform/**`, `app/src/SmartFlow/**` | **claude-A** | CLAIM | 25/08 |
 | CMP-2 | Audience : definition dun segment sur les donnees de comportement, previsualisation du nombre de personnes touchees | `app/src/Campagne/**` | *a assigner* | CLAIM | 25/08 |
 | CMP-3 | Message et canaux, **avec le consentement rendu incontournable a lenvoi** — pas verifie, impossible a contourner | `app/src/Campagne/**` | *a assigner* | CLAIM | 25/08 |
