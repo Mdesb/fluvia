@@ -54,6 +54,10 @@ final class SmartFlowModule implements ModuleManifest
             'smart_flow.read',
             'smart_flow.reschedule_manage',
             'smart_flow.reschedule_read_own',
+            // Paramétrage (`settingsSchema()` ci-dessous) — déclarée par la spec/le plan (§0.11) mais
+            // jusqu'ici absente d'ici et des fixtures (écart corrigé en revue de cohérence, seedée par
+            // `Version20260825090000.php`).
+            'smart_flow.manage',
         ];
     }
 
