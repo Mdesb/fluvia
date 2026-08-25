@@ -37,6 +37,12 @@ final class PreparerEReportingProcessor implements ProcessorInterface
         if ($id === null || !Uuid::isValid($id)) {
             throw new UnprocessableEntityHttpException('Référence de profil exploitant obligatoire.');
         }
+        // @cloisonnement-verifie : le `profilExploitant` du corps est une relation IRI qu'API Platform
+        // désérialise ET confronte au périmètre via AccountingScopeExtension (ProfilExploitant ->
+        // etablissementPrincipal) AVANT ce processor. Un profil hors périmètre échoue en amont — vérifié
+        // sur pièce : « Item not found for IRI /api/profil_exploitants/... » (400) pour un appelant sans
+        // affectation sur l'établissement principal du profil. Ce `find()` par le même identifiant ne
+        // résout donc qu'un profil déjà dans le périmètre de l'appelant.
         $profil = $this->em->getRepository(ProfilExploitant::class)->find(Uuid::fromString($id));
         if ($profil === null) {
             throw new UnprocessableEntityHttpException('Profil exploitant introuvable.');

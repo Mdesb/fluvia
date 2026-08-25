@@ -66,6 +66,11 @@ final class RetournerPatinsProcessor implements ProcessorInterface
         $data->setDateRetour(new \DateTimeImmutable())->setEtatRetour($etat);
         $parcPatins->incrementerSortie(-1);
 
+        // @cloisonnement-verifie : les deux résolutions ci-dessous sont clefées par $data
+        // (LocationPatins), lui-même chargé par l'opération `read: true` /patinoire/locations/{id}/retour
+        // et donc DÉJÀ confronté au périmètre par PerimetrePatinoireExtension::applyToItem — un {id}
+        // d'un autre établissement renvoie 404 au read, avant ce processor. La CautionLocationPatins et
+        // la Caution générique liées à $data sont transitivement dans le périmètre.
         $caution = $this->em->getRepository(CautionLocationPatins::class)->findOneBy([
             'location' => $data,
             'locationActive' => $data->getId(),
