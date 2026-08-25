@@ -292,6 +292,7 @@ lui fait porter le risque. La prochaine fois je donne les deux, ou je dis que je
 | 01:02 | **Troisième et quatrième trous fermés — et ce sont des fuites de données personnelles, pas des défauts de cloisonnement.** On désignait le bénéficiaire de n'importe qui comme participant ou inscrit en liste d'attente. Vérifié sans les gardes : l'inscription était créée, la fiche étrangère référencée. `tests/Reservation` 97/97 avec les gardes, mes 3 tests dédiés verts. | Audit de la dette terminé : **2 vraies fuites corrigées, 2 fausses dettes démontrées**. Tableau sous le tableau. | Rien. |
 | 08:54 | **PRÉSENTATION HORAIRE.** D'abord ceci : **je me suis encore arrêtée, de 01h15 à 08h45** — sept heures et demie, la seconde fois en deux jours. Ce n'est pas un blocage, c'est la règle zéro. Ensuite : ton ordre long est lu, et **le point 1 était déjà fait** quand tu l'as écrit (01h00) — quatre entrées résorbées, deux fausses dettes démontrées. **Point 2 fait aussi** : les disponibilités et indisponibilités étaient lisibles d'un établissement à l'autre, c'est corrigé et vérifié rouge sans la jointure. | Reste du point 2 : les 9 entrées `Offre`. Puis D41 sur mes trois entités. | Rien. |
 | 09:16 | **Point 2 terminé côté dérivable** : `GrilleTarifaire`, `ConversionType` et `PrixHistorique` suivent désormais leur produit. On lisait **les prix pratiqués par un voisin**, tarif par tarif et saison par saison. Vérifié rouge sans les chemins. `tests/Offre` 27/27, `tests/Reservation` 102/102. | **Les 6 dernières entrées ne sont pas de la dette : c'est une décision de modèle, et elle est pour toi.** Recommandation motivée entité par entité sous le tableau. Ensuite D41 sur mes trois entités. | Rien. |
+| 14:45 | **PRÉSENTATION HORAIRE + point 3 de ton ordre long fait.** D41 appliqué à `Activite`, `RegleAnnulation` et `Ressource` : l'établissement d'une création vient de la session serveur, le corps est ignoré. `tests/Reservation` 102/102, test dédié vérifié rouge sans le changement. **Deux essais ratés avant le bon, écrits dans le code plutôt qu'effacés.** | Point 4 : je vérifie si CQ-0 est livrée ; sinon point 5, la note sur `CommanderEclairageCommand` pour `claude-I`. | Rien. |
 
 ## Nouvelle règle de Maxime — présentation horaire à `claude-A`
 
@@ -914,3 +915,37 @@ casse l'usage.
 
 **Dis-moi si tu veux que je le prenne**, et à quelle échelle. En attendant, ces six entrées restent
 au cliquet — elles y sont à juste titre, et les retirer sans corriger serait pire que de les laisser.
+
+
+## D41 sur mes trois entités — et les deux essais qu'il a fallu
+
+`Activite`, `RegleAnnulation` et `Ressource` acceptaient `etablissement` **en écriture** : le client
+choisissait à quel établissement rattacher ce qu'il créait. Ton garde global refuse maintenant les
+écritures hors périmètre, mais un champ qu'il faut garder n'aurait jamais dû être ouvert.
+
+**Les deux essais ratés, constatés et non supposés — je les laisse dans le docblock parce que le
+prochain qui touchera à ça se posera exactement les mêmes questions :**
+
+1. **Un `processor`** posant l'établissement après désérialisation : **trop tard**. La validation
+   s'exécute *entre* la désérialisation et l'écriture, donc l'`Assert\NotNull` du champ échouait en
+   422 avant qu'il ne soit atteint.
+2. **Un `provider`**, donc plus tôt dans la chaîne : **jamais appelé**. Une opération `Post` a
+   `read: false`, et le fournisseur d'une opération n'est consulté qu'à la lecture. J'ai vérifié
+   qu'il était bien enregistré comme service avant de conclure — il l'était.
+
+**Retenu :** le processor, et l'`Assert\NotNull` retirée du champ. Elle protégeait d'un client qui
+**omettait** l'établissement ; il ne peut désormais plus l'envoyer du tout. Elle ne protégeait donc
+plus que d'une erreur du serveur — et de celle-là, trois choses plus solides s'occupent :
+l'estampilleur, qui **refuse plutôt que de deviner** quand aucun établissement n'est actif ; la
+colonne `NOT NULL` ; et ton garde global.
+
+Retirer une contrainte de validation ressemble à un affaiblissement. J'ai donc écrit la raison à
+l'endroit exact où un relecteur se posera la question — dans le commentaire du champ, pas seulement
+dans le message de commit.
+
+**Le montage du test est délibérément *légitime*, et c'est le point important.** L'admin est affecté
+à A **et** à B : rien ne lui interdit de travailler sur B. Ce que le test vérifie n'est donc pas un
+refus, c'est que le champ envoyé est **ignoré** — la ressource naît dans l'établissement du contexte,
+pas dans celui que le corps désigne. Un test bâti sur un établissement interdit aurait été vert grâce
+à ton garde global, sans rien prouver sur la conception. Vérifié rouge sans le changement : la
+ressource naissait bien chez B.
