@@ -408,4 +408,9 @@ export const api = {
   creerEditorOption: (corps) => request('/api/editor/catalog/options', { method: 'POST', body: corps }),
   majEditorOption: (id, corps) => request(`/api/editor/catalog/options/${id}`, { method: 'PATCH', body: corps }),
   supprimerEditorOption: (id) => request(`/api/editor/catalog/options/${id}`, { method: 'DELETE' }),
+
+  // Fiche client de l'éditeur (ED-6). La collection ne rend QUE les clients du CRM de l'éditeur :
+  // les clients finaux des exploitants vivent dans la même table et n'ont rien à faire ici.
+  editorCustomers: () => request('/api/editor/customers'),
+  editorCustomer: (id) => request(`/api/editor/customers/${id}`),
 }
