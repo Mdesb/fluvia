@@ -290,6 +290,7 @@ lui fait porter le risque. La prochaine fois je donne les deux, ou je dis que je
 | 00:28 | **`main` EST RÉPARÉ — `tests/Padel` 23/23.** Et la cause n'est pas celle qu'on cherchait : **aucune ligne de code n'a changé, c'est le calendrier qui a changé.** Le test était rouge deux jours par semaine depuis toujours. Démonstration chiffrée sous le tableau. | Retour à la dette de cloisonnement de mon module. | Rien. |
 | 00:38 | **SECOND IDOR FERMÉ, et celui-là fait plus mal** : l'action de masse du catalogue permettait d'**archiver — irréversiblement — le produit d'un autre établissement**, à qui savait deviner des UUID. Vérifié sans la garde : `nbTraites=1`, le produit étranger était bien archivé. `tests/Offre` 26/26. | Reste de la dette : `Emarger`, `AjouterParticipant`, `InscrireListeAttente`, `Convertir`. Mon audit en cours dit que plusieurs sont de la **fausse** dette — je te le démontrerai plutôt que d'ajouter des gardes décoratives. | Rien. |
 | 01:02 | **Troisième et quatrième trous fermés — et ce sont des fuites de données personnelles, pas des défauts de cloisonnement.** On désignait le bénéficiaire de n'importe qui comme participant ou inscrit en liste d'attente. Vérifié sans les gardes : l'inscription était créée, la fiche étrangère référencée. `tests/Reservation` 97/97 avec les gardes, mes 3 tests dédiés verts. | Audit de la dette terminé : **2 vraies fuites corrigées, 2 fausses dettes démontrées**. Tableau sous le tableau. | Rien. |
+| 08:54 | **PRÉSENTATION HORAIRE.** D'abord ceci : **je me suis encore arrêtée, de 01h15 à 08h45** — sept heures et demie, la seconde fois en deux jours. Ce n'est pas un blocage, c'est la règle zéro. Ensuite : ton ordre long est lu, et **le point 1 était déjà fait** quand tu l'as écrit (01h00) — quatre entrées résorbées, deux fausses dettes démontrées. **Point 2 fait aussi** : les disponibilités et indisponibilités étaient lisibles d'un établissement à l'autre, c'est corrigé et vérifié rouge sans la jointure. | Reste du point 2 : les 9 entrées `Offre`. Puis D41 sur mes trois entités. | Rien. |
 
 ## Nouvelle règle de Maxime — présentation horaire à `claude-A`
 
@@ -834,3 +835,37 @@ livrer un mur au lieu d'une garde, avec une suite verte pour le prouver.
 Je ne l'ai pas emporté dans ce lot : c'est le cœur du module, il mérite son propre commit et sa
 propre suite verte plutôt que d'être corrigé à une heure du matin dans un lot de dette. Le résolveur
 est écrit, le branchement est d'une ligne. Dis-moi si tu veux que je le prenne au prochain battement.
+
+
+## Couverture de périmètre — les deux entrées `Reservation` sont fermées
+
+`DisponibiliteRessource` et `IndisponibiliteRessource` ne portent pas d'établissement : elles le
+tiennent de leur **ressource**. Sans jointure, leurs collections étaient lisibles d'un établissement
+à l'autre.
+
+**Ce que ça donnait à voir n'est pas anodin** : les plages d'ouverture et les fermetures
+exceptionnelles d'un voisin, c'est-à-dire son activité réelle — quand il ouvre, quand il ferme, quand
+il est en travaux.
+
+**Correctif :** deux lignes dans `PerimetreReservationExtension`, avec la jointure vers la ressource.
+Aucun mécanisme neuf — la ligne de base l'avait d'ailleurs déjà écrit dans son champ `traitement` :
+groupe A, chemin `ressource`, cible `Ressource`. Il n'y avait qu'à l'appliquer.
+
+**Vérifié rouge sans la jointure** : la disponibilité étrangère apparaissait bien dans la collection.
+
+**Et le `risque_ecriture` de la ligne de base, lui, était déjà couvert** — je l'ai vérifié plutôt que
+de le supposer. Déclarer une disponibilité **sur** la ressource d'un autre établissement échoue en
+« Item not found » : la résolution d'IRI par API Platform passe par le fournisseur d'item, donc par
+l'extension de périmètre, et `Ressource` y était déjà. Mon test le documente au lieu de le corriger —
+il vaut mieux qu'un invariant réel soit tenu par un test que par la mémoire de celui qui l'a lu.
+
+## Et je dois dire ceci avant le reste
+
+**Je me suis arrêtée sept heures et demie**, de 01h15 à 08h45. C'est la seconde fois en deux jours,
+après les cinq heures d'hier. Rien ne me bloquait : ton ordre long de 01h00 était précisément écrit
+pour que je puisse continuer sans toi, et il est resté non lu jusqu'à ce matin.
+
+Je ne peux pas garantir que ça ne se reproduira pas — c'est la limite que tu as toi-même décrite à
+18h10, une session lancée depuis un bureau s'arrête quand elle a fini de répondre. Ce que je peux
+faire, et que je fais : le dire au lieu de le laisser deviner, et reprendre par le battement plutôt
+que par le travail — fusionner, lire les ordres, me présenter, puis coder.
