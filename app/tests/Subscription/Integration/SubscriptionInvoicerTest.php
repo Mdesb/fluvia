@@ -22,6 +22,7 @@ use App\Subscription\Entity\Subscription;
 use App\Subscription\Entity\SubscriptionInvoice;
 use App\Subscription\Enum\SubscriptionStatus;
 use App\Subscription\Exception\InvoicingRefusedException;
+use App\Subscription\Service\ProrationCalculator;
 use App\Subscription\Service\SubscriptionInvoicer;
 use App\Tests\Facturation\FacturationApiTestCase;
 use Doctrine\ORM\EntityManagerInterface;
@@ -176,6 +177,7 @@ final class SubscriptionInvoicerTest extends FacturationApiTestCase
             $builder,
             $emetteur,
             $capacites,
+            new ProrationCalculator(),
         );
     }
 

@@ -19,6 +19,7 @@ use App\Organisation\Service\EditorTenantResolver;
 use App\Securite\Entity\Utilisateur;
 use App\Subscription\Entity\Subscription;
 use App\Subscription\Entity\SubscriptionInvoice;
+use App\Subscription\Entity\SubscriptionItem;
 use App\Subscription\Enum\SubscriptionStatus;
 use App\Subscription\Exception\InvoicingRefusedException;
 use App\Subscription\Exception\UnknownCustomerException;
@@ -58,6 +59,7 @@ final class SubscriptionInvoicer
         private readonly FactureDirecteBuilder $builder,
         private readonly EmettreFactureDirecteHandler $emetteur,
         private readonly CatalogueCapacites $capacites,
+        private readonly ProrationCalculator $prorata,
     ) {
     }
 
@@ -124,6 +126,33 @@ final class SubscriptionInvoicer
         return $registre;
     }
 
+    /**
+     * Ce que ce mois coutera, avant emission.
+     *
+     * **Le meme calcul que celui des lignes, et c'est le but.** Un ecran qui annonce un montant et une
+     * facture qui en porte un autre est la maniere la plus sure de perdre la confiance d'un client au
+     * premier prelevement — et de la perdre chez soi d'abord, quand personne ne sait lequel croire.
+     * Une seule methode, deux usages.
+     */
+    public function montantDuMois(Subscription $abonnement, \DateTimeImmutable $quand): int
+    {
+        $mois = SubscriptionInvoice::debutDeMois($quand);
+        $fin = $mois->modify('+1 month');
+        $total = $abonnement->getPlan()?->getMonthlyPriceCents() ?? 0;
+
+        foreach ($abonnement->getItems() as $item) {
+            if (!$this->porteSurLeMois($item, $mois, $fin)) {
+                continue;
+            }
+
+            $total += $item->getActiveFrom() > $mois
+                ? $this->prorata->forPartialPeriod($item->getUnitPriceCents(), $item->getActiveFrom(), $mois, $fin)
+                : $item->getUnitPriceCents();
+        }
+
+        return $total;
+    }
+
     private function emettre(
         Subscription $abonnement,
         \DateTimeImmutable $mois,
@@ -174,15 +203,32 @@ final class SubscriptionInvoicer
             ];
         }
 
+        $finDuMois = $mois->modify('+1 month');
+
         foreach ($abonnement->getItems() as $item) {
-            if (!$item->isActiveAt($mois)) {
+            if (!$this->porteSurLeMois($item, $mois, $finDuMois)) {
+                continue;
+            }
+
+            $depuis = $item->getActiveFrom();
+            $partiel = $depuis > $mois;
+
+            // Une option achetee le 24 se facture au prorata, pas pour rien. C'est CA-4, et le calcul
+            // existe deja : `ProrationCalculator` compte des jours entiers, la journee d'achat due.
+            $montant = $partiel
+                ? $this->prorata->forPartialPeriod($item->getUnitPriceCents(), $depuis, $mois, $finDuMois)
+                : $item->getUnitPriceCents();
+
+            if (0 === $montant) {
                 continue;
             }
 
             $lignes[] = [
-                'designation' => sprintf('Option %s', $this->libelle($item->getCapability())),
+                'designation' => $partiel
+                    ? sprintf('Option %s — a partir du %s', $this->libelle($item->getCapability()), $depuis->format('d/m/Y'))
+                    : sprintf('Option %s', $this->libelle($item->getCapability())),
                 'quantite' => 1,
-                'prixUnitaireHT' => $this->euros($item->getUnitPriceCents()),
+                'prixUnitaireHT' => $this->euros($montant),
                 'tauxTva' => $taux->getId()->toRfc4122(),
             ];
         }
@@ -252,6 +298,24 @@ final class SubscriptionInvoicer
             'Un abonnement « %s » ne se facture pas : seul un abonnement actif ou suspendu porte une dette.',
             $abonnement->getStatus()->value,
         ));
+    }
+
+    /**
+     * L'option est-elle vendue a un moment quelconque de ce mois ?
+     *
+     * **Pas « active au premier du mois ».** C'etait la premiere version, et elle ne facturait pas du
+     * tout une option achetee en cours de mois : le client l'utilisait sans jamais la payer, et rien
+     * ne le signalait. Une option compte des qu'elle chevauche le mois, ne serait-ce que d'un jour.
+     */
+    private function porteSurLeMois(SubscriptionItem $item, \DateTimeImmutable $debut, \DateTimeImmutable $fin): bool
+    {
+        if ($item->getActiveFrom() >= $fin) {
+            return false;
+        }
+
+        $jusqua = $item->getActiveTo();
+
+        return null === $jusqua || $jusqua > $debut;
     }
 
     private function euros(int $cents): string
