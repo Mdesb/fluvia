@@ -204,6 +204,12 @@ while read -r ancien nouveau ref; do
         lancer garde-fou-ecriture-transfrontiere.php "--contre=$BASE"
     fi
 
+    # Un DEFAULT pose en migration doit etre declare au mapping (D32).
+    if [ -f "$ARBRE/bin/garde-fou-defauts-mapping.php" ]; then
+        echo "── Défauts au mapping (D32)"
+        lancer garde-fou-defauts-mapping.php "--contre=$BASE"
+    fi
+
     # ⚠ FILET DE COMPLÉTUDE — la leçon du 24/08, et elle a coûté cher.
     #
     # Ce hook n'appelle pas `bin/garde-fous.sh` : il doit calculer les fichiers ajoutés sur
@@ -221,18 +227,35 @@ while read -r ancien nouveau ref; do
     # répond à « par où passent mes commits ». Dans un hook, la question n'a pas de sens — on
     # analyse un arbre extrait dans un `mktemp`, sans remote ni worktree. Sa complétude est donc
     # assurée par le filet de `bin/garde-fous.sh`, qui lui globe sans extension.
+    # ⚠ On compare l'inventaire de l'arbre poussé aux appels du hook DE L'ARBRE POUSSÉ — pas à ceux
+    # du hook installé.
+    #
+    # La première version comparait aux appels de CE hook-ci, c'est-à-dire celui de `main`. Il ne peut
+    # évidemment pas connaître un garde-fou qui arrive avec la poussée : **plus aucun garde-fou neuf ne
+    # pouvait entrer dans le dépôt**, même câblé correctement dans le même commit. Constaté le 26/08 en
+    # poussant le n°10 — le filet s'était refermé sur lui-même.
+    #
+    # La bonne question n'est pas « ce run a-t-il tout lancé ? » (il ne lance que ce qu'il connaît),
+    # c'est « la version qu'on pousse est-elle cohérente avec elle-même ? ». La protection est intacte,
+    # et même plus juste : c'est le hook poussé qui tournera une fois installé.
+    HOOK_POUSSE="$ARBRE/hooks/pre-receive"
     for chemin in "$ARBRE"/bin/garde-fou-*.php; do
         [ -f "$chemin" ] || continue
         nom="$(basename "$chemin")"
-        case " $LANCES " in
-            *" $nom "*) ;;
-            *)
-                echo "✗ Garde-fou présent dans l'arbre mais jamais lancé par ce hook : $nom"
-                echo "  Ajoute son appel dans hooks/pre-receive — un contrôle qui ne tourne pas"
-                echo "  rend un vert au nom d'une vérification qui n'a pas eu lieu."
-                ECHEC_REF=1
-                ;;
-        esac
+
+        if [ -f "$HOOK_POUSSE" ] && grep -q "$nom" "$HOOK_POUSSE"; then
+            continue
+        fi
+
+        # Repli quand l'arbre poussé ne versionne pas le hook : on retombe sur ce qui a tourné ici.
+        if [ ! -f "$HOOK_POUSSE" ]; then
+            case " $LANCES " in *" $nom "*) continue ;; esac
+        fi
+
+        echo "✗ Garde-fou présent dans l'arbre mais appelé par aucun hook : $nom"
+        echo "  Ajoute son appel dans hooks/pre-receive, dans le même commit que le garde-fou —"
+        echo "  un contrôle qui ne tourne pas rend un vert au nom d'une vérification qui n'a pas eu lieu."
+        ECHEC_REF=1
     done
 
     rm -rf "$ARBRE"
