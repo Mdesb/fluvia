@@ -101,9 +101,39 @@ final class PadelModule implements ModuleManifest
         return [];
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * **Les mots de ce métier (D15).** Un « créneau » est un *rendez-vous* chez le coiffeur et une
+     * *réservation de terrain* au padel : même concept, mots différents. Les cles sont celles du
+     * catalogue commun — anglaises, donc techniques (D5) ; les valeurs sont le libellé par défaut, en
+     * attendant la couche i18n, qui n'existe pas encore dans ce dépôt.
+     *
+     * **Pourquoi ici plutôt que dans un document.** `settingsSchema()` est déjà le schéma de
+     * configuration par tenant, et `SmartFlowModule` s'en sert de la même façon. Une surcharge de
+     * vocabulaire *est* de la configuration par établissement : l'exploitant qui préfère « usager » à
+     * « Partie » doit pouvoir le changer, et ne jamais le reperdre à une montée de
+     * version (D15).
+     *
+     * Ce que cette verticale ne surcharge pas ne figure pas ici : le défaut commun s'applique. Un
+     * tiret au catalogue vaut décision, pas trou à combler.
+     *
+     * @return array<string, mixed>
+     */
     public function settingsSchema(): array
     {
-        return [];
+        return [
+            'vocabulary' => [
+                'resource' => 'Terrain',
+                'resource_unit' => 'Terrain',
+                'slot' => 'Réservation de terrain',
+                'booking' => 'Partie',
+                'participant' => 'Joueur',
+                'staff' => 'Juge-arbitre',
+                'group' => 'Poule',
+                'entry' => 'Accès terrain',
+                'rental' => 'Location de matériel',
+                'deposit' => 'Caution matériel',
+                'multi_entry_card' => 'Carte de parties',
+            ],
+        ];
     }
 }
