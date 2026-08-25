@@ -9,6 +9,7 @@ use App\Crm\Entity\Client;
 use App\Crm\Enum\TypeClient;
 use App\DataFixtures\SocleFixtures;
 use App\Facturation\Entity\Facture;
+use App\Facturation\Entity\ParametreFacturationEtablissement;
 use App\Facturation\Enum\StatutFacture;
 use App\Facturation\Service\EmettreFactureDirecteHandler;
 use App\Facturation\Service\FactureDirecteBuilder;
@@ -113,6 +114,31 @@ final class SubscriptionInvoicerTest extends FacturationApiTestCase
     }
 
     /**
+     * Le taux designe dans le parametrage est utilise sans qu'on ait a le repeter.
+     *
+     * C'est le chemin nominal une fois l'editeur configure : l'exploitant choisit une fois, et la
+     * facturation — a l'ecran comme en ligne de commande — n'a plus a poser la question.
+     */
+    public function testLeTauxDesigneDansLeParametrageEstUtilise(): void
+    {
+        $parametre = $this->em()->getRepository(ParametreFacturationEtablissement::class)
+            ->findOneBy(['profilExploitant' => $this->profilExploitant()]);
+        \assert($parametre instanceof ParametreFacturationEtablissement);
+
+        $parametre->setTauxTvaAbonnement($this->taux());
+        $this->em()->flush();
+
+        $abonnement = $this->abonnementActif();
+
+        // Aucun taux passe en argument : il doit venir du parametrage.
+        $registre = $this->facturier()->facturerLeMois($abonnement, $this->mois(), $this->auteur());
+
+        $facture = $this->em()->getRepository(Facture::class)->find($registre->getInvoiceId());
+        self::assertInstanceOf(Facture::class, $facture);
+        self::assertNotNull($facture->getNumero());
+    }
+
+    /**
      * Un abonnement au panier ne se facture pas — il n'a pas été payé.
      *
      * Le résilié non plus. Le suspendu, si : la suspension coupe l'exposition des modules, pas la
@@ -130,11 +156,12 @@ final class SubscriptionInvoicerTest extends FacturationApiTestCase
     /**
      * Sans taux explicite, l'ambiguïté est refusée avec un message qui dit quoi faire.
      *
-     * Le profil des fixtures porte quatre taux actifs — 20 %, 10 %, 5,5 % et hors champ — ce qui est
-     * la situation normale d'un exploitant français. Deviner reviendrait à facturer au mauvais taux,
-     * ce qui se corrige par un avoir et se voit sur une déclaration.
+     * Le taux applicable aux abonnements se lit dans le parametrage de l'editeur, et il n'y a AUCUNE
+     * valeur par defaut : le profil porte quatre taux actifs, donc en poser un d'office reviendrait a
+     * se tromper une fois sur quatre. `null` veut dire « non decide », jamais « exonere » —
+     * l'exoneration se dit par un taux a zero, qui facture normalement.
      */
-    public function testSansTauxExpliciteLambiguiteEstRefuseeAvecUnMessageUtile(): void
+    public function testSansTauxDesigneLaFacturationEstRefuseeAvecUnMessageUtile(): void
     {
         $abonnement = $this->abonnementActif();
 
@@ -142,8 +169,8 @@ final class SubscriptionInvoicerTest extends FacturationApiTestCase
             $this->facturier()->facturerLeMois($abonnement, $this->mois(), $this->auteur());
             self::fail('la facturation aurait dû être refusée');
         } catch (InvoicingRefusedException $refus) {
-            self::assertStringContainsString('plusieurs taux', $refus->getMessage());
-            self::assertStringContainsString('précisez', $refus->getMessage());
+            self::assertStringContainsString('Aucun taux de TVA', $refus->getMessage());
+            self::assertStringContainsString('parametrage', $refus->getMessage());
         }
 
         // Et le mois n'est pas condamné : la réservation a été défaite.

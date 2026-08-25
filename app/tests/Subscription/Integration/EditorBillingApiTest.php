@@ -153,8 +153,9 @@ final class EditorBillingApiTest extends FacturationApiTestCase
     /**
      * Sans taux, le refus explique quoi faire — il n'échoue pas en 500.
      *
-     * Le profil porte quatre taux actifs, ce qui est la situation normale : le message est donc le
-     * chemin nominal, pas un cas limite.
+     * Le taux se lit dans le parametrage de l'editeur, sans valeur par defaut : tant qu'il n'est pas
+     * choisi, la facturation refuse et dit ou le choisir. Le message est le chemin nominal d'une
+     * installation neuve, pas un cas limite.
      */
     public function testSansTauxLeRefusExpliqueQuoiFaire(): void
     {
@@ -167,7 +168,7 @@ final class EditorBillingApiTest extends FacturationApiTestCase
         ]);
 
         self::assertSame(422, $reponse->getStatusCode(), (string) $reponse->getContent(false));
-        self::assertStringContainsString('précisez', (string) $reponse->getContent(false));
+        self::assertStringContainsString('Aucun taux de TVA', (string) $reponse->getContent(false));
     }
 
     /** Un autre établissement ne voit rien et ne facture rien. */

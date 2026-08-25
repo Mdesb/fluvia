@@ -161,7 +161,7 @@ final class SubscriptionInvoicer
     ): Facture {
         $editeur = $this->editorTenant->resolve();
         $profil = $this->comptes->profilPour($editeur);
-        $taux ??= $this->tauxUnique($profil);
+        $taux ??= $this->tauxApplicable($profil);
 
         $facture = new Facture();
         $facture->setNature(NatureFacture::Facture);
@@ -273,23 +273,30 @@ final class SubscriptionInvoicer
     }
 
     /**
-     * Le taux de TVA de l'éditeur, quand il n'y en a qu'un.
+     * Le taux de TVA applicable aux abonnements.
      *
-     * **On ne devine pas au-delà.** Deux taux actifs, c'est un choix commercial que ce service n'a pas
-     * à trancher — facturer au mauvais taux se corrige par un avoir, et se voit sur une déclaration.
+     * **Il se lit dans le parametrage, il ne se devine pas.** Un profil francais porte couramment
+     * quatre taux actifs — 20 %, 10 %, 5,5 % et hors champ. En choisir un d office reviendrait a se
+     * tromper une fois sur quatre, et l erreur se corrige par un avoir apres avoir ete declaree.
+     *
+     * **`null` veut dire « non decide », jamais « exonere ».** Les deux se ressemblent et n ont rien
+     * a voir : l exoneration se dit par un taux a **zero**, qui facture normalement et porte sa
+     * mention legale. Un parametre vide, lui, est une decision que personne n a prise — on refuse, et
+     * on dit ou la prendre.
      */
-    private function tauxUnique(ProfilExploitant $profil): TauxTva
+    private function tauxApplicable(ProfilExploitant $profil): TauxTva
     {
-        /** @var list<TauxTva> $taux */
-        $taux = $this->em->getRepository(TauxTva::class)->findBy(['profilExploitant' => $profil, 'actif' => true]);
+        $taux = $this->comptes->parametre($profil)?->getTauxTvaAbonnement();
 
-        if (1 === \count($taux)) {
-            return $taux[0];
+        if ($taux instanceof TauxTva) {
+            return $taux;
         }
 
-        throw new InvoicingRefusedException([] === $taux
-            ? 'L\'éditeur n\'a aucun taux de TVA actif : configurez-en un avant de facturer.'
-            : 'L\'éditeur a plusieurs taux de TVA actifs : précisez celui qui s\'applique aux abonnements.');
+        throw new InvoicingRefusedException(
+            'Aucun taux de TVA n est designe pour les abonnements. Choisissez-le dans le parametrage '
+            .'de facturation de l editeur : il n y a pas de valeur par defaut, parce qu en poser une '
+            .'reviendrait a facturer au hasard parmi les taux actifs.'
+        );
     }
 
     private function assertFacturable(Subscription $abonnement): void

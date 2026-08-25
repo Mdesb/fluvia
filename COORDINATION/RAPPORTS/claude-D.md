@@ -24,6 +24,7 @@
 | 16:20 | **ED-7 suite — l'API de l'écran de facturation, et un défaut d'argent trouvé en la testant.** `GET /editor/billing` liste les abonnements facturables du mois avec **ce qui n'a pas eu lieu en tête** — ton raisonnement sur les provisionnements échoués, appliqué à la facturation : un abonnement actif qu'on oublie de facturer ne produit aucun signal, juste de l'argent jamais prélevé qu'on découvre trois mois plus tard. `POST` émet, et rejouer est sans effet. **Le défaut** : la première version ne facturait que les options actives **au premier du mois**. Une option achetée le 20 n'apparaissait sur aucune facture — le client s'en servait sans jamais la payer, et rien ne le signalait. `ProrationCalculator` existait déjà pour ça (CA-4), il n'était simplement pas appelé. Corrigé, avec le test du cas. **Et le montant affiché vient désormais du facturier lui-même** : un écran qui annonce un prix et une facture qui en porte un autre est le meilleur moyen de perdre la confiance d'un client — et de la perdre chez soi d'abord, quand personne ne sait lequel croire. Tests : `tests/Subscription` **104 verts / 506 assertions**, `tests/Platform` 62 verts. | L'écran lui-même, côté React. | Rien |
 | 15:12 | **L écran de facturation est livré** — quatrième écran de ton administration. Bandeau en tête quand des abonnements ne sont pas facturés, avec le total à émettre ; les lignes manquantes en rouge, un bouton par ligne. Le taux de TVA est **choisi par l exploitant**, jamais deviné. Et l écart entre le montant attendu et le montant facturé est **montré** plutôt que masqué : une facture émise avant un changement de tarif porte l ancien montant, ce qui est une information et non une erreur. Les refus du serveur sont affichés tels quels — ils disent quoi faire, les traduire en « une erreur est survenue » perdrait justement ce qui sert. `EditeurApp` = 18 ko pour quatre écrans. Build OK. | Rien en cours — je te demande la suite. | Rien |
 | 18:40 | **ED-8 — « qui n'a pas payé », cinquième écran.** `GET /editor/receivables` : ce qui reste dû, **le plus en retard devant**, et **une facture soldée sort de la liste** — ni grisée ni repliée. Une liste de créances où figurent les factures payées oblige à lire pour savoir quoi faire, et c'est l'effort qu'on veut supprimer. Le retard est calculé **par le serveur** : côté navigateur il dépendrait de l'horloge du poste, et deux exploitants verraient deux retards différents pour la même facture — le plus optimiste ferait foi. **Deux trouvailles en chemin.** (1) Mes factures d'abonnement ne portaient **aucune date d'échéance** : `delaiPaiementDefautJours` existe dans le paramétrage, valeur 30, et personne ne le lisait — donc aucun retard n'était calculable. Encore ton motif : le mécanisme existait, l'appel manquait. Corrigé, et rendu **déterministe** — l'échéance dérive du mois facturé et non de l'heure d'exécution, pour qu'une facture rejouée après incident porte la même date. (2) Le scellement NF525 m'a **refusé** de modifier une facture émise pendant que j'écrivais les tests. Il avait raison ; j'ai fabriqué les retards en facturant de vieux mois plutôt qu'en trichant sur la date, ce qui rend le test plus fidèle. Tests : `tests/Subscription` **110 verts / 548 assertions**, `tests/Platform` 62 verts, build OK — cinq écrans pour 20,6 ko. | Rien en cours — je te demande la suite. | Rien |
+| 20:15 | **Ton paramètre est branché, et la commande de facturation est écrite.** Le facturier lit `tauxTvaAbonnement` ou refuse en disant où le choisir — ma résolution automatique est supprimée, elle n'avait plus lieu d'être. J'ai encodé ta distinction : `null` = **non décidé**, refus explicite ; un taux à **zéro** = exonération, qui facture normalement. Les deux se ressemblent et n'ont rien à voir. `subscription:facturer-le-mois` facture un mois entier en une passe, rejouable sans doublon, avec `--a-blanc`, et **un échec ne bloque pas les clients suivants** — interrompre priverait de facture tout le monde pour le problème d'un seul. | **MAIS JE N'AI PAS DÉCLARÉ LA TÂCHE AU CATALOGUE**, et c'est ton propre critère qui me retient — voir ci-dessous. | Une question pour Maxime, pas un blocage |
 
 ---
 
@@ -214,3 +215,29 @@ app/src` la retrouvera le jour où quelqu'un auditera.
 **Ce que j'en retiens.** Un garde-fou qui propose une porte de sortie n'est pas un garde-fou qu'il
 faut franchir. Les deux fois, la porte existait ; les deux fois, la refuser a produit un meilleur
 code — une ressource qui n'expose que le nécessaire, et une exemption qu'on peut retrouver.
+
+**Pourquoi je n'ai pas déclaré `subscription:facturer-le-mois` au catalogue de l'ordonnanceur.**
+
+Une facture NF525 est un document scellé qui **porte le nom de qui l'a émise** : `Facture.creePar`
+est non nullable, et ce n'est pas un oubli de modélisation. Une tâche périodique n'a pas
+d'utilisateur connecté.
+
+Le dépôt a bien le précédent — `SessionSystemeBoutiqueResolver` et `SessionSystemeResolver` créent un
+utilisateur technique — mais les deux portent le même avertissement dans leur en-tête : *vente sans
+opérateur humain identifié, risque n°1 du plan*. Ce qui était déjà inconfortable pour une vente en
+ligne l'est davantage pour une facture scellée.
+
+**Et c'est exactement ton critère.** Tu as retiré `personnel:traiter-echeances-sortie` parce qu'elle
+« exige une identité humaine et ne peut pas tourner sans surveillance ». Une facturation qui attribue
+des documents scellés à un compte de service est le même cas, à un endroit plus sensible : le nom
+porté par la facture est opposable.
+
+**Ce que j'ai fait à la place.** `--auteur` est **obligatoire** : la commande s'exécute au nom d'une
+personne nommée, qu'un exploitant lance à la main. Elle facture un mois entier en une passe, ce qui
+couvre le besoin réel — personne ne facture au jour près — sans trancher une question comptable à la
+place de Maxime.
+
+**Ce qu'il faut pour la déclarer**, et c'est une décision de Maxime, pas la nôtre : soit il accepte
+qu'un compte de service émette les factures et le désigne au déploiement, soit on ajoute une mention
+explicite sur la facture. Je lui ai posé la question. Tant qu'elle n'est pas tranchée, la déclaration
+tiendrait en quatre lignes mais dirait quelque chose que personne n'a décidé.
