@@ -1071,3 +1071,361 @@ balaie **toutes** les réservations sans borne de date et rattrape donc tout le 
 exécution. Inoffensif aujourd'hui grâce au contrôle d'événement déjà émis — c'est la cause structurelle
 du symptôme, pas le symptôme. `claude-G` ne l'a pas touché parce que je lui avais ouvert Padel pour
 rendre un test vert, pas pour le refondre. Cela revient à `claude-I`.
+
+### 2026-08-25 · D41 — Le cloisonnement filtre les lectures, et personne ne garde les écritures
+`claude-H` a trouvé que `PointDeVente` accepte son `etablissement` **depuis le corps de la requête**,
+sans processor et sans contrôle. Quelqu'un qui a `caisse.gerer` sur son établissement peut donc créer un
+point de vente **chez un autre établissement** — et un point de vente est ce sur quoi s'ouvre une caisse.
+
+**J'ai compté avant de traiter, et ce n'est pas un cas : c'est une classe. Trente-cinq entités.**
+
+    Acces          Equipement, EspaceAcces
+    Boutique       PartenaireOTA, Vitrine
+    Caisse         PointDeVente
+    Caution        GrilleRetenue
+    Crm            ParametrePmvEtablissement
+    Musee          AllocationQuotaOTA, Audioguide, ContingentGratuite, Exposition, Guide,
+                   ParametreMuseeEtablissement, PartenaireOTA, PassAnnuel, PolitiqueDelestage,
+                   Salle, SousQuotaSalle
+    Organisation   Espace
+    Padel          ParametragePadel, PlageHoraire
+    Patinoire      ParcPatins, SaisonEphemere, ZonePatinoire
+    Personnel      RattachementEmploye
+    Piscine        Bassin, ParametrePiscineEtablissement, Poss, QualificationEncadrant
+    Recouvrement   PolitiqueRecouvrement
+    Reservation    Activite, RegleAnnulation, Ressource
+    Stock          Fournisseur, ParametrageStock
+
+**Pourquoi personne ne l'avait vu, et c'est le point qui compte.** Les extensions Doctrine de ce dépôt
+bornent les **lectures** au périmètre de l'utilisateur — vingt-six modules en ont une, et elles
+fonctionnent. Une **écriture** qui reçoit son établissement du corps de la requête n'est vue par
+personne : ni par l'extension, qui ne s'applique qu'aux requêtes de lecture, ni par le garde-fou de
+cloisonnement, qui inspecte les **résolutions d'entités** et non les **groupes de sérialisation**.
+Les seize IDOR trouvés en cinq jours étaient tous des lectures ou des résolutions. Ceux-ci sont d'une
+autre nature, et notre outillage était structurellement aveugle.
+
+**Ce que ça permet concrètement** : créer une salle dans le musée d'un autre client, un fournisseur chez
+un concurrent, un bassin dans sa piscine, une plage horaire sur ses terrains. La victime verra ces
+objets apparaître dans ses propres écrans — puisque ses lectures, elles, sont bien filtrées sur son
+périmètre. C'est une pollution de données invisible à l'auteur comme à la victime.
+
+**Le traitement : un mécanisme unique, pas trente-cinq processors.** Écrire trente-cinq gardes serait
+répéter trente-cinq fois la même décision, dans douze périmètres différents, avec la certitude qu'on en
+oublierait et que la trente-sixième entité écrite demain ne l'aurait pas. C'est exactement le motif que
+`claude-H` a nommé cette nuit : *« le remède n'est pas de faire attention — c'est de rendre le cas
+général impossible à écrire »*. Un décorateur du processeur de persistance d'API Platform, appliqué
+globalement : toute entité écrite qui porte un établissement voit cet établissement confronté au
+périmètre de l'appelant, et refusé en **404** s'il en sort.
+
+**Et un garde-fou pour la classe, demandé à `claude-C`** : refuser qu'une entité neuve expose un
+`Etablissement` dans un groupe d'écriture. Le mécanisme protège ce qui existe ; le garde-fou empêche
+d'en ajouter. Sans lui, on répare trente-cinq fois et on recommence.
+
+### 2026-08-25 · D42 — Campagnes marketing : ce que c'est, et surtout ce que ce n'est pas
+Demandé par Maxime. **La première chose à trancher n'est pas ce que le module fait, c'est ce qui le
+distingue de Revenue Recovery** — sans quoi on refait la collision SF-0, qui a coûté 415 lignes de
+travail parallèle et une décision d'arbitrage.
+
+**La frontière, et elle est nette :**
+
+| | Revenue Recovery | Campagne |
+|---|---|---|
+| déclencheur | un **événement** arrivé à **un** client | une **décision** de l'exploitant |
+| population | un individu, à la fois | une **audience**, choisie |
+| moment | dès que l'événement survient | choisi, ou récurrent |
+| finalité | récupérer ce qui allait être perdu | **provoquer** une venue qui n'allait pas avoir lieu |
+
+Panier abandonné, facture échue, devis expiré : Revenue Recovery. « Les abonnés qui n'ont pas nagé
+depuis trois mois » : campagne. Si un lot ne rentre dans aucune des deux cases, il faut se demander
+lequel des deux modules ment.
+
+**Trois choses existent déjà et il ne faut surtout pas les refaire :**
+
+1. **Le consentement RGPD est modélisé et il est bon.** `Consentement`, `CanalConsentement`
+   (email / sms / courrier), `EtatConsentement` (accordé / refusé / à renouveler). C'est la colonne
+   vertébrale légale du module. **Un envoi de campagne se fait à travers ce contrôle, jamais à côté** —
+   et pas « en le vérifiant », mais en le rendant impossible à contourner, au même endroit que l'envoi.
+2. **Le port de notification client existe** — `SmartFlow\Port\ClientNotificationInterface`, avec un
+   adaptateur qui **écrit dans un journal**. Autrement dit : *rien n'envoie quoi que ce soit à un client
+   aujourd'hui.* C'est une bonne nouvelle déguisée en manque, voir plus bas.
+3. **Les données de comportement sont là** : dernière visite, chiffre cumulé, abonnement, solde de
+   carte, activités pratiquées, établissement. C'est ce qu'aucun outil généraliste ne possède.
+
+**Ce qui n'existe pas, et c'est le cœur du module : l'audience.** Aucune notion de segment, de ciblage
+ni de population dans tout le dépôt. C'est là que va l'effort.
+
+**L'argument de fond, pour ne pas construire un Mailchimp de plus.** Un outil d'emailing dit qui a
+ouvert. Cette plateforme peut dire **qui est revenu, ce qu'il a acheté, et combien ça a rapporté** —
+parce qu'elle tient la vente. L'attribution est le seul avantage qu'un généraliste ne peut pas copier ;
+si le module ne la porte pas, il ne vaut pas la peine d'être écrit.
+
+**La dépendance externe, consignée et non attendue (D19).** Envoyer des courriels ou des SMS en volume
+exige un prestataire — délivrabilité, désinscription, réputation d'expéditeur — donc un contrat, donc
+l'immatriculation. Même famille que les adaptateurs Meta et les magasins d'applications.
+
+**On ne l'attend pas.** Le module se construit **contre le port existant** et se livre avec
+l'adaptateur de journal : audience, message, planification, consentement, mesure — tout est écrit,
+testé et démontrable sans qu'une seule adresse ne soit contactée. Le jour où le prestataire existe, on
+écrit un adaptateur et rien d'autre ne bouge.
+
+**Une décision d'architecture qui découle de tout ça** : `ClientNotificationInterface` vit dans
+`SmartFlow` alors que **trois** modules en ont besoin — Smart Flow, Revenue Recovery et Campagnes. Il
+remonte dans `Platform`. Le laisser où il est obligerait deux modules à dépendre d'un troisième pour
+une capacité qui n'appartient à aucun (D3/D8).
+
+**Périmètre : à ouvrir.** Le module est proche de Revenue Recovery, donc de `claude-E` — muette depuis
+vingt et une heures et jamais présentée, donc injoignable. Maxime tranche : soit `claude-E` reprend et
+prend les deux, soit une session dédiée s'ouvre. **Ne pas l'attribuer par défaut à qui passe** : c'est
+exactement ainsi que le front est resté cinq jours sans propriétaire.
+
+### 2026-08-25 · D43 — Carte d'abord, prélèvement en repli : les deux se recueillent ensemble
+Demandé par Maxime : la carte porte tout au départ ; en cas de rejet, bascule automatique sur le
+prélèvement. Et au guichet comme en ligne, il faut pouvoir recueillir les deux.
+
+**Le point non négociable, et il commande tout le reste : NOUS NE STOCKONS JAMAIS UN NUMÉRO DE CARTE.**
+Ni le numéro, ni le cryptogramme, ni la date d'expiration. Vérifié : aujourd'hui rien n'en stocke, et
+`DomainEvent` porte déjà une liste de censure (`card_number`, `pan`, `cvv`, `cvc`, `iban`, `bic`, …)
+qui montre que quelqu'un y avait pensé avant moi. **Cette propriété ne se perd pas.**
+
+Ce qui existe et qu'on utilise à la place :
+- **au guichet**, la carte passe par le terminal (`Vente\Tpe\TerminalPaiementInterface`). Nous
+  recevons un **résultat** et une référence de transaction. Le numéro ne transite jamais par nos
+  serveurs, et « saisir le numéro de carte » veut dire *sur le terminal*, jamais dans un formulaire
+  de l'application ;
+- **en ligne**, les champs hébergés ou la redirection du prestataire bancaire. Même règle ;
+- **pour un paiement récurrent**, un **jeton** rendu par le prestataire, qui ne vaut que pour notre
+  compte marchand et ne permet à personne de reconstituer une carte.
+
+Un numéro de carte dans notre base engagerait la conformité PCI-DSS de Maxime et de chacun de ses
+clients. Ce n'est pas une contrainte technique, c'est une responsabilité qu'on ne prend pas.
+
+**L'IBAN, lui, est stocké — et c'est légitime.** Un mandat de prélèvement en a besoin par nature. Il
+est chiffré au repos (`Sepa\Service\ChiffreurIban`), et le module `Sepa` porte déjà `MandatSepa`,
+`RemiseSepa`, `LigneRemiseSepa` et `RejetSepa`.
+
+**La subtilité qui détermine tout le parcours.** Un repli automatique vers le prélèvement suppose
+**un mandat déjà signé** : on ne crée pas un mandat sans la signature du client, et surtout pas au
+moment où sa carte vient d'être refusée. Donc **les deux moyens se recueillent ensemble, à la
+souscription** — la carte pour porter les échéances, le mandat signé pour prendre le relais. C'est
+exactement ce que Maxime décrit, et c'est la seule séquence qui fonctionne.
+
+**Ce qui suit du recueil des deux, et qu'on ne peut pas éluder : il faut l'expliquer.** Un client à qui
+l'on demande une carte **et** un IBAN soupçonne un piège si on ne lui dit pas pourquoi. Le parcours doit
+dire, en une phrase et avant la saisie : *« votre carte est débitée à chaque échéance ; le mandat ne
+sert que si elle est refusée ou expirée, et vous serez prévenu avant tout prélèvement. »* Cette phrase
+fait partie du lot, pas de la documentation.
+
+**Ce qui existe déjà pour le rejet** : `RejetSepa` et son processeur, en **saisie manuelle**, faute de
+lecteur de retour bancaire réel (`RetourSepaInterface`, aucun analyseur `pain.002`). Le rejet **carte**,
+lui, n'existe pas du tout. La bascule automatique est donc un lot neuf, et elle dépend du prestataire.
+
+**EXTERNE, consigné et non attendu (D19)** : le prestataire bancaire commande le jeton récurrent, les
+champs hébergés en ligne, et la lecture automatique des retours. Comme partout ailleurs, **on construit
+contre le port et on livre avec la simulation** — `TpeMock` existe déjà, la saisie manuelle du rejet
+aussi. Tout le parcours, la bascule et l'explication au client sont écrits et démontrables avant qu'un
+contrat ne soit signé.
+
+### 2026-08-25 · D44 — Un seul produit, plusieurs tarifs : le modèle le fait déjà, l'écran l'empêche
+Maxime, après un échange avec un gestionnaire de salle de sport : *« une entrée unitaire peut avoir
+plusieurs tarifs et plein d'options ; il faut qu'il n'y ait qu'un seul produit créé et que ce soit
+juste la tarification qui change. »*
+
+**Le modèle fait exactement cela, et il le fait bien.** Vérifié :
+`GrilleTarifaire` est un **quadruplet unique** — `produit × typeTarif × saison × trancheQuotientFamilial`.
+Un même produit porte donc autant de lignes tarifaires qu'on veut : adulte, enfant, réduit, haute et
+basse saison, tranches de quotient familial. Et `OptionProduit` rattache des **groupes d'options**
+partagés à plusieurs produits.
+
+**Rien à concevoir. Le problème est ailleurs, et il est net :**
+
+`Caisse.jsx` ligne 141 — `const tarif = typeTarifId(l.produit)` — le guichet **choisit un tarif tout
+seul** et n'offre aucun choix. L'API, elle, accepte `typeTarif` par ligne et résout le prix par
+tarif × saison × quotient (`AjoutLigneHandler`, `ResolveurPrix`).
+
+**Conséquence, et c'est l'explication de la prolifération** : un exploitant qui veut vendre une entrée
+au tarif enfant n'a aucun moyen de le faire à l'écran. Il crée donc « Entrée enfant » comme produit
+distinct. **Le modèle est propre, la pratique est sale, et c'est l'interface qui a forcé le
+contournement.** C'est encore un cas des 181 opérations non branchées — le plus coûteux trouvé
+jusqu'ici, parce qu'il ne se voit pas comme un manque mais comme une habitude.
+
+**Traitement** : offrir le choix du tarif au guichet, et n'afficher les options que d'un produit. Aucun
+changement de modèle, aucune migration.
+
+**Et un garde-fou de conception, pour ne pas réparer l'écran et garder la mauvaise habitude** : quand
+deux produits ne diffèrent que par leur tarif ou leur public, ce sont **un** produit et deux lignes
+tarifaires. À écrire dans la spec des options (`UI-2`), et à rappeler dans l'écran de création.
+
+### 2026-08-25 · D44-bis — Vendre sans caisse
+Le même gestionnaire *« n'a pas besoin d'un outil de caisse, mais doit pouvoir vendre depuis le
+catalogue directement »*.
+
+**Aujourd'hui c'est impossible**, et par règle explicite : `CreerVenteProcessor` refuse toute vente
+sans session de caisse ouverte — `RG-M2-01`, « Aucune session ouverte : vente impossible ».
+
+Cette règle est **juste pour une caisse** : elle porte la responsabilité du fonds, la clôture Z et la
+traçabilité de l'argent liquide. Elle est **absurde pour une salle de sport** dont le gérant encaisse
+trois abonnements par carte dans le mois et n'a jamais vu un tiroir-caisse.
+
+**La bonne réponse n'est pas d'assouplir la règle**, ce qui casserait la traçabilité pour tout le
+monde. C'est de reconnaître qu'il existe **deux manières de vendre** :
+
+| | Caisse | Vente directe |
+|---|---|---|
+| session | obligatoire, avec fonds et clôture Z | aucune |
+| espèces | oui | **non** — c'est ce qui permet de se passer de session |
+| responsabilité | le caissier répond du tiroir | la transaction répond d'elle-même |
+
+**Sans espèces, il n'y a rien à compter, donc rien à clôturer.** La séparation tient à cette seule
+phrase, et elle est vérifiable : la vente directe refuse les moyens de paiement fiduciaires.
+
+À trancher par Maxime avant tout code : est-ce un **mode d'établissement** (cette salle ne fait pas de
+caisse) ou une **permission** (ce vendeur peut vendre sans caisse) ? Les deux se défendent, et ce n'est
+pas la même chose à l'usage.
+
+### 2026-08-25 · D45 — Corriger un moyen de paiement : ce n'est pas une modification, et la date est celle du geste
+Maxime : *« un caissier a renseigné espèces alors que c'était de la carte bancaire, on doit pouvoir
+faire la modification… La question est de savoir si on le date du jour de l'action ou du jour de la
+vente. »*
+
+**Première réponse, et elle n'est pas négociable : on ne modifie pas.** Vérifié dans le dépôt —
+`Vente\Nf525\InalterabiliteListener` et `OperationInalterableException` **refusent** toute écriture sur
+une opération scellée, et `HashChainSignataire` chaîne les empreintes. Ce n'est pas une politique qu'on
+pourrait assouplir : c'est le mécanisme qui donne sa valeur à la chaîne. Le jour où l'on peut réécrire
+une vente validée, **plus aucune vente n'est probante**, y compris les milliers qui étaient justes.
+
+**Ce qu'on fait à la place.** Le dépôt sait déjà le faire pour l'annulation et le remboursement :
+`ContrePassationHandler` produit un **avoir** horodaté, motivé, signé de son auteur, rattaché à la vente
+d'origine, scellé à son tour — *« sans jamais supprimer de ligne d'origine »*.
+
+**Mais pour un moyen de paiement, l'avoir est le mauvais outil.** Un avoir suivi d'une nouvelle vente
+annule et rejoue le chiffre d'affaires : on fait bouger deux fois le résultat pour corriger une erreur
+qui n'a rien changé au montant. **Le montant de la vente n'est pas en cause — seule sa ventilation
+l'est.** Il faut donc une **écriture de correction de règlement** : −X en espèces, +X en carte,
+rattachée à la vente, motivée, signée, scellée. La vente reste intacte et sa somme ne bouge pas.
+
+**Réponse à la question de la date : le jour du geste, pas le jour de la vente.** Trois raisons, dans
+l'ordre de force :
+
+1. **La chaîne NF525 est chronologique.** Insérer une écriture datée d'hier dans une chaîne scellée
+   aujourd'hui la rendrait incohérente — c'est-à-dire invérifiable.
+2. **La clôture Z d'hier est fermée.** Si la correction remontait au jour de la vente, il faudrait
+   réécrire un Z déjà tiré, c'est-à-dire refaire l'histoire du fonds de caisse. Un Z qu'on peut
+   réécrire ne prouve plus rien.
+3. **La correction est un fait réel**, qui a eu lieu aujourd'hui, décidé par quelqu'un. Le dater d'hier
+   effacerait la seule information qui compte en cas de contrôle : **quand s'en est-on aperçu**.
+
+**La conséquence qu'il faut assumer, et le dire à l'exploitant** : le Z d'hier garde sa ventilation
+fausse, celui d'aujourd'hui porte la correction. Ce n'est pas un défaut, c'est **ce qui rend le Z
+digne de foi**. Et ce n'est pas un problème d'analyse : la correction pointe la vente d'origine, donc
+un état par date de vente reste calculable. C'est une question de **restitution**, pas de donnée.
+
+**Le droit qui va avec.** Maxime a raison : c'est une permission, et elle n'existe pas. Elle est
+sensible — quelqu'un qui peut déplacer des espèces vers la carte peut masquer un manquant. Elle doit
+donc être **distincte** de `caisse.gerer`, portée par l'administrateur du club, et chaque usage doit
+être lisible dans le journal d'audit, pas seulement dans la chaîne.
+
+### 2026-08-25 · D45-bis — Vente directe : une permission, et trois documents qui n'existent pas
+**Permission, pas mode d'établissement** — tranché par Maxime. Certains clubs n'ont même pas le module
+de caisse et doivent pouvoir vendre. La règle vérifiable reste celle de D44-bis : **la vente directe
+refuse les espèces**, donc il n'y a rien à compter et rien à clôturer.
+
+**Et trois documents manquent, vérifié :** `Facturation` porte `Facture`, `LigneFacture`,
+`ReglementFacture`, `SerieNumerotation`, `DestinataireFacturation` — **la facture existe et elle est
+sérieuse**. En revanche **devis**, **bon de commande** et **bon de livraison** n'existent nulle part.
+Le seul objet approchant est `Stock\Entity\ReceptionAchat`, qui va dans l'autre sens — ce qu'on
+achète, pas ce qu'on vend.
+
+Ces trois-là forment une chaîne : devis accepté → commande → livraison → facture. Chaque étape reprend
+la précédente sans la ressaisir, et chacune peut s'arrêter là. C'est un lot cohérent, pas trois lots.
+
+### 2026-08-25 · D46 — Corriger sans caisse, et chercher un écart sans noyer l'œil
+Trois questions de Maxime, dont la dernière porte une idée qui vaut mieux que les deux autres.
+
+#### 1. Un manager corrige sans ouvrir de caisse : où atterrit l'écriture ?
+
+**Elle n'a pas besoin de session, parce qu'elle ne touche aucun tiroir.**
+
+C'est la distinction qui manquait à D45. Une correction de ventilation — espèces vers carte — ne
+déplace **aucun billet** : elle constate que l'argent n'était pas là où on l'a écrit. Une session de
+caisse et sa clôture Z servent à **compter du liquide**. Rien à compter, donc rien à ouvrir.
+
+L'écriture est donc rattachée à **la vente**, pas à une session, et datée du jour du geste (D45).
+Seule une correction qui déplacerait réellement des espèces exige une session — et c'est alors un
+mouvement de caisse, ce qui existe déjà.
+
+**Et il y a mieux : la correction peut pointer l'écart qu'elle explique.** `AlerteEcartCaisse` existe
+et se rattache à une `ClotureZ` et à sa session. Si le Z d'hier a constaté 50 € de manquant, la
+correction d'aujourd'hui doit pouvoir dire *« c'est ce manquant-là »*. **Un écart expliqué cesse d'être
+un écart** — c'est ce qui transforme une liste d'alertes qu'on finit par ignorer en une liste qui se
+vide.
+
+#### 2. Les trois dates
+
+Vérifié : `Facture` porte déjà `dateEmission`, `dateEcheance`, `acquitteeLe` et `creeLe`. **Il manque la
+date de modification**, et l'ensemble n'existe pas au niveau de la **vente**.
+
+Elles entrent, mais avec une réserve qui répond à la vraie demande de Maxime — *« que les listes ne
+soient pas débordantes de chiffres »* : **on affiche l'écart, jamais les dates brutes.** Trois dates
+côte à côte obligent l'œil à soustraire, à chaque ligne, toute la journée. Un « en retard de 12 j » ou
+un « corrigée 3 j après » se lit sans calculer, et c'est ce qu'on cherchait.
+
+Les dates restent disponibles au détail. Elles ne sont simplement pas ce qu'on met dans une liste.
+
+#### 3. Le drapeau par origine — l'idée qui structure le reste
+
+Maxime : *« une vente faite en caisse attend un paiement immédiat ; une vente faite depuis l'outil de
+gestion peut avoir des conditions à trente ou soixante jours. »*
+
+**C'est juste, et ça change la nature du problème.** Chercher des incohérences devient une requête
+qu'il faut savoir formuler ; **porter une attente de paiement** en fait une propriété de la vente, que
+n'importe qui peut vérifier :
+
+| Origine | Attente | Anomalie |
+|---|---|---|
+| guichet | immédiate | non soldée à la clôture de session |
+| vente directe | terme convenu (30 j, 60 j…) | non soldée **après** l'échéance |
+
+**Une anomalie n'est plus un cas à chercher : c'est un écart entre ce qui était attendu et ce qui est.**
+Le même écran sert alors aux deux mondes sans qu'on ait à expliquer la différence à personne, et une
+vente à 60 jours cesse d'apparaître en rouge le premier jour — ce qui est précisément ce qui fait qu'on
+n'ouvre plus la liste.
+
+`Facture` porte déjà `dateEcheance` : la moitié du chemin est faite. Ce qui manque est de la **poser à
+la vente** et de la **dériver de l'origine** plutôt que de la saisir.
+
+**Conséquence à assumer** : l'origine d'une vente devient une donnée porteuse de sens, pas un
+renseignement. Elle doit être posée à la création et ne plus bouger — une vente de guichet requalifiée
+en vente directe effacerait l'anomalie au lieu de la traiter.
+
+#### 2026-08-25 · D46-bis — L'attente de paiement est **par canal**, et l'OTA n'est pas un client
+Maxime, immédiatement après D46 : *« n'oublie pas qu'il y a vente en ligne, appli, borne, etc. »* Il a
+raison et mon tableau à deux colonnes était faux.
+
+**État vérifié** : `Offre\Enum\Canal` porte **trois** valeurs — `guichet`, `en_ligne`, `borne`. Il en
+manque déjà deux que Maxime a décidées cette semaine, plus un cas particulier :
+
+| Canal | Attente de paiement | Anomalie | Qui paie |
+|---|---|---|---|
+| `guichet` | immédiate | non soldée à la clôture de session | le client, en face |
+| `en_ligne` | immédiate, **avant** confirmation | panier payé à moitié, retour bancaire perdu | le client |
+| `borne` | immédiate, sans espèces en pratique | transaction acceptée sans contrepartie | le client |
+| `appli` *(à créer — D38)* | immédiate | idem en ligne | le client |
+| `gestion` *(à créer — D45-bis)* | **terme convenu** (30 j, 60 j…) | non soldée après l'échéance | le client, plus tard |
+| `ota` *(à créer)* | **différée et groupée** | écart de rapprochement | **le partenaire, pas le client** |
+
+**Le cas OTA est celui que personne n'avait soulevé, et il ne rentre dans aucune des deux cases.** Une
+vente OTA non soldée **n'est pas une créance client** : le visiteur a payé son agence, et c'est
+l'agence qui reverse — `Boutique\Entity\ReversementOTA` existe déjà pour ça. La traiter comme un
+impayé enverrait une relance à quelqu'un qui a payé, ce qui est le pire résultat possible pour une
+fonction censée récupérer de l'argent.
+
+**Donc l'attente ne suffit pas : il faut aussi savoir QUI doit.** Deux propriétés, pas une.
+
+**La règle qui empêche la prochaine omission — et c'est le vrai enjeu de cette décision.** Maxime a
+trouvé le trou en trois secondes parce qu'il connaît son métier ; le prochain canal sera ajouté par
+quelqu'un qui ne le connaîtra pas. **Un canal ne peut pas exister sans déclarer son attente de paiement
+et son débiteur.** Ce n'est pas une consigne : la donnée est exigée à la construction, et un canal
+ajouté sans elle ne compile pas.
+
+C'est exactement le motif qu'on répète depuis trois jours — *un mécanisme qui dépend de la vigilance
+n'est pas un mécanisme* — appliqué à une énumération qui va grandir de trois valeurs cette année.

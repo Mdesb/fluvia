@@ -8,6 +8,9 @@ use ApiPlatform\Doctrine\Orm\Extension\QueryCollectionExtensionInterface;
 use ApiPlatform\Doctrine\Orm\Extension\QueryItemExtensionInterface;
 use ApiPlatform\Doctrine\Orm\Util\QueryNameGeneratorInterface;
 use ApiPlatform\Metadata\Operation;
+use App\Offre\Entity\ConversionType;
+use App\Offre\Entity\GrilleTarifaire;
+use App\Offre\Entity\PrixHistorique;
 use App\Offre\Entity\Produit;
 use App\Securite\Entity\Affectation;
 use App\Securite\Entity\Utilisateur;
@@ -22,6 +25,25 @@ use Symfony\Bundle\SecurityBundle\Security;
  */
 final class PerimetreProduitExtension implements QueryCollectionExtensionInterface, QueryItemExtensionInterface
 {
+    /**
+     * Chemin d'association (relatif a l'alias racine) menant au `Produit` porteur des
+     * etablissements — `null` quand la ressource EST le produit.
+     *
+     * Les trois entites satellites ne portent pas d'etablissement : elles le tiennent de leur
+     * produit. Sans ces chemins, leurs collections etaient lisibles d'un etablissement a l'autre —
+     * on lisait la grille tarifaire d'un voisin, son historique de prix, et jusqu'a ses conversions
+     * de type. C'est le classement que `claude-C` avait deja pose dans la ligne de base (groupes A
+     * et A2, chemins `produit` et `grille.produit`) : il n'y avait qu'a l'appliquer.
+     *
+     * @var array<class-string, string|null>
+     */
+    private const CHEMINS = [
+        Produit::class => null,
+        ConversionType::class => 'produit',
+        GrilleTarifaire::class => 'produit',
+        PrixHistorique::class => 'grille.produit',
+    ];
+
     public function __construct(
         private readonly Security $security,
     ) {
@@ -54,7 +76,7 @@ final class PerimetreProduitExtension implements QueryCollectionExtensionInterfa
 
     private function restreindre(QueryBuilder $queryBuilder, string $resourceClass): void
     {
-        if ($resourceClass !== Produit::class) {
+        if (!\array_key_exists($resourceClass, self::CHEMINS)) {
             return;
         }
 
@@ -65,8 +87,20 @@ final class PerimetreProduitExtension implements QueryCollectionExtensionInterfa
 
         $rootAlias = $queryBuilder->getRootAliases()[0];
 
+        // Remonte jusqu'au produit, segment par segment : `grille.produit` demande deux jointures.
+        $aliasProduit = $rootAlias;
+        $chemin = self::CHEMINS[$resourceClass];
+        if ($chemin !== null) {
+            $rang = 0;
+            foreach (explode('.', $chemin) as $segment) {
+                $suivant = 'perim_vers_produit_' . $rang++;
+                $queryBuilder->innerJoin($aliasProduit . '.' . $segment, $suivant);
+                $aliasProduit = $suivant;
+            }
+        }
+
         $queryBuilder
-            ->innerJoin($rootAlias . '.etablissements', 'perim_etab')
+            ->innerJoin($aliasProduit . '.etablissements', 'perim_etab')
             ->innerJoin(
                 Affectation::class,
                 'perim_aff',

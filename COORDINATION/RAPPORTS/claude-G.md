@@ -291,6 +291,7 @@ lui fait porter le risque. La prochaine fois je donne les deux, ou je dis que je
 | 00:38 | **SECOND IDOR FERMÉ, et celui-là fait plus mal** : l'action de masse du catalogue permettait d'**archiver — irréversiblement — le produit d'un autre établissement**, à qui savait deviner des UUID. Vérifié sans la garde : `nbTraites=1`, le produit étranger était bien archivé. `tests/Offre` 26/26. | Reste de la dette : `Emarger`, `AjouterParticipant`, `InscrireListeAttente`, `Convertir`. Mon audit en cours dit que plusieurs sont de la **fausse** dette — je te le démontrerai plutôt que d'ajouter des gardes décoratives. | Rien. |
 | 01:02 | **Troisième et quatrième trous fermés — et ce sont des fuites de données personnelles, pas des défauts de cloisonnement.** On désignait le bénéficiaire de n'importe qui comme participant ou inscrit en liste d'attente. Vérifié sans les gardes : l'inscription était créée, la fiche étrangère référencée. `tests/Reservation` 97/97 avec les gardes, mes 3 tests dédiés verts. | Audit de la dette terminé : **2 vraies fuites corrigées, 2 fausses dettes démontrées**. Tableau sous le tableau. | Rien. |
 | 08:54 | **PRÉSENTATION HORAIRE.** D'abord ceci : **je me suis encore arrêtée, de 01h15 à 08h45** — sept heures et demie, la seconde fois en deux jours. Ce n'est pas un blocage, c'est la règle zéro. Ensuite : ton ordre long est lu, et **le point 1 était déjà fait** quand tu l'as écrit (01h00) — quatre entrées résorbées, deux fausses dettes démontrées. **Point 2 fait aussi** : les disponibilités et indisponibilités étaient lisibles d'un établissement à l'autre, c'est corrigé et vérifié rouge sans la jointure. | Reste du point 2 : les 9 entrées `Offre`. Puis D41 sur mes trois entités. | Rien. |
+| 09:16 | **Point 2 terminé côté dérivable** : `GrilleTarifaire`, `ConversionType` et `PrixHistorique` suivent désormais leur produit. On lisait **les prix pratiqués par un voisin**, tarif par tarif et saison par saison. Vérifié rouge sans les chemins. `tests/Offre` 27/27, `tests/Reservation` 102/102. | **Les 6 dernières entrées ne sont pas de la dette : c'est une décision de modèle, et elle est pour toi.** Recommandation motivée entité par entité sous le tableau. Ensuite D41 sur mes trois entités. | Rien. |
 
 ## Nouvelle règle de Maxime — présentation horaire à `claude-A`
 
@@ -869,3 +870,47 @@ Je ne peux pas garantir que ça ne se reproduira pas — c'est la limite que tu 
 18h10, une session lancée depuis un bureau s'arrête quand elle a fini de répondre. Ce que je peux
 faire, et que je fais : le dire au lieu de le laisser deviner, et reprendre par le battement plutôt
 que par le travail — fusionner, lire les ordres, me présenter, puis coder.
+
+
+## Couverture de périmètre — trois de plus, et les six dernières ne m'appartiennent pas
+
+**Les trois dérivables sont fermées.** `GrilleTarifaire` et `ConversionType` par leur produit,
+`PrixHistorique` par `grille.produit`. Le classement de `claude-C` dans la ligne de base était juste
+(groupes A et A2, chemins écrits noir sur blanc) : je n'ai eu qu'à l'appliquer. L'extension produit
+accepte maintenant un chemin d'association et le remonte segment par segment — deux jointures pour
+`grille.produit`.
+
+**Ce que la fuite donnait à voir** : la grille tarifaire d'un voisin, tarif par tarif et saison par
+saison, plus l'historique de ses changements de prix. Ce n'est pas de la configuration partagée,
+c'est sa politique commerciale — et l'historique dit en plus **quand** il l'a changée.
+
+Vérifié rouge sans les chemins. `tests/Offre` 27/27, et `tests/Reservation` 102/102 après le lot
+précédent.
+
+### Les six dernières : ce n'est plus de la dette, c'est un choix de modèle
+
+`Categorie`, `Promotion`, `Saison`, `TypeProduit`, `TypeTarif`, `TrancheQuotientFamilial`. Ta ligne
+de base les classe en « groupe B — référentiel présumé, à trancher module par module ». Je suis le
+module ; voici mon tranchage, mais il ne se met pas en œuvre sans toi, parce qu'il demande une
+colonne et une migration, pas une jointure.
+
+**Le fait, d'abord** : aucune ne porte d'établissement **ni de groupe**. Elles ne sont donc pas
+« globales au groupe » — elles sont globales à **toute la base**, c'est-à-dire partagées entre des
+exploitants qui n'ont aucun rapport entre eux.
+
+| Entité | Mon avis | Pourquoi |
+|---|---|---|
+| `TypeProduit`, `TypeTarif` | **laisser global** | Vocabulaire structurant du logiciel (« entrée », « carte », « plein tarif »). Les cloisonner interdirait à deux établissements de partager un référentiel commun, ce qui est précisément l'intérêt d'une plateforme. Et `TypeProduit` porte les compatibilités de conversion : cloisonné, il faudrait les redéclarer partout. |
+| `Categorie` | **laisser global**, mais à revoir si la personnalisation arrive | Arbre de classement. Même raison, avec moins de force : un exploitant peut vouloir son propre axe. |
+| `TrancheQuotientFamilial` | **à cloisonner par groupe** | Les tranches de quotient familial sont fixées par la collectivité. Deux clients n'ont pas les mêmes, et les voir mutuellement n'a aucun sens. |
+| `Saison` | **à cloisonner par groupe** | Une saison est un calendrier d'exploitation. Celui du voisin ne le regarde pas, et une saison créée par l'un apparaît aujourd'hui dans les listes de l'autre. |
+| `Promotion` | **à cloisonner par groupe, et c'est la plus urgente** | Une promotion est une **arme commerciale**. Aujourd'hui, un exploitant voit celles de ses concurrents, y compris avant leur date de début. |
+
+**Ce que je ne fais pas et pourquoi.** Ajouter un `groupe` à trois entités, c'est une migration, une
+reprise de données (à quel groupe rattacher l'existant ?) et un choix d'échelle — groupe ou
+établissement — que je ne peux pas trancher seul. Sur `Promotion`, il y a en plus une question de
+compatibilité : si des promotions existantes sont déjà partagées entre groupes, les cloisonner en
+casse l'usage.
+
+**Dis-moi si tu veux que je le prenne**, et à quelle échelle. En attendant, ces six entrées restent
+au cliquet — elles y sont à juste titre, et les retirer sans corriger serait pire que de les laisser.

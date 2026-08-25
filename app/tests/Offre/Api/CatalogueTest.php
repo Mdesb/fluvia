@@ -72,6 +72,60 @@ final class CatalogueTest extends OffreApiTestCase
     }
 
     /**
+     * RG-SOCLE-05 — la grille tarifaire ne porte pas d'établissement : elle le tient de son produit.
+     *
+     * Sans jointure, la collection était lisible d'un établissement à l'autre : on lisait **les prix
+     * pratiqués par un voisin**, tarif par tarif et saison par saison. Ce n'est pas de la
+     * configuration partagée, c'est sa politique commerciale.
+     */
+    public function testLaGrilleTarifaireDunProduitHorsPerimetreNestPasListee(): void
+    {
+        [$client, $token, $idA] = $this->adminSurA();
+        $entete = ['auth_bearer' => $token, 'headers' => [ContexteEtablissement::HEADER => $idA]];
+
+        $produit = $client->request('POST', '/api/produits', $entete + [
+            'json' => [
+                'libelle' => ['fr' => 'Produit a grille hors perimetre'],
+                'type' => '/api/type_produits/' . $this->idType(OffreFixtures::TYPE_ENTREE),
+                'canaux' => ['guichet'],
+                'etablissements' => ['/api/etablissements/' . $idA],
+            ],
+        ])->toArray();
+        self::assertResponseStatusCodeSame(201);
+
+        /** @var \Doctrine\ORM\EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $entite = $em->getRepository(\App\Offre\Entity\Produit::class)->find($produit['id']);
+        self::assertNotNull($entite);
+
+        $etabAEntite = $em->getRepository(\App\Organisation\Entity\Etablissement::class)->find($idA);
+        self::assertNotNull($etabAEntite);
+        $etranger = (new \App\Organisation\Entity\Etablissement())
+            ->setNom('Etablissement hors perimetre ' . uniqid())
+            ->setRegion($etabAEntite->getRegion());
+        $em->persist($etranger);
+
+        // La grille est creee AVANT le deplacement : on teste bien la lecture, pas l'ecriture.
+        $grille = (new \App\Offre\Entity\GrilleTarifaire())->setProduit($entite)
+            ->setTypeTarif($em->getRepository(\App\Offre\Entity\TypeTarif::class)->find($this->idTarif(OffreFixtures::TARIF_PLEIN)))
+            ->setSaison($em->getRepository(\App\Offre\Entity\Saison::class)->find($this->idSaison(OffreFixtures::SAISON)))
+            ->setPrix('42.00');
+        $em->persist($grille);
+
+        foreach ($entite->getEtablissements()->toArray() as $ancien) {
+            $entite->getEtablissements()->removeElement($ancien);
+        }
+        $entite->getEtablissements()->add($etranger);
+        $em->flush();
+
+        $client->request('GET', '/api/grille_tarifaires', $entete + ['query' => ['itemsPerPage' => 100]]);
+        self::assertResponseIsSuccessful();
+        $membres = $client->getResponse()->toArray()['member'] ?? $client->getResponse()->toArray()['hydra:member'];
+        $ids = array_map(static fn (array $g): string => $g['id'], $membres);
+        self::assertNotContains((string) $grille->getId(), $ids, 'La grille d\'un produit hors perimetre ne doit pas etre listee.');
+    }
+
+    /**
      * D3/D8 — une action de masse ne doit pas atteindre le produit d'un établissement hors périmètre.
      *
      * Les identifiants viennent du corps de la requête, et l'action de masse en accepte une liste
