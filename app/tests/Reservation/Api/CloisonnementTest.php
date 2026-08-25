@@ -83,6 +83,92 @@ final class CloisonnementTest extends ReservationApiTestCase
         self::assertSame($ressourceInitiale, (string) $creneau->getRessource()?->getId());
     }
 
+    /**
+     * RG-SOCLE-05 — les disponibilités et indisponibilités ne portent pas d'établissement : elles le
+     * tiennent de leur ressource. Sans jointure, leurs collections étaient lisibles d'un
+     * établissement à l'autre — on voyait les plages d'ouverture et les fermetures exceptionnelles
+     * des voisins, c'est-à-dire leur activité réelle.
+     */
+    public function testLesDisponibilitesDunEtablissementHorsPerimetreNeSontPasListees(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $client->disableReboot();
+
+        $idRessourceEtrangere = $this->creerRessourceHorsPerimetre();
+
+        /** @var \Doctrine\ORM\EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $ressource = $em->getRepository(\App\Reservation\Entity\Ressource::class)->find($idRessourceEtrangere);
+        self::assertNotNull($ressource);
+        $dispo = (new \App\Reservation\Entity\DisponibiliteRessource())->setRessource($ressource)
+            ->setJourSemaine(1)
+            ->setHeureDebut(new \DateTimeImmutable('2026-01-01 08:00:00'))
+            ->setHeureFin(new \DateTimeImmutable('2026-01-01 18:00:00'));
+        $em->persist($dispo);
+        $em->flush();
+
+        $client->request('GET', '/api/reservation_disponibilites', $entete);
+        self::assertResponseIsSuccessful();
+        $membres = $client->getResponse()->toArray()['member'] ?? $client->getResponse()->toArray()['hydra:member'];
+        $ids = array_map(static fn (array $d): string => $d['id'], $membres);
+        self::assertNotContains((string) $dispo->getId(), $ids, 'La disponibilité d\'un établissement hors périmètre ne doit pas être listée.');
+    }
+
+    /**
+     * Et l'écriture : déclarer une disponibilité SUR la ressource d'un autre établissement.
+     * `risque_ecriture` de la ligne de base, mot pour mot — la lecture corrigée ne suffit pas si
+     * l'écriture reste ouverte.
+     */
+    public function testOnNeDeclarePasUneDisponibiliteSurLaRessourceDunAutreEtablissement(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $client->disableReboot();
+
+        $idRessourceEtrangere = $this->creerRessourceHorsPerimetre();
+
+        $client->request('POST', '/api/reservation_disponibilites', $entete + [
+            'json' => [
+                'ressource' => '/api/reservation_ressources/' . $idRessourceEtrangere,
+                'jourSemaine' => 2,
+                'heureDebut' => '09:00:00',
+                'heureFin' => '17:00:00',
+            ],
+        ]);
+        self::assertGreaterThanOrEqual(400, $client->getResponse()->getStatusCode(), 'Une ressource hors périmètre ne doit pas être adressable.');
+
+        /** @var \Doctrine\ORM\EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $em->clear();
+        self::assertSame(
+            0,
+            (int) $em->getRepository(\App\Reservation\Entity\DisponibiliteRessource::class)
+                ->count(['ressource' => $idRessourceEtrangere]),
+            'Aucune disponibilité ne doit avoir été écrite sur la ressource étrangère.'
+        );
+    }
+
+    /** Une ressource sur un établissement neuf, où l'admin n'a aucune affectation. */
+    private function creerRessourceHorsPerimetre(): string
+    {
+        /** @var \Doctrine\ORM\EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $etabA = $em->getRepository(\App\Organisation\Entity\Etablissement::class)
+            ->findOneBy(['nom' => SocleFixtures::ETAB_A_NOM]);
+        self::assertNotNull($etabA);
+
+        $etranger = (new \App\Organisation\Entity\Etablissement())
+            ->setNom('Etablissement hors perimetre ' . uniqid())
+            ->setRegion($etabA->getRegion());
+        $em->persist($etranger);
+
+        $ressource = (new \App\Reservation\Entity\Ressource())->setEtablissement($etranger)
+            ->setCodeType('terrain')->setLibelle('Terrain hors perimetre ' . uniqid())->setCapacitePropre(2);
+        $em->persist($ressource);
+        $em->flush();
+
+        return (string) $ressource->getId();
+    }
+
     public function testAdminNeVoitPasLesRessourcesDunAutreGroupe(): void
     {
         [$client, $entete] = $this->adminSurA();
