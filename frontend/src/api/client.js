@@ -432,4 +432,8 @@ export const api = {
   // un abonnement actif qu'on oublie ne produit aucun signal, seulement de l'argent jamais prélevé.
   editorBilling: (mois) => request('/api/editor/billing', { query: mois ? { month: mois } : {} }),
   emettreFactureAbonnement: (corps) => request('/api/editor/billing', { method: 'POST', body: corps }),
+
+  // Ce qui reste du a l'editeur (ED-8). Une facture soldee ne figure pas dans la reponse : le
+  // serveur la retire, l'ecran n'a pas a decider ce qu'il montre.
+  editorReceivables: () => request('/api/editor/receivables'),
 }

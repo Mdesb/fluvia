@@ -172,7 +172,13 @@ final class SubscriptionInvoicer
 
         $this->builder->appliquerDestinataire($facture, $this->destinataire($abonnement));
         $this->builder->appliquerLignes($facture, ['lignes' => $this->lignes($abonnement, $mois, $taux)]);
-        $facture->setConditionsReglement($this->comptes->parametre($profil)?->conditionsCompletes());
+        $parametre = $this->comptes->parametre($profil);
+        $facture->setConditionsReglement($parametre?->conditionsCompletes());
+
+        // L'echeance derive du MOIS FACTURE, pas de l'heure d'execution : une meme facture rejouee
+        // — reprise apres incident, rattrapage d'un mois oublie — doit porter la meme date. Le delai
+        // vient du parametrage de l'exploitant, qui existait et que personne ne lisait.
+        $facture->setDateEcheance($mois->modify(sprintf('+%d days', $parametre?->getDelaiPaiementDefautJours() ?? 30)));
 
         $this->em->persist($facture);
         $this->em->flush();
