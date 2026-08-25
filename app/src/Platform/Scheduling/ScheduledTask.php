@@ -23,6 +23,29 @@ final readonly class ScheduledTask
         public int $everyMinutes,
         public string $why,
         public bool $critical = false,
+        /**
+         * Le premier passage d'une commande qui n'a jamais tourné est-il **sûr** ?
+         *
+         * **Le défaut est `false`, et c'est délibéré.** Trouvé par `claude-G` sur
+         * `padel:eclairage:commander` : elle balaie toutes les réservations **sans borne de date** et
+         * déclencherait, à sa première exécution, un allumage pour chaque créneau passé et une
+         * extinction pour chaque créneau fini — sur un **port qui pilote un relais physique**.
+         * Aujourd'hui l'adaptateur est un simulateur ; le jour où un vrai relais est branché, la
+         * première exécution allume et éteint les projecteurs de chaque terrain autant de fois qu'il y
+         * a de réservations dans l'historique.
+         *
+         * **Et je ne sais pas combien des vingt et une autres ont le même profil** — je ne les ai pas
+         * écrites. Un défaut à `true` reviendrait à affirmer qu'elles sont sûres sans l'avoir vérifié :
+         * c'est exactement le genre d'affirmation qui a produit les défauts de cette semaine.
+         *
+         * Conséquence : une tâche jamais exécutée n'est **pas** lancée automatiquement. Elle attend un
+         * passage supervisé — `--premier-passage`, ou `--only` — où quelqu'un regarde ce qu'elle fait.
+         * Après quoi elle se planifie normalement.
+         *
+         * `true` se déclare quand on a **lu la commande** et vérifié qu'elle borne son travail dans le
+         * temps au lieu de rattraper l'historique.
+         */
+        public bool $safeOnFirstRun = false,
     ) {
     }
 }

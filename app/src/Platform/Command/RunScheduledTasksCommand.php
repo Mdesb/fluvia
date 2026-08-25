@@ -69,6 +69,7 @@ final class RunScheduledTasksCommand extends Command
         $dryRun = (bool) $input->getOption('dry-run');
         $executees = 0;
         $echouees = 0;
+        $attente = 0;
 
         foreach ($this->catalog->all() as $task) {
             if (\is_string($only) && $only !== '' && $task->command !== $only) {
@@ -81,6 +82,24 @@ final class RunScheduledTasksCommand extends Command
                 continue;
             }
 
+            $premierPassage = $trace->getLastFinishedAt() === null;
+            $supervise = \is_string($only) && $only !== '';
+
+            if ($premierPassage && !$task->safeOnFirstRun && !$supervise) {
+                // Une commande qui n'a jamais tourné peut rattraper tout l'historique d'un coup — et
+                // certaines pilotent du matériel. Tant que personne n'a regardé ce qu'elle fait, on ne
+                // la lance pas toute seule. Ce n'est pas un blocage : `--premier-passage` ou `--only`
+                // la lancent sous supervision, et elle se planifie normalement ensuite.
+                $io->writeln(sprintf(
+                    '  <comment>premier passage</comment> %s — lancer sous supervision : '
+                    . 'bin/console platform:scheduler:run --only=%s',
+                    $task->command,
+                    $task->command,
+                ));
+                ++$attente;
+                continue;
+            }
+
             if ($dryRun) {
                 $io->writeln(sprintf('  <comment>due</comment> %s', $task->command));
                 ++$executees;
@@ -89,6 +108,14 @@ final class RunScheduledTasksCommand extends Command
 
             $code = $this->runOne($task, $trace, $now, $io);
             $code === Command::SUCCESS ? ++$executees : ++$echouees;
+        }
+
+        if ($attente > 0) {
+            $io->note(sprintf(
+                "%d tâche(s) attendent un premier passage supervisé. Tant qu'il n'a pas eu lieu, "
+                . "elles ne tournent pas — voir `--only` ci-dessus.",
+                $attente,
+            ));
         }
 
         if ($echouees > 0) {

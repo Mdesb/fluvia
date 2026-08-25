@@ -151,7 +151,10 @@ final class ScheduleCatalog
             new ScheduledTask(
                 'padel:eclairage:commander',
                 5,
-                "L'éclairage des terrains n'est ni allumé ni éteint automatiquement.",
+                "L'éclairage des terrains n'est ni allumé ni éteint automatiquement. "
+                . "⚠ PREMIER PASSAGE NON SÛR : la commande balaie toutes les réservations sans borne "
+                . "de date et pilote un relais physique — signalé par claude-G. À borner dans le temps "
+                . "(périmètre claude-I) avant de la déclarer sûre.",
             ),
         ];
     }
