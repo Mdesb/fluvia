@@ -119,18 +119,37 @@ final class ScheduleCatalog
                 "Un salarié dont le contrat est fini garde ses accès : son statut ne bascule pas et son "
                 . "badge n'est jamais révoqué. Personne ne le signale — ni erreur, ni alerte.",
                 critical: true,
+                // NON SÛR AU PREMIER PASSAGE, et pourtant ce qu'elle ferait est juste : elle traite
+                // **toutes** les sorties passées d'un coup, donc révoque en une salve les badges de tous
+                // ceux qui sont partis depuis la mise en service. C'est exactement ce qu'il faut faire —
+                // mais une révocation de masse mérite quelqu'un devant l'écran la première fois, ne
+                // serait-ce que pour constater l'ampleur de ce qui traînait.
             ),
 
+            // SÛR AU PREMIER PASSAGE — vérifié en lisant `RecalculFenetreBadgeHandler` :
+            // `recalculerTous()` recalcule chaque badge à partir de **maintenant**. Il ne rejoue aucun
+            // historique, il recompose un état présent, et il est idempotent : deux exécutions de suite
+            // produisent le même résultat.
             new ScheduledTask(
                 'personnel:recalculer-fenetres-badges',
                 60,
-                "Les fenêtres de validité des badges ne suivent pas les changements de planning.",
+                "Les fenêtres de validité des badges ne suivent pas les changements de planning : "
+                . "un agent dont l'horaire a bougé garde l'ancienne fenêtre.",
+                safeOnFirstRun: true,
             ),
+            // SÛR AU PREMIER PASSAGE — vérifié : sans option, la commande borne son travail à
+            // `today`. Elle ne remonte pas l'historique, il faut le lui demander explicitement avec
+            // `--depuis`.
             new ScheduledTask(
                 'reporting:agreger',
                 60,
                 "Les mesures ne sont jamais agrégées : les tableaux de bord restent figés.",
+                safeOnFirstRun: true,
             ),
+            // NON SÛR AU PREMIER PASSAGE — vérifié : la requête retient les rapports dont
+            // `prochainEnvoi` est **nul** ou dépassé. Tout rapport planifié et jamais envoyé partirait
+            // donc **en une seule salve**, à ses destinataires réels. Chacun est légitimement dû ; c'est
+            // leur simultanéité qui mérite un œil. Le premier passage reste supervisé.
             new ScheduledTask(
                 'reporting:executer-rapports',
                 60,
