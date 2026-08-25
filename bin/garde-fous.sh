@@ -202,6 +202,25 @@ fi
 # 6. CSRF — SANS OBJET : tous les pare-feux sont `stateless: true` et l'authentification est un JWT
 #    en en-tête, qui n'est pas un identifiant ambiant. Acté par l'intégrateur le 21/08.
 
+# 11. Droits du frontend (D39) — écrit par claude-H, branché ici.
+#
+# La comparaison brute `droits.includes('caisse.lire')` ignore la permission joker `*.lire` : quatre
+# occurrences ont enfermé Maxime hors de son propre logiciel. Le script vérifie aussi que les
+# composants qui affichent des droits les reçoivent réellement en propriété.
+#
+# ⚠ Il tourne sur l'HÔTE : `node` n'est pas dans l'image PHP. S'il manque, on le dit — un contrôle
+# sauté qui se tait laisse croire qu'il a validé.
+if [ -f "$RACINE/frontend/scripts/verifier-droits.mjs" ]; then
+    if command -v node >/dev/null 2>&1; then
+        executer "Droits du frontend (D39)" sh -c "cd '$RACINE/frontend' && node scripts/verifier-droits.mjs"
+    else
+        echo "─────────────────────────────────────────────────────────────"
+        echo "▶ Droits du frontend (D39)"
+        echo "─────────────────────────────────────────────────────────────"
+        echo "· IGNORÉ — « node » indisponible ici. Le contrôle n'a PAS tourné."
+    fi
+fi
+
 # ⚠ FILET DE COMPLÉTUDE DU LANCEUR — et il couvre TOUTES les extensions.
 #
 # Les deux hooks ont déjà ce filet, mais ils globent `bin/garde-fou-*.php`. Le garde-fou de

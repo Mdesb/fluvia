@@ -91,6 +91,15 @@ if [ -f "$RACINE/bin/garde-fou-nommage-anglais.php" ]; then
     fi
 fi
 
+# Droits du frontend (D39), ecrit par claude-H. Sur l'hote : node n'est pas dans l'image PHP.
+if [ -f "$RACINE/frontend/scripts/verifier-droits.mjs" ]; then
+    if command -v node >/dev/null 2>&1; then
+        ( cd "$RACINE/frontend" && node scripts/verifier-droits.mjs ) || ECHEC=1
+    else
+        echo "· Droits du frontend IGNORÉ — « node » indisponible. Le contrôle n'a PAS tourné."
+    fi
+fi
+
 # ⚠ FILET DE COMPLÉTUDE — même leçon que `pre-receive`, même remède.
 #
 # Ce hook redit la liste des garde-fous au lieu d'appeler `bin/garde-fous.sh`, parce qu'il n'a ni

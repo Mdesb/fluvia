@@ -210,6 +210,17 @@ while read -r ancien nouveau ref; do
         lancer garde-fou-defauts-mapping.php "--contre=$BASE"
     fi
 
+    # Droits du frontend (D39), ecrit par claude-H. Il tourne sur l'HOTE : `node` n'est pas dans
+    # l'image PHP, et l'arbre pousse est deja extrait ici. S'il manque, on le dit.
+    if [ -f "$ARBRE/frontend/scripts/verifier-droits.mjs" ]; then
+        echo "── Droits du frontend (D39)"
+        if command -v node >/dev/null 2>&1; then
+            ( cd "$ARBRE/frontend" && node scripts/verifier-droits.mjs ) || ECHEC_REF=1
+        else
+            echo "· IGNORÉ — « node » indisponible sur l'hôte. Le contrôle n'a PAS tourné."
+        fi
+    fi
+
     # ⚠ FILET DE COMPLÉTUDE — la leçon du 24/08, et elle a coûté cher.
     #
     # Ce hook n'appelle pas `bin/garde-fous.sh` : il doit calculer les fichiers ajoutés sur
