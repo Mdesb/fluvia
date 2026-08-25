@@ -1396,3 +1396,36 @@ la vente** et de la **dériver de l'origine** plutôt que de la saisir.
 **Conséquence à assumer** : l'origine d'une vente devient une donnée porteuse de sens, pas un
 renseignement. Elle doit être posée à la création et ne plus bouger — une vente de guichet requalifiée
 en vente directe effacerait l'anomalie au lieu de la traiter.
+
+#### 2026-08-25 · D46-bis — L'attente de paiement est **par canal**, et l'OTA n'est pas un client
+Maxime, immédiatement après D46 : *« n'oublie pas qu'il y a vente en ligne, appli, borne, etc. »* Il a
+raison et mon tableau à deux colonnes était faux.
+
+**État vérifié** : `Offre\Enum\Canal` porte **trois** valeurs — `guichet`, `en_ligne`, `borne`. Il en
+manque déjà deux que Maxime a décidées cette semaine, plus un cas particulier :
+
+| Canal | Attente de paiement | Anomalie | Qui paie |
+|---|---|---|---|
+| `guichet` | immédiate | non soldée à la clôture de session | le client, en face |
+| `en_ligne` | immédiate, **avant** confirmation | panier payé à moitié, retour bancaire perdu | le client |
+| `borne` | immédiate, sans espèces en pratique | transaction acceptée sans contrepartie | le client |
+| `appli` *(à créer — D38)* | immédiate | idem en ligne | le client |
+| `gestion` *(à créer — D45-bis)* | **terme convenu** (30 j, 60 j…) | non soldée après l'échéance | le client, plus tard |
+| `ota` *(à créer)* | **différée et groupée** | écart de rapprochement | **le partenaire, pas le client** |
+
+**Le cas OTA est celui que personne n'avait soulevé, et il ne rentre dans aucune des deux cases.** Une
+vente OTA non soldée **n'est pas une créance client** : le visiteur a payé son agence, et c'est
+l'agence qui reverse — `Boutique\Entity\ReversementOTA` existe déjà pour ça. La traiter comme un
+impayé enverrait une relance à quelqu'un qui a payé, ce qui est le pire résultat possible pour une
+fonction censée récupérer de l'argent.
+
+**Donc l'attente ne suffit pas : il faut aussi savoir QUI doit.** Deux propriétés, pas une.
+
+**La règle qui empêche la prochaine omission — et c'est le vrai enjeu de cette décision.** Maxime a
+trouvé le trou en trois secondes parce qu'il connaît son métier ; le prochain canal sera ajouté par
+quelqu'un qui ne le connaîtra pas. **Un canal ne peut pas exister sans déclarer son attente de paiement
+et son débiteur.** Ce n'est pas une consigne : la donnée est exigée à la construction, et un canal
+ajouté sans elle ne compile pas.
+
+C'est exactement le motif qu'on répète depuis trois jours — *un mécanisme qui dépend de la vigilance
+n'est pas un mécanisme* — appliqué à une énumération qui va grandir de trois valeurs cette année.

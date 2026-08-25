@@ -109,6 +109,6 @@ Ne touche pas un chemin déjà en `WIP` par une autre instance.
 | VTE-4 | Permission dediee a la correction de reglement, distincte de caisse.gerer, tracee a laudit | `app/src/Securite/**` | **claude-A** | CLAIM | 25/08 |
 | FAC-1 | Devis, bon de commande, bon de livraison : la chaine complete jusqua la facture existante | `app/src/Facturation/**` | *a assigner* | CLAIM | 25/08 |
 
-| VTE-5 | Attente de paiement portee par la vente, derivee de lorigine (guichet = immediat, directe = terme) — D46 | `app/src/Vente/**` | *a assigner* | CLAIM | 25/08 |
+| VTE-5 | Attente de paiement **et debiteur** portes par le CANAL, exiges a la construction — six canaux, dont OTA ou le debiteur nest pas le client (D46-bis) | `app/src/{Offre,Vente}/**` | *a assigner* | CLAIM | 25/08 |
 | VTE-6 | Date de modification sur vente et facture, et **affichage en ecart** et non en dates brutes | `app/src/{Vente,Facturation}/**`, `frontend/**` | *a assigner* | CLAIM | 25/08 |
 | CAI-1 | Une correction de reglement peut pointer lAlerteEcartCaisse quelle explique — un ecart explique cesse detre un ecart | `app/src/Caisse/**` | *a assigner* | CLAIM | 25/08 |
