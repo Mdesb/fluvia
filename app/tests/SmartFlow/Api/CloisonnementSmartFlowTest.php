@@ -89,7 +89,36 @@ final class CloisonnementSmartFlowTest extends SmartFlowApiTestCase
         self::assertStringNotContainsString((string) $entreeB->getId(), (string) $reponse->getContent(false));
     }
 
-    private function creerEntreeListeAttente(string $nomEtablissement): SlotWaitlistEntry
+    /**
+     * Défaut corrigé (revue de cohérence, ce lot) : `CreateSlotWaitlistEntryProcessor` calculait
+     * `MAX(rank)` par `resourceId` seul (colonne UUID opaque, RG-SF-17), sans filtrer sur
+     * l'établissement — une `SlotWaitlistEntry` d'un autre établissement portant, par accident ou abus,
+     * le même UUID de ressource, aurait pu décaler le `rank` attribué en A. Cette entrée B ne doit
+     * jamais influencer le `rank` calculé en A.
+     */
+    public function testRangListeAttenteScopeParEtablissementIgnoreLesEntreesDunAutreEtablissement(): void
+    {
+        $ressourceA = $this->entity(Ressource::class, ['libelle' => ReservationFixtures::RESSOURCE_SALLE_LIBELLE]);
+
+        // Entrée dans l'établissement B, sur le **même** UUID de ressource que celui utilisé côté A
+        // ci-dessous (colonne opaque, aucune contrainte d'unicité inter-établissements) — simule le
+        // scénario de défense en profondeur visé par le correctif.
+        $this->creerEntreeListeAttente(SocleFixtures::ETAB_B_NOM, $ressourceA->getId(), 5);
+
+        [$client, $entete] = $this->managerOn(SocleFixtures::ETAB_A_NOM);
+        $reponse = $client->request('POST', '/api/smart-flow/waitlist-entries', $entete + [
+            'json' => [
+                'resourceId' => (string) $ressourceA->getId(),
+                'beneficiaryId' => (string) Uuid::v4(),
+                'searchWindowStart' => (new \DateTimeImmutable('+1 day'))->format(\DATE_ATOM),
+                'searchWindowEnd' => (new \DateTimeImmutable('+7 days'))->format(\DATE_ATOM),
+            ],
+        ])->toArray();
+
+        self::assertSame(1, $reponse['rank'], 'Le rank 5 de l\'entrée B ne doit pas influencer le rank attribué en A.');
+    }
+
+    private function creerEntreeListeAttente(string $nomEtablissement, ?Uuid $resourceId = null, int $rank = 1): SlotWaitlistEntry
     {
         $em = $this->em();
         $etablissement = $em->getRepository(Etablissement::class)->findOneBy(['nom' => $nomEtablissement]);
@@ -97,11 +126,11 @@ final class CloisonnementSmartFlowTest extends SmartFlowApiTestCase
 
         $entry = (new SlotWaitlistEntry())
             ->setEstablishment($etablissement)
-            ->setResourceId(Uuid::v4())
+            ->setResourceId($resourceId ?? Uuid::v4())
             ->setBeneficiaryId(Uuid::v4())
             ->setSearchWindowStart(new \DateTimeImmutable('+1 day'))
             ->setSearchWindowEnd(new \DateTimeImmutable('+7 days'))
-            ->setRank(1)
+            ->setRank($rank)
             ->setStatus(SlotWaitlistEntryStatus::Waiting);
 
         $em->persist($entry);

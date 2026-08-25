@@ -59,6 +59,7 @@ api_platform:
             - '%kernel.project_dir%/src/Ocr/Entity'
             - '%kernel.project_dir%/src/Dms/Entity'
             - '%kernel.project_dir%/src/SmartFlow/Entity'
+            - '%kernel.project_dir%/src/RevenueRecovery/Entity'
     defaults:
         stateless: true
         cache_headers:

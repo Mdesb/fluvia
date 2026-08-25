@@ -146,9 +146,33 @@ while (change) {
   }
 }
 
+// Le fichier `f` importe-t-il `nom` depuis le fichier `origine` ? Deux composants peuvent porter le
+// meme nom dans deux dossiers — comparer les noms sans resoudre l'import produit une accusation
+// fausse, et dans le perimetre de quelqu'un d'autre.
+function importeDepuis(f, src, nom, origine) {
+  // Recherche sans expression reguliere construite : `\\s` dans un gabarit de chaine vaut `s`, et
+  // une classe de caracteres perdue rend le controle muet. Je m'y suis laissee prendre trois fois ;
+  // ce qui suit ne peut pas se tromper de cette maniere.
+  for (const ligne of src.split('\n')) {
+    const l = ligne.trim()
+    if (!l.startsWith('import ')) continue
+    const avantFrom = l.slice(0, l.indexOf(' from '))
+    if (l.indexOf(' from ') === -1) continue
+    if (!avantFrom.split(/[\s,{}]+/).includes(nom)) continue
+    const guillemet = l.indexOf("'", l.indexOf(' from ')) !== -1 ? "'" : '"'
+    const d = l.indexOf(guillemet, l.indexOf(' from '))
+    const fin = l.indexOf(guillemet, d + 1)
+    if (d === -1 || fin === -1) continue
+    const chemin = l.slice(d + 1, fin)
+    return new URL(chemin, 'file://' + f).pathname === RACINE + origine
+  }
+  return false
+}
+
 // --- 3. Tout usage d'un composant qui exige `droits` doit le lui passer --------------------------
 for (const [f, src] of sources) {
   for (const nom of exigent.keys()) {
+    if (court(f) !== exigent.get(nom) && !importeDepuis(f, src, nom, exigent.get(nom))) continue
     for (const m of src.matchAll(new RegExp(`<${nom}(?=[\\s/>])`, 'g'))) {
       const balise = baliseOuvrante(src, m.index)
       if (balise === null) continue

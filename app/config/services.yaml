@@ -19,6 +19,12 @@ services:
     App\:
         resource: '../src/'
 
+    # Point de passage unique vers le client (CMP-1). L'implementation par defaut JOURNALISE et
+    # n'envoie rien : aucun prestataire n'est branche (D19, CMP-6). L'alias est explicite parce que
+    # deux classes implementent l'interface — le journal et le decorateur de consentement de Crm —
+    # et l'autowiring ne peut pas choisir seul.
+    App\Platform\Notification\ClientNotifierInterface: '@App\Platform\Notification\LogClientNotifier'
+
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones
 

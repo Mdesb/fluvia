@@ -15,6 +15,9 @@ use App\Reservation\DataFixtures\ReservationFixtures;
 use App\Reservation\Entity\Creneau;
 use App\Reservation\Entity\Ressource;
 use App\Reservation\Enum\StatutCreneau;
+use App\SmartFlow\Command\ExpireSlotWaitlistPromotionsCommand;
+use App\SmartFlow\Entity\RescheduleProposal;
+use App\SmartFlow\Enum\RescheduleProposalStatus;
 use App\Tests\SmartFlow\SmartFlowApiTestCase;
 use Symfony\Component\Uid\Uuid;
 
@@ -90,6 +93,117 @@ final class RescheduleFlowEndToEndTest extends SmartFlowApiTestCase
         $client->request('POST', '/api/smart-flow/reschedule-proposals/' . $idProposition . '/decline', $entete);
         self::assertResponseIsSuccessful();
         self::assertSame('expired', $client->getResponse()->toArray()['status'], 'RG-SF-12 : decline -> expired immédiat.');
+    }
+
+    public function testDoubleAcceptRefuseEnConflit409(): void
+    {
+        [$client, $entete, $idA] = $this->managerOn(SocleFixtures::ETAB_A_NOM);
+        [$origin, $compatible] = $this->creerCreneauOrigineEtCompatible($idA);
+        $idBeneficiairePayeur = $this->idBeneficiairePayeur();
+
+        $this->publierReschedule($idA, $idBeneficiairePayeur, $origin->getId());
+
+        $reponse = $client->request('GET', '/api/smart-flow/reschedule-proposals', $entete)->toArray();
+        $membres = $reponse['member'] ?? $reponse['hydra:member'] ?? [];
+        $idProposition = $membres[0]['id'];
+
+        [$adminClient, $adminEntete] = $this->adminOn(SocleFixtures::ETAB_A_NOM);
+        $reservation = $adminClient->request('POST', '/api/reservation/reservations', $adminEntete + [
+            'json' => [
+                'creneau' => '/api/reservation_creneaus/' . $compatible->getId(),
+                'organisateur' => '/api/beneficiaires/' . $idBeneficiairePayeur,
+            ],
+        ])->toArray();
+
+        $client->request('POST', '/api/smart-flow/reschedule-proposals/' . $idProposition . '/accept', $entete + [
+            'json' => ['confirmedReservationRef' => $reservation['id']],
+        ]);
+        self::assertResponseIsSuccessful((string) $client->getResponse()->getContent(false));
+
+        $second = $client->request('POST', '/api/smart-flow/reschedule-proposals/' . $idProposition . '/accept', $entete + [
+            'json' => ['confirmedReservationRef' => $reservation['id']],
+        ]);
+        self::assertSame(409, $second->getStatusCode(), 'Une proposition déjà confirmed ne peut pas être acceptée une seconde fois.');
+    }
+
+    public function testDeclineSurPropositionDejaConfirmeeRefuse409(): void
+    {
+        [$client, $entete, $idA] = $this->managerOn(SocleFixtures::ETAB_A_NOM);
+        [$origin, $compatible] = $this->creerCreneauOrigineEtCompatible($idA);
+        $idBeneficiairePayeur = $this->idBeneficiairePayeur();
+
+        $this->publierReschedule($idA, $idBeneficiairePayeur, $origin->getId());
+
+        $reponse = $client->request('GET', '/api/smart-flow/reschedule-proposals', $entete)->toArray();
+        $membres = $reponse['member'] ?? $reponse['hydra:member'] ?? [];
+        $idProposition = $membres[0]['id'];
+
+        [$adminClient, $adminEntete] = $this->adminOn(SocleFixtures::ETAB_A_NOM);
+        $reservation = $adminClient->request('POST', '/api/reservation/reservations', $adminEntete + [
+            'json' => [
+                'creneau' => '/api/reservation_creneaus/' . $compatible->getId(),
+                'organisateur' => '/api/beneficiaires/' . $idBeneficiairePayeur,
+            ],
+        ])->toArray();
+
+        $client->request('POST', '/api/smart-flow/reschedule-proposals/' . $idProposition . '/accept', $entete + [
+            'json' => ['confirmedReservationRef' => $reservation['id']],
+        ]);
+        self::assertResponseIsSuccessful();
+
+        $decline = $client->request('POST', '/api/smart-flow/reschedule-proposals/' . $idProposition . '/decline', $entete);
+        self::assertSame(409, $decline->getStatusCode(), 'Une proposition confirmed ne doit jamais basculer expired via decline.');
+    }
+
+    public function testAcceptSurPropositionSearchingRefuse409(): void
+    {
+        [$client, $entete, $idA] = $this->managerOn(SocleFixtures::ETAB_A_NOM);
+        $origin = $this->creerCreneauIsole($idA, ReservationFixtures::RESSOURCE_SALLE_LIBELLE);
+
+        $this->publierReschedule($idA, $this->idBeneficiairePayeur(), $origin->getId());
+
+        $reponse = $client->request('GET', '/api/smart-flow/reschedule-proposals', $entete)->toArray();
+        $membres = $reponse['member'] ?? $reponse['hydra:member'] ?? [];
+        self::assertSame('searching', $membres[0]['status']);
+        $idProposition = $membres[0]['id'];
+
+        $accept = $client->request('POST', '/api/smart-flow/reschedule-proposals/' . $idProposition . '/accept', $entete + [
+            'json' => ['confirmedReservationRef' => (string) Uuid::v4()],
+        ]);
+        self::assertSame(409, $accept->getStatusCode(), 'Une proposition searching (aucun créneau trouvé) ne peut pas être acceptée.');
+    }
+
+    /**
+     * CA-5/RG-SF-11 (défaut corrigé, revue de cohérence) : une proposition I1 (report de no-show,
+     * `sourceWaitlistEntryRef` NULL) `searching` dont `expiresAt` est dépassé est expirée par la
+     * commande `smart-flow:waitlist:expirer`, au même titre qu'une promotion I2.
+     */
+    public function testExpirationDunePropositionI1SearchingEchue(): void
+    {
+        [$client, $entete, $idA] = $this->managerOn(SocleFixtures::ETAB_A_NOM);
+        $origin = $this->creerCreneauIsole($idA, ReservationFixtures::RESSOURCE_SALLE_LIBELLE);
+
+        $this->publierReschedule($idA, $this->idBeneficiairePayeur(), $origin->getId());
+
+        $reponse = $client->request('GET', '/api/smart-flow/reschedule-proposals', $entete)->toArray();
+        $membres = $reponse['member'] ?? $reponse['hydra:member'] ?? [];
+        self::assertSame('searching', $membres[0]['status']);
+        $idProposition = $membres[0]['id'];
+
+        $em = $this->em();
+        $proposition = $em->getRepository(RescheduleProposal::class)->find(Uuid::fromString($idProposition));
+        self::assertInstanceOf(RescheduleProposal::class, $proposition);
+        self::assertNull($proposition->getSourceWaitlistEntryRef(), 'Proposition I1 : pas de liste d\'attente associée.');
+        $proposition->setExpiresAt(new \DateTimeImmutable('-1 minute'));
+        $em->flush();
+
+        /** @var ExpireSlotWaitlistPromotionsCommand $commande */
+        $commande = static::getContainer()->get(ExpireSlotWaitlistPromotionsCommand::class);
+        $traites = $commande->expirer(new \DateTimeImmutable());
+        self::assertSame(1, $traites);
+
+        $em->refresh($proposition);
+        self::assertSame(RescheduleProposalStatus::Expired, $proposition->getStatus());
     }
 
     public function testAcceptAvecReservationDunAutreClientRefuse422(): void
