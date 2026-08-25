@@ -16,6 +16,7 @@
 | 22:40 | Suites des cinq verticales passees. Piscine, Patinoire, Sport, Musee **vertes**. Padel : **1 echec, preexistant sur `origin/main`** (verifie en rejouant le test sur main, pas suppose) — et je tiens la cause exacte : le test ne tombe **que le lundi**. Diagnostic complet ci-dessous. Pile `claudeI` demontee, worktree VPS rendu a sa branche. | Je prepare le correctif ; il touche du code de production, donc je te laisse une fenetre d-objection avant de le poser. | Rien. |
 | 23:00 | **Padel repasse au vert** : 23 tests, 228 assertions. `tests/Platform` toujours 58/58. Le correctif ne prend aucune constante de reglage — deux regles physiques suffisaient, detail ci-dessous. Les cinq verticales sont donc vertes, manifestes compris. Pile demontee, worktree VPS rendu. | Je reprends le fil des paquets : ce qui est livrable sans installateur. | Rien. |
 | 25/08 09:05 | **Silence de 22:52 a 09:05 : ma session ne s-est pas reveillee**, je le dis plutot que de le masquer. Reprise : ordres longs lus. Balayage D40 fait sur mes quatre autres modules — **aucun autre basculement**, detail ci-dessous. D41 verifie en profondeur : mes 9 entites exposees le sont bien, mais mes ~30 processeurs a persistance directe sont **deja corrects** via `ContexteEtablissement`. | Item 2 de mes ordres : `PrioriteOtaResolver` qui passe en `AnnuleeLibre` sans rien restituer. | Rien. |
+| 25/08 09:45 | **Item 2 livre : `PrioriteOtaResolver` restitue.** Le billet perdant recupere son credit de carte (CQ-3/CQ-6), son droit d-acces est revoque, et la jauge de la ressource mere est liberee — il ne faisait aucun des trois. Test ecrit **verifie rouge sans la garde** (0 au lieu de 1) puis vert. Musee 23/23, Platform 62/62. Pile demontee, worktree rendu. | Item 5 : reprise des paquets verticales. | Rien. |
 
 ---
 
@@ -340,3 +341,38 @@ vaut peut-etre un garde-fou de poussee plutot qu-une relecture.
 **Je ne retire pas `etablissement` des groupes d-ecriture pour l-instant** : ton propre docblock
 argumente contre trente-cinq correctifs locaux et pour une regle unique. Dis-moi si tu veux les deux —
 je fais les neuf en un lot.
+
+---
+
+## 2026-08-25 09:45 · Item 2 — ce que l-arbitrage OTA ne rendait pas
+
+Tu m-avais signale l-absence de restitution de credit. En ouvrant le chemin, il en manquait **trois**,
+pas une. `PrioriteOtaResolver::arbitrer()` passait la reservation perdante en `AnnuleeLibre` et
+s-arretait la. Compare a `AnnulerReservationProcessor` dans sa branche « dans les delais », il ne
+faisait ni l-un ni l-autre de :
+
+1. **le credit de carte** (`StockCardCreditHandler::restituer`) — celui que tu avais vu. Sans lui,
+   l-arbitrage vole une seance au porteur, definitivement et sans trace : son solde est juste plus bas
+   et aucun ecran ne dit pourquoi ;
+2. **la revocation du droit d-acces projete** (`ProjectionAccesReservationHandler::revoquerSiProjete`)
+   — un billet annule qui ouvre encore un tourniquet n-est pas une imprecision comptable, c-est un
+   defaut de controle d-acces ;
+3. **la jauge de la ressource mere** (`JaugeRessourceMereHandler::decrementer`) — la place liberee
+   restait comptee occupee, donc le musee refusait un visiteur pour un creneau qu-il ne vendait plus.
+
+**Le raisonnement qui les relie**, et qui justifie de les traiter ensemble : le perdant n-a rien fait
+de mal. Son billet disparait par une decision de la plateforme, pas par la sienne. Tout ce que la
+plateforme lui a pris, elle le lui doit.
+
+**Ce que je n-ai pas touche** : le remboursement monetaire. Le docblock d-origine dit qu-il appartient
+a l-OTA selon ses CGV, et c-est juste — on ne rembourse pas l-argent d-un partenaire a sa place. Je
+l-ai reecrit pour que la frontiere soit lisible plutot que sous-entendue.
+
+**Discipline** : test ecrit d-abord, **pousse seul**, verifie rouge (`0` au lieu de `1`), puis le
+correctif, puis vert. Deux commits distincts, l-un apres l-autre, pour que la preuve soit dans
+l-historique et pas seulement dans ce rapport.
+
+**Deux ratees de ma part, dites franchement** : ma branche portait le cliquet de cloisonnement a 36
+alors que tu l-avais descendu a 33 — le garde-fou m-a refusee, il a eu raison, un `merge` a suffi. Et
+j-ai casse un docblock en le reecrivant, ce qui a fait tomber les trois tests en `ParseError` : je
+n-avais pas de `php -l` sous la main en local. Je le lance desormais sur le VPS avant de pousser du PHP.
