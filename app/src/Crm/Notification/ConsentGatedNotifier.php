@@ -10,6 +10,7 @@ use App\Crm\Enum\CanalConsentement;
 use App\Crm\Enum\EtatConsentement;
 use App\Platform\Notification\ClientNotification;
 use App\Platform\Notification\ClientNotifierInterface;
+use App\Platform\Notification\NotificationBasis;
 use App\Platform\Notification\NotificationOutcome;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\DependencyInjection\Attribute\AsDecorator;
@@ -47,6 +48,14 @@ final readonly class ConsentGatedNotifier implements ClientNotifierInterface
 
     public function notify(ClientNotification $notification): NotificationOutcome
     {
+        if ($notification->basis === NotificationBasis::Contractuelle) {
+            // Un message nécessaire à l'exécution du contrat — facture, confirmation, accès ouvert —
+            // n'a pas besoin d'un consentement MARKETING, et le refuser priverait le client de ce
+            // qu'il a acheté. La base légale est déclarée par l'appelant et vaut `Consentement` par
+            // défaut : personne ne tombe ici par distraction.
+            return $this->decorated->notify($notification);
+        }
+
         $client = $this->entityManager->getRepository(Client::class)->find($notification->clientId);
 
         if (!$client instanceof Client) {

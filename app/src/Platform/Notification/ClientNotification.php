@@ -34,6 +34,12 @@ final readonly class ClientNotification
         public \DateTimeImmutable $occurredAt,
         /** D'où vient la notification — pour la traçabilité et le plafond de sollicitation (D42). */
         public string $source,
+        /**
+         * Sur quel fondement on écrit. **Le défaut est le plus strict** : qui ne se pose pas la
+         * question voit son message refusé faute de consentement, ce qui se voit et se corrige.
+         * L'inverse enverrait de la prospection à des gens qui l'ont refusée, ce qui ne se voit pas.
+         */
+        public NotificationBasis $basis = NotificationBasis::Consentement,
     ) {
     }
 }
