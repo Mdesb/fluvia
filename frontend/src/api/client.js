@@ -183,6 +183,12 @@ export const api = {
     request(`/api/sessions-caisse/${id}/cloturer`, { method: 'POST', body: corps }),
 
   // Vente + encaissement.
+  // Historique : la collection et le detail existaient et n'etaient appeles nulle part.
+  ventes: (params) => request('/api/ventes', { query: params }),
+  vente: (id) => request(`/api/ventes/${id}`),
+  // `input: false` cote serveur, mais le processor lit bien un corps : motif, montant partiel
+  // facultatif, et jeton de rejeu apres validation d'une escalade.
+  rembourserVente: (id, corps) => request(`/api/ventes/${id}/rembourser`, { method: 'POST', body: corps }),
   creerVente: (corps) => request('/api/ventes', { method: 'POST', body: corps, timeoutMs: 20000 }),
   ajouterLigne: (venteId, corps) =>
     request(`/api/ventes/${venteId}/lignes`, { method: 'POST', body: corps, timeoutMs: 20000 }),
@@ -248,6 +254,12 @@ export const api = {
   reservationCreneaux: () => request('/api/reservation_creneaus', { query: { itemsPerPage: 200 } }),
   reservationActivites: () => request('/api/reservation_activites', { query: { itemsPerPage: 100 } }),
   reservations: () => request('/api/reservations', { query: { itemsPerPage: 200 } }),
+  // No-show (D27) : les deux operations existaient et n'etaient appelees de nulle part.
+  facturationsNoShow: () => request('/api/reservation_facturation_no_shows', { query: { itemsPerPage: 100 } }),
+  exonererNoShow: (id, corps) =>
+    request(`/api/reservation/facturations-no-show/${id}/exonerer`, { method: 'POST', body: corps }),
+  emettreVenteNoShow: (id, corps) =>
+    request(`/api/reservation/facturations-no-show/${id}/emettre-vente`, { method: 'POST', body: corps }),
   beneficiaires: () => request('/api/beneficiaires', { query: { itemsPerPage: 100 } }),
   // Écriture : réserver un créneau (créneau + organisateur en IRI). L'opération API Platform
   // n'accepte que le format JSON-LD (application/ld+json) — sans `ld`, le back répond 415.
