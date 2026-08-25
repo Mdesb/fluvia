@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Facturation\Entity;
 
+use App\Compta\Entity\TauxTva;
 use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
@@ -87,6 +88,28 @@ class ParametreFacturationEtablissement
     #[ORM\Column(type: 'decimal', precision: 10, scale: 2, options: ['default' => '40.00'])]
     #[Groups(['parametre_facturation:read', 'parametre_facturation:write'])]
     private string $indemniteForfaitaireRecouvrement = '40.00';
+
+    /**
+     * Le taux de TVA applicable aux abonnements de la plateforme.
+     *
+     * **Volontairement `null` par défaut, et ce n'est pas un oubli.** Un exploitant français porte
+     * couramment quatre taux actifs — 20 %, 10 %, 5,5 % et hors champ — constaté par `claude-D` sur les
+     * données de démonstration, qui reflètent ici la réalité et non un artefact de test. Poser un taux
+     * par défaut reviendrait donc à en choisir un à la place de l'exploitant, une fois sur quatre au
+     * hasard. **Facturer au mauvais taux se corrige par un avoir et se voit sur une déclaration.**
+     *
+     * **Ce que ce champ débloque.** Tant que le taux devait être choisi à chaque émission, la
+     * facturation mensuelle ne pouvait pas être automatisée : une tâche périodique qui exige un
+     * arbitrage humain n'en est pas une. Renseigné une fois, il rend la tâche exécutable ; laissé vide,
+     * l'émission échoue explicitement en demandant de le préciser — jamais en devinant.
+     *
+     * `null` signifie donc « non décidé », pas « exonéré ». L'exonération, elle, se dit par un taux à
+     * zéro et se justifie par `mentionTvaSpecifique`.
+     */
+    #[ORM\ManyToOne(targetEntity: TauxTva::class)]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'RESTRICT')]
+    #[Groups(['parametre_facturation:read', 'parametre_facturation:write'])]
+    private ?TauxTva $tauxTvaAbonnement = null;
 
     /** Franchise en base (art. 293 B du CGI) — optionnel, ⚠ hypothèse §4.2 de la spec. */
     #[ORM\Column(length: 255, nullable: true)]
@@ -236,5 +259,17 @@ class ParametreFacturationEtablissement
         }
 
         return $texte;
+    }
+
+    public function getTauxTvaAbonnement(): ?TauxTva
+    {
+        return $this->tauxTvaAbonnement;
+    }
+
+    public function setTauxTvaAbonnement(?TauxTva $tauxTvaAbonnement): self
+    {
+        $this->tauxTvaAbonnement = $tauxTvaAbonnement;
+
+        return $this;
     }
 }
