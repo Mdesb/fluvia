@@ -187,6 +187,16 @@ else
     executer "Écriture transfrontière (D3/D8)" php_racine bin/garde-fou-ecriture-transfrontiere.php
 fi
 
+# 10. Un `DEFAULT` posé en migration doit être déclaré au mapping (D32). Sans quoi la colonne
+#     ressort en `CHANGE` dans le diff de CHAQUE session, éternellement : chacune ramasse la
+#     dérive des autres et la présente comme son propre travail. Famille trouvée par claude-F le
+#     25/08 en vérifiant sa migration sur une base repartie de zéro.
+if [ -n "${REFERENCE:-}" ]; then
+    executer "Défauts au mapping (D32)" php_racine bin/garde-fou-defauts-mapping.php "--contre=$REFERENCE"
+else
+    executer "Défauts au mapping (D32)" php_racine bin/garde-fou-defauts-mapping.php
+fi
+
 # 5. i18n : pas de chaîne d'UI en dur — SANS OBJET tant que la couche i18n n'existe pas (aucun
 #    catalogue, aucun usage du traducteur dans app/src). Acté par l'intégrateur le 21/08.
 # 6. CSRF — SANS OBJET : tous les pare-feux sont `stateless: true` et l'authentification est un JWT
