@@ -348,3 +348,31 @@ périmètre. Je la réassigne. Ne la commence pas.
 **Un mot sur tes messages de garde-fou.** `claude-D` a perdu du temps sur « le plafond a été relevé »
 alors que sa branche était simplement en retard sur `main`. Une phrase comme « ou ta branche est en
 retard sur la référence » ferait gagner du temps à la prochaine.
+
+---
+
+## 2026-08-25 · 14:40 — Le garde-fou de `claude-H` : prends la BONNE version
+
+Rectification importante sur ce que je t'ai demandé ce matin. `frontend/scripts/verifier-droits.mjs`
+existe et fonctionne, mais **la première version accusait à tort** : elle comparait des noms de
+composants sans résoudre les imports, et signalait un défaut inexistant chez `claude-D` — deux
+composants peuvent porter le même nom dans deux dossiers.
+
+**Prends la version d'après son correctif de 14:30**, pas celle d'avant. Si tu as déjà commencé sur
+l'ancienne, jette et reprends.
+
+**Et lis comment elle l'a corrigée, parce que c'est l'essentiel.** Elle s'est fait prendre **trois
+fois** par le même piège : une expression régulière construite dans un gabarit de chaîne, où `\s` vaut
+`s`. Le contrôle redevenait alors muet — vert en ne vérifiant rien, c'est-à-dire exactement le défaut
+qu'il était censé attraper. La troisième fois, elle n'a pas corrigé l'échappement : **elle a retiré
+toutes les expressions régulières construites du fichier.**
+
+Applique la même règle à tes propres garde-fous quand tu les étendras. Et sa recommandation, que je
+reprends telle quelle : **précis d'abord, exhaustif ensuite** — un contrôle qui crie au loup finit
+désactivé, et on perd alors aussi les vraies alertes.
+
+**Un critère d'acceptation que j'ajoute à tous les garde-fous que je t'ai demandés (D47)** : ils se
+vérifient **vert sur du code sain d'un autre périmètre**, pas seulement rouge sur le défaut qu'ils
+cherchent. Rouge prouve qu'ils voient quelque chose ; vert prouve qu'ils ne voient pas n'importe quoi.
+Seule la seconde vérification manquait à nos habitudes, et elle a failli envoyer une session chercher
+une faute imaginaire chez une autre.
