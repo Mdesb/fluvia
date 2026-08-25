@@ -5,11 +5,12 @@ declare(strict_types=1);
 namespace App\Tests\Reservation\Api;
 
 use App\Acces\Entity\DroitAcces;
+use App\Acces\Enum\StatutProjectionDroit;
+use App\Acces\Enum\TypeDroitAcces;
 use App\Reservation\Command\BasculerNoShowCommand;
 use App\Reservation\DataFixtures\ReservationFixtures;
 use App\Reservation\Entity\Activite;
 use App\Reservation\Entity\FacturationNoShow;
-use App\Reservation\Entity\ProjectionAccesReservation;
 use App\Reservation\Entity\RegleAnnulation;
 use App\Reservation\Entity\Reservation;
 use App\Reservation\Entity\Ressource;
@@ -448,18 +449,30 @@ final class IssueCreditNoShowTest extends ReservationApiTestCase
         return $client->getResponse()->toArray()['id'];
     }
 
-    /** Force `creditRestant` sur le DroitAcces projeté (fixture factice, décision 6 du mandat, plan §7). */
+    /**
+     * Attache à la réservation une **carte** portant `$credit`, comme si elle avait été débitée à la
+     * réservation.
+     *
+     * **Recentré par CQ-3 + CQ-6.** La version d'origine forçait `creditRestant` sur le `DroitAcces`
+     * PROJETÉ de la réservation, faute de carte à l'époque. Le solde vit désormais sur un droit de
+     * type carte, désigné par `Reservation::creditDroitRef` : un droit projeté meurt avec sa
+     * réservation et ne peut pas porter un solde qui doit survivre à N réservations.
+     */
     private function forcerCredit(string $idReservation, int $credit): void
     {
         /** @var EntityManagerInterface $em */
         $em = static::getContainer()->get('doctrine')->getManager();
         $reservation = $em->getRepository(Reservation::class)->find($idReservation);
         self::assertNotNull($reservation);
-        $projection = $em->getRepository(ProjectionAccesReservation::class)->findOneBy(['reservation' => $reservation]);
-        self::assertNotNull($projection, 'Projection attendue (Ressource.ouvreAcces=true).');
-        $droit = $em->getRepository(DroitAcces::class)->find($projection->getDroitAccesRef());
-        self::assertNotNull($droit);
-        $droit->setCreditRestant($credit);
+
+        $carte = (new DroitAcces())->setSourceType(TypeDroitAcces::CarteQuota)
+            ->setCreditRestant($credit)
+            ->setStatutProjection(StatutProjectionDroit::Valide)
+            ->setEtablissement($reservation->getEtablissement());
+        $em->persist($carte);
+        $em->flush();
+
+        $reservation->setCreditDroitRef($carte->getId());
         $em->flush();
     }
 
@@ -487,10 +500,8 @@ final class IssueCreditNoShowTest extends ReservationApiTestCase
         $em ??= static::getContainer()->get('doctrine')->getManager();
         $reservation = $em->getRepository(Reservation::class)->find($idReservation);
         self::assertNotNull($reservation);
-        $projection = $em->getRepository(ProjectionAccesReservation::class)->findOneBy(['reservation' => $reservation]);
-        self::assertNotNull($projection);
-        $droit = $em->getRepository(DroitAcces::class)->find($projection->getDroitAccesRef());
-        self::assertNotNull($droit);
+        $droit = $em->getRepository(DroitAcces::class)->find($reservation->getCreditDroitRef());
+        self::assertNotNull($droit, 'Carte attendue : forcerCredit() doit avoir été appelé.');
 
         return $droit;
     }

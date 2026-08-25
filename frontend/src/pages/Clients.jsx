@@ -1,6 +1,9 @@
 import { useEffect, useState, useCallback } from 'react'
 import { api } from '../api/client.js'
 import { euros } from '../api/produit.js'
+import { aLeDroit } from '../api/droits.js'
+import { mot } from '../api/vocabulaire.js'
+import ClientEditionModal from '../components/ClientEditionModal.jsx'
 
 // Nom d'affichage d'un client (physique ou personne morale).
 function nomClient(c) {
@@ -34,7 +37,8 @@ function formatAdresse(a) {
 }
 
 // Écran Clients (CRM) : liste + recherche et fiche client 360° enrichie.
-export default function Clients({ etabActif, cible = null, onCibleConsommee }) {
+export default function Clients({ etabActif, cible = null, onCibleConsommee, droits = [] }) {
+  const [edition, setEdition] = useState(false)
   const [q, setQ] = useState('')
   const [items, setItems] = useState([])
   const [total, setTotal] = useState(0)
@@ -83,7 +87,8 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee }) {
     setFicheLoading(true)
     try {
       const f = await api.ficheClient(id)
-      setFiche(f)
+      const complet = await api.client(id).catch(() => null)
+      setFiche(complet ? { ...f, client: { ...(f.client || {}), ...complet } } : f)
       // Relevé PMV chargé séparément (US-L5-04) uniquement si un porte-monnaie existe.
       if (f?.pmv) {
         try {
@@ -182,8 +187,13 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee }) {
         {/* Fiche 360 */}
         <section className="card">
           <div className="card-h">
-            <h3>Fiche 360°</h3>
+            <h3>Fiche client</h3>
             {fiche?.client && <span className="sub" style={{ marginLeft: 'auto' }}>{nomClient(fiche.client)}</span>}
+            {fiche?.client && aLeDroit(droits, 'crm.modifier') && (
+              <div className="r">
+                <button className="btn ghost sm" type="button" onClick={() => setEdition(true)}>Modifier</button>
+              </div>
+            )}
           </div>
           <div className="card-b">
             {!selId ? (
@@ -198,6 +208,13 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee }) {
           </div>
         </section>
       </div>
+
+      <ClientEditionModal
+        open={edition}
+        clientId={selId}
+        onClose={() => setEdition(false)}
+        onEnregistre={() => ouvrirFiche(selId)}
+      />
     </div>
   )
 }
@@ -250,6 +267,21 @@ function FicheContenu({ fiche, mouvements }) {
       <div>
         <div className="fiche-sec">Coordonnées</div>
         <dl className="deflist">
+          <div><dt>Type</dt><dd>{c.type === 'morale' ? 'Entreprise ou association' : 'Particulier'}</dd></div>
+          {c.type === 'morale' ? (
+            <>
+              <div><dt>Raison sociale</dt><dd>{c.raisonSociale || '—'}</dd></div>
+              <div><dt>SIRET</dt><dd>{c.siret || '—'}</dd></div>
+            </>
+          ) : (
+            <>
+              <div><dt>Civilité</dt><dd>{c.civilite || '—'}</dd></div>
+              <div>
+                <dt title="Sert aux tarifs liés à l'âge, quand vous en proposez.">Date de naissance</dt>
+                <dd>{c.dateNaissance ? dateFr(c.dateNaissance) : '—'}</dd>
+              </div>
+            </>
+          )}
           <div><dt>E-mail</dt><dd>{c.email || '—'}</dd></div>
           <div><dt>Téléphone</dt><dd>{c.telephone || '—'}</dd></div>
           <div><dt>Adresse</dt><dd>{adresse || '—'}</dd></div>

@@ -2,6 +2,10 @@ import { useEffect, useState, useCallback } from 'react'
 import Liste, { texte, dateHeureFr } from '../components/Liste.jsx'
 import Tabs from '../components/Tabs.jsx'
 import Modal from '../components/Modal.jsx'
+import ReferentielEditable from '../components/ReferentielEditable.jsx'
+import PretAVendre from '../components/PretAVendre.jsx'
+import { aLeDroit } from '../api/droits.js'
+import { mot } from '../api/vocabulaire.js'
 import { api, membres } from '../api/client.js'
 
 const SOUS = [
@@ -18,7 +22,314 @@ const STATUT_BADGE = { actif: 'good', invite: 'warn', suspendu: 'crit' }
 
 // Paramètres : hub d'administration du socle. Consultation des référentiels, édition simple là où
 // l'API le permet (moyens de paiement, comptes & droits), lecture ailleurs.
-export default function Parametres({ etabActif, etablissements }) {
+// Descripteurs des référentiels modifiables.
+//
+// Chaque champ dit sa CONSÉQUENCE et non sa nature : « ce qui change pour le client ou pour la
+// caisse », jamais « ce qui est stocké ». Un régisseur de piscine n'a pas à deviner ce qu'est un
+// « canal de visibilité » — il a besoin de savoir où le tarif apparaîtra.
+const CANAUX = [
+  { valeur: 'guichet', libelle: 'Au guichet' },
+  { valeur: 'en_ligne', libelle: 'En ligne' },
+  { valeur: 'borne', libelle: 'Sur borne' },
+]
+
+function descripteurTypesTarif(api) {
+  return {
+    titre: 'Types de tarif',
+    aQuoiCaSert:
+      "Les catégories de prix que vous proposez : plein tarif, tarif réduit, enfant, abonné… "
+      + 'Chaque produit porte un prix par type de tarif.',
+    siVide:
+      "Vous n'avez aucun type de tarif. Tant qu'il n'y en a pas, vos produits ne peuvent recevoir "
+      + 'aucun prix, donc rien ne peut être vendu ni publié. Commencez par « Plein tarif ».',
+    consequenceSuppression:
+      "Si ce type de tarif est utilise par le prix d'un produit, la suppression sera refusee : "
+      + 'vous pourrez alors le rendre inutilisable plutot que de le supprimer.',
+    charger: api.typeTarifs,
+    creer: api.creerTypeTarif,
+    modifier: api.majTypeTarif,
+    supprimer: api.supprimerTypeTarif,
+    champs: [
+      {
+        nom: 'nom',
+        libelle: 'Nom du tarif',
+        type: 'text',
+        requis: true,
+        exemple: 'Plein tarif',
+        aide: "C'est ce que verra le vendeur au moment de choisir un prix.",
+      },
+      {
+        nom: 'visibiliteCanal',
+        libelle: 'Où ce tarif est proposé',
+        type: 'choix-multiples',
+        options: CANAUX,
+        aide: "Si vous ne cochez rien, le tarif n'apparaîtra nulle part — ni en caisse, ni en ligne.",
+      },
+      {
+        nom: 'actif',
+        libelle: 'Utilisable',
+        type: 'bool',
+        libelleCase: 'Ce tarif peut être utilisé',
+        aide: 'Décocher masque le tarif pour les nouvelles ventes sans toucher aux ventes passées.',
+      },
+    ],
+    colonnes: [
+      { cle: 'nom', titre: 'Nom du tarif', rendu: (r) => <span className="nm">{r.nom || '—'}</span> },
+      {
+        cle: 'visibiliteCanal',
+        titre: 'Proposé',
+        aide: 'Les endroits où ce tarif peut être choisi.',
+        rendu: (r) => {
+          const l = Array.isArray(r.visibiliteCanal) ? r.visibiliteCanal : []
+          if (l.length === 0) return <span className="badge crit" title="Ce tarif n apparait nulle part.">nulle part</span>
+          return l.map((c) => CANAUX.find((x) => x.valeur === c)?.libelle || c).join(', ')
+        },
+      },
+      {
+        cle: 'actif',
+        titre: 'État',
+        rendu: (r) => <span className={`badge ${r.actif ? 'good' : 'mut'}`}>{r.actif ? 'utilisable' : 'masqué'}</span>,
+      },
+    ],
+  }
+}
+
+function descripteurTva(api) {
+  return {
+    titre: 'Taux de TVA',
+    aQuoiCaSert:
+      'Les taux appliqués à vos ventes. Chaque produit porte un taux, qui détermine la TVA facturée '
+      + 'et ce qui remonte en comptabilité.',
+    siVide:
+      "Aucun taux de TVA n'est enregistré. Vos produits ne pourront pas être rattachés à un taux, et "
+      + 'la comptabilité ne pourra pas être tenue correctement.',
+    consequenceSuppression: '',
+    charger: api.tauxTvas,
+    creer: api.creerTauxTva,
+    modifier: api.majTauxTva,
+    supprimer: null,
+    champs: [
+      {
+        nom: 'libelle',
+        libelle: 'Nom',
+        type: 'text',
+        requis: true,
+        exemple: 'Taux normal',
+        aide: 'Le nom que vous lui donnez, pour le reconnaître dans la liste.',
+      },
+      {
+        nom: 'taux',
+        libelle: 'Pourcentage',
+        type: 'nombre',
+        pas: '0.01',
+        requis: true,
+        exemple: '20',
+        aide: 'Le pourcentage appliqué au prix hors taxes. Saisissez 20 pour 20 %.',
+      },
+      {
+        nom: 'actif',
+        libelle: 'Utilisable',
+        type: 'bool',
+        libelleCase: 'Ce taux peut être choisi',
+        aide: 'Décocher empêche de le choisir sur un nouveau produit, sans rien changer aux ventes passées.',
+      },
+    ],
+    colonnes: [
+      { cle: 'libelle', titre: 'Nom', rendu: (r) => <span className="nm">{r.libelle || '—'}</span> },
+      { cle: 'taux', titre: 'Pourcentage', num: true, rendu: (r) => (r.taux != null ? `${r.taux} %` : '—') },
+      {
+        cle: 'actif',
+        titre: 'État',
+        rendu: (r) => <span className={`badge ${r.actif ? 'good' : 'mut'}`}>{r.actif ? 'utilisable' : 'masqué'}</span>,
+      },
+    ],
+  }
+}
+
+const AXES = [
+  { valeur: 'marketing', libelle: 'Regroupement commercial' },
+  { valeur: 'comptable', libelle: 'Ventilation comptable' },
+  { valeur: 'rayon', libelle: 'Rayon en boutique' },
+]
+
+function descripteurCategories(api) {
+  return {
+    titre: 'Catégories',
+    aQuoiCaSert:
+      'Des regroupements de produits. Ils servent à retrouver un produit plus vite en caisse, à '
+      + 'organiser votre boutique en ligne, ou à ventiler votre chiffre d’affaires en comptabilité.',
+    siVide:
+      "Vous n'avez aucune catégorie. Ce n'est pas bloquant : vos produits restent vendables. Mais "
+      + 'au-delà d’une trentaine de produits, une caisse sans catégories devient difficile à utiliser.',
+    consequenceSuppression:
+      'Les produits rattachés à cette catégorie ne seront pas supprimés — ils perdront simplement ce '
+      + 'regroupement.',
+    charger: api.categories,
+    creer: api.creerCategorie,
+    modifier: api.majCategorie,
+    supprimer: api.supprimerCategorie,
+    champs: [
+      {
+        nom: 'libelle',
+        libelle: 'Nom',
+        type: 'text',
+        requis: true,
+        exemple: 'Activités aquatiques',
+        aide: 'Le nom tel qu’il apparaîtra dans les écrans.',
+      },
+      {
+        nom: 'axe',
+        libelle: 'À quoi elle sert',
+        type: 'choix',
+        options: AXES,
+        aide:
+          'Un regroupement commercial sert à la vente ; une ventilation comptable sert à vos écritures ; '
+          + 'un rayon organise votre boutique. Un même produit peut appartenir à plusieurs catégories '
+          + 'd’axes différents.',
+      },
+    ],
+    colonnes: [
+      { cle: 'libelle', titre: 'Nom', rendu: (r) => <span className="nm">{texte(r.libelle, '—')}</span> },
+      {
+        cle: 'axe',
+        titre: 'Sert à',
+        rendu: (r) => AXES.find((a) => a.valeur === r.axe)?.libelle || r.axe || '—',
+      },
+      { cle: 'chemin', titre: 'Rattachée à', rendu: (r) => <span className="mono">{r.chemin || '—'}</span> },
+    ],
+  }
+}
+
+function descripteurSaisons(api) {
+  return {
+    titre: 'Saisons',
+    aQuoiCaSert:
+      'Des périodes de l’année pendant lesquelles vos prix changent : haute saison, vacances '
+      + 'scolaires, hors saison. Un produit peut avoir un prix différent par saison.',
+    siVide:
+      "Aucune saison n'est définie. Ce n'est pas bloquant : vos prix s'appliquent alors toute l'année "
+      + 'de la même façon.',
+    consequenceSuppression:
+      'Les prix définis pour cette saison ne s’appliqueront plus. Les produits reviendront à leur prix '
+      + 'habituel.',
+    charger: api.saisons,
+    creer: api.creerSaison,
+    modifier: api.majSaison,
+    supprimer: api.supprimerSaison,
+    champs: [
+      {
+        nom: 'nom',
+        libelle: 'Nom',
+        type: 'text',
+        requis: true,
+        exemple: 'Haute saison',
+      },
+      {
+        nom: 'dateDebut',
+        libelle: 'Du',
+        type: 'date',
+        requis: true,
+        aide: 'Premier jour où les prix de cette saison s’appliquent.',
+      },
+      {
+        nom: 'dateFin',
+        libelle: 'Au',
+        type: 'date',
+        requis: true,
+        aide: 'Dernier jour inclus.',
+      },
+      {
+        nom: 'priorite',
+        libelle: 'Priorité',
+        type: 'nombre',
+        defaut: 0,
+        aide:
+          'Départage deux saisons qui se recouvrent : la plus haute l’emporte. Deux saisons de même '
+          + 'priorité ne peuvent pas se chevaucher — l’enregistrement sera refusé.',
+      },
+      {
+        nom: 'recurrenceAnnuelle',
+        libelle: 'Chaque année',
+        type: 'bool',
+        defaut: false,
+        libelleCase: 'Cette période revient tous les ans',
+        aide: 'Évite de recréer la même saison chaque année.',
+      },
+      {
+        nom: 'actif',
+        libelle: 'Utilisable',
+        type: 'bool',
+        libelleCase: 'Cette saison est appliquée',
+        aide: 'Décocher suspend ses prix sans supprimer la saison ni son paramétrage.',
+      },
+    ],
+    colonnes: [
+      { cle: 'nom', titre: 'Nom', rendu: (r) => <span className="nm">{r.nom || '—'}</span> },
+      {
+        cle: 'periode',
+        titre: 'Période',
+        rendu: (r) => {
+          const d = (r.dateDebut || '').slice(0, 10)
+          const f = (r.dateFin || '').slice(0, 10)
+          return d && f ? `${d} → ${f}` : '—'
+        },
+      },
+      { cle: 'priorite', titre: 'Priorité', num: true, rendu: (r) => r.priorite ?? '—' },
+      {
+        cle: 'actif',
+        titre: 'État',
+        rendu: (r) => <span className={`badge ${r.actif ? 'good' : 'mut'}`}>{r.actif ? 'appliquée' : 'suspendue'}</span>,
+      },
+    ],
+  }
+}
+
+function descripteurPointsDeVente(api, etabActif) {
+  return {
+    titre: 'Points de vente',
+    aQuoiCaSert:
+      'Les endroits où vous encaissez : un guichet, une borne, un comptoir. Une caisse s’ouvre '
+      + 'toujours sur un point de vente.',
+    siVide:
+      "Vous n'avez aucun point de vente. Tant qu'il n'y en a pas, aucune caisse ne peut être ouverte "
+      + 'et rien ne peut être encaissé. Commencez par « Guichet principal ».',
+    consequenceSuppression: '',
+    charger: api.pointDeVentes,
+    // L'établissement n'est pas un champ du formulaire : il vient du contexte de travail, jamais
+    // d'une saisie. Le proposer à choisir serait offrir de créer un point de vente chez quelqu'un
+    // d'autre.
+    creer: (corps) => api.creerPointDeVente({ ...corps, etablissement: `/api/etablissements/${etabActif}` }),
+    modifier: api.majPointDeVente,
+    supprimer: null,
+    champs: [
+      {
+        nom: 'libelle',
+        libelle: 'Nom',
+        type: 'text',
+        requis: true,
+        exemple: 'Guichet principal',
+        aide: 'Le nom que verra le caissier en ouvrant sa caisse.',
+      },
+    ],
+    colonnes: [
+      { cle: 'libelle', titre: 'Nom', rendu: (r) => <span className="nm">{r.libelle || '—'}</span> },
+      {
+        cle: 'tpe',
+        titre: 'Terminal de paiement',
+        aide: 'Un terminal bancaire est-il rattaché à ce point de vente ?',
+        rendu: (r) => (r.tpe ? 'oui' : '—'),
+      },
+      {
+        cle: 'moyensAutorises',
+        titre: 'Paiements acceptés',
+        rendu: (r) =>
+          Array.isArray(r.moyensAutorises) && r.moyensAutorises.length ? r.moyensAutorises.join(', ') : 'tous',
+      },
+    ],
+  }
+}
+
+export default function Parametres({ etabActif, etablissements, droits = [] }) {
   const [sousOnglet, setSousOnglet] = useState('entites')
 
   return (
@@ -31,6 +342,11 @@ export default function Parametres({ etabActif, etablissements }) {
       </div>
 
       <Tabs onglets={SOUS} actif={sousOnglet} onChange={setSousOnglet} />
+
+      {/* En tete, avant les onglets de contenu : c'est la premiere chose que voit quelqu'un qui
+          arrive ici sans savoir par ou commencer. Il se replie tout seul des que les trois
+          conditions sont remplies. */}
+      <PretAVendre etabActif={etabActif} droits={droits} onAller={setSousOnglet} />
 
       {sousOnglet === 'entites' && (
         <div className="resa-grid">
@@ -54,72 +370,49 @@ export default function Parametres({ etabActif, etablissements }) {
             vide="Aucun espace."
             colonnes={[
               { cle: 'nom', entete: 'Espace', rendu: (r) => <span className="nm">{r.nom || '—'}</span> },
-              { cle: 'type', entete: 'Type', rendu: (r) => r.type || '—' },
+              { cle: 'type', entete: 'Nature', rendu: (r) => mot(r.type) },
             ]}
           />
         </div>
       )}
 
       {sousOnglet === 'referentiels' && (
-        <div className="resa-grid">
-          <Liste
-            titre="Taux de TVA"
-            deps={[etabActif]}
-            charger={api.tauxTvas}
-            vide="Aucun taux."
-            colonnes={[
-              { cle: 'libelle', entete: 'Libellé', rendu: (r) => <span className="nm">{r.libelle || '—'}</span> },
-              { cle: 'taux', entete: 'Taux', num: true, rendu: (r) => (r.taux != null ? `${r.taux} %` : '—') },
-              { cle: 'actif', entete: 'État', rendu: (r) => <span className={`badge ${r.actif ? 'good' : 'mut'}`}>{r.actif ? 'actif' : 'inactif'}</span> },
-            ]}
+        <>
+          {/* Ce qu'il FAUT régler avant de pouvoir vendre, séparé de ce qu'on PEUT régler ensuite.
+              Un débutant ne sait pas par où commencer, et une liste de cinq blocs équivalents ne le
+              lui dit pas. */}
+          <div className="fiche-sec" style={{ marginBottom: 10 }}>Indispensable pour vendre</div>
+          <ReferentielEditable
+            descripteur={descripteurTypesTarif(api)}
+            peutEcrire={aLeDroit(droits, 'offre.gerer')}
           />
-          <Liste
-            titre="Catégories"
-            deps={[etabActif]}
-            charger={api.categories}
-            vide="Aucune catégorie."
-            colonnes={[
-              { cle: 'libelle', entete: 'Catégorie', rendu: (r) => <span className="nm">{texte(r.libelle, '—')}</span> },
-              { cle: 'chemin', entete: 'Chemin', rendu: (r) => <span className="mono">{r.chemin || '—'}</span> },
-            ]}
+          <ReferentielEditable
+            descripteur={descripteurTva(api)}
+            peutEcrire={aLeDroit(droits, 'compta.gerer')}
           />
-          <Liste
-            titre="Types de tarif"
-            deps={[etabActif]}
-            charger={api.typeTarifs}
-            vide="Aucun type de tarif."
-            colonnes={[
-              { cle: 'nom', entete: 'Type', rendu: (r) => <span className="nm">{r.nom || '—'}</span> },
-              { cle: 'visibiliteCanal', entete: 'Canal', rendu: (r) => (Array.isArray(r.visibiliteCanal) ? r.visibiliteCanal.join(', ') : r.visibiliteCanal || '—') },
-              { cle: 'actif', entete: 'État', rendu: (r) => <span className={`badge ${r.actif ? 'good' : 'mut'}`}>{r.actif ? 'actif' : 'inactif'}</span> },
-            ]}
+
+          <div className="fiche-sec" style={{ margin: '24px 0 10px' }}>Pour aller plus loin</div>
+          {/* Ces deux-là ne bloquent pas la vente, d'où leur place ici plutôt qu'au-dessus. Elles
+              sont modifiables au même titre que les autres : je les avais laissées en consultation
+              en croyant qu'un « axe » était un référentiel à exposer et que le format de date était
+              incertain. Les deux étaient faux — l'axe est une énumération de trois valeurs, et le
+              format `AAAA-MM-JJ` est celui qu'utilise la suite de tests du serveur. */}
+          <ReferentielEditable
+            descripteur={descripteurCategories(api)}
+            peutEcrire={aLeDroit(droits, 'offre.gerer')}
           />
-          <Liste
-            titre="Saisons"
-            deps={[etabActif]}
-            charger={api.saisons}
-            vide="Aucune saison."
-            colonnes={[
-              { cle: 'nom', entete: 'Saison', rendu: (r) => <span className="nm">{r.nom || '—'}</span> },
-              { cle: 'priorite', entete: 'Priorité', num: true, rendu: (r) => r.priorite ?? '—' },
-              { cle: 'actif', entete: 'État', rendu: (r) => <span className={`badge ${r.actif ? 'good' : 'mut'}`}>{r.actif ? 'actif' : 'inactif'}</span> },
-            ]}
+          <ReferentielEditable
+            descripteur={descripteurSaisons(api)}
+            peutEcrire={aLeDroit(droits, 'offre.gerer')}
           />
-        </div>
+        </>
       )}
 
       {sousOnglet === 'caisse' && (
         <div className="resa-grid">
-          <Liste
-            titre="Points de vente"
-            deps={[etabActif]}
-            charger={api.pointDeVentes}
-            vide="Aucun point de vente."
-            colonnes={[
-              { cle: 'libelle', entete: 'Point de vente', rendu: (r) => <span className="nm">{r.libelle || '—'}</span> },
-              { cle: 'tpe', entete: 'TPE', rendu: (r) => (r.tpe ? 'oui' : '—') },
-              { cle: 'moyensAutorises', entete: 'Moyens', rendu: (r) => (Array.isArray(r.moyensAutorises) && r.moyensAutorises.length ? r.moyensAutorises.join(', ') : 'tous') },
-            ]}
+          <ReferentielEditable
+            descripteur={descripteurPointsDeVente(api, etabActif)}
+            peutEcrire={aLeDroit(droits, 'caisse.gerer')}
           />
           <Liste
             titre="Caisses"

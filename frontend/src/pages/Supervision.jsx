@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { api, membres } from '../api/client.js'
+import { mot, GLOSSAIRE } from '../api/vocabulaire.js'
 
 function heure(v) {
   if (!v) return '—'
@@ -155,12 +156,16 @@ export default function Supervision({ etabActif }) {
               <div className="card-h"><h3>Contrôleurs</h3></div>
               <div className="card-b" style={{ overflowX: 'auto' }}>
                 <table className="tbl">
-                  <thead><tr><th>Contrôleur</th><th>État</th><th>Heartbeat</th></tr></thead>
+                  <thead><tr>
+                    <th>Contrôleur</th>
+                    <th>État</th>
+                    <th title={GLOSSAIRE.heartbeat}>Dernier signe de vie</th>
+                  </tr></thead>
                   <tbody>
                     {controleurs.map((c) => (
                       <tr key={c.id}>
                         <td><span className="nm">{c.libelle}</span></td>
-                        <td><span className={`badge ${c.etat === 'en_ligne' ? 'good' : 'crit'}`}>{c.etat}</span></td>
+                        <td><span className={`badge ${c.etat === 'en_ligne' ? 'good' : 'crit'}`}>{mot(c.etat)}</span></td>
                         <td>{c.dernierHeartbeat ? heure(c.dernierHeartbeat) : '—'}</td>
                       </tr>
                     ))}
@@ -183,8 +188,8 @@ export default function Supervision({ etabActif }) {
                   {passages.map((p) => (
                     <tr key={p.id}>
                       <td className="mono">{heure(p.horodatage)}</td>
-                      <td><span className={`badge ${RESULTAT_CLS[p.resultat] || 'mut'}`}>{p.resultat || '—'}</span></td>
-                      <td>{p.sens || '—'}</td>
+                      <td><span className={`badge ${RESULTAT_CLS[p.resultat] || 'mut'}`}>{mot(p.resultat)}</span></td>
+                      <td>{mot(p.sens)}</td>
                       <td>{libelleDe(p.espace)}</td>
                       <td>{libelleDe(p.controleur)}</td>
                       <td>{p.motif || '—'}</td>

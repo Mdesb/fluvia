@@ -12,6 +12,7 @@ use App\Reservation\Entity\Ressource;
 use App\Reservation\Port\NotificationReservationInterface;
 use App\Vente\Service\LecteurCorps;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Uid\Uuid;
 
 /**
@@ -39,10 +40,21 @@ final class ArbitrerConflitRecurrenceProcessor implements ProcessorInterface
             $segment = str_contains($corps['ressource'], '/') ? basename($corps['ressource']) : $corps['ressource'];
             if (Uuid::isValid($segment)) {
                 $ressource = $this->em->getRepository(Ressource::class)->find(Uuid::fromString($segment));
-                if ($ressource instanceof Ressource) {
-                    $data->setRessource($ressource);
-                    $data->setOccurrenceModifiee(true);
+                // D3/D8 — la ressource vient du CORPS de la requete ; le perimetre vient du creneau,
+                // lui-meme filtre par `PerimetreReservationExtension`. Sans cette confrontation, un
+                // exploitant d'un etablissement pouvait deplacer son creneau sur la ressource d'un
+                // autre : la ressource n'etait resolue que par son identifiant.
+                //
+                // Echec ferme, et 404 plutot que 403 : repondre « interdit » confirmerait que cet
+                // identifiant existe ailleurs. L'ignorer silencieusement aurait ete pire encore —
+                // l'arbitrage aurait rendu 200 sans avoir rien change.
+                if (!$ressource instanceof Ressource
+                    || (string) $ressource->getEtablissement()?->getId() !== (string) $data->getEtablissement()?->getId()) {
+                    throw new NotFoundHttpException('Ressource introuvable.');
                 }
+
+                $data->setRessource($ressource);
+                $data->setOccurrenceModifiee(true);
             }
         }
 

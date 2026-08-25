@@ -6,6 +6,7 @@ import {
   etablissementStore,
   setUnauthorizedHandler,
 } from './api/client.js'
+import { aLeDroit } from './api/droits.js'
 import Login from './pages/Login.jsx'
 import AppShell from './components/AppShell.jsx'
 import Dashboard from './pages/Dashboard.jsx'
@@ -29,7 +30,10 @@ import Musee from './pages/Musee.jsx'
 // de bord et la visibilité de son entrée de menu.
 export function estAdministrateur(me) {
   const droits = me?.droits || []
-  return droits.includes('securite.gerer') || droits.includes('organisation.gerer')
+  // `aLeDroit` et non `includes` : un administrateur porte la permission joker `*.*` et JAMAIS
+  // `securite.gerer` en toutes lettres. L'egalite stricte rendait donc faux pour le compte le plus
+  // puissant du logiciel — il n'atterrissait pas sur son tableau de bord et n'en voyait pas l'entree.
+  return aLeDroit(droits, 'securite.gerer') || aLeDroit(droits, 'organisation.gerer')
 }
 
 export default function App() {
@@ -145,7 +149,9 @@ export default function App() {
     }
     if (onglet === 'dashboard' && me && !estAdministrateur(me)) setOnglet('caisse')
     else if (capRequise[onglet] && !caps.includes(capRequise[onglet])) setOnglet('caisse')
-    else if (permRequise[onglet] && !droits.includes(permRequise[onglet])) setOnglet('caisse')
+    // Meme piege, consequence differente et plus penible : un porteur de joker etait RENVOYE a la
+    // caisse depuis n'importe quel ecran protege, sans explication et sans moyen d'y rester.
+    else if (permRequise[onglet] && !aLeDroit(droits, permRequise[onglet])) setOnglet('caisse')
   }, [me, onglet])
 
   function changerEtablissement(id) {
@@ -198,7 +204,7 @@ export default function App() {
       estAdmin={estAdmin}
     >
       {onglet === 'dashboard' && estAdmin && (
-        <Dashboard etabActif={etabActif} etablissements={etablissements} />
+        <Dashboard etabActif={etabActif} etablissements={etablissements} droits={droits} onNav={naviguer} />
       )}
       {onglet === 'caisse' && (
         <Caisse
@@ -210,14 +216,14 @@ export default function App() {
           onSessionRefresh={rechargerSession}
         />
       )}
-      {onglet === 'catalogue' && <Catalogue etabActif={etabActif} cible={cible} onCibleConsommee={() => setCible(null)} />}
+      {onglet === 'catalogue' && <Catalogue etabActif={etabActif} cible={cible} onCibleConsommee={() => setCible(null)} droits={droits} />}
       {onglet === 'reservation' && <Reservation etabActif={etabActif} />}
       {onglet === 'supervision' && <Supervision etabActif={etabActif} />}
       {onglet === 'pilotage' && (
         <Pilotage etabActif={etabActif} etablissements={etablissements} />
       )}
       {onglet === 'comptabilite' && <Comptabilite etabActif={etabActif} />}
-      {onglet === 'clients' && <Clients etabActif={etabActif} cible={cible} onCibleConsommee={() => setCible(null)} />}
+      {onglet === 'clients' && <Clients etabActif={etabActif} cible={cible} onCibleConsommee={() => setCible(null)} droits={droits} />}
       {onglet === 'boutique' && <Boutique etabActif={etabActif} />}
       {onglet === 'piscine' && <Piscine etabActif={etabActif} />}
       {onglet === 'patinoire' && <Patinoire etabActif={etabActif} />}
@@ -225,7 +231,7 @@ export default function App() {
       {onglet === 'musee' && <Musee etabActif={etabActif} />}
       {onglet === 'personnel' && <Personnel etabActif={etabActif} />}
       {onglet === 'parametres' && (
-        <Parametres etabActif={etabActif} etablissements={etablissements} />
+        <Parametres etabActif={etabActif} etablissements={etablissements} droits={droits} />
       )}
     </AppShell>
   )

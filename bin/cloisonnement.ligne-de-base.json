@@ -12,7 +12,7 @@
     ],
     "scelle": {
         "gelee_le": "2026-08-20",
-        "plafond": 37,
+        "plafond": 33,
         "reference": "MESSAGES.md — claude-A -> claude-C, 19/08, option (a) et ses 3 conditions"
     },
     "entrees": {
@@ -271,17 +271,6 @@
             ],
             "ecrit": false
         },
-        "Offre/State/ActionsDeMasseProcessor.php": {
-            "depuis": "2026-08-20",
-            "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
-            "raison": "Antérieur au gel de la ligne de base : non revu, non corrigé. N'est PAS une dérogation permanente — à ouvrir par le propriétaire du module.",
-            "sensibilite": "autre",
-            "entites_resolues": [
-                "Categorie",
-                "Produit"
-            ],
-            "ecrit": true
-        },
         "Offre/State/ConvertirProcessor.php": {
             "depuis": "2026-08-20",
             "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
@@ -353,25 +342,6 @@
             ],
             "ecrit": true
         },
-        "Reservation/State/AjouterParticipantProcessor.php": {
-            "depuis": "2026-08-20",
-            "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
-            "raison": "Antérieur au gel de la ligne de base : non revu, non corrigé. N'est PAS une dérogation permanente — à ouvrir par le propriétaire du module.",
-            "sensibilite": "autre",
-            "entites_resolues": [],
-            "ecrit": true
-        },
-        "Reservation/State/ArbitrerConflitRecurrenceProcessor.php": {
-            "depuis": "2026-08-20",
-            "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
-            "raison": "Antérieur au gel de la ligne de base : non revu, non corrigé. N'est PAS une dérogation permanente — à ouvrir par le propriétaire du module.",
-            "sensibilite": "autre",
-            "entites_resolues": [
-                "Reservation",
-                "Ressource"
-            ],
-            "ecrit": true
-        },
         "Reservation/State/EmargerProcessor.php": {
             "depuis": "2026-08-20",
             "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
@@ -381,21 +351,11 @@
                 "Emargement"
             ],
             "ecrit": true
-        },
-        "Reservation/State/InscrireListeAttenteProcessor.php": {
-            "depuis": "2026-08-20",
-            "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
-            "raison": "Antérieur au gel de la ligne de base : non revu, non corrigé. N'est PAS une dérogation permanente — à ouvrir par le propriétaire du module.",
-            "sensibilite": "autre",
-            "entites_resolues": [
-                "ListeAttente"
-            ],
-            "ecrit": true
         }
     },
     "scelle_resolution": {
         "gelee_le": "2026-08-23",
-        "plafond": 14,
+        "plafond": 13,
         "reference": "MESSAGES.md — saut d'affectation, IDOR n7 (23/08)"
     },
     "entrees_resolution": {
@@ -468,13 +428,6 @@
             "raison": "Le controle de perimetre ne porte pas sur l'entite resolue. Rendue visible par l'amelioration de detection (identifiant client transitant par une variable), pas nouvellement introduite. A ouvrir par le proprietaire du module.",
             "sensibilite": "autre",
             "module": "Reporting"
-        },
-        "Reservation/State/ArbitrerConflitRecurrenceProcessor.php:40:$ressource": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — revelees par le saut d'affectation du 23/08, pas par un relachement",
-            "raison": "Le controle de perimetre ne porte pas sur l'entite resolue. Rendue visible par l'amelioration de detection (identifiant client transitant par une variable), pas nouvellement introduite. A ouvrir par le proprietaire du module.",
-            "sensibilite": "autre",
-            "module": "Reservation"
         },
         "Support/State/EscaladerTicketProcessor.php:36:$agent": {
             "depuis": "2026-08-23",

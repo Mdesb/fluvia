@@ -8,7 +8,6 @@ use App\Acces\Entity\Appairage;
 use App\Acces\Entity\DroitAcces;
 use App\Acces\Entity\Support;
 use App\Acces\Service\VersionSnapshotSequencer;
-use App\Reservation\Entity\ProjectionAccesReservation;
 use App\Reservation\Entity\Reservation;
 use App\Reservation\Enum\IssueCreditNoShow;
 use Doctrine\DBAL\Connection;
@@ -40,17 +39,26 @@ final class ApplyNoShowCreditIssueHandler
 
     public function apply(Reservation $reservation, IssueCreditNoShow $issue): NoShowCreditIssueResult
     {
-        // RG-CQ5-04 — résolution du droit créditable, même repository lookup que
-        // ProjectionAccesReservationHandler::revoquerSiProjete().
-        $projection = $this->em->getRepository(ProjectionAccesReservation::class)
-            ->findOneBy(['reservation' => $reservation]);
-        if (!$projection instanceof ProjectionAccesReservation || $projection->getDroitAccesRef() === null) {
-            return NoShowCreditIssueResult::noCredit(); // aucune projection — cas universel (§3.2 spec).
+        // RG-CQ5-04, **recible par CQ-3 + CQ-6** (autorisation de claude-A du 24/08) — le droit
+        // créditable est la CARTE que la réservation a débitée, pas le droit `Booking` projeté.
+        //
+        // La version d'origine résolvait `ProjectionAccesReservation` → `droitAccesRef`, c'est-à-dire
+        // le droit créé PAR RÉSERVATION avec la fenêtre du créneau, en attendant que CQ-3 y ouvre
+        // `creditRestant`. Ce droit-là ne peut pas porter le solde : il en existe un par réservation
+        // et il meurt avec elle, donc la deuxième réservation ne verrait pas ce que la première a
+        // consommé, et la restitution créditerait un objet que plus personne ne regarde. Le solde vit
+        // sur le droit de type carte, qui survit aux N réservations.
+        //
+        // Rien n'était cassé avant ce lot : `creditRestant` restant `null` sur les droits `Booking`,
+        // la garde ci-dessous sortait toujours par `noCredit()`.
+        $droitRef = $reservation->getCreditDroitRef();
+        if ($droitRef === null) {
+            return NoShowCreditIssueResult::noCredit(); // la réservation n'a débité aucune carte — cas universel.
         }
 
-        $droit = $this->em->getRepository(DroitAcces::class)->find($projection->getDroitAccesRef());
+        $droit = $this->em->getRepository(DroitAcces::class)->find($droitRef);
         if (!$droit instanceof DroitAcces || $droit->getCreditRestant() === null) {
-            return NoShowCreditIssueResult::noCredit(); // projeté mais sans crédit — cas universel Booking.
+            return NoShowCreditIssueResult::noCredit(); // carte disparue ou sans crédit décomptable.
         }
 
         // RG-CQ5-10 — garde défensive de cloisonnement (C19) : ne devrait JAMAIS déclencher, puisque
@@ -63,8 +71,9 @@ final class ApplyNoShowCreditIssueHandler
         }
 
         if ($issue === IssueCreditNoShow::Decremented) {
-            // RG-CQ5-05 — sous l'hypothèse §3.3 (décompte au booking), le crédit déjà pris reste pris :
-            // AUCUNE écriture. Volontairement symétrique et indépendant du point de décompte réel.
+            // RG-CQ5-05 — le crédit déjà pris reste pris : AUCUNE écriture. L'hypothèse « décompte au
+            // booking » que ce commentaire portait est devenue le comportement réel avec CQ-3 + CQ-6,
+            // et cette branche est correcte pour la première fois plutôt que par prudence.
             return NoShowCreditIssueResult::decremented($droit->getId());
         }
 

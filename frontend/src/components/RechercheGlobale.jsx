@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { libelleProduit, prixIndicatif, euros, statutProduit } from '../api/produit.js'
+import { aLeDroit } from '../api/droits.js'
 
 // Recherche globale de la barre du haut.
 //
@@ -28,13 +29,14 @@ export default function RechercheGlobale({ droits = [], onNav }) {
   const [produits, setProduits] = useState([])
   const [chargement, setChargement] = useState(false)
   const [indice, setIndice] = useState(0)
+  const [panne, setPanne] = useState(false)
 
   const champ = useRef(null)
   const boite = useRef(null)
   const cacheProduits = useRef(null)
 
-  const peutClients = droits.includes('crm.lire')
-  const peutProduits = droits.includes('offre.lire')
+  const peutClients = aLeDroit(droits, 'crm.lire')
+  const peutProduits = aLeDroit(droits, 'offre.lire')
 
   const resultats = useMemo(() => {
     const l = []
@@ -86,8 +88,13 @@ export default function RechercheGlobale({ droits = [], onNav }) {
           peutProduits ? chargerProduits(cacheProduits).catch(() => null) : null,
         ])
         if (annule) return
-        setClients(cs ? membres(cs) : [])
+        // `/crm/clients/recherche` est une operation sur mesure : elle rend `{ items, total }` et non
+        // une collection hydra. L'extracteur generique rendait donc toujours une liste vide.
+        setClients(cs ? (Array.isArray(cs.items) ? cs.items : membres(cs)) : [])
         setProduits(ps ? filtrerProduits(ps, q) : [])
+        // Une recherche qui echoue et une recherche sans resultat ne doivent pas se ressembler :
+        // « aucun resultat » sur une panne envoie chercher un client qui existe pourtant.
+        setPanne((peutClients && cs === null) || (peutProduits && ps === null))
         setIndice(0)
       } finally {
         if (!annule) setChargement(false)
@@ -154,6 +161,8 @@ export default function RechercheGlobale({ droits = [], onNav }) {
         <div className="ts-panel" role="listbox">
           {chargement && resultats.length === 0 ? (
             <div className="ts-vide">Recherche…</div>
+          ) : panne && resultats.length === 0 ? (
+            <div className="ts-vide">La recherche n'a pas abouti. Réessayez dans un instant.</div>
           ) : resultats.length === 0 ? (
             <div className="ts-vide">Aucun résultat pour « {terme.trim()} ».</div>
           ) : (

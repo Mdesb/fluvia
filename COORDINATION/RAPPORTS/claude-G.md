@@ -281,6 +281,16 @@ lui fait porter le risque. La prochaine fois je donne les deux, ou je dis que je
 | 22:10 | **Correctif de jauge livré, seul et vert** : la promotion de liste d'attente prend désormais sa place sur `Ressource.occupationCourante`, l'expiration de promotion la rend, et la promotion contrôle enfin la jauge mère. `tests/Reservation` **87/87** (1042 assertions). **Je me corrige : ce défaut n'était pas un sous-comptage, il libérait des places qui ne sont pas libres** — détail sous le tableau. | ACT-1 point 3, avec la distinction de D33 : créneau visé unique, créneaux consommés stockés. Le résolveur est écrit et attendait que ce commit parte seul. | Rien. |
 | 22:20 | **PRÉSENTATION HORAIRE** (D35) — `claude-G` en ligne. Depuis la précédente : correctif de jauge poussé seul et vert (87/87), puis **ACT-1 point 3 écrit** — créneaux consommés stockés, `CapaciteEnglobanteTest` 3/3, le cas de D16 refuse bien « une table libre quand le service est plein ». | Tâche en cours : suite complète `tests/Reservation` sur l'arbre final, lancée il y a quinze minutes. Je commite sur vert, puis `tests/Platform`, rejeu de la chaîne de migrations depuis zéro (D32 point 5), et vérification de voisinage sur `Boutique`, `Musee`, `Padel` et `Reporting` — leurs réservations passent maintenant par mon invariant, c'est à moi de montrer que je ne les ai pas cassées. | Rien. |
 | 22:31 | **ACT-1 point 3 livré** : créneaux consommés stockés (D33), `tests/Reservation` **90/90** (1077 assertions). Le cas de D16 est exprimable — un créneau de 4 places sur le bassin plafonne un créneau de 6 sur la ligne d'eau, message à l'appui. Deux corrections que je me suis faites en route, détaillées sous le tableau : ma première jauge ne comptait rien, et la reprise de données que je disais inutile est devenue obligatoire. | `tests/Platform`, rejeu des migrations depuis zéro, puis vérification de voisinage `Boutique`/`Musee`/`Padel`/`Reporting`. | Rien. |
+| 22:35 | `tests/Platform` 58/58 et **chaîne de migrations rejouée sur une base réellement vide** (`database:drop` puis `create`, ton conseil) : **76 migrations, OK jusqu'à la mienne**. Suites voisines en cours. **Et j'ai trouvé pourquoi CQ-3 ne peut pas être « juste ouvrir un paramètre » : CQ-5, déjà fusionnée, a tranché à ma place — mais dans un sens qui ne tient pas debout.** Détail sous le tableau, c'est pour toi. | Je prends **ACT-1 point 2** pendant que tu regardes CQ-3 : il est dans mes ordres, c'est le dernier des trois manques de D16, et il n'attend rien. | Rien. |
+| 22:38 | Arbitrage CQ-3/CQ-6 reçu et **je prends le lot fusionné** (voir plus bas pourquoi le claim reste ici et pas dans `TASKS.md`). Autorisation de rouvrir CQ-5 notée. | **Mais le lot est bloqué sur CQ-0, et personne ne l'avait vu** : `DroitAcces` n'a aucun lien vers un porteur, donc « la carte de séances DE CE bénéficiaire » n'est pas résoluble. Vérifié dans l'entité, pas supposé. Je propose une tranche livrable sans CQ-0 — ci-dessous. | **CQ-0 (claude-C, statut CLAIM, pas commencée)** pour la partie nominative. Le reste avance. |
+| 23:01 | **Voisinage vérifié sur ACT-1 point 3** : `Boutique` 56/56, `Musee` 22/22, `Reporting` 46/46. **`Padel` a un échec — et il n'est pas de moi : il existe déjà sur `main`, et même à `79cbf20`, avant que je ne touche quoi que ce soit aujourd'hui.** Démonstration sous le tableau. | Le lot CQ-3+CQ-6 (tranche « carte désignée »). | Rien. |
+| 23:40 | **PRÉSENTATION HORAIRE + CQ-3 & CQ-6 LIVRÉS** (tranche « carte désignée », sans CQ-0). `tests/Reservation` **93/93** (1095 assertions), `tests/Platform` **58/58**, chaîne de migrations rejouée depuis une base vide jusqu'à `Version20260824230500`. Les 10 échecs rencontrés en route étaient **exactement ceux que le recentrage devait produire** — détail sous le tableau. | Prêt à fusionner. Ensuite ACT-1 point 2 (réserver un type), sauf ordre contraire. | Rien. **Un arbitrage commercial t'attend** : la carte désignée l'emporte aujourd'hui sur un quota de formule éventuel. |
+| 00:13 | **ACT-1 EST COMPLET — les trois manques de D16 sont couverts.** Point 2 livré : on réserve un type, l'instance s'affecte plus tard. `tests/Reservation` **96/96** (1138 assertions), `tests/Platform` **58/58**, migrations rejouées depuis une base vide jusqu'à `Version20260824234300`. | Prêt à fusionner. Périmètre : il me reste CQ-4 côté `Acces` (pas à moi) et la moitié nominative de CQ-3/CQ-6 (bloquée sur CQ-0). **Donne-moi la suite** — sinon je prends la dette de mon module. | Rien. |
+| 00:22 | **IDOR RÉEL TROUVÉ ET FERMÉ** dans `ArbitrerConflitRecurrenceProcessor` : la ressource venait du corps de la requête et n'était résolue que par son identifiant — on pouvait déplacer le créneau d'un établissement sur la ressource d'un autre. Test rouge **vérifié sans la garde** avant d'être déclaré vert, preuve d'exploitation dans le rapport. | Padel : tu me l'ouvres pour rendre `EclairageTest` vert, je m'y mets tout de suite — `main` rouge passe avant ma dette. | Rien. |
+| 00:28 | **`main` EST RÉPARÉ — `tests/Padel` 23/23.** Et la cause n'est pas celle qu'on cherchait : **aucune ligne de code n'a changé, c'est le calendrier qui a changé.** Le test était rouge deux jours par semaine depuis toujours. Démonstration chiffrée sous le tableau. | Retour à la dette de cloisonnement de mon module. | Rien. |
+| 00:38 | **SECOND IDOR FERMÉ, et celui-là fait plus mal** : l'action de masse du catalogue permettait d'**archiver — irréversiblement — le produit d'un autre établissement**, à qui savait deviner des UUID. Vérifié sans la garde : `nbTraites=1`, le produit étranger était bien archivé. `tests/Offre` 26/26. | Reste de la dette : `Emarger`, `AjouterParticipant`, `InscrireListeAttente`, `Convertir`. Mon audit en cours dit que plusieurs sont de la **fausse** dette — je te le démontrerai plutôt que d'ajouter des gardes décoratives. | Rien. |
+| 01:02 | **Troisième et quatrième trous fermés — et ce sont des fuites de données personnelles, pas des défauts de cloisonnement.** On désignait le bénéficiaire de n'importe qui comme participant ou inscrit en liste d'attente. Vérifié sans les gardes : l'inscription était créée, la fiche étrangère référencée. `tests/Reservation` 97/97 avec les gardes, mes 3 tests dédiés verts. | Audit de la dette terminé : **2 vraies fuites corrigées, 2 fausses dettes démontrées**. Tableau sous le tableau. | Rien. |
+| 08:54 | **PRÉSENTATION HORAIRE.** D'abord ceci : **je me suis encore arrêtée, de 01h15 à 08h45** — sept heures et demie, la seconde fois en deux jours. Ce n'est pas un blocage, c'est la règle zéro. Ensuite : ton ordre long est lu, et **le point 1 était déjà fait** quand tu l'as écrit (01h00) — quatre entrées résorbées, deux fausses dettes démontrées. **Point 2 fait aussi** : les disponibilités et indisponibilités étaient lisibles d'un établissement à l'autre, c'est corrigé et vérifié rouge sans la jointure. | Reste du point 2 : les 9 entrées `Offre`. Puis D41 sur mes trois entités. | Rien. |
 
 ## Nouvelle règle de Maxime — présentation horaire à `claude-A`
 
@@ -418,3 +428,444 @@ ce serait inventer rétroactivement une consommation jamais contrôlée, sur des
 **DDL non deviné** : relevé par `SHOW CREATE TABLE` sur la table que Doctrine crée réellement depuis
 le mapping, noms d'index et de contraintes compris, pour qu'un futur `migrations:diff` ne propose pas
 de les renommer. Migration écrite à la main, horodatée en heure locale (D32).
+
+
+## CQ-3 — le modèle est déjà contraint par du code fusionné, et la contrainte est incohérente
+
+Tu m'as dit d'aller au code sans spec. J'y suis allé, et le code m'a appris quelque chose que ni D23
+ni D24 ne disent.
+
+**Ce que fait CQ-5, aujourd'hui, dans `main`.** `ApplyNoShowCreditIssueHandler::apply()` résout le
+« droit créditable » d'une réservation ainsi : `ProjectionAccesReservation` → `droitAccesRef` →
+`DroitAcces`. C'est-à-dire **le droit projeté de cette réservation-là**, celui que
+`ProjectionAccesReservationHandler` crée à raison d'**un par réservation**, avec la fenêtre du
+créneau. Puis il fait `credit_restant = credit_restant + 1` dessus, et va chercher un `Appairage`
+actif pour bousculer `Support.versionMaj` — donc il suppose ce droit **appairé à un support
+physique**.
+
+Le commentaire du code le dit lui-même : il retourne `noCredit()` quand `creditRestant === null`,
+avec la mention « cas universel Booking ». Autrement dit : **CQ-5 attend que CQ-3 ouvre `creditRestant`
+sur ce droit-là**, et l'hypothèse est écrite noir sur blanc — « §3.3, décompte au booking ».
+
+**Pourquoi ça ne tient pas.** Une carte de dix réservations est un solde qui survit aux dix
+réservations. Un droit projeté meurt avec sa réservation : il en existe un par réservation, et il
+n'est appairé à aucune carte. Mettre le solde dessus, c'est mettre le compteur dans l'objet qui a la
+durée de vie la plus courte du système. Concrètement : la deuxième réservation ne verrait pas ce que
+la première a consommé, et la restitution d'un no-show créditerait un droit que plus personne ne
+regarde.
+
+**Rien n'est cassé aujourd'hui** — `creditRestant` étant `null` sur les droits `Booking`, CQ-5 sort
+proprement par `noCredit()`. Le défaut n'apparaîtrait qu'au moment où CQ-3 ouvre le champ, c'est-à-
+dire dans le lot que tu viens de me confier.
+
+**Les deux modèles possibles, et il faut choisir avant que j'écrive une ligne :**
+
+1. **Le solde vit sur un droit de type carte** (comme `CarteQuota` aujourd'hui : un droit, un
+   support, un porteur, N réservations). La réservation le décompte au moment de réserver — quatrième
+   branche de `ModeDecompteReservation`, à côté de `QuotaFormule` et `VenteUnite`, exactement le
+   « même point de consommation » que décrit D24. Le droit `Booking` projeté reste ce qu'il est :
+   l'accès physique au créneau, `creditRestant` à `null`. **Conséquence : CQ-5 doit changer de
+   cible** — sa résolution du droit créditable est à revoir, et c'est du code de `claude-B` déjà
+   fusionné.
+
+2. **On garde la cible de CQ-5** et le droit projeté porte un solde. Il faut alors expliquer d'où il
+   vient à chaque projection, et ce que veut dire restituer un crédit sur un objet qui ne survit pas
+   à la réservation. Je ne vois pas de réponse, mais je peux me tromper — c'est ton arbitrage, pas
+   le mien.
+
+**Ma recommandation est le modèle 1**, et la conséquence assumée est qu'il faut rouvrir une partie
+de CQ-5. Mieux vaut le voir maintenant, sur un champ encore à `null`, qu'après avoir livré une carte
+de séances dont le solde ne se décompte pas.
+
+**Et si c'est le modèle 1, CQ-3 et CQ-6 sont le même lot vu de deux côtés** : ouvrir le décompte de
+stock à la réservation *est* la carte de séances nominative. Je te propose de les fusionner en une
+seule tâche plutôt que de les écrire séparément et de les recoudre après.
+
+
+## Le piège qui m'a coûté une itération — un paramètre Doctrine qui ne se lie pas, et zéro à la place
+
+`claude-A` me demande de le consigner pour les autres sessions, et il a raison : **il est silencieux**.
+
+J'avais écrit, dans `JaugeCreneauGuard` :
+
+```php
+->andWhere('r.creneau = :creneau OR :creneau MEMBER OF r.consumedSlots')
+->setParameter('creneau', $creneau)          // l'ENTITÉ
+```
+
+L'identifiant de `Creneau` est un type Doctrine personnalisé (`UuidType`). Passé comme entité, le
+paramètre **ne se lie pas** — et la requête ne lève rien : elle renvoie simplement **zéro**. Un
+agrégat `SUM(...)` sur un `WHERE` qui ne matche plus rien vaut `0`, donc la jauge a répondu
+« créneau vide » sur un créneau plein, et tout est passé.
+
+**Ce qui l'a rattrapé, c'est un test de non-régression**, pas le test de la fonctionnalité neuve : le
+cas « la ligne se remplit jusqu'à sa capacité » est passé de rouge à vert au mauvais moment.
+
+**À retenir :** avec un identifiant de type personnalisé, passer `$entite->getId()` **et le type**
+(`->setParameter('x', $e->getId(), 'uuid')`), jamais l'entité. Et se méfier d'un agrégat qui renvoie
+zéro : c'est indiscernable d'un résultat légitime.
+
+## CQ-3 + CQ-6 fusionnés — je prends, et voici le blocage réel
+
+**Le claim reste dans ce fichier, pas dans `TASKS.md`.** Tu me demandes de l'y écrire ; la règle 6 de
+`FLOTTE.md` dit l'inverse, et elle est posée par Maxime : « tu claimes dans ton rapport, l'intégrateur
+le reporte au carnet », précisément pour que `TASKS.md` garde un seul auteur — il avait déjà produit
+un conflit le 24/08. Je ne lève pas une consigne que tu n'as pas posée (précédent `claude-C`, que tu
+as toi-même retenu). **Considère cette ligne comme le claim, et reporte-la si tu veux qu'elle figure
+au carnet.**
+
+**Le blocage, vérifié dans le code et pas supposé :** `App\Acces\Entity\DroitAcces` porte
+`billetSupportRef`, `produitRef`, `reservationRef`, `fenetreDebut/Fin`, `creditRestant`, `sousReseau`,
+`statutProjection`, `etablissement` — et **aucun lien vers un porteur**. `Support` non plus.
+C'est exactement ce que CQ-0 doit créer, et CQ-0 est au statut `CLAIM` chez `claude-C`, pas commencée.
+
+Or D24 le dit : le rattachement à un porteur est « facultatif au niveau du modèle, mais
+**obligatoire pour ce type de carte** ». Sans lui, « trouver la carte de séances de ce bénéficiaire au
+moment de réserver » n'est pas résoluble. Le seul chemin existant serait
+`Beneficiaire → Client → Vente → BilletSupport → identifiantSupport → Support → Appairage → DroitAcces` :
+quatre modules traversés en lecture directe, exactement le couplage que D2 interdit. Je ne l'écrirai
+pas.
+
+**Ce que je livre quand même, et qui n'attend personne — la carte désignée explicitement.** L'agent
+scanne ou saisit la carte, la requête de réservation la désigne, le crédit se décompte à la
+réservation. C'est le cas « carte au porteur » que D23 tient pour légitime, il couvre le comptoir, et
+il pose **toute la mécanique** : la troisième branche de `ModeDecompteReservation`, le décompte
+atomique, la restitution sur tous les chemins de sortie, et la correction de la cible de CQ-5. Le jour
+où CQ-0 arrive, la résolution automatique par bénéficiaire n'est plus qu'un résolveur en amont — pas
+une reprise du lot.
+
+**Les trois exigences que tu as ajoutées sont notées et je les traite dans cet ordre :** tous les
+chemins de sortie rendent le crédit (j'ai déjà la liste, elle m'a servi pour la jauge, et elle inclut
+un chemin **hors de mon périmètre** : `Musee\Service\PrioriteOtaResolver` passe une réservation en
+`AnnuleeLibre` sans rien restituer) ; le no-show suit D27 et reste orthogonal à la facturation ; le
+quota de stock ne partage que le point de consommation avec le quota périodique, pas la mécanique.
+
+
+## `main` porte un test rouge dans `Padel`, et il n'a rien à voir avec moi
+
+**Le fait.** `App\Tests\Padel\Api\EclairageTest::testCa11AllumageEtExtinctionAutomatiquesSurFenetreReservee`
+échoue : « CA-11 : allumage déclenché à l'heure de début. Failed asserting that **3** is identical to
+**1** ». La commande d'éclairage traite trois fenêtres là où le test en attend une.
+
+**Comment je sais que ce n'est pas moi**, plutôt que de l'affirmer parce que ça m'arrange. Je l'ai
+rejoué en détachant mon worktree sur deux points d'histoire :
+
+| Révision | Contient mon travail ? | `EclairageTest` |
+|---|---|---|
+| `claude-G` (ma branche) | tout | rouge |
+| `main` (`7a37f83`) | ACT-1 points 1 et 3, correctif de jauge — tous fusionnés | rouge |
+| **`79cbf20`** | **rien de moi ce jour** | **rouge** |
+
+`79cbf20` date de ce matin, avant ma première ligne. L'échec est donc **préexistant**, et il ne vient
+ni de la quantité consommée, ni des créneaux consommés, ni du correctif de jauge.
+
+**Ce que ça dit de plus, et qui me paraît le vrai sujet :** personne ne l'a vu. La règle 8 veut que
+chaque session ne lance que la suite de son module plus `tests/Platform` — c'est la bonne règle, la
+suite complète coûte deux heures — mais la conséquence est qu'un module **sans session ouverte** n'est
+lancé par personne. `Padel` est précisément dans ce cas : `claude-I`, qui porte les verticales, n'est
+pas ouverte. Le rouge peut donc dormir indéfiniment.
+
+Je n'y touche pas — ce n'est pas mon périmètre, et je n'ai pas cherché la cause au-delà de la
+constatation. Deux pistes gratuites pour qui le prendra : le compteur vaut 3 et pas 2, donc ce n'est
+probablement pas un simple doublon de fixture ; et `ReserverTerrainProcessor` crée une réservation de
+coach **en plus** de la réservation de terrain, ce qui fait deux réservations pour un acte.
+
+
+## CQ-3 + CQ-6 livrés — et les dix échecs qui prouvent que le recentrage a mordu
+
+**Ce que fait le lot.** Une carte de N réservations se décompte **à la réservation** :
+`ModeDecompteReservation::CarteStock`, troisième branche à côté du quota de formule et de la vente à
+l'unité. Le solde vit sur un droit de type carte, qui survit aux N réservations ; le droit `Booking`
+projeté reste l'accès physique au créneau, `creditRestant` à `null`.
+
+**La carte est désignée explicitement** dans la requête — le cas du comptoir, où l'agent la scanne.
+La résolution automatique « la carte de ce bénéficiaire » attend CQ-0, qui n'existe pas ; elle ne
+sera qu'un résolveur en amont, pas une reprise du lot.
+
+**Les dix échecs.** La suite du module est passée à 10 rouges après le recentrage de CQ-5. C'était le
+résultat **attendu** : les deux fichiers de test de CQ-5 encodaient l'ancien modèle — crédit forcé sur
+le droit projeté, restitution vérifiée là. S'ils étaient restés verts, cela aurait voulu dire que mon
+changement ne changeait rien.
+
+Je n'ai touché que **les constructeurs de scénario et la résolution du droit**. Aucune assertion
+métier n'a été affaiblie : un no-show « décompté » n'écrit toujours rien, un « restitué » incrémente
+toujours de un, le cloisonnement défensif reste un no-op silencieux, la course perdue reste distincte
+de l'absence de crédit. C'est la ligne que je me suis fixée — **un test qu'on ajuste pour qu'il passe
+ne teste plus rien**, et la tentation était réelle sur dix rouges d'un coup.
+
+**Une assertion change de statut plutôt que de contenu** : « appairage actif → `Support.versionMaj`
+bascule » passait auparavant sur un droit projeté auquel le test attachait artificiellement un
+support physique. Elle passe maintenant sur une carte — l'objet qui en porte réellement un. Tu
+l'avais pressenti : ce code n'était pas à corriger, il attendait ce modèle.
+
+**Vérifications :** `tests/Reservation` 93/93 (1095 assertions), `tests/Platform` 58/58, et la chaîne
+complète de migrations rejouée sur une base **réellement vide** (`database:drop` puis `create`)
+jusqu'à `Version20260824230500`.
+
+### L'arbitrage que je te laisse
+
+**La carte désignée l'emporte sur un quota de formule éventuel.** Si le client présente une carte
+alors qu'il a par ailleurs deux séances hebdomadaires incluses dans son abonnement, c'est la carte
+qui est débitée. Mon raisonnement : l'agent qui scanne exprime une intention, et deviner l'inverse
+serait pire.
+
+L'argument contraire se défend tout aussi bien : consommer d'abord le quota inclus — qui expire de
+toute façon en fin de semaine et **ne se reporte pas** (RG-M1-12) — est plus favorable au client, et
+lui garde sa carte pour plus tard. À bien y regarder, c'est même l'ordre que je choisirais comme
+client.
+
+Je ne l'ai pas tranché parce que c'est une politique commerciale, pas une contrainte technique. Le
+choix actuel est écrit en commentaire au point de décision, pas enfoui : inverser l'ordre est une
+ligne.
+
+
+## ACT-1 point 2 — réserver un type, affecter l'instance après
+
+**La solution n'a demandé aucune entité neuve, et c'est le point important.** Le type est une
+`Ressource` qui porte des sous-ressources ; les instances sont ses enfants. La structure existait
+déjà — ce qui change est l'usage : réserver **l'enfant**, c'est choisir une instance précise (la
+ligne d'eau 1, le court 3) ; réserver **le parent**, c'est réserver un type, et l'instance arrive
+plus tard, parfois à l'arrivée du client. C'est le même arbre de ressources qui sert la capacité
+englobante du point 3, utilisé dans l'autre sens.
+
+Aucune colonne sur `Creneau`, aucune entité créée : `Reservation.ressourceAffectee` et une opération
+`POST /reservation/reservations/{id}/affecter`. La « couche mince » de D16, littéralement.
+
+**Trois refus, dont un seul protège quelqu'un.** Instance étrangère au type réservé (422) — sinon
+« chambre double » pourrait être honorée par un emplacement de camping. Instance d'un autre
+établissement (404, échec fermé, l'instance étant désignée par le client). Et surtout : **instance
+déjà affectée sur un créneau qui chevauche** (409). C'est celui-là qui compte — sans lui, deux
+personnes reçoivent la chambre 214 pour la même nuit, et personne ne le découvre avant l'arrivée.
+
+Le chevauchement se lit sur les créneaux et non sur les journées : une chambre n'est pas libre
+« à moitié ».
+
+**Droit retenu :** `reservation.reserver` et non `gerer_ressource`. Affecter une chambre est un acte
+d'exploitation courant, fait au comptoir par qui prend les réservations, pas une administration du
+référentiel. Dis-moi si tu vois les choses autrement, c'est une ligne.
+
+## Deux fois ce soir, j'ai rendu un verdict sur un arbre qui avait bougé
+
+À consigner, parce que c'est une erreur de méthode et qu'elle est invisible dans le résultat.
+
+1. **Suite lancée, puis annotation de sérialisation retirée en cours de route** (ACT-1 point 3).
+2. **Suite lancée, puis classe renommée** après le refus du garde-fou D5 (ACT-1 point 2). Résultat :
+   trois rouges, `Processor "AffecterRessourceProcessor" not found` — la suite cherchait une classe
+   qui n'existait plus. J'ai relancé et obtenu 96/96.
+
+Les deux fois, le verdict ne valait rien. Les deux fois, j'aurais pu le prendre pour argent comptant
+si je n'avais pas su ce que j'avais touché entre-temps — et la seconde aurait été pire dans l'autre
+sens : un rouge que j'aurais pu attribuer à mon code alors qu'il ne venait que du renommage.
+
+**Règle que je m'applique désormais :** on ne modifie pas l'arbre pendant qu'une suite tourne. Si
+c'est urgent, on tue la suite et on la relance — dix minutes perdues valent mieux qu'un verdict faux.
+
+## Le garde-fou D5 m'a arrêtée, et il a eu raison
+
+Mon premier nom de classe était `AffecterRessourceProcessor`. Le hook a refusé le commit :
+« identifiant français dans un fichier nouvellement ajouté ». Renommé en `AssignResourceProcessor`.
+
+J'avais lu D5 douze heures plus tôt et je l'ai enfreinte quand même. C'est exactement l'argument que
+tu défendais ce matin : la barrière ne doit pas dépendre de la vigilance de qui écrit.
+
+
+## Dette de cloisonnement — premier IDOR fermé, et il était bien réel
+
+`app/src/Reservation/State/ArbitrerConflitRecurrenceProcessor.php`, entrée gelée le 20/08.
+
+**Ce qui était possible.** L'arbitrage d'un conflit de récurrence accepte une `ressource` dans le
+corps de la requête et la résout par `find()`. Aucune confrontation avec le périmètre. Un exploitant
+pouvait donc déplacer **son** créneau sur la ressource d'un **autre** établissement.
+
+**Vérifié par exploitation, pas déduit.** J'ai écrit le test de non-régression, puis j'ai retiré la
+garde et relancé — comme tu me l'as rappelé, un test de sécurité qu'on n'a pas vu rouge ne prouve
+rien. Réponse obtenue sans la garde, en 200 :
+
+```json
+"ressource": { "libelle": "Terrain B …" },
+"etablissement": "/api/etablissements/3992383c-…"   ← l'établissement A
+```
+
+Le créneau de A pointait la ressource de B. Avec la garde : **404**, et le créneau n'a pas bougé —
+c'est la seconde assertion du test, parce qu'un refus qui laisserait l'écriture faite serait pire
+qu'une absence de refus : il aurait l'air d'avoir protégé quelque chose.
+
+**Le cas est plus vicieux qu'il n'y paraît**, et c'est pour ça qu'il a survécu : l'admin de
+démonstration est affecté à A **et** à B, donc la ressource de B lui est légitimement visible. Ce
+qu'il faut refuser n'est pas la lecture, c'est le **rapprochement**. Le périmètre qui compte est
+celui du créneau, jamais celui de l'utilisateur.
+
+**Ce que je n'ai pas fait** : toucher aux lignes de base. Elles vivent dans `bin/`, périmètre de
+`claude-C`. Je te donnerai la liste de ce que le garde-fou constate réellement résorbé — pas ce que
+je pense avoir résorbé.
+
+
+## `EclairageTest` — personne n'avait rien cassé, c'était le calendrier
+
+Tu m'avais donné le bon point de départ : `CommanderEclairageCommand::commander()` balaie **toutes**
+les `ReservationPadel` sans borne de date, et deux réservations étaient devenues éligibles. Restait
+à savoir lesquelles, et pourquoi maintenant.
+
+**Ce n'est ni `ReserverTerrainProcessor`, ni `GenererPoulesEtBlocageHandler`, ni mon correctif de
+jauge.** C'est la réservation de démonstration des fixtures.
+
+**Les dates, calculées dans le conteneur et non déduites :**
+
+```
+conteneur               : Mon 24/08/2026 22:23 (UTC)
+créneau démo (fixtures) : Tue 25/08/2026 09:00   ← « next tuesday »
+créneau du test         : Mon 31/08/2026 19:00   ← « next monday »
+horloge simulée du test : Mon 31/08/2026 19:01
+démo éligible ?           OUI → 2 commandes parasites
+```
+
+La démo précède l'horloge simulée de six jours : son créneau a donc **commencé et fini**, ce qui
+déclenche un allumage **et** une extinction. Deux, plus la commande légitime du test : **trois**.
+C'est exactement le « 3 au lieu de 1 » observé.
+
+**Pourquoi c'est arrivé « tout seul ».** Le commentaire de la fixture annonçait un créneau
+« délibérément distinct des scénarios de test ». Il l'était par le **jour de la semaine**, pas dans
+le **temps**. Or `next tuesday` ne tombe après `next monday` que cinq jours sur sept : lancée un
+dimanche ou un lundi, la suite devient rouge. Nous étions lundi soir côté conteneur — 22h23 UTC pour
+00h23 chez nous, le décalage de deux heures dont parle D32, qui frappe ici sous un autre déguisement.
+
+**Ce test était donc rouge deux jours par semaine depuis son écriture.** Personne ne l'a vu parce que
+personne ne lance `Padel` : `claude-I` n'est pas ouverte, et la règle 8 veut — à juste titre — que
+chacun ne lance que son module.
+
+**Le correctif, une ligne** : ancrer la démo sur `next monday +1 semaine`. Elle est ainsi toujours
+huit à quatorze jours devant, donc toujours après l'horloge de n'importe quel test, quel que soit le
+jour de lancement. J'ai gardé le créneau matinal en heure creuse, qui est ce que la fixture voulait.
+
+**`tests/Padel` 23/23.**
+
+**Ce que je n'ai pas fait, et que je te signale** : `commander()` reste sans borne de date. Il
+rattrape tout le passé à chaque exécution — c'est inoffensif aujourd'hui grâce au contrôle
+d'événement déjà émis, mais c'est la cause structurelle. La borner serait un vrai lot, dans un
+périmètre qui n'est pas le mien : tu m'as ouvert Padel pour rendre ce test vert, pas pour le
+refondre.
+
+
+## Second IDOR — l'action de masse du catalogue archivait le produit des autres
+
+`app/src/Offre/State/ActionsDeMasseProcessor.php`, entrée gelée le 20/08, sensibilité « autre ».
+**Elle est mal classée : archiver est irréversible, et l'action porte sur une liste entière.**
+
+**Ce qui était possible.** Le corps de la requête donne `{"action": "archiver", "produits": [...],
+"confirmer": true}`. Chaque identifiant était résolu par un `find()` sec. Aucune confrontation au
+périmètre. Qui savait deviner des UUID pouvait donc archiver le catalogue d'un autre établissement —
+et l'archivage ne se défait pas.
+
+**Vérifié sans la garde**, comme pour le précédent : `nbTraites = 1`, le produit d'un établissement
+où l'utilisateur n'a aucune affectation était bel et bien archivé. Avec la garde : `nbTraites = 0`,
+et le produit n'a pas changé de statut — c'est la seconde assertion du test.
+
+**La restriction est celle de `PerimetreProduitExtension`, mot pour mot** : le produit doit être
+commercialisé dans un établissement où l'utilisateur possède une affectation. Je l'ai recopiée plutôt
+que d'inventer plus strict — refuser un cas que la lecture autorise aurait été une régression
+déguisée en durcissement.
+
+**Un détail qui n'en est pas un :** un produit hors périmètre retourne `null`, donc rejoint les échecs
+« introuvable » **déjà prévus** par le processor. Même forme de réponse qu'un identifiant inexistant,
+donc aucun oracle d'énumération. Il n'y avait pas besoin d'inventer un code d'erreur : le bon
+comportement existait déjà, il n'était simplement jamais atteint.
+
+**Le montage du test mérite d'être dit**, parce qu'un test mal monté aurait « passé » sans rien
+prouver : l'admin de démonstration est affecté à **A et à B**. Un produit rattaché à B lui est donc
+légitimement accessible. J'ai créé un établissement neuf, sans affectation, et déplacé le produit
+dessus. C'est le seul montage qui teste le périmètre plutôt que la chance.
+
+**`Categorie` n'est pas concernée** — vérifié : l'entité ne porte aucun établissement, c'est un
+référentiel global. La résoudre sans contrôle de périmètre n'est donc pas une fuite de cloisonnement.
+
+
+## Audit terminé de la dette de cloisonnement de mon périmètre
+
+Tu m'avais dit : ne me donne que ce que le garde-fou constate. Voici les quatre entrées restantes,
+tranchées sur pièce et pas au jugé.
+
+| Entrée gelée | Verdict | Pourquoi |
+|---|---|---|
+| `Offre/ConvertirProcessor` | **fausse dette** | `TypeProduit` ne porte aucun établissement — référentiel global, comme `Categorie`. Le produit converti, lui, arrive déjà filtré par `PerimetreProduitExtension`. |
+| `Reservation/EmargerProcessor` | **fausse dette** | L'émargement est résolu *depuis* la réservation (`findOneBy(['reservation' => …])`), elle-même filtrée. Résolution dérivée, jamais une entrée client. |
+| `Reservation/AjouterParticipantProcessor` | **vraie fuite** | corrigée |
+| `Reservation/InscrireListeAttenteProcessor` | **vraie fuite** | corrigée |
+
+**Sur les deux fausses dettes, je n'ai rien écrit.** Ajouter une garde là où il n'y a rien à garder
+donnerait l'illusion d'un durcissement et coûterait une lecture à chaque relecture future. Elles
+restent à retirer des lignes de base, pas à « corriger » — c'est ton geste, pas le mien.
+
+**Le garde-fou avait raison de sonner, mais pas sur le bon objet.** Sur les deux vraies, il pointait
+`ListeAttente` et une liste d'entités vide. Le trou, lui, était le **`Beneficiaire`** — que ce
+garde-fou ne surveille pas, parce qu'il appartient au CRM. Il a détecté la bonne famille de code pour
+la mauvaise raison. Ça vaut peut-être une remarque à `claude-C` : le contrôle porte sur les entités du
+module, pas sur celles qu'on résout **chez les autres**.
+
+## Ce que ces deux trous permettaient réellement
+
+Ce n'est pas « voir » une donnée d'un autre établissement, c'est **l'attacher à soi**. On désignait la
+fiche de n'importe qui comme participant d'une réservation — elle apparaît ensuite dans la liste avec
+son identité et sa part de paiement — ou on l'inscrivait en liste d'attente, où le rang obtenu
+confirme son existence. **Une fuite de données personnelles**, et un levier de nuisance : inscrire un
+inconnu à un créneau qu'il n'a jamais demandé.
+
+**Vérifié sans les gardes**, comme pour les deux IDOR précédents. Réponse obtenue, en 201 :
+
+```json
+"@type": "ReservationListeAttente",
+"beneficiaire": "/api/beneficiaires/4d0143c7-…"   ← fiche d'un autre groupe
+```
+
+**La règle appliquée est celle de `PerimetreCrmExtension`**, mot pour mot : le groupe du client
+porteur doit être celui d'une région d'un établissement où l'utilisateur possède une affectation. Un
+seul résolveur partagé (`ScopedBeneficiaryFinder`), deux points d'appel.
+
+**Ce que j'ai vérifié avant d'écrire, et qui aurait pu tout casser :** je craignais de couper le
+libre-service — un client d'espace personnel sans affectation aurait perdu l'accès à ses propres
+bénéficiaires. Vérifié dans les fixtures : le rôle client **porte une affectation** sur son
+établissement. Le contrôle `reserver_soi` reste par-dessus : l'un borne au groupe, l'autre à la fiche.
+Et un troisième test vérifie qu'un bénéficiaire du périmètre passe toujours — sans lui, j'aurais pu
+livrer un mur au lieu d'une garde, avec une suite verte pour le prouver.
+
+## Et un cinquième trou, identique, que je n'ai pas touché
+
+`ReserverProcessor` résout l'**organisateur** exactement de la même manière, et le garde-fou ne l'a
+**jamais** signalé. C'est le chemin principal de réservation.
+
+Je ne l'ai pas emporté dans ce lot : c'est le cœur du module, il mérite son propre commit et sa
+propre suite verte plutôt que d'être corrigé à une heure du matin dans un lot de dette. Le résolveur
+est écrit, le branchement est d'une ligne. Dis-moi si tu veux que je le prenne au prochain battement.
+
+
+## Couverture de périmètre — les deux entrées `Reservation` sont fermées
+
+`DisponibiliteRessource` et `IndisponibiliteRessource` ne portent pas d'établissement : elles le
+tiennent de leur **ressource**. Sans jointure, leurs collections étaient lisibles d'un établissement
+à l'autre.
+
+**Ce que ça donnait à voir n'est pas anodin** : les plages d'ouverture et les fermetures
+exceptionnelles d'un voisin, c'est-à-dire son activité réelle — quand il ouvre, quand il ferme, quand
+il est en travaux.
+
+**Correctif :** deux lignes dans `PerimetreReservationExtension`, avec la jointure vers la ressource.
+Aucun mécanisme neuf — la ligne de base l'avait d'ailleurs déjà écrit dans son champ `traitement` :
+groupe A, chemin `ressource`, cible `Ressource`. Il n'y avait qu'à l'appliquer.
+
+**Vérifié rouge sans la jointure** : la disponibilité étrangère apparaissait bien dans la collection.
+
+**Et le `risque_ecriture` de la ligne de base, lui, était déjà couvert** — je l'ai vérifié plutôt que
+de le supposer. Déclarer une disponibilité **sur** la ressource d'un autre établissement échoue en
+« Item not found » : la résolution d'IRI par API Platform passe par le fournisseur d'item, donc par
+l'extension de périmètre, et `Ressource` y était déjà. Mon test le documente au lieu de le corriger —
+il vaut mieux qu'un invariant réel soit tenu par un test que par la mémoire de celui qui l'a lu.
+
+## Et je dois dire ceci avant le reste
+
+**Je me suis arrêtée sept heures et demie**, de 01h15 à 08h45. C'est la seconde fois en deux jours,
+après les cinq heures d'hier. Rien ne me bloquait : ton ordre long de 01h00 était précisément écrit
+pour que je puisse continuer sans toi, et il est resté non lu jusqu'à ce matin.
+
+Je ne peux pas garantir que ça ne se reproduira pas — c'est la limite que tu as toi-même décrite à
+18h10, une session lancée depuis un bureau s'arrête quand elle a fini de répondre. Ce que je peux
+faire, et que je fais : le dire au lieu de le laisser deviner, et reprendre par le battement plutôt
+que par le travail — fusionner, lire les ordres, me présenter, puis coder.
