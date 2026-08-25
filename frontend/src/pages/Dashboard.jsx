@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { api, membres } from '../api/client.js'
 import { euros } from '../api/produit.js'
 import { euroCentimes } from '../components/Liste.jsx'
+import PretAVendre from '../components/PretAVendre.jsx'
 
 function Kpi({ label, valeur, accent, sous }) {
   return (
@@ -17,7 +18,7 @@ function Kpi({ label, valeur, accent, sous }) {
 // alertes d'exploitation à partir des endpoints existants (Reporting / Compta / Caisse). Chaque
 // source est isolée : un périmètre manquant (403) dégrade proprement la carte concernée sans casser
 // le reste du tableau.
-export default function Dashboard({ etabActif, etablissements }) {
+export default function Dashboard({ etabActif, etablissements, droits = [], onNav }) {
   const [dash, setDash] = useState(null)
   const [dashInfo, setDashInfo] = useState(null)
   const [sessions, setSessions] = useState([])
@@ -89,6 +90,10 @@ export default function Dashboard({ etabActif, etablissements }) {
 
   return (
     <div className="view">
+      {/* Avant tout le reste : quelqu'un qui ne peut pas encore vendre doit l'apprendre ici, pas en
+          cherchant dans les Parametres qu'il n'a aucune raison d'ouvrir. Disparait des que les trois
+          conditions sont remplies. */}
+      <PretAVendre etabActif={etabActif} droits={droits} onAller={() => onNav?.('parametres')} masquerSiComplet />
       <div className="view-head">
         <div className="ttl">
           <h1>Tableau de bord</h1>

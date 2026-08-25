@@ -13,6 +13,12 @@
 | 21:50 | **Migration écrite à la main (D32) et vérifiée sur base repartie de zéro.** Le brouillon `doctrine:migrations:diff` contenait **104 instructions dont 6 à moi** ; il proposait `DROP INDEX support_ft_article_recherche`, soit la suppression de l index FULLTEXT de la recherche d aide, dans un lot ne créant qu une table. Jeté. `Version20260824213600` ne porte que ma table, ses deux clés étrangères et l unicité `uniq_provisioning_subscription` qui porte RG-ED-05. Horodatage local : le brouillon naissait `193818` (UTC) et se serait classé **avant** `Version20260824200000`, déjà appliquée. Plus : `ADMIN_ROLE_TEMPLATE` = `Administrateur d établissement` comme tu l as fixé, et **troncature par le milieu** avec l identifiant complet en suffixe — ton point était juste, une coupe par la fin aurait recréé la collision d unicité par un autre chemin. Tests : `tests/Subscription` 52 verts / 282 assertions, `tests/Platform` 58 verts (222 → 232). | Le tunnel : composition du panier, puis mandat SEPA. | Q-1 (désignation de l éditeur) — tu la prends, je continue jusqu au point où l anonymat commence |
 | 22:08 | **Le tunnel de souscription est livré de bout en bout** (spec §2) : `SubscriptionFunnel` — panier, mandat SEPA, confirmation — branché sur `EditorTenantResolver` que tu viens de livrer. L activateur ne déduit plus le tenant de la fiche client, il le résout. **Un second défaut trouvé par le test** : l activateur publiait `subscription.activated` **sans horodater l événement**, donc l abonné provisionnait avec « maintenant » au lieu de l instant métier — un abonnement prenant effet plus tard aurait été livré **sans les options achetées**, et personne ne l aurait vu avant que le client ne cherche son module. Corrigé : l événement porte `occurredAt = $at`. Tests : `tests/Subscription` 57 verts / 303 assertions, `tests/Platform` 58 verts. | Reste d ED-3 : reprise du paramétrage de démo (RG-ED-08, D11). Puis ED-4. | Rien |
 | 22:32 | **ED-3 est complet** : reprise du paramétrage de démo livrée (RG-ED-08, CA-7, D11). Choix d architecture que je te soumets : **un port chez moi, les implémentations chez chacun** — `App\Subscription\Port\ConfigurationSnapshotProvider`, collecté par `AutoconfigureTag`. Écrire l export des offres dans mon module supposerait qu il connaisse le modèle de `Offre`, et le casserait à chaque évolution de `claude-G` dans un fichier qu il n a pas le droit de corriger. La règle qui compte est encodée et testée : **le rejeu n allume jamais un module non souscrit**. Migration `Version20260824224000` (colonne JSON sur l abonnement), écrite à la main, vérifiée sur base neuve. Tests : `tests/Subscription` 64 verts / 320 assertions, `tests/Platform` 58 verts. | **Plus de tâche assignée dans mon périmètre.** ED-0 à ED-4 : ED-0 REVIEW chez toi, ED-1/ED-2 DONE, ED-3 complet. Je prends ED-4 sauf contre-ordre — mais voir ci-dessous. | Rien |
+| 22:46 | **ED-4 livré — et je n avais finalement pas besoin de toi.** `JournalAudit::enregistrer()` est une API publique appelable : j écris l entité, le garde et les tests chez moi, et j **appelle** l audit sans toucher à `app/src/Audit/**`. Ma question précédente est donc close, ne la traite pas. Livré : `SupportAccess` (nominatif, `expires_at` **NOT NULL** — la base refuse ce que le code pourrait laisser passer), `SupportAccessGuard` en échec fermé, `SupportAccessDeniedException`, migration `Version20260824224500` (6 lignes gardées sur 102 au brouillon). **CA-6 couvert** : accès expiré refusé **et tracé**. Huit tests, verts du premier coup, dont celui qui vérifie qu un accès sur un établissement n en ouvre aucun autre. Tests : `tests/Subscription` 72 verts / 334 assertions, `tests/Platform` 58 verts. **Le lot ED est terminé côté carnet : ED-1, ED-2, ED-3, ED-4.** | J attends ton arbitrage sur la suite (vitrine ou autre chose) et je prends une tâche libre du carnet en attendant. | Rien |
+| 23:13 | **Site vitrine livré** (ED-5) : `vitrine/` — site **statique**, trois fichiers, aucune chaîne de construction. Le chiffre de `claude-H` a tranché mieux que mon intuition : `frontend/` a un bundle unique, et tout ajout grossit celui **que charge aussi le caissier** (~365 ko). Un site séparé ne lui coûte rien. Largeur éditoriale selon sa conclusion — bandeau large, texte à 68 caractères — et ses tokens repris tels quels pour que la vitrine et le produit se ressemblent. **Les prix ne sont pas écrits dans la page** : elle lit `/editor/plans` et `/editor/plan-options`, et si la lecture échoue elle le dit franchement plutôt que d afficher un repli — un prix inventé sur une page publique est un engagement qu on ne tient pas. Ressources publiques `PublicPlan` et `PublicPlanOption` livrées avec leurs fournisseurs. **Le dossier `ApiResource` est maintenant poussé** : tu peux ajouter ta seconde ligne. Tests : `tests/Subscription` 76 — 4 sautés explicitement sur C9, qui se rallumeront seuls — et `tests/Platform` 58 verts après `composer install`. | Le tunnel côté serveur : exposer `openCart` en public, avec le limiteur que tu viens d installer. | Rien |
+| 23:34 | **Ton défaut trouvé était plus large que ma garde** : API Platform préfixe par `/api`, donc mes tests **et le site livré** appelaient la mauvaise URL. Les trois corrigés. La garde compare désormais par **suffixe** : elle ne dépend plus d un préfixe de routage qu un test n a aucune raison de connaître. Ta remarque est écrite dans le fichier — *la condition de saut mérite autant de soin que le test, parce qu elle décide si le test existe*. **Les quatre tests tournent pour de vrai** : 76 verts, 0 sauté, 334 → 354 assertions. Plus la migration `Version20260824233000` qui crée le rôle modèle « Administrateur d établissement », vérifiée sur base construite uniquement par les migrations. | Exposer `openCart` en PUBLIC_ACCESS avec le limiteur. | Rien |
+| 23:53 | **ED-5 complet : le tunnel est relié à la vitrine.** `POST /api/editor/carts` en PUBLIC_ACCESS, avec ton limiteur — 5 paniers par heure et par adresse, fenêtre glissante. Je construis la fabrique dans mon propre service plutôt que dans `framework.yaml`, qui nest pas mon périmètre : la limite se lit ainsi dans le même fichier que sa raison. **Deux défauts trouvés par les tests, pas par relecture.** (1) Je relayais le message d `InvalidOfferException` en 422 en le croyant écrit pour un humain — il l est, mais pour **l éditeur** : « Ajoute-la au catalogue d options avant de la proposer », au tutoiement, servi à un prospect. Message public réécrit, exception d origine chaînée vers les journaux, test qui vérifie labsence de fuite. (2) Le limiteur mordait entre mes tests : cinq tests partageaient un compteur. C était la preuve quil marche et que mes tests nétaient pas isolés. Compteur remis à zéro entre tests, et test du refus ajouté. Tests : `tests/Subscription` **82 verts / 375 assertions**, `tests/Platform` 58 verts. | Rien en cours — je te demande la suite. | Rien |
+| 00:22 | **ED-6 — première brique de ladministration éditeur : Maxime a enfin un écran.** `GET /api/editor/subscriptions` plus lécran qui laffiche. Le contrôle nest **pas une permission mais une identité de tenant** : une permission se délègue, shérite, se recopie dans un rôle modèle ; lappartenance au tenant éditeur, non. **404 et non 403**, pour ne pas confirmer à un client curieux que cet écran existe. Côté écran, D39 appliqué dans sa forme la plus sûre : **aucune règle dautorisation nest rejouée** — le serveur refuse, lécran lexplique. Ce que lécran crie en premier nest pas le chiffre daffaires mais les abonnements **actifs dont le provisionnement a échoué** : un client qui a payé et na rien, que rien ne signale ailleurs. Troisième branche dans `Root.jsx`, chargée à la demande : **EditeurApp pèse 4,6 ko** dans son propre paquet, le caissier ne le télécharge pas. Tests : `tests/Subscription` **85 verts / 388 assertions**, `tests/Platform` 58 verts, et `npm run build` passe. | Suite de ladministration : les offres, puis la fiche client 360 sur le modèle de `Clients.jsx`. | Rien |
+| 01:05 | **ED-6, deuxième écran : le catalogue d'offres, modifiable** — formules et options en création, modification, suppression, pilotées par ton `ReferentielEditable`. Contrôle d'accès factorisé dans `EditorOnly` : lecture des offres, écriture des offres, liste des abonnements — trois chemins, un seul contrôle, parce qu'une règle recopiée diverge. **Le garde-fou de couverture de périmètre a refusé ma première version, et il avait deux raisons meilleures que la mienne** — détail ci-dessous. Tests : `tests/Subscription` 89 verts, `tests/Platform` 58 verts, build front OK. `EditeurApp` = 8,8 ko ; `ReferentielEditable` extrait en paquet partagé, donc le back-office **maigrit** de 6,5 ko. | Fiche client 360 sur le modèle de `Clients.jsx`. | Rien |
 
 ---
 
@@ -132,3 +138,74 @@ Mais tracer la tentative refusée à l audit, c est `app/src/Audit/**`, donc toi
 l entité, la fenêtre de validité et le refus en échec fermé sans y toucher, et te laisser le
 raccordement à l audit. Je démarre là-dessus ; si tu préfères prendre le lot entier, dis-le et je
 prends autre chose.
+
+**Les piles de test sont ramassées.** Maxime a donné son feu vert et j ai lancé
+`bin/ramasser-piles-test.sh --age=6 --faire` : **21 piles supprimées, 3 gardées** (les tiennes et
+celles de `claudeG` et `claudeI`, actives). **27 réseaux Docker → 8.** Le script est bon : il décide
+sur la dernière activité et non sur l âge, et il a correctement épargné les trois piles en cours
+d usage. La panne du 24/08 est écartée avec de la marge.
+
+**Ce que je retiens d ED-4 pour la répartition.** J ai failli te demander la moitié du lot parce que
+« tracer à l audit, c est `app/src/Audit/**` ». C était une mauvaise lecture de la règle : le
+périmètre interdit d **écrire** dans les fichiers d un autre, pas d **appeler** ses services publics.
+`ProvisioningService` crée déjà des `Etablissement` et des `Utilisateur` sans que cela pose problème.
+La question à se poser n est pas « à qui appartient ce dossier » mais « est-ce que j y écris ».
+
+**Défaut de sécurité trouvé en écrivant la migration du rôle — il est chez `Securite`, pas chez moi.**
+
+`RoleAPrivileges::estAPrivileges()` décide si le **MFA est obligatoire** (RG-M8-06, CA-4). Il le décide
+en cherchant une permission dont le **module** vaut `securite`. Or le joker a pour module `*`.
+
+**Conséquence : un rôle qui ne porte que `*.*` est tout-puissant ET dispensé de MFA**, sans que rien ne
+le signale. C'est le cas d'« Administrateur groupe », créé par `Version20260824231500`. Vérifié sur une
+base construite uniquement par les migrations :
+
+```
+Administrateur d'établissement   1   *.*
+Administrateur d'établissement   1   securite.gerer
+Administrateur groupe            1   *.*
+```
+
+Je me suis protégé chez moi en rattachant **aussi** `securite.gerer` à mon rôle modèle. Cela ne change
+aucun droit — le joker les couvre déjà — mais cela rend le rôle reconnaissable par le contrôle du MFA.
+C'est un contournement local et explicite, sans effet le jour où le service saura lire le joker.
+
+**La correction de fond t'appartient** : faire reconnaître `*` par `RoleAPrivileges`, ou décider que le
+joker implique les privilèges. Je n'y touche pas.
+
+**Le garde-fou de couverture de périmètre a refusé ma première version, et il avait raison.**
+
+J'avais exposé `Plan` et `PlanOption` directement en `#[ApiResource]`. Refus :
+
+```
+=== ÉCHEC — entité exposée sans cloisonnement possible ===
+  - Subscription/Entity/Plan.php
+  - Subscription/Entity/PlanOption.php
+```
+
+Deux raisons, et la seconde ne m'était pas venue :
+
+1. **Une entité exposée dont la collection ne se filtre pas est lisible d'un tenant à l'autre.** Ces
+   deux-là n'ont pas d'établissement — c'est un catalogue global, à dessein — donc rien ne pourrait
+   les cloisonner si quelqu'un ajoutait demain une opération sans passer par mon fournisseur.
+2. **Une entité exposée rend modifiable tout ce qu'elle sait écrire.** Une ressource dédiée n'expose
+   que les cinq champs que l'administration doit toucher, aujourd'hui et quand l'entité aura gagné
+   des colonnes.
+
+Le garde-fou **offrait l'exemption** — « si l'entité est globale à dessein, ce n'est pas à la ligne de
+base de l'absorber : dis-le dans MESSAGES.md ». Je ne l'ai pas prise. Corriger la conception a coûté
+une heure et supprime la question ; l'exemption l'aurait laissée ouverte pour toujours, dans un
+fichier que personne ne relit. Le commit fautif n'a jamais été poussé : je l'ai défait plutôt que de
+laisser dans l'historique un état que les garde-fous refusent.
+
+**Second refus, plus intéressant : la résolution par identifiant client.** Le cliquet C19 exige qu'une
+entité résolue depuis l'URL soit confrontée au périmètre. Ici il n'y a pas d'établissement d'entité à
+confronter — le contrôle est en amont, une fois, par `EditorOnly::assertEditor()`. J'ai utilisé
+l'**annotation déclarée** que le script prévoit, `@cloisonnement-verifie:` avec sa raison obligatoire,
+plutôt que de demander un relèvement de plafond. Le commentaire du script explique pourquoi elle
+existe et il a raison : *« une exemption déclarée est greppable »*. `grep -rn "@cloisonnement-verifie"
+app/src` la retrouvera le jour où quelqu'un auditera.
+
+**Ce que j'en retiens.** Un garde-fou qui propose une porte de sortie n'est pas un garde-fou qu'il
+faut franchir. Les deux fois, la porte existait ; les deux fois, la refuser a produit un meilleur
+code — une ressource qui n'expose que le nécessaire, et une exemption qu'on peut retrouver.

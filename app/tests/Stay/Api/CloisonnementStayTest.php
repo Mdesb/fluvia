@@ -104,6 +104,34 @@ final class CloisonnementStayTest extends StayApiTestCase
         self::assertStringContainsString(StayFixtures::REFERENCE_A, (string) $client->getResponse()->getContent());
     }
 
+    public function testLaNoteDuSejourDeBEstInaccessibleDepuisA(): void
+    {
+        // La note est le document le plus indiscret du module : elle dit ce qu'un client a consommé
+        // et à quelle heure. Elle doit tomber exactement comme le séjour lui-même.
+        $sejourB = $this->entite(Stay::class, ['reference' => StayFixtures::REFERENCE_B]);
+        [$client, $entete] = $this->receptionnisteDeA();
+
+        $client->request('GET', '/api/stays/' . $sejourB->getId() . '/folio', $entete);
+
+        self::assertResponseStatusCodeSame(404, (string) $client->getResponse()->getContent(false));
+    }
+
+    public function testLaNoteDuSejourDeAEstLisibleEtChiffree(): void
+    {
+        // Témoin de la note : le séjour de A porte une ligne de 9,00 € dans les fixtures. Sans cette
+        // assertion, le test précédent serait satisfait par une route qui répond 404 à tout le monde.
+        $sejourA = $this->entite(Stay::class, ['reference' => StayFixtures::REFERENCE_A]);
+        [$client, $entete] = $this->receptionnisteDeA();
+
+        $client->request('GET', '/api/stays/' . $sejourA->getId() . '/folio', $entete);
+
+        self::assertResponseIsSuccessful();
+        $corps = (string) $client->getResponse()->getContent();
+        self::assertStringContainsString('9.00', $corps, 'Le solde doit refleter la ligne des fixtures.');
+        self::assertStringContainsString('Bar - 2 demis', $corps);
+        self::assertStringContainsString(StayFixtures::REFERENCE_A, $corps);
+    }
+
     /**
      * Un réceptionniste doté de toutes les permissions `stay.*`, affecté au **seul** établissement A.
      *

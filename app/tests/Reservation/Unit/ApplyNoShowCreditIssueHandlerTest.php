@@ -17,7 +17,6 @@ use App\Crm\Entity\Client as CrmClient;
 use App\DataFixtures\SocleFixtures;
 use App\Organisation\Entity\Etablissement;
 use App\Reservation\Entity\Creneau;
-use App\Reservation\Entity\ProjectionAccesReservation;
 use App\Reservation\Entity\Reservation;
 use App\Reservation\Entity\Ressource;
 use App\Reservation\Enum\IssueCreditNoShow;
@@ -91,7 +90,7 @@ final class ApplyNoShowCreditIssueHandlerTest extends KernelTestCase
 
     public function testDecrementedAucuneEcritureNiRestitution(): void
     {
-        $reservation = $this->creerReservationAvecDroitProjete(creditRestant: 3);
+        $reservation = $this->creerReservationAvecCarteDebitee(creditRestant: 3);
 
         $resultat = $this->handler->apply($reservation, IssueCreditNoShow::Decremented);
 
@@ -99,31 +98,29 @@ final class ApplyNoShowCreditIssueHandlerTest extends KernelTestCase
         self::assertFalse($resultat->creditRestored);
 
         $this->em->clear();
-        $droit = $this->em->getRepository(DroitAcces::class)->findOneBy(['sourceType' => TypeDroitAcces::Booking]);
+        $droit = $this->em->getRepository(DroitAcces::class)->findOneBy(['sourceType' => TypeDroitAcces::CarteQuota]);
         self::assertNotNull($droit);
         self::assertSame(3, $droit->getCreditRestant(), 'RG-CQ5-05 Decremented : creditRestant inchangé en base.');
     }
 
     public function testRestoredIncrementeAtomiquementEtRafraichit(): void
     {
-        $reservation = $this->creerReservationAvecDroitProjete(creditRestant: 3);
+        $reservation = $this->creerReservationAvecCarteDebitee(creditRestant: 3);
 
         $resultat = $this->handler->apply($reservation, IssueCreditNoShow::Restored);
 
         self::assertTrue($resultat->creditActioned);
         self::assertTrue($resultat->creditRestored);
 
-        $droit = $this->em->getRepository(DroitAcces::class)->findOneBy(['sourceType' => TypeDroitAcces::Booking]);
+        $droit = $this->em->getRepository(DroitAcces::class)->findOneBy(['sourceType' => TypeDroitAcces::CarteQuota]);
         self::assertNotNull($droit);
         self::assertSame(4, $droit->getCreditRestant(), 'RG-CQ5-05 Restored : +1 en base, preuve du refresh() en mémoire.');
     }
 
     public function testAppairageActifBasculeVersionMajSupport(): void
     {
-        $reservation = $this->creerReservationAvecDroitProjete(creditRestant: 3);
-        $projection = $this->em->getRepository(ProjectionAccesReservation::class)->findOneBy(['reservation' => $reservation]);
-        self::assertNotNull($projection);
-        $droit = $this->em->getRepository(DroitAcces::class)->find($projection->getDroitAccesRef());
+        $reservation = $this->creerReservationAvecCarteDebitee(creditRestant: 3);
+        $droit = $this->em->getRepository(DroitAcces::class)->find($reservation->getCreditDroitRef());
         self::assertNotNull($droit);
 
         $support = (new Support())->setIdentifiant('SUP-CQ5-' . uniqid())->setType(TypeSupport::Qr)->setEtablissement($this->etablissement);
@@ -140,9 +137,9 @@ final class ApplyNoShowCreditIssueHandlerTest extends KernelTestCase
         self::assertGreaterThan($versionInitiale, $support->getVersionMaj(), 'RG-CQ5-05 : Appairage actif -> Support.versionMaj bascule (D23).');
     }
 
-    public function testAucuneProjectionRetourneSansCredit(): void
+    public function testAucuneCarteDebiteeRetourneSansCredit(): void
     {
-        $reservation = $this->creerReservationSansProjection();
+        $reservation = $this->creerReservationSansCarte();
 
         $resultat = $this->handler->apply($reservation, IssueCreditNoShow::Restored);
 
@@ -152,10 +149,10 @@ final class ApplyNoShowCreditIssueHandlerTest extends KernelTestCase
         self::assertSame(0, (int) $this->em->getRepository(DroitAcces::class)->count([]), 'RG-CQ5-04 : aucun UPDATE, aucun droit créé.');
     }
 
-    public function testDroitProjeteSansCreditRetourneSansCredit(): void
+    public function testCarteSansCreditDecomptableRetourneSansCredit(): void
     {
-        // creditRestant = null : cas universel réel aujourd'hui (§3.2 spec), pas forcé.
-        $reservation = $this->creerReservationAvecDroitProjete(creditRestant: null);
+        // creditRestant = null : une carte sans crédit décomptable ne restitue rien.
+        $reservation = $this->creerReservationAvecCarteDebitee(creditRestant: null);
 
         $resultat = $this->handler->apply($reservation, IssueCreditNoShow::Restored);
 
@@ -165,10 +162,8 @@ final class ApplyNoShowCreditIssueHandlerTest extends KernelTestCase
 
     public function testCloisonnementEtablissementDefensifNoOp(): void
     {
-        $reservation = $this->creerReservationAvecDroitProjete(creditRestant: 3);
-        $projection = $this->em->getRepository(ProjectionAccesReservation::class)->findOneBy(['reservation' => $reservation]);
-        self::assertNotNull($projection);
-        $droit = $this->em->getRepository(DroitAcces::class)->find($projection->getDroitAccesRef());
+        $reservation = $this->creerReservationAvecCarteDebitee(creditRestant: 3);
+        $droit = $this->em->getRepository(DroitAcces::class)->find($reservation->getCreditDroitRef());
         self::assertNotNull($droit);
 
         // Construit artificiellement un droit d'un autre établissement (RG-CQ5-10, garde défensive C19).
@@ -196,10 +191,8 @@ final class ApplyNoShowCreditIssueHandlerTest extends KernelTestCase
         // via l'identity map : le droit reste géré à creditRestant=3 (le find() interne du handler le
         // sert depuis le cache, la garde `=== null` passe), mais la ligne DB est mise à NULL, donc
         // l'UPDATE `... AND credit_restant IS NOT NULL` n'affecte aucune ligne.
-        $reservation = $this->creerReservationAvecDroitProjete(creditRestant: 3);
-        $projection = $this->em->getRepository(ProjectionAccesReservation::class)->findOneBy(['reservation' => $reservation]);
-        self::assertNotNull($projection);
-        $droitId = $projection->getDroitAccesRef();
+        $reservation = $this->creerReservationAvecCarteDebitee(creditRestant: 3);
+        $droitId = $reservation->getCreditDroitRef();
         self::assertNotNull($droitId);
 
         $this->em->getConnection()->executeStatement(
@@ -215,29 +208,30 @@ final class ApplyNoShowCreditIssueHandlerTest extends KernelTestCase
         self::assertSame((string) $droitId, (string) $resultat->droitId);
     }
 
-    private function creerReservationAvecDroitProjete(?int $creditRestant): Reservation
+    /**
+     * **Recentré par CQ-3 + CQ-6.** La version d'origine posait le crédit sur le droit `Booking`
+     * PROJETÉ de la réservation, en attendant que CQ-3 y ouvre `creditRestant`. Ce droit ne peut pas
+     * porter un solde de carte : il en existe un par réservation et il meurt avec elle. Le solde vit
+     * désormais sur un droit de type carte, que la réservation désigne par `creditDroitRef`.
+     */
+    private function creerReservationAvecCarteDebitee(?int $creditRestant): Reservation
     {
-        $reservation = $this->creerReservationSansProjection();
+        $reservation = $this->creerReservationSansCarte();
 
-        $droit = (new DroitAcces())->setSourceType(TypeDroitAcces::Booking)
-            ->setReservationRef($reservation->getId())
+        $droit = (new DroitAcces())->setSourceType(TypeDroitAcces::CarteQuota)
             ->setCreditRestant($creditRestant)
             ->setEtablissement($this->etablissement)
             ->setStatutProjection(StatutProjectionDroit::Valide);
         $this->em->persist($droit);
+        $this->em->flush();
 
-        $projection = (new ProjectionAccesReservation())->setReservation($reservation)
-            ->setDroitAccesRef($droit->getId())
-            ->setEtablissement($this->etablissement)
-            ->setFenetreDebut($reservation->getCreneau()->getDebut())
-            ->setFenetreFin($reservation->getCreneau()->getFin());
-        $this->em->persist($projection);
+        $reservation->setCreditDroitRef($droit->getId());
         $this->em->flush();
 
         return $reservation;
     }
 
-    private function creerReservationSansProjection(): Reservation
+    private function creerReservationSansCarte(): Reservation
     {
         $ressource = (new Ressource())->setEtablissement($this->etablissement)->setCodeType('terrain')
             ->setLibelle('Terrain Unit CQ-5 ' . uniqid())->setCapacitePropre(4)->setOuvreAcces(true);

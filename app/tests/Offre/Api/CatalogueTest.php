@@ -71,6 +71,68 @@ final class CatalogueTest extends OffreApiTestCase
         self::assertSame('archive', $gold['statut']);
     }
 
+    /**
+     * D3/D8 — une action de masse ne doit pas atteindre le produit d'un établissement hors périmètre.
+     *
+     * Les identifiants viennent du corps de la requête, et l'action de masse en accepte une liste
+     * entière : un `find()` sec permettait d'archiver — **irréversiblement** — le catalogue de
+     * quelqu'un d'autre à qui savait deviner des UUID.
+     *
+     * Le produit est déplacé sur l'établissement C, du groupe voisin, où l'admin du groupe A n'a
+     * aucune affectation (même montage que `testAdminNeVoitPasLesRessourcesDunAutreGroupe` côté
+     * réservation). L'admin est affecté à A **et** à B : un test bâti sur B ne prouverait rien.
+     */
+    public function testActionDeMasseNAtteintPasLeProduitDunAutreGroupe(): void
+    {
+        [$client, $token, $idA] = $this->adminSurA();
+        $entete = ['auth_bearer' => $token, 'headers' => [ContexteEtablissement::HEADER => $idA]];
+
+        $produit = $client->request('POST', '/api/produits', $entete + [
+            'json' => [
+                'libelle' => ['fr' => 'Produit deplace hors perimetre'],
+                'type' => '/api/type_produits/' . $this->idType(OffreFixtures::TYPE_ENTREE),
+                'canaux' => ['guichet'],
+                'etablissements' => ['/api/etablissements/' . $idA],
+            ],
+        ])->toArray();
+        self::assertResponseStatusCodeSame(201);
+
+        // Bascule hors périmètre : commercialisé uniquement sur l'établissement C.
+        /** @var \Doctrine\ORM\EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $entite = $em->getRepository(\App\Offre\Entity\Produit::class)->find($produit['id']);
+        self::assertNotNull($entite);
+        // Un établissement neuf, sur lequel l'admin n'a aucune affectation. Construit ici plutôt
+        // que pris dans les fixtures : l'admin de démonstration est affecté à A **et** à B, donc
+        // aucun des deux ne prouverait quoi que ce soit.
+        $etabAEntite = $em->getRepository(\App\Organisation\Entity\Etablissement::class)->find($idA);
+        self::assertNotNull($etabAEntite);
+        $etabC = (new \App\Organisation\Entity\Etablissement())
+            ->setNom('Etablissement hors perimetre ' . uniqid())
+            ->setRegion($etabAEntite->getRegion());
+        $em->persist($etabC);
+        foreach ($entite->getEtablissements()->toArray() as $ancien) {
+            $entite->getEtablissements()->removeElement($ancien);
+        }
+        $entite->getEtablissements()->add($etabC);
+        $em->flush();
+        $statutAvant = $entite->getStatut()->value;
+
+        $reponse = $client->request('POST', '/api/produits/actions-de-masse', $entete + [
+            'json' => ['action' => 'archiver', 'produits' => [$produit['id']], 'confirmer' => true],
+        ])->toArray();
+
+        // Même forme de réponse qu'un identifiant inexistant : pas d'oracle d'énumération.
+        self::assertSame(0, $reponse['nbTraites']);
+        self::assertSame('introuvable', $reponse['echecs'][0]['raison'] ?? null);
+
+        // Et surtout : le produit n'a pas bougé. L'archivage est irréversible.
+        $em->clear();
+        $apres = $em->getRepository(\App\Offre\Entity\Produit::class)->find($produit['id']);
+        self::assertNotNull($apres);
+        self::assertSame($statutAvant, $apres->getStatut()->value, 'Aucune transition sur un produit hors périmètre.');
+    }
+
     /** RG-SOCLE-05 — Un lecteur affecté à A ne voit pas un produit rattaché à B seulement. */
     public function testCloisonnementEtablissement(): void
     {

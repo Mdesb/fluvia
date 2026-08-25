@@ -150,6 +150,7 @@ export const api = {
   produits: () => request('/api/produits'),
   // Le détail ajoute le groupe `produit:compta` (compte, TVA, règle PCA), absent de la collection.
   produit: (id) => request(`/api/produits/${id}`),
+  majProduit: (id, corps) => request(`/api/produits/${id}`, { method: 'PATCH', body: corps }),
   typeProduits: () => request('/api/type_produits'),
   creerProduit: (corps) =>
     request('/api/produits', { method: 'POST', body: corps, ld: true }),
@@ -164,6 +165,8 @@ export const api = {
   reactiverProduit: (id) => request(`/api/produits/${id}/reactiver`, { method: 'POST' }),
 
   pointDeVentes: () => request('/api/point_de_ventes'),
+  creerPointDeVente: (corps) => request('/api/point_de_ventes', { method: 'POST', body: corps }),
+  majPointDeVente: (id, corps) => request(`/api/point_de_ventes/${id}`, { method: 'PATCH', body: corps }),
   caisses: () => request('/api/caisses'),
   moyensPaiement: () => request('/api/moyen_paiements'),
   // Moyens de paiement — écriture (source M6, sécurité `compta.gerer`).
@@ -198,6 +201,9 @@ export const api = {
   // CRM.
   rechercheClients: (params) => request('/api/crm/clients/recherche', { query: params }),
   ficheClient: (id) => request(`/api/clients/${id}/fiche-360`),
+  // La fiche 360 ne porte qu'un sous-ensemble des champs : pour modifier, il faut le client entier.
+  client: (id) => request(`/api/clients/${id}`),
+  majClient: (id, corps) => request(`/api/clients/${id}`, { method: 'PATCH', body: corps }),
   // Relevé de mouvements du porte-monnaie virtuel (US-L5-04). Renvoie { mouvements: [...] }.
   pmvMouvements: (id) => request(`/api/clients/${id}/pmv/mouvements`),
   // Création rapide d'une fiche client (US-L5-02). L'établissement de création / le groupe sont
@@ -264,10 +270,23 @@ export const api = {
   espaces: () => request('/api/espaces', { query: { itemsPerPage: 200 } }),
   regions: () => request('/api/regions', { query: { itemsPerPage: 100 } }),
   categories: () => request('/api/categories', { query: { itemsPerPage: 200 } }),
+  creerCategorie: (corps) => request('/api/categories', { method: 'POST', body: corps }),
+  majCategorie: (id, corps) => request(`/api/categories/${id}`, { method: 'PATCH', body: corps }),
+  supprimerCategorie: (id) => request(`/api/categories/${id}`, { method: 'DELETE' }),
   typeTarifs: () => request('/api/type_tarifs', { query: { itemsPerPage: 100 } }),
+  // Référentiels modifiables : les opérations existaient côté serveur depuis le début, le front ne
+  // les appelait simplement pas.
+  creerTypeTarif: (corps) => request('/api/type_tarifs', { method: 'POST', body: corps }),
+  majTypeTarif: (id, corps) => request(`/api/type_tarifs/${id}`, { method: 'PATCH', body: corps }),
+  supprimerTypeTarif: (id) => request(`/api/type_tarifs/${id}`, { method: 'DELETE' }),
   grilleTarifaires: () => request('/api/grille_tarifaires', { query: { itemsPerPage: 200 } }),
   saisons: () => request('/api/saisons', { query: { itemsPerPage: 100 } }),
+  creerSaison: (corps) => request('/api/saisons', { method: 'POST', body: corps }),
+  majSaison: (id, corps) => request(`/api/saisons/${id}`, { method: 'PATCH', body: corps }),
+  supprimerSaison: (id) => request(`/api/saisons/${id}`, { method: 'DELETE' }),
   tauxTvas: () => request('/api/taux_tvas', { query: { itemsPerPage: 100 } }),
+  creerTauxTva: (corps) => request('/api/taux_tvas', { method: 'POST', body: corps }),
+  majTauxTva: (id, corps) => request(`/api/taux_tvas/${id}`, { method: 'PATCH', body: corps }),
 
   // Comptes / rôles & droits (M8).
   utilisateurs: () => request('/api/utilisateurs', { query: { itemsPerPage: 100 } }),
@@ -359,4 +378,22 @@ export const api = {
   museeExpositions: () => request('/api/musee_expositions', { query: { itemsPerPage: 100 } }),
   museeVisitesGuidees: () =>
     request('/api/musee_visite_guidees', { query: { itemsPerPage: 100 } }),
+
+  // Administration de l'éditeur (ED-6). Le serveur répond 404 si la session n'est pas celle de
+  // l'éditeur : le contrôle est une identité de tenant, pas une permission, et il n'est pas rejoué
+  // ici (D39).
+  editorSubscriptions: () => request('/api/editor/subscriptions'),
+
+  // Catalogue d'offres, côté administration éditeur (ED-6). Ces routes rendent AUSSI ce que la
+  // vitrine cache — formules retirées de la vente, formules incohérentes — parce que c'est le seul
+  // écran où on peut les corriger.
+  editorPlans: () => request('/api/editor/catalog/plans'),
+  creerEditorPlan: (corps) => request('/api/editor/catalog/plans', { method: 'POST', body: corps }),
+  majEditorPlan: (id, corps) => request(`/api/editor/catalog/plans/${id}`, { method: 'PATCH', body: corps }),
+  supprimerEditorPlan: (id) => request(`/api/editor/catalog/plans/${id}`, { method: 'DELETE' }),
+
+  editorOptions: () => request('/api/editor/catalog/options'),
+  creerEditorOption: (corps) => request('/api/editor/catalog/options', { method: 'POST', body: corps }),
+  majEditorOption: (id, corps) => request(`/api/editor/catalog/options/${id}`, { method: 'PATCH', body: corps }),
+  supprimerEditorOption: (id) => request(`/api/editor/catalog/options/${id}`, { method: 'DELETE' }),
 }

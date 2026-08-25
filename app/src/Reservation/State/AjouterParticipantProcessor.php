@@ -10,6 +10,7 @@ use App\Crm\Entity\Beneficiaire;
 use App\Reservation\Entity\ParticipantReservation;
 use App\Reservation\Entity\Reservation;
 use App\Reservation\Enum\StatutPaiementParticipant;
+use App\Reservation\Service\BeneficiaryScopeGuard;
 use App\Vente\Service\LecteurCorps;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
@@ -26,6 +27,7 @@ final class AjouterParticipantProcessor implements ProcessorInterface
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly LecteurCorps $lecteur,
+        private readonly BeneficiaryScopeGuard $beneficiaryGuard,
     ) {
     }
 
@@ -34,8 +36,7 @@ final class AjouterParticipantProcessor implements ProcessorInterface
         \assert($data instanceof Reservation);
 
         $corps = $this->lecteur->corps();
-        $personne = $this->resoudre(Beneficiaire::class, $corps['personne'] ?? null, 'personne');
-        \assert($personne instanceof Beneficiaire);
+        $personne = $this->resoudreBeneficiaire($corps['personne'] ?? null, 'personne');
 
         $participant = new ParticipantReservation();
         $participant->setPersonne($personne)
@@ -48,6 +49,28 @@ final class AjouterParticipantProcessor implements ProcessorInterface
         $this->em->flush();
 
         return $data;
+    }
+
+    /**
+     * D3/D8 — le beneficiaire vient du corps de la requete, donc il se confronte au perimetre.
+     * Sans ce controle, on ajoutait a sa propre reservation la fiche de n'importe qui : elle
+     * apparait ensuite dans la liste des participants, avec son identite et sa part de paiement.
+     *
+     * Message et code identiques entre « inconnu » et « hors perimetre » : les distinguer offrirait
+     * un oracle d'enumeration sur les fiches clients.
+     */
+    private function resoudreBeneficiaire(mixed $reference, string $champ): Beneficiaire
+    {
+        $uuid = $this->uuid($reference);
+        if ($uuid === null) {
+            throw new UnprocessableEntityHttpException(sprintf('Reference « %s » obligatoire (UUID ou IRI).', $champ));
+        }
+        $beneficiaire = $this->beneficiaryGuard->find($uuid);
+        if ($beneficiaire === null) {
+            throw new UnprocessableEntityHttpException(sprintf('%s introuvable.', $champ));
+        }
+
+        return $beneficiaire;
     }
 
     /**
