@@ -149,3 +149,57 @@ la joignabilité, pas ma bonne volonté.
 **Mon engagement en retour** : je réponds à chaque présentation, même brièvement. Si tu demandes une
 tâche, tu repars avec une tâche. Une session qui écrit dans le vide apprend que c'est inutile, et je ne
 veux pas t'apprendre ça.
+
+---
+
+## 2026-08-25 · 01:00 — ORDRE LONG : de quoi tenir sans moi
+
+Maxime dort. Je resterai joignable tant que ma propre session tourne, mais **ne m'attends pour rien** :
+tout ce qui suit est tranché, et les critères d'acceptation sont écrits pour que tu puisses juger
+seul(e) qu'un lot est fini.
+
+**Ordre de passage imposé.** Prends-les dans l'ordre. Si un lot te bloque plus de vingt minutes,
+écris-le dans ton rapport, passe au suivant, et reviens. Ne t'arrête jamais sur une question (D30).
+
+**Rappels qui ont coûté cher cette nuit, tous constatés :**
+
+- **D32** — ne commite jamais un `migrations:diff` sans le relire ligne à ligne. Le brouillon de
+  `claude-D` contenait 104 instructions dont 6 à elle. Horodate en **heure locale** : le conteneur
+  tourne en UTC, deux heures derrière.
+- **D40** — deux jeux de données qui doivent rester ordonnés dans le temps s'ancrent sur la **même**
+  référence avec un écart explicite. « next tuesday » ne tombe après « next monday » que cinq jours sur
+  sept : un test s'est révélé rouge **deux jours par semaine depuis son écriture**.
+- **D39** — si tu rejoues une règle d'autorisation du serveur, rejoue-la **entière**. Utilise
+  `api/droits.js`, jamais `droits.includes(...)`. Quatre occurrences trouvées cette nuit, dont une
+  écrite pendant le lot qui corrigeait cette classe.
+- **D41** — je viens de trouver que **35 entités** laissent écrire leur `etablissement` sans contrôle.
+  Si tu exposes une entité qui porte un établissement, ne le mets **pas** dans un groupe d'écriture.
+- **Un test qu'on ajuste pour qu'il passe ne teste plus rien.** Vérifie-le **rouge sans la garde** avant
+  de le déclarer vert.
+- **Refus en 404, jamais 403** : un 403 est un oracle d'énumération.
+- **Démonte ta pile de test.** Vingt-deux orphelines ont saturé le VPS hier ; `bin/ramasser-piles-test.sh`
+  existe désormais mais ne te dispense pas de `down`.
+
+### Ton fil, si Maxime t'ouvre : cinq modules que personne n'a jamais regardés
+
+Tu n'as jamais été lancée, et cela a un coût mesuré : **un test de ton périmètre est resté rouge
+vingt-quatre heures** sans que personne le voie. `claude-G` l'a réparé par exception.
+
+1. **Lis D40 en premier.** Ton `EclairageTest` était rouge **deux jours par semaine depuis son
+   écriture**, parce qu'une fixture se disait « distincte » du test par le jour de la semaine et non
+   dans le temps. Cherche le même motif dans tes quatre autres modules : toute date relative qui doit
+   rester ordonnée par rapport à une autre est suspecte.
+2. **`Musee\Service\PrioriteOtaResolver`** passe une réservation en `AnnuleeLibre` **sans rien
+   restituer**. Signalé deux fois par `claude-G`, jamais touché parce que ce n'est pas son périmètre.
+   Avec les cartes de réservation (CQ-3), ce chemin ne rendrait pas le crédit au client.
+3. **`CommanderEclairageCommand`** balaie toutes les réservations **sans borne de date** et rattrape
+   tout le passé à chaque exécution. Inoffensif aujourd'hui grâce au contrôle d'événement déjà émis,
+   mais c'est la cause structurelle du test rouge.
+4. **Onze de tes entités sont dans la liste des 35 de D41** — `Musee` en a neuf à lui seul. Retire
+   `etablissement` de leurs groupes d'écriture.
+5. **Puis ACT-0 appliqué aux verticales** : composition d'activités, paquets de démarrage, clés de
+   vocabulaire. Un « créneau » est un *rendez-vous* chez le coiffeur et une *réservation de terrain* au
+   padel — c'est le lot le moins cher et le plus visible.
+
+**Attention** : tes cinq modules exposent 81 entités d'API. Suite de ton module **plus**
+`tests/Platform` avant chaque push.

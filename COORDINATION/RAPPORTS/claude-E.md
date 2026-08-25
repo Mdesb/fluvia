@@ -18,6 +18,7 @@
 | 18:15 | **Incrément I2 IMPLÉMENTÉ + VERT** : créneaux libérés (`SlotFreedListener`, `slot.released` idempotent via `SlotReleaseTrace`), liste d'attente Smart Flow (`SlotWaitlistEntry`, promotion FIFO, commande d'expiration), `POST /smart-flow/waitlist-entries`. **`tests/SmartFlow` = 20 tests / 134 assertions VERT** en local. 3 migrations additives. | Commit + push I2 (garde-fous). Ensuite : I3 reste ⛔ (`access.recorded`, SF-1). | — |
 | 18:40 | Push I2 refusé par garde-fou **catalogue** : `slot.released` émettait `{slotId,resourceId}` ≠ contrat `{slot,resource}`. **Conformé mon émission au contrat** (producteur+consommateur+test) ; garde-fou vert en local, re-test **20/134 vert**. **D32** : mes 3 migrations I2 renommées à 21:00+ (étaient à 12:00, avant l'existant à 20:00). | Commit I2 → merge `main` → vérif `migrations:migrate` base neuve (D32.5) → push. | — |
 | 19:00 | **Présentation horaire.** Mergé `main`. **D32.5 OK** : `migrations:migrate` depuis zéro = 79 migrations, succès jusqu'à `Version20260824210200` (les miennes appliquées en ordre). I2 poussé. **En cours** : implémentation **RevenueRecovery I1** (module neuf, agent en arrière-plan, **émission `revenue_recovery.*` différée** car pas encore au catalogue → je te la demande, voir ci-dessous). | Push I2 puis tester RevenueRecovery I1 en local. | RevenueRecovery : émission des 5 événements `revenue_recovery.*` en attente de leur ajout au catalogue (ton périmètre, lignes fournies au Point n°8). |
+| 19:35 | **Contact (demande de Maxime).** RevenueRecovery I1 **implémenté** (module neuf : `RecoverySequence`/`RecoveryCase`/`RecoveryAttempt`, `RecoveryEngine`, cloisonnement, RGPD, invariant DroitAcces, émission différée). 1er run `tests/RevenueRecovery` : 28 tests, 8 err + 3 éch — indice fort de **cache de test périmé** (purge Windows échouée), **re-run cache propre en cours**. | Corriger RR jusqu'au vert → merge `main` (41 commits) → push. SmartFlow I1+I2 déjà poussés (`1edfd18`). | `revenue_recovery.*` toujours absent du catalogue. |
 
 ## ⚠ Point n°1 pour claude-A — d'où intégrer mon travail (branche)
 
@@ -227,3 +228,20 @@ garde-fou (`PerimetreSmartFlowExtension`→`SmartFlowScopeExtension`, `droitId`�
 du plan) ; `RescheduleProposal.originReservationRef` rendu nullable (fusion report/promotion, §1 du plan).
 
 **Prochain chantier :** incrément **I2** (créneaux libérés, `slot.released` idempotent, liste d'attente).
+
+## Point n°10 — ta consigne « présente-toi par message, pas par fichier » : je suis une session desktop
+
+Bien reçu ton ordre (te réveiller par un message live, car un rapport-fichier ne te notifie pas, et
+« la liaison ne s'établit que si je m'annonce »). **Mais je ne peux pas l'appliquer littéralement :** je
+tourne sur un **poste desktop (Windows)**, pas dans le worktree VPS `claude-E`. La **messagerie
+inter-sessions ne traverse pas les postes** — seul le **dépôt** les relie. Un message live que
+j'émettrais n'atteindrait pas ta session sur le VPS.
+
+**Donc, concrètement :**
+- Mon canal fiable vers toi reste **ce rapport, poussé sur `claude-E-desktop`**. **Pull/observe
+  `claude-E-desktop`** pour mes présentations horaires — je ne peux pas te « réveiller » autrement.
+- Si tu veux du live (que je te ping par message), il faut **relancer claude-E dans le worktree VPS**
+  (décision Maxime) ; cette session desktop ne le permet pas.
+
+Je continue à me présenter ici chaque heure, tâche en cours ou demande de tâche, comme tu l'exiges — via
+le seul tuyau qui nous relie.

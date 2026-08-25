@@ -17,6 +17,7 @@ use App\Reservation\Service\ConsumedSlotResolver;
 use App\Reservation\Service\JaugeCreneauGuard;
 use App\Reservation\Service\JaugeRessourceMereHandler;
 use App\Reservation\Service\RequestedQuantityReader;
+use App\Reservation\Service\StockCardCreditHandler;
 use App\Reservation\Service\ProjectionAccesReservationHandler;
 use App\Reservation\Service\QuotaFormuleResolver;
 use App\Reservation\Service\ResolveurRegleAnnulation;
@@ -49,6 +50,7 @@ final class ReserverProcessor implements ProcessorInterface
         private readonly ConsumedSlotResolver $creneauxConsommes,
         private readonly JaugeRessourceMereHandler $jaugeMere,
         private readonly RequestedQuantityReader $quantiteDemandee,
+        private readonly StockCardCreditHandler $carteStock,
         private readonly QuotaFormuleResolver $quotaResolver,
         private readonly ResolveurRegleAnnulation $resolveurRegle,
         private readonly VenteReservationHandler $venteHandler,
@@ -133,9 +135,31 @@ final class ReserverProcessor implements ProcessorInterface
         }
 
         $activite = $creneau->getActivite();
-        $service = $activite !== null ? $this->quotaResolver->resoudre($organisateur->getId(), $activite, new \DateTimeImmutable()) : null;
+        $carteRef = $this->uuid($corps['carte'] ?? null);
+        $service = $carteRef === null && $activite !== null
+            ? $this->quotaResolver->resoudre($organisateur->getId(), $activite, new \DateTimeImmutable())
+            : null;
 
-        if ($service !== null) {
+        if ($carteRef !== null) {
+            // CQ-3 + CQ-6 — carte de N réservations, décomptée ICI et non au passage (D24, arbitrage
+            // du 24/08). La carte est **désignée explicitement** par la requête : c'est le cas du
+            // comptoir, où l'agent scanne la carte. La résolution automatique « la carte de séances
+            // de ce bénéficiaire » demande le rattachement du droit à un porteur (CQ-0), qui n'existe
+            // pas encore — la mécanique posée ici n'aura qu'un résolveur à recevoir en amont.
+            //
+            // La carte désignée l'emporte sur un quota de formule éventuel : l'agent qui la présente
+            // exprime une intention, et la deviner autrement serait pire. Question ouverte à
+            // claude-A si l'usage montre le contraire.
+            $etablissementCarte = $creneau->getEtablissement();
+            if ($etablissementCarte === null) {
+                throw new UnprocessableEntityHttpException('Créneau sans établissement : carte inutilisable.');
+            }
+            // Le périmètre vient du créneau, donc de la session serveur — jamais du corps (D3/D8).
+            $droitCarte = $this->carteStock->debiter($carteRef, $etablissementCarte);
+            $reservation->setModeDecompte(ModeDecompteReservation::CarteStock);
+            $reservation->setCreditDroitRef($droitCarte->getId());
+            $reservation->setMontantDu('0.00');
+        } elseif ($service !== null) {
             // Ré-attache une référence gérée par l'EM courant (le port frontière M1/M4 peut renvoyer
             // une entité chargée par un autre contexte, ex. un stub de test) — évite toute ambiguïté
             // Doctrine « nouvelle entité non cascade-persist » sans introduire de cascade persist M5->M1.
@@ -170,7 +194,19 @@ final class ReserverProcessor implements ProcessorInterface
         if ($ressource !== null) {
             $this->jaugeMere->incrementer($ressource, $quantite);
         }
-        $this->em->flush();
+
+        try {
+            $this->em->flush();
+        } catch (\Throwable $echec) {
+            // Le débit de la carte a sa propre transaction, déjà committée à ce stade : si la
+            // réservation ne s'enregistre pas, le client aurait payé une séance sans en avoir une.
+            // On rend l'unité avant de laisser remonter l'échec. Compensation explicite plutôt que
+            // transaction englobante : ce processor n'en ouvre pas, et en ouvrir une ici changerait
+            // le comportement de toutes les autres branches de décompte.
+            $this->carteStock->restituer($reservation->getCreditDroitRef());
+
+            throw $echec;
+        }
 
         $this->projectionAcces->projeterSiApplicable($reservation);
 

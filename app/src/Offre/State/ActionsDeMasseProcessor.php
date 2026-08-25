@@ -9,8 +9,12 @@ use ApiPlatform\State\ProcessorInterface;
 use App\Offre\Entity\Categorie;
 use App\Offre\Entity\Produit;
 use App\Offre\Service\TransitionProduitHandler;
+use App\Securite\Entity\Affectation;
+use App\Securite\Entity\Utilisateur;
+use Doctrine\ORM\Query\Expr\Join;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\Uid\Uuid;
@@ -30,6 +34,7 @@ final class ActionsDeMasseProcessor implements ProcessorInterface
         private readonly EntityManagerInterface $em,
         private readonly TransitionProduitHandler $handler,
         private readonly RequestStack $requestStack,
+        private readonly Security $security,
     ) {
     }
 
@@ -129,7 +134,39 @@ final class ActionsDeMasseProcessor implements ProcessorInterface
             return null;
         }
 
-        return $this->em->getRepository(Produit::class)->find(Uuid::fromString($segment));
+        $utilisateur = $this->security->getUser();
+        if (!$utilisateur instanceof Utilisateur) {
+            return null;
+        }
+
+        // D3/D8 — les identifiants viennent du corps de la requete. Un `find()` sec permettait
+        // d'archiver (irreversiblement) ou de publier le produit d'un autre etablissement : il
+        // suffisait d'en connaitre l'identifiant, et l'action de masse en accepte une liste entiere.
+        //
+        // La restriction est celle de `PerimetreProduitExtension`, mot pour mot : le produit doit
+        // etre commercialise dans un etablissement ou l'utilisateur possede une affectation. La
+        // recopier plutot que d'inventer une regle plus stricte evite de refuser un cas que la
+        // lecture, elle, autorise.
+        //
+        // Un produit hors perimetre retourne `null`, donc rejoint les echecs « introuvable » deja
+        // prevus : meme forme de reponse qu'un identifiant inexistant, aucun oracle d'enumeration.
+        /** @var Produit|null $produit */
+        $produit = $this->em->getRepository(Produit::class)->createQueryBuilder('p')
+            ->innerJoin('p.etablissements', 'perim_etab')
+            ->innerJoin(
+                Affectation::class,
+                'perim_aff',
+                Join::WITH,
+                'IDENTITY(perim_aff.etablissement) = perim_etab.id AND IDENTITY(perim_aff.utilisateur) = :perim_utilisateur'
+            )
+            ->andWhere('p.id = :produit')
+            ->setParameter('perim_utilisateur', $utilisateur->getId(), 'uuid')
+            ->setParameter('produit', Uuid::fromString($segment), 'uuid')
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+
+        return $produit;
     }
 
     private function resoudreCategorie(mixed $ref): Categorie

@@ -19,6 +19,7 @@ use App\Reservation\Enum\StatutPaiementReservation;
 use App\Reservation\Enum\StatutReservation;
 use App\Reservation\Security\ReservationSoiVoter;
 use App\Reservation\State\AjouterParticipantProcessor;
+use App\Reservation\State\AssignResourceProcessor;
 use App\Reservation\State\AnnulerReservationProcessor;
 use App\Reservation\State\EmargerProcessor;
 use App\Reservation\State\ReserverProcessor;
@@ -54,6 +55,17 @@ use Symfony\Component\Uid\Uuid;
             input: false,
             security: "is_granted('PERM', 'reservation.annuler') or (is_granted('PERM', 'reservation.annuler_soi') and is_granted('" . ReservationSoiVoter::ATTRIBUTE . "', object))",
             processor: AnnulerReservationProcessor::class,
+        ),
+        // ACT-1 point 2 / D16 — affectation de l'instance à une réservation faite sur un type.
+        // Droit `reservation.reserver` et non `gerer_ressource` : affecter une chambre est un acte
+        // d'exploitation courant, fait au comptoir par qui prend les réservations, pas une
+        // administration du référentiel des ressources.
+        new Post(
+            uriTemplate: '/reservation/reservations/{id}/affecter',
+            read: true,
+            input: false,
+            security: "is_granted('PERM', 'reservation.reserver')",
+            processor: AssignResourceProcessor::class,
         ),
         new Post(
             uriTemplate: '/reservation/reservations/{id}/participants',
@@ -126,6 +138,20 @@ class Reservation
     #[Groups(['reservation:read'])]
     private ?ServiceInclus $serviceInclusRef = null;
 
+    /**
+     * CQ-3 + CQ-6 — identifiant du droit d'accès de type carte qui a été débité d'une unité à la
+     * réservation, ou `null` si la réservation ne consomme pas de carte.
+     *
+     * **Sans ce champ, aucune restitution n'est possible.** Le décompte a lieu à la réservation ;
+     * une annulation doit rendre l'unité, et rien d'autre ne dit sur QUELLE carte la rendre — le
+     * porteur peut en avoir plusieurs, et retrouver « celle qui a servi » par déduction serait une
+     * devinette. Référence libre (`Uuid`) et non relation : `Reservation` (M5) ne possède pas
+     * `App\Acces\Entity\DroitAcces`, même patron que `billetSupportRef`/`produitRef` côté Accès.
+     */
+    #[ORM\Column(type: UuidType::NAME, nullable: true)]
+    #[Groups(['reservation:read'])]
+    private ?Uuid $creditDroitRef = null;
+
     #[ORM\ManyToOne(targetEntity: Vente::class)]
     #[ORM\JoinColumn(nullable: true)]
     #[Groups(['reservation:read'])]
@@ -155,6 +181,19 @@ class Reservation
     #[ORM\JoinColumn(nullable: false)]
     #[Groups(['reservation:read'])]
     private ?Etablissement $etablissement = null;
+
+    /**
+     * ACT-1 point 2 / D16 — l'**instance** affectée à une réservation faite sur un **type**.
+     *
+     * « Personne ne réserve la chambre 214 : on réserve une chambre double. » Le type est la
+     * `Ressource` du créneau ; les instances sont ses enfants (`ressourceMere`). Réserver l'enfant,
+     * c'est choisir une instance précise et ce champ reste `null` ; réserver le parent, c'est
+     * réserver un type, et l'instance arrive ici — plus tard, parfois à l'arrivée du client.
+     */
+    #[ORM\ManyToOne(targetEntity: Ressource::class)]
+    #[ORM\JoinColumn(nullable: true)]
+    #[Groups(['reservation:read'])]
+    private ?Ressource $ressourceAffectee = null;
 
     /**
      * ACT-1 point 3 / D33 — les créneaux que cette réservation **consomme** : le créneau visé, plus
@@ -208,6 +247,30 @@ class Reservation
         if (!$this->consumedSlots->contains($creneau)) {
             $this->consumedSlots->add($creneau);
         }
+
+        return $this;
+    }
+
+    public function getRessourceAffectee(): ?Ressource
+    {
+        return $this->ressourceAffectee;
+    }
+
+    public function setRessourceAffectee(?Ressource $ressourceAffectee): self
+    {
+        $this->ressourceAffectee = $ressourceAffectee;
+
+        return $this;
+    }
+
+    public function getCreditDroitRef(): ?Uuid
+    {
+        return $this->creditDroitRef;
+    }
+
+    public function setCreditDroitRef(?Uuid $creditDroitRef): self
+    {
+        $this->creditDroitRef = $creditDroitRef;
 
         return $this;
     }

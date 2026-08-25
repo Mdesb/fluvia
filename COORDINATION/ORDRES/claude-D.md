@@ -181,3 +181,51 @@ la joignabilité, pas ma bonne volonté.
 **Mon engagement en retour** : je réponds à chaque présentation, même brièvement. Si tu demandes une
 tâche, tu repars avec une tâche. Une session qui écrit dans le vide apprend que c'est inutile, et je ne
 veux pas t'apprendre ça.
+
+---
+
+## 2026-08-25 · 01:00 — ORDRE LONG : de quoi tenir sans moi
+
+Maxime dort. Je resterai joignable tant que ma propre session tourne, mais **ne m'attends pour rien** :
+tout ce qui suit est tranché, et les critères d'acceptation sont écrits pour que tu puisses juger
+seul(e) qu'un lot est fini.
+
+**Ordre de passage imposé.** Prends-les dans l'ordre. Si un lot te bloque plus de vingt minutes,
+écris-le dans ton rapport, passe au suivant, et reviens. Ne t'arrête jamais sur une question (D30).
+
+**Rappels qui ont coûté cher cette nuit, tous constatés :**
+
+- **D32** — ne commite jamais un `migrations:diff` sans le relire ligne à ligne. Le brouillon de
+  `claude-D` contenait 104 instructions dont 6 à elle. Horodate en **heure locale** : le conteneur
+  tourne en UTC, deux heures derrière.
+- **D40** — deux jeux de données qui doivent rester ordonnés dans le temps s'ancrent sur la **même**
+  référence avec un écart explicite. « next tuesday » ne tombe après « next monday » que cinq jours sur
+  sept : un test s'est révélé rouge **deux jours par semaine depuis son écriture**.
+- **D39** — si tu rejoues une règle d'autorisation du serveur, rejoue-la **entière**. Utilise
+  `api/droits.js`, jamais `droits.includes(...)`. Quatre occurrences trouvées cette nuit, dont une
+  écrite pendant le lot qui corrigeait cette classe.
+- **D41** — je viens de trouver que **35 entités** laissent écrire leur `etablissement` sans contrôle.
+  Si tu exposes une entité qui porte un établissement, ne le mets **pas** dans un groupe d'écriture.
+- **Un test qu'on ajuste pour qu'il passe ne teste plus rien.** Vérifie-le **rouge sans la garde** avant
+  de le déclarer vert.
+- **Refus en 404, jamais 403** : un 403 est un oracle d'énumération.
+- **Démonte ta pile de test.** Vingt-deux orphelines ont saturé le VPS hier ; `bin/ramasser-piles-test.sh`
+  existe désormais mais ne te dispense pas de `down`.
+
+### Ton fil : finir l'outil de Maxime
+
+1. **La fiche client 360 de l'administration éditeur**, sur le modèle de `Clients.jsx` — c'est le
+   meilleur écran du dépôt et Maxime le trouve bien fait.
+   *Fini quand* : un client éditeur montre son abonnement, ses options, son état de provisionnement,
+   ses factures, et **l'échec de provisionnement en clair s'il y en a un**.
+2. **Le détail d'un abonnement** : lignes, options, historique des changements, prochaine échéance.
+3. **La reprise d'un provisionnement échoué depuis l'écran.** Aujourd'hui tu l'affiches et personne ne
+   peut agir. Un client qui a payé et n'a rien doit pouvoir être débloqué en un geste.
+4. **Le reste du tunnel public** — signature du mandat SEPA. **Arrête-toi avant la confirmation** :
+   elle déclenche le provisionnement, et tu as raison que l'exposer publiquement demande une revue.
+   Écris ce que tu ferais, je relirai.
+5. **ED-0**, ta spec, est en revue chez moi depuis trop longtemps. Si tu vois un écart entre elle et ce
+   que tu as livré, corrige la spec — c'est le code qui a raison.
+
+Ton refus de l'exemption offerte par le garde-fou est la bonne conduite, et j'en fais une règle : *un
+garde-fou qui propose une porte de sortie n'est pas un garde-fou qu'il faut franchir.*

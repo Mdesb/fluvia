@@ -49,10 +49,18 @@ final class SocialFixtures extends Fixture implements DependentFixtureInterface
 
     public function load(ObjectManager $manager): void
     {
+        // Les permissions sont desormais installees par migration (Version20260824224000) pour les
+        // bases reelles. Ici on ne les cree QUE si elles manquent : le couple module x action porte
+        // une contrainte d'unicite, et une creation aveugle ferait echouer le chargement des
+        // fixtures sur toute base ou les migrations ont deja tourne — c'est-a-dire sur la
+        // demonstration, precisement la ou l'on charge des fixtures.
         $permissions = [];
         foreach (['read_account', 'manage_account', 'read_post', 'publish'] as $action) {
-            $permission = (new Permission())->setModule('social')->setAction($action);
-            $manager->persist($permission);
+            $permission = $manager->getRepository(Permission::class)->findOneBy(['module' => 'social', 'action' => $action]);
+            if (!$permission instanceof Permission) {
+                $permission = (new Permission())->setModule('social')->setAction($action);
+                $manager->persist($permission);
+            }
             $permissions[] = $permission;
         }
 
