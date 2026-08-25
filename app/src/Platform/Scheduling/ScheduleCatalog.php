@@ -92,13 +92,15 @@ final class ScheduleCatalog
             ),
 
             // --- Exploitation ----------------------------------------------------------------------
-            new ScheduledTask(
-                'personnel:traiter-echeances-sortie',
-                1440,
-                "Les échéances de sortie du personnel ne sont jamais traitées : un salarié parti garde "
-                . "ses accès.",
-                critical: true,
-            ),
+            // La commande personnel:traiter-echeances-sortie N EST PAS ICI, et c'est délibéré. Elle exige un
+            // argument agentEmail — l'identité de qui traite la sortie, pour la traçabilité — donc
+            // elle ne peut pas s'exécuter sans surveillance. La laisser au catalogue produirait un
+            // échec rouge tous les jours que personne ne pourrait corriger, et on apprendrait à
+            // l'ignorer : c'est le défaut des entrées grisées, appliqué à l'exploitation.
+            //
+            // Le manque reste réel et grave — un salarié parti garde ses accès. Il faut décider quelle
+            // identité porte un traitement automatique dans le journal d'audit, ce qui est un choix,
+            // pas une réparation. Consigné comme tâche ; le module Personnel n'a aujourd'hui aucun propriétaire.
             new ScheduledTask(
                 'personnel:recalculer-fenetres-badges',
                 60,
