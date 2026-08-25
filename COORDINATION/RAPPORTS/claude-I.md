@@ -15,6 +15,7 @@
 | 22:20 | **Cinq manifestes de module livres** (`PiscineModule`, `PadelModule`, `PatinoireModule`, `SportModule`, `MuseeModule`) — aucune des cinq verticales n-en avait, alors que Dms, Finance, Ocr, SmartFlow, Social et Stay en ont un. D2 est contract-first : ces cinq modules etaient invisibles au registre. `tests/Platform` **58/58 vert** sur pile isolee `claudeI` (VPS). D35 lue. | Suites des cinq modules en cours d-execution. | Rien. Trois constats a arbitrer ci-dessous — dont un qui donne enfin un point de chute a la suppression de `PresetVerticale`. |
 | 22:40 | Suites des cinq verticales passees. Piscine, Patinoire, Sport, Musee **vertes**. Padel : **1 echec, preexistant sur `origin/main`** (verifie en rejouant le test sur main, pas suppose) — et je tiens la cause exacte : le test ne tombe **que le lundi**. Diagnostic complet ci-dessous. Pile `claudeI` demontee, worktree VPS rendu a sa branche. | Je prepare le correctif ; il touche du code de production, donc je te laisse une fenetre d-objection avant de le poser. | Rien. |
 | 23:00 | **Padel repasse au vert** : 23 tests, 228 assertions. `tests/Platform` toujours 58/58. Le correctif ne prend aucune constante de reglage — deux regles physiques suffisaient, detail ci-dessous. Les cinq verticales sont donc vertes, manifestes compris. Pile demontee, worktree VPS rendu. | Je reprends le fil des paquets : ce qui est livrable sans installateur. | Rien. |
+| 25/08 09:05 | **Silence de 22:52 a 09:05 : ma session ne s-est pas reveillee**, je le dis plutot que de le masquer. Reprise : ordres longs lus. Balayage D40 fait sur mes quatre autres modules — **aucun autre basculement**, detail ci-dessous. D41 verifie en profondeur : mes 9 entites exposees le sont bien, mais mes ~30 processeurs a persistance directe sont **deja corrects** via `ContexteEtablissement`. | Item 2 de mes ordres : `PrioriteOtaResolver` qui passe en `AnnuleeLibre` sans rien restituer. | Rien. |
 
 ---
 
@@ -282,3 +283,60 @@ verification qui l-etait. Je fais desormais `merge --ff-only origin/<branche>` a
 verifie le `%h` affiche avant de lire un resultat.
 
 **Etat de mon perimetre** : cinq verticales vertes, cinq manifestes livres, `tests/Platform` 58/58.
+
+---
+
+## 2026-08-25 09:05 · Presentation horaire + resultats de tes items 1 et 4
+
+**`claude-I` en ligne.** Et d-abord l-aveu : **ma session est restee muette de 22:52 a 09:05**. Ce
+n-est pas un choix, c-est le mode de defaillance que D30 decrit — une session de bureau qui ne se
+rouvre pas seule. Tu peux compter dix heures perdues sur mon perimetre, et le dire a Maxime : c-est
+exactement l-argument de D34 sur la joignabilite, vu de l-interieur.
+
+### Item 1 — balayage D40 sur les quatre autres modules : rien
+
+J-ai repris chaque date relative des fixtures et des tests de Piscine, Patinoire, Sport et Musee, et
+cherche le motif : deux jeux de donnees qui doivent rester ordonnes mais s-ancrent sur des references
+differentes.
+
+- **Musee** — la fixture s-ancre sur `next tuesday`, trois tests sur `next wednesday`, `next thursday`,
+  `next friday`. Le motif y ressemble, mais **chaque test est autosuffisant** : il compare ses propres
+  dates entre elles, jamais a celle de la fixture. Aucun basculement possible.
+- **Patinoire, Sport, Piscine** — dates absolues ou ecarts relatifs a une seule ancre. Rien.
+
+**Ton `EclairageTest` etait donc le seul.** Je te le dis avec la meme franchise que s-il y en avait
+eu cinq : j-ai cherche, je n-ai pas trouve. Un balayage qui ne trouve rien est un resultat, pas un
+non-travail.
+
+**Un point de vigilance quand meme, hors D40** : les fixtures patinoire ancrent la saison ephemere sur
+des dates **absolues** (`2026-12-01` → `2027-02-28`). Inerte aujourd-hui — `catalogueAssocie` est vide,
+donc le garde ne se declenche jamais. Mais le 1er mars 2027, tout test qui supposerait cette saison
+ouverte deviendrait rouge, et cela ressemblerait a une regression sans en etre une. Meme famille que
+D40, echeance differente.
+
+### Item 4 — D41 : tes 35 entites, et ce que ton decorateur ne voit pas
+
+**Neuf de mes entites exposent `etablissement` en ecriture** : `Piscine\Casier`,
+`ParametrePiscineEtablissement`, `Padel\ParametragePadel`, `PlageHoraire`, `Tournoi`,
+`Patinoire\ParcPatins`, `SaisonEphemere`, `Musee\Guide`, `ParametreMuseeEtablissement`. Tu en
+annonces onze dont neuf au musee — **dis-moi lesquelles deux me manquent**, mon balayage ne voit que
+les proprietes nommees `$etablissement` typees `Etablissement`.
+
+**Et surtout, une chose que ton decorateur ne couvre pas.** `EstablishmentScopeWriteGuard` decore
+`api_platform.doctrine.orm.state.persist_processor`. Or **une trentaine de mes processeurs persistent
+en direct** via `$em->persist()` — `CreerVisiteGuideeProcessor`, `ReserverTerrainProcessor`,
+`SortirPatinsProcessor` et les autres. Ils ne passent jamais par le processeur decore.
+
+**Bonne nouvelle : ils sont deja corrects.** Je les ai ouverts : ils derivent l-etablissement de
+`App\Securite\Service\ContexteEtablissement`, donc du serveur, jamais du corps de la requete. Le
+trou n-existe que sur les operations `Post` **sans** processeur, ou le client fournit le champ — soit
+exactement mes neuf.
+
+Ce que cela veut dire pour toi : **ton compte de 35 est un compte d-entites, pas un compte de chemins
+d-ecriture.** Les chemins a processeur propre sont hors de portee de ton decorateur, et il en existe
+des dizaines dans les douze modules. Chez moi ils sont sains ; ailleurs, personne ne l-a verifie. Cela
+vaut peut-etre un garde-fou de poussee plutot qu-une relecture.
+
+**Je ne retire pas `etablissement` des groupes d-ecriture pour l-instant** : ton propre docblock
+argumente contre trente-cinq correctifs locaux et pour une regle unique. Dis-moi si tu veux les deux —
+je fais les neuf en un lot.
