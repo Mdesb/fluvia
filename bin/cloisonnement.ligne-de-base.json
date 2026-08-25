@@ -12,7 +12,7 @@
     ],
     "scelle": {
         "gelee_le": "2026-08-20",
-        "plafond": 36,
+        "plafond": 33,
         "reference": "MESSAGES.md — claude-A -> claude-C, 19/08, option (a) et ses 3 conditions"
     },
     "entrees": {
@@ -271,17 +271,6 @@
             ],
             "ecrit": false
         },
-        "Offre/State/ActionsDeMasseProcessor.php": {
-            "depuis": "2026-08-20",
-            "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
-            "raison": "Antérieur au gel de la ligne de base : non revu, non corrigé. N'est PAS une dérogation permanente — à ouvrir par le propriétaire du module.",
-            "sensibilite": "autre",
-            "entites_resolues": [
-                "Categorie",
-                "Produit"
-            ],
-            "ecrit": true
-        },
         "Offre/State/ConvertirProcessor.php": {
             "depuis": "2026-08-20",
             "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
@@ -353,14 +342,6 @@
             ],
             "ecrit": true
         },
-        "Reservation/State/AjouterParticipantProcessor.php": {
-            "depuis": "2026-08-20",
-            "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
-            "raison": "Antérieur au gel de la ligne de base : non revu, non corrigé. N'est PAS une dérogation permanente — à ouvrir par le propriétaire du module.",
-            "sensibilite": "autre",
-            "entites_resolues": [],
-            "ecrit": true
-        },
         "Reservation/State/EmargerProcessor.php": {
             "depuis": "2026-08-20",
             "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
@@ -368,16 +349,6 @@
             "sensibilite": "autre",
             "entites_resolues": [
                 "Emargement"
-            ],
-            "ecrit": true
-        },
-        "Reservation/State/InscrireListeAttenteProcessor.php": {
-            "depuis": "2026-08-20",
-            "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
-            "raison": "Antérieur au gel de la ligne de base : non revu, non corrigé. N'est PAS une dérogation permanente — à ouvrir par le propriétaire du module.",
-            "sensibilite": "autre",
-            "entites_resolues": [
-                "ListeAttente"
             ],
             "ecrit": true
         }

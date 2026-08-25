@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { api, membres } from '../api/client.js'
 import { euros } from '../api/produit.js'
+import NoShowSection from '../components/NoShowSection.jsx'
 
 // --- Helpers de lecture (structures API Platform / module Réservation) ---
 
@@ -37,7 +38,7 @@ function labelBeneficiaire(b) {
 
 // Écran Réservation / Planning (M5) : ressources, créneaux (capacité vs réservations) et
 // réservation d'un créneau (unique écriture de cet écran).
-export default function Reservation({ etabActif }) {
+export default function Reservation({ etabActif, droits = [], session }) {
   const [ressources, setRessources] = useState([])
   const [creneaux, setCreneaux] = useState([])
   const [reservations, setReservations] = useState([])
@@ -261,6 +262,12 @@ export default function Reservation({ etabActif }) {
           </section>
         </div>
       )}
+
+      {/* Absences non prevenues : facturer ou exonerer, et l'issue sur la seance affichee a part.
+          En bas de l'ecran de reservation parce que c'est la consequence d'une reservation, pas une
+          activite distincte — et parce qu'un ecran de plus pour deux boutons serait une exception a
+          D13 que rien ne justifie. */}
+      <NoShowSection etabActif={etabActif} droits={droits} session={session} />
     </div>
   )
 }

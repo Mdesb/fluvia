@@ -76,3 +76,13 @@ Ne touche pas un chemin déjà en `WIP` par une autre instance.
 | CLI-2 | Mes reservations, mes billets, mes commandes — lecture cloisonnee par les droits `_soi` | `client/**` | *a assigner* | CLAIM | 25/08 |
 | CLI-3 | Ma carte et mon solde : porte-monnaie, cartes multi-entrees, recharge | `client/**` | *a assigner* | CLAIM | 25/08 |
 | CLI-4 | Coquille native (iOS/Android) — **non publiable avant immatriculation, cf. SOC-4** | `client-natif/**` | *a assigner* | EXTERNE | 25/08 |
+
+| UI-1 | **Modifier un prix** — `GrilleTarifaire` expose Post et Patch, le front ne fait que lire. Plainte directe de Maxime | `frontend/**` | **claude-H** | CLAIM | 25/08 |
+| UI-2 | Options produit : le chantier entier — creation, valeurs, rattachement, apercu caisse | `frontend/**`, `app/src/OptionProduit/**` | *a assigner* | CLAIM | 25/08 |
+| UI-3 | Vue rapide du billet : produit, type, entrees restantes, ou dates si abonnement | `frontend/**` | *a assigner* | CLAIM | 25/08 |
+| UI-4 | Vue calendrier type agenda : ajout et suppression rapides d evenements | `frontend/**` | *a assigner* | CLAIM | 25/08 |
+| UI-5 | Informations client : champs supplementaires, dont moyen de paiement prefere (**ajout serveur**, nexiste pas) | `app/src/Crm/**`, `frontend/**` | *a assigner* | CLAIM | 25/08 |
+| ACT-5 | Categories automatiques par verticale : un produit daffutage doit tomber dans les bons axes sans saisie | `app/src/{Patinoire,Offre}/**` | *a assigner* | CLAIM | 25/08 |
+| ACT-6 | Jauge propre aux cours (padel, tennis) — a confirmer avec Maxime avant den faire un lot | `app/src/Reservation/**` | *a assigner* | BLOCKED | 25/08 |
+| VTE-1 | `Vente` : ajouter OrderFilter sur la date, DateFilter, SearchFilter sur le client — bloque lhistorique des ventes | `app/src/Vente/**` | *a assigner* | CLAIM | 25/08 |
+| PER-1 | `personnel:traiter-echeances-sortie` exige un agentEmail : decider quelle identite porte un traitement automatique dans laudit | `app/src/Personnel/**` | *a assigner* | CLAIM | 25/08 |
