@@ -94,3 +94,10 @@ Ne touche pas un chemin déjà en `WIP` par une autre instance.
 | CMP-4 | Planification : ponctuelle, recurrente, ou declenchee par un evenement de domaine (anniversaire, abonnement a echeance, carte a une entree) | `app/src/Campagne/**` | *a assigner* | CLAIM | 25/08 |
 | CMP-5 | **ATTRIBUTION** — qui est revenu, ce quil a achete, combien ca a rapporte. Cest le seul avantage quun outil generaliste ne peut pas copier | `app/src/Campagne/**` | *a assigner* | CLAIM | 25/08 |
 | CMP-6 | Adaptateur denvoi reel (courriel, SMS) — **EXTERNE : exige un prestataire, donc un contrat, donc limmatriculation** | `app/src/Campagne/**` | *a assigner* | EXTERNE | 25/08 |
+
+| PAY-0 | Spec du parcours de paiement : recueil conjoint carte + mandat, bascule sur rejet, explication au client | `specs/paiement/**` | **claude-A** | CLAIM | 25/08 |
+| PAY-1 | Recueil conjoint au guichet : carte par le terminal (**jamais de numero saisi dans lapplication**), mandat signe | `app/src/{Vente,Sepa}/**` | *a assigner* | CLAIM | 25/08 |
+| PAY-2 | Bascule automatique carte -> prelevement sur rejet, avec preavis au client avant tout prelevement | `app/src/{Sepa,Facturation}/**` | *a assigner* | CLAIM | 25/08 |
+| PAY-3 | Rejet CARTE : lentite nexiste pas, seul le rejet SEPA est modelise | `app/src/Vente/**` | *a assigner* | CLAIM | 25/08 |
+| PAY-4 | Explication du double recueil dans le parcours client — une phrase avant la saisie, pas une note de bas de page | `frontend/**`, `vitrine/**` | *a assigner* | CLAIM | 25/08 |
+| PAY-5 | Prestataire bancaire : jeton recurrent, champs heberges en ligne, lecture des retours pain.002 | `app/src/{Vente,Sepa}/**` | *a assigner* | EXTERNE | 25/08 |

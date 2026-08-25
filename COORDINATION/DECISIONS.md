@@ -1177,3 +1177,50 @@ une capacité qui n'appartient à aucun (D3/D8).
 vingt et une heures et jamais présentée, donc injoignable. Maxime tranche : soit `claude-E` reprend et
 prend les deux, soit une session dédiée s'ouvre. **Ne pas l'attribuer par défaut à qui passe** : c'est
 exactement ainsi que le front est resté cinq jours sans propriétaire.
+
+### 2026-08-25 · D43 — Carte d'abord, prélèvement en repli : les deux se recueillent ensemble
+Demandé par Maxime : la carte porte tout au départ ; en cas de rejet, bascule automatique sur le
+prélèvement. Et au guichet comme en ligne, il faut pouvoir recueillir les deux.
+
+**Le point non négociable, et il commande tout le reste : NOUS NE STOCKONS JAMAIS UN NUMÉRO DE CARTE.**
+Ni le numéro, ni le cryptogramme, ni la date d'expiration. Vérifié : aujourd'hui rien n'en stocke, et
+`DomainEvent` porte déjà une liste de censure (`card_number`, `pan`, `cvv`, `cvc`, `iban`, `bic`, …)
+qui montre que quelqu'un y avait pensé avant moi. **Cette propriété ne se perd pas.**
+
+Ce qui existe et qu'on utilise à la place :
+- **au guichet**, la carte passe par le terminal (`Vente\Tpe\TerminalPaiementInterface`). Nous
+  recevons un **résultat** et une référence de transaction. Le numéro ne transite jamais par nos
+  serveurs, et « saisir le numéro de carte » veut dire *sur le terminal*, jamais dans un formulaire
+  de l'application ;
+- **en ligne**, les champs hébergés ou la redirection du prestataire bancaire. Même règle ;
+- **pour un paiement récurrent**, un **jeton** rendu par le prestataire, qui ne vaut que pour notre
+  compte marchand et ne permet à personne de reconstituer une carte.
+
+Un numéro de carte dans notre base engagerait la conformité PCI-DSS de Maxime et de chacun de ses
+clients. Ce n'est pas une contrainte technique, c'est une responsabilité qu'on ne prend pas.
+
+**L'IBAN, lui, est stocké — et c'est légitime.** Un mandat de prélèvement en a besoin par nature. Il
+est chiffré au repos (`Sepa\Service\ChiffreurIban`), et le module `Sepa` porte déjà `MandatSepa`,
+`RemiseSepa`, `LigneRemiseSepa` et `RejetSepa`.
+
+**La subtilité qui détermine tout le parcours.** Un repli automatique vers le prélèvement suppose
+**un mandat déjà signé** : on ne crée pas un mandat sans la signature du client, et surtout pas au
+moment où sa carte vient d'être refusée. Donc **les deux moyens se recueillent ensemble, à la
+souscription** — la carte pour porter les échéances, le mandat signé pour prendre le relais. C'est
+exactement ce que Maxime décrit, et c'est la seule séquence qui fonctionne.
+
+**Ce qui suit du recueil des deux, et qu'on ne peut pas éluder : il faut l'expliquer.** Un client à qui
+l'on demande une carte **et** un IBAN soupçonne un piège si on ne lui dit pas pourquoi. Le parcours doit
+dire, en une phrase et avant la saisie : *« votre carte est débitée à chaque échéance ; le mandat ne
+sert que si elle est refusée ou expirée, et vous serez prévenu avant tout prélèvement. »* Cette phrase
+fait partie du lot, pas de la documentation.
+
+**Ce qui existe déjà pour le rejet** : `RejetSepa` et son processeur, en **saisie manuelle**, faute de
+lecteur de retour bancaire réel (`RetourSepaInterface`, aucun analyseur `pain.002`). Le rejet **carte**,
+lui, n'existe pas du tout. La bascule automatique est donc un lot neuf, et elle dépend du prestataire.
+
+**EXTERNE, consigné et non attendu (D19)** : le prestataire bancaire commande le jeton récurrent, les
+champs hébergés en ligne, et la lecture automatique des retours. Comme partout ailleurs, **on construit
+contre le port et on livre avec la simulation** — `TpeMock` existe déjà, la saisie manuelle du rejet
+aussi. Tout le parcours, la bascule et l'explication au client sont écrits et démontrables avant qu'un
+contrat ne soit signé.
