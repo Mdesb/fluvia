@@ -1,0 +1,287 @@
+import { useCallback, useEffect, useState } from 'react'
+import { api, membres } from '../api/client.js'
+import { euros, libelleProduit } from '../api/produit.js'
+import { mot } from '../api/vocabulaire.js'
+import Modal from './Modal.jsx'
+
+// Historique des ventes — `GET /api/ventes` existait et n'était appelé nulle part. Un caissier ne
+// pouvait pas retrouver une vente d'hier, ni même celle d'il y a dix minutes.
+//
+// CE QUE CET ÉCRAN NE FAIT PAS, ET POURQUOI JE LE DIS PLUTÔT QUE DE FAIRE SEMBLANT.
+//
+// L'API n'expose ni tri, ni filtre par date, ni filtre par client sur les ventes : seulement
+// `numero`, `statut` et `session`. J'aurais pu poser un champ « du … au … » et filtrer en mémoire les
+// résultats déjà chargés. Ç'aurait été un mensonge : le filtre n'aurait porté que sur la page
+// courante, et un caissier qui ne trouve pas sa vente en conclurait qu'elle n'existe pas.
+//
+// On offre donc ce qui est réel — la recherche par numéro de ticket, qui est de toute façon le geste
+// naturel quand on a le ticket en main, et le filtre par état. Le reste demande trois attributs côté
+// serveur, signalés à l'intégrateur.
+//
+// Le cloisonnement n'est pas fait ici : `PerimetreVenteExtension` rattache `Vente` à son établissement
+// côté serveur. Un établissement ne voit pas les ventes d'un autre, et ce n'est pas au front d'en
+// décider.
+
+const ETATS = [
+  ['', 'Tous les états'],
+  ['validee', 'Validées'],
+  ['en_cours', 'En cours'],
+  ['annulee', 'Annulées'],
+  ['avoir_emis', 'Avoir émis'],
+]
+
+const TON_ETAT = { validee: 'good', en_cours: 'warn', annulee: 'mut', avoir_emis: 'info' }
+
+export default function HistoriqueVentesModal({ open, onClose }) {
+  const [numero, setNumero] = useState('')
+  const [statut, setStatut] = useState('')
+  const [ventes, setVentes] = useState([])
+  const [chargement, setChargement] = useState(false)
+  const [erreur, setErreur] = useState(null)
+  const [detail, setDetail] = useState(null)
+  const [detailChargement, setDetailChargement] = useState(false)
+  const [produits, setProduits] = useState({})
+
+  const charger = useCallback(async () => {
+    setChargement(true)
+    setErreur(null)
+    try {
+      const params = { itemsPerPage: 50 }
+      if (numero.trim()) params.numero = numero.trim()
+      if (statut) params.statut = statut
+      setVentes(membres(await api.ventes(params)))
+    } catch (e) {
+      setErreur(e.message)
+      setVentes([])
+    } finally {
+      setChargement(false)
+    }
+  }, [numero, statut])
+
+  useEffect(() => {
+    if (!open) return
+    setDetail(null)
+    charger()
+  }, [open, charger])
+
+  // Les lignes de vente ne portent que l'identifiant du produit, pas son nom : le nom est résolu ici.
+  // Un produit archivé depuis la vente ne sera pas trouvé — on affiche alors « produit retiré » plutôt
+  // qu'un identifiant, qui n'apprendrait rien à personne.
+  useEffect(() => {
+    if (!open || Object.keys(produits).length > 0) return
+    api
+      .produits()
+      .then((c) => {
+        const parId = {}
+        membres(c).forEach((p) => {
+          parId[String(p.id)] = libelleProduit(p)
+        })
+        setProduits(parId)
+      })
+      .catch(() => {})
+  }, [open, produits])
+
+  async function ouvrirDetail(v) {
+    setDetailChargement(true)
+    setErreur(null)
+    try {
+      setDetail(await api.vente(v.id))
+    } catch (e) {
+      setErreur(e.message || 'Détail indisponible.')
+    } finally {
+      setDetailChargement(false)
+    }
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      titre={detail ? `Vente ${detail.numero}` : 'Historique des ventes'}
+      taille="lg"
+    >
+      {erreur && <div className="banner banner-error">{erreur}</div>}
+
+      {detail ? (
+        <DetailVente detail={detail} produits={produits} onRetour={() => setDetail(null)} />
+      ) : (
+        <>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              charger()
+            }}
+            className="grid"
+            style={{ gridTemplateColumns: '2fr 1fr auto', gap: 10, alignItems: 'end', marginBottom: 12 }}
+          >
+            <div className="field" style={{ margin: 0 }}>
+              <label htmlFor="hv-num">Numéro de ticket</label>
+              <input
+                id="hv-num"
+                className="input"
+                value={numero}
+                placeholder="Tel qu'il figure sur le ticket"
+                onChange={(e) => setNumero(e.target.value)}
+              />
+            </div>
+            <div className="field" style={{ margin: 0 }}>
+              <label htmlFor="hv-etat">État</label>
+              <select id="hv-etat" className="select" value={statut} onChange={(e) => setStatut(e.target.value)}>
+                {ETATS.map(([v, l]) => (
+                  <option key={v || 'tous'} value={v}>{l}</option>
+                ))}
+              </select>
+            </div>
+            <button className="btn primary" type="submit" disabled={chargement}>Rechercher</button>
+          </form>
+
+          <div className="hint" style={{ marginTop: 0 }}>
+            La recherche par date n'est pas encore possible : le serveur ne la propose pas. Cherchez par
+            numéro de ticket, ou parcourez les cinquante dernières ventes ci-dessous.
+          </div>
+
+          {chargement ? (
+            <div className="center" style={{ minHeight: 120 }}><div className="spinner" /></div>
+          ) : ventes.length === 0 ? (
+            <div className="empty" style={{ padding: 18 }}>
+              {numero.trim()
+                ? `Aucune vente ne porte le numéro « ${numero.trim()} ».`
+                : 'Aucune vente enregistrée pour cet établissement.'}
+            </div>
+          ) : (
+            <div style={{ overflowX: 'auto', maxHeight: '50vh' }}>
+              <table className="tbl">
+                <thead>
+                  <tr>
+                    <th>Ticket</th>
+                    <th>Date</th>
+                    <th>État</th>
+                    <th className="num">Total</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {ventes.map((v) => (
+                    <tr key={v.id}>
+                      <td><span className="nm">{v.numero || '—'}</span></td>
+                      <td>{dateHeure(v.date)}</td>
+                      <td><span className={`badge ${TON_ETAT[v.statut] || 'mut'}`}>{mot(v.statut)}</span></td>
+                      <td className="num">{euros(v.total)}</td>
+                      <td className="num">
+                        <button
+                          className="btn ghost sm"
+                          type="button"
+                          disabled={detailChargement}
+                          onClick={() => ouvrirDetail(v)}
+                        >
+                          Détail
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
+    </Modal>
+  )
+}
+
+function DetailVente({ detail, produits, onRetour }) {
+  const lignes = detail.lignes || []
+  const paiements = detail.paiements || []
+
+  return (
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+        <button className="btn ghost sm" type="button" onClick={onRetour}>← Retour à la liste</button>
+        <span className={`badge ${TON_ETAT[detail.statut] || 'mut'}`} style={{ marginLeft: 'auto' }}>
+          {mot(detail.statut)}
+        </span>
+      </div>
+
+      <div className="fiche-stats">
+        <div>
+          <div className="st-lib">Date</div>
+          <div className="st-val">{dateHeure(detail.date)}</div>
+        </div>
+        <div>
+          <div className="st-lib">Total</div>
+          <div className="st-val num">{euros(detail.total)}</div>
+        </div>
+        <div>
+          <div className="st-lib" title="Ce qui reste dû sur cette vente.">Reste à payer</div>
+          <div className="st-val num">{euros(detail.resteAPayer)}</div>
+        </div>
+      </div>
+
+      <div className="fiche-sec" style={{ marginTop: 14 }}>Ce qui a été vendu</div>
+      {lignes.length === 0 ? (
+        <div className="empty">Aucune ligne.</div>
+      ) : (
+        <table className="tbl">
+          <thead>
+            <tr>
+              <th>Produit</th>
+              <th className="num">Quantité</th>
+              <th className="num">Prix unitaire</th>
+              <th className="num">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {lignes.map((l) => (
+              <tr key={l.id}>
+                <td>
+                  <span className="nm">{produits[String(l.produit)] || 'Produit retiré du catalogue'}</span>
+                  {l.prixForce && (
+                    <span className="badge warn" style={{ marginLeft: 8 }} title="Le prix a été saisi à la main au moment de la vente.">
+                      prix forcé
+                    </span>
+                  )}
+                </td>
+                <td className="num">{l.quantite}</td>
+                <td className="num">{euros(l.prixUnitaire)}</td>
+                <td className="num">{euros(l.montantLigne)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      <div className="fiche-sec" style={{ marginTop: 14 }}>Comment ça a été payé</div>
+      {paiements.length === 0 ? (
+        <div className="empty">Aucun paiement enregistré.</div>
+      ) : (
+        <table className="tbl">
+          <thead>
+            <tr>
+              <th>Moyen</th>
+              <th>Quand</th>
+              <th className="num">Montant</th>
+              <th className="num">Rendu</th>
+            </tr>
+          </thead>
+          <tbody>
+            {paiements.map((p) => (
+              <tr key={p.id}>
+                <td>{mot(p.moyenCode)}</td>
+                <td>{dateHeure(p.dateHeure)}</td>
+                <td className="num">{euros(p.montant)}</td>
+                <td className="num">{Number(p.rendu) > 0 ? euros(p.rendu) : '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </>
+  )
+}
+
+function dateHeure(v) {
+  if (!v) return '—'
+  const d = new Date(v)
+  if (Number.isNaN(d.getTime())) return String(v)
+  return d.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })
+}

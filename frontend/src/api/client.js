@@ -183,6 +183,9 @@ export const api = {
     request(`/api/sessions-caisse/${id}/cloturer`, { method: 'POST', body: corps }),
 
   // Vente + encaissement.
+  // Historique : la collection et le detail existaient et n'etaient appeles nulle part.
+  ventes: (params) => request('/api/ventes', { query: params }),
+  vente: (id) => request(`/api/ventes/${id}`),
   creerVente: (corps) => request('/api/ventes', { method: 'POST', body: corps, timeoutMs: 20000 }),
   ajouterLigne: (venteId, corps) =>
     request(`/api/ventes/${venteId}/lignes`, { method: 'POST', body: corps, timeoutMs: 20000 }),

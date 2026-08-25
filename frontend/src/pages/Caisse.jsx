@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import Qr from '../components/Qr.jsx'
+import HistoriqueVentesModal from '../components/HistoriqueVentesModal.jsx'
 import Modal from '../components/Modal.jsx'
 import ClientPicker, { nomClient } from '../components/ClientPicker.jsx'
 import SessionCaisse from './SessionCaisse.jsx'
@@ -19,6 +20,7 @@ const ORDRE_MOYENS = ['especes', 'cb', 'cheque', 'pmv']
 
 export default function Caisse({ me, etabActif, etablissements, session, capacites = [], onSessionRefresh }) {
   const [caisseModale, setCaisseModale] = useState(false)
+  const [historique, setHistorique] = useState(false)
   const [produits, setProduits] = useState([])
   const [moyens, setMoyens] = useState([])
   const [pdvs, setPdvs] = useState([])
@@ -318,6 +320,7 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
           </p>
         </div>
         <div className="actions">
+          <button className="btn" onClick={() => setHistorique(true)} disabled={enPaiement}>Historique</button>
           <button className="btn" onClick={() => setCaisseModale(true)} disabled={enPaiement}>Clôture Z</button>
         </div>
       </div>
@@ -474,6 +477,7 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
           </div>
         </section>
       </div>
+      <HistoriqueVentesModal open={historique} onClose={() => setHistorique(false)} />
       {modaleSession}
       {modaleClient}
     </div>
