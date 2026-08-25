@@ -1281,3 +1281,59 @@ phrase, et elle est vérifiable : la vente directe refuse les moyens de paiement
 À trancher par Maxime avant tout code : est-ce un **mode d'établissement** (cette salle ne fait pas de
 caisse) ou une **permission** (ce vendeur peut vendre sans caisse) ? Les deux se défendent, et ce n'est
 pas la même chose à l'usage.
+
+### 2026-08-25 · D45 — Corriger un moyen de paiement : ce n'est pas une modification, et la date est celle du geste
+Maxime : *« un caissier a renseigné espèces alors que c'était de la carte bancaire, on doit pouvoir
+faire la modification… La question est de savoir si on le date du jour de l'action ou du jour de la
+vente. »*
+
+**Première réponse, et elle n'est pas négociable : on ne modifie pas.** Vérifié dans le dépôt —
+`Vente\Nf525\InalterabiliteListener` et `OperationInalterableException` **refusent** toute écriture sur
+une opération scellée, et `HashChainSignataire` chaîne les empreintes. Ce n'est pas une politique qu'on
+pourrait assouplir : c'est le mécanisme qui donne sa valeur à la chaîne. Le jour où l'on peut réécrire
+une vente validée, **plus aucune vente n'est probante**, y compris les milliers qui étaient justes.
+
+**Ce qu'on fait à la place.** Le dépôt sait déjà le faire pour l'annulation et le remboursement :
+`ContrePassationHandler` produit un **avoir** horodaté, motivé, signé de son auteur, rattaché à la vente
+d'origine, scellé à son tour — *« sans jamais supprimer de ligne d'origine »*.
+
+**Mais pour un moyen de paiement, l'avoir est le mauvais outil.** Un avoir suivi d'une nouvelle vente
+annule et rejoue le chiffre d'affaires : on fait bouger deux fois le résultat pour corriger une erreur
+qui n'a rien changé au montant. **Le montant de la vente n'est pas en cause — seule sa ventilation
+l'est.** Il faut donc une **écriture de correction de règlement** : −X en espèces, +X en carte,
+rattachée à la vente, motivée, signée, scellée. La vente reste intacte et sa somme ne bouge pas.
+
+**Réponse à la question de la date : le jour du geste, pas le jour de la vente.** Trois raisons, dans
+l'ordre de force :
+
+1. **La chaîne NF525 est chronologique.** Insérer une écriture datée d'hier dans une chaîne scellée
+   aujourd'hui la rendrait incohérente — c'est-à-dire invérifiable.
+2. **La clôture Z d'hier est fermée.** Si la correction remontait au jour de la vente, il faudrait
+   réécrire un Z déjà tiré, c'est-à-dire refaire l'histoire du fonds de caisse. Un Z qu'on peut
+   réécrire ne prouve plus rien.
+3. **La correction est un fait réel**, qui a eu lieu aujourd'hui, décidé par quelqu'un. Le dater d'hier
+   effacerait la seule information qui compte en cas de contrôle : **quand s'en est-on aperçu**.
+
+**La conséquence qu'il faut assumer, et le dire à l'exploitant** : le Z d'hier garde sa ventilation
+fausse, celui d'aujourd'hui porte la correction. Ce n'est pas un défaut, c'est **ce qui rend le Z
+digne de foi**. Et ce n'est pas un problème d'analyse : la correction pointe la vente d'origine, donc
+un état par date de vente reste calculable. C'est une question de **restitution**, pas de donnée.
+
+**Le droit qui va avec.** Maxime a raison : c'est une permission, et elle n'existe pas. Elle est
+sensible — quelqu'un qui peut déplacer des espèces vers la carte peut masquer un manquant. Elle doit
+donc être **distincte** de `caisse.gerer`, portée par l'administrateur du club, et chaque usage doit
+être lisible dans le journal d'audit, pas seulement dans la chaîne.
+
+### 2026-08-25 · D45-bis — Vente directe : une permission, et trois documents qui n'existent pas
+**Permission, pas mode d'établissement** — tranché par Maxime. Certains clubs n'ont même pas le module
+de caisse et doivent pouvoir vendre. La règle vérifiable reste celle de D44-bis : **la vente directe
+refuse les espèces**, donc il n'y a rien à compter et rien à clôturer.
+
+**Et trois documents manquent, vérifié :** `Facturation` porte `Facture`, `LigneFacture`,
+`ReglementFacture`, `SerieNumerotation`, `DestinataireFacturation` — **la facture existe et elle est
+sérieuse**. En revanche **devis**, **bon de commande** et **bon de livraison** n'existent nulle part.
+Le seul objet approchant est `Stock\Entity\ReceptionAchat`, qui va dans l'autre sens — ce qu'on
+achète, pas ce qu'on vend.
+
+Ces trois-là forment une chaîne : devis accepté → commande → livraison → facture. Chaque étape reprend
+la précédente sans la ressaisir, et chacune peut s'arrêter là. C'est un lot cohérent, pas trois lots.

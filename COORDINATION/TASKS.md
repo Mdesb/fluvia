@@ -103,4 +103,8 @@ Ne touche pas un chemin déjà en `WIP` par une autre instance.
 | PAY-5 | Prestataire bancaire : jeton recurrent, champs heberges en ligne, lecture des retours pain.002 | `app/src/{Vente,Sepa}/**` | *a assigner* | EXTERNE | 25/08 |
 
 | UI-6 | **Choix du tarif au guichet** — lAPI laccepte deja, lecran choisit tout seul. Cause probable de la proliferation de produits (D44) | `frontend/**` | **claude-H** | CLAIM | 25/08 |
-| VTE-2 | Vente directe sans session de caisse, **sans especes** — mode detablissement ou permission, a trancher (D44-bis) | `app/src/{Vente,Caisse}/**` | *a assigner* | BLOCKED | 25/08 |
+| VTE-2 | Vente directe sans session de caisse, **sans especes**, ouverte par une PERMISSION (tranche par Maxime, D45-bis) | `app/src/{Vente,Caisse}/**` | *a assigner* | CLAIM | 25/08 |
+
+| VTE-3 | Correction de reglement : ecriture compensatoire datee du jour du geste, rattachee a la vente, scellee (D45) | `app/src/{Vente,Caisse}/**` | *a assigner* | CLAIM | 25/08 |
+| VTE-4 | Permission dediee a la correction de reglement, distincte de caisse.gerer, tracee a laudit | `app/src/Securite/**` | **claude-A** | CLAIM | 25/08 |
+| FAC-1 | Devis, bon de commande, bon de livraison : la chaine complete jusqua la facture existante | `app/src/Facturation/**` | *a assigner* | CLAIM | 25/08 |
