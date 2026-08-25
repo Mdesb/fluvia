@@ -293,6 +293,7 @@ lui fait porter le risque. La prochaine fois je donne les deux, ou je dis que je
 | 08:54 | **PRÉSENTATION HORAIRE.** D'abord ceci : **je me suis encore arrêtée, de 01h15 à 08h45** — sept heures et demie, la seconde fois en deux jours. Ce n'est pas un blocage, c'est la règle zéro. Ensuite : ton ordre long est lu, et **le point 1 était déjà fait** quand tu l'as écrit (01h00) — quatre entrées résorbées, deux fausses dettes démontrées. **Point 2 fait aussi** : les disponibilités et indisponibilités étaient lisibles d'un établissement à l'autre, c'est corrigé et vérifié rouge sans la jointure. | Reste du point 2 : les 9 entrées `Offre`. Puis D41 sur mes trois entités. | Rien. |
 | 09:16 | **Point 2 terminé côté dérivable** : `GrilleTarifaire`, `ConversionType` et `PrixHistorique` suivent désormais leur produit. On lisait **les prix pratiqués par un voisin**, tarif par tarif et saison par saison. Vérifié rouge sans les chemins. `tests/Offre` 27/27, `tests/Reservation` 102/102. | **Les 6 dernières entrées ne sont pas de la dette : c'est une décision de modèle, et elle est pour toi.** Recommandation motivée entité par entité sous le tableau. Ensuite D41 sur mes trois entités. | Rien. |
 | 14:45 | **PRÉSENTATION HORAIRE + point 3 de ton ordre long fait.** D41 appliqué à `Activite`, `RegleAnnulation` et `Ressource` : l'établissement d'une création vient de la session serveur, le corps est ignoré. `tests/Reservation` 102/102, test dédié vérifié rouge sans le changement. **Deux essais ratés avant le bon, écrits dans le code plutôt qu'effacés.** | Point 4 : je vérifie si CQ-0 est livrée ; sinon point 5, la note sur `CommanderEclairageCommand` pour `claude-I`. | Rien. |
+| 23:17 | **Point 4 : CQ-0 n'est toujours pas livrée** — `DroitAcces` ne porte toujours aucun lien vers un porteur, statut `CLAIM` chez `claude-C` depuis le 23/08. La moitié nominative de CQ-3/CQ-6 reste donc bloquée ; je ne l'attends pas. **Point 5 fait, et il y a urgence dedans** : le balayage sans borne de `CommanderEclairageCommand` était inoffensif tant que rien ne le lançait — l'ordonnanceur vient de le lancer. | Note d'analyse écrite pour `claude-I` sous le tableau. | Rien. |
 
 ## Nouvelle règle de Maxime — présentation horaire à `claude-A`
 
@@ -949,3 +950,55 @@ refus, c'est que le champ envoyé est **ignoré** — la ressource naît dans l'
 pas dans celui que le corps désigne. Un test bâti sur un établissement interdit aurait été vert grâce
 à ton garde global, sans rien prouver sur la conception. Vérifié rouge sans le changement : la
 ressource naissait bien chez B.
+
+
+## Point 5 — `CommanderEclairageCommand` : ce que je ferais, et ce qui est urgent
+
+Padel ne m'est pas ouvert pour ça. Voici l'analyse pour `claude-I`, et **un point qui ne peut pas
+attendre son ouverture.**
+
+### L'urgence : cette commande vient de passer de « jamais lancée » à « lancée »
+
+`commander()` charge **toutes** les `ReservationPadel` sans aucune borne de date, et déclenche un
+allumage pour chaque créneau déjà commencé, une extinction pour chaque créneau déjà fini. Tant que
+rien ne la lançait, c'était une inefficacité. Depuis que l'ordonnanceur tourne, **sa première
+exécution rattrape tout l'historique en une fois**.
+
+Et ce n'est pas qu'une écriture en base : `PilotageEclairageHandler::declencher()` appelle
+`PiloteEclairage::commander()`, c'est-à-dire **le port qui pilote le relais physique**. L'adaptateur
+actuel est un simulateur, donc l'effet réel est nul aujourd'hui — mais le jour où un vrai relais est
+branché, la première exécution allume et éteint les projecteurs de chaque terrain autant de fois
+qu'il y a de réservations passées.
+
+Le contrôle `evenementExiste()` limite les dégâts à **une seule** salve : chaque réservation n'est
+traitée qu'une fois. C'est une salve de rattrapage, pas une boucle — mais elle a lieu exactement une
+fois, et c'est maintenant.
+
+**Ce que je ferais tout de suite, avant même le correctif** : vérifier si la commande a déjà tourné
+(`platform:scheduler:status`) et, si oui, compter les `EvenementEclairage` créés dans la dernière
+heure. S'il y en a un par réservation padel historique, la salve a eu lieu et il faut le savoir
+plutôt que de le découvrir sur un incident terrain.
+
+### Le correctif, tel que je l'écrirais
+
+**1. Borner la requête par le temps, pas par l'historique déjà traité.** Un créneau terminé depuis
+deux semaines n'a aucune commande à recevoir. Deux requêtes ciblées remplacent le balayage :
+les créneaux dont le **début** tombe dans une fenêtre récente pour l'allumage, ceux dont la **fin**
+y tombe pour l'extinction. La fenêtre doit couvrir plusieurs cycles d'ordonnanceur — une heure est
+large et suffit.
+
+**2. Garder `evenementExiste()` comme garde d'idempotence, jamais comme borne.** C'est aujourd'hui
+la seule chose qui empêche de tout rejouer, et elle coûte deux requêtes par réservation : un N+1 qui
+grandit avec l'historique. Bornée par le temps, elle ne s'exécute plus que sur une poignée de lignes.
+
+**3. Joindre le relais au lieu de le chercher par réservation.** `findOneBy(['terrain' => …])` dans
+la boucle est le même N+1. Une jointure le supprime et écarte d'emblée les terrains sans relais.
+
+**4. Ne pas rattraper le passé au démarrage.** C'est le point de conception, et il déborde du reste :
+une commande périodique qui n'a pas tourné depuis longtemps doit reprendre **à maintenant**, pas
+depuis le début des temps. Sinon toute remise en service d'un ordonnanceur produit une salve.
+La borne temporelle du point 1 y répond mécaniquement — c'est pour ça que je la mets en premier.
+
+**Ce que je ne toucherais pas** : la logique métier elle-même (allumer au début, éteindre à la fin,
+basculer le relais en défaut sur échec) est juste. Le défaut n'est pas dans ce qu'elle décide, il est
+dans **l'ensemble sur lequel elle décide**.
