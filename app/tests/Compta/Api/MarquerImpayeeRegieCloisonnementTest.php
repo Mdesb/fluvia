@@ -11,10 +11,15 @@ use App\Securite\Entity\Permission;
 use App\Securite\Entity\Role;
 use App\Securite\Entity\Utilisateur;
 use App\Securite\Service\ContexteEtablissement;
+use App\Compta\Entity\CompteComptable;
+use App\Compta\Entity\EtalementPca;
 use App\Compta\Entity\VenteImpayeeRegie;
+use App\Compta\Enum\MethodePca;
+use App\Compta\Enum\NaturePca;
 use App\Tests\Compta\ComptaApiTestCase;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
+use Symfony\Component\Uid\Uuid;
 
 /**
  * Non-régression du cloisonnement (D3/D8) de `POST /compta/ventes/{id}/marquer-impayee-regie`
@@ -62,6 +67,40 @@ final class MarquerImpayeeRegieCloisonnementTest extends ComptaApiTestCase
         self::assertSame(404, $reponse->getStatusCode(), (string) $reponse->getContent(false));
     }
 
+    /**
+     * Cloisonnement de `GET /compta/pca/{id}/rapprochement` (`RapprochementPcaProvider`, provider
+     * custom hors extensions Doctrine). Un gestionnaire `compta.lire` sur B ne doit pas pouvoir lire le
+     * rapprochement PCA (données financières) d'un étalement rattaché au profil de A → 404.
+     */
+    public function testRapprochementPcaDunAutreEtablissementRenvoie404(): void
+    {
+        // Étalement PCA rattaché au profil fixture (établissement principal = A).
+        $em = $this->em();
+        $etalement = (new EtalementPca())
+            ->setProfilExploitant($this->profilExploitant())
+            ->setProduit(Uuid::v4())
+            ->setVenteOrigine(Uuid::v4())
+            ->setNature(NaturePca::ALaConsommation)
+            ->setMethode(MethodePca::AuPassage)
+            ->setCompteReport($this->entite(CompteComptable::class, ['numero' => '487000']))
+            ->setMontantReporteCentimes(1200)
+            ->setResteAServirCentimes(1200)
+            ->setNbUnitesCarte(12)
+            ->setIdentifiantSupport('QR-C-CLOIS-' . substr(uniqid(), -6));
+        $em->persist($etalement);
+        $em->flush();
+        $etalementId = (string) $etalement->getId();
+
+        [$emailB, $mdpB] = $this->creerGestionnaireComptaSurB();
+        $clientB = static::createClient();
+        $idB = $this->idEtablissement(SocleFixtures::ETAB_B_NOM);
+        $enteteB = ['auth_bearer' => $this->jeton($clientB, $emailB, $mdpB), 'headers' => [ContexteEtablissement::HEADER => $idB]];
+
+        $reponse = $clientB->request('GET', '/api/compta/pca/' . $etalementId . '/rapprochement', $enteteB);
+
+        self::assertSame(404, $reponse->getStatusCode(), (string) $reponse->getContent(false));
+    }
+
     private function em(): EntityManagerInterface
     {
         /** @var EntityManagerInterface $em */
@@ -83,11 +122,16 @@ final class MarquerImpayeeRegieCloisonnementTest extends ComptaApiTestCase
 
         $etabB = $em->getRepository(Etablissement::class)->findOneBy(['nom' => SocleFixtures::ETAB_B_NOM]);
         self::assertInstanceOf(Etablissement::class, $etabB);
-        $permGerer = $em->getRepository(Permission::class)->findOneBy(['module' => 'compta', 'action' => 'gerer']);
-        self::assertInstanceOf(Permission::class, $permGerer, 'La permission compta.gerer doit etre semee.');
-
         $role = (new Role())->setNom('Gestionnaire compta B (test)');
-        $role->addPermission($permGerer);
+        // Toutes les permissions compta utiles sur B : l'utilisateur passe la sécurité de route de
+        // chaque endpoint testé (gerer/lire/…), seul le contrôle applicatif de périmètre (sur A) le
+        // refuse en 404.
+        foreach (['gerer', 'lire', 'exporter'] as $action) {
+            $perm = $em->getRepository(Permission::class)->findOneBy(['module' => 'compta', 'action' => $action]);
+            if ($perm instanceof Permission) {
+                $role->addPermission($perm);
+            }
+        }
         $em->persist($role);
 
         $email = 'compta-b-' . uniqid() . '@itcotation.com';
