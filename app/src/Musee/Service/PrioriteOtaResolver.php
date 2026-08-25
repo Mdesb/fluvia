@@ -33,6 +33,7 @@ use Doctrine\ORM\EntityManagerInterface;
  *
  * **Ce qui reste hors périmètre, et le demeure** : le remboursement monétaire. Il appartient à l'OTA
  * selon ses CGV, comme dit plus haut — on ne rembourse pas l'argent d'un partenaire à sa place.
+ */
 final class PrioriteOtaResolver
 {
     public function __construct(
