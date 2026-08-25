@@ -86,3 +86,11 @@ Ne touche pas un chemin déjà en `WIP` par une autre instance.
 | ACT-6 | Jauge propre aux cours (padel, tennis) — a confirmer avec Maxime avant den faire un lot | `app/src/Reservation/**` | *a assigner* | BLOCKED | 25/08 |
 | VTE-1 | `Vente` : ajouter OrderFilter sur la date, DateFilter, SearchFilter sur le client — bloque lhistorique des ventes | `app/src/Vente/**` | *a assigner* | CLAIM | 25/08 |
 | PER-1 | `personnel:traiter-echeances-sortie` exige un agentEmail : decider quelle identite porte un traitement automatique dans laudit | `app/src/Personnel/**` | *a assigner* | CLAIM | 25/08 |
+
+| CMP-0 | Spec SDD du module de campagnes — frontiere avec Revenue Recovery, audience, consentement, attribution | `specs/campagnes/**` | **claude-A** | CLAIM | 25/08 |
+| CMP-1 | **PREALABLE** — remonter `ClientNotificationInterface` de SmartFlow vers Platform (trois modules en dependent) | `app/src/Platform/**`, `app/src/SmartFlow/**` | **claude-A** | CLAIM | 25/08 |
+| CMP-2 | Audience : definition dun segment sur les donnees de comportement, previsualisation du nombre de personnes touchees | `app/src/Campagne/**` | *a assigner* | CLAIM | 25/08 |
+| CMP-3 | Message et canaux, **avec le consentement rendu incontournable a lenvoi** — pas verifie, impossible a contourner | `app/src/Campagne/**` | *a assigner* | CLAIM | 25/08 |
+| CMP-4 | Planification : ponctuelle, recurrente, ou declenchee par un evenement de domaine (anniversaire, abonnement a echeance, carte a une entree) | `app/src/Campagne/**` | *a assigner* | CLAIM | 25/08 |
+| CMP-5 | **ATTRIBUTION** — qui est revenu, ce quil a achete, combien ca a rapporte. Cest le seul avantage quun outil generaliste ne peut pas copier | `app/src/Campagne/**` | *a assigner* | CLAIM | 25/08 |
+| CMP-6 | Adaptateur denvoi reel (courriel, SMS) — **EXTERNE : exige un prestataire, donc un contrat, donc limmatriculation** | `app/src/Campagne/**` | *a assigner* | EXTERNE | 25/08 |

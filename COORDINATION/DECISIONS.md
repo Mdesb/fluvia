@@ -1071,3 +1071,109 @@ balaie **toutes** les réservations sans borne de date et rattrape donc tout le 
 exécution. Inoffensif aujourd'hui grâce au contrôle d'événement déjà émis — c'est la cause structurelle
 du symptôme, pas le symptôme. `claude-G` ne l'a pas touché parce que je lui avais ouvert Padel pour
 rendre un test vert, pas pour le refondre. Cela revient à `claude-I`.
+
+### 2026-08-25 · D41 — Le cloisonnement filtre les lectures, et personne ne garde les écritures
+`claude-H` a trouvé que `PointDeVente` accepte son `etablissement` **depuis le corps de la requête**,
+sans processor et sans contrôle. Quelqu'un qui a `caisse.gerer` sur son établissement peut donc créer un
+point de vente **chez un autre établissement** — et un point de vente est ce sur quoi s'ouvre une caisse.
+
+**J'ai compté avant de traiter, et ce n'est pas un cas : c'est une classe. Trente-cinq entités.**
+
+    Acces          Equipement, EspaceAcces
+    Boutique       PartenaireOTA, Vitrine
+    Caisse         PointDeVente
+    Caution        GrilleRetenue
+    Crm            ParametrePmvEtablissement
+    Musee          AllocationQuotaOTA, Audioguide, ContingentGratuite, Exposition, Guide,
+                   ParametreMuseeEtablissement, PartenaireOTA, PassAnnuel, PolitiqueDelestage,
+                   Salle, SousQuotaSalle
+    Organisation   Espace
+    Padel          ParametragePadel, PlageHoraire
+    Patinoire      ParcPatins, SaisonEphemere, ZonePatinoire
+    Personnel      RattachementEmploye
+    Piscine        Bassin, ParametrePiscineEtablissement, Poss, QualificationEncadrant
+    Recouvrement   PolitiqueRecouvrement
+    Reservation    Activite, RegleAnnulation, Ressource
+    Stock          Fournisseur, ParametrageStock
+
+**Pourquoi personne ne l'avait vu, et c'est le point qui compte.** Les extensions Doctrine de ce dépôt
+bornent les **lectures** au périmètre de l'utilisateur — vingt-six modules en ont une, et elles
+fonctionnent. Une **écriture** qui reçoit son établissement du corps de la requête n'est vue par
+personne : ni par l'extension, qui ne s'applique qu'aux requêtes de lecture, ni par le garde-fou de
+cloisonnement, qui inspecte les **résolutions d'entités** et non les **groupes de sérialisation**.
+Les seize IDOR trouvés en cinq jours étaient tous des lectures ou des résolutions. Ceux-ci sont d'une
+autre nature, et notre outillage était structurellement aveugle.
+
+**Ce que ça permet concrètement** : créer une salle dans le musée d'un autre client, un fournisseur chez
+un concurrent, un bassin dans sa piscine, une plage horaire sur ses terrains. La victime verra ces
+objets apparaître dans ses propres écrans — puisque ses lectures, elles, sont bien filtrées sur son
+périmètre. C'est une pollution de données invisible à l'auteur comme à la victime.
+
+**Le traitement : un mécanisme unique, pas trente-cinq processors.** Écrire trente-cinq gardes serait
+répéter trente-cinq fois la même décision, dans douze périmètres différents, avec la certitude qu'on en
+oublierait et que la trente-sixième entité écrite demain ne l'aurait pas. C'est exactement le motif que
+`claude-H` a nommé cette nuit : *« le remède n'est pas de faire attention — c'est de rendre le cas
+général impossible à écrire »*. Un décorateur du processeur de persistance d'API Platform, appliqué
+globalement : toute entité écrite qui porte un établissement voit cet établissement confronté au
+périmètre de l'appelant, et refusé en **404** s'il en sort.
+
+**Et un garde-fou pour la classe, demandé à `claude-C`** : refuser qu'une entité neuve expose un
+`Etablissement` dans un groupe d'écriture. Le mécanisme protège ce qui existe ; le garde-fou empêche
+d'en ajouter. Sans lui, on répare trente-cinq fois et on recommence.
+
+### 2026-08-25 · D42 — Campagnes marketing : ce que c'est, et surtout ce que ce n'est pas
+Demandé par Maxime. **La première chose à trancher n'est pas ce que le module fait, c'est ce qui le
+distingue de Revenue Recovery** — sans quoi on refait la collision SF-0, qui a coûté 415 lignes de
+travail parallèle et une décision d'arbitrage.
+
+**La frontière, et elle est nette :**
+
+| | Revenue Recovery | Campagne |
+|---|---|---|
+| déclencheur | un **événement** arrivé à **un** client | une **décision** de l'exploitant |
+| population | un individu, à la fois | une **audience**, choisie |
+| moment | dès que l'événement survient | choisi, ou récurrent |
+| finalité | récupérer ce qui allait être perdu | **provoquer** une venue qui n'allait pas avoir lieu |
+
+Panier abandonné, facture échue, devis expiré : Revenue Recovery. « Les abonnés qui n'ont pas nagé
+depuis trois mois » : campagne. Si un lot ne rentre dans aucune des deux cases, il faut se demander
+lequel des deux modules ment.
+
+**Trois choses existent déjà et il ne faut surtout pas les refaire :**
+
+1. **Le consentement RGPD est modélisé et il est bon.** `Consentement`, `CanalConsentement`
+   (email / sms / courrier), `EtatConsentement` (accordé / refusé / à renouveler). C'est la colonne
+   vertébrale légale du module. **Un envoi de campagne se fait à travers ce contrôle, jamais à côté** —
+   et pas « en le vérifiant », mais en le rendant impossible à contourner, au même endroit que l'envoi.
+2. **Le port de notification client existe** — `SmartFlow\Port\ClientNotificationInterface`, avec un
+   adaptateur qui **écrit dans un journal**. Autrement dit : *rien n'envoie quoi que ce soit à un client
+   aujourd'hui.* C'est une bonne nouvelle déguisée en manque, voir plus bas.
+3. **Les données de comportement sont là** : dernière visite, chiffre cumulé, abonnement, solde de
+   carte, activités pratiquées, établissement. C'est ce qu'aucun outil généraliste ne possède.
+
+**Ce qui n'existe pas, et c'est le cœur du module : l'audience.** Aucune notion de segment, de ciblage
+ni de population dans tout le dépôt. C'est là que va l'effort.
+
+**L'argument de fond, pour ne pas construire un Mailchimp de plus.** Un outil d'emailing dit qui a
+ouvert. Cette plateforme peut dire **qui est revenu, ce qu'il a acheté, et combien ça a rapporté** —
+parce qu'elle tient la vente. L'attribution est le seul avantage qu'un généraliste ne peut pas copier ;
+si le module ne la porte pas, il ne vaut pas la peine d'être écrit.
+
+**La dépendance externe, consignée et non attendue (D19).** Envoyer des courriels ou des SMS en volume
+exige un prestataire — délivrabilité, désinscription, réputation d'expéditeur — donc un contrat, donc
+l'immatriculation. Même famille que les adaptateurs Meta et les magasins d'applications.
+
+**On ne l'attend pas.** Le module se construit **contre le port existant** et se livre avec
+l'adaptateur de journal : audience, message, planification, consentement, mesure — tout est écrit,
+testé et démontrable sans qu'une seule adresse ne soit contactée. Le jour où le prestataire existe, on
+écrit un adaptateur et rien d'autre ne bouge.
+
+**Une décision d'architecture qui découle de tout ça** : `ClientNotificationInterface` vit dans
+`SmartFlow` alors que **trois** modules en ont besoin — Smart Flow, Revenue Recovery et Campagnes. Il
+remonte dans `Platform`. Le laisser où il est obligerait deux modules à dépendre d'un troisième pour
+une capacité qui n'appartient à aucun (D3/D8).
+
+**Périmètre : à ouvrir.** Le module est proche de Revenue Recovery, donc de `claude-E` — muette depuis
+vingt et une heures et jamais présentée, donc injoignable. Maxime tranche : soit `claude-E` reprend et
+prend les deux, soit une session dédiée s'ouvre. **Ne pas l'attribuer par défaut à qui passe** : c'est
+exactement ainsi que le front est resté cinq jours sans propriétaire.
