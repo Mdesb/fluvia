@@ -12,7 +12,7 @@
     ],
     "scelle": {
         "gelee_le": "2026-08-20",
-        "plafond": 30,
+        "plafond": 29,
         "reference": "MESSAGES.md — claude-A -> claude-C, 19/08, option (a) et ses 3 conditions"
     },
     "entrees": {
@@ -46,17 +46,6 @@
                 "Facture"
             ],
             "ecrit": false
-        },
-        "Patinoire/State/ValiderRetenueProcessor.php": {
-            "depuis": "2026-08-20",
-            "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
-            "raison": "Antérieur au gel de la ligne de base : non revu, non corrigé. N'est PAS une dérogation permanente — à ouvrir par le propriétaire du module.",
-            "sensibilite": "argent",
-            "entites_resolues": [
-                "CautionLocationPatins",
-                "MouvementCaution"
-            ],
-            "ecrit": true
         },
         "Stock/State/RattacherProduitProcessor.php": {
             "depuis": "2026-08-20",
