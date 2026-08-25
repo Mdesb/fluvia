@@ -218,7 +218,7 @@ export default function App() {
         />
       )}
       {onglet === 'catalogue' && <Catalogue etabActif={etabActif} cible={cible} onCibleConsommee={() => setCible(null)} droits={droits} />}
-      {onglet === 'reservation' && <Reservation etabActif={etabActif} />}
+      {onglet === 'reservation' && <Reservation etabActif={etabActif} droits={droits} session={session} />}
       {onglet === 'supervision' && <Supervision etabActif={etabActif} />}
       {onglet === 'pilotage' && (
         <Pilotage etabActif={etabActif} etablissements={etablissements} />
