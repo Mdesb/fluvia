@@ -1224,3 +1224,60 @@ champs hébergés en ligne, et la lecture automatique des retours. Comme partout
 contre le port et on livre avec la simulation** — `TpeMock` existe déjà, la saisie manuelle du rejet
 aussi. Tout le parcours, la bascule et l'explication au client sont écrits et démontrables avant qu'un
 contrat ne soit signé.
+
+### 2026-08-25 · D44 — Un seul produit, plusieurs tarifs : le modèle le fait déjà, l'écran l'empêche
+Maxime, après un échange avec un gestionnaire de salle de sport : *« une entrée unitaire peut avoir
+plusieurs tarifs et plein d'options ; il faut qu'il n'y ait qu'un seul produit créé et que ce soit
+juste la tarification qui change. »*
+
+**Le modèle fait exactement cela, et il le fait bien.** Vérifié :
+`GrilleTarifaire` est un **quadruplet unique** — `produit × typeTarif × saison × trancheQuotientFamilial`.
+Un même produit porte donc autant de lignes tarifaires qu'on veut : adulte, enfant, réduit, haute et
+basse saison, tranches de quotient familial. Et `OptionProduit` rattache des **groupes d'options**
+partagés à plusieurs produits.
+
+**Rien à concevoir. Le problème est ailleurs, et il est net :**
+
+`Caisse.jsx` ligne 141 — `const tarif = typeTarifId(l.produit)` — le guichet **choisit un tarif tout
+seul** et n'offre aucun choix. L'API, elle, accepte `typeTarif` par ligne et résout le prix par
+tarif × saison × quotient (`AjoutLigneHandler`, `ResolveurPrix`).
+
+**Conséquence, et c'est l'explication de la prolifération** : un exploitant qui veut vendre une entrée
+au tarif enfant n'a aucun moyen de le faire à l'écran. Il crée donc « Entrée enfant » comme produit
+distinct. **Le modèle est propre, la pratique est sale, et c'est l'interface qui a forcé le
+contournement.** C'est encore un cas des 181 opérations non branchées — le plus coûteux trouvé
+jusqu'ici, parce qu'il ne se voit pas comme un manque mais comme une habitude.
+
+**Traitement** : offrir le choix du tarif au guichet, et n'afficher les options que d'un produit. Aucun
+changement de modèle, aucune migration.
+
+**Et un garde-fou de conception, pour ne pas réparer l'écran et garder la mauvaise habitude** : quand
+deux produits ne diffèrent que par leur tarif ou leur public, ce sont **un** produit et deux lignes
+tarifaires. À écrire dans la spec des options (`UI-2`), et à rappeler dans l'écran de création.
+
+### 2026-08-25 · D44-bis — Vendre sans caisse
+Le même gestionnaire *« n'a pas besoin d'un outil de caisse, mais doit pouvoir vendre depuis le
+catalogue directement »*.
+
+**Aujourd'hui c'est impossible**, et par règle explicite : `CreerVenteProcessor` refuse toute vente
+sans session de caisse ouverte — `RG-M2-01`, « Aucune session ouverte : vente impossible ».
+
+Cette règle est **juste pour une caisse** : elle porte la responsabilité du fonds, la clôture Z et la
+traçabilité de l'argent liquide. Elle est **absurde pour une salle de sport** dont le gérant encaisse
+trois abonnements par carte dans le mois et n'a jamais vu un tiroir-caisse.
+
+**La bonne réponse n'est pas d'assouplir la règle**, ce qui casserait la traçabilité pour tout le
+monde. C'est de reconnaître qu'il existe **deux manières de vendre** :
+
+| | Caisse | Vente directe |
+|---|---|---|
+| session | obligatoire, avec fonds et clôture Z | aucune |
+| espèces | oui | **non** — c'est ce qui permet de se passer de session |
+| responsabilité | le caissier répond du tiroir | la transaction répond d'elle-même |
+
+**Sans espèces, il n'y a rien à compter, donc rien à clôturer.** La séparation tient à cette seule
+phrase, et elle est vérifiable : la vente directe refuse les moyens de paiement fiduciaires.
+
+À trancher par Maxime avant tout code : est-ce un **mode d'établissement** (cette salle ne fait pas de
+caisse) ou une **permission** (ce vendeur peut vendre sans caisse) ? Les deux se défendent, et ce n'est
+pas la même chose à l'usage.

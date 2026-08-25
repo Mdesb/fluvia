@@ -101,3 +101,6 @@ Ne touche pas un chemin déjà en `WIP` par une autre instance.
 | PAY-3 | Rejet CARTE : lentite nexiste pas, seul le rejet SEPA est modelise | `app/src/Vente/**` | *a assigner* | CLAIM | 25/08 |
 | PAY-4 | Explication du double recueil dans le parcours client — une phrase avant la saisie, pas une note de bas de page | `frontend/**`, `vitrine/**` | *a assigner* | CLAIM | 25/08 |
 | PAY-5 | Prestataire bancaire : jeton recurrent, champs heberges en ligne, lecture des retours pain.002 | `app/src/{Vente,Sepa}/**` | *a assigner* | EXTERNE | 25/08 |
+
+| UI-6 | **Choix du tarif au guichet** — lAPI laccepte deja, lecran choisit tout seul. Cause probable de la proliferation de produits (D44) | `frontend/**` | **claude-H** | CLAIM | 25/08 |
+| VTE-2 | Vente directe sans session de caisse, **sans especes** — mode detablissement ou permission, a trancher (D44-bis) | `app/src/{Vente,Caisse}/**` | *a assigner* | BLOCKED | 25/08 |
