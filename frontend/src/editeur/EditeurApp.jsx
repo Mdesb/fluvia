@@ -4,6 +4,7 @@ import Login from '../pages/Login.jsx'
 import Abonnements from './pages/Abonnements.jsx'
 import Offres from './pages/Offres.jsx'
 import Clients from './pages/Clients.jsx'
+import Facturation from './pages/Facturation.jsx'
 
 // Administration de l'éditeur (ED-6) — l'outil avec lequel l'éditeur pilote ses clients, ses offres
 // et ses abonnements.
@@ -60,6 +61,7 @@ export default function EditeurApp() {
     { id: 'abonnements', ic: '≡', label: 'Abonnements' },
     { id: 'offres', ic: '▥', label: 'Offres' },
     { id: 'clients', ic: '●', label: 'Clients' },
+    { id: 'facturation', ic: '€', label: 'Facturation' },
   ]
 
   return (
@@ -110,6 +112,7 @@ export default function EditeurApp() {
             {onglet === 'abonnements' && <Abonnements onRefus={() => setRefuse(true)} />}
             {onglet === 'offres' && <Offres />}
             {onglet === 'clients' && <Clients onRefus={() => setRefuse(true)} />}
+            {onglet === 'facturation' && <Facturation onRefus={() => setRefuse(true)} />}
           </>
         )}
       </main>
