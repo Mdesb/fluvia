@@ -1337,3 +1337,62 @@ achète, pas ce qu'on vend.
 
 Ces trois-là forment une chaîne : devis accepté → commande → livraison → facture. Chaque étape reprend
 la précédente sans la ressaisir, et chacune peut s'arrêter là. C'est un lot cohérent, pas trois lots.
+
+### 2026-08-25 · D46 — Corriger sans caisse, et chercher un écart sans noyer l'œil
+Trois questions de Maxime, dont la dernière porte une idée qui vaut mieux que les deux autres.
+
+#### 1. Un manager corrige sans ouvrir de caisse : où atterrit l'écriture ?
+
+**Elle n'a pas besoin de session, parce qu'elle ne touche aucun tiroir.**
+
+C'est la distinction qui manquait à D45. Une correction de ventilation — espèces vers carte — ne
+déplace **aucun billet** : elle constate que l'argent n'était pas là où on l'a écrit. Une session de
+caisse et sa clôture Z servent à **compter du liquide**. Rien à compter, donc rien à ouvrir.
+
+L'écriture est donc rattachée à **la vente**, pas à une session, et datée du jour du geste (D45).
+Seule une correction qui déplacerait réellement des espèces exige une session — et c'est alors un
+mouvement de caisse, ce qui existe déjà.
+
+**Et il y a mieux : la correction peut pointer l'écart qu'elle explique.** `AlerteEcartCaisse` existe
+et se rattache à une `ClotureZ` et à sa session. Si le Z d'hier a constaté 50 € de manquant, la
+correction d'aujourd'hui doit pouvoir dire *« c'est ce manquant-là »*. **Un écart expliqué cesse d'être
+un écart** — c'est ce qui transforme une liste d'alertes qu'on finit par ignorer en une liste qui se
+vide.
+
+#### 2. Les trois dates
+
+Vérifié : `Facture` porte déjà `dateEmission`, `dateEcheance`, `acquitteeLe` et `creeLe`. **Il manque la
+date de modification**, et l'ensemble n'existe pas au niveau de la **vente**.
+
+Elles entrent, mais avec une réserve qui répond à la vraie demande de Maxime — *« que les listes ne
+soient pas débordantes de chiffres »* : **on affiche l'écart, jamais les dates brutes.** Trois dates
+côte à côte obligent l'œil à soustraire, à chaque ligne, toute la journée. Un « en retard de 12 j » ou
+un « corrigée 3 j après » se lit sans calculer, et c'est ce qu'on cherchait.
+
+Les dates restent disponibles au détail. Elles ne sont simplement pas ce qu'on met dans une liste.
+
+#### 3. Le drapeau par origine — l'idée qui structure le reste
+
+Maxime : *« une vente faite en caisse attend un paiement immédiat ; une vente faite depuis l'outil de
+gestion peut avoir des conditions à trente ou soixante jours. »*
+
+**C'est juste, et ça change la nature du problème.** Chercher des incohérences devient une requête
+qu'il faut savoir formuler ; **porter une attente de paiement** en fait une propriété de la vente, que
+n'importe qui peut vérifier :
+
+| Origine | Attente | Anomalie |
+|---|---|---|
+| guichet | immédiate | non soldée à la clôture de session |
+| vente directe | terme convenu (30 j, 60 j…) | non soldée **après** l'échéance |
+
+**Une anomalie n'est plus un cas à chercher : c'est un écart entre ce qui était attendu et ce qui est.**
+Le même écran sert alors aux deux mondes sans qu'on ait à expliquer la différence à personne, et une
+vente à 60 jours cesse d'apparaître en rouge le premier jour — ce qui est précisément ce qui fait qu'on
+n'ouvre plus la liste.
+
+`Facture` porte déjà `dateEcheance` : la moitié du chemin est faite. Ce qui manque est de la **poser à
+la vente** et de la **dériver de l'origine** plutôt que de la saisir.
+
+**Conséquence à assumer** : l'origine d'une vente devient une donnée porteuse de sens, pas un
+renseignement. Elle doit être posée à la création et ne plus bouger — une vente de guichet requalifiée
+en vente directe effacerait l'anomalie au lieu de la traiter.
