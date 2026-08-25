@@ -269,6 +269,10 @@ export const api = {
 
   // Supervision accès / FMI (M3).
   supervisionAcces: () => request('/api/acces/supervision'),
+  // Verification d'un billet : le support par son numero imprime, puis son droit actif.
+  // `Appairage` n'expose aucun filtre : on charge et on croise cote client, faute de mieux.
+  supports: (params) => request('/api/supports', { query: params }),
+  appairages: () => request('/api/appairages', { query: { itemsPerPage: 200 } }),
   jaugesFmi: () => request('/api/jauge_fmis', { query: { itemsPerPage: 100 } }),
   passages: () =>
     request('/api/passages', { query: { itemsPerPage: 20, 'order[horodatage]': 'desc' } }),

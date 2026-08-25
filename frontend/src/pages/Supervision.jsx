@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { api, membres } from '../api/client.js'
 import { mot, GLOSSAIRE } from '../api/vocabulaire.js'
+import RechercheBilletModal from '../components/RechercheBilletModal.jsx'
 
 function heure(v) {
   if (!v) return '—'
@@ -28,6 +29,7 @@ const RESULTAT_CLS = { autorise: 'good', accepte: 'good', refuse: 'crit', bloque
 // derniers passages. Rafraîchissement automatique (poll court).
 export default function Supervision({ etabActif }) {
   const [sup, setSup] = useState(null)
+  const [verifBillet, setVerifBillet] = useState(false)
   const [passages, setPassages] = useState([])
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
@@ -82,6 +84,7 @@ export default function Supervision({ etabActif }) {
           <button className={`btn${auto ? ' primary' : ''}`} onClick={() => setAuto((v) => !v)}>
             {auto ? '⏸ Auto' : '▶ Auto'}
           </button>
+          <button className="btn" onClick={() => setVerifBillet(true)}>Vérifier un billet</button>
           <button className="btn" onClick={() => recharger()}>↻ Rafraîchir</button>
         </div>
       </div>
@@ -204,6 +207,8 @@ export default function Supervision({ etabActif }) {
           </section>
         </>
       )}
+
+      <RechercheBilletModal open={verifBillet} onClose={() => setVerifBillet(false)} />
     </div>
   )
 }
