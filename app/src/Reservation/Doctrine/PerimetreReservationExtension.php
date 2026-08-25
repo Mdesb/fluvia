@@ -10,8 +10,10 @@ use ApiPlatform\Doctrine\Orm\Util\QueryNameGeneratorInterface;
 use ApiPlatform\Metadata\Operation;
 use App\Reservation\Entity\Activite;
 use App\Reservation\Entity\Creneau;
+use App\Reservation\Entity\DisponibiliteRessource;
 use App\Reservation\Entity\Emargement;
 use App\Reservation\Entity\FacturationNoShow;
+use App\Reservation\Entity\IndisponibiliteRessource;
 use App\Reservation\Entity\ListeAttente;
 use App\Reservation\Entity\ParticipantReservation;
 use App\Reservation\Entity\ProjectionAccesReservation;
@@ -39,6 +41,8 @@ final class PerimetreReservationExtension implements QueryCollectionExtensionInt
         Reservation::class => '{root}.etablissement',
         RegleAnnulation::class => '{root}.etablissement',
         ProjectionAccesReservation::class => '{root}.etablissement',
+        DisponibiliteRessource::class => 'ress.etablissement',
+        IndisponibiliteRessource::class => 'ress.etablissement',
         ListeAttente::class => 'cr.etablissement',
         ParticipantReservation::class => 'res.etablissement',
         Emargement::class => 'res.etablissement',
@@ -87,7 +91,12 @@ final class PerimetreReservationExtension implements QueryCollectionExtensionInt
 
         $rootAlias = $queryBuilder->getRootAliases()[0];
 
-        if ($resourceClass === ListeAttente::class) {
+        if (\in_array($resourceClass, [DisponibiliteRessource::class, IndisponibiliteRessource::class], true)) {
+            // Ces deux-la ne portent pas d'etablissement : elles le tiennent de leur ressource.
+            // Sans cette jointure, leurs collections etaient lisibles d'un etablissement a l'autre —
+            // on voyait les plages d'ouverture et les fermetures exceptionnelles des concurrents.
+            $queryBuilder->innerJoin($rootAlias . '.ressource', 'ress');
+        } elseif ($resourceClass === ListeAttente::class) {
             $queryBuilder->innerJoin($rootAlias . '.creneau', 'cr');
         } elseif (\in_array($resourceClass, [ParticipantReservation::class, Emargement::class, FacturationNoShow::class], true)) {
             $queryBuilder->innerJoin($rootAlias . '.reservation', 'res');
