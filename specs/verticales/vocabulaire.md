@@ -1,7 +1,13 @@
 # Clés de vocabulaire des verticales
 
 > Périmètre `claude-I`. Application de **D15** aux cinq verticales existantes.
-> Statut : **catalogue posé**, résolveur non posé (voir « Ce qui manque » en fin de document).
+> Statut : **catalogue posé et déclaré en code** — les cinq manifestes portent leur vocabulaire dans
+> `settingsSchema()`, et `app/tests/Verticales/VocabulaireManifesteTest.php` refuse une verticale sans
+> vocabulaire ou avec une clé hors catalogue. Le résolveur, lui, n'existe toujours pas (fin de document).
+>
+> **Ce document n'est plus la source de vérité, il l'explique.** Les mots vivent dans
+> `app/src/<Verticale>/<Verticale>Module.php`. Un tableau de documentation ne se teste pas ; un
+> manifeste, si.
 
 ## Le problème, en une phrase
 
