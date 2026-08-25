@@ -291,6 +291,9 @@ lui fait porter le risque. La prochaine fois je donne les deux, ou je dis que je
 | 00:38 | **SECOND IDOR FERMÉ, et celui-là fait plus mal** : l'action de masse du catalogue permettait d'**archiver — irréversiblement — le produit d'un autre établissement**, à qui savait deviner des UUID. Vérifié sans la garde : `nbTraites=1`, le produit étranger était bien archivé. `tests/Offre` 26/26. | Reste de la dette : `Emarger`, `AjouterParticipant`, `InscrireListeAttente`, `Convertir`. Mon audit en cours dit que plusieurs sont de la **fausse** dette — je te le démontrerai plutôt que d'ajouter des gardes décoratives. | Rien. |
 | 01:02 | **Troisième et quatrième trous fermés — et ce sont des fuites de données personnelles, pas des défauts de cloisonnement.** On désignait le bénéficiaire de n'importe qui comme participant ou inscrit en liste d'attente. Vérifié sans les gardes : l'inscription était créée, la fiche étrangère référencée. `tests/Reservation` 97/97 avec les gardes, mes 3 tests dédiés verts. | Audit de la dette terminé : **2 vraies fuites corrigées, 2 fausses dettes démontrées**. Tableau sous le tableau. | Rien. |
 | 08:54 | **PRÉSENTATION HORAIRE.** D'abord ceci : **je me suis encore arrêtée, de 01h15 à 08h45** — sept heures et demie, la seconde fois en deux jours. Ce n'est pas un blocage, c'est la règle zéro. Ensuite : ton ordre long est lu, et **le point 1 était déjà fait** quand tu l'as écrit (01h00) — quatre entrées résorbées, deux fausses dettes démontrées. **Point 2 fait aussi** : les disponibilités et indisponibilités étaient lisibles d'un établissement à l'autre, c'est corrigé et vérifié rouge sans la jointure. | Reste du point 2 : les 9 entrées `Offre`. Puis D41 sur mes trois entités. | Rien. |
+| 09:16 | **Point 2 terminé côté dérivable** : `GrilleTarifaire`, `ConversionType` et `PrixHistorique` suivent désormais leur produit. On lisait **les prix pratiqués par un voisin**, tarif par tarif et saison par saison. Vérifié rouge sans les chemins. `tests/Offre` 27/27, `tests/Reservation` 102/102. | **Les 6 dernières entrées ne sont pas de la dette : c'est une décision de modèle, et elle est pour toi.** Recommandation motivée entité par entité sous le tableau. Ensuite D41 sur mes trois entités. | Rien. |
+| 14:45 | **PRÉSENTATION HORAIRE + point 3 de ton ordre long fait.** D41 appliqué à `Activite`, `RegleAnnulation` et `Ressource` : l'établissement d'une création vient de la session serveur, le corps est ignoré. `tests/Reservation` 102/102, test dédié vérifié rouge sans le changement. **Deux essais ratés avant le bon, écrits dans le code plutôt qu'effacés.** | Point 4 : je vérifie si CQ-0 est livrée ; sinon point 5, la note sur `CommanderEclairageCommand` pour `claude-I`. | Rien. |
+| 23:17 | **Point 4 : CQ-0 n'est toujours pas livrée** — `DroitAcces` ne porte toujours aucun lien vers un porteur, statut `CLAIM` chez `claude-C` depuis le 23/08. La moitié nominative de CQ-3/CQ-6 reste donc bloquée ; je ne l'attends pas. **Point 5 fait, et il y a urgence dedans** : le balayage sans borne de `CommanderEclairageCommand` était inoffensif tant que rien ne le lançait — l'ordonnanceur vient de le lancer. | Note d'analyse écrite pour `claude-I` sous le tableau. | Rien. |
 
 ## Nouvelle règle de Maxime — présentation horaire à `claude-A`
 
@@ -869,3 +872,133 @@ Je ne peux pas garantir que ça ne se reproduira pas — c'est la limite que tu 
 18h10, une session lancée depuis un bureau s'arrête quand elle a fini de répondre. Ce que je peux
 faire, et que je fais : le dire au lieu de le laisser deviner, et reprendre par le battement plutôt
 que par le travail — fusionner, lire les ordres, me présenter, puis coder.
+
+
+## Couverture de périmètre — trois de plus, et les six dernières ne m'appartiennent pas
+
+**Les trois dérivables sont fermées.** `GrilleTarifaire` et `ConversionType` par leur produit,
+`PrixHistorique` par `grille.produit`. Le classement de `claude-C` dans la ligne de base était juste
+(groupes A et A2, chemins écrits noir sur blanc) : je n'ai eu qu'à l'appliquer. L'extension produit
+accepte maintenant un chemin d'association et le remonte segment par segment — deux jointures pour
+`grille.produit`.
+
+**Ce que la fuite donnait à voir** : la grille tarifaire d'un voisin, tarif par tarif et saison par
+saison, plus l'historique de ses changements de prix. Ce n'est pas de la configuration partagée,
+c'est sa politique commerciale — et l'historique dit en plus **quand** il l'a changée.
+
+Vérifié rouge sans les chemins. `tests/Offre` 27/27, et `tests/Reservation` 102/102 après le lot
+précédent.
+
+### Les six dernières : ce n'est plus de la dette, c'est un choix de modèle
+
+`Categorie`, `Promotion`, `Saison`, `TypeProduit`, `TypeTarif`, `TrancheQuotientFamilial`. Ta ligne
+de base les classe en « groupe B — référentiel présumé, à trancher module par module ». Je suis le
+module ; voici mon tranchage, mais il ne se met pas en œuvre sans toi, parce qu'il demande une
+colonne et une migration, pas une jointure.
+
+**Le fait, d'abord** : aucune ne porte d'établissement **ni de groupe**. Elles ne sont donc pas
+« globales au groupe » — elles sont globales à **toute la base**, c'est-à-dire partagées entre des
+exploitants qui n'ont aucun rapport entre eux.
+
+| Entité | Mon avis | Pourquoi |
+|---|---|---|
+| `TypeProduit`, `TypeTarif` | **laisser global** | Vocabulaire structurant du logiciel (« entrée », « carte », « plein tarif »). Les cloisonner interdirait à deux établissements de partager un référentiel commun, ce qui est précisément l'intérêt d'une plateforme. Et `TypeProduit` porte les compatibilités de conversion : cloisonné, il faudrait les redéclarer partout. |
+| `Categorie` | **laisser global**, mais à revoir si la personnalisation arrive | Arbre de classement. Même raison, avec moins de force : un exploitant peut vouloir son propre axe. |
+| `TrancheQuotientFamilial` | **à cloisonner par groupe** | Les tranches de quotient familial sont fixées par la collectivité. Deux clients n'ont pas les mêmes, et les voir mutuellement n'a aucun sens. |
+| `Saison` | **à cloisonner par groupe** | Une saison est un calendrier d'exploitation. Celui du voisin ne le regarde pas, et une saison créée par l'un apparaît aujourd'hui dans les listes de l'autre. |
+| `Promotion` | **à cloisonner par groupe, et c'est la plus urgente** | Une promotion est une **arme commerciale**. Aujourd'hui, un exploitant voit celles de ses concurrents, y compris avant leur date de début. |
+
+**Ce que je ne fais pas et pourquoi.** Ajouter un `groupe` à trois entités, c'est une migration, une
+reprise de données (à quel groupe rattacher l'existant ?) et un choix d'échelle — groupe ou
+établissement — que je ne peux pas trancher seul. Sur `Promotion`, il y a en plus une question de
+compatibilité : si des promotions existantes sont déjà partagées entre groupes, les cloisonner en
+casse l'usage.
+
+**Dis-moi si tu veux que je le prenne**, et à quelle échelle. En attendant, ces six entrées restent
+au cliquet — elles y sont à juste titre, et les retirer sans corriger serait pire que de les laisser.
+
+
+## D41 sur mes trois entités — et les deux essais qu'il a fallu
+
+`Activite`, `RegleAnnulation` et `Ressource` acceptaient `etablissement` **en écriture** : le client
+choisissait à quel établissement rattacher ce qu'il créait. Ton garde global refuse maintenant les
+écritures hors périmètre, mais un champ qu'il faut garder n'aurait jamais dû être ouvert.
+
+**Les deux essais ratés, constatés et non supposés — je les laisse dans le docblock parce que le
+prochain qui touchera à ça se posera exactement les mêmes questions :**
+
+1. **Un `processor`** posant l'établissement après désérialisation : **trop tard**. La validation
+   s'exécute *entre* la désérialisation et l'écriture, donc l'`Assert\NotNull` du champ échouait en
+   422 avant qu'il ne soit atteint.
+2. **Un `provider`**, donc plus tôt dans la chaîne : **jamais appelé**. Une opération `Post` a
+   `read: false`, et le fournisseur d'une opération n'est consulté qu'à la lecture. J'ai vérifié
+   qu'il était bien enregistré comme service avant de conclure — il l'était.
+
+**Retenu :** le processor, et l'`Assert\NotNull` retirée du champ. Elle protégeait d'un client qui
+**omettait** l'établissement ; il ne peut désormais plus l'envoyer du tout. Elle ne protégeait donc
+plus que d'une erreur du serveur — et de celle-là, trois choses plus solides s'occupent :
+l'estampilleur, qui **refuse plutôt que de deviner** quand aucun établissement n'est actif ; la
+colonne `NOT NULL` ; et ton garde global.
+
+Retirer une contrainte de validation ressemble à un affaiblissement. J'ai donc écrit la raison à
+l'endroit exact où un relecteur se posera la question — dans le commentaire du champ, pas seulement
+dans le message de commit.
+
+**Le montage du test est délibérément *légitime*, et c'est le point important.** L'admin est affecté
+à A **et** à B : rien ne lui interdit de travailler sur B. Ce que le test vérifie n'est donc pas un
+refus, c'est que le champ envoyé est **ignoré** — la ressource naît dans l'établissement du contexte,
+pas dans celui que le corps désigne. Un test bâti sur un établissement interdit aurait été vert grâce
+à ton garde global, sans rien prouver sur la conception. Vérifié rouge sans le changement : la
+ressource naissait bien chez B.
+
+
+## Point 5 — `CommanderEclairageCommand` : ce que je ferais, et ce qui est urgent
+
+Padel ne m'est pas ouvert pour ça. Voici l'analyse pour `claude-I`, et **un point qui ne peut pas
+attendre son ouverture.**
+
+### L'urgence : cette commande vient de passer de « jamais lancée » à « lancée »
+
+`commander()` charge **toutes** les `ReservationPadel` sans aucune borne de date, et déclenche un
+allumage pour chaque créneau déjà commencé, une extinction pour chaque créneau déjà fini. Tant que
+rien ne la lançait, c'était une inefficacité. Depuis que l'ordonnanceur tourne, **sa première
+exécution rattrape tout l'historique en une fois**.
+
+Et ce n'est pas qu'une écriture en base : `PilotageEclairageHandler::declencher()` appelle
+`PiloteEclairage::commander()`, c'est-à-dire **le port qui pilote le relais physique**. L'adaptateur
+actuel est un simulateur, donc l'effet réel est nul aujourd'hui — mais le jour où un vrai relais est
+branché, la première exécution allume et éteint les projecteurs de chaque terrain autant de fois
+qu'il y a de réservations passées.
+
+Le contrôle `evenementExiste()` limite les dégâts à **une seule** salve : chaque réservation n'est
+traitée qu'une fois. C'est une salve de rattrapage, pas une boucle — mais elle a lieu exactement une
+fois, et c'est maintenant.
+
+**Ce que je ferais tout de suite, avant même le correctif** : vérifier si la commande a déjà tourné
+(`platform:scheduler:status`) et, si oui, compter les `EvenementEclairage` créés dans la dernière
+heure. S'il y en a un par réservation padel historique, la salve a eu lieu et il faut le savoir
+plutôt que de le découvrir sur un incident terrain.
+
+### Le correctif, tel que je l'écrirais
+
+**1. Borner la requête par le temps, pas par l'historique déjà traité.** Un créneau terminé depuis
+deux semaines n'a aucune commande à recevoir. Deux requêtes ciblées remplacent le balayage :
+les créneaux dont le **début** tombe dans une fenêtre récente pour l'allumage, ceux dont la **fin**
+y tombe pour l'extinction. La fenêtre doit couvrir plusieurs cycles d'ordonnanceur — une heure est
+large et suffit.
+
+**2. Garder `evenementExiste()` comme garde d'idempotence, jamais comme borne.** C'est aujourd'hui
+la seule chose qui empêche de tout rejouer, et elle coûte deux requêtes par réservation : un N+1 qui
+grandit avec l'historique. Bornée par le temps, elle ne s'exécute plus que sur une poignée de lignes.
+
+**3. Joindre le relais au lieu de le chercher par réservation.** `findOneBy(['terrain' => …])` dans
+la boucle est le même N+1. Une jointure le supprime et écarte d'emblée les terrains sans relais.
+
+**4. Ne pas rattraper le passé au démarrage.** C'est le point de conception, et il déborde du reste :
+une commande périodique qui n'a pas tourné depuis longtemps doit reprendre **à maintenant**, pas
+depuis le début des temps. Sinon toute remise en service d'un ordonnanceur produit une salve.
+La borne temporelle du point 1 y répond mécaniquement — c'est pour ça que je la mets en premier.
+
+**Ce que je ne toucherais pas** : la logique métier elle-même (allumer au début, éteindre à la fin,
+basculer le relais en défaut sur échec) est juste. Le défaut n'est pas dans ce qu'elle décide, il est
+dans **l'ensemble sur lequel elle décide**.

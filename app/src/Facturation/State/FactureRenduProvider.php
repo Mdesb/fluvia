@@ -9,10 +9,10 @@ use ApiPlatform\State\ProviderInterface;
 use App\Facturation\Entity\Facture;
 use App\Facturation\Service\ResolveurComptesFacturation;
 use App\Securite\Entity\Utilisateur;
+use App\Securite\Service\CalculateurDroits;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\JsonResponse;
-use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Uid\Uuid;
 
@@ -30,6 +30,7 @@ final class FactureRenduProvider implements ProviderInterface
         private readonly EntityManagerInterface $em,
         private readonly ResolveurComptesFacturation $comptes,
         private readonly Security $security,
+        private readonly CalculateurDroits $calculateur,
     ) {
     }
 
@@ -46,13 +47,24 @@ final class FactureRenduProvider implements ProviderInterface
             throw new NotFoundHttpException('Facture introuvable.');
         }
 
+        // Cloisonnement (D3/D8) — la facture est résolue par un `find()` sur l'{id} d'URI, hors des
+        // extensions Doctrine de lecture. `facturation.lire` doit se recalculer contre l'établissement
+        // de la FACTURE, jamais contre l'en-tête X-Etablissement : sans quoi un agent `facturation.lire`
+        // sur A lisait la facture de B (montants + PII destinataire : SIRET, adresse). La branche
+        // `lire_soi` reste confrontée par `estLieA()` (l'utilisateur est bien lié à cette facture).
+        // Échec fermé en 404 (anti-oracle : ne pas confirmer l'existence d'une facture hors périmètre).
         $utilisateur = $this->security->getUser();
-        $peutTout = $this->security->isGranted('PERM', 'facturation.lire');
+        \assert($utilisateur instanceof Utilisateur || $utilisateur === null);
+
+        $etablissement = $facture->getEtablissement();
+        $codes = $utilisateur instanceof Utilisateur && $etablissement !== null
+            ? $this->calculateur->codesEffectifs($utilisateur, $etablissement->getId())
+            : [];
+        $peutTout = $this->calculateur->autorise($codes, 'facturation', 'lire');
         $peutSoi = $this->security->isGranted('PERM', 'facturation.lire_soi') && $facture->estLieA($utilisateur);
         if (!$peutTout && !$peutSoi) {
-            throw new AccessDeniedHttpException();
+            throw new NotFoundHttpException('Facture introuvable.');
         }
-        \assert($utilisateur instanceof Utilisateur || $utilisateur === null);
 
         $profil = $facture->getProfilExploitant();
         $emetteur = $profil !== null ? $this->comptes->parametre($profil)?->getMentionsLegalesEmetteur() : null;

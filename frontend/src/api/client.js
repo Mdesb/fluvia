@@ -183,6 +183,12 @@ export const api = {
     request(`/api/sessions-caisse/${id}/cloturer`, { method: 'POST', body: corps }),
 
   // Vente + encaissement.
+  // Historique : la collection et le detail existaient et n'etaient appeles nulle part.
+  ventes: (params) => request('/api/ventes', { query: params }),
+  vente: (id) => request(`/api/ventes/${id}`),
+  // `input: false` cote serveur, mais le processor lit bien un corps : motif, montant partiel
+  // facultatif, et jeton de rejeu apres validation d'une escalade.
+  rembourserVente: (id, corps) => request(`/api/ventes/${id}/rembourser`, { method: 'POST', body: corps }),
   creerVente: (corps) => request('/api/ventes', { method: 'POST', body: corps, timeoutMs: 20000 }),
   ajouterLigne: (venteId, corps) =>
     request(`/api/ventes/${venteId}/lignes`, { method: 'POST', body: corps, timeoutMs: 20000 }),
@@ -248,6 +254,12 @@ export const api = {
   reservationCreneaux: () => request('/api/reservation_creneaus', { query: { itemsPerPage: 200 } }),
   reservationActivites: () => request('/api/reservation_activites', { query: { itemsPerPage: 100 } }),
   reservations: () => request('/api/reservations', { query: { itemsPerPage: 200 } }),
+  // No-show (D27) : les deux operations existaient et n'etaient appelees de nulle part.
+  facturationsNoShow: () => request('/api/reservation_facturation_no_shows', { query: { itemsPerPage: 100 } }),
+  exonererNoShow: (id, corps) =>
+    request(`/api/reservation/facturations-no-show/${id}/exonerer`, { method: 'POST', body: corps }),
+  emettreVenteNoShow: (id, corps) =>
+    request(`/api/reservation/facturations-no-show/${id}/emettre-vente`, { method: 'POST', body: corps }),
   beneficiaires: () => request('/api/beneficiaires', { query: { itemsPerPage: 100 } }),
   // Écriture : réserver un créneau (créneau + organisateur en IRI). L'opération API Platform
   // n'accepte que le format JSON-LD (application/ld+json) — sans `ld`, le back répond 415.
@@ -257,6 +269,10 @@ export const api = {
 
   // Supervision accès / FMI (M3).
   supervisionAcces: () => request('/api/acces/supervision'),
+  // Verification d'un billet : le support par son numero imprime, puis son droit actif.
+  // `Appairage` n'expose aucun filtre : on charge et on croise cote client, faute de mieux.
+  supports: (params) => request('/api/supports', { query: params }),
+  appairages: () => request('/api/appairages', { query: { itemsPerPage: 200 } }),
   jaugesFmi: () => request('/api/jauge_fmis', { query: { itemsPerPage: 100 } }),
   passages: () =>
     request('/api/passages', { query: { itemsPerPage: 20, 'order[horodatage]': 'desc' } }),
@@ -280,6 +296,11 @@ export const api = {
   majTypeTarif: (id, corps) => request(`/api/type_tarifs/${id}`, { method: 'PATCH', body: corps }),
   supprimerTypeTarif: (id) => request(`/api/type_tarifs/${id}`, { method: 'DELETE' }),
   grilleTarifaires: () => request('/api/grille_tarifaires', { query: { itemsPerPage: 200 } }),
+  // Post et Patch existaient depuis le debut, appeles de nulle part. Pas de Delete cote serveur :
+  // un prix engage dans des ventes passees ne s'efface pas.
+  creerGrilleTarifaire: (corps) => request('/api/grille_tarifaires', { method: 'POST', body: corps }),
+  majGrilleTarifaire: (id, corps) =>
+    request(`/api/grille_tarifaires/${id}`, { method: 'PATCH', body: corps }),
   saisons: () => request('/api/saisons', { query: { itemsPerPage: 100 } }),
   creerSaison: (corps) => request('/api/saisons', { method: 'POST', body: corps }),
   majSaison: (id, corps) => request(`/api/saisons/${id}`, { method: 'PATCH', body: corps }),
@@ -352,6 +373,11 @@ export const api = {
 
   // --- Personnel ---
   employes: () => request('/api/employes', { query: { itemsPerPage: 200 } }),
+  // Absences : declarer, accepter, refuser. Trois operations qui n'avaient aucun bouton.
+  absences: () => request('/api/absences', { query: { itemsPerPage: 200 } }),
+  declarerAbsence: (corps) => request('/api/personnel/absences', { method: 'POST', body: corps }),
+  validerAbsence: (id) => request(`/api/personnel/absences/${id}/valider`, { method: 'POST' }),
+  refuserAbsence: (id) => request(`/api/personnel/absences/${id}/refuser`, { method: 'POST' }),
   roster: () => request('/api/personnel/roster'),
   badgeStaffs: () => request('/api/badge_staffs', { query: { itemsPerPage: 200 } }),
   revoquerBadgeStaff: (id, motif) =>
@@ -396,4 +422,18 @@ export const api = {
   creerEditorOption: (corps) => request('/api/editor/catalog/options', { method: 'POST', body: corps }),
   majEditorOption: (id, corps) => request(`/api/editor/catalog/options/${id}`, { method: 'PATCH', body: corps }),
   supprimerEditorOption: (id) => request(`/api/editor/catalog/options/${id}`, { method: 'DELETE' }),
+
+  // Fiche client de l'éditeur (ED-6). La collection ne rend QUE les clients du CRM de l'éditeur :
+  // les clients finaux des exploitants vivent dans la même table et n'ont rien à faire ici.
+  editorCustomers: () => request('/api/editor/customers'),
+  editorCustomer: (id) => request(`/api/editor/customers/${id}`),
+
+  // Facturation des abonnements (ED-7). La collection remonte en tête ce qui n'a PAS été facturé :
+  // un abonnement actif qu'on oublie ne produit aucun signal, seulement de l'argent jamais prélevé.
+  editorBilling: (mois) => request('/api/editor/billing', { query: mois ? { month: mois } : {} }),
+  emettreFactureAbonnement: (corps) => request('/api/editor/billing', { method: 'POST', body: corps }),
+
+  // Ce qui reste du a l'editeur (ED-8). Une facture soldee ne figure pas dans la reponse : le
+  // serveur la retire, l'ecran n'a pas a decider ce qu'il montre.
+  editorReceivables: () => request('/api/editor/receivables'),
 }

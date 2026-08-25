@@ -19,9 +19,10 @@ final class SmartFlowModuleManifestTest extends TestCase
         self::assertNull($manifest->capability(), 'Service réactif transverse, D22 : Smart Flow ne vend rien.');
         self::assertSame([], $manifest->dependencies());
         self::assertSame(
-            ['smart_flow.read', 'smart_flow.reschedule_manage', 'smart_flow.reschedule_read_own'],
+            ['smart_flow.read', 'smart_flow.reschedule_manage', 'smart_flow.reschedule_read_own', 'smart_flow.manage'],
             $manifest->permissions(),
-            'I2 (T11) ajoute smart_flow.read (lecture SlotWaitlistEntry, §2 du plan).',
+            'I2 (T11) ajoute smart_flow.read (lecture SlotWaitlistEntry, §2 du plan) ; smart_flow.manage '
+            . '(paramétrage) ajoutée en revue de cohérence, seedée par Version20260825090000.php.',
         );
         self::assertSame(['slot.released'], $manifest->eventsEmitted(), 'I2 (T11) : slot.released, produit par SlotFreedListener (RG-SF-03).');
         self::assertSame(

@@ -3,6 +3,7 @@ import { api, membres } from '../api/client.js'
 import { libelleProduit, prixIndicatif, euros, statutProduit } from '../api/produit.js'
 import Modal from './Modal.jsx'
 import { humaniser, mot } from '../api/vocabulaire.js'
+import TarifsProduit from './TarifsProduit.jsx'
 
 // Fiche produit détaillée — même niveau de détail que la fiche 360° client, en modale (D13 : la
 // modale est le défaut, créer un écran est l'exception ; consulter un produit depuis sa liste ne
@@ -242,29 +243,16 @@ export default function ProduitFicheModal({ open, produit, onClose, peutModifier
         </div>
       </div>
 
-      <Section titre="Tarifs">
-        {grilles.length === 0 ? (
-          <div className="empty">
-            Aucun tarif. Un produit sans tarif au guichet ne peut pas être vendu, et sa publication sera refusée.
-          </div>
-        ) : (
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Type de tarif</th>
-                <th className="num">Prix</th>
-              </tr>
-            </thead>
-            <tbody>
-              {grilles.map((g, i) => (
-                <tr key={g.id || i}>
-                  <td>{g.typeTarif?.libelle || g.typeTarif?.code || '—'}</td>
-                  <td className="num">{euros(g.prix)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+      <Section titre="Tarifs" aide="Le prix de ce produit, par type de tarif et par période.">
+        <TarifsProduit
+          produit={p}
+          grilles={grilles}
+          peutModifier={peutModifier}
+          onChange={async () => {
+            setDetail(await api.produit(produitId))
+            onModifie?.()
+          }}
+        />
       </Section>
 
       <Section

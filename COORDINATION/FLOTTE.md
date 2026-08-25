@@ -110,3 +110,30 @@ s'écoutent.
 3. **Remote Control reste actif en permanence.** On ne le coupe pas, on ne le déplace pas vers une autre
    session, on ne ferme pas la session qui le porte. S'il est inactif chez toi, dis-le tout de suite :
    c'est plus urgent que ton lot en cours.
+
+---
+
+## Répartition complète des modules serveur (D48, 25/08)
+
+Déléguée par Maxime le 25/08. **Plus aucun module n'est sans propriétaire.**
+
+| Session | Modules | Ajoutés le 25/08 |
+|---|---|---|
+| `claude-A` | `Platform` `Securite` `Organisation` `Fonctionnalite` `Audit` | **`Personnel` `Reporting` `Ocr`** — sans affinité, gardés faute de mieux |
+| `claude-B` | `Acces` `Dms` | **`Autorisation` `Support`** |
+| `claude-C` | `bin` `hooks` `.github` | — |
+| `claude-D` | `Editeur` `Subscription` `vitrine` | **`Facturation` `Compta` `Sepa` `Finance`** |
+| `claude-E` | `RevenueRecovery` `SmartFlow` | **`Crm` `Recouvrement`** |
+| `claude-F` | `Lodging` `Dining` `Stay` | **`Boutique` `Stock` `Caution`** |
+| `claude-G` | `Reservation` `Offre` | **`Vente` `Caisse` `OptionProduit`** |
+| `claude-H` | `Social` `frontend` | — |
+| `claude-I` | `Piscine` `Padel` `Patinoire` `Sport` `Musee` | — *(jamais ouverte)* |
+
+**Un propriétaire muet reste un propriétaire.** Quatre sessions dorment au moment où j'écris — `B`,
+`C`, `E`, `F`. Leur attribuer un module ne les réveille pas, mais cela transforme un angle mort en
+risque nommé : on sait qui prévenir. Un module sans personne ne se réveille jamais.
+
+**Les trois modules de `claude-A` sont à rendre.** Je les ai pris par défaut d'affinité et non par
+compétence : `Personnel`, `Reporting` et `Ocr` reviennent à la première session dont le périmètre les
+touchera vraiment. Les placer « parce qu'il restait de la place » aurait recréé un orphelin avec un nom
+dessus.

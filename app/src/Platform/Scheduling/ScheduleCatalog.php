@@ -56,6 +56,14 @@ final class ScheduleCatalog
                 critical: true,
             ),
             new ScheduledTask(
+                'subscription:facturer-le-mois',
+                1440,
+                "Les abonnements du mois ne sont pas facturés : le client utilise le logiciel sans "
+                . "payer, et rien ne le signale. C'est le défaut des options de mi-mois — corrigé "
+                . "depuis — mais à l'échelle du mois entier et de tous les clients.",
+                critical: true,
+            ),
+            new ScheduledTask(
                 'boutique:liberer-paniers-expires',
                 5,
                 "Un panier abandonné retient sa place indéfiniment. Les billets qu'il bloque ne sont "
@@ -92,15 +100,27 @@ final class ScheduleCatalog
             ),
 
             // --- Exploitation ----------------------------------------------------------------------
-            // La commande personnel:traiter-echeances-sortie N EST PAS ICI, et c'est délibéré. Elle exige un
-            // argument agentEmail — l'identité de qui traite la sortie, pour la traçabilité — donc
-            // elle ne peut pas s'exécuter sans surveillance. La laisser au catalogue produirait un
-            // échec rouge tous les jours que personne ne pourrait corriger, et on apprendrait à
-            // l'ignorer : c'est le défaut des entrées grisées, appliqué à l'exploitation.
+            // `personnel:traiter-echeances-sortie` était absente de ce catalogue du 25/08 au matin
+            // jusqu'à cet après-midi. Elle exigeait un argument obligatoire — l'identité de l'agent qui
+            // révoque — donc elle ne pouvait pas tourner sans surveillance, donc je l'avais retirée
+            // plutôt que de laisser un échec rouge quotidien que personne ne pourrait corriger.
             //
-            // Le manque reste réel et grave — un salarié parti garde ses accès. Il faut décider quelle
-            // identité porte un traitement automatique dans le journal d'audit, ce qui est un choix,
-            // pas une réparation. Consigné comme tâche ; le module Personnel n'a aujourd'hui aucun propriétaire.
+            // Pendant tout ce temps, **un salarié dont le contrat était fini gardait ses accès**.
+            // L'en-tête de la commande réclamait pourtant « un compte technique dédié pour l'exécution
+            // planifiée » depuis son écriture : il n'avait jamais été créé. Encore le motif de la
+            // semaine — le mécanisme existe, l'appel manque.
+            //
+            // `AccessRevocationServiceAccount` le crée désormais, sur le patron posé par `claude-D`
+            // pour la facturation : nommé pour se lire dans un journal d'audit, créé `Suspendu` donc
+            // structurellement non connectable, mot de passe aléatoire que personne ne conserve.
+            new ScheduledTask(
+                'personnel:traiter-echeances-sortie',
+                1440,
+                "Un salarié dont le contrat est fini garde ses accès : son statut ne bascule pas et son "
+                . "badge n'est jamais révoqué. Personne ne le signale — ni erreur, ni alerte.",
+                critical: true,
+            ),
+
             new ScheduledTask(
                 'personnel:recalculer-fenetres-badges',
                 60,
@@ -143,7 +163,10 @@ final class ScheduleCatalog
             new ScheduledTask(
                 'padel:eclairage:commander',
                 5,
-                "L'éclairage des terrains n'est ni allumé ni éteint automatiquement.",
+                "L'éclairage des terrains n'est ni allumé ni éteint automatiquement. "
+                . "⚠ PREMIER PASSAGE NON SÛR : la commande balaie toutes les réservations sans borne "
+                . "de date et pilote un relais physique — signalé par claude-G. À borner dans le temps "
+                . "(périmètre claude-I) avant de la déclarer sûre.",
             ),
         ];
     }

@@ -42,6 +42,7 @@ The first-class events published on the bus by the core and the modules. An even
 | `subscription.created` | SEPA/Subscription | recurring_amount | Accounting |
 | `subscription.suspended` | SEPA/Subscription | reason | Revenue Recovery |
 | `subscription.activated` | Subscription (`SubscriptionActivator`, ED-3) | planCode, capabilities, effectiveFrom | **Subscription** (provisioning ED-3) |
+| `establishment.provisioned` | Subscription (`ProvisionOnSubscriptionActivated`, ED-3) | establishmentId, adminUserId, idempotencyKey | **Subscription** (courriel de bienvenue, ED-9) |
 | `access.recorded` | Access control | door, credential | Reporting, Smart Flow (footfall) |
 | `access.denied` | Access control | reason | Supervision |
 | `access.card_recharged` | Access control (`CardRechargeHandler`, CQ-1) | droitId, supportId, creditsAdded, creditBalanceAfter, newExpiryAt?, saleId | Reporting, CRM, Smart Flow |

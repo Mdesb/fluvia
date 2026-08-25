@@ -213,11 +213,12 @@ export default function App() {
           etablissements={etablissements}
           session={session}
           capacites={me?.capacitesActives || []}
+          droits={droits}
           onSessionRefresh={rechargerSession}
         />
       )}
       {onglet === 'catalogue' && <Catalogue etabActif={etabActif} cible={cible} onCibleConsommee={() => setCible(null)} droits={droits} />}
-      {onglet === 'reservation' && <Reservation etabActif={etabActif} />}
+      {onglet === 'reservation' && <Reservation etabActif={etabActif} droits={droits} session={session} />}
       {onglet === 'supervision' && <Supervision etabActif={etabActif} />}
       {onglet === 'pilotage' && (
         <Pilotage etabActif={etabActif} etablissements={etablissements} />
@@ -229,7 +230,7 @@ export default function App() {
       {onglet === 'patinoire' && <Patinoire etabActif={etabActif} />}
       {onglet === 'padel' && <Padel etabActif={etabActif} />}
       {onglet === 'musee' && <Musee etabActif={etabActif} />}
-      {onglet === 'personnel' && <Personnel etabActif={etabActif} />}
+      {onglet === 'personnel' && <Personnel etabActif={etabActif} droits={droits} />}
       {onglet === 'parametres' && (
         <Parametres etabActif={etabActif} etablissements={etablissements} droits={droits} />
       )}

@@ -76,3 +76,39 @@ Ne touche pas un chemin déjà en `WIP` par une autre instance.
 | CLI-2 | Mes reservations, mes billets, mes commandes — lecture cloisonnee par les droits `_soi` | `client/**` | *a assigner* | CLAIM | 25/08 |
 | CLI-3 | Ma carte et mon solde : porte-monnaie, cartes multi-entrees, recharge | `client/**` | *a assigner* | CLAIM | 25/08 |
 | CLI-4 | Coquille native (iOS/Android) — **non publiable avant immatriculation, cf. SOC-4** | `client-natif/**` | *a assigner* | EXTERNE | 25/08 |
+
+| UI-1 | **Modifier un prix** — `GrilleTarifaire` expose Post et Patch, le front ne fait que lire. Plainte directe de Maxime | `frontend/**` | **claude-H** | CLAIM | 25/08 |
+| UI-2 | Options produit : le chantier entier — creation, valeurs, rattachement, apercu caisse | `frontend/**`, `app/src/OptionProduit/**` | *a assigner* | CLAIM | 25/08 |
+| UI-3 | Vue rapide du billet : produit, type, entrees restantes, ou dates si abonnement | `frontend/**` | *a assigner* | CLAIM | 25/08 |
+| UI-4 | Vue calendrier type agenda : ajout et suppression rapides d evenements | `frontend/**` | *a assigner* | CLAIM | 25/08 |
+| UI-5 | Informations client : champs supplementaires, dont moyen de paiement prefere (**ajout serveur**, nexiste pas) | `app/src/Crm/**`, `frontend/**` | *a assigner* | CLAIM | 25/08 |
+| ACT-5 | Categories automatiques par verticale : un produit daffutage doit tomber dans les bons axes sans saisie | `app/src/{Patinoire,Offre}/**` | *a assigner* | CLAIM | 25/08 |
+| ACT-6 | Jauge propre aux cours (padel, tennis) — a confirmer avec Maxime avant den faire un lot | `app/src/Reservation/**` | *a assigner* | BLOCKED | 25/08 |
+| VTE-1 | `Vente` : ajouter OrderFilter sur la date, DateFilter, SearchFilter sur le client — bloque lhistorique des ventes | `app/src/Vente/**` | *a assigner* | CLAIM | 25/08 |
+| PER-1 | `personnel:traiter-echeances-sortie` exige un agentEmail : decider quelle identite porte un traitement automatique dans laudit | `app/src/Personnel/**` | *a assigner* | CLAIM | 25/08 |
+
+| CMP-0 | Spec SDD du module de campagnes — frontiere avec Revenue Recovery, audience, consentement, attribution | `specs/campagnes/**` | **claude-A** | REVIEW | 25/08 |
+| CMP-1 | **PREALABLE** — remonter `ClientNotificationInterface` de SmartFlow vers Platform (trois modules en dependent) | `app/src/Platform/**`, `app/src/SmartFlow/**` | **claude-A** | CLAIM | 25/08 |
+| CMP-2 | Audience : definition dun segment sur les donnees de comportement, previsualisation du nombre de personnes touchees | `app/src/Campagne/**` | *a assigner* | CLAIM | 25/08 |
+| CMP-3 | Message et canaux, **avec le consentement rendu incontournable a lenvoi** — pas verifie, impossible a contourner | `app/src/Campagne/**` | *a assigner* | CLAIM | 25/08 |
+| CMP-4 | Planification : ponctuelle, recurrente, ou declenchee par un evenement de domaine (anniversaire, abonnement a echeance, carte a une entree) | `app/src/Campagne/**` | *a assigner* | CLAIM | 25/08 |
+| CMP-5 | **ATTRIBUTION** — qui est revenu, ce quil a achete, combien ca a rapporte. Cest le seul avantage quun outil generaliste ne peut pas copier | `app/src/Campagne/**` | *a assigner* | CLAIM | 25/08 |
+| CMP-6 | Adaptateur denvoi reel (courriel, SMS) — **EXTERNE : exige un prestataire, donc un contrat, donc limmatriculation** | `app/src/Campagne/**` | *a assigner* | EXTERNE | 25/08 |
+
+| PAY-0 | Spec du parcours de paiement : recueil conjoint carte + mandat, bascule sur rejet, explication au client | `specs/paiement/**` | **claude-A** | CLAIM | 25/08 |
+| PAY-1 | Recueil conjoint au guichet : carte par le terminal (**jamais de numero saisi dans lapplication**), mandat signe | `app/src/{Vente,Sepa}/**` | *a assigner* | CLAIM | 25/08 |
+| PAY-2 | Bascule automatique carte -> prelevement sur rejet, avec preavis au client avant tout prelevement | `app/src/{Sepa,Facturation}/**` | *a assigner* | CLAIM | 25/08 |
+| PAY-3 | Rejet CARTE : lentite nexiste pas, seul le rejet SEPA est modelise | `app/src/Vente/**` | *a assigner* | CLAIM | 25/08 |
+| PAY-4 | Explication du double recueil dans le parcours client — une phrase avant la saisie, pas une note de bas de page | `frontend/**`, `vitrine/**` | *a assigner* | CLAIM | 25/08 |
+| PAY-5 | Prestataire bancaire : jeton recurrent, champs heberges en ligne, lecture des retours pain.002 | `app/src/{Vente,Sepa}/**` | *a assigner* | EXTERNE | 25/08 |
+
+| UI-6 | **Choix du tarif au guichet** — lAPI laccepte deja, lecran choisit tout seul. Cause probable de la proliferation de produits (D44) | `frontend/**` | **claude-H** | CLAIM | 25/08 |
+| VTE-2 | Vente directe sans session de caisse, **sans especes**, ouverte par une PERMISSION (tranche par Maxime, D45-bis) | `app/src/{Vente,Caisse}/**` | *a assigner* | CLAIM | 25/08 |
+
+| VTE-3 | Correction de reglement : ecriture compensatoire datee du jour du geste, rattachee a la vente, scellee (D45) | `app/src/{Vente,Caisse}/**` | *a assigner* | CLAIM | 25/08 |
+| VTE-4 | Permission dediee a la correction de reglement, distincte de caisse.gerer, tracee a laudit | `app/src/Securite/**` | **claude-A** | CLAIM | 25/08 |
+| FAC-1 | Devis, bon de commande, bon de livraison : la chaine complete jusqua la facture existante | `app/src/Facturation/**` | *a assigner* | CLAIM | 25/08 |
+
+| VTE-5 | Attente de paiement **et debiteur** portes par le CANAL, exiges a la construction — six canaux, dont OTA ou le debiteur nest pas le client (D46-bis) | `app/src/{Offre,Vente}/**` | *a assigner* | CLAIM | 25/08 |
+| VTE-6 | Date de modification sur vente et facture, et **affichage en ecart** et non en dates brutes | `app/src/{Vente,Facturation}/**`, `frontend/**` | *a assigner* | CLAIM | 25/08 |
+| CAI-1 | Une correction de reglement peut pointer lAlerteEcartCaisse quelle explique — un ecart explique cesse detre un ecart | `app/src/Caisse/**` | *a assigner* | CLAIM | 25/08 |

@@ -281,3 +281,55 @@ seul(e) qu'un lot est fini.
 5. **Ton signalement sur `CommanderEclairageCommand`** — balayage sans borne de date qui rattrape tout
    le passé. Padel ne t'est **pas** ouvert pour ça. Écris ce que tu ferais dans ton rapport, ça servira
    à `claude-I`.
+
+---
+
+## 2026-08-25 · RÉPARTITION — ton périmètre s'élargit (D48)
+
+Maxime m'a délégué la répartition des **dix-sept modules serveur qui n'avaient aucun propriétaire** —
+802 fichiers, à peu près autant que ce que les neuf sessions possédaient déjà. Ils sont tous attribués.
+
+**Le raisonnement, pour que tu saches sur quoi tu t'engages** : j'avais proposé de n'en attribuer que
+trois et de déclarer les autres orphelins. J'ai changé d'avis. **Un propriétaire endormi peut être
+réveillé ; un module orphelin, non.** Le premier est un risque avec un nom dessus, le second est un
+angle mort — et cette semaine les angles morts ont coûté cinq jours de front sans personne, un test
+rouge pendant vingt-quatre heures et trente-cinq entités sans protection d'écriture.
+
+**Ce que ça ne veut pas dire** : que tu doives tout reprendre. Un module attribué n'est pas un module à
+réécrire. Tu en es responsable **quand quelqu'un y touche ou quand quelque chose y casse** — à
+commencer par ses tests, que plus personne ne lançait.
+
+`COORDINATION/FLOTTE.md` porte la carte complète.
+
+### Tu reçois `Vente`, `Caisse`, `OptionProduit`
+
+Tu possédais `Offre` : produit et vente sont **une seule chaîne**, et tu étais la seule à en tenir la
+moitié. C'est l'attribution la plus évidente des six.
+
+**COMMENCE PAR CECI, ça bloque `claude-H` depuis ce matin.** `Vente` n'expose ni tri ni filtre par date
+ni filtre par client : l'historique des ventes est donc inutilisable, et `claude-H` a **refusé** de
+contourner en filtrant en mémoire — un filtre qui ne porterait que sur la page chargée ferait conclure
+à un caissier que sa vente n'existe pas. Elle avait raison.
+
+Il manque, sur `Vente` : un `OrderFilter` sur la date — sans lui « les cinquante dernières » n'est même
+pas garanti, l'ordre est celui de la base — un `DateFilter`, et un `SearchFilter` sur le client.
+**Trois attributs sur une ligne.**
+
+**ENSUITE, et c'est plus gros :**
+
+1. **D44** — le guichet choisit **un** tarif tout seul (`Caisse.jsx` ligne 141) alors que l'API accepte
+   `typeTarif` par ligne. C'est ce qui force les exploitants à créer « Entrée enfant » comme produit
+   distinct au lieu d'une ligne tarifaire. Le modèle est propre, l'écran force à le contourner. Côté
+   serveur il n'y a probablement rien à faire — vérifie-le et dis-le à `claude-H`.
+2. **D46-bis** — l'attente de paiement et le **débiteur** portés par le canal. Six canaux, dont l'OTA
+   où le débiteur **n'est pas le client** : une vente OTA non soldée n'est pas une créance, c'est un
+   rapprochement avec le partenaire. La traiter comme un impayé enverrait une relance à quelqu'un qui a
+   payé. **Un canal ne doit pas pouvoir exister sans déclarer son attente et son débiteur.**
+3. **D45** — la correction de règlement : écriture compensatoire datée du jour du geste, rattachée à la
+   vente, **jamais une modification** — l'inaltérabilité NF525 la refusera, et elle aura raison. La
+   permission `vente.corriger_reglement` existe depuis ce matin.
+4. **D46** — une correction peut pointer l'`AlerteEcartCaisse` qu'elle explique. Un écart expliqué
+   cesse d'être un écart.
+5. **D44-bis** — la vente directe sans session de caisse, ouverte par **permission** (tranché par
+   Maxime). La règle vérifiable : **elle refuse les espèces**. Sans espèces, rien à compter, donc rien
+   à clôturer.

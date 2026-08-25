@@ -503,3 +503,29 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 
 /* Un client qui a payé sans obtenir sa plateforme : la ligne doit se voir sans être lue. */
 .ligne-alerte > td { background: var(--crit-bg); }
+
+/* ── Fiche client de l'éditeur (ED-6) ─────────────────────────────────────────────────────────────
+   Liste à gauche, fiche à droite. Sous 900 px la grille s'effondre en une colonne : sur un écran
+   étroit, deux colonnes donnent deux zones inutilisables plutôt qu'une lisible. */
+
+.grid-2 { display: grid; grid-template-columns: minmax(260px, 380px) 1fr; gap: 16px; align-items: start; }
+@media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } }
+
+.liste-clients { list-style: none; margin: 12px 0 0; padding: 0; max-height: 60vh; overflow-y: auto; }
+
+.ligne-client {
+  display: flex; flex-direction: column; gap: 2px; align-items: flex-start;
+  width: 100%; text-align: left;
+  padding: 10px 12px; border: 1px solid transparent; border-radius: var(--radius);
+  background: transparent; color: var(--ink); cursor: pointer;
+}
+.ligne-client:hover { background: var(--panel-2); }
+.ligne-client.active { background: var(--accent-soft); border-color: var(--accent); }
+.ligne-client .mut { font-size: 13px; }
+
+.bloc-abo { padding: 10px 0; border-bottom: 1px solid var(--line); }
+.bloc-abo:last-of-type { border-bottom: none; }
+
+.liste-acces { list-style: none; margin: 0; padding: 0; }
+.liste-acces li { padding: 10px 0; border-bottom: 1px solid var(--line); }
+.liste-acces li:last-child { border-bottom: none; }
