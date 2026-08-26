@@ -210,6 +210,12 @@ while read -r ancien nouveau ref; do
         lancer garde-fou-defauts-mapping.php "--contre=$BASE"
     fi
 
+    # Une entite ne doit pas laisser ecrire son propre etablissement (D41).
+    if [ -f "$ARBRE/bin/garde-fou-etablissement-ecrivable.php" ]; then
+        echo "── Établissement écrivable (D41)"
+        lancer garde-fou-etablissement-ecrivable.php "--contre=$BASE"
+    fi
+
     # Droits du frontend (D39), ecrit par claude-H. Il tourne sur l'HOTE : `node` n'est pas dans
     # l'image PHP, et l'arbre pousse est deja extrait ici. S'il manque, on le dit.
     if [ -f "$ARBRE/frontend/scripts/verifier-droits.mjs" ]; then

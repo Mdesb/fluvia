@@ -79,6 +79,9 @@ lancer_gf garde-fou-cloisonnement.php || ECHEC=1
 # Un DEFAULT pose en migration doit etre declare au mapping (D32).
 [ -f "$RACINE/bin/garde-fou-defauts-mapping.php" ] && { lancer_gf garde-fou-defauts-mapping.php || ECHEC=1; }
 
+# Une entite ne doit pas laisser ecrire son propre etablissement (D41).
+[ -f "$RACINE/bin/garde-fou-etablissement-ecrivable.php" ] && { lancer_gf garde-fou-etablissement-ecrivable.php || ECHEC=1; }
+
 # Nommage : sur les fichiers **indexés** et ajoutés. `--cached` est ce qui sera réellement commité,
 # et c'est aussi ce qui évite de dépendre d'une révision de référence inexistante à ce stade.
 if [ -f "$RACINE/bin/garde-fou-nommage-anglais.php" ]; then

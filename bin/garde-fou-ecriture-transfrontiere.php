@@ -46,13 +46,6 @@ const MOTIF_ECRITURE = '/new (?:Post|Patch|Put)\s*\(/';
 const MOTIF_DENORMALISATION = '/denormalizationContext:\s*\[\s*\'groups\'\s*=>\s*\[([^\]]*)\]/';
 const MOTIF_TENANT = '/ManyToOne\(targetEntity:\s*Etablissement::class/';
 /** Relation + son bloc d'attributs jusqu'aux Groups qui la qualifient. */
-/** La relation vers `Etablissement` et la propriété qu'elle porte. */
-// ⚠ `[^;]*` apres le nom : la forme la plus courante est `private ?Etablissement $etablissement
-// = null;`. Un motif exigeant le point-virgule immediatement apres le nom echouait sur onze
-// entites, dont SessionCaisse, MandatSepa et Facture.
-const MOTIF_REL_ETAB = '/ManyToOne\(targetEntity:\s*Etablissement::class.*?private\s+[^;]*\$\w+[^;]*;/s';
-const MOTIF_SETTER_ETAB = '/function setEtablissement\s*\(/';
-
 const MOTIF_RELATION = '/(ManyToOne|ManyToMany|OneToMany)\(targetEntity:\s*(\w+)::class[^\]]*?\][^;]*?#\[Groups\(\[([^\]]*)\]/s';
 
 /**
@@ -162,53 +155,6 @@ foreach ($nonCloisonnees as $nom) {
     }
 }
 
-// --- RÈGLE 2 : l'entité laisse écrire son PROPRE établissement (D41) ---------------------------
-//
-// La règle 1 regarde un propriétaire non cloisonné écrivant vers du cloisonné. Celle-ci regarde
-// l'inverse, et je l'avais manquée : l'entité EST cloisonnée, mais le champ qui la rattache est
-// modifiable depuis le corps de la requête — donc l'appelant choisit à quel établissement elle
-// appartient. Trouvé par claude-H sur `PointDeVente`.
-foreach ($sources as $nom => $source) {
-    if (!str_contains($source, '#[ApiResource') || preg_match(MOTIF_ECRITURE, $source) !== 1) {
-        continue;
-    }
-    // On ne sort PAS si le bloc de relation est illisible : la voie « dénormalisation par défaut »
-    // n'en a pas besoin — sans groupe déclaré, c'est le mutateur qui expose, pas le groupe. Sortir
-    // ici rendait le garde-fou aveugle à la voie MAJORITAIRE, celle qui ne se voit nulle part dans
-    // le fichier.
-    $bloc = preg_match(MOTIF_REL_ETAB, $source, $rel) === 1 ? $rel[0] : '';
-    $voie = null;
-
-    if ($bloc !== '' && preg_match(MOTIF_DENORMALISATION, $source, $contexte) === 1) {
-        preg_match_all('/\'([^\']+)\'/', $contexte[1], $trouves);
-        foreach ($trouves[1] as $groupe) {
-            if (str_contains($bloc, "'" . $groupe . "'")) {
-                $voie = 'groupe';
-                break;
-            }
-        }
-    } elseif (
-        // ⚠ Exiger l'ABSENCE de contexte, pas seulement l'echec de lecture du bloc. Une entite qui
-        // declare un contexte et n'y met pas le champ ne l'expose PAS ; la classer exposee est une
-        // accusation fausse, et gelee dans la ligne de base elle le reste pour toujours.
-        preg_match(MOTIF_DENORMALISATION, $source) !== 1
-        && preg_match(MOTIF_SETTER_ETAB, $source) === 1
-    ) {
-        // Aucun groupe déclaré : API Platform dénormalise TOUTE propriété dotée d'un mutateur.
-        $voie = 'defaut';
-    }
-
-    if ($voie === null) {
-        continue;
-    }
-
-    $constats['etab:' . $nom] = [
-        'entite' => $nom,
-        'relation' => $voie === 'groupe' ? 'groupe d\'écriture' : 'dénormalisation par défaut',
-        'cible' => 'Etablissement',
-    ];
-}
-
 ksort($constats);
 
 if (!is_file(LIGNE_DE_BASE)) {
@@ -262,43 +208,16 @@ $nouveaux = array_values(array_diff(array_keys($constats), array_keys($base['ent
 
 if ($nouveaux !== []) {
     $echec = true;
-    $relations = array_values(array_filter($nouveaux, static fn (string $c): bool => !str_starts_with($c, 'etab:')));
-    $etablissements = array_values(array_filter($nouveaux, static fn (string $c): bool => str_starts_with($c, 'etab:')));
-
-    if ($relations !== []) {
-        echo "\n=== ÉCHEC — écriture qui traverse la frontière ===\n\n";
-        foreach ($relations as $cle) {
-            $c = $constats[$cle];
-            echo sprintf("  %s  --%s-->  %s\n", $c['entite'], $c['relation'], $c['cible']);
-        }
-        echo "\n  Cette entité n'est cloisonnée par rien, et sa relation est dans le groupe d'écriture.\n";
-        echo "  Un appelant y rattache donc l'entité d'un AUTRE établissement, sans qu'aucun code n'ait\n";
-        echo "  à résoudre quoi que ce soit : le sérialiseur désérialise l'IRI tel quel.\n\n";
-        echo "  Deux issues : cloisonner le propriétaire (extension ou champ), ou retirer la relation du\n";
-        echo "  groupe d'écriture et la faire poser par un Processor qui confronte la cible au périmètre.\n";
+    echo "\n=== ÉCHEC — écriture qui traverse la frontière ===\n\n";
+    foreach ($nouveaux as $cle) {
+        $c = $constats[$cle];
+        echo sprintf("  %s  --%s-->  %s\n", $c['entite'], $c['relation'], $c['cible']);
     }
-
-    if ($etablissements !== []) {
-        echo "\n=== ÉCHEC — l'entité laisse écrire son PROPRE établissement (D41) ===\n\n";
-        foreach ($etablissements as $cle) {
-            $c = $constats[$cle];
-            echo sprintf("  %-34s %s\n", $c['entite'], $c['relation']);
-        }
-        echo "\n  L'appelant choisit à quel établissement l'entité appartient. C'est la plus grosse classe\n";
-        echo "  de faille du projet, et l'outillage y était structurellement aveugle : le garde-fou de\n";
-        echo "  cloisonnement inspecte les résolutions, jamais les groupes de sérialisation.\n";
-        echo "\n  Le correctif dépend de la voie, et elles n'ont pas le même remède :\n";
-        echo "\n";
-        echo "  · « groupe d'écriture » — le champ porte un groupe de dénormalisation. Retire-le de ce\n";
-        echo "    groupe : la relation se pose côté serveur, jamais depuis le corps de la requête.\n";
-        echo "\n";
-        echo "  · « dénormalisation par défaut » — l'entité n'a AUCUN denormalizationContext, donc API\n";
-        echo "    Platform rend écrivable toute propriété dotée d'un mutateur. Il n'y a pas de groupe à\n";
-        echo "    retirer : déclare un denormalizationContext qui EXCLUT l'établissement, ou supprime\n";
-        echo "    `setEtablissement()` si rien de légitime ne l'appelle.\n";
-        echo "\n  Cette seconde voie est la majoritaire, et la moins visible : rien dans le fichier ne\n";
-        echo "  signale que le champ est exposé — c'est l'absence de déclaration qui l'expose.\n";
-    }
+    echo "\n  « " . $constats[$nouveaux[0]]['entite'] . " » n'est cloisonnée par rien, et sa relation est dans le groupe\n";
+    echo "  d'écriture. Un appelant y rattache donc l'entité d'un AUTRE établissement, sans qu'aucun\n";
+    echo "  code n'ait à résoudre quoi que ce soit : le sérialiseur désérialise l'IRI tel quel.\n\n";
+    echo "  Deux issues : cloisonner le propriétaire (extension ou champ), ou retirer la relation du\n";
+    echo "  groupe d'écriture et la faire poser par un Processor qui confronte la cible au périmètre.\n";
 }
 
 if (count($constats) > $plafond) {
@@ -314,12 +233,7 @@ if (count($constats) > $plafond) {
         . "  Les deux seules issues :\n"
         . "    · corriger ce qui a fait monter le compte — l'endroit exact est listé ci-dessus ;\n"
         . "    · si la hausse est délibérée, elle demande l'accord de l'intégrateur : le plafond\n"
-        . "      de référence se change sur « main », pas ici.\n"
-        . "\n"
-        . "  ⚠ La cause la plus fréquente n'est pas une faute : ta branche est simplement EN\n"
-        . "  RETARD sur la référence, et un plafond a baissé entre-temps. Commence par ça :\n"
-        . "\n"
-        . "      git fetch origin && git merge --no-edit origin/main\n";
+        . "      de référence se change sur « main », pas ici.\n";
 }
 
 if ($plafondReference !== null && $plafond > $plafondReference) {
@@ -335,12 +249,7 @@ if ($plafondReference !== null && $plafond > $plafondReference) {
         . "  Les deux seules issues :\n"
         . "    · corriger ce qui a fait monter le compte — l'endroit exact est listé ci-dessus ;\n"
         . "    · si la hausse est délibérée, elle demande l'accord de l'intégrateur : le plafond\n"
-        . "      de référence se change sur « main », pas ici.\n"
-        . "\n"
-        . "  ⚠ La cause la plus fréquente n'est pas une faute : ta branche est simplement EN\n"
-        . "  RETARD sur la référence, et un plafond a baissé entre-temps. Commence par ça :\n"
-        . "\n"
-        . "      git fetch origin && git merge --no-edit origin/main\n";
+        . "      de référence se change sur « main », pas ici.\n";
 }
 
 if ($echec) {

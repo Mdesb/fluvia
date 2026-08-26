@@ -197,6 +197,18 @@ else
     executer "Défauts au mapping (D32)" php_racine bin/garde-fou-defauts-mapping.php
 fi
 
+# 12. Une entité ne doit pas laisser écrire son PROPRE établissement (D41). L'entité est
+#     cloisonnée, mais le champ qui la rattache est modifiable depuis le corps de la requête :
+#     l'appelant choisit à quel établissement elle appartient. Trouvé par claude-H sur
+#     PointDeVente. Cliquet séparé du n°8 — ajouter une règle à un cliquet existant relève
+#     toujours son plafond, et il ne peut pas distinguer une dette qui grossit d'une règle qui
+#     mesure ce qui n'était pas compté.
+if [ -n "${REFERENCE:-}" ]; then
+    executer "Établissement écrivable (D41)" php_racine bin/garde-fou-etablissement-ecrivable.php "--contre=$REFERENCE"
+else
+    executer "Établissement écrivable (D41)" php_racine bin/garde-fou-etablissement-ecrivable.php
+fi
+
 # 5. i18n : pas de chaîne d'UI en dur — SANS OBJET tant que la couche i18n n'existe pas (aucun
 #    catalogue, aucun usage du traducteur dans app/src). Acté par l'intégrateur le 21/08.
 # 6. CSRF — SANS OBJET : tous les pare-feux sont `stateless: true` et l'authentification est un JWT
