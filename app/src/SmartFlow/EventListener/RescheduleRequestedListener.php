@@ -6,9 +6,12 @@ namespace App\SmartFlow\EventListener;
 
 use App\Organisation\Entity\Etablissement;
 use App\Platform\Event\DomainEvent;
+use App\Platform\Notification\ClientNotification;
+use App\Platform\Notification\ClientNotifierInterface;
+use App\Platform\Notification\NotificationBasis;
+use App\Platform\Notification\NotificationChannel;
 use App\SmartFlow\Entity\RescheduleProposal;
 use App\SmartFlow\Enum\RescheduleProposalStatus;
-use App\SmartFlow\Port\ClientNotificationInterface;
 use App\SmartFlow\Service\CompatibleSlotFinder;
 use App\SmartFlow\Service\ReservationSlotReader;
 use Doctrine\ORM\EntityManagerInterface;
@@ -18,8 +21,11 @@ use Symfony\Component\Uid\Uuid;
 
 /**
  * Abonné à `booking.reschedule_requested` (RG-SF-08..12, plan-smart-flow.md T4) — crée une
- * `RescheduleProposal` en `searching`, tente `CompatibleSlotFinder` (RG-SF-09), notifie le client si un
- * créneau compatible est trouvé (RG-SF-10, passe alors en `proposed`).
+ * `RescheduleProposal` en `searching`, tente `CompatibleSlotFinder` (RG-SF-09), notifie le client via le
+ * port transverse `App\Platform\Notification\ClientNotifierInterface` si un créneau compatible est
+ * trouvé (RG-SF-10, passe alors en `proposed`) — remplace l'ancien port propre à Smart Flow
+ * (`App\SmartFlow\Port\ClientNotificationInterface`, supprimé) : le consentement RGPD est désormais
+ * imposé par le décorateur du port transverse, plus par ce module.
  *
  * **Best-effort, par obligation (D7, patron `App\Platform\Event\Legacy\LegacyEventBridge`).** Ce
  * listener s'exécute dans la **même transaction PHP/Doctrine** que l'émetteur
@@ -41,7 +47,7 @@ final class RescheduleRequestedListener implements EventSubscriberInterface
         private readonly EntityManagerInterface $em,
         private readonly ReservationSlotReader $slotReader,
         private readonly CompatibleSlotFinder $finder,
-        private readonly ClientNotificationInterface $notifier,
+        private readonly ClientNotifierInterface $notifier,
         private readonly ?LoggerInterface $logger = null,
     ) {
     }
@@ -119,7 +125,24 @@ final class RescheduleRequestedListener implements EventSubscriberInterface
         $this->em->flush();
 
         if (RescheduleProposalStatus::Proposed === $proposal->getStatus()) {
-            $this->notifier->notifyRescheduleProposal($proposal);
+            // ⚠ BASE LÉGALE À CONFIRMER PAR claude-A : `Consentement` par défaut (le plus strict) —
+            // une proposition de report après no-show est peut-être un message dû au titre du contrat
+            // (`Contractuelle`, cf. `App\Subscription\EventListener\EnvoyerCourrielDeBienvenue`), à
+            // trancher une fois le fondement RGPD de Smart Flow arbitré.
+            $this->notifier->notify(new ClientNotification(
+                $proposal->getCustomerId(),
+                NotificationChannel::Email,
+                'smart_flow.reschedule_proposed',
+                [
+                    'proposalId' => $proposal->getId()->toRfc4122(),
+                    'proposedSlotId' => $proposal->getProposedSlotId()?->toRfc4122(),
+                ],
+                // D37 : l'instant métier est celui de l'événement source (`booking.reschedule_requested`),
+                // jamais l'heure d'exécution de ce listener.
+                $event->occurredAt,
+                'smart_flow',
+                NotificationBasis::Consentement,
+            ));
         }
     }
 
