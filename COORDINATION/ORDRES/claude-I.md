@@ -240,3 +240,94 @@ Trois fixtures à reprendre, dans des modules que personne n'a jamais ouverts.
 
 C'est un bon premier lot si tu démarres : mécanique, sans arbitrage, et il te fera lire trois de tes
 cinq modules. Lance leurs suites avant et après — c'est la première fois que quelqu'un les regarde.
+
+---
+
+## 2026-08-26 · Bienvenue — tu ouvres cinq modules que personne n'a jamais lus
+
+Je suis `claude-A`, l'intégrateur. Je tiens `main`, `COORDINATION/`, `CONTRACT/` et le socle. Tu viens de
+faire tourner `tests/Padel` : c'est la première fois que quelqu'un ouvre un de ces modules depuis leur
+écriture.
+
+**Ton périmètre : `Piscine`, `Padel`, `Patinoire`, `Sport`, `Musee`.** Personne d'autre n'y touche.
+C'était le plus gros trou du chantier jusqu'à ce matin — il l'est encore, mais il a désormais quelqu'un.
+
+**Ne travaille pas hors de ces cinq répertoires.** Si tu as besoin d'une modification ailleurs, demande-la
+moi : le garde-fou de cloisonnement refusera ta poussée, et huit autres sessions écrivent en parallèle.
+
+---
+
+### ⚠ À LIRE AVANT DE TOUCHER À QUOI QUE CE SOIT DANS `Padel`
+
+`padel:eclairage:commander` **pilote un relais physique**. Ce n'est pas une abstraction : la commande
+allume et éteint réellement l'éclairage de courts.
+
+Un ordonnanceur a été écrit cette semaine (`platform:scheduler:run`). Il **refuse** le premier passage
+non supervisé d'une commande non déclarée sûre, et celle-ci ne l'est pas — parce qu'un premier passage
+rejouerait tout l'arriéré d'un coup, sur du matériel. C'est `claude-G` qui l'a signalé, et j'ai vérifié :
+l'ordonnanceur n'a jamais tourné en préproduction, donc aucun dégât.
+
+**Ne lance jamais l'ordonnanceur sans supervision, et ne déclare aucune de tes commandes
+`safeOnFirstRun: true` sans me le dire.** Le critère n'est pas « la commande est-elle bornée dans le
+temps » — c'est **que produit un arriéré traité d'un coup**. Trois catégories, une seule est sûre :
+nettoyage d'état interne (sûr) ; destruction irréversible (jamais) ; effet visible au dehors (jamais).
+
+---
+
+### Ton premier lot : rendre tes fixtures rechargeables — `Musee`, `Padel`, `Patinoire`
+
+Neuf créations de rôles, six gardes. Trois manquent.
+
+**Pourquoi ça compte, et ce n'est pas de la cosmétique.** Le 24/08 j'ai voulu régénérer les données de
+démonstration de la préproduction. Le chargement a échoué en cours de route, **après avoir tronqué la
+table des rattachements droits-rôles** : les trente-quatre rôles se sont retrouvés à zéro droit. Maxime
+ne peut plus tester qu'avec son propre compte depuis — donc il ne peut vérifier aucun écran du point de
+vue d'un caissier ou d'un responsable.
+
+Cinq sessions ont corrigé leurs fixtures depuis. Les tiennes sont parmi les dernières.
+
+**Le patron est dans `app/src/DataFixtures/SocleFixtures.php`** : des aides privées qui cherchent avant
+de créer. Regarde-les toutes, elles couvrent quatre cas différents.
+
+**⚠ Deux pièges de vérification, et ils m'ont eu tous les deux :**
+
+1. **Relancer ta suite ne prouve rien.** Elle passait déjà avant. Le harnais recrée le schéma depuis les
+   entités à chaque classe de test, donc tes fixtures partent **toujours d'une base vide**. Le seul geste
+   qui révèle le défaut est de **charger deux fois**. `claude-D` me l'a fait remarquer après que j'aie
+   écrit le contraire dans son ordre.
+
+2. **« Ne lève pas » n'est pas « idempotent ».** Une entité dont la seule unicité porte sur son
+   identifiant technique ne produira **aucune erreur** au rechargement : elle se dupliquera en silence.
+   J'ai trouvé trois cas comme ça dans mon propre fichier, une heure après l'avoir déclaré corrigé — dont
+   `Etablissement`, c'est-à-dire la frontière sur laquelle repose tout le cloisonnement. Compte les
+   lignes avant et après, ne te contente pas de l'absence d'exception.
+
+---
+
+### Ensuite : ce que Maxime attend sur tes modules
+
+Il l'a demandé explicitement : **une jauge différente lorsqu'il y a des cours de padel ou de tennis.**
+Un court occupé par un cours collectif ne se remplit pas comme un court loué à deux joueurs — la
+capacité dépend du type de créneau, pas seulement du court.
+
+Ne code rien avant de m'avoir dit **comment tu comptes t'y prendre**. `Reservation` appartient à
+`claude-G` et porte déjà la notion de quota de second niveau : il y a probablement de quoi t'appuyer
+dessus plutôt que de refaire. Poser la question coûte un aller-retour ; redévelopper ce qui existe coûte
+une semaine.
+
+---
+
+### Les règles qui te feront refuser une poussée
+
+- **Nommage anglais (D5)** dans `app/src` et `app/migrations`. Le garde-fou te proposera de retirer les
+  mots du lexique : **ne prends pas cette porte.** Renomme. `claude-D` l'a refusée hier sur un module
+  neuf, et c'était le bon geste — un garde-fou qui offre son propre contournement finit contourné.
+- **Cloisonnement.** Toute lecture ou écriture doit être confrontée au périmètre de l'appelant.
+- **Les cliquets ne remontent jamais.** Un défaut connu est toléré, un défaut neuf fait refuser la
+  poussée. Ne demande pas à relever un plafond.
+- **Fusionne `main` avant chaque poussée.** Le dépôt a pris 223 commits aujourd'hui.
+
+**Rapport dans `COORDINATION/RAPPORTS/claude-I.md`. Présente-toi à moi chaque heure**, en disant ce que
+tu fais ou en demandant une tâche — c'est une consigne de Maxime, pas de moi.
+
+Bienvenue. Tes cinq modules sont ceux dont on ne sait rien, donc ceux où tu trouveras le plus.

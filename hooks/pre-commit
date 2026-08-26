@@ -76,6 +76,12 @@ lancer_gf garde-fou-cloisonnement.php || ECHEC=1
 # Écriture qui traverse la frontière (D3/D8).
 [ -f "$RACINE/bin/garde-fou-ecriture-transfrontiere.php" ] && { lancer_gf garde-fou-ecriture-transfrontiere.php || ECHEC=1; }
 
+# Un DEFAULT pose en migration doit etre declare au mapping (D32).
+[ -f "$RACINE/bin/garde-fou-defauts-mapping.php" ] && { lancer_gf garde-fou-defauts-mapping.php || ECHEC=1; }
+
+# Une entite ne doit pas laisser ecrire son propre etablissement (D41).
+[ -f "$RACINE/bin/garde-fou-etablissement-ecrivable.php" ] && { lancer_gf garde-fou-etablissement-ecrivable.php || ECHEC=1; }
+
 # Nommage : sur les fichiers **indexés** et ajoutés. `--cached` est ce qui sera réellement commité,
 # et c'est aussi ce qui évite de dépendre d'une révision de référence inexistante à ce stade.
 if [ -f "$RACINE/bin/garde-fou-nommage-anglais.php" ]; then
@@ -85,6 +91,15 @@ if [ -f "$RACINE/bin/garde-fou-nommage-anglais.php" ]; then
     else
         # Rien d'ajouté : le contrôle est traité, on l'enregistre pour le filet.
         LANCES="$LANCES garde-fou-nommage-anglais.php"
+    fi
+fi
+
+# Droits du frontend (D39), ecrit par claude-H. Sur l'hote : node n'est pas dans l'image PHP.
+if [ -f "$RACINE/frontend/scripts/verifier-droits.mjs" ]; then
+    if command -v node >/dev/null 2>&1; then
+        ( cd "$RACINE/frontend" && node scripts/verifier-droits.mjs ) || ECHEC=1
+    else
+        echo "· Droits du frontend IGNORÉ — « node » indisponible. Le contrôle n'a PAS tourné."
     fi
 fi
 

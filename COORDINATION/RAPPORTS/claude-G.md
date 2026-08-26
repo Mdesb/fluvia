@@ -295,6 +295,7 @@ lui fait porter le risque. La prochaine fois je donne les deux, ou je dis que je
 | 14:45 | **PRÉSENTATION HORAIRE + point 3 de ton ordre long fait.** D41 appliqué à `Activite`, `RegleAnnulation` et `Ressource` : l'établissement d'une création vient de la session serveur, le corps est ignoré. `tests/Reservation` 102/102, test dédié vérifié rouge sans le changement. **Deux essais ratés avant le bon, écrits dans le code plutôt qu'effacés.** | Point 4 : je vérifie si CQ-0 est livrée ; sinon point 5, la note sur `CommanderEclairageCommand` pour `claude-I`. | Rien. |
 | 23:17 | **Point 4 : CQ-0 n'est toujours pas livrée** — `DroitAcces` ne porte toujours aucun lien vers un porteur, statut `CLAIM` chez `claude-C` depuis le 23/08. La moitié nominative de CQ-3/CQ-6 reste donc bloquée ; je ne l'attends pas. **Point 5 fait, et il y a urgence dedans** : le balayage sans borne de `CommanderEclairageCommand` était inoffensif tant que rien ne le lançait — l'ordonnanceur vient de le lancer. | Note d'analyse écrite pour `claude-I` sous le tableau. | Rien. |
 | 23:40 | **`Promotion` est cloisonnée — Maxime a tranché et m'a dit de la prendre.** Elle ne portait aucun rattachement : lisible par tous les exploitants de la base, d'un groupe à l'autre, **y compris avant sa date de début**. `tests/Offre` 29/29, chaîne de migrations rejouée depuis une base vide, test vérifié rouge sans le cloisonnement. | Les cinq autres entrées « référentiel présumé » attendent toujours ton arbitrage — je n'en prends aucune sans. | Rien. |
+| 10:13 | **Le chargement complet des fixtures passe de nouveau.** C'était bien chez moi : `CaisseClotureRoleFixtures` créait le rôle « Caissier » que `L7Fixtures` crée aussi. Corrigé là et dans `ReservationFixtures`. `tests/Caisse` 15/15, `tests/Reservation` 103/103. **Et le second passage bute maintenant chez toi**, sur `SocleFixtures:51`. | D48 : historique de `Vente` livré (débloque `claude-H`). Suite : les cinq chantiers `Vente`/`Caisse`. | Rien. |
 
 ## Nouvelle règle de Maxime — présentation horaire à `claude-A`
 
@@ -1055,3 +1056,43 @@ haut, il n'a pas changé — mais aucune ne se prend sans arbitrage, et surtout 
 `TypeTarif`, que je recommande de **laisser globales**. Les cloisonner par confort de cliquet serait
 le contraire du travail : on résorberait une entrée en cassant le partage de référentiel qui fait
 l'intérêt d'une plateforme.
+
+
+## Fixtures idempotentes — l'ordre parlait des rôles, il n'y avait pas que ça
+
+**Le blocage était bien le mien** : `CaisseClotureRoleFixtures` créait un rôle « Caissier » que
+`Securite\DataFixtures\L7Fixtures` crée également, et `Role.nom` porte une unicité globale. Corrigé
+là et dans `ReservationFixtures`, avec le patron `roleNomme()`.
+
+**Mais en corrigeant, j'ai trouvé trois autres familles dans mes deux fixtures, et je les ai toutes
+gardées :**
+
+- les **`Permission`** — le couple (module, action) porte aussi une unicité, et j'en créais deux dans
+  `Caisse` et quinze dans `Reservation` ;
+- les **`Utilisateur`** — l'email est unique ;
+- les **`Affectation`**, et c'est la plus vicieuse : **elle ne porte aucune unicité en base**. Un
+  second chargement ne casse pas, il **empile des doublons**. Silencieux, et faux — les droits
+  effectifs d'un utilisateur se calculent en parcourant ses affectations.
+
+Me limiter aux rôles aurait fait passer la seconde passe **sans rendre les fixtures idempotentes pour
+autant**. C'est le genre de correctif qui a l'air fini parce que le symptôme a disparu.
+
+### Ce que la vérification a donné, et où ça bute maintenant
+
+J'ai fait le double chargement que tu prescris, dans mon conteneur :
+
+- **premier chargement : passe** — il allait au mur avant ;
+- **second chargement (`--append`) : échoue**, sur `Duplicate entry 'organisation-gerer'`.
+
+La cause est `App\DataFixtures\SocleFixtures` ligne 51 —
+`(new Permission())->setModule('organisation')->setAction('gerer')`, sans garde. Elle t'appartient.
+Tant qu'elle n'est pas gardée, ton `FixturesIdempotentesTest` sera rouge sur la seconde passe : je te
+suggère de le fusionner **avec** ce correctif, pas avant.
+
+### La méthode, et pourquoi je ne me fie pas à mes suites ici
+
+`tests/Caisse` 15/15 et `tests/Reservation` 103/103 — **et elles étaient vertes avant ma correction
+aussi**. Elles ne prouvent rien sur l'idempotence : le harnais recrée le schéma depuis les entités à
+chaque classe, donc les fixtures partent toujours d'une base vide et sont chargées sélectivement. La
+formule de `claude-D` est la bonne — « la suite passait déjà avant ma correction, c'est tout le
+problème ». Le seul geste qui révèle le défaut est de charger deux fois.

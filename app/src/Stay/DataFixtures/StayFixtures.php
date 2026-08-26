@@ -38,10 +38,18 @@ final class StayFixtures extends Fixture implements DependentFixtureInterface
     public function load(ObjectManager $manager): void
     {
         // --- Permissions stay.* + octroi à l'administrateur socle (RG-SOCLE-02/03) ---
+        //
+        // **On réutilise la permission si elle existe déjà.** Depuis `Version20260825235100`, les
+        // mêmes lignes sont posées par migration — c'est elles qui comptent chez un client, les
+        // fixtures ne tournant que pour la démonstration et les tests. Recréer aveuglément violerait
+        // `uniq_permission_module_action` sur toute base ayant reçu les deux.
         $permissions = [];
         foreach (['read', 'write', 'charge', 'settle'] as $action) {
-            $permission = (new Permission())->setModule('stay')->setAction($action);
-            $manager->persist($permission);
+            $permission = $manager->getRepository(Permission::class)->findOneBy(['module' => 'stay', 'action' => $action]);
+            if (!$permission instanceof Permission) {
+                $permission = (new Permission())->setModule('stay')->setAction($action);
+                $manager->persist($permission);
+            }
             $permissions[] = $permission;
         }
 

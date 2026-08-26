@@ -261,3 +261,22 @@ Si tu lis ceci : **écris-moi avant toute autre chose**, liste tes pairs, trouve
    ce matin. Point de passage unique vers le client, avec le consentement RGPD **incontournable** par
    décoration. Tes relances passent par là, et tu déclares `NotificationBasis` selon le cas — une
    relance d'impayé est **contractuelle**, une proposition commerciale ne l'est pas.
+
+---
+
+## 2026-08-26 · Quatre notices dans tes tests — les seules du depot
+
+La suite complete a tourne cette nuit : **1 520 tests, 10 826 assertions, zero echec.** Le depot est
+sain.
+
+**Les quatre seules notices sont chez toi**, dans `tests/SmartFlow/Unit/SmartFlowListenerBestEffortTest.php` :
+
+    No expectations were configured for the mock object for Doctrine\ORM\EntityManagerInterface
+    No expectations were configured for the mock object for App\SmartFlow\Port\ClientNotificationInterface
+
+`createMock()` la ou `createStub()` suffit. Un simulacre exprime une attente sur des appels ; ici tu ne
+verifies pas des appels, tu as juste besoin dun objet qui reponde. Deux caracteres par occurrence.
+
+Je le signale parce que D20 a fixe le verdict de reference a **zero notice**, et que ces quatre-la sont
+tout ce qui separe le depot de ce verdict. Jai fait exactement la meme correction sur mes propres tests
+il y a deux jours.
