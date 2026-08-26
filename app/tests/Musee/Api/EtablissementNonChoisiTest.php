@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Tests\Musee\Api;
 
 use App\DataFixtures\SocleFixtures;
+use App\Musee\DataFixtures\MuseeFixtures;
 use App\Organisation\Entity\Etablissement;
+use App\Securite\Entity\Utilisateur;
 use App\Musee\Entity\Guide;
 use App\Tests\Musee\MuseeApiTestCase;
 use Doctrine\ORM\EntityManagerInterface;
@@ -37,8 +39,16 @@ final class EtablissementNonChoisiTest extends MuseeApiTestCase
         $idB = (string) $etabB->getId();
         self::assertNotSame($idA, $idB, 'Le montage du test suppose deux etablissements distincts.');
 
+        // `Guide` n'a qu'un seul champ ecrivable : l'utilisateur qu'il represente. On prend le
+        // coordinateur, que les fixtures ne rattachent pas deja a un guide.
+        $coordinateur = $em->getRepository(Utilisateur::class)->findOneBy(['email' => MuseeFixtures::COORDINATEUR_EMAIL]);
+        self::assertNotNull($coordinateur);
+
         $client->request('POST', '/api/musee_guides', $entete + [
-            'json' => ['etablissement' => '/api/etablissements/' . $idB, 'nom' => 'Guide Temoin D41', 'langues' => ['fr']],
+            'json' => [
+                'etablissement' => '/api/etablissements/' . $idB,
+                'utilisateur' => '/api/utilisateurs/' . (string) $coordinateur->getId(),
+            ],
         ]);
         self::assertResponseIsSuccessful();
 
