@@ -450,6 +450,22 @@ export const api = {
   stockDetacherProduit: (id) =>
     request(`/api/stock/articles/${id}/detacher-produit`, { method: 'POST', body: {} }),
 
+  // Inventaire.
+  stockInventaires: () =>
+    request('/api/stock_inventaires', { query: { itemsPerPage: 20, 'order[dateLancement]': 'desc' } }),
+  stockLignesInventaire: () =>
+    request('/api/stock_ligne_inventaires', { query: { itemsPerPage: 500 } }),
+  // Operation STANDARD (pas d'`uriTemplate`) : elle deserialise, donc `ld: true`. Les trois
+  // suivantes sont sur mesure et n'en ont pas besoin.
+  stockLancerInventaire: (corps) =>
+    request('/api/stock_inventaires', { method: 'POST', body: corps, ld: true }),
+  stockSaisirComptage: (id, corps) =>
+    request(`/api/stock/lignes-inventaire/${id}`, { method: 'PATCH', body: corps }),
+  stockRegulariserLigne: (id) =>
+    request(`/api/stock/lignes-inventaire/${id}/regulariser`, { method: 'POST', body: {} }),
+  stockCloturerInventaire: (id) =>
+    request(`/api/stock/inventaires/${id}/cloturer`, { method: 'POST', body: {} }),
+
   // Padel
   padelTerrains: () => request('/api/padel/terrains', { query: { itemsPerPage: 100 } }),
   // Pas de collection listable pour les tournois (seulement des routes custom

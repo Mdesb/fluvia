@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Modal from '../components/Modal.jsx'
 import ReferentielEditable from '../components/ReferentielEditable.jsx'
+import InventaireStock from '../components/InventaireStock.jsx'
 import { dateHeureFr } from '../components/Liste.jsx'
 import { api, membres } from '../api/client.js'
 import { aUnDesDroits } from '../api/droits.js'
@@ -136,6 +137,14 @@ export default function Stock({ etabActif, droits }) {
           {peutGererArticle && <ArticlesEdition onChange={recharger} />}
 
           <RegleEcart parametrage={parametrage} droits={droits} />
+
+          <InventaireStock
+            articles={articles}
+            droits={droits}
+            etabActif={etabActif}
+            onErreur={setErreur}
+            onFait={apres}
+          />
 
           <JournalSection mouvements={mouvements} />
         </>
