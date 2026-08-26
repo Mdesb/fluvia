@@ -48,19 +48,19 @@ final class SocleFixtures extends Fixture
         $manager->persist($etabB);
 
         // Permissions (RG-SOCLE-02).
-        $permOrgGerer = (new Permission())->setModule('organisation')->setAction('gerer');
-        $permSecGerer = (new Permission())->setModule('securite')->setAction('gerer');
-        $permLireTout = (new Permission())->setModule('*')->setAction('lire');
+        $permOrgGerer = $this->permissionNommee($manager, 'organisation', 'gerer');
+        $permSecGerer = $this->permissionNommee($manager, 'securite', 'gerer');
+        $permLireTout = $this->permissionNommee($manager, '*', 'lire');
         $manager->persist($permOrgGerer);
         $manager->persist($permSecGerer);
         $manager->persist($permLireTout);
 
         // Rôles (RG-SOCLE-03).
-        $roleAdmin = (new Role())->setNom('Administrateur groupe');
+        $roleAdmin = $this->roleNomme($manager, 'Administrateur groupe');
         $roleAdmin->addPermission($permOrgGerer)->addPermission($permSecGerer)->addPermission($permLireTout);
         $manager->persist($roleAdmin);
 
-        $roleLecteur = (new Role())->setNom('Lecture seule');
+        $roleLecteur = $this->roleNomme($manager, 'Lecture seule');
         $roleLecteur->addPermission($permLireTout);
         $manager->persist($roleLecteur);
 
@@ -81,10 +81,83 @@ final class SocleFixtures extends Fixture
         $manager->persist($lecteur);
 
         // Affectations (RG-SOCLE-03/05) : admin sur A et B, lecteur sur A seulement.
-        $manager->persist((new Affectation())->setUtilisateur($admin)->setRole($roleAdmin)->setEtablissement($etabA));
-        $manager->persist((new Affectation())->setUtilisateur($admin)->setRole($roleAdmin)->setEtablissement($etabB));
-        $manager->persist((new Affectation())->setUtilisateur($lecteur)->setRole($roleLecteur)->setEtablissement($etabA));
+        $this->affectationUnique($manager, $admin, $roleAdmin, $etabA);
+        $this->affectationUnique($manager, $admin, $roleAdmin, $etabB);
+        $this->affectationUnique($manager, $lecteur, $roleLecteur, $etabA);
 
         $manager->flush();
+    }
+
+    /**
+     * Les fixtures se rechargent : chaque création cherche d'abord.
+     *
+     * **Le 24/08, régénérer les données de démonstration de la préproduction a échoué en cours de
+     * route, après avoir tronqué la table des rattachements droits-rôles.** Trente-quatre rôles se sont
+     * retrouvés à zéro droit, et Maxime n'a plus pu tester qu'avec son propre compte. La cause n'était
+     * pas l'incident : **un chargement complet n'avait jamais fonctionné**, parce que quatorze fixtures
+     * créaient aveuglément des objets à contrainte d'unicité.
+     *
+     * **Le harnais ne pouvait pas le voir** : il recrée le schéma depuis les entités à chaque classe de
+     * test, donc les fixtures partent toujours d'une base vide, et elles sont chargées sélectivement.
+     * Le seul geste qui révèle le défaut — charger deux fois — n'était fait nulle part.
+     */
+    private function roleNomme(ObjectManager $manager, string $nom): Role
+    {
+        $existant = $manager->getRepository(Role::class)->findOneBy(['nom' => $nom]);
+
+        if ($existant instanceof Role) {
+            return $existant;
+        }
+
+        $role = (new Role())->setNom($nom);
+        $manager->persist($role);
+
+        return $role;
+    }
+
+    private function permissionNommee(ObjectManager $manager, string $module, string $action): Permission
+    {
+        $existante = $manager->getRepository(Permission::class)
+            ->findOneBy(['module' => $module, 'action' => $action]);
+
+        if ($existante instanceof Permission) {
+            return $existante;
+        }
+
+        $permission = (new Permission())->setModule($module)->setAction($action);
+        $manager->persist($permission);
+
+        return $permission;
+    }
+
+    /**
+     * **Le cas le plus vicieux, trouvé par `claude-G`, et le seul qui ne casse pas.**
+     *
+     * `Affectation` ne porte **aucune contrainte d'unicité en base**. Un second chargement n'échoue
+     * donc pas : il **empile des doublons**, silencieusement. Et les droits effectifs d'un utilisateur
+     * se calculent en parcourant ses affectations — une affectation en double n'est pas un doublon
+     * cosmétique, c'est un calcul de droits qui repose sur des données fausses.
+     *
+     * C'est exactement le genre de défaut qu'on ne trouve qu'en cherchant autre chose.
+     */
+    private function affectationUnique(
+        ObjectManager $manager,
+        Utilisateur $utilisateur,
+        Role $role,
+        Etablissement $etablissement,
+    ): void {
+        $existante = $manager->getRepository(Affectation::class)->findOneBy([
+            'utilisateur' => $utilisateur,
+            'role' => $role,
+            'etablissement' => $etablissement,
+        ]);
+
+        if ($existante instanceof Affectation) {
+            return;
+        }
+
+        $manager->persist(
+            (new Affectation())->setUtilisateur($utilisateur)->setRole($role)->setEtablissement($etablissement)
+        );
     }
 }
