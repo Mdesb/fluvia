@@ -299,6 +299,8 @@ lui fait porter le risque. La prochaine fois je donne les deux, ou je dis que je
 | 12:11 | **D45 livré** : la correction de ventilation d'un règlement s'ajoute et se scelle, la vente n'est jamais touchée, et elle est datée du **jour du geste**. `tests/Vente` **52/52**, migrations rejouées depuis une base vide. Avant : D46-bis (canal → attente + débiteur), D44 (rien à faire côté serveur, prouvé), descriptions d'opérations, fixtures idempotentes. | D46 : rattacher une correction à l'écart de caisse qu'elle explique. | Rien. |
 | 13:05 | **D46 livré avec D45** : une correction peut désigner l'`AlerteEcartCaisse` qu'elle explique. `tests/Vente` **54/54**, migrations rejouées depuis une base vide. Il ne me reste de D48 que **D44-bis** (vente directe sans session). | D44-bis. | Rien. |
 | 14:03 | **Un écart sait maintenant qu'il est expliqué** — `AlerteEcartCaisse.expliquee`, calculé à la lecture, une requête pour toute la page. Sans ça `claude-H` avait un écran complet qu'elle **refusait de livrer** : une liste qu'on ne peut pas vider est celle que sa propre règle D55 interdit. `tests/Caisse` 15/15, `tests/Vente` 55/55. | D44-bis : refus des fiduciaires sans session, puis point de vente dédié (arbitré par toi). | Rien. |
+| 14:51 | **D44-bis — la vraie barrière n'était pas la règle, c'était une colonne.** `vente_vente.session_id` était `NOT NULL` : vendre sans caisse n'était pas interdit, c'était impossible. Point de vente porté par la vente (`NOT NULL`), session nullable, refus des fiduciaires hors session. `VenteDirecteTest` 5/5, `Vente` 60/60, `Caisse` 15/15, `Boutique` 56/56. | `Reservation` et `Reporting` en vol ; je ne commite pas avant. | Rien. |
+| 14:55 | **Mon raccourci était déjà faux, et `claude-A` l'a montré sur pièce.** `estFiduciaire()` renvoyait `autoriseRendu` : les quatre chèques du référentiel portent `autoriseRendu = false`, une vente directe les aurait acceptés **sans que personne ne détienne le papier**. Critère écrit, plus proxy. `MoyenFiduciaireTest` 4/4. | Vérification complète avant commit : `Reservation` 103/103, `Reporting` en vol, puis `Vente` à rejouer. | Rien. |
 
 ## Nouvelle règle de Maxime — présentation horaire à `claude-A`
 
@@ -1222,3 +1224,121 @@ Sur les références libres, le relevé est maintenant complet :
 **Trois formes, un seul symptôme : du code qui répond « rien » avec l'air d'avoir cherché.** La
 formule est de `claude-H` et elle vaut au-delà du front. Aucune ne lève. Toutes se découvrent par un
 test qui devrait passer et ne passe pas.
+
+
+## D44-bis — on m'a demandé d'assouplir une règle ; l'obstacle était ailleurs
+
+D44-bis dit, à raison, que la bonne réponse n'est **pas** d'assouplir `RG-M2-01`. Mais la décision
+suppose que cette règle était l'obstacle. Elle ne l'était pas : **`vente_vente.session_id` était
+`NOT NULL`**. Vendre sans caisse n'était pas interdit par une règle qu'on aurait pu relâcher dans
+`CreerVenteProcessor` — c'était **impossible au niveau du schéma**, et aucune quantité de code n'y
+serait arrivée.
+
+### L'invariant n'est pas perdu : il est déplacé, et il est plus fort
+
+| | Avant | Après |
+|---|---|---|
+| garanti en base | toute vente a une **session** | toute vente a un **point de vente** |
+| ce dont NF525 a besoin | par ricochet | directement |
+
+La chaîne est chaînée **par point de vente**, et `ValiderVenteService` refusait déjà de sceller sans
+lui. Une vente sans session est une vente sans tiroir ; une vente sans point de vente aurait été **une
+vente non scellée** — exactement ce que le module entier existe pour empêcher. C'est pourquoi
+« point de vente dédié » était le bon arbitrage et « aucun point de vente » n'en était pas un.
+
+### Le détail qui rend la colonne `NOT NULL` tenable
+
+Six endroits du dépôt construisent une `Vente` — abonnement en ligne, confirmation de commande,
+synchronisation hors ligne, réservation, caisse, jeu L11 — dont **quatre hors de mon périmètre**. Leur
+demander un `setPointDeVente()` de plus aurait fait reposer une colonne `NOT NULL` sur la vigilance
+d'autrui : elle aurait cassé **chez eux, à l'exécution**, un jour où personne ne cherchait ça.
+
+Donc `Vente::setSession()` pose aussi le point de vente. Aucun fichier modifié chez `claude-B`,
+`claude-E` ou qui que ce soit. C'est le même geste que `Reservation::setCreneau()`, qui ajoute
+d'office le créneau visé aux créneaux consommés : **un invariant qui dépend d'un appel qu'on peut
+oublier n'est pas un invariant.**
+
+### Ce qui rend vraie la phrase sur laquelle repose toute la décision
+
+*Sans espèces, il n'y a rien à compter, donc rien à clôturer.* Le refus des fiduciaires hors session
+est ce qui la rend vraie. Sans lui, on aurait ouvert un chemin pour encaisser du liquide sans fonds de
+caisse, sans Z et sans personne pour en répondre — et il ne serait plus resté aucune raison d'avoir
+exigé une session de qui que ce soit.
+
+Le test le prouve avec son **contrôle négatif** : le même moyen, sur une vente de caisse, passe. Ce
+qui refuse n'est donc pas le moyen — c'est l'absence d'un tiroir qui en répondrait.
+
+Le critère est `session === null`, pas un drapeau sur la vente : c'est la même chose, sauf que
+celui-là **ne peut pas être requalifié après coup**.
+
+### Trois précautions, et ce qu'elles évitent
+
+- **`estFiduciaire()` est `autoriseRendu`, et le commentaire dit que ça tient par coïncidence.** Un
+  chèque-vacances papier se compte le soir sans autoriser de rendu : mon raccourci le rate peut-être
+  **déjà**. Isolé en un seul endroit nommé pour qu'il y ait une ligne à changer, et non des
+  `if ($moyen->autoriseRendu)` signifiant « espèces » dispersés dans le dépôt. Demande écrite à
+  `claude-D` dans `MESSAGES.md` — sa session n'est pas joignable — avec la signature attendue et la
+  remarque que l'arbitrage est métier, pas technique.
+- **`uniq_pdv_etablissement_libelle`.** Le point de vente dédié est résolu par son libellé, faute de
+  code sur l'entité, et l'API permet d'en créer un homonyme avec `caisse.gerer`. Deux homonymes
+  scinderaient une chaîne en deux moitiés **chacune vérifiable, l'ensemble ne l'étant plus** — le
+  genre de dégât qu'on ne constate qu'au contrôle.
+- **Une vente directe n'est pas marquée imprimée.** Le seuil vaut 0 € par défaut, donc sans précaution
+  *toute* vente directe se serait déclarée imprimée alors qu'aucun comptoir n'a de ticket à sortir. Un
+  fait faux dans une base comptable est pire qu'une absence.
+
+Le droit `vente.vente_directe` est distinct de `vente.creer` — sinon tout caissier vendrait hors
+caisse. Le test le prouve avec un utilisateur qui a `vente.creer` **et** `vente.encaisser` : il ouvre
+parfaitement un panier sur une session, et seul le hors-session lui est refusé. Un utilisateur sans
+droits aurait rendu le même 403 pour une raison qui n'a rien à voir.
+
+### Le Z reste juste sans que j'aie eu à y toucher
+
+`CloturerSessionProcessor` agrège par `findBy(['session' => ...])`. Une vente directe n'ayant pas de
+session, elle **n'entre dans aucun Z** — vérifié, pas supposé. Si l'agrégation avait porté sur le
+point de vente, il aurait fallu la corriger ; c'est la première chose que j'ai regardée.
+
+
+## Le raccourci que j'avais nommé « peut-être faux » l'était déjà
+
+J'avais écrit, dans le commentaire de `estFiduciaire()`, que le raccourci `autoriseRendu` *« tient par
+coïncidence, pas par définition »*, et j'avais ajouté à `claude-A` qu'un chèque-vacances le ratait
+**peut-être** déjà. Il a vérifié plutôt que d'accepter ma formulation prudente. `ComptaFixtures`,
+lignes 146-150 :
+
+| Code | `autoriseRendu` | Se remet en main propre |
+|---|---|---|
+| `cheque` | `false` | **oui** |
+| `cheque_vacances` | `false` | **oui** |
+| `cheque_culture` | `false` | **oui** |
+| `cheque_loisirs` | `false` | **oui** |
+
+**Quatre moyens papier, déjà dans le référentiel, déjà dans `VenteFixtures::MOYENS`.** Ma vente directe
+les aurait acceptés hors session, et personne n'aurait détenu le papier. Ce n'était pas une précaution
+d'avenir : c'était un défaut livrable, à quelques minutes du commit.
+
+**Le critère n'est pas « autorise le rendu de monnaie », c'est « se remet en main propre et se dépose
+en banque ».** Un chèque n'est pas une écriture, c'est un objet : il se reçoit, se garde, se compte, se
+remet en banque. La phrase qui fonde D44-bis — *sans espèces, rien à compter, donc rien à clôturer* —
+devenait fausse dès qu'un chèque entrait.
+
+Et ce n'était **pas un arbitrage métier**, contrairement à ce que j'avais écrit à `claude-D` : un
+instrument remis physiquement exige quelqu'un qui le détienne. J'ai corrigé ma demande dans
+`MESSAGES.md` pour qu'elle ne rouvre pas une question qui n'existe pas.
+
+### Ce que je retiens, et qui vaut au-delà de ce cas
+
+**Une réserve nommée « peut-être » est une vérification qu'on n'a pas faite.** Je l'avais écrite dans
+le code, ce qui est mieux que rien — mais un commentaire qui signale un doute ne le lève pas, et le
+défaut serait parti en fusion avec sa propre documentation à côté. C'est la deuxième fois aujourd'hui
+qu'une de mes réserves prudentes se révèle exacte à la vérification ; les deux fois, quelqu'un d'autre
+a fait la vérification.
+
+**Et j'ai remplacé ma vigilance par un mécanisme, parce qu'une liste de codes en dur n'en est pas un.**
+Un exploitant qui ajoute son propre instrument papier ne serait pas couvert. `MoyenFiduciaireTest`
+parcourt le référentiel et **échoue sur tout code non classé** — le contrôle grandit avec la donnée
+qu'il surveille, comme `CanalContratTest` pour les canaux. Un moyen ajouté sans décision casse le test
+à l'endroit et au moment où la décision se prend, pas en caisse six mois plus tard.
+
+C'est un filet, pas la propriété : la propriété appartient au moyen, donc à `Compta`. Le filet se
+retirera quand `MoyenPaiement::isFiduciaire()` existera.

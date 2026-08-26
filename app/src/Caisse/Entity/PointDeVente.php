@@ -23,6 +23,11 @@ use Symfony\Component\Validator\Constraints as Assert;
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'caisse_point_de_vente')]
+// D44-bis — le point de vente « Vente directe » est résolu **par son libellé**, faute de code sur
+// l'entité. Sans cette contrainte, un second point de vente du même nom (l'API le permet : `caisse.gerer`
+// suffit) scinderait silencieusement une chaîne NF525 en deux. Chacune resterait vérifiable, et
+// l'ensemble ne le serait plus — la sorte de dégât qu'on ne constate qu'au contrôle.
+#[ORM\UniqueConstraint(name: 'uniq_pdv_etablissement_libelle', columns: ['etablissement_id', 'libelle'])]
 #[ApiResource(
     shortName: 'PointDeVente',
     operations: [
