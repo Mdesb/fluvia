@@ -118,7 +118,9 @@ final class AffutageTest extends PatinoireApiTestCase
             'json' => [
                 'type' => 'prestation_client',
                 'technicien' => '/api/utilisateurs/' . $idTechnicien,
-                'etablissement' => '/api/etablissements/' . $idB,
+                // UUID nu : c'est la seconde forme que `resoudre()` accepte, et celle qui
+                // contourne la resolution d'IRI du denormaliseur.
+                'etablissement' => $idB,
             ],
         ]);
         self::assertResponseIsSuccessful();
