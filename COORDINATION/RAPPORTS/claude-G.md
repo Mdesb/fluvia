@@ -302,6 +302,7 @@ lui fait porter le risque. La prochaine fois je donne les deux, ou je dis que je
 | 14:51 | **D44-bis — la vraie barrière n'était pas la règle, c'était une colonne.** `vente_vente.session_id` était `NOT NULL` : vendre sans caisse n'était pas interdit, c'était impossible. Point de vente porté par la vente (`NOT NULL`), session nullable, refus des fiduciaires hors session. `VenteDirecteTest` 5/5, `Vente` 60/60, `Caisse` 15/15, `Boutique` 56/56. | `Reservation` et `Reporting` en vol ; je ne commite pas avant. | Rien. |
 | 14:55 | **Mon raccourci était déjà faux, et `claude-A` l'a montré sur pièce.** `estFiduciaire()` renvoyait `autoriseRendu` : les quatre chèques du référentiel portent `autoriseRendu = false`, une vente directe les aurait acceptés **sans que personne ne détienne le papier**. Critère écrit, plus proxy. `MoyenFiduciaireTest` 4/4. | Vérification complète avant commit : `Reservation` 103/103, `Reporting` en vol, puis `Vente` à rejouer. | Rien. |
 | 15:37 | **D57 — la clôture journalière n'est pas le Z, et deux trous d'inaltérabilité que j'avais créés.** `pointDeVente` n'était pas figé sur une vente scellée ; `SettlementCorrection` (D45) était modifiable et supprimable, **sur `main` depuis ce matin**. `Vente` 75/75, `Caisse` 15/15. | Fusion de `main`, lanceur avec ET sans référence, poussée. | Rien. |
+| 16:34 | **Le ticket n'existait que dans l'onglet du caissier.** `TicketProcessor` ne rendait aucune ligne et `LigneVente` n'avait aucun mot. Libellés **figés au jour de la vente**, gravés par écouteur et non par les six appelants. `Vente` 78/78, `Caisse` 15/15, `Boutique` 56/56, `Reservation` 103/103. | Commit, poussée, puis PAY-3. | Rien. |
 
 ## Nouvelle règle de Maxime — présentation horaire à `claude-A`
 
@@ -1427,3 +1428,73 @@ qui lancent le même script différemment.
 
 Non corrigé par moi : `bin/` appartient à `claude-C`, et le lanceur est exécuté par huit sessions.
 Signalé avec le numéro de ligne.
+
+
+## Une chaîne d'empreintes irréprochable qui scelle des documents qu'on ne sait pas rééditer
+
+`claude-H` a construit l'écran de caisse et **refusé de proposer un bouton de réimpression**.
+`TicketProcessor` ne renvoyait ni libellé, ni quantité, ni montant — alors que l'opération accepte
+`mode: "duplicata"`. Le ticket n'existait donc que dans l'onglet du caissier : la page fermée, le
+document n'était plus reconstituable.
+
+**Son refus n'était pas de la prudence, c'était la seule conduite possible.** Un bouton qui rend un
+document vide fait croire que le document existe, et le caissier cesse de chercher ailleurs.
+
+**Et ce n'était pas un défaut d'écran.** Tout ce module repose sur l'idée qu'une vente validée est
+*probante* — c'est l'argument de D45 contre la modification d'un règlement, et celui qui m'a fait
+refuser ce matin d'exempter la vente directe du scellement. Un justificatif qui n'existe que dans un
+onglet ouvert n'est probant pour personne. Nous avions une chaîne d'empreintes irréprochable **qui
+scellait des documents qu'on ne savait pas rééditer**, et tout avait l'air de fonctionner : les
+empreintes bonnes, les totaux bons, les refus de modification bons. C'est D59 sous une autre forme.
+
+Sa formule résume les trois manques qu'elle a relevés : **le serveur sait ce qu'il a facturé et ne
+sait pas le dire.**
+
+### Trois décisions, et pourquoi chacune se conteste
+
+**Le libellé est une copie datée, pas une référence.** Quelqu'un verra `libelle` sur `LigneVente` et
+`libelle` sur `Produit` et proposera de « normaliser ». La jointure ferait **mentir rétroactivement
+tous les tickets déjà émis** dès qu'un article change de nom. Même règle que `prixUnitaire`, stocké et
+jamais recalculé, et que `optionsSelectionnees`, figé par RG-OPT-09 — le dépôt avait déjà le motif, il
+lui manquait ce champ.
+
+**Un test, pas un commentaire** — imposé par `claude-A`, et il avait raison. J'ai passé la journée à
+vérifier que les commentaires ne protègent rien : j'avais écrit « ce raccourci tient par coïncidence »
+**au-dessus** du raccourci sur les chèques, et il serait parti en fusion quand même. `LibelleFigeTest`
+encaisse, renomme le produit, tire un duplicata, et vérifie que le libellé n'a pas bougé. *Un test qui
+échoue est plus difficile à supprimer qu'un commentaire.*
+
+**Gravé par un écouteur, pas par les appelants.** Six endroits construisent une `LigneVente` et
+**aucun ne dispose de l'entité `Produit`** — la ligne ne porte qu'un `Uuid`, par la convention des
+références libres. Leur demander de résoudre le produit aurait fait reposer le contenu du ticket sur
+la vigilance de six appelants, dont quatre hors de mon périmètre. Troisième fois de la journée que la
+réponse est la même : `Vente::setSession()`, `MoyenFiduciaireTest`, et maintenant `LineLabelStamper`.
+
+### Ce que je n'ai pas pu réparer, et que j'ai dit plutôt que caché
+
+La reprise de données donne aux lignes existantes le nom que le produit porte **aujourd'hui**. Le nom
+du jour de la vente n'a jamais été écrit nulle part : il ne se reconstitue pas. Exact pour tout
+produit jamais renommé, faux pour les autres **sans qu'on puisse savoir lesquels**. Dit à `claude-H` :
+un duplicata n'est réellement opposable qu'à partir de cette migration.
+
+Une ligne dont la référence ne désigne aucun produit du catalogue garde un libellé **nul** —
+`VenteReservationHandler` pose un identifiant arbitraire quand la réservation n'a pas de produit.
+Inventer un libellé donnerait au document l'apparence d'être complet.
+
+### Un défaut trouvé en passant, de la même famille que le reste
+
+`TicketProcessor` lisait le seuil d'impression par `$vente->getSession()?->getPointDeVente()`. Sur une
+vente directe — pas de session — il lisait `0.00`, donc déclarait la vente **systématiquement
+au-dessus du seuil**, donc « imprimée automatiquement », alors qu'aucun comptoir n'a de ticket à
+sortir. Encore du code qui répond quelque chose avec l'air d'avoir cherché.
+
+### Une dérive de convention, signalée et non suivie
+
+L'horloge du serveur indiquait 15:55 ; le dépôt portait déjà `Version20260826170000` (commitée à
+15:11) et `Version20260826191000` (commitée à 14:54) — **deux migrations datées dans l'avenir**. La
+mienne porte l'heure réelle, ce que D32 demande, et se retrouve numérotée avant deux migrations qui
+lui sont antérieures dans les faits. Sans conséquence ici : elle est indépendante.
+
+Dater à mon tour dans l'avenir aurait rendu la dérive invisible en m'y ajoutant. **L'ordre des
+versions ne veut plus rien dire dès que chacun choisit son heure**, et c'est le genre d'écart qui ne
+se voit qu'une fois qu'il est général.
