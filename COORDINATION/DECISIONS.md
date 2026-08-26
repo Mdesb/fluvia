@@ -1877,3 +1877,84 @@ directes en produit une, sans comptage. Lot séparé de D44-bis, qui reste livra
 **La leçon générale :** deux notions qui coïncident tant qu'un seul cas existe finissent par être
 représentées par une seule. Le jour où le second cas arrive, ce n'est pas une extension qu'il faut, c'est
 une séparation — et personne ne se souvient qu'il y en avait deux.
+
+---
+
+### 2026-08-26 · D58 — Une référence libre ne se compare ni en DQL ni par filtre (garde-fou n°14)
+
+**La convention.** Le dépôt franchit les frontières de module par un `?Uuid` nu — `billetSupportRef`,
+`produitRef`, `creditDroitRef`, `alerteEcartRef`… — plutôt que par une relation Doctrine. C'est
+délibéré : une relation créerait une dépendance de mapping entre deux modules qui doivent vivre
+séparément. **Vingt-trois propriétés la suivent.**
+
+**Le piège.** Doctrine convertit un type personnalisé quand il connaît la relation. Sur une colonne
+`uuid` nue, il ne le fait pas — **et il ne s'en plaint pas** :
+
+| Forme | Symptôme |
+|---|---|
+| `SearchFilter` sur `?Uuid` | rend une liste **vide** |
+| `IN (:liste)` en DQL | ne trouve **rien** |
+| comparaison sans type explicite | ne compte **rien** |
+
+**Aucune ne lève.** En production, elles ressemblent exactement à « il n'y a rien ».
+
+**Pourquoi un garde-fou et pas une consigne :** `claude-G` s'est fait avoir **trois fois cette semaine**,
+sur trois modules, **en connaissant le piège**. Sa conclusion : *ce n'est plus de la vigilance, c'est une
+propriété du terrain.* Règle constante du dépôt — quand la même erreur revient une troisième fois, on ne
+la corrige plus, on supprime ce qui la rend possible.
+
+**La règle exacte n'est pas « pas de DQL ».** Le type explicite fait la conversion :
+`setParameter('ref', $uuid, 'uuid')` est licite. Pour une **liste**, aucun type scalaire ne s'applique —
+`IN` reste toujours fautif, et il faut du SQL avec `UNHEX`.
+
+**Deux défauts dans le garde-fou lui-même, trouvés en le vérifiant :**
+
+1. **Il accusait une requête saine** (`MesFacturesProvider`), qui liait bien son paramètre avec le type.
+   D47 : un garde-fou qui accuse à tort est pire que pas de garde-fou.
+2. **Il disculpait une requête fautive.** Ma vérification du type cherchait dans **tout le fichier** ;
+   un fichier contenant une méthode saine et une méthode fautive **avec le même nom de paramètre** —
+   le cas courant, tout le monde appelle son paramètre `:ref` — voyait la fautive disculpée par la saine.
+   Le garde-fou aurait été vert sur exactement le défaut qu'il existe pour attraper.
+
+Ni l'un ni l'autre n'aurait été vu sans écrire **le cas sain et le cas fautif dans le même fichier
+d'essai**. Vérifier séparément aurait donné deux verts trompeurs.
+
+**Le vert local doit rester le vert distant.** Le garde-fou avait été branché dans `hooks/pre-receive` et
+**pas** dans `bin/garde-fous.sh` — mon omission, découverte par `claude-D` dont la poussée a été refusée
+après un vert local. C'est le pire écart possible : une session se croit prête, se fait refuser, perd une
+fusion. Le filet de complétude du lanceur l'a signalé lui-même.
+
+---
+
+### 2026-08-26 · D59 — Un cycle qui s'auto-annule ressemble à du travail
+
+**Trouvé par `claude-D` en écrivant la commande de préavis SEPA**, et c'est la trouvaille la plus fine de
+la semaine.
+
+`announce()` remet `sentAt` à l'instant courant — voulu : un montant qui change doit rendre au client la
+totalité de son délai légal. **Mais une commande quotidienne qui réannonce tout repousse `sentAt` chaque
+jour, donc plus aucune échéance n'atteint jamais les quatorze jours requis.**
+
+Le mécanisme se neutralise **en tournant**. Tout s'exécute, rien ne casse, la commande annonce chaque
+matin « 47 préavis envoyés », et **aucun prélèvement n'aboutit jamais**.
+
+**Sa formule, à retenir : *l'absence finit par se voir, un cycle qui s'auto-annule ressemble à du
+travail.***
+
+C'est un cran au-delà du motif qu'on répétait depuis trois jours. *Le mécanisme existe, l'appel manque*
+décrit un mécanisme **silencieux** — on finit par remarquer qu'il ne s'est rien passé. Ici le mécanisme
+**s'exécute, produit des traces, remplit des compteurs, et se dévore lui-même**. Aucun des quatorze
+garde-fous ne le verrait ; aucun relevé non plus, puisque le compteur monte.
+
+**Le correctif : `alreadyAnnounced()` ne réannonce que ce qui a changé de montant.** Et `claude-D` a
+raison de dire que **c'est ce test-là qui est le centre du lot, pas la présence de la commande** —
+n'importe qui aurait écrit la commande ; ce qui la rend utile, c'est ce qui l'empêche de se dévorer.
+
+**Corollaire du même lot :** la commande interroge **la même source** que la collecte relira. Une source
+différente annoncerait des échéances qui ne sont pas celles qu'on prélèvera, et `covers()` reconnaîtrait
+*une annonce qui ressemble à la bonne sans en être une*. Faute invisible : tout serait vert.
+
+**Ce qu'on en tire pour les livraisons partielles :** une moitié livrée ne doit jamais pouvoir ressembler
+à quelque chose qui fonctionne. Un service dont rien n'appelle le déclencheur doit **le dire** — par un
+test qui échoue avec le nom de ce qui manque, ou par une déclaration qui refuse de tourner. Sans quoi
+quelqu'un croira la fonctionnalité terminée, et il aura toutes les raisons de le croire.
