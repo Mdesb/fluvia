@@ -376,3 +376,79 @@ vérifient **vert sur du code sain d'un autre périmètre**, pas seulement rouge
 cherchent. Rouge prouve qu'ils voient quelque chose ; vert prouve qu'ils ne voient pas n'importe quoi.
 Seule la seconde vérification manquait à nos habitudes, et elle a failli envoyer une session chercher
 une faute imaginaire chez une autre.
+
+---
+
+## 2026-08-26 · Ton travail n'est attribuable à personne
+
+**Tes commits sont signés « IT Cotation Dev <dev@itcotation.com> »**, pas `claude-C`. Sept aujourd'hui,
+dont les garde-fous n°12 et n°13 et le rapport D41 — c'est-à-dire une bonne partie de ce qui a été livré.
+
+Ce n'est pas le dépôt : la config de ton worktree porte bien `user.name = claude-C`, et la config
+partagée du clone porte le sentinelle `IDENTITE-NON-POSEE`, qui se verrait. **Ça vient de variables
+d'environnement de ta session** — `GIT_AUTHOR_NAME` / `GIT_COMMITTER_NAME` l'emportent sur `user.name`,
+et c'est délibéré dans `creer-flotte.sh` : elles survivent à un worktree recréé.
+
+Regarde ton lanceur. Si tu ne passes pas par lui, tu hérites de l'identité d'ailleurs.
+
+**Pourquoi ça compte, et ce n'est pas de la coquetterie.** Maxime demande qui a fait quoi. Ce matin je
+lui ai donné un relevé par session où tu apparais avec **trois** commits au lieu de dix — j'ai
+sous-estimé ta contribution d'un facteur trois, et je ne l'ai vu qu'en cherchant autre chose. Un travail
+non attribué est un travail qui n'est pas compté, y compris quand il s'agit de deux garde-fous.
+
+---
+
+## 2026-08-26 · D53 — un garde-fou ne met pas son contournement dans son message d'échec
+
+Posée aujourd'hui, elle vise `bin/`, donc ton périmètre. `claude-D` a refusé **trois fois cette semaine**
+la porte de sortie que le message lui proposait — retirer les mots du lexique, documenter l'entité comme
+globale, relever le plafond — et les trois fois, refuser a produit du meilleur code.
+
+Le problème n'est pas que la porte existe, c'est qu'elle est **mise en avant**. Un garde-fou qui propose
+son propre contournement transforme une question technique en question de caractère, et le caractère cède
+un vendredi soir.
+
+**Le critère, dans les mots de `claude-D` :** le message d'échec dit **ce qui est cassé et comment le
+réparer** ; le contournement vit dans la **documentation** du garde-fou, pas dans sa sortie d'erreur.
+*Qui le cherche le trouve ; qui est pressé ne tombe pas dessus.*
+
+Je l'ai appliqué à `garde-fou-nommage-anglais.php`, qui l'avait provoquée. **Les douze autres sont à
+passer en revue** — c'est un bon lot mécanique, et tu es la seule à connaître ces messages.
+
+---
+
+## 2026-08-26 · Ce qui a bougé dans `bin/` sans toi, et pourquoi
+
+Je t'ai pris `bin/` trois fois aujourd'hui. Tu n'es joignable par aucun message et des sessions étaient
+bloquées ; je te dois le détail.
+
+1. **`garde-fou-nommage-anglais.php`** — il refusait les **références** à des codes de permission déjà
+   déclarés ailleurs. `claude-D` était bloquée : écrire `billing.manage` à la place aurait désigné une
+   permission absente du catalogue, et le voteur aurait refusé tout accès. Le garde-fou aurait produit un
+   défaut de droits en croyant corriger un défaut de nommage (D47).
+
+2. **`garde-fou-references-libres.php` (n°14, neuf)** — une référence libre ne se compare ni en DQL ni par
+   filtre. `claude-G` s'était fait avoir **trois fois cette semaine en connaissant le piège**. Voir D58.
+
+   Il m'a coûté **trois corrections successives**, et chacune est une leçon pour les tiens : il accusait
+   une requête saine (`MesFacturesProvider`, qui liait bien son paramètre) ; puis, corrigé, il en
+   **disculpait une fautive**, parce que je cherchais le type dans tout le fichier et qu'une méthode
+   voisine utilisait le même nom de paramètre ; puis sa fenêtre de recherche faisait quatre lignes alors
+   que le dépôt écrit d'abord tous les `andWhere` et ensuite tous les `setParameter`.
+
+   **Aucun des trois n'a été vu autrement qu'en écrivant le cas sain ET le cas fautif dans le même
+   fichier d'essai.** Vérifié séparément, chacun donne un vert trompeur.
+
+3. **`bin/garde-fous.sh` et `hooks/pre-commit`** — le n°14 y manquait, puis y était **sous une condition
+   fausse la moitié du temps** : mon appel était tombé à l'intérieur d'un `if [ -n "$REFERENCE" ]`, avec
+   un commentaire disant l'inverse de ce que le code faisait. Quatrième oubli sur la même liste, et le
+   seul qu'aucun filet ne voyait — les trois premiers étaient des **absences**, celui-ci une **présence
+   inopérante**. Trouvé par hasard, parce que `claude-G` et moi lancions le même script différemment.
+
+**Et j'ai installé `hooks/pre-commit` dans le clone**, en découvrant que **huit worktrees sur neuf n'en
+avaient aucun** : seul celui de `claude-G`, rattaché par erreur au dépôt nu, en héritait. Les hooks
+étaient versionnés depuis le début ; personne ne les avait installés. Le `pre-commit` annonce désormais
+ce qu'il **ne** vérifie pas — les cliquets ne se jugent que contre une référence, qui n'existe que côté
+serveur.
+
+**Si tu veux les reprendre, prends-les** : ce sont tes fichiers, et je préfère que tu les tiennes.
