@@ -19,6 +19,7 @@
 | 25/08 09:45 | **Item 2 livre : `PrioriteOtaResolver` restitue.** Le billet perdant recupere son credit de carte (CQ-3/CQ-6), son droit d-acces est revoque, et la jauge de la ressource mere est liberee — il ne faisait aucun des trois. Test ecrit **verifie rouge sans la garde** (0 au lieu de 1) puis vert. Musee 23/23, Platform 62/62. Pile demontee, worktree rendu. | Item 5 : reprise des paquets verticales. | Rien. |
 | 25/08 10:10 | **Chantier ferme.** Le vocabulaire des cinq verticales passe du document au **manifeste** (`settingsSchema()`, patron `SmartFlowModule`) : 51 cles declarees en code, testees. `VocabulaireManifesteTest` verifie rouge sur les cinq (« aucun vocabulaire declare ») avant d-etre vert. Verticales 5/5, Platform 62/62. Pile demontee, worktree rendu. | Rien d-assigne — **je te demande une tache** (D35). En attendant je reprends le chantier `frontend/` si tu me l-attribues, sinon la revue de mes 81 entites d-API. | Rien. |
 | 26/08 09:55 | Nouveau silence 23:56 -> 09:41, meme cause. Reprise : **fixtures rendues idempotentes** dans les cinq verticales — 9 roles (Padel 2, Patinoire 3, Musee 4, ton compte exact) et **8 creations de permissions** que tu n-avais pas comptees. Syntaxe verifiee en conteneur avant push. | Les cinq suites tournent. | Rien. |
+| 26/08 10:25 | **Deux lots verts.** (1) Fixtures idempotentes : 9 roles + **8 permissions** sur mes cinq verticales. (2) Dette de couverture : `EvenementEclairage` cloisonne par `terrain` — **la seule des 34 entites gelees qui soit chez moi**. Suites : Piscine 33, Padel 23, Patinoire 29, Sport 31, Musee 23, Platform 62 — **toutes vertes**. Pile demontee. | Plus rien d-assigne. Je reste sur ma demande de tache. | Rien. |
 
 ---
 
@@ -455,3 +456,57 @@ ne couvre. Ce n-est pas quelque chose que je peux corriger de l-interieur.
 **Et ma demande de tache d-hier soir tient toujours** — mes cinq items sont fermes, celui-ci etait un
 lot distribue a toute la flotte. Si tu n-as rien, je prends la revue de cloisonnement de mes 81
 entites d-API, que personne n-a jamais faite.
+
+---
+
+## 2026-08-26 10:25 · Deux lots livres, et une erreur de methode que je me suis faite
+
+### Fixtures — ton lot, plus ce qu-il ne couvrait pas
+
+Les neuf roles sont passes par `roleNomme()`, ton patron repris tel quel. **Et huit creations de
+permissions non gardees**, que ton ordre ne pouvait pas citer puisqu-il visait les trois modules a
+roles : il y en a aussi dans `Piscine` et `Sport`.
+
+Le detail qui compte : `PiscineFixtures` cree ses permissions **ligne 58**, bien avant tout role. Sur
+un chargement complet, elle serait donc tombee **avant** d-atteindre le moindre role. Rendre les neuf
+roles idempotents n-aurait pas suffi a faire passer un chargement — c-est peut-etre vrai chez d-autres
+que moi, ca vaut d-etre verifie ailleurs avant de rejouer un chargement sur la preprod.
+
+J-ai laisse en place tous les `persist()` existants : Doctrine ignore un `persist()` sur un objet deja
+gere, donc le comportement est identique et le diff se limite aux expressions de construction. Moins
+de surface touchee dans des modules que je decouvrais.
+
+### Dette de couverture — une seule entite chez moi
+
+Sur les 34 entites gelees, **une seule est dans mon perimetre** : `Padel\EvenementEclairage`. Corrigee
+par `terrain`, pas par `reservation`. Les deux menent a un etablissement, mais le chemin par le
+terrain est plus court d-une jointure **et ne depend pas d-une reservation qui peut etre nulle** sur un
+forcage manuel d-eclairage — par l-autre chemin, un evenement sans reservation serait reste invisible
+a son propre exploitant. La ligne de base est dans `bin/`, perimetre de `claude-C` : je ne la nettoie
+pas, le garde-fou annonce desormais 5 entites resorbees.
+
+### Mon erreur, parce qu-elle peut servir a d-autres
+
+J-ai vu Padel passer a 18 erreurs apres mon changement de cloisonnement et j-ai cru l-avoir casse.
+**C-etait moi** : une tache de fond tournait encore sur le jeton `claudeI` pendant que je lancais des
+essais au premier plan. Deux processus, une seule base. Le symptome — « Base table or view already
+exists » — est exactement celui que le playbook decrit, et je l-ai quand meme pris pour une
+regression pendant plusieurs minutes.
+
+La regle 7 dit « un jeton par session ». Elle merite peut-etre « **et un seul processus a la fois
+dessus** » : a neuf sessions, chacune peut se corrompre toute seule sans qu-aucune autre soit en
+cause. Apres arret de la tache et reconstruction de la pile, Padel est vert : 23 tests, 228
+assertions.
+
+### Etat de mon perimetre
+
+| Suite | Resultat |
+|---|---|
+| Piscine | 33 tests, 200 assertions |
+| Padel | 23 tests, 228 assertions |
+| Patinoire | 29 tests, 264 assertions |
+| Sport | 31 tests, 246 assertions |
+| Musee | 23 tests, 179 assertions |
+| Platform | 62 tests, 305 assertions |
+
+Tout vert, pile demontee, worktree VPS rendu.
