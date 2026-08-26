@@ -83,6 +83,27 @@ class SettlementCorrection
     #[Groups(['correction:read'])]
     private ?Utilisateur $auteur = null;
 
+    /**
+     * D46 — l'écart de caisse que cette correction **explique**, s'il y en a un.
+     *
+     * « Si le Z d'hier a constaté 50 € de manquant, la correction d'aujourd'hui doit pouvoir dire
+     * *c'est ce manquant-là*. » **Un écart expliqué cesse d'être un écart** : c'est ce qui transforme
+     * une liste d'alertes qu'on finit par ignorer en une liste qui se vide.
+     *
+     * **Référence libre plutôt que relation**, comme `billetSupportRef` ou `creditDroitRef` ailleurs :
+     * `AlerteEcartCaisse` appartient au module `Caisse`, et la convention du dépôt pour franchir une
+     * frontière de module est l'UUID nu. Une clé étrangère figerait en plus l'ordre de suppression
+     * des deux domaines.
+     *
+     * **L'alerte, elle, ne bouge pas.** Son entité se déclare immuable — aucune écriture exposée par
+     * l'API, au plus une alerte par clôture. Le lien vit donc du côté de la correction : c'est elle
+     * qui affirme expliquer, pas l'alerte qui se déclare expliquée. La nuance compte, parce qu'un
+     * drapeau sur l'alerte serait un état à maintenir, là où ceci est un fait à constater.
+     */
+    #[ORM\Column(type: UuidType::NAME, nullable: true)]
+    #[Groups(['correction:read', 'vente:read'])]
+    private ?Uuid $alerteEcartRef = null;
+
     /** Le jour du geste (D45). Jamais celui de la vente. */
     #[ORM\Column(type: 'datetime_immutable')]
     #[Groups(['correction:read', 'vente:read'])]
@@ -171,6 +192,18 @@ class SettlementCorrection
     public function setAuteur(?Utilisateur $auteur): self
     {
         $this->auteur = $auteur;
+
+        return $this;
+    }
+
+    public function getAlerteEcartRef(): ?Uuid
+    {
+        return $this->alerteEcartRef;
+    }
+
+    public function setAlerteEcartRef(?Uuid $alerteEcartRef): self
+    {
+        $this->alerteEcartRef = $alerteEcartRef;
 
         return $this;
     }

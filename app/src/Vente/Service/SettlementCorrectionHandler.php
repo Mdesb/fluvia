@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Vente\Service;
 
 use App\Autorisation\Service\ComparateurMontant;
+use App\Caisse\Entity\AlerteEcartCaisse;
 use App\Securite\Entity\Utilisateur;
 use App\Vente\Entity\Paiement;
 use App\Vente\Entity\SettlementCorrection;
@@ -16,7 +17,9 @@ use App\Vente\Nf525\ScellementHandler;
 use App\Vente\Port\ReferentielReglementInterface;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
+use Symfony\Component\Uid\Uuid;
 
 /**
  * Corrige la ventilation d'un règlement (D45) : −X sur un moyen, +X sur un autre, sans jamais toucher
@@ -69,6 +72,8 @@ final class SettlementCorrectionHandler
             ));
         }
 
+        $alerte = $this->alerteExpliquee($donnees['alerteEcart'] ?? null, $vente);
+
         $correction = new SettlementCorrection();
         $correction->setVente($vente)
             ->setMoyenDebite($debite)
@@ -76,6 +81,7 @@ final class SettlementCorrectionHandler
             ->setMontant($montant)
             ->setMotif($motif)
             ->setAuteur($auteur)
+            ->setAlerteEcartRef($alerte?->getId())
             ->setEtablissement($vente->getEtablissement());
         $this->em->persist($correction);
 
@@ -95,11 +101,39 @@ final class SettlementCorrectionHandler
                     'motif' => $motif,
                     // La date du geste, jamais celle de la vente : la chaîne est chronologique.
                     'dateHeure' => $correction->getDateHeure()->format(\DATE_ATOM),
+                    // L'écart expliqué fait partie de la justification : il est scellé avec le reste.
+                    'alerteEcart' => (string) ($alerte?->getId() ?? ''),
                 ],
             ));
         }
 
         return $correction;
+    }
+
+    /**
+     * D46 — l'écart de caisse que cette correction explique, s'il est désigné.
+     *
+     * L'identifiant vient du **corps de la requête** : il se confronte donc au périmètre, comme
+     * partout ailleurs. 404 et non 403 — répondre « interdit » confirmerait qu'une alerte existe
+     * chez le voisin, et une alerte de caisse dit combien il lui manque.
+     */
+    private function alerteExpliquee(mixed $reference, Vente $vente): ?AlerteEcartCaisse
+    {
+        if (!\is_string($reference) || $reference === '') {
+            return null;
+        }
+        $segment = str_contains($reference, '/') ? basename($reference) : $reference;
+        if (!Uuid::isValid($segment)) {
+            throw new UnprocessableEntityHttpException('Référence « alerteEcart » invalide.');
+        }
+
+        $alerte = $this->em->getRepository(AlerteEcartCaisse::class)->find(Uuid::fromString($segment));
+        if (!$alerte instanceof AlerteEcartCaisse
+            || (string) $alerte->getEtablissement()?->getId() !== (string) $vente->getEtablissement()?->getId()) {
+            throw new NotFoundHttpException("Alerte d'écart introuvable.");
+        }
+
+        return $alerte;
     }
 
     /**

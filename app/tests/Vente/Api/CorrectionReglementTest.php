@@ -120,6 +120,103 @@ final class CorrectionReglementTest extends VenteApiTestCase
     }
 
     /**
+     * D46 — une correction peut pointer l'écart de caisse qu'elle explique.
+     *
+     * « Si le Z d'hier a constaté 50 € de manquant, la correction d'aujourd'hui doit pouvoir dire
+     * *c'est ce manquant-là*. » Un écart expliqué cesse d'être un écart — c'est ce qui transforme une
+     * liste d'alertes qu'on finit par ignorer en une liste qui se vide.
+     */
+    public function testLaCorrectionPeutDesignerLEcartQuElleExplique(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $client->disableReboot();
+        $vente = $this->venteReglee($client, $entete, 'especes');
+        $idAlerte = $this->alerteEcart($this->idSession($vente), $this->idEtablissement(\App\DataFixtures\SocleFixtures::ETAB_A_NOM));
+
+        $correction = $client->request('POST', '/api/ventes/' . $vente['id'] . '/corriger-reglement', $entete + [
+            'json' => [
+                'moyenDebite' => 'especes',
+                'moyenCredite' => 'cb',
+                'montant' => '5.50',
+                'motif' => 'Le manquant du Z d hier vient de cette saisie',
+                'alerteEcart' => '/api/alerte_ecart_caisses/' . $idAlerte,
+            ],
+        ])->toArray();
+        self::assertResponseIsSuccessful();
+        self::assertSame($idAlerte, $correction['alerteEcartRef'], 'La correction designe l ecart qu elle explique.');
+    }
+
+    /**
+     * L'écart est désigné **par le client** : il se confronte donc au périmètre. 404 et non 403 —
+     * répondre « interdit » confirmerait qu'une alerte existe chez le voisin, et une alerte de caisse
+     * dit combien il lui manque.
+     */
+    public function testUnEcartDunAutreEtablissementEstIntrouvable(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $client->disableReboot();
+        $vente = $this->venteReglee($client, $entete, 'especes');
+        $idAlerteB = $this->alerteEcart($this->idSession($vente), $this->idEtablissement(\App\DataFixtures\SocleFixtures::ETAB_B_NOM));
+
+        $client->request('POST', '/api/ventes/' . $vente['id'] . '/corriger-reglement', $entete + [
+            'json' => [
+                'moyenDebite' => 'especes', 'moyenCredite' => 'cb', 'montant' => '1.00',
+                'motif' => 'Test', 'alerteEcart' => '/api/alerte_ecart_caisses/' . $idAlerteB,
+            ],
+        ]);
+        self::assertResponseStatusCodeSame(404);
+    }
+
+    /**
+     * Une alerte d'écart, posée directement.
+     *
+     * `AlerteEcartCaisse.cloture` est NOT NULL — l'alerte n'existe pas sans son Z, et c'est juste :
+     * un écart de caisse est **constaté par une clôture**, jamais dans le vide. On monte donc le
+     * couple minimal session + clôture plutôt que de contourner la contrainte.
+     */
+    private function alerteEcart(string $idSession, string $idEtablissement): string
+    {
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $etablissement = $em->getRepository(\App\Organisation\Entity\Etablissement::class)->find($idEtablissement);
+        self::assertNotNull($etablissement);
+
+        // On réutilise la session déjà ouverte pour la vente : une caisse n'en supporte qu'une à la
+        // fois, et en rouvrir une seconde échoue — vérifié, c'est ce qui faisait tomber ce test.
+        $sessionEntite = $em->getRepository(\App\Caisse\Entity\SessionCaisse::class)->find($idSession);
+        self::assertNotNull($sessionEntite);
+
+        $cloture = new \App\Caisse\Entity\ClotureZ();
+        $cloture->setSession($sessionEntite);
+        $em->persist($cloture);
+
+        $alerte = new \App\Caisse\Entity\AlerteEcartCaisse();
+        // `auteurCloture` est NOT NULL : une alerte d'écart nomme toujours qui a clôturé. C'est juste —
+        // un manquant sans auteur n'est pas exploitable.
+        $auteur = $em->getRepository(\App\Securite\Entity\Utilisateur::class)
+            ->findOneBy(['email' => \App\DataFixtures\SocleFixtures::ADMIN_EMAIL]);
+        self::assertNotNull($auteur);
+
+        $alerte->setCloture($cloture)->setSession($sessionEntite)
+            ->setEtablissement($etablissement)
+            ->setAuteurCloture($auteur)
+            ->setEcartMontant('-50.00')->setToleranceAppliquee('10.00');
+        $em->persist($alerte);
+        $em->flush();
+
+        return (string) $alerte->getId();
+    }
+
+    /** @param array<string, mixed> $vente */
+    private function idSession(array $vente): string
+    {
+        $session = $vente['session'] ?? null;
+        $reference = \is_array($session) ? ($session['id'] ?? '') : (string) $session;
+
+        return str_contains((string) $reference, '/') ? basename((string) $reference) : (string) $reference;
+    }
+
+    /**
      * @param array<string, mixed> $entete
      *
      * @return array<string, mixed>

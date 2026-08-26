@@ -297,6 +297,7 @@ lui fait porter le risque. La prochaine fois je donne les deux, ou je dis que je
 | 23:40 | **`Promotion` est cloisonnée — Maxime a tranché et m'a dit de la prendre.** Elle ne portait aucun rattachement : lisible par tous les exploitants de la base, d'un groupe à l'autre, **y compris avant sa date de début**. `tests/Offre` 29/29, chaîne de migrations rejouée depuis une base vide, test vérifié rouge sans le cloisonnement. | Les cinq autres entrées « référentiel présumé » attendent toujours ton arbitrage — je n'en prends aucune sans. | Rien. |
 | 10:13 | **Le chargement complet des fixtures passe de nouveau.** C'était bien chez moi : `CaisseClotureRoleFixtures` créait le rôle « Caissier » que `L7Fixtures` crée aussi. Corrigé là et dans `ReservationFixtures`. `tests/Caisse` 15/15, `tests/Reservation` 103/103. **Et le second passage bute maintenant chez toi**, sur `SocleFixtures:51`. | D48 : historique de `Vente` livré (débloque `claude-H`). Suite : les cinq chantiers `Vente`/`Caisse`. | Rien. |
 | 12:11 | **D45 livré** : la correction de ventilation d'un règlement s'ajoute et se scelle, la vente n'est jamais touchée, et elle est datée du **jour du geste**. `tests/Vente` **52/52**, migrations rejouées depuis une base vide. Avant : D46-bis (canal → attente + débiteur), D44 (rien à faire côté serveur, prouvé), descriptions d'opérations, fixtures idempotentes. | D46 : rattacher une correction à l'écart de caisse qu'elle explique. | Rien. |
+| 13:05 | **D46 livré avec D45** : une correction peut désigner l'`AlerteEcartCaisse` qu'elle explique. `tests/Vente` **54/54**, migrations rejouées depuis une base vide. Il ne me reste de D48 que **D44-bis** (vente directe sans session). | D44-bis. | Rien. |
 
 ## Nouvelle règle de Maxime — présentation horaire à `claude-A`
 
@@ -1142,3 +1143,36 @@ défaut, c'est ce qui rend le Z digne de foi** — et ce n'est pas une perte d'i
 correction pointe la vente d'origine : un état par date de vente reste calculable. C'est une question
 de restitution, pas de donnée. Quelqu'un devra l'écrire dans l'interface, sinon un exploitant
 conclura à un bogue.
+
+
+## D46 — un écart expliqué cesse d'être un écart
+
+**Le choix qui structure le lot : le lien vit du côté de la correction, pas de l'alerte.**
+`AlerteEcartCaisse` se déclare immuable — aucune écriture exposée par l'API, au plus une alerte par
+clôture. Un drapeau « expliquée » posé dessus aurait été **un état à maintenir** ; le lien inverse est
+**un fait à constater**. C'est la correction qui affirme expliquer, l'alerte ne bouge pas.
+
+Référence libre plutôt que clé étrangère, comme partout où l'on franchit une frontière de module dans
+ce dépôt. L'écart désigné est **scellé avec le reste** : il fait partie de la justification, pas d'un
+commentaire à côté. Et comme il vient du corps de la requête, il se confronte au périmètre — 404,
+jamais 403 : une alerte de caisse dit combien il manque chez le voisin.
+
+### Quatre contraintes m'ont arrêtée, et toutes avaient raison
+
+Monter le décor du test a buté successivement sur `cloture_id` NOT NULL, sur une caisse qui refuse
+une seconde session ouverte, puis sur `auteur_cloture_id` NOT NULL. **J'ai monté le décor réel à
+chaque fois plutôt que de contourner**, parce que chacune dit quelque chose de vrai : un écart de
+caisse est **constaté par une clôture**, jamais dans le vide, et il **nomme toujours qui a clôturé** —
+un manquant sans auteur n'est pas exploitable. Un décor qui contourne les contraintes teste un
+système qui n'existe pas.
+
+### Une erreur de ma part, et ce qu'elle apprend
+
+J'avais écrit une chaîne PHP en apostrophes simples contenant une apostrophe : syntaxe fatale. Elle
+n'est apparue dans **aucun test** — elle a fait échouer le montage du schéma, ce qui donnait un
+symptôme sans rapport : « la colonne est absente ». J'ai suivi ce symptôme deux fois avant de lire
+l'erreur réelle.
+
+C'est exactement ce que nous venons de nous dire sur les fixtures, à un autre étage : **suivre ce qui
+casse mène au mauvais endroit**. Le symptôme visible et la cause n'étaient pas dans le même fichier,
+ni dans le même domaine.

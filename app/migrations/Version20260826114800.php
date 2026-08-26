@@ -19,6 +19,16 @@ use Doctrine\Migrations\AbstractMigration;
  * par `SHOW CREATE TABLE` sur la table que Doctrine crée depuis le mapping, noms d'index et de
  * contraintes compris.
  *
+ * `alerte_ecart_ref` (D46) : l'écart de caisse que la correction **explique**, s'il est désigné.
+ * Référence libre et non clé étrangère — `AlerteEcartCaisse` appartient au module `Caisse`, et la
+ * convention du dépôt pour franchir une frontière de module est l'UUID nu ; une contrainte figerait
+ * en plus l'ordre de suppression des deux domaines. Le lien vit du côté de la correction parce que
+ * l'alerte se déclare **immuable** : c'est la correction qui affirme expliquer, pas l'alerte qui se
+ * déclare expliquée.
+ *
+ * Cette migration a été **complétée avant fusion** plutôt que doublée : elle n'était présente que sur
+ * cette branche, et D45 et D46 forment un seul lot. Une fois dans `main`, elle ne bougera plus.
+ *
  * Aucune reprise de données : la table naît vide, et rien d'existant ne s'y traduit — une correction
  * est un fait qui a eu lieu, pas un état qu'on reconstitue.
  */
@@ -39,6 +49,7 @@ final class Version20260826114800 extends AbstractMigration
                 montant NUMERIC(10, 2) NOT NULL,
                 motif LONGTEXT NOT NULL,
                 date_heure DATETIME NOT NULL,
+                alerte_ecart_ref BINARY(16) DEFAULT NULL,
                 vente_id BINARY(16) NOT NULL,
                 auteur_id BINARY(16) DEFAULT NULL,
                 etablissement_id BINARY(16) NOT NULL,
