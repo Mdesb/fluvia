@@ -204,6 +204,15 @@ fi
 #     toujours son plafond, et il ne peut pas distinguer une dette qui grossit d'une règle qui
 #     mesure ce qui n'était pas compté.
 if [ -n "${REFERENCE:-}" ]; then
+# Une reference libre ne se compare ni en DQL ni par filtre (D58). Sans reference : le controle ne
+# depend d'aucune comparaison avec un etat anterieur, il lit l'arbre courant.
+#
+# Il etait branche dans hooks/pre-receive et PAS ici -- mon omission, trouvee par claude-D dont la
+# poussee a ete refusee apres un vert local. C'est le pire ecart possible : une session se croit
+# prete, se fait refuser, et perd une fusion. Le filet de completude de ce script l'a signale, ce qui
+# est exactement son travail.
+executer "Références libres (D58)" php_racine bin/garde-fou-references-libres.php
+
     executer "Établissement écrivable (D41)" php_racine bin/garde-fou-etablissement-ecrivable.php "--contre=$REFERENCE"
 else
     executer "Établissement écrivable (D41)" php_racine bin/garde-fou-etablissement-ecrivable.php
