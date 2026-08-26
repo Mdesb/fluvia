@@ -398,6 +398,22 @@ export const api = {
   cloturerPeriode: (id) =>
     request(`/api/compta/periodes/${id}/cloturer`, { method: 'POST', body: {} }),
   telechargerExport: (id) => request(`/api/compta/exports/${id}/telecharger`),
+  // --- Achats & tresorerie ---
+  facturesFournisseur: () =>
+    request('/api/supplier_invoices', { query: { itemsPerPage: 200 } }),
+  // Le rapprochement a trois voies : facture contre commande contre reception. Charge AVANT
+  // d'afficher le bouton d'approbation — approuver, c'est engager le paiement.
+  rapprochementFactureFournisseur: (id) =>
+    request(`/api/finance/supplier-invoices/${id}/reconciliation`),
+  approuverFactureFournisseur: (id) =>
+    request(`/api/finance/supplier-invoices/${id}/approve`, { method: 'POST', body: {} }),
+  contesterFactureFournisseur: (id, corps) =>
+    request(`/api/finance/supplier-invoices/${id}/dispute`, { method: 'POST', body: corps }),
+  resoudreLitigeFactureFournisseur: (id, corps) =>
+    request(`/api/finance/supplier-invoices/${id}/resolve-dispute`, { method: 'POST', body: corps }),
+  annulerFactureFournisseur: (id) =>
+    request(`/api/finance/supplier-invoices/${id}/cancel`, { method: 'POST', body: {} }),
+
   // Recouvrement : les deux gestes qui closent un impaye, et le compteur d'acces bloques.
   tableauBordRecouvrement: () => request('/api/recouvrement/tableau-bord'),
   // Ecarts de caisse.  est calcule par le serveur a la lecture — aucun drapeau stocke,
