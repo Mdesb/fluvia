@@ -308,3 +308,85 @@ ni de D5 ni de l'arbitrage sur l'écran.
 À qui l'écran FAC-1 ? Le lot sert vos **clients** — les clubs qui vendent sans caisse — pas votre
 administration. L'écran va donc dans `frontend/src/pages/` (back-office exploitant) et non dans
 `frontend/src/editeur/`, qui est mon périmètre. Je ne me l'attribue pas de moi-même.
+
+## 26/08 (suite) — PAY-2 : le préavis de prélèvement, et l'écran FAC-1
+
+### PAY-2 — ce que j'ai trouvé en ouvrant le module
+
+**Le module SEPA n'émet rien.** Aucun fichier de `src/Sepa/` ne dispatche d'événement ni n'appelle de
+notifieur. Le préavis réglementaire — informer le débiteur du montant et de la date avant chaque
+prélèvement, quatorze jours sauf autre délai convenu — n'existait donc nulle part. Les remises
+partaient sans qu'aucun client n'ait été prévenu, et ce n'est pas propre à PAY-2 : c'était vrai de
+toutes les collectes, Sport et Piscine comprises.
+
+`DebitPreNotification` consigne le préavis, `DebitPreNotifier` l'envoie **et** le relit. `announce()`
+sans `covers()` aurait produit une table à alimenter, pas une garantie.
+
+Trois points qui ne sont pas des détails :
+
+**Le fondement est `Contractuelle`, pas `Consentement`.** Le point de passage de `Platform` refuse par
+défaut faute de consentement. Sur cette base, un client ayant refusé la prospection ne recevrait jamais
+son préavis — et le prélèvement qui suit serait irrégulier. Prévenir quelqu'un qu'on va débiter son
+compte n'est pas de la sollicitation. C'est la deuxième fois que cette valeur par défaut aurait produit
+un défaut de conformité en croyant protéger la vie privée ; la première était le courriel de bienvenue.
+
+**`Journalisee` n'est pas `Envoyee`**, et le commentaire de `NotificationOutcome` le disait déjà. Aucun
+prestataire d'envoi n'est branché (D19) : l'adaptateur journalise. `covers()` rejette donc un préavis
+journalisé. Il est quand même consigné, pour qu'un exploitant puisse compter ce qui ne part pas.
+
+**Le montant fait partie du préavis.** Annoncer trente euros puis en prélever trois cents n'est pas un
+préavis, c'est un préavis pour autre chose. Sans cette comparaison, il aurait suffi d'avoir prévenu une
+fois pour prélever n'importe quoi ensuite : la garantie serait devenue une case cochée.
+
+### Le câblage — une décision que je n'ai pas prise seul
+
+`covers()` n'était appelé par personne, ce qui est exactement le motif que je répète. Mais le brancher
+arrête les prélèvements de quatre verticales tant que D19 tient. J'ai posé le choix à claude-A avec
+trois options plutôt que de trancher : il a retenu l'exclusion, et il a corrigé mon analyse sur un point
+que j'avais manqué — **aujourd'hui l'exclusion et le fail-closed donnent le même résultat**, seule la
+première explique pourquoi ; ce qui les départage est le jour où un prestataire existera.
+
+`reasonNotCovered()` remplace donc le booléen, et nomme le cas `Journalisee` à part **parce que c'est
+celui de tout le dépôt aujourd'hui** : le confondre avec « aucun préavis émis » enverrait chercher un
+oubli d'appel là où il manque une brique d'infrastructure. La remise porte `nb_exclues` et
+`motif_exclusion` — une remise vide parce que tout a été exclu n'est pas une remise vide faute
+d'échéances, et les confondre rendrait le blocage invisible. Aucun interrupteur : un garde-fou désarmé
+par défaut est décoratif.
+
+**J'ai cherché les appelants avant de pousser**, plutôt que de laisser la casse tomber sur quelqu'un à
+froid. Ils sont deux : `SepaFixtures`, que j'ai traité, et `Sport\Service\GenererRemiseSepaHandler`, qui
+n'est pas à moi. `tests/Sport/Api/RemiseSepaRecablageTest.php` échoue donc, avec un message qui dit quoi
+faire. Recette transmise à claude-A, avec le point de fond : **ce test ne casse pas malgré le
+changement, il casse parce qu'il décrivait un comportement qui n'était pas licite** — l'adapter sans
+adapter le chemin réel remettrait le problème où il était.
+
+### L'écran FAC-1
+
+L'onglet « Facturation » était un placeholder désactivé depuis le départ. Il ouvre maintenant.
+
+**Les gestes affichés viennent du serveur** (`gestesPossibles`), pas d'une table recopiée dans le front.
+C'est D39 appliqué à une règle métier plutôt qu'à une règle d'autorisation : quand le client rejoue une
+règle du serveur, il doit la rejouer entière, et le plus sûr est de ne pas la rejouer. Un test de
+contrat protège ce champ à chaque étape — s'il disparaissait de la sérialisation, l'écran n'afficherait
+plus aucun bouton, sans erreur et sans trace.
+
+Les **droits**, eux, restent évalués côté client : le serveur ne connaît pas l'utilisateur au moment où
+il sérialise la pièce. D54 : « Facturer » reste visible et désactivé pour qui n'a pas
+`facturation.emettre_directe`, et l'infobulle dit d'abord **pourquoi** le geste est renforcé, ensuite si
+vous y avez droit.
+
+Conventions de claude-H suivies, et sa réserve relayée à Maxime : elle ne peut pas céder un périmètre
+qu'elle n'a pas attribué. Ce que claude-A a fait est une répartition de charge, pas un déplacement de
+frontière — `frontend/src/pages/` reste à elle.
+
+### Un angle mort trouvé dans `verifier-formats`
+
+Le contrôle normalise toute interpolation en `{id}`. Un chemin composé de deux variables —
+`/api/billing/documents/${id}/${geste}` — devient `/billing/documents/{id}/{id}`, ne correspond à aucun
+`uriTemplate`, et le contrôle réclame un `ld: true` dont ces routes n'ont que faire. J'ai rendu mes cinq
+routes littérales plutôt que de contourner le contrôle : un geste mal orthographié échoue maintenant à
+l'appel au lieu de partir en 404. Le défaut du contrôle reste, il est signalé à claude-H et claude-A —
+`bin/` et `frontend/scripts/` ne sont pas à moi.
+
+Poussé : `b221e65` (API FAC-1), `b41492f` (préavis), `6dbb912` (câblage), `7b07119` (écran). Douze
+garde-fous verts à chaque fois.
