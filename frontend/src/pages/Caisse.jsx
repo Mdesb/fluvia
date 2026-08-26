@@ -319,7 +319,23 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
 // Les ventes antérieures à la migration portent le nom que le produit a *aujourd'hui* : cette
 // information n'avait jamais été écrite et ne se reconstitue pas. Un duplicata n'est réellement
 // opposable qu'à partir de cette migration.
-function construireTicket(infoTicket, paiements, support) {
+/**
+ * @param {boolean} premiereEdition vrai quand le ticket est édité dans la foulée de la vente.
+ *
+ * **Pourquoi ce drapeau existe.** `TicketProcessor` déclare « duplicata » dès que la vente porte déjà
+ * `imprime`. Or `ValiderVenteService` la marque imprimée **à la validation**, au titre de l'impression
+ * automatique au-dessus du seuil — et ce seuil vaut 0 € par défaut. **Toute vente encaissée sortait donc
+ * son premier ticket estampillé DUPLICATA.**
+ *
+ * L'impression automatique et cette édition-ci sont **le même événement**, pas deux. Seul l'appelant
+ * sait le distinguer : il vient de créer la vente. Une réimpression demandée depuis l'historique, elle,
+ * reste un duplicata et le dit.
+ *
+ * Le modèle confond deux choses — « un ticket a été émis » et « une impression a été ordonnée » —, comme
+ * la clôture Z confondait le comptage et l'arrêté. On ne les sépare pas ici : ce serait toucher à un
+ * comportement scellé et testé, sur un écran qu'on est en train de vérifier.
+ */
+function construireTicket(infoTicket, paiements, support, premiereEdition = false) {
   const lignes = (infoTicket.lignes || []).map((l) => {
     const nom = texte(l.libelle, 'Article')
     return {
@@ -331,6 +347,16 @@ function construireTicket(infoTicket, paiements, support) {
       // `montantLigne` est le montant réellement facturé pour la ligne : options et remises
       // comprises. C'est lui qu'on affiche à droite, et non un produit qu'on recalculerait.
       montant: l.montantLigne ?? null,
+      // LE DÉTAIL DES OPTIONS, PARCE QUE SANS LUI LE TICKET NE S'EXPLIQUE PAS.
+      //
+      // Le serveur les renvoyait déjà — figées à l'ajout au panier — et l'écran ne les lisait pas.
+      // Un client qui paie 21,20 € pour un produit affiché 15,00 € voyait un écart sans cause : le
+      // ticket s'additionnait, et restait incompréhensible. C'est le même défaut que le prix indicatif
+      // d'hier, déplacé d'un cran — non plus un chiffre faux, mais un chiffre juste sans son motif.
+      options: (l.optionsSelectionnees || []).map((o) => ({
+        libelle: texte(o.libelle, 'Option'),
+        montant: o.montantUnitaireApplique ?? null,
+      })),
     }
   })
 
@@ -349,7 +375,7 @@ function construireTicket(infoTicket, paiements, support) {
     detailIndisponible: lignes.length === 0,
     total: infoTicket.total ?? '0.00',
     ecartDetail: lignes.length > 0 && Math.abs(somme - total) > 0.005,
-    duplicata: !!infoTicket.duplicata,
+    duplicata: !premiereEdition && !!infoTicket.duplicata,
     paiements,
     codeSupport: support?.identifiantSupport || null,
   }
@@ -365,7 +391,7 @@ function construireTicket(infoTicket, paiements, support) {
       const infoTicket = await api.ticket(vente.id, 'imprimer')
       // Code de support signé (HMAC) émis à la validation : 1er support porteur d'un identifiant.
       const support = (venteValidee.supports || []).find((s) => s.identifiantSupport)
-      setTicket(construireTicket(infoTicket, paiements, support))
+      setTicket(construireTicket(infoTicket, paiements, support, true))
       setPanier([])
       setVente(null)
       setPaiements([])
@@ -660,6 +686,7 @@ function construireTicket(infoTicket, paiements, support) {
       <ChoixOptions
         ouvert={!!choixOptions}
         produit={choixOptions?.produit}
+        typeTarifId={choixOptions?.grille?.typeTarif?.id}
         tarifLibelle={choixOptions ? libelleTarif(choixOptions.grille) : null}
         devis={choixOptions?.devis}
         onFermer={() => setChoixOptions(null)}
@@ -793,11 +820,19 @@ function TicketVente({ ticket }) {
       <div className="tb">
         <div className="tnum">Ticket {ticket.numero}</div>
         {ticket.lignes.map((l, i) => (
-          <div className="trow" key={i}>
+          <div key={i}>
+          <div className="trow">
             <span>{l.quantite} × {l.libelle}</span>
             <span className="num">
               {euros(l.montant != null ? l.montant : parseFloat(l.pu || '0') * l.quantite)}
             </span>
+          </div>
+          {l.options.map((o, j) => (
+            <div className="trow" key={`o${j}`} style={{ paddingLeft: 14, opacity: 0.75, fontSize: 13 }}>
+              <span>· {o.libelle}</span>
+              <span className="num">{o.montant != null ? euros(o.montant) : ''}</span>
+            </div>
+          ))}
           </div>
         ))}
         {ticket.duplicata && (

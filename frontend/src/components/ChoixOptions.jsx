@@ -26,7 +26,7 @@ import { euros } from '../api/produit.js'
  * Et l'ordre des phrases suit D54 : d'abord le fait sur la donnée — *pourquoi cette option-ci est
  * indisponible* — jamais un grisé muet.
  */
-export default function ChoixOptions({ ouvert, produit, tarifLibelle, devis, onFermer, onValider }) {
+export default function ChoixOptions({ ouvert, produit, typeTarifId, tarifLibelle, devis, onFermer, onValider }) {
   const [retenues, setRetenues] = useState([])
   const [courant, setCourant] = useState(devis)
   const [chargement, setChargement] = useState(false)
@@ -47,19 +47,32 @@ export default function ChoixOptions({ ouvert, produit, tarifLibelle, devis, onF
       try {
         setCourant(
           await api.tarifProduit(produit.id, {
-            typeTarif: devis.typeTarif,
+            // ⚠ L'IDENTIFIANT du tarif, pas celui du devis. `PriceQuote.typeTarif` porte le **nom**
+            // (« Plein tarif ») : le renvoyer faisait refuser la requête, les options se cochaient,
+            // et le total restait celui d'avant. Trouvé en cliquant, pas en relisant.
+            typeTarif: typeTarifId,
             canal: devis.canal,
             options: selection,
           }),
         )
       } catch (e) {
-        // On ne garde pas un total périmé à l'écran : il serait cru.
+        // ⚠ ON N'AFFICHE PAS UN TOTAL PÉRIMÉ, ET CE N'EST PAS UNE PRÉCAUTION DE STYLE.
+        //
+        // Ma première version disait ça en commentaire **et gardait le total d'avant** à l'écran. En
+        // cliquant, on voyait donc deux options cochées, un bandeau d'erreur, et un montant inchangé
+        // qui avait toutes les apparences d'un montant à jour. C'est exactement le défaut que cet
+        // écran existe pour supprimer — un prix annoncé qui n'est pas celui qui sera facturé —
+        // reproduit par le remède, dans son propre gestionnaire d'erreur.
+        //
+        // Le montant devient donc inconnu, et l'ajout au panier est refusé : on ne vend pas un prix
+        // qu'on n'a pas.
+        setCourant((avant) => (avant ? { ...avant, totalUnitaire: null, prixUnitaire: null } : avant))
         setErreur(e.message || "Le prix n'a pas pu être recalculé.")
       } finally {
         setChargement(false)
       }
     },
-    [produit, devis],
+    [produit, devis, typeTarifId],
   )
 
   function basculer(groupe, valeur) {
@@ -154,7 +167,9 @@ export default function ChoixOptions({ ouvert, produit, tarifLibelle, devis, onF
           >
             <div>
               <div style={{ fontSize: 20, fontWeight: 640 }}>
-                {chargement ? '…' : euros(courant.totalUnitaire ?? courant.prixUnitaire)}
+                {chargement ? '…' : (courant.totalUnitaire ?? courant.prixUnitaire) === null
+                  ? '— €'
+                  : euros(courant.totalUnitaire ?? courant.prixUnitaire)}
               </div>
               <div className="hint" style={{ margin: 0 }}>par unité, options comprises</div>
             </div>
@@ -164,7 +179,12 @@ export default function ChoixOptions({ ouvert, produit, tarifLibelle, devis, onF
               <button
                 type="button"
                 className="btn"
-                disabled={chargement || obligatoiresManquants.length > 0}
+                disabled={
+                  chargement
+                  || obligatoiresManquants.length > 0
+                  // Un prix inconnu ne s'ajoute pas au panier : le caissier l'annoncerait.
+                  || (courant.totalUnitaire ?? courant.prixUnitaire) === null
+                }
                 onClick={() => onValider(retenues, courant)}
               >
                 Ajouter au panier
