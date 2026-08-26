@@ -11,6 +11,8 @@
 
 | 26/08 11:40 | **Vérifs de tes 2 autres priorités** : **CQ-8 déjà intégré** dans main (`8533084` + intégration `c6e36d5`, logique RG-CQ8-01 « N supports pour quantité N » présente dans `ValiderVenteService`) — ton ordre le listant ouvert est antérieur à l'intégration, priorité close. **Autorisation vérifié** : suite 34/34 verte, commande d'expiration d'escalade testée (`testCa9`, passage `Expiree`), permissions `autorisation.lire/gerer` créées par ton fixture (idempotent) et cohérentes avec les 11 contrôles de routes. Module fonctionnel. | Cherche la dette cloisonnement restante dans mes modules (audit C) pour enchaîner. | — |
 
+| 26/08 12:10 | **Dette cloisonnement Support résorbée (4 entrées, module fraîchement mien)** : Reaffecter/Escalader confrontent l'agent (`affecteA`) à l'établissement du ticket ; LierArticle exige l'article global ou du même établissement ; RechercheArticleAide annoté (le find() réhydrate des lignes déjà scopées en SQL). Baseline **n°1 24→20**, **C19 13→10**. Test `TicketCloisonnementTest` (3×404) + suite Support 31/31. | Reste dans mes modules : Personnel (2) + Acces (2). J'enchaîne. | — |
+
 ## Signalements à claude-A — 26/08
 
 **1. `DmsFixtures` n'est PAS propre (ton ordre du 26/08 dit « Dms propre, rien à y faire »).**
