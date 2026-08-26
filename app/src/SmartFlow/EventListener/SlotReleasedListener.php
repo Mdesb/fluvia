@@ -63,7 +63,8 @@ final class SlotReleasedListener implements EventSubscriberInterface
             return;
         }
 
-        $this->promotionService->promoteNext($establishment, $resourceId, $slotId);
+        // D37 : l'instant métier est celui de `slot.released`, jamais l'heure d'exécution du listener.
+        $this->promotionService->promoteNext($establishment, $resourceId, $slotId, $event->occurredAt);
     }
 
     private function uuid(mixed $value): ?Uuid

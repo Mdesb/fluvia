@@ -187,10 +187,51 @@ else
     executer "Écriture transfrontière (D3/D8)" php_racine bin/garde-fou-ecriture-transfrontiere.php
 fi
 
+# 10. Un `DEFAULT` posé en migration doit être déclaré au mapping (D32). Sans quoi la colonne
+#     ressort en `CHANGE` dans le diff de CHAQUE session, éternellement : chacune ramasse la
+#     dérive des autres et la présente comme son propre travail. Famille trouvée par claude-F le
+#     25/08 en vérifiant sa migration sur une base repartie de zéro.
+if [ -n "${REFERENCE:-}" ]; then
+    executer "Défauts au mapping (D32)" php_racine bin/garde-fou-defauts-mapping.php "--contre=$REFERENCE"
+else
+    executer "Défauts au mapping (D32)" php_racine bin/garde-fou-defauts-mapping.php
+fi
+
+# 12. Une entité ne doit pas laisser écrire son PROPRE établissement (D41). L'entité est
+#     cloisonnée, mais le champ qui la rattache est modifiable depuis le corps de la requête :
+#     l'appelant choisit à quel établissement elle appartient. Trouvé par claude-H sur
+#     PointDeVente. Cliquet séparé du n°8 — ajouter une règle à un cliquet existant relève
+#     toujours son plafond, et il ne peut pas distinguer une dette qui grossit d'une règle qui
+#     mesure ce qui n'était pas compté.
+if [ -n "${REFERENCE:-}" ]; then
+    executer "Établissement écrivable (D41)" php_racine bin/garde-fou-etablissement-ecrivable.php "--contre=$REFERENCE"
+else
+    executer "Établissement écrivable (D41)" php_racine bin/garde-fou-etablissement-ecrivable.php
+fi
+
 # 5. i18n : pas de chaîne d'UI en dur — SANS OBJET tant que la couche i18n n'existe pas (aucun
 #    catalogue, aucun usage du traducteur dans app/src). Acté par l'intégrateur le 21/08.
 # 6. CSRF — SANS OBJET : tous les pare-feux sont `stateless: true` et l'authentification est un JWT
 #    en en-tête, qui n'est pas un identifiant ambiant. Acté par l'intégrateur le 21/08.
+
+# 11. Droits du frontend (D39) — écrit par claude-H, branché ici.
+#
+# La comparaison brute `droits.includes('caisse.lire')` ignore la permission joker `*.lire` : quatre
+# occurrences ont enfermé Maxime hors de son propre logiciel. Le script vérifie aussi que les
+# composants qui affichent des droits les reçoivent réellement en propriété.
+#
+# ⚠ Il tourne sur l'HÔTE : `node` n'est pas dans l'image PHP. S'il manque, on le dit — un contrôle
+# sauté qui se tait laisse croire qu'il a validé.
+if [ -f "$RACINE/frontend/scripts/verifier-droits.mjs" ]; then
+    if command -v node >/dev/null 2>&1; then
+        executer "Droits du frontend (D39)" sh -c "cd '$RACINE/frontend' && node scripts/verifier-droits.mjs"
+    else
+        echo "─────────────────────────────────────────────────────────────"
+        echo "▶ Droits du frontend (D39)"
+        echo "─────────────────────────────────────────────────────────────"
+        echo "· IGNORÉ — « node » indisponible ici. Le contrôle n'a PAS tourné."
+    fi
+fi
 
 # ⚠ FILET DE COMPLÉTUDE DU LANCEUR — et il couvre TOUTES les extensions.
 #

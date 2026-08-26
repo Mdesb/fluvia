@@ -266,6 +266,17 @@ while read -r ancien nouveau ref; do
         fi
     fi
 
+    # Une entite ne doit pas laisser ecrire son propre etablissement (D41). Ecrit par claude-C, qui a
+    # au passage corrige mon compte : 49 entites concernees et non 35. Vingt-deux d'entre elles ne
+    # declarent AUCUN `denormalizationContext` — c'est l'absence de declaration qui expose, et une
+    # lecture qui cherche des groupes d'ecriture ne la voit pas. La voie la moins visible est la plus
+    # large.
+    if [ -f "$ARBRE/bin/garde-fou-etablissement-ecrivable.php" ]; then
+        echo "── Établissement écrivable (D41)"
+        lancer garde-fou-etablissement-ecrivable.php "--contre=$BASE"
+    fi
+
+
     # ⚠ FILET DE COMPLÉTUDE — la leçon du 24/08, et elle a coûté cher.
     #
     # Ce hook n'appelle pas `bin/garde-fous.sh` : il doit calculer les fichiers ajoutés sur

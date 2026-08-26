@@ -69,6 +69,47 @@ final class ArticleStockApiTest extends StockApiTestCase
         self::assertSame((string) $produit->getId(), $this->idDepuisIri($rattache['produit'] ?? ''));
     }
 
+    /**
+     * Cloisonnement (D3/D8) — le `produit` du rattachement est résolu depuis le corps (find() direct),
+     * hors des extensions. Rattacher un article de A à un produit commercialisé UNIQUEMENT dans un autre
+     * établissement doit être refusé (404) : sinon référence stock cross-établissement.
+     */
+    public function testRattacherAUnProduitDunAutreEtablissementRenvoie404(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+
+        // Article sur A.
+        $article = $client->request('POST', '/api/article_stocks', $entete + [
+            'json' => $this->corpsArticle(self::EAN_VALIDE),
+        ])->toArray();
+        self::assertResponseIsSuccessful();
+
+        // Produit commercialisé UNIQUEMENT dans l'établissement B (réutilise le type d'un produit fixture).
+        /** @var \Doctrine\ORM\EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $etabB = $em->getRepository(\App\Organisation\Entity\Etablissement::class)
+            ->findOneBy(['nom' => \App\DataFixtures\SocleFixtures::ETAB_B_NOM]);
+        self::assertNotNull($etabB);
+        $type = $this->entite(Produit::class, ['libelleRecherche' => StockFixtures::PRODUIT_BOUTIQUE])->getType();
+
+        $produitB = (new Produit())
+            ->setType($type)
+            ->setLibelle(['fr' => 'Produit B only (test cloisonnement)'])
+            ->setLibelleRecherche('Produit B only ' . uniqid())
+            ->setCode('PRD-BONLY-' . substr(uniqid(), -6))
+            ->setCanaux(['guichet'])
+            ->setStatut(\App\Offre\Enum\StatutProduit::Brouillon)
+            ->addEtablissement($etabB);
+        $em->persist($produitB);
+        $em->flush();
+
+        $reponse = $client->request('POST', '/api/stock/articles/' . $article['id'] . '/rattacher-produit', $entete + [
+            'json' => ['produit' => (string) $produitB->getId()],
+        ]);
+
+        self::assertSame(404, $reponse->getStatusCode(), (string) $reponse->getContent(false));
+    }
+
     /** CA-2 (RG-STOCK-01) — un ArticleStock non rattaché n'a pas de produit associé. */
     public function testCa2ArticleSansProduitResteSansRattachement(): void
     {

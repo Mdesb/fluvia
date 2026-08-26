@@ -5,12 +5,16 @@ declare(strict_types=1);
 namespace App\SmartFlow\Service;
 
 use App\Organisation\Entity\Etablissement;
+use App\Platform\Notification\ClientNotification;
+use App\Platform\Notification\ClientNotifierInterface;
+use App\Platform\Notification\NotificationBasis;
+use App\Platform\Notification\NotificationChannel;
 use App\SmartFlow\Entity\RescheduleProposal;
 use App\SmartFlow\Entity\SlotWaitlistEntry;
 use App\SmartFlow\Enum\RescheduleProposalStatus;
 use App\SmartFlow\Enum\SlotWaitlistEntryStatus;
-use App\SmartFlow\Port\ClientNotificationInterface;
 use Doctrine\ORM\EntityManagerInterface;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\Uid\Uuid;
 
 /**
@@ -33,7 +37,8 @@ final class SlotWaitlistPromotionService
 
     public function __construct(
         private readonly EntityManagerInterface $em,
-        private readonly ClientNotificationInterface $notifier,
+        private readonly ClientNotifierInterface $notifier,
+        private readonly ?LoggerInterface $logger = null,
     ) {
     }
 
@@ -41,8 +46,14 @@ final class SlotWaitlistPromotionService
      * Tente une promotion sur la ressource `$resourceId` pour le créneau libéré `$slotId` (RG-SF-06) —
      * `null` si aucune inscription `waiting` n'existe sur cette ressource (pas un échec, un simple
      * constat : la revente non ciblée, hors périmètre de ce lot, peut alors s'appliquer).
+     *
+     * `$occurredAt` (D37) est l'instant métier de la promotion : celui de `slot.released` quand
+     * l'appelant est `App\SmartFlow\EventListener\SlotReleasedListener`, celui de l'exécution de la
+     * tâche planifiée quand l'appelant est `App\SmartFlow\Command\ExpireSlotWaitlistPromotionsCommand`
+     * (l'expiration constatée déclenche elle-même la promotion suivante, il n'existe pas d'instant
+     * antérieur plus légitime).
      */
-    public function promoteNext(Etablissement $establishment, Uuid $resourceId, Uuid $slotId): ?RescheduleProposal
+    public function promoteNext(Etablissement $establishment, Uuid $resourceId, Uuid $slotId, \DateTimeImmutable $occurredAt): ?RescheduleProposal
     {
         /** @var SlotWaitlistEntry|null $entry */
         $entry = $this->em->getRepository(SlotWaitlistEntry::class)->createQueryBuilder('e')
@@ -79,7 +90,30 @@ final class SlotWaitlistPromotionService
         $this->em->persist($proposal);
         $this->em->flush();
 
-        $this->notifier->notifyWaitlistPromotion($entry);
+        try {
+            // ⚠ BASE LÉGALE À CONFIRMER PAR claude-A : `Consentement` par défaut (le plus strict), même
+            // question que `RescheduleRequestedListener` pour une proposition de report après no-show.
+            $this->notifier->notify(new ClientNotification(
+                $entry->getBeneficiaryId(),
+                NotificationChannel::Email,
+                'smart_flow.waitlist_promoted',
+                [
+                    'entryId' => $entry->getId()->toRfc4122(),
+                    'promotedProposalRef' => $entry->getPromotedProposalRef()?->toRfc4122(),
+                ],
+                $occurredAt,
+                'smart_flow',
+                NotificationBasis::Consentement,
+            ));
+        } catch (\Throwable $error) {
+            // Best-effort (D7) : un appelant console (`ExpireSlotWaitlistPromotionsCommand`) n'est pas
+            // enveloppé par le try/catch d'un listener — la promotion elle-même (déjà persistée) ne doit
+            // jamais échouer parce que la notification a échoué.
+            $this->logger?->error('smart_flow.notification.failed', [
+                'entry' => (string) $entry->getId(),
+                'reason' => $error->getMessage(),
+            ]);
+        }
 
         return $proposal;
     }

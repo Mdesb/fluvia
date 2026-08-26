@@ -7,8 +7,8 @@ namespace App\Tests\SmartFlow\Unit;
 use App\Platform\Event\DomainEvent;
 use App\Platform\Event\EventSubject;
 use App\Platform\Event\EventTenant;
+use App\Platform\Notification\ClientNotifierInterface;
 use App\SmartFlow\EventListener\RescheduleRequestedListener;
-use App\SmartFlow\Port\ClientNotificationInterface;
 use App\SmartFlow\Service\CompatibleSlotFinder;
 use App\SmartFlow\Service\ReservationSlotReader;
 use Doctrine\ORM\EntityManagerInterface;
@@ -35,7 +35,7 @@ final class SmartFlowListenerBestEffortTest extends TestCase
             $em,
             new ReservationSlotReader($em),
             new CompatibleSlotFinder(),
-            $this->createMock(ClientNotificationInterface::class),
+            $this->createMock(ClientNotifierInterface::class),
             $logger,
         );
 
@@ -66,7 +66,7 @@ final class SmartFlowListenerBestEffortTest extends TestCase
             $em,
             new ReservationSlotReader($em),
             new CompatibleSlotFinder(),
-            $this->createMock(ClientNotificationInterface::class),
+            $this->createMock(ClientNotifierInterface::class),
             // logger absent (nullable, §T4) : ne doit pas non plus faire planter le listener.
         );
 
