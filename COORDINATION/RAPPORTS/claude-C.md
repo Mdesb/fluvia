@@ -24,6 +24,7 @@
 | 05:00 | **Présentation** — `claude-C`. **Fil n°2 (D41) livré** : garde-fou n°12, deux voies d'exposition, **49 entités** et non 35. Trois défauts de ma propre règle trouvés en réconciliant deux implémentations. Lanceur **12/12**. | fil n°3 (permission sans rôle) | rien |
 | 06:00 | **Présentation** — `claude-C`. **Fil n°3 : je ne le construis pas, et voici pourquoi.** La prémisse ne tient pas dans ce dépôt — le rôle modèle porte le joker `*.*`, donc `smart_flow.read` n'est pas morte. La règle signalerait **22 migrations légitimes sur 28**. | fil n°4 | rien |
 | 07:00 | **Présentation** — `claude-C`. **Fil n°4 livré** : garde-fou n°13, suppressions en migration, cliquet à 10 + échappatoire annotée. **Et un cas de banc qui mentait** — il visait une entité cloisonnée depuis, donc passait au vert sans rien tester. Rendu autonome. | ton fil est épuisé — périmètre disponible | rien |
+| 08:00 | **FERMETURE DE SESSION** — décision de Maxime, qui lève sa propre consigne et D30. Rien en cours, rien de non poussé, aucune pile ouverte. **Passation ci-dessous** : quatre choses t'attendent, aucune n'est dans mon périmètre. | — | — |
 
 ---
 
@@ -1187,3 +1188,62 @@ prendrai le premier :
    périmètre. Je l'ai appliqué aux n°12 et n°13 ; les onze premiers ne l'ont jamais été formellement.
 
 **Lanceur 13/13, banc 17/17.**
+
+
+---
+
+### 2026-08-26 · 08:00 — Passation : `claude-C` ferme
+
+**Maxime ferme cette session.** C'est sa décision et elle lève sa propre consigne d'ouverture ainsi que
+D30. Je le note pour que tu ne cherches pas une session arrêtée par accident : elle est arrêtée
+volontairement.
+
+**État vérifié avant fermeture**, pas supposé :
+
+- aucun travail non commité, aucun commit non poussé ;
+- aucune pile de test à mon nom — pool à **9 réseaux** ;
+- branche de travail `n10-en-attente` supprimée après vérification que son contenu est identique dans
+  `claude-C` **et** déjà sur `main` ;
+- lanceur **13/13**, banc **17/17**.
+
+**Ce que laisse la session** — treize garde-fous, tous câblés au lanceur et aux deux hooks, sous filet
+de complétude qui refuse d'en laisser un muet :
+
+| | |
+|---|---|
+| n°0 | topologie — refuse de démarrer si les commits ne franchissent aucune barrière |
+| n°1 | cloisonnement (D3/D8) + C19, résolution liée |
+| n°2 | nommage anglais (D5) |
+| n°4 | secrets en dur |
+| n°5 | couverture de périmètre en lecture |
+| n°6 | événements du catalogue — abonné inerte, hors contrat, cliquet |
+| n°7 | charges utiles vs catalogue |
+| n°8 | écriture qui traverse la frontière |
+| n°10 | `DEFAULT` et index non déclarés au mapping (D32) |
+| n°11 | droits du frontend (D39) — écrit par claude-H, branché ici |
+| n°12 | établissement écrivable (D41) — 49 entités, deux voies |
+| n°13 | suppressions en migration (D32) |
+
+---
+
+### Ce qui t'attend, et dont aucune n'est dans mon périmètre
+
+1. **`OperationScellee`** — la chaîne NF525 reste listable d'un établissement à l'autre. Une ligne dans
+   `PerimetreVenteExtension` (`pointDeVente`), et le cliquet du n°5 la retire tout seul : je l'ai
+   simulé, il annonce « Bonne nouvelle ». Douze autres jointures du groupe A suivent le même patron.
+2. **`reservation_regle_annulation.issue_credit_no_show`** — un `options: ['default' => …]` manquant sur
+   la propriété. Une ligne, et elle retire une ligne du diff de toute la flotte.
+3. **`claude-G`** est toujours un worktree du dépôt nu. Ses commits entrent dans les refs sans push,
+   donc sans `pre-receive` — couvert seulement par `pre-commit`, qui est contournable.
+4. **Le registre d'attente du n°6** (`--attendre=<événement>=<tâche>/<session>`) attend ton mot :
+   à valider ou à retirer. Il est inerte tant que personne ne l'utilise.
+
+**Et un point que je te dois** : `D34` n'a jamais été applicable. `claude-A` n'est joignable par
+messagerie de session depuis aucune des deux sessions qui se voient — constat croisé avec `claude-F`,
+chacune dans son propre rapport. Toute la coordination est passée par le dépôt, et c'est ce qui a
+fonctionné.
+
+**Trois choses que je n'ai pas livrées, délibérément**, pour que personne ne les reprenne en croyant à
+un oubli : le garde-fou de permission sans rôle (la prémisse ne tient pas — le rôle modèle porte le
+joker `*.*`), un doublon du décorateur D41 (déjà vérifié dans les deux sens de ton côté), et un
+garde-fou `droits.includes(` (celui de claude-H couvrait déjà le besoin).
