@@ -468,6 +468,22 @@ export const api = {
   creneauxBassin: () => request('/api/creneau_bassins', { query: { itemsPerPage: 200 } }),
   jaugesGrandPublic: () =>
     request('/api/jauge_grand_public_calculees', { query: { itemsPerPage: 100 } }),
+  // Casiers : quatre gestes, dont un qui demande un droit plus fort que les autres.
+  piscineCasiers: () => request('/api/casiers', { query: { itemsPerPage: 300 } }),
+  piscineBracelets: () => request('/api/bracelet_etanches', { query: { itemsPerPage: 300 } }),
+  piscineAttribuerCasier: (id, corps) =>
+    request(`/api/piscine/casiers/${id}/attribuer`, { method: 'POST', body: corps }),
+  piscineLibererCasier: (id) =>
+    request(`/api/piscine/casiers/${id}/liberer`, { method: 'POST', body: {} }),
+  piscineRelancerCasier: (id) =>
+    request(`/api/piscine/casiers/${id}/relancer`, { method: 'POST', body: {} }),
+  piscineForcerCasier: (id, motif) =>
+    request(`/api/piscine/casiers/${id}/forcer`, { method: 'POST', body: { motif } }),
+  // Le POSS est le plan de surveillance : son seuil est une limite reglementaire, pas un confort.
+  piscinePoss: () => request('/api/posses', { query: { itemsPerPage: 20 } }),
+  piscineEtatPoss: (id) => request(`/api/piscine/poss/${id}/etat`),
+  piscineValiderCreneauBassin: (id) =>
+    request(`/api/piscine/creneaux-bassin/${id}/valider`, { method: 'POST', body: {} }),
   // Patinoire
   patinoireConflits: () => request('/api/patinoire/conflits-glace'),
   patinoireLocations: () =>

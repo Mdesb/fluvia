@@ -15,13 +15,13 @@ import Catalogue from './pages/Catalogue.jsx'
 import Clients from './pages/Clients.jsx'
 import Reservation from './pages/Reservation.jsx'
 import Supervision from './pages/Supervision.jsx'
-import Piscine from './pages/Piscine.jsx'
-import Patinoire from './pages/Patinoire.jsx'
 
 // Ecrans de back-office charges a la demande : un caissier qui reste a sa caisse ne les
 // telecharge jamais. Ceux qu'on ouvre plusieurs fois par jour — caisse, catalogue, clients,
 // reservation — restent dans le paquet principal : leur decoupage ferait payer une attente
 // repetee pour un gain unique.
+const Piscine = lazy(() => import('./pages/Piscine.jsx'))
+const Patinoire = lazy(() => import('./pages/Patinoire.jsx'))
 const Pilotage = lazy(() => import('./pages/Pilotage.jsx'))
 const Boutique = lazy(() => import('./pages/Boutique.jsx'))
 const Comptabilite = lazy(() => import('./pages/Comptabilite.jsx'))
@@ -238,7 +238,7 @@ export default function App() {
       {onglet === 'facturation' && <Facturation etabActif={etabActif} droits={droits} />}
       {onglet === 'clients' && <Clients etabActif={etabActif} cible={cible} onCibleConsommee={() => setCible(null)} droits={droits} />}
       {onglet === 'boutique' && <Boutique etabActif={etabActif} droits={droits} />}
-      {onglet === 'piscine' && <Piscine etabActif={etabActif} />}
+      {onglet === 'piscine' && <Piscine etabActif={etabActif} droits={droits} />}
       {onglet === 'patinoire' && <Patinoire etabActif={etabActif} droits={droits} />}
       {onglet === 'padel' && <Padel etabActif={etabActif} />}
       {onglet === 'musee' && <Musee etabActif={etabActif} droits={droits} />}
