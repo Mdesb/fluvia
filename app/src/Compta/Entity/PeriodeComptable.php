@@ -10,6 +10,7 @@ use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Post;
 use App\Compta\Enum\StatutPeriode;
 use App\Compta\State\CloturerPeriodeProcessor;
+use App\Compta\State\SimulateClosureProcessor;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
@@ -28,6 +29,13 @@ use Symfony\Component\Uid\Uuid;
         new GetCollection(security: "is_granted('PERM', 'compta.lire')"),
         new Get(security: "is_granted('PERM', 'compta.lire')"),
         new Post(security: "is_granted('PERM', 'compta.gerer')"),
+        new Post(
+            uriTemplate: '/compta/periodes/{id}/simuler-cloture',
+            read: true,
+            input: false,
+            security: "is_granted('PERM', 'compta.cloturer')",
+            processor: SimulateClosureProcessor::class,
+        ),
         new Post(
             uriTemplate: '/compta/periodes/{id}/cloturer',
             read: true,

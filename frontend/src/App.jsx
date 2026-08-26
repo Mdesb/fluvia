@@ -25,6 +25,7 @@ import Patinoire from './pages/Patinoire.jsx'
 const Pilotage = lazy(() => import('./pages/Pilotage.jsx'))
 const Boutique = lazy(() => import('./pages/Boutique.jsx'))
 const Comptabilite = lazy(() => import('./pages/Comptabilite.jsx'))
+const Facturation = lazy(() => import('./pages/Facturation.jsx'))
 const Personnel = lazy(() => import('./pages/Personnel.jsx'))
 const Parametres = lazy(() => import('./pages/Parametres.jsx'))
 const Stock = lazy(() => import('./pages/Stock.jsx'))
@@ -152,6 +153,7 @@ export default function App() {
     const permRequise = {
       piscine: 'piscine.lire', patinoire: 'patinoire.lire', padel: 'padel.lire',
       musee: 'musee.lire', comptabilite: 'compta.lire', personnel: 'personnel.lire',
+      facturation: 'facturation.lire',
     }
     if (onglet === 'dashboard' && me && !estAdministrateur(me)) setOnglet('caisse')
     else if (capRequise[onglet] && !caps.includes(capRequise[onglet])) setOnglet('caisse')
@@ -233,6 +235,7 @@ export default function App() {
         <Pilotage etabActif={etabActif} etablissements={etablissements} />
       )}
       {onglet === 'comptabilite' && <Comptabilite etabActif={etabActif} droits={droits} />}
+      {onglet === 'facturation' && <Facturation etabActif={etabActif} droits={droits} />}
       {onglet === 'clients' && <Clients etabActif={etabActif} cible={cible} onCibleConsommee={() => setCible(null)} droits={droits} />}
       {onglet === 'boutique' && <Boutique etabActif={etabActif} droits={droits} />}
       {onglet === 'piscine' && <Piscine etabActif={etabActif} />}

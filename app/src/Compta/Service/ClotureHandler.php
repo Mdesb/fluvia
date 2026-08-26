@@ -30,6 +30,42 @@ final class ClotureHandler
             throw new ConflictHttpException('Clôture refusée : ' . implode(' | ', $bloquants));
         }
 
+        $arrete = $this->arrete($periode);
+        $arrete['clotureLe'] = (new \DateTimeImmutable())->format(\DATE_ATOM);
+
+        $periode->setEtatCloture($arrete);
+        $periode->setStatut(StatutPeriode::Cloturee);
+
+        $profil = $periode->getProfilExploitant();
+        if ($profil !== null && !$profil->isVerrouille()) {
+            $profil->setVerrouille(true);
+        }
+
+        $this->em->flush();
+
+        return $periode;
+    }
+
+    /**
+     * L'arrêté chiffré de la période — les mêmes montants que la clôture, calculés sans rien figer.
+     *
+     * **Extrait de `cloturer()` pour qu'on puisse le montrer AVANT le clic.** La clôture est
+     * définitive : aucun code de ce dépôt ne repasse une période à `Ouverte`. Or `etatCloture` n'était
+     * rempli qu'une fois la clôture faite — l'exploitant signait donc à l'aveugle le seul geste
+     * irréversible du module, et la meilleure fenêtre de confirmation possible se réduisait à
+     * « faites-moi confiance ».
+     *
+     * **Une seule source pour les deux usages, et c'est tout l'intérêt.** Un aperçu calculé à part
+     * finirait par annoncer autre chose que ce que la clôture enregistre, et la divergence se
+     * découvrirait sur un arrêté — c'est-à-dire trop tard, et sur le document qui fait foi.
+     *
+     * Ne contient pas `clotureLe` : tant que rien n'est clôturé, il n'y a pas de date de clôture, et
+     * en inventer une ferait passer un aperçu pour un arrêté.
+     *
+     * @return array{produitsCentimes: int, tvaCentimes: int, encaissementsCentimes: int, nbEcritures: int}
+     */
+    public function arrete(PeriodeComptable $periode): array
+    {
         /** @var list<EcritureComptable> $ecritures */
         $ecritures = $this->em->getRepository(EcritureComptable::class)->findBy(['periode' => $periode->getId()]);
 
@@ -50,22 +86,17 @@ final class ClotureHandler
             }
         }
 
-        $periode->setEtatCloture([
+        return [
             'produitsCentimes' => $produits,
             'tvaCentimes' => $tva,
             'encaissementsCentimes' => $encaissements,
             'nbEcritures' => \count($ecritures),
-            'clotureLe' => (new \DateTimeImmutable())->format(\DATE_ATOM),
-        ]);
-        $periode->setStatut(StatutPeriode::Cloturee);
+        ];
+    }
 
-        $profil = $periode->getProfilExploitant();
-        if ($profil !== null && !$profil->isVerrouille()) {
-            $profil->setVerrouille(true);
-        }
-
-        $this->em->flush();
-
-        return $periode;
+    /** Ce qui empêche encore de clôturer, dans les mots que l'exploitant lira sur le refus. */
+    public function pointsBloquants(PeriodeComptable $periode): array
+    {
+        return $this->guard->pointsBloquants($periode);
     }
 }

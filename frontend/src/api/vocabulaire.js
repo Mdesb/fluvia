@@ -19,6 +19,18 @@
 // « Boutique stock » que d'effacer une information qu'on n'a pas su traduire.
 
 const MOTS = {
+  // --- Pièces commerciales (FAC-1) : natures et statuts ---
+  quote: 'Devis',
+  sales_order: 'Bon de commande',
+  delivery_note: 'Bon de livraison',
+  draft: 'Brouillon',
+  issued: 'Émis',
+  accepted: 'Accepté',
+  rejected: 'Refusé',
+  expired: 'Périmé',
+  converted: 'Transformé',
+  cancelled: 'Annulé',
+
   // --- Espaces (types physiques) ---
   guichet: 'Guichet',
   salle_exposition: "Salle d'exposition",
