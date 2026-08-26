@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Organisation\Entity;
 
 use ApiPlatform\Metadata\ApiResource;
-use ApiPlatform\Metadata\Delete;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
@@ -31,7 +30,27 @@ use Symfony\Component\Validator\Constraints as Assert;
         new Get(security: "is_granted('IS_AUTHENTICATED_FULLY')"),
         new Post(security: "is_granted('PERM', 'organisation.gerer')"),
         new Patch(security: "is_granted('PERM', 'organisation.gerer')"),
-        new Delete(security: "is_granted('PERM', 'organisation.gerer')"),
+        // PAS DE `Delete`, ET C'EST DELIBERE.
+        //
+        // Un etablissement n'est pas une ligne de referentiel : c'est **la frontiere de cloisonnement
+        // a laquelle tout est rattache**. 119 entites du depot portent une relation vers lui, et
+        // **deux** declarent un comportement de suppression. Les 117 autres retombent donc sur le
+        // refus de la base : une suppression echouerait par une violation de cle etrangere brute --
+        // ou, sur un etablissement encore vide, **reussirait**, en detruisant un perimetre reel.
+        //
+        // Aucun des deux comportements n'est acceptable, et le second est le pire : il ne se produit
+        // que sur un etablissement recemment cree, c'est-a-dire au moment ou l'on tatonne encore.
+        //
+        // Ce qu'un exploitant veut reellement, c'est **desactiver** : le site cesse d'etre propose,
+        // l'historique reste consultable, et c'est reversible. Le champ `actif` existe pour ca.
+        //
+        // Trouve par claude-H, qui avait deja refuse d'exposer le bouton cote ecran -- « un bouton qui
+        // echoue une fois sur deux enseigne surtout qu'on peut reessayer ». Elle avait raison sur
+        // l'ecran ; le trou etait dans l'API, ou n'importe qui portant `organisation.gerer` pouvait
+        // appeler l'operation directement, bouton ou pas. Cacher un bouton ne ferme pas une porte.
+        //
+        // Si une fermeture definitive doit exister un jour, elle merite un geste dedie, ses propres
+        // avertissements et une reprise des 119 relations -- pas la meme croix qu'un taux de TVA.
     ],
     normalizationContext: ['groups' => ['etablissement:read']],
     denormalizationContext: ['groups' => ['etablissement:write']],
