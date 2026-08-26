@@ -13,6 +13,10 @@ use App\Offre\Service\ResolveurPrix;
 use App\Vente\Dto\PriceQuote;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Uid\Uuid;
+use App\OptionProduit\Entity\ValeurOption;
+use App\OptionProduit\Enum\ImpactOptionType;
+use App\OptionProduit\Entity\OptionProduit;
+use App\Organisation\Entity\Etablissement;
 
 /**
  * Le prix d'une ligne : **un seul calcul, deux appelants**.
@@ -44,11 +48,15 @@ final class PriceQuoter
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly ResolveurPrix $resolveurPrix,
+        private readonly PanierCalculateur $calculateur,
     ) {
     }
 
     /**
      * Le prix applicable, et la raison. Ne crée rien, ne réserve rien, ne consomme aucun stock.
+     */
+    /**
+     * @param list<string> $optionsRetenues identifiants de `ValeurOption` selectionnes
      */
     public function quote(
         Produit $produit,
@@ -56,9 +64,32 @@ final class PriceQuoter
         \DateTimeImmutable $date,
         Canal $canal = Canal::Guichet,
         ?float $qf = null,
+        ?Etablissement $etablissement = null,
+        array $optionsRetenues = [],
+        int $quantite = 1,
     ): PriceQuote {
         $prix = $this->resolveurPrix->resoudre($produit, $typeTarif, $date, $canal, $qf);
         $saison = $prix === null ? null : $this->saison($produit, $typeTarif, $date, $qf);
+
+        $baseCentimes = $prix !== null ? $this->calculateur->centimes($prix) : 0;
+        $groupes = $this->optionsDuProduit($produit, $etablissement, $baseCentimes, $optionsRetenues);
+
+        $totalUnitaire = null;
+        $totalLigne = null;
+        if ($prix !== null) {
+            $cumul = $baseCentimes;
+            foreach ($groupes as $groupe) {
+                foreach ($groupe['valeurs'] as $valeur) {
+                    // Une option retenue mais indisponible n ajoute rien : la caisse la refuserait, et
+                    // annoncer un total que la vente ne produira pas est le defaut qu on ferme ici.
+                    if ($valeur['retenue'] === true && $valeur['disponible'] === true) {
+                        $cumul += $this->calculateur->centimes($valeur['montantParUnite']);
+                    }
+                }
+            }
+            $totalUnitaire = $this->calculateur->decimal($cumul);
+            $totalLigne = $this->calculateur->decimal($cumul * max(1, $quantite));
+        }
 
         return new PriceQuote(
             produit: (string) $produit->getId(),
@@ -69,7 +100,86 @@ final class PriceQuoter
             date: $date->format(\DATE_ATOM),
             promotions: $prix === null ? [] : $this->promotionsAuto($produit, $date),
             motif: $this->motif($produit, $typeTarif, $date, $canal, $prix, $saison, $qf),
+            options: $groupes,
+            quantite: max(1, $quantite),
+            totalUnitaire: $totalUnitaire,
+            totalLigne: $totalLigne,
         );
+    }
+
+    /**
+     * Le catalogue d options du produit, **avec le montant deja calcule** et, pour chaque valeur
+     * indisponible, la raison.
+     *
+     * Le filtrage reprend celui d `AjoutLigneHandler::resoudreOptions()` — liaison active, groupe
+     * actif, restriction d etablissement (RG-OPT-07/08). La difference est qu ici **on n ecarte pas :
+     * on explique**. `claude-H` a nuance sa propre regle pour ce cas : *la question n est pas si
+     * l action est possible, c est si l utilisateur a une raison de la chercher.* Un client qui reclame
+     * nommement une option que le caissier ne trouve pas l envoie fouiller le parametrage.
+     *
+     * @param list<string> $retenues
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function optionsDuProduit(Produit $produit, ?Etablissement $etablissement, int $baseCentimes, array $retenues): array
+    {
+        /** @var list<OptionProduit> $liaisons */
+        $liaisons = $this->em->getRepository(OptionProduit::class)->findBy(['produit' => $produit, 'actif' => true]);
+
+        $groupes = [];
+        foreach ($liaisons as $liaison) {
+            $groupe = $liaison->getGroupeOption();
+            if ($groupe === null || !$groupe->isActif()) {
+                continue;
+            }
+
+            $restrictions = $liaison->getEtablissementsRestriction();
+            $horsEtablissement = !$restrictions->isEmpty()
+                && ($etablissement === null || !$restrictions->contains($etablissement));
+
+            $valeurs = [];
+            foreach ($groupe->getValeurs() as $valeur) {
+                $impact = $this->impactOption($valeur, $baseCentimes);
+                // D54 — l ordre des phrases : d abord le fait sur la DONNEE, ensuite le fait sur
+                // l utilisateur ou son etablissement. Inverser envoie chercher un droit manquant.
+                $motif = '';
+                if (!$valeur->isActif()) {
+                    $motif = 'Cette option n est plus proposee.';
+                } elseif ($horsEtablissement) {
+                    $motif = 'Cette option n est pas proposee dans cet etablissement.';
+                }
+
+                $valeurs[] = [
+                    'valeurOption' => (string) $valeur->getId(),
+                    'libelle' => $valeur->getLibelle(),
+                    // Gardes a la demande de claude-H : ils ne servent pas a calculer, ils servent a
+                    // EXPLIQUER. « +10 % » repond a « pourquoi » ; « +1,00 EUR » ne repond pas.
+                    'impactType' => $valeur->getImpactType()?->value,
+                    'impactValeur' => $valeur->getImpactValeur(),
+                    // « par unite » et non « unitaire » : une ligne porte une quantite, et
+                    // « unitaire par rapport a quoi » est exactement l ambiguite qui produit un
+                    // chiffre faux sur le document que le client emporte.
+                    'montantParUnite' => $this->calculateur->decimal($impact),
+                    'ordreAffichage' => $valeur->getOrdreAffichage(),
+                    'disponible' => $motif === '',
+                    'motif' => $motif,
+                    'retenue' => \in_array((string) $valeur->getId(), $retenues, true),
+                ];
+            }
+            usort($valeurs, static fn (array $a, array $b): int => $a['ordreAffichage'] <=> $b['ordreAffichage']);
+
+            $groupes[] = [
+                'groupeOption' => (string) $groupe->getId(),
+                'libelle' => $groupe->getLibelle(),
+                'modeSelection' => $groupe->getModeSelection()?->value,
+                'obligatoire' => $liaison->isObligatoire(),
+                'ordreAffichage' => $liaison->getOrdreAffichage(),
+                'valeurs' => $valeurs,
+            ];
+        }
+        usort($groupes, static fn (array $a, array $b): int => $a['ordreAffichage'] <=> $b['ordreAffichage']);
+
+        return $groupes;
     }
 
     /**
@@ -120,6 +230,33 @@ final class PriceQuoter
         }
 
         return null;
+    }
+
+    /**
+     * **L'impact d'une option sur le prix unitaire, en centimes** (RG-OPT-04).
+     *
+     * Cette formule est **la** raison d'être de cette méthode publique. Elle vivait dans une méthode
+     * privée d'`AjoutLigneHandler`, donc hors de portée de l'écran de caisse : `OptionsDisponiblesProvider`
+     * déclare lui-même *« lecture seule, sans résolution de prix »*, et l'écran ne pouvait donc lister
+     * les options d'un produit **qu'en taisant ce qu'elles coûtent**. Le supplément ne se découvrait
+     * qu'après l'ajout au panier.
+     *
+     * Sans ce point d'entrée, la caisse aurait réimplémenté `ImpactOptionType` côté navigateur — donc
+     * une seconde implémentation d'une règle tarifaire, avec exactement l'écart annoncé/facturé que le
+     * `PriceQuoter` existe pour supprimer. **Le remède aurait eu la forme de la maladie.**
+     *
+     * Un pourcentage porte sur le **prix de base résolu**, que l'écran ne connaît pas non plus : c'est
+     * la seconde raison pour laquelle le calcul ne peut pas être fait ailleurs qu'ici.
+     *
+     * `intdiv` sur des centimes entiers, jamais de flottant — la convention du dépôt, `bcmath` n'étant
+     * pas installé. Le `100 * 100` n'est pas une coquette : cent pour convertir le pourcentage, cent
+     * pour les centimes de sa valeur.
+     */
+    public function impactOption(ValeurOption $valeur, int $prixBaseCentimes): int
+    {
+        return $valeur->getImpactType() === ImpactOptionType::Pourcentage
+            ? intdiv($prixBaseCentimes * $this->calculateur->centimes($valeur->getImpactValeur()), 100 * 100)
+            : $this->calculateur->centimes($valeur->getImpactValeur());
     }
 
     /**

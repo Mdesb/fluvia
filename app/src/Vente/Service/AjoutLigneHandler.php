@@ -216,9 +216,10 @@ final class AjoutLigneHandler
         $snapshot = [];
         foreach ($valeursParGroupe as $entree) {
             foreach ($entree['valeurs'] as $valeur) {
-                $impactUnitaire = $valeur->getImpactType() === ImpactOptionType::Pourcentage
-                    ? intdiv($prixBaseCentimes * $this->calculateur->centimes($valeur->getImpactValeur()), 100 * 100)
-                    : $this->calculateur->centimes($valeur->getImpactValeur());
+                // Un seul calcul, deux appelants : la meme formule sert a l estimation que la caisse
+                // demande AVANT l ajout au panier. Une seconde implementation ne divergerait pas au
+                // moment ou on l ecrit — elle divergerait au premier correctif applique a une seule.
+                $impactUnitaire = $this->tarif->impactOption($valeur, $prixBaseCentimes);
                 $impactTotal += $impactUnitaire;
                 $snapshot[] = [
                     'groupeOptionId' => (string) $valeur->getGroupeOption()?->getId(),

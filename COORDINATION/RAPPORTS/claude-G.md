@@ -307,6 +307,7 @@ lui fait porter le risque. La prochaine fois je donne les deux, ou je dis que je
 | 18:27 | **PAY-3 : un refus de carte ne laissait aucune trace.** `CA-10` veut qu'un refus ne crée aucun `Paiement` — donc il ne restait rien. Table + événement qui la référence, dans cet ordre (bus synchrone). `rejectionId` et non `paymentId` : le second n'existe pas. `Vente` 92/92, `Caisse` 15/15, `Sepa` 55/55. | Commit et poussée. | Rien. |
 | 19:15 | **L'estimation de tarif appelle le code qui facture.** Le remède ne devait pas avoir la forme de la maladie : un service d'estimation parallèle aurait reproduit le défaut dans une couche où **personne ne verrait la divergence**. `Vente` 98/98, `Offre` 32/32, `Boutique` 56/56, `Reservation` 103/103. | Commit et poussée. | Rien. |
 | 21:11 | **D51 — socle partagé + ajout local, et le joker `offre.*` qui contenait le droit sur le socle.** Le test a trouvé deux défauts que la relecture n'aurait pas vus. `Offre` 39/39, `Vente` 98/98, `Boutique` 56/56, `Reservation` 103/103. | Commit et poussée. | Rien. |
+| 22:02 | **Le prix d'une option, avant l'ajout au panier.** `OptionsDisponiblesProvider` disait lui-même « sans résolution de prix » : l'écran listait les options sans pouvoir dire ce qu'elles coûtent. Formule partagée, totaux serveur, indisponibles expliquées. `OptionProduit` 22/22, `Vente` 98/98, `Offre` 39/39, `Boutique` 56/56. | Commit et poussée. | Rien. |
 
 ## Nouvelle règle de Maxime — présentation horaire à `claude-A`
 
@@ -1803,3 +1804,74 @@ Une sortie tronquée qui ressemble à une sortie complète — le motif du jour 
 cette fois, c'est l'outil de lecture qui ment, pas le code lu. `claude-A` avait déjà relayé le constat
 à Maxime ; il l'a corrigé, en notant que ce n'est pas la fausseté qui a porté l'erreur mais **la
 justesse de tout ce qui l'entourait**.
+
+
+## Le prix d'une option, avant l'ajout au panier
+
+La plainte de Maxime — *« je ne comprends rien aux options produit »* — avait une cause écrite dans le
+code : `OptionsDisponiblesProvider` déclare lui-même *« lecture seule, **sans résolution de prix** »*.
+L'écran pouvait lister les options d'un produit et **pas dire ce qu'elles coûtent**.
+
+**Le cas du pourcentage interdisait toute solution côté écran** : il porte sur le prix de base
+**résolu** — tarif × saison × quotient familial — que le navigateur ne connaît pas. Sans cet endpoint,
+la caisse aurait réimplémenté `ImpactOptionType`, c'est-à-dire une seconde règle tarifaire dans une
+couche où **personne ne voit la divergence**. Le remède aurait eu la forme de la maladie.
+
+La formule vivait dans une méthode **privée** d'`AjoutLigneHandler`. Elle est dans
+`PriceQuoter::impactOption()`, appelée par les deux. Déplacement pur : `tests/Vente` 98/98 avant et
+après.
+
+### `claude-H` a corrigé deux de mes propositions, et les deux corrections valent mieux
+
+**Le nom.** J'avais proposé `montantUnitaire`. Elle a refusé : *unitaire par rapport à quoi ?* Trois
+patins avec un affûtage à 5 € font-ils +5 ou +15 sur la ligne ? Elle le pensait sans le savoir — et
+c'est la forme exacte de la faute qu'elle avait corrigée deux fois le même jour : **un nom presque
+juste, une supposition raisonnable, un chiffre faux sur le document que le client emporte.** Elle a
+proposé les deux façons de fermer l'ambiguïté ; j'ai pris les deux — `montantParUnite` **et** les
+totaux serveur.
+
+**L'argument du total serveur.** Je disais : l'addition est triviale, donc personne ne la croit
+risquée. Elle dit : **aujourd'hui c'est une addition, demain ce ne le sera plus.** Un plafond sur le
+cumul, une remise « pack », une option qui en rend une autre gratuite — le serveur absorbe la règle
+sans qu'un écran change une ligne, là où une somme côté navigateur devient fausse **en continuant de
+rendre un nombre plausible**. Le mien explique pourquoi on duplique ; le sien explique pourquoi c'est
+coûteux. C'est le sien qui est dans le code.
+
+### Une règle qu'elle a nuancée, et la nuance est juste
+
+Elle répète par ailleurs qu'*une action sans objet est absente, jamais grisée*. Ici elle demande
+l'inverse, et le critère est meilleur que la règle : **la question n'est pas si l'action est possible,
+c'est si l'utilisateur a une raison de la chercher.** Un bouton « rembourser » sur une vente annulée,
+personne ne le cherche. Une option qu'un client réclame nommément, si — et ne pas la trouver envoie le
+caissier fouiller le paramétrage.
+
+*Une absence sans explication est une énigme ; une présence expliquée est une réponse.* L'ordre des
+phrases suit D54 : d'abord le fait sur la **donnée**, ensuite le fait sur l'établissement.
+
+### Une décision tranchée seule, et signalée
+
+Une option **retenue mais indisponible** n'entre pas dans le total. La caisse la refuserait, et
+annoncer un total que la vente ne produira pas est exactement le défaut qu'on ferme. Elle reste
+renvoyée avec `retenue: true` et `disponible: false`, pour que l'écran puisse dire **pourquoi** le
+total ne bouge pas plutôt que de laisser cliquer sans effet.
+
+### Ce que le lot ne fait pas, et pourquoi
+
+**L'estimation ne valide pas une sélection.** RG-OPT-05 (choix unique) et RG-OPT-03 (groupe
+obligatoire) restent appliquées à l'ajout de ligne, en 422. `modeSelection` et `obligatoire` permettent
+de construire un écran qui ne les enfreint pas — mais si l'estimation validait aussi, **nous aurions
+deux endroits qui décident si une sélection est licite**, et nous serions revenus au point de départ.
+
+### Le relevé de `claude-H`, qui change la portée du lot
+
+Les options ne sont pas *mal* sélectionnables au guichet : **elles ne le sont pas du tout.**
+`optionsDisponibles` est dans son client HTTP et **aucun écran ne l'appelle** — un des sept orphelins
+que sa mesure liste. `ProduitOptionsModal` existe, mais côté catalogue : il rattache des options à un
+produit, il n'en fait pas choisir une en vendant.
+
+Sa conclusion explique pourquoi personne n'avait relevé l'absence de résolution de prix : **on ne peut
+pas manquer un prix qu'on n'a jamais eu l'occasion d'afficher.** C'est le motif de la journée une
+dernière fois — un mécanisme complet, aucun appelant, et rien qui le signale. Comme la commande inerte
+de `claude-D`, comme le duplicata vide.
+
+La moitié serveur est prête. La moitié écran est chez elle, et elle l'a annoncée.

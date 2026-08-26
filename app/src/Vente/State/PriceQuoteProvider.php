@@ -17,6 +17,7 @@ use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\Uid\Uuid;
+use App\Securite\Service\ContexteEtablissement;
 
 /**
  * `GET /produits/{id}/tarif` — **quel prix, et pourquoi celui-là**, avant que la vente existe.
@@ -46,6 +47,7 @@ final class PriceQuoteProvider implements ProviderInterface
         private readonly EntityManagerInterface $em,
         private readonly PriceQuoter $tarif,
         private readonly RequestStack $requetes,
+        private readonly ContexteEtablissement $contexte,
     ) {
     }
 
@@ -68,12 +70,33 @@ final class PriceQuoteProvider implements ProviderInterface
 
         $qf = $requete?->query->get('qf');
 
+        // Les options retenues arrivent en `options[]=uuid&options[]=uuid`, et le TOTAL est rendu par
+        // le serveur. Ce n est pas parce que l addition serait difficile — c est parce qu elle ne
+        // restera pas une addition : un plafond sur le cumul, une remise « pack », une option qui en
+        // rend une autre gratuite, et une somme faite cote navigateur devient fausse **en continuant
+        // de rendre un nombre plausible**. L argument est de `claude-H`, il est meilleur que le mien.
+        $options = $requete?->query->all('options') ?? [];
+        $retenues = [];
+        foreach ($options as $option) {
+            if (\is_string($option) && $option !== '') {
+                $nu = str_contains($option, '/') ? (string) substr($option, (int) strrpos($option, '/') + 1) : $option;
+                if (Uuid::isValid($nu)) {
+                    $retenues[] = $nu;
+                }
+            }
+        }
+
+        $quantite = (int) ($requete?->query->get('quantite') ?? 1);
+
         return $this->tarif->quote(
             $produit,
             $typeTarif,
             $this->date($requete?->query->get('date')),
             $canal,
             $qf !== null && $qf !== '' ? (float) $qf : null,
+            $this->contexte->etablissementActif(),
+            $retenues,
+            $quantite,
         );
     }
 
