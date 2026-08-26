@@ -7,7 +7,9 @@
     "dev": "vite --host --port 5173",
     "build": "vite build",
     "preview": "vite preview --port 5173",
-    "verifier-droits": "node scripts/verifier-droits.mjs"
+    "verifier-droits": "node scripts/verifier-droits.mjs",
+    "verifier-formats": "node scripts/verifier-formats.mjs",
+    "verifier": "npm run verifier-droits && npm run verifier-formats"
   },
   "dependencies": {
     "qrcode": "^1.5.4",
