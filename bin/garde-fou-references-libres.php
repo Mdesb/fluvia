@@ -184,6 +184,38 @@ function analyser(string $fichier, array $proprietes, array $filtrables): array
             continue;
         }
 
+        // ── Sixième forme : `IN (:liste)` sur l'IDENTIFIANT d'une entité, quel que soit l'alias ──
+        //
+        // Les cinq premières formes portent sur des **propriétés** — références libres ou relations
+        // déclarées. Celle-ci porte sur `alias.id`, qui n'est ni l'une ni l'autre : ni une propriété
+        // `*Ref`, ni une relation, souvent l'alias d'une **jointure**. Elle passait donc entre les
+        // mailles même après l'élargissement aux relations ordinaires.
+        //
+        // **Deux défauts réels trouvés par ce seul motif, dans deux modules sans rapport :**
+        //
+        // 1. `JaugeCreneauGuard` — `cs.id IN (:creneaux)` sur une jointure `consumedSlots`. La requête
+        //    s'exécute, rend zéro ligne, et la jauge répond « 0 place occupée » pour tous les créneaux.
+        //    Un calendrier aurait affiché « tout est libre » sur un planning complet, et une
+        //    réservation aurait été acceptée sur un créneau plein. Trouvé par `claude-G`, qui avait
+        //    écrit l'avertissement D58 **sur la ligne précédente**.
+        //
+        // 2. `InventaireRegularisationHandler` — `a.id IN (:ids)` avec une `list<string>` venue de la
+        //    requête. Un inventaire lancé sur une **sélection d'articles n'en compte aucun**. Et
+        //    `claude-H` avait déjà trouvé que le périmètre « par rayon » les compte **tous** : deux
+        //    modes sur trois, faux en sens inverse, aucun des deux ne levant.
+        //
+        // Tous les identifiants de ce dépôt sont des `Uuid` : `.id` désigne donc toujours un type
+        // personnalisé, et `IN` ne le convertit jamais. Le motif est sûr sans avoir à suivre les alias.
+        if (preg_match('/\.\s*id\s+IN\s*\(\s*:(\w+)/i', $ligne) === 1) {
+            $trouvailles[] = [
+                'fichier' => $fichier,
+                'ligne' => $index + 1,
+                'propriete' => 'identifiant d\'entité',
+                'forme' => 'IN (:liste) sur un identifiant',
+                'extrait' => trim($ligne),
+            ];
+        }
+
         foreach ($proprietes as $propriete) {
             if (!str_contains($ligne, '.' . $propriete)) {
                 continue;
