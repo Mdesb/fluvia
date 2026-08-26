@@ -205,6 +205,25 @@ final class DebitPreNotifier
         return $this->config($mandate)?->getPreNotificationDelayDays() ?? self::DEFAULT_DELAY_DAYS;
     }
 
+    /**
+     * Ce prélèvement a-t-il déjà été annoncé, pour ce montant ?
+     *
+     * **Sert à ne PAS réannoncer, et c'est vital.** `announce()` remet `sentAt` à l'instant courant —
+     * voulu, un montant qui change doit rendre au client la totalité du délai. Mais une tâche planifiée
+     * qui réannoncerait tout à chaque passage repousserait `sentAt` chaque jour, et plus aucune échéance
+     * ne serait jamais couverte. Le mécanisme se serait auto-neutralisé **en tournant** : tout
+     * s'exécute, rien n'aboutit, et rien ne le dit.
+     *
+     * Le montant fait partie de la question : une annonce pour une autre somme n'a pas annoncé
+     * celle-ci.
+     */
+    public function alreadyAnnounced(MandatSepa $mandate, string $originReference, int $amountCents): bool
+    {
+        $preavis = $this->existing($mandate, $originReference);
+
+        return null !== $preavis && $preavis->getAmountCents() === $amountCents;
+    }
+
     private function existing(MandatSepa $mandate, string $originReference): ?DebitPreNotification
     {
         return $this->em->getRepository(DebitPreNotification::class)->findOneBy([
