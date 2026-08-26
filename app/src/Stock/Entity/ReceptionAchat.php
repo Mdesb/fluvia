@@ -9,6 +9,7 @@ use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
+use App\Stock\State\EstablishmentStampProcessor;
 use App\Organisation\Entity\Etablissement;
 use App\Stock\Enum\StatutReceptionAchat;
 use App\Stock\State\ValiderReceptionAchatProcessor;
@@ -31,7 +32,10 @@ use Symfony\Component\Validator\Constraints as Assert;
     operations: [
         new GetCollection(security: "is_granted('PERM', 'stock.lire')"),
         new Get(security: "is_granted('PERM', 'stock.lire')"),
-        new Post(security: "is_granted('PERM', 'stock.receptionner') or is_granted('PERM', 'stock.gerer')"),
+        new Post(
+            security: "is_granted('PERM', 'stock.receptionner') or is_granted('PERM', 'stock.gerer')",
+            processor: EstablishmentStampProcessor::class,
+        ),
         new Patch(security: "is_granted('PERM', 'stock.receptionner') or is_granted('PERM', 'stock.gerer')"),
         new Post(
             uriTemplate: '/stock/receptions-achat/{id}/valider',
@@ -58,8 +62,12 @@ class ReceptionAchat
 
     #[ORM\ManyToOne(targetEntity: Etablissement::class)]
     #[ORM\JoinColumn(nullable: false)]
-    #[Assert\NotNull]
-    #[Groups(['reception_achat:read', 'reception_achat:write'])]
+    // D41 — hors groupe d'ecriture : l'etablissement vient de la session serveur, pose par
+    // `EstablishmentStampProcessor`, jamais du corps de la requete. Plus d'`Assert\NotNull` non plus :
+    // la validation s'execute AVANT l'ecriture, donc avant l'estampillage, et echouerait en 422 sur
+    // une valeur que le serveur allait poser lui-meme. L'invariant tient par l'estampilleur, qui
+    // refuse plutot que de deviner, par la colonne NOT NULL, et par le garde global D41.
+    #[Groups(['reception_achat:read'])]
     private ?Etablissement $etablissement = null;
 
     #[ORM\ManyToOne(targetEntity: Fournisseur::class)]

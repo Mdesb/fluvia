@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tests\Stock\Api;
 
 use App\DataFixtures\SocleFixtures;
+use App\Securite\Service\ContexteEtablissement;
 use App\Stock\Entity\LotStock;
 use App\Tests\Stock\StockApiTestCase;
 use Doctrine\ORM\EntityManagerInterface;
@@ -67,9 +68,12 @@ final class TransfertApiTest extends StockApiTestCase
      */
     private function creerArticle(object $client, array $entete, string $etabIri, string $ean): array
     {
+        // D41 : l'etablissement d'une creation vient de la session serveur. L'IRI recue sert
+        // desormais a se PLACER dans l'etablissement vise, au lieu de le nommer dans un corps ou il
+        // serait ignore. Les appelants n'ont pas a changer.
+        $entete['headers'][ContexteEtablissement::HEADER] = basename($etabIri);
         $article = $client->request('POST', '/api/article_stocks', $entete + [
             'json' => [
-                'etablissement' => $etabIri,
                 'codeEAN' => $ean,
                 'libelle' => 'Mug boutique',
                 'unite' => 'piece',
@@ -89,13 +93,14 @@ final class TransfertApiTest extends StockApiTestCase
      */
     private function receptionner(object $client, array $entete, string $etabIri, string $articleId, string $quantite, string $prix): void
     {
+        // D41 : meme raison que dans `creerArticle`.
+        $entete['headers'][ContexteEtablissement::HEADER] = basename($etabIri);
         $fournisseur = $client->request('POST', '/api/stock_fournisseurs', $entete + [
-            'json' => ['etablissement' => $etabIri, 'raisonSociale' => 'Grossiste Boutique SARL'],
+            'json' => ['raisonSociale' => 'Grossiste Boutique SARL'],
         ])->toArray();
 
         $reception = $client->request('POST', '/api/stock_reception_achats', $entete + [
             'json' => [
-                'etablissement' => $etabIri,
                 'fournisseur' => '/api/stock_fournisseurs/' . $fournisseur['id'],
                 'date' => '2026-03-01',
                 'numeroBonLivraison' => 'BL-INIT',
