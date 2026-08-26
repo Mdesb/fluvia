@@ -97,6 +97,22 @@ up)
     php_run php bin/console doctrine:database:create --env=test --if-not-exists >/dev/null
     php_run php bin/console doctrine:schema:drop --env=test --force --full-database >/dev/null 2>&1 || true
     php_run php bin/console doctrine:schema:create --env=test >/dev/null
+
+    # `doctrine:schema:create` monte les TABLES depuis le mapping, et ignore les objets que le mapping
+    # ne decrit pas. La sequence native `acces_snapshot_seq` en fait partie : elle est posee par la
+    # migration Version20260817192240, que le harnais ne rejoue jamais.
+    #
+    # Faute de quoi deux fixtures la creaient elles-memes, defensivement (`AccesFixtures`,
+    # `PersonnelFixtures`). Ca marchait, et ca posait un probleme qu'on ne voyait pas : un `CREATE`
+    # provoque une VALIDATION IMPLICITE en MySQL. Une fixture qui fait du DDL referme donc toute
+    # transaction englobante AU MILIEU du chargement -- et tout ce qui a ete purge avant est perdu,
+    # transaction ou pas. Signale par claude-D en repondant a la question « comment protege-t-on
+    # contre une purge suivie d'un echec ». La reponse etait : pas comme ca, tant que ceci existe.
+    #
+    # Une fixture est un jeu de DONNEES. Le schema appartient au harnais et aux migrations.
+    php_run php bin/console doctrine:query:sql \
+        "CREATE SEQUENCE IF NOT EXISTS acces_snapshot_seq START WITH 1 INCREMENT BY 1" \
+        --env=test >/dev/null 2>&1 || true
     echo "schéma  : app_test$TOKEN monté"
     ;;
 

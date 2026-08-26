@@ -1,262 +1,313 @@
-<title>Avancement du développement</title>
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Poste de conduite — billetterie</title>
 <style>
-  :root{
-    --bg:#eef3f4;--surface:#fff;--surface-2:#e7eef0;--ink:#12262d;--ink-soft:#4d626b;--ink-faint:#7a8d94;
-    --line:#d6e0e2;--accent:#0d7d88;--accent-2:#094f57;--warm:#d9702f;
-    --good:#2f9e68;--good-bg:#e4f3ea;--watch:#b07d00;--watch-bg:#f6eed6;--crit:#cc4634;--crit-bg:#f7e3df;
-    --shadow:0 1px 2px rgba(18,38,45,.06),0 6px 20px rgba(18,38,45,.05);
-    --mono:ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+  :root {
+    --encre:      #14181f;
+    --encre-2:    #4a5460;
+    --encre-3:    #7d8794;
+    --fond:       #f7f6f3;
+    --carte:      #ffffff;
+    --trait:      #e2e0da;
+    --trait-fort: #c9c6bd;
+    --accent:     #9a3412;
+    --accent-pale:#fdf0e9;
+    --vert:       #2f6b4f;
+    --vert-pale:  #eaf3ee;
+    --ambre:      #8a6116;
+    --ambre-pale: #fbf3e0;
+    --rouge:      #a02128;
+    --rouge-pale: #fbeced;
   }
-  :root:not([data-theme="light"]){@media(prefers-color-scheme:dark){
-    --bg:#0b1417;--surface:#121f24;--surface-2:#182a30;--ink:#e8eff1;--ink-soft:#a2b5bc;--ink-faint:#6f858d;
-    --line:#253840;--accent:#37b4be;--accent-2:#7ad3db;--warm:#ef9459;
-    --good:#46b884;--good-bg:#163027;--watch:#e0ad3d;--watch-bg:#322a12;--crit:#e86a58;--crit-bg:#341d19;
-    --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.28);
-  }}
-  :root[data-theme="dark"]{
-    --bg:#0b1417;--surface:#121f24;--surface-2:#182a30;--ink:#e8eff1;--ink-soft:#a2b5bc;--ink-faint:#6f858d;
-    --line:#253840;--accent:#37b4be;--accent-2:#7ad3db;--warm:#ef9459;
-    --good:#46b884;--good-bg:#163027;--watch:#e0ad3d;--watch-bg:#322a12;--crit:#e86a58;--crit-bg:#341d19;
-    --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.28);
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --encre:      #eceae5;
+      --encre-2:    #a6adb8;
+      --encre-3:    #737d8a;
+      --fond:       #12151a;
+      --carte:      #191d24;
+      --trait:      #2b313a;
+      --trait-fort: #3d4550;
+      --accent:     #e8895c;
+      --accent-pale:#2a1a12;
+      --vert:       #74c39a;
+      --vert-pale:  #14231b;
+      --ambre:      #d9ab52;
+      --ambre-pale: #241d0f;
+      --rouge:      #e8848c;
+      --rouge-pale: #261517;
+    }
   }
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;line-height:1.55;-webkit-font-smoothing:antialiased}
-  .wrap{max-width:1000px;margin:0 auto;padding:0 20px 72px}
-  h1,h2,h3{margin:0;font-weight:700;letter-spacing:-.01em;text-wrap:balance}
-  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);font-weight:600}
-  .hero{padding:40px 0 8px}
-  .hero h1{font-size:clamp(25px,3.6vw,38px);margin:12px 0 0}
-  .hero p{color:var(--ink-soft);max-width:64ch;margin:12px 0 0;font-size:16px}
-  .stamp{font-family:var(--mono);font-size:12px;color:var(--ink-faint);margin-top:14px}
-  .stamp b{color:var(--good)}
-  section{margin-top:34px}
-  .sec-h{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-faint);font-weight:700;margin:0 0 14px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+  :root[data-theme="dark"] {
+    --encre:      #eceae5;
+    --encre-2:    #a6adb8;
+    --encre-3:    #737d8a;
+    --fond:       #12151a;
+    --carte:      #191d24;
+    --trait:      #2b313a;
+    --trait-fort: #3d4550;
+    --accent:     #e8895c;
+    --accent-pale:#2a1a12;
+    --vert:       #74c39a;
+    --vert-pale:  #14231b;
+    --ambre:      #d9ab52;
+    --ambre-pale: #241d0f;
+    --rouge:      #e8848c;
+    --rouge-pale: #261517;
+  }
 
-  /* KPI */
-  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
-  .kpi{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 16px 14px;box-shadow:var(--shadow)}
-  .kpi .n{font-size:30px;font-weight:750;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1}
-  .kpi .l{font-size:12.5px;color:var(--ink-soft);margin-top:7px}
-  .kpi .n.good{color:var(--good)}
-  .barwrap{margin-top:16px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 18px;box-shadow:var(--shadow)}
-  .barwrap .top{display:flex;justify-content:space-between;align-items:baseline;font-size:13px;color:var(--ink-soft);margin-bottom:9px}
-  .barwrap .top b{color:var(--ink);font-size:14px}
-  .bar{height:12px;border-radius:99px;background:var(--surface-2);overflow:hidden;display:flex}
-  .bar i{display:block;height:100%}
-  .bar .done{background:var(--good)}
-  .bar .doing{background:repeating-linear-gradient(45deg,var(--accent),var(--accent) 6px,color-mix(in srgb,var(--accent) 65%,transparent) 6px,color-mix(in srgb,var(--accent) 65%,transparent) 12px)}
-  .legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;font-size:12px;color:var(--ink-soft)}
-  .legend span{display:inline-flex;align-items:center;gap:6px}
-  .dot{width:10px;height:10px;border-radius:3px;display:inline-block}
-  .dot.done{background:var(--good)}.dot.doing{background:var(--accent)}.dot.todo{background:var(--surface-2);border:1px solid var(--line)}
+  * { box-sizing: border-box; }
 
-  /* Roadmap lanes */
-  .lanes{display:flex;flex-direction:column;gap:8px}
-  .lane{display:grid;grid-template-columns:52px 1fr auto;gap:14px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:13px 15px;box-shadow:var(--shadow)}
-  .lane.doing{border-color:color-mix(in srgb,var(--accent) 45%,var(--line));background:color-mix(in srgb,var(--accent) 5%,var(--surface))}
-  .lane .lot{font-family:var(--mono);font-weight:700;font-size:13px;color:var(--accent-2);background:color-mix(in srgb,var(--accent) 12%,var(--surface));border-radius:7px;padding:6px 0;text-align:center}
-  .lane .body h3{font-size:15px}
-  .lane .body p{margin:3px 0 0;font-size:13px;color:var(--ink-soft)}
-  .lane .meta{display:flex;flex-direction:column;align-items:flex-end;gap:6px;text-align:right}
-  .pill{font-family:var(--mono);font-size:11px;font-weight:700;padding:3px 10px;border-radius:99px;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap}
-  .pill.done{background:var(--good-bg);color:var(--good)}
-  .pill.doing{background:color-mix(in srgb,var(--accent) 16%,var(--surface));color:var(--accent-2)}
-  .pill.todo{background:var(--surface-2);color:var(--ink-faint)}
-  .tests{font-family:var(--mono);font-size:11px;color:var(--ink-faint);white-space:nowrap}
-  .tests b{color:var(--good)}
+  body {
+    margin: 0;
+    background: var(--fond);
+    color: var(--encre);
+    font: 15px/1.55 ui-sans-serif, -apple-system, "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
 
-  /* patterns / stack */
-  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-  .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 17px;box-shadow:var(--shadow)}
-  .card h3{font-size:14px;margin-bottom:10px}
-  .chips{display:flex;flex-wrap:wrap;gap:7px}
-  .chip{font-family:var(--mono);font-size:12px;color:var(--ink-soft);background:var(--surface-2);border:1px solid var(--line);border-radius:7px;padding:4px 9px}
-  ul.clean{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
-  ul.clean li{font-size:13.5px;color:var(--ink-soft);padding-left:20px;position:relative}
-  ul.clean li::before{content:"";position:absolute;left:2px;top:8px;width:7px;height:7px;border-radius:2px;background:var(--accent)}
-  ul.clean li b{color:var(--ink);font-weight:600}
+  .page { max-width: 1120px; margin: 0 auto; padding: 40px 24px 80px; }
 
-  /* pipeline */
-  .pipe{display:flex;align-items:stretch;gap:0;flex-wrap:wrap}
-  .step{flex:1;min-width:150px;background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:13px 15px;box-shadow:var(--shadow);position:relative}
-  .step .k{font-family:var(--mono);font-size:11px;color:var(--accent);font-weight:700;text-transform:uppercase;letter-spacing:.05em}
-  .step h3{font-size:14.5px;margin:5px 0 4px}
-  .step p{margin:0;font-size:12.5px;color:var(--ink-soft)}
-  .arrow{display:flex;align-items:center;color:var(--ink-faint);padding:0 8px;font-size:18px}
-  @media(max-width:760px){.arrow{transform:rotate(90deg);padding:4px 0;align-self:center}}
+  header { border-bottom: 2px solid var(--trait-fort); padding-bottom: 18px; margin-bottom: 30px; }
+  h1 {
+    margin: 0 0 6px;
+    font-size: 27px;
+    font-weight: 620;
+    letter-spacing: -0.022em;
+  }
+  .horodatage { color: var(--encre-3); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .horodatage strong { color: var(--encre-2); font-weight: 600; }
 
-  .note{font-size:13px;color:var(--ink-soft);background:var(--surface-2);border:1px dashed var(--line);border-radius:10px;padding:13px 16px;margin-top:14px}
-  .note b{color:var(--ink)}
-  .watchbox{border-left:3px solid var(--watch);background:var(--watch-bg);border-radius:0 10px 10px 0;padding:12px 15px;margin-bottom:9px}
-  .watchbox h3{font-size:13.5px;color:var(--ink)}
-  .watchbox p{margin:4px 0 0;font-size:13px;color:var(--ink-soft)}
+  h2 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--encre-3);
+    font-weight: 700;
+    margin: 42px 0 14px;
+    padding-bottom: 7px;
+    border-bottom: 1px solid var(--trait);
+  }
+  h2:first-of-type { margin-top: 0; }
 
-  footer{margin-top:40px;padding-top:18px;border-top:1px solid var(--line);color:var(--ink-faint);font-size:13px;font-family:var(--mono)}
-  .themebtn{position:fixed;right:16px;bottom:16px;width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--ink-soft);cursor:pointer;box-shadow:var(--shadow);font-size:16px}
-  @media(max-width:720px){
-    .kpis{grid-template-columns:repeat(2,1fr)}
-    .grid2{grid-template-columns:1fr}
-    .lane{grid-template-columns:46px 1fr;grid-template-areas:"lot body" "meta meta"}
-    .lane .lot{grid-area:lot}.lane .body{grid-area:body}.lane .meta{grid-area:meta;flex-direction:row;align-items:center;justify-content:flex-start;gap:12px;margin-top:2px}
+  .bandeau {
+    background: var(--rouge-pale);
+    border-left: 3px solid var(--rouge);
+    padding: 16px 20px;
+    margin-bottom: 8px;
+    border-radius: 0 4px 4px 0;
+  }
+  .bandeau.ok { background: var(--vert-pale); border-left-color: var(--vert); }
+  .bandeau h3 { margin: 0 0 5px; font-size: 15.5px; font-weight: 620; }
+  .bandeau p  { margin: 0; color: var(--encre-2); font-size: 14px; }
+  .bandeau + .bandeau { margin-top: 10px; }
+
+  .grille { display: grid; gap: 12px; }
+  .grille.chiffres { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+
+  .chiffre {
+    background: var(--carte);
+    border: 1px solid var(--trait);
+    border-radius: 5px;
+    padding: 14px 16px;
+  }
+  .chiffre .valeur {
+    font-size: 27px;
+    font-weight: 640;
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.15;
+  }
+  .chiffre .etiquette { font-size: 12px; color: var(--encre-3); margin-top: 3px; }
+
+  .tableau-enveloppe { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th {
+    text-align: left;
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.075em;
+    color: var(--encre-3);
+    font-weight: 700;
+    padding: 0 12px 8px 0;
+    border-bottom: 1px solid var(--trait-fort);
+    white-space: nowrap;
+  }
+  td {
+    padding: 10px 12px 10px 0;
+    border-bottom: 1px solid var(--trait);
+    vertical-align: top;
+  }
+  tr:last-child td { border-bottom: none; }
+  td.sess { font-weight: 640; white-space: nowrap; }
+  td.num  { font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--encre-2); }
+  td.quoi { color: var(--encre-2); }
+
+  .pastille {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 650;
+    padding: 2px 8px;
+    border-radius: 20px;
+    white-space: nowrap;
+  }
+  .p-actif   { background: var(--vert-pale);  color: var(--vert); }
+  .p-lent    { background: var(--ambre-pale); color: var(--ambre); }
+  .p-arret   { background: var(--rouge-pale); color: var(--rouge); }
+
+  ul.liste { margin: 0; padding-left: 0; list-style: none; }
+  ul.liste li {
+    padding: 11px 0 11px 18px;
+    border-bottom: 1px solid var(--trait);
+    position: relative;
+    color: var(--encre-2);
+  }
+  ul.liste li:last-child { border-bottom: none; }
+  ul.liste li::before {
+    content: "";
+    position: absolute;
+    left: 0; top: 19px;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--trait-fort);
+  }
+  ul.liste li.fait::before  { background: var(--vert); }
+  ul.liste li.attend::before { background: var(--ambre); }
+  ul.liste li.dur::before   { background: var(--rouge); }
+  ul.liste li b { color: var(--encre); font-weight: 620; }
+
+  .note {
+    color: var(--encre-3);
+    font-size: 13px;
+    font-style: italic;
+    margin-top: 12px;
+    padding-left: 14px;
+    border-left: 2px solid var(--trait);
+  }
+
+  code {
+    font: 12.5px/1.4 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    background: var(--accent-pale);
+    color: var(--accent);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+
+  footer {
+    margin-top: 56px;
+    padding-top: 18px;
+    border-top: 1px solid var(--trait);
+    color: var(--encre-3);
+    font-size: 12.5px;
   }
 </style>
+</head>
+<body>
 
-<div class="wrap">
-  <header class="hero">
-    <div class="eyebrow">Billetterie &amp; contrôle d'accès · Chantier logiciel</div>
-    <h1>Avancement du développement</h1>
-    <p>Le MVP se construit lot par lot, chacun spécifié puis implémenté et testé avant d'être intégré. Voici l'état réel du code — pas une estimation, ce qui est écrit, testé et versionné à ce jour.</p>
-    <div class="stamp">Mise à jour : 17 août 2026 · <b>+ boutique en ligne · reporting · IBAN · caution · front ×3</b> · <b>~515 tests verts</b></div>
-  </header>
+<div class="page">
 
-  <section>
-    <div class="kpis">
-      <div class="kpi"><div class="n good">5<span style="color:var(--ink-faint);font-size:18px">/5</span></div><div class="l">Verticales métier livrées</div></div>
-      <div class="kpi"><div class="n">~515</div><div class="l">Tests automatisés au vert</div></div>
-      <div class="kpi"><div class="n">29</div><div class="l">Livraisons versionnées (git)</div></div>
-      <div class="kpi"><div class="n good">3</div><div class="l">Tranches d'interface web</div></div>
-    </div>
-    <div class="barwrap">
-      <div class="top"><b>Progression du MVP back-end</b><span>8 livrés · MVP complet ✓</span></div>
-      <div class="bar">
-        <i class="done" style="width:100%"></i>
-      </div>
-      <div class="legend">
-        <span><i class="dot done"></i> Livré &amp; testé</span>
-        <span>Socle + 5 verticales + front-end · tout vert</span>
-      </div>
-    </div>
-  </section>
+<header>
+  <h1>Poste de conduite</h1>
+  <div class="horodatage">Relevé du <strong>26/08/2026 à 10:49</strong> · neuf sessions · dépôt <code>billetterie</code> sur le VPS</div>
+</header>
 
-  <section>
-    <h2 class="sec-h">Feuille de route du MVP</h2>
-    <div class="lanes">
-      <div class="lane">
-        <div class="lot">L0</div>
-        <div class="body"><h3>Socle technique</h3><p>Multi-entités (Groupe→Région→Établissement→Espace), connexion JWT, droits fins par établissement, piste d'audit.</p></div>
-        <div class="meta"><span class="pill done">Livré</span><span class="tests"><b>6</b> tests</span></div>
-      </div>
-      <div class="lane">
-        <div class="lot">L1</div>
-        <div class="body"><h3>Offre &amp; Tarification</h3><p>Produits à facettes, grilles tarif×saison, formules &amp; cartes (10=12), cycle de vie brouillon→publié→archivé, conversion assistée.</p></div>
-        <div class="meta"><span class="pill done">Livré</span><span class="tests"><b>19</b> tests</span></div>
-      </div>
-      <div class="lane">
-        <div class="lot">L2</div>
-        <div class="body"><h3>Vente &amp; Caisse</h3><p>Session de caisse, paiement scindé + TPE, avoirs, clôture Z, inaltérabilité NF525, mode hors-ligne.</p></div>
-        <div class="meta"><span class="pill done">Livré</span><span class="tests"><b>29</b> tests</span></div>
-      </div>
-      <div class="lane">
-        <div class="lot">L3</div>
-        <div class="body"><h3>Contrôle d'accès</h3><p>Tourniquets iDTRONIC/ITBOX (couche enfichable), validation de passage, jauge FMI, anti-passback, fonctionnement hors-ligne.</p></div>
-        <div class="meta"><span class="pill done">Livré</span><span class="tests"><b>45</b> tests</span></div>
-      </div>
-      <div class="lane">
-        <div class="lot">L4</div>
-        <div class="body"><h3>Compta &amp; Régie</h3><p>Moteur bi-régime (régie M57/M4 · DSP · groupe), écritures en partie double, PCA, TVA multi-taux, export FEC, PayFiP, e-reporting.</p></div>
-        <div class="meta"><span class="pill done">Livré</span><span class="tests"><b>36</b> tests</span></div>
-      </div>
-      <div class="lane">
-        <div class="lot">L5</div>
-        <div class="body"><h3>CRM noyau</h3><p>Fiche client 360°, familles (payeur ≠ bénéficiaire), porte-monnaie virtuel, RGPD (consentement, anonymisation).</p></div>
-        <div class="meta"><span class="pill done">Livré</span><span class="tests"><b>26</b> tests</span></div>
-      </div>
-      <div class="lane">
-        <div class="lot">L6</div>
-        <div class="body"><h3>Verticale Piscine</h3><p>POSS/FMI réglementaire, encadrants MNS, lignes d'eau public/club, casiers &amp; caution.</p></div>
-        <div class="meta"><span class="pill done">Livré</span><span class="tests"><b>32</b> tests</span></div>
-      </div>
-      <div class="lane">
-        <div class="lot">L7</div>
-        <div class="body"><h3>Back-office &amp; Droits</h3><p>MFA, mot de passe oublié, délégation temporaire, garde-fous d'admin, audit avant/après. (Le back-office visuel reste côté interface.)</p></div>
-        <div class="meta"><span class="pill done">Livré</span><span class="tests"><b>34</b> tests</span></div>
-      </div>
-    </div>
-    <div class="note">🎉 <b>MVP back-end complet</b> : les 8 lots sont écrits, testés et versionnés. Le moteur couvre toute la chaîne — offre → vente → accès → compta → client — plus l'administration. Une <b>première interface web</b> (caisse + catalogue, habillée Fluvia) le consomme déjà.</div>
-  </section>
+<h2>Ce qui te concerne en premier</h2>
 
-  <section>
-    <h2 class="sec-h">Capacités socle ajoutées (transverses)</h2>
-    <div class="lanes">
-      <div class="lane"><div class="lot">📅</div><div class="body"><h3>Réservation &amp; no-show</h3><p>Ressource réservable à l'heure (type paramétrable), créneaux, quotas, liste d'attente, annulation tardive facturée — réutilisée par padel, patinoire, musée, lignes d'eau.</p></div><div class="meta"><span class="pill done">Livré</span></div></div>
-      <div class="lane"><div class="lot">🏦</div><div class="body"><h3>SEPA (prélèvement)</h3><p>Mandats + remises pain.008 bi-régime (régie/privé) — partagé entre sport, piscine régie, futures verticales.</p></div><div class="meta"><span class="pill done">Livré</span></div></div>
-      <div class="lane"><div class="lot">🔁</div><div class="body"><h3>Recouvrement / anti-impayés</h3><p>Échec de prélèvement → refus de badge automatique, représentations, régularisation → ré-accès. Commun à tout abonnement.</p></div><div class="meta"><span class="pill done">Livré</span></div></div>
-      <div class="lane"><div class="lot">🧩</div><div class="body"><h3>Profil de fonctionnalités</h3><p>Chaque établissement active les capacités dont il a besoin (presets par métier) ; l'UI n'affiche que le pertinent.</p></div><div class="meta"><span class="pill done">Livré</span></div></div>
-    </div>
-  </section>
-
-  <section>
-    <h2 class="sec-h">Verticales métier — les 5 livrées</h2>
-    <div class="lanes">
-      <div class="lane"><div class="lot">🏊</div><div class="body"><h3>Piscine</h3><p>POSS/FMI, encadrants MNS, lignes d'eau public/club, casiers &amp; caution.</p></div><div class="meta"><span class="pill done">Livré</span><span class="tests"><b>32</b> tests</span></div></div>
-      <div class="lane"><div class="lot">🏋️</div><div class="body"><h3>Salle de sport / Fitness</h3><p>Anti-impayés couplé au badge, engagement/pause/résiliation, accès nocturne autonome.</p></div><div class="meta"><span class="pill done">Livré</span><span class="tests"><b>37</b> tests</span></div></div>
-      <div class="lane"><div class="lot">🎾</div><div class="body"><h3>Padel</h3><p>Terrain à l'heure, parties 3/4 maintenues à 3, niveau validé club, tournois, relais d'éclairage.</p></div><div class="meta"><span class="pill done">Livré</span><span class="tests"><b>22</b> tests</span></div></div>
-      <div class="lane"><div class="lot">⛸️</div><div class="body"><h3>Patinoire</h3><p>Location de patins (pointures/retenue), surbooking toléré, affûtage, réservation de la glace.</p></div><div class="meta"><span class="pill done">Livré</span><span class="tests"><b>29</b> tests</span></div></div>
-      <div class="lane"><div class="lot">🏛️</div><div class="body"><h3>Musée</h3><p>Timed-entry, sous-quota par salle, gratuités scolaires, sur-vente OTA, visites guidées/audioguide.</p></div><div class="meta"><span class="pill done">Livré</span><span class="tests"><b>22</b> tests</span></div></div>
-    </div>
-    <div class="note">Chaque verticale <b>réutilise le moteur commun</b> et n'ajoute que ses règles propres — <b>sans modifier une ligne</b> des modules socle. Voir la carte <b>« Moteur global &amp; modules par secteur »</b>.</div>
-  </section>
-
-  <section>
-    <h2 class="sec-h">Canaux, pilotage &amp; finitions</h2>
-    <div class="lanes">
-      <div class="lane"><div class="lot">🛒</div><div class="body"><h3>Boutique en ligne (M3)</h3><p>Vitrine white-label, tunnel panier → créneau timed-entry → paiement (PayFiP/CB) → billet QR, compte client, click&amp;collect — la commande réutilise la vente/caisse.</p></div><div class="meta"><span class="pill done">Livré</span></div></div>
-      <div class="lane"><div class="lot">📊</div><div class="body"><h3>Reporting multi-niveaux (M7)</h3><p>Tableaux de bord site → région → DG, analytique multi-axes, FMI vs fréquentation cumulée, rapports planifiés &amp; export.</p></div><div class="meta"><span class="pill done">Livré</span></div></div>
-      <div class="lane"><div class="lot">🔐</div><div class="body"><h3>Coffre IBAN réversible</h3><p>L'IBAN est chiffré au repos ; la remise SEPA pain.008 porte le vrai IBAN (à compléter par un coffre PCI pour la prod).</p></div><div class="meta"><span class="pill done">Livré</span></div></div>
-      <div class="lane"><div class="lot">🧾</div><div class="body"><h3>Caution générique</h3><p>Un seul moteur de consigne/retenue, réutilisé par casiers piscine, matériel padel, patins patinoire (plus de duplication).</p></div><div class="meta"><span class="pill done">Livré</span></div></div>
-    </div>
-    <div class="note">Interface web : <b>3 tranches livrées</b> — caisse complète (paiements, scindé, clôture Z), catalogue, clients (fiche 360°), réservation/planning, supervision accès (FMI en direct), pilotage. Ouvrable sur <b>localhost:5173</b>.</div>
-  </section>
-
-  <section>
-    <h2 class="sec-h">Sous le capot</h2>
-    <div class="grid2">
-      <div class="card">
-        <h3>Socle technique</h3>
-        <div class="chips">
-          <span class="chip">PHP 8.4</span><span class="chip">Symfony 7</span><span class="chip">API Platform</span>
-          <span class="chip">Doctrine</span><span class="chip">MariaDB 11.4</span><span class="chip">Docker</span>
-          <span class="chip">JWT</span><span class="chip">PHPUnit</span>
-        </div>
-        <p style="font-size:13px;color:var(--ink-soft);margin:12px 0 0">API-first : chaque capacité est une API documentée (OpenAPI générée), l'interface la consommera. Hébergement <b style="color:var(--ink)">France</b>, données cloisonnées par établissement.</p>
-      </div>
-      <div class="card">
-        <h3>Choix d'architecture qui tiennent dans la durée</h3>
-        <ul class="clean">
-          <li><b>Droits fins</b> — permission = module × action, rôles différents par établissement.</li>
-          <li><b>NF525 enfichable</b> — le scellement inaltérable est isolé derrière une interface : le procédé de certification se branche sans toucher au métier.</li>
-          <li><b>Matériel en adaptateurs</b> — aucune logique iDTRONIC/ITBOX codée en dur ; un simulateur permet de développer sans borne.</li>
-          <li><b>Hors-ligne natif</b> — caisse et accès fonctionnent coupés du réseau puis resynchronisent sans doublon.</li>
-        </ul>
-      </div>
-    </div>
-  </section>
-
-  <section>
-    <h2 class="sec-h">Méthode — chaque module suit le même pipeline</h2>
-    <div class="pipe">
-      <div class="step"><div class="k">1 · Spécifier</div><h3>Spec</h3><p>Comportements, règles de gestion, critères d'acceptation — tirés du cahier détaillé.</p></div>
-      <div class="arrow">→</div>
-      <div class="step"><div class="k">2 · Planifier</div><h3>Plan</h3><p>Entités, API, sécurité, migrations, liste des tests. Découpé en tâches.</p></div>
-      <div class="arrow">→</div>
-      <div class="step"><div class="k">3 · Réaliser</div><h3>Code + tests</h3><p>Implémentation Symfony + tests automatisés couvrant chaque critère.</p></div>
-      <div class="arrow">→</div>
-      <div class="step"><div class="k">4 · Vérifier</div><h3>Revue</h3><p>Contrôle sécurité/conformité, tests au vert, puis versionné.</p></div>
-    </div>
-    <div class="note">Plusieurs <b>agents travaillent de concert</b> : pendant qu'un module se code, le suivant se spécifie et se planifie. Chaque livraison est vérifiée (tests, cloisonnement, protection des écritures) avant d'être intégrée.</div>
-  </section>
-
-  <section>
-    <h2 class="sec-h">Points à valider avec un expert (avant de figer)</h2>
-    <div class="watchbox"><h3>NF525 — référent conformité</h3><p>Le mécanisme d'inaltérabilité est en place et enfichable ; le procédé cryptographique exact, le périmètre de certification (auto-attestation vs LNE/INFOCERT) et les clôtures périodiques restent à arbitrer.</p></div>
-    <div class="watchbox"><h3>Protocoles matériel — IT Cotation</h3><p>Contrat d'échange avec les tourniquets iDTRONIC / concentrateur ITBOX / SmartAccess (OSDP ou API, remontée d'événements, liste de révocation embarquée) à cadrer pour brancher l'adaptateur réel.</p></div>
-    <div class="watchbox"><h3>Comptabilité publique — comptable/fiscaliste</h3><p>SPIC/M57 vs M4, TVA réduite, produits constatés d'avance en régie : implémentés en paramètres (défauts prudents), à confirmer pour figer la conformité du module Compta.</p></div>
-    <div class="watchbox"><h3>Collecte SEPA &amp; coffre IBAN — banque / PSP (verticale Sport)</h3><p>Le cycle d'impayés et la tokenisation IBAN sont en place derrière une interface ; la remise bancaire réelle (pain.008, retours) et un coffre IBAN conforme PCI-DSS restent à brancher.</p></div>
-  </section>
-
-  <footer>29 commits sur main · socle + compta bi-régime + 5 verticales + réservation/SEPA/recouvrement/caution/fonctionnalités + boutique + reporting + front ×3 · méthode SDD, agents de concert.</footer>
+<div class="bandeau ok">
+  <h3>Réparé et déployé — l'ajout d'un tarif fonctionne</h3>
+  <p>Le message <em>« content-type application/json is not supported »</em> venait d'un désaccord de format entre l'écran et le serveur. <b>Treize appels de création étaient cassés, dont sept depuis toujours</b> : créer un client, un utilisateur, un moyen de paiement, une option produit. Réessaie aussi ces écrans-là — plusieurs de tes plaintes classées « écran manquant » étaient ce refus silencieux.</p>
 </div>
-<button class="themebtn" id="themeBtn" aria-label="Changer de thème">◐</button>
-<script>
-  (function(){var tb=document.getElementById('themeBtn');if(!tb)return;tb.addEventListener('click',function(){var r=document.documentElement;var d=r.getAttribute('data-theme')==='dark';r.setAttribute('data-theme',d?'light':'dark');});})();
-</script>
+
+<div class="bandeau">
+  <h3>Toujours bloqué — les 34 rôles de la préproduction sont à zéro droit</h3>
+  <p>Depuis mon incident de dimanche. Tu ne peux tester qu'avec ton compte, celui qui a tout — donc <b>aucun écran ne peut être vérifié du point de vue d'un caissier ou d'un responsable</b>. Le rétablissement dépend d'un chargement complet des données de démonstration, qui vient d'être réparé par cinq sessions. Vérification en cours.</p>
+</div>
+
+<h2>Le dépôt aujourd'hui</h2>
+
+<div class="grille chiffres">
+  <div class="chiffre"><div class="valeur">223</div><div class="etiquette">commits poussés aujourd'hui</div></div>
+  <div class="chiffre"><div class="valeur">49</div><div class="etiquette">intégrés dans <code>main</code></div></div>
+  <div class="chiffre"><div class="valeur">7/9</div><div class="etiquette">sessions actives dans l'heure</div></div>
+  <div class="chiffre"><div class="valeur">12</div><div class="etiquette">garde-fous au push</div></div>
+  <div class="chiffre"><div class="valeur">1 520</div><div class="etiquette">tests à la dernière référence</div></div>
+</div>
+
+<h2>Les neuf sessions</h2>
+
+<div class="tableau-enveloppe">
+<table>
+  <thead>
+    <tr><th>Session</th><th>État</th><th>Commits<br>aujourd'hui</th><th>Sur quoi elle travaille</th></tr>
+  </thead>
+  <tbody>
+    <tr><td class="sess">A · moi</td><td><span class="pastille p-actif">actif</span></td><td class="num">49</td><td class="quoi">Intégration, arbitrages, garde-fous. Socle, sécurité, coordination.</td></tr>
+    <tr><td class="sess">B</td><td><span class="pastille p-actif">actif</span></td><td class="num">22</td><td class="quoi">Failles de cloisonnement : rattachement produit au stock, vérification de chaîne NF525.</td></tr>
+    <tr><td class="sess">C</td><td><span class="pastille p-actif">actif</span></td><td class="num">13</td><td class="quoi">Garde-fous. A livré le douzième et <b>corrigé mon compte : 49 entités exposées, pas 35</b>.</td></tr>
+    <tr><td class="sess">D</td><td><span class="pastille p-actif">actif</span></td><td class="num">51</td><td class="quoi">Devis, bons de commande, bons de livraison — moteur livré, écran à suivre.</td></tr>
+    <tr><td class="sess">E</td><td><span class="pastille p-lent">8 heures</span></td><td class="num">5</td><td class="quoi">Relances et créneaux libérés. N'a pas poussé depuis ce matin.</td></tr>
+    <tr><td class="sess">F</td><td><span class="pastille p-actif">actif</span></td><td class="num">10</td><td class="quoi">Hébergement : la nuitée, le tarif par nuit, la règle de la demi-journée.</td></tr>
+    <tr><td class="sess">G</td><td><span class="pastille p-actif">actif</span></td><td class="num">48</td><td class="quoi">Vente et caisse : historique filtrable, un tarif par ligne de panier.</td></tr>
+    <tr><td class="sess">H</td><td><span class="pastille p-actif">actif</span></td><td class="num">25</td><td class="quoi">Les écrans. A trouvé et réparé le défaut de format qui te bloquait.</td></tr>
+    <tr><td class="sess">I</td><td><span class="pastille p-arret">jamais ouverte</span></td><td class="num">0</td><td class="quoi">Piscine, padel, patinoire, sport, musée. <b>Cinq modules que personne n'a jamais ouverts.</b></td></tr>
+  </tbody>
+</table>
+</div>
+
+<p class="note">Ce tableau mesure les branches, pas les messages. J'ai cru la flotte à moitié muette ce matin parce que je n'arrivais plus à joindre deux sessions ; leurs branches, elles, bougeaient. Une session est silencieuse quand son code ne bouge plus, pas quand elle ne répond pas.</p>
+
+<h2>Livré aujourd'hui</h2>
+
+<ul class="liste">
+  <li class="fait"><b>Le défaut de format qui te bloquait</b> — treize créations réparées, et un contrôle automatique qui rend la faute impossible à livrer désormais.</li>
+  <li class="fait"><b>Devis, bons de commande, bons de livraison</b> — avec leur filiation, et le bon de livraison qui facture la quantité <em>livrée</em>, pas la commandée.</li>
+  <li class="fait"><b>Deux failles de cloisonnement</b> — un établissement pouvait rattacher un produit au stock d'un autre, et lire la chaîne NF525 d'un autre.</li>
+  <li class="fait"><b>Le douzième garde-fou</b> — 49 entités laissaient écrire leur propre établissement. Vingt-deux d'entre elles ne le déclaraient nulle part : c'est l'absence de déclaration qui exposait.</li>
+  <li class="fait"><b>Les données de démonstration rechargeables</b> — quatorze fixtures créaient des rôles sans vérifier s'ils existaient. Réparé par cinq sessions.</li>
+  <li class="fait"><b>Un tarif par ligne de panier</b> — la caisse cesse de le deviner.</li>
+  <li class="fait"><b>Deux cliquets resserrés</b> — ils annonçaient depuis des jours qu'il fallait le faire. Personne ne lisait le message.</li>
+</ul>
+
+<h2>Ce qui attend une décision</h2>
+
+<ul class="liste">
+  <li class="dur"><b>La vente en ligne, l'application et la borne</b> — chaque canal a sa propre attente de paiement et son propre débiteur. Pour une agence de voyage, le débiteur est le partenaire, pas le client. Tranché sur le principe, pas encore construit.</li>
+  <li class="attend"><b>Carte plus mandat SEPA signés ensemble</b> — décidé, spécifié, pas encore développé. Rappel : <b>aucun numéro de carte ne sera jamais stocké.</b></li>
+  <li class="attend"><b>Le module campagne marketing</b> — les spécifications sont écrites, le développement n'a pas commencé.</li>
+  <li class="attend"><b>Correction d'une erreur de type de paiement</b> — datée du jour du geste, pas du jour de la vente, parce que la veille est déjà scellée. Conforme NF525, pas encore construit.</li>
+  <li class="dur"><b>Cinq modules jamais ouverts</b> — piscine, padel, patinoire, sport, musée. La session qui les porte n'a jamais démarré. <b>C'est le plus gros trou du chantier.</b></li>
+</ul>
+
+<h2>Dette gelée</h2>
+
+<p class="note" style="margin-top:0">Chaque compteur ne peut que descendre : un défaut connu est toléré, un défaut neuf fait refuser la poussée. Relevé à 10:49.</p>
+
+<div class="tableau-enveloppe">
+<table>
+  <thead><tr><th>Garde-fou</th><th>Reste</th><th>Ce qu'il empêche</th></tr></thead>
+  <tbody>
+    <tr><td class="sess">Cloisonnement</td><td class="num">24</td><td class="quoi">Lire ou écrire les données d'un autre établissement</td></tr>
+    <tr><td class="sess">Établissement écrivable</td><td class="num">49</td><td class="quoi">Déplacer une donnée vers un autre établissement</td></tr>
+    <tr><td class="sess">Couverture de périmètre</td><td class="num">30</td><td class="quoi">Exposer une liste que rien ne filtre</td></tr>
+    <tr><td class="sess">Événements orphelins</td><td class="num">25</td><td class="quoi">Émettre un événement que personne n'écoute</td></tr>
+    <tr><td class="sess">Résolution liée</td><td class="num">13</td><td class="quoi">Contrôler le droit sur la mauvaise entité</td></tr>
+    <tr><td class="sess">Charges utiles</td><td class="num">11</td><td class="quoi">Envoyer autre chose que ce que le contrat annonce</td></tr>
+    <tr><td class="sess">Écriture transfrontière</td><td class="num">3</td><td class="quoi">Écrire au travers d'une frontière de module</td></tr>
+    <tr><td class="sess">Défauts au mapping</td><td class="num">2</td><td class="quoi">Poser en base ce que le code ignore</td></tr>
+  </tbody>
+</table>
+</div>
+
+<footer>
+  Établi par <b>claude-A</b>, intégrateur. Les chiffres datent de l'heure indiquée en tête —
+  ici une mesure vit une vingtaine de minutes.
+</footer>
+
+</div>
+
+</body>
+</html>
