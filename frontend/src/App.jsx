@@ -18,6 +18,7 @@ import Supervision from './pages/Supervision.jsx'
 import Pilotage from './pages/Pilotage.jsx'
 import Boutique from './pages/Boutique.jsx'
 import Comptabilite from './pages/Comptabilite.jsx'
+import Facturation from './pages/Facturation.jsx'
 import Personnel from './pages/Personnel.jsx'
 import Parametres from './pages/Parametres.jsx'
 import Piscine from './pages/Piscine.jsx'
@@ -146,6 +147,7 @@ export default function App() {
     const permRequise = {
       piscine: 'piscine.lire', patinoire: 'patinoire.lire', padel: 'padel.lire',
       musee: 'musee.lire', comptabilite: 'compta.lire', personnel: 'personnel.lire',
+      facturation: 'facturation.lire',
     }
     if (onglet === 'dashboard' && me && !estAdministrateur(me)) setOnglet('caisse')
     else if (capRequise[onglet] && !caps.includes(capRequise[onglet])) setOnglet('caisse')
@@ -224,6 +226,7 @@ export default function App() {
         <Pilotage etabActif={etabActif} etablissements={etablissements} />
       )}
       {onglet === 'comptabilite' && <Comptabilite etabActif={etabActif} />}
+      {onglet === 'facturation' && <Facturation etabActif={etabActif} droits={droits} />}
       {onglet === 'clients' && <Clients etabActif={etabActif} cible={cible} onCibleConsommee={() => setCible(null)} droits={droits} />}
       {onglet === 'boutique' && <Boutique etabActif={etabActif} />}
       {onglet === 'piscine' && <Piscine etabActif={etabActif} />}

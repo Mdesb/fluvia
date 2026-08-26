@@ -227,6 +227,52 @@ class CommercialDocument
         return $this;
     }
 
+    /**
+     * Les gestes que l'état de la pièce autorise, dans l'ordre où on les propose.
+     *
+     * **Exposé pour que le client n'ait pas à recopier la table des transitions.** Un écran qui
+     * déciderait lui-même quels boutons afficher rejouerait une règle du serveur — et le jour où la
+     * table change, les deux divergeraient sans que rien ne le signale. C'est la leçon de D39,
+     * appliquée à une règle métier plutôt qu'à une règle d'autorisation : quand le client rejoue une
+     * règle du serveur, il doit la rejouer entière, et le plus sûr est de ne pas la rejouer.
+     *
+     * **Ce que cette liste ne dit PAS, c'est le droit.** `invoice` exige
+     * `facturation.emettre_directe` là où les autres se contentent de `facturation.gerer` : le partage
+     * est net, l'état vient d'ici, les droits viennent de `/me`. Une entité n'a pas de contexte de
+     * sécurité et n'a pas à en inventer un.
+     *
+     * @return list<string>
+     */
+    public function getGestesPossibles(): array
+    {
+        $gestes = [];
+
+        foreach ($this->statut->transitionsAutorisees() as $cible) {
+            $geste = match ($cible) {
+                DocumentStatus::Issued => 'issue',
+                DocumentStatus::Accepted => 'accept',
+                DocumentStatus::Rejected => 'reject',
+                default => null,
+            };
+
+            if (null !== $geste) {
+                $gestes[] = $geste;
+            }
+        }
+
+        if ($this->statut->peutEtreConvertie()) {
+            if (null !== $this->nature->suivante()) {
+                $gestes[] = 'derive';
+            }
+
+            if (null === $this->factureId) {
+                $gestes[] = 'invoice';
+            }
+        }
+
+        return $gestes;
+    }
+
     /** Le quote est-il périmé à cette date ? Les autres natures ne périment pas. */
     public function estPerimeAu(\DateTimeImmutable $instant): bool
     {

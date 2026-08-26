@@ -57,6 +57,41 @@ final class DocumentApiTest extends FacturationApiTestCase
     }
 
     /**
+     * **L'API dit elle-même quels gestes une pièce accepte.**
+     *
+     * L'écran affiche ses boutons depuis `gestesPossibles` plutôt que de recopier la table des
+     * transitions. Ce test est donc le contrat entre les deux : si le champ disparaît de la
+     * sérialisation, l'écran n'affiche plus aucun bouton — sans erreur, sans trace, et sans que
+     * quiconque le remarque avant qu'un exploitant appelle.
+     */
+    public function testLApiAnnonceLesGestesPossiblesAChaqueEtape(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+
+        $devis = $this->creerDevis($client, $entete);
+        self::assertSame(['issue'], $devis['gestesPossibles'], 'un brouillon ne peut qu etre emis');
+
+        $id = $this->identifiant($devis);
+        $emis = $client->request('POST', "/api/billing/documents/{$id}/issue", $entete)->toArray();
+        self::assertSame(['accept', 'reject'], $emis['gestesPossibles']);
+
+        $accepte = $client->request('POST', "/api/billing/documents/{$id}/accept", $entete)->toArray();
+        self::assertSame(['derive', 'invoice'], $accepte['gestesPossibles']);
+
+        $commande = $client->request('POST', "/api/billing/documents/{$id}/derive", $entete)->toArray();
+
+        // Le devis est converti : il ne reste rien a en faire, et l ecran n affichera aucun bouton.
+        $relu = $client->request('GET', "/api/billing/documents/{$id}", $entete)->toArray();
+        self::assertSame([], $relu['gestesPossibles']);
+
+        // Un bon de livraison est la derniere nature : on le facture, on ne le derive plus.
+        $idCommande = $this->identifiant($commande);
+        $client->request('POST', "/api/billing/documents/{$idCommande}/issue", $entete);
+        $accepteCommande = $client->request('POST', "/api/billing/documents/{$idCommande}/accept", $entete)->toArray();
+        self::assertContains('invoice', $accepteCommande['gestesPossibles']);
+    }
+
+    /**
      * **Le test qui compte : un devis d'un autre établissement est introuvable.**
      *
      * Pas « masqué », pas « grisé » : introuvable. Le cloisonnement passe par l'extension Doctrine,

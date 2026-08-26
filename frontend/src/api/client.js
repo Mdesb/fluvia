@@ -140,6 +140,16 @@ export function membres(collection) {
   return collection.member || collection['hydra:member'] || []
 }
 
+// Les routes des gestes d'une pièce commerciale (FAC-1). Aucune ne prend de corps : tout est dans
+// la route, et le serveur les déclare `input: false`.
+const GESTES_PIECE = {
+  issue: (id) => request(`/api/billing/documents/${id}/issue`, { method: 'POST' }),
+  accept: (id) => request(`/api/billing/documents/${id}/accept`, { method: 'POST' }),
+  reject: (id) => request(`/api/billing/documents/${id}/reject`, { method: 'POST' }),
+  derive: (id) => request(`/api/billing/documents/${id}/derive`, { method: 'POST' }),
+  invoice: (id) => request(`/api/billing/documents/${id}/invoice`, { method: 'POST' }),
+}
+
 export const api = {
   // Auth : hors /api, sans X-Etablissement.
   login: (email, motDePasse) =>
@@ -163,6 +173,24 @@ export const api = {
   depublierProduit: (id) => request(`/api/produits/${id}/depublier`, { method: 'POST' }),
   archiverProduit: (id) => request(`/api/produits/${id}/archiver`, { method: 'POST' }),
   reactiverProduit: (id) => request(`/api/produits/${id}/reactiver`, { method: 'POST' }),
+
+  // Pièces commerciales (FAC-1) : devis -> bon de commande -> bon de livraison -> facture.
+  //
+  // Aucun `ld: true` : les huit opérations sont déclarées `input: false` côté serveur et lisent le
+  // corps brut, elles ne passent donc pas par la désérialisation d'API Platform. Les cinq gestes
+  // n'ont carrément pas de corps — seul l'identifiant compte, tout est dans la route.
+  piecesCommerciales: () => request('/api/billing/documents'),
+  pieceCommerciale: (id) => request(`/api/billing/documents/${id}`),
+  creerDevis: (corps) => request('/api/billing/documents', { method: 'POST', body: corps }),
+  // Les cinq gestes sont écrits en toutes lettres, un par ligne, et non composés depuis une variable.
+  //
+  // Deux raisons, et la seconde n'est pas cosmétique. D'abord un geste mal orthographié échoue ici,
+  // à l'appel, au lieu de partir en 404 sur une route qui n'existe pas. Ensuite `verifier-formats`
+  // compare le chemin au `uriTemplate` déclaré côté serveur, et il normalise toute interpolation en
+  // `{id}` : un chemin composé donnait `/billing/documents/{id}/{id}`, qui ne correspond à rien, et
+  // le contrôle réclamait un `ld: true` dont ces routes n'ont que faire. Le contrôle avait raison de
+  // ne pas savoir — c'est au code appelé d'être lisible.
+  gestePiece: (id, geste) => GESTES_PIECE[geste](id),
 
   pointDeVentes: () => request('/api/point_de_ventes'),
   creerPointDeVente: (corps) => request('/api/point_de_ventes', { method: 'POST', body: corps, ld: true }),
