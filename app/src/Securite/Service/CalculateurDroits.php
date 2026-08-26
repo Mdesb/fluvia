@@ -6,6 +6,7 @@ namespace App\Securite\Service;
 
 use App\Securite\Entity\Affectation;
 use App\Securite\Entity\DelegationDroit;
+use App\Securite\Port\SupportAccessRightsInterface;
 use App\Securite\Entity\Utilisateur;
 use App\Securite\Enum\StatutDelegation;
 use Doctrine\ORM\EntityManagerInterface;
@@ -24,6 +25,7 @@ final class CalculateurDroits
 {
     public function __construct(
         private readonly EntityManagerInterface $em,
+        private readonly SupportAccessRightsInterface $supportAccessRights,
     ) {
     }
 
@@ -81,6 +83,35 @@ final class CalculateurDroits
             }
             foreach ($role->getPermissions() as $permission) {
                 $codes[$permission->getCode()] = true;
+            }
+        }
+
+        // --- Accès d'assistance de l'éditeur (ED-4, RG-ED-07) ---
+        //
+        // **Ce n'est PAS une exception au cloisonnement, c'est le seul chemin légitime pour la
+        // franchir.** Le cloisonnement ordinaire refuse déjà à un agent de l'éditeur l'établissement
+        // d'un client : pas d'affectation, pas de droits, 404. Le risque n'était donc pas l'accès non
+        // autorisé — c'était le **contournement**.
+        //
+        // Le jour où un client appelle parce que sa caisse ne s'ouvre pas, quelqu'un doit regarder ses
+        // données. Sans chemin praticable, la seule façon est de donner à l'agent une **affectation
+        // permanente** sur l'établissement du client : invisible, indistinguable d'une affectation
+        // normale, que personne ne pensera à retirer. C'est exactement ce que RG-ED-07 interdit, obtenu
+        // par la porte de service. **Une règle sans chemin praticable ne tient pas.**
+        //
+        // ⚠ **Placé APRÈS les affectations et les délégations, et non à leur place.** Un agent qui a
+        // par ailleurs des droits légitimes les garde ; l'accès d'assistance n'ajoute que la lecture.
+        // Le port rend un tableau vide dans tous les cas douteux, donc ce bloc ne peut qu'ajouter.
+        //
+        // ⚠ **L'appel vaut usage** : l'implémentation trace. Savoir qui *pouvait* regarder n'est pas
+        // savoir qui a regardé. Le volume reste borné — un accès d'assistance est exceptionnel par
+        // construction, et s'il produit beaucoup d'entrées, c'est une information et pas du bruit.
+        //
+        // Sans établissement actif, rien : un accès d'assistance est nominatif ET ciblé, et l'accorder
+        // « partout » reviendrait à recréer le rôle qui voit tous les établissements.
+        if ($etablissement !== null) {
+            foreach ($this->supportAccessRights->grantedCodes($utilisateur, $etablissement, $maintenant) as $code) {
+                $codes[$code] = true;
             }
         }
 
