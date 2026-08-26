@@ -68,6 +68,25 @@ const MOTS = {
   en_attente: 'En attente',
   suspendu: 'Suspendu',
   invite: 'Invité',
+
+  // --- Patinoire ---
+  // « non_rendu » et « non_rendue » diffèrent d'un caractère et ne disent pas la même chose : le
+  // premier qualifie l'état des patins au retour, le second l'état de la location. Traduire les deux
+  // évite qu'un agent lise « non rendu » sur une ligne dont la paire est revenue.
+  en_cours: 'En cours',
+  retournee: 'Rendue',
+  non_rendue: 'Jamais rendue',
+  bon: 'Bon état',
+  casse: 'Cassés',
+  non_rendu: 'Non rendus',
+  prestation_client: 'Affûtage client',
+  maintenance_parc: 'Entretien du parc',
+  termine: 'Terminé',
+  proposee: 'Pointure proposée',
+  honoree: 'Servie',
+  expiree: 'Expirée',
+  perte: 'Perte',
+  restitution_partielle: 'Restitution partielle',
 }
 
 // Rend un code lisible sans prétendre le traduire : `boutique_stock` → « Boutique stock ».
