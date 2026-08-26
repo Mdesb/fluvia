@@ -227,7 +227,7 @@ export default function App() {
       {onglet === 'clients' && <Clients etabActif={etabActif} cible={cible} onCibleConsommee={() => setCible(null)} droits={droits} />}
       {onglet === 'boutique' && <Boutique etabActif={etabActif} />}
       {onglet === 'piscine' && <Piscine etabActif={etabActif} />}
-      {onglet === 'patinoire' && <Patinoire etabActif={etabActif} />}
+      {onglet === 'patinoire' && <Patinoire etabActif={etabActif} droits={droits} />}
       {onglet === 'padel' && <Padel etabActif={etabActif} />}
       {onglet === 'musee' && <Musee etabActif={etabActif} />}
       {onglet === 'personnel' && <Personnel etabActif={etabActif} droits={droits} />}

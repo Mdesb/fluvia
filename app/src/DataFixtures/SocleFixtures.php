@@ -36,16 +36,16 @@ final class SocleFixtures extends Fixture
 
     public function load(ObjectManager $manager): void
     {
-        $groupe = (new Groupe())->setNom('Groupe Loisirs Métropole');
-        $manager->persist($groupe);
+        $groupe = $this->parNom($manager, Groupe::class, 'Groupe Loisirs Métropole');
 
-        $region = (new Region())->setNom('Région Est')->setGroupe($groupe);
-        $manager->persist($region);
+        $region = $this->parNom($manager, Region::class, 'Région Est');
+        $region->setGroupe($groupe);
 
-        $etabA = (new Etablissement())->setNom(self::ETAB_A_NOM)->setRegion($region)->setActif(true);
-        $etabB = (new Etablissement())->setNom(self::ETAB_B_NOM)->setRegion($region)->setActif(true);
-        $manager->persist($etabA);
-        $manager->persist($etabB);
+        $etabA = $this->parNom($manager, Etablissement::class, self::ETAB_A_NOM);
+        $etabA->setRegion($region)->setActif(true);
+
+        $etabB = $this->parNom($manager, Etablissement::class, self::ETAB_B_NOM);
+        $etabB->setRegion($region)->setActif(true);
 
         // Permissions (RG-SOCLE-02).
         $permOrgGerer = $this->permissionNommee($manager, 'organisation', 'gerer');
@@ -65,20 +65,13 @@ final class SocleFixtures extends Fixture
         $manager->persist($roleLecteur);
 
         // Utilisateurs (RG-SOCLE-06 : mot de passe haché).
-        $admin = (new Utilisateur())
-            ->setEmail(self::ADMIN_EMAIL)
-            ->setNom('Administratrice Socle')
+        $admin = $this->utilisateurParEmail($manager, self::ADMIN_EMAIL, self::ADMIN_MDP);
+        $admin->setNom('Administratrice Socle')
             ->setActif(true)
             ->setRolesSecurite(['ROLE_ADMIN']);
-        $admin->setMotDePasse($this->hasher->hashPassword($admin, self::ADMIN_MDP));
-        $manager->persist($admin);
 
-        $lecteur = (new Utilisateur())
-            ->setEmail(self::LECTEUR_EMAIL)
-            ->setNom('Lecteur Socle')
-            ->setActif(true);
-        $lecteur->setMotDePasse($this->hasher->hashPassword($lecteur, self::LECTEUR_MDP));
-        $manager->persist($lecteur);
+        $lecteur = $this->utilisateurParEmail($manager, self::LECTEUR_EMAIL, self::LECTEUR_MDP);
+        $lecteur->setNom('Lecteur Socle')->setActif(true);
 
         // Affectations (RG-SOCLE-03/05) : admin sur A et B, lecteur sur A seulement.
         $this->affectationUnique($manager, $admin, $roleAdmin, $etabA);
@@ -159,5 +152,67 @@ final class SocleFixtures extends Fixture
         $manager->persist(
             (new Affectation())->setUtilisateur($utilisateur)->setRole($role)->setEtablissement($etablissement)
         );
+    }
+
+    /**
+     * **La quatrième famille, et j'avais laissé passer les trois autres avant elle.**
+     *
+     * `claude-G` m'avait prévenu qu'il y avait quatre familles d'entités uniques dans ce fichier, pas
+     * une. J'en ai gardé trois — rôles, permissions, affectations — et j'ai déclaré la fixture
+     * idempotente. Le double chargement a avancé d'un cran et buté sur
+     * `Duplicate entry 'admin@itcotation.com'`.
+     *
+     * C'est exactement ce qu'elle avait annoncé : **corriger la seule famille qui bloque fait avancer
+     * le curseur sans rendre la fixture idempotente.** Et je l'ai fait après l'avoir lu.
+     *
+     * Le mot de passe n'est posé qu'à la création : le rejouer à chaque chargement réécrirait un hachage
+     * pour rien, et surtout écraserait un mot de passe changé depuis.
+     */
+    private function utilisateurParEmail(ObjectManager $manager, string $email, string $motDePasse): Utilisateur
+    {
+        $existant = $manager->getRepository(Utilisateur::class)->findOneBy(['email' => $email]);
+
+        if ($existant instanceof Utilisateur) {
+            return $existant;
+        }
+
+        $utilisateur = (new Utilisateur())->setEmail($email);
+        $utilisateur->setMotDePasse($this->hasher->hashPassword($utilisateur, $motDePasse));
+        $manager->persist($utilisateur);
+
+        return $utilisateur;
+    }
+
+    /**
+     * **Le cas qui ne crie pas, et c'est pour ça qu'il est le plus dangereux.**
+     *
+     * `Groupe`, `Region` et `Etablissement` ne portent d'unicité que sur leur identifiant technique,
+     * régénéré à chaque construction. Un second chargement ne lève donc **aucune** erreur : il crée un
+     * second « Groupe Loisirs Métropole », une seconde « Région Est », deux piscines A. Silencieusement.
+     *
+     * On ne l'aurait pas su en corrigeant les erreurs une par une, parce qu'il n'en produit pas. Il
+     * apparaît quand on **compte les lignes** — le contrôle que `claude-D` a exigé d'ajouter au test
+     * après avoir remarqué que « ne lève pas » n'est pas « idempotent ».
+     *
+     * Un établissement en double n'est pas cosmétique : c'est la frontière sur laquelle repose tout le
+     * cloisonnement. Deux établissements du même nom, et l'on ne sait plus lequel porte les droits.
+     *
+     * @template T of object
+     * @param class-string<T> $classe
+     * @return T
+     */
+    private function parNom(ObjectManager $manager, string $classe, string $nom): object
+    {
+        $existant = $manager->getRepository($classe)->findOneBy(['nom' => $nom]);
+
+        if ($existant !== null) {
+            return $existant;
+        }
+
+        $entite = new $classe();
+        $entite->setNom($nom);
+        $manager->persist($entite);
+
+        return $entite;
     }
 }

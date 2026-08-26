@@ -31,7 +31,27 @@ declare(strict_types=1);
  *   php bin/garde-fou-nommage-anglais.php --fichiers=a.php,b.php   # contrôle ciblé, hors git
  */
 
+/**
+ * **Faux positif du lexique — la procédure, volontairement placée ici et pas dans le message d'échec.**
+ *
+ * Le lexique a été bâti sur un relevé de fréquence, pas sur une vérité révélée : il contient des mots
+ * qui s'écrivent à l'identique dans les deux langues, et il en manque d'autres. Il est fait pour être
+ * corrigé.
+ *
+ * **Mais il se corrige à deux.** Retirer un mot désarme le contrôle pour les neuf sessions, sur toutes
+ * les familles de mots, et ce désarmement ne se voit nulle part ensuite. Retirer `facturation` pour
+ * débloquer un fichier, c'est laisser passer tous les `facturation*` de la semaine suivante.
+ *
+ * Donc : retire le mot de `bin/nommage.lexique-francais.txt`, **et écris pourquoi dans `MESSAGES.md`**,
+ * dans le même commit. Sans la seconde moitié, personne ne saura que le contrôle a rétréci.
+ *
+ * C'est D53 : le message d'échec dit ce qui est cassé et comment le réparer ; le contournement vit
+ * dans la documentation. Qui le cherche le trouve, qui est pressé ne tombe pas dessus.
+ */
 const LEXIQUE = 'bin/nommage.lexique-francais.txt';
+
+// Partage entre la detection et la recherche du meme code ailleurs dans le depot.
+const MOTIF_CODE_PERMISSION = '/is_granted\s*\(\s*[\'"]PERM[\'"]\s*,\s*[\'"]([\w.]+)[\'"]/';
 const REFERENCE_DEFAUT = 'origin/main';
 
 /** Répertoires dont les fichiers ajoutés sont contrôlés. */
@@ -46,7 +66,7 @@ const DECLARATIONS = [
     'cas d\'enum' => '/\bcase\s+(\w+)\s*(?:=|;)/',
     'table'      => '/#\[ORM\\\\Table\s*\([^)]*name:\s*[\'"](\w+)[\'"]/',
     'colonne'    => '/#\[ORM\\\\Column\s*\([^)]*name:\s*[\'"](\w+)[\'"]/',
-    'permission' => '/is_granted\s*\(\s*[\'"]PERM[\'"]\s*,\s*[\'"]([\w.]+)[\'"]/',
+    'permission' => MOTIF_CODE_PERMISSION,
 ];
 
 // ------------------------------------------------------------------ utilitaires
@@ -158,6 +178,78 @@ function fichiersAjoutes(string $ref): array
 // ------------------------------------------------------------------- contrôle
 
 /**
+ * Un code de permission cité ailleurs dans le dépôt est une **référence**, pas une déclaration.
+ *
+ * **Le faux positif, et il a bloqué une session entière.** `claude-D` livrait `CommercialDocument`, qui
+ * porte huit `is_granted('PERM', 'facturation.gerer')`. Le contrôle a compté huit fautes. Or ce code
+ * n'est pas forgé là : il est **déclaré** dans `FacturationFixtures`, le catalogue du module, et cité
+ * à l'identique par quatre autres fichiers.
+ *
+ * Écrire `billing.manage` à la place n'aurait rien renommé — ça aurait désigné une permission **absente
+ * du catalogue**, et le voteur aurait refusé tout accès. Le garde-fou aurait donc produit un défaut de
+ * droits en croyant corriger un défaut de nommage.
+ *
+ * **Ce fichier fait déjà cette distinction pour les classes** — « seules les déclarations sont
+ * contrôlées, pas les références ». Elle n'avait simplement jamais été appliquée aux codes de
+ * permission, où elle compte autant : renommer une permission, c'est une matrice de droits à reprendre,
+ * et c'est précisément pour ça que ce genre est surveillé.
+ *
+ * Le contrôle garde tout son objet : un code français **réellement neuf** n'existe nulle part ailleurs,
+ * donc il est toujours attrapé. Signalé et diagnostiqué par `claude-D`, qui a refusé pour la troisième
+ * fois de cette semaine la porte de sortie que le message d'échec lui proposait (D53).
+ */
+function permissionDejaDeclaree(string $code, string $fichierAnalyse): bool
+{
+    /** @var array<string, bool>|null $connus */
+    static $connus = null;
+
+    if ($connus === null) {
+        $connus = [];
+
+        $dossier = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator('app/src', FilesystemIterator::SKIP_DOTS)
+        );
+
+        foreach ($dossier as $entree) {
+            if (!$entree->isFile() || $entree->getExtension() !== 'php') {
+                continue;
+            }
+
+            $chemin = $entree->getPathname();
+            $source = @file_get_contents($chemin);
+
+            if ($source === false) {
+                continue;
+            }
+
+            // On retient d'ou vient chaque code : un code qui n'apparait QUE dans le fichier analyse
+            // y est bel et bien forge, et doit rester signale.
+            if (preg_match_all(MOTIF_CODE_PERMISSION, $source, $trouves) === false) {
+                continue;
+            }
+
+            foreach ($trouves[1] as $trouve) {
+                $connus[$trouve][$chemin] = true;
+            }
+        }
+    }
+
+    if (!isset($connus[$code])) {
+        return false;
+    }
+
+    $reel = realpath($fichierAnalyse);
+
+    foreach (array_keys($connus[$code]) as $ou) {
+        if (realpath($ou) !== $reel) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
  * @param list<string> $lexique
  * @return list<array{fichier: string, ligne: int, genre: string, identifiant: string, jetons: list<string>}>
  */
@@ -184,6 +276,12 @@ function analyser(string $fichier, array $lexique): array
 
         foreach ($correspondances[1] as $capture) {
             [$identifiant, $decalage] = $capture;
+
+            // Une permission citee ailleurs est une reference, pas une declaration : la renommer ici
+            // designerait un code absent du catalogue, et le voteur refuserait tout.
+            if ($genre === 'permission' && permissionDejaDeclaree($identifiant, $fichier)) {
+                continue;
+            }
 
             $fautifs = array_values(array_intersect(decouper($identifiant), $lexique));
 
@@ -280,9 +378,16 @@ fichiers AJOUTÉS. Un fichier neuf n'a donc aucune raison d'introduire du vocabu
 Deux cas particuliers :
   - tu consommes une classe historique française (SessionCaisse, Etablissement…) : c'est permis,
     seules les *déclarations* sont contrôlées, pas les références ni les propriétés ;
-  - le mot signalé est en réalité correct en anglais : c'est un défaut du lexique, pas de ton code.
-    Retire-le de bin/nommage.lexique-francais.txt et dis-le dans MESSAGES.md — le lexique est fait
-    pour être corrigé, il a été bâti sur un relevé de fréquence, pas sur une vérité révélée.
+  - un code de permission déjà déclaré ailleurs dans app/src est une référence, pas une déclaration :
+    il n'est plus signalé. Si tu vois encore ce message sur un code existant, c'est un défaut du
+    contrôle — dis-le-moi, ne renomme pas : tu désignerais une permission absente du catalogue.
+
+La bonne réponse est de renommer. Elle l'a été les trois fois où elle a été refusée cette semaine,
+sur trois modules différents, et à chaque fois le code final était meilleur.
+
+Si tu crois tenir un faux positif, la procédure est écrite en tête de ce fichier — elle passe par un
+aller-retour, délibérément. Un contrôle qu'on peut désarmer seul, un vendredi soir, ne protège que
+les gens qui n'en avaient pas besoin (D53).
 
 TXT;
 

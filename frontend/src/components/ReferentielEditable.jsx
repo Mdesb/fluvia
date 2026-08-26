@@ -22,6 +22,27 @@ import Modal from './Modal.jsx'
 // 3. Il ne nomme jamais un champ par ce qu'il stocke. Chaque champ porte, si besoin, une phrase qui
 //    dit ce qui change pour le client ou pour la caisse — pas ce qui change en base.
 
+// Ce qu'un champ de formulaire doit recevoir quand la valeur vient du serveur.
+//
+// Une relation est sérialisée en objet ; un `<select>` ne compare que des chaînes. On rend donc
+// l'IRI (`@id`) quand elle existe, l'identifiant brut à défaut.
+//
+// CE QUE CETTE FONCTION NE SAIT PAS FAIRE, ET QUI RESTE LE TRAVAIL DE `versValeur`.
+//
+// Quand le serveur sérialise la relation SANS `@id` — juste `{ id, nom }` —, on ne peut pas
+// reconstruire l'IRI : le chemin de la ressource n'est pas déductible de la valeur. La fonction rend
+// alors l'identifiant nu, qui ne correspondra à aucune option, et le serveur refusera l'envoi.
+//
+// Ce n'est pas une réparation, c'est un déplacement — et c'est tout l'intérêt : **le pire cas
+// devient bruyant au lieu d'être silencieux.** Avant, un oubli effaçait une relation sans que
+// personne ne s'en aperçoive ; maintenant il produit un refus immédiat, sur l'écran, devant celui
+// qui vient d'enregistrer. C'est `versValeur` qui règle ce cas-là, comme pour `region`.
+function versChampSimple(valeur, champ) {
+  if (valeur === null || valeur === undefined) return champ.type === 'bool' ? false : ''
+  if (typeof valeur === 'object') return valeur['@id'] || valeur.id || ''
+  return valeur
+}
+
 export default function ReferentielEditable({ descripteur, peutEcrire }) {
   const [lignes, setLignes] = useState([])
   const [chargement, setChargement] = useState(true)
@@ -64,9 +85,19 @@ export default function ReferentielEditable({ descripteur, peutEcrire }) {
   function ouvrirEdition(ligne) {
     const valeurs = {}
     champs.forEach((c) => {
-      if (c.type === 'choix-multiples') valeurs[c.nom] = Array.isArray(ligne[c.nom]) ? [...ligne[c.nom]] : []
+      // Une relation arrive du serveur en objet (`{ '@id', id, nom }`) alors qu'un `<select>`
+      // manipule une chaîne. Sans conversion, le champ s'affiche vide ET l'enregistrement efface la
+      // valeur existante sans que personne ne l'ait demandé — un défaut qui, vu de l'écran, ne
+      // ressemble à rien : on ouvre une fiche, on corrige un nom, on perd une relation qu'on n'a
+      // jamais touchée, et on ne le découvrira que des semaines plus tard.
+      //
+      // La conversion est donc faite ICI, par défaut, plutôt que confiée à un crochet qu'il faut
+      // savoir écrire. `versValeur` reste disponible pour les cas que cette règle ne couvre pas —
+      // mais l'oublier ne détruit plus rien.
+      if (c.versValeur) valeurs[c.nom] = c.versValeur(ligne)
+      else if (c.type === 'choix-multiples') valeurs[c.nom] = Array.isArray(ligne[c.nom]) ? [...ligne[c.nom]] : []
       else if (c.type === 'date') valeurs[c.nom] = (ligne[c.nom] || '').slice(0, 10)
-      else valeurs[c.nom] = ligne[c.nom] ?? (c.type === 'bool' ? false : '')
+      else valeurs[c.nom] = versChampSimple(ligne[c.nom], c)
     })
     setEdition({ ligne, valeurs })
   }
@@ -80,12 +111,17 @@ export default function ReferentielEditable({ descripteur, peutEcrire }) {
       const corps = {}
       champs.forEach((c) => {
         const v = edition.valeurs[c.nom]
-        if (c.type === 'nombre') corps[c.nom] = Number(v)
+        // Symétrique du précédent : un choix laissé vide part à `null` et non en chaîne vide,
+        // que le serveur refuse avec un message de désérialisation illisible. `versCorps` reste
+        // disponible, mais n'est plus nécessaire pour ce cas-là.
+        if (c.versCorps) corps[c.nom] = c.versCorps(v)
+        else if (c.type === 'nombre') corps[c.nom] = Number(v)
         else if (c.type === 'bool') corps[c.nom] = !!v
         else if (c.type === 'choix-multiples') corps[c.nom] = Array.isArray(v) ? v : []
         // Une date laissee vide part a `null` et non en chaine vide : le serveur rejette la seconde
         // avec un message de deserialisation que personne ne peut interpreter.
         else if (c.type === 'date') corps[c.nom] = v ? v : null
+        else if (c.type === 'choix') corps[c.nom] = v === '' ? null : v
         else corps[c.nom] = v
       })
       if (edition.ligne) await modifier(edition.ligne.id, corps)
