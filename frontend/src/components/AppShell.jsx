@@ -61,7 +61,7 @@ const NAV = [
       { id: 'personnel', ic: '☰', label: 'Personnel', perm: 'personnel.lire' },
       { id: 'stock', ic: '▣', label: 'Stock', perm: 'stock.lire' },
       { id: 'facturation', ic: '▤', label: 'Facturation', perm: 'facturation.lire' },
-      { id: 'finance', ic: '€', label: 'Achats & trésorerie', perm: 'finance.read', disabled: true, absent: true },
+      { id: 'finance', ic: '€', label: 'Achats & trésorerie', perm: 'finance.read' },
       { id: 'sepa', ic: '⇄', label: 'Prélèvements SEPA', perm: 'sepa.lire', disabled: true, absent: true },
       { id: 'recouvrement', ic: '⚠', label: 'Recouvrement', perm: 'recouvrement.lire', disabled: true, absent: true },
       { id: 'caution', ic: '⛨', label: 'Cautions', perm: 'caution.lire', disabled: true, absent: true },

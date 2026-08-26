@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import Liste, { dateHeureFr } from '../components/Liste.jsx'
+import Liste, { dateHeureFr, jourLocal } from '../components/Liste.jsx'
 import Modal from '../components/Modal.jsx'
 import Tabs from '../components/Tabs.jsx'
 import { api, membres } from '../api/client.js'
@@ -494,7 +494,7 @@ function GroupesSection({ etabActif, droits }) {
 
   const enOption = dossiers.filter((d) => d.statutPaiement === 'en_option')
   const suite = dossiers.filter((d) => d.statutPaiement !== 'en_option')
-  const aujourdHui = new Date().toISOString().slice(0, 10)
+  const aujourdHui = jourLocal()
 
   return (
     <>

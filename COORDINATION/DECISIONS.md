@@ -2414,3 +2414,81 @@ Confondre les deux revient à inscrire dans le code de production une réparatio
 un jeu d'essai.
 
 > **Une migration ne fabrique jamais de donnée métier. Ce qui manque reste visiblement manquant.**
+
+---
+
+### 2026-08-26 · D67 — Un oracle de test est la seule exception à « un seul calcul »
+
+**La règle standing :** un calcul existe une fois, plusieurs appelants — parce que deux implémentations
+en **production** divergent en silence et que **les deux sont crues**. Appliquée quatre fois ce jour :
+simulation de clôture, estimation de tarif, prix des options, jauge en lot.
+
+**L'exception, demandée par `claude-G` et validée :** un **calcul de référence écrit dans un test** n'est
+pas de cette nature.
+
+- **Personne ne le croit** — sa seule sortie est une comparaison, jamais une donnée métier.
+- **Sa divergence est le signal**, pas un défaut à corriger.
+- **Il ne sert aucun appelant**, donc il ne peut pas devenir la version que quelqu'un utilise par erreur.
+
+C'est un **oracle**, et c'est la seule façon de tester un calcul dont on ne peut pas écrire le résultat à
+la main.
+
+**Pourquoi il en fallait un ici.** J'avais demandé un test comparant la jauge en lot au chemin unitaire.
+`claude-G` a vu ce que je n'avais pas vu : **`placesOccupees()` délègue désormais au lot**, donc le test
+aurait comparé une fonction à elle-même — vert, et ne prouvant rien. *« Exactement le défaut que le test
+est censé empêcher, retourné. »*
+
+**⚠ SON SEUL MODE D'ÉCHEC, ET IL EST DÉCISIF : écrire l'oracle depuis le CODE plutôt que depuis la
+RÈGLE.**
+
+Ouvrir la requête de production et la ré-exprimer en PHP transcrit **aussi son défaut**. Les deux
+s'accordent, le test est vert, et **il confirme l'erreur au lieu de l'attraper**. C'est le piège
+classique de cette forme, d'autant plus facile que le code est sous les yeux.
+
+L'oracle s'écrit depuis la spécification. S'il diverge, c'est une information **dans les deux sens** —
+y compris quand c'est lui qui a tort.
+
+**Condition de forme, de `claude-G` :** lent, naïf, sans SQL, sans optimisation. **Sa justesse doit se
+lire d'un coup d'œil**, sinon on a deux choses à déboguer au lieu d'une.
+
+---
+
+### 2026-08-26 · D67-bis — Croire qu'on applique une règle parce qu'on vient de l'écrire
+
+**Déclaré par `claude-G` sur elle-même, quatrième fois de la journée.**
+
+Elle a écrit ce commentaire, avec la conséquence exacte :
+
+> D58 — les identifiants et non les entités. Sur une relation à identifiant `Uuid`, un `IN` d'entités ne
+> trouve rien et **ne lève pas** : la jauge rendrait zéro partout, donc « tout est libre » sur un
+> calendrier complet.
+
+**Et elle a commis la faute sur la ligne suivante.** D58 est pourtant sans nuance : pour une **liste**,
+aucun type scalaire ne s'applique — `IN` reste toujours fautif, il faut du SQL avec `UNHEX`. Passer
+`getId()` au lieu d'entités lui a suffi à croire la règle appliquée.
+
+La jauge rendait **zéro partout**. Un écran de calendrier aurait laissé réserver un créneau plein.
+Quatre tests l'ont attrapée ; le commentaire, non.
+
+**Sa formulation, qui vaut mieux que le constat :**
+
+> La constante n'est pas l'ignorance de la règle : c'est de croire qu'on l'applique parce qu'on vient de
+> l'écrire.
+
+**Quatre occurrences le même jour, chez la même personne, toutes déclarées :** le raccourci des chèques
+documenté au-dessus de lui-même ; `promoEligible` failli « corrigée » en la déplaçant ; le `static` du
+test de clôture, optimisation raisonnable ; et celle-ci.
+
+**Ce n'est pas de la négligence, c'est le geste qui ressemble le plus à la conformité qui est le plus
+dangereux** — pas celui qui l'ignore. Un commentaire ne protège pas ; seul un test protège.
+
+---
+
+### 2026-08-26 · D67-ter — Sixième forme du piège des identifiants : `IN` sur l'identifiant d'une entité jointe
+
+Le garde-fou n°14 surveille les propriétés `*Ref` et les relations déclarées. Il **ne voit pas**
+`IN (:liste)` posé sur `cs.id` — l'identifiant d'une **entité jointe**, qui n'est ni l'une ni l'autre.
+
+C'est la sixième forme du même piège, et elle vient de coûter un faux « tout est libre ». À élargir,
+avec le cas de reproduction de `claude-G` — et **vu refuser avant d'être livré**, pas seulement vert sur
+le correctif.
