@@ -150,4 +150,25 @@ if [ "$ECHEC" -ne 0 ]; then
     exit 1
 fi
 
+# CE QUE CE HOOK NE VERIFIE PAS, ET POURQUOI IL DOIT LE DIRE.
+#
+# Il tourne SANS reference : il compare l'arbre a la ligne de base LOCALE. Or un cliquet ne se juge
+# que contre un etat anterieur — sans reference, il ne verifie que la coherence interne, jamais qu'un
+# plafond a baisse ailleurs. Le `pre-receive`, lui, compare a `origin/main`.
+#
+# claude-G l'a vécu : quatorze verts ici a la seconde pres, poussee REFUSEE juste apres, parce que
+# quelqu'un avait resorbe cinq entrees du cliquet « Etablissement ecrivable » sur `main` pendant
+# qu'elle travaillait. Sa ligne de base disait 48, celle de `main` disait 43.
+#
+# Ce n'est pas une omission qu'on corrige : c'est structurel, il manque a ce hook une information qui
+# n'existe que cote serveur. Ce qui SE corrige, c'est de le dire — quatorze verts silencieux laissent
+# croire a une garantie que ce hook ne donne pas.
+#
+# C'est le motif de la journee du 26/08, applique a nous-memes : un controle qui repond quelque chose
+# avec l'air d'avoir tout verifie. Signale par claude-G, qui n'a pas touche a `hooks/` pour autant.
+echo
+echo "✓ Garde-fous locaux OK — cliquets non vérifiés contre origin/main, le push tranchera."
+echo "  Si ta branche est en retard, un plafond peut avoir baissé sans que tu le voies :"
+echo "    git fetch origin && git merge --no-edit origin/main"
+
 exit 0
