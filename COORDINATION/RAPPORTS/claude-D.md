@@ -245,3 +245,66 @@ place de Maxime.
 qu'un compte de service émette les factures et le désigne au déploiement, soit on ajoute une mention
 explicite sur la facture. Je lui ai posé la question. Tant qu'elle n'est pas tranchée, la déclaration
 tiendrait en quatre lignes mais dirait quelque chose que personne n'a décidé.
+
+## 26/08 — FAC-1, l'API : huit opérations, et deux garde-fous qui ont parlé
+
+Huit opérations sur `/api/billing/documents` : lecture, création, et cinq gestes (`issue`, `accept`,
+`reject`, `derive`, `invoice`). La création ne produit **qu'un devis** — les deux autres natures se
+dérivent, donc la filiation, qui est ce que le lot apporte, ne peut pas être contournée par la route
+de création. L'établissement vient de la session, jamais du corps (D3). `invoice` exige
+`facturation.emettre_directe`, pas seulement `facturation.gerer`.
+
+Un seul processeur pour les cinq gestes : ils partagent le contrôle d'accès, la résolution et le
+traitement d'erreur, et cinq classes jumelles divergeraient au premier correctif appliqué à une
+seule. Le cloisonnement n'y est pas rejoué : `PerimetreFacturationExtension` restreint déjà la
+résolution, et deux règles finissent par diverger sans qu'on sache laquelle fait foi.
+
+**Le test de cloisonnement, je l'avais d'abord monté sur l'administrateur du socle — et il échouait.**
+La cause n'était pas le code : l'administrateur est affecté sur A *et* sur B, donc lui montrer la
+pièce de B est correct. Monté sur lui, ce test aurait pu passer au vert plus tard en ne mesurant
+rien. Le témoin est maintenant le **lecteur** du socle, affecté sur A seulement et porteur du joker
+`*.lire` : il franchit le contrôle d'accès et bute uniquement sur le périmètre, ce qui rend le 404
+attribuable au cloisonnement et à rien d'autre. Un second test dit l'autre moitié — le lecteur voit,
+mais ne peut pas `issue` (403) —, sans quoi les cinq routes de geste auraient pu n'exiger que la
+lecture sans que rien ne s'en aperçoive, puisque l'administrateur porte `ROLE_ADMIN` et franchit tout.
+
+**D41 a trouvé un vrai trou.** `CommercialDocument` n'avait aucun `denormalizationContext` : tout
+mutateur était donc écrivable, et un corps `{"etablissement": "…/voisin"}` posté sur une route de
+geste aurait été désérialisé sur la pièce chargée, que le `flush()` aurait déplacée chez un autre
+exploitant. Je ne l'ai pas supposé : la sonde `testUnCorpsDeRequeteNeDeplacePasLaPieceChezLeVoisin`
+montre que ce n'est **pas** exploitable aujourd'hui, les huit opérations portant `input: false`. Donc
+exposition latente, pas fuite. J'ai quand même déclaré un groupe d'écriture **vide** : huit drapeaux
+qu'il faut penser à maintenir ne sont pas une protection, il suffit qu'une neuvième opération naisse
+sans le sien. La sonde reste dans la suite pour que la garantie soit mesurée et pas déclarée.
+
+Tests : 14 d'API verts / 93 assertions. `tests/Facturation` 40 verts / 335, `tests/Platform` 62 verts
+/ 259. 11 garde-fous sur 12.
+
+### Bloqueur remonté à claude-A — D5 traite une référence comme une déclaration
+
+D5 refuse le fichier sur huit lignes de la forme `is_granted('PERM', 'facturation.gerer')`. Ces codes
+sont **déclarés** dans `src/Facturation/DataFixtures/FacturationFixtures.php:35` et référencés à
+l'identique par `Facture.php`, `SerieNumerotation.php`, `ParametreFacturationEtablissement.php`,
+`FactureRenduProvider.php`. Aucune classe de constantes n'existe : ce sont des littéraux partout dans
+le module. Écrire `billing.manage` désignerait une permission absente du catalogue et le voter
+refuserait tout ; en fabriquer un second, anglais, pour une seule entité couperait le modèle de droits
+du module en deux.
+
+D5 énonce lui-même que « seules les *déclarations* sont contrôlées, pas les références » — il applique
+la distinction aux classes, pas aux codes de permission.
+
+**Je n'ai pas pris le remède proposé**, qui est de retirer le mot du lexique. « facturation » est bel
+et bien français ; l'ôter aveuglerait le contrôle pour les neuf sessions, sur toutes les familles de
+mots, pour débloquer un fichier. Un garde-fou ne devrait jamais offrir comme remède la réduction de
+son propre périmètre. Correctif proposé à claude-A : ne signaler un code de permission que s'il
+n'existe pas déjà dans `origin/main` — un code français réellement neuf reste attrapé, une référence
+passe, et le contrôle garde son objet.
+
+Le commit FAC-1 reste local, prêt à partir. **Je n'attends pas** : j'enchaîne sur PAY-3, qui ne dépend
+ni de D5 ni de l'arbitrage sur l'écran.
+
+### Question ouverte
+
+À qui l'écran FAC-1 ? Le lot sert vos **clients** — les clubs qui vendent sans caisse — pas votre
+administration. L'écran va donc dans `frontend/src/pages/` (back-office exploitant) et non dans
+`frontend/src/editeur/`, qui est mon périmètre. Je ne me l'attribue pas de moi-même.

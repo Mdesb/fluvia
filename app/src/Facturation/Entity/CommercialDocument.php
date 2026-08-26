@@ -57,6 +57,20 @@ use Symfony\Component\Uid\Uuid;
 #[ORM\Index(name: 'idx_document_establishment_nature', columns: ['etablissement_id', 'nature'])]
 #[ApiResource(
     shortName: 'CommercialDocument',
+    // **Le groupe d'écriture est vide, et il doit le rester.**
+    //
+    // Sans `denormalizationContext`, API Platform rend écrivable toute propriété dotée d'un mutateur :
+    // un corps `{"etablissement": "/api/etablissements/<voisin>"}` posté sur une route de geste
+    // déplacerait la pièce chez un autre exploitant au `flush()` suivant. Les huit opérations portent
+    // `input: false`, ce qui suffit **aujourd'hui** — la sonde
+    // `testUnCorpsDeRequeteNeDeplacePasLaPieceChezLeVoisin` le vérifie plutôt que de le supposer. Mais
+    // huit drapeaux qu'il faut penser à maintenir ne sont pas une protection : il suffit qu'une
+    // neuvième opération naisse sans le sien. Le groupe vide déplace la garantie du côté où on ne peut
+    // pas l'oublier.
+    //
+    // Rien ne se compose depuis le corps de la requête : les deux processeurs lisent le corps brut et
+    // construisent eux-mêmes, en prenant l'établissement dans la session (D3, D41).
+    denormalizationContext: ['groups' => ['commercial_document:write']],
     operations: [
         new GetCollection(uriTemplate: '/billing/documents', security: "is_granted('PERM', 'facturation.lire')"),
         new Get(uriTemplate: '/billing/documents/{id}', security: "is_granted('PERM', 'facturation.lire')"),

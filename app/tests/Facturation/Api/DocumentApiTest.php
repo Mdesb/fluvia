@@ -202,6 +202,37 @@ final class DocumentApiTest extends FacturationApiTestCase
         self::assertSame(403, $reponse->getStatusCode(), (string) $reponse->getContent(false));
     }
 
+    /**
+     * **Un corps de requête ne déplace pas une pièce chez le voisin.**
+     *
+     * Le garde-fou D41 signale que `CommercialDocument` n a aucun `denormalizationContext` : tout
+     * mutateur est donc exposé par défaut. Les huit opérations portent `input: false`, ce qui doit
+     * suffire — mais « ce qui doit suffire » est une hypothèse tant que personne ne l a tirée.
+     */
+    public function testUnCorpsDeRequeteNeDeplacePasLaPieceChezLeVoisin(): void
+    {
+        $devis = $this->devisSur(SocleFixtures::ETAB_A_NOM, 'Club de chez nous');
+        $idA = $devis->getEtablissement()->getId()->toRfc4122();
+        $id = $devis->getId()->toRfc4122();
+
+        [$client, $entete] = $this->adminSurA();
+
+        $client->request('POST', "/api/billing/documents/{$id}/issue", $entete + [
+            'json' => [
+                'etablissement' => '/api/etablissements/'.$this->idEtablissement(SocleFixtures::ETAB_B_NOM),
+                'numero' => 'FAUX-001',
+                'totalHT' => '999999.00',
+            ],
+        ]);
+
+        $this->em()->clear();
+        $relue = $this->em()->getRepository(CommercialDocument::class)->find($id);
+        self::assertNotNull($relue);
+        self::assertSame($idA, $relue->getEtablissement()->getId()->toRfc4122(), 'la piece est restee sur son etablissement');
+        self::assertNull($relue->getNumero(), 'le numero ne se pose pas depuis le corps');
+        self::assertSame('10.00', $relue->getTotalHT(), 'les totaux ne se posent pas depuis le corps');
+    }
+
     // ---------------------------------------------------------------- montage
 
     /**
