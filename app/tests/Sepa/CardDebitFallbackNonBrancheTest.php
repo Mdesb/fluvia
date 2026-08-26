@@ -48,14 +48,53 @@ final class CardDebitFallbackNonBrancheTest extends TestCase
         self::assertSame(
             [],
             $appelants,
-            "PAY-2 vient d'être branché — c'est une bonne nouvelle, et ce test a fini son travail.\n\n"
-            . "Il existait pour signaler que `CardDebitFallback` n'était appelé par personne, faute du\n"
-            . "refus de carte (PAY-3, App\\Vente). Ces fichiers l'appellent désormais :\n"
+            "Quelque chose appelle désormais `CardDebitFallback` :\n"
             . '  - ' . implode("\n  - ", $appelants) . "\n\n"
-            . "À FAIRE : supprimez ce fichier de test. Vérifiez au passage que l'abonné passe bien\n"
-            . "`occurredAt` — l'instant du REFUS et non celui du traitement (D37) —, sans quoi le délai\n"
-            . 'de préavis courrait à partir de la mauvaise date.',
+            . "SI C'EST UN VRAI BRANCHEMENT — l'abonné à `sale.card_payment_rejected` existe et appelle\n"
+            . "la bascule —, alors PAY-2 est complet et ce test a fini son travail : supprimez ce\n"
+            . "fichier. Vérifiez au passage que l'abonné passe bien `occurredAt`, l'instant du REFUS et\n"
+            . "non celui du traitement (D37), sans quoi le délai de préavis courrait à partir de la\n"
+            . "mauvaise date.\n\n"
+            . "SI CE N'EST PAS UN BRANCHEMENT, NE SUPPRIMEZ RIEN. Le trou serait toujours là et vous\n"
+            . "auriez retiré le seul signal qui le dit — au moment précis où quelqu'un vient de lire\n"
+            . 'une mention de ce service et croit la chaîne complète.',
         );
+    }
+
+    /**
+     * Le fichier cite-t-il la classe **ailleurs que dans un commentaire** ?
+     *
+     * **Corrigé après un faux positif, et il valait la peine.** La première version cherchait la
+     * chaîne dans le fichier entier. Elle a sonné sur `Vente/SalesModule.php`, où le manifeste
+     * mentionnait le service **en prose** — « consommé par `App\Sepa` (`CardDebitFallback`) ». Une
+     * phrase de documentation, pas un appel.
+     *
+     * **Et son remède disait « supprimez ce fichier de test ».** Le suivre aurait retiré le signal en
+     * laissant le trou, au moment exact où il devenait le plus utile : quelqu'un lit la mention, croit
+     * la chaîne complète, et plus rien ne le détrompe. Une sentinelle dont le remède est faux dans le
+     * cas du faux positif est pire qu'aucune sentinelle.
+     *
+     * On tokenise donc plutôt que de chercher une sous-chaîne : `T_COMMENT` et `T_DOC_COMMENT` sont
+     * écartés, le reste est du code. C'est exact et non heuristique — et l'exactitude compte ici,
+     * parce que le troisième faux positif est celui après lequel plus personne ne croit l'alerte.
+     */
+    private function citeHorsCommentaire(string $source, string $classe): bool
+    {
+        foreach (token_get_all($source) as $jeton) {
+            if (!\is_array($jeton)) {
+                continue;
+            }
+
+            if (\T_COMMENT === $jeton[0] || \T_DOC_COMMENT === $jeton[0]) {
+                continue;
+            }
+
+            if (str_contains($jeton[1], $classe)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -81,7 +120,7 @@ final class CardDebitFallbackNonBrancheTest extends TestCase
                 continue;
             }
 
-            if (str_contains((string) file_get_contents($chemin), $classe)) {
+            if ($this->citeHorsCommentaire((string) file_get_contents($chemin), $classe)) {
                 $trouves[] = str_replace($racine . \DIRECTORY_SEPARATOR, '', $chemin);
             }
         }
