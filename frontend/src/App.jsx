@@ -15,16 +15,18 @@ import Catalogue from './pages/Catalogue.jsx'
 import Clients from './pages/Clients.jsx'
 import Reservation from './pages/Reservation.jsx'
 import Supervision from './pages/Supervision.jsx'
-import Piscine from './pages/Piscine.jsx'
-import Patinoire from './pages/Patinoire.jsx'
 
 // Ecrans de back-office charges a la demande : un caissier qui reste a sa caisse ne les
 // telecharge jamais. Ceux qu'on ouvre plusieurs fois par jour — caisse, catalogue, clients,
 // reservation — restent dans le paquet principal : leur decoupage ferait payer une attente
 // repetee pour un gain unique.
+const Piscine = lazy(() => import('./pages/Piscine.jsx'))
+const Patinoire = lazy(() => import('./pages/Patinoire.jsx'))
+const Finance = lazy(() => import('./pages/Finance.jsx'))
 const Pilotage = lazy(() => import('./pages/Pilotage.jsx'))
 const Boutique = lazy(() => import('./pages/Boutique.jsx'))
 const Comptabilite = lazy(() => import('./pages/Comptabilite.jsx'))
+const Facturation = lazy(() => import('./pages/Facturation.jsx'))
 const Personnel = lazy(() => import('./pages/Personnel.jsx'))
 const Parametres = lazy(() => import('./pages/Parametres.jsx'))
 const Stock = lazy(() => import('./pages/Stock.jsx'))
@@ -152,6 +154,7 @@ export default function App() {
     const permRequise = {
       piscine: 'piscine.lire', patinoire: 'patinoire.lire', padel: 'padel.lire',
       musee: 'musee.lire', comptabilite: 'compta.lire', personnel: 'personnel.lire',
+      facturation: 'facturation.lire',
     }
     if (onglet === 'dashboard' && me && !estAdministrateur(me)) setOnglet('caisse')
     else if (capRequise[onglet] && !caps.includes(capRequise[onglet])) setOnglet('caisse')
@@ -230,17 +233,19 @@ export default function App() {
       {onglet === 'reservation' && <Reservation etabActif={etabActif} droits={droits} session={session} />}
       {onglet === 'supervision' && <Supervision etabActif={etabActif} />}
       {onglet === 'pilotage' && (
-        <Pilotage etabActif={etabActif} etablissements={etablissements} />
+        <Pilotage etabActif={etabActif} etablissements={etablissements} droits={droits} />
       )}
       {onglet === 'comptabilite' && <Comptabilite etabActif={etabActif} droits={droits} />}
+      {onglet === 'facturation' && <Facturation etabActif={etabActif} droits={droits} />}
       {onglet === 'clients' && <Clients etabActif={etabActif} cible={cible} onCibleConsommee={() => setCible(null)} droits={droits} />}
       {onglet === 'boutique' && <Boutique etabActif={etabActif} droits={droits} />}
-      {onglet === 'piscine' && <Piscine etabActif={etabActif} />}
+      {onglet === 'piscine' && <Piscine etabActif={etabActif} droits={droits} />}
       {onglet === 'patinoire' && <Patinoire etabActif={etabActif} droits={droits} />}
-      {onglet === 'padel' && <Padel etabActif={etabActif} />}
-      {onglet === 'musee' && <Musee etabActif={etabActif} />}
+      {onglet === 'padel' && <Padel etabActif={etabActif} droits={droits} />}
+      {onglet === 'musee' && <Musee etabActif={etabActif} droits={droits} />}
       {onglet === 'personnel' && <Personnel etabActif={etabActif} droits={droits} />}
       {onglet === 'stock' && <Stock etabActif={etabActif} droits={droits} />}
+      {onglet === 'finance' && <Finance etabActif={etabActif} droits={droits} />}
       {onglet === 'parametres' && (
         <Parametres etabActif={etabActif} etablissements={etablissements} droits={droits} />
       )}

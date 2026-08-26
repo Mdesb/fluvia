@@ -5,11 +5,9 @@ declare(strict_types=1);
 namespace App\Vente\Service;
 
 use App\Offre\Entity\Produit;
-use App\Offre\Entity\Promotion;
 use App\Offre\Entity\TypeProduit;
 use App\Offre\Entity\TypeTarif;
 use App\Offre\Enum\Canal;
-use App\Offre\Enum\TypePromotion;
 use App\Offre\Service\ResolveurPrix;
 use App\OptionProduit\Entity\OptionProduit;
 use App\OptionProduit\Entity\ValeurOption;
@@ -35,6 +33,12 @@ final class AjoutLigneHandler
         private readonly EntityManagerInterface $em,
         private readonly ResolveurPrix $resolveurPrix,
         private readonly PanierCalculateur $calculateur,
+        // **Un seul calcul, deux appelants.** La saison retenue et les promotions automatiques
+        // vivaient ici, en methodes privees — donc inatteignables depuis l estimation de prix que la
+        // caisse doit pouvoir demander AVANT qu une vente existe. Les y laisser aurait force
+        // l estimation a les reecrire, et deux implementations des memes regles ne divergent pas au
+        // moment ou on les ecrit : elles divergent au premier correctif applique a une seule des deux.
+        private readonly PriceQuoter $tarif,
     ) {
     }
 
@@ -105,7 +109,7 @@ final class AjoutLigneHandler
                 throw new UnprocessableEntityHttpException('Produit non commercialisé au guichet pour ce tarif/saison (RG-M1-01/07).');
             }
             $ligne->setPrixUnitaire($prix);
-            $ligne->setSaison($this->saisonResolue($produit, $typeTarif, $vente->getDate(), $qf));
+            $ligne->setSaison($this->tarif->saison($produit, $typeTarif, $vente->getDate(), $qf));
         }
 
         // App\OptionProduit (RG-OPT-03/04/05/07/08) — options sélectionnées, snapshot figé (RG-OPT-09).
@@ -114,7 +118,7 @@ final class AjoutLigneHandler
         $ligne->setImpactOptionsUnitaire($this->calculateur->decimal($impactOptionsCentimes));
 
         // CA-4 — promotions éligibles appliquées automatiquement et visibles sur la ligne.
-        $ligne->setPromotionsAppliquees($this->promotionsAuto($produit, $vente->getDate()));
+        $ligne->setPromotionsAppliquees($this->tarif->promotionsAuto($produit, $vente->getDate()));
 
         $vente->addLigne($ligne);
         $this->calculateur->recalculerLigne($ligne);
@@ -131,69 +135,6 @@ final class AjoutLigneHandler
         }
 
         return ($produit->getChampsPerso()['beneficiaireRequis'] ?? false) === true;
-    }
-
-    /**
-     * @return list<array{id: string, nom: string, type: string, valeur: string|null}>
-     */
-    private function promotionsAuto(Produit $produit, \DateTimeImmutable $date): array
-    {
-        /** @var list<Promotion> $promotions */
-        $promotions = $this->em->getRepository(Promotion::class)->findAll();
-        $appliquees = [];
-        foreach ($promotions as $promo) {
-            if ($promo->getType() === TypePromotion::Bonus1012 || $promo->getType() === TypePromotion::OffreGroupee) {
-                continue; // portées par la carte / logique de groupe, hors calcul de remise ligne.
-            }
-            if (!$this->promoEligible($promo, $produit, $date)) {
-                continue;
-            }
-            $appliquees[] = [
-                'id' => (string) $promo->getId(),
-                'nom' => $promo->getNom(),
-                'type' => $promo->getType()?->value ?? '',
-                'valeur' => $promo->getValeur(),
-            ];
-        }
-
-        return $appliquees;
-    }
-
-    private function promoEligible(Promotion $promo, Produit $produit, \DateTimeImmutable $date): bool
-    {
-        if ($promo->getDateDebut() !== null && $promo->getDateDebut() > $date) {
-            return false;
-        }
-        if ($promo->getDateFin() !== null && $promo->getDateFin() < $date) {
-            return false;
-        }
-        $canaux = $promo->getCanaux();
-        if ($canaux !== null && $canaux !== [] && !\in_array('guichet', $canaux, true)) {
-            return false;
-        }
-        $eligibilite = $promo->getEligibilite() ?? [];
-        $produits = $eligibilite['produits'] ?? null;
-        if (!\is_array($produits)) {
-            return false;
-        }
-
-        return \in_array((string) $produit->getId(), array_map('strval', $produits), true);
-    }
-
-    private function saisonResolue(Produit $produit, TypeTarif $typeTarif, \DateTimeImmutable $date, ?float $qf): ?Uuid
-    {
-        foreach ($produit->getGrilles() as $grille) {
-            $gt = $grille->getTypeTarif();
-            $saison = $grille->getSaison();
-            if ($gt === null || $saison === null || !$gt->getId()->equals($typeTarif->getId())) {
-                continue;
-            }
-            if ($saison->isActif() && $saison->contient($date) && $grille->getPrix() !== null) {
-                return $saison->getId();
-            }
-        }
-
-        return null;
     }
 
     /**
@@ -275,9 +216,10 @@ final class AjoutLigneHandler
         $snapshot = [];
         foreach ($valeursParGroupe as $entree) {
             foreach ($entree['valeurs'] as $valeur) {
-                $impactUnitaire = $valeur->getImpactType() === ImpactOptionType::Pourcentage
-                    ? intdiv($prixBaseCentimes * $this->calculateur->centimes($valeur->getImpactValeur()), 100 * 100)
-                    : $this->calculateur->centimes($valeur->getImpactValeur());
+                // Un seul calcul, deux appelants : la meme formule sert a l estimation que la caisse
+                // demande AVANT l ajout au panier. Une seconde implementation ne divergerait pas au
+                // moment ou on l ecrit — elle divergerait au premier correctif applique a une seule.
+                $impactUnitaire = $this->tarif->impactOption($valeur, $prixBaseCentimes);
                 $impactTotal += $impactUnitaire;
                 $snapshot[] = [
                     'groupeOptionId' => (string) $valeur->getGroupeOption()?->getId(),

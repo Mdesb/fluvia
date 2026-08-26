@@ -10,6 +10,8 @@ use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\Organisation\Entity\Etablissement;
+use App\Vente\Nf525\Entity\DailyClosure;
+use App\Vente\State\CloseDayProcessor;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
@@ -23,6 +25,11 @@ use Symfony\Component\Validator\Constraints as Assert;
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'caisse_point_de_vente')]
+// D44-bis — le point de vente « Vente directe » est résolu **par son libellé**, faute de code sur
+// l'entité. Sans cette contrainte, un second point de vente du même nom (l'API le permet : `caisse.gerer`
+// suffit) scinderait silencieusement une chaîne NF525 en deux. Chacune resterait vérifiable, et
+// l'ensemble ne le serait plus — la sorte de dégât qu'on ne constate qu'au contrôle.
+#[ORM\UniqueConstraint(name: 'uniq_pdv_etablissement_libelle', columns: ['etablissement_id', 'libelle'])]
 #[ApiResource(
     shortName: 'PointDeVente',
     operations: [
@@ -30,6 +37,20 @@ use Symfony\Component\Validator\Constraints as Assert;
         new Get(security: "is_granted('PERM', 'caisse.lire') or is_granted('PERM', 'vente.lire')"),
         new Post(security: "is_granted('PERM', 'caisse.gerer')"),
         new Patch(security: "is_granted('PERM', 'caisse.gerer')"),
+        // D57 — l'arrêté de journée. Il est posé sur le point de vente et non sur la session : la
+        // chaîne NF525 est chaînée par point de vente, et un point de vente de vente directe n'a
+        // aucune session dont on pourrait le déduire. Sortie : une `ClotureJournaliere`.
+        new Post(
+            uriTemplate: '/point_de_ventes/{id}/cloture-journaliere',
+            description: 'Arrete la journee (D57). Corps : { journee?: AAAA-MM-JJ }, par defaut la veille. '
+                . 'Ce n est pas un Z : aucun comptage, un arrete de totaux cumules.',
+            read: true,
+            input: false,
+            output: DailyClosure::class,
+            normalizationContext: ['groups' => ['daily_closure:read']],
+            security: "is_granted('PERM', 'vente.cloture_journaliere')",
+            processor: CloseDayProcessor::class,
+        ),
     ],
     normalizationContext: ['groups' => ['pdv:read']],
     denormalizationContext: ['groups' => ['pdv:write']],

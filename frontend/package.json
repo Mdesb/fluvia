@@ -11,7 +11,8 @@
     "verifier-formats": "node scripts/verifier-formats.mjs",
     "verifier": "npm run verifier-droits && npm run verifier-formats && npm run verifier-imports",
     "mesurer-ecart": "node scripts/mesurer-ecart.mjs",
-    "verifier-imports": "node scripts/verifier-imports.mjs"
+    "verifier-imports": "node scripts/verifier-imports.mjs",
+    "mesurer-signaux-muets": "node scripts/mesurer-signaux-muets.mjs"
   },
   "dependencies": {
     "qrcode": "^1.5.4",

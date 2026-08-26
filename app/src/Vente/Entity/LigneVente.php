@@ -44,6 +44,31 @@ class LigneVente
     #[Groups(['vente:read'])]
     private ?Uuid $saison = null;
 
+    /**
+     * Le nom que portait le produit **le jour de la vente**.
+     *
+     * ⚠ **Ce libellé est une copie datée, pas une référence.** Un ticket dit ce que le produit
+     * s'appelait le jour où il a été vendu. Remplacer ce champ par une jointure sur `Produit` ferait
+     * **mentir rétroactivement tous les tickets déjà émis** le jour où quelqu'un renomme un article —
+     * et un duplicata tiré six mois plus tard n'aurait plus rien à voir avec l'original.
+     *
+     * Ce n'est donc pas une redondance à normaliser. C'est la même règle que `prixUnitaire`, stocké et
+     * jamais recalculé, et que `optionsSelectionnees`, figé par RG-OPT-09. `LibelleFigeTest` le
+     * vérifie : un test qui échoue est plus difficile à supprimer qu'un commentaire.
+     *
+     * Nul quand la référence ne désigne aucun produit du catalogue — voir `LineLabelStamper`.
+     *
+     * @var array<string, string>|null
+     */
+    #[ORM\Column(nullable: true)]
+    #[Groups(['vente:read', 'ticket:read'])]
+    private ?array $libelleProduit = null;
+
+    /** Le nom que portait le tarif ce jour-là. Même règle que ci-dessus : copie datée. */
+    #[ORM\Column(length: 120, nullable: true)]
+    #[Groups(['vente:read', 'ticket:read'])]
+    private ?string $libelleTypeTarif = null;
+
     #[ORM\Column(options: ['default' => 1])]
     #[Groups(['vente:read'])]
     private int $quantite = 1;
@@ -160,6 +185,32 @@ class LigneVente
     public function setSaison(?Uuid $saison): self
     {
         $this->saison = $saison;
+
+        return $this;
+    }
+
+    /** @return array<string, string>|null */
+    public function getLibelleProduit(): ?array
+    {
+        return $this->libelleProduit;
+    }
+
+    /** @param array<string, string>|null $libelleProduit */
+    public function setLibelleProduit(?array $libelleProduit): self
+    {
+        $this->libelleProduit = $libelleProduit;
+
+        return $this;
+    }
+
+    public function getLibelleTypeTarif(): ?string
+    {
+        return $this->libelleTypeTarif;
+    }
+
+    public function setLibelleTypeTarif(?string $libelleTypeTarif): self
+    {
+        $this->libelleTypeTarif = $libelleTypeTarif;
 
         return $this;
     }

@@ -13,6 +13,7 @@ use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Post;
 use App\Vente\Filter\SaleCustomerFilter;
+use App\Caisse\Entity\PointDeVente;
 use App\Caisse\Entity\SessionCaisse;
 use App\Organisation\Entity\Etablissement;
 use App\Vente\Enum\StatutVente;
@@ -57,7 +58,7 @@ use Symfony\Component\Uid\Uuid;
         new Get(security: "is_granted('PERM', 'vente.lire')"),
         new Post(
             uriTemplate: '/ventes',
-            description: 'Ouvre un panier. Corps : { session, client?, cleIdempotence?, id?, origineHorsLigne? }.',
+            description: 'Ouvre un panier. Corps : { session, client?, cleIdempotence?, id?, origineHorsLigne? }. Sans session : vente directe — exige le droit vente.vente_directe et refuse ensuite les especes (D44-bis).',
             read: false,
             input: false,
             security: "is_granted('PERM', 'vente.creer')",
@@ -178,10 +179,29 @@ class Vente
     #[Groups(['vente:read'])]
     private string $numero = '';
 
+    /**
+     * **Nulle sur une vente directe** (D44-bis). La colonne était `NOT NULL` : la vente sans caisse
+     * n'était pas interdite par une règle qu'on pouvait assouplir, elle était **impossible au niveau
+     * du schéma**. Ce qui reste garanti est plus fort, et se lit sur le champ d'en dessous.
+     */
     #[ORM\ManyToOne(targetEntity: SessionCaisse::class)]
-    #[ORM\JoinColumn(nullable: false)]
+    #[ORM\JoinColumn(nullable: true)]
     #[Groups(['vente:read'])]
     private ?SessionCaisse $session = null;
+
+    /**
+     * **Toujours renseigné** — l'invariant qui remplace celui que la session perd (D44-bis).
+     *
+     * La chaîne NF525 est chaînée **par point de vente**, et `ValiderVenteService` refuse déjà de
+     * valider une vente qui n'en a pas. Le porter ici plutôt que de le relire par la session répond à
+     * deux besoins : une vente directe n'a pas de session d'où le déduire, et le point de vente qui a
+     * scellé une vente est un **fait de son histoire** — le déduire ferait dépendre le passé d'un
+     * objet qui, lui, peut encore bouger.
+     */
+    #[ORM\ManyToOne(targetEntity: PointDeVente::class)]
+    #[ORM\JoinColumn(nullable: false)]
+    #[Groups(['vente:read'])]
+    private ?PointDeVente $pointDeVente = null;
 
     #[ORM\Column(type: 'datetime_immutable')]
     #[Groups(['vente:read'])]
@@ -280,9 +300,35 @@ class Vente
         return $this->session;
     }
 
+    /**
+     * Pose aussi le point de vente. **C'est volontaire, et c'est ce qui rend la colonne tenable.**
+     *
+     * Six endroits du dépôt construisent une `Vente` — abonnement en ligne, confirmation de commande,
+     * synchronisation hors ligne, réservation, caisse, jeu de données L11. Tous appellent
+     * `setSession()`. Exiger en plus un `setPointDeVente()` de chacun aurait fait reposer une colonne
+     * `NOT NULL` sur la vigilance de six appelants, dont quatre hors de mon périmètre : elle aurait
+     * cassé chez eux, à l'exécution, un jour où personne ne cherchait ça.
+     *
+     * Une vente directe, qui n'a pas de session, pose le point de vente elle-même.
+     */
     public function setSession(?SessionCaisse $session): self
     {
         $this->session = $session;
+        if ($session?->getPointDeVente() !== null) {
+            $this->pointDeVente = $session->getPointDeVente();
+        }
+
+        return $this;
+    }
+
+    public function getPointDeVente(): ?PointDeVente
+    {
+        return $this->pointDeVente;
+    }
+
+    public function setPointDeVente(?PointDeVente $pointDeVente): self
+    {
+        $this->pointDeVente = $pointDeVente;
 
         return $this;
     }

@@ -19,6 +19,8 @@
 
 | 26/08 13:05 | **Dette cloisonnement de mes modules : CLOSE.** Dernière entrée (C19) `DeclarationIncidentBadgeProvider` annotée — le contrôle existait déjà (l'établissement du badge de la déclaration doit être dans les Affectations de l'utilisateur), mais portait sur `$etablissementBadge`, pas nommément `$declaration`. C19 **8→7**. Bilan session : n°1 **26→16**, C19 **13→7** ; 10 IDOR cross-tenant fermés (Vente, Stock, Support ×3, Personnel, Acces ×2) + 6 résolutions documentées. | **En attente d'assignation.** Je me présente pour la suite : reprendre l'audit C sur d'autres modules, ou une tâche que tu fixes. | — |
 
+| 26/08 13:15 | **Balayage idempotence de mes fixtures : complet.** `StockFixtures` créait aussi les permissions `stock.*` sans garde — corrigé (helper `permissionStock`, patron identique). Bilan idempotence : Support (8 rôles+10 perms), Dms (5 perms+rôle+2 RetentionPolicy), Stock (perms). Acces/Autorisation déjà gardés (findOneBy-ou-crée). Suite Stock verte. | En attente d'assignation A. | — |
+
 ## Signalements à claude-A — 26/08
 
 **1. `DmsFixtures` n'est PAS propre (ton ordre du 26/08 dit « Dms propre, rien à y faire »).**

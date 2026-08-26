@@ -85,7 +85,8 @@ final class SettlementCorrectionHandler
             ->setEtablissement($vente->getEtablissement());
         $this->em->persist($correction);
 
-        $pdv = $vente->getSession()?->getPointDeVente();
+        // D44-bis — porté par la vente : une vente directe n'a pas de session d'où le déduire.
+        $pdv = $vente->getPointDeVente();
         if ($pdv !== null) {
             $this->scellement->sceller(new OperationAScellerDto(
                 $pdv,

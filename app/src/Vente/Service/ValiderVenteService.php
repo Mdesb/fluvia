@@ -100,7 +100,8 @@ final class ValiderVenteService
             throw new UnprocessableEntityHttpException('Reste dû non nul : validation impossible sans paiement différé (RG-M2-03).');
         }
 
-        $pdv = $vente->getSession()?->getPointDeVente();
+        // D44-bis — porté par la vente : une vente directe n'a pas de session d'où le déduire.
+        $pdv = $vente->getPointDeVente();
         if ($pdv === null) {
             throw new UnprocessableEntityHttpException('Point de vente introuvable pour le scellement.');
         }
@@ -151,8 +152,11 @@ final class ValiderVenteService
                 ));
 
                 // CA-11 — impression automatique au-dessus du seuil.
+                // D44-bis — une vente directe n'a pas de comptoir, donc pas d'imprimante : la marquer
+                // « imprimée » écrirait un fait qui n'a pas eu lieu. Le seuil par défaut valant 0 €,
+                // sans cette condition **toute** vente directe serait déclarée imprimée.
                 $seuil = $this->calculateur->centimes($pdv->getSeuilImpression());
-                if ($this->calculateur->centimes($vente->getTotal()) >= $seuil) {
+                if ($vente->getSession() !== null && $this->calculateur->centimes($vente->getTotal()) >= $seuil) {
                     $vente->setImprime(true);
                 }
 

@@ -298,6 +298,16 @@ lui fait porter le risque. La prochaine fois je donne les deux, ou je dis que je
 | 10:13 | **Le chargement complet des fixtures passe de nouveau.** C'était bien chez moi : `CaisseClotureRoleFixtures` créait le rôle « Caissier » que `L7Fixtures` crée aussi. Corrigé là et dans `ReservationFixtures`. `tests/Caisse` 15/15, `tests/Reservation` 103/103. **Et le second passage bute maintenant chez toi**, sur `SocleFixtures:51`. | D48 : historique de `Vente` livré (débloque `claude-H`). Suite : les cinq chantiers `Vente`/`Caisse`. | Rien. |
 | 12:11 | **D45 livré** : la correction de ventilation d'un règlement s'ajoute et se scelle, la vente n'est jamais touchée, et elle est datée du **jour du geste**. `tests/Vente` **52/52**, migrations rejouées depuis une base vide. Avant : D46-bis (canal → attente + débiteur), D44 (rien à faire côté serveur, prouvé), descriptions d'opérations, fixtures idempotentes. | D46 : rattacher une correction à l'écart de caisse qu'elle explique. | Rien. |
 | 13:05 | **D46 livré avec D45** : une correction peut désigner l'`AlerteEcartCaisse` qu'elle explique. `tests/Vente` **54/54**, migrations rejouées depuis une base vide. Il ne me reste de D48 que **D44-bis** (vente directe sans session). | D44-bis. | Rien. |
+| 14:03 | **Un écart sait maintenant qu'il est expliqué** — `AlerteEcartCaisse.expliquee`, calculé à la lecture, une requête pour toute la page. Sans ça `claude-H` avait un écran complet qu'elle **refusait de livrer** : une liste qu'on ne peut pas vider est celle que sa propre règle D55 interdit. `tests/Caisse` 15/15, `tests/Vente` 55/55. | D44-bis : refus des fiduciaires sans session, puis point de vente dédié (arbitré par toi). | Rien. |
+| 14:51 | **D44-bis — la vraie barrière n'était pas la règle, c'était une colonne.** `vente_vente.session_id` était `NOT NULL` : vendre sans caisse n'était pas interdit, c'était impossible. Point de vente porté par la vente (`NOT NULL`), session nullable, refus des fiduciaires hors session. `VenteDirecteTest` 5/5, `Vente` 60/60, `Caisse` 15/15, `Boutique` 56/56. | `Reservation` et `Reporting` en vol ; je ne commite pas avant. | Rien. |
+| 14:55 | **Mon raccourci était déjà faux, et `claude-A` l'a montré sur pièce.** `estFiduciaire()` renvoyait `autoriseRendu` : les quatre chèques du référentiel portent `autoriseRendu = false`, une vente directe les aurait acceptés **sans que personne ne détienne le papier**. Critère écrit, plus proxy. `MoyenFiduciaireTest` 4/4. | Vérification complète avant commit : `Reservation` 103/103, `Reporting` en vol, puis `Vente` à rejouer. | Rien. |
+| 15:37 | **D57 — la clôture journalière n'est pas le Z, et deux trous d'inaltérabilité que j'avais créés.** `pointDeVente` n'était pas figé sur une vente scellée ; `SettlementCorrection` (D45) était modifiable et supprimable, **sur `main` depuis ce matin**. `Vente` 75/75, `Caisse` 15/15. | Fusion de `main`, lanceur avec ET sans référence, poussée. | Rien. |
+| 16:34 | **Le ticket n'existait que dans l'onglet du caissier.** `TicketProcessor` ne rendait aucune ligne et `LigneVente` n'avait aucun mot. Libellés **figés au jour de la vente**, gravés par écouteur et non par les six appelants. `Vente` 78/78, `Caisse` 15/15, `Boutique` 56/56, `Reservation` 103/103. | Commit, poussée, puis PAY-3. | Rien. |
+| 17:29 | **La clôture devient un mécanisme.** Commande quotidienne, file des journées non closes qui descend à zéro, et le fuseau a révélé que le handler **comptait mal** — journée bornée sur l'heure du serveur. **Et j'ai enfreint ma propre règle** : test ajouté pendant une suite, verdict faux, deux erreurs réelles au rejeu. `Vente` 86/86, `Caisse` 15/15, `Platform` 62/62. | Commit, poussée, puis PAY-3. | Rien. |
+| 18:27 | **PAY-3 : un refus de carte ne laissait aucune trace.** `CA-10` veut qu'un refus ne crée aucun `Paiement` — donc il ne restait rien. Table + événement qui la référence, dans cet ordre (bus synchrone). `rejectionId` et non `paymentId` : le second n'existe pas. `Vente` 92/92, `Caisse` 15/15, `Sepa` 55/55. | Commit et poussée. | Rien. |
+| 19:15 | **L'estimation de tarif appelle le code qui facture.** Le remède ne devait pas avoir la forme de la maladie : un service d'estimation parallèle aurait reproduit le défaut dans une couche où **personne ne verrait la divergence**. `Vente` 98/98, `Offre` 32/32, `Boutique` 56/56, `Reservation` 103/103. | Commit et poussée. | Rien. |
+| 21:11 | **D51 — socle partagé + ajout local, et le joker `offre.*` qui contenait le droit sur le socle.** Le test a trouvé deux défauts que la relecture n'aurait pas vus. `Offre` 39/39, `Vente` 98/98, `Boutique` 56/56, `Reservation` 103/103. | Commit et poussée. | Rien. |
+| 22:02 | **Le prix d'une option, avant l'ajout au panier.** `OptionsDisponiblesProvider` disait lui-même « sans résolution de prix » : l'écran listait les options sans pouvoir dire ce qu'elles coûtent. Formule partagée, totaux serveur, indisponibles expliquées. `OptionProduit` 22/22, `Vente` 98/98, `Offre` 39/39, `Boutique` 56/56. | Commit et poussée. | Rien. |
 
 ## Nouvelle règle de Maxime — présentation horaire à `claude-A`
 
@@ -1176,3 +1186,692 @@ l'erreur réelle.
 C'est exactement ce que nous venons de nous dire sur les fixtures, à un autre étage : **suivre ce qui
 casse mène au mauvais endroit**. Le symptôme visible et la cause n'étaient pas dans le même fichier,
 ni dans le même domaine.
+
+
+## Un écart expliqué doit le **dire** — sinon la liste ne descend jamais
+
+`claude-H` avait écrit l'écran des écarts de caisse en entier et **refusait de le livrer** : rien ne
+permettait de savoir qu'un écart avait été expliqué. `SettlementCorrection` n'est exposée que comme
+sortie d'opération, `AlerteEcartCaisse` ne portait aucun champ, et `Vente` n'expose pas ses
+corrections. L'utilisateur aurait expliqué un écart, **et la ligne serait restée**.
+
+Elle a écarté trois contournements en les nommant, et chacun était un mensonge d'une forme
+différente : marquer côté navigateur (un état partagé qui n'est pas partagé), recharger les ventes
+de chaque session (N+1 qui ne marche même pas), ou afficher la liste en s'excusant de ne pas savoir
+(« une liste qui s'excuse reste une liste qu'on cesse de lire »).
+
+**Livré : `expliquee`, calculé à la lecture.** Trois choix qui tiennent ensemble :
+
+- **Rien n'est stocké.** Un drapeau persisté serait un état à maintenir — poser à la création,
+  retirer si la correction disparaît, vivre avec les oublis. Ici c'est un fait constaté, et l'alerte
+  reste l'entité **immuable** qu'elle déclare être.
+- **Une requête pour toute la page.** Un getter interrogeant la base depuis l'entité aurait produit
+  un N+1 sur l'écran même que ce champ doit rendre utilisable.
+- **Le lien reste unidirectionnel** : c'est la correction qui affirme expliquer, l'alerte n'apprend
+  rien d'elle-même.
+
+**Le nom n'est pas celui demandé, et c'est le sérialiseur qui tranche** : il n'accepte les groupes que
+sur `get`/`is`/`has`/`can`/`set`. Donc `isExpliquee()`, donc un champ `expliquee`. Écrit à côté du
+getter pour que personne ne le renomme en croyant améliorer.
+
+### Troisième forme du même piège cette semaine
+
+Ma première version faisait un `IN (:liste)` en DQL sur `alerteEcartRef`. **Le test restait faux, sans
+aucune erreur** : la colonne porte un type Doctrine personnalisé, et un `IN` en DQL n'y convertit pas
+les valeurs. SQL direct avec `UNHEX`, comme `CardRechargeHandler`.
+
+Sur les références libres, le relevé est maintenant complet :
+
+| Forme | Symptôme |
+|---|---|
+| `SearchFilter` sur `?Uuid` | liste vide |
+| paramètre d'entité dans un `WHERE` | ne compte rien |
+| `IN (:liste)` en DQL | ne trouve rien |
+
+**Trois formes, un seul symptôme : du code qui répond « rien » avec l'air d'avoir cherché.** La
+formule est de `claude-H` et elle vaut au-delà du front. Aucune ne lève. Toutes se découvrent par un
+test qui devrait passer et ne passe pas.
+
+
+## D44-bis — on m'a demandé d'assouplir une règle ; l'obstacle était ailleurs
+
+D44-bis dit, à raison, que la bonne réponse n'est **pas** d'assouplir `RG-M2-01`. Mais la décision
+suppose que cette règle était l'obstacle. Elle ne l'était pas : **`vente_vente.session_id` était
+`NOT NULL`**. Vendre sans caisse n'était pas interdit par une règle qu'on aurait pu relâcher dans
+`CreerVenteProcessor` — c'était **impossible au niveau du schéma**, et aucune quantité de code n'y
+serait arrivée.
+
+### L'invariant n'est pas perdu : il est déplacé, et il est plus fort
+
+| | Avant | Après |
+|---|---|---|
+| garanti en base | toute vente a une **session** | toute vente a un **point de vente** |
+| ce dont NF525 a besoin | par ricochet | directement |
+
+La chaîne est chaînée **par point de vente**, et `ValiderVenteService` refusait déjà de sceller sans
+lui. Une vente sans session est une vente sans tiroir ; une vente sans point de vente aurait été **une
+vente non scellée** — exactement ce que le module entier existe pour empêcher. C'est pourquoi
+« point de vente dédié » était le bon arbitrage et « aucun point de vente » n'en était pas un.
+
+### Le détail qui rend la colonne `NOT NULL` tenable
+
+Six endroits du dépôt construisent une `Vente` — abonnement en ligne, confirmation de commande,
+synchronisation hors ligne, réservation, caisse, jeu L11 — dont **quatre hors de mon périmètre**. Leur
+demander un `setPointDeVente()` de plus aurait fait reposer une colonne `NOT NULL` sur la vigilance
+d'autrui : elle aurait cassé **chez eux, à l'exécution**, un jour où personne ne cherchait ça.
+
+Donc `Vente::setSession()` pose aussi le point de vente. Aucun fichier modifié chez `claude-B`,
+`claude-E` ou qui que ce soit. C'est le même geste que `Reservation::setCreneau()`, qui ajoute
+d'office le créneau visé aux créneaux consommés : **un invariant qui dépend d'un appel qu'on peut
+oublier n'est pas un invariant.**
+
+### Ce qui rend vraie la phrase sur laquelle repose toute la décision
+
+*Sans espèces, il n'y a rien à compter, donc rien à clôturer.* Le refus des fiduciaires hors session
+est ce qui la rend vraie. Sans lui, on aurait ouvert un chemin pour encaisser du liquide sans fonds de
+caisse, sans Z et sans personne pour en répondre — et il ne serait plus resté aucune raison d'avoir
+exigé une session de qui que ce soit.
+
+Le test le prouve avec son **contrôle négatif** : le même moyen, sur une vente de caisse, passe. Ce
+qui refuse n'est donc pas le moyen — c'est l'absence d'un tiroir qui en répondrait.
+
+Le critère est `session === null`, pas un drapeau sur la vente : c'est la même chose, sauf que
+celui-là **ne peut pas être requalifié après coup**.
+
+### Trois précautions, et ce qu'elles évitent
+
+- **`estFiduciaire()` est `autoriseRendu`, et le commentaire dit que ça tient par coïncidence.** Un
+  chèque-vacances papier se compte le soir sans autoriser de rendu : mon raccourci le rate peut-être
+  **déjà**. Isolé en un seul endroit nommé pour qu'il y ait une ligne à changer, et non des
+  `if ($moyen->autoriseRendu)` signifiant « espèces » dispersés dans le dépôt. Demande écrite à
+  `claude-D` dans `MESSAGES.md` — sa session n'est pas joignable — avec la signature attendue et la
+  remarque que l'arbitrage est métier, pas technique.
+- **`uniq_pdv_etablissement_libelle`.** Le point de vente dédié est résolu par son libellé, faute de
+  code sur l'entité, et l'API permet d'en créer un homonyme avec `caisse.gerer`. Deux homonymes
+  scinderaient une chaîne en deux moitiés **chacune vérifiable, l'ensemble ne l'étant plus** — le
+  genre de dégât qu'on ne constate qu'au contrôle.
+- **Une vente directe n'est pas marquée imprimée.** Le seuil vaut 0 € par défaut, donc sans précaution
+  *toute* vente directe se serait déclarée imprimée alors qu'aucun comptoir n'a de ticket à sortir. Un
+  fait faux dans une base comptable est pire qu'une absence.
+
+Le droit `vente.vente_directe` est distinct de `vente.creer` — sinon tout caissier vendrait hors
+caisse. Le test le prouve avec un utilisateur qui a `vente.creer` **et** `vente.encaisser` : il ouvre
+parfaitement un panier sur une session, et seul le hors-session lui est refusé. Un utilisateur sans
+droits aurait rendu le même 403 pour une raison qui n'a rien à voir.
+
+### Le Z reste juste sans que j'aie eu à y toucher
+
+`CloturerSessionProcessor` agrège par `findBy(['session' => ...])`. Une vente directe n'ayant pas de
+session, elle **n'entre dans aucun Z** — vérifié, pas supposé. Si l'agrégation avait porté sur le
+point de vente, il aurait fallu la corriger ; c'est la première chose que j'ai regardée.
+
+
+## Le raccourci que j'avais nommé « peut-être faux » l'était déjà
+
+J'avais écrit, dans le commentaire de `estFiduciaire()`, que le raccourci `autoriseRendu` *« tient par
+coïncidence, pas par définition »*, et j'avais ajouté à `claude-A` qu'un chèque-vacances le ratait
+**peut-être** déjà. Il a vérifié plutôt que d'accepter ma formulation prudente. `ComptaFixtures`,
+lignes 146-150 :
+
+| Code | `autoriseRendu` | Se remet en main propre |
+|---|---|---|
+| `cheque` | `false` | **oui** |
+| `cheque_vacances` | `false` | **oui** |
+| `cheque_culture` | `false` | **oui** |
+| `cheque_loisirs` | `false` | **oui** |
+
+**Quatre moyens papier, déjà dans le référentiel, déjà dans `VenteFixtures::MOYENS`.** Ma vente directe
+les aurait acceptés hors session, et personne n'aurait détenu le papier. Ce n'était pas une précaution
+d'avenir : c'était un défaut livrable, à quelques minutes du commit.
+
+**Le critère n'est pas « autorise le rendu de monnaie », c'est « se remet en main propre et se dépose
+en banque ».** Un chèque n'est pas une écriture, c'est un objet : il se reçoit, se garde, se compte, se
+remet en banque. La phrase qui fonde D44-bis — *sans espèces, rien à compter, donc rien à clôturer* —
+devenait fausse dès qu'un chèque entrait.
+
+Et ce n'était **pas un arbitrage métier**, contrairement à ce que j'avais écrit à `claude-D` : un
+instrument remis physiquement exige quelqu'un qui le détienne. J'ai corrigé ma demande dans
+`MESSAGES.md` pour qu'elle ne rouvre pas une question qui n'existe pas.
+
+### Ce que je retiens, et qui vaut au-delà de ce cas
+
+**Une réserve nommée « peut-être » est une vérification qu'on n'a pas faite.** Je l'avais écrite dans
+le code, ce qui est mieux que rien — mais un commentaire qui signale un doute ne le lève pas, et le
+défaut serait parti en fusion avec sa propre documentation à côté. C'est la deuxième fois aujourd'hui
+qu'une de mes réserves prudentes se révèle exacte à la vérification ; les deux fois, quelqu'un d'autre
+a fait la vérification.
+
+**Et j'ai remplacé ma vigilance par un mécanisme, parce qu'une liste de codes en dur n'en est pas un.**
+Un exploitant qui ajoute son propre instrument papier ne serait pas couvert. `MoyenFiduciaireTest`
+parcourt le référentiel et **échoue sur tout code non classé** — le contrôle grandit avec la donnée
+qu'il surveille, comme `CanalContratTest` pour les canaux. Un moyen ajouté sans décision casse le test
+à l'endroit et au moment où la décision se prend, pas en caisse six mois plus tard.
+
+C'est un filet, pas la propriété : la propriété appartient au moyen, donc à `Compta`. Le filet se
+retirera quand `MoyenPaiement::isFiduciaire()` existera.
+
+
+## D57 — le cumul perpétuel n'est pas un chiffre, c'est un détecteur
+
+Le Z ferme une **session de caisse** : il compte du liquide, constate un écart, fige un fonds. Il n'a
+de sens que là où quelqu'un tient un tiroir. Tant que toute vente passait par une caisse, il faisait
+office de clôture quotidienne **sans que personne ait eu à décider que c'en était une** — et un point
+de vente de vente directe se serait retrouvé sans clôture quotidienne du tout.
+
+**Ce que porte `grandTotal`.** Chaque clôture recopie le cumul de la précédente et y ajoute la
+journée. Supprimer une vente d'hier laisse le cumul d'hier plus grand que la somme des ventes qui
+restent : **l'écart se voit sans qu'on ait à savoir ce qui manquait**. C'est tout l'objet de la table.
+
+D'où trois refus, et chacun protège ce mécanisme :
+
+| Refus | Ce qui arriverait sans lui |
+|---|---|
+| journée à venir | l'arrêté fige un total que la journée viendrait contredire |
+| journée déjà close | deux arrêtés comptent deux fois la même journée — le détecteur **fabrique** un excédent |
+| journée sautée | les ventes du jour omis disparaissent du cumul : la signature d'une suppression, **scellée** |
+
+Le troisième est celui que je n'aurais pas écrit sans chercher ce que le cumul protège. Le message
+nomme la journée à clôturer — un refus qu'on ne peut pas suivre n'est pas un refus, c'est un mur.
+
+**Le défaut par défaut est la veille.** Clore aujourd'hui à quinze heures arrêterait une journée qui
+continue. Clore le jour même reste permis — un exploitant qui ferme à dix-neuf heures a le droit
+d'arrêter sa journée — mais il doit le demander. **Le défaut est celui qui ne peut pas mentir.**
+
+**Le cumul ne déduit pas les avoirs, et ça se contestera.** Il totalise ce que la chaîne a scellé, il
+ne calcule pas un résultat. Une vente annulée y reste parce qu'elle **est** dans la chaîne. En retirer
+les annulations le rendrait incapable de faire la seule chose pour laquelle il existe. La raison est
+dans le code, pour que la discussion se gagne sans moi.
+
+## Deux trous d'inaltérabilité, tous deux de moi, tous deux la même distance
+
+- **`pointDeVente` absent de `CHAMPS_VENTE_FIGES`.** Je venais d'en faire l'ancre fiscale de la vente
+  (D44-bis). Il était protégé **par déduction** — `session` était figée, le point de vente s'en
+  déduisait. En le portant, j'ai coupé le ricochet sans remplacer la protection, et **rien ne s'est
+  rompu pour le dire**.
+- **`SettlementCorrection` absente de `estAppendOnly()`.** Mon entité de D45, scellée dans la chaîne
+  au même titre qu'un avoir, **modifiable et supprimable depuis ce matin, sur `main`**. Plus grave que
+  la première, et je l'avais présentée comme symétrique : celle-là permet d'effacer **la pièce qui
+  explique pourquoi un montant a bougé**, c'est-à-dire exactement ce qu'un contrôle vient chercher.
+  D45 promet qu'une correction s'ajoute et ne modifie jamais ; une écriture effaçable ne tient pas
+  cette promesse.
+
+**Le motif commun n'est pas l'inattention, c'est une distance** : la protection est dans `Nf525/`, la
+chose protégée dans `Entity/`. Rien dans le fichier que j'écrivais ne me rappelait l'existence de
+l'autre. Je l'ai fait **deux fois en trois heures, en connaissant le motif, en l'écrivant dans le
+commentaire** — ce qui montre surtout que la leçon ne suffit pas.
+
+**La règle : quand une propriété passe de « déduite » à « portée », tout ce qui la protégeait par
+déduction cesse de la protéger, et aucun contrôle ne se rompt pour l'annoncer.** Corollaire :
+*vérifier les usages n'est pas vérifier les garanties.* J'avais cherché `getSession()` dans tout
+`src/` avant de commiter — le bon réflexe, et insuffisant : le danger n'était pas chez ceux qui
+**lisaient** `session`, mais chez ceux qui **s'appuyaient dessus pour protéger autre chose**.
+
+`ChampsFigesTest` rapproche les deux : il confronte les champs réellement mappés à la liste, avec sept
+exceptions **chacune assortie de sa raison**, et pose la question au lieu de donner l'ordre. Son
+troisième cas — un champ figé **disparu du mapping** — est le symétrique vicieux : une protection qui
+ne porte plus sur rien, et qui donne à qui lit la liste l'impression inverse de la vérité.
+
+## Un contrôle présent qui ne s'exécute pas — le défaut qu'aucun filet ne voit
+
+`claude-A` voyait ✓ 14 garde-fous, je voyais un échec, sur le **même commit**. Ni l'un ni l'autre ne
+se trompait. Dans `bin/garde-fous.sh` (et dans `origin/main` à cette heure) :
+
+```sh
+if [ -n "${REFERENCE:-}" ]; then
+executer "Références libres (D58)" php_racine bin/garde-fou-references-libres.php
+```
+
+**L'appel est tombé à l'intérieur du `if`.** Le n°14 ne tourne que si une référence est passée. A
+lançait `garde-fous.sh origin/main`, moi sans argument. Le commentaire juste au-dessus dit pourtant
+l'inverse de ce que le code fait — *« sans référence… il lit l'arbre courant »* — donc l'intention
+était bien de le lancer dans les deux cas.
+
+**Quatrième oubli sur la même liste dans la journée, et le seul d'une autre nature.** Les trois
+premiers étaient des absences, et un filet de complétude les voit. Celui-ci est une **présence
+inopérante** : la ligne est là, versionnée, relue. Rien ne la voit — sauf le hasard de deux personnes
+qui lancent le même script différemment.
+
+Non corrigé par moi : `bin/` appartient à `claude-C`, et le lanceur est exécuté par huit sessions.
+Signalé avec le numéro de ligne.
+
+
+## Une chaîne d'empreintes irréprochable qui scelle des documents qu'on ne sait pas rééditer
+
+`claude-H` a construit l'écran de caisse et **refusé de proposer un bouton de réimpression**.
+`TicketProcessor` ne renvoyait ni libellé, ni quantité, ni montant — alors que l'opération accepte
+`mode: "duplicata"`. Le ticket n'existait donc que dans l'onglet du caissier : la page fermée, le
+document n'était plus reconstituable.
+
+**Son refus n'était pas de la prudence, c'était la seule conduite possible.** Un bouton qui rend un
+document vide fait croire que le document existe, et le caissier cesse de chercher ailleurs.
+
+**Et ce n'était pas un défaut d'écran.** Tout ce module repose sur l'idée qu'une vente validée est
+*probante* — c'est l'argument de D45 contre la modification d'un règlement, et celui qui m'a fait
+refuser ce matin d'exempter la vente directe du scellement. Un justificatif qui n'existe que dans un
+onglet ouvert n'est probant pour personne. Nous avions une chaîne d'empreintes irréprochable **qui
+scellait des documents qu'on ne savait pas rééditer**, et tout avait l'air de fonctionner : les
+empreintes bonnes, les totaux bons, les refus de modification bons. C'est D59 sous une autre forme.
+
+Sa formule résume les trois manques qu'elle a relevés : **le serveur sait ce qu'il a facturé et ne
+sait pas le dire.**
+
+### Trois décisions, et pourquoi chacune se conteste
+
+**Le libellé est une copie datée, pas une référence.** Quelqu'un verra `libelle` sur `LigneVente` et
+`libelle` sur `Produit` et proposera de « normaliser ». La jointure ferait **mentir rétroactivement
+tous les tickets déjà émis** dès qu'un article change de nom. Même règle que `prixUnitaire`, stocké et
+jamais recalculé, et que `optionsSelectionnees`, figé par RG-OPT-09 — le dépôt avait déjà le motif, il
+lui manquait ce champ.
+
+**Un test, pas un commentaire** — imposé par `claude-A`, et il avait raison. J'ai passé la journée à
+vérifier que les commentaires ne protègent rien : j'avais écrit « ce raccourci tient par coïncidence »
+**au-dessus** du raccourci sur les chèques, et il serait parti en fusion quand même. `LibelleFigeTest`
+encaisse, renomme le produit, tire un duplicata, et vérifie que le libellé n'a pas bougé. *Un test qui
+échoue est plus difficile à supprimer qu'un commentaire.*
+
+**Gravé par un écouteur, pas par les appelants.** Six endroits construisent une `LigneVente` et
+**aucun ne dispose de l'entité `Produit`** — la ligne ne porte qu'un `Uuid`, par la convention des
+références libres. Leur demander de résoudre le produit aurait fait reposer le contenu du ticket sur
+la vigilance de six appelants, dont quatre hors de mon périmètre. Troisième fois de la journée que la
+réponse est la même : `Vente::setSession()`, `MoyenFiduciaireTest`, et maintenant `LineLabelStamper`.
+
+### Ce que je n'ai pas pu réparer, et que j'ai dit plutôt que caché
+
+La reprise de données donne aux lignes existantes le nom que le produit porte **aujourd'hui**. Le nom
+du jour de la vente n'a jamais été écrit nulle part : il ne se reconstitue pas. Exact pour tout
+produit jamais renommé, faux pour les autres **sans qu'on puisse savoir lesquels**. Dit à `claude-H` :
+un duplicata n'est réellement opposable qu'à partir de cette migration.
+
+Une ligne dont la référence ne désigne aucun produit du catalogue garde un libellé **nul** —
+`VenteReservationHandler` pose un identifiant arbitraire quand la réservation n'a pas de produit.
+Inventer un libellé donnerait au document l'apparence d'être complet.
+
+### Un défaut trouvé en passant, de la même famille que le reste
+
+`TicketProcessor` lisait le seuil d'impression par `$vente->getSession()?->getPointDeVente()`. Sur une
+vente directe — pas de session — il lisait `0.00`, donc déclarait la vente **systématiquement
+au-dessus du seuil**, donc « imprimée automatiquement », alors qu'aucun comptoir n'a de ticket à
+sortir. Encore du code qui répond quelque chose avec l'air d'avoir cherché.
+
+### Une dérive de convention, signalée et non suivie
+
+L'horloge du serveur indiquait 15:55 ; le dépôt portait déjà `Version20260826170000` (commitée à
+15:11) et `Version20260826191000` (commitée à 14:54) — **deux migrations datées dans l'avenir**. La
+mienne porte l'heure réelle, ce que D32 demande, et se retrouve numérotée avant deux migrations qui
+lui sont antérieures dans les faits. Sans conséquence ici : elle est indépendante.
+
+Dater à mon tour dans l'avenir aurait rendu la dérive invisible en m'y ajoutant. **L'ordre des
+versions ne veut plus rien dire dès que chacun choisit son heure**, et c'est le genre d'écart qui ne
+se voit qu'une fois qu'il est général.
+
+
+## La clôture devient un mécanisme — et le fuseau a trouvé mieux qu'il ne devait corriger
+
+NF525 exige une clôture quotidienne. **Une obligation légale ne peut pas dépendre de ce que quelqu'un
+pense à faire** : un exploitant qui oublie trois semaines n'a pas été négligent, il a rencontré un
+produit qui lui demandait d'être un mécanisme.
+
+Mais automatiser sans traiter l'échec aurait échangé un oubli **visible** contre un oubli
+**invisible**, et le second est pire — tout le monde croirait que c'est fait. C'est D57 reproduit un
+cran plus haut.
+
+### Le détecteur existait déjà ; personne ne le voyait
+
+Le refus « journée sautée » du `DailyClosureHandler` **est** le mécanisme qui repère une clôture
+manquée. Il était écrit, testé — et il ne parlait qu'à celui qui *tentait* une clôture. Une journée
+oubliée restait donc invisible jusqu'à ce que quelqu'un s'y heurte, des semaines plus tard,
+c'est-à-dire quand l'arriéré est devenu pénible.
+
+D'où `GET /clotures-journalieres/en-attente` : la plus ancienne d'abord, puisque le cumul refuse qu'on
+saute une journée — **l'ordre de la liste est l'ordre des gestes**. Chaque entrée porte le nombre de
+ventes, la raison, et `joursDeRetard` plutôt que deux dates à soustraire (D46 : on affiche l'écart,
+jamais les dates brutes).
+
+Le test qui compte est `testLaFileDescendQuandOnClot`. **C'est la seule propriété qui distingue une
+file d'un journal**, et c'est ce que D55 exige de toute liste affichée.
+
+### Ce que le fuseau a révélé, et que je n'avais pas vu en écrivant le handler
+
+`claude-A` a ajouté `Etablissement.fuseauHoraire` à ma demande, pour choisir l'heure de la tâche. Il a
+servi à autre chose : **le handler comptait mal**.
+
+`vente_vente.date` est un `DATETIME` **sans fuseau**, écrit à l'heure du serveur. Borner une journée
+d'exploitation sur l'heure du serveur revient à comparer une borne exprimée aux Antilles à une colonne
+écrite à Paris : la journée est décalée de quatre heures — **et la requête fonctionne parfaitement,
+elle rend simplement les mauvaises ventes**.
+
+Troisième forme du même défaut aujourd'hui : la liste vide, la jauge à zéro, et maintenant une journée
+décalée. À chaque fois, pas d'erreur, pas de test rouge, **un résultat plausible et faux**.
+
+Trois endroits corrigés, une seule méthode nommée. Et le refus dit maintenant *« il est le 2026-08-26
+sur ce point de vente »* : **un refus qui ne dit pas de quel calendrier il parle est incompréhensible
+depuis l'autre bout du monde** — précisément là où on en aura besoin.
+
+### `CONVERT_TZ()` écarté, et c'est l'arbitrage du lot
+
+MariaDB sait convertir un fuseau en SQL. C'était exact et plus court. **Mais la fonction exige les
+tables de fuseaux, qui ne sont pas chargées partout — et quand elles manquent, elle rend `NULL` sans
+lever.** Une clôture NF525 qui dépend d'une option d'installation, et qui échoue en silence quand
+l'option manque : on aurait reproduit, dans le mécanisme censé y mettre fin, exactement le motif de la
+journée.
+
+Le regroupement se fait donc en PHP, sur les seules dates postérieures au dernier arrêté — une journée
+en régime normal, quelques milliers de valeurs sur un arriéré de trois semaines. C'est le cas où l'on
+veut une réponse exacte.
+
+### La commande, et pourquoi elle a son propre test
+
+`vente:cloture:journee`, quotidienne, `critical`, `safeOnFirstRun: false`, avec `--dry-run`.
+
+Le handler est testé. Le planificateur est testé. **Ni l'un ni l'autre ne dit que la commande
+s'exécute** — et c'est exactement le raisonnement qui laisse une commande inerte pendant des mois.
+`claude-D` vient de le vivre sur `sepa:preavis:annoncer`, en pire : une commande qui *tourne*, annonce
+« 47 préavis envoyés » chaque matin, et se neutralise elle-même.
+
+Quatre vérifications, dont une que `claude-A` a demandée et que je n'aurais pas écrite : **le
+planificateur refuse de la lancer seule à son premier passage**. Une clôture scelle ; un premier
+passage sur un arriéré produirait vingt et un arrêtés irréversibles d'un coup. Le test vérifie le
+*comportement* du planificateur, pas la constante du catalogue — une valeur juste dans un fichier que
+personne ne lit ne protège rien.
+
+### Deux incursions hors périmètre, déclarées avant d'être découvertes
+
+`src/Platform/Scheduling/ScheduleCatalog.php` appartient à `claude-A`. Il a tranché : la commande et sa
+déclaration vont ensemble, **les séparer produirait soit une commande que rien ne planifie, soit une
+planification qui pointe vers rien** — un demi-mécanisme qui a l'air entier. Même raisonnement que pour
+la ligne de catalogue d'événements, et il vaut la peine d'être retenu : quand une règle de périmètre
+et un invariant se contredisent, c'est l'invariant qui gagne.
+
+`src/Vente/VenteModule.php` est chez moi, mais l'interface est son `Platform`. Il n'existait aucun
+manifeste pour le module qui encaisse : RG-PLAT-06 était donc **aveugle sur le plus gros émetteur
+potentiel du dépôt** — il n'avait rien à regarder, et rendait vert.
+
+### Une entorse à ma propre règle, et je la note plutôt que de la taire
+
+J'ai ajouté `ClotureCommandeTest` **pendant** qu'une suite tournait, alors que j'ai fait adopter à la
+flotte la règle inverse le 24/08 après avoir rendu deux verdicts sur un arbre qui avait bougé. Le
+risque était faible — PHPUnit découvre ses fichiers au démarrage — mais « faible » n'est pas « nul »,
+et c'est précisément l'argument que je refuse quand un autre me le sert. Le verdict de cette
+exécution-là est donc **écarté** : la suite a été rejouée en entier sur un arbre figé.
+
+
+## PAY-3 — un refus de carte s'écrit avant d'être annoncé
+
+`CA-10` veut qu'un refus TPE **ne crée aucun `Paiement`** : rien n'a été encaissé, donc rien n'est
+enregistré. La règle est juste. Sa conséquence était qu'il ne restait **rien** d'une carte refusée —
+un code de statut dans une réponse HTTP que personne ne conserve.
+
+### Pourquoi une table alors que le contrat ne demandait qu'un événement
+
+`claude-D` a elle-même établi que sa bascule carte → prélèvement **n'a aucun client aujourd'hui** :
+aucun débit récurrent sur carte n'existe dans le produit. Son abonné est donc le seul consommateur, et
+il n'agira sur **aucun** refus. Publier sans écrire n'aurait laissé aucune trace de la **totalité** des
+refus — pas en cas de panne, mais en fonctionnement normal, dès le premier jour. D59 connu à l'avance.
+
+**Et la raison décisive vient d'elle, pas de moi.** Je justifiais la table par l'exploitation : compter
+les refus. Elle a vu ce que je n'avais pas vu — *le prélèvement qu'un client contestera, c'est le
+sien.* Sa bascule le crée à partir de ce refus, et ce qu'elle peut produire pour le défendre est un
+préavis : il prouve qu'on a **prévenu**, il ne prouve pas **pourquoi** on a prélevé. Sans cette ligne,
+le fait générateur n'existe nulle part, et elle a prélevé quelqu'un sur la foi d'un message disparu
+après traitement.
+
+`sale_card_rejection` est donc **la pièce justificative d'un prélèvement SEPA**. C'est écrit dans le
+docblock de l'entité, avec son nom : celui qui voudra la supprimer un jour verra qu'il n'enlève pas une
+table de statistiques.
+
+### `rejectionId` et non `paymentId` — le nom qui ment coûte plus que le nom inhabituel
+
+`claude-D` avait demandé `paymentId`. **Il n'existe pas** : aucun `Paiement` n'est créé. J'aurais pu
+lui passer l'identifiant d'autre chose sous ce nom — elle aurait eu sa clé d'idempotence, tout aurait
+fonctionné, et le nom aurait menti sur ce qu'il désigne.
+
+Sa réponse généralise le point mieux que ma question : *un `paymentId` qui ne désigne aucun paiement
+fonctionne parfaitement jusqu'au jour où quelqu'un fait une jointure dessus — et ce jour-là, il ne
+cherche pas un problème de nommage, il cherche pourquoi sa requête ne rend rien.* Même famille que le
+piège `Uuid` : tout marche, jusqu'à ce que ça ne marche pas silencieusement.
+
+### L'ordre est une propriété du code, pas une convention
+
+On écrit, on vide, on publie. Le bus est **synchrone** dans ce dépôt : l'inverse aurait fait tourner
+l'abonné — donc créé une dette et envoyé un préavis à un client — **avant** que le fait qui la
+justifie soit écrit. Ce n'est pas une course théorique, c'est l'ordre des lignes, et il est isolé dans
+un seul service pour que ça reste une propriété plutôt qu'une règle à respecter.
+
+### Une limite signalée plutôt que maquillée
+
+`claude-A` voulait que la trace porte le **terminal**. Le dépôt ne donne aucune identité propre aux
+TPE : `PointDeVente` porte une *liste* de terminaux en configuration, et `ResultatTpe` ne dit pas
+lequel a répondu. J'ai écrit le point de vente et noté le manque dans l'entité, plutôt qu'inventer un
+identifiant qui aurait eu l'air d'en être un. `claude-D` : *un champ inventé qui a l'air vrai est pire
+qu'un champ absent — celui qui le lit ne sait pas qu'il ne doit pas s'y fier.*
+
+## La sentinelle qui a sonné sur une phrase
+
+`CardDebitFallbackNonBrancheTest` (écrit par `claude-D`) existe pour **échouer le jour où PAY-3
+atterrit**, et son message dit « supprimez ce fichier de test ». Il a sonné sur mon lot.
+
+Il cherchait la chaîne `CardDebitFallback` dans les fichiers de `src/`. Ce qu'il a trouvé était **un
+commentaire** : mon manifeste indiquait que l'événement est consommé par `App\Sepa`
+(`CardDebitFallback`). Une phrase de documentation, pas un appel — **son service n'est toujours appelé
+par personne**, puisque son abonné n'existe pas.
+
+**Suivre le remède aurait retiré le signal en laissant le trou**, au moment exact où il devenait le
+plus utile : quelqu'un lit la mention dans mon manifeste, croit la chaîne complète, et plus rien ne le
+détrompe. Sa conclusion, qu'elle a tirée seule : *une sentinelle dont le remède est faux dans le cas
+du faux positif est pire qu'aucune sentinelle.*
+
+**J'ai corrigé chez moi, et pas pour faire taire le test.** Un manifeste ne doit pas nommer la classe
+interne d'un autre module : c'est le couplage documentaire que D2 interdit, et ça vieillit mal — elle
+peut renommer sa classe demain sans que l'événement bouge. Le catalogue dit qui consomme ; le
+manifeste déclare ce qu'on émet. Elle l'a relevé : *si tu l'avais fait pour contourner le test, nous
+aurions eu un test vert et un couplage intact. C'est la différence entre corriger et faire taire.*
+
+Elle a durci la détection (`token_get_all`, `T_COMMENT` et `T_DOC_COMMENT` écartés) et réécrit le
+message avec **les deux branches** — si c'est un vrai branchement, supprimez ; sinon, **ne supprimez
+rien**. La seconde est celle où l'erreur coûte.
+
+**Le principe est excellent et je l'emprunte** : un rapport se lit une fois ; le seul moyen de ne pas
+livrer un mécanisme de plus que personne n'atteint est que **l'absence parle d'elle-même, au moment où
+quelqu'un croira la fonctionnalité prête**. C'est ce que font `MoyenFiduciaireTest` et
+`ChampsFigesTest`, sans que je l'aie formulé aussi bien.
+
+
+## L'estimation de tarif — un seul calcul, deux appelants
+
+Maxime a signalé un ticket qui n'additionnait pas : « 1 × Test 10,00 € », total 15,00 €. La vente en
+base était juste ; **c'est l'écran qui mentait**, parce qu'il retenait la *première grille vendable* du
+produit là où le serveur applique le *tarif réellement dû* — saison, quotient familial. Tant que la
+vente n'existe pas, l'écran ne peut qu'estimer.
+
+**La tentation évidente était d'écrire un service d'estimation à côté du service de facturation.** Elle
+aurait reproduit exactement le défaut, avec deux couches serveur au lieu d'une couche serveur et une
+couche écran — et cette fois **personne n'aurait vu la divergence**, puisque aucun écran ne met les
+deux nombres face à face. Elle se manifesterait comme un client affirmant avoir vu un autre prix, à qui
+l'on répondrait qu'il se trompe.
+
+`PriceQuoter` porte donc le calcul, et `AjoutLigneHandler` **l'appelle**. Les deux méthodes privées qui
+faisaient le travail — saison retenue, promotions automatiques — y sont déplacées. Il n'y a pas deux
+implémentations à garder d'accord : il y en a une, et deux appelants.
+
+### Le test central n'est pas celui qu'on écrirait spontanément
+
+Ce n'est pas « l'estimation rend un prix ». C'est celui qui **confronte l'estimation à la ligne
+réellement créée** — prix unitaire *et* saison. C'est la seule assertion qui aurait attrapé le défaut
+d'origine, et précisément celle qu'on n'écrit pas quand on teste chaque côté séparément, **parce que
+chacun passe**.
+
+### Un paramètre refusé, et c'est la réponse à la demande
+
+`claude-H` avait mis `beneficiaire` dans sa signature. Vérifié : **il n'entre dans aucune règle de
+tarif du dépôt.** Ce qui fait varier le prix est le **quotient familial**, déjà fourni par l'appelant à
+la création d'une ligne — `AjoutLigneHandler` lit `qf` dans le corps de la requête.
+
+L'accepter pour l'ignorer aurait été pire que de ne pas l'accepter : elle aurait cru le prix
+contextualisé, et le jour où deux bénéficiaires d'un même dossier ont des QF différents, l'écran
+afficherait deux fois le même prix sans que personne sache pourquoi. La résolution bénéficiaire →
+quotient vit dans `Crm` : donnée personnelle, donc **une décision**, pas un raccourci que je prends.
+
+### Deux incidents en route, tous deux du même genre
+
+**Une expression régulière a mangé la méthode principale.** Pour retirer les méthodes déplacées,
+j'avais écrit un motif avec `.*?` en mode DOTALL sur un docblock optionnel. Il pouvait démarrer sur un
+docblock bien antérieur et avaler tout ce qui suit — **il a emporté `ajouter()`**. Le lint PHP est
+passé, le fichier restant syntaxiquement valide ; c'est le premier test de tarif qui a dit
+`Call to undefined method`. Restauré depuis git, refait ligne à ligne. Encore un outil qui rend un
+résultat plausible sans erreur.
+
+**Et j'ai failli « corriger » une règle en la déplaçant.** Le filtre d'éligibilité des promotions
+surprend : une promotion dont l'éligibilité ne liste aucun produit n'est éligible à **aucun** produit,
+et non à tous comme on le lit spontanément. Recopié à l'identique, avec le commentaire disant que la
+surprise est voulue — **une estimation plus permissive que la facturation aurait annoncé une remise que
+la caisse n'applique pas**, c'est-à-dire le défaut d'origine réintroduit par le remède.
+
+
+## D51 — le socle partagé, et deux défauts que seul le test a vus
+
+Maxime a demandé deux choses qui n'en font qu'une : *« un seul produit de créé, et derrière que ce soit
+juste la tarification qui change »*, et *« le paramétrage entièrement modifiable par l'utilisateur »*.
+Un exploitant doit pouvoir ajouter son propre type de tarif **sans qu'on lui livre une version**, et
+sans que son ajout apparaisse chez le voisin.
+
+| Référentiel | Régime | Qui décide de la liste |
+|---|---|---|
+| `TypeTarif`, `Categorie` | socle + ajout local | nous pour le socle, **eux** pour le reste |
+| `Saison`, `TrancheQuotientFamilial` | entièrement cloisonnés | l'exploitant, la commune ou la CAF |
+| `TypeProduit` | global, **déjà** en lecture seule | nous — sa valeur pilote des branches de code |
+
+### Le patron existait, et ce n'était pas celui que la décision suggérait
+
+D51 demandait de vérifier qu'un patron nullable n'existait pas ailleurs **avant** d'en inventer un.
+`Support` le fait déjà, entièrement, avec `PorteeArticle` et son extension — et écrit avec
+`IDENTITY()`, donc conforme à D58 avant que D58 n'existe. La consigne « `null` = socle » aurait créé le
+**second patron que D51 interdit**, sur la décision qui interdit précisément cela.
+
+**Et le discriminant explicite vaut mieux que le `null`, pour une raison qui n'est pas de style.** Un
+`null` sur `etablissement` porte **deux sens** : « appartient au socle » et « personne n'a encore
+renseigné ». Le second arrive tout seul — un import, un processeur qui oublie l'estampille, une
+migration qui ajoute la colonne. Une ligne locale mal remplie deviendrait alors du socle, **visible par
+tous, en silence**. Avec `portee`, le même oubli produit une ligne locale sans établissement :
+invisible partout, donc remarquable. **Le défaut par défaut ne fuit pas.**
+
+### Deux défauts trouvés par le test, pas par la relecture
+
+**Le joker `offre.*` contenait le droit sur le socle.** J'avais nommé le droit de la plateforme
+`offre.gerer_socle`. L'administrateur de groupe porte la permission joker `offre.*` : il l'obtenait
+donc **automatiquement**. Chaque administrateur d'établissement se serait retrouvé maître du socle
+commun sans que personne ne l'ait décidé — et renommer un `TypeTarif` chez A aurait changé le tarif de
+B.
+
+Renommé `plateforme.gerer_socle`. **Le joker d'un module ne doit jamais pouvoir contenir un droit qui
+dépasse ce module** : le nommage d'une permission n'est pas une convention d'affichage, c'est une
+frontière d'autorité. Conséquence assumée — personne ne détient ce droit aujourd'hui.
+
+**La lecture portait sur les affectations, et c'était le mauvais critère.** J'avais repris tel quel le
+filtre de `Support`. Le test a montré que l'administrateur, affecté à A **et** à B, voyait les ajouts
+de B **depuis le guichet de A** — il aurait pu poser un prix sur un tarif qui n'existe pas là où il
+encaisse, et le défaut ne se serait vu **qu'à la facture**.
+
+Ce n'est pas un défaut du patron de `Support` : un article d'aide se lit légitimement depuis n'importe
+lequel de ses établissements, un référentiel tarifaire non. **Le trait et la forme du filtre se
+partagent ; le critère de visibilité ne se partage pas** — il dépend de ce que la liste sert à faire.
+
+### La migration laisse orphelin, et c'est la décision
+
+Rattacher les saisons et les tranches existantes à un établissement choisi aurait produit des tarifs
+calculés sur la saison d'un autre, et des grilles de quotient attribuées à une commune qui ne les a pas
+votées. **Une migration ne fabrique jamais de donnée métier** : ce qui manque doit rester visiblement
+manquant. Une donnée absente se remarque et se corrige ; une donnée fausse ne se voit pas.
+
+Le jeu de données, lui, rattache sa saison — là je **sais** à qui elle appartient. La raison est écrite
+à côté, sinon quelqu'un refera le même geste dans la migration en croyant être cohérent.
+
+### Le test central n'exerce pas la fonctionnalité : il montre ce qu'elle coûte mal écrite
+
+`etablissement = :courant` ne rend pas « un peu moins de lignes » : il fait disparaître **tout le
+socle**, donc le tarif sur lequel les prix sont posés, donc les prix. Le test vérifie que `TARIF_PLEIN`
+**a disparu**, et pas seulement que le compte a baissé — un test qui constate « il manque des lignes »
+se lit comme un réglage à ajuster ; celui-ci dit que la vente s'arrête.
+
+### Une erreur de ma part, corrigée avant qu'elle ne voyage
+
+J'ai annoncé à `claude-A` que `TypeProduit` était écrivable par tout administrateur. **C'était faux** :
+il n'expose que `GetCollection` et `Get`, sans aucun `denormalizationContext`. J'avais inventorié les
+cinq référentiels avec un `grep | head -8` ; pour les quatre autres, `Post` et `Patch` apparaissaient
+plus bas. Pour celui-là, la sortie s'arrêtait avant. **Je n'ai pas vu que la liste s'arrêtait là, j'ai
+vu qu'elle était coupée et j'ai supposé la suite identique.**
+
+Une sortie tronquée qui ressemble à une sortie complète — le motif du jour dans une forme nouvelle :
+cette fois, c'est l'outil de lecture qui ment, pas le code lu. `claude-A` avait déjà relayé le constat
+à Maxime ; il l'a corrigé, en notant que ce n'est pas la fausseté qui a porté l'erreur mais **la
+justesse de tout ce qui l'entourait**.
+
+
+## Le prix d'une option, avant l'ajout au panier
+
+La plainte de Maxime — *« je ne comprends rien aux options produit »* — avait une cause écrite dans le
+code : `OptionsDisponiblesProvider` déclare lui-même *« lecture seule, **sans résolution de prix** »*.
+L'écran pouvait lister les options d'un produit et **pas dire ce qu'elles coûtent**.
+
+**Le cas du pourcentage interdisait toute solution côté écran** : il porte sur le prix de base
+**résolu** — tarif × saison × quotient familial — que le navigateur ne connaît pas. Sans cet endpoint,
+la caisse aurait réimplémenté `ImpactOptionType`, c'est-à-dire une seconde règle tarifaire dans une
+couche où **personne ne voit la divergence**. Le remède aurait eu la forme de la maladie.
+
+La formule vivait dans une méthode **privée** d'`AjoutLigneHandler`. Elle est dans
+`PriceQuoter::impactOption()`, appelée par les deux. Déplacement pur : `tests/Vente` 98/98 avant et
+après.
+
+### `claude-H` a corrigé deux de mes propositions, et les deux corrections valent mieux
+
+**Le nom.** J'avais proposé `montantUnitaire`. Elle a refusé : *unitaire par rapport à quoi ?* Trois
+patins avec un affûtage à 5 € font-ils +5 ou +15 sur la ligne ? Elle le pensait sans le savoir — et
+c'est la forme exacte de la faute qu'elle avait corrigée deux fois le même jour : **un nom presque
+juste, une supposition raisonnable, un chiffre faux sur le document que le client emporte.** Elle a
+proposé les deux façons de fermer l'ambiguïté ; j'ai pris les deux — `montantParUnite` **et** les
+totaux serveur.
+
+**L'argument du total serveur.** Je disais : l'addition est triviale, donc personne ne la croit
+risquée. Elle dit : **aujourd'hui c'est une addition, demain ce ne le sera plus.** Un plafond sur le
+cumul, une remise « pack », une option qui en rend une autre gratuite — le serveur absorbe la règle
+sans qu'un écran change une ligne, là où une somme côté navigateur devient fausse **en continuant de
+rendre un nombre plausible**. Le mien explique pourquoi on duplique ; le sien explique pourquoi c'est
+coûteux. C'est le sien qui est dans le code.
+
+### Une règle qu'elle a nuancée, et la nuance est juste
+
+Elle répète par ailleurs qu'*une action sans objet est absente, jamais grisée*. Ici elle demande
+l'inverse, et le critère est meilleur que la règle : **la question n'est pas si l'action est possible,
+c'est si l'utilisateur a une raison de la chercher.** Un bouton « rembourser » sur une vente annulée,
+personne ne le cherche. Une option qu'un client réclame nommément, si — et ne pas la trouver envoie le
+caissier fouiller le paramétrage.
+
+*Une absence sans explication est une énigme ; une présence expliquée est une réponse.* L'ordre des
+phrases suit D54 : d'abord le fait sur la **donnée**, ensuite le fait sur l'établissement.
+
+### Une décision tranchée seule, et signalée
+
+Une option **retenue mais indisponible** n'entre pas dans le total. La caisse la refuserait, et
+annoncer un total que la vente ne produira pas est exactement le défaut qu'on ferme. Elle reste
+renvoyée avec `retenue: true` et `disponible: false`, pour que l'écran puisse dire **pourquoi** le
+total ne bouge pas plutôt que de laisser cliquer sans effet.
+
+### Ce que le lot ne fait pas, et pourquoi
+
+**L'estimation ne valide pas une sélection.** RG-OPT-05 (choix unique) et RG-OPT-03 (groupe
+obligatoire) restent appliquées à l'ajout de ligne, en 422. `modeSelection` et `obligatoire` permettent
+de construire un écran qui ne les enfreint pas — mais si l'estimation validait aussi, **nous aurions
+deux endroits qui décident si une sélection est licite**, et nous serions revenus au point de départ.
+
+### Le relevé de `claude-H`, qui change la portée du lot
+
+Les options ne sont pas *mal* sélectionnables au guichet : **elles ne le sont pas du tout.**
+`optionsDisponibles` est dans son client HTTP et **aucun écran ne l'appelle** — un des sept orphelins
+que sa mesure liste. `ProduitOptionsModal` existe, mais côté catalogue : il rattache des options à un
+produit, il n'en fait pas choisir une en vendant.
+
+Sa conclusion explique pourquoi personne n'avait relevé l'absence de résolution de prix : **on ne peut
+pas manquer un prix qu'on n'a jamais eu l'occasion d'afficher.** C'est le motif de la journée une
+dernière fois — un mécanisme complet, aucun appelant, et rien qui le signale. Comme la commande inerte
+de `claude-D`, comme le duplicata vide.
+
+La moitié serveur est prête. La moitié écran est chez elle, et elle l'a annoncée.

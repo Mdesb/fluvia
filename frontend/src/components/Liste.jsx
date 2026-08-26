@@ -136,6 +136,26 @@ export function dateHeureFr(v) {
 }
 
 // Libellé multilingue { fr: ... } ou chaîne simple.
+// La date d'un instant, dans le fuseau de celui qui regarde.
+//
+// POURQUOI CE N'EST PAS `toISOString().slice(0, 10)`.
+//
+// `toISOString()` rend de l'UTC. Un créneau à **00 h 30 heure de Paris en été** devient `22:30Z` la
+// veille : il est rangé au mauvais jour. Trois endroits du front le faisaient — le groupement par
+// journée des réservations, la comparaison d'échéance des options de groupe scolaire, et la date
+// envoyée au serveur pour une réception d'achat.
+//
+// Le dernier est le plus coûteux : entre minuit et deux heures du matin, une réception était datée
+// de la veille. Sur un mouvement de stock, c'est une date qui compte.
+//
+// `sv-SE` est utilisé parce que c'est la seule locale courante dont le format court est déjà
+// `AAAA-MM-JJ` — on obtient la date locale sans reconstruire la chaîne à la main.
+export function jourLocal(v) {
+  const d = v ? new Date(v) : new Date()
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toLocaleDateString('sv-SE')
+}
+
 export function texte(v, repli = '—') {
   if (!v) return repli
   if (typeof v === 'string') return v

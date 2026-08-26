@@ -47,6 +47,25 @@ final class GenerateurNumero
         return sprintf('%s-T%05d', $session->getNumero(), $nb + 1);
     }
 
+    /**
+     * Numéro d'une vente directe (D44-bis) : elle n'a pas de session dont hériter, donc on compte par
+     * point de vente. Le `D` la distingue à l'œil d'une vente de guichet — utile en relecture de
+     * chaîne, où l'on veut savoir tout de suite si un tiroir était censé être impliqué.
+     */
+    public function numeroVenteDirecte(PointDeVente $pdv): string
+    {
+        $nb = (int) $this->em->getRepository(Vente::class)
+            ->createQueryBuilder('v')
+            ->select('COUNT(v.id)')
+            ->andWhere('v.pointDeVente = :pdv')
+            ->andWhere('v.session IS NULL')
+            ->setParameter('pdv', $pdv->getId(), 'uuid')
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        return sprintf('D-%s-%05d', substr(strtoupper($pdv->getId()->toRfc4122()), 0, 8), $nb + 1);
+    }
+
     public function numeroAvoir(): string
     {
         $nb = (int) $this->em->getRepository(Avoir::class)

@@ -20,6 +20,7 @@ use App\Offre\Enum\StatutProduit;
 use App\Organisation\Entity\Etablissement;
 use App\Securite\Entity\Permission;
 use App\Securite\Entity\Role;
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use Doctrine\Bundle\FixturesBundle\Fixture;
 use Doctrine\Common\DataFixtures\DependentFixtureInterface;
 use Doctrine\Persistence\ObjectManager;
@@ -32,6 +33,8 @@ use Symfony\Component\Uid\Uuid;
  */
 final class OffreFixtures extends Fixture implements DependentFixtureInterface
 {
+    use FixturesIdempotentes;
+
     public const TYPE_ENTREE = 'entree_unitaire';
     public const TYPE_ABONNEMENT = 'abonnement';
     public const TYPE_CARTE = 'carte';
@@ -51,10 +54,9 @@ final class OffreFixtures extends Fixture implements DependentFixtureInterface
     public function load(ObjectManager $manager): void
     {
         // --- Permissions du module offre + octroi à l'administrateur (RG-SOCLE-02/03) ---
-        $permOffreTout = (new Permission())->setModule('offre')->setAction('*');
-        $manager->persist($permOffreTout);
+        $permOffreTout = $this->permissionNommee($manager, 'offre', '*');
         foreach (['creer', 'lire', 'modifier', 'publier', 'archiver', 'gerer', 'modifier_compta'] as $action) {
-            $manager->persist((new Permission())->setModule('offre')->setAction($action));
+            $this->permissionNommee($manager, 'offre', $action);
         }
 
         $roleAdmin = $manager->getRepository(Role::class)->findOneBy(['nom' => 'Administrateur groupe']);
@@ -65,43 +67,50 @@ final class OffreFixtures extends Fixture implements DependentFixtureInterface
         $etabA = $manager->getRepository(Etablissement::class)->findOneBy(['nom' => SocleFixtures::ETAB_A_NOM]);
 
         // --- Types de produits (facettes + matrice de conversion RG-M1-11) ---
-        $typeEntree = (new TypeProduit())
-            ->setCode(self::TYPE_ENTREE)
-            ->setLibelle('Entrée unitaire')
+        // `TypeProduit.code` porte `uniq_type_produit_code` : il crie au rechargement. Les trois
+        // référentiels qui suivent ne crient pas — `TypeTarif`, `Saison` et `Categorie` n'ont d'unicité
+        // que sur leur identifiant technique, donc un second chargement les **dupliquerait en
+        // silence**, et le catalogue de démonstration afficherait deux fois chaque tarif (D52).
+        $typeEntree = $this->parCode($manager, TypeProduit::class, self::TYPE_ENTREE);
+        $typeEntree->setLibelle('Entrée unitaire')
             ->setFacettes([TypeProduit::FACETTE_BILLET, TypeProduit::FACETTE_CONSOMMATEUR]);
-        $typeAbo = (new TypeProduit())
-            ->setCode(self::TYPE_ABONNEMENT)
-            ->setLibelle('Abonnement')
+
+        $typeAbo = $this->parCode($manager, TypeProduit::class, self::TYPE_ABONNEMENT);
+        $typeAbo->setLibelle('Abonnement')
             ->setFacettes([TypeProduit::FACETTE_FORMULE, TypeProduit::FACETTE_ACCES]);
-        $typeCarte = (new TypeProduit())
-            ->setCode(self::TYPE_CARTE)
-            ->setLibelle('Carte multi-entrées')
+
+        $typeCarte = $this->parCode($manager, TypeProduit::class, self::TYPE_CARTE);
+        $typeCarte->setLibelle('Carte multi-entrées')
             ->setFacettes([TypeProduit::FACETTE_CARNET, TypeProduit::FACETTE_CONSOMMATEUR]);
-        // entree_unitaire ↔ carte : conversion assistée compatible (CA-13).
+
+        // entree_unitaire ↔ carte : conversion assistée compatible (CA-13). `addTypeCompatible` est
+        // gardé par `contains`, donc réattacher sur un type réutilisé est sans effet.
         $typeEntree->addTypeCompatible($typeCarte);
         $typeCarte->addTypeCompatible($typeEntree);
-        $manager->persist($typeEntree);
-        $manager->persist($typeAbo);
-        $manager->persist($typeCarte);
 
         // --- Référentiels tarifaires ---
-        $tarifPlein = (new TypeTarif())->setNom(self::TARIF_PLEIN)->setVisibiliteCanal([]);
-        $tarifGuichet = (new TypeTarif())->setNom(self::TARIF_GUICHET)->setVisibiliteCanal(['guichet']);
-        $manager->persist($tarifPlein);
-        $manager->persist($tarifGuichet);
+        $tarifPlein = $this->parNom($manager, TypeTarif::class, self::TARIF_PLEIN);
+        $tarifPlein->setVisibiliteCanal([]);
+        $tarifGuichet = $this->parNom($manager, TypeTarif::class, self::TARIF_GUICHET);
+        $tarifGuichet->setVisibiliteCanal(['guichet']);
 
-        $saison = (new Saison())
-            ->setNom(self::SAISON)
-            ->setDateDebut(new \DateTimeImmutable('2026-01-01'))
+        $saison = $this->parNom($manager, Saison::class, self::SAISON);
+        $saison->setDateDebut(new \DateTimeImmutable('2026-01-01'))
             ->setDateFin(new \DateTimeImmutable('2026-12-31'))
             ->setPriorite(0);
-        $manager->persist($saison);
+        // D51 — une saison appartient a un etablissement, elle n a pas de socle : sans rattachement,
+        // elle n est visible de personne et les grilles tarifaires ne resolvent plus aucun prix. Ici on
+        // SAIT a qui elle appartient, c est un jeu de donnees — la migration, elle, laisse orphelin
+        // plutot que d inventer un proprietaire sur des donnees reelles.
+        if ($etabA instanceof Etablissement) {
+            $saison->setEtablissement($etabA);
+        }
 
         // --- Catégories (axe comptable obligatoire + axe marketing) ---
-        $catCompta = (new Categorie())->setAxe(AxeCategorie::Comptable)->setLibelle(self::CAT_COMPTABLE);
-        $catMarketing = (new Categorie())->setAxe(AxeCategorie::Marketing)->setLibelle('Aquatique');
-        $manager->persist($catCompta);
-        $manager->persist($catMarketing);
+        // Une catégorie s'identifie par son libellé ET son axe : le même libellé peut exister sur deux
+        // axes sans être un doublon.
+        $catCompta = $this->categorie($manager, AxeCategorie::Comptable, self::CAT_COMPTABLE);
+        $catMarketing = $this->categorie($manager, AxeCategorie::Marketing, 'Aquatique');
 
         // --- Produits ---
         // 1) Entrée unitaire (publiable : libellé + site + canal + prix + cat. comptable).
@@ -181,5 +190,24 @@ final class OffreFixtures extends Fixture implements DependentFixtureInterface
             ->setPrix($prix);
         $produit->addGrille($grille);
         $manager->persist($grille);
+    }
+
+    /**
+     * Une catégorie s'identifie par le couple (axe, libellé) — le même libellé sur deux axes n'est pas
+     * un doublon. Aucune unicité en base, donc un rechargement la duplique sans lever.
+     */
+    private function categorie(ObjectManager $manager, AxeCategorie $axe, string $libelle): Categorie
+    {
+        $existante = $manager->getRepository(Categorie::class)
+            ->findOneBy(['axe' => $axe, 'libelle' => $libelle]);
+
+        if ($existante instanceof Categorie) {
+            return $existante;
+        }
+
+        $categorie = (new Categorie())->setAxe($axe)->setLibelle($libelle);
+        $manager->persist($categorie);
+
+        return $categorie;
     }
 }

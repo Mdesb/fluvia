@@ -24,6 +24,7 @@ use App\Compta\Regime\Dto\LigneEcritureADto;
 use App\Compta\Regime\Dto\VenteProjectionDto;
 use App\Compta\Regime\RegimeComptableResolver;
 use App\Offre\Enum\ReglePca;
+use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Uid\Uuid;
 
@@ -48,6 +49,35 @@ final class GenerateurEcrituresHandler
      * @return array{ecrituresGenerees: int, extournesGenerees: int, anomalies: list<array{vente: string, anomalies: list<string>}>}
      */
     public function generer(ProfilExploitant $profil): array
+    {
+        // **Un verrou, parce que la liste des ventes déjà comptabilisées est lue AVANT la boucle.**
+        //
+        // La génération est idempotente en séquentiel : une seconde exécution ne retrouve rien, la
+        // projection excluant ce qui est déjà comptabilisé. Elle ne l'était pas en concurrent — deux
+        // requêtes qui se chevauchent lisaient le même ensemble et généraient toutes les deux. Le cas
+        // n'est pas théorique : l'exploitant clique, ne voit rien bouger parce que la requête est
+        // longue, et reclique. **Un journal comptable doublé ne se corrige pas en effaçant des
+        // lignes ; il se corrige par extourne, et ça se voit au contrôle.**
+        //
+        // Verrou pessimiste sur la ligne du profil plutôt qu'une table de verrous : rien à créer, et
+        // surtout aucun verrou orphelin à ramasser après un incident — il tombe avec la transaction.
+        //
+        // **La transaction ferme un second défaut, indépendant du premier.** `persisterEcriture()`
+        // écrit à chaque écriture (le scellement NF525 relit la base pour chaîner) : une interruption
+        // en cours de route laissait donc un journal à moitié généré. Les écritures restent visibles
+        // les unes des autres à l'intérieur de la transaction, le chaînage fonctionne comme avant, et
+        // ce qui échoue ne laisse plus de moitié derrière lui.
+        return $this->em->wrapInTransaction(function () use ($profil): array {
+            $this->em->lock($profil, LockMode::PESSIMISTIC_WRITE);
+
+            return $this->genererSousVerrou($profil);
+        });
+    }
+
+    /**
+     * @return array{ecrituresGenerees: int, extournesGenerees: int, anomalies: list<array{vente: string, anomalies: list<string>}>}
+     */
+    private function genererSousVerrou(ProfilExploitant $profil): array
     {
         $regime = $this->resolver->pour($profil);
         $mappingResolveur = $this->mappingGuard->resolveur($profil);

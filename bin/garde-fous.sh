@@ -203,6 +203,26 @@ fi
 #     PointDeVente. Cliquet séparé du n°8 — ajouter une règle à un cliquet existant relève
 #     toujours son plafond, et il ne peut pas distinguer une dette qui grossit d'une règle qui
 #     mesure ce qui n'était pas compté.
+# 13. Une reference libre ne se compare ni en DQL ni par filtre (D58). Ce controle ne depend d'aucune
+#     comparaison avec un etat anterieur : il lit l'arbre courant, donc il tourne TOUJOURS -- avec ou
+#     sans reference.
+#
+#     QUATRIEME OUBLI SUR LA MEME LISTE, ET LE PLUS INSTRUCTIF DES QUATRE.
+#
+#     Je l'ai oublie dans hooks/pre-receive (non), puis ici (attrape par claude-D apres une poussee
+#     refusee sur un vert local), puis dans hooks/pre-commit (attrape par le hook lui-meme le jour ou
+#     je venais de l'installer). Trois absences -- et un filet les voit toutes les trois.
+#
+#     Le quatrieme etait une PRESENCE INOPERANTE : mon correctif precedent avait pose l'appel A
+#     L'INTERIEUR du `if [ -n "$REFERENCE" ]` ci-dessous, avec un commentaire qui disait exactement
+#     l'inverse de ce que le code faisait. Le controle ne tournait donc que si on passait une
+#     reference. `./bin/garde-fous.sh origin/main` : vert. `./bin/garde-fous.sh` : le filet criait.
+#
+#     Aucun filet ne voit ca. Un controle absent se compte ; un controle present mais place sous une
+#     condition fausse la moitie du temps ne se distingue pas d'un controle qui tourne. Trouve par
+#     claude-G, parce qu'elle et moi lancions le meme script differemment -- c'est-a-dire par hasard.
+executer "Références libres (D58)" php_racine bin/garde-fou-references-libres.php
+
 if [ -n "${REFERENCE:-}" ]; then
     executer "Établissement écrivable (D41)" php_racine bin/garde-fou-etablissement-ecrivable.php "--contre=$REFERENCE"
 else

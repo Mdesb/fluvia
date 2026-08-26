@@ -18,6 +18,12 @@ use App\Securite\Entity\Utilisateur;
 use Doctrine\ORM\Query\Expr\Join;
 use Doctrine\ORM\QueryBuilder;
 use Symfony\Bundle\SecurityBundle\Security;
+use App\Offre\Entity\Categorie;
+use App\Offre\Entity\TypeTarif;
+use App\Platform\Scoping\ScopedReferenceQuery;
+use App\Securite\Service\ContexteEtablissement;
+use App\Offre\Entity\Saison;
+use App\Offre\Entity\TrancheQuotientFamilial;
 
 /**
  * Cloisonnement multi-entités des produits (RG-SOCLE-05, réutilise la stratégie du socle) :
@@ -48,6 +54,7 @@ final class PerimetreProduitExtension implements QueryCollectionExtensionInterfa
 
     public function __construct(
         private readonly Security $security,
+        private readonly ContexteEtablissement $contexte,
     ) {
     }
 
@@ -76,8 +83,65 @@ final class PerimetreProduitExtension implements QueryCollectionExtensionInterfa
         $this->restreindre($queryBuilder, $resourceClass);
     }
 
+    /**
+     * Referentiels « socle + ajout local » (D51) : la lecture voit le socle PLUS les ajouts des
+     * etablissements de l utilisateur, jamais ceux d un autre.
+     *
+     * Le filtre n est pas ecrit ici : `ScopedReferenceQuery` le porte une seule fois, parce que le
+     * filtre faux — `etablissement = :courant` — se lit comme une evidence et fait DISPARAITRE TOUT
+     * LE SOCLE, donc tous les tarifs de base, donc tous les prix.
+     *
+     * @var list<class-string>
+     */
+    private const REFERENTIELS_A_SOCLE = [
+        TypeTarif::class,
+        Categorie::class,
+    ];
+
+    /**
+     * Referentiels sans socle : la liste entiere appartient a l etablissement (D51).
+     *
+     * @var list<class-string>
+     */
+    private const REFERENTIELS_CLOISONNES = [
+        Saison::class,
+        TrancheQuotientFamilial::class,
+    ];
+
     private function restreindre(QueryBuilder $queryBuilder, string $resourceClass): void
     {
+        // D51 — referentiels ENTIEREMENT cloisonnes : pas de socle, donc pas de discriminant. Ici le
+        // filtre « etablissement = actif » est le bon, precisement parce qu il n y a rien a partager :
+        // une saison est decidee par l exploitant, une tranche de quotient familial par la commune ou
+        // la CAF, et un tarif calcule sur la mauvaise grille est une erreur de facturation opposable.
+        //
+        // Une ligne sans etablissement — anterieure au cloisonnement — n est visible de personne. La
+        // migration les laisse orphelines plutot que de leur inventer un proprietaire.
+        if (\in_array($resourceClass, self::REFERENTIELS_CLOISONNES, true)) {
+            $actif = $this->contexte->idActif();
+            $alias = $queryBuilder->getRootAliases()[0];
+
+            if ($actif === null) {
+                // Fermeture par defaut : sans etablissement actif, rien. Une liste vide se remarque ;
+                // une liste inter-etablissements a seulement l air plus longue.
+                $queryBuilder->andWhere('1 = 0');
+
+                return;
+            }
+
+            $queryBuilder
+                ->andWhere(sprintf('IDENTITY(%s.etablissement) = :perimetre_ref_cloisonne', $alias))
+                ->setParameter('perimetre_ref_cloisonne', $actif, 'uuid');
+
+            return;
+        }
+
+        if (\in_array($resourceClass, self::REFERENTIELS_A_SOCLE, true)) {
+            ScopedReferenceQuery::restreindre($queryBuilder, $this->contexte->idActif());
+
+            return;
+        }
+
         if (!\array_key_exists($resourceClass, self::CHEMINS)) {
             return;
         }
