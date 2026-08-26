@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace App\Vente\Entity;
 
+use ApiPlatform\Doctrine\Orm\Filter\DateFilter;
+use ApiPlatform\Doctrine\Orm\Filter\OrderFilter;
 use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
 use ApiPlatform\Metadata\ApiFilter;
 use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Post;
+use App\Vente\Filter\SaleCustomerFilter;
 use App\Caisse\Entity\SessionCaisse;
 use App\Organisation\Entity\Etablissement;
 use App\Vente\Enum\StatutVente;
@@ -128,6 +131,16 @@ use Symfony\Component\Uid\Uuid;
     normalizationContext: ['groups' => ['vente:read']],
 )]
 #[ApiFilter(SearchFilter::class, properties: ['session' => 'exact', 'statut' => 'exact', 'numero' => 'exact'])]
+// D48 — sans ces deux filtres, l'historique des ventes est inutilisable : `claude-H` a refuse de
+// contourner en filtrant en memoire, et elle avait raison — un filtre qui ne porterait que sur la
+// page chargee ferait conclure a un caissier que sa vente n'existe pas.
+//
+// L'ordre importe autant que le filtre : sans `OrderFilter`, « les cinquante dernieres ventes » n'est
+// meme pas garanti, l'ordre etant celui que la base rend. `date` est le defaut descendant, parce que
+// c'est ainsi qu'on lit un historique.
+#[ApiFilter(OrderFilter::class, properties: ['date' => 'DESC', 'numero' => 'ASC'], arguments: ['orderParameterName' => 'order'])]
+#[ApiFilter(DateFilter::class, properties: ['date'])]
+#[ApiFilter(SaleCustomerFilter::class)]
 class Vente
 {
     #[ORM\Id]

@@ -225,3 +225,40 @@ seul(e) qu'un lot est fini.
 `claude-G` a livré la réservation par type avec affectation différée (ACT-1 point 3) : « on réserve une
 chambre double, pas la chambre 214 ». C'est exactement ce dont l'hébergement a besoin — lis-le avant
 d'écrire ACT-2, tu n'auras rien à réinventer.
+
+---
+
+## 2026-08-25 · RÉPARTITION — ton périmètre s'élargit (D48)
+
+Maxime m'a délégué la répartition des **dix-sept modules serveur qui n'avaient aucun propriétaire** —
+802 fichiers, à peu près autant que ce que les neuf sessions possédaient déjà. Ils sont tous attribués.
+
+**Le raisonnement, pour que tu saches sur quoi tu t'engages** : j'avais proposé de n'en attribuer que
+trois et de déclarer les autres orphelins. J'ai changé d'avis. **Un propriétaire endormi peut être
+réveillé ; un module orphelin, non.** Le premier est un risque avec un nom dessus, le second est un
+angle mort — et cette semaine les angles morts ont coûté cinq jours de front sans personne, un test
+rouge pendant vingt-quatre heures et trente-cinq entités sans protection d'écriture.
+
+**Ce que ça ne veut pas dire** : que tu doives tout reprendre. Un module attribué n'est pas un module à
+réécrire. Tu en es responsable **quand quelqu'un y touche ou quand quelque chose y casse** — à
+commencer par ses tests, que plus personne ne lançait.
+
+`COORDINATION/FLOTTE.md` porte la carte complète.
+
+### Tu reçois `Boutique`, `Stock`, `Caution`
+
+Ils vont avec le séjour : un client qui séjourne consomme à la boutique, laisse une caution, et ce
+qu'il consomme sort d'un stock.
+
+**`Boutique` est gros — 84 fichiers, 13 entités — et il porte la vente en ligne**, c'est-à-dire un
+point d'entrée public. Deux choses à vérifier avant tout :
+
+1. `Boutique/Entity/{PartenaireOTA, Vitrine}` sont dans la liste des 35 entités qui laissaient écrire
+   leur établissement (D41). Un garde global les protège désormais, mais **retire `etablissement` de
+   leurs groupes d'écriture** : le garde protège, la conception doit aussi être juste.
+2. `Boutique` a dû écrire son propre limiteur de débit, que son auteur documente comme provisoire. Le
+   composant `symfony/rate-limiter` est installé depuis ce matin — **remplace le repli**, et `claude-D`
+   a déjà écrit un exemple d'usage dans `Subscription`.
+
+**Ta priorité reste ACT-3**, le séjour : le compte unique réglé une fois au départ. C'est ce qui
+transforme « six modules » en « un logiciel », et tu es la seule dessus.

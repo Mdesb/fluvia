@@ -1429,3 +1429,69 @@ ajouté sans elle ne compile pas.
 
 C'est exactement le motif qu'on répète depuis trois jours — *un mécanisme qui dépend de la vigilance
 n'est pas un mécanisme* — appliqué à une énumération qui va grandir de trois valeurs cette année.
+
+### 2026-08-25 · D47 — Un garde-fou qui accuse à tort est pire que pas de garde-fou
+`claude-H` a écrit un contrôle qui refuse la comparaison brute de droits dans le front (D39). En le
+livrant, elle a constaté qu'il **accusait `claude-D` à tort** : il signalait que l'administration
+éditeur rendait un composant sans lui passer ses droits, alors que l'éditeur importe **son propre**
+`Clients.jsx`, qui ne teste aucun droit. Le contrôle comparait des **noms** sans résoudre les imports —
+et deux composants peuvent porter le même nom dans deux dossiers.
+
+**Ce qui aurait suivi, si elle ne l'avait pas vu.** Une session envoyée chercher une faute inexistante,
+**dans le périmètre d'une autre**, sur la foi d'un outil. Le coût n'est pas le temps perdu : c'est que
+la deuxième fausse alerte fait désinstaller le garde-fou, et qu'on perd alors aussi les vraies.
+
+**Règle : un garde-fou se vérifie sur du code SAIN avant d'être livré, pas seulement sur le défaut
+qu'il cherche.** Le vérifier rouge sur le défaut prouve qu'il voit quelque chose ; le vérifier vert sur
+du code juste — **et en particulier sur celui d'un autre périmètre** — prouve qu'il ne voit pas
+n'importe quoi. Les deux sont nécessaires, et seule la seconde manquait à nos habitudes.
+
+**Et la leçon qu'elle en tire, qui vaut au-delà de l'outillage.** Elle s'est fait prendre **trois fois**
+par le même piège d'échappement — une expression régulière construite dans un gabarit de chaîne, où
+`\s` vaut `s` : le contrôle redevenait muet, vert en ne vérifiant rien. La troisième fois, elle n'a pas
+corrigé l'échappement une fois de plus : **elle a retiré toutes les expressions régulières construites
+du fichier.**
+
+> *« Trois fois le même piège, c'est que le remède n'était pas le bon : ce n'est pas la vigilance qui
+> manquait, c'est la construction qui était fragile. »*
+
+C'est la formulation la plus aboutie du motif qu'on suit depuis trois jours. On avait *« un mécanisme
+qui dépend de la vigilance n'est pas un mécanisme »* ; on a maintenant son corollaire pratique —
+**quand la même erreur revient une troisième fois, on ne la corrige plus, on supprime ce qui la rend
+possible.**
+
+### 2026-08-25 · D48 — Les dix-sept modules orphelins reçoivent un propriétaire
+Maxime : *« vas-y, occupe-toi de tout. »* Délégation explicite après que je lui ai présenté la carte
+des affinités et le compte : **802 fichiers, 17 modules sans propriétaire** — à peu près autant que ce
+que les neuf sessions possédaient déjà.
+
+**J'avais proposé de n'en attribuer que trois et de déclarer les quatorze autres comme orphelins.
+Je change d'avis, et voici pourquoi** : un propriétaire endormi **peut être réveillé** ; un module
+orphelin ne le peut pas. Le premier est un risque visible avec un nom dessus, le second est un angle
+mort — et on sait ce que les angles morts ont coûté cette semaine : cinq jours de front sans personne,
+un test rouge vingt-quatre heures, trente-cinq entités sans protection d'écriture.
+
+**La répartition, par affinité et non par équilibrage :**
+
+| Modules | Propriétaire | Raison |
+|---|---|---|
+| `Facturation` `Compta` `Sepa` `Finance` | `claude-D` | elle y vit depuis deux jours et n'avait pas le droit d'y écrire |
+| `Vente` `Caisse` `OptionProduit` | `claude-G` | elle possède `Offre` ; produit et vente sont une seule chaîne |
+| `Crm` `Recouvrement` | `claude-E` | Revenue Recovery **est** du recouvrement |
+| `Autorisation` `Support` | `claude-B` | droits et documents, prolongement direct d'`Acces` et `Dms` |
+| `Boutique` `Stock` `Caution` | `claude-F` | boutique, stock et cautions vont avec le séjour |
+| `Personnel` `Reporting` `Ocr` | `claude-A` | **aucune affinité honnête** — je les garde plutôt que de les forcer |
+
+**Les trois derniers sont chez moi par défaut d'affinité, pas par compétence.** Je les rendrai à la
+première session dont le périmètre les touchera vraiment. Les mettre chez quelqu'un « parce qu'il reste
+de la place » serait la façon la plus sûre de recréer un orphelin avec un nom dessus.
+
+**Ce que cette décision ne résout pas, et qu'il faut dire.** Quatre des huit propriétaires dorment
+depuis six à huit heures — `B`, `C`, `E`, `F`. Leur attribuer des modules ne les réveille pas. Mais
+`FLOTTE.md` porte désormais une colonne d'état : **un propriétaire muet est un risque nommé**, pas un
+trou. C'est la même règle que les entrées de menu grisées de `claude-H` — *un manque déclaré s'arbitre,
+un manque implicite se découvre par accident.*
+
+**Trois lots deviennent débloqués immédiatement** : les trois filtres de `Vente` qui bloquent
+l'historique des ventes depuis ce matin, le moyen de paiement préféré dans `Crm` demandé par Maxime, et
+le droit d'écrire dans `Facturation` pour `claude-D`.

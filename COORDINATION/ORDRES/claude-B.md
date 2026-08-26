@@ -267,3 +267,77 @@ seul(e) qu'un lot est fini.
 
 `claude-G` a rouvert ta résolution du droit créditable dans CQ-5 : c'est son périmètre, ton code n'est
 pas en cause, et il devient **correct** avec le nouveau modèle. Rien à faire de ton côté.
+
+---
+
+## 2026-08-25 · RÉPARTITION — ton périmètre s'élargit (D48)
+
+Maxime m'a délégué la répartition des **dix-sept modules serveur qui n'avaient aucun propriétaire** —
+802 fichiers, à peu près autant que ce que les neuf sessions possédaient déjà. Ils sont tous attribués.
+
+**Le raisonnement, pour que tu saches sur quoi tu t'engages** : j'avais proposé de n'en attribuer que
+trois et de déclarer les autres orphelins. J'ai changé d'avis. **Un propriétaire endormi peut être
+réveillé ; un module orphelin, non.** Le premier est un risque avec un nom dessus, le second est un
+angle mort — et cette semaine les angles morts ont coûté cinq jours de front sans personne, un test
+rouge pendant vingt-quatre heures et trente-cinq entités sans protection d'écriture.
+
+**Ce que ça ne veut pas dire** : que tu doives tout reprendre. Un module attribué n'est pas un module à
+réécrire. Tu en es responsable **quand quelqu'un y touche ou quand quelque chose y casse** — à
+commencer par ses tests, que plus personne ne lançait.
+
+`COORDINATION/FLOTTE.md` porte la carte complète.
+
+### Tu reçois `Autorisation` et `Support`
+
+Prolongement direct d'`Acces` et de `Dms` : les droits et les documents.
+
+**Une urgence dans `Autorisation`, et elle est de sécurité.** J'ai corrigé hier que
+`autorisation.lire` et `autorisation.gerer` n'étaient créées par **aucun code** — le module des
+élévations de privilèges était donc inaccessible à tout le monde dans une installation neuve, et
+invisible en préproduction dont la base les avait par héritage. C'est réparé, **mais vérifie que le
+module fonctionne réellement** : personne ne l'a jamais utilisé, donc personne ne sait s'il marche.
+
+**Et `Autorisation` porte deux commandes qui ne tournaient jamais** avant l'ordonnanceur de ce matin :
+une élévation de privilèges temporaire était **permanente**. Elles tournent depuis ce matin ; regarde
+ce qu'elles font maintenant qu'elles s'exécutent pour la première fois.
+
+**Ta priorité reste CQ-8**, le défaut d'argent : vendre N cartes en facture N et n'en émet **qu'une**
+seule chargée. Il est ouvert depuis trois jours.
+
+---
+
+## 2026-08-26 · Rends tes fixtures idempotentes — c'est ce qui bloque les données de démo
+
+**Le constat, et il vient d'un incident que j'ai causé.** Le 24/08 j'ai voulu régénérer les données de
+démonstration de la préproduction, à la demande de Maxime. Le chargement a échoué en cours de route,
+après avoir tronqué la table des rattachements droits-rôles : **les trente-quatre rôles de la
+préproduction se sont retrouvés à zéro droit.** Maxime ne peut plus tester avec autre chose que son
+propre compte depuis.
+
+**La cause n'est pas l'incident, c'est qu'un chargement complet n'a jamais fonctionné sur ce dépôt.**
+J'ai compté : **quatorze fixtures créent des rôles**, et plusieurs ne se gardent pas du tout —
+`Support` en crée huit sans une seule garde, `Personnel` cinq, `Reporting` quatre.
+
+`Role.nom` porte une **unicité globale**. Deux fixtures qui créent le même nom, ou un rechargement sur
+une base qui les a déjà, échouent sur « Duplicate entry ».
+
+**Pourquoi personne ne l'avait vu** : le harnais de test recrée le schéma depuis les entités à chaque
+classe de test, donc les fixtures partent toujours d'une base vide, et elles sont chargées
+**sélectivement**. Les deux mondes ne se croisent jamais. C'est encore le motif de la semaine — un
+défaut invisible parce que le seul endroit où il se verrait n'est jamais visité.
+
+**Ce que je te demande**, et c'est court : là où ta fixture fait `(new Role())->setNom('X')`, cherche
+d'abord. J'ai posé le patron dans `PersonnelFixtures` et `L11Fixtures` — une méthode privée
+`roleNomme()` qui rend l'existant ou crée. Même chose pour les `Permission` : le couple
+(module, action) porte aussi une unicité.
+
+**Ne me demande pas d'arbitrage** : c'est mécanique, ça ne change aucun comportement, et ça se vérifie
+en relançant ta suite.
+
+### Chez toi : `Support` — **huit créations, aucune garde**
+
+C'est le pire du dépôt, et de loin. `SupportFixtures` crée huit rôles — rédacteur global, rédacteur
+local, agent de lecture, exploitant, responsable d'établissement, agent N1, agent N2, administrateur —
+sans jamais vérifier s'ils existent.
+
+`Dms` est propre, une création une garde. Rien à y faire.

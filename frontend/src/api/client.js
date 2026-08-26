@@ -427,4 +427,13 @@ export const api = {
   // les clients finaux des exploitants vivent dans la même table et n'ont rien à faire ici.
   editorCustomers: () => request('/api/editor/customers'),
   editorCustomer: (id) => request(`/api/editor/customers/${id}`),
+
+  // Facturation des abonnements (ED-7). La collection remonte en tête ce qui n'a PAS été facturé :
+  // un abonnement actif qu'on oublie ne produit aucun signal, seulement de l'argent jamais prélevé.
+  editorBilling: (mois) => request('/api/editor/billing', { query: mois ? { month: mois } : {} }),
+  emettreFactureAbonnement: (corps) => request('/api/editor/billing', { method: 'POST', body: corps }),
+
+  // Ce qui reste du a l'editeur (ED-8). Une facture soldee ne figure pas dans la reponse : le
+  // serveur la retire, l'ecran n'a pas a decider ce qu'il montre.
+  editorReceivables: () => request('/api/editor/receivables'),
 }

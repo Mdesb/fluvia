@@ -11,6 +11,7 @@ use App\Crm\Enum\EtatConsentement;
 use App\Crm\Notification\ConsentGatedNotifier;
 use App\Platform\Notification\ClientNotification;
 use App\Platform\Notification\ClientNotifierInterface;
+use App\Platform\Notification\NotificationBasis;
 use App\Platform\Notification\NotificationChannel;
 use App\Platform\Notification\NotificationOutcome;
 use Doctrine\ORM\EntityManagerInterface;
@@ -66,6 +67,29 @@ final class ConsentGatedNotifierTest extends TestCase
         $notifier = $this->notifier($consentement);
 
         self::assertSame(NotificationOutcome::Refusee, $notifier->notify($this->notification()));
+    }
+
+    /**
+     * Le cas qui manquait, et qui aurait coûté cher : un courriel de bienvenue, une facture ou un
+     * accès ouvert n'ont pas besoin d'un consentement **marketing**. Les refuser priverait le client
+     * de ce qu'il a acheté. Trouvé en répondant à une question de `claude-D` sur le courriel de
+     * bienvenue — pas par un test, ce qui montre bien qu'il manquait.
+     */
+    public function testUneNotificationContractuellePasseSansConsentement(): void
+    {
+        $notifier = $this->notifier(null);
+
+        $notification = new ClientNotification(
+            Uuid::v7(),
+            NotificationChannel::Email,
+            'souscription.bienvenue',
+            [],
+            new \DateTimeImmutable(),
+            'subscription',
+            NotificationBasis::Contractuelle,
+        );
+
+        self::assertSame(NotificationOutcome::Journalisee, $notifier->notify($notification));
     }
 
     private function notifier(?Consentement $consentement): ConsentGatedNotifier

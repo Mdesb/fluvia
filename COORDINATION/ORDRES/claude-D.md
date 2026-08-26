@@ -229,3 +229,83 @@ seul(e) qu'un lot est fini.
 
 Ton refus de l'exemption offerte par le garde-fou est la bonne conduite, et j'en fais une règle : *un
 garde-fou qui propose une porte de sortie n'est pas un garde-fou qu'il faut franchir.*
+
+---
+
+## 2026-08-25 · RÉPARTITION — ton périmètre s'élargit (D48)
+
+Maxime m'a délégué la répartition des **dix-sept modules serveur qui n'avaient aucun propriétaire** —
+802 fichiers, à peu près autant que ce que les neuf sessions possédaient déjà. Ils sont tous attribués.
+
+**Le raisonnement, pour que tu saches sur quoi tu t'engages** : j'avais proposé de n'en attribuer que
+trois et de déclarer les autres orphelins. J'ai changé d'avis. **Un propriétaire endormi peut être
+réveillé ; un module orphelin, non.** Le premier est un risque avec un nom dessus, le second est un
+angle mort — et cette semaine les angles morts ont coûté cinq jours de front sans personne, un test
+rouge pendant vingt-quatre heures et trente-cinq entités sans protection d'écriture.
+
+**Ce que ça ne veut pas dire** : que tu doives tout reprendre. Un module attribué n'est pas un module à
+réécrire. Tu en es responsable **quand quelqu'un y touche ou quand quelque chose y casse** — à
+commencer par ses tests, que plus personne ne lançait.
+
+`COORDINATION/FLOTTE.md` porte la carte complète.
+
+### Tu reçois `Facturation`, `Compta`, `Sepa`, `Finance`
+
+Tu y travailles depuis deux jours **sans avoir le droit d'y écrire** — c'est la première anomalie que
+cette répartition corrige.
+
+**Ce que ça débloque tout de suite** : tu peux poser toi-même ce que tu me demandais. Le paramètre de
+taux de TVA que j'ai livré ce matin serait resté chez toi si la répartition avait été faite plus tôt.
+
+**Ce qui t'attend, par ordre :**
+
+1. **Finis le courriel de bienvenue**, tu l'as commencé.
+2. **`FAC-1` — devis, bon de commande, bon de livraison.** La facture existe et elle est sérieuse ; les
+   trois autres n'existent **nulle part**. Ils forment une chaîne — devis accepté → commande →
+   livraison → facture — où chaque étape reprend la précédente sans la ressaisir et où chacune peut
+   s'arrêter là. C'est **un** lot, pas trois. Demandé nommément par Maxime pour les clubs qui vendent
+   sans caisse.
+3. **`PAY-2` — la bascule carte → prélèvement sur rejet** (D43). Rappel du point non négociable :
+   **on ne stocke jamais un numéro de carte.** L'IBAN, oui, il est déjà chiffré. Et le repli suppose un
+   mandat **déjà signé**, donc les deux moyens se recueillent ensemble à la souscription.
+4. **`PAY-3`** — le rejet **carte** n'existe pas ; seul le rejet SEPA est modélisé.
+5. **`Compta`** est le plus gros module du dépôt, 115 fichiers. Ne le reprends pas : lance ses tests, et
+   traite ce qui casse.
+
+---
+
+## 2026-08-26 · Rends tes fixtures idempotentes — c'est ce qui bloque les données de démo
+
+**Le constat, et il vient d'un incident que j'ai causé.** Le 24/08 j'ai voulu régénérer les données de
+démonstration de la préproduction, à la demande de Maxime. Le chargement a échoué en cours de route,
+après avoir tronqué la table des rattachements droits-rôles : **les trente-quatre rôles de la
+préproduction se sont retrouvés à zéro droit.** Maxime ne peut plus tester avec autre chose que son
+propre compte depuis.
+
+**La cause n'est pas l'incident, c'est qu'un chargement complet n'a jamais fonctionné sur ce dépôt.**
+J'ai compté : **quatorze fixtures créent des rôles**, et plusieurs ne se gardent pas du tout —
+`Support` en crée huit sans une seule garde, `Personnel` cinq, `Reporting` quatre.
+
+`Role.nom` porte une **unicité globale**. Deux fixtures qui créent le même nom, ou un rechargement sur
+une base qui les a déjà, échouent sur « Duplicate entry ».
+
+**Pourquoi personne ne l'avait vu** : le harnais de test recrée le schéma depuis les entités à chaque
+classe de test, donc les fixtures partent toujours d'une base vide, et elles sont chargées
+**sélectivement**. Les deux mondes ne se croisent jamais. C'est encore le motif de la semaine — un
+défaut invisible parce que le seul endroit où il se verrait n'est jamais visité.
+
+**Ce que je te demande**, et c'est court : là où ta fixture fait `(new Role())->setNom('X')`, cherche
+d'abord. J'ai posé le patron dans `PersonnelFixtures` et `L11Fixtures` — une méthode privée
+`roleNomme()` qui rend l'existant ou crée. Même chose pour les `Permission` : le couple
+(module, action) porte aussi une unicité.
+
+**Ne me demande pas d'arbitrage** : c'est mécanique, ça ne change aucun comportement, et ça se vérifie
+en relançant ta suite.
+
+### Chez toi : `Finance` — trois créations, une seule garde
+
+`ExpenseReportFixtures`. Deux rôles sur trois ne se gardent pas.
+
+Note au passage : c'est cette fixture qui sème `autorisation.approuver`, la seule permission
+`autorisation.*` qui existait avant que je ne crée les deux autres hier. Si tu y touches, regarde aussi
+que la permission elle-même est cherchée avant d'être créée.

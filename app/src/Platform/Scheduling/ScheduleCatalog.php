@@ -19,6 +19,23 @@ namespace App\Platform\Scheduling;
  * liste est dans le dépôt, elle se relit, elle se teste, et elle n'a besoin que d'**un seul** appel
  * périodique de l'extérieur. Ajouter une tâche devient une ligne, pas une intervention système.
  *
+ * **Le critère du premier passage, et pourquoi le premier était mauvais.** J'ai d'abord cherché si une
+ * commande **bornait sa requête dans le temps**. C'est le mauvais critère : `securite:delegations:expirer`
+ * borne parfaitement — `dateFin <= maintenant` — et traite pourtant, au premier passage, tout l'arriéré.
+ * La vraie question est : **que produit un arriéré traité d'un coup ?** Trois cas, et un seul est sûr :
+ *
+ * 1. **Nettoyage d'état interne** — expirer une délégation, libérer un panier, recalculer une fenêtre.
+ *    L'arriéré est le rattrapage qu'on voulait. **Sûr.**
+ * 2. **Destruction irréversible** — `dms:purge-expired-documents` appelle `Storage::delete()` et retire
+ *    le contenu physique ; `crm:rgpd:expirer-pmv` écrit un mouvement négatif du solde entier.
+ *    L'arriéré détruit des fichiers et de la valeur client, en une fois, sans retour. **Jamais sûr.**
+ * 3. **Effet visible au dehors** — publier sur un réseau social, facturer, notifier un client, écrire
+ *    en comptabilité. L'arriéré est correct et *quand même* inacceptable : personne ne veut découvrir
+ *    trente publications parties ensemble. **Jamais sûr.**
+ *
+ * Ce n'est donc pas une question de justesse — les trois cas font ce qu'on leur demande. C'est une
+ * question de **simultanéité**, et la simultanéité mérite quelqu'un devant l'écran une fois.
+ *
  * **Ce que ce fichier ne résout pas, et qu'il faut dire.** Il reste un déclencheur extérieur à lancer —
  * `platform:scheduler:run` toutes les minutes. Tant que personne ne le lance, RIEN ne tourne, et c'est
  * exactement le défaut qu'on répare. La différence est que l'absence devient **visible** :
@@ -38,6 +55,8 @@ final class ScheduleCatalog
                 "Une délégation de droits dont la date de fin est passée reste ACTIVE. Le bénéficiaire "
                 . "garde indéfiniment des droits qu'on croyait temporaires.",
                 critical: true,
+                // SÛR AU PREMIER PASSAGE — nettoyage d'état interne : l'arriéré révoque des droits qui auraient dû l'être. C'est le rattrapage qu'on veut, et il se défait en réattribuant.
+                safeOnFirstRun: true,
             ),
             new ScheduledTask(
                 'autorisation:escalades:expirer',
@@ -45,6 +64,8 @@ final class ScheduleCatalog
                 "Une élévation de privilèges accordée pour une opération reste ouverte. C'est le "
                 . "contraire exact de ce que le module des autorisations graduées promet.",
                 critical: true,
+                // SÛR AU PREMIER PASSAGE — idem — ferme des élévations qui traînent, sans effet au dehors.
+                safeOnFirstRun: true,
             ),
 
             // --- Argent et engagement client : un retard se voit par le client ---------------------
@@ -56,10 +77,20 @@ final class ScheduleCatalog
                 critical: true,
             ),
             new ScheduledTask(
+                'subscription:facturer-le-mois',
+                1440,
+                "Les abonnements du mois ne sont pas facturés : le client utilise le logiciel sans "
+                . "payer, et rien ne le signale. C'est le défaut des options de mi-mois — corrigé "
+                . "depuis — mais à l'échelle du mois entier et de tous les clients.",
+                critical: true,
+            ),
+            new ScheduledTask(
                 'boutique:liberer-paniers-expires',
                 5,
                 "Un panier abandonné retient sa place indéfiniment. Les billets qu'il bloque ne sont "
                 . "vendus à personne.",
+                // SÛR AU PREMIER PASSAGE — libère des places retenues par des paniers abandonnés. Aucun effet visible d'un client, et c'est exactement le rattrapage attendu.
+                safeOnFirstRun: true,
             ),
             new ScheduledTask(
                 'smart-flow:waitlist:expirer',
@@ -84,6 +115,8 @@ final class ScheduleCatalog
                 'crm:consentement:verifier-majorite',
                 1440,
                 "Un mineur devenu majeur garde le régime de consentement de ses parents.",
+                // SÛR AU PREMIER PASSAGE — bascule un régime de consentement interne. Rien ne part, rien ne se détruit.
+                safeOnFirstRun: true,
             ),
             new ScheduledTask(
                 'dms:purge-expired-documents',
@@ -92,25 +125,56 @@ final class ScheduleCatalog
             ),
 
             // --- Exploitation ----------------------------------------------------------------------
-            // La commande personnel:traiter-echeances-sortie N EST PAS ICI, et c'est délibéré. Elle exige un
-            // argument agentEmail — l'identité de qui traite la sortie, pour la traçabilité — donc
-            // elle ne peut pas s'exécuter sans surveillance. La laisser au catalogue produirait un
-            // échec rouge tous les jours que personne ne pourrait corriger, et on apprendrait à
-            // l'ignorer : c'est le défaut des entrées grisées, appliqué à l'exploitation.
+            // `personnel:traiter-echeances-sortie` était absente de ce catalogue du 25/08 au matin
+            // jusqu'à cet après-midi. Elle exigeait un argument obligatoire — l'identité de l'agent qui
+            // révoque — donc elle ne pouvait pas tourner sans surveillance, donc je l'avais retirée
+            // plutôt que de laisser un échec rouge quotidien que personne ne pourrait corriger.
             //
-            // Le manque reste réel et grave — un salarié parti garde ses accès. Il faut décider quelle
-            // identité porte un traitement automatique dans le journal d'audit, ce qui est un choix,
-            // pas une réparation. Consigné comme tâche ; le module Personnel n'a aujourd'hui aucun propriétaire.
+            // Pendant tout ce temps, **un salarié dont le contrat était fini gardait ses accès**.
+            // L'en-tête de la commande réclamait pourtant « un compte technique dédié pour l'exécution
+            // planifiée » depuis son écriture : il n'avait jamais été créé. Encore le motif de la
+            // semaine — le mécanisme existe, l'appel manque.
+            //
+            // `AccessRevocationServiceAccount` le crée désormais, sur le patron posé par `claude-D`
+            // pour la facturation : nommé pour se lire dans un journal d'audit, créé `Suspendu` donc
+            // structurellement non connectable, mot de passe aléatoire que personne ne conserve.
+            new ScheduledTask(
+                'personnel:traiter-echeances-sortie',
+                1440,
+                "Un salarié dont le contrat est fini garde ses accès : son statut ne bascule pas et son "
+                . "badge n'est jamais révoqué. Personne ne le signale — ni erreur, ni alerte.",
+                critical: true,
+                // NON SÛR AU PREMIER PASSAGE, et pourtant ce qu'elle ferait est juste : elle traite
+                // **toutes** les sorties passées d'un coup, donc révoque en une salve les badges de tous
+                // ceux qui sont partis depuis la mise en service. C'est exactement ce qu'il faut faire —
+                // mais une révocation de masse mérite quelqu'un devant l'écran la première fois, ne
+                // serait-ce que pour constater l'ampleur de ce qui traînait.
+            ),
+
+            // SÛR AU PREMIER PASSAGE — vérifié en lisant `RecalculFenetreBadgeHandler` :
+            // `recalculerTous()` recalcule chaque badge à partir de **maintenant**. Il ne rejoue aucun
+            // historique, il recompose un état présent, et il est idempotent : deux exécutions de suite
+            // produisent le même résultat.
             new ScheduledTask(
                 'personnel:recalculer-fenetres-badges',
                 60,
-                "Les fenêtres de validité des badges ne suivent pas les changements de planning.",
+                "Les fenêtres de validité des badges ne suivent pas les changements de planning : "
+                . "un agent dont l'horaire a bougé garde l'ancienne fenêtre.",
+                safeOnFirstRun: true,
             ),
+            // SÛR AU PREMIER PASSAGE — vérifié : sans option, la commande borne son travail à
+            // `today`. Elle ne remonte pas l'historique, il faut le lui demander explicitement avec
+            // `--depuis`.
             new ScheduledTask(
                 'reporting:agreger',
                 60,
                 "Les mesures ne sont jamais agrégées : les tableaux de bord restent figés.",
+                safeOnFirstRun: true,
             ),
+            // NON SÛR AU PREMIER PASSAGE — vérifié : la requête retient les rapports dont
+            // `prochainEnvoi` est **nul** ou dépassé. Tout rapport planifié et jamais envoyé partirait
+            // donc **en une seule salve**, à ses destinataires réels. Chacun est légitimement dû ; c'est
+            // leur simultanéité qui mérite un œil. Le premier passage reste supervisé.
             new ScheduledTask(
                 'reporting:executer-rapports',
                 60,
@@ -132,6 +196,8 @@ final class ScheduleCatalog
                 'social:collect-metrics',
                 60,
                 "Les statistiques des publications ne sont jamais collectées.",
+                // SÛR AU PREMIER PASSAGE — lit des statistiques chez le réseau. Aucune écriture au dehors.
+                safeOnFirstRun: true,
             ),
 
             // --- Verticales -------------------------------------------------------------------------
@@ -143,7 +209,10 @@ final class ScheduleCatalog
             new ScheduledTask(
                 'padel:eclairage:commander',
                 5,
-                "L'éclairage des terrains n'est ni allumé ni éteint automatiquement.",
+                "L'éclairage des terrains n'est ni allumé ni éteint automatiquement. "
+                . "⚠ PREMIER PASSAGE NON SÛR : la commande balaie toutes les réservations sans borne "
+                . "de date et pilote un relais physique — signalé par claude-G. À borner dans le temps "
+                . "(périmètre claude-I) avant de la déclarer sûre.",
             ),
         ];
     }
