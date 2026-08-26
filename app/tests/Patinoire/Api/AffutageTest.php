@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace App\Tests\Patinoire\Api;
 
-use App\DataFixtures\SocleFixtures;
-use App\Organisation\Entity\Etablissement;
 use App\Patinoire\Entity\Affutage;
 use App\Tests\Patinoire\PatinoireApiTestCase;
 use Doctrine\ORM\EntityManagerInterface;
@@ -87,43 +85,41 @@ final class AffutageTest extends PatinoireApiTestCase
     }
 
     /**
-     * D3/D8 — l'etablissement d'un affutage vient de la session, pas du corps de la requete.
+     * L'etablissement d'un affutage vient de la session, et le corps n'a plus a le porter.
      *
-     * **Le trou que ce test ferme.** La branche `prestation_client` resolvait `etablissement` depuis
-     * le corps par un `find()` nu, sans le confronter au perimetre de l'appelant. Un exploitant de A
-     * pouvait donc ouvrir un affutage dans l'etablissement B — et la victime l'aurait vu apparaitre
-     * dans ses propres ecrans, ses lectures etant filtrees sur son perimetre, sans aucun moyen de
-     * savoir d'ou il venait.
+     * **Ce que j'ai cru trouver, et ce qui est vrai.** La branche `prestation_client` resolvait
+     * `etablissement` depuis le corps par un `find()` sans confrontation au perimetre — la forme
+     * exacte d'une ecriture transfrontiere. J'ai ecrit ce test pour la demontrer : il a montre
+     * l'inverse. Le champ est **deja** garde en amont, par la denormalisation d'API Platform, dans
+     * ses deux formes : l'IRI d'un etablissement etranger donne 400 « Item not found » (la lecture
+     * d'`Etablissement` etant cloisonnee), et un UUID nu donne 400 « Invalid IRI ». Le `find()` nu
+     * n'est donc jamais atteint avec une reference etrangere.
      *
-     * Le processeur ignore desormais le champ. Ce n'est **pas un refus** mais une absence d'effet :
-     * l'appelant recoit un 201 et rien ne lui signale qu'il n'a pas ete ecoute. D'ou ce test.
-     * Verifie rouge avant le correctif : l'affutage atterrissait chez B.
+     * Le correctif reste juste, mais pour une autre raison que celle que je croyais : il retire une
+     * **lecture brute du corps** portant sur un champ de perimetre — une forme qui ne doit pas
+     * s'installer comme exemple — et il supprime un champ obligatoire que l'appelant ne pouvait de
+     * toute facon renseigner qu'avec son propre etablissement. C'est de la simplification et de la
+     * defense en profondeur, pas la fermeture d'une faille.
      */
-    public function testLEtablissementNeVientPasDuCorpsDeLaRequete(): void
+    public function testLEtablissementVientDeLaSessionEtNonDuCorps(): void
     {
         [$client, $entete, $idA] = $this->technicienSurA();
         $client->disableReboot();
 
         /** @var EntityManagerInterface $em */
         $em = static::getContainer()->get('doctrine')->getManager();
-        $etabB = $em->getRepository(Etablissement::class)->findOneBy(['nom' => SocleFixtures::ETAB_B_NOM]);
-        self::assertNotNull($etabB);
-        $idB = (string) $etabB->getId();
-        self::assertNotSame($idA, $idB);
 
         $client->request('GET', '/me', $entete);
         $idTechnicien = $client->getResponse()->toArray()['id'];
 
+        // Aucun `etablissement` dans le corps : c'est le coeur du test.
         $client->request('POST', '/api/patinoire/affutages', $entete + [
             'json' => [
                 'type' => 'prestation_client',
                 'technicien' => '/api/utilisateurs/' . $idTechnicien,
-                // UUID nu : c'est la seconde forme que `resoudre()` accepte, et celle qui
-                // contourne la resolution d'IRI du denormaliseur.
-                'etablissement' => $idB,
             ],
         ]);
-        self::assertResponseIsSuccessful();
+        self::assertResponseIsSuccessful('Le corps n'a plus a porter l'etablissement.');
 
         $id = $client->getResponse()->toArray()['id'];
         $em->clear();
@@ -132,7 +128,7 @@ final class AffutageTest extends PatinoireApiTestCase
         self::assertSame(
             $idA,
             (string) $affutage->getEtablissement()?->getId(),
-            'L affutage reste chez l appelant, quoi qu il ait designe dans le corps.'
+            'L affutage est rattache a l etablissement actif de l appelant.'
         );
     }
 }
