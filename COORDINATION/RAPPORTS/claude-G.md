@@ -301,6 +301,7 @@ lui fait porter le risque. La prochaine fois je donne les deux, ou je dis que je
 | 14:03 | **Un écart sait maintenant qu'il est expliqué** — `AlerteEcartCaisse.expliquee`, calculé à la lecture, une requête pour toute la page. Sans ça `claude-H` avait un écran complet qu'elle **refusait de livrer** : une liste qu'on ne peut pas vider est celle que sa propre règle D55 interdit. `tests/Caisse` 15/15, `tests/Vente` 55/55. | D44-bis : refus des fiduciaires sans session, puis point de vente dédié (arbitré par toi). | Rien. |
 | 14:51 | **D44-bis — la vraie barrière n'était pas la règle, c'était une colonne.** `vente_vente.session_id` était `NOT NULL` : vendre sans caisse n'était pas interdit, c'était impossible. Point de vente porté par la vente (`NOT NULL`), session nullable, refus des fiduciaires hors session. `VenteDirecteTest` 5/5, `Vente` 60/60, `Caisse` 15/15, `Boutique` 56/56. | `Reservation` et `Reporting` en vol ; je ne commite pas avant. | Rien. |
 | 14:55 | **Mon raccourci était déjà faux, et `claude-A` l'a montré sur pièce.** `estFiduciaire()` renvoyait `autoriseRendu` : les quatre chèques du référentiel portent `autoriseRendu = false`, une vente directe les aurait acceptés **sans que personne ne détienne le papier**. Critère écrit, plus proxy. `MoyenFiduciaireTest` 4/4. | Vérification complète avant commit : `Reservation` 103/103, `Reporting` en vol, puis `Vente` à rejouer. | Rien. |
+| 15:37 | **D57 — la clôture journalière n'est pas le Z, et deux trous d'inaltérabilité que j'avais créés.** `pointDeVente` n'était pas figé sur une vente scellée ; `SettlementCorrection` (D45) était modifiable et supprimable, **sur `main` depuis ce matin**. `Vente` 75/75, `Caisse` 15/15. | Fusion de `main`, lanceur avec ET sans référence, poussée. | Rien. |
 
 ## Nouvelle règle de Maxime — présentation horaire à `claude-A`
 
@@ -1342,3 +1343,87 @@ qu'il surveille, comme `CanalContratTest` pour les canaux. Un moyen ajouté sans
 
 C'est un filet, pas la propriété : la propriété appartient au moyen, donc à `Compta`. Le filet se
 retirera quand `MoyenPaiement::isFiduciaire()` existera.
+
+
+## D57 — le cumul perpétuel n'est pas un chiffre, c'est un détecteur
+
+Le Z ferme une **session de caisse** : il compte du liquide, constate un écart, fige un fonds. Il n'a
+de sens que là où quelqu'un tient un tiroir. Tant que toute vente passait par une caisse, il faisait
+office de clôture quotidienne **sans que personne ait eu à décider que c'en était une** — et un point
+de vente de vente directe se serait retrouvé sans clôture quotidienne du tout.
+
+**Ce que porte `grandTotal`.** Chaque clôture recopie le cumul de la précédente et y ajoute la
+journée. Supprimer une vente d'hier laisse le cumul d'hier plus grand que la somme des ventes qui
+restent : **l'écart se voit sans qu'on ait à savoir ce qui manquait**. C'est tout l'objet de la table.
+
+D'où trois refus, et chacun protège ce mécanisme :
+
+| Refus | Ce qui arriverait sans lui |
+|---|---|
+| journée à venir | l'arrêté fige un total que la journée viendrait contredire |
+| journée déjà close | deux arrêtés comptent deux fois la même journée — le détecteur **fabrique** un excédent |
+| journée sautée | les ventes du jour omis disparaissent du cumul : la signature d'une suppression, **scellée** |
+
+Le troisième est celui que je n'aurais pas écrit sans chercher ce que le cumul protège. Le message
+nomme la journée à clôturer — un refus qu'on ne peut pas suivre n'est pas un refus, c'est un mur.
+
+**Le défaut par défaut est la veille.** Clore aujourd'hui à quinze heures arrêterait une journée qui
+continue. Clore le jour même reste permis — un exploitant qui ferme à dix-neuf heures a le droit
+d'arrêter sa journée — mais il doit le demander. **Le défaut est celui qui ne peut pas mentir.**
+
+**Le cumul ne déduit pas les avoirs, et ça se contestera.** Il totalise ce que la chaîne a scellé, il
+ne calcule pas un résultat. Une vente annulée y reste parce qu'elle **est** dans la chaîne. En retirer
+les annulations le rendrait incapable de faire la seule chose pour laquelle il existe. La raison est
+dans le code, pour que la discussion se gagne sans moi.
+
+## Deux trous d'inaltérabilité, tous deux de moi, tous deux la même distance
+
+- **`pointDeVente` absent de `CHAMPS_VENTE_FIGES`.** Je venais d'en faire l'ancre fiscale de la vente
+  (D44-bis). Il était protégé **par déduction** — `session` était figée, le point de vente s'en
+  déduisait. En le portant, j'ai coupé le ricochet sans remplacer la protection, et **rien ne s'est
+  rompu pour le dire**.
+- **`SettlementCorrection` absente de `estAppendOnly()`.** Mon entité de D45, scellée dans la chaîne
+  au même titre qu'un avoir, **modifiable et supprimable depuis ce matin, sur `main`**. Plus grave que
+  la première, et je l'avais présentée comme symétrique : celle-là permet d'effacer **la pièce qui
+  explique pourquoi un montant a bougé**, c'est-à-dire exactement ce qu'un contrôle vient chercher.
+  D45 promet qu'une correction s'ajoute et ne modifie jamais ; une écriture effaçable ne tient pas
+  cette promesse.
+
+**Le motif commun n'est pas l'inattention, c'est une distance** : la protection est dans `Nf525/`, la
+chose protégée dans `Entity/`. Rien dans le fichier que j'écrivais ne me rappelait l'existence de
+l'autre. Je l'ai fait **deux fois en trois heures, en connaissant le motif, en l'écrivant dans le
+commentaire** — ce qui montre surtout que la leçon ne suffit pas.
+
+**La règle : quand une propriété passe de « déduite » à « portée », tout ce qui la protégeait par
+déduction cesse de la protéger, et aucun contrôle ne se rompt pour l'annoncer.** Corollaire :
+*vérifier les usages n'est pas vérifier les garanties.* J'avais cherché `getSession()` dans tout
+`src/` avant de commiter — le bon réflexe, et insuffisant : le danger n'était pas chez ceux qui
+**lisaient** `session`, mais chez ceux qui **s'appuyaient dessus pour protéger autre chose**.
+
+`ChampsFigesTest` rapproche les deux : il confronte les champs réellement mappés à la liste, avec sept
+exceptions **chacune assortie de sa raison**, et pose la question au lieu de donner l'ordre. Son
+troisième cas — un champ figé **disparu du mapping** — est le symétrique vicieux : une protection qui
+ne porte plus sur rien, et qui donne à qui lit la liste l'impression inverse de la vérité.
+
+## Un contrôle présent qui ne s'exécute pas — le défaut qu'aucun filet ne voit
+
+`claude-A` voyait ✓ 14 garde-fous, je voyais un échec, sur le **même commit**. Ni l'un ni l'autre ne
+se trompait. Dans `bin/garde-fous.sh` (et dans `origin/main` à cette heure) :
+
+```sh
+if [ -n "${REFERENCE:-}" ]; then
+executer "Références libres (D58)" php_racine bin/garde-fou-references-libres.php
+```
+
+**L'appel est tombé à l'intérieur du `if`.** Le n°14 ne tourne que si une référence est passée. A
+lançait `garde-fous.sh origin/main`, moi sans argument. Le commentaire juste au-dessus dit pourtant
+l'inverse de ce que le code fait — *« sans référence… il lit l'arbre courant »* — donc l'intention
+était bien de le lancer dans les deux cas.
+
+**Quatrième oubli sur la même liste dans la journée, et le seul d'une autre nature.** Les trois
+premiers étaient des absences, et un filet de complétude les voit. Celui-ci est une **présence
+inopérante** : la ligne est là, versionnée, relue. Rien ne la voit — sauf le hasard de deux personnes
+qui lancent le même script différemment.
+
+Non corrigé par moi : `bin/` appartient à `claude-C`, et le lanceur est exécuté par huit sessions.
+Signalé avec le numéro de ligne.
