@@ -36,6 +36,7 @@ declare(strict_types=1);
  */
 
 const RACINE = 'app/src';
+const LIGNE_DE_BASE = 'bin/references-libres.ligne-de-base.json';
 
 /**
  * Les propriétés qui suivent la convention : un `Uuid` nu, sans relation Doctrine.
@@ -77,10 +78,93 @@ function referencesLibres(): array
 }
 
 /**
- * @param list<string> $proprietes
+ * Les relations Doctrine ordinaires — la moitié du piège que la première version ne voyait pas.
+ *
+ * **Ce que la première version manquait, et pourquoi.** Elle ne collectait que les propriétés dont le
+ * nom finit par `Ref`, c'est-à-dire la convention des références libres. Mais **le défaut n'est pas
+ * produit par la convention : il est produit par le type d'identifiant.** Toute entité à identifiant
+ * `Uuid` est concernée — donc toutes.
+ *
+ * **Ce ne sont pas des hypothèses, les deux ont été payées le même jour :**
+ *
+ * - `claude-D` : `->andWhere('m.etablissement = :e')->setParameter('e', $etablissement)` rendait une
+ *   liste **vide** alors que la donnée existait. Une heure perdue. `etablissement` n'est pas une
+ *   propriété `*Ref`.
+ * - `claude-G`, avec un symptôme bien pire : `JaugeCreneauGuard::placesOccupees()` comparait un créneau
+ *   passé en entité, la requête rendait **zéro place occupée**, donc **la jauge acceptait une
+ *   réservation sur un créneau complet**. Une liste vide se voit ; « il reste de la place » ne se voit
+ *   pas — ça se découvre le jour où soixante personnes se présentent pour quarante couverts.
+ *
+ * **Et quelqu'un l'avait rencontré avant nous sans que personne ne le sache.**
+ * `ProjectionVenteDoctrineAdapter` porte en commentaire que « `IN(:tableau)` avec un tableau
+ * d'entités/UUID s'est révélé peu fiable selon le contexte d'exécution », et son auteur a contourné en
+ * filtrant en PHP. `PerimetreFacturationExtension` utilise `IDENTITY()` avec le type explicite partout,
+ * **sans que la raison soit dite nulle part**. Un contournement sans sa raison n'enseigne rien : il se
+ * lit comme une préférence de style, et il se « simplifie » au premier passage de quelqu'un qui met de
+ * l'ordre.
+ *
+ * @return array<string, string> nom de propriété => fichier qui la déclare
+ */
+function relationsUuid(): array
+{
+    $trouvees = [];
+
+    $entrees = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator(RACINE, FilesystemIterator::SKIP_DOTS)
+    );
+
+    foreach ($entrees as $entree) {
+        if (!$entree->isFile() || $entree->getExtension() !== 'php') {
+            continue;
+        }
+
+        $source = @file_get_contents($entree->getPathname());
+
+        if ($source === false || !str_contains($source, 'ORM\\ManyToOne') && !str_contains($source, 'ORM\\OneToOne')) {
+            continue;
+        }
+
+        // `#[ORM\ManyToOne(...)]` puis, dans les lignes qui suivent, la propriété qu'il décore.
+        $motif = '/#\[ORM\\\\(?:ManyToOne|OneToOne)[^\]]*\](?:\s*#\[[^\]]*\])*\s*private\s+\??\\?[A-Z][A-Za-z]*\s+\$(\w+)/';
+
+        if (preg_match_all($motif, $source, $correspondances) === false) {
+            continue;
+        }
+
+        foreach ($correspondances[1] as $propriete) {
+            $trouvees[$propriete] = $entree->getPathname();
+        }
+    }
+
+    return $trouvees;
+}
+
+/**
+ * **Les deux familles ne courent pas le même risque, et les confondre a produit 61 faux positifs.**
+ *
+ * Ma première version de l'élargissement appliquait les trois formes aux relations Doctrine ordinaires
+ * comme aux références libres. Résultat : **61 signalements, dont la grande majorité fausse** — presque
+ * tous des `SearchFilter` sur `etablissement`.
+ *
+ * Or un `SearchFilter` sur une **relation** fonctionne : API Platform la résout par son IRI ou son
+ * identifiant, et Doctrine sait convertir une relation qu'il connaît. Ce qui échoue, c'est le filtre
+ * sur une colonne `uuid` **nue**, que rien ne relie à une entité.
+ *
+ * Le risque des relations est ailleurs : passer **l'entité elle-même** en paramètre, ou une liste
+ * d'entités. C'est ce qui a rendu une jauge aveugle et une remise vide le 26/08.
+ *
+ * Donc :
+ * - **références libres** (`*Ref`) → les trois formes, filtre compris ;
+ * - **relations ordinaires** → les deux formes DQL seulement.
+ *
+ * Livrer la version large aurait coûté plus cher que le défaut : personne ne trie 61 lignes, et un
+ * contrôle qu'on ne trie pas finit désactivé — avec les treize autres (D47, D53).
+ *
+ * @param list<string> $proprietes toutes les propriétés surveillées (formes DQL)
+ * @param list<string> $filtrables celles qui craignent aussi un `SearchFilter` (références libres)
  * @return list<array{fichier: string, ligne: int, propriete: string, forme: string, extrait: string}>
  */
-function analyser(string $fichier, array $proprietes): array
+function analyser(string $fichier, array $proprietes, array $filtrables): array
 {
     $source = @file_get_contents($fichier);
 
@@ -132,7 +216,29 @@ function analyser(string $fichier, array $proprietes): array
                 // attraper, et je ne l'aurais pas su sans écrire les deux cas dans le même fichier.
                 // On regarde désormais la ligne et les trois suivantes : la portée d'une chaîne
                 // fluide, pas celle d'un fichier.
-                $fenetre = implode("\n", array_slice($lignes, $index, 4));
+                // ⚠ TROISIÈME DÉFAUT DE CE GARDE-FOU, ET LA FENÊTRE EST LE SUJET.
+                //
+                // Une fenêtre de quatre lignes convient à `->andWhere(...)->setParameter(...)` écrit
+                // d'un trait. Elle est trop courte pour la forme la plus répandue du dépôt, où le
+                // constructeur empile d'abord tous les `andWhere` puis tous les `setParameter` :
+                //
+                //     ->where('v.etablissement = :etablissement')
+                //     ->andWhere('v.statut IN (:statutsScelles)')
+                //     ->andWhere('v.date >= :debut')
+                //     ->andWhere('v.date <= :fin')
+                //     ->setParameter('etablissement', $id, 'uuid')     <-- quatre lignes plus bas
+                //
+                // Le contrôle accusait donc `ProjectionVenteDoctrine`, qui est saine. La bonne fenêtre
+                // n'est pas un nombre de lignes, c'est **la chaîne fluide** : on lit jusqu'à la fin de
+                // l'instruction.
+                $fenetre = '';
+                foreach (array_slice($lignes, $index, 60) as $suivante) {
+                    $fenetre .= $suivante . "\n";
+
+                    if (str_contains($suivante, ';')) {
+                        break;
+                    }
+                }
 
                 if (preg_match(
                     '/setParameter\s*\(\s*[\'"]' . preg_quote($m[1], '/') . '[\'"].{0,300}?[\'"]uuid[\'"]/s',
@@ -157,7 +263,7 @@ function analyser(string $fichier, array $proprietes): array
     // Un `SearchFilter` posé sur une référence libre rend une liste vide, silencieusement.
     if (preg_match_all('/SearchFilter::class[^)]*/s', $source, $filtres) !== false) {
         foreach ($filtres[0] as $filtre) {
-            foreach ($proprietes as $propriete) {
+            foreach ($filtrables as $propriete) {
                 if (!preg_match('/[\'"]' . preg_quote($propriete, '/') . '[\'"]/', $filtre)) {
                     continue;
                 }
@@ -190,13 +296,23 @@ foreach (array_slice($argv, 1) as $option) {
 }
 
 $references = referencesLibres();
+$relations = relationsUuid();
 
-if ($references === []) {
-    echo "Références libres : OK — aucune propriété `?Uuid …Ref` déclarée, rien à contrôler.\n";
+// Les deux familles retombent sur le même défaut et se traitent pareil : les références libres par
+// convention (`*Ref`), et les relations Doctrine ordinaires. La seconde est la plus fréquente, et
+// c'est celle que la première version du contrôle ne regardait pas.
+$surveillees = $references + $relations;
+
+if ($surveillees === []) {
+    echo "Références libres : OK — aucune propriété à identifiant `Uuid` déclarée, rien à contrôler.\n";
     exit(0);
 }
 
-$proprietes = array_keys($references);
+$proprietes = array_keys($surveillees);
+
+// Seules les références libres craignent le `SearchFilter` : sur une relation, API Platform et Doctrine
+// savent convertir.
+$filtrables = array_keys($references);
 
 if ($fichiers === null) {
     $fichiers = [];
@@ -218,13 +334,61 @@ foreach ($fichiers as $fichier) {
         continue;
     }
 
-    $trouvailles = [...$trouvailles, ...analyser($fichier, $proprietes)];
+    $trouvailles = [...$trouvailles, ...analyser($fichier, $proprietes, $filtrables)];
 }
+
+/**
+ * Le cliquet, dans la forme des treize autres garde-fous : la dette connue est gelée, un défaut neuf
+ * fait refuser la poussée.
+ *
+ * **Pourquoi geler plutôt que corriger d'abord.** Les douze entrées sont réparties sur six périmètres.
+ * Laisser le contrôle rouge bloquerait les neuf sessions sur des défauts qui ne sont pas les leurs — et
+ * un contrôle qui bloque tout le monde se contourne avant d'être corrigé. Le cliquet fige ce qui existe
+ * et rend impossible le treizième.
+ *
+ * **Chaque entrée gelée reste un défaut réel**, pas une tolérance de style : une comparaison sans type
+ * rend une liste vide, un `IN` ne trouve rien. Elles sont distribuées à leurs propriétaires.
+ */
+$cle = static fn (array $t): string => sprintf('%s:%s:%s', $t['fichier'], $t['propriete'], $t['forme']);
+
+$gelees = is_file(LIGNE_DE_BASE)
+    ? (array) json_decode((string) file_get_contents(LIGNE_DE_BASE), true)
+    : [];
+
+if (in_array('--nettoyer', array_slice($argv, 1), true)) {
+    $liste = array_values(array_unique(array_map($cle, $trouvailles)));
+    sort($liste);
+    file_put_contents(LIGNE_DE_BASE, json_encode($liste, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");
+    echo sprintf("Ligne de base réécrite : %d entrée(s) gelée(s).\n", count($liste));
+    exit(0);
+}
+
+$neuves = array_values(array_filter($trouvailles, static fn (array $t): bool => !in_array($cle($t), $gelees, true)));
+$resorbees = count($gelees) - count(array_intersect($gelees, array_map($cle, $trouvailles)));
+
+if ($neuves === []) {
+    echo sprintf(
+        "Références libres : OK — %d propriété(s) surveillée(s) (%d référence(s) libre(s), %d relation(s)). "
+        . "Dette gelée : %d, plafond %d.%s\n",
+        count($surveillees),
+        count($references),
+        count($relations),
+        count($gelees) - $resorbees,
+        count($gelees),
+        $resorbees > 0 ? sprintf(' %d résorbée(s) — pense à --nettoyer.', $resorbees) : '',
+    );
+    exit(0);
+}
+
+$trouvailles = $neuves;
 
 if ($trouvailles === []) {
     echo sprintf(
-        "Références libres : OK — %d référence(s) libre(s) surveillée(s), aucune comparaison DQL ni filtre.\n",
-        count($references)
+        "Références libres : OK — %d propriété(s) surveillée(s) (%d référence(s) libre(s), %d relation(s)), "
+        . "aucune comparaison DQL ni filtre.\n",
+        count($surveillees),
+        count($references),
+        count($relations)
     );
     exit(0);
 }
