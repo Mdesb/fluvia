@@ -92,7 +92,9 @@ final class ExpireSlotWaitlistPromotionsCommand extends Command
                 $this->em->flush();
 
                 if ($establissement !== null) {
-                    $this->promotionService->promoteNext($establissement, $entry->getResourceId(), $proposition->getOriginSlotId());
+                    // D37 : l'expiration constatée à `$maintenant` déclenche elle-même la promotion
+                    // suivante (RG-SF-07) — il n'existe pas d'instant métier antérieur plus légitime.
+                    $this->promotionService->promoteNext($establissement, $entry->getResourceId(), $proposition->getOriginSlotId(), $maintenant);
                 }
             }
 

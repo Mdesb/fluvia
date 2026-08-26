@@ -11,6 +11,11 @@ use App\Platform\Event\DomainEvent;
 use App\Platform\Event\EventBus;
 use App\Platform\Event\EventSubject;
 use App\Platform\Event\EventTenant;
+use App\Platform\Notification\ClientNotification;
+use App\Platform\Notification\ClientNotifierInterface;
+use App\Platform\Notification\NotificationBasis;
+use App\Platform\Notification\NotificationChannel;
+use App\Platform\Notification\NotificationOutcome;
 use App\Reservation\DataFixtures\ReservationFixtures;
 use App\Reservation\Entity\Creneau;
 use App\Reservation\Entity\Ressource;
@@ -62,6 +67,35 @@ final class RescheduleFlowEndToEndTest extends SmartFlowApiTestCase
         $accepte = $client->getResponse()->toArray();
         self::assertSame('confirmed', $accepte['status'], 'RG-SF-12 : accept clôt la proposition en confirmed.');
         self::assertSame($reservation['id'], $accepte['confirmedReservationRef']);
+    }
+
+    /**
+     * Migration `App\Platform\Notification\ClientNotifierInterface` (port transverse, remplace
+     * `App\SmartFlow\Port\ClientNotificationInterface` supprimé) : vérifie canal, gabarit, source, base
+     * légale et instant métier (D37) transmis à `notify()` quand un créneau compatible est trouvé.
+     */
+    public function testNotificationDeLaPropositionPasseParLePortTransverse(): void
+    {
+        [, , $idA] = $this->managerOn(SocleFixtures::ETAB_A_NOM);
+        [$origin, ] = $this->creerCreneauOrigineEtCompatible($idA);
+        $idBeneficiairePayeur = $this->idBeneficiairePayeur();
+
+        // L'espion doit être posé APRÈS `managerOn()` : `createClient()` redémarre le kernel (nouveau
+        // conteneur), ce qui effacerait un espion installé avant. Le listener synchrone de
+        // `publierReschedule` doit résoudre le notifier depuis le conteneur courant, celui qui porte l'espion.
+        $espion = $this->espionnerNotifier();
+
+        $occurredAt = new \DateTimeImmutable('2026-08-20 10:00:00');
+        $this->publierReschedule($idA, $idBeneficiairePayeur, $origin->getId(), $occurredAt);
+
+        self::assertCount(1, $espion->recues, 'Un créneau compatible existe (RG-SF-10) : une notification doit partir.');
+        $notification = $espion->recues[0];
+        self::assertSame($idBeneficiairePayeur, $notification->clientId->toRfc4122());
+        self::assertSame(NotificationChannel::Email, $notification->channel);
+        self::assertSame('smart_flow.reschedule_proposed', $notification->templateKey);
+        self::assertSame('smart_flow', $notification->source);
+        self::assertSame(NotificationBasis::Consentement, $notification->basis, '⚠ à confirmer par claude-A (défaut le plus strict).');
+        self::assertEquals($occurredAt, $notification->occurredAt, 'D37 : instant métier = celui de l\'événement source, pas l\'heure d\'exécution du listener.');
     }
 
     public function testAucunCreneauCompatibleResteEnAttente(): void
@@ -291,7 +325,7 @@ final class RescheduleFlowEndToEndTest extends SmartFlowApiTestCase
         return $origin;
     }
 
-    private function publierReschedule(string $idEtablissement, string $customerId, Uuid $slotId): void
+    private function publierReschedule(string $idEtablissement, string $customerId, Uuid $slotId, ?\DateTimeImmutable $occurredAt = null): void
     {
         /** @var EventBus $bus */
         $bus = static::getContainer()->get(EventBus::class);
@@ -307,6 +341,33 @@ final class RescheduleFlowEndToEndTest extends SmartFlowApiTestCase
                 'slotId' => (string) $slotId,
                 'droitId' => (string) Uuid::v4(),
             ],
+            null,
+            $occurredAt,
         ));
+    }
+
+    /**
+     * Remplace `ClientNotifierInterface` par un espion qui journalise et rend `Journalisee` (même patron
+     * que `App\Tests\Subscription\Integration\CourrielDeBienvenueTest::espionner()`).
+     *
+     * @return object{recues: list<ClientNotification>}
+     */
+    private function espionnerNotifier(): object
+    {
+        $espion = new class implements ClientNotifierInterface {
+            /** @var list<ClientNotification> */
+            public array $recues = [];
+
+            public function notify(ClientNotification $notification): NotificationOutcome
+            {
+                $this->recues[] = $notification;
+
+                return NotificationOutcome::Journalisee;
+            }
+        };
+
+        static::getContainer()->set(ClientNotifierInterface::class, $espion);
+
+        return $espion;
     }
 }

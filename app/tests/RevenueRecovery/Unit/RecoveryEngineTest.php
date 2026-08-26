@@ -9,6 +9,10 @@ use App\Organisation\Entity\Etablissement;
 use App\Platform\Event\DomainEvent;
 use App\Platform\Event\EventSubject;
 use App\Platform\Event\EventTenant;
+use App\Platform\Notification\ClientNotification;
+use App\Platform\Notification\ClientNotifierInterface;
+use App\Platform\Notification\NotificationBasis;
+use App\Platform\Notification\NotificationOutcome;
 use App\Reservation\Entity\Reservation;
 use App\RevenueRecovery\Entity\RecoveryAttempt;
 use App\RevenueRecovery\Entity\RecoveryCase;
@@ -28,6 +32,15 @@ use Symfony\Component\Uid\Uuid;
  * au sens du plan (§5), exécuté kernel démarré (base réelle, même patron que
  * `App\Tests\Recouvrement\Api\MoteurRecouvrementTest`) : `RecoveryEngine` interroge Doctrine directement,
  * un mock d'`EntityManagerInterface` ne couvrirait pas fidèlement ses requêtes.
+ *
+ * **Migration `App\Platform\Notification\ClientNotifierInterface`** (port transverse, remplace
+ * `RecoveryAttemptMailer` + la vérification maison de consentement) : `testConsentementAbsentTentative-
+ * SauteeSkippedNoConsent` passe par la **vraie chaîne du container** (`ConsentGatedNotifier` ->
+ * `LogClientNotifier`) — aucun consentement enregistré par les fixtures CRM pour ce client, donc
+ * `Refusee`, mappé ici en `Skipped`. Les tests ci-dessous qui vérifient le mapping complet des quatre
+ * `NotificationOutcome` (`Envoyee`/`Echouee`) et la base légale transmise remplacent
+ * `ClientNotifierInterface` par un espion dans le container (même patron que
+ * `App\Tests\Subscription\Integration\CourrielDeBienvenueTest`).
  */
 final class RecoveryEngineTest extends RevenueRecoveryApiTestCase
 {
@@ -121,6 +134,104 @@ final class RecoveryEngineTest extends RevenueRecoveryApiTestCase
         self::assertSame(RecoveryEngine::SKIP_REASON_NO_CONSENT, $attempt->getSkipReason());
     }
 
+    /**
+     * RG-RR-03 (mapping outcome -> statut) : `NotificationOutcome::Envoyee` marque la tentative `Sent`.
+     *
+     * ⚠ MAPPING BASIS À CONFIRMER PAR claude-A : ce test vérifie aussi que le déclencheur
+     * `payment_failed` porte `NotificationBasis::Contractuelle` (relance d'impayé = fondement
+     * contractuel, mapping provisoire de `RecoveryEngine::basisFor()`).
+     */
+    public function testSortieEnvoyeeMarqueTentativeSentEtBasisPaymentFailedEstContractuelle(): void
+    {
+        $etablissement = $this->etablissementA();
+        $this->creerSequenceActive($etablissement, RecoveryTriggerType::PaymentFailed, [
+            ['delayDays' => 0, 'channel' => 'email', 'templateCode' => 'impaye_j0'],
+        ], 3);
+
+        $beneficiaire = $this->beneficiairePayeur();
+        $reservation = $this->em()->getRepository(Reservation::class)->findOneBy(['organisateur' => $beneficiaire]);
+        self::assertInstanceOf(Reservation::class, $reservation, 'Réservation de démonstration introuvable (fixtures Reservation).');
+
+        $espion = $this->espionnerNotifier(NotificationOutcome::Envoyee);
+
+        $evenement = new DomainEvent(
+            'payment.failed',
+            new EventTenant($etablissement->getId()),
+            new EventSubject('Reservation', (string) $reservation->getId()),
+            [],
+        );
+        $case = $this->engine()->handle($evenement, RecoveryTriggerType::PaymentFailed, 4200);
+        self::assertInstanceOf(RecoveryCase::class, $case);
+
+        $resultat = $this->engine()->sendDueAttempts(new \DateTimeImmutable('+1 minute'));
+        self::assertSame(1, $resultat['sent']);
+        self::assertSame(0, $resultat['failed']);
+
+        self::assertCount(1, $espion->recues, 'ClientNotifierInterface::notify() doit être appelé une fois.');
+        self::assertSame(NotificationBasis::Contractuelle, $espion->recues[0]->basis);
+
+        $attempt = $this->em()->getRepository(RecoveryAttempt::class)->findOneBy(['recoveryCase' => $case->getId()]);
+        self::assertSame(RecoveryAttemptStatus::Sent, $attempt->getStatus());
+        self::assertNotNull($attempt->getSentAt());
+    }
+
+    /** RG-RR-03 (mapping outcome -> statut) : `NotificationOutcome::Echouee` marque la tentative `Failed`, jamais bloquante. */
+    public function testSortieEchoueeMarqueTentativeFailed(): void
+    {
+        $etablissement = $this->etablissementA();
+        $this->creerSequenceActive($etablissement, RecoveryTriggerType::BookingNoShow, [
+            ['delayDays' => 0, 'channel' => 'email', 'templateCode' => 'no_show_j0'],
+        ], 3);
+
+        $beneficiaire = $this->beneficiairePayeur();
+        $reservation = $this->em()->getRepository(Reservation::class)->findOneBy(['organisateur' => $beneficiaire]);
+        self::assertInstanceOf(Reservation::class, $reservation, 'Réservation de démonstration introuvable (fixtures Reservation).');
+
+        $this->espionnerNotifier(NotificationOutcome::Echouee);
+
+        $evenement = $this->evenement($etablissement, 'Reservation', (string) $reservation->getId());
+        $case = $this->engine()->handle($evenement, RecoveryTriggerType::BookingNoShow);
+        self::assertInstanceOf(RecoveryCase::class, $case);
+
+        $resultat = $this->engine()->sendDueAttempts(new \DateTimeImmutable('+1 minute'));
+        self::assertSame(1, $resultat['failed']);
+        self::assertSame(0, $resultat['sent']);
+        self::assertSame(0, $resultat['skipped']);
+
+        $attempt = $this->em()->getRepository(RecoveryAttempt::class)->findOneBy(['recoveryCase' => $case->getId()]);
+        self::assertSame(RecoveryAttemptStatus::Failed, $attempt->getStatus());
+    }
+
+    /**
+     * Client non résolu par `RecoverySubjectCustomerResolver` (RG-RR-03/RG-RR-07) : la tentative est
+     * sautée proprement, **aucun appel** n'est fait à `ClientNotifierInterface` (jamais d'envoi à
+     * l'aveugle sans destinataire).
+     */
+    public function testClientNonResoluNappelleJamaisLeNotifierEtSauteLaTentative(): void
+    {
+        $etablissement = $this->etablissementA();
+        $this->creerSequenceActive($etablissement, RecoveryTriggerType::BookingNoShow, [
+            ['delayDays' => 0, 'channel' => 'email', 'templateCode' => 'no_show_j0'],
+        ], 3);
+
+        $espion = $this->espionnerNotifier(NotificationOutcome::Envoyee);
+
+        // `subjectType = 'PaymentIncident'` n'est pas résolu par `RecoverySubjectCustomerResolver` en I1
+        // (§0.8 du plan) : `resolveCustomerId()` renvoie toujours `null`.
+        $evenement = $this->evenement($etablissement, 'PaymentIncident', (string) Uuid::v4());
+        $case = $this->engine()->handle($evenement, RecoveryTriggerType::BookingNoShow);
+        self::assertInstanceOf(RecoveryCase::class, $case);
+
+        $resultat = $this->engine()->sendDueAttempts(new \DateTimeImmutable('+1 minute'));
+        self::assertSame(1, $resultat['skipped']);
+        self::assertSame(0, $resultat['sent']);
+        self::assertCount(0, $espion->recues, 'Aucun appel au notifier sans client résolu.');
+
+        $attempt = $this->em()->getRepository(RecoveryAttempt::class)->findOneBy(['recoveryCase' => $case->getId()]);
+        self::assertSame(RecoveryAttemptStatus::Skipped, $attempt->getStatus());
+        self::assertSame(RecoveryEngine::SKIP_REASON_NO_CONSENT, $attempt->getSkipReason());
+    }
+
     /** US-RR-04/CA-1, RG-RR-04 : un événement de résolution clôt le dossier actif et annule les tentatives Pending restantes. */
     public function testArretAutomatiqueSurEvenementDeResolutionAnnuleTentativesRestantes(): void
     {
@@ -204,6 +315,37 @@ final class RecoveryEngineTest extends RevenueRecoveryApiTestCase
     private function engine(): RecoveryEngine
     {
         return static::getContainer()->get(RecoveryEngine::class);
+    }
+
+    /**
+     * Remplace `ClientNotifierInterface` par un espion qui rend systématiquement `$sortie` (même patron
+     * que `App\Tests\Subscription\Integration\CourrielDeBienvenueTest::espionner()`) — permet de vérifier
+     * le mapping outcome -> statut de `RecoveryEngine::sendDueAttempts()` sans dépendre de la chaîne
+     * réelle `ConsentGatedNotifier`/`LogClientNotifier`, qui ne rend jamais `Envoyee`/`Echouee`.
+     *
+     * @return object{recues: list<ClientNotification>}
+     */
+    private function espionnerNotifier(NotificationOutcome $sortie): object
+    {
+        $espion = new class($sortie) implements ClientNotifierInterface {
+            /** @var list<ClientNotification> */
+            public array $recues = [];
+
+            public function __construct(private readonly NotificationOutcome $sortie)
+            {
+            }
+
+            public function notify(ClientNotification $notification): NotificationOutcome
+            {
+                $this->recues[] = $notification;
+
+                return $this->sortie;
+            }
+        };
+
+        static::getContainer()->set(ClientNotifierInterface::class, $espion);
+
+        return $espion;
     }
 
     private function etablissementA(): Etablissement
