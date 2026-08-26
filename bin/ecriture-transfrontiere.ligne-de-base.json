@@ -18,19 +18,9 @@
         "ValidationPassageHandler s en sert pour autoriser un franchissement."
     ],
     "scelle": {
-        "plafond": 5
+        "plafond": 52
     },
     "entrees": {
-        "DisponibiliteRessource::Ressource": {
-            "entite": "DisponibiliteRessource",
-            "relation": "ManyToOne",
-            "cible": "Ressource"
-        },
-        "IndisponibiliteRessource::Ressource": {
-            "entite": "IndisponibiliteRessource",
-            "relation": "ManyToOne",
-            "cible": "Ressource"
-        },
         "PieceJointeAide::ArticleAide": {
             "entite": "PieceJointeAide",
             "relation": "ManyToOne",
@@ -45,6 +35,251 @@
             "entite": "ValeurOption",
             "relation": "ManyToOne",
             "cible": "ArticleStock"
+        },
+        "etab:AbonnementFitness": {
+            "entite": "AbonnementFitness",
+            "relation": "dénormalisation par défaut",
+            "cible": "Etablissement"
+        },
+        "etab:Affectation": {
+            "entite": "Affectation",
+            "relation": "groupe d'écriture",
+            "cible": "Etablissement"
+        },
+        "etab:Affutage": {
+            "entite": "Affutage",
+            "relation": "dénormalisation par défaut",
+            "cible": "Etablissement"
+        },
+        "etab:Appairage": {
+            "entite": "Appairage",
+            "relation": "dénormalisation par défaut",
+            "cible": "Etablissement"
+        },
+        "etab:ArticleAide": {
+            "entite": "ArticleAide",
+            "relation": "groupe d'écriture",
+            "cible": "Etablissement"
+        },
+        "etab:ArticleStock": {
+            "entite": "ArticleStock",
+            "relation": "groupe d'écriture",
+            "cible": "Etablissement"
+        },
+        "etab:BadgeStaff": {
+            "entite": "BadgeStaff",
+            "relation": "dénormalisation par défaut",
+            "cible": "Etablissement"
+        },
+        "etab:BankAccount": {
+            "entite": "BankAccount",
+            "relation": "groupe d'écriture",
+            "cible": "Etablissement"
+        },
+        "etab:Casier": {
+            "entite": "Casier",
+            "relation": "groupe d'écriture",
+            "cible": "Etablissement"
+        },
+        "etab:CommandeAchat": {
+            "entite": "CommandeAchat",
+            "relation": "groupe d'écriture",
+            "cible": "Etablissement"
+        },
+        "etab:ConfigCreancierSepa": {
+            "entite": "ConfigCreancierSepa",
+            "relation": "groupe d'écriture",
+            "cible": "Etablissement"
+        },
+        "etab:CreneauTravail": {
+            "entite": "CreneauTravail",
+            "relation": "groupe d'écriture",
+            "cible": "Etablissement"
+        },
+        "etab:DeclarationPerteVol": {
+            "entite": "DeclarationPerteVol",
+            "relation": "dénormalisation par défaut",
+            "cible": "Etablissement"
+        },
+        "etab:DelegationDroit": {
+            "entite": "DelegationDroit",
+            "relation": "groupe d'écriture",
+            "cible": "Etablissement"
+        },
+        "etab:DemandeEscalade": {
+            "entite": "DemandeEscalade",
+            "relation": "dénormalisation par défaut",
+            "cible": "Etablissement"
+        },
+        "etab:DemandeRemboursement": {
+            "entite": "DemandeRemboursement",
+            "relation": "dénormalisation par défaut",
+            "cible": "Etablissement"
+        },
+        "etab:Espace": {
+            "entite": "Espace",
+            "relation": "groupe d'écriture",
+            "cible": "Etablissement"
+        },
+        "etab:ExpenseReport": {
+            "entite": "ExpenseReport",
+            "relation": "groupe d'écriture",
+            "cible": "Etablissement"
+        },
+        "etab:Facture": {
+            "entite": "Facture",
+            "relation": "dénormalisation par défaut",
+            "cible": "Etablissement"
+        },
+        "etab:Fournisseur": {
+            "entite": "Fournisseur",
+            "relation": "groupe d'écriture",
+            "cible": "Etablissement"
+        },
+        "etab:GrilleRetenue": {
+            "entite": "GrilleRetenue",
+            "relation": "groupe d'écriture",
+            "cible": "Etablissement"
+        },
+        "etab:Guide": {
+            "entite": "Guide",
+            "relation": "groupe d'écriture",
+            "cible": "Etablissement"
+        },
+        "etab:IncidentImpaye": {
+            "entite": "IncidentImpaye",
+            "relation": "dénormalisation par défaut",
+            "cible": "Etablissement"
+        },
+        "etab:Inventaire": {
+            "entite": "Inventaire",
+            "relation": "dénormalisation par défaut",
+            "cible": "Etablissement"
+        },
+        "etab:LimiteAutorisation": {
+            "entite": "LimiteAutorisation",
+            "relation": "groupe d'écriture",
+            "cible": "Etablissement"
+        },
+        "etab:ListeAttentePointure": {
+            "entite": "ListeAttentePointure",
+            "relation": "dénormalisation par défaut",
+            "cible": "Etablissement"
+        },
+        "etab:LocationPatins": {
+            "entite": "LocationPatins",
+            "relation": "dénormalisation par défaut",
+            "cible": "Etablissement"
+        },
+        "etab:MandatSepa": {
+            "entite": "MandatSepa",
+            "relation": "dénormalisation par défaut",
+            "cible": "Etablissement"
+        },
+        "etab:MouvementStock": {
+            "entite": "MouvementStock",
+            "relation": "dénormalisation par défaut",
+            "cible": "Etablissement"
+        },
+        "etab:NiveauJoueur": {
+            "entite": "NiveauJoueur",
+            "relation": "dénormalisation par défaut",
+            "cible": "Etablissement"
+        },
+        "etab:PanierEnLigne": {
+            "entite": "PanierEnLigne",
+            "relation": "dénormalisation par défaut",
+            "cible": "Etablissement"
+        },
+        "etab:ParametrePmvEtablissement": {
+            "entite": "ParametrePmvEtablissement",
+            "relation": "groupe d'écriture",
+            "cible": "Etablissement"
+        },
+        "etab:ParcPatins": {
+            "entite": "ParcPatins",
+            "relation": "groupe d'écriture",
+            "cible": "Etablissement"
+        },
+        "etab:Passage": {
+            "entite": "Passage",
+            "relation": "dénormalisation par défaut",
+            "cible": "Etablissement"
+        },
+        "etab:PlageHoraire": {
+            "entite": "PlageHoraire",
+            "relation": "groupe d'écriture",
+            "cible": "Etablissement"
+        },
+        "etab:PointDeVente": {
+            "entite": "PointDeVente",
+            "relation": "groupe d'écriture",
+            "cible": "Etablissement"
+        },
+        "etab:PolitiqueRecouvrement": {
+            "entite": "PolitiqueRecouvrement",
+            "relation": "groupe d'écriture",
+            "cible": "Etablissement"
+        },
+        "etab:ProfilExploitant": {
+            "entite": "ProfilExploitant",
+            "relation": "groupe d'écriture",
+            "cible": "Etablissement"
+        },
+        "etab:RattachementEmploye": {
+            "entite": "RattachementEmploye",
+            "relation": "groupe d'écriture",
+            "cible": "Etablissement"
+        },
+        "etab:ReceptionAchat": {
+            "entite": "ReceptionAchat",
+            "relation": "groupe d'écriture",
+            "cible": "Etablissement"
+        },
+        "etab:RemiseSepa": {
+            "entite": "RemiseSepa",
+            "relation": "dénormalisation par défaut",
+            "cible": "Etablissement"
+        },
+        "etab:RetraitClickCollect": {
+            "entite": "RetraitClickCollect",
+            "relation": "dénormalisation par défaut",
+            "cible": "Etablissement"
+        },
+        "etab:SaisonEphemere": {
+            "entite": "SaisonEphemere",
+            "relation": "groupe d'écriture",
+            "cible": "Etablissement"
+        },
+        "etab:SessionCaisse": {
+            "entite": "SessionCaisse",
+            "relation": "dénormalisation par défaut",
+            "cible": "Etablissement"
+        },
+        "etab:SupplierInvoice": {
+            "entite": "SupplierInvoice",
+            "relation": "groupe d'écriture",
+            "cible": "Etablissement"
+        },
+        "etab:Terminal": {
+            "entite": "Terminal",
+            "relation": "dénormalisation par défaut",
+            "cible": "Etablissement"
+        },
+        "etab:Tournoi": {
+            "entite": "Tournoi",
+            "relation": "groupe d'écriture",
+            "cible": "Etablissement"
+        },
+        "etab:TreasurySettings": {
+            "entite": "TreasurySettings",
+            "relation": "groupe d'écriture",
+            "cible": "Etablissement"
+        },
+        "etab:Vente": {
+            "entite": "Vente",
+            "relation": "dénormalisation par défaut",
+            "cible": "Etablissement"
         }
     }
 }
