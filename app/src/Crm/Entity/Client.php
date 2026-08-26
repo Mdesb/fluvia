@@ -162,6 +162,16 @@ class Client
     #[Groups(['client:read', 'client:write', 'fiche360:read'])]
     private ?string $telephone = null;
 
+    /**
+     * Moyen de paiement préféré du client (UI-5), renseigné par l'exploitant depuis le back-office.
+     * Référence souple par **code** au référentiel `App\Compta\Entity\MoyenPaiement.code` — volontai-
+     * rement pas de relation Doctrine / FK cross-module : `App\Crm` ne couple pas `App\Compta` (D2/D8).
+     * Aucune validation contre le référentiel pour l'instant ; à durcir plus tard si besoin.
+     */
+    #[ORM\Column(name: 'preferred_payment_method_code', length: 32, nullable: true)]
+    #[Groups(['client:read', 'client:write'])]
+    private ?string $preferredPaymentMethodCode = null;
+
     /** @var array<string, mixed>|null {rue,complement,cp,ville,pays} */
     #[ORM\Column(nullable: true)]
     #[Groups(['client:read', 'client:write', 'fiche360:read'])]
@@ -344,6 +354,18 @@ class Client
     public function setTelephone(?string $telephone): self
     {
         $this->telephone = $telephone;
+
+        return $this;
+    }
+
+    public function getPreferredPaymentMethodCode(): ?string
+    {
+        return $this->preferredPaymentMethodCode;
+    }
+
+    public function setPreferredPaymentMethodCode(?string $preferredPaymentMethodCode): self
+    {
+        $this->preferredPaymentMethodCode = $preferredPaymentMethodCode;
 
         return $this;
     }
