@@ -376,6 +376,31 @@ export const api = {
 
   // --- Comptabilité / Régie (M6) ---
   journaux: () => request('/api/journals', { query: { itemsPerPage: 100 } }),
+  profilsExploitant: () => request('/api/profil_exploitants', { query: { itemsPerPage: 20 } }),
+  periodesComptables: () =>
+    request('/api/periode_comptables', { query: { itemsPerPage: 100, 'order[dateDebut]': 'desc' } }),
+  exportsComptables: () => request('/api/export_comptables', { query: { itemsPerPage: 50 } }),
+  // Operations sur mesure (`input: false`) : pas de `ld: true`.
+  //
+  // `generer` est idempotent en sequentiel — `ventesValideesNonComptabilisees` exclut ce qui a deja
+  // une ecriture. Mais la liste est calculee avant la boucle et le flush n'a lieu qu'a la fin : deux
+  // requetes qui se chevauchent voient le meme ensemble et generent toutes les deux. claude-D pose
+  // le verrou serveur ; en attendant, le bouton est desactive du clic jusqu'a la reponse, ce qui
+  // ferme le cas courant — celui de l'exploitant qui reclique parce que rien ne bouge.
+  genererEcritures: (profilId) =>
+    request('/api/compta/ecritures/generer', { method: 'POST', body: { profilExploitant: profilId } }),
+  validerEcriture: (id) =>
+    request(`/api/compta/ecritures/${id}/valider`, { method: 'POST', body: {} }),
+  extournerEcriture: (id) =>
+    request(`/api/compta/ecritures/${id}/extourne`, { method: 'POST', body: {} }),
+  verifierChaineEcritures: (journalId) =>
+    request('/api/compta/ecritures/verifier-chaine', { query: { journal: journalId } }),
+  cloturerPeriode: (id) =>
+    request(`/api/compta/periodes/${id}/cloturer`, { method: 'POST', body: {} }),
+  telechargerExport: (id) => request(`/api/compta/exports/${id}/telecharger`),
+  // Operation STANDARD : elle deserialise.
+  creerExportComptable: (corps) =>
+    request('/api/export_comptables', { method: 'POST', body: corps, ld: true }),
   ecrituresComptables: () =>
     request('/api/ecriture_comptables', { query: { itemsPerPage: 100 } }),
   regieRecettes: () => request('/api/regie_recettes', { query: { itemsPerPage: 100 } }),
@@ -471,6 +496,16 @@ export const api = {
     request('/api/stock_mouvements', { query: { itemsPerPage: 50, 'order[date]': 'desc' } }),
   stockParametrage: () => request('/api/stock_parametrages', { query: { itemsPerPage: 5 } }),
   stockAlertesReappro: () => request('/api/stock/alertes-reappro'),
+  // Valorisation : droit distinct (`stock.lire_valorisation`). Le total de l'etablissement n'accepte
+  // PAS de date ; seule la valorisation par article la reconstruit.
+  stockValorisation: () => request('/api/stock/valorisation'),
+  stockValorisationArticle: (id, date) =>
+    request(`/api/stock/articles/${id}/valorisation`, { query: date ? { date } : undefined }),
+  // Les imputations ne sont pas lisibles depuis le mouvement : `MouvementStock` expose bien
+  // `imputations` dans `mouvement:read`, mais aucune propriete d'`ImputationLotStock` ne porte ce
+  // groupe — la collection sort en simples IRI. On la charge donc a part.
+  stockImputations: () =>
+    request('/api/stock_imputation_lots', { query: { itemsPerPage: 500 } }),
   creerArticleStock: (corps) => request('/api/article_stocks', { method: 'POST', body: corps, ld: true }),
   majArticleStock: (id, corps) => request(`/api/article_stocks/${id}`, { method: 'PATCH', body: corps }),
   // Operations sur mesure : `input: false`, le processor lit le corps brut. Pas de `ld: true`.

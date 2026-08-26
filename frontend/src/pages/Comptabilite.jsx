@@ -2,10 +2,13 @@ import { useState } from 'react'
 import Liste, { euroCentimes, dateFr, dateHeureFr } from '../components/Liste.jsx'
 import Tabs from '../components/Tabs.jsx'
 import { api } from '../api/client.js'
+import ClotureComptable from '../components/ClotureComptable.jsx'
 
 // Comptabilité / Régie (M6) + SEPA + impayés + cautions. Consultation multi-onglets.
-export default function Comptabilite({ etabActif }) {
-  const [sousOnglet, setSousOnglet] = useState('journaux')
+export default function Comptabilite({ etabActif, droits }) {
+  // La cloture est l'onglet par defaut : c'est le seul du module qui porte un TRAVAIL. Les huit
+  // listes existantes repondent a des questions qu'on se pose ; la cloture repond a une echeance.
+  const [sousOnglet, setSousOnglet] = useState('cloture')
 
   return (
     <div className="view">
@@ -18,6 +21,7 @@ export default function Comptabilite({ etabActif }) {
 
       <Tabs
         onglets={[
+          ['cloture', 'Clôture'],
           ['journaux', 'Journaux & écritures'],
           ['regie', 'Régie & versements'],
           ['sepa', 'SEPA'],
@@ -27,6 +31,8 @@ export default function Comptabilite({ etabActif }) {
         actif={sousOnglet}
         onChange={setSousOnglet}
       />
+
+      {sousOnglet === 'cloture' && <ClotureComptable etabActif={etabActif} droits={droits} />}
 
       {sousOnglet === 'journaux' && (
         <div className="resa-grid">

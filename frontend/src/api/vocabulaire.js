@@ -123,6 +123,13 @@ const MOTS = {
   fifo: 'Premier entré, premier sorti (FIFO)',
   cmup: 'Coût moyen pondéré',
 
+  // --- Comptabilite ---
+  provisoire: 'Provisoire',
+  controlee: 'Contrôlée',
+  exportee: 'Exportée',
+  ouverte: 'Ouverte',
+  cloturee: 'Clôturée',
+
   // --- Achats ---
   // « brouillon » et « validee » servent aussi ailleurs : ce sont des etats de document, pas des
   // etats propres au stock.
