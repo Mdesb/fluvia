@@ -25,7 +25,9 @@ final class SmartFlowListenerBestEffortTest extends TestCase
 {
     public function testExceptionDansLeListenerNeCasseraJamaisLaTransactionEmetteur(): void
     {
-        $em = $this->createMock(EntityManagerInterface::class);
+        // `createStub` (pas `createMock`) : on ne vérifie aucun appel sur l'EM, on a juste besoin qu'il
+        // lève — un simulacre exprimerait une attente inutile (D20 : verdict de référence = zéro notice).
+        $em = $this->createStub(EntityManagerInterface::class);
         $em->method('getRepository')->willThrowException(new \RuntimeException('panne simulée'));
 
         $logger = $this->createMock(LoggerInterface::class);
@@ -35,7 +37,7 @@ final class SmartFlowListenerBestEffortTest extends TestCase
             $em,
             new ReservationSlotReader($em),
             new CompatibleSlotFinder(),
-            $this->createMock(ClientNotifierInterface::class),
+            $this->createStub(ClientNotifierInterface::class),
             $logger,
         );
 
@@ -59,14 +61,16 @@ final class SmartFlowListenerBestEffortTest extends TestCase
 
     public function testAucunLoggerNeLeveNonPlus(): void
     {
-        $em = $this->createMock(EntityManagerInterface::class);
+        // `createStub` (pas `createMock`) : on ne vérifie aucun appel sur l'EM, on a juste besoin qu'il
+        // lève — un simulacre exprimerait une attente inutile (D20 : verdict de référence = zéro notice).
+        $em = $this->createStub(EntityManagerInterface::class);
         $em->method('getRepository')->willThrowException(new \RuntimeException('panne simulée'));
 
         $listener = new RescheduleRequestedListener(
             $em,
             new ReservationSlotReader($em),
             new CompatibleSlotFinder(),
-            $this->createMock(ClientNotifierInterface::class),
+            $this->createStub(ClientNotifierInterface::class),
             // logger absent (nullable, §T4) : ne doit pas non plus faire planter le listener.
         );
 
