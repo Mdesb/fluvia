@@ -23,7 +23,7 @@ use Symfony\Component\Validator\Exception\UnexpectedValueException;
  * jamais le corps de la requête. Ce que la validation vérifie est donc exactement l'établissement dans
  * lequel l'article va être écrit.
  */
-final class EanUniqueParEtablissementValidator extends ConstraintValidator
+final class UniqueEanPerEstablishmentValidator extends ConstraintValidator
 {
     public function __construct(
         private readonly EntityManagerInterface $em,
@@ -33,8 +33,8 @@ final class EanUniqueParEtablissementValidator extends ConstraintValidator
 
     public function validate(mixed $value, Constraint $constraint): void
     {
-        if (!$constraint instanceof EanUniqueParEtablissement) {
-            throw new UnexpectedValueException($constraint, EanUniqueParEtablissement::class);
+        if (!$constraint instanceof UniqueEanPerEstablishment) {
+            throw new UnexpectedValueException($constraint, UniqueEanPerEstablishment::class);
         }
 
         if (!$value instanceof ArticleStock || '' === $value->getCodeEAN()) {

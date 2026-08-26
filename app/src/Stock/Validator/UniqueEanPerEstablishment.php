@@ -20,7 +20,7 @@ use Symfony\Component\Validator\Constraint;
  * prochaine sera ecrite par quelqu un qui ne saura pas.
  */
 #[\Attribute(\Attribute::TARGET_CLASS)]
-final class EanUniqueParEtablissement extends Constraint
+final class UniqueEanPerEstablishment extends Constraint
 {
     public string $message = 'Ce code-barres est déjà utilisé sur cet établissement (RG-STOCK-02).';
 

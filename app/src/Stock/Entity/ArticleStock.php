@@ -37,7 +37,7 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ORM\Table(name: 'stk_article')]
 #[ORM\UniqueConstraint(name: 'uniq_article_ean_etab', columns: ['etablissement_id', 'code_ean'])]
 #[ORM\UniqueConstraint(name: 'uniq_article_produit', columns: ['produit_id'])]
-#[AppAssert\EanUniqueParEtablissement]
+#[AppAssert\UniqueEanPerEstablishment]
 #[ApiResource(
     shortName: 'ArticleStock',
     operations: [
