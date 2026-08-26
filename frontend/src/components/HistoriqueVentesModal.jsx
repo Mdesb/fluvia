@@ -3,6 +3,8 @@ import { api, membres } from '../api/client.js'
 import { euros, libelleProduit } from '../api/produit.js'
 import { mot } from '../api/vocabulaire.js'
 import { aLeDroit } from '../api/droits.js'
+// `texte` lit un libelle multilingue : le libelle fige d'une ligne est un objet `{ fr: '...' }`.
+import { texte } from './Liste.jsx'
 import Modal from './Modal.jsx'
 
 // Historique des ventes — `GET /api/ventes` existait et n'était appelé nulle part. Un caissier ne
@@ -33,7 +35,7 @@ const ETATS = [
 
 const TON_ETAT = { validee: 'good', en_cours: 'warn', annulee: 'mut', avoir_emis: 'info' }
 
-export default function HistoriqueVentesModal({ open, onClose, droits = [] }) {
+export default function HistoriqueVentesModal({ open, onClose, droits = [], onDuplicata }) {
   const [numero, setNumero] = useState('')
   const [statut, setStatut] = useState('')
   const [du, setDu] = useState('')
@@ -119,6 +121,7 @@ export default function HistoriqueVentesModal({ open, onClose, droits = [] }) {
             setDetail(await api.vente(detail.id).catch(() => detail))
             charger()
           }}
+          onDuplicata={onDuplicata}
         />
       ) : (
         <>
@@ -215,7 +218,7 @@ export default function HistoriqueVentesModal({ open, onClose, droits = [] }) {
   )
 }
 
-function DetailVente({ detail, produits, droits, onRetour, onRembourse }) {
+function DetailVente({ detail, produits, droits, onRetour, onRembourse, onDuplicata }) {
   const [remboursement, setRemboursement] = useState(null)
   const lignes = detail.lignes || []
   const paiements = detail.paiements || []
@@ -230,6 +233,11 @@ function DetailVente({ detail, produits, droits, onRetour, onRembourse }) {
         {/* Le remboursement n'a de sens que sur une vente validée : proposer le bouton sur une vente
             annulée ou déjà remboursée ferait cliquer pour rien, et le refus viendrait du serveur
             après coup. Une action qui n'a pas de sens est absente, jamais grisée. */}
+        {detail.statut === 'validee' && onDuplicata && !remboursement && (
+          <button className="btn ghost sm" type="button" onClick={() => onDuplicata(detail)}>
+            Réimprimer le ticket
+          </button>
+        )}
         {detail.statut === 'validee' && aLeDroit(droits, 'vente.rembourser') && !remboursement && (
           <button className="btn ghost sm" type="button" onClick={() => setRemboursement({ etape: 'saisie' })}>
             Rembourser
@@ -278,7 +286,12 @@ function DetailVente({ detail, produits, droits, onRetour, onRembourse }) {
             {lignes.map((l) => (
               <tr key={l.id}>
                 <td>
-                  <span className="nm">{produits[String(l.produit)] || 'Produit retiré du catalogue'}</span>
+                  <span className="nm">
+                    {texte(l.libelleProduit, produits[String(l.produit)] || 'Produit retiré du catalogue')}
+                  </span>
+                  {l.libelleTypeTarif && (
+                    <span className="badge mut" style={{ marginLeft: 6 }}>{l.libelleTypeTarif}</span>
+                  )}
                   {l.prixForce && (
                     <span className="badge warn" style={{ marginLeft: 8 }} title="Le prix a été saisi à la main au moment de la vente.">
                       prix forcé
