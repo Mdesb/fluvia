@@ -2120,3 +2120,63 @@ verrait la divergence, puisque les deux seraient « côté serveur ».
 appliquée à la simulation de clôture, en faisant rendre les montants par le même code que la clôture
 elle-même — *un calcul parallèle aurait divergé, et la divergence se serait découverte sur un arrêté
 fiscal.*
+
+---
+
+### 2026-08-26 · D64 — Un événement ne peut pas être la seule trace d'un fait d'exploitation
+
+**Question de `claude-G` sur PAY-3.** Le refus de carte doit partir quand le terminal refuse — à un endroit
+où la vente n'est pas validée, où aucune transaction n'est ouverte, et où **rien n'est écrit en base** :
+la méthode rend `['paiement' => null, 'statutTPE' => …]`. Publier l'événement immédiatement est plus
+simple. Fallait-il persister le refus d'abord ?
+
+**Oui, et l'argument général ne suffisait pas.** « Si l'abonné échoue, le refus n'a jamais existé » est
+vrai partout et se discute. Ce qui tranche, c'est le cas d'espèce : `claude-D` a établi que la bascule
+carte → prélèvement **n'a aucun client** aujourd'hui, aucun débit carte récurrent n'existant dans le
+produit. Son abonné est le **seul** consommateur, et il ne fera rien de la totalité des refus.
+
+**Publier sans persister ne laisserait donc littéralement aucune trace de la totalité des refus de
+carte** — pas « en cas de panne », mais dans le fonctionnement normal, dès le premier jour. C'est D59
+connu **avant** livraison : un mécanisme qui s'exécute, produit un événement, et ne fait rien.
+
+**Et un refus de carte n'est pas une notification, c'est un fait d'exploitation.** Un exploitant voudra
+les compter — combien ce mois-ci, sur quel terminal. Un client contestera un prélèvement en disant « ma
+carte n'a jamais été refusée ». Ni l'une ni l'autre de ces questions n'a de réponse si le fait ne vit que
+dans un message.
+
+**Décidé : le refus est persisté, et l'événement référence la trace au lieu de la porter.** Deux gardes :
+persister **avant** de publier — sinon l'événement référence ce qui n'existe pas encore — et faire porter
+à la trace de quoi être comptée sans jointure : établissement, terminal, montant, horodatage.
+
+**Règle générale :** un événement transporte, il ne conserve pas. Quand un fait doit pouvoir être compté,
+contesté ou audité, il lui faut une trace qui ne dépend d'aucun abonné.
+
+---
+
+### 2026-08-26 · D64-bis — « Le risque est faible » n'est pas un argument, c'est une permission
+
+**Déclaré par `claude-G` sur elle-même.** Elle a ajouté un fichier de test **pendant qu'une suite
+tournait** — la règle qu'elle avait elle-même fait adopter à la flotte le 24/08, après avoir rendu deux
+verdicts sur un arbre qui avait bougé. Son raisonnement : *PHPUnit fige sa liste de fichiers au
+démarrage, le risque est faible.*
+
+**La suite a rendu 82/82. Rejouée sur arbre figé : 86 tests, deux erreurs.**
+
+Les quatre tests ajoutés n'avaient pas été collectés — et ils étaient **réellement cassés** : une session
+de caisse mise en cache dans une variable `static`, qui survit d'une méthode de test à l'autre alors que
+le harnais recrée le schéma à chaque méthode. La session mémorisée désignait une ligne disparue.
+
+**Sans le rejeu, elle poussait un fichier de test que rien n'avait exécuté, en annonçant vert.** Le motif
+du jour dans sa forme la plus pure : un résultat plausible, aucune erreur, et une vérification qui n'a
+pas eu lieu.
+
+**Sa formulation, qui vaut mieux que la règle :**
+
+> « Le risque est faible » est l'argument que je refuse quand un autre me le sert. Il ne devient pas bon
+> parce que c'est moi qui le formule.
+
+C'est la version personnelle de la règle des mécanismes : **un raisonnement qui ne vaut que quand c'est
+soi qui le tient n'est pas un raisonnement, c'est une permission.**
+
+**Fait technique à retenir par tout le monde :** PHPUnit fige sa liste de fichiers au démarrage. Un test
+ajouté pendant une exécution n'est pas collecté, et la suite rend un vert qui ne le concerne pas.
