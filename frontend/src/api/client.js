@@ -398,6 +398,12 @@ export const api = {
   cloturerPeriode: (id) =>
     request(`/api/compta/periodes/${id}/cloturer`, { method: 'POST', body: {} }),
   telechargerExport: (id) => request(`/api/compta/exports/${id}/telecharger`),
+  // Recouvrement : les deux gestes qui closent un impaye, et le compteur d'acces bloques.
+  tableauBordRecouvrement: () => request('/api/recouvrement/tableau-bord'),
+  resoudreImpaye: (id) =>
+    request(`/api/recouvrement/incidents/${id}/resoudre`, { method: 'POST', body: {} }),
+  forcerReouvertureImpaye: (id, motif) =>
+    request(`/api/recouvrement/incidents/${id}/forcer-reouverture`, { method: 'POST', body: { motif } }),
   // Operation STANDARD : elle deserialise.
   creerExportComptable: (corps) =>
     request('/api/export_comptables', { method: 'POST', body: corps, ld: true }),
