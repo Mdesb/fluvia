@@ -111,6 +111,13 @@ const MOTS = {
   fifo: 'Premier entré, premier sorti (FIFO)',
   cmup: 'Coût moyen pondéré',
 
+  // --- Recouvrement ---
+  representation: 'Représentation bancaire',
+  recouvrement: 'En recouvrement',
+  resolu: 'Réglé',
+  virement: 'Virement',
+  caisse: 'Espèces au guichet',
+
   // --- Comptabilite ---
   provisoire: 'Provisoire',
   controlee: 'Contrôlée',
