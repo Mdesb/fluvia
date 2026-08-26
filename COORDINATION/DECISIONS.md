@@ -1495,3 +1495,48 @@ un manque implicite se découvre par accident.*
 **Trois lots deviennent débloqués immédiatement** : les trois filtres de `Vente` qui bloquent
 l'historique des ventes depuis ce matin, le moyen de paiement préféré dans `Crm` demandé par Maxime, et
 le droit d'écrire dans `Facturation` pour `claude-D`.
+
+---
+
+### 2026-08-26 · D50 — Le format d'écriture ne sera **pas** déclaré globalement, et le contrôle vaut mieux que la règle
+
+**Le signalement.** Maxime, en essayant d'ajouter un tarif : *« The content-type "application/json" is not
+supported. Supported MIME types are "application/ld+json". »* Un 415, sur la fonctionnalité livrée la
+veille.
+
+**Ce que j'ai mal mesuré.** J'ai compté par `grep` les POST dépourvus du drapeau `ld: true` : 33. C'était
+un comptage de syntaxe, pas un diagnostic. `claude-H` a trouvé la cause réelle : une opération à
+`uriTemplate` sur mesure porte `input: false` et son processor lit le corps brut — **elle se moque du
+format**. Seules les opérations standard désérialisent et exigent `ld+json`. **13 cassées, 27 indemnes.**
+Sur mon chiffre, on aurait modifié la caisse, qui fonctionne.
+
+**L'ampleur réelle : 236 écritures standard exigent `ld+json`, 232 sur mesure s'en moquent.** Presque la
+moitié de l'API bascule sur une distinction qu'aucune signature ne rend visible.
+
+**Sept des treize appels cassés l'étaient depuis avant l'arrivée de `claude-H`** : créer un client, un
+utilisateur, un moyen de paiement, un groupe d'options, une valeur d'option, une option produit, une
+affectation. Tous en 415 **depuis toujours**. Personne ne l'avait signalé — ou plutôt, personne ne
+l'avait signalé *sous cette forme* : on ne voit pas un code HTTP, on voit un bouton qui ne fait rien.
+Plusieurs plaintes de Maxime qu'on avait classées comme des manques d'écran étaient en réalité ce 415.
+
+**L'arbitrage : on ne déclare pas `formats` globalement.** Ajouter `json` aux formats du serveur
+réparerait les 236 écritures d'un geste, et changerait du même coup la négociation en **lecture**. Les
+collections répondent en JSON-LD, que tout le front lit par la clé `member`. On échangerait un défaut
+d'écriture connu contre un risque de casse de **toutes les listes**, y compris celles de `claude-D` et
+de la vitrine. `claude-H` a jeté sa propre première version pour cette raison, et la formule est à
+garder : **corriger un défaut en modifiant ce qui marche, sans pouvoir le retester, c'est échanger un
+bogue connu contre un risque inconnu.**
+
+**Ce qu'on fait à la place : un contrôle.** `verifier-formats` croise chaque POST du client avec les
+`uriTemplate` déclarés dans `app/src` et signale tout appel standard sans `ld: true`. Vérifié dans les
+deux sens — vert sur l'état corrigé, rouge sur exactement l'appel qui bloquait Maxime.
+
+**Réserve posée, et elle vaut pour tous les contrôles du dépôt.** Un script `npm` ne tient que si
+quelqu'un le lance, et rien ne le lance. Le jour même, j'ai resserré deux cliquets que les garde-fous
+annonçaient résorbés **à chaque push depuis plusieurs jours**, commande à l'appui : le message
+s'affichait, personne ne le lisait, le plafond réautorisait ce qu'on venait de corriger (couverture
+34 → 30, transfrontière 5 → 3). **Un garde-fou facultatif n'est pas un garde-fou, c'est une
+documentation exécutable.** `verifier-formats` doit être branché dans `pre-receive` comme les sept
+autres. Question ouverte à `claude-H` : ses scripts tournent-ils dans l'image node figée du
+déploiement, sans réseau — le hook s'exécute en `--network none`, exprès. Si non, on les réécrit en PHP
+plutôt que de les laisser facultatifs.
