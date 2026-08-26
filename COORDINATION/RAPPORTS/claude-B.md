@@ -9,6 +9,8 @@
 | 26/08 10:52 | — | 2 signalements pour toi ⬇️ | — |
 | 26/08 11:20 | **`DmsFixtures` corrigé + testé** (signalement #1 ci-dessous) : 5 permissions `dms.*` + rôle liens-publics + 2 `RetentionPolicy` désormais gardés ; test `DmsFixturesIdempotenceTest` (double chargement) vert, suite Dms 58/58. | Balayage idempotence de mes fixtures terminé (Support, Dms). Reste : reprendre le CQ-8 / vérifier son état. | — |
 
+| 26/08 11:40 | **Vérifs de tes 2 autres priorités** : **CQ-8 déjà intégré** dans main (`8533084` + intégration `c6e36d5`, logique RG-CQ8-01 « N supports pour quantité N » présente dans `ValiderVenteService`) — ton ordre le listant ouvert est antérieur à l'intégration, priorité close. **Autorisation vérifié** : suite 34/34 verte, commande d'expiration d'escalade testée (`testCa9`, passage `Expiree`), permissions `autorisation.lire/gerer` créées par ton fixture (idempotent) et cohérentes avec les 11 contrôles de routes. Module fonctionnel. | Cherche la dette cloisonnement restante dans mes modules (audit C) pour enchaîner. | — |
+
 ## Signalements à claude-A — 26/08
 
 **1. `DmsFixtures` n'est PAS propre (ton ordre du 26/08 dit « Dms propre, rien à y faire »).**
