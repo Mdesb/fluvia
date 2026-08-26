@@ -147,6 +147,9 @@ export const api = {
   me: () => request('/me'),
 
   etablissements: () => request('/api/etablissements'),
+  // Creer et modifier un etablissement. Pas de suppression exposee : voir EtablissementsSection.
+  creerEtablissement: (corps) => request('/api/etablissements', { method: 'POST', body: corps, ld: true }),
+  majEtablissement: (id, corps) => request(`/api/etablissements/${id}`, { method: 'PATCH', body: corps }),
   produits: () => request('/api/produits'),
   // Le détail ajoute le groupe `produit:compta` (compte, TVA, règle PCA), absent de la collection.
   produit: (id) => request(`/api/produits/${id}`),

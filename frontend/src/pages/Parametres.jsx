@@ -5,6 +5,7 @@ import Modal from '../components/Modal.jsx'
 import ReferentielEditable from '../components/ReferentielEditable.jsx'
 import PretAVendre from '../components/PretAVendre.jsx'
 import RolesSection from '../components/RolesSection.jsx'
+import EtablissementsSection from '../components/EtablissementsSection.jsx'
 import { aLeDroit } from '../api/droits.js'
 import { mot } from '../api/vocabulaire.js'
 import { api, membres } from '../api/client.js'
@@ -351,18 +352,7 @@ export default function Parametres({ etabActif, etablissements, droits = [] }) {
 
       {sousOnglet === 'entites' && (
         <div className="resa-grid">
-          <Liste
-            titre="Établissements"
-            sous={`${etablissements?.length || 0} accessible(s)`}
-            deps={[etabActif]}
-            charger={api.etablissements}
-            vide="Aucun établissement."
-            colonnes={[
-              { cle: 'nom', entete: 'Établissement', rendu: (r) => <span className="nm">{r.nom || '—'}</span> },
-              { cle: 'region', entete: 'Région', rendu: (r) => texte(r.region?.nom, '—') },
-              { cle: 'actif', entete: 'État', rendu: (r) => <span className={`badge ${r.actif ? 'good' : 'mut'}`}>{r.actif ? 'actif' : 'inactif'}</span> },
-            ]}
-          />
+          <EtablissementsSection peutEcrire={aLeDroit(droits, 'organisation.gerer')} />
           <Liste
             titre="Espaces"
             sous="zones physiques"

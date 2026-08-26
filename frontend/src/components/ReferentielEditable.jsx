@@ -64,7 +64,11 @@ export default function ReferentielEditable({ descripteur, peutEcrire }) {
   function ouvrirEdition(ligne) {
     const valeurs = {}
     champs.forEach((c) => {
-      if (c.type === 'choix-multiples') valeurs[c.nom] = Array.isArray(ligne[c.nom]) ? [...ligne[c.nom]] : []
+      // `versValeur` : une relation arrive du serveur en objet (`{ id, nom }`) alors que le
+      // formulaire manipule une IRI. Sans transformation, le champ s'affiche vide et l'enregistrement
+      // efface la valeur existante sans que personne ne l'ait demande.
+      if (c.versValeur) valeurs[c.nom] = c.versValeur(ligne)
+      else if (c.type === 'choix-multiples') valeurs[c.nom] = Array.isArray(ligne[c.nom]) ? [...ligne[c.nom]] : []
       else if (c.type === 'date') valeurs[c.nom] = (ligne[c.nom] || '').slice(0, 10)
       else valeurs[c.nom] = ligne[c.nom] ?? (c.type === 'bool' ? false : '')
     })
@@ -80,7 +84,10 @@ export default function ReferentielEditable({ descripteur, peutEcrire }) {
       const corps = {}
       champs.forEach((c) => {
         const v = edition.valeurs[c.nom]
-        if (c.type === 'nombre') corps[c.nom] = Number(v)
+        // `versCorps` : symetrique du precedent. Un choix vide doit partir a `null` et non en
+        // chaine vide — le serveur refuse la seconde avec un message de deserialisation.
+        if (c.versCorps) corps[c.nom] = c.versCorps(v)
+        else if (c.type === 'nombre') corps[c.nom] = Number(v)
         else if (c.type === 'bool') corps[c.nom] = !!v
         else if (c.type === 'choix-multiples') corps[c.nom] = Array.isArray(v) ? v : []
         // Une date laissee vide part a `null` et non en chaine vide : le serveur rejette la seconde
