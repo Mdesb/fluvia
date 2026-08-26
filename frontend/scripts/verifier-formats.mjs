@@ -65,4 +65,9 @@ if (anomalies.length === 0) {
 
 console.error(`✗ Formats : ${anomalies.length} appel(s) qui échoueront en 415.\n`)
 anomalies.forEach((a) => console.error('  - ' + a))
+console.error(
+  "\nN'ajoutez PAS `ld: true` partout : les opérations déclarées avec un `uriTemplate` sur mesure\n" +
+    "portent `input: false`, leur processor lit le corps brut et se moque du type. Ce contrôle ne\n" +
+    'signale que les opérations standard — celles qu\'il liste ci-dessus, et elles seules.',
+)
 process.exit(1)

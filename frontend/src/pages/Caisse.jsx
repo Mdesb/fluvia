@@ -8,6 +8,8 @@ import SessionCaisse from './SessionCaisse.jsx'
 import {
   libelleProduit,
   prixIndicatif,
+  grillesVendables,
+  libelleTarif,
   typeTarifId,
   estVendable,
   raisonNonVendable,
@@ -21,6 +23,7 @@ const ORDRE_MOYENS = ['especes', 'cb', 'cheque', 'pmv']
 export default function Caisse({ me, etabActif, etablissements, session, capacites = [], droits = [], onSessionRefresh }) {
   const [caisseModale, setCaisseModale] = useState(false)
   const [historique, setHistorique] = useState(false)
+  const [choixTarif, setChoixTarif] = useState(null)
   const [produits, setProduits] = useState([])
   const [moyens, setMoyens] = useState([])
   const [pdvs, setPdvs] = useState([])
@@ -73,7 +76,7 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   const total = useMemo(
     () =>
       panier.reduce((s, l) => {
-        const pu = parseFloat(prixIndicatif(l.produit) || '0') || 0
+        const pu = parseFloat((l.prix ?? prixIndicatif(l.produit)) || '0') || 0
         return s + pu * l.quantite
       }, 0),
     [panier],
@@ -97,25 +100,52 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   const moyenCourant = moyensDispo.find((m) => m.code === moyenSel) || null
   const reste = vente ? parseFloat(vente.reste || '0') : total
 
-  function ajouter(produit) {
+  // Une ligne de panier est un produit ET un tarif : deux tarifs du meme produit sont deux lignes.
+  // Les fusionner obligerait a ressaisir pour vendre un adulte et un enfant ensemble, ce qui est la
+  // vente courante d'une famille au guichet.
+  const cleLigne = (produitId, tarifId) => `${produitId}|${tarifId}`
+
+  function ajouter(produit, grille) {
     setTicket(null)
+    const g = grille || grillesVendables(produit)[0]
+    if (!g) return
+    const cle = cleLigne(produit.id, g.typeTarif.id)
     setPanier((p) => {
-      const i = p.findIndex((l) => l.produit.id === produit.id)
+      const i = p.findIndex((l) => l.cle === cle)
       if (i >= 0) {
         const copie = [...p]
         copie[i] = { ...copie[i], quantite: copie[i].quantite + 1 }
         return copie
       }
-      return [...p, { produit, quantite: 1 }]
+      return [
+        ...p,
+        {
+          cle,
+          produit,
+          quantite: 1,
+          typeTarifId: g.typeTarif.id,
+          tarifLibelle: libelleTarif(g),
+          prix: g.prix,
+        },
+      ]
     })
   }
-  function changerQte(id, delta) {
+
+  // Un clic reste un clic quand il n'y a rien a choisir : on ne fait payer le choix qu'a ceux qui en
+  // ont un. Une caisse se juge au nombre de gestes par vente.
+  function choisirPuisAjouter(produit) {
+    const grilles = grillesVendables(produit)
+    if (grilles.length <= 1) ajouter(produit, grilles[0])
+    else setChoixTarif({ produit, grilles })
+  }
+
+  function changerQte(cle, delta) {
     setPanier((p) =>
-      p.map((l) => (l.produit.id === id ? { ...l, quantite: l.quantite + delta } : l)).filter((l) => l.quantite > 0),
+      p.map((l) => (l.cle === cle ? { ...l, quantite: l.quantite + delta } : l)).filter((l) => l.quantite > 0),
     )
   }
-  function retirer(id) {
-    setPanier((p) => p.filter((l) => l.produit.id !== id))
+  function retirer(cle) {
+    setPanier((p) => p.filter((l) => l.cle !== cle))
   }
 
   // Démarre l'encaissement : crée la vente, ajoute les lignes, passe en phase paiement.
@@ -138,7 +168,8 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
       }
       let courant = v
       for (const l of panier) {
-        const tarif = typeTarifId(l.produit)
+        // Le tarif choisi sur la ligne, et non plus un tarif devine pour tout le panier.
+        const tarif = l.typeTarifId || typeTarifId(l.produit)
         if (!tarif) throw new Error(`« ${libelleProduit(l.produit)} » n'a pas de tarif au guichet.`)
         const corps = { produit: l.produit.id, typeTarif: tarif, quantite: l.quantite }
         // Bénéficiaire requis pour les produits nominatifs (RG-M2-04) : on passe le client rattaché.
@@ -213,9 +244,11 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
       setTicket({
         numero: infoTicket.numero || venteValidee.numero,
         lignes: panier.map((l) => ({
-          libelle: libelleProduit(l.produit),
+          // Le tarif figure sur le ticket : sans lui, deux lignes du meme produit a des prix
+          // differents sont illisibles, pour le client comme pour le caissier qui le relit.
+          libelle: l.tarifLibelle ? `${libelleProduit(l.produit)} — ${l.tarifLibelle}` : libelleProduit(l.produit),
           quantite: l.quantite,
-          pu: prixIndicatif(l.produit),
+          pu: l.prix ?? prixIndicatif(l.produit),
         })),
         total: venteValidee.total ?? total.toFixed(2),
         paiements,
@@ -374,25 +407,30 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
               ) : (
                 <>
                   {panier.map((l) => {
-                    const pu = parseFloat(prixIndicatif(l.produit) || '0') || 0
+                    const pu = parseFloat((l.prix ?? prixIndicatif(l.produit)) || '0') || 0
                     return (
-                      <div className="cline" key={l.produit.id}>
+                      <div className="cline" key={l.cle}>
                         <div className="cn">
                           <span className="nm">{libelleProduit(l.produit)}</span>
-                          <div className="cp">{euros(pu)}</div>
+                          <div className="cp">
+                            {l.tarifLibelle && (
+                              <span className="badge mut" style={{ marginRight: 6 }}>{l.tarifLibelle}</span>
+                            )}
+                            {euros(pu)}
+                          </div>
                         </div>
                         {!enPaiement ? (
                           <div className="qty">
-                            <button onClick={() => changerQte(l.produit.id, -1)}>−</button>
+                            <button onClick={() => changerQte(l.cle, -1)}>−</button>
                             <span>{l.quantite}</span>
-                            <button onClick={() => changerQte(l.produit.id, 1)}>+</button>
+                            <button onClick={() => changerQte(l.cle, 1)}>+</button>
                           </div>
                         ) : (
                           <span style={{ color: 'var(--ink-soft)' }}>× {l.quantite}</span>
                         )}
                         <span className="num" style={{ minWidth: 58, fontWeight: 600 }}>{euros(pu * l.quantite)}</span>
                         {!enPaiement && (
-                          <button className="rm" onClick={() => retirer(l.produit.id)} title="Retirer">×</button>
+                          <button className="rm" onClick={() => retirer(l.cle)} title="Retirer">×</button>
                         )}
                       </div>
                     )
@@ -454,7 +492,7 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
                       key={p.id}
                       className="prodtile"
                       disabled={!vendable}
-                      onClick={() => ajouter(p)}
+                      onClick={() => choisirPuisAjouter(p)}
                       title={
                         enPaiement
                           ? 'Encaissement en cours'
@@ -477,6 +515,36 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
           </div>
         </section>
       </div>
+      {/* Choix du tarif : n'apparait que si le produit en a plusieurs. Un produit a tarif unique
+          s'ajoute en un clic, exactement comme avant — on ne fait payer le choix qu'a ceux qui en
+          ont un. */}
+      <Modal
+        open={!!choixTarif}
+        onClose={() => setChoixTarif(null)}
+        titre={choixTarif ? `${libelleProduit(choixTarif.produit)} — quel tarif ?` : ''}
+        taille="sm"
+      >
+        {choixTarif && (
+          <div style={{ display: 'grid', gap: 8 }}>
+            {choixTarif.grilles.map((g) => (
+              <button
+                key={g.id}
+                type="button"
+                className="prodtile"
+                onClick={() => {
+                  ajouter(choixTarif.produit, g)
+                  setChoixTarif(null)
+                }}
+              >
+                <span className="pn">{libelleTarif(g)}</span>
+                {g.saison?.nom && <span className="pc">{g.saison.nom}</span>}
+                <span className="pp">{euros(g.prix)}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </Modal>
+
       <HistoriqueVentesModal open={historique} onClose={() => setHistorique(false)} droits={droits} />
       {modaleSession}
       {modaleClient}
