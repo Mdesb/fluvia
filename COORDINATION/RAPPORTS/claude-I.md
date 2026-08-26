@@ -21,6 +21,7 @@
 | 26/08 09:55 | Nouveau silence 23:56 -> 09:41, meme cause. Reprise : **fixtures rendues idempotentes** dans les cinq verticales — 9 roles (Padel 2, Patinoire 3, Musee 4, ton compte exact) et **8 creations de permissions** que tu n-avais pas comptees. Syntaxe verifiee en conteneur avant push. | Les cinq suites tournent. | Rien. |
 | 26/08 10:25 | **Deux lots verts.** (1) Fixtures idempotentes : 9 roles + **8 permissions** sur mes cinq verticales. (2) Dette de couverture : `EvenementEclairage` cloisonne par `terrain` — **la seule des 34 entites gelees qui soit chez moi**. Suites : Piscine 33, Padel 23, Patinoire 29, Sport 31, Musee 23, Platform 62 — **toutes vertes**. Pile demontee. | Plus rien d-assigne. Je reste sur ma demande de tache. | Rien. |
 | 26/08 11:30 | **D41 : six entites traitees, dette 49 -> 43.** Ton garde-fou n12 confirme « 6 resorbees ». Quatre `EstablishmentStampProcessor` sur le patron de `Reservation`. Trois tests de non-regression ecrits la ou il n-y en avait aucun, **verifies rouges sans le correctif**. | Les cinq entites de la **voie B** (aucun `denormalizationContext`) — lot separe. | Rien. |
+| 26/08 12:05 | Voie B analysee : sur les cinq, **trois seulement sont reellement denormalisables**, deux sont fermees par `input: false`. J-ai cru trouver une ecriture transfrontiere dans `DemarrerAffutageProcessor` — **l-experience m-a contredite**, detail ci-dessous. Correctif conserve pour une autre raison, teste, vert. | Voie B proprement dite. | Rien. |
 
 ---
 
@@ -555,3 +556,57 @@ identical » — l-entite atterrissait bien chez B). Puis vert.
 Les cinq de la voie B. Leur correctif est d-une autre nature — poser un `denormalizationContext` la ou
 il n-y en a pas — et aucune n-a d-operation `Post` nue. Melanger les deux natures dans un meme diff
 rendrait la relecture plus difficile pour rien. Je les prends au lot suivant.
+
+---
+
+## 2026-08-26 12:05 · J-ai cru trouver une faille, l-experience dit non
+
+A consigner tel quel, parce que la conclusion est plus utile que ce que je croyais annoncer.
+
+**Ce que j-ai trouve.** `DemarrerAffutageProcessor`, branche `prestation_client`, resolvait
+`etablissement` **depuis le corps de la requete** par un `find()` sans confrontation au perimetre :
+
+    $etablissement = $this->resoudre(Etablissement::class, $corps['etablissement'] ?? null, ...);
+
+C-est la forme exacte d-une ecriture transfrontiere, et le fichier **n-est pas dans ta ligne de base
+de cloisonnement** — donc le garde-fou ne l-a jamais compte. J-allais te l-annoncer comme une faille.
+
+**Ce que l-experience a montre.** J-ai ecrit le test qui la demontre. Il echoue — mais pas comme
+prevu : la requete est refusee **avant** d-atteindre le processeur, par la denormalisation d-API
+Platform, dans les deux formes que `resoudre()` accepte :
+
+| Ce que l-appelant envoie | Reponse | Pourquoi |
+|---|---|---|
+| IRI d-un etablissement etranger | 400 « Item not found » | la lecture d-`Etablissement` est cloisonnee |
+| UUID nu | 400 « Invalid IRI » | le denormaliseur n-accepte que des IRI |
+
+Le `find()` nu n-est donc **jamais atteint avec une reference etrangere**. Il n-y a pas de faille.
+
+**Le correctif reste, pour une raison plus modeste.** Il retire une lecture brute du corps portant sur
+un champ de perimetre — une forme qui ne doit pas s-installer comme exemple, puisque rien dans le
+processeur ne dit qu-un autre garde la protege — et il **supprime un champ obligatoire** que
+l-appelant ne pouvait de toute facon renseigner qu-avec son propre etablissement. Simplification et
+defense en profondeur, pas fermeture de faille. Le test l-ecrit noir sur blanc pour que personne ne
+relise ce lot en croyant a une correction de securite.
+
+**Ce que j-en retire, et qui vaut peut-etre pour la flotte.** Trois d-entre nous chassent la meme
+classe de defaut depuis deux jours. La forme « `find()` sur une reference du corps » est un bon
+signal, mais elle **ne suffit pas a conclure** : le denormaliseur garde deja les champs de type
+relation. Un signalement sans test d-exploitation risque de faire corriger du vide — et, pire, de
+faire croire le perimetre plus troue qu-il ne l-est. J-ai failli le faire.
+
+### Voie B : la mesure precise
+
+| Entite | Post de creation | Denormalise ? |
+|---|---|---|
+| `NiveauJoueur` | `input: false` | non |
+| `AbonnementFitness` | `input: false` | non |
+| `Affutage` | processeur, sans `input: false` | **oui** |
+| `ListeAttentePointure` | processeur, sans `input: false` | **oui** |
+| `LocationPatins` | processeur, sans `input: false` | **oui** |
+
+Deux des cinq sont donc deja fermees par `input: false` — mais rien ne le dit sur l-entite, et retirer
+ce `input: false` rouvrirait l-exposition sans qu-aucun garde-fou ne bronche. C-est un point a
+arbitrer : faut-il quand meme leur poser un `denormalizationContext`, pour que la fermeture soit
+declaree plutot que dependante d-une option d-operation ? **Mon avis : oui**, mais c-est ton
+arbitrage, et je ne le fais pas sans reponse.
