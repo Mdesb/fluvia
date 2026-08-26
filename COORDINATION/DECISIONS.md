@@ -1728,3 +1728,66 @@ permis à `claude-H` de faire tout l'écran patinoire en un lot.
 
 C'est **le signal muet à l'envers** : d'ordinaire l'information existe et rien ne l'appelle ; ici elle
 n'existe pas. `Stock` est le périmètre de `claude-F`.
+
+---
+
+### 2026-08-26 · D55 — Une liste de choses à traiter s'affiche avec le geste qui les traite, ou ne s'affiche pas
+
+**Le relevé de `claude-H`**, demandé après sa remarque : *une liste qui ne descend jamais à zéro n'est pas
+un signal, c'est du décor.*
+
+| Liste | Affichée | Geste qui la vide | Branché |
+|---|---|---|---|
+| `AlerteEcartCaisse` | non | oui, **ailleurs** (`/ventes/{id}/corriger-reglement`) | non |
+| `AlerteReappro` | oui | indirect (passer une commande) | non |
+| `ConflitGlace` | oui | indirect (déplacer le créneau) | non |
+| `DeclarationIncidentBadge` | non | oui (`annuler`) | non |
+| `IncidentImpaye` | non | oui (`resoudre`, `forcer-reouverture`) | non |
+| `AlertePresenceIsolee` | non | **aucun** — le seul POST en *crée* | — |
+
+**Quatre listes affichées, zéro geste de résolution branché.** Toutes les listes d'alerte du produit sont
+aujourd'hui du décor.
+
+**La règle :** *une liste de choses à traiter s'affiche avec le geste qui les traite, ou ne s'affiche
+pas.* Pas « on branchera la résolution plus tard ».
+
+**Le motif, et c'est lui qui justifie la sévérité :** une liste qu'on ne peut pas vider **apprend à son
+lecteur à l'ignorer**, et cet apprentissage ne se défait pas quand on branche le geste six mois après.
+La liste sera toujours là ; l'habitude de ne pas la regarder aussi. On aura alors deux défauts : le
+retard initial, et un signal durablement mort qu'aucun correctif ne ranime.
+
+**Le corollaire, et il évite une erreur d'accusation.** `RejetSepa` et `VenteImpayeeRegie` n'ont **aucun
+champ de statut** : ce ne sont pas des files d'attente qui ne se vident pas, ce sont des **journaux**, et
+un journal qui grandit se comporte correctement. `claude-H` s'est arrêtée avant de les accuser, et elle a
+eu raison.
+
+**Donc le défaut n'est pas toujours dans l'API — il est souvent dans le cadrage.** Une même collection
+est un journal ou une file d'attente **selon la façon dont l'écran la présente**. Un journal s'annonce
+comme un journal : au passé, sans compteur en haut à droite. Une file d'attente s'annonce avec son geste.
+
+**`AlertePresenceIsolee` est le cas dur** : elle porte bien un statut de chose à traiter, et son unique
+opération d'écriture en **fabrique de nouvelles**. Rien, nulle part, ne permet d'en clore une. Périmètre
+`Sport`, donc `claude-I` depuis D48.
+
+---
+
+### 2026-08-26 · D55-bis — Une demande de remboursement arrive sans que personne puisse y répondre
+
+Neuf opérations sont **appelables** par le client HTTP du front sans qu'aucun écran ne les déclenche.
+Deux d'entre elles comptent : `accepterRemboursement` et `refuserRemboursement`.
+
+Le geste existe côté serveur, le client sait le former, **aucun écran ne le propose**. Une demande de
+remboursement entre donc dans le produit et **personne ne peut y répondre**. Ce n'est pas une liste
+morte : c'est une boîte aux lettres sans porte.
+
+**Et c'est cette découverte qui a corrigé la mesure d'écart elle-même.** `claude-H` comptait comme
+« branchées » les opérations que `client.js` sait appeler — donc y compris celles qu'aucun écran ne
+déclenche. Elle comptait *ce que le code sait faire* en l'annonçant comme *ce que le produit permet*.
+C'est exactement l'angle mort qu'elle signalait aux autres depuis la veille.
+
+L'instrument rend désormais deux nombres — appelées depuis le client, **atteignables depuis un écran** —
+et seul le second est reporté. La série publiée ce jour (157, 166, 168, 174) était surestimée d'une
+dizaine ; le dernier valait **164**. Corrigé sur le tableau de bord, avec la raison écrite sur la page :
+un chiffre publié faux qu'on remplace en silence est pire que le chiffre faux.
+
+Elle avait elle-même créé un de ces orphelins le jour même (`stockValorisation`), et l'a retiré.
