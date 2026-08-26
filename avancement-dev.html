@@ -73,136 +73,85 @@
   .page { max-width: 1120px; margin: 0 auto; padding: 40px 24px 80px; }
 
   header { border-bottom: 2px solid var(--trait-fort); padding-bottom: 18px; margin-bottom: 30px; }
-  h1 {
-    margin: 0 0 6px;
-    font-size: 27px;
-    font-weight: 620;
-    letter-spacing: -0.022em;
-  }
+  h1 { margin: 0 0 6px; font-size: 27px; font-weight: 620; letter-spacing: -0.022em; }
   .horodatage { color: var(--encre-3); font-size: 13px; font-variant-numeric: tabular-nums; }
   .horodatage strong { color: var(--encre-2); font-weight: 600; }
 
   h2 {
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--encre-3);
-    font-weight: 700;
-    margin: 42px 0 14px;
-    padding-bottom: 7px;
-    border-bottom: 1px solid var(--trait);
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--encre-3); font-weight: 700;
+    margin: 42px 0 14px; padding-bottom: 7px; border-bottom: 1px solid var(--trait);
   }
   h2:first-of-type { margin-top: 0; }
 
   .bandeau {
-    background: var(--rouge-pale);
-    border-left: 3px solid var(--rouge);
-    padding: 16px 20px;
-    margin-bottom: 8px;
-    border-radius: 0 4px 4px 0;
+    background: var(--rouge-pale); border-left: 3px solid var(--rouge);
+    padding: 16px 20px; border-radius: 0 4px 4px 0;
   }
-  .bandeau.ok { background: var(--vert-pale); border-left-color: var(--vert); }
+  .bandeau.ok    { background: var(--vert-pale);  border-left-color: var(--vert); }
+  .bandeau.tiede { background: var(--ambre-pale); border-left-color: var(--ambre); }
   .bandeau h3 { margin: 0 0 5px; font-size: 15.5px; font-weight: 620; }
   .bandeau p  { margin: 0; color: var(--encre-2); font-size: 14px; }
   .bandeau + .bandeau { margin-top: 10px; }
 
-  .grille { display: grid; gap: 12px; }
-  .grille.chiffres { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
-
-  .chiffre {
-    background: var(--carte);
-    border: 1px solid var(--trait);
-    border-radius: 5px;
-    padding: 14px 16px;
-  }
+  .grille { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+  .chiffre { background: var(--carte); border: 1px solid var(--trait); border-radius: 5px; padding: 14px 16px; }
   .chiffre .valeur {
-    font-size: 27px;
-    font-weight: 640;
-    letter-spacing: -0.03em;
-    font-variant-numeric: tabular-nums;
-    line-height: 1.15;
+    font-size: 27px; font-weight: 640; letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums; line-height: 1.15;
   }
   .chiffre .etiquette { font-size: 12px; color: var(--encre-3); margin-top: 3px; }
 
   .tableau-enveloppe { overflow-x: auto; }
   table { border-collapse: collapse; width: 100%; font-size: 14px; }
   th {
-    text-align: left;
-    font-size: 10.5px;
-    text-transform: uppercase;
-    letter-spacing: 0.075em;
-    color: var(--encre-3);
-    font-weight: 700;
-    padding: 0 12px 8px 0;
-    border-bottom: 1px solid var(--trait-fort);
-    white-space: nowrap;
+    text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.075em;
+    color: var(--encre-3); font-weight: 700; padding: 0 12px 8px 0;
+    border-bottom: 1px solid var(--trait-fort); white-space: nowrap;
   }
-  td {
-    padding: 10px 12px 10px 0;
-    border-bottom: 1px solid var(--trait);
-    vertical-align: top;
-  }
+  td { padding: 10px 12px 10px 0; border-bottom: 1px solid var(--trait); vertical-align: top; }
   tr:last-child td { border-bottom: none; }
   td.sess { font-weight: 640; white-space: nowrap; }
-  td.num  { font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--encre-2); }
+  td.num  { font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--encre-2); text-align: right; }
   td.quoi { color: var(--encre-2); }
 
-  .pastille {
-    display: inline-block;
-    font-size: 11px;
-    font-weight: 650;
-    padding: 2px 8px;
-    border-radius: 20px;
-    white-space: nowrap;
-  }
-  .p-actif   { background: var(--vert-pale);  color: var(--vert); }
-  .p-lent    { background: var(--ambre-pale); color: var(--ambre); }
-  .p-arret   { background: var(--rouge-pale); color: var(--rouge); }
+  .barre { height: 6px; background: var(--trait); border-radius: 3px; overflow: hidden; min-width: 70px; }
+  .barre span { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+
+  .pastille { display: inline-block; font-size: 11px; font-weight: 650; padding: 2px 8px; border-radius: 20px; white-space: nowrap; }
+  .p-actif { background: var(--vert-pale);  color: var(--vert); }
+  .p-lent  { background: var(--ambre-pale); color: var(--ambre); }
+  .p-arret { background: var(--rouge-pale); color: var(--rouge); }
 
   ul.liste { margin: 0; padding-left: 0; list-style: none; }
   ul.liste li {
-    padding: 11px 0 11px 18px;
-    border-bottom: 1px solid var(--trait);
-    position: relative;
-    color: var(--encre-2);
+    padding: 11px 0 11px 18px; border-bottom: 1px solid var(--trait);
+    position: relative; color: var(--encre-2);
   }
   ul.liste li:last-child { border-bottom: none; }
   ul.liste li::before {
-    content: "";
-    position: absolute;
-    left: 0; top: 19px;
-    width: 6px; height: 6px;
-    border-radius: 50%;
-    background: var(--trait-fort);
+    content: ""; position: absolute; left: 0; top: 19px;
+    width: 6px; height: 6px; border-radius: 50%; background: var(--trait-fort);
   }
-  ul.liste li.fait::before  { background: var(--vert); }
+  ul.liste li.fait::before   { background: var(--vert); }
   ul.liste li.attend::before { background: var(--ambre); }
-  ul.liste li.dur::before   { background: var(--rouge); }
+  ul.liste li.dur::before    { background: var(--rouge); }
   ul.liste li b { color: var(--encre); font-weight: 620; }
 
   .note {
-    color: var(--encre-3);
-    font-size: 13px;
-    font-style: italic;
-    margin-top: 12px;
-    padding-left: 14px;
-    border-left: 2px solid var(--trait);
+    color: var(--encre-3); font-size: 13px; font-style: italic;
+    margin-top: 12px; padding-left: 14px; border-left: 2px solid var(--trait);
   }
 
   code {
     font: 12.5px/1.4 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-    background: var(--accent-pale);
-    color: var(--accent);
-    padding: 1px 5px;
-    border-radius: 3px;
+    background: var(--accent-pale); color: var(--accent);
+    padding: 1px 5px; border-radius: 3px;
   }
 
   footer {
-    margin-top: 56px;
-    padding-top: 18px;
-    border-top: 1px solid var(--trait);
-    color: var(--encre-3);
-    font-size: 12.5px;
+    margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--trait);
+    color: var(--encre-3); font-size: 12.5px;
   }
 </style>
 </head>
@@ -212,88 +161,115 @@
 
 <header>
   <h1>Poste de conduite</h1>
-  <div class="horodatage">Relevé du <strong>26/08/2026 à 10:49</strong> · neuf sessions · dépôt <code>billetterie</code> sur le VPS</div>
+  <div class="horodatage">Relevé du <strong>26/08/2026 à 13:08</strong> · neuf sessions · dépôt <code>billetterie</code> sur le VPS</div>
 </header>
 
 <h2>Ce qui te concerne en premier</h2>
 
 <div class="bandeau ok">
   <h3>Réparé et déployé — l'ajout d'un tarif fonctionne</h3>
-  <p>Le message <em>« content-type application/json is not supported »</em> venait d'un désaccord de format entre l'écran et le serveur. <b>Treize appels de création étaient cassés, dont sept depuis toujours</b> : créer un client, un utilisateur, un moyen de paiement, une option produit. Réessaie aussi ces écrans-là — plusieurs de tes plaintes classées « écran manquant » étaient ce refus silencieux.</p>
+  <p><b>Treize appels de création étaient cassés, dont sept depuis toujours</b> : créer un client, un utilisateur, un moyen de paiement, une option produit. Réessaie ces écrans-là — plusieurs plaintes classées « écran manquant » étaient ce refus silencieux.</p>
+</div>
+
+<div class="bandeau tiede">
+  <h3>Décision qui t'attend — aucun client n'est prévenu avant d'être prélevé</h3>
+  <p>Le préavis SEPA est une obligation : montant et date, quatorze jours avant. Il n'existait pas. Il est construit — mais il ne peut pas partir, <b>aucun prestataire d'envoi de courriels n'est branché sur le produit</b>. Le choix n'est donc pas « prévenir ou pas » : c'est prélever irrégulièrement, ou ne pas prélever. <b>Choisir un prestataire devient le prérequis de toute mise en production avec prélèvements.</b></p>
 </div>
 
 <div class="bandeau">
   <h3>Toujours bloqué — les 34 rôles de la préproduction sont à zéro droit</h3>
-  <p>Depuis mon incident de dimanche. Tu ne peux tester qu'avec ton compte, celui qui a tout — donc <b>aucun écran ne peut être vérifié du point de vue d'un caissier ou d'un responsable</b>. Le rétablissement dépend d'un chargement complet des données de démonstration, qui vient d'être réparé par cinq sessions. Vérification en cours.</p>
+  <p>Depuis mon incident de dimanche. Tu ne peux tester qu'avec ton compte, celui qui a tout — donc <b>aucun écran n'est vérifiable du point de vue d'un caissier ou d'un responsable</b>. Six fixtures corrigées aujourd'hui, la chaîne avance à chaque passe.</p>
 </div>
 
-<h2>Le dépôt aujourd'hui</h2>
+<h2>L'écart entre ce qui existe et ce qu'on peut atteindre</h2>
 
-<div class="grille chiffres">
-  <div class="chiffre"><div class="valeur">223</div><div class="etiquette">commits poussés aujourd'hui</div></div>
-  <div class="chiffre"><div class="valeur">49</div><div class="etiquette">intégrés dans <code>main</code></div></div>
-  <div class="chiffre"><div class="valeur">7/9</div><div class="etiquette">sessions actives dans l'heure</div></div>
-  <div class="chiffre"><div class="valeur">12</div><div class="etiquette">garde-fous au push</div></div>
-  <div class="chiffre"><div class="valeur">1 520</div><div class="etiquette">tests à la dernière référence</div></div>
+<div class="grille">
+  <div class="chiffre"><div class="valeur">1 029</div><div class="etiquette">opérations que le serveur sait faire</div></div>
+  <div class="chiffre"><div class="valeur">174</div><div class="etiquette">atteignables depuis un écran</div></div>
+  <div class="chiffre"><div class="valeur">16,9 %</div><div class="etiquette">contre 13 % ce matin</div></div>
+  <div class="chiffre"><div class="valeur">855</div><div class="etiquette">construites et sans porte</div></div>
 </div>
+
+<p class="note">C'est la découverte du jour, et elle change la lecture du chantier : <b>l'essentiel du produit est écrit, pas atteignable.</b> Ce n'est pas du travail restant, c'est du travail déjà payé qui ne sert à rien faute d'un écran. La mesure est reproductible depuis ce matin — les chiffres précédents ne l'étaient pas et ont été retirés.</p>
+
+<h2>Où l'écart se creuse</h2>
+
+<div class="tableau-enveloppe">
+<table>
+  <thead><tr><th>Module</th><th>Exposées</th><th>Atteignables</th><th style="width:130px">Écart</th><th></th></tr></thead>
+  <tbody>
+    <tr><td class="sess">Compta</td><td class="num">77</td><td class="num">7</td><td><div class="barre"><span style="width:91%"></span></div></td><td class="quoi">70</td></tr>
+    <tr><td class="sess">Musée</td><td class="num">67</td><td class="num">2</td><td><div class="barre"><span style="width:97%"></span></div></td><td class="quoi">65</td></tr>
+    <tr><td class="sess">Padel</td><td class="num">56</td><td class="num">1</td><td><div class="barre"><span style="width:98%"></span></div></td><td class="quoi">55</td></tr>
+    <tr><td class="sess">Finance</td><td class="num">60</td><td class="num">7</td><td><div class="barre"><span style="width:88%"></span></div></td><td class="quoi">53</td></tr>
+    <tr><td class="sess">Piscine</td><td class="num">53</td><td class="num">4</td><td><div class="barre"><span style="width:92%"></span></div></td><td class="quoi">49</td></tr>
+    <tr><td class="sess">Accès</td><td class="num">50</td><td class="num">4</td><td><div class="barre"><span style="width:92%"></span></div></td><td class="quoi">46</td></tr>
+    <tr><td class="sess">Réservation</td><td class="num">51</td><td class="num">7</td><td><div class="barre"><span style="width:86%"></span></div></td><td class="quoi">44</td></tr>
+    <tr><td class="sess">Boutique</td><td class="num">47</td><td class="num">4</td><td><div class="barre"><span style="width:91%"></span></div></td><td class="quoi">43</td></tr>
+    <tr><td class="sess">Offre</td><td class="num">47</td><td class="num">9</td><td><div class="barre"><span style="width:81%"></span></div></td><td class="quoi">38</td></tr>
+    <tr><td class="sess">Personnel</td><td class="num">42</td><td class="num">9</td><td><div class="barre"><span style="width:79%"></span></div></td><td class="quoi">33</td></tr>
+    <tr><td class="sess">Stock</td><td class="num">63</td><td class="num">31</td><td><div class="barre"><span style="width:51%"></span></div></td><td class="quoi">32 <b>— était à 0 ce matin</b></td></tr>
+    <tr><td class="sess">Patinoire</td><td class="num">34</td><td class="num">13</td><td><div class="barre"><span style="width:62%"></span></div></td><td class="quoi">21</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p class="note">Relevé de <code>claude-H</code>. Les « exposées » sont exactes ; les « atteignables » sont reconstituées par préfixe d'URL, donc à une ou deux unités près quand un module en expose plusieurs.</p>
 
 <h2>Les neuf sessions</h2>
 
 <div class="tableau-enveloppe">
 <table>
-  <thead>
-    <tr><th>Session</th><th>État</th><th>Commits<br>aujourd'hui</th><th>Sur quoi elle travaille</th></tr>
-  </thead>
+  <thead><tr><th>Session</th><th>Dernière poussée</th><th>Sur quoi elle travaille</th></tr></thead>
   <tbody>
-    <tr><td class="sess">A · moi</td><td><span class="pastille p-actif">actif</span></td><td class="num">49</td><td class="quoi">Intégration, arbitrages, garde-fous. Socle, sécurité, coordination.</td></tr>
-    <tr><td class="sess">B</td><td><span class="pastille p-actif">actif</span></td><td class="num">22</td><td class="quoi">Failles de cloisonnement : rattachement produit au stock, vérification de chaîne NF525.</td></tr>
-    <tr><td class="sess">C</td><td><span class="pastille p-actif">actif</span></td><td class="num">13</td><td class="quoi">Garde-fous. A livré le douzième et <b>corrigé mon compte : 49 entités exposées, pas 35</b>.</td></tr>
-    <tr><td class="sess">D</td><td><span class="pastille p-actif">actif</span></td><td class="num">51</td><td class="quoi">Devis, bons de commande, bons de livraison — moteur livré, écran à suivre.</td></tr>
-    <tr><td class="sess">E</td><td><span class="pastille p-lent">8 heures</span></td><td class="num">5</td><td class="quoi">Relances et créneaux libérés. N'a pas poussé depuis ce matin.</td></tr>
-    <tr><td class="sess">F</td><td><span class="pastille p-actif">actif</span></td><td class="num">10</td><td class="quoi">Hébergement : la nuitée, le tarif par nuit, la règle de la demi-journée.</td></tr>
-    <tr><td class="sess">G</td><td><span class="pastille p-actif">actif</span></td><td class="num">48</td><td class="quoi">Vente et caisse : historique filtrable, un tarif par ligne de panier.</td></tr>
-    <tr><td class="sess">H</td><td><span class="pastille p-actif">actif</span></td><td class="num">25</td><td class="quoi">Les écrans. A trouvé et réparé le défaut de format qui te bloquait.</td></tr>
-    <tr><td class="sess">I</td><td><span class="pastille p-arret">jamais ouverte</span></td><td class="num">0</td><td class="quoi">Piscine, padel, patinoire, sport, musée. <b>Cinq modules que personne n'a jamais ouverts.</b></td></tr>
+    <tr><td class="sess">A · moi</td><td><span class="pastille p-actif">2 h</span></td><td class="quoi">Intégration, arbitrages, garde-fous. Socle, sécurité, coordination.</td></tr>
+    <tr><td class="sess">B</td><td><span class="pastille p-actif">4 min</span></td><td class="quoi">Failles de cloisonnement — rattachement produit au stock, chaîne comptable.</td></tr>
+    <tr><td class="sess">C</td><td><span class="pastille p-actif">14 min</span></td><td class="quoi">Garde-fous. A livré le douzième et <b>corrigé mon compte : 49 entités exposées, pas 35</b>.</td></tr>
+    <tr><td class="sess">D</td><td><span class="pastille p-actif">12 min</span></td><td class="quoi">Devis, bons de commande, bons de livraison. Puis le préavis de prélèvement.</td></tr>
+    <tr><td class="sess">E</td><td><span class="pastille p-actif">40 min</span></td><td class="quoi">Relances et créneaux libérés. Réveillée depuis ce midi.</td></tr>
+    <tr><td class="sess">F</td><td><span class="pastille p-lent">2 h</span></td><td class="quoi">Hébergement : la nuitée, le tarif par nuit. <b>Trois défauts de stock l'attendent.</b></td></tr>
+    <tr><td class="sess">G</td><td><span class="pastille p-actif">4 min</span></td><td class="quoi">Vente et caisse : historique filtrable, correction de règlement, écart de caisse.</td></tr>
+    <tr><td class="sess">H</td><td><span class="pastille p-actif">63 min</span></td><td class="quoi">Les écrans. Patinoire livrée, stock livré — <b>de zéro à trente et une opérations</b>.</td></tr>
+    <tr><td class="sess">I</td><td><span class="pastille p-arret">branche : 2 j</span></td><td class="quoi">Piscine, padel, patinoire, sport, musée. <b>Ouverte aujourd'hui, n'a encore rien poussé.</b></td></tr>
   </tbody>
 </table>
 </div>
 
-<p class="note">Ce tableau mesure les branches, pas les messages. J'ai cru la flotte à moitié muette ce matin parce que je n'arrivais plus à joindre deux sessions ; leurs branches, elles, bougeaient. Une session est silencieuse quand son code ne bouge plus, pas quand elle ne répond pas.</p>
-
-<h2>Livré aujourd'hui</h2>
+<h2>Ce qui a été trouvé aujourd'hui</h2>
 
 <ul class="liste">
-  <li class="fait"><b>Le défaut de format qui te bloquait</b> — treize créations réparées, et un contrôle automatique qui rend la faute impossible à livrer désormais.</li>
-  <li class="fait"><b>Devis, bons de commande, bons de livraison</b> — avec leur filiation, et le bon de livraison qui facture la quantité <em>livrée</em>, pas la commandée.</li>
-  <li class="fait"><b>Deux failles de cloisonnement</b> — un établissement pouvait rattacher un produit au stock d'un autre, et lire la chaîne NF525 d'un autre.</li>
-  <li class="fait"><b>Le douzième garde-fou</b> — 49 entités laissaient écrire leur propre établissement. Vingt-deux d'entre elles ne le déclaraient nulle part : c'est l'absence de déclaration qui exposait.</li>
-  <li class="fait"><b>Les données de démonstration rechargeables</b> — quatorze fixtures créaient des rôles sans vérifier s'ils existaient. Réparé par cinq sessions.</li>
-  <li class="fait"><b>Un tarif par ligne de panier</b> — la caisse cesse de le deviner.</li>
-  <li class="fait"><b>Deux cliquets resserrés</b> — ils annonçaient depuis des jours qu'il fallait le faire. Personne ne lisait le message.</li>
+  <li class="fait"><b>Treize écrans de création étaient muets</b> — un désaccord de format entre l'écran et le serveur, invisible parce qu'on ne voit pas un code d'erreur : on voit un bouton qui ne fait rien.</li>
+  <li class="dur"><b>Un établissement pouvait être supprimé.</b> 119 tables y sont rattachées, deux seulement disent ce qu'il advient d'elles. Opération retirée.</li>
+  <li class="dur"><b>Un article de stock non rattaché à un produit ne manque jamais de stock</b> — la seule garde de disponibilité du module est inatteignable pour lui. Et il fabrique de faux écarts d'inventaire dans l'autre sens.</li>
+  <li class="dur"><b>Le contrôle des écarts d'inventaire est inactif par défaut.</b> Sans paramétrage, aucun écart n'est jamais « significatif », si grand soit-il.</li>
+  <li class="dur"><b>« Inventaire sur un rayon » compte tout le magasin.</b> Le choix est accepté, le filtre n'est jamais appliqué. Un exploitant le découvre après avoir bloqué son magasin une journée.</li>
+  <li class="fait"><b>Deux failles de cloisonnement fermées</b> — un établissement pouvait rattacher un produit au stock d'un autre, et lire sa chaîne comptable.</li>
+  <li class="fait"><b>Le douzième garde-fou</b> : 49 entités laissaient écrire leur propre établissement. Vingt-deux ne le déclaraient nulle part.</li>
+  <li class="fait"><b>Le stock et la patinoire ont leurs premiers écrans</b>, construits autour de la question réelle du guichet — « vous avez du 38 ? », « il en reste combien ? ».</li>
 </ul>
 
 <h2>Ce qui attend une décision</h2>
 
 <ul class="liste">
-  <li class="dur"><b>La vente en ligne, l'application et la borne</b> — chaque canal a sa propre attente de paiement et son propre débiteur. Pour une agence de voyage, le débiteur est le partenaire, pas le client. Tranché sur le principe, pas encore construit.</li>
-  <li class="attend"><b>Carte plus mandat SEPA signés ensemble</b> — décidé, spécifié, pas encore développé. Rappel : <b>aucun numéro de carte ne sera jamais stocké.</b></li>
-  <li class="attend"><b>Le module campagne marketing</b> — les spécifications sont écrites, le développement n'a pas commencé.</li>
-  <li class="attend"><b>Correction d'une erreur de type de paiement</b> — datée du jour du geste, pas du jour de la vente, parce que la veille est déjà scellée. Conforme NF525, pas encore construit.</li>
-  <li class="dur"><b>Cinq modules jamais ouverts</b> — piscine, padel, patinoire, sport, musée. La session qui les porte n'a jamais démarré. <b>C'est le plus gros trou du chantier.</b></li>
+  <li class="dur"><b>Un prestataire d'envoi de courriels.</b> Prérequis de toute mise en production avec prélèvements. Il faut un compte et un nom de domaine expéditeur.</li>
+  <li class="attend"><b>Carte plus mandat SEPA signés ensemble</b> — décidé et spécifié, pas encore développé. <b>Aucun numéro de carte ne sera jamais stocké.</b></li>
+  <li class="attend"><b>Le module campagne marketing</b> — spécifications écrites, développement non commencé.</li>
+  <li class="attend"><b>Correction d'une erreur de type de paiement</b> — datée du jour du geste, pas du jour de la vente. Conforme, en cours.</li>
+  <li class="dur"><b>Compta et Musée : 70 et 65 opérations sans aucun écran.</b> Les deux plus gros écarts du produit.</li>
 </ul>
 
 <h2>Dette gelée</h2>
 
-<p class="note" style="margin-top:0">Chaque compteur ne peut que descendre : un défaut connu est toléré, un défaut neuf fait refuser la poussée. Relevé à 10:49.</p>
+<p class="note" style="margin-top:0">Chaque compteur ne peut que descendre : un défaut connu est toléré, un défaut neuf fait refuser la livraison.</p>
 
 <div class="tableau-enveloppe">
 <table>
   <thead><tr><th>Garde-fou</th><th>Reste</th><th>Ce qu'il empêche</th></tr></thead>
   <tbody>
-    <tr><td class="sess">Cloisonnement</td><td class="num">24</td><td class="quoi">Lire ou écrire les données d'un autre établissement</td></tr>
     <tr><td class="sess">Établissement écrivable</td><td class="num">49</td><td class="quoi">Déplacer une donnée vers un autre établissement</td></tr>
     <tr><td class="sess">Couverture de périmètre</td><td class="num">30</td><td class="quoi">Exposer une liste que rien ne filtre</td></tr>
     <tr><td class="sess">Événements orphelins</td><td class="num">25</td><td class="quoi">Émettre un événement que personne n'écoute</td></tr>
+    <tr><td class="sess">Cloisonnement</td><td class="num">24</td><td class="quoi">Lire ou écrire les données d'un autre établissement</td></tr>
     <tr><td class="sess">Résolution liée</td><td class="num">13</td><td class="quoi">Contrôler le droit sur la mauvaise entité</td></tr>
     <tr><td class="sess">Charges utiles</td><td class="num">11</td><td class="quoi">Envoyer autre chose que ce que le contrat annonce</td></tr>
     <tr><td class="sess">Écriture transfrontière</td><td class="num">3</td><td class="quoi">Écrire au travers d'une frontière de module</td></tr>
@@ -303,8 +279,8 @@
 </div>
 
 <footer>
-  Établi par <b>claude-A</b>, intégrateur. Les chiffres datent de l'heure indiquée en tête —
-  ici une mesure vit une vingtaine de minutes.
+  Établi par <b>claude-A</b>, intégrateur. 826 livraisons au total, dont 75 aujourd'hui.
+  Les chiffres datent de l'heure indiquée en tête — ici une mesure vit une vingtaine de minutes.
 </footer>
 
 </div>
