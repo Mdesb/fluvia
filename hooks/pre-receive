@@ -28,6 +28,8 @@ BARE="$(pwd)"                       # git place le hook dans le répertoire du d
 BRANCHE_REFERENCE="refs/heads/main"
 ZERO="0000000000000000000000000000000000000000"
 IMAGE="billetterie-preprod-php"
+# Les controles du front tournent dans l'image du deploiement, sans dependances ni reseau.
+IMAGE_NODE="node:20-alpine"
 
 if [ -f "$BARE/hooks/GARDE-FOUS-DESACTIVES" ]; then
     echo "⚠ Garde-fous DÉSACTIVÉS ($BARE/hooks/GARDE-FOUS-DESACTIVES). Push accepté sans contrôle."
@@ -210,6 +212,60 @@ while read -r ancien nouveau ref; do
         lancer garde-fou-defauts-mapping.php "--contre=$BASE"
     fi
 
+    # ── Contrôles du front (D50) ──
+    #
+    # Le front parle à l'API dans deux formats selon l'opération, et **rien dans la signature ne dit
+    # lequel** : une opération à `uriTemplate` sur mesure porte `input: false` et lit le corps brut,
+    # une opération standard désérialise et exige `ld+json`. 236 écritures standard contre 232 sur
+    # mesure — presque la moitié de l'API bascule sur une distinction invisible.
+    #
+    # Treize appels de création répondaient 415, dont sept **depuis toujours** : créer un client, un
+    # utilisateur, un moyen de paiement, une option produit… Personne ne l'avait signalé, parce que
+    # personne ne voit un code HTTP : on voit un bouton qui ne fait rien. C'est Maxime qui l'a trouvé,
+    # en production, en essayant d'ajouter un tarif.
+    #
+    # `claude-H` a écrit les deux contrôles et les a prouvés dans les deux sens. Ils étaient lançables
+    # par `npm run verifier` — donc facultatifs, donc suspendus à ce que quelqu'un y pense. Le jour
+    # même, deux cliquets du dépôt annonçaient leur résorption à chaque poussée depuis plusieurs
+    # jours, commande à l'appui, et personne ne l'avait lancée. **Un garde-fou facultatif n'est pas un
+    # garde-fou, c'est une documentation exécutable.**
+    #
+    # ⚠ LE MONTAGE EST LA RACINE DU DÉPÔT, PAS `frontend/`. `verifier-formats` lit `app/src` pour
+    # connaître les `uriTemplate` du serveur. Monté sur `frontend/` seul il ne verrait aucune opération
+    # sur mesure et crierait 27 faux positifs — dont la caisse. Un contrôle qui crie au loup finit
+    # désactivé, ce qui coûte plus cher que son absence.
+    #
+    # Aucune dépendance : les scripts n'utilisent que `node:fs`, `node:path`, `node:url`. Donc pas de
+    # `npm install`, donc `--network none` comme les autres. L'image est celle du déploiement.
+    if [ -f "$ARBRE/frontend/scripts/verifier-formats.mjs" ]; then
+        # Inutile de lancer node quand la poussée ne touche ni le front ni les opérations du serveur
+        # que le contrôle lit.
+        TOUCHE_FRONT="$(git --git-dir="$BARE" diff --name-only "$BASE...$nouveau" \
+                        -- 'frontend' 'app/src' 2>/dev/null | head -1)"
+
+        if [ -z "$TOUCHE_FRONT" ]; then
+            echo "── Contrôles du front : OK — la poussée ne touche ni frontend/ ni app/src."
+        else
+            echo "── Contrôles du front (D50)"
+            # Les noms portent leur extension parce que le filet de completude, plus bas, cherche
+            # le nom COMPLET du fichier dans ce hook. Ecrits sans `.mjs`, les deux controles
+            # seraient declares « appeles par aucun hook » et feraient refuser toute poussee. Le
+            # filet se refermerait sur ce qu'il protege.
+            for script in verifier-droits.mjs verifier-formats.mjs; do
+                [ -f "$ARBRE/frontend/scripts/$script" ] || continue
+                if docker run --rm --network none \
+                        -u "$(id -u):$(id -g)" \
+                        -v "$ARBRE:$ARBRE" \
+                        -w "$ARBRE/frontend" "$IMAGE_NODE" \
+                        node "scripts/$script"; then
+                    :
+                else
+                    ECHEC_REF=1
+                fi
+            done
+        fi
+    fi
+
     # ⚠ FILET DE COMPLÉTUDE — la leçon du 24/08, et elle a coûté cher.
     #
     # Ce hook n'appelle pas `bin/garde-fous.sh` : il doit calculer les fichiers ajoutés sur
@@ -239,7 +295,11 @@ while read -r ancien nouveau ref; do
     # c'est « la version qu'on pousse est-elle cohérente avec elle-même ? ». La protection est intacte,
     # et même plus juste : c'est le hook poussé qui tournera une fois installé.
     HOOK_POUSSE="$ARBRE/hooks/pre-receive"
-    for chemin in "$ARBRE"/bin/garde-fou-*.php; do
+
+    # Le filet couvre aussi les controles du front : ils ne s'appellent pas `garde-fou-*.php`, donc
+    # le glob ci-dessous les manquait. Un controle qu'on peut retirer du hook sans que rien ne le
+    # dise retombe exactement dans le defaut qu'il corrige.
+    for chemin in "$ARBRE"/bin/garde-fou-*.php "$ARBRE"/frontend/scripts/verifier-*.mjs; do
         [ -f "$chemin" ] || continue
         nom="$(basename "$chemin")"
 
