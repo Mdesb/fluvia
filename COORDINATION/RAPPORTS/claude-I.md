@@ -18,6 +18,7 @@
 | 25/08 09:05 | **Silence de 22:52 a 09:05 : ma session ne s-est pas reveillee**, je le dis plutot que de le masquer. Reprise : ordres longs lus. Balayage D40 fait sur mes quatre autres modules — **aucun autre basculement**, detail ci-dessous. D41 verifie en profondeur : mes 9 entites exposees le sont bien, mais mes ~30 processeurs a persistance directe sont **deja corrects** via `ContexteEtablissement`. | Item 2 de mes ordres : `PrioriteOtaResolver` qui passe en `AnnuleeLibre` sans rien restituer. | Rien. |
 | 25/08 09:45 | **Item 2 livre : `PrioriteOtaResolver` restitue.** Le billet perdant recupere son credit de carte (CQ-3/CQ-6), son droit d-acces est revoque, et la jauge de la ressource mere est liberee — il ne faisait aucun des trois. Test ecrit **verifie rouge sans la garde** (0 au lieu de 1) puis vert. Musee 23/23, Platform 62/62. Pile demontee, worktree rendu. | Item 5 : reprise des paquets verticales. | Rien. |
 | 25/08 10:10 | **Chantier ferme.** Le vocabulaire des cinq verticales passe du document au **manifeste** (`settingsSchema()`, patron `SmartFlowModule`) : 51 cles declarees en code, testees. `VocabulaireManifesteTest` verifie rouge sur les cinq (« aucun vocabulaire declare ») avant d-etre vert. Verticales 5/5, Platform 62/62. Pile demontee, worktree rendu. | Rien d-assigne — **je te demande une tache** (D35). En attendant je reprends le chantier `frontend/` si tu me l-attribues, sinon la revue de mes 81 entites d-API. | Rien. |
+| 26/08 09:55 | Nouveau silence 23:56 -> 09:41, meme cause. Reprise : **fixtures rendues idempotentes** dans les cinq verticales — 9 roles (Padel 2, Patinoire 3, Musee 4, ton compte exact) et **8 creations de permissions** que tu n-avais pas comptees. Syntaxe verifiee en conteneur avant push. | Les cinq suites tournent. | Rien. |
 
 ---
 
@@ -422,3 +423,35 @@ etaient plus hauts que ceux de `main` — que tu venais de faire descendre. Le g
 chaque fois et un `merge` a suffi. Mais a neuf sessions, chaque descente de cliquet refuse la
 prochaine poussee de tous ceux qui n-ont pas remerge dans l-intervalle. Ce n-est pas un bug, c-est un
 cout a connaitre — peut-etre a dire dans le message de refus : « remerge `main`, un cliquet a baisse ».
+
+---
+
+## 2026-08-26 09:55 · Presentation horaire (D35) — fixtures idempotentes, et un ecart a ton compte
+
+**`claude-I` en ligne.** Tache en cours : verification des cinq suites apres le lot fixtures.
+
+**Ton lot est fait.** Les neuf creations de roles sont passees par `roleNomme()` — ton patron, repris
+tel quel : Padel 2, Patinoire 3, Musee 4. Ton compte etait exact.
+
+**Mais il manquait les permissions, et elles sont plus nombreuses.** Tu ecrivais « meme chose pour les
+`Permission` : le couple (module, action) porte aussi une unicite ». J-en ai trouve **huit creations
+non gardees** dans mes cinq fixtures — dont deux dans `Piscine` et `Sport`, que ton ordre ne citait
+pas puisqu-il ne visait que les trois modules a roles. Elles echouent exactement de la meme facon sur
+un chargement complet, et elles auraient fait tomber le chargement **avant** meme d-arriver aux roles :
+`PiscineFixtures` cree ses permissions ligne 58, bien avant tout role.
+
+Autrement dit : rendre les neuf roles idempotents n-aurait pas suffi a faire passer un chargement
+complet. Les cinq fixtures sont traitees, roles **et** permissions.
+
+**Un detail de mise en oeuvre qui evite du risque** : j-ai laisse en place tous les `persist()`
+existants plutot que de les demeler. Doctrine ignore un `persist()` sur un objet deja gere, donc le
+comportement est identique et le diff se limite aux expressions de construction. Moins de surface,
+moins de chances de casser un chemin que je ne connais pas.
+
+**Sur mon silence.** Deuxieme nuit d-arret, 23:56 -> 09:41. Je le redis parce que ca reste, de loin,
+mon plus gros cout : deux fois dix heures perdues en deux jours, sur un perimetre que personne d-autre
+ne couvre. Ce n-est pas quelque chose que je peux corriger de l-interieur.
+
+**Et ma demande de tache d-hier soir tient toujours** — mes cinq items sont fermes, celui-ci etait un
+lot distribue a toute la flotte. Si tu n-as rien, je prends la revue de cloisonnement de mes 81
+entites d-API, que personne n-a jamais faite.
