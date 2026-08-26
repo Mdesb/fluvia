@@ -24,6 +24,7 @@
 | 26/08 12:05 | Voie B analysee : sur les cinq, **trois seulement sont reellement denormalisables**, deux sont fermees par `input: false`. J-ai cru trouver une ecriture transfrontiere dans `DemarrerAffutageProcessor` — **l-experience m-a contredite**, detail ci-dessous. Correctif conserve pour une autre raison, teste, vert. | Voie B proprement dite. | Rien. |
 | 26/08 13:10 | **D41 termine chez moi : 11 resorbees sur 11.** Dette globale 49 -> 38. Voie A (6) par processeur de rattachement, voie B (5) par `input: false` **plus** fermeture declaree. | Verification des suites — le risque est qu-une operation dependait de la denormalisation par defaut. | Un angle mort de ton garde-fou n12, ci-dessous. |
 | 26/08 13:20 | **D41 clos et verifie** : Padel 24, Patinoire 30, Sport 31, Platform 62 — toutes vertes. Aucune operation ne dependait de la denormalisation par defaut, c-etait le risque reel du lot. Pile demontee, worktree rendu. | Plus rien d-assigne. | Rien. |
+| 26/08 23:40 | Session fermee par Maxime. Rien en cours, rien a moitie ecrit, aucune pile de test, worktree VPS rendu a `claude-I`. | **Deux taches assignees non commencees** : le preavis SEPA de `Sport` (prioritaire) et `AlertePresenceIsolee` (en troisieme, sur ta consigne). | **69 commits a moi non fusionnes dans `main`.** |
 
 ---
 
@@ -694,3 +695,35 @@ chez toi, et aucune n-est de mon ressort :
 
 En attendant, je continue a chercher dans mes cinq modules : c-est la ou j-ai trouve les deux vrais
 defauts de la semaine, et personne d-autre n-y va.
+
+---
+
+## 2026-08-26 23:40 · Fermeture — ou en est mon perimetre
+
+Maxime ferme la session. J-ecris l-etat ici pour qu-une reprise n-ait besoin de rien d-autre.
+
+**Livre et verifie** : cinq manifestes de module · le vocabulaire des cinq verticales en code (51 cles,
+testees) · cinq paquets verticales rediges · le correctif d-eclairage padel (test rouge un lundi sur
+sept) · la restitution de l-arbitrage OTA (credit, acces, jauge) · fixtures idempotentes (9 roles +
+8 permissions) · `EvenementEclairage` cloisonne · **D41 : 11 entites sur 11, dette 49 -> 38**.
+
+**Non commence, et assigne par toi :**
+1. **`Sport` preleve sans preavis** — `GenererRemiseSepaHandler`. Tu l-as marquee prioritaire sur les
+   fixtures, et `RemiseSepaRecablageTest:50` est rouge en attendant. Ton avertissement est note :
+   adapter le test sans adapter le chemin reel remettrait le probleme la ou il etait, avec un test vert
+   pour le couvrir.
+2. **`AlertePresenceIsolee` ne peut que grandir** (D55) — tu la veux en troisieme, et tu veux ma
+   proposition sur *ce qui clot une alerte* **avant** que j-ecrive quoi que ce soit. Je n-ai pas
+   d-avis ecrit a te donner : je ne l-ai pas encore etudiee.
+
+**Ce qui bloque, et qui n-a pas bouge depuis trois jours :**
+- **69 de mes commits ne sont pas fusionnes dans `main`.** Tout ce qui est ci-dessus vit sur
+  `claude-I-desktop` et nulle part ailleurs.
+- `frontend/` n-est attribue a personne — quatre libelles y sont les seuls points d-affichage vivants
+  de mes 51 cles.
+- Les deux chevauchements Smart Flow (liste d-attente patinoire, delestage musee), a trancher avant que
+  `claude-E` n-implemente.
+- Le resolveur i18n et l-`xid` du socle : sans eux mes cinq paquets restent rediges et non installables.
+
+**Environnement** : aucune pile de test, aucun conteneur, worktree `/home/debian/wt/claude-I` rendu a sa
+branche. Rien a nettoyer apres moi.
