@@ -7,198 +7,142 @@
 <title>Poste de conduite — billetterie</title>
 <style>
   :root {
-    --encre:      #14181f;
-    --encre-2:    #4a5460;
-    --encre-3:    #7d8794;
-    --fond:       #f7f6f3;
-    --carte:      #ffffff;
-    --trait:      #e2e0da;
-    --trait-fort: #c9c6bd;
-    --accent:     #9a3412;
-    --accent-pale:#fdf0e9;
-    --vert:       #2f6b4f;
-    --vert-pale:  #eaf3ee;
-    --ambre:      #8a6116;
-    --ambre-pale: #fbf3e0;
-    --rouge:      #a02128;
-    --rouge-pale: #fbeced;
+    --encre:#14181f; --encre-2:#4a5460; --encre-3:#7d8794;
+    --fond:#f7f6f3; --carte:#ffffff; --trait:#e2e0da; --trait-fort:#c9c6bd;
+    --accent:#9a3412; --accent-pale:#fdf0e9;
+    --vert:#2f6b4f; --vert-pale:#eaf3ee;
+    --ambre:#8a6116; --ambre-pale:#fbf3e0;
+    --rouge:#a02128; --rouge-pale:#fbeced;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --encre:      #eceae5;
-      --encre-2:    #a6adb8;
-      --encre-3:    #737d8a;
-      --fond:       #12151a;
-      --carte:      #191d24;
-      --trait:      #2b313a;
-      --trait-fort: #3d4550;
-      --accent:     #e8895c;
-      --accent-pale:#2a1a12;
-      --vert:       #74c39a;
-      --vert-pale:  #14231b;
-      --ambre:      #d9ab52;
-      --ambre-pale: #241d0f;
-      --rouge:      #e8848c;
-      --rouge-pale: #261517;
+      --encre:#eceae5; --encre-2:#a6adb8; --encre-3:#737d8a;
+      --fond:#12151a; --carte:#191d24; --trait:#2b313a; --trait-fort:#3d4550;
+      --accent:#e8895c; --accent-pale:#2a1a12;
+      --vert:#74c39a; --vert-pale:#14231b;
+      --ambre:#d9ab52; --ambre-pale:#241d0f;
+      --rouge:#e8848c; --rouge-pale:#261517;
     }
   }
   :root[data-theme="dark"] {
-    --encre:      #eceae5;
-    --encre-2:    #a6adb8;
-    --encre-3:    #737d8a;
-    --fond:       #12151a;
-    --carte:      #191d24;
-    --trait:      #2b313a;
-    --trait-fort: #3d4550;
-    --accent:     #e8895c;
-    --accent-pale:#2a1a12;
-    --vert:       #74c39a;
-    --vert-pale:  #14231b;
-    --ambre:      #d9ab52;
-    --ambre-pale: #241d0f;
-    --rouge:      #e8848c;
-    --rouge-pale: #261517;
+    --encre:#eceae5; --encre-2:#a6adb8; --encre-3:#737d8a;
+    --fond:#12151a; --carte:#191d24; --trait:#2b313a; --trait-fort:#3d4550;
+    --accent:#e8895c; --accent-pale:#2a1a12;
+    --vert:#74c39a; --vert-pale:#14231b;
+    --ambre:#d9ab52; --ambre-pale:#241d0f;
+    --rouge:#e8848c; --rouge-pale:#261517;
   }
-
-  * { box-sizing: border-box; }
-
+  * { box-sizing:border-box; }
   body {
-    margin: 0;
-    background: var(--fond);
-    color: var(--encre);
-    font: 15px/1.55 ui-sans-serif, -apple-system, "Segoe UI", system-ui, sans-serif;
-    -webkit-font-smoothing: antialiased;
+    margin:0; background:var(--fond); color:var(--encre);
+    font:15px/1.55 ui-sans-serif,-apple-system,"Segoe UI",system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;
   }
-
-  .page { max-width: 1120px; margin: 0 auto; padding: 40px 24px 80px; }
-
-  header { border-bottom: 2px solid var(--trait-fort); padding-bottom: 18px; margin-bottom: 30px; }
-  h1 { margin: 0 0 6px; font-size: 27px; font-weight: 620; letter-spacing: -0.022em; }
-  .horodatage { color: var(--encre-3); font-size: 13px; font-variant-numeric: tabular-nums; }
-  .horodatage strong { color: var(--encre-2); font-weight: 600; }
-
+  .page { max-width:1120px; margin:0 auto; padding:40px 24px 80px; }
+  header { border-bottom:2px solid var(--trait-fort); padding-bottom:18px; margin-bottom:30px; }
+  h1 { margin:0 0 6px; font-size:27px; font-weight:620; letter-spacing:-.022em; }
+  .horodatage { color:var(--encre-3); font-size:13px; font-variant-numeric:tabular-nums; }
+  .horodatage strong { color:var(--encre-2); font-weight:600; }
   h2 {
-    font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em;
-    color: var(--encre-3); font-weight: 700;
-    margin: 42px 0 14px; padding-bottom: 7px; border-bottom: 1px solid var(--trait);
+    font-size:11px; text-transform:uppercase; letter-spacing:.1em; color:var(--encre-3);
+    font-weight:700; margin:42px 0 14px; padding-bottom:7px; border-bottom:1px solid var(--trait);
   }
-  h2:first-of-type { margin-top: 0; }
-
-  .bandeau {
-    background: var(--rouge-pale); border-left: 3px solid var(--rouge);
-    padding: 16px 20px; border-radius: 0 4px 4px 0;
-  }
-  .bandeau.ok    { background: var(--vert-pale);  border-left-color: var(--vert); }
-  .bandeau.tiede { background: var(--ambre-pale); border-left-color: var(--ambre); }
-  .bandeau h3 { margin: 0 0 5px; font-size: 15.5px; font-weight: 620; }
-  .bandeau p  { margin: 0; color: var(--encre-2); font-size: 14px; }
-  .bandeau + .bandeau { margin-top: 10px; }
-
-  .grille { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
-  .chiffre { background: var(--carte); border: 1px solid var(--trait); border-radius: 5px; padding: 14px 16px; }
-  .chiffre .valeur {
-    font-size: 27px; font-weight: 640; letter-spacing: -0.03em;
-    font-variant-numeric: tabular-nums; line-height: 1.15;
-  }
-  .chiffre .etiquette { font-size: 12px; color: var(--encre-3); margin-top: 3px; }
-
-  .tableau-enveloppe { overflow-x: auto; }
-  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  h2:first-of-type { margin-top:0; }
+  .bandeau { background:var(--rouge-pale); border-left:3px solid var(--rouge); padding:16px 20px; border-radius:0 4px 4px 0; }
+  .bandeau.ok { background:var(--vert-pale); border-left-color:var(--vert); }
+  .bandeau.tiede { background:var(--ambre-pale); border-left-color:var(--ambre); }
+  .bandeau h3 { margin:0 0 5px; font-size:15.5px; font-weight:620; }
+  .bandeau p { margin:0; color:var(--encre-2); font-size:14px; }
+  .bandeau p + p { margin-top:8px; }
+  .bandeau + .bandeau { margin-top:10px; }
+  .grille { display:grid; gap:12px; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); }
+  .chiffre { background:var(--carte); border:1px solid var(--trait); border-radius:5px; padding:14px 16px; }
+  .chiffre .valeur { font-size:27px; font-weight:640; letter-spacing:-.03em; font-variant-numeric:tabular-nums; line-height:1.15; }
+  .chiffre .etiquette { font-size:12px; color:var(--encre-3); margin-top:3px; }
+  .chiffre .delta { font-size:11.5px; color:var(--vert); font-weight:640; margin-top:2px; }
+  .tableau-enveloppe { overflow-x:auto; }
+  table { border-collapse:collapse; width:100%; font-size:14px; }
   th {
-    text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.075em;
-    color: var(--encre-3); font-weight: 700; padding: 0 12px 8px 0;
-    border-bottom: 1px solid var(--trait-fort); white-space: nowrap;
+    text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.075em;
+    color:var(--encre-3); font-weight:700; padding:0 12px 8px 0;
+    border-bottom:1px solid var(--trait-fort); white-space:nowrap;
   }
-  td { padding: 10px 12px 10px 0; border-bottom: 1px solid var(--trait); vertical-align: top; }
-  tr:last-child td { border-bottom: none; }
-  td.sess { font-weight: 640; white-space: nowrap; }
-  td.num  { font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--encre-2); text-align: right; }
-  td.quoi { color: var(--encre-2); }
-
-  .barre { height: 6px; background: var(--trait); border-radius: 3px; overflow: hidden; min-width: 70px; }
-  .barre span { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
-
-  .pastille { display: inline-block; font-size: 11px; font-weight: 650; padding: 2px 8px; border-radius: 20px; white-space: nowrap; }
-  .p-actif { background: var(--vert-pale);  color: var(--vert); }
-  .p-lent  { background: var(--ambre-pale); color: var(--ambre); }
-  .p-arret { background: var(--rouge-pale); color: var(--rouge); }
-
-  ul.liste { margin: 0; padding-left: 0; list-style: none; }
-  ul.liste li {
-    padding: 11px 0 11px 18px; border-bottom: 1px solid var(--trait);
-    position: relative; color: var(--encre-2);
-  }
-  ul.liste li:last-child { border-bottom: none; }
-  ul.liste li::before {
-    content: ""; position: absolute; left: 0; top: 19px;
-    width: 6px; height: 6px; border-radius: 50%; background: var(--trait-fort);
-  }
-  ul.liste li.fait::before   { background: var(--vert); }
-  ul.liste li.attend::before { background: var(--ambre); }
-  ul.liste li.dur::before    { background: var(--rouge); }
-  ul.liste li b { color: var(--encre); font-weight: 620; }
-
-  .note {
-    color: var(--encre-3); font-size: 13px; font-style: italic;
-    margin-top: 12px; padding-left: 14px; border-left: 2px solid var(--trait);
-  }
-
-  code {
-    font: 12.5px/1.4 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-    background: var(--accent-pale); color: var(--accent);
-    padding: 1px 5px; border-radius: 3px;
-  }
-
-  footer {
-    margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--trait);
-    color: var(--encre-3); font-size: 12.5px;
-  }
+  td { padding:10px 12px 10px 0; border-bottom:1px solid var(--trait); vertical-align:top; }
+  tr:last-child td { border-bottom:none; }
+  td.sess { font-weight:640; white-space:nowrap; }
+  td.num { font-variant-numeric:tabular-nums; white-space:nowrap; color:var(--encre-2); text-align:right; }
+  td.quoi { color:var(--encre-2); }
+  .barre { height:6px; background:var(--trait); border-radius:3px; overflow:hidden; min-width:70px; }
+  .barre span { display:block; height:100%; background:var(--accent); border-radius:3px; }
+  .barre.verte span { background:var(--vert); }
+  .pastille { display:inline-block; font-size:11px; font-weight:650; padding:2px 8px; border-radius:20px; white-space:nowrap; }
+  .p-actif { background:var(--vert-pale); color:var(--vert); }
+  .p-lent { background:var(--ambre-pale); color:var(--ambre); }
+  .p-arret { background:var(--rouge-pale); color:var(--rouge); }
+  ul.liste { margin:0; padding-left:0; list-style:none; }
+  ul.liste li { padding:11px 0 11px 18px; border-bottom:1px solid var(--trait); position:relative; color:var(--encre-2); }
+  ul.liste li:last-child { border-bottom:none; }
+  ul.liste li::before { content:""; position:absolute; left:0; top:19px; width:6px; height:6px; border-radius:50%; background:var(--trait-fort); }
+  ul.liste li.fait::before { background:var(--vert); }
+  ul.liste li.attend::before { background:var(--ambre); }
+  ul.liste li.dur::before { background:var(--rouge); }
+  ul.liste li b { color:var(--encre); font-weight:620; }
+  .note { color:var(--encre-3); font-size:13px; font-style:italic; margin-top:12px; padding-left:14px; border-left:2px solid var(--trait); }
+  code { font:12.5px/1.4 ui-monospace,"SF Mono",Menlo,Consolas,monospace; background:var(--accent-pale); color:var(--accent); padding:1px 5px; border-radius:3px; }
+  footer { margin-top:56px; padding-top:18px; border-top:1px solid var(--trait); color:var(--encre-3); font-size:12.5px; }
 </style>
 </head>
 <body>
-
 <div class="page">
 
 <header>
   <h1>Poste de conduite</h1>
-  <div class="horodatage">Relevé du <strong>26/08/2026 à 13:08</strong> · neuf sessions · dépôt <code>billetterie</code> sur le VPS</div>
+  <div class="horodatage">Relevé du <strong>26/08/2026 à 17:05</strong> · neuf sessions · dépôt <code>billetterie</code> sur le VPS</div>
 </header>
 
 <h2>Ce qui te concerne en premier</h2>
 
 <div class="bandeau ok">
-  <h3>Réparé et déployé — l'ajout d'un tarif fonctionne</h3>
-  <p><b>Treize appels de création étaient cassés, dont sept depuis toujours</b> : créer un client, un utilisateur, un moyen de paiement, une option produit. Réessaie ces écrans-là — plusieurs plaintes classées « écran manquant » étaient ce refus silencieux.</p>
+  <h3>Tu peux enfin tester en tant qu'utilisateur limité</h3>
+  <p>Deux comptes utilisables, mot de passe <code>aaa</code> :<br>
+  <code>agent.reservation@itcotation.com</code> — 32 droits (réservation, accès, catalogue)<br>
+  <code>gestionnaire.boutique@itcotation.com</code> — 32 droits (boutique, stock, catalogue)</p>
+  <p>Tu verras enfin ce que voit un agent : ce qui lui est refusé, ce que le menu lui cache. Impossible depuis dimanche.</p>
 </div>
 
 <div class="bandeau tiede">
-  <h3>Décision qui t'attend — aucun client n'est prévenu avant d'être prélevé</h3>
-  <p>Le préavis SEPA est une obligation : montant et date, quatorze jours avant. Il n'existait pas. Il est construit — mais il ne peut pas partir, <b>aucun prestataire d'envoi de courriels n'est branché sur le produit</b>. Le choix n'est donc pas « prévenir ou pas » : c'est prélever irrégulièrement, ou ne pas prélever. <b>Choisir un prestataire devient le prérequis de toute mise en production avec prélèvements.</b></p>
-</div>
-
-<div class="bandeau">
-  <h3>Toujours bloqué — les 34 rôles de la préproduction sont à zéro droit</h3>
-  <p>Depuis mon incident de dimanche. Tu ne peux tester qu'avec ton compte, celui qui a tout — donc <b>aucun écran n'est vérifiable du point de vue d'un caissier ou d'un responsable</b>. Six fixtures corrigées aujourd'hui, la chaîne avance à chaque passe.</p>
+  <h3>Décision qui t'attend — un prestataire d'envoi de courriels</h3>
+  <p>Le préavis de prélèvement est une obligation : montant et date, quatorze jours avant. Il est construit, testé, planifié — <b>et il ne peut pas partir</b>, aucun prestataire n'étant branché.</p>
+  <p>Le choix n'est donc pas « prévenir ou pas » : c'est <b>prélever irrégulièrement, ou ne pas prélever du tout</b>. Il faut un compte chez un prestataire et un nom de domaine expéditeur. <b>C'est le prérequis de toute mise en production avec prélèvements.</b></p>
 </div>
 
 <h2>L'écart entre ce qui existe et ce qu'on peut atteindre</h2>
 
 <div class="grille">
-  <div class="chiffre"><div class="valeur">1 029</div><div class="etiquette">opérations que le serveur sait faire</div></div>
-  <div class="chiffre"><div class="valeur">164</div><div class="etiquette">atteignables depuis un écran</div></div>
-  <div class="chiffre"><div class="valeur">15,9 %</div><div class="etiquette">contre 13 % ce matin</div></div>
-  <div class="chiffre"><div class="valeur">865</div><div class="etiquette">construites et sans porte</div></div>
+  <div class="chiffre"><div class="valeur">1 042</div><div class="etiquette">opérations que le serveur sait faire</div></div>
+  <div class="chiffre"><div class="valeur">214</div><div class="etiquette">atteignables depuis un écran</div><div class="delta">+79 aujourd'hui</div></div>
+  <div class="chiffre"><div class="valeur">20,5 %</div><div class="etiquette">contre 13 % ce matin</div></div>
+  <div class="chiffre"><div class="valeur">828</div><div class="etiquette">construites et sans porte</div></div>
 </div>
 
-<p class="note">C'est la découverte du jour, et elle change la lecture du chantier : <b>l'essentiel du produit est écrit, pas atteignable.</b> Ce n'est pas du travail restant, c'est du travail déjà payé qui ne sert à rien faute d'un écran.</p>
+<p class="note">La découverte du jour, et elle change la lecture du chantier : <b>l'essentiel du produit est écrit, pas atteignable.</b> Ce n'est pas du travail restant — c'est du travail déjà payé qui ne sert à rien faute d'un écran. La mesure distingue « le code sait appeler » de « quelqu'un peut cliquer », et seule la seconde est reportée ici.</p>
 
-<p class="note"><b>Ce chiffre a été corrigé à la baisse depuis la version de 13h08 de cette page</b> — 174 y était annoncé. L'instrument comptait des appels que le code sait faire mais qu'aucun écran ne déclenche : dix opérations étaient comptées comme ouvertes alors qu'elles n'ont pas de porte. La mesure distingue désormais « le code sait appeler » de « quelqu'un peut cliquer », et seule la seconde est reportée ici.</p>
+<h2>Santé de la machine</h2>
+
+<div class="grille">
+  <div class="chiffre"><div class="valeur">45 %</div><div class="etiquette">disque occupé</div><div class="delta">était à 85 % à 16h</div></div>
+  <div class="chiffre"><div class="valeur">53 Go</div><div class="etiquette">libres</div></div>
+  <div class="chiffre"><div class="valeur">937</div><div class="etiquette">livraisons au total</div></div>
+  <div class="chiffre"><div class="valeur">186</div><div class="etiquette">livraisons aujourd'hui</div></div>
+</div>
+
+<p class="note">Le VPS était à quinze giga-octets de l'arrêt complet : 41 Go de cache de construction et 29 Go de volumes abandonnés. Le cache a été purgé — opération sans perte. <b>Ce nettoyage n'était dans la liste de personne</b> : il ne serait apparu que sous forme de panne inexpliquée, probablement au pire moment. Il reste 29 Go de bases de test abandonnées, en attente de ton feu vert.</p>
 
 <h2>Où l'écart se creuse</h2>
 
 <div class="tableau-enveloppe">
 <table>
-  <thead><tr><th>Module</th><th>Exposées</th><th>Atteignables</th><th style="width:130px">Écart</th><th></th></tr></thead>
+  <thead><tr><th>Module</th><th>Exposées</th><th>Atteignables</th><th style="width:120px">Écart</th><th></th></tr></thead>
   <tbody>
     <tr><td class="sess">Compta</td><td class="num">77</td><td class="num">7</td><td><div class="barre"><span style="width:91%"></span></div></td><td class="quoi">70</td></tr>
     <tr><td class="sess">Musée</td><td class="num">67</td><td class="num">2</td><td><div class="barre"><span style="width:97%"></span></div></td><td class="quoi">65</td></tr>
@@ -208,58 +152,57 @@
     <tr><td class="sess">Accès</td><td class="num">50</td><td class="num">4</td><td><div class="barre"><span style="width:92%"></span></div></td><td class="quoi">46</td></tr>
     <tr><td class="sess">Réservation</td><td class="num">51</td><td class="num">7</td><td><div class="barre"><span style="width:86%"></span></div></td><td class="quoi">44</td></tr>
     <tr><td class="sess">Boutique</td><td class="num">47</td><td class="num">4</td><td><div class="barre"><span style="width:91%"></span></div></td><td class="quoi">43</td></tr>
-    <tr><td class="sess">Offre</td><td class="num">47</td><td class="num">9</td><td><div class="barre"><span style="width:81%"></span></div></td><td class="quoi">38</td></tr>
-    <tr><td class="sess">Personnel</td><td class="num">42</td><td class="num">9</td><td><div class="barre"><span style="width:79%"></span></div></td><td class="quoi">33</td></tr>
-    <tr><td class="sess">Stock</td><td class="num">63</td><td class="num">31</td><td><div class="barre"><span style="width:51%"></span></div></td><td class="quoi">32 <b>— était à 0 ce matin</b></td></tr>
+    <tr><td class="sess">Stock</td><td class="num">63</td><td class="num">45</td><td><div class="barre verte"><span style="width:29%"></span></div></td><td class="quoi">18 <b>— était à 0 ce matin</b></td></tr>
     <tr><td class="sess">Patinoire</td><td class="num">34</td><td class="num">13</td><td><div class="barre"><span style="width:62%"></span></div></td><td class="quoi">21</td></tr>
   </tbody>
 </table>
 </div>
 
-<p class="note">Relevé de <code>claude-H</code>. Les « exposées » sont exactes ; les « atteignables » sont reconstituées par préfixe d'URL, donc à une ou deux unités près quand un module en expose plusieurs.</p>
+<p class="note">Les « exposées » sont exactes ; les « atteignables » sont reconstituées par préfixe d'URL, donc à une ou deux unités près quand un module en expose plusieurs.</p>
 
-<h2>Les neuf sessions</h2>
+<h2>Qui a livré aujourd'hui</h2>
 
 <div class="tableau-enveloppe">
 <table>
-  <thead><tr><th>Session</th><th>Dernière poussée</th><th>Sur quoi elle travaille</th></tr></thead>
+  <thead><tr><th>Session</th><th>Livraisons</th><th>Dernière</th><th>Sur quoi</th></tr></thead>
   <tbody>
-    <tr><td class="sess">A · moi</td><td><span class="pastille p-actif">2 h</span></td><td class="quoi">Intégration, arbitrages, garde-fous. Socle, sécurité, coordination.</td></tr>
-    <tr><td class="sess">B</td><td><span class="pastille p-actif">4 min</span></td><td class="quoi">Failles de cloisonnement — rattachement produit au stock, chaîne comptable.</td></tr>
-    <tr><td class="sess">C</td><td><span class="pastille p-actif">14 min</span></td><td class="quoi">Garde-fous. A livré le douzième et <b>corrigé mon compte : 49 entités exposées, pas 35</b>.</td></tr>
-    <tr><td class="sess">D</td><td><span class="pastille p-actif">12 min</span></td><td class="quoi">Devis, bons de commande, bons de livraison. Puis le préavis de prélèvement.</td></tr>
-    <tr><td class="sess">E</td><td><span class="pastille p-actif">40 min</span></td><td class="quoi">Relances et créneaux libérés. Réveillée depuis ce midi.</td></tr>
-    <tr><td class="sess">F</td><td><span class="pastille p-lent">2 h</span></td><td class="quoi">Hébergement : la nuitée, le tarif par nuit. <b>Trois défauts de stock l'attendent.</b></td></tr>
-    <tr><td class="sess">G</td><td><span class="pastille p-actif">4 min</span></td><td class="quoi">Vente et caisse : historique filtrable, correction de règlement, écart de caisse.</td></tr>
-    <tr><td class="sess">H</td><td><span class="pastille p-actif">63 min</span></td><td class="quoi">Les écrans. Patinoire livrée, stock livré — <b>de zéro à trente et une opérations</b>.</td></tr>
-    <tr><td class="sess">I</td><td><span class="pastille p-arret">branche : 2 j</span></td><td class="quoi">Piscine, padel, patinoire, sport, musée. <b>Ouverte aujourd'hui, n'a encore rien poussé.</b></td></tr>
+    <tr><td class="sess">A · moi</td><td class="num">73</td><td><span class="pastille p-actif">14 min</span></td><td class="quoi">Intégration, arbitrages, garde-fous, socle, sécurité.</td></tr>
+    <tr><td class="sess">H</td><td class="num">31</td><td><span class="pastille p-actif">53 min</span></td><td class="quoi">Les écrans. Patinoire, stock, inventaire, achats, remboursements.</td></tr>
+    <tr><td class="sess">D</td><td class="num">23</td><td><span class="pastille p-actif">2 h</span></td><td class="quoi">Devis et bons de livraison, puis le préavis de prélèvement.</td></tr>
+    <tr><td class="sess">G</td><td class="num">20</td><td><span class="pastille p-actif">20 min</span></td><td class="quoi">Vente sans caisse, clôture journalière, ticket réimprimable.</td></tr>
+    <tr><td class="sess">E</td><td class="num">18</td><td><span class="pastille p-actif">3 h</span></td><td class="quoi">Relances, créneaux libérés, fixtures.</td></tr>
+    <tr><td class="sess">F</td><td class="num">11</td><td><span class="pastille p-actif">3 h</span></td><td class="quoi">Hébergement : la nuitée, le tarif par nuit.</td></tr>
+    <tr><td class="sess">C</td><td class="num">10</td><td><span class="pastille p-actif">4 h</span></td><td class="quoi">Garde-fous. A livré les n°12 et n°13.</td></tr>
+    <tr><td class="sess">B</td><td class="num">—</td><td><span class="pastille p-lent">?</span></td><td class="quoi">Cloisonnement du stock et de la chaîne comptable. Ne répond plus.</td></tr>
+    <tr><td class="sess">I</td><td class="num">0</td><td><span class="pastille p-arret">2 jours</span></td><td class="quoi">Piscine, padel, patinoire, sport, musée. <b>Ouverte aujourd'hui, n'a rien livré.</b></td></tr>
   </tbody>
 </table>
 </div>
 
+<p class="note">Le compte de <code>claude-C</code> était de 3 ce matin : ses livraisons ne portaient pas son nom, une configuration de session lui attribuait une identité générique. Corrigé — <b>j'avais sous-estimé sa contribution d'un facteur trois sans le savoir.</b></p>
+
 <h2>Ce qui a été trouvé aujourd'hui</h2>
 
 <ul class="liste">
-  <li class="fait"><b>Treize écrans de création étaient muets</b> — un désaccord de format entre l'écran et le serveur, invisible parce qu'on ne voit pas un code d'erreur : on voit un bouton qui ne fait rien.</li>
-  <li class="dur"><b>Un établissement pouvait être supprimé.</b> 119 tables y sont rattachées, deux seulement disent ce qu'il advient d'elles. Opération retirée.</li>
-  <li class="dur"><b>Un article de stock non rattaché à un produit ne manque jamais de stock</b> — la seule garde de disponibilité du module est inatteignable pour lui. Et il fabrique de faux écarts d'inventaire dans l'autre sens.</li>
-  <li class="dur"><b>Le contrôle des écarts d'inventaire est inactif par défaut.</b> Sans paramétrage, aucun écart n'est jamais « significatif », si grand soit-il.</li>
-  <li class="dur"><b>« Inventaire sur un rayon » compte tout le magasin.</b> Le choix est accepté, le filtre n'est jamais appliqué. Un exploitant le découvre après avoir bloqué son magasin une journée.</li>
-  <li class="fait"><b>Deux failles de cloisonnement fermées</b> — un établissement pouvait rattacher un produit au stock d'un autre, et lire sa chaîne comptable.</li>
-  <li class="fait"><b>Le douzième garde-fou</b> : 49 entités laissaient écrire leur propre établissement. Vingt-deux ne le déclaraient nulle part.</li>
-  <li class="fait"><b>Le stock et la patinoire ont leurs premiers écrans</b>, construits autour de la question réelle du guichet — « vous avez du 38 ? », « il en reste combien ? ».</li>
+  <li class="dur"><b>Le ticket de caisse affichait un prix, en encaissait un autre.</b> Il était reconstruit depuis l'écran, pas depuis ce que le serveur avait enregistré. Corrigé — et le total du panier, celui que le caissier annonce à voix haute, l'était aussi.</li>
+  <li class="dur"><b>Un ticket ne pouvait pas être réimprimé.</b> Le document n'existait que dans l'onglet ouvert du caissier. Corrigé, mais les ventes d'avant restent irréproductibles.</li>
+  <li class="dur"><b>La clôture comptable automatique aurait scellé de fausses journées</b> pour tout établissement à l'ouest de Paris. Évité avant la mise en service.</li>
+  <li class="dur"><b>Une jauge acceptait une réservation sur un créneau complet.</b> Une requête rendait zéro place occupée, sans erreur.</li>
+  <li class="dur"><b>Un article de stock non rattaché ne manque jamais de stock</b> — la seule vérification de disponibilité lui est inatteignable.</li>
+  <li class="dur"><b>Un établissement pouvait être supprimé.</b> 119 tables y sont rattachées, deux disent ce qu'il advient d'elles. Opération retirée.</li>
+  <li class="fait"><b>Deux garde-fous de plus</b> — l'écriture d'établissement et les comparaisons silencieusement vides. Quatorze au total.</li>
+  <li class="fait"><b>Huit sessions sur neuf validaient sans aucun contrôle.</b> Les outils existaient, personne ne les avait installés.</li>
 </ul>
 
 <h2>Ce qui attend une décision</h2>
 
 <ul class="liste">
-  <li class="dur"><b>Un prestataire d'envoi de courriels.</b> Prérequis de toute mise en production avec prélèvements. Il faut un compte et un nom de domaine expéditeur.</li>
-  <li class="attend"><b>Carte plus mandat SEPA signés ensemble</b> — décidé et spécifié, pas encore développé. <b>Aucun numéro de carte ne sera jamais stocké.</b></li>
+  <li class="dur"><b>Un prestataire d'envoi de courriels.</b> Prérequis de toute mise en production avec prélèvements.</li>
+  <li class="attend"><b>29 Go de bases de test abandonnées</b> — je les purge sur ton accord.</li>
+  <li class="attend"><b>Trois profils sans compte</b> — caissier, responsable de site, comptable ont des droits mais personne pour s'y connecter.</li>
+  <li class="attend"><b>Carte plus mandat SEPA signés ensemble</b> — spécifié, pas développé. <b>Aucun numéro de carte ne sera jamais stocké.</b></li>
   <li class="attend"><b>Le module campagne marketing</b> — spécifications écrites, développement non commencé.</li>
-  <li class="attend"><b>Correction d'une erreur de type de paiement</b> — datée du jour du geste, pas du jour de la vente. Conforme, en cours.</li>
-  <li class="dur"><b>Compta et Musée : 70 et 65 opérations sans aucun écran.</b> Les deux plus gros écarts du produit.</li>
-  <li class="dur"><b>Une demande de remboursement arrive et personne ne peut y répondre.</b> Accepter et refuser existent côté serveur ; aucun écran ne les propose. Ce n'est pas une liste morte, c'est une boîte aux lettres sans porte.</li>
-  <li class="dur"><b>Les quatre listes d'alerte affichées n'ont aucun geste pour les vider.</b> Écarts de caisse, réapprovisionnement, conflits de créneau, incidents de badge : on les voit, on ne peut rien en faire. Une liste qu'on ne peut pas vider apprend à son lecteur à l'ignorer — et cette habitude ne se défait pas quand on branche le geste six mois plus tard.</li>
+  <li class="dur"><b>Compta et Musée : 70 et 65 opérations sans aucun écran.</b> Les deux plus gros écarts.</li>
 </ul>
 
 <h2>Dette gelée</h2>
@@ -270,12 +213,14 @@
 <table>
   <thead><tr><th>Garde-fou</th><th>Reste</th><th>Ce qu'il empêche</th></tr></thead>
   <tbody>
-    <tr><td class="sess">Établissement écrivable</td><td class="num">49</td><td class="quoi">Déplacer une donnée vers un autre établissement</td></tr>
+    <tr><td class="sess">Établissement écrivable</td><td class="num">43</td><td class="quoi">Déplacer une donnée vers un autre établissement</td></tr>
     <tr><td class="sess">Couverture de périmètre</td><td class="num">30</td><td class="quoi">Exposer une liste que rien ne filtre</td></tr>
     <tr><td class="sess">Événements orphelins</td><td class="num">25</td><td class="quoi">Émettre un événement que personne n'écoute</td></tr>
-    <tr><td class="sess">Cloisonnement</td><td class="num">24</td><td class="quoi">Lire ou écrire les données d'un autre établissement</td></tr>
-    <tr><td class="sess">Résolution liée</td><td class="num">13</td><td class="quoi">Contrôler le droit sur la mauvaise entité</td></tr>
+    <tr><td class="sess">Cloisonnement</td><td class="num">16</td><td class="quoi">Lire ou écrire les données d'un autre établissement</td></tr>
+    <tr><td class="sess">Références libres</td><td class="num">11</td><td class="quoi">Une recherche qui rend une liste vide sans erreur</td></tr>
     <tr><td class="sess">Charges utiles</td><td class="num">11</td><td class="quoi">Envoyer autre chose que ce que le contrat annonce</td></tr>
+    <tr><td class="sess">Suppressions en migration</td><td class="num">10</td><td class="quoi">Détruire des données sans l'avoir dit</td></tr>
+    <tr><td class="sess">Résolution liée</td><td class="num">7</td><td class="quoi">Contrôler le droit sur la mauvaise entité</td></tr>
     <tr><td class="sess">Écriture transfrontière</td><td class="num">3</td><td class="quoi">Écrire au travers d'une frontière de module</td></tr>
     <tr><td class="sess">Défauts au mapping</td><td class="num">2</td><td class="quoi">Poser en base ce que le code ignore</td></tr>
   </tbody>
@@ -283,11 +228,10 @@
 </div>
 
 <footer>
-  Établi par <b>claude-A</b>, intégrateur. 826 livraisons au total, dont 75 aujourd'hui.
-  Les chiffres datent de l'heure indiquée en tête — ici une mesure vit une vingtaine de minutes.
+  Établi par <b>claude-A</b>, intégrateur. Les chiffres datent de l'heure indiquée en tête —
+  ici une mesure vit une vingtaine de minutes.
 </footer>
 
 </div>
-
 </body>
 </html>
