@@ -458,3 +458,78 @@ n'en est pas un non plus.**
 
 **Sur ma branche `claude-D`, pas sur `main` : `bc8706b`.** 13 garde-fous verts. `tests/Compta` 81 verts
 / 685, `tests/Platform` 62 verts / 259.
+
+## 26/08 (suite) — PAY-2 : la bascule carte → prélèvement, et ce que le dépôt sait sans le dire
+
+### La moitié qui est chez moi, avec l'autre moitié dite en clair
+
+`CardDebitFallback` vérifie qu'un mandat SEPA **actif** existe, envoie un préavis « carte refusée », et
+enregistre une dette exigible seulement **après** que le préavis aura couru. Elle ne prélève pas :
+prélever tout de suite serait un prélèvement sur un moyen que le client ne s'attendait pas à voir
+utilisé ce mois-ci — exactement la situation où l'absence de préavis se conteste, et où elle se
+conteste avec raison. `CardFallbackEcheanceSource` présente ensuite ces dettes à la collecte par le
+même port que Sport et Piscine : un chemin parallèle aurait échappé au préavis, au cloisonnement et au
+comptage des exclues.
+
+**Le déclencheur n'existe pas — c'est PAY-3, chez claude-G — et l'absence est épinglée.**
+`CardDebitFallbackNonBrancheTest` échouera le jour où quelqu'un appellera le service, et son message
+dira quoi supprimer. Un rapport se lit une fois ; ce test parlera au moment précis où quelqu'un croira
+la fonctionnalité terminée. C'est la seule façon que j'aie trouvée de ne pas livrer un quinzième
+mécanisme muet après en avoir dénoncé quatorze.
+
+### Le contrôle du mandat n'est pas une garde technique : c'est le filtre métier
+
+Trouvé en répondant à claude-G, qui me demandait quoi faire d'un refus de carte sur une vente anonyme.
+Ma réponse spontanée — « sans client, pas de mandat, donc je refuse » — était vraie et à côté.
+
+**Au comptoir, la bascule est une mauvaise réponse même si un mandat existe.** Une carte refusée devant
+un client qui est là se règle en trente secondes : il paie autrement. Lui annoncer un prélèvement dans
+quatorze jours lui imposerait un débit qu'il n'a pas choisi, pour une transaction soldable sur place.
+
+La bascule n'a de sens que quand le client **n'est pas devant nous**. Et ce qui sépare les deux cas
+n'est pas la présence d'un client identifié — une vente de guichet peut être nominative — mais celle
+d'un **mandat actif**, qui n'existe que dans une relation suivie. Le contrôle que j'avais écrit comme
+une précondition sélectionne donc exactement la population pour qui la bascule est utile. Consigné dans
+le fichier, parce que quelqu'un finira par vouloir « assouplir » ce contrôle pour élargir la couverture.
+
+### Le garde-fou écrit ce matin m'a attrapé — et il lui manque la moitié du problème
+
+Ma source d'échéances filtrait par `->andWhere('m.etablissement = :e')->setParameter('e', $etablissement)`.
+Elle rendait une liste **vide** alors que la dette existait. Aucune erreur, aucun avertissement. En
+production, ça ne ressemble pas à un défaut : ça ressemble à « il n'y a rien à prélever ». Corrigé en
+`IDENTITY(m.etablissement)` avec le type `'uuid'` explicite.
+
+**Le n°14 ne l'aurait pas vu**, et j'ai vérifié plutôt que de le supposer : il ne collecte que les
+propriétés dont le nom finit par `Ref` (ligne 66), c'est-à-dire la convention des références libres.
+Les trois formes qu'il cherche — `IN (:liste)`, `= :param` sans type, `SearchFilter` — ne sont cherchées
+que sur celles-là.
+
+Or le défaut n'est pas produit par la convention, **il est produit par le type d'identifiant**. Toute
+entité à identifiant `Uuid` est concernée, donc toutes. claude-G a payé la même forme sur
+`JaugeCreneauGuard::placesOccupees()`, avec un symptôme pire que le mien : la requête rendait zéro place
+occupée, donc **la jauge acceptait une réservation sur un créneau complet**. Une liste vide se voit ;
+une jauge qui dit « il reste de la place » se découvre le jour où soixante personnes se présentent
+pour quarante couverts.
+
+**Et le dépôt savait déjà.** `ProjectionVenteDoctrineAdapter` porte en commentaire que
+« `IN(:tableau)` avec un tableau d'entités/UUID s'est révélé peu fiable selon le contexte d'exécution » ;
+son auteur avait contourné en filtrant en PHP. `PerimetreFacturationExtension` utilise `IDENTITY()` avec
+le type explicite partout, sans que la raison soit dite nulle part. Quelqu'un a rencontré le défaut
+avant nous, l'a contourné, l'a écrit — et personne ne l'a su.
+
+C'est une variante du motif de la semaine, et peut-être la plus coûteuse : **le dépôt sait des choses
+que le dépôt ne dit pas.** Un contournement sans sa raison n'enseigne rien ; il se lit comme une
+préférence de style et se « simplifie » au premier passage.
+
+Relevé remonté à claude-A avec les cas de reproduction, de la part de claude-G et de moi. `bin/` n'est
+ni à elle ni à moi.
+
+### Deux déductions non vérifiées, corrigées avant d'être contredites
+
+J'ai adressé le contrat d'interface à une session en **déduisant** son identité d'un nom d'hôte. Le
+hasard a voulu que ce soit juste. Je l'ai signalé à l'intéressée sans attendre. Elle avait de son côté
+lu ma signature comme une adresse, en avait conclu à une collision de périmètre, et avait demandé un
+arbitrage à claude-A pour un conflit qui n'existait pas ; elle l'a retiré.
+
+Deux inférences, une seule information réelle — celle de claude-A, qui était juste. Ce qui a levé le
+doute, ce sont les deux corrections spontanées, pas les démentis.
