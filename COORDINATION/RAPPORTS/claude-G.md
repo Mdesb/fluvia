@@ -298,6 +298,7 @@ lui fait porter le risque. La prochaine fois je donne les deux, ou je dis que je
 | 10:13 | **Le chargement complet des fixtures passe de nouveau.** C'était bien chez moi : `CaisseClotureRoleFixtures` créait le rôle « Caissier » que `L7Fixtures` crée aussi. Corrigé là et dans `ReservationFixtures`. `tests/Caisse` 15/15, `tests/Reservation` 103/103. **Et le second passage bute maintenant chez toi**, sur `SocleFixtures:51`. | D48 : historique de `Vente` livré (débloque `claude-H`). Suite : les cinq chantiers `Vente`/`Caisse`. | Rien. |
 | 12:11 | **D45 livré** : la correction de ventilation d'un règlement s'ajoute et se scelle, la vente n'est jamais touchée, et elle est datée du **jour du geste**. `tests/Vente` **52/52**, migrations rejouées depuis une base vide. Avant : D46-bis (canal → attente + débiteur), D44 (rien à faire côté serveur, prouvé), descriptions d'opérations, fixtures idempotentes. | D46 : rattacher une correction à l'écart de caisse qu'elle explique. | Rien. |
 | 13:05 | **D46 livré avec D45** : une correction peut désigner l'`AlerteEcartCaisse` qu'elle explique. `tests/Vente` **54/54**, migrations rejouées depuis une base vide. Il ne me reste de D48 que **D44-bis** (vente directe sans session). | D44-bis. | Rien. |
+| 14:03 | **Un écart sait maintenant qu'il est expliqué** — `AlerteEcartCaisse.expliquee`, calculé à la lecture, une requête pour toute la page. Sans ça `claude-H` avait un écran complet qu'elle **refusait de livrer** : une liste qu'on ne peut pas vider est celle que sa propre règle D55 interdit. `tests/Caisse` 15/15, `tests/Vente` 55/55. | D44-bis : refus des fiduciaires sans session, puis point de vente dédié (arbitré par toi). | Rien. |
 
 ## Nouvelle règle de Maxime — présentation horaire à `claude-A`
 
@@ -1176,3 +1177,48 @@ l'erreur réelle.
 C'est exactement ce que nous venons de nous dire sur les fixtures, à un autre étage : **suivre ce qui
 casse mène au mauvais endroit**. Le symptôme visible et la cause n'étaient pas dans le même fichier,
 ni dans le même domaine.
+
+
+## Un écart expliqué doit le **dire** — sinon la liste ne descend jamais
+
+`claude-H` avait écrit l'écran des écarts de caisse en entier et **refusait de le livrer** : rien ne
+permettait de savoir qu'un écart avait été expliqué. `SettlementCorrection` n'est exposée que comme
+sortie d'opération, `AlerteEcartCaisse` ne portait aucun champ, et `Vente` n'expose pas ses
+corrections. L'utilisateur aurait expliqué un écart, **et la ligne serait restée**.
+
+Elle a écarté trois contournements en les nommant, et chacun était un mensonge d'une forme
+différente : marquer côté navigateur (un état partagé qui n'est pas partagé), recharger les ventes
+de chaque session (N+1 qui ne marche même pas), ou afficher la liste en s'excusant de ne pas savoir
+(« une liste qui s'excuse reste une liste qu'on cesse de lire »).
+
+**Livré : `expliquee`, calculé à la lecture.** Trois choix qui tiennent ensemble :
+
+- **Rien n'est stocké.** Un drapeau persisté serait un état à maintenir — poser à la création,
+  retirer si la correction disparaît, vivre avec les oublis. Ici c'est un fait constaté, et l'alerte
+  reste l'entité **immuable** qu'elle déclare être.
+- **Une requête pour toute la page.** Un getter interrogeant la base depuis l'entité aurait produit
+  un N+1 sur l'écran même que ce champ doit rendre utilisable.
+- **Le lien reste unidirectionnel** : c'est la correction qui affirme expliquer, l'alerte n'apprend
+  rien d'elle-même.
+
+**Le nom n'est pas celui demandé, et c'est le sérialiseur qui tranche** : il n'accepte les groupes que
+sur `get`/`is`/`has`/`can`/`set`. Donc `isExpliquee()`, donc un champ `expliquee`. Écrit à côté du
+getter pour que personne ne le renomme en croyant améliorer.
+
+### Troisième forme du même piège cette semaine
+
+Ma première version faisait un `IN (:liste)` en DQL sur `alerteEcartRef`. **Le test restait faux, sans
+aucune erreur** : la colonne porte un type Doctrine personnalisé, et un `IN` en DQL n'y convertit pas
+les valeurs. SQL direct avec `UNHEX`, comme `CardRechargeHandler`.
+
+Sur les références libres, le relevé est maintenant complet :
+
+| Forme | Symptôme |
+|---|---|
+| `SearchFilter` sur `?Uuid` | liste vide |
+| paramètre d'entité dans un `WHERE` | ne compte rien |
+| `IN (:liste)` en DQL | ne trouve rien |
+
+**Trois formes, un seul symptôme : du code qui répond « rien » avec l'air d'avoir cherché.** La
+formule est de `claude-H` et elle vaut au-delà du front. Aucune ne lève. Toutes se découvrent par un
+test qui devrait passer et ne passe pas.

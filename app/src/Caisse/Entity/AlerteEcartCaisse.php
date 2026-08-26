@@ -7,6 +7,7 @@ namespace App\Caisse\Entity;
 use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
 use ApiPlatform\Metadata\ApiFilter;
 use ApiPlatform\Metadata\ApiResource;
+use App\Caisse\State\ExplainedGapProvider;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use App\Organisation\Entity\Etablissement;
@@ -32,8 +33,8 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ApiResource(
     shortName: 'AlerteEcartCaisse',
     operations: [
-        new GetCollection(security: "is_granted('PERM', 'caisse.voir_ecart')"),
-        new Get(security: "is_granted('PERM', 'caisse.voir_ecart')"),
+        new GetCollection(security: "is_granted('PERM', 'caisse.voir_ecart')", provider: ExplainedGapProvider::class),
+        new Get(security: "is_granted('PERM', 'caisse.voir_ecart')", provider: ExplainedGapProvider::class),
     ],
     normalizationContext: ['groups' => ['alerte_ecart:read']],
 )]
@@ -84,10 +85,45 @@ class AlerteEcartCaisse
     #[Groups(['alerte_ecart:read'])]
     private \DateTimeImmutable $horodatage;
 
+    /**
+     * D46 — vrai dès qu'une `SettlementCorrection` désigne cette alerte comme l'écart qu'elle
+     * explique. **Non persisté** : renseigné à la lecture par `ExplainedGapProvider`.
+     *
+     * **Pourquoi un calcul et pas une colonne.** Un drapeau stocké serait un état à maintenir : il
+     * faudrait le poser à la création de la correction, le retirer si elle disparaît, et vivre avec
+     * les cas où quelqu'un a oublié. Ici c'est un **fait constaté à la lecture** — l'alerte reste
+     * l'entité immuable qu'elle déclare être, et rien ne peut diverger de la réalité.
+     *
+     * **Pourquoi ce n'est pas l'entité qui interroge.** Un getter qui irait chercher en base
+     * produirait une requête par ligne de liste. Le fournisseur le fait **en une seule** pour toute
+     * la page.
+     */
+    private bool $expliquee = false;
+
     public function __construct()
     {
         $this->id = Uuid::v4();
         $this->horodatage = new \DateTimeImmutable();
+    }
+
+    /**
+     * Un écart expliqué cesse d'être un écart : c'est ce qui fait qu'une liste d'alertes se vide au
+     * lieu d'apprendre à son lecteur à l'ignorer.
+     */
+    // Nommée `isExpliquee` et non `estExpliquee` : le sérialiseur n'accepte les groupes que sur les
+    // méthodes commençant par get/is/has/can/set — vérifié, il refuse net au démarrage. Le champ
+    // exposé s'appelle donc `expliquee`.
+    #[Groups(['alerte_ecart:read'])]
+    public function isExpliquee(): bool
+    {
+        return $this->expliquee;
+    }
+
+    public function marquerExpliquee(bool $expliquee): self
+    {
+        $this->expliquee = $expliquee;
+
+        return $this;
     }
 
     public function getId(): Uuid

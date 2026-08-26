@@ -207,6 +207,48 @@ final class CorrectionReglementTest extends VenteApiTestCase
         return (string) $alerte->getId();
     }
 
+    /**
+     * D46 / D55 — l'écart doit **savoir** qu'il est expliqué, sinon la liste ne descend jamais.
+     *
+     * `claude-H` a écrit l'écran complet puis refusé de le livrer : sans ce champ, l'utilisateur
+     * explique un écart et la ligne reste, le lendemain elle est encore là avec les nouvelles.
+     * C'est la liste qui apprend à son lecteur à l'ignorer — celle que sa propre règle interdit.
+     */
+    public function testUnEcartSaitQuIlEstExplique(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $client->disableReboot();
+        $vente = $this->venteReglee($client, $entete, 'especes');
+        $idAlerte = $this->alerteEcart($this->idSession($vente), $this->idEtablissement(\App\DataFixtures\SocleFixtures::ETAB_A_NOM));
+
+        $avant = $client->request('GET', '/api/alerte_ecart_caisses/' . $idAlerte, $entete)->toArray();
+        self::assertFalse($avant['expliquee'], 'Un ecart sans correction n est pas explique.');
+
+        $client->request('POST', '/api/ventes/' . $vente['id'] . '/corriger-reglement', $entete + [
+            'json' => [
+                'moyenDebite' => 'especes', 'moyenCredite' => 'cb', 'montant' => '5.50',
+                'motif' => 'Le manquant vient de cette saisie',
+                'alerteEcart' => '/api/alerte_ecart_caisses/' . $idAlerte,
+            ],
+        ]);
+        self::assertResponseIsSuccessful();
+
+        $apres = $client->request('GET', '/api/alerte_ecart_caisses/' . $idAlerte, $entete)->toArray();
+        self::assertTrue($apres['expliquee'], 'Un ecart explique cesse d etre un ecart.');
+
+        // Et dans la liste : c'est là que ça compte, puisque c'est elle qui doit se vider.
+        $liste = $client->request('GET', '/api/alerte_ecart_caisses', $entete + ['query' => ['itemsPerPage' => 100]])->toArray();
+        $membres = $liste['member'] ?? $liste['hydra:member'];
+        $trouve = null;
+        foreach ($membres as $membre) {
+            if ($membre['id'] === $idAlerte) {
+                $trouve = $membre;
+            }
+        }
+        self::assertNotNull($trouve, 'L alerte doit rester listee.');
+        self::assertTrue($trouve['expliquee'], 'Le calcul doit valoir aussi en collection, pas seulement en detail.');
+    }
+
     /** @param array<string, mixed> $vente */
     private function idSession(array $vente): string
     {
