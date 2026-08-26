@@ -305,6 +305,7 @@ lui fait porter le risque. La prochaine fois je donne les deux, ou je dis que je
 | 16:34 | **Le ticket n'existait que dans l'onglet du caissier.** `TicketProcessor` ne rendait aucune ligne et `LigneVente` n'avait aucun mot. Libellés **figés au jour de la vente**, gravés par écouteur et non par les six appelants. `Vente` 78/78, `Caisse` 15/15, `Boutique` 56/56, `Reservation` 103/103. | Commit, poussée, puis PAY-3. | Rien. |
 | 17:29 | **La clôture devient un mécanisme.** Commande quotidienne, file des journées non closes qui descend à zéro, et le fuseau a révélé que le handler **comptait mal** — journée bornée sur l'heure du serveur. **Et j'ai enfreint ma propre règle** : test ajouté pendant une suite, verdict faux, deux erreurs réelles au rejeu. `Vente` 86/86, `Caisse` 15/15, `Platform` 62/62. | Commit, poussée, puis PAY-3. | Rien. |
 | 18:27 | **PAY-3 : un refus de carte ne laissait aucune trace.** `CA-10` veut qu'un refus ne crée aucun `Paiement` — donc il ne restait rien. Table + événement qui la référence, dans cet ordre (bus synchrone). `rejectionId` et non `paymentId` : le second n'existe pas. `Vente` 92/92, `Caisse` 15/15, `Sepa` 55/55. | Commit et poussée. | Rien. |
+| 19:15 | **L'estimation de tarif appelle le code qui facture.** Le remède ne devait pas avoir la forme de la maladie : un service d'estimation parallèle aurait reproduit le défaut dans une couche où **personne ne verrait la divergence**. `Vente` 98/98, `Offre` 32/32, `Boutique` 56/56, `Reservation` 103/103. | Commit et poussée. | Rien. |
 
 ## Nouvelle règle de Maxime — présentation horaire à `claude-A`
 
@@ -1671,3 +1672,54 @@ rien**. La seconde est celle où l'erreur coûte.
 livrer un mécanisme de plus que personne n'atteint est que **l'absence parle d'elle-même, au moment où
 quelqu'un croira la fonctionnalité prête**. C'est ce que font `MoyenFiduciaireTest` et
 `ChampsFigesTest`, sans que je l'aie formulé aussi bien.
+
+
+## L'estimation de tarif — un seul calcul, deux appelants
+
+Maxime a signalé un ticket qui n'additionnait pas : « 1 × Test 10,00 € », total 15,00 €. La vente en
+base était juste ; **c'est l'écran qui mentait**, parce qu'il retenait la *première grille vendable* du
+produit là où le serveur applique le *tarif réellement dû* — saison, quotient familial. Tant que la
+vente n'existe pas, l'écran ne peut qu'estimer.
+
+**La tentation évidente était d'écrire un service d'estimation à côté du service de facturation.** Elle
+aurait reproduit exactement le défaut, avec deux couches serveur au lieu d'une couche serveur et une
+couche écran — et cette fois **personne n'aurait vu la divergence**, puisque aucun écran ne met les
+deux nombres face à face. Elle se manifesterait comme un client affirmant avoir vu un autre prix, à qui
+l'on répondrait qu'il se trompe.
+
+`PriceQuoter` porte donc le calcul, et `AjoutLigneHandler` **l'appelle**. Les deux méthodes privées qui
+faisaient le travail — saison retenue, promotions automatiques — y sont déplacées. Il n'y a pas deux
+implémentations à garder d'accord : il y en a une, et deux appelants.
+
+### Le test central n'est pas celui qu'on écrirait spontanément
+
+Ce n'est pas « l'estimation rend un prix ». C'est celui qui **confronte l'estimation à la ligne
+réellement créée** — prix unitaire *et* saison. C'est la seule assertion qui aurait attrapé le défaut
+d'origine, et précisément celle qu'on n'écrit pas quand on teste chaque côté séparément, **parce que
+chacun passe**.
+
+### Un paramètre refusé, et c'est la réponse à la demande
+
+`claude-H` avait mis `beneficiaire` dans sa signature. Vérifié : **il n'entre dans aucune règle de
+tarif du dépôt.** Ce qui fait varier le prix est le **quotient familial**, déjà fourni par l'appelant à
+la création d'une ligne — `AjoutLigneHandler` lit `qf` dans le corps de la requête.
+
+L'accepter pour l'ignorer aurait été pire que de ne pas l'accepter : elle aurait cru le prix
+contextualisé, et le jour où deux bénéficiaires d'un même dossier ont des QF différents, l'écran
+afficherait deux fois le même prix sans que personne sache pourquoi. La résolution bénéficiaire →
+quotient vit dans `Crm` : donnée personnelle, donc **une décision**, pas un raccourci que je prends.
+
+### Deux incidents en route, tous deux du même genre
+
+**Une expression régulière a mangé la méthode principale.** Pour retirer les méthodes déplacées,
+j'avais écrit un motif avec `.*?` en mode DOTALL sur un docblock optionnel. Il pouvait démarrer sur un
+docblock bien antérieur et avaler tout ce qui suit — **il a emporté `ajouter()`**. Le lint PHP est
+passé, le fichier restant syntaxiquement valide ; c'est le premier test de tarif qui a dit
+`Call to undefined method`. Restauré depuis git, refait ligne à ligne. Encore un outil qui rend un
+résultat plausible sans erreur.
+
+**Et j'ai failli « corriger » une règle en la déplaçant.** Le filtre d'éligibilité des promotions
+surprend : une promotion dont l'éligibilité ne liste aucun produit n'est éligible à **aucun** produit,
+et non à tous comme on le lit spontanément. Recopié à l'identique, avec le commentaire disant que la
+surprise est voulue — **une estimation plus permissive que la facturation aurait annoncé une remise que
+la caisse n'applique pas**, c'est-à-dire le défaut d'origine réintroduit par le remède.
