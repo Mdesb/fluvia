@@ -16,16 +16,26 @@ use Symfony\Component\Console\Output\OutputInterface;
 /**
  * Les agents planifiés dont la qualification aura expiré le jour du créneau.
  *
- * **Le seul cas qui survit au contrôle, et c'est celui que personne ne regarde.**
+ * **⚠ CETTE COMMANDE A D'ABORD ÉTÉ JUSTIFIÉE SUR UNE PRÉMISSE FAUSSE, ET LE TEST L'A DIT.**
  *
- * `AffecterEmployeProcessor` refuse déjà d'affecter un employé sans qualification valide (CA-5) : on ne
- * peut pas mettre un agent non qualifié au planning. Ce refus donne à tout le monde la certitude que le
- * planning est valable — **et c'est précisément ce qui rend l'autre cas invisible.**
+ * J'avais écrit qu'une qualification est vérifiée « à la date d'affectation », et que le cas dangereux
+ * était donc un brevet expirant entre la planification et le créneau. **C'est faux.**
+ * `AffecterEmployeProcessor::qualificationValide()` interroge `estValideA($debut)` — la validité **au
+ * jour du créneau**. On ne peut pas planifier quelqu'un dont le brevet aura expiré.
  *
- * Une qualification est vérifiée **à la date d'affectation**. Un maître-nageur dont le brevet expire
- * entre le moment où le planning est monté et le jour du créneau reste au planning, et **rien ne le
- * dit** : ni le refus, qui a déjà eu lieu et a laissé passer, ni le calcul de `RosterHebdomadaire`, qui
- * ne s'exécute que si quelqu'un ouvre le planning ce jour-là.
+ * J'avais lu que le garde existait, pas ce qu'il comparait. **Vérifier qu'un contrôle est là n'est pas
+ * vérifier ce qu'il contrôle** — la faute exacte que je corrigeais chez les autres depuis deux jours.
+ * C'est le test qui m'a détrompé, en refusant l'affectation que je croyais possible.
+ *
+ * **Ce qui reste vrai, et que rien ne surveille.** L'affectation est vérifiée **une seule fois**, au
+ * moment où on la crée. Rien ne la revoit ensuite : une qualification **révoquée**, **raccourcie** ou
+ * **supprimée** après coup laisse l'affectation en place. Et `RosterHebdomadaire` ne recalcule que si
+ * quelqu'un ouvre le planning ce jour-là — or le cas dangereux est celui d'un planning monté il y a
+ * trois semaines que plus personne ne rouvre.
+ *
+ * Le cas est **plus étroit** que je ne l'avais écrit. Il n'est pas moins réel : une suspension, un
+ * contrôle médical, une erreur de saisie corrigée raccourcissent une validité — et personne ne pense à
+ * rapprocher ça d'un planning déjà monté.
  *
  * Autrement dit : l'information existe, elle est juste, et **elle n'atteint personne**. Un responsable
  * ne le découvrira ni le jour même ni le lendemain — mais lors d'un contrôle, ou d'un accident.

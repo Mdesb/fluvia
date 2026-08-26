@@ -196,12 +196,12 @@ final class ScheduleCatalog
             new ScheduledTask(
                 'personnel:qualifications:verifier',
                 1440,
-                "Un agent dont la qualification expire ENTRE la planification et le créneau reste au "
-                . "planning sans que rien ne le dise. L'affectation a été refusée en son temps si la "
-                . "qualification manquait — ce refus donne la certitude que le planning est valable, et "
-                . "c'est ce qui rend l'autre cas invisible. Dans une piscine, ce sont des surveillants "
-                . "qui n'ont plus le droit de surveiller ; on ne le découvre ni le jour même ni le "
-                . "lendemain, mais lors d'un contrôle ou d'un accident.",
+                "L'affectation vérifie la qualification AU JOUR DU CRÉNEAU, mais une seule fois : au "
+                . "moment où on la crée. Rien ne la revoit ensuite. Une qualification révoquée, "
+                . "raccourcie ou supprimée après coup laisse l'affectation en place, et le planning "
+                . "ne recalcule que si quelqu'un l'ouvre — or le cas dangereux est celui d'un planning "
+                . "monté il y a trois semaines que plus personne ne rouvre. Dans une piscine, ce sont "
+                . "des surveillants qui n'ont plus le droit de surveiller.",
                 safeOnFirstRun: true,
             ),
             new ScheduledTask(
