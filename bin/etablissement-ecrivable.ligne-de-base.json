@@ -1,0 +1,218 @@
+{
+    "_lisez_moi": [
+        "Ligne de base GELEE du garde-fou n12 — une entite laisse ecrire son PROPRE etablissement (D41).",
+        "",
+        "Deux voies dexposition : un groupe decriture qui porte le champ, ou AUCUN",
+        "denormalizationContext — auquel cas API Platform rend ecrivable toute propriete dotee dun",
+        "mutateur. La seconde est majoritaire et la moins visible : cest labsence de declaration qui",
+        "expose, rien dans le fichier ne le signale.",
+        "",
+        "Cliquet SEPARE de celui du n8, deliberement : ajouter une regle a un cliquet existant releve",
+        "toujours son plafond, et le cliquet ne peut pas distinguer une dette qui grossit dune regle",
+        "nouvelle qui mesure ce qui netait pas compte.",
+        "",
+        "Ce controle ne double pas le decorateur global pose par D41, qui refuse a lexecution et qui est",
+        "verifie dans les deux sens. Il empeche la dette de croitre pendant quon la resorbe."
+    ],
+    "scelle": {
+        "plafond": 49
+    },
+    "entrees": {
+        "AbonnementFitness": {
+            "voie": "defaut",
+            "fichier": "Sport/Entity/AbonnementFitness.php"
+        },
+        "Affectation": {
+            "voie": "groupe",
+            "fichier": "Securite/Entity/Affectation.php"
+        },
+        "Affutage": {
+            "voie": "defaut",
+            "fichier": "Patinoire/Entity/Affutage.php"
+        },
+        "Appairage": {
+            "voie": "defaut",
+            "fichier": "Acces/Entity/Appairage.php"
+        },
+        "ArticleAide": {
+            "voie": "groupe",
+            "fichier": "Support/Entity/ArticleAide.php"
+        },
+        "ArticleStock": {
+            "voie": "groupe",
+            "fichier": "Stock/Entity/ArticleStock.php"
+        },
+        "BadgeStaff": {
+            "voie": "defaut",
+            "fichier": "Personnel/Entity/BadgeStaff.php"
+        },
+        "BankAccount": {
+            "voie": "groupe",
+            "fichier": "Finance/Treasury/Entity/BankAccount.php"
+        },
+        "Casier": {
+            "voie": "groupe",
+            "fichier": "Piscine/Entity/Casier.php"
+        },
+        "CommandeAchat": {
+            "voie": "groupe",
+            "fichier": "Stock/Entity/CommandeAchat.php"
+        },
+        "ConfigCreancierSepa": {
+            "voie": "groupe",
+            "fichier": "Sepa/Entity/ConfigCreancierSepa.php"
+        },
+        "CreneauTravail": {
+            "voie": "groupe",
+            "fichier": "Personnel/Entity/CreneauTravail.php"
+        },
+        "DeclarationPerteVol": {
+            "voie": "defaut",
+            "fichier": "Acces/Entity/DeclarationPerteVol.php"
+        },
+        "DelegationDroit": {
+            "voie": "groupe",
+            "fichier": "Securite/Entity/DelegationDroit.php"
+        },
+        "DemandeEscalade": {
+            "voie": "defaut",
+            "fichier": "Autorisation/Entity/DemandeEscalade.php"
+        },
+        "DemandeRemboursement": {
+            "voie": "defaut",
+            "fichier": "Boutique/Entity/DemandeRemboursement.php"
+        },
+        "Espace": {
+            "voie": "groupe",
+            "fichier": "Organisation/Entity/Espace.php"
+        },
+        "ExpenseReport": {
+            "voie": "groupe",
+            "fichier": "Finance/ExpenseReport/Entity/ExpenseReport.php"
+        },
+        "Facture": {
+            "voie": "defaut",
+            "fichier": "Facturation/Entity/Facture.php"
+        },
+        "Fournisseur": {
+            "voie": "groupe",
+            "fichier": "Stock/Entity/Fournisseur.php"
+        },
+        "GrilleRetenue": {
+            "voie": "groupe",
+            "fichier": "Caution/Entity/GrilleRetenue.php"
+        },
+        "Guide": {
+            "voie": "groupe",
+            "fichier": "Musee/Entity/Guide.php"
+        },
+        "IncidentImpaye": {
+            "voie": "defaut",
+            "fichier": "Recouvrement/Entity/IncidentImpaye.php"
+        },
+        "Inventaire": {
+            "voie": "defaut",
+            "fichier": "Stock/Entity/Inventaire.php"
+        },
+        "LimiteAutorisation": {
+            "voie": "groupe",
+            "fichier": "Autorisation/Entity/LimiteAutorisation.php"
+        },
+        "ListeAttentePointure": {
+            "voie": "defaut",
+            "fichier": "Patinoire/Entity/ListeAttentePointure.php"
+        },
+        "LocationPatins": {
+            "voie": "defaut",
+            "fichier": "Patinoire/Entity/LocationPatins.php"
+        },
+        "MandatSepa": {
+            "voie": "defaut",
+            "fichier": "Sepa/Entity/MandatSepa.php"
+        },
+        "MouvementStock": {
+            "voie": "defaut",
+            "fichier": "Stock/Entity/MouvementStock.php"
+        },
+        "NiveauJoueur": {
+            "voie": "defaut",
+            "fichier": "Padel/Entity/NiveauJoueur.php"
+        },
+        "PanierEnLigne": {
+            "voie": "defaut",
+            "fichier": "Boutique/Entity/PanierEnLigne.php"
+        },
+        "ParametrePmvEtablissement": {
+            "voie": "groupe",
+            "fichier": "Crm/Entity/ParametrePmvEtablissement.php"
+        },
+        "ParcPatins": {
+            "voie": "groupe",
+            "fichier": "Patinoire/Entity/ParcPatins.php"
+        },
+        "Passage": {
+            "voie": "defaut",
+            "fichier": "Acces/Entity/Passage.php"
+        },
+        "PlageHoraire": {
+            "voie": "groupe",
+            "fichier": "Padel/Entity/PlageHoraire.php"
+        },
+        "PointDeVente": {
+            "voie": "groupe",
+            "fichier": "Caisse/Entity/PointDeVente.php"
+        },
+        "PolitiqueRecouvrement": {
+            "voie": "groupe",
+            "fichier": "Recouvrement/Entity/PolitiqueRecouvrement.php"
+        },
+        "ProfilExploitant": {
+            "voie": "groupe",
+            "fichier": "Compta/Entity/ProfilExploitant.php"
+        },
+        "RattachementEmploye": {
+            "voie": "groupe",
+            "fichier": "Personnel/Entity/RattachementEmploye.php"
+        },
+        "ReceptionAchat": {
+            "voie": "groupe",
+            "fichier": "Stock/Entity/ReceptionAchat.php"
+        },
+        "RemiseSepa": {
+            "voie": "defaut",
+            "fichier": "Sepa/Entity/RemiseSepa.php"
+        },
+        "RetraitClickCollect": {
+            "voie": "defaut",
+            "fichier": "Boutique/Entity/RetraitClickCollect.php"
+        },
+        "SaisonEphemere": {
+            "voie": "groupe",
+            "fichier": "Patinoire/Entity/SaisonEphemere.php"
+        },
+        "SessionCaisse": {
+            "voie": "defaut",
+            "fichier": "Caisse/Entity/SessionCaisse.php"
+        },
+        "SupplierInvoice": {
+            "voie": "groupe",
+            "fichier": "Finance/SupplierInvoice/Entity/SupplierInvoice.php"
+        },
+        "Terminal": {
+            "voie": "defaut",
+            "fichier": "Acces/Entity/Terminal.php"
+        },
+        "Tournoi": {
+            "voie": "groupe",
+            "fichier": "Padel/Entity/Tournoi.php"
+        },
+        "TreasurySettings": {
+            "voie": "groupe",
+            "fichier": "Finance/Treasury/Entity/TreasurySettings.php"
+        },
+        "Vente": {
+            "voie": "defaut",
+            "fichier": "Vente/Entity/Vente.php"
+        }
+    }
+}
