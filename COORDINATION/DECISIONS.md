@@ -1540,3 +1540,64 @@ documentation exécutable.** `verifier-formats` doit être branché dans `pre-re
 autres. Question ouverte à `claude-H` : ses scripts tournent-ils dans l'image node figée du
 déploiement, sans réseau — le hook s'exécute en `--network none`, exprès. Si non, on les réécrit en PHP
 plutôt que de les laisser facultatifs.
+
+---
+
+### 2026-08-26 · D51 — Un référentiel se tranche sur **qui décide de la liste**, pas sur « est-ce partagé »
+
+**La question de `claude-G`**, en attente depuis le matin : cinq entrées classées « référentiel présumé »
+par le garde-fou de couverture — `Categorie`, `Saison`, `TypeProduit`, `TypeTarif`,
+`TrancheQuotientFamilial` — faut-il les cloisonner ? Elle plaidait pour laisser `TypeProduit` et
+`TypeTarif` globales : *« les cloisonner ferait descendre un compteur en cassant le partage de
+référentiel qui fait l'intérêt d'une plateforme. »*
+
+**Elle a raison, et le cadrage global/cloisonné rend pourtant la question insoluble.** Trois de ces cinq
+listes ne sont pas décidées par nous.
+
+**Le critère : qui décide de la liste.**
+
+| Référentiel | Qui décide | Verdict |
+|---|---|---|
+| `TypeProduit` | **nous** — la valeur pilote du code | **global**, lecture seule pour les établissements |
+| `TypeTarif` | nous pour le socle, **eux** pour le reste | **global + ajout local** |
+| `Categorie` | **eux** — celle d'une patinoire n'est pas celle d'un musée | **global + ajout local** |
+| `Saison` | **eux** | **cloisonné** |
+| `TrancheQuotientFamilial` | **la collectivité** | **cloisonné**, sans discussion |
+
+**Le quotient familial tranche seul.** Les tranches sont fixées par la commune ou la CAF. Deux
+établissements de deux communes ont des grilles différentes, et un tarif calculé sur la mauvaise grille
+est une **erreur de facturation opposable**. Il n'y a pas d'arbitrage à rendre.
+
+**`TypeProduit` confirme `claude-G`, pour une raison plus forte que le partage** : sa valeur pilote des
+branches d'exécution. Un établissement qui invente un type produit invente un chemin de code qui
+n'existe pas. Ce n'est pas un référentiel, c'est une énumération qui a mal tourné.
+
+**⚠ Ce que « global » engage, et que la question ne posait pas.** Une table globale que n'importe quel
+établissement peut **écrire** est un trou transfrontière : A renomme un `TypeTarif`, le tarif de B change.
+Silencieux et immédiat. **Garder une table globale engage donc à la rendre non écrivable par un
+établissement** — sans quoi « partagé » signifie « modifiable par tout le monde ».
+
+C'est D41, et `claude-C` vient d'en corriger le compte : **49 entités concernées et non 35** que j'avais
+annoncées. Vingt-sept par groupe d'écriture, **vingt-deux sans aucun `denormalizationContext`** — c'est
+l'absence de déclaration qui expose, et ma lecture, qui cherchait des groupes, ne pouvait pas les voir.
+**La voie la moins visible était la plus large.** Son garde-fou est fusionné.
+
+**Forme laissée à `claude-G`** (colonne `etablissement` nullable, ou table d'extension), avec deux
+exigences : le socle n'est écrivable que par la plateforme ; une lecture d'établissement voit le socle
+**plus** ses ajouts, jamais ceux d'un autre. Vérifier d'abord qu'un patron nullable n'existe pas
+ailleurs — en inventer un second serait pire que le problème.
+
+---
+
+### 2026-08-26 · D51-bis — Une session est muette si sa **branche** ne bouge pas, pas si on ne la joint pas
+
+J'ai annoncé à Maxime que je ne pouvais plus joindre `claude-G` ni `claude-D`, et j'en ai déduit une
+flotte à moitié silencieuse. **`claude-D` m'a corrigé** : le canal fonctionnait, sept échanges depuis la
+veille. Ce sont les **noms** qui avaient disparu de l'annuaire, pas les sessions.
+
+Sa règle remplace la mienne, et la mesure la confirme : **sept sessions sur neuf avaient poussé dans
+l'heure** (A, B, C, D, F, G, H ; `E` à huit heures, `I` jamais ouverte).
+
+C'est la deuxième fois de la semaine qu'une mesure non réactualisée devient une affirmation — et c'est
+`claude-D` qui l'avait déjà signalé la première fois, en se trompant elle-même sur le compte de la flotte.
+La leçon est symétrique : **on ne mesure pas l'activité par le canal qui la rapporte.**
