@@ -87,6 +87,29 @@ const MOTS = {
   expiree: 'Expirée',
   perte: 'Perte',
   restitution_partielle: 'Restitution partielle',
+
+  // --- Stock ---
+  entree_achat: 'Entrée (achat)',
+  sortie_vente: 'Sortie (vente)',
+  retour_fournisseur: 'Retour fournisseur',
+  ajustement_positif: 'Correction en plus',
+  ajustement_negatif: 'Correction en moins',
+  perte_casse: 'Perte ou casse',
+  sortie_transfert: 'Départ en transfert',
+  entree_transfert: 'Arrivée de transfert',
+  regularisation_inventaire: 'Régularisation d’inventaire',
+  piece: 'pièce',
+  kg: 'kg',
+  litre: 'litre',
+  paquet: 'paquet',
+  autre: 'autre',
+  tous: 'Tous les articles',
+  rayon: 'Un rayon',
+  selection: 'Une sélection',
+  cloture: 'Clôturé',
+  en_validation: 'En validation',
+  fifo: 'Premier entré, premier sorti (FIFO)',
+  cmup: 'Coût moyen pondéré',
 }
 
 // Rend un code lisible sans prétendre le traduire : `boutique_stock` → « Boutique stock ».

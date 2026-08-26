@@ -1661,3 +1661,70 @@ sur un module tout neuf — *« prendre la porte de sortie au moment où le modu
 été le pire moment »*.
 
 À appliquer aux douze garde-fous. `bin/` est le périmètre de `claude-C`.
+
+---
+
+### 2026-08-26 · D54 — Le geste qui exige un droit plus fort que l'écran qui le porte
+
+**Trois modules indépendants ont inventé le même motif dans la même journée**, sans se concerter et sans
+que personne l'ait nommé :
+
+| Module | Le geste | Le droit distinct |
+|---|---|---|
+| Facturation (`claude-D`) | émettre la facture d'une pièce | `invoice`, plus fort que la lecture du document |
+| Patinoire (`claude-H`) | retenir une caution **hors barème** | `patinoire.forcer_retenue` |
+| Stock (`claude-H`) | régulariser un **écart significatif** d'inventaire | `stock.valider_ecart` |
+
+Trois découvertes séparées le même jour, c'est un patron, pas une coïncidence.
+
+**La forme commune :** un écran présente plusieurs gestes sur un même objet ; l'un d'eux engage
+davantage — de l'argent, une pièce comptable, une correction que personne ne reverra — et exige donc un
+droit que la simple consultation de l'écran n'implique pas.
+
+**La règle d'écran, et elle va à contre-courant de l'habitude.**
+
+`claude-H` avait déjà obtenu de Maxime la règle générale : *si les accès sont refusés, pourquoi laisser
+l'affichage dans le menu ?* — donc **on cache ce qui est interdit**. Ce cas-ci est l'exception, et il
+faut savoir pourquoi.
+
+**Le bouton s'affiche, il annonce le droit qu'il exige, et il est désactivé pour qui ne l'a pas.**
+
+Cacher un geste rare fait croire qu'il **n'existe pas** : l'agent qui a besoin d'une retenue hors barème
+cherchera un contournement, appellera son responsable pour « le logiciel ne le permet pas », ou saisira
+un montant faux dans le champ qui, lui, s'affiche. Un menu caché dit « ce n'est pas pour vous » ; un
+geste caché dit « c'est impossible ». Ce n'est pas la même phrase, et la seconde est un mensonge.
+
+La distinction tient donc à ceci : **on cache une zone entière du produit, on n'ampute pas un écran
+qu'on affiche.**
+
+**Corollaire, tiré de `claude-H` sur la patinoire :** un geste dont la conséquence n'est pas écrite à
+côté de lui est un piège, indépendamment des droits. Trois états de retour de patins déclenchent trois
+traitements de caution différents — l'agent qui coche « cassés » sans savoir qu'il déclenche une retenue
+l'apprendrait par la réclamation du client.
+
+**Et le seuil qui décide de « significatif » doit être lisible avant d'écrire la phrase.** Dans `Stock`,
+`seuilEcartSignificatifPourcentage` et `seuilEcartSignificatifMontant` sont tous deux **nullables** : si
+personne ne les a réglés, on ne sait pas si rien n'est significatif ou si tout l'est. Un écran qui
+affirme « écart non significatif » sur un seuil jamais configuré ment à l'agent **avec l'autorité du
+logiciel**.
+
+---
+
+### 2026-08-26 · D54-bis — `Stock` : soixante-trois opérations exposées, aucune appelée
+
+Relevé de `claude-H` (`npm run mesurer-ecart --par-module`) : le module est **complet et cohérent** —
+quatorze entités, dix-huit processors, le cycle d'achat entier, le cycle d'inventaire, les transferts
+inter-sites, et trois modèles de lecture déjà calculés. **Rien n'y manque sauf une porte.**
+
+Ce n'est pas de la dette : c'est du travail déjà payé qui ne sert à rien.
+
+**Mais deux choses résistent aux écrans, et il faut les régler d'abord.**
+
+**`ArticleStock` ne porte aucune quantité** — ni disponible, ni en stock. Le chiffre réel vit dans
+`StockLot.quantiteRestante`, à agréger. Un écran « articles » afficherait donc une liste **sans le seul
+chiffre qu'on vient y chercher**, ce qui est pire qu'un écran manquant : il donne l'impression d'avoir
+consulté le stock. `ParcPatins::getQuantiteDisponible()` est le précédent à suivre — c'est lui qui a
+permis à `claude-H` de faire tout l'écran patinoire en un lot.
+
+C'est **le signal muet à l'envers** : d'ordinaire l'information existe et rien ne l'appelle ; ici elle
+n'existe pas. `Stock` est le périmètre de `claude-F`.

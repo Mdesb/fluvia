@@ -428,6 +428,44 @@ export const api = {
     request(`/api/patinoire/liste-attente/${id}/annuler`, { method: 'POST', body: {} }),
   patinoireValiderRetenue: (id, corps) =>
     request(`/api/patinoire/retenues/${id}/valider`, { method: 'POST', body: corps }),
+  // Stock
+  // `articleStock` ne porte AUCUNE quantite : le stock reel vit dans les lots, un article pouvant en
+  // avoir plusieurs (dates d'entree et couts d'achat differents). C'est pour ca que les deux listes
+  // sont chargees ensemble et agregees a l'ecran.
+  stockArticles: () => request('/api/article_stocks', { query: { itemsPerPage: 200 } }),
+  stockLots: () => request('/api/stock_lots', { query: { itemsPerPage: 500 } }),
+  stockMouvements: () =>
+    request('/api/stock_mouvements', { query: { itemsPerPage: 50, 'order[date]': 'desc' } }),
+  stockParametrage: () => request('/api/stock_parametrages', { query: { itemsPerPage: 5 } }),
+  stockAlertesReappro: () => request('/api/stock/alertes-reappro'),
+  stockValorisation: () => request('/api/stock/valorisation'),
+  creerArticleStock: (corps) => request('/api/article_stocks', { method: 'POST', body: corps, ld: true }),
+  majArticleStock: (id, corps) => request(`/api/article_stocks/${id}`, { method: 'PATCH', body: corps }),
+  // Operations sur mesure : `input: false`, le processor lit le corps brut. Pas de `ld: true`.
+  stockAjuster: (corps) => request('/api/stock/mouvements/ajustement', { method: 'POST', body: corps }),
+  // Rattacher un article a un produit vendu : c'est CE lien qui fait qu'une vente decremente le
+  // stock. Sans lui, le produit se vend et rien ne bouge — volontairement, et silencieusement.
+  stockRattacherProduit: (id, produit) =>
+    request(`/api/stock/articles/${id}/rattacher-produit`, { method: 'POST', body: { produit } }),
+  stockDetacherProduit: (id) =>
+    request(`/api/stock/articles/${id}/detacher-produit`, { method: 'POST', body: {} }),
+
+  // Inventaire.
+  stockInventaires: () =>
+    request('/api/stock_inventaires', { query: { itemsPerPage: 20, 'order[dateLancement]': 'desc' } }),
+  stockLignesInventaire: () =>
+    request('/api/stock_ligne_inventaires', { query: { itemsPerPage: 500 } }),
+  // Operation STANDARD (pas d'`uriTemplate`) : elle deserialise, donc `ld: true`. Les trois
+  // suivantes sont sur mesure et n'en ont pas besoin.
+  stockLancerInventaire: (corps) =>
+    request('/api/stock_inventaires', { method: 'POST', body: corps, ld: true }),
+  stockSaisirComptage: (id, corps) =>
+    request(`/api/stock/lignes-inventaire/${id}`, { method: 'PATCH', body: corps }),
+  stockRegulariserLigne: (id) =>
+    request(`/api/stock/lignes-inventaire/${id}/regulariser`, { method: 'POST', body: {} }),
+  stockCloturerInventaire: (id) =>
+    request(`/api/stock/inventaires/${id}/cloturer`, { method: 'POST', body: {} }),
+
   // Padel
   padelTerrains: () => request('/api/padel/terrains', { query: { itemsPerPage: 100 } }),
   // Pas de collection listable pour les tournois (seulement des routes custom
