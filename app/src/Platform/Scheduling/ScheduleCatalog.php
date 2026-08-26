@@ -190,6 +190,20 @@ final class ScheduleCatalog
             // `recalculerTous()` recalcule chaque badge à partir de **maintenant**. Il ne rejoue aucun
             // historique, il recompose un état présent, et il est idempotent : deux exécutions de suite
             // produisent le même résultat.
+            // SÛR AU PREMIER PASSAGE — elle LIT et rapporte : aucune écriture, aucun envoi, aucun
+            // effet visible au dehors. Un arriéré traité d'un coup est exactement le constat qu'on
+            // veut. Catégorie 1 du critère, la seule des trois qui n'exige pas de supervision.
+            new ScheduledTask(
+                'personnel:qualifications:verifier',
+                1440,
+                "Un agent dont la qualification expire ENTRE la planification et le créneau reste au "
+                . "planning sans que rien ne le dise. L'affectation a été refusée en son temps si la "
+                . "qualification manquait — ce refus donne la certitude que le planning est valable, et "
+                . "c'est ce qui rend l'autre cas invisible. Dans une piscine, ce sont des surveillants "
+                . "qui n'ont plus le droit de surveiller ; on ne le découvre ni le jour même ni le "
+                . "lendemain, mais lors d'un contrôle ou d'un accident.",
+                safeOnFirstRun: true,
+            ),
             new ScheduledTask(
                 'personnel:recalculer-fenetres-badges',
                 60,
