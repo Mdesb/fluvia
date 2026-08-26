@@ -119,7 +119,7 @@ final class AffutageTest extends PatinoireApiTestCase
                 'technicien' => '/api/utilisateurs/' . $idTechnicien,
             ],
         ]);
-        self::assertResponseIsSuccessful('Le corps n'a plus a porter l'etablissement.');
+        self::assertResponseIsSuccessful('Le corps na plus a porter letablissement.');
 
         $id = $client->getResponse()->toArray()['id'];
         $em->clear();
