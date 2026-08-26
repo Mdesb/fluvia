@@ -2022,3 +2022,101 @@ ne le regardera.
 **Et j'ai refusé de faire taire le garde-fou de topologie** en ajoutant un remote de façade, ce qui
 aurait rendu le contrôle vert sans rien réparer — sur le contrôle dont le rôle est précisément de
 détecter cette configuration (D53).
+
+---
+
+### 2026-08-26 · D61 — Un ticket qui n'existe que dans l'onglet du caissier n'est probant pour personne
+
+**Trouvé en creusant une capture d'écran de Maxime**, qui signalait un ticket ne s'additionnant pas :
+`1 × Test 10,00 €` pour un total de `15,00 €`.
+
+**La base était juste** — quantité 1, prix unitaire 15,00, aucune remise. **L'écran mentait** : il
+construisait le ticket depuis le panier local, avec repli sur le prix **indicatif du catalogue** quand la
+ligne n'en portait pas. Le serveur avait appliqué une grille tarifaire ; l'écran affichait le prix de la
+vignette.
+
+**Le correctif n'était pas de mieux deviner, c'était d'arrêter de deviner** : le ticket se construit
+depuis la vente validée. Le panier local est ce que l'utilisateur a **demandé** ; la vente validée est ce
+qui a été **facturé**. Sur un ticket, seul le second a le droit de s'afficher.
+
+**Mais la vérification a trouvé plus grave que le signalement.** `TicketProcessor` ne renvoie **aucune
+ligne** : ni libellé, ni quantité, ni montant — seulement `numero`, `imprime`, `duplicata`,
+`renvoiPropose`. Et `LigneVente` sérialise `produit` et `typeTarif` en `Uuid` nus : **tout l'argent y
+est, aucun mot.**
+
+**Conséquence : un ticket ne peut pas être réimprimé.** L'opération accepte pourtant
+`mode: "duplicata"`. Le document n'existe que dans l'onglet ouvert du caissier ; il ferme la page, la
+pièce n'est plus reconstituable. Chaque vente encaissée avant le correctif est **définitivement
+irréproductible**.
+
+**Et c'est une affaire de conformité, pas de confort.** `claude-G` l'a cadré ainsi : tout le module repose
+sur l'idée qu'une vente validée est **probante** — c'est l'argument de D45 contre la modification d'un
+règlement, et celui opposé à l'exemption de scellement de la vente directe. *Nous aurions une chaîne
+d'empreintes irréprochable qui scelle des documents qu'on ne sait pas réémettre.*
+
+C'est D59 sous une autre forme : **un mécanisme qui produit toutes les traces d'un fonctionnement
+correct, et qui ne fait pas la chose.** Les empreintes sont bonnes, les totaux sont bons, les refus de
+modification sont bons — et il n'y a rien à produire le jour où on demande la pièce.
+
+**Décidé :** le libellé est **figé sur la ligne au moment de la vente**, pas relu du produit. Un produit
+renommé six mois plus tard ne doit pas changer ce qu'un ticket d'hier affirme — même règle que le prix
+unitaire, déjà stocké et jamais recalculé.
+
+⚠ **Cette copie sera prise pour une redondance et quelqu'un proposera de la supprimer.** La raison va
+dans le docblock de la propriété, pas dans cette décision — et un test la protège : renommer le produit,
+relire une vente ancienne, vérifier que le libellé n'a pas bougé. **Un test qui échoue est plus difficile
+à supprimer qu'un commentaire.**
+
+---
+
+### 2026-08-26 · D62 — Un signal qui ne ressemble pas à un signal, une image qui ressemble à ce qu'elle n'est pas
+
+**Deux fautes corrigées le même jour par `claude-H`, sur deux écrans sans rapport**, et elle a vu qu'elles
+étaient symétriques :
+
+- **le matin** : un bandeau d'avertissement **sans couleur d'avertissement** — un signal réel qui ne
+  ressemble pas à un signal, donc que personne ne lit ;
+- **le soir** : un carré ressemblant à un QR affiché **à côté du texte « aucun support QR sur cette
+  vente »**. Le composant était rendu sans condition, y compris quand il n'y avait rien à encoder.
+
+**Le second est le pire des deux.** L'agent présente le QR au lecteur, ça ne marche pas, et il conclut
+que **le lecteur est en panne** — pas qu'il n'y avait rien à scanner. Il cherchera au mauvais endroit,
+avec de bonnes raisons. **Un faux signal coûte plus cher qu'un signal absent : l'absence fait chercher,
+la fausse présence fait chercher ailleurs.**
+
+Deux fois dans la journée, chez la même personne, sur deux écrans sans rapport : ce n'est pas une
+inattention, c'est une classe de défaut qui n'avait pas de nom.
+
+---
+
+### 2026-08-26 · D63 — Un coût qui grossit passe devant un coût qui attend
+
+**Question de `claude-G`** : le duplicata (une heure, conformité) passe-t-il avant PAY-3 (une demi-journée,
+qui fait attendre `claude-D` depuis le matin) ?
+
+Son argument était le mien de la veille — *une heure qui ferme un défaut de conformité passe avant une
+demi-journée qui ferme un coût d'organisation*. Vrai, et ce n'est pas le critère décisif.
+
+**Le vrai départ : l'un des deux coûts grossit, l'autre non.**
+
+L'attente de `claude-D` est **fixe** : trois heures de plus ne l'aggravent pas, et elle n'est pas à
+l'arrêt. Le duplicata **accumule** : chaque vente encaissée sans libellé figé devient définitivement
+irréproductible. Ce n'est pas une dette qu'on rembourse plus tard, c'est une perte sèche, ligne par ligne.
+
+**Un coût qui grossit passe devant un coût qui attend.**
+
+---
+
+### 2026-08-26 · D63-bis — Le remède ne doit pas avoir la forme de la maladie
+
+**Formulé par `claude-G`** en posant à `claude-H` une contrainte qu'elle n'avait pas demandée : l'estimation
+de tarif du panier appellera **le calculateur qui facture**, pas une copie de ses règles.
+
+Une seconde implémentation reproduirait le défaut du jour — un prix annoncé différent du prix facturé —
+avec **deux couches serveur** au lieu d'une couche serveur et une couche écran. Et cette fois personne ne
+verrait la divergence, puisque les deux seraient « côté serveur ».
+
+**Deux fois le même jour, la bonne réponse a été : un seul calcul, deux appelants.** `claude-D` l'avait
+appliquée à la simulation de clôture, en faisant rendre les montants par le même code que la clôture
+elle-même — *un calcul parallèle aurait divergé, et la divergence se serait découverte sur un arrêté
+fiscal.*
