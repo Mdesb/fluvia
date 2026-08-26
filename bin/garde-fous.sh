@@ -209,6 +209,16 @@ else
     executer "Établissement écrivable (D41)" php_racine bin/garde-fou-etablissement-ecrivable.php
 fi
 
+# 13. Une suppression dans un `up()` de migration doit être voulue, et le dire (D32).
+#     `migrations:diff` compare les métadonnées à la base ENTIÈRE : il ramasse la dérive des
+#     autres sessions et la présente comme le travail de l'auteur. Préventif — aucun DROP de
+#     dérive n'a jamais été commité, les dix gelés sont des consolidations délibérées d'août.
+if [ -n "${REFERENCE:-}" ]; then
+    executer "Suppressions en migration (D32)" php_racine bin/garde-fou-drop-migrations.php "--contre=$REFERENCE"
+else
+    executer "Suppressions en migration (D32)" php_racine bin/garde-fou-drop-migrations.php
+fi
+
 # 5. i18n : pas de chaîne d'UI en dur — SANS OBJET tant que la couche i18n n'existe pas (aucun
 #    catalogue, aucun usage du traducteur dans app/src). Acté par l'intégrateur le 21/08.
 # 6. CSRF — SANS OBJET : tous les pare-feux sont `stateless: true` et l'authentification est un JWT
