@@ -23,6 +23,7 @@
 | 26/08 11:30 | **D41 : six entites traitees, dette 49 -> 43.** Ton garde-fou n12 confirme « 6 resorbees ». Quatre `EstablishmentStampProcessor` sur le patron de `Reservation`. Trois tests de non-regression ecrits la ou il n-y en avait aucun, **verifies rouges sans le correctif**. | Les cinq entites de la **voie B** (aucun `denormalizationContext`) — lot separe. | Rien. |
 | 26/08 12:05 | Voie B analysee : sur les cinq, **trois seulement sont reellement denormalisables**, deux sont fermees par `input: false`. J-ai cru trouver une ecriture transfrontiere dans `DemarrerAffutageProcessor` — **l-experience m-a contredite**, detail ci-dessous. Correctif conserve pour une autre raison, teste, vert. | Voie B proprement dite. | Rien. |
 | 26/08 13:10 | **D41 termine chez moi : 11 resorbees sur 11.** Dette globale 49 -> 38. Voie A (6) par processeur de rattachement, voie B (5) par `input: false` **plus** fermeture declaree. | Verification des suites — le risque est qu-une operation dependait de la denormalisation par defaut. | Un angle mort de ton garde-fou n12, ci-dessous. |
+| 26/08 13:20 | **D41 clos et verifie** : Padel 24, Patinoire 30, Sport 31, Platform 62 — toutes vertes. Aucune operation ne dependait de la denormalisation par defaut, c-etait le risque reel du lot. Pile demontee, worktree rendu. | Plus rien d-assigne. | Rien. |
 
 ---
 
@@ -648,3 +649,48 @@ comprises — elles n-avaient que `input: false` et auraient traine au tableau p
 la porte par effet de bord d-un autre reglage. Retirer ce `input: false` — par exemple pour accepter
 un jour un corps deserialise — rouvrirait l-exposition **sans qu-aucune ligne ne mentionne
 l-etablissement**. Une declaration explicite, elle, resisterait.
+
+---
+
+## 2026-08-26 13:20 · Presentation horaire (D35) — D41 clos, et je redemande une tache
+
+**`claude-I` en ligne.** Le lot D41 est termine et verifie : **11 entites sur 11**, dette globale
+49 -> 38, quatre suites vertes apres coup.
+
+Le risque de ce lot n-etait pas le correctif mais son effet de bord : declarer un
+`denormalizationContext` la ou il n-y en avait aucun **retire** l-ecriture par defaut sur *toutes* les
+proprietes, pas seulement l-etablissement. Si une operation s-appuyait dessus — un `Patch` de pause ou
+de resiliation sur `AbonnementFitness`, par exemple — elle serait tombee. Aucune ne l-a fait.
+
+### Ce que ce lot m-a appris, et qui vaut au-dela de mon perimetre
+
+**Deux fois en deux heures, la mesure a contredit ce que je croyais avoir trouve.**
+
+1. J-ai cru tenir une ecriture transfrontiere dans `DemarrerAffutageProcessor`. Le denormaliseur la
+   refusait deja, en amont. **Pas de faille.**
+2. J-ai cru fermer la voie B avec `input: false`. Le garde-fou a continue de compter. **Fermeture
+   invisible a l-outil.**
+
+Dans les deux cas, le raisonnement seul menait a une conclusion fausse, et c-est l-essai qui a
+tranche. A neuf sessions qui chassent la meme classe de defaut, je crois que ca vaut une regle :
+**un signalement de cloisonnement sans test d-exploitation ne devrait pas etre annonce comme une
+faille.** Le cout d-une fausse alerte n-est pas nul — il fait corriger du vide, et il fait croire le
+perimetre plus troue qu-il ne l-est.
+
+### Etat de mon perimetre
+
+Tout ce que tu m-as confie est fait : les cinq items des ordres longs, les fixtures idempotentes, la
+dette de couverture, et D41 en entier. Cinq suites vertes, aucune pile qui traine.
+
+**Je n-ai plus de tache.** Ma demande tient depuis avant-hier soir. Trois choses restent en attente
+chez toi, et aucune n-est de mon ressort :
+
+1. **`frontend/` n-appartient toujours a personne** — quatre libelles dans `Reservation.jsx` sont les
+   seuls points d-affichage vivants de mes 51 cles de vocabulaire.
+2. **Les deux chevauchements Smart Flow** — liste d-attente patinoire, delestage musee — avant que
+   `claude-E` n-implemente, pas apres.
+3. **Le resolveur i18n et l-`xid` du socle**, sans lesquels mes cinq paquets verticales restent
+   rediges et non installables.
+
+En attendant, je continue a chercher dans mes cinq modules : c-est la ou j-ai trouve les deux vrais
+defauts de la semaine, et personne d-autre n-y va.
