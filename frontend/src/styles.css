@@ -547,3 +547,23 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 .pat-tuile.vide { background: var(--bg-soft, var(--panel)); border-style: dashed; }
 .pat-tuile.vide .pat-dispo { color: var(--crit); }
 .pat-tuile .pat-att { position: absolute; top: -7px; right: -5px; font-size: 10px; }
+
+
+/* ---- Piscine : les casiers ---- */
+/* La couleur porte l'etat avant le texte : au guichet, on cherche « lesquels sont libres » d'un
+   coup d'oeil, pas ligne a ligne. Le numero reste lisible de loin — c'est lui que le nageur
+   retiendra et repetera. */
+.cas-tuile { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 10px 8px;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--panel); text-align: center; }
+.cas-tuile .cas-num { font-size: 22px; font-weight: 800; line-height: 1.1; border: none; background: none;
+  font-family: inherit; color: var(--ink); cursor: pointer; padding: 0; }
+.cas-tuile .cas-num:disabled { cursor: default; }
+.cas-tuile .cas-etat { font-size: 11px; font-weight: 700; letter-spacing: .02em; }
+.cas-tuile .cas-zone { font-size: 10.5px; color: var(--ink-faint); }
+.cas-tuile .cas-actes { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; margin-top: 4px; }
+.cas-tuile.libre { border-color: var(--good); }
+.cas-tuile.libre .cas-etat { color: var(--good); }
+.cas-tuile.occupe { background: var(--panel-2); }
+.cas-tuile.occupe .cas-etat { color: var(--ink-soft); }
+.cas-tuile.non_rendu { border-color: var(--crit); background: var(--crit-bg); }
+.cas-tuile.non_rendu .cas-etat { color: var(--crit); }
