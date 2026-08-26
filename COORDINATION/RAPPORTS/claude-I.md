@@ -22,6 +22,7 @@
 | 26/08 10:25 | **Deux lots verts.** (1) Fixtures idempotentes : 9 roles + **8 permissions** sur mes cinq verticales. (2) Dette de couverture : `EvenementEclairage` cloisonne par `terrain` — **la seule des 34 entites gelees qui soit chez moi**. Suites : Piscine 33, Padel 23, Patinoire 29, Sport 31, Musee 23, Platform 62 — **toutes vertes**. Pile demontee. | Plus rien d-assigne. Je reste sur ma demande de tache. | Rien. |
 | 26/08 11:30 | **D41 : six entites traitees, dette 49 -> 43.** Ton garde-fou n12 confirme « 6 resorbees ». Quatre `EstablishmentStampProcessor` sur le patron de `Reservation`. Trois tests de non-regression ecrits la ou il n-y en avait aucun, **verifies rouges sans le correctif**. | Les cinq entites de la **voie B** (aucun `denormalizationContext`) — lot separe. | Rien. |
 | 26/08 12:05 | Voie B analysee : sur les cinq, **trois seulement sont reellement denormalisables**, deux sont fermees par `input: false`. J-ai cru trouver une ecriture transfrontiere dans `DemarrerAffutageProcessor` — **l-experience m-a contredite**, detail ci-dessous. Correctif conserve pour une autre raison, teste, vert. | Voie B proprement dite. | Rien. |
+| 26/08 13:10 | **D41 termine chez moi : 11 resorbees sur 11.** Dette globale 49 -> 38. Voie A (6) par processeur de rattachement, voie B (5) par `input: false` **plus** fermeture declaree. | Verification des suites — le risque est qu-une operation dependait de la denormalisation par defaut. | Un angle mort de ton garde-fou n12, ci-dessous. |
 
 ---
 
@@ -610,3 +611,40 @@ ce `input: false` rouvrirait l-exposition sans qu-aucun garde-fou ne bronche. C-
 arbitrer : faut-il quand meme leur poser un `denormalizationContext`, pour que la fermeture soit
 declaree plutot que dependante d-une option d-operation ? **Mon avis : oui**, mais c-est ton
 arbitrage, et je ne le fais pas sans reponse.
+
+---
+
+## 2026-08-26 13:10 · Ton garde-fou n12 ne sait pas voir `input: false`
+
+**Mesure, pas opinion.** J-ai pose `input: false` sur les trois creations patinoire qui lisent le corps
+brut — la forme exacte que `/padel/niveaux/declarer` et `/sport/abonnements/souscrire` portent deja.
+L-exposition est alors techniquement fermee : sans denormalisation, aucune propriete n-est ecrite
+depuis le corps.
+
+**Le garde-fou a continue de les compter.** Toujours « 6 resorbees », inchange. Il lit les groupes de
+serialisation et l-absence de `denormalizationContext` ; il ne lit pas les options d-operation.
+
+**Ce que cela produit si on le laisse.** Une entite fermee mais comptee comme exposee reste au tableau
+indefiniment. Le prochain qui prend le lot la « corrige » une seconde fois — et, ne comprenant pas
+pourquoi le compteur ne bouge pas, il finira par toucher a autre chose. C-est une fausse dette, et une
+fausse dette coute plus cher qu-une vraie : elle ne se resorbe jamais.
+
+**Ce que j-ai fait, et c-est la reponse a l-arbitrage que je te posais a 12:05.** J-ai **declare** la
+fermeture : `denormalizationContext` avec un groupe qu-aucune propriete ne porte. Rien n-est ecrivable,
+et cette fois l-outil le voit. Applique aux cinq de la voie B, `NiveauJoueur` et `AbonnementFitness`
+comprises — elles n-avaient que `input: false` et auraient traine au tableau pour rien.
+
+**Resultat : 11 resorbees sur 11, dette 49 -> 38.**
+
+**Deux facons de traiter l-angle mort, et ce n-est pas moi qui tranche** (`bin/` est le perimetre de
+`claude-C`) :
+- soit le garde-fou apprend `input: false` — il devient plus juste, mais la fermeture reste invisible
+  a la lecture de l-entite ;
+- soit on garde la regle actuelle et on **exige la declaration**, ce que je viens de faire. Plus
+  verbeux, mais la fermeture se lit dans le fichier plutot que dans une option d-operation situee
+  quarante lignes plus haut.
+
+**Ma preference va a la seconde**, et pour une raison qui depasse le garde-fou : `input: false` ferme
+la porte par effet de bord d-un autre reglage. Retirer ce `input: false` — par exemple pour accepter
+un jour un corps deserialise — rouvrirait l-exposition **sans qu-aucune ligne ne mentionne
+l-etablissement**. Une declaration explicite, elle, resisterait.
