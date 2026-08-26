@@ -3,6 +3,7 @@ import Modal from '../components/Modal.jsx'
 import ReferentielEditable from '../components/ReferentielEditable.jsx'
 import InventaireStock from '../components/InventaireStock.jsx'
 import AchatsStock from '../components/AchatsStock.jsx'
+import ValorisationStock from '../components/ValorisationStock.jsx'
 import Tabs from '../components/Tabs.jsx'
 import { dateHeureFr } from '../components/Liste.jsx'
 import { api, membres } from '../api/client.js'
@@ -50,6 +51,7 @@ export default function Stock({ etabActif, droits }) {
 
   const peutAjuster = aUnDesDroits(droits, ['stock.ajuster', 'stock.gerer'])
   const peutGererArticle = aUnDesDroits(droits, ['stock.gerer_article', 'stock.gerer'])
+  const peutValoriser = aUnDesDroits(droits, ['stock.lire_valorisation', 'stock.gerer'])
 
   const recharger = useCallback(async () => {
     setChargement(true)
@@ -121,6 +123,7 @@ export default function Stock({ etabActif, droits }) {
         onglets={[
           ['etat', 'Ce qu’il reste'],
           ['achats', 'Achats'],
+          ...(peutValoriser ? [['valorisation', 'Valeur du stock']] : []),
         ]}
         actif={onglet}
         onChange={setOnglet}
@@ -128,6 +131,8 @@ export default function Stock({ etabActif, droits }) {
 
       {chargement ? (
         <div className="center" style={{ minHeight: 160 }}><div className="spinner" /></div>
+      ) : onglet === 'valorisation' && peutValoriser ? (
+        <ValorisationStock etabActif={etabActif} onErreur={setErreur} />
       ) : onglet === 'achats' ? (
         <AchatsStock
           articles={articles}
