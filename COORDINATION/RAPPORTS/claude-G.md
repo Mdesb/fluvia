@@ -296,6 +296,7 @@ lui fait porter le risque. La prochaine fois je donne les deux, ou je dis que je
 | 23:17 | **Point 4 : CQ-0 n'est toujours pas livrée** — `DroitAcces` ne porte toujours aucun lien vers un porteur, statut `CLAIM` chez `claude-C` depuis le 23/08. La moitié nominative de CQ-3/CQ-6 reste donc bloquée ; je ne l'attends pas. **Point 5 fait, et il y a urgence dedans** : le balayage sans borne de `CommanderEclairageCommand` était inoffensif tant que rien ne le lançait — l'ordonnanceur vient de le lancer. | Note d'analyse écrite pour `claude-I` sous le tableau. | Rien. |
 | 23:40 | **`Promotion` est cloisonnée — Maxime a tranché et m'a dit de la prendre.** Elle ne portait aucun rattachement : lisible par tous les exploitants de la base, d'un groupe à l'autre, **y compris avant sa date de début**. `tests/Offre` 29/29, chaîne de migrations rejouée depuis une base vide, test vérifié rouge sans le cloisonnement. | Les cinq autres entrées « référentiel présumé » attendent toujours ton arbitrage — je n'en prends aucune sans. | Rien. |
 | 10:13 | **Le chargement complet des fixtures passe de nouveau.** C'était bien chez moi : `CaisseClotureRoleFixtures` créait le rôle « Caissier » que `L7Fixtures` crée aussi. Corrigé là et dans `ReservationFixtures`. `tests/Caisse` 15/15, `tests/Reservation` 103/103. **Et le second passage bute maintenant chez toi**, sur `SocleFixtures:51`. | D48 : historique de `Vente` livré (débloque `claude-H`). Suite : les cinq chantiers `Vente`/`Caisse`. | Rien. |
+| 12:11 | **D45 livré** : la correction de ventilation d'un règlement s'ajoute et se scelle, la vente n'est jamais touchée, et elle est datée du **jour du geste**. `tests/Vente` **52/52**, migrations rejouées depuis une base vide. Avant : D46-bis (canal → attente + débiteur), D44 (rien à faire côté serveur, prouvé), descriptions d'opérations, fixtures idempotentes. | D46 : rattacher une correction à l'écart de caisse qu'elle explique. | Rien. |
 
 ## Nouvelle règle de Maxime — présentation horaire à `claude-A`
 
@@ -1096,3 +1097,48 @@ aussi**. Elles ne prouvent rien sur l'idempotence : le harnais recrée le schém
 chaque classe, donc les fixtures partent toujours d'une base vide et sont chargées sélectivement. La
 formule de `claude-D` est la bonne — « la suite passait déjà avant ma correction, c'est tout le
 problème ». Le seul geste qui révèle le défaut est de charger deux fois.
+
+
+## D45 — la correction de règlement, et les deux murs que j'ai heurtés
+
+**Ce que ça pose.** `SettlementCorrection` : −X sur un moyen, +X sur un autre, rattachée à la vente,
+motivée, signée, scellée dans la chaîne sous un type dédié. **La vente n'est jamais modifiée** — ni
+par écriture directe (la chaîne la refuserait), ni par avoir (il annulerait et rejouerait le chiffre
+d'affaires pour une erreur qui n'a rien changé au montant).
+
+### L'inaltérabilité a refusé mon propre test
+
+J'écrivais le test « datée du jour du geste » en antidatant la vente **après** validation :
+
+    OperationInalterableException: Modification interdite : la vente est validée (NF525) ;
+    champ « date » figé.
+
+C'est exactement le mécanisme sur lequel repose D45, et il m'a arrêtée moi aussi. Je n'ai pas cherché
+à le contourner — j'ai antidaté **avant** la validation, seul chemin honnête. La garantie n'est pas
+déclarative : je viens de la heurter, et c'est la meilleure preuve que le lot repose sur du solide.
+
+### J'avais écrit du `bcmath`, qui n'existe pas sur cette image
+
+Premier échec : `Call to undefined function bccomp()`. Et le dépôt le savait déjà —
+`Autorisation\Service\ComparateurMontant` existe précisément pour ça, avec le même contrat, et
+`Stay\Service\StayBalance` porte la même note. J'ai repris leur convention (centimes entiers) plutôt
+que d'en introduire une troisième. C'est la règle que tu m'as rappelée ce matin sur les patrons
+nullable, appliquée ailleurs : **vérifier avant d'inventer**.
+
+### Le contrôle qui fait le lot
+
+Le cœur n'est pas de créer l'écriture, c'est de **borner ce qu'elle déplace** : on ne sort d'un moyen
+que ce qui y reste **net des corrections déjà passées**. Sans ça, deux corrections successives
+déplaceraient deux fois la même somme, et on créditerait la carte depuis des espèces jamais
+encaissées. Un test le vérifie en repassant la même correction — la seconde est refusée.
+
+Motif obligatoire (ce geste déplace de l'argent : qui peut sortir des espèces vers la carte peut
+masquer un manquant), droit `vente.corriger_reglement` distinct de `caisse.gerer`, auteur signé.
+
+### Ce que j'assume et qu'il faudra dire à l'exploitant
+
+Le Z d'hier garde sa ventilation fausse ; celui d'aujourd'hui porte la correction. **Ce n'est pas un
+défaut, c'est ce qui rend le Z digne de foi** — et ce n'est pas une perte d'information, puisque la
+correction pointe la vente d'origine : un état par date de vente reste calculable. C'est une question
+de restitution, pas de donnée. Quelqu'un devra l'écrire dans l'interface, sinon un exploitant
+conclura à un bogue.

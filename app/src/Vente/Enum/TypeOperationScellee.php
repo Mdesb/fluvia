@@ -11,6 +11,12 @@ enum TypeOperationScellee: string
 {
     case Vente = 'vente';
     case Avoir = 'avoir';
+
+    /**
+     * D45 — correction de la ventilation d'un règlement (−X sur un moyen, +X sur un autre). Scellée
+     * comme les autres : elle s'ajoute à la chaîne, elle ne réécrit rien.
+     */
+    case CorrectionReglement = 'correction_reglement';
     case ClotureZ = 'cloture_z';
     case ClotureMensuelle = 'cloture_mensuelle';
     case ClotureAnnuelle = 'cloture_annuelle';
