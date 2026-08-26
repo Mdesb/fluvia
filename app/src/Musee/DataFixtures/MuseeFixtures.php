@@ -87,12 +87,12 @@ final class MuseeFixtures extends Fixture implements DependentFixtureInterface
         }
 
         // --- Permissions musee.* + octroi complet à l'administrateur (RG-SOCLE-02/03) ---
-        $permMuseeTout = (new Permission())->setModule('musee')->setAction('*');
+        $permMuseeTout = $this->permissionPour($manager, 'musee', '*');
         $manager->persist($permMuseeTout);
         $actions = ['lire', 'configurer', 'superviser_salle', 'gerer_visite', 'gerer_dossier_groupe', 'gerer_pass', 'gerer_ota', 'gerer'];
         $permissions = [];
         foreach ($actions as $action) {
-            $permissions[$action] = (new Permission())->setModule('musee')->setAction($action);
+            $permissions[$action] = $this->permissionPour($manager, 'musee', $action);
             $manager->persist($permissions[$action]);
         }
 
@@ -105,7 +105,7 @@ final class MuseeFixtures extends Fixture implements DependentFixtureInterface
         $permOffreModifier = $manager->getRepository(Permission::class)->findOneBy(['module' => 'offre', 'action' => 'modifier']);
 
         // --- Rôle « Gestionnaire d'offre culturelle » (§3 spec-musee.md) ---
-        $roleGestionnaire = (new Role())->setNom('Gestionnaire offre culturelle');
+        $roleGestionnaire = $this->roleNomme($manager, 'Gestionnaire offre culturelle');
         foreach (['lire', 'configurer'] as $action) {
             $roleGestionnaire->addPermission($permissions[$action]);
         }
@@ -120,7 +120,7 @@ final class MuseeFixtures extends Fixture implements DependentFixtureInterface
         $manager->persist((new Affectation())->setUtilisateur($gestionnaire)->setRole($roleGestionnaire)->setEtablissement($etabA));
 
         // --- Rôle « Coordinateur de visites guidées » ---
-        $roleCoordinateur = (new Role())->setNom('Coordinateur visites guidées');
+        $roleCoordinateur = $this->roleNomme($manager, 'Coordinateur visites guidées');
         foreach (['lire', 'gerer_visite'] as $action) {
             $roleCoordinateur->addPermission($permissions[$action]);
         }
@@ -129,7 +129,7 @@ final class MuseeFixtures extends Fixture implements DependentFixtureInterface
         $manager->persist((new Affectation())->setUtilisateur($coordinateur)->setRole($roleCoordinateur)->setEtablissement($etabA));
 
         // --- Rôle « Agent d'accueil / caisse » ---
-        $roleAgent = (new Role())->setNom('Agent accueil musée');
+        $roleAgent = $this->roleNomme($manager, 'Agent accueil musée');
         foreach (['lire', 'gerer_dossier_groupe', 'gerer_pass', 'superviser_salle'] as $action) {
             $roleAgent->addPermission($permissions[$action]);
         }
@@ -138,7 +138,7 @@ final class MuseeFixtures extends Fixture implements DependentFixtureInterface
         $manager->persist((new Affectation())->setUtilisateur($agent)->setRole($roleAgent)->setEtablissement($etabA));
 
         // --- Rôle « Gestionnaire de distribution OTA » ---
-        $roleOta = (new Role())->setNom('Gestionnaire distribution OTA');
+        $roleOta = $this->roleNomme($manager, 'Gestionnaire distribution OTA');
         foreach (['lire', 'gerer_ota'] as $action) {
             $roleOta->addPermission($permissions[$action]);
         }
@@ -283,5 +283,49 @@ final class MuseeFixtures extends Fixture implements DependentFixtureInterface
         $manager->persist($utilisateur);
 
         return $utilisateur;
+    }
+
+    /**
+     * Rend le role existant ou le cree. `Role.nom` porte une unicite **globale** : deux fixtures qui
+     * creent le meme nom, ou un rechargement sur une base qui les a deja, echouent sur « Duplicate
+     * entry » et laissent le chargement a mi-course. C'est ce qui a vide les droits des trente-quatre
+     * roles de la preproduction le 24/08.
+     *
+     * Le harnais de test ne le voyait pas : il recree le schema a chaque classe et charge les fixtures
+     * selectivement, donc elles partent toujours d'une base vide. Le seul endroit ou le defaut se voit
+     * — un chargement complet — n'etait jamais visite.
+     */
+    private function roleNomme(ObjectManager $manager, string $nom): Role
+    {
+        $existant = $manager->getRepository(Role::class)->findOneBy(['nom' => $nom]);
+
+        if ($existant instanceof Role) {
+            return $existant;
+        }
+
+        $role = (new Role())->setNom($nom);
+        $manager->persist($role);
+
+        return $role;
+    }
+
+    /**
+     * Meme raison que pour les roles : le couple (module, action) porte lui aussi une unicite.
+     *
+     * Rappeler `persist()` sur l'entite rendue est sans effet — Doctrine ignore un objet deja gere —
+     * ce qui permet de laisser en place les appels existants plutot que de les demeler un a un.
+     */
+    private function permissionPour(ObjectManager $manager, string $module, string $action): Permission
+    {
+        $existante = $manager->getRepository(Permission::class)->findOneBy(['module' => $module, 'action' => $action]);
+
+        if ($existante instanceof Permission) {
+            return $existante;
+        }
+
+        $permission = (new Permission())->setModule($module)->setAction($action);
+        $manager->persist($permission);
+
+        return $permission;
     }
 }

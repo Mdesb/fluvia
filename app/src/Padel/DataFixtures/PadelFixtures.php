@@ -82,7 +82,7 @@ final class PadelFixtures extends Fixture implements DependentFixtureInterface
         $groupeA = $etabA->getRegion()?->getGroupe();
 
         // --- Permissions padel.* + octroi complet à l'administrateur (RG-SOCLE-02/03) ---
-        $permPadelTout = (new Permission())->setModule('padel')->setAction('*');
+        $permPadelTout = $this->permissionPour($manager, 'padel', '*');
         $manager->persist($permPadelTout);
         $actions = [
             'lire', 'lire_soi', 'reserver', 'reserver_soi', 'partie_rejoindre_soi',
@@ -92,7 +92,7 @@ final class PadelFixtures extends Fixture implements DependentFixtureInterface
         ];
         $permissions = [];
         foreach ($actions as $action) {
-            $permissions[$action] = (new Permission())->setModule('padel')->setAction($action);
+            $permissions[$action] = $this->permissionPour($manager, 'padel', $action);
             $manager->persist($permissions[$action]);
         }
 
@@ -102,7 +102,7 @@ final class PadelFixtures extends Fixture implements DependentFixtureInterface
         }
 
         // --- Rôle « Gestionnaire de club » (§3 spec-padel.md) ---
-        $roleGestionnaire = (new Role())->setNom('Gestionnaire de club padel');
+        $roleGestionnaire = $this->roleNomme($manager, 'Gestionnaire de club padel');
         foreach (['lire', 'reserver', 'niveau_valider', 'tournoi_gerer', 'materiel_gerer', 'acces_forcer', 'gerer_terrain', 'configurer_eclairage', 'parametrer'] as $action) {
             $roleGestionnaire->addPermission($permissions[$action]);
         }
@@ -111,7 +111,7 @@ final class PadelFixtures extends Fixture implements DependentFixtureInterface
         $manager->persist((new Affectation())->setUtilisateur($gestionnaire)->setRole($roleGestionnaire)->setEtablissement($etabA));
 
         // --- Rôle « Joueur / Adhérent » (§3 spec-padel.md) ---
-        $roleJoueur = (new Role())->setNom('Joueur Padel');
+        $roleJoueur = $this->roleNomme($manager, 'Joueur Padel');
         foreach (['lire_soi', 'reserver_soi', 'partie_rejoindre_soi', 'niveau_declarer_soi', 'tournoi_inscrire_soi', 'coach_lire_soi'] as $action) {
             $roleJoueur->addPermission($permissions[$action]);
         }
@@ -307,5 +307,49 @@ final class PadelFixtures extends Fixture implements DependentFixtureInterface
         $manager->persist($utilisateur);
 
         return $utilisateur;
+    }
+
+    /**
+     * Rend le role existant ou le cree. `Role.nom` porte une unicite **globale** : deux fixtures qui
+     * creent le meme nom, ou un rechargement sur une base qui les a deja, echouent sur « Duplicate
+     * entry » et laissent le chargement a mi-course. C'est ce qui a vide les droits des trente-quatre
+     * roles de la preproduction le 24/08.
+     *
+     * Le harnais de test ne le voyait pas : il recree le schema a chaque classe et charge les fixtures
+     * selectivement, donc elles partent toujours d'une base vide. Le seul endroit ou le defaut se voit
+     * — un chargement complet — n'etait jamais visite.
+     */
+    private function roleNomme(ObjectManager $manager, string $nom): Role
+    {
+        $existant = $manager->getRepository(Role::class)->findOneBy(['nom' => $nom]);
+
+        if ($existant instanceof Role) {
+            return $existant;
+        }
+
+        $role = (new Role())->setNom($nom);
+        $manager->persist($role);
+
+        return $role;
+    }
+
+    /**
+     * Meme raison que pour les roles : le couple (module, action) porte lui aussi une unicite.
+     *
+     * Rappeler `persist()` sur l'entite rendue est sans effet — Doctrine ignore un objet deja gere —
+     * ce qui permet de laisser en place les appels existants plutot que de les demeler un a un.
+     */
+    private function permissionPour(ObjectManager $manager, string $module, string $action): Permission
+    {
+        $existante = $manager->getRepository(Permission::class)->findOneBy(['module' => $module, 'action' => $action]);
+
+        if ($existante instanceof Permission) {
+            return $existante;
+        }
+
+        $permission = (new Permission())->setModule($module)->setAction($action);
+        $manager->persist($permission);
+
+        return $permission;
     }
 }

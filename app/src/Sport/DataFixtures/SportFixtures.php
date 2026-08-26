@@ -62,7 +62,7 @@ final class SportFixtures extends Fixture implements DependentFixtureInterface
             'configurer_nocturne', 'superviser_nocturne', 'lire_soi',
             'pause_demander_soi', 'resilier_demander_soi',
         ] as $action) {
-            $perm = (new Permission())->setModule('sport')->setAction($action);
+            $perm = $this->permissionPour($manager, 'sport', $action);
             $manager->persist($perm);
             $perms[$action] = $perm;
         }
@@ -153,5 +153,25 @@ final class SportFixtures extends Fixture implements DependentFixtureInterface
         }
 
         $manager->flush();
+    }
+
+    /**
+     * Meme raison que pour les roles : le couple (module, action) porte lui aussi une unicite.
+     *
+     * Rappeler `persist()` sur l'entite rendue est sans effet — Doctrine ignore un objet deja gere —
+     * ce qui permet de laisser en place les appels existants plutot que de les demeler un a un.
+     */
+    private function permissionPour(ObjectManager $manager, string $module, string $action): Permission
+    {
+        $existante = $manager->getRepository(Permission::class)->findOneBy(['module' => $module, 'action' => $action]);
+
+        if ($existante instanceof Permission) {
+            return $existante;
+        }
+
+        $permission = (new Permission())->setModule($module)->setAction($action);
+        $manager->persist($permission);
+
+        return $permission;
     }
 }

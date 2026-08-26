@@ -55,7 +55,7 @@ final class PiscineFixtures extends Fixture implements DependentFixtureInterface
         // --- Permissions piscine.* + octroi à l'administrateur (RG-SOCLE-02/03) ---
         $perms = [];
         foreach (['configurer', 'gerer_casier', 'forcer_casier', 'lire', 'gerer'] as $action) {
-            $perm = (new Permission())->setModule('piscine')->setAction($action);
+            $perm = $this->permissionPour($manager, 'piscine', $action);
             $manager->persist($perm);
             $perms[$action] = $perm;
         }
@@ -151,5 +151,25 @@ final class PiscineFixtures extends Fixture implements DependentFixtureInterface
         }
 
         $manager->flush();
+    }
+
+    /**
+     * Meme raison que pour les roles : le couple (module, action) porte lui aussi une unicite.
+     *
+     * Rappeler `persist()` sur l'entite rendue est sans effet — Doctrine ignore un objet deja gere —
+     * ce qui permet de laisser en place les appels existants plutot que de les demeler un a un.
+     */
+    private function permissionPour(ObjectManager $manager, string $module, string $action): Permission
+    {
+        $existante = $manager->getRepository(Permission::class)->findOneBy(['module' => $module, 'action' => $action]);
+
+        if ($existante instanceof Permission) {
+            return $existante;
+        }
+
+        $permission = (new Permission())->setModule($module)->setAction($action);
+        $manager->persist($permission);
+
+        return $permission;
     }
 }
