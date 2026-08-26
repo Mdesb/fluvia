@@ -47,11 +47,11 @@ final class StockFixtures extends Fixture implements DependentFixtureInterface
 
     public function load(ObjectManager $manager): void
     {
+        // Idempotence (ordre A 26/08) : `Permission(module, action)` porte une unicité globale ; un
+        // rechargement sur une base peuplée échouait sur « Duplicate entry ». On cherche avant de créer.
         $perms = [];
         foreach (self::ACTIONS as $action) {
-            $perm = (new Permission())->setModule('stock')->setAction($action);
-            $manager->persist($perm);
-            $perms[$action] = $perm;
+            $perms[$action] = $this->permissionStock($manager, $action);
         }
 
         $roleAdmin = $manager->getRepository(Role::class)->findOneBy(['nom' => 'Administrateur groupe']);
@@ -101,5 +101,19 @@ final class StockFixtures extends Fixture implements DependentFixtureInterface
         }
 
         $manager->flush();
+    }
+
+    /** Le couple `(module, action)` est unique — rendre l'existant plutôt qu'un doublon (ordre A 26/08). */
+    private function permissionStock(ObjectManager $manager, string $action): Permission
+    {
+        $existante = $manager->getRepository(Permission::class)->findOneBy(['module' => 'stock', 'action' => $action]);
+        if ($existante instanceof Permission) {
+            return $existante;
+        }
+
+        $permission = (new Permission())->setModule('stock')->setAction($action);
+        $manager->persist($permission);
+
+        return $permission;
     }
 }
