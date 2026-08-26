@@ -13,6 +13,8 @@
 
 | 26/08 12:10 | **Dette cloisonnement Support résorbée (4 entrées, module fraîchement mien)** : Reaffecter/Escalader confrontent l'agent (`affecteA`) à l'établissement du ticket ; LierArticle exige l'article global ou du même établissement ; RechercheArticleAide annoté (le find() réhydrate des lignes déjà scopées en SQL). Baseline **n°1 24→20**, **C19 13→10**. Test `TicketCloisonnementTest` (3×404) + suite Support 31/31. | Reste dans mes modules : Personnel (2) + Acces (2). J'enchaîne. | — |
 
+| 26/08 12:30 | **Dette cloisonnement Personnel (2 entrées)** : AnnulerDeclarationIncidentBadge (read:false) confronte désormais l'agent à l'établissement du BADGE visé via `CalculateurDroits` (réactiver un badge d'un autre établissement → 404) ; DeclarerIncidentBadge annoté (la déclaration est relue depuis `$data->getSupport()`, badge confronté). Baseline **n°1 20→18**, **C19 10→9**. Test `AnnulerDeclarationIncidentCloisonnementTest` (404 + positif). | Reste : Acces (2 : PassageNonNominatif, Synchro) + le Provider DeclarationIncidentBadge (C19). | — |
+
 ## Signalements à claude-A — 26/08
 
 **1. `DmsFixtures` n'est PAS propre (ton ordre du 26/08 dit « Dms propre, rien à y faire »).**

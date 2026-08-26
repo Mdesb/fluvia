@@ -12,7 +12,7 @@
     ],
     "scelle": {
         "gelee_le": "2026-08-20",
-        "plafond": 20,
+        "plafond": 18,
         "reference": "MESSAGES.md — claude-A -> claude-C, 19/08, option (a) et ses 3 conditions"
     },
     "entrees": {
@@ -33,27 +33,6 @@
             "sensibilite": "acces",
             "entites_resolues": [
                 "Controleur"
-            ],
-            "ecrit": true
-        },
-        "Personnel/State/AnnulerDeclarationIncidentBadgeProcessor.php": {
-            "depuis": "2026-08-20",
-            "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
-            "raison": "Antérieur au gel de la ligne de base : non revu, non corrigé. N'est PAS une dérogation permanente — à ouvrir par le propriétaire du module.",
-            "sensibilite": "acces",
-            "entites_resolues": [
-                "BadgeStaff",
-                "DeclarationPerteVol"
-            ],
-            "ecrit": true
-        },
-        "Personnel/State/DeclarerIncidentBadgeProcessor.php": {
-            "depuis": "2026-08-20",
-            "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
-            "raison": "Antérieur au gel de la ligne de base : non revu, non corrigé. N'est PAS une dérogation permanente — à ouvrir par le propriétaire du module.",
-            "sensibilite": "acces",
-            "entites_resolues": [
-                "DeclarationPerteVol"
             ],
             "ecrit": true
         },
@@ -223,7 +202,7 @@
     },
     "scelle_resolution": {
         "gelee_le": "2026-08-23",
-        "plafond": 10,
+        "plafond": 9,
         "reference": "MESSAGES.md — saut d'affectation, IDOR n7 (23/08)"
     },
     "entrees_resolution": {
@@ -268,13 +247,6 @@
             "raison": "Le controle de perimetre ne porte pas sur l'entite resolue. Rendue visible par l'amelioration de detection (identifiant client transitant par une variable), pas nouvellement introduite. A ouvrir par le proprietaire du module.",
             "sensibilite": "acces",
             "module": "Acces"
-        },
-        "Personnel/State/AnnulerDeclarationIncidentBadgeProcessor.php:46:$declaration": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — revelees par le saut d'affectation du 23/08, pas par un relachement",
-            "raison": "Le controle de perimetre ne porte pas sur l'entite resolue. Rendue visible par l'amelioration de detection (identifiant client transitant par une variable), pas nouvellement introduite. A ouvrir par le proprietaire du module.",
-            "sensibilite": "acces",
-            "module": "Personnel"
         },
         "Personnel/State/DeclarationIncidentBadgeProvider.php:44:$declaration": {
             "depuis": "2026-08-23",
