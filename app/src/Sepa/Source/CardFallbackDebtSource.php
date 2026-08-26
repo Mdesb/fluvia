@@ -31,7 +31,7 @@ use Symfony\Component\DependencyInjection\Attribute\AutoconfigureTag;
  * et de gonfler le compte des exclues d'un cas normal.
  */
 #[AutoconfigureTag('sepa.echeance_source')]
-final class CardFallbackEcheanceSource implements EcheanceSepaSource
+final class CardFallbackDebtSource implements EcheanceSepaSource
 {
     public function __construct(
         private readonly EntityManagerInterface $em,

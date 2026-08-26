@@ -17,7 +17,7 @@ use App\Sepa\Exception\CardFallbackRefusedException;
 use App\Sepa\Exception\PreNotificationRefusedException;
 use App\Sepa\Service\CardDebitFallback;
 use App\Sepa\Service\DebitPreNotifier;
-use App\Sepa\Source\CardFallbackEcheanceSource;
+use App\Sepa\Source\CardFallbackDebtSource;
 use Doctrine\ORM\EntityManagerInterface;
 
 /**
@@ -128,7 +128,7 @@ final class CardDebitFallbackTest extends SepaApiTestCase
         $etablissement = $mandat->getEtablissement();
         self::assertNotNull($etablissement);
 
-        $source = new CardFallbackEcheanceSource($this->em());
+        $source = new CardFallbackDebtSource($this->em());
 
         self::assertSame(
             [],
