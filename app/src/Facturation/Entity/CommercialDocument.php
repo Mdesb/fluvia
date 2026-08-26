@@ -4,6 +4,12 @@ declare(strict_types=1);
 
 namespace App\Facturation\Entity;
 
+use ApiPlatform\Metadata\ApiResource;
+use ApiPlatform\Metadata\Get;
+use ApiPlatform\Metadata\GetCollection;
+use ApiPlatform\Metadata\Post;
+use App\Facturation\State\CreateDocumentProcessor;
+use App\Facturation\State\DocumentActionProcessor;
 use App\Compta\Entity\ProfilExploitant;
 use App\Facturation\Enum\DocumentNature;
 use App\Facturation\Enum\DocumentStatus;
@@ -49,6 +55,50 @@ use Symfony\Component\Uid\Uuid;
 #[ORM\Table(name: 'billing_document')]
 #[ORM\UniqueConstraint(name: 'uniq_document_number', columns: ['numero'])]
 #[ORM\Index(name: 'idx_document_establishment_nature', columns: ['etablissement_id', 'nature'])]
+#[ApiResource(
+    shortName: 'CommercialDocument',
+    operations: [
+        new GetCollection(uriTemplate: '/billing/documents', security: "is_granted('PERM', 'facturation.lire')"),
+        new Get(uriTemplate: '/billing/documents/{id}', security: "is_granted('PERM', 'facturation.lire')"),
+        new Post(
+            uriTemplate: '/billing/documents',
+            security: "is_granted('PERM', 'facturation.gerer')",
+            read: false,
+            input: false,
+            processor: CreateDocumentProcessor::class,
+        ),
+        new Post(
+            uriTemplate: '/billing/documents/{id}/issue',
+            security: "is_granted('PERM', 'facturation.gerer')",
+            input: false,
+            processor: DocumentActionProcessor::class,
+        ),
+        new Post(
+            uriTemplate: '/billing/documents/{id}/accept',
+            security: "is_granted('PERM', 'facturation.gerer')",
+            input: false,
+            processor: DocumentActionProcessor::class,
+        ),
+        new Post(
+            uriTemplate: '/billing/documents/{id}/reject',
+            security: "is_granted('PERM', 'facturation.gerer')",
+            input: false,
+            processor: DocumentActionProcessor::class,
+        ),
+        new Post(
+            uriTemplate: '/billing/documents/{id}/derive',
+            security: "is_granted('PERM', 'facturation.gerer')",
+            input: false,
+            processor: DocumentActionProcessor::class,
+        ),
+        new Post(
+            uriTemplate: '/billing/documents/{id}/invoice',
+            security: "is_granted('PERM', 'facturation.emettre_directe')",
+            input: false,
+            processor: DocumentActionProcessor::class,
+        ),
+    ],
+)]
 class CommercialDocument
 {
     #[ORM\Id]
