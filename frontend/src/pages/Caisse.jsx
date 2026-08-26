@@ -176,8 +176,30 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
         if (client) corps.beneficiaire = client.id
         courant = await api.ajouterLigne(v.id, corps)
       }
-      // Le total et le reste font foi côté serveur : le tarif réellement appliqué peut différer du
-      // prix indicatif affiché (grilles, remises). On s'aligne dessus pour l'encaissement.
+      // LES LIGNES S'ALIGNENT SUR LE SERVEUR, PAS SEULEMENT LE TOTAL.
+      //
+      // Le total faisait déjà foi ici. Les lignes, elles, gardaient leur prix indicatif — si bien que
+      // le panier pouvait afficher « 1 × Test 10,00 € » au-dessus d'un total de 15,00 €. C'est le
+      // même défaut que celui du ticket, un cran plus tôt : **c'est ce montant que le caissier
+      // annonce à voix haute avant d'encaisser.**
+      //
+      // Le tarif choisi par l'écran est la première grille vendable ; le serveur applique celui qui
+      // est réellement dû — saison, quotient familial. Les deux peuvent différer sans que personne
+      // ne soit en faute. Tant que la vente n'existe pas, l'écran ne peut qu'estimer ; dès qu'elle
+      // existe, il n'a plus aucune raison de le faire.
+      const lignesServeur = courant?.lignes || []
+      if (lignesServeur.length > 0) {
+        setPanier((p) =>
+          p.map((l) => {
+            const ls = lignesServeur.find(
+              (x) => String(x.produit) === String(l.produit?.id)
+                && String(x.typeTarif || '') === String(l.typeTarifId || ''),
+            ) || lignesServeur.find((x) => String(x.produit) === String(l.produit?.id))
+            return ls?.prixUnitaire != null ? { ...l, prix: ls.prixUnitaire } : l
+          }),
+        )
+      }
+
       const totalServeur = courant?.total ?? total.toFixed(2)
       const resteServeur = courant?.resteAPayer ?? totalServeur
       setVente({ id: v.id, reste: resteServeur, total: totalServeur })
@@ -231,7 +253,68 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
     }
   }
 
-  // Finalise : valide la vente et édite le ticket.
+  // Le ticket se construit depuis la VENTE VALIDÉE, jamais depuis le panier.
+//
+// LE PANIER EST CE QUE L'UTILISATEUR A DEMANDÉ ; LA VENTE EST CE QUI A ÉTÉ FACTURÉ.
+//
+// Ces deux choses se ressemblent presque toujours, et c'est ce qui rend l'erreur si difficile à
+// voir : le ticket lisait `l.prix ?? prixIndicatif(l.produit)` et retombait donc, quand la ligne du
+// panier ne portait pas de prix, sur le prix **indicatif du catalogue**. Le serveur avait appliqué
+// une grille à 15 €, le ticket imprimait 10 € et un total de 15 € — sur le document que le client
+// emporte, et qu'il a le droit de contester.
+//
+// Corriger le repli n'aurait fait que mieux deviner. On cesse de deviner : les montants viennent des
+// lignes du serveur, qui portent `prixUnitaire` tel qu'il a été enregistré.
+//
+// LE LIBELLÉ, LUI, RESTE CELUI DU PANIER, ET IL FAUT SAVOIR POURQUOI.
+//
+// `LigneVente` ne sérialise pas de libellé : elle porte `produit` et `typeTarif` en identifiants
+// nus. Le nom lisible n'existe que côté écran. On apparie donc chaque ligne du serveur à sa ligne de
+// panier par (produit, tarif) — l'argent vient du serveur, le mot vient de nous, et si l'appariement
+// échoue on affiche l'identifiant plutôt qu'un nom inventé.
+function construireTicket(venteValidee, infoTicket, panier, paiements, support) {
+  const lignesServeur = venteValidee.lignes || []
+
+  const lignes = lignesServeur.map((ls) => {
+    const idProduit = String(ls.produit || '')
+    const idTarif = String(ls.typeTarif || '')
+    const source = panier.find(
+      (p) => String(p.produit?.id) === idProduit && String(p.typeTarifId || '') === idTarif,
+    ) || panier.find((p) => String(p.produit?.id) === idProduit)
+
+    const nom = source ? libelleProduit(source.produit) : `Article ${idProduit.slice(0, 8)}`
+    return {
+      // Le tarif figure sur le ticket : sans lui, deux lignes du même produit à des prix différents
+      // sont illisibles, pour le client comme pour le caissier qui le relit.
+      libelle: source?.tarifLibelle ? `${nom} — ${source.tarifLibelle}` : nom,
+      quantite: ls.quantite ?? 1,
+      pu: ls.prixUnitaire ?? '0.00',
+    }
+  })
+
+  // Un ticket qui ne s'additionne pas est un ticket qu'un client conteste, et il a raison. Remises
+  // de ligne, options et promotions font légitimement diverger la somme des lignes du total : on le
+  // DIT au lieu d'afficher deux chiffres qui se contredisent en silence.
+  const sommeLignes = lignes.reduce((s, l) => s + (parseFloat(l.pu) || 0) * (l.quantite || 0), 0)
+  const totalVente = parseFloat(venteValidee.total ?? '0') || 0
+  const ecart = Math.abs(sommeLignes - totalVente) > 0.005
+
+  return {
+    numero: infoTicket.numero || venteValidee.numero,
+    // Toujours un tableau : le rendu itère dessus sans condition, et un `null` ferait planter le
+    // ticket au moment précis où l'on veut le donner au client.
+    lignes,
+    // Le détail manque plutôt qu'il ne ment : si le serveur n'a rendu aucune ligne, on le dit et le
+    // total reste affiché — c'est lui qui engage.
+    detailIndisponible: lignes.length === 0,
+    total: venteValidee.total ?? '0.00',
+    ecartDetail: ecart && lignes.length > 0,
+    paiements,
+    codeSupport: support?.identifiantSupport || null,
+  }
+}
+
+// Finalise : valide la vente et édite le ticket.
   async function validerVente() {
     if (!vente) return
     setBusy(true)
@@ -241,19 +324,7 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
       const infoTicket = await api.ticket(vente.id, 'imprimer')
       // Code de support signé (HMAC) émis à la validation : 1er support porteur d'un identifiant.
       const support = (venteValidee.supports || []).find((s) => s.identifiantSupport)
-      setTicket({
-        numero: infoTicket.numero || venteValidee.numero,
-        lignes: panier.map((l) => ({
-          // Le tarif figure sur le ticket : sans lui, deux lignes du meme produit a des prix
-          // differents sont illisibles, pour le client comme pour le caissier qui le relit.
-          libelle: l.tarifLibelle ? `${libelleProduit(l.produit)} — ${l.tarifLibelle}` : libelleProduit(l.produit),
-          quantite: l.quantite,
-          pu: l.prix ?? prixIndicatif(l.produit),
-        })),
-        total: venteValidee.total ?? total.toFixed(2),
-        paiements,
-        codeSupport: support?.identifiantSupport || null,
-      })
+      setTicket(construireTicket(venteValidee, infoTicket, panier, paiements, support))
       setPanier([])
       setVente(null)
       setPaiements([])
@@ -660,6 +731,19 @@ function TicketVente({ ticket }) {
             <span className="num">{euros(parseFloat(l.pu || '0') * l.quantite)}</span>
           </div>
         ))}
+        {ticket.detailIndisponible && (
+          <div className="trow" style={{ color: 'var(--warn)' }}>
+            <span>Le détail des lignes n'a pas pu être relu. Le total ci-dessous fait foi.</span>
+          </div>
+        )}
+        {ticket.ecartDetail && (
+          <div className="trow" style={{ color: 'var(--warn)' }}>
+            <span>
+              Le détail ci-dessus ne fait pas le total : des remises, options ou promotions
+              s'appliquent. <b>Le montant dû est le total.</b>
+            </span>
+          </div>
+        )}
         <div className="trow tt">
           <span>Total</span>
           <span className="num">{euros(ticket.total)}</span>
@@ -679,7 +763,9 @@ function TicketVente({ ticket }) {
           </div>
         )}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
-          <Qr value={ticket.codeSupport} size={84} title={`QR billet ${ticket.numero}`} />
+          {ticket.codeSupport && (
+            <Qr value={ticket.codeSupport} size={84} title={`QR billet ${ticket.numero}`} />
+          )}
           <div className="hint" style={{ margin: 0 }}>
             {ticket.codeSupport ? (
               <>Billet + QR édités · support appairé
