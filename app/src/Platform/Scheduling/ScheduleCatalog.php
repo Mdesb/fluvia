@@ -190,6 +190,20 @@ final class ScheduleCatalog
             // `recalculerTous()` recalcule chaque badge à partir de **maintenant**. Il ne rejoue aucun
             // historique, il recompose un état présent, et il est idempotent : deux exécutions de suite
             // produisent le même résultat.
+            // SÛR AU PREMIER PASSAGE — elle LIT et rapporte : aucune écriture, aucun envoi, aucun
+            // effet visible au dehors. Un arriéré traité d'un coup est exactement le constat qu'on
+            // veut. Catégorie 1 du critère, la seule des trois qui n'exige pas de supervision.
+            new ScheduledTask(
+                'personnel:qualifications:verifier',
+                1440,
+                "L'affectation vérifie la qualification AU JOUR DU CRÉNEAU, mais une seule fois : au "
+                . "moment où on la crée. Rien ne la revoit ensuite. Une qualification révoquée, "
+                . "raccourcie ou supprimée après coup laisse l'affectation en place, et le planning "
+                . "ne recalcule que si quelqu'un l'ouvre — or le cas dangereux est celui d'un planning "
+                . "monté il y a trois semaines que plus personne ne rouvre. Dans une piscine, ce sont "
+                . "des surveillants qui n'ont plus le droit de surveiller.",
+                safeOnFirstRun: true,
+            ),
             new ScheduledTask(
                 'personnel:recalculer-fenetres-badges',
                 60,

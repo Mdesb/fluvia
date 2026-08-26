@@ -468,6 +468,22 @@ export const api = {
   creneauxBassin: () => request('/api/creneau_bassins', { query: { itemsPerPage: 200 } }),
   jaugesGrandPublic: () =>
     request('/api/jauge_grand_public_calculees', { query: { itemsPerPage: 100 } }),
+  // Casiers : quatre gestes, dont un qui demande un droit plus fort que les autres.
+  piscineCasiers: () => request('/api/casiers', { query: { itemsPerPage: 300 } }),
+  piscineBracelets: () => request('/api/bracelet_etanches', { query: { itemsPerPage: 300 } }),
+  piscineAttribuerCasier: (id, corps) =>
+    request(`/api/piscine/casiers/${id}/attribuer`, { method: 'POST', body: corps }),
+  piscineLibererCasier: (id) =>
+    request(`/api/piscine/casiers/${id}/liberer`, { method: 'POST', body: {} }),
+  piscineRelancerCasier: (id) =>
+    request(`/api/piscine/casiers/${id}/relancer`, { method: 'POST', body: {} }),
+  piscineForcerCasier: (id, motif) =>
+    request(`/api/piscine/casiers/${id}/forcer`, { method: 'POST', body: { motif } }),
+  // Le POSS est le plan de surveillance : son seuil est une limite reglementaire, pas un confort.
+  piscinePoss: () => request('/api/posses', { query: { itemsPerPage: 20 } }),
+  piscineEtatPoss: (id) => request(`/api/piscine/poss/${id}/etat`),
+  piscineValiderCreneauBassin: (id) =>
+    request(`/api/piscine/creneaux-bassin/${id}/valider`, { method: 'POST', body: {} }),
   // Patinoire
   patinoireConflits: () => request('/api/patinoire/conflits-glace'),
   patinoireLocations: () =>
@@ -583,6 +599,20 @@ export const api = {
 
   // Padel
   padelTerrains: () => request('/api/padel/terrains', { query: { itemsPerPage: 100 } }),
+  padelReservations: () =>
+    request('/api/padel_reservations', { query: { itemsPerPage: 200 } }),
+  padelLocationsMateriel: () =>
+    request('/api/padel_location_materiels', { query: { itemsPerPage: 200 } }),
+  // Operations sur mesure : `input: false`, pas de `ld: true`.
+  padelReserverTerrain: (id, corps) =>
+    request(`/api/padel/terrains/${id}/reservations`, { method: 'POST', body: corps }),
+  padelRejoindrePartie: (id, corps) =>
+    request(`/api/padel/parties-ouvertes/${id}/rejoindre`, { method: 'POST', body: corps }),
+  padelRetournerMateriel: (id, corps) =>
+    request(`/api/padel/locations/${id}/retour`, { method: 'POST', body: corps }),
+  // `padel.acces_forcer` : passer outre l'automatisme d'eclairage. Motif obligatoire.
+  padelEclairageManuel: (id, corps) =>
+    request(`/api/padel/terrains/${id}/eclairage/repli-manuel`, { method: 'POST', body: corps }),
   // Pas de collection listable pour les tournois (seulement des routes custom
   // /api/padel/tournois/{id}/...) : on renvoie un état vide propre.
   padelTournois: () => Promise.resolve({ 'hydra:member': [] }),
