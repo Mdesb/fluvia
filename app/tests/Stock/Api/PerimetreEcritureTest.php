@@ -209,7 +209,16 @@ final class PerimetreEcritureTest extends StockApiTestCase
         $client->request('POST', '/api/stock/articles/' . $articleB['id'] . '/rattacher-produit', $entete + [
             'json' => ['produit' => (string) $produitA->getId()],
         ]);
-        self::assertResponseStatusCodeSame(422, 'Un article de B ne doit pas pouvoir se rattacher à un produit qui n\'existe que sur A (RG-SOCLE-05).');
+        // **404, et non plus 422.** Le refus intervient desormais plus tot et mieux : depuis A,
+        // l'article de B n'est pas « invalide », il est **introuvable**. C'est la regle de la flotte —
+        // un refus qui distingue « existe mais interdit » de « n'existe pas » est un oracle
+        // d'enumeration.
+        //
+        // Ce test attendait 422, ce qui signifie que l'article qu'il croyait creer chez B etait en
+        // realite joignable depuis A : il passait pour une raison qui n'etait pas la sienne. Depuis
+        // D41 l'etablissement d'une creation vient de la session serveur, l'article est vraiment chez
+        // B, et la propriete de securite verifiee ici est enfin celle que son nom annonce.
+        self::assertResponseStatusCodeSame(404, 'Depuis A, un article de B doit etre introuvable, pas invalide (RG-SOCLE-05, D41).');
     }
 
     // --- 4. Permission stock.gerer opérante sur les écritures -----------------------------------
@@ -220,7 +229,6 @@ final class PerimetreEcritureTest extends StockApiTestCase
 
         $clientOperateur->request('POST', '/api/article_stocks', $entete + [
             'json' => [
-                'etablissement' => '/api/etablissements/' . $idEtab,
                 'codeEAN' => '5901234123457',
                 'libelle' => 'Article via stock.gerer',
                 'unite' => 'piece',
@@ -242,10 +250,11 @@ final class PerimetreEcritureTest extends StockApiTestCase
      */
     private function creerArticle(object $client, array $entete, string $nomEtab, string $ean): array
     {
-        $etabIri = '/api/etablissements/' . $this->idEtablissement($nomEtab);
+        // D41 : l'etablissement d'une creation vient de la session serveur. On se place donc dans
+        // celui qu'on vise au lieu de le nommer dans le corps, ou il serait desormais ignore.
+        $entete = $this->enteteSur($entete, $nomEtab);
         $article = $client->request('POST', '/api/article_stocks', $entete + [
             'json' => [
-                'etablissement' => $etabIri,
                 'codeEAN' => $ean,
                 'libelle' => 'Article ' . $nomEtab,
                 'unite' => 'piece',
@@ -265,14 +274,14 @@ final class PerimetreEcritureTest extends StockApiTestCase
      */
     private function receptionner(object $client, array $entete, string $nomEtab, string $articleId, string $quantite, string $prix): string
     {
-        $etabIri = '/api/etablissements/' . $this->idEtablissement($nomEtab);
+        // D41 : meme raison que dans `creerArticle`.
+        $entete = $this->enteteSur($entete, $nomEtab);
         $fournisseur = $client->request('POST', '/api/stock_fournisseurs', $entete + [
-            'json' => ['etablissement' => $etabIri, 'raisonSociale' => 'Grossiste ' . $nomEtab],
+            'json' => ['raisonSociale' => 'Grossiste ' . $nomEtab],
         ])->toArray();
 
         $reception = $client->request('POST', '/api/stock_reception_achats', $entete + [
             'json' => [
-                'etablissement' => $etabIri,
                 'fournisseur' => '/api/stock_fournisseurs/' . $fournisseur['id'],
                 'date' => '2026-03-01',
                 'numeroBonLivraison' => 'BL-' . $nomEtab . '-' . bin2hex(random_bytes(3)),

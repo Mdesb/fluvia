@@ -65,6 +65,26 @@ abstract class StockApiTestCase extends ApiTestCase
         return [$client, $entete, $idA];
     }
 
+    /**
+     * Le même appelant, mais **placé dans un autre établissement**.
+     *
+     * D41 : l'établissement d'une création ne vient plus du corps de la requête, il est estampillé
+     * depuis la session serveur. Un test qui voulait créer « chez B » en le nommant dans la charge
+     * utile doit donc désormais se placer chez B — ce que l'administrateur du groupe a parfaitement le
+     * droit de faire, puisqu'il est affecté aux deux. Ce n'est pas un contournement de la règle, c'est
+     * la façon légitime de faire ce que le test faisait déjà.
+     *
+     * @param array<string, mixed> $entete
+     *
+     * @return array<string, mixed>
+     */
+    protected function enteteSur(array $entete, string $nomEtablissement): array
+    {
+        $entete['headers'][ContexteEtablissement::HEADER] = $this->idEtablissement($nomEtablissement);
+
+        return $entete;
+    }
+
     /** @return array{0: Client, 1: array<string, mixed>, 2: string} client, entête auth+étab, id établissement B */
     protected function adminSurB(): array
     {

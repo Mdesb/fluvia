@@ -26,11 +26,13 @@ final class CloisonnementTest extends StockApiTestCase
         $etabBIri = '/api/etablissements/' . $this->idEtablissement(SocleFixtures::ETAB_B_NOM);
 
         $clientAdmin->request('POST', '/api/article_stocks', $enteteAdminA + [
-            'json' => ['etablissement' => $etabAIri, 'codeEAN' => '5901234123457', 'libelle' => 'Article A', 'unite' => 'piece', 'prixAchatHT' => '1.0000', 'tauxTvaAchat' => '20.00', 'seuilMin' => '0.000', 'seuilMax' => '0.000'],
+            'json' => ['codeEAN' => '5901234123457', 'libelle' => 'Article A', 'unite' => 'piece', 'prixAchatHT' => '1.0000', 'tauxTvaAchat' => '20.00', 'seuilMin' => '0.000', 'seuilMax' => '0.000'],
         ]);
         self::assertResponseIsSuccessful();
-        $clientAdmin->request('POST', '/api/article_stocks', $enteteAdminA + [
-            'json' => ['etablissement' => $etabBIri, 'codeEAN' => '40170725', 'libelle' => 'Article B', 'unite' => 'piece', 'prixAchatHT' => '1.0000', 'tauxTvaAchat' => '20.00', 'seuilMin' => '0.000', 'seuilMax' => '0.000'],
+        // D41 : on se place chez B au lieu de le nommer dans le corps — l'administrateur du groupe y
+        // est affecte, c'est la facon legitime de faire ce que ce test faisait deja.
+        $clientAdmin->request('POST', '/api/article_stocks', $this->enteteSur($enteteAdminA, SocleFixtures::ETAB_B_NOM) + [
+            'json' => ['codeEAN' => '40170725', 'libelle' => 'Article B', 'unite' => 'piece', 'prixAchatHT' => '1.0000', 'tauxTvaAchat' => '20.00', 'seuilMin' => '0.000', 'seuilMax' => '0.000'],
         ]);
         self::assertResponseIsSuccessful();
 
@@ -52,10 +54,11 @@ final class CloisonnementTest extends StockApiTestCase
         $etabBIri = '/api/etablissements/' . $this->idEtablissement(SocleFixtures::ETAB_B_NOM);
 
         $articleA = $clientAdmin->request('POST', '/api/article_stocks', $enteteAdmin + [
-            'json' => ['etablissement' => $etabAIri, 'codeEAN' => '5901234123457', 'libelle' => 'Article A', 'unite' => 'piece', 'prixAchatHT' => '1.0000', 'tauxTvaAchat' => '20.00', 'seuilMin' => '0.000', 'seuilMax' => '0.000'],
+            'json' => ['codeEAN' => '5901234123457', 'libelle' => 'Article A', 'unite' => 'piece', 'prixAchatHT' => '1.0000', 'tauxTvaAchat' => '20.00', 'seuilMin' => '0.000', 'seuilMax' => '0.000'],
         ])->toArray();
-        $articleB = $clientAdmin->request('POST', '/api/article_stocks', $enteteAdmin + [
-            'json' => ['etablissement' => $etabBIri, 'codeEAN' => '40170725', 'libelle' => 'Article B', 'unite' => 'piece', 'prixAchatHT' => '1.0000', 'tauxTvaAchat' => '20.00', 'seuilMin' => '0.000', 'seuilMax' => '0.000'],
+        // D41 : on se place chez B plutot que de le nommer dans le corps.
+        $articleB = $clientAdmin->request('POST', '/api/article_stocks', $this->enteteSur($enteteAdmin, SocleFixtures::ETAB_B_NOM) + [
+            'json' => ['codeEAN' => '40170725', 'libelle' => 'Article B', 'unite' => 'piece', 'prixAchatHT' => '1.0000', 'tauxTvaAchat' => '20.00', 'seuilMin' => '0.000', 'seuilMax' => '0.000'],
         ])->toArray();
 
         $transfert = $clientAdmin->request('POST', '/api/stock_transferts', $enteteAdmin + [
