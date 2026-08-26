@@ -137,7 +137,11 @@ final class DebitPreNotifierTest extends SepaApiTestCase
         $notifier->announce($mandat, 'echeance-1', 3000, new \DateTimeImmutable('2026-09-15'), PreNotificationReason::Schedule, new \DateTimeImmutable('2026-08-01'));
         $second = $notifier->announce($mandat, 'echeance-1', 5000, new \DateTimeImmutable('2026-09-15'), PreNotificationReason::Schedule, new \DateTimeImmutable('2026-09-10'));
 
-        self::assertCount(1, $this->em()->getRepository(\App\Sepa\Entity\DebitPreNotification::class)->findAll());
+        // Sur CE mandat : la fixture de demonstration en pose un autre, sur un mandat different.
+        self::assertCount(
+            1,
+            $this->em()->getRepository(\App\Sepa\Entity\DebitPreNotification::class)->findBy(['mandate' => $mandat]),
+        );
         self::assertSame(5000, $second->getAmountCents());
         self::assertFalse(
             $notifier->covers($mandat, 'echeance-1', 5000, new \DateTimeImmutable('2026-09-15')),
@@ -202,11 +206,16 @@ final class DebitPreNotifierTest extends SepaApiTestCase
     private function mandat(?int $delaiCreancier = null, bool $avecClient = true, bool $persiste = true): MandatSepa
     {
         $em = $this->em();
-        $etablissement = $em->getRepository(\App\Organisation\Entity\Etablissement::class)->findOneBy([]);
-        self::assertNotNull($etablissement, 'un etablissement est requis');
+        // L'etablissement est celui qui porte une configuration creancier, et non le premier venu :
+        // un mandat appartient a un etablissement capable de prelever. Prendre `findOneBy([])` rendait
+        // parfois la Patinoire B, sans config — et `delayFor()` retombait sur le defaut legal sans que
+        // le test s'en apercoive. Il passait au vert en ne mesurant pas ce qu'il annoncait.
+        $config = $em->getRepository(ConfigCreancierSepa::class)->findOneBy([]);
+        self::assertNotNull($config, 'une configuration creancier est requise');
+        $etablissement = $config->getEtablissement();
+        self::assertNotNull($etablissement);
 
-        $config = $em->getRepository(ConfigCreancierSepa::class)->findOneBy(['etablissement' => $etablissement]);
-        if ($config instanceof ConfigCreancierSepa && null !== $delaiCreancier) {
+        if (null !== $delaiCreancier) {
             $config->setPreNotificationDelayDays($delaiCreancier);
             $em->flush();
         }

@@ -137,20 +137,61 @@ final class DebitPreNotifier
         \DateTimeImmutable $executionDate,
         ?int $delayDays = null,
     ): bool {
+        return null === $this->reasonNotCovered($mandate, $originReference, $amountCents, $executionDate, $delayDays);
+    }
+
+    /**
+     * Pourquoi ce prélèvement n'est pas couvert — ou `null` s'il l'est.
+     *
+     * **Le compte ne suffit pas, il faut la raison.** « 47 échéances exclues » envoie quelqu'un
+     * chercher un défaut de mandat pendant une demi-journée ; « préavis non envoyé, aucun prestataire
+     * d'envoi configuré » se règle en une minute. Un message doit fermer la mauvaise piste, pas
+     * seulement ouvrir la bonne.
+     *
+     * Le cas `Journalisee` est nommé à part parce que c'est **celui de tout le dépôt aujourd'hui** :
+     * l'adaptateur par défaut journalise faute de prestataire (D19). Le confondre avec « pas de
+     * préavis » ferait chercher un oubli d'appel là où il manque une brique d'infrastructure.
+     */
+    public function reasonNotCovered(
+        MandatSepa $mandate,
+        string $originReference,
+        int $amountCents,
+        \DateTimeImmutable $executionDate,
+        ?int $delayDays = null,
+    ): ?string {
         $preavis = $this->existing($mandate, $originReference);
 
-        if (null === $preavis || !$preavis->wasDelivered()) {
-            return false;
+        if (null === $preavis) {
+            return 'aucun préavis émis';
+        }
+
+        if (NotificationOutcome::Journalisee === $preavis->getOutcome()) {
+            return 'préavis non envoyé : aucun prestataire d\'envoi configuré';
+        }
+
+        if (!$preavis->wasDelivered()) {
+            return sprintf('préavis non délivré (%s)', $preavis->getOutcome()->value);
         }
 
         if ($preavis->getAmountCents() !== $amountCents) {
-            return false;
+            return sprintf(
+                'préavis émis pour %s €, prélèvement de %s €',
+                number_format($preavis->getAmountCents() / 100, 2, ',', ' '),
+                number_format($amountCents / 100, 2, ',', ' '),
+            );
         }
 
-        $auPlusTard = $executionDate->modify(sprintf('-%d days', $delayDays ?? $this->delayFor($mandate)));
+        $delai = $delayDays ?? $this->delayFor($mandate);
 
-        return $preavis->getSentAt() <= $auPlusTard
-            && $preavis->getAnnouncedDueDate() <= $executionDate;
+        if ($preavis->getSentAt() > $executionDate->modify(sprintf('-%d days', $delai))) {
+            return sprintf('préavis envoyé moins de %d jours avant le prélèvement', $delai);
+        }
+
+        if ($preavis->getAnnouncedDueDate() > $executionDate) {
+            return 'prélèvement avancé par rapport à la date annoncée au client';
+        }
+
+        return null;
     }
 
     /** La première date à laquelle un préavis émis maintenant autoriserait un prélèvement. */
