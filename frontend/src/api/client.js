@@ -375,10 +375,15 @@ export const api = {
   comptesClientBoutique: () =>
     request('/api/compte_clients', { query: { itemsPerPage: 100 } }),
   vitrines: () => request('/api/boutique/vitrines', { query: { itemsPerPage: 100 } }),
-  accepterRemboursement: (id) =>
-    request(`/api/boutique/demandes-remboursement/${id}/accepter`, { method: 'POST', body: {}, ld: true }),
-  refuserRemboursement: (id, motif) =>
-    request(`/api/boutique/demandes-remboursement/${id}/refuser`, { method: 'POST', body: { motifRefus: motif }, ld: true }),
+  // `montant` absent = remboursement total, c'est le defaut du serveur. On ne l'envoie donc que
+  // lorsque l'utilisateur a explicitement choisi un remboursement partiel.
+  accepterRemboursement: (id, montant) =>
+    request(`/api/boutique/demandes-remboursement/${id}/accepter`, {
+      method: 'POST',
+      body: montant === undefined ? {} : { montant: String(montant) },
+    }),
+  refuserRemboursement: (id, motifRefus) =>
+    request(`/api/boutique/demandes-remboursement/${id}/refuser`, { method: 'POST', body: { motifRefus } }),
 
   // --- Personnel ---
   employes: () => request('/api/employes', { query: { itemsPerPage: 200 } }),
