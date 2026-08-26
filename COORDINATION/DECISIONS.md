@@ -2180,3 +2180,69 @@ soi qui le tient n'est pas un raisonnement, c'est une permission.**
 
 **Fait technique à retenir par tout le monde :** PHPUnit fige sa liste de fichiers au démarrage. Un test
 ajouté pendant une exécution n'est pas collecté, et la suite rend un vert qui ne le concerne pas.
+
+---
+
+### 2026-08-26 · D65 — Un contrôle dit quoi faire dans les deux cas, ou n'ordonne rien
+
+**Relevé par `claude-G` après un faux positif dont le remède affiché aurait fait exactement le dommage
+que le contrôle existe pour empêcher.**
+
+`CardDebitFallbackNonBrancheTest` est une sentinelle de `claude-D` : elle existe pour **échouer le jour
+où PAY-3 atterrit**, et son message ordonne *« À FAIRE : supprimez ce fichier de test. »*
+
+Elle a échoué — sur **un commentaire**. Le manifeste de `claude-G` nommait le consommateur par sa classe,
+la sentinelle cherchait cette chaîne dans `src/`, et son service n'était **toujours appelé par personne**.
+
+**Suivre le remède aurait retiré le signal en laissant le trou**, au moment précis où il devenait le plus
+utile : quelqu'un lit la mention dans le manifeste, croit la chaîne complète, et plus rien ne le
+détrompe.
+
+**La conclusion de `claude-D`, tirée seule :** *une sentinelle dont le remède est faux dans le cas du
+faux positif est pire qu'aucune sentinelle.*
+
+**La règle générale, formulée par `claude-G` :** nous avons quatorze garde-fous plus des sentinelles.
+Aucune décision n'exigeait jusqu'ici que **le remède affiché** soit vérifié aussi soigneusement que la
+détection. Celui-là était faux dans un cas sur deux — et impératif.
+
+> **Un contrôle doit dire quoi faire dans les deux cas — le vrai positif et le faux — ou ne rien
+> ordonner du tout.**
+
+C'est le complément de D53. D53 dit qu'un message ne met pas en avant son propre contournement ; D65 dit
+qu'un message qui **ordonne** doit avoir raison dans les deux branches, et que la seconde est celle où
+l'erreur coûte. Un impératif appliqué au mauvais cas ne se discute pas : il s'exécute.
+
+**Corrections faites :** `claude-D` a durci la détection (`token_get_all`, commentaires écartés) et
+réécrit le message avec ses deux branches. `claude-G` a retiré le nom de classe de son manifeste — **un
+manifeste ne nomme pas la classe interne d'un autre module** (couplage documentaire, D2 ; et le nom peut
+changer sans que l'événement bouge).
+
+---
+
+### 2026-08-26 · D65-bis — La trace d'un refus de carte est une pièce justificative, pas un confort
+
+J'avais demandé la trace persistée (D64) pour une raison d'exploitation : compter les refus, répondre à
+un client qui conteste.
+
+**`claude-D` a trouvé la raison décisive, que ni `claude-G` ni moi n'avions vue : le prélèvement qu'un
+client contestera, c'est celui que la bascule aura créé à partir de ce refus.** Ce qu'on peut produire
+pour le défendre est un préavis — il prouve qu'on a **prévenu**, il ne prouve pas **pourquoi on a
+prélevé**.
+
+Sans cette ligne, **le fait générateur n'existe nulle part**, et on aurait prélevé quelqu'un sur la foi
+d'un message disparu après traitement. `sale_card_rejection` est donc la pièce justificative d'un
+prélèvement SEPA. C'est écrit dans le docblock de l'entité, pour que celui qui voudra la supprimer voie
+ce qu'il enlève.
+
+**Et un écart au contrat, assumé :** le champ s'appelle `rejectionId`, pas `paymentId`. Le second
+n'existe pas — CA-10 veut qu'un refus ne crée aucun `Paiement`. Passer l'identifiant d'autre chose sous
+ce nom aurait donné la clé d'idempotence attendue, **et le nom aurait menti**.
+
+> Un `paymentId` qui ne désigne aucun paiement fonctionne parfaitement jusqu'au jour où quelqu'un fait
+> une jointure dessus — et ce jour-là il ne cherche pas un problème de nommage, il cherche pourquoi sa
+> requête ne rend rien. — `claude-G`
+
+**Manque de modèle noté, pas inventé :** le dépôt ne donne aucune identité propre aux terminaux de
+paiement. `PointDeVente` porte une *liste* de terminaux en configuration, et `ResultatTpe` ne dit pas
+lequel a répondu. La trace porte donc le point de vente. Distinguer deux terminaux d'un même comptoir est
+un chantier séparé.
