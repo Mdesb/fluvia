@@ -312,6 +312,12 @@ export const api = {
   // Comptes / rôles & droits (M8).
   utilisateurs: () => request('/api/utilisateurs', { query: { itemsPerPage: 100 } }),
   roles: () => request('/api/roles', { query: { itemsPerPage: 100 } }),
+  // Creer, modifier, dupliquer, supprimer un role : quatre operations qui existaient sans bouton,
+  // sur l'ecran qui s'appelle « Utilisateurs et droits ».
+  creerRole: (corps) => request('/api/roles', { method: 'POST', body: corps, ld: true }),
+  majRole: (id, corps) => request(`/api/roles/${id}`, { method: 'PATCH', body: corps }),
+  supprimerRole: (id) => request(`/api/roles/${id}`, { method: 'DELETE' }),
+  dupliquerRole: (id) => request(`/api/roles/${id}/dupliquer`, { method: 'POST' }),
   permissions: () => request('/api/permissions', { query: { itemsPerPage: 300 } }),
   affectations: () => request('/api/affectations', { query: { itemsPerPage: 200 } }),
   // Création de compte : sans mot de passe, le back génère un jeton d'invitation et passe le
