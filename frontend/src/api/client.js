@@ -438,7 +438,6 @@ export const api = {
     request('/api/stock_mouvements', { query: { itemsPerPage: 50, 'order[date]': 'desc' } }),
   stockParametrage: () => request('/api/stock_parametrages', { query: { itemsPerPage: 5 } }),
   stockAlertesReappro: () => request('/api/stock/alertes-reappro'),
-  stockValorisation: () => request('/api/stock/valorisation'),
   creerArticleStock: (corps) => request('/api/article_stocks', { method: 'POST', body: corps, ld: true }),
   majArticleStock: (id, corps) => request(`/api/article_stocks/${id}`, { method: 'PATCH', body: corps }),
   // Operations sur mesure : `input: false`, le processor lit le corps brut. Pas de `ld: true`.
