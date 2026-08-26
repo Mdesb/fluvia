@@ -1958,3 +1958,67 @@ différente annoncerait des échéances qui ne sont pas celles qu'on prélèvera
 à quelque chose qui fonctionne. Un service dont rien n'appelle le déclencheur doit **le dire** — par un
 test qui échoue avec le nom de ce qui manque, ou par une déclaration qui refuse de tourner. Sans quoi
 quelqu'un croira la fonctionnalité terminée, et il aura toutes les raisons de le croire.
+
+---
+
+### 2026-08-26 · D60 — Vérifier les usages n'est pas vérifier les garanties
+
+**Déclaré par `claude-G` sur son propre commit déjà fusionné**, plutôt que corrigé en silence — et c'est
+ce geste qui donne à la leçon sa valeur : j'avais relu ce commit en le fusionnant et **je n'avais pas vu
+le trou**.
+
+**Le cas.** D44-bis a déplacé l'invariant : `Vente.session` était `NOT NULL`, elle est devenue
+`Vente.pointDeVente`. L'invariant est plus fort — c'est le point de vente dont la chaîne NF525 a
+réellement besoin. Mais `Nf525\InalterabiliteListener::CHAMPS_VENTE_FIGES` fige `session` et **pas**
+`pointDeVente`.
+
+Avant, `pointDeVente` était protégé **par ricochet** : il découlait de la session, qui était figée.
+Le ricochet a été coupé, la protection ne l'a pas suivi. Rien ne s'est rompu, aucun test n'a rougi.
+
+**Conséquence :** on peut aujourd'hui changer le point de vente d'une vente **scellée** — donc la faire
+disparaître d'un arrêté de totaux et apparaître dans un autre, sans qu'aucun contrôle ne parle.
+
+**La règle, dans ses mots :**
+
+> Quand une propriété passe de « déduite » à « portée », tout ce qui la protégeait par déduction cesse
+> de la protéger — et rien ne le signale, puisque aucun de ces contrôles ne se rompt.
+
+**Et son corollaire, qui est le geste manquant :** `claude-G` avait cherché `getSession()` dans tout
+`src/` avant de commiter, et vérifié que tout était null-safe. C'était le bon réflexe et il était
+insuffisant : le danger n'était pas chez ceux qui **lisaient** `session`, mais chez ceux qui
+**s'appuyaient dessus pour protéger autre chose**.
+
+**Vérifier les usages n'est pas vérifier les garanties.**
+
+C'est D57 d'un cran plus loin : là, deux notions confondues devaient être séparées ; ici, une notion
+séparée emporte avec elle des protections que personne n'avait déclarées.
+
+**Le correctif structurel, pas la ligne.** `CHAMPS_VENTE_FIGES` est une liste écrite à la main sur une
+entité que huit sessions modifient : elle dépend de la vigilance de qui ajoute un champ. Elle devient un
+**test** dans `Vente` — pas un garde-fou dans `bin/` — qui confronte les colonnes réellement mappées à
+la liste, avec les exceptions explicites et leur raison. La question « ce champ est-il fiscal ? » se pose
+dans le module qui connaît la réponse, et le test grandit avec l'entité sans que personne n'y pense.
+
+---
+
+### 2026-08-26 · D60-bis — Huit sessions commitaient sans aucun contrôle
+
+En recréant le worktree de `claude-G` — le seul rattaché au **dépôt nu** au lieu du clone
+d'intégration —, j'ai découvert que son `pre-commit` venait de ce rattachement, et que **les worktrees
+du clone n'en avaient aucun**.
+
+Autrement dit : **huit sessions sur neuf commitaient sans le moindre contrôle**, couvertes uniquement
+par `pre-receive` à la poussée. Les hooks étaient pourtant versionnés dans `hooks/` depuis le début ;
+personne ne les avait installés dans le clone.
+
+Installé pour tous. `claude-G` récupère ce qu'elle perdait au passage, et les huit autres l'ont pour la
+première fois.
+
+**Ce que ça dit :** elle signalait sa topologie cassée depuis des jours, poliment, sans insister. Le
+symptôme était pour elle ; **la cause était pour tout le monde.** Un défaut qui ne gêne qu'une personne
+est un défaut qu'on repousse — et c'est exactement celui qu'il faut regarder, parce que personne d'autre
+ne le regardera.
+
+**Et j'ai refusé de faire taire le garde-fou de topologie** en ajoutant un remote de façade, ce qui
+aurait rendu le contrôle vert sans rien réparer — sur le contrôle dont le rôle est précisément de
+détecter cette configuration (D53).

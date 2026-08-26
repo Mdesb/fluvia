@@ -1,0 +1,13 @@
+[
+    "app/src/Crm/Command/AppliquerConservationCommand.php:groupe:comparaison DQL sans type explicite",
+    "app/src/Finance/Treasury/Service/PaymentScheduleCalculator.php:establishment:IN (:liste) en DQL",
+    "app/src/Finance/Treasury/Service/PaymentScheduleCalculator.php:etablissement:IN (:liste) en DQL",
+    "app/src/Finance/Treasury/Service/TreasuryPositionCalculator.php:establishment:IN (:liste) en DQL",
+    "app/src/Finance/Treasury/State/DiscrepancyDashboardProvider.php:establishment:IN (:liste) en DQL",
+    "app/src/Personnel/State/DeclarationIncidentBadgeProvider.php:etablissement:IN (:liste) en DQL",
+    "app/src/Personnel/State/RosterProvider.php:etablissement:IN (:liste) en DQL",
+    "app/src/Reporting/Service/CalculComparaisonService.php:etablissement:comparaison DQL sans type explicite",
+    "app/src/Reporting/Service/CalculComparaisonService.php:groupe:comparaison DQL sans type explicite",
+    "app/src/Reporting/Service/MesureLookupService.php:groupe:comparaison DQL sans type explicite",
+    "app/src/SmartFlow/State/CreateSlotWaitlistEntryProcessor.php:establishment:comparaison DQL sans type explicite"
+]
