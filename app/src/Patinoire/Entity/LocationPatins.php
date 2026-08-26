@@ -40,6 +40,12 @@ use Symfony\Component\Uid\Uuid;
         new Post(
             uriTemplate: '/patinoire/locations',
             read: false,
+            // D41 : le processeur lit le corps brut et ignore l'objet deserialise ; sans
+            // `input: false`, API Platform denormalise quand meme le corps dans l'entite, et
+            // cette entite n'ayant aucun `denormalizationContext`, toute propriete munie d'un
+            // mutateur devient ecrivable — l'etablissement compris. Meme forme que
+            // `/padel/niveaux/declarer` et `/sport/abonnements/souscrire`, qui la portent deja.
+            input: false,
             security: "is_granted('PERM', 'patinoire.gerer_location')",
             processor: SortirPatinsProcessor::class,
         ),
