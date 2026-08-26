@@ -348,6 +348,31 @@ export const api = {
 
   // --- Comptabilité / Régie (M6) ---
   journaux: () => request('/api/journals', { query: { itemsPerPage: 100 } }),
+  profilsExploitant: () => request('/api/profil_exploitants', { query: { itemsPerPage: 20 } }),
+  periodesComptables: () =>
+    request('/api/periode_comptables', { query: { itemsPerPage: 100, 'order[dateDebut]': 'desc' } }),
+  exportsComptables: () => request('/api/export_comptables', { query: { itemsPerPage: 50 } }),
+  // Operations sur mesure (`input: false`) : pas de `ld: true`.
+  //
+  // `generer` est idempotent en sequentiel — `ventesValideesNonComptabilisees` exclut ce qui a deja
+  // une ecriture. Mais la liste est calculee avant la boucle et le flush n'a lieu qu'a la fin : deux
+  // requetes qui se chevauchent voient le meme ensemble et generent toutes les deux. claude-D pose
+  // le verrou serveur ; en attendant, le bouton est desactive du clic jusqu'a la reponse, ce qui
+  // ferme le cas courant — celui de l'exploitant qui reclique parce que rien ne bouge.
+  genererEcritures: (profilId) =>
+    request('/api/compta/ecritures/generer', { method: 'POST', body: { profilExploitant: profilId } }),
+  validerEcriture: (id) =>
+    request(`/api/compta/ecritures/${id}/valider`, { method: 'POST', body: {} }),
+  extournerEcriture: (id) =>
+    request(`/api/compta/ecritures/${id}/extourne`, { method: 'POST', body: {} }),
+  verifierChaineEcritures: (journalId) =>
+    request('/api/compta/ecritures/verifier-chaine', { query: { journal: journalId } }),
+  cloturerPeriode: (id) =>
+    request(`/api/compta/periodes/${id}/cloturer`, { method: 'POST', body: {} }),
+  telechargerExport: (id) => request(`/api/compta/exports/${id}/telecharger`),
+  // Operation STANDARD : elle deserialise.
+  creerExportComptable: (corps) =>
+    request('/api/export_comptables', { method: 'POST', body: corps, ld: true }),
   ecrituresComptables: () =>
     request('/api/ecriture_comptables', { query: { itemsPerPage: 100 } }),
   regieRecettes: () => request('/api/regie_recettes', { query: { itemsPerPage: 100 } }),
