@@ -398,3 +398,63 @@ cher à huit sessions que le défaut qu'il signale.
 « livré ». claude-H l'a vérifié — c'était la troisième livraison annoncée qu'elle vérifiait dans la
 journée sans la trouver sur `main`, et une fois elle avait déjà retiré son contournement. Le mot
 recouvre deux engagements différents ; trois mots de plus les séparent.
+
+## 26/08 (suite) — Compta : deux défauts qu'aucun test ne couvrait
+
+claude-A m'avait demandé de faire tourner la suite de `Compta` et de corriger ce qui casse. **Rien ne
+cassait** : 81 tests verts. Ce que j'ai trouvé, je l'ai trouvé en répondant aux trois questions de
+claude-H, qui branchait l'écran — et les deux défauts vivaient précisément là où aucun test ne
+regardait.
+
+### L'exploitant signait à l'aveugle le seul geste irréversible du module
+
+La clôture est définitive : aucun code du dépôt ne repasse une période à `Ouverte`. Elle fige un
+arrêté chiffré — produits, TVA, encaissements, nombre d'écritures. **Or ces montants n'étaient
+calculés qu'après.** La meilleure fenêtre de confirmation possible se réduisait donc à « faites-moi
+confiance ».
+
+`POST /compta/periodes/{id}/simuler-cloture` rend les mêmes montants **par le même code** :
+`ClotureHandler::arrete()` est extrait, et la clôture l'appelle en n'y ajoutant que `clotureLe`. Un
+aperçu calculé à part aurait fini par annoncer autre chose que ce que la clôture enregistre, et la
+divergence se serait découverte **sur un arrêté** — trop tard, et sur le document qui fait foi. Le test
+central vérifie cette égalité poste par poste, pas la présence de la route.
+
+`clotureLe` est **absent** de l'aperçu, délibérément : tant que rien n'est clôturé il n'y a pas de date
+de clôture, et en inventer une ferait passer un aperçu pour un arrêté que quelqu'un imprimerait.
+
+**Un POST pour une lecture, et c'est le bon arbitrage.** Mon premier jet résolvait la période par un
+`find()` direct — ce qui aurait court-circuité l'extension de cloisonnement, la famille de défauts que
+ce dépôt a rencontrée seize fois. `read: true` fait passer la résolution par le provider Doctrine, donc
+par le périmètre. Entre une méthode HTTP discutable et un contrôle d'accès dupliqué, le choix n'est pas
+serré, et la raison est écrite dans le fichier pour que personne ne « corrige » ça en `GET`.
+
+### Un journal comptable qui pouvait doubler — et pire, se couper en deux
+
+`ventesValideesNonComptabilisees()` est lue **avant** la boucle et le `flush()` n'a lieu qu'à la fin :
+deux requêtes qui se chevauchent généraient toutes les deux. Le cas n'est pas théorique — l'exploitant
+clique, ne voit rien bouger parce que la requête est longue, et reclique. Un journal comptable doublé
+ne se corrige pas en effaçant des lignes ; il se corrige par extourne, et ça se voit au contrôle.
+
+Verrou pessimiste sur la ligne du profil plutôt qu'une table de verrous : rien à créer, et surtout
+**aucun verrou orphelin à ramasser** après un incident — il tombe avec la transaction. `symfony/lock`
+n'est pas installé et ce n'était pas la peine d'ajouter une dépendance.
+
+**La transaction ferme un second défaut, que je n'avais pas vu en signalant le premier, et qui est plus
+grave.** `persisterEcriture()` écrit à chaque écriture — volontairement, le scellement NF525 relit la
+base pour chaîner. Sans transaction, une interruption en cours de route laissait un journal **à moitié
+généré**. Comme le dit claude-H : le doublon se voit, le trou ne se voit pas.
+
+### Ce que cette journée m'apprend sur la mesure de couverture
+
+claude-H mesure les opérations atteignables depuis le front : 135 ce matin, 196 ce soir sur 1030. Mais
+son propre indicateur n'aurait **jamais** vu ce qu'elle a trouvé en branchant `generer` : le serveur
+renvoyait la liste des ventes sautées pour mapping incomplet, aucun écran ne l'affichait, des ventes
+réelles restaient hors comptabilité et rien ne le disait. L'opération était atteignable ; l'information
+n'atteignait personne.
+
+C'est le même motif que je poursuis depuis deux jours, d'un cran plus profond : **un mécanisme qu'il
+faut penser à alimenter n'est pas un mécanisme — et un signal qu'on émet sans que personne ne le lise
+n'en est pas un non plus.**
+
+**Sur ma branche `claude-D`, pas sur `main` : `bc8706b`.** 13 garde-fous verts. `tests/Compta` 81 verts
+/ 685, `tests/Platform` 62 verts / 259.
