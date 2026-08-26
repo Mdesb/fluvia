@@ -72,6 +72,17 @@ docker run --rm \
 log "Publication du frontend"
 rsync -a --delete frontend/dist/ "$WEB_ROOT/"
 
+# Le tableau de bord d'avancement, que Maxime consulte. Il est publie APRES le rsync ci-dessus, et
+# c'est la raison d'etre de ces trois lignes : `--delete` efface tout ce qui n'est pas le front.
+#
+# Il avait ete publie une fois, puis efface par le deploiement suivant. Personne ne l'a vu partir --
+# une page qui disparait ne previent pas, contrairement a une page qui casse. Neuf jours plus tard,
+# l'URL que Maxime « gardait precieusement » ne servait plus rien.
+if [ -f avancement-dev.html ]; then
+    log "Publication du tableau de bord"
+    cp avancement-dev.html "$WEB_ROOT/avancement-dev.html"
+fi
+
 log "État de la stack"
 "${COMPOSE[@]}" ps
 
