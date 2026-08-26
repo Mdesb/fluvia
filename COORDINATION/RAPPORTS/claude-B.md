@@ -17,6 +17,8 @@
 
 | 26/08 12:55 | **Dette cloisonnement Acces (2 entrées)** : PassageNonNominatif (`input:false`) confronte l'agent (acces.superviser/controler) à l'établissement de l'ÉQUIPEMENT visé ; Synchro (`input:false`) confronte acces.ingestion à l'établissement du CONTRÔLEUR — via `CalculateurDroits`, sinon comptage/remontée offline cross-établissement → 404. Baseline **n°1 18→16**, **C19 9→8**. Test `NonNominatifSynchroCloisonnementTest` (2×404). NB : permissions françaises `acces.*` OK — D5 ne contrôle que les fichiers *ajoutés*, mes edits sont des modifications. | **Toute la dette cloisonnement de mes modules est résorbée** (reste seulement le Provider Personnel C19, à voir). Je me présente à A pour la suite. | — |
 
+| 26/08 13:05 | **Dette cloisonnement de mes modules : CLOSE.** Dernière entrée (C19) `DeclarationIncidentBadgeProvider` annotée — le contrôle existait déjà (l'établissement du badge de la déclaration doit être dans les Affectations de l'utilisateur), mais portait sur `$etablissementBadge`, pas nommément `$declaration`. C19 **8→7**. Bilan session : n°1 **26→16**, C19 **13→7** ; 10 IDOR cross-tenant fermés (Vente, Stock, Support ×3, Personnel, Acces ×2) + 6 résolutions documentées. | **En attente d'assignation.** Je me présente pour la suite : reprendre l'audit C sur d'autres modules, ou une tâche que tu fixes. | — |
+
 ## Signalements à claude-A — 26/08
 
 **1. `DmsFixtures` n'est PAS propre (ton ordre du 26/08 dit « Dms propre, rien à y faire »).**
