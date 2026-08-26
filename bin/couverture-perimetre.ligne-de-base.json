@@ -36,7 +36,7 @@
     ],
     "scelle": {
         "gelee_le": "2026-08-23",
-        "plafond": 34,
+        "plafond": 30,
         "reference": "MESSAGES.md — claude-C, 23/08 : le module Compta est entier hors du cloisonnement"
     },
     "entrees": {
@@ -487,92 +487,6 @@
             }
         },
         "Offre/Entity/Categorie.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Offre",
-            "operations": [
-                "Delete",
-                "Get",
-                "GetCollection",
-                "Patch",
-                "Post"
-            ],
-            "permissions": [
-                "offre.gerer",
-                "offre.lire"
-            ],
-            "sensibilite": "autre",
-            "traitement": {
-                "groupe": "B",
-                "chemin": "",
-                "cible": "",
-                "note": "Referentiel presume global. NON CONFIRME par l'integrateur au 24/08 — tant que ce mot manque, l'entree reste comptee."
-            }
-        },
-        "Offre/Entity/ConversionType.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Offre",
-            "operations": [
-                "Get",
-                "GetCollection"
-            ],
-            "permissions": [
-                "offre.lire"
-            ],
-            "sensibilite": "autre",
-            "traitement": {
-                "groupe": "A",
-                "chemin": "produit",
-                "cible": "Produit"
-            }
-        },
-        "Offre/Entity/GrilleTarifaire.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Offre",
-            "operations": [
-                "Get",
-                "GetCollection",
-                "Patch",
-                "Post"
-            ],
-            "permissions": [
-                "offre.creer",
-                "offre.lire",
-                "offre.modifier"
-            ],
-            "sensibilite": "autre",
-            "traitement": {
-                "groupe": "A",
-                "chemin": "produit",
-                "cible": "Produit"
-            }
-        },
-        "Offre/Entity/PrixHistorique.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Offre",
-            "operations": [
-                "Get",
-                "GetCollection"
-            ],
-            "permissions": [
-                "offre.lire"
-            ],
-            "sensibilite": "autre",
-            "traitement": {
-                "groupe": "A2",
-                "chemin": "grille.produit",
-                "cible": "GrilleTarifaire",
-                "note": "A traiter APRES GrilleTarifaire : la cible immediate n'est pas encore cloisonnee."
-            }
-        },
-        "Offre/Entity/Promotion.php": {
             "depuis": "2026-08-23",
             "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
             "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
