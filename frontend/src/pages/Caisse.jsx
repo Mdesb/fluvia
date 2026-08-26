@@ -176,8 +176,30 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
         if (client) corps.beneficiaire = client.id
         courant = await api.ajouterLigne(v.id, corps)
       }
-      // Le total et le reste font foi côté serveur : le tarif réellement appliqué peut différer du
-      // prix indicatif affiché (grilles, remises). On s'aligne dessus pour l'encaissement.
+      // LES LIGNES S'ALIGNENT SUR LE SERVEUR, PAS SEULEMENT LE TOTAL.
+      //
+      // Le total faisait déjà foi ici. Les lignes, elles, gardaient leur prix indicatif — si bien que
+      // le panier pouvait afficher « 1 × Test 10,00 € » au-dessus d'un total de 15,00 €. C'est le
+      // même défaut que celui du ticket, un cran plus tôt : **c'est ce montant que le caissier
+      // annonce à voix haute avant d'encaisser.**
+      //
+      // Le tarif choisi par l'écran est la première grille vendable ; le serveur applique celui qui
+      // est réellement dû — saison, quotient familial. Les deux peuvent différer sans que personne
+      // ne soit en faute. Tant que la vente n'existe pas, l'écran ne peut qu'estimer ; dès qu'elle
+      // existe, il n'a plus aucune raison de le faire.
+      const lignesServeur = courant?.lignes || []
+      if (lignesServeur.length > 0) {
+        setPanier((p) =>
+          p.map((l) => {
+            const ls = lignesServeur.find(
+              (x) => String(x.produit) === String(l.produit?.id)
+                && String(x.typeTarif || '') === String(l.typeTarifId || ''),
+            ) || lignesServeur.find((x) => String(x.produit) === String(l.produit?.id))
+            return ls?.prixUnitaire != null ? { ...l, prix: ls.prixUnitaire } : l
+          }),
+        )
+      }
+
       const totalServeur = courant?.total ?? total.toFixed(2)
       const resteServeur = courant?.resteAPayer ?? totalServeur
       setVente({ id: v.id, reste: resteServeur, total: totalServeur })
