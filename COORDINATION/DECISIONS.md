@@ -2338,3 +2338,79 @@ manque une résolution `bénéficiaire → quotient familial`, qui vit dans `Crm
 depuis l'écran de caisse revient à **l'afficher au guichet, devant l'intéressé et devant les autres**.
 C'est une question de dignité, pas d'architecture, et elle se tranche avec Maxime — pas entre nous, et
 pas parce que ce serait techniquement commode.
+
+---
+
+### 2026-08-26 · D66 — Le joker d'un module ne peut pas contenir un droit qui dépasse ce module
+
+**Trouvé par le test, pas par la relecture.** `claude-G` avait nommé `offre.gerer_socle` le droit
+d'éditer le socle partagé des référentiels. Son test `testUnAjoutNaitLocalEtRattache` a échoué pour une
+raison qu'aucune relecture n'aurait donnée :
+
+**l'administrateur de groupe porte la permission joker `offre.*`, donc `offre.gerer_socle` lui était
+accordé automatiquement.**
+
+Conséquence : **chaque administrateur d'établissement devenait maître du socle commun**, sans que
+personne ne l'ait décidé. Renommer un `TypeTarif` chez A aurait changé le tarif de B — le trou
+transfrontière contre lequel D51 met en garde, ouvert par un **nom**.
+
+**La règle :**
+
+> Le joker d'un module ne doit jamais pouvoir contenir un droit qui dépasse ce module.
+
+**Le nommage d'une permission n'est pas une convention d'affichage, c'est une frontière d'autorité.**
+`offre.*` désigne « tout sur l'offre **de cet établissement** », pas « tout sur l'offre **de tout le
+monde** ». Un droit qui porte sur le partagé appartient donc à un autre module — ici
+`plateforme.gerer_socle`.
+
+**Corollaire, et il fait le lien avec le défaut du menu de mardi :** un joker accorde du droit sur ce qui
+n'existe pas encore. C'est sa propriété, et elle est utile — mais elle rend le nommage définitif : **on
+ne peut pas ajouter une permission sous un préfixe existant sans la donner rétroactivement à tous ceux
+qui portent le joker.** Personne ne relira les rôles pour vérifier.
+
+**Conséquence assumée : personne ne détient `plateforme.gerer_socle` aujourd'hui.** Le socle est semé
+par les jeux de données et les migrations. Le jour où la plateforme voudra l'éditer par l'API, il faudra
+décider **à qui** on le donne — et ce n'est pas une décision qui se prend par défaut, en héritant d'un
+joker.
+
+---
+
+### 2026-08-26 · D66-bis — Le critère de visibilité ne se partage pas avec le patron
+
+`claude-G` avait repris tel quel le filtre de `Support` : « les établissements où l'utilisateur a une
+affectation ». Son test a montré que l'administrateur, affecté à **A et B**, voyait les ajouts de B
+**depuis le guichet de A**.
+
+**Ce n'est pas un défaut du patron de `Support` — les deux cas ne sont pas les mêmes.** Un article d'aide
+se lit légitimement depuis n'importe lequel de ses établissements. Un référentiel tarifaire, non : un
+responsable qui vend au guichet de A ne doit pas voir les types de tarif de B, **il pourrait poser un
+prix sur un tarif qui n'existe pas là où il encaisse, et le défaut ne se verrait qu'à la facture.**
+
+La lecture porte donc sur **l'établissement actif**, et sans établissement actif : **le socle seul**,
+fermeture par défaut.
+
+**Ce que ça nuance dans la consigne « monte le patron dans `Platform` » :** le **trait** et la **forme**
+du filtre se partagent ; **le critère de visibilité ne se partage pas** — il dépend de ce que la liste
+sert à faire. Un patron qui imposerait son critère ferait porter à chaque module la question à laquelle
+un seul avait répondu.
+
+---
+
+### 2026-08-26 · D66-ter — Une migration ne fabrique pas de donnée pour sauver une démonstration
+
+**Question de `claude-G` sur `Saison` et `TrancheQuotientFamilial`**, à cloisonner et non à doter d'un
+socle : **à quel établissement appartiennent les lignes existantes ?** Elles sont globales aujourd'hui.
+
+Deux options proposées : rattacher au hasard à l'établissement de démonstration, ou laisser les lignes
+orphelines et **visibles de personne**.
+
+**Décidé : la migration laisse orphelin.** Une migration s'exécutera un jour sur des données réelles, et
+rattacher au hasard produirait des tarifs calculés sur la saison d'un autre établissement — le quotient
+familial étant le cas où D51 dit lui-même qu'une erreur est **opposable**.
+
+**La démonstration se répare à la main, là où la donnée est admise comme fausse.** La préproduction ne
+contient que des données de test ; l'y remettre en état est une opération d'exploitation, pas un `up()`.
+Confondre les deux revient à inscrire dans le code de production une réparation qui n'a de sens que sur
+un jeu d'essai.
+
+> **Une migration ne fabrique jamais de donnée métier. Ce qui manque reste visiblement manquant.**
