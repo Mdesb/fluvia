@@ -129,11 +129,17 @@ class Client
     private ?string $civilite = null;
 
     #[ORM\Column(length: 120, nullable: true)]
-    #[Groups(['client:read', 'client:list', 'client:write', 'fiche360:read'])]
+    // `beneficiaire:read` : sans nom ni prénom, `/api/beneficiaires` ne rend que des UUID, et un
+    // sélecteur de bénéficiaire au guichet devient inutilisable — « Bénéficiaire 3f2a91c4 ».
+    // `Beneficiaire` sérialise pourtant bien son client ; c'est le client qui ne disait pas qui il
+    // est. Trouvé par `claude-H` en branchant la sortie de patins de la patinoire, qui exige un
+    // bénéficiaire. Elle recoupait localement avec `/api/clients`, ce qui marche jusqu'au centième
+    // client et échoue silencieusement après.
+    #[Groups(['client:read', 'client:list', 'client:write', 'beneficiaire:read', 'fiche360:read'])]
     private ?string $nom = null;
 
     #[ORM\Column(length: 120, nullable: true)]
-    #[Groups(['client:read', 'client:list', 'client:write', 'fiche360:read'])]
+    #[Groups(['client:read', 'client:list', 'client:write', 'beneficiaire:read', 'fiche360:read'])]
     private ?string $prenom = null;
 
     #[ORM\Column(length: 180, nullable: true)]

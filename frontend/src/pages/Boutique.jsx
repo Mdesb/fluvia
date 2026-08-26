@@ -1,15 +1,11 @@
 import { useState } from 'react'
-import Liste, { dateHeureFr, texte } from '../components/Liste.jsx'
+import Liste, { texte } from '../components/Liste.jsx'
 import Tabs from '../components/Tabs.jsx'
+import DemandesRemboursement from '../components/DemandesRemboursement.jsx'
 import { api } from '../api/client.js'
 
-const STATUT_REMB = {
-  Recue: 'warn', recue: 'warn', Acceptee: 'good', acceptee: 'good',
-  Refusee: 'crit', refusee: 'crit', Traitee: 'good',
-}
-
 // Boutique en ligne (M3, vue admin) : demandes de remboursement, comptes clients, vitrines.
-export default function Boutique({ etabActif }) {
+export default function Boutique({ etabActif, droits }) {
   const [sousOnglet, setSousOnglet] = useState('remboursements')
 
   return (
@@ -32,20 +28,7 @@ export default function Boutique({ etabActif }) {
       />
 
       {sousOnglet === 'remboursements' && (
-        <Liste
-          titre="Demandes de remboursement"
-          sous="workflow reçue → acceptée / refusée"
-          deps={[etabActif]}
-          charger={api.demandesRemboursement}
-          vide="Aucune demande de remboursement."
-          colonnes={[
-            { cle: 'id', entete: 'Réf.', rendu: (r) => <span className="mono">{String(r.id || '').slice(0, 8)}</span> },
-            { cle: 'motif', entete: 'Motif', rendu: (r) => r.motif || '—' },
-            { cle: 'origineAutomatique', entete: 'Origine', rendu: (r) => (r.origineAutomatique ? 'auto' : 'manuelle') },
-            { cle: 'dateDemande', entete: 'Demandée le', rendu: (r) => dateHeureFr(r.dateDemande) },
-            { cle: 'statut', entete: 'Statut', rendu: (r) => <span className={`badge ${STATUT_REMB[r.statut] || 'mut'}`}>{r.statut || '—'}</span> },
-          ]}
-        />
+        <DemandesRemboursement etabActif={etabActif} droits={droits} />
       )}
 
       {sousOnglet === 'comptes' && (

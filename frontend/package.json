@@ -9,7 +9,9 @@
     "preview": "vite preview --port 5173",
     "verifier-droits": "node scripts/verifier-droits.mjs",
     "verifier-formats": "node scripts/verifier-formats.mjs",
-    "verifier": "npm run verifier-droits && npm run verifier-formats"
+    "verifier": "npm run verifier-droits && npm run verifier-formats && npm run verifier-imports",
+    "mesurer-ecart": "node scripts/mesurer-ecart.mjs",
+    "verifier-imports": "node scripts/verifier-imports.mjs"
   },
   "dependencies": {
     "qrcode": "^1.5.4",

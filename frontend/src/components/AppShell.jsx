@@ -59,7 +59,7 @@ const NAV = [
       { id: 'comptabilite', ic: '▧', label: 'Comptabilité', perm: 'compta.lire' },
       { id: 'boutique', ic: '▦', label: 'Boutique en ligne', cap: 'boutique_en_ligne' },
       { id: 'personnel', ic: '☰', label: 'Personnel', perm: 'personnel.lire' },
-      { id: 'stock', ic: '▣', label: 'Stock', perm: 'stock.lire', disabled: true, absent: true },
+      { id: 'stock', ic: '▣', label: 'Stock', perm: 'stock.lire' },
       { id: 'facturation', ic: '▤', label: 'Facturation', perm: 'facturation.lire' },
       { id: 'finance', ic: '€', label: 'Achats & trésorerie', perm: 'finance.read', disabled: true, absent: true },
       { id: 'sepa', ic: '⇄', label: 'Prélèvements SEPA', perm: 'sepa.lire', disabled: true, absent: true },

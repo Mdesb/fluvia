@@ -157,6 +157,9 @@ export const api = {
   me: () => request('/me'),
 
   etablissements: () => request('/api/etablissements'),
+  // Creer et modifier un etablissement. Pas de suppression exposee : voir EtablissementsSection.
+  creerEtablissement: (corps) => request('/api/etablissements', { method: 'POST', body: corps, ld: true }),
+  majEtablissement: (id, corps) => request(`/api/etablissements/${id}`, { method: 'PATCH', body: corps }),
   produits: () => request('/api/produits'),
   // Le détail ajoute le groupe `produit:compta` (compte, TVA, règle PCA), absent de la collection.
   produit: (id) => request(`/api/produits/${id}`),
@@ -340,6 +343,12 @@ export const api = {
   // Comptes / rôles & droits (M8).
   utilisateurs: () => request('/api/utilisateurs', { query: { itemsPerPage: 100 } }),
   roles: () => request('/api/roles', { query: { itemsPerPage: 100 } }),
+  // Creer, modifier, dupliquer, supprimer un role : quatre operations qui existaient sans bouton,
+  // sur l'ecran qui s'appelle « Utilisateurs et droits ».
+  creerRole: (corps) => request('/api/roles', { method: 'POST', body: corps, ld: true }),
+  majRole: (id, corps) => request(`/api/roles/${id}`, { method: 'PATCH', body: corps }),
+  supprimerRole: (id) => request(`/api/roles/${id}`, { method: 'DELETE' }),
+  dupliquerRole: (id) => request(`/api/roles/${id}/dupliquer`, { method: 'POST' }),
   permissions: () => request('/api/permissions', { query: { itemsPerPage: 300 } }),
   affectations: () => request('/api/affectations', { query: { itemsPerPage: 200 } }),
   // Création de compte : sans mot de passe, le back génère un jeton d'invitation et passe le
@@ -394,10 +403,15 @@ export const api = {
   comptesClientBoutique: () =>
     request('/api/compte_clients', { query: { itemsPerPage: 100 } }),
   vitrines: () => request('/api/boutique/vitrines', { query: { itemsPerPage: 100 } }),
-  accepterRemboursement: (id) =>
-    request(`/api/boutique/demandes-remboursement/${id}/accepter`, { method: 'POST', body: {}, ld: true }),
-  refuserRemboursement: (id, motif) =>
-    request(`/api/boutique/demandes-remboursement/${id}/refuser`, { method: 'POST', body: { motifRefus: motif }, ld: true }),
+  // `montant` absent = remboursement total, c'est le defaut du serveur. On ne l'envoie donc que
+  // lorsque l'utilisateur a explicitement choisi un remboursement partiel.
+  accepterRemboursement: (id, montant) =>
+    request(`/api/boutique/demandes-remboursement/${id}/accepter`, {
+      method: 'POST',
+      body: montant === undefined ? {} : { montant: String(montant) },
+    }),
+  refuserRemboursement: (id, motifRefus) =>
+    request(`/api/boutique/demandes-remboursement/${id}/refuser`, { method: 'POST', body: { motifRefus } }),
 
   // --- Personnel ---
   employes: () => request('/api/employes', { query: { itemsPerPage: 200 } }),
@@ -423,6 +437,67 @@ export const api = {
     request('/api/patinoire_location_patins', { query: { itemsPerPage: 100 } }),
   patinoireAffutages: () =>
     request('/api/patinoire_affutages', { query: { itemsPerPage: 100 } }),
+  // Le parc par pointure : c'est lui qui dit ce qui est louable, pas la liste des locations.
+  patinoireParc: () =>
+    request('/api/patinoire_parc_patins', { query: { itemsPerPage: 200 } }),
+  patinoireListeAttente: () =>
+    request('/api/patinoire_liste_attente_pointures', { query: { itemsPerPage: 100 } }),
+  patinoireRetenues: () =>
+    request('/api/patinoire_retenue_cautions', { query: { itemsPerPage: 100 } }),
+  // Opérations sur mesure (`uriTemplate`) : elles portent `input: false`, leur processor lit le corps
+  // brut. Pas de `ld: true` — l'ajouter ici serait exactement la correction que `verifier-formats`
+  // cherche à éviter.
+  patinoireSortirPatins: (corps) =>
+    request('/api/patinoire/locations', { method: 'POST', body: corps }),
+  patinoireRetourPatins: (id, corps) =>
+    request(`/api/patinoire/locations/${id}/retour`, { method: 'POST', body: corps }),
+  patinoireDemarrerAffutage: (corps) =>
+    request('/api/patinoire/affutages', { method: 'POST', body: corps }),
+  patinoireTerminerAffutage: (id) =>
+    request(`/api/patinoire/affutages/${id}/terminer`, { method: 'POST', body: {} }),
+  patinoireInscrireListeAttente: (corps) =>
+    request('/api/patinoire/liste-attente', { method: 'POST', body: corps }),
+  patinoireAnnulerListeAttente: (id) =>
+    request(`/api/patinoire/liste-attente/${id}/annuler`, { method: 'POST', body: {} }),
+  patinoireValiderRetenue: (id, corps) =>
+    request(`/api/patinoire/retenues/${id}/valider`, { method: 'POST', body: corps }),
+  // Stock
+  // `articleStock` ne porte AUCUNE quantite : le stock reel vit dans les lots, un article pouvant en
+  // avoir plusieurs (dates d'entree et couts d'achat differents). C'est pour ca que les deux listes
+  // sont chargees ensemble et agregees a l'ecran.
+  stockArticles: () => request('/api/article_stocks', { query: { itemsPerPage: 200 } }),
+  stockLots: () => request('/api/stock_lots', { query: { itemsPerPage: 500 } }),
+  stockMouvements: () =>
+    request('/api/stock_mouvements', { query: { itemsPerPage: 50, 'order[date]': 'desc' } }),
+  stockParametrage: () => request('/api/stock_parametrages', { query: { itemsPerPage: 5 } }),
+  stockAlertesReappro: () => request('/api/stock/alertes-reappro'),
+  creerArticleStock: (corps) => request('/api/article_stocks', { method: 'POST', body: corps, ld: true }),
+  majArticleStock: (id, corps) => request(`/api/article_stocks/${id}`, { method: 'PATCH', body: corps }),
+  // Operations sur mesure : `input: false`, le processor lit le corps brut. Pas de `ld: true`.
+  stockAjuster: (corps) => request('/api/stock/mouvements/ajustement', { method: 'POST', body: corps }),
+  // Rattacher un article a un produit vendu : c'est CE lien qui fait qu'une vente decremente le
+  // stock. Sans lui, le produit se vend et rien ne bouge — volontairement, et silencieusement.
+  stockRattacherProduit: (id, produit) =>
+    request(`/api/stock/articles/${id}/rattacher-produit`, { method: 'POST', body: { produit } }),
+  stockDetacherProduit: (id) =>
+    request(`/api/stock/articles/${id}/detacher-produit`, { method: 'POST', body: {} }),
+
+  // Inventaire.
+  stockInventaires: () =>
+    request('/api/stock_inventaires', { query: { itemsPerPage: 20, 'order[dateLancement]': 'desc' } }),
+  stockLignesInventaire: () =>
+    request('/api/stock_ligne_inventaires', { query: { itemsPerPage: 500 } }),
+  // Operation STANDARD (pas d'`uriTemplate`) : elle deserialise, donc `ld: true`. Les trois
+  // suivantes sont sur mesure et n'en ont pas besoin.
+  stockLancerInventaire: (corps) =>
+    request('/api/stock_inventaires', { method: 'POST', body: corps, ld: true }),
+  stockSaisirComptage: (id, corps) =>
+    request(`/api/stock/lignes-inventaire/${id}`, { method: 'PATCH', body: corps }),
+  stockRegulariserLigne: (id) =>
+    request(`/api/stock/lignes-inventaire/${id}/regulariser`, { method: 'POST', body: {} }),
+  stockCloturerInventaire: (id) =>
+    request(`/api/stock/inventaires/${id}/cloturer`, { method: 'POST', body: {} }),
+
   // Padel
   padelTerrains: () => request('/api/padel/terrains', { query: { itemsPerPage: 100 } }),
   // Pas de collection listable pour les tournois (seulement des routes custom

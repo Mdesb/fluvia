@@ -137,6 +137,8 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 .banner { padding: 11px 14px; border-radius: 9px; font-size: 13.5px; margin-bottom: 16px; font-weight: 600; }
 .banner-error { background: var(--crit-bg); color: var(--crit); }
 .banner-ok { background: var(--good-bg); color: var(--good); }
+/* Ni une erreur ni une confirmation : un etat que l'ecran signale sans crier. */
+.banner-warn { background: var(--warn-bg); color: var(--warn); }
 
 /* ---- Menu mobile ---- */
 .burger { display: none; width: 38px; height: 38px; border-radius: 9px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); font-size: 17px; cursor: pointer; flex: none; align-items: center; justify-content: center; }
@@ -529,3 +531,19 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 .liste-acces { list-style: none; margin: 0; padding: 0; }
 .liste-acces li { padding: 10px 0; border-bottom: 1px solid var(--line); }
 .liste-acces li:last-child { border-bottom: none; }
+
+
+/* ---- Patinoire : le parc par pointure ---- */
+.pat-parc { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 10px; }
+.pat-tuile { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 12px 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel);
+  cursor: pointer; text-align: center; font: inherit; color: inherit; transition: border-color .12s, box-shadow .12s; }
+.pat-tuile:hover:not(:disabled) { border-color: var(--accent); box-shadow: var(--shadow); }
+.pat-tuile:disabled { cursor: default; opacity: .75; }
+.pat-tuile .pat-pt { font-size: 12px; color: var(--ink-faint); font-weight: 700; letter-spacing: .04em; }
+.pat-tuile .pat-dispo { font-size: 30px; font-weight: 800; line-height: 1.05; color: var(--good);
+  font-variant-numeric: tabular-nums; }
+.pat-tuile .pat-detail { font-size: 11px; color: var(--ink-faint); }
+.pat-tuile.vide { background: var(--bg-soft, var(--panel)); border-style: dashed; }
+.pat-tuile.vide .pat-dispo { color: var(--crit); }
+.pat-tuile .pat-att { position: absolute; top: -7px; right: -5px; font-size: 10px; }

@@ -23,6 +23,7 @@ import Personnel from './pages/Personnel.jsx'
 import Parametres from './pages/Parametres.jsx'
 import Piscine from './pages/Piscine.jsx'
 import Patinoire from './pages/Patinoire.jsx'
+import Stock from './pages/Stock.jsx'
 import Padel from './pages/Padel.jsx'
 import Musee from './pages/Musee.jsx'
 
@@ -228,12 +229,13 @@ export default function App() {
       {onglet === 'comptabilite' && <Comptabilite etabActif={etabActif} />}
       {onglet === 'facturation' && <Facturation etabActif={etabActif} droits={droits} />}
       {onglet === 'clients' && <Clients etabActif={etabActif} cible={cible} onCibleConsommee={() => setCible(null)} droits={droits} />}
-      {onglet === 'boutique' && <Boutique etabActif={etabActif} />}
+      {onglet === 'boutique' && <Boutique etabActif={etabActif} droits={droits} />}
       {onglet === 'piscine' && <Piscine etabActif={etabActif} />}
-      {onglet === 'patinoire' && <Patinoire etabActif={etabActif} />}
+      {onglet === 'patinoire' && <Patinoire etabActif={etabActif} droits={droits} />}
       {onglet === 'padel' && <Padel etabActif={etabActif} />}
       {onglet === 'musee' && <Musee etabActif={etabActif} />}
       {onglet === 'personnel' && <Personnel etabActif={etabActif} droits={droits} />}
+      {onglet === 'stock' && <Stock etabActif={etabActif} droits={droits} />}
       {onglet === 'parametres' && (
         <Parametres etabActif={etabActif} etablissements={etablissements} droits={droits} />
       )}

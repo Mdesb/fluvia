@@ -331,3 +331,113 @@ une semaine.
 tu fais ou en demandant une tâche — c'est une consigne de Maxime, pas de moi.
 
 Bienvenue. Tes cinq modules sont ceux dont on ne sait rien, donc ceux où tu trouveras le plus.
+
+---
+
+## 2026-08-26 · Ta première vraie tâche : `Sport` prélève sans prévenir personne
+
+C'est plus important que les fixtures que je t'ai données ce matin. Prends celle-ci d'abord.
+
+### Le contexte, parce qu'il change ce que tu vas écrire
+
+`claude-D` a ouvert le module de prélèvement SEPA et trouvé qu'**il n'émettait rien** : ni notification,
+ni événement. Or le préavis est une **obligation réglementaire** — avant chaque prélèvement, le débiteur
+doit être informé du montant et de la date, quatorze jours à l'avance sauf autre délai convenu.
+
+Elle a construit le préavis : `DebitPreNotification` le consigne, `DebitPreNotifier` l'émet **et le
+relit** (`covers()`). Et elle a câblé la remise pour que **les échéances non couvertes soient exclues**,
+la remise partant quand même avec le compte et la raison des exclues.
+
+### Ce que ça révèle chez toi, et ce n'est pas un test à réparer
+
+`tests/Sport/Api/RemiseSepaRecablageTest.php:50` échoue désormais :
+
+    Aucun prélèvement n'est autorisé : 2 échéance(s) due(s) sur 2 écartées
+    faute de préavis (aucun préavis émis).
+
+**Ce test ne casse pas malgré le changement. Il casse parce qu'il décrivait un comportement qui n'était
+pas licite.** `Sport\Service\GenererRemiseSepaHandler` prélèverait aujourd'hui sans qu'aucun adhérent
+n'ait été prévenu.
+
+**⚠ Adapter le test sans adapter le chemin réel remettrait le problème exactement là où il était** — et
+cette fois avec un test vert pour le couvrir. C'est le mot de `claude-D`, et il est juste.
+
+### Ce qu'il faut faire
+
+Dans `GenererRemiseSepaHandler`, **avant** de générer la remise, poser un `DebitPreNotification` par
+échéance :
+
+- `mandate`
+- `originReference` — **la même** que celle de l'`EcheanceSepaDue`
+- `amountCents` — **identique** au montant réellement collecté
+- `announcedDueDate` ≤ date d'exécution
+- `sentAt` ≥ 14 jours avant
+
+Le montant compte autant que le reste. `claude-D` l'a formulé ainsi et garde-le en tête :
+**annoncer trente euros puis en prélever trois cents n'est pas un préavis, c'est un préavis pour autre
+chose.** Sans cette comparaison, il aurait suffi d'avoir prévenu une fois pour prélever n'importe quoi.
+
+Regarde `SepaFixtures::preavisDemo()` : elle fait exactement ça, tu peux t'en inspirer.
+
+### ⚠ Le point qui va te bloquer, et sa réponse
+
+**Aucun prestataire d'envoi de courriels n'est branché sur le produit** (c'est un blocage connu, D19).
+L'adaptateur journalise au lieu d'envoyer, et `covers()` rejette un préavis seulement journalisé — ce qui
+est correct : `Journalisee` n'est pas `Envoyee`, et un préavis qu'on a écrit dans un journal n'a prévenu
+personne.
+
+**Donc aujourd'hui, même bien câblé, `Sport` ne prélèvera plus.** C'est voulu, et c'est le sujet que j'ai
+remonté à Maxime : le choix n'est pas entre « prévenir ou pas », il est entre **prélever irrégulièrement**
+et **ne pas prélever du tout** tant qu'aucun envoi n'existe.
+
+**Ce que tu dois faire de ça :** dans tes **tests**, tu peux poser un préavis avec
+`outcome: NotificationOutcome::Envoyee` — une fixture ou un test **énonce un passé cohérent**, exactement
+comme il énonce qu'un mandat a été signé. Ce qui est fabriqué, c'est l'envoi, pas la vérification :
+`covers()` relit le préavis et contrôle le montant et le délai comme pour n'importe quelle échéance.
+
+**Ce que tu ne dois PAS faire :** poser `Envoyee` dans le chemin de production pour te débloquer. Ce
+serait déclarer envoyé ce qui ne l'est pas, sur une obligation réglementaire, et le défaut deviendrait
+invisible au lieu d'être bloquant.
+
+Si tu ne vois pas comment séparer les deux proprement, **demande-moi plutôt que de trancher seul**. C'est
+la seule chose de cet ordre où je préfère un aller-retour à une initiative.
+
+### Vérification
+
+`./infra/test-stack.sh run <ton-token> tests/Sport` doit repasser au vert **et** tu dois pouvoir dire ce
+qui se passerait en production — pas seulement en test. Les deux réponses sont différentes ici, et c'est
+tout le sujet.
+
+**Je retiens la fusion de `claude-D` dans `main` tant que ce n'est pas fait** : la fusionner maintenant
+rendrait `main` rouge pour les huit autres sessions, et un `main` rouge coûte plus cher à tout le monde
+que le défaut qu'il signale.
+
+**Dis-moi quand c'est poussé.**
+
+---
+
+## 2026-08-26 · Pour plus tard — `AlertePresenceIsolee` ne peut que grandir
+
+**Ne prends pas ça maintenant.** L'ordre est : le préavis de `Sport` d'abord, tes fixtures ensuite, ceci
+en troisième. Je te le pose ici pour que ça ne se perde pas, pas pour ajouter à ta charge.
+
+**Le constat**, relevé par `claude-H` en inventoriant les listes d'alerte du produit :
+`AlertePresenceIsolee` porte un statut de « chose à traiter », et **sa seule opération d'écriture en
+fabrique de nouvelles**. Rien, nulle part, ne permet d'en clore une.
+
+Ce n'est pas une liste sans geste de résolution — c'est **un compteur qui ne peut que monter**. Le jour
+où on l'affiche, il affichera un nombre qui n'aura jamais décru depuis la mise en service.
+
+**La règle qui s'applique, posée aujourd'hui en D55** : *une liste de choses à traiter s'affiche avec le
+geste qui les traite, ou ne s'affiche pas.* Sa justification vaut d'être lue avant d'écrire quoi que ce
+soit — **une liste qu'on ne peut pas vider apprend à son lecteur à l'ignorer, et cet apprentissage ne se
+défait pas** quand on branche le geste six mois plus tard.
+
+**Ce qu'il te faudra décider, et c'est la vraie question :** qu'est-ce qui clôt une alerte de présence
+isolée ? Quelqu'un est allé voir ? La personne est ressortie ? Le délai est passé ? La réponse n'est pas
+technique — elle décide de ce que l'exploitant devra faire chaque matin. **Dis-moi ce que tu proposes
+avant de l'écrire.**
+
+Et lis la nuance de `claude-H` avant de conclure : deux autres collections du produit **n'ont aucun champ
+de statut**, ce qui en fait des **journaux** et non des files d'attente. Un journal qui grandit se
+comporte correctement. `AlertePresenceIsolee`, elle, a bien ce statut — c'est ce qui la rend fautive.

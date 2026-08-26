@@ -80,6 +80,53 @@ const MOTS = {
   en_attente: 'En attente',
   suspendu: 'Suspendu',
   invite: 'Invité',
+
+  // --- Patinoire ---
+  // « non_rendu » et « non_rendue » diffèrent d'un caractère et ne disent pas la même chose : le
+  // premier qualifie l'état des patins au retour, le second l'état de la location. Traduire les deux
+  // évite qu'un agent lise « non rendu » sur une ligne dont la paire est revenue.
+  en_cours: 'En cours',
+  retournee: 'Rendue',
+  non_rendue: 'Jamais rendue',
+  bon: 'Bon état',
+  casse: 'Cassés',
+  non_rendu: 'Non rendus',
+  prestation_client: 'Affûtage client',
+  maintenance_parc: 'Entretien du parc',
+  termine: 'Terminé',
+  proposee: 'Pointure proposée',
+  honoree: 'Servie',
+  expiree: 'Expirée',
+  perte: 'Perte',
+  restitution_partielle: 'Restitution partielle',
+
+  // --- Stock ---
+  entree_achat: 'Entrée (achat)',
+  sortie_vente: 'Sortie (vente)',
+  retour_fournisseur: 'Retour fournisseur',
+  ajustement_positif: 'Correction en plus',
+  ajustement_negatif: 'Correction en moins',
+  perte_casse: 'Perte ou casse',
+  sortie_transfert: 'Départ en transfert',
+  entree_transfert: 'Arrivée de transfert',
+  regularisation_inventaire: 'Régularisation d’inventaire',
+  piece: 'pièce',
+  kg: 'kg',
+  litre: 'litre',
+  paquet: 'paquet',
+  autre: 'autre',
+  tous: 'Tous les articles',
+  rayon: 'Un rayon',
+  selection: 'Une sélection',
+  cloture: 'Clôturé',
+  en_validation: 'En validation',
+  fifo: 'Premier entré, premier sorti (FIFO)',
+  cmup: 'Coût moyen pondéré',
+
+  // --- Remboursements ---
+  recue: 'Reçue',
+  acceptee: 'Acceptée',
+  refusee: 'Refusée',
 }
 
 // Rend un code lisible sans prétendre le traduire : `boutique_stock` → « Boutique stock ».

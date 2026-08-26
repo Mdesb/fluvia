@@ -1661,3 +1661,133 @@ sur un module tout neuf — *« prendre la porte de sortie au moment où le modu
 été le pire moment »*.
 
 À appliquer aux douze garde-fous. `bin/` est le périmètre de `claude-C`.
+
+---
+
+### 2026-08-26 · D54 — Le geste qui exige un droit plus fort que l'écran qui le porte
+
+**Trois modules indépendants ont inventé le même motif dans la même journée**, sans se concerter et sans
+que personne l'ait nommé :
+
+| Module | Le geste | Le droit distinct |
+|---|---|---|
+| Facturation (`claude-D`) | émettre la facture d'une pièce | `invoice`, plus fort que la lecture du document |
+| Patinoire (`claude-H`) | retenir une caution **hors barème** | `patinoire.forcer_retenue` |
+| Stock (`claude-H`) | régulariser un **écart significatif** d'inventaire | `stock.valider_ecart` |
+
+Trois découvertes séparées le même jour, c'est un patron, pas une coïncidence.
+
+**La forme commune :** un écran présente plusieurs gestes sur un même objet ; l'un d'eux engage
+davantage — de l'argent, une pièce comptable, une correction que personne ne reverra — et exige donc un
+droit que la simple consultation de l'écran n'implique pas.
+
+**La règle d'écran, et elle va à contre-courant de l'habitude.**
+
+`claude-H` avait déjà obtenu de Maxime la règle générale : *si les accès sont refusés, pourquoi laisser
+l'affichage dans le menu ?* — donc **on cache ce qui est interdit**. Ce cas-ci est l'exception, et il
+faut savoir pourquoi.
+
+**Le bouton s'affiche, il annonce le droit qu'il exige, et il est désactivé pour qui ne l'a pas.**
+
+Cacher un geste rare fait croire qu'il **n'existe pas** : l'agent qui a besoin d'une retenue hors barème
+cherchera un contournement, appellera son responsable pour « le logiciel ne le permet pas », ou saisira
+un montant faux dans le champ qui, lui, s'affiche. Un menu caché dit « ce n'est pas pour vous » ; un
+geste caché dit « c'est impossible ». Ce n'est pas la même phrase, et la seconde est un mensonge.
+
+La distinction tient donc à ceci : **on cache une zone entière du produit, on n'ampute pas un écran
+qu'on affiche.**
+
+**Corollaire, tiré de `claude-H` sur la patinoire :** un geste dont la conséquence n'est pas écrite à
+côté de lui est un piège, indépendamment des droits. Trois états de retour de patins déclenchent trois
+traitements de caution différents — l'agent qui coche « cassés » sans savoir qu'il déclenche une retenue
+l'apprendrait par la réclamation du client.
+
+**Et le seuil qui décide de « significatif » doit être lisible avant d'écrire la phrase.** Dans `Stock`,
+`seuilEcartSignificatifPourcentage` et `seuilEcartSignificatifMontant` sont tous deux **nullables** : si
+personne ne les a réglés, on ne sait pas si rien n'est significatif ou si tout l'est. Un écran qui
+affirme « écart non significatif » sur un seuil jamais configuré ment à l'agent **avec l'autorité du
+logiciel**.
+
+---
+
+### 2026-08-26 · D54-bis — `Stock` : soixante-trois opérations exposées, aucune appelée
+
+Relevé de `claude-H` (`npm run mesurer-ecart --par-module`) : le module est **complet et cohérent** —
+quatorze entités, dix-huit processors, le cycle d'achat entier, le cycle d'inventaire, les transferts
+inter-sites, et trois modèles de lecture déjà calculés. **Rien n'y manque sauf une porte.**
+
+Ce n'est pas de la dette : c'est du travail déjà payé qui ne sert à rien.
+
+**Mais deux choses résistent aux écrans, et il faut les régler d'abord.**
+
+**`ArticleStock` ne porte aucune quantité** — ni disponible, ni en stock. Le chiffre réel vit dans
+`StockLot.quantiteRestante`, à agréger. Un écran « articles » afficherait donc une liste **sans le seul
+chiffre qu'on vient y chercher**, ce qui est pire qu'un écran manquant : il donne l'impression d'avoir
+consulté le stock. `ParcPatins::getQuantiteDisponible()` est le précédent à suivre — c'est lui qui a
+permis à `claude-H` de faire tout l'écran patinoire en un lot.
+
+C'est **le signal muet à l'envers** : d'ordinaire l'information existe et rien ne l'appelle ; ici elle
+n'existe pas. `Stock` est le périmètre de `claude-F`.
+
+---
+
+### 2026-08-26 · D55 — Une liste de choses à traiter s'affiche avec le geste qui les traite, ou ne s'affiche pas
+
+**Le relevé de `claude-H`**, demandé après sa remarque : *une liste qui ne descend jamais à zéro n'est pas
+un signal, c'est du décor.*
+
+| Liste | Affichée | Geste qui la vide | Branché |
+|---|---|---|---|
+| `AlerteEcartCaisse` | non | oui, **ailleurs** (`/ventes/{id}/corriger-reglement`) | non |
+| `AlerteReappro` | oui | indirect (passer une commande) | non |
+| `ConflitGlace` | oui | indirect (déplacer le créneau) | non |
+| `DeclarationIncidentBadge` | non | oui (`annuler`) | non |
+| `IncidentImpaye` | non | oui (`resoudre`, `forcer-reouverture`) | non |
+| `AlertePresenceIsolee` | non | **aucun** — le seul POST en *crée* | — |
+
+**Quatre listes affichées, zéro geste de résolution branché.** Toutes les listes d'alerte du produit sont
+aujourd'hui du décor.
+
+**La règle :** *une liste de choses à traiter s'affiche avec le geste qui les traite, ou ne s'affiche
+pas.* Pas « on branchera la résolution plus tard ».
+
+**Le motif, et c'est lui qui justifie la sévérité :** une liste qu'on ne peut pas vider **apprend à son
+lecteur à l'ignorer**, et cet apprentissage ne se défait pas quand on branche le geste six mois après.
+La liste sera toujours là ; l'habitude de ne pas la regarder aussi. On aura alors deux défauts : le
+retard initial, et un signal durablement mort qu'aucun correctif ne ranime.
+
+**Le corollaire, et il évite une erreur d'accusation.** `RejetSepa` et `VenteImpayeeRegie` n'ont **aucun
+champ de statut** : ce ne sont pas des files d'attente qui ne se vident pas, ce sont des **journaux**, et
+un journal qui grandit se comporte correctement. `claude-H` s'est arrêtée avant de les accuser, et elle a
+eu raison.
+
+**Donc le défaut n'est pas toujours dans l'API — il est souvent dans le cadrage.** Une même collection
+est un journal ou une file d'attente **selon la façon dont l'écran la présente**. Un journal s'annonce
+comme un journal : au passé, sans compteur en haut à droite. Une file d'attente s'annonce avec son geste.
+
+**`AlertePresenceIsolee` est le cas dur** : elle porte bien un statut de chose à traiter, et son unique
+opération d'écriture en **fabrique de nouvelles**. Rien, nulle part, ne permet d'en clore une. Périmètre
+`Sport`, donc `claude-I` depuis D48.
+
+---
+
+### 2026-08-26 · D55-bis — Une demande de remboursement arrive sans que personne puisse y répondre
+
+Neuf opérations sont **appelables** par le client HTTP du front sans qu'aucun écran ne les déclenche.
+Deux d'entre elles comptent : `accepterRemboursement` et `refuserRemboursement`.
+
+Le geste existe côté serveur, le client sait le former, **aucun écran ne le propose**. Une demande de
+remboursement entre donc dans le produit et **personne ne peut y répondre**. Ce n'est pas une liste
+morte : c'est une boîte aux lettres sans porte.
+
+**Et c'est cette découverte qui a corrigé la mesure d'écart elle-même.** `claude-H` comptait comme
+« branchées » les opérations que `client.js` sait appeler — donc y compris celles qu'aucun écran ne
+déclenche. Elle comptait *ce que le code sait faire* en l'annonçant comme *ce que le produit permet*.
+C'est exactement l'angle mort qu'elle signalait aux autres depuis la veille.
+
+L'instrument rend désormais deux nombres — appelées depuis le client, **atteignables depuis un écran** —
+et seul le second est reporté. La série publiée ce jour (157, 166, 168, 174) était surestimée d'une
+dizaine ; le dernier valait **164**. Corrigé sur le tableau de bord, avec la raison écrite sur la page :
+un chiffre publié faux qu'on remplace en silence est pire que le chiffre faux.
+
+Elle avait elle-même créé un de ces orphelins le jour même (`stockValorisation`), et l'a retiré.
