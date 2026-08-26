@@ -22,6 +22,7 @@
 | 02:00 | **Présentation** — `claude-C`, en ligne. **Mon filet de complétude se refermait sur lui-même** : aucun garde-fou neuf ne pouvait plus entrer. Corrigé et poussé (`fd0c32e`). Le garde-fou **n°10 est prêt et attend ta fusion** — je n'ai pas contourné la barrière. | n°10 en attente de `fd0c32e` dans `main` | ta fusion, et rien d'autre |
 | 03:30 | **Présentation** — `claude-C`. **n°10 poussé** après ta fusion, chemin propre, aucun interrupteur. **Fil n°1 : rien à écrire, tout à brancher** — le garde-fou de claude-H existait et ne tournait nulle part. Câblé, vérifié dans les deux sens. **n°5 déjà livré.** Lanceur **11/11**. | fil n°2 (D41) | rien |
 | 05:00 | **Présentation** — `claude-C`. **Fil n°2 (D41) livré** : garde-fou n°12, deux voies d'exposition, **49 entités** et non 35. Trois défauts de ma propre règle trouvés en réconciliant deux implémentations. Lanceur **12/12**. | fil n°3 (permission sans rôle) | rien |
+| 06:00 | **Présentation** — `claude-C`. **Fil n°3 : je ne le construis pas, et voici pourquoi.** La prémisse ne tient pas dans ce dépôt — le rôle modèle porte le joker `*.*`, donc `smart_flow.read` n'est pas morte. La règle signalerait **22 migrations légitimes sur 28**. | fil n°4 | rien |
 
 ---
 
@@ -1046,3 +1047,66 @@ mon cas de test ne ressemble pas au vrai défaut.
 
 **Lanceur 12/12, banc 17/17**, vérifiés après fusion des dix derniers commits de `main`, dont une
 migration neuve.
+
+
+---
+
+### 2026-08-26 · 06:00 — Fil n°3 : la règle demandée crierait au loup 22 fois
+
+**`claude-C`, en ligne.** Remote Control actif. **D34 toujours inapplicable.**
+
+Tu m'as demandé de **refuser une migration qui crée une permission sans la rattacher à au moins un
+rôle**, avec cet argument : *« une permission sans rôle n'a littéralement aucun effet »*, et
+`Version20260824210100` (`smart_flow.read`) en exemple.
+
+**J'ai mesuré avant de coder, et la règle ne tient pas dans ce dépôt.**
+
+**1. Aucune migration ne rattache de permission à un rôle — par conception.** Sur 28 migrations qui
+créent une permission, **22 ne rattachent rien**. Ce n'est pas de la négligence répétée 22 fois :
+`sec_role_permission` est rempli par les **fixtures** et par `ProvisioningService`, jamais par les
+migrations qui seedent le catalogue.
+
+**2. `ProvisioningService` ne compose aucune politique**, et il le dit lui-même :
+
+> *« Décider ici ce qu'un administrateur de client a le droit de faire reviendrait à écrire une seconde
+> politique d'habilitation, à côté de celle de `Securite`, qui divergerait dès la première évolution. »*
+
+Il **duplique un rôle modèle**, `Administrateur d'établissement`.
+
+**3. Ce rôle modèle porte le joker.** `Version20260824233000` lui attache exactement deux
+permissions — et la première est `('*', '*')` :
+
+```php
+foreach ([['*', '*'], ['securite', 'gerer']] as [$module, $action]) {
+```
+
+**4. Et le calculateur honore le joker**, `CalculateurDroits` ligne 99 :
+
+```php
+if (($m === $module || $m === '*') && ($a === $action || $a === '*')) {
+```
+
+**Conclusion : `smart_flow.read` n'est pas morte.** L'administrateur d'établissement la détient par le
+joker, dès sa création. Le cas que tu cites en exemple n'est pas un défaut.
+
+**Ce que la règle produirait si je l'écrivais** : 22 refus sur des migrations correctes, dont les tiennes
+et celles de tout le monde depuis le 14/08. C'est le scénario exact que tu m'as décrit toi-même — *« un
+contrôle qui crie au loup finit désactivé, et on perd alors aussi les vraies alertes »* — et la
+recommandation de claude-H que tu reprenais : **précis d'abord, exhaustif ensuite**.
+
+**Je ne le construis donc pas, et je te rends la décision** avec ce qui reste vrai :
+
+- Une permission qu'**aucun rôle non-joker** ne détient n'est utilisable que par un administrateur. Ce
+  n'est pas un défaut mécanique : c'est une décision produit, permission par permission — faut-il que
+  les rôles délégués puissent le faire ? Aucun outil ne peut trancher ça.
+- Si tu veux quand même un contrôle, le seul énoncé mécaniquement vrai serait : *« une permission ne
+  doit pas être seedée sans que le catalogue d'événements ou une spec la mentionne »* — mais je ne l'ai
+  pas mesuré et je ne le propose pas à la légère.
+
+**C'est la troisième fois cette nuit que la bonne contribution est de ne rien livrer** — après D41
+côté décorateur et le fil n°1. Je préfère te le dire que t'apporter un garde-fou qui te ferait perdre
+la confiance dans les onze autres.
+
+**Suite** : fil n°4 — refuser un `DROP TABLE` / `DROP INDEX` non justifié dans `app/migrations/`.
+
+**Lanceur 12/12, banc 17/17.**
