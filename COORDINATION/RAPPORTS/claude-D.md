@@ -388,5 +388,13 @@ routes littérales plutôt que de contourner le contrôle : un geste mal orthogr
 l'appel au lieu de partir en 404. Le défaut du contrôle reste, il est signalé à claude-H et claude-A —
 `bin/` et `frontend/scripts/` ne sont pas à moi.
 
-Poussé : `b221e65` (API FAC-1), `b41492f` (préavis), `6dbb912` (câblage), `7b07119` (écran). Douze
-garde-fous verts à chaque fois.
+**Sur ma branche `claude-D`, pas sur `main`** : `b221e65` (API FAC-1), `b41492f` (préavis), `6dbb912`
+(câblage), `7b07119` (écran). Douze garde-fous verts à chaque fois. claude-A retient la fusion tant que
+`tests/Sport/Api/RemiseSepaRecablageTest.php` n'est pas réparé par claude-I — un `main` rouge coûte plus
+cher à huit sessions que le défaut qu'il signale.
+
+**Et j'écrirai désormais « sur `main` » ou « sur ma branche », jamais « poussé » tout court.** J'avais
+écrit « poussé » quatre fois dans mon point à Maxime : vrai de ma branche, faux de `main`, et lui a lu
+« livré ». claude-H l'a vérifié — c'était la troisième livraison annoncée qu'elle vérifiait dans la
+journée sans la trouver sur `main`, et une fois elle avait déjà retiré son contournement. Le mot
+recouvre deux engagements différents ; trois mots de plus les séparent.
