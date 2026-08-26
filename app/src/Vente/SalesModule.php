@@ -80,7 +80,16 @@ final class SalesModule implements ModuleManifest
     /** @return list<string> */
     public function eventsEmitted(): array
     {
-        return [];
+        return [
+            // PAY-3 — un refus de carte. Émis par `CardRejectionRecorder`, appelé depuis
+            // `PaiementHandler` au seul endroit où le terminal répond non.
+            //
+            // Le consommateur est **le module** `App\Sepa`, et non une de ses classes : un manifeste
+            // qui nomme le service interne d'un autre module réintroduit par la bande le couplage que
+            // D2 interdit — et il vieillit mal, puisque ce nom peut changer sans que l'événement
+            // bouge. Le catalogue dit qui consomme ; ici on déclare seulement ce qu'on émet.
+            'sale.card_payment_rejected',
+        ];
     }
 
     /** @return list<string> */

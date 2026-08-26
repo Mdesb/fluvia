@@ -24,6 +24,7 @@ The first-class events published on the bus by the core and the modules. An even
 |---|---|---|---|
 | `sale.completed` | Sale/POS | amount, lines, customer? | Reporting, Revenue Recovery |
 | `sale.cancelled` | Sale/POS | reason, amount | Accounting, Authorization |
+| `sale.card_payment_rejected` | Sale/POS (`CardRejectionRecorder`, PAY-3) | rejectionId, saleId, amountCents, establishmentId, customerId? | **SEPA** (`CardDebitFallback`, PAY-2) |
 | `cart.abandoned` | Shop | amount, customer | Revenue Recovery |
 | `payment.succeeded` | Payment | amount, method | Accounting, Invoicing |
 | `payment.failed` | Payment / SEPA | amount, cause | **Revenue Recovery**, dunning |

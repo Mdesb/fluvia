@@ -304,6 +304,7 @@ lui fait porter le risque. La prochaine fois je donne les deux, ou je dis que je
 | 15:37 | **D57 — la clôture journalière n'est pas le Z, et deux trous d'inaltérabilité que j'avais créés.** `pointDeVente` n'était pas figé sur une vente scellée ; `SettlementCorrection` (D45) était modifiable et supprimable, **sur `main` depuis ce matin**. `Vente` 75/75, `Caisse` 15/15. | Fusion de `main`, lanceur avec ET sans référence, poussée. | Rien. |
 | 16:34 | **Le ticket n'existait que dans l'onglet du caissier.** `TicketProcessor` ne rendait aucune ligne et `LigneVente` n'avait aucun mot. Libellés **figés au jour de la vente**, gravés par écouteur et non par les six appelants. `Vente` 78/78, `Caisse` 15/15, `Boutique` 56/56, `Reservation` 103/103. | Commit, poussée, puis PAY-3. | Rien. |
 | 17:29 | **La clôture devient un mécanisme.** Commande quotidienne, file des journées non closes qui descend à zéro, et le fuseau a révélé que le handler **comptait mal** — journée bornée sur l'heure du serveur. **Et j'ai enfreint ma propre règle** : test ajouté pendant une suite, verdict faux, deux erreurs réelles au rejeu. `Vente` 86/86, `Caisse` 15/15, `Platform` 62/62. | Commit, poussée, puis PAY-3. | Rien. |
+| 18:27 | **PAY-3 : un refus de carte ne laissait aucune trace.** `CA-10` veut qu'un refus ne crée aucun `Paiement` — donc il ne restait rien. Table + événement qui la référence, dans cet ordre (bus synchrone). `rejectionId` et non `paymentId` : le second n'existe pas. `Vente` 92/92, `Caisse` 15/15, `Sepa` 55/55. | Commit et poussée. | Rien. |
 
 ## Nouvelle règle de Maxime — présentation horaire à `claude-A`
 
@@ -1589,3 +1590,84 @@ flotte la règle inverse le 24/08 après avoir rendu deux verdicts sur un arbre 
 risque était faible — PHPUnit découvre ses fichiers au démarrage — mais « faible » n'est pas « nul »,
 et c'est précisément l'argument que je refuse quand un autre me le sert. Le verdict de cette
 exécution-là est donc **écarté** : la suite a été rejouée en entier sur un arbre figé.
+
+
+## PAY-3 — un refus de carte s'écrit avant d'être annoncé
+
+`CA-10` veut qu'un refus TPE **ne crée aucun `Paiement`** : rien n'a été encaissé, donc rien n'est
+enregistré. La règle est juste. Sa conséquence était qu'il ne restait **rien** d'une carte refusée —
+un code de statut dans une réponse HTTP que personne ne conserve.
+
+### Pourquoi une table alors que le contrat ne demandait qu'un événement
+
+`claude-D` a elle-même établi que sa bascule carte → prélèvement **n'a aucun client aujourd'hui** :
+aucun débit récurrent sur carte n'existe dans le produit. Son abonné est donc le seul consommateur, et
+il n'agira sur **aucun** refus. Publier sans écrire n'aurait laissé aucune trace de la **totalité** des
+refus — pas en cas de panne, mais en fonctionnement normal, dès le premier jour. D59 connu à l'avance.
+
+**Et la raison décisive vient d'elle, pas de moi.** Je justifiais la table par l'exploitation : compter
+les refus. Elle a vu ce que je n'avais pas vu — *le prélèvement qu'un client contestera, c'est le
+sien.* Sa bascule le crée à partir de ce refus, et ce qu'elle peut produire pour le défendre est un
+préavis : il prouve qu'on a **prévenu**, il ne prouve pas **pourquoi** on a prélevé. Sans cette ligne,
+le fait générateur n'existe nulle part, et elle a prélevé quelqu'un sur la foi d'un message disparu
+après traitement.
+
+`sale_card_rejection` est donc **la pièce justificative d'un prélèvement SEPA**. C'est écrit dans le
+docblock de l'entité, avec son nom : celui qui voudra la supprimer un jour verra qu'il n'enlève pas une
+table de statistiques.
+
+### `rejectionId` et non `paymentId` — le nom qui ment coûte plus que le nom inhabituel
+
+`claude-D` avait demandé `paymentId`. **Il n'existe pas** : aucun `Paiement` n'est créé. J'aurais pu
+lui passer l'identifiant d'autre chose sous ce nom — elle aurait eu sa clé d'idempotence, tout aurait
+fonctionné, et le nom aurait menti sur ce qu'il désigne.
+
+Sa réponse généralise le point mieux que ma question : *un `paymentId` qui ne désigne aucun paiement
+fonctionne parfaitement jusqu'au jour où quelqu'un fait une jointure dessus — et ce jour-là, il ne
+cherche pas un problème de nommage, il cherche pourquoi sa requête ne rend rien.* Même famille que le
+piège `Uuid` : tout marche, jusqu'à ce que ça ne marche pas silencieusement.
+
+### L'ordre est une propriété du code, pas une convention
+
+On écrit, on vide, on publie. Le bus est **synchrone** dans ce dépôt : l'inverse aurait fait tourner
+l'abonné — donc créé une dette et envoyé un préavis à un client — **avant** que le fait qui la
+justifie soit écrit. Ce n'est pas une course théorique, c'est l'ordre des lignes, et il est isolé dans
+un seul service pour que ça reste une propriété plutôt qu'une règle à respecter.
+
+### Une limite signalée plutôt que maquillée
+
+`claude-A` voulait que la trace porte le **terminal**. Le dépôt ne donne aucune identité propre aux
+TPE : `PointDeVente` porte une *liste* de terminaux en configuration, et `ResultatTpe` ne dit pas
+lequel a répondu. J'ai écrit le point de vente et noté le manque dans l'entité, plutôt qu'inventer un
+identifiant qui aurait eu l'air d'en être un. `claude-D` : *un champ inventé qui a l'air vrai est pire
+qu'un champ absent — celui qui le lit ne sait pas qu'il ne doit pas s'y fier.*
+
+## La sentinelle qui a sonné sur une phrase
+
+`CardDebitFallbackNonBrancheTest` (écrit par `claude-D`) existe pour **échouer le jour où PAY-3
+atterrit**, et son message dit « supprimez ce fichier de test ». Il a sonné sur mon lot.
+
+Il cherchait la chaîne `CardDebitFallback` dans les fichiers de `src/`. Ce qu'il a trouvé était **un
+commentaire** : mon manifeste indiquait que l'événement est consommé par `App\Sepa`
+(`CardDebitFallback`). Une phrase de documentation, pas un appel — **son service n'est toujours appelé
+par personne**, puisque son abonné n'existe pas.
+
+**Suivre le remède aurait retiré le signal en laissant le trou**, au moment exact où il devenait le
+plus utile : quelqu'un lit la mention dans mon manifeste, croit la chaîne complète, et plus rien ne le
+détrompe. Sa conclusion, qu'elle a tirée seule : *une sentinelle dont le remède est faux dans le cas
+du faux positif est pire qu'aucune sentinelle.*
+
+**J'ai corrigé chez moi, et pas pour faire taire le test.** Un manifeste ne doit pas nommer la classe
+interne d'un autre module : c'est le couplage documentaire que D2 interdit, et ça vieillit mal — elle
+peut renommer sa classe demain sans que l'événement bouge. Le catalogue dit qui consomme ; le
+manifeste déclare ce qu'on émet. Elle l'a relevé : *si tu l'avais fait pour contourner le test, nous
+aurions eu un test vert et un couplage intact. C'est la différence entre corriger et faire taire.*
+
+Elle a durci la détection (`token_get_all`, `T_COMMENT` et `T_DOC_COMMENT` écartés) et réécrit le
+message avec **les deux branches** — si c'est un vrai branchement, supprimez ; sinon, **ne supprimez
+rien**. La seconde est celle où l'erreur coûte.
+
+**Le principe est excellent et je l'emprunte** : un rapport se lit une fois ; le seul moyen de ne pas
+livrer un mécanisme de plus que personne n'atteint est que **l'absence parle d'elle-même, au moment où
+quelqu'un croira la fonctionnalité prête**. C'est ce que font `MoyenFiduciaireTest` et
+`ChampsFigesTest`, sans que je l'aie formulé aussi bien.

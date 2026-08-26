@@ -33,6 +33,10 @@ final class PaiementHandler
         // d'origine (moyen `pmv` traité comme un code de règlement ordinaire) si aucun port n'est
         // câblé — ne casse aucun test M2 existant qui n'exerce pas le moyen `pmv` en détail.
         private readonly ?PorteMonnaieVirtuelInterface $pmv = null,
+        // PAY-3 — nullable pour la même raison que `$pmv` : les tests unitaires qui construisent ce
+        // gestionnaire à la main n'ont pas à connaître le bus d'événements pour exercer un rendu de
+        // monnaie. En service câblé, il est toujours présent.
+        private readonly ?CardRejectionRecorder $refusCarte = null,
     ) {
     }
 
@@ -122,6 +126,18 @@ final class PaiementHandler
             $resultat = $this->tpe->demander($pdv, $paiement->getMontant());
             $paiement->setStatutTPE($resultat->statut);
             if (!$resultat->estAccepte()) {
+                // PAY-3 — **le refus est un fait, et il ne laissait aucune trace.** Aucun `Paiement`
+                // n'est créé (c'est la règle CA-10), donc jusqu'ici la seule chose qui restait d'une
+                // carte refusée était un code de statut dans une réponse HTTP que personne ne
+                // conserve. On l'écrit, puis on l'annonce — dans cet ordre, voir le service.
+                $this->refusCarte?->consigner(
+                    $vente,
+                    $code,
+                    $paiement->getMontant(),
+                    $resultat->statut,
+                    $resultat->reference,
+                );
+
                 return ['paiement' => null, 'statutTPE' => $resultat->statut];
             }
             $paiement->setRefTPE($resultat->reference);
