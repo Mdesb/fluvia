@@ -19,6 +19,18 @@
 // « Boutique stock » que d'effacer une information qu'on n'a pas su traduire.
 
 const MOTS = {
+  // --- Pièces commerciales (FAC-1) : natures et statuts ---
+  quote: 'Devis',
+  sales_order: 'Bon de commande',
+  delivery_note: 'Bon de livraison',
+  draft: 'Brouillon',
+  issued: 'Émis',
+  accepted: 'Accepté',
+  rejected: 'Refusé',
+  expired: 'Périmé',
+  converted: 'Transformé',
+  cancelled: 'Annulé',
+
   // --- Espaces (types physiques) ---
   guichet: 'Guichet',
   salle_exposition: "Salle d'exposition",
@@ -110,6 +122,20 @@ const MOTS = {
   en_validation: 'En validation',
   fifo: 'Premier entré, premier sorti (FIFO)',
   cmup: 'Coût moyen pondéré',
+
+  // --- Recouvrement ---
+  representation: 'Représentation bancaire',
+  recouvrement: 'En recouvrement',
+  resolu: 'Réglé',
+  virement: 'Virement',
+  caisse: 'Espèces au guichet',
+
+  // --- Comptabilite ---
+  provisoire: 'Provisoire',
+  controlee: 'Contrôlée',
+  exportee: 'Exportée',
+  ouverte: 'Ouverte',
+  cloturee: 'Clôturée',
 
   // --- Achats ---
   // « brouillon » et « validee » servent aussi ailleurs : ce sont des etats de document, pas des

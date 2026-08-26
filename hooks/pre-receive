@@ -266,6 +266,24 @@ while read -r ancien nouveau ref; do
         fi
     fi
 
+    # Une reference libre ne se compare ni en DQL ni par filtre (D58).
+    #
+    # Le depot franchit les frontieres de module par un `?Uuid` nu plutot que par une relation
+    # Doctrine -- c'est deliberе, une relation creerait une dependance de mapping entre deux modules
+    # qui doivent vivre separement. 23 proprietes suivent cette convention.
+    #
+    # Doctrine ne convertit pas un type personnalise sur une colonne `uuid` nue, faute de relation a
+    # consulter -- et il ne s'en plaint pas. Un `SearchFilter` rend une liste vide, un `IN (:liste)`
+    # ne trouve rien. AUCUNE de ces formes ne leve : elles ressemblent a « il n'y a rien ».
+    #
+    # claude-G s'est fait avoir trois fois cette semaine, sur trois modules, EN CONNAISSANT le piege.
+    # Quand la meme erreur revient une troisieme fois, on ne la corrige plus : on supprime ce qui la
+    # rend possible.
+    if [ -f "$ARBRE/bin/garde-fou-references-libres.php" ]; then
+        echo "── Références libres (D58)"
+        lancer garde-fou-references-libres.php
+    fi
+
     # Une entite ne doit pas laisser ecrire son propre etablissement (D41). Ecrit par claude-C, qui a
     # au passage corrige mon compte : 49 entites concernees et non 35. Vingt-deux d'entre elles ne
     # declarent AUCUN `denormalizationContext` — c'est l'absence de declaration qui expose, et une

@@ -140,6 +140,16 @@ export function membres(collection) {
   return collection.member || collection['hydra:member'] || []
 }
 
+// Les routes des gestes d'une pièce commerciale (FAC-1). Aucune ne prend de corps : tout est dans
+// la route, et le serveur les déclare `input: false`.
+const GESTES_PIECE = {
+  issue: (id) => request(`/api/billing/documents/${id}/issue`, { method: 'POST' }),
+  accept: (id) => request(`/api/billing/documents/${id}/accept`, { method: 'POST' }),
+  reject: (id) => request(`/api/billing/documents/${id}/reject`, { method: 'POST' }),
+  derive: (id) => request(`/api/billing/documents/${id}/derive`, { method: 'POST' }),
+  invoice: (id) => request(`/api/billing/documents/${id}/invoice`, { method: 'POST' }),
+}
+
 export const api = {
   // Auth : hors /api, sans X-Etablissement.
   login: (email, motDePasse) =>
@@ -166,6 +176,24 @@ export const api = {
   depublierProduit: (id) => request(`/api/produits/${id}/depublier`, { method: 'POST' }),
   archiverProduit: (id) => request(`/api/produits/${id}/archiver`, { method: 'POST' }),
   reactiverProduit: (id) => request(`/api/produits/${id}/reactiver`, { method: 'POST' }),
+
+  // Pièces commerciales (FAC-1) : devis -> bon de commande -> bon de livraison -> facture.
+  //
+  // Aucun `ld: true` : les huit opérations sont déclarées `input: false` côté serveur et lisent le
+  // corps brut, elles ne passent donc pas par la désérialisation d'API Platform. Les cinq gestes
+  // n'ont carrément pas de corps — seul l'identifiant compte, tout est dans la route.
+  piecesCommerciales: () => request('/api/billing/documents'),
+  pieceCommerciale: (id) => request(`/api/billing/documents/${id}`),
+  creerDevis: (corps) => request('/api/billing/documents', { method: 'POST', body: corps }),
+  // Les cinq gestes sont écrits en toutes lettres, un par ligne, et non composés depuis une variable.
+  //
+  // Deux raisons, et la seconde n'est pas cosmétique. D'abord un geste mal orthographié échoue ici,
+  // à l'appel, au lieu de partir en 404 sur une route qui n'existe pas. Ensuite `verifier-formats`
+  // compare le chemin au `uriTemplate` déclaré côté serveur, et il normalise toute interpolation en
+  // `{id}` : un chemin composé donnait `/billing/documents/{id}/{id}`, qui ne correspond à rien, et
+  // le contrôle réclamait un `ld: true` dont ces routes n'ont que faire. Le contrôle avait raison de
+  // ne pas savoir — c'est au code appelé d'être lisible.
+  gestePiece: (id, geste) => GESTES_PIECE[geste](id),
 
   pointDeVentes: () => request('/api/point_de_ventes'),
   creerPointDeVente: (corps) => request('/api/point_de_ventes', { method: 'POST', body: corps, ld: true }),
@@ -348,6 +376,37 @@ export const api = {
 
   // --- Comptabilité / Régie (M6) ---
   journaux: () => request('/api/journals', { query: { itemsPerPage: 100 } }),
+  profilsExploitant: () => request('/api/profil_exploitants', { query: { itemsPerPage: 20 } }),
+  periodesComptables: () =>
+    request('/api/periode_comptables', { query: { itemsPerPage: 100, 'order[dateDebut]': 'desc' } }),
+  exportsComptables: () => request('/api/export_comptables', { query: { itemsPerPage: 50 } }),
+  // Operations sur mesure (`input: false`) : pas de `ld: true`.
+  //
+  // `generer` est idempotent en sequentiel — `ventesValideesNonComptabilisees` exclut ce qui a deja
+  // une ecriture. Mais la liste est calculee avant la boucle et le flush n'a lieu qu'a la fin : deux
+  // requetes qui se chevauchent voient le meme ensemble et generent toutes les deux. claude-D pose
+  // le verrou serveur ; en attendant, le bouton est desactive du clic jusqu'a la reponse, ce qui
+  // ferme le cas courant — celui de l'exploitant qui reclique parce que rien ne bouge.
+  genererEcritures: (profilId) =>
+    request('/api/compta/ecritures/generer', { method: 'POST', body: { profilExploitant: profilId } }),
+  validerEcriture: (id) =>
+    request(`/api/compta/ecritures/${id}/valider`, { method: 'POST', body: {} }),
+  extournerEcriture: (id) =>
+    request(`/api/compta/ecritures/${id}/extourne`, { method: 'POST', body: {} }),
+  verifierChaineEcritures: (journalId) =>
+    request('/api/compta/ecritures/verifier-chaine', { query: { journal: journalId } }),
+  cloturerPeriode: (id) =>
+    request(`/api/compta/periodes/${id}/cloturer`, { method: 'POST', body: {} }),
+  telechargerExport: (id) => request(`/api/compta/exports/${id}/telecharger`),
+  // Recouvrement : les deux gestes qui closent un impaye, et le compteur d'acces bloques.
+  tableauBordRecouvrement: () => request('/api/recouvrement/tableau-bord'),
+  resoudreImpaye: (id) =>
+    request(`/api/recouvrement/incidents/${id}/resoudre`, { method: 'POST', body: {} }),
+  forcerReouvertureImpaye: (id, motif) =>
+    request(`/api/recouvrement/incidents/${id}/forcer-reouverture`, { method: 'POST', body: { motif } }),
+  // Operation STANDARD : elle deserialise.
+  creerExportComptable: (corps) =>
+    request('/api/export_comptables', { method: 'POST', body: corps, ld: true }),
   ecrituresComptables: () =>
     request('/api/ecriture_comptables', { query: { itemsPerPage: 100 } }),
   regieRecettes: () => request('/api/regie_recettes', { query: { itemsPerPage: 100 } }),
