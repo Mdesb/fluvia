@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useState } from 'react'
 import {
   api,
   membres,
@@ -15,17 +15,22 @@ import Catalogue from './pages/Catalogue.jsx'
 import Clients from './pages/Clients.jsx'
 import Reservation from './pages/Reservation.jsx'
 import Supervision from './pages/Supervision.jsx'
-import Pilotage from './pages/Pilotage.jsx'
-import Boutique from './pages/Boutique.jsx'
-import Comptabilite from './pages/Comptabilite.jsx'
-import Facturation from './pages/Facturation.jsx'
-import Personnel from './pages/Personnel.jsx'
-import Parametres from './pages/Parametres.jsx'
 import Piscine from './pages/Piscine.jsx'
 import Patinoire from './pages/Patinoire.jsx'
-import Stock from './pages/Stock.jsx'
-import Padel from './pages/Padel.jsx'
-import Musee from './pages/Musee.jsx'
+
+// Ecrans de back-office charges a la demande : un caissier qui reste a sa caisse ne les
+// telecharge jamais. Ceux qu'on ouvre plusieurs fois par jour — caisse, catalogue, clients,
+// reservation — restent dans le paquet principal : leur decoupage ferait payer une attente
+// repetee pour un gain unique.
+const Pilotage = lazy(() => import('./pages/Pilotage.jsx'))
+const Boutique = lazy(() => import('./pages/Boutique.jsx'))
+const Comptabilite = lazy(() => import('./pages/Comptabilite.jsx'))
+const Facturation = lazy(() => import('./pages/Facturation.jsx'))
+const Personnel = lazy(() => import('./pages/Personnel.jsx'))
+const Parametres = lazy(() => import('./pages/Parametres.jsx'))
+const Stock = lazy(() => import('./pages/Stock.jsx'))
+const Musee = lazy(() => import('./pages/Musee.jsx'))
+const Padel = lazy(() => import('./pages/Padel.jsx'))
 
 // Un compte est « administrateur » s'il porte l'un des droits d'administration du socle sur
 // l'établissement actif (matérialisés dans `me.droits`). Gouverne l'atterrissage sur le tableau
@@ -206,6 +211,9 @@ export default function App() {
       droits={droits}
       estAdmin={estAdmin}
     >
+      {/* Une seule frontiere de suspension pour tout le contenu : les ecrans differes s'y
+          rattachent, et un ecran deja charge ne la declenche pas. */}
+      <Suspense fallback={<div className="center" style={{ minHeight: 240 }}><div className="spinner" /></div>}>
       {onglet === 'dashboard' && estAdmin && (
         <Dashboard etabActif={etabActif} etablissements={etablissements} droits={droits} onNav={naviguer} />
       )}
@@ -239,6 +247,7 @@ export default function App() {
       {onglet === 'parametres' && (
         <Parametres etabActif={etabActif} etablissements={etablissements} droits={droits} />
       )}
+      </Suspense>
     </AppShell>
   )
 }

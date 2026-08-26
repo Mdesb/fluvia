@@ -1791,3 +1791,35 @@ dizaine ; le dernier valait **164**. Corrigé sur le tableau de bord, avec la ra
 un chiffre publié faux qu'on remplace en silence est pire que le chiffre faux.
 
 Elle avait elle-même créé un de ces orphelins le jour même (`stockValorisation`), et l'a retiré.
+
+---
+
+### 2026-08-26 · D56 — On ne dit plus « poussé ». On dit « sur `main`, commit X » ou « sur ma branche, commit X »
+
+**Trois fois dans la même journée, chez trois sessions différentes**, une livraison annoncée « poussée »
+n'était pas sur `main` :
+
+- **moi**, le matin : la sérialisation du bénéficiaire. `claude-H` avait **déjà retiré son contournement**
+  quand elle a vérifié ; sans cette vérification, l'écran de location de patins aurait été cassé pendant
+  que tout le monde le croyait réparé.
+- **`claude-G`** : `POST /ventes/{id}/corriger-reglement`. `claude-H` allait construire son écran dessus.
+- **`claude-D`** : FAC-1 — le message du commit disait lui-même `WIP`.
+
+**Dans les trois cas la phrase était vraie du point de vue de qui l'écrivait, et fausse pour qui
+construisait dessus.** « Poussé sur ma branche » et « poussé sur `main` » n'engagent pas la même chose.
+
+**La règle, proposée par `claude-H`, adoptée par `claude-G` avant même d'être consignée :**
+
+> On ne dit plus « poussé ». On dit « **sur `main`, commit X** », ou « **sur ma branche, commit X** ».
+
+**L'argument qui la rend obligatoire**, formulé par `claude-G` : *quand la même erreur se produit trois
+fois chez trois personnes, ce n'est pas la vigilance qui manque, c'est le vocabulaire qui est ambigu.*
+C'est la règle des mécanismes appliquée au langage — **un protocole qui dépend de la précision de chacun
+n'est pas un protocole**.
+
+**Le corollaire, et il ne se négocie pas :** `git fetch` avant de construire sur l'annonce de quelqu'un.
+Y compris la mienne. Les trois fois, c'est le pair qui a vérifié plutôt que de croire, et les trois fois
+il avait raison de le faire.
+
+**Coût mesuré de l'ambiguïté** : plusieurs heures, trois sessions, en une journée. Coût de la règle :
+trois mots.

@@ -50,6 +50,10 @@ final class DeclarerIncidentBadgeProcessor implements ProcessorInterface
 
         $this->handler->suspendre($data, $motif, $agent);
 
+        // @cloisonnement-verifie : le findOneBy ci-dessous ne résout PAS un identifiant client — il
+        // relit la déclaration à partir du support du badge `$data`, lequel est confronté au périmètre
+        // par `read: true` + PerimetrePersonnelExtension. Le seul champ lu au corps est `motif` (chaîne,
+        // pas une entité). Aucune résolution hors périmètre. — claude-B, 26/08.
         $support = $data->getSupport();
         $declaration = $support !== null
             ? $this->em->getRepository(DeclarationPerteVol::class)->findOneBy(['support' => $support, 'annulee' => false], ['horodatage' => 'DESC'])

@@ -10,8 +10,12 @@ use App\Acces\Entity\Equipement;
 use App\Acces\Entity\Passage;
 use App\Acces\Enum\SensPassage;
 use App\Acces\Service\ComptageNonNominatifHandler;
+use App\Securite\Entity\Utilisateur;
+use App\Securite\Service\CalculateurDroits;
 use App\Vente\Service\LecteurCorps;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\SecurityBundle\Security;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\Uid\Uuid;
 
@@ -27,6 +31,8 @@ final class PassageNonNominatifProcessor implements ProcessorInterface
         private readonly LecteurCorps $lecteur,
         private readonly ComptageNonNominatifHandler $handler,
         private readonly EntityManagerInterface $em,
+        private readonly Security $security,
+        private readonly CalculateurDroits $calculateur,
     ) {
     }
 
@@ -41,6 +47,20 @@ final class PassageNonNominatifProcessor implements ProcessorInterface
         $equipement = $this->em->getRepository(Equipement::class)->find($equipementId);
         if (!$equipement instanceof Equipement) {
             throw new UnprocessableEntityHttpException('Équipement introuvable.');
+        }
+
+        // Cloisonnement (D3/D8) — l'opération est `input: false` : l'équipement est résolu depuis le
+        // corps par un `find()` direct, hors des extensions. On recalcule l'autorité de l'agent (la
+        // sécurité de route : acces.superviser OU acces.controler) contre l'établissement de
+        // l'ÉQUIPEMENT VISÉ, pas l'en-tête X-Etablissement (D6). Sans quoi on comptabilise un passage
+        // sur un équipement d'un autre établissement. Échec fermé en 404 (anti-oracle).
+        $agent = $this->security->getUser();
+        $codes = $agent instanceof Utilisateur
+            ? $this->calculateur->codesEffectifs($agent, $equipement->getEtablissement()?->getId())
+            : [];
+        if (!$this->calculateur->autorise($codes, 'acces', 'superviser')
+            && !$this->calculateur->autorise($codes, 'acces', 'controler')) {
+            throw new NotFoundHttpException('Équipement introuvable.');
         }
 
         $motif = (string) ($corps['motif'] ?? '');

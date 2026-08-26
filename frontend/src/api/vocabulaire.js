@@ -123,6 +123,17 @@ const MOTS = {
   fifo: 'Premier entré, premier sorti (FIFO)',
   cmup: 'Coût moyen pondéré',
 
+  // --- Achats ---
+  // « brouillon » et « validee » servent aussi ailleurs : ce sont des etats de document, pas des
+  // etats propres au stock.
+  brouillon: 'Brouillon',
+  envoyee: 'Envoyée',
+  confirmee: 'Confirmée',
+  partiellement_recue: 'Partiellement reçue',
+  cloturee: 'Clôturée',
+  annulee: 'Annulée',
+  validee: 'Validée',
+
   // --- Remboursements ---
   recue: 'Reçue',
   acceptee: 'Acceptée',

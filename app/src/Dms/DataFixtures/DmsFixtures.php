@@ -34,14 +34,15 @@ final class DmsFixtures extends Fixture implements DependentFixtureInterface
 
     public function load(ObjectManager $manager): void
     {
-        $permRead = (new Permission())->setModule('dms')->setAction('read');
-        $permWrite = (new Permission())->setModule('dms')->setAction('write');
-        $permDelete = (new Permission())->setModule('dms')->setAction('delete');
-        $permManageRetention = (new Permission())->setModule('dms')->setAction('manage_retention');
-        $permManagePublicLink = (new Permission())->setModule('dms')->setAction('manage_public_link');
-        foreach ([$permRead, $permWrite, $permDelete, $permManageRetention, $permManagePublicLink] as $permission) {
-            $manager->persist($permission);
-        }
+        // Idempotence (ordre A 26/08) : `Permission(module, action)`, `Role.nom` et
+        // `RetentionPolicy.code`/`default_for_category` portent tous une unicité globale. Un
+        // rechargement sur une base peuplée — régénération des données de démo préprod — échouait sinon
+        // sur « Duplicate entry » dès `dms.read`. On cherche avant de créer.
+        $permRead = $this->permissionDms($manager, 'read');
+        $permWrite = $this->permissionDms($manager, 'write');
+        $permDelete = $this->permissionDms($manager, 'delete');
+        $permManageRetention = $this->permissionDms($manager, 'manage_retention');
+        $permManagePublicLink = $this->permissionDms($manager, 'manage_public_link');
 
         // Administrateur groupe (socle) : toutes les permissions DMS SAUF manage_public_link — §0.5,
         // aucun rôle générique d'administration ne doit l'hériter (arbitrage D18 pt.1).
@@ -55,27 +56,51 @@ final class DmsFixtures extends Fixture implements DependentFixtureInterface
 
         // Rôle dédié (§0.5) : exactement dms.read (retrouver/consulter le document à lier) +
         // dms.manage_public_link — rien d'autre (DedicatedRolePublicLinkFixtureTest le garde).
-        $roleLiensPublics = (new Role())->setNom(self::ROLE_LIENS_PUBLICS)->setEstModele(true);
+        // `addPermission` est gardé par `contains` : réattacher sur un rôle réutilisé est sans effet.
+        $roleLiensPublics = $manager->getRepository(Role::class)->findOneBy(['nom' => self::ROLE_LIENS_PUBLICS])
+            ?? (new Role())->setNom(self::ROLE_LIENS_PUBLICS);
+        $roleLiensPublics->setEstModele(true);
         $roleLiensPublics->addPermission($permRead)->addPermission($permManagePublicLink);
         $manager->persist($roleLiensPublics);
 
         // Catalogue RetentionPolicy v1 (RG-DMS-11) — ⚠ valeurs légales proposées par analogie, à
         // confirmer par un expert compta/RH avant mise en production (plan §14 pt.6).
-        $politiqueCompta = new RetentionPolicy(
-            self::POLICY_ACCOUNTING,
-            120,
-            'dms.retention.fr_accounting_10y',
-            DocumentCategory::AccountingPiece,
-        );
-        $politiqueRh = new RetentionPolicy(
-            self::POLICY_HR,
-            60,
-            'dms.retention.fr_hr_5y',
-            DocumentCategory::HrDocument,
-        );
-        $manager->persist($politiqueCompta);
-        $manager->persist($politiqueRh);
+        $this->retentionPolicy($manager, self::POLICY_ACCOUNTING, 120, 'dms.retention.fr_accounting_10y', DocumentCategory::AccountingPiece);
+        $this->retentionPolicy($manager, self::POLICY_HR, 60, 'dms.retention.fr_hr_5y', DocumentCategory::HrDocument);
 
         $manager->flush();
+    }
+
+    /** Le couple `(module, action)` est unique — rendre l'existant plutôt qu'un doublon (ordre A 26/08). */
+    private function permissionDms(ObjectManager $manager, string $action): Permission
+    {
+        $existante = $manager->getRepository(Permission::class)->findOneBy(['module' => 'dms', 'action' => $action]);
+        if ($existante instanceof Permission) {
+            return $existante;
+        }
+
+        $permission = (new Permission())->setModule('dms')->setAction($action);
+        $manager->persist($permission);
+
+        return $permission;
+    }
+
+    /** `code` et `default_for_category` sont uniques — rendre l'existant plutôt qu'un doublon. */
+    private function retentionPolicy(
+        ObjectManager $manager,
+        string $code,
+        int $durationMonths,
+        string $legalBasisKey,
+        DocumentCategory $defaultForCategory,
+    ): RetentionPolicy {
+        $existante = $manager->getRepository(RetentionPolicy::class)->findOneBy(['code' => $code]);
+        if ($existante instanceof RetentionPolicy) {
+            return $existante;
+        }
+
+        $policy = new RetentionPolicy($code, $durationMonths, $legalBasisKey, $defaultForCategory);
+        $manager->persist($policy);
+
+        return $policy;
     }
 }

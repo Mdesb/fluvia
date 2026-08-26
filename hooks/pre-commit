@@ -82,6 +82,9 @@ lancer_gf garde-fou-cloisonnement.php || ECHEC=1
 # Une entite ne doit pas laisser ecrire son propre etablissement (D41).
 [ -f "$RACINE/bin/garde-fou-etablissement-ecrivable.php" ] && { lancer_gf garde-fou-etablissement-ecrivable.php || ECHEC=1; }
 
+# Une suppression dans un up() de migration doit etre voulue et le dire (D32).
+[ -f "$RACINE/bin/garde-fou-drop-migrations.php" ] && { lancer_gf garde-fou-drop-migrations.php || ECHEC=1; }
+
 # Nommage : sur les fichiers **indexés** et ajoutés. `--cached` est ce qui sera réellement commité,
 # et c'est aussi ce qui évite de dépendre d'une révision de référence inexistante à ce stade.
 if [ -f "$RACINE/bin/garde-fou-nommage-anglais.php" ]; then

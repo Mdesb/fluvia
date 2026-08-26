@@ -498,6 +498,42 @@ export const api = {
   stockCloturerInventaire: (id) =>
     request(`/api/stock/inventaires/${id}/cloturer`, { method: 'POST', body: {} }),
 
+  // Cycle d'achat : fournisseur -> commande -> envoi -> confirmation -> reception -> validation.
+  stockFournisseurs: () =>
+    request('/api/stock_fournisseurs', { query: { itemsPerPage: 200 } }),
+  stockCommandesAchat: () =>
+    request('/api/stock_commande_achats', { query: { itemsPerPage: 100 } }),
+  stockLignesCommandeAchat: () =>
+    request('/api/stock_ligne_commande_achats', { query: { itemsPerPage: 500 } }),
+  stockReceptions: () =>
+    request('/api/stock_reception_achats', { query: { itemsPerPage: 100 } }),
+  // Operations STANDARD : elles deserialisent, donc `ld: true`.
+  //
+  // `etablissement` n'est JAMAIS envoye, bien que le modele l'accepte en ecriture : le serveur le
+  // tient de la session (D3/D8), et un client qui le choisit est un client qui peut ecrire chez le
+  // voisin. Le respecter ici evite de prendre l'habitude inverse sur un ecran.
+  creerFournisseur: (corps) =>
+    request('/api/stock_fournisseurs', { method: 'POST', body: corps, ld: true }),
+  majFournisseur: (id, corps) =>
+    request(`/api/stock_fournisseurs/${id}`, { method: 'PATCH', body: corps }),
+  creerCommandeAchat: (corps) =>
+    request('/api/stock_commande_achats', { method: 'POST', body: corps, ld: true }),
+  creerLigneCommandeAchat: (corps) =>
+    request('/api/stock_ligne_commande_achats', { method: 'POST', body: corps, ld: true }),
+  creerReceptionAchat: (corps) =>
+    request('/api/stock_reception_achats', { method: 'POST', body: corps, ld: true }),
+  creerLigneReceptionAchat: (corps) =>
+    request('/api/stock_ligne_reception_achats', { method: 'POST', body: corps, ld: true }),
+  // Operations sur mesure : `input: false`, pas de `ld: true`.
+  stockEnvoyerCommande: (id) =>
+    request(`/api/stock/commandes-achat/${id}/envoyer`, { method: 'POST', body: {} }),
+  stockConfirmerCommande: (id) =>
+    request(`/api/stock/commandes-achat/${id}/confirmer`, { method: 'POST', body: {} }),
+  stockAnnulerCommande: (id) =>
+    request(`/api/stock/commandes-achat/${id}/annuler`, { method: 'POST', body: {} }),
+  stockValiderReception: (id) =>
+    request(`/api/stock/receptions-achat/${id}/valider`, { method: 'POST', body: {} }),
+
   // Padel
   padelTerrains: () => request('/api/padel/terrains', { query: { itemsPerPage: 100 } }),
   // Pas de collection listable pour les tournois (seulement des routes custom

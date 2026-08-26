@@ -276,6 +276,12 @@ while read -r ancien nouveau ref; do
         lancer garde-fou-etablissement-ecrivable.php "--contre=$BASE"
     fi
 
+    # Une suppression dans un up() de migration doit etre voulue et le dire (D32).
+    if [ -f "$ARBRE/bin/garde-fou-drop-migrations.php" ]; then
+        echo "── Suppressions en migration (D32)"
+        lancer garde-fou-drop-migrations.php "--contre=$BASE"
+    fi
+
 
     # ⚠ FILET DE COMPLÉTUDE — la leçon du 24/08, et elle a coûté cher.
     #
