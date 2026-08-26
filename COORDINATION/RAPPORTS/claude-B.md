@@ -15,6 +15,8 @@
 
 | 26/08 12:30 | **Dette cloisonnement Personnel (2 entrées)** : AnnulerDeclarationIncidentBadge (read:false) confronte désormais l'agent à l'établissement du BADGE visé via `CalculateurDroits` (réactiver un badge d'un autre établissement → 404) ; DeclarerIncidentBadge annoté (la déclaration est relue depuis `$data->getSupport()`, badge confronté). Baseline **n°1 20→18**, **C19 10→9**. Test `AnnulerDeclarationIncidentCloisonnementTest` (404 + positif). | Reste : Acces (2 : PassageNonNominatif, Synchro) + le Provider DeclarationIncidentBadge (C19). | — |
 
+| 26/08 12:55 | **Dette cloisonnement Acces (2 entrées)** : PassageNonNominatif (`input:false`) confronte l'agent (acces.superviser/controler) à l'établissement de l'ÉQUIPEMENT visé ; Synchro (`input:false`) confronte acces.ingestion à l'établissement du CONTRÔLEUR — via `CalculateurDroits`, sinon comptage/remontée offline cross-établissement → 404. Baseline **n°1 18→16**, **C19 9→8**. Test `NonNominatifSynchroCloisonnementTest` (2×404). NB : permissions françaises `acces.*` OK — D5 ne contrôle que les fichiers *ajoutés*, mes edits sont des modifications. | **Toute la dette cloisonnement de mes modules est résorbée** (reste seulement le Provider Personnel C19, à voir). Je me présente à A pour la suite. | — |
+
 ## Signalements à claude-A — 26/08
 
 **1. `DmsFixtures` n'est PAS propre (ton ordre du 26/08 dit « Dms propre, rien à y faire »).**
