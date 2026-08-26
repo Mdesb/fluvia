@@ -2246,3 +2246,171 @@ ce nom aurait donné la clé d'idempotence attendue, **et le nom aurait menti**.
 paiement. `PointDeVente` porte une *liste* de terminaux en configuration, et `ResultatTpe` ne dit pas
 lequel a répondu. La trace porte donc le point de vente. Distinguer deux terminaux d'un même comptoir est
 un chantier séparé.
+
+---
+
+### 2026-08-26 · D51-ter — Le patron « socle + ajout local » existait déjà, et ma consigne en créait un second
+
+**Correction de D51, sur pièce.** J'avais arbitré la forme : `etablissement` nullable, `null` = socle
+partagé, pas de table d'extension. `claude-G` a fait ce que D51 exigeait — *vérifier d'abord qu'un patron
+n'existe pas ailleurs, en inventer un second serait pire que le problème* — et **elle en a trouvé un,
+complet, fusionné, avec son extension Doctrine.**
+
+`Support` porte déjà exactement ça, et le discriminant n'est **pas** `null` :
+
+```php
+#[ORM\Column(length: 6, enumType: PorteeArticle::class, options: ['default' => 'global'])]
+private PorteeArticle $portee = PorteeArticle::Global;   // Global | Local
+#[ORM\JoinColumn(nullable: true)]
+private ?Etablissement $etablissement = null;
+```
+
+Et son extension applique déjà « le socle **plus** ses ajouts, jamais ceux d'un autre », avec `IDENTITY()`
+— donc conforme à D58 avant que D58 n'existe.
+
+**Ma consigne aurait donc créé le second patron que D51 interdit**, sur la décision qui interdit
+justement ça.
+
+---
+
+**ET LE DISCRIMINANT EXPLICITE EST MEILLEUR QUE LE NULL, POUR UNE RAISON QUI N'EST PAS DE STYLE.**
+
+Argument de `claude-G`, et il est décisif : **`null` sur `etablissement` porte deux sens différents** —
+« cette ligne appartient au socle » et « personne n'a encore renseigné l'établissement ».
+
+Le second arrive tout seul : un import, un processeur qui oublie l'estampille, une migration qui ajoute
+la colonne. Et alors **une ligne locale mal remplie devient du socle** — donc visible par tous les
+établissements, **silencieusement**.
+
+Avec `portee`, le même oubli produit une ligne `local` sans établissement : **invisible partout**, ce qui
+se remarque et se corrige.
+
+> **Le défaut par défaut ne fuit pas.**
+
+C'est le même critère que la clôture journalière le matin même — *le défaut est celui qui ne peut pas
+mentir* — appliqué à une frontière de cloisonnement au lieu d'une date.
+
+**Décidé : D51 s'aligne sur le patron de `Support`.** Le trait porteur (`portee` + `etablissement`) et le
+fragment de requête réutilisable montent dans `Platform`, **une seule fois**, pour que le troisième
+module ne le réinvente pas une troisième fois.
+
+**Ce que je ne fais pas :** convertir `Support` au nullable pur. Ce serait remplacer le bon patron par le
+moins bon pour satisfaire une consigne écrite trop vite.
+
+---
+
+### 2026-08-26 · D51-quater — Chercher la fonctionnalité, pas le numéro de décision
+
+`claude-G` allait reconstruire les trois documents de D45-bis — devis, bon de commande, bon de livraison.
+**`claude-D` les avait livrés le matin même**, sous le nom FAC-1 : `Facturation\Entity\CommercialDocument`,
+`DocumentNature::Quote | SalesOrder | DeliveryNote`, huit opérations, la filiation complète.
+
+Une demi-journée en double, évitée à la lecture.
+
+**Et la règle existante ne suffisait pas.** « Fusionner `main` avant de claimer » est en place depuis
+lundi, et `main` **était** à jour chez elle. Le travail était simplement arrivé **sous un autre nom que
+celui de la décision** — D45-bis livré comme FAC-1.
+
+> **Avant de proposer un lot, chercher la fonctionnalité dans le code, pas le numéro de décision dans le
+> tableau.** — `claude-G`
+
+Un identifiant de décision ne survit pas au passage à l'implémentation : celui qui livre nomme son lot
+d'après ce qu'il construit, pas d'après ce qui l'a demandé. Le tableau de claim voit donc D45-bis
+« libre » alors que la fonctionnalité existe.
+
+---
+
+### 2026-08-26 · D51-quinquies — Le quotient familial ne s'affiche pas au guichet
+
+`claude-H` demandait un paramètre `beneficiaire` dans l'estimation de tarif. `claude-G` l'a refusé après
+vérification : **il n'entre dans aucune règle de tarif du dépôt**. Ce qui fait varier le prix est le
+**quotient familial**, déjà fourni par l'appelant.
+
+*L'accepter pour l'ignorer aurait été pire que de ne pas l'accepter : l'écran aurait cru le prix
+contextualisé, et le jour où deux bénéficiaires d'un même dossier ont des quotients différents, il
+afficherait deux fois le même prix sans que personne sache pourquoi.* **Un paramètre ignoré est un
+mensonge de signature.**
+
+Reste la question qu'elle a fait remonter : si l'écran connaît le bénéficiaire mais pas son quotient, il
+manque une résolution `bénéficiaire → quotient familial`, qui vit dans `Crm`.
+
+**Non ouverte, et ce n'est pas une frontière de module.** Lire le quotient familial d'un bénéficiaire
+depuis l'écran de caisse revient à **l'afficher au guichet, devant l'intéressé et devant les autres**.
+C'est une question de dignité, pas d'architecture, et elle se tranche avec Maxime — pas entre nous, et
+pas parce que ce serait techniquement commode.
+
+---
+
+### 2026-08-26 · D66 — Le joker d'un module ne peut pas contenir un droit qui dépasse ce module
+
+**Trouvé par le test, pas par la relecture.** `claude-G` avait nommé `offre.gerer_socle` le droit
+d'éditer le socle partagé des référentiels. Son test `testUnAjoutNaitLocalEtRattache` a échoué pour une
+raison qu'aucune relecture n'aurait donnée :
+
+**l'administrateur de groupe porte la permission joker `offre.*`, donc `offre.gerer_socle` lui était
+accordé automatiquement.**
+
+Conséquence : **chaque administrateur d'établissement devenait maître du socle commun**, sans que
+personne ne l'ait décidé. Renommer un `TypeTarif` chez A aurait changé le tarif de B — le trou
+transfrontière contre lequel D51 met en garde, ouvert par un **nom**.
+
+**La règle :**
+
+> Le joker d'un module ne doit jamais pouvoir contenir un droit qui dépasse ce module.
+
+**Le nommage d'une permission n'est pas une convention d'affichage, c'est une frontière d'autorité.**
+`offre.*` désigne « tout sur l'offre **de cet établissement** », pas « tout sur l'offre **de tout le
+monde** ». Un droit qui porte sur le partagé appartient donc à un autre module — ici
+`plateforme.gerer_socle`.
+
+**Corollaire, et il fait le lien avec le défaut du menu de mardi :** un joker accorde du droit sur ce qui
+n'existe pas encore. C'est sa propriété, et elle est utile — mais elle rend le nommage définitif : **on
+ne peut pas ajouter une permission sous un préfixe existant sans la donner rétroactivement à tous ceux
+qui portent le joker.** Personne ne relira les rôles pour vérifier.
+
+**Conséquence assumée : personne ne détient `plateforme.gerer_socle` aujourd'hui.** Le socle est semé
+par les jeux de données et les migrations. Le jour où la plateforme voudra l'éditer par l'API, il faudra
+décider **à qui** on le donne — et ce n'est pas une décision qui se prend par défaut, en héritant d'un
+joker.
+
+---
+
+### 2026-08-26 · D66-bis — Le critère de visibilité ne se partage pas avec le patron
+
+`claude-G` avait repris tel quel le filtre de `Support` : « les établissements où l'utilisateur a une
+affectation ». Son test a montré que l'administrateur, affecté à **A et B**, voyait les ajouts de B
+**depuis le guichet de A**.
+
+**Ce n'est pas un défaut du patron de `Support` — les deux cas ne sont pas les mêmes.** Un article d'aide
+se lit légitimement depuis n'importe lequel de ses établissements. Un référentiel tarifaire, non : un
+responsable qui vend au guichet de A ne doit pas voir les types de tarif de B, **il pourrait poser un
+prix sur un tarif qui n'existe pas là où il encaisse, et le défaut ne se verrait qu'à la facture.**
+
+La lecture porte donc sur **l'établissement actif**, et sans établissement actif : **le socle seul**,
+fermeture par défaut.
+
+**Ce que ça nuance dans la consigne « monte le patron dans `Platform` » :** le **trait** et la **forme**
+du filtre se partagent ; **le critère de visibilité ne se partage pas** — il dépend de ce que la liste
+sert à faire. Un patron qui imposerait son critère ferait porter à chaque module la question à laquelle
+un seul avait répondu.
+
+---
+
+### 2026-08-26 · D66-ter — Une migration ne fabrique pas de donnée pour sauver une démonstration
+
+**Question de `claude-G` sur `Saison` et `TrancheQuotientFamilial`**, à cloisonner et non à doter d'un
+socle : **à quel établissement appartiennent les lignes existantes ?** Elles sont globales aujourd'hui.
+
+Deux options proposées : rattacher au hasard à l'établissement de démonstration, ou laisser les lignes
+orphelines et **visibles de personne**.
+
+**Décidé : la migration laisse orphelin.** Une migration s'exécutera un jour sur des données réelles, et
+rattacher au hasard produirait des tarifs calculés sur la saison d'un autre établissement — le quotient
+familial étant le cas où D51 dit lui-même qu'une erreur est **opposable**.
+
+**La démonstration se répare à la main, là où la donnée est admise comme fausse.** La préproduction ne
+contient que des données de test ; l'y remettre en état est une opération d'exploitation, pas un `up()`.
+Confondre les deux revient à inscrire dans le code de production une réparation qui n'a de sens que sur
+un jeu d'essai.
+
+> **Une migration ne fabrique jamais de donnée métier. Ce qui manque reste visiblement manquant.**
