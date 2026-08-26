@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Modal from './Modal.jsx'
 import ReferentielEditable from './ReferentielEditable.jsx'
-import { dateHeureFr } from './Liste.jsx'
+import { dateHeureFr, jourLocal } from './Liste.jsx'
 import { api, membres } from '../api/client.js'
 import { aUnDesDroits } from '../api/droits.js'
 import { mot } from '../api/vocabulaire.js'
@@ -543,7 +543,8 @@ function ReceptionModal({ etat, onClose, onFait, onErreur }) {
         commandeAchat: `/api/stock_commande_achats/${etat.commande.id}`,
         fournisseur: `/api/stock_fournisseurs/${etat.commande.fournisseur?.id}`,
         numeroBonLivraison: bl.trim(),
-        date: new Date().toISOString().slice(0, 10),
+        // Date locale : en UTC, une réception saisie après minuit portait la date de la veille.
+        date: jourLocal(),
       })
       for (const l of etat.lignes) {
         const q = parseFloat(quantites[l.id]) || 0
