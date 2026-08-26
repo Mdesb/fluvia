@@ -110,6 +110,11 @@ const MOTS = {
   en_validation: 'En validation',
   fifo: 'Premier entré, premier sorti (FIFO)',
   cmup: 'Coût moyen pondéré',
+
+  // --- Remboursements ---
+  recue: 'Reçue',
+  acceptee: 'Acceptée',
+  refusee: 'Refusée',
 }
 
 // Rend un code lisible sans prétendre le traduire : `boutique_stock` → « Boutique stock ».
