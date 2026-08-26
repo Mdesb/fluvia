@@ -20,6 +20,7 @@
 | 25/08 10:10 | **Chantier ferme.** Le vocabulaire des cinq verticales passe du document au **manifeste** (`settingsSchema()`, patron `SmartFlowModule`) : 51 cles declarees en code, testees. `VocabulaireManifesteTest` verifie rouge sur les cinq (« aucun vocabulaire declare ») avant d-etre vert. Verticales 5/5, Platform 62/62. Pile demontee, worktree rendu. | Rien d-assigne — **je te demande une tache** (D35). En attendant je reprends le chantier `frontend/` si tu me l-attribues, sinon la revue de mes 81 entites d-API. | Rien. |
 | 26/08 09:55 | Nouveau silence 23:56 -> 09:41, meme cause. Reprise : **fixtures rendues idempotentes** dans les cinq verticales — 9 roles (Padel 2, Patinoire 3, Musee 4, ton compte exact) et **8 creations de permissions** que tu n-avais pas comptees. Syntaxe verifiee en conteneur avant push. | Les cinq suites tournent. | Rien. |
 | 26/08 10:25 | **Deux lots verts.** (1) Fixtures idempotentes : 9 roles + **8 permissions** sur mes cinq verticales. (2) Dette de couverture : `EvenementEclairage` cloisonne par `terrain` — **la seule des 34 entites gelees qui soit chez moi**. Suites : Piscine 33, Padel 23, Patinoire 29, Sport 31, Musee 23, Platform 62 — **toutes vertes**. Pile demontee. | Plus rien d-assigne. Je reste sur ma demande de tache. | Rien. |
+| 26/08 11:30 | **D41 : six entites traitees, dette 49 -> 43.** Ton garde-fou n12 confirme « 6 resorbees ». Quatre `EstablishmentStampProcessor` sur le patron de `Reservation`. Trois tests de non-regression ecrits la ou il n-y en avait aucun, **verifies rouges sans le correctif**. | Les cinq entites de la **voie B** (aucun `denormalizationContext`) — lot separe. | Rien. |
 
 ---
 
@@ -510,3 +511,47 @@ assertions.
 | Platform | 62 tests, 305 assertions |
 
 Tout vert, pile demontee, worktree VPS rendu.
+
+---
+
+## 2026-08-26 11:30 · D41 chez moi : ton compte etait juste, le mien ne l-etait pas
+
+**Onze, pas neuf.** Hier je t-annoncais neuf entites ; tu m-en annoncais onze. **Tu avais raison**, et
+ton garde-fou n12 dit pourquoi : il detecte **deux voies**, et mon grep n-en voyait qu-une.
+
+- **Voie A — groupe d-ecriture** : `Casier`, `PlageHoraire`, `Tournoi`, `ParcPatins`, `SaisonEphemere`,
+  `Guide`. Six.
+- **Voie B — aucun `denormalizationContext`**, donc API Platform rend ecrivable toute propriete munie
+  d-un mutateur : `NiveauJoueur`, `Affutage`, `ListeAttentePointure`, `LocationPatins`,
+  `AbonnementFitness`. Cinq.
+
+La voie B est celle que je ratais, et c-est la plus sournoise : **rien dans le fichier ne signale
+l-exposition, c-est l-absence de declaration qui expose**. Un relecteur humain ne la voit pas non plus.
+
+**Les six de la voie A sont traitees.** J-ai repris `Reservation\State\EstablishmentStampProcessor`
+plutot que d-inventer, y compris ses deux pieges — que je n-aurais pas trouves seule : la validation
+s-execute entre la deserialisation et l-ecriture, donc un `Assert\NotNull` reste sur le champ ferait
+echouer la creation en 422 **avant** que le processeur ne soit atteint ; et un `provider` ne serait
+jamais appele, une operation `Post` etant en `read: false`. Quatre processeurs, un par module, et
+l-assertion retiree des cinq champs qui la portaient. Ton garde-fou annonce **6 resorbees, 49 -> 43**.
+
+### Ce que j-ai trouve en verifiant, et qui vaut plus que le correctif
+
+**Sur les six, deux seulement avaient un test de creation** : `ParcPatins` et `SaisonEphemere`. Les
+quatre autres n-en avaient aucun — j-aurais livre quatre processeurs sans une ligne de preuve qu-ils
+s-executent.
+
+J-ai donc ecrit trois tests, un par module non couvert. Ils envoient **deliberement l-IRI de
+l-etablissement B** et verifient que l-entite atterrit chez A. Ce qui justifie le test : **ce n-est
+pas un refus, c-est une absence d-effet**. Le client recoit un 201 et rien dans la reponse ne lui dit
+qu-il n-a pas ete ecoute — donc rien, sans test, ne signalerait qu-on a recommence a l-ecouter le jour
+ou quelqu-un remettrait le champ au groupe d-ecriture.
+
+**Verifies rouges** : j-ai remis `Casier` dans son etat d-avant, le test tombe (« two strings are
+identical » — l-entite atterrissait bien chez B). Puis vert.
+
+### Ce que je ne fais pas dans ce lot
+
+Les cinq de la voie B. Leur correctif est d-une autre nature — poser un `denormalizationContext` la ou
+il n-y en a pas — et aucune n-a d-operation `Post` nue. Melanger les deux natures dans un meme diff
+rendrait la relecture plus difficile pour rien. Je les prends au lot suivant.
