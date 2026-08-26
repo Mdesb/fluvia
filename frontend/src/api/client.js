@@ -45,11 +45,28 @@ export class ApiError extends Error {
 }
 
 // Construit une query string à partir d'un objet (ignore null/undefined/'').
+//
+// ⚠ UN TABLEAU DEVIENT `k[]=a&k[]=b`, ET CE N'EST PAS UNE PRÉFÉRENCE DE STYLE.
+//
+// La version précédente faisait `String(v)` sur tout, donc un tableau partait en `k=a,b` — une seule
+// valeur contenant une virgule. Côté serveur, `$request->query->all('k')` attend des entrées
+// répétées : il n'aurait rien trouvé, **sans lever**, et le filtre serait resté silencieusement vide.
+//
+// C'est la forme la plus courante du défaut de cette semaine : une requête qui part, une réponse qui
+// arrive, un résultat plausible et faux. Ici il se serait traduit par « aucune option retenue » sur
+// un panier où le caissier venait d'en cocher trois — et le client aurait payé le prix de base.
 function qs(params) {
   if (!params) return ''
   const usp = new URLSearchParams()
   for (const [k, v] of Object.entries(params)) {
     if (v === null || v === undefined || v === '') continue
+    if (Array.isArray(v)) {
+      for (const element of v) {
+        if (element === null || element === undefined || element === '') continue
+        usp.append(`${k}[]`, String(element))
+      }
+      continue
+    }
     usp.append(k, String(v))
   }
   const s = usp.toString()
@@ -275,6 +292,31 @@ export const api = {
     request(`/api/option_produits/${id}`, { method: 'PATCH', body: corps }),
   supprimerOptionProduit: (id) =>
     request(`/api/option_produits/${id}`, { method: 'DELETE' }),
+  // LE PRIX APPLICABLE, OPTIONS COMPRISES, RENDU PAR LE SERVEUR.
+  //
+  // `GET /produits/{id}/tarif` appelle **le même service que la composition d'une ligne de vente** :
+  // ce n'est pas une estimation parallèle, c'est le calcul qui facturera. Il rend les groupes
+  // d'options avec leur prix, **les indisponibles comprises et leur motif**, plus `totalUnitaire` et
+  // `totalLigne`.
+  //
+  // L'écran n'additionne donc rien. La raison n'est pas que l'addition serait difficile : un plafond
+  // sur le cumul, une remise « pack », une option qui en rend une autre gratuite — et une somme faite
+  // ici deviendrait fausse **en continuant de rendre un nombre plausible**.
+  //
+  // `options` est une liste d'identifiants de valeurs retenues ; le serveur ignore celles qu'il
+  // refuse et le dit dans sa réponse.
+  tarifProduit: (produitId, { typeTarif, canal = 'guichet', date, qf, options = [], quantite = 1 } = {}) =>
+    request(`/api/produits/${produitId}/tarif`, {
+      query: {
+        typeTarif,
+        canal,
+        ...(date ? { date } : {}),
+        ...(qf !== undefined && qf !== null && qf !== '' ? { qf } : {}),
+        ...(options.length ? { options } : {}),
+        quantite,
+      },
+    }),
+
   // Options proposables à la vente pour un produit sur l'établissement actif (RG-OPT-07/08).
   optionsDisponibles: (produitId) => request(`/api/produits/${produitId}/options-disponibles`),
 

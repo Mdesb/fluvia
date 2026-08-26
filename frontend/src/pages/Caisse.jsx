@@ -5,6 +5,7 @@ import Qr from '../components/Qr.jsx'
 import { texte } from '../components/Liste.jsx'
 import HistoriqueVentesModal from '../components/HistoriqueVentesModal.jsx'
 import Modal from '../components/Modal.jsx'
+import ChoixOptions from '../components/ChoixOptions.jsx'
 import ClientPicker, { nomClient } from '../components/ClientPicker.jsx'
 import SessionCaisse from './SessionCaisse.jsx'
 import {
@@ -26,6 +27,7 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   const [caisseModale, setCaisseModale] = useState(false)
   const [historique, setHistorique] = useState(false)
   const [choixTarif, setChoixTarif] = useState(null)
+  const [choixOptions, setChoixOptions] = useState(null)
   const [produits, setProduits] = useState([])
   const [moyens, setMoyens] = useState([])
   const [pdvs, setPdvs] = useState([])
@@ -107,11 +109,42 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   // vente courante d'une famille au guichet.
   const cleLigne = (produitId, tarifId) => `${produitId}|${tarifId}`
 
-  function ajouter(produit, grille) {
+  /**
+   * Ajoute au panier — en demandant AU SERVEUR le prix et les options proposables.
+   *
+   * **Un clic reste un clic quand il n'y a rien à choisir.** Si le produit n'a aucune option, la ligne
+   * part immédiatement ; la modale ne s'ouvre que pour ceux qui ont un choix à faire. Une caisse se juge
+   * au nombre de gestes par vente.
+   *
+   * **Et le prix vient du devis, plus de la grille.** L'écran choisissait la première grille vendable ;
+   * le serveur applique le tarif réellement dû — saison, quotient familial. Les deux peuvent différer
+   * sans que personne ne soit en faute, et c'est ce montant que le caissier annonce à voix haute.
+   */
+  async function ajouter(produit, grille, options = [], devisConnu = null) {
     setTicket(null)
     const g = grille || grillesVendables(produit)[0]
     if (!g) return
-    const cle = cleLigne(produit.id, g.typeTarif.id)
+
+    let devis = devisConnu
+    if (!devis) {
+      try {
+        devis = await api.tarifProduit(produit.id, { typeTarif: g.typeTarif.id })
+      } catch (e) {
+        setErreur(e.message || "Le prix n'a pas pu être obtenu.")
+        return
+      }
+      // Des options à choisir : on ouvre plutôt que de décider à la place du caissier.
+      if ((devis.options ?? []).length > 0) {
+        setChoixOptions({ produit, grille: g, devis })
+        return
+      }
+    }
+
+    ajouterLigne(produit, g, options, devis)
+  }
+
+  function ajouterLigne(produit, g, options, devis) {
+    const cle = cleLigne(produit.id, g.typeTarif.id) + (options.length ? `|${[...options].sort().join(',')}` : '')
     setPanier((p) => {
       const i = p.findIndex((l) => l.cle === cle)
       if (i >= 0) {
@@ -127,7 +160,14 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
           quantite: 1,
           typeTarifId: g.typeTarif.id,
           tarifLibelle: libelleTarif(g),
-          prix: g.prix,
+          // Le prix du DEVIS, pas celui de la grille : c'est celui qui sera facturé.
+          prix: devis?.totalUnitaire ?? devis?.prixUnitaire ?? g.prix,
+          options,
+          // Les libellés servent à afficher la ligne sans redemander ; les montants viennent du devis.
+          optionsLibelles: (devis?.options ?? [])
+            .flatMap((groupe) => groupe.valeurs)
+            .filter((valeur) => options.includes(valeur.valeurOption))
+            .map((valeur) => valeur.libelle),
         },
       ]
     })
@@ -174,6 +214,9 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
         const tarif = l.typeTarifId || typeTarifId(l.produit)
         if (!tarif) throw new Error(`« ${libelleProduit(l.produit)} » n'a pas de tarif au guichet.`)
         const corps = { produit: l.produit.id, typeTarif: tarif, quantite: l.quantite }
+        // Les options retenues suivent la ligne : sans elles, le serveur facturerait le prix de base
+        // et le caissier aurait annoncé autre chose.
+        if (l.options?.length) corps.options = l.options
         // Bénéficiaire requis pour les produits nominatifs (RG-M2-04) : on passe le client rattaché.
         if (client) corps.beneficiaire = client.id
         courant = await api.ajouterLigne(v.id, corps)
@@ -613,6 +656,18 @@ function construireTicket(infoTicket, paiements, support) {
           </div>
         )}
       </Modal>
+
+      <ChoixOptions
+        ouvert={!!choixOptions}
+        produit={choixOptions?.produit}
+        tarifLibelle={choixOptions ? libelleTarif(choixOptions.grille) : null}
+        devis={choixOptions?.devis}
+        onFermer={() => setChoixOptions(null)}
+        onValider={(retenues, devis) => {
+          ajouterLigne(choixOptions.produit, choixOptions.grille, retenues, devis)
+          setChoixOptions(null)
+        }}
+      />
 
       <HistoriqueVentesModal
         open={historique}

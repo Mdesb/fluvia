@@ -177,6 +177,10 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 /* ---- Caisse : produits ---- */
 .prodtile { text-align: left; cursor: pointer; border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 12px; font-family: inherit; color: var(--ink); transition: background .1s, border-color .1s; display: flex; flex-direction: column; gap: 2px; min-height: 74px; }
 .prodtile:hover:not(:disabled) { background: var(--panel-2); border-color: var(--accent); }
+/* Option retenue : la bordure ET le fond changent. Une seule des deux ne se voit pas sur un
+   ecran de caisse eclaire par une vitrine. */
+.prodtile.actif { border-color: var(--accent); background: var(--panel-2); box-shadow: inset 3px 0 0 var(--accent); }
+.prodtile:disabled { opacity: .55; cursor: not-allowed; }
 .prodtile:active:not(:disabled) { transform: scale(.98); }
 .prodtile:disabled { opacity: .5; cursor: not-allowed; }
 .prodtile .pn { font-weight: 600; font-size: 13.5px; }
