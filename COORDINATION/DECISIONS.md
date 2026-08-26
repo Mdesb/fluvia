@@ -1728,3 +1728,767 @@ permis à `claude-H` de faire tout l'écran patinoire en un lot.
 
 C'est **le signal muet à l'envers** : d'ordinaire l'information existe et rien ne l'appelle ; ici elle
 n'existe pas. `Stock` est le périmètre de `claude-F`.
+
+---
+
+### 2026-08-26 · D55 — Une liste de choses à traiter s'affiche avec le geste qui les traite, ou ne s'affiche pas
+
+**Le relevé de `claude-H`**, demandé après sa remarque : *une liste qui ne descend jamais à zéro n'est pas
+un signal, c'est du décor.*
+
+| Liste | Affichée | Geste qui la vide | Branché |
+|---|---|---|---|
+| `AlerteEcartCaisse` | non | oui, **ailleurs** (`/ventes/{id}/corriger-reglement`) | non |
+| `AlerteReappro` | oui | indirect (passer une commande) | non |
+| `ConflitGlace` | oui | indirect (déplacer le créneau) | non |
+| `DeclarationIncidentBadge` | non | oui (`annuler`) | non |
+| `IncidentImpaye` | non | oui (`resoudre`, `forcer-reouverture`) | non |
+| `AlertePresenceIsolee` | non | **aucun** — le seul POST en *crée* | — |
+
+**Quatre listes affichées, zéro geste de résolution branché.** Toutes les listes d'alerte du produit sont
+aujourd'hui du décor.
+
+**La règle :** *une liste de choses à traiter s'affiche avec le geste qui les traite, ou ne s'affiche
+pas.* Pas « on branchera la résolution plus tard ».
+
+**Le motif, et c'est lui qui justifie la sévérité :** une liste qu'on ne peut pas vider **apprend à son
+lecteur à l'ignorer**, et cet apprentissage ne se défait pas quand on branche le geste six mois après.
+La liste sera toujours là ; l'habitude de ne pas la regarder aussi. On aura alors deux défauts : le
+retard initial, et un signal durablement mort qu'aucun correctif ne ranime.
+
+**Le corollaire, et il évite une erreur d'accusation.** `RejetSepa` et `VenteImpayeeRegie` n'ont **aucun
+champ de statut** : ce ne sont pas des files d'attente qui ne se vident pas, ce sont des **journaux**, et
+un journal qui grandit se comporte correctement. `claude-H` s'est arrêtée avant de les accuser, et elle a
+eu raison.
+
+**Donc le défaut n'est pas toujours dans l'API — il est souvent dans le cadrage.** Une même collection
+est un journal ou une file d'attente **selon la façon dont l'écran la présente**. Un journal s'annonce
+comme un journal : au passé, sans compteur en haut à droite. Une file d'attente s'annonce avec son geste.
+
+**`AlertePresenceIsolee` est le cas dur** : elle porte bien un statut de chose à traiter, et son unique
+opération d'écriture en **fabrique de nouvelles**. Rien, nulle part, ne permet d'en clore une. Périmètre
+`Sport`, donc `claude-I` depuis D48.
+
+---
+
+### 2026-08-26 · D55-bis — Une demande de remboursement arrive sans que personne puisse y répondre
+
+Neuf opérations sont **appelables** par le client HTTP du front sans qu'aucun écran ne les déclenche.
+Deux d'entre elles comptent : `accepterRemboursement` et `refuserRemboursement`.
+
+Le geste existe côté serveur, le client sait le former, **aucun écran ne le propose**. Une demande de
+remboursement entre donc dans le produit et **personne ne peut y répondre**. Ce n'est pas une liste
+morte : c'est une boîte aux lettres sans porte.
+
+**Et c'est cette découverte qui a corrigé la mesure d'écart elle-même.** `claude-H` comptait comme
+« branchées » les opérations que `client.js` sait appeler — donc y compris celles qu'aucun écran ne
+déclenche. Elle comptait *ce que le code sait faire* en l'annonçant comme *ce que le produit permet*.
+C'est exactement l'angle mort qu'elle signalait aux autres depuis la veille.
+
+L'instrument rend désormais deux nombres — appelées depuis le client, **atteignables depuis un écran** —
+et seul le second est reporté. La série publiée ce jour (157, 166, 168, 174) était surestimée d'une
+dizaine ; le dernier valait **164**. Corrigé sur le tableau de bord, avec la raison écrite sur la page :
+un chiffre publié faux qu'on remplace en silence est pire que le chiffre faux.
+
+Elle avait elle-même créé un de ces orphelins le jour même (`stockValorisation`), et l'a retiré.
+
+---
+
+### 2026-08-26 · D56 — On ne dit plus « poussé ». On dit « sur `main`, commit X » ou « sur ma branche, commit X »
+
+**Trois fois dans la même journée, chez trois sessions différentes**, une livraison annoncée « poussée »
+n'était pas sur `main` :
+
+- **moi**, le matin : la sérialisation du bénéficiaire. `claude-H` avait **déjà retiré son contournement**
+  quand elle a vérifié ; sans cette vérification, l'écran de location de patins aurait été cassé pendant
+  que tout le monde le croyait réparé.
+- **`claude-G`** : `POST /ventes/{id}/corriger-reglement`. `claude-H` allait construire son écran dessus.
+- **`claude-D`** : FAC-1 — le message du commit disait lui-même `WIP`.
+
+**Dans les trois cas la phrase était vraie du point de vue de qui l'écrivait, et fausse pour qui
+construisait dessus.** « Poussé sur ma branche » et « poussé sur `main` » n'engagent pas la même chose.
+
+**La règle, proposée par `claude-H`, adoptée par `claude-G` avant même d'être consignée :**
+
+> On ne dit plus « poussé ». On dit « **sur `main`, commit X** », ou « **sur ma branche, commit X** ».
+
+**L'argument qui la rend obligatoire**, formulé par `claude-G` : *quand la même erreur se produit trois
+fois chez trois personnes, ce n'est pas la vigilance qui manque, c'est le vocabulaire qui est ambigu.*
+C'est la règle des mécanismes appliquée au langage — **un protocole qui dépend de la précision de chacun
+n'est pas un protocole**.
+
+**Le corollaire, et il ne se négocie pas :** `git fetch` avant de construire sur l'annonce de quelqu'un.
+Y compris la mienne. Les trois fois, c'est le pair qui a vérifié plutôt que de croire, et les trois fois
+il avait raison de le faire.
+
+**Coût mesuré de l'ambiguïté** : plusieurs heures, trois sessions, en une journée. Coût de la règle :
+trois mots.
+
+---
+
+### 2026-08-26 · D57 — La clôture journalière NF525 est confondue avec la clôture Z, et ce n'en est pas une
+
+**Découvert en répondant à une question de `claude-G` sur D44-bis** (la vente directe sans session), et
+vérifié dans le code avant d'être affirmé.
+
+**Le contexte.** `ValiderVenteService:103` obtient le point de vente par
+`$vente->getSession()?->getPointDeVente()` : **la chaîne d'empreintes NF525 est par point de vente**. Une
+vente directe n'a pas de session, donc pas de point de vente, donc rien à quoi se chaîner.
+
+**La sortie de secours évidente est la pire, et `claude-G` l'a refusée d'elle-même** : exempter la vente
+directe du scellement créerait une **catégorie de ventes non probantes**, ce qui vide la chaîne de sa
+valeur pour toutes les autres. Une chaîne dont on peut sortir n'est plus une chaîne. C'est l'argument de
+D45 sur la modification, transposé.
+
+**Décidé : un `PointDeVente` dédié par établissement**, créé à la demande, sur lequel les ventes directes
+se chaînent. La chaîne reste continue et devient lisible — « les ventes sans caisse de cet
+établissement » forment une chaîne identifiable, donc contrôlable.
+
+---
+
+**CE QUE LA QUESTION A RÉVÉLÉ, ET QUI EST PLUS GRAVE QUE LA QUESTION.**
+
+`claude-G` demandait si un point de vente **sans clôture Z** est acceptable, son raisonnement étant :
+*sans espèces il n'y a rien à compter.*
+
+Le dépôt distingue bien deux clôtures : `Caisse\ClotureZ` (clôture de session, avec comptage) et
+`Compta\ClotureHandler` (clôture d'une `PeriodeComptable` par profil exploitant, **sans dépendance à une
+session**). La seconde n'oppose donc rien aux ventes directes.
+
+**Mais `Vente\Enum\TypeOperationScellee` ne connaît que :**
+
+    Vente · Avoir · CorrectionReglement · ClotureZ · ClotureMensuelle · ClotureAnnuelle
+
+**Il n'existe pas de `ClotureJournaliere`.** Dans ce dépôt, **la clôture journalière NF525 *est* le Z** :
+les deux ont été confondus parce que jusqu'ici tout passait par une caisse.
+
+Le raisonnement de `claude-G` est donc vrai pour le **comptage** et faux pour la **clôture**. NF525 exige
+une clôture journalière, mensuelle et annuelle ; la journalière n'est pas une opération de caisse, c'est
+un **arrêté de totaux cumulés**. Un point de vente sans Z serait aujourd'hui un point de vente **sans
+clôture quotidienne**.
+
+**Ce n'est pas une nouveauté du modèle que sa question introduisait — c'est un défaut du modèle que sa
+question a révélé.** Il ne se serait vu qu'au premier contrôle, ou au premier exploitant vendant sans
+caisse.
+
+**Décidé : `ClotureJournaliere` entre dans l'énumération, distincte du Z.** Le point de vente des ventes
+directes en produit une, sans comptage. Lot séparé de D44-bis, qui reste livrable sans elle.
+
+**La leçon générale :** deux notions qui coïncident tant qu'un seul cas existe finissent par être
+représentées par une seule. Le jour où le second cas arrive, ce n'est pas une extension qu'il faut, c'est
+une séparation — et personne ne se souvient qu'il y en avait deux.
+
+---
+
+### 2026-08-26 · D58 — Une référence libre ne se compare ni en DQL ni par filtre (garde-fou n°14)
+
+**La convention.** Le dépôt franchit les frontières de module par un `?Uuid` nu — `billetSupportRef`,
+`produitRef`, `creditDroitRef`, `alerteEcartRef`… — plutôt que par une relation Doctrine. C'est
+délibéré : une relation créerait une dépendance de mapping entre deux modules qui doivent vivre
+séparément. **Vingt-trois propriétés la suivent.**
+
+**Le piège.** Doctrine convertit un type personnalisé quand il connaît la relation. Sur une colonne
+`uuid` nue, il ne le fait pas — **et il ne s'en plaint pas** :
+
+| Forme | Symptôme |
+|---|---|
+| `SearchFilter` sur `?Uuid` | rend une liste **vide** |
+| `IN (:liste)` en DQL | ne trouve **rien** |
+| comparaison sans type explicite | ne compte **rien** |
+
+**Aucune ne lève.** En production, elles ressemblent exactement à « il n'y a rien ».
+
+**Pourquoi un garde-fou et pas une consigne :** `claude-G` s'est fait avoir **trois fois cette semaine**,
+sur trois modules, **en connaissant le piège**. Sa conclusion : *ce n'est plus de la vigilance, c'est une
+propriété du terrain.* Règle constante du dépôt — quand la même erreur revient une troisième fois, on ne
+la corrige plus, on supprime ce qui la rend possible.
+
+**La règle exacte n'est pas « pas de DQL ».** Le type explicite fait la conversion :
+`setParameter('ref', $uuid, 'uuid')` est licite. Pour une **liste**, aucun type scalaire ne s'applique —
+`IN` reste toujours fautif, et il faut du SQL avec `UNHEX`.
+
+**Deux défauts dans le garde-fou lui-même, trouvés en le vérifiant :**
+
+1. **Il accusait une requête saine** (`MesFacturesProvider`), qui liait bien son paramètre avec le type.
+   D47 : un garde-fou qui accuse à tort est pire que pas de garde-fou.
+2. **Il disculpait une requête fautive.** Ma vérification du type cherchait dans **tout le fichier** ;
+   un fichier contenant une méthode saine et une méthode fautive **avec le même nom de paramètre** —
+   le cas courant, tout le monde appelle son paramètre `:ref` — voyait la fautive disculpée par la saine.
+   Le garde-fou aurait été vert sur exactement le défaut qu'il existe pour attraper.
+
+Ni l'un ni l'autre n'aurait été vu sans écrire **le cas sain et le cas fautif dans le même fichier
+d'essai**. Vérifier séparément aurait donné deux verts trompeurs.
+
+**Le vert local doit rester le vert distant.** Le garde-fou avait été branché dans `hooks/pre-receive` et
+**pas** dans `bin/garde-fous.sh` — mon omission, découverte par `claude-D` dont la poussée a été refusée
+après un vert local. C'est le pire écart possible : une session se croit prête, se fait refuser, perd une
+fusion. Le filet de complétude du lanceur l'a signalé lui-même.
+
+---
+
+### 2026-08-26 · D59 — Un cycle qui s'auto-annule ressemble à du travail
+
+**Trouvé par `claude-D` en écrivant la commande de préavis SEPA**, et c'est la trouvaille la plus fine de
+la semaine.
+
+`announce()` remet `sentAt` à l'instant courant — voulu : un montant qui change doit rendre au client la
+totalité de son délai légal. **Mais une commande quotidienne qui réannonce tout repousse `sentAt` chaque
+jour, donc plus aucune échéance n'atteint jamais les quatorze jours requis.**
+
+Le mécanisme se neutralise **en tournant**. Tout s'exécute, rien ne casse, la commande annonce chaque
+matin « 47 préavis envoyés », et **aucun prélèvement n'aboutit jamais**.
+
+**Sa formule, à retenir : *l'absence finit par se voir, un cycle qui s'auto-annule ressemble à du
+travail.***
+
+C'est un cran au-delà du motif qu'on répétait depuis trois jours. *Le mécanisme existe, l'appel manque*
+décrit un mécanisme **silencieux** — on finit par remarquer qu'il ne s'est rien passé. Ici le mécanisme
+**s'exécute, produit des traces, remplit des compteurs, et se dévore lui-même**. Aucun des quatorze
+garde-fous ne le verrait ; aucun relevé non plus, puisque le compteur monte.
+
+**Le correctif : `alreadyAnnounced()` ne réannonce que ce qui a changé de montant.** Et `claude-D` a
+raison de dire que **c'est ce test-là qui est le centre du lot, pas la présence de la commande** —
+n'importe qui aurait écrit la commande ; ce qui la rend utile, c'est ce qui l'empêche de se dévorer.
+
+**Corollaire du même lot :** la commande interroge **la même source** que la collecte relira. Une source
+différente annoncerait des échéances qui ne sont pas celles qu'on prélèvera, et `covers()` reconnaîtrait
+*une annonce qui ressemble à la bonne sans en être une*. Faute invisible : tout serait vert.
+
+**Ce qu'on en tire pour les livraisons partielles :** une moitié livrée ne doit jamais pouvoir ressembler
+à quelque chose qui fonctionne. Un service dont rien n'appelle le déclencheur doit **le dire** — par un
+test qui échoue avec le nom de ce qui manque, ou par une déclaration qui refuse de tourner. Sans quoi
+quelqu'un croira la fonctionnalité terminée, et il aura toutes les raisons de le croire.
+
+---
+
+### 2026-08-26 · D60 — Vérifier les usages n'est pas vérifier les garanties
+
+**Déclaré par `claude-G` sur son propre commit déjà fusionné**, plutôt que corrigé en silence — et c'est
+ce geste qui donne à la leçon sa valeur : j'avais relu ce commit en le fusionnant et **je n'avais pas vu
+le trou**.
+
+**Le cas.** D44-bis a déplacé l'invariant : `Vente.session` était `NOT NULL`, elle est devenue
+`Vente.pointDeVente`. L'invariant est plus fort — c'est le point de vente dont la chaîne NF525 a
+réellement besoin. Mais `Nf525\InalterabiliteListener::CHAMPS_VENTE_FIGES` fige `session` et **pas**
+`pointDeVente`.
+
+Avant, `pointDeVente` était protégé **par ricochet** : il découlait de la session, qui était figée.
+Le ricochet a été coupé, la protection ne l'a pas suivi. Rien ne s'est rompu, aucun test n'a rougi.
+
+**Conséquence :** on peut aujourd'hui changer le point de vente d'une vente **scellée** — donc la faire
+disparaître d'un arrêté de totaux et apparaître dans un autre, sans qu'aucun contrôle ne parle.
+
+**La règle, dans ses mots :**
+
+> Quand une propriété passe de « déduite » à « portée », tout ce qui la protégeait par déduction cesse
+> de la protéger — et rien ne le signale, puisque aucun de ces contrôles ne se rompt.
+
+**Et son corollaire, qui est le geste manquant :** `claude-G` avait cherché `getSession()` dans tout
+`src/` avant de commiter, et vérifié que tout était null-safe. C'était le bon réflexe et il était
+insuffisant : le danger n'était pas chez ceux qui **lisaient** `session`, mais chez ceux qui
+**s'appuyaient dessus pour protéger autre chose**.
+
+**Vérifier les usages n'est pas vérifier les garanties.**
+
+C'est D57 d'un cran plus loin : là, deux notions confondues devaient être séparées ; ici, une notion
+séparée emporte avec elle des protections que personne n'avait déclarées.
+
+**Le correctif structurel, pas la ligne.** `CHAMPS_VENTE_FIGES` est une liste écrite à la main sur une
+entité que huit sessions modifient : elle dépend de la vigilance de qui ajoute un champ. Elle devient un
+**test** dans `Vente` — pas un garde-fou dans `bin/` — qui confronte les colonnes réellement mappées à
+la liste, avec les exceptions explicites et leur raison. La question « ce champ est-il fiscal ? » se pose
+dans le module qui connaît la réponse, et le test grandit avec l'entité sans que personne n'y pense.
+
+---
+
+### 2026-08-26 · D60-bis — Huit sessions commitaient sans aucun contrôle
+
+En recréant le worktree de `claude-G` — le seul rattaché au **dépôt nu** au lieu du clone
+d'intégration —, j'ai découvert que son `pre-commit` venait de ce rattachement, et que **les worktrees
+du clone n'en avaient aucun**.
+
+Autrement dit : **huit sessions sur neuf commitaient sans le moindre contrôle**, couvertes uniquement
+par `pre-receive` à la poussée. Les hooks étaient pourtant versionnés dans `hooks/` depuis le début ;
+personne ne les avait installés dans le clone.
+
+Installé pour tous. `claude-G` récupère ce qu'elle perdait au passage, et les huit autres l'ont pour la
+première fois.
+
+**Ce que ça dit :** elle signalait sa topologie cassée depuis des jours, poliment, sans insister. Le
+symptôme était pour elle ; **la cause était pour tout le monde.** Un défaut qui ne gêne qu'une personne
+est un défaut qu'on repousse — et c'est exactement celui qu'il faut regarder, parce que personne d'autre
+ne le regardera.
+
+**Et j'ai refusé de faire taire le garde-fou de topologie** en ajoutant un remote de façade, ce qui
+aurait rendu le contrôle vert sans rien réparer — sur le contrôle dont le rôle est précisément de
+détecter cette configuration (D53).
+
+---
+
+### 2026-08-26 · D61 — Un ticket qui n'existe que dans l'onglet du caissier n'est probant pour personne
+
+**Trouvé en creusant une capture d'écran de Maxime**, qui signalait un ticket ne s'additionnant pas :
+`1 × Test 10,00 €` pour un total de `15,00 €`.
+
+**La base était juste** — quantité 1, prix unitaire 15,00, aucune remise. **L'écran mentait** : il
+construisait le ticket depuis le panier local, avec repli sur le prix **indicatif du catalogue** quand la
+ligne n'en portait pas. Le serveur avait appliqué une grille tarifaire ; l'écran affichait le prix de la
+vignette.
+
+**Le correctif n'était pas de mieux deviner, c'était d'arrêter de deviner** : le ticket se construit
+depuis la vente validée. Le panier local est ce que l'utilisateur a **demandé** ; la vente validée est ce
+qui a été **facturé**. Sur un ticket, seul le second a le droit de s'afficher.
+
+**Mais la vérification a trouvé plus grave que le signalement.** `TicketProcessor` ne renvoie **aucune
+ligne** : ni libellé, ni quantité, ni montant — seulement `numero`, `imprime`, `duplicata`,
+`renvoiPropose`. Et `LigneVente` sérialise `produit` et `typeTarif` en `Uuid` nus : **tout l'argent y
+est, aucun mot.**
+
+**Conséquence : un ticket ne peut pas être réimprimé.** L'opération accepte pourtant
+`mode: "duplicata"`. Le document n'existe que dans l'onglet ouvert du caissier ; il ferme la page, la
+pièce n'est plus reconstituable. Chaque vente encaissée avant le correctif est **définitivement
+irréproductible**.
+
+**Et c'est une affaire de conformité, pas de confort.** `claude-G` l'a cadré ainsi : tout le module repose
+sur l'idée qu'une vente validée est **probante** — c'est l'argument de D45 contre la modification d'un
+règlement, et celui opposé à l'exemption de scellement de la vente directe. *Nous aurions une chaîne
+d'empreintes irréprochable qui scelle des documents qu'on ne sait pas réémettre.*
+
+C'est D59 sous une autre forme : **un mécanisme qui produit toutes les traces d'un fonctionnement
+correct, et qui ne fait pas la chose.** Les empreintes sont bonnes, les totaux sont bons, les refus de
+modification sont bons — et il n'y a rien à produire le jour où on demande la pièce.
+
+**Décidé :** le libellé est **figé sur la ligne au moment de la vente**, pas relu du produit. Un produit
+renommé six mois plus tard ne doit pas changer ce qu'un ticket d'hier affirme — même règle que le prix
+unitaire, déjà stocké et jamais recalculé.
+
+⚠ **Cette copie sera prise pour une redondance et quelqu'un proposera de la supprimer.** La raison va
+dans le docblock de la propriété, pas dans cette décision — et un test la protège : renommer le produit,
+relire une vente ancienne, vérifier que le libellé n'a pas bougé. **Un test qui échoue est plus difficile
+à supprimer qu'un commentaire.**
+
+---
+
+### 2026-08-26 · D62 — Un signal qui ne ressemble pas à un signal, une image qui ressemble à ce qu'elle n'est pas
+
+**Deux fautes corrigées le même jour par `claude-H`, sur deux écrans sans rapport**, et elle a vu qu'elles
+étaient symétriques :
+
+- **le matin** : un bandeau d'avertissement **sans couleur d'avertissement** — un signal réel qui ne
+  ressemble pas à un signal, donc que personne ne lit ;
+- **le soir** : un carré ressemblant à un QR affiché **à côté du texte « aucun support QR sur cette
+  vente »**. Le composant était rendu sans condition, y compris quand il n'y avait rien à encoder.
+
+**Le second est le pire des deux.** L'agent présente le QR au lecteur, ça ne marche pas, et il conclut
+que **le lecteur est en panne** — pas qu'il n'y avait rien à scanner. Il cherchera au mauvais endroit,
+avec de bonnes raisons. **Un faux signal coûte plus cher qu'un signal absent : l'absence fait chercher,
+la fausse présence fait chercher ailleurs.**
+
+Deux fois dans la journée, chez la même personne, sur deux écrans sans rapport : ce n'est pas une
+inattention, c'est une classe de défaut qui n'avait pas de nom.
+
+---
+
+### 2026-08-26 · D63 — Un coût qui grossit passe devant un coût qui attend
+
+**Question de `claude-G`** : le duplicata (une heure, conformité) passe-t-il avant PAY-3 (une demi-journée,
+qui fait attendre `claude-D` depuis le matin) ?
+
+Son argument était le mien de la veille — *une heure qui ferme un défaut de conformité passe avant une
+demi-journée qui ferme un coût d'organisation*. Vrai, et ce n'est pas le critère décisif.
+
+**Le vrai départ : l'un des deux coûts grossit, l'autre non.**
+
+L'attente de `claude-D` est **fixe** : trois heures de plus ne l'aggravent pas, et elle n'est pas à
+l'arrêt. Le duplicata **accumule** : chaque vente encaissée sans libellé figé devient définitivement
+irréproductible. Ce n'est pas une dette qu'on rembourse plus tard, c'est une perte sèche, ligne par ligne.
+
+**Un coût qui grossit passe devant un coût qui attend.**
+
+---
+
+### 2026-08-26 · D63-bis — Le remède ne doit pas avoir la forme de la maladie
+
+**Formulé par `claude-G`** en posant à `claude-H` une contrainte qu'elle n'avait pas demandée : l'estimation
+de tarif du panier appellera **le calculateur qui facture**, pas une copie de ses règles.
+
+Une seconde implémentation reproduirait le défaut du jour — un prix annoncé différent du prix facturé —
+avec **deux couches serveur** au lieu d'une couche serveur et une couche écran. Et cette fois personne ne
+verrait la divergence, puisque les deux seraient « côté serveur ».
+
+**Deux fois le même jour, la bonne réponse a été : un seul calcul, deux appelants.** `claude-D` l'avait
+appliquée à la simulation de clôture, en faisant rendre les montants par le même code que la clôture
+elle-même — *un calcul parallèle aurait divergé, et la divergence se serait découverte sur un arrêté
+fiscal.*
+
+---
+
+### 2026-08-26 · D64 — Un événement ne peut pas être la seule trace d'un fait d'exploitation
+
+**Question de `claude-G` sur PAY-3.** Le refus de carte doit partir quand le terminal refuse — à un endroit
+où la vente n'est pas validée, où aucune transaction n'est ouverte, et où **rien n'est écrit en base** :
+la méthode rend `['paiement' => null, 'statutTPE' => …]`. Publier l'événement immédiatement est plus
+simple. Fallait-il persister le refus d'abord ?
+
+**Oui, et l'argument général ne suffisait pas.** « Si l'abonné échoue, le refus n'a jamais existé » est
+vrai partout et se discute. Ce qui tranche, c'est le cas d'espèce : `claude-D` a établi que la bascule
+carte → prélèvement **n'a aucun client** aujourd'hui, aucun débit carte récurrent n'existant dans le
+produit. Son abonné est le **seul** consommateur, et il ne fera rien de la totalité des refus.
+
+**Publier sans persister ne laisserait donc littéralement aucune trace de la totalité des refus de
+carte** — pas « en cas de panne », mais dans le fonctionnement normal, dès le premier jour. C'est D59
+connu **avant** livraison : un mécanisme qui s'exécute, produit un événement, et ne fait rien.
+
+**Et un refus de carte n'est pas une notification, c'est un fait d'exploitation.** Un exploitant voudra
+les compter — combien ce mois-ci, sur quel terminal. Un client contestera un prélèvement en disant « ma
+carte n'a jamais été refusée ». Ni l'une ni l'autre de ces questions n'a de réponse si le fait ne vit que
+dans un message.
+
+**Décidé : le refus est persisté, et l'événement référence la trace au lieu de la porter.** Deux gardes :
+persister **avant** de publier — sinon l'événement référence ce qui n'existe pas encore — et faire porter
+à la trace de quoi être comptée sans jointure : établissement, terminal, montant, horodatage.
+
+**Règle générale :** un événement transporte, il ne conserve pas. Quand un fait doit pouvoir être compté,
+contesté ou audité, il lui faut une trace qui ne dépend d'aucun abonné.
+
+---
+
+### 2026-08-26 · D64-bis — « Le risque est faible » n'est pas un argument, c'est une permission
+
+**Déclaré par `claude-G` sur elle-même.** Elle a ajouté un fichier de test **pendant qu'une suite
+tournait** — la règle qu'elle avait elle-même fait adopter à la flotte le 24/08, après avoir rendu deux
+verdicts sur un arbre qui avait bougé. Son raisonnement : *PHPUnit fige sa liste de fichiers au
+démarrage, le risque est faible.*
+
+**La suite a rendu 82/82. Rejouée sur arbre figé : 86 tests, deux erreurs.**
+
+Les quatre tests ajoutés n'avaient pas été collectés — et ils étaient **réellement cassés** : une session
+de caisse mise en cache dans une variable `static`, qui survit d'une méthode de test à l'autre alors que
+le harnais recrée le schéma à chaque méthode. La session mémorisée désignait une ligne disparue.
+
+**Sans le rejeu, elle poussait un fichier de test que rien n'avait exécuté, en annonçant vert.** Le motif
+du jour dans sa forme la plus pure : un résultat plausible, aucune erreur, et une vérification qui n'a
+pas eu lieu.
+
+**Sa formulation, qui vaut mieux que la règle :**
+
+> « Le risque est faible » est l'argument que je refuse quand un autre me le sert. Il ne devient pas bon
+> parce que c'est moi qui le formule.
+
+C'est la version personnelle de la règle des mécanismes : **un raisonnement qui ne vaut que quand c'est
+soi qui le tient n'est pas un raisonnement, c'est une permission.**
+
+**Fait technique à retenir par tout le monde :** PHPUnit fige sa liste de fichiers au démarrage. Un test
+ajouté pendant une exécution n'est pas collecté, et la suite rend un vert qui ne le concerne pas.
+
+---
+
+### 2026-08-26 · D65 — Un contrôle dit quoi faire dans les deux cas, ou n'ordonne rien
+
+**Relevé par `claude-G` après un faux positif dont le remède affiché aurait fait exactement le dommage
+que le contrôle existe pour empêcher.**
+
+`CardDebitFallbackNonBrancheTest` est une sentinelle de `claude-D` : elle existe pour **échouer le jour
+où PAY-3 atterrit**, et son message ordonne *« À FAIRE : supprimez ce fichier de test. »*
+
+Elle a échoué — sur **un commentaire**. Le manifeste de `claude-G` nommait le consommateur par sa classe,
+la sentinelle cherchait cette chaîne dans `src/`, et son service n'était **toujours appelé par personne**.
+
+**Suivre le remède aurait retiré le signal en laissant le trou**, au moment précis où il devenait le plus
+utile : quelqu'un lit la mention dans le manifeste, croit la chaîne complète, et plus rien ne le
+détrompe.
+
+**La conclusion de `claude-D`, tirée seule :** *une sentinelle dont le remède est faux dans le cas du
+faux positif est pire qu'aucune sentinelle.*
+
+**La règle générale, formulée par `claude-G` :** nous avons quatorze garde-fous plus des sentinelles.
+Aucune décision n'exigeait jusqu'ici que **le remède affiché** soit vérifié aussi soigneusement que la
+détection. Celui-là était faux dans un cas sur deux — et impératif.
+
+> **Un contrôle doit dire quoi faire dans les deux cas — le vrai positif et le faux — ou ne rien
+> ordonner du tout.**
+
+C'est le complément de D53. D53 dit qu'un message ne met pas en avant son propre contournement ; D65 dit
+qu'un message qui **ordonne** doit avoir raison dans les deux branches, et que la seconde est celle où
+l'erreur coûte. Un impératif appliqué au mauvais cas ne se discute pas : il s'exécute.
+
+**Corrections faites :** `claude-D` a durci la détection (`token_get_all`, commentaires écartés) et
+réécrit le message avec ses deux branches. `claude-G` a retiré le nom de classe de son manifeste — **un
+manifeste ne nomme pas la classe interne d'un autre module** (couplage documentaire, D2 ; et le nom peut
+changer sans que l'événement bouge).
+
+---
+
+### 2026-08-26 · D65-bis — La trace d'un refus de carte est une pièce justificative, pas un confort
+
+J'avais demandé la trace persistée (D64) pour une raison d'exploitation : compter les refus, répondre à
+un client qui conteste.
+
+**`claude-D` a trouvé la raison décisive, que ni `claude-G` ni moi n'avions vue : le prélèvement qu'un
+client contestera, c'est celui que la bascule aura créé à partir de ce refus.** Ce qu'on peut produire
+pour le défendre est un préavis — il prouve qu'on a **prévenu**, il ne prouve pas **pourquoi on a
+prélevé**.
+
+Sans cette ligne, **le fait générateur n'existe nulle part**, et on aurait prélevé quelqu'un sur la foi
+d'un message disparu après traitement. `sale_card_rejection` est donc la pièce justificative d'un
+prélèvement SEPA. C'est écrit dans le docblock de l'entité, pour que celui qui voudra la supprimer voie
+ce qu'il enlève.
+
+**Et un écart au contrat, assumé :** le champ s'appelle `rejectionId`, pas `paymentId`. Le second
+n'existe pas — CA-10 veut qu'un refus ne crée aucun `Paiement`. Passer l'identifiant d'autre chose sous
+ce nom aurait donné la clé d'idempotence attendue, **et le nom aurait menti**.
+
+> Un `paymentId` qui ne désigne aucun paiement fonctionne parfaitement jusqu'au jour où quelqu'un fait
+> une jointure dessus — et ce jour-là il ne cherche pas un problème de nommage, il cherche pourquoi sa
+> requête ne rend rien. — `claude-G`
+
+**Manque de modèle noté, pas inventé :** le dépôt ne donne aucune identité propre aux terminaux de
+paiement. `PointDeVente` porte une *liste* de terminaux en configuration, et `ResultatTpe` ne dit pas
+lequel a répondu. La trace porte donc le point de vente. Distinguer deux terminaux d'un même comptoir est
+un chantier séparé.
+
+---
+
+### 2026-08-26 · D51-ter — Le patron « socle + ajout local » existait déjà, et ma consigne en créait un second
+
+**Correction de D51, sur pièce.** J'avais arbitré la forme : `etablissement` nullable, `null` = socle
+partagé, pas de table d'extension. `claude-G` a fait ce que D51 exigeait — *vérifier d'abord qu'un patron
+n'existe pas ailleurs, en inventer un second serait pire que le problème* — et **elle en a trouvé un,
+complet, fusionné, avec son extension Doctrine.**
+
+`Support` porte déjà exactement ça, et le discriminant n'est **pas** `null` :
+
+```php
+#[ORM\Column(length: 6, enumType: PorteeArticle::class, options: ['default' => 'global'])]
+private PorteeArticle $portee = PorteeArticle::Global;   // Global | Local
+#[ORM\JoinColumn(nullable: true)]
+private ?Etablissement $etablissement = null;
+```
+
+Et son extension applique déjà « le socle **plus** ses ajouts, jamais ceux d'un autre », avec `IDENTITY()`
+— donc conforme à D58 avant que D58 n'existe.
+
+**Ma consigne aurait donc créé le second patron que D51 interdit**, sur la décision qui interdit
+justement ça.
+
+---
+
+**ET LE DISCRIMINANT EXPLICITE EST MEILLEUR QUE LE NULL, POUR UNE RAISON QUI N'EST PAS DE STYLE.**
+
+Argument de `claude-G`, et il est décisif : **`null` sur `etablissement` porte deux sens différents** —
+« cette ligne appartient au socle » et « personne n'a encore renseigné l'établissement ».
+
+Le second arrive tout seul : un import, un processeur qui oublie l'estampille, une migration qui ajoute
+la colonne. Et alors **une ligne locale mal remplie devient du socle** — donc visible par tous les
+établissements, **silencieusement**.
+
+Avec `portee`, le même oubli produit une ligne `local` sans établissement : **invisible partout**, ce qui
+se remarque et se corrige.
+
+> **Le défaut par défaut ne fuit pas.**
+
+C'est le même critère que la clôture journalière le matin même — *le défaut est celui qui ne peut pas
+mentir* — appliqué à une frontière de cloisonnement au lieu d'une date.
+
+**Décidé : D51 s'aligne sur le patron de `Support`.** Le trait porteur (`portee` + `etablissement`) et le
+fragment de requête réutilisable montent dans `Platform`, **une seule fois**, pour que le troisième
+module ne le réinvente pas une troisième fois.
+
+**Ce que je ne fais pas :** convertir `Support` au nullable pur. Ce serait remplacer le bon patron par le
+moins bon pour satisfaire une consigne écrite trop vite.
+
+---
+
+### 2026-08-26 · D51-quater — Chercher la fonctionnalité, pas le numéro de décision
+
+`claude-G` allait reconstruire les trois documents de D45-bis — devis, bon de commande, bon de livraison.
+**`claude-D` les avait livrés le matin même**, sous le nom FAC-1 : `Facturation\Entity\CommercialDocument`,
+`DocumentNature::Quote | SalesOrder | DeliveryNote`, huit opérations, la filiation complète.
+
+Une demi-journée en double, évitée à la lecture.
+
+**Et la règle existante ne suffisait pas.** « Fusionner `main` avant de claimer » est en place depuis
+lundi, et `main` **était** à jour chez elle. Le travail était simplement arrivé **sous un autre nom que
+celui de la décision** — D45-bis livré comme FAC-1.
+
+> **Avant de proposer un lot, chercher la fonctionnalité dans le code, pas le numéro de décision dans le
+> tableau.** — `claude-G`
+
+Un identifiant de décision ne survit pas au passage à l'implémentation : celui qui livre nomme son lot
+d'après ce qu'il construit, pas d'après ce qui l'a demandé. Le tableau de claim voit donc D45-bis
+« libre » alors que la fonctionnalité existe.
+
+---
+
+### 2026-08-26 · D51-quinquies — Le quotient familial ne s'affiche pas au guichet
+
+`claude-H` demandait un paramètre `beneficiaire` dans l'estimation de tarif. `claude-G` l'a refusé après
+vérification : **il n'entre dans aucune règle de tarif du dépôt**. Ce qui fait varier le prix est le
+**quotient familial**, déjà fourni par l'appelant.
+
+*L'accepter pour l'ignorer aurait été pire que de ne pas l'accepter : l'écran aurait cru le prix
+contextualisé, et le jour où deux bénéficiaires d'un même dossier ont des quotients différents, il
+afficherait deux fois le même prix sans que personne sache pourquoi.* **Un paramètre ignoré est un
+mensonge de signature.**
+
+Reste la question qu'elle a fait remonter : si l'écran connaît le bénéficiaire mais pas son quotient, il
+manque une résolution `bénéficiaire → quotient familial`, qui vit dans `Crm`.
+
+**Non ouverte, et ce n'est pas une frontière de module.** Lire le quotient familial d'un bénéficiaire
+depuis l'écran de caisse revient à **l'afficher au guichet, devant l'intéressé et devant les autres**.
+C'est une question de dignité, pas d'architecture, et elle se tranche avec Maxime — pas entre nous, et
+pas parce que ce serait techniquement commode.
+
+---
+
+### 2026-08-26 · D66 — Le joker d'un module ne peut pas contenir un droit qui dépasse ce module
+
+**Trouvé par le test, pas par la relecture.** `claude-G` avait nommé `offre.gerer_socle` le droit
+d'éditer le socle partagé des référentiels. Son test `testUnAjoutNaitLocalEtRattache` a échoué pour une
+raison qu'aucune relecture n'aurait donnée :
+
+**l'administrateur de groupe porte la permission joker `offre.*`, donc `offre.gerer_socle` lui était
+accordé automatiquement.**
+
+Conséquence : **chaque administrateur d'établissement devenait maître du socle commun**, sans que
+personne ne l'ait décidé. Renommer un `TypeTarif` chez A aurait changé le tarif de B — le trou
+transfrontière contre lequel D51 met en garde, ouvert par un **nom**.
+
+**La règle :**
+
+> Le joker d'un module ne doit jamais pouvoir contenir un droit qui dépasse ce module.
+
+**Le nommage d'une permission n'est pas une convention d'affichage, c'est une frontière d'autorité.**
+`offre.*` désigne « tout sur l'offre **de cet établissement** », pas « tout sur l'offre **de tout le
+monde** ». Un droit qui porte sur le partagé appartient donc à un autre module — ici
+`plateforme.gerer_socle`.
+
+**Corollaire, et il fait le lien avec le défaut du menu de mardi :** un joker accorde du droit sur ce qui
+n'existe pas encore. C'est sa propriété, et elle est utile — mais elle rend le nommage définitif : **on
+ne peut pas ajouter une permission sous un préfixe existant sans la donner rétroactivement à tous ceux
+qui portent le joker.** Personne ne relira les rôles pour vérifier.
+
+**Conséquence assumée : personne ne détient `plateforme.gerer_socle` aujourd'hui.** Le socle est semé
+par les jeux de données et les migrations. Le jour où la plateforme voudra l'éditer par l'API, il faudra
+décider **à qui** on le donne — et ce n'est pas une décision qui se prend par défaut, en héritant d'un
+joker.
+
+---
+
+### 2026-08-26 · D66-bis — Le critère de visibilité ne se partage pas avec le patron
+
+`claude-G` avait repris tel quel le filtre de `Support` : « les établissements où l'utilisateur a une
+affectation ». Son test a montré que l'administrateur, affecté à **A et B**, voyait les ajouts de B
+**depuis le guichet de A**.
+
+**Ce n'est pas un défaut du patron de `Support` — les deux cas ne sont pas les mêmes.** Un article d'aide
+se lit légitimement depuis n'importe lequel de ses établissements. Un référentiel tarifaire, non : un
+responsable qui vend au guichet de A ne doit pas voir les types de tarif de B, **il pourrait poser un
+prix sur un tarif qui n'existe pas là où il encaisse, et le défaut ne se verrait qu'à la facture.**
+
+La lecture porte donc sur **l'établissement actif**, et sans établissement actif : **le socle seul**,
+fermeture par défaut.
+
+**Ce que ça nuance dans la consigne « monte le patron dans `Platform` » :** le **trait** et la **forme**
+du filtre se partagent ; **le critère de visibilité ne se partage pas** — il dépend de ce que la liste
+sert à faire. Un patron qui imposerait son critère ferait porter à chaque module la question à laquelle
+un seul avait répondu.
+
+---
+
+### 2026-08-26 · D66-ter — Une migration ne fabrique pas de donnée pour sauver une démonstration
+
+**Question de `claude-G` sur `Saison` et `TrancheQuotientFamilial`**, à cloisonner et non à doter d'un
+socle : **à quel établissement appartiennent les lignes existantes ?** Elles sont globales aujourd'hui.
+
+Deux options proposées : rattacher au hasard à l'établissement de démonstration, ou laisser les lignes
+orphelines et **visibles de personne**.
+
+**Décidé : la migration laisse orphelin.** Une migration s'exécutera un jour sur des données réelles, et
+rattacher au hasard produirait des tarifs calculés sur la saison d'un autre établissement — le quotient
+familial étant le cas où D51 dit lui-même qu'une erreur est **opposable**.
+
+**La démonstration se répare à la main, là où la donnée est admise comme fausse.** La préproduction ne
+contient que des données de test ; l'y remettre en état est une opération d'exploitation, pas un `up()`.
+Confondre les deux revient à inscrire dans le code de production une réparation qui n'a de sens que sur
+un jeu d'essai.
+
+> **Une migration ne fabrique jamais de donnée métier. Ce qui manque reste visiblement manquant.**
+
+---
+
+### 2026-08-26 · D67 — Un oracle de test est la seule exception à « un seul calcul »
+
+**La règle standing :** un calcul existe une fois, plusieurs appelants — parce que deux implémentations
+en **production** divergent en silence et que **les deux sont crues**. Appliquée quatre fois ce jour :
+simulation de clôture, estimation de tarif, prix des options, jauge en lot.
+
+**L'exception, demandée par `claude-G` et validée :** un **calcul de référence écrit dans un test** n'est
+pas de cette nature.
+
+- **Personne ne le croit** — sa seule sortie est une comparaison, jamais une donnée métier.
+- **Sa divergence est le signal**, pas un défaut à corriger.
+- **Il ne sert aucun appelant**, donc il ne peut pas devenir la version que quelqu'un utilise par erreur.
+
+C'est un **oracle**, et c'est la seule façon de tester un calcul dont on ne peut pas écrire le résultat à
+la main.
+
+**Pourquoi il en fallait un ici.** J'avais demandé un test comparant la jauge en lot au chemin unitaire.
+`claude-G` a vu ce que je n'avais pas vu : **`placesOccupees()` délègue désormais au lot**, donc le test
+aurait comparé une fonction à elle-même — vert, et ne prouvant rien. *« Exactement le défaut que le test
+est censé empêcher, retourné. »*
+
+**⚠ SON SEUL MODE D'ÉCHEC, ET IL EST DÉCISIF : écrire l'oracle depuis le CODE plutôt que depuis la
+RÈGLE.**
+
+Ouvrir la requête de production et la ré-exprimer en PHP transcrit **aussi son défaut**. Les deux
+s'accordent, le test est vert, et **il confirme l'erreur au lieu de l'attraper**. C'est le piège
+classique de cette forme, d'autant plus facile que le code est sous les yeux.
+
+L'oracle s'écrit depuis la spécification. S'il diverge, c'est une information **dans les deux sens** —
+y compris quand c'est lui qui a tort.
+
+**Condition de forme, de `claude-G` :** lent, naïf, sans SQL, sans optimisation. **Sa justesse doit se
+lire d'un coup d'œil**, sinon on a deux choses à déboguer au lieu d'une.
+
+---
+
+### 2026-08-26 · D67-bis — Croire qu'on applique une règle parce qu'on vient de l'écrire
+
+**Déclaré par `claude-G` sur elle-même, quatrième fois de la journée.**
+
+Elle a écrit ce commentaire, avec la conséquence exacte :
+
+> D58 — les identifiants et non les entités. Sur une relation à identifiant `Uuid`, un `IN` d'entités ne
+> trouve rien et **ne lève pas** : la jauge rendrait zéro partout, donc « tout est libre » sur un
+> calendrier complet.
+
+**Et elle a commis la faute sur la ligne suivante.** D58 est pourtant sans nuance : pour une **liste**,
+aucun type scalaire ne s'applique — `IN` reste toujours fautif, il faut du SQL avec `UNHEX`. Passer
+`getId()` au lieu d'entités lui a suffi à croire la règle appliquée.
+
+La jauge rendait **zéro partout**. Un écran de calendrier aurait laissé réserver un créneau plein.
+Quatre tests l'ont attrapée ; le commentaire, non.
+
+**Sa formulation, qui vaut mieux que le constat :**
+
+> La constante n'est pas l'ignorance de la règle : c'est de croire qu'on l'applique parce qu'on vient de
+> l'écrire.
+
+**Quatre occurrences le même jour, chez la même personne, toutes déclarées :** le raccourci des chèques
+documenté au-dessus de lui-même ; `promoEligible` failli « corrigée » en la déplaçant ; le `static` du
+test de clôture, optimisation raisonnable ; et celle-ci.
+
+**Ce n'est pas de la négligence, c'est le geste qui ressemble le plus à la conformité qui est le plus
+dangereux** — pas celui qui l'ignore. Un commentaire ne protège pas ; seul un test protège.
+
+---
+
+### 2026-08-26 · D67-ter — Sixième forme du piège des identifiants : `IN` sur l'identifiant d'une entité jointe
+
+Le garde-fou n°14 surveille les propriétés `*Ref` et les relations déclarées. Il **ne voit pas**
+`IN (:liste)` posé sur `cs.id` — l'identifiant d'une **entité jointe**, qui n'est ni l'une ni l'autre.
+
+C'est la sixième forme du même piège, et elle vient de coûter un faux « tout est libre ». À élargir,
+avec le cas de reproduction de `claude-G` — et **vu refuser avant d'être livré**, pas seulement vert sur
+le correctif.

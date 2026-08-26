@@ -77,6 +77,30 @@ class Etablissement
     #[Groups(['etablissement:read', 'etablissement:write'])]
     private bool $actif = true;
 
+    /**
+     * Le fuseau dans lequel cet établissement vit sa journée.
+     *
+     * **Pourquoi ça n'est pas un détail de confort.** La clôture journalière NF525 arrête une journée
+     * et la **scelle**. Une clôture planifiée à 3 h de Paris tombe à **21 h la veille aux Antilles** :
+     * elle arrêterait une journée **en cours**, avec des ventes encore à venir dessus. Ces ventes
+     * basculeraient dans la journée suivante, et le refus « journée sautée » ne les rattraperait pas —
+     * puisque la journée aurait bien été close.
+     *
+     * Autrement dit : sur un établissement à l'ouest de Paris, l'automatisme produirait **exactement le
+     * défaut que la clôture existe pour empêcher**, et le produirait scellé, donc indiscutable.
+     *
+     * Relevé par `claude-G` en écrivant la commande de clôture : j'avais exigé « le fuseau de
+     * l'établissement, pas du serveur » sans vérifier que l'établissement en portait un. Il n'en portait
+     * pas. Elle a refusé de l'inventer, refusé d'attendre, et proposé les trois options en chiffrant
+     * chacune — La Réunion à 5 h du matin, acceptable ; les Antilles la veille, non.
+     *
+     * Le défaut vaut `Europe/Paris` : c'est le cas de tous les établissements existants, et une valeur
+     * fausse pour personne aujourd'hui vaut mieux qu'une colonne nulle que chaque appelant interprète.
+     */
+    #[ORM\Column(length: 64, options: ['default' => 'Europe/Paris'])]
+    #[Groups(['etablissement:read', 'etablissement:write'])]
+    private string $fuseauHoraire = 'Europe/Paris';
+
     /** @var Collection<int, Espace> */
     #[ORM\OneToMany(targetEntity: Espace::class, mappedBy: 'etablissement')]
     private Collection $espaces;
@@ -132,5 +156,30 @@ class Etablissement
     public function getEspaces(): Collection
     {
         return $this->espaces;
+    }
+
+    public function getFuseauHoraire(): string
+    {
+        return $this->fuseauHoraire;
+    }
+
+    /**
+     * @throws \InvalidArgumentException si l'identifiant n'est pas un fuseau connu
+     */
+    public function setFuseauHoraire(string $fuseauHoraire): self
+    {
+        // Un fuseau invalide ne se découvre pas à l'écriture mais à la première clôture, c'est-à-dire
+        // au moment où l'on scelle. On refuse ici, où c'est encore réparable.
+        if (!in_array($fuseauHoraire, \DateTimeZone::listIdentifiers(), true)) {
+            throw new \InvalidArgumentException(sprintf(
+                'Fuseau horaire inconnu : « %s ». Attendu un identifiant IANA, par exemple Europe/Paris '
+                . 'ou America/Martinique.',
+                $fuseauHoraire,
+            ));
+        }
+
+        $this->fuseauHoraire = $fuseauHoraire;
+
+        return $this;
     }
 }

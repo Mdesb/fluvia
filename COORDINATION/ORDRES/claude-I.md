@@ -413,3 +413,31 @@ rendrait `main` rouge pour les huit autres sessions, et un `main` rouge coûte p
 que le défaut qu'il signale.
 
 **Dis-moi quand c'est poussé.**
+
+---
+
+## 2026-08-26 · Pour plus tard — `AlertePresenceIsolee` ne peut que grandir
+
+**Ne prends pas ça maintenant.** L'ordre est : le préavis de `Sport` d'abord, tes fixtures ensuite, ceci
+en troisième. Je te le pose ici pour que ça ne se perde pas, pas pour ajouter à ta charge.
+
+**Le constat**, relevé par `claude-H` en inventoriant les listes d'alerte du produit :
+`AlertePresenceIsolee` porte un statut de « chose à traiter », et **sa seule opération d'écriture en
+fabrique de nouvelles**. Rien, nulle part, ne permet d'en clore une.
+
+Ce n'est pas une liste sans geste de résolution — c'est **un compteur qui ne peut que monter**. Le jour
+où on l'affiche, il affichera un nombre qui n'aura jamais décru depuis la mise en service.
+
+**La règle qui s'applique, posée aujourd'hui en D55** : *une liste de choses à traiter s'affiche avec le
+geste qui les traite, ou ne s'affiche pas.* Sa justification vaut d'être lue avant d'écrire quoi que ce
+soit — **une liste qu'on ne peut pas vider apprend à son lecteur à l'ignorer, et cet apprentissage ne se
+défait pas** quand on branche le geste six mois plus tard.
+
+**Ce qu'il te faudra décider, et c'est la vraie question :** qu'est-ce qui clôt une alerte de présence
+isolée ? Quelqu'un est allé voir ? La personne est ressortie ? Le délai est passé ? La réponse n'est pas
+technique — elle décide de ce que l'exploitant devra faire chaque matin. **Dis-moi ce que tu proposes
+avant de l'écrire.**
+
+Et lis la nuance de `claude-H` avant de conclure : deux autres collections du produit **n'ont aucun champ
+de statut**, ce qui en fait des **journaux** et non des files d'attente. Un journal qui grandit se
+comporte correctement. `AlertePresenceIsolee`, elle, a bien ce statut — c'est ce qui la rend fautive.

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import Qr from '../components/Qr.jsx'
+// `texte` lit un libelle multilingue : le serveur rend `{ fr: '...' }`, pas une chaine.
+import { texte } from '../components/Liste.jsx'
 import HistoriqueVentesModal from '../components/HistoriqueVentesModal.jsx'
 import Modal from '../components/Modal.jsx'
 import ClientPicker, { nomClient } from '../components/ClientPicker.jsx'
@@ -176,8 +178,30 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
         if (client) corps.beneficiaire = client.id
         courant = await api.ajouterLigne(v.id, corps)
       }
-      // Le total et le reste font foi côté serveur : le tarif réellement appliqué peut différer du
-      // prix indicatif affiché (grilles, remises). On s'aligne dessus pour l'encaissement.
+      // LES LIGNES S'ALIGNENT SUR LE SERVEUR, PAS SEULEMENT LE TOTAL.
+      //
+      // Le total faisait déjà foi ici. Les lignes, elles, gardaient leur prix indicatif — si bien que
+      // le panier pouvait afficher « 1 × Test 10,00 € » au-dessus d'un total de 15,00 €. C'est le
+      // même défaut que celui du ticket, un cran plus tôt : **c'est ce montant que le caissier
+      // annonce à voix haute avant d'encaisser.**
+      //
+      // Le tarif choisi par l'écran est la première grille vendable ; le serveur applique celui qui
+      // est réellement dû — saison, quotient familial. Les deux peuvent différer sans que personne
+      // ne soit en faute. Tant que la vente n'existe pas, l'écran ne peut qu'estimer ; dès qu'elle
+      // existe, il n'a plus aucune raison de le faire.
+      const lignesServeur = courant?.lignes || []
+      if (lignesServeur.length > 0) {
+        setPanier((p) =>
+          p.map((l) => {
+            const ls = lignesServeur.find(
+              (x) => String(x.produit) === String(l.produit?.id)
+                && String(x.typeTarif || '') === String(l.typeTarifId || ''),
+            ) || lignesServeur.find((x) => String(x.produit) === String(l.produit?.id))
+            return ls?.prixUnitaire != null ? { ...l, prix: ls.prixUnitaire } : l
+          }),
+        )
+      }
+
       const totalServeur = courant?.total ?? total.toFixed(2)
       const resteServeur = courant?.resteAPayer ?? totalServeur
       setVente({ id: v.id, reste: resteServeur, total: totalServeur })
@@ -231,7 +255,64 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
     }
   }
 
-  // Finalise : valide la vente et édite le ticket.
+  // Le ticket vient ENTIÈREMENT du serveur, y compris les mots.
+//
+// CE QUE CETTE FONCTION A CESSÉ DE FAIRE, ET POURQUOI C'EST UNE BONNE NOUVELLE.
+//
+// Première version : le ticket se construisait depuis le panier, avec un repli sur le prix indicatif
+// du catalogue. Le serveur facturait 15 €, le ticket imprimait 10 € et un total de 15 € — sur le
+// document que le client emporte, et qu'il a le droit de contester.
+//
+// Deuxième version : les montants venaient de la vente, mais les libellés restaient ceux du panier,
+// appariés par (produit, tarif), parce que `LigneVente` ne sérialisait aucun nom. Ça marchait tant
+// que le ticket était édité dans la foulée — et jamais pour un duplicata, où il n'y a plus de panier.
+//
+// `claude-G` a livré le libellé **figé au moment de la vente**, et `TicketProcessor` rend désormais
+// ses lignes. L'appariement disparaît : **l'argent et le mot viennent tous les deux du serveur**, et
+// un produit renommé six mois plus tard ne change pas ce qu'un ticket d'hier affirme.
+//
+// UNE LIMITE QUI NE BOUGERA PAS, ET QU'IL FAUT CONNAÎTRE.
+//
+// Les ventes antérieures à la migration portent le nom que le produit a *aujourd'hui* : cette
+// information n'avait jamais été écrite et ne se reconstitue pas. Un duplicata n'est réellement
+// opposable qu'à partir de cette migration.
+function construireTicket(infoTicket, paiements, support) {
+  const lignes = (infoTicket.lignes || []).map((l) => {
+    const nom = texte(l.libelle, 'Article')
+    return {
+      // Le tarif figure sur le ticket : sans lui, deux lignes du même produit à des prix différents
+      // sont illisibles, pour le client comme pour le caissier qui le relit.
+      libelle: l.tarif ? `${nom} — ${l.tarif}` : nom,
+      quantite: l.quantite ?? 1,
+      pu: l.prixUnitaire ?? '0.00',
+      // `montantLigne` est le montant réellement facturé pour la ligne : options et remises
+      // comprises. C'est lui qu'on affiche à droite, et non un produit qu'on recalculerait.
+      montant: l.montantLigne ?? null,
+    }
+  })
+
+  // Un ticket qui ne s'additionne pas est un ticket qu'un client conteste, et il a raison.
+  const somme = lignes.reduce(
+    (s, l) => s + (l.montant != null ? parseFloat(l.montant) || 0 : (parseFloat(l.pu) || 0) * (l.quantite || 0)),
+    0,
+  )
+  const total = parseFloat(infoTicket.total ?? '0') || 0
+
+  return {
+    numero: infoTicket.numero,
+    lignes,
+    // Le détail manque plutôt qu'il ne ment : si le serveur n'a rendu aucune ligne, on le dit et le
+    // total reste affiché — c'est lui qui engage.
+    detailIndisponible: lignes.length === 0,
+    total: infoTicket.total ?? '0.00',
+    ecartDetail: lignes.length > 0 && Math.abs(somme - total) > 0.005,
+    duplicata: !!infoTicket.duplicata,
+    paiements,
+    codeSupport: support?.identifiantSupport || null,
+  }
+}
+
+// Finalise : valide la vente et édite le ticket.
   async function validerVente() {
     if (!vente) return
     setBusy(true)
@@ -241,19 +322,7 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
       const infoTicket = await api.ticket(vente.id, 'imprimer')
       // Code de support signé (HMAC) émis à la validation : 1er support porteur d'un identifiant.
       const support = (venteValidee.supports || []).find((s) => s.identifiantSupport)
-      setTicket({
-        numero: infoTicket.numero || venteValidee.numero,
-        lignes: panier.map((l) => ({
-          // Le tarif figure sur le ticket : sans lui, deux lignes du meme produit a des prix
-          // differents sont illisibles, pour le client comme pour le caissier qui le relit.
-          libelle: l.tarifLibelle ? `${libelleProduit(l.produit)} — ${l.tarifLibelle}` : libelleProduit(l.produit),
-          quantite: l.quantite,
-          pu: l.prix ?? prixIndicatif(l.produit),
-        })),
-        total: venteValidee.total ?? total.toFixed(2),
-        paiements,
-        codeSupport: support?.identifiantSupport || null,
-      })
+      setTicket(construireTicket(infoTicket, paiements, support))
       setPanier([])
       setVente(null)
       setPaiements([])
@@ -545,7 +614,21 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
         )}
       </Modal>
 
-      <HistoriqueVentesModal open={historique} onClose={() => setHistorique(false)} droits={droits} />
+      <HistoriqueVentesModal
+        open={historique}
+        onClose={() => setHistorique(false)}
+        droits={droits}
+        onDuplicata={async (vente) => {
+          setErreur(null)
+          try {
+            const info = await api.ticket(vente.id, 'duplicata')
+            setTicket(construireTicket(info, [], null))
+            setHistorique(false)
+          } catch (e) {
+            setErreur(e.message || "Le duplicata n'a pas pu être édité.")
+          }
+        }}
+      />
       {modaleSession}
       {modaleClient}
     </div>
@@ -657,9 +740,29 @@ function TicketVente({ ticket }) {
         {ticket.lignes.map((l, i) => (
           <div className="trow" key={i}>
             <span>{l.quantite} × {l.libelle}</span>
-            <span className="num">{euros(parseFloat(l.pu || '0') * l.quantite)}</span>
+            <span className="num">
+              {euros(l.montant != null ? l.montant : parseFloat(l.pu || '0') * l.quantite)}
+            </span>
           </div>
         ))}
+        {ticket.duplicata && (
+          <div className="trow" style={{ color: 'var(--warn)' }}>
+            <span><b>DUPLICATA</b> — ce ticket a déjà été édité.</span>
+          </div>
+        )}
+        {ticket.detailIndisponible && (
+          <div className="trow" style={{ color: 'var(--warn)' }}>
+            <span>Le détail des lignes n'a pas pu être relu. Le total ci-dessous fait foi.</span>
+          </div>
+        )}
+        {ticket.ecartDetail && (
+          <div className="trow" style={{ color: 'var(--warn)' }}>
+            <span>
+              Le détail ci-dessus ne fait pas le total : des remises, options ou promotions
+              s'appliquent. <b>Le montant dû est le total.</b>
+            </span>
+          </div>
+        )}
         <div className="trow tt">
           <span>Total</span>
           <span className="num">{euros(ticket.total)}</span>
@@ -679,7 +782,9 @@ function TicketVente({ ticket }) {
           </div>
         )}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
-          <Qr value={ticket.codeSupport} size={84} title={`QR billet ${ticket.numero}`} />
+          {ticket.codeSupport && (
+            <Qr value={ticket.codeSupport} size={84} title={`QR billet ${ticket.numero}`} />
+          )}
           <div className="hint" style={{ margin: 0 }}>
             {ticket.codeSupport ? (
               <>Billet + QR édités · support appairé

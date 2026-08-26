@@ -384,20 +384,41 @@ commiter "banc : charge utile hors contrat"
 essai "charges utiles — clé absente du contrat" refus
 
 # --- garde-fou n°8 : écriture qui traverse la frontière ----------------------------------------
-# `Promotion` est dans la ligne de base du n°5 — rien ne la cloisonne — et son groupe d'écriture est
-# `ref:write`. On lui ajoute une relation écrivable vers `Ressource`, qui porte un établissement :
-# il n'y a plus de frontière ni en lecture ni en écriture.
-python3 - app/src/Offre/Entity/Promotion.php <<'PY'
-import io, sys
-p = sys.argv[1]
-s = io.open(p, encoding='utf-8').read()
-ajout = (
-    "\n    #[ORM" + chr(92) + "ManyToOne(targetEntity: Ressource::class)]\n"
-    "    #[Groups(['ref:write'])]\n"
-    "    private $bancRessource = null;\n"
-)
-i = s.rindex('}')
-io.open(p, 'w', encoding='utf-8').write(s[:i] + ajout + s[i:])
+#
+# ⚠ La cible est choisie À L'EXÉCUTION, et ce n'est pas de la coquetterie. Ce cas visait `Promotion`
+# en dur ; elle a été cloisonnée le 26/08, et le cas est alors devenu vert **en ne testant plus rien**.
+# C'est la panne la plus insidieuse d'un banc : il ne casse pas, il ment.
+#
+# On prend donc la première entité encore non cloisonnée qui expose une écriture, et on ÉCHOUE
+# bruyamment si l'on n'en trouve aucune — un banc sans cible doit le dire, pas se taire.
+python3 <<'PY'
+import io, json, os, re, sys
+
+base = json.load(io.open('bin/couverture-perimetre.ligne-de-base.json', encoding='utf-8'))
+for cle in base['entrees']:
+    chemin = os.path.join('app/src', cle)
+    if not os.path.isfile(chemin):
+        continue
+    src = io.open(chemin, encoding='utf-8', errors='replace').read()
+    if '#[ApiResource' not in src or not re.search(r'new (Post|Patch|Put)\(', src):
+        continue
+    m = re.search(r"denormalizationContext:\s*\[\s*'groups'\s*=>\s*\[\s*'([^']+)'", src)
+    if not m:
+        continue
+    groupe = m.group(1)
+    ajout = (
+        '\n    #[ORM' + chr(92) + 'ManyToOne(targetEntity: Ressource::class)]\n'
+        "    #[Groups(['" + groupe + "'])]\n"
+        '    private $bancRessource = null;\n'
+    )
+    i = src.rindex('}')
+    io.open(chemin, 'w', encoding='utf-8').write(src[:i] + ajout + src[i:])
+    print('  cible du banc : ' + cle + ' (groupe ' + groupe + ')')
+    sys.exit(0)
+
+sys.stderr.write("✗ Banc : aucune entite non cloisonnee exposant une ecriture — le cas du n8 ne teste\n")
+sys.stderr.write("  plus rien. Choisis une autre forme de cas plutot que de le laisser passer.\n")
+sys.exit(1)
 PY
 commiter "banc : relation ecrivable vers du cloisonne"
 essai "écriture transfrontière — relation écrivable vers du cloisonné" refus

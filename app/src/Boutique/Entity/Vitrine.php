@@ -10,6 +10,7 @@ use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\Boutique\State\VitrinePubliqueProvider;
+use App\Boutique\State\EstablishmentStampProcessor;
 use App\Organisation\Entity\Etablissement;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
@@ -34,7 +35,11 @@ use Symfony\Component\Validator\Constraints as Assert;
             security: "is_granted('PUBLIC_ACCESS')",
             provider: VitrinePubliqueProvider::class,
         ),
-        new Post(uriTemplate: '/boutique/vitrines', security: "is_granted('PERM', 'boutique.gerer_vitrine')"),
+        new Post(
+            uriTemplate: '/boutique/vitrines',
+            security: "is_granted('PERM', 'boutique.gerer_vitrine')",
+            processor: EstablishmentStampProcessor::class,
+        ),
         new Patch(uriTemplate: '/boutique/vitrines/{id}', security: "is_granted('PERM', 'boutique.gerer_vitrine')"),
     ],
     normalizationContext: ['groups' => ['vitrine:read']],
@@ -47,10 +52,17 @@ class Vitrine
     #[Groups(['vitrine:read', 'panier:read'])]
     private Uuid $id;
 
+    // D41 — hors groupe d'ecriture : l'etablissement vient de la session serveur, pose par
+    // `EstablishmentStampProcessor`, jamais du corps de la requete. La vitrine est un point d'entree
+    // PUBLIC en lecture ; laisser l'appelant choisir son rattachement etait d'autant moins tenable.
+    //
+    // Plus d'`Assert\NotNull` non plus : la validation s'execute AVANT l'ecriture, donc avant
+    // l'estampillage, et echouait en 422 sur une valeur que le serveur allait poser lui-meme
+    // (constat de `claude-G`, paye de deux essais, que je ne refais pas). L'invariant tient par
+    // l'estampilleur qui refuse plutot que de deviner, la colonne NOT NULL, et le garde global D41.
     #[ORM\OneToOne(targetEntity: Etablissement::class)]
     #[ORM\JoinColumn(nullable: false)]
-    #[Assert\NotNull]
-    #[Groups(['vitrine:read', 'vitrine:write'])]
+    #[Groups(['vitrine:read'])]
     private ?Etablissement $etablissement = null;
 
     #[ORM\Column(length: 255, nullable: true)]

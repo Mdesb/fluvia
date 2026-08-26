@@ -8,6 +8,7 @@ use ApiPlatform\Doctrine\Orm\Extension\QueryCollectionExtensionInterface;
 use ApiPlatform\Doctrine\Orm\Extension\QueryItemExtensionInterface;
 use ApiPlatform\Doctrine\Orm\Util\QueryNameGeneratorInterface;
 use ApiPlatform\Metadata\Operation;
+use App\Facturation\Entity\CommercialDocument;
 use App\Facturation\Entity\Facture;
 use App\Facturation\Entity\ParametreFacturationEtablissement;
 use App\Facturation\Entity\SerieNumerotation;
@@ -22,7 +23,8 @@ use Symfony\Bundle\SecurityBundle\Security;
  * utilisateur ne voit que les ressources rattachées à un établissement où il possède au moins une
  * affectation. Même patron que `App\Vente\Doctrine\PerimetreVenteExtension`.
  *
- *  - `Facture` porte directement `etablissement` ;
+ *  - `Facture` et `CommercialDocument` (FAC-1 : devis, bon de commande, bon de livraison) portent
+ *    directement `etablissement` ;
  *  - `ParametreFacturationEtablissement` et `SerieNumerotation` (correctif revue de cohérence, défaut
  *    3 — sans ce durcissement, `GET /parametres-facturation` et `/series-numerotation` renvoyaient
  *    toutes les lignes tous établissements, fuite SIRET/TVA/numéros inter-tenants) ne portent qu'un
@@ -36,7 +38,7 @@ use Symfony\Bundle\SecurityBundle\Security;
 final class PerimetreFacturationExtension implements QueryCollectionExtensionInterface, QueryItemExtensionInterface
 {
     /** Ressources cloisonnées directement via un champ `etablissement` sur la racine. */
-    private const RESOURCES_ETABLISSEMENT_DIRECT = [Facture::class];
+    private const RESOURCES_ETABLISSEMENT_DIRECT = [Facture::class, CommercialDocument::class];
 
     /** Ressources cloisonnées via `{root}.profilExploitant` (principal ou rattachés). */
     private const RESOURCES_VIA_PROFIL = [ParametreFacturationEtablissement::class, SerieNumerotation::class];

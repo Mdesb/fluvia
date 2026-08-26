@@ -32,6 +32,8 @@ use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Validator\Constraints as Assert;
+use App\Vente\Dto\PriceQuote;
+use App\Vente\State\PriceQuoteProvider;
 
 /**
  * Produit générique à facettes (RG-M1-02) : un modèle unique couvre les 4 métiers. Le type
@@ -70,6 +72,24 @@ use Symfony\Component\Validator\Constraints as Assert;
             processor: ProduitProcessor::class,
             denormalizationContext: ['groups' => ['produit:compta']],
             normalizationContext: ['groups' => ['produit:read', 'produit:compta']],
+        ),
+        // Le prix applicable AVANT qu'une vente existe, et la raison qui l'explique.
+        //
+        // Tant qu'aucune vente n'est ouverte, la caisse ne peut qu'estimer — et elle estimait mal :
+        // elle retenait la premiere grille vendable du produit, quand le serveur applique le tarif
+        // reellement du (saison, quotient familial). Maxime a vu le resultat : « 1 x Test 10,00 EUR »
+        // pour un total de 15,00 EUR.
+        //
+        // `PriceQuoteProvider` ne recalcule rien : il appelle le MEME service que la composition d'une
+        // ligne de vente. Une seconde implementation aurait reproduit le defaut dans une couche ou
+        // plus personne ne verrait la divergence.
+        new Get(
+            uriTemplate: '/produits/{id}/tarif',
+            description: 'Prix applicable et son motif. Parametres : typeTarif (obligatoire), canal?, date?, qf?. Ne cree rien.',
+            security: "is_granted('PERM', 'offre.lire')",
+            output: PriceQuote::class,
+            normalizationContext: ['groups' => ['tarif:read']],
+            provider: PriceQuoteProvider::class,
         ),
         new Post(
             uriTemplate: '/produits/{id}/publier',

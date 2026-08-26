@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
+import EcartsCaisse from '../components/EcartsCaisse.jsx'
 import { api } from '../api/client.js'
 import { euros } from '../api/produit.js'
 
@@ -55,7 +56,7 @@ function Kpi({ label, valeur, accent }) {
 
 // Écran Reporting / Pilotage (M7) : dashboard établissement (lecture directe des modules
 // producteurs). En l'absence de périmètre Reporting, repli sur la supervision accès accessible.
-export default function Pilotage({ etabActif, etablissements }) {
+export default function Pilotage({ etabActif, etablissements, droits }) {
   const [dash, setDash] = useState(null)
   const [repli, setRepli] = useState(null) // données de supervision si dashboard hors périmètre
   const [chargement, setChargement] = useState(true)
@@ -206,6 +207,10 @@ export default function Pilotage({ etabActif, etablissements }) {
           </div>
         </section>
       </div>
+
+      {/* Les écarts de caisse sont ici et non sur l'écran de caisse : c'est un travail de
+          responsable, fait après la clôture, pas pendant le service. */}
+      <EcartsCaisse etabActif={etabActif} droits={droits} />
 
       <p className="hint" style={{ marginTop: 14 }}>
         Les absences non prévenues et les impayés sont calculés à l'échelle du groupe : ils apparaîtront ici dès qu'une mesure existe pour ce périmètre. Non affichés tant

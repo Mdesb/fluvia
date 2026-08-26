@@ -48,6 +48,27 @@ final class ScheduleCatalog
     public function all(): array
     {
         return [
+            // --- Conformité fiscale : ne pas tourner ici ne se voit qu'au contrôle ------------------
+            new ScheduledTask(
+                'vente:cloture:journee',
+                1440,
+                "Aucune journee n est arretee. NF525 exige une cloture quotidienne, et une obligation "
+                . "legale ne peut pas dependre de ce que quelqu un pense a faire : un exploitant qui "
+                . "oublie trois semaines n a pas ete negligent, il a rencontre un produit qui lui "
+                . "demandait d etre un mecanisme. Le manque ne se decouvre qu au controle.",
+                critical: true,
+                // JAMAIS SÛR AU PREMIER PASSAGE — une clôture SCELLE. Un premier passage sur un
+                // arriéré de trois semaines produirait vingt et un arrêtés d'un coup, irréversibles :
+                // c'est la catégorie « destruction irréversible », jamais sûre. `--dry-run` montre ce
+                // qui partirait avant que quiconque décide — sur un geste irréversible, montrer avant
+                // de faire n'est pas un confort.
+                //
+                // Et ce qui échoue ne disparaît pas : la journée reste dans la file
+                // `/clotures-journalieres/en-attente`, avec sa raison. Une clôture manquée EN SILENCE
+                // serait le défaut de D57 reproduit un cran plus haut — on échangerait un oubli
+                // visible contre un oubli invisible, et tout le monde croirait que c'est fait.
+                safeOnFirstRun: false,
+            ),
             // --- Sécurité : ne pas tourner ici n'est pas un retard, c'est une faille ---------------
             new ScheduledTask(
                 'securite:delegations:expirer',
@@ -75,6 +96,20 @@ final class ScheduleCatalog
                 "Le no-show ne bascule jamais. D27 promet au client une séance restituée avec report, "
                 . "et rien ne l'exécute : la promesse est faite à l'écran et jamais tenue.",
                 critical: true,
+            ),
+            new ScheduledTask(
+                'sepa:preavis:annoncer',
+                1440,
+                "Les prelevements SEPA ne sont annonces a personne. Un creancier doit informer le "
+                . "debiteur du montant et de la date avant chaque prelevement ; sans cette commande, "
+                . "aucune echeance n'est jamais couverte et la collecte s'arrete entierement — "
+                . "silencieusement, puisque tout s'execute et que rien n'aboutit.",
+                critical: true,
+                // JAMAIS SÛR AU PREMIER PASSAGE — effet visible au dehors (cas 3) : la commande envoie
+                // des courriels a des clients reels. Un arriere traite d'un coup est correct et
+                // quand meme inacceptable : personne ne veut decouvrir trois cents preavis partis
+                // ensemble. `--dry-run` montre ce qui partirait avant que quiconque decide.
+                safeOnFirstRun: false,
             ),
             new ScheduledTask(
                 'subscription:facturer-le-mois',
@@ -155,6 +190,20 @@ final class ScheduleCatalog
             // `recalculerTous()` recalcule chaque badge à partir de **maintenant**. Il ne rejoue aucun
             // historique, il recompose un état présent, et il est idempotent : deux exécutions de suite
             // produisent le même résultat.
+            // SÛR AU PREMIER PASSAGE — elle LIT et rapporte : aucune écriture, aucun envoi, aucun
+            // effet visible au dehors. Un arriéré traité d'un coup est exactement le constat qu'on
+            // veut. Catégorie 1 du critère, la seule des trois qui n'exige pas de supervision.
+            new ScheduledTask(
+                'personnel:qualifications:verifier',
+                1440,
+                "L'affectation vérifie la qualification AU JOUR DU CRÉNEAU, mais une seule fois : au "
+                . "moment où on la crée. Rien ne la revoit ensuite. Une qualification révoquée, "
+                . "raccourcie ou supprimée après coup laisse l'affectation en place, et le planning "
+                . "ne recalcule que si quelqu'un l'ouvre — or le cas dangereux est celui d'un planning "
+                . "monté il y a trois semaines que plus personne ne rouvre. Dans une piscine, ce sont "
+                . "des surveillants qui n'ont plus le droit de surveiller.",
+                safeOnFirstRun: true,
+            ),
             new ScheduledTask(
                 'personnel:recalculer-fenetres-badges',
                 60,

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
+import { jourLocal } from '../components/Liste.jsx'
 import { api, membres } from '../api/client.js'
 import { euros } from '../api/produit.js'
 import NoShowSection from '../components/NoShowSection.jsx'
@@ -18,7 +19,8 @@ function court(id) {
 
 function jourCle(v) {
   if (!v) return ''
-  return new Date(v).toISOString().slice(0, 10)
+  // Fuseau local, pas UTC : un créneau de 00 h 30 en été était rangé la veille.
+  return jourLocal(v)
 }
 
 function jourLabel(cle) {

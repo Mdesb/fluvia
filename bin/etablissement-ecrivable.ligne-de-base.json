@@ -15,7 +15,7 @@
         "verifie dans les deux sens. Il empeche la dette de croitre pendant quon la resorbe."
     ],
     "scelle": {
-        "plafond": 49
+        "plafond": 43
     },
     "entrees": {
         "AbonnementFitness": {
@@ -38,10 +38,6 @@
             "voie": "groupe",
             "fichier": "Support/Entity/ArticleAide.php"
         },
-        "ArticleStock": {
-            "voie": "groupe",
-            "fichier": "Stock/Entity/ArticleStock.php"
-        },
         "BadgeStaff": {
             "voie": "defaut",
             "fichier": "Personnel/Entity/BadgeStaff.php"
@@ -53,10 +49,6 @@
         "Casier": {
             "voie": "groupe",
             "fichier": "Piscine/Entity/Casier.php"
-        },
-        "CommandeAchat": {
-            "voie": "groupe",
-            "fichier": "Stock/Entity/CommandeAchat.php"
         },
         "ConfigCreancierSepa": {
             "voie": "groupe",
@@ -93,14 +85,6 @@
         "Facture": {
             "voie": "defaut",
             "fichier": "Facturation/Entity/Facture.php"
-        },
-        "Fournisseur": {
-            "voie": "groupe",
-            "fichier": "Stock/Entity/Fournisseur.php"
-        },
-        "GrilleRetenue": {
-            "voie": "groupe",
-            "fichier": "Caution/Entity/GrilleRetenue.php"
         },
         "Guide": {
             "voie": "groupe",
@@ -162,10 +146,6 @@
             "voie": "groupe",
             "fichier": "Caisse/Entity/PointDeVente.php"
         },
-        "PolitiqueRecouvrement": {
-            "voie": "groupe",
-            "fichier": "Recouvrement/Entity/PolitiqueRecouvrement.php"
-        },
         "ProfilExploitant": {
             "voie": "groupe",
             "fichier": "Compta/Entity/ProfilExploitant.php"
@@ -173,10 +153,6 @@
         "RattachementEmploye": {
             "voie": "groupe",
             "fichier": "Personnel/Entity/RattachementEmploye.php"
-        },
-        "ReceptionAchat": {
-            "voie": "groupe",
-            "fichier": "Stock/Entity/ReceptionAchat.php"
         },
         "RemiseSepa": {
             "voie": "defaut",

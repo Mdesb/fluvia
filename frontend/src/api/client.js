@@ -140,6 +140,16 @@ export function membres(collection) {
   return collection.member || collection['hydra:member'] || []
 }
 
+// Les routes des gestes d'une pièce commerciale (FAC-1). Aucune ne prend de corps : tout est dans
+// la route, et le serveur les déclare `input: false`.
+const GESTES_PIECE = {
+  issue: (id) => request(`/api/billing/documents/${id}/issue`, { method: 'POST' }),
+  accept: (id) => request(`/api/billing/documents/${id}/accept`, { method: 'POST' }),
+  reject: (id) => request(`/api/billing/documents/${id}/reject`, { method: 'POST' }),
+  derive: (id) => request(`/api/billing/documents/${id}/derive`, { method: 'POST' }),
+  invoice: (id) => request(`/api/billing/documents/${id}/invoice`, { method: 'POST' }),
+}
+
 export const api = {
   // Auth : hors /api, sans X-Etablissement.
   login: (email, motDePasse) =>
@@ -166,6 +176,24 @@ export const api = {
   depublierProduit: (id) => request(`/api/produits/${id}/depublier`, { method: 'POST' }),
   archiverProduit: (id) => request(`/api/produits/${id}/archiver`, { method: 'POST' }),
   reactiverProduit: (id) => request(`/api/produits/${id}/reactiver`, { method: 'POST' }),
+
+  // Pièces commerciales (FAC-1) : devis -> bon de commande -> bon de livraison -> facture.
+  //
+  // Aucun `ld: true` : les huit opérations sont déclarées `input: false` côté serveur et lisent le
+  // corps brut, elles ne passent donc pas par la désérialisation d'API Platform. Les cinq gestes
+  // n'ont carrément pas de corps — seul l'identifiant compte, tout est dans la route.
+  piecesCommerciales: () => request('/api/billing/documents'),
+  pieceCommerciale: (id) => request(`/api/billing/documents/${id}`),
+  creerDevis: (corps) => request('/api/billing/documents', { method: 'POST', body: corps }),
+  // Les cinq gestes sont écrits en toutes lettres, un par ligne, et non composés depuis une variable.
+  //
+  // Deux raisons, et la seconde n'est pas cosmétique. D'abord un geste mal orthographié échoue ici,
+  // à l'appel, au lieu de partir en 404 sur une route qui n'existe pas. Ensuite `verifier-formats`
+  // compare le chemin au `uriTemplate` déclaré côté serveur, et il normalise toute interpolation en
+  // `{id}` : un chemin composé donnait `/billing/documents/{id}/{id}`, qui ne correspond à rien, et
+  // le contrôle réclamait un `ld: true` dont ces routes n'ont que faire. Le contrôle avait raison de
+  // ne pas savoir — c'est au code appelé d'être lisible.
+  gestePiece: (id, geste) => GESTES_PIECE[geste](id),
 
   pointDeVentes: () => request('/api/point_de_ventes'),
   creerPointDeVente: (corps) => request('/api/point_de_ventes', { method: 'POST', body: corps, ld: true }),
@@ -348,6 +376,59 @@ export const api = {
 
   // --- Comptabilité / Régie (M6) ---
   journaux: () => request('/api/journals', { query: { itemsPerPage: 100 } }),
+  profilsExploitant: () => request('/api/profil_exploitants', { query: { itemsPerPage: 20 } }),
+  periodesComptables: () =>
+    request('/api/periode_comptables', { query: { itemsPerPage: 100, 'order[dateDebut]': 'desc' } }),
+  exportsComptables: () => request('/api/export_comptables', { query: { itemsPerPage: 50 } }),
+  // Operations sur mesure (`input: false`) : pas de `ld: true`.
+  //
+  // `generer` est idempotent en sequentiel — `ventesValideesNonComptabilisees` exclut ce qui a deja
+  // une ecriture. Mais la liste est calculee avant la boucle et le flush n'a lieu qu'a la fin : deux
+  // requetes qui se chevauchent voient le meme ensemble et generent toutes les deux. claude-D pose
+  // le verrou serveur ; en attendant, le bouton est desactive du clic jusqu'a la reponse, ce qui
+  // ferme le cas courant — celui de l'exploitant qui reclique parce que rien ne bouge.
+  genererEcritures: (profilId) =>
+    request('/api/compta/ecritures/generer', { method: 'POST', body: { profilExploitant: profilId } }),
+  validerEcriture: (id) =>
+    request(`/api/compta/ecritures/${id}/valider`, { method: 'POST', body: {} }),
+  extournerEcriture: (id) =>
+    request(`/api/compta/ecritures/${id}/extourne`, { method: 'POST', body: {} }),
+  verifierChaineEcritures: (journalId) =>
+    request('/api/compta/ecritures/verifier-chaine', { query: { journal: journalId } }),
+  cloturerPeriode: (id) =>
+    request(`/api/compta/periodes/${id}/cloturer`, { method: 'POST', body: {} }),
+  telechargerExport: (id) => request(`/api/compta/exports/${id}/telecharger`),
+  // --- Achats & tresorerie ---
+  facturesFournisseur: () =>
+    request('/api/supplier_invoices', { query: { itemsPerPage: 200 } }),
+  // Le rapprochement a trois voies : facture contre commande contre reception. Charge AVANT
+  // d'afficher le bouton d'approbation — approuver, c'est engager le paiement.
+  rapprochementFactureFournisseur: (id) =>
+    request(`/api/finance/supplier-invoices/${id}/reconciliation`),
+  approuverFactureFournisseur: (id) =>
+    request(`/api/finance/supplier-invoices/${id}/approve`, { method: 'POST', body: {} }),
+  contesterFactureFournisseur: (id, corps) =>
+    request(`/api/finance/supplier-invoices/${id}/dispute`, { method: 'POST', body: corps }),
+  resoudreLitigeFactureFournisseur: (id, corps) =>
+    request(`/api/finance/supplier-invoices/${id}/resolve-dispute`, { method: 'POST', body: corps }),
+  annulerFactureFournisseur: (id) =>
+    request(`/api/finance/supplier-invoices/${id}/cancel`, { method: 'POST', body: {} }),
+
+  // Recouvrement : les deux gestes qui closent un impaye, et le compteur d'acces bloques.
+  tableauBordRecouvrement: () => request('/api/recouvrement/tableau-bord'),
+  // Ecarts de caisse.  est calcule par le serveur a la lecture — aucun drapeau stocke,
+  // donc aucun drapeau a maintenir. C'est lui qui fait descendre la liste (D55).
+  alertesEcartCaisse: () =>
+    request('/api/alerte_ecart_caisses', { query: { itemsPerPage: 100 } }),
+  corrigerReglement: (venteId, corps) =>
+    request(`/api/ventes/${venteId}/corriger-reglement`, { method: 'POST', body: corps }),
+  resoudreImpaye: (id) =>
+    request(`/api/recouvrement/incidents/${id}/resoudre`, { method: 'POST', body: {} }),
+  forcerReouvertureImpaye: (id, motif) =>
+    request(`/api/recouvrement/incidents/${id}/forcer-reouverture`, { method: 'POST', body: { motif } }),
+  // Operation STANDARD : elle deserialise.
+  creerExportComptable: (corps) =>
+    request('/api/export_comptables', { method: 'POST', body: corps, ld: true }),
   ecrituresComptables: () =>
     request('/api/ecriture_comptables', { query: { itemsPerPage: 100 } }),
   regieRecettes: () => request('/api/regie_recettes', { query: { itemsPerPage: 100 } }),
@@ -375,10 +456,15 @@ export const api = {
   comptesClientBoutique: () =>
     request('/api/compte_clients', { query: { itemsPerPage: 100 } }),
   vitrines: () => request('/api/boutique/vitrines', { query: { itemsPerPage: 100 } }),
-  accepterRemboursement: (id) =>
-    request(`/api/boutique/demandes-remboursement/${id}/accepter`, { method: 'POST', body: {}, ld: true }),
-  refuserRemboursement: (id, motif) =>
-    request(`/api/boutique/demandes-remboursement/${id}/refuser`, { method: 'POST', body: { motifRefus: motif }, ld: true }),
+  // `montant` absent = remboursement total, c'est le defaut du serveur. On ne l'envoie donc que
+  // lorsque l'utilisateur a explicitement choisi un remboursement partiel.
+  accepterRemboursement: (id, montant) =>
+    request(`/api/boutique/demandes-remboursement/${id}/accepter`, {
+      method: 'POST',
+      body: montant === undefined ? {} : { montant: String(montant) },
+    }),
+  refuserRemboursement: (id, motifRefus) =>
+    request(`/api/boutique/demandes-remboursement/${id}/refuser`, { method: 'POST', body: { motifRefus } }),
 
   // --- Personnel ---
   employes: () => request('/api/employes', { query: { itemsPerPage: 200 } }),
@@ -398,6 +484,22 @@ export const api = {
   creneauxBassin: () => request('/api/creneau_bassins', { query: { itemsPerPage: 200 } }),
   jaugesGrandPublic: () =>
     request('/api/jauge_grand_public_calculees', { query: { itemsPerPage: 100 } }),
+  // Casiers : quatre gestes, dont un qui demande un droit plus fort que les autres.
+  piscineCasiers: () => request('/api/casiers', { query: { itemsPerPage: 300 } }),
+  piscineBracelets: () => request('/api/bracelet_etanches', { query: { itemsPerPage: 300 } }),
+  piscineAttribuerCasier: (id, corps) =>
+    request(`/api/piscine/casiers/${id}/attribuer`, { method: 'POST', body: corps }),
+  piscineLibererCasier: (id) =>
+    request(`/api/piscine/casiers/${id}/liberer`, { method: 'POST', body: {} }),
+  piscineRelancerCasier: (id) =>
+    request(`/api/piscine/casiers/${id}/relancer`, { method: 'POST', body: {} }),
+  piscineForcerCasier: (id, motif) =>
+    request(`/api/piscine/casiers/${id}/forcer`, { method: 'POST', body: { motif } }),
+  // Le POSS est le plan de surveillance : son seuil est une limite reglementaire, pas un confort.
+  piscinePoss: () => request('/api/posses', { query: { itemsPerPage: 20 } }),
+  piscineEtatPoss: (id) => request(`/api/piscine/poss/${id}/etat`),
+  piscineValiderCreneauBassin: (id) =>
+    request(`/api/piscine/creneaux-bassin/${id}/valider`, { method: 'POST', body: {} }),
   // Patinoire
   patinoireConflits: () => request('/api/patinoire/conflits-glace'),
   patinoireLocations: () =>
@@ -438,7 +540,16 @@ export const api = {
     request('/api/stock_mouvements', { query: { itemsPerPage: 50, 'order[date]': 'desc' } }),
   stockParametrage: () => request('/api/stock_parametrages', { query: { itemsPerPage: 5 } }),
   stockAlertesReappro: () => request('/api/stock/alertes-reappro'),
+  // Valorisation : droit distinct (`stock.lire_valorisation`). Le total de l'etablissement n'accepte
+  // PAS de date ; seule la valorisation par article la reconstruit.
   stockValorisation: () => request('/api/stock/valorisation'),
+  stockValorisationArticle: (id, date) =>
+    request(`/api/stock/articles/${id}/valorisation`, { query: date ? { date } : undefined }),
+  // Les imputations ne sont pas lisibles depuis le mouvement : `MouvementStock` expose bien
+  // `imputations` dans `mouvement:read`, mais aucune propriete d'`ImputationLotStock` ne porte ce
+  // groupe — la collection sort en simples IRI. On la charge donc a part.
+  stockImputations: () =>
+    request('/api/stock_imputation_lots', { query: { itemsPerPage: 500 } }),
   creerArticleStock: (corps) => request('/api/article_stocks', { method: 'POST', body: corps, ld: true }),
   majArticleStock: (id, corps) => request(`/api/article_stocks/${id}`, { method: 'PATCH', body: corps }),
   // Operations sur mesure : `input: false`, le processor lit le corps brut. Pas de `ld: true`.
@@ -466,8 +577,58 @@ export const api = {
   stockCloturerInventaire: (id) =>
     request(`/api/stock/inventaires/${id}/cloturer`, { method: 'POST', body: {} }),
 
+  // Cycle d'achat : fournisseur -> commande -> envoi -> confirmation -> reception -> validation.
+  stockFournisseurs: () =>
+    request('/api/stock_fournisseurs', { query: { itemsPerPage: 200 } }),
+  stockCommandesAchat: () =>
+    request('/api/stock_commande_achats', { query: { itemsPerPage: 100 } }),
+  stockLignesCommandeAchat: () =>
+    request('/api/stock_ligne_commande_achats', { query: { itemsPerPage: 500 } }),
+  stockReceptions: () =>
+    request('/api/stock_reception_achats', { query: { itemsPerPage: 100 } }),
+  // Operations STANDARD : elles deserialisent, donc `ld: true`.
+  //
+  // `etablissement` n'est JAMAIS envoye, bien que le modele l'accepte en ecriture : le serveur le
+  // tient de la session (D3/D8), et un client qui le choisit est un client qui peut ecrire chez le
+  // voisin. Le respecter ici evite de prendre l'habitude inverse sur un ecran.
+  creerFournisseur: (corps) =>
+    request('/api/stock_fournisseurs', { method: 'POST', body: corps, ld: true }),
+  majFournisseur: (id, corps) =>
+    request(`/api/stock_fournisseurs/${id}`, { method: 'PATCH', body: corps }),
+  creerCommandeAchat: (corps) =>
+    request('/api/stock_commande_achats', { method: 'POST', body: corps, ld: true }),
+  creerLigneCommandeAchat: (corps) =>
+    request('/api/stock_ligne_commande_achats', { method: 'POST', body: corps, ld: true }),
+  creerReceptionAchat: (corps) =>
+    request('/api/stock_reception_achats', { method: 'POST', body: corps, ld: true }),
+  creerLigneReceptionAchat: (corps) =>
+    request('/api/stock_ligne_reception_achats', { method: 'POST', body: corps, ld: true }),
+  // Operations sur mesure : `input: false`, pas de `ld: true`.
+  stockEnvoyerCommande: (id) =>
+    request(`/api/stock/commandes-achat/${id}/envoyer`, { method: 'POST', body: {} }),
+  stockConfirmerCommande: (id) =>
+    request(`/api/stock/commandes-achat/${id}/confirmer`, { method: 'POST', body: {} }),
+  stockAnnulerCommande: (id) =>
+    request(`/api/stock/commandes-achat/${id}/annuler`, { method: 'POST', body: {} }),
+  stockValiderReception: (id) =>
+    request(`/api/stock/receptions-achat/${id}/valider`, { method: 'POST', body: {} }),
+
   // Padel
   padelTerrains: () => request('/api/padel/terrains', { query: { itemsPerPage: 100 } }),
+  padelReservations: () =>
+    request('/api/padel_reservations', { query: { itemsPerPage: 200 } }),
+  padelLocationsMateriel: () =>
+    request('/api/padel_location_materiels', { query: { itemsPerPage: 200 } }),
+  // Operations sur mesure : `input: false`, pas de `ld: true`.
+  padelReserverTerrain: (id, corps) =>
+    request(`/api/padel/terrains/${id}/reservations`, { method: 'POST', body: corps }),
+  padelRejoindrePartie: (id, corps) =>
+    request(`/api/padel/parties-ouvertes/${id}/rejoindre`, { method: 'POST', body: corps }),
+  padelRetournerMateriel: (id, corps) =>
+    request(`/api/padel/locations/${id}/retour`, { method: 'POST', body: corps }),
+  // `padel.acces_forcer` : passer outre l'automatisme d'eclairage. Motif obligatoire.
+  padelEclairageManuel: (id, corps) =>
+    request(`/api/padel/terrains/${id}/eclairage/repli-manuel`, { method: 'POST', body: corps }),
   // Pas de collection listable pour les tournois (seulement des routes custom
   // /api/padel/tournois/{id}/...) : on renvoie un état vide propre.
   padelTournois: () => Promise.resolve({ 'hydra:member': [] }),
@@ -475,6 +636,23 @@ export const api = {
   museeExpositions: () => request('/api/musee_expositions', { query: { itemsPerPage: 100 } }),
   museeVisitesGuidees: () =>
     request('/api/musee_visite_guidees', { query: { itemsPerPage: 100 } }),
+  museeSalles: () => request('/api/musee_salles', { query: { itemsPerPage: 100 } }),
+  museeGuides: () => request('/api/musee_guides', { query: { itemsPerPage: 100 } }),
+  museeContingentsGratuite: () =>
+    request('/api/musee_contingent_gratuites', { query: { itemsPerPage: 50 } }),
+  museeDossiersGroupe: () =>
+    request('/api/musee_dossier_groupe_scolaires', { query: { itemsPerPage: 100 } }),
+  // L'etat d'une salle se lit salle par salle : il n'existe pas de vue d'ensemble cote serveur.
+  museeEtatSalle: (id) => request(`/api/musee/salles/${id}/etat`),
+  // Operations sur mesure : `input: false`, pas de `ld: true`.
+  museeCreerVisite: (corps) =>
+    request('/api/musee/visites-guidees', { method: 'POST', body: corps }),
+  museeConfirmerVisite: (id) =>
+    request(`/api/musee/visites-guidees/${id}/confirmer`, { method: 'POST', body: {} }),
+  museeCreerDossierGroupe: (corps) =>
+    request('/api/musee/dossiers-groupe', { method: 'POST', body: corps }),
+  museeConfirmerDossierGroupe: (id, corps) =>
+    request(`/api/musee/dossiers-groupe/${id}/confirmer`, { method: 'POST', body: corps }),
 
   // Administration de l'éditeur (ED-6). Le serveur répond 404 si la session n'est pas celle de
   // l'éditeur : le contrôle est une identité de tenant, pas une permission, et il n'est pas rejoué

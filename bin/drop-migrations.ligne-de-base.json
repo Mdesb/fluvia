@@ -1,0 +1,70 @@
+{
+    "_lisez_moi": [
+        "Ligne de base GELEE du garde-fou n13 — un DROP dans up() doit etre voulu et le dire (D32).",
+        "",
+        "Ce garde-fou est PREVENTIF. Mesure du 26/08 : onze DROP figurent dans un up(), tous anterieurs",
+        "au 17/08 et manifestement deliberes — consolidations de tables sport_, padel_, patin_. Aucun",
+        "DROP de derive na jamais ete commite. Le cliquet nempeche pas le douzieme detre ecrit, il",
+        "lempeche de passer inapercu.",
+        "",
+        "Seulement up() : un DROP dans down() annule le up() de la meme migration, cest sa raison detre.",
+        "",
+        "Echappatoire : @drop-voulu : <raison> dans la migration elle-meme. Greppable, datee,",
+        "attribuable — ce quun assouplissement de detection nest jamais."
+    ],
+    "scelle": {
+        "plafond": 10
+    },
+    "entrees": {
+        "Version20260815092253.php::COLONNE::actif": {
+            "migration": "Version20260815092253.php",
+            "type": "COLONNE",
+            "objet": "actif"
+        },
+        "Version20260815153119.php::TABLE::sport_mandat_sepa_fitness": {
+            "migration": "Version20260815153119.php",
+            "type": "TABLE",
+            "objet": "sport_mandat_sepa_fitness"
+        },
+        "Version20260815153119.php::TABLE::sport_remise_sepa": {
+            "migration": "Version20260815153119.php",
+            "type": "TABLE",
+            "objet": "sport_remise_sepa"
+        },
+        "Version20260815184354.php::TABLE::sport_incident_prelevement": {
+            "migration": "Version20260815184354.php",
+            "type": "TABLE",
+            "objet": "sport_incident_prelevement"
+        },
+        "Version20260815184354.php::TABLE::sport_politique_anti_impayes": {
+            "migration": "Version20260815184354.php",
+            "type": "TABLE",
+            "objet": "sport_politique_anti_impayes"
+        },
+        "Version20260815184354.php::TABLE::sport_rejet_prelevement": {
+            "migration": "Version20260815184354.php",
+            "type": "TABLE",
+            "objet": "sport_rejet_prelevement"
+        },
+        "Version20260815184354.php::TABLE::sport_representation_sepa": {
+            "migration": "Version20260815184354.php",
+            "type": "TABLE",
+            "objet": "sport_representation_sepa"
+        },
+        "Version20260816210533.php::TABLE::padel_grille_retenue_materiel": {
+            "migration": "Version20260816210533.php",
+            "type": "TABLE",
+            "objet": "padel_grille_retenue_materiel"
+        },
+        "Version20260816210533.php::TABLE::patin_grille_retenue": {
+            "migration": "Version20260816210533.php",
+            "type": "TABLE",
+            "objet": "patin_grille_retenue"
+        },
+        "Version20260818095000.php::INDEX::IDX_B52288087A0F6D9A": {
+            "migration": "Version20260818095000.php",
+            "type": "INDEX",
+            "objet": "IDX_B52288087A0F6D9A"
+        }
+    }
+}

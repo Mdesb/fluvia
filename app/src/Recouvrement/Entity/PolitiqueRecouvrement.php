@@ -11,6 +11,7 @@ use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\Organisation\Entity\Etablissement;
 use App\Recouvrement\Enum\MomentRefusAcces;
+use App\Recouvrement\State\RecoveryPolicyWriteProcessor;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
@@ -32,8 +33,8 @@ use Symfony\Component\Validator\Constraints as Assert;
     operations: [
         new GetCollection(security: "is_granted('PERM', 'recouvrement.lire')"),
         new Get(security: "is_granted('PERM', 'recouvrement.lire')"),
-        new Post(security: "is_granted('PERM', 'recouvrement.parametrer')"),
-        new Patch(security: "is_granted('PERM', 'recouvrement.parametrer')"),
+        new Post(security: "is_granted('PERM', 'recouvrement.parametrer')", processor: RecoveryPolicyWriteProcessor::class),
+        new Patch(security: "is_granted('PERM', 'recouvrement.parametrer')", processor: RecoveryPolicyWriteProcessor::class),
     ],
     normalizationContext: ['groups' => ['politique_recouvrement:read']],
     denormalizationContext: ['groups' => ['politique_recouvrement:write']],
@@ -45,10 +46,15 @@ class PolitiqueRecouvrement
     #[Groups(['politique_recouvrement:read'])]
     private Uuid $id;
 
+    // D3/D8/D41 : `etablissement` n'est PAS dans le groupe d'écriture — un appelant ne doit jamais
+    // pouvoir rattacher/déplacer une politique vers un autre établissement via le corps de la requête.
+    // Posé côté serveur, depuis le contexte établissement actif, par `RecoveryPolicyWriteProcessor`.
+    // Pas d'`#[Assert\NotNull]` : la validation API Platform s'exécute AVANT le processor (qui pose
+    // l'établissement) — elle échouerait donc toujours à la création. La présence est garantie par le
+    // processor (échec fermé si aucun contexte) et, en dernier ressort, par la contrainte DB NOT NULL.
     #[ORM\ManyToOne(targetEntity: Etablissement::class)]
     #[ORM\JoinColumn(nullable: false)]
-    #[Assert\NotNull]
-    #[Groups(['politique_recouvrement:read', 'politique_recouvrement:write'])]
+    #[Groups(['politique_recouvrement:read'])]
     private ?Etablissement $etablissement = null;
 
     #[ORM\Column(type: 'smallint', options: ['default' => 1])]

@@ -67,6 +67,17 @@ lancer_gf garde-fou-cloisonnement.php || ECHEC=1
 # Couverture de perimetre en lecture (voir hooks/pre-receive).
 [ -f "$RACINE/bin/garde-fou-couverture-perimetre.php" ] && { lancer_gf garde-fou-couverture-perimetre.php || ECHEC=1; }
 
+# Une reference libre ne se compare ni en DQL ni par filtre (D58).
+#
+# TROISIEME endroit ou ce garde-fou a du etre branche : hooks/pre-receive, bin/garde-fous.sh, et ici.
+# Je les ai oublies dans cet ordre, et chaque fois c'est un filet de completude qui me l'a dit -- pas
+# ma relecture. Le second oubli a coute une poussee refusee a claude-D apres un vert local ; le
+# troisieme a ete attrape par ce hook lui-meme, le jour ou je venais de l'installer.
+#
+# La lecon n'est pas « faire attention » : c'est que trois listes redites se desynchronisent, et que
+# seul un filet qui les compare a l'inventaire reel le voit.
+[ -f "$RACINE/bin/garde-fou-references-libres.php" ] && { lancer_gf garde-fou-references-libres.php || ECHEC=1; }
+
 # Événements du catalogue (D2/D22) : abonné inerte, émission hors contrat, cliquet.
 [ -f "$RACINE/bin/garde-fou-evenements-orphelins.php" ] && { lancer_gf garde-fou-evenements-orphelins.php || ECHEC=1; }
 
@@ -81,6 +92,9 @@ lancer_gf garde-fou-cloisonnement.php || ECHEC=1
 
 # Une entite ne doit pas laisser ecrire son propre etablissement (D41).
 [ -f "$RACINE/bin/garde-fou-etablissement-ecrivable.php" ] && { lancer_gf garde-fou-etablissement-ecrivable.php || ECHEC=1; }
+
+# Une suppression dans un up() de migration doit etre voulue et le dire (D32).
+[ -f "$RACINE/bin/garde-fou-drop-migrations.php" ] && { lancer_gf garde-fou-drop-migrations.php || ECHEC=1; }
 
 # Nommage : sur les fichiers **indexés** et ajoutés. `--cached` est ce qui sera réellement commité,
 # et c'est aussi ce qui évite de dépendre d'une révision de référence inexistante à ce stade.
@@ -135,5 +149,26 @@ if [ "$ECHEC" -ne 0 ]; then
     echo "  Si tu dois vraiment passer outre : git commit --no-verify, et dis pourquoi dans MESSAGES.md."
     exit 1
 fi
+
+# CE QUE CE HOOK NE VERIFIE PAS, ET POURQUOI IL DOIT LE DIRE.
+#
+# Il tourne SANS reference : il compare l'arbre a la ligne de base LOCALE. Or un cliquet ne se juge
+# que contre un etat anterieur — sans reference, il ne verifie que la coherence interne, jamais qu'un
+# plafond a baisse ailleurs. Le `pre-receive`, lui, compare a `origin/main`.
+#
+# claude-G l'a vécu : quatorze verts ici a la seconde pres, poussee REFUSEE juste apres, parce que
+# quelqu'un avait resorbe cinq entrees du cliquet « Etablissement ecrivable » sur `main` pendant
+# qu'elle travaillait. Sa ligne de base disait 48, celle de `main` disait 43.
+#
+# Ce n'est pas une omission qu'on corrige : c'est structurel, il manque a ce hook une information qui
+# n'existe que cote serveur. Ce qui SE corrige, c'est de le dire — quatorze verts silencieux laissent
+# croire a une garantie que ce hook ne donne pas.
+#
+# C'est le motif de la journee du 26/08, applique a nous-memes : un controle qui repond quelque chose
+# avec l'air d'avoir tout verifie. Signale par claude-G, qui n'a pas touche a `hooks/` pour autant.
+echo
+echo "✓ Garde-fous locaux OK — cliquets non vérifiés contre origin/main, le push tranchera."
+echo "  Si ta branche est en retard, un plafond peut avoir baissé sans que tu le voies :"
+echo "    git fetch origin && git merge --no-edit origin/main"
 
 exit 0

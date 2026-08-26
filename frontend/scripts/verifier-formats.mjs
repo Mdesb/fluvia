@@ -41,14 +41,43 @@ for (const f of php(SERVEUR)) {
 const src = readFileSync(CLIENT, 'utf8')
 const anomalies = []
 
+// Un chemin du client correspond-il a un `uriTemplate` declare ?
+//
+// LE FAUX POSITIF QUE CETTE FONCTION CORRIGE, TROUVE PAR `claude-D`.
+//
+// La premiere version remplacait TOUTE interpolation par `{id}`. Un chemin a deux variables —
+// `/billing/documents/${'$'}{id}/${'$'}{geste}` — devenait donc `/billing/documents/{id}/{id}`, qui ne
+// correspond a aucun `uriTemplate` declare. Le controle reclamait un `ld: true` dont ces routes
+// n'ont que faire : elles sont sur mesure et `input: false`, exactement le cas que le message d'aide
+// dit de ne PAS marquer. Le controle contredisait sa propre explication.
+//
+// On compare donc segment par segment. Un segment dynamique cote client accepte n'importe quel
+// segment cote serveur ; un segment `{...}` cote serveur accepte n'importe quoi cote client.
+//
+// LE COMPROMIS, ECRIT PLUTOT QUE TU.
+//
+// Un segment dynamique cote client peut ainsi correspondre a une route sur mesure qu'il ne vise pas
+// reellement, et taire un avertissement legitime. C'est le sens d'erreur que je choisis : un
+// controle qui crie au loup finit desactive, et le silence occasionnel coute moins qu'un garde-fou
+// que personne ne lit plus.
+function correspond(chemin, modele) {
+  const a = chemin.split('/')
+  const b = modele.split('/')
+  if (a.length !== b.length) return false
+  return a.every((segment, i) => {
+    if (segment.includes('${')) return true
+    if (b[i].startsWith('{') && b[i].endsWith('}')) return true
+    return segment === b[i]
+  })
+}
+
 // `request('/api/...', { ... method: 'POST' ... })`
 for (const m of src.matchAll(/request\((`|')(\/api\/[^`']*)\1,\s*\{([^}]*)\}/g)) {
   const [, , chemin, options] = m
   if (!/method:\s*'POST'/.test(options)) continue
   if (/\bld:\s*true/.test(options)) continue
 
-  const normalise = chemin.replace(/\$\{[^}]+\}/g, '{id}').replace(/^\/api/, '')
-  if (surMesure.has(normalise)) continue
+  if ([...surMesure].some((modele) => correspond(chemin.replace(/^\/api/, ''), modele))) continue
 
   const ligne = src.slice(0, m.index).split('\n').length
   anomalies.push(

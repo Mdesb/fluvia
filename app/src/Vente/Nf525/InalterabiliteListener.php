@@ -8,8 +8,10 @@ use App\Caisse\Entity\ClotureZ;
 use App\Vente\Entity\Avoir;
 use App\Vente\Entity\LigneVente;
 use App\Vente\Entity\Paiement;
+use App\Vente\Entity\SettlementCorrection;
 use App\Vente\Entity\Vente;
 use App\Vente\Enum\StatutVente;
+use App\Vente\Nf525\Entity\DailyClosure;
 use App\Vente\Nf525\Entity\OperationScellee;
 use Doctrine\Bundle\DoctrineBundle\Attribute\AsDoctrineListener;
 use Doctrine\ORM\Event\PreRemoveEventArgs;
@@ -31,6 +33,15 @@ final class InalterabiliteListener
     private const CHAMPS_VENTE_FIGES = [
         'numero', 'total', 'totalRemises', 'session', 'cleIdempotence',
         'client', 'date', 'origineHorsLigne', 'etablissement',
+        // D44-bis — **ajouté après coup, et c'est un défaut que j'avais introduit.** `pointDeVente`
+        // est devenu l'ancre fiscale de la vente : la chaîne d'empreintes est chaînée par point de
+        // vente, et l'arrêté de journée totalise par point de vente. Il était jusque-là protégé **par
+        // ricochet**, puisqu'il se déduisait de `session`, déjà figée. En le portant sur la vente,
+        // j'ai coupé le ricochet sans remplacer la protection — et rien ne s'est rompu pour le dire.
+        //
+        // Sans cette ligne, déplacer une vente scellée d'une chaîne à l'autre la ferait disparaître
+        // d'un arrêté de totaux et apparaître dans un autre, en silence.
+        'pointDeVente',
     ];
 
     public function preUpdate(PreUpdateEventArgs $args): void
@@ -91,7 +102,15 @@ final class InalterabiliteListener
         return $entity instanceof OperationScellee
             || $entity instanceof Avoir
             || $entity instanceof ClotureZ
-            || $entity instanceof Paiement;
+            || $entity instanceof Paiement
+            // D57 — l'arrêté de journée. Une clôture qu'on pourrait rejouer ou effacer ne prouverait
+            // rien : c'est le cumul perpétuel qu'elle porte qui rend une suppression détectable, et un
+            // cumul qu'on peut réécrire ne détecte plus que ce qu'on veut bien lui laisser voir.
+            || $entity instanceof DailyClosure
+            // D45 — **oubli de mon propre lot, relevé en écrivant celui-ci.** La correction de
+            // ventilation est scellée dans la chaîne au même titre qu'un avoir, et elle n'était
+            // protégée par rien : elle est restée modifiable et supprimable pendant une journée.
+            || $entity instanceof SettlementCorrection;
     }
 
     private function venteScellee(LigneVente $ligne): bool

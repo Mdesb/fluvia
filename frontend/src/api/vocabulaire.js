@@ -19,6 +19,18 @@
 // « Boutique stock » que d'effacer une information qu'on n'a pas su traduire.
 
 const MOTS = {
+  // --- Pièces commerciales (FAC-1) : natures et statuts ---
+  quote: 'Devis',
+  sales_order: 'Bon de commande',
+  delivery_note: 'Bon de livraison',
+  draft: 'Brouillon',
+  issued: 'Émis',
+  accepted: 'Accepté',
+  rejected: 'Refusé',
+  expired: 'Périmé',
+  converted: 'Transformé',
+  cancelled: 'Annulé',
+
   // --- Espaces (types physiques) ---
   guichet: 'Guichet',
   salle_exposition: "Salle d'exposition",
@@ -110,6 +122,62 @@ const MOTS = {
   en_validation: 'En validation',
   fifo: 'Premier entré, premier sorti (FIFO)',
   cmup: 'Coût moyen pondéré',
+
+  // --- Achats & tresorerie ---
+  // Ce module est nomme en anglais cote serveur ; les mots restent francais a l'ecran.
+  draft: 'Brouillon',
+  to_pay: 'À payer',
+  partially_paid: 'Partiellement payée',
+  disputed: 'En litige',
+  cancelled: 'Annulée',
+
+  // --- Padel ---
+  indoor: 'Couvert',
+  outdoor: 'Extérieur',
+  complete: 'Complète',
+  rendu: 'Rendu',
+
+  // --- Piscine ---
+  libre: 'Libre',
+  occupe: 'Occupé',
+  // `non_rendu` existe deja pour les patins et dit la meme chose : parti avec, pas revenu.
+
+  // --- Musee ---
+  planifiee: 'Planifiée',
+  en_option: 'En option',
+  bon_commande_emis: 'Bon de commande émis',
+  mandat_emis: 'Mandat émis',
+  paye: 'Payé',
+
+  // --- Recouvrement ---
+  representation: 'Représentation bancaire',
+  recouvrement: 'En recouvrement',
+  resolu: 'Réglé',
+  virement: 'Virement',
+  caisse: 'Espèces au guichet',
+
+  // --- Comptabilite ---
+  provisoire: 'Provisoire',
+  controlee: 'Contrôlée',
+  exportee: 'Exportée',
+  ouverte: 'Ouverte',
+  cloturee: 'Clôturée',
+
+  // --- Achats ---
+  // « brouillon » et « validee » servent aussi ailleurs : ce sont des etats de document, pas des
+  // etats propres au stock.
+  brouillon: 'Brouillon',
+  envoyee: 'Envoyée',
+  confirmee: 'Confirmée',
+  partiellement_recue: 'Partiellement reçue',
+  cloturee: 'Clôturée',
+  annulee: 'Annulée',
+  validee: 'Validée',
+
+  // --- Remboursements ---
+  recue: 'Reçue',
+  acceptee: 'Acceptée',
+  refusee: 'Refusée',
 }
 
 // Rend un code lisible sans prétendre le traduire : `boutique_stock` → « Boutique stock ».
