@@ -100,25 +100,56 @@ final class ScheduleCatalog
             ),
 
             // --- Exploitation ----------------------------------------------------------------------
-            // La commande personnel:traiter-echeances-sortie N EST PAS ICI, et c'est délibéré. Elle exige un
-            // argument agentEmail — l'identité de qui traite la sortie, pour la traçabilité — donc
-            // elle ne peut pas s'exécuter sans surveillance. La laisser au catalogue produirait un
-            // échec rouge tous les jours que personne ne pourrait corriger, et on apprendrait à
-            // l'ignorer : c'est le défaut des entrées grisées, appliqué à l'exploitation.
+            // `personnel:traiter-echeances-sortie` était absente de ce catalogue du 25/08 au matin
+            // jusqu'à cet après-midi. Elle exigeait un argument obligatoire — l'identité de l'agent qui
+            // révoque — donc elle ne pouvait pas tourner sans surveillance, donc je l'avais retirée
+            // plutôt que de laisser un échec rouge quotidien que personne ne pourrait corriger.
             //
-            // Le manque reste réel et grave — un salarié parti garde ses accès. Il faut décider quelle
-            // identité porte un traitement automatique dans le journal d'audit, ce qui est un choix,
-            // pas une réparation. Consigné comme tâche ; le module Personnel n'a aujourd'hui aucun propriétaire.
+            // Pendant tout ce temps, **un salarié dont le contrat était fini gardait ses accès**.
+            // L'en-tête de la commande réclamait pourtant « un compte technique dédié pour l'exécution
+            // planifiée » depuis son écriture : il n'avait jamais été créé. Encore le motif de la
+            // semaine — le mécanisme existe, l'appel manque.
+            //
+            // `AccessRevocationServiceAccount` le crée désormais, sur le patron posé par `claude-D`
+            // pour la facturation : nommé pour se lire dans un journal d'audit, créé `Suspendu` donc
+            // structurellement non connectable, mot de passe aléatoire que personne ne conserve.
+            new ScheduledTask(
+                'personnel:traiter-echeances-sortie',
+                1440,
+                "Un salarié dont le contrat est fini garde ses accès : son statut ne bascule pas et son "
+                . "badge n'est jamais révoqué. Personne ne le signale — ni erreur, ni alerte.",
+                critical: true,
+                // NON SÛR AU PREMIER PASSAGE, et pourtant ce qu'elle ferait est juste : elle traite
+                // **toutes** les sorties passées d'un coup, donc révoque en une salve les badges de tous
+                // ceux qui sont partis depuis la mise en service. C'est exactement ce qu'il faut faire —
+                // mais une révocation de masse mérite quelqu'un devant l'écran la première fois, ne
+                // serait-ce que pour constater l'ampleur de ce qui traînait.
+            ),
+
+            // SÛR AU PREMIER PASSAGE — vérifié en lisant `RecalculFenetreBadgeHandler` :
+            // `recalculerTous()` recalcule chaque badge à partir de **maintenant**. Il ne rejoue aucun
+            // historique, il recompose un état présent, et il est idempotent : deux exécutions de suite
+            // produisent le même résultat.
             new ScheduledTask(
                 'personnel:recalculer-fenetres-badges',
                 60,
-                "Les fenêtres de validité des badges ne suivent pas les changements de planning.",
+                "Les fenêtres de validité des badges ne suivent pas les changements de planning : "
+                . "un agent dont l'horaire a bougé garde l'ancienne fenêtre.",
+                safeOnFirstRun: true,
             ),
+            // SÛR AU PREMIER PASSAGE — vérifié : sans option, la commande borne son travail à
+            // `today`. Elle ne remonte pas l'historique, il faut le lui demander explicitement avec
+            // `--depuis`.
             new ScheduledTask(
                 'reporting:agreger',
                 60,
                 "Les mesures ne sont jamais agrégées : les tableaux de bord restent figés.",
+                safeOnFirstRun: true,
             ),
+            // NON SÛR AU PREMIER PASSAGE — vérifié : la requête retient les rapports dont
+            // `prochainEnvoi` est **nul** ou dépassé. Tout rapport planifié et jamais envoyé partirait
+            // donc **en une seule salve**, à ses destinataires réels. Chacun est légitimement dû ; c'est
+            // leur simultanéité qui mérite un œil. Le premier passage reste supervisé.
             new ScheduledTask(
                 'reporting:executer-rapports',
                 60,

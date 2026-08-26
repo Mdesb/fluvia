@@ -72,6 +72,63 @@ final class CatalogueTest extends OffreApiTestCase
     }
 
     /**
+     * RG-SOCLE-05 — une promotion ne doit pas être visible hors de ses sites.
+     *
+     * Avant ce lot, `Promotion` ne portait **aucun** rattachement : la collection était lisible par
+     * tous les exploitants de la base, y compris d'un groupe à l'autre. Une promotion est une arme
+     * commerciale, et elle était visible des concurrents **avant même sa date de début** — ce test
+     * pose justement une promotion à venir, pour que ce point-là soit couvert et pas seulement dit.
+     */
+    public function testUnePromotionNestPasVisibleHorsDeSesSites(): void
+    {
+        [$client, $token, $idA] = $this->adminSurA();
+        $entete = ['auth_bearer' => $token, 'headers' => [ContexteEtablissement::HEADER => $idA]];
+
+        /** @var \Doctrine\ORM\EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $etabAEntite = $em->getRepository(\App\Organisation\Entity\Etablissement::class)->find($idA);
+        self::assertNotNull($etabAEntite);
+        $etranger = (new \App\Organisation\Entity\Etablissement())
+            ->setNom('Etablissement hors perimetre ' . uniqid())
+            ->setRegion($etabAEntite->getRegion());
+        $em->persist($etranger);
+
+        $promo = (new \App\Offre\Entity\Promotion())
+            ->setNom('Offre de rentree du concurrent ' . uniqid())
+            ->setType(\App\Offre\Enum\TypePromotion::cases()[0])
+            ->setDateDebut(new \DateTimeImmutable('+3 months'));
+        $promo->addEtablissement($etranger);
+        $em->persist($promo);
+        $em->flush();
+
+        $client->request('GET', '/api/promotions', $entete + ['query' => ['itemsPerPage' => 100]]);
+        self::assertResponseIsSuccessful();
+        $membres = $client->getResponse()->toArray()['member'] ?? $client->getResponse()->toArray()['hydra:member'];
+        $ids = array_map(static fn (array $p): string => $p['id'], $membres);
+        self::assertNotContains((string) $promo->getId(), $ids, 'Une promotion a venir d un autre site ne doit pas etre lisible.');
+    }
+
+    /**
+     * Le piège que le cloisonnement ouvre : une promotion sans site serait invisible pour tout le
+     * monde, y compris son auteur, après un 201 rassurant. Le défaut la rattache au site actif.
+     */
+    public function testUnePromotionCreeeSansSiteEstRattacheeAuSiteActif(): void
+    {
+        [$client, $token, $idA] = $this->adminSurA();
+        $entete = ['auth_bearer' => $token, 'headers' => [ContexteEtablissement::HEADER => $idA]];
+
+        $cree = $client->request('POST', '/api/promotions', $entete + [
+            'json' => ['nom' => 'Promo sans site ' . uniqid(), 'type' => \App\Offre\Enum\TypePromotion::cases()[0]->value],
+        ])->toArray();
+        self::assertResponseStatusCodeSame(201);
+
+        $client->request('GET', '/api/promotions', $entete + ['query' => ['itemsPerPage' => 100]]);
+        $membres = $client->getResponse()->toArray()['member'] ?? $client->getResponse()->toArray()['hydra:member'];
+        $ids = array_map(static fn (array $p): string => $p['id'], $membres);
+        self::assertContains($cree['id'], $ids, 'Son auteur doit la voir : sinon la creation reussit et la ressource disparait.');
+    }
+
+    /**
      * RG-SOCLE-05 — la grille tarifaire ne porte pas d'établissement : elle le tient de son produit.
      *
      * Sans jointure, la collection était lisible d'un établissement à l'autre : on lisait **les prix

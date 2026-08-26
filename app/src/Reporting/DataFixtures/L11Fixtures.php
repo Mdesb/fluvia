@@ -110,13 +110,13 @@ final class L11Fixtures extends Fixture
         $manager->persist($permPlanifier);
         $manager->persist($permConfigurer);
 
-        $roleSite = (new Role())->setNom('Reporting Directeur Site');
+        $roleSite = $this->roleNomme($manager, 'Reporting Directeur Site');
         $roleSite->addPermission($permLire);
-        $roleRegion = (new Role())->setNom('Reporting Directeur Régional');
+        $roleRegion = $this->roleNomme($manager, 'Reporting Directeur Régional');
         $roleRegion->addPermission($permLire)->addPermission($permPlanifier);
-        $roleGroupe = (new Role())->setNom('Reporting Direction Générale');
+        $roleGroupe = $this->roleNomme($manager, 'Reporting Direction Générale');
         $roleGroupe->addPermission($permLire)->addPermission($permPlanifier);
-        $roleAdmin = (new Role())->setNom('Reporting Administrateur');
+        $roleAdmin = $this->roleNomme($manager, 'Reporting Administrateur');
         $roleAdmin->addPermission($permLire)->addPermission($permPlanifier)->addPermission($permConfigurer);
         foreach ([$roleSite, $roleRegion, $roleGroupe, $roleAdmin] as $role) {
             $manager->persist($role);
@@ -302,5 +302,30 @@ final class L11Fixtures extends Fixture
         }
 
         $manager->flush();
+    }
+
+    /**
+     * Un rôle existant plutôt qu'un doublon.
+     *
+     * `Role.nom` porte une unicité **globale** : recharger les fixtures sur une base qui les a déjà
+     * échoue sur « Duplicate entry ». Ce n'est pas théorique — c'est exactement ce qui m'a empêché de
+     * régénérer les données de démonstration de la préproduction le 24/08, et qui a fini par me faire
+     * effacer les rattachements de droits de trente-quatre rôles.
+     *
+     * Le harnais de test ne voit jamais ce cas : il recrée le schéma depuis les entités à chaque classe
+     * de test, donc les fixtures partent toujours d'une base vide. Les deux mondes ne se croisent pas.
+     */
+    private function roleNomme(ObjectManager $manager, string $nom): Role
+    {
+        $existant = $manager->getRepository(Role::class)->findOneBy(['nom' => $nom]);
+
+        if ($existant instanceof Role) {
+            return $existant;
+        }
+
+        $role = (new Role())->setNom($nom);
+        $manager->persist($role);
+
+        return $role;
     }
 }
