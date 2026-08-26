@@ -18,6 +18,7 @@ use App\Organisation\Entity\Etablissement;
 use App\Vente\Enum\StatutVente;
 use App\Vente\State\AjoutLigneProcessor;
 use App\Vente\State\AnnulerVenteProcessor;
+use App\Vente\State\CorrectSettlementProcessor;
 use App\Vente\State\CreerVenteProcessor;
 use App\Vente\State\ModifierLigneProcessor;
 use App\Vente\State\PaiementProcessor;
@@ -133,6 +134,16 @@ use Symfony\Component\Uid\Uuid;
             input: false,
             security: "is_granted('PERM', 'vente.rembourser')",
             processor: RembourserVenteProcessor::class,
+        ),
+        new Post(
+            uriTemplate: '/ventes/{id}/corriger-reglement',
+            description: 'Corrige la VENTILATION d un reglement (D45) : -X sur un moyen, +X sur un autre. La vente n est jamais modifiee, l ecriture s ajoute et est scellee, et elle est datee du JOUR DU GESTE. Corps : { moyenDebite, moyenCredite, montant, motif }.',
+            read: true,
+            input: false,
+            output: SettlementCorrection::class,
+            normalizationContext: ['groups' => ['correction:read']],
+            security: "is_granted('PERM', 'vente.corriger_reglement')",
+            processor: CorrectSettlementProcessor::class,
         ),
         new Post(
             uriTemplate: '/ventes/{id}/ticket',

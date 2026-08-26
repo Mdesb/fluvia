@@ -348,6 +348,31 @@ export const api = {
 
   // --- Comptabilité / Régie (M6) ---
   journaux: () => request('/api/journals', { query: { itemsPerPage: 100 } }),
+  profilsExploitant: () => request('/api/profil_exploitants', { query: { itemsPerPage: 20 } }),
+  periodesComptables: () =>
+    request('/api/periode_comptables', { query: { itemsPerPage: 100, 'order[dateDebut]': 'desc' } }),
+  exportsComptables: () => request('/api/export_comptables', { query: { itemsPerPage: 50 } }),
+  // Operations sur mesure (`input: false`) : pas de `ld: true`.
+  //
+  // `generer` est idempotent en sequentiel — `ventesValideesNonComptabilisees` exclut ce qui a deja
+  // une ecriture. Mais la liste est calculee avant la boucle et le flush n'a lieu qu'a la fin : deux
+  // requetes qui se chevauchent voient le meme ensemble et generent toutes les deux. claude-D pose
+  // le verrou serveur ; en attendant, le bouton est desactive du clic jusqu'a la reponse, ce qui
+  // ferme le cas courant — celui de l'exploitant qui reclique parce que rien ne bouge.
+  genererEcritures: (profilId) =>
+    request('/api/compta/ecritures/generer', { method: 'POST', body: { profilExploitant: profilId } }),
+  validerEcriture: (id) =>
+    request(`/api/compta/ecritures/${id}/valider`, { method: 'POST', body: {} }),
+  extournerEcriture: (id) =>
+    request(`/api/compta/ecritures/${id}/extourne`, { method: 'POST', body: {} }),
+  verifierChaineEcritures: (journalId) =>
+    request('/api/compta/ecritures/verifier-chaine', { query: { journal: journalId } }),
+  cloturerPeriode: (id) =>
+    request(`/api/compta/periodes/${id}/cloturer`, { method: 'POST', body: {} }),
+  telechargerExport: (id) => request(`/api/compta/exports/${id}/telecharger`),
+  // Operation STANDARD : elle deserialise.
+  creerExportComptable: (corps) =>
+    request('/api/export_comptables', { method: 'POST', body: corps, ld: true }),
   ecrituresComptables: () =>
     request('/api/ecriture_comptables', { query: { itemsPerPage: 100 } }),
   regieRecettes: () => request('/api/regie_recettes', { query: { itemsPerPage: 100 } }),
@@ -375,10 +400,15 @@ export const api = {
   comptesClientBoutique: () =>
     request('/api/compte_clients', { query: { itemsPerPage: 100 } }),
   vitrines: () => request('/api/boutique/vitrines', { query: { itemsPerPage: 100 } }),
-  accepterRemboursement: (id) =>
-    request(`/api/boutique/demandes-remboursement/${id}/accepter`, { method: 'POST', body: {}, ld: true }),
-  refuserRemboursement: (id, motif) =>
-    request(`/api/boutique/demandes-remboursement/${id}/refuser`, { method: 'POST', body: { motifRefus: motif }, ld: true }),
+  // `montant` absent = remboursement total, c'est le defaut du serveur. On ne l'envoie donc que
+  // lorsque l'utilisateur a explicitement choisi un remboursement partiel.
+  accepterRemboursement: (id, montant) =>
+    request(`/api/boutique/demandes-remboursement/${id}/accepter`, {
+      method: 'POST',
+      body: montant === undefined ? {} : { montant: String(montant) },
+    }),
+  refuserRemboursement: (id, motifRefus) =>
+    request(`/api/boutique/demandes-remboursement/${id}/refuser`, { method: 'POST', body: { motifRefus } }),
 
   // --- Personnel ---
   employes: () => request('/api/employes', { query: { itemsPerPage: 200 } }),
@@ -428,6 +458,89 @@ export const api = {
     request(`/api/patinoire/liste-attente/${id}/annuler`, { method: 'POST', body: {} }),
   patinoireValiderRetenue: (id, corps) =>
     request(`/api/patinoire/retenues/${id}/valider`, { method: 'POST', body: corps }),
+  // Stock
+  // `articleStock` ne porte AUCUNE quantite : le stock reel vit dans les lots, un article pouvant en
+  // avoir plusieurs (dates d'entree et couts d'achat differents). C'est pour ca que les deux listes
+  // sont chargees ensemble et agregees a l'ecran.
+  stockArticles: () => request('/api/article_stocks', { query: { itemsPerPage: 200 } }),
+  stockLots: () => request('/api/stock_lots', { query: { itemsPerPage: 500 } }),
+  stockMouvements: () =>
+    request('/api/stock_mouvements', { query: { itemsPerPage: 50, 'order[date]': 'desc' } }),
+  stockParametrage: () => request('/api/stock_parametrages', { query: { itemsPerPage: 5 } }),
+  stockAlertesReappro: () => request('/api/stock/alertes-reappro'),
+  // Valorisation : droit distinct (`stock.lire_valorisation`). Le total de l'etablissement n'accepte
+  // PAS de date ; seule la valorisation par article la reconstruit.
+  stockValorisation: () => request('/api/stock/valorisation'),
+  stockValorisationArticle: (id, date) =>
+    request(`/api/stock/articles/${id}/valorisation`, { query: date ? { date } : undefined }),
+  // Les imputations ne sont pas lisibles depuis le mouvement : `MouvementStock` expose bien
+  // `imputations` dans `mouvement:read`, mais aucune propriete d'`ImputationLotStock` ne porte ce
+  // groupe — la collection sort en simples IRI. On la charge donc a part.
+  stockImputations: () =>
+    request('/api/stock_imputation_lots', { query: { itemsPerPage: 500 } }),
+  creerArticleStock: (corps) => request('/api/article_stocks', { method: 'POST', body: corps, ld: true }),
+  majArticleStock: (id, corps) => request(`/api/article_stocks/${id}`, { method: 'PATCH', body: corps }),
+  // Operations sur mesure : `input: false`, le processor lit le corps brut. Pas de `ld: true`.
+  stockAjuster: (corps) => request('/api/stock/mouvements/ajustement', { method: 'POST', body: corps }),
+  // Rattacher un article a un produit vendu : c'est CE lien qui fait qu'une vente decremente le
+  // stock. Sans lui, le produit se vend et rien ne bouge — volontairement, et silencieusement.
+  stockRattacherProduit: (id, produit) =>
+    request(`/api/stock/articles/${id}/rattacher-produit`, { method: 'POST', body: { produit } }),
+  stockDetacherProduit: (id) =>
+    request(`/api/stock/articles/${id}/detacher-produit`, { method: 'POST', body: {} }),
+
+  // Inventaire.
+  stockInventaires: () =>
+    request('/api/stock_inventaires', { query: { itemsPerPage: 20, 'order[dateLancement]': 'desc' } }),
+  stockLignesInventaire: () =>
+    request('/api/stock_ligne_inventaires', { query: { itemsPerPage: 500 } }),
+  // Operation STANDARD (pas d'`uriTemplate`) : elle deserialise, donc `ld: true`. Les trois
+  // suivantes sont sur mesure et n'en ont pas besoin.
+  stockLancerInventaire: (corps) =>
+    request('/api/stock_inventaires', { method: 'POST', body: corps, ld: true }),
+  stockSaisirComptage: (id, corps) =>
+    request(`/api/stock/lignes-inventaire/${id}`, { method: 'PATCH', body: corps }),
+  stockRegulariserLigne: (id) =>
+    request(`/api/stock/lignes-inventaire/${id}/regulariser`, { method: 'POST', body: {} }),
+  stockCloturerInventaire: (id) =>
+    request(`/api/stock/inventaires/${id}/cloturer`, { method: 'POST', body: {} }),
+
+  // Cycle d'achat : fournisseur -> commande -> envoi -> confirmation -> reception -> validation.
+  stockFournisseurs: () =>
+    request('/api/stock_fournisseurs', { query: { itemsPerPage: 200 } }),
+  stockCommandesAchat: () =>
+    request('/api/stock_commande_achats', { query: { itemsPerPage: 100 } }),
+  stockLignesCommandeAchat: () =>
+    request('/api/stock_ligne_commande_achats', { query: { itemsPerPage: 500 } }),
+  stockReceptions: () =>
+    request('/api/stock_reception_achats', { query: { itemsPerPage: 100 } }),
+  // Operations STANDARD : elles deserialisent, donc `ld: true`.
+  //
+  // `etablissement` n'est JAMAIS envoye, bien que le modele l'accepte en ecriture : le serveur le
+  // tient de la session (D3/D8), et un client qui le choisit est un client qui peut ecrire chez le
+  // voisin. Le respecter ici evite de prendre l'habitude inverse sur un ecran.
+  creerFournisseur: (corps) =>
+    request('/api/stock_fournisseurs', { method: 'POST', body: corps, ld: true }),
+  majFournisseur: (id, corps) =>
+    request(`/api/stock_fournisseurs/${id}`, { method: 'PATCH', body: corps }),
+  creerCommandeAchat: (corps) =>
+    request('/api/stock_commande_achats', { method: 'POST', body: corps, ld: true }),
+  creerLigneCommandeAchat: (corps) =>
+    request('/api/stock_ligne_commande_achats', { method: 'POST', body: corps, ld: true }),
+  creerReceptionAchat: (corps) =>
+    request('/api/stock_reception_achats', { method: 'POST', body: corps, ld: true }),
+  creerLigneReceptionAchat: (corps) =>
+    request('/api/stock_ligne_reception_achats', { method: 'POST', body: corps, ld: true }),
+  // Operations sur mesure : `input: false`, pas de `ld: true`.
+  stockEnvoyerCommande: (id) =>
+    request(`/api/stock/commandes-achat/${id}/envoyer`, { method: 'POST', body: {} }),
+  stockConfirmerCommande: (id) =>
+    request(`/api/stock/commandes-achat/${id}/confirmer`, { method: 'POST', body: {} }),
+  stockAnnulerCommande: (id) =>
+    request(`/api/stock/commandes-achat/${id}/annuler`, { method: 'POST', body: {} }),
+  stockValiderReception: (id) =>
+    request(`/api/stock/receptions-achat/${id}/valider`, { method: 'POST', body: {} }),
+
   // Padel
   padelTerrains: () => request('/api/padel/terrains', { query: { itemsPerPage: 100 } }),
   // Pas de collection listable pour les tournois (seulement des routes custom

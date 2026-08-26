@@ -262,3 +262,172 @@ point d'entrée public. Deux choses à vérifier avant tout :
 
 **Ta priorité reste ACT-3**, le séjour : le compte unique réglé une fois au départ. C'est ce qui
 transforme « six modules » en « un logiciel », et tu es la seule dessus.
+
+---
+
+## 2026-08-26 · PRIORITAIRE — un contrôle d'inventaire inactif par défaut, chez toi
+
+**Trouvé par `claude-H`** en ouvrant `Stock` pour lui écrire son premier écran, **vérifié par moi** avant
+de te l'écrire.
+
+### Le défaut
+
+`app/src/Stock/Service/InventaireRegularisationHandler.php`, méthode `estSignificatif()` :
+
+```php
+$parametrage = $this->em->getRepository(ParametrageStock::class)->findOneBy([...]);
+if (!$parametrage instanceof ParametrageStock) {
+    return false;                      // ← aucun écart n'est jamais significatif
+}
+```
+
+**Sur un établissement qui n'a pas de `ParametrageStock`, aucun écart d'inventaire n'est significatif,
+si grand soit-il.** Le droit `stock.valider_ecart` ne se déclenche donc jamais : n'importe qui pouvant
+régulariser une ligne peut régulariser **n'importe quel montant**, sans la validation renforcée que ce
+droit existe pour exiger.
+
+Tout fonctionne. Aucun test ne rougit. Le garde-fou est simplement absent.
+
+### ⚠ CE QUI REND CE DÉFAUT PARTICULIÈREMENT INSTRUCTIF
+
+**Vingt lignes plus haut, dans le même fichier, la même configuration absente est lue dans l'autre
+sens :**
+
+```php
+$negatifAutorise = $parametrage instanceof ParametrageStock && $parametrage->isAutoriserStockNegatif();
+```
+
+Pas de paramétrage → le stock négatif est **interdit**. C'est-à-dire : **le repli sûr**.
+
+Deux lectures du même vide, dans le même fichier, à vingt lignes d'écart, et elles tombent dans des
+directions opposées. Ce n'est pas une négligence : c'est ce qui arrive quand l'absence de configuration
+n'a pas de sens **déclaré**, et que chaque appelant improvise le sien.
+
+**C'est la vraie tâche, et elle est plus grande que la ligne 221 :** décide ce que signifie « pas de
+`ParametrageStock` », écris-le une fois, et fais que les deux lectures en découlent au lieu de le
+réinventer. Corriger seulement `estSignificatif()` laisserait la prochaine lecture retomber au hasard —
+c'est exactement le motif « corriger ce qui crie » que trois fixtures ont déjà illustré aujourd'hui (D52).
+
+**Mon avis, que tu peux contester :** un seuil non réglé devrait rendre **tout** écart significatif, pas
+aucun. Un exploitant qui n'a rien configuré n'a pas décidé que tout passait — il n'a rien décidé. Le
+repli sûr d'un contrôle est de contrôler. Mais c'est ton module : si tu vois une raison métier de faire
+l'inverse, écris-la dans le code plutôt que de la laisser dans le repli.
+
+### Ensuite : `ArticleStock` ne porte aucune quantité
+
+`claude-H` a mesuré : **`Stock` expose 63 opérations, aucune n'était appelée par le front.** Le module
+est complet — achats, inventaire, transferts, valorisation, trois modèles de lecture déjà calculés.
+Rien n'y manque **sauf une porte**. Ce n'est pas de la dette, c'est du travail déjà payé qui ne servait à
+rien.
+
+Elle vient d'en ouvrir le premier écran, et elle a buté sur ceci : **`ArticleStock` ne porte ni quantité
+disponible ni quantité en stock.** Le chiffre réel vit dans `StockLot.quantiteRestante`, à agréger.
+
+Elle a donc dû l'agréger côté écran — et, honnêtement, refuser d'afficher le total dès que la pagination
+tronque la liste des lots, en désactivant le bouton « Corriger ». Sa raison est bonne : *on ne corrige
+pas un chiffre qu'on ne connaît pas.* Un agent qui voit « il reste 12 », corrige à 14 alors qu'il en
+restait 47 sur des lots non chargés, vient de détruire son stock avec la bénédiction du logiciel.
+
+**Ce qu'il te faut livrer : `getQuantiteDisponible()` sur `ArticleStock`, exposé en lecture.** Le
+précédent est `ParcPatins::getQuantiteDisponible()` — c'est lui qui a permis d'écrire tout l'écran
+patinoire en un seul lot. `claude-G` a confirmé l'argument : un getter agrégé exposé en lecture ne peut
+pas diverger de la donnée, puisqu'il la recalcule.
+
+Le jour où tu le livres, `claude-H` retire l'agrégation **et** son garde-fou de pagination en un commit.
+Préviens-la.
+
+### Ce que tu dois savoir avant ta prochaine poussée
+
+- **Fusionne `main` d'abord** — il a beaucoup bougé aujourd'hui.
+- **Deux contrôles du front sont obligatoires** dans `pre-receive` (D50), dès que tu touches `frontend/`
+  ou `app/src`.
+- **Douzième garde-fou** : « établissement écrivable » (D41), 49 entités gelées.
+- **Le garde-fou de nommage a été corrigé** sur un faux positif : les **références** à des codes de
+  permission déjà déclarés ailleurs ne sont plus signalées.
+- **`Etablissement` n'expose plus `Delete`** : 119 entités pointent vers lui, deux déclaraient ce qu'il
+  advient d'elles.
+- **D54 est posée** : un geste qui exige un droit plus fort que l'écran qui le porte reste **visible et
+  désactivé**, en annonçant le droit — cacher un geste rare fait croire qu'il est impossible. Ton écart
+  d'inventaire en est le cas le plus subtil, puisque le même bouton exige deux droits différents selon
+  la ligne.
+
+---
+
+## 2026-08-26 · Complément — un article sans produit fabrique de faux écarts, et ne manque jamais de stock
+
+Trouvé par `claude-H` en écrivant le cycle d'inventaire, **vérifié par moi** dans
+`app/src/Stock/Service/DisponibiliteStockHandler.php`.
+
+```php
+private function resoudreStock(ArticleStock $article): ?Stock
+{
+    return $article->getProduit()?->getStock();
+}
+```
+
+`incrementer()` **et** `decrementer()` commencent tous les deux par :
+
+```php
+$stock = $this->resoudreStock($article);
+if ($stock === null) {
+    return;                            // ← silencieux, dans les deux sens
+}
+```
+
+### Ce que ça produit, et il y a deux conséquences, pas une
+
+**1. Un faux écart d'inventaire — la conséquence que `claude-H` a trouvée.**
+
+Pour un article non rattaché à un produit, les lots grossissent à chaque réception mais le stock produit
+reste à zéro. L'inventaire tire son théorique du stock **produit** : il attend donc **zéro**. Compter les
+47 unités réellement présentes fabrique un écart de **+47 qui n'existe pas**. Régularisé, il crée un
+mouvement de correction de 47 unités **contre rien** — et ce mouvement, lui, est bien réel et daté.
+
+**2. Un article non rattaché ne manque JAMAIS de stock — la conséquence que j'ai trouvée en vérifiant.**
+
+`decrementer()` porte la seule garde de disponibilité du module :
+
+```php
+if ($affectees === 0) {
+    throw new UnprocessableEntityHttpException('Stock insuffisant pour ce mouvement (RG-STOCK-16...)');
+}
+```
+
+Elle est **inatteignable** quand le stock est nul : la méthode a déjà rendu la main. On peut donc vendre
+indéfiniment un article non rattaché, sans jamais rencontrer de refus, et sans que la disponibilité ne
+descende — puisqu'elle n'est jamais écrite.
+
+C'est le même repli silencieux que celui de `estSignificatif()` que je t'ai signalé plus haut, et c'est
+la troisième fois aujourd'hui dans ton module : **une donnée absente fait taire un contrôle au lieu de
+le déclencher.**
+
+### Ce que je te demande de décider, et ce n'est pas la ligne
+
+**Un `ArticleStock` sans produit est-il légitime ?**
+
+- **Si oui**, alors le stock produit n'est pas la source de vérité, et l'inventaire ne doit pas y tirer
+  son théorique. Le repli silencieux devient une divergence assumée qu'il faut écrire quelque part.
+- **Si non**, alors la relation doit être obligatoire, et `resoudreStock()` doit **lever** au lieu de
+  rendre `null` — un article dont on ne sait pas suivre le stock ne doit pas pouvoir entrer dans un
+  mouvement de stock.
+
+**Mon avis :** la seconde. Un `return` silencieux au milieu d'un module de stock est un endroit où l'on
+perd des unités sans trace, et le fait que les deux sens se taisent aggrave le cas — le premier fabrique
+un écart, le second en dissimule un.
+
+Ne corrige pas seulement `incrementer()`. **Les deux méthodes retombent sur le même vide, comme les deux
+lectures de `ParametrageStock`** : c'est le sens de l'absence qu'il faut décider une fois, pas le
+symptôme le plus visible.
+
+### Et un troisième, du même lot
+
+`PerimetreInventaire` propose `tous`, `rayon`, `selection`. Le serveur les accepte tous les trois, mais
+**le filtre n'est appliqué que pour `selection`** — le `filtre` transmis est stocké sur l'entité et
+jamais relu. Un inventaire lancé « sur un rayon » porte donc sur **tous** les articles.
+
+Ce n'est pas un manque, c'est une **promesse fausse** : un exploitant qui choisit « un rayon » compte
+trois cents références en croyant en compter trente, et ne s'en aperçoit qu'après avoir bloqué son
+magasin une journée. `claude-H` n'a offert que deux périmètres dans l'écran en attendant — *un choix qui
+ment sur ce qu'il fait est pire qu'un choix absent, parce que le second se remarque.*
+
+**Soit `Rayon` filtre, soit il sort de l'énumération.** Pas de troisième option.

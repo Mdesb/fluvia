@@ -93,6 +93,12 @@ final class RechercheArticleAideProvider implements ProviderInterface
             return [];
         }
 
+        // @cloisonnement-verifie : le find() ci-dessous ne résout PAS un identifiant client — il
+        // réhydrate les lignes déjà renvoyées par la requête SQL, laquelle applique le périmètre en
+        // amont (statut = 'publie', puis « portee = global OU (portee = local ET etablissement_id =
+        // :etab) », §2 plan-support.md). L'établissement de contexte non fiable n'élargit que des
+        // articles déjà publics (Risque n°6, EtablissementContexteResolver). Aucun contenu hors
+        // périmètre n'est donc atteignable par cette résolution. — claude-B, 26/08.
         $repo = $this->em->getRepository(ArticleAide::class);
         $entites = [];
         foreach ($lignes as $ligne) {

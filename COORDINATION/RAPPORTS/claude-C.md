@@ -22,6 +22,8 @@
 | 02:00 | **Présentation** — `claude-C`, en ligne. **Mon filet de complétude se refermait sur lui-même** : aucun garde-fou neuf ne pouvait plus entrer. Corrigé et poussé (`fd0c32e`). Le garde-fou **n°10 est prêt et attend ta fusion** — je n'ai pas contourné la barrière. | n°10 en attente de `fd0c32e` dans `main` | ta fusion, et rien d'autre |
 | 03:30 | **Présentation** — `claude-C`. **n°10 poussé** après ta fusion, chemin propre, aucun interrupteur. **Fil n°1 : rien à écrire, tout à brancher** — le garde-fou de claude-H existait et ne tournait nulle part. Câblé, vérifié dans les deux sens. **n°5 déjà livré.** Lanceur **11/11**. | fil n°2 (D41) | rien |
 | 05:00 | **Présentation** — `claude-C`. **Fil n°2 (D41) livré** : garde-fou n°12, deux voies d'exposition, **49 entités** et non 35. Trois défauts de ma propre règle trouvés en réconciliant deux implémentations. Lanceur **12/12**. | fil n°3 (permission sans rôle) | rien |
+| 06:00 | **Présentation** — `claude-C`. **Fil n°3 : je ne le construis pas, et voici pourquoi.** La prémisse ne tient pas dans ce dépôt — le rôle modèle porte le joker `*.*`, donc `smart_flow.read` n'est pas morte. La règle signalerait **22 migrations légitimes sur 28**. | fil n°4 | rien |
+| 07:00 | **Présentation** — `claude-C`. **Fil n°4 livré** : garde-fou n°13, suppressions en migration, cliquet à 10 + échappatoire annotée. **Et un cas de banc qui mentait** — il visait une entité cloisonnée depuis, donc passait au vert sans rien tester. Rendu autonome. | ton fil est épuisé — périmètre disponible | rien |
 
 ---
 
@@ -1046,3 +1048,142 @@ mon cas de test ne ressemble pas au vrai défaut.
 
 **Lanceur 12/12, banc 17/17**, vérifiés après fusion des dix derniers commits de `main`, dont une
 migration neuve.
+
+
+---
+
+### 2026-08-26 · 06:00 — Fil n°3 : la règle demandée crierait au loup 22 fois
+
+**`claude-C`, en ligne.** Remote Control actif. **D34 toujours inapplicable.**
+
+Tu m'as demandé de **refuser une migration qui crée une permission sans la rattacher à au moins un
+rôle**, avec cet argument : *« une permission sans rôle n'a littéralement aucun effet »*, et
+`Version20260824210100` (`smart_flow.read`) en exemple.
+
+**J'ai mesuré avant de coder, et la règle ne tient pas dans ce dépôt.**
+
+**1. Aucune migration ne rattache de permission à un rôle — par conception.** Sur 28 migrations qui
+créent une permission, **22 ne rattachent rien**. Ce n'est pas de la négligence répétée 22 fois :
+`sec_role_permission` est rempli par les **fixtures** et par `ProvisioningService`, jamais par les
+migrations qui seedent le catalogue.
+
+**2. `ProvisioningService` ne compose aucune politique**, et il le dit lui-même :
+
+> *« Décider ici ce qu'un administrateur de client a le droit de faire reviendrait à écrire une seconde
+> politique d'habilitation, à côté de celle de `Securite`, qui divergerait dès la première évolution. »*
+
+Il **duplique un rôle modèle**, `Administrateur d'établissement`.
+
+**3. Ce rôle modèle porte le joker.** `Version20260824233000` lui attache exactement deux
+permissions — et la première est `('*', '*')` :
+
+```php
+foreach ([['*', '*'], ['securite', 'gerer']] as [$module, $action]) {
+```
+
+**4. Et le calculateur honore le joker**, `CalculateurDroits` ligne 99 :
+
+```php
+if (($m === $module || $m === '*') && ($a === $action || $a === '*')) {
+```
+
+**Conclusion : `smart_flow.read` n'est pas morte.** L'administrateur d'établissement la détient par le
+joker, dès sa création. Le cas que tu cites en exemple n'est pas un défaut.
+
+**Ce que la règle produirait si je l'écrivais** : 22 refus sur des migrations correctes, dont les tiennes
+et celles de tout le monde depuis le 14/08. C'est le scénario exact que tu m'as décrit toi-même — *« un
+contrôle qui crie au loup finit désactivé, et on perd alors aussi les vraies alertes »* — et la
+recommandation de claude-H que tu reprenais : **précis d'abord, exhaustif ensuite**.
+
+**Je ne le construis donc pas, et je te rends la décision** avec ce qui reste vrai :
+
+- Une permission qu'**aucun rôle non-joker** ne détient n'est utilisable que par un administrateur. Ce
+  n'est pas un défaut mécanique : c'est une décision produit, permission par permission — faut-il que
+  les rôles délégués puissent le faire ? Aucun outil ne peut trancher ça.
+- Si tu veux quand même un contrôle, le seul énoncé mécaniquement vrai serait : *« une permission ne
+  doit pas être seedée sans que le catalogue d'événements ou une spec la mentionne »* — mais je ne l'ai
+  pas mesuré et je ne le propose pas à la légère.
+
+**C'est la troisième fois cette nuit que la bonne contribution est de ne rien livrer** — après D41
+côté décorateur et le fil n°1. Je préfère te le dire que t'apporter un garde-fou qui te ferait perdre
+la confiance dans les onze autres.
+
+**Suite** : fil n°4 — refuser un `DROP TABLE` / `DROP INDEX` non justifié dans `app/migrations/`.
+
+**Lanceur 12/12, banc 17/17.**
+
+
+---
+
+### 2026-08-26 · 07:00 — Fil n°4 livré, et un cas de banc qui mentait depuis ce matin
+
+**`claude-C`, en ligne.** Remote Control actif. **D34 toujours inapplicable.**
+
+**Garde-fou n°13 — une suppression dans un `up()` de migration doit être voulue, et le dire.**
+
+**Il est préventif, et je préfère le dire que le laisser croire.** Sur les 75 migrations du dépôt,
+**dix** `DROP` figurent dans un `up()`, tous antérieurs au 17/08 et manifestement délibérés — des
+consolidations de tables `sport_*`, `padel_*`, `patin_*`. **Aucun `DROP` de dérive n'a jamais été
+commité.** Le cliquet ne répare rien : il empêche le onzième de passer inaperçu.
+
+**Seulement `up()`, et c'est essentiel.** Un `DROP` dans `down()` annule le `up()` de la même
+migration. J'avais failli signaler `DROP TABLE messenger_messages` avant de voir qu'il se trouvait dans
+le `down()` de la migration qui **crée** cette table. Un garde-fou qui confond les deux transforme
+chaque migration correcte en faute — et c'est précisément le reproche que tu m'as fait sur les messages
+trompeurs.
+
+**Échappatoire annotée**, sur le modèle de `@cloisonnement-verifie` :
+
+```
+@drop-voulu : <pourquoi cet objet disparaît, et ce qui le remplace>
+```
+
+Greppable, datée, attribuable — ce qu'un assouplissement de détection n'est jamais. Vérifié : elle
+dispense bien.
+
+**Vérifié dans les trois états**, comme D47 l'exige : vert sur le dépôt sain, rouge sur un `DROP` neuf
+avec le nom de l'objet et la migration, et silencieux une fois l'annotation posée.
+
+---
+
+### Un cas de banc qui mentait, et je l'ai poussé avant de le voir
+
+Le cas du n°8 visait **`Promotion`** en dur, parce qu'elle figurait dans la ligne de base des entités
+non cloisonnées. Elle a été **cloisonnée le 26/08** — commit `c0ee41a`, *« une arme commerciale ne se
+lit pas d'un établissement à l'autre »*. Le cas est alors devenu **vert en ne testant plus rien**.
+
+**C'est la panne la plus insidieuse d'un banc : il ne casse pas, il ment.** Et je ne l'ai vu qu'après
+avoir poussé — le hook ne lance pas le banc, seul le lanceur le fait.
+
+Le cas choisit désormais sa cible **à l'exécution** dans la ligne de base courante : la première entité
+encore non cloisonnée qui expose une écriture. Il a pris `FactureB2G`. **Et s'il n'en trouve aucune, il
+échoue bruyamment** plutôt que de passer en silence — un banc sans cible doit le dire.
+
+Même motif que tout ce que j'ai corrigé cette nuit : **un mécanisme qui dépend d'une donnée qui bouge
+doit la relire, pas la figer.**
+
+---
+
+### Ton fil de cinq est épuisé — voici où il en est
+
+| | | |
+|---|---|---|
+| 1 | `droits.includes(` dans `frontend/` | **rien à écrire** — celui de claude-H couvrait déjà le besoin, mais ne tournait nulle part. Branché. |
+| 2 | établissement écrivable (D41) | **livré** — n°12, 49 entités, deux voies |
+| 3 | permission sans rôle | **non construit** — la prémisse ne tient pas, la règle crierait au loup 22 fois. Preuves dans mon rapport de 06:00. |
+| 4 | `DROP` non justifié | **livré** — n°13, préventif, cliquet à 10 |
+| 5 | garde-fou de topologie | **déjà livré** le 25/08 au matin, en position zéro du lanceur |
+
+**Mon périmètre est donc vide, et je te le dis plutôt que de me taire.** Treize garde-fous, tous verts,
+câblés, sous filet de complétude. Banc à 17 cas dont un désormais auto-adaptatif.
+
+**Ce que je peux prendre sans t'attendre**, si tu ne réponds pas d'ici mon prochain battement — je
+prendrai le premier :
+
+1. **Les `RENAME INDEX`** que claude-F a vus sur base propre. Je t'ai dit que ma mesure statique ne les
+   voit pas : ils viennent de l'autre direction, un index déclaré au mapping dont la base porte le nom
+   auto-généré. Ça demande une base vivante, et j'ai le ramasseur pour monter puis démonter proprement.
+2. **Une revue des douze autres garde-fous sous le critère D47** — vert sur du code sain d'un autre
+   périmètre. Je l'ai appliqué aux n°12 et n°13 ; les onze premiers ne l'ont jamais été formellement.
+
+**Lanceur 13/13, banc 17/17.**

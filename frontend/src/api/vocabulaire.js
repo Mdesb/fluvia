@@ -87,6 +87,52 @@ const MOTS = {
   expiree: 'Expirée',
   perte: 'Perte',
   restitution_partielle: 'Restitution partielle',
+
+  // --- Stock ---
+  entree_achat: 'Entrée (achat)',
+  sortie_vente: 'Sortie (vente)',
+  retour_fournisseur: 'Retour fournisseur',
+  ajustement_positif: 'Correction en plus',
+  ajustement_negatif: 'Correction en moins',
+  perte_casse: 'Perte ou casse',
+  sortie_transfert: 'Départ en transfert',
+  entree_transfert: 'Arrivée de transfert',
+  regularisation_inventaire: 'Régularisation d’inventaire',
+  piece: 'pièce',
+  kg: 'kg',
+  litre: 'litre',
+  paquet: 'paquet',
+  autre: 'autre',
+  tous: 'Tous les articles',
+  rayon: 'Un rayon',
+  selection: 'Une sélection',
+  cloture: 'Clôturé',
+  en_validation: 'En validation',
+  fifo: 'Premier entré, premier sorti (FIFO)',
+  cmup: 'Coût moyen pondéré',
+
+  // --- Comptabilite ---
+  provisoire: 'Provisoire',
+  controlee: 'Contrôlée',
+  exportee: 'Exportée',
+  ouverte: 'Ouverte',
+  cloturee: 'Clôturée',
+
+  // --- Achats ---
+  // « brouillon » et « validee » servent aussi ailleurs : ce sont des etats de document, pas des
+  // etats propres au stock.
+  brouillon: 'Brouillon',
+  envoyee: 'Envoyée',
+  confirmee: 'Confirmée',
+  partiellement_recue: 'Partiellement reçue',
+  cloturee: 'Clôturée',
+  annulee: 'Annulée',
+  validee: 'Validée',
+
+  // --- Remboursements ---
+  recue: 'Reçue',
+  acceptee: 'Acceptée',
+  refusee: 'Refusée',
 }
 
 // Rend un code lisible sans prétendre le traduire : `boutique_stock` → « Boutique stock ».
