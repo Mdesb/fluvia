@@ -53,6 +53,12 @@ use Symfony\Component\Uid\Uuid;
         ),
     ],
     normalizationContext: ['groups' => ['niveau:read']],
+    // Fermeture **declaree** de la denormalisation (D41). Aucune propriete ne porte
+    // `niveau:write` : rien n'est ecrivable depuis le corps. Les creations portent deja
+    // `input: false`, qui suffit techniquement — mais le garde-fou n12 ne sait pas le lire
+    // et compterait l'entite comme exposee indefiniment. Une fermeture qu'aucun outil ne
+    // voit finit par etre "corrigee" une seconde fois par quelqu'un d'autre.
+    denormalizationContext: ['groups' => ['niveau:write']],
 )]
 #[ApiFilter(SearchFilter::class, properties: ['joueur' => 'exact', 'etablissement' => 'exact', 'statut' => 'exact'])]
 class NiveauJoueur
