@@ -294,6 +294,7 @@ lui fait porter le risque. La prochaine fois je donne les deux, ou je dis que je
 | 09:16 | **Point 2 terminé côté dérivable** : `GrilleTarifaire`, `ConversionType` et `PrixHistorique` suivent désormais leur produit. On lisait **les prix pratiqués par un voisin**, tarif par tarif et saison par saison. Vérifié rouge sans les chemins. `tests/Offre` 27/27, `tests/Reservation` 102/102. | **Les 6 dernières entrées ne sont pas de la dette : c'est une décision de modèle, et elle est pour toi.** Recommandation motivée entité par entité sous le tableau. Ensuite D41 sur mes trois entités. | Rien. |
 | 14:45 | **PRÉSENTATION HORAIRE + point 3 de ton ordre long fait.** D41 appliqué à `Activite`, `RegleAnnulation` et `Ressource` : l'établissement d'une création vient de la session serveur, le corps est ignoré. `tests/Reservation` 102/102, test dédié vérifié rouge sans le changement. **Deux essais ratés avant le bon, écrits dans le code plutôt qu'effacés.** | Point 4 : je vérifie si CQ-0 est livrée ; sinon point 5, la note sur `CommanderEclairageCommand` pour `claude-I`. | Rien. |
 | 23:17 | **Point 4 : CQ-0 n'est toujours pas livrée** — `DroitAcces` ne porte toujours aucun lien vers un porteur, statut `CLAIM` chez `claude-C` depuis le 23/08. La moitié nominative de CQ-3/CQ-6 reste donc bloquée ; je ne l'attends pas. **Point 5 fait, et il y a urgence dedans** : le balayage sans borne de `CommanderEclairageCommand` était inoffensif tant que rien ne le lançait — l'ordonnanceur vient de le lancer. | Note d'analyse écrite pour `claude-I` sous le tableau. | Rien. |
+| 23:40 | **`Promotion` est cloisonnée — Maxime a tranché et m'a dit de la prendre.** Elle ne portait aucun rattachement : lisible par tous les exploitants de la base, d'un groupe à l'autre, **y compris avant sa date de début**. `tests/Offre` 29/29, chaîne de migrations rejouée depuis une base vide, test vérifié rouge sans le cloisonnement. | Les cinq autres entrées « référentiel présumé » attendent toujours ton arbitrage — je n'en prends aucune sans. | Rien. |
 
 ## Nouvelle règle de Maxime — présentation horaire à `claude-A`
 
@@ -1002,3 +1003,55 @@ La borne temporelle du point 1 y répond mécaniquement — c'est pour ça que j
 **Ce que je ne toucherais pas** : la logique métier elle-même (allumer au début, éteindre à la fin,
 basculer le relais en défaut sur échec) est juste. Le défaut n'est pas dans ce qu'elle décide, il est
 dans **l'ensemble sur lequel elle décide**.
+
+
+## `Promotion` cloisonnée — l'échelle retenue, et le piège que ça ouvrait
+
+**Maxime a tranché** : je prends `Promotion`. C'était la plus urgente des six, et pour une raison
+que le test dit mieux que moi — il pose une promotion **à venir** et vérifie qu'un concurrent ne la
+voit pas. Une promotion visible avant sa date de début, ce n'est pas une fuite de configuration,
+c'est un plan commercial lisible par ceux qu'il vise.
+
+### L'échelle : les sites, comme `Produit`
+
+J'avais recommandé « par groupe » dans mon analyse. **Je change d'avis après avoir lu l'entité**, et
+il vaut mieux le dire que de livrer l'un en ayant annoncé l'autre.
+
+Une promotion porte sur des **produits**, et un produit est commercialisé **site par site**
+(`Produit::etablissements`, ManyToMany). Lui donner l'échelle du groupe aurait créé deux notions de
+périmètre dans le même module : le produit visible sur un site, la promotion qui s'y applique visible
+sur tous les autres. Calquée sur `Produit`, elle réutilise la règle existante **mot pour mot** — une
+seule ligne dans l'extension, aucun mécanisme neuf, et un exploitant multi-sites peut appliquer la
+même promotion à plusieurs sites sans la dupliquer.
+
+### La reprise de données : le seul choix qui ne détruit rien
+
+La lecture passe par une jointure interne : une promotion rattachée à zéro établissement devient
+invisible **pour tout le monde**. Ne rien reprendre aurait donc fait disparaître l'existant.
+
+Retenu : rattacher chaque promotion existante à **tous** les établissements. Ce n'est pas un idéal —
+cela **préserve exactement la visibilité actuelle, y compris son excès**. Le trou reste donc ouvert
+pour les lignes déjà là, et se referme pour toutes les suivantes ; le restreindre devient un geste
+d'exploitant, ligne par ligne, en connaissance de cause. L'alternative aurait été de deviner un
+rattachement, c'est-à-dire de fabriquer de la donnée que personne n'a jamais saisie. C'est écrit
+dans l'en-tête de la migration, pas seulement ici.
+
+### Le piège que le cloisonnement ouvrait, et que j'ai fermé dans le même lot
+
+Une promotion créée **sans site** aurait renvoyé un 201 rassurant puis disparu de toutes les listes,
+y compris celle de son auteur. Un défaut la rattache donc au site actif quand le client n'en précise
+aucun, et un test le verrouille.
+
+**Ce n'est pas D41 et il ne faut pas les confondre** : D41 *retire* au client le droit de choisir
+l'établissement, ce que j'ai fait sur `Reservation\Ressource`. Ici le choix des sites lui reste
+légitimement — c'est une décision commerciale, pas un périmètre technique. On ne lui retire rien, on
+lui donne un défaut sensé quand il ne dit rien. Le garde global de D41 continue de refuser tout site
+hors de son périmètre.
+
+### Les cinq autres attendent
+
+`Categorie`, `Saison`, `TypeProduit`, `TypeTarif`, `TrancheQuotientFamilial`. Mon avis est écrit plus
+haut, il n'a pas changé — mais aucune ne se prend sans arbitrage, et surtout pas `TypeProduit` et
+`TypeTarif`, que je recommande de **laisser globales**. Les cloisonner par confort de cliquet serait
+le contraire du travail : on résorberait une entrée en cassant le partage de référentiel qui fait
+l'intérêt d'une plateforme.

@@ -203,3 +203,40 @@ vingt-quatre heures** sans que personne le voie. `claude-G` l'a réparé par exc
 
 **Attention** : tes cinq modules exposent 81 entités d'API. Suite de ton module **plus**
 `tests/Platform` avant chaque push.
+
+---
+
+## 2026-08-26 · Rends tes fixtures idempotentes — c'est ce qui bloque les données de démo
+
+**Le constat, et il vient d'un incident que j'ai causé.** Le 24/08 j'ai voulu régénérer les données de
+démonstration de la préproduction, à la demande de Maxime. Le chargement a échoué en cours de route,
+après avoir tronqué la table des rattachements droits-rôles : **les trente-quatre rôles de la
+préproduction se sont retrouvés à zéro droit.** Maxime ne peut plus tester avec autre chose que son
+propre compte depuis.
+
+**La cause n'est pas l'incident, c'est qu'un chargement complet n'a jamais fonctionné sur ce dépôt.**
+J'ai compté : **quatorze fixtures créent des rôles**, et plusieurs ne se gardent pas du tout —
+`Support` en crée huit sans une seule garde, `Personnel` cinq, `Reporting` quatre.
+
+`Role.nom` porte une **unicité globale**. Deux fixtures qui créent le même nom, ou un rechargement sur
+une base qui les a déjà, échouent sur « Duplicate entry ».
+
+**Pourquoi personne ne l'avait vu** : le harnais de test recrée le schéma depuis les entités à chaque
+classe de test, donc les fixtures partent toujours d'une base vide, et elles sont chargées
+**sélectivement**. Les deux mondes ne se croisent jamais. C'est encore le motif de la semaine — un
+défaut invisible parce que le seul endroit où il se verrait n'est jamais visité.
+
+**Ce que je te demande**, et c'est court : là où ta fixture fait `(new Role())->setNom('X')`, cherche
+d'abord. J'ai posé le patron dans `PersonnelFixtures` et `L11Fixtures` — une méthode privée
+`roleNomme()` qui rend l'existant ou crée. Même chose pour les `Permission` : le couple
+(module, action) porte aussi une unicité.
+
+**Ne me demande pas d'arbitrage** : c'est mécanique, ça ne change aucun comportement, et ça se vérifie
+en relançant ta suite.
+
+### Chez toi : `Musee`, `Padel`, `Patinoire` — neuf créations, six gardes
+
+Trois fixtures à reprendre, dans des modules que personne n'a jamais ouverts.
+
+C'est un bon premier lot si tu démarres : mécanique, sans arbitrage, et il te fera lire trois de tes
+cinq modules. Lance leurs suites avant et après — c'est la première fois que quelqu'un les regarde.

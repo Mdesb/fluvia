@@ -11,6 +11,10 @@ use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\Offre\Enum\TypePromotion;
+use App\Offre\State\PromotionScopeStampProcessor;
+use App\Organisation\Entity\Etablissement;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
@@ -28,7 +32,7 @@ use Symfony\Component\Validator\Constraints as Assert;
     operations: [
         new GetCollection(security: "is_granted('PERM', 'offre.lire')"),
         new Get(security: "is_granted('PERM', 'offre.lire')"),
-        new Post(security: "is_granted('PERM', 'offre.gerer')"),
+        new Post(security: "is_granted('PERM', 'offre.gerer')", processor: PromotionScopeStampProcessor::class),
         new Patch(security: "is_granted('PERM', 'offre.gerer')"),
         new Delete(security: "is_granted('PERM', 'offre.gerer')"),
     ],
@@ -44,6 +48,24 @@ class Promotion
     #[ORM\Column(type: UuidType::NAME, unique: true)]
     #[Groups(['ref:read'])]
     private Uuid $id;
+
+    /**
+     * Sites ou cette promotion s'applique — **cloisonnement** (RG-SOCLE-05).
+     *
+     * Calque sur `Produit::etablissements`, et pour une raison de fond : une promotion porte sur des
+     * produits, et un produit est commercialise site par site. Lui donner une autre echelle aurait
+     * cree deux notions de perimetre dans le meme module.
+     *
+     * **Avant ce lot, `Promotion` ne portait aucun rattachement** : la collection etait donc lisible
+     * par tous les exploitants de la base, y compris d'un groupe a l'autre. Une promotion est une
+     * arme commerciale, et elle etait visible des concurrents **avant meme sa date de debut**.
+     *
+     * @var Collection<int, Etablissement>
+     */
+    #[ORM\ManyToMany(targetEntity: Etablissement::class)]
+    #[ORM\JoinTable(name: 'off_promotion_etablissement')]
+    #[Groups(['ref:read', 'ref:write'])]
+    private Collection $etablissements;
 
     #[ORM\Column(length: 120)]
     #[Assert\NotBlank]
@@ -88,6 +110,7 @@ class Promotion
     public function __construct()
     {
         $this->id = Uuid::v4();
+        $this->etablissements = new ArrayCollection();
     }
 
     public function getId(): Uuid
@@ -203,6 +226,28 @@ class Promotion
     public function setEligibilite(?array $eligibilite): self
     {
         $this->eligibilite = $eligibilite;
+
+        return $this;
+    }
+
+    /** @return Collection<int, Etablissement> */
+    public function getEtablissements(): Collection
+    {
+        return $this->etablissements;
+    }
+
+    public function addEtablissement(Etablissement $etablissement): self
+    {
+        if (!$this->etablissements->contains($etablissement)) {
+            $this->etablissements->add($etablissement);
+        }
+
+        return $this;
+    }
+
+    public function removeEtablissement(Etablissement $etablissement): self
+    {
+        $this->etablissements->removeElement($etablissement);
 
         return $this;
     }

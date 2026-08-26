@@ -12,6 +12,7 @@ use App\Offre\Entity\ConversionType;
 use App\Offre\Entity\GrilleTarifaire;
 use App\Offre\Entity\PrixHistorique;
 use App\Offre\Entity\Produit;
+use App\Offre\Entity\Promotion;
 use App\Securite\Entity\Affectation;
 use App\Securite\Entity\Utilisateur;
 use Doctrine\ORM\Query\Expr\Join;
@@ -39,6 +40,7 @@ final class PerimetreProduitExtension implements QueryCollectionExtensionInterfa
      */
     private const CHEMINS = [
         Produit::class => null,
+        Promotion::class => null,
         ConversionType::class => 'produit',
         GrilleTarifaire::class => 'produit',
         PrixHistorique::class => 'grille.produit',
