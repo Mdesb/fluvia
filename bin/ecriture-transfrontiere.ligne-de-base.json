@@ -18,19 +18,9 @@
         "ValidationPassageHandler s en sert pour autoriser un franchissement."
     ],
     "scelle": {
-        "plafond": 5
+        "plafond": 3
     },
     "entrees": {
-        "DisponibiliteRessource::Ressource": {
-            "entite": "DisponibiliteRessource",
-            "relation": "ManyToOne",
-            "cible": "Ressource"
-        },
-        "IndisponibiliteRessource::Ressource": {
-            "entite": "IndisponibiliteRessource",
-            "relation": "ManyToOne",
-            "cible": "Ressource"
-        },
         "PieceJointeAide::ArticleAide": {
             "entite": "PieceJointeAide",
             "relation": "ManyToOne",
