@@ -112,6 +112,17 @@ a { color: var(--accent); }
 table.tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 table.tbl th { text-align: left; font-size: 11.5px; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-faint); font-weight: 700; padding: 10px 14px; border-bottom: 1px solid var(--line); }
 table.tbl td { padding: 11px 14px; border-bottom: 1px solid var(--line); color: var(--ink-soft); }
+/* UN EN-TÊTE DE COLONNE CHIFFRÉE SUIT SA COLONNE, ET IL FALLAIT LE DIRE PLUS FORT QUE `.num`.
+ *
+ * `table.tbl th` cale tous les en-têtes à gauche, et sa spécificité (0-1-2) l'emporte sur `.num`
+ * (0-1-0). Les 61 en-têtes marqués `.num` du dépôt — dans 23 écrans — étaient donc à gauche pendant
+ * que leurs montants étaient à droite : chaque tableau de chiffres du logiciel avait son titre décalé
+ * de la colonne qu'il nomme.
+ *
+ * Aucun de ces 61 endroits n'était fautif : ils déclaraient tous correctement leur intention, et la
+ * feuille de style l'annulait. Une collision de cascade ne se voit ni à la relecture d'un composant,
+ * ni à la relecture du CSS — seulement à l'écran, et Maxime l'a vue là. */
+table.tbl th.num { text-align: right; }
 table.tbl tr:last-child td { border-bottom: none; }
 table.tbl td b, table.tbl td .nm { color: var(--ink); font-weight: 600; }
 table.tbl tbody tr:hover { background: var(--panel-2); }
@@ -253,7 +264,21 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 .fiche-ident { display: flex; align-items: center; gap: 12px; }
 .fiche-avatar { flex: none; width: 44px; height: 44px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-2); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 18px; }
 .fiche-nom { font-size: 16px; font-weight: 700; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.fiche-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; }
+/* CE BANDEAU N'AVAIT AUCUN STYLE, ET PERSONNE NE POUVAIT LE VOIR EN LISANT LE CODE.
+ *
+ * Le composant écrit `.st-lib` et `.st-val` dans `.fiche-stats` ; la feuille ne définissait que
+ * `.stat-tile .st-val` et `.stat-tile .st-lbl` — autre conteneur, et `lib` contre `lbl`. Trois écarts
+ * de nom, aucun avertissement : le libellé et la valeur sortaient en texte courant.
+ *
+ * `.num` y aggravait les choses. Cette classe mêle deux intentions — « ce sont des chiffres »
+ * (`tabular-nums`) et « c'est une cellule de tableau » (`text-align: right`). Sur une tuile de grille,
+ * la seconde n'a pas de sens : elle poussait la valeur à droite pendant que son libellé restait à
+ * gauche, si bien qu'aucun des deux ne désignait l'autre. On garde les chiffres tabulaires et on rend
+ * l'alignement à la tuile. */
+.fiche-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px 24px; }
+.fiche-stats .st-lib { font-size: 11.5px; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-faint); font-weight: 700; }
+.fiche-stats .st-val { font-size: 17px; font-weight: 800; color: var(--ink); letter-spacing: -.01em; margin-top: 3px; }
+.fiche-stats .num { text-align: left; }
 .stat-tile { background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
 .stat-tile .st-val { font-size: 17px; font-weight: 800; color: var(--ink); letter-spacing: -.01em; }
 .stat-tile .st-lbl { font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-faint); font-weight: 700; margin-top: 3px; }
@@ -282,7 +307,16 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 /* ---- Modale réutilisable ---- */
 .modal-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, .45); z-index: 60; display: flex; align-items: flex-start; justify-content: center; padding: 40px 16px; overflow-y: auto; }
 .modal { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); width: 100%; }
-.modal-sm { max-width: 440px; } .modal-md { max-width: 640px; } .modal-lg { max-width: 900px; }
+/* UNE MODALE « LARGE » PLAFONNAIT À 900 px SUR UN ÉCRAN DE 1568 : PLUS DE 600 px DE VIDE À DROITE.
+ *
+ * Douze des quatorze modales du dépôt demandent `lg` — c'est la taille par défaut de fait, et c'est
+ * elle qui décide de la densité perçue du logiciel. Une fiche produit qui doit montrer des tarifs,
+ * des options et leurs montants n'a aucune raison de s'exécuter dans un tiers de la fenêtre pendant
+ * que le reste est noir.
+ *
+ * Les largeurs restent des plafonds : `.modal` est en `width: 100%`, donc rien ne déborde sur un
+ * écran étroit. */
+.modal-sm { max-width: 480px; } .modal-md { max-width: 720px; } .modal-lg { max-width: 1180px; }
 @media (prefers-reduced-motion: no-preference) { .modal { animation: modal-in .16s ease; } @keyframes modal-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } } }
 .modal-h { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
 .modal-h h3 { font-size: 16px; }

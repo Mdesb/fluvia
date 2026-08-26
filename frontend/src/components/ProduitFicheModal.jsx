@@ -27,6 +27,8 @@ export default function ProduitFicheModal({ open, produit, onClose, peutModifier
   const [detail, setDetail] = useState(null)
   const [liaisons, setLiaisons] = useState([])
   const [valeurs, setValeurs] = useState({}) // groupeId -> valeurs
+  // Le produit n'est pas commercialisable sur l'établissement actif : le guichet ne l'aurait pas.
+  const [horsSite, setHorsSite] = useState(false)
   const [chargement, setChargement] = useState(false)
   const [erreur, setErreur] = useState(null)
 
@@ -40,27 +42,46 @@ export default function ProduitFicheModal({ open, produit, onClose, peutModifier
     setEdition(null)
     setLiaisons([])
     setValeurs({})
+    setHorsSite(false)
     setErreur(null)
     setChargement(true)
     ;(async () => {
       try {
-        const [d, ops] = await Promise.all([api.produit(produitId), api.optionProduits(produitId)])
+        // ON DEMANDE AU GUICHET CE QUE LE GUICHET AFFICHERA, PLUTÔT QUE DE LE RECONSTITUER.
+        //
+        // Cette section s'annonce « Aperçu de ce que le guichet affichera pour ce produit ». Elle le
+        // reconstituait à partir de deux collections filtrées — les rattachements du produit, puis les
+        // valeurs de chaque groupe — soit 1+N requêtes, et **une seconde implémentation de la règle
+        // d'éligibilité**. Un aperçu qui recalcule ce qu'il prétend refléter ne diverge pas le jour où
+        // on l'écrit : il diverge au premier correctif appliqué à un seul des deux.
+        //
+        // `GET /produits/{id}/options-disponibles` est **la réponse même du guichet** : `actif`,
+        // restriction d'établissement (RG-OPT-07), tri d'affichage, et le cloisonnement vérifié côté
+        // serveur. Une requête, et l'aperçu devient fidèle par construction au lieu de l'être par
+        // ressemblance.
+        //
+        // Au passage, il n'emprunte aucun filtre de collection — donc aucun des deux pièges observés
+        // le 27/08 sur `SearchFilter` (identifiant nu → collection entière ; IRI → collection vide).
+        // Le guichet répond 404 quand le produit n'appartient PAS à l'établissement actif. Ce n'est pas
+        // une panne à signaler en rouge : c'est le seul contrôle de la chaîne qui vérifie réellement
+        // l'appartenance, et sa réponse est une information à afficher telle quelle.
+        const [d, dispo] = await Promise.all([
+          api.produit(produitId),
+          api.optionsDisponibles(produitId).catch(() => 'hors-site'),
+        ])
         if (annule) return
         setDetail(d)
-        const l = membres(ops)
-        setLiaisons(l)
+        setHorsSite(dispo === 'hors-site')
 
-        // Les valeurs de chaque groupe rattaché : c'est ce qui permet de montrer le RÉSULTAT plutôt
-        // que la mécanique. Sans elles on ne saurait afficher que « un groupe est rattaché », ce qui
-        // n'apprend rien à personne.
-        const groupes = l.map((op) => op.groupeOption).filter((g) => g?.id)
-        const listes = await Promise.all(groupes.map((g) => api.valeurOptions(g.id).catch(() => null)))
-        if (annule) return
-        const parGroupe = {}
-        groupes.forEach((g, i) => {
-          parGroupe[g.id] = listes[i] ? membres(listes[i]).filter((v) => v.actif !== false) : []
-        })
-        setValeurs(parGroupe)
+        const groupes = dispo === 'hors-site' ? [] : (dispo?.groupes || [])
+        setLiaisons(
+          groupes.map((g) => ({
+            id: g.optionProduit,
+            obligatoire: g.obligatoire,
+            groupeOption: { id: g.groupeOption, libelle: g.libelle, modeSelection: g.modeSelection },
+          })),
+        )
+        setValeurs(Object.fromEntries(groupes.map((g) => [g.groupeOption, g.valeurs || []])))
       } catch (e) {
         if (!annule) setErreur(e.message || 'Détail indisponible.')
       } finally {
@@ -261,6 +282,12 @@ export default function ProduitFicheModal({ open, produit, onClose, peutModifier
       >
         {chargement && liaisons.length === 0 ? (
           <div className="center" style={{ minHeight: 60 }}><div className="spinner" /></div>
+        ) : horsSite ? (
+          // D54 : d'abord le fait sur la donnée, jamais un vide muet ni un rouge sans cause.
+          <div className="sub" style={{ textAlign: 'center', padding: '10px 0' }}>
+            Ce produit n'est pas commercialisé sur l'établissement actif : le guichet ne l'affichera
+            pas ici, options comprises.
+          </div>
         ) : liaisons.length === 0 ? (
           <div className="empty">Aucune option rattachée : le produit se vend tel quel.</div>
         ) : (

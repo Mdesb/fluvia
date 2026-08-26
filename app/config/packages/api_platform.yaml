@@ -22,6 +22,19 @@ api_platform:
             - '%kernel.project_dir%/src/Securite/Entity'
             - '%kernel.project_dir%/src/Audit/Entity'
             - '%kernel.project_dir%/src/Offre/Entity'
+            # Absent jusqu'au 27/08, et le symptome n'etait pas une route manquante.
+            # Les routes CRUD des options repondaient 200 ; c'est le SERVICE DE FILTRE qui
+            # n'existait pas -- `debug:container` en comptait 4 pour Offre (dossier liste) et
+            # 0 pour OptionProduit. API Platform ignore alors le parametre `groupeOption` et
+            # RENVOIE LA COLLECTION ENTIERE : sur la fiche produit, chacun des deux groupes
+            # listait les cinq valeurs des deux groupes.
+            #
+            # C9 dit qu'un module absent de cette liste est invisible de l'API. Le cas des
+            # options montre le mode de defaillance intermediaire, et c'est le pire des deux :
+            # les routes marchent, le filtre est silencieusement inerte, et la reponse EN DIT
+            # PLUS que demande. Une route absente se remarque au premier appel ; un filtre
+            # absent rend des donnees plausibles, que personne ne va verifier.
+            - '%kernel.project_dir%/src/OptionProduit/Entity'
             - '%kernel.project_dir%/src/Caisse/Entity'
             - '%kernel.project_dir%/src/Vente/Entity'
             - '%kernel.project_dir%/src/Vente/Nf525/Entity'

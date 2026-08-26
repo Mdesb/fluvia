@@ -274,18 +274,40 @@ export const api = {
   creerGroupeOption: (corps) => request('/api/groupe_options', { method: 'POST', body: corps, ld: true }),
   majGroupeOption: (id, corps) =>
     request(`/api/groupe_options/${id}`, { method: 'PATCH', body: corps }),
-  // Valeurs d'un groupe (impact prix fixe/%). Filtrable par groupe (SearchFilter exact).
+  // ⚠ UN FILTRE DE RELATION PREND UNE IRI, ET UN IDENTIFIANT NU LE FAIT ABANDONNER.
+  //
+  // C'est le piège D58 sous sa **septième forme**, et la seule qui rende **plus** au lieu de moins.
+  //
+  // `SearchFilter::filterProperty` résout la valeur d'un filtre de relation par `getResourceFromIri`.
+  // Un UUID nu n'est pas une IRI : la résolution lève, le repli teste la valeur contre le type Doctrine
+  // de l'identifiant — ici le type personnalisé `uuid`, absent de la liste admise — et la déclare
+  // invalide. Le filtre est alors **retiré de la requête** :
+  //
+  //     $this->logger->notice('Invalid filter ignored', …);
+  //     return;   // ← aucune condition ajoutée
+  //
+  // La bibliothèque commente elle-même la ligne au-dessus : « Shouldn't this actually fail harder? »
+  //
+  // **La collection revient entière.** Les six formes connues de D58 rendent « rien » — ça ressemble à
+  // une absence, et une absence intrigue. Celle-ci rend « tout » : ça ressemble à des données, et
+  // personne n'interroge des données qui s'affichent. Sur la fiche produit, chacun des deux groupes
+  // d'options listait les cinq valeurs des deux groupes.
+  //
+  // L'IRI supprime le repli : la résolution réussit, le filtre s'applique.
   valeurOptions: (groupeId) =>
     request('/api/valeur_options', {
-      query: { itemsPerPage: 300, ...(groupeId ? { groupeOption: groupeId } : {}) },
+      query: { itemsPerPage: 300, ...(groupeId ? { groupeOption: `/api/groupe_options/${groupeId}` } : {}) },
     }),
   creerValeurOption: (corps) => request('/api/valeur_options', { method: 'POST', body: corps, ld: true }),
   majValeurOption: (id, corps) =>
     request(`/api/valeur_options/${id}`, { method: 'PATCH', body: corps }),
-  // Rattachements groupe↔produit (pivot). Filtrable par produit (SearchFilter exact).
+  // Rattachements groupe↔produit (pivot). IRI et non identifiant nu — voir `valeurOptions` ci-dessus.
+  //
+  // Celui-ci était plus discret : sans filtre effectif, la fiche d'un produit montrait les groupes
+  // rattachés à **tous** les produits. Un seul produit en démonstration le rendait invisible.
   optionProduits: (produitId) =>
     request('/api/option_produits', {
-      query: { itemsPerPage: 300, ...(produitId ? { produit: produitId } : {}) },
+      query: { itemsPerPage: 300, ...(produitId ? { produit: `/api/produits/${produitId}` } : {}) },
     }),
   creerOptionProduit: (corps) => request('/api/option_produits', { method: 'POST', body: corps, ld: true }),
   majOptionProduit: (id, corps) =>
