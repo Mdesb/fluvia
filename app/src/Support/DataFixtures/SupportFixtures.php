@@ -56,15 +56,16 @@ final class SupportFixtures extends Fixture
 
     public function load(ObjectManager $manager): void
     {
-        $groupe = (new Groupe())->setNom(self::GROUPE_NOM);
-        $manager->persist($groupe);
-        $region = (new Region())->setNom(self::REGION_NOM)->setGroupe($groupe);
-        $manager->persist($region);
+        $groupe = $this->parNom($manager, Groupe::class, self::GROUPE_NOM);
 
-        $etabA = (new Etablissement())->setNom(self::ETAB_A_NOM)->setRegion($region)->setActif(true);
-        $etabB = (new Etablissement())->setNom(self::ETAB_B_NOM)->setRegion($region)->setActif(true);
-        $manager->persist($etabA);
-        $manager->persist($etabB);
+        $region = $this->parNom($manager, Region::class, self::REGION_NOM);
+        $region->setGroupe($groupe);
+
+        $etabA = $this->parNom($manager, Etablissement::class, self::ETAB_A_NOM);
+        $etabA->setRegion($region)->setActif(true);
+
+        $etabB = $this->parNom($manager, Etablissement::class, self::ETAB_B_NOM);
+        $etabB->setRegion($region)->setActif(true);
 
         // Idempotence (ordre A 26/08) : `Permission(module, action)` et `Role.nom` portent une unicité
         // globale. Un rechargement sur une base qui les a déjà — la régénération des données de démo de
@@ -110,26 +111,34 @@ final class SupportFixtures extends Fixture
         $agentN2 = $this->creerUtilisateur($manager, self::EMAIL_AGENT_N2, 'Agent Support N2');
         $admin = $this->creerUtilisateur($manager, self::EMAIL_ADMIN, 'Administrateur Support');
 
-        $manager->persist((new Affectation())->setUtilisateur($redacteurGlobal)->setRole($roleRedacteurGlobal)->setEtablissement($etabA));
-        $manager->persist((new Affectation())->setUtilisateur($redacteurGlobal)->setRole($roleRedacteurGlobal)->setEtablissement($etabB));
-        $manager->persist((new Affectation())->setUtilisateur($redacteurLocalA)->setRole($roleRedacteurLocal)->setEtablissement($etabA));
-        $manager->persist((new Affectation())->setUtilisateur($redacteurLocalB)->setRole($roleRedacteurLocal)->setEtablissement($etabB));
-        $manager->persist((new Affectation())->setUtilisateur($agentLecture)->setRole($roleAgentLecture)->setEtablissement($etabA));
-        $manager->persist((new Affectation())->setUtilisateur($exploitantA)->setRole($roleExploitant)->setEtablissement($etabA));
-        $manager->persist((new Affectation())->setUtilisateur($exploitantB)->setRole($roleExploitant)->setEtablissement($etabB));
-        $manager->persist((new Affectation())->setUtilisateur($responsableA)->setRole($roleResponsableEtab)->setEtablissement($etabA));
-        $manager->persist((new Affectation())->setUtilisateur($agentN1)->setRole($roleAgentN1)->setEtablissement($etabA));
-        $manager->persist((new Affectation())->setUtilisateur($agentN1)->setRole($roleAgentN1)->setEtablissement($etabB));
-        $manager->persist((new Affectation())->setUtilisateur($agentN2)->setRole($roleAgentN2)->setEtablissement($etabA));
-        $manager->persist((new Affectation())->setUtilisateur($agentN2)->setRole($roleAgentN2)->setEtablissement($etabB));
-        $manager->persist((new Affectation())->setUtilisateur($admin)->setRole($roleAdmin)->setEtablissement($etabA));
-        $manager->persist((new Affectation())->setUtilisateur($admin)->setRole($roleAdmin)->setEtablissement($etabB));
+        $this->affectationUnique($manager, $redacteurGlobal, $roleRedacteurGlobal, $etabA);
+        $this->affectationUnique($manager, $redacteurGlobal, $roleRedacteurGlobal, $etabB);
+        $this->affectationUnique($manager, $redacteurLocalA, $roleRedacteurLocal, $etabA);
+        $this->affectationUnique($manager, $redacteurLocalB, $roleRedacteurLocal, $etabB);
+        $this->affectationUnique($manager, $agentLecture, $roleAgentLecture, $etabA);
+        $this->affectationUnique($manager, $exploitantA, $roleExploitant, $etabA);
+        $this->affectationUnique($manager, $exploitantB, $roleExploitant, $etabB);
+        $this->affectationUnique($manager, $responsableA, $roleResponsableEtab, $etabA);
+        $this->affectationUnique($manager, $agentN1, $roleAgentN1, $etabA);
+        $this->affectationUnique($manager, $agentN1, $roleAgentN1, $etabB);
+        $this->affectationUnique($manager, $agentN2, $roleAgentN2, $etabA);
+        $this->affectationUnique($manager, $agentN2, $roleAgentN2, $etabB);
+        $this->affectationUnique($manager, $admin, $roleAdmin, $etabA);
+        $this->affectationUnique($manager, $admin, $roleAdmin, $etabB);
 
         $manager->flush();
     }
 
     private function creerUtilisateur(ObjectManager $manager, string $email, string $nom): Utilisateur
     {
+        $existant = $manager->getRepository(Utilisateur::class)->findOneBy(['email' => $email]);
+
+        if ($existant instanceof Utilisateur) {
+            return $existant->setNom($nom)->setActif(true);
+        }
+
+        // Le mot de passe n'est posé qu'à la création : le rejouer écraserait un mot de passe changé
+        // depuis, et réécrirait un hachage pour rien à chaque chargement.
         $utilisateur = (new Utilisateur())->setEmail($email)->setNom($nom)->setActif(true);
         $utilisateur->setMotDePasse($this->hasher->hashPassword($utilisateur, self::MDP));
         $manager->persist($utilisateur);
@@ -164,5 +173,72 @@ final class SupportFixtures extends Fixture
         $manager->persist($role);
 
         return $role;
+    }
+
+    /**
+     * **Les trois familles qui ne crient pas.**
+     *
+     * `claude-B` avait gardé les permissions et les rôles — les deux qui produisent un
+     * « Duplicate entry ». Le double chargement a donc avancé d'un cran et buté sur les utilisateurs,
+     * puis aurait buté ici sans erreur du tout.
+     *
+     * `Groupe`, `Region` et `Etablissement` ne portent d'unicité que sur leur identifiant technique,
+     * régénéré à chaque construction. Un second chargement ne lève rien : il crée un second
+     * « Groupe Support », une seconde région, **deux établissements A**. Silencieusement.
+     *
+     * Et l'établissement est le pire des trois : c'est **la frontière de cloisonnement** à laquelle
+     * tout est rattaché. Deux établissements du même nom, et la question « cet utilisateur a-t-il le
+     * droit ? » a deux réponses selon la ligne qu'on lit.
+     *
+     * C'est le motif D52, vérifié pour la sixième fois de la journée : **il faut inventorier ce qu'une
+     * fixture construit, pas suivre ce qui casse.** Suivre les erreurs ne corrige que les familles
+     * assez contraintes pour en produire une.
+     *
+     * @template T of object
+     * @param class-string<T> $classe
+     * @return T
+     */
+    private function parNom(ObjectManager $manager, string $classe, string $nom): object
+    {
+        $existant = $manager->getRepository($classe)->findOneBy(['nom' => $nom]);
+
+        if ($existant !== null) {
+            return $existant;
+        }
+
+        $entite = new $classe();
+        $entite->setNom($nom);
+        $manager->persist($entite);
+
+        return $entite;
+    }
+
+    /**
+     * `Affectation` ne porte **aucune** unicité en base : un rechargement empile des doublons sans
+     * lever. Et les droits effectifs d'un utilisateur se calculent en parcourant ces lignes — un
+     * doublon n'est pas cosmétique, c'est un calcul de droits sur des données fausses.
+     *
+     * Quatorze affectations dans ce fichier, c'est le plus gros gisement du dépôt. Trouvé par
+     * `claude-G` sur ses propres fixtures.
+     */
+    private function affectationUnique(
+        ObjectManager $manager,
+        Utilisateur $utilisateur,
+        Role $role,
+        Etablissement $etablissement,
+    ): void {
+        $existante = $manager->getRepository(Affectation::class)->findOneBy([
+            'utilisateur' => $utilisateur,
+            'role' => $role,
+            'etablissement' => $etablissement,
+        ]);
+
+        if ($existante instanceof Affectation) {
+            return;
+        }
+
+        $manager->persist(
+            (new Affectation())->setUtilisateur($utilisateur)->setRole($role)->setEtablissement($etablissement)
+        );
     }
 }
