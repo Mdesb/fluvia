@@ -1823,3 +1823,57 @@ il avait raison de le faire.
 
 **Coût mesuré de l'ambiguïté** : plusieurs heures, trois sessions, en une journée. Coût de la règle :
 trois mots.
+
+---
+
+### 2026-08-26 · D57 — La clôture journalière NF525 est confondue avec la clôture Z, et ce n'en est pas une
+
+**Découvert en répondant à une question de `claude-G` sur D44-bis** (la vente directe sans session), et
+vérifié dans le code avant d'être affirmé.
+
+**Le contexte.** `ValiderVenteService:103` obtient le point de vente par
+`$vente->getSession()?->getPointDeVente()` : **la chaîne d'empreintes NF525 est par point de vente**. Une
+vente directe n'a pas de session, donc pas de point de vente, donc rien à quoi se chaîner.
+
+**La sortie de secours évidente est la pire, et `claude-G` l'a refusée d'elle-même** : exempter la vente
+directe du scellement créerait une **catégorie de ventes non probantes**, ce qui vide la chaîne de sa
+valeur pour toutes les autres. Une chaîne dont on peut sortir n'est plus une chaîne. C'est l'argument de
+D45 sur la modification, transposé.
+
+**Décidé : un `PointDeVente` dédié par établissement**, créé à la demande, sur lequel les ventes directes
+se chaînent. La chaîne reste continue et devient lisible — « les ventes sans caisse de cet
+établissement » forment une chaîne identifiable, donc contrôlable.
+
+---
+
+**CE QUE LA QUESTION A RÉVÉLÉ, ET QUI EST PLUS GRAVE QUE LA QUESTION.**
+
+`claude-G` demandait si un point de vente **sans clôture Z** est acceptable, son raisonnement étant :
+*sans espèces il n'y a rien à compter.*
+
+Le dépôt distingue bien deux clôtures : `Caisse\ClotureZ` (clôture de session, avec comptage) et
+`Compta\ClotureHandler` (clôture d'une `PeriodeComptable` par profil exploitant, **sans dépendance à une
+session**). La seconde n'oppose donc rien aux ventes directes.
+
+**Mais `Vente\Enum\TypeOperationScellee` ne connaît que :**
+
+    Vente · Avoir · CorrectionReglement · ClotureZ · ClotureMensuelle · ClotureAnnuelle
+
+**Il n'existe pas de `ClotureJournaliere`.** Dans ce dépôt, **la clôture journalière NF525 *est* le Z** :
+les deux ont été confondus parce que jusqu'ici tout passait par une caisse.
+
+Le raisonnement de `claude-G` est donc vrai pour le **comptage** et faux pour la **clôture**. NF525 exige
+une clôture journalière, mensuelle et annuelle ; la journalière n'est pas une opération de caisse, c'est
+un **arrêté de totaux cumulés**. Un point de vente sans Z serait aujourd'hui un point de vente **sans
+clôture quotidienne**.
+
+**Ce n'est pas une nouveauté du modèle que sa question introduisait — c'est un défaut du modèle que sa
+question a révélé.** Il ne se serait vu qu'au premier contrôle, ou au premier exploitant vendant sans
+caisse.
+
+**Décidé : `ClotureJournaliere` entre dans l'énumération, distincte du Z.** Le point de vente des ventes
+directes en produit une, sans comptage. Lot séparé de D44-bis, qui reste livrable sans elle.
+
+**La leçon générale :** deux notions qui coïncident tant qu'un seul cas existe finissent par être
+représentées par une seule. Le jour où le second cas arrive, ce n'est pas une extension qu'il faut, c'est
+une séparation — et personne ne se souvient qu'il y en avait deux.
