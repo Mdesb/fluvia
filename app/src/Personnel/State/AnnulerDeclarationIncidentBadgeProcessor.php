@@ -10,6 +10,7 @@ use App\Acces\Entity\DeclarationPerteVol;
 use App\Personnel\Entity\BadgeStaff;
 use App\Personnel\Service\RevocationBadgeHandler;
 use App\Securite\Entity\Utilisateur;
+use App\Securite\Service\CalculateurDroits;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -30,6 +31,7 @@ final class AnnulerDeclarationIncidentBadgeProcessor implements ProcessorInterfa
         private readonly EntityManagerInterface $em,
         private readonly RevocationBadgeHandler $handler,
         private readonly Security $security,
+        private readonly CalculateurDroits $calculateur,
     ) {
     }
 
@@ -53,6 +55,21 @@ final class AnnulerDeclarationIncidentBadgeProcessor implements ProcessorInterfa
         $badge = $this->em->getRepository(BadgeStaff::class)->findOneBy(['support' => $declaration->getSupport()]);
         if (!$badge instanceof BadgeStaff) {
             throw new NotFoundHttpException('Badge staff introuvable pour cette déclaration.');
+        }
+
+        // Cloisonnement (D3/D8) — l'opération est `read: false` : la déclaration est résolue depuis
+        // l'identifiant de l'URI par un `find()` direct, hors des extensions. On recalcule l'autorité de
+        // l'agent contre l'établissement du BADGE VISÉ (pas l'en-tête X-Etablissement, D6) : sans quoi on
+        // réactive un badge d'un autre établissement. Échec fermé en 404 (anti-oracle).
+        //
+        // @cloisonnement-verifie : la confrontation porte sur `$badge->getEtablissement()` et non sur
+        // `$declaration` — `DeclarationPerteVol` n'a pas d'établissement propre, il est porté par le
+        // support/badge (1:1 via `support`). Confronter l'établissement du badge cloisonne donc bien la
+        // déclaration résolue depuis l'URI. — claude-B, 26/08.
+        $codes = $this->calculateur->codesEffectifs($agent, $badge->getEtablissement()?->getId());
+        if (!$this->calculateur->autorise($codes, 'personnel', 'gerer_badge')
+            && !$this->calculateur->autorise($codes, 'acces', 'bloquer_support')) {
+            throw new NotFoundHttpException('Déclaration introuvable.');
         }
 
         $this->handler->reactiver($badge, $agent);

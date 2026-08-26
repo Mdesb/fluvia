@@ -66,44 +66,38 @@ final class SupportFixtures extends Fixture
         $manager->persist($etabA);
         $manager->persist($etabB);
 
+        // Idempotence (ordre A 26/08) : `Permission(module, action)` et `Role.nom` portent une unicité
+        // globale. Un rechargement sur une base qui les a déjà — la régénération des données de démo de
+        // la préprod — échouait sur « Duplicate entry ». On cherche avant de créer. `addPermission` est
+        // gardé par `contains`, donc réattacher une permission à un rôle réutilisé est sans effet.
         $perms = [];
         foreach (self::ACTIONS as $action) {
-            $perm = (new Permission())->setModule('support')->setAction($action);
-            $manager->persist($perm);
-            $perms[$action] = $perm;
+            $perms[$action] = $this->permissionSupport($manager, $action);
         }
 
-        $roleRedacteurGlobal = (new Role())->setNom('Support Rédacteur KB Global');
+        $roleRedacteurGlobal = $this->roleNomme($manager, 'Support Rédacteur KB Global');
         $roleRedacteurGlobal->addPermission($perms['gerer_kb_globale'])->addPermission($perms['gerer_categorie'])->addPermission($perms['lire']);
-        $manager->persist($roleRedacteurGlobal);
 
-        $roleRedacteurLocal = (new Role())->setNom('Support Rédacteur KB Local');
+        $roleRedacteurLocal = $this->roleNomme($manager, 'Support Rédacteur KB Local');
         $roleRedacteurLocal->addPermission($perms['gerer_kb_locale'])->addPermission($perms['lire']);
-        $manager->persist($roleRedacteurLocal);
 
-        $roleAgentLecture = (new Role())->setNom('Support Agent (lecture KB)');
+        $roleAgentLecture = $this->roleNomme($manager, 'Support Agent (lecture KB)');
         $roleAgentLecture->addPermission($perms['lire']);
-        $manager->persist($roleAgentLecture);
 
-        $roleExploitant = (new Role())->setNom('Support Exploitant (ticket)');
+        $roleExploitant = $this->roleNomme($manager, 'Support Exploitant (ticket)');
         $roleExploitant->addPermission($perms['ouvrir_ticket'])->addPermission($perms['lire_ticket_soi']);
-        $manager->persist($roleExploitant);
 
-        $roleResponsableEtab = (new Role())->setNom('Support Responsable Établissement');
+        $roleResponsableEtab = $this->roleNomme($manager, 'Support Responsable Établissement');
         $roleResponsableEtab->addPermission($perms['lire_ticket_etablissement']);
-        $manager->persist($roleResponsableEtab);
 
-        $roleAgentN1 = (new Role())->setNom('Support Agent N1');
+        $roleAgentN1 = $this->roleNomme($manager, 'Support Agent N1');
         $roleAgentN1->addPermission($perms['traiter_ticket_n1'])->addPermission($perms['lire']);
-        $manager->persist($roleAgentN1);
 
-        $roleAgentN2 = (new Role())->setNom('Support Agent N2');
+        $roleAgentN2 = $this->roleNomme($manager, 'Support Agent N2');
         $roleAgentN2->addPermission($perms['traiter_ticket_n2'])->addPermission($perms['lire']);
-        $manager->persist($roleAgentN2);
 
-        $roleAdmin = (new Role())->setNom('Support Administrateur');
+        $roleAdmin = $this->roleNomme($manager, 'Support Administrateur');
         $roleAdmin->addPermission($perms['administrer'])->addPermission($perms['lire']);
-        $manager->persist($roleAdmin);
 
         $redacteurGlobal = $this->creerUtilisateur($manager, self::EMAIL_REDACTEUR_GLOBAL, 'Rédacteur KB Global');
         $redacteurLocalA = $this->creerUtilisateur($manager, self::EMAIL_REDACTEUR_LOCAL_A, 'Rédacteur KB Local A');
@@ -141,5 +135,34 @@ final class SupportFixtures extends Fixture
         $manager->persist($utilisateur);
 
         return $utilisateur;
+    }
+
+    /** Le couple `(module, action)` est unique — rendre l'existant plutôt qu'un doublon (ordre A 26/08). */
+    private function permissionSupport(ObjectManager $manager, string $action): Permission
+    {
+        $existante = $manager->getRepository(Permission::class)
+            ->findOneBy(['module' => 'support', 'action' => $action]);
+        if ($existante instanceof Permission) {
+            return $existante;
+        }
+
+        $permission = (new Permission())->setModule('support')->setAction($action);
+        $manager->persist($permission);
+
+        return $permission;
+    }
+
+    /** `Role.nom` est unique — rendre l'existant plutôt qu'un doublon (ordre A 26/08). */
+    private function roleNomme(ObjectManager $manager, string $nom): Role
+    {
+        $existant = $manager->getRepository(Role::class)->findOneBy(['nom' => $nom]);
+        if ($existant instanceof Role) {
+            return $existant;
+        }
+
+        $role = (new Role())->setNom($nom);
+        $manager->persist($role);
+
+        return $role;
     }
 }

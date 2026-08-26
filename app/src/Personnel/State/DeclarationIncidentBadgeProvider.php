@@ -47,6 +47,11 @@ final class DeclarationIncidentBadgeProvider implements ProviderInterface
                 throw new NotFoundHttpException('Déclaration introuvable.');
             }
 
+            // @cloisonnement-verifie : la déclaration résolue depuis l'URI est immédiatement confrontée
+            // ci-dessous — son BADGE (DeclarationPerteVol n'a pas d'établissement propre, il l'hérite via
+            // support/badge) doit appartenir à un établissement où l'utilisateur possède une Affectation
+            // (`$autorises`), sinon 404. Le contrôle porte sur `$etablissementBadge`, pas nommément sur
+            // `$declaration` — d'où l'exemption. — claude-B, 26/08.
             $badge = $this->em->getRepository(BadgeStaff::class)->findOneBy(['support' => $declaration->getSupport()]);
             $etablissementBadge = $badge instanceof BadgeStaff ? $badge->getEtablissement() : null;
             if ($etablissementBadge === null || !\in_array($etablissementBadge->getId()->toBinary(), $autorises, true)) {
