@@ -165,13 +165,13 @@ export const api = {
   reactiverProduit: (id) => request(`/api/produits/${id}/reactiver`, { method: 'POST' }),
 
   pointDeVentes: () => request('/api/point_de_ventes'),
-  creerPointDeVente: (corps) => request('/api/point_de_ventes', { method: 'POST', body: corps }),
+  creerPointDeVente: (corps) => request('/api/point_de_ventes', { method: 'POST', body: corps, ld: true }),
   majPointDeVente: (id, corps) => request(`/api/point_de_ventes/${id}`, { method: 'PATCH', body: corps }),
   caisses: () => request('/api/caisses'),
   moyensPaiement: () => request('/api/moyen_paiements'),
   // Moyens de paiement — écriture (source M6, sécurité `compta.gerer`).
   creerMoyenPaiement: (corps) =>
-    request('/api/moyen_paiements', { method: 'POST', body: corps }),
+    request('/api/moyen_paiements', { method: 'POST', body: corps, ld: true }),
   majMoyenPaiement: (id, corps) =>
     request(`/api/moyen_paiements/${id}`, { method: 'PATCH', body: corps }),
 
@@ -214,7 +214,7 @@ export const api = {
   pmvMouvements: (id) => request(`/api/clients/${id}/pmv/mouvements`),
   // Création rapide d'une fiche client (US-L5-02). L'établissement de création / le groupe sont
   // fixés côté back depuis l'établissement actif (en-tête X-Etablissement).
-  creerClient: (corps) => request('/api/clients', { method: 'POST', body: corps }),
+  creerClient: (corps) => request('/api/clients', { method: 'POST', body: corps, ld: true }),
   // Rattache (ou crée) un client sur une vente ouverte (M2, CA-7). Corps : un de
   // { client: uuid } | { recherche: "..." } | { creer: { nom, prenom, email, telephone } }.
   rattacherClientVente: (venteId, corps) =>
@@ -223,7 +223,7 @@ export const api = {
   // --- Options produits (App\OptionProduit) ---
   // Groupes d'options (choix unique/multiple) — référentiel réutilisable (RG-OPT-01).
   groupeOptions: () => request('/api/groupe_options', { query: { itemsPerPage: 200 } }),
-  creerGroupeOption: (corps) => request('/api/groupe_options', { method: 'POST', body: corps }),
+  creerGroupeOption: (corps) => request('/api/groupe_options', { method: 'POST', body: corps, ld: true }),
   majGroupeOption: (id, corps) =>
     request(`/api/groupe_options/${id}`, { method: 'PATCH', body: corps }),
   // Valeurs d'un groupe (impact prix fixe/%). Filtrable par groupe (SearchFilter exact).
@@ -231,7 +231,7 @@ export const api = {
     request('/api/valeur_options', {
       query: { itemsPerPage: 300, ...(groupeId ? { groupeOption: groupeId } : {}) },
     }),
-  creerValeurOption: (corps) => request('/api/valeur_options', { method: 'POST', body: corps }),
+  creerValeurOption: (corps) => request('/api/valeur_options', { method: 'POST', body: corps, ld: true }),
   majValeurOption: (id, corps) =>
     request(`/api/valeur_options/${id}`, { method: 'PATCH', body: corps }),
   // Rattachements groupe↔produit (pivot). Filtrable par produit (SearchFilter exact).
@@ -239,7 +239,7 @@ export const api = {
     request('/api/option_produits', {
       query: { itemsPerPage: 300, ...(produitId ? { produit: produitId } : {}) },
     }),
-  creerOptionProduit: (corps) => request('/api/option_produits', { method: 'POST', body: corps }),
+  creerOptionProduit: (corps) => request('/api/option_produits', { method: 'POST', body: corps, ld: true }),
   majOptionProduit: (id, corps) =>
     request(`/api/option_produits/${id}`, { method: 'PATCH', body: corps }),
   supprimerOptionProduit: (id) =>
@@ -286,27 +286,27 @@ export const api = {
   espaces: () => request('/api/espaces', { query: { itemsPerPage: 200 } }),
   regions: () => request('/api/regions', { query: { itemsPerPage: 100 } }),
   categories: () => request('/api/categories', { query: { itemsPerPage: 200 } }),
-  creerCategorie: (corps) => request('/api/categories', { method: 'POST', body: corps }),
+  creerCategorie: (corps) => request('/api/categories', { method: 'POST', body: corps, ld: true }),
   majCategorie: (id, corps) => request(`/api/categories/${id}`, { method: 'PATCH', body: corps }),
   supprimerCategorie: (id) => request(`/api/categories/${id}`, { method: 'DELETE' }),
   typeTarifs: () => request('/api/type_tarifs', { query: { itemsPerPage: 100 } }),
   // Référentiels modifiables : les opérations existaient côté serveur depuis le début, le front ne
   // les appelait simplement pas.
-  creerTypeTarif: (corps) => request('/api/type_tarifs', { method: 'POST', body: corps }),
+  creerTypeTarif: (corps) => request('/api/type_tarifs', { method: 'POST', body: corps, ld: true }),
   majTypeTarif: (id, corps) => request(`/api/type_tarifs/${id}`, { method: 'PATCH', body: corps }),
   supprimerTypeTarif: (id) => request(`/api/type_tarifs/${id}`, { method: 'DELETE' }),
   grilleTarifaires: () => request('/api/grille_tarifaires', { query: { itemsPerPage: 200 } }),
   // Post et Patch existaient depuis le debut, appeles de nulle part. Pas de Delete cote serveur :
   // un prix engage dans des ventes passees ne s'efface pas.
-  creerGrilleTarifaire: (corps) => request('/api/grille_tarifaires', { method: 'POST', body: corps }),
+  creerGrilleTarifaire: (corps) => request('/api/grille_tarifaires', { method: 'POST', body: corps, ld: true }),
   majGrilleTarifaire: (id, corps) =>
     request(`/api/grille_tarifaires/${id}`, { method: 'PATCH', body: corps }),
   saisons: () => request('/api/saisons', { query: { itemsPerPage: 100 } }),
-  creerSaison: (corps) => request('/api/saisons', { method: 'POST', body: corps }),
+  creerSaison: (corps) => request('/api/saisons', { method: 'POST', body: corps, ld: true }),
   majSaison: (id, corps) => request(`/api/saisons/${id}`, { method: 'PATCH', body: corps }),
   supprimerSaison: (id) => request(`/api/saisons/${id}`, { method: 'DELETE' }),
   tauxTvas: () => request('/api/taux_tvas', { query: { itemsPerPage: 100 } }),
-  creerTauxTva: (corps) => request('/api/taux_tvas', { method: 'POST', body: corps }),
+  creerTauxTva: (corps) => request('/api/taux_tvas', { method: 'POST', body: corps, ld: true }),
   majTauxTva: (id, corps) => request(`/api/taux_tvas/${id}`, { method: 'PATCH', body: corps }),
 
   // Comptes / rôles & droits (M8).
@@ -317,7 +317,7 @@ export const api = {
   // Création de compte : sans mot de passe, le back génère un jeton d'invitation et passe le
   // compte en `statut = invite` (UtilisateurProcessor, RG-M8-01).
   creerUtilisateur: (corps) =>
-    request('/api/utilisateurs', { method: 'POST', body: corps }),
+    request('/api/utilisateurs', { method: 'POST', body: corps, ld: true }),
   // Cycle de vie (RG-M8-01). Le back refuse (422) toute opération laissant un établissement sans
   // administrateur (RG-M8-07) : l'erreur est remontée telle quelle.
   suspendreUtilisateur: (id) =>
@@ -328,7 +328,7 @@ export const api = {
     request(`/api/utilisateurs/${id}/reinviter`, { method: 'POST', body: {} }),
   // Affectation d'un rôle sur un établissement (utilisateur/role/etablissement en IRI).
   creerAffectation: (corps) =>
-    request('/api/affectations', { method: 'POST', body: corps }),
+    request('/api/affectations', { method: 'POST', body: corps, ld: true }),
   // Aperçu des droits conférés par un rôle (matrice « vivante », US-L7-05).
   apercuDroitsRole: (id, etablissement) =>
     request(`/api/roles/${id}/apercu-droits`, { query: { etablissement } }),
