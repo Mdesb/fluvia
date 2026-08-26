@@ -24,20 +24,23 @@ import { euros } from '../api/produit.js'
 // Le 409 reste traité malgré tout : deux agents peuvent louer la dernière paire en même temps, et
 // c'est précisément le cas où l'écran ne peut rien savoir d'avance.
 //
-// CE QUE CET ÉCRAN CONTOURNE, ET QUI SE CORRIGE CÔTÉ SERVEUR.
+// LE SÉLECTEUR DE BÉNÉFICIAIRE A FAILLI ÊTRE UN CONTOURNEMENT.
 //
-// Une sortie de patins exige un bénéficiaire, et `/api/beneficiaires` ne publie du client rattaché
-// que son identifiant : ni nom, ni prénom — seul `id` de `Client` porte le groupe `beneficiaire:read`.
-// Un sélecteur bâti dessus n'afficherait que des UUID. On recoupe donc localement avec la liste des
-// clients pour retrouver les noms, ce qui marche mais ne couvre que les cent premiers. Signalé à
-// l'intégrateur : c'est un groupe de sérialisation à ajouter, pas un écran à réécrire.
+// À la première version, `/api/beneficiaires` ne publiait du client rattaché que son identifiant :
+// seul `id` de `Client` portait le groupe `beneficiaire:read`. Un sélecteur bâti dessus n'aurait
+// affiché que des UUID. Je recoupais donc avec `/api/clients` pour retrouver les noms — ce qui
+// marchait, et ne couvrait que les cent premiers clients : au-delà, l'agent lisait
+// « Bénéficiaire 3f2a91c4 » et ne pouvait pas louer.
+//
+// `claude-A` a ajouté les deux groupes manquants. Le recoupement est retiré : une limite invisible
+// qui survit à sa propre correction est pire que pas de limite du tout, parce que plus personne ne
+// la cherche.
 
 export default function Patinoire({ etabActif, droits }) {
   const [parc, setParc] = useState([])
   const [locations, setLocations] = useState([])
   const [attente, setAttente] = useState([])
   const [retenues, setRetenues] = useState([])
-  const [nomsClients, setNomsClients] = useState({})
   const [beneficiaires, setBeneficiaires] = useState([])
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
@@ -77,29 +80,23 @@ export default function Patinoire({ etabActif, droits }) {
     recharger()
   }, [recharger])
 
-  // Les noms sont chargés à part, et leur absence ne bloque rien : sans eux, le sélecteur affiche un
-  // identifiant court plutôt que rien du tout.
+  // La liste ne sert qu'à ceux qui peuvent louer : la charger pour les autres serait un appel de plus
+  // à chaque ouverture de l'écran, pour un menu qu'ils ne verront jamais.
   useEffect(() => {
     if (!peutLouer) return
-    Promise.all([api.beneficiaires(), api.clients()])
-      .then(([b, c]) => {
-        setBeneficiaires(membres(b))
-        const index = {}
-        for (const cl of membres(c)) {
-          index[cl.id] = [cl.prenom, cl.nom].filter(Boolean).join(' ').trim()
-        }
-        setNomsClients(index)
-      })
+    api
+      .beneficiaires()
+      .then((b) => setBeneficiaires(membres(b)))
       .catch(() => setBeneficiaires([]))
   }, [peutLouer, etabActif])
 
-  const nommer = useCallback(
-    (b) => {
-      const idClient = b?.client?.id || String(b?.client || '').split('/').pop()
-      return nomsClients[idClient] || `Bénéficiaire ${String(b?.id || '').slice(0, 8)}`
-    },
-    [nomsClients],
-  )
+  // Le repli sur l'identifiant court reste : une fiche client sans nom ni prénom est possible, et un
+  // menu déroulant qui contient une ligne vide ne se choisit pas.
+  const nommer = useCallback((b) => {
+    const c = b?.client
+    const nom = [c?.prenom, c?.nom].filter(Boolean).join(' ').trim()
+    return nom || `Bénéficiaire ${String(b?.id || '').slice(0, 8)}`
+  }, [])
 
   const apres = useCallback(
     async (message) => {
