@@ -232,7 +232,7 @@ export default function App() {
       {onglet === 'reservation' && <Reservation etabActif={etabActif} droits={droits} session={session} />}
       {onglet === 'supervision' && <Supervision etabActif={etabActif} />}
       {onglet === 'pilotage' && (
-        <Pilotage etabActif={etabActif} etablissements={etablissements} />
+        <Pilotage etabActif={etabActif} etablissements={etablissements} droits={droits} />
       )}
       {onglet === 'comptabilite' && <Comptabilite etabActif={etabActif} droits={droits} />}
       {onglet === 'facturation' && <Facturation etabActif={etabActif} droits={droits} />}

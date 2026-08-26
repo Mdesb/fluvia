@@ -400,6 +400,12 @@ export const api = {
   telechargerExport: (id) => request(`/api/compta/exports/${id}/telecharger`),
   // Recouvrement : les deux gestes qui closent un impaye, et le compteur d'acces bloques.
   tableauBordRecouvrement: () => request('/api/recouvrement/tableau-bord'),
+  // Ecarts de caisse.  est calcule par le serveur a la lecture — aucun drapeau stocke,
+  // donc aucun drapeau a maintenir. C'est lui qui fait descendre la liste (D55).
+  alertesEcartCaisse: () =>
+    request('/api/alerte_ecart_caisses', { query: { itemsPerPage: 100 } }),
+  corrigerReglement: (venteId, corps) =>
+    request(`/api/ventes/${venteId}/corriger-reglement`, { method: 'POST', body: corps }),
   resoudreImpaye: (id) =>
     request(`/api/recouvrement/incidents/${id}/resoudre`, { method: 'POST', body: {} }),
   forcerReouvertureImpaye: (id, motif) =>
