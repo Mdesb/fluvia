@@ -114,6 +114,17 @@ class ConfigCreancierSepa
     #[Groups(['config_creancier:read', 'config_creancier:write'])]
     private ?string $ultimateCreancierOrgId = null;
 
+    /**
+     * Combien de jours avant un prélèvement le client doit être prévenu.
+     *
+     * Quatorze par défaut, qui est la règle SEPA quand rien d'autre n'a été convenu au contrat. Le
+     * champ existe parce que « autre délai convenu » est fréquent : les collectivités négocient
+     * souvent plus long. Il est porté par le créancier et non par le mandat — c'est le créancier qui
+     * s'engage sur un délai, pas chaque débiteur séparément.
+     */
+    #[ORM\Column(name: 'prenotification_delay_days', options: ['default' => 14])]
+    private int $preNotificationDelayDays = 14;
+
     #[ORM\Column(type: 'datetime_immutable')]
     #[Groups(['config_creancier:read'])]
     private \DateTimeImmutable $modifieLe;
@@ -281,6 +292,18 @@ class ConfigCreancierSepa
     public function toucherModifieLe(): self
     {
         $this->modifieLe = new \DateTimeImmutable();
+
+        return $this;
+    }
+
+    public function getPreNotificationDelayDays(): int
+    {
+        return $this->preNotificationDelayDays;
+    }
+
+    public function setPreNotificationDelayDays(int $preNotificationDelayDays): self
+    {
+        $this->preNotificationDelayDays = $preNotificationDelayDays;
 
         return $this;
     }
