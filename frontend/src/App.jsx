@@ -22,6 +22,7 @@ import Supervision from './pages/Supervision.jsx'
 // repetee pour un gain unique.
 const Piscine = lazy(() => import('./pages/Piscine.jsx'))
 const Patinoire = lazy(() => import('./pages/Patinoire.jsx'))
+const Finance = lazy(() => import('./pages/Finance.jsx'))
 const Pilotage = lazy(() => import('./pages/Pilotage.jsx'))
 const Boutique = lazy(() => import('./pages/Boutique.jsx'))
 const Comptabilite = lazy(() => import('./pages/Comptabilite.jsx'))
@@ -244,6 +245,7 @@ export default function App() {
       {onglet === 'musee' && <Musee etabActif={etabActif} droits={droits} />}
       {onglet === 'personnel' && <Personnel etabActif={etabActif} droits={droits} />}
       {onglet === 'stock' && <Stock etabActif={etabActif} droits={droits} />}
+      {onglet === 'finance' && <Finance etabActif={etabActif} droits={droits} />}
       {onglet === 'parametres' && (
         <Parametres etabActif={etabActif} etablissements={etablissements} droits={droits} />
       )}

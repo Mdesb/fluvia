@@ -123,6 +123,14 @@ const MOTS = {
   fifo: 'Premier entré, premier sorti (FIFO)',
   cmup: 'Coût moyen pondéré',
 
+  // --- Achats & tresorerie ---
+  // Ce module est nomme en anglais cote serveur ; les mots restent francais a l'ecran.
+  draft: 'Brouillon',
+  to_pay: 'À payer',
+  partially_paid: 'Partiellement payée',
+  disputed: 'En litige',
+  cancelled: 'Annulée',
+
   // --- Padel ---
   indoor: 'Couvert',
   outdoor: 'Extérieur',
