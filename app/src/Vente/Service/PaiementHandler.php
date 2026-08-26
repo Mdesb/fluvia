@@ -53,9 +53,24 @@ final class PaiementHandler
             throw new UnprocessableEntityHttpException(sprintf('Moyen de paiement inconnu : « %s ».', $code));
         }
 
-        $pdv = $vente->getSession()?->getPointDeVente();
+        // D44-bis — porté par la vente : une vente directe n'a pas de session d'où le déduire.
+        $pdv = $vente->getPointDeVente();
         if ($pdv !== null && $pdv->getMoyensAutorises() !== [] && !$pdv->autoriseMoyen($code)) {
             throw new UnprocessableEntityHttpException(sprintf('Moyen « %s » non autorisé sur ce point de vente (RG-M2-02).', $code));
+        }
+
+        // D44-bis — **la phrase qui justifie toute la vente directe** : sans espèces, il n'y a rien à
+        // compter, donc rien à clôturer, donc pas besoin de session. Ce contrôle est ce qui rend cette
+        // phrase vraie ; sans lui, on aurait ouvert un chemin pour encaisser du liquide sans fonds de
+        // caisse, sans Z et sans personne pour en répondre.
+        //
+        // Le critère est l'absence de session, pas un drapeau sur la vente : c'est la même chose, mais
+        // celle-là ne peut pas être requalifiée après coup.
+        if ($vente->getSession() === null && $moyen->estFiduciaire()) {
+            throw new UnprocessableEntityHttpException(sprintf(
+                'Moyen « %s » impossible hors session de caisse : une vente directe n\'encaisse pas d\'espèces (D44-bis).',
+                $code,
+            ));
         }
 
         $resteCentimes = $this->calculateur->centimes($vente->getResteAPayer());

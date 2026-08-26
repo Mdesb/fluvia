@@ -8,17 +8,21 @@ use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
 use App\Caisse\Entity\SessionCaisse;
 use App\Vente\Entity\Vente;
+use App\Vente\Service\DirectSalePoint;
 use App\Vente\Service\GenerateurNumero;
 use App\Vente\Service\LecteurCorps;
 use App\Securite\Service\ContexteEtablissement;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\SecurityBundle\Security;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\Uid\Uuid;
 
 /**
- * Ouvre un panier (POST /ventes, CA-1). Refuse hors session ouverte (RG-M2-01). La clé d'idempotence
+ * Ouvre un panier (POST /ventes, CA-1). Refuse hors session ouverte (RG-M2-01) — **sauf en vente
+ * directe** (D44-bis), où l'absence de session est le mode de fonctionnement et non un oubli. La clé d'idempotence
  * (générée côté client en mode dégradé) rend l'ouverture rejouable sans doublon (RG-M2-08). Corps :
  *   { "session": iri|uuid, "client"?: uuid, "cleIdempotence"?: uuid, "origineHorsLigne"?: bool, "id"?: uuid }
  *
@@ -31,6 +35,8 @@ final class CreerVenteProcessor implements ProcessorInterface
         private readonly LecteurCorps $lecteur,
         private readonly GenerateurNumero $generateur,
         private readonly ContexteEtablissement $contexte,
+        private readonly DirectSalePoint $venteDirecte,
+        private readonly Security $securite,
     ) {
     }
 
@@ -66,11 +72,13 @@ final class CreerVenteProcessor implements ProcessorInterface
             }
         }
 
-        $session = $this->resoudreSession($corps['session'] ?? null);
-        if (!$session->estOuverte()) {
-            throw new ConflictHttpException('Aucune session ouverte : vente impossible (RG-M2-01).');
-        }
-
+        // D44-bis — **deux manières de vendre, pas une règle assouplie.** Ne pas fournir de session
+        // n'est pas une omission qu'on tolérerait : c'est la demande d'une vente directe, et elle a son
+        // propre droit. RG-M2-01 reste entière pour la caisse, juste en dessous.
+        //
+        // Le droit plutôt qu'un mode d'établissement : tranché par Maxime (D45-bis). Certains clubs
+        // n'ont même pas le module de caisse ; d'autres ont un guichet ET un gérant qui vend trois
+        // abonnements par mois. C'est une propriété de la personne, pas du lieu.
         $vente = new Vente();
         if (($id = $this->uuid($corps['id'] ?? null)) !== null) {
             $vente->setId($id);
@@ -78,6 +86,35 @@ final class CreerVenteProcessor implements ProcessorInterface
         if ($cle !== null) {
             $vente->setCleIdempotence($cle);
         }
+
+        if (($corps['session'] ?? null) === null) {
+            $etablissement = $this->contexte->etablissementActif();
+            if ($etablissement === null) {
+                throw new UnprocessableEntityHttpException('Établissement actif requis pour une vente directe.');
+            }
+            if (!$this->securite->isGranted('PERM', 'vente.vente_directe')) {
+                // 403 et non 404 : la vente directe n'est pas une ressource dont on cacherait
+                // l'existence, c'est un droit qu'on a ou qu'on n'a pas. Il n'y a rien à énumérer ici.
+                throw new AccessDeniedHttpException('Vente sans session : droit vente.vente_directe requis (D44-bis).');
+            }
+
+            $pdv = $this->venteDirecte->forEstablishment($etablissement);
+            $vente->setPointDeVente($pdv)
+                ->setEtablissement($etablissement)
+                ->setNumero($this->generateur->numeroVenteDirecte($pdv))
+                ->setOrigineHorsLigne(false);
+
+            $this->em->persist($vente);
+            $this->em->flush();
+
+            return $vente;
+        }
+
+        $session = $this->resoudreSession($corps['session']);
+        if (!$session->estOuverte()) {
+            throw new ConflictHttpException('Aucune session ouverte : vente impossible (RG-M2-01).');
+        }
+
         $vente->setSession($session)
             ->setEtablissement($session->getEtablissement())
             ->setNumero($this->generateur->numeroVente($session))
