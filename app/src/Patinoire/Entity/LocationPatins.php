@@ -59,6 +59,12 @@ use Symfony\Component\Uid\Uuid;
         ),
     ],
     normalizationContext: ['groups' => ['location:read']],
+    // Fermeture **declaree** de la denormalisation (D41). Aucune propriete ne porte
+    // `location:write` : rien n'est ecrivable depuis le corps. Les operations de creation portent
+    // deja `input: false`, qui suffit techniquement — mais le garde-fou n12 ne sait pas le
+    // lire, et compterait cette entite comme exposee indefiniment. Une fermeture qu'aucun
+    // outil ne voit finit par etre "corrigee" une seconde fois par quelqu'un d'autre.
+    denormalizationContext: ['groups' => ['location:write']],
 )]
 #[ApiFilter(SearchFilter::class, properties: ['statut' => 'exact', 'beneficiaire' => 'exact', 'parcPatins' => 'exact', 'etablissement' => 'exact'])]
 class LocationPatins
