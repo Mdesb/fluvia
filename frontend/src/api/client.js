@@ -441,8 +441,14 @@ export const api = {
   stockValorisation: () => request('/api/stock/valorisation'),
   creerArticleStock: (corps) => request('/api/article_stocks', { method: 'POST', body: corps, ld: true }),
   majArticleStock: (id, corps) => request(`/api/article_stocks/${id}`, { method: 'PATCH', body: corps }),
-  // Operation sur mesure : `input: false`, le processor lit le corps brut. Pas de `ld: true`.
+  // Operations sur mesure : `input: false`, le processor lit le corps brut. Pas de `ld: true`.
   stockAjuster: (corps) => request('/api/stock/mouvements/ajustement', { method: 'POST', body: corps }),
+  // Rattacher un article a un produit vendu : c'est CE lien qui fait qu'une vente decremente le
+  // stock. Sans lui, le produit se vend et rien ne bouge — volontairement, et silencieusement.
+  stockRattacherProduit: (id, produit) =>
+    request(`/api/stock/articles/${id}/rattacher-produit`, { method: 'POST', body: { produit } }),
+  stockDetacherProduit: (id) =>
+    request(`/api/stock/articles/${id}/detacher-produit`, { method: 'POST', body: {} }),
 
   // Padel
   padelTerrains: () => request('/api/padel/terrains', { query: { itemsPerPage: 100 } }),

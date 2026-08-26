@@ -5,7 +5,7 @@ import { dateHeureFr } from '../components/Liste.jsx'
 import { api, membres } from '../api/client.js'
 import { aUnDesDroits } from '../api/droits.js'
 import { mot } from '../api/vocabulaire.js'
-import { euros } from '../api/produit.js'
+import { euros, libelleProduit } from '../api/produit.js'
 
 // Stock — soixante-trois opérations exposées, aucune appelée jusqu'ici.
 //
@@ -41,6 +41,7 @@ export default function Stock({ etabActif, droits }) {
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
   const [ajustement, setAjustement] = useState(null)
+  const [rattachement, setRattachement] = useState(null)
   const [recherche, setRecherche] = useState('')
 
   const peutAjuster = aUnDesDroits(droits, ['stock.ajuster', 'stock.gerer'])
@@ -128,6 +129,8 @@ export default function Stock({ etabActif, droits }) {
             onRecherche={setRecherche}
             peutAjuster={peutAjuster && !lotsTronques}
             onAjuster={(a) => setAjustement({ article: a, restant: restantParArticle[a.id] || 0 })}
+            onRattacher={peutGererArticle ? (a) => setRattachement(a) : null}
+            nonSuivis={articles.filter((a) => !a.produit).length}
           />
 
           {peutGererArticle && <ArticlesEdition onChange={recharger} />}
@@ -142,6 +145,13 @@ export default function Stock({ etabActif, droits }) {
         etat={ajustement}
         onClose={() => setAjustement(null)}
         onFait={(m) => { setAjustement(null); apres(m) }}
+        onErreur={setErreur}
+      />
+
+      <RattachementModal
+        article={rattachement}
+        onClose={() => setRattachement(null)}
+        onFait={(m) => { setRattachement(null); apres(m) }}
         onErreur={setErreur}
       />
     </div>
@@ -215,7 +225,8 @@ function AlertesSection({ alertes }) {
 // Les articles et ce qu'il en reste.
 // --------------------------------------------------------------------------------------------
 function ArticlesSection({
-  articles, total, restantParArticle, lotsCharges, tronque, recherche, onRecherche, peutAjuster, onAjuster,
+  articles, total, restantParArticle, lotsCharges, tronque, recherche, onRecherche, peutAjuster,
+  onAjuster, onRattacher, nonSuivis,
 }) {
   return (
     <section className="card" style={{ marginTop: 16 }}>
@@ -242,6 +253,15 @@ function ArticlesSection({
           <div className="empty">Aucun article ne correspond à « {recherche.trim()} ».</div>
         ) : (
           <>
+            {nonSuivis > 0 && (
+              <div className="banner banner-warn">
+                <b>{nonSuivis} article{nonSuivis > 1 ? 's ne sont' : " n'est"} rattaché
+                {nonSuivis > 1 ? 's' : ''} à aucun produit du catalogue.</b> Vendre ne les fera pas
+                descendre : leur quantité ne bougera que par correction manuelle. Ce n'est pas
+                forcément une erreur — on peut suivre un consommable qu'on ne vend pas — mais un
+                article à zéro mouvement ne veut pas dire la même chose selon le cas.
+              </div>
+            )}
             {tronque && (
               <div className="banner banner-error">
                 <b>Les quantités ne sont pas affichées, et c'est volontaire.</b> Cet établissement a
@@ -258,6 +278,7 @@ function ArticlesSection({
                   <th>Unité</th>
                   <th className="num">Il reste</th>
                   <th className="num">Seuil mini</th>
+                  <th>Suivi des ventes</th>
                   <th className="num">Prix d'achat HT</th>
                   {peutAjuster && <th />}
                 </tr>
@@ -285,12 +306,33 @@ function ArticlesSection({
                         )}
                       </td>
                       <td className="num">{nombre(a.seuilMin)}</td>
+                      <td>
+                        {a.produit ? (
+                          <span className="badge good" title="Une vente de ce produit décrémente cet article.">
+                            {libelleProduit(a.produit)}
+                          </span>
+                        ) : (
+                          <span
+                            className="badge warn"
+                            title="Aucune vente ne décrémentera cet article tant qu'il n'est rattaché à aucun produit."
+                          >
+                            non suivi
+                          </span>
+                        )}
+                      </td>
                       <td className="num">{euros(a.prixAchatHT)}</td>
                       {peutAjuster && (
                         <td className="num">
-                          <button className="btn ghost sm" type="button" onClick={() => onAjuster(a)}>
-                            Corriger
-                          </button>
+                          <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                            {onRattacher && (
+                              <button className="btn ghost sm" type="button" onClick={() => onRattacher(a)}>
+                                {a.produit ? 'Changer le produit' : 'Rattacher'}
+                              </button>
+                            )}
+                            <button className="btn ghost sm" type="button" onClick={() => onAjuster(a)}>
+                              Corriger
+                            </button>
+                          </div>
                         </td>
                       )}
                     </tr>
@@ -553,6 +595,100 @@ function AjustementModal({ etat, onClose, onFait, onErreur }) {
 }
 
 // --------------------------------------------------------------------------------------------
+// Rattacher un article à un produit vendu.
+// --------------------------------------------------------------------------------------------
+// Le détachement est proposé dans le même écran que le rattachement, parce que c'est le même sujet
+// vu des deux côtés — et il dit ce qu'il casse : à partir de là, les ventes cessent de décrémenter.
+function RattachementModal({ article, onClose, onFait, onErreur }) {
+  const [produits, setProduits] = useState([])
+  const [choix, setChoix] = useState('')
+  const [enCours, setEnCours] = useState(false)
+
+  useEffect(() => {
+    if (!article) return
+    setChoix('')
+    api
+      .produits()
+      .then((c) => setProduits(membres(c)))
+      .catch(() => setProduits([]))
+  }, [article])
+
+  async function rattacher(e) {
+    e.preventDefault()
+    setEnCours(true)
+    try {
+      await api.stockRattacherProduit(article.id, choix)
+      onFait(`« ${article.libelle} » suit désormais les ventes.`)
+    } catch (err) {
+      onErreur(err.message || "Le rattachement n'a pas abouti.")
+    } finally {
+      setEnCours(false)
+    }
+  }
+
+  async function detacher() {
+    if (
+      !window.confirm(
+        `Détacher « ${article.libelle} » de son produit ?\n\nÀ partir de maintenant, vendre ce `
+          + `produit ne fera plus descendre le stock de cet article. Les mouvements déjà enregistrés `
+          + `sont conservés.`,
+      )
+    )
+      return
+    setEnCours(true)
+    try {
+      await api.stockDetacherProduit(article.id)
+      onFait(`« ${article.libelle} » ne suit plus les ventes.`)
+    } catch (err) {
+      onErreur(err.message || "Le détachement n'a pas abouti.")
+    } finally {
+      setEnCours(false)
+    }
+  }
+
+  return (
+    <Modal open={!!article} onClose={onClose} titre={article ? `Suivi des ventes — ${article.libelle}` : ''}>
+      {article && (
+        <form onSubmit={rattacher}>
+          <p style={{ marginTop: 0 }}>
+            Rattacher un article à un produit, c'est ce qui fait qu'une vente au comptoir fait
+            descendre le stock. Sans ce lien, le produit se vend normalement et la quantité ne bouge
+            pas — c'est voulu, tous les produits ne sont pas gérés en stock.
+          </p>
+
+          <div className="field">
+            <label htmlFor="st-produit">Produit vendu</label>
+            <select id="st-produit" className="input" value={choix} onChange={(e) => setChoix(e.target.value)}>
+              <option value="">Choisir…</option>
+              {produits.map((p) => (
+                <option key={p.id} value={p.id}>{libelleProduit(p)}</option>
+              ))}
+            </select>
+            <div className="hint">
+              {article.produit
+                ? `Actuellement rattaché à « ${libelleProduit(article.produit)} ».`
+                : "Cet article n'est rattaché à aucun produit."}
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
+            {article.produit && (
+              <button className="btn ghost" type="button" disabled={enCours} onClick={detacher}>
+                Ne plus suivre les ventes
+              </button>
+            )}
+            <button className="btn" type="button" onClick={onClose}>Annuler</button>
+            <button className="btn primary" type="submit" disabled={enCours || !choix}>
+              {enCours ? 'Enregistrement…' : 'Rattacher'}
+            </button>
+          </div>
+        </form>
+      )}
+    </Modal>
+  )
+}
+
+// --------------------------------------------------------------------------------------------
 // La règle des écarts d'inventaire — dite telle qu'elle est, pas telle qu'on l'imagine.
 // --------------------------------------------------------------------------------------------
 // Le serveur exige `stock.valider_ecart` pour régulariser un écart d'inventaire « significatif ».
@@ -625,8 +761,10 @@ function JournalSection({ mouvements }) {
       <div className="card-b">
         {mouvements.length === 0 ? (
           <div className="empty">
-            Aucun mouvement. Chaque entrée, sortie, correction ou perte laisse une ligne ici, avec son
-            auteur et sa raison.
+            Aucun mouvement. Chaque entrée, sortie, correction ou perte laisse une ligne ici, avec sa
+            raison. Un journal vide peut aussi vouloir dire que vos articles ne sont rattachés à aucun
+            produit : dans ce cas les ventes ne les touchent pas, et c'est la colonne « suivi des
+            ventes » ci-dessus qui le dit.
           </div>
         ) : (
           <table className="tbl">
