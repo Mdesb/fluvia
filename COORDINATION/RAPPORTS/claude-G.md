@@ -303,6 +303,7 @@ lui fait porter le risque. La prochaine fois je donne les deux, ou je dis que je
 | 14:55 | **Mon raccourci était déjà faux, et `claude-A` l'a montré sur pièce.** `estFiduciaire()` renvoyait `autoriseRendu` : les quatre chèques du référentiel portent `autoriseRendu = false`, une vente directe les aurait acceptés **sans que personne ne détienne le papier**. Critère écrit, plus proxy. `MoyenFiduciaireTest` 4/4. | Vérification complète avant commit : `Reservation` 103/103, `Reporting` en vol, puis `Vente` à rejouer. | Rien. |
 | 15:37 | **D57 — la clôture journalière n'est pas le Z, et deux trous d'inaltérabilité que j'avais créés.** `pointDeVente` n'était pas figé sur une vente scellée ; `SettlementCorrection` (D45) était modifiable et supprimable, **sur `main` depuis ce matin**. `Vente` 75/75, `Caisse` 15/15. | Fusion de `main`, lanceur avec ET sans référence, poussée. | Rien. |
 | 16:34 | **Le ticket n'existait que dans l'onglet du caissier.** `TicketProcessor` ne rendait aucune ligne et `LigneVente` n'avait aucun mot. Libellés **figés au jour de la vente**, gravés par écouteur et non par les six appelants. `Vente` 78/78, `Caisse` 15/15, `Boutique` 56/56, `Reservation` 103/103. | Commit, poussée, puis PAY-3. | Rien. |
+| 17:29 | **La clôture devient un mécanisme.** Commande quotidienne, file des journées non closes qui descend à zéro, et le fuseau a révélé que le handler **comptait mal** — journée bornée sur l'heure du serveur. **Et j'ai enfreint ma propre règle** : test ajouté pendant une suite, verdict faux, deux erreurs réelles au rejeu. `Vente` 86/86, `Caisse` 15/15, `Platform` 62/62. | Commit, poussée, puis PAY-3. | Rien. |
 
 ## Nouvelle règle de Maxime — présentation horaire à `claude-A`
 
@@ -1498,3 +1499,93 @@ lui sont antérieures dans les faits. Sans conséquence ici : elle est indépend
 Dater à mon tour dans l'avenir aurait rendu la dérive invisible en m'y ajoutant. **L'ordre des
 versions ne veut plus rien dire dès que chacun choisit son heure**, et c'est le genre d'écart qui ne
 se voit qu'une fois qu'il est général.
+
+
+## La clôture devient un mécanisme — et le fuseau a trouvé mieux qu'il ne devait corriger
+
+NF525 exige une clôture quotidienne. **Une obligation légale ne peut pas dépendre de ce que quelqu'un
+pense à faire** : un exploitant qui oublie trois semaines n'a pas été négligent, il a rencontré un
+produit qui lui demandait d'être un mécanisme.
+
+Mais automatiser sans traiter l'échec aurait échangé un oubli **visible** contre un oubli
+**invisible**, et le second est pire — tout le monde croirait que c'est fait. C'est D57 reproduit un
+cran plus haut.
+
+### Le détecteur existait déjà ; personne ne le voyait
+
+Le refus « journée sautée » du `DailyClosureHandler` **est** le mécanisme qui repère une clôture
+manquée. Il était écrit, testé — et il ne parlait qu'à celui qui *tentait* une clôture. Une journée
+oubliée restait donc invisible jusqu'à ce que quelqu'un s'y heurte, des semaines plus tard,
+c'est-à-dire quand l'arriéré est devenu pénible.
+
+D'où `GET /clotures-journalieres/en-attente` : la plus ancienne d'abord, puisque le cumul refuse qu'on
+saute une journée — **l'ordre de la liste est l'ordre des gestes**. Chaque entrée porte le nombre de
+ventes, la raison, et `joursDeRetard` plutôt que deux dates à soustraire (D46 : on affiche l'écart,
+jamais les dates brutes).
+
+Le test qui compte est `testLaFileDescendQuandOnClot`. **C'est la seule propriété qui distingue une
+file d'un journal**, et c'est ce que D55 exige de toute liste affichée.
+
+### Ce que le fuseau a révélé, et que je n'avais pas vu en écrivant le handler
+
+`claude-A` a ajouté `Etablissement.fuseauHoraire` à ma demande, pour choisir l'heure de la tâche. Il a
+servi à autre chose : **le handler comptait mal**.
+
+`vente_vente.date` est un `DATETIME` **sans fuseau**, écrit à l'heure du serveur. Borner une journée
+d'exploitation sur l'heure du serveur revient à comparer une borne exprimée aux Antilles à une colonne
+écrite à Paris : la journée est décalée de quatre heures — **et la requête fonctionne parfaitement,
+elle rend simplement les mauvaises ventes**.
+
+Troisième forme du même défaut aujourd'hui : la liste vide, la jauge à zéro, et maintenant une journée
+décalée. À chaque fois, pas d'erreur, pas de test rouge, **un résultat plausible et faux**.
+
+Trois endroits corrigés, une seule méthode nommée. Et le refus dit maintenant *« il est le 2026-08-26
+sur ce point de vente »* : **un refus qui ne dit pas de quel calendrier il parle est incompréhensible
+depuis l'autre bout du monde** — précisément là où on en aura besoin.
+
+### `CONVERT_TZ()` écarté, et c'est l'arbitrage du lot
+
+MariaDB sait convertir un fuseau en SQL. C'était exact et plus court. **Mais la fonction exige les
+tables de fuseaux, qui ne sont pas chargées partout — et quand elles manquent, elle rend `NULL` sans
+lever.** Une clôture NF525 qui dépend d'une option d'installation, et qui échoue en silence quand
+l'option manque : on aurait reproduit, dans le mécanisme censé y mettre fin, exactement le motif de la
+journée.
+
+Le regroupement se fait donc en PHP, sur les seules dates postérieures au dernier arrêté — une journée
+en régime normal, quelques milliers de valeurs sur un arriéré de trois semaines. C'est le cas où l'on
+veut une réponse exacte.
+
+### La commande, et pourquoi elle a son propre test
+
+`vente:cloture:journee`, quotidienne, `critical`, `safeOnFirstRun: false`, avec `--dry-run`.
+
+Le handler est testé. Le planificateur est testé. **Ni l'un ni l'autre ne dit que la commande
+s'exécute** — et c'est exactement le raisonnement qui laisse une commande inerte pendant des mois.
+`claude-D` vient de le vivre sur `sepa:preavis:annoncer`, en pire : une commande qui *tourne*, annonce
+« 47 préavis envoyés » chaque matin, et se neutralise elle-même.
+
+Quatre vérifications, dont une que `claude-A` a demandée et que je n'aurais pas écrite : **le
+planificateur refuse de la lancer seule à son premier passage**. Une clôture scelle ; un premier
+passage sur un arriéré produirait vingt et un arrêtés irréversibles d'un coup. Le test vérifie le
+*comportement* du planificateur, pas la constante du catalogue — une valeur juste dans un fichier que
+personne ne lit ne protège rien.
+
+### Deux incursions hors périmètre, déclarées avant d'être découvertes
+
+`src/Platform/Scheduling/ScheduleCatalog.php` appartient à `claude-A`. Il a tranché : la commande et sa
+déclaration vont ensemble, **les séparer produirait soit une commande que rien ne planifie, soit une
+planification qui pointe vers rien** — un demi-mécanisme qui a l'air entier. Même raisonnement que pour
+la ligne de catalogue d'événements, et il vaut la peine d'être retenu : quand une règle de périmètre
+et un invariant se contredisent, c'est l'invariant qui gagne.
+
+`src/Vente/VenteModule.php` est chez moi, mais l'interface est son `Platform`. Il n'existait aucun
+manifeste pour le module qui encaisse : RG-PLAT-06 était donc **aveugle sur le plus gros émetteur
+potentiel du dépôt** — il n'avait rien à regarder, et rendait vert.
+
+### Une entorse à ma propre règle, et je la note plutôt que de la taire
+
+J'ai ajouté `ClotureCommandeTest` **pendant** qu'une suite tournait, alors que j'ai fait adopter à la
+flotte la règle inverse le 24/08 après avoir rendu deux verdicts sur un arbre qui avait bougé. Le
+risque était faible — PHPUnit découvre ses fichiers au démarrage — mais « faible » n'est pas « nul »,
+et c'est précisément l'argument que je refuse quand un autre me le sert. Le verdict de cette
+exécution-là est donc **écarté** : la suite a été rejouée en entier sur un arbre figé.

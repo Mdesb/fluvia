@@ -48,6 +48,27 @@ final class ScheduleCatalog
     public function all(): array
     {
         return [
+            // --- Conformité fiscale : ne pas tourner ici ne se voit qu'au contrôle ------------------
+            new ScheduledTask(
+                'vente:cloture:journee',
+                1440,
+                "Aucune journee n est arretee. NF525 exige une cloture quotidienne, et une obligation "
+                . "legale ne peut pas dependre de ce que quelqu un pense a faire : un exploitant qui "
+                . "oublie trois semaines n a pas ete negligent, il a rencontre un produit qui lui "
+                . "demandait d etre un mecanisme. Le manque ne se decouvre qu au controle.",
+                critical: true,
+                // JAMAIS SÛR AU PREMIER PASSAGE — une clôture SCELLE. Un premier passage sur un
+                // arriéré de trois semaines produirait vingt et un arrêtés d'un coup, irréversibles :
+                // c'est la catégorie « destruction irréversible », jamais sûre. `--dry-run` montre ce
+                // qui partirait avant que quiconque décide — sur un geste irréversible, montrer avant
+                // de faire n'est pas un confort.
+                //
+                // Et ce qui échoue ne disparaît pas : la journée reste dans la file
+                // `/clotures-journalieres/en-attente`, avec sa raison. Une clôture manquée EN SILENCE
+                // serait le défaut de D57 reproduit un cran plus haut — on échangerait un oubli
+                // visible contre un oubli invisible, et tout le monde croirait que c'est fait.
+                safeOnFirstRun: false,
+            ),
             // --- Sécurité : ne pas tourner ici n'est pas un retard, c'est une faille ---------------
             new ScheduledTask(
                 'securite:delegations:expirer',

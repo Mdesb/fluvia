@@ -10,6 +10,8 @@ use ApiPlatform\Metadata\GetCollection;
 use App\Caisse\Entity\PointDeVente;
 use App\Organisation\Entity\Etablissement;
 use App\Securite\Entity\Utilisateur;
+use App\Vente\Nf525\Dto\PendingClosure;
+use App\Vente\State\PendingClosuresProvider;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
@@ -53,6 +55,19 @@ use Symfony\Component\Uid\Uuid;
     operations: [
         new GetCollection(security: "is_granted('PERM', 'vente.lire')"),
         new Get(security: "is_granted('PERM', 'vente.lire')"),
+        // D57/D55 — la file des journees non closes. Le detecteur existait deja (le refus « journee
+        // sautee ») mais il ne parlait qu a celui qui tentait une cloture : une journee oubliee
+        // restait invisible jusqu a ce que quelqu un bute dessus, des semaines plus tard. Ici elle se
+        // lit sans qu on ait rien tente, et la liste descend a zero.
+        new GetCollection(
+            uriTemplate: '/clotures-journalieres/en-attente',
+            description: 'Journees porteuses de ventes jamais arretees, la plus ancienne d abord (le cumul refuse qu on saute une journee).',
+            security: "is_granted('PERM', 'vente.lire')",
+            output: PendingClosure::class,
+            normalizationContext: ['groups' => ['pending_closure:read']],
+            provider: PendingClosuresProvider::class,
+            paginationEnabled: false,
+        ),
     ],
     normalizationContext: ['groups' => ['daily_closure:read']],
 )]

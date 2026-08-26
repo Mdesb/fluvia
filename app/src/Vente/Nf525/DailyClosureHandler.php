@@ -38,8 +38,16 @@ final class DailyClosureHandler
         // 1 — On n'arrête pas une journée qui n'a pas eu lieu. Sans ce refus, clore demain figerait un
         // cumul que les ventes de demain viendraient contredire : la clôture affirmerait un total, et
         // la journée qu'elle prétend couvrir se remplirait après coup.
-        if ($jour > new \DateTimeImmutable('today')) {
-            throw new UnprocessableEntityHttpException('On ne clôt pas une journée à venir.');
+        // **Dans le fuseau de l'établissement, pas dans celui du serveur.** À 3 h du matin à Paris,
+        // il est encore 21 h la veille aux Antilles : comparer à l'« aujourd'hui » du serveur y
+        // clôturerait une journée EN COURS, avec des ventes encore à venir dessus. Elles tomberaient
+        // alors dans la journée suivante, et le refus « journée sautée » ne les rattraperait pas,
+        // puisque leur journée aurait été close. Une clôture fausse, et scellée.
+        if ($jour > $this->aujourdhui($pdv)) {
+            throw new UnprocessableEntityHttpException(sprintf(
+                'On ne clôt pas une journée à venir (il est le %s sur ce point de vente).',
+                $this->aujourdhui($pdv)->format('Y-m-d'),
+            ));
         }
 
         // 2 — Une journée ne se clôt qu'une fois. Deux clôtures du même jour compteraient deux fois la
@@ -128,6 +136,7 @@ final class DailyClosureHandler
      */
     private function totalDuJour(PointDeVente $pdv, \DateTimeImmutable $jour): array
     {
+        $bornes = $this->bornes($pdv, $jour);
         $ligne = $this->em->getRepository(Vente::class)->createQueryBuilder('v')
             ->select('COUNT(v.id) AS nb', 'COALESCE(SUM(v.total), 0) AS total')
             ->andWhere('v.pointDeVente = :pdv')
@@ -139,12 +148,50 @@ final class DailyClosureHandler
             // que la requête n'a rien trouvé serait indiscernable d'une journée sans vente.
             ->setParameter('pdv', $pdv->getId(), 'uuid')
             ->setParameter('encours', StatutVente::EnCours->value)
-            ->setParameter('debut', $jour)
-            ->setParameter('fin', $jour->modify('+1 day'))
+            ->setParameter('debut', $bornes[0])
+            ->setParameter('fin', $bornes[1])
             ->getQuery()
             ->getSingleResult();
 
         return [(int) $ligne['nb'], $this->calculateur->decimal($this->calculateur->centimes((string) $ligne['total']))];
+    }
+
+    /**
+     * Le fuseau dans lequel ce point de vente vit sa journée.
+     *
+     * Il vient de l'établissement (`claude-A`, à ma demande) : sans lui, tout exploitant à l'ouest de
+     * Paris se ferait clôturer une journée en cours par la tâche de nuit.
+     */
+    private function fuseau(PointDeVente $pdv): \DateTimeZone
+    {
+        return new \DateTimeZone($pdv->getEtablissement()?->getFuseauHoraire() ?? date_default_timezone_get());
+    }
+
+    /** La date du jour **sur ce point de vente**, qui n'est pas forcément celle du serveur. */
+    private function aujourdhui(PointDeVente $pdv): \DateTimeImmutable
+    {
+        return (new \DateTimeImmutable('now', $this->fuseau($pdv)))->setTime(0, 0);
+    }
+
+    /**
+     * Les bornes d'une journée d'exploitation, **converties dans l'heure du serveur**.
+     *
+     * `vente_vente.date` est un `DATETIME` sans fuseau : la base stocke l'heure du serveur et ne sait
+     * pas d'où elle vient. Comparer une borne exprimée aux Antilles à une colonne écrite à Paris
+     * donnerait une journée décalée de quatre heures — silencieusement, puisque la requête
+     * fonctionnerait parfaitement et rendrait simplement les mauvaises ventes.
+     *
+     * On construit donc la journée dans le fuseau de l'établissement, puis on la ramène dans celui du
+     * serveur pour interroger. Le jour où les dates seront stockées en UTC, c'est ici que ça change.
+     *
+     * @return array{0: \DateTimeImmutable, 1: \DateTimeImmutable}
+     */
+    private function bornes(PointDeVente $pdv, \DateTimeImmutable $jour): array
+    {
+        $debut = new \DateTimeImmutable($jour->format('Y-m-d') . ' 00:00:00', $this->fuseau($pdv));
+        $serveur = new \DateTimeZone(date_default_timezone_get());
+
+        return [$debut->setTimezone($serveur), $debut->modify('+1 day')->setTimezone($serveur)];
     }
 
     private function derniereCloture(PointDeVente $pdv, \DateTimeImmutable $jour): ?DailyClosure
@@ -169,7 +216,11 @@ final class DailyClosureHandler
      */
     private function premierJourNonClos(PointDeVente $pdv, ?\DateTimeImmutable $dernierArrete, \DateTimeImmutable $jour): ?\DateTimeImmutable
     {
-        $depuis = $dernierArrete?->modify('+1 day') ?? new \DateTimeImmutable('@0');
+        // Bornes converties, pour la même raison que `bornes()` : la colonne est en heure serveur.
+        $depuis = $dernierArrete !== null
+            ? $this->bornes($pdv, $dernierArrete->modify('+1 day'))[0]
+            : new \DateTimeImmutable('@0');
+        $jour = $this->bornes($pdv, $jour)[0];
 
         $date = $this->em->getRepository(Vente::class)->createQueryBuilder('v')
             ->select('MIN(v.date)')
