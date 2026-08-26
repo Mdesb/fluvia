@@ -1601,3 +1601,63 @@ l'heure** (A, B, C, D, F, G, H ; `E` à huit heures, `I` jamais ouverte).
 C'est la deuxième fois de la semaine qu'une mesure non réactualisée devient une affirmation — et c'est
 `claude-D` qui l'avait déjà signalé la première fois, en se trompant elle-même sur le compte de la flotte.
 La leçon est symétrique : **on ne mesure pas l'activité par le canal qui la rapporte.**
+
+---
+
+### 2026-08-26 · D52 — « Ne lève pas » n'est pas « idempotent »
+
+**La règle.** Un rechargement de données ne se juge pas à l'absence d'erreur, mais au **nombre de lignes**.
+Une entité dont la seule unicité porte sur son identifiant technique — régénéré à chaque construction —
+ne produit **aucune** erreur au second chargement : elle se duplique en silence.
+
+**Comment on l'a trouvée, et pourquoi la méthode compte autant que la règle.**
+
+`claude-G` avait signalé quatre familles d'entités uniques dans `SocleFixtures`. J'en ai gardé trois et
+déclaré la fixture idempotente. Elle avait annoncé le résultat : *« corriger la seule famille qui bloque
+fait avancer le curseur d'un cran »*. Le double chargement a effectivement buté un cran plus loin, sur
+`Utilisateur.email`.
+
+J'ai alors arrêté de suivre les erreurs et **inventorié ce que le fichier construit**. Sept types.
+Quatre gardés, un oublié, et **trois qui ne crieront jamais** : `Groupe`, `Region`, `Etablissement`. Un
+second chargement y crée un second « Groupe Loisirs Métropole », une seconde « Région Est », **deux
+Piscine A**.
+
+**Suivre les `Duplicate entry` ne les aurait jamais révélés, puisqu'ils n'en produisent aucun.**
+
+**Pourquoi celui-là est le plus grave, et pas le moins.** Un établissement en double n'est pas un doublon
+de données, c'est une **frontière de cloisonnement dupliquée**. `claude-G` l'a formulé en constatant que
+tout son module s'y appuie : `PerimetreReservationExtension` joint `etablissement` à une `Affectation`,
+`PerimetreProduitExtension` fait pareil par les sites d'un produit. **Deux « Piscine A », et la question
+« cet utilisateur a-t-il le droit ? » a deux réponses selon la ligne tirée.**
+
+**Le contrôle qui l'attrape** est dans `FixturesIdempotentesTest` : compter les lignes de toutes les
+tables peuplées avant et après la seconde passe, et échouer si un compte a bougé. Exigé par `claude-D`,
+qui avait vu que ma première version ne voyait que les tables assez bien contraintes pour crier.
+
+**Ce qu'on en retient au-delà des fixtures :** quand un défaut ne se manifeste que par une erreur, on ne
+corrige que les cas assez contraints pour en produire une. **Il faut inventorier ce qu'on construit,
+pas suivre ce qui casse.**
+
+---
+
+### 2026-08-26 · D53 — Un garde-fou ne met jamais son propre contournement dans son message d'échec
+
+**Le constat, apporté par `claude-D` après trois refus dans la même semaine.** Les trois fois, la porte
+de sortie était offerte par le garde-fou lui-même : *retirer les mots du lexique* (nommage anglais),
+*documenter l'entité comme globale dans `MESSAGES.md`* (couverture), *relever le plafond* (cliquet). Les
+trois fois, refuser a produit du meilleur code.
+
+**Le problème n'est pas que la porte existe, c'est qu'elle est mise en avant.** Un garde-fou qui propose
+son propre contournement transforme une question technique en question de caractère — et le caractère
+cède un vendredi soir. Le remède affaiblit alors le contrôle pour faire passer le code, ce qui est
+exactement l'inverse de sa raison d'être.
+
+**Le critère opérationnel, tel que `claude-D` l'a formulé :** le message d'échec explique **ce qui est
+cassé et comment le réparer**. Le contournement, lui, vit dans la **documentation** du garde-fou, pas
+dans sa sortie d'erreur. *Qui le cherche le trouve ; qui est pressé ne tombe pas dessus.*
+
+**Cas d'espèce :** `claude-D` a renommé ses classes plutôt que d'accepter le retrait des mots du lexique,
+sur un module tout neuf — *« prendre la porte de sortie au moment où le module vient de naître aurait
+été le pire moment »*.
+
+À appliquer aux douze garde-fous. `bin/` est le périmètre de `claude-C`.
