@@ -2246,3 +2246,95 @@ ce nom aurait donné la clé d'idempotence attendue, **et le nom aurait menti**.
 paiement. `PointDeVente` porte une *liste* de terminaux en configuration, et `ResultatTpe` ne dit pas
 lequel a répondu. La trace porte donc le point de vente. Distinguer deux terminaux d'un même comptoir est
 un chantier séparé.
+
+---
+
+### 2026-08-26 · D51-ter — Le patron « socle + ajout local » existait déjà, et ma consigne en créait un second
+
+**Correction de D51, sur pièce.** J'avais arbitré la forme : `etablissement` nullable, `null` = socle
+partagé, pas de table d'extension. `claude-G` a fait ce que D51 exigeait — *vérifier d'abord qu'un patron
+n'existe pas ailleurs, en inventer un second serait pire que le problème* — et **elle en a trouvé un,
+complet, fusionné, avec son extension Doctrine.**
+
+`Support` porte déjà exactement ça, et le discriminant n'est **pas** `null` :
+
+```php
+#[ORM\Column(length: 6, enumType: PorteeArticle::class, options: ['default' => 'global'])]
+private PorteeArticle $portee = PorteeArticle::Global;   // Global | Local
+#[ORM\JoinColumn(nullable: true)]
+private ?Etablissement $etablissement = null;
+```
+
+Et son extension applique déjà « le socle **plus** ses ajouts, jamais ceux d'un autre », avec `IDENTITY()`
+— donc conforme à D58 avant que D58 n'existe.
+
+**Ma consigne aurait donc créé le second patron que D51 interdit**, sur la décision qui interdit
+justement ça.
+
+---
+
+**ET LE DISCRIMINANT EXPLICITE EST MEILLEUR QUE LE NULL, POUR UNE RAISON QUI N'EST PAS DE STYLE.**
+
+Argument de `claude-G`, et il est décisif : **`null` sur `etablissement` porte deux sens différents** —
+« cette ligne appartient au socle » et « personne n'a encore renseigné l'établissement ».
+
+Le second arrive tout seul : un import, un processeur qui oublie l'estampille, une migration qui ajoute
+la colonne. Et alors **une ligne locale mal remplie devient du socle** — donc visible par tous les
+établissements, **silencieusement**.
+
+Avec `portee`, le même oubli produit une ligne `local` sans établissement : **invisible partout**, ce qui
+se remarque et se corrige.
+
+> **Le défaut par défaut ne fuit pas.**
+
+C'est le même critère que la clôture journalière le matin même — *le défaut est celui qui ne peut pas
+mentir* — appliqué à une frontière de cloisonnement au lieu d'une date.
+
+**Décidé : D51 s'aligne sur le patron de `Support`.** Le trait porteur (`portee` + `etablissement`) et le
+fragment de requête réutilisable montent dans `Platform`, **une seule fois**, pour que le troisième
+module ne le réinvente pas une troisième fois.
+
+**Ce que je ne fais pas :** convertir `Support` au nullable pur. Ce serait remplacer le bon patron par le
+moins bon pour satisfaire une consigne écrite trop vite.
+
+---
+
+### 2026-08-26 · D51-quater — Chercher la fonctionnalité, pas le numéro de décision
+
+`claude-G` allait reconstruire les trois documents de D45-bis — devis, bon de commande, bon de livraison.
+**`claude-D` les avait livrés le matin même**, sous le nom FAC-1 : `Facturation\Entity\CommercialDocument`,
+`DocumentNature::Quote | SalesOrder | DeliveryNote`, huit opérations, la filiation complète.
+
+Une demi-journée en double, évitée à la lecture.
+
+**Et la règle existante ne suffisait pas.** « Fusionner `main` avant de claimer » est en place depuis
+lundi, et `main` **était** à jour chez elle. Le travail était simplement arrivé **sous un autre nom que
+celui de la décision** — D45-bis livré comme FAC-1.
+
+> **Avant de proposer un lot, chercher la fonctionnalité dans le code, pas le numéro de décision dans le
+> tableau.** — `claude-G`
+
+Un identifiant de décision ne survit pas au passage à l'implémentation : celui qui livre nomme son lot
+d'après ce qu'il construit, pas d'après ce qui l'a demandé. Le tableau de claim voit donc D45-bis
+« libre » alors que la fonctionnalité existe.
+
+---
+
+### 2026-08-26 · D51-quinquies — Le quotient familial ne s'affiche pas au guichet
+
+`claude-H` demandait un paramètre `beneficiaire` dans l'estimation de tarif. `claude-G` l'a refusé après
+vérification : **il n'entre dans aucune règle de tarif du dépôt**. Ce qui fait varier le prix est le
+**quotient familial**, déjà fourni par l'appelant.
+
+*L'accepter pour l'ignorer aurait été pire que de ne pas l'accepter : l'écran aurait cru le prix
+contextualisé, et le jour où deux bénéficiaires d'un même dossier ont des quotients différents, il
+afficherait deux fois le même prix sans que personne sache pourquoi.* **Un paramètre ignoré est un
+mensonge de signature.**
+
+Reste la question qu'elle a fait remonter : si l'écran connaît le bénéficiaire mais pas son quotient, il
+manque une résolution `bénéficiaire → quotient familial`, qui vit dans `Crm`.
+
+**Non ouverte, et ce n'est pas une frontière de module.** Lire le quotient familial d'un bénéficiaire
+depuis l'écran de caisse revient à **l'afficher au guichet, devant l'intéressé et devant les autres**.
+C'est une question de dignité, pas d'architecture, et elle se tranche avec Maxime — pas entre nous, et
+pas parce que ce serait techniquement commode.
