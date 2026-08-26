@@ -108,25 +108,25 @@ final class PersonnelFixtures extends Fixture
         // (RG-PERSO-07) — en production, ce compte technique serait dédié au contrôleur/ITBOX.
         $permIngestion = $this->permissionAcces($manager, 'ingestion');
 
-        $roleRh = (new Role())->setNom('Personnel Administrateur RH');
+        $roleRh = $this->roleNomme($manager, 'Personnel Administrateur RH');
         $roleRh->addPermission($perms['gerer_employe'])->addPermission($perms['gerer_qualification'])
             ->addPermission($perms['gerer_badge'])->addPermission($perms['lire'])
             ->addPermission($permIngestion);
         $manager->persist($roleRh);
 
-        $rolePlanning = (new Role())->setNom('Personnel Responsable Planning');
+        $rolePlanning = $this->roleNomme($manager, 'Personnel Responsable Planning');
         $rolePlanning->addPermission($perms['gerer_planning'])->addPermission($perms['valider_absence'])->addPermission($perms['lire']);
         $manager->persist($rolePlanning);
 
-        $roleLecture = (new Role())->setNom('Personnel Lecture seule');
+        $roleLecture = $this->roleNomme($manager, 'Personnel Lecture seule');
         $roleLecture->addPermission($perms['lire']);
         $manager->persist($roleLecture);
 
-        $roleAccueil = (new Role())->setNom('Personnel Agent Accueil');
+        $roleAccueil = $this->roleNomme($manager, 'Personnel Agent Accueil');
         $roleAccueil->addPermission($permBloquerSupport);
         $manager->persist($roleAccueil);
 
-        $roleEmploye = (new Role())->setNom('Personnel Employé (soi)');
+        $roleEmploye = $this->roleNomme($manager, 'Personnel Employé (soi)');
         $roleEmploye->addPermission($perms['lire_soi'])->addPermission($perms['declarer_absence_soi']);
         $manager->persist($roleEmploye);
 
@@ -197,5 +197,30 @@ final class PersonnelFixtures extends Fixture
         $manager->persist($utilisateur);
 
         return $utilisateur;
+    }
+
+    /**
+     * Un rôle existant plutôt qu'un doublon.
+     *
+     * `Role.nom` porte une unicité **globale** : recharger les fixtures sur une base qui les a déjà
+     * échoue sur « Duplicate entry ». Ce n'est pas théorique — c'est exactement ce qui m'a empêché de
+     * régénérer les données de démonstration de la préproduction le 24/08, et qui a fini par me faire
+     * effacer les rattachements de droits de trente-quatre rôles.
+     *
+     * Le harnais de test ne voit jamais ce cas : il recrée le schéma depuis les entités à chaque classe
+     * de test, donc les fixtures partent toujours d'une base vide. Les deux mondes ne se croisent pas.
+     */
+    private function roleNomme(ObjectManager $manager, string $nom): Role
+    {
+        $existant = $manager->getRepository(Role::class)->findOneBy(['nom' => $nom]);
+
+        if ($existant instanceof Role) {
+            return $existant;
+        }
+
+        $role = (new Role())->setNom($nom);
+        $manager->persist($role);
+
+        return $role;
     }
 }
