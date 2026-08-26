@@ -18,6 +18,8 @@ use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Serializer\Attribute\Groups;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Validator\Constraints as Assert;
+use App\Offre\State\TenantReferenceProcessor;
+use App\Organisation\Entity\Etablissement;
 
 /**
  * Saison : période de validité d'un prix (RG-M1-01). En cas de chevauchement pour une date,
@@ -33,8 +35,11 @@ use Symfony\Component\Validator\Constraints as Assert;
     operations: [
         new GetCollection(security: "is_granted('PERM', 'offre.lire')"),
         new Get(security: "is_granted('PERM', 'offre.lire')"),
-        new Post(security: "is_granted('PERM', 'offre.gerer')"),
-        new Patch(security: "is_granted('PERM', 'offre.gerer')"),
+        // D51 — entierement cloisonne : l etablissement est estampille depuis le CONTEXTE
+        // serveur, jamais lu du corps de la requete (D3/D8). C est la seule raison pour laquelle un
+        // appelant ne peut pas deposer sa saison ou sa grille de quotient chez le voisin.
+        new Post(security: "is_granted('PERM', 'offre.gerer')", processor: TenantReferenceProcessor::class),
+        new Patch(security: "is_granted('PERM', 'offre.gerer')", processor: TenantReferenceProcessor::class),
         new Delete(
             security: "is_granted('PERM', 'offre.gerer')",
             processor: SuppressionReferentielProcessor::class,
@@ -45,6 +50,21 @@ use Symfony\Component\Validator\Constraints as Assert;
 )]
 class Saison
 {
+    /**
+     * L'établissement propriétaire. **Nul uniquement pour les lignes antérieures au cloisonnement**
+     * (D51) — et une ligne nulle n'est visible de personne.
+     *
+     * C'est voulu : la migration les laisse orphelines plutôt que de leur inventer un propriétaire.
+     * Une saison rattachée au hasard produirait des tarifs calculés sur la saison d'un autre
+     * établissement, et pour les tranches de quotient familial, D51 rappelle qu'une erreur de grille
+     * est une **erreur de facturation opposable**. Une donnée manquante reste visiblement manquante ;
+     * une donnée fausse ne se voit pas.
+     */
+    #[ORM\ManyToOne(targetEntity: Etablissement::class)]
+    #[ORM\JoinColumn(nullable: true)]
+    #[Groups(['ref:read'])]
+    private ?Etablissement $etablissement = null;
+
     #[ORM\Id]
     #[ORM\Column(type: UuidType::NAME, unique: true)]
     #[Groups(['ref:read', 'grille:read', 'produit:read'])]
@@ -182,5 +202,17 @@ class Saison
         }
 
         return $this->dateDebut <= $autre->dateFin && $autre->dateDebut <= $this->dateFin;
+    }
+
+    public function getEtablissement(): ?Etablissement
+    {
+        return $this->etablissement;
+    }
+
+    public function setEtablissement(?Etablissement $etablissement): self
+    {
+        $this->etablissement = $etablissement;
+
+        return $this;
     }
 }

@@ -18,6 +18,8 @@ use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Serializer\Attribute\Groups;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Validator\Constraints as Assert;
+use App\Offre\State\LocalReferenceProcessor;
+use App\Platform\Scoping\ScopedReference;
 
 /**
  * Type de tarif : dimension de la grille tarifaire (RG-M1-01). Sa visibilité par canal
@@ -32,8 +34,9 @@ use Symfony\Component\Validator\Constraints as Assert;
     operations: [
         new GetCollection(security: "is_granted('PERM', 'offre.lire')"),
         new Get(security: "is_granted('PERM', 'offre.lire')"),
-        new Post(security: "is_granted('PERM', 'offre.gerer')"),
-        new Patch(security: "is_granted('PERM', 'offre.gerer')"),
+        // D51 — l ajout est LOCAL, la modification du socle est refusee : voir LocalReferenceProcessor.
+        new Post(security: "is_granted('PERM', 'offre.gerer')", processor: LocalReferenceProcessor::class),
+        new Patch(security: "is_granted('PERM', 'offre.gerer')", processor: LocalReferenceProcessor::class),
         new Delete(
             security: "is_granted('PERM', 'offre.gerer')",
             processor: SuppressionReferentielProcessor::class,
@@ -44,6 +47,11 @@ use Symfony\Component\Validator\Constraints as Assert;
 )]
 class TypeTarif
 {
+    // D51 — socle partage + ajout local. Le trait porte `portee` et `etablissement`, et
+    // `ScopedReferenceQuery` fait la lecture ; les deux vont ensemble, le trait seul rendrait la
+    // donnee lisible par tous.
+    use ScopedReference;
+
     #[ORM\Id]
     #[ORM\Column(type: UuidType::NAME, unique: true)]
     #[Groups(['ref:read', 'produit:read', 'grille:read'])]

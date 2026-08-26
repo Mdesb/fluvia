@@ -306,6 +306,7 @@ lui fait porter le risque. La prochaine fois je donne les deux, ou je dis que je
 | 17:29 | **La clôture devient un mécanisme.** Commande quotidienne, file des journées non closes qui descend à zéro, et le fuseau a révélé que le handler **comptait mal** — journée bornée sur l'heure du serveur. **Et j'ai enfreint ma propre règle** : test ajouté pendant une suite, verdict faux, deux erreurs réelles au rejeu. `Vente` 86/86, `Caisse` 15/15, `Platform` 62/62. | Commit, poussée, puis PAY-3. | Rien. |
 | 18:27 | **PAY-3 : un refus de carte ne laissait aucune trace.** `CA-10` veut qu'un refus ne crée aucun `Paiement` — donc il ne restait rien. Table + événement qui la référence, dans cet ordre (bus synchrone). `rejectionId` et non `paymentId` : le second n'existe pas. `Vente` 92/92, `Caisse` 15/15, `Sepa` 55/55. | Commit et poussée. | Rien. |
 | 19:15 | **L'estimation de tarif appelle le code qui facture.** Le remède ne devait pas avoir la forme de la maladie : un service d'estimation parallèle aurait reproduit le défaut dans une couche où **personne ne verrait la divergence**. `Vente` 98/98, `Offre` 32/32, `Boutique` 56/56, `Reservation` 103/103. | Commit et poussée. | Rien. |
+| 21:11 | **D51 — socle partagé + ajout local, et le joker `offre.*` qui contenait le droit sur le socle.** Le test a trouvé deux défauts que la relecture n'aurait pas vus. `Offre` 39/39, `Vente` 98/98, `Boutique` 56/56, `Reservation` 103/103. | Commit et poussée. | Rien. |
 
 ## Nouvelle règle de Maxime — présentation horaire à `claude-A`
 
@@ -1723,3 +1724,82 @@ surprend : une promotion dont l'éligibilité ne liste aucun produit n'est élig
 et non à tous comme on le lit spontanément. Recopié à l'identique, avec le commentaire disant que la
 surprise est voulue — **une estimation plus permissive que la facturation aurait annoncé une remise que
 la caisse n'applique pas**, c'est-à-dire le défaut d'origine réintroduit par le remède.
+
+
+## D51 — le socle partagé, et deux défauts que seul le test a vus
+
+Maxime a demandé deux choses qui n'en font qu'une : *« un seul produit de créé, et derrière que ce soit
+juste la tarification qui change »*, et *« le paramétrage entièrement modifiable par l'utilisateur »*.
+Un exploitant doit pouvoir ajouter son propre type de tarif **sans qu'on lui livre une version**, et
+sans que son ajout apparaisse chez le voisin.
+
+| Référentiel | Régime | Qui décide de la liste |
+|---|---|---|
+| `TypeTarif`, `Categorie` | socle + ajout local | nous pour le socle, **eux** pour le reste |
+| `Saison`, `TrancheQuotientFamilial` | entièrement cloisonnés | l'exploitant, la commune ou la CAF |
+| `TypeProduit` | global, **déjà** en lecture seule | nous — sa valeur pilote des branches de code |
+
+### Le patron existait, et ce n'était pas celui que la décision suggérait
+
+D51 demandait de vérifier qu'un patron nullable n'existait pas ailleurs **avant** d'en inventer un.
+`Support` le fait déjà, entièrement, avec `PorteeArticle` et son extension — et écrit avec
+`IDENTITY()`, donc conforme à D58 avant que D58 n'existe. La consigne « `null` = socle » aurait créé le
+**second patron que D51 interdit**, sur la décision qui interdit précisément cela.
+
+**Et le discriminant explicite vaut mieux que le `null`, pour une raison qui n'est pas de style.** Un
+`null` sur `etablissement` porte **deux sens** : « appartient au socle » et « personne n'a encore
+renseigné ». Le second arrive tout seul — un import, un processeur qui oublie l'estampille, une
+migration qui ajoute la colonne. Une ligne locale mal remplie deviendrait alors du socle, **visible par
+tous, en silence**. Avec `portee`, le même oubli produit une ligne locale sans établissement :
+invisible partout, donc remarquable. **Le défaut par défaut ne fuit pas.**
+
+### Deux défauts trouvés par le test, pas par la relecture
+
+**Le joker `offre.*` contenait le droit sur le socle.** J'avais nommé le droit de la plateforme
+`offre.gerer_socle`. L'administrateur de groupe porte la permission joker `offre.*` : il l'obtenait
+donc **automatiquement**. Chaque administrateur d'établissement se serait retrouvé maître du socle
+commun sans que personne ne l'ait décidé — et renommer un `TypeTarif` chez A aurait changé le tarif de
+B.
+
+Renommé `plateforme.gerer_socle`. **Le joker d'un module ne doit jamais pouvoir contenir un droit qui
+dépasse ce module** : le nommage d'une permission n'est pas une convention d'affichage, c'est une
+frontière d'autorité. Conséquence assumée — personne ne détient ce droit aujourd'hui.
+
+**La lecture portait sur les affectations, et c'était le mauvais critère.** J'avais repris tel quel le
+filtre de `Support`. Le test a montré que l'administrateur, affecté à A **et** à B, voyait les ajouts
+de B **depuis le guichet de A** — il aurait pu poser un prix sur un tarif qui n'existe pas là où il
+encaisse, et le défaut ne se serait vu **qu'à la facture**.
+
+Ce n'est pas un défaut du patron de `Support` : un article d'aide se lit légitimement depuis n'importe
+lequel de ses établissements, un référentiel tarifaire non. **Le trait et la forme du filtre se
+partagent ; le critère de visibilité ne se partage pas** — il dépend de ce que la liste sert à faire.
+
+### La migration laisse orphelin, et c'est la décision
+
+Rattacher les saisons et les tranches existantes à un établissement choisi aurait produit des tarifs
+calculés sur la saison d'un autre, et des grilles de quotient attribuées à une commune qui ne les a pas
+votées. **Une migration ne fabrique jamais de donnée métier** : ce qui manque doit rester visiblement
+manquant. Une donnée absente se remarque et se corrige ; une donnée fausse ne se voit pas.
+
+Le jeu de données, lui, rattache sa saison — là je **sais** à qui elle appartient. La raison est écrite
+à côté, sinon quelqu'un refera le même geste dans la migration en croyant être cohérent.
+
+### Le test central n'exerce pas la fonctionnalité : il montre ce qu'elle coûte mal écrite
+
+`etablissement = :courant` ne rend pas « un peu moins de lignes » : il fait disparaître **tout le
+socle**, donc le tarif sur lequel les prix sont posés, donc les prix. Le test vérifie que `TARIF_PLEIN`
+**a disparu**, et pas seulement que le compte a baissé — un test qui constate « il manque des lignes »
+se lit comme un réglage à ajuster ; celui-ci dit que la vente s'arrête.
+
+### Une erreur de ma part, corrigée avant qu'elle ne voyage
+
+J'ai annoncé à `claude-A` que `TypeProduit` était écrivable par tout administrateur. **C'était faux** :
+il n'expose que `GetCollection` et `Get`, sans aucun `denormalizationContext`. J'avais inventorié les
+cinq référentiels avec un `grep | head -8` ; pour les quatre autres, `Post` et `Patch` apparaissaient
+plus bas. Pour celui-là, la sortie s'arrêtait avant. **Je n'ai pas vu que la liste s'arrêtait là, j'ai
+vu qu'elle était coupée et j'ai supposé la suite identique.**
+
+Une sortie tronquée qui ressemble à une sortie complète — le motif du jour dans une forme nouvelle :
+cette fois, c'est l'outil de lecture qui ment, pas le code lu. `claude-A` avait déjà relayé le constat
+à Maxime ; il l'a corrigé, en notant que ce n'est pas la fausseté qui a porté l'erreur mais **la
+justesse de tout ce qui l'entourait**.

@@ -98,6 +98,13 @@ final class OffreFixtures extends Fixture implements DependentFixtureInterface
         $saison->setDateDebut(new \DateTimeImmutable('2026-01-01'))
             ->setDateFin(new \DateTimeImmutable('2026-12-31'))
             ->setPriorite(0);
+        // D51 — une saison appartient a un etablissement, elle n a pas de socle : sans rattachement,
+        // elle n est visible de personne et les grilles tarifaires ne resolvent plus aucun prix. Ici on
+        // SAIT a qui elle appartient, c est un jeu de donnees — la migration, elle, laisse orphelin
+        // plutot que d inventer un proprietaire sur des donnees reelles.
+        if ($etabA instanceof Etablissement) {
+            $saison->setEtablissement($etabA);
+        }
 
         // --- Catégories (axe comptable obligatoire + axe marketing) ---
         // Une catégorie s'identifie par son libellé ET son axe : le même libellé peut exister sur deux
