@@ -15,7 +15,7 @@
         "verifie dans les deux sens. Il empeche la dette de croitre pendant quon la resorbe."
     ],
     "scelle": {
-        "plafond": 49
+        "plafond": 48
     },
     "entrees": {
         "AbonnementFitness": {
@@ -161,10 +161,6 @@
         "PointDeVente": {
             "voie": "groupe",
             "fichier": "Caisse/Entity/PointDeVente.php"
-        },
-        "PolitiqueRecouvrement": {
-            "voie": "groupe",
-            "fichier": "Recouvrement/Entity/PolitiqueRecouvrement.php"
         },
         "ProfilExploitant": {
             "voie": "groupe",
