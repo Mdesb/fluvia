@@ -77,6 +77,20 @@ final class ScheduleCatalog
                 critical: true,
             ),
             new ScheduledTask(
+                'sepa:preavis:annoncer',
+                1440,
+                "Les prelevements SEPA ne sont annonces a personne. Un creancier doit informer le "
+                . "debiteur du montant et de la date avant chaque prelevement ; sans cette commande, "
+                . "aucune echeance n'est jamais couverte et la collecte s'arrete entierement — "
+                . "silencieusement, puisque tout s'execute et que rien n'aboutit.",
+                critical: true,
+                // JAMAIS SÛR AU PREMIER PASSAGE — effet visible au dehors (cas 3) : la commande envoie
+                // des courriels a des clients reels. Un arriere traite d'un coup est correct et
+                // quand meme inacceptable : personne ne veut decouvrir trois cents preavis partis
+                // ensemble. `--dry-run` montre ce qui partirait avant que quiconque decide.
+                safeOnFirstRun: false,
+            ),
+            new ScheduledTask(
                 'subscription:facturer-le-mois',
                 1440,
                 "Les abonnements du mois ne sont pas facturés : le client utilise le logiciel sans "
