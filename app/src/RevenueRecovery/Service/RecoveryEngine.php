@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\RevenueRecovery\Service;
 
-use App\Crm\Entity\Client;
-use App\Crm\Enum\CanalConsentement;
-use App\Crm\Service\ConsentementResolver;
 use App\Organisation\Entity\Etablissement;
 use App\Platform\Event\DomainEvent;
+use App\Platform\Notification\ClientNotification;
+use App\Platform\Notification\ClientNotifierInterface;
+use App\Platform\Notification\NotificationBasis;
+use App\Platform\Notification\NotificationChannel;
+use App\Platform\Notification\NotificationOutcome;
 use App\RevenueRecovery\Entity\RecoveryAttempt;
 use App\RevenueRecovery\Entity\RecoveryCase;
 use App\RevenueRecovery\Entity\RecoverySequence;
@@ -40,8 +42,7 @@ class RecoveryEngine
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly RecoverySubjectCustomerResolver $customerResolver,
-        private readonly ConsentementResolver $consentementResolver,
-        private readonly RecoveryAttemptMailer $mailer,
+        private readonly ClientNotifierInterface $notifier,
     ) {
     }
 
@@ -235,33 +236,67 @@ class RecoveryEngine
                 continue;
             }
 
-            if (!$this->isChannelConsented($case, $tentative->getChannel())) {
+            $establishment = $case->getEstablishment();
+            $clientId = $establishment instanceof Etablissement
+                ? $this->customerResolver->resolveCustomerId($case->getSubjectType(), $case->getSubjectRef(), $establishment->getId())
+                : null;
+
+            if ($clientId === null) {
+                // Pas de client identifiable (ou hors périmètre établissement, RG-RR-07) : échec fermé
+                // (RG-RR-03), jamais un envoi à l'aveugle — et aucun appel à `ClientNotifierInterface`
+                // sans destinataire résolu.
                 $tentative->setStatus(RecoveryAttemptStatus::Skipped)->setSkipReason(self::SKIP_REASON_NO_CONSENT);
                 ++$compteurs['skipped'];
                 $this->maybeExhaust($case);
                 continue;
             }
 
+            $notification = new ClientNotification(
+                $clientId,
+                match ($tentative->getChannel()) {
+                    RecoveryChannel::Email => NotificationChannel::Email,
+                },
+                $this->templateKeyFor($case, $tentative),
+                [
+                    'amountCents' => $case->getAmountCents(),
+                    'triggerType' => $case->getTriggerType()->value,
+                ],
+                // D37 : l'instant métier est celui de l'ouverture du dossier (le fait déclencheur),
+                // jamais l'heure d'exécution de cette tâche planifiée.
+                $case->getOpenedAt(),
+                'revenue_recovery',
+                $this->basisFor($case->getTriggerType()),
+            );
+
             try {
-                $envoyee = $this->mailer->send($case, $tentative);
+                $resultat = $this->notifier->notify($notification);
             } catch (\Throwable) {
-                // Panne du transport mail (réseau, fournisseur…) : ne doit jamais interrompre le
-                // traitement des autres tentatives échues dans le même passage de la tâche planifiée.
+                // Panne du transport (réseau, fournisseur…) : ne doit jamais interrompre le traitement
+                // des autres tentatives échues dans le même passage de la tâche planifiée.
                 $tentative->setStatus(RecoveryAttemptStatus::Failed);
                 ++$compteurs['failed'];
                 $this->maybeExhaust($case);
                 continue;
             }
-            if ($envoyee) {
-                $tentative->setStatus(RecoveryAttemptStatus::Sent)->setSentAt($maintenant);
-                ++$compteurs['sent'];
-                // TODO(claude-A catalogue) : émettre `revenue_recovery.attempt_sent` (T9, différé).
-            } else {
-                // Aucun contact e-mail connu : marqué « sauté » (même traitement que l'absence de
-                // consentement, RG-RR-03 — pas une erreur, pas de propagation).
-                $tentative->setStatus(RecoveryAttemptStatus::Skipped)->setSkipReason(self::SKIP_REASON_NO_CONSENT);
-                ++$compteurs['skipped'];
-                // TODO(claude-A catalogue) : émettre `revenue_recovery.attempt_skipped` (T9, différé).
+
+            switch ($resultat) {
+                case NotificationOutcome::Envoyee:
+                case NotificationOutcome::Journalisee:
+                    $tentative->setStatus(RecoveryAttemptStatus::Sent)->setSentAt($maintenant);
+                    ++$compteurs['sent'];
+                    // TODO(claude-A catalogue) : émettre `revenue_recovery.attempt_sent` (T9, différé).
+                    break;
+                case NotificationOutcome::Refusee:
+                    // Consentement absent/refusé (vérifié par le décorateur du port, plus ici) : même
+                    // traitement qu'avant (RG-RR-03 — pas une erreur, pas de propagation).
+                    $tentative->setStatus(RecoveryAttemptStatus::Skipped)->setSkipReason(self::SKIP_REASON_NO_CONSENT);
+                    ++$compteurs['skipped'];
+                    // TODO(claude-A catalogue) : émettre `revenue_recovery.attempt_skipped` (T9, différé).
+                    break;
+                case NotificationOutcome::Echouee:
+                    $tentative->setStatus(RecoveryAttemptStatus::Failed);
+                    ++$compteurs['failed'];
+                    break;
             }
             $this->maybeExhaust($case);
         }
@@ -271,30 +306,30 @@ class RecoveryEngine
         return $compteurs;
     }
 
-    private function isChannelConsented(RecoveryCase $case, RecoveryChannel $channel): bool
+    /**
+     * ⚠ À CONFIRMER PAR claude-A : mapping provisoire déduit de la nature du déclencheur, faute d'une
+     * base légale portée explicitement par `RecoveryTriggerType`/`RecoverySequence`. Une relance
+     * d'impayé (`payment_failed`/`payment_incident_reopened`) est traitée comme nécessaire à
+     * l'exécution du contrat (recouvrement d'une créance due) ; tous les autres déclencheurs
+     * (`booking_*`, `cart_*`, `quote_*`, `customer_*`) restent soumis au consentement marketing —
+     * défaut le plus strict de `NotificationBasis`.
+     */
+    private function basisFor(RecoveryTriggerType $triggerType): NotificationBasis
     {
-        $establishment = $case->getEstablishment();
-        if ($establishment === null) {
-            return false;
-        }
-
-        $clientId = $this->customerResolver->resolveCustomerId($case->getSubjectType(), $case->getSubjectRef(), $establishment->getId());
-        if ($clientId === null) {
-            // Pas de client identifiable (ou hors périmètre établissement, RG-RR-07) : échec fermé
-            // (RG-RR-03), jamais un envoi à l'aveugle.
-            return false;
-        }
-
-        $client = $this->em->getRepository(Client::class)->find($clientId);
-        if (!$client instanceof Client) {
-            return false;
-        }
-
-        $canal = match ($channel) {
-            RecoveryChannel::Email => CanalConsentement::Email,
+        return match ($triggerType) {
+            RecoveryTriggerType::PaymentFailed, RecoveryTriggerType::PaymentIncidentReopened => NotificationBasis::Contractuelle,
+            default => NotificationBasis::Consentement,
         };
+    }
 
-        return $this->consentementResolver->estExploitable($client, $canal);
+    /** `templateCode` de l'étape de séquence correspondante, ou une clé par défaut par déclencheur. */
+    private function templateKeyFor(RecoveryCase $case, RecoveryAttempt $attempt): string
+    {
+        $sequence = $case->getSequence();
+        $step = $sequence?->getSteps()[$attempt->getStepIndex()] ?? null;
+        $templateCode = \is_array($step) && \is_string($step['templateCode'] ?? null) ? $step['templateCode'] : null;
+
+        return $templateCode ?? sprintf('revenue_recovery.%s', $case->getTriggerType()->value);
     }
 
     /** RG-RR-08 : plus aucune tentative `Pending` pour ce dossier -> `Exhausted` (sauf s'il vient d'être clos autrement). */

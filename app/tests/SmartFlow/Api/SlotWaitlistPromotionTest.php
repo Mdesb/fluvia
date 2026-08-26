@@ -10,6 +10,11 @@ use App\Platform\Event\DomainEvent;
 use App\Platform\Event\EventBus;
 use App\Platform\Event\EventSubject;
 use App\Platform\Event\EventTenant;
+use App\Platform\Notification\ClientNotification;
+use App\Platform\Notification\ClientNotifierInterface;
+use App\Platform\Notification\NotificationBasis;
+use App\Platform\Notification\NotificationChannel;
+use App\Platform\Notification\NotificationOutcome;
 use App\SmartFlow\Command\ExpireSlotWaitlistPromotionsCommand;
 use App\SmartFlow\Entity\RescheduleProposal;
 use App\SmartFlow\Entity\SlotWaitlistEntry;
@@ -56,6 +61,36 @@ final class SlotWaitlistPromotionTest extends SmartFlowApiTestCase
         self::assertNull($proposition->getOriginReservationRef(), 'Une promotion liste d\'attente ne trace aucun no-show d\'origine.');
     }
 
+    /**
+     * Migration `App\Platform\Notification\ClientNotifierInterface` (port transverse, remplace
+     * `App\SmartFlow\Port\ClientNotificationInterface` supprimé) : vérifie canal, gabarit, source, base
+     * légale et instant métier (D37, celui de `slot.released`) transmis à `notify()` lors d'une promotion.
+     */
+    public function testNotificationDeLaPromotionPasseParLePortTransverseEtPorteLinstantMetierDeSlotReleased(): void
+    {
+        $idA = $this->establishmentId(SocleFixtures::ETAB_A_NOM);
+        $etablissement = $this->em()->getRepository(Etablissement::class)->find(Uuid::fromString($idA));
+        self::assertInstanceOf(Etablissement::class, $etablissement);
+
+        $resourceId = Uuid::v4();
+        $entree1 = $this->creerEntree($etablissement, $resourceId, 1);
+
+        $espion = $this->espionnerNotifier();
+
+        $slotId = Uuid::v4();
+        $occurredAt = new \DateTimeImmutable('2026-08-21 09:30:00');
+        $this->publierSlotReleased($idA, $slotId, $resourceId, $occurredAt);
+
+        self::assertCount(1, $espion->recues, 'RG-SF-06 : une promotion doit notifier le bénéficiaire promu.');
+        $notification = $espion->recues[0];
+        self::assertSame((string) $entree1->getBeneficiaryId(), $notification->clientId->toRfc4122());
+        self::assertSame(NotificationChannel::Email, $notification->channel);
+        self::assertSame('smart_flow.waitlist_promoted', $notification->templateKey);
+        self::assertSame('smart_flow', $notification->source);
+        self::assertSame(NotificationBasis::Consentement, $notification->basis, '⚠ à confirmer par claude-A (défaut le plus strict).');
+        self::assertEquals($occurredAt, $notification->occurredAt, 'D37 : instant métier = celui de slot.released.');
+    }
+
     public function testExpirationSansConfirmationTenteLInscriptionSuivante(): void
     {
         $idA = $this->establishmentId(SocleFixtures::ETAB_A_NOM);
@@ -69,7 +104,7 @@ final class SlotWaitlistPromotionTest extends SmartFlowApiTestCase
         /** @var SlotWaitlistPromotionService $promotionService */
         $promotionService = static::getContainer()->get(SlotWaitlistPromotionService::class);
         $slotId = Uuid::v4();
-        $proposition1 = $promotionService->promoteNext($etablissement, $resourceId, $slotId);
+        $proposition1 = $promotionService->promoteNext($etablissement, $resourceId, $slotId, new \DateTimeImmutable());
         self::assertInstanceOf(RescheduleProposal::class, $proposition1);
 
         // Force l'expiration (RG-SF-07 : délai de confirmation dépassé sans accept/decline).
@@ -113,7 +148,7 @@ final class SlotWaitlistPromotionTest extends SmartFlowApiTestCase
         return $entry;
     }
 
-    private function publierSlotReleased(string $idEtablissement, Uuid $slotId, Uuid $resourceId): void
+    private function publierSlotReleased(string $idEtablissement, Uuid $slotId, Uuid $resourceId, ?\DateTimeImmutable $occurredAt = null): void
     {
         /** @var EventBus $bus */
         $bus = static::getContainer()->get(EventBus::class);
@@ -125,6 +160,33 @@ final class SlotWaitlistPromotionTest extends SmartFlowApiTestCase
                 'slot' => (string) $slotId,
                 'resource' => (string) $resourceId,
             ],
+            null,
+            $occurredAt,
         ));
+    }
+
+    /**
+     * Remplace `ClientNotifierInterface` par un espion qui journalise et rend `Journalisee` (même patron
+     * que `App\Tests\Subscription\Integration\CourrielDeBienvenueTest::espionner()`).
+     *
+     * @return object{recues: list<ClientNotification>}
+     */
+    private function espionnerNotifier(): object
+    {
+        $espion = new class implements ClientNotifierInterface {
+            /** @var list<ClientNotification> */
+            public array $recues = [];
+
+            public function notify(ClientNotification $notification): NotificationOutcome
+            {
+                $this->recues[] = $notification;
+
+                return NotificationOutcome::Journalisee;
+            }
+        };
+
+        static::getContainer()->set(ClientNotifierInterface::class, $espion);
+
+        return $espion;
     }
 }
