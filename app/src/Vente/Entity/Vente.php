@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace App\Vente\Entity;
 
+use ApiPlatform\Doctrine\Orm\Filter\DateFilter;
+use ApiPlatform\Doctrine\Orm\Filter\OrderFilter;
 use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
 use ApiPlatform\Metadata\ApiFilter;
 use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Post;
+use App\Vente\Filter\SaleCustomerFilter;
 use App\Caisse\Entity\SessionCaisse;
 use App\Organisation\Entity\Etablissement;
 use App\Vente\Enum\StatutVente;
@@ -44,11 +47,16 @@ use Symfony\Component\Uid\Uuid;
 #[ORM\UniqueConstraint(name: 'uniq_vente_cle_idempotence', columns: ['cle_idempotence'])]
 #[ApiResource(
     shortName: 'Vente',
+    // D48 — chaque operation ci-dessous est `input: false` et lit pourtant un corps : le contrat
+    // n'etait donc lisible QUE dans le processor. `claude-H` y a perdu du temps sur le
+    // remboursement, dont le processor lit trois champs et repond trois choses dont une escalade,
+    // sans que rien ne l'annonce. Les `description:` remettent le contrat la ou on le cherche.
     operations: [
         new GetCollection(security: "is_granted('PERM', 'vente.lire')"),
         new Get(security: "is_granted('PERM', 'vente.lire')"),
         new Post(
             uriTemplate: '/ventes',
+            description: 'Ouvre un panier. Corps : { session, client?, cleIdempotence?, id?, origineHorsLigne? }.',
             read: false,
             input: false,
             security: "is_granted('PERM', 'vente.creer')",
@@ -56,6 +64,7 @@ use Symfony\Component\Uid\Uuid;
         ),
         new Post(
             uriTemplate: '/ventes/{id}/lignes',
+            description: 'Ajoute une ligne. Corps : { produit, typeTarif, quantite, beneficiaire?, options?, note?, qf?, remiseLigne?, remiseType?, prixForce?/prixUnitaire? (droit vente.forcer_prix) }. Le typeTarif est propre a CHAQUE ligne (D44).',
             read: true,
             input: false,
             security: "is_granted('PERM', 'vente.creer')",
@@ -63,6 +72,7 @@ use Symfony\Component\Uid\Uuid;
         ),
         new Post(
             uriTemplate: '/ventes/{id}/modifier-ligne',
+            description: 'Modifie une ligne du panier. Corps : { ligne, quantite?, note? }.',
             read: true,
             input: false,
             security: "is_granted('PERM', 'vente.creer')",
@@ -70,6 +80,7 @@ use Symfony\Component\Uid\Uuid;
         ),
         new Post(
             uriTemplate: '/ventes/{id}/retirer-ligne',
+            description: 'Retire une ligne du panier. Corps : { ligne }.',
             read: true,
             input: false,
             security: "is_granted('PERM', 'vente.creer')",
@@ -77,6 +88,7 @@ use Symfony\Component\Uid\Uuid;
         ),
         new Post(
             uriTemplate: '/ventes/{id}/vider',
+            description: 'Vide le panier. Aucun corps.',
             read: true,
             input: false,
             security: "is_granted('PERM', 'vente.creer')",
@@ -84,6 +96,7 @@ use Symfony\Component\Uid\Uuid;
         ),
         new Post(
             uriTemplate: '/ventes/{id}/client',
+            description: 'Rattache un client a la vente. Corps : { client } ou { recherche } ou { creer }.',
             read: true,
             input: false,
             security: "is_granted('PERM', 'vente.creer')",
@@ -91,6 +104,7 @@ use Symfony\Component\Uid\Uuid;
         ),
         new Post(
             uriTemplate: '/ventes/{id}/paiements',
+            description: 'Enregistre un reglement. Corps : { moyen, montant, id?, differe?, banque?, numeroCheque? }.',
             read: true,
             input: false,
             security: "is_granted('PERM', 'vente.encaisser')",
@@ -98,6 +112,7 @@ use Symfony\Component\Uid\Uuid;
         ),
         new Post(
             uriTemplate: '/ventes/{id}/valider',
+            description: 'Valide la vente et emet les supports. Corps : { supports?: [...] }.',
             read: true,
             input: false,
             security: "is_granted('PERM', 'vente.encaisser')",
@@ -105,6 +120,7 @@ use Symfony\Component\Uid\Uuid;
         ),
         new Post(
             uriTemplate: '/ventes/{id}/annuler',
+            description: 'Annule une vente non validee. Corps : { motif?, demandeEscalade? (jeton de rejeu) }.',
             read: true,
             input: false,
             security: "is_granted('PERM', 'vente.annuler')",
@@ -112,6 +128,7 @@ use Symfony\Component\Uid\Uuid;
         ),
         new Post(
             uriTemplate: '/ventes/{id}/rembourser',
+            description: 'Rembourse une vente validee par contre-passation (Avoir), jamais par modification. Corps : { motif, montant? (partiel, defaut = total), demandeEscalade? (jeton de rejeu) }. Repond soit l Avoir, soit une escalade a autoriser.',
             read: true,
             input: false,
             security: "is_granted('PERM', 'vente.rembourser')",
@@ -119,6 +136,7 @@ use Symfony\Component\Uid\Uuid;
         ),
         new Post(
             uriTemplate: '/ventes/{id}/ticket',
+            description: 'Produit le ticket. Corps : { canal?, mode? }.',
             read: true,
             input: false,
             security: "is_granted('PERM', 'vente.lire')",
@@ -128,6 +146,16 @@ use Symfony\Component\Uid\Uuid;
     normalizationContext: ['groups' => ['vente:read']],
 )]
 #[ApiFilter(SearchFilter::class, properties: ['session' => 'exact', 'statut' => 'exact', 'numero' => 'exact'])]
+// D48 — sans ces deux filtres, l'historique des ventes est inutilisable : `claude-H` a refuse de
+// contourner en filtrant en memoire, et elle avait raison — un filtre qui ne porterait que sur la
+// page chargee ferait conclure a un caissier que sa vente n'existe pas.
+//
+// L'ordre importe autant que le filtre : sans `OrderFilter`, « les cinquante dernieres ventes » n'est
+// meme pas garanti, l'ordre etant celui que la base rend. `date` est le defaut descendant, parce que
+// c'est ainsi qu'on lit un historique.
+#[ApiFilter(OrderFilter::class, properties: ['date' => 'DESC', 'numero' => 'ASC'], arguments: ['orderParameterName' => 'order'])]
+#[ApiFilter(DateFilter::class, properties: ['date'])]
+#[ApiFilter(SaleCustomerFilter::class)]
 class Vente
 {
     #[ORM\Id]

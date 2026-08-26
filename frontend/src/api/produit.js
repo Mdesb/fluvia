@@ -18,6 +18,18 @@ export function prixIndicatif(p) {
   return g?.prix != null ? g.prix : null
 }
 
+// Toutes les lignes tarifaires exploitables au guichet, pas seulement la premiere.
+//
+// `premiereGrille` existait et suffisait tant que l'ecran n'offrait aucun choix. C'est precisement ce
+// « suffisait » qui a force les exploitants a dupliquer leurs produits.
+export function grillesVendables(p) {
+  return (p?.grilles || []).filter((g) => g?.typeTarif?.id && g?.prix != null)
+}
+
+export function libelleTarif(g) {
+  return g?.typeTarif?.nom || g?.typeTarif?.code || 'Tarif'
+}
+
 export function typeTarifId(p) {
   const g = premiereGrille(p)
   return g?.typeTarif?.id || null

@@ -91,17 +91,24 @@ final class ExpenseReportFixtures extends Fixture implements DependentFixtureInt
         }
 
         // --- Rôles de test ---
-        $roleSalarie = (new Role())->setNom(self::ROLE_SALARIE);
+        //
+        // Cherchés avant d'être créés (D49) : `Role.nom` porte une unicité GLOBALE, et quatorze
+        // fixtures créent des rôles. Un rechargement complet sur une base qui les a déjà échoue sur
+        // « Duplicate entry » — ce qui est arrivé le 24/08 en préproduction, après que le chargement
+        // eut tronqué les rattachements droits-rôles : trente-quatre rôles se sont retrouvés à zéro
+        // droit. Le harnais de test ne le voyait pas, parce qu'il repart d'une base vide à chaque
+        // classe et charge les fixtures sélectivement. Les deux mondes ne se croisaient jamais.
+        $roleSalarie = $this->roleNomme($manager, self::ROLE_SALARIE);
         $roleSalarie->addPermission($permissions['expense_report_submit'])
             ->addPermission($permissions['expense_report_read_own'])
             ->addPermission($permissions['expense_report_approve']);
         $manager->persist($roleSalarie);
 
-        $roleComptable = (new Role())->setNom(self::ROLE_COMPTABLE);
+        $roleComptable = $this->roleNomme($manager, self::ROLE_COMPTABLE);
         $roleComptable->addPermission($permissions['expense_report_post_to_ledger']);
         $manager->persist($roleComptable);
 
-        $roleSuperviseur = (new Role())->setNom(self::ROLE_SUPERVISEUR);
+        $roleSuperviseur = $this->roleNomme($manager, self::ROLE_SUPERVISEUR);
         $roleSuperviseur->addPermission($permApprouver);
         $manager->persist($roleSuperviseur);
 
@@ -142,4 +149,26 @@ final class ExpenseReportFixtures extends Fixture implements DependentFixtureInt
 
         $manager->flush();
     }
+
+    /**
+     * Le rôle portant ce nom, existant ou créé.
+     *
+     * **`addPermission` est idempotent de son côté** : la collection est une `ManyToMany` que Doctrine
+     * dédoublonne. Rendre un rôle déjà présent puis lui rattacher les mêmes permissions ne produit
+     * donc pas de doublon de rattachement — c'est ce qui permet de recharger sans rien casser.
+     */
+    private function roleNomme(ObjectManager $manager, string $nom): Role
+    {
+        $existant = $manager->getRepository(Role::class)->findOneBy(['nom' => $nom]);
+
+        if ($existant instanceof Role) {
+            return $existant;
+        }
+
+        $role = (new Role())->setNom($nom);
+        $manager->persist($role);
+
+        return $role;
+    }
+
 }

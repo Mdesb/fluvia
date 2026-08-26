@@ -20,6 +20,8 @@
 | 23:45 | **Présentation** — `claude-C`, en ligne. La famille de défauts trouvée par claude-F est réelle et **mesurée : il n'en reste qu'un**, `reservation_regle_annulation.issue_credit_no_show`. C'est la base exacte du garde-fou n°10, bien meilleure que le tri des `DROP`. | garde-fou n°10, base de mesure enfin fiable | rien |
 | 00:30 | **Présentation** — `claude-C`, en ligne. **Garde-fou n°10 livré** (D32) : un `DEFAULT` posé en migration doit être déclaré au mapping. Cliquet à **1**, câblé au lanceur et aux deux hooks, vérifié déclenchant. Lanceur **10/10**, banc 17/17. | rien — périmètre disponible | rien |
 | 02:00 | **Présentation** — `claude-C`, en ligne. **Mon filet de complétude se refermait sur lui-même** : aucun garde-fou neuf ne pouvait plus entrer. Corrigé et poussé (`fd0c32e`). Le garde-fou **n°10 est prêt et attend ta fusion** — je n'ai pas contourné la barrière. | n°10 en attente de `fd0c32e` dans `main` | ta fusion, et rien d'autre |
+| 03:30 | **Présentation** — `claude-C`. **n°10 poussé** après ta fusion, chemin propre, aucun interrupteur. **Fil n°1 : rien à écrire, tout à brancher** — le garde-fou de claude-H existait et ne tournait nulle part. Câblé, vérifié dans les deux sens. **n°5 déjà livré.** Lanceur **11/11**. | fil n°2 (D41) | rien |
+| 05:00 | **Présentation** — `claude-C`. **Fil n°2 (D41) livré** : garde-fou n°12, deux voies d'exposition, **49 entités** et non 35. Trois défauts de ma propre règle trouvés en réconciliant deux implémentations. Lanceur **12/12**. | fil n°3 (permission sans rôle) | rien |
 
 ---
 
@@ -904,3 +906,143 @@ unitaires qui passent au rouge quand tu le neutralises. Un garde-fou qui interdi
 serait désormais redondant **et faux** — le champ n'est plus dangereux.
 
 C'est la deuxième fois cette nuit que la bonne contribution est de ne rien livrer.
+
+
+---
+
+### 2026-08-26 · 03:30 — Ton fil de cinq : deux sont déjà faits, et le premier ne demandait pas de code
+
+**`claude-C`, en ligne.** Remote Control actif. **D34 toujours inapplicable** — tu n'es joignable par
+messagerie depuis aucune des deux sessions qui se voient.
+
+**Le n°10 est passé** (`b8d9c8b`), après ta fusion de `fd0c32e`. Chemin propre de bout en bout : j'ai
+scindé, poussé le correctif de filet seul, attendu ta fusion, puis remis le garde-fou. **Aucun
+interrupteur, aucune exception.** Il tient après 70 commits de `main` : gelés 2, plafond 2.
+
+---
+
+### Ton fil, réexaminé avant d'écrire quoi que ce soit
+
+**Fil n°1 — `droits.includes(` dans `frontend/` : il n'y avait pas de garde-fou à écrire.**
+
+J'ai mesuré avant de coder. Les quatre occurrences que tu cites sont **déjà corrigées**. Il en reste
+deux, toutes deux **dans des commentaires** qui documentent l'anti-motif — et le script de claude-H les
+exclut correctement (`!ligne.trimStart().startsWith('//')`).
+
+Et son `frontend/scripts/verifier-droits.mjs` **couvre déjà exactement ce que tu me demandais**,
+ligne 93.
+
+**Mais il ne tournait nulle part.** Ni le lanceur, ni les hooks, ni la CI ne l'appelaient — seulement un
+script npm que personne ne lance. **Quatrième mécanisme de la semaine qui existe sans tourner**, après
+le garde-fou de topologie, la réinstallation des hooks et le démontage des piles. Je ne l'ai pas
+réécrit : je l'ai branché — lanceur, `pre-receive`, `pre-commit`.
+
+Une contrainte technique, dite plutôt que masquée : `node` est présent sur **l'hôte** mais absent de
+l'image PHP. Le contrôle tourne donc côté hôte, comme celui de topologie. **Et quand `node` manque, il
+le dit** — un contrôle sauté qui se tait laisse croire qu'il a validé.
+
+**Vérifié dans les deux sens, comme D47 l'exige** : vert sur le frontend entier — qui est le périmètre
+de claude-D et claude-H, pas le mien — et rouge sur une comparaison brute injectée, avec fichier, ligne
+et raison.
+
+**Fil n°5 — le garde-fou de topologie : il est livré depuis le 25/08 au matin.** Tu écris qu'il « existe
+et ne tourne pas » ; c'était vrai quand tu l'as écrit. Il est depuis dans `bin/garde-fous.sh`, **en
+position zéro**, et il **refuse de démarrer** — exactement la solution que tu proposais en repli. Tu
+avais raison sur `pre-receive` : un arbre extrait dans un `mktemp` n'a ni remote ni worktree, la
+question « par où passent mes commits » n'y a aucun sens. Vérifié sur la flotte réelle : les huit
+sessions saines passent, `main` passe par l'exception d'intégration, **`claude-G` échoue** — et il
+échouait encore à ma dernière vérification.
+
+**Fil n°2 (D41) — je le prends, mais je dois te dire ce que j'ai mesuré**, parce que mon chiffre n'est
+pas le tien. Ma lecture statique trouve **18** entités exposant leur `etablissement` en écriture, pas 35
+— et **25 autres** ont un groupe de dénormalisation que mon analyseur ne sait pas lire, ce qui explique
+sans doute l'écart. Je les traiterai comme un angle mort déclaré, pas comme des entités saines.
+
+Une question qui décide de la forme du garde-fou, et elle est pour toi : **ton décorateur global les
+couvre déjà toutes**, et tu l'as vérifié dans les deux sens. Un garde-fou qui interdirait d'exposer le
+champ interdirait donc un motif devenu inoffensif. Je pars sur un **cliquet** — geler les 18, refuser la
+19ᵉ — plutôt que sur une interdiction, sauf avis contraire de ta part.
+
+---
+
+**Ta remarque sur mes messages est traitée.** Les neuf blocs « plafond relevé » nomment désormais la
+cause la plus **fréquente** en premier — *« ta branche est simplement en retard sur la référence »* —
+avec la commande pour la lever, avant la cause la plus grave. claude-D y a perdu du temps ; **je m'y
+suis heurté deux fois la même nuit**, sur ma propre branche. C'est le quatrième message d'échec que je
+corrige cette semaine, et à chaque fois la faute était la même : j'écris pour celui qui connaît déjà le
+mécanisme.
+
+**Lanceur 11/11, banc 17/17.**
+
+
+---
+
+### 2026-08-26 · 05:00 — D41 livré, et mon chiffre n'est pas le tien
+
+**`claude-C`, en ligne.** Remote Control actif. **D34 toujours inapplicable.**
+
+**Garde-fou n°12 livré.** Une entité ne doit pas laisser écrire son **propre** établissement.
+L'outillage y était structurellement aveugle, comme tu l'écrivais : le garde-fou de cloisonnement
+inspecte les **résolutions**, jamais les **groupes de sérialisation**.
+
+**Deux voies d'exposition, et c'est ce que la mesure a appris :**
+
+| Voie | Nombre | Ce qui expose |
+|---|---|---|
+| groupe d'écriture | **27** | le champ porte un groupe de dénormalisation |
+| dénormalisation par défaut | **22** | **aucun** `denormalizationContext` — API Platform rend écrivable toute propriété dotée d'un mutateur |
+
+**La seconde voie est la moins visible : c'est l'absence de déclaration qui expose.** Rien dans le
+fichier ne le signale. D'où deux messages distincts — dire « retire-le du groupe d'écriture » à
+quelqu'un qui n'a pas de groupe ne l'aide pas.
+
+**Mon chiffre est 49, pas 35**, et l'écart vient probablement de là : une lecture qui cherche des
+groupes ne voit pas les 22 qui n'en ont aucun. Parmi elles, `Vente`, `Facture`, `SessionCaisse`,
+`MandatSepa`.
+
+---
+
+**Un cliquet séparé du n°8, et c'est une leçon plutôt qu'un détail.**
+
+J'avais d'abord ajouté la règle au n°8. **Son cliquet a refusé ma poussée** : *« 5 sur la référence,
+52 proposé »*. Il avait raison — un cliquet ne monte pas. Mais la cause n'était pas une dette qui
+grossit : c'était une **règle nouvelle qui mesure ce qui n'était pas compté**, et un cliquet ne sait
+pas distinguer les deux.
+
+C'est la **deuxième fois cette nuit** qu'un de mes mécanismes, correct, rend impossible son propre
+enrichissement — après le filet de complétude. La sortie est la même dans les deux cas : **scinder,
+pas assouplir**. Chaque règle a sa ligne de base ; leurs dettes se résorbent séparément.
+
+---
+
+**Trois défauts de ma propre règle, trouvés en réconciliant deux implémentations écrites séparément.**
+Je les note parce qu'aucun n'aurait été visible sans cette confrontation :
+
+1. Le motif exigeait `private <type> $prop;` — il échouait donc sur
+   `private ?Etablissement $etablissement = null;`, **la forme la plus courante**. Onze entités
+   manquées, dont `SessionCaisse`, `MandatSepa`, `Passage`, `Facture`.
+2. Le code **sortait avant** de tester la voie « par défaut », qui n'a pourtant pas besoin de ce bloc.
+   Il était donc aveugle à la voie **majoritaire**.
+3. **Cinq faux positifs** : une entité **avec** contexte de dénormalisation était classée « par
+   défaut » quand son bloc était illisible. Une accusation fausse — et gelée dans la ligne de base,
+   elle l'aurait été pour toujours.
+
+**Sonde Python et garde-fou PHP convergent maintenant sur 49 exactement**, zéro écart dans les deux
+sens. C'est cette convergence qui me permet de te donner le chiffre.
+
+**Vérifié dans les deux sens comme D47 l'exige** : vert sur le dépôt entier, rouge sur **chacune** des
+deux voies avec une entité d'essai minimale. Et un **angle mort inscrit dans l'en-tête** : je ne
+reconnais `'groups'` qu'en apostrophes simples — découvert parce qu'un essai en guillemets doubles a
+fait taire le contrôle. Le dépôt écrit en apostrophes simples partout, mais le silence méritait d'être
+écrit plutôt que découvert.
+
+**Une remarque de méthode, puisque c'est la quatrième fois cette nuit.** Quatre essais m'ont fait
+croire à un garde-fou défaillant : colonne sans propriété correspondante, `test-stack.sh run` qui lance
+PHPUnit, `schema:update` sans `--complete`, guillemets doubles. **À chaque fois c'était l'essai, pas
+l'outil.** Je le note comme un motif : quand un contrôle se tait, ma première hypothèse doit être que
+mon cas de test ne ressemble pas au vrai défaut.
+
+**Suite** : fil n°3 — refuser une migration qui crée une permission sans la rattacher à un rôle.
+
+**Lanceur 12/12, banc 17/17**, vérifiés après fusion des dix derniers commits de `main`, dont une
+migration neuve.
