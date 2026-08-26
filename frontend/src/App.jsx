@@ -241,7 +241,7 @@ export default function App() {
       {onglet === 'piscine' && <Piscine etabActif={etabActif} />}
       {onglet === 'patinoire' && <Patinoire etabActif={etabActif} droits={droits} />}
       {onglet === 'padel' && <Padel etabActif={etabActif} />}
-      {onglet === 'musee' && <Musee etabActif={etabActif} />}
+      {onglet === 'musee' && <Musee etabActif={etabActif} droits={droits} />}
       {onglet === 'personnel' && <Personnel etabActif={etabActif} droits={droits} />}
       {onglet === 'stock' && <Stock etabActif={etabActif} droits={droits} />}
       {onglet === 'parametres' && (

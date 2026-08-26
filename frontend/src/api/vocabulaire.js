@@ -123,6 +123,13 @@ const MOTS = {
   fifo: 'Premier entré, premier sorti (FIFO)',
   cmup: 'Coût moyen pondéré',
 
+  // --- Musee ---
+  planifiee: 'Planifiée',
+  en_option: 'En option',
+  bon_commande_emis: 'Bon de commande émis',
+  mandat_emis: 'Mandat émis',
+  paye: 'Payé',
+
   // --- Recouvrement ---
   representation: 'Représentation bancaire',
   recouvrement: 'En recouvrement',

@@ -590,6 +590,23 @@ export const api = {
   museeExpositions: () => request('/api/musee_expositions', { query: { itemsPerPage: 100 } }),
   museeVisitesGuidees: () =>
     request('/api/musee_visite_guidees', { query: { itemsPerPage: 100 } }),
+  museeSalles: () => request('/api/musee_salles', { query: { itemsPerPage: 100 } }),
+  museeGuides: () => request('/api/musee_guides', { query: { itemsPerPage: 100 } }),
+  museeContingentsGratuite: () =>
+    request('/api/musee_contingent_gratuites', { query: { itemsPerPage: 50 } }),
+  museeDossiersGroupe: () =>
+    request('/api/musee_dossier_groupe_scolaires', { query: { itemsPerPage: 100 } }),
+  // L'etat d'une salle se lit salle par salle : il n'existe pas de vue d'ensemble cote serveur.
+  museeEtatSalle: (id) => request(`/api/musee/salles/${id}/etat`),
+  // Operations sur mesure : `input: false`, pas de `ld: true`.
+  museeCreerVisite: (corps) =>
+    request('/api/musee/visites-guidees', { method: 'POST', body: corps }),
+  museeConfirmerVisite: (id) =>
+    request(`/api/musee/visites-guidees/${id}/confirmer`, { method: 'POST', body: {} }),
+  museeCreerDossierGroupe: (corps) =>
+    request('/api/musee/dossiers-groupe', { method: 'POST', body: corps }),
+  museeConfirmerDossierGroupe: (id, corps) =>
+    request(`/api/musee/dossiers-groupe/${id}/confirmer`, { method: 'POST', body: corps }),
 
   // Administration de l'éditeur (ED-6). Le serveur répond 404 si la session n'est pas celle de
   // l'éditeur : le contrôle est une identité de tenant, pas une permission, et il n'est pas rejoué
