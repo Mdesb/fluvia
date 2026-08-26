@@ -608,7 +608,12 @@ if (count($entrees) > $plafond) {
         . "  Les deux seules issues :\n"
         . "    · corriger ce qui a fait monter le compte — l'endroit exact est listé ci-dessus ;\n"
         . "    · si la hausse est délibérée, elle demande l'accord de l'intégrateur : le plafond\n"
-        . "      de référence se change sur « main », pas ici.\n";
+        . "      de référence se change sur « main », pas ici.\n"
+        . "\n"
+        . "  ⚠ La cause la plus fréquente n'est pas une faute : ta branche est simplement EN\n"
+        . "  RETARD sur la référence, et un plafond a baissé entre-temps. Commence par ça :\n"
+        . "\n"
+        . "      git fetch origin && git merge --no-edit origin/main\n";
     echo sprintf(
         "  Elle contient %d entrées pour un plafond scellé à %d (gelé le %s).\n",
         count($entrees),

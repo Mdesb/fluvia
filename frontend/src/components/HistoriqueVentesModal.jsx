@@ -8,16 +8,16 @@ import Modal from './Modal.jsx'
 // Historique des ventes — `GET /api/ventes` existait et n'était appelé nulle part. Un caissier ne
 // pouvait pas retrouver une vente d'hier, ni même celle d'il y a dix minutes.
 //
-// CE QUE CET ÉCRAN NE FAIT PAS, ET POURQUOI JE LE DIS PLUTÔT QUE DE FAIRE SEMBLANT.
+// LE FILTRE PAR DATE EST RÉEL, ET IL A FALLU L'ATTENDRE.
 //
-// L'API n'expose ni tri, ni filtre par date, ni filtre par client sur les ventes : seulement
-// `numero`, `statut` et `session`. J'aurais pu poser un champ « du … au … » et filtrer en mémoire les
-// résultats déjà chargés. Ç'aurait été un mensonge : le filtre n'aurait porté que sur la page
-// courante, et un caissier qui ne trouve pas sa vente en conclurait qu'elle n'existe pas.
+// À la première version, l'API n'exposait ni tri ni filtre de date. J'aurais pu poser un champ
+// « du … au … » et filtrer en mémoire les résultats déjà chargés : ç'aurait été un mensonge, le
+// filtre n'aurait porté que sur la page courante, et un caissier qui ne trouve pas sa vente en
+// conclurait qu'elle n'existe pas. L'écran disait donc franchement que ce n'était pas possible.
 //
-// On offre donc ce qui est réel — la recherche par numéro de ticket, qui est de toute façon le geste
-// naturel quand on a le ticket en main, et le filtre par état. Le reste demande trois attributs côté
-// serveur, signalés à l'intégrateur.
+// `claude-G` a livré les trois attributs manquants. Le plus important n'était pas le filtre mais
+// `order[date]` : sans tri, « les cinquante dernières » n'est pas une promesse qu'on peut tenir —
+// l'ordre est celui que la base rend. Je l'affichais pourtant.
 //
 // Le cloisonnement n'est pas fait ici : `PerimetreVenteExtension` rattache `Vente` à son établissement
 // côté serveur. Un établissement ne voit pas les ventes d'un autre, et ce n'est pas au front d'en
@@ -36,6 +36,8 @@ const TON_ETAT = { validee: 'good', en_cours: 'warn', annulee: 'mut', avoir_emis
 export default function HistoriqueVentesModal({ open, onClose, droits = [] }) {
   const [numero, setNumero] = useState('')
   const [statut, setStatut] = useState('')
+  const [du, setDu] = useState('')
+  const [au, setAu] = useState('')
   const [ventes, setVentes] = useState([])
   const [chargement, setChargement] = useState(false)
   const [erreur, setErreur] = useState(null)
@@ -47,9 +49,13 @@ export default function HistoriqueVentesModal({ open, onClose, droits = [] }) {
     setChargement(true)
     setErreur(null)
     try {
-      const params = { itemsPerPage: 50 }
+      // `order[date]=desc` d'abord : sans tri, « les cinquante dernières » n'est pas une promesse
+      // qu'on peut tenir — l'ordre est celui que la base rend. Je l'affichais pourtant.
+      const params = { itemsPerPage: 50, 'order[date]': 'desc' }
       if (numero.trim()) params.numero = numero.trim()
       if (statut) params.statut = statut
+      if (du) params['date[after]'] = du
+      if (au) params['date[before]'] = au
       setVentes(membres(await api.ventes(params)))
     } catch (e) {
       setErreur(e.message)
@@ -57,7 +63,7 @@ export default function HistoriqueVentesModal({ open, onClose, droits = [] }) {
     } finally {
       setChargement(false)
     }
-  }, [numero, statut])
+  }, [numero, statut, du, au])
 
   useEffect(() => {
     if (!open) return
@@ -122,7 +128,7 @@ export default function HistoriqueVentesModal({ open, onClose, droits = [] }) {
               charger()
             }}
             className="grid"
-            style={{ gridTemplateColumns: '2fr 1fr auto', gap: 10, alignItems: 'end', marginBottom: 12 }}
+            style={{ gridTemplateColumns: '2fr 1fr 1fr 1fr auto', gap: 10, alignItems: 'end', marginBottom: 12 }}
           >
             <div className="field" style={{ margin: 0 }}>
               <label htmlFor="hv-num">Numéro de ticket</label>
@@ -142,12 +148,20 @@ export default function HistoriqueVentesModal({ open, onClose, droits = [] }) {
                 ))}
               </select>
             </div>
+            <div className="field" style={{ margin: 0 }}>
+              <label htmlFor="hv-du">Du</label>
+              <input id="hv-du" className="input" type="date" value={du} onChange={(e) => setDu(e.target.value)} />
+            </div>
+            <div className="field" style={{ margin: 0 }}>
+              <label htmlFor="hv-au">Au</label>
+              <input id="hv-au" className="input" type="date" value={au} onChange={(e) => setAu(e.target.value)} />
+            </div>
             <button className="btn primary" type="submit" disabled={chargement}>Rechercher</button>
           </form>
 
           <div className="hint" style={{ marginTop: 0 }}>
-            La recherche par date n'est pas encore possible : le serveur ne la propose pas. Cherchez par
-            numéro de ticket, ou parcourez les cinquante dernières ventes ci-dessous.
+            Les cinquante ventes les plus récentes, de la plus récente à la plus ancienne. Affinez par
+            numéro de ticket, par état ou par période.
           </div>
 
           {chargement ? (
@@ -156,7 +170,9 @@ export default function HistoriqueVentesModal({ open, onClose, droits = [] }) {
             <div className="empty" style={{ padding: 18 }}>
               {numero.trim()
                 ? `Aucune vente ne porte le numéro « ${numero.trim()} ».`
-                : 'Aucune vente enregistrée pour cet établissement.'}
+                : du || au
+                  ? 'Aucune vente sur cette période.'
+                  : 'Aucune vente enregistrée pour cet établissement.'}
             </div>
           ) : (
             <div style={{ overflowX: 'auto', maxHeight: '50vh' }}>
