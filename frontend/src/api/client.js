@@ -599,6 +599,20 @@ export const api = {
 
   // Padel
   padelTerrains: () => request('/api/padel/terrains', { query: { itemsPerPage: 100 } }),
+  padelReservations: () =>
+    request('/api/padel_reservations', { query: { itemsPerPage: 200 } }),
+  padelLocationsMateriel: () =>
+    request('/api/padel_location_materiels', { query: { itemsPerPage: 200 } }),
+  // Operations sur mesure : `input: false`, pas de `ld: true`.
+  padelReserverTerrain: (id, corps) =>
+    request(`/api/padel/terrains/${id}/reservations`, { method: 'POST', body: corps }),
+  padelRejoindrePartie: (id, corps) =>
+    request(`/api/padel/parties-ouvertes/${id}/rejoindre`, { method: 'POST', body: corps }),
+  padelRetournerMateriel: (id, corps) =>
+    request(`/api/padel/locations/${id}/retour`, { method: 'POST', body: corps }),
+  // `padel.acces_forcer` : passer outre l'automatisme d'eclairage. Motif obligatoire.
+  padelEclairageManuel: (id, corps) =>
+    request(`/api/padel/terrains/${id}/eclairage/repli-manuel`, { method: 'POST', body: corps }),
   // Pas de collection listable pour les tournois (seulement des routes custom
   // /api/padel/tournois/{id}/...) : on renvoie un état vide propre.
   padelTournois: () => Promise.resolve({ 'hydra:member': [] }),

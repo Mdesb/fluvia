@@ -123,6 +123,12 @@ const MOTS = {
   fifo: 'Premier entré, premier sorti (FIFO)',
   cmup: 'Coût moyen pondéré',
 
+  // --- Padel ---
+  indoor: 'Couvert',
+  outdoor: 'Extérieur',
+  complete: 'Complète',
+  rendu: 'Rendu',
+
   // --- Piscine ---
   libre: 'Libre',
   occupe: 'Occupé',
