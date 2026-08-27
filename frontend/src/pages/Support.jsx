@@ -236,6 +236,10 @@ function FicheTicket({ id, agent, peut, onFermer, onChange }) {
   const [motif, setMotif] = useState('')
   const [busy, setBusy] = useState(false)
   const [erreur, setErreur] = useState(null)
+  const [agents, setAgents] = useState([])
+  const [articles, setArticles] = useState([])
+  const [nouvelAgent, setNouvelAgent] = useState('')
+  const [article, setArticle] = useState('')
 
   const charger = useCallback(async () => {
     if (!id) return
@@ -255,8 +259,28 @@ function FicheTicket({ id, agent, peut, onFermer, onChange }) {
     setReponse('')
     setNote(false)
     setMotif('')
+    setNouvelAgent('')
+    setArticle('')
     charger()
   }, [charger])
+
+  // LES DEUX LISTES QUI RENDENT LES ACTIONS POSSIBLES.
+  //
+  // Elles échouent en silence : réaffecter et rattacher un article sont des gestes de confort. Si
+  // l'une des listes ne charge pas, le reste de la fiche — répondre, fermer, escalader — doit
+  // continuer à fonctionner. Un écran qui refuse de s'ouvrir parce qu'un menu déroulant secondaire
+  // n'a pas répondu punit l'utilisateur pour une panne qui ne le concerne pas.
+  useEffect(() => {
+    if (!id) return undefined
+    let annule = false
+    api.utilisateurs()
+      .then((r) => { if (!annule) setAgents(membres(r)) })
+      .catch(() => {})
+    api.articlesAide()
+      .then((r) => { if (!annule) setArticles(membres(r)) })
+      .catch(() => {})
+    return () => { annule = true }
+  }, [id])
 
   async function agir(action) {
     setBusy(true)
@@ -427,6 +451,69 @@ function FicheTicket({ id, agent, peut, onFermer, onChange }) {
               </button>
             )}
           </div>
+
+          {/* RÉAFFECTER — le geste qui manquait quand la personne en charge n'est pas là.
+              Escalader change de NIVEAU ; réaffecter change de PERSONNE. Sans lui, une demande
+              affectée à quelqu'un en congé n'avait qu'une sortie : l'escalade, qui ment sur la
+              raison. Un mauvais motif dans un historique vaut une statistique fausse. */}
+          {peut('support.traiter_ticket_n2') && statut !== 'ferme' && agents.length > 0 && (
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <span className="sub">Réaffecter à</span>
+              <select
+                className="input sm"
+                style={{ width: 240 }}
+                value={nouvelAgent}
+                onChange={(e) => setNouvelAgent(e.target.value)}
+              >
+                <option value="">Choisir un agent…</option>
+                {agents.map((u) => (
+                  <option key={u.id} value={`/api/utilisateurs/${u.id}`}>{u.nom || u.email}</option>
+                ))}
+              </select>
+              <button
+                className="btn sm"
+                type="button"
+                disabled={busy || nouvelAgent === ''}
+                onClick={() => agir(async () => {
+                  await api.reaffecterTicket(ticket.id, nouvelAgent)
+                  setNouvelAgent('')
+                })}
+              >
+                Réaffecter
+              </button>
+            </div>
+          )}
+
+          {/* RATTACHER L'ARTICLE QUI RÉPOND — c'est ce qui ferme la boucle entre les deux moitiés du
+              module. Une réponse écrite trois fois dans trois demandes est un article qui manque ;
+              un article qu'aucune demande ne cite est un article que personne n'a trouvé utile. */}
+          {agent && statut !== 'ferme' && articles.length > 0 && (
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <span className="sub">Article de réponse</span>
+              <select
+                className="input sm"
+                style={{ width: 280 }}
+                value={article}
+                onChange={(e) => setArticle(e.target.value)}
+              >
+                <option value="">Choisir un article…</option>
+                {articles.map((a) => (
+                  <option key={a.id} value={a.id}>{a.titre}</option>
+                ))}
+              </select>
+              <button
+                className="btn sm"
+                type="button"
+                disabled={busy || article === ''}
+                onClick={() => agir(async () => {
+                  await api.lierArticleTicket(ticket.id, article)
+                  setArticle('')
+                })}
+              >
+                Rattacher
+              </button>
+            </div>
+          )}
 
           {ticket.motifFermeture && (
             <div className="sub">Fermée le {quand(ticket.dateFermeture)} — {ticket.motifFermeture}</div>

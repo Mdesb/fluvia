@@ -172,7 +172,7 @@ export default function Disponibilites({ droits = [] }) {
                 {journees.length === 0 && (
                   <span className="badge warn" style={{ marginLeft: 8 }}>aucun horaire</span>
                 )}
-                {absences.length > 0 && (
+                {(absences.length > 0 || peutGerer) && (
                   <span className="badge mut" style={{ marginLeft: 8 }}>
                     {absences.length} absence{absences.length > 1 ? 's' : ''}
                   </span>
@@ -244,7 +244,18 @@ export default function Disponibilites({ droits = [] }) {
                 {absences.length > 0 && (
                   <div>
                     <div className="st-lib">Absences à venir</div>
-                    <div style={{ overflowX: 'auto', marginTop: 6 }}>
+                    {absences.length === 0 && (
+                      // ON ÉCRIT LE VIDE PLUTÔT QUE DE MASQUER LE BLOC.
+                      //
+                      // Tant que le bloc disparaissait faute d'absence, il n'y avait aucun endroit
+                      // où en déclarer une : le seul moyen d'obtenir le formulaire aurait été d'avoir
+                      // déjà ce qu'il sert à créer.
+                      <div className="sub" style={{ marginTop: 4 }}>
+                        Aucune absence déclarée : la ressource est disponible sur toutes ses journées
+                        d’ouverture.
+                      </div>
+                    )}
+                    <div style={{ overflowX: 'auto', marginTop: 6, display: absences.length === 0 ? 'none' : undefined }}>
                       <table className="tbl">
                         <thead>
                           <tr>
@@ -277,6 +288,18 @@ export default function Disponibilites({ droits = [] }) {
                         </tbody>
                       </table>
                     </div>
+
+                    {peutGerer && (
+                      <DeclarerAbsence
+                        busy={busy}
+                        onDeclarer={(corps) =>
+                          agir(() => api.creerIndisponibilite({
+                            ...corps,
+                            ressource: `/api/reservation_ressources/${r.id}`,
+                          }))
+                        }
+                      />
+                    )}
                   </div>
                 )}
               </div>
@@ -388,6 +411,98 @@ function AjoutJournee({ ouverte, onOuvrir, busy, onAjouter }) {
       </button>
       <button className="btn ghost sm" type="button" onClick={onOuvrir}>Annuler</button>
       {incoherent && <span className="sub">La fermeture doit suivre l&rsquo;ouverture.</span>}
+    </div>
+  )
+}
+
+/**
+ * DÉCLARER UNE ABSENCE — congés, panne, fermeture exceptionnelle.
+ *
+ * **Ce qui manquait, et ce que ça rendait inerte.** L'écran savait RETIRER une absence et pas en
+ * CRÉER une. Pire : le bloc entier disparaissait quand il n'y en avait aucune, si bien que le seul
+ * moyen d'atteindre un formulaire de création aurait été de posséder déjà ce qu'il sert à créer.
+ *
+ * Le moteur de créneaux, lui, tenait compte des absences depuis le début — il coupe la journée en
+ * deux autour d'elles. Une règle métier écrite, testée, et qu'aucun exploitant ne pouvait déclencher.
+ *
+ * > **Une règle que personne ne peut alimenter n'est pas une règle, c'est une intention.**
+ *
+ * **Les deux dates sont des horodatages, pas des jours.** Une panne de quatre heures un mardi
+ * après-midi n'est pas une journée fermée : arrondir à la journée annulerait des réservations du
+ * matin qui tenaient parfaitement.
+ *
+ * **Le motif est facultatif et l'écran ne l'exige pas.** Il est lu par des collègues, pas par une
+ * machine, et une absence sans motif reste plus utile qu'une absence qu'on renonce à saisir.
+ */
+function DeclarerAbsence({ busy, onDeclarer }) {
+  const [ouvert, setOuvert] = useState(false)
+  const [debut, setDebut] = useState('')
+  const [fin, setFin] = useState('')
+  const [motif, setMotif] = useState('')
+
+  const incoherent = debut !== '' && fin !== '' && fin <= debut
+
+  if (!ouvert) {
+    return (
+      <button className="btn ghost sm" type="button" style={{ marginTop: 8 }} onClick={() => setOuvert(true)}>
+        + Déclarer une absence
+      </button>
+    )
+  }
+
+  return (
+    <div className="panel" style={{ padding: 10, marginTop: 8, display: 'grid', gap: 8 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
+        <label style={{ display: 'grid', gap: 4 }}>
+          <span className="sub">Du</span>
+          <input className="input sm" type="datetime-local" value={debut} onChange={(e) => setDebut(e.target.value)} />
+        </label>
+        <label style={{ display: 'grid', gap: 4 }}>
+          <span className="sub">Au</span>
+          <input className="input sm" type="datetime-local" value={fin} onChange={(e) => setFin(e.target.value)} />
+        </label>
+        <label style={{ display: 'grid', gap: 4 }}>
+          <span className="sub">Motif</span>
+          <input
+            className="input sm"
+            type="text"
+            maxLength={255}
+            value={motif}
+            placeholder="Facultatif — congés, panne…"
+            onChange={(e) => setMotif(e.target.value)}
+          />
+        </label>
+      </div>
+
+      {incoherent && (
+        // On le dit ici plutot que de laisser le serveur repondre : la correction se fait a l'endroit
+        // ou la faute a ete commise.
+        <div className="sub">La fin doit être postérieure au début.</div>
+      )}
+
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+        <button className="btn ghost sm" type="button" disabled={busy} onClick={() => setOuvert(false)}>
+          Annuler
+        </button>
+        <button
+          className="btn primary sm"
+          type="button"
+          disabled={busy || debut === '' || fin === '' || incoherent}
+          onClick={() => {
+            onDeclarer({
+              debut: new Date(debut).toISOString(),
+              fin: new Date(fin).toISOString(),
+              ...(motif.trim() ? { motif: motif.trim() } : {}),
+            })
+            setOuvert(false)
+            setDebut('')
+            setFin('')
+            setMotif('')
+          }}
+        >
+          Déclarer
+        </button>
+      </div>
     </div>
   )
 }

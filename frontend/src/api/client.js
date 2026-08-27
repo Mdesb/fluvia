@@ -697,6 +697,23 @@ export const api = {
   revoquerBadgeStaff: (id, motif) =>
     request(`/api/personnel/badges/${id}/revoquer`, { method: 'POST', body: { motif }, ld: true }),
 
+  // LE CYCLE DE VIE COMPLET D'UN BADGE, ET NON LA SEULE LECTURE.
+  //
+  // Quatre operations existaient cote serveur -- emettre, suspendre, revoquer, reactiver -- et
+  // l'ecran n'affichait qu'une liste. Un badge est une CLE PHYSIQUE : ne pas pouvoir le desactiver
+  // n'est pas une gene d'interface, c'est un acces qui reste ouvert.
+  //
+  // Suspendre et revoquer ne sont pas la meme chose et ne se remplacent pas : on suspend un badge
+  // egare qu'on retrouvera peut-etre, on revoque celui d'une personne qui est partie. Confondre les
+  // deux, c'est soit rendre une carte a quelqu'un qui n'a plus rien a faire ici, soit re-emettre un
+  // badge pour rien.
+  suspendreBadgeStaff: (id, motif) =>
+    request(`/api/personnel/badges/${id}/suspendre`, { method: 'POST', body: { motif }, ld: true }),
+  reactiverBadgeStaff: (id) =>
+    request(`/api/personnel/badges/${id}/reactiver`, { method: 'POST', body: {}, ld: true }),
+  emettreBadgeStaff: (employeId) =>
+    request(`/api/personnel/employes/${employeId}/badges`, { method: 'POST', body: {}, ld: true }),
+
   // --- Verticales (routes explicites privilégiées) ---
   // Piscine
   bassins: () => request('/api/bassins', { query: { itemsPerPage: 100 } }),
