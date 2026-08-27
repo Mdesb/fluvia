@@ -19,6 +19,7 @@ import Support from './pages/Support.jsx'
 import Autorisations from './pages/Autorisations.jsx'
 import MentionsLegales from './pages/MentionsLegales.jsx'
 import Pipeline from './pages/Pipeline.jsx'
+import Projets from './pages/Projets.jsx'
 
 // Ecrans de back-office charges a la demande : un caissier qui reste a sa caisse ne les
 // telecharge jamais. Ceux qu'on ouvre plusieurs fois par jour — caisse, catalogue, clients,
@@ -240,6 +241,7 @@ export default function App() {
       {onglet === 'autorisations' && <Autorisations droits={droits} />}
       {onglet === 'legal' && <MentionsLegales etabActif={etabActif} droits={droits} />}
       {onglet === 'affaires' && <Pipeline etabActif={etabActif} droits={droits} />}
+      {onglet === 'projets' && <Projets etabActif={etabActif} droits={droits} />}
       {onglet === 'pilotage' && (
         <Pilotage etabActif={etabActif} etablissements={etablissements} droits={droits} />
       )}

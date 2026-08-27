@@ -11,6 +11,7 @@ use ApiPlatform\Metadata\Operation;
 use App\Crm\Entity\Beneficiaire;
 use App\Crm\Entity\Client;
 use App\Crm\Entity\Consentement;
+use App\Crm\Entity\CustomerContact;
 use App\Crm\Entity\DemandeRGPD;
 use App\Crm\Entity\Famille;
 use App\Crm\Entity\JournalFusion;
@@ -46,6 +47,13 @@ final class PerimetreCrmExtension implements QueryCollectionExtensionInterface, 
         RegleConservation::class => null,
         PorteMonnaieVirtuel::class => 'client',
         Beneficiaire::class => 'client',
+        // Les contacts d'une societe suivent leur client, comme les beneficiaires.
+        //
+        // Sans cette ligne, leur collection etait lisible d'un etablissement a l'autre : un
+        // exploitant aurait lu les interlocuteurs commerciaux d'un voisin -- nom, fonction,
+        // courriel direct. C'est le garde-fou de couverture qui l'a vu, pas la relecture, et il
+        // l'a vu parce qu'il cherche les entites exposees que RIEN ne peut filtrer.
+        CustomerContact::class => 'customer',
         Consentement::class => 'client',
         DemandeRGPD::class => 'client',
     ];

@@ -264,12 +264,39 @@ export const api = {
   // fixés côté back depuis l'établissement actif (en-tête X-Etablissement).
   creerClient: (corps) => request('/api/clients', { method: 'POST', body: corps, ld: true }),
 
+  // CONTACTS D'UN CLIENT PROFESSIONNEL. `Beneficiaire` porte une semantique de FAMILLE
+  // (payeur, beneficiaire) : elle ne sait pas dire << directrice >> ni << comptabilite >>.
+  //
+  // Charges entiers puis filtres a l'ecran : le `SearchFilter` sur `customer` est de la famille
+  // D58 -- il rend soit tout, soit rien, sans jamais lever.
+  contactsClient: () => request('/api/customer_contacts', { query: { itemsPerPage: 300 } }),
+  creerContactClient: (corps) =>
+    request('/api/customer_contacts', { method: 'POST', body: corps, ld: true }),
+  majContactClient: (id, corps) =>
+    request(`/api/customer_contacts/${id}`, { method: 'PATCH', body: corps }),
+  supprimerContactClient: (id) =>
+    request(`/api/customer_contacts/${id}`, { method: 'DELETE' }),
+
   // AFFAIRES EN COURS -- ce qui vit entre << un client appelle >> et << un devis part >>.
   //
   // `/crm/pipeline` rend les colonnes avec l'etape EFFECTIVE : des qu'un devis est rattache,
   // c'est lui qui dit ou en est l'affaire. Rien n'est recopie -- une copie prend du retard, et
   // une etape en retard est pire qu'absente parce qu'elle a l'air d'etre a jour.
   pipeline: () => request('/api/crm/pipeline'),
+
+  // PROJETS -- travail interne qui a une fin. A ne pas confondre avec un ticket d'assistance
+  // (arrive de l'exterieur) ni avec une tache planifiee (machine, cron).
+  //
+  // `/projets/tableau` rend l'avancement COMPTE et le retard DEDUIT : rien de tout cela n'est
+  // stocke. Un pourcentage recopie serait faux entre deux rafraichissements, et un pourcentage
+  // faux est pire qu'absent parce qu'il rassure.
+  tableauProjets: () => request('/api/projets/tableau'),
+  creerProjet: (corps) => request('/api/projects', { method: 'POST', body: corps, ld: true }),
+  majProjet: (id, corps) => request(`/api/projects/${id}`, { method: 'PATCH', body: corps }),
+  tachesProjet: () => request('/api/project_tasks', { query: { itemsPerPage: 500 } }),
+  creerTacheProjet: (corps) => request('/api/project_tasks', { method: 'POST', body: corps, ld: true }),
+  majTacheProjet: (id, corps) => request(`/api/project_tasks/${id}`, { method: 'PATCH', body: corps }),
+  supprimerTacheProjet: (id) => request(`/api/project_tasks/${id}`, { method: 'DELETE' }),
   opportunites: () => request('/api/opportunities', { query: { itemsPerPage: 200 } }),
   creerOpportunite: (corps) => request('/api/opportunities', { method: 'POST', body: corps, ld: true }),
   majOpportunite: (id, corps) => request(`/api/opportunities/${id}`, { method: 'PATCH', body: corps }),

@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
+import ContactsClient from '../components/ContactsClient.jsx'
 import { api } from '../api/client.js'
 import { euros } from '../api/produit.js'
 import { aLeDroit } from '../api/droits.js'
@@ -287,6 +288,12 @@ function FicheContenu({ fiche, mouvements }) {
           <div><dt>Adresse</dt><dd>{adresse || '—'}</dd></div>
         </dl>
       </div>
+
+      {/* LES CONTACTS, JUSTE APRES LES COORDONNEES.
+          Une societe avait une raison sociale, un SIRET, UN courriel et UN telephone. Une entreprise
+          n'est pas une personne : c'est une directrice, une comptabilite, quelqu'un qui signe -- et
+          ils n'ont pas la meme adresse. Le bloc ne s'affiche que pour un client moral. */}
+      <ContactsClient client={c} peutModifier />
 
       {/* Porte-monnaie PMV + mouvements */}
       <div>

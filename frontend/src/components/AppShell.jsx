@@ -63,6 +63,10 @@ const NAV = [
       { id: 'comptabilite', ic: '▧', label: 'Comptabilité', perm: 'compta.lire' },
       { id: 'boutique', ic: '▦', label: 'Boutique en ligne', cap: 'boutique_en_ligne' },
       { id: 'personnel', ic: '☰', label: 'Personnel', perm: 'personnel.lire' },
+      // Sous Gestion et a cote du Personnel : un projet se distribue a des gens, et c'est la
+      // qu'on va chercher qui fait quoi. Pas sous Pilotage -- un projet se conduit, il ne
+      // s'observe pas.
+      { id: 'projets', ic: '◱', label: 'Projets', perms: ['personnel.lire', 'personnel.gerer', 'organisation.gerer'] },
       { id: 'stock', ic: '▣', label: 'Stock', perm: 'stock.lire' },
       { id: 'facturation', ic: '▤', label: 'Facturation', perm: 'facturation.lire' },
       { id: 'finance', ic: '€', label: 'Achats & trésorerie', perm: 'finance.read' },

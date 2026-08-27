@@ -40,6 +40,10 @@ api_platform:
             # livrer a moitie. Voir le commentaire d'OptionProduit ci-dessus pour le mode de
             # defaillance intermediaire, plus vicieux : routes presentes, filtres inertes.
             - '%kernel.project_dir%/src/Legal/Entity'
+            # Gestion de projet : un travail HUMAIN, decide en interne, avec une echeance --
+            # a ne pas confondre avec `Platform\ScheduledTask` (tache machine, cron) ni avec un
+            # ticket `Support` (arrive de l'exterieur, se ferme quand on a repondu).
+            - '%kernel.project_dir%/src/Project/Entity'
             - '%kernel.project_dir%/src/Caisse/Entity'
             - '%kernel.project_dir%/src/Vente/Entity'
             - '%kernel.project_dir%/src/Vente/Nf525/Entity'
