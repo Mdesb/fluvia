@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import VitrinesBoutique from '../components/VitrinesBoutique.jsx'
 import Liste, { texte } from '../components/Liste.jsx'
 import Tabs from '../components/Tabs.jsx'
 import DemandesRemboursement from '../components/DemandesRemboursement.jsx'
@@ -46,19 +47,9 @@ export default function Boutique({ etabActif, droits }) {
         />
       )}
 
-      {sousOnglet === 'vitrines' && (
-        <Liste
-          titre="Vitrines"
-          sous="points de vente en ligne"
-          deps={[etabActif]}
-          charger={api.vitrines}
-          vide="Aucune vitrine configurée."
-          colonnes={[
-            { cle: 'libelle', entete: 'Vitrine', rendu: (r) => <span className="nm">{texte(r.libelle, r.nom || r.code || 'Vitrine')}</span> },
-            { cle: 'statut', entete: 'Statut', rendu: (r) => <span className="badge mut">{r.statut || r.etat || '—'}</span> },
-          ]}
-        />
-      )}
+      {/* La liste generique montrait un libelle et un statut -- jamais l'ADRESSE. Un exploitant qui
+          vient d'ouvrir sa boutique n'avait aucun moyen de savoir ou elle est. */}
+      {sousOnglet === 'vitrines' && <VitrinesBoutique droits={droits} />}
     </div>
   )
 }

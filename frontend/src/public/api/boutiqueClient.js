@@ -7,34 +7,84 @@
 //    stocké sous une clé DIFFÉRENTE du token staff pour ne jamais les mélanger.
 // Chemins relatifs proxifiés par Vite (/auth, /api) — même origine, pas de CORS.
 
+/**
+ * STOCKAGE LOCAL QUI NE JETTE JAMAIS — parce que la boutique est faite pour vivre en IFRAME.
+ *
+ * Maxime, le 27/08 : *« l'iframe il faut faire attention je pense avec les differents navigateurs,
+ * il faut que ce soit nickel »*. Le piege n'est pas la mise en page, c'est le stockage.
+ *
+ * Dans une iframe servie depuis un autre domaine que la page qui l'heberge, Safari et Firefox
+ * **cloisonnent** le stockage par site parent, et Safari le **refuse purement et simplement** dans
+ * certaines configurations. `localStorage.getItem` leve alors une `SecurityError`.
+ *
+ * Le cout exact, si on n'y fait rien : `panierStore.getToken()` leve au premier rendu, l'application
+ * ne monte pas, et **le client voit une page blanche**. Pas un message, pas un panier vide -- rien.
+ *
+ * Le repli en memoire garde la boutique fonctionnelle sur la duree de la visite. Ce qui se perd, c'est
+ * la persistance entre deux ouvertures d'onglet -- une degradation reelle, et sans commune mesure avec
+ * une page blanche.
+ *
+ * > **Un stockage indisponible est un cas courant, pas une panne. Ce qui casse, ce n'est pas son
+ * > absence : c'est de ne pas l'avoir prevue.**
+ */
+const memoire = new Map()
+
+const stockage = {
+  get(cle) {
+    try {
+      return window.localStorage.getItem(cle)
+    } catch {
+      return memoire.get(cle) ?? null
+    }
+  },
+  set(cle, valeur) {
+    // On ecrit TOUJOURS en memoire, meme quand localStorage marche : si le quota explose en cours de
+    // visite -- un navigateur en navigation privee le fait -- le panier reste lisible.
+    memoire.set(cle, valeur)
+    try {
+      window.localStorage.setItem(cle, valeur)
+    } catch {
+      /* la memoire a deja la valeur */
+    }
+  },
+  remove(cle) {
+    memoire.delete(cle)
+    try {
+      window.localStorage.removeItem(cle)
+    } catch {
+      /* rien a faire */
+    }
+  },
+}
+
 const PANIER_TOKEN_KEY = 'boutique.panierToken'
 const PANIER_ID_KEY = 'boutique.panierId'
 const CLIENT_TOKEN_KEY = 'boutique.clientToken'
 const VITRINE_KEY = 'boutique.vitrine'
 
 export const panierStore = {
-  getToken: () => localStorage.getItem(PANIER_TOKEN_KEY),
-  getId: () => localStorage.getItem(PANIER_ID_KEY),
+  getToken: () => stockage.get(PANIER_TOKEN_KEY),
+  getId: () => stockage.get(PANIER_ID_KEY),
   set: (id, token) => {
-    if (id) localStorage.setItem(PANIER_ID_KEY, id)
-    if (token) localStorage.setItem(PANIER_TOKEN_KEY, token)
+    if (id) stockage.set(PANIER_ID_KEY, id)
+    if (token) stockage.set(PANIER_TOKEN_KEY, token)
   },
   clear: () => {
-    localStorage.removeItem(PANIER_ID_KEY)
-    localStorage.removeItem(PANIER_TOKEN_KEY)
+    stockage.remove(PANIER_ID_KEY)
+    stockage.remove(PANIER_TOKEN_KEY)
   },
 }
 
 export const clientTokenStore = {
-  get: () => localStorage.getItem(CLIENT_TOKEN_KEY),
-  set: (t) => localStorage.setItem(CLIENT_TOKEN_KEY, t),
-  clear: () => localStorage.removeItem(CLIENT_TOKEN_KEY),
+  get: () => stockage.get(CLIENT_TOKEN_KEY),
+  set: (t) => stockage.set(CLIENT_TOKEN_KEY, t),
+  clear: () => stockage.remove(CLIENT_TOKEN_KEY),
 }
 
 export const vitrineStore = {
-  get: () => localStorage.getItem(VITRINE_KEY),
-  set: (id) => localStorage.setItem(VITRINE_KEY, id),
-  clear: () => localStorage.removeItem(VITRINE_KEY),
+  get: () => stockage.get(VITRINE_KEY),
+  set: (id) => stockage.set(VITRINE_KEY, id),
+  clear: () => stockage.remove(VITRINE_KEY),
 }
 
 export class ApiError extends Error {

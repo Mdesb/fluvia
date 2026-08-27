@@ -7,6 +7,7 @@ namespace App\Boutique\State;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProviderInterface;
 use App\Boutique\Entity\Vitrine;
+use App\Boutique\Service\VitrineResolver;
 use App\Boutique\Security\PanierProprietaireGuard;
 use App\Boutique\Security\VitrineAccessibleGuard;
 use App\Boutique\Service\DisponibiliteAffichageHandler;
@@ -33,6 +34,7 @@ final class CatalogueVitrineProvider implements ProviderInterface
 {
     public function __construct(
         private readonly EntityManagerInterface $em,
+        private readonly VitrineResolver $resolver,
         private readonly DisponibiliteAffichageHandler $disponibilite,
         private readonly ResolveurPrix $resolveurPrix,
         private readonly VitrineAccessibleGuard $vitrineGuard,
@@ -41,8 +43,8 @@ final class CatalogueVitrineProvider implements ProviderInterface
 
     public function provide(Operation $operation, array $uriVariables = [], array $context = []): JsonResponse
     {
-        $id = PanierProprietaireGuard::estUuid($uriVariables['id'] ?? null);
-        $vitrine = $id !== null ? $this->em->getRepository(Vitrine::class)->find($id) : null;
+        // Identifiant OU nom d'URL : meme resolution que `VitrinePubliqueProvider`.
+        $vitrine = $this->resolver->resoudre($uriVariables['id'] ?? null);
         if (!$vitrine instanceof Vitrine) {
             throw new NotFoundHttpException('Vitrine introuvable.');
         }
@@ -100,6 +102,10 @@ final class CatalogueVitrineProvider implements ProviderInterface
 
         return new JsonResponse([
             'vitrine' => (string) $vitrine->getId(),
+            // Rendu pour que la boutique chargee par identifiant puisse afficher -- et faire
+            // partager -- son adresse propre. Sans ca, un exploitant qui ouvre sa vitrine
+            // depuis le back-office copierait l'URL en UUID et la donnerait a ses clients.
+            'slug' => $vitrine->getSlug(),
             // Necessaire au pied de page public : c'est par l'etablissement que se lisent les mentions
             // legales publiees. Le deduire cote client demanderait un second appel pour une donnee que
             // le serveur a deja en main.

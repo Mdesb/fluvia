@@ -532,6 +532,9 @@ export const api = {
   comptesClientBoutique: () =>
     request('/api/compte_clients', { query: { itemsPerPage: 100 } }),
   vitrines: () => request('/api/boutique/vitrines', { query: { itemsPerPage: 100 } }),
+  // Le nom d'URL de la boutique. PATCH partiel : on n'envoie que `slug`, pour ne pas
+  // reecrire par megarde une couleur ou une langue qu'un autre onglet vient de changer.
+  majVitrine: (id, corps) => request(`/api/boutique/vitrines/${id}`, { method: 'PATCH', body: corps }),
   // `montant` absent = remboursement total, c'est le defaut du serveur. On ne l'envoie donc que
   // lorsque l'utilisateur a explicitement choisi un remboursement partiel.
   accepterRemboursement: (id, montant) =>

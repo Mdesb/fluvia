@@ -65,6 +65,20 @@ class Vitrine
     #[Groups(['vitrine:read'])]
     private ?Etablissement $etablissement = null;
 
+    /**
+     * LE NOM DE LA BOUTIQUE DANS L'URL : `/b/piscine-municipale`.
+     *
+     * Nullable, et c'est un choix de compatibilite : les vitrines creees avant le 27/08 n'en ont pas,
+     * et leur URL par identifiant continue de marcher. Un lien deja envoye dans un courriel de
+     * confirmation ne se casse pas parce qu'on a trouve mieux.
+     *
+     * Modifiable par l'exploitant (`vitrine:write`) : c'est SON adresse, elle porte son nom, et le
+     * defaut fabrique depuis le nom de l'etablissement n'est qu'une proposition.
+     */
+    #[ORM\Column(length: 80, unique: true, nullable: true)]
+    #[Groups(['vitrine:read', 'vitrine:write'])]
+    private ?string $slug = null;
+
     #[ORM\Column(length: 255, nullable: true)]
     #[Groups(['vitrine:read', 'vitrine:write'])]
     private ?string $logo = null;
@@ -107,6 +121,18 @@ class Vitrine
     public function setEtablissement(?Etablissement $etablissement): self
     {
         $this->etablissement = $etablissement;
+
+        return $this;
+    }
+
+    public function getSlug(): ?string
+    {
+        return $this->slug;
+    }
+
+    public function setSlug(?string $slug): self
+    {
+        $this->slug = $slug;
 
         return $this;
     }

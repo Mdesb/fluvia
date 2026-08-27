@@ -50,10 +50,23 @@ export default function PublicApp() {
     setErreur(null)
     try {
       const [v, cat] = await Promise.all([
+        // ⚠ CET APPEL ECHOUE QUAND L'ADRESSE PORTE UN SLUG, ET C'EST STRUCTUREL.
+        //
+        // `GET /boutique/vitrines/{id}` est une operation ITEM : API Platform convertit `{id}` en
+        // `Uuid` AVANT d'atteindre le fournisseur, et rend 404 sur `piscine-a` sans que le code du
+        // fournisseur soit jamais execute. Le catalogue, lui, est une operation collection a chemin
+        // personnalise : la valeur y reste une chaine, donc le slug passe.
+        //
+        // On ne force pas le passage : le catalogue rend DEJA le logo, les couleurs et les langues.
+        // Un second appel pour les memes donnees serait un aller-retour de plus a chaque ouverture de
+        // boutique, sur le chemin critique du client.
         boutique.vitrine(id).catch(() => null),
         boutique.catalogue(id),
       ])
-      setVitrine(v)
+      // Le catalogue fait foi pour l'identite visuelle ; l'appel item n'ajoute que ce qu'il est seul
+      // a porter. Sans ce repli, une boutique ouverte sur `/b/piscine-a` perdrait son logo et ses
+      // couleurs -- elle s'afficherait en blanc, sans erreur, et personne ne saurait pourquoi.
+      setVitrine(v || (cat ? { logo: cat.logo, couleurs: cat.couleurs, langues: cat.langues, slug: cat.slug } : null))
       setCatalogue(cat)
     } catch (e) {
       setErreur(e?.message || "Cette boutique est introuvable ou indisponible.")
@@ -263,9 +276,22 @@ function Cadre({ vitrine, etablissementId, nbArticles, connecte, vue, onNaviguer
   )
 }
 
-// Priorité : ?vitrine=<id> dans l'URL, puis la dernière vitrine mémorisée.
+// Priorité : `/b/<slug>`, puis `?vitrine=<id>`, puis la dernière vitrine mémorisée.
+//
+// LE CHEMIN PASSE DEVANT LE PARAMÈTRE, ET C'EST L'ORDRE QUI COMPTE.
+//
+// Une boutique ouverte sur `/b/piscine-a` doit afficher Piscine A, même si le navigateur se souvient
+// d'une autre vitrine visitée hier. L'ordre inverse ferait qu'un lien envoyé à un client ouvrirait la
+// boutique du voisin — sans erreur, sans message, avec un catalogue plausible.
+//
+// Le serveur accepte les deux formes (`VitrineResolver`) : rien à convertir ici.
 function lireVitrineInitiale() {
   try {
+    const chemin = window.location.pathname || ''
+    if (chemin.startsWith('/b/')) {
+      const slug = decodeURIComponent(chemin.slice(3).split('/')[0] || '').trim()
+      if (slug) return slug
+    }
     const params = new URLSearchParams(window.location.search)
     const q = params.get('vitrine')
     if (q) return q
