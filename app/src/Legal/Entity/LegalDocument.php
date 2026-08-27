@@ -6,6 +6,7 @@ namespace App\Legal\Entity;
 
 use ApiPlatform\Metadata\ApiFilter;
 use ApiPlatform\Metadata\ApiResource;
+use ApiPlatform\Metadata\Link;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
@@ -72,6 +73,14 @@ use Symfony\Component\Uid\Uuid;
         // qu'un texte validé.
         new GetCollection(
             uriTemplate: '/legal/publics/{establishmentId}',
+            // La variable d'URL doit etre DECLAREE, sinon API Platform repond 404 << Invalid uri
+            // variables >> -- une erreur qui se lit comme << cet etablissement n'existe pas >> alors
+            // que c'est la route qui est mal formee. Meme patron que
+            // `OptionProduit::options-disponibles` : un placeholder distinct de `id`, lie a la classe
+            // qu'il designe.
+            uriVariables: [
+                'establishmentId' => new Link(fromClass: Etablissement::class, identifiers: ['id']),
+            ],
             security: "is_granted('PUBLIC_ACCESS')",
             provider: PublicLegalDocumentProvider::class,
         ),

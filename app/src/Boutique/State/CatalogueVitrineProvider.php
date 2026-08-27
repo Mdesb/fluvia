@@ -51,12 +51,33 @@ final class CatalogueVitrineProvider implements ProviderInterface
         $this->vitrineGuard->verifier($vitrine);
         $etablissement = $vitrine->getEtablissement();
 
+        // LA JOINTURE EST EXTERNE, ET C'EST TOUT LE CORRECTIF.
+        //
+        // En interne, un produit SANS etablissement ne satisfait aucune ligne. Or, au 27/08, les sept
+        // produits publies et vendables en ligne du jeu de demonstration -- audioguide, abonnement,
+        // pass musee, expo Egypte, boutique -- avaient TOUS un etablissement nul. Les deux seuls
+        // produits rattaches a un site etaient en brouillon, guichet uniquement.
+        //
+        // Resultat : LES DEUX BOUTIQUES EN LIGNE N'AVAIENT JAMAIS RIEN EU A VENDRE, depuis la creation
+        // du jeu de demonstration. Elles affichaient << Aucun billet en vente >> -- une phrase exacte,
+        // qui ne ressemblait pas a un defaut.
+        //
+        // C'est la meme cause que la fuite du catalogue back-office corrigee le meme jour : dans ce
+        // depot, << sans etablissement >> veut dire << socle, partage par tous >> pour cette entite --
+        // elle n'a ni discriminant `portee` ni colonne `etablissement`, donc ni l'un ni l'autre des
+        // deux patrons de D51. Une jointure interne la traite comme n'appartenant a personne.
+        //
+        // Regle retenue par Maxime le 27/08 : etablissement actif PLUS socle.
         $produits = $this->em->getRepository(Produit::class)->createQueryBuilder('p')
-            ->innerJoin('p.etablissements', 'e')
-            ->andWhere('e = :etablissement')
+            ->leftJoin('p.etablissements', 'e')
+            ->andWhere('(e.id = :etablissement OR SIZE(p.etablissements) = 0)')
             ->andWhere('p.statut = :publie')
+            // Type `uuid` explicite : sur un identifiant a type personnalise, une comparaison sans type
+            // ne compte rien et NE LEVE PAS (D58). Ici elle ne rendrait pas << moins >> mais le socle
+            // seul, ce qui ressemble a un catalogue mal configure bien plus qu'a un bug.
             ->setParameter('etablissement', $etablissement?->getId(), 'uuid')
             ->setParameter('publie', StatutProduit::Publie->value)
+            ->distinct()
             ->getQuery()
             ->getResult();
 
@@ -79,6 +100,10 @@ final class CatalogueVitrineProvider implements ProviderInterface
 
         return new JsonResponse([
             'vitrine' => (string) $vitrine->getId(),
+            // Necessaire au pied de page public : c'est par l'etablissement que se lisent les mentions
+            // legales publiees. Le deduire cote client demanderait un second appel pour une donnee que
+            // le serveur a deja en main.
+            'etablissement' => (string) $etablissement?->getId(),
             'logo' => $vitrine->getLogo(),
             'couleurs' => $vitrine->getCouleurs(),
             'langues' => $vitrine->getLangues(),

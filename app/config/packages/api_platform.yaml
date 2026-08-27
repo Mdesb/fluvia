@@ -35,6 +35,11 @@ api_platform:
             # PLUS que demande. Une route absente se remarque au premier appel ; un filtre
             # absent rend des donnees plausibles, que personne ne va verifier.
             - '%kernel.project_dir%/src/OptionProduit/Entity'
+            # Sans cette ligne, les routes du module Legal n'existent pas du tout -- et les
+            # mentions obligatoires d'une boutique ne sont pas une fonctionnalite qu'on peut
+            # livrer a moitie. Voir le commentaire d'OptionProduit ci-dessus pour le mode de
+            # defaillance intermediaire, plus vicieux : routes presentes, filtres inertes.
+            - '%kernel.project_dir%/src/Legal/Entity'
             - '%kernel.project_dir%/src/Caisse/Entity'
             - '%kernel.project_dir%/src/Vente/Entity'
             - '%kernel.project_dir%/src/Vente/Nf525/Entity'
