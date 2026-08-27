@@ -75,10 +75,20 @@ function qs(params) {
 
 async function request(
   path,
-  { method = 'GET', body, ld = false, auth = true, headers: extra = {}, query, timeoutMs } = {},
+  { method = 'GET', body, formData, ld = false, auth = true, headers: extra = {}, query, timeoutMs } = {},
 ) {
   const headers = { ...extra }
-  if (body !== undefined) {
+  // ⚠ ON NE POSE PAS `Content-Type` SUR UN ENVOI MULTIPART, ET C'EST CONTRE-INTUITIF.
+  //
+  // Le navigateur doit le composer lui-même, parce qu'il y ajoute la *frontière* (`boundary`) qui
+  // sépare les parties du corps. Un `Content-Type: multipart/form-data` écrit à la main arrive donc
+  // SANS frontière : PHP reçoit un corps qu'il ne sait pas découper, `$request->files` est vide, et
+  // le serveur répond « fichier manquant » sur une requête qui contenait le fichier.
+  //
+  // Le symptôme accuse l'appelant ; la cause est cet en-tête de trop.
+  if (formData !== undefined) {
+    // rien : le navigateur s'en charge
+  } else if (body !== undefined) {
     // API Platform impose `application/merge-patch+json` sur les PATCH (sinon 415) ; les autres
     // écritures acceptent JSON simple, ou JSON-LD quand l'opération l'exige (`ld: true`).
     headers['Content-Type'] = method === 'PATCH'
@@ -109,7 +119,7 @@ async function request(
     res = await fetch(path, {
       method,
       headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      body: formData !== undefined ? formData : (body !== undefined ? JSON.stringify(body) : undefined),
       signal: abort?.signal,
     })
   } catch (e) {
@@ -290,6 +300,19 @@ export const api = {
   // `/projets/tableau` rend l'avancement COMPTE et le retard DEDUIT : rien de tout cela n'est
   // stocke. Un pourcentage recopie serait faux entre deux rafraichissements, et un pourcentage
   // faux est pire qu'absent parce qu'il rassure.
+  // DOCUMENTS (App\Dms) -- 15 operations, aucun appelant jusqu'ici.
+  //
+  // Le televersement est en multipart : `request()` laisse alors le navigateur composer l'en-tete,
+  // frontiere comprise. Le telechargement, lui, n'est pas une operation API Platform mais un
+  // controleur qui diffuse le flux -- on ouvre donc l'URL, on ne la lit pas en JSON.
+  documentsDms: (params) => request('/api/documents', { query: { itemsPerPage: 100, ...(params || {}) } }),
+  televerserDocument: (formData) => request('/api/documents', { method: 'POST', formData }),
+  majDocumentDms: (id, corps) => request(`/api/documents/${id}`, { method: 'PATCH', body: corps }),
+  remplacerVersionDocument: (id, formData) =>
+    request(`/api/documents/${id}/replace-version`, { method: 'POST', formData }),
+  versionsDocument: () => request('/api/document_versions', { query: { itemsPerPage: 300 } }),
+  urlTelechargementDocument: (id) => `/dms/documents/${id}/download`,
+
   tableauProjets: () => request('/api/projets/tableau'),
   creerProjet: (corps) => request('/api/projects', { method: 'POST', body: corps, ld: true }),
   majProjet: (id, corps) => request(`/api/projects/${id}`, { method: 'PATCH', body: corps }),

@@ -77,7 +77,9 @@ const NAV = [
       // Ce qui manquait -- representations et politique -- a ete ajoute LA, pas ailleurs.
       { id: 'recouvrement', ic: '⚠', label: 'Recouvrement', perm: 'recouvrement.lire', disabled: true, absent: true },
       { id: 'caution', ic: '⛨', label: 'Cautions', perm: 'caution.lire', disabled: true, absent: true },
-      { id: 'documents', ic: '🗎', label: 'Documents', perm: 'dms.read', disabled: true, absent: true },
+      // Ouvert le 27/08 : quinze operations, aucun ecran. Un contrat depose par l'API existait,
+      // et personne ne pouvait le relire.
+      { id: 'documents', ic: '🗎', label: 'Documents', perms: ['dms.read', 'dms.write'] },
       { id: 'social', ic: '◎', label: 'Publication sociale', perm: 'social.read_post', disabled: true, absent: true },
     ],
   },
