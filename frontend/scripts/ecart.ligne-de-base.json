@@ -29,27 +29,22 @@
         "Le script REFUSE de le relever. Un plafond qui remonte n est plus un cliquet, c est un",
         "compteur."
     ],
-    "plafond": 752,
+    "plafond": 750,
     "releve": {
         "exposees": 1086,
         "sansEcran": 0,
         "attendues": 1086,
-        "appelees": 344,
-        "atteignables": 334,
-        "inatteignables": 752,
+        "appelees": 342,
+        "atteignables": 336,
+        "inatteignables": 750,
         "orphelins": [
-            "articleAide  (back-office)",
             "comptesComptables  (back-office)",
-            "documentsLegauxPublics  (back-office)",
             "grilleTarifaires  (back-office)",
             "majDocumentDms  (back-office)",
-            "opportunites  (back-office)",
             "padelTournois  (back-office)",
             "pieceCommerciale  (back-office)",
             "piscineValiderCreneauBassin  (back-office)",
-            "supportTableauBord  (back-office)",
-            "ventesImpayeesRegie  (back-office)",
-            "versionsDocument  (back-office)"
+            "supportTableauBord  (back-office)"
         ],
         "declares": [],
         "marqueursSansRaison": [],
@@ -57,8 +52,8 @@
         "parFront": [
             {
                 "nom": "back-office",
-                "appelees": 324,
-                "atteignables": 313
+                "appelees": 321,
+                "atteignables": 315
             },
             {
                 "nom": "boutique en ligne",
@@ -81,7 +76,7 @@
             ],
             [
                 "support",
-                16
+                15
             ],
             [
                 "editor",
@@ -200,10 +195,6 @@
                 3
             ],
             [
-                "opportunities",
-                3
-            ],
-            [
                 "groupe",
                 3
             ],
@@ -233,6 +224,10 @@
             ],
             [
                 "projects",
+                2
+            ],
+            [
+                "opportunities",
                 2
             ],
             [

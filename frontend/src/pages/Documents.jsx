@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, membres, tokenStore, etablissementStore } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
+import Modal from '../components/Modal.jsx'
 
 /**
  * DOCUMENTS — quinze opérations serveur, aucun écran jusqu'ici.
@@ -55,6 +56,8 @@ export default function Documents({ etabActif, droits = [] }) {
   const peutEcrire = aLeDroit(droits, 'dms.write')
 
   const [documents, setDocuments] = useState([])
+  const [versions, setVersions] = useState([])
+  const [historique, setHistorique] = useState(null)
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
@@ -70,7 +73,16 @@ export default function Documents({ etabActif, droits = [] }) {
     setChargement(true)
     setErreur(null)
     try {
-      setDocuments(membres(await api.documentsDms()))
+      const [docs, vers] = await Promise.all([
+        api.documentsDms(),
+        // L'HISTORIQUE ECHOUE EN SILENCE. C'est un complement de lecture : si le service de versions
+        // ne repond pas, la bibliotheque doit rester consultable et telechargeable. Un ecran qui
+        // refuse de s'ouvrir parce qu'un detail secondaire manque punit l'utilisateur pour une panne
+        // qui ne le concerne pas.
+        api.versionsDocument().catch(() => null),
+      ])
+      setDocuments(membres(docs))
+      setVersions(vers ? membres(vers) : [])
     } catch (e) {
       setErreur(e.message || 'Les documents n’ont pas pu être chargés.')
     } finally {
@@ -235,7 +247,20 @@ export default function Documents({ etabActif, droits = [] }) {
                       {/* Un document versionne dont l'ecran ne montre pas la version laisse croire
                           qu'il n'y en a qu'une -- et quelqu'un << corrige >> un fichier en creant en
                           realite une version de plus. */}
-                      {d.currentVersion?.versionNumber ? `v${d.currentVersion.versionNumber}` : '—'}
+                      {d.currentVersion?.versionNumber ? (
+                        (d.currentVersion.versionNumber > 1)
+                          ? (
+                            <button
+                              type="button"
+                              className="btn ghost sm"
+                              style={{ padding: '1px 8px', fontSize: 11.5 }}
+                              onClick={() => setHistorique(d)}
+                            >
+                              v{d.currentVersion.versionNumber}
+                            </button>
+                          )
+                          : `v${d.currentVersion.versionNumber}`
+                      ) : '—'}
                     </td>
                     <td className="num">{poids(d.currentVersion?.sizeBytes)}</td>
                     <td className="num">{quand(d.createdAt)}</td>
@@ -272,6 +297,12 @@ export default function Documents({ etabActif, droits = [] }) {
         )}
       </div>
 
+      <HistoriqueVersions
+        document={historique}
+        versions={versions}
+        onFermer={() => setHistorique(null)}
+      />
+
       <input
         ref={champRemplacement}
         type="file"
@@ -283,5 +314,68 @@ export default function Documents({ etabActif, droits = [] }) {
         }}
       />
     </div>
+  )
+}
+
+/**
+ * L'HISTORIQUE D'UN DOCUMENT VERSIONNÉ.
+ *
+ * **Le numéro de version disait déjà qu'il y en avait plusieurs ; il ne disait pas lesquelles.**
+ * « v4 » sans historique pose exactement la question à laquelle il faut répondre : qu'est-ce qui a
+ * changé, quand, et par qui. Sans réponse, la seule façon de retrouver une version précédente est
+ * de demander à quelqu'un qui s'en souvient.
+ *
+ * **L'empreinte du fichier est affichée**, tronquée. C'est ce qui distingue un vrai remplacement
+ * d'un redépôt du même fichier — et un document déposé deux fois à l'identique n'est pas une
+ * correction, c'est une fausse manœuvre qu'il vaut mieux voir.
+ *
+ * ⚠ La liste des versions est chargée entière puis filtrée ici. `DocumentVersion` n'expose pas de
+ * filtre par document, et lui en ajouter un ferait entrer une référence dans la famille D58 — où un
+ * filtre rend soit tout, soit rien, sans jamais lever.
+ */
+function HistoriqueVersions({ document: doc, versions, onFermer }) {
+  const miennes = (versions || [])
+    .filter((v) => {
+      const ref = v.document
+      const id = typeof ref === 'string' ? ref.split('/').pop() : ref?.id
+      return doc && String(id) === String(doc.id)
+    })
+    .sort((a, b) => (b.versionNumber || 0) - (a.versionNumber || 0))
+
+  return (
+    <Modal open={!!doc} onClose={onFermer} titre={doc ? `Versions — ${doc.title}` : ''} taille="md">
+      {miennes.length === 0 ? (
+        <div className="sub">
+          L’historique n’a pas pu être chargé, ou ce document n’a qu’une seule version.
+        </div>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th className="num">Version</th>
+                <th>Fichier</th>
+                <th className="num">Taille</th>
+                <th className="num">Déposée le</th>
+                <th>Par</th>
+                <th>Empreinte</th>
+              </tr>
+            </thead>
+            <tbody>
+              {miennes.map((v) => (
+                <tr key={v.id}>
+                  <td className="num">v{v.versionNumber}</td>
+                  <td>{v.originalFilename || '—'}</td>
+                  <td className="num">{poids(v.sizeBytes)}</td>
+                  <td className="num">{quand(v.createdAt)}</td>
+                  <td>{v.uploadedBy?.nom || <span className="sub">—</span>}</td>
+                  <td><span className="mono sub">{String(v.fileHash || '').slice(0, 12) || '—'}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Modal>
   )
 }

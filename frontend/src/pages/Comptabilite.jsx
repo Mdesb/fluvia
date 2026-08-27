@@ -76,6 +76,22 @@ export default function Comptabilite({ etabActif, droits }) {
               { cle: 'plafondEncaisseCentimes', entete: 'Plafond', num: true, rendu: (r) => euroCentimes(r.plafondEncaisseCentimes) },
             ]}
           />
+          {/* LES IMPAYES, A COTE DES ENCAISSEMENTS ET PAS AILLEURS.
+              Une regie de recettes se lit par ce qu'elle a encaisse ET par ce qui lui manque. Ranger
+              les impayes dans un autre ecran laisse regarder le solde sans son complement -- et un
+              solde lu seul a l'air bon. */}
+          <Liste
+            titre="Ventes impayées"
+            sous="à recouvrer par la régie"
+            deps={[etabActif]}
+            charger={api.ventesImpayeesRegie}
+            vide="Aucune vente impayée."
+            colonnes={[
+              { cle: 'dateMarquage', entete: 'Marquée le', rendu: (r) => dateFr(r.dateMarquage) },
+              { cle: 'motif', entete: 'Motif', rendu: (r) => <span className="nm">{r.motif || '—'}</span> },
+              { cle: 'venteOrigine', entete: 'Vente', rendu: (r) => <span className="mono sub">{String(r.venteOrigine || '').slice(0, 8) || '—'}</span> },
+            ]}
+          />
           <Liste
             titre="Bordereaux de versement"
             deps={[etabActif]}

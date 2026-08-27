@@ -366,7 +366,6 @@ export const api = {
   creerTacheProjet: (corps) => request('/api/project_tasks', { method: 'POST', body: corps, ld: true }),
   majTacheProjet: (id, corps) => request(`/api/project_tasks/${id}`, { method: 'PATCH', body: corps }),
   supprimerTacheProjet: (id) => request(`/api/project_tasks/${id}`, { method: 'DELETE' }),
-  opportunites: () => request('/api/opportunities', { query: { itemsPerPage: 200 } }),
   creerOpportunite: (corps) => request('/api/opportunities', { method: 'POST', body: corps, ld: true }),
   majOpportunite: (id, corps) => request(`/api/opportunities/${id}`, { method: 'PATCH', body: corps }),
   // Rattache (ou crée) un client sur une vente ouverte (M2, CA-7). Corps : un de
@@ -990,13 +989,11 @@ export const api = {
 
   // Lecture PUBLIQUE, sans jeton : la LCEN exige des mentions << aisement accessibles >>, et le
   // visiteur qui hesite a acheter est justement celui qui n'a pas encore de compte.
-  documentsLegauxPublics: (etablissementId) => request(`/api/legal/publics/${etablissementId}`),
 
   // Base de connaissances. `/publics` et `/recherche` sont en accès public : ce sont elles que la
   // webapp cliente interroge, sans jeton.
   articlesAide: (params) => request('/api/support/articles/publics', { query: { itemsPerPage: 100, ...(params || {}) } }),
   rechercheArticles: (q) => request('/api/support/articles/recherche', { query: { q, itemsPerPage: 20 } }),
-  articleAide: (id) => request(`/api/support/articles/${id}`),
   categoriesAide: () => request('/api/categorie_aides', { query: { itemsPerPage: 100 } }),
 
   // REDACTION DE LA BASE DE CONNAISSANCES.
