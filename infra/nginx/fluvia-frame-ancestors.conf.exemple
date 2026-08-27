@@ -1,0 +1,14 @@
+# Généré par `php bin/console app:integration:csp` — ne pas modifier à la main.
+#
+# À placer dans le contexte http (hors server), puis, DANS le server qui sert la boutique :
+#
+#     add_header Content-Security-Policy "frame-ancestors $fluvia_frame_ancestors" always;
+#
+# `always` est indispensable : sans lui, nginx omet l'en-tête sur les réponses d'erreur — et
+# une page 404 encadrée reste une page encadrée.
+#
+# Une boutique absente de cette carte n'est encadrable nulle part : c'est voulu. Pour en
+# ouvrir une, déclarez ses domaines sur la fiche vitrine, puis régénérez ce fichier.
+map $uri $fluvia_frame_ancestors {
+    default                                 "'none'";
+}
