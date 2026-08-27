@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Reservation\Unit;
 
+use App\Tests\SchemaDuHarnais;
 use App\Acces\Entity\Appairage;
 use App\Acces\Entity\DroitAcces;
 use App\Acces\Entity\Support;
@@ -50,12 +51,10 @@ final class ApplyNoShowCreditIssueHandlerTest extends KernelTestCase
         $em = $container->get('doctrine')->getManager();
         $this->em = $em;
 
-        $tool = new SchemaTool($em);
-        $metadata = $em->getMetadataFactory()->getAllMetadata();
-        $em->getConnection()->executeStatement('SET FOREIGN_KEY_CHECKS=0');
-        $tool->dropSchema($metadata);
-        $tool->createSchema($metadata);
-        $em->getConnection()->executeStatement('SET FOREIGN_KEY_CHECKS=1');
+        // Le schéma est construit UNE FOIS par processus, puis vidé entre les tests. Le faire
+        // détruire et reconstruire par chaque `setUp()` coûtait ~10 s par test — six heures sur
+        // la suite complète, et donc une suite que personne ne lançait.
+        SchemaDuHarnais::reinitialiser($em);
 
         // La séquence native MariaDB `acces_snapshot_seq` (migration Version20260817192240) n'est PAS
         // recréée par SchemaTool (hors mapping ORM) : le chemin appairage->Support.versionMaj exercé par

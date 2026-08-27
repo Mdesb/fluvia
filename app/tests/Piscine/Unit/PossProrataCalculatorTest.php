@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Piscine\Unit;
 
+use App\Tests\SchemaDuHarnais;
 use App\DataFixtures\SocleFixtures;
 use App\Organisation\Entity\Espace;
 use App\Organisation\Entity\Etablissement;
@@ -14,7 +15,6 @@ use App\Piscine\Entity\ParametrePiscineEtablissement;
 use App\Piscine\Enum\EtatLigneEau;
 use App\Piscine\Service\PossProrataCalculator;
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Tools\SchemaTool;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 /**
@@ -33,14 +33,9 @@ final class PossProrataCalculatorTest extends KernelTestCase
         $this->em = $container->get('doctrine')->getManager();
         $this->calculateur = $container->get(PossProrataCalculator::class);
 
-        $tool = new SchemaTool($this->em);
-        $metadata = $this->em->getMetadataFactory()->getAllMetadata();
-        // FK_CHECKS désactivé le temps du drop/create (nombreuses tables inter-référencées) : évite les
-        // échecs d'ordonnancement DROP/CREATE observés après l'introduction du schéma recouvrement_*.
-        $this->em->getConnection()->executeStatement('SET FOREIGN_KEY_CHECKS=0');
-        $tool->dropSchema($metadata);
-        $tool->createSchema($metadata);
-        $this->em->getConnection()->executeStatement('SET FOREIGN_KEY_CHECKS=1');
+        // Le schéma est construit UNE FOIS par processus, puis vidé entre les tests.
+        // Le faire détruire et reconstruire par chaque `setUp()` coûtait ~10 s par test.
+        SchemaDuHarnais::reinitialiser($this->em);
 
         /** @var \App\DataFixtures\SocleFixtures $socle */
         $socle = $container->get(SocleFixtures::class);

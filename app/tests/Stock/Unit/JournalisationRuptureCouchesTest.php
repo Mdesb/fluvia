@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Stock\Unit;
 
+use App\Tests\SchemaDuHarnais;
 use App\DataFixtures\SocleFixtures;
 use App\Organisation\Entity\Etablissement;
 use App\Organisation\Entity\Region;
@@ -21,7 +22,6 @@ use App\Stock\Service\MoteurValorisationFifoLifo;
 use App\Stock\Service\ResolveurMethodeValorisation;
 use App\Stock\Service\TransfertStockHandler;
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Tools\SchemaTool;
 use Psr\Log\AbstractLogger;
 use Psr\Log\LoggerInterface;
 use Stringable;
@@ -47,12 +47,10 @@ final class JournalisationRuptureCouchesTest extends KernelTestCase
         $em = $container->get('doctrine')->getManager();
         $this->em = $em;
 
-        $tool = new SchemaTool($em);
-        $metadata = $em->getMetadataFactory()->getAllMetadata();
-        $em->getConnection()->executeStatement('SET FOREIGN_KEY_CHECKS=0');
-        $tool->dropSchema($metadata);
-        $tool->createSchema($metadata);
-        $em->getConnection()->executeStatement('SET FOREIGN_KEY_CHECKS=1');
+        // Le schéma est construit UNE FOIS par processus, puis vidé entre les tests. Le faire
+        // détruire et reconstruire par chaque `setUp()` coûtait ~10 s par test — six heures sur
+        // la suite complète, et donc une suite que personne ne lançait.
+        SchemaDuHarnais::reinitialiser($em);
 
         $container->get(SocleFixtures::class)->load($em);
 

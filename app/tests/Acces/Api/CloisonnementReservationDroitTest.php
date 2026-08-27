@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Acces\Api;
 
+use App\Tests\SchemaDuHarnais;
 use ApiPlatform\Symfony\Bundle\Test\ApiTestCase;
 use App\Acces\DataFixtures\AccesFixtures;
 use App\Acces\Entity\DroitAcces;
@@ -27,7 +28,6 @@ use App\Securite\Entity\Utilisateur;
 use App\Securite\Service\ContexteEtablissement;
 use App\Vente\DataFixtures\VenteFixtures;
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Tools\SchemaTool;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 
 /**
@@ -53,12 +53,10 @@ final class CloisonnementReservationDroitTest extends ApiTestCase
         /** @var EntityManagerInterface $em */
         $em = $container->get('doctrine')->getManager();
 
-        $tool = new SchemaTool($em);
-        $metadata = $em->getMetadataFactory()->getAllMetadata();
-        $em->getConnection()->executeStatement('SET FOREIGN_KEY_CHECKS=0');
-        $tool->dropSchema($metadata);
-        $tool->createSchema($metadata);
-        $em->getConnection()->executeStatement('SET FOREIGN_KEY_CHECKS=1');
+        // Le schéma est construit UNE FOIS par processus, puis vidé entre les tests. Le faire
+        // détruire et reconstruire par chaque `setUp()` coûtait ~10 s par test — six heures sur
+        // la suite complète, et donc une suite que personne ne lançait.
+        SchemaDuHarnais::reinitialiser($em);
 
         foreach ([SocleFixtures::class, OffreFixtures::class, VenteFixtures::class, CrmFixtures::class, AccesFixtures::class] as $classe) {
             $container->get($classe)->load($em);

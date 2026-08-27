@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Personnel\Unit;
 
+use App\Tests\SchemaDuHarnais;
 use App\Acces\Entity\DroitAcces;
 use App\Acces\Entity\Support;
 use App\Acces\Enum\ModeAppairage;
@@ -26,7 +27,6 @@ use App\Personnel\Enum\StatutCreneauTravail;
 use App\Personnel\Enum\TypeContrat;
 use App\Personnel\Service\RecalculFenetreBadgeHandler;
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Tools\SchemaTool;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Uid\Uuid;
 
@@ -45,12 +45,9 @@ final class RecalculFenetreBadgeHandlerTest extends KernelTestCase
         self::bootKernel();
         $this->em = static::getContainer()->get('doctrine')->getManager();
 
-        $tool = new SchemaTool($this->em);
-        $metadata = $this->em->getMetadataFactory()->getAllMetadata();
-        $this->em->getConnection()->executeStatement('SET FOREIGN_KEY_CHECKS=0');
-        $tool->dropSchema($metadata);
-        $tool->createSchema($metadata);
-        $this->em->getConnection()->executeStatement('SET FOREIGN_KEY_CHECKS=1');
+        // Le schéma est construit UNE FOIS par processus, puis vidé entre les tests.
+        // Le faire détruire et reconstruire par chaque `setUp()` coûtait ~10 s par test.
+        SchemaDuHarnais::reinitialiser($this->em);
     }
 
     public function testFenetreDeplaceeSurProchainCreneauConfirme(): void

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Sepa;
 
+use App\Tests\SchemaDuHarnais;
 use ApiPlatform\Symfony\Bundle\Test\ApiTestCase;
 use ApiPlatform\Symfony\Bundle\Test\Client;
 use App\Compta\DataFixtures\ComptaFixtures;
@@ -16,7 +17,6 @@ use App\Sepa\DataFixtures\SepaFixtures;
 use App\Sepa\Entity\MandatSepa;
 use App\Tests\DdlHorsMapping;
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Tools\SchemaTool;
 
 /**
  * Base des tests d'API du module SEPA partagé : schéma recréé et fixtures socle + offre + compta
@@ -34,14 +34,10 @@ abstract class SepaApiTestCase extends ApiTestCase
         /** @var EntityManagerInterface $em */
         $em = $container->get('doctrine')->getManager();
 
-        $tool = new SchemaTool($em);
-        $metadata = $em->getMetadataFactory()->getAllMetadata();
-        // FK_CHECKS désactivé le temps du drop/create (nombreuses tables inter-référencées) : évite les
-        // échecs d'ordonnancement DROP/CREATE observés après l'introduction du schéma recouvrement_*.
-        $em->getConnection()->executeStatement('SET FOREIGN_KEY_CHECKS=0');
-        $tool->dropSchema($metadata);
-        $tool->createSchema($metadata);
-        $em->getConnection()->executeStatement('SET FOREIGN_KEY_CHECKS=1');
+        // Le schéma est construit UNE FOIS par processus, puis vidé entre les tests. Le faire
+        // détruire et reconstruire par chaque `setUp()` coûtait ~10 s par test — six heures sur
+        // la suite complète, et donc une suite que personne ne lançait.
+        SchemaDuHarnais::reinitialiser($em);
 
         DdlHorsMapping::appliquer($em);
 

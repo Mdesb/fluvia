@@ -9,7 +9,6 @@ use ApiPlatform\Symfony\Bundle\Test\Client;
 use App\DataFixtures\SocleFixtures;
 use App\Organisation\Entity\Etablissement;
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Tools\SchemaTool;
 
 /**
  * Base des tests d'API du socle : schéma recréé et fixtures rechargées avant chaque test
@@ -27,14 +26,10 @@ abstract class SocleApiTestCase extends ApiTestCase
         /** @var EntityManagerInterface $em */
         $em = $container->get('doctrine')->getManager();
 
-        $tool = new SchemaTool($em);
-        $metadata = $em->getMetadataFactory()->getAllMetadata();
-        // FK_CHECKS désactivé le temps du drop/create (nombreuses tables inter-référencées) : évite les
-        // échecs d'ordonnancement DROP/CREATE observés après l'introduction du schéma recouvrement_*.
-        $em->getConnection()->executeStatement('SET FOREIGN_KEY_CHECKS=0');
-        $tool->dropSchema($metadata);
-        $tool->createSchema($metadata);
-        $em->getConnection()->executeStatement('SET FOREIGN_KEY_CHECKS=1');
+        // Le schéma est construit UNE FOIS par processus, puis vidé entre les tests. Le faire
+        // détruire et reconstruire par chaque `setUp()` coûtait ~10 s par test — six heures sur
+        // la suite complète, et donc une suite que personne ne lançait.
+        SchemaDuHarnais::reinitialiser($em);
 
         DdlHorsMapping::appliquer($em);
 
