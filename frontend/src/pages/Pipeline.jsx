@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import Modal from '../components/Modal.jsx'
+import Relances from '../components/Relances.jsx'
 
 /**
  * LES AFFAIRES EN COURS — ce qui vit entre « un client appelle » et « un devis part ».
@@ -54,7 +55,7 @@ function jour(v) {
   return Number.isNaN(d.getTime()) ? null : d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })
 }
 
-export default function Pipeline({ etabActif, droits = [] }) {
+export default function Pipeline({ etabActif, droits = [], onNaviguer }) {
   const peutModifier = aLeDroit(droits, 'crm.modifier') || aLeDroit(droits, 'crm.creer')
 
   const [tableau, setTableau] = useState(null)
@@ -117,6 +118,15 @@ export default function Pipeline({ etabActif, droits = [] }) {
 
       {erreur && <div className="alert crit">{erreur}</div>}
       {succes && <div className="alert good">{succes}</div>}
+
+      {/* CE QU'IL RESTE A FAIRE, AVANT LE TABLEAU DES AFFAIRES.
+          Le pipeline dit ou en sont les affaires ; les relances disent ce qu'on doit faire
+          aujourd'hui. Mettre les colonnes en premier, c'est demander a l'utilisateur de deduire
+          lui-meme sa journee d'un tableau -- et il ne le fait pas. */}
+      <Relances
+        etabActif={etabActif}
+        onOuvrirClient={onNaviguer ? (id) => onNaviguer('clients', { type: 'client', id }) : null}
+      />
 
       <div style={{ display: 'grid', gridTemplateColumns: `repeat(${colonnes.length}, minmax(210px, 1fr))`, gap: 12, overflowX: 'auto' }}>
         {colonnes.map((col) => (

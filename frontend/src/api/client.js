@@ -294,6 +294,27 @@ export const api = {
   // une etape en retard est pire qu'absente parce qu'elle a l'air d'etre a jour.
   pipeline: () => request('/api/crm/pipeline'),
 
+  // ECHANGES COMMERCIAUX -- ce qui s'est passe avec un client, et le prochain geste.
+  //
+  // Distinct d'un ticket d'assistance : un ticket est SUBI et se ferme, un echange est DECIDE et la
+  // relation continue. Les ranger ensemble forcerait un statut << ferme >> sur un client qu'on
+  // rappellera dans six mois.
+  //
+  // /!\ La collection est chargee entiere puis filtree cote ecran. `CommercialActivity` porte un
+  // SearchFilter sur `customer` -- famille D58, ou le filtre rend soit tout soit rien, sans jamais
+  // lever. Un historique vide ressemble a un client qu'on n'a jamais appele : on ne l'emprunte pas.
+  activitesCommerciales: () =>
+    request('/api/commercial_activities', { query: { itemsPerPage: 500 } }),
+  creerActivite: (corps) =>
+    request('/api/commercial_activities', { method: 'POST', body: corps, ld: true }),
+
+  // RELANCES EN ATTENTE -- deduites, jamais stockees.
+  //
+  // Une relance tient tant qu'aucun echange plus recent n'existe sur la meme cible : rappeler suffit
+  // a la faire disparaitre. Il n'y a donc rien a cocher, et pas de seconde boite de taches a cote
+  // du module Projets -- personne ne regarde les deux.
+  relances: () => request('/api/crm/relances'),
+
   // PROJETS -- travail interne qui a une fin. A ne pas confondre avec un ticket d'assistance
   // (arrive de l'exterieur) ni avec une tache planifiee (machine, cron).
   //

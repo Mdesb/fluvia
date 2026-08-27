@@ -11,7 +11,9 @@ use ApiPlatform\Metadata\Operation;
 use App\Crm\Entity\Beneficiaire;
 use App\Crm\Entity\Client;
 use App\Crm\Entity\Consentement;
+use App\Crm\Entity\CommercialActivity;
 use App\Crm\Entity\CustomerContact;
+use App\Crm\Entity\Opportunity;
 use App\Crm\Entity\DemandeRGPD;
 use App\Crm\Entity\Famille;
 use App\Crm\Entity\JournalFusion;
@@ -54,6 +56,10 @@ final class PerimetreCrmExtension implements QueryCollectionExtensionInterface, 
         // courriel direct. C'est le garde-fou de couverture qui l'a vu, pas la relecture, et il
         // l'a vu parce qu'il cherche les entites exposees que RIEN ne peut filtrer.
         CustomerContact::class => 'customer',
+        // Une activite commerciale porte SON PROPRE etablissement (estampille au serveur) : elle
+        // peut viser une affaire sans client, et n'a donc pas toujours de chemin vers un `Client`.
+        CommercialActivity::class => null,
+        Opportunity::class => null,
         Consentement::class => 'client',
         DemandeRGPD::class => 'client',
     ];

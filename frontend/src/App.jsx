@@ -255,7 +255,7 @@ export default function App() {
       {onglet === 'support' && <Support droits={droits} />}
       {onglet === 'autorisations' && <Autorisations droits={droits} />}
       {onglet === 'legal' && <MentionsLegales etabActif={etabActif} droits={droits} />}
-      {onglet === 'affaires' && <Pipeline etabActif={etabActif} droits={droits} />}
+      {onglet === 'affaires' && <Pipeline etabActif={etabActif} droits={droits} onNaviguer={naviguer} />}
       {onglet === 'projets' && <Projets etabActif={etabActif} droits={droits} />}
       {onglet === 'documents' && <Documents etabActif={etabActif} droits={droits} />}
       {onglet === 'social' && <Social etabActif={etabActif} droits={droits} />}

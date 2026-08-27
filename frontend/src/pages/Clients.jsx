@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
+import ActivitesClient from '../components/ActivitesClient.jsx'
 import ContactsClient from '../components/ContactsClient.jsx'
 import { api } from '../api/client.js'
 import { euros } from '../api/produit.js'
@@ -294,6 +295,12 @@ function FicheContenu({ fiche, mouvements }) {
           n'est pas une personne : c'est une directrice, une comptabilite, quelqu'un qui signe -- et
           ils n'ont pas la meme adresse. Le bloc ne s'affiche que pour un client moral. */}
       <ContactsClient client={c} peutModifier />
+
+      {/* LES ECHANGES, JUSTE APRES LES CONTACTS.
+          Savoir A QUI parler ne sert a rien si l'on ne sait plus CE QU'ON S'EST DIT. Le bloc porte
+          aussi la relance en attente -- sans case a cocher : on ne coche pas une relance, on la
+          remplace en notant l'echange suivant. */}
+      <ActivitesClient client={c} peutModifier />
 
       {/* Porte-monnaie PMV + mouvements */}
       <div>
