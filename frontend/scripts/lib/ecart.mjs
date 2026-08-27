@@ -227,8 +227,16 @@ export function mesurer() {
       c = CLE.exec(source)
     }
 
-    let appeleesFront = 0
-    let atteignablesFront = 0
+    // COMPTES LOCAUX, ET C'EST LE POINT.
+    //
+    // Une premiere version incrementait les compteurs du front en regardant les tables GLOBALES :
+    // `/auth` etant appele par les deux applications, il comptait comme << appele >> pour la premiere
+    // et << atteignable >> pour la seconde. La boutique affichait « 21 atteignables sur 20 appelees ».
+    // Un total qui depasse son propre denominateur est la forme la plus visible d'un compte fait au
+    // mauvais endroit -- et la plus rare : le meme defaut sur des chiffres plausibles ne se serait
+    // jamais vu.
+    const appelsFront = new Map()
+    const atteignablesDuFront = new Map()
     let m = APPEL.exec(source)
     while (m !== null) {
       const chemin = m[1].replace(INTERPOLATION, '{id}')
@@ -237,22 +245,25 @@ export function mesurer() {
         const verbe = suite ? suite[1] : 'GET'
 
         if (!appels.has(chemin)) appels.set(chemin, new Set())
-        if (!appels.get(chemin).has(verbe)) appeleesFront += 1
         appels.get(chemin).add(verbe)
+        if (!appelsFront.has(chemin)) appelsFront.set(chemin, new Set())
+        appelsFront.get(chemin).add(verbe)
 
         // À quel helper appartient cet appel : la dernière clé déclarée avant lui.
         const derniere = [...source.slice(0, m.index).matchAll(/^ {2}([a-zA-Z][a-zA-Z0-9]*):\s/gm)].pop()
         const nom = derniere ? derniere[1] : null
         if (nom !== null && !orphelinsDuFront.has(nom)) {
           if (!appelsAtteignables.has(chemin)) appelsAtteignables.set(chemin, new Set())
-          if (!appelsAtteignables.get(chemin).has(verbe)) atteignablesFront += 1
           appelsAtteignables.get(chemin).add(verbe)
+          if (!atteignablesDuFront.has(chemin)) atteignablesDuFront.set(chemin, new Set())
+          atteignablesDuFront.get(chemin).add(verbe)
         }
       }
       m = APPEL.exec(source)
     }
 
-    parFront.push({ nom: front.nom, appelees: appeleesFront, atteignables: atteignablesFront })
+    const compter = (table) => [...table.values()].reduce((n, verbes) => n + verbes.size, 0)
+    parFront.push({ nom: front.nom, appelees: compter(appelsFront), atteignables: compter(atteignablesDuFront) })
   }
 
   let appelees = 0

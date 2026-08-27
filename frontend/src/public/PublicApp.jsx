@@ -139,6 +139,25 @@ export default function PublicApp() {
     [panier],
   )
 
+  // VIDER LE PANIER — l'opération existait côté serveur depuis le début, sans bouton pour l'appeler.
+  //
+  // Retirer les articles un par un marche, jusqu'à ce qu'il y en ait six. Au-delà, la personne ferme
+  // l'onglet — et un panier abandonné ressemble en base à une hésitation alors que c'est un abandon
+  // d'interface.
+  const viderPanier = useCallback(async () => {
+    if (!panier) return
+    setBusyPanier(true)
+    setErreurPanier(null)
+    try {
+      const maj = await boutique.viderPanier(panier.id)
+      setPanier(maj)
+    } catch (e) {
+      setErreurPanier(e?.message || 'Le panier n’a pas pu être vidé.')
+    } finally {
+      setBusyPanier(false)
+    }
+  }, [panier])
+
   // Modification de quantité : opération dédiée côté back (ajustement direct de la ligne).
   const modifierQuantite = useCallback(
     async (ligne, delta) => {
@@ -214,6 +233,7 @@ export default function PublicApp() {
           erreur={erreurPanier}
           onRetirer={retirerLigne}
           onModifier={modifierQuantite}
+          onVider={viderPanier}
           onNaviguer={onNaviguer}
         />
       ) : route.vue === 'tunnel' ? (
@@ -240,6 +260,7 @@ export default function PublicApp() {
             erreur={erreurPanier}
             onRetirer={retirerLigne}
             onModifier={modifierQuantite}
+            onVider={viderPanier}
             onNaviguer={onNaviguer}
           />
         )

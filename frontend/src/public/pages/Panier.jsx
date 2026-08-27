@@ -12,6 +12,7 @@ export default function Panier({
   busy,
   erreur,
   onRetirer,
+  onVider,
   onModifier,
   onNaviguer,
 }) {
@@ -130,6 +131,24 @@ export default function Panier({
             >
               Continuer mes achats
             </button>
+            {onVider && lignes.length > 1 && (
+              // LE BOUTON N'APPARAIT QU'A PARTIR DE DEUX ARTICLES.
+              //
+              // Avec un seul, << retirer >> est deja le geste juste : offrir les deux cote a cote
+              // obligerait a choisir entre deux boutons qui font la meme chose. Et il est place en
+              // DERNIER, en retrait : c'est le geste qu'on regrette, pas celui qu'on cherche.
+              <button
+                type="button"
+                className="btn lg"
+                style={{ marginTop: 8 }}
+                disabled={busy}
+                onClick={() => {
+                  if (window.confirm('Vider le panier — tous les articles seront retirés. Continuer ?')) onVider()
+                }}
+              >
+                Vider le panier
+              </button>
+            )}
           </div>
         </aside>
       </div>

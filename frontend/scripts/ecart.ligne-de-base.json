@@ -29,19 +29,18 @@
         "Le script REFUSE de le relever. Un plafond qui remonte n est plus un cliquet, c est un",
         "compteur."
     ],
-    "plafond": 767,
+    "plafond": 765,
     "releve": {
         "exposees": 1086,
         "sansEcran": 0,
         "attendues": 1086,
         "appelees": 336,
-        "atteignables": 319,
-        "inatteignables": 767,
+        "atteignables": 321,
+        "inatteignables": 765,
         "orphelins": [
             "articleAide  (back-office)",
             "categoriesAide  (back-office)",
             "comptesComptables  (back-office)",
-            "creerCompte  (boutique en ligne)",
             "creerIndisponibilite  (back-office)",
             "documentsLegauxPublics  (back-office)",
             "grilleTarifaires  (back-office)",
@@ -55,15 +54,11 @@
             "revoquerBadgeStaff  (back-office)",
             "supportTableauBord  (back-office)",
             "ventesImpayeesRegie  (back-office)",
-            "versionsDocument  (back-office)",
-            "viderPanier  (boutique en ligne)"
+            "versionsDocument  (back-office)"
         ],
         "declares": [],
         "marqueursSansRaison": [],
-        "clientsNonDeclares": [
-            "frontend/src/components/ActivitesClient.jsx",
-            "frontend/src/components/ContactsClient.jsx"
-        ],
+        "clientsNonDeclares": [],
         "parFront": [
             {
                 "nom": "back-office",
@@ -72,8 +67,8 @@
             },
             {
                 "nom": "boutique en ligne",
-                "appelees": 20,
-                "atteignables": 19
+                "appelees": 21,
+                "atteignables": 21
             }
         ],
         "parPrefixe": [
