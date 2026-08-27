@@ -17,6 +17,7 @@ use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Validator\Constraints as Assert;
+use Symfony\Component\Validator\Context\ExecutionContextInterface;
 
 /**
  * Vitrine white-label par établissement (US-L8-01, RG-M3-01/08). Porte l'identité visuelle, les
@@ -102,6 +103,30 @@ class Vitrine
     #[Assert\Positive]
     #[Groups(['vitrine:read', 'vitrine:write'])]
     private int $delaiExpirationPanierMinutes = 15;
+
+    /**
+     * LES SITES QUI ONT LE DROIT D'ENCADRER CETTE BOUTIQUE.
+     *
+     * Sans en-tete `frame-ancestors`, n'importe quel site peut afficher cette boutique dans une
+     * iframe, sous son propre nom. Le visiteur paie sur une page qu'il croit etre celle du site
+     * encadrant. Rien ne casse et rien n'alerte -- c'est pour ca que personne ne le remarque.
+     *
+     * **Vide = encadrable nulle part**, et c'est le sens sur de l'erreur : une integration qui ne
+     * marche pas se signale et se corrige en une ligne ; une boutique encadrable par tout le monde ne
+     * se signale jamais.
+     *
+     * On stocke des ORIGINES (`https://exemple.fr`), pas des noms d'hote : c'est ce que la directive
+     * CSP attend, et un `http://` accepte par erreur ouvrirait l'encadrement a un intermediaire.
+     * `https://*.exemple.fr` est accepte pour un client qui a plusieurs sous-domaines.
+     *
+     * La valeur ne sert pas ici : elle alimente `php bin/console app:integration:csp`, qui ecrit la
+     * carte nginx. C'est nginx qui sert le front statique, donc lui seul peut poser l'en-tete.
+     *
+     * @var list<string>
+     */
+    #[ORM\Column(type: 'json')]
+    #[Groups(['vitrine:read', 'vitrine:write'])]
+    private array $domainesIntegration = [];
 
     public function __construct()
     {
@@ -201,5 +226,44 @@ class Vitrine
         $this->delaiExpirationPanierMinutes = $delaiExpirationPanierMinutes;
 
         return $this;
+    }
+
+    /** @return list<string> */
+    public function getDomainesIntegration(): array
+    {
+        return $this->domainesIntegration;
+    }
+
+    /** @param list<string> $domainesIntegration */
+    public function setDomainesIntegration(array $domainesIntegration): self
+    {
+        // Normalise : un espace ou une barre finale collee par un copier-coller ferait echouer la
+        // comparaison d'origine cote navigateur, sans aucun message.
+        $this->domainesIntegration = array_values(array_filter(array_map(
+            static fn (mixed $d): string => rtrim(trim((string) $d), '/'),
+            $domainesIntegration,
+        ), static fn (string $d): bool => $d !== ''));
+
+        return $this;
+    }
+
+    /**
+     * UN DOMAINE MAL ECRIT N'OUVRE RIEN ET NE DIT RIEN.
+     *
+     * Le navigateur compare l'origine caractere par caractere. `exemple.fr` sans schema, ou une barre
+     * finale, ne correspond a rien -- l'iframe reste blanche et l'exploitant conclut que la
+     * fonctionnalite ne marche pas. On refuse a la saisie, la ou la faute se corrige.
+     */
+    #[Assert\Callback]
+    public function validerDomainesIntegration(ExecutionContextInterface $context): void
+    {
+        foreach ($this->domainesIntegration as $i => $domaine) {
+            if (preg_match('#^https://(\\*\\.)?[a-z0-9-]+(\\.[a-z0-9-]+)+(:[0-9]{1,5})?$#i', $domaine) !== 1) {
+                $context->buildViolation('« {{ valeur }} » n’est pas une origine valide. Attendu : https://exemple.fr (ou https://*.exemple.fr).')
+                    ->setParameter('{{ valeur }}', $domaine)
+                    ->atPath(sprintf('domainesIntegration[%d]', $i))
+                    ->addViolation();
+            }
+        }
     }
 }

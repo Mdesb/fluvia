@@ -145,6 +145,12 @@ export default function VitrinesBoutique({ droits = [] }) {
                   </div>
                 )}
 
+                <DomainesIntegration
+                  vitrine={v}
+                  onEnregistre={(msg) => { setSucces(msg); recharger() }}
+                  onErreur={setErreur}
+                />
+
                 <div>
                   <div className="st-lib">Intégrer dans votre site</div>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 4 }}>
@@ -203,5 +209,103 @@ function BoutonCopier({ texte }) {
     <button className="btn ghost sm" type="button" onClick={copier}>
       {etat || 'Copier'}
     </button>
+  )
+}
+
+
+/**
+ * QUI A LE DROIT D'ENCADRER CETTE BOUTIQUE.
+ *
+ * **Le code d'intégration au-dessus ne suffit pas.** Il dit comment afficher la boutique chez soi ;
+ * il ne dit pas qui en a le droit. Sans cette liste, la réponse est « tout le monde » : n'importe
+ * quel site peut afficher la boutique d'un client sous son propre nom, et le visiteur paie sur une
+ * page qu'il croit être celle du site encadrant. Rien ne casse, rien n'alerte.
+ *
+ * > **Une page qu'on peut encadrer sans le dire est une page qu'on peut porter au nom d'un autre.**
+ *
+ * **Aucun domaine déclaré = encadrable nulle part.** C'est le sens sûr de l'erreur : une intégration
+ * qui ne s'affiche pas se signale tout de suite et se corrige en une ligne ; une boutique encadrable
+ * par tout le monde ne se signale jamais.
+ *
+ * ⚠ **Déclarer ici ne suffit pas encore.** L'en-tête est posé par nginx, qui sert le front statique ;
+ * PHP ne voit jamais passer cette requête. L'écran le dit plutôt que de laisser croire que
+ * l'autorisation est active à l'enregistrement.
+ */
+function DomainesIntegration({ vitrine, onEnregistre, onErreur }) {
+  const [ouvert, setOuvert] = useState(false)
+  const [texte, setTexte] = useState((vitrine.domainesIntegration || []).join('\n'))
+  const [busy, setBusy] = useState(false)
+
+  const liste = (vitrine.domainesIntegration || [])
+
+  async function enregistrer() {
+    setBusy(true)
+    onErreur(null)
+    try {
+      const domaines = texte.split('\n').map((d) => d.trim()).filter(Boolean)
+      await api.majVitrine(vitrine.id, { domainesIntegration: domaines })
+      setOuvert(false)
+      onEnregistre(
+        domaines.length === 0
+          ? 'Boutique non encadrable : aucun site autorisé.'
+          : `${domaines.length} site(s) autorisé(s) — à appliquer côté serveur pour prendre effet.`,
+      )
+    } catch (e) {
+      onErreur(e.message || 'Les domaines n’ont pas pu être enregistrés.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div>
+      <div className="st-lib">Sites autorisés à l’encadrer</div>
+
+      {!ouvert ? (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap', marginTop: 4 }}>
+          {liste.length === 0 ? (
+            <span className="badge warn">Aucun — la boutique n’est encadrable nulle part</span>
+          ) : (
+            liste.map((d) => <span className="badge good" key={d}>{d}</span>)
+          )}
+          <button
+            className="btn ghost sm"
+            type="button"
+            onClick={() => { setTexte(liste.join('\n')); setOuvert(true) }}
+          >
+            Modifier
+          </button>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gap: 6, marginTop: 4 }}>
+          <textarea
+            rows={3}
+            value={texte}
+            onChange={(e) => setTexte(e.target.value)}
+            placeholder={'https://exemple.fr\nhttps://www.exemple.fr'}
+            style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12.5 }}
+          />
+          <div className="hint" style={{ margin: 0 }}>
+            Une origine par ligne, schéma compris : <code>https://exemple.fr</code>. Un sous-domaine
+            générique s’écrit <code>https://*.exemple.fr</code>. Laisser vide interdit tout
+            encadrement.
+          </div>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <button className="btn ghost sm" type="button" disabled={busy} onClick={() => setOuvert(false)}>
+              Annuler
+            </button>
+            <button className="btn primary sm" type="button" disabled={busy} onClick={enregistrer}>
+              Enregistrer
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="hint" style={{ margin: '4px 0 0' }}>
+        L’autorisation est appliquée par le serveur web, pas par cet écran : après modification,
+        l’exploitant technique régénère la configuration
+        (<code>php bin/console app:integration:csp</code>) et la recharge.
+      </div>
+    </div>
   )
 }
