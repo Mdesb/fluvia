@@ -96,3 +96,81 @@ garde-fous verts, **zéro exécution**. Le premier qui les ouvre trouvera des ch
 
 Et le reste — les doutes non levés, les endroits où l'API ment sur ce qu'elle rend, les pièges de
 nommage à effet silencieux — est dans `COORDINATION/PASSATION.md`.
+
+---
+
+# Relevé du 27/08/2026 au soir — ce qui a changé en un jour
+
+**Le chiffre du haut n'est plus le bon, et l'écart s'est déplacé.**
+
+|  | 26/08 au soir | 27/08 au soir |
+|---|---:|---:|
+| Opérations exposées | 1 049 | **1 081** |
+| Appels depuis les écrans | ~234 | **343** |
+| Entrées de menu condamnées (`absent: true`) | 7 | **3, toutes délibérées** |
+
+Les trois entrées restantes — **SEPA, recouvrement, cautions** — ne sont pas des manques : elles
+vivent dans les onglets de `Comptabilité`, là où l'exploitant les cherche. Leur ouvrir une porte
+propre créerait deux chemins vers la même liste, et personne ne saurait lequel fait foi. Le drapeau
+est conservé **à dessein**, avec l'explication dans `AppShell.jsx`.
+
+## Ce qui a été ouvert
+
+| Module | Ce qui manquait | Ce qui a été fait |
+|---|---|---|
+| **Support** | 18 opérations, **aucun écran** | Tickets, escalade N1→N2, notes internes, base de connaissances |
+| **Autorisation** | 13 opérations, aucun écran | File des demandes, **triée par ce qui expire** |
+| **Dms** | 15 opérations, aucun écran | Bibliothèque versionnée, dépôt multipart, téléchargement authentifié |
+| **Social** | 11 opérations, aucun écran | Comptes, composition, **détail par compte** d'un envoi partiel |
+| **Sport** | `EvenementSOS` listable mais jamais listé | Appels d'urgence en tête, présences isolées, abonnements |
+| **Legal** | *n'existait pas* | Six documents composés depuis une fiche de faits |
+| **Project** | *n'existait pas* | Projets et tâches, avancement compté, retard déduit |
+| **Crm** | pas de contacts, pas de pipeline | Contacts d'une société, pipeline dont trois étapes se lisent du devis |
+| **Reservation** | un seul modèle de réservation | Placement libre, horaires et absences, vue semaine |
+
+## Les défauts que cette journée a fait sortir
+
+Ils ne se ressemblent pas, et c'est ce qui les rend instructifs.
+
+**Deux fuites de cloisonnement.** Le catalogue de Piscine A montrait le produit de Patinoire B et
+cachait les quatorze produits du socle — et un produit d'un autre site a été **encaissé**, entrant
+dans une chaîne de scellement NF525 tenue par point de vente. Puis `CustomerContact`, exposée sans
+qu'aucune extension ne puisse la filtrer.
+
+> **Une fuite de cloisonnement ne produit pas d'erreur : elle produit des lignes en trop, et des
+> lignes en trop ne se remarquent que si on les compte.**
+
+**Un bug d'argent.** Un abonnement souscrit chez Patinoire B par un compte né chez Piscine A entrait
+dans les comptes de Piscine A — abonnement, mandat SEPA et panier.
+
+**Les deux boutiques en ligne n'avaient jamais rien eu à vendre.** Les sept produits publiés et
+vendables en ligne ont tous un établissement nul ; la jointure interne les excluait tous. La boutique
+affichait *« Aucun billet en vente »* — une phrase exacte, qui ne ressemblait pas à un défaut.
+
+**Et un défaut qui ne venait pas de nous.** Le préfixe CSS `pub-` (pour « public ») est lu comme
+« publicité » par les listes de filtres françaises : `#pub-main` était masqué, et la boutique
+apparaissait vide à tout visiteur muni d'un bloqueur. Renommé `bq-` sur 299 occurrences.
+
+## Cinq champs déclarés et inertes, trouvés le même jour
+
+`TypeProduit::$defauts`, `Activite::$competenceExigee`, `Ressource::$competenceRequise`,
+`DisponibiliteRessource` et `IndisponibiliteRessource` (exposées en CRUD complet, front muet),
+`CommercialDocument` (chaîne devis → facture, écran existant mais jamais nommée dans la carte).
+
+> **Ce qui manque à ce produit n'est presque jamais la règle métier : c'est le chemin qui y mène.**
+
+C'est la leçon la plus rentable de la journée, et elle a changé deux décisions : la « verticale salon
+de massage » et le « CRM B2B » n'ont **pas** été écrits comme des modules neufs — ils existaient sous
+d'autres noms, et il ne manquait qu'un écran et deux briques.
+
+## Ce qui reste, et qui n'est pas du développement
+
+- **Cloisonnement des comptes clients** : ils sont cloisonnés par boutique d'**inscription**, donc un
+  exploitant voit ceux nés chez lui et pas ceux qui achètent chez lui. Faux dans les deux sens.
+  Décision de produit — voir `COMPTE-CLIENT-FINAL.md`.
+- **Activités commerciales** : étendre `Support` ou séparer. Un module écrit à côté ferait deux boîtes
+  de suivi. Voir `CRM-B2B.md`.
+- **`frame-ancestors`** : absent, la boutique est encapsulable par n'importe qui. Configuration nginx.
+  Voir `INTEGRATION-IFRAME.md`.
+- **La suite complète de tests n'a jamais été menée à son terme** : 835 tests qui recréent un schéma
+  de ~300 tables par classe, arrêtés après six heures. Les modules touchés sont validés un par un.
