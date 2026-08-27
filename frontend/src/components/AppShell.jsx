@@ -43,7 +43,10 @@ const NAV = [
       { id: 'patinoire', ic: '❆', label: 'Patinoire', perm: 'patinoire.lire' },
       { id: 'padel', ic: '◍', label: 'Padel', perm: 'padel.lire' },
       { id: 'musee', ic: '⛫', label: 'Musée', perm: 'musee.lire' },
-      { id: 'sport', ic: '⬤', label: 'Sport & fitness', perm: 'sport.lire', disabled: true, absent: true },
+      // Ouvert le 27/08, et pas pour les abonnements : `EvenementSOS` portait un statut
+      // << ouverte >> et une operation << traiter >> SANS AUCUN ECRAN. Une alarme qu'aucune
+      // interface ne montre cree la croyance qu'on serait prevenu.
+      { id: 'sport', ic: '⬤', label: 'Sport & fitness', perms: ['sport.lire', 'sport.gerer', 'sport.superviser_nocturne'] },
     ],
   },
   {
@@ -70,6 +73,15 @@ const NAV = [
       { id: 'stock', ic: '▣', label: 'Stock', perm: 'stock.lire' },
       { id: 'facturation', ic: '▤', label: 'Facturation', perm: 'facturation.lire' },
       { id: 'finance', ic: '€', label: 'Achats & trésorerie', perm: 'finance.read' },
+      // TROIS ENTREES RESTENT << ABSENTES >>, ET AUCUNE N'EST UN MANQUE.
+      //
+      // SEPA, recouvrement et cautions ONT un ecran : ils vivent dans les onglets de
+      // `Comptabilite`, la ou l'exploitant les cherche -- au milieu de sa comptabilite, pas
+      // dans trois entrees de menu separees. Leur ouvrir une porte propre creerait deux
+      // chemins vers la meme liste, et personne ne saurait lequel fait foi.
+      //
+      // Le drapeau est donc conserve A DESSEIN, avec cette explication : sans elle, le
+      // prochain qui relit ce fichier les rouvrira en croyant combler un trou.
       { id: 'sepa', ic: '⇄', label: 'Prélèvements SEPA', perm: 'sepa.lire', disabled: true, absent: true },
       // PAS D'ENTREE PROPRE, ET C'EST DELIBERE. `Comptabilite > Impayes` traite deja les incidents,
       // le tableau de bord, la resolution et la reouverture forcee. Une seconde porte vers la meme
@@ -80,7 +92,10 @@ const NAV = [
       // Ouvert le 27/08 : quinze operations, aucun ecran. Un contrat depose par l'API existait,
       // et personne ne pouvait le relire.
       { id: 'documents', ic: '🗎', label: 'Documents', perms: ['dms.read', 'dms.write'] },
-      { id: 'social', ic: '◎', label: 'Publication sociale', perm: 'social.read_post', disabled: true, absent: true },
+      // Ouvert le 27/08. L'ecran existe pour un etat precis : `partially_failed` -- un message
+      // parti sur deux comptes, passe sur l'un, echoue sur l'autre. Sans le detail par compte,
+      // on republie partout pour rattraper un seul echec.
+      { id: 'social', ic: '◎', label: 'Publication sociale', perms: ['social.read_post', 'social.publish', 'social.read_account'] },
     ],
   },
   {

@@ -313,6 +313,31 @@ export const api = {
   versionsDocument: () => request('/api/document_versions', { query: { itemsPerPage: 300 } }),
   urlTelechargementDocument: (id) => `/dms/documents/${id}/download`,
 
+  // PUBLICATION SOCIALE -- onze operations, aucun appelant jusqu'ici.
+  //
+  // Les publications sont chargees SEPAREMENT des messages : c'est le detail par compte qui distingue
+  // un envoi a moitie reussi d'un echec complet. Un statut global sur une action partielle est faux
+  // dans les deux sens, et le lecteur ne peut pas savoir lequel.
+  comptesSociaux: () => request('/api/social_accounts', { query: { itemsPerPage: 50 } }),
+  messagesSociaux: () => request('/api/social_posts', { query: { itemsPerPage: 100 } }),
+  publicationsSociales: () => request('/api/social_publications', { query: { itemsPerPage: 300 } }),
+  creerMessageSocial: (corps) => request('/api/social_posts', { method: 'POST', body: corps, ld: true }),
+
+  // SPORT & FITNESS -- et d'abord les alertes que personne n'entendait.
+  //
+  // `EvenementSOS` porte un statut << ouverte >> et une operation << traiter >>, sans aucun ecran :
+  // une alarme qu'aucune interface ne montre cree la croyance qu'on serait prevenu.
+  // ⚠ `/api/evenement_s_o_s` et non `evenement_sos` : API Platform transforme le nom court
+  // `EvenementSOS` caractere par caractere -- chaque majuscule devient un segment. Devine, le
+  // chemin rend 404, et l'ecran conclut << aucune alerte >> sur une salle qui en a.
+  //
+  // C'est la troisieme fois aujourd'hui qu'un chemin suppose se revele faux. On les releve
+  // desormais dans `debug:router`, jamais par deduction depuis le nom de la classe.
+  evenementsSOS: () => request('/api/evenement_s_o_s', { query: { itemsPerPage: 100 } }),
+  traiterSOS: (id) => request(`/api/sport/sos/${id}/traiter`, { method: 'POST', body: {} }),
+  alertesPresenceIsolee: () => request('/api/alerte_presence_isolees', { query: { itemsPerPage: 100 } }),
+  abonnementsFitness: () => request('/api/abonnement_fitness', { query: { itemsPerPage: 200 } }),
+
   tableauProjets: () => request('/api/projets/tableau'),
   creerProjet: (corps) => request('/api/projects', { method: 'POST', body: corps, ld: true }),
   majProjet: (id, corps) => request(`/api/projects/${id}`, { method: 'PATCH', body: corps }),
