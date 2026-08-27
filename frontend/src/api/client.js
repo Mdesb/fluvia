@@ -313,6 +313,19 @@ export const api = {
   // un compte ne se verifie pas, des noms se reconnaissent.
   apercuSegment: (id) => request(`/api/marketing/segments/${id}/apercu`),
 
+  // CAMPAGNES -- un message, une audience, et la trace de ce qui s'est passe.
+  campagnes: () => request('/api/campaigns', { query: { itemsPerPage: 200 } }),
+  creerCampagne: (corps) => request('/api/campaigns', { method: 'POST', body: corps, ld: true }),
+  majCampagne: (id, corps) => request(`/api/campaigns/${id}`, { method: 'PATCH', body: corps }),
+  campagne: (id) => request(`/api/campaigns/${id}`),
+
+  // L'ENVOI -- le geste qu'on ne rattrape pas. Rend le detail PAR MOTIF : << 310 exclus faute de
+  // consentement >> dit qu'il faut travailler le recueil du consentement, << 930 envoyes >> ne dit
+  // rien.
+  envoyerCampagne: (id) =>
+    request(`/api/marketing/campagnes/${id}/envoyer`, { method: 'POST', body: {} }),
+  resultatCampagne: (id) => request(`/api/marketing/campagnes/${id}/resultat`),
+
   // ECHANGES COMMERCIAUX -- ce qui s'est passe avec un client, et le prochain geste.
   //
   // Distinct d'un ticket d'assistance : un ticket est SUBI et se ferme, un echange est DECIDE et la

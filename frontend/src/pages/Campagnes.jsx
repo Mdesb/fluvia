@@ -51,6 +51,10 @@ const CRITERES = [
 export default function Campagnes({ etabActif, droits = [] }) {
   const peutGerer = aLeDroit(droits, 'campagne.gerer')
 
+  const [onglet, setOnglet] = useState('campagnes')
+  const [campagnes, setCampagnes] = useState([])
+  const [redigee, setRedigee] = useState(null)
+  const [resultat, setResultat] = useState(null)
   const [segments, setSegments] = useState([])
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
@@ -63,7 +67,9 @@ export default function Campagnes({ etabActif, droits = [] }) {
     setChargement(true)
     setErreur(null)
     try {
-      setSegments(membres(await api.segments()))
+      const [s, ca] = await Promise.all([api.segments(), api.campagnes()])
+      setSegments(membres(s))
+      setCampagnes(membres(ca))
     } catch (e) {
       setErreur(e.message || 'Les segments n’ont pas pu être chargés.')
     } finally {
@@ -87,6 +93,49 @@ export default function Campagnes({ etabActif, droits = [] }) {
       setEdite(await api.segment(segment.id))
     } catch {
       setEdite(segment)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // L'ENVOI DEMANDE UNE CONFIRMATION QUI RAPPELLE L'EFFECTIF.
+  //
+  // Pas « êtes-vous sûr ? » — personne ne lit « êtes-vous sûr ». La confirmation dit COMBIEN de
+  // personnes vont recevoir le message, parce que c'est le seul chiffre qui fait hésiter à bon
+  // escient. Et elle rappelle que c'est définitif : une campagne ne se rejoue pas.
+  async function envoyer(campagne) {
+    const segment = segments.find((s) => idDe(campagne.segment) === s.id)
+    let effectif = null
+    try {
+      effectif = segment ? (await api.apercuSegment(segment.id)).effectif : null
+    } catch { /* l'aperçu est un confort : son échec ne doit pas empêcher de décider */ }
+
+    const combien = effectif === null ? 'un nombre inconnu de' : effectif
+    if (!window.confirm(
+      `Envoyer « ${campagne.label} » à ${combien} personne(s) ?\n\n`
+      + 'Une campagne ne se rejoue pas : ceux qui la recevront ne pourront pas la « dé-recevoir ».',
+    )) return
+
+    setBusy(true)
+    setErreur(null)
+    try {
+      const r = await api.envoyerCampagne(campagne.id)
+      setResultat({ campagne, ...(await api.resultatCampagne(campagne.id)), immediat: r.resultat })
+      await recharger()
+    } catch (e) {
+      setErreur(e.message || 'La campagne n’a pas pu partir.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function voirResultat(campagne) {
+    setBusy(true)
+    setErreur(null)
+    try {
+      setResultat({ campagne, ...(await api.resultatCampagne(campagne.id)) })
+    } catch (e) {
+      setErreur(e.message || 'Le résultat n’a pas pu être lu.')
     } finally {
       setBusy(false)
     }
@@ -129,8 +178,12 @@ export default function Campagnes({ etabActif, droits = [] }) {
           </div>
         </div>
         {peutGerer && (
-          <button className="btn primary" type="button" onClick={() => setEdite({})}>
-            + Nouveau segment
+          <button
+            className="btn primary"
+            type="button"
+            onClick={() => (onglet === 'campagnes' ? setRedigee({}) : setEdite({}))}
+          >
+            {onglet === 'campagnes' ? '+ Nouvelle campagne' : '+ Nouveau segment'}
           </button>
         )}
       </div>
@@ -147,7 +200,25 @@ export default function Campagnes({ etabActif, droits = [] }) {
       {erreur && <div className="alert crit">{erreur}</div>}
       {succes && <div className="alert good">{succes}</div>}
 
-      <div className="panel">
+      <div className="seg" style={{ marginBottom: 16 }}>
+        {[['campagnes', 'Campagnes'], ['segments', 'Segments']].map(([k, l]) => (
+          <button key={k} className={onglet === k ? 'on' : ''} onClick={() => setOnglet(k)}>{l}</button>
+        ))}
+      </div>
+
+      {onglet === 'campagnes' && (
+        <ListeCampagnes
+          campagnes={campagnes}
+          segments={segments}
+          peutGerer={peutGerer}
+          busy={busy}
+          onRediger={setRedigee}
+          onEnvoyer={envoyer}
+          onResultat={voirResultat}
+        />
+      )}
+
+      <div className="panel" style={{ display: onglet === 'segments' ? undefined : 'none' }}>
         <div className="panel-h"><span>Segments</span></div>
 
         {chargement ? (
@@ -216,6 +287,16 @@ export default function Campagnes({ etabActif, droits = [] }) {
       </div>
 
       <ApercuSegment apercu={apercu} onFermer={() => setApercu(null)} />
+
+      <ResultatCampagne resultat={resultat} onFermer={() => setResultat(null)} />
+
+      <RedactionCampagne
+        campagne={redigee}
+        segments={segments}
+        onFermer={() => setRedigee(null)}
+        onEnregistre={async (message) => { setRedigee(null); setSucces(message); await recharger() }}
+        onErreur={setErreur}
+      />
 
       <EditionSegment
         segment={edite}
@@ -409,6 +490,349 @@ function EditionSegment({ segment, onFermer, onEnregistre, onErreur }) {
             type="button"
             onClick={enregistrer}
             disabled={busy || label.trim() === '' || aucunCritere}
+          >
+            Enregistrer
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+const STATUTS = {
+  brouillon: { libelle: 'Brouillon', ton: 'warn' },
+  planifiee: { libelle: 'Planifiée', ton: 'mut' },
+  envoyee: { libelle: 'Envoyée', ton: 'good' },
+  arretee: { libelle: 'Arrêtée', ton: 'crit' },
+}
+
+const CANAUX = [['email', 'Courriel'], ['sms', 'SMS']]
+
+function idDe(ref) {
+  if (!ref) return null
+  return typeof ref === 'string' ? ref.split('/').pop() : ref.id
+}
+
+/**
+ * LA LISTE DES CAMPAGNES — et surtout, ce qu'on peut encore en faire.
+ *
+ * **Une campagne envoyée n'offre plus qu'un bouton : voir le résultat.** Pas de « renvoyer », pas
+ * de « modifier ». Rejouer recontacterait des gens qui ont déjà reçu le message — c'est la façon la
+ * plus simple de brûler un canal, et un bouton suffirait.
+ */
+function ListeCampagnes({ campagnes, segments, peutGerer, busy, onRediger, onEnvoyer, onResultat }) {
+  const nomSegment = (ref) => segments.find((s) => s.id === idDe(ref))?.label || '—'
+
+  return (
+    <div className="panel">
+      <div className="panel-h"><span>Campagnes</span></div>
+
+      {campagnes.length === 0 ? (
+        <div className="sub" style={{ textAlign: 'center', padding: 26 }}>
+          Aucune campagne. Une campagne, c’est un segment plus un message&nbsp;: commencez par le
+          segment.
+        </div>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th>Campagne</th>
+                <th>Audience</th>
+                <th>Canal</th>
+                <th>Statut</th>
+                <th className="num">Témoin</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {campagnes.map((c) => {
+                const statut = STATUTS[c.status] || { libelle: c.status, ton: 'mut' }
+                const partie = c.status === 'envoyee' || c.status === 'arretee'
+                return (
+                  <tr key={c.id}>
+                    <td><span className="nm">{c.label}</span></td>
+                    <td className="sub">{nomSegment(c.segment)}</td>
+                    <td>{CANAUX.find(([v]) => v === c.channel)?.[1] || c.channel}</td>
+                    <td><span className={`badge ${statut.ton}`}>{statut.libelle}</span></td>
+                    <td className="num">{c.controlGroupPercent} %</td>
+                    <td>
+                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                        {partie ? (
+                          <button
+                            className="btn sm"
+                            type="button"
+                            disabled={busy}
+                            style={{ padding: '1px 8px', fontSize: 11.5 }}
+                            onClick={() => onResultat(c)}
+                          >
+                            Résultat
+                          </button>
+                        ) : peutGerer && (
+                          <>
+                            <button
+                              className="btn ghost sm"
+                              type="button"
+                              disabled={busy}
+                              style={{ padding: '1px 8px', fontSize: 11.5 }}
+                              onClick={() => onRediger(c)}
+                            >
+                              Modifier
+                            </button>
+                            <button
+                              className="btn sm"
+                              type="button"
+                              disabled={busy}
+                              style={{ padding: '1px 8px', fontSize: 11.5 }}
+                              onClick={() => onEnvoyer(c)}
+                            >
+                              Envoyer
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * LE RÉSULTAT — et le détail par motif, jamais un total.
+ *
+ * « 930 envoyés » ne dit rien. « 310 exclus faute de consentement » dit qu'il faut travailler le
+ * recueil du consentement avant d'écrire un message de plus — et c'est souvent l'information la
+ * plus utile de tout l'écran.
+ *
+ * **Le groupe témoin est montré à part, en clair.** Le ranger parmi les exclus ferait croire qu'on a
+ * raté une part de son audience, alors que c'est la seule chose qui permettra de dire si la campagne
+ * a servi à quelque chose.
+ */
+function ResultatCampagne({ resultat, onFermer }) {
+  return (
+    <Modal
+      open={!!resultat}
+      onClose={onFermer}
+      titre={resultat ? `Résultat — ${resultat.campagne.label}` : ''}
+      taille="md"
+    >
+      {resultat && (
+        <div style={{ display: 'grid', gap: 14 }}>
+          <div className="fiche-stats">
+            <div>
+              <div className="st-lib">Ciblés</div>
+              <div className="st-val num">{resultat.cibles}</div>
+            </div>
+            <div>
+              <div className="st-lib">Contactés</div>
+              <div className="st-val num">{resultat.contactes}</div>
+            </div>
+            <div>
+              <div className="st-lib">Groupe témoin</div>
+              <div className="st-val num">{resultat.temoins}</div>
+            </div>
+          </div>
+
+          {resultat.temoins > 0 && (
+            <div className="sub">
+              Le groupe témoin n’a <strong>volontairement</strong> rien reçu. C’est lui qui permettra
+              de dire combien de gens sont revenus <em>grâce à</em> la campagne, et non simplement
+              combien sont revenus.
+            </div>
+          )}
+
+          {resultat.exclus.length > 0 && (
+            <div>
+              <div className="st-lib" style={{ marginBottom: 6 }}>Écartés, et pourquoi</div>
+              <div style={{ overflowX: 'auto' }}>
+                <table className="tbl">
+                  <thead><tr><th>Motif</th><th className="num">Nombre</th></tr></thead>
+                  <tbody>
+                    {resultat.exclus.map((e) => (
+                      <tr key={e.motif}>
+                        <td>{e.motif}</td>
+                        <td className="num">{e.nombre}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="sub" style={{ marginTop: 6 }}>
+                Beaucoup d’exclusions « sans consentement » veut dire qu’il faut travailler le
+                recueil du consentement — pas le message.
+              </div>
+            </div>
+          )}
+
+          {!resultat.envoiReelDisponible && (
+            <div className="alert warn" style={{ margin: 0 }}>
+              Aucun envoi réel n’est branché : ces messages ont été <strong>journalisés</strong>,
+              pas expédiés.
+            </div>
+          )}
+        </div>
+      )}
+    </Modal>
+  )
+}
+
+/**
+ * LA RÉDACTION.
+ *
+ * **Les variables sont proposées, pas devinées.** Une variable que le serveur ne sait pas remplir
+ * exclurait chaque destinataire au moment de l'envoi — l'exploitant l'apprendrait sur un rapport
+ * disant « 1 240 exclus ». La liste des variables disponibles est donc affichée sous le champ.
+ *
+ * **Le groupe témoin dit ce qu'il coûte.** Dix pour cent de l'audience non contactée, c'est dix pour
+ * cent de chiffre d'affaires potentiel sacrifié pour savoir si la campagne sert à quelque chose. Le
+ * décider en silence serait malhonnête ; le proposer sans l'expliquer le serait aussi.
+ */
+function RedactionCampagne({ campagne, segments, onFermer, onEnregistre, onErreur }) {
+  const ouvert = campagne !== null && campagne !== undefined
+  const existante = ouvert && !!campagne.id
+
+  const [label, setLabel] = useState('')
+  const [segment, setSegment] = useState('')
+  const [channel, setChannel] = useState('email')
+  const [subject, setSubject] = useState('')
+  const [body, setBody] = useState('')
+  const [temoin, setTemoin] = useState(10)
+  const [fenetre, setFenetre] = useState(30)
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    if (!ouvert) return
+    setLabel(campagne.label || '')
+    setSegment(idDe(campagne.segment) || '')
+    setChannel(campagne.channel || 'email')
+    setSubject(campagne.subject || '')
+    setBody(campagne.body || '')
+    setTemoin(campagne.controlGroupPercent ?? 10)
+    setFenetre(campagne.attributionWindowDays ?? 30)
+  }, [ouvert, campagne])
+
+  async function enregistrer() {
+    setBusy(true)
+    onErreur(null)
+    try {
+      const corps = {
+        label: label.trim(),
+        segment: `/api/segments/${segment}`,
+        channel,
+        subject: subject.trim(),
+        body,
+        controlGroupPercent: Number(temoin),
+        attributionWindowDays: Number(fenetre),
+      }
+      if (existante) {
+        await api.majCampagne(campagne.id, corps)
+        await onEnregistre('Campagne modifiée.')
+      } else {
+        await api.creerCampagne(corps)
+        await onEnregistre('Campagne créée. Elle ne partira que si vous l’envoyez.')
+      }
+    } catch (e) {
+      onErreur(e.message || 'La campagne n’a pas pu être enregistrée.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal
+      open={ouvert}
+      onClose={onFermer}
+      titre={existante ? 'Modifier la campagne' : 'Nouvelle campagne'}
+      taille="lg"
+    >
+      <div style={{ display: 'grid', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <label style={{ display: 'grid', gap: 4 }}>
+            <span className="sub">Nom de la campagne</span>
+            <input className="input" value={label} maxLength={120} onChange={(e) => setLabel(e.target.value)} />
+          </label>
+
+          <label style={{ display: 'grid', gap: 4 }}>
+            <span className="sub">Audience</span>
+            <select className="select" value={segment} onChange={(e) => setSegment(e.target.value)}>
+              <option value="">Choisir un segment…</option>
+              {segments.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+            </select>
+          </label>
+        </div>
+
+        <label style={{ display: 'grid', gap: 4 }}>
+          <span className="sub">Canal</span>
+          <select className="select" value={channel} onChange={(e) => setChannel(e.target.value)}>
+            {CANAUX.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+          <span className="sub" style={{ fontSize: 12 }}>
+            Un message écrit pour un courriel fait un mauvais SMS. Deux canaux, c’est deux campagnes.
+          </span>
+        </label>
+
+        <label style={{ display: 'grid', gap: 4 }}>
+          <span className="sub">Objet</span>
+          <input className="input" value={subject} maxLength={200} onChange={(e) => setSubject(e.target.value)} />
+        </label>
+
+        <label style={{ display: 'grid', gap: 4 }}>
+          <span className="sub">Message</span>
+          <textarea rows={7} value={body} onChange={(e) => setBody(e.target.value)} />
+          <span className="sub" style={{ fontSize: 12 }}>
+            Variables disponibles&nbsp;: <code>{'{{prenom}}'}</code> <code>{'{{nom}}'}</code>{' '}
+            <code>{'{{civilite}}'}</code>. Une variable que le serveur ne sait pas remplir écarte la
+            personne concernée plutôt que d’écrire «&nbsp;Bonjour ,&nbsp;».
+          </span>
+        </label>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <label style={{ display: 'grid', gap: 4 }}>
+            <span className="sub">Groupe témoin (%)</span>
+            <input
+              className="input"
+              type="number"
+              min="0"
+              max="50"
+              value={temoin}
+              onChange={(e) => setTemoin(e.target.value)}
+            />
+            <span className="sub" style={{ fontSize: 12 }}>
+              Cette part ne recevra rien. C’est ce qui permet de dire si la campagne a servi à
+              quelque chose — et c’est aussi autant de clients non sollicités. Zéro pour la désactiver.
+            </span>
+          </label>
+
+          <label style={{ display: 'grid', gap: 4 }}>
+            <span className="sub">Fenêtre d’attribution (jours)</span>
+            <input
+              className="input"
+              type="number"
+              min="1"
+              max="365"
+              value={fenetre}
+              onChange={(e) => setFenetre(e.target.value)}
+            />
+            <span className="sub" style={{ fontSize: 12 }}>
+              Durée pendant laquelle une visite sera rattachée à cette campagne. Trente jours pour
+              une piscine, davantage pour un musée.
+            </span>
+          </label>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button className="btn ghost" type="button" onClick={onFermer} disabled={busy}>Annuler</button>
+          <button
+            className="btn primary"
+            type="button"
+            onClick={enregistrer}
+            disabled={busy || label.trim() === '' || segment === '' || body.trim() === ''}
           >
             Enregistrer
           </button>
