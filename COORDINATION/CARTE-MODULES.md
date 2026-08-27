@@ -174,3 +174,86 @@ d'autres noms, et il ne manquait qu'un écran et deux briques.
   Voir `INTEGRATION-IFRAME.md`.
 - **La suite complète de tests n'a jamais été menée à son terme** : 835 tests qui recréent un schéma
   de ~300 tables par classe, arrêtés après six heures. Les modules touchés sont validés un par un.
+
+---
+
+# Relevé du 27/08/2026 en fin de journée — l'écart cesse de grandir
+
+**Les trois chantiers « qui ne sont pas du développement » de la veille sont fermés.** Compte client
+cloisonné par les achats, module commercial distinct du support, `frame-ancestors` déclaré par
+vitrine. Deux chantiers se sont ajoutés en route, dont un que le premier a révélé.
+
+## Le quinzième garde-fou : une opération neuve a un écran, ou dit pourquoi elle n'en a pas
+
+`mesurer-ecart.mjs` constatait depuis une semaine ; un constat n'arrête rien, et le nombre
+d'opérations exposées est passé de 1 042 à 1 086 pendant qu'on le regardait chaque jour.
+
+> **Une mesure qui ne refuse rien ne fait que documenter la dérive.**
+
+Deux sorties, et c'est voulu qu'il y en ait deux : brancher l'opération, ou déclarer `@sans-ecran:`
+avec sa raison dans le fichier PHP. **Ce qui est refusé n'est pas l'absence d'écran, c'est l'absence
+de décision** — rien ne distinguait « volontairement sans interface » de « oublié ».
+
+Le calcul vit désormais dans `frontend/scripts/lib/ecart.mjs`, appelé par la mesure **et** par le
+garde-fou : *un seul calcul, deux appelants*.
+
+## Et la mesure elle-même était fausse
+
+Elle lisait `api/client.js`, et lui seul. **La boutique en ligne a son propre client** —
+`public/api/boutiqueClient.js`, vingt-et-un appels : catalogue, panier, paiement, billets, documents
+légaux. Toutes ces opérations comptaient comme « qu'aucun utilisateur ne peut déclencher », alors
+qu'elles sont exactement ce qu'un client final déclenche en achetant.
+
+> **Une mesure qui ignore un front entier ne se trompe pas un peu : elle compte comme absent ce qui
+> marche.**
+
+Le défaut ne se voyait pas parce que le chiffre restait plausible — 27,6 % d'API atteignable est aussi
+crédible que 29,4 %. Un filet refuse maintenant tout fichier qui **définit un transport HTTP** sans
+être déclaré comme front. Le critère n'est pas le nom du fichier : une première version signalait
+`ContactsClient.jsx` et `ActivitesClient.jsx`, qui sont des composants React — *un contrôle qui crie
+sur des innocents finit désarmé*.
+
+## Ce que le garde-fou a trouvé en une journée
+
+Cinq chemins manquants, tous de la même famille : **le serveur est juste, le client aussi, et le
+chemin entre les deux n'existe pas.** Aucune assertion ne porte sur un chemin absent — c'est pourquoi
+la suite de tests ne les voyait pas.
+
+| Ce qui manquait | Ce que ça rendait impossible |
+|---|---|
+| Inscription en boutique | Un visiteur sans compte ne pouvait pas en obtenir un |
+| Vider le panier | Au-delà de cinq articles, on ferme l'onglet |
+| Écrire un article d'aide | La base de connaissances était vide **pour toujours** |
+| Suspendre/révoquer un badge | Un employé parti gardait une clé physique active |
+| Déclarer une absence | Le moteur de créneaux la gérait depuis le début, sans entrée |
+| Réaffecter une demande | Une demande affectée à un absent n'avait que l'escalade, qui ment |
+| Historique d'un document | « v4 » sans dire lesquelles |
+| Ventes impayées de la régie | Un solde lu sans son complément a l'air bon |
+
+Trois appels ont été **retirés** plutôt que branchés — `articleAide`, `documentsLegauxPublics`,
+`opportunites` : tout appel mort n'est pas un écran manquant, et le dire est aussi une décision.
+
+## Les chiffres du soir
+
+| | 26/08 | 27/08 matin | 27/08 soir |
+|---|---:|---:|---:|
+| Opérations exposées | 1 049 | 1 086 | 1 086 |
+| Atteignables depuis un écran | ~234 | 300 *(mesure fausse)* | **336** |
+| Part atteignable | — | 27,6 % *(faux)* | **30,9 %** |
+| Appels morts dans un client | — | 17 | **7** |
+| Garde-fous | 14 | 14 | **15** |
+
+## Ce qui reste, et qui n'est pas du développement
+
+- **Quelle part de l'API est volontairement sans écran ?** Le cliquet gèle 750 opérations sans dire
+  lesquelles sont un produit et lesquelles un oubli. Si Fluvia vise aussi des intégrateurs, une bonne
+  partie est un produit assumé — et le déclarer module par module ferait tomber le plafond d'un coup,
+  pour la bonne raison. Décision de produit.
+- **`frame-ancestors` est déclaré, pas appliqué.** Le fragment nginx se génère par
+  `php bin/console app:integration:csp` ; le coller et recharger le serveur est une décision
+  d'exploitation.
+- **Les mentions légales attendent des faits.** Tant que l'identité légale porte des données de
+  démonstration, les six documents générés sont exacts **et faux**.
+- **La suite complète** a été menée pour la première fois sans interruption ; voir le relevé du jour
+  pour son résultat. Sa lenteur (~6 h) vient du `dropSchema`/`createSchema` par classe de test, pas du
+  nombre de tests.
