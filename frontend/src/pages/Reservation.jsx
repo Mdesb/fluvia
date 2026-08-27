@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, useCallback } from 'react'
 import { jourLocal } from '../components/Liste.jsx'
 import { api, membres } from '../api/client.js'
 import PlanningSemaine from '../components/PlanningSemaine.jsx'
+import Disponibilites from '../components/Disponibilites.jsx'
 import { euros } from '../api/produit.js'
 import NoShowSection from '../components/NoShowSection.jsx'
 
@@ -158,11 +159,20 @@ export default function Reservation({ etabActif, droits = [], session }) {
           <button type="button" className={vue === 'liste' ? 'on' : ''} onClick={() => setVue('liste')}>
             Liste par jour
           </button>
+          {/* LES HORAIRES DES RESSOURCES, QUI N'AVAIENT AUCUN ECRAN.
+              `DisponibiliteRessource` et `IndisponibiliteRessource` exposent un CRUD complet depuis le
+              debut, et le front ne les mentionnait nulle part. Sans eux, une ressource ne peut rien
+              recevoir -- et rien ne le disait. */}
+          <button type="button" className={vue === 'horaires' ? 'on' : ''} onClick={() => setVue('horaires')}>
+            Horaires et absences
+          </button>
         </div>
       )}
 
       {chargement ? (
         <div className="center" style={{ minHeight: 200 }}><div className="spinner" /></div>
+      ) : vue === 'horaires' ? (
+        <Disponibilites droits={droits} />
       ) : vue === 'semaine' ? (
         <PlanningSemaine
           creneaux={creneaux}

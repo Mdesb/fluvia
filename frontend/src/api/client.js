@@ -347,6 +347,24 @@ export const api = {
   // Réservation / Planning (M5).
   reservationRessources: () => request('/api/reservation_ressources', { query: { itemsPerPage: 100 } }),
   reservationCreneaux: () => request('/api/reservation_creneaus', { query: { itemsPerPage: 200 } }),
+  // HORAIRES ET ABSENCES D'UNE RESSOURCE -- exposes en CRUD complet depuis le debut, sans un
+  // seul appelant. Un coiffeur ne pouvait pas declarer qu'il travaille le mardi.
+  //
+  // Chargees ENTIERES, sans le `SearchFilter` sur `ressource` : c'est la famille D58, ou le
+  // filtre rend soit tout (parametre ignore) soit rien (identifiant lie sans type), sans jamais
+  // lever. Le regroupement se fait a l'ecran, ou il est visible ; les volumes le permettent.
+  reservationDisponibilites: () =>
+    request('/api/reservation_disponibilites', { query: { itemsPerPage: 300 } }),
+  creerDisponibilite: (corps) =>
+    request('/api/reservation_disponibilites', { method: 'POST', body: corps, ld: true }),
+  supprimerDisponibilite: (id) =>
+    request(`/api/reservation_disponibilites/${id}`, { method: 'DELETE' }),
+  reservationIndisponibilites: () =>
+    request('/api/reservation_indisponibilites', { query: { itemsPerPage: 300 } }),
+  creerIndisponibilite: (corps) =>
+    request('/api/reservation_indisponibilites', { method: 'POST', body: corps, ld: true }),
+  supprimerIndisponibilite: (id) =>
+    request(`/api/reservation_indisponibilites/${id}`, { method: 'DELETE' }),
   reservationActivites: () => request('/api/reservation_activites', { query: { itemsPerPage: 100 } }),
   reservations: () => request('/api/reservations', { query: { itemsPerPage: 200 } }),
   // No-show (D27) : les deux operations existaient et n'etaient appelees de nulle part.
