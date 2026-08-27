@@ -55,6 +55,20 @@ final class CautionFixtures extends Fixture implements DependentFixtureInterface
             return;
         }
 
+        // ── LE BLOC DE DEMONSTRATION NE SE POSE QU'UNE FOIS ──────────────────────────────────
+        //
+        // `caution_caution` porte `uniq_caution_cible_active` : une seule caution active par cible.
+        // Sans garde, un second chargement s'y heurte. La sentinelle vise LA caution de demonstration
+        // par sa cible, pas « une caution quelconque » : Piscine et Patinoire en creent aussi, et une
+        // sentinelle large aurait fait sauter ce bloc quand l'une d'elles passe en premier.
+        if ($manager->getRepository(\App\Caution\Entity\Caution::class)
+            ->findOneBy(['referenceCible' => self::REFERENCE_CIBLE_DEMO]) !== null
+        ) {
+            $manager->flush();
+
+            return;
+        }
+
         $caution = new Caution();
         $caution->setEtablissement($etabA)
             ->setTypeCible('demo.cible')

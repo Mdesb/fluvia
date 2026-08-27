@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Reporting\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\Acces\Entity\Controleur;
 use App\Acces\Entity\EspaceAcces;
 use App\Acces\Entity\JaugeFmi;
@@ -56,6 +57,8 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
  */
 final class L11Fixtures extends Fixture
 {
+    use FixturesIdempotentes;
+
     public const GROUPE_NOM = 'Groupe Démo Reporting';
     public const REGION_A_NOM = 'Région A Reporting';
     public const REGION_B_NOM = 'Région B Reporting';
@@ -146,6 +149,21 @@ final class L11Fixtures extends Fixture
         $this->profilExploitant($manager, '111111111', TypeExploitant::RegieDirecte, $siteA1);
         $this->profilExploitant($manager, '222222222', TypeExploitant::Dsp, $siteA2);
         $this->profilExploitant($manager, '333333333', TypeExploitant::RegieDirecte, $siteB1);
+
+        // ── LE BLOC DE DÉMONSTRATION NE SE POSE QU'UNE FOIS ──────────────────────────────────
+        //
+        // Tout ce qui suit est un jeu de données cohérent, pas un référentiel : le reposer sur une
+        // base qui l'a déjà écraserait ce qui a été corrigé à la main depuis, ou le dupliquerait
+        // pour les entités sans contrainte d'unicité — silencieusement.
+        //
+        // Les permissions et les rôles restent AU-DESSUS de cette garde : ils doivent être rejoués à
+        // chaque chargement, sans quoi un droit ajouté au code n'atteindrait jamais une base
+        // existante.
+        if ($manager->getRepository(Passage::class)->findOneBy([]) !== null) {
+            $manager->flush();
+
+            return;
+        }
 
         // --- Ventes (M2) : CA du jour par site ---
         $this->creerVenteEtSession($manager, $siteA1, self::CA_A1, $utilisateurAdmin);

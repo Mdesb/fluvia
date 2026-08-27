@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Support\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\Organisation\Entity\Etablissement;
 use App\Organisation\Entity\Groupe;
 use App\Organisation\Entity\Region;
@@ -26,6 +27,8 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
  */
 final class SupportFixtures extends Fixture
 {
+    use FixturesIdempotentes;
+
     public const GROUPE_NOM = 'Groupe Démo Support';
     public const REGION_NOM = 'Région Démo Support';
     public const ETAB_A_NOM = 'Site A Support';
@@ -155,7 +158,7 @@ final class SupportFixtures extends Fixture
             return $existante;
         }
 
-        $permission = (new Permission())->setModule('support')->setAction($action);
+        $permission = $this->permissionNommee($manager, 'support', $action);
         $manager->persist($permission);
 
         return $permission;

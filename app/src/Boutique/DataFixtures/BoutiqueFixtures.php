@@ -99,7 +99,7 @@ final class BoutiqueFixtures extends Fixture implements DependentFixtureInterfac
         }
 
         // --- Permissions boutique.* + octroi complet à l'administrateur (RG-SOCLE-02/03) ---
-        $permBoutiqueTout = (new Permission())->setModule('boutique')->setAction('*');
+        $permBoutiqueTout = $this->permissionNommee($manager, 'boutique', '*');
         $manager->persist($permBoutiqueTout);
         $actions = [
             'gerer_vitrine', 'gerer_promo', 'gerer_connecteur_ota', 'lire', 'traiter_remboursement',
@@ -117,22 +117,22 @@ final class BoutiqueFixtures extends Fixture implements DependentFixtureInterfac
         }
 
         // --- Rôle « Gestionnaire boutique » (§3 spec-boutique.md) ---
-        $roleGestionnaire = (new Role())->setNom('Gestionnaire boutique');
+        $roleGestionnaire = $this->roleNomme($manager, 'Gestionnaire boutique');
         foreach (['lire', 'gerer_vitrine', 'gerer_promo', 'gerer_connecteur_ota'] as $action) {
             $roleGestionnaire->addPermission($permissions[$action]);
         }
         $manager->persist($roleGestionnaire);
         $gestionnaire = $this->utilisateur($manager, self::GESTIONNAIRE_EMAIL, self::GESTIONNAIRE_MDP, 'Gestionnaire Boutique');
-        $manager->persist((new Affectation())->setUtilisateur($gestionnaire)->setRole($roleGestionnaire)->setEtablissement($etabA));
+        $this->affectationUnique($manager, $gestionnaire, $roleGestionnaire, $etabA);
 
         // --- Rôle « Responsable boutique » (traitement remboursement/retrait) ---
-        $roleResponsable = (new Role())->setNom('Responsable boutique');
+        $roleResponsable = $this->roleNomme($manager, 'Responsable boutique');
         foreach (['lire', 'traiter_remboursement', 'traiter_retrait'] as $action) {
             $roleResponsable->addPermission($permissions[$action]);
         }
         $manager->persist($roleResponsable);
         $responsable = $this->utilisateur($manager, self::RESPONSABLE_EMAIL, self::RESPONSABLE_MDP, 'Responsable Boutique');
-        $manager->persist((new Affectation())->setUtilisateur($responsable)->setRole($roleResponsable)->setEtablissement($etabA));
+        $this->affectationUnique($manager, $responsable, $roleResponsable, $etabA);
 
         // --- Rôle système RoleClientFinal (§1.4 plan-boutique.md, idempotent) ---
         $roleClientFinal = $manager->getRepository(Role::class)->findOneBy(['nom' => CreationCompteHandler::ROLE_CLIENT_FINAL_NOM]);
@@ -143,12 +143,27 @@ final class BoutiqueFixtures extends Fixture implements DependentFixtureInterfac
                 $perm = $manager->getRepository(Permission::class)->findOneBy(['module' => $module, 'action' => $action])
                     ?? $permissions[$action] ?? null;
                 if (!$perm instanceof Permission) {
-                    $perm = (new Permission())->setModule($module)->setAction($action);
+                    $perm = $this->permissionNommee($manager, $module, $action);
                     $manager->persist($perm);
                 }
                 $roleClientFinal->addPermission($perm);
             }
             $manager->persist($roleClientFinal);
+        }
+
+        // ── LE BLOC DE DÉMONSTRATION NE SE POSE QU'UNE FOIS ──────────────────────────────────
+        //
+        // Tout ce qui suit est un jeu de données cohérent, pas un référentiel : le reposer sur une
+        // base qui l'a déjà écraserait ce qui a été corrigé à la main depuis, ou le dupliquerait
+        // pour les entités sans contrainte d'unicité — silencieusement.
+        //
+        // Les permissions et les rôles, eux, restent AU-DESSUS de cette garde : ils doivent être
+        // rejoués à chaque chargement, sans quoi un droit ajouté au code n'atteindrait jamais une
+        // base existante.
+        if ($manager->getRepository(Vitrine::class)->findOneBy([]) !== null) {
+            $manager->flush();
+
+            return;
         }
 
         // --- Vitrine régie directe (établissement A, réutilise le ProfilExploitant M6 existant) ---
@@ -275,13 +290,20 @@ final class BoutiqueFixtures extends Fixture implements DependentFixtureInterfac
         $compteDemo = (new CompteClient())->setUtilisateur($utilisateurClient)->setClient($clientDemo)
             ->setVitrineCreation($vitrineA)->setEtablissement($etabA);
         $manager->persist($compteDemo);
-        $manager->persist((new Affectation())->setUtilisateur($utilisateurClient)->setRole($roleClientFinal)->setEtablissement($etabA));
+        $this->affectationUnique($manager, $utilisateurClient, $roleClientFinal, $etabA);
 
         $manager->flush();
     }
 
     private function utilisateur(ObjectManager $manager, string $email, string $motDePasse, string $nom): Utilisateur
     {
+        $existant = $manager->getRepository(Utilisateur::class)->findOneBy(['email' => $email]);
+        if ($existant instanceof Utilisateur) {
+            // Le mot de passe n'est pas repose : le rejouer ecraserait un mot de passe change
+            // depuis, et recalculerait un hachage pour rien a chaque chargement.
+            return $existant->setNom($nom)->setActif(true);
+        }
+
         $utilisateur = (new Utilisateur())->setEmail($email)->setNom($nom)->setStatut(StatutUtilisateur::Actif);
         $utilisateur->setMotDePasse($this->hasher->hashPassword($utilisateur, $motDePasse));
         $manager->persist($utilisateur);

@@ -90,7 +90,7 @@ final class MuseeFixtures extends Fixture implements DependentFixtureInterface
         }
 
         // --- Permissions musee.* + octroi complet à l'administrateur (RG-SOCLE-02/03) ---
-        $permMuseeTout = (new Permission())->setModule('musee')->setAction('*');
+        $permMuseeTout = $this->permissionNommee($manager, 'musee', '*');
         $manager->persist($permMuseeTout);
         $actions = ['lire', 'configurer', 'superviser_salle', 'gerer_visite', 'gerer_dossier_groupe', 'gerer_pass', 'gerer_ota', 'gerer'];
         $permissions = [];
@@ -108,7 +108,7 @@ final class MuseeFixtures extends Fixture implements DependentFixtureInterface
         $permOffreModifier = $manager->getRepository(Permission::class)->findOneBy(['module' => 'offre', 'action' => 'modifier']);
 
         // --- Rôle « Gestionnaire d'offre culturelle » (§3 spec-musee.md) ---
-        $roleGestionnaire = (new Role())->setNom('Gestionnaire offre culturelle');
+        $roleGestionnaire = $this->roleNomme($manager, 'Gestionnaire offre culturelle');
         foreach (['lire', 'configurer'] as $action) {
             $roleGestionnaire->addPermission($permissions[$action]);
         }
@@ -120,34 +120,49 @@ final class MuseeFixtures extends Fixture implements DependentFixtureInterface
         }
         $manager->persist($roleGestionnaire);
         $gestionnaire = $this->utilisateur($manager, self::GESTIONNAIRE_EMAIL, self::GESTIONNAIRE_MDP, 'Gestionnaire Offre Culturelle');
-        $manager->persist((new Affectation())->setUtilisateur($gestionnaire)->setRole($roleGestionnaire)->setEtablissement($etabA));
+        $this->affectationUnique($manager, $gestionnaire, $roleGestionnaire, $etabA);
 
         // --- Rôle « Coordinateur de visites guidées » ---
-        $roleCoordinateur = (new Role())->setNom('Coordinateur visites guidées');
+        $roleCoordinateur = $this->roleNomme($manager, 'Coordinateur visites guidées');
         foreach (['lire', 'gerer_visite'] as $action) {
             $roleCoordinateur->addPermission($permissions[$action]);
         }
         $manager->persist($roleCoordinateur);
         $coordinateur = $this->utilisateur($manager, self::COORDINATEUR_EMAIL, self::COORDINATEUR_MDP, 'Coordinateur Visites Guidées');
-        $manager->persist((new Affectation())->setUtilisateur($coordinateur)->setRole($roleCoordinateur)->setEtablissement($etabA));
+        $this->affectationUnique($manager, $coordinateur, $roleCoordinateur, $etabA);
 
         // --- Rôle « Agent d'accueil / caisse » ---
-        $roleAgent = (new Role())->setNom('Agent accueil musée');
+        $roleAgent = $this->roleNomme($manager, 'Agent accueil musée');
         foreach (['lire', 'gerer_dossier_groupe', 'gerer_pass', 'superviser_salle'] as $action) {
             $roleAgent->addPermission($permissions[$action]);
         }
         $manager->persist($roleAgent);
         $agent = $this->utilisateur($manager, self::AGENT_EMAIL, self::AGENT_MDP, 'Agent Accueil Musée');
-        $manager->persist((new Affectation())->setUtilisateur($agent)->setRole($roleAgent)->setEtablissement($etabA));
+        $this->affectationUnique($manager, $agent, $roleAgent, $etabA);
 
         // --- Rôle « Gestionnaire de distribution OTA » ---
-        $roleOta = (new Role())->setNom('Gestionnaire distribution OTA');
+        $roleOta = $this->roleNomme($manager, 'Gestionnaire distribution OTA');
         foreach (['lire', 'gerer_ota'] as $action) {
             $roleOta->addPermission($permissions[$action]);
         }
         $manager->persist($roleOta);
         $gestionnaireOta = $this->utilisateur($manager, self::GESTIONNAIRE_OTA_EMAIL, self::GESTIONNAIRE_OTA_MDP, 'Gestionnaire Distribution OTA');
-        $manager->persist((new Affectation())->setUtilisateur($gestionnaireOta)->setRole($roleOta)->setEtablissement($etabA));
+        $this->affectationUnique($manager, $gestionnaireOta, $roleOta, $etabA);
+
+        // ── LE BLOC DE DÉMONSTRATION NE SE POSE QU'UNE FOIS ──────────────────────────────────
+        //
+        // Tout ce qui suit est un jeu de données cohérent, pas un référentiel : le reposer sur une
+        // base qui l'a déjà écraserait ce qui a été corrigé à la main depuis, ou le dupliquerait
+        // pour les entités sans contrainte d'unicité — silencieusement.
+        //
+        // Les permissions et les rôles, eux, restent AU-DESSUS de cette garde : ils doivent être
+        // rejoués à chaque chargement, sans quoi un droit ajouté au code n'atteindrait jamais une
+        // base existante.
+        if ($manager->getRepository(Exposition::class)->findOneBy([]) !== null) {
+            $manager->flush();
+
+            return;
+        }
 
         // --- Paramètres établissement (décision n°7 du plan) ---
         $parametre = (new ParametreMuseeEtablissement())->setEtablissement($etabA)
@@ -281,6 +296,13 @@ final class MuseeFixtures extends Fixture implements DependentFixtureInterface
 
     private function utilisateur(ObjectManager $manager, string $email, string $motDePasse, string $nom): Utilisateur
     {
+        $existant = $manager->getRepository(Utilisateur::class)->findOneBy(['email' => $email]);
+        if ($existant instanceof Utilisateur) {
+            // Le mot de passe n'est pas repose : le rejouer ecraserait un mot de passe change
+            // depuis, et recalculerait un hachage pour rien a chaque chargement.
+            return $existant->setNom($nom)->setActif(true);
+        }
+
         $utilisateur = (new Utilisateur())->setEmail($email)->setNom($nom)->setActif(true);
         $utilisateur->setMotDePasse($this->hasher->hashPassword($utilisateur, $motDePasse));
         $manager->persist($utilisateur);

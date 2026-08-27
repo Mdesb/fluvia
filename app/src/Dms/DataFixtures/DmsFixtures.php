@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Dms\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\DataFixtures\SocleFixtures;
 use App\Dms\Entity\RetentionPolicy;
 use App\Dms\Enum\DocumentCategory;
@@ -23,6 +24,8 @@ use Doctrine\Persistence\ObjectManager;
  */
 final class DmsFixtures extends Fixture implements DependentFixtureInterface
 {
+    use FixturesIdempotentes;
+
     public const ROLE_LIENS_PUBLICS = 'GED — Gestion des liens publics';
     public const POLICY_ACCOUNTING = 'fr_accounting_10y';
     public const POLICY_HR = 'fr_hr_5y';
@@ -58,7 +61,7 @@ final class DmsFixtures extends Fixture implements DependentFixtureInterface
         // dms.manage_public_link — rien d'autre (DedicatedRolePublicLinkFixtureTest le garde).
         // `addPermission` est gardé par `contains` : réattacher sur un rôle réutilisé est sans effet.
         $roleLiensPublics = $manager->getRepository(Role::class)->findOneBy(['nom' => self::ROLE_LIENS_PUBLICS])
-            ?? (new Role())->setNom(self::ROLE_LIENS_PUBLICS);
+            ?? $this->roleNomme($manager, self::ROLE_LIENS_PUBLICS);
         $roleLiensPublics->setEstModele(true);
         $roleLiensPublics->addPermission($permRead)->addPermission($permManagePublicLink);
         $manager->persist($roleLiensPublics);
@@ -79,7 +82,7 @@ final class DmsFixtures extends Fixture implements DependentFixtureInterface
             return $existante;
         }
 
-        $permission = (new Permission())->setModule('dms')->setAction($action);
+        $permission = $this->permissionNommee($manager, 'dms', $action);
         $manager->persist($permission);
 
         return $permission;

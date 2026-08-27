@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\Organisation\Entity\Etablissement;
 use App\Organisation\Entity\Groupe;
 use App\Organisation\Entity\Region;
@@ -21,6 +22,8 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
  */
 final class SocleFixtures extends Fixture
 {
+    use FixturesIdempotentes;
+
     // Valeurs déterministes exploitées par les tests.
     public const ETAB_A_NOM = 'Piscine A';
     public const ETAB_B_NOM = 'Patinoire B';

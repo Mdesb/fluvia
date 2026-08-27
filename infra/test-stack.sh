@@ -110,9 +110,15 @@ up)
     # contre une purge suivie d'un echec ». La reponse etait : pas comme ca, tant que ceci existe.
     #
     # Une fixture est un jeu de DONNEES. Le schema appartient au harnais et aux migrations.
-    php_run php bin/console doctrine:query:sql \
-        "CREATE SEQUENCE IF NOT EXISTS acces_snapshot_seq START WITH 1 INCREMENT BY 1" \
-        --env=test >/dev/null 2>&1 || true
+    # ⚠ NE PAS REPASSER PAR `bin/console` ICI. La version precedente appelait
+    # `doctrine:query:sql`, qui N'EXISTE PAS dans cette version de Doctrine, et masquait l'echec par
+    # `|| true` : le harnais annoncait « schema monte » sans avoir pose la sequence. La chaine qui
+    # s'ensuivait ne nommait jamais la cause -- fixture qui cree la sequence en DDL, validation
+    # implicite MariaDB, transaction de l'executeur perdue, et un message final qui accuse le pilote
+    # (« There is no active transaction »).
+    docker exec "$DB" mariadb -uroot -proot "app_test$TOKEN" -e \
+        "CREATE SEQUENCE IF NOT EXISTS acces_snapshot_seq START WITH 1 INCREMENT BY 1"
+    echo "sequence: acces_snapshot_seq"
     echo "schéma  : app_test$TOKEN monté"
     ;;
 

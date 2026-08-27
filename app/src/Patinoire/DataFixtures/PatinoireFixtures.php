@@ -73,7 +73,7 @@ final class PatinoireFixtures extends Fixture implements DependentFixtureInterfa
         }
 
         // --- Permissions patinoire.* + octroi complet à l'administrateur (RG-SOCLE-02/03) ---
-        $permPatinoireTout = (new Permission())->setModule('patinoire')->setAction('*');
+        $permPatinoireTout = $this->permissionNommee($manager, 'patinoire', '*');
         $manager->persist($permPatinoireTout);
         $actions = [
             'lire', 'configurer', 'gerer_location', 'gerer_liste_attente', 'gerer_affutage',
@@ -91,31 +91,46 @@ final class PatinoireFixtures extends Fixture implements DependentFixtureInterfa
         }
 
         // --- Rôle « Agent de comptoir patinoire » (§3 spec-patinoire.md) ---
-        $roleAgent = (new Role())->setNom('Agent de comptoir patinoire');
+        $roleAgent = $this->roleNomme($manager, 'Agent de comptoir patinoire');
         foreach (['lire', 'gerer_location', 'gerer_liste_attente'] as $action) {
             $roleAgent->addPermission($permissions[$action]);
         }
         $manager->persist($roleAgent);
         $agent = $this->utilisateur($manager, self::AGENT_EMAIL, self::AGENT_MDP, 'Agent Comptoir Patinoire');
-        $manager->persist((new Affectation())->setUtilisateur($agent)->setRole($roleAgent)->setEtablissement($etabA));
+        $this->affectationUnique($manager, $agent, $roleAgent, $etabA);
 
         // --- Rôle « Technicien / atelier » (§3 spec-patinoire.md) ---
-        $roleTechnicien = (new Role())->setNom('Technicien atelier patinoire');
+        $roleTechnicien = $this->roleNomme($manager, 'Technicien atelier patinoire');
         foreach (['lire', 'gerer_affutage'] as $action) {
             $roleTechnicien->addPermission($permissions[$action]);
         }
         $manager->persist($roleTechnicien);
         $technicien = $this->utilisateur($manager, self::TECHNICIEN_EMAIL, self::TECHNICIEN_MDP, 'Technicien Atelier Patinoire');
-        $manager->persist((new Affectation())->setUtilisateur($technicien)->setRole($roleTechnicien)->setEtablissement($etabA));
+        $this->affectationUnique($manager, $technicien, $roleTechnicien, $etabA);
 
         // --- Rôle « Gestionnaire glace (planning) » (§3 spec-patinoire.md) ---
-        $roleGestionnaireGlace = (new Role())->setNom('Gestionnaire glace patinoire');
+        $roleGestionnaireGlace = $this->roleNomme($manager, 'Gestionnaire glace patinoire');
         foreach (['lire', 'arbitrer_surbooking'] as $action) {
             $roleGestionnaireGlace->addPermission($permissions[$action]);
         }
         $manager->persist($roleGestionnaireGlace);
         $gestionnaireGlace = $this->utilisateur($manager, self::GESTIONNAIRE_GLACE_EMAIL, self::GESTIONNAIRE_GLACE_MDP, 'Gestionnaire Glace Patinoire');
-        $manager->persist((new Affectation())->setUtilisateur($gestionnaireGlace)->setRole($roleGestionnaireGlace)->setEtablissement($etabA));
+        $this->affectationUnique($manager, $gestionnaireGlace, $roleGestionnaireGlace, $etabA);
+
+        // ── LE BLOC DE DÉMONSTRATION NE SE POSE QU'UNE FOIS ──────────────────────────────────
+        //
+        // Tout ce qui suit est un jeu de données cohérent, pas un référentiel : le reposer sur une
+        // base qui l'a déjà écraserait ce qui a été corrigé à la main depuis, ou le dupliquerait
+        // pour les entités sans contrainte d'unicité — silencieusement.
+        //
+        // Les permissions et les rôles, eux, restent AU-DESSUS de cette garde : ils doivent être
+        // rejoués à chaque chargement, sans quoi un droit ajouté au code n'atteindrait jamais une
+        // base existante.
+        if ($manager->getRepository(ZonePatinoire::class)->findOneBy([]) !== null) {
+            $manager->flush();
+
+            return;
+        }
 
         // --- Zones glace / gradins (RG-PAT-02, spécialisation EspaceAcces L3, patron Poss) ---
         $espaceGlace = (new Espace())->setNom('Piste de glace')->setEtablissement($etabA)->setType('glace');
@@ -198,6 +213,13 @@ final class PatinoireFixtures extends Fixture implements DependentFixtureInterfa
 
     private function utilisateur(ObjectManager $manager, string $email, string $motDePasse, string $nom): Utilisateur
     {
+        $existant = $manager->getRepository(Utilisateur::class)->findOneBy(['email' => $email]);
+        if ($existant instanceof Utilisateur) {
+            // Le mot de passe n'est pas repose : le rejouer ecraserait un mot de passe change
+            // depuis, et recalculerait un hachage pour rien a chaque chargement.
+            return $existant->setNom($nom)->setActif(true);
+        }
+
         $utilisateur = (new Utilisateur())->setEmail($email)->setNom($nom)->setActif(true);
         $utilisateur->setMotDePasse($this->hasher->hashPassword($utilisateur, $motDePasse));
         $manager->persist($utilisateur);

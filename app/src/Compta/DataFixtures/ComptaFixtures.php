@@ -66,6 +66,23 @@ final class ComptaFixtures extends Fixture implements DependentFixtureInterface
 
         $etabA = $manager->getRepository(Etablissement::class)->findOneBy(['nom' => SocleFixtures::ETAB_A_NOM]);
 
+        // ── LE BLOC DE DÉMONSTRATION NE SE POSE QU'UNE FOIS ──────────────────────────────────
+        //
+        // Tout ce qui suit est un jeu de données cohérent, pas un référentiel : le reposer sur une
+        // base qui l'a déjà écraserait ce qui a été corrigé à la main depuis, ou le dupliquerait
+        // pour les entités sans contrainte d'unicité — silencieusement.
+        //
+        // Les permissions et les rôles restent AU-DESSUS de cette garde : ils doivent être rejoués à
+        // chaque chargement, sans quoi un droit ajouté au code n'atteindrait jamais une base
+        // existante.
+        if ($manager->getRepository(\App\Compta\Entity\ProfilExploitant::class)
+            ->findOneBy(['siren' => self::PROFIL_SIREN]) !== null
+        ) {
+            $manager->flush();
+
+            return;
+        }
+
         // --- Profil exploitant : régie directe / M57 ---
         $profil = new ProfilExploitant();
         $profil->setType(TypeExploitant::RegieDirecte);

@@ -67,7 +67,7 @@ final class CrmFixtures extends Fixture implements DependentFixtureInterface
         $groupeA = $etabA instanceof Etablissement ? $etabA->getRegion()?->getGroupe() : null;
 
         // --- Permissions crm.* + octroi complet à l'administrateur (RG-SOCLE-02/03) ---
-        $permCrmTout = (new Permission())->setModule('crm')->setAction('*');
+        $permCrmTout = $this->permissionNommee($manager, 'crm', '*');
         $manager->persist($permCrmTout);
         $actions = [
             'lire', 'lire_soi', 'creer', 'modifier', 'modifier_soi',
@@ -88,17 +88,34 @@ final class CrmFixtures extends Fixture implements DependentFixtureInterface
 
         // --- Rôle « Agent CRM » restreint (séparation des devoirs, §3 spec-crm.md) : ni fusion, ni
         // RGPD, ni paramétrage — seulement lecture/création/modification/PMV recharge/famille.
-        $roleAgent = (new Role())->setNom('Agent CRM');
+        $roleAgent = $this->roleNomme($manager, 'Agent CRM');
         foreach (['lire', 'creer', 'modifier', 'pmv_lire', 'pmv_recharger', 'famille_gerer'] as $action) {
             $roleAgent->addPermission($permissions[$action]);
         }
         $manager->persist($roleAgent);
 
+        // ── LE BLOC DE DÉMONSTRATION NE SE POSE QU'UNE FOIS ──────────────────────────────────
+        //
+        // Tout ce qui suit est un jeu de données cohérent, pas un référentiel : le reposer sur une
+        // base qui l'a déjà écraserait ce qui a été corrigé à la main depuis, ou le dupliquerait
+        // pour les entités sans contrainte d'unicité — silencieusement.
+        //
+        // Les permissions et les rôles restent AU-DESSUS de cette garde : ils doivent être rejoués à
+        // chaque chargement, sans quoi un droit ajouté au code n'atteindrait jamais une base
+        // existante.
+        if ($manager->getRepository(\App\Crm\Entity\Famille::class)
+            ->findOneBy(['libelle' => self::FAMILLE_LIBELLE]) !== null
+        ) {
+            $manager->flush();
+
+            return;
+        }
+
         $agent = (new Utilisateur())->setEmail(self::AGENT_EMAIL)->setNom('Agent Accueil CRM')->setActif(true);
         $agent->setMotDePasse($this->hasher->hashPassword($agent, self::AGENT_MDP));
         $manager->persist($agent);
         if ($etabA instanceof Etablissement) {
-            $manager->persist((new Affectation())->setUtilisateur($agent)->setRole($roleAgent)->setEtablissement($etabA));
+            $this->affectationUnique($manager, $agent, $roleAgent, $etabA);
         }
 
         // --- Second Groupe + Établissement + utilisateur (cloisonnement Groupe, §6 plan-crm.md) ---
@@ -109,13 +126,13 @@ final class CrmFixtures extends Fixture implements DependentFixtureInterface
         $etabC = (new Etablissement())->setNom(self::ETAB_C_NOM)->setRegion($regionB)->setActif(true);
         $manager->persist($etabC);
 
-        $roleAdminB = (new Role())->setNom('Administrateur groupe B');
+        $roleAdminB = $this->roleNomme($manager, 'Administrateur groupe B');
         $roleAdminB->addPermission($permCrmTout);
         $manager->persist($roleAdminB);
         $agentB = (new Utilisateur())->setEmail(self::AGENT_B_EMAIL)->setNom('Agent Groupe B')->setActif(true);
         $agentB->setMotDePasse($this->hasher->hashPassword($agentB, self::AGENT_B_MDP));
         $manager->persist($agentB);
-        $manager->persist((new Affectation())->setUtilisateur($agentB)->setRole($roleAdminB)->setEtablissement($etabC));
+        $this->affectationUnique($manager, $agentB, $roleAdminB, $etabC);
 
         // --- Paramètre PMV établissement A (US-L5-06/07, valeurs de repli explicites) ---
         if ($etabA instanceof Etablissement) {

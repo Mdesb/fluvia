@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Acces\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\Acces\Entity\Appairage;
 use App\Acces\Entity\Controleur;
 use App\Acces\Entity\DroitAcces;
@@ -40,6 +41,8 @@ use Doctrine\Persistence\ObjectManager;
  */
 final class AccesFixtures extends Fixture implements DependentFixtureInterface
 {
+    use FixturesIdempotentes;
+
     public const ESPACE_LIBELLE = 'Zone tourniquets Piscine A';
     public const CONTROLEUR_LIBELLE = 'Contrôleur Entrée A1';
     public const EQUIPEMENT_LIBELLE = 'Tourniquet Entrée A1';
@@ -98,6 +101,23 @@ final class AccesFixtures extends Fixture implements DependentFixtureInterface
 
         $etabA = $manager->getRepository(Etablissement::class)->findOneBy(['nom' => SocleFixtures::ETAB_A_NOM]);
         if (!$etabA instanceof Etablissement) {
+            $manager->flush();
+
+            return;
+        }
+
+        // ── LE BLOC DE DÉMONSTRATION NE SE POSE QU'UNE FOIS ──────────────────────────────────
+        //
+        // Tout ce qui suit est un jeu de données cohérent, pas un référentiel : le reposer sur une
+        // base qui l'a déjà écraserait ce qui a été corrigé à la main depuis, ou le dupliquerait
+        // pour les entités sans contrainte d'unicité — silencieusement.
+        //
+        // Les permissions et les rôles restent AU-DESSUS de cette garde : ils doivent être rejoués à
+        // chaque chargement, sans quoi un droit ajouté au code n'atteindrait jamais une base
+        // existante.
+        if ($manager->getRepository(\App\Acces\Entity\Controleur::class)
+            ->findOneBy(['itboxRef' => self::ITBOX_REF]) !== null
+        ) {
             $manager->flush();
 
             return;
@@ -196,7 +216,7 @@ final class AccesFixtures extends Fixture implements DependentFixtureInterface
             return $existante;
         }
 
-        $permission = (new Permission())->setModule('acces')->setAction($action);
+        $permission = $this->permissionNommee($manager, 'acces', $action);
         $manager->persist($permission);
 
         return $permission;

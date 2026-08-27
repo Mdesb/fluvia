@@ -76,6 +76,26 @@ final class VenteFixtures extends Fixture implements DependentFixtureInterface
 
         $etabA = $manager->getRepository(Etablissement::class)->findOneBy(['nom' => SocleFixtures::ETAB_A_NOM]);
 
+        // ── LE BLOC DE DEMONSTRATION NE SE POSE QU'UNE FOIS ──────────────────────────────────
+        //
+        // Tout ce qui suit est un jeu de donnees coherent, pas un referentiel : le reposer sur une
+        // base qui l'a deja ecraserait ce qui a ete corrige a la main depuis, ou le dupliquerait
+        // pour les entites sans contrainte d'unicite -- silencieusement.
+        //
+        // Les permissions et les roles restent AU-DESSUS de cette garde : ils doivent etre rejoues a
+        // chaque chargement, sans quoi un droit ajoute au code n'atteindrait jamais une base
+        // existante.
+        //
+        // La classe est ecrite en nom pleinement qualifie, sans `use` : deviner le namespace d'apres
+        // le dossier de la fixture m'a fait ecraser deux imports corrects.
+        if ($manager->getRepository(\App\Caisse\Entity\PointDeVente::class)
+            ->findOneBy(['libelle' => self::PDV_LIBELLE]) !== null
+        ) {
+            $manager->flush();
+
+            return;
+        }
+
         // --- Point de vente + caisse sur l'établissement A ---
         $pdv = (new PointDeVente())
             ->setLibelle(self::PDV_LIBELLE)

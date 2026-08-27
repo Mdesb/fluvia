@@ -85,7 +85,7 @@ final class PadelFixtures extends Fixture implements DependentFixtureInterface
         $groupeA = $etabA->getRegion()?->getGroupe();
 
         // --- Permissions padel.* + octroi complet à l'administrateur (RG-SOCLE-02/03) ---
-        $permPadelTout = (new Permission())->setModule('padel')->setAction('*');
+        $permPadelTout = $this->permissionNommee($manager, 'padel', '*');
         $manager->persist($permPadelTout);
         $actions = [
             'lire', 'lire_soi', 'reserver', 'reserver_soi', 'partie_rejoindre_soi',
@@ -105,22 +105,37 @@ final class PadelFixtures extends Fixture implements DependentFixtureInterface
         }
 
         // --- Rôle « Gestionnaire de club » (§3 spec-padel.md) ---
-        $roleGestionnaire = (new Role())->setNom('Gestionnaire de club padel');
+        $roleGestionnaire = $this->roleNomme($manager, 'Gestionnaire de club padel');
         foreach (['lire', 'reserver', 'niveau_valider', 'tournoi_gerer', 'materiel_gerer', 'acces_forcer', 'gerer_terrain', 'configurer_eclairage', 'parametrer'] as $action) {
             $roleGestionnaire->addPermission($permissions[$action]);
         }
         $manager->persist($roleGestionnaire);
         $gestionnaire = $this->utilisateur($manager, self::GESTIONNAIRE_EMAIL, self::GESTIONNAIRE_MDP, 'Gestionnaire Club Padel');
-        $manager->persist((new Affectation())->setUtilisateur($gestionnaire)->setRole($roleGestionnaire)->setEtablissement($etabA));
+        $this->affectationUnique($manager, $gestionnaire, $roleGestionnaire, $etabA);
 
         // --- Rôle « Joueur / Adhérent » (§3 spec-padel.md) ---
-        $roleJoueur = (new Role())->setNom('Joueur Padel');
+        $roleJoueur = $this->roleNomme($manager, 'Joueur Padel');
         foreach (['lire_soi', 'reserver_soi', 'partie_rejoindre_soi', 'niveau_declarer_soi', 'tournoi_inscrire_soi', 'coach_lire_soi'] as $action) {
             $roleJoueur->addPermission($permissions[$action]);
         }
         $manager->persist($roleJoueur);
 
         if (!$groupeA instanceof Groupe) {
+            $manager->flush();
+
+            return;
+        }
+
+        // ── LE BLOC DE DÉMONSTRATION NE SE POSE QU'UNE FOIS ──────────────────────────────────
+        //
+        // Tout ce qui suit est un jeu de données cohérent, pas un référentiel : le reposer sur une
+        // base qui l'a déjà écraserait ce qui a été corrigé à la main depuis, ou le dupliquerait
+        // pour les entités sans contrainte d'unicité — silencieusement.
+        //
+        // Les permissions et les rôles, eux, restent AU-DESSUS de cette garde : ils doivent être
+        // rejoués à chaque chargement, sans quoi un droit ajouté au code n'atteindrait jamais une
+        // base existante.
+        if ($manager->getRepository(TerrainPadel::class)->findOneBy([]) !== null) {
             $manager->flush();
 
             return;
@@ -156,7 +171,7 @@ final class PadelFixtures extends Fixture implements DependentFixtureInterface
             $utilisateur = $this->utilisateur($manager, self::JOUEUR_EMAIL_PREFIX . $i . self::JOUEUR_DOMAINE, 'JoueurPadel#2026', 'Joueur Padel ' . $i);
             $utilisateur->setClientLie($client->getId());
             $manager->persist($utilisateur);
-            $manager->persist((new Affectation())->setUtilisateur($utilisateur)->setRole($roleJoueur)->setEtablissement($etabA));
+            $this->affectationUnique($manager, $utilisateur, $roleJoueur, $etabA);
         }
 
         // --- Terrain padel n°1 (+ Ressource socle) ---
@@ -305,6 +320,13 @@ final class PadelFixtures extends Fixture implements DependentFixtureInterface
 
     private function utilisateur(ObjectManager $manager, string $email, string $motDePasse, string $nom): Utilisateur
     {
+        $existant = $manager->getRepository(Utilisateur::class)->findOneBy(['email' => $email]);
+        if ($existant instanceof Utilisateur) {
+            // Le mot de passe n'est pas repose : le rejouer ecraserait un mot de passe change
+            // depuis, et recalculerait un hachage pour rien a chaque chargement.
+            return $existant->setNom($nom)->setActif(true);
+        }
+
         $utilisateur = (new Utilisateur())->setEmail($email)->setNom($nom)->setActif(true);
         $utilisateur->setMotDePasse($this->hasher->hashPassword($utilisateur, $motDePasse));
         $manager->persist($utilisateur);

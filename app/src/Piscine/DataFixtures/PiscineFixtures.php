@@ -76,6 +76,21 @@ final class PiscineFixtures extends Fixture implements DependentFixtureInterface
             return;
         }
 
+        // ── LE BLOC DE DÉMONSTRATION NE SE POSE QU'UNE FOIS ──────────────────────────────────
+        //
+        // Tout ce qui suit est un jeu de données cohérent, pas un référentiel : le reposer sur une
+        // base qui l'a déjà écraserait ce qui a été corrigé à la main depuis, ou le dupliquerait
+        // pour les entités sans contrainte d'unicité — silencieusement.
+        //
+        // Les permissions et les rôles, eux, restent AU-DESSUS de cette garde : ils doivent être
+        // rejoués à chaque chargement, sans quoi un droit ajouté au code n'atteindrait jamais une
+        // base existante.
+        if ($manager->getRepository(Bassin::class)->findOneBy([]) !== null) {
+            $manager->flush();
+
+            return;
+        }
+
         // --- Paramètres piscine établissement (délai forçage, caution défaut, prorata défaut) ---
         $parametre = (new ParametrePiscineEtablissement())
             ->setEtablissement($etabA)

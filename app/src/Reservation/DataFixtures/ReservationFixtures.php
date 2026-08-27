@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Reservation\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\Compta\DataFixtures\ComptaFixtures;
 use App\Crm\DataFixtures\CrmFixtures;
 use App\Crm\Entity\Beneficiaire;
@@ -40,6 +41,8 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
  */
 final class ReservationFixtures extends Fixture implements DependentFixtureInterface
 {
+    use FixturesIdempotentes;
+
     public const RESSOURCE_TERRAIN_LIBELLE = 'Terrain padel n°1';
     public const RESSOURCE_BASSIN_LIBELLE = 'Bassin sportif';
     public const RESSOURCE_LIGNE_1_LIBELLE = 'Ligne 1';
@@ -136,6 +139,23 @@ final class ReservationFixtures extends Fixture implements DependentFixtureInter
         $this->affectation($manager, $clientUtilisateur, $roleClient, $etabA);
 
         // --- Ressources de types variés (RG-M5-03/05/08) ---
+        // ── LE BLOC DE DEMONSTRATION NE SE POSE QU'UNE FOIS ──────────────────────────────────
+        //
+        // `reservation_ressource` NE PORTE AUCUNE CONTRAINTE D'UNICITE : un second chargement n'y
+        // echoue pas, il double les six ressources en silence. C'est le cas que seul le comptage de
+        // lignes attrape -- et celui qui fausse le plus de choses en aval, puisque les creneaux et
+        // les reservations s'y rattachent.
+        //
+        // La sentinelle est la premiere ressource de l'etablissement A : elle est creee juste apres,
+        // inconditionnellement.
+        if ($manager->getRepository(Ressource::class)
+            ->findOneBy(['etablissement' => $etabA, 'codeType' => 'terrain']) !== null
+        ) {
+            $manager->flush();
+
+            return;
+        }
+
         $terrain = (new Ressource())->setEtablissement($etabA)->setCodeType('terrain')
             ->setLibelle(self::RESSOURCE_TERRAIN_LIBELLE)->setCapacitePropre(4);
         $manager->persist($terrain);
@@ -229,7 +249,7 @@ final class ReservationFixtures extends Fixture implements DependentFixtureInter
             return $existante;
         }
 
-        $permission = (new Permission())->setModule($module)->setAction($action);
+        $permission = $this->permissionNommee($manager, $module, $action);
         $manager->persist($permission);
 
         return $permission;
@@ -251,7 +271,7 @@ final class ReservationFixtures extends Fixture implements DependentFixtureInter
             return;
         }
 
-        $manager->persist((new Affectation())->setUtilisateur($utilisateur)->setRole($role)->setEtablissement($etablissement));
+        $this->affectationUnique($manager, $utilisateur, $role, $etablissement);
     }
 
     private function utilisateur(ObjectManager $manager, string $email, string $motDePasse, string $nom): Utilisateur

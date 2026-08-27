@@ -51,6 +51,20 @@ final class FacturationFixtures extends Fixture implements DependentFixtureInter
             return;
         }
 
+        // ── LE BLOC DE DEMONSTRATION NE SE POSE QU'UNE FOIS ──────────────────────────────────
+        //
+        // Tout ce qui suit est un jeu de donnees coherent, pas un referentiel : le reposer sur une
+        // base qui l'a deja ecraserait ce qui a ete corrige a la main depuis, ou le dupliquerait
+        // pour les entites sans contrainte d'unicite -- silencieusement.
+        //
+        // Les permissions, les roles et les affectations restent AU-DESSUS : ils doivent etre
+        // rejoues a chaque chargement, sans quoi un droit ajoute au code n'atteindrait jamais une
+        // base existante.
+        if ($manager->getRepository(\App\Compta\Entity\PeriodeComptable::class)->findOneBy([]) !== null) {
+            $manager->flush();
+
+            return;
+        }
         $periode = new PeriodeComptable();
         $periode->setProfilExploitant($profil);
         $periode->setDateDebut(new \DateTimeImmutable('first day of this month'));

@@ -74,6 +74,20 @@ final class FinanceFixtures extends Fixture implements DependentFixtureInterface
         $etabA = $manager->getRepository(Etablissement::class)->findOneBy(['nom' => SocleFixtures::ETAB_A_NOM]);
 
         if ($etabA instanceof Etablissement) {
+        // ── LE BLOC DE DEMONSTRATION NE SE POSE QU'UNE FOIS ──────────────────────────────────
+        //
+        // Tout ce qui suit est un jeu de donnees coherent, pas un referentiel : le reposer sur une
+        // base qui l'a deja ecraserait ce qui a ete corrige a la main depuis, ou le dupliquerait
+        // pour les entites sans contrainte d'unicite -- silencieusement.
+        //
+        // Les permissions, les roles et les affectations restent AU-DESSUS : ils doivent etre
+        // rejoues a chaque chargement, sans quoi un droit ajoute au code n'atteindrait jamais une
+        // base existante.
+        if ($manager->getRepository(\App\Stock\Entity\Fournisseur::class)->findOneBy([]) !== null) {
+            $manager->flush();
+
+            return;
+        }
             $manager->persist((new Fournisseur())->setEtablissement($etabA)->setRaisonSociale(self::FOURNISSEUR_ACTIF)->setActif(true));
             $manager->persist((new Fournisseur())->setEtablissement($etabA)->setRaisonSociale(self::FOURNISSEUR_INACTIF)->setActif(false));
         }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Stock\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\DataFixtures\SocleFixtures;
 use App\Offre\DataFixtures\OffreFixtures;
 use App\Offre\Entity\GrilleTarifaire;
@@ -31,6 +32,8 @@ use Doctrine\Persistence\ObjectManager;
  */
 final class StockFixtures extends Fixture implements DependentFixtureInterface
 {
+    use FixturesIdempotentes;
+
     /** @var list<string> */
     public const ACTIONS = [
         'gerer_article', 'gerer_fournisseur', 'gerer_achat', 'receptionner', 'ajuster',
@@ -59,6 +62,21 @@ final class StockFixtures extends Fixture implements DependentFixtureInterface
             foreach ($perms as $perm) {
                 $roleAdmin->addPermission($perm);
             }
+        }
+
+        // ── LE BLOC DE DÉMONSTRATION NE SE POSE QU'UNE FOIS ──────────────────────────────────
+        //
+        // Tout ce qui suit est un jeu de données cohérent, pas un référentiel : le reposer sur une
+        // base qui l'a déjà écraserait ce qui a été corrigé à la main depuis, ou le dupliquerait
+        // pour les entités sans contrainte d'unicité — silencieusement.
+        //
+        // Les permissions et les rôles restent AU-DESSUS de cette garde : ils doivent être rejoués à
+        // chaque chargement, sans quoi un droit ajouté au code n'atteindrait jamais une base
+        // existante.
+        if ($manager->getRepository(ParametrageStock::class)->findOneBy([]) !== null) {
+            $manager->flush();
+
+            return;
         }
 
         foreach ([SocleFixtures::ETAB_A_NOM, SocleFixtures::ETAB_B_NOM] as $nomEtab) {
@@ -111,7 +129,7 @@ final class StockFixtures extends Fixture implements DependentFixtureInterface
             return $existante;
         }
 
-        $permission = (new Permission())->setModule('stock')->setAction($action);
+        $permission = $this->permissionNommee($manager, 'stock', $action);
         $manager->persist($permission);
 
         return $permission;
