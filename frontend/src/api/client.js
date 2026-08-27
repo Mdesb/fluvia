@@ -813,6 +813,25 @@ export const api = {
   limitesAutorisation: () => request('/api/limite_autorisations', { query: { itemsPerPage: 200 } }),
   operationsSensibles: () => request('/api/operation_sensibles', { query: { itemsPerPage: 200 } }),
 
+  // --- App\Legal — MENTIONS OBLIGATOIRES ---------------------------------------------------------
+  //
+  // Une fiche saisie une fois, six documents composes a partir d'elle. Le champ qui decide de tout
+  // est `activities` : le droit de retractation n'est pas le meme pour un billet date (aucune
+  // retractation) et pour une marchandise (quatorze jours, formulaire type obligatoire).
+  identitesLegales: () => request('/api/legal_identities', { query: { itemsPerPage: 20 } }),
+  creerIdentiteLegale: (corps) => request('/api/legal_identities', { method: 'POST', body: corps, ld: true }),
+  majIdentiteLegale: (id, corps) => request(`/api/legal_identities/${id}`, { method: 'PATCH', body: corps }),
+  genererDocumentsLegaux: (id, nomSite) =>
+    request(`/api/legal/identites/${id}/generer`, { method: 'POST', body: nomSite ? { nomSite } : {} }),
+
+  documentsLegaux: () => request('/api/legal_documents', { query: { itemsPerPage: 50 } }),
+  majDocumentLegal: (id, corps) => request(`/api/legal_documents/${id}`, { method: 'PATCH', body: corps }),
+  publierDocumentLegal: (id) => request(`/api/legal/documents/${id}/publier`, { method: 'POST', body: {} }),
+
+  // Lecture PUBLIQUE, sans jeton : la LCEN exige des mentions << aisement accessibles >>, et le
+  // visiteur qui hesite a acheter est justement celui qui n'a pas encore de compte.
+  documentsLegauxPublics: (etablissementId) => request(`/api/legal/publics/${etablissementId}`),
+
   // Base de connaissances. `/publics` et `/recherche` sont en accès public : ce sont elles que la
   // webapp cliente interroge, sans jeton.
   articlesAide: (params) => request('/api/support/articles/publics', { query: { itemsPerPage: 100, ...(params || {}) } }),

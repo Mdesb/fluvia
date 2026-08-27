@@ -117,6 +117,35 @@ export default function Comptabilite({ etabActif, droits }) {
               { cle: 'iban4Derniers', entete: 'IBAN', rendu: (r) => (r.iban4Derniers ? `••••${r.iban4Derniers}` : '—') },
             ]}
           />
+          {/* LES REJETS, QUI ETAIENT LA SEULE PIECE INVISIBLE DE LA CHAINE.
+              L'ecran montrait ce qu'on envoie a la banque (remises) et qui l'a autorise (mandats),
+              jamais ce que la banque RENVOIE. Or un rejet ouvre un incident d'impaye, programme des
+              representations et peut bloquer l'acces du redevable : c'est l'evenement qui declenche
+              tout le reste, et il n'apparaissait sur aucun ecran.
+              Le code motif de la banque est affiche brut a cote de son libelle : c'est lui qu'on
+              cite au telephone quand on rappelle sa banque, et le libelle traduit ne suffit pas. */}
+          <Liste
+            titre="Rejets bancaires"
+            sous="ce que la banque renvoie"
+            deps={[etabActif]}
+            charger={api.rejetsSepa}
+            vide="Aucun rejet. Les prelevements refuses par la banque apparaitront ici, et ouvriront un impaye."
+            colonnes={[
+              { cle: 'dateRejet', entete: 'Rejet', rendu: (r) => dateFr(r.dateRejet) },
+              { cle: 'mndtId', entete: 'Mandat', rendu: (r) => <span className="mono">{r.mndtId || '—'}</span> },
+              {
+                cle: 'codeMotif',
+                entete: 'Motif',
+                rendu: (r) => (
+                  <span>
+                    {r.libelleMotif || '—'}
+                    {r.codeMotif && <div className="sub mono">{r.codeMotif}</div>}
+                  </span>
+                ),
+              },
+              { cle: 'endToEndId', entete: 'Reference', rendu: (r) => <span className="mono">{r.endToEndId || '—'}</span> },
+            ]}
+          />
         </div>
       )}
 

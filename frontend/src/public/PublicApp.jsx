@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { boutique, panierStore, clientTokenStore, vitrineStore } from './api/boutiqueClient.js'
 import PublicHeader from './components/PublicHeader.jsx'
 import PublicFooter from './components/PublicFooter.jsx'
+import PageLegale from './pages/PageLegale.jsx'
 import { Chargement, Erreur } from './components/Etats.jsx'
 import Configuration from './pages/Configuration.jsx'
 import Vitrine from './pages/Vitrine.jsx'
@@ -171,6 +172,7 @@ export default function PublicApp() {
   return (
     <Cadre
       vitrine={vitrine}
+      etablissementId={catalogue?.etablissement}
       nbArticles={nbArticles}
       connecte={connecte}
       vue={route.vue}
@@ -228,6 +230,12 @@ export default function PublicApp() {
             onNaviguer={onNaviguer}
           />
         )
+      ) : route.vue === 'legal' ? (
+        <PageLegale
+          etablissementId={catalogue?.etablissement}
+          slug={route.slug}
+          onNaviguer={onNaviguer}
+        />
       ) : route.vue === 'compte' ? (
         <MonCompte connecte={connecte} onConnexionChange={setConnecte} onNaviguer={onNaviguer} />
       ) : (
@@ -237,7 +245,7 @@ export default function PublicApp() {
   )
 }
 
-function Cadre({ vitrine, nbArticles, connecte, vue, onNaviguer, children }) {
+function Cadre({ vitrine, etablissementId, nbArticles, connecte, vue, onNaviguer, children }) {
   return (
     <div className="bq">
       <PublicHeader
@@ -250,7 +258,7 @@ function Cadre({ vitrine, nbArticles, connecte, vue, onNaviguer, children }) {
       <main id="bq-main" className="bq-main" tabIndex={-1}>
         {children}
       </main>
-      <PublicFooter />
+      <PublicFooter etablissementId={etablissementId} onNaviguer={onNaviguer} />
     </div>
   )
 }

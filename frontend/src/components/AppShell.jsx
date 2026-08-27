@@ -97,6 +97,10 @@ const NAV = [
       },
       // Ouvert le 27/08. Voir le commentaire de l'entree << Assistance >> : meme motif, meme cout.
       { id: 'autorisations', ic: '⚿', label: 'Autorisations', perms: ['autorisation.lire', 'autorisation.approuver', 'autorisation.gerer'] },
+      // Les mentions obligatoires d'un site marchand. Sous Administration et non sous Boutique :
+      // elles engagent l'exploitant, pas la vitrine, et un exploitant qui n'a pas encore ouvert
+      // sa boutique doit pouvoir les preparer.
+      { id: 'legal', ic: '§', label: 'Mentions legales', perms: ['organisation.gerer', 'boutique.gerer_vitrine'] },
     ],
   },
 ]

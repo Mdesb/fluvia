@@ -117,6 +117,13 @@ export const boutique = {
   catalogue: (id) => request(`/api/boutique/vitrines/${id}/catalogue`),
   creneaux: (produitId) => request(`/api/boutique/produits/${produitId}/creneaux`),
 
+  // Mentions obligatoires, en acces PUBLIC et sans jeton.
+  //
+  // La LCEN exige des mentions << aisement accessibles >>. Les mettre derriere une authentification
+  // les rendrait inaccessibles a exactement la personne qui en a besoin : le visiteur qui hesite a
+  // acheter, et qui n'a pas encore de compte.
+  documentsLegaux: (etablissementId) => request(`/api/legal/publics/${etablissementId}`),
+
   // --- Panier (invité, jeton applicatif) ---
   ouvrirPanier: (vitrineId, email) =>
     request('/api/boutique/paniers', { method: 'POST', body: { vitrine: vitrineId, email } }),
