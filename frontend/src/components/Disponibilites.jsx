@@ -157,11 +157,18 @@ export default function Disponibilites({ droits = [] }) {
             <section className="panel" key={r.id}>
               <div className="panel-h">
                 <span>{r.libelle || r.codeType || 'Ressource'}</span>
-                <span className="sub" style={{ marginLeft: 8 }}>
-                  {/* La capacité dit ce qu'est la ressource : à 1 c'est une personne ou un terrain,
-                      au-delà c'est un groupe. L'exploitant lit sa propre configuration. */}
-                  {r.capacitePropre === 1 ? 'une place à la fois' : `${r.capacitePropre} places`}
-                </span>
+                {/* LA JAUGE SE REGLE ICI, ET ELLE N'ETAIT REGLABLE NULLE PART.
+                    `capacitePropre` distingue deja un terrain de padel (4) d'un court de tennis en
+                    simple (2) et d'un bassin (cinquante). Le modele savait ; l'ecran ne montrait que
+                    le resultat. */}
+                <JaugeEditable
+                  ressource={r}
+                  peutGerer={peutGerer}
+                  busy={busy}
+                  onEnregistrer={(capacite) =>
+                    agir(() => api.majRessourceReservation(r.id, { capacitePropre: capacite }))
+                  }
+                />
                 {journees.length === 0 && (
                   <span className="badge warn" style={{ marginLeft: 8 }}>aucun horaire</span>
                 )}
@@ -278,6 +285,71 @@ export default function Disponibilites({ droits = [] }) {
         })
       )}
     </div>
+  )
+}
+
+/**
+ * La jauge d'une ressource, lisible et modifiable au meme endroit.
+ *
+ * **On affiche le SENS avant le nombre.** << 4 places >> ne dit pas grand-chose ; << une place a la
+ * fois >> dit qu'on parle d'une personne ou d'un terrain en simple. Un exploitant qui configure son
+ * padel doit reconnaitre sa situation dans la phrase, pas la deduire du chiffre.
+ *
+ * **Zero est refuse ici, pas au serveur.** Une jauge a zero rend la ressource invisible partout sans
+ * qu'aucun ecran ne dise pourquoi -- ce n'est pas une desactivation, c'est une disparition. Pour
+ * retirer une ressource, on la desactive ; c'est un geste distinct, et il se voit.
+ */
+function JaugeEditable({ ressource, peutGerer, busy, onEnregistrer }) {
+  const [edite, setEdite] = useState(false)
+  const [valeur, setValeur] = useState(String(ressource.capacitePropre ?? 1))
+
+  useEffect(() => {
+    setValeur(String(ressource.capacitePropre ?? 1))
+  }, [ressource.capacitePropre])
+
+  const n = Number(valeur)
+  const invalide = !Number.isInteger(n) || n < 1
+
+  if (!edite) {
+    return (
+      <span className="sub" style={{ marginLeft: 8, display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+        {ressource.capacitePropre === 1 ? 'une place a la fois' : `${ressource.capacitePropre} places`}
+        {peutGerer && (
+          <button
+            className="btn ghost sm"
+            type="button"
+            style={{ padding: '0 6px', fontSize: 11.5 }}
+            onClick={() => setEdite(true)}
+          >
+            Modifier la jauge
+          </button>
+        )}
+      </span>
+    )
+  }
+
+  return (
+    <span style={{ marginLeft: 8, display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+      <input
+        className="input sm"
+        type="number"
+        min="1"
+        step="1"
+        style={{ width: 80 }}
+        value={valeur}
+        onChange={(e) => setValeur(e.target.value)}
+      />
+      <button
+        className="btn primary sm"
+        type="button"
+        disabled={busy || invalide}
+        onClick={() => { onEnregistrer(n); setEdite(false) }}
+      >
+        Enregistrer
+      </button>
+      <button className="btn ghost sm" type="button" onClick={() => setEdite(false)}>Annuler</button>
+      {invalide && <span className="sub">Au moins une place.</span>}
+    </span>
   )
 }
 

@@ -356,6 +356,14 @@ export const api = {
 
   // Réservation / Planning (M5).
   reservationRessources: () => request('/api/reservation_ressources', { query: { itemsPerPage: 100 } }),
+  // LA JAUGE D'UNE RESSOURCE ETAIT AFFICHEE A DEUX ENDROITS ET MODIFIABLE NULLE PART.
+  //
+  // `capacitePropre` porte deja la jauge par ressource -- un terrain de padel a 4, un court de
+  // tennis en simple a 2, un bassin en a cinquante. Le modele savait donc les distinguer depuis
+  // le debut ; aucun ecran ne permettait de poser la valeur. C'etait la demande de Maxime
+  // << jauge differente padel/tennis >>, et il ne manquait que ceci.
+  majRessourceReservation: (id, corps) =>
+    request(`/api/reservation_ressources/${id}`, { method: 'PATCH', body: corps }),
   reservationCreneaux: () => request('/api/reservation_creneaus', { query: { itemsPerPage: 200 } }),
   // HORAIRES ET ABSENCES D'UNE RESSOURCE -- exposes en CRUD complet depuis le debut, sans un
   // seul appelant. Un coiffeur ne pouvait pas declarer qu'il travaille le mardi.
