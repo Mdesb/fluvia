@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Patinoire\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\Acces\Entity\EspaceAcces;
 use App\Crm\DataFixtures\CrmFixtures;
 use App\Crm\Entity\Beneficiaire;
@@ -42,6 +43,8 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
  */
 final class PatinoireFixtures extends Fixture implements DependentFixtureInterface
 {
+    use FixturesIdempotentes;
+
     public const AGENT_EMAIL = 'agent.comptoir@patinoire.itcotation.com';
     public const AGENT_MDP = 'aaa';
     public const TECHNICIEN_EMAIL = 'technicien.atelier@patinoire.itcotation.com';
@@ -78,7 +81,7 @@ final class PatinoireFixtures extends Fixture implements DependentFixtureInterfa
         ];
         $permissions = [];
         foreach ($actions as $action) {
-            $permissions[$action] = (new Permission())->setModule('patinoire')->setAction($action);
+            $permissions[$action] = $this->permissionNommee($manager, 'patinoire', $action);
             $manager->persist($permissions[$action]);
         }
 

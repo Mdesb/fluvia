@@ -134,65 +134,90 @@ final class OffreFixtures extends Fixture implements DependentFixtureInterface
         $typeCarte->setDefauts(['categories' => ['comptable' => self::CAT_COMPTABLE]]);
 
         // --- Produits ---
+        //
+        // ⚠ CHAQUE PRODUIT EST CRÉÉ **UNE FOIS**, ET LE SECOND CHARGEMENT NE LE TOUCHE PLUS.
+        //
+        // Les trois produits étaient construits par un `new Produit()` sans garde. `Produit.code`
+        // porte `uniq_produit_code` : le second chargement s'arrêtait donc en plein milieu, sur
+        // « Duplicate entry 'PRD-ENTREE01' ». C'est exactement l'incident du 24/08 — une
+        // régénération des données de démonstration qui échoue après avoir déjà écrit.
+        //
+        // **On ne réécrit pas un produit existant, on le laisse.** Un rechargement qui repose le
+        // prix effacerait un tarif corrigé à la main en préproduction — et personne ne saurait
+        // qu'il a été effacé, puisque la valeur d'origine est plausible. Une fixture pose un état
+        // de départ ; elle ne rattrape pas ce qui a vécu depuis.
+        //
+        // Les grilles et les enfants (formule, carnet) sont donc **à l'intérieur** de la garde : ils
+        // n'ont pas d'unicité propre et se seraient empilés en silence, ce qui est pire que l'échec.
+
         // 1) Entrée unitaire (publiable : libellé + site + canal + prix + cat. comptable).
-        $entree = (new Produit())
-            ->setType($typeEntree)
-            ->setLibelle(['fr' => self::PRODUIT_ENTREE])
-            ->setLibelleRecherche(self::PRODUIT_ENTREE)
-            ->setCode('PRD-ENTREE01')
-            ->setCanaux(['guichet', 'en_ligne'])
-            ->setStatut(StatutProduit::Brouillon);
-        if ($etabA instanceof Etablissement) {
-            $entree->addEtablissement($etabA);
+        $entree = $manager->getRepository(Produit::class)->findOneBy(['code' => 'PRD-ENTREE01']);
+        if (!$entree instanceof Produit) {
+            $entree = (new Produit())
+                ->setType($typeEntree)
+                ->setLibelle(['fr' => self::PRODUIT_ENTREE])
+                ->setLibelleRecherche(self::PRODUIT_ENTREE)
+                ->setCode('PRD-ENTREE01')
+                ->setCanaux(['guichet', 'en_ligne'])
+                ->setStatut(StatutProduit::Brouillon);
+            if ($etabA instanceof Etablissement) {
+                $entree->addEtablissement($etabA);
+            }
+            $entree->addCategorie($catCompta)->addCategorie($catMarketing);
+            $manager->persist($entree);
+            $this->ajouterGrille($manager, $entree, $tarifPlein, $saison, '5.50');
+            $this->ajouterGrille($manager, $entree, $tarifGuichet, $saison, '4.00');
         }
-        $entree->addCategorie($catCompta)->addCategorie($catMarketing);
-        $manager->persist($entree);
-        $this->ajouterGrille($manager, $entree, $tarifPlein, $saison, '5.50');
-        $this->ajouterGrille($manager, $entree, $tarifGuichet, $saison, '4.00');
 
         // 2) Abonnement Gold (formule + service inclus à quota).
-        $formule = (new Formule())
-            ->setPeriodicite(PeriodiciteFormule::Mensuel)
-            ->setDroitAcces(['mode' => 'illimite'])
-            ->setRenouvellement(['auto' => true, 'prix' => 'fixe']);
-        $service = (new ServiceInclus())
-            ->setActiviteRef(Uuid::v4())
-            ->setQuota(2);
-        $formule->addServiceInclus($service);
-        $gold = (new Produit())
-            ->setType($typeAbo)
-            ->setLibelle(['fr' => self::PRODUIT_GOLD])
-            ->setLibelleRecherche(self::PRODUIT_GOLD)
-            ->setCode('PRD-GOLD01')
-            ->setCanaux(['guichet', 'en_ligne'])
-            ->setFormule($formule)
-            ->setStatut(StatutProduit::Brouillon);
-        if ($etabA instanceof Etablissement) {
-            $gold->addEtablissement($etabA);
+        $gold = $manager->getRepository(Produit::class)->findOneBy(['code' => 'PRD-GOLD01']);
+        if (!$gold instanceof Produit) {
+            $formule = (new Formule())
+                ->setPeriodicite(PeriodiciteFormule::Mensuel)
+                ->setDroitAcces(['mode' => 'illimite'])
+                ->setRenouvellement(['auto' => true, 'prix' => 'fixe']);
+            $service = (new ServiceInclus())
+                ->setActiviteRef(Uuid::v4())
+                ->setQuota(2);
+            $formule->addServiceInclus($service);
+            $gold = (new Produit())
+                ->setType($typeAbo)
+                ->setLibelle(['fr' => self::PRODUIT_GOLD])
+                ->setLibelleRecherche(self::PRODUIT_GOLD)
+                ->setCode('PRD-GOLD01')
+                ->setCanaux(['guichet', 'en_ligne'])
+                ->setFormule($formule)
+                ->setStatut(StatutProduit::Brouillon);
+            if ($etabA instanceof Etablissement) {
+                $gold->addEtablissement($etabA);
+            }
+            $gold->addCategorie($catCompta);
+            $manager->persist($gold);
+            $this->ajouterGrille($manager, $gold, $tarifPlein, $saison, '39.90');
         }
-        $gold->addCategorie($catCompta);
-        $manager->persist($gold);
-        $this->ajouterGrille($manager, $gold, $tarifPlein, $saison, '39.90');
 
         // 3) Carte 10=12 (carnet : 10 payées, 12 créditées).
-        $carte = (new CarteMultiEntrees())
-            ->setNbPaye(10)
-            ->setNbCredite(12)
-            ->setDateButoir(new \DateTimeImmutable('2026-12-31'));
-        $carteProduit = (new Produit())
-            ->setType($typeCarte)
-            ->setLibelle(['fr' => self::PRODUIT_CARTE])
-            ->setLibelleRecherche(self::PRODUIT_CARTE)
-            ->setCode('PRD-CARTE01')
-            ->setCanaux(['guichet'])
-            ->setCarte($carte)
-            ->setStatut(StatutProduit::Brouillon);
-        if ($etabA instanceof Etablissement) {
-            $carteProduit->addEtablissement($etabA);
+        $carteProduit = $manager->getRepository(Produit::class)->findOneBy(['code' => 'PRD-CARTE01']);
+        if (!$carteProduit instanceof Produit) {
+            $carte = (new CarteMultiEntrees())
+                ->setNbPaye(10)
+                ->setNbCredite(12)
+                ->setDateButoir(new \DateTimeImmutable('2026-12-31'));
+            $carteProduit = (new Produit())
+                ->setType($typeCarte)
+                ->setLibelle(['fr' => self::PRODUIT_CARTE])
+                ->setLibelleRecherche(self::PRODUIT_CARTE)
+                ->setCode('PRD-CARTE01')
+                ->setCanaux(['guichet'])
+                ->setCarte($carte)
+                ->setStatut(StatutProduit::Brouillon);
+            if ($etabA instanceof Etablissement) {
+                $carteProduit->addEtablissement($etabA);
+            }
+            $carteProduit->addCategorie($catCompta);
+            $manager->persist($carteProduit);
+            $this->ajouterGrille($manager, $carteProduit, $tarifPlein, $saison, '45.00');
         }
-        $carteProduit->addCategorie($catCompta);
-        $manager->persist($carteProduit);
-        $this->ajouterGrille($manager, $carteProduit, $tarifPlein, $saison, '45.00');
 
         $manager->flush();
     }

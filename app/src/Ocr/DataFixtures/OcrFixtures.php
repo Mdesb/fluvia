@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Ocr\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\DataFixtures\SocleFixtures;
 use App\Ocr\Entity\ExtractionAttempt;
 use App\Ocr\Entity\OcrProviderConfig;
@@ -28,6 +29,8 @@ use Doctrine\Persistence\ObjectManager;
  */
 final class OcrFixtures extends Fixture implements DependentFixtureInterface
 {
+    use FixturesIdempotentes;
+
     public const DEMO_API_KEY = 'sk-ant-demo-0000000000000000000000';
 
     public function __construct(
@@ -43,8 +46,8 @@ final class OcrFixtures extends Fixture implements DependentFixtureInterface
     public function load(ObjectManager $manager): void
     {
         // --- Permissions ocr.* + octroi à l'administrateur socle (RG-SOCLE-02/03) ---
-        $permConfigurer = (new Permission())->setModule('ocr')->setAction('configure');
-        $permLireExtraction = (new Permission())->setModule('ocr')->setAction('read_extraction');
+        $permConfigurer = $this->permissionNommee($manager, 'ocr', 'configure');
+        $permLireExtraction = $this->permissionNommee($manager, 'ocr', 'read_extraction');
         $manager->persist($permConfigurer);
         $manager->persist($permLireExtraction);
 

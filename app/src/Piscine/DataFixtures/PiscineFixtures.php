@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Piscine\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\Acces\DataFixtures\AccesFixtures;
 use App\Acces\Entity\EspaceAcces;
 use App\Acces\Entity\Support;
@@ -40,6 +41,8 @@ use Doctrine\Persistence\ObjectManager;
  */
 final class PiscineFixtures extends Fixture implements DependentFixtureInterface
 {
+    use FixturesIdempotentes;
+
     public const BASSIN_LIBELLE = 'Grand bassin';
     public const CASIER_ZONE = 'Vestiaire A';
     public const CASIER_NUMERO = 1;
@@ -55,7 +58,7 @@ final class PiscineFixtures extends Fixture implements DependentFixtureInterface
         // --- Permissions piscine.* + octroi à l'administrateur (RG-SOCLE-02/03) ---
         $perms = [];
         foreach (['configurer', 'gerer_casier', 'forcer_casier', 'lire', 'gerer'] as $action) {
-            $perm = (new Permission())->setModule('piscine')->setAction($action);
+            $perm = $this->permissionNommee($manager, 'piscine', $action);
             $manager->persist($perm);
             $perms[$action] = $perm;
         }

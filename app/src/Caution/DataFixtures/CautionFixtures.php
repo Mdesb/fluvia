@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Caution\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\Caution\Entity\Caution;
 use App\Caution\Entity\GrilleRetenue;
 use App\Caution\Enum\ModeRetenue;
@@ -23,6 +24,8 @@ use Doctrine\Persistence\ObjectManager;
  */
 final class CautionFixtures extends Fixture implements DependentFixtureInterface
 {
+    use FixturesIdempotentes;
+
     public const REFERENCE_CIBLE_DEMO = '00000000-0000-4000-8000-000000000001';
 
     public function getDependencies(): array
@@ -34,7 +37,7 @@ final class CautionFixtures extends Fixture implements DependentFixtureInterface
     {
         $perms = [];
         foreach (['lire', 'piloter', 'parametrer', 'gerer', 'forcer'] as $action) {
-            $perm = (new Permission())->setModule('caution')->setAction($action);
+            $perm = $this->permissionNommee($manager, 'caution', $action);
             $manager->persist($perm);
             $perms[$action] = $perm;
         }

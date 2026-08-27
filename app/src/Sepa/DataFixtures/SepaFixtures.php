@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Sepa\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\Compta\DataFixtures\ComptaFixtures;
 use App\Crm\DataFixtures\CrmFixtures;
 use App\Crm\Entity\Client;
@@ -38,6 +39,8 @@ use Doctrine\Persistence\ObjectManager;
  */
 final class SepaFixtures extends Fixture implements DependentFixtureInterface
 {
+    use FixturesIdempotentes;
+
     public const REGIE_IBAN_DEMO = 'FR7630006000011234567890189';
     public const PRIVE_IBAN_DEMO = 'FR7630004000031234567890143';
 
@@ -58,7 +61,7 @@ final class SepaFixtures extends Fixture implements DependentFixtureInterface
         // --- Permissions sepa.* + octroi à l'administrateur (RG-SOCLE-02/03) ---
         $perms = [];
         foreach (['lire', 'gerer', 'generer_remise', 'declarer_rejet'] as $action) {
-            $perm = (new Permission())->setModule('sepa')->setAction($action);
+            $perm = $this->permissionNommee($manager, 'sepa', $action);
             $manager->persist($perm);
             $perms[$action] = $perm;
         }

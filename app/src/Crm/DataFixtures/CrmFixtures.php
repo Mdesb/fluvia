@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Crm\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\Crm\Entity\Beneficiaire;
 use App\Crm\Entity\Client;
 use App\Crm\Entity\Famille;
@@ -37,6 +38,8 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
  */
 final class CrmFixtures extends Fixture implements DependentFixtureInterface
 {
+    use FixturesIdempotentes;
+
     public const PAYEUR_EMAIL = 'jean.dupont@example.test';
     public const ENFANT_PRENOM = 'Léo';
     public const CONJOINT_PRENOM = 'Marie';
@@ -74,7 +77,7 @@ final class CrmFixtures extends Fixture implements DependentFixtureInterface
         ];
         $permissions = [];
         foreach ($actions as $action) {
-            $permissions[$action] = (new Permission())->setModule('crm')->setAction($action);
+            $permissions[$action] = $this->permissionNommee($manager, 'crm', $action);
             $manager->persist($permissions[$action]);
         }
 

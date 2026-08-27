@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Finance\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\Compta\DataFixtures\ComptaFixtures;
 use App\Compta\Entity\CompteComptable;
 use App\Compta\Entity\ExpenseAccountMapping;
@@ -34,6 +35,8 @@ use Doctrine\Persistence\ObjectManager;
  */
 final class FinanceFixtures extends Fixture implements DependentFixtureInterface
 {
+    use FixturesIdempotentes;
+
     /** @var list<string> */
     public const ACTIONS = [
         'read', 'supplier_invoice_create', 'supplier_invoice_approve',
@@ -55,7 +58,7 @@ final class FinanceFixtures extends Fixture implements DependentFixtureInterface
     {
         $perms = [];
         foreach (self::ACTIONS as $action) {
-            $perm = (new Permission())->setModule('finance')->setAction($action);
+            $perm = $this->permissionNommee($manager, 'finance', $action);
             $manager->persist($perm);
             $perms[$action] = $perm;
         }

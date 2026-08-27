@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Facturation\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\Compta\DataFixtures\ComptaFixtures;
 use App\Compta\Entity\CompteComptable;
 use App\Compta\Entity\PeriodeComptable;
@@ -23,6 +24,8 @@ use Doctrine\Persistence\ObjectManager;
  */
 final class FacturationFixtures extends Fixture implements DependentFixtureInterface
 {
+    use FixturesIdempotentes;
+
     public function getDependencies(): array
     {
         return [SocleFixtures::class, ComptaFixtures::class];
@@ -30,10 +33,10 @@ final class FacturationFixtures extends Fixture implements DependentFixtureInter
 
     public function load(ObjectManager $manager): void
     {
-        $permFacturationTout = (new Permission())->setModule('facturation')->setAction('*');
+        $permFacturationTout = $this->permissionNommee($manager, 'facturation', '*');
         $manager->persist($permFacturationTout);
         foreach (['lire', 'lire_soi', 'emettre_justificative', 'emettre_directe', 'avoir', 'lettrer', 'deposer_chorus', 'gerer'] as $action) {
-            $manager->persist((new Permission())->setModule('facturation')->setAction($action));
+            $manager->persist($this->permissionNommee($manager, 'facturation', $action));
         }
 
         $roleAdmin = $manager->getRepository(Role::class)->findOneBy(['nom' => 'Administrateur groupe']);

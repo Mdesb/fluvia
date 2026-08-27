@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Compta\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\Compta\Entity\CompteComptable;
 use App\Compta\Entity\Journal;
 use App\Compta\Entity\MappingComptable;
@@ -33,6 +34,8 @@ use Doctrine\Persistence\ObjectManager;
  */
 final class ComptaFixtures extends Fixture implements DependentFixtureInterface
 {
+    use FixturesIdempotentes;
+
     public const PROFIL_SIREN = '130025265';
     public const REGIE_LIBELLE = 'Régie piscine A';
 
@@ -44,15 +47,15 @@ final class ComptaFixtures extends Fixture implements DependentFixtureInterface
     public function load(ObjectManager $manager): void
     {
         // --- Permissions compta.* + caisse.versement + octroi à l'administrateur ---
-        $permComptaTout = (new Permission())->setModule('compta')->setAction('*');
+        $permComptaTout = $this->permissionNommee($manager, 'compta', '*');
         $manager->persist($permComptaTout);
         // `record_manual_entry` (FIN-1, US-L4-11) : nouvelle action, couverte par le joker `compta.*`
         // déjà accordé à l'Administrateur groupe ; créée explicitement ici comme toute autre action du
         // référentiel (§3 spec-comptabilite-generale.md), pour un octroi fin à un rôle non-wildcard.
         foreach (['lire', 'lettrer', 'valider', 'exporter', 'cloturer', 'gerer', 'lire_rad', 'lire_consolide', 'record_manual_entry'] as $action) {
-            $manager->persist((new Permission())->setModule('compta')->setAction($action));
+            $manager->persist($this->permissionNommee($manager, 'compta', $action));
         }
-        $permVersement = (new Permission())->setModule('caisse')->setAction('versement');
+        $permVersement = $this->permissionNommee($manager, 'caisse', 'versement');
         $manager->persist($permVersement);
 
         $roleAdmin = $manager->getRepository(Role::class)->findOneBy(['nom' => 'Administrateur groupe']);

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Securite\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\DataFixtures\SocleFixtures;
 use App\Organisation\Entity\Etablissement;
 use App\Securite\Entity\Affectation;
@@ -24,6 +25,8 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
  */
 final class L7Fixtures extends Fixture implements DependentFixtureInterface
 {
+    use FixturesIdempotentes;
+
     public const INVITE_EMAIL = 'invite.valide@itcotation.com';
     public const INVITE_JETON_CLAIR = 'jeton-invitation-test-clair-01';
     public const INVITE_EXPIRE_EMAIL = 'invite.expire@itcotation.com';
@@ -118,7 +121,7 @@ final class L7Fixtures extends Fixture implements DependentFixtureInterface
         $manager->persist($respA);
         $manager->persist((new Affectation())->setUtilisateur($respA)->setRole($roleRespA)->setEtablissement($etabA));
 
-        $permDemo = (new Permission())->setModule(self::PERMISSION_DEMO_MODULE)->setAction(self::PERMISSION_DEMO_ACTION);
+        $permDemo = $this->permissionNommee($manager, self::PERMISSION_DEMO_MODULE, self::PERMISSION_DEMO_ACTION);
         $manager->persist($permDemo);
         $roleTropPuissant = (new Role())->setNom(self::ROLE_TROP_PUISSANT_NOM);
         $roleTropPuissant->addPermission($permSecuriteGerer)->addPermission($permDemo);

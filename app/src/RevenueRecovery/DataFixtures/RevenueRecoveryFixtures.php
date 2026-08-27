@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\RevenueRecovery\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\DataFixtures\SocleFixtures;
 use App\Securite\Entity\Permission;
 use Doctrine\Bundle\FixturesBundle\Fixture;
@@ -19,6 +20,8 @@ use Doctrine\Persistence\ObjectManager;
  */
 final class RevenueRecoveryFixtures extends Fixture implements DependentFixtureInterface
 {
+    use FixturesIdempotentes;
+
     public function getDependencies(): array
     {
         return [SocleFixtures::class];
@@ -27,7 +30,7 @@ final class RevenueRecoveryFixtures extends Fixture implements DependentFixtureI
     public function load(ObjectManager $manager): void
     {
         foreach (['read', 'configure', 'manage'] as $action) {
-            $permission = (new Permission())->setModule('revenue_recovery')->setAction($action);
+            $permission = $this->permissionNommee($manager, 'revenue_recovery', $action);
             $manager->persist($permission);
         }
 

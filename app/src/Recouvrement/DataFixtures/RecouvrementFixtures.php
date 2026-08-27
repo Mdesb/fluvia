@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Recouvrement\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\DataFixtures\SocleFixtures;
 use App\Securite\Entity\Permission;
 use App\Securite\Entity\Role;
@@ -18,6 +19,8 @@ use Doctrine\Persistence\ObjectManager;
  */
 final class RecouvrementFixtures extends Fixture implements DependentFixtureInterface
 {
+    use FixturesIdempotentes;
+
     public function getDependencies(): array
     {
         return [SocleFixtures::class];
@@ -27,7 +30,7 @@ final class RecouvrementFixtures extends Fixture implements DependentFixtureInte
     {
         $perms = [];
         foreach (['lire', 'piloter', 'parametrer', 'forcer_acces', 'lire_soi', 'resoudre_impaye_soi'] as $action) {
-            $perm = (new Permission())->setModule('recouvrement')->setAction($action);
+            $perm = $this->permissionNommee($manager, 'recouvrement', $action);
             $manager->persist($perm);
             $perms[$action] = $perm;
         }

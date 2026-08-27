@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Musee\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\Acces\Entity\EspaceAcces;
 use App\Acces\Entity\Support;
 use App\Acces\Enum\ModeSeuil;
@@ -54,6 +55,8 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
  */
 final class MuseeFixtures extends Fixture implements DependentFixtureInterface
 {
+    use FixturesIdempotentes;
+
     public const GESTIONNAIRE_EMAIL = 'gestionnaire.musee@itcotation.com';
     public const GESTIONNAIRE_MDP = 'aaa';
     public const COORDINATEUR_EMAIL = 'coordinateur.visites@itcotation.com';
@@ -92,7 +95,7 @@ final class MuseeFixtures extends Fixture implements DependentFixtureInterface
         $actions = ['lire', 'configurer', 'superviser_salle', 'gerer_visite', 'gerer_dossier_groupe', 'gerer_pass', 'gerer_ota', 'gerer'];
         $permissions = [];
         foreach ($actions as $action) {
-            $permissions[$action] = (new Permission())->setModule('musee')->setAction($action);
+            $permissions[$action] = $this->permissionNommee($manager, 'musee', $action);
             $manager->persist($permissions[$action]);
         }
 

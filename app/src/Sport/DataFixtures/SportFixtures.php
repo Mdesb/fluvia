@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Sport\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\Acces\DataFixtures\AccesFixtures;
 use App\Acces\Entity\DroitAcces;
 use App\Acces\Entity\EspaceAcces;
@@ -37,6 +38,8 @@ use Doctrine\Persistence\ObjectManager;
  */
 final class SportFixtures extends Fixture implements DependentFixtureInterface
 {
+    use FixturesIdempotentes;
+
     public const ADHERENT_IBAN_DEMO = 'FR7630006000011234567890189';
     public const ADHERENT_TITULAIRE = 'Marie Dupont';
     public const MONTANT_MENSUEL_CENTIMES = 3990;
@@ -62,7 +65,7 @@ final class SportFixtures extends Fixture implements DependentFixtureInterface
             'configurer_nocturne', 'superviser_nocturne', 'lire_soi',
             'pause_demander_soi', 'resilier_demander_soi',
         ] as $action) {
-            $perm = (new Permission())->setModule('sport')->setAction($action);
+            $perm = $this->permissionNommee($manager, 'sport', $action);
             $manager->persist($perm);
             $perms[$action] = $perm;
         }

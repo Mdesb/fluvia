@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Boutique\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\Boutique\Entity\CompteClient;
 use App\Boutique\Entity\LignePanierEnLigne;
 use App\Boutique\Entity\PanierEnLigne;
@@ -55,6 +56,8 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
  */
 final class BoutiqueFixtures extends Fixture implements DependentFixtureInterface
 {
+    use FixturesIdempotentes;
+
     public const GESTIONNAIRE_EMAIL = 'gestionnaire.boutique@itcotation.com';
     public const GESTIONNAIRE_MDP = 'aaa';
     public const RESPONSABLE_EMAIL = 'responsable.boutique@itcotation.com';
@@ -104,7 +107,7 @@ final class BoutiqueFixtures extends Fixture implements DependentFixtureInterfac
         ];
         $permissions = [];
         foreach ($actions as $action) {
-            $permissions[$action] = (new Permission())->setModule('boutique')->setAction($action);
+            $permissions[$action] = $this->permissionNommee($manager, 'boutique', $action);
             $manager->persist($permissions[$action]);
         }
 

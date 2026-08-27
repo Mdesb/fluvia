@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Padel\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\Crm\Entity\Beneficiaire;
 use App\Crm\Entity\Client;
 use App\Crm\Entity\Famille;
@@ -53,6 +54,8 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
  */
 final class PadelFixtures extends Fixture implements DependentFixtureInterface
 {
+    use FixturesIdempotentes;
+
     public const GESTIONNAIRE_EMAIL = 'gestionnaire.padel@itcotation.com';
     public const GESTIONNAIRE_MDP = 'aaa';
     public const JOUEUR_EMAIL_PREFIX = 'joueur';
@@ -92,7 +95,7 @@ final class PadelFixtures extends Fixture implements DependentFixtureInterface
         ];
         $permissions = [];
         foreach ($actions as $action) {
-            $permissions[$action] = (new Permission())->setModule('padel')->setAction($action);
+            $permissions[$action] = $this->permissionNommee($manager, 'padel', $action);
             $manager->persist($permissions[$action]);
         }
 
