@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
+import VocabulaireMetier from '../components/VocabulaireMetier.jsx'
 import Liste, { texte, dateHeureFr } from '../components/Liste.jsx'
 import Tabs from '../components/Tabs.jsx'
 import Modal from '../components/Modal.jsx'
@@ -353,6 +354,11 @@ export default function Parametres({ etabActif, etablissements, droits = [] }) {
       {sousOnglet === 'entites' && (
         <div className="resa-grid">
           <EtablissementsSection peutEcrire={aLeDroit(droits, 'organisation.gerer')} />
+          {/* LES MOTS DU METIER, A COTE DE L'ETABLISSEMENT QU'ILS CONCERNENT.
+              << Ressource >> veut dire praticien chez le coiffeur, ligne d'eau a la piscine. Le mettre
+              dans un onglet << apparence >> le ferait chercher ailleurs : c'est un reglage de
+              l'etablissement, pas du theme. */}
+          <VocabulaireMetier etabActif={etabActif} peutEcrire={aLeDroit(droits, 'organisation.gerer')} />
           <Liste
             titre="Espaces"
             sous="zones physiques"

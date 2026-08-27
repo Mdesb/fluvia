@@ -187,9 +187,31 @@ export function humaniser(code) {
   return t.charAt(0).toUpperCase() + t.slice(1)
 }
 
+// LES MOTS DU METIER, PAR ETABLISSEMENT -- poses PAR-DESSUS la table statique, jamais a la place.
+//
+// << Ressource >> veut dire *praticien* dans un salon de coiffure, *ligne d'eau* dans une piscine,
+// *court* au padel. Traduire une fois pour tout le monde rendrait le logiciel faux partout sauf a un
+// endroit.
+//
+// Un code absent des remplacements garde sa traduction par defaut : un etablissement qui ne renseigne
+// rien continue de voir exactement ce qu'il voyait. C'est la seule facon d'ajouter cette souplesse
+// sans risquer de vider un mot quelque part.
+//
+// Etat de module et non contexte React, deliberement : `mot()` est appelee depuis des fonctions pures,
+// des colonnes de tableau, des titres -- la faire dependre d'un contexte obligerait a la transformer
+// en hook et a toucher trente appels pour une fonctionnalite que la plupart des etablissements
+// n'utiliseront jamais.
+let vocabulaireLocal = {}
+
+/** @param {Record<string,string>|null|undefined} mots */
+export function setVocabulaireLocal(mots) {
+  vocabulaireLocal = mots && typeof mots === 'object' ? mots : {}
+}
+
 export function mot(code) {
   if (code === null || code === undefined || code === '') return '—'
-  return MOTS[String(code)] || humaniser(code)
+  const cle = String(code)
+  return vocabulaireLocal[cle] || MOTS[cle] || humaniser(cle)
 }
 
 // Glossaire des sigles qu'on ne peut pas remplacer — ils figurent sur les équipements, dans les

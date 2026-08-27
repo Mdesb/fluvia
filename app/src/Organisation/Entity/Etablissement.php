@@ -101,6 +101,28 @@ class Etablissement
     #[Groups(['etablissement:read', 'etablissement:write'])]
     private string $fuseauHoraire = 'Europe/Paris';
 
+    /**
+     * LES MOTS DU METIER, PAR ETABLISSEMENT.
+     *
+     * Maxime, le 27/08 : << il manque les verticales salon de massage, salon de coiffure >>. En
+     * regardant, le metier etait deja ecrit -- `Activite` porte une duree, `Ressource` une capacite,
+     * et il existe des regles d'annulation et une facturation des non-presentations. Ce qui manquait
+     * n'etait pas le modele : c'etaient LES MOTS.
+     *
+     * **Et ils ne peuvent pas etre globaux.** << Ressource >> veut dire *praticien* dans un salon,
+     * *ligne d'eau* dans une piscine, *court* au padel. Traduire une fois pour tout le monde
+     * rendrait le logiciel faux partout sauf a un endroit.
+     *
+     * Table de remplacements posee PAR-DESSUS `vocabulaire.js`, jamais a la place : un code absent
+     * d'ici garde sa traduction par defaut. Un etablissement qui ne renseigne rien continue de voir
+     * exactement ce qu'il voyait.
+     *
+     * @var array<string, string>|null
+     */
+    #[ORM\Column(type: 'json', nullable: true)]
+    #[Groups(['etablissement:read', 'etablissement:write'])]
+    private ?array $vocabulaire = null;
+
     /** @var Collection<int, Espace> */
     #[ORM\OneToMany(targetEntity: Espace::class, mappedBy: 'etablissement')]
     private Collection $espaces;
@@ -156,6 +178,36 @@ class Etablissement
     public function getEspaces(): Collection
     {
         return $this->espaces;
+    }
+
+    /** @return array<string, string>|null */
+    public function getVocabulaire(): ?array
+    {
+        return $this->vocabulaire;
+    }
+
+    /** @param array<string, string>|null $vocabulaire */
+    public function setVocabulaire(?array $vocabulaire): self
+    {
+        if ($vocabulaire === null) {
+            $this->vocabulaire = null;
+
+            return $this;
+        }
+
+        // On ne garde que des paires de chaines non vides. Une valeur vide effacerait le mot par
+        // defaut sans en proposer d'autre : l'ecran afficherait un blanc a la place d'un terme.
+        $propre = [];
+        foreach ($vocabulaire as $code => $mot) {
+            if (!\is_string($code) || !\is_string($mot) || trim($code) === '' || trim($mot) === '') {
+                continue;
+            }
+            $propre[trim($code)] = trim($mot);
+        }
+
+        $this->vocabulaire = $propre === [] ? null : $propre;
+
+        return $this;
     }
 
     public function getFuseauHoraire(): string

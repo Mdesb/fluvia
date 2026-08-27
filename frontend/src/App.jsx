@@ -1,4 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useState } from 'react'
+import { setVocabulaireLocal } from './api/vocabulaire.js'
 import {
   api,
   membres,
@@ -100,6 +101,14 @@ export default function App() {
     if (choisi) etablissementStore.set(choisi)
     else etablissementStore.clear()
     setEtabActif(choisi)
+
+    // LES MOTS DU METIER SONT POSES AVANT LE PREMIER RENDU, ET C'EST LE POINT.
+    //
+    // `mot()` est appelee depuis des colonnes de tableau et des titres, pendant le rendu. Charger le
+    // vocabulaire APRES afficherait un ecran en langue par defaut, puis le meme ecran en langue du
+    // metier -- un clignotement qui donne l'impression que le logiciel hesite sur ses propres termes.
+    setVocabulaireLocal((valide || liste.find((e) => e.id === choisi))?.vocabulaire)
+
     // /me est désormais appelé avec l'établissement corrigé : capacitesActives correctes dès le 1er rendu.
     setMe(await api.me())
   }, [])
@@ -172,6 +181,9 @@ export default function App() {
   }, [me, onglet])
 
   function changerEtablissement(id) {
+    // Changer d'etablissement change les mots : sans ca, on garderait le vocabulaire du salon
+    // en arrivant sur la piscine, et << praticien >> designerait une ligne d'eau.
+    setVocabulaireLocal(etablissements.find((e) => e.id === id)?.vocabulaire)
     setEtabActif(id)
     etablissementStore.set(id)
   }
