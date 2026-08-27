@@ -9,6 +9,7 @@ use ApiPlatform\State\ProcessorInterface;
 use App\Offre\Entity\Produit;
 use App\Offre\Service\GenerateurCodeProduit;
 use App\Offre\Service\ResolveurFacettes;
+use App\Offre\Service\DefaultCategoryResolver;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 /**
@@ -27,6 +28,7 @@ final class ProduitProcessor implements ProcessorInterface
         #[Autowire(service: 'api_platform.doctrine.orm.state.persist_processor')]
         private readonly ProcessorInterface $persistProcessor,
         private readonly ResolveurFacettes $facettes,
+        private readonly DefaultCategoryResolver $categoriesParDefaut,
         private readonly GenerateurCodeProduit $generateurCode,
     ) {
     }
@@ -38,6 +40,15 @@ final class ProduitProcessor implements ProcessorInterface
                 $data->setCode($this->generateurCode->generer());
             }
             $data->setLibelleRecherche($this->projeterLibelle($data));
+
+            // ACT-5 : les categories par defaut du TYPE, sur les axes encore vides.
+            //
+            // L'axe comptable est OBLIGATOIRE POUR PUBLIER (RG-M1-05). Sans ce remplissage, un produit
+            // cree sans lui reste bloque en brouillon, et l'exploitant qui ne connait pas la regle
+            // cherche pourquoi son produit ne se vend pas.
+            //
+            // Un defaut n'est pas une regle : les axes deja renseignes ne sont jamais ecrases.
+            $this->categoriesParDefaut->appliquer($data);
             $this->facettes->purgerOrphelins($data);
             $data->toucherModifieLe();
         }
