@@ -934,7 +934,6 @@ export const api = {
   // ⚠ Les actions sont des POST à `input: false` : API Platform ne désérialise pas le corps, et c'est
   // le processeur qui le lit directement dans la requête. Le corps part donc tel quel, sans IRI.
   supportTickets: (params) => request('/api/support/tickets', { query: { itemsPerPage: 100, ...(params || {}) } }),
-  supportTableauBord: () => request('/api/support/tickets/tableau-de-bord'),
   supportTicket: (id) => request(`/api/support/tickets/${id}`),
   ouvrirTicket: (corps) => request('/api/support/tickets', { method: 'POST', body: corps, ld: true }),
   prendreEnChargeTicket: (id) => request(`/api/support/tickets/${id}/prendre-en-charge`, { method: 'POST', body: {} }),

@@ -72,6 +72,7 @@ export default function Support({ droits = [], etabActif }) {
   const [onglet, setOnglet] = useState('tickets')
   const [tickets, setTickets] = useState([])
   const [filtreStatut, setFiltreStatut] = useState('')
+  const [filtrePriorite, setFiltrePriorite] = useState('')
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [ouvert, setOuvert] = useState(null)
@@ -81,13 +82,25 @@ export default function Support({ droits = [], etabActif }) {
     setChargement(true)
     setErreur(null)
     try {
-      setTickets(membres(await api.supportTickets(filtreStatut ? { statut: filtreStatut } : {})))
+      // LES FILTRES SONT CEUX DE LA COLLECTION, PAS D'UN SECOND POINT D'ENTRÉE.
+      //
+      // `/support/tickets/tableau-de-bord` existait et proposait exactement les mêmes filtres, servi
+      // par un fournisseur qui **recopiait à la main** la règle de cloisonnement de
+      // `PerimetreSupportExtension` — son propre commentaire le disait. Deux chemins vers la même
+      // donnée, dont l'un rejoue une règle de sécurité : le jour où la règle change, il en reste une
+      // version périmée, et c'est celle-là qui décide qui voit quoi.
+      //
+      // On lit donc la collection, qui porte déjà `statut`, `priorite` et `niveauAffectation`.
+      setTickets(membres(await api.supportTickets({
+        ...(filtreStatut ? { statut: filtreStatut } : {}),
+        ...(filtrePriorite ? { priorite: filtrePriorite } : {}),
+      })))
     } catch (e) {
       setErreur(e.message || 'Les tickets n’ont pas pu être chargés.')
     } finally {
       setChargement(false)
     }
-  }, [filtreStatut])
+  }, [filtreStatut, filtrePriorite])
 
   useEffect(() => {
     if (onglet === 'tickets') recharger()
@@ -121,6 +134,8 @@ export default function Support({ droits = [], etabActif }) {
           chargement={chargement}
           filtreStatut={filtreStatut}
           onFiltrer={setFiltreStatut}
+          filtrePriorite={filtrePriorite}
+          onFiltrerPriorite={setFiltrePriorite}
           onOuvrir={setOuvert}
         />
       ) : (
@@ -148,14 +163,30 @@ export default function Support({ droits = [], etabActif }) {
   )
 }
 
-function ListeTickets({ tickets, chargement, filtreStatut, onFiltrer, onOuvrir }) {
+function ListeTickets({ tickets, chargement, filtreStatut, onFiltrer, filtrePriorite, onFiltrerPriorite, onOuvrir }) {
   return (
     <div className="panel">
-      <div className="panel-h">
+      <div className="panel-h" style={{ gap: 8, flexWrap: 'wrap' }}>
         <span>Demandes</span>
+
+        {/* LA PRIORITÉ AVANT LE STATUT, PARCE QUE C'EST LA QUESTION DU MATIN.
+            « Qu'est-ce qui est critique » se demande tous les jours ; « qu'est-ce qui est fermé »
+            se demande une fois par mois. L'ordre des filtres est l'ordre des questions. */}
         <select
           className="select sm"
-          style={{ marginLeft: 'auto', width: 220 }}
+          style={{ marginLeft: 'auto', width: 180 }}
+          value={filtrePriorite}
+          onChange={(e) => onFiltrerPriorite(e.target.value)}
+        >
+          <option value="">Toutes priorités</option>
+          {Object.entries(PRIORITES).map(([cle, p]) => (
+            <option key={cle} value={cle}>{p.libelle}</option>
+          ))}
+        </select>
+
+        <select
+          className="select sm"
+          style={{ width: 200 }}
           value={filtreStatut}
           onChange={(e) => onFiltrer(e.target.value)}
         >
@@ -172,8 +203,8 @@ function ListeTickets({ tickets, chargement, filtreStatut, onFiltrer, onOuvrir }
         // D54 : le fait sur la donnée d'abord. « Aucune demande » et « le filtre n'en laisse
         // aucune » ne demandent pas la même action de la part du lecteur.
         <div className="sub" style={{ textAlign: 'center', padding: 24 }}>
-          {filtreStatut
-            ? 'Aucune demande dans ce statut. Les autres restent visibles en retirant le filtre.'
+          {filtreStatut || filtrePriorite
+            ? 'Aucune demande ne correspond à ces filtres. Les autres restent visibles en les retirant.'
             : 'Aucune demande ouverte.'}
         </div>
       ) : (
