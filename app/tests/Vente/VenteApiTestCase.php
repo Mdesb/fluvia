@@ -100,6 +100,46 @@ abstract class VenteApiTestCase extends ApiTestCase
         ])->toArray();
     }
 
+    /**
+     * L'instant demandé, exprimé dans le fuseau de l'ÉTABLISSEMENT puis converti en UTC pour la base.
+     *
+     * Sans cette conversion, « il y a 3 jours » se calculait dans le fuseau du conteneur — UTC —
+     * alors que la journée comptable se lit dans celui de l'établissement — Europe/Paris. Entre
+     * minuit et 2 h du matin, les deux ne désignent pas le même jour : `JourneesNonClosesTest` et
+     * `ClotureCommandeTest` échouaient **deux heures par nuit**, et personne ne lance la suite à
+     * cette heure-là. Trouvé le 28/08 à 1 h 25.
+     *
+     * > **Un test qui dépend de l'heure qu'il est ne dit rien sur le code.**
+     */
+    /**
+     * La journée comptable désignée par `$quand`, dans le fuseau de l'établissement.
+     *
+     * Le pendant de `momentUtc()` : l'un pose la donnée, l'autre nomme le jour attendu. Les deux
+     * doivent compter dans le MÊME calendrier, sinon le test compare deux jours différents en
+     * croyant en comparer un seul — et ne le fait que deux heures par nuit.
+     */
+    protected function jourComptable(string $quand): string
+    {
+        return (new \DateTimeImmutable($quand, $this->fuseauEtablissement()))->format('Y-m-d');
+    }
+
+    private function fuseauEtablissement(): \DateTimeZone
+    {
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $etablissement = $em->getRepository(\App\Organisation\Entity\Etablissement::class)
+            ->findOneBy(['nom' => SocleFixtures::ETAB_A_NOM]);
+
+        return new \DateTimeZone($etablissement?->getFuseauHoraire() ?? 'UTC');
+    }
+
+    protected function momentUtc(string $quand): string
+    {
+        return (new \DateTimeImmutable($quand, $this->fuseauEtablissement()))
+            ->setTimezone(new \DateTimeZone('UTC'))
+            ->format('Y-m-d H:i:s');
+    }
+
     protected function idEtablissement(string $nom): string
     {
         return (string) $this->entite(Etablissement::class, ['nom' => $nom])->getId();

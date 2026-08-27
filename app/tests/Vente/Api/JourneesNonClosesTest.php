@@ -42,7 +42,7 @@ final class JourneesNonClosesTest extends VenteApiTestCase
         self::assertResponseIsSuccessful();
 
         $journees = array_column($file['member'] ?? $file, 'journee');
-        self::assertContains((new \DateTimeImmutable('-3 days'))->format('Y-m-d'), $journees);
+        self::assertContains($this->jourComptable('-3 days'), $journees);
 
         $entree = ($file['member'] ?? $file)[0];
         self::assertSame(1, $entree['nombreVentes']);
@@ -60,7 +60,7 @@ final class JourneesNonClosesTest extends VenteApiTestCase
 
         $session = $this->ouvrirSession($client, $entete);
         $vente = $this->venteValidee($client, $entete, $session['id']);
-        $jour = (new \DateTimeImmutable('-2 days'))->format('Y-m-d');
+        $jour = $this->jourComptable('-2 days');
         $this->antidater($vente['id'], '-2 days 10:00');
 
         $avant = $this->journees($client, $entete);
@@ -84,7 +84,7 @@ final class JourneesNonClosesTest extends VenteApiTestCase
         $session = $this->ouvrirSession($client, $entete);
         $this->venteValidee($client, $entete, $session['id']);
 
-        self::assertNotContains((new \DateTimeImmutable('today'))->format('Y-m-d'), $this->journees($client, $entete));
+        self::assertNotContains($this->jourComptable('today'), $this->journees($client, $entete));
     }
 
     /**
@@ -132,7 +132,7 @@ final class JourneesNonClosesTest extends VenteApiTestCase
         $em = $this->em();
         $em->getConnection()->executeStatement(
             'UPDATE vente_vente SET date = ? WHERE id = UNHEX(REPLACE(?, "-", ""))',
-            [(new \DateTimeImmutable($quand))->format('Y-m-d H:i:s'), $venteId],
+            [$this->momentUtc($quand), $venteId],
         );
         $em->clear();
     }
