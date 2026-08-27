@@ -263,6 +263,16 @@ export const api = {
   // Création rapide d'une fiche client (US-L5-02). L'établissement de création / le groupe sont
   // fixés côté back depuis l'établissement actif (en-tête X-Etablissement).
   creerClient: (corps) => request('/api/clients', { method: 'POST', body: corps, ld: true }),
+
+  // AFFAIRES EN COURS -- ce qui vit entre << un client appelle >> et << un devis part >>.
+  //
+  // `/crm/pipeline` rend les colonnes avec l'etape EFFECTIVE : des qu'un devis est rattache,
+  // c'est lui qui dit ou en est l'affaire. Rien n'est recopie -- une copie prend du retard, et
+  // une etape en retard est pire qu'absente parce qu'elle a l'air d'etre a jour.
+  pipeline: () => request('/api/crm/pipeline'),
+  opportunites: () => request('/api/opportunities', { query: { itemsPerPage: 200 } }),
+  creerOpportunite: (corps) => request('/api/opportunities', { method: 'POST', body: corps, ld: true }),
+  majOpportunite: (id, corps) => request(`/api/opportunities/${id}`, { method: 'PATCH', body: corps }),
   // Rattache (ou crée) un client sur une vente ouverte (M2, CA-7). Corps : un de
   // { client: uuid } | { recherche: "..." } | { creer: { nom, prenom, email, telephone } }.
   rattacherClientVente: (venteId, corps) =>
@@ -366,6 +376,14 @@ export const api = {
   supprimerIndisponibilite: (id) =>
     request(`/api/reservation_indisponibilites/${id}`, { method: 'DELETE' }),
   reservationActivites: () => request('/api/reservation_activites', { query: { itemsPerPage: 100 } }),
+  // PLACEMENT LIBRE : les debuts ou un rendez-vous TIENDRAIT, un jour donne.
+  //
+  // Sans `ressource`, on interroge tous les praticiens capables -- le mode << avec qui est
+  // libre >>, qui est celui qui remplit un agenda. Ce point d'entree ne reserve rien : il
+  // propose, et la reservation reste la creation d'un creneau puis d'une reservation.
+  creneauxLibres: (params) => request('/api/reservation/creneaux-libres', { query: params }),
+  creerCreneau: (corps) =>
+    request('/api/reservation/creneaux', { method: 'POST', body: corps }),
   reservations: () => request('/api/reservations', { query: { itemsPerPage: 200 } }),
   // No-show (D27) : les deux operations existaient et n'etaient appelees de nulle part.
   facturationsNoShow: () => request('/api/reservation_facturation_no_shows', { query: { itemsPerPage: 100 } }),

@@ -3,6 +3,7 @@ import { jourLocal } from '../components/Liste.jsx'
 import { api, membres } from '../api/client.js'
 import PlanningSemaine from '../components/PlanningSemaine.jsx'
 import Disponibilites from '../components/Disponibilites.jsx'
+import PriseRendezVous from '../components/PriseRendezVous.jsx'
 import { euros } from '../api/produit.js'
 import NoShowSection from '../components/NoShowSection.jsx'
 
@@ -163,6 +164,13 @@ export default function Reservation({ etabActif, droits = [], session }) {
               `DisponibiliteRessource` et `IndisponibiliteRessource` exposent un CRUD complet depuis le
               debut, et le front ne les mentionnait nulle part. Sans eux, une ressource ne peut rien
               recevoir -- et rien ne le disait. */}
+          {/* LE SECOND MODELE DE PRISE DE RENDEZ-VOUS.
+              Le planning reserve un creneau QUI EXISTE DEJA -- juste pour une seance de piscine. Ici
+              rien n'existe avant que le client n'appelle : on cherche ou le rendez-vous TIENDRAIT.
+              Maxime, le 27/08 : << il faut les deux pour le calendrier >>. */}
+          <button type="button" className={vue === 'rdv' ? 'on' : ''} onClick={() => setVue('rdv')}>
+            Prendre un rendez-vous
+          </button>
           <button type="button" className={vue === 'horaires' ? 'on' : ''} onClick={() => setVue('horaires')}>
             Horaires et absences
           </button>
@@ -171,6 +179,8 @@ export default function Reservation({ etabActif, droits = [], session }) {
 
       {chargement ? (
         <div className="center" style={{ minHeight: 200 }}><div className="spinner" /></div>
+      ) : vue === 'rdv' ? (
+        <PriseRendezVous onReserve={recharger} />
       ) : vue === 'horaires' ? (
         <Disponibilites droits={droits} />
       ) : vue === 'semaine' ? (

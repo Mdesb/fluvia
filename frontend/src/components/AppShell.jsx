@@ -56,6 +56,10 @@ const NAV = [
     section: 'Gestion',
     items: [
       { id: 'clients', ic: '☺', label: 'Clients', perms: ['crm.lire', 'crm.creer', 'crm.modifier'] },
+      // Une entree propre plutot qu'un onglet dans Clients : un commercial cherche << ses
+      // affaires >>, pas un onglet dans un annuaire. Et le pipeline se lit tous les jours,
+      // alors qu'une fiche client s'ouvre a l'occasion.
+      { id: 'affaires', ic: '◨', label: 'Affaires', perms: ['crm.lire', 'crm.creer', 'crm.modifier'] },
       { id: 'comptabilite', ic: '▧', label: 'Comptabilité', perm: 'compta.lire' },
       { id: 'boutique', ic: '▦', label: 'Boutique en ligne', cap: 'boutique_en_ligne' },
       { id: 'personnel', ic: '☰', label: 'Personnel', perm: 'personnel.lire' },
