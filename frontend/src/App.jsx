@@ -15,6 +15,7 @@ import Catalogue from './pages/Catalogue.jsx'
 import Clients from './pages/Clients.jsx'
 import Reservation from './pages/Reservation.jsx'
 import Supervision from './pages/Supervision.jsx'
+import Support from './pages/Support.jsx'
 
 // Ecrans de back-office charges a la demande : un caissier qui reste a sa caisse ne les
 // telecharge jamais. Ceux qu'on ouvre plusieurs fois par jour — caisse, catalogue, clients,
@@ -232,6 +233,7 @@ export default function App() {
       {onglet === 'catalogue' && <Catalogue etabActif={etabActif} cible={cible} onCibleConsommee={() => setCible(null)} droits={droits} />}
       {onglet === 'reservation' && <Reservation etabActif={etabActif} droits={droits} session={session} />}
       {onglet === 'supervision' && <Supervision etabActif={etabActif} />}
+      {onglet === 'support' && <Support droits={droits} />}
       {onglet === 'pilotage' && (
         <Pilotage etabActif={etabActif} etablissements={etablissements} droits={droits} />
       )}

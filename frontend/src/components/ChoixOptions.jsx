@@ -26,18 +26,32 @@ import { euros } from '../api/produit.js'
  * Et l'ordre des phrases suit D54 : d'abord le fait sur la donnée — *pourquoi cette option-ci est
  * indisponible* — jamais un grisé muet.
  */
-export default function ChoixOptions({ ouvert, produit, typeTarifId, tarifLibelle, devis, onFermer, onValider }) {
+export default function ChoixOptions({
+  ouvert,
+  produit,
+  typeTarifId,
+  tarifLibelle,
+  devis,
+  selectionInitiale,
+  ajustement = false,
+  onFermer,
+  onValider,
+}) {
   const [retenues, setRetenues] = useState([])
   const [courant, setCourant] = useState(devis)
   const [chargement, setChargement] = useState(false)
   const [erreur, setErreur] = useState(null)
 
-  // Le devis d'ouverture fait foi : il a été demandé sans option, il porte le prix de base.
+  // Le devis d'ouverture fait foi, et LA SÉLECTION AUSSI.
+  //
+  // Repartir de zéro était juste tant que la fenêtre ne s'ouvrait qu'avant l'ajout au panier. Depuis
+  // qu'on peut rouvrir une ligne déjà vendue pour l'ajuster, remettre les cases à blanc effacerait en
+  // silence ce que le client a déjà choisi — et le total, lui, resterait juste, donc rien ne le dirait.
   useEffect(() => {
     setCourant(devis)
-    setRetenues([])
+    setRetenues(selectionInitiale ?? [])
     setErreur(null)
-  }, [devis])
+  }, [devis, selectionInitiale])
 
   const redemander = useCallback(
     async (selection) => {
@@ -187,7 +201,9 @@ export default function ChoixOptions({ ouvert, produit, typeTarifId, tarifLibell
                 }
                 onClick={() => onValider(retenues, courant)}
               >
-                Ajouter au panier
+                {/* Le bouton dit ce qu'il fait : rouvrir une ligne deja vendue pour la corriger n'est
+                    pas ajouter une seconde ligne, et le panier derriere montrerait le contraire. */}
+                {ajustement ? 'Mettre a jour la ligne' : 'Ajouter au panier'}
               </button>
             </div>
           </div>
@@ -195,7 +211,7 @@ export default function ChoixOptions({ ouvert, produit, typeTarifId, tarifLibell
           {/* Ce qui manque, dit avant le refus : un bouton inactif sans raison fait chercher un droit. */}
           {obligatoiresManquants.length > 0 && (
             <div className="hint" style={{ margin: 0 }}>
-              À choisir avant d'ajouter : {obligatoiresManquants.map((g) => g.libelle).join(', ')}.
+              À choisir avant de continuer : {obligatoiresManquants.map((g) => g.libelle).join(', ')}.
             </div>
           )}
         </div>

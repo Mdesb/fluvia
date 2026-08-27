@@ -239,7 +239,7 @@ export default function PublicApp() {
 
 function Cadre({ vitrine, nbArticles, connecte, vue, onNaviguer, children }) {
   return (
-    <div className="pub">
+    <div className="bq">
       <PublicHeader
         vitrine={vitrine}
         nbArticles={nbArticles}
@@ -247,7 +247,7 @@ function Cadre({ vitrine, nbArticles, connecte, vue, onNaviguer, children }) {
         vue={vue}
         onNaviguer={onNaviguer}
       />
-      <main id="pub-main" className="pub-main" tabIndex={-1}>
+      <main id="bq-main" className="bq-main" tabIndex={-1}>
         {children}
       </main>
       <PublicFooter />

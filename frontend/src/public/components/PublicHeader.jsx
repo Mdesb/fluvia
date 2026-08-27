@@ -1,34 +1,50 @@
+import { useEffect, useState } from 'react'
+
 // En-tête public : marque de la vitrine, navigation principale, accès panier et compte.
 // Sémantique : <header> + <nav>. Le lien d'évitement (« Aller au contenu ») précède la navigation.
 
 export default function PublicHeader({ vitrine, nbArticles, connecte, onNaviguer, vue }) {
-  const logo = vitrine?.logo
+  // UN LOGO CONFIGURÉ N'EST PAS UN LOGO QUI EXISTE.
+  //
+  // Le repli ne jouait que si `logo` était vide. Or la vitrine de démonstration pointe sur
+  // `/assets/vitrine-a-logo.svg`, qui n'a jamais été déployé : la balise partait, le fichier
+  // répondait 404, et **la première chose que voyait un client sur la boutique était une image
+  // cassée**. C'est le cas courant, pas le cas limite — une adresse saisie par l'exploitant cesse
+  // de répondre le jour où il refait son site, et personne ne le lui dira.
+  //
+  // On ne teste donc pas la configuration, on teste le chargement.
+  const [logoCasse, setLogoCasse] = useState(false)
+  const logo = logoCasse ? null : vitrine?.logo
+
+  useEffect(() => {
+    setLogoCasse(false)
+  }, [vitrine?.logo])
   return (
-    <header className="pub-header">
-      <a className="pub-skip" href="#pub-main">
+    <header className="bq-header">
+      <a className="bq-skip" href="#bq-main">
         Aller au contenu
       </a>
-      <div className="pub-header-in">
+      <div className="bq-header-in">
         <button
           type="button"
-          className="pub-brand"
+          className="bq-brand"
           onClick={() => onNaviguer({ vue: 'vitrine' })}
           aria-label="Retour à la boutique"
         >
           {logo ? (
-            <img className="pub-brand-logo" src={logo} alt="" />
+            <img className="bq-brand-logo" src={logo} alt="" onError={() => setLogoCasse(true)} />
           ) : (
-            <span className="pub-brand-mark" aria-hidden="true">
+            <span className="bq-brand-mark" aria-hidden="true">
               ◈
             </span>
           )}
-          <span className="pub-brand-txt">Billetterie</span>
+          <span className="bq-brand-txt">Billetterie</span>
         </button>
 
-        <nav className="pub-nav" aria-label="Navigation principale">
+        <nav className="bq-nav" aria-label="Navigation principale">
           <button
             type="button"
-            className={vue === 'vitrine' ? 'pub-nav-link on' : 'pub-nav-link'}
+            className={vue === 'vitrine' ? 'bq-nav-link on' : 'bq-nav-link'}
             aria-current={vue === 'vitrine' ? 'page' : undefined}
             onClick={() => onNaviguer({ vue: 'vitrine' })}
           >
@@ -36,7 +52,7 @@ export default function PublicHeader({ vitrine, nbArticles, connecte, onNaviguer
           </button>
           <button
             type="button"
-            className={vue === 'compte' ? 'pub-nav-link on' : 'pub-nav-link'}
+            className={vue === 'compte' ? 'bq-nav-link on' : 'bq-nav-link'}
             aria-current={vue === 'compte' ? 'page' : undefined}
             onClick={() => onNaviguer({ vue: 'compte' })}
           >
@@ -44,12 +60,12 @@ export default function PublicHeader({ vitrine, nbArticles, connecte, onNaviguer
           </button>
           <button
             type="button"
-            className={vue === 'panier' ? 'pub-nav-link pub-cart on' : 'pub-nav-link pub-cart'}
+            className={vue === 'panier' ? 'bq-nav-link bq-cart on' : 'bq-nav-link bq-cart'}
             aria-current={vue === 'panier' ? 'page' : undefined}
             onClick={() => onNaviguer({ vue: 'panier' })}
           >
             Panier
-            <span className="pub-cart-count" aria-label={`${nbArticles} article(s) dans le panier`}>
+            <span className="bq-cart-count" aria-label={`${nbArticles} article(s) dans le panier`}>
               {nbArticles}
             </span>
           </button>

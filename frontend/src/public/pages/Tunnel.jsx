@@ -34,8 +34,8 @@ export default function Tunnel({
   }, [lignes.length, etape])
 
   return (
-    <section aria-labelledby="pub-tunnel-titre">
-      <h1 id="pub-tunnel-titre" className="sr-only">
+    <section aria-labelledby="bq-tunnel-titre">
+      <h1 id="bq-tunnel-titre" className="sr-only">
         Commande — {ETAPES[etape]}
       </h1>
       <Etapes etapes={ETAPES} courant={etape} />
@@ -143,12 +143,12 @@ function EtapeIdentification({ panier, onConnexionClient, onOk }) {
   }
 
   return (
-    <form className="card pub-etape" onSubmit={soumettre}>
+    <form className="card bq-etape" onSubmit={soumettre}>
       <div className="card-h">
         <h2>Comment souhaitez-vous continuer ?</h2>
       </div>
       <div className="card-b">
-        <div className="seg pub-modes" role="tablist" aria-label="Mode d'identification">
+        <div className="seg bq-modes" role="tablist" aria-label="Mode d'identification">
           {[
             ['invite', 'Achat rapide'],
             ['compte', 'J\'ai un compte'],
@@ -170,19 +170,19 @@ function EtapeIdentification({ panier, onConnexionClient, onOk }) {
           ))}
         </div>
 
-        <Erreur message={erreur} id="pub-id-err" />
+        <Erreur message={erreur} id="bq-id-err" />
 
         {mode === 'invite' && (
           <div className="field">
-            <label htmlFor="pub-id-email">Adresse e-mail (pour recevoir vos billets)</label>
+            <label htmlFor="bq-id-email">Adresse e-mail (pour recevoir vos billets)</label>
             <input
-              id="pub-id-email"
+              id="bq-id-email"
               className="input"
               type="email"
               autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              aria-describedby={erreur ? 'pub-id-err' : undefined}
+              aria-describedby={erreur ? 'bq-id-err' : undefined}
             />
           </div>
         )}
@@ -190,9 +190,9 @@ function EtapeIdentification({ panier, onConnexionClient, onOk }) {
         {mode === 'compte' && (
           <>
             <div className="field">
-              <label htmlFor="pub-id-email2">Adresse e-mail</label>
+              <label htmlFor="bq-id-email2">Adresse e-mail</label>
               <input
-                id="pub-id-email2"
+                id="bq-id-email2"
                 className="input"
                 type="email"
                 autoComplete="email"
@@ -202,9 +202,9 @@ function EtapeIdentification({ panier, onConnexionClient, onOk }) {
               />
             </div>
             <div className="field">
-              <label htmlFor="pub-id-mdp">Mot de passe</label>
+              <label htmlFor="bq-id-mdp">Mot de passe</label>
               <input
-                id="pub-id-mdp"
+                id="bq-id-mdp"
                 className="input"
                 type="password"
                 autoComplete="current-password"
@@ -218,9 +218,9 @@ function EtapeIdentification({ panier, onConnexionClient, onOk }) {
 
         {mode === 'franceconnect' && (
           <div className="field">
-            <label htmlFor="pub-id-fc">Code FranceConnect (simulation)</label>
+            <label htmlFor="bq-id-fc">Code FranceConnect (simulation)</label>
             <input
-              id="pub-id-fc"
+              id="bq-id-fc"
               className="input"
               type="text"
               value={code}
@@ -292,32 +292,32 @@ function EtapeBeneficiaires({ panier, metaProduits, metaCreneaux, langue, onReto
   }
 
   return (
-    <form className="card pub-etape" onSubmit={soumettre}>
+    <form className="card bq-etape" onSubmit={soumettre}>
       <div className="card-h">
         <h2>À qui sont destinés les billets ?</h2>
       </div>
       <div className="card-b">
-        <Erreur message={erreur} id="pub-benef-err" />
-        <ul className="pub-benef-list">
+        <Erreur message={erreur} id="bq-benef-err" />
+        <ul className="bq-benef-list">
           {lignes.map((l, i) => {
             const meta = metaProduits?.[iriId(l.produit)]
             const nom = meta ? libelleProduit(meta, langue) : 'Billet'
             const cr = l.creneau ? metaCreneaux?.[iriId(l.creneau)] : null
             return (
-              <li key={l.id} className="pub-benef">
-                <p className="pub-benef-t">
+              <li key={l.id} className="bq-benef">
+                <p className="bq-benef-t">
                   {nom}
                   {(l.quantite || 1) > 1 ? ` ×${l.quantite}` : ''}
-                  {cr && <span className="pub-benef-cr"> · {libelleCreneau(cr.debut, cr.fin)}</span>}
+                  {cr && <span className="bq-benef-cr"> · {libelleCreneau(cr.debut, cr.fin)}</span>}
                   {l.montantLigne != null && (
-                    <span className="pub-benef-montant"> · {euros(l.montantLigne)}</span>
+                    <span className="bq-benef-montant"> · {euros(l.montantLigne)}</span>
                   )}
                 </p>
-                <div className="pub-benef-grid">
+                <div className="bq-benef-grid">
                   <div className="field">
-                    <label htmlFor={`pub-b-prenom-${i}`}>Prénom</label>
+                    <label htmlFor={`bq-b-prenom-${i}`}>Prénom</label>
                     <input
-                      id={`pub-b-prenom-${i}`}
+                      id={`bq-b-prenom-${i}`}
                       className="input"
                       value={valeurs[l.id]?.prenom || ''}
                       onChange={(e) => maj(l.id, 'prenom', e.target.value)}
@@ -326,9 +326,9 @@ function EtapeBeneficiaires({ panier, metaProduits, metaCreneaux, langue, onReto
                     />
                   </div>
                   <div className="field">
-                    <label htmlFor={`pub-b-nom-${i}`}>Nom</label>
+                    <label htmlFor={`bq-b-nom-${i}`}>Nom</label>
                     <input
-                      id={`pub-b-nom-${i}`}
+                      id={`bq-b-nom-${i}`}
                       className="input"
                       value={valeurs[l.id]?.nom || ''}
                       onChange={(e) => maj(l.id, 'nom', e.target.value)}
@@ -337,9 +337,9 @@ function EtapeBeneficiaires({ panier, metaProduits, metaCreneaux, langue, onReto
                     />
                   </div>
                   <div className="field">
-                    <label htmlFor={`pub-b-dn-${i}`}>Date de naissance</label>
+                    <label htmlFor={`bq-b-dn-${i}`}>Date de naissance</label>
                     <input
-                      id={`pub-b-dn-${i}`}
+                      id={`bq-b-dn-${i}`}
                       className="input"
                       type="date"
                       value={valeurs[l.id]?.dateNaissance || ''}
@@ -354,12 +354,12 @@ function EtapeBeneficiaires({ panier, metaProduits, metaCreneaux, langue, onReto
           })}
         </ul>
         {panier?.total != null && (
-          <div className="pub-recap-row pub-recap-total" style={{ marginTop: 12 }}>
+          <div className="bq-recap-row bq-recap-total" style={{ marginTop: 12 }}>
             <span>Total</span>
             <strong>{euros(panier.total)}</strong>
           </div>
         )}
-        <div className="pub-etape-actions">
+        <div className="bq-etape-actions">
           <button type="button" className="btn" onClick={onRetour}>
             Retour
           </button>
@@ -409,19 +409,19 @@ function EtapeConsentement({ panier, metaProduits, langue, onRetour, onOk }) {
   }
 
   return (
-    <form className="card pub-etape" onSubmit={soumettre}>
+    <form className="card bq-etape" onSubmit={soumettre}>
       <div className="card-h">
         <h2>Consentement</h2>
       </div>
       <div className="card-b">
-        <Erreur message={erreur} id="pub-cons-err" />
+        <Erreur message={erreur} id="bq-cons-err" />
 
-        <label className="pub-consent">
+        <label className="bq-consent">
           <input
             type="checkbox"
             checked={rgpd}
             onChange={(e) => setRgpd(e.target.checked)}
-            aria-describedby={erreur ? 'pub-cons-err' : undefined}
+            aria-describedby={erreur ? 'bq-cons-err' : undefined}
             required
           />
           <span>
@@ -431,7 +431,7 @@ function EtapeConsentement({ panier, metaProduits, langue, onRetour, onOk }) {
         </label>
 
         {lignesMineurs.length > 0 && (
-          <fieldset className="pub-fieldset">
+          <fieldset className="bq-fieldset">
             <legend>Autorisation parentale (bénéficiaires mineurs)</legend>
             {lignesMineurs.map((l) => {
               const meta = metaProduits?.[iriId(l.produit)]
@@ -439,7 +439,7 @@ function EtapeConsentement({ panier, metaProduits, langue, onRetour, onOk }) {
               const b = l.beneficiaireSimple
               const qui = b ? `${b.prenom || ''} ${b.nom || ''}`.trim() : nom
               return (
-                <label key={l.id} className="pub-consent">
+                <label key={l.id} className="bq-consent">
                   <input
                     type="checkbox"
                     checked={!!parentales[l.id]}
@@ -454,7 +454,7 @@ function EtapeConsentement({ panier, metaProduits, langue, onRetour, onOk }) {
           </fieldset>
         )}
 
-        <div className="pub-etape-actions">
+        <div className="bq-etape-actions">
           <button type="button" className="btn" onClick={onRetour}>
             Retour
           </button>
@@ -525,7 +525,7 @@ function EtapePaiement({ panier, resultat, setResultat, onConfirme }) {
 
   if (phase === 'echec' && !resultat) {
     return (
-      <div className="card pub-etape">
+      <div className="card bq-etape">
         <div className="card-b">
           <Erreur message={erreur} />
           <p className="empty" style={{ textAlign: 'left', padding: 0 }}>
@@ -537,12 +537,12 @@ function EtapePaiement({ panier, resultat, setResultat, onConfirme }) {
   }
 
   return (
-    <div className="card pub-etape">
+    <div className="card bq-etape">
       <div className="card-h">
         <h2>Paiement sécurisé</h2>
       </div>
       <div className="card-b">
-        <div className="pub-pay-montant">
+        <div className="bq-pay-montant">
           <span>Montant à régler</span>
           <strong>{eurosCentimes(resultat?.montantCentimes)}</strong>
         </div>
@@ -567,7 +567,7 @@ function EtapePaiement({ panier, resultat, setResultat, onConfirme }) {
         {phase === 'traitement' ? (
           <Chargement texte="Traitement du paiement…" />
         ) : (
-          <div className="pub-etape-actions" style={{ marginTop: 16 }}>
+          <div className="bq-etape-actions" style={{ marginTop: 16 }}>
             <button type="button" className="btn primary lg" onClick={() => retour('accepte')}>
               Payer {eurosCentimes(resultat?.montantCentimes)}
             </button>
@@ -613,13 +613,13 @@ function EtapeConfirmation({ resultat, infoBillets, connecte, onNaviguer }) {
   const aDesBillets = (billets || []).length > 0
 
   return (
-    <div className="pub-conf">
-      <div className="pub-conf-hero">
-        <span className="pub-conf-check" aria-hidden="true">
+    <div className="bq-conf">
+      <div className="bq-conf-hero">
+        <span className="bq-conf-check" aria-hidden="true">
           ✓
         </span>
         <h2>Commande confirmée</h2>
-        <p className="pub-sub">
+        <p className="bq-sub">
           Merci ! Votre paiement a été accepté
           {resultat?.montantCentimes != null ? ` (${eurosCentimes(resultat.montantCentimes)})` : ''}.
         </p>
@@ -633,17 +633,17 @@ function EtapeConfirmation({ resultat, infoBillets, connecte, onNaviguer }) {
       )}
 
       <section aria-label="Vos billets" style={{ marginTop: 20 }}>
-        <h3 className="pub-conf-sec">Vos billets</h3>
+        <h3 className="bq-conf-sec">Vos billets</h3>
         {chargement ? (
           <Chargement texte="Chargement de vos billets…" />
         ) : aDesBillets ? (
-          <ul className="pub-billets">
+          <ul className="bq-billets">
             {billets.map((b) => (
-              <li key={b.billetSupport || b.identifiantSupport} className="pub-billet card">
-                <div className="card-b pub-billet-b">
+              <li key={b.billetSupport || b.identifiantSupport} className="bq-billet card">
+                <div className="card-b bq-billet-b">
                   <Qr value={b.qrDynamique || b.identifiantSupport} size={110} title="QR du billet" />
                   <div>
-                    <p className="pub-billet-id mono">{b.identifiantSupport}</p>
+                    <p className="bq-billet-id mono">{b.identifiantSupport}</p>
                     {b.passWalletDisponible && <span className="badge info">Wallet disponible</span>}
                   </div>
                 </div>
@@ -662,7 +662,7 @@ function EtapeConfirmation({ resultat, infoBillets, connecte, onNaviguer }) {
         )}
       </section>
 
-      <div className="pub-etape-actions" style={{ marginTop: 20 }}>
+      <div className="bq-etape-actions" style={{ marginTop: 20 }}>
         <button type="button" className="btn primary" onClick={() => onNaviguer({ vue: 'vitrine' })}>
           Retour à la boutique
         </button>

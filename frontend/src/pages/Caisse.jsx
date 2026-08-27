@@ -110,6 +110,40 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   const cleLigne = (produitId, tarifId) => `${produitId}|${tarifId}`
 
   /**
+   * LES GROUPES QUI DEMANDENT VRAIMENT UNE DÉCISION DU CAISSIER.
+   *
+   * Maxime, en voyant la première version : *« c'est trop complexe ou trop chargé pour le client
+   * final »*. Il avait raison, et la faute était nette — la modale s'ouvrait dès qu'un produit portait
+   * **une** option, y compris facultative. Vendre une entrée passait de un clic à trois, pour poser une
+   * question dont la réponse par défaut est « non ».
+   *
+   * Un groupe **facultatif** n'est pas une décision : ne rien prendre est une réponse valide, et le
+   * caissier peut l'ajouter après si le client le demande. Un groupe **obligatoire à valeur unique**
+   * n'en est pas une non plus : il n'y a rien à arbitrer, seulement une formalité que le serveur
+   * exigera. **Reste le seul vrai cas : obligatoire, et plusieurs valeurs disponibles.**
+   */
+  const decisionsOuvertes = (devis) =>
+    (devis?.options ?? []).filter(
+      (g) => g.obligatoire && (g.valeurs ?? []).filter((v) => v.disponible !== false).length > 1,
+    )
+
+  /**
+   * Ce qui se choisit tout seul : un groupe obligatoire dont une seule valeur est disponible.
+   *
+   * Sans ça, l'écran ouvrirait une fenêtre pour faire cocher l'unique case possible — ou, pire, laisserait
+   * partir la ligne que `AjoutLigneHandler` refusera en RG-OPT-03, après que le caissier a annoncé un prix.
+   */
+  const optionsImposees = (devis) => {
+    const retenues = []
+    for (const g of devis?.options ?? []) {
+      if (!g.obligatoire) continue
+      const dispo = (g.valeurs ?? []).filter((v) => v.disponible !== false)
+      if (dispo.length === 1) retenues.push(dispo[0].valeurOption)
+    }
+    return retenues
+  }
+
+  /**
    * Ajoute au panier — en demandant AU SERVEUR le prix et les options proposables.
    *
    * **Un clic reste un clic quand il n'y a rien à choisir.** Si le produit n'a aucune option, la ligne
@@ -133,23 +167,72 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
         setErreur(e.message || "Le prix n'a pas pu être obtenu.")
         return
       }
-      // Des options à choisir : on ouvre plutôt que de décider à la place du caissier.
-      if ((devis.options ?? []).length > 0) {
-        setChoixOptions({ produit, grille: g, devis })
+      // On n'ouvre que pour un arbitrage réel — jamais pour une case à cocher sans alternative.
+      if (decisionsOuvertes(devis).length > 0) {
+        setChoixOptions({ produit, grille: g, devis, selection: optionsImposees(devis) })
         return
+      }
+
+      // Les formalités se règlent sans le caissier, mais PAS SANS LE SERVEUR : le prix change, et un
+      // prix annoncé qui n'est pas celui qui sera facturé est précisément ce qu'on corrige depuis
+      // trois jours. On redemande le devis plutôt que d'ajouter l'impact ici.
+      const imposees = optionsImposees(devis)
+      if (imposees.length > 0) {
+        try {
+          devis = await api.tarifProduit(produit.id, {
+            typeTarif: g.typeTarif.id,
+            canal: devis.canal,
+            options: imposees,
+          })
+          options = imposees
+        } catch (e) {
+          setErreur(e.message || "Le prix n'a pas pu être obtenu.")
+          return
+        }
       }
     }
 
     ajouterLigne(produit, g, options, devis)
   }
 
-  function ajouterLigne(produit, g, options, devis) {
+  /**
+   * Rouvrir les options d'une ligne déjà au panier.
+   *
+   * C'est ce qui permet au premier clic de rester un clic : le caissier vend, et n'ouvre cette fenêtre
+   * que si le client réclame quelque chose. L'ordre naturel du comptoir — on encaisse, puis on ajuste —
+   * plutôt que l'ordre du formulaire.
+   */
+  async function ajusterOptions(l) {
+    setErreur(null)
+    try {
+      const devis = await api.tarifProduit(l.produit.id, {
+        typeTarif: l.typeTarifId,
+        options: l.options ?? [],
+      })
+      setChoixOptions({
+        produit: l.produit,
+        grille: l.grille,
+        devis,
+        selection: l.options ?? [],
+        remplace: l.cle,
+      })
+    } catch (e) {
+      setErreur(e.message || "Les options n'ont pas pu être relues.")
+    }
+  }
+
+  function ajouterLigne(produit, g, options, devis, remplace = null) {
     const cle = cleLigne(produit.id, g.typeTarif.id) + (options.length ? `|${[...options].sort().join(',')}` : '')
     setPanier((p) => {
+      // AJUSTER N'EST PAS AJOUTER. Changer les options change la clé de ligne ; sans ce retrait, le
+      // panier garderait l'ancienne version à côté de la nouvelle et facturerait les deux.
+      const quantiteReprise = remplace !== null ? p.find((l) => l.cle === remplace)?.quantite : null
+      if (remplace !== null && remplace !== cle) p = p.filter((l) => l.cle !== remplace)
       const i = p.findIndex((l) => l.cle === cle)
       if (i >= 0) {
         const copie = [...p]
-        copie[i] = { ...copie[i], quantite: copie[i].quantite + 1 }
+        // Un ajustement ne vend pas une unité de plus : il rhabille celle qui est déjà là.
+        copie[i] = { ...copie[i], quantite: copie[i].quantite + (remplace !== null ? 0 : 1) }
         return copie
       }
       return [
@@ -157,9 +240,12 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
         {
           cle,
           produit,
-          quantite: 1,
+          quantite: quantiteReprise ?? 1,
           typeTarifId: g.typeTarif.id,
           tarifLibelle: libelleTarif(g),
+          // Conservées pour rouvrir les options sans redemander au catalogue ce qu'on a déjà.
+          grille: g,
+          aOptions: (devis?.options ?? []).length > 0,
           // Le prix du DEVIS, pas celui de la grille : c'est celui qui sera facturé.
           prix: devis?.totalUnitaire ?? devis?.prixUnitaire ?? g.prix,
           options,
@@ -556,6 +642,28 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
                             )}
                             {euros(pu)}
                           </div>
+                          {/* CE QUI EST FACTURÉ SE LIT SUR LA LIGNE QUI LE FACTURE.
+                              Le panier affichait un prix options comprises sans nommer les options :
+                              le caissier annonçait un montant qu'il ne pouvait pas justifier au client
+                              qui le lui demandait. */}
+                          {l.optionsLibelles?.length > 0 && (
+                            <div className="cp" style={{ opacity: 0.8 }}>
+                              {l.optionsLibelles.join(' · ')}
+                            </div>
+                          )}
+                          {!enPaiement && l.aOptions && (
+                            // Présent seulement quand le produit porte des options : sinon le bouton
+                            // ouvrirait une fenêtre vide, et un bouton qui ne fait rien s'apprend une
+                            // fois puis se contourne pour toujours.
+                            <button
+                              type="button"
+                              className="btn ghost sm"
+                              style={{ marginTop: 4, padding: '1px 8px', fontSize: 11.5 }}
+                              onClick={() => ajusterOptions(l)}
+                            >
+                              {l.optionsLibelles?.length > 0 ? 'Modifier les options' : '+ Options'}
+                            </button>
+                          )}
                         </div>
                         {!enPaiement ? (
                           <div className="qty">
@@ -689,9 +797,11 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
         typeTarifId={choixOptions?.grille?.typeTarif?.id}
         tarifLibelle={choixOptions ? libelleTarif(choixOptions.grille) : null}
         devis={choixOptions?.devis}
+        selectionInitiale={choixOptions?.selection}
+        ajustement={choixOptions?.remplace != null}
         onFermer={() => setChoixOptions(null)}
         onValider={(retenues, devis) => {
-          ajouterLigne(choixOptions.produit, choixOptions.grille, retenues, devis)
+          ajouterLigne(choixOptions.produit, choixOptions.grille, retenues, devis, choixOptions.remplace ?? null)
           setChoixOptions(null)
         }}
       />

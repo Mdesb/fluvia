@@ -36,33 +36,33 @@ function ConnexionClient({ onConnecte, onNaviguer }) {
   }
 
   return (
-    <section aria-labelledby="pub-cnx-titre" className="pub-narrow">
+    <section aria-labelledby="bq-cnx-titre" className="bq-narrow">
       <form className="card" onSubmit={soumettre} style={{ maxWidth: 440, margin: '10px auto' }}>
         <div className="card-h">
-          <h2 id="pub-cnx-titre">Se connecter</h2>
+          <h2 id="bq-cnx-titre">Se connecter</h2>
         </div>
         <div className="card-b">
-          <p className="pub-sub" style={{ marginTop: 0 }}>
+          <p className="bq-sub" style={{ marginTop: 0 }}>
             Accédez à vos commandes et à vos billets.
           </p>
-          <Erreur message={erreur} id="pub-cnx-err" />
+          <Erreur message={erreur} id="bq-cnx-err" />
           <div className="field">
-            <label htmlFor="pub-cnx-email">Adresse e-mail</label>
+            <label htmlFor="bq-cnx-email">Adresse e-mail</label>
             <input
-              id="pub-cnx-email"
+              id="bq-cnx-email"
               className="input"
               type="email"
               autoComplete="username"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              aria-describedby={erreur ? 'pub-cnx-err' : undefined}
+              aria-describedby={erreur ? 'bq-cnx-err' : undefined}
               required
             />
           </div>
           <div className="field">
-            <label htmlFor="pub-cnx-mdp">Mot de passe</label>
+            <label htmlFor="bq-cnx-mdp">Mot de passe</label>
             <input
-              id="pub-cnx-mdp"
+              id="bq-cnx-mdp"
               className="input"
               type="password"
               autoComplete="current-password"
@@ -131,12 +131,12 @@ function EspaceClient({ onDeconnexion, onNaviguer }) {
   }
 
   return (
-    <section aria-labelledby="pub-espace-titre">
-      <div className="pub-view-head">
+    <section aria-labelledby="bq-espace-titre">
+      <div className="bq-view-head">
         <div>
-          <h1 id="pub-espace-titre">Mon compte</h1>
+          <h1 id="bq-espace-titre">Mon compte</h1>
           {compte?.client && (
-            <p className="pub-sub">Bienvenue dans votre espace personnel.</p>
+            <p className="bq-sub">Bienvenue dans votre espace personnel.</p>
           )}
         </div>
         <button type="button" className="btn" onClick={deconnexion}>
@@ -206,13 +206,13 @@ function Billets({ billets }) {
     return <Vide titre="Aucun billet" texte="Vos billets à QR apparaîtront ici après un achat." />
   }
   return (
-    <ul className="pub-billets">
+    <ul className="bq-billets">
       {billets.map((b) => (
-        <li key={b.billetSupport} className="pub-billet card">
-          <div className="card-b pub-billet-b">
+        <li key={b.billetSupport} className="bq-billet card">
+          <div className="card-b bq-billet-b">
             <Qr value={b.qrDynamique || b.identifiantSupport} size={110} title="QR du billet" />
             <div>
-              <p className="pub-billet-id mono">{b.identifiantSupport}</p>
+              <p className="bq-billet-id mono">{b.identifiantSupport}</p>
               {b.passWalletDisponible && <span className="badge info">Wallet disponible</span>}
               {b.statutRetraitPhysique && (
                 <span className="badge mut">{b.statutRetraitPhysique}</span>

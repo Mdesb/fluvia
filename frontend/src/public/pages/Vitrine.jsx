@@ -25,19 +25,19 @@ export default function Vitrine({ catalogue, langue, onNaviguer }) {
   }, [produits, q, dispoSeule, langue])
 
   return (
-    <section aria-labelledby="pub-cat-titre">
-      <div className="pub-view-head">
+    <section aria-labelledby="bq-cat-titre">
+      <div className="bq-view-head">
         <div>
-          <h1 id="pub-cat-titre">Nos billets</h1>
-          <p className="pub-sub">Choisissez votre offre et réservez en quelques minutes.</p>
+          <h1 id="bq-cat-titre">Nos billets</h1>
+          <p className="bq-sub">Choisissez votre offre et réservez en quelques minutes.</p>
         </div>
       </div>
 
-      <div className="pub-filtres" role="search">
+      <div className="bq-filtres" role="search">
         <div className="field" style={{ margin: 0, flex: 1, minWidth: 220 }}>
-          <label htmlFor="pub-recherche">Rechercher un billet</label>
+          <label htmlFor="bq-recherche">Rechercher un billet</label>
           <input
-            id="pub-recherche"
+            id="bq-recherche"
             className="input"
             type="search"
             value={q}
@@ -45,7 +45,7 @@ export default function Vitrine({ catalogue, langue, onNaviguer }) {
             placeholder="Nom, type de billet…"
           />
         </div>
-        <label className="pub-check">
+        <label className="bq-check">
           <input
             type="checkbox"
             checked={dispoSeule}
@@ -60,7 +60,7 @@ export default function Vitrine({ catalogue, langue, onNaviguer }) {
       ) : filtres.length === 0 ? (
         <Vide titre="Aucun résultat" texte="Aucun billet ne correspond à votre recherche." />
       ) : (
-        <ul className="pub-grille" aria-label="Liste des billets">
+        <ul className="bq-grille" aria-label="Liste des billets">
           {filtres.map((p) => (
             <li key={p.produit}>
               <ProduitCarte produit={p} langue={langue} onNaviguer={onNaviguer} />
@@ -79,19 +79,19 @@ function ProduitCarte({ produit, langue, onNaviguer }) {
   const prix = libellePrix(produit.prix)
 
   return (
-    <article className="pub-carte">
-      <div className="pub-carte-img">
+    <article className="bq-carte">
+      <div className="bq-carte-img">
         {produit.visuel ? (
           <img src={produit.visuel} alt={nom} loading="lazy" />
         ) : (
           <span aria-hidden="true">{nom.slice(0, 1).toUpperCase()}</span>
         )}
       </div>
-      <div className="pub-carte-b">
-        <h2 className="pub-carte-t">{nom}</h2>
-        {produit.code && <p className="pub-carte-code">{produit.code}</p>}
-        {prix && <p className="pub-carte-prix">{prix}</p>}
-        <div className="pub-carte-tags">
+      <div className="bq-carte-b">
+        <h2 className="bq-carte-t">{nom}</h2>
+        {produit.code && <p className="bq-carte-code">{produit.code}</p>}
+        {prix && <p className="bq-carte-prix">{prix}</p>}
+        <div className="bq-carte-tags">
           {produit.timedEntry && <span className="badge info">Horaire à choisir</span>}
           {enRupture ? (
             <span className="badge crit">Épuisé</span>
@@ -103,7 +103,7 @@ function ProduitCarte({ produit, langue, onNaviguer }) {
         </div>
         <button
           type="button"
-          className="btn primary pub-carte-cta"
+          className="btn primary bq-carte-cta"
           disabled={enRupture}
           onClick={() => onNaviguer({ vue: 'produit', produitId: produit.produit })}
         >

@@ -23,7 +23,7 @@ export default function FicheProduit({ produit, langue, onAjouter, onNaviguer })
   if (!produit) {
     return (
       <section>
-        <button type="button" className="btn ghost pub-retour" onClick={() => onNaviguer({ vue: 'vitrine' })}>
+        <button type="button" className="btn ghost bq-retour" onClick={() => onNaviguer({ vue: 'vitrine' })}>
           ← Retour à la boutique
         </button>
         <Erreur message="Ce billet n'est plus disponible ou le lien est incorrect." />
@@ -83,13 +83,13 @@ export default function FicheProduit({ produit, langue, onAjouter, onNaviguer })
       : null
 
   return (
-    <section aria-labelledby="pub-fp-titre">
-      <button type="button" className="btn ghost pub-retour" onClick={() => onNaviguer({ vue: 'vitrine' })}>
+    <section aria-labelledby="bq-fp-titre">
+      <button type="button" className="btn ghost bq-retour" onClick={() => onNaviguer({ vue: 'vitrine' })}>
         ← Retour à la boutique
       </button>
 
-      <div className="pub-fiche">
-        <div className="pub-fiche-media">
+      <div className="bq-fiche">
+        <div className="bq-fiche-media">
           {produit.visuel ? (
             <img src={produit.visuel} alt={nom} />
           ) : (
@@ -97,24 +97,24 @@ export default function FicheProduit({ produit, langue, onAjouter, onNaviguer })
           )}
         </div>
 
-        <div className="pub-fiche-info">
-          <h1 id="pub-fp-titre">{nom}</h1>
-          {produit?.code && <p className="pub-carte-code">{produit.code}</p>}
-          <div className="pub-carte-tags" style={{ marginTop: 10 }}>
+        <div className="bq-fiche-info">
+          <h1 id="bq-fp-titre">{nom}</h1>
+          {produit?.code && <p className="bq-carte-code">{produit.code}</p>}
+          <div className="bq-carte-tags" style={{ marginTop: 10 }}>
             {timedEntry && <span className="badge info">Horaire à choisir</span>}
             {enRupture && <span className="badge crit">Épuisé</span>}
           </div>
 
           {prix ? (
-            <p className="pub-fiche-prix">{prix}</p>
+            <p className="bq-fiche-prix">{prix}</p>
           ) : (
-            <p className="pub-sub" style={{ marginTop: 14 }}>
+            <p className="bq-sub" style={{ marginTop: 14 }}>
               Le tarif applicable est calculé et confirmé à l'étape de paiement.
             </p>
           )}
 
           {timedEntry && (
-            <fieldset className="pub-fieldset">
+            <fieldset className="bq-fieldset">
               <legend>Choisissez votre horaire</legend>
               {chargementCr ? (
                 <Chargement texte="Chargement des horaires…" />
@@ -125,7 +125,7 @@ export default function FicheProduit({ produit, langue, onAjouter, onNaviguer })
                   Aucun horaire disponible pour ce billet actuellement.
                 </p>
               ) : (
-                <ul className="pub-creneaux" role="radiogroup" aria-label="Horaires disponibles">
+                <ul className="bq-creneaux" role="radiogroup" aria-label="Horaires disponibles">
                   {creneaux.map((c) => {
                     const plein = typeof c.reste === 'number' && c.reste <= 0
                     const actif = creneauChoisi === c.creneau
@@ -135,12 +135,12 @@ export default function FicheProduit({ produit, langue, onAjouter, onNaviguer })
                           type="button"
                           role="radio"
                           aria-checked={actif}
-                          className={`pub-creneau${actif ? ' on' : ''}`}
+                          className={`bq-creneau${actif ? ' on' : ''}`}
                           disabled={plein}
                           onClick={() => setCreneauChoisi(c.creneau)}
                         >
-                          <span className="pub-creneau-h">{libelleCreneau(c.debut, c.fin)}</span>
-                          <span className={`pub-creneau-r${plein ? ' full' : ''}`}>
+                          <span className="bq-creneau-h">{libelleCreneau(c.debut, c.fin)}</span>
+                          <span className={`bq-creneau-r${plein ? ' full' : ''}`}>
                             {plein ? 'Complet' : `Reste ${c.reste}`}
                           </span>
                         </button>
@@ -152,9 +152,9 @@ export default function FicheProduit({ produit, langue, onAjouter, onNaviguer })
             </fieldset>
           )}
 
-          <div className="pub-qte">
-            <label htmlFor="pub-qte-input">Quantité</label>
-            <div className="pub-qte-ctrl">
+          <div className="bq-qte">
+            <label htmlFor="bq-qte-input">Quantité</label>
+            <div className="bq-qte-ctrl">
               <button
                 type="button"
                 aria-label="Diminuer la quantité"
@@ -164,7 +164,7 @@ export default function FicheProduit({ produit, langue, onAjouter, onNaviguer })
                 −
               </button>
               <input
-                id="pub-qte-input"
+                id="bq-qte-input"
                 className="input"
                 type="number"
                 min="1"
@@ -182,14 +182,14 @@ export default function FicheProduit({ produit, langue, onAjouter, onNaviguer })
             </div>
           </div>
 
-          <Erreur message={erreurAjout} id="pub-fp-err" />
+          <Erreur message={erreurAjout} id="bq-fp-err" />
 
           <button
             type="button"
             className="btn primary lg"
             onClick={ajouter}
             disabled={ajout || enRupture || (timedEntry && !creneauChoisi)}
-            aria-describedby={erreurAjout ? 'pub-fp-err' : undefined}
+            aria-describedby={erreurAjout ? 'bq-fp-err' : undefined}
           >
             {ajout ? 'Ajout…' : 'Ajouter au panier'}
           </button>

@@ -73,7 +73,13 @@ const NAV = [
     section: 'Pilotage',
     items: [
       { id: 'pilotage', ic: '◨', label: 'Reporting', perms: ['reporting.lire', 'reporting.configurer', 'reporting.planifier'] },
-      { id: 'support', ic: '?', label: 'Assistance', perm: 'support.lire', disabled: true, absent: true },
+      // `absent: true` a tenu jusqu'au 27/08 sur un module qui expose ONZE operations de tickets
+      // et sept d'articles d'aide. La porte etait dessinee et condamnee ; c'est le motif le plus
+      // couteux du depot -- 815 operations sans porte pour 234 atteignables.
+      //
+      // Les droits fins restent ceux du serveur : l'entree exige `support.lire`, et l'ecran ne
+      // montre les gestes d'agent qu'a qui les possede. Ouvrir la porte n'ouvre aucun droit.
+      { id: 'support', ic: '?', label: 'Assistance', perms: ['support.lire', 'support.ouvrir_ticket', 'support.lire_ticket_soi', 'support.traiter_ticket_n1', 'support.traiter_ticket_n2', 'support.administrer'] },
     ],
   },
   {

@@ -749,4 +749,49 @@ export const api = {
   // Ce qui reste du a l'editeur (ED-8). Une facture soldee ne figure pas dans la reponse : le
   // serveur la retire, l'ecran n'a pas a decider ce qu'il montre.
   editorReceivables: () => request('/api/editor/receivables'),
+
+  // --- App\Support — ASSISTANCE ------------------------------------------------------------------
+  //
+  // Onze opérations de tickets et sept d'articles d'aide, **et pas un seul appelant** jusqu'au 27/08.
+  // Le module était complet côté serveur — statuts, escalade N1→N2, réaffectation, notes internes,
+  // base de connaissances versionnée et publiable — et l'entrée de menu portait `absent: true`.
+  //
+  // C'est la forme la plus coûteuse de travail perdu du dépôt : `CARTE-MODULES.md` compte **815
+  // opérations sans porte** contre 234 atteignables. Ce qui manque n'est presque jamais la règle
+  // métier ; c'est le chemin qui y mène.
+  //
+  // ⚠ Les actions sont des POST à `input: false` : API Platform ne désérialise pas le corps, et c'est
+  // le processeur qui le lit directement dans la requête. Le corps part donc tel quel, sans IRI.
+  supportTickets: (params) => request('/api/support/tickets', { query: { itemsPerPage: 100, ...(params || {}) } }),
+  supportTableauBord: () => request('/api/support/tickets/tableau-de-bord'),
+  supportTicket: (id) => request(`/api/support/tickets/${id}`),
+  ouvrirTicket: (corps) => request('/api/support/tickets', { method: 'POST', body: corps, ld: true }),
+  prendreEnChargeTicket: (id) => request(`/api/support/tickets/${id}/prendre-en-charge`, { method: 'POST', body: {} }),
+  changerStatutTicket: (id, statut, motifFermeture) =>
+    request(`/api/support/tickets/${id}/statut`, {
+      method: 'POST',
+      body: { statut, ...(motifFermeture ? { motifFermeture } : {}) },
+    }),
+  rouvrirTicket: (id) => request(`/api/support/tickets/${id}/rouvrir`, { method: 'POST', body: {} }),
+  escaladerTicket: (id, affecteA) =>
+    request(`/api/support/tickets/${id}/escalader`, { method: 'POST', body: affecteA ? { affecteA } : {} }),
+  reaffecterTicket: (id, affecteA) =>
+    request(`/api/support/tickets/${id}/reaffecter`, { method: 'POST', body: { affecteA } }),
+  lierArticleTicket: (id, articleId) =>
+    request(`/api/support/tickets/${id}/lier-article`, { method: 'POST', body: { articleId } }),
+
+  messagesTicket: (ticketId) => request(`/api/support/tickets/${ticketId}/messages`, { query: { itemsPerPage: 200 } }),
+  repondreTicket: (ticketId, contenu, noteInterne = false) =>
+    request(`/api/support/tickets/${ticketId}/messages`, {
+      method: 'POST',
+      body: { contenu, noteInterne },
+      ld: true,
+    }),
+
+  // Base de connaissances. `/publics` et `/recherche` sont en accès public : ce sont elles que la
+  // webapp cliente interroge, sans jeton.
+  articlesAide: (params) => request('/api/support/articles/publics', { query: { itemsPerPage: 100, ...(params || {}) } }),
+  rechercheArticles: (q) => request('/api/support/articles/recherche', { query: { q, itemsPerPage: 20 } }),
+  articleAide: (id) => request(`/api/support/articles/${id}`),
+  categoriesAide: () => request('/api/categorie_aides', { query: { itemsPerPage: 100 } }),
 }
