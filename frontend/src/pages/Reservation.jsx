@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { jourLocal } from '../components/Liste.jsx'
 import { api, membres } from '../api/client.js'
+import PlanningSemaine from '../components/PlanningSemaine.jsx'
 import { euros } from '../api/produit.js'
 import NoShowSection from '../components/NoShowSection.jsx'
 
@@ -49,6 +50,7 @@ export default function Reservation({ etabActif, droits = [], session }) {
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
 
+  const [vue, setVue] = useState('semaine')
   const [jour, setJour] = useState('')
   const [reserverPour, setReserverPour] = useState(null) // id du créneau en cours de réservation
   const [organisateur, setOrganisateur] = useState('')
@@ -143,8 +145,38 @@ export default function Reservation({ etabActif, droits = [], session }) {
       {erreur && <div className="banner banner-error">{erreur}</div>}
       {succes && <div className="banner banner-ok">{succes}</div>}
 
+      {/* LA VUE SEMAINE EST LE DEFAUT, ET C'EST UN CHOIX.
+          La liste par jour repond creneau par creneau ; la question qu'on se pose en ouvrant un
+          planning est << ou reste-t-il de la place cette semaine >>. Une liste ne montre pas les
+          trous -- un creneau vide n'y a pas de ligne, donc il n'existe pas a l'ecran, alors que
+          c'est justement ce qu'on cherche. */}
+      {!chargement && (
+        <div className="seg" style={{ marginBottom: 14 }}>
+          <button type="button" className={vue === 'semaine' ? 'on' : ''} onClick={() => setVue('semaine')}>
+            Semaine
+          </button>
+          <button type="button" className={vue === 'liste' ? 'on' : ''} onClick={() => setVue('liste')}>
+            Liste par jour
+          </button>
+        </div>
+      )}
+
       {chargement ? (
         <div className="center" style={{ minHeight: 200 }}><div className="spinner" /></div>
+      ) : vue === 'semaine' ? (
+        <PlanningSemaine
+          creneaux={creneaux}
+          occupation={occupation}
+          ressources={ressources}
+          onCreneau={(cr) => {
+            // Cliquer un bloc bascule sur la liste du jour concerne : la grille sert a TROUVER,
+            // la liste a AGIR. Ouvrir un formulaire de reservation dans une case de 40 px produirait
+            // un ecran qu'on ne peut ni lire ni remplir.
+            setJour(jourCle(cr.debut))
+            setVue('liste')
+            setReserverPour(cr.id)
+          }}
+        />
       ) : (
         <div className="resa-grid">
           {/* Agenda / créneaux */}
