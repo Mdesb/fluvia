@@ -511,6 +511,18 @@ export const api = {
 
   // Recouvrement / impayés.
   incidentsImpayes: () => request('/api/incident_impayes', { query: { itemsPerPage: 100 } }),
+  // Les REPRÉSENTATIONS bancaires et la POLITIQUE qui les gouverne : deux ressources exposées depuis
+  // le début, sans appelant. Sans elles, l'écran montrait des accès bloqués sans jamais dire *quand*
+  // la banque va réessayer, ni *quelle règle* a décidé de couper — donc rien de ce qui permet de
+  // répondre à l'abonné qui appelle.
+  representationsRecouvrement: () =>
+    request('/api/representation_recouvrements', { query: { itemsPerPage: 100 } }),
+  enregistrerResultatRepresentation: (id, resultat) =>
+    request(`/api/recouvrement/representations/${id}/enregistrer-resultat`, {
+      method: 'POST',
+      body: { resultat },
+    }),
+  politiquesRecouvrement: () => request('/api/politique_recouvrements', { query: { itemsPerPage: 50 } }),
 
   // --- Boutique en ligne (M3, vue admin) ---
   // Les paniers en ligne ne sont pas listables (accès par id) : la vue admin s'appuie sur les

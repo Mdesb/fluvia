@@ -63,6 +63,10 @@ const NAV = [
       { id: 'facturation', ic: '▤', label: 'Facturation', perm: 'facturation.lire' },
       { id: 'finance', ic: '€', label: 'Achats & trésorerie', perm: 'finance.read' },
       { id: 'sepa', ic: '⇄', label: 'Prélèvements SEPA', perm: 'sepa.lire', disabled: true, absent: true },
+      // PAS D'ENTREE PROPRE, ET C'EST DELIBERE. `Comptabilite > Impayes` traite deja les incidents,
+      // le tableau de bord, la resolution et la reouverture forcee. Une seconde porte vers la meme
+      // liste, c'est deux endroits a corriger et un exploitant qui ne sait plus lequel fait foi.
+      // Ce qui manquait -- representations et politique -- a ete ajoute LA, pas ailleurs.
       { id: 'recouvrement', ic: '⚠', label: 'Recouvrement', perm: 'recouvrement.lire', disabled: true, absent: true },
       { id: 'caution', ic: '⛨', label: 'Cautions', perm: 'caution.lire', disabled: true, absent: true },
       { id: 'documents', ic: '🗎', label: 'Documents', perm: 'dms.read', disabled: true, absent: true },

@@ -219,6 +219,10 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
         </section>
       )}
 
+      <Representations peutPiloter={peutPiloter} onErreur={setErreur} />
+
+      <Politique />
+
       <ForcageModal
         incident={forcage}
         onClose={() => setForcage(null)}
@@ -226,6 +230,179 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
         onErreur={setErreur}
       />
     </>
+  )
+}
+
+// LE CALENDRIER BANCAIRE, PARCE QUE << QUAND >> EST LA PREMIERE QUESTION DU REDEVABLE.
+//
+// L'écran savait dire qu'un accès était bloqué. Il ne savait pas dire quand la banque réessaierait —
+// alors que `RepresentationSepa` porte la date programmée depuis le début, et que l'opération pour en
+// enregistrer le résultat existait sans appelant.
+//
+// Un agent qui reçoit l'appel d'un abonné bloqué n'a que deux réponses utiles : « ce sera représenté
+// le 5 » ou « il faut régler maintenant ». Sans cette liste, il n'avait ni l'une ni l'autre.
+function Representations({ peutPiloter, onErreur }) {
+  const [lignes, setLignes] = useState([])
+  const [chargement, setChargement] = useState(true)
+  const [enCours, setEnCours] = useState(false)
+
+  const recharger = useCallback(async () => {
+    setChargement(true)
+    try {
+      setLignes(membres(await api.representationsRecouvrement()))
+    } catch {
+      // Une représentation absente n'empêche pas de traiter les impayés : l'écran principal reste
+      // utilisable, et on ne remonte pas une erreur qui ferait croire que la liste du dessus est fausse.
+      setLignes([])
+    } finally {
+      setChargement(false)
+    }
+  }, [])
+
+  useEffect(() => { recharger() }, [recharger])
+
+  async function enregistrer(id, resultat) {
+    setEnCours(true)
+    try {
+      await api.enregistrerResultatRepresentation(id, resultat)
+      await recharger()
+    } catch (e) {
+      onErreur(e.message || "Le résultat n'a pas pu être enregistré.")
+    } finally {
+      setEnCours(false)
+    }
+  }
+
+  if (chargement || lignes.length === 0) return null
+
+  const attendues = lignes.filter((r) => r.resultat === 'en_attente')
+
+  return (
+    <section className="card" style={{ marginTop: 16 }}>
+      <div className="card-h">
+        <h3>Représentations bancaires</h3>
+        <span className="sub">
+          {attendues.length === 0
+            ? 'aucune en attente'
+            : `${attendues.length} programmée${attendues.length > 1 ? 's' : ''}`}
+        </span>
+      </div>
+      <div className="card-b">
+        <table className="tbl">
+          <thead>
+            <tr>
+              <th>Redevable</th>
+              <th>Programmée le</th>
+              <th>Exécutée le</th>
+              <th>Résultat</th>
+              {peutPiloter && <th />}
+            </tr>
+          </thead>
+          <tbody>
+            {lignes.map((r) => (
+              <tr key={r.id}>
+                <td>{r.incident?.referenceRedevable || r.incident?.typeRedevable || '—'}</td>
+                <td>{r.dateProgrammee ? dateHeureFr(r.dateProgrammee) : '—'}</td>
+                <td>{r.dateExecution ? dateHeureFr(r.dateExecution) : <span className="sub">—</span>}</td>
+                <td>
+                  <span className={`badge ${r.resultat === 'reussie' ? 'good' : r.resultat === 'echouee' ? 'crit' : 'mut'}`}>
+                    {mot(r.resultat)}
+                  </span>
+                </td>
+                {peutPiloter && (
+                  <td>
+                    {/* Le résultat ne se saisit que sur une représentation encore en attente : le
+                        rejouer sur une ligne déjà tranchée réécrirait un fait bancaire constaté. */}
+                    {r.resultat === 'en_attente' && (
+                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                        <button className="btn primary sm" type="button" disabled={enCours} onClick={() => enregistrer(r.id, 'reussie')}>
+                          Réussie
+                        </button>
+                        <button className="btn sm" type="button" disabled={enCours} onClick={() => enregistrer(r.id, 'echouee')}>
+                          Échouée
+                        </button>
+                      </div>
+                    )}
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  )
+}
+
+// LA REGLE QUI A COUPE L'ACCES, ECRITE LA OU ON CONSTATE SES EFFETS.
+//
+// `PolitiqueRecouvrement` decide combien de fois la banque represente, a quel rythme, et A QUEL
+// MOMENT L'ACCES EST REFUSE. C'est donc elle qui explique chaque ligne bloquee du tableau ci-dessus.
+//
+// Elle etait modifiable par l'API et invisible de l'ecran : on voyait la consequence sans jamais la
+// cause. Un exploitant qui trouve le blocage trop brutal n'avait aucun moyen de savoir que le
+// reglage existait -- il concluait que le logiciel etait comme ca.
+function Politique() {
+  const [politiques, setPolitiques] = useState([])
+
+  useEffect(() => {
+    let annule = false
+    api.politiquesRecouvrement()
+      .then((p) => { if (!annule) setPolitiques(membres(p)) })
+      .catch(() => { if (!annule) setPolitiques([]) })
+    return () => { annule = true }
+  }, [])
+
+  const MOMENTS = {
+    apres_1er_echec: 'dès le premier échec',
+    apres_representation_echouee: 'après une représentation échouée',
+    apres_n_representations_echouees: 'après N représentations échouées',
+  }
+
+  return (
+    <section className="card" style={{ marginTop: 16 }}>
+      <div className="card-h">
+        <h3>Règle appliquée</h3>
+        <span className="sub">ce qui décide du blocage</span>
+      </div>
+      <div className="card-b">
+        {politiques.length === 0 ? (
+          // Une politique absente n'est pas une absence de regle : ce sont les valeurs par defaut de
+          // l'entite qui s'appliquent. Les taire laisserait croire que rien ne coupe l'acces.
+          <div className="empty">
+            Aucune règle propre à cet établissement — les valeurs par défaut s&rsquo;appliquent :
+            une représentation à J+5, et refus d&rsquo;accès après une représentation échouée.
+          </div>
+        ) : (
+          politiques.map((p) => (
+            <div className="deflist" key={p.id}>
+              <div><span>Représentations maximum</span><span className="num">{p.nbRepresentationsMax}</span></div>
+              <div>
+                <span>Calendrier</span>
+                <span className="num">
+                  {(p.calendrierRepresentationJours || []).map((j) => `J+${j}`).join(' · ') || '—'}
+                </span>
+              </div>
+              <div>
+                <span>Refus d&rsquo;accès</span>
+                <span className="num">{MOMENTS[p.momentRefusAcces] || p.momentRefusAcces}</span>
+              </div>
+              {p.nReprAvantBlocage != null && (
+                <div><span>Représentations avant blocage</span><span className="num">{p.nReprAvantBlocage}</span></div>
+              )}
+              <div>
+                <span>Suspension du contrat</span>
+                <span className="num">
+                  {p.delaiAvantSuspensionContratJours != null
+                    ? `après ${p.delaiAvantSuspensionContratJours} j`
+                    : 'jamais'}
+                </span>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </section>
   )
 }
 
