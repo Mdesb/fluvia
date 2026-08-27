@@ -3,6 +3,7 @@ import Liste, { texte } from '../components/Liste.jsx'
 import Tabs from '../components/Tabs.jsx'
 import CasiersPiscine from '../components/CasiersPiscine.jsx'
 import { api, membres } from '../api/client.js'
+import { aLeDroit } from '../api/droits.js'
 
 function heure(v) {
   if (!v) return '—'
@@ -67,20 +68,7 @@ export default function Piscine({ etabActif, droits }) {
       </div>
 
       <div style={{ marginTop: 16 }}>
-        <Liste
-          titre="Créneaux bassins"
-          sous="planning surveillance"
-          deps={[etabActif]}
-          charger={api.creneauxBassin}
-          vide="Aucun créneau planifié."
-          colonnes={[
-            { cle: 'bassin', entete: 'Bassin', rendu: (r) => texte(r.bassin?.libelle, String(r.bassin || '').split('/').pop() || '—') },
-            { cle: 'debut', entete: 'Début', rendu: (r) => heure(r.debut) },
-            { cle: 'fin', entete: 'Fin', rendu: (r) => heure(r.fin) },
-            { cle: 'encadrantRequis', entete: 'Encadrant', rendu: (r) => (r.encadrantRequis ? 'requis' : '—') },
-            { cle: 'statut', entete: 'Statut', rendu: (r) => <span className="badge mut">{r.statut || '—'}</span> },
-          ]}
-        />
+        <CreneauxBassins etabActif={etabActif} droits={droits} />
       </div>
     </div>
   )
@@ -183,5 +171,90 @@ function SurveillancePoss({ etabActif }) {
         </div>
       </div>
     </section>
+  )
+}
+
+/**
+ * LES CRÉNEAUX DE BASSIN — et le geste qui les fait exister.
+ *
+ * **Un créneau naît en brouillon.** Valider est ce qui le fait entrer dans le planning de
+ * surveillance ; l'opération existait côté serveur et aucun écran ne l'appelait. Le tableau
+ * affichait donc une colonne « statut » où tout restait « brouillon », sans que rien n'explique
+ * pourquoi ni comment en sortir.
+ *
+ * > **Un planning dont aucune ligne n'est validée ressemble à un planning, et n'en est pas un.**
+ *
+ * **Le ton du statut n'est pas décoratif.** Un brouillon en gris se lit comme une nuance ; en orange,
+ * il se lit comme un travail à finir. C'est exactement ce qu'il est — et sur un plan de surveillance,
+ * la différence entre les deux lectures est réglementaire.
+ */
+function CreneauxBassins({ etabActif, droits = [] }) {
+  const peutConfigurer = aLeDroit(droits, 'piscine.configurer')
+  const [version, setVersion] = useState(0)
+  const [busy, setBusy] = useState(false)
+  const [erreur, setErreur] = useState(null)
+
+  const colonnes = [
+    { cle: 'bassin', entete: 'Bassin', rendu: (r) => texte(r.bassin?.libelle, String(r.bassin || '').split('/').pop() || '—') },
+    { cle: 'debut', entete: 'Début', rendu: (r) => heure(r.debut) },
+    { cle: 'fin', entete: 'Fin', rendu: (r) => heure(r.fin) },
+    { cle: 'encadrantRequis', entete: 'Encadrant', rendu: (r) => (r.encadrantRequis ? 'requis' : '—') },
+    {
+      cle: 'statut',
+      entete: 'Statut',
+      rendu: (r) => {
+        const s = String(r.statut || '').toLowerCase()
+        const ton = s === 'valide' ? 'good' : s === 'annule' ? 'crit' : 'warn'
+        return <span className={`badge ${ton}`}>{r.statut || '—'}</span>
+      },
+    },
+  ]
+
+  if (peutConfigurer) {
+    colonnes.push({
+      cle: 'valider',
+      entete: '',
+      rendu: (r) => {
+        if (String(r.statut || '').toLowerCase() !== 'brouillon') return null
+        return (
+          <div style={{ textAlign: 'right' }}>
+            <button
+              className="btn ghost sm"
+              type="button"
+              disabled={busy}
+              style={{ padding: '1px 8px', fontSize: 11.5 }}
+              onClick={async () => {
+                setBusy(true)
+                setErreur(null)
+                try {
+                  await api.piscineValiderCreneauBassin(r.id)
+                  setVersion((v) => v + 1)
+                } catch (e) {
+                  setErreur(e.message || 'Le créneau n’a pas pu être validé.')
+                } finally {
+                  setBusy(false)
+                }
+              }}
+            >
+              Valider
+            </button>
+          </div>
+        )
+      },
+    })
+  }
+
+  return (
+    <div>
+      {erreur && <div className="alert crit">{erreur}</div>}
+      <Liste
+        titre="Créneaux bassins"
+        sous="planning surveillance"
+        deps={[etabActif, version]}
+        charger={api.creneauxBassin}
+        vide="Aucun créneau planifié."
+        colonnes={colonnes}
+      />
+    </div>
   )
 }

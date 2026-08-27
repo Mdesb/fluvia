@@ -3,6 +3,7 @@ import AbsencesSection from '../components/AbsencesSection.jsx'
 import Liste, { dateFr, dateHeureFr } from '../components/Liste.jsx'
 import Modal from '../components/Modal.jsx'
 import { api } from '../api/client.js'
+import { aLeDroit } from '../api/droits.js'
 
 function heure(v) {
   if (!v) return '—'
