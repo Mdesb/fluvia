@@ -58,6 +58,7 @@ export default function Documents({ etabActif, droits = [] }) {
   const [documents, setDocuments] = useState([])
   const [versions, setVersions] = useState([])
   const [historique, setHistorique] = useState(null)
+  const [aRenommer, setARenommer] = useState(null)
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
@@ -275,17 +276,27 @@ export default function Documents({ etabActif, droits = [] }) {
                           Télécharger
                         </button>
                         {peutEcrire && (
-                          <button
-                            className="btn ghost sm"
-                            type="button"
-                            disabled={busy}
-                            onClick={() => {
-                              setARemplacer(d)
-                              champRemplacement.current?.click()
-                            }}
-                          >
-                            Nouvelle version
-                          </button>
+                          <>
+                            <button
+                              className="btn ghost sm"
+                              type="button"
+                              disabled={busy}
+                              onClick={() => setARenommer(d)}
+                            >
+                              Renommer
+                            </button>
+                            <button
+                              className="btn ghost sm"
+                              type="button"
+                              disabled={busy}
+                              onClick={() => {
+                                setARemplacer(d)
+                                champRemplacement.current?.click()
+                              }}
+                            >
+                              Nouvelle version
+                            </button>
+                          </>
                         )}
                       </div>
                     </td>
@@ -296,6 +307,13 @@ export default function Documents({ etabActif, droits = [] }) {
           </div>
         )}
       </div>
+
+      <RenommerDocument
+        document={aRenommer}
+        onFermer={() => setARenommer(null)}
+        onRenomme={async (message) => { setARenommer(null); setSucces(message); await charger() }}
+        onErreur={setErreur}
+      />
 
       <HistoriqueVersions
         document={historique}
@@ -376,6 +394,77 @@ function HistoriqueVersions({ document: doc, versions, onFermer }) {
           </table>
         </div>
       )}
+    </Modal>
+  )
+}
+
+/**
+ * RENOMMER ET RECLASSER UN DOCUMENT.
+ *
+ * **Le titre vient du nom du fichier déposé, et le nom d'un fichier est rarement un titre.**
+ * « scan_2026-08-27_001.pdf » est ce qu'écrit un scanner, pas ce qu'un collègue cherchera dans six
+ * mois. Sans moyen de le corriger, la bibliothèque se remplit de noms de machine — et une
+ * bibliothèque qu'on ne peut pas parcourir sert autant qu'une pile.
+ *
+ * **La catégorie est modifiable pour la même raison** : elle est choisie au dépôt, souvent au
+ * jugé, et c'est elle qui décide du filtre où le document réapparaîtra.
+ *
+ * **L'établissement, lui, ne bouge pas** (RG-DMS-04) : il n'est pas dans le groupe d'écriture du
+ * serveur, et le déplacer reviendrait à faire passer une pièce comptable d'un exploitant à un autre.
+ */
+function RenommerDocument({ document: doc, onFermer, onRenomme, onErreur }) {
+  const [titre, setTitre] = useState('')
+  const [categorie, setCategorie] = useState('other')
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    if (!doc) return
+    setTitre(doc.title || '')
+    setCategorie(doc.category || 'other')
+  }, [doc])
+
+  async function enregistrer() {
+    setBusy(true)
+    onErreur(null)
+    try {
+      await api.majDocumentDms(doc.id, { title: titre.trim(), category: categorie })
+      await onRenomme('Document renommé.')
+    } catch (e) {
+      onErreur(e.message || 'Le document n’a pas pu être renommé.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal open={!!doc} onClose={onFermer} titre="Renommer le document" taille="sm">
+      <div style={{ display: 'grid', gap: 12 }}>
+        <label style={{ display: 'grid', gap: 4 }}>
+          <span className="sub">Titre</span>
+          <input className="input" value={titre} onChange={(e) => setTitre(e.target.value)} maxLength={255} />
+        </label>
+
+        <label style={{ display: 'grid', gap: 4 }}>
+          <span className="sub">Catégorie</span>
+          <select className="select" value={categorie} onChange={(e) => setCategorie(e.target.value)}>
+            {CATEGORIES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+        </label>
+
+        {doc?.currentVersion?.originalFilename && (
+          <div className="sub">
+            Fichier déposé : <span className="mono">{doc.currentVersion.originalFilename}</span> — il
+            ne change pas, seul le titre affiché change.
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button className="btn ghost" type="button" onClick={onFermer} disabled={busy}>Annuler</button>
+          <button className="btn primary" type="button" onClick={enregistrer} disabled={busy || titre.trim() === ''}>
+            Enregistrer
+          </button>
+        </div>
+      </div>
     </Modal>
   )
 }
