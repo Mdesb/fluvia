@@ -6,6 +6,7 @@ namespace App\Boutique\Service;
 
 use App\Boutique\Entity\BilletQrMeta;
 use App\Boutique\Entity\CompteClient;
+use App\Boutique\Entity\Vitrine;
 use App\Boutique\Entity\LigneCommandeMeta;
 use App\Boutique\Entity\SuiviCommandeEnLigne;
 use App\Boutique\Enum\StatutTunnel;
@@ -50,7 +51,29 @@ final class SouscriptionAbonnementEnLigneHandler
     /**
      * @param array<string, mixed> $donnees {iban, bicDebiteur, debiteurNom, dateSignature?}
      */
-    public function souscrire(?CompteClient $compteClient, Produit $produit, array $donnees): Vente
+    /**
+     * @param Vitrine|null $vitrineAchat la boutique OU L'ACHAT A LIEU.
+     *
+     * **Pourquoi ce parametre existe.** Le gestionnaire lisait `compteClient->getVitrineCreation()`
+     * et `compteClient->getEtablissement()` : un client inscrit chez Piscine A qui s'abonne chez
+     * Patinoire B faisait entrer l'abonnement, le mandat SEPA et le panier DANS LES COMPTES DE
+     * PISCINE A.
+     *
+     * Un compte global est une IDENTITE, pas une appartenance commerciale. L'argent, lui,
+     * appartient au vendeur -- et une recette portee au mauvais etablissement ne se voit ni a la
+     * vente, ni au prelevement, seulement a la cloture.
+     *
+     * > Confondre ou quelqu'un s'est inscrit avec ou il achete, c'est facturer le mauvais.
+     *
+     * `null` conserve l'ancien comportement : un appelant qui ne sait pas ou il vend ne doit pas
+     * se voir refuser la vente, il doit se voir attribuer le defaut historique.
+     */
+    public function souscrire(
+        ?CompteClient $compteClient,
+        Produit $produit,
+        array $donnees,
+        ?Vitrine $vitrineAchat = null,
+    ): Vente
     {
         // RG-M3-12/17 (CA-13) : un invité (aucun CompteClient) est bloqué avant paiement.
         if ($compteClient === null) {
@@ -63,7 +86,8 @@ final class SouscriptionAbonnementEnLigneHandler
 
         $client = $compteClient->getClient();
         \assert($client !== null);
-        $etablissement = $compteClient->getEtablissement();
+        // L'etablissement du VENDEUR, pas celui ou le compte est ne.
+        $etablissement = $vitrineAchat?->getEtablissement() ?? $compteClient->getEtablissement();
 
         $iban = \is_string($donnees['iban'] ?? null) ? $donnees['iban'] : '';
         $bic = \is_string($donnees['bicDebiteur'] ?? null) ? $donnees['bicDebiteur'] : '';
@@ -133,7 +157,7 @@ final class SouscriptionAbonnementEnLigneHandler
 
         $suivi = new SuiviCommandeEnLigne();
         $suivi->setVente($vente)->setVitrine($compteClient->getVitrineCreation())
-            ->setPanierOrigine($this->panierFictifPourAbonnement($compteClient))
+            ->setPanierOrigine($this->panierFictifPourAbonnement($compteClient, $vitrineAchat))
             ->setCompteClient($compteClient)->setStatutTunnel(StatutTunnel::Confirme)->setEtablissement($etablissement);
         $this->em->persist($suivi);
 
@@ -161,7 +185,7 @@ final class SouscriptionAbonnementEnLigneHandler
      * panier le plus récent du compte s'il en existe un, sinon on lève un panier n'est pas requis :
      * ce champ est rendu nullable applicativement via un panier vide auto-créé au besoin.
      */
-    private function panierFictifPourAbonnement(CompteClient $compteClient): \App\Boutique\Entity\PanierEnLigne
+    private function panierFictifPourAbonnement(CompteClient $compteClient, ?Vitrine $vitrineAchat): \App\Boutique\Entity\PanierEnLigne
     {
         $existant = $this->em->getRepository(\App\Boutique\Entity\PanierEnLigne::class)
             ->findOneBy(['compteClient' => $compteClient], ['dateCreation' => 'DESC']);
@@ -170,9 +194,9 @@ final class SouscriptionAbonnementEnLigneHandler
         }
 
         $panier = new \App\Boutique\Entity\PanierEnLigne();
-        $panier->setVitrine($compteClient->getVitrineCreation())
+        $panier->setVitrine($vitrineAchat ?? $compteClient->getVitrineCreation())
             ->setCompteClient($compteClient)
-            ->setEtablissement($compteClient->getEtablissement())
+            ->setEtablissement($vitrineAchat?->getEtablissement() ?? $compteClient->getEtablissement())
             ->setStatut(\App\Boutique\Enum\StatutPanier::TransformeEnCommande);
         $this->em->persist($panier);
 

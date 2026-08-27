@@ -171,6 +171,34 @@ class PanierEnLigne
     #[ORM\Column(options: ['default' => false])]
     private bool $relanceEnvoyee = false;
 
+    /**
+     * LA VERSION DES CGV QUE LE CLIENT A ACCEPTEE, ET LE DOCUMENT D'OU ELLE VIENT.
+     *
+     * **Sans elle, on archivait la moitie de la preuve.** Le panier horodatait deja le consentement
+     * RGPD, et `LegalDocument` conserve chaque version publiee des CGV -- mais rien ne reliait les
+     * deux. On savait donc QUAND le client avait accepte, et pas CE QU'IL AVAIT ACCEPTE.
+     *
+     * Des CGV ne sont opposables que dans la version que le client a pu lire au moment ou il a paye.
+     * Un exploitant qui les modifie en mars ne peut rien invoquer pour une commande de janvier --
+     * et sans ce lien, il ne peut meme pas montrer laquelle s'appliquait.
+     *
+     * > Conserver le texte sans conserver ce que le client a vu, c'est archiver la moitie de la preuve.
+     *
+     * Reference libre vers `App\Legal\Entity\LegalDocument` : les deux modules doivent vivre
+     * separement (D2). Toute lecture par cette reference type son parametre `'uuid'` -- sur une
+     * colonne uuid nue, Doctrine ne convertit pas et NE S'EN PLAINT PAS (D58).
+     *
+     * Nullable : les paniers anterieurs au 27/08 n'ont rien accepte de tracable, et inventer une
+     * version leur attribuerait un texte qu'ils n'ont pas vu.
+     */
+    #[ORM\Column(type: 'integer', nullable: true)]
+    #[Groups(['panier:read'])]
+    private ?int $cgvVersionAcceptee = null;
+
+    #[ORM\Column(type: UuidType::NAME, nullable: true)]
+    #[Groups(['panier:read'])]
+    private ?Uuid $cgvDocumentRef = null;
+
     /** RGPD (RG-M3-07) : horodatage du consentement bloquant avant paiement. */
     #[ORM\Column(type: 'datetime_immutable', nullable: true)]
     #[Groups(['panier:read'])]
@@ -299,6 +327,31 @@ class PanierEnLigne
     public function setRelanceEnvoyee(bool $relanceEnvoyee): self
     {
         $this->relanceEnvoyee = $relanceEnvoyee;
+
+        return $this;
+    }
+
+    public function getCgvVersionAcceptee(): ?int
+    {
+        return $this->cgvVersionAcceptee;
+    }
+
+    public function getCgvDocumentRef(): ?Uuid
+    {
+        return $this->cgvDocumentRef;
+    }
+
+    /**
+     * Enregistre CE QUI a ete accepte, en meme temps que le fait qu'il l'ait ete.
+     *
+     * Les deux valeurs se posent ensemble ou pas du tout : une version sans document ne se relit
+     * pas, et un document sans version ne dit pas laquelle. Un unique mutateur evite qu'un appelant
+     * n'en pose qu'une moitie.
+     */
+    public function accepterCgv(Uuid $document, int $version): self
+    {
+        $this->cgvDocumentRef = $document;
+        $this->cgvVersionAcceptee = $version;
 
         return $this;
     }

@@ -9,6 +9,7 @@ use ApiPlatform\State\ProcessorInterface;
 use App\Boutique\Entity\CompteClient;
 use App\Boutique\Security\PanierProprietaireGuard;
 use App\Boutique\Service\SouscriptionAbonnementEnLigneHandler;
+use App\Boutique\Service\VitrineResolver;
 use App\Offre\Entity\Produit;
 use App\Securite\Entity\Utilisateur;
 use App\Vente\Service\LecteurCorps;
@@ -30,6 +31,7 @@ final class SouscrireAbonnementEnLigneProcessor implements ProcessorInterface
         private readonly LecteurCorps $lecteur,
         private readonly Security $security,
         private readonly SouscriptionAbonnementEnLigneHandler $handler,
+        private readonly VitrineResolver $resolver,
     ) {
     }
 
@@ -48,7 +50,18 @@ final class SouscrireAbonnementEnLigneProcessor implements ProcessorInterface
             $compteClient = $this->em->getRepository(CompteClient::class)->findOneBy(['utilisateur' => $utilisateur]);
         }
 
-        $vente = $this->handler->souscrire($compteClient, $produit, $corps);
+        // LA BOUTIQUE OU L'ACHAT A LIEU, ET NON CELLE OU LE COMPTE EST NE.
+        //
+        // Sans ce parametre, le gestionnaire retombait sur `compteClient->getVitrineCreation()` : un
+        // client inscrit chez Piscine A qui s'abonne chez Patinoire B faisait entrer l'abonnement, le
+        // mandat SEPA et le panier DANS LES COMPTES DE PISCINE A. Un compte global est une identite,
+        // pas une appartenance commerciale -- et l'argent, lui, appartient au vendeur.
+        //
+        // Facultatif pour ne rien casser : les appelants qui ne l'envoient pas conservent l'ancien
+        // comportement, et l'ecran de la boutique le transmet desormais.
+        $vitrineAchat = $this->resolver->resoudre($corps['vitrine'] ?? null);
+
+        $vente = $this->handler->souscrire($compteClient, $produit, $corps, $vitrineAchat);
 
         return new JsonResponse([
             'vente' => (string) $vente->getId(),
