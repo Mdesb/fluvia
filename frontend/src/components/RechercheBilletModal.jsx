@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { libelleProduit } from '../api/produit.js'
 import { mot } from '../api/vocabulaire.js'
@@ -19,15 +19,34 @@ import Modal from './Modal.jsx'
 // elle n'en crée jamais un second. Si plusieurs droits actifs apparaissent pour un même support, ce
 // n'est pas une richesse à afficher : c'est un défaut, et l'écran le dit au lieu de le maquiller.
 
-export default function RechercheBilletModal({ open, onClose }) {
+/**
+ * @param {string} [numeroInitial] numero deja connu — la fiche s'ouvre alors DIRECTEMENT dessus.
+ *
+ * Ouverte depuis la recherche globale, cette fenetre connait deja le support : refaire saisir le
+ * numero qu'on vient de choisir dans une liste serait absurde, et surtout ce serait rendre lente une
+ * fonction dont le seul interet est d'etre rapide.
+ */
+export default function RechercheBilletModal({ open, onClose, numeroInitial = '' }) {
   const [numero, setNumero] = useState('')
   const [resultat, setResultat] = useState(null)
   const [chargement, setChargement] = useState(false)
   const [erreur, setErreur] = useState(null)
 
-  async function chercher(e) {
-    e.preventDefault()
-    const q = numero.trim()
+  // A l'ouverture avec un numero connu : on cherche tout de suite. Sans `open` dans les dependances,
+  // rouvrir la fenetre sur le meme billet n'aurait rien relance et afficherait l'etat precedent --
+  // sur un controle d'acces, montrer un ancien resultat serait pire que ne rien montrer.
+  useEffect(() => {
+    if (!open) return
+    setNumero(numeroInitial || '')
+    setResultat(null)
+    setErreur(null)
+    if (numeroInitial) chercher(null, numeroInitial)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, numeroInitial])
+
+  async function chercher(e, force) {
+    e?.preventDefault?.()
+    const q = (force ?? numero).trim()
     if (!q) return
     setChargement(true)
     setErreur(null)

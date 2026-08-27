@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { libelleProduit, prixIndicatif, euros, statutProduit } from '../api/produit.js'
 import { aLeDroit } from '../api/droits.js'
+import { mot } from '../api/vocabulaire.js'
+import RechercheBilletModal from './RechercheBilletModal.jsx'
 
 // Recherche globale de la barre du haut.
 //
@@ -16,6 +18,19 @@ import { aLeDroit } from '../api/droits.js'
 // côté serveur, et une boîte qui promet de tout trouver mais ne trouve que la moitié est pire qu'une
 // boîte honnête.
 //
+// LES BILLETS ONT REJOINT LA LISTE, ET ILS N'AURAIENT PAS DÛ ATTENDRE.
+//
+// La vérification d'un billet existait — `RechercheBilletModal`, complète — et n'était atteignable
+// que depuis **Supervision**. Or la personne qui a besoin de vérifier un billet, c'est le caissier
+// avec un client devant lui, ou l'agent au portique. Aucun des deux n'a Supervision ouverte, et
+// aucun des deux ne va changer d'écran pendant qu'on lui parle.
+//
+// Un numéro de billet se cherche **à l'exact**, pas approximativement : c'est ce qui le rend
+// compatible avec la règle ci-dessus. `/api/supports?identifiant=` existe déjà et rend zéro ou un
+// résultat — il n'y a rien à écrire côté serveur, seulement à ouvrir la porte.
+//
+// > **Une fonction qu'on ne peut atteindre que depuis l'écran où elle ne sert pas n'existe pas.**
+//
 // LES DROITS SONT RESPECTÉS ICI AUSSI : on n'interroge que ce que l'utilisateur a le droit de lire.
 // Une recherche qui révélerait l'existence d'un client à quelqu'un qui n'a pas `crm.lire` serait une
 // fuite, même sans afficher la fiche.
@@ -27,6 +42,10 @@ export default function RechercheGlobale({ droits = [], onNav }) {
   const [ouvert, setOuvert] = useState(false)
   const [clients, setClients] = useState([])
   const [produits, setProduits] = useState([])
+  const [supports, setSupports] = useState([])
+  // Le billet consulte SANS QUITTER L'ECRAN. Une << vue rapide >> qui fait changer de page
+  // n'est pas rapide : le caissier a un client devant lui, et son panier a l'ecran.
+  const [billetOuvert, setBilletOuvert] = useState(null)
   const [chargement, setChargement] = useState(false)
   const [indice, setIndice] = useState(0)
   const [panne, setPanne] = useState(false)
@@ -37,13 +56,17 @@ export default function RechercheGlobale({ droits = [], onNav }) {
 
   const peutClients = aLeDroit(droits, 'crm.lire')
   const peutProduits = aLeDroit(droits, 'offre.lire')
+  const peutSupports = aLeDroit(droits, 'acces.lire')
 
   const resultats = useMemo(() => {
     const l = []
     clients.slice(0, 5).forEach((c) => l.push({ type: 'client', id: c.id, item: c }))
     produits.slice(0, 5).forEach((p) => l.push({ type: 'produit', id: p.id, item: p }))
+    // Les billets EN PREMIER quand il y en a : on ne cherche un numéro de support que si on l'a sous
+    // les yeux, donc l'intention est certaine — alors qu'un mot tapé peut viser un client ou un produit.
+    supports.slice(0, 3).forEach((s) => l.unshift({ type: 'support', id: s.id, item: s }))
     return l
-  }, [clients, produits])
+  }, [clients, produits, supports])
 
   // Raccourci clavier : « / » comme dans la plupart des outils, et Ctrl+K / ⌘K pour ceux qui ont
   // l'habitude. Sans raccourci, une recherche en haut de page se prend à la souris — trois secondes
@@ -75,6 +98,7 @@ export default function RechercheGlobale({ droits = [], onNav }) {
     if (q.length < 2) {
       setClients([])
       setProduits([])
+      setSupports([])
       setChargement(false)
       return undefined
     }
@@ -83,15 +107,20 @@ export default function RechercheGlobale({ droits = [], onNav }) {
     setChargement(true)
     const minuteur = setTimeout(async () => {
       try {
-        const [cs, ps] = await Promise.all([
+        const [cs, ps, ss] = await Promise.all([
           peutClients ? api.rechercheClients({ q, itemsPerPage: 5 }).catch(() => null) : null,
           peutProduits ? chargerProduits(cacheProduits).catch(() => null) : null,
+          // Recherche EXACTE : `identifiant=` ne fait pas de correspondance partielle. Un numéro
+          // tronqué ne rend donc rien, et c'est voulu — proposer « le billet le plus proche » sur un
+          // contrôle d'accès serait la pire des complaisances.
+          peutSupports ? api.supports({ identifiant: q, itemsPerPage: 3 }).catch(() => null) : null,
         ])
         if (annule) return
         // `/crm/clients/recherche` est une operation sur mesure : elle rend `{ items, total }` et non
         // une collection hydra. L'extracteur generique rendait donc toujours une liste vide.
         setClients(cs ? (Array.isArray(cs.items) ? cs.items : membres(cs)) : [])
         setProduits(ps ? filtrerProduits(ps, q) : [])
+        setSupports(ss ? membres(ss) : [])
         // Une recherche qui echoue et une recherche sans resultat ne doivent pas se ressembler :
         // « aucun resultat » sur une panne envoie chercher un client qui existe pourtant.
         setPanne((peutClients && cs === null) || (peutProduits && ps === null))
@@ -105,13 +134,15 @@ export default function RechercheGlobale({ droits = [], onNav }) {
       annule = true
       clearTimeout(minuteur)
     }
-  }, [terme, peutClients, peutProduits])
+  }, [terme, peutClients, peutProduits, peutSupports])
 
   function choisir(r) {
     setOuvert(false)
     setTerme('')
     champ.current?.blur()
     if (r.type === 'client') onNav('clients', { type: 'client', id: r.id })
+    // Pas de navigation : la fiche s'ouvre par-dessus l'ecran courant, et se referme dessus.
+    else if (r.type === 'support') setBilletOuvert(r.item.identifiant)
     else onNav('catalogue', { type: 'produit', id: r.id })
   }
 
@@ -134,7 +165,7 @@ export default function RechercheGlobale({ droits = [], onNav }) {
     }
   }
 
-  if (!peutClients && !peutProduits) return null
+  if (!peutClients && !peutProduits && !peutSupports) return null
 
   const montrerPanneau = ouvert && terme.trim().length >= 2
 
@@ -146,7 +177,7 @@ export default function RechercheGlobale({ droits = [], onNav }) {
         className="input"
         type="search"
         value={terme}
-        placeholder={placeholder(peutClients, peutProduits)}
+        placeholder={placeholder(peutClients, peutProduits, peutSupports)}
         aria-label="Recherche globale"
         onChange={(e) => {
           setTerme(e.target.value)
@@ -156,6 +187,12 @@ export default function RechercheGlobale({ droits = [], onNav }) {
         onKeyDown={onKeyDown}
       />
       <span className="ts-kbd" aria-hidden="true">/</span>
+
+      <RechercheBilletModal
+        open={!!billetOuvert}
+        numeroInitial={billetOuvert || ''}
+        onClose={() => setBilletOuvert(null)}
+      />
 
       {montrerPanneau && (
         <div className="ts-panel" role="listbox">
@@ -167,6 +204,26 @@ export default function RechercheGlobale({ droits = [], onNav }) {
             <div className="ts-vide">Aucun résultat pour « {terme.trim()} ».</div>
           ) : (
             <>
+              {supports.length > 0 && <div className="ts-sec">Billets et cartes</div>}
+              {resultats
+                .filter((r) => r.type === 'support')
+                .map((r) => (
+                  <Resultat
+                    key={`s-${r.id}`}
+                    actif={resultats[indice] === r}
+                    onChoisir={() => choisir(r)}
+                    principal={r.item.identifiant}
+                    secondaire={mot(r.item.type) || 'support'}
+                    badge={
+                      r.item.statut === 'actif'
+                        ? { ton: 'good', libelle: 'utilisable', aide: 'Ce support passera au contrôle.' }
+                        // Un support bloqué se voit AVANT d'ouvrir la fiche : c'est l'information
+                        // qu'on cherche, et la faire attendre un clic la fait manquer.
+                        : { ton: 'crit', libelle: 'bloqué', aide: "Refusé au contrôle d'accès." }
+                    }
+                  />
+                ))}
+
               {clients.length > 0 && <div className="ts-sec">Clients</div>}
               {resultats
                 .filter((r) => r.type === 'client')
@@ -217,10 +274,18 @@ function Resultat({ actif, onChoisir, principal, secondaire, badge }) {
   )
 }
 
-function placeholder(peutClients, peutProduits) {
-  if (peutClients && peutProduits) return 'Rechercher un client, un produit…'
-  if (peutClients) return 'Rechercher un client…'
-  return 'Rechercher un produit…'
+// LE LIBELLE ENUMERE EXACTEMENT CE QUE LA BOITE TROUVE.
+//
+// Une boite qui annonce moins qu'elle ne fait est aussi couteuse qu'une boite qui annonce plus :
+// personne n'y tape un numero de billet si rien ne dit qu'elle en cherche. La fonctionnalite existe
+// alors sans etre utilisee, ce qui revient au meme que de ne pas l'avoir ecrite.
+function placeholder(peutClients, peutProduits, peutSupports) {
+  const quoi = []
+  if (peutClients) quoi.push('un client')
+  if (peutProduits) quoi.push('un produit')
+  if (peutSupports) quoi.push('un billet')
+  if (quoi.length === 0) return 'Rechercher…'
+  return `Rechercher ${quoi.join(', ')}…`
 }
 
 function nomClient(c) {
