@@ -91,7 +91,8 @@ const NAV = [
         label: 'Paramètres',
         perms: ['securite.gerer', 'securite.lire', 'organisation.gerer', 'offre.gerer', 'caisse.gerer', 'crm.parametrer'],
       },
-      { id: 'autorisations', ic: '⚿', label: 'Autorisations', perm: 'autorisation.lire', disabled: true, absent: true },
+      // Ouvert le 27/08. Voir le commentaire de l'entree << Assistance >> : meme motif, meme cout.
+      { id: 'autorisations', ic: '⚿', label: 'Autorisations', perms: ['autorisation.lire', 'autorisation.approuver', 'autorisation.gerer'] },
     ],
   },
 ]

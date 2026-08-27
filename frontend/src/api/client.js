@@ -788,6 +788,19 @@ export const api = {
       ld: true,
     }),
 
+  // --- App\Autorisation — PLAFONDS ET ESCALADES ---------------------------------------------------
+  //
+  // Treize opérations, aucun appelant jusqu'au 27/08. Un module d'autorisation sans écran n'est pas
+  // une fonctionnalité en attente : c'est un mécanisme qui refuse et que personne ne peut débloquer.
+  // La demande d'escalade d'un caissier partait, n'arrivait nulle part, et expirait.
+  demandesEscalade: (params) =>
+    request('/api/demande_escalades', { query: { itemsPerPage: 100, ...(params || {}) } }),
+  approuverEscalade: (id) => request(`/api/demandes-escalade/${id}/approuver`, { method: 'POST', body: {} }),
+  rejeterEscalade: (id, motif) =>
+    request(`/api/demandes-escalade/${id}/rejeter`, { method: 'POST', body: { motif } }),
+  limitesAutorisation: () => request('/api/limite_autorisations', { query: { itemsPerPage: 200 } }),
+  operationsSensibles: () => request('/api/operation_sensibles', { query: { itemsPerPage: 200 } }),
+
   // Base de connaissances. `/publics` et `/recherche` sont en accès public : ce sont elles que la
   // webapp cliente interroge, sans jeton.
   articlesAide: (params) => request('/api/support/articles/publics', { query: { itemsPerPage: 100, ...(params || {}) } }),
