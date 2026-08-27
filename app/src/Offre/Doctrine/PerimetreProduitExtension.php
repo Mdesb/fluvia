@@ -11,6 +11,7 @@ use ApiPlatform\Metadata\Operation;
 use App\Offre\Entity\ConversionType;
 use App\Offre\Entity\GrilleTarifaire;
 use App\Offre\Entity\PrixHistorique;
+use App\OptionProduit\Entity\OptionProduit;
 use App\Offre\Entity\Produit;
 use App\Offre\Entity\Promotion;
 use App\Securite\Entity\Utilisateur;
@@ -77,6 +78,11 @@ final class PerimetreProduitExtension implements QueryCollectionExtensionInterfa
         ConversionType::class => 'produit',
         GrilleTarifaire::class => 'produit',
         PrixHistorique::class => 'grille.produit',
+
+        // Ajoutee le 28/08, meme raison que ses trois voisines : elle tient son perimetre du
+        // produit et rien ne le lui appliquait. Les options d'un produit disent la composition
+        // d'une offre concurrente.
+        OptionProduit::class => 'produit',
     ];
 
     public function __construct(

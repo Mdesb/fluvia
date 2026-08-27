@@ -16,7 +16,9 @@ use App\Caisse\Entity\SessionCaisse;
 use App\Securite\Entity\Affectation;
 use App\Securite\Entity\Utilisateur;
 use App\Vente\Entity\Avoir;
+use App\Vente\Entity\CardRejection;
 use App\Vente\Entity\Vente;
+use App\Vente\Nf525\Entity\DailyClosure;
 use Doctrine\ORM\Query\Expr\Join;
 use Doctrine\ORM\QueryBuilder;
 use Symfony\Bundle\SecurityBundle\Security;
@@ -41,6 +43,16 @@ final class PerimetreVenteExtension implements QueryCollectionExtensionInterface
         Caisse::class => 'pdv.etablissement',
         MouvementCaisse::class => 'sess.etablissement',
         ClotureZ::class => 'sess.etablissement',
+
+        // Ajoutees le 28/08. Elles portaient un `etablissement` depuis toujours, et personne ne
+        // s'en servait : une liste blanche ne protege que ce qu'on a pense a y ecrire, et son
+        // oubli ne se voit pas -- la collection rend simplement des lignes de plus.
+        //
+        // Ce que la fuite exposait : les rejets de carte d'un autre etablissement, avec leur
+        // identifiant client ; et ses clotures fiscales quotidiennes, c'est-a-dire son chiffre
+        // d'affaires jour par jour.
+        CardRejection::class => '{root}.etablissement',
+        DailyClosure::class => '{root}.etablissement',
     ];
 
     public function __construct(

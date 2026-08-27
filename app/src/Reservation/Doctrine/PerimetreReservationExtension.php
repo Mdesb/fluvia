@@ -18,6 +18,7 @@ use App\Reservation\Entity\ListeAttente;
 use App\Reservation\Entity\ParticipantReservation;
 use App\Reservation\Entity\ProjectionAccesReservation;
 use App\Reservation\Entity\RegleAnnulation;
+use App\Reservation\Entity\Recurrence;
 use App\Reservation\Entity\Reservation;
 use App\Reservation\Entity\Ressource;
 use App\Securite\Entity\Affectation;
@@ -45,6 +46,10 @@ final class PerimetreReservationExtension implements QueryCollectionExtensionInt
         IndisponibiliteRessource::class => 'ress.etablissement',
         ListeAttente::class => 'cr.etablissement',
         ParticipantReservation::class => 'res.etablissement',
+
+        // Ajoutee le 28/08 : elle portait un `etablissement` et rien ne s'en servait. Une regle de
+        // recurrence dit les horaires et le rythme d'exploitation d'un site.
+        Recurrence::class => '{root}.etablissement',
         Emargement::class => 'res.etablissement',
         FacturationNoShow::class => 'res.etablissement',
     ];
