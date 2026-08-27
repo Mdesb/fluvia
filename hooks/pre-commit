@@ -117,6 +117,15 @@ if [ -f "$RACINE/frontend/scripts/verifier-droits.mjs" ]; then
     fi
 fi
 
+# Écart client/serveur (n°15) : une opération neuve a un écran, ou déclare `@sans-ecran:`.
+if [ -f "$RACINE/frontend/scripts/garde-fou-ecart.mjs" ]; then
+    if command -v node >/dev/null 2>&1; then
+        ( cd "$RACINE/frontend" && node scripts/garde-fou-ecart.mjs ) || ECHEC=1
+    else
+        echo "· Écart client/serveur IGNORÉ — « node » indisponible. Le contrôle n'a PAS tourné."
+    fi
+fi
+
 # ⚠ FILET DE COMPLÉTUDE — même leçon que `pre-receive`, même remède.
 #
 # Ce hook redit la liste des garde-fous au lieu d'appeler `bin/garde-fous.sh`, parce qu'il n'a ni

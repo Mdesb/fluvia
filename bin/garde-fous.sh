@@ -263,6 +263,24 @@ if [ -f "$RACINE/frontend/scripts/verifier-droits.mjs" ]; then
     fi
 fi
 
+# ÉCART CLIENT/SERVEUR (n°15) — une opération neuve a un écran, ou dit pourquoi elle n'en a pas.
+#
+# Le quinzième contrôle, et le premier qui ne porte pas sur la correction du code mais sur le fait
+# qu'il SERVE à quelqu'un. `mesurer-ecart.mjs` constatait depuis une semaine ; un constat n'arrête
+# rien, et le nombre d'opérations exposées est passé de 1 042 à 1 086 pendant qu'on le regardait.
+#
+# Il tourne sur l'HÔTE comme les contrôles de droits : node n'est pas dans l'image PHP.
+if [ -f "$RACINE/frontend/scripts/garde-fou-ecart.mjs" ]; then
+    if command -v node >/dev/null 2>&1; then
+        executer "Écart client/serveur (n°15)" sh -c "cd '$RACINE/frontend' && node scripts/garde-fou-ecart.mjs"
+    else
+        echo "─────────────────────────────────────────────────────────────"
+        echo "▶ Écart client/serveur (n°15)"
+        echo "─────────────────────────────────────────────────────────────"
+        echo "· IGNORÉ — « node » indisponible ici. Le contrôle n'a PAS tourné."
+    fi
+fi
+
 # ⚠ FILET DE COMPLÉTUDE DU LANCEUR — et il couvre TOUTES les extensions.
 #
 # Les deux hooks ont déjà ce filet, mais ils globent `bin/garde-fou-*.php`. Le garde-fou de
