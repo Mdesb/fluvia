@@ -981,4 +981,23 @@ export const api = {
   rechercheArticles: (q) => request('/api/support/articles/recherche', { query: { q, itemsPerPage: 20 } }),
   articleAide: (id) => request(`/api/support/articles/${id}`),
   categoriesAide: () => request('/api/categorie_aides', { query: { itemsPerPage: 100 } }),
+
+  // REDACTION DE LA BASE DE CONNAISSANCES.
+  //
+  // Sept operations d'ecriture existaient cote serveur -- creer, modifier, publier, archiver -- et
+  // AUCUN appel ne les atteignait. L'ecran affichait donc une base de connaissances en lecture seule,
+  // qui ne pouvait jamais contenir un seul article : personne n'avait de moyen d'en ecrire un.
+  //
+  // /!\ `articlesAideStaff` lit la collection PRIVEE et non `/support/articles/publics`. La publique
+  // ne rend que les articles PUBLIES : un brouillon qu'on vient d'ecrire y serait invisible, et le
+  // redacteur conclurait que l'enregistrement a echoue. Il rechercherait ensuite dans le mauvais
+  // endroit un article qui existe.
+  articlesAideStaff: (params) =>
+    request('/api/article_aides', { query: { itemsPerPage: 200, ...(params || {}) } }),
+  creerArticleAide: (corps) => request('/api/article_aides', { method: 'POST', body: corps, ld: true }),
+  majArticleAide: (id, corps) => request(`/api/article_aides/${id}`, { method: 'PATCH', body: corps }),
+  publierArticleAide: (id) =>
+    request(`/api/support/articles/${id}/publier`, { method: 'POST', body: {} }),
+  archiverArticleAide: (id) =>
+    request(`/api/support/articles/${id}/archiver`, { method: 'POST', body: {} }),
 }

@@ -57,7 +57,7 @@ function nomUtilisateur(u) {
   return complet || u.email || null
 }
 
-export default function Support({ droits = [] }) {
+export default function Support({ droits = [], etabActif }) {
   // ⚠ `droits.includes(code)` NE VOIT PAS LE JOKER, et le garde-fou n°13 me l'a refuse a raison.
   //
   // Une permission peut arriver sous la forme `support.*` ou `*.lire` : une egalite stricte la
@@ -124,7 +124,7 @@ export default function Support({ droits = [] }) {
           onOuvrir={setOuvert}
         />
       ) : (
-        <BaseConnaissances />
+        <BaseConnaissances droits={droits} etabActif={etabActif} />
       )}
 
       <FicheTicket
@@ -532,68 +532,192 @@ function OuvrirDemande({ open, onFermer, onOuvert }) {
  * afficherait sinon une seconde définition de « publié », qui divergerait au premier changement de
  * règle côté serveur.
  */
-function BaseConnaissances() {
+/**
+ * LA BASE DE CONNAISSANCES — et, depuis le 27/08, de quoi la remplir.
+ *
+ * **Ce que l'écran ne savait pas faire.** Il affichait les articles publiés, et rien d'autre. Créer,
+ * modifier, publier, archiver : quatre opérations écrites côté serveur, aucune atteignable. La base
+ * était donc en lecture seule **et vide pour toujours** — personne n'avait de moyen d'y écrire un
+ * article, et l'écran disait poliment « Aucun article publié pour l'instant », ce qui est exact et
+ * ne ressemble pas à un défaut.
+ *
+ * > **Une bibliothèque sans porte de service ne se remplit jamais.**
+ *
+ * ⚠ **La liste de rédaction lit la collection PRIVÉE, pas `/support/articles/publics`.** La publique
+ * ne rend que le publié : un brouillon qu'on vient d'écrire y serait invisible, et son auteur
+ * conclurait que l'enregistrement a échoué — puis le réécrirait.
+ *
+ * **Publier est un geste, pas une case.** Un article naît en brouillon — le serveur l'impose — et
+ * quelqu'un décide de le publier. C'est ce qui permet d'écrire à moitié sans que ça parte chez
+ * l'usager.
+ */
+function BaseConnaissances({ droits = [], etabActif }) {
+  const peutEcrire = aLeDroit(droits, 'support.gerer_kb_globale') || aLeDroit(droits, 'support.gerer_kb_locale')
+  const seulementLocal = !aLeDroit(droits, 'support.gerer_kb_globale') && aLeDroit(droits, 'support.gerer_kb_locale')
+
   const [articles, setArticles] = useState([])
+  const [categories, setCategories] = useState([])
   const [q, setQ] = useState('')
+  const [categorie, setCategorie] = useState('')
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
+  const [succes, setSucces] = useState(null)
   const [lu, setLu] = useState(null)
+  const [edite, setEdite] = useState(null)
+  const [busy, setBusy] = useState(false)
+
+  const recharger = useCallback(async () => {
+    setChargement(true)
+    setErreur(null)
+    try {
+      // Un rédacteur doit voir ses brouillons ; un lecteur ne voit que le publié. Deux besoins, deux
+      // collections — et surtout pas la publique pour les deux.
+      const rep = peutEcrire
+        ? await api.articlesAideStaff(categorie ? { categorie } : undefined)
+        : q.trim().length >= 2
+          ? await api.rechercheArticles(q.trim())
+          : await api.articlesAide()
+      setArticles(membres(rep))
+    } catch (e) {
+      setErreur(e.message || 'Les articles n’ont pas pu être chargés.')
+    } finally {
+      setChargement(false)
+    }
+  }, [peutEcrire, categorie, q])
+
+  useEffect(() => { recharger() }, [recharger])
 
   useEffect(() => {
     let annule = false
-    setChargement(true)
+    api.categoriesAide()
+      .then((r) => { if (!annule) setCategories(membres(r)) })
+      .catch(() => { /* le filtre par catégorie est un confort : son absence ne casse rien */ })
+    return () => { annule = true }
+  }, [])
+
+  async function agir(action, message) {
+    setBusy(true)
     setErreur(null)
-    ;(async () => {
-      try {
-        const rep = q.trim().length >= 2 ? await api.rechercheArticles(q.trim()) : await api.articlesAide()
-        if (!annule) setArticles(membres(rep))
-      } catch (e) {
-        if (!annule) setErreur(e.message || 'Les articles n’ont pas pu être chargés.')
-      } finally {
-        if (!annule) setChargement(false)
-      }
-    })()
-    return () => {
-      annule = true
+    setSucces(null)
+    try {
+      await action()
+      setSucces(message)
+      await recharger()
+    } catch (e) {
+      setErreur(e.message || 'L’action a échoué.')
+    } finally {
+      setBusy(false)
     }
-  }, [q])
+  }
+
+  // Le filtre plein texte reste local quand on lit la collection de rédaction : elle n'a pas
+  // d'opération de recherche, et en fabriquer une côté serveur serait du travail pour un besoin que
+  // personne n'a exprimé.
+  const visibles = peutEcrire && q.trim().length >= 2
+    ? articles.filter((a) => `${a.titre} ${a.resume || ''}`.toLowerCase().includes(q.trim().toLowerCase()))
+    : articles
 
   return (
     <div className="panel">
-      <div className="panel-h">
+      <div className="panel-h" style={{ gap: 8, flexWrap: 'wrap' }}>
         <span>Articles d&rsquo;aide</span>
+
+        {categories.length > 0 && (
+          <select
+            className="input sm"
+            style={{ width: 180 }}
+            value={categorie}
+            onChange={(e) => setCategorie(e.target.value)}
+          >
+            <option value="">Toutes les catégories</option>
+            {categories.map((c) => (
+              <option key={c.id} value={`/api/categorie_aides/${c.id}`}>{c.libelle || c.nom}</option>
+            ))}
+          </select>
+        )}
+
         <input
           className="input sm"
-          style={{ marginLeft: 'auto', width: 280 }}
+          style={{ marginLeft: 'auto', width: 260 }}
           placeholder="Rechercher…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
+
+        {peutEcrire && (
+          <button className="btn primary sm" type="button" onClick={() => setEdite({})}>
+            + Nouvel article
+          </button>
+        )}
       </div>
 
       {erreur && <div className="alert crit">{erreur}</div>}
+      {succes && <div className="alert good">{succes}</div>}
 
       {chargement ? (
         <div className="center" style={{ minHeight: 120 }}><div className="spinner" /></div>
-      ) : articles.length === 0 ? (
+      ) : visibles.length === 0 ? (
         <div className="sub" style={{ textAlign: 'center', padding: 24 }}>
           {q.trim().length >= 2
             ? `Aucun article ne correspond à « ${q.trim()} ».`
-            : 'Aucun article publié pour l’instant.'}
+            : peutEcrire
+              ? 'Aucun article. Le premier se crée avec le bouton ci-dessus.'
+              : 'Aucun article publié pour l’instant.'}
         </div>
       ) : (
         <div style={{ display: 'grid', gap: 10, padding: 4 }}>
-          {articles.map((a) => (
-            <button
+          {visibles.map((a) => (
+            <article
               key={a.id}
-              type="button"
               className="panel"
-              style={{ padding: 12, textAlign: 'left', cursor: 'pointer', background: 'none', border: '1px solid var(--line)' }}
-              onClick={() => setLu(a)}
+              style={{ padding: 12, border: '1px solid var(--line)', display: 'grid', gap: 6 }}
             >
-              <span className="nm">{a.titre}</span>
-              {a.resume && <div className="sub" style={{ marginTop: 4 }}>{a.resume}</div>}
-            </button>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  style={{ background: 'none', border: 0, padding: 0, cursor: 'pointer', textAlign: 'left', font: 'inherit', fontWeight: 700 }}
+                  onClick={() => setLu(a)}
+                >
+                  {a.titre}
+                </button>
+                {a.statut && a.statut !== 'publie' && (
+                  <span className={`badge ${a.statut === 'archive' ? 'mut' : 'warn'}`}>
+                    {a.statut === 'archive' ? 'Archivé' : 'Brouillon'}
+                  </span>
+                )}
+                {a.portee === 'local' && <span className="badge mut">Local</span>}
+              </div>
+
+              {a.resume && <div className="sub">{a.resume}</div>}
+
+              {peutEcrire && (
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <button className="btn ghost sm" type="button" disabled={busy} onClick={() => setEdite(a)}>
+                    Modifier
+                  </button>
+                  {a.statut !== 'publie' && (
+                    <button
+                      className="btn sm"
+                      type="button"
+                      disabled={busy}
+                      onClick={() => agir(() => api.publierArticleAide(a.id), 'Article publié.')}
+                    >
+                      Publier
+                    </button>
+                  )}
+                  {a.statut !== 'archive' && (
+                    <button
+                      className="btn ghost sm"
+                      type="button"
+                      disabled={busy}
+                      onClick={() => agir(() => api.archiverArticleAide(a.id), 'Article archivé.')}
+                    >
+                      Archiver
+                    </button>
+                  )}
+                </div>
+              )}
+            </article>
           ))}
         </div>
       )}
@@ -601,6 +725,163 @@ function BaseConnaissances() {
       <Modal open={!!lu} onClose={() => setLu(null)} titre={lu?.titre || ''} taille="lg">
         {lu && <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{lu.contenu}</div>}
       </Modal>
+
+      <RedactionArticle
+        article={edite}
+        categories={categories}
+        etabActif={etabActif}
+        seulementLocal={seulementLocal}
+        onFerme={() => setEdite(null)}
+        onEnregistre={async (message) => { setEdite(null); setSucces(message); await recharger() }}
+      />
     </div>
+  )
+}
+
+/**
+ * ÉCRIRE OU MODIFIER UN ARTICLE.
+ *
+ * **La portée est le seul champ piégeux, et l'écran la traite comme telle.** Le serveur refuse un
+ * article local sans établissement et un article global qui en porte un (RG-SUP-04). Laisser
+ * l'utilisateur découvrir cette règle par un 422 lui ferait perdre sa saisie ; le formulaire pose
+ * l'établissement actif dès qu'on choisit « local », et l'écrit.
+ *
+ * **Qui n'a que `gerer_kb_locale` n'a pas le choix**, et l'écran ne le lui propose donc pas : offrir
+ * une option que le serveur refusera fait perdre du temps deux fois.
+ */
+function RedactionArticle({ article, categories, etabActif, seulementLocal, onFerme, onEnregistre }) {
+  const ouvert = article !== null && article !== undefined
+  const existant = ouvert && !!article.id
+
+  const [titre, setTitre] = useState('')
+  const [resume, setResume] = useState('')
+  const [contenu, setContenu] = useState('')
+  const [categorie, setCategorie] = useState('')
+  const [portee, setPortee] = useState('global')
+  const [busy, setBusy] = useState(false)
+  const [erreur, setErreur] = useState(null)
+
+  useEffect(() => {
+    if (!ouvert) return
+    setErreur(null)
+    setTitre(article.titre || '')
+    setResume(article.resume || '')
+    setContenu(article.contenu || '')
+    const ref = article.categorie
+    setCategorie(typeof ref === 'string' ? ref : ref?.id ? `/api/categorie_aides/${ref.id}` : '')
+    setPortee(article.portee || (seulementLocal ? 'local' : 'global'))
+  }, [ouvert, article, seulementLocal])
+
+  async function enregistrer() {
+    setBusy(true)
+    setErreur(null)
+    try {
+      const corps = {
+        titre: titre.trim(),
+        resume: resume.trim() || null,
+        contenu,
+        ...(categorie ? { categorie } : {}),
+      }
+      if (existant) {
+        await api.majArticleAide(article.id, corps)
+        await onEnregistre('Article modifié. Il reste à publier pour être visible.')
+      } else {
+        await api.creerArticleAide({
+          ...corps,
+          portee,
+          // Le serveur refuse un article local sans établissement, et un global qui en porte un.
+          ...(portee === 'local' && etabActif ? { etablissement: `/api/etablissements/${etabActif}` } : {}),
+        })
+        await onEnregistre('Article créé en brouillon. Publiez-le quand il est prêt.')
+      }
+    } catch (e) {
+      setErreur(e.message || 'L’enregistrement a échoué.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal
+      open={ouvert}
+      onClose={onFerme}
+      titre={existant ? 'Modifier l’article' : 'Nouvel article'}
+      taille="lg"
+    >
+      <div style={{ display: 'grid', gap: 12 }}>
+        {erreur && <div className="alert crit">{erreur}</div>}
+
+        <label style={{ display: 'grid', gap: 4 }}>
+          <span className="sub">Titre</span>
+          <input className="input" value={titre} onChange={(e) => setTitre(e.target.value)} maxLength={200} />
+        </label>
+
+        <label style={{ display: 'grid', gap: 4 }}>
+          <span className="sub">Résumé</span>
+          <input
+            className="input"
+            value={resume}
+            onChange={(e) => setResume(e.target.value)}
+            maxLength={300}
+            placeholder="La phrase qui s’affiche dans la liste"
+          />
+        </label>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <label style={{ display: 'grid', gap: 4 }}>
+            <span className="sub">Catégorie</span>
+            <select className="input" value={categorie} onChange={(e) => setCategorie(e.target.value)}>
+              <option value="">Sans catégorie</option>
+              {categories.map((c) => (
+                <option key={c.id} value={`/api/categorie_aides/${c.id}`}>{c.libelle || c.nom}</option>
+              ))}
+            </select>
+          </label>
+
+          {!existant && (
+            <label style={{ display: 'grid', gap: 4 }}>
+              <span className="sub">Portée</span>
+              <select
+                className="input"
+                value={portee}
+                disabled={seulementLocal}
+                onChange={(e) => setPortee(e.target.value)}
+              >
+                <option value="global">Tous les établissements</option>
+                <option value="local">Cet établissement seulement</option>
+              </select>
+            </label>
+          )}
+        </div>
+
+        {!existant && portee === 'local' && !etabActif && (
+          <div className="alert warn">
+            Aucun établissement actif : un article local doit en référencer un.
+          </div>
+        )}
+
+        <label style={{ display: 'grid', gap: 4 }}>
+          <span className="sub">Contenu</span>
+          <textarea rows={12} value={contenu} onChange={(e) => setContenu(e.target.value)} />
+        </label>
+
+        <div className="sub">
+          L’article est enregistré en <strong>brouillon</strong> : il n’est visible de personne tant
+          qu’il n’est pas publié.
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button className="btn ghost" type="button" onClick={onFerme} disabled={busy}>Annuler</button>
+          <button
+            className="btn primary"
+            type="button"
+            onClick={enregistrer}
+            disabled={busy || titre.trim() === '' || contenu.trim() === '' || (!existant && portee === 'local' && !etabActif)}
+          >
+            Enregistrer
+          </button>
+        </div>
+      </div>
+    </Modal>
   )
 }

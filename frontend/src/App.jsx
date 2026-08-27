@@ -252,7 +252,7 @@ export default function App() {
       {onglet === 'catalogue' && <Catalogue etabActif={etabActif} cible={cible} onCibleConsommee={() => setCible(null)} droits={droits} />}
       {onglet === 'reservation' && <Reservation etabActif={etabActif} droits={droits} session={session} />}
       {onglet === 'supervision' && <Supervision etabActif={etabActif} />}
-      {onglet === 'support' && <Support droits={droits} />}
+      {onglet === 'support' && <Support droits={droits} etabActif={etabActif} />}
       {onglet === 'autorisations' && <Autorisations droits={droits} />}
       {onglet === 'legal' && <MentionsLegales etabActif={etabActif} droits={droits} />}
       {onglet === 'affaires' && <Pipeline etabActif={etabActif} droits={droits} onNaviguer={naviguer} />}
