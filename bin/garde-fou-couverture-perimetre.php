@@ -18,7 +18,7 @@ declare(strict_types=1);
  * **collection entière**. C'est le plus rentable des deux à surveiller, et c'était l'angle mort.
  *
  * **Ce qui compte comme cloisonnable** — les deux mécanismes réellement employés ici :
- *   1. l'entité porte un champ `etablissement` (rattachement direct) ;
+ *   1. une extension filtre son **module entier** par préfixe de namespace ;
  *   2. une extension `Perimetre*` la nomme — rattachement indirect **déclaré**, comme
  *      `LigneCommandeAchat` filtrée via `commandeAchat`, ou `MouvementCaisse` via `sess.etablissement`.
  *
@@ -52,8 +52,17 @@ const MOTIF_CLASSE = '/(?:final\s+)?class\s+(\w+)/';
  */
 const MOTIF_INTERFACE = '/\b(\w+Interface)\b/';
 
-/** Rattachement direct : une propriété `$etablissement`, ou une relation vers `Etablissement`. */
-const MOTIF_ETABLISSEMENT = '/(?:private|protected|public)[^;\n]*\$etablissement\b|targetEntity:\s*Etablissement::class/';
+// ── LA PRÉMISSE CORRIGÉE LE 28/08 ───────────────────────────────────────────────────────────────
+//
+// Jusqu'ici, porter un champ `etablissement` suffisait à être compté couvert. C'était faux, et le
+// module Campagnes est passé par ce trou : `Segment` et `Campaign` portaient l'établissement, aucune
+// extension ne s'en servait, et `GET /api/campaigns` rendait le texte intégral des campagnes des
+// autres groupes. Le garde-fou disait « OK » pendant ce temps.
+//
+//   > **Porter un établissement, c'est pouvoir être cloisonné. Ce n'est pas l'être.**
+//
+// Ne compte désormais comme couverture que ce qui FILTRE : une extension qui nomme la classe, une
+// interface qu'elle sait filtrer, ou un préfixe de namespace qu'elle traite en bloc.
 
 // ------------------------------------------------------------------ analyse
 
@@ -75,6 +84,12 @@ function classesCouvertesParExtension(string $racine): array
         }
 
         $source = (string) file_get_contents($fichier->getPathname());
+
+        // Une extension peut filtrer un MODULE entier par préfixe de namespace plutôt que classe
+        // par classe. Ne pas le lire ferait passer pour non cloisonnée une entité qui l'est.
+        foreach (prefixesDuFichier($source) as $prefixe) {
+            $couvertes['@' . $prefixe] = true;
+        }
 
         if (preg_match_all('/(\w+)::class/', $source, $noms) !== false) {
             foreach ($noms[1] as $nom) {
@@ -113,6 +128,53 @@ function implementeUneInterfaceCouverte(string $source, array $couvertes): bool
     return false;
 }
 
+/**
+ * Les préfixes de namespace cités en littéral par une extension.
+ *
+ * Lecture sans expression régulière : les antislashs d'un littéral PHP en rendent une illisible, et
+ * une regex fausse ici rendrait « couvert » sans que rien ne le signale — exactement le défaut
+ * qu'on corrige.
+ *
+ * @return list<string>
+ */
+function prefixesDuFichier(string $source): array
+{
+    $prefixes = [];
+    $position = 0;
+
+    while (($debut = strpos($source, "'App\\\\", $position)) !== false) {
+        $fin = strpos($source, "'", $debut + 1);
+        if ($fin === false) {
+            break;
+        }
+
+        $prefixes[] = str_replace('\\\\', '\\', substr($source, $debut + 1, $fin - $debut - 1));
+        $position = $fin + 1;
+    }
+
+    return $prefixes;
+}
+
+/**
+ * L'entité vit-elle dans un namespace qu'une extension filtre en bloc ?
+ *
+ * @param array<string, true> $couvertes
+ */
+function namespaceCouvert(string $source, array $couvertes): bool
+{
+    if (preg_match('/^namespace\s+([^;]+);/m', $source, $ns) !== 1) {
+        return false;
+    }
+
+    foreach (array_keys($couvertes) as $cle) {
+        if (str_starts_with($cle, '@') && str_starts_with($ns[1] . '\\', substr($cle, 1))) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 /** @return list<string> chemins des entités exposées et non cloisonnables, triés */
 function violations(string $racine): array
 {
@@ -140,9 +202,9 @@ function violations(string $racine): array
         if (preg_match(MOTIF_CLASSE, $source, $classe) !== 1) {
             continue;
         }
-        if (preg_match(MOTIF_ETABLISSEMENT, $source) === 1
-            || isset($couvertes[$classe[1]])
-            || implementeUneInterfaceCouverte($source, $couvertes)) {
+        if (isset($couvertes[$classe[1]])
+            || implementeUneInterfaceCouverte($source, $couvertes)
+            || namespaceCouvert($source, $couvertes)) {
             continue;
         }
 

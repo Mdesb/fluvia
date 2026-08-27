@@ -1,8 +1,16 @@
 {
     "_lisez_moi": [
         "Ligne de base GELEE du garde-fou de couverture de perimetre en LECTURE.",
-        "Chaque entree est une entite exposee par l'API que rien ne permet de cloisonner :",
-        "ni champ etablissement, ni extension Perimetre* qui la nomme.",
+        "Chaque entree est une entite exposee par l'API que RIEN NE FILTRE : aucune extension",
+        "qui la nomme, ni qui filtre son interface, ni qui traite son namespace en bloc.",
+        "",
+        "  ⚠ PREMISSE CORRIGEE LE 28/08. Jusque-la, PORTER un champ `etablissement`",
+        "  suffisait a etre compte couvert. C'etait faux : porter un etablissement,",
+        "  c'est POUVOIR etre cloisonne, ce n'est pas l'ETRE. Le module Campagnes est",
+        "  passe par ce trou — `GET /api/campaigns` rendait le texte integral des",
+        "  campagnes des autres groupes pendant que le garde-fou disait OK. Les 11",
+        "  entrees du 28/08 sont ce que la premisse cachait ; toutes portent deja un",
+        "  `etablissement`, donc toutes sont du groupe A : une ligne dans une extension.",
         "",
         "Ce n'est pas une autorisation. Une extension manquante expose une COLLECTION entiere.",
         "",
@@ -35,9 +43,9 @@
         "premiere lecture n'avait pas cherche parce que l'entite elle-meme ne porte aucune relation."
     ],
     "scelle": {
-        "gelee_le": "2026-08-23",
-        "plafond": 26,
-        "reference": "MESSAGES.md — claude-C, 23/08 : le module Compta est entier hors du cloisonnement"
+        "gelee_le": "2026-08-28",
+        "plafond": 37,
+        "reference": "MESSAGES.md — claude-A, 28/08 : le garde-fou tenait « porte un champ etablissement » pour « est cloisonne ». Les 11 entrees ajoutees ce jour-la sont ce que la premisse cachait."
     },
     "entrees": {
         "Compta/Entity/BordereauPayFiP.php": {
@@ -619,6 +627,245 @@
                 "chemin": "",
                 "cible": "",
                 "note": "Definition de KPI (code, unite, mode de calcul, nature, module source). Referentiel. Doute leve le 24/08 par lecture des champs. NON CONFIRME par l'integrateur — tant que ce mot manque, l'entree reste comptee."
+            }
+        },
+        "Audit/Entity/EntreeAudit.php": {
+            "depuis": "2026-08-28",
+            "accorde_par": "claude-A — premisse du garde-fou corrigee le 28/08 : porter un champ `etablissement` ne vaut pas etre cloisonne",
+            "raison": "Exposee par ApiResource, PORTE un etablissement, mais aucune extension ne s'en sert. Le garde-fou la comptait couverte sur la seule presence du champ. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige.",
+            "module": "Audit",
+            "operations": [
+                "Get",
+                "GetCollection"
+            ],
+            "permissions": [
+                "securite.gerer",
+                "securite.lire"
+            ],
+            "sensibilite": "journal",
+            "traitement": {
+                "groupe": "A",
+                "chemin": "{root}.etablissement",
+                "cible": "Etablissement",
+                "note": "Le module Audit n'a AUCUNE extension de perimetre. Un journal lisible d'un etablissement a l'autre raconte qui fait quoi chez le voisin. A traiter en premier."
+            }
+        },
+        "Crm/Entity/ParametrePmvEtablissement.php": {
+            "depuis": "2026-08-28",
+            "accorde_par": "claude-A — premisse du garde-fou corrigee le 28/08 : porter un champ `etablissement` ne vaut pas etre cloisonne",
+            "raison": "Exposee par ApiResource, PORTE un etablissement, mais aucune extension ne s'en sert. Le garde-fou la comptait couverte sur la seule presence du champ. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige.",
+            "module": "Crm",
+            "operations": [
+                "Get",
+                "GetCollection",
+                "Patch",
+                "Post"
+            ],
+            "permissions": [
+                "crm.lire",
+                "crm.parametrer"
+            ],
+            "sensibilite": "argent",
+            "traitement": {
+                "groupe": "A",
+                "chemin": "{root}.etablissement",
+                "cible": "Etablissement",
+                "note": "Rattachement direct deja present : ajouter le chemin a l'extension du module, ou creer l'extension si le module n'en a pas."
+            }
+        },
+        "Fonctionnalite/Entity/FonctionnaliteEtablissement.php": {
+            "depuis": "2026-08-28",
+            "accorde_par": "claude-A — premisse du garde-fou corrigee le 28/08 : porter un champ `etablissement` ne vaut pas etre cloisonne",
+            "raison": "Exposee par ApiResource, PORTE un etablissement, mais aucune extension ne s'en sert. Le garde-fou la comptait couverte sur la seule presence du champ. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige.",
+            "module": "Fonctionnalite",
+            "operations": [
+                "GetCollection",
+                "Patch",
+                "Post"
+            ],
+            "permissions": [],
+            "sensibilite": "structure",
+            "traitement": {
+                "groupe": "A",
+                "chemin": "{root}.etablissement",
+                "cible": "Etablissement",
+                "note": "Rattachement direct deja present : ajouter le chemin a l'extension du module, ou creer l'extension si le module n'en a pas."
+            }
+        },
+        "Legal/Entity/LegalDocument.php": {
+            "depuis": "2026-08-28",
+            "accorde_par": "claude-A — premisse du garde-fou corrigee le 28/08 : porter un champ `etablissement` ne vaut pas etre cloisonne",
+            "raison": "Exposee par ApiResource, PORTE un etablissement, mais aucune extension ne s'en sert. Le garde-fou la comptait couverte sur la seule presence du champ. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige.",
+            "module": "Legal",
+            "operations": [
+                "Get",
+                "GetCollection",
+                "Patch",
+                "Post"
+            ],
+            "permissions": [
+                "boutique.gerer_vitrine",
+                "organisation.gerer"
+            ],
+            "sensibilite": "identite",
+            "traitement": {
+                "groupe": "A",
+                "chemin": "{root}.etablissement",
+                "cible": "Etablissement",
+                "note": "Rattachement direct deja present : ajouter le chemin a l'extension du module, ou creer l'extension si le module n'en a pas."
+            }
+        },
+        "Legal/Entity/LegalIdentity.php": {
+            "depuis": "2026-08-28",
+            "accorde_par": "claude-A — premisse du garde-fou corrigee le 28/08 : porter un champ `etablissement` ne vaut pas etre cloisonne",
+            "raison": "Exposee par ApiResource, PORTE un etablissement, mais aucune extension ne s'en sert. Le garde-fou la comptait couverte sur la seule presence du champ. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige.",
+            "module": "Legal",
+            "operations": [
+                "Get",
+                "GetCollection",
+                "Patch",
+                "Post"
+            ],
+            "permissions": [
+                "boutique.gerer_vitrine",
+                "organisation.gerer"
+            ],
+            "sensibilite": "identite",
+            "traitement": {
+                "groupe": "A",
+                "chemin": "{root}.etablissement",
+                "cible": "Etablissement",
+                "note": "Rattachement direct deja present : ajouter le chemin a l'extension du module, ou creer l'extension si le module n'en a pas."
+            }
+        },
+        "OptionProduit/Entity/OptionProduit.php": {
+            "depuis": "2026-08-28",
+            "accorde_par": "claude-A — premisse du garde-fou corrigee le 28/08 : porter un champ `etablissement` ne vaut pas etre cloisonne",
+            "raison": "Exposee par ApiResource, PORTE un etablissement, mais aucune extension ne s'en sert. Le garde-fou la comptait couverte sur la seule presence du champ. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige.",
+            "module": "OptionProduit",
+            "operations": [
+                "Delete",
+                "Get",
+                "GetCollection",
+                "Patch",
+                "Post"
+            ],
+            "permissions": [
+                "offre.lire",
+                "offre.modifier"
+            ],
+            "sensibilite": "catalogue",
+            "traitement": {
+                "groupe": "A",
+                "chemin": "{root}.etablissement",
+                "cible": "Etablissement",
+                "note": "Rattachement direct deja present : ajouter le chemin a l'extension du module, ou creer l'extension si le module n'en a pas."
+            }
+        },
+        "Organisation/Entity/Espace.php": {
+            "depuis": "2026-08-28",
+            "accorde_par": "claude-A — premisse du garde-fou corrigee le 28/08 : porter un champ `etablissement` ne vaut pas etre cloisonne",
+            "raison": "Exposee par ApiResource, PORTE un etablissement, mais aucune extension ne s'en sert. Le garde-fou la comptait couverte sur la seule presence du champ. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige.",
+            "module": "Organisation",
+            "operations": [
+                "Delete",
+                "Get",
+                "GetCollection",
+                "Patch",
+                "Post"
+            ],
+            "permissions": [
+                "organisation.gerer"
+            ],
+            "sensibilite": "structure",
+            "traitement": {
+                "groupe": "A",
+                "chemin": "{root}.etablissement",
+                "cible": "Etablissement",
+                "note": "Rattachement direct deja present : ajouter le chemin a l'extension du module, ou creer l'extension si le module n'en a pas."
+            }
+        },
+        "Organisation/Entity/Region.php": {
+            "depuis": "2026-08-28",
+            "accorde_par": "claude-A — premisse du garde-fou corrigee le 28/08 : porter un champ `etablissement` ne vaut pas etre cloisonne",
+            "raison": "Exposee par ApiResource, PORTE un etablissement, mais aucune extension ne s'en sert. Le garde-fou la comptait couverte sur la seule presence du champ. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige.",
+            "module": "Organisation",
+            "operations": [
+                "Delete",
+                "Get",
+                "GetCollection",
+                "Patch",
+                "Post"
+            ],
+            "permissions": [
+                "organisation.gerer"
+            ],
+            "sensibilite": "structure",
+            "traitement": {
+                "groupe": "A",
+                "chemin": "{root}.etablissement",
+                "cible": "Etablissement",
+                "note": "Le nom des regions d'un autre groupe dit sa structure et souvent ses clients."
+            }
+        },
+        "Reservation/Entity/Recurrence.php": {
+            "depuis": "2026-08-28",
+            "accorde_par": "claude-A — premisse du garde-fou corrigee le 28/08 : porter un champ `etablissement` ne vaut pas etre cloisonne",
+            "raison": "Exposee par ApiResource, PORTE un etablissement, mais aucune extension ne s'en sert. Le garde-fou la comptait couverte sur la seule presence du champ. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige.",
+            "module": "Reservation",
+            "operations": [
+                "Get",
+                "GetCollection"
+            ],
+            "permissions": [
+                "reservation.lire"
+            ],
+            "sensibilite": "exploitation",
+            "traitement": {
+                "groupe": "A",
+                "chemin": "{root}.etablissement",
+                "cible": "Etablissement",
+                "note": "Rattachement direct deja present : ajouter le chemin a l'extension du module, ou creer l'extension si le module n'en a pas."
+            }
+        },
+        "Vente/Entity/CardRejection.php": {
+            "depuis": "2026-08-28",
+            "accorde_par": "claude-A — premisse du garde-fou corrigee le 28/08 : porter un champ `etablissement` ne vaut pas etre cloisonne",
+            "raison": "Exposee par ApiResource, PORTE un etablissement, mais aucune extension ne s'en sert. Le garde-fou la comptait couverte sur la seule presence du champ. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige.",
+            "module": "Vente",
+            "operations": [
+                "Get",
+                "GetCollection"
+            ],
+            "permissions": [
+                "vente.lire"
+            ],
+            "sensibilite": "argent",
+            "traitement": {
+                "groupe": "A",
+                "chemin": "{root}.etablissement",
+                "cible": "Etablissement",
+                "note": "PerimetreVenteExtension est une liste blanche de 7 classes ; celle-ci n'y est pas. Rejets de carte avec identifiant client."
+            }
+        },
+        "Vente/Nf525/Entity/DailyClosure.php": {
+            "depuis": "2026-08-28",
+            "accorde_par": "claude-A — premisse du garde-fou corrigee le 28/08 : porter un champ `etablissement` ne vaut pas etre cloisonne",
+            "raison": "Exposee par ApiResource, PORTE un etablissement, mais aucune extension ne s'en sert. Le garde-fou la comptait couverte sur la seule presence du champ. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige.",
+            "module": "Vente",
+            "operations": [
+                "Get",
+                "GetCollection"
+            ],
+            "permissions": [
+                "vente.lire"
+            ],
+            "sensibilite": "argent",
+            "traitement": {
+                "groupe": "A",
+                "chemin": "{root}.etablissement",
+                "cible": "Etablissement",
+                "note": "Meme liste blanche, meme absence. Cloture fiscale quotidienne : chiffre d'affaires par jour."
             }
         }
     }
