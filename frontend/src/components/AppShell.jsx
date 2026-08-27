@@ -63,6 +63,13 @@ const NAV = [
       // affaires >>, pas un onglet dans un annuaire. Et le pipeline se lit tous les jours,
       // alors qu'une fiche client s'ouvre a l'occasion.
       { id: 'affaires', ic: '◨', label: 'Affaires', perms: ['crm.lire', 'crm.creer', 'crm.modifier'] },
+      // Sous Gestion, juste apres les affaires : une campagne se decide comme une affaire, et
+      // s'adresse aux memes gens. Pas sous Pilotage -- on ne l'observe pas, on la lance.
+      //
+      // Le droit `campagne.*` est distinct de `crm.*` a dessein : construire une audience n'est pas
+      // modifier un client, et le droit de contacter mille personnes ne doit pas emporter celui d'en
+      // corriger une.
+      { id: 'campagnes', ic: '◈', label: 'Campagnes', perms: ['campagne.lire', 'campagne.gerer'] },
       { id: 'comptabilite', ic: '▧', label: 'Comptabilité', perm: 'compta.lire' },
       { id: 'boutique', ic: '▦', label: 'Boutique en ligne', cap: 'boutique_en_ligne' },
       { id: 'personnel', ic: '☰', label: 'Personnel', perm: 'personnel.lire' },

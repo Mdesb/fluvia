@@ -22,6 +22,7 @@ api_platform:
             - '%kernel.project_dir%/src/Securite/Entity'
             - '%kernel.project_dir%/src/Audit/Entity'
             - '%kernel.project_dir%/src/Offre/Entity'
+            - '%kernel.project_dir%/src/Marketing/Entity'
             # Absent jusqu'au 27/08, et le symptome n'etait pas une route manquante.
             # Les routes CRUD des options repondaient 200 ; c'est le SERVICE DE FILTRE qui
             # n'existait pas -- `debug:container` en comptait 4 pour Offre (dossier liste) et

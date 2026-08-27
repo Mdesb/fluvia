@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Crm\Doctrine;
 
+use App\Crm\Doctrine\CustomerScope;
 use ApiPlatform\Doctrine\Orm\Extension\QueryCollectionExtensionInterface;
 use ApiPlatform\Doctrine\Orm\Extension\QueryItemExtensionInterface;
 use ApiPlatform\Doctrine\Orm\Util\QueryNameGeneratorInterface;
@@ -130,15 +131,11 @@ final class PerimetreCrmExtension implements QueryCollectionExtensionInterface, 
             $queryBuilder->innerJoin($rootAlias . '.' . $association, $aliasGroupe);
         }
 
-        $sousRequete = 'SELECT aff_pcrm.id FROM ' . Affectation::class . ' aff_pcrm '
-            . 'INNER JOIN ' . Etablissement::class . ' etb_pcrm WITH etb_pcrm = aff_pcrm.etablissement '
-            . 'INNER JOIN ' . Region::class . ' reg_pcrm WITH reg_pcrm = etb_pcrm.region '
-            . 'WHERE IDENTITY(aff_pcrm.utilisateur) = :perimetre_crm_utilisateur '
-            . 'AND IDENTITY(reg_pcrm.groupe) = IDENTITY(' . $aliasGroupe . '.groupe)';
-
-        $queryBuilder
-            ->andWhere('EXISTS (' . $sousRequete . ')')
-            ->setParameter('perimetre_crm_utilisateur', $utilisateur->getId(), 'uuid')
-            ->distinct();
+        // La clause vit dans `CustomerScope`. Elle était écrite ici ET recopiée à la main dans
+        // `RechercheClientProvider` ; le module Campagnes en aurait écrit une troisième. Une copie
+        // d'une règle de cloisonnement n'est pas de la duplication de code : c'est une seconde
+        // politique de sécurité que personne ne maintient — le jour où la règle change, il en reste
+        // une version périmée, et c'est elle qui décide qui voit quoi.
+        CustomerScope::restreindreAuGroupe($queryBuilder, $aliasGroupe, $utilisateur->getId());
     }
 }

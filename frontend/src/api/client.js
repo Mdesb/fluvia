@@ -294,6 +294,25 @@ export const api = {
   // une etape en retard est pire qu'absente parce qu'elle a l'air d'etre a jour.
   pipeline: () => request('/api/crm/pipeline'),
 
+  // SEGMENTS -- une DEFINITION de clients, jamais une liste.
+  //
+  // Les membres se calculent a chaque lecture : c'est ce que veut dire << segment dynamique >>, et
+  // c'est ce qu'exige son critere d'acceptation (<< immediatement disponible et a jour >>). Une
+  // liste stockee serait juste le jour de sa creation et fausse le lendemain, avec exactement la
+  // meme allure.
+  segments: () => request('/api/segments', { query: { itemsPerPage: 200 } }),
+  // Relu avant edition : la ligne du tableau date du dernier chargement, et un collegue a pu
+  // changer les criteres entre-temps.
+  segment: (id) => request(`/api/segments/${id}`),
+  creerSegment: (corps) => request('/api/segments', { method: 'POST', body: corps, ld: true }),
+  majSegment: (id, corps) => request(`/api/segments/${id}`, { method: 'PATCH', body: corps }),
+  supprimerSegment: (id) => request(`/api/segments/${id}`, { method: 'DELETE' }),
+
+  // L'EFFECTIF AVANT L'ENVOI. Sans ce chiffre, l'exploitant decouvre l'ampleur de son geste apres
+  // l'avoir fait -- et un message parti ne se rattrape pas. Rend aussi un echantillon nominatif :
+  // un compte ne se verifie pas, des noms se reconnaissent.
+  apercuSegment: (id) => request(`/api/marketing/segments/${id}/apercu`),
+
   // ECHANGES COMMERCIAUX -- ce qui s'est passe avec un client, et le prochain geste.
   //
   // Distinct d'un ticket d'assistance : un ticket est SUBI et se ferme, un echange est DECIDE et la
