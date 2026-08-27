@@ -326,6 +326,10 @@ export const api = {
     request(`/api/marketing/campagnes/${id}/envoyer`, { method: 'POST', body: {} }),
   resultatCampagne: (id) => request(`/api/marketing/campagnes/${id}/resultat`),
 
+  // L'ATTRIBUTION -- ce que la campagne a produit EN PLUS de ce qui serait arrive sans elle.
+  // Droit distinct (campagne.lire_journal) : la reponse expose du chiffre d'affaires par groupe.
+  attributionCampagne: (id) => request(`/api/marketing/campagnes/${id}/attribution`),
+
   // ECHANGES COMMERCIAUX -- ce qui s'est passe avec un client, et le prochain geste.
   //
   // Distinct d'un ticket d'assistance : un ticket est SUBI et se ferme, un echange est DECIDE et la

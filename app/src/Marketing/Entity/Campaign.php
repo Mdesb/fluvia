@@ -10,6 +10,7 @@ use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\Marketing\Enum\CampaignStatus;
+use App\Marketing\State\CampaignAttributionProvider;
 use App\Marketing\State\CampaignResultProvider;
 use App\Marketing\State\MarketingEstablishmentStampProcessor;
 use App\Marketing\State\SendCampaignProcessor;
@@ -84,6 +85,16 @@ use Symfony\Component\Validator\Context\ExecutionContextInterface;
             uriTemplate: '/marketing/campagnes/{id}/resultat',
             security: "is_granted('PERM', 'campagne.lire')",
             provider: CampaignResultProvider::class,
+        ),
+
+        // L'ATTRIBUTION -- la raison d'etre du module : ce que la campagne a produit EN PLUS de ce
+        // qui serait arrive sans elle. Droit distinct et plus etroit que le resultat : cette
+        // reponse expose du chiffre d'affaires par groupe de clients, la ou le resultat ne compte
+        // que des envois.
+        new Get(
+            uriTemplate: '/marketing/campagnes/{id}/attribution',
+            security: "is_granted('PERM', 'campagne.lire_journal')",
+            provider: CampaignAttributionProvider::class,
         ),
     ],
     normalizationContext: ['groups' => ['campaign:read']],

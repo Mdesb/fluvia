@@ -7,10 +7,11 @@ namespace App\Crm\State;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProviderInterface;
 use App\Crm\Entity\Opportunity;
+use App\Crm\Service\MontantUtil;
 use App\Crm\Enum\OpportunityStage;
 use App\Facturation\Enum\DocumentStatus;
 use App\Securite\Service\ContexteEtablissement;
-use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 
@@ -87,10 +88,11 @@ final class PipelineProvider implements ProviderInterface
                 'motifPerte' => $affaire->getLossReason()?->label(),
                 'commentairePerte' => $affaire->getLossComment(),
             ];
-            $colonnes[$etape->value]['montantTotal'] = bcadd(
+            // `bcadd` n'existe pas ici : bcmath n'est pas installe sur l'image PHP du projet.
+            // L'appel ne levait rien a la lecture et fatalait a la premiere affaire chiffree.
+            $colonnes[$etape->value]['montantTotal'] = MontantUtil::addition(
                 $colonnes[$etape->value]['montantTotal'],
                 $affaire->getEstimatedAmount(),
-                2,
             );
         }
 
@@ -143,7 +145,7 @@ final class PipelineProvider implements ProviderInterface
         $lignes = $this->em->getConnection()->executeQuery(
             'SELECT id, statut FROM billing_document WHERE id IN (?)',
             [$refs],
-            [Connection::PARAM_STR_ARRAY],
+            [ArrayParameterType::BINARY],
         )->fetchAllAssociative();
 
         $statuts = [];

@@ -50,6 +50,9 @@ const CRITERES = [
 
 export default function Campagnes({ etabActif, droits = [] }) {
   const peutGerer = aLeDroit(droits, 'campagne.gerer')
+  // Lire le résultat, c'est compter des envois ; lire l'attribution, c'est lire ce que dépense une
+  // part du fichier client. Deux droits, parce que ce ne sont pas les mêmes yeux.
+  const peutLireJournal = aLeDroit(droits, 'campagne.lire_journal')
 
   const [onglet, setOnglet] = useState('campagnes')
   const [campagnes, setCampagnes] = useState([])
@@ -103,6 +106,20 @@ export default function Campagnes({ etabActif, droits = [] }) {
   // Pas « êtes-vous sûr ? » — personne ne lit « êtes-vous sûr ». La confirmation dit COMBIEN de
   // personnes vont recevoir le message, parce que c'est le seul chiffre qui fait hésiter à bon
   // escient. Et elle rappelle que c'est définitif : une campagne ne se rejoue pas.
+  // Le résultat et l'attribution se lisent ensemble : ce sont les deux moitiés de la même
+  // question — « à qui a-t-on écrit », puis « cela a-t-il servi à quelque chose ».
+  async function chargerResultat(campagne) {
+    const base = await api.resultatCampagne(campagne.id)
+    let attribution = null
+    if (peutLireJournal) {
+      // L'attribution est un supplément : sans le droit, ou en cas de panne, l'écran garde son
+      // résultat plutôt que de ne rien afficher.
+      try { attribution = await api.attributionCampagne(campagne.id) } catch { /* sans */ }
+    }
+
+    return { campagne, ...base, attribution }
+  }
+
   async function envoyer(campagne) {
     const segment = segments.find((s) => idDe(campagne.segment) === s.id)
     let effectif = null
@@ -120,7 +137,7 @@ export default function Campagnes({ etabActif, droits = [] }) {
     setErreur(null)
     try {
       const r = await api.envoyerCampagne(campagne.id)
-      setResultat({ campagne, ...(await api.resultatCampagne(campagne.id)), immediat: r.resultat })
+      setResultat({ ...(await chargerResultat(campagne)), immediat: r.resultat })
       await recharger()
     } catch (e) {
       setErreur(e.message || 'La campagne n’a pas pu partir.')
@@ -133,7 +150,7 @@ export default function Campagnes({ etabActif, droits = [] }) {
     setBusy(true)
     setErreur(null)
     try {
-      setResultat({ campagne, ...(await api.resultatCampagne(campagne.id)) })
+      setResultat(await chargerResultat(campagne))
     } catch (e) {
       setErreur(e.message || 'Le résultat n’a pas pu être lu.')
     } finally {
@@ -620,7 +637,7 @@ function ResultatCampagne({ resultat, onFermer }) {
       open={!!resultat}
       onClose={onFermer}
       titre={resultat ? `Résultat — ${resultat.campagne.label}` : ''}
-      taille="md"
+      taille="lg"
     >
       {resultat && (
         <div style={{ display: 'grid', gap: 14 }}>
@@ -646,6 +663,8 @@ function ResultatCampagne({ resultat, onFermer }) {
               combien sont revenus.
             </div>
           )}
+
+          <Attribution attribution={resultat.attribution} />
 
           {resultat.exclus.length > 0 && (
             <div>
@@ -839,5 +858,105 @@ function RedactionCampagne({ campagne, segments, onFermer, onEnregistre, onErreu
         </div>
       </div>
     </Modal>
+  )
+}
+
+/**
+ * L'ATTRIBUTION — le seul endroit de l'écran où l'on ose dire « la campagne a servi ».
+ *
+ * Trois refus tiennent ce composant :
+ *
+ *   - sans témoin, on n'affiche AUCUN effet — le taux de retour brut mesure la saison, pas le
+ *     message, et le nommer « effet » serait le mensonge le plus facile du module ;
+ *   - un écart plus petit que sa marge est rendu comme « on ne sait pas encore », pas comme un
+ *     gain — sur quarante témoins, deux visites déplacent le taux de cinq points ;
+ *   - un écart négatif s'affiche tel quel : un tableau de bord qui ne sait montrer que des gains
+ *     ne mesure rien, il rassure.
+ */
+function Attribution({ attribution }) {
+  if (!attribution) return null
+
+  if (!attribution.mesurable) {
+    return <div className="sub">{attribution.raison}</div>
+  }
+
+  const { contactes, temoins, fenetre } = attribution
+  const nb = (v) => Number(v).toLocaleString('fr-FR')
+  const euros = (v) => `${Number(v).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`
+  const pct = (v) => `${Number(v).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} %`
+  const signe = (v) => (v > 0 ? '+' : '') + Number(v).toLocaleString('fr-FR', { maximumFractionDigits: 1 })
+
+  const lignes = [
+    ['Effectif', nb(contactes.effectif), nb(temoins.effectif)],
+    ['Sont revenus', nb(contactes.revenus), nb(temoins.revenus)],
+    ['Taux de retour', pct(contactes.tauxRetour), pct(temoins.tauxRetour)],
+    ['Chiffre d’affaires', euros(contactes.ca), euros(temoins.ca)],
+    ['Panier moyen', euros(contactes.panierMoyen), euros(temoins.panierMoyen)],
+  ]
+
+  return (
+    <div>
+      <div className="st-lib" style={{ marginBottom: 6 }}>
+        Ce que la campagne a produit — fenêtre de {fenetre.jours} jours
+      </div>
+
+      <div style={{ overflowX: 'auto' }}>
+        <table className="tbl">
+          <thead>
+            <tr><th /><th className="num">Contactés</th><th className="num">Groupe témoin</th></tr>
+          </thead>
+          <tbody>
+            {lignes.map(([libelle, a, b]) => (
+              <tr key={libelle}>
+                <td>{libelle}</td>
+                <td className="num">{a}</td>
+                <td className="num">{b}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {!attribution.comparable ? (
+        <div className="alert warn" style={{ marginTop: 10, marginBottom: 0 }}>
+          <strong>Aucun effet ne peut être attribué à cette campagne.</strong> {attribution.raison}
+          {' '}Les retours affichés sont ceux du groupe contacté : on ne sait pas combien seraient
+          revenus sans le message.
+        </div>
+      ) : !attribution.concluant ? (
+        <div className="alert warn" style={{ marginTop: 10, marginBottom: 0 }}>
+          <strong>On ne peut pas encore conclure.</strong> L’écart mesuré est de{' '}
+          {signe(attribution.ecartPoints)} points, pour une marge d’incertitude de{' '}
+          ± {nb(attribution.margeErreur)}. Plus petit que sa marge, il ne se distingue pas de zéro —
+          un groupe témoin plus grand, ou une audience plus large, trancherait.
+        </div>
+      ) : attribution.ecartPoints > 0 ? (
+        <div className="alert good" style={{ marginTop: 10, marginBottom: 0 }}>
+          <strong>
+            La campagne a ramené {nb(attribution.visitesGagnees)} personne(s) de plus
+          </strong>{' '}
+          que si elle n’avait pas eu lieu, soit environ {euros(attribution.caGagne)} de chiffre
+          d’affaires. Écart : {signe(attribution.ecartPoints)} points ± {nb(attribution.margeErreur)}.
+        </div>
+      ) : (
+        <div className="alert crit" style={{ marginTop: 10, marginBottom: 0 }}>
+          <strong>Le groupe contacté est revenu MOINS que le témoin</strong> —{' '}
+          {signe(attribution.ecartPoints)} points ± {nb(attribution.margeErreur)}. L’écart dépasse sa
+          marge : ce n’est pas du bruit. Le message, le moment ou la cible ont desservi.
+        </div>
+      )}
+
+      {!fenetre.close && (
+        <div className="sub" style={{ marginTop: 6 }}>
+          Mesure <strong>provisoire</strong> : la fenêtre se referme dans {fenetre.joursRestants}{' '}
+          jour(s). Ces chiffres bougeront encore.
+        </div>
+      )}
+
+      <div className="sub" style={{ marginTop: 6 }}>
+        Les ventes sont comptées où qu’elles aient eu lieu dans le groupe : la campagne a ramené une
+        personne, pas une caisse.
+      </div>
+    </div>
   )
 }
