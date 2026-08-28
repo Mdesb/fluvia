@@ -18,7 +18,9 @@ import { api, membres } from '../api/client.js'
  * > **Une file d'attente se lit en colonnes ; une réponse se lit en bulles.** Le même module sert
  * > les deux, alors l'écran doit répondre à la seconde question sans perdre la première.
  *
- * **Trois choses viennent de Vespera, et une n'en vient pas.**
+ * **Trois choses viennent de Vespera, et une n'en vient pas.** (Vespera est un produit
+ * TIERS, hors périmètre depuis D9 : on s'en inspire, on n'en reprend rien. Notre produit
+ * s'appelle Fluvia.)
  *   1. Les deux volets : la liste des fils à gauche, le fil ouvert à droite. On voit qui a écrit en
  *      dernier sans quitter la conversation qu'on lit.
  *   2. L'aperçu du dernier message dans la liste, préfixé de « Vous : » quand c'est nous. C'est ce

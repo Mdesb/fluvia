@@ -5,6 +5,16 @@ declare(strict_types=1);
 namespace App\Tests\Calendar;
 
 use App\DataFixtures\SocleFixtures;
+use App\Organisation\Entity\Etablissement;
+use App\Personnel\Entity\AffectationTravail;
+use App\Personnel\Entity\CreneauTravail;
+use App\Personnel\Entity\Employe;
+use App\Personnel\Enum\TypeContrat;
+use App\Reservation\Entity\Activite;
+use App\Reservation\Entity\Creneau;
+use App\Reservation\Entity\Ressource;
+use App\Securite\Entity\Utilisateur;
+use Doctrine\ORM\EntityManagerInterface;
 use App\Securite\Service\ContexteEtablissement;
 use App\Tests\Acces\AccesApiTestCase;
 use ApiPlatform\Symfony\Bundle\Test\Client;
@@ -212,6 +222,10 @@ final class CalendarTest extends AccesApiTestCase
         // La virgule du titre DOIT être échappée : non échappée, elle coupe la propriété en deux et
         // l'événement s'appelle « Réunion » dans tous les agendas du monde.
         self::assertStringContainsString('SUMMARY:Réunion\\, salle B', $corps);
+        // LE NOM DU PRODUIT, ET NON CELUI DU DÉPÔT. `PRODID` s'affiche dans l'agenda du client :
+        // « Billetterie » y aurait nommé un dépôt que personne d'autre que nous ne connaît.
+        self::assertStringContainsString('PRODID:-//Fluvia//Agenda//FR', $corps);
+        self::assertStringNotContainsString('billetterie', $corps);
         // CRLF et non LF : Apple et Outlook refusent le fichier, sans jamais parler de fin de ligne.
         self::assertStringContainsString("BEGIN:VCALENDAR\r\n", $corps);
 
@@ -229,6 +243,102 @@ final class CalendarTest extends AccesApiTestCase
         $anonyme = static::createClient();
         $anonyme->request('GET', '/calendar/ics/' . str_repeat('a', 48) . '.ics');
         self::assertResponseStatusCodeSame(404);
+    }
+
+    /**
+     * LES SOURCES SONT BRANCHÉES, ET CHACUNE PUBLIE DANS SA SEULE PORTÉE.
+     *
+     * ⚠ Ce test existe parce que les sept autres passaient DÉJÀ avant l'introduction du port — le
+     * jeu de données ne contient ni créneau de réservation ni créneau de travail sur cet
+     * établissement. Un port mal tagué, une méthode jamais appelée, un service non autowiré :
+     * rien de tout cela n'aurait rougi. Un filet vert peut l'être pour une raison qui n'a rien à
+     * voir.
+     *
+     * Les DEUX SENS sont vérifiés. N'en vérifier qu'un laisserait passer une source qui publie
+     * tout partout — et l'agenda personnel d'un agent afficherait les quarante cours de la semaine.
+     */
+    public function testLesSourcesDesAutresModulesAlimententLaBonnePortee(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $em = $this->em();
+        $etablissement = $this->etablissementDeA();
+
+        $ressource = (new Ressource())
+            ->setEtablissement($etablissement)
+            ->setCodeType('bassin')
+            ->setLibelle('Bassin sportif');
+        $em->persist($ressource);
+
+        $activite = (new Activite())->setEtablissement($etablissement)->setLibelle('Aquagym');
+        $em->persist($activite);
+
+        $creneau = (new Creneau())
+            ->setEtablissement($etablissement)
+            ->setRessource($ressource)
+            ->setActivite($activite)
+            ->setDebut(new \DateTimeImmutable('2026-06-15T09:00:00+00:00'))
+            ->setFin(new \DateTimeImmutable('2026-06-15T10:00:00+00:00'));
+        $em->persist($creneau);
+
+        $creneauTravail = (new CreneauTravail())
+            ->setEtablissement($etablissement)
+            ->setLibellePoste('Surveillance bassin')
+            ->setDebut(new \DateTimeImmutable('2026-06-15T14:00:00+00:00'))
+            ->setFin(new \DateTimeImmutable('2026-06-15T18:00:00+00:00'));
+        $em->persist($creneauTravail);
+
+        $employe = (new Employe())
+            ->setNom('Socle')
+            ->setPrenom('Administratrice')
+            ->setPoste('Régisseur')
+            // `typeContrat` est NON NUL en base sans l'être au mapping : Doctrine l'accepte,
+            // MariaDB
+            // le refuse. Le message ne parle que de la colonne — pas de l'entité, pas du test.
+            ->setTypeContrat(TypeContrat::Cdi)
+            ->setDateEntree(new \DateTimeImmutable('2020-01-01'))
+            ->setUtilisateur($this->utilisateurAdmin());
+        $em->persist($employe);
+
+        $em->persist((new AffectationTravail())->setCreneauTravail($creneauTravail)->setEmploye($employe));
+        $em->flush();
+
+        $site = $client->request('GET', '/api/calendar/feed?du=2026-06-15&au=2026-06-15&scope=site', $entete)->toArray();
+        self::assertResponseIsSuccessful();
+        $titresSite = array_column($site['events'], 'title');
+        self::assertContains('Aquagym · Bassin sportif', $titresSite, 'Le créneau de réservation doit alimenter « le site ».');
+        self::assertNotContains('Surveillance bassin', $titresSite, 'Le planning de l’équipe n’a rien à faire dans « le site ».');
+
+        $moi = $client->request('GET', '/api/calendar/feed?du=2026-06-15&au=2026-06-15&scope=mine', $entete)->toArray();
+        self::assertResponseIsSuccessful();
+        $titresMoi = array_column($moi['events'], 'title');
+        self::assertContains('Surveillance bassin', $titresMoi, 'Mon créneau de travail doit alimenter « moi ».');
+        self::assertNotContains('Aquagym · Bassin sportif', $titresMoi, 'Les quarante cours de la semaine ne sont pas mon agenda.');
+    }
+
+    private function etablissementDeA(): Etablissement
+    {
+        $etablissement = $this->em()->getRepository(Etablissement::class)
+            ->findOneBy(['nom' => SocleFixtures::ETAB_A_NOM]);
+        self::assertNotNull($etablissement);
+
+        return $etablissement;
+    }
+
+    private function utilisateurAdmin(): Utilisateur
+    {
+        $utilisateur = $this->em()->getRepository(Utilisateur::class)
+            ->findOneBy(['email' => SocleFixtures::ADMIN_EMAIL]);
+        self::assertNotNull($utilisateur);
+
+        return $utilisateur;
+    }
+
+    private function em(): EntityManagerInterface
+    {
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+
+        return $em;
     }
 
     /** @return array{0: Client, 1: array<string, mixed>} */

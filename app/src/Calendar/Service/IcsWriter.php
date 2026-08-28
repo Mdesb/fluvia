@@ -35,7 +35,11 @@ final readonly class IcsWriter
         $lignes = [
             'BEGIN:VCALENDAR',
             'VERSION:2.0',
-            'PRODID:-//Billetterie//Calendar//FR',
+            // LE NOM DU PRODUIT, PAS CELUI DU DÉPÔT. Cette ligne et l'`UID` ci-dessous sont les deux
+            // seules chaînes de ce module qui SORTENT chez le client : elles s'affichent dans
+            // Google Agenda, Apple Calendar et Outlook. « Billetterie » y aurait nommé un
+            // dépôt que personne d'autre que nous ne connaît.
+            'PRODID:-//Fluvia//Agenda//FR',
             'CALSCALE:GREGORIAN',
             'METHOD:PUBLISH',
             'X-WR-CALNAME:' . $this->echapper($nomEtablissement),
@@ -59,7 +63,7 @@ final readonly class IcsWriter
             }
 
             $lignes[] = 'BEGIN:VEVENT';
-            $lignes[] = 'UID:' . $id . '@billetterie';
+            $lignes[] = 'UID:' . $id . '@fluvia';
             $lignes[] = 'DTSTAMP:' . gmdate('Ymd\THis\Z');
             $lignes[] = 'DTSTART:' . $debut;
             $lignes[] = 'DTEND:' . $fin;
