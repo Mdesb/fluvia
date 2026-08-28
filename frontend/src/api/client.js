@@ -163,6 +163,26 @@ async function request(
     if (timer) clearTimeout(timer)
   }
 
+  // SESSION GLISSANTE : LE SERVEUR REND UN JETON FRAIS, ENCORE FAUT-IL LE PRENDRE.
+  //
+  // Le jeton vit une heure. Sans renouvellement, un écran laissé ouvert devant soi — la caisse, la
+  // supervision — se fait éjecter en pleine journée, sans un mot, et l'agent croit s'être
+  // déconnecté. Le serveur réémet donc un jeton dans l'en-tête `X-Jeton-Renouvele` dès que celui
+  // qu'on présente a passé la moitié de sa vie ; il suffit de le poser à la place de l'ancien.
+  //
+  // TROIS CHOSES QUI ÉVITENT DE MAL LIRE CE MÉCANISME :
+  //
+  // 1. L'en-tête n'arrive QUE sur les réponses authentifiées qui atteignent le noyau. Son absence
+  //    n'est donc pas un signal : la plupart des réponses n'en portent pas, et c'est normal.
+  // 2. Une réponse 401 n'en porte jamais. Le bloc ci-dessous s'exécute avant celui du 401, mais il
+  //    ne trouvera rien dans ce cas — les deux ne se marchent pas dessus.
+  // 3. LE 401 NE DISPARAÎT PAS, IL RECULE. Passé douze heures depuis la première connexion, le
+  //    serveur cesse de réémettre : sinon un jeton dérobé se renouvellerait indéfiniment, il
+  //    suffirait de s'en servir. Les écrans qui interrogent en boucle doivent donc TOUJOURS savoir
+  //    s'arrêter proprement sur un 401 et le dire — c'est plus rare qu'avant, pas impossible.
+  const jetonFrais = res.headers.get('X-Jeton-Renouvele')
+  if (jetonFrais && auth) tokenStore.set(jetonFrais)
+
   if (res.status === 401 && auth) {
     tokenStore.clear()
     if (onUnauthorized) onUnauthorized()

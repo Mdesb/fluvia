@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
+import { RESULTAT_CLS, RESULTAT_PASSAGE, phraseMotif } from '../api/acces.js'
 import RechercheBilletModal from './RechercheBilletModal.jsx'
 
 // LES SCANS EN DIRECT, À LA CAISSE — PARCE QUE C'EST LÀ QUE LE CLIENT SE PLAINT.
@@ -51,28 +52,6 @@ import RechercheBilletModal from './RechercheBilletModal.jsx'
 // D'où le compromis : le bandeau montre ce qui est certain (numéro, lieu, résultat, pourquoi), et
 // un clic ouvre la fiche du billet, qui va chercher le produit, le type et le solde. Le manque est
 // nommé ici pour qu'il soit demandé au serveur plutôt que bricolé.
-
-const RESULTAT = { valide: 'Validé', refuse: 'Refusé', compte: 'Compté' }
-const RESULTAT_CLS = { valide: 'good', refuse: 'crit', compte: 'mut' }
-
-// Même table que l'écran Topologie & passages, restreinte à ce qui sert au comptoir : ce que le
-// caissier doit RÉPONDRE au client qui est devant lui.
-const POURQUOI = {
-  hors_marge: 'Hors créneau : trop tôt ou trop tard par rapport à son billet.',
-  anti_passback: 'Badge déjà passé il y a moins que le délai anti-passback.',
-  credit_epuise: 'Carte épuisée : plus d’entrée disponible.',
-  support_bloque: 'Badge déclaré perdu ou volé, donc bloqué.',
-  seuil_fmi: 'Jauge atteinte sur cet espace : les entrées sont refusées.',
-  droit_invalide: 'Billet inconnu, non appairé, ou droit annulé.',
-  sens_interdit: 'Ce lecteur n’accepte pas ce sens de passage.',
-  non_nominatif: 'Comptage sans billet identifié.',
-  ouverture_manuelle: 'Passage forcé par un agent.',
-  federation_inactive: 'Billet d’un autre site : la reconnaissance mutuelle est inactive.',
-  signature_invalide: 'Code du billet invalide ou falsifié.',
-  hors_portee: 'Ce terminal n’a pas autorité sur cet équipement.',
-  credit_epuise_hors_ligne_litige: 'Accepté hors ligne alors que la carte était épuisée.',
-  hors_horaires_ouverture: 'Le site est fermé à cette heure.',
-}
 
 function heure(v) {
   const d = new Date(v)
@@ -251,7 +230,7 @@ export default function ScansEnDirect({ droits = [], etabActif }) {
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span className={`badge ${RESULTAT_CLS[p.resultat] || 'mut'}`}>
-                        {RESULTAT[p.resultat] || p.resultat}
+                        {RESULTAT_PASSAGE[p.resultat] || p.resultat}
                       </span>
                       <span className="nm">{p.support?.identifiant || 'sans support'}</span>
                       <span className="mut" style={{ marginLeft: 'auto' }}>{heure(p.horodatage)}</span>
@@ -264,7 +243,7 @@ export default function ScansEnDirect({ droits = [], etabActif }) {
                         ligne de motif vide ne dit rien et pousse à chercher un problème. */}
                     {refuse && (
                       <div style={{ color: 'var(--crit)' }}>
-                        {POURQUOI[p.codeMotif] || p.motif || 'Refusé, sans motif transmis.'}
+                        {phraseMotif(p) || 'Refusé, sans motif transmis.'}
                       </div>
                     )}
                     {p.support?.identifiant && (

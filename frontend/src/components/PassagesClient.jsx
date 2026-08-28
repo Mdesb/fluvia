@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
+import { RESULTAT_CLS, RESULTAT_PASSAGE, phraseMotif } from '../api/acces.js'
 
 // LES PASSAGES D'UN CLIENT, SUR SA FICHE — « il dit qu'il est venu mardi, c'est vrai ? »
 //
@@ -36,26 +37,6 @@ import { aLeDroit } from '../api/droits.js'
 //
 // Aucune de ces trois limites ne se corrige depuis l'écran ; les taire ferait lire « ce client n'est
 // jamais entré » là où la bonne phrase est « je ne vois pas plus loin ».
-
-const RESULTAT = { valide: 'Validé', refuse: 'Refusé', compte: 'Compté' }
-const RESULTAT_CLS = { valide: 'good', refuse: 'crit', compte: 'mut' }
-
-const POURQUOI = {
-  hors_marge: 'Hors créneau',
-  anti_passback: 'Repassage trop rapproché',
-  credit_epuise: 'Carte épuisée',
-  support_bloque: 'Badge bloqué (perte ou vol)',
-  seuil_fmi: 'Jauge de l’espace atteinte',
-  droit_invalide: 'Billet inconnu ou droit annulé',
-  sens_interdit: 'Sens non autorisé sur ce lecteur',
-  non_nominatif: 'Comptage sans billet',
-  ouverture_manuelle: 'Ouverture forcée par un agent',
-  federation_inactive: 'Reconnaissance mutuelle inactive',
-  signature_invalide: 'Code de billet invalide',
-  hors_portee: 'Terminal sans autorité sur ce lecteur',
-  credit_epuise_hors_ligne_litige: 'Accepté hors ligne, carte épuisée',
-  hors_horaires_ouverture: 'Site fermé à cette heure',
-}
 
 const MAX_NUMEROS = 25
 
@@ -158,10 +139,10 @@ export default function PassagesClient({ clientId, droits = [] }) {
                     <td>{p.equipement?.libelle || <span className="mut">—</span>}</td>
                     <td>
                       <span className={`badge ${RESULTAT_CLS[p.resultat] || 'mut'}`}>
-                        {RESULTAT[p.resultat] || p.resultat}
+                        {RESULTAT_PASSAGE[p.resultat] || p.resultat}
                       </span>
                       {p.resultat === 'refuse' && (
-                        <div className="mut">{POURQUOI[p.codeMotif] || p.motif || 'motif non transmis'}</div>
+                        <div className="mut">{phraseMotif(p) || 'motif non transmis'}</div>
                       )}
                     </td>
                     <td className="mono">{p.support?.identifiant || '—'}</td>
