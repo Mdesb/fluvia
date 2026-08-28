@@ -251,7 +251,7 @@ while read -r ancien nouveau ref; do
             # le nom COMPLET du fichier dans ce hook. Ecrits sans `.mjs`, les deux controles
             # seraient declares « appeles par aucun hook » et feraient refuser toute poussee. Le
             # filet se refermerait sur ce qu'il protege.
-            for script in verifier-droits.mjs verifier-formats.mjs verifier-imports.mjs verifier-classes.mjs garde-fou-ecart.mjs; do
+            for script in verifier-droits.mjs verifier-formats.mjs verifier-imports.mjs verifier-classes.mjs verifier-cache.mjs garde-fou-ecart.mjs; do
                 [ -f "$ARBRE/frontend/scripts/$script" ] || continue
                 if docker run --rm --network none \
                         -u "$(id -u):$(id -g)" \
