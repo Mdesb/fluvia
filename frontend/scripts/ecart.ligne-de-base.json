@@ -29,24 +29,22 @@
         "Le script REFUSE de le relever. Un plafond qui remonte n est plus un cliquet, c est un",
         "compteur."
     ],
-    "plafond": 701,
+    "plafond": 697,
     "releve": {
         "exposees": 1142,
         "sansEcran": 0,
         "attendues": 1142,
-        "appelees": 449,
-        "atteignables": 441,
-        "inatteignables": 701,
+        "appelees": 451,
+        "atteignables": 445,
+        "inatteignables": 697,
         "orphelins": [
             "comptesComptables  (back-office)",
             "etatSynchroAcces  (back-office)",
-            "factureDepuisVente  (back-office)",
             "grilleTarifaires  (back-office)",
-            "majFactureDirecte  (back-office)",
+            "majFactureFournisseur  (back-office)",
             "padelTournois  (back-office)",
             "pieceCommerciale  (back-office)",
-            "planningOuverture  (back-office)",
-            "verifierChaineFactures  (back-office)"
+            "planningOuverture  (back-office)"
         ],
         "declares": [],
         "marqueursSansRaison": [],
@@ -54,8 +52,8 @@
         "parFront": [
             {
                 "nom": "back-office",
-                "appelees": 428,
-                "atteignables": 420
+                "appelees": 430,
+                "atteignables": 424
             },
             {
                 "nom": "boutique en ligne",
@@ -105,10 +103,6 @@
                 11
             ],
             [
-                "factures",
-                10
-            ],
-            [
                 "marketing",
                 10
             ],
@@ -118,6 +112,10 @@
             ],
             [
                 "billing",
+                8
+            ],
+            [
+                "factures",
                 8
             ],
             [
@@ -210,6 +208,10 @@
             ],
             [
                 "saisons",
+                4
+            ],
+            [
+                "supplier",
                 4
             ],
             [
@@ -425,7 +427,7 @@
                 1
             ],
             [
-                "supplier",
+                "expense",
                 1
             ],
             [
