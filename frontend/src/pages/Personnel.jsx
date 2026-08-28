@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import AbsencesSection from '../components/AbsencesSection.jsx'
 import Liste, { dateFr, dateHeureFr } from '../components/Liste.jsx'
 import Modal from '../components/Modal.jsx'
+import Tabs from '../components/Tabs.jsx'
 import { api } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 
@@ -27,15 +28,15 @@ export default function Personnel({ etabActif, droits = [] }) {
         </div>
       </div>
 
-      <div className="seg" style={{ marginBottom: 16 }}>
-        {[
+      <Tabs
+        onglets={[
           ['employes', 'Employés'],
           ['roster', 'Roster'],
           ['badges', 'Badges staff'],
-        ].map(([k, l]) => (
-          <button key={k} className={sousOnglet === k ? 'on' : ''} onClick={() => setSousOnglet(k)}>{l}</button>
-        ))}
-      </div>
+        ]}
+        actif={sousOnglet}
+        onChange={setSousOnglet}
+      />
 
       {sousOnglet === 'employes' && (
         <ListeEmployes etabActif={etabActif} droits={droits} onBadgeEmis={() => setSousOnglet('badges')} />
@@ -165,7 +166,7 @@ function GestionBadges({ etabActif, droits = [] }) {
 
   return (
     <div>
-      {erreur && <div className="alert crit">{erreur}</div>}
+      {erreur && <div className="banner banner-error">{erreur}</div>}
 
       <Liste
         titre="Badges staff"
@@ -314,7 +315,7 @@ function ListeEmployes({ etabActif, droits = [], onBadgeEmis }) {
 
   return (
     <div>
-      {erreur && <div className="alert crit">{erreur}</div>}
+      {erreur && <div className="banner banner-error">{erreur}</div>}
       <Liste
         titre="Employés"
         sous="effectif de l'établissement"

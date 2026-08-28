@@ -119,7 +119,7 @@ export default function OuvrirStructure({ ouvert, onFermer, onOuverte }) {
           {cherche && <div className="hint">Recherche…</div>}
 
           {!annuaire.disponible && (
-            <div className="alert warn" style={{ margin: 0 }}>
+            <div className="banner banner-warn" style={{ margin: 0 }}>
               {annuaire.raison} Vous pouvez ouvrir la structure au nom saisi :
               <button
                 className="btn ghost sm"

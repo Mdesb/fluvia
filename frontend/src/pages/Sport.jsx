@@ -104,9 +104,9 @@ export default function Sport({ etabActif, droits = [] }) {
   const traites = sos.filter((e) => e.statut !== 'ouverte')
 
   return (
-    <div>
-      <div className="page-head">
-        <div>
+    <div className="view">
+      <div className="view-head">
+        <div className="ttl">
           <h1>Sport &amp; fitness</h1>
           <div className="sub">
             {ouverts.length > 0
@@ -116,13 +116,13 @@ export default function Sport({ etabActif, droits = [] }) {
         </div>
       </div>
 
-      {erreur && <div className="alert crit">{erreur}</div>}
+      {erreur && <div className="banner banner-error">{erreur}</div>}
 
       {/* LES SOS EN TETE, ET AFFICHES MEME VIDES.
           Un bloc absent ne se distingue pas d'un bloc qu'on a oublie de charger : l'ecran doit DIRE
           qu'il n'y a rien, sinon l'exploitant ne sait pas s'il est tranquille ou mal informe. */}
-      <section className="panel" style={{ marginBottom: 14 }}>
-        <div className="panel-h">
+      <section className="card" style={{ marginBottom: 14 }}>
+        <div className="card-h">
           <span>Appels d&rsquo;urgence</span>
           {ouverts.length > 0 && <span className="badge crit" style={{ marginLeft: 8 }}>{ouverts.length} ouvert{ouverts.length > 1 ? 's' : ''}</span>}
         </div>
@@ -136,7 +136,7 @@ export default function Sport({ etabActif, droits = [] }) {
             {ouverts.map((e) => (
               <article
                 key={e.id}
-                className="panel"
+                className="card"
                 style={{ padding: 12, border: '1px solid var(--crit)', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}
               >
                 <span className="nm">{e.espaceAcces?.libelle || e.espaceAcces?.nom || 'Espace inconnu'}</span>
@@ -163,8 +163,8 @@ export default function Sport({ etabActif, droits = [] }) {
         )}
       </section>
 
-      <section className="panel" style={{ marginBottom: 14 }}>
-        <div className="panel-h"><span>Présences isolées détectées</span></div>
+      <section className="card" style={{ marginBottom: 14 }}>
+        <div className="card-h"><span>Présences isolées détectées</span></div>
         {alertes.length === 0 ? (
           <div className="sub" style={{ textAlign: 'center', padding: 22 }}>
             Aucune présence isolée signalée.
@@ -193,8 +193,8 @@ export default function Sport({ etabActif, droits = [] }) {
         )}
       </section>
 
-      <section className="panel">
-        <div className="panel-h">
+      <section className="card">
+        <div className="card-h">
           <span>Abonnements</span>
           <span className="sub" style={{ marginLeft: 8 }}>{abonnements.length}</span>
         </div>

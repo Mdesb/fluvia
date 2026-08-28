@@ -45,15 +45,15 @@ export default function Relances({ etabActif, onOuvrirClient }) {
 
   useEffect(() => { recharger() }, [recharger])
 
-  if (erreur) return <div className="alert crit">{erreur}</div>
+  if (erreur) return <div className="banner banner-error">{erreur}</div>
   if (!charge) return null
 
   // RIEN A RELANCER N'EST PAS UNE LISTE VIDE : C'EST UNE BONNE NOUVELLE, ET ON L'ECRIT.
   // Un cadre vide se lit comme une panne de chargement ; la phrase dit que le compte est à jour.
   if (charge.total === 0) {
     return (
-      <section className="panel" style={{ marginBottom: 12 }}>
-        <div className="panel-h"><span>Relances</span></div>
+      <section className="card" style={{ marginBottom: 12 }}>
+        <div className="card-h"><span>Relances</span></div>
         <div className="sub" style={{ padding: 12 }}>
           Aucune relance en attente : chaque échange en cours a déjà eu sa suite.
         </div>
@@ -62,8 +62,8 @@ export default function Relances({ etabActif, onOuvrirClient }) {
   }
 
   return (
-    <section className="panel" style={{ marginBottom: 12 }}>
-      <div className="panel-h" style={{ gap: 10 }}>
+    <section className="card" style={{ marginBottom: 12 }}>
+      <div className="card-h" style={{ gap: 10 }}>
         <span>Relances</span>
         <span className="sub" style={{ fontVariantNumeric: 'tabular-nums' }}>
           {charge.total} en attente

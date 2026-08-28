@@ -274,6 +274,28 @@ if [ -f "$RACINE/frontend/scripts/verifier-droits.mjs" ]; then
     fi
 fi
 
+# CLASSES CSS DÉCLARÉES (n°16) — un écran qui s'affiche n'est pas un écran qui est stylé.
+#
+# Le 28/08, quatre noms de classe — `page-head`, `panel`, `panel-h`, `alert` — étaient employés 136
+# fois dans 22 fichiers et déclarés dans AUCUNE règle de `styles.css`. Neuf écrans entiers sortaient
+# sans cadre, sans en-tête et sans couleur d'erreur.
+#
+# Ce défaut ne casse rien : le navigateur ignore une classe inconnue sans un mot, le build passe,
+# les tests passent. Il ne se voit que sur un écran ouvert, et il y ressemble à un dessin bâclé
+# plutôt qu'à une panne — donc personne ne va lire la feuille de style.
+#
+# Il tourne sur l'HÔTE comme les deux contrôles suivants : node n'est pas dans l'image PHP.
+if [ -f "$RACINE/frontend/scripts/verifier-classes.mjs" ]; then
+    if command -v node >/dev/null 2>&1; then
+        executer "Classes CSS déclarées (n°16)" sh -c "cd '$RACINE/frontend' && node scripts/verifier-classes.mjs"
+    else
+        echo "─────────────────────────────────────────────────────────────"
+        echo "▶ Classes CSS déclarées (n°16)"
+        echo "─────────────────────────────────────────────────────────────"
+        echo "· IGNORÉ — « node » indisponible ici. Le contrôle n'a PAS tourné."
+    fi
+fi
+
 # ÉCART CLIENT/SERVEUR (n°15) — une opération neuve a un écran, ou dit pourquoi elle n'en a pas.
 #
 # Le quinzième contrôle, et le premier qui ne porte pas sur la correction du code mais sur le fait

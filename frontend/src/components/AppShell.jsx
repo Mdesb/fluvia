@@ -80,22 +80,28 @@ const NAV = [
       { id: 'stock', ic: '▣', label: 'Stock', perm: 'stock.lire' },
       { id: 'facturation', ic: '▤', label: 'Facturation', perm: 'facturation.lire' },
       { id: 'finance', ic: '€', label: 'Achats & trésorerie', perm: 'finance.read' },
-      // TROIS ENTREES RESTENT << ABSENTES >>, ET AUCUNE N'EST UN MANQUE.
+      // LES TROIS DERNIERES PORTES CONDAMNEES SONT OUVERTES (28/08), ET L'OBJECTION QUI LES
+      // FERMAIT A ETE TRAITEE PLUTOT QU'IGNOREE.
       //
-      // SEPA, recouvrement et cautions ONT un ecran : ils vivent dans les onglets de
-      // `Comptabilite`, la ou l'exploitant les cherche -- au milieu de sa comptabilite, pas
-      // dans trois entrees de menu separees. Leur ouvrir une porte propre creerait deux
-      // chemins vers la meme liste, et personne ne saurait lequel fait foi.
+      // Elle disait ceci, et elle etait juste : SEPA, recouvrement et cautions vivaient dans les
+      // onglets de `Comptabilite` ; leur ouvrir une entree propre creerait DEUX CHEMINS vers la
+      // meme liste, deux endroits a corriger, et personne pour savoir lequel fait foi.
       //
-      // Le drapeau est donc conserve A DESSEIN, avec cette explication : sans elle, le
-      // prochain qui relit ce fichier les rouvrira en croyant combler un trou.
-      { id: 'sepa', ic: '⇄', label: 'Prélèvements SEPA', perm: 'sepa.lire', disabled: true, absent: true },
-      // PAS D'ENTREE PROPRE, ET C'EST DELIBERE. `Comptabilite > Impayes` traite deja les incidents,
-      // le tableau de bord, la resolution et la reouverture forcee. Une seconde porte vers la meme
-      // liste, c'est deux endroits a corriger et un exploitant qui ne sait plus lequel fait foi.
-      // Ce qui manquait -- representations et politique -- a ete ajoute LA, pas ailleurs.
-      { id: 'recouvrement', ic: '⚠', label: 'Recouvrement', perm: 'recouvrement.lire', disabled: true, absent: true },
-      { id: 'caution', ic: '⛨', label: 'Cautions', perm: 'caution.lire', disabled: true, absent: true },
+      // Ce qui a change : les trois ecrans sont desormais des composants partages
+      // (`PrelevementsSepa`, `ImpayesRecouvrement`, `CautionsGestion`) rendus AUX DEUX ENDROITS.
+      // Il y a bien deux portes, mais une seule piece derriere -- une seule implementation, qui ne
+      // peut pas diverger d'elle-meme. L'objection portait sur la duplication, pas sur les portes.
+      //
+      // Et elles ont chacune une raison d'exister a part :
+      //  - SEPA porte quatre ecritures (mandat, remise, rejet, creancier) : c'est un poste de
+      //    travail, pas une consultation qu'on ouvre au detour d'un journal comptable.
+      //  - Le recouvrement porte une FILE DE TRAVAIL derriere laquelle des gens sont bloques a
+      //    l'entree. Une file rangee au quatrieme onglet ne se regarde que quand on y pense.
+      //  - Les cautions sont transversales : elles naissent a la piscine, au padel et a la
+      //    patinoire, et le solde consigne est unique. On ne pose pas la question trois fois.
+      { id: 'sepa', ic: '⇄', label: 'Prélèvements SEPA', perms: ['sepa.lire', 'compta.lire'] },
+      { id: 'recouvrement', ic: '⚠', label: 'Recouvrement', perms: ['recouvrement.lire', 'recouvrement.piloter', 'compta.lire'] },
+      { id: 'caution', ic: '⛨', label: 'Cautions', perms: ['caution.lire', 'caution.piloter'] },
       // Ouvert le 27/08 : quinze operations, aucun ecran. Un contrat depose par l'API existait,
       // et personne ne pouvait le relire.
       { id: 'documents', ic: '🗎', label: 'Documents', perms: ['dms.read', 'dms.write'] },

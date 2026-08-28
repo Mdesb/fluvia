@@ -734,11 +734,69 @@ export const api = {
   comptesComptables: () =>
     request('/api/compte_comptables', { query: { itemsPerPage: 200 } }),
   cautions: () => request('/api/cautions', { query: { itemsPerPage: 100 } }),
+  // Le JOURNAL d'une caution, et le BARÈME qui chiffre ses retenues. Les deux ressources existaient
+  // sans appelant : l'écran montrait un montant retenu sans jamais dire *qui* l'a retenu, *quand*,
+  // ni *au nom de quelle règle* — les trois seules choses qu'un client conteste au guichet.
+  cautionMouvements: () => request('/api/caution_mouvements', { query: { itemsPerPage: 200 } }),
+  grillesRetenue: () => request('/api/caution_grille_retenues', { query: { itemsPerPage: 100 } }),
+  // Opérations STANDARD : elles désérialisent, donc `ld: true` (cf. `creerExportComptable`).
+  creerGrilleRetenue: (corps) =>
+    request('/api/caution_grille_retenues', { method: 'POST', body: corps, ld: true }),
+  majGrilleRetenue: (id, corps) =>
+    request(`/api/caution_grille_retenues/${id}`, { method: 'PATCH', body: corps }),
 
   // SEPA : remises de prélèvement (pain.008), mandats, rejets.
   remisesSepa: () => request('/api/remise_sepas', { query: { itemsPerPage: 100 } }),
   mandatsSepa: () => request('/api/mandat_sepas', { query: { itemsPerPage: 100 } }),
   rejetsSepa: () => request('/api/rejet_sepas', { query: { itemsPerPage: 100 } }),
+
+  // LES QUATRE ÉCRITURES SEPA, QUI EXISTAIENT TOUTES SANS APPELANT.
+  //
+  // `/api/sepa/mandats` et `/api/sepa/remises/generer` sont des opérations à corps brut (elles
+  // passent par `LecteurCorps`, pas par la désérialisation d'API Platform) : PAS de `ld: true`,
+  // sinon on annonce un type que l'opération n'attend pas.
+  //
+  // `/api/rejet_sepas` en POST est l'inverse : opération STANDARD, donc `ld: true` obligatoire —
+  // sans lui API Platform répond 415 et la déclaration de rejet échoue. Je l'avais écrite sans le
+  // drapeau ; c'est `scripts/verifier-formats.mjs` qui l'a arrêtée, pas une relecture.
+  creerMandatSepa: (corps) => request('/api/sepa/mandats', { method: 'POST', body: corps }),
+  genererRemiseSepa: (dateExecution) =>
+    request('/api/sepa/remises/generer', {
+      method: 'POST',
+      body: dateExecution ? { dateExecution } : {},
+      // La génération parcourt toutes les échéances dues de l'établissement et compose le XML :
+      // c'est la plus lente des écritures SEPA, et un spinner sans fin s'y lirait comme un blocage.
+      timeoutMs: 30000,
+    }),
+  declarerRejetSepa: (corps) =>
+    request('/api/rejet_sepas', { method: 'POST', body: corps, ld: true }),
+
+  // LES LIGNES D'UNE REMISE — ET POURQUOI ON LES CHARGE TOUTES.
+  //
+  // `LigneRemiseSepa` n'a AUCUN filtre déclaré côté serveur (aucun `#[ApiFilter]` sur l'entité) :
+  // `?remise=...` serait accepté par l'URL et IGNORÉ par Doctrine. On aurait alors la liste complète
+  // en croyant lire celle d'une remise — un résultat plausible et faux, exactement le défaut que la
+  // fonction `qs()` en tête de ce fichier documente. On charge donc large et on filtre côté client,
+  // et c'est écrit ici pour que personne n'ajoute un paramètre qui ne sert à rien.
+  lignesRemiseSepa: () => request('/api/ligne_remise_sepas', { query: { itemsPerPage: 500 } }),
+
+  // Le PARAMÉTRAGE du créancier : ICS, nom, IBAN de collecte. Sans lui, aucune remise ne peut être
+  // composée — c'est la première chose à remplir du module, et elle n'avait pas d'écran.
+  configsCreancierSepa: () =>
+    request('/api/config_creancier_sepas', { query: { itemsPerPage: 20 } }),
+  creerConfigCreancierSepa: (corps) =>
+    request('/api/config_creancier_sepas', { method: 'POST', body: corps, ld: true }),
+  majConfigCreancierSepa: (id, corps) =>
+    request(`/api/config_creancier_sepas/${id}`, { method: 'PATCH', body: corps }),
+
+  // Le pain.008 n'est PAS une opération API Platform mais un contrôleur simple qui rend du XML.
+  // Même patron que `urlTelechargementDocument` : une URL, pas un appel — le jeton doit voyager
+  // dans l'en-tête, donc l'appelant fait son `fetch` et lit un blob (voir `PrelevementsSepa.jsx`).
+  //
+  // ⚠ Cette route est hors `/api` : elle doit être routée explicitement vers Symfony (proxy Vite en
+  // dev, bloc nginx en préprod). Sans ça le SPA rend son propre `index.html` avec un 200, et le
+  // « fichier » téléchargé est une page HTML portant l'extension .xml.
+  urlPain008: (id) => `/sepa/remises/${id}/pain008`,
 
   // Recouvrement / impayés.
   incidentsImpayes: () => request('/api/incident_impayes', { query: { itemsPerPage: 100 } }),
@@ -754,6 +812,13 @@ export const api = {
       body: { resultat },
     }),
   politiquesRecouvrement: () => request('/api/politique_recouvrements', { query: { itemsPerPage: 50 } }),
+  // LA RÈGLE ÉTAIT LISIBLE ET PAS MODIFIABLE, alors que le serveur accepte POST et PATCH depuis le
+  // début. Un exploitant qui trouvait le blocage d'accès trop brutal pouvait le constater sur
+  // l'écran, et nulle part le corriger : il en concluait que le logiciel était comme ça.
+  creerPolitiqueRecouvrement: (corps) =>
+    request('/api/politique_recouvrements', { method: 'POST', body: corps, ld: true }),
+  majPolitiqueRecouvrement: (id, corps) =>
+    request(`/api/politique_recouvrements/${id}`, { method: 'PATCH', body: corps }),
 
   // --- Boutique en ligne (M3, vue admin) ---
   // Les paniers en ligne ne sont pas listables (accès par id) : la vue admin s'appuie sur les

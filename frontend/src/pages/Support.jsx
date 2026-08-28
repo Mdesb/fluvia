@@ -107,9 +107,9 @@ export default function Support({ droits = [], etabActif }) {
   }, [onglet, recharger])
 
   return (
-    <div>
-      <div className="page-head">
-        <div>
+    <div className="view">
+      <div className="view-head">
+        <div className="ttl">
           <h1>Assistance</h1>
           <div className="sub">Demandes d&rsquo;aide et base de connaissances</div>
         </div>
@@ -126,7 +126,7 @@ export default function Support({ droits = [], etabActif }) {
         onChange={setOnglet}
       />
 
-      {erreur && <div className="alert crit">{erreur}</div>}
+      {erreur && <div className="banner banner-error">{erreur}</div>}
 
       {onglet === 'tickets' ? (
         <ListeTickets
@@ -165,8 +165,8 @@ export default function Support({ droits = [], etabActif }) {
 
 function ListeTickets({ tickets, chargement, filtreStatut, onFiltrer, filtrePriorite, onFiltrerPriorite, onOuvrir }) {
   return (
-    <div className="panel">
-      <div className="panel-h" style={{ gap: 8, flexWrap: 'wrap' }}>
+    <div className="card">
+      <div className="card-h" style={{ gap: 8, flexWrap: 'wrap' }}>
         <span>Demandes</span>
 
         {/* LA PRIORITÉ AVANT LE STATUT, PARCE QUE C'EST LA QUESTION DU MATIN.
@@ -335,7 +335,7 @@ function FicheTicket({ id, agent, peut, onFermer, onChange }) {
         <div className="center" style={{ minHeight: 120 }}><div className="spinner" /></div>
       ) : (
         <div style={{ display: 'grid', gap: 16 }}>
-          {erreur && <div className="alert crit">{erreur}</div>}
+          {erreur && <div className="banner banner-error">{erreur}</div>}
 
           <div className="fiche-stats">
             <div>
@@ -356,7 +356,7 @@ function FicheTicket({ id, agent, peut, onFermer, onChange }) {
             </div>
           </div>
 
-          <div className="panel" style={{ padding: 14 }}>
+          <div className="card" style={{ padding: 14 }}>
             <div className="sub" style={{ marginBottom: 6 }}>
               Ouvert le {quand(ticket.dateCreation)}
               {nomUtilisateur(ticket.demandeur) ? ` par ${nomUtilisateur(ticket.demandeur)}` : ''}
@@ -373,7 +373,7 @@ function FicheTicket({ id, agent, peut, onFermer, onChange }) {
                 {messages.map((m) => (
                   <div
                     key={m.id}
-                    className="panel"
+                    className="card"
                     style={{
                       padding: 12,
                       // Une note interne ne se distingue pas par une étiquette qu'on peut manquer :
@@ -594,7 +594,7 @@ function OuvrirDemande({ open, onFermer, onOuvert }) {
   return (
     <Modal open={open} onClose={onFermer} titre="Ouvrir une demande" taille="md">
       <form onSubmit={envoyer} style={{ display: 'grid', gap: 12 }}>
-        {erreur && <div className="alert crit">{erreur}</div>}
+        {erreur && <div className="banner banner-error">{erreur}</div>}
         <div>
           <label htmlFor="tk-sujet">Sujet *</label>
           <input id="tk-sujet" className="input" required value={sujet} onChange={(e) => setSujet(e.target.value)} />
@@ -736,8 +736,8 @@ function BaseConnaissances({ droits = [], etabActif }) {
     : articles
 
   return (
-    <div className="panel">
-      <div className="panel-h" style={{ gap: 8, flexWrap: 'wrap' }}>
+    <div className="card">
+      <div className="card-h" style={{ gap: 8, flexWrap: 'wrap' }}>
         <span>Articles d&rsquo;aide</span>
 
         {categories.length > 0 && (
@@ -769,8 +769,8 @@ function BaseConnaissances({ droits = [], etabActif }) {
         )}
       </div>
 
-      {erreur && <div className="alert crit">{erreur}</div>}
-      {succes && <div className="alert good">{succes}</div>}
+      {erreur && <div className="banner banner-error">{erreur}</div>}
+      {succes && <div className="banner banner-ok">{succes}</div>}
 
       {chargement ? (
         <div className="center" style={{ minHeight: 120 }}><div className="spinner" /></div>
@@ -787,7 +787,7 @@ function BaseConnaissances({ droits = [], etabActif }) {
           {visibles.map((a) => (
             <article
               key={a.id}
-              className="panel"
+              className="card"
               style={{ padding: 12, border: '1px solid var(--line)', display: 'grid', gap: 6 }}
             >
               <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
@@ -927,7 +927,7 @@ function RedactionArticle({ article, categories, etabActif, seulementLocal, onFe
       taille="lg"
     >
       <div style={{ display: 'grid', gap: 12 }}>
-        {erreur && <div className="alert crit">{erreur}</div>}
+        {erreur && <div className="banner banner-error">{erreur}</div>}
 
         <label style={{ display: 'grid', gap: 4 }}>
           <span className="sub">Titre</span>
@@ -973,7 +973,7 @@ function RedactionArticle({ article, categories, etabActif, seulementLocal, onFe
         </div>
 
         {!existant && portee === 'local' && !etabActif && (
-          <div className="alert warn">
+          <div className="banner banner-warn">
             Aucun établissement actif : un article local doit en référencer un.
           </div>
         )}

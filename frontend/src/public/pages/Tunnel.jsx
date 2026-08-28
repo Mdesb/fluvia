@@ -304,7 +304,7 @@ function EtapeBeneficiaires({ panier, metaProduits, metaCreneaux, langue, onReto
             const nom = meta ? libelleProduit(meta, langue) : 'Billet'
             const cr = l.creneau ? metaCreneaux?.[iriId(l.creneau)] : null
             return (
-              <li key={l.id} className="bq-benef">
+              <li key={l.id}>
                 <p className="bq-benef-t">
                   {nom}
                   {(l.quantite || 1) > 1 ? ` ×${l.quantite}` : ''}
@@ -639,7 +639,7 @@ function EtapeConfirmation({ resultat, infoBillets, connecte, onNaviguer }) {
         ) : aDesBillets ? (
           <ul className="bq-billets">
             {billets.map((b) => (
-              <li key={b.billetSupport || b.identifiantSupport} className="bq-billet card">
+              <li key={b.billetSupport || b.identifiantSupport} className="card">
                 <div className="card-b bq-billet-b">
                   <Qr value={b.qrDynamique || b.identifiantSupport} size={110} title="QR du billet" />
                   <div>

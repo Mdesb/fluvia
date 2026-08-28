@@ -98,8 +98,8 @@ export default function VocabulaireMetier({ etabActif, peutEcrire }) {
         <span className="sub">{etablissement?.nom || '—'}</span>
       </div>
       <div className="card-b">
-        {erreur && <div className="alert crit">{erreur}</div>}
-        {succes && <div className="alert good">{succes}</div>}
+        {erreur && <div className="banner banner-error">{erreur}</div>}
+        {succes && <div className="banner banner-ok">{succes}</div>}
 
         <div className="hint" style={{ marginTop: 0 }}>
           Ces mots ne changent que pour cet établissement. Laissé vide, un terme garde son nom par

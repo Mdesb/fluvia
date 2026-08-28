@@ -74,11 +74,11 @@ export default function VitrinesBoutique({ droits = [] }) {
 
   return (
     <div style={{ display: 'grid', gap: 14 }}>
-      {erreur && <div className="alert crit">{erreur}</div>}
-      {succes && <div className="alert good">{succes}</div>}
+      {erreur && <div className="banner banner-error">{erreur}</div>}
+      {succes && <div className="banner banner-ok">{succes}</div>}
 
       {vitrines.length === 0 ? (
-        <div className="panel">
+        <div className="card">
           <div className="sub" style={{ textAlign: 'center', padding: 24 }}>Aucune vitrine configurée.</div>
         </div>
       ) : (
@@ -88,8 +88,8 @@ export default function VitrinesBoutique({ droits = [] }) {
           const iframe = `<iframe src="${url}" title="Billetterie en ligne" width="100%" height="900" style="border:0" loading="lazy"></iframe>`
 
           return (
-            <section className="panel" key={v.id}>
-              <div className="panel-h">
+            <section className="card" key={v.id}>
+              <div className="card-h">
                 <span>{v.etablissement?.nom || 'Vitrine'}</span>
                 {!v.slug && (
                   // Une vitrine sans nom d'URL fonctionne — par son identifiant — mais son adresse est

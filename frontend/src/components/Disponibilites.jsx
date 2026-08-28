@@ -137,10 +137,10 @@ export default function Disponibilites({ droits = [] }) {
 
   return (
     <div style={{ display: 'grid', gap: 14 }}>
-      {erreur && <div className="alert crit">{erreur}</div>}
+      {erreur && <div className="banner banner-error">{erreur}</div>}
 
       {ressources.length === 0 ? (
-        <div className="panel">
+        <div className="card">
           <div className="sub" style={{ textAlign: 'center', padding: 24 }}>
             Aucune ressource. Un praticien, un terrain ou une salle se déclare comme ressource avant de
             pouvoir recevoir des horaires.
@@ -154,8 +154,8 @@ export default function Disponibilites({ droits = [] }) {
             .sort((a, b) => new Date(a.debut) - new Date(b.debut))
 
           return (
-            <section className="panel" key={r.id}>
-              <div className="panel-h">
+            <section className="card" key={r.id}>
+              <div className="card-h">
                 <span>{r.libelle || r.codeType || 'Ressource'}</span>
                 {/* LA JAUGE SE REGLE ICI, ET ELLE N'ETAIT REGLABLE NULLE PART.
                     `capacitePropre` distingue deja un terrain de padel (4) d'un court de tennis en
@@ -451,7 +451,7 @@ function DeclarerAbsence({ busy, onDeclarer }) {
   }
 
   return (
-    <div className="panel" style={{ padding: 10, marginTop: 8, display: 'grid', gap: 8 }}>
+    <div className="card" style={{ padding: 10, marginTop: 8, display: 'grid', gap: 8 }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
         <label style={{ display: 'grid', gap: 4 }}>
           <span className="sub">Du</span>

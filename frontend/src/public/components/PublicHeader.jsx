@@ -38,7 +38,7 @@ export default function PublicHeader({ vitrine, nbArticles, connecte, onNaviguer
               ◈
             </span>
           )}
-          <span className="bq-brand-txt">Billetterie</span>
+          <span>Billetterie</span>
         </button>
 
         <nav className="bq-nav" aria-label="Navigation principale">

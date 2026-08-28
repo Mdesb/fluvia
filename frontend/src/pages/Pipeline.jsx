@@ -101,9 +101,9 @@ export default function Pipeline({ etabActif, droits = [], onNaviguer }) {
   const colonnes = tableau?.colonnes || []
 
   return (
-    <div>
-      <div className="page-head">
-        <div>
+    <div className="view">
+      <div className="view-head">
+        <div className="ttl">
           <h1>Affaires</h1>
           <div className="sub">
             {tableau?.total || 0} affaire{(tableau?.total || 0) > 1 ? 's' : ''} · montants prévisionnels
@@ -116,8 +116,8 @@ export default function Pipeline({ etabActif, droits = [], onNaviguer }) {
         )}
       </div>
 
-      {erreur && <div className="alert crit">{erreur}</div>}
-      {succes && <div className="alert good">{succes}</div>}
+      {erreur && <div className="banner banner-error">{erreur}</div>}
+      {succes && <div className="banner banner-ok">{succes}</div>}
 
       {/* CE QU'IL RESTE A FAIRE, AVANT LE TABLEAU DES AFFAIRES.
           Le pipeline dit ou en sont les affaires ; les relances disent ce qu'on doit faire
@@ -130,8 +130,8 @@ export default function Pipeline({ etabActif, droits = [], onNaviguer }) {
 
       <div style={{ display: 'grid', gridTemplateColumns: `repeat(${colonnes.length}, minmax(210px, 1fr))`, gap: 12, overflowX: 'auto' }}>
         {colonnes.map((col) => (
-          <section className="panel" key={col.etape} style={{ minWidth: 210 }}>
-            <div className="panel-h" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
+          <section className="card" key={col.etape} style={{ minWidth: 210 }}>
+            <div className="card-h" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
               <span>{col.libelle}</span>
               <span className="sub" style={{ fontVariantNumeric: 'tabular-nums' }}>
                 {col.affaires.length} · {euros(col.montantTotal)}
@@ -145,7 +145,7 @@ export default function Pipeline({ etabActif, droits = [], onNaviguer }) {
                 col.affaires.map((a) => (
                   <article
                     key={a.id}
-                    className="panel"
+                    className="card"
                     style={{ padding: 10, border: '1px solid var(--line)', display: 'grid', gap: 4 }}
                   >
                     <span className="nm" style={{ fontSize: 13.5 }}>{a.titre}</span>
