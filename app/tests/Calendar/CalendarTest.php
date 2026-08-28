@@ -291,8 +291,14 @@ final class CalendarTest extends AccesApiTestCase
             ->setNom('Socle')
             ->setPrenom('Administratrice')
             ->setPoste('Régisseur')
-            // `typeContrat` est NON NUL en base sans l'être au mapping : Doctrine l'accepte,
-            // MariaDB
+            // ⚠ LE TYPE PHP AUTORISE CE QUE LA COLONNE INTERDIT — et ce n'est PAS une dérive de
+            // mapping : `#[ORM\Column]` sans `nullable: true` déclare bien `NOT NULL`, et
+            // l'`Assert\NotNull` est là. Mais la propriété est `?TypeContrat $typeContrat = null` :
+            // une entité fraîchement construite est valide pour PHP, valide pour Doctrine, et
+            // refusée par MariaDB au `flush()`. La validation Symfony ne s'exécute pas non plus,
+            // puisqu'on persiste par l'`EntityManager` et non par l'API. D'où un message qui ne
+            // nomme qu'une colonne. Diagnostic rectifié par claude-A le 28/08 — le mien disait
+            // « mapping incomplet », et un garde-fou de dérive n'aurait jamais rien vu.
             // le refuse. Le message ne parle que de la colonne — pas de l'entité, pas du test.
             ->setTypeContrat(TypeContrat::Cdi)
             ->setDateEntree(new \DateTimeImmutable('2020-01-01'))
