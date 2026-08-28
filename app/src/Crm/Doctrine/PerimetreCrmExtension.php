@@ -23,6 +23,7 @@ use App\Crm\Entity\RegleConservation;
 use App\Organisation\Entity\Etablissement;
 use App\Organisation\Entity\Region;
 use App\Securite\Entity\Utilisateur;
+use App\Securite\Service\ContexteEtablissement;
 use Doctrine\ORM\QueryBuilder;
 use Symfony\Bundle\SecurityBundle\Security;
 
@@ -56,16 +57,34 @@ final class PerimetreCrmExtension implements QueryCollectionExtensionInterface, 
         // courriel direct. C'est le garde-fou de couverture qui l'a vu, pas la relecture, et il
         // l'a vu parce qu'il cherche les entites exposees que RIEN ne peut filtrer.
         CustomerContact::class => 'customer',
-        // Une activite commerciale porte SON PROPRE etablissement (estampille au serveur) : elle
-        // peut viser une affaire sans client, et n'a donc pas toujours de chemin vers un `Client`.
-        CommercialActivity::class => null,
-        Opportunity::class => null,
         Consentement::class => 'client',
         DemandeRGPD::class => 'client',
     ];
 
+    /**
+     * CE QUI SE CLOISONNE PAR ETABLISSEMENT, ET NON PAR GROUPE.
+     *
+     * Le fichier client suit l'enseigne : un client appartient au groupe, pas a l'un de ses sites
+     * (RG-SOCLE-05). Une AFFAIRE et une ACTIVITE COMMERCIALE, elles, appartiennent a un site precis
+     * -- c'est pour cela qu'elles portent `establishment`, estampille au serveur.
+     *
+     * Elles figuraient dans `ASSOCIATION_VERS_GROUPE` avec la valeur `null`, qui signifie dans cette
+     * table « la ressource porte `groupe` elle-meme ». Elle ne le porte pas : le DQL visait un champ
+     * inexistant et Doctrine refusait la requete, donc `/api/opportunities` repondait 500 en
+     * collection comme en item. Les deux gestes de l'ecran Affaires -- « Qualifier » et « Perdue » --
+     * echouaient a chaque clic, sous un tableau qui s'affichait parfaitement parce qu'il est servi
+     * par un fournisseur dedie qui contourne cette extension.
+     *
+     * @var list<class-string>
+     */
+    private const PAR_ETABLISSEMENT = [
+        Opportunity::class,
+        CommercialActivity::class,
+    ];
+
     public function __construct(
         private readonly Security $security,
+        private readonly ContexteEtablissement $contexte,
     ) {
     }
 
@@ -103,6 +122,12 @@ final class PerimetreCrmExtension implements QueryCollectionExtensionInterface, 
             return;
         }
 
+        if (\in_array($resourceClass, self::PAR_ETABLISSEMENT, true)) {
+            $this->restreindreParEtablissement($queryBuilder);
+
+            return;
+        }
+
         if (!\array_key_exists($resourceClass, self::ASSOCIATION_VERS_GROUPE)) {
             return;
         }
@@ -136,5 +161,22 @@ final class PerimetreCrmExtension implements QueryCollectionExtensionInterface, 
         // politique de sécurité que personne ne maintient — le jour où la règle change, il en reste
         // une version périmée, et c'est elle qui décide qui voit quoi.
         CustomerScope::restreindreAuGroupe($queryBuilder, $aliasGroupe, $utilisateur->getId());
+    }
+
+    private function restreindreParEtablissement(QueryBuilder $queryBuilder): void
+    {
+        $actif = $this->contexte->idActif();
+        if ($actif === null) {
+            // Fermeture par defaut : une liste vide se remarque, une liste inter-etablissements a
+            // seulement l'air plus longue.
+            $queryBuilder->andWhere('1 = 0');
+
+            return;
+        }
+
+        $rootAlias = $queryBuilder->getRootAliases()[0];
+        $queryBuilder
+            ->andWhere(sprintf('IDENTITY(%s.establishment) = :perimetre_crm_actif', $rootAlias))
+            ->setParameter('perimetre_crm_actif', $actif, 'uuid');
     }
 }
