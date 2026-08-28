@@ -307,3 +307,87 @@ l'écran contre un vrai serveur, le même jour :
 **Un écran qui n'a jamais tourné n'est pas livré.** Le 26/08, vingt écrans ont été livrés sans une
 seule exécution ; les défauts ci-dessus dormaient dedans. Monter un serveur de développement branché
 sur l'API de préprod prend deux minutes — c'est moins cher que n'importe lequel de ces défauts.
+
+## 9. Le modèle d'écran — arbitré par Maxime le 29/08
+
+Cette section remplace la standardisation écran par écran. Elle ne contient rien d'inventé : tout
+est tiré de ce que Fluvia fait déjà quelque part.
+
+### 9.1 L'écriture : lisez `pages/Stock.jsx`
+
+C'est le meilleur écran de l'application, et il l'est pour trois raisons imitables.
+
+**Il dit ce qu'EST la chose, pas que la liste est vide.**
+
+> « Aucun article de stock. Un article, c'est ce que vous achetez et comptez — une canette, une paire
+> de lacets, un sac de sel. Il devient vendable en le rattachant à un produit du catalogue. »
+
+Un écran vide est le moment où l'exploitant a le plus besoin d'aide, et c'est celui où l'on écrit
+d'habitude le moins.
+
+**Il prévient quand une absence de réglage DÉSACTIVE UN CONTRÔLE.**
+
+> « Aucun seuil n'est réglé pour cet établissement, et la conséquence n'est pas neutre : aucun écart
+> d'inventaire n'est considéré comme significatif. La validation par un responsable ne se
+> déclenchera donc jamais, quelle que soit la taille de l'écart. **Tout fonctionne, et le contrôle
+> est absent.** »
+
+Cette phrase est l'exact inverse des défauts trouvés les 28 et 29/08, qui affirmaient tous qu'un
+contrôle existait : sept opérations badgées « contrôlée » qu'aucun plafond ne limitait ; un
+contrôleur d'accès affiché « En ligne » sans avoir jamais émis de signe de vie ; une checklist
+« 2 sur 3 » qui ne comptait pas la caisse manquante ; un rôle nommé « Lecture seule » qui conférait
+l'administration complète.
+
+> **Un logiciel qui se tait sur un contrôle absent ment plus qu'un logiciel qui échoue.**
+
+**Il distingue les trois raisons d'un vide.**
+
+> « Un journal vide peut aussi vouloir dire que vos articles ne sont rattachés à aucun produit. »
+
+Vide parce que rien ne s'est passé, vide parce que mal branché, vide parce qu'on n'a pas le droit de
+voir : trois états qui se ressemblent à l'écran et n'appellent pas la même action.
+
+### 9.2 La structure : ce qui est borné reste, ce qui grandit s'en va
+
+Maxime, en lisant Stock : « Le stock c'est aussi plein de blocs qui vont devenir énormes dès qu'il y
+a beaucoup de datas. » Il a raison : Stock empile en pleine largeur trois collections SANS BORNE —
+articles, derniers mouvements, articles sous seuil — plus les réglages et l'inventaire. Avec de
+vraies données, il faut faire défiler trois listes interminables pour atteindre la quatrième.
+
+| Ce que c'est | Où ça va |
+|---|---|
+| Alertes, compteurs, réglages, état du jour — quelques lignes, une décision à prendre | Page d'accueil du module |
+| Toute collection qui peut grandir sans limite | Une vue à elle |
+
+Et une vue de collection, c'est **toujours** la même chose, décrite par Maxime pour les clients et
+redemandée deux minutes plus tard pour les produits :
+
+1. liste **pleine largeur** (`className="view large"`) ;
+2. filtres — **ceux que le serveur accepte déjà**, cf. §7 ;
+3. état dans l'URL via `useEtatUrl` (`api/url.js`) ;
+4. clic sur une ligne → **fiche en page**, pas en modale ;
+5. « ← Retour à la liste » qui **restitue les filtres**.
+
+Le point 3 n'est pas un raffinement. Le jeton dure une heure : sans lui, chaque expiration efface le
+travail de tri de l'exploitant, qui se reconnecte sur la caisse et recommence. Avec, il revient
+exactement où il était — vérifié en supprimant le jeton et en se reconnectant, pas en le supposant.
+
+Le point 4 non plus : une modale ne porte pas d'URL, donc elle n'est ni partageable, ni restituable,
+et elle s'interdit d'ouvrir une fenêtre par-dessus.
+
+**Ce motif n'est pas « le motif clients ».** C'est celui de toute collection de l'application.
+`Clients` et `Catalogue` l'appliquent depuis le 29/08 ; il n'est pas à recopier, il est à réutiliser.
+
+### 9.3 Les actions : on crée une chose là où c'est le métier
+
+Le défaut trouvé **six fois** en deux jours : l'écran Clients ne créait pas de client (seul
+`ClientPicker`, au milieu d'une vente, le pouvait) ; la Piscine ne déclare pas de bassin ; la Caisse
+ne crée pas de caisse ; les modules n'étaient pas activables depuis l'onglet « activables » ; un
+moyen de paiement ne se réglait qu'à la création ; la comptabilité d'un produit s'affichait sans se
+modifier.
+
+Stock, lui, le fait : « + Ajouter », « + Créer le premier », « + Lancer un inventaire ».
+
+**Et quand le DROIT est séparé, le bouton l'est aussi.** `offre.modifier_compta` n'est pas
+`offre.modifier` : qui peut renommer un produit n'a pas à décider du compte sur lequel ses ventes
+s'imputent. Un seul bouton aurait fait porter les deux gestes par le droit le plus faible.
