@@ -665,3 +665,96 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 .cas-tuile.occupe .cas-etat { color: var(--ink-soft); }
 .cas-tuile.non_rendu { border-color: var(--crit); background: var(--crit-bg); }
 .cas-tuile.non_rendu .cas-etat { color: var(--crit); }
+
+/* ---- Champs compacts, la contrepartie de `.btn.sm` ---- */
+/* `.btn.sm` existait seul depuis toujours : une puce d'action melant un bouton `sm` et un `select`
+   pleine taille se lisait comme deux rangees mal alignees. */
+.input.sm, .select.sm { padding: 6px 10px; font-size: 12.5px; width: auto; }
+
+/* ---- Assistance : la messagerie ---- */
+/* DEUX VOLETS, ET UNE HAUTEUR FIXE. La hauteur n'est pas une preference : c'est elle qui permet au
+   fil de defiler DANS son volet au lieu d'allonger la page. Un fil de quarante messages qui pousse
+   la page fait disparaitre la zone de saisie sous le pli — on repond a une conversation qu'on ne
+   voit plus. */
+/* `minmax(0, 1fr)` ET NON `1fr`. `1fr` vaut `minmax(auto, 1fr)`, et `auto` refuse de descendre
+   sous la largeur minimale du contenu : un message d'erreur colle sans espace — ce que contient
+   exactement une demande d'assistance — elargit la colonne au-dela de la fenetre et fait partir
+   TOUTE la page en defilement horizontal. Vu au navigateur, invisible partout ailleurs. */
+.msgr { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 14px; height: calc(100vh - 240px); min-height: 460px; }
+
+.msgr-liste { display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line);
+  border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+.msgr-liste-h { display: flex; gap: 8px; padding: 10px; border-bottom: 1px solid var(--line); }
+.msgr-liste-h .select { flex: 1; min-width: 0; }
+.msgr-liste-p { padding: 10px; border-top: 1px solid var(--line); }
+.msgr-liste-p .btn { width: 100%; justify-content: center; }
+.msgr-fils { flex: 1; overflow-y: auto; }
+
+/* Une ligne de fil est un BOUTON, pas un `div` cliquable : elle se traverse au clavier et
+   s'annonce comme actionnable. Le tableau qu'elle remplace etait des `<tr onClick>`, inatteignables
+   sans souris. */
+.msgr-fil { display: flex; gap: 10px; align-items: flex-start; width: 100%; text-align: left;
+  padding: 11px 12px; border: none; border-bottom: 1px solid var(--line); background: none;
+  color: var(--ink); font-family: inherit; cursor: pointer; }
+.msgr-fil:hover { background: var(--panel-2); }
+.msgr-fil.on { background: var(--accent-soft); }
+.msgr-fil-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.msgr-fil-h { display: flex; align-items: baseline; gap: 8px; }
+/* `min-width: 0` + `ellipsis` : sans lui, un sujet long elargit la colonne et pousse l'heure hors
+   du volet. */
+.msgr-fil-nom { flex: 1; min-width: 0; font-weight: 700; font-size: 13.5px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.msgr-fil-t { font-size: 11.5px; color: var(--ink-faint); white-space: nowrap; }
+.msgr-fil-apercu { font-size: 12.5px; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.msgr-fil-etats { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 2px; }
+
+.msgr-av { display: grid; place-items: center; width: 34px; height: 34px; flex: 0 0 34px; border-radius: 50%;
+  background: var(--accent-soft); color: var(--accent-2); font-size: 12px; font-weight: 800; }
+
+.msgr-vue { display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line);
+  border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+.msgr-vue-h { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.msgr-vue-t { flex: 1; min-width: 0; }
+.msgr-vue-t h3 { font-size: 15px; }
+.msgr-vue .banner { margin: 12px 16px 0; }
+
+.msgr-bulles { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+
+/* LE COTE DE LA BULLE PORTE UNE INFORMATION, ET C'EST LA SEULE QU'ON LIT SANS LIRE.
+   `max-width` a 72 % : une bulle pleine largeur ne se distingue plus d'un paragraphe, et le fil
+   redevient la liste de cartes qu'il remplace. */
+.msgr-b { max-width: 72%; align-self: flex-start; background: var(--panel-2); border-radius: 14px 14px 14px 4px; padding: 10px 13px; }
+.msgr-b.moi { align-self: flex-end; background: var(--accent); color: #fff; border-radius: 14px 14px 4px 14px; }
+.msgr-b.moi .msgr-b-t { color: rgba(255, 255, 255, .75); }
+/* La note interne ne se distingue pas par une etiquette qu'on peut manquer : elle change de fond
+   ET de bordure. C'est un texte que le demandeur ne doit jamais voir, et l'agent doit le savoir
+   sans lire. */
+.msgr-b.note { align-self: center; max-width: 86%; background: var(--warn-bg); color: var(--ink);
+  border: 1px dashed var(--warn); border-radius: 10px; }
+.msgr-b.note .msgr-b-t { color: var(--warn); }
+.msgr-b-a { font-size: 11.5px; font-weight: 700; color: var(--ink-soft); margin-bottom: 3px; }
+.msgr-b-n { font-size: 11px; font-weight: 800; color: var(--warn); letter-spacing: .02em; margin-bottom: 4px; }
+.msgr-b-c { font-size: 14px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+.msgr-b-t { font-size: 11px; color: var(--ink-faint); margin-top: 4px; text-align: right; }
+
+.msgr-cloture { align-self: center; font-size: 12.5px; color: var(--ink-faint); background: var(--panel-2);
+  border-radius: 999px; padding: 5px 14px; }
+
+.msgr-puces { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding: 10px 16px;
+  border-top: 1px solid var(--line); background: var(--panel-2); }
+.msgr-puces:empty { display: none; }
+
+.msgr-saisie { padding: 12px 16px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
+.msgr-saisie-p { display: flex; gap: 12px; align-items: center; }
+.msgr-saisie-p .btn { margin-left: auto; }
+.msgr-note-b { display: flex; gap: 6px; align-items: center; font-size: 12.5px; color: var(--ink-soft); }
+.msgr-saisie-close { padding: 14px 16px; border-top: 1px solid var(--line); font-size: 13px; color: var(--ink-faint); }
+
+/* SOUS 900 px, UN SEUL VOLET TIENT. On empile : la liste devient une bande courte au-dessus du fil,
+   plutot qu'une colonne de 320 px qui ne laisse rien au texte. */
+@media (max-width: 900px) {
+  .msgr { grid-template-columns: 1fr; height: auto; }
+  .msgr-fils { max-height: 240px; }
+  .msgr-bulles { min-height: 320px; }
+  .msgr-b { max-width: 88%; }
+}

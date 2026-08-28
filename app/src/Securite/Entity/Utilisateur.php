@@ -112,7 +112,9 @@ class Utilisateur implements UserInterface, PasswordAuthenticatedUserInterface
 {
     #[ORM\Id]
     #[ORM\Column(type: UuidType::NAME, unique: true)]
-    #[Groups(['utilisateur:read', 'me:read', 'affectation:read'])]
+    // `ticket:read` / `message:read` : sans eux, la relation part en IRI et l'ecran d'assistance
+    // ne peut pas dire QUI a ecrit — ni de quel cote poser la bulle.
+    #[Groups(['utilisateur:read', 'me:read', 'affectation:read', 'ticket:read', 'message:read'])]
     private Uuid $id;
 
     #[ORM\Column(length: 180)]
@@ -135,7 +137,10 @@ class Utilisateur implements UserInterface, PasswordAuthenticatedUserInterface
 
     #[ORM\Column(length: 180)]
     #[Assert\NotBlank]
-    #[Groups(['utilisateur:read', 'utilisateur:write', 'me:read'])]
+    // Le NOM voyage avec le ticket et le message, PAS l'adresse : lire une conversation demande de
+    // savoir qui parle, pas comment le joindre. `NotBlank` garantit qu'il y a toujours quelque
+    // chose a afficher — c'est ce qui permet de ne pas exposer l'e-mail en solution de repli.
+    #[Groups(['utilisateur:read', 'utilisateur:write', 'me:read', 'ticket:read', 'message:read'])]
     private string $nom = '';
 
     /**

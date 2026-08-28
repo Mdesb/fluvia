@@ -3,6 +3,7 @@ import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import Modal from '../components/Modal.jsx'
 import Tabs from '../components/Tabs.jsx'
+import MessagerieAssistance from '../components/MessagerieAssistance.jsx'
 
 /**
  * ASSISTANCE — l'écran qui manquait à un module entièrement construit.
@@ -23,14 +24,9 @@ import Tabs from '../components/Tabs.jsx'
  * décident de ce qui s'affiche, jamais un onglet à choisir soi-même.
  */
 
-const STATUTS = {
-  nouveau: { libelle: 'Nouveau', cls: 'warn' },
-  en_cours: { libelle: 'En cours', cls: 'good' },
-  en_attente_client: { libelle: 'En attente du demandeur', cls: 'mut' },
-  resolu: { libelle: 'Résolu', cls: 'good' },
-  ferme: { libelle: 'Fermé', cls: 'mut' },
-}
-
+// `STATUTS`, `STATUTS_POSABLES`, `quand` et `nomUtilisateur` ont suivi le tableau et la modale
+// qu'ils servaient : ils vivent desormais dans `components/MessagerieAssistance.jsx`. `PRIORITES`
+// reste ici, la modale d'ouverture d'une demande s'en sert encore.
 const PRIORITES = {
   basse: { libelle: 'Basse', cls: 'mut' },
   normale: { libelle: 'Normale', cls: 'mut' },
@@ -38,26 +34,7 @@ const PRIORITES = {
   critique: { libelle: 'Critique', cls: 'crit' },
 }
 
-// Les statuts qu'un agent peut poser lui-même. `ferme` en fait partie et demande un motif : une
-// fermeture sans raison écrite est une question à laquelle personne ne pourra répondre six mois plus
-// tard, quand le même incident reviendra.
-const STATUTS_POSABLES = ['en_cours', 'en_attente_client', 'resolu', 'ferme']
-
-function quand(v) {
-  if (!v) return '—'
-  const d = new Date(v)
-  if (Number.isNaN(d.getTime())) return '—'
-  return d.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
-}
-
-function nomUtilisateur(u) {
-  if (!u) return null
-  if (typeof u === 'string') return null // IRI seule : on ne devine pas un nom à partir d'une URL.
-  const complet = [u.prenom, u.nom].filter(Boolean).join(' ').trim()
-  return complet || u.email || null
-}
-
-export default function Support({ droits = [], etabActif }) {
+export default function Support({ droits = [], etabActif, me = null }) {
   // ⚠ `droits.includes(code)` NE VOIT PAS LE JOKER, et le garde-fou n°13 me l'a refuse a raison.
   //
   // Une permission peut arriver sous la forme `support.*` ou `*.lire` : une egalite stricte la
@@ -75,7 +52,9 @@ export default function Support({ droits = [], etabActif }) {
   const [filtrePriorite, setFiltrePriorite] = useState('')
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
-  const [ouvert, setOuvert] = useState(null)
+  // Plus d'etat `ouvert` : la messagerie tient elle-meme le fil choisi. Le garder ici en ferait
+  // deux sources pour une meme question — « quelle conversation regarde-t-on ? » — et deux
+  // sources finissent toujours par diverger.
   const [nouveau, setNouveau] = useState(false)
 
   const recharger = useCallback(async () => {
@@ -129,429 +108,39 @@ export default function Support({ droits = [], etabActif }) {
       {erreur && <div className="banner banner-error">{erreur}</div>}
 
       {onglet === 'tickets' ? (
-        <ListeTickets
+        <MessagerieAssistance
           tickets={tickets}
           chargement={chargement}
+          erreur={null}
           filtreStatut={filtreStatut}
-          onFiltrer={setFiltreStatut}
+          onFiltrerStatut={setFiltreStatut}
           filtrePriorite={filtrePriorite}
           onFiltrerPriorite={setFiltrePriorite}
-          onOuvrir={setOuvert}
+          agent={agent}
+          peut={peut}
+          me={me}
+          onRecharger={recharger}
+          onOuvrirNouveau={() => setNouveau(true)}
         />
       ) : (
         <BaseConnaissances droits={droits} etabActif={etabActif} />
       )}
 
-      <FicheTicket
-        id={ouvert}
-        agent={agent}
-        peut={peut}
-        onFermer={() => setOuvert(null)}
-        onChange={recharger}
-      />
-
       <OuvrirDemande
         open={nouveau}
         onFermer={() => setNouveau(false)}
-        onOuvert={(id) => {
+        onOuvert={() => {
+          // LA CONVERSATION QU'ON VIENT D'OUVRIR DOIT ETRE CELLE QU'ON LIT.
+          //
+          // La modale rendait l'identifiant pour ouvrir la fiche ; la messagerie choisit d'elle-meme
+          // le premier fil de la liste, et la liste est triee par derniere activite. Une demande
+          // qu'on vient d'ecrire EST la plus recente : recharger suffit, et evite un second etat a
+          // tenir a jour.
           setNouveau(false)
           recharger()
-          setOuvert(id)
         }}
       />
     </div>
-  )
-}
-
-function ListeTickets({ tickets, chargement, filtreStatut, onFiltrer, filtrePriorite, onFiltrerPriorite, onOuvrir }) {
-  return (
-    <div className="card">
-      <div className="card-h" style={{ gap: 8, flexWrap: 'wrap' }}>
-        <span>Demandes</span>
-
-        {/* LA PRIORITÉ AVANT LE STATUT, PARCE QUE C'EST LA QUESTION DU MATIN.
-            « Qu'est-ce qui est critique » se demande tous les jours ; « qu'est-ce qui est fermé »
-            se demande une fois par mois. L'ordre des filtres est l'ordre des questions. */}
-        <select
-          className="select sm"
-          style={{ marginLeft: 'auto', width: 180 }}
-          value={filtrePriorite}
-          onChange={(e) => onFiltrerPriorite(e.target.value)}
-        >
-          <option value="">Toutes priorités</option>
-          {Object.entries(PRIORITES).map(([cle, p]) => (
-            <option key={cle} value={cle}>{p.libelle}</option>
-          ))}
-        </select>
-
-        <select
-          className="select sm"
-          style={{ width: 200 }}
-          value={filtreStatut}
-          onChange={(e) => onFiltrer(e.target.value)}
-        >
-          <option value="">Tous les statuts</option>
-          {Object.entries(STATUTS).map(([cle, s]) => (
-            <option key={cle} value={cle}>{s.libelle}</option>
-          ))}
-        </select>
-      </div>
-
-      {chargement ? (
-        <div className="center" style={{ minHeight: 120 }}><div className="spinner" /></div>
-      ) : tickets.length === 0 ? (
-        // D54 : le fait sur la donnée d'abord. « Aucune demande » et « le filtre n'en laisse
-        // aucune » ne demandent pas la même action de la part du lecteur.
-        <div className="sub" style={{ textAlign: 'center', padding: 24 }}>
-          {filtreStatut || filtrePriorite
-            ? 'Aucune demande ne correspond à ces filtres. Les autres restent visibles en les retirant.'
-            : 'Aucune demande ouverte.'}
-        </div>
-      ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Sujet</th>
-                <th>Module</th>
-                <th>Priorité</th>
-                <th>Statut</th>
-                <th>Affecté à</th>
-                <th className="num">Dernière activité</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tickets.map((t) => (
-                <tr key={t.id} style={{ cursor: 'pointer' }} onClick={() => onOuvrir(t.id)}>
-                  <td><span className="nm">{t.sujet || '—'}</span></td>
-                  <td>{t.moduleConcerne || '—'}</td>
-                  <td>
-                    <span className={`badge ${PRIORITES[t.priorite]?.cls || 'mut'}`}>
-                      {PRIORITES[t.priorite]?.libelle || t.priorite}
-                    </span>
-                  </td>
-                  <td>
-                    <span className={`badge ${STATUTS[t.statut]?.cls || 'mut'}`}>
-                      {STATUTS[t.statut]?.libelle || t.statut}
-                    </span>
-                    {t.niveauAffectation && (
-                      <span className="badge mut" style={{ marginLeft: 6 }}>{t.niveauAffectation}</span>
-                    )}
-                  </td>
-                  <td>{nomUtilisateur(t.affecteA) || <span className="sub">non affecté</span>}</td>
-                  <td className="num">{quand(t.dateDerniereMaj)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  )
-}
-
-/**
- * La fiche d'une demande : son fil, et les gestes qu'on peut poser dessus.
- *
- * **Les actions absentes ne sont pas grisées, elles ne sont pas là.** Un agent N1 ne voit pas
- * « Réaffecter », qui appartient au N2 ; un demandeur ne voit ni l'un ni l'autre. C'est la règle du
- * dépôt — *une action sans objet est absente, jamais grisée* —, et l'exception admise (afficher avec
- * un motif) ne vaut que quand l'utilisateur a une raison de chercher l'action. Personne ne cherche
- * un bouton d'escalade qu'il n'a jamais eu.
- */
-function FicheTicket({ id, agent, peut, onFermer, onChange }) {
-  const [ticket, setTicket] = useState(null)
-  const [messages, setMessages] = useState([])
-  const [reponse, setReponse] = useState('')
-  const [note, setNote] = useState(false)
-  const [motif, setMotif] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [erreur, setErreur] = useState(null)
-  const [agents, setAgents] = useState([])
-  const [articles, setArticles] = useState([])
-  const [nouvelAgent, setNouvelAgent] = useState('')
-  const [article, setArticle] = useState('')
-
-  const charger = useCallback(async () => {
-    if (!id) return
-    setErreur(null)
-    try {
-      const [t, m] = await Promise.all([api.supportTicket(id), api.messagesTicket(id).catch(() => null)])
-      setTicket(t)
-      setMessages(m ? membres(m) : [])
-    } catch (e) {
-      setErreur(e.message || 'La demande n’a pas pu être relue.')
-    }
-  }, [id])
-
-  useEffect(() => {
-    setTicket(null)
-    setMessages([])
-    setReponse('')
-    setNote(false)
-    setMotif('')
-    setNouvelAgent('')
-    setArticle('')
-    charger()
-  }, [charger])
-
-  // LES DEUX LISTES QUI RENDENT LES ACTIONS POSSIBLES.
-  //
-  // Elles échouent en silence : réaffecter et rattacher un article sont des gestes de confort. Si
-  // l'une des listes ne charge pas, le reste de la fiche — répondre, fermer, escalader — doit
-  // continuer à fonctionner. Un écran qui refuse de s'ouvrir parce qu'un menu déroulant secondaire
-  // n'a pas répondu punit l'utilisateur pour une panne qui ne le concerne pas.
-  useEffect(() => {
-    if (!id) return undefined
-    let annule = false
-    api.utilisateurs()
-      .then((r) => { if (!annule) setAgents(membres(r)) })
-      .catch(() => {})
-    api.articlesAide()
-      .then((r) => { if (!annule) setArticles(membres(r)) })
-      .catch(() => {})
-    return () => { annule = true }
-  }, [id])
-
-  async function agir(action) {
-    setBusy(true)
-    setErreur(null)
-    try {
-      await action()
-      await charger()
-      onChange?.()
-    } catch (e) {
-      setErreur(e.message || 'L’action a échoué.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const statut = ticket?.statut
-
-  return (
-    <Modal open={!!id} onClose={onFermer} titre={ticket?.sujet || 'Demande'} taille="lg">
-      {!ticket ? (
-        <div className="center" style={{ minHeight: 120 }}><div className="spinner" /></div>
-      ) : (
-        <div style={{ display: 'grid', gap: 16 }}>
-          {erreur && <div className="banner banner-error">{erreur}</div>}
-
-          <div className="fiche-stats">
-            <div>
-              <div className="st-lib">Statut</div>
-              <div className="st-val">{STATUTS[statut]?.libelle || statut}</div>
-            </div>
-            <div>
-              <div className="st-lib">Priorité</div>
-              <div className="st-val">{PRIORITES[ticket.priorite]?.libelle || ticket.priorite}</div>
-            </div>
-            <div>
-              <div className="st-lib">Module</div>
-              <div className="st-val">{ticket.moduleConcerne || '—'}</div>
-            </div>
-            <div>
-              <div className="st-lib">Affecté à</div>
-              <div className="st-val">{nomUtilisateur(ticket.affecteA) || '—'}</div>
-            </div>
-          </div>
-
-          <div className="card" style={{ padding: 14 }}>
-            <div className="sub" style={{ marginBottom: 6 }}>
-              Ouvert le {quand(ticket.dateCreation)}
-              {nomUtilisateur(ticket.demandeur) ? ` par ${nomUtilisateur(ticket.demandeur)}` : ''}
-            </div>
-            <div style={{ whiteSpace: 'pre-wrap' }}>{ticket.description}</div>
-          </div>
-
-          <div>
-            <div className="st-lib" style={{ marginBottom: 8 }}>Échanges</div>
-            {messages.length === 0 ? (
-              <div className="sub">Aucun échange pour l&rsquo;instant.</div>
-            ) : (
-              <div style={{ display: 'grid', gap: 10 }}>
-                {messages.map((m) => (
-                  <div
-                    key={m.id}
-                    className="card"
-                    style={{
-                      padding: 12,
-                      // Une note interne ne se distingue pas par une étiquette qu'on peut manquer :
-                      // elle change de fond. C'est un texte que le demandeur ne doit jamais voir, et
-                      // l'agent doit le savoir sans lire.
-                      borderLeft: m.noteInterne ? '3px solid var(--warn)' : '3px solid transparent',
-                    }}
-                  >
-                    <div className="sub" style={{ marginBottom: 4 }}>
-                      {nomUtilisateur(m.auteur) || 'Auteur inconnu'} · {quand(m.dateCreation)}
-                      {m.noteInterne && <span className="badge warn" style={{ marginLeft: 8 }}>note interne</span>}
-                    </div>
-                    <div style={{ whiteSpace: 'pre-wrap' }}>{m.contenu}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {statut !== 'ferme' && (
-            <div style={{ display: 'grid', gap: 8 }}>
-              <textarea
-                className="input"
-                rows={3}
-                placeholder="Votre réponse…"
-                value={reponse}
-                onChange={(e) => setReponse(e.target.value)}
-              />
-              <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                {agent && (
-                  <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13 }}>
-                    <input type="checkbox" checked={note} onChange={(e) => setNote(e.target.checked)} />
-                    Note interne (invisible du demandeur)
-                  </label>
-                )}
-                <button
-                  className="btn primary sm"
-                  type="button"
-                  style={{ marginLeft: 'auto' }}
-                  disabled={busy || reponse.trim() === ''}
-                  onClick={() =>
-                    agir(async () => {
-                      await api.repondreTicket(ticket.id, reponse.trim(), note)
-                      setReponse('')
-                      setNote(false)
-                    })
-                  }
-                >
-                  Répondre
-                </button>
-              </div>
-            </div>
-          )}
-
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', borderTop: '1px solid var(--line)', paddingTop: 14 }}>
-            {agent && !ticket.affecteA && (
-              <button className="btn sm" type="button" disabled={busy} onClick={() => agir(() => api.prendreEnChargeTicket(ticket.id))}>
-                Prendre en charge
-              </button>
-            )}
-
-            {agent && statut !== 'ferme' && (
-              <select
-                className="select sm"
-                style={{ width: 200 }}
-                value=""
-                disabled={busy}
-                onChange={(e) => {
-                  const cible = e.target.value
-                  if (!cible) return
-                  // Une fermeture sans motif ne se refuse pas en silence : on demande, et si la
-                  // demande reste vide on n'envoie rien plutôt que de fermer sans raison.
-                  if (cible === 'ferme' && motif.trim() === '') {
-                    setErreur('Indiquez le motif de fermeture avant de fermer la demande.')
-                    return
-                  }
-                  agir(() => api.changerStatutTicket(ticket.id, cible, cible === 'ferme' ? motif.trim() : null))
-                }}
-              >
-                <option value="">Changer le statut…</option>
-                {STATUTS_POSABLES.filter((s) => s !== statut).map((s) => (
-                  <option key={s} value={s}>{STATUTS[s].libelle}</option>
-                ))}
-              </select>
-            )}
-
-            {agent && statut !== 'ferme' && (
-              <input
-                className="input sm"
-                style={{ width: 240 }}
-                placeholder="Motif de fermeture"
-                value={motif}
-                onChange={(e) => setMotif(e.target.value)}
-              />
-            )}
-
-            {peut('support.traiter_ticket_n1') && ticket.niveauAffectation !== 'N2' && statut !== 'ferme' && (
-              <button className="btn sm" type="button" disabled={busy} onClick={() => agir(() => api.escaladerTicket(ticket.id))}>
-                Escalader en N2
-              </button>
-            )}
-
-            {statut === 'ferme' && (
-              <button className="btn sm" type="button" disabled={busy} onClick={() => agir(() => api.rouvrirTicket(ticket.id))}>
-                Rouvrir
-              </button>
-            )}
-          </div>
-
-          {/* RÉAFFECTER — le geste qui manquait quand la personne en charge n'est pas là.
-              Escalader change de NIVEAU ; réaffecter change de PERSONNE. Sans lui, une demande
-              affectée à quelqu'un en congé n'avait qu'une sortie : l'escalade, qui ment sur la
-              raison. Un mauvais motif dans un historique vaut une statistique fausse. */}
-          {peut('support.traiter_ticket_n2') && statut !== 'ferme' && agents.length > 0 && (
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              <span className="sub">Réaffecter à</span>
-              <select
-                className="input sm"
-                style={{ width: 240 }}
-                value={nouvelAgent}
-                onChange={(e) => setNouvelAgent(e.target.value)}
-              >
-                <option value="">Choisir un agent…</option>
-                {agents.map((u) => (
-                  <option key={u.id} value={`/api/utilisateurs/${u.id}`}>{u.nom || u.email}</option>
-                ))}
-              </select>
-              <button
-                className="btn sm"
-                type="button"
-                disabled={busy || nouvelAgent === ''}
-                onClick={() => agir(async () => {
-                  await api.reaffecterTicket(ticket.id, nouvelAgent)
-                  setNouvelAgent('')
-                })}
-              >
-                Réaffecter
-              </button>
-            </div>
-          )}
-
-          {/* RATTACHER L'ARTICLE QUI RÉPOND — c'est ce qui ferme la boucle entre les deux moitiés du
-              module. Une réponse écrite trois fois dans trois demandes est un article qui manque ;
-              un article qu'aucune demande ne cite est un article que personne n'a trouvé utile. */}
-          {agent && statut !== 'ferme' && articles.length > 0 && (
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              <span className="sub">Article de réponse</span>
-              <select
-                className="input sm"
-                style={{ width: 280 }}
-                value={article}
-                onChange={(e) => setArticle(e.target.value)}
-              >
-                <option value="">Choisir un article…</option>
-                {articles.map((a) => (
-                  <option key={a.id} value={a.id}>{a.titre}</option>
-                ))}
-              </select>
-              <button
-                className="btn sm"
-                type="button"
-                disabled={busy || article === ''}
-                onClick={() => agir(async () => {
-                  await api.lierArticleTicket(ticket.id, article)
-                  setArticle('')
-                })}
-              >
-                Rattacher
-              </button>
-            </div>
-          )}
-
-          {ticket.motifFermeture && (
-            <div className="sub">Fermée le {quand(ticket.dateFermeture)} — {ticket.motifFermeture}</div>
-          )}
-        </div>
-      )}
-    </Modal>
   )
 }
 

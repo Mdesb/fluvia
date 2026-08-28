@@ -264,7 +264,9 @@ export default function App() {
       {onglet === 'catalogue' && <Catalogue etabActif={etabActif} cible={cible} onCibleConsommee={() => setCible(null)} droits={droits} />}
       {onglet === 'reservation' && <Reservation etabActif={etabActif} droits={droits} session={session} />}
       {onglet === 'supervision' && <Supervision etabActif={etabActif} />}
-      {onglet === 'support' && <Support droits={droits} etabActif={etabActif} />}
+      {/* `me` porte l'identifiant du lecteur, et c'est ce qui donne un COTE aux bulles : sans lui
+          la messagerie ne sait pas lesquelles sont les siennes et les aligne toutes a gauche. */}
+      {onglet === 'support' && <Support droits={droits} etabActif={etabActif} me={me} />}
       {onglet === 'autorisations' && <Autorisations droits={droits} />}
       {onglet === 'legal' && <MentionsLegales etabActif={etabActif} droits={droits} />}
       {onglet === 'affaires' && <Pipeline etabActif={etabActif} droits={droits} onNaviguer={naviguer} />}

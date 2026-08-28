@@ -89,6 +89,57 @@ final class AssistanceDeSocleTest extends SupportApiTestCase
     }
 
     /**
+     * QUI PARLE — le nom voyage avec le ticket et avec le message.
+     *
+     * `MessageTicket.auteur` et `TicketSupport.demandeur` sont des relations : sans groupe de
+     * lecture commun, API Platform les serialise en IRI (`/api/utilisateurs/<uuid>`). L'écran
+     * recevait donc une URL là où il attendait un nom, et affichait « Auteur inconnu » sur chaque
+     * bulle de l'interlocuteur — un défaut qui préexistait à la messagerie, mais qu'un tableau
+     * rendait invisible et qu'une conversation écrit vingt fois.
+     *
+     * ⚠ Ce test vérifie aussi CE QUI N'EST PAS EXPOSÉ. Le nom suffit à lire une conversation ;
+     * l'adresse e-mail n'y ajoute rien et la file d'un agent N2 traverse plusieurs établissements.
+     * Sans cette seconde moitié, personne ne remarquerait qu'un `utilisateur:read` ajouté un jour
+     * par commodité fait voyager les adresses avec les tickets.
+     */
+    public function testLeNomDeLAuteurVoyageAvecLeTicketEtLeMessage(): void
+    {
+        [$client, $entete] = $this->connecte(SupportFixtures::EMAIL_SANS_ROLE_SUPPORT, SupportFixtures::ETAB_A_NOM);
+
+        $ticket = $client->request('POST', '/api/support/tickets', $entete + [
+            'json' => [
+                'sujet' => 'Qui parle ?',
+                'description' => 'Le fil doit savoir nommer celui qui écrit.',
+                'priorite' => 'normale',
+                'moduleConcerne' => 'socle',
+            ],
+        ])->toArray();
+        self::assertResponseIsSuccessful();
+
+        // Le demandeur du ticket est un OBJET nommé, pas une IRI.
+        self::assertIsArray($ticket['demandeur'], 'Le demandeur est sérialisé en IRI : l’écran ne peut pas le nommer.');
+        self::assertSame('Compte ordinaire', $ticket['demandeur']['nom']);
+        self::assertArrayHasKey('id', $ticket['demandeur']);
+        self::assertArrayNotHasKey('email', $ticket['demandeur']);
+
+        $client->request('POST', '/api/support/tickets/' . $ticket['id'] . '/messages', $entete + [
+            'json' => ['contenu' => 'Un complément d’information.', 'noteInterne' => false],
+        ]);
+        self::assertResponseIsSuccessful();
+
+        $messages = $client->request('GET', '/api/support/tickets/' . $ticket['id'] . '/messages', $entete)->toArray();
+        self::assertResponseIsSuccessful();
+        self::assertNotEmpty($messages['member'], 'Sans message, les assertions suivantes seraient vraies sans rien prouver.');
+
+        $auteur = $messages['member'][0]['auteur'];
+        self::assertIsArray($auteur, 'L’auteur du message est sérialisé en IRI : la bulle affichera « Auteur inconnu ».');
+        self::assertSame('Compte ordinaire', $auteur['nom']);
+        // L'identifiant est ce qui donne un CÔTÉ à la bulle : sans lui, tout s'aligne à gauche.
+        self::assertArrayHasKey('id', $auteur);
+        self::assertArrayNotHasKey('email', $auteur);
+    }
+
+    /**
      * OUVRIR L'ASSISTANCE À TOUS N'OUVRE PAS LA FILE À TOUS.
      *
      * La question a été posée en revue : `support.lire` accordé à tout le monde donne-t-il la file
