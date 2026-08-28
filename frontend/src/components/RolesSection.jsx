@@ -26,6 +26,7 @@ import Modal from './Modal.jsx'
 export default function RolesSection({ droits, peutGerer, onChange }) {
   const [roles, setRoles] = useState([])
   const [permissions, setPermissions] = useState([])
+  const [erreurEdition, setErreurEdition] = useState(null)
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
@@ -66,6 +67,7 @@ export default function RolesSection({ droits, peutGerer, onChange }) {
   function ouvrir(role) {
     setSucces(null)
     setErreur(null)
+    setErreurEdition(null)
     setEdition({
       role,
       nom: role?.nom || '',
@@ -93,6 +95,7 @@ export default function RolesSection({ droits, peutGerer, onChange }) {
   async function enregistrer(e) {
     e.preventDefault()
     setErreur(null)
+    setErreurEdition(null)
     setEnCours(true)
     try {
       const corps = {
@@ -106,7 +109,7 @@ export default function RolesSection({ droits, peutGerer, onChange }) {
       await recharger()
       onChange?.()
     } catch (err) {
-      setErreur(err.message || "L'enregistrement n'a pas abouti.")
+      setErreurEdition(err.message || "L'enregistrement n'a pas abouti.")
     } finally {
       setEnCours(false)
     }
@@ -176,6 +179,21 @@ export default function RolesSection({ droits, peutGerer, onChange }) {
               {roles.map((r) => {
                 const perms = r.permissions || []
                 const modules = [...new Set(perms.map((p) => p.module))].sort()
+                // UN RÔLE QUI PORTE LE JOKER NE SE COMPTE PAS EN LIGNES.
+                //
+                // « Administrateur d'établissement » affichait « 2 » dans la colonne Droits : c'est
+                // le nombre exact de lignes de permission qu'il porte, et c'est trompeur — l'une des
+                // deux est `*` × `*`, qui donne TOUT. Une session en revue avec Maxime a lu ce 2 et
+                // en a conclu qu'un rôle modèle était presque vide alors qu'il est le plus puissant
+                // du référentiel.
+                //
+                // Un nombre est une réponse plus crédible qu'un mot, donc plus dangereux quand il
+                // est faux. La colonne dit désormais « tous » et garde le décompte en infobulle.
+                const joker = perms.some((p) => (p.module === '*' && p.action === '*') || p.code === '*')
+                // Un rôle MODÈLE vide est un piège silencieux : on ne peut que le dupliquer, et la
+                // copie ne donne rien non plus. Le dire ici évite d'attribuer un rôle qui n'ouvre
+                // aucune porte et de chercher ensuite pourquoi l'agent ne voit rien.
+                const modeleVide = r.estModele && perms.length === 0
                 return (
                   <tr key={r.id}>
                     <td>
@@ -189,13 +207,34 @@ export default function RolesSection({ droits, peutGerer, onChange }) {
                           modèle
                         </span>
                       )}
+                      {modeleVide && (
+                        <div className="sub" style={{ color: 'var(--crit)' }}>
+                          modèle vide : sa copie n’ouvrira rien non plus
+                        </div>
+                      )}
                     </td>
-                    <td className="num">{perms.length}</td>
+                    <td className="num">
+                      {joker ? (
+                        <span title={`${perms.length} ligne(s) de permission, dont le joker « tout sur tout ».`}>tous</span>
+                      ) : (
+                        perms.length
+                      )}
+                    </td>
                     <td>
+                      {/* « TOUS LES MODULES » COUVRAIT DEUX CHOSES TRÈS DIFFÉRENTES, EN ROUGE.
+                          `*` × `lire` et `*` × `*` portent tous deux le module joker, et la même
+                          pastille rouge les confondait. Lire tout le logiciel et pouvoir tout y
+                          faire n'appellent pas la même alerte : un rôle « Lecture seule » légitime
+                          s'affichait aussi alarmant qu'un administrateur.
+                          Le rouge est réservé à ce qui écrit partout. */}
                       {modules.length === 0 ? (
                         <span className="sub">aucun — ce rôle ne donne rien</span>
+                      ) : joker ? (
+                        <span className="badge crit" title="Ce rôle peut TOUT faire, sur tous les modules, y compris ceux qui seront ajoutés plus tard.">
+                          tout le logiciel
+                        </span>
                       ) : modules.includes('*') ? (
-                        <span className="badge crit" title="Ce rôle porte un droit sur tous les modules.">
+                        <span className="badge warn" title="Ce rôle porte un droit transversal (par exemple lire tous les modules), mais pas le pouvoir de tout faire.">
                           tous les modules
                         </span>
                       ) : (
@@ -230,12 +269,24 @@ export default function RolesSection({ droits, peutGerer, onChange }) {
 
       <Modal
         open={!!edition}
-        onClose={() => setEdition(null)}
+        onClose={() => { setEdition(null); setErreurEdition(null) }}
         titre={edition?.role ? `Modifier — ${edition.role.nom}` : 'Nouveau rôle'}
         taille="lg"
       >
         {edition && (
           <form onSubmit={enregistrer}>
+            {/* LE REFUS DU SERVEUR S'AFFICHAIT DERRIÈRE LA MODALE RESTÉE OUVERTE.
+                Maxime : « j'ai changé les droits d'un rôle, et je ne peux plus le faire maintenant. »
+                L'erreur était bien récupérée — et écrite dans le bandeau de la CARTE, c'est-à-dire
+                sous la fenêtre ouverte. On cliquait « Enregistrer », rien ne bougeait, et
+                l'explication était cachée.
+                Or le message du serveur est précisément celui qui débloque : « ce rôle est la seule
+                source du droit d'administration de l'établissement X — désignez un remplaçant avant
+                de retirer ce droit. » Il ne dit pas non, il dit dans quel ordre faire.
+                Une modale doit porter l'erreur qui l'empêche de se fermer. Sinon on ferme la modale
+                pour lire pourquoi on n'a pas pu la valider. */}
+            {erreurEdition && <div className="banner banner-error">{erreurEdition}</div>}
+
             <div className="field">
               <label htmlFor="rl-nom">Nom du rôle *</label>
               <input

@@ -51,6 +51,10 @@ const Agenda = lazy(() => import('./pages/Agenda.jsx'))
 const Sepa = lazy(() => import('./pages/Sepa.jsx'))
 const Recouvrement = lazy(() => import('./pages/Recouvrement.jsx'))
 const Cautions = lazy(() => import('./pages/Cautions.jsx'))
+// Differe pour la meme raison : un caissier n'enrole pas de terminal et ne bloque pas de badge.
+const Acces = lazy(() => import('./pages/Acces.jsx'))
+
+import { lireHash, ecrireHash } from './api/url.js'
 
 // Un compte est « administrateur » s'il porte l'un des droits d'administration du socle sur
 // l'établissement actif (matérialisés dans `me.droits`). Gouverne l'atterrissage sur le tableau
@@ -69,7 +73,39 @@ export default function App() {
   const [me, setMe] = useState(null)
   const [etablissements, setEtablissements] = useState([])
   const [etabActif, setEtabActif] = useState(etablissementStore.get() || '')
-  const [onglet, setOnglet] = useState('caisse')
+  // L'ONGLET VIT DANS L'URL, ET C'EST CE QUI REND LE RESTE UTILE.
+  //
+  // L'application ne routait sur rien : `onglet` était un état de composant, l'URL ne bougeait
+  // jamais, et un rechargement ramenait toujours à la caisse. Mettre les filtres d'un écran dans
+  // l'URL sans y mettre l'écran lui-même n'aurait servi à rien -- on serait revenu sur la caisse
+  // avec des filtres pointant une liste qu'on ne regarde pas.
+  //
+  // Le jeton dure une heure. Ce que ça change concrètement : après une expiration de session, on
+  // se reconnecte et on retombe sur l'écran qu'on avait sous les yeux, filtres compris, au lieu de
+  // tout refaire. Voir `api/url.js`.
+  const [onglet, setOngletBrut] = useState(() => lireHash().onglet || 'caisse')
+  const setOnglet = useCallback((id) => {
+    setOngletBrut((precedent) => {
+      // Changer d'écran abandonne les paramètres du précédent : ils ne veulent rien dire ailleurs.
+      if (id !== precedent) ecrireHash(id, {})
+      return id
+    })
+  }, [])
+
+  // Le bouton « Précédent » du navigateur change le hash sans rien démonter.
+  useEffect(() => {
+    function surChangement() {
+      const cible = lireHash().onglet
+      if (cible) setOngletBrut(cible)
+    }
+    window.addEventListener('hashchange', surChangement)
+    window.addEventListener('popstate', surChangement)
+    return () => {
+      window.removeEventListener('hashchange', surChangement)
+      window.removeEventListener('popstate', surChangement)
+    }
+  }, [])
+
   // Enregistrement à ouvrir en arrivant sur l'écran, quand la navigation vient d'une recherche.
   // Consommé puis oublié par l'écran destinataire : le garder ferait rouvrir la même fiche à chaque
   // retour sur l'onglet, ce qui est déroutant et impossible à annuler.
@@ -168,16 +204,28 @@ export default function App() {
   // caisse). Appliqué une seule fois par session, après le 1er chargement du profil.
   useEffect(() => {
     if (me && !landingApplique) {
-      if (estAdministrateur(me)) setOnglet('dashboard')
+      // Une URL qui nomme un écran l'emporte sur l'atterrissage par défaut : sans cette garde, on
+      // ouvre un lien vers une fiche client et on arrive sur le tableau de bord.
+      if (estAdministrateur(me) && !lireHash().onglet) setOnglet('dashboard')
       setLandingApplique(true)
     }
   }, [me, landingApplique])
 
   // Si l'onglet courant dépend d'une capacité ou d'une permission désormais absente, retour Caisse.
   useEffect(() => {
-    const caps = me?.capacitesActives || []
-    const droits = me?.droits || []
-    const capRequise = { reservation: 'reservation', supervision: 'controle_acces', boutique: 'boutique_en_ligne' }
+    // TANT QUE LE PROFIL N'EST PAS CHARGÉ, ON NE SAIT RIEN — ET NE RIEN SAVOIR N'EST PAS UN REFUS.
+    //
+    // Défaut introduit en mettant l'onglet dans l'URL, et trouvé en ouvrant `#facturation` : `me`
+    // vaut `null` pendant le premier rendu, donc `droits` vaut `[]`, donc cette garde concluait
+    // « permission absente » et renvoyait à la caisse AVANT que le serveur ait répondu. Le lien
+    // profond ne marchait que pour les écrans sans permission requise.
+    //
+    // Invisible avant, parce que l'onglet de départ était déjà la caisse : le renvoi ne changeait
+    // rien. C'est exactement pourquoi un défaut dormant se réveille au premier usage nouveau.
+    if (!me) return
+    const caps = me.capacitesActives || []
+    const droits = me.droits || []
+    const capRequise = { reservation: 'reservation', supervision: 'controle_acces', acces: 'controle_acces', boutique: 'boutique_en_ligne' }
     const permRequise = {
       piscine: 'piscine.lire', patinoire: 'patinoire.lire', padel: 'padel.lire',
       musee: 'musee.lire', comptabilite: 'compta.lire', personnel: 'personnel.lire',
@@ -203,6 +251,16 @@ export default function App() {
     setEtabActif(id)
     etablissementStore.set(id)
   }
+
+  // METTRE UN MODULE EN SERVICE CHANGE LE MENU, ET LE MENU VIENT DE `/me`.
+  //
+  // La colonne de gauche est construite sur `me.capacitesActives`. Sans ce rappel, on met
+  // « Réservation » en service depuis les paramètres, le serveur enregistre, et l'entrée
+  // n'apparaît qu'au prochain rechargement complet de la page — l'action a l'air de n'avoir rien
+  // fait, ce qui est exactement la conclusion qu'on veut éviter sur un écran d'activation.
+  const rechargerMe = useCallback(async () => {
+    setMe(await api.me())
+  }, [])
 
   // Session de caisse ouverte sur le périmètre courant (partagée entre Caisse et l'écran Session/Z).
   const rechargerSession = useCallback(async () => {
@@ -274,6 +332,7 @@ export default function App() {
       {onglet === 'catalogue' && <Catalogue etabActif={etabActif} cible={cible} onCibleConsommee={() => setCible(null)} droits={droits} />}
       {onglet === 'reservation' && <Reservation etabActif={etabActif} droits={droits} session={session} />}
       {onglet === 'supervision' && <Supervision etabActif={etabActif} />}
+      {onglet === 'acces' && <Acces etabActif={etabActif} droits={droits} />}
       {onglet === 'agenda' && <Agenda droits={droits} etabActif={etabActif} />}
       {/* `me` porte l'identifiant du lecteur, et c'est ce qui donne un CÔTÉ aux bulles : sans lui
           la messagerie ne sait pas lesquelles sont les siennes et les aligne toutes à gauche. */}
@@ -293,7 +352,7 @@ export default function App() {
       {onglet === 'sepa' && <Sepa etabActif={etabActif} droits={droits} />}
       {onglet === 'recouvrement' && <Recouvrement etabActif={etabActif} droits={droits} />}
       {onglet === 'caution' && <Cautions etabActif={etabActif} droits={droits} />}
-      {onglet === 'facturation' && <Facturation etabActif={etabActif} droits={droits} />}
+      {onglet === 'facturation' && <Facturation etabActif={etabActif} droits={droits} onNaviguer={naviguer} />}
       {onglet === 'clients' && <Clients etabActif={etabActif} cible={cible} onCibleConsommee={() => setCible(null)} droits={droits} />}
       {onglet === 'boutique' && <Boutique etabActif={etabActif} droits={droits} />}
       {onglet === 'piscine' && <Piscine etabActif={etabActif} droits={droits} />}
@@ -304,7 +363,7 @@ export default function App() {
       {onglet === 'stock' && <Stock etabActif={etabActif} droits={droits} />}
       {onglet === 'finance' && <Finance etabActif={etabActif} droits={droits} />}
       {onglet === 'parametres' && (
-        <Parametres etabActif={etabActif} etablissements={etablissements} droits={droits} />
+        <Parametres etabActif={etabActif} etablissements={etablissements} droits={droits} onCapacitesChangees={rechargerMe} />
       )}
       </Suspense>
       </FrontiereErreur>

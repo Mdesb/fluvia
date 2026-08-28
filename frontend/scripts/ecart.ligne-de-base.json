@@ -29,20 +29,23 @@
         "Le script REFUSE de le relever. Un plafond qui remonte n est plus un cliquet, c est un",
         "compteur."
     ],
-    "plafond": 739,
+    "plafond": 714,
     "releve": {
         "exposees": 1142,
         "sansEcran": 0,
         "attendues": 1142,
-        "appelees": 407,
-        "atteignables": 403,
-        "inatteignables": 739,
+        "appelees": 435,
+        "atteignables": 428,
+        "inatteignables": 714,
         "orphelins": [
             "comptesComptables  (back-office)",
+            "factureDepuisVente  (back-office)",
             "grilleTarifaires  (back-office)",
+            "majFactureDirecte  (back-office)",
             "padelTournois  (back-office)",
             "pieceCommerciale  (back-office)",
-            "planningOuverture  (back-office)"
+            "planningOuverture  (back-office)",
+            "verifierChaineFactures  (back-office)"
         ],
         "declares": [],
         "marqueursSansRaison": [],
@@ -50,8 +53,8 @@
         "parFront": [
             {
                 "nom": "back-office",
-                "appelees": 386,
-                "atteignables": 382
+                "appelees": 414,
+                "atteignables": 407
             },
             {
                 "nom": "boutique en ligne",
@@ -73,6 +76,10 @@
                 16
             ],
             [
+                "patinoire",
+                16
+            ],
+            [
                 "editor",
                 14
             ],
@@ -81,8 +88,8 @@
                 14
             ],
             [
-                "patinoire",
-                13
+                "produits",
+                11
             ],
             [
                 "ventes",
@@ -93,7 +100,7 @@
                 11
             ],
             [
-                "produits",
+                "factures",
                 10
             ],
             [
@@ -103,6 +110,10 @@
             [
                 "opening",
                 10
+            ],
+            [
+                "acces",
+                9
             ],
             [
                 "billing",
@@ -119,6 +130,10 @@
             [
                 "padel",
                 7
+            ],
+            [
+                "etablissements",
+                6
             ],
             [
                 "roles",
@@ -163,10 +178,6 @@
             [
                 "calendar",
                 5
-            ],
-            [
-                "etablissements",
-                4
             ],
             [
                 "customer",
@@ -214,6 +225,10 @@
             ],
             [
                 "point",
+                3
+            ],
+            [
+                "caisses",
                 3
             ],
             [
@@ -313,10 +328,6 @@
                 2
             ],
             [
-                "caisses",
-                1
-            ],
-            [
                 "session",
                 1
             ],
@@ -349,10 +360,6 @@
                 1
             ],
             [
-                "acces",
-                1
-            ],
-            [
                 "supports",
                 1
             ],
@@ -362,6 +369,14 @@
             ],
             [
                 "passages",
+                1
+            ],
+            [
+                "droit",
+                1
+            ],
+            [
+                "declaration",
                 1
             ],
             [

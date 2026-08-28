@@ -72,6 +72,15 @@ const MOTS = {
   tripode: 'Tripode',
   lecteur: 'Lecteur',
 
+  // --- États d'une caisse ---
+  //
+  // « Sécurisée » est le mot du modèle, pas celui de l'exploitant : c'est l'état NORMAL d'une caisse
+  // fermée, celle qui exige le code régisseur pour rouvrir. Affiché tel quel, il se lit comme un
+  // incident de sécurité -- et il l'était dans le menu d'ouverture de session, où chaque caisse
+  // s'annonçait « securisee » sans accent.
+  securisee: 'Au repos',
+  en_fermeture: 'En fermeture',
+
   // --- Statuts courants ---
   actif: 'Actif',
   inactif: 'Inactif',
@@ -148,6 +157,12 @@ const MOTS = {
   bon_commande_emis: 'Bon de commande émis',
   mandat_emis: 'Mandat émis',
   paye: 'Payé',
+
+  // --- Couverture d'un créneau du roster ---
+  // Trois valeurs, et le mot compte : « conflit » sonne comme un chevauchement d'horaires alors
+  // qu'il désigne une qualification manquante ou périmée. On le dit.
+  sous_couvert: 'Sous-couvert',
+  conflit: 'Qualification en défaut',
 
   // --- Recouvrement ---
   representation: 'Représentation bancaire',
