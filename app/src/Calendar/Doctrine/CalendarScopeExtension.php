@@ -98,12 +98,16 @@ final readonly class CalendarScopeExtension implements QueryCollectionExtensionI
             return;
         }
 
-        // ⚠ LES PARENTHÈSES SONT ÉCRITES À LA MAIN, ET ELLES SONT LA CLAUSE ENTIÈRE.
+        // Les parenthèses sont écrites à la main POUR LE LECTEUR, pas comme garde-fou : Doctrine
+        // les ajoute de toute façon. `Expr\Composite::processQueryPart` enveloppe toute partie
+        // contenant ' OR ' ou ' AND ' (correctif DDC-1237). Vérifié en les retirant — le DQL produit
+        // reste `... = :calendar_active AND (owner IS NULL OR IDENTITY(owner) = :calendar_owner)`.
         //
-        // `andWhere('A OR B')` juxtapose la chaîne aux autres conditions avec des AND. Sans
-        // parenthèses, `etab = X AND A OR B` se lit `(etab = X AND A) OR B` — et `B` seul suffit
-        // alors à faire passer une ligne, quel que soit son établissement. Le cloisonnement
-        // tomberait sans qu'aucune requête n'échoue.
+        // ⚠ CORRECTION D'UN AVERTISSEMENT QUE J'AVAIS ÉCRIT ICI. Il annonçait que leur chute ferait
+        // tomber le cloisonnement en silence. C'était faux, et un commentaire faux coûte plus cher
+        // qu'un commentaire absent : il oriente la relecture vers un danger inexistant, donc il en
+        // détourne. Ce qui porte le cloisonnement, c'est la borne d'ÉTABLISSEMENT juste au-dessus —
+        // vérifié en la retirant, `testMonPropreEvenementChezLeVoisinResteInvisible` rougit.
         $queryBuilder
             ->andWhere(sprintf('(%s.owner IS NULL OR IDENTITY(%s.owner) = :calendar_owner)', $alias, $alias))
             ->setParameter('calendar_owner', $utilisateur->getId(), 'uuid')

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Tests\Calendar;
 
 use App\DataFixtures\SocleFixtures;
+use App\Calendar\Entity\CalendarEvent;
+use App\Calendar\Enum\CalendarEventType;
 use App\Organisation\Entity\Etablissement;
 use App\Personnel\Entity\AffectationTravail;
 use App\Personnel\Entity\CreneauTravail;
@@ -148,7 +150,12 @@ final class CalendarTest extends AccesApiTestCase
 
         [$admin, $enteteAdmin] = $this->adminSurA();
 
-        foreach (['site', 'moi'] as $portee) {
+        // « mine » et non « moi » : le fournisseur lit `scope === 'mine' ? 'mine' : 'site'`, donc
+        // « moi » retombait sur « site » et cette boucle passait DEUX FOIS par la portée du site.
+        // Elle annonçait vérifier l'agenda personnel sans le vérifier. Le front, lui, traduit
+        // (`onglet === 'moi' ? 'mine' : 'site'`) : c'est le test qui parlait le vocabulaire des
+        // onglets au lieu de celui du fil.
+        foreach (['site', 'mine'] as $portee) {
             $journal = $admin->request('GET', '/api/calendar/feed?du=2026-06-03&au=2026-06-03&scope=' . $portee, $enteteAdmin)->toArray();
             self::assertResponseIsSuccessful();
             self::assertNotContains(
@@ -319,6 +326,74 @@ final class CalendarTest extends AccesApiTestCase
         $titresMoi = array_column($moi['events'], 'title');
         self::assertContains('Surveillance bassin', $titresMoi, 'Mon créneau de travail doit alimenter « moi ».');
         self::assertNotContains('Aquagym · Bassin sportif', $titresMoi, 'Les quarante cours de la semaine ne sont pas mon agenda.');
+    }
+
+    /**
+     * LA FRONTIÈRE D'ÉTABLISSEMENT TIENT AUSSI POUR MES PROPRES ÉVÉNEMENTS.
+     *
+     * Les tests d'isolation existants prennent l'événement d'un TIERS : la propriété les écarte
+     * déjà, donc ils resteraient verts même si la borne d'établissement sautait. Le cas qui reste
+     * découvert, c'est MON PROPRE événement chez le voisin — celui que la seule condition sur le
+     * propriétaire laisserait passer.
+     *
+     * On l'écrit par l'`EntityManager` : l'API refuse — correctement — de créer hors du site actif,
+     * donc elle ne sait pas fabriquer la ligne dont on veut vérifier qu'elle reste invisible.
+     *
+     * ⚠ SEULE L'ASSERTION SUR LA COLLECTION MESURE L'EXTENSION. Le fil (`/calendar/feed`) passe par
+     * `CalendarAggregator`, qui reçoit l'établissement en paramètre : il ne consulte JAMAIS
+     * `CalendarScopeExtension`. Les deux assertions sur le fil gardent l'agrégateur, ce qui est
+     * utile, mais elles ne diraient rien d'une extension cassée. Les garder sans le dire ferait
+     * croire à une couverture qu'on n'a pas.
+     *
+     * Filet vu attraper : en retirant la borne d'établissement de l'extension, ce test rougit.
+     * (En retirant les parenthèses de la clause OR, non — Doctrine les remet, cf. l'extension.)
+     */
+    public function testMonPropreEvenementChezLeVoisinResteInvisible(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+
+        $voisin = $this->etablissementVoisin();
+        $evenement = new CalendarEvent();
+        $evenement->setEstablishment($voisin);
+        $evenement->setOwner($this->utilisateurAdmin());
+        $evenement->setTitle('Congé chez le voisin');
+        $evenement->setStart(new \DateTimeImmutable('2026-06-05T09:00:00+00:00'));
+        $evenement->setEnd(new \DateTimeImmutable('2026-06-05T10:00:00+00:00'));
+        $evenement->setType(CalendarEventType::Unavailability);
+        $this->em()->persist($evenement);
+        $this->em()->flush();
+
+        foreach (['site', 'mine'] as $portee) {
+            $journal = $client->request('GET', '/api/calendar/feed?du=2026-06-05&au=2026-06-05&scope=' . $portee, $entete)->toArray();
+            self::assertResponseIsSuccessful();
+            self::assertNotContains(
+                'Congé chez le voisin',
+                array_column($journal['events'], 'title'),
+                sprintf('Un événement d’un autre établissement a fui dans la portée « %s » — les parenthèses de la clause OR ont probablement sauté.', $portee),
+            );
+        }
+
+        $collection = $client->request('GET', '/api/calendar/calendar_events', $entete)->toArray();
+        self::assertResponseIsSuccessful();
+        self::assertNotContains('Congé chez le voisin', array_column($collection['member'], 'title'));
+    }
+
+    /**
+     * Le voisin est CHERCHÉ et non supposé : coder « Patinoire B » en dur ferait dépendre un test
+     * de cloisonnement du nom d'un jeu de données.
+     */
+    private function etablissementVoisin(): Etablissement
+    {
+        $actif = $this->etablissementDeA();
+        /** @var list<Etablissement> $etablissements */
+        $etablissements = $this->em()->getRepository(Etablissement::class)->findAll();
+        foreach ($etablissements as $candidat) {
+            if (!$candidat->getId()->equals($actif->getId())) {
+                return $candidat;
+            }
+        }
+
+        self::fail('Aucun second établissement : ce test ne peut rien cloisonner.');
     }
 
     private function etablissementDeA(): Etablissement
