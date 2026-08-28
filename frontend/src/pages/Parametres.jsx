@@ -30,6 +30,13 @@ const SOUS = [
   ['ouverture', 'Horaires d’ouverture'],
 ]
 
+// Les trois formes d'exploitation que le socle connaît (`Compta\Enum\TypeExploitant`), en clair.
+const PROFILS_COMPTABLES = {
+  regie_directe: 'Régie directe',
+  dsp: 'Délégation de service public',
+  groupe_prive: 'Groupe privé',
+}
+
 const STATUT_BADGE = { actif: 'good', invite: 'warn', suspendu: 'crit' }
 
 // Paramètres : hub d'administration du socle. Consultation des référentiels, édition simple là où
@@ -106,7 +113,7 @@ function descripteurTypesTarif(api) {
   }
 }
 
-function descripteurTva(api) {
+function descripteurTva(api, profils = []) {
   return {
     titre: 'Taux de TVA',
     aQuoiCaSert:
@@ -137,6 +144,48 @@ function descripteurTva(api) {
         requis: true,
         exemple: '20',
         aide: 'Le pourcentage appliqué au prix hors taxes. Saisissez 20 pour 20 %.',
+        // CRÉER UN TAUX DE TVA ÉTAIT IMPOSSIBLE, ET C'EST CE QUI BLOQUAIT TOUTE MISE EN VENTE.
+        //
+        // Le moteur envoie `Number(v)` pour un champ `type: 'nombre'` — donc `20`. Or
+        // `Compta\Entity\TauxTva::$taux` est déclaré `private string $taux = '0.00'` : le
+        // désérialiseur refuse en 422, « The type of the "taux" attribute must be "string",
+        // "integer" given ». Aucun taux ne pouvait donc être créé, et sans taux aucun produit ne
+        // peut être rattaché ni vendu — le troisième point de « Avant de pouvoir vendre » était
+        // infranchissable pour tout le monde.
+        //
+        // On ne corrige PAS le moteur : `Saison::$priorite` est un `int` et attend bien un nombre.
+        // Le type est une propriété du champ, pas du composant, d'où le `versCorps` — le crochet
+        // prévu exactement pour ça.
+        //
+        // Un montant part en chaîne dans tout ce dépôt (prix, plafonds, cautions) : la virgule
+        // flottante binaire ne représente pas 20,10 exactement, et sur de l'argent ça se voit.
+        versCorps: (v) => (v === '' || v == null ? null : String(v)),
+      },
+      {
+        // LE SECOND REFUS, CELUI QU'ON NE VOIT QU'APRÈS AVOIR LEVÉ LE PREMIER.
+        //
+        // `TauxTva::$profilExploitant` porte `nullable: false`, `NotNull`, ET le groupe
+        // `taux:write` : c'est au client de le fournir, aucun listener ne le pose. Une fois le type
+        // du taux corrigé, le serveur répondait « profilExploitant: This value should not be
+        // null » — constaté à l'écran, pas déduit. Corriger le premier défaut sans celui-ci aurait
+        // remplacé un message incompréhensible par un autre, et laissé la création tout aussi
+        // impossible.
+        nom: 'profilExploitant',
+        libelle: 'Profil comptable',
+        type: 'choix',
+        requis: true,
+        options: profils.map((p) => ({
+          valeur: p['@id'] || `/api/profil_exploitants/${p.id}`,
+          libelle: [PROFILS_COMPTABLES[p.type] || p.type, p.referentielComptable, p.siren]
+            .filter(Boolean)
+            .join(' · '),
+        })),
+        aide: profils.length === 0
+          ? "Aucun profil comptable n'existe pour cet établissement, et un taux de TVA doit en "
+            + 'porter un. Tant qu’il manque, aucun taux ne peut être créé — c’est lui qui fixe le '
+            + 'référentiel comptable (M57, M4…) auquel le taux se rattache.'
+          : 'Le référentiel comptable auquel ce taux appartient. C’est lui qui décide de la façon '
+            + 'dont la TVA remonte en comptabilité.',
       },
       {
         nom: 'actif',
@@ -386,6 +435,16 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
   //
   // La liste ne peut pas etre une constante : ce sont les moyens que CET etablissement a
   // declares, juste en dessous dans le meme onglet.
+  // Le profil comptable de l'établissement : obligatoire sur un taux de TVA, jamais demandé.
+  const [profils, setProfils] = useState([])
+  useEffect(() => {
+    let annule = false
+    api.profilsExploitant()
+      .then((r) => { if (!annule) setProfils(membres(r)) })
+      .catch(() => { if (!annule) setProfils([]) })
+    return () => { annule = true }
+  }, [etabActif])
+
   const [moyens, setMoyens] = useState([])
   useEffect(() => {
     let annule = false
@@ -467,7 +526,7 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
             peutEcrire={aLeDroit(droits, 'offre.gerer')}
           />
           <ReferentielEditable
-            descripteur={descripteurTva(api)}
+            descripteur={descripteurTva(api, profils)}
             peutEcrire={aLeDroit(droits, 'compta.gerer')}
           />
 

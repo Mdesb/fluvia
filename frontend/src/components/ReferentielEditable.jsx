@@ -47,6 +47,7 @@ export default function ReferentielEditable({ descripteur, peutEcrire }) {
   const [lignes, setLignes] = useState([])
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
+  const [erreurEdition, setErreurEdition] = useState(null)
   const [succes, setSucces] = useState(null)
   const [edition, setEdition] = useState(null) // { ligne, valeurs } — ligne nulle = création
   const [enCours, setEnCours] = useState(false)
@@ -106,6 +107,7 @@ export default function ReferentielEditable({ descripteur, peutEcrire }) {
     e.preventDefault()
     setErreur(null)
     setSucces(null)
+    setErreurEdition(null)
     setEnCours(true)
     try {
       const corps = {}
@@ -130,8 +132,16 @@ export default function ReferentielEditable({ descripteur, peutEcrire }) {
       setEdition(null)
       await recharger()
     } catch (err) {
-      // Le message du serveur tel quel : c'est lui qui sait ce qui manque ou ce qui bloque.
-      setErreur(err.message || "L'enregistrement n'a pas abouti.")
+      // LE MESSAGE DU SERVEUR TEL QUEL, ET DANS LA FENÊTRE QUI L'A PROVOQUÉ.
+      //
+      // Le message brut est gardé parce que c'est lui qui sait ce qui manque. Il partait dans le
+      // bandeau de la CARTE, donc DERRIÈRE la modale restée ouverte : sur le formulaire des taux
+      // de TVA, la seule chose lisible était la moitié gauche de la bannière qui dépassait du
+      // panneau. Constaté à l'écran par la session en revue avec Maxime, pas déduit.
+      //
+      // Ce composant engendre le formulaire de TOUS les référentiels : la faute était donc dans
+      // chacun d'eux à la fois, et la corriger ici les corrige tous.
+      setErreurEdition(err.message || "L'enregistrement n'a pas abouti.")
     } finally {
       setEnCours(false)
     }
@@ -234,11 +244,13 @@ export default function ReferentielEditable({ descripteur, peutEcrire }) {
 
       <Modal
         open={!!edition}
-        onClose={() => setEdition(null)}
+        onClose={() => { setEdition(null); setErreurEdition(null) }}
         titre={edition?.ligne ? `Modifier — ${titre}` : `Ajouter — ${titre}`}
       >
         {edition && (
           <form onSubmit={enregistrer}>
+            {erreurEdition && <div className="banner banner-error">{erreurEdition}</div>}
+
             {champs.map((c) => (
               <div className="field" key={c.nom}>
                 <label htmlFor={`ref-${c.nom}`}>
