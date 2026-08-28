@@ -42,6 +42,9 @@ export default function PlanningOuvertureSection({ droits = [], etabActif = null
   const [busy, setBusy] = useState(false)
   const [ajoutPlage, setAjoutPlage] = useState(false)
   const [ajoutException, setAjoutException] = useState(false)
+  // La date que le calendrier a fait choisir. `null` quand on passe par le bouton :
+  // la modale demande alors la date, comme avant.
+  const [dateChoisie, setDateChoisie] = useState(null)
   const [indices, setIndices] = useState(null)
 
   const recharger = useCallback(async () => {
@@ -213,6 +216,17 @@ export default function PlanningOuvertureSection({ droits = [], etabActif = null
         </div>
       </div>
 
+      <CalendrierJoursParticuliers
+        exceptions={exceptions}
+        indices={indices}
+        peutGerer={peutGerer}
+        onChoisir={(date) => {
+          setDateChoisie(date)
+          setAjoutException(true)
+        }}
+        onRetirer={(id) => agir(() => api.supprimerExceptionOuverture(id))}
+      />
+
       <div className="card">
         <div className="card-h">
           <h3>Jours particuliers</h3>
@@ -286,9 +300,14 @@ export default function PlanningOuvertureSection({ droits = [], etabActif = null
       />
       <AjouterException
         open={ajoutException}
-        onFermer={() => setAjoutException(false)}
+        dateInitiale={dateChoisie}
+        onFermer={() => {
+          setAjoutException(false)
+          setDateChoisie(null)
+        }}
         onCree={() => {
           setAjoutException(false)
+          setDateChoisie(null)
           recharger()
         }}
       />
@@ -479,6 +498,119 @@ function VacancesScolaires({ indices }) {
   )
 }
 
+const JOURS_COURTS = ['LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM', 'DIM']
+
+function ymd(d) {
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+
+/**
+ * LE CALENDRIER DE SAISIE — cliquer un jour, plutôt que taper une date.
+ *
+ * Un champ date demande de SAVOIR la date. Le calendrier la MONTRE, avec ce qui la rend
+ * particulière : le férié, les vacances, la fermeture déjà posée. « Le 8 mai tombe un vendredi
+ * cette année » est une information qu'un champ date ne donne pas, et c'est souvent elle qui décide.
+ *
+ * ⚠ **Les trois informations d'une case ne se confondent pas.** Une fermeture remplit la case —
+ * c'est une décision prise. Un férié met une pastille — c'est une proposition. Une période de
+ * vacances teinte le fond — elle ne ferme rien. Les rendre d'une seule couleur ferait lire
+ * « fermé » là où il n'y a qu'un jour férié possible.
+ */
+function CalendrierJoursParticuliers({ exceptions, indices, peutGerer, onChoisir, onRetirer }) {
+  const [ancre, setAncre] = useState(() => new Date())
+
+  const premier = new Date(ancre.getFullYear(), ancre.getMonth(), 1)
+  const debut = new Date(premier)
+  debut.setHours(0, 0, 0, 0)
+  // `getDay()` rend 0 pour dimanche : sans ce décalage la semaine commencerait un dimanche.
+  debut.setDate(debut.getDate() - ((debut.getDay() + 6) % 7))
+
+  const cases = []
+  const curseur = new Date(debut)
+  for (let i = 0; i < 42; i += 1) {
+    cases.push(new Date(curseur))
+    curseur.setDate(curseur.getDate() + 1)
+  }
+
+  const feries = {}
+  for (const f of indices?.publicHolidays || []) feries[f.date] = f.label
+  const vacances = indices?.schoolHolidays || []
+  const parDate = {}
+  for (const e of exceptions) {
+    const d = String(e.date).slice(0, 10)
+    if (!parDate[d]) parDate[d] = []
+    parDate[d].push(e)
+  }
+
+  const aujourdHui = new Date()
+  const decaler = (sens) => {
+    const d = new Date(ancre)
+    d.setMonth(d.getMonth() + sens)
+    setAncre(d)
+  }
+
+  return (
+    <div className="card">
+      <div className="card-h">
+        <h3>Choisir un jour sur le calendrier</h3>
+        <div className="r">
+          <button className="btn sm" type="button" onClick={() => decaler(-1)} aria-label="Mois précédent">‹</button>
+          <button className="btn sm" type="button" onClick={() => setAncre(new Date())}>Ce mois-ci</button>
+          <button className="btn sm" type="button" onClick={() => decaler(1)} aria-label="Mois suivant">›</button>
+          <span className="cal-titre">
+            {ancre.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
+          </span>
+        </div>
+      </div>
+      <div className="card-b">
+        <p className="sub" style={{ marginTop: 0 }}>
+          {peutGerer
+            ? 'Cliquez un jour pour le déclarer fermé ou ouvert exceptionnellement. Un jour déjà saisi se retire d’un clic.'
+            : 'Les jours colorés portent une fermeture ou une ouverture exceptionnelle. Les modifier demande un droit d’administration.'}
+        </p>
+        <div className="cal-mois">
+          {JOURS_COURTS.map((j) => (
+            <div key={j} className="cal-mois-h">{j}</div>
+          ))}
+          {cases.map((jour) => {
+            const cle = ymd(jour)
+            const posees = parDate[cle] || []
+            const ferie = feries[cle]
+            const vac = vacances.find((v) => v.start <= cle && cle <= v.end)
+            const classes = ['cal-jour']
+            if (jour.getMonth() !== ancre.getMonth()) classes.push('hors')
+            if (vac) classes.push('vac')
+            if (posees.some((e) => e.type === 'closure')) classes.push('ferme')
+            else if (posees.length > 0) classes.push('special')
+            if (ymd(jour) === ymd(aujourdHui)) classes.push('on')
+
+            const titre = [
+              ferie,
+              vac?.label,
+              ...posees.map((e) => e.reason),
+            ].filter(Boolean).join(' · ')
+
+            return (
+              <button
+                key={cle}
+                type="button"
+                className={classes.join(' ')}
+                title={titre || undefined}
+                disabled={!peutGerer}
+                onClick={() => (posees.length > 0 ? onRetirer(posees[0].id) : onChoisir(cle))}
+              >
+                <span className="cal-jour-n">{jour.getDate()}</span>
+                {ferie && <span className="cal-jour-f" aria-hidden="true" />}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function AjouterPlage({ open, onFermer, onCree }) {
   const [jour, setJour] = useState(1)
   const [debut, setDebut] = useState('09:00')
@@ -558,7 +690,7 @@ function AjouterPlage({ open, onFermer, onCree }) {
   )
 }
 
-function AjouterException({ open, onFermer, onCree }) {
+function AjouterException({ open, dateInitiale = null, onFermer, onCree }) {
   const [date, setDate] = useState('')
   const [type, setType] = useState('closure')
   const [journee, setJournee] = useState(true)
@@ -570,14 +702,15 @@ function AjouterException({ open, onFermer, onCree }) {
 
   useEffect(() => {
     if (!open) return
-    setDate('')
+    // La date vient du calendrier quand on y a cliqué ; sinon la modale la redemande, comme avant.
+    setDate(dateInitiale || '')
     setType('closure')
     setJournee(true)
     setDebut('10:00')
     setFin('13:00')
     setMotif('')
     setErreur(null)
-  }, [open])
+  }, [open, dateInitiale])
 
   // Une ouverture exceptionnelle SANS heures n'a pas de sens — le serveur la refuse. L'écran ne
   // laisse donc pas arriver jusque-là : la case journée entière disparaît quand on choisit

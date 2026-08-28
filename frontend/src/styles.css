@@ -819,6 +819,16 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
   opacity: .5; z-index: 0; pointer-events: none; }
 .cal-bloc:not(.fond) { z-index: 1; }
 
+/* ---- Vacances scolaires : un FOND, jamais un bloc ---- */
+/* Une periode de vacances n'ARRIVE pas, elle dure. La dessiner comme un evenement la mettrait au
+   meme rang qu'une reunion, et un exploitant qui clique dessus s'attendrait a pouvoir la modifier —
+   ce qui n'a aucun sens pour un arrete ministeriel. D'ou la teinte, et `pointer-events: none`. */
+.cal-mois-c.vac { background: color-mix(in srgb, var(--warn-bg) 55%, transparent); }
+.cal-mois-c.hors.vac { background: color-mix(in srgb, var(--warn-bg) 30%, var(--panel-2)); }
+.cal-colonne.vac { background: color-mix(in srgb, var(--warn-bg) 35%, transparent); }
+.cal-grille-v { display: block; font-size: 10px; font-weight: 700; color: var(--warn);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
+
 /* ---- A venir, et abonnement ICS ---- */
 .cal-avenir { display: grid; gap: 8px; }
 .cal-avenir-l { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
@@ -837,3 +847,29 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
   .cal-mois-c { min-height: 72px; }
   .cal-avenir-q { min-width: 0; }
 }
+
+/* ---- Calendrier de saisie des jours particuliers ---- */
+/* Reutilise la grille `.cal-mois` de l'agenda : deux grilles de mois qui ne se ressemblent pas
+   demanderaient a l'exploitant d'apprendre deux fois la meme chose. */
+.cal-jour { position: relative; min-height: 54px; border: none; border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line); background: var(--panel); color: var(--ink);
+  font-family: inherit; cursor: pointer; display: grid; place-items: center; padding: 4px; }
+.cal-jour:nth-child(7n + 7) { border-right: none; }
+.cal-jour:hover:not(:disabled) { background: var(--panel-2); }
+.cal-jour:disabled { cursor: default; }
+.cal-jour-n { font-size: 13px; font-weight: 700; }
+/* Les jours des mois voisins restent VISIBLES et attenues : les masquer casserait la grille de six
+   semaines, et un lundi 30 qui disparait fait croire a un trou. */
+.cal-jour.hors { background: var(--panel-2); opacity: .5; }
+.cal-jour.vac { background: color-mix(in srgb, var(--warn-bg) 55%, transparent); }
+/* Une fermeture REMPLIT la case : c'est l'etat le plus fort, celui qu'on doit voir de loin. */
+.cal-jour.ferme { background: var(--crit-bg); color: var(--crit); }
+/* Une ouverture exceptionnelle BORDE : meme force de decision, sens inverse. */
+.cal-jour.special { box-shadow: inset 0 0 0 2px var(--good); }
+.cal-jour.on .cal-jour-n { background: var(--accent); color: #fff; min-width: 24px; height: 24px;
+  border-radius: 50%; display: grid; place-items: center; }
+/* LE FERIE EST UNE PASTILLE, PAS UN FOND. C'est une proposition, pas un etat : lui donner un fond
+   le ferait lire comme une fermeture, et un exploitant conclurait qu'il ferme le 14 juillet alors
+   que personne ne l'a decide. */
+.cal-jour-f { position: absolute; top: 5px; right: 5px; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--warm); }

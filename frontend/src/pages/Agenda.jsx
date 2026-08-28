@@ -58,6 +58,7 @@ export default function Agenda({ droits = [], etabActif = null }) {
   const [vue, setVue] = useState('semaine')
   const [ancre, setAncre] = useState(() => new Date())
   const [evenements, setEvenements] = useState([])
+  const [vacances, setVacances] = useState([])
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [ajout, setAjout] = useState(false)
@@ -70,8 +71,15 @@ export default function Agenda({ droits = [], etabActif = null }) {
     setChargement(true)
     setErreur(null)
     try {
-      const journal = await api.journalAgenda(iso(du), iso(au), portee)
+      // Les vacances scolaires sont un CONFORT : elles échouent en silence. Si le ministère ne
+      // répond pas, l'agenda doit s'afficher quand même — un fond manquant n'empêche personne de
+      // lire sa semaine.
+      const [journal, indices] = await Promise.all([
+        api.journalAgenda(iso(du), iso(au), portee),
+        api.indicesOuverture(iso(du), iso(au)).catch(() => null),
+      ])
       setEvenements(journal.events || [])
+      setVacances(indices?.schoolHolidays || [])
     } catch (e) {
       setErreur(e.message || 'L’agenda n’a pas pu être chargé.')
       setEvenements([])
@@ -129,7 +137,7 @@ export default function Agenda({ droits = [], etabActif = null }) {
           ) : (
             <div className="card">
               <div className="card-b">
-                <CalendrierAgenda vue={vue} ancre={ancre} evenements={evenements} onOuvrir={setDetail} />
+                <CalendrierAgenda vue={vue} ancre={ancre} evenements={evenements} vacances={vacances} onOuvrir={setDetail} />
               </div>
             </div>
           )}

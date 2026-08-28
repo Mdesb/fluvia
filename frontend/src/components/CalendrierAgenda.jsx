@@ -49,6 +49,30 @@ function memeJour(a, b) {
   )
 }
 
+/**
+ * LE LIBELLÉ DE LA PÉRIODE DE VACANCES QUI COUVRE CE JOUR, OU `null`.
+ *
+ * Les bornes sont INCLUSIVES des deux côtés : le calendrier du ministère publie un premier et un
+ * dernier jour de vacances, pas un intervalle semi-ouvert. Traiter la fin comme exclusive
+ * rendrait le dernier jour ouvré — visiblement faux un lundi de rentrée.
+ */
+function vacancesDu(vacances, jour) {
+  const j = ymd(jour)
+  const periode = vacances.find((v) => v.start <= j && j <= v.end)
+  return periode ? periode.label : null
+}
+
+/** Vrai si ce jour est le premier de sa période — c'est là qu'on écrit le libellé, et là seulement. */
+function premierJourDeVacances(vacances, jour) {
+  const j = ymd(jour)
+  return vacances.some((v) => v.start === j)
+}
+
+function ymd(d) {
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+
 function hhmm(d) {
   return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
 }
@@ -86,7 +110,7 @@ export function iso(d) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
 }
 
-export default function CalendrierAgenda({ vue, ancre, evenements = [], onOuvrir }) {
+export default function CalendrierAgenda({ vue, ancre, evenements = [], vacances = [], onOuvrir }) {
   const [debut, fin] = useMemo(() => bornes(vue, ancre), [vue, ancre])
 
   const blocs = useMemo(
@@ -98,7 +122,7 @@ export default function CalendrierAgenda({ vue, ancre, evenements = [], onOuvrir
     [evenements],
   )
 
-  if (vue === 'mois') return <VueMois debut={debut} ancre={ancre} blocs={blocs} onOuvrir={onOuvrir} />
+  if (vue === 'mois') return <VueMois debut={debut} ancre={ancre} blocs={blocs} vacances={vacances} onOuvrir={onOuvrir} />
 
   const jours = []
   const curseur = new Date(debut)
@@ -106,10 +130,10 @@ export default function CalendrierAgenda({ vue, ancre, evenements = [], onOuvrir
     jours.push(new Date(curseur))
     curseur.setDate(curseur.getDate() + 1)
   }
-  return <VueGrille jours={jours} blocs={blocs} onOuvrir={onOuvrir} />
+  return <VueGrille jours={jours} blocs={blocs} vacances={vacances} onOuvrir={onOuvrir} />
 }
 
-function VueMois({ debut, ancre, blocs, onOuvrir }) {
+function VueMois({ debut, ancre, blocs, vacances, onOuvrir }) {
   const cases = []
   const curseur = new Date(debut)
   for (let i = 0; i < 42; i += 1) {
@@ -134,8 +158,11 @@ function VueMois({ debut, ancre, blocs, onOuvrir }) {
         const classes = ['cal-mois-c']
         if (hors) classes.push('hors')
         if (memeJour(jour, aujourdHui)) classes.push('on')
+        // Le fond de vacances est une TEINTE, jamais un bloc : voir `vacancesDu`.
+        const vac = vacancesDu(vacances, jour)
+        if (vac) classes.push('vac')
         return (
-          <div key={jour.toISOString()} className={classes.join(' ')}>
+          <div key={jour.toISOString()} className={classes.join(' ')} title={vac || undefined}>
             <div className="cal-mois-n">{jour.getDate()}</div>
             {duJour.slice(0, 3).map((b) => (
               <button
@@ -157,7 +184,7 @@ function VueMois({ debut, ancre, blocs, onOuvrir }) {
   )
 }
 
-function VueGrille({ jours, blocs, onOuvrir }) {
+function VueGrille({ jours, blocs, vacances, onOuvrir }) {
   // L'AMPLITUDE VIENT DES DONNÉES, PAS D'UNE CONSTANTE. Un plafond fixe à 8 h - 22 h masquerait
   // sans un mot un créneau de 6 h 30 sur un bassin qui ouvre tôt, et une nocturne qui finit à 2 h.
   const [hDebut, hFin] = useMemo(() => {
@@ -178,9 +205,19 @@ function VueGrille({ jours, blocs, onOuvrir }) {
     <div className="cal-grille" style={{ gridTemplateColumns: `56px repeat(${jours.length}, 1fr)` }}>
       <div className="cal-grille-coin" />
       {jours.map((j) => (
-        <div key={j.toISOString()} className={memeJour(j, aujourdHui) ? 'cal-grille-h on' : 'cal-grille-h'}>
+        <div
+          key={j.toISOString()}
+          className={memeJour(j, aujourdHui) ? 'cal-grille-h on' : 'cal-grille-h'}
+          title={vacancesDu(vacances, j) || undefined}
+        >
           <span className="cal-grille-j">{JOURS_COURTS[(j.getDay() + 6) % 7]}</span>
           <span className="cal-grille-d">{j.getDate()}</span>
+          {/* Le libellé n'apparaît qu'une fois par période, sur son premier jour visible : le
+              répéter sept fois sur une semaine de vacances remplirait l'en-tête sans rien
+              ajouter. */}
+          {premierJourDeVacances(vacances, j) && (
+            <span className="cal-grille-v">{vacancesDu(vacances, j)}</span>
+          )}
         </div>
       ))}
 
@@ -195,7 +232,11 @@ function VueGrille({ jours, blocs, onOuvrir }) {
       {jours.map((jour) => {
         const duJour = blocs.filter((b) => memeJour(b.d1, jour))
         return (
-          <div key={jour.toISOString()} className="cal-colonne" style={{ height: heures.length * HAUTEUR_HEURE }}>
+          <div
+            key={jour.toISOString()}
+            className={vacancesDu(vacances, jour) ? 'cal-colonne vac' : 'cal-colonne'}
+            style={{ height: heures.length * HAUTEUR_HEURE }}
+          >
             {heures.map((h) => (
               <div key={h} className="cal-ligne" style={{ height: HAUTEUR_HEURE }} />
             ))}
