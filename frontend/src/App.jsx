@@ -288,7 +288,9 @@ export default function App() {
       {onglet === 'reservation' && <Reservation etabActif={etabActif} droits={droits} session={session} />}
       {onglet === 'supervision' && <Supervision etabActif={etabActif} droits={droits} />}
       {onglet === 'acces' && <Acces etabActif={etabActif} droits={droits} />}
-      {onglet === 'topologie_acces' && <TopologieAcces etabActif={etabActif} droits={droits} />}
+      {onglet === 'topologie_acces' && (
+        <TopologieAcces etabActif={etabActif} droits={droits} onNav={naviguer} />
+      )}
       {onglet === 'agenda' && <Agenda droits={droits} etabActif={etabActif} />}
       {/* `me` porte l'identifiant du lecteur, et c'est ce qui donne un CÔTÉ aux bulles : sans lui
           la messagerie ne sait pas lesquelles sont les siennes et les aligne toutes à gauche. */}

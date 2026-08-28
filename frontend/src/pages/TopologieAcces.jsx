@@ -208,7 +208,7 @@ function nombreOuNul(v) {
   return Number.isFinite(n) ? n : null
 }
 
-export default function TopologieAcces({ etabActif, droits }) {
+export default function TopologieAcces({ etabActif, droits, onNav }) {
   const [onglet, setOnglet] = useState('plan')
   const [espaces, setEspaces] = useState([])
   const [controleurs, setControleurs] = useState([])
@@ -743,8 +743,17 @@ export default function TopologieAcces({ etabActif, droits }) {
                 Trois niveaux : un <strong>espace d’accès</strong> porte le seuil de fréquentation et
                 l’anti-passback ; un <strong>contrôleur</strong> est le boîtier qui décide ; un{' '}
                 <strong>équipement</strong> est le tourniquet ou le lecteur qu’on franchit.{' '}
-                Les heures d’ouverture, elles, se règlent dans Paramètres › Heures d’ouverture — un
-                passage peut y être refusé sans que rien ici ne le dise.
+                Les heures d’ouverture, elles, se règlent{' '}
+                {/* Un renvoi qu'on ne peut pas suivre est une devinette : l'écran nomme la
+                    destination ET y emmène. Sans `onNav`, la phrase reste, sans le lien. */}
+                {onNav ? (
+                  <button className="lnk" type="button" onClick={() => onNav('parametres')}>
+                    dans Paramètres › Heures d’ouverture
+                  </button>
+                ) : (
+                  'dans Paramètres › Heures d’ouverture'
+                )}{' '}
+                — un passage peut y être refusé sans que rien ici ne le dise.
               </p>
 
               {chargement ? (
