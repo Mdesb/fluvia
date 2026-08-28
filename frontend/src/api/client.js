@@ -334,10 +334,22 @@ export const api = {
   // Corps : { numeroEngagement?, serviceExecutant? } -- exiges par certains donneurs d'ordre publics.
   deposerFactureChorus: (id, corps) =>
     request(`/api/factures/${id}/chorus`, { method: 'POST', body: corps }),
-  factureDepuisVente: (corps) =>
-    request('/api/factures/depuis-vente', { method: 'POST', body: corps }),
-  // Le controle d'integrite de la sequence : une facture ne se modifie pas, la chaine le prouve.
-  verifierChaineFactures: () => request('/api/factures/verifier-chaine'),
+  // ⚠ DEUX ROUTES DECLAREES QUE JE NE BRANCHE PAS, ET CHACUNE POUR SA RAISON.
+  //
+  // `/factures/verifier-chaine` REPOND 404. Declaree en `GetCollection` avec ce `uriTemplate`, elle
+  // est captee par l'operation d'item `/factures/{id}` qui lit << verifier-chaine >> comme un
+  // identifiant : le serveur repond << Invalid uri variables >>. Mesure contre la preprod le 29/08 :
+  //     /api/factures?itemsPerPage=1   200
+  //     /api/factures/verifier-chaine  404
+  //     /api/mes-factures              200
+  // Le bouton etait ecrit ; je l'ai retire plutot que d'en livrer un qui echoue. Signale au serveur.
+  // C'est la meme famille que le GET du padel sur une route POST : << la route existe >> ne veut pas
+  // dire << elle repond >>.
+  //
+  // `/factures/depuis-vente` fonctionne, mais son geste appartient a l'historique des ventes -- on
+  // emet une facture justificative EN REGARDANT une vente, pas en regardant la liste des factures.
+  // La brancher ici aurait demande de ressaisir la vente, c'est-a-dire exactement ce que la facture
+  // justificative existe pour eviter.
 
   pointDeVentes: () => request('/api/point_de_ventes'),
   creerPointDeVente: (corps) => request('/api/point_de_ventes', { method: 'POST', body: corps, ld: true }),
