@@ -162,6 +162,40 @@ function depuis(v) {
   return `il y a ${Math.round(s / 86400)} j`
 }
 
+// UN ÉTAT « EN LIGNE » N'EST PAS UN SIGNE DE VIE, ET LES CONFONDRE FAIT MENTIR L'ÉCRAN.
+//
+// Constaté le 29/08 contre la préprod : le contrôleur « Entrée A1 » de Piscine A s'affiche EN LIGNE
+// avec un dernier signe de vie à **jamais**. L'état vient des données d'installation, pas d'un ping.
+// Un écran de supervision qui répète « en ligne » sur un matériel qui n'a jamais parlé raconte une
+// histoire, et c'est le seul écran qui n'a pas le droit d'en raconter.
+//
+// Trois cas, parce qu'ils appellent trois gestes différents :
+//   — JAMAIS VU : le matériel n'a jamais rapporté. C'est une installation à finir, pas une panne.
+//   — VU RÉCEMMENT : rien à faire.
+//   — SILENCIEUX : il parlait, il s'est tu. C'est une panne, et c'est le seul cas qui presse.
+//
+// Le seuil ci-dessous est une CONVENTION DE CET ÉCRAN, pas une règle du serveur : rien, côté API, ne
+// déclare la période de battement attendue d'un ITBOX. Dix minutes est large exprès — mieux vaut
+// signaler tard que crier sur un matériel qui va bien. Le jour où le serveur portera la période,
+// c'est elle qu'il faudra lire ici.
+const SILENCE_ALERTE_MS = 10 * 60 * 1000
+
+function signeDeVie(controleur) {
+  const brut = controleur?.dernierHeartbeat
+  if (!brut) {
+    return controleur?.etat === 'en_ligne'
+      ? { texte: 'annoncé en ligne, mais aucun signe de vie', cls: 'warn', suspect: true }
+      : { texte: 'aucun signe de vie', cls: 'mut', suspect: false }
+  }
+  const d = new Date(brut)
+  if (Number.isNaN(d.getTime())) return { texte: 'signe de vie illisible', cls: 'warn', suspect: true }
+  const age = Date.now() - d.getTime()
+  if (age > SILENCE_ALERTE_MS) {
+    return { texte: `silencieux depuis ${depuis(brut).replace('il y a ', '')}`, cls: 'crit', suspect: true }
+  }
+  return { texte: `vu ${depuis(brut)}`, cls: 'mut', suspect: false }
+}
+
 function duree(secondes) {
   if (secondes === null || secondes === undefined) return '—'
   if (secondes < 60) return `${secondes} s`
@@ -702,6 +736,9 @@ export default function TopologieAcces({ etabActif, droits }) {
 
   const enLigne = controleurs.filter((c) => c.etat === 'en_ligne').length
   const horsService = controleurs.filter((c) => c.etat === 'hors_service').length
+  // « 1 sur 1 en ligne » est un chiffre rassurant qui peut être entièrement faux : l'état est
+  // déclaré, le signe de vie est constaté. Quand les deux divergent, le compteur doit le dire.
+  const muets = controleurs.filter((c) => signeDeVie(c).suspect).length
 
   return (
     <div className="view">
@@ -771,6 +808,11 @@ export default function TopologieAcces({ etabActif, droits }) {
                 {enLigne}
                 <span style={{ fontSize: 15, color: 'var(--ink-faint)' }}> / {controleurs.length}</span>
               </div>
+              {muets > 0 && (
+                <div style={{ color: 'var(--warn)' }}>
+                  dont {muets} sans signe de vie récent
+                </div>
+              )}
             </div>
             <div className="kpi">
               <div className="lbl">Hors service</div>
@@ -870,9 +912,16 @@ export default function TopologieAcces({ etabActif, droits }) {
                                 {ETAT_CONTROLEUR[controleur.etat] || controleur.etat}
                               </span>
                               <span className="mut">ITBOX {texteOuTiret(controleur.itboxRef)}</span>
-                              <span className="mut" title={horodate(controleur.dernierHeartbeat)}>
-                                · dernier signe de vie {depuis(controleur.dernierHeartbeat)}
-                              </span>
+                              {(() => {
+                                const vie = signeDeVie(controleur)
+                                return vie.suspect ? (
+                                  <span className={`badge ${vie.cls}`} title={horodate(controleur.dernierHeartbeat)}>
+                                    {vie.texte}
+                                  </span>
+                                ) : (
+                                  <span className="mut" title={horodate(controleur.dernierHeartbeat)}>· {vie.texte}</span>
+                                )
+                              })()}
                               <span className="mut" title="Version de la liste de révocation embarquée par ce contrôleur">
                                 · révocations v{controleur.versionRevocation ?? 0}
                               </span>
@@ -1118,9 +1167,20 @@ function Lecteurs({ equipements, controleurs, espaces, peutGerer, chargement, on
                       </td>
                       <td>
                         {controleur ? (
-                          <span className={`badge ${ETAT_CLS[controleur.etat] || 'mut'}`} title={`Dernier signe de vie ${depuis(controleur.dernierHeartbeat)}`}>
-                            {ETAT_CONTROLEUR[controleur.etat] || controleur.etat}
-                          </span>
+                          <>
+                            <span
+                              className={`badge ${ETAT_CLS[controleur.etat] || 'mut'}`}
+                              title={horodate(controleur.dernierHeartbeat)}
+                            >
+                              {ETAT_CONTROLEUR[controleur.etat] || controleur.etat}
+                            </span>
+                            {/* L'état déclaré et le signe de vie sont deux informations distinctes :
+                                affichées ensemble, elles se contredisent au lieu de se confirmer, et
+                                c'est cette contradiction qui doit sauter aux yeux. */}
+                            <div className={signeDeVie(controleur).suspect ? undefined : 'mut'}>
+                              {signeDeVie(controleur).texte}
+                            </div>
+                          </>
                         ) : (
                           '—'
                         )}

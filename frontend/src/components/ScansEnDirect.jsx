@@ -127,18 +127,25 @@ export default function ScansEnDirect({ droits = [], etabActif }) {
       const query = { 'order[horodatage]': 'desc' }
       if (dernier.current) query['horodatage[strictly_after]'] = dernier.current
       const recus = membres(await api.journalPassages(query))
+
+      // ⚠ L'AMORÇAGE SE TERMINE MÊME QUAND LA RÉPONSE EST VIDE, ET C'EST TOUT LE POINT.
+      //
+      // Défaut trouvé en ouvrant l'écran, pas en le relisant : sur un site où AUCUN passage n'est
+      // encore enregistré, la première lecture rend zéro ligne. Si on repart sans marquer l'amorçage,
+      // le tout premier scan de la journée est pris pour de l'historique et avalé en silence — le
+      // seul cas où ce bandeau devait servir, et le seul où il ne servait pas.
+      const premiere = !amorce.current
+      amorce.current = true
+
       if (recus.length === 0) return
 
       // Le plus récent d'abord : c'est l'ordre demandé au serveur, et c'est celui du bandeau.
       dernier.current = recus[0].horodatage
 
-      // PREMIÈRE LECTURE : on prend le repère SANS annoncer les passages comme s'ils venaient
-      // d'arriver. Ouvrir la caisse à 14 h et voir surgir le refus de 9 h 12 comme un événement du
-      // moment ferait chercher un problème qui n'existe plus.
-      if (!amorce.current) {
-        amorce.current = true
-        return
-      }
+      // PREMIÈRE LECTURE NON VIDE : on prend le repère SANS annoncer les passages comme s'ils
+      // venaient d'arriver. Ouvrir la caisse à 14 h et voir surgir le refus de 9 h 12 comme un
+      // événement du moment ferait chercher un problème qui n'existe plus.
+      if (premiere) return
 
       if (recus.length >= 30) setTrouEventuel(true)
       setScans((s) => [...recus, ...s].slice(0, MAX_AFFICHES))
