@@ -294,7 +294,7 @@ function descripteurSaisons(api) {
   }
 }
 
-function descripteurPointsDeVente(api, etabActif) {
+function descripteurPointsDeVente(api, etabActif, moyens = []) {
   return {
     titre: 'Points de vente',
     aQuoiCaSert:
@@ -320,6 +320,34 @@ function descripteurPointsDeVente(api, etabActif) {
         exemple: 'Guichet principal',
         aide: 'Le nom que verra le caissier en ouvrant sa caisse.',
       },
+      // LES MOYENS DE PAIEMENT ÉTAIENT LISIBLES ET PAS RÉGLABLES.
+      //
+      // Le champ `moyensAutorises` est écrivable côté serveur depuis le début (groupe `pdv:write`,
+      // droit `caisse.gerer`) ; l'écran l'affichait en colonne et ne le mettait pas au formulaire.
+      // Signalé par Maxime à la revue des écrans.
+      //
+      // ⚠ RIEN DE COCHÉ = AUCUNE RESTRICTION, et c'est le contraire de ce qu'on lit spontanément.
+      // `PaiementHandler` teste `getMoyensAutorises() !== []` avant de vérifier quoi que ce soit :
+      // une liste vide laisse donc TOUT passer. Cocher trois moyens, c'est restreindre à ces trois ;
+      // n'en cocher aucun, c'est tout autoriser. L'aide le dit, parce qu'une case à cocher vide se
+      // lit d'habitude comme « rien n'est permis ».
+      {
+        nom: 'moyensAutorises',
+        libelle: 'Paiements acceptés à ce point de vente',
+        type: 'choix-multiples',
+        options: moyens.map((m) => ({ valeur: m.code, libelle: m.libelle || m.code })),
+        aide: moyens.length === 0
+          ? "Aucun moyen de paiement n'est déclaré pour cet établissement : renseignez-les plus bas, "
+            + 'puis revenez restreindre ce point de vente si besoin.'
+          : "Ne cochez rien pour accepter tous les moyens déclarés. Cochez-en pour n'autoriser "
+            + "que ceux-là : un caissier qui tentera un autre moyen se verra refuser l'encaissement.",
+      },
+      {
+        nom: 'tpe',
+        libelle: 'Un terminal bancaire est rattaché',
+        type: 'bool',
+        aide: 'Détermine si le paiement par carte passe par un terminal plutôt que par une saisie.',
+      },
     ],
     colonnes: [
       { cle: 'libelle', titre: 'Nom', rendu: (r) => <span className="nm">{r.libelle || '—'}</span> },
@@ -332,8 +360,13 @@ function descripteurPointsDeVente(api, etabActif) {
       {
         cle: 'moyensAutorises',
         titre: 'Paiements acceptés',
-        rendu: (r) =>
-          Array.isArray(r.moyensAutorises) && r.moyensAutorises.length ? r.moyensAutorises.join(', ') : 'tous',
+        // Le serveur stocke des CODES ; on affiche les libellés du référentiel. « tous » est exact :
+        // une liste vide vaut absence de restriction (voir l'aide du champ, plus haut).
+        rendu: (r) => {
+          const codes = Array.isArray(r.moyensAutorises) ? r.moyensAutorises : []
+          if (codes.length === 0) return <span className="sub">tous</span>
+          return codes.map((c) => moyens.find((m) => m.code === c)?.libelle || c).join(', ')
+        },
       },
     ],
   }
@@ -342,6 +375,25 @@ function descripteurPointsDeVente(api, etabActif) {
 export default function Parametres({ etabActif, etablissements, droits = [] }) {
   const [ouvertureStructure, setOuvertureStructure] = useState(false)
   const [sousOnglet, setSousOnglet] = useState('entites')
+
+  // LES MOYENS DE PAIEMENT DU REFERENTIEL, POUR POUVOIR LES COCHER PAR POINT DE VENTE.
+  //
+  // Maxime, a la revue des ecrans : << on ne peut pas ajouter/enlever les moyens de paiement
+  // d une caisse >>. Le champ est ecrivable cote serveur depuis le debut ; l ecran l affichait
+  // en colonne et ne le proposait pas au formulaire.
+  //
+  // La liste ne peut pas etre une constante : ce sont les moyens que CET etablissement a
+  // declares, juste en dessous dans le meme onglet.
+  const [moyens, setMoyens] = useState([])
+  useEffect(() => {
+    let annule = false
+    api.moyensPaiement()
+      .then((r) => { if (!annule) setMoyens(membres(r)) })
+      // Un referentiel illisible ne doit pas empecher de renommer un point de vente : la case
+      // a cocher disparait, le reste du formulaire fonctionne.
+      .catch(() => { if (!annule) setMoyens([]) })
+    return () => { annule = true }
+  }, [etabActif])
 
   return (
     <div className="view">
@@ -437,7 +489,7 @@ export default function Parametres({ etabActif, etablissements, droits = [] }) {
       {sousOnglet === 'caisse' && (
         <div className="resa-grid">
           <ReferentielEditable
-            descripteur={descripteurPointsDeVente(api, etabActif)}
+            descripteur={descripteurPointsDeVente(api, etabActif, moyens)}
             peutEcrire={aLeDroit(droits, 'caisse.gerer')}
           />
           <Liste

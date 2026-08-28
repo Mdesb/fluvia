@@ -26,6 +26,7 @@ import Modal from './Modal.jsx'
 export default function RolesSection({ droits, peutGerer, onChange }) {
   const [roles, setRoles] = useState([])
   const [permissions, setPermissions] = useState([])
+  const [erreurEdition, setErreurEdition] = useState(null)
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
@@ -66,6 +67,7 @@ export default function RolesSection({ droits, peutGerer, onChange }) {
   function ouvrir(role) {
     setSucces(null)
     setErreur(null)
+    setErreurEdition(null)
     setEdition({
       role,
       nom: role?.nom || '',
@@ -93,6 +95,7 @@ export default function RolesSection({ droits, peutGerer, onChange }) {
   async function enregistrer(e) {
     e.preventDefault()
     setErreur(null)
+    setErreurEdition(null)
     setEnCours(true)
     try {
       const corps = {
@@ -106,7 +109,7 @@ export default function RolesSection({ droits, peutGerer, onChange }) {
       await recharger()
       onChange?.()
     } catch (err) {
-      setErreur(err.message || "L'enregistrement n'a pas abouti.")
+      setErreurEdition(err.message || "L'enregistrement n'a pas abouti.")
     } finally {
       setEnCours(false)
     }
@@ -230,12 +233,24 @@ export default function RolesSection({ droits, peutGerer, onChange }) {
 
       <Modal
         open={!!edition}
-        onClose={() => setEdition(null)}
+        onClose={() => { setEdition(null); setErreurEdition(null) }}
         titre={edition?.role ? `Modifier — ${edition.role.nom}` : 'Nouveau rôle'}
         taille="lg"
       >
         {edition && (
           <form onSubmit={enregistrer}>
+            {/* LE REFUS DU SERVEUR S'AFFICHAIT DERRIÈRE LA MODALE RESTÉE OUVERTE.
+                Maxime : « j'ai changé les droits d'un rôle, et je ne peux plus le faire maintenant. »
+                L'erreur était bien récupérée — et écrite dans le bandeau de la CARTE, c'est-à-dire
+                sous la fenêtre ouverte. On cliquait « Enregistrer », rien ne bougeait, et
+                l'explication était cachée.
+                Or le message du serveur est précisément celui qui débloque : « ce rôle est la seule
+                source du droit d'administration de l'établissement X — désignez un remplaçant avant
+                de retirer ce droit. » Il ne dit pas non, il dit dans quel ordre faire.
+                Une modale doit porter l'erreur qui l'empêche de se fermer. Sinon on ferme la modale
+                pour lire pourquoi on n'a pas pu la valider. */}
+            {erreurEdition && <div className="banner banner-error">{erreurEdition}</div>}
+
             <div className="field">
               <label htmlFor="rl-nom">Nom du rôle *</label>
               <input
