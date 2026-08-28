@@ -7,6 +7,7 @@ import { aLeDroit } from '../api/droits.js'
 import { mot } from '../api/vocabulaire.js'
 import ClientEditionModal from '../components/ClientEditionModal.jsx'
 import DevisModal from '../components/DevisModal.jsx'
+import PassagesClient from '../components/PassagesClient.jsx'
 
 // Nom d'affichage d'un client (physique ou personne morale).
 function nomClient(c) {
@@ -457,6 +458,11 @@ function FicheContenu({ fiche, mouvements, fidelite, droits, onMouvement }) {
           <div className="empty" style={{ padding: 12 }}>Aucun achat enregistré.</div>
         )}
       </div>
+
+      {/* La fiche savait ce que le client a ACHETÉ, jamais s'il est ENTRÉ. Les deux questions du
+          comptoir sont pourtant celles-là : « a-t-il utilisé sa carte ? » et « il dit que la borne
+          l'a refusé hier ». Le bloc ne s'affiche pas pour un compte sans droit sur les accès. */}
+      <PassagesClient clientId={c.id} droits={droits} />
     </div>
   )
 }
