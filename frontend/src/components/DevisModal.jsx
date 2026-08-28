@@ -21,7 +21,20 @@ import { api, membres, ApiError } from '../api/client.js'
 // cautions : l'écran Facturation et la fiche client ouvrent la même modale. Deux endroits d'où
 // partir, une seule implémentation, et le jour où le formulaire gagne un champ il le gagne aux deux
 // endroits.
-export default function DevisModal({ open, client, onClose, onCree }) {
+// UN DEVIS ET UNE FACTURE DIRECTE SE REDIGENT DE LA MEME FACON, ET LE SERVEUR LE CONFIRME.
+//
+// `POST /billing/documents` et `POST /factures` attendent le meme couple : un destinataire et des
+// lignes { designation, quantite, prixUnitaireHT, tauxTva }. Ecrire un second formulaire pour la
+// facture aurait donne deux verites sur ce qu'est une ligne -- et la seconde aurait pris du retard
+// sur la premiere au premier ajustement.
+//
+// `cible` vaut donc 'devis' ou 'facture'. Ce qui change : la route appelee, le titre, deux champs
+// propres a la facture (echeance, conditions de reglement), et l'avertissement de non-rattachement
+// qui ne concerne QUE le devis -- le constructeur de facture directe lit `clientRef`, celui du
+// document commercial ne le lit pas.
+export default function DevisModal({ open, client, onClose, onCree, cible = 'devis' }) {
+  const facture = cible === 'facture'
+  const [echeance, setEcheance] = useState('')
   const [tauxTva, setTauxTva] = useState([])
   const [choisi, setChoisi] = useState(null)
   const [pickerOuvert, setPickerOuvert] = useState(false)
@@ -45,8 +58,16 @@ export default function DevisModal({ open, client, onClose, onCree }) {
     setErreur(null)
     setNonRattache(false)
     setCreeSansLien(null)
+    setEcheance('')
     api.tauxTvas()
-      .then((r) => setTauxTva(membres(r)))
+      // UN TAUX MASQUE RESTAIT PROPOSE, ET C'EST L'INVERSE DE CE QUE << masque >> VEUT DIRE.
+      //
+      // Vu a l'ecran : le referentiel affiche << Taux reduit 2025 (a valider fiscaliste) >> en
+      // `actif: false`, et cette liste l'offrait quand meme. Le sens du drapeau est precisement
+      // << ne plus le proposer sur une nouvelle piece >> -- le desactiver ne servait donc a rien
+      // ici, alors que c'est le seul moyen de retirer un taux (l'entite n'expose aucune
+      // suppression, et c'est voulu : un taux cite par des ventes passees ne se supprime pas).
+      .then((r) => setTauxTva(membres(r).filter((t) => t.actif !== false)))
       // Les taux absents n'empêchent pas d'ouvrir la modale : le champ restera vide et le formulaire
       // refusera la validation, ce qui est plus clair qu'une modale qui ne s'ouvre pas.
       .catch(() => setTauxTva([]))
@@ -61,7 +82,7 @@ export default function DevisModal({ open, client, onClose, onCree }) {
     setEnvoi(true)
     setErreur(null)
     try {
-      const cree = await api.creerDevis({
+      const corps = {
         destinataire: corpsDestinataire(destinataire, raisonSociale),
         lignes: lignes.map((l) => ({
           designation: l.designation,
@@ -69,7 +90,16 @@ export default function DevisModal({ open, client, onClose, onCree }) {
           prixUnitaireHT: String(l.prixUnitaireHT || '0'),
           tauxTva: l.tauxTva,
         })),
-      })
+      }
+      if (facture && echeance) corps.dateEcheance = echeance
+      const cree = facture ? await api.creerFactureDirecte(corps) : await api.creerDevis(corps)
+
+      // La facture directe RETIENT le rattachement au client : `FactureDirecteBuilder` lit
+      // `clientRef`. L'avertissement ci-dessous ne vaut donc que pour le devis.
+      if (facture) {
+        onCree?.(cree)
+        return
+      }
 
       // ON VÉRIFIE CE QUE LE SERVEUR A RETENU, PLUTÔT QUE CE QU'ON LUI A ENVOYÉ.
       //
@@ -104,7 +134,7 @@ export default function DevisModal({ open, client, onClose, onCree }) {
 
   return (
     <>
-      <Modal open={open} onClose={onClose} titre="Nouveau devis">
+      <Modal open={open} onClose={onClose} titre={facture ? 'Facturer un client' : 'Nouveau devis'}>
         <form onSubmit={soumettre}>
           {erreur && <div className="banner banner-error">{erreur}</div>}
 
@@ -160,9 +190,9 @@ export default function DevisModal({ open, client, onClose, onCree }) {
                       destinataire saisi à la main n'est rattaché à personne : il ne remontera pas
                       sur une fiche, et deux orthographes feront deux destinataires. */}
                   <div className="hint">
-                    Un destinataire saisi à la main n&rsquo;est rattaché à aucune fiche client : ce
-                    devis n&rsquo;apparaîtra pas dans son historique, et une autre orthographe créera
-                    un second destinataire.
+                    Un destinataire saisi à la main n&rsquo;est rattaché à aucune fiche client :{' '}
+                    {facture ? 'cette facture' : 'ce devis'} n&rsquo;apparaîtra pas dans son
+                    historique, et une autre orthographe créera un second destinataire.
                   </div>
                 </div>
               </>
@@ -223,16 +253,34 @@ export default function DevisModal({ open, client, onClose, onCree }) {
             + Ajouter une ligne
           </button>
 
+          {facture && (
+            <div className="field">
+              <label htmlFor="dm-echeance">Date d&rsquo;échéance</label>
+              <input
+                id="dm-echeance"
+                className="input"
+                type="date"
+                value={echeance}
+                onChange={(e) => setEcheance(e.target.value)}
+              />
+              <div className="hint">
+                La date au-delà de laquelle la facture est en retard. Laissée vide, elle prend les
+                conditions de règlement du profil comptable — et sans échéance, aucun retard ne peut
+                être constaté.
+              </div>
+            </div>
+          )}
+
           <p className="hint">
-            Le devis part en brouillon : rien ne sort tant que vous ne l&apos;avez pas émis, et un
-            numéro n&apos;est consommé qu&apos;à l&apos;émission — un numéro pris par une pièce
-            qu&apos;on jette laisse un trou dans la série.
+            {facture
+              ? 'La facture part en BROUILLON : aucun numéro n’est consommé tant que vous ne l’avez pas émise. C’est ce qui permet de se tromper sans trouer la série légale des numéros.'
+              : 'Le devis part en brouillon : rien ne sort tant que vous ne l’avez pas émis, et un numéro n’est consommé qu’à l’émission — un numéro pris par une pièce qu’on jette laisse un trou dans la série.'}
           </p>
 
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
             <button className="btn" type="button" onClick={onClose}>Annuler</button>
             <button className="btn primary" type="submit" disabled={envoi || !pretAEnvoyer}>
-              {envoi ? 'Création…' : 'Créer le devis'}
+              {envoi ? 'Création…' : facture ? 'Créer le brouillon' : 'Créer le devis'}
             </button>
           </div>
         </form>

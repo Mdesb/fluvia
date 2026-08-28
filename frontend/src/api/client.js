@@ -163,6 +163,27 @@ async function request(
     if (timer) clearTimeout(timer)
   }
 
+  // LE JETON SE RENOUVELLE PENDANT QU'ON TRAVAILLE, ET CA SE LIT ICI PARCE QU'ICI VOIT TOUT.
+  //
+  // Le serveur renvoie un jeton frais dans `X-JETON-RENOUVELE` des que le jeton courant a passe la
+  // moitie de sa vie. L'en-tete N'EST PAS sur toutes les reponses : son absence est le cas normal,
+  // pas une anomalie.
+  //
+  // Un seul endroit a modifier, et c'est deliberement celui-la : `request()` est la seule fonction
+  // qui voit toutes les reponses. Le poser ecran par ecran donnerait des ecrans qui prolongent la
+  // session et d'autres non, sans que rien ne distingue les deux.
+  //
+  // ⚠ CE MECANISME PEUT ETRE INERTE SANS QUE RIEN NE LE DISE. Lire l'en-tete et oublier de remplacer
+  // le jeton stocke marche exactement comme avant pendant une heure, puis ejecte -- et rien ne
+  // signale qu'il n'a jamais servi. Eprouve en comparant le jeton stocke AVANT et APRES une reponse
+  // qui porte l'en-tete, pas en constatant qu'on est encore connecte dix minutes plus tard.
+  //
+  // ET IL NE SUPPRIME PAS L'EXPIRATION. Passe douze heures depuis la premiere connexion, le serveur
+  // cesse de reemettre : une session qui se prolonge sans fin n'est plus une session, c'est un mot
+  // de passe. L'ecran de connexion doit donc toujours savoir apparaitre.
+  const renouvele = res.headers.get('X-JETON-RENOUVELE')
+  if (renouvele && auth) tokenStore.set(renouvele)
+
   if (res.status === 401 && auth) {
     tokenStore.clear()
     if (onUnauthorized) onUnauthorized()
@@ -281,6 +302,42 @@ export const api = {
   // le contrôle réclamait un `ld: true` dont ces routes n'ont que faire. Le contrôle avait raison de
   // ne pas savoir — c'est au code appelé d'être lisible.
   gestePiece: (id, geste) => GESTES_PIECE[geste](id),
+
+  // LES FACTURES : DIX OPERATIONS EXPOSEES, ZERO ROUTE DANS CE FICHIER.
+  //
+  // L'ecran << Facturation >> ne montrait pas des factures : il montrait des PIECES COMMERCIALES et
+  // enseignait une chaine devis -> commande -> livraison -> facture. Sa seule action etait
+  // << + Nouveau devis >>. Une facture emise sortait de l'ecran et n'etait plus visible NULLE PART :
+  // il n'existait aucune liste des factures, donc aucun moyen de savoir qui doit combien.
+  //
+  // C'est une chaine d'ERP imposee a des gens qui n'en ont pas besoin : une piscine facture une ecole
+  // pour une sortie de groupe, un club de padel facture une entreprise pour un tournoi. Ni devis, ni
+  // bon de livraison.
+  //
+  // QUATRE DROITS DISTINCTS, DONC QUATRE BOUTONS : emettre (`facturation.emettre_directe`), lettrer
+  // (`facturation.lettrer`), avoir (`facturation.avoir`), Chorus (`facturation.deposer_chorus`). Qui
+  // encaisse un reglement n'a pas a pouvoir annuler la facture par un avoir.
+  //
+  // Toutes ces routes portent un `uriTemplate` sur mesure et `input: false` : pas de `ld: true`.
+  factures: (params) => request('/api/factures', { query: params }),
+  facture: (id) => request(`/api/factures/${id}`),
+  // Cree un BROUILLON : aucun numero n'est consomme tant qu'on n'a pas emis (RG-FACT-01). C'est ce
+  // qui permet de se tromper sans trouer la sequence legale des numeros.
+  creerFactureDirecte: (corps) => request('/api/factures', { method: 'POST', body: corps }),
+  majFactureDirecte: (id, corps) => request(`/api/factures/${id}`, { method: 'PATCH', body: corps }),
+  emettreFacture: (id) => request(`/api/factures/${id}/emettre`, { method: 'POST', body: {} }),
+  // Corps : { montant: "150.00", moyen: "virement", reference?: "..." }.
+  enregistrerReglement: (id, corps) =>
+    request(`/api/factures/${id}/reglements`, { method: 'POST', body: corps }),
+  // Avoir TOTAL, sans corps : la simplification est assumee cote serveur (plan §7).
+  genererAvoirFacture: (id) => request(`/api/factures/${id}/avoir`, { method: 'POST', body: {} }),
+  // Corps : { numeroEngagement?, serviceExecutant? } -- exiges par certains donneurs d'ordre publics.
+  deposerFactureChorus: (id, corps) =>
+    request(`/api/factures/${id}/chorus`, { method: 'POST', body: corps }),
+  factureDepuisVente: (corps) =>
+    request('/api/factures/depuis-vente', { method: 'POST', body: corps }),
+  // Le controle d'integrite de la sequence : une facture ne se modifie pas, la chaine le prouve.
+  verifierChaineFactures: () => request('/api/factures/verifier-chaine'),
 
   pointDeVentes: () => request('/api/point_de_ventes'),
   creerPointDeVente: (corps) => request('/api/point_de_ventes', { method: 'POST', body: corps, ld: true }),

@@ -213,8 +213,18 @@ export default function App() {
 
   // Si l'onglet courant dépend d'une capacité ou d'une permission désormais absente, retour Caisse.
   useEffect(() => {
-    const caps = me?.capacitesActives || []
-    const droits = me?.droits || []
+    // TANT QUE LE PROFIL N'EST PAS CHARGÉ, ON NE SAIT RIEN — ET NE RIEN SAVOIR N'EST PAS UN REFUS.
+    //
+    // Défaut introduit en mettant l'onglet dans l'URL, et trouvé en ouvrant `#facturation` : `me`
+    // vaut `null` pendant le premier rendu, donc `droits` vaut `[]`, donc cette garde concluait
+    // « permission absente » et renvoyait à la caisse AVANT que le serveur ait répondu. Le lien
+    // profond ne marchait que pour les écrans sans permission requise.
+    //
+    // Invisible avant, parce que l'onglet de départ était déjà la caisse : le renvoi ne changeait
+    // rien. C'est exactement pourquoi un défaut dormant se réveille au premier usage nouveau.
+    if (!me) return
+    const caps = me.capacitesActives || []
+    const droits = me.droits || []
     const capRequise = { reservation: 'reservation', supervision: 'controle_acces', acces: 'controle_acces', boutique: 'boutique_en_ligne' }
     const permRequise = {
       piscine: 'piscine.lire', patinoire: 'patinoire.lire', padel: 'padel.lire',
@@ -342,7 +352,7 @@ export default function App() {
       {onglet === 'sepa' && <Sepa etabActif={etabActif} droits={droits} />}
       {onglet === 'recouvrement' && <Recouvrement etabActif={etabActif} droits={droits} />}
       {onglet === 'caution' && <Cautions etabActif={etabActif} droits={droits} />}
-      {onglet === 'facturation' && <Facturation etabActif={etabActif} droits={droits} />}
+      {onglet === 'facturation' && <Facturation etabActif={etabActif} droits={droits} onNaviguer={naviguer} />}
       {onglet === 'clients' && <Clients etabActif={etabActif} cible={cible} onCibleConsommee={() => setCible(null)} droits={droits} />}
       {onglet === 'boutique' && <Boutique etabActif={etabActif} droits={droits} />}
       {onglet === 'piscine' && <Piscine etabActif={etabActif} droits={droits} />}
