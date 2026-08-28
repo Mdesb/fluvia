@@ -51,6 +51,8 @@ const Agenda = lazy(() => import('./pages/Agenda.jsx'))
 const Sepa = lazy(() => import('./pages/Sepa.jsx'))
 const Recouvrement = lazy(() => import('./pages/Recouvrement.jsx'))
 const Cautions = lazy(() => import('./pages/Cautions.jsx'))
+// Differe pour la meme raison : un caissier n'enrole pas de terminal et ne bloque pas de badge.
+const Acces = lazy(() => import('./pages/Acces.jsx'))
 
 // Un compte est « administrateur » s'il porte l'un des droits d'administration du socle sur
 // l'établissement actif (matérialisés dans `me.droits`). Gouverne l'atterrissage sur le tableau
@@ -177,7 +179,7 @@ export default function App() {
   useEffect(() => {
     const caps = me?.capacitesActives || []
     const droits = me?.droits || []
-    const capRequise = { reservation: 'reservation', supervision: 'controle_acces', boutique: 'boutique_en_ligne' }
+    const capRequise = { reservation: 'reservation', supervision: 'controle_acces', acces: 'controle_acces', boutique: 'boutique_en_ligne' }
     const permRequise = {
       piscine: 'piscine.lire', patinoire: 'patinoire.lire', padel: 'padel.lire',
       musee: 'musee.lire', comptabilite: 'compta.lire', personnel: 'personnel.lire',
@@ -274,6 +276,7 @@ export default function App() {
       {onglet === 'catalogue' && <Catalogue etabActif={etabActif} cible={cible} onCibleConsommee={() => setCible(null)} droits={droits} />}
       {onglet === 'reservation' && <Reservation etabActif={etabActif} droits={droits} session={session} />}
       {onglet === 'supervision' && <Supervision etabActif={etabActif} />}
+      {onglet === 'acces' && <Acces etabActif={etabActif} droits={droits} />}
       {onglet === 'agenda' && <Agenda droits={droits} etabActif={etabActif} />}
       {/* `me` porte l'identifiant du lecteur, et c'est ce qui donne un CÔTÉ aux bulles : sans lui
           la messagerie ne sait pas lesquelles sont les siennes et les aligne toutes à gauche. */}

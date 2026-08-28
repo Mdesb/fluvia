@@ -637,6 +637,40 @@ export const api = {
   passages: () =>
     request('/api/passages', { query: { itemsPerPage: 20, 'order[horodatage]': 'desc' } }),
 
+  // LE CONTRÔLE D'ACCÈS N'AVAIT QUE SA SUPERVISION : ON REGARDAIT, ON N'AGISSAIT PAS.
+  //
+  // Dix-huit opérations exposées, deux atteignables (`/acces/supervision` et `/api/passages`). Les
+  // deux gestes qu'un exploitant fait le plus souvent — bloquer un badge perdu, appairer une carte —
+  // n'étaient possibles depuis aucun écran. Un adhérent qui perd sa carte ne pouvait pas être
+  // protégé : le badge restait valide jusqu'à ce que quelqu'un touche la base.
+  //
+  // Toutes ces écritures portent un `uriTemplate` sur mesure et `input: false` : leur processor lit
+  // le corps brut, elles n'exigent donc PAS `application/ld+json` (cf. `scripts/verifier-formats.mjs`).
+  droitsAcces: () => request('/api/droit_acces', { query: { itemsPerPage: 200 } }),
+  declarationsPerteVol: () =>
+    request('/api/declaration_perte_vols', { query: { itemsPerPage: 200 } }),
+  terminauxAcces: () => request('/api/acces/terminaux', { query: { itemsPerPage: 100 } }),
+  // Corps : { identifiantSupport, typeSupport: QR|RFID|wallet, droit: iri|uuid, mode: caisse|autonome }.
+  // Le support est créé à la volée s'il n'existe pas — c'est le geste « appairer une carte neuve ».
+  appairerSupport: (corps) => request('/api/acces/appairages', { method: 'POST', body: corps }),
+  revoquerAppairage: (id) =>
+    request(`/api/acces/appairages/${id}/revoquer`, { method: 'POST', body: {} }),
+  // Perte/vol : blocage serveur immédiat + nouvelle version de liste de révocation pour chaque
+  // contrôleur (refus hors ligne aussi, à leur prochaine synchro). Motif OBLIGATOIRE côté serveur.
+  bloquerSupport: (id, motif) =>
+    request(`/api/acces/supports/${id}/bloquer`, { method: 'POST', body: { motif } }),
+  // Le déblocage passe par l'annulation de la DÉCLARATION, pas par le support : c'est la trace qui
+  // porte la réversibilité (qui a débloqué, quand), et le support suit.
+  annulerDeclarationPerteVol: (id) =>
+    request(`/api/acces/declarations/${id}/annuler`, { method: 'POST', body: {} }),
+  // Enrôlement et rotation renvoient LE SECRET EN CLAIR UNE SEULE FOIS (RG-SOCLE-06 : il est haché
+  // en base, jamais restitué ensuite). L'écran doit le montrer et le dire.
+  enrolerTerminal: (corps) => request('/api/acces/terminaux', { method: 'POST', body: corps }),
+  rotationJetonTerminal: (id) =>
+    request(`/api/acces/terminaux/${id}/jetons`, { method: 'POST', body: {} }),
+  revoquerTerminal: (id) =>
+    request(`/api/acces/terminaux/${id}/revoquer`, { method: 'POST', body: {} }),
+
   // Reporting / Pilotage (M7). Route hors /api (proxifiée via /reporting).
   dashboardEtablissement: (id) => request(`/reporting/dashboards/etablissement/${id}`),
   // Référentiel des indicateurs (M7).

@@ -54,6 +54,10 @@ const NAV = [
     section: 'Contrôle d’accès',
     items: [
       { id: 'supervision', ic: '◉', label: 'Supervision', cap: 'controle_acces' },
+      // Regarder ne suffisait pas : dix-huit operations exposees, deux atteignables. Bloquer un
+      // badge perdu et appairer une carte sont les deux gestes les plus frequents d'un exploitant,
+      // et aucun des deux n'etait possible depuis l'application.
+      { id: 'acces', ic: '▭', label: 'Badges & terminaux', cap: 'controle_acces', perms: ['acces.lire', 'acces.appairer', 'acces.bloquer_support', 'acces.gerer'] },
     ],
   },
   {
