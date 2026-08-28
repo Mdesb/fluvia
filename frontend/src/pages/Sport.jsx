@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
+import { resoudre } from '../components/Liste.jsx'
 
 /**
  * SPORT & FITNESS — et d'abord **les alertes que personne n'entendait**.
@@ -42,6 +43,12 @@ function depuis(v) {
   return `il y a ${Math.floor(heures / 24)} j`
 }
 
+// Un espace se nomme `libelle` ou `nom` selon l'entité : on accepte les deux plutôt que de parier.
+function nomEspace(espace) {
+  if (!espace) return null
+  return espace.libelle || espace.nom || null
+}
+
 export default function Sport({ etabActif, droits = [] }) {
   // Le droit exige par le serveur est `sport.superviser_nocturne`, et lui seul : afficher le
   // bouton a qui ne l'a pas produirait un 403 sur un geste d'urgence -- le pire moment pour
@@ -57,18 +64,28 @@ export default function Sport({ etabActif, droits = [] }) {
   // Un compteur << il y a N minutes >> qui ne bouge pas est un compteur faux : on redessine.
   const [, setTic] = useState(0)
 
+  const [espaces, setEspaces] = useState([])
+
   const recharger = useCallback(async () => {
     setChargement(true)
     setErreur(null)
     try {
-      const [s, a, ab] = await Promise.all([
+      // OU EST L ALERTE : la premiere question sur un appel d urgence, et elle etait sans reponse.
+      //
+      // `EvenementSOS.espaceAcces` revient en IRI nue — `EspaceAcces` n'expose rien dans le groupe
+      // `sos:read`, vérifié dans l'entité. La carte affichait donc « Espace inconnu » sur CHAQUE
+      // alerte, y compris celles dont l'espace est parfaitement enregistré. Sur un écran où l'on
+      // court, ce n'est pas une colonne vide : c'est l'information qui dit où courir.
+      const [s, a, ab, es] = await Promise.all([
         api.evenementsSOS(),
         api.alertesPresenceIsolee().catch(() => null),
         api.abonnementsFitness().catch(() => null),
+        api.espaces().catch(() => null),
       ])
       setSos(membres(s))
       setAlertes(a ? membres(a) : [])
       setAbonnements(ab ? membres(ab) : [])
+      setEspaces(es ? membres(es) : [])
     } catch (e) {
       setErreur(e.message || 'Le module n’a pas pu être chargé.')
     } finally {
@@ -139,7 +156,7 @@ export default function Sport({ etabActif, droits = [] }) {
                 className="card"
                 style={{ padding: 12, border: '1px solid var(--crit)', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}
               >
-                <span className="nm">{e.espaceAcces?.libelle || e.espaceAcces?.nom || 'Espace inconnu'}</span>
+                <span className="nm">{nomEspace(resoudre(e.espaceAcces, espaces)) || 'espace non transmis'}</span>
                 <span className="sub">
                   {quandHeure(e.horodatage)} · {depuis(e.horodatage)}
                 </span>
@@ -182,7 +199,7 @@ export default function Sport({ etabActif, droits = [] }) {
               <tbody>
                 {alertes.map((a) => (
                   <tr key={a.id}>
-                    <td>{a.espaceAcces?.libelle || a.espaceAcces?.nom || '—'}</td>
+                    <td>{nomEspace(resoudre(a.espaceAcces, espaces)) || '—'}</td>
                     <td className="num">{a.nbPersonnesDetectees}</td>
                     <td className="num">{quandHeure(a.horodatage)}</td>
                   </tr>

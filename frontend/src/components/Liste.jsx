@@ -149,6 +149,31 @@ function afficher(v) {
   return String(v)
 }
 
+// LA RELATION RENDUE EN IRI, RÉSOLUE CONTRE UNE LISTE DÉJÀ CHARGÉE.
+//
+// API Platform n'embarque une relation que si l'entité cible expose au moins une propriété dans le
+// groupe de sérialisation courant ; sinon elle rend une IRI nue. Côté écran, `x.relation.propriete`
+// vaut alors `undefined` — sans erreur, sans avertissement, avec une colonne vide qui se lit comme
+// une donnée manquante.
+//
+// **Treize défauts de cette seule cause ont été confirmés le 28/08**, dans dix modules : le mandat
+// d'une ligne de remise SEPA, le barème d'une retenue de caution, l'impayé d'une représentation,
+// l'agent d'un ticket, l'assigné d'une tâche, le déposant d'un document, l'auteur d'une activité,
+// le rôle d'un plafond, le fournisseur d'une commande et d'une facture, l'article d'une ligne de
+// commande et d'un mouvement de stock, l'espace d'une alerte SOS.
+//
+// Chacun avait sa petite fonction de résolution recopiée. Celle-ci les remplace : on lui passe la
+// relation telle que le serveur l'a rendue et la liste qu'on a déjà en main.
+//
+// Elle accepte les DEUX formes — objet embarqué ou IRI — pour que l'écran continue de marcher le
+// jour où quelqu'un ajoute un `#[Groups]` côté serveur, sans qu'on ait à y revenir.
+export function resoudre(relation, liste) {
+  if (!relation) return null
+  if (typeof relation === 'object') return relation
+  const id = String(relation).split('/').pop()
+  return (liste || []).find((x) => x.id === id || x.code === id) || null
+}
+
 // « JE NE SAIS PAS » N'EST PAS « IL N'Y EN A PAS », ET L'ÉCRAN NE DOIT PAS CONFONDRE LES DEUX.
 //
 // `Utilisateur` n'expose aucune propriété aux groupes de sérialisation de cinq modules (CRM,

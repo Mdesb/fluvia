@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import Modal from './Modal.jsx'
-import { dateHeureFr } from './Liste.jsx'
+import { dateHeureFr, resoudre } from './Liste.jsx'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import { mot } from '../api/vocabulaire.js'
@@ -44,10 +44,21 @@ export default function FacturesFournisseur({ etabActif, droits }) {
   const peutContester = aLeDroit(droits, 'finance.supplier_invoice_dispute')
   const peutSaisir = aLeDroit(droits, 'finance.supplier_invoice_create')
 
+  const [fournisseurs, setFournisseurs] = useState([])
+
   const recharger = useCallback(async () => {
     setChargement(true)
     try {
-      setFactures(membres(await api.facturesFournisseur()))
+      // Le fournisseur d une facture revient en IRI nue : l entite Fournisseur n expose rien
+      // dans le groupe qui la porte. La colonne << fournisseur >> etait donc vide sur un ecran
+      // dont tout l objet est de savoir A QUI on doit de l argent. On charge la liste pour la
+      // resoudre ; son absence ne prive pas des factures.
+      const [f, four] = await Promise.all([
+        api.facturesFournisseur(),
+        api.stockFournisseurs().catch(() => null),
+      ])
+      setFactures(membres(f))
+      setFournisseurs(four ? membres(four) : [])
     } catch (e) {
       setErreur(e.message)
     } finally {
@@ -220,7 +231,7 @@ function TableauFactures({ titre, sous, factures, vide, actions }) {
                       <span className="nm">{f.supplierInvoiceNumber || '—'}</span>
                       {f.invoiceDate && <div className="sub">{dateHeureFr(f.invoiceDate)}</div>}
                     </td>
-                    <td>{f.supplier?.raisonSociale || '—'}</td>
+                    <td>{resoudre(f.supplier, fournisseurs)?.raisonSociale || <span className="sub">non transmis</span>}</td>
                     <td className="num">{euros(f.amountInclTax)}</td>
                     <td>
                       {f.dueDate ? String(f.dueDate).slice(0, 10) : '—'}
@@ -294,7 +305,7 @@ function ApprobationModal({ facture, onClose, onFait, onErreur }) {
         <>
           <p style={{ marginTop: 0 }}>
             Facture <b>{facture.supplierInvoiceNumber}</b> de{' '}
-            <b>{facture.supplier?.raisonSociale || 'fournisseur inconnu'}</b> —{' '}
+            <b>{resoudre(facture.supplier, fournisseurs)?.raisonSociale || 'fournisseur non transmis'}</b> —{' '}
             <b>{euros(facture.amountInclTax)}</b> TTC.
           </p>
 
