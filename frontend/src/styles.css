@@ -78,7 +78,16 @@ a { color: var(--accent); }
 @media (prefers-reduced-motion: no-preference) { .view { animation: vin .24s ease; } @keyframes vin { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } } }
 .view-head { display: flex; align-items: flex-end; gap: 14px; margin-bottom: 20px; flex-wrap: wrap; }
 .view-head .ttl h1 { font-size: 24px; }
-.view-head .ttl p { margin: 4px 0 0; color: var(--ink-soft); font-size: 14px; }
+/* Le sous-titre d'un ecran s'ecrit `<p>` (voir CONVENTIONS-ECRANS.md) ; neuf ecrans plus anciens
+ * ecrivent `<div className="sub">` au meme endroit. Les deux disent la meme chose : on les rend
+ * pareil ici, plutot que de reecrire neuf fichiers pour un nom de balise. */
+.view-head .ttl p,
+.view-head .ttl .sub { margin: 4px 0 0; color: var(--ink-soft); font-size: 14px; }
+/* LES BOUTONS D'EN-TETE A DROITE, MEME QUAND PERSONNE N'A ECRIT `.actions`.
+ * Trois ecrans posent leur bouton principal directement dans le `.view-head`, sans conteneur : il
+ * se collait alors au titre. Pousser le TITRE plutot que tirer les actions marche dans les deux
+ * ecritures, et ne demande pas de retoucher le JSX de chaque page. */
+.view-head .ttl { margin-right: auto; }
 .view-head .actions { margin-left: auto; display: flex; gap: 9px; flex-wrap: wrap; align-items: center; }
 
 /* ---- Composants ---- */
@@ -90,6 +99,24 @@ a { color: var(--accent); }
 .btn.sm { padding: 6px 10px; font-size: 12.5px; }
 .btn.ghost { background: none; border-color: transparent; }
 .btn.lg { padding: 12px 18px; font-size: 15px; width: 100%; justify-content: center; }
+
+/* DEUX UTILITAIRES UTILISES 400 FOIS ET DEFINIS NULLE PART — MEME DEFAUT QUE `.num` PLUS BAS.
+ *
+ * `.sub` (texte secondaire) apparait 312 fois dans le JSX, `.nm` (nom, valeur principale) 88 fois,
+ * dans une trentaine de fichiers. Aucun des deux n'avait de regle GLOBALE : `.sub` n'etait style
+ * que sous `.card-h` et dans la barre du haut, `.nm` que dans les tableaux et la barre client.
+ *
+ * Partout ailleurs — sous un titre d'ecran, dans une carte, dans une liste, sous un champ — le
+ * texte marque « secondaire » sortait avec la taille et la couleur du texte principal. Il ne
+ * MANQUAIT rien a l'ecran : la hierarchie de lecture etait simplement absente, ce qui ne ressemble
+ * pas a un defaut mais a un ecran charge. C'est exactement l'histoire des 61 en-tetes `.num`
+ * alignes a gauche, racontee ligne 115.
+ *
+ * Les deux regles scopees qui suivent restent plus specifiques : elles continuent de gagner la ou
+ * elles different (11.5px dans la barre du haut).
+ */
+.sub { color: var(--ink-faint); font-size: 12.5px; }
+.nm { color: var(--ink); font-weight: 600; }
 
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
 .card-h { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
@@ -142,6 +169,24 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 
 .empty { color: var(--ink-faint); font-size: 13.5px; padding: 20px; text-align: center; }
 .hint { font-size: 12.5px; color: var(--ink-faint); margin-top: 8px; }
+
+/* DEUX CLASSES QUE LE JSX EMPLOIE ET QUE LE CSS N'AVAIT JAMAIS DECLAREES.
+ *
+ * `.lnk` : un bouton qui doit se lire comme un lien — le nom d'un produit, dans le catalogue, qui
+ * ouvre sa fiche. Sans regle, c'est un BOUTON GRIS DU NAVIGATEUR au milieu d'une colonne de texte :
+ * la cellule ne ressemble plus aux autres, et on ne devine pas que c'est le nom qui est cliquable.
+ *
+ * `.row` : une rangee de champs cote a cote — quantite, prix unitaire, remise d'une ligne de
+ * facture. Sans regle, les trois champs s'empilent l'un sous l'autre et la saisie d'une facture
+ * s'etire sur trois fois la hauteur, sans que rien ne signale une anomalie.
+ *
+ * Aucune des deux ne levait quoi que ce soit : une classe inconnue est ignoree en silence. Elles
+ * ont ete trouvees par `scripts/verifier-classes.mjs`, ecrit le 28/08 pour ca.
+ */
+.lnk { background: none; border: none; padding: 0; font: inherit; color: var(--accent); font-weight: 600; cursor: pointer; text-align: left; }
+.lnk:hover { text-decoration: underline; }
+.row { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
+.row > * { flex: 1; min-width: 90px; }
 .demo-note { background: var(--warn-bg); color: var(--warn); border-radius: 9px; padding: 8px 12px; font-size: 12.5px; font-weight: 600; display: inline-flex; gap: 7px; align-items: center; }
 
 /* ---- Bannières ---- */
@@ -150,6 +195,12 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 .banner-ok { background: var(--good-bg); color: var(--good); }
 /* Ni une erreur ni une confirmation : un etat que l'ecran signale sans crier. */
 .banner-warn { background: var(--warn-bg); color: var(--warn); }
+/* LA QUATRIEME VARIANTE MANQUAIT, ET SON ABSENCE A PRODUIT UNE CLASSE MORTE.
+ * Il n'existait aucun bandeau simplement INFORMATIF : erreur, succes, avertissement, et rien pour
+ * << voici ce qui est prevu >>. Faute de quoi la fiche client composait `alert warn|mut`, trois noms
+ * dont aucun n'existe -- une relance a venir s'affichait donc en texte nu. Memes jetons que
+ * `.badge.info`, pour que les deux se ressemblent. */
+.banner-info { background: var(--accent-soft); color: var(--accent-2); }
 
 /* ---- Menu mobile ---- */
 .burger { display: none; width: 38px; height: 38px; border-radius: 9px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); font-size: 17px; cursor: pointer; flex: none; align-items: center; justify-content: center; }

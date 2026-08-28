@@ -3,6 +3,7 @@ import { api } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import Modal from '../components/Modal.jsx'
 import Relances from '../components/Relances.jsx'
+import DevisModal from '../components/DevisModal.jsx'
 
 /**
  * LES AFFAIRES EN COURS — ce qui vit entre « un client appelle » et « un devis part ».
@@ -65,6 +66,55 @@ export default function Pipeline({ etabActif, droits = [], onNaviguer }) {
   const [nouvelle, setNouvelle] = useState(false)
   const [aPerdre, setAPerdre] = useState(null)
   const [busy, setBusy] = useState(false)
+  // L'affaire pour laquelle on est en train d'établir un devis, et le client résolu qui va le
+  // recevoir. Deux états séparés : on ouvre la modale seulement une fois le client retrouvé, sinon
+  // elle s'ouvrirait vide le temps de deux requêtes.
+  const [devisPour, setDevisPour] = useState(null)
+  const [clientDevis, setClientDevis] = useState(null)
+
+  // LA CARTE NE PORTE QUE LE NOM DU CLIENT, PAS SON IDENTIFIANT.
+  //
+  // `PipelineProvider` compose une chaîne d'affichage (« raison sociale, ou prénom + nom »). Pour en
+  // faire un destinataire de devis il faut la vraie fiche : on relit donc l'affaire, on en tire
+  // l'IRI du client, et on charge la fiche. Deux requêtes, sur un clic explicite — c'est le prix
+  // d'un écran qui ne demande pas de retaper ce qu'il affiche déjà.
+  async function ouvrirDevis(affaire) {
+    setErreur(null)
+    setBusy(true)
+    try {
+      const detail = await api.opportunite(affaire.id)
+      const ref = detail?.customer
+      const idClient = typeof ref === 'string' ? ref.split('/').pop() : ref?.id
+      if (!idClient) {
+        throw new Error("Cette affaire n'a pas de client rattaché : ouvrez sa fiche pour en choisir un.")
+      }
+      setClientDevis(await api.client(idClient))
+      setDevisPour(affaire)
+    } catch (e) {
+      setErreur(e.message || "Le client de cette affaire n'a pas pu être retrouvé.")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // Le devis créé est RATTACHÉ à l'affaire : c'est ce lien, et lui seul, qui fera passer la carte en
+  // « Devis envoyé » le jour où le devis sera émis.
+  async function lierDevis(piece) {
+    setDevisPour(null)
+    setClientDevis(null)
+    if (!piece?.id) return
+    try {
+      await api.majOpportunite(devisPour.id, { commercialDocumentRef: piece.id })
+      setSucces('Devis créé et rattaché à l’affaire. La carte suivra le devis dès qu’il sera émis.')
+      await recharger()
+    } catch (e) {
+      // Le devis EXISTE : le dire, sinon on le recrée et il y en a deux.
+      setErreur(
+        `Le devis a bien été créé, mais le lien avec l’affaire n’a pas pu être enregistré (${e.message}). `
+        + 'Vous le retrouverez dans l’écran Facturation.',
+      )
+    }
+  }
 
   const recharger = useCallback(async () => {
     setChargement(true)
@@ -101,9 +151,9 @@ export default function Pipeline({ etabActif, droits = [], onNaviguer }) {
   const colonnes = tableau?.colonnes || []
 
   return (
-    <div>
-      <div className="page-head">
-        <div>
+    <div className="view">
+      <div className="view-head">
+        <div className="ttl">
           <h1>Affaires</h1>
           <div className="sub">
             {tableau?.total || 0} affaire{(tableau?.total || 0) > 1 ? 's' : ''} · montants prévisionnels
@@ -116,8 +166,8 @@ export default function Pipeline({ etabActif, droits = [], onNaviguer }) {
         )}
       </div>
 
-      {erreur && <div className="alert crit">{erreur}</div>}
-      {succes && <div className="alert good">{succes}</div>}
+      {erreur && <div className="banner banner-error">{erreur}</div>}
+      {succes && <div className="banner banner-ok">{succes}</div>}
 
       {/* CE QU'IL RESTE A FAIRE, AVANT LE TABLEAU DES AFFAIRES.
           Le pipeline dit ou en sont les affaires ; les relances disent ce qu'on doit faire
@@ -130,8 +180,8 @@ export default function Pipeline({ etabActif, droits = [], onNaviguer }) {
 
       <div style={{ display: 'grid', gridTemplateColumns: `repeat(${colonnes.length}, minmax(210px, 1fr))`, gap: 12, overflowX: 'auto' }}>
         {colonnes.map((col) => (
-          <section className="panel" key={col.etape} style={{ minWidth: 210 }}>
-            <div className="panel-h" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
+          <section className="card" key={col.etape} style={{ minWidth: 210 }}>
+            <div className="card-h" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
               <span>{col.libelle}</span>
               <span className="sub" style={{ fontVariantNumeric: 'tabular-nums' }}>
                 {col.affaires.length} · {euros(col.montantTotal)}
@@ -145,7 +195,7 @@ export default function Pipeline({ etabActif, droits = [], onNaviguer }) {
                 col.affaires.map((a) => (
                   <article
                     key={a.id}
-                    className="panel"
+                    className="card"
                     style={{ padding: 10, border: '1px solid var(--line)', display: 'grid', gap: 4 }}
                   >
                     <span className="nm" style={{ fontSize: 13.5 }}>{a.titre}</span>
@@ -185,6 +235,25 @@ export default function Pipeline({ etabActif, droits = [], onNaviguer }) {
                             onClick={() => agir(() => api.majOpportunite(a.id, { stage: 'qualified' }))}
                           >
                             Qualifier
+                          </button>
+                        )}
+                        {/* LE DEVIS SE FAIT DEPUIS L'AFFAIRE, ET C'EST CE QUI FAIT AVANCER LA COLONNE.
+                            `PipelineProvider` DÉDUIT l'étape du statut du devis lié — l'en-tête de ce
+                            fichier l'explique en détail — mais rien dans le front ne posait jamais
+                            `commercialDocumentRef`. Aucune affaire ne pouvait donc atteindre
+                            « Devis envoyé », « Gagnée » ni « Perdue par le devis » : l'automatisation
+                            était écrite, branchée, et inerte faute du geste qui l'amorce.
+                            C'est la suite naturelle de « facturer depuis la fiche client » — même
+                            modale, un cran plus tôt dans la chaîne. */}
+                        {a.client && !a.devis && (
+                          <button
+                            className="btn ghost sm"
+                            type="button"
+                            disabled={busy}
+                            style={{ padding: '1px 8px', fontSize: 11.5 }}
+                            onClick={() => ouvrirDevis(a)}
+                          >
+                            Etablir un devis
                           </button>
                         )}
                         <button
@@ -232,6 +301,15 @@ export default function Pipeline({ etabActif, droits = [], onNaviguer }) {
             setAPerdre(null)
           }, 'Affaire close.')
         }
+      />
+
+      {/* La même modale que l'écran Facturation et la fiche client — troisième porte, une seule
+          implémentation. Ici le client vient de l'affaire, et le devis créé lui est rattaché. */}
+      <DevisModal
+        open={!!devisPour && !!clientDevis}
+        client={clientDevis}
+        onClose={() => { setDevisPour(null); setClientDevis(null) }}
+        onCree={lierDevis}
       />
     </div>
   )

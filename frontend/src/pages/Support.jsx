@@ -3,6 +3,7 @@ import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import Modal from '../components/Modal.jsx'
 import Tabs from '../components/Tabs.jsx'
+import { nomOuAbsence } from '../components/Liste.jsx'
 
 /**
  * ASSISTANCE — l'écran qui manquait à un module entièrement construit.
@@ -50,9 +51,19 @@ function quand(v) {
   return d.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
+// LE CONSTAT DE L'AUTEUR ÉTAIT JUSTE, LE REPLI NE L'ÉTAIT PAS.
+//
+// « IRI seule : on ne devine pas un nom à partir d'une URL » — exact, et c'est pour ça que cette
+// fonction rendait `null`. Le défaut était en aval : les appelants repliaient sur « non affecté » et
+// « Auteur inconnu », donc l'écran AFFIRMAIT une absence là où il avait seulement un manque de
+// lecture. Un ticket pris en charge s'annonçait libre.
+//
+// `nomOuAbsence` (dans `components/Liste.jsx`) distingue les deux états et porte l'explication.
+// Cette fonction-ci reste pour les endroits où l'on veut vraiment `null` afin de composer une
+// phrase (« par X ») : une phrase tronquée vaut mieux qu'une phrase qui invente.
 function nomUtilisateur(u) {
   if (!u) return null
-  if (typeof u === 'string') return null // IRI seule : on ne devine pas un nom à partir d'une URL.
+  if (typeof u === 'string') return null
   const complet = [u.prenom, u.nom].filter(Boolean).join(' ').trim()
   return complet || u.email || null
 }
@@ -107,9 +118,9 @@ export default function Support({ droits = [], etabActif }) {
   }, [onglet, recharger])
 
   return (
-    <div>
-      <div className="page-head">
-        <div>
+    <div className="view">
+      <div className="view-head">
+        <div className="ttl">
           <h1>Assistance</h1>
           <div className="sub">Demandes d&rsquo;aide et base de connaissances</div>
         </div>
@@ -126,7 +137,7 @@ export default function Support({ droits = [], etabActif }) {
         onChange={setOnglet}
       />
 
-      {erreur && <div className="alert crit">{erreur}</div>}
+      {erreur && <div className="banner banner-error">{erreur}</div>}
 
       {onglet === 'tickets' ? (
         <ListeTickets
@@ -165,8 +176,8 @@ export default function Support({ droits = [], etabActif }) {
 
 function ListeTickets({ tickets, chargement, filtreStatut, onFiltrer, filtrePriorite, onFiltrerPriorite, onOuvrir }) {
   return (
-    <div className="panel">
-      <div className="panel-h" style={{ gap: 8, flexWrap: 'wrap' }}>
+    <div className="card">
+      <div className="card-h" style={{ gap: 8, flexWrap: 'wrap' }}>
         <span>Demandes</span>
 
         {/* LA PRIORITÉ AVANT LE STATUT, PARCE QUE C'EST LA QUESTION DU MATIN.
@@ -238,7 +249,7 @@ function ListeTickets({ tickets, chargement, filtreStatut, onFiltrer, filtrePrio
                       <span className="badge mut" style={{ marginLeft: 6 }}>{t.niveauAffectation}</span>
                     )}
                   </td>
-                  <td>{nomUtilisateur(t.affecteA) || <span className="sub">non affecté</span>}</td>
+                  <td>{nomOuAbsence(t.affecteA, 'non affecté')}</td>
                   <td className="num">{quand(t.dateDerniereMaj)}</td>
                 </tr>
               ))}
@@ -335,7 +346,7 @@ function FicheTicket({ id, agent, peut, onFermer, onChange }) {
         <div className="center" style={{ minHeight: 120 }}><div className="spinner" /></div>
       ) : (
         <div style={{ display: 'grid', gap: 16 }}>
-          {erreur && <div className="alert crit">{erreur}</div>}
+          {erreur && <div className="banner banner-error">{erreur}</div>}
 
           <div className="fiche-stats">
             <div>
@@ -352,11 +363,11 @@ function FicheTicket({ id, agent, peut, onFermer, onChange }) {
             </div>
             <div>
               <div className="st-lib">Affecté à</div>
-              <div className="st-val">{nomUtilisateur(ticket.affecteA) || '—'}</div>
+              <div className="st-val">{nomOuAbsence(ticket.affecteA, 'non affecté')}</div>
             </div>
           </div>
 
-          <div className="panel" style={{ padding: 14 }}>
+          <div className="card" style={{ padding: 14 }}>
             <div className="sub" style={{ marginBottom: 6 }}>
               Ouvert le {quand(ticket.dateCreation)}
               {nomUtilisateur(ticket.demandeur) ? ` par ${nomUtilisateur(ticket.demandeur)}` : ''}
@@ -373,7 +384,7 @@ function FicheTicket({ id, agent, peut, onFermer, onChange }) {
                 {messages.map((m) => (
                   <div
                     key={m.id}
-                    className="panel"
+                    className="card"
                     style={{
                       padding: 12,
                       // Une note interne ne se distingue pas par une étiquette qu'on peut manquer :
@@ -383,7 +394,7 @@ function FicheTicket({ id, agent, peut, onFermer, onChange }) {
                     }}
                   >
                     <div className="sub" style={{ marginBottom: 4 }}>
-                      {nomUtilisateur(m.auteur) || 'Auteur inconnu'} · {quand(m.dateCreation)}
+                      {nomOuAbsence(m.auteur, 'Auteur inconnu')} · {quand(m.dateCreation)}
                       {m.noteInterne && <span className="badge warn" style={{ marginLeft: 8 }}>note interne</span>}
                     </div>
                     <div style={{ whiteSpace: 'pre-wrap' }}>{m.contenu}</div>
@@ -594,7 +605,7 @@ function OuvrirDemande({ open, onFermer, onOuvert }) {
   return (
     <Modal open={open} onClose={onFermer} titre="Ouvrir une demande" taille="md">
       <form onSubmit={envoyer} style={{ display: 'grid', gap: 12 }}>
-        {erreur && <div className="alert crit">{erreur}</div>}
+        {erreur && <div className="banner banner-error">{erreur}</div>}
         <div>
           <label htmlFor="tk-sujet">Sujet *</label>
           <input id="tk-sujet" className="input" required value={sujet} onChange={(e) => setSujet(e.target.value)} />
@@ -736,8 +747,8 @@ function BaseConnaissances({ droits = [], etabActif }) {
     : articles
 
   return (
-    <div className="panel">
-      <div className="panel-h" style={{ gap: 8, flexWrap: 'wrap' }}>
+    <div className="card">
+      <div className="card-h" style={{ gap: 8, flexWrap: 'wrap' }}>
         <span>Articles d&rsquo;aide</span>
 
         {categories.length > 0 && (
@@ -769,8 +780,8 @@ function BaseConnaissances({ droits = [], etabActif }) {
         )}
       </div>
 
-      {erreur && <div className="alert crit">{erreur}</div>}
-      {succes && <div className="alert good">{succes}</div>}
+      {erreur && <div className="banner banner-error">{erreur}</div>}
+      {succes && <div className="banner banner-ok">{succes}</div>}
 
       {chargement ? (
         <div className="center" style={{ minHeight: 120 }}><div className="spinner" /></div>
@@ -787,7 +798,7 @@ function BaseConnaissances({ droits = [], etabActif }) {
           {visibles.map((a) => (
             <article
               key={a.id}
-              className="panel"
+              className="card"
               style={{ padding: 12, border: '1px solid var(--line)', display: 'grid', gap: 6 }}
             >
               <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
@@ -927,7 +938,7 @@ function RedactionArticle({ article, categories, etabActif, seulementLocal, onFe
       taille="lg"
     >
       <div style={{ display: 'grid', gap: 12 }}>
-        {erreur && <div className="alert crit">{erreur}</div>}
+        {erreur && <div className="banner banner-error">{erreur}</div>}
 
         <label style={{ display: 'grid', gap: 4 }}>
           <span className="sub">Titre</span>
@@ -973,7 +984,7 @@ function RedactionArticle({ article, categories, etabActif, seulementLocal, onFe
         </div>
 
         {!existant && portee === 'local' && !etabActif && (
-          <div className="alert warn">
+          <div className="banner banner-warn">
             Aucun établissement actif : un article local doit en référencer un.
           </div>
         )}

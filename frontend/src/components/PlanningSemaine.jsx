@@ -102,8 +102,8 @@ export default function PlanningSemaine({ creneaux, occupation, ressources, onCr
   const libelleSemaine = `${jours[0].toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })} – ${jours[6].toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}`
 
   return (
-    <div className="panel">
-      <div className="panel-h" style={{ gap: 10, flexWrap: 'wrap' }}>
+    <div className="card">
+      <div className="card-h" style={{ gap: 10, flexWrap: 'wrap' }}>
         <button className="btn ghost sm" type="button" onClick={() => decaler(-1)} aria-label="Semaine précédente">←</button>
         <span style={{ minWidth: 200, textAlign: 'center' }}>{libelleSemaine}</span>
         <button className="btn ghost sm" type="button" onClick={() => decaler(1)} aria-label="Semaine suivante">→</button>

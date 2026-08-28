@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Modal from './Modal.jsx'
 import { dateHeureFr } from './Liste.jsx'
 import { api, membres } from '../api/client.js'
@@ -36,6 +36,7 @@ import { mot } from '../api/vocabulaire.js'
 
 export default function ImpayesRecouvrement({ etabActif, droits }) {
   const [incidents, setIncidents] = useState([])
+  const [totalIncidents, setTotalIncidents] = useState(null)
   const [bord, setBord] = useState(null)
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
@@ -48,7 +49,14 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
   const recharger = useCallback(async () => {
     setChargement(true)
     try {
-      setIncidents(membres(await api.incidentsImpayes()))
+      const reponse = await api.incidentsImpayes()
+      setIncidents(membres(reponse))
+      // Le serveur plafonne chaque collection à 30 lignes (l'explication complète est dans
+      // `components/Liste.jsx`). Ici la conséquence n'est pas seulement une liste courte : le
+      // tableau des représentations retrouve le nom du redevable EN RECOUPANT cette liste. Au-delà
+      // d'une page, des représentations perdent leur redevable sans que rien ne le dise.
+      const total = reponse?.totalItems ?? reponse?.['hydra:totalItems']
+      setTotalIncidents(typeof total === 'number' ? total : null)
     } catch (e) {
       setErreur(e.message)
     } finally {
@@ -81,6 +89,8 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
     }
   }
 
+  const incidentsParId = useMemo(() => new Map(incidents.map((i) => [i.id, i])), [incidents])
+
   const ouverts = incidents.filter((i) => i.statut !== 'resolu')
   const resolus = incidents.filter((i) => i.statut === 'resolu')
 
@@ -95,6 +105,36 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
           chaque ligne ci-dessous, quelqu'un ne peut plus entrer et se présentera au guichet sans
           savoir pourquoi. {bord.nbEnRepresentation} en attente de représentation bancaire,{' '}
           {bord.nbEnRecouvrement} en recouvrement.
+        </div>
+      )}
+
+      {/* LE QUATRIÈME CHIFFRE DU TABLEAU DE BORD, QUE PERSONNE N'AFFICHAIT (28/08).
+          `tauxResolutionSelfService` était calculé par le serveur à chaque appel et jeté par le
+          front — repéré par `scripts/mesurer-signaux-muets.mjs`, pas à l'œil.
+          Ce n'est pas un indicateur de confort : c'est la part des impayés que le client a réglés
+          SEUL depuis l'application. Chaque point gagné est un appel au standard et un passage au
+          guichet en moins, sur des gens qui arrivent fâchés d'être bloqués. Un exploitant qui ne le
+          voit pas ne saura jamais que le règlement en ligne mérite d'être mieux mis en avant. */}
+      {bord && (
+        <div className="fiche-stats" style={{ marginBottom: 16 }}>
+          <div className="stat-tile">
+            <div className="st-val num">{bord.nbAccesBloques}</div>
+            <div className="st-lbl">Accès bloqués</div>
+          </div>
+          <div className="stat-tile">
+            <div className="st-val num">{bord.nbEnRepresentation}</div>
+            <div className="st-lbl">En représentation</div>
+          </div>
+          <div className="stat-tile">
+            <div className="st-val num">{bord.nbEnRecouvrement}</div>
+            <div className="st-lbl">En recouvrement</div>
+          </div>
+          <div className="stat-tile">
+            <div className="st-val num">
+              {Math.round((bord.tauxResolutionSelfService || 0) * 100)} %
+            </div>
+            <div className="st-lbl">Réglés par le client seul</div>
+          </div>
         </div>
       )}
 
@@ -219,9 +259,14 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
         </section>
       )}
 
-      <Representations peutPiloter={peutPiloter} onErreur={setErreur} />
+      <Representations
+        peutPiloter={peutPiloter}
+        incidentsParId={incidentsParId}
+        listeIncidentsPartielle={totalIncidents !== null && incidents.length < totalIncidents}
+        onErreur={setErreur}
+      />
 
-      <Politique />
+      <Politique droits={droits} etabActif={etabActif} onSucces={setSucces} />
 
       <ForcageModal
         incident={forcage}
@@ -241,7 +286,7 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
 //
 // Un agent qui reçoit l'appel d'un abonné bloqué n'a que deux réponses utiles : « ce sera représenté
 // le 5 » ou « il faut régler maintenant ». Sans cette liste, il n'avait ni l'une ni l'autre.
-function Representations({ peutPiloter, onErreur }) {
+function Representations({ peutPiloter, incidentsParId, listeIncidentsPartielle, onErreur }) {
   const [lignes, setLignes] = useState([])
   const [chargement, setChargement] = useState(true)
   const [enCours, setEnCours] = useState(false)
@@ -288,6 +333,15 @@ function Representations({ peutPiloter, onErreur }) {
         </span>
       </div>
       <div className="card-b">
+        {/* Le nom du redevable est retrouvé en recoupant la liste des impayés. Si le serveur a
+            coupé cette liste, certaines lignes garderont un tiret — et un tiret ici se lirait
+            comme « pas de redevable » plutôt que comme « je n'ai pas pu le retrouver ». */}
+        {listeIncidentsPartielle && (
+          <div className="banner banner-warn">
+            La liste des impayés a été tronquée par le serveur : le redevable de certaines
+            représentations ne peut pas être retrouvé et reste affiché « — ».
+          </div>
+        )}
         <table className="tbl">
           <thead>
             <tr>
@@ -301,7 +355,7 @@ function Representations({ peutPiloter, onErreur }) {
           <tbody>
             {lignes.map((r) => (
               <tr key={r.id}>
-                <td>{r.incident?.referenceRedevable || r.incident?.typeRedevable || '—'}</td>
+                <td>{redevableDe(r, incidentsParId)}</td>
                 <td>{r.dateProgrammee ? dateHeureFr(r.dateProgrammee) : '—'}</td>
                 <td>{r.dateExecution ? dateHeureFr(r.dateExecution) : <span className="sub">—</span>}</td>
                 <td>
@@ -342,16 +396,28 @@ function Representations({ peutPiloter, onErreur }) {
 // Elle etait modifiable par l'API et invisible de l'ecran : on voyait la consequence sans jamais la
 // cause. Un exploitant qui trouve le blocage trop brutal n'avait aucun moyen de savoir que le
 // reglage existait -- il concluait que le logiciel etait comme ca.
-function Politique() {
+//
+// ET ELLE ÉTAIT LISIBLE SANS ÊTRE MODIFIABLE (D-28/08).
+//
+// `POST` et `PATCH /api/politique_recouvrements` existaient depuis le début avec leur processor
+// dédié, et aucun écran ne les appelait. L'exploitant voyait donc la règle qui coupe l'accès de ses
+// abonnés, la trouvait trop brutale, et n'avait aucun moyen d'en changer : il en concluait que le
+// logiciel était comme ça. Montrer un réglage sans donner le bouton est pire que ne rien montrer.
+function Politique({ droits, etabActif, onSucces }) {
   const [politiques, setPolitiques] = useState([])
+  const [edition, setEdition] = useState(null)
 
-  useEffect(() => {
+  const peutParametrer = aLeDroit(droits, 'recouvrement.parametrer')
+
+  const recharger = useCallback(() => {
     let annule = false
     api.politiquesRecouvrement()
       .then((p) => { if (!annule) setPolitiques(membres(p)) })
       .catch(() => { if (!annule) setPolitiques([]) })
     return () => { annule = true }
   }, [])
+
+  useEffect(() => recharger(), [recharger])
 
   const MOMENTS = {
     apres_1er_echec: 'dès le premier échec',
@@ -364,6 +430,17 @@ function Politique() {
       <div className="card-h">
         <h3>Règle appliquée</h3>
         <span className="sub">ce qui décide du blocage</span>
+        {peutParametrer && (
+          <div className="r" style={{ marginLeft: 'auto' }}>
+            <button
+              className="btn sm"
+              type="button"
+              onClick={() => setEdition(politiques[0] || {})}
+            >
+              {politiques.length > 0 ? 'Modifier la règle' : 'Définir une règle'}
+            </button>
+          </div>
+        )}
       </div>
       <div className="card-b">
         {politiques.length === 0 ? (
@@ -402,7 +479,195 @@ function Politique() {
           ))
         )}
       </div>
+
+      <PolitiqueModal
+        politique={edition}
+        etabActif={etabActif}
+        onClose={() => setEdition(null)}
+        onFait={(m) => { setEdition(null); onSucces(m); recharger() }}
+      />
     </section>
+  )
+}
+
+// LA MODALE QUI RÈGLE LA DURETÉ DU RECOUVREMENT.
+//
+// Les cinq champs ne sont pas cinq préférences : ce sont trois décisions commerciales et deux
+// paramètres bancaires, et l'écran les présente dans cet ordre parce que c'est celui de la question
+// que l'exploitant se pose — « à partir de quand je ferme la porte ? » avant « combien de fois la
+// banque réessaie ? ».
+function PolitiqueModal({ politique, etabActif, onClose, onFait }) {
+  const edition = politique && politique.id
+  const [nbRepresentationsMax, setNbMax] = useState(1)
+  const [calendrier, setCalendrier] = useState('5')
+  const [momentRefusAcces, setMoment] = useState('apres_representation_echouee')
+  const [nReprAvantBlocage, setNRepr] = useState('')
+  const [delaiSuspension, setDelai] = useState('')
+  const [enCours, setEnCours] = useState(false)
+  const [erreur, setErreur] = useState(null)
+
+  useEffect(() => {
+    if (!politique) return
+    setNbMax(politique.nbRepresentationsMax ?? 1)
+    setCalendrier((politique.calendrierRepresentationJours || [5]).join(', '))
+    setMoment(politique.momentRefusAcces || 'apres_representation_echouee')
+    setNRepr(politique.nReprAvantBlocage != null ? String(politique.nReprAvantBlocage) : '')
+    setDelai(
+      politique.delaiAvantSuspensionContratJours != null
+        ? String(politique.delaiAvantSuspensionContratJours)
+        : '',
+    )
+    setErreur(null)
+  }, [politique])
+
+  async function envoyer(e) {
+    e.preventDefault()
+    setEnCours(true)
+    setErreur(null)
+    try {
+      // LE CALENDRIER EST SAISI EN TEXTE ET ENVOYÉ EN TABLEAU D'ENTIERS.
+      //
+      // « 5, 12 » est ce qu'un humain écrit ; `[5, 12]` est ce que la colonne JSON attend. Envoyer
+      // les chaînes telles quelles passerait la validation d'API Platform sans broncher et écrirait
+      // `["5", "12"]` en base — que le moteur de recouvrement comparerait à des entiers, donc
+      // jamais. Une règle silencieusement inapplicable, et aucune erreur nulle part.
+      const jours = calendrier
+        .split(/[,;\s]+/)
+        .map((j) => parseInt(j, 10))
+        .filter((j) => Number.isInteger(j) && j >= 0)
+      if (jours.length === 0) throw new Error('Indiquez au moins un délai de représentation, en jours.')
+
+      const corps = {
+        nbRepresentationsMax: Number(nbRepresentationsMax),
+        calendrierRepresentationJours: jours,
+        momentRefusAcces,
+        nReprAvantBlocage:
+          momentRefusAcces === 'apres_n_representations_echouees' && nReprAvantBlocage !== ''
+            ? Number(nReprAvantBlocage)
+            : null,
+        delaiAvantSuspensionContratJours: delaiSuspension !== '' ? Number(delaiSuspension) : null,
+      }
+
+      if (edition) {
+        await api.majPolitiqueRecouvrement(politique.id, corps)
+      } else {
+        await api.creerPolitiqueRecouvrement({
+          ...corps,
+          etablissement: `/api/etablissements/${etabActif}`,
+        })
+      }
+      onFait('Règle de recouvrement enregistrée. Elle vaut pour les incidents à venir.')
+    } catch (err) {
+      setErreur(err.message || "La règle n'a pas pu être enregistrée.")
+    } finally {
+      setEnCours(false)
+    }
+  }
+
+  return (
+    <Modal
+      open={!!politique}
+      onClose={onClose}
+      titre={edition ? 'Modifier la règle de recouvrement' : 'Définir la règle de recouvrement'}
+    >
+      <form onSubmit={envoyer}>
+        {erreur && <div className="banner banner-error">{erreur}</div>}
+
+        <div className="banner banner-warn">
+          <b>Cette règle ferme des portes.</b> Elle décide à quel moment un abonné qui doit de
+          l&rsquo;argent cesse de pouvoir entrer. La durcir se voit tout de suite au guichet ; la
+          desserrer ne rouvre pas les accès déjà bloqués.
+        </div>
+
+        <div className="field">
+          <label htmlFor="pr-moment">Refuser l&rsquo;accès…</label>
+          <select
+            id="pr-moment"
+            className="input"
+            value={momentRefusAcces}
+            onChange={(e) => setMoment(e.target.value)}
+          >
+            <option value="apres_1er_echec">dès le premier échec de prélèvement</option>
+            <option value="apres_representation_echouee">après une représentation échouée</option>
+            <option value="apres_n_representations_echouees">après N représentations échouées</option>
+          </select>
+          <div className="hint">
+            « Dès le premier échec » bloque un abonné dont la banque a simplement refusé un
+            prélèvement — parfois pour une erreur de leur côté. Les deux autres laissent à la banque
+            le temps de réessayer avant de fermer la porte.
+          </div>
+        </div>
+
+        {momentRefusAcces === 'apres_n_representations_echouees' && (
+          <div className="field">
+            <label htmlFor="pr-nrepr">Nombre de représentations échouées avant blocage</label>
+            <input
+              id="pr-nrepr"
+              className="input"
+              type="number"
+              min="1"
+              value={nReprAvantBlocage}
+              onChange={(e) => setNRepr(e.target.value)}
+            />
+          </div>
+        )}
+
+        <div className="field">
+          <label htmlFor="pr-nbmax">Représentations bancaires maximum</label>
+          <input
+            id="pr-nbmax"
+            className="input"
+            type="number"
+            min="0"
+            value={nbRepresentationsMax}
+            onChange={(e) => setNbMax(e.target.value)}
+          />
+          <div className="hint">
+            Combien de fois on redemande à la banque de prélever après un rejet. Chaque
+            représentation peut être facturée par la banque, au créancier comme au débiteur.
+          </div>
+        </div>
+
+        <div className="field">
+          <label htmlFor="pr-calendrier">Calendrier des représentations (jours)</label>
+          <input
+            id="pr-calendrier"
+            className="input mono"
+            placeholder="5, 12"
+            value={calendrier}
+            onChange={(e) => setCalendrier(e.target.value)}
+          />
+          <div className="hint">
+            En jours après le rejet, séparés par des virgules. « 5, 12 » représente une première fois
+            à J+5, une seconde à J+12.
+          </div>
+        </div>
+
+        <div className="field">
+          <label htmlFor="pr-suspension">Suspendre le contrat après (jours)</label>
+          <input
+            id="pr-suspension"
+            className="input"
+            type="number"
+            min="0"
+            placeholder="jamais"
+            value={delaiSuspension}
+            onChange={(e) => setDelai(e.target.value)}
+          />
+          <div className="hint">
+            Laisser vide pour ne jamais suspendre. Suspendre un contrat va plus loin que bloquer un
+            accès : l&rsquo;abonnement lui-même s&rsquo;arrête.
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
+          <button className="btn" type="button" onClick={onClose}>Annuler</button>
+          <button className="btn primary" type="submit" disabled={enCours}>
+            {enCours ? 'Enregistrement…' : 'Enregistrer la règle'}
+          </button>
+        </div>
+      </form>
+    </Modal>
   )
 }
 
@@ -473,6 +738,33 @@ function ForcageModal({ incident, onClose, onFait, onErreur }) {
 
 // Les montants d'impayé sont en centimes entiers, pas en décimal : les passer à `euros` les
 // diviserait par cent de travers.
+// LA COLONNE « REDEVABLE » DES REPRÉSENTATIONS ÉTAIT VIDE DEPUIS TOUJOURS, ET PERSONNE NE L'AVAIT VU.
+//
+// Le code lisait `r.incident?.referenceRedevable`. Or `IncidentImpaye` ne déclare AUCUNE propriété
+// dans le groupe `representation:read` — vérifié dans l'entité, pas supposé : le champ `incident`
+// d'une représentation revient donc en IRI nue, et l'expression valait `undefined` sur chaque ligne.
+// La colonne affichait un tiret partout.
+//
+// Ce n'est pas cosmétique. Le commentaire au-dessus de ce tableau explique sa raison d'être : « un
+// agent qui reçoit l'appel d'un abonné bloqué n'a que deux réponses utiles — ce sera représenté le 5,
+// ou il faut régler maintenant ». Sans le nom, il ne peut pas savoir QUELLE ligne est celle de son
+// interlocuteur : le tableau ne répond plus à la seule question pour laquelle il existe.
+//
+// Même défaut que `ligne.mandat` dans l'écran SEPA, trouvé le même jour. Deux relations, deux
+// écrans, une seule cause : une expression optionnelle sur une relation non embarquée ne lève pas,
+// elle rend `undefined` — et `undefined` s'affiche comme une donnée manquante, pas comme un bug.
+function redevableDe(representation, incidentsParId) {
+  const ref = representation.incident
+  if (!ref) return '—'
+  // On accepte les deux formes : si quelqu'un ajoute un jour `representation:read` aux propriétés
+  // de l'incident, cet écran s'en servira sans qu'on ait à y revenir.
+  const incident = typeof ref === 'object'
+    ? ref
+    : incidentsParId.get(String(ref).split('/').pop())
+  if (!incident) return '—'
+  return incident.referenceRedevable || incident.typeRedevable || '—'
+}
+
 function centimes(v) {
   const n = Number(v)
   if (!Number.isFinite(n)) return '—'

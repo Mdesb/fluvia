@@ -5,7 +5,7 @@ import InventaireStock from '../components/InventaireStock.jsx'
 import AchatsStock from '../components/AchatsStock.jsx'
 import ValorisationStock from '../components/ValorisationStock.jsx'
 import Tabs from '../components/Tabs.jsx'
-import { dateHeureFr } from '../components/Liste.jsx'
+import { dateHeureFr, resoudre } from '../components/Liste.jsx'
 import { api, membres } from '../api/client.js'
 import { aUnDesDroits } from '../api/droits.js'
 import { mot } from '../api/vocabulaire.js'
@@ -815,7 +815,12 @@ function JournalSection({ mouvements }) {
               {mouvements.map((m) => (
                 <tr key={m.id}>
                   <td>{dateHeureFr(m.date)}</td>
-                  <td>{m.articleStock?.libelle || '—'}</td>
+                  {/* `MouvementStock.articleStock` revient en IRI nue : `ArticleStock` n'expose
+                      rien dans le groupe `mouvement:read`. La colonne « article » du journal des
+                      mouvements était donc vide en permanence — un journal de stock qui ne dit pas
+                      SUR QUOI porte le mouvement ne sert à rien. Résolu contre la liste des
+                      articles déjà chargée par cet écran. */}
+                  <td>{resoudre(m.articleStock, articles)?.libelle || <span className="sub">article non transmis</span>}</td>
                   <td><span className="badge mut">{mot(m.type)}</span></td>
                   <td className="num">{nombre(m.quantite)}</td>
                   <td>{m.motif || <span className="sub">—</span>}</td>

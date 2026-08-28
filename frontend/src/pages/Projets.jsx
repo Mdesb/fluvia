@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import Modal from '../components/Modal.jsx'
+import { nomOuAbsence } from '../components/Liste.jsx'
 
 /**
  * PROJETS — le travail interne qui a une fin, un responsable et des tâches.
@@ -90,9 +91,9 @@ export default function Projets({ etabActif, droits = [] }) {
   const clos = projets.filter((p) => p.statut === 'done' || p.statut === 'cancelled')
 
   return (
-    <div>
-      <div className="page-head">
-        <div>
+    <div className="view">
+      <div className="view-head">
+        <div className="ttl">
           <h1>Projets</h1>
           <div className="sub">{ouverts.length} en cours · {clos.length} clos</div>
         </div>
@@ -101,10 +102,10 @@ export default function Projets({ etabActif, droits = [] }) {
         )}
       </div>
 
-      {erreur && <div className="alert crit">{erreur}</div>}
+      {erreur && <div className="banner banner-error">{erreur}</div>}
 
       {projets.length === 0 ? (
-        <div className="panel">
+        <div className="card">
           <div className="sub" style={{ textAlign: 'center', padding: 28 }}>
             Aucun projet. Un projet, c&rsquo;est un travail interne qui a une fin — pas une demande
             d&rsquo;assistance, pas une tâche automatique.
@@ -113,8 +114,8 @@ export default function Projets({ etabActif, droits = [] }) {
       ) : (
         <div style={{ display: 'grid', gap: 12 }}>
           {[...ouverts, ...clos].map((p) => (
-            <section className="panel" key={p.id}>
-              <div className="panel-h" style={{ gap: 8, flexWrap: 'wrap' }}>
+            <section className="card" key={p.id}>
+              <div className="card-h" style={{ gap: 8, flexWrap: 'wrap' }}>
                 <span>{p.nom}</span>
                 <span className={`badge ${TON_STATUT[p.statut] || 'mut'}`}>{p.statutLibelle}</span>
                 {p.enRetard && <span className="badge crit">en retard</span>}
@@ -286,7 +287,7 @@ function FicheProjet({ projet, peutGerer, onFermer, onChange }) {
 
   return (
     <Modal open={!!projet} onClose={onFermer} titre={projet?.nom || 'Projet'} taille="lg">
-      {erreur && <div className="alert crit">{erreur}</div>}
+      {erreur && <div className="banner banner-error">{erreur}</div>}
 
       {chargement ? (
         <div className="center" style={{ minHeight: 120 }}><div className="spinner" /></div>
@@ -335,8 +336,8 @@ function FicheProjet({ projet, peutGerer, onFermer, onChange }) {
             {COLONNES_TACHE.map(([cle, libelle]) => {
               const dedans = taches.filter((t) => t.status === cle)
               return (
-                <section className="panel" key={cle}>
-                  <div className="panel-h" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
+                <section className="card" key={cle}>
+                  <div className="card-h" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
                     <span>{libelle}</span>
                     <span className="sub">{dedans.length}</span>
                   </div>
@@ -349,13 +350,13 @@ function FicheProjet({ projet, peutGerer, onFermer, onChange }) {
                         return (
                           <article
                             key={t.id}
-                            className="panel"
+                            className="card"
                             style={{ padding: 8, border: '1px solid var(--line)', display: 'grid', gap: 3 }}
                           >
                             <span style={{ fontSize: 13 }}>{t.title}</span>
                             <div className="sub" style={{ fontSize: 11.5, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                               {/* Une tache sans responsable se VOIT : c'est celle que personne n'a prise. */}
-                              <span>{t.assignee?.nom || 'non assignée'}</span>
+                              <span>{nomOuAbsence(t.assignee, 'non assignée')}</span>
                               {enRetard && <span className="badge crit">en retard</span>}
                               {t.dueDate && !enRetard && <span>{jour(t.dueDate)}</span>}
                             </div>

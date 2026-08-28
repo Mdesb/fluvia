@@ -99,16 +99,16 @@ export default function MentionsLegales({ etabActif, droits = [] }) {
   }, [recharger, etabActif])
 
   return (
-    <div>
-      <div className="page-head">
-        <div>
+    <div className="view">
+      <div className="view-head">
+        <div className="ttl">
           <h1>Mentions légales</h1>
           <div className="sub">Ce que votre boutique en ligne doit publier</div>
         </div>
       </div>
 
-      {erreur && <div className="alert crit">{erreur}</div>}
-      {succes && <div className="alert good">{succes}</div>}
+      {erreur && <div className="banner banner-error">{erreur}</div>}
+      {succes && <div className="banner banner-ok">{succes}</div>}
 
       <Tabs
         onglets={[['fiche', 'Vos informations'], ['documents', `Documents${documents.length ? ` (${documents.length})` : ''}`]]}
@@ -129,6 +129,7 @@ export default function MentionsLegales({ etabActif, droits = [] }) {
       ) : (
         <Documents
           documents={documents}
+          onAllerFiche={() => setOnglet('fiche')}
           fiche={fiche}
           peutGerer={peutGerer}
           onErreur={setErreur}
@@ -223,8 +224,8 @@ function Fiche({ fiche, peutGerer, onErreur, onSucces, onChange }) {
       {/* CE BLOC EST EN PREMIER PARCE QU'IL DÉCIDE DU CONTENU DES CGV.
           Placé en bas comme un réglage accessoire, il serait coché au hasard — et une case cochée au
           hasard ici produit une clause de rétractation fausse, opposable au vendeur. */}
-      <section className="panel">
-        <div className="panel-h">
+      <section className="card">
+        <div className="card-h">
           <span>Ce que vous vendez</span>
           <span className="sub" style={{ marginLeft: 8 }}>décide des clauses de rétractation</span>
         </div>
@@ -253,15 +254,15 @@ function Fiche({ fiche, peutGerer, onErreur, onSucces, onChange }) {
         </div>
       </section>
 
-      <section className="panel">
-        <div className="panel-h"><span>Éditeur du site</span></div>
+      <section className="card">
+        <div className="card-h"><span>Éditeur du site</span></div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14, padding: 14 }}>
           {CHAMPS.map(champ)}
         </div>
       </section>
 
-      <section className="panel">
-        <div className="panel-h">
+      <section className="card">
+        <div className="card-h">
           <span>Hébergeur</span>
           <span className="sub" style={{ marginLeft: 8 }}>exigé par la LCEN, et systématiquement oublié</span>
         </div>
@@ -270,8 +271,8 @@ function Fiche({ fiche, peutGerer, onErreur, onSucces, onChange }) {
         </div>
       </section>
 
-      <section className="panel">
-        <div className="panel-h">
+      <section className="card">
+        <div className="card-h">
           <span>Médiateur de la consommation</span>
           <span className="sub" style={{ marginLeft: 8 }}>l&rsquo;adhésion est obligatoire, même sans litige</span>
         </div>
@@ -297,7 +298,7 @@ function Fiche({ fiche, peutGerer, onErreur, onSucces, onChange }) {
   )
 }
 
-function Documents({ documents, fiche, peutGerer, onErreur, onSucces, onChange }) {
+function Documents({ documents, fiche, peutGerer, onAllerFiche, onErreur, onSucces, onChange }) {
   const [edite, setEdite] = useState(null)
   const [texte, setTexte] = useState('')
   const [busy, setBusy] = useState(false)
@@ -308,12 +309,25 @@ function Documents({ documents, fiche, peutGerer, onErreur, onSucces, onChange }
 
   if (courants.length === 0) {
     return (
-      <div className="panel">
+      // UN MESSAGE DE VIDE QUI DÉSIGNE UN BOUTON ABSENT DE L'ÉCRAN QU'ON REGARDE.
+      //
+      // Il disait « utilisez “Générer les six documents” » — et ce bouton est sur l'AUTRE onglet.
+      // Constaté en ouvrant l'écran : on lit une consigne, on cherche le bouton, il n'y est pas.
+      // Un état vide doit porter le geste qui le remplit, ou au minimum y conduire ; l'indiquer
+      // sans y mener transforme une explication en devinette.
+      <div className="card">
         <div className="sub" style={{ textAlign: 'center', padding: 28 }}>
           Aucun document pour l&rsquo;instant.{' '}
           {fiche?.id
-            ? 'Renseignez la fiche, puis utilisez « Générer les six documents ».'
-            : 'Commencez par renseigner vos informations dans l’onglet précédent.'}
+            ? 'Les six textes se composent depuis votre fiche, en un geste.'
+            : 'Renseignez d’abord vos informations : les textes en découlent.'}
+          {onAllerFiche && (
+            <div style={{ marginTop: 12 }}>
+              <button className="btn primary sm" type="button" onClick={onAllerFiche}>
+                {fiche?.id ? 'Aller générer les documents' : 'Renseigner la fiche'}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     )
@@ -349,8 +363,8 @@ function Documents({ documents, fiche, peutGerer, onErreur, onSucces, onChange }
   return (
     <div style={{ display: 'grid', gap: 12 }}>
       {courants.map((d) => (
-        <section className="panel" key={d.id}>
-          <div className="panel-h">
+        <section className="card" key={d.id}>
+          <div className="card-h">
             <span>{d.title}</span>
             <span className={`badge ${STATUTS[d.status]?.cls || 'mut'}`} style={{ marginLeft: 8 }}>
               {STATUTS[d.status]?.libelle || d.status}
@@ -371,7 +385,7 @@ function Documents({ documents, fiche, peutGerer, onErreur, onSucces, onChange }
           {/* CE QUI MANQUE EST NOMMÉ ICI, PAS LAISSÉ EN BLANC DANS LE TEXTE.
               Un trou anonyme se publie ; un trou nommé se comble. */}
           {(d.missingFields || []).length > 0 && (
-            <div className="alert warn" style={{ margin: 12 }}>
+            <div className="banner banner-warn" style={{ margin: 12 }}>
               <b>À compléter avant publication :</b> {d.missingFields.join(', ')}.
               <div className="sub" style={{ marginTop: 4 }}>
                 Renseignez ces informations dans l&rsquo;onglet « Vos informations », puis régénérez.

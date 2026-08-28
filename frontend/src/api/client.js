@@ -55,6 +55,30 @@ export class ApiError extends Error {
 // C'est la forme la plus courante du défaut de cette semaine : une requête qui part, une réponse qui
 // arrive, un résultat plausible et faux. Ici il se serait traduit par « aucune option retenue » sur
 // un panier où le caissier venait d'en cocher trois — et le client aurait payé le prix de base.
+// ⚠ `itemsPerPage` NE FAIT RIEN. IL EST ÉCRIT ~350 FOIS DANS CE FICHIER, ET LE SERVEUR L'IGNORE.
+//
+// `config/packages/api_platform.yaml` ne déclare aucun bloc `pagination` : les valeurs par défaut
+// d'API Platform s'appliquent — **30 éléments par page**, et `pagination_client_items_per_page` à
+// `false`, ce qui interdit au client de changer la taille de page.
+//
+// Mesuré contre la préprod le 28/08, pas déduit :
+//     GET /api/mandat_sepas?itemsPerPage=1   →  rend les 3 lignes. Le paramètre est ignoré.
+//     debug:config api_platform              →  pagination.enabled: true, aucun items_per_page
+//                                               ni client_items_per_page dans `defaults`.
+//
+// Autrement dit : `itemsPerPage: 500` obtient 30 lignes, exactement comme `itemsPerPage: 100`. Un
+// catalogue de 40 produits en affiche 30, un annuaire de 200 clients en affiche 30 — même code 200,
+// même forme de réponse, juste moins de lignes.
+//
+// LES PARAMÈTRES SONT CONSERVÉS À DESSEIN : ils disent quelle taille chaque écran AURAIT BESOIN
+// d'obtenir, et ils redeviendront effectifs le jour où le serveur activera
+// `pagination_client_items_per_page`. Les retirer ferait perdre cette information sans rien gagner.
+//
+// EN ATTENDANT, C'EST L'AFFICHAGE QUI PORTE L'AVERTISSEMENT. La réponse Hydra contient `totalItems`
+// — le total réel, pas la taille de la page — donc une réponse tronquée est reconnaissable.
+// `components/Liste.jsx` affiche « 30 sur 47 » à côté du titre, et les trois écrans qui RECOUPENT
+// deux listes (SEPA, cautions, recouvrement) le signalent plus fort : chez eux, une liste coupée ne
+// rend pas l'écran incomplet, elle le rend faux.
 function qs(params) {
   if (!params) return ''
   const usp = new URLSearchParams()
@@ -448,6 +472,10 @@ export const api = {
   supprimerTacheProjet: (id) => request(`/api/project_tasks/${id}`, { method: 'DELETE' }),
   creerOpportunite: (corps) => request('/api/opportunities', { method: 'POST', body: corps, ld: true }),
   majOpportunite: (id, corps) => request(`/api/opportunities/${id}`, { method: 'PATCH', body: corps }),
+  // Le detail d'une affaire, pour retrouver SON CLIENT. La carte du pipeline ne porte que le nom
+  // affichable du client (`PipelineProvider` compose une chaine), pas son identifiant : impossible
+  // d'en faire un destinataire de devis sans relire l'affaire.
+  opportunite: (id) => request(`/api/opportunities/${id}`),
   // Rattache (ou crée) un client sur une vente ouverte (M2, CA-7). Corps : un de
   // { client: uuid } | { recherche: "..." } | { creer: { nom, prenom, email, telephone } }.
   rattacherClientVente: (venteId, corps) =>
@@ -734,11 +762,69 @@ export const api = {
   comptesComptables: () =>
     request('/api/compte_comptables', { query: { itemsPerPage: 200 } }),
   cautions: () => request('/api/cautions', { query: { itemsPerPage: 100 } }),
+  // Le JOURNAL d'une caution, et le BARÈME qui chiffre ses retenues. Les deux ressources existaient
+  // sans appelant : l'écran montrait un montant retenu sans jamais dire *qui* l'a retenu, *quand*,
+  // ni *au nom de quelle règle* — les trois seules choses qu'un client conteste au guichet.
+  cautionMouvements: () => request('/api/caution_mouvements', { query: { itemsPerPage: 200 } }),
+  grillesRetenue: () => request('/api/caution_grille_retenues', { query: { itemsPerPage: 100 } }),
+  // Opérations STANDARD : elles désérialisent, donc `ld: true` (cf. `creerExportComptable`).
+  creerGrilleRetenue: (corps) =>
+    request('/api/caution_grille_retenues', { method: 'POST', body: corps, ld: true }),
+  majGrilleRetenue: (id, corps) =>
+    request(`/api/caution_grille_retenues/${id}`, { method: 'PATCH', body: corps }),
 
   // SEPA : remises de prélèvement (pain.008), mandats, rejets.
   remisesSepa: () => request('/api/remise_sepas', { query: { itemsPerPage: 100 } }),
   mandatsSepa: () => request('/api/mandat_sepas', { query: { itemsPerPage: 100 } }),
   rejetsSepa: () => request('/api/rejet_sepas', { query: { itemsPerPage: 100 } }),
+
+  // LES QUATRE ÉCRITURES SEPA, QUI EXISTAIENT TOUTES SANS APPELANT.
+  //
+  // `/api/sepa/mandats` et `/api/sepa/remises/generer` sont des opérations à corps brut (elles
+  // passent par `LecteurCorps`, pas par la désérialisation d'API Platform) : PAS de `ld: true`,
+  // sinon on annonce un type que l'opération n'attend pas.
+  //
+  // `/api/rejet_sepas` en POST est l'inverse : opération STANDARD, donc `ld: true` obligatoire —
+  // sans lui API Platform répond 415 et la déclaration de rejet échoue. Je l'avais écrite sans le
+  // drapeau ; c'est `scripts/verifier-formats.mjs` qui l'a arrêtée, pas une relecture.
+  creerMandatSepa: (corps) => request('/api/sepa/mandats', { method: 'POST', body: corps }),
+  genererRemiseSepa: (dateExecution) =>
+    request('/api/sepa/remises/generer', {
+      method: 'POST',
+      body: dateExecution ? { dateExecution } : {},
+      // La génération parcourt toutes les échéances dues de l'établissement et compose le XML :
+      // c'est la plus lente des écritures SEPA, et un spinner sans fin s'y lirait comme un blocage.
+      timeoutMs: 30000,
+    }),
+  declarerRejetSepa: (corps) =>
+    request('/api/rejet_sepas', { method: 'POST', body: corps, ld: true }),
+
+  // LES LIGNES D'UNE REMISE — ET POURQUOI ON LES CHARGE TOUTES.
+  //
+  // `LigneRemiseSepa` n'a AUCUN filtre déclaré côté serveur (aucun `#[ApiFilter]` sur l'entité) :
+  // `?remise=...` serait accepté par l'URL et IGNORÉ par Doctrine. On aurait alors la liste complète
+  // en croyant lire celle d'une remise — un résultat plausible et faux, exactement le défaut que la
+  // fonction `qs()` en tête de ce fichier documente. On charge donc large et on filtre côté client,
+  // et c'est écrit ici pour que personne n'ajoute un paramètre qui ne sert à rien.
+  lignesRemiseSepa: () => request('/api/ligne_remise_sepas', { query: { itemsPerPage: 500 } }),
+
+  // Le PARAMÉTRAGE du créancier : ICS, nom, IBAN de collecte. Sans lui, aucune remise ne peut être
+  // composée — c'est la première chose à remplir du module, et elle n'avait pas d'écran.
+  configsCreancierSepa: () =>
+    request('/api/config_creancier_sepas', { query: { itemsPerPage: 20 } }),
+  creerConfigCreancierSepa: (corps) =>
+    request('/api/config_creancier_sepas', { method: 'POST', body: corps, ld: true }),
+  majConfigCreancierSepa: (id, corps) =>
+    request(`/api/config_creancier_sepas/${id}`, { method: 'PATCH', body: corps }),
+
+  // Le pain.008 n'est PAS une opération API Platform mais un contrôleur simple qui rend du XML.
+  // Même patron que `urlTelechargementDocument` : une URL, pas un appel — le jeton doit voyager
+  // dans l'en-tête, donc l'appelant fait son `fetch` et lit un blob (voir `PrelevementsSepa.jsx`).
+  //
+  // ⚠ Cette route est hors `/api` : elle doit être routée explicitement vers Symfony (proxy Vite en
+  // dev, bloc nginx en préprod). Sans ça le SPA rend son propre `index.html` avec un 200, et le
+  // « fichier » téléchargé est une page HTML portant l'extension .xml.
+  urlPain008: (id) => `/sepa/remises/${id}/pain008`,
 
   // Recouvrement / impayés.
   incidentsImpayes: () => request('/api/incident_impayes', { query: { itemsPerPage: 100 } }),
@@ -754,6 +840,13 @@ export const api = {
       body: { resultat },
     }),
   politiquesRecouvrement: () => request('/api/politique_recouvrements', { query: { itemsPerPage: 50 } }),
+  // LA RÈGLE ÉTAIT LISIBLE ET PAS MODIFIABLE, alors que le serveur accepte POST et PATCH depuis le
+  // début. Un exploitant qui trouvait le blocage d'accès trop brutal pouvait le constater sur
+  // l'écran, et nulle part le corriger : il en concluait que le logiciel était comme ça.
+  creerPolitiqueRecouvrement: (corps) =>
+    request('/api/politique_recouvrements', { method: 'POST', body: corps, ld: true }),
+  majPolitiqueRecouvrement: (id, corps) =>
+    request(`/api/politique_recouvrements/${id}`, { method: 'PATCH', body: corps }),
 
   // --- Boutique en ligne (M3, vue admin) ---
   // Les paniers en ligne ne sont pas listables (accès par id) : la vue admin s'appuie sur les
@@ -1062,6 +1155,20 @@ export const api = {
     request(`/api/demandes-escalade/${id}/rejeter`, { method: 'POST', body: { motif } }),
   limitesAutorisation: () => request('/api/limite_autorisations', { query: { itemsPerPage: 200 } }),
   operationsSensibles: () => request('/api/operation_sensibles', { query: { itemsPerPage: 200 } }),
+  // LES PLAFONDS ÉTAIENT LISIBLES ET PAS MODIFIABLES, comme la règle de recouvrement ce matin.
+  //
+  // `POST`, `PATCH` et `DELETE` sur `/api/limite_autorisations` existent depuis le début, protégés
+  // par `autorisation.gerer`, et aucun écran ne les appelait — le pied de page de l'écran le disait
+  // même en toutes lettres : « la création et la modification passent encore par l'API ».
+  //
+  // Or un plafond REFUSE des opérations au guichet. Le voir sans pouvoir le corriger, c'est
+  // constater un blocage et devoir appeler quelqu'un pour le lever.
+  creerLimiteAutorisation: (corps) =>
+    request('/api/limite_autorisations', { method: 'POST', body: corps, ld: true }),
+  majLimiteAutorisation: (id, corps) =>
+    request(`/api/limite_autorisations/${id}`, { method: 'PATCH', body: corps }),
+  supprimerLimiteAutorisation: (id) =>
+    request(`/api/limite_autorisations/${id}`, { method: 'DELETE' }),
 
   // --- App\Legal — MENTIONS OBLIGATOIRES ---------------------------------------------------------
   //

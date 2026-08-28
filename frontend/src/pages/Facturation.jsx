@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, membres, ApiError } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
+import DevisModal from '../components/DevisModal.jsx'
 import { mot } from '../api/vocabulaire.js'
 
 // Pièces commerciales (FAC-1) : devis -> bon de commande -> bon de livraison -> facture.
@@ -54,6 +55,7 @@ const idDe = (ressource) => {
 export default function Facturation({ etabActif, droits }) {
   const [pieces, setPieces] = useState([])
   const [tauxTva, setTauxTva] = useState([])
+  const [nouveauDevis, setNouveauDevis] = useState(false)
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [enCours, setEnCours] = useState(null)
@@ -106,6 +108,17 @@ export default function Facturation({ etabActif, droits }) {
           <h1>Facturation</h1>
           <p>Devis, bons de commande, bons de livraison</p>
         </div>
+        {/* LE FORMULAIRE EST DEVENU UNE MODALE PARTAGÉE, ET CE N'EST PAS UNE QUESTION DE STYLE.
+            Il vit maintenant dans `components/DevisModal.jsx`, appelé aussi depuis la fiche d'un
+            client — c'est la demande de Maxime du 28/08. Le laisser ici en carte permanente aurait
+            imposé d'en écrire une seconde copie là-bas. */}
+        {peutGerer && (
+          <div className="actions">
+            <button className="btn primary" type="button" onClick={() => setNouveauDevis(true)}>
+              + Nouveau devis
+            </button>
+          </div>
+        )}
       </div>
 
       {erreur && <div className="banner banner-error">{erreur}</div>}
@@ -155,8 +168,13 @@ export default function Facturation({ etabActif, droits }) {
           </div>
         </div>
 
-        {peutGerer && <FormulaireDevis tauxTva={tauxTva} onCree={recharger} onErreur={setErreur} />}
       </div>
+
+      <DevisModal
+        open={nouveauDevis}
+        onClose={() => setNouveauDevis(false)}
+        onCree={() => { setNouveauDevis(false); recharger() }}
+      />
     </div>
   )
 }
@@ -223,126 +241,5 @@ function BoutonGeste({ geste, droits, occupe, onClick }) {
     >
       {occupe ? '…' : LIBELLE_GESTE[geste] || geste}
     </button>
-  )
-}
-
-const LIGNE_VIDE = { designation: '', quantite: 1, prixUnitaireHT: '', tauxTva: '' }
-
-function FormulaireDevis({ tauxTva, onCree, onErreur }) {
-  const [raisonSociale, setRaisonSociale] = useState('')
-  const [lignes, setLignes] = useState([{ ...LIGNE_VIDE }])
-  const [envoi, setEnvoi] = useState(false)
-
-  function majLigne(i, champ, valeur) {
-    setLignes((precedent) => precedent.map((l, j) => (i === j ? { ...l, [champ]: valeur } : l)))
-  }
-
-  async function soumettre(e) {
-    e.preventDefault()
-    setEnvoi(true)
-    try {
-      await api.creerDevis({
-        destinataire: { raisonSociale },
-        lignes: lignes.map((l) => ({
-          designation: l.designation,
-          quantite: Number(l.quantite) || 1,
-          prixUnitaireHT: String(l.prixUnitaireHT || '0'),
-          tauxTva: l.tauxTva,
-        })),
-      })
-      setRaisonSociale('')
-      setLignes([{ ...LIGNE_VIDE }])
-      onErreur(null)
-      await onCree()
-    } catch (err) {
-      onErreur(err instanceof ApiError ? err.message : 'Création impossible.')
-    } finally {
-      setEnvoi(false)
-    }
-  }
-
-  return (
-    <div className="card">
-      <div className="card-h">
-        <h3>Nouveau devis</h3>
-        <span className="sub">les autres pièces se dérivent</span>
-      </div>
-      <div className="card-b">
-        <form onSubmit={soumettre}>
-          <div className="field">
-            <label htmlFor="devis-client">Client</label>
-            <input
-              id="devis-client"
-              value={raisonSociale}
-              onChange={(e) => setRaisonSociale(e.target.value)}
-              placeholder="Raison sociale"
-              required
-            />
-          </div>
-
-          {lignes.map((ligne, i) => (
-            <div className="field" key={i}>
-              <label htmlFor={`ligne-${i}`}>Ligne {i + 1}</label>
-              <input
-                id={`ligne-${i}`}
-                value={ligne.designation}
-                onChange={(e) => majLigne(i, 'designation', e.target.value)}
-                placeholder="Désignation — ce que le client lira"
-                required
-              />
-              <div className="row">
-                <input
-                  type="number"
-                  min="1"
-                  value={ligne.quantite}
-                  onChange={(e) => majLigne(i, 'quantite', e.target.value)}
-                  aria-label={`Quantité de la ligne ${i + 1}`}
-                />
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={ligne.prixUnitaireHT}
-                  onChange={(e) => majLigne(i, 'prixUnitaireHT', e.target.value)}
-                  placeholder="Prix unitaire HT"
-                  aria-label={`Prix unitaire HT de la ligne ${i + 1}`}
-                  required
-                />
-                <select
-                  value={ligne.tauxTva}
-                  onChange={(e) => majLigne(i, 'tauxTva', e.target.value)}
-                  aria-label={`Taux de TVA de la ligne ${i + 1}`}
-                  required
-                >
-                  <option value="">Taux de TVA…</option>
-                  {tauxTva.map((t) => (
-                    <option key={idDe(t)} value={idDe(t)}>
-                      {t.libelle}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          ))}
-
-          <button
-            type="button"
-            className="btn ghost sm"
-            onClick={() => setLignes((p) => [...p, { ...LIGNE_VIDE }])}
-          >
-            + Ajouter une ligne
-          </button>
-
-          <p className="hint">
-            Le devis part en brouillon : rien ne sort tant que vous ne l&apos;avez pas émis, et un
-            numéro n&apos;est consommé qu&apos;à l&apos;émission — un numéro pris par une pièce
-            qu&apos;on jette laisse un trou dans la série.
-          </p>
-
-          <button type="submit" className="btn primary" disabled={envoi}>
-            {envoi ? 'Création…' : 'Créer le devis'}
-          </button>
-        </form>
-      </div>
-    </div>
   )
 }

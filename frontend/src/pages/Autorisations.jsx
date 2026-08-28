@@ -72,16 +72,16 @@ function nomUtilisateur(u) {
   return [u.prenom, u.nom].filter(Boolean).join(' ').trim() || u.email || null
 }
 
-export default function Autorisations({ droits = [] }) {
+export default function Autorisations({ droits = [], etabActif }) {
   const peutApprouver = aLeDroit(droits, 'autorisation.approuver')
   const peutGerer = aLeDroit(droits, 'autorisation.gerer')
 
   const [onglet, setOnglet] = useState('demandes')
 
   return (
-    <div>
-      <div className="page-head">
-        <div>
+    <div className="view">
+      <div className="view-head">
+        <div className="ttl">
           <h1>Autorisations</h1>
           <div className="sub">Demandes d&rsquo;escalade et plafonds</div>
         </div>
@@ -96,7 +96,7 @@ export default function Autorisations({ droits = [] }) {
       {onglet === 'demandes' ? (
         <FileDemandes peutApprouver={peutApprouver} />
       ) : (
-        <Plafonds peutGerer={peutGerer} />
+        <Plafonds peutGerer={peutGerer} etabActif={etabActif} />
       )}
     </div>
   )
@@ -158,8 +158,8 @@ function FileDemandes({ peutApprouver }) {
   const enAttente = triees.filter((d) => d.statut === 'en_attente').length
 
   return (
-    <div className="panel">
-      <div className="panel-h">
+    <div className="card">
+      <div className="card-h">
         <span>Demandes d&rsquo;escalade</span>
         {enAttente > 0 && <span className="badge warn" style={{ marginLeft: 8 }}>{enAttente} en attente</span>}
         <button className="btn ghost sm" type="button" style={{ marginLeft: 'auto' }} onClick={recharger}>
@@ -167,7 +167,7 @@ function FileDemandes({ peutApprouver }) {
         </button>
       </div>
 
-      {erreur && <div className="alert crit">{erreur}</div>}
+      {erreur && <div className="banner banner-error">{erreur}</div>}
 
       {chargement ? (
         <div className="center" style={{ minHeight: 120 }}><div className="spinner" /></div>
@@ -281,8 +281,39 @@ function FileDemandes({ peutApprouver }) {
   )
 }
 
-function Plafonds({ peutGerer }) {
+// LE RÔLE S’APPELLE `nom`, PAS `libelle` NI `code` — vérifié contre la réponse, pas supposé.
+// Le code existant lisait `role.libelle || role.code` : les deux valent `undefined` sur l’entité
+// `Role`, qui n’expose que `nom` et `permissions`. La colonne « s’applique à » repliait donc sur
+// « tout le monde » pour un plafond qui vise pourtant un rôle précis — la même famille de défaut
+// que « non affecté » dans l’assistance : un repli qui affirme au lieu de constater.
+function nomRole(role) {
+  if (!role || typeof role === 'string') return null
+  return role.nom || role.libelle || role.code || null
+}
+
+// Qui pourra faire l'opération après la levée, verbe accordé compris.
+function qui(limite, roles) {
+  const nom = nomRole(resoudreRole(limite.role, roles))
+  if (nom) return `les titulaires du rôle « ${nom} » pourront`
+  if (limite.role) return 'les titulaires du rôle visé par ce plafond pourront'
+  return 'tout le personnel pourra'
+}
+
+// Le rôle d'un plafond revient en IRI : on le retrouve dans la liste des rôles déjà chargée. Même
+// geste que pour le mandat d'une ligne de remise SEPA ou le barème d'une retenue de caution — trois
+// écrans, trois relations, une seule cause.
+function resoudreRole(role, roles) {
+  if (!role) return null
+  if (typeof role === 'object') return role
+  const id = String(role).split('/').pop()
+  return roles.find((r) => r.id === id) || null
+}
+
+function Plafonds({ peutGerer, etabActif }) {
   const [limites, setLimites] = useState([])
+  const [roles, setRoles] = useState([])
+  const [editee, setEditee] = useState(null)
+  const [suppression, setSuppression] = useState(null)
   const [operations, setOperations] = useState([])
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
@@ -291,12 +322,16 @@ function Plafonds({ peutGerer }) {
     setChargement(true)
     setErreur(null)
     try {
-      const [l, o] = await Promise.all([
+      const [l, o, r] = await Promise.all([
         api.limitesAutorisation(),
         api.operationsSensibles().catch(() => null),
+        // Les roles servent a designer A QUI un plafond s applique. Leur absence ne doit pas
+        // empecher de lire les plafonds : le champ sera simplement vide.
+        api.roles().catch(() => null),
       ])
       setLimites(membres(l))
       setOperations(o ? membres(o) : [])
+      setRoles(r ? membres(r) : [])
     } catch (e) {
       setErreur(e.message || 'Les plafonds n’ont pas pu être chargés.')
     } finally {
@@ -310,14 +345,28 @@ function Plafonds({ peutGerer }) {
 
   return (
     <div style={{ display: 'grid', gap: 16 }}>
-      <div className="panel">
-        <div className="panel-h"><span>Plafonds en vigueur</span></div>
-        {erreur && <div className="alert crit">{erreur}</div>}
+      <div className="card">
+        <div className="card-h">
+          <span>Plafonds en vigueur</span>
+          {peutGerer && (
+            <div className="r">
+              <button
+                className="btn primary sm"
+                type="button"
+                onClick={() => setEditee({})}
+              >
+                + Nouveau plafond
+              </button>
+            </div>
+          )}
+        </div>
+        {erreur && <div className="banner banner-error">{erreur}</div>}
         {chargement ? (
           <div className="center" style={{ minHeight: 120 }}><div className="spinner" /></div>
         ) : limites.length === 0 ? (
           <div className="sub" style={{ textAlign: 'center', padding: 24 }}>
             Aucun plafond défini : les opérations sensibles ne sont limitées que par les permissions.
+            {peutGerer && ' Un plafond ajoute une limite de montant par-dessus le droit — et permet de demander l’accord d’un responsable au lieu de refuser.'}
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
@@ -330,6 +379,7 @@ function Plafonds({ peutGerer }) {
                   <th className="num">Plafond</th>
                   <th className="num">Cumul / jour</th>
                   <th>Au-delà</th>
+                  {peutGerer && <th />}
                 </tr>
               </thead>
               <tbody>
@@ -337,12 +387,20 @@ function Plafonds({ peutGerer }) {
                   <tr key={l.id}>
                     <td><span className="nm">{l.operation?.libelle || l.operation?.code || '—'}</span></td>
                     <td>
+                      {/* « TOUT LE MONDE » EST UNE AFFIRMATION, ET ELLE ÉTAIT FAUSSE.
+                          Constaté en créant un plafond depuis cet écran : le rôle est bien
+                          enregistré côté serveur, mais `Role` n'expose rien dans le groupe
+                          `limite:read` — il revient en IRI nue. Le repli annonçait donc « tout le
+                          monde » pour un plafond qui ne visait qu'un rôle.
+                          Sur une règle qui REFUSE des opérations, c'est le pire des malentendus :
+                          on lève un plafond en croyant débloquer tout le personnel. On résout donc
+                          l'IRI contre la liste des rôles déjà chargée, et on ne dit « tout le
+                          monde » que si le champ est réellement vide. */}
                       {nomUtilisateur(l.utilisateur)
-                        || l.role?.libelle
-                        || l.role?.code
-                        // Ni rôle ni personne : la limite vaut pour tout le monde. Le dire, plutôt
-                        // que d'afficher un tiret qui se lit « non renseigné ».
-                        || <span className="sub">tout le monde</span>}
+                        || nomRole(resoudreRole(l.role, roles))
+                        || (l.role
+                          ? <span className="sub">un rôle précis (nom non transmis)</span>
+                          : <span className="sub">tout le monde</span>)}
                     </td>
                     <td>{PERIMETRES[l.perimetre] || l.perimetre}</td>
                     <td className="num">{l.plafondMontant != null ? euros(l.plafondMontant) : <span className="sub">aucun</span>}</td>
@@ -352,6 +410,21 @@ function Plafonds({ peutGerer }) {
                         {l.escaladeAuDela ? 'demande une escalade' : 'refus direct'}
                       </span>
                     </td>
+                    {peutGerer && (
+                      <td className="num">
+                        <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                          <button className="btn ghost sm" type="button" onClick={() => setEditee(l)}>
+                            Modifier
+                          </button>
+                          {/* SUPPRIMER UN PLAFOND N'EST PAS RANGER UNE LIGNE : c'est lever une
+                              limite. On le confirme par une modale qui dit ce que ça libère, plutôt
+                              que par un `confirm()` du navigateur qui ne dit rien. */}
+                          <button className="btn ghost sm" type="button" onClick={() => setSuppression(l)}>
+                            Lever
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -360,8 +433,8 @@ function Plafonds({ peutGerer }) {
         )}
       </div>
 
-      <div className="panel">
-        <div className="panel-h"><span>Opérations sensibles</span></div>
+      <div className="card">
+        <div className="card-h"><span>Opérations sensibles</span></div>
         {operations.length === 0 ? (
           <div className="sub" style={{ textAlign: 'center', padding: 20 }}>
             Aucune opération déclarée sensible.
@@ -394,13 +467,234 @@ function Plafonds({ peutGerer }) {
             </table>
           </div>
         )}
-        {peutGerer && (
-          <div className="hint">
-            La création et la modification des plafonds passent encore par l&rsquo;API : cet écran les
-            montre et traite les demandes, il ne les édite pas.
-          </div>
-        )}
+
       </div>
+
+      <PlafondModal
+        limite={editee}
+        etabActif={etabActif}
+        operations={operations}
+        roles={roles}
+        onClose={() => setEditee(null)}
+        onFait={() => { setEditee(null); recharger() }}
+        onErreur={setErreur}
+      />
+
+      <LeverPlafondModal
+        limite={suppression}
+        roles={roles}
+        onClose={() => setSuppression(null)}
+        onFait={() => { setSuppression(null); recharger() }}
+        onErreur={setErreur}
+      />
     </div>
   )
+}
+
+// LE PLAFOND SE RÈGLE ICI, ET CHAQUE CHAMP DIT CE QU'IL COÛTE À CELUI QUI EST AU GUICHET.
+//
+// Un plafond n'est pas un paramètre : c'est ce qui refuse une remise, un remboursement ou une
+// annulation à un caissier devant son client. Le formulaire est donc écrit du point de vue de la
+// personne bloquée, pas de celui qui règle.
+function PlafondModal({ limite, etabActif, operations, roles, onClose, onFait, onErreur }) {
+  const edition = limite && limite.id
+  const [operation, setOperation] = useState('')
+  const [role, setRole] = useState('')
+  const [perimetre, setPerimetre] = useState('propre_etablissement')
+  const [plafond, setPlafond] = useState('')
+  const [cumul, setCumul] = useState('')
+  const [escalade, setEscalade] = useState(false)
+  const [enCours, setEnCours] = useState(false)
+
+  useEffect(() => {
+    if (!limite) return
+    setOperation(iriOuVide(limite.operation, operations))
+    setRole(iriOuVide(limite.role, roles))
+    setPerimetre(limite.perimetre || 'propre_etablissement')
+    setPlafond(limite.plafondMontant != null ? String(limite.plafondMontant) : '')
+    setCumul(limite.cumulJournalierMax != null ? String(limite.cumulJournalierMax) : '')
+    setEscalade(Boolean(limite.escaladeAuDela))
+  }, [limite, operations, roles])
+
+  async function envoyer(e) {
+    e.preventDefault()
+    setEnCours(true)
+    try {
+      const corps = {
+        operation: operation || null,
+        role: role || null,
+        perimetre,
+        // Un plafond vide n'est pas zéro : c'est « pas de limite sur ce montant ». Envoyer `0`
+        // interdirait toute opération, ce qui est l'inverse de ce que l'utilisateur a laissé vide.
+        plafondMontant: plafond.trim() === '' ? null : plafond.trim(),
+        cumulJournalierMax: cumul.trim() === '' ? null : cumul.trim(),
+        escaladeAuDela: escalade,
+      }
+      if (edition) {
+        await api.majLimiteAutorisation(limite.id, corps)
+      } else {
+        // L ETABLISSEMENT EST OBLIGATOIRE, ET RIEN NE LE DISAIT AVANT L ENVOI.
+        // Sans lui, le serveur refuse en 422 ("etablissement: This value should not be null")
+        // -- constate en creant un plafond depuis l ecran, pas en lisant l entite. Un plafond
+        // vaut pour UN site : on pose donc l etablissement actif, celui que la barre du haut
+        // affiche au moment ou l on regle.
+        await api.creerLimiteAutorisation({ ...corps, etablissement: `/api/etablissements/${etabActif}` })
+      }
+      onFait()
+    } catch (err) {
+      onErreur(err.message || "Le plafond n'a pas pu être enregistré.")
+    } finally {
+      setEnCours(false)
+    }
+  }
+
+  return (
+    <Modal
+      open={!!limite}
+      onClose={onClose}
+      titre={edition ? 'Modifier un plafond' : 'Nouveau plafond'}
+    >
+      <form onSubmit={envoyer}>
+        <div className="field">
+          <label htmlFor="pl-op">Opération concernée *</label>
+          <select id="pl-op" className="input" required value={operation} onChange={(e) => setOperation(e.target.value)}>
+            <option value="">Choisir…</option>
+            {operations.map((o) => (
+              <option key={o.code} value={o['@id'] || o.code}>{o.libelle || o.code}</option>
+            ))}
+          </select>
+          <div className="hint">
+            Seules les opérations déclarées sensibles peuvent être plafonnées — la liste est celle du
+            tableau du dessous.
+          </div>
+        </div>
+
+        <div className="field">
+          <label htmlFor="pl-role">S&rsquo;applique à</label>
+          <select id="pl-role" className="input" value={role} onChange={(e) => setRole(e.target.value)}>
+            <option value="">Tout le monde</option>
+            {roles.map((r) => (
+              <option key={r.id} value={r['@id'] || `/api/roles/${r.id}`}>{nomRole(r)}</option>
+            ))}
+          </select>
+          <div className="hint">
+            Laisser « tout le monde » plafonne l&rsquo;opération pour l&rsquo;ensemble du personnel,
+            y compris vous.
+          </div>
+        </div>
+
+        <div className="field">
+          <label htmlFor="pl-montant">Plafond par opération (€)</label>
+          <input
+            id="pl-montant"
+            className="input"
+            inputMode="decimal"
+            placeholder="aucun"
+            value={plafond}
+            onChange={(e) => setPlafond(e.target.value)}
+          />
+          <div className="hint">Laisser vide pour ne pas limiter le montant d&rsquo;une opération isolée.</div>
+        </div>
+
+        <div className="field">
+          <label htmlFor="pl-cumul">Cumul maximum par jour (€)</label>
+          <input
+            id="pl-cumul"
+            className="input"
+            inputMode="decimal"
+            placeholder="aucun"
+            value={cumul}
+            onChange={(e) => setCumul(e.target.value)}
+          />
+          <div className="hint">
+            Ce qui empêche de contourner le plafond en découpant une opération en plusieurs petites.
+          </div>
+        </div>
+
+        <div className="field">
+          <label htmlFor="pl-perimetre">Portée du cumul</label>
+          <select id="pl-perimetre" className="input" value={perimetre} onChange={(e) => setPerimetre(e.target.value)}>
+            <option value="propre_session">La session de caisse en cours</option>
+            <option value="propre_etablissement">L&rsquo;établissement</option>
+            <option value="global">Tous les établissements</option>
+          </select>
+        </div>
+
+        <div className="field">
+          <label>
+            <input type="checkbox" checked={escalade} onChange={(e) => setEscalade(e.target.checked)} />{' '}
+            Au-delà, demander une escalade plutôt que refuser
+          </label>
+          {/* LA DIFFÉRENCE ENTRE LES DEUX EST CELLE QUE LE CLIENT VOIT.
+              Coché, le caissier peut demander l'accord d'un responsable et l'opération se fait dans
+              la minute. Décoché, elle est refusée, point — et le client repart. */}
+          <div className="hint">
+            Coché : le caissier demande l&rsquo;accord d&rsquo;un responsable et l&rsquo;opération
+            passe s&rsquo;il l&rsquo;accorde. Décoché : elle est refusée sur place, sans recours.
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
+          <button className="btn" type="button" onClick={onClose}>Annuler</button>
+          <button className="btn primary" type="submit" disabled={enCours || !operation}>
+            {enCours ? 'Enregistrement…' : 'Enregistrer'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+// Lever un plafond ne se confirme pas par un `window.confirm` : il faut dire CE QUI DEVIENT POSSIBLE.
+function LeverPlafondModal({ limite, roles, onClose, onFait, onErreur }) {
+  const [enCours, setEnCours] = useState(false)
+
+  async function supprimer() {
+    setEnCours(true)
+    try {
+      await api.supprimerLimiteAutorisation(limite.id)
+      onFait()
+    } catch (err) {
+      onErreur(err.message || "Le plafond n'a pas pu être levé.")
+    } finally {
+      setEnCours(false)
+    }
+  }
+
+  return (
+    <Modal open={!!limite} onClose={onClose} titre="Lever ce plafond" taille="sm">
+      {limite && (
+        <>
+          <div className="banner banner-warn">
+            {/* Le rôle est résolu ici aussi : annoncer « tout le personnel » avant de lever un
+                plafond qui ne vise qu'un rôle ferait décider sur une portée fausse.
+                Le verbe est porté par chaque branche — un sujet singulier et un sujet pluriel ne
+                s'accordent pas pareil, et une phrase fautive sur un avertissement le décrédibilise. */}
+            <b>L&rsquo;opération ne sera plus limitée.</b> Après cette levée,{' '}
+            {qui(limite, roles)} effectuer{' '}
+            « {limite.operation?.libelle || limite.operation?.code || 'cette opération'} » sans
+            montant maximum et sans demander d&rsquo;accord.
+          </div>
+          <p className="hint" style={{ marginTop: 0 }}>
+            Pour restreindre sans supprimer, modifiez le plafond plutôt que de le lever.
+          </p>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
+            <button className="btn" type="button" onClick={onClose}>Annuler</button>
+            <button className="btn primary" type="button" disabled={enCours} onClick={supprimer}>
+              {enCours ? 'Levée…' : 'Lever le plafond'}
+            </button>
+          </div>
+        </>
+      )}
+    </Modal>
+  )
+}
+
+// Une relation rendue en IRI ou embarquée : on rend l'IRI attendue par l'API dans les deux cas.
+function iriOuVide(relation, liste) {
+  if (!relation) return ''
+  if (typeof relation === 'string') return relation
+  if (relation['@id']) return relation['@id']
+  const trouve = liste.find((x) => x.id === relation.id || x.code === relation.code)
+  return trouve?.['@id'] || ''
 }

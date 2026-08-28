@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, membres, tokenStore, etablissementStore } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import Modal from '../components/Modal.jsx'
+import { nomOuAbsence } from '../components/Liste.jsx'
 
 /**
  * DOCUMENTS — quinze opérations serveur, aucun écran jusqu'ici.
@@ -166,9 +167,9 @@ export default function Documents({ etabActif, droits = [] }) {
   }
 
   return (
-    <div>
-      <div className="page-head">
-        <div>
+    <div className="view">
+      <div className="view-head">
+        <div className="ttl">
           <h1>Documents</h1>
           <div className="sub">{visibles.length} document{visibles.length > 1 ? 's' : ''}</div>
         </div>
@@ -193,11 +194,11 @@ export default function Documents({ etabActif, droits = [] }) {
         )}
       </div>
 
-      {erreur && <div className="alert crit">{erreur}</div>}
-      {succes && <div className="alert good">{succes}</div>}
+      {erreur && <div className="banner banner-error">{erreur}</div>}
+      {succes && <div className="banner banner-ok">{succes}</div>}
 
-      <div className="panel">
-        <div className="panel-h" style={{ gap: 10, flexWrap: 'wrap' }}>
+      <div className="card">
+        <div className="card-h" style={{ gap: 10, flexWrap: 'wrap' }}>
           <span>Bibliothèque</span>
           <select className="select sm" style={{ width: 220 }} value={categorie} onChange={(e) => setCategorie(e.target.value)}>
             <option value="">Toutes les catégories</option>
@@ -386,7 +387,7 @@ function HistoriqueVersions({ document: doc, versions, onFermer }) {
                   <td>{v.originalFilename || '—'}</td>
                   <td className="num">{poids(v.sizeBytes)}</td>
                   <td className="num">{quand(v.createdAt)}</td>
-                  <td>{v.uploadedBy?.nom || <span className="sub">—</span>}</td>
+                  <td>{nomOuAbsence(v.uploadedBy, '—')}</td>
                   <td><span className="mono sub">{String(v.fileHash || '').slice(0, 12) || '—'}</span></td>
                 </tr>
               ))}

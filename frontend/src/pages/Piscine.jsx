@@ -246,7 +246,7 @@ function CreneauxBassins({ etabActif, droits = [] }) {
 
   return (
     <div>
-      {erreur && <div className="alert crit">{erreur}</div>}
+      {erreur && <div className="banner banner-error">{erreur}</div>}
       <Liste
         titre="Créneaux bassins"
         sous="planning surveillance"

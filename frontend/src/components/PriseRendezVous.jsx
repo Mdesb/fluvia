@@ -132,11 +132,11 @@ export default function PriseRendezVous({ onReserve }) {
 
   return (
     <div style={{ display: 'grid', gap: 14 }}>
-      {erreur && <div className="alert crit">{erreur}</div>}
-      {succes && <div className="alert good">{succes}</div>}
+      {erreur && <div className="banner banner-error">{erreur}</div>}
+      {succes && <div className="banner banner-ok">{succes}</div>}
 
-      <section className="panel">
-        <div className="panel-h"><span>Chercher un rendez-vous</span></div>
+      <section className="card">
+        <div className="card-h"><span>Chercher un rendez-vous</span></div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 12, padding: 14 }}>
           <div>
             <label htmlFor="rdv-act">Prestation</label>
@@ -180,8 +180,8 @@ export default function PriseRendezVous({ onReserve }) {
       </section>
 
       {resultat && (
-        <section className="panel">
-          <div className="panel-h">
+        <section className="card">
+          <div className="card-h">
             <span>{propositions.length} proposition{propositions.length > 1 ? 's' : ''}</span>
             <span className="sub" style={{ marginLeft: 8 }}>
               {resultat.libelle} · {resultat.dureeMinutes} min

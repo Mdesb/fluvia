@@ -10,7 +10,19 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const target = env.VITE_API_URL || 'http://localhost:8080'
   const proxy = {}
-  for (const path of ['/auth', '/me', '/api', '/reporting']) {
+  // TROIS PRÉFIXES HORS `/api`, ET LEUR ABSENCE NE PRODUISAIT AUCUNE ERREUR.
+  //
+  // `/media`, `/dms` et `/sepa` sont servis par des contrôleurs Symfony simples (une photo de
+  // produit, un document de la GED, le fichier pain.008 d'une remise). Sans eux dans cette liste,
+  // Vite ne relaie pas la requête : c'est le SPA qui répond, avec son propre `index.html` et un
+  // **200**. Le navigateur enregistre donc une page HTML sous le nom du fichier attendu, ou affiche
+  // une image cassée — et rien, nulle part, ne signale une erreur.
+  //
+  // Le symptôme a déjà été payé deux fois : les photos de produit ne s'affichaient pas, et le
+  // téléchargement de la GED rendait la page de connexion. Le bloc nginx de la préprod a été
+  // corrigé en miroir (`^/(api|auth|me|reporting|media|dms|sepa)`) ; les deux doivent rester
+  // alignés, sinon le dev et la préprod ne se comportent pas pareil.
+  for (const path of ['/auth', '/me', '/api', '/reporting', '/media', '/dms', '/sepa']) {
     proxy[path] = { target, changeOrigin: true, secure: false }
   }
   return {

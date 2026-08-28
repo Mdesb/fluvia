@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
+import { resoudre } from '../components/Liste.jsx'
 
 /**
  * SPORT & FITNESS — et d'abord **les alertes que personne n'entendait**.
@@ -42,6 +43,12 @@ function depuis(v) {
   return `il y a ${Math.floor(heures / 24)} j`
 }
 
+// Un espace se nomme `libelle` ou `nom` selon l'entité : on accepte les deux plutôt que de parier.
+function nomEspace(espace) {
+  if (!espace) return null
+  return espace.libelle || espace.nom || null
+}
+
 export default function Sport({ etabActif, droits = [] }) {
   // Le droit exige par le serveur est `sport.superviser_nocturne`, et lui seul : afficher le
   // bouton a qui ne l'a pas produirait un 403 sur un geste d'urgence -- le pire moment pour
@@ -57,18 +64,28 @@ export default function Sport({ etabActif, droits = [] }) {
   // Un compteur << il y a N minutes >> qui ne bouge pas est un compteur faux : on redessine.
   const [, setTic] = useState(0)
 
+  const [espaces, setEspaces] = useState([])
+
   const recharger = useCallback(async () => {
     setChargement(true)
     setErreur(null)
     try {
-      const [s, a, ab] = await Promise.all([
+      // OU EST L ALERTE : la premiere question sur un appel d urgence, et elle etait sans reponse.
+      //
+      // `EvenementSOS.espaceAcces` revient en IRI nue — `EspaceAcces` n'expose rien dans le groupe
+      // `sos:read`, vérifié dans l'entité. La carte affichait donc « Espace inconnu » sur CHAQUE
+      // alerte, y compris celles dont l'espace est parfaitement enregistré. Sur un écran où l'on
+      // court, ce n'est pas une colonne vide : c'est l'information qui dit où courir.
+      const [s, a, ab, es] = await Promise.all([
         api.evenementsSOS(),
         api.alertesPresenceIsolee().catch(() => null),
         api.abonnementsFitness().catch(() => null),
+        api.espaces().catch(() => null),
       ])
       setSos(membres(s))
       setAlertes(a ? membres(a) : [])
       setAbonnements(ab ? membres(ab) : [])
+      setEspaces(es ? membres(es) : [])
     } catch (e) {
       setErreur(e.message || 'Le module n’a pas pu être chargé.')
     } finally {
@@ -104,9 +121,9 @@ export default function Sport({ etabActif, droits = [] }) {
   const traites = sos.filter((e) => e.statut !== 'ouverte')
 
   return (
-    <div>
-      <div className="page-head">
-        <div>
+    <div className="view">
+      <div className="view-head">
+        <div className="ttl">
           <h1>Sport &amp; fitness</h1>
           <div className="sub">
             {ouverts.length > 0
@@ -116,13 +133,13 @@ export default function Sport({ etabActif, droits = [] }) {
         </div>
       </div>
 
-      {erreur && <div className="alert crit">{erreur}</div>}
+      {erreur && <div className="banner banner-error">{erreur}</div>}
 
       {/* LES SOS EN TETE, ET AFFICHES MEME VIDES.
           Un bloc absent ne se distingue pas d'un bloc qu'on a oublie de charger : l'ecran doit DIRE
           qu'il n'y a rien, sinon l'exploitant ne sait pas s'il est tranquille ou mal informe. */}
-      <section className="panel" style={{ marginBottom: 14 }}>
-        <div className="panel-h">
+      <section className="card" style={{ marginBottom: 14 }}>
+        <div className="card-h">
           <span>Appels d&rsquo;urgence</span>
           {ouverts.length > 0 && <span className="badge crit" style={{ marginLeft: 8 }}>{ouverts.length} ouvert{ouverts.length > 1 ? 's' : ''}</span>}
         </div>
@@ -136,15 +153,27 @@ export default function Sport({ etabActif, droits = [] }) {
             {ouverts.map((e) => (
               <article
                 key={e.id}
-                className="panel"
+                className="card"
                 style={{ padding: 12, border: '1px solid var(--crit)', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}
               >
-                <span className="nm">{e.espaceAcces?.libelle || e.espaceAcces?.nom || 'Espace inconnu'}</span>
+                <span className="nm">{nomEspace(resoudre(e.espaceAcces, espaces)) || 'espace non transmis'}</span>
                 <span className="sub">
                   {quandHeure(e.horodatage)} · {depuis(e.horodatage)}
                 </span>
-                {e.declenchePar?.identifiantSupport && (
-                  <span className="sub">support {e.declenchePar.identifiantSupport}</span>
+                {/* QUI A DÉCLENCHÉ, ET POURQUOI ON LE DIT MÊME QUAND ON NE PEUT PAS LE LIRE.
+                    `EvenementSOS.declenchePar` pointe `Support` (le badge), qui n'expose rien dans
+                    le groupe `sos:read` : le champ revient en IRI nue et la mention ne s'affichait
+                    jamais. Elle disparaissait en silence — indiscernable d'une alerte déclenchée
+                    sans badge, par un bouton mural par exemple.
+                    Sur un appel d'urgence, « un badge a déclenché mais je ne peux pas le nommer »
+                    et « aucun badge » ne mènent pas au même endroit : le premier identifie une
+                    personne, le second non. On distingue les deux. */}
+                {e.declenchePar && (
+                  <span className="sub">
+                    {typeof e.declenchePar === 'object' && e.declenchePar.identifiantSupport
+                      ? `support ${e.declenchePar.identifiantSupport}`
+                      : 'déclenché par un badge — identifiant non transmis'}
+                  </span>
                 )}
                 {peutTraiter && (
                   <button
@@ -163,8 +192,8 @@ export default function Sport({ etabActif, droits = [] }) {
         )}
       </section>
 
-      <section className="panel" style={{ marginBottom: 14 }}>
-        <div className="panel-h"><span>Présences isolées détectées</span></div>
+      <section className="card" style={{ marginBottom: 14 }}>
+        <div className="card-h"><span>Présences isolées détectées</span></div>
         {alertes.length === 0 ? (
           <div className="sub" style={{ textAlign: 'center', padding: 22 }}>
             Aucune présence isolée signalée.
@@ -182,7 +211,7 @@ export default function Sport({ etabActif, droits = [] }) {
               <tbody>
                 {alertes.map((a) => (
                   <tr key={a.id}>
-                    <td>{a.espaceAcces?.libelle || a.espaceAcces?.nom || '—'}</td>
+                    <td>{nomEspace(resoudre(a.espaceAcces, espaces)) || '—'}</td>
                     <td className="num">{a.nbPersonnesDetectees}</td>
                     <td className="num">{quandHeure(a.horodatage)}</td>
                   </tr>
@@ -193,8 +222,8 @@ export default function Sport({ etabActif, droits = [] }) {
         )}
       </section>
 
-      <section className="panel">
-        <div className="panel-h">
+      <section className="card">
+        <div className="card-h">
           <span>Abonnements</span>
           <span className="sub" style={{ marginLeft: 8 }}>{abonnements.length}</span>
         </div>

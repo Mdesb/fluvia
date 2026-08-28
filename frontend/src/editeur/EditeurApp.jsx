@@ -67,7 +67,7 @@ export default function EditeurApp() {
   ]
 
   return (
-    <div className="editeur">
+    <div>
       <header className="editeur-barre">
         <div className="editeur-marque">
           <span className="editeur-point" aria-hidden="true" />

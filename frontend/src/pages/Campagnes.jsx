@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import Modal from '../components/Modal.jsx'
+import Tabs from '../components/Tabs.jsx'
 
 /**
  * CAMPAGNES — première étape : les segments, et l'effectif avant l'envoi.
@@ -186,9 +187,9 @@ export default function Campagnes({ etabActif, droits = [] }) {
   }
 
   return (
-    <div>
-      <div className="page-head">
-        <div>
+    <div className="view">
+      <div className="view-head">
+        <div className="ttl">
           <h1>Campagnes</h1>
           <div className="sub">
             {segments.length} segment{segments.length > 1 ? 's' : ''} · l’effectif se calcule à chaque lecture
@@ -208,20 +209,20 @@ export default function Campagnes({ etabActif, droits = [] }) {
       {/* AUCUN ENVOI RÉEL N'EXISTE, ET ON LE DIT EN HAUT.
           Le dire en petit en bas d'un écran de campagnes reviendrait à ne pas le dire. Tant qu'aucun
           prestataire n'est branché, un exploitant doit savoir que ce qu'il prépare ne partira pas. */}
-      <div className="alert warn">
+      <div className="banner banner-warn">
         <strong>Aucun envoi réel n’est branché.</strong> Les segments se construisent et se comptent ;
         les messages sont journalisés, jamais expédiés. Le jour où un prestataire d’envoi est
         raccordé, rien d’autre ne change.
       </div>
 
-      {erreur && <div className="alert crit">{erreur}</div>}
-      {succes && <div className="alert good">{succes}</div>}
+      {erreur && <div className="banner banner-error">{erreur}</div>}
+      {succes && <div className="banner banner-ok">{succes}</div>}
 
-      <div className="seg" style={{ marginBottom: 16 }}>
-        {[['campagnes', 'Campagnes'], ['segments', 'Segments'], ['fidelite', 'Fidélité']].map(([k, l]) => (
-          <button key={k} className={onglet === k ? 'on' : ''} onClick={() => setOnglet(k)}>{l}</button>
-        ))}
-      </div>
+      <Tabs
+        onglets={[['campagnes', 'Campagnes'], ['segments', 'Segments'], ['fidelite', 'Fidélité']]}
+        actif={onglet}
+        onChange={setOnglet}
+      />
 
       {onglet === 'fidelite' && <ReglagesFidelite droits={droits} onErreur={setErreur} />}
 
@@ -237,8 +238,8 @@ export default function Campagnes({ etabActif, droits = [] }) {
         />
       )}
 
-      <div className="panel" style={{ display: onglet === 'segments' ? undefined : 'none' }}>
-        <div className="panel-h"><span>Segments</span></div>
+      <div className="card" style={{ display: onglet === 'segments' ? undefined : 'none' }}>
+        <div className="card-h"><span>Segments</span></div>
 
         {chargement ? (
           <div className="center" style={{ minHeight: 140 }}><div className="spinner" /></div>
@@ -343,6 +344,24 @@ function resumerCriteres(criteria) {
  * restrictif est le cas le plus fréquent, et le message doit envoyer l'exploitant vers ses critères
  * plutôt que le laisser conclure à une panne.
  */
+// « APERÇU — UNDEFINED » S'AFFICHAIT SUR CHAQUE APERÇU DE SEGMENT, ET PERSONNE NE L'AVAIT VU.
+//
+// L'appelant écrit `setApercu({ segment, ...reponse })`. Or la réponse du serveur porte elle-même
+// une clé `segment` — et c'est **le libellé, une chaîne**, pas l'objet. Le spread écrasait donc
+// l'objet local par cette chaîne, et `.label` d'une chaîne vaut `undefined`.
+//
+// Un `?.` n'aurait rien changé : ce n'était pas une valeur nulle, c'était la mauvaise FORME. C'est
+// ce qui rend ce défaut différent des seize relations muettes de la même journée — là, le serveur
+// ne donnait rien ; ici il donne exactement ce qu'il faut, au même nom, et c'est le code qui
+// regarde un cran trop loin.
+//
+// Trouvé en CLIQUANT le bouton « Combien de personnes ? ». Mon propre analyseur avait signalé cette
+// ligne ; je l'avais classée faux positif en raisonnant sur le code sans exécuter l'écran.
+function libelleSegment(segment) {
+  if (!segment) return 'segment'
+  return typeof segment === 'string' ? segment : (segment.label || 'segment')
+}
+
 function ApercuSegment({ apercu, onFermer }) {
   const vide = apercu && apercu.effectif === 0
 
@@ -350,7 +369,7 @@ function ApercuSegment({ apercu, onFermer }) {
     <Modal
       open={!!apercu}
       onClose={onFermer}
-      titre={apercu ? `Aperçu — ${apercu.segment.label}` : ''}
+      titre={apercu ? `Aperçu — ${libelleSegment(apercu.segment)}` : ''}
       taille="md"
     >
       {apercu && (
@@ -392,7 +411,7 @@ function ApercuSegment({ apercu, onFermer }) {
           )}
 
           {!apercu.envoiReelDisponible && (
-            <div className="alert warn" style={{ margin: 0 }}>
+            <div className="banner banner-warn" style={{ margin: 0 }}>
               Aucun envoi réel n’est branché : ce segment se compte, il ne s’expédie pas encore.
             </div>
           )}
@@ -496,7 +515,7 @@ function EditionSegment({ segment, onFermer, onEnregistre, onErreur }) {
         </div>
 
         {aucunCritere && (
-          <div className="alert warn" style={{ margin: 0 }}>
+          <div className="banner banner-warn" style={{ margin: 0 }}>
             Un segment sans critère désigne <strong>tout le monde</strong>. Précisez au moins une
             condition — le serveur refusera de l’enregistrer autrement.
           </div>
@@ -543,8 +562,8 @@ function ListeCampagnes({ campagnes, segments, peutGerer, busy, onRediger, onEnv
   const nomSegment = (ref) => segments.find((s) => s.id === idDe(ref))?.label || '—'
 
   return (
-    <div className="panel">
-      <div className="panel-h"><span>Campagnes</span></div>
+    <div className="card">
+      <div className="card-h"><span>Campagnes</span></div>
 
       {campagnes.length === 0 ? (
         <div className="sub" style={{ textAlign: 'center', padding: 26 }}>
@@ -692,7 +711,7 @@ function ResultatCampagne({ resultat, onFermer }) {
           )}
 
           {!resultat.envoiReelDisponible && (
-            <div className="alert warn" style={{ margin: 0 }}>
+            <div className="banner banner-warn" style={{ margin: 0 }}>
               Aucun envoi réel n’est branché : ces messages ont été <strong>journalisés</strong>,
               pas expédiés.
             </div>
@@ -920,20 +939,20 @@ function Attribution({ attribution }) {
       </div>
 
       {!attribution.comparable ? (
-        <div className="alert warn" style={{ marginTop: 10, marginBottom: 0 }}>
+        <div className="banner banner-warn" style={{ marginTop: 10, marginBottom: 0 }}>
           <strong>Aucun effet ne peut être attribué à cette campagne.</strong> {attribution.raison}
           {' '}Les retours affichés sont ceux du groupe contacté : on ne sait pas combien seraient
           revenus sans le message.
         </div>
       ) : !attribution.concluant ? (
-        <div className="alert warn" style={{ marginTop: 10, marginBottom: 0 }}>
+        <div className="banner banner-warn" style={{ marginTop: 10, marginBottom: 0 }}>
           <strong>On ne peut pas encore conclure.</strong> L’écart mesuré est de{' '}
           {signe(attribution.ecartPoints)} points, pour une marge d’incertitude de{' '}
           ± {nb(attribution.margeErreur)}. Plus petit que sa marge, il ne se distingue pas de zéro —
           un groupe témoin plus grand, ou une audience plus large, trancherait.
         </div>
       ) : attribution.ecartPoints > 0 ? (
-        <div className="alert good" style={{ marginTop: 10, marginBottom: 0 }}>
+        <div className="banner banner-ok" style={{ marginTop: 10, marginBottom: 0 }}>
           <strong>
             La campagne a ramené {nb(attribution.visitesGagnees)} personne(s) de plus
           </strong>{' '}
@@ -941,7 +960,7 @@ function Attribution({ attribution }) {
           d’affaires. Écart : {signe(attribution.ecartPoints)} points ± {nb(attribution.margeErreur)}.
         </div>
       ) : (
-        <div className="alert crit" style={{ marginTop: 10, marginBottom: 0 }}>
+        <div className="banner banner-error" style={{ marginTop: 10, marginBottom: 0 }}>
           <strong>Le groupe contacté est revenu MOINS que le témoin</strong> —{' '}
           {signe(attribution.ecartPoints)} points ± {nb(attribution.margeErreur)}. L’écart dépasse sa
           marge : ce n’est pas du bruit. Le message, le moment ou la cible ont desservi.
@@ -1037,8 +1056,8 @@ function PanneauBaremes({ baremes, peutRegler, busy, onAjouter }) {
   const tries = [...baremes].sort((a, b) => (a.validFrom < b.validFrom ? 1 : -1))
 
   return (
-    <div className="panel">
-      <div className="panel-h"><span>Barème — points par euro</span></div>
+    <div className="card">
+      <div className="card-h"><span>Barème — points par euro</span></div>
 
       <div className="sub" style={{ marginBottom: 8 }}>
         Un barème vaut <strong>à partir</strong> de sa date et jusqu’au suivant. On en ajoute un, on
@@ -1095,8 +1114,8 @@ function PanneauPaliers({ paliers, peutRegler, busy, onAgir }) {
   const tries = [...paliers].sort((a, b) => a.threshold - b.threshold)
 
   return (
-    <div className="panel">
-      <div className="panel-h"><span>Paliers</span></div>
+    <div className="card">
+      <div className="card-h"><span>Paliers</span></div>
 
       <div className="sub" style={{ marginBottom: 8 }}>
         Le palier se lit sur les points gagnés sur <strong>douze mois glissants</strong>, pas sur le
@@ -1170,8 +1189,8 @@ function PanneauParrainage({ programme, peutRegler, busy, onAgir }) {
   const corps = { rewardPoints: Number(points), minimumPurchase: Number(minimum).toFixed(2) }
 
   return (
-    <div className="panel">
-      <div className="panel-h">
+    <div className="card">
+      <div className="card-h">
         <span>Parrainage</span>
         {programme && (
           <span className={`badge ${programme.enabled ? 'good' : 'mut'}`} style={{ marginLeft: 'auto' }}>
