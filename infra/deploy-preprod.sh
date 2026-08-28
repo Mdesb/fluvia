@@ -44,6 +44,19 @@ fi
 log "Migrations de base"
 "${COMPOSE[@]}" exec -T php php bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration
 
+# LA BASE DE CONNAISSANCE GENERIQUE, POSEE A CHAQUE DEPLOIEMENT.
+#
+# Les dix-huit articles de `app/docs/aide/**` sont tous en portee GLOBALE : ils ne sont donc pas la
+# documentation d'un client, ils sont celle du produit, et tout etablissement les voit. Sans cette
+# ligne ils ne quittaient jamais le depot — la commande existait, l'ecran d'assistance existait, et
+# un exploitant qui ouvrait « Base de connaissances » trouvait une liste vide.
+#
+# `--strict` volontairement ABSENT : un article de doc mal forme ne doit pas faire echouer un
+# deploiement. Le resume imprime dit ce qui est passe et ce qui ne l'est pas ; le reste de la mise
+# en ligne continue.
+log "Base de connaissance (doc vivante -> articles d'aide)"
+"${COMPOSE[@]}" exec -T php php bin/console support:importer-aide --no-interaction
+
 log "Préchauffage du cache Symfony"
 "${COMPOSE[@]}" exec -T php php bin/console cache:clear --env=prod --no-debug
 "${COMPOSE[@]}" exec -T php php bin/console cache:warmup --env=prod --no-debug
