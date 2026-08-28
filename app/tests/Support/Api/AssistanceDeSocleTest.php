@@ -87,4 +87,43 @@ final class AssistanceDeSocleTest extends SupportApiTestCase
         ]);
         self::assertResponseStatusCodeSame(403);
     }
+
+    /**
+     * OUVRIR L'ASSISTANCE À TOUS N'OUVRE PAS LA FILE À TOUS.
+     *
+     * La question a été posée en revue : `support.lire` accordé à tout le monde donne-t-il la file
+     * complète à un agent d'accueil ? Le code dit non — `TicketSupport::GetCollection` n'accepte pas
+     * `support.lire`, et `PerimetreSupportExtension` retombe sur `demandeur = utilisateur courant`
+     * faute d'une permission plus large. Mais lire le code n'est pas voir le filet attraper : un
+     * élargissement de droits par défaut se vérifie, il ne se raisonne pas.
+     */
+    public function testLeSocleNeMontreQueSesPropresDemandes(): void
+    {
+        [$autre, $enteteAutre] = $this->connecte(SupportFixtures::EMAIL_EXPLOITANT_A, SupportFixtures::ETAB_A_NOM);
+        $ticketDUnAutre = $autre->request('POST', '/api/support/tickets', $enteteAutre + [
+            'json' => [
+                'sujet' => 'Demande d’un autre exploitant',
+                'description' => 'Ce compte ordinaire ne doit jamais voir cette demande.',
+                'priorite' => 'normale',
+                'moduleConcerne' => 'vente',
+            ],
+        ])->toArray();
+        self::assertResponseIsSuccessful();
+
+        [$ordinaire, $enteteOrdinaire] = $this->connecte(SupportFixtures::EMAIL_SANS_ROLE_SUPPORT, SupportFixtures::ETAB_A_NOM);
+
+        // ⚠ LA GARDE QUI REND L'ASSERTION SUIVANTE SIGNIFIANTE. Un 403 sur la collection rendrait
+        // « ne contient pas le ticket de l'autre » vrai sans rien prouver — la réponse ne
+        // contiendrait rien du tout. On exige donc que l'appel ABOUTISSE avant de compter.
+        $liste = $ordinaire->request('GET', '/api/support/tickets', $enteteOrdinaire)->toArray();
+        self::assertResponseIsSuccessful();
+
+        $ids = array_map(static fn (array $t): string => $t['id'], $liste['member'] ?? []);
+        self::assertNotContains($ticketDUnAutre['id'], $ids);
+
+        // Et pas davantage en visant l'identifiant directement : la collection filtrée ne vaut rien
+        // si l'accès direct passe. C'est la forme que prend une IDOR quand on ne la cherche pas.
+        $ordinaire->request('GET', '/api/support/tickets/' . $ticketDUnAutre['id'], $enteteOrdinaire);
+        self::assertResponseStatusCodeSame(404);
+    }
 }
