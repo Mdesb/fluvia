@@ -298,6 +298,19 @@ function Journal({ mouvements, grillesParId }) {
   // prise contre la règle, et c'est le premier chiffre qu'un contrôle vient regarder.
   const forces = mouvements.filter((m) => m.forcee).length
 
+  // LA COLONNE « AGENT » S'ALLUME QUAND LE SERVEUR LA REMPLIT, ET PAS AVANT.
+  //
+  // `MouvementCaution` porte l'agent auteur du geste depuis toujours ; `Utilisateur` ne déclarait
+  // aucune propriété dans le groupe `caution_mouvement:read`, si bien que le champ revenait en IRI
+  // nue — sans nom. Une colonne entière de tirets, sur un registre dont l'unique raison d'être est
+  // de répondre à « qui a décidé de garder mon argent ? », ne dit pas « information indisponible » :
+  // elle dit « personne n'a signé ». C'est un mensonge sur la seule question qui compte.
+  //
+  // Le groupe a été ajouté côté serveur le 28/08. Plutôt que de le supposer déployé partout, on
+  // regarde ce qui arrive : si au moins un mouvement porte un nom lisible, la colonne apparaît ;
+  // sinon on l'omet et on dit pourquoi sous le tableau.
+  const montreAgent = mouvements.some((m) => nomAgent(m.agent))
+
   return (
     <section className="card">
       <div className="card-h">
@@ -339,6 +352,7 @@ function Journal({ mouvements, grillesParId }) {
                 <th className="num">Montant</th>
                 <th>Motif</th>
                 <th>Barème appliqué</th>
+                {montreAgent && <th>Agent</th>}
               </tr>
             </thead>
             <tbody>
@@ -376,23 +390,18 @@ function Journal({ mouvements, grillesParId }) {
                         <span className="sub">{m.type === 'retenue' ? 'montant libre' : '—'}</span>
                       )}
                     </td>
+                    {montreAgent && <td>{nomAgent(m.agent) || <span className="sub">—</span>}</td>}
                   </tr>
                 )
               })}
             </tbody>
           </table>
         )}
-        {/* ⚠ CE QUE CE JOURNAL NE PEUT PAS ENCORE DIRE.
-            `MouvementCaution` porte bien l'agent auteur du geste, mais `Utilisateur` ne déclare
-            aucune propriété dans le groupe `caution_mouvement:read` : le champ revient en IRI, sans
-            nom. Une colonne « Agent » entièrement remplie de tirets aurait laissé croire que
-            personne n'est enregistré — ce qui est faux, et dangereux à croire sur un registre de
-            contestation. On préfère le dire. */}
-        {visibles.length > 0 && (
+        {visibles.length > 0 && !montreAgent && (
           <div className="hint">
             Le nom de l&rsquo;agent qui a fait chaque geste <b>est enregistré</b> côté serveur, mais
-            n&rsquo;est pas rendu par l&rsquo;API : la colonne serait vide, elle n&rsquo;est donc pas
-            affichée plutôt que de faire croire que personne n&rsquo;a signé.
+            n&rsquo;est pas rendu par cette version de l&rsquo;API : la colonne serait vide, elle
+            n&rsquo;est donc pas affichée plutôt que de faire croire que personne n&rsquo;a signé.
           </div>
         )}
       </div>
@@ -696,6 +705,15 @@ function idDe(relation) {
 // Le barème cité par un mouvement, résolu contre la liste déjà chargée. On accepte aussi la forme
 // embarquée : si quelqu'un ajoute un jour `caution_mouvement:read` aux propriétés de `GrilleRetenue`,
 // cet écran se mettra à l'utiliser sans qu'on ait à y revenir.
+// L'entité `Utilisateur` ne porte qu'un `nom` — pas de `prenom`, vérifié côté serveur. On accepte
+// quand même `prenom` s'il apparaît un jour, et `email` en dernier recours : sur un registre de
+// contestation, une adresse identifie encore quelqu'un, un tiret non.
+function nomAgent(agent) {
+  if (!agent || typeof agent === 'string') return null
+  const nom = [agent.prenom, agent.nom].filter(Boolean).join(' ').trim()
+  return nom || agent.email || null
+}
+
 function grilleDe(mouvement, grillesParId) {
   const ref = mouvement.grilleAppliquee
   if (!ref) return null
