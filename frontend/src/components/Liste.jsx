@@ -149,6 +149,34 @@ function afficher(v) {
   return String(v)
 }
 
+// « JE NE SAIS PAS » N'EST PAS « IL N'Y EN A PAS », ET L'ÉCRAN NE DOIT PAS CONFONDRE LES DEUX.
+//
+// `Utilisateur` n'expose aucune propriété aux groupes de sérialisation de cinq modules (CRM,
+// Projets, DMS, Assistance, Cautions) : l'agent d'un ticket, l'assigné d'une tâche, le déposant d'un
+// document reviennent en **IRI nue**, sans nom. Les écrans lisaient `u?.nom` et repliaient sur une
+// phrase — et la phrase choisie AFFIRMAIT :
+//
+//     {nomUtilisateur(t.affecteA) || 'non affecté'}     ← la file d'assistance
+//     {t.assignee?.nom || 'non assignée'}               ← les tâches d'un projet
+//
+// Un ticket bel et bien pris en charge s'annonçait donc « non affecté ». Deux agents le prennent, ou
+// personne ne le prend en croyant qu'un autre s'en occupe. Ce n'est plus une colonne vide, c'est une
+// information fausse — et c'est pire, parce qu'une colonne vide se remarque.
+//
+// La réponse de l'API permet pourtant de trancher sans rien deviner : **absent** (`null`) veut dire
+// qu'il n'y a personne, **une chaîne** veut dire qu'il y a quelqu'un dont on ne peut pas lire le
+// nom. Deux états différents, deux phrases différentes. Le jour où les `#[Groups]` manquants seront
+// posés côté serveur, la branche « objet » prendra le dessus toute seule.
+//
+// `vide` est ce qu'on affiche quand il n'y a réellement personne — il change selon le contexte
+// (« non affecté », « non assignée »), d'où le paramètre.
+export function nomOuAbsence(utilisateur, vide = 'personne') {
+  if (utilisateur === null || utilisateur === undefined || utilisateur === '') return vide
+  if (typeof utilisateur === 'string') return 'affecté — nom non transmis'
+  const complet = [utilisateur.prenom, utilisateur.nom].filter(Boolean).join(' ').trim()
+  return complet || utilisateur.email || 'affecté — nom non transmis'
+}
+
 // Helpers partagés par les écrans de consultation.
 export function euroCentimes(c) {
   if (c == null || c === '') return '—'

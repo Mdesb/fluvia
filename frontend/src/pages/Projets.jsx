@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import Modal from '../components/Modal.jsx'
+import { nomOuAbsence } from '../components/Liste.jsx'
 
 /**
  * PROJETS — le travail interne qui a une fin, un responsable et des tâches.
@@ -355,7 +356,7 @@ function FicheProjet({ projet, peutGerer, onFermer, onChange }) {
                             <span style={{ fontSize: 13 }}>{t.title}</span>
                             <div className="sub" style={{ fontSize: 11.5, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                               {/* Une tache sans responsable se VOIT : c'est celle que personne n'a prise. */}
-                              <span>{t.assignee?.nom || 'non assignée'}</span>
+                              <span>{nomOuAbsence(t.assignee, 'non assignée')}</span>
                               {enRetard && <span className="badge crit">en retard</span>}
                               {t.dueDate && !enRetard && <span>{jour(t.dueDate)}</span>}
                             </div>

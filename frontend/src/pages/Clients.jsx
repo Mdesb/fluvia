@@ -6,6 +6,7 @@ import { euros } from '../api/produit.js'
 import { aLeDroit } from '../api/droits.js'
 import { mot } from '../api/vocabulaire.js'
 import ClientEditionModal from '../components/ClientEditionModal.jsx'
+import DevisModal from '../components/DevisModal.jsx'
 
 // Nom d'affichage d'un client (physique ou personne morale).
 function nomClient(c) {
@@ -244,6 +245,7 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
 
 function FicheContenu({ fiche, mouvements, fidelite, droits, onMouvement }) {
   const c = fiche.client || {}
+  const [devis, setDevis] = useState(false)
   const historique = fiche.historique || []
   const famille = fiche.famille || []
   const consentements = fiche.consentements || []
@@ -264,7 +266,28 @@ function FicheContenu({ fiche, mouvements, fidelite, droits, onMouvement }) {
             {c.estMineur && <span className="badge warn">mineur</span>}
           </div>
         </div>
+
+        {/* FACTURER SE DÉCIDE ICI, EN REGARDANT LE CLIENT — demande de Maxime, 28/08.
+            On facture QUELQU'UN : on regarde ce qu'il a acheté, ce qu'il doit, et on part de là.
+            Jusqu'ici il fallait ouvrir l'écran Facturation et RETAPER son nom en texte libre — le
+            devis n'était alors rattaché à aucune fiche, et n'apparaissait dans l'historique de
+            personne. La modale est la même que celle de l'écran Facturation ; partant d'ici, elle
+            envoie en plus `clientRef`, ce qui rattache la pièce à ce client. */}
+        {aLeDroit(droits, 'facturation.gerer') && (
+          <div style={{ marginLeft: 'auto' }}>
+            <button className="btn sm" type="button" onClick={() => setDevis(true)}>
+              Établir un devis
+            </button>
+          </div>
+        )}
       </div>
+
+      <DevisModal
+        open={devis}
+        client={c}
+        onClose={() => setDevis(false)}
+        onCree={() => setDevis(false)}
+      />
 
       <BlocFidelite
         fidelite={fidelite}

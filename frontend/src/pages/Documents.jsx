@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, membres, tokenStore, etablissementStore } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import Modal from '../components/Modal.jsx'
+import { nomOuAbsence } from '../components/Liste.jsx'
 
 /**
  * DOCUMENTS — quinze opérations serveur, aucun écran jusqu'ici.
@@ -386,7 +387,7 @@ function HistoriqueVersions({ document: doc, versions, onFermer }) {
                   <td>{v.originalFilename || '—'}</td>
                   <td className="num">{poids(v.sizeBytes)}</td>
                   <td className="num">{quand(v.createdAt)}</td>
-                  <td>{v.uploadedBy?.nom || <span className="sub">—</span>}</td>
+                  <td>{nomOuAbsence(v.uploadedBy, '—')}</td>
                   <td><span className="mono sub">{String(v.fileHash || '').slice(0, 12) || '—'}</span></td>
                 </tr>
               ))}
