@@ -782,9 +782,25 @@ export const api = {
   apercuDroitsRole: (id, etablissement) =>
     request(`/api/roles/${id}/apercu-droits`, { query: { etablissement } }),
 
-  // Capacités activables (feature flags par établissement).
+  // LES CAPACITÉS D'UN ÉTABLISSEMENT — ON POUVAIT LES LIRE, PAS LES ACTIVER.
+  //
+  // L'onglet s'appelait « Capacités activables » et n'offrait AUCUNE action : douze lignes toutes
+  // marquées « inactive », et rien pour en changer. Maxime, à la revue : « je ne sais pas ce que
+  // c'est ». Un onglet nommé « activables » où l'on ne peut rien activer n'explique pas ce qu'il
+  // fait — il laisse conclure que le logiciel ne le permet pas.
+  //
+  // Les deux écritures existaient depuis le début. Elles sont gardées par `fonctionnalite.gerer` ou
+  // `organisation.gerer`, contrôlé sur l'établissement DU CHEMIN et non sur l'établissement actif
+  // (RG-SOCLE-05) : c'est pour ça que l'identifiant est dans l'URL et pas dans un en-tête.
   catalogueCapacites: () => request('/api/fonctionnalites/catalogue'),
   fonctionnalitesEtablissement: (id) => request(`/api/etablissements/${id}/fonctionnalites`),
+  // Corps : { capaciteCode, active, parametres? }.
+  majFonctionnalite: (id, corps) =>
+    request(`/api/etablissements/${id}/fonctionnalites`, { method: 'PATCH', body: corps }),
+  // Corps : { metier: piscine|sport|padel|patinoire|musee }. ADDITIF : n'éteint jamais une capacité
+  // déjà active — vérifié dans `Fonctionnalites::appliquerPreset`, pas supposé.
+  appliquerPresetCapacites: (id, metier) =>
+    request(`/api/etablissements/${id}/appliquer-preset`, { method: 'POST', body: { metier } }),
 
   // --- Comptabilité / Régie (M6) ---
   journaux: () => request('/api/journals', { query: { itemsPerPage: 100 } }),

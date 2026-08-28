@@ -207,6 +207,16 @@ export default function App() {
     etablissementStore.set(id)
   }
 
+  // METTRE UN MODULE EN SERVICE CHANGE LE MENU, ET LE MENU VIENT DE `/me`.
+  //
+  // La colonne de gauche est construite sur `me.capacitesActives`. Sans ce rappel, on met
+  // « Réservation » en service depuis les paramètres, le serveur enregistre, et l'entrée
+  // n'apparaît qu'au prochain rechargement complet de la page — l'action a l'air de n'avoir rien
+  // fait, ce qui est exactement la conclusion qu'on veut éviter sur un écran d'activation.
+  const rechargerMe = useCallback(async () => {
+    setMe(await api.me())
+  }, [])
+
   // Session de caisse ouverte sur le périmètre courant (partagée entre Caisse et l'écran Session/Z).
   const rechargerSession = useCallback(async () => {
     try {
@@ -309,7 +319,7 @@ export default function App() {
       {onglet === 'stock' && <Stock etabActif={etabActif} droits={droits} />}
       {onglet === 'finance' && <Finance etabActif={etabActif} droits={droits} />}
       {onglet === 'parametres' && (
-        <Parametres etabActif={etabActif} etablissements={etablissements} droits={droits} />
+        <Parametres etabActif={etabActif} etablissements={etablissements} droits={droits} onCapacitesChangees={rechargerMe} />
       )}
       </Suspense>
       </FrontiereErreur>

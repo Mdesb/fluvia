@@ -179,6 +179,21 @@ export default function RolesSection({ droits, peutGerer, onChange }) {
               {roles.map((r) => {
                 const perms = r.permissions || []
                 const modules = [...new Set(perms.map((p) => p.module))].sort()
+                // UN RÔLE QUI PORTE LE JOKER NE SE COMPTE PAS EN LIGNES.
+                //
+                // « Administrateur d'établissement » affichait « 2 » dans la colonne Droits : c'est
+                // le nombre exact de lignes de permission qu'il porte, et c'est trompeur — l'une des
+                // deux est `*` × `*`, qui donne TOUT. Une session en revue avec Maxime a lu ce 2 et
+                // en a conclu qu'un rôle modèle était presque vide alors qu'il est le plus puissant
+                // du référentiel.
+                //
+                // Un nombre est une réponse plus crédible qu'un mot, donc plus dangereux quand il
+                // est faux. La colonne dit désormais « tous » et garde le décompte en infobulle.
+                const joker = perms.some((p) => (p.module === '*' && p.action === '*') || p.code === '*')
+                // Un rôle MODÈLE vide est un piège silencieux : on ne peut que le dupliquer, et la
+                // copie ne donne rien non plus. Le dire ici évite d'attribuer un rôle qui n'ouvre
+                // aucune porte et de chercher ensuite pourquoi l'agent ne voit rien.
+                const modeleVide = r.estModele && perms.length === 0
                 return (
                   <tr key={r.id}>
                     <td>
@@ -192,8 +207,19 @@ export default function RolesSection({ droits, peutGerer, onChange }) {
                           modèle
                         </span>
                       )}
+                      {modeleVide && (
+                        <div className="sub" style={{ color: 'var(--crit)' }}>
+                          modèle vide : sa copie n’ouvrira rien non plus
+                        </div>
+                      )}
                     </td>
-                    <td className="num">{perms.length}</td>
+                    <td className="num">
+                      {joker ? (
+                        <span title={`${perms.length} ligne(s) de permission, dont le joker « tout sur tout ».`}>tous</span>
+                      ) : (
+                        perms.length
+                      )}
+                    </td>
                     <td>
                       {modules.length === 0 ? (
                         <span className="sub">aucun — ce rôle ne donne rien</span>

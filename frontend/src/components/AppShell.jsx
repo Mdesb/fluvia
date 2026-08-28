@@ -290,7 +290,15 @@ export default function AppShell({
 
       <aside className="sidebar">
         <div className="side-brand"><span className="logo">◈</span> Fluvia</div>
-        <div className="side-tenant"><b>{nomEtab}</b>Billetterie · Contrôle d'accès</div>
+        {/* LE SOUS-TITRE ANNONÇAIT UN MODULE QUE L'ÉTABLISSEMENT N'A PAS.
+            « Billetterie · Contrôle d'accès » était écrit en dur sous le nom du site. Sur un
+            établissement dont la capacité `controle_acces` est hors service — le cas de GI-ONE
+            FITNESS — l'application affirmait donc dans son en-tête un module que son propre écran
+            des modules déclarait absent, et dont aucune entrée n'apparaissait dans le menu.
+            Relevé par la session en revue avec Maxime.
+            La ligne dit maintenant ce qui est réellement en service. La billetterie ne se négocie
+            pas (caisse et catalogue existent partout) ; le reste se lit dans les capacités. */}
+        <div className="side-tenant"><b>{nomEtab}</b>{sousTitreDe(capacites)}</div>
         <nav className="side-nav">
           {navAvecEcran.map((grp) => (
             <div key={grp.section}>
@@ -415,4 +423,23 @@ export default function AppShell({
       </div>
     </div>
   )
+}
+
+// Ce que l'établissement fait vraiment, d'après ses capacités actives — pas d'après une chaîne
+// écrite en dur. On ne cite que ce qui se voit dans le menu : annoncer « Porte-monnaie virtuel »
+// sous le nom du site rendrait la ligne illisible sans rien apprendre à personne.
+//
+// La billetterie n'est pas une capacité : caisse et catalogue existent sur tous les établissements.
+const SOUS_TITRES = [
+  ['controle_acces', "Contrôle d'accès"],
+  ['reservation', 'Réservation'],
+  ['boutique_en_ligne', 'Boutique en ligne'],
+]
+
+function sousTitreDe(capacites = []) {
+  const parts = ['Billetterie']
+  for (const [code, libelle] of SOUS_TITRES) {
+    if (capacites.includes(code)) parts.push(libelle)
+  }
+  return parts.join(' · ')
 }
