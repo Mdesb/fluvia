@@ -486,8 +486,8 @@ function BlocFidelite({ fidelite, clientId, droits, onMouvement }) {
   }
 
   return (
-    <div className="panel">
-      <div className="panel-h">
+    <div className="card">
+      <div className="card-h">
         <span>Fidélité</span>
         {fidelite.baremeCourant ? (
           <span className="sub" style={{ marginLeft: 'auto' }}>
@@ -663,8 +663,8 @@ function BlocParrainage({ clientId, droits, onMouvement }) {
   const filleuls = liste.parrainages || []
 
   return (
-    <div className="panel">
-      <div className="panel-h">
+    <div className="card">
+      <div className="card-h">
         <span>Parrainage</span>
         {liste.aRecompenser > 0 && (
           <span className="badge warn" style={{ marginLeft: 'auto' }}>

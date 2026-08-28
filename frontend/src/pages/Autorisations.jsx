@@ -79,9 +79,9 @@ export default function Autorisations({ droits = [] }) {
   const [onglet, setOnglet] = useState('demandes')
 
   return (
-    <div>
-      <div className="page-head">
-        <div>
+    <div className="view">
+      <div className="view-head">
+        <div className="ttl">
           <h1>Autorisations</h1>
           <div className="sub">Demandes d&rsquo;escalade et plafonds</div>
         </div>
@@ -158,8 +158,8 @@ function FileDemandes({ peutApprouver }) {
   const enAttente = triees.filter((d) => d.statut === 'en_attente').length
 
   return (
-    <div className="panel">
-      <div className="panel-h">
+    <div className="card">
+      <div className="card-h">
         <span>Demandes d&rsquo;escalade</span>
         {enAttente > 0 && <span className="badge warn" style={{ marginLeft: 8 }}>{enAttente} en attente</span>}
         <button className="btn ghost sm" type="button" style={{ marginLeft: 'auto' }} onClick={recharger}>
@@ -167,7 +167,7 @@ function FileDemandes({ peutApprouver }) {
         </button>
       </div>
 
-      {erreur && <div className="alert crit">{erreur}</div>}
+      {erreur && <div className="banner banner-error">{erreur}</div>}
 
       {chargement ? (
         <div className="center" style={{ minHeight: 120 }}><div className="spinner" /></div>
@@ -310,9 +310,9 @@ function Plafonds({ peutGerer }) {
 
   return (
     <div style={{ display: 'grid', gap: 16 }}>
-      <div className="panel">
-        <div className="panel-h"><span>Plafonds en vigueur</span></div>
-        {erreur && <div className="alert crit">{erreur}</div>}
+      <div className="card">
+        <div className="card-h"><span>Plafonds en vigueur</span></div>
+        {erreur && <div className="banner banner-error">{erreur}</div>}
         {chargement ? (
           <div className="center" style={{ minHeight: 120 }}><div className="spinner" /></div>
         ) : limites.length === 0 ? (
@@ -360,8 +360,8 @@ function Plafonds({ peutGerer }) {
         )}
       </div>
 
-      <div className="panel">
-        <div className="panel-h"><span>Opérations sensibles</span></div>
+      <div className="card">
+        <div className="card-h"><span>Opérations sensibles</span></div>
         {operations.length === 0 ? (
           <div className="sub" style={{ textAlign: 'center', padding: 20 }}>
             Aucune opération déclarée sensible.

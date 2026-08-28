@@ -123,19 +123,19 @@ export default function Social({ etabActif, droits = [] }) {
   const utilisables = comptes.filter((c) => c.status === 'connected')
 
   return (
-    <div>
-      <div className="page-head">
-        <div>
+    <div className="view">
+      <div className="view-head">
+        <div className="ttl">
           <h1>Publication sociale</h1>
           <div className="sub">{comptes.length} compte{comptes.length > 1 ? 's' : ''} · {messages.length} message{messages.length > 1 ? 's' : ''}</div>
         </div>
       </div>
 
-      {erreur && <div className="alert crit">{erreur}</div>}
-      {succes && <div className="alert good">{succes}</div>}
+      {erreur && <div className="banner banner-error">{erreur}</div>}
+      {succes && <div className="banner banner-ok">{succes}</div>}
 
-      <section className="panel" style={{ marginBottom: 14 }}>
-        <div className="panel-h"><span>Comptes</span></div>
+      <section className="card" style={{ marginBottom: 14 }}>
+        <div className="card-h"><span>Comptes</span></div>
         {comptes.length === 0 ? (
           <div className="sub" style={{ textAlign: 'center', padding: 22 }}>
             Aucun compte connecté. La connexion d&rsquo;un compte se fait par le réseau lui-même
@@ -146,7 +146,7 @@ export default function Social({ etabActif, droits = [] }) {
             {comptes.map((c) => {
               const etat = ETAT_COMPTE[c.status] || { libelle: c.status, ton: 'mut' }
               return (
-                <div key={c.id} className="panel" style={{ padding: 10, border: '1px solid var(--line)', minWidth: 200 }}>
+                <div key={c.id} className="card" style={{ padding: 10, border: '1px solid var(--line)', minWidth: 200 }}>
                   <span className="nm">@{c.handle}</span>
                   <div className="sub">
                     {RESEAUX[c.network] || c.network}
@@ -171,8 +171,8 @@ export default function Social({ etabActif, droits = [] }) {
       </section>
 
       {peutPublier && utilisables.length > 0 && (
-        <section className="panel" style={{ marginBottom: 14 }}>
-          <div className="panel-h"><span>Écrire</span></div>
+        <section className="card" style={{ marginBottom: 14 }}>
+          <div className="card-h"><span>Écrire</span></div>
           <div style={{ display: 'grid', gap: 10, padding: 14 }}>
             <textarea
               className="input"
@@ -222,8 +222,8 @@ export default function Social({ etabActif, droits = [] }) {
         </section>
       )}
 
-      <section className="panel">
-        <div className="panel-h"><span>Messages</span></div>
+      <section className="card">
+        <div className="card-h"><span>Messages</span></div>
         {messages.length === 0 ? (
           <div className="sub" style={{ textAlign: 'center', padding: 22 }}>Aucun message.</div>
         ) : (
@@ -232,7 +232,7 @@ export default function Social({ etabActif, droits = [] }) {
               const etat = ETAT_MESSAGE[m.status] || { libelle: m.status, ton: 'mut' }
               const siennes = publications.filter((p) => idDe(p.post) === String(m.id))
               return (
-                <article key={m.id} className="panel" style={{ padding: 12, border: '1px solid var(--line)' }}>
+                <article key={m.id} className="card" style={{ padding: 12, border: '1px solid var(--line)' }}>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
                     <span className={`badge ${etat.ton}`}>{etat.libelle}</span>
                     {m.scheduledFor && <span className="sub">pour le {quand(m.scheduledFor)}</span>}

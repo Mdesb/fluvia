@@ -166,9 +166,9 @@ export default function Documents({ etabActif, droits = [] }) {
   }
 
   return (
-    <div>
-      <div className="page-head">
-        <div>
+    <div className="view">
+      <div className="view-head">
+        <div className="ttl">
           <h1>Documents</h1>
           <div className="sub">{visibles.length} document{visibles.length > 1 ? 's' : ''}</div>
         </div>
@@ -193,11 +193,11 @@ export default function Documents({ etabActif, droits = [] }) {
         )}
       </div>
 
-      {erreur && <div className="alert crit">{erreur}</div>}
-      {succes && <div className="alert good">{succes}</div>}
+      {erreur && <div className="banner banner-error">{erreur}</div>}
+      {succes && <div className="banner banner-ok">{succes}</div>}
 
-      <div className="panel">
-        <div className="panel-h" style={{ gap: 10, flexWrap: 'wrap' }}>
+      <div className="card">
+        <div className="card-h" style={{ gap: 10, flexWrap: 'wrap' }}>
           <span>Bibliothèque</span>
           <select className="select sm" style={{ width: 220 }} value={categorie} onChange={(e) => setCategorie(e.target.value)}>
             <option value="">Toutes les catégories</option>

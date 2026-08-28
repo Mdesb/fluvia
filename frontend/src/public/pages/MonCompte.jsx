@@ -260,7 +260,7 @@ function Billets({ billets }) {
   return (
     <ul className="bq-billets">
       {billets.map((b) => (
-        <li key={b.billetSupport} className="bq-billet card">
+        <li key={b.billetSupport} className="card">
           <div className="card-b bq-billet-b">
             <Qr value={b.qrDynamique || b.identifiantSupport} size={110} title="QR du billet" />
             <div>

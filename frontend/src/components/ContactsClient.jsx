@@ -66,7 +66,7 @@ export default function ContactsClient({ client, peutModifier }) {
   return (
     <div>
       <div className="fiche-sec">Contacts</div>
-      {erreur && <div className="alert crit">{erreur}</div>}
+      {erreur && <div className="banner banner-error">{erreur}</div>}
 
       {chargement ? (
         <div className="center" style={{ minHeight: 60 }}><div className="spinner" /></div>
