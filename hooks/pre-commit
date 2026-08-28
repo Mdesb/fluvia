@@ -121,6 +121,19 @@ if [ -f "$RACINE/frontend/scripts/verifier-droits.mjs" ]; then
     fi
 fi
 
+# Cache du service worker (n°18) : aucune réponse métier ne peut être servie depuis le cache.
+#
+# Branché ici et pas seulement dans `pre-receive` : les commits d'intégration sur `main` ne passent
+# jamais par `pre-receive`, et c'est justement `main` qui part en déploiement. Un service worker qui
+# ment n'y serait rattrapé nulle part.
+if [ -f "$RACINE/frontend/scripts/verifier-cache.mjs" ]; then
+    if command -v node >/dev/null 2>&1; then
+        ( cd "$RACINE/frontend" && node scripts/verifier-cache.mjs ) || ECHEC=1
+    else
+        echo "· Cache du service worker IGNORÉ — « node » indisponible. Le contrôle n'a PAS tourné."
+    fi
+fi
+
 # Écart client/serveur (n°15) : une opération neuve a un écran, ou déclare `@sans-ecran:`.
 if [ -f "$RACINE/frontend/scripts/garde-fou-ecart.mjs" ]; then
     if command -v node >/dev/null 2>&1; then

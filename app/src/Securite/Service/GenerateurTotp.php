@@ -13,7 +13,25 @@ use OTPHP\TOTP;
  */
 final class GenerateurTotp
 {
-    private const EMETTEUR = 'Billetterie IT Cotation';
+    /**
+     * ⚠ CETTE CHAÎNE S'AFFICHE SUR LE TÉLÉPHONE DE L'UTILISATEUR, PAS DANS NOTRE CODE.
+     *
+     * Elle part dans l'URI `otpauth://`, donc dans le QR code, donc dans Google Authenticator ou
+     * Authy — où elle reste à côté du compte, tous les jours. Elle disait encore « Billetterie »,
+     * le nom d'un dépôt que personne d'autre que nous ne connaît. C'est **Fluvia**.
+     *
+     * Plus durable que le titre de page qui portait le même défaut : un titre se corrige au
+     * déploiement suivant, une entrée d'authentificateur reste telle quelle jusqu'à ce que la
+     * personne la supprime.
+     *
+     * Sans danger pour les comptes déjà enrôlés : l'émetteur ne participe pas au calcul du code
+     * (RFC 6238 — seuls le secret et le temps comptent). Seules les nouvelles inscriptions
+     * afficheront le bon nom.
+     *
+     * « Fluvia » seul plutôt que « Fluvia — IT Cotation » : une entrée d'authentificateur nomme LE
+     * SERVICE, pas l'éditeur, et un cadratin n'a rien à faire dans une URI.
+     */
+    private const EMETTEUR = 'Fluvia';
 
     public function genererSecret(): string
     {

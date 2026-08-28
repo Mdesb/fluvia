@@ -296,6 +296,34 @@ if [ -f "$RACINE/frontend/scripts/verifier-classes.mjs" ]; then
     fi
 fi
 
+# CACHE DU SERVICE WORKER (n°18) — le seul défaut de ce dépôt qui ne ressemble pas à une panne.
+#
+# Un service worker qui sert une réponse d'API périmée ne lève rien, ne ralentit rien, n'écrit rien
+# dans aucun journal. Un caissier voit un solde de carte ou une liste de passages vieux de dix
+# minutes, et RIEN à l'écran ne lui dit qu'ils sont vieux. Il encaisse, il laisse entrer, il refuse
+# une entrée. Un logiciel de caisse hors ligne qui ment est pire qu'un logiciel de caisse
+# indisponible.
+#
+# `sw.js` n'était chargé par aucun test et ne passe par aucun build : rien ne l'empêchait. Le jour
+# où quelqu'un ajoutera « le mode hors ligne » de bonne foi, il touchera ce fichier.
+#
+# Le contrôle EXÉCUTE le service worker dans un `vm` et lui envoie des requêtes synthétiques, au
+# lieu de lire son texte. La différence n'est pas cosmétique : une branche de cache attrape-tout
+# placée APRÈS la liste des routes métier ne fuit pas, la même placée AVANT sert `/api` depuis le
+# cache. L'ordre est tout, et aucune expression régulière ne le voit.
+#
+# Il tourne sur l'HÔTE comme les autres contrôles front : node n'est pas dans l'image PHP.
+if [ -f "$RACINE/frontend/scripts/verifier-cache.mjs" ]; then
+    if command -v node >/dev/null 2>&1; then
+        executer "Cache du service worker (n°18)" sh -c "cd '$RACINE/frontend' && node scripts/verifier-cache.mjs"
+    else
+        echo "─────────────────────────────────────────────────────────────"
+        echo "▶ Cache du service worker (n°18)"
+        echo "─────────────────────────────────────────────────────────────"
+        echo "· IGNORÉ — « node » indisponible ici. Le contrôle n'a PAS tourné."
+    fi
+fi
+
 # ÉCART CLIENT/SERVEUR (n°15) — une opération neuve a un écran, ou dit pourquoi elle n'en a pas.
 #
 # Le quinzième contrôle, et le premier qui ne porte pas sur la correction du code mais sur le fait
