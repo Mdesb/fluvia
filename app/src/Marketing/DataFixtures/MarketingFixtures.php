@@ -6,6 +6,9 @@ namespace App\Marketing\DataFixtures;
 
 use App\Crm\DataFixtures\CrmFixtures;
 use App\DataFixtures\SocleFixtures;
+use App\Marketing\Entity\LoyaltyRule;
+use App\Marketing\Entity\LoyaltyTier;
+use App\Marketing\Entity\ReferralProgram;
 use App\Marketing\Entity\Segment;
 use App\Marketing\Entity\SegmentCriteria;
 use App\Organisation\Entity\Etablissement;
@@ -60,6 +63,27 @@ final class MarketingFixtures extends Fixture implements DependentFixtureInterfa
             }
         }
 
+        // ── LES DROITS DE LA FIDÉLITÉ ────────────────────────────────────────────────────────
+        //
+        // Trois droits et non un seul, parce que ce sont trois métiers : consulter un solde au
+        // comptoir, accorder ou débiter des points, et fixer le barème. Le troisième engage
+        // l'exploitant sur la durée — il ne se donne pas à qui tient la caisse.
+        $permFideliteTout = $this->permissionNommee($manager, 'fidelite', '*');
+        $droitsFidelite = [];
+        foreach (['lire', 'gerer', 'parametrer'] as $action) {
+            $droitsFidelite[$action] = $this->permissionNommee($manager, 'fidelite', $action);
+        }
+
+        foreach (['Administrateur groupe', 'Administrateur groupe B'] as $nomRole) {
+            $role = $manager->getRepository(Role::class)->findOneBy(['nom' => $nomRole]);
+            if ($role instanceof Role) {
+                $role->addPermission($permFideliteTout);
+                foreach ($droitsFidelite as $droit) {
+                    $role->addPermission($droit);
+                }
+            }
+        }
+
         // Un rôle « Chargé de campagnes » : il gère les campagnes sans toucher aux fiches clients.
         // La séparation compte — construire une audience n'est pas modifier un client, et le droit
         // de contacter mille personnes ne doit pas emporter celui d'en corriger une.
@@ -91,6 +115,34 @@ final class MarketingFixtures extends Fixture implements DependentFixtureInterfa
                 ->setEstablishment($etabA)
                 ->setLabel(self::SEGMENT_DEMO)
                 ->setCriteria([SegmentCriteria::SANS_VISITE_DEPUIS_JOURS => 90])
+        );
+
+        // UN BARÈME DATÉ DE L'AN DERNIER, pour que les ventes existantes rapportent quelque chose.
+        // Daté d'aujourd'hui, il ne s'appliquerait à rien et la démonstration afficherait zéro
+        // partout — ce qui se lirait comme une panne.
+        $manager->persist(
+            (new LoyaltyRule())
+                ->setEstablishment($etabA)
+                ->setPointsPerEuro(1)
+                ->setValidFrom(new \DateTimeImmutable('-1 year'))
+        );
+
+        foreach ([['Bronze', 100], ['Argent', 500], ['Or', 1500]] as [$libelle, $seuil]) {
+            $manager->persist(
+                (new LoyaltyTier())
+                    ->setEstablishment($etabA)
+                    ->setLabel($libelle)
+                    ->setThreshold($seuil)
+            );
+        }
+
+        // Le programme de parrainage : 200 points au parrain, dès 10 € encaissés par le filleul.
+        // Le seuil est le cœur du programme — sans lui, on paierait des inscriptions.
+        $manager->persist(
+            (new ReferralProgram())
+                ->setEstablishment($etabA)
+                ->setRewardPoints(200)
+                ->setMinimumPurchase('10.00')
         );
 
         $manager->flush();

@@ -121,6 +121,43 @@ final class CampaignTest extends MarketingApiTestCase
     }
 
     /**
+     * **LE CHEMIN NOMINAL — celui qu'aucun test ne parcourait.**
+     *
+     * Tous les tests d'écriture de ce fichier attendent un REFUS : variable inconnue, canal
+     * interdit, périmètre. Aucun n'allait jusqu'à l'enregistrement. Résultat : `Campaign` utilisait
+     * le processeur de tampon d'établissement, ce processeur ne traitait que `Segment`, et créer
+     * une campagne depuis l'écran répondait 500 sur une colonne `NOT NULL`.
+     *
+     * > **Un chemin nominal que personne ne parcourt en test est un chemin qu'on découvre en
+     * > production.**
+     *
+     * L'établissement n'est PAS envoyé par le corps de la requête, et c'est le point du test : il
+     * doit être posé par le serveur (D41). L'accepter du client permettrait de créer une campagne
+     * chez le voisin.
+     */
+    public function testUneCampagneSeCreeParLApiEtRecoitSonEtablissement(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $segment = $this->segment();
+
+        $cree = $client->request('POST', '/api/campaigns', $entete + [
+            'json' => [
+                'label' => 'Nocturne de septembre',
+                'segment' => '/api/segments/' . $segment->getId(),
+                'subject' => 'Une nocturne vous attend',
+                'body' => 'Nous serions heureux de vous revoir.',
+            ],
+        ])->toArray();
+
+        self::assertResponseStatusCodeSame(201);
+        self::assertSame(
+            '/api/etablissements/' . $this->etablissementA()->getId(),
+            $cree['establishment'] ?? null,
+            'L’établissement doit être posé par le serveur, jamais reçu du client (D41).',
+        );
+    }
+
+    /**
      * **CA-5 : le groupe témoin n'est pas contacté, et il apparaît dans le résultat.**
      *
      * Il est compté à part, jamais parmi les exclus. Le confondre avec un raté ferait croire qu'on a

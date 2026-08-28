@@ -6,7 +6,6 @@ namespace App\Marketing\State;
 
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
-use App\Marketing\Entity\Segment;
 use App\Securite\Service\ContexteEtablissement;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
@@ -39,13 +38,23 @@ final class MarketingEstablishmentStampProcessor implements ProcessorInterface
 
     public function process(mixed $data, Operation $operation, array $uriVariables = [], array $context = []): mixed
     {
-        if ($data instanceof Segment && $data->getEstablishment() === null) {
+        // ── POURQUOI CE N'EST PLUS « SI C'EST UN SEGMENT » ───────────────────────────────────
+        //
+        // Ça l'était jusqu'au 28/08, et `Campaign` utilisait pourtant le même processeur : son
+        // établissement restait donc nul sur une colonne `NOT NULL`, et créer une campagne depuis
+        // l'écran répondait 500. Aucun test ne l'avait vu — le seul qui poste une campagne attend
+        // un refus de validation, et n'atteint jamais l'enregistrement.
+        //
+        // La règle porte désormais sur la CAPACITÉ et non sur une classe nommée : toute entité du
+        // module qui sait recevoir un établissement en reçoit un. Celle qu'on ajoutera demain est
+        // tamponnée sans que personne ait à s'en souvenir.
+        if ($this->sePrendUnEtablissement($data) && $data->getEstablishment() === null) {
             $etablissement = $this->contexte->etablissementActif();
             if ($etablissement === null) {
-                // On ne devine pas : un segment rattaché au hasard apparaîtrait dans la liste d'un
+                // On ne devine pas : un objet rattaché au hasard apparaîtrait dans la liste d'un
                 // établissement qui ne l'a jamais créé.
                 throw new UnprocessableEntityHttpException(
-                    'Aucun établissement actif : impossible de rattacher ce segment (D41).',
+                    'Aucun établissement actif : impossible de rattacher cet enregistrement (D41).',
                 );
             }
 
@@ -53,5 +62,20 @@ final class MarketingEstablishmentStampProcessor implements ProcessorInterface
         }
 
         return $this->persist->process($data, $operation, $uriVariables, $context);
+    }
+
+    /**
+     * L'objet appartient-il au module et sait-il porter un établissement ?
+     *
+     * Le contrôle de namespace n'est pas décoratif : sans lui, ce processeur tamponnerait n'importe
+     * quelle entité qu'on lui passerait, y compris celles dont un autre module tient le
+     * rattachement sur un autre axe.
+     */
+    private function sePrendUnEtablissement(mixed $data): bool
+    {
+        return \is_object($data)
+            && str_starts_with($data::class, 'App\\Marketing\\Entity\\')
+            && method_exists($data, 'getEstablishment')
+            && method_exists($data, 'setEstablishment');
     }
 }

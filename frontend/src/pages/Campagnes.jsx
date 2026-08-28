@@ -194,7 +194,7 @@ export default function Campagnes({ etabActif, droits = [] }) {
             {segments.length} segment{segments.length > 1 ? 's' : ''} · l’effectif se calcule à chaque lecture
           </div>
         </div>
-        {peutGerer && (
+        {peutGerer && onglet !== 'fidelite' && (
           <button
             className="btn primary"
             type="button"
@@ -218,10 +218,12 @@ export default function Campagnes({ etabActif, droits = [] }) {
       {succes && <div className="alert good">{succes}</div>}
 
       <div className="seg" style={{ marginBottom: 16 }}>
-        {[['campagnes', 'Campagnes'], ['segments', 'Segments']].map(([k, l]) => (
+        {[['campagnes', 'Campagnes'], ['segments', 'Segments'], ['fidelite', 'Fidélité']].map(([k, l]) => (
           <button key={k} className={onglet === k ? 'on' : ''} onClick={() => setOnglet(k)}>{l}</button>
         ))}
       </div>
+
+      {onglet === 'fidelite' && <ReglagesFidelite droits={droits} onErreur={setErreur} />}
 
       {onglet === 'campagnes' && (
         <ListeCampagnes
@@ -957,6 +959,271 @@ function Attribution({ attribution }) {
         Les ventes sont comptées où qu’elles aient eu lieu dans le groupe : la campagne a ramené une
         personne, pas une caisse.
       </div>
+    </div>
+  )
+}
+
+/**
+ * LE PARAMÉTRAGE DE LA FIDÉLITÉ — trois réglages, trois raisons.
+ *
+ * **Le barème s'AJOUTE, il ne se modifie pas.** Une règle vaut à partir d'une date ; corriger celle
+ * d'hier changerait des soldes déjà annoncés aux clients. Se tromper se répare en posant un
+ * nouveau barème, exactement comme on ne rature pas une écriture comptable.
+ *
+ * **Un palier se lit sur douze mois glissants**, indépendamment des dépenses : dépenser ses points
+ * ne doit pas faire perdre son statut, sinon le client apprend à ne jamais s'en servir.
+ *
+ * **Le seuil d'achat du parrainage est le cœur du programme.** À zéro, on récompense une
+ * inscription — c'est-à-dire quiconque sait créer une adresse e-mail.
+ */
+/** Une date lisible, ou un tiret. Le format ISO brut ne se lit pas dans un tableau. */
+function dateFr(v) {
+  if (!v) return '—'
+  const d = new Date(v)
+
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('fr-FR')
+}
+
+function ReglagesFidelite({ droits, onErreur }) {
+  const [baremes, setBaremes] = useState([])
+  const [paliers, setPaliers] = useState([])
+  const [programme, setProgramme] = useState(null)
+  const [busy, setBusy] = useState(false)
+
+  const peutRegler = aLeDroit(droits, 'fidelite.parametrer')
+
+  const charger = useCallback(async () => {
+    try {
+      const [b, p, pr] = await Promise.all([
+        api.baremesFidelite(),
+        api.paliersFidelite(),
+        api.programmesParrainage(),
+      ])
+      setBaremes(membres(b))
+      setPaliers(membres(p))
+      setProgramme(membres(pr)[0] || null)
+    } catch (e) {
+      onErreur?.(e.message || 'Le paramétrage n’a pas pu être lu.')
+    }
+  }, [onErreur])
+
+  useEffect(() => { charger() }, [charger])
+
+  async function agir(promesse) {
+    setBusy(true)
+    try {
+      await promesse
+      await charger()
+    } catch (e) {
+      onErreur?.(e.message || 'Le réglage n’a pas pu être enregistré.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div style={{ display: 'grid', gap: 16 }}>
+      <PanneauBaremes baremes={baremes} peutRegler={peutRegler} busy={busy} onAjouter={agir} />
+      <PanneauPaliers paliers={paliers} peutRegler={peutRegler} busy={busy} onAgir={agir} />
+      <PanneauParrainage programme={programme} peutRegler={peutRegler} busy={busy} onAgir={agir} />
+    </div>
+  )
+}
+
+function PanneauBaremes({ baremes, peutRegler, busy, onAjouter }) {
+  const [points, setPoints] = useState('1')
+  const [depuis, setDepuis] = useState(() => new Date().toISOString().slice(0, 10))
+
+  const tries = [...baremes].sort((a, b) => (a.validFrom < b.validFrom ? 1 : -1))
+
+  return (
+    <div className="panel">
+      <div className="panel-h"><span>Barème — points par euro</span></div>
+
+      <div className="sub" style={{ marginBottom: 8 }}>
+        Un barème vaut <strong>à partir</strong> de sa date et jusqu’au suivant. On en ajoute un, on
+        n’en corrige jamais : changer celui d’hier modifierait des soldes déjà annoncés aux clients.
+      </div>
+
+      {tries.length > 0 && (
+        <div style={{ overflowX: 'auto' }}>
+          <table className="tbl">
+            <thead><tr><th>En vigueur depuis</th><th className="num">Points par euro</th></tr></thead>
+            <tbody>
+              {tries.map((b, i) => (
+                <tr key={b.id}>
+                  <td>{dateFr(b.validFrom)} {i === 0 && <span className="badge good">actuel</span>}</td>
+                  <td className="num">{b.pointsPerEuro}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {peutRegler && (
+        <div className="r" style={{ gap: 8, marginTop: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label>Points par euro</label>
+            <input type="number" min="0" value={points} onChange={(e) => setPoints(e.target.value)} />
+          </div>
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label>À partir du</label>
+            <input type="date" value={depuis} onChange={(e) => setDepuis(e.target.value)} />
+          </div>
+          <button
+            className="btn primary sm"
+            type="button"
+            disabled={busy}
+            onClick={() => onAjouter(api.creerBaremeFidelite({
+              pointsPerEuro: Number(points),
+              validFrom: `${depuis}T00:00:00+00:00`,
+            }))}
+          >
+            Ajouter ce barème
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function PanneauPaliers({ paliers, peutRegler, busy, onAgir }) {
+  const [libelle, setLibelle] = useState('')
+  const [seuil, setSeuil] = useState('')
+
+  const tries = [...paliers].sort((a, b) => a.threshold - b.threshold)
+
+  return (
+    <div className="panel">
+      <div className="panel-h"><span>Paliers</span></div>
+
+      <div className="sub" style={{ marginBottom: 8 }}>
+        Le palier se lit sur les points gagnés sur <strong>douze mois glissants</strong>, pas sur le
+        solde : dépenser ses points ne doit pas faire perdre son statut.
+      </div>
+
+      {tries.length > 0 && (
+        <div style={{ overflowX: 'auto' }}>
+          <table className="tbl">
+            <thead><tr><th>Palier</th><th className="num">À partir de</th><th /></tr></thead>
+            <tbody>
+              {tries.map((p) => (
+                <tr key={p.id}>
+                  <td>{p.label}</td>
+                  <td className="num">{p.threshold}</td>
+                  <td>
+                    {peutRegler && (
+                      <button
+                        className="btn ghost sm"
+                        type="button"
+                        disabled={busy}
+                        onClick={() => onAgir(api.supprimerPalierFidelite(p.id))}
+                      >
+                        Retirer
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {peutRegler && (
+        <div className="r" style={{ gap: 8, marginTop: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label>Nom du palier</label>
+            <input value={libelle} onChange={(e) => setLibelle(e.target.value)} placeholder="Argent" />
+          </div>
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label>Points requis</label>
+            <input type="number" min="1" value={seuil} onChange={(e) => setSeuil(e.target.value)} />
+          </div>
+          <button
+            className="btn primary sm"
+            type="button"
+            disabled={busy || !libelle.trim() || !seuil}
+            onClick={() => onAgir(api.creerPalierFidelite({
+              label: libelle.trim(),
+              threshold: Number(seuil),
+            }).then(() => { setLibelle(''); setSeuil('') }))}
+          >
+            Ajouter
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function PanneauParrainage({ programme, peutRegler, busy, onAgir }) {
+  const [points, setPoints] = useState(String(programme?.rewardPoints ?? 100))
+  const [minimum, setMinimum] = useState(String(programme?.minimumPurchase ?? '10.00'))
+
+  useEffect(() => {
+    setPoints(String(programme?.rewardPoints ?? 100))
+    setMinimum(String(programme?.minimumPurchase ?? '10.00'))
+  }, [programme])
+
+  const corps = { rewardPoints: Number(points), minimumPurchase: Number(minimum).toFixed(2) }
+
+  return (
+    <div className="panel">
+      <div className="panel-h">
+        <span>Parrainage</span>
+        {programme && (
+          <span className={`badge ${programme.enabled ? 'good' : 'mut'}`} style={{ marginLeft: 'auto' }}>
+            {programme.enabled ? 'actif' : 'suspendu'}
+          </span>
+        )}
+      </div>
+
+      <div className="sub" style={{ marginBottom: 8 }}>
+        Le <strong>montant minimum</strong> est le cœur du programme : il fait dépendre la récompense
+        d’un achat encaissé, jamais d’une inscription. À zéro, on récompense quiconque sait créer une
+        adresse e-mail.
+      </div>
+
+      {peutRegler ? (
+        <div className="r" style={{ gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label>Points au parrain</label>
+            <input type="number" min="1" value={points} onChange={(e) => setPoints(e.target.value)} />
+          </div>
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label>Achat minimum du filleul (€)</label>
+            <input type="number" min="0" step="0.01" value={minimum} onChange={(e) => setMinimum(e.target.value)} />
+          </div>
+          <button
+            className="btn primary sm"
+            type="button"
+            disabled={busy}
+            onClick={() => onAgir(programme
+              ? api.majProgrammeParrainage(programme.id, corps)
+              : api.creerProgrammeParrainage(corps))}
+          >
+            {programme ? 'Enregistrer' : 'Créer le programme'}
+          </button>
+          {programme && (
+            <button
+              className="btn ghost sm"
+              type="button"
+              disabled={busy}
+              onClick={() => onAgir(api.majProgrammeParrainage(programme.id, { enabled: !programme.enabled }))}
+            >
+              {programme.enabled ? 'Suspendre' : 'Réactiver'}
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="sub">
+          {programme
+            ? `${programme.rewardPoints} points au parrain dès ${programme.minimumPurchase} € encaissés.`
+            : 'Aucun programme défini.'}
+        </div>
+      )}
     </div>
   )
 }

@@ -81,6 +81,20 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
     return () => clearTimeout(t)
   }, [q, rechercher])
 
+  const [fidelite, setFidelite] = useState(null)
+
+  // Le solde se relit APRÈS chaque geste : il se recalcule côté serveur, et le recopier ici ferait
+  // diverger l'écran de la vérité au premier arrondi.
+  const rechargerFidelite = useCallback(async (id) => {
+    if (!id || !aLeDroit(droits, 'fidelite.lire')) { setFidelite(null); return }
+    try {
+      setFidelite(await api.fidelite(id))
+    } catch {
+      // Sans programme de fidélité, ou sans droit : la fiche vit très bien sans ce bloc.
+      setFidelite(null)
+    }
+  }, [droits])
+
   async function ouvrirFiche(id) {
     setSelId(id)
     setFiche(null)
@@ -88,6 +102,7 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
     setFicheErr(null)
     setFicheLoading(true)
     try {
+      rechargerFidelite(id)
       const f = await api.ficheClient(id)
       const complet = await api.client(id).catch(() => null)
       setFiche(complet ? { ...f, client: { ...(f.client || {}), ...complet } } : f)
@@ -205,7 +220,13 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
             ) : ficheErr ? (
               <div className="banner banner-error">{ficheErr}</div>
             ) : fiche ? (
-              <FicheContenu fiche={fiche} mouvements={mouvements} />
+              <FicheContenu
+                fiche={fiche}
+                mouvements={mouvements}
+                fidelite={fidelite}
+                droits={droits}
+                onMouvement={() => rechargerFidelite(selId)}
+              />
             ) : null}
           </div>
         </section>
@@ -221,7 +242,7 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
   )
 }
 
-function FicheContenu({ fiche, mouvements }) {
+function FicheContenu({ fiche, mouvements, fidelite, droits, onMouvement }) {
   const c = fiche.client || {}
   const historique = fiche.historique || []
   const famille = fiche.famille || []
@@ -244,6 +265,15 @@ function FicheContenu({ fiche, mouvements }) {
           </div>
         </div>
       </div>
+
+      <BlocFidelite
+        fidelite={fidelite}
+        clientId={c.id}
+        droits={droits}
+        onMouvement={onMouvement}
+      />
+
+      <BlocParrainage clientId={c.id} droits={droits} onMouvement={onMouvement} />
 
       {/* Indicateurs clés */}
       <div className="fiche-stats">
@@ -404,6 +434,324 @@ function FicheContenu({ fiche, mouvements }) {
           <div className="empty" style={{ padding: 12 }}>Aucun achat enregistré.</div>
         )}
       </div>
+    </div>
+  )
+}
+
+/**
+ * LA FIDÉLITÉ AU COMPTOIR.
+ *
+ * Trois chiffres, dans cet ordre, parce que ce sont trois questions différentes :
+ *
+ *   - le **solde** — ce que le client peut échanger maintenant, la seule chose qu'il demande ;
+ *   - le **palier** — ce qu'il est, qui ne baisse pas quand il dépense ;
+ *   - ce qui **manque au palier suivant** — le seul chiffre qui fasse revenir. « Il vous manque
+ *     40 points » agit ; « vous avez 260 points » n'agit pas.
+ *
+ * Et une phrase que l'écran doit dire tout haut : les points **n'expirent pas**. Une expiration
+ * silencieuse se découvre au comptoir, et c'est ce jour-là qu'on perd le client qu'on voulait
+ * fidéliser.
+ */
+function BlocFidelite({ fidelite, clientId, droits, onMouvement }) {
+  const [ouvert, setOuvert] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState(null)
+  const [points, setPoints] = useState('')
+  const [motif, setMotif] = useState('')
+  const [sens, setSens] = useState('depense')
+
+  if (!fidelite) return null
+
+  const peutGerer = aLeDroit(droits, 'fidelite.gerer')
+
+  async function enregistrer() {
+    setBusy(true)
+    setErr(null)
+    try {
+      await api.mouvementFidelite({
+        customerRef: clientId,
+        points: Number(points),
+        movement: sens,
+        reason: motif,
+      })
+      setOuvert(false)
+      setPoints('')
+      setMotif('')
+      onMouvement?.()
+    } catch (e) {
+      setErr(e.message || 'Le mouvement n’a pas pu être enregistré.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="panel">
+      <div className="panel-h">
+        <span>Fidélité</span>
+        {fidelite.baremeCourant ? (
+          <span className="sub" style={{ marginLeft: 'auto' }}>
+            {fidelite.baremeCourant.pointsParEuro} point(s) par euro
+          </span>
+        ) : (
+          <span className="sub" style={{ marginLeft: 'auto' }}>Aucun barème défini</span>
+        )}
+      </div>
+
+      <div className="fiche-stats">
+        <div className="stat-tile">
+          <div className="st-val num">{fidelite.solde}</div>
+          <div className="st-lbl">Points disponibles</div>
+        </div>
+        <div className="stat-tile">
+          <div className="st-val">{fidelite.palier?.libelle || '—'}</div>
+          <div className="st-lbl">Palier</div>
+        </div>
+        <div className="stat-tile">
+          <div className="st-val num">
+            {fidelite.palierSuivant ? fidelite.palierSuivant.pointsManquants : '—'}
+          </div>
+          <div className="st-lbl">
+            {fidelite.palierSuivant ? `Pour « ${fidelite.palierSuivant.libelle} »` : 'Palier maximal'}
+          </div>
+        </div>
+      </div>
+
+      {!fidelite.expirationDesPoints && (
+        <div className="sub" style={{ marginTop: 6 }}>
+          Ces points <strong>n’expirent pas</strong>. Une expiration que le client découvrirait au
+          comptoir coûterait davantage que les points qu’elle économise.
+        </div>
+      )}
+
+      {peutGerer && !ouvert && (
+        <button
+          className="btn ghost sm"
+          type="button"
+          style={{ marginTop: 10 }}
+          onClick={() => setOuvert(true)}
+        >
+          Dépenser ou ajuster
+        </button>
+      )}
+
+      {ouvert && (
+        <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
+          {err && <div className="banner banner-error">{err}</div>}
+          <div className="seg">
+            {[['depense', 'Dépense'], ['ajustement', 'Ajustement']].map(([k, l]) => (
+              <button key={k} className={sens === k ? 'on' : ''} onClick={() => setSens(k)}>{l}</button>
+            ))}
+          </div>
+          <div className="field">
+            <label>Points</label>
+            <input type="number" value={points} onChange={(e) => setPoints(e.target.value)} />
+          </div>
+          <div className="field">
+            <label>Motif — le client demandera</label>
+            <input
+              value={motif}
+              onChange={(e) => setMotif(e.target.value)}
+              placeholder="Entrée offerte, geste commercial…"
+            />
+          </div>
+          <div className="r" style={{ gap: 8 }}>
+            <button className="btn ghost sm" type="button" onClick={() => setOuvert(false)}>Annuler</button>
+            <button className="btn primary sm" type="button" disabled={busy} onClick={enregistrer}>
+              Enregistrer
+            </button>
+          </div>
+        </div>
+      )}
+
+      {(fidelite.historique || []).length > 0 && (
+        <div style={{ overflowX: 'auto', marginTop: 10 }}>
+          <table className="tbl">
+            <thead><tr><th>Date</th><th>Mouvement</th><th>Motif</th><th className="num">Points</th></tr></thead>
+            <tbody>
+              {fidelite.historique.map((m, i) => (
+                <tr key={`${m.le}-${i}`}>
+                  <td>{dateFr(m.le)}</td>
+                  <td>{m.mouvement}</td>
+                  <td>{m.motif}</td>
+                  <td className="num">{m.points > 0 ? `+${m.points}` : m.points}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * LE PARRAINAGE, AU COMPTOIR.
+ *
+ * Le code s'affiche à la demande — le charger d'office créerait un code de parrainage à tous les
+ * clients dont on ouvre la fiche, y compris ceux qui ne parraineront jamais.
+ *
+ * Deux chiffres suffisent : combien de filleuls, et combien sont **à récompenser**. Le second est
+ * le seul qui fasse agir ; « 47 parrainages » se regarde, « 3 à récompenser » se traite.
+ *
+ * L'écran dit aussi ce qu'il ne fait pas : le code ne part par aucun canal automatique. L'agent le
+ * donne. Le taire laisserait croire que le filleul l'a reçu.
+ */
+function BlocParrainage({ clientId, droits, onMouvement }) {
+  const [code, setCode] = useState(null)
+  const [liste, setListe] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState(null)
+  const [codeParrain, setCodeParrain] = useState('')
+
+  const peutLire = aLeDroit(droits, 'fidelite.lire')
+  const peutGerer = aLeDroit(droits, 'fidelite.gerer')
+
+  const charger = useCallback(async () => {
+    if (!clientId || !peutLire) { setListe(null); return }
+    try {
+      setListe(await api.parrainages(clientId))
+    } catch {
+      setListe(null)
+    }
+  }, [clientId, peutLire])
+
+  useEffect(() => { setCode(null); setErr(null); charger() }, [charger])
+
+  if (!peutLire || !liste) return null
+
+  async function afficherCode() {
+    setBusy(true)
+    setErr(null)
+    try {
+      setCode((await api.codeParrainage(clientId)).code)
+    } catch (e) {
+      setErr(e.message || 'Le code n’a pas pu être obtenu.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function recompenser(id) {
+    setBusy(true)
+    setErr(null)
+    try {
+      await api.recompenserParrainage(id)
+      await charger()
+      onMouvement?.()
+    } catch (e) {
+      setErr(e.message || 'La récompense n’a pas pu être versée.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function declarer() {
+    setBusy(true)
+    setErr(null)
+    try {
+      await api.declarerParrainage({ code: codeParrain.trim().toUpperCase(), refereeRef: clientId })
+      setCodeParrain('')
+      await charger()
+    } catch (e) {
+      setErr(e.message || 'Ce parrainage n’a pas pu être déclaré.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const filleuls = liste.parrainages || []
+
+  return (
+    <div className="panel">
+      <div className="panel-h">
+        <span>Parrainage</span>
+        {liste.aRecompenser > 0 && (
+          <span className="badge warn" style={{ marginLeft: 'auto' }}>
+            {liste.aRecompenser} à récompenser
+          </span>
+        )}
+      </div>
+
+      <div className="r" style={{ gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        {code ? (
+          <>
+            <span className="sub">Son code :</span>
+            <strong style={{ fontFamily: 'monospace', fontSize: 18, letterSpacing: 2 }}>{code}</strong>
+          </>
+        ) : (
+          <button className="btn ghost sm" type="button" disabled={busy} onClick={afficherCode}>
+            Afficher son code de parrainage
+          </button>
+        )}
+      </div>
+
+      {code && (
+        <div className="sub" style={{ marginTop: 6 }}>
+          Ce code n’est envoyé par <strong>aucun canal automatique</strong> : donnez-le au client. Le
+          jour où la boutique en ligne saura le porter, elle appellera la même adresse.
+        </div>
+      )}
+
+      {err && <div className="banner banner-error" style={{ marginTop: 8 }}>{err}</div>}
+
+      {filleuls.length > 0 && (
+        <div style={{ overflowX: 'auto', marginTop: 10 }}>
+          <table className="tbl">
+            <thead>
+              <tr><th>Filleul</th><th>Depuis</th><th>État</th><th className="num">Points</th><th /></tr>
+            </thead>
+            <tbody>
+              {filleuls.map((p) => (
+                <tr key={p.id}>
+                  <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{p.filleul.slice(0, 8)}…</td>
+                  <td>{dateFr(p.le)}</td>
+                  <td>
+                    <span className={`badge ${p.etat === 'eligible' ? 'warn' : p.etat === 'recompense' ? 'good' : 'mut'}`}>
+                      {p.libelle}
+                    </span>
+                  </td>
+                  <td className="num">{p.pointsVerses || '—'}</td>
+                  <td>
+                    {p.etat === 'eligible' && peutGerer && (
+                      <button
+                        className="btn primary sm"
+                        type="button"
+                        disabled={busy}
+                        onClick={() => recompenser(p.id)}
+                      >
+                        Récompenser
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {peutGerer && (
+        <div className="r" style={{ gap: 8, marginTop: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label>Ce client a été parrainé — code du parrain</label>
+            <input
+              value={codeParrain}
+              onChange={(e) => setCodeParrain(e.target.value)}
+              placeholder="ABCD2345"
+              style={{ fontFamily: 'monospace', letterSpacing: 2 }}
+            />
+          </div>
+          <button
+            className="btn ghost sm"
+            type="button"
+            disabled={busy || codeParrain.trim().length < 4}
+            onClick={declarer}
+          >
+            Déclarer
+          </button>
+        </div>
+      )}
     </div>
   )
 }

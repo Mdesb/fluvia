@@ -330,6 +330,38 @@ export const api = {
   // Droit distinct (campagne.lire_journal) : la reponse expose du chiffre d'affaires par groupe.
   attributionCampagne: (id) => request(`/api/marketing/campagnes/${id}/attribution`),
 
+  // FIDELITE -- solde, palier et historique d'un client. Tout est calcule : aucun compteur n'est
+  // stocke, donc une vente annulee retire ses points d'elle-meme.
+  fidelite: (clientId) => request(`/api/marketing/fidelite/${clientId}`),
+  mouvementFidelite: (corps) =>
+    request('/api/marketing/fidelite/mouvements', { method: 'POST', body: corps, ld: true }),
+
+  // PARRAINAGE -- le code est CREE au premier appel : demander son code est le geste qui l'attribue.
+  codeParrainage: (clientId) => request(`/api/marketing/parrainage/code/${clientId}`),
+  parrainages: (parrain) =>
+    request('/api/marketing/parrainages', { query: parrain ? { parrain } : {} }),
+  declarerParrainage: (corps) =>
+    request('/api/marketing/parrainages', { method: 'POST', body: corps, ld: true }),
+  // Le versement est EXPLICITE : une lecture qui verse verserait deux fois si on la rafraichit.
+  recompenserParrainage: (id) =>
+    request(`/api/marketing/parrainages/${id}/recompenser`, { method: 'POST', body: {} }),
+
+  // PARAMETRAGE -- un bareme est DATE : il vaut a partir d'un jour et ne reecrit pas le passe.
+  // C'est pour cela qu'on en AJOUTE un et qu'on n'en modifie jamais : corriger un bareme passe
+  // changerait des soldes deja annonces aux clients.
+  baremesFidelite: () => request('/api/loyalty_rules', { query: { itemsPerPage: 100 } }),
+  creerBaremeFidelite: (corps) => request('/api/loyalty_rules', { method: 'POST', body: corps, ld: true }),
+
+  paliersFidelite: () => request('/api/loyalty_tiers', { query: { itemsPerPage: 100 } }),
+  creerPalierFidelite: (corps) => request('/api/loyalty_tiers', { method: 'POST', body: corps, ld: true }),
+  supprimerPalierFidelite: (id) => request(`/api/loyalty_tiers/${id}`, { method: 'DELETE' }),
+
+  programmesParrainage: () => request('/api/referral_programs', { query: { itemsPerPage: 100 } }),
+  creerProgrammeParrainage: (corps) =>
+    request('/api/referral_programs', { method: 'POST', body: corps, ld: true }),
+  majProgrammeParrainage: (id, corps) =>
+    request(`/api/referral_programs/${id}`, { method: 'PATCH', body: corps }),
+
   // ECHANGES COMMERCIAUX -- ce qui s'est passe avec un client, et le prochain geste.
   //
   // Distinct d'un ticket d'assistance : un ticket est SUBI et se ferme, un echange est DECIDE et la
