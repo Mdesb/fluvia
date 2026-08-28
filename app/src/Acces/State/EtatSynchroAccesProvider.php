@@ -9,6 +9,7 @@ use ApiPlatform\State\ProviderInterface;
 use App\Acces\ApiResource\SynchronisationAcces;
 use App\Acces\Entity\Controleur;
 use App\Acces\Enum\EtatControleur;
+use App\Securite\Service\ContexteEtablissement;
 use Doctrine\ORM\EntityManagerInterface;
 
 /**
@@ -21,6 +22,7 @@ final class EtatSynchroAccesProvider implements ProviderInterface
 {
     public function __construct(
         private readonly EntityManagerInterface $em,
+        private readonly ContexteEtablissement $contexte,
     ) {
     }
 
@@ -29,7 +31,21 @@ final class EtatSynchroAccesProvider implements ProviderInterface
         $vue = new SynchronisationAcces();
 
         /** @var list<Controleur> $controleurs */
-        $controleurs = $this->em->getRepository(Controleur::class)->findAll();
+        // `findAll()` rendait les controleurs de TOUS les sites, avec leurs libelles et leurs etats
+        // de synchronisation. Meme cause que l'export des passages : un fournisseur sur mesure ne
+        // passe par aucune extension. `SupervisionProvider`, ecrit dans ce meme dossier, lit bien
+        // l'etablissement actif — la regle etait connue, c'est ici qu'elle manquait.
+        $actif = $this->contexte->idActif();
+        if ($actif === null) {
+            return [];
+        }
+
+        $controleurs = $this->em->getRepository(Controleur::class)
+            ->createQueryBuilder('c')
+            ->andWhere('IDENTITY(c.etablissement) = :synchro_etablissement')
+            ->setParameter('synchro_etablissement', $actif, 'uuid')
+            ->getQuery()
+            ->getResult();
         $horsLigne = 0;
         foreach ($controleurs as $controleur) {
             $vue->controleurs[] = [

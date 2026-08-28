@@ -145,6 +145,18 @@ executer "Nommage anglais (D5)" php_racine bin/garde-fou-nommage-anglais.php "--
 #    Facturation/Nf525/ScellementFactureHandler n'est pas passé à #[Autowire(env:)] — c'est voulu.
 executer "Secrets en dur" php_racine bin/garde-fou-secrets.php
 
+# 20. Le code de production ne dépend d'aucun paquet de développement.
+#     `symfony/http-client` etait en `require-dev` alors que huit classes de production s'en
+#     servaient : OCR Anthropic, les quatre adaptateurs Bluesky/Mastodon, l'annuaire des
+#     entreprises, le calendrier scolaire. Sur un deploiement `--no-dev`, aucune ne pouvait
+#     fonctionner — et le service `http_client` etant construit par le conteneur, le transport du
+#     mailer explosait avec, d'ou un 500 sur « mot de passe oublie ».
+#
+#     Les tests tournent avec les dependances de dev : le defaut est invisible partout ou on le
+#     cherche, et visible seulement la ou personne ne regarde. Pas de ligne de base, meme raison
+#     que le n°4.
+executer "Dépendances de dev (n°20)" php_racine bin/garde-fou-dependances-dev.php
+
 # 5. Couverture de périmètre en LECTURE. Les quatre précédents surveillent les écritures ; celui-ci
 #    surveille ce qu'aucun d'eux ne pouvait voir — une entité exposée que rien ne permet de filtrer.
 #    C'est ce trou qui laissait `GET /ecritures-comptables` renvoyer le grand livre de tous les

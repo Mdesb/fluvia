@@ -180,6 +180,11 @@ while read -r ancien nouveau ref; do
         lancer garde-fou-secrets.php
     fi
 
+    if [ -f "$ARBRE/bin/garde-fou-dependances-dev.php" ]; then
+        echo "── Dépendances de dev (n°20)"
+        lancer garde-fou-dependances-dev.php
+    fi
+
     # Couverture de perimetre en lecture : une entite exposee que rien ne peut filtrer. Aucun des
     # controles ci-dessus ne pouvait la voir — ils surveillent les ecritures, pas les collections.
     if [ -f "$ARBRE/bin/garde-fou-couverture-perimetre.php" ]; then

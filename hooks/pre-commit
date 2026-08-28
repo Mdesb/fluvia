@@ -64,6 +64,9 @@ lancer_gf garde-fou-cloisonnement.php || ECHEC=1
 # Secrets : sur l'arbre de travail également.
 [ -f "$RACINE/bin/garde-fou-secrets.php" ] && { lancer_gf garde-fou-secrets.php || ECHEC=1; }
 
+# Dependances de dev (n°20) : du code de production qui importe un paquet absent en production.
+[ -f "$RACINE/bin/garde-fou-dependances-dev.php" ] && { lancer_gf garde-fou-dependances-dev.php || ECHEC=1; }
+
 # Couverture de perimetre en lecture (voir hooks/pre-receive).
 [ -f "$RACINE/bin/garde-fou-couverture-perimetre.php" ] && { lancer_gf garde-fou-couverture-perimetre.php || ECHEC=1; }
 
