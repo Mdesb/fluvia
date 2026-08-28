@@ -17,9 +17,8 @@ use App\Boutique\Entity\PartenaireOTA;
 use App\Boutique\Entity\RetraitClickCollect;
 use App\Boutique\Entity\ReversementOTA;
 use App\Boutique\Entity\Vitrine;
-use App\Securite\Entity\Affectation;
 use App\Securite\Entity\Utilisateur;
-use Doctrine\ORM\Query\Expr\Join;
+use App\Securite\Service\ContexteEtablissement;
 use Doctrine\ORM\QueryBuilder;
 use Symfony\Bundle\SecurityBundle\Security;
 
@@ -70,6 +69,7 @@ final class PerimetreBoutiqueExtension implements QueryCollectionExtensionInterf
 
     public function __construct(
         private readonly Security $security,
+        private readonly ContexteEtablissement $contexte,
     ) {
     }
 
@@ -118,17 +118,30 @@ final class PerimetreBoutiqueExtension implements QueryCollectionExtensionInterf
         $rootAlias = $queryBuilder->getRootAliases()[0];
         $chemin = str_replace('{root}', $rootAlias, self::CHEMINS[$resourceClass]);
 
+        // ── L'AXE EST L'ÉTABLISSEMENT ACTIF ──────────────────────────────────────────────────
+        //
+        // Bascule du 28/08. Le filtre portait sur le PÉRIMÈTRE du lecteur : un exploitant affecté à
+        // trois sites voyait les données des trois, sous le titre d'un seul. Constaté dans le
+        // navigateur — le tableau de bord d'un site créé le matin même annonçait une session de
+        // caisse ouverte, celle du voisin, et la pastille « prêt à vendre » s'allumait sur un site
+        // sans caisse.
+        //
+        // L'écran porte un sélecteur d'établissement et titre ses pages du site actif : les données
+        // le suivent. Le périmètre dit ce qu'on a le DROIT de voir ; l'actif dit ce qu'on REGARDE.
+        // `PermissionVoter` a déjà refusé un établissement hors périmètre avant cette requête : on
+        // filtre, on ne rejuge pas.
+        $actif = $this->contexte->idActif();
+        if ($actif === null) {
+            // Fermeture par défaut : une liste vide se remarque, une liste inter-établissements a
+            // seulement l'air plus longue.
+            $queryBuilder->andWhere('1 = 0');
+
+            return;
+        }
+
         $queryBuilder
-            ->innerJoin(
-                Affectation::class,
-                'aff_perimetre_boutique',
-                Join::WITH,
-                sprintf(
-                    'IDENTITY(aff_perimetre_boutique.etablissement) = IDENTITY(%s) AND IDENTITY(aff_perimetre_boutique.utilisateur) = :perimetre_boutique_utilisateur',
-                    $chemin,
-                ),
-            )
-            ->setParameter('perimetre_boutique_utilisateur', $utilisateur->getId(), 'uuid')
+            ->andWhere(sprintf('IDENTITY(%s) = :%s', $chemin, 'perimetre_boutique_actif'))
+            ->setParameter('perimetre_boutique_actif', $actif, 'uuid')
             ->distinct();
     }
 
@@ -144,21 +157,25 @@ final class PerimetreBoutiqueExtension implements QueryCollectionExtensionInterf
     {
         $rootAlias = $queryBuilder->getRootAliases()[0];
 
+        $actif = $this->contexte->idActif();
+        if ($actif === null) {
+            $queryBuilder->andWhere('1 = 0');
+
+            return;
+        }
+
         $queryBuilder
             ->andWhere(sprintf(
                 'EXISTS (
                     SELECT 1 FROM %s pan
-                    INNER JOIN %s aff_achat
-                        WITH IDENTITY(aff_achat.etablissement) = IDENTITY(pan.etablissement)
-                        AND IDENTITY(aff_achat.utilisateur) = :perimetre_achat_utilisateur
                     WHERE IDENTITY(pan.compteClient) = %s.id
+                      AND IDENTITY(pan.etablissement) = :perimetre_achat_actif
                       AND pan.statut = :perimetre_achat_statut
                 )',
                 PanierEnLigne::class,
-                Affectation::class,
                 $rootAlias,
             ))
-            ->setParameter('perimetre_achat_utilisateur', $utilisateur->getId(), 'uuid')
+            ->setParameter('perimetre_achat_actif', $actif, 'uuid')
             ->setParameter('perimetre_achat_statut', StatutPanier::TransformeEnCommande->value);
     }
 }

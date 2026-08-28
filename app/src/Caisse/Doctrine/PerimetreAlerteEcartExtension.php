@@ -9,9 +9,8 @@ use ApiPlatform\Doctrine\Orm\Extension\QueryItemExtensionInterface;
 use ApiPlatform\Doctrine\Orm\Util\QueryNameGeneratorInterface;
 use ApiPlatform\Metadata\Operation;
 use App\Caisse\Entity\AlerteEcartCaisse;
-use App\Securite\Entity\Affectation;
 use App\Securite\Entity\Utilisateur;
-use Doctrine\ORM\Query\Expr\Join;
+use App\Securite\Service\ContexteEtablissement;
 use Doctrine\ORM\QueryBuilder;
 use Symfony\Bundle\SecurityBundle\Security;
 
@@ -27,6 +26,7 @@ final class PerimetreAlerteEcartExtension implements QueryCollectionExtensionInt
 {
     public function __construct(
         private readonly Security $security,
+        private readonly ContexteEtablissement $contexte,
     ) {
     }
 
@@ -67,17 +67,33 @@ final class PerimetreAlerteEcartExtension implements QueryCollectionExtensionInt
 
         $rootAlias = $queryBuilder->getRootAliases()[0];
 
+        // ── L'AXE EST L'ÉTABLISSEMENT ACTIF ──────────────────────────────────────────────────
+        //
+        // Bascule du 28/08. Le filtre portait sur le PÉRIMÈTRE du lecteur : un exploitant affecté à
+        // plusieurs sites voyait les données de tous, sous le titre d'un seul. Constaté à l'écran —
+        // un site créé le matin même, sans caisse, annonçait une session de caisse ouverte, celle
+        // du voisin, et sa pastille « prêt à vendre » s'allumait.
+        //
+        // L'écran porte un sélecteur d'établissement et titre ses pages du site actif : les données
+        // le suivent. Le périmètre dit ce qu'on a le DROIT de voir ; l'actif dit ce qu'on REGARDE.
+        //
+        // Le droit reste vérifié ailleurs, et c'est ce qui rend la bascule sûre :
+        // `ContexteEtablissement::idActif()` ne fait que lire l'en-tête — c'est un sélecteur, pas
+        // une preuve — mais `CalculateurDroits::codesEffectifs()` ne retient que les affectations
+        // portant SUR cet établissement, donc un en-tête hors périmètre ne donne aucun droit et le
+        // voter refuse avant que cette requête n'existe. Éprouvé par `AxeEtablissementActifTest`.
+        $actif = $this->contexte->idActif();
+        if ($actif === null) {
+            // Fermeture par défaut : une liste vide se remarque, une liste inter-établissements a
+            // seulement l'air plus longue.
+            $queryBuilder->andWhere('1 = 0');
+
+            return;
+        }
+
         $queryBuilder
-            ->innerJoin(
-                Affectation::class,
-                'aff_perimetre_alerte_ecart',
-                Join::WITH,
-                sprintf(
-                    'IDENTITY(aff_perimetre_alerte_ecart.etablissement) = IDENTITY(%s.etablissement) AND IDENTITY(aff_perimetre_alerte_ecart.utilisateur) = :perimetre_alerte_ecart_utilisateur',
-                    $rootAlias,
-                ),
-            )
-            ->setParameter('perimetre_alerte_ecart_utilisateur', $utilisateur->getId(), 'uuid')
+            ->andWhere(sprintf('IDENTITY(%s.etablissement) = :perimetre_alerte_ecart_actif', $rootAlias))
+            ->setParameter('perimetre_alerte_ecart_actif', $actif, 'uuid')
             ->distinct();
     }
 }

@@ -9,9 +9,8 @@ use ApiPlatform\State\ProcessorInterface;
 use App\Offre\Entity\Categorie;
 use App\Offre\Entity\Produit;
 use App\Offre\Service\TransitionProduitHandler;
-use App\Securite\Entity\Affectation;
 use App\Securite\Entity\Utilisateur;
-use Doctrine\ORM\Query\Expr\Join;
+use App\Securite\Service\ContexteEtablissement;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Bundle\SecurityBundle\Security;
@@ -35,6 +34,7 @@ final class ActionsDeMasseProcessor implements ProcessorInterface
         private readonly TransitionProduitHandler $handler,
         private readonly RequestStack $requestStack,
         private readonly Security $security,
+        private readonly ContexteEtablissement $contexte,
     ) {
     }
 
@@ -151,16 +151,16 @@ final class ActionsDeMasseProcessor implements ProcessorInterface
         // Un produit hors perimetre retourne `null`, donc rejoint les echecs « introuvable » deja
         // prevus : meme forme de reponse qu'un identifiant inexistant, aucun oracle d'enumeration.
         /** @var Produit|null $produit */
+        $actif = $this->contexte->idActif();
+        if ($actif === null) {
+            return null;
+        }
+
         $produit = $this->em->getRepository(Produit::class)->createQueryBuilder('p')
             ->innerJoin('p.etablissements', 'perim_etab')
-            ->innerJoin(
-                Affectation::class,
-                'perim_aff',
-                Join::WITH,
-                'IDENTITY(perim_aff.etablissement) = perim_etab.id AND IDENTITY(perim_aff.utilisateur) = :perim_utilisateur'
-            )
+            ->andWhere('perim_etab.id = :perim_actif')
             ->andWhere('p.id = :produit')
-            ->setParameter('perim_utilisateur', $utilisateur->getId(), 'uuid')
+            ->setParameter('perim_actif', $actif, 'uuid')
             ->setParameter('produit', Uuid::fromString($segment), 'uuid')
             ->setMaxResults(1)
             ->getQuery()

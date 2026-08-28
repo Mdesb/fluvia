@@ -9,10 +9,9 @@ use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProviderInterface;
 use App\Caution\Entity\GrilleRetenue as GrilleRetenueEntity;
 use App\Padel\ApiResource\GrilleRetenueMateriel;
-use App\Securite\Entity\Affectation;
 use App\Securite\Entity\Utilisateur;
+use App\Securite\Service\ContexteEtablissement;
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Query\Expr\Join;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Uid\Uuid;
@@ -30,6 +29,7 @@ final class GrilleRetenueMaterielProvider implements ProviderInterface
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly Security $security,
+        private readonly ContexteEtablissement $contexte,
     ) {
     }
 
@@ -55,15 +55,18 @@ final class GrilleRetenueMaterielProvider implements ProviderInterface
             ->andWhere('g.typeCible = :type')
             ->setParameter('type', LouerMaterielProcessor::TYPE_CIBLE);
 
+        // Meme correction que les alertes de stock : l'axe passe a l'etablissement actif, et le
+        // filtre cesse d'etre facultatif. Sans utilisateur ou sans etablissement actif, la grille
+        // rendait celles de tous les sites.
         $utilisateur = $this->security->getUser();
-        if ($utilisateur instanceof Utilisateur) {
-            $qb->innerJoin(
-                Affectation::class,
-                'aff_padel_grille',
-                Join::WITH,
-                'IDENTITY(aff_padel_grille.etablissement) = IDENTITY(g.etablissement) AND IDENTITY(aff_padel_grille.utilisateur) = :aff_padel_grille_utilisateur',
-            )->setParameter('aff_padel_grille_utilisateur', $utilisateur->getId(), 'uuid')->distinct();
+        $actif = $this->contexte->idActif();
+        if (!$utilisateur instanceof Utilisateur || $actif === null) {
+            return [];
         }
+
+        $qb->andWhere('IDENTITY(g.etablissement) = :padel_grille_actif')
+            ->setParameter('padel_grille_actif', $actif, 'uuid')
+            ->distinct();
 
         /** @var list<GrilleRetenueEntity> $resultat */
         $resultat = $qb->getQuery()->getResult();

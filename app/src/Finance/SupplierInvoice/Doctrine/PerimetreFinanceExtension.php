@@ -12,9 +12,8 @@ use App\Finance\SupplierInvoice\Entity\ReconciliationSettings;
 use App\Finance\SupplierInvoice\Entity\SupplierInvoice;
 use App\Finance\SupplierInvoice\Entity\SupplierInvoiceLine;
 use App\Finance\SupplierInvoice\Entity\SupplierPayment;
-use App\Securite\Entity\Affectation;
 use App\Securite\Entity\Utilisateur;
-use Doctrine\ORM\Query\Expr\Join;
+use App\Securite\Service\ContexteEtablissement;
 use Doctrine\ORM\QueryBuilder;
 use Symfony\Bundle\SecurityBundle\Security;
 
@@ -46,6 +45,7 @@ final class PerimetreFinanceExtension implements QueryCollectionExtensionInterfa
 
     public function __construct(
         private readonly Security $security,
+        private readonly ContexteEtablissement $contexte,
     ) {
     }
 
@@ -88,6 +88,13 @@ final class PerimetreFinanceExtension implements QueryCollectionExtensionInterfa
 
         $alias = $queryBuilder->getRootAliases()[0];
 
+        $actif = $this->contexte->idActif();
+        if ($actif === null) {
+            $queryBuilder->andWhere('1 = 0');
+
+            return;
+        }
+
         if ($viaProfil) {
             // Pas de champ `establishment` atteignable : rattachement via `businessProfile`, principal
             // OU rattaché (même patron que `PerimetreFacturationExtension`).
@@ -95,9 +102,8 @@ final class PerimetreFinanceExtension implements QueryCollectionExtensionInterfa
                 ->innerJoin($alias . '.businessProfile', 'finance_profil_perimetre')
                 ->leftJoin('finance_profil_perimetre.etablissementsRattaches', 'finance_etab_rattache_perimetre');
 
-            $condition = '(IDENTITY(finance_aff_perimetre.etablissement) = IDENTITY(finance_profil_perimetre.etablissementPrincipal)'
-                . ' OR finance_aff_perimetre.etablissement = finance_etab_rattache_perimetre)'
-                . ' AND IDENTITY(finance_aff_perimetre.utilisateur) = :finance_perimetre_utilisateur';
+            $condition = '(IDENTITY(finance_profil_perimetre.etablissementPrincipal) = :finance_perimetre_actif'
+                . ' OR finance_etab_rattache_perimetre.id = :finance_perimetre_actif)';
         } else {
             foreach (self::CHAINES[$resourceClass] as $i => $relation) {
                 $nouvelAlias = 'finance_perimetre_' . $i;
@@ -106,14 +112,14 @@ final class PerimetreFinanceExtension implements QueryCollectionExtensionInterfa
             }
 
             $condition = sprintf(
-                'IDENTITY(finance_aff_perimetre.etablissement) = IDENTITY(%s.establishment) AND IDENTITY(finance_aff_perimetre.utilisateur) = :finance_perimetre_utilisateur',
+                'IDENTITY(%s.establishment) = :finance_perimetre_actif',
                 $alias,
             );
         }
 
         $queryBuilder
-            ->innerJoin(Affectation::class, 'finance_aff_perimetre', Join::WITH, $condition)
-            ->setParameter('finance_perimetre_utilisateur', $utilisateur->getId(), 'uuid')
+            ->andWhere($condition)
+            ->setParameter('finance_perimetre_actif', $actif, 'uuid')
             ->distinct();
     }
 }

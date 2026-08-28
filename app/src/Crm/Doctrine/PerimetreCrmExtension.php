@@ -22,7 +22,6 @@ use App\Crm\Entity\PorteMonnaieVirtuel;
 use App\Crm\Entity\RegleConservation;
 use App\Organisation\Entity\Etablissement;
 use App\Organisation\Entity\Region;
-use App\Securite\Entity\Affectation;
 use App\Securite\Entity\Utilisateur;
 use Doctrine\ORM\QueryBuilder;
 use Symfony\Bundle\SecurityBundle\Security;

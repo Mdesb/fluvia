@@ -12,9 +12,8 @@ use App\Facturation\Entity\CommercialDocument;
 use App\Facturation\Entity\Facture;
 use App\Facturation\Entity\ParametreFacturationEtablissement;
 use App\Facturation\Entity\SerieNumerotation;
-use App\Securite\Entity\Affectation;
 use App\Securite\Entity\Utilisateur;
-use Doctrine\ORM\Query\Expr\Join;
+use App\Securite\Service\ContexteEtablissement;
 use Doctrine\ORM\QueryBuilder;
 use Symfony\Bundle\SecurityBundle\Security;
 
@@ -45,6 +44,7 @@ final class PerimetreFacturationExtension implements QueryCollectionExtensionInt
 
     public function __construct(
         private readonly Security $security,
+        private readonly ContexteEtablissement $contexte,
     ) {
     }
 
@@ -86,6 +86,13 @@ final class PerimetreFacturationExtension implements QueryCollectionExtensionInt
 
         $rootAlias = $queryBuilder->getRootAliases()[0];
 
+        $actif = $this->contexte->idActif();
+        if ($actif === null) {
+            $queryBuilder->andWhere('1 = 0');
+
+            return;
+        }
+
         if ($viaProfil) {
             // `ParametreFacturationEtablissement`/`SerieNumerotation` ne portent qu'un profil
             // exploitant : le rattachement à un établissement passe par
@@ -94,19 +101,20 @@ final class PerimetreFacturationExtension implements QueryCollectionExtensionInt
                 ->innerJoin($rootAlias . '.profilExploitant', 'profil_perimetre_facturation')
                 ->leftJoin('profil_perimetre_facturation.etablissementsRattaches', 'etab_rattache_perimetre_facturation');
 
-            $condition = '(IDENTITY(aff_perimetre_facturation.etablissement) = IDENTITY(profil_perimetre_facturation.etablissementPrincipal)'
-                . ' OR aff_perimetre_facturation.etablissement = etab_rattache_perimetre_facturation)'
-                . ' AND IDENTITY(aff_perimetre_facturation.utilisateur) = :perimetre_facturation_utilisateur';
+            // Principal OU rattaché : un site rattaché doit continuer de voir ce qu'on facture en
+            // son nom. La règle ne change pas, seul son terme de comparaison.
+            $condition = '(IDENTITY(profil_perimetre_facturation.etablissementPrincipal) = :perimetre_facturation_actif'
+                . ' OR etab_rattache_perimetre_facturation.id = :perimetre_facturation_actif)';
         } else {
             $condition = sprintf(
-                'IDENTITY(aff_perimetre_facturation.etablissement) = IDENTITY(%s.etablissement) AND IDENTITY(aff_perimetre_facturation.utilisateur) = :perimetre_facturation_utilisateur',
+                'IDENTITY(%s.etablissement) = :perimetre_facturation_actif',
                 $rootAlias,
             );
         }
 
         $queryBuilder
-            ->innerJoin(Affectation::class, 'aff_perimetre_facturation', Join::WITH, $condition)
-            ->setParameter('perimetre_facturation_utilisateur', $utilisateur->getId(), 'uuid')
+            ->andWhere($condition)
+            ->setParameter('perimetre_facturation_actif', $actif, 'uuid')
             ->distinct();
     }
 }

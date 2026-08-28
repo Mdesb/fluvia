@@ -26,9 +26,8 @@ use App\Musee\Entity\Reversement;
 use App\Musee\Entity\Salle;
 use App\Musee\Entity\SousQuotaSalle;
 use App\Musee\Entity\VisiteGuidee;
-use App\Securite\Entity\Affectation;
 use App\Securite\Entity\Utilisateur;
-use Doctrine\ORM\Query\Expr\Join;
+use App\Securite\Service\ContexteEtablissement;
 use Doctrine\ORM\QueryBuilder;
 use Symfony\Bundle\SecurityBundle\Security;
 
@@ -69,6 +68,7 @@ final class PerimetreMuseeExtension implements QueryCollectionExtensionInterface
 
     public function __construct(
         private readonly Security $security,
+        private readonly ContexteEtablissement $contexte,
     ) {
     }
 
@@ -117,17 +117,30 @@ final class PerimetreMuseeExtension implements QueryCollectionExtensionInterface
 
         $chemin = str_replace('{root}', $rootAlias, self::CHEMIN_ETABLISSEMENT[$resourceClass]);
 
+        // ── L'AXE EST L'ÉTABLISSEMENT ACTIF ──────────────────────────────────────────────────
+        //
+        // Bascule du 28/08. Le filtre portait sur le PÉRIMÈTRE du lecteur : un exploitant affecté à
+        // trois sites voyait les données des trois, sous le titre d'un seul. Constaté dans le
+        // navigateur — le tableau de bord d'un site créé le matin même annonçait une session de
+        // caisse ouverte, celle du voisin, et la pastille « prêt à vendre » s'allumait sur un site
+        // sans caisse.
+        //
+        // L'écran porte un sélecteur d'établissement et titre ses pages du site actif : les données
+        // le suivent. Le périmètre dit ce qu'on a le DROIT de voir ; l'actif dit ce qu'on REGARDE.
+        // `PermissionVoter` a déjà refusé un établissement hors périmètre avant cette requête : on
+        // filtre, on ne rejuge pas.
+        $actif = $this->contexte->idActif();
+        if ($actif === null) {
+            // Fermeture par défaut : une liste vide se remarque, une liste inter-établissements a
+            // seulement l'air plus longue.
+            $queryBuilder->andWhere('1 = 0');
+
+            return;
+        }
+
         $queryBuilder
-            ->innerJoin(
-                Affectation::class,
-                'aff_perimetre_musee',
-                Join::WITH,
-                sprintf(
-                    'IDENTITY(aff_perimetre_musee.etablissement) = IDENTITY(%s) AND IDENTITY(aff_perimetre_musee.utilisateur) = :perimetre_musee_utilisateur',
-                    $chemin,
-                ),
-            )
-            ->setParameter('perimetre_musee_utilisateur', $utilisateur->getId(), 'uuid')
+            ->andWhere(sprintf('IDENTITY(%s) = :%s', $chemin, 'perimetre_musee_actif'))
+            ->setParameter('perimetre_musee_actif', $actif, 'uuid')
             ->distinct();
     }
 }
