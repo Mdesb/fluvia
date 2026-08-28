@@ -1,7 +1,17 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, membres, tokenStore, etablissementStore, setUnauthorizedHandler } from '../api/client.js'
 import Login from '../pages/Login.jsx'
+import { aUnDesDroits } from '../api/droits.js'
 import Agenda from '../pages/Agenda.jsx'
+import Documents from '../pages/Documents.jsx'
+import Finance from '../pages/Finance.jsx'
+import MentionsLegales from '../pages/MentionsLegales.jsx'
+import Parametres from '../pages/Parametres.jsx'
+import Pilotage from '../pages/Pilotage.jsx'
+import Pipeline from '../pages/Pipeline.jsx'
+import Projets from '../pages/Projets.jsx'
+import Sepa from '../pages/Sepa.jsx'
+import Social from '../pages/Social.jsx'
 import Support from '../pages/Support.jsx'
 import Abonnements from './pages/Abonnements.jsx'
 import Offres from './pages/Offres.jsx'
@@ -101,11 +111,28 @@ export default function EditeurApp() {
     { id: 'clients', ic: '●', label: 'Clients' },
     { id: 'facturation', ic: '€', label: 'Facturation' },
     { id: 'reglements', ic: '⇄', label: 'Règlements' },
-    { id: 'agenda', ic: '▦', label: 'Agenda' },
-    { id: 'assistance', ic: '☏', label: 'Assistance' },
   ]
 
   const droits = me?.droits || []
+
+  // LES ÉCRANS DU MÉTIER DE L'ÉDITEUR — ceux de l'application client, tels quels.
+  //
+  // Leurs permissions sont calculées sur l'ÉTABLISSEMENT ACTIF : un employé qui porte `crm.lire`
+  // chez l'éditeur voit ses affaires, un autre ne voit pas l'onglet. Aucune permission neuve n'est
+  // nécessaire — c'est ce que l'éditeur gagne à être un établissement comme un autre.
+  const ongletsMetier = [
+    { id: 'affaires', ic: '◨', label: 'Affaires', perms: ['crm.lire', 'crm.creer', 'crm.modifier'] },
+    { id: 'projets', ic: '◱', label: 'Projets', perms: ['personnel.lire', 'personnel.gerer', 'organisation.gerer'] },
+    { id: 'finance', ic: '€', label: 'Achats & trésorerie', perms: ['finance.read'] },
+    { id: 'sepa', ic: '⇄', label: 'Prélèvements SEPA', perms: ['sepa.lire', 'compta.lire'] },
+    { id: 'documents', ic: '🗎', label: 'Documents', perms: ['dms.read', 'dms.write'] },
+    { id: 'social', ic: '◎', label: 'Publication sociale', perms: ['social.read_post', 'social.publish', 'social.read_account'] },
+    { id: 'agenda', ic: '▤', label: 'Agenda' },
+    { id: 'pilotage', ic: '◨', label: 'Reporting', perms: ['reporting.lire', 'reporting.configurer', 'reporting.planifier'] },
+    { id: 'assistance', ic: '?', label: 'Assistance', perms: ['support.lire', 'support.ouvrir_ticket', 'support.lire_ticket_soi', 'support.traiter_ticket_n1', 'support.traiter_ticket_n2', 'support.administrer'] },
+    { id: 'parametres', ic: '⚙', label: 'Paramètres', perms: ['securite.gerer', 'securite.lire', 'organisation.gerer', 'offre.gerer', 'caisse.gerer', 'crm.parametrer'] },
+    { id: 'legal', ic: '§', label: 'Mentions légales', perms: ['organisation.gerer', 'boutique.gerer_vitrine'] },
+  ].filter((o) => !o.perms || aUnDesDroits(droits, o.perms))
   const nomEtabActif = etablissements.find((e) => e.id === etabActif)?.nom || ''
 
   return (
@@ -117,7 +144,7 @@ export default function EditeurApp() {
         </div>
 
         <nav aria-label="Sections">
-          {onglets.map((o) => (
+          {[...onglets, ...ongletsMetier].map((o) => (
             <button
               key={o.id}
               type="button"
@@ -202,8 +229,17 @@ export default function EditeurApp() {
               produit deux agendas et deux messageries à corriger séparément — et une seule des deux
               le jour où l'on est pressé.
             */}
+            {onglet === 'affaires' && <Pipeline droits={droits} etabActif={etabActif} onNaviguer={setOnglet} />}
+            {onglet === 'projets' && <Projets droits={droits} etabActif={etabActif} />}
+            {onglet === 'finance' && <Finance droits={droits} etabActif={etabActif} />}
+            {onglet === 'sepa' && <Sepa droits={droits} etabActif={etabActif} />}
+            {onglet === 'documents' && <Documents droits={droits} etabActif={etabActif} />}
+            {onglet === 'social' && <Social droits={droits} etabActif={etabActif} />}
             {onglet === 'agenda' && <Agenda droits={droits} etabActif={etabActif} />}
+            {onglet === 'pilotage' && <Pilotage droits={droits} etabActif={etabActif} etablissements={etablissements} />}
             {onglet === 'assistance' && <Support droits={droits} etabActif={etabActif} me={me} />}
+            {onglet === 'parametres' && <Parametres droits={droits} etabActif={etabActif} etablissements={etablissements} />}
+            {onglet === 'legal' && <MentionsLegales droits={droits} etabActif={etabActif} />}
           </>
         )}
       </main>
