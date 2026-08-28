@@ -28,6 +28,49 @@ final class ImporterAideCommandTest extends SupportApiTestCase
         parent::tearDown();
     }
 
+    /**
+     * ⚠ CE TEST LIT LA VRAIE DOC VIVANTE, PAS UN FICHIER FABRIQUÉ POUR L'OCCASION.
+     *
+     * Les autres cas de ce fichier écrivent leurs propres `.md` dans un répertoire temporaire : ils
+     * vérifient que l'importeur fonctionne, jamais que NOS articles passent. Un front-matter mal
+     * fermé, un champ `categorie` oublié, un répertoire mal nommé — rien ne le disait avant le
+     * déploiement, et l'article manquait en silence dans la base de connaissance.
+     *
+     * ⚠ LA SECONDE ASSERTION EST CELLE QUI COMPTE. « 0 en erreur » est vrai quand on ne lit rien :
+     * un répertoire entier ignoré laisserait ce test vert. On exige donc que le TOTAL traité égale
+     * le nombre de fichiers sur le disque.
+     *
+     * Le compte se lit sur le disque et ne se code pas en dur : ajouter un article ne doit pas
+     * demander de penser à incrémenter un nombre ici — sinon quelqu'un le décrémentera un jour pour
+     * faire passer le test.
+     */
+    public function testLaVraieDocVivanteEstImportableEnEntier(): void
+    {
+        $racine = static::getContainer()->getParameter('kernel.project_dir') . '/docs/aide';
+        self::assertDirectoryExists($racine, 'La doc vivante est la base de connaissance générique livrée à chaque client.');
+
+        $surLeDisque = 0;
+        $iterateur = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($racine, \FilesystemIterator::SKIP_DOTS));
+        foreach ($iterateur as $fichier) {
+            if ($fichier->isFile() && $fichier->getExtension() === 'md') {
+                ++$surLeDisque;
+            }
+        }
+        self::assertGreaterThan(0, $surLeDisque, 'Sans article, ce test serait vert sans rien mesurer.');
+
+        // Sans `--chemin` : on emprunte le chemin par défaut, celui qu'utilise le déploiement.
+        $tester = new CommandTester(static::getContainer()->get(ImporterAideCommand::class));
+        $code = $tester->execute(['--dry-run' => true, '--strict' => true]);
+
+        self::assertSame(Command::SUCCESS, $code, $tester->getDisplay());
+        self::assertStringContainsString('0 en erreur', $tester->getDisplay());
+        self::assertStringContainsString(
+            sprintf('total %d)', $surLeDisque),
+            $tester->getDisplay(),
+            sprintf('%d fichier(s) sur le disque, un autre nombre traité : un article est ignoré en silence.', $surLeDisque),
+        );
+    }
+
     public function testDryRunNePersistePasEtRenvoieCodeSucces(): void
     {
         file_put_contents($this->cheminTemp . '/vente/article.md', $this->contenu());
