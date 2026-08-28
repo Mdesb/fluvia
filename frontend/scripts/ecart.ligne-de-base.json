@@ -29,21 +29,24 @@
         "Le script REFUSE de le relever. Un plafond qui remonte n est plus un cliquet, c est un",
         "compteur."
     ],
-    "plafond": 710,
+    "plafond": 701,
     "releve": {
         "exposees": 1142,
         "sansEcran": 0,
         "attendues": 1142,
-        "appelees": 437,
-        "atteignables": 432,
-        "inatteignables": 710,
+        "appelees": 449,
+        "atteignables": 441,
+        "inatteignables": 701,
         "orphelins": [
             "comptesComptables  (back-office)",
+            "etatSynchroAcces  (back-office)",
+            "factureDepuisVente  (back-office)",
             "grilleTarifaires  (back-office)",
-            "majFactureFournisseur  (back-office)",
+            "majFactureDirecte  (back-office)",
             "padelTournois  (back-office)",
             "pieceCommerciale  (back-office)",
-            "planningOuverture  (back-office)"
+            "planningOuverture  (back-office)",
+            "verifierChaineFactures  (back-office)"
         ],
         "declares": [],
         "marqueursSansRaison": [],
@@ -51,8 +54,8 @@
         "parFront": [
             {
                 "nom": "back-office",
-                "appelees": 416,
-                "atteignables": 411
+                "appelees": 428,
+                "atteignables": 420
             },
             {
                 "nom": "boutique en ligne",
@@ -94,8 +97,16 @@
                 11
             ],
             [
+                "acces",
+                11
+            ],
+            [
                 "musee",
                 11
+            ],
+            [
+                "factures",
+                10
             ],
             [
                 "marketing",
@@ -106,15 +117,7 @@
                 10
             ],
             [
-                "acces",
-                9
-            ],
-            [
                 "billing",
-                8
-            ],
-            [
-                "factures",
                 8
             ],
             [
@@ -210,10 +213,6 @@
                 4
             ],
             [
-                "supplier",
-                4
-            ],
-            [
                 "recouvrement",
                 4
             ],
@@ -259,6 +258,22 @@
             ],
             [
                 "valeur",
+                3
+            ],
+            [
+                "espace",
+                3
+            ],
+            [
+                "controleurs",
+                3
+            ],
+            [
+                "equipements",
+                3
+            ],
+            [
+                "sous",
                 3
             ],
             [
@@ -410,7 +425,7 @@
                 1
             ],
             [
-                "expense",
+                "supplier",
                 1
             ],
             [

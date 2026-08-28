@@ -58,6 +58,16 @@ const NAV = [
       // badge perdu et appairer une carte sont les deux gestes les plus frequents d'un exploitant,
       // et aucun des deux n'etait possible depuis l'application.
       { id: 'acces', ic: '▭', label: 'Badges & terminaux', cap: 'controle_acces', perms: ['acces.lire', 'acces.appairer', 'acces.bloquer_support', 'acces.gerer'] },
+      // L'installation du contrôle d'accès : le plan du site, les lecteurs, et le journal complet.
+      // Même garde que ses deux voisines — la capacité DIT ce que le site a acheté, les permissions
+      // disent ce que ce compte a le droit d'en faire.
+      //
+      // Cette entrée a d'abord été posée sans `cap`, parce que la capacité était inactive sur tous
+      // les tenants et que l'écran des modules ne permettait pas de l'activer : la garder aurait
+      // caché l'écran à celui-là même qui vient d'installer ses tourniquets. Ce n'est plus vrai
+      // depuis que Paramètres › Modules en service permet la mise en service — l'entrée rejoint donc
+      // ses voisines, et une topologie invisible se corrige là où elle doit l'être.
+      { id: 'topologie_acces', ic: '⛬', label: 'Topologie & passages', cap: 'controle_acces', perms: ['acces.lire', 'acces.gerer', 'acces.superviser'] },
     ],
   },
   {

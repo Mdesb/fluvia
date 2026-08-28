@@ -163,6 +163,10 @@ async function request(
     if (timer) clearTimeout(timer)
   }
 
+  // ⚠ DEUX SESSIONS ONT ÉCRIT CE MÊME BLOC INDÉPENDAMMENT, à une heure d'intervalle. Les deux
+  // versions étaient justes et disaient la même chose ; celle-ci a été retenue à la fusion. Le
+  // doublon n'a coûté qu'un conflit — il aurait pu coûter deux mécanismes concurrents dans la même
+  // fonction, dont un seul aurait servi.
   // LE JETON SE RENOUVELLE PENDANT QU'ON TRAVAILLE, ET CA SE LIT ICI PARCE QU'ICI VOIT TOUT.
   //
   // Le serveur renvoie un jeton frais dans `X-JETON-RENOUVELE` des que le jeton courant a passe la
@@ -768,6 +772,43 @@ export const api = {
     request(`/api/acces/terminaux/${id}/jetons`, { method: 'POST', body: {} }),
   revoquerTerminal: (id) =>
     request(`/api/acces/terminaux/${id}/revoquer`, { method: 'POST', body: {} }),
+
+  // TOPOLOGIE DU CONTRÔLE D'ACCÈS (A-01) — QUATRE ENTITÉS COMPLÈTES, ZÉRO ÉCRAN.
+  //
+  // `EspaceAcces`, `Controleur`, `Equipement` et `SousReseau` exposent chacune GetCollection + Get
+  // + Post + Patch depuis l'origine du module, et aucune n'était atteignable : sur une installation
+  // neuve, déclarer un tourniquet passait par la base de données. Le seuil de jauge d'un espace, le
+  // mode au dépassement, le délai d'anti-passback et les marges d'avance/retard se réglaient au même
+  // endroit — c'est-à-dire nulle part, pour un exploitant.
+  //
+  // Les chemins ne sont PAS déductibles du nom de la ressource, et deux d'entre eux surprennent :
+  // `EspaceAcces` donne `/api/espace_acces` (pas de « s » final) et `SousReseau` donne
+  // `/api/sous_reseaus` (le pluriel est fabriqué mécaniquement). Vérifiés sur `debug:router`, pas
+  // supposés.
+  espacesAcces: () => request('/api/espace_acces', { query: { itemsPerPage: 200 } }),
+  creerEspaceAcces: (corps) => request('/api/espace_acces', { method: 'POST', body: corps, ld: true }),
+  majEspaceAcces: (id, corps) => request(`/api/espace_acces/${id}`, { method: 'PATCH', body: corps }),
+  controleursAcces: () => request('/api/controleurs', { query: { itemsPerPage: 200 } }),
+  creerControleur: (corps) => request('/api/controleurs', { method: 'POST', body: corps, ld: true }),
+  majControleur: (id, corps) => request(`/api/controleurs/${id}`, { method: 'PATCH', body: corps }),
+  equipementsAcces: () => request('/api/equipements', { query: { itemsPerPage: 200 } }),
+  creerEquipement: (corps) => request('/api/equipements', { method: 'POST', body: corps, ld: true }),
+  majEquipement: (id, corps) => request(`/api/equipements/${id}`, { method: 'PATCH', body: corps }),
+  sousReseauxAcces: () => request('/api/sous_reseaus', { query: { itemsPerPage: 100 } }),
+  creerSousReseau: (corps) => request('/api/sous_reseaus', { method: 'POST', body: corps, ld: true }),
+  majSousReseau: (id, corps) => request(`/api/sous_reseaus/${id}`, { method: 'PATCH', body: corps }),
+
+  // JOURNAL DES PASSAGES (A-05). `passages` ci-dessus rend les vingt derniers pour la supervision ;
+  // celui-ci porte les filtres du serveur (`espace`, `controleur`, `equipement`, `resultat` en
+  // SearchFilter, `horodatage` en DateFilter).
+  journalPassages: (query) => request('/api/passages', { query }),
+  // ⚠ L'EXPORT N'A PAS LES MÊMES NOMS DE PARAMÈTRES QUE LE JOURNAL. `PassageExportProvider` est écrit
+  // à la main : il lit `depuis`, `jusqua`, `espace`, `equipement`, `resultat` — et ignore
+  // silencieusement `horodatage[after]`. Passer les paramètres du journal rendrait un export NON
+  // FILTRÉ qui a toutes les apparences d'un export filtré.
+  exportPassages: (query) => request('/api/acces/passages/export', { query }),
+  // État réseau des contrôleurs (bascule en ligne / hors ligne, US-L3-07).
+  etatSynchroAcces: () => request('/api/acces/synchro/etat'),
 
   // Reporting / Pilotage (M7). Route hors /api (proxifiée via /reporting).
   dashboardEtablissement: (id) => request(`/reporting/dashboards/etablissement/${id}`),
