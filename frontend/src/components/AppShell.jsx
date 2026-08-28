@@ -109,6 +109,16 @@ const NAV = [
       // parti sur deux comptes, passe sur l'un, echoue sur l'autre. Sans le detail par compte,
       // on republie partout pour rattraper un seul echec.
       { id: 'social', ic: '◎', label: 'Publication sociale', perms: ['social.read_post', 'social.publish', 'social.read_account'] },
+      // AUCUNE PERMISSION EXIGÉE, ET C'EST DÉLIBÉRÉ.
+      //
+      // « Moi » n'est pas une fonctionnalité qu'on achète : tout compte rattaché à un établissement
+      // a un agenda, comme il a une boîte d'assistance. Le CONTENU, lui, reste borné — l'onglet
+      // « Le site » ne montre que ce que le cloisonnement laisse passer, l'onglet « Ouverture »
+      // n'expose ses gestes qu'à qui porte `organisation.gerer` ou `acces.gerer`, et l'agenda
+      // personnel d'un tiers n'est lisible par personne, pas même par un administrateur.
+      //
+      // Ouvrir la porte n'ouvre aucun droit : c'est la même règle que pour « Assistance ».
+      { id: 'agenda', ic: '▤', label: 'Agenda' },
     ],
   },
   {

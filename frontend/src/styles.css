@@ -758,3 +758,82 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
   .msgr-bulles { min-height: 320px; }
   .msgr-b { max-width: 88%; }
 }
+
+/* ---- Agenda : le calendrier ---- */
+.cal-barre { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+.cal-titre { font-size: 16px; font-weight: 700; margin-left: 6px; text-transform: capitalize; }
+
+/* LA COULEUR PORTE LA NATURE AVANT LE TEXTE. Sur une grille de semaine, on cherche d'abord « qu'est-ce
+   qui remplit mes apres-midi », pas « comment s'appelle ce bloc ». Le titre repond ensuite. */
+.cal-puce, .cal-bloc { border: 1px solid transparent; border-left-width: 3px; background: var(--panel-2);
+  color: var(--ink); font-family: inherit; text-align: left; cursor: pointer; }
+.cal-puce.reservation, .cal-bloc.reservation { border-left-color: var(--accent); background: var(--accent-soft); }
+.cal-puce.shift, .cal-bloc.shift { border-left-color: var(--good); background: var(--good-bg); }
+.cal-puce.meeting, .cal-bloc.meeting { border-left-color: var(--warm); background: var(--panel-2); }
+.cal-puce.maintenance, .cal-bloc.maintenance { border-left-color: var(--crit); background: var(--crit-bg); }
+.cal-puce.training, .cal-bloc.training { border-left-color: var(--warn); background: var(--warn-bg); }
+.cal-puce.unavailability, .cal-bloc.unavailability { border-left-color: var(--ink-faint); background: var(--panel-2); }
+.cal-puce.other, .cal-bloc.other { border-left-color: var(--ink-faint); }
+
+/* ---- Vue mois ---- */
+.cal-mois { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border: 1px solid var(--line);
+  border-radius: 10px; overflow: hidden; }
+.cal-mois-h { padding: 8px 6px; text-align: center; font-size: 11.5px; font-weight: 700; letter-spacing: .04em;
+  color: var(--ink-faint); background: var(--panel-2); border-bottom: 1px solid var(--line); }
+.cal-mois-c { min-height: 96px; padding: 5px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line);
+  display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.cal-mois-c:nth-child(7n + 7) { border-right: none; }
+/* Les jours des mois voisins restent VISIBLES et attenues : les masquer casserait la grille de six
+   semaines, et un lundi 30 qui disparait fait croire a un trou dans le planning. */
+.cal-mois-c.hors { background: var(--panel-2); opacity: .55; }
+.cal-mois-c.on .cal-mois-n { background: var(--accent); color: #fff; }
+.cal-mois-n { align-self: flex-start; font-size: 12px; font-weight: 700; min-width: 22px; height: 22px;
+  display: grid; place-items: center; border-radius: 50%; }
+.cal-puce { display: block; width: 100%; border-radius: 6px; padding: 2px 6px; font-size: 11.5px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cal-mois-plus { font-size: 11px; color: var(--ink-faint); padding-left: 4px; }
+
+/* ---- Vues semaine et jour ---- */
+.cal-grille { display: grid; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.cal-grille-coin { background: var(--panel-2); border-bottom: 1px solid var(--line); }
+.cal-grille-h { padding: 7px 4px; text-align: center; background: var(--panel-2);
+  border-bottom: 1px solid var(--line); border-left: 1px solid var(--line); }
+.cal-grille-j { display: block; font-size: 11px; font-weight: 700; letter-spacing: .04em; color: var(--ink-faint); }
+.cal-grille-d { display: inline-grid; place-items: center; min-width: 24px; height: 24px; border-radius: 50%;
+  font-size: 13px; font-weight: 700; }
+.cal-grille-h.on .cal-grille-d { background: var(--accent); color: #fff; }
+.cal-heures { border-right: 1px solid var(--line); }
+.cal-heure { font-size: 11px; color: var(--ink-faint); padding: 2px 6px; text-align: right;
+  border-bottom: 1px solid var(--line); }
+.cal-colonne { position: relative; border-left: 1px solid var(--line); }
+.cal-ligne { border-bottom: 1px solid var(--line); }
+.cal-bloc { position: absolute; left: 3px; right: 3px; border-radius: 7px; padding: 3px 6px; overflow: hidden;
+  display: flex; flex-direction: column; gap: 1px; }
+.cal-bloc-t { font-size: 11.5px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cal-bloc-h { font-size: 10.5px; color: var(--ink-soft); }
+/* L'OUVERTURE EST UN ARRIERE-PLAN, PAS UN RENDEZ-VOUS. Une plage d'ouverture n'a pas lieu : elle est
+   le cadre dans lequel le reste a lieu. Dessinee comme un bloc ordinaire, elle recouvrirait les
+   creneaux qu'elle sert a situer — et on perdrait exactement ce qu'on cherchait : le creneau pose
+   hors des heures d'ouverture. */
+.cal-bloc.fond { left: 0; right: 0; border-radius: 0; border-left-color: transparent; background: var(--accent-soft);
+  opacity: .5; z-index: 0; pointer-events: none; }
+.cal-bloc:not(.fond) { z-index: 1; }
+
+/* ---- A venir, et abonnement ICS ---- */
+.cal-avenir { display: grid; gap: 8px; }
+.cal-avenir-l { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.cal-avenir-q { font-size: 12.5px; color: var(--ink-soft); min-width: 150px; }
+.cal-avenir-t { font-weight: 600; font-size: 13.5px; }
+.cal-pastille { width: 9px; height: 9px; border-radius: 50%; background: var(--ink-faint); flex: 0 0 9px; }
+.cal-pastille.reservation { background: var(--accent); }
+.cal-pastille.shift { background: var(--good); }
+.cal-pastille.meeting { background: var(--warm); }
+.cal-pastille.maintenance { background: var(--crit); }
+.cal-pastille.training { background: var(--warn); }
+.cal-ics { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.cal-ics .input { flex: 1; min-width: 220px; font-size: 12.5px; }
+
+@media (max-width: 900px) {
+  .cal-mois-c { min-height: 72px; }
+  .cal-avenir-q { min-width: 0; }
+}

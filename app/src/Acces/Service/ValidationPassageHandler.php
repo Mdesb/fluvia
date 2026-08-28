@@ -21,6 +21,7 @@ use App\Acces\Enum\StatutProjectionDroit;
 use App\Acces\Enum\StatutSupport;
 use App\Acces\Enum\TypeDroitAcces;
 use App\Acces\Port\PiloteAcces;
+use App\Opening\Service\OpeningCalendar;
 use App\Vente\Service\GenerateurCodeSupport;
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
@@ -43,6 +44,12 @@ final class ValidationPassageHandler
         private readonly PiloteAcces $pilote,
         private readonly GenerateurCodeSupport $generateurCode,
         private readonly VersionSnapshotSequencer $sequencer,
+        /**
+         * Le planning d'ouverture du site. Injecté ici plutôt que consulté à la volée : une
+         * dépendance explicite se voit dans la signature, et le jour où quelqu'un se demandera
+         * pourquoi un passage est refusé, la réponse est dans la liste des collaborateurs.
+         */
+        private readonly OpeningCalendar $ouverture,
         /**
          * Plancher du crédit négatif borné (CA-8, plan-acces-terminal.md §4.2) — global MVP, pas encore
          * par établissement (§8 spec pt.5). N'a d'effet que si
@@ -139,6 +146,26 @@ final class ValidationPassageHandler
         // Étape 4 — sens compatible avec l'équipement.
         if (!$equipement->getSens()->accepte($sens)) {
             return $this->refuser($espace, $controleur, $equipement, $support, $droit, $sens, $evt, CodeMotifRefus::SensInterdit, 'Sens non autorisé sur cet équipement.');
+        }
+
+        // Étape 4-bis — le site est-il ouvert ? (module App\Opening, 28/08)
+        //
+        // ── PLACÉE AVANT LES MARGES, ET C'EST VOULU ────────────────────────────────────────────
+        //
+        // Les marges disent si LE DROIT vaut à cette heure ; le planning dit si LE SITE est ouvert.
+        // Quand les deux refusent, le motif utile à l'exploitant est le second : « nous sommes
+        // fermés » se comprend et se corrige, « hors fenêtre autorisée » envoie chercher un défaut
+        // de tarification qui n'existe pas.
+        //
+        // ── NE REFUSE RIEN TANT QUE L'EXPLOITANT NE L'A PAS DEMANDÉ ────────────────────────────
+        //
+        // `autoriseLePassage()` rend `true` dès que le réglage de l'établissement n'est pas coché —
+        // c'est-à-dire partout, tant que personne n'a activé la règle. Arbitrage de Maxime du
+        // 28/08 : le sens sûr de l'erreur est d'ordinaire celui qui restreint, sauf quand
+        // restreindre veut dire refuser des clients qui ont payé. Aucun site existant ne se met
+        // donc à refuser du monde parce qu'on a déployé ce module.
+        if (!$this->ouverture->autoriseLePassage($espace->getEtablissement(), $evt->horodatage, $espace)) {
+            return $this->refuser($espace, $controleur, $equipement, $support, $droit, $sens, $evt, CodeMotifRefus::HorsHorairesOuverture, 'Site fermé à cette heure (planning d’ouverture).');
         }
 
         // Étape 5 — marges (intersection droit ∩ équipement, §4.2).

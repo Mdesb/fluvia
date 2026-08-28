@@ -1,0 +1,443 @@
+import { useCallback, useEffect, useState } from 'react'
+import { api, membres } from '../api/client.js'
+import { aLeDroit } from '../api/droits.js'
+import Modal from '../components/Modal.jsx'
+
+/**
+ * LE PLANNING D'OUVERTURE — les heures du site, et la case qui les rend opposables.
+ *
+ * **La case d'abord, et en haut.** « Faire appliquer au contrôle d'accès » n'est pas un réglage
+ * parmi d'autres : c'est la seule ligne de cet écran qui peut refuser quelqu'un à la porte. La
+ * placer en tête, avec ce qu'elle fait écrit en toutes lettres, est la différence entre un
+ * exploitant qui décide et un exploitant qui découvre.
+ *
+ * **Décochée par défaut, et l'écran le dit.** Arbitrage de Maxime le 28/08 : un site peut saisir ses
+ * horaires pour les afficher, sans que sa porte se mette à refuser du monde. Tant que la case est
+ * décochée, l'écran annonce que le planning est *informatif* — sinon on lirait ces heures comme une
+ * règle en vigueur, ce qu'elles ne sont pas.
+ */
+
+const JOURS = [
+  [1, 'Lundi'], [2, 'Mardi'], [3, 'Mercredi'], [4, 'Jeudi'],
+  [5, 'Vendredi'], [6, 'Samedi'], [7, 'Dimanche'],
+]
+
+function hhmm(v) {
+  if (!v) return ''
+  // L'API rend une heure au format `HH:MM:SS` ou une date ISO selon les sérialiseurs : on garde
+  // les cinq premiers caractères utiles, sans supposer laquelle des deux formes arrive.
+  const s = String(v)
+  const m = s.match(/(\d{2}:\d{2})/)
+  return m ? m[1] : s.slice(0, 5)
+}
+
+export default function PlanningOuvertureSection({ droits = [], etabActif = null }) {
+  const peutGerer = aLeDroit(droits, 'organisation.gerer') || aLeDroit(droits, 'acces.gerer')
+
+  const [reglage, setReglage] = useState(null)
+  const [plages, setPlages] = useState([])
+  const [exceptions, setExceptions] = useState([])
+  const [chargement, setChargement] = useState(true)
+  const [erreur, setErreur] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [ajoutPlage, setAjoutPlage] = useState(false)
+  const [ajoutException, setAjoutException] = useState(false)
+
+  const recharger = useCallback(async () => {
+    setChargement(true)
+    setErreur(null)
+    try {
+      const [r, p, e] = await Promise.all([
+        api.reglageOuverture(),
+        api.plagesOuverture(),
+        api.exceptionsOuverture(),
+      ])
+      setReglage(membres(r)[0] || null)
+      setPlages(membres(p))
+      setExceptions(membres(e))
+    } catch (err) {
+      setErreur(err.message || 'Le planning d’ouverture n’a pas pu être chargé.')
+    } finally {
+      setChargement(false)
+    }
+    // Voir `Agenda` : `etabActif` n'est pas lu ici, il DIT à React que la réponse précédente
+    // appartient à un autre site. Sans lui, l'onglet restait vide sur un site qui a des horaires.
+  }, [etabActif])
+
+  useEffect(() => {
+    recharger()
+  }, [recharger])
+
+  async function agir(action) {
+    setBusy(true)
+    setErreur(null)
+    try {
+      await action()
+      await recharger()
+    } catch (e) {
+      setErreur(e.message || 'L’action a échoué.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (chargement) {
+    return <div className="center" style={{ minHeight: 200 }}><div className="spinner" /></div>
+  }
+
+  const applique = !!reglage?.enforced
+
+  return (
+    <div style={{ display: 'grid', gap: 16 }}>
+      {erreur && <div className="banner banner-error">{erreur}</div>}
+
+      <div className="card">
+        <div className="card-h">
+          <h3>Faire appliquer au contrôle d’accès</h3>
+          <span className={`badge ${applique ? 'good' : 'mut'}`}>{applique ? 'En vigueur' : 'Informatif'}</span>
+        </div>
+        <div className="card-b">
+          {/* Le bandeau dit la CONSÉQUENCE, pas l'état. « Informatif » se lit vite ; « personne ne
+              sera refusé » se comprend. */}
+          <div className={applique ? 'banner banner-warn' : 'banner banner-ok'}>
+            {applique
+              ? 'Un passage présenté en dehors des heures ci-dessous est REFUSÉ à la porte, avec le motif « hors horaires d’ouverture ».'
+              : 'Ces horaires ne sont qu’informatifs : personne n’est refusé à la porte tant que cette case est décochée.'}
+          </div>
+          {peutGerer ? (
+            <label className="msgr-note-b" style={{ marginTop: 4 }}>
+              <input
+                type="checkbox"
+                checked={applique}
+                disabled={busy || !reglage}
+                onChange={(e) => agir(() => api.majReglageOuverture(reglage.id, e.target.checked))}
+              />
+              Refuser les passages hors des heures d’ouverture
+            </label>
+          ) : (
+            <div className="hint">
+              Modifier ce réglage demande un droit d’administration que votre profil n’a pas.
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-h">
+          <h3>Heures d’ouverture</h3>
+          {peutGerer && (
+            <div className="r">
+              <button className="btn sm" type="button" onClick={() => setAjoutPlage(true)}>+ Ajouter une tranche</button>
+            </div>
+          )}
+        </div>
+        <div className="card-b">
+          {plages.length === 0 ? (
+            <div className="empty">
+              Aucune heure d’ouverture saisie. Ajoutez une tranche par jour ouvré — plusieurs par
+              jour si le site ferme le midi.
+            </div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table className="tbl">
+                <thead>
+                  <tr>
+                    <th>Jour</th>
+                    <th>De</th>
+                    <th>À</th>
+                    <th>Libellé</th>
+                    {peutGerer && <th />}
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...plages]
+                    .sort((a, b) => a.jour - b.jour || hhmm(a.heureDebut).localeCompare(hhmm(b.heureDebut)))
+                    .map((p) => (
+                      <tr key={p.id}>
+                        <td>{JOURS.find(([n]) => n === p.weekday)?.[1] || p.weekday}</td>
+                        <td>{hhmm(p.startTime)}</td>
+                        <td>
+                          {hhmm(p.endTime)}
+                          {/* Une tranche qui traverse minuit finit LE LENDEMAIN. Sans cette
+                              mention, « 22:00 → 02:00 » se lit comme une erreur de saisie. */}
+                          {p.overnight && <span className="badge info" style={{ marginLeft: 6 }}>le lendemain</span>}
+                        </td>
+                        <td>{p.label || <span className="sub">—</span>}</td>
+                        {peutGerer && (
+                          <td className="num">
+                            <button
+                              className="btn sm"
+                              type="button"
+                              disabled={busy}
+                              onClick={() => agir(() => api.supprimerPlageOuverture(p.id))}
+                            >
+                              Retirer
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-h">
+          <h3>Jours particuliers</h3>
+          {peutGerer && (
+            <div className="r">
+              <button className="btn sm" type="button" onClick={() => setAjoutException(true)}>+ Ajouter</button>
+            </div>
+          )}
+        </div>
+        <div className="card-b">
+          {exceptions.length === 0 ? (
+            <div className="empty">
+              Aucun jour particulier. Les fériés, fermetures techniques et nocturnes se saisissent
+              ici — ils l’emportent sur les heures habituelles.
+            </div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table className="tbl">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Nature</th>
+                    <th>Heures</th>
+                    <th>Motif</th>
+                    {peutGerer && <th />}
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...exceptions]
+                    .sort((a, b) => String(a.date).localeCompare(String(b.date)))
+                    .map((e) => (
+                      <tr key={e.id}>
+                        <td>{new Date(e.date).toLocaleDateString('fr-FR')}</td>
+                        <td>
+                          <span className={`badge ${e.type === 'closure' ? 'crit' : 'good'}`}>
+                            {e.type === 'closure' ? 'Fermeture' : 'Ouverture exceptionnelle'}
+                          </span>
+                        </td>
+                        <td>
+                          {e.allDay ? 'Journée entière' : `${hhmm(e.startTime)} – ${hhmm(e.endTime)}`}
+                        </td>
+                        <td>{e.reason}</td>
+                        {peutGerer && (
+                          <td className="num">
+                            <button
+                              className="btn sm"
+                              type="button"
+                              disabled={busy}
+                              onClick={() => agir(() => api.supprimerExceptionOuverture(e.id))}
+                            >
+                              Retirer
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <AjouterPlage
+        open={ajoutPlage}
+        onFermer={() => setAjoutPlage(false)}
+        onCree={() => {
+          setAjoutPlage(false)
+          recharger()
+        }}
+      />
+      <AjouterException
+        open={ajoutException}
+        onFermer={() => setAjoutException(false)}
+        onCree={() => {
+          setAjoutException(false)
+          recharger()
+        }}
+      />
+    </div>
+  )
+}
+
+function AjouterPlage({ open, onFermer, onCree }) {
+  const [jour, setJour] = useState(1)
+  const [debut, setDebut] = useState('09:00')
+  const [fin, setFin] = useState('18:00')
+  const [libelle, setLibelle] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [erreur, setErreur] = useState(null)
+
+  useEffect(() => {
+    if (!open) return
+    setJour(1)
+    setDebut('09:00')
+    setFin('18:00')
+    setLibelle('')
+    setErreur(null)
+  }, [open])
+
+  const traverse = fin <= debut
+
+  async function envoyer(e) {
+    e.preventDefault()
+    setBusy(true)
+    setErreur(null)
+    try {
+      await api.creerPlageOuverture({
+        weekday: Number(jour),
+        startTime: `${debut}:00`,
+        endTime: `${fin}:00`,
+        ...(libelle.trim() ? { label: libelle.trim() } : {}),
+      })
+      onCree()
+    } catch (err) {
+      setErreur(err.message || 'La tranche n’a pas pu être ajoutée.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal open={open} onClose={onFermer} titre="Ajouter une tranche d’ouverture">
+      <form onSubmit={envoyer}>
+        {erreur && <div className="banner banner-error">{erreur}</div>}
+        <div className="field">
+          <label htmlFor="op-jour">Jour *</label>
+          <select id="op-jour" className="select" value={jour} onChange={(e) => setJour(e.target.value)}>
+            {JOURS.map(([n, l]) => (
+              <option key={n} value={n}>{l}</option>
+            ))}
+          </select>
+        </div>
+        <div className="field">
+          <label htmlFor="op-debut">Ouverture *</label>
+          <input id="op-debut" className="input" type="time" required value={debut} onChange={(e) => setDebut(e.target.value)} />
+        </div>
+        <div className="field">
+          <label htmlFor="op-fin">Fermeture *</label>
+          <input id="op-fin" className="input" type="time" required value={fin} onChange={(e) => setFin(e.target.value)} />
+          {/* On ANNONCE la traversée de minuit au lieu de la refuser : 22 h → 02 h est une soirée,
+              pas une faute de frappe, et le socle porte une capacité « accès nocturne ». */}
+          <div className="hint">
+            {traverse
+              ? 'La fermeture précède l’ouverture : cette tranche se termine le lendemain matin.'
+              : 'Plusieurs tranches par jour sont possibles — par exemple pour une fermeture le midi.'}
+          </div>
+        </div>
+        <div className="field">
+          <label htmlFor="op-libelle">Libellé</label>
+          <input id="op-libelle" className="input" value={libelle} onChange={(e) => setLibelle(e.target.value)} />
+          <div className="hint">« Nocturne », « Créneau scolaire »… facultatif, c’est un repère pour vous.</div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
+          <button className="btn" type="button" onClick={onFermer}>Annuler</button>
+          <button className="btn primary" type="submit" disabled={busy}>Ajouter</button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+function AjouterException({ open, onFermer, onCree }) {
+  const [date, setDate] = useState('')
+  const [type, setType] = useState('closure')
+  const [journee, setJournee] = useState(true)
+  const [debut, setDebut] = useState('10:00')
+  const [fin, setFin] = useState('13:00')
+  const [motif, setMotif] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [erreur, setErreur] = useState(null)
+
+  useEffect(() => {
+    if (!open) return
+    setDate('')
+    setType('closure')
+    setJournee(true)
+    setDebut('10:00')
+    setFin('13:00')
+    setMotif('')
+    setErreur(null)
+  }, [open])
+
+  // Une ouverture exceptionnelle SANS heures n'a pas de sens — le serveur la refuse. L'écran ne
+  // laisse donc pas arriver jusque-là : la case journée entière disparaît quand on choisit
+  // « ouverture ». Refuser après coup ferait ressaisir une date et un motif pour rien.
+  const journeeEntiere = type === 'closure' ? journee : false
+
+  async function envoyer(e) {
+    e.preventDefault()
+    setBusy(true)
+    setErreur(null)
+    try {
+      await api.creerExceptionOuverture({
+        date,
+        type,
+        reason: motif.trim(),
+        ...(journeeEntiere ? {} : { startTime: `${debut}:00`, endTime: `${fin}:00` }),
+      })
+      onCree()
+    } catch (err) {
+      setErreur(err.message || 'Le jour particulier n’a pas pu être ajouté.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal open={open} onClose={onFermer} titre="Ajouter un jour particulier">
+      <form onSubmit={envoyer}>
+        {erreur && <div className="banner banner-error">{erreur}</div>}
+        <div className="field">
+          <label htmlFor="oe-date">Date *</label>
+          <input id="oe-date" className="input" type="date" required value={date} onChange={(e) => setDate(e.target.value)} />
+        </div>
+        <div className="field">
+          <label htmlFor="oe-type">Nature *</label>
+          <select id="oe-type" className="select" value={type} onChange={(e) => setType(e.target.value)}>
+            <option value="closure">Fermeture</option>
+            <option value="special_opening">Ouverture exceptionnelle</option>
+          </select>
+        </div>
+        {type === 'closure' && (
+          <div className="field">
+            <label className="msgr-note-b" htmlFor="oe-journee">
+              <input id="oe-journee" type="checkbox" checked={journee} onChange={(e) => setJournee(e.target.checked)} />
+              Journée entière
+            </label>
+          </div>
+        )}
+        {!journeeEntiere && (
+          <>
+            <div className="field">
+              <label htmlFor="oe-debut">De *</label>
+              <input id="oe-debut" className="input" type="time" required value={debut} onChange={(e) => setDebut(e.target.value)} />
+            </div>
+            <div className="field">
+              <label htmlFor="oe-fin">À *</label>
+              <input id="oe-fin" className="input" type="time" required value={fin} onChange={(e) => setFin(e.target.value)} />
+            </div>
+          </>
+        )}
+        <div className="field">
+          <label htmlFor="oe-motif">Motif *</label>
+          <input id="oe-motif" className="input" required value={motif} onChange={(e) => setMotif(e.target.value)} />
+          <div className="hint">
+            Dans six mois, personne ne saura pourquoi ce jour était différent. Écrivez-le.
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
+          <button className="btn" type="button" onClick={onFermer}>Annuler</button>
+          <button className="btn primary" type="submit" disabled={busy || date === '' || motif.trim() === ''}>Ajouter</button>
+        </div>
+      </form>
+    </Modal>
+  )
+}

@@ -29,19 +29,20 @@
         "Le script REFUSE de le relever. Un plafond qui remonte n est plus un cliquet, c est un",
         "compteur."
     ],
-    "plafond": 746,
+    "plafond": 743,
     "releve": {
-        "exposees": 1116,
+        "exposees": 1141,
         "sansEcran": 0,
-        "attendues": 1116,
-        "appelees": 373,
-        "atteignables": 370,
-        "inatteignables": 746,
+        "attendues": 1141,
+        "appelees": 402,
+        "atteignables": 398,
+        "inatteignables": 743,
         "orphelins": [
             "comptesComptables  (back-office)",
             "grilleTarifaires  (back-office)",
             "padelTournois  (back-office)",
-            "pieceCommerciale  (back-office)"
+            "pieceCommerciale  (back-office)",
+            "planningOuverture  (back-office)"
         ],
         "declares": [],
         "marqueursSansRaison": [],
@@ -49,8 +50,8 @@
         "parFront": [
             {
                 "nom": "back-office",
-                "appelees": 352,
-                "atteignables": 349
+                "appelees": 381,
+                "atteignables": 377
             },
             {
                 "nom": "boutique en ligne",
@@ -98,6 +99,10 @@
             [
                 "marketing",
                 10
+            ],
+            [
+                "ouverture",
+                9
             ],
             [
                 "billing",
@@ -156,6 +161,10 @@
                 5
             ],
             [
+                "agenda",
+                5
+            ],
+            [
                 "etablissements",
                 4
             ],
@@ -193,6 +202,10 @@
             ],
             [
                 "recouvrement",
+                4
+            ],
+            [
+                "caution",
                 4
             ],
             [
@@ -236,6 +249,14 @@
                 3
             ],
             [
+                "config",
+                3
+            ],
+            [
+                "politique",
+                3
+            ],
+            [
                 "sessions-caisse",
                 2
             ],
@@ -260,6 +281,10 @@
                 2
             ],
             [
+                "organisation",
+                2
+            ],
+            [
                 "affectations",
                 2
             ],
@@ -269,6 +294,14 @@
             ],
             [
                 "compte",
+                2
+            ],
+            [
+                "rejet",
+                2
+            ],
+            [
+                "sepa",
                 2
             ],
             [
@@ -388,7 +421,7 @@
                 1
             ],
             [
-                "rejet",
+                "ligne",
                 1
             ],
             [
@@ -397,10 +430,6 @@
             ],
             [
                 "representation",
-                1
-            ],
-            [
-                "politique",
                 1
             ],
             [

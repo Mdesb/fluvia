@@ -87,7 +87,11 @@ up)
     # Clés JWT : ignorées par git (config/jwt/*.pem), donc absentes de tout worktree neuf. Sans elles,
     # chaque test authentifié échoue en JWTEncodeFailureException — le symptôme est bruyant mais la
     # cause est invisible, d'où cette étape explicite.
-    if [ ! -f "$APP/config/jwt/private.pem" ]; then
+    # ⚠ `test-private.pem`, PAS `private.pem`. `.env.test` pointe la cle prefixee `test-` ; garder
+    # `private.pem` ici faisait relancer la generation a chaque `up`, et la commande sort en erreur
+    # quand les cles existent — `set -e` arretait alors le script AVANT le montage du schema, sans
+    # qu'aucun message ne parle de cles. Corrige le 28/08 apres etre tombe dedans.
+    if [ ! -f "$APP/config/jwt/test-private.pem" ]; then
         php_run php bin/console lexik:jwt:generate-keypair --no-interaction --env=test >/dev/null
         echo "clés JWT: générées"
     else

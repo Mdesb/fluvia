@@ -42,6 +42,9 @@ const Parametres = lazy(() => import('./pages/Parametres.jsx'))
 const Stock = lazy(() => import('./pages/Stock.jsx'))
 const Musee = lazy(() => import('./pages/Musee.jsx'))
 const Padel = lazy(() => import('./pages/Padel.jsx'))
+// Différé : l'agenda embarque une grille horaire et trois vues. Un caissier qui reste à sa caisse
+// ne le télécharge jamais.
+const Agenda = lazy(() => import('./pages/Agenda.jsx'))
 // Différés comme la comptabilité, dont ils partagent les composants : trois écrans de gestion
 // financière qu'un caissier n'ouvrira jamais n'ont pas à peser sur le premier chargement.
 const Sepa = lazy(() => import('./pages/Sepa.jsx'))
@@ -266,6 +269,7 @@ export default function App() {
       {onglet === 'supervision' && <Supervision etabActif={etabActif} />}
       {/* `me` porte l'identifiant du lecteur, et c'est ce qui donne un COTE aux bulles : sans lui
           la messagerie ne sait pas lesquelles sont les siennes et les aligne toutes a gauche. */}
+      {onglet === 'agenda' && <Agenda droits={droits} etabActif={etabActif} />}
       {onglet === 'support' && <Support droits={droits} etabActif={etabActif} me={me} />}
       {onglet === 'autorisations' && <Autorisations droits={droits} />}
       {onglet === 'legal' && <MentionsLegales etabActif={etabActif} droits={droits} />}

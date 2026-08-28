@@ -30,4 +30,15 @@ enum CodeMotifRefus: string
      *  un dépassement de crédit détecté au rejeu — actif uniquement derrière le flag
      *  `EvenementPassageDto::autoriserCreditNegatifSiHorsLigne` (désactivé par défaut). */
     case CreditEpuiseHorsLigneLitige = 'credit_epuise_hors_ligne_litige';
+    /**
+     * Le site est fermé à cette heure-là, d'après son planning d'ouverture (module App\Ouverture,
+     * 28/08) — et ce planning est déclaré « faisant loi » sur cet établissement.
+     *
+     * DISTINCT DE `HorsMarge`, ET CE N'EST PAS UNE NUANCE. `HorsMarge` dit que LE DROIT ne vaut pas
+     * à cette heure — un abonnement heures creuses présenté à 19 h. Celui-ci dit que LE SITE est
+     * fermé, quel que soit le droit. Confondre les deux ferait chercher un défaut de tarification
+     * là où il n'y a qu'un rideau baissé, et inversement : la supervision compte les refus par
+     * motif, et un motif emprunté est une statistique fausse.
+     */
+    case HorsHorairesOuverture = 'hors_horaires_ouverture';
 }

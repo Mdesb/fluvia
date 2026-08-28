@@ -78,6 +78,18 @@ security:
         # de `offre_product_photo`, et seulement si le produit est publié ET vendu en ligne : la
         # photo d'un brouillon reste privée. Aucun identifiant de document ne passe par cette porte.
         - { path: ^/media/produit/, roles: PUBLIC_ACCESS }
+        # Flux ICS de l'agenda — anonyme PAR NECESSITE, et borne par construction.
+        #
+        # Google, Apple et Outlook interrogent une URL toutes les heures, sans en-tete et sans
+        # jeton porteur : exiger une authentification reviendrait a ne pas livrer l'abonnement.
+        # L'ADRESSE EST LE SECRET — 192 bits tires de `random_bytes`, nominatifs, bornes a un
+        # etablissement, revocables en un geste, et places dans le CHEMIN et non dans la chaine de
+        # requete (qui finit dans les journaux de tous les intermediaires).
+        #
+        # Le chemin est ancre a `^/agenda/ics/` et pas a `^/calendar` : sans cette precision, tout le
+        # module — evenements et abonnements compris — deviendrait public. La regle generique qui
+        # suit continue de proteger le reste.
+        - { path: ^/calendar/ics/, roles: PUBLIC_ACCESS }
 
 when@test:
     security:

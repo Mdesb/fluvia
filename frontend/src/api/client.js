@@ -1170,4 +1170,43 @@ export const api = {
     request(`/api/support/articles/${id}/publier`, { method: 'POST', body: {} }),
   archiverArticleAide: (id) =>
     request(`/api/support/articles/${id}/archiver`, { method: 'POST', body: {} }),
+
+  // ── AGENDA ────────────────────────────────────────────────────────────────────────────────────
+  //
+  // UN SEUL APPEL POUR TOUT CE QUI OCCUPE L'INTERVALLE, et c'est délibéré. L'agenda agrège des
+  // créneaux de réservation, des créneaux de travail, des plages d'ouverture et des événements
+  // saisis à la main. Un appel par source, assemblé ici, ferait dépendre l'affichage de l'ordre
+  // d'arrivée des réponses et obligerait chaque écran à réécrire la règle de tri.
+  journalAgenda: (du, au, scope = 'site') =>
+    request('/api/calendar/feed', { query: { du, au, scope } }),
+  // `duSite` n'est pas une propriété de l'entité : c'est une INTENTION, lue par le serveur pour
+  // décider si l'événement appartient au site ou à son auteur. Elle ne se relit pas telle quelle.
+  creerEvenementAgenda: (corps) =>
+    request('/api/calendar/calendar_events', { method: 'POST', body: corps, ld: true }),
+  supprimerEvenementAgenda: (id) =>
+    request(`/api/calendar/calendar_events/${id}`, { method: 'DELETE' }),
+  abonnementIcs: () => request('/api/calendar/ics-subscription'),
+  regenererIcs: () => request('/api/calendar/ics-subscription/regenerate', { method: 'POST', body: {} }),
+
+  // ── PLANNING D'OUVERTURE ──────────────────────────────────────────────────────────────────────
+  //
+  // `planningOuverture` rend les fenêtres RÉSOLUES — exceptions appliquées, traversée de minuit
+  // comprise, fuseau de l'établissement compris. Les tranches brutes (`plagesOuverture`) ne servent
+  // qu'à l'écran de SAISIE : les résoudre ici, côté client, ferait dessiner une ouverture pendant
+  // laquelle la porte refuse.
+  planningOuverture: (du, au) => request('/api/opening/schedule', { query: { du, au } }),
+  plagesOuverture: () => request('/api/opening/opening_slots', { query: { itemsPerPage: 200 } }),
+  creerPlageOuverture: (corps) =>
+    request('/api/opening/opening_slots', { method: 'POST', body: corps, ld: true }),
+  supprimerPlageOuverture: (id) =>
+    request(`/api/opening/opening_slots/${id}`, { method: 'DELETE' }),
+  exceptionsOuverture: () =>
+    request('/api/opening/opening_exceptions', { query: { itemsPerPage: 200 } }),
+  creerExceptionOuverture: (corps) =>
+    request('/api/opening/opening_exceptions', { method: 'POST', body: corps, ld: true }),
+  supprimerExceptionOuverture: (id) =>
+    request(`/api/opening/opening_exceptions/${id}`, { method: 'DELETE' }),
+  reglageOuverture: () => request('/api/opening/opening_settings'),
+  majReglageOuverture: (id, enforced) =>
+    request(`/api/opening/opening_settings/${id}`, { method: 'PATCH', body: { enforced } }),
 }

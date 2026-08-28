@@ -87,6 +87,14 @@ api_platform:
             - '%kernel.project_dir%/src/Dms/Entity'
             - '%kernel.project_dir%/src/SmartFlow/Entity'
             - '%kernel.project_dir%/src/RevenueRecovery/Entity'
+            # Planning d'ouverture (28/08). Les deux dossiers existent sur disque AVANT cette ligne :
+            # la liste est fail-hard, un dossier absent fait echouer la construction du conteneur,
+            # donc la suite de tests de toutes les sessions.
+            - '%kernel.project_dir%/src/Opening/Entity'
+            - '%kernel.project_dir%/src/Opening/ApiResource'
+            # Agenda (28/08). Meme regle que ci-dessus : les dossiers existent avant leur ligne.
+            - '%kernel.project_dir%/src/Calendar/Entity'
+            - '%kernel.project_dir%/src/Calendar/ApiResource'
     defaults:
         stateless: true
         cache_headers:
