@@ -303,8 +303,13 @@ while read -r ancien nouveau ref; do
 
     # Lier un OBJET a un parametre de requete sans dire son type (D58).
     if [ -f "$ARBRE/bin/garde-fou-liaisons-objet.php" ]; then
-        echo "── Liaisons d'objet (D58)"
+        echo "── Nullable sur colonne non nulle"
         lancer garde-fou-liaisons-objet.php "--contre=$BASE"
+    fi
+
+    if [ -f "$ARBRE/bin/garde-fou-nullable-non-nul.php" ]; then
+        echo "── Nullable sur colonne non nulle"
+        lancer garde-fou-nullable-non-nul.php "--contre=$BASE"
     fi
 
     # ⚠ FILET DE COMPLÉTUDE — la leçon du 24/08, et elle a coûté cher.
