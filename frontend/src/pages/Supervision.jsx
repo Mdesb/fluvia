@@ -91,7 +91,9 @@ export default function Supervision({ etabActif }) {
     try {
       const [s, p] = await Promise.all([api.supervisionAcces(), api.passages().catch(() => null)])
       setSup(s)
-      if (p) setPassages(membres(p))
+      // Le serveur ignore `order[horodatage]` (aucun `OrderFilter` sur `Passage`) : sans ce tri,
+      // la carte « Derniers passages » montrait les PREMIERS passages du site.
+      if (p) setPassages(membres(p).sort((a, b) => (a.horodatage < b.horodatage ? 1 : -1)))
       setMaj(new Date())
       setErreur(null)
       setSessionPerdue(false)
@@ -300,7 +302,11 @@ export default function Supervision({ etabActif }) {
 
           {/* Derniers passages */}
           <section className="card" style={{ marginTop: 16 }}>
-            <div className="card-h"><h3>Derniers passages</h3><span className="sub">{passages.length} récents</span></div>
+            <div className="card-h"><h3>Derniers passages</h3>
+              <span className="sub">
+                {passages.length} lus — le serveur ne sachant pas trier, ce sont les plus anciens
+                enregistrés, remis dans l’ordre ici
+              </span></div>
             <div className="card-b" style={{ overflowX: 'auto' }}>
               <table className="tbl">
                 <thead>
