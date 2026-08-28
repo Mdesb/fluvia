@@ -14,10 +14,19 @@
 // C'est la même famille que les 61 en-têtes `.num` alignés à gauche et que les 312 `.sub` sans
 // règle globale : une convention appliquée par les auteurs et jamais honorée par le CSS.
 //
-// CE QUE LE CONTRÔLE NE FAIT PAS. Il ne lit que les `className="…"` littéraux — pas les
-// expressions (`className={...}`), où une classe se compose à l'exécution. C'est assumé : les
-// littéraux sont l'écrasante majorité, et un contrôle qui prétendrait couvrir les expressions
-// donnerait surtout des faux positifs.
+// CE QU'IL LIT, ET POURQUOI ÇA A ÉTÉ ÉLARGI.
+//
+// Première version : les `className="…"` littéraux seulement. La session qui tient le back a posé
+// tout de suite la bonne objection — **c'est par les gabarits que les classes reviennent**. Un
+// `` className={`alert ${gravite}`} `` échappait au contrôle, et `alert` est précisément l'un des
+// quatre noms morts. Le filet aurait laissé rentrer ce qu'il venait de faire sortir.
+//
+// On lit donc aussi les portions STATIQUES des gabarits : dans `` `card ${ouvert ? 'on' : ''}` ``,
+// `card` est vérifié, et ce qui vient de `${…}` est ignoré.
+//
+// CE QU'IL NE FAIT TOUJOURS PAS : évaluer une expression. Une classe entièrement calculée
+// (`className={styles[etat]}`) reste invisible, et c'est assumé — un contrôle qui prétendrait la
+// couvrir rendrait surtout des faux positifs.
 
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
@@ -44,17 +53,38 @@ const css = readFileSync(CSS, 'utf8')
 // (`.btn.primary:hover`) : on ne retient que le nom de classe lui-même.
 const declarees = new Set([...css.matchAll(/\.([a-zA-Z][\w-]*)/g)].map((m) => m[1]))
 
+// Les classes qu'une ligne pose de façon CERTAINE : le contenu d'un `className="…"`, plus les
+// morceaux statiques d'un `` className={`…`} ``.
+//
+// ⚠ UN TROU `${…}` NE SE REMPLACE PAS PAR UNE ESPACE, et c'est le contrôle lui-même qui me l'a
+// appris : `` `modal modal-${taille}` `` produisait alors le jeton « modal- », signalé comme classe
+// inconnue alors qu'aucune classe de ce nom n'est jamais posée. Un garde-fou qui crie sur du code
+// juste se fait désactiver, et emporte avec lui les vrais signalements.
+//
+// On y met donc un caractère qui ne peut appartenir à aucun nom de classe, et on jette tout jeton
+// qui le contient : `modal-\0` disparaît, `badge` de `` `badge ${ton}` `` est bien vérifié.
+const MARQUE = '\u0000'
+
+function classesDeLaLigne(ligne) {
+  const trouvees = []
+  for (const m of ligne.matchAll(/className="([^"{}]*)"/g)) trouvees.push(m[1])
+  for (const m of ligne.matchAll(/className=\{`([^`]*)`/g)) {
+    trouvees.push(m[1].replace(/\$\{[^}]*\}/g, MARQUE))
+  }
+  return trouvees
+    .flatMap((t) => t.split(/\s+/))
+    .filter((c) => c && !c.includes(MARQUE))
+}
+
 const manquantes = new Map()
 for (const fichier of fichiersJsx(SRC)) {
   const source = readFileSync(fichier, 'utf8')
   const lignes = source.split('\n')
   lignes.forEach((ligne, i) => {
-    for (const m of ligne.matchAll(/className="([^"{}]+)"/g)) {
-      for (const classe of m[1].split(/\s+/).filter(Boolean)) {
-        if (declarees.has(classe) || TOLEREES.has(classe)) continue
-        if (!manquantes.has(classe)) manquantes.set(classe, [])
-        manquantes.get(classe).push(`${relative(RACINE, fichier)}:${i + 1}`)
-      }
+    for (const classe of classesDeLaLigne(ligne)) {
+      if (declarees.has(classe) || TOLEREES.has(classe)) continue
+      if (!manquantes.has(classe)) manquantes.set(classe, [])
+      manquantes.get(classe).push(`${relative(RACINE, fichier)}:${i + 1}`)
     }
   })
 }

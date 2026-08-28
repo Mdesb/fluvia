@@ -195,6 +195,12 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 .banner-ok { background: var(--good-bg); color: var(--good); }
 /* Ni une erreur ni une confirmation : un etat que l'ecran signale sans crier. */
 .banner-warn { background: var(--warn-bg); color: var(--warn); }
+/* LA QUATRIEME VARIANTE MANQUAIT, ET SON ABSENCE A PRODUIT UNE CLASSE MORTE.
+ * Il n'existait aucun bandeau simplement INFORMATIF : erreur, succes, avertissement, et rien pour
+ * << voici ce qui est prevu >>. Faute de quoi la fiche client composait `alert warn|mut`, trois noms
+ * dont aucun n'existe -- une relance a venir s'affichait donc en texte nu. Memes jetons que
+ * `.badge.info`, pour que les deux se ressemblent. */
+.banner-info { background: var(--accent-soft); color: var(--accent-2); }
 
 /* ---- Menu mobile ---- */
 .burger { display: none; width: 38px; height: 38px; border-radius: 9px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); font-size: 17px; cursor: pointer; flex: none; align-items: center; justify-content: center; }

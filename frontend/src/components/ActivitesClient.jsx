@@ -89,8 +89,16 @@ export default function ActivitesClient({ client, peutModifier }) {
 
       {erreur && <div className="banner banner-error">{erreur}</div>}
 
+      {/* `alert warn|mut` : trois noms de classe dont aucun n'est declare dans `styles.css`. La
+          relance sortait donc en texte nu, sans cadre ni couleur, au milieu de la fiche client —
+          et rien ne le signalait, un nom de classe inconnu etant ignore en silence. Trouve par
+          `scripts/verifier-classes.mjs` une fois etendu aux gabarits, sur la suggestion de la
+          session qui tient le back : c'est exactement par la que les classes mortes revenaient. */}
       {relance && (
-        <div className={`alert ${enRetard ? 'warn' : 'mut'}`} style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div
+          className={`banner ${enRetard ? 'banner-warn' : 'banner-info'}`}
+          style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}
+        >
           <span style={{ flex: 1, minWidth: 200 }}>
             <strong>{relance.nextAction}</strong>
             <span className="sub"> — {enRetard ? 'à faire depuis le' : 'prévu le'} {jourSeul(relance.nextActionAt)}</span>
