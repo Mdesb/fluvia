@@ -737,7 +737,15 @@ function BlocFidelite({ fidelite, clientId, droits, onMouvement }) {
             {fidelite.baremeCourant.pointsParEuro} point(s) par euro
           </span>
         ) : (
-          <span className="sub" style={{ marginLeft: 'auto' }}>Aucun barème défini</span>
+          // << AUCUN BAREME DEFINI >> DISAIT LE MANQUE SANS DIRE OU LE COMBLER.
+          //
+          // Le bareme SE CREE, depuis l'ecran Campagnes (`api.creerBaremeFidelite`) : ce n'est pas
+          // une capacite absente, c'est un chemin invisible. Sans le dire, on lit la ligne comme
+          // << ce logiciel ne fait pas de fidelite >> -- et le compteur de points juste en dessous
+          // reste a zero sans qu'on sache pourquoi.
+          <span className="sub" style={{ marginLeft: 'auto' }}>
+            Aucun barème défini — il se règle dans Campagnes, onglet Fidélité
+          </span>
         )}
       </div>
 
