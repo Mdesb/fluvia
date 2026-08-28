@@ -18,6 +18,23 @@ import Modal from './Modal.jsx'
 
 const CIVILITES = ['', 'Mme', 'M.']
 
+const VALEURS_VIDES = {
+  type: 'physique',
+  civilite: '',
+  nom: '',
+  prenom: '',
+  raisonSociale: '',
+  siret: '',
+  dateNaissance: '',
+  email: '',
+  telephone: '',
+  rue: '',
+  complement: '',
+  cp: '',
+  ville: '',
+  pays: '',
+}
+
 export default function ClientEditionModal({ open, clientId, onClose, onEnregistre }) {
   const [valeurs, setValeurs] = useState(null)
   const [chargement, setChargement] = useState(false)
@@ -25,7 +42,20 @@ export default function ClientEditionModal({ open, clientId, onClose, onEnregist
   const [enCours, setEnCours] = useState(false)
 
   useEffect(() => {
-    if (!open || !clientId) return undefined
+    if (!open) return undefined
+    // CREER UN CLIENT PASSE PAR CE MEME FORMULAIRE, ET C'EST DELIBERE.
+    //
+    // `api.creerClient` existait et n'etait appele que par `ClientPicker`, dont le formulaire ne
+    // sait creer qu'une personne PHYSIQUE avec quatre champs. Ecrire un second formulaire de
+    // creation aurait donne deux verites sur ce qu'est un client : celui-ci gere les deux types,
+    // l'adresse structuree, le SIRET et la date de naissance, et il connait deja les regles
+    // (adresse entierement vide envoyee a `null`, champs de personne morale exclusifs).
+    if (!clientId) {
+      setValeurs({ ...VALEURS_VIDES })
+      setErreur(null)
+      setChargement(false)
+      return undefined
+    }
     let annule = false
     setValeurs(null)
     setErreur(null)
@@ -86,7 +116,7 @@ export default function ClientEditionModal({ open, clientId, onClose, onEnregist
           }
         : null
 
-      await api.majClient(clientId, {
+      const corps = {
         type: valeurs.type,
         civilite: morale ? null : valeurs.civilite || null,
         nom: valeurs.nom.trim() || null,
@@ -97,8 +127,9 @@ export default function ClientEditionModal({ open, clientId, onClose, onEnregist
         email: valeurs.email.trim() || null,
         telephone: valeurs.telephone.trim() || null,
         adresse,
-      })
-      onEnregistre?.()
+      }
+      const enregistre = clientId ? await api.majClient(clientId, corps) : await api.creerClient(corps)
+      onEnregistre?.(enregistre)
       onClose?.()
     } catch (err) {
       setErreur(err.message || "L'enregistrement n'a pas abouti.")
@@ -110,7 +141,7 @@ export default function ClientEditionModal({ open, clientId, onClose, onEnregist
   const morale = valeurs?.type === 'morale'
 
   return (
-    <Modal open={open} onClose={onClose} titre="Modifier la fiche" taille="lg">
+    <Modal open={open} onClose={onClose} titre={clientId ? 'Modifier la fiche' : 'Ajouter un client'} taille="lg">
       {erreur && <div className="banner banner-error">{erreur}</div>}
 
       {chargement || !valeurs ? (
@@ -214,7 +245,7 @@ export default function ClientEditionModal({ open, clientId, onClose, onEnregist
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
             <button className="btn" type="button" onClick={onClose}>Annuler</button>
             <button className="btn primary" type="submit" disabled={enCours}>
-              {enCours ? 'Enregistrement…' : 'Enregistrer'}
+              {enCours ? 'Enregistrement…' : clientId ? 'Enregistrer' : 'Créer la fiche'}
             </button>
           </div>
         </form>

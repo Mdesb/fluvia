@@ -82,8 +82,8 @@ export default function Autorisations({ droits = [], etabActif }) {
     <div className="view">
       <div className="view-head">
         <div className="ttl">
-          <h1>Autorisations</h1>
-          <div className="sub">Demandes d&rsquo;escalade et plafonds</div>
+          <h1>Escalades &amp; plafonds</h1>
+          <div className="sub">Ce qui dépasse un plafond, et qui peut le débloquer</div>
         </div>
       </div>
 
@@ -317,21 +317,34 @@ function Plafonds({ peutGerer, etabActif }) {
   const [operations, setOperations] = useState([])
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
+  // Distinguer << il n'y en a pas >> de << je n'ai pas pu lire >>.
+  const [operationsIllisibles, setOperationsIllisibles] = useState(false)
+  const [rolesIllisibles, setRolesIllisibles] = useState(false)
 
   const recharger = useCallback(async () => {
     setChargement(true)
     setErreur(null)
     try {
-      const [l, o, r] = await Promise.all([
+      // AVALER UN ECHEC ET AFFICHER << AUCUN >> SONT DEUX CHOSES DIFFERENTES.
+      //
+      // Les trois lectures etaient rattrapees en `null`, puis rendues en liste vide. Sur l'ecran qui
+      // repond a << qui peut depasser quoi >>, une panne de lecture s'affichait donc comme
+      // << aucune operation declaree sensible >> -- c'est-a-dire comme une reponse rassurante.
+      //
+      // La distinction n'est pas << avaler ou pas >>, c'est CONFORT ou SUBSTANCE. Un fond de
+      // calendrier qui manque, on s'en passe. Un catalogue d'operations sensibles qui manque, on ne
+      // le presente pas comme vide.
+      const [l, o, r] = await Promise.allSettled([
         api.limitesAutorisation(),
-        api.operationsSensibles().catch(() => null),
-        // Les roles servent a designer A QUI un plafond s applique. Leur absence ne doit pas
-        // empecher de lire les plafonds : le champ sera simplement vide.
-        api.roles().catch(() => null),
+        api.operationsSensibles(),
+        api.roles(),
       ])
-      setLimites(membres(l))
-      setOperations(o ? membres(o) : [])
-      setRoles(r ? membres(r) : [])
+      if (l.status === 'rejected') throw l.reason
+      setLimites(membres(l.value))
+      setOperations(o.status === 'fulfilled' ? membres(o.value) : [])
+      setRoles(r.status === 'fulfilled' ? membres(r.value) : [])
+      setOperationsIllisibles(o.status === 'rejected')
+      setRolesIllisibles(r.status === 'rejected')
     } catch (e) {
       setErreur(e.message || 'Les plafonds n’ont pas pu être chargés.')
     } finally {
@@ -361,6 +374,15 @@ function Plafonds({ peutGerer, etabActif }) {
           )}
         </div>
         {erreur && <div className="banner banner-error">{erreur}</div>}
+        {/* Sans les rôles, la colonne « s'applique à » ne peut pas nommer sa cible : elle affiche
+            « un rôle précis (nom non transmis) », ce qui se lit comme un défaut de données alors
+            que c'est une lecture qui a échoué. */}
+        {rolesIllisibles && (
+          <div className="banner banner-warn">
+            La liste des rôles n’a pas pu être lue : les plafonds ci-dessous ne pourront pas nommer le
+            rôle qu’ils visent, et un nouveau plafond ne pourra pas en désigner un.
+          </div>
+        )}
         {chargement ? (
           <div className="center" style={{ minHeight: 120 }}><div className="spinner" /></div>
         ) : limites.length === 0 ? (
@@ -396,11 +418,15 @@ function Plafonds({ peutGerer, etabActif }) {
                           on lève un plafond en croyant débloquer tout le personnel. On résout donc
                           l'IRI contre la liste des rôles déjà chargée, et on ne dit « tout le
                           monde » que si le champ est réellement vide. */}
+                      {/* Et « tout le monde » ne peut pas exister non plus DANS CE TABLEAU : le
+                          serveur refuse une limite sans cible (RG-AUTZ-02). Une ligne sans rôle ni
+                          utilisateur ne veut donc pas dire « tout le personnel », elle veut dire
+                          que la cible n'est pas arrivée jusqu'ici. On dit ça, pas l'inverse. */}
                       {nomUtilisateur(l.utilisateur)
                         || nomRole(resoudreRole(l.role, roles))
                         || (l.role
                           ? <span className="sub">un rôle précis (nom non transmis)</span>
-                          : <span className="sub">tout le monde</span>)}
+                          : <span className="sub">cible non transmise — à signaler</span>)}
                     </td>
                     <td>{PERIMETRES[l.perimetre] || l.perimetre}</td>
                     <td className="num">{l.plafondMontant != null ? euros(l.plafondMontant) : <span className="sub">aucun</span>}</td>
@@ -433,9 +459,31 @@ function Plafonds({ peutGerer, etabActif }) {
         )}
       </div>
 
+      {/* « CONTRÔLÉE » ÉTAIT FAUX, ET L'ÉCRAN SE CONTREDISAIT À DEUX BLOCS D'INTERVALLE.
+          Le bloc au-dessus disait « aucun plafond défini : les opérations sensibles ne sont limitées
+          que par les permissions », et celui-ci badgeait les sept opérations « contrôlée ».
+          Les deux phrases ne peuvent pas être vraies ensemble. Relevé par la session en revue avec
+          Maxime, constaté à l'écran.
+
+          C'est la seconde qui mentait. `OperationSensible.active` ne veut pas dire « contrôlée » : il
+          veut dire « inscrite au catalogue des opérations sensibles ». `ServiceAutorisation::evaluer`
+          est explicite — si aucune `LimiteAutorisation` ne la vise, retour IMMÉDIAT « autorisé »,
+          sans écriture, « comportement binaire inchangé ». Une opération au catalogue et sans
+          plafond n'est donc contrôlée par rien de plus qu'avant.
+          L'état se lit maintenant en croisant les deux listes, ce qui est la seule façon de le dire
+          juste. */}
       <div className="card">
-        <div className="card-h"><span>Opérations sensibles</span></div>
-        {operations.length === 0 ? (
+        <div className="card-h">
+          <span>Opérations sensibles</span>
+          <span className="sub">ce qui peut recevoir un plafond</span>
+        </div>
+        {operationsIllisibles ? (
+          <div className="banner banner-error">
+            Le catalogue des opérations sensibles n’a pas pu être lu. Ce tableau est vide parce que la
+            lecture a échoué, <b>pas</b> parce qu’aucune opération n’est surveillée : n’en concluez
+            rien sur ce qui est plafonné.
+          </div>
+        ) : operations.length === 0 ? (
           <div className="sub" style={{ textAlign: 'center', padding: 20 }}>
             Aucune opération déclarée sensible.
           </div>
@@ -444,25 +492,44 @@ function Plafonds({ peutGerer, etabActif }) {
             <table className="tbl">
               <thead>
                 <tr>
-                  <th>Code</th>
-                  <th>Libellé</th>
-                  <th>Action contrôlée</th>
-                  <th>État</th>
+                  <th>Opération</th>
+                  <th>Droit qui la protège déjà</th>
+                  <th>Limitée par un plafond&nbsp;?</th>
                 </tr>
               </thead>
               <tbody>
-                {operations.map((o) => (
-                  <tr key={o.code}>
-                    <td><code>{o.code}</code></td>
-                    <td>{o.libelle}</td>
-                    <td className="sub">{o.moduleAction}</td>
-                    <td>
-                      <span className={`badge ${o.active ? 'good' : 'mut'}`}>
-                        {o.active ? 'contrôlée' : 'non contrôlée'}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                {operations.map((o) => {
+                  const nb = limites.filter((l) => (l.operation?.code || l.operation) === o.code).length
+                  return (
+                    <tr key={o.code}>
+                      <td>
+                        <span className="nm">{o.libelle}</span>
+                        <div className="sub mono">{o.code}</div>
+                      </td>
+                      {/* Les deux codes se ressemblent et ne disent pas la même chose :
+                          `vente.remise_exceptionnelle` est la clé de l'opération sensible,
+                          `vente.forcer_prix` est la permission qui la garde déjà. Côte à côte sans
+                          en-tête explicite, on cherche en vain la correspondance — il n'y en a pas
+                          à trouver, ce sont deux référentiels distincts. */}
+                      <td className="sub mono">{o.moduleAction}</td>
+                      <td>
+                        {!o.active ? (
+                          <span className="badge mut" title="Retirée du catalogue : aucun plafond ne peut la viser.">
+                            hors catalogue
+                          </span>
+                        ) : nb > 0 ? (
+                          <span className="badge good" title="Un plafond au moins la vise : au-delà, le serveur refuse ou demande une escalade.">
+                            {nb} plafond{nb > 1 ? 's' : ''}
+                          </span>
+                        ) : (
+                          <span className="badge mut" title="Aucun plafond ne la vise : le serveur autorise dès que la permission est accordée, quel que soit le montant.">
+                            aucun plafond
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -505,9 +572,11 @@ function PlafondModal({ limite, etabActif, operations, roles, onClose, onFait, o
   const [cumul, setCumul] = useState('')
   const [escalade, setEscalade] = useState(false)
   const [enCours, setEnCours] = useState(false)
+  const [erreurModale, setErreurModale] = useState(null)
 
   useEffect(() => {
     if (!limite) return
+    setErreurModale(null)
     setOperation(iriOuVide(limite.operation, operations))
     setRole(iriOuVide(limite.role, roles))
     setPerimetre(limite.perimetre || 'propre_etablissement')
@@ -518,6 +587,7 @@ function PlafondModal({ limite, etabActif, operations, roles, onClose, onFait, o
 
   async function envoyer(e) {
     e.preventDefault()
+    setErreurModale(null)
     setEnCours(true)
     try {
       const corps = {
@@ -542,7 +612,10 @@ function PlafondModal({ limite, etabActif, operations, roles, onClose, onFait, o
       }
       onFait()
     } catch (err) {
-      onErreur(err.message || "Le plafond n'a pas pu être enregistré.")
+      // Le message du serveur atterrissait dans le bandeau de la CARTE, sous la fenêtre restée
+      // ouverte. Constaté en enregistrant un plafond sans cible : le serveur refuse en 422 avec
+      // exactement la phrase qui débloque, et elle s'écrivait derrière la modale.
+      setErreurModale(err.message || "Le plafond n'a pas pu être enregistré.")
     } finally {
       setEnCours(false)
     }
@@ -555,6 +628,8 @@ function PlafondModal({ limite, etabActif, operations, roles, onClose, onFait, o
       titre={edition ? 'Modifier un plafond' : 'Nouveau plafond'}
     >
       <form onSubmit={envoyer}>
+        {erreurModale && <div className="banner banner-error">{erreurModale}</div>}
+
         <div className="field">
           <label htmlFor="pl-op">Opération concernée *</label>
           <select id="pl-op" className="input" required value={operation} onChange={(e) => setOperation(e.target.value)}>
@@ -570,16 +645,33 @@ function PlafondModal({ limite, etabActif, operations, roles, onClose, onFait, o
         </div>
 
         <div className="field">
-          <label htmlFor="pl-role">S&rsquo;applique à</label>
-          <select id="pl-role" className="input" value={role} onChange={(e) => setRole(e.target.value)}>
-            <option value="">Tout le monde</option>
+          {/* « TOUT LE MONDE » ÉTAIT L'OPTION PAR DÉFAUT, ET LE SERVEUR LA REFUSE TOUJOURS.
+              `LimiteAutorisation` porte une contrainte d'expression : une limite vise un rôle OU un
+              utilisateur, jamais les deux ni AUCUN (RG-AUTZ-02). Enregistrer sans cible répond donc
+              en 422, systématiquement.
+              Le formulaire proposait pourtant ce choix en premier, et son aide décrivait un
+              comportement qui n'existe pas — « plafonne l'opération pour l'ensemble du personnel, y
+              compris vous ». Constaté en enregistrant : c'est le seul chemin par défaut du
+              formulaire, et il ne mène nulle part.
+              Une option qu'aucun enregistrement ne peut accepter n'est pas une option. */}
+          <label htmlFor="pl-role">Rôle plafonné *</label>
+          <select
+            id="pl-role"
+            className="input"
+            required
+            value={role}
+            onChange={(e) => setRole(e.target.value)}
+          >
+            <option value="">— choisir un rôle —</option>
             {roles.map((r) => (
               <option key={r.id} value={r['@id'] || `/api/roles/${r.id}`}>{nomRole(r)}</option>
             ))}
           </select>
           <div className="hint">
-            Laisser « tout le monde » plafonne l&rsquo;opération pour l&rsquo;ensemble du personnel,
-            y compris vous.
+            Un plafond vise toujours quelqu&rsquo;un : un rôle, ou une personne précise. Pour
+            plafonner l&rsquo;ensemble du personnel, posez la limite sur chacun des rôles concernés —
+            c&rsquo;est ce que le serveur exige, et ça évite de bloquer un rôle qu&rsquo;on avait
+            oublié dans le lot.
           </div>
         </div>
 

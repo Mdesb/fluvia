@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api, membres } from '../api/client.js'
+import { mot } from '../api/vocabulaire.js'
 import { euros } from '../api/produit.js'
 
 // Gestion de la session de caisse (M2) : ouverture (point de vente, caisse, fond, régisseur)
@@ -61,8 +62,21 @@ export default function SessionCaisse({ me, etabActif, session, onRefresh, modal
   async function ouvrir(e) {
     e.preventDefault()
     setErreur(null)
-    if (!pdvId || !caisseId) {
-      setErreur('Point de vente et caisse requis.')
+    // IL REPROCHAIT DEUX CHAMPS QUAND UN SEUL MANQUAIT, ET CELUI-LA ETAIT IMPOSSIBLE A REMPLIR.
+    //
+    // << Point de vente et caisse requis >> s'affichait alors que le point de vente etait bien
+    // choisi : l'exploitant cherchait ce qu'il avait mal fait sur un champ correct, pendant que le
+    // vrai manque -- aucune caisse n'existe -- n'etait dit nulle part. Et il ne pouvait pas la
+    // creer : `POST /api/caisses` n'etait appele d'aucun ecran.
+    //
+    // Un refus nomme CE QUI MANQUE, un seul champ a la fois. Et il arrive maintenant AVANT le clic,
+    // en desactivant le bouton : voir `manque` plus bas.
+    if (!pdvId) {
+      setErreur('Choisissez un point de vente.')
+      return
+    }
+    if (!caisseId) {
+      setErreur('Aucune caisse n’est rattachée à ce point de vente : créez-en une dans Paramètres › Caisse & moyens de paiement.')
       return
     }
     setOuverture(true)
@@ -136,14 +150,24 @@ export default function SessionCaisse({ me, etabActif, session, onRefresh, modal
       </div>
       <div className="field">
         <label htmlFor="cai">Caisse</label>
-        <select id="cai" className="select" value={caisseId} onChange={(e) => setCaisseId(e.target.value)}>
-          {caissesDuPdv.length === 0 && <option value="">Aucune caisse</option>}
-          {caissesDuPdv.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.libelle}{c.etat ? ` — ${c.etat}` : ''}
-            </option>
-          ))}
-        </select>
+        {/* << Aucune caisse >> ETAIT UNE OPTION DU MENU, SANS VALEUR : un texte de remplissage
+            deguise en choix. On le lit comme une caisse qu'on aurait selectionnee, et le bouton
+            restait actif par-dessus. Une liste vide se dit AU-DESSUS de la liste, jamais dedans. */}
+        {caissesDuPdv.length === 0 ? (
+          <div className="banner banner-warn" style={{ marginTop: 4 }}>
+            Aucune caisse n’est rattachée à ce point de vente. Une caisse, c’est le tiroir et le poste
+            depuis lesquels on encaisse : sans elle, aucune session ne peut s’ouvrir et rien ne peut
+            être vendu. Elle se crée dans <b>Paramètres › Caisse &amp; moyens de paiement</b>.
+          </div>
+        ) : (
+          <select id="cai" className="select" value={caisseId} onChange={(e) => setCaisseId(e.target.value)}>
+            {caissesDuPdv.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.libelle}{c.etat ? ` — ${mot(c.etat)}` : ''}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
       <div className="field">
         <label htmlFor="fond">Fond de caisse</label>
@@ -153,7 +177,7 @@ export default function SessionCaisse({ me, etabActif, session, onRefresh, modal
       <div className="hint" style={{ marginBottom: 14 }}>
         Régisseur : <b>{me?.nom || me?.email}</b>. Aucun code n'est requis à l'ouverture.
       </div>
-      <button className="btn primary lg" type="submit" disabled={ouverture}>
+      <button className="btn primary lg" type="submit" disabled={ouverture || !pdvId || !caisseId}>
         {ouverture ? 'Ouverture…' : 'Ouvrir la caisse'}
       </button>
     </>

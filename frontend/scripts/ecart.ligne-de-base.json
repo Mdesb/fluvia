@@ -29,21 +29,24 @@
         "Le script REFUSE de le relever. Un plafond qui remonte n est plus un cliquet, c est un",
         "compteur."
     ],
-    "plafond": 709,
+    "plafond": 699,
     "releve": {
         "exposees": 1142,
         "sansEcran": 0,
         "attendues": 1142,
-        "appelees": 438,
-        "atteignables": 433,
-        "inatteignables": 709,
+        "appelees": 451,
+        "atteignables": 443,
+        "inatteignables": 699,
         "orphelins": [
             "comptesComptables  (back-office)",
             "etatSynchroAcces  (back-office)",
+            "factureDepuisVente  (back-office)",
             "grilleTarifaires  (back-office)",
+            "majFactureDirecte  (back-office)",
             "padelTournois  (back-office)",
             "pieceCommerciale  (back-office)",
-            "planningOuverture  (back-office)"
+            "planningOuverture  (back-office)",
+            "verifierChaineFactures  (back-office)"
         ],
         "declares": [],
         "marqueursSansRaison": [],
@@ -51,8 +54,8 @@
         "parFront": [
             {
                 "nom": "back-office",
-                "appelees": 417,
-                "atteignables": 412
+                "appelees": 430,
+                "atteignables": 422
             },
             {
                 "nom": "boutique en ligne",
@@ -90,6 +93,10 @@
                 13
             ],
             [
+                "produits",
+                11
+            ],
+            [
                 "ventes",
                 11
             ],
@@ -98,7 +105,7 @@
                 11
             ],
             [
-                "produits",
+                "factures",
                 10
             ],
             [
@@ -222,6 +229,10 @@
                 3
             ],
             [
+                "caisses",
+                3
+            ],
+            [
                 "moyen",
                 3
             ],
@@ -332,10 +343,6 @@
             [
                 "demandes-escalade",
                 2
-            ],
-            [
-                "caisses",
-                1
             ],
             [
                 "session",

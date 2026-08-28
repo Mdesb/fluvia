@@ -163,25 +163,30 @@ async function request(
     if (timer) clearTimeout(timer)
   }
 
-  // SESSION GLISSANTE : LE SERVEUR REND UN JETON FRAIS, ENCORE FAUT-IL LE PRENDRE.
+  // ⚠ DEUX SESSIONS ONT ÉCRIT CE MÊME BLOC INDÉPENDAMMENT, à une heure d'intervalle. Les deux
+  // versions étaient justes et disaient la même chose ; celle-ci a été retenue à la fusion. Le
+  // doublon n'a coûté qu'un conflit — il aurait pu coûter deux mécanismes concurrents dans la même
+  // fonction, dont un seul aurait servi.
+  // LE JETON SE RENOUVELLE PENDANT QU'ON TRAVAILLE, ET CA SE LIT ICI PARCE QU'ICI VOIT TOUT.
   //
-  // Le jeton vit une heure. Sans renouvellement, un écran laissé ouvert devant soi — la caisse, la
-  // supervision — se fait éjecter en pleine journée, sans un mot, et l'agent croit s'être
-  // déconnecté. Le serveur réémet donc un jeton dans l'en-tête `X-Jeton-Renouvele` dès que celui
-  // qu'on présente a passé la moitié de sa vie ; il suffit de le poser à la place de l'ancien.
+  // Le serveur renvoie un jeton frais dans `X-JETON-RENOUVELE` des que le jeton courant a passe la
+  // moitie de sa vie. L'en-tete N'EST PAS sur toutes les reponses : son absence est le cas normal,
+  // pas une anomalie.
   //
-  // TROIS CHOSES QUI ÉVITENT DE MAL LIRE CE MÉCANISME :
+  // Un seul endroit a modifier, et c'est deliberement celui-la : `request()` est la seule fonction
+  // qui voit toutes les reponses. Le poser ecran par ecran donnerait des ecrans qui prolongent la
+  // session et d'autres non, sans que rien ne distingue les deux.
   //
-  // 1. L'en-tête n'arrive QUE sur les réponses authentifiées qui atteignent le noyau. Son absence
-  //    n'est donc pas un signal : la plupart des réponses n'en portent pas, et c'est normal.
-  // 2. Une réponse 401 n'en porte jamais. Le bloc ci-dessous s'exécute avant celui du 401, mais il
-  //    ne trouvera rien dans ce cas — les deux ne se marchent pas dessus.
-  // 3. LE 401 NE DISPARAÎT PAS, IL RECULE. Passé douze heures depuis la première connexion, le
-  //    serveur cesse de réémettre : sinon un jeton dérobé se renouvellerait indéfiniment, il
-  //    suffirait de s'en servir. Les écrans qui interrogent en boucle doivent donc TOUJOURS savoir
-  //    s'arrêter proprement sur un 401 et le dire — c'est plus rare qu'avant, pas impossible.
-  const jetonFrais = res.headers.get('X-Jeton-Renouvele')
-  if (jetonFrais && auth) tokenStore.set(jetonFrais)
+  // ⚠ CE MECANISME PEUT ETRE INERTE SANS QUE RIEN NE LE DISE. Lire l'en-tete et oublier de remplacer
+  // le jeton stocke marche exactement comme avant pendant une heure, puis ejecte -- et rien ne
+  // signale qu'il n'a jamais servi. Eprouve en comparant le jeton stocke AVANT et APRES une reponse
+  // qui porte l'en-tete, pas en constatant qu'on est encore connecte dix minutes plus tard.
+  //
+  // ET IL NE SUPPRIME PAS L'EXPIRATION. Passe douze heures depuis la premiere connexion, le serveur
+  // cesse de reemettre : une session qui se prolonge sans fin n'est plus une session, c'est un mot
+  // de passe. L'ecran de connexion doit donc toujours savoir apparaitre.
+  const renouvele = res.headers.get('X-JETON-RENOUVELE')
+  if (renouvele && auth) tokenStore.set(renouvele)
 
   if (res.status === 401 && auth) {
     tokenStore.clear()
@@ -249,10 +254,28 @@ export const api = {
   // Creer et modifier un etablissement. Pas de suppression exposee : voir EtablissementsSection.
   creerEtablissement: (corps) => request('/api/etablissements', { method: 'POST', body: corps, ld: true }),
   majEtablissement: (id, corps) => request(`/api/etablissements/${id}`, { method: 'PATCH', body: corps }),
-  produits: () => request('/api/produits'),
+  // `Produit` declare un SearchFilter sur `code` (partiel), `libelleRecherche` (partiel), `statut`
+  // et `typeCode` -- quatre filtres testes cote serveur, et cette fonction n'en transmettait aucun :
+  // elle ne prenait meme pas d'argument. Le catalogue chargeait donc les trente premiers produits et
+  // n'offrait aucun moyen d'atteindre les suivants.
+  //
+  // Le piege qu'on evite en le corrigeant tout de suite : passer un objet a une fonction qui l'ignore
+  // ne leve rien. On aurait vu des champs de filtre a l'ecran, une requete partir, une reponse
+  // arriver -- et la meme liste. Un resultat plausible et faux.
+  produits: (params) => request('/api/produits', { query: params }),
   // Le détail ajoute le groupe `produit:compta` (compte, TVA, règle PCA), absent de la collection.
   produit: (id) => request(`/api/produits/${id}`),
   majProduit: (id, corps) => request(`/api/produits/${id}`, { method: 'PATCH', body: corps }),
+  // L'ONGLET COMPTA D'UN PRODUIT : TROIS CHAMPS ECRIVABLES, AFFICHES ET JAMAIS PROPOSES.
+  //
+  // `PATCH /produits/{id}/compta` existe depuis le debut, avec son propre groupe (`produit:compta`)
+  // et son propre droit (`offre.modifier_compta`, distinct de `offre.modifier`). La fiche produit
+  // montrait compte, taux et regle PCA ; le formulaire << Modifier >> n'offrait que le nom, les
+  // canaux, la couleur en caisse et la note interne.
+  //
+  // Route sur mesure et `input: false` cote serveur : pas de `ld: true` a poser.
+  majComptaProduit: (id, corps) =>
+    request(`/api/produits/${id}/compta`, { method: 'PATCH', body: corps }),
   typeProduits: () => request('/api/type_produits'),
   creerProduit: (corps) =>
     request('/api/produits', { method: 'POST', body: corps, ld: true }),
@@ -284,10 +307,57 @@ export const api = {
   // ne pas savoir — c'est au code appelé d'être lisible.
   gestePiece: (id, geste) => GESTES_PIECE[geste](id),
 
+  // LES FACTURES : DIX OPERATIONS EXPOSEES, ZERO ROUTE DANS CE FICHIER.
+  //
+  // L'ecran << Facturation >> ne montrait pas des factures : il montrait des PIECES COMMERCIALES et
+  // enseignait une chaine devis -> commande -> livraison -> facture. Sa seule action etait
+  // << + Nouveau devis >>. Une facture emise sortait de l'ecran et n'etait plus visible NULLE PART :
+  // il n'existait aucune liste des factures, donc aucun moyen de savoir qui doit combien.
+  //
+  // C'est une chaine d'ERP imposee a des gens qui n'en ont pas besoin : une piscine facture une ecole
+  // pour une sortie de groupe, un club de padel facture une entreprise pour un tournoi. Ni devis, ni
+  // bon de livraison.
+  //
+  // QUATRE DROITS DISTINCTS, DONC QUATRE BOUTONS : emettre (`facturation.emettre_directe`), lettrer
+  // (`facturation.lettrer`), avoir (`facturation.avoir`), Chorus (`facturation.deposer_chorus`). Qui
+  // encaisse un reglement n'a pas a pouvoir annuler la facture par un avoir.
+  //
+  // Toutes ces routes portent un `uriTemplate` sur mesure et `input: false` : pas de `ld: true`.
+  factures: (params) => request('/api/factures', { query: params }),
+  facture: (id) => request(`/api/factures/${id}`),
+  // Cree un BROUILLON : aucun numero n'est consomme tant qu'on n'a pas emis (RG-FACT-01). C'est ce
+  // qui permet de se tromper sans trouer la sequence legale des numeros.
+  creerFactureDirecte: (corps) => request('/api/factures', { method: 'POST', body: corps }),
+  majFactureDirecte: (id, corps) => request(`/api/factures/${id}`, { method: 'PATCH', body: corps }),
+  emettreFacture: (id) => request(`/api/factures/${id}/emettre`, { method: 'POST', body: {} }),
+  // Corps : { montant: "150.00", moyen: "virement", reference?: "..." }.
+  enregistrerReglement: (id, corps) =>
+    request(`/api/factures/${id}/reglements`, { method: 'POST', body: corps }),
+  // Avoir TOTAL, sans corps : la simplification est assumee cote serveur (plan §7).
+  genererAvoirFacture: (id) => request(`/api/factures/${id}/avoir`, { method: 'POST', body: {} }),
+  // Corps : { numeroEngagement?, serviceExecutant? } -- exiges par certains donneurs d'ordre publics.
+  deposerFactureChorus: (id, corps) =>
+    request(`/api/factures/${id}/chorus`, { method: 'POST', body: corps }),
+  factureDepuisVente: (corps) =>
+    request('/api/factures/depuis-vente', { method: 'POST', body: corps }),
+  // Le controle d'integrite de la sequence : une facture ne se modifie pas, la chaine le prouve.
+  verifierChaineFactures: () => request('/api/factures/verifier-chaine'),
+
   pointDeVentes: () => request('/api/point_de_ventes'),
   creerPointDeVente: (corps) => request('/api/point_de_ventes', { method: 'POST', body: corps, ld: true }),
   majPointDeVente: (id, corps) => request(`/api/point_de_ventes/${id}`, { method: 'PATCH', body: corps }),
   caisses: () => request('/api/caisses'),
+  // UNE CAISSE NE POUVAIT PAS ETRE CREEE, ET C'EST CE QUI BLOQUAIT LA VENTE.
+  //
+  // `POST /api/caisses` existe (droit `caisse.gerer`) et n'etait appele de nulle part. Consequence
+  // observee sur GI-ONE FITNESS : le formulaire d'ouverture de caisse propose << Aucune caisse >>
+  // comme unique option, sans valeur, avec le bouton actif -- puis refuse avec << Point de vente et
+  // caisse requis >> alors que le point de vente EST choisi. Il reproche deux champs quand un seul
+  // manque, et celui-la etait impossible a remplir depuis l'application.
+  //
+  // Operation API Platform standard (pas d'`uriTemplate`) : elle deserialise, donc `ld: true`.
+  creerCaisse: (corps) => request('/api/caisses', { method: 'POST', body: corps, ld: true }),
+  majCaisse: (id, corps) => request(`/api/caisses/${id}`, { method: 'PATCH', body: corps }),
   moyensPaiement: () => request('/api/moyen_paiements'),
   // Moyens de paiement — écriture (source M6, sécurité `compta.gerer`).
   creerMoyenPaiement: (corps) =>

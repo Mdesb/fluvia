@@ -55,6 +55,8 @@ const Cautions = lazy(() => import('./pages/Cautions.jsx'))
 const Acces = lazy(() => import('./pages/Acces.jsx'))
 const TopologieAcces = lazy(() => import('./pages/TopologieAcces.jsx'))
 
+import { lireHash, ecrireHash } from './api/url.js'
+
 // Un compte est « administrateur » s'il porte l'un des droits d'administration du socle sur
 // l'établissement actif (matérialisés dans `me.droits`). Gouverne l'atterrissage sur le tableau
 // de bord et la visibilité de son entrée de menu.
@@ -72,7 +74,39 @@ export default function App() {
   const [me, setMe] = useState(null)
   const [etablissements, setEtablissements] = useState([])
   const [etabActif, setEtabActif] = useState(etablissementStore.get() || '')
-  const [onglet, setOnglet] = useState('caisse')
+  // L'ONGLET VIT DANS L'URL, ET C'EST CE QUI REND LE RESTE UTILE.
+  //
+  // L'application ne routait sur rien : `onglet` était un état de composant, l'URL ne bougeait
+  // jamais, et un rechargement ramenait toujours à la caisse. Mettre les filtres d'un écran dans
+  // l'URL sans y mettre l'écran lui-même n'aurait servi à rien -- on serait revenu sur la caisse
+  // avec des filtres pointant une liste qu'on ne regarde pas.
+  //
+  // Le jeton dure une heure. Ce que ça change concrètement : après une expiration de session, on
+  // se reconnecte et on retombe sur l'écran qu'on avait sous les yeux, filtres compris, au lieu de
+  // tout refaire. Voir `api/url.js`.
+  const [onglet, setOngletBrut] = useState(() => lireHash().onglet || 'caisse')
+  const setOnglet = useCallback((id) => {
+    setOngletBrut((precedent) => {
+      // Changer d'écran abandonne les paramètres du précédent : ils ne veulent rien dire ailleurs.
+      if (id !== precedent) ecrireHash(id, {})
+      return id
+    })
+  }, [])
+
+  // Le bouton « Précédent » du navigateur change le hash sans rien démonter.
+  useEffect(() => {
+    function surChangement() {
+      const cible = lireHash().onglet
+      if (cible) setOngletBrut(cible)
+    }
+    window.addEventListener('hashchange', surChangement)
+    window.addEventListener('popstate', surChangement)
+    return () => {
+      window.removeEventListener('hashchange', surChangement)
+      window.removeEventListener('popstate', surChangement)
+    }
+  }, [])
+
   // Enregistrement à ouvrir en arrivant sur l'écran, quand la navigation vient d'une recherche.
   // Consommé puis oublié par l'écran destinataire : le garder ferait rouvrir la même fiche à chaque
   // retour sur l'onglet, ce qui est déroutant et impossible à annuler.
@@ -171,15 +205,27 @@ export default function App() {
   // caisse). Appliqué une seule fois par session, après le 1er chargement du profil.
   useEffect(() => {
     if (me && !landingApplique) {
-      if (estAdministrateur(me)) setOnglet('dashboard')
+      // Une URL qui nomme un écran l'emporte sur l'atterrissage par défaut : sans cette garde, on
+      // ouvre un lien vers une fiche client et on arrive sur le tableau de bord.
+      if (estAdministrateur(me) && !lireHash().onglet) setOnglet('dashboard')
       setLandingApplique(true)
     }
   }, [me, landingApplique])
 
   // Si l'onglet courant dépend d'une capacité ou d'une permission désormais absente, retour Caisse.
   useEffect(() => {
-    const caps = me?.capacitesActives || []
-    const droits = me?.droits || []
+    // TANT QUE LE PROFIL N'EST PAS CHARGÉ, ON NE SAIT RIEN — ET NE RIEN SAVOIR N'EST PAS UN REFUS.
+    //
+    // Défaut introduit en mettant l'onglet dans l'URL, et trouvé en ouvrant `#facturation` : `me`
+    // vaut `null` pendant le premier rendu, donc `droits` vaut `[]`, donc cette garde concluait
+    // « permission absente » et renvoyait à la caisse AVANT que le serveur ait répondu. Le lien
+    // profond ne marchait que pour les écrans sans permission requise.
+    //
+    // Invisible avant, parce que l'onglet de départ était déjà la caisse : le renvoi ne changeait
+    // rien. C'est exactement pourquoi un défaut dormant se réveille au premier usage nouveau.
+    if (!me) return
+    const caps = me.capacitesActives || []
+    const droits = me.droits || []
     const capRequise = { reservation: 'reservation', supervision: 'controle_acces', acces: 'controle_acces', boutique: 'boutique_en_ligne' }
     const permRequise = {
       piscine: 'piscine.lire', patinoire: 'patinoire.lire', padel: 'padel.lire',
@@ -310,7 +356,7 @@ export default function App() {
       {onglet === 'sepa' && <Sepa etabActif={etabActif} droits={droits} />}
       {onglet === 'recouvrement' && <Recouvrement etabActif={etabActif} droits={droits} />}
       {onglet === 'caution' && <Cautions etabActif={etabActif} droits={droits} />}
-      {onglet === 'facturation' && <Facturation etabActif={etabActif} droits={droits} />}
+      {onglet === 'facturation' && <Facturation etabActif={etabActif} droits={droits} onNaviguer={naviguer} />}
       {onglet === 'clients' && <Clients etabActif={etabActif} cible={cible} onCibleConsommee={() => setCible(null)} droits={droits} />}
       {onglet === 'boutique' && <Boutique etabActif={etabActif} droits={droits} />}
       {onglet === 'piscine' && <Piscine etabActif={etabActif} droits={droits} />}

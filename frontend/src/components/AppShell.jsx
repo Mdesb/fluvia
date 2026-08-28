@@ -159,7 +159,11 @@ const NAV = [
         perms: ['securite.gerer', 'securite.lire', 'organisation.gerer', 'offre.gerer', 'caisse.gerer', 'crm.parametrer'],
       },
       // Ouvert le 27/08. Voir le commentaire de l'entree << Assistance >> : meme motif, meme cout.
-      { id: 'autorisations', ic: '⚿', label: 'Autorisations', perms: ['autorisation.lire', 'autorisation.approuver', 'autorisation.gerer'] },
+      // « Autorisations » faisait chercher les droits ici, et on y tombait sur un journal vide :
+      // qui-a-le-droit-de-quoi vit dans Paramètres › Utilisateurs & droits. Cet écran porte les
+      // demandes d'escalade et les plafonds de montant — ce n'est pas la même question.
+      // Arbitré par Maxime à la revue : on renomme, on ne déplace pas les droits.
+      { id: 'autorisations', ic: '⚿', label: 'Escalades & plafonds', perms: ['autorisation.lire', 'autorisation.approuver', 'autorisation.gerer'] },
       // Les mentions obligatoires d'un site marchand. Sous Administration et non sous Boutique :
       // elles engagent l'exploitant, pas la vitrine, et un exploitant qui n'a pas encore ouvert
       // sa boutique doit pouvoir les preparer.

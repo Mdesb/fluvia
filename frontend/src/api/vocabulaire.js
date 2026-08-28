@@ -72,6 +72,15 @@ const MOTS = {
   tripode: 'Tripode',
   lecteur: 'Lecteur',
 
+  // --- États d'une caisse ---
+  //
+  // « Sécurisée » est le mot du modèle, pas celui de l'exploitant : c'est l'état NORMAL d'une caisse
+  // fermée, celle qui exige le code régisseur pour rouvrir. Affiché tel quel, il se lit comme un
+  // incident de sécurité -- et il l'était dans le menu d'ouverture de session, où chaque caisse
+  // s'annonçait « securisee » sans accent.
+  securisee: 'Au repos',
+  en_fermeture: 'En fermeture',
+
   // --- Statuts courants ---
   actif: 'Actif',
   inactif: 'Inactif',

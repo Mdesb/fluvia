@@ -221,10 +221,20 @@ export default function RolesSection({ droits, peutGerer, onChange }) {
                       )}
                     </td>
                     <td>
+                      {/* « TOUS LES MODULES » COUVRAIT DEUX CHOSES TRÈS DIFFÉRENTES, EN ROUGE.
+                          `*` × `lire` et `*` × `*` portent tous deux le module joker, et la même
+                          pastille rouge les confondait. Lire tout le logiciel et pouvoir tout y
+                          faire n'appellent pas la même alerte : un rôle « Lecture seule » légitime
+                          s'affichait aussi alarmant qu'un administrateur.
+                          Le rouge est réservé à ce qui écrit partout. */}
                       {modules.length === 0 ? (
                         <span className="sub">aucun — ce rôle ne donne rien</span>
+                      ) : joker ? (
+                        <span className="badge crit" title="Ce rôle peut TOUT faire, sur tous les modules, y compris ceux qui seront ajoutés plus tard.">
+                          tout le logiciel
+                        </span>
                       ) : modules.includes('*') ? (
-                        <span className="badge crit" title="Ce rôle porte un droit sur tous les modules.">
+                        <span className="badge warn" title="Ce rôle porte un droit transversal (par exemple lire tous les modules), mais pas le pouvoir de tout faire.">
                           tous les modules
                         </span>
                       ) : (
