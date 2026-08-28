@@ -890,6 +890,39 @@ export const api = {
   // --- Achats & tresorerie ---
   facturesFournisseur: () =>
     request('/api/supplier_invoices', { query: { itemsPerPage: 200 } }),
+  // ON POUVAIT APPROUVER UNE FACTURE FOURNISSEUR, ON NE POUVAIT PAS EN ENREGISTRER UNE.
+  //
+  // Maxime : << Achats & tresorerie -- on ne peut pas enregistrer une facture fournisseur, il faut
+  // donc creer le module fournisseur. >> L'ecran savait rapprocher, approuver, contester, resoudre un
+  // litige et annuler : il traitait une file qu'aucun geste ne remplissait.
+  //
+  // LE MODULE FOURNISSEUR AU SENS DES TIERS EXISTE DEJA (`creerFournisseur`, cote Stock). Ce qui
+  // manquait est l'ENTREE de la facture -- un formulaire, pas une chaine d'extraction.
+  //
+  // Operations API Platform STANDARD (pas d'`uriTemplate`) : elles deserialisent, donc `ld: true`,
+  // et les relations partent en IRI.
+  creerFactureFournisseur: (corps) =>
+    request('/api/supplier_invoices', { method: 'POST', body: corps, ld: true }),
+  // Modification libre TANT QUE brouillon : le serveur repond 409 << Facture scellee >> au-dela.
+  majFactureFournisseur: (id, corps) =>
+    request(`/api/supplier_invoices/${id}`, { method: 'PATCH', body: corps }),
+  // LES LIGNES SONT UNE RESSOURCE A PART, ET CE N'EST PAS UN DETAIL D'IMPLEMENTATION.
+  //
+  // `SupplierInvoice.lines` ne porte AUCUN groupe d'ecriture : les lignes ne s'embarquent pas dans le
+  // corps de la facture, elles se posent une a une sur une facture deja creee. Verifie dans l'entite
+  // avant d'ecrire le formulaire, pas devine -- l'envoi groupe aurait ete accepte en 201 avec une
+  // facture a zero euro et aucune ligne.
+  creerLigneFactureFournisseur: (corps) =>
+    request('/api/supplier_invoice_lines', { method: 'POST', body: corps, ld: true }),
+  // ⚠ PAS DE SUPPRESSION DE LIGNE : `SupplierInvoiceLine` ne declare ni `Delete` ni desactivation.
+  // Une ligne posee sur un brouillon y reste. Le formulaire compose donc la facture AVANT de la
+  // creer, et ne pose ses lignes qu'une fois -- se tromper coute une facture a annuler, pas une
+  // ligne a retirer. Verifie dans l'entite, et signale : c'est une lacune du serveur, pas un choix
+  // de cet ecran.
+  // Le referentiel des natures de depense : c'est lui qui dit sur quel compte une ligne s'impute.
+  // Une nature SANS mapping laisse la facture sans imputation comptable -- l'ecran le signale.
+  mappingsDepense: () =>
+    request('/api/expense_account_mappings', { query: { itemsPerPage: 200 } }),
   // Le rapprochement a trois voies : facture contre commande contre reception. Charge AVANT
   // d'afficher le bouton d'approbation — approuver, c'est engager le paiement.
   rapprochementFactureFournisseur: (id) =>
