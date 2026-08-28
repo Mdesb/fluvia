@@ -162,6 +162,20 @@ export default function EditeurApp() {
         </div>
       </header>
 
+      {/*
+        ⚠ `=== false` ET NON `!me?.estEditeur`. Tant que le profil n'est pas chargé, la propriété
+        est `undefined` — un `!` afficherait « vous êtes chez un client » pendant le chargement, à
+        chaque ouverture, y compris chez soi. Une alerte qui crie à tort est une alerte qu'on
+        apprend à ignorer, et c'est celle-là qu'on ignorera le jour où elle sera vraie.
+      */}
+      {me?.estEditeur === false && (
+        <div className="banner banner-warn" role="status">
+          Vous travaillez sur <strong>{nomEtabActif || 'le site d’un client'}</strong>, pas sur
+          l’établissement éditeur. Ce que vous écrivez ici appartient à ce client, et les chiffres
+          affichés sont les siens.
+        </div>
+      )}
+
       <main className="view">
         {/*
           Un refus vient du serveur et signifie une seule chose : cette session n'est pas celle de
