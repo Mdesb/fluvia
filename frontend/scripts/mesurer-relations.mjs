@@ -169,8 +169,16 @@ const TRANCHES = new Map([
   ['etat', 'Carte locale (`etats[s.id]` dans Musée, `{ article, restant }` dans Stock), pas une '
     + 'relation sérialisée.'],
   ['grille', 'TypeTarif expose bien trois propriétés dans `grille:read` : la relation EST embarquée.'],
-  ['segment', 'Objet local de l’aperçu de campagne, qui porte déjà un segment complet lu depuis '
-    + '/api/segments.'],
+  // ⚠ `segment` A ÉTÉ RETIRÉ DE CETTE TABLE, ET C'EST L'ENTRÉE LA PLUS INSTRUCTIVE DU FICHIER.
+  //
+  // Je l'y avais mise le 28/08 : « objet local de l'aperçu de campagne, qui porte déjà un segment
+  // complet ». C'était faux. L'appelant écrit `setApercu({ segment, ...reponse })` et la réponse du
+  // serveur porte SA PROPRE clé `segment` — une chaîne — qui écrase l'objet local par le spread.
+  // La modale affichait « Aperçu — undefined » sur chaque aperçu.
+  //
+  // Je l'avais classée en raisonnant sur le code, sans ouvrir l'écran. Le signalement était juste et
+  // l'arbitrage était faux — précisément le mode de défaillance que l'avertissement ci-dessus
+  // annonce. Une mise à l'écart se gagne en OBSERVANT, jamais en déduisant.
   // Localisée, et pas générale : dans l'écran Stock, `article` est le champ d'un objet composé sur
   // place (`{ article, restant }`). Ailleurs, `article` peut parfaitement être une vraie relation —
   // on n'éteint donc le signal que dans ce fichier.
