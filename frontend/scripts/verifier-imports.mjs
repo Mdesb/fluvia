@@ -68,13 +68,30 @@ const MODULES_UTILITAIRES = [
   join(SRC, 'api', 'droits.js'),
   join(SRC, 'api', 'client.js'),
   join(SRC, 'components', 'Liste.jsx'),
+  // ⚠ AJOUTÉS LE 28/08 APRÈS UN ÉCRAN BLANC, et l'omission a coûté cher.
+  //
+  // `vocabulaire.js` et `produit.js` n'étaient pas surveillés. `Pilotage.jsx` lisait `GLOSSAIRE`
+  // sans l'importer : `ReferenceError` au rendu, et — faute de garde-fou React — **toute
+  // l'application passait à l'écran blanc**. Ce contrôle était vert.
+  join(SRC, 'api', 'vocabulaire.js'),
+  join(SRC, 'api', 'produit.js'),
   join(SRC, 'public', 'lib', 'format.js'),
   join(SRC, 'public', 'api', 'boutiqueClient.js'),
 ]
 
-const EXPORT_NOMME = /export\s+(?:async\s+)?(?:function|const|let|var)\s+([a-z][A-Za-z0-9_$]*)/g
+// DEUX FAMILLES D'EXPORTS, DEUX FAÇONS DE LES UTILISER — ET ON N'EN VOYAIT QU'UNE.
+//
+// Le motif d'origine n'acceptait que les noms commençant par une MINUSCULE (`[a-z]`), et le
+// détecteur ne cherchait que des APPELS (`nom(`). Une constante exportée en majuscules et lue par
+// accès de propriété — `GLOSSAIRE.fmi` — échappait donc deux fois au contrôle.
+//
+// C'est exactement ce qui a fait l'écran blanc de `Pilotage`. On sépare donc les deux :
+// une fonction se repère à son `(`, une constante à son `.` ou son `[`.
+const EXPORT_FONCTION = /export\s+(?:async\s+)?(?:function|const|let|var)\s+([a-z][A-Za-z0-9_$]*)/g
+const EXPORT_CONSTANTE = /export\s+const\s+([A-Z][A-Z0-9_]*)\b/g
 
 const HELPERS = new Set()
+const CONSTANTES = new Set()
 for (const module of MODULES_UTILITAIRES) {
   let texte
   try {
@@ -83,10 +100,15 @@ for (const module of MODULES_UTILITAIRES) {
     // Un module déplacé n'est pas une raison de tout arrêter : Vite le signalera.
     continue
   }
-  let e = EXPORT_NOMME.exec(texte)
+  let e = EXPORT_FONCTION.exec(texte)
   while (e !== null) {
     HELPERS.add(e[1])
-    e = EXPORT_NOMME.exec(texte)
+    e = EXPORT_FONCTION.exec(texte)
+  }
+  let c = EXPORT_CONSTANTE.exec(texte)
+  while (c !== null) {
+    CONSTANTES.add(c[1])
+    c = EXPORT_CONSTANTE.exec(texte)
   }
 }
 
@@ -170,10 +192,23 @@ for (const fichier of fichiers(SRC)) {
     const chemin = relative(join(ICI, '..', '..'), fichier).replace(/\\/g, '/')
     anomalies.push(`${chemin}:${ligne} — ${helper}() est appelé sans être importé.`)
   }
+
+  // Les CONSTANTES exportées, lues sans être importées. Une constante ne s'appelle pas : elle se
+  // déréférence (`GLOSSAIRE.fmi`) ou s'indexe (`MOTS[code]`). C'est ce motif-là qu'il faut chercher.
+  for (const constante of CONSTANTES) {
+    if (connus.has(constante)) continue
+    const lecture = new RegExp(`\\b${constante}\\s*[.[]`)
+    const trouve = lecture.exec(code)
+    if (trouve === null) continue
+    if (lieLocalement(code, constante)) continue
+    const ligne = texte.slice(0, trouve.index).split('\n').length
+    const chemin = relative(join(ICI, '..', '..'), fichier).replace(/\\/g, '/')
+    anomalies.push(`${chemin}:${ligne} — ${constante} est lu sans être importé.`)
+  }
 }
 
 if (anomalies.length === 0) {
-  console.log(`✓ Imports : aucun composant ni utilitaire (${HELPERS.size} surveillé(s)) utilisé sans être importé.`)
+  console.log(`✓ Imports : aucun composant, utilitaire ou constante (${HELPERS.size + CONSTANTES.size} surveillé(s)) utilisé sans être importé.`)
   process.exit(0)
 }
 

@@ -174,7 +174,25 @@ async function request(
     try {
       payload = JSON.parse(text)
     } catch {
-      payload = { message: text }
+      // UNE RÉPONSE QUI N'EST PAS DU JSON NE SE RECOPIE PAS TELLE QUELLE DANS L'ÉCRAN.
+      //
+      // `{ message: text }` mettait le corps BRUT dans le message d'erreur. Or toutes les erreurs
+      // ne viennent pas d'API Platform : un 405 sorti du routeur, un 502 de nginx, une page de
+      // maintenance rendent du HTML. Constaté le 28/08 sur l'écran Padel — la page affichait
+      // « <!DOCTYPE html> <html lang="en"> <head>… » dans son bandeau d'erreur, sur toute la
+      // largeur, à la place du message.
+      //
+      // Le corps reste dans `payload` pour qui débogue ; ce qui remonte à l'utilisateur est une
+      // phrase. Un message illisible ne dit pas seulement « erreur » : il fait croire à un bug de
+      // l'affichage plutôt qu'à un appel qui a échoué, et on cherche au mauvais endroit.
+      const ressembleAduHtml = /^\s*<(?:!doctype|html|\?xml)/i.test(text)
+      payload = {
+        message: ressembleAduHtml
+          ? `Le serveur a répondu une page (${res.status}) au lieu de données. `
+            + "L'appel n'a probablement pas atteint l'API."
+          : text.slice(0, 300),
+        corpsBrut: text,
+      }
     }
   }
 
@@ -1034,7 +1052,16 @@ export const api = {
     request(`/api/stock/receptions-achat/${id}/valider`, { method: 'POST', body: {} }),
 
   // Padel
-  padelTerrains: () => request('/api/padel/terrains', { query: { itemsPerPage: 100 } }),
+  // ⚠ `/api/padel/terrains` N'EXISTE QU'EN POST — c'est la création d'un terrain.
+  //
+  // La LECTURE de la collection est `/api/padel_terrains`, la route standard d'API Platform. Le
+  // client faisait un GET sur la route de création : le routeur répond **405**, et un 405 sorti du
+  // routeur rend une page HTML, pas du JSON. L'écran Padel affichait donc « <!DOCTYPE html>… » dans
+  // son bandeau d'erreur et ne listait AUCUN terrain — alors qu'il y en a.
+  //
+  // Deux routes qui se ressemblent (`/padel/terrains` et `/padel_terrains`), l'une en écriture et
+  // l'autre en lecture : c'est le genre de confusion que seul un appel réel révèle.
+  padelTerrains: () => request('/api/padel_terrains', { query: { itemsPerPage: 100 } }),
   padelReservations: () =>
     request('/api/padel_reservations', { query: { itemsPerPage: 200 } }),
   padelLocationsMateriel: () =>

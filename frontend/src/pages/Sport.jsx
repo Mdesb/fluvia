@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
-import { resoudre } from '../components/Liste.jsx'
+import { resoudre, nomOuAbsence } from '../components/Liste.jsx'
 
 /**
  * SPORT & FITNESS — et d'abord **les alertes que personne n'entendait**.
@@ -266,10 +266,46 @@ export default function Sport({ etabActif, droits = [] }) {
         </div>
       </section>
 
+      {/* « 2 APPELS DÉJÀ TRAITÉS » N'EST PAS UN REGISTRE, C'EST UN COMPTEUR.
+          `EvenementSOS` porte `traitePar` et `dateTraitement` — QUI est intervenu et QUAND — et
+          l'écran n'affichait ni l'un ni l'autre : juste un nombre. Or c'est exactement ce qu'on
+          vient chercher après coup, pour un rapport d'incident ou quand quelqu'un demande si on
+          est venu. Un compteur dit qu'une alerte a été fermée ; il ne dit pas que quelqu'un y est
+          allé.
+          Le manque a été relevé par la session qui tient le back, en recoupant ma liste de
+          relations muettes avec son propre outil — je ne l'avais pas vu. */}
       {traites.length > 0 && (
-        <div className="sub" style={{ marginTop: 12 }}>
-          {traites.length} appel{traites.length > 1 ? 's' : ''} d&rsquo;urgence déjà traité{traites.length > 1 ? 's' : ''}.
-        </div>
+        <section className="card" style={{ marginTop: 16 }}>
+          <div className="card-h">
+            <h3>Appels d&rsquo;urgence traités</h3>
+            <span className="sub">qui est intervenu, et quand</span>
+          </div>
+          <div className="card-b" style={{ overflowX: 'auto' }}>
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>Espace</th>
+                  <th>Déclenché</th>
+                  <th>Traité par</th>
+                  <th>Traité</th>
+                </tr>
+              </thead>
+              <tbody>
+                {traites.map((e) => (
+                  <tr key={e.id}>
+                    <td><span className="nm">{nomEspace(resoudre(e.espaceAcces, espaces)) || '—'}</span></td>
+                    <td>{quandHeure(e.horodatage)}</td>
+                    {/* Même distinction que partout ailleurs : « personne » et « je ne sais pas
+                        lire le nom » ne sont pas la même réponse — surtout ici, où la question
+                        est de savoir si quelqu'un y est allé. */}
+                    <td>{nomOuAbsence(e.traitePar, 'non renseigné')}</td>
+                    <td>{e.dateTraitement ? quandHeure(e.dateTraitement) : <span className="sub">—</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
       )}
     </div>
   )

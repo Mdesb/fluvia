@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Modal from '../components/Modal.jsx'
 import Tabs from '../components/Tabs.jsx'
-import { dateHeureFr } from '../components/Liste.jsx'
+import { dateHeureFr, resoudre } from '../components/Liste.jsx'
 import { api, membres } from '../api/client.js'
 import { aUnDesDroits } from '../api/droits.js'
 import { mot } from '../api/vocabulaire.js'
@@ -67,6 +67,7 @@ function TerrainsSection({ etabActif, droits }) {
   const [reservation, setReservation] = useState(null)
   const [eclairage, setEclairage] = useState(null)
   const [rejoindre, setRejoindre] = useState(null)
+  const [ressources, setRessources] = useState([])
 
   const peutReserver = aUnDesDroits(droits, ['padel.reserver', 'padel.reserver_soi', 'padel.gerer'])
   const peutForcerEclairage = aUnDesDroits(droits, ['padel.acces_forcer', 'padel.gerer'])
@@ -74,14 +75,22 @@ function TerrainsSection({ etabActif, droits }) {
   const recharger = useCallback(async () => {
     setChargement(true)
     try {
-      const [t, r, b] = await Promise.all([
+      // UN TERRAIN DE PADEL N A PAS DE NOM A LUI : il le tient de sa RESSOURCE de reservation,
+      // qui revient en IRI nue. Le repli affichait donc un fragment d UUID sur chaque ligne, y
+      // compris dans le titre de la modale de reservation.
+      //
+      // Quelqu un avait vu le symptome et pose ce repli plutot que d en chercher la cause : le
+      // meme geste que l UUID d article dans le journal de stock. On charge les ressources.
+      const [t, r, b, res] = await Promise.all([
         api.padelTerrains(),
         api.padelReservations(),
         api.beneficiaires(),
+        api.reservationRessources().catch(() => null),
       ])
       setTerrains(membres(t))
       setReservations(membres(r))
       setBeneficiaires(membres(b))
+      setRessources(res ? membres(res) : [])
     } catch (e) {
       setErreur(e.message)
     } finally {
@@ -133,7 +142,7 @@ function TerrainsSection({ etabActif, droits }) {
               <tbody>
                 {ouvertes.map((r) => (
                   <tr key={r.id}>
-                    <td><span className="nm">{nomTerrain(r.terrain)}</span></td>
+                    <td><span className="nm">{nomTerrain(r.terrain, ressources, terrains)}</span></td>
                     <td>{r.reservation?.debut ? dateHeureFr(r.reservation.debut) : '—'}</td>
                     <td>
                       {r.niveauViseMin != null || r.niveauViseMax != null ? (
@@ -186,7 +195,7 @@ function TerrainsSection({ etabActif, droits }) {
               <tbody>
                 {terrains.map((t) => (
                   <tr key={t.id}>
-                    <td><span className="nm">{nomTerrain(t)}</span></td>
+                    <td><span className="nm">{nomTerrain(t, ressources, terrains)}</span></td>
                     <td>{t.type ? mot(t.type) : '—'}</td>
                     <td>
                       {(t.dureesAutoriseesMinutes || []).map((d) => `${d} min`).join(' · ') || '—'}
@@ -221,6 +230,8 @@ function TerrainsSection({ etabActif, droits }) {
       </section>
 
       <ReservationModal
+        ressources={ressources}
+        terrains={terrains}
         terrain={reservation}
         beneficiaires={beneficiaires}
         onClose={() => setReservation(null)}
@@ -229,6 +240,8 @@ function TerrainsSection({ etabActif, droits }) {
       />
 
       <RejoindreModal
+        ressources={ressources}
+        terrains={terrains}
         partie={rejoindre}
         beneficiaires={beneficiaires}
         onClose={() => setRejoindre(null)}
@@ -237,6 +250,8 @@ function TerrainsSection({ etabActif, droits }) {
       />
 
       <EclairageModal
+        ressources={ressources}
+        terrains={terrains}
         terrain={eclairage}
         onClose={() => setEclairage(null)}
         onFait={(m) => { setEclairage(null); setSucces(m) }}
@@ -246,7 +261,7 @@ function TerrainsSection({ etabActif, droits }) {
   )
 }
 
-function ReservationModal({ terrain, beneficiaires, onClose, onFait, onErreur }) {
+function ReservationModal({ terrain, ressources, terrains, beneficiaires, onClose, onFait, onErreur }) {
   const [debut, setDebut] = useState('')
   const [duree, setDuree] = useState('')
   const [organisateur, setOrganisateur] = useState('')
@@ -292,7 +307,7 @@ function ReservationModal({ terrain, beneficiaires, onClose, onFait, onErreur })
   }
 
   return (
-    <Modal open={!!terrain} onClose={onClose} titre={terrain ? `Réserver — ${nomTerrain(terrain)}` : ''}>
+    <Modal open={!!terrain} onClose={onClose} titre={terrain ? `Réserver — ${nomTerrain(terrain, ressources, terrains)}` : ''}>
       {terrain && (
         <form onSubmit={envoyer}>
           <div className="grid" style={{ gridTemplateColumns: '2fr 1fr', gap: 10 }}>
@@ -371,7 +386,7 @@ function ReservationModal({ terrain, beneficiaires, onClose, onFait, onErreur })
   )
 }
 
-function RejoindreModal({ partie, beneficiaires, onClose, onFait, onErreur }) {
+function RejoindreModal({ partie, ressources, terrains, beneficiaires, onClose, onFait, onErreur }) {
   const [joueur, setJoueur] = useState('')
   const [enCours, setEnCours] = useState(false)
 
@@ -397,7 +412,7 @@ function RejoindreModal({ partie, beneficiaires, onClose, onFait, onErreur }) {
       {partie && (
         <form onSubmit={envoyer}>
           <p style={{ marginTop: 0 }}>
-            {nomTerrain(partie.terrain)}
+            {nomTerrain(partie.terrain, ressources, terrains)}
             {partie.reservation?.debut ? ` — ${dateHeureFr(partie.reservation.debut)}` : ''}.
           </p>
 
@@ -442,7 +457,7 @@ function RejoindreModal({ partie, beneficiaires, onClose, onFait, onErreur }) {
 // Ce n'est pas un interrupteur : c'est le fait de passer outre l'automatisme. On le fait quand la
 // commande automatique n'a pas fonctionné, ou pour une partie qui se prolonge — et l'oubli
 // d'extinction se lit sur la facture d'électricité, pas sur un écran.
-function EclairageModal({ terrain, onClose, onFait, onErreur }) {
+function EclairageModal({ terrain, ressources, terrains, onClose, onFait, onErreur }) {
   const [action, setAction] = useState('allumage')
   const [motif, setMotif] = useState('')
   const [enCours, setEnCours] = useState(false)
@@ -465,7 +480,7 @@ function EclairageModal({ terrain, onClose, onFait, onErreur }) {
   }
 
   return (
-    <Modal open={!!terrain} onClose={onClose} titre={terrain ? `Éclairage — ${nomTerrain(terrain)}` : ''}>
+    <Modal open={!!terrain} onClose={onClose} titre={terrain ? `Éclairage — ${nomTerrain(terrain, ressources, terrains)}` : ''}>
       {terrain && (
         <form onSubmit={envoyer}>
           <div className="banner banner-warn">
@@ -671,6 +686,22 @@ function RetourMaterielModal({ location, onClose, onFait, onErreur }) {
 
 // Un terrain n'a pas de nom propre : il porte une ressource. Le repli sur l'identifiant court évite
 // une ligne vide dans un tableau où chaque ligne est un lieu physique.
-function nomTerrain(t) {
-  return t?.ressource?.libelle || t?.ressource?.nom || t?.libelle || `Terrain ${String(t?.id || '').slice(0, 8)}`
+// LE NOM D UN TERRAIN VIENT DE SA RESSOURCE, QUI ARRIVE EN IRI.
+//
+// `PadelTerrain` ne porte pas de nom : il tient le sien de `ReservationRessource`, rendue
+// en IRI nue. Le repli affichait donc un fragment d UUID -- constate a l ecran le 28/08, sur le seul
+// terrain de la preprod. On resout contre la liste des ressources ; le repli reste, pour le cas
+// ou la lecture des ressources echoue, mais il ne sert plus au cas normal.
+function nomTerrain(t, ressources, terrains) {
+  // DEUX NIVEAUX D IRI, ET LE PREMIER SE VOYAIT MOINS QUE LE SECOND.
+  //
+  // Corriger la resolution de la RESSOURCE a fait apparaitre les noms dans le tableau des
+  // terrains -- et pas dans celui des parties ouvertes, ou `partie.terrain` est lui-meme une
+  // IRI. Une correction partielle est une correction qui ment sur son etendue : on resout donc
+  // le terrain avant sa ressource.
+  const terrain = resoudre(t, terrains) || t
+  const r = resoudre(terrain?.ressource, ressources)
+  return r?.libelle || r?.nom
+    || terrain?.ressource?.libelle || terrain?.ressource?.nom || terrain?.libelle
+    || `Terrain ${String(terrain?.id || (typeof t === 'string' ? t.split('/').pop() : '') || '').slice(0, 8)}`
 }
