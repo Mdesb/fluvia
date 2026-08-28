@@ -161,24 +161,23 @@ const METHODES_JS = new Set([
 // qui lance l'outil recommence le même travail d'élimination — et un outil qu'on doit re-trier en
 // entier à chaque passage finit par ne plus être lancé.
 //
-// ⚠ On n'ajoute ici que ce qu'on a VÉRIFIÉ, jamais ce qu'on suppose. Une entrée de trop et l'outil
-// se met à taire un vrai défaut, ce qui est exactement ce qu'il sert à empêcher.
+// ⚠ On n'ajoute ici que ce qu'on a VÉRIFIÉ EN OBSERVANT, jamais ce qu'on déduit du code. C'est la
+// leçon du 28/08 et elle a été payée : j'y avais mis `segment` en raisonnant — « c'est un objet
+// local qui porte déjà un segment complet » — sans ouvrir l'écran. La modale affichait
+// « Aperçu — undefined » sur chaque aperçu. Le signalement était juste, mon arbitrage était faux.
+//
+// Chaque entrée dit donc COMMENT elle a été vérifiée, pas seulement sa conclusion. Une entrée de
+// trop et l'outil se met à taire un vrai défaut — exactement ce qu'il sert à empêcher.
 const TRANCHES = new Map([
-  ['pmv', 'FicheClient360Provider compose « pmv » à la main comme un tableau simple : ce n’est pas '
-    + 'la relation PorteMonnaieVirtuel, juste le même nom.'],
-  ['etat', 'Carte locale (`etats[s.id]` dans Musée, `{ article, restant }` dans Stock), pas une '
-    + 'relation sérialisée.'],
-  ['grille', 'TypeTarif expose bien trois propriétés dans `grille:read` : la relation EST embarquée.'],
-  // ⚠ `segment` A ÉTÉ RETIRÉ DE CETTE TABLE, ET C'EST L'ENTRÉE LA PLUS INSTRUCTIVE DU FICHIER.
-  //
-  // Je l'y avais mise le 28/08 : « objet local de l'aperçu de campagne, qui porte déjà un segment
-  // complet ». C'était faux. L'appelant écrit `setApercu({ segment, ...reponse })` et la réponse du
-  // serveur porte SA PROPRE clé `segment` — une chaîne — qui écrase l'objet local par le spread.
-  // La modale affichait « Aperçu — undefined » sur chaque aperçu.
-  //
-  // Je l'avais classée en raisonnant sur le code, sans ouvrir l'écran. Le signalement était juste et
-  // l'arbitrage était faux — précisément le mode de défaillance que l'avertissement ci-dessus
-  // annonce. Une mise à l'écart se gagne en OBSERVANT, jamais en déduisant.
+  ['pmv', 'CONSTATÉ : /api/clients/{id}/fiche-360 rend « pmv » à null ou composé à la main par '
+    + 'FicheClient360Provider, jamais une IRI. Le nom entre en collision avec la relation '
+    + 'PorteMonnaieVirtuel. (Aucun client de préprod ne porte de porte-monnaie : la forme '
+    + 'renseignée n’a pas pu être vue à l’écran, seulement lue dans le fournisseur.)'],
+  ['etat', 'CONSTATÉ À L’ÉCRAN : le message d’agent du Musée s’affiche, donc « etats[s.id] » est '
+    + 'bien une carte locale ; idem pour « { article, restant } » dans Stock. — Cette vérification '
+    + 'a révélé un AUTRE défaut au passage : le message s’affichait sur une salle vide.'],
+  ['grille', 'CONSTATÉ SUR LA RÉPONSE : /api/grille_tarifaires rend « typeTarif » EMBARQUÉ, avec '
+    + 'son « nom ». TypeTarif expose bien trois propriétés dans « grille:read ».'],
   // Localisée, et pas générale : dans l'écran Stock, `article` est le champ d'un objet composé sur
   // place (`{ article, restant }`). Ailleurs, `article` peut parfaitement être une vraie relation —
   // on n'éteint donc le signal que dans ce fichier.

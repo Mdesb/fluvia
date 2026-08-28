@@ -104,9 +104,22 @@ function SallesSection({ etabActif }) {
     recharger()
   }, [recharger])
 
+  // UNE ALERTE TOUJOURS ALLUMEE EST UNE ALERTE QUE PERSONNE NE LIT.
+  //
+  // `messageAgent` n'est PAS un événement : c'est le texte configuré de la politique de délestage
+  // — la consigne à donner AU MOMENT où la salle sature. `SalleEtatLiveProvider` le rend
+  // inconditionnellement, saturation ou non.
+  //
+  // L ecran le montrait donc en permanence, en bandeau d avertissement en tete de page. Constate
+  // sur la preprod : << Salle des sarcophages -- Salle saturee : reguler l entree >> affiche sur
+  // une salle a ZERO present pour un seuil de vingt. Le jour ou elle sature vraiment, le bandeau
+  // est identique -- donc il ne dit plus rien.
+  //
+  // Le fournisseur calcule pourtant `seuilAtteint` et `preAlerteAtteinte`, que rien ne lisait.
+  // Ce sont eux qui décident si la consigne s'applique MAINTENANT.
   const messages = salles
     .map((s) => ({ salle: s, etat: etats[s.id] }))
-    .filter((x) => x.etat?.messageAgent)
+    .filter((x) => x.etat?.messageAgent && (x.etat.seuilAtteint || x.etat.preAlerteAtteinte))
 
   return (
     <>
