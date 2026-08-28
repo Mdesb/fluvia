@@ -160,8 +160,20 @@ export default function Sport({ etabActif, droits = [] }) {
                 <span className="sub">
                   {quandHeure(e.horodatage)} · {depuis(e.horodatage)}
                 </span>
-                {e.declenchePar?.identifiantSupport && (
-                  <span className="sub">support {e.declenchePar.identifiantSupport}</span>
+                {/* QUI A DÉCLENCHÉ, ET POURQUOI ON LE DIT MÊME QUAND ON NE PEUT PAS LE LIRE.
+                    `EvenementSOS.declenchePar` pointe `Support` (le badge), qui n'expose rien dans
+                    le groupe `sos:read` : le champ revient en IRI nue et la mention ne s'affichait
+                    jamais. Elle disparaissait en silence — indiscernable d'une alerte déclenchée
+                    sans badge, par un bouton mural par exemple.
+                    Sur un appel d'urgence, « un badge a déclenché mais je ne peux pas le nommer »
+                    et « aucun badge » ne mènent pas au même endroit : le premier identifie une
+                    personne, le second non. On distingue les deux. */}
+                {e.declenchePar && (
+                  <span className="sub">
+                    {typeof e.declenchePar === 'object' && e.declenchePar.identifiantSupport
+                      ? `support ${e.declenchePar.identifiantSupport}`
+                      : 'déclenché par un badge — identifiant non transmis'}
+                  </span>
                 )}
                 {peutTraiter && (
                   <button

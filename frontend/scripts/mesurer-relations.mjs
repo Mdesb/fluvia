@@ -171,6 +171,11 @@ const TRANCHES = new Map([
   ['grille', 'TypeTarif expose bien trois propriétés dans `grille:read` : la relation EST embarquée.'],
   ['segment', 'Objet local de l’aperçu de campagne, qui porte déjà un segment complet lu depuis '
     + '/api/segments.'],
+  // Localisée, et pas générale : dans l'écran Stock, `article` est le champ d'un objet composé sur
+  // place (`{ article, restant }`). Ailleurs, `article` peut parfaitement être une vraie relation —
+  // on n'éteint donc le signal que dans ce fichier.
+  ['pages/Stock.jsx|article', 'Champ d’un objet local `{ article, restant }` construit par l’écran '
+    + 'pour la modale de correction, pas une relation sérialisée.'],
 ])
 
 const certains = []
@@ -187,7 +192,12 @@ for (const fichier of fichiers(FRONT, (n) => n.endsWith('.jsx') || n.endsWith('.
       const declarations = parPropriete.get(propriete)
       if (!declarations) continue
       if (METHODES_JS.has(sousPropriete)) continue
-      if (TRANCHES.has(propriete)) continue
+      // Une entrée peut être générale (`pmv`) ou LOCALISÉE (`pages/Stock.jsx|article`). La forme
+      // localisée existe pour un cas précis : `article` est un objet local dans l'écran Stock, mais
+      // ce serait une vraie relation ailleurs. Écarter le nom partout aurait fait taire un défaut
+      // futur dans un autre fichier — une mise à l'écart doit être aussi étroite que la preuve.
+      const cheminRelatif = relative(RACINE, fichier).replace(/\\/g, '/').replace(/^src\//, '')
+      if (TRANCHES.has(propriete) || TRANCHES.has(`${cheminRelatif}|${propriete}`)) continue
       // `.id` est le seul champ qu'une relation EMBARQUÉE porte toujours, et c'est aussi ce qu'on
       // extrait légitimement d'une IRI. On ne le signale pas.
       if (sousPropriete === 'id') continue
