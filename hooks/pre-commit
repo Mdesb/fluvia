@@ -96,6 +96,10 @@ lancer_gf garde-fou-cloisonnement.php || ECHEC=1
 # Une suppression dans un up() de migration doit etre voulue et le dire (D32).
 [ -f "$RACINE/bin/garde-fou-drop-migrations.php" ] && { lancer_gf garde-fou-drop-migrations.php || ECHEC=1; }
 
+# Lier un OBJET a un parametre de requete sans dire son type (D58). Doctrine passe l'identifiant
+# sans son type `uuid` : la requete reste valide et compte zero, sans rien signaler.
+[ -f "$RACINE/bin/garde-fou-liaisons-objet.php" ] && { lancer_gf garde-fou-liaisons-objet.php || ECHEC=1; }
+
 # Nommage : sur les fichiers **indexés** et ajoutés. `--cached` est ce qui sera réellement commité,
 # et c'est aussi ce qui évite de dépendre d'une révision de référence inexistante à ce stade.
 if [ -f "$RACINE/bin/garde-fou-nommage-anglais.php" ]; then

@@ -239,6 +239,17 @@ else
     executer "Suppressions en migration (D32)" php_racine bin/garde-fou-drop-migrations.php
 fi
 
+# 16. Lier un OBJET à un paramètre de requête sans dire son type (D58).
+#     Doctrine passe l'identifiant SANS son type `uuid` : la requête reste valide et compte zéro,
+#     sans exception ni avertissement. Deux modules en sont morts en silence le 28/08 — le solde
+#     de fidélité ne bougeait jamais, la file d'attente Smart Flow donnait le rang 1 à tout le
+#     monde. Une comparaison mal typée ne produit pas d'erreur, elle produit un vide.
+if [ -n "${REFERENCE:-}" ]; then
+    executer "Liaisons d'objet (D58)" php_racine bin/garde-fou-liaisons-objet.php "--contre=$REFERENCE"
+else
+    executer "Liaisons d'objet (D58)" php_racine bin/garde-fou-liaisons-objet.php
+fi
+
 # 5. i18n : pas de chaîne d'UI en dur — SANS OBJET tant que la couche i18n n'existe pas (aucun
 #    catalogue, aucun usage du traducteur dans app/src). Acté par l'intégrateur le 21/08.
 # 6. CSRF — SANS OBJET : tous les pare-feux sont `stateless: true` et l'authentification est un JWT

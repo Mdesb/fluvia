@@ -14,7 +14,7 @@
         "declare est refuse des son apparition."
     ],
     "scelle": {
-        "plafond": 2
+        "plafond": 1
     },
     "entrees": {
         "index:support_ft_article_recherche": {
@@ -23,13 +23,6 @@
             "valeur": "(non déclaré au mapping)",
             "migration": "Version20260817205431.php",
             "entite": "Support/Entity/ArticleAide.php"
-        },
-        "reservation_regle_annulation.issue_credit_no_show": {
-            "table": "reservation_regle_annulation",
-            "colonne": "issue_credit_no_show",
-            "valeur": "'restored_with_reschedule'",
-            "migration": "Version20260824090000.php",
-            "entite": "Reservation/Entity/RegleAnnulation.php"
         }
     }
 }

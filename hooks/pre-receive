@@ -301,6 +301,12 @@ while read -r ancien nouveau ref; do
     fi
 
 
+    # Lier un OBJET a un parametre de requete sans dire son type (D58).
+    if [ -f "$ARBRE/bin/garde-fou-liaisons-objet.php" ]; then
+        echo "── Liaisons d'objet (D58)"
+        lancer garde-fou-liaisons-objet.php "--contre=$BASE"
+    fi
+
     # ⚠ FILET DE COMPLÉTUDE — la leçon du 24/08, et elle a coûté cher.
     #
     # Ce hook n'appelle pas `bin/garde-fous.sh` : il doit calculer les fichiers ajoutés sur

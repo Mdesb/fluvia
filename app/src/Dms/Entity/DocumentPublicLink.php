@@ -28,6 +28,8 @@ use Symfony\Component\Uid\Uuid;
 #[ORM\Entity]
 #[ORM\Table(name: 'dms_document_public_link')]
 #[ORM\Index(columns: ['document_id'], name: 'IDX_DMS_PUBLIC_LINK_DOCUMENT')]
+// La purge des liens expires les balaie par date : sans cet index elle scanne la table.
+#[ORM\Index(columns: ['expires_at'], name: 'idx_dms_public_link_expires_at')]
 #[ApiResource(
     shortName: 'DocumentPublicLink',
     operations: [
@@ -79,7 +81,8 @@ class DocumentPublicLink
     private ?DocumentVersion $version = null;
 
     /** sha256 hex du jeton — jamais le clair. N'est délibérément pas dans `document_public_link:read`. */
-    #[ORM\Column(name: 'token_hash', length: 64, unique: true)]
+    // `fixed` = CHAR : sha256 hexadecimal, longueur invariable.
+    #[ORM\Column(name: 'token_hash', length: 64, unique: true, options: ['fixed' => true])]
     private string $tokenHash;
 
     #[ORM\Column(name: 'expires_at', type: 'datetime_immutable')]
@@ -99,7 +102,7 @@ class DocumentPublicLink
     #[Groups(['document_public_link:read'])]
     private \DateTimeImmutable $createdAt;
 
-    #[ORM\Column(name: 'access_count')]
+    #[ORM\Column(name: 'access_count', options: ['default' => 0])]
     #[Groups(['document_public_link:read'])]
     private int $accessCount = 0;
 

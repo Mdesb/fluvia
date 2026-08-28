@@ -29,6 +29,10 @@ use Symfony\Component\Uid\Uuid;
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'dms_document_version')]
+// Deux index poses par migration le 22/08 et jamais declares : la deduplication par
+// empreinte, et le tri chronologique des versions.
+#[ORM\Index(columns: ['file_hash'], name: 'idx_dms_version_file_hash')]
+#[ORM\Index(columns: ['uploaded_at'], name: 'idx_dms_version_uploaded_at')]
 #[ORM\UniqueConstraint(name: 'uniq_dms_version_document_number', columns: ['document_id', 'version_number'])]
 #[ORM\UniqueConstraint(name: 'uniq_dms_version_storage_key', columns: ['storage_key'])]
 #[ApiResource(
@@ -65,7 +69,9 @@ class DocumentVersion
     #[ORM\Column(name: 'storage_key', length: 190, unique: true)]
     private string $storageKey;
 
-    #[ORM\Column(name: 'file_hash', length: 64)]
+    // `fixed` = CHAR et non VARCHAR : une empreinte sha256 fait toujours 64 caracteres, et la
+    // base le savait deja. Sans ce mot, Doctrine voulait la retrograder en VARCHAR.
+    #[ORM\Column(name: 'file_hash', length: 64, options: ['fixed' => true])]
     #[Groups(['document_version:read'])]
     private string $fileHash;
 

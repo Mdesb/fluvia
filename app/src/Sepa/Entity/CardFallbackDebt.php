@@ -28,6 +28,9 @@ use Symfony\Component\Uid\Uuid;
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'sepa_card_fallback_debt')]
+// Pose par migration le 26/08 et jamais declare : Doctrine voulait le SUPPRIMER. Il sert
+// la seule requete chaude du lot -- les dettes echues et non encore collectees.
+#[ORM\Index(columns: ['due_date', 'collected_at'], name: 'idx_card_fallback_due')]
 #[ORM\UniqueConstraint(name: 'uniq_card_fallback_mandate_origin', columns: ['mandate_id', 'origin_reference'])]
 class CardFallbackDebt
 {

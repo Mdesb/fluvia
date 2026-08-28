@@ -106,7 +106,10 @@ final class RevenueRecoveryEventSubscriberTest extends TestCase
     {
         $event = $this->evenement('booking.no_show', ['amountAtRisk' => 1000]);
 
-        $engine = $this->createMock(RecoveryEngine::class);
+        // `createStub` et non `createMock` : on ne vérifie RIEN sur ce moteur, on le fait
+        // seulement échouer. Un mock sans attente est une doublure qui se fait passer pour un
+        // contrôle — PHPUnit le signale, et il a raison.
+        $engine = $this->createStub(RecoveryEngine::class);
         $engine->method('handle')->willThrowException(new \RuntimeException('panne simulée'));
 
         $logger = $this->createMock(LoggerInterface::class);
@@ -124,7 +127,10 @@ final class RevenueRecoveryEventSubscriberTest extends TestCase
     {
         $event = $this->evenement('booking.no_show', ['amountAtRisk' => 1000]);
 
-        $engine = $this->createMock(RecoveryEngine::class);
+        // `createStub` et non `createMock` : on ne vérifie RIEN sur ce moteur, on le fait
+        // seulement échouer. Un mock sans attente est une doublure qui se fait passer pour un
+        // contrôle — PHPUnit le signale, et il a raison.
+        $engine = $this->createStub(RecoveryEngine::class);
         $engine->method('handle')->willThrowException(new \RuntimeException('panne simulée'));
 
         $subscriber = new RevenueRecoveryEventSubscriber($engine);
