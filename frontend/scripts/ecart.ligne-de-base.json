@@ -29,14 +29,14 @@
         "Le script REFUSE de le relever. Un plafond qui remonte n est plus un cliquet, c est un",
         "compteur."
     ],
-    "plafond": 743,
+    "plafond": 739,
     "releve": {
-        "exposees": 1141,
+        "exposees": 1142,
         "sansEcran": 0,
-        "attendues": 1141,
-        "appelees": 402,
-        "atteignables": 398,
-        "inatteignables": 743,
+        "attendues": 1142,
+        "appelees": 407,
+        "atteignables": 403,
+        "inatteignables": 739,
         "orphelins": [
             "comptesComptables  (back-office)",
             "grilleTarifaires  (back-office)",
@@ -50,8 +50,8 @@
         "parFront": [
             {
                 "nom": "back-office",
-                "appelees": 381,
-                "atteignables": 377
+                "appelees": 386,
+                "atteignables": 382
             },
             {
                 "nom": "boutique en ligne",
@@ -101,8 +101,8 @@
                 10
             ],
             [
-                "ouverture",
-                9
+                "opening",
+                10
             ],
             [
                 "billing",
@@ -161,7 +161,7 @@
                 5
             ],
             [
-                "agenda",
+                "calendar",
                 5
             ],
             [
@@ -209,6 +209,10 @@
                 4
             ],
             [
+                "limite",
+                4
+            ],
+            [
                 "point",
                 3
             ],
@@ -226,6 +230,10 @@
             ],
             [
                 "referral",
+                3
+            ],
+            [
+                "opportunities",
                 3
             ],
             [
@@ -270,10 +278,6 @@
             ],
             [
                 "projects",
-                2
-            ],
-            [
-                "opportunities",
                 2
             ],
             [
@@ -466,10 +470,6 @@
             ],
             [
                 "demande",
-                1
-            ],
-            [
-                "limite",
                 1
             ],
             [

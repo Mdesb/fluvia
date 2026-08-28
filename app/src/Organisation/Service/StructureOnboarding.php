@@ -8,6 +8,10 @@ use App\Caisse\Entity\PointDeVente;
 use App\Fonctionnalite\Enum\Metier;
 use App\Fonctionnalite\Service\Fonctionnalites;
 use App\Legal\Entity\LegalIdentity;
+use App\Compta\Entity\ProfilExploitant;
+use App\Compta\Entity\TauxTva;
+use App\Compta\Enum\ReferentielComptable;
+use App\Compta\Enum\TypeExploitant;
 use App\Organisation\Entity\Etablissement;
 use App\Organisation\Entity\Groupe;
 use App\Organisation\Entity\Region;
@@ -50,6 +54,25 @@ final readonly class StructureOnboarding
 {
     /** Ce qu'on encaisse partout, et qui ne demande aucun matériel. */
     private const MOYENS_PAR_DEFAUT = ['especes', 'cb'];
+
+    /**
+     * LES TAUX DE TVA FRANÇAIS, POSÉS D'OFFICE.
+     *
+     * C'est de la base légale : un exploitant n'a pas à la saisir, et le lui demander autorise 17,3 %
+     * ou un « taux normal » à 5,5 %. Il masque ce qu'il n'utilise pas — `TauxTva::$actif` existe déjà
+     * pour cela — au lieu de créer ce qu'il connaît mal.
+     *
+     * ⚠ France seulement. `Etablissement` ne porte aucun pays : le jour où un client belge arrivera,
+     * ce tableau ne saura pas quoi proposer. C'est un préalable de modèle, pas un oubli d'ici.
+     *
+     * @var list<array{0: string, 1: string}>
+     */
+    private const TAUX_TVA_FRANCE = [
+        ['20.00', 'Taux normal 20 %'],
+        ['10.00', 'Taux intermédiaire 10 %'],
+        ['5.50', 'Taux réduit 5,5 %'],
+        ['2.10', 'Taux particulier 2,1 %'],
+    ];
 
     /**
      * Le métier déduit du code NAF publié par l'annuaire.
@@ -131,6 +154,13 @@ final readonly class StructureOnboarding
 
         $this->entityManager->persist($this->identiteLegale($donnees, $raisonSociale, $etablissement));
 
+        // LE PROFIL EXPLOITANT ET LES TAUX, SANS QUOI ON NE PEUT PAS VENDRE.
+        //
+        // « Avant de pouvoir vendre » exige un taux de TVA ; un taux exige un profil exploitant ; et
+        // aucun écran ne permettait d'en créer un. La mise en service s'arrêtait là, pour tout le
+        // monde, sans que rien n'indique par où sortir.
+        $this->creerProfilComptable($donnees, $etablissement);
+
         $this->entityManager->flush();
 
         // LE PRESET DE SECTEUR, APRES LE FLUSH : il a besoin d'un etablissement qui existe.
@@ -176,6 +206,63 @@ final readonly class StructureOnboarding
      *
      * @param array<string, mixed> $donnees
      */
+    /**
+     * Le profil comptable de la structure, et ses taux de TVA.
+     *
+     * LE TYPE SE DÉDUIT DE LA NATURE JURIDIQUE, il ne se demande pas. Les codes INSEE commençant par
+     * `4` désignent les personnes morales de droit public ; les autres sont privées. C'est le même
+     * geste que le métier déduit du code NAF : poser une question dont on a la réponse est une
+     * question de trop.
+     *
+     * ⚠ ET CE N'EST PAS QU'UNE ÉTIQUETTE. `SelecteurPaiementEnLigne` choisit le prestataire de
+     * paiement SUR CE TYPE : laisser le défaut `RegieDirecte` aurait envoyé une salle de sport
+     * encaisser par PayFiP, le portail de l'État. Le référentiel comptable suit la même logique —
+     * M57 pour une collectivité, le plan comptable général pour une société.
+     *
+     * @param array<string, mixed> $donnees
+     */
+    private function creerProfilComptable(array $donnees, Etablissement $etablissement): void
+    {
+        // Le SIREN est la racine du SIRET : neuf chiffres, la contrainte de l'entité l'exige.
+        $siret = preg_replace('/\D/', '', (string) ($donnees['siret'] ?? '')) ?? '';
+        $siren = substr($siret, 0, 9);
+        if (\strlen($siren) !== 9) {
+            // Sans SIREN valide, le profil ne passerait pas la validation. On n'invente pas un
+            // numéro d'entreprise : l'exploitant le complétera, et le reste de l'ouverture tient.
+            return;
+        }
+
+        $publique = str_starts_with((string) ($donnees['formeJuridique'] ?? ''), '4');
+
+        $profil = (new ProfilExploitant())
+            ->setSiren($siren)
+            ->setEtablissementPrincipal($etablissement)
+            ->setType($publique ? TypeExploitant::RegieDirecte : TypeExploitant::GroupePrive)
+            ->setReferentielComptable($publique ? ReferentielComptable::M57 : ReferentielComptable::Pcg);
+
+        $this->entityManager->persist($profil);
+
+        foreach (self::TAUX_TVA_FRANCE as [$taux, $libelle]) {
+            $this->entityManager->persist(
+                (new TauxTva())
+                    ->setProfilExploitant($profil)
+                    ->setTaux($taux)
+                    ->setLibelle($libelle)
+                    ->setActif(true)
+            );
+        }
+
+        // Le hors-champ n'est pas un taux à zéro parmi d'autres : il dit « cette opération n'entre
+        // pas dans le champ de la TVA ». Le confondre avec une exonération fausse la déclaration.
+        $this->entityManager->persist(
+            (new TauxTva())
+                ->setProfilExploitant($profil)
+                ->setTaux('0.00')
+                ->setLibelle(TauxTva::LIBELLE_HORS_CHAMP)
+                ->setActif(true)
+        );
+    }
+
     private function identiteLegale(array $donnees, string $raisonSociale, Etablissement $etablissement): LegalIdentity
     {
         $texte = static fn (string $cle): ?string => match (true) {
