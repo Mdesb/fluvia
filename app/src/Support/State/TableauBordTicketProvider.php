@@ -6,12 +6,11 @@ namespace App\Support\State;
 
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProviderInterface;
-use App\Securite\Entity\Affectation;
 use App\Securite\Entity\Utilisateur;
+use App\Securite\Service\ContexteEtablissement;
 use App\Securite\Service\CalculateurDroits;
 use App\Support\Entity\TicketSupport;
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Query\Expr\Join;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\RequestStack;
 
@@ -29,6 +28,7 @@ final class TableauBordTicketProvider implements ProviderInterface
         private readonly EntityManagerInterface $em,
         private readonly RequestStack $requestStack,
         private readonly Security $security,
+        private readonly ContexteEtablissement $contexte,
         private readonly CalculateurDroits $calculateur,
     ) {
     }
@@ -40,14 +40,17 @@ final class TableauBordTicketProvider implements ProviderInterface
             return [];
         }
 
+        // Un tableau de bord compte ce que l'on REGARDE, pas ce a quoi on a droit. Filtrer sur le
+        // perimetre affichait la somme de plusieurs sites sous le titre d'un seul -- des chiffres
+        // justes au mauvais endroit, et rien pour le signaler.
+        $actif = $this->contexte->idActif();
+        if ($actif === null) {
+            return [];
+        }
+
         $qb = $this->em->getRepository(TicketSupport::class)->createQueryBuilder('t')
-            ->innerJoin(
-                Affectation::class,
-                'aff_tdb',
-                Join::WITH,
-                'IDENTITY(aff_tdb.etablissement) = IDENTITY(t.etablissement) AND IDENTITY(aff_tdb.utilisateur) = :tdb_utilisateur',
-            )
-            ->setParameter('tdb_utilisateur', $utilisateur->getId(), 'uuid')
+            ->andWhere('IDENTITY(t.etablissement) = :tdb_actif')
+            ->setParameter('tdb_actif', $actif, 'uuid')
             ->distinct()
             ->orderBy('t.dateCreation', 'DESC');
 

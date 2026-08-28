@@ -23,9 +23,8 @@ use App\Compta\Entity\ProfilExploitant;
 use App\Compta\Entity\Rad;
 use App\Compta\Entity\RegieRecettes;
 use App\Compta\Entity\TauxTva;
-use App\Securite\Entity\Affectation;
 use App\Securite\Entity\Utilisateur;
-use Doctrine\ORM\Query\Expr\Join;
+use App\Securite\Service\ContexteEtablissement;
 use Doctrine\ORM\QueryBuilder;
 use Symfony\Bundle\SecurityBundle\Security;
 
@@ -89,6 +88,7 @@ final class AccountingScopeExtension implements QueryCollectionExtensionInterfac
 
     public function __construct(
         private readonly Security $security,
+        private readonly ContexteEtablissement $contexte,
     ) {
     }
 
@@ -141,20 +141,24 @@ final class AccountingScopeExtension implements QueryCollectionExtensionInterfac
             return;
         }
 
-        // Même patron que `PerimetreVenteExtension` : l'utilisateur doit posséder une affectation sur
-        // l'établissement de la ressource. La jointure vaut filtre — une ressource sans affectation
-        // correspondante disparaît du résultat, elle n'est pas signalée comme interdite.
+        // Même patron que `PerimetreVenteExtension` : le filtre porte sur l'établissement ACTIF, et
+        // non sur le périmètre d'affectation du lecteur. Le module atteint l'établissement à travers
+        // le profil exploitant — chemin plus long, même axe.
+        //
+        // Le droit reste vérifié ailleurs : `idActif()` ne fait que lire l'en-tête, mais
+        // `CalculateurDroits::codesEffectifs()` ne retient que les affectations portant sur cet
+        // établissement, donc un en-tête hors périmètre ne donne aucun droit et le voter refuse en
+        // amont. Éprouvé par `AxeEtablissementActifTest`.
+        $actif = $this->contexte->idActif();
+        if ($actif === null) {
+            $queryBuilder->andWhere('1 = 0');
+
+            return;
+        }
+
         $queryBuilder
-            ->innerJoin(
-                Affectation::class,
-                'aff_accounting_scope',
-                Join::WITH,
-                sprintf(
-                    'IDENTITY(aff_accounting_scope.etablissement) = IDENTITY(%s) AND IDENTITY(aff_accounting_scope.utilisateur) = :accounting_scope_user',
-                    $chemin,
-                ),
-            )
-            ->setParameter('accounting_scope_user', $utilisateur->getId(), 'uuid')
+            ->andWhere(sprintf('IDENTITY(%s) = :accounting_scope_actif', $chemin))
+            ->setParameter('accounting_scope_actif', $actif, 'uuid')
             ->distinct();
     }
 }

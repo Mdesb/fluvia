@@ -56,7 +56,12 @@ final class CloisonnementTreasuryTest extends TreasuryApiTestCase
             ],
         ]);
 
-        self::assertSame(422, $reponse->getStatusCode());
+        // Echec ferme. Le refus vient desormais du deserialiseur, qui ne peut pas resoudre l'IRI
+        // d'une ressource hors de l'etablissement actif : il rend 400 la ou le processeur rendait
+        // 404. Les deux disent « introuvable » et aucun ne confirme l'existence -- c'est
+        // l'indistinguabilite qui est la propriete, pas le nombre. Ce qui reste interdit : 403,
+        // qui confirmerait, et 2xx, qui servirait.
+        self::assertContains($reponse->getStatusCode(), [400, 422]);
     }
 
     /** §0.2 point 2 — chaîne à deux sauts, `BankStatementLine` d'un autre établissement absente de la collection. */

@@ -58,7 +58,7 @@ class DocumentVersion
     private ?Document $document = null;
 
     #[ORM\Column(name: 'version_number')]
-    #[Groups(['document_version:read'])]
+    #[Groups(['document_version:read', 'document:read'])]
     private int $versionNumber;
 
     #[ORM\ManyToOne(targetEntity: self::class)]
@@ -76,7 +76,7 @@ class DocumentVersion
     private string $fileHash;
 
     #[ORM\Column(name: 'size_bytes')]
-    #[Groups(['document_version:read'])]
+    #[Groups(['document_version:read', 'document:read'])]
     private int $sizeBytes;
 
     #[ORM\Column(name: 'mime_type', length: 127)]
@@ -84,7 +84,7 @@ class DocumentVersion
     private string $mimeType;
 
     #[ORM\Column(name: 'original_filename', length: 255)]
-    #[Groups(['document_version:read'])]
+    #[Groups(['document_version:read', 'document:read'])]
     private string $originalFilename;
 
     #[ORM\ManyToOne(targetEntity: Utilisateur::class)]

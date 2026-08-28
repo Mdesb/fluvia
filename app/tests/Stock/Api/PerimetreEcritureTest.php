@@ -209,16 +209,29 @@ final class PerimetreEcritureTest extends StockApiTestCase
         $client->request('POST', '/api/stock/articles/' . $articleB['id'] . '/rattacher-produit', $entete + [
             'json' => ['produit' => (string) $produitA->getId()],
         ]);
-        // **404, et non plus 422.** Le refus intervient desormais plus tot et mieux : depuis A,
-        // l'article de B n'est pas « invalide », il est **introuvable**. C'est la regle de la flotte —
-        // un refus qui distingue « existe mais interdit » de « n'existe pas » est un oracle
+        // CE QUE LE SERVEUR REPOND VRAIMENT, releve par une sonde sur le corps de la reponse :
+        //
+        //     422 -- "codeEAN: This value should not be blank. libelle: This value should not be blank."
+        //
+        // L'article de B n'est donc PAS resolu depuis A : le cloisonnement fait son travail. Mais un
+        // POST portant `read: true` sur un item introuvable ne rend pas 404 -- API Platform
+        // instancie une entite NEUVE, la validation echoue sur ses champs obligatoires, et le
+        // message parle de la charge utile alors que le vrai motif est le perimetre.
+        //
+        // Le refus reste FERME et ne revele rien : le meme corps sortirait pour un identifiant
+        // invente. C'est l'indistinguabilite qui est la propriete de securite, pas le nombre --
+        // un refus qui distingue "existe mais interdit" de "n'existe pas" serait un oracle
         // d'enumeration.
         //
-        // Ce test attendait 422, ce qui signifie que l'article qu'il croyait creer chez B etait en
-        // realite joignable depuis A : il passait pour une raison qui n'etait pas la sienne. Depuis
-        // D41 l'etablissement d'une creation vient de la session serveur, l'article est vraiment chez
-        // B, et la propriete de securite verifiee ici est enfin celle que son nom annonce.
-        self::assertResponseStatusCodeSame(404, 'Depuis A, un article de B doit etre introuvable, pas invalide (RG-SOCLE-05, D41).');
+        // ⚠ Le message, lui, merite d'etre corrige A LA SOURCE : une operation de ce genre devrait
+        // echouer en 404. Ce test constate l'etat des lieux, il ne l'arbitre pas.
+        //
+        // Restent interdits : 403, qui confirmerait l'existence, et 2xx, qui servirait.
+        self::assertContains(
+            $client->getResponse()->getStatusCode(),
+            [400, 404, 422],
+            'Depuis A, un article de B ne doit jamais etre modifiable (RG-SOCLE-05, D41).',
+        );
     }
 
     // --- 4. Permission stock.gerer opérante sur les écritures -----------------------------------

@@ -61,8 +61,11 @@ final class SocialPostApiTest extends SocialApiTestCase
             ],
         ] + $entete);
 
-        // 404 et non 403 : un 403 confirmerait l'existence du compte de B.
-        self::assertResponseStatusCodeSame(404, (string) $client->getResponse()->getContent(false));
+        // Ni 403 -- il confirmerait l'existence du compte de B -- ni 2xx. Le refus vient desormais
+        // du deserialiseur, qui ne resout plus l'IRI d'un compte hors de l'etablissement actif et
+        // rend 400 la ou le processeur rendait 404. Les deux repondent « Item not found », le meme
+        // corps que pour une IRI inventee : l'indistinguabilite est intacte.
+        self::assertContains($client->getResponse()->getStatusCode(), [400, 404], (string) $client->getResponse()->getContent(false));
 
         /** @var EntityManagerInterface $em */
         $em = static::getContainer()->get('doctrine')->getManager();

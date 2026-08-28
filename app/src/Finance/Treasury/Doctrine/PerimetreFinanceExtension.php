@@ -12,9 +12,8 @@ use App\Finance\Treasury\Entity\BankAccount;
 use App\Finance\Treasury\Entity\BankStatementImport;
 use App\Finance\Treasury\Entity\BankStatementLine;
 use App\Finance\Treasury\Entity\TreasurySettings;
-use App\Securite\Entity\Affectation;
 use App\Securite\Entity\Utilisateur;
-use Doctrine\ORM\Query\Expr\Join;
+use App\Securite\Service\ContexteEtablissement;
 use Doctrine\ORM\QueryBuilder;
 use Symfony\Bundle\SecurityBundle\Security;
 
@@ -43,6 +42,7 @@ final class PerimetreFinanceExtension implements QueryCollectionExtensionInterfa
 
     public function __construct(
         private readonly Security $security,
+        private readonly ContexteEtablissement $contexte,
     ) {
     }
 
@@ -89,14 +89,16 @@ final class PerimetreFinanceExtension implements QueryCollectionExtensionInterfa
             $alias = $nouvelAlias;
         }
 
-        $condition = sprintf(
-            'IDENTITY(treasury_aff_perimetre.etablissement) = IDENTITY(%s.establishment) AND IDENTITY(treasury_aff_perimetre.utilisateur) = :treasury_perimetre_utilisateur',
-            $alias,
-        );
+        $actif = $this->contexte->idActif();
+        if ($actif === null) {
+            $queryBuilder->andWhere('1 = 0');
+
+            return;
+        }
 
         $queryBuilder
-            ->innerJoin(Affectation::class, 'treasury_aff_perimetre', Join::WITH, $condition)
-            ->setParameter('treasury_perimetre_utilisateur', $utilisateur->getId(), 'uuid')
+            ->andWhere(sprintf('IDENTITY(%s.establishment) = :treasury_perimetre_actif', $alias))
+            ->setParameter('treasury_perimetre_actif', $actif, 'uuid')
             ->distinct();
     }
 }

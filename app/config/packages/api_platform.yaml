@@ -99,3 +99,26 @@ api_platform:
         stateless: true
         cache_headers:
             vary: ['Content-Type', 'Authorization', 'Origin']
+
+        # ── PAGINATION ──────────────────────────────────────────────────────────────────────────
+        #
+        # Aucun bloc `pagination` n'etait declare : les defauts du composant s'appliquaient, soit
+        # 30 lignes par page et un client sans droit de le changer. Toutes les collections etaient
+        # donc coupees a 30, et les ~350 `itemsPerPage` ecrits dans `frontend/src/api/client.js`
+        # etaient sans effet -- verifie sur le reseau, `?itemsPerPage=1` rendait la liste entiere.
+        #
+        # Invisible chez nous : la plus grosse collection de la preproduction compte 15 lignes. Le
+        # defaut n'apparait qu'au trente-et-unieme enregistrement, c'est-a-dire chez le premier
+        # vrai client et jamais dans nos tests.
+        #
+        # `client_items_per_page` accorde au code ce qu'il demandait deja. `maximum_items_per_page`
+        # borne ce qu'on peut reclamer : sans plafond, une boucle qui demande cent mille lignes
+        # emporte la memoire du serveur.
+        #
+        # ⚠ Un plafond, quel qu'il soit, tronque en SILENCE. `totalItems` est dans chaque reponse
+        # et c'est a l'ecran de le comparer au nombre de lignes recues : c'est la seule chose qui
+        # transforme « il en manque » en « il en manque, et voici combien ».
+        pagination_enabled: true
+        pagination_client_items_per_page: true
+        pagination_items_per_page: 100
+        pagination_maximum_items_per_page: 500

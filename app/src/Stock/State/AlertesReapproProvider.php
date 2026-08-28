@@ -6,13 +6,12 @@ namespace App\Stock\State;
 
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProviderInterface;
-use App\Securite\Entity\Affectation;
 use App\Securite\Entity\Utilisateur;
+use App\Securite\Service\ContexteEtablissement;
 use App\Stock\ApiResource\AlerteReappro;
 use App\Stock\Entity\ArticleStock;
 use App\Stock\Service\ArithmetiqueDecimale;
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Query\Expr\Join;
 use Symfony\Bundle\SecurityBundle\Security;
 
 /**
@@ -26,23 +25,31 @@ final class AlertesReapproProvider implements ProviderInterface
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly Security $security,
+        private readonly ContexteEtablissement $contexte,
     ) {
     }
 
     public function provide(Operation $operation, array $uriVariables = [], array $context = []): array
     {
-        $qb = $this->em->getRepository(ArticleStock::class)->createQueryBuilder('a')
-            ->andWhere('a.actif = true');
-
+        // Deux corrections ici, et la seconde est la plus grave.
+        //
+        // L'AXE : une alerte de reapprovisionnement dit « il faut recommander », donc elle designe
+        // un site precis. Agregee sur le perimetre, elle melangeait les stocks de plusieurs sites.
+        //
+        // LE SENS DE L'ERREUR : le filtre n'etait pose que `if ($utilisateur instanceof
+        // Utilisateur)`. Sans utilisateur, AUCUN filtre -- la requete rendait le stock de tous les
+        // etablissements. Ecrit comme une precaution, se comportant comme une ouverture.
         $utilisateur = $this->security->getUser();
-        if ($utilisateur instanceof Utilisateur) {
-            $qb->innerJoin(
-                Affectation::class,
-                'aff_alerte',
-                Join::WITH,
-                'IDENTITY(aff_alerte.etablissement) = IDENTITY(a.etablissement) AND IDENTITY(aff_alerte.utilisateur) = :aff_alerte_utilisateur',
-            )->setParameter('aff_alerte_utilisateur', $utilisateur->getId(), 'uuid')->distinct();
+        $actif = $this->contexte->idActif();
+        if (!$utilisateur instanceof Utilisateur || $actif === null) {
+            return [];
         }
+
+        $qb = $this->em->getRepository(ArticleStock::class)->createQueryBuilder('a')
+            ->andWhere('a.actif = true')
+            ->andWhere('IDENTITY(a.etablissement) = :aff_alerte_actif')
+            ->setParameter('aff_alerte_actif', $actif, 'uuid')
+            ->distinct();
 
         /** @var list<ArticleStock> $articles */
         $articles = $qb->getQuery()->getResult();

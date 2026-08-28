@@ -13,14 +13,12 @@ use App\Caisse\Entity\ClotureZ;
 use App\Caisse\Entity\MouvementCaisse;
 use App\Caisse\Entity\PointDeVente;
 use App\Caisse\Entity\SessionCaisse;
-use App\Securite\Entity\Affectation;
 use App\Securite\Entity\Utilisateur;
 use App\Securite\Service\ContexteEtablissement;
 use App\Vente\Entity\Avoir;
 use App\Vente\Entity\CardRejection;
 use App\Vente\Entity\Vente;
 use App\Vente\Nf525\Entity\DailyClosure;
-use Doctrine\ORM\Query\Expr\Join;
 use Doctrine\ORM\QueryBuilder;
 use Symfony\Bundle\SecurityBundle\Security;
 

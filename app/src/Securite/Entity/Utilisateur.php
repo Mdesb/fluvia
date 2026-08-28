@@ -137,10 +137,26 @@ class Utilisateur implements UserInterface, PasswordAuthenticatedUserInterface
 
     #[ORM\Column(length: 180)]
     #[Assert\NotBlank]
-    // Le NOM voyage avec le ticket et le message, PAS l'adresse : lire une conversation demande de
-    // savoir qui parle, pas comment le joindre. `NotBlank` garantit qu'il y a toujours quelque
-    // chose a afficher — c'est ce qui permet de ne pas exposer l'e-mail en solution de repli.
-    #[Groups(['utilisateur:read', 'utilisateur:write', 'me:read', 'ticket:read', 'message:read'])]
+    // Cinq modules referencent `Utilisateur` sans qu'aucune de ses proprietes ne leur soit
+    // visible : la relation partait en IRI nue et l'ecran recevait une URL la ou il attend un
+    // nom. Le plus grave etait la file d'assistance, qui affichait « non affecte » sur un
+    // ticket pourtant pris en charge -- une absence deguisee en information.
+    //
+    // `message:read` s'ajoute a la liste de `main` : c'est lui qui nomme l'auteur de chaque bulle
+    // dans la messagerie d'assistance. Sans lui, chaque message d'un interlocuteur s'affiche
+    // « Auteur inconnu » -- le meme defaut, un cran plus loin dans le meme ecran.
+    //
+    // Seul `nom` rejoint ces groupes : une propriete sans groupe reste invisible meme quand
+    // son entite est embarquee, et c'est ce qui garde le reste de la fiche hors de portee.
+    // L'e-mail, en particulier, n'y est pas : lire une conversation demande de savoir qui parle,
+    // pas comment le joindre.
+    //
+    // L'attribut tient sur UNE ligne, comme partout ailleurs dans le depot. La version repliee
+    // sur plusieurs lignes ecrite d'abord etait valide pour PHP et illisible pour les outils :
+    // `relations-muettes.py` cessait de voir les groupes de cette propriete, et le compte des
+    // relations muettes MONTAIT au lieu de baisser. Une variante de forme qui n'apporte rien
+    // coute la mesure.
+    #[Groups(['utilisateur:read', 'utilisateur:write', 'me:read', 'caution_mouvement:read', 'activity:read', 'project_task:read', 'project:read', 'ticket:read', 'message:read', 'document_version:read'])]
     private string $nom = '';
 
     /**
