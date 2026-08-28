@@ -119,3 +119,52 @@ données.
 
 `front-acces-topologie`, poussée. 19 garde-fous verts à chaque commit, cliquet d'écart abaissé et
 gelé à 711 (**416 → 431 opérations atteignables**). Rien fusionné sur `main` : c'est à l'intégrateur.
+
+---
+
+## Suite de la nuit (après le premier rapport)
+
+### Deux gestes de supervision qui n'existaient nulle part
+
+La spec A-03 décrit un agent qui ouvre la porte lui-même devant un porteur bloqué, et un comptage
+« +1 » pour qui entre sans support. Les deux opérations existaient côté serveur depuis l'origine ;
+aucune interface ne les appelait. **Sans elles, un exploitant devant une barrière qui refuse à tort
+ouvre à la main, et le passage n'est nulle part** — ni dans la jauge, ni au journal, ni dans le
+comptage du soir.
+
+Deux boutons dans la barre de la supervision, chacun gardé par son droit réel. Le **motif est
+obligatoire**, et l'aide du champ dit pourquoi : un franchissement forcé sans motif est indiscernable
+d'une fraude quand on relit le journal six mois plus tard.
+
+### Trois défauts de plus, tous trouvés en cliquant
+
+7. **Le bandeau des scans recouvrait les boutons d'encaissement sur un téléphone.** Position fixe,
+   340 px de large, six lignes dépliées : sur 375 px, l'information passait devant le métier. Il
+   commence replié sous 768 px.
+8. **Le tri client ne suffisait pas** — voir défaut n°1 : il réordonne les 30 lignes reçues, il ne
+   change pas **le choix** de ces 30-là. Seul un `OrderFilter` serveur le corrige. Posé par
+   l'intégrateur dans la nuit.
+9. **`removeEspace()` est déployé et sans effet** : `var/cache/prod/serialization.php` date d'avant
+   le correctif. La carte qui décide qu'une collection est modifiable n'a pas été régénérée — donc
+   un correctif déployé peut se lire comme un correctif qui ne marche pas.
+
+### Ce que l'intégrateur a construit cette nuit, et ce qu'il en reste pour l'écran
+
+**« Ce produit ouvre telle ou telle zone » existe maintenant dans le moteur** : `DroitAcces` porte
+les espaces qu'il ouvre, une douzième étape de décision les vérifie, et un motif neuf —
+`zone_non_autorisee` — les distingue. Un droit sans espace déclaré ouvre tout : les titres déjà
+vendus continuent de passer.
+
+⚠ **Mais rien ne peut encore l'écrire** : pas de groupe d'écriture, pas de `Patch`, aucun appelant de
+`addAuthorisedSpace()`, et rien côté produit à recopier à la projection. La règle est juste, le test
+est vert, l'exploitant ne peut pas s'en servir. Signalé ; l'écran suit dès qu'il y a un chemin
+d'écriture.
+
+Le motif est déjà dans la table de vocabulaire, **distinct de `hors_portee`** : l'un est une
+installation à vérifier, l'autre une vente à faire, et ils se ressemblent dans un journal.
+
+### État final
+
+`front-acces-topologie`, fusionnée avec `origin/main`, poussée. 19 garde-fous verts, cliquet regelé à
+699 — **443 opérations atteignables contre 416 au début de la nuit**. Les quatre onglets, la
+supervision, la caisse et la fiche client revérifiés à l'écran après la fusion.
