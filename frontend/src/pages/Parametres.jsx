@@ -21,7 +21,9 @@ const SOUS = [
   ['referentiels', 'Catalogue & référentiels'],
   ['caisse', 'Caisse & moyens de paiement'],
   ['droits', 'Utilisateurs & droits'],
-  ['capacites', 'Capacités activables'],
+  // « Capacités activables » était le nom interne d'un mécanisme, pas celui d'un réglage. Maxime,
+  // à la revue : « je ne sais pas ce que c'est ».
+  ['capacites', 'Modules en service'],
   // Les horaires d'ouverture sont une CONFIGURATION du site, pas un écran de consultation : ils se
   // saisissent deux fois par an. Ils portent surtout la case qui fait refuser un passage à la
   // porte — elle n'a rien à faire dans un agenda qu'on ouvre pour regarder sa semaine.
@@ -372,7 +374,7 @@ function descripteurPointsDeVente(api, etabActif, moyens = []) {
   }
 }
 
-export default function Parametres({ etabActif, etablissements, droits = [] }) {
+export default function Parametres({ etabActif, etablissements, droits = [], onCapacitesChangees }) {
   const [ouvertureStructure, setOuvertureStructure] = useState(false)
   const [sousOnglet, setSousOnglet] = useState('entites')
 
@@ -511,7 +513,7 @@ export default function Parametres({ etabActif, etablissements, droits = [] }) {
         <ComptesDroits etabActif={etabActif} etablissements={etablissements} droits={droits} />
       )}
 
-      {sousOnglet === 'capacites' && <Capacites etabActif={etabActif} />}
+      {sousOnglet === 'capacites' && <Capacites etabActif={etabActif} onCapacitesChangees={onCapacitesChangees} />}
 
       {/* ⚠ ENTRE LES CONDITIONNELS DE SOUS-ONGLET, et c'est le point.
           Posée à l'intérieur de l'un d'eux — ce qui est arrivé deux fois — elle n'existe pas quand
@@ -1152,10 +1154,58 @@ function iriFin(v) {
 }
 
 // Capacités activables : catalogue socle croisé avec l'état par établissement (lecture).
-function Capacites({ etabActif }) {
+// LES MÉTIERS PROPOSÉS PAR LE SERVEUR, ET CE QUE CHACUN ALLUME.
+//
+// `App\Fonctionnalite\Config\PresetVerticale` fige un jeu de capacités par verticale. Le preset est
+// ADDITIF — vérifié dans `Fonctionnalites::appliquerPreset`, pas supposé : il n'éteint jamais une
+// capacité déjà active, et conserve les paramètres déjà saisis. C'est ce qui permet de le proposer
+// sans avertissement anxiogène : au pire il en allume une de trop, qu'on éteint d'un clic.
+const METIERS = [
+  ['piscine', 'Piscine'],
+  ['sport', 'Salle de sport / fitness'],
+  ['padel', 'Padel'],
+  ['patinoire', 'Patinoire'],
+  ['musee', 'Musée'],
+]
+
+// CE QUE CHANGE UNE ACTIVATION, ÉCRAN PAR ÉCRAN — ET SEULEMENT CE QU'ON PEUT PROUVER.
+//
+// Trois capacités commandent une entrée du menu de gauche (`components/AppShell.jsx`). Les autres
+// ouvrent des surfaces serveur (souscription, OCR, séjours, trésorerie) sans effet visible immédiat
+// dans cette application. On nomme les trois qu'on peut montrer, et on se tait sur les autres
+// plutôt que de promettre un effet qu'on n'a pas constaté.
+const EFFET_VISIBLE = {
+  controle_acces: 'Fait apparaître « Supervision » et « Badges & terminaux » dans le menu.',
+  reservation: 'Fait apparaître « Réservation » dans le menu.',
+  boutique_en_ligne: 'Fait apparaître « Boutique en ligne » dans le menu.',
+}
+
+const CATEGORIES = {
+  acces: 'Accès',
+  planning: 'Planning',
+  finance: 'Encaissement & recouvrement',
+  confort: 'Services aux visiteurs',
+  securite: 'Sécurité & réglementation',
+  vente: 'Vente',
+}
+
+// UN ONGLET NOMMÉ « ACTIVABLES » OÙ L'ON NE POUVAIT RIEN ACTIVER.
+//
+// L'écran lisait le catalogue et l'état, affichait douze lignes toutes marquées « inactive », et
+// n'offrait aucune action. Le sous-titre disait « feature flags par établissement » — du jargon de
+// développeur, en anglais, sur un écran d'exploitant. Maxime, à la revue : « je ne sais pas ce que
+// c'est ». Ce n'était pas un défaut de libellé : l'écran ne disait ni ce que ça fait, ni ce qu'on
+// est censé en faire, et le seul geste possible était de refermer l'onglet.
+//
+// `PATCH /etablissements/{id}/fonctionnalites` et `POST /etablissements/{id}/appliquer-preset`
+// existaient depuis le début.
+function Capacites({ etabActif, onCapacitesChangees }) {
   const [items, setItems] = useState([])
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
+  const [msg, setMsg] = useState(null)
+  const [busy, setBusy] = useState(null)
+  const [metier, setMetier] = useState('')
 
   const charger = useCallback(async () => {
     setChargement(true)
@@ -1180,35 +1230,121 @@ function Capacites({ etabActif }) {
     charger()
   }, [charger])
 
+  async function basculer(c) {
+    setBusy(c.code)
+    setMsg(null)
+    setErreur(null)
+    try {
+      await api.majFonctionnalite(etabActif, { capaciteCode: c.code, active: !c.active })
+      await charger()
+      // Le menu de gauche est construit sur `capacitesActives` de `/me` : sans ce rappel, on
+      // active « Réservation » et l'entrée n'apparaît qu'au prochain rechargement de la page.
+      await onCapacitesChangees?.()
+      setMsg(`« ${c.libelle || c.code} » ${c.active ? 'désactivé' : 'activé'}.`)
+    } catch (e) {
+      setErreur(erreurEcriture(e))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function appliquerPreset() {
+    if (!metier) return
+    setBusy('preset')
+    setMsg(null)
+    setErreur(null)
+    try {
+      const r = await api.appliquerPresetCapacites(etabActif, metier)
+      await charger()
+      await onCapacitesChangees?.()
+      const n = (r?.capacitesActivees || []).length
+      setMsg(`Jeu « ${METIERS.find(([v]) => v === metier)?.[1] || metier} » appliqué : ${n} capacité(s) active(s).`)
+    } catch (e) {
+      setErreur(erreurEcriture(e))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const actives = items.filter((c) => c.active).length
+  const parCategorie = []
+  for (const c of items) {
+    const groupe = parCategorie.find((g) => g.cle === c.categorie)
+    if (groupe) groupe.items.push(c)
+    else parCategorie.push({ cle: c.categorie, titre: CATEGORIES[c.categorie] || c.categorie || 'Autres', items: [c] })
+  }
+
   return (
     <section className="card">
       <div className="card-h">
-        <h3>Capacités activables</h3>
-        <span className="sub">feature flags par établissement</span>
+        <h3>Ce que fait votre établissement</h3>
+        <span className="sub">{actives} sur {items.length} en service</span>
         <button className="btn ghost sm" style={{ marginLeft: 'auto' }} onClick={charger} disabled={chargement}>↻</button>
       </div>
       <div className="card-b" style={{ overflowX: 'auto' }}>
+        {msg && <div className="banner banner-ok" style={{ margin: '0 0 12px' }}>{msg}</div>}
+        {erreur && <div className="banner banner-error" style={{ margin: '0 0 12px' }}>{erreur}</div>}
+
+        <p className="hint" style={{ marginTop: 0 }}>
+          Chaque ligne est une partie du logiciel qu’on met en service ou qu’on laisse de côté. Ce
+          n’est pas un réglage définitif : on active, on essaie, on désactive. Rien n’est effacé quand
+          on désactive — les données saisies restent et reviennent à la réactivation.
+        </p>
+
+        {/* On ne demande pas à un exploitant de deviner lesquelles vont ensemble : le serveur
+            connaît le jeu de chaque métier, et il est additif. */}
+        <div className="row" style={{ gap: 8, alignItems: 'flex-end', margin: '14px 0 18px', flexWrap: 'wrap' }}>
+          <div className="field" style={{ margin: 0, minWidth: 220 }}>
+            <label htmlFor="cap-metier">Vous exploitez plutôt…</label>
+            <select id="cap-metier" className="input" value={metier} onChange={(e) => setMetier(e.target.value)}>
+              <option value="">— choisir un métier —</option>
+              {METIERS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          </div>
+          <button className="btn" onClick={appliquerPreset} disabled={!metier || busy === 'preset'}>
+            {busy === 'preset' ? 'Application…' : 'Mettre en service le jeu correspondant'}
+          </button>
+          <span className="hint" style={{ margin: 0, flex: 1, minWidth: 240 }}>
+            Active d’un coup ce qu’un site de ce type utilise. N’éteint jamais rien de ce qui tourne
+            déjà.
+          </span>
+        </div>
+
         {chargement ? (
           <div className="center" style={{ minHeight: 140 }}><div className="spinner" /></div>
-        ) : erreur ? (
-          <div className="banner banner-error">{erreur}</div>
+        ) : items.length === 0 ? (
+          <div className="empty">Aucune capacité au catalogue.</div>
         ) : (
-          <table className="tbl">
-            <thead>
-              <tr><th>Capacité</th><th>Catégorie</th><th>Description</th><th>État (établissement)</th></tr>
-            </thead>
-            <tbody>
-              {items.map((c) => (
-                <tr key={c.code}>
-                  <td><span className="nm">{c.libelle || c.code}</span> <span className="mono" style={{ color: 'var(--ink-faint)' }}>{c.code}</span></td>
-                  <td>{c.categorie || '—'}</td>
-                  <td style={{ color: 'var(--ink-soft)' }}>{c.description || '—'}</td>
-                  <td><span className={`badge ${c.active ? 'good' : 'mut'}`}>{c.active ? 'activée' : 'inactive'}</span></td>
-                </tr>
-              ))}
-              {items.length === 0 && <tr><td colSpan={4} className="empty">Aucune capacité au catalogue.</td></tr>}
-            </tbody>
-          </table>
+          parCategorie.map((g) => (
+            <div key={g.cle} style={{ marginBottom: 18 }}>
+              <div className="sub" style={{ marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.04em' }}>{g.titre}</div>
+              <table className="tbl">
+                <tbody>
+                  {g.items.map((c) => (
+                    <tr key={c.code}>
+                      <td style={{ width: '32%' }}>
+                        <span className="nm">{c.libelle || c.code}</span>
+                        <div className="sub">{c.description || ''}</div>
+                        {EFFET_VISIBLE[c.code] && <div className="sub">{EFFET_VISIBLE[c.code]}</div>}
+                      </td>
+                      <td style={{ width: 120 }}>
+                        <span className={`badge ${c.active ? 'good' : 'mut'}`}>{c.active ? 'en service' : 'hors service'}</span>
+                      </td>
+                      <td className="num">
+                        <button
+                          className="btn ghost sm"
+                          onClick={() => basculer(c)}
+                          disabled={busy === c.code || !etabActif}
+                        >
+                          {busy === c.code ? '…' : c.active ? 'Mettre hors service' : 'Mettre en service'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))
         )}
       </div>
     </section>
