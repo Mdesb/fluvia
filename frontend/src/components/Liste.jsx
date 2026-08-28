@@ -28,6 +28,9 @@ export default function Liste({
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [statut, setStatut] = useState(null)
+  // Combien de lignes existent RÉELLEMENT côté serveur quand il en a rendu moins. `null` = tout est
+  // là (ou le serveur ne le dit pas). Voir le bloc ci-dessous.
+  const [totalReel, setTotalReel] = useState(null)
 
   const recharger = useCallback(async () => {
     setChargement(true)
@@ -36,12 +39,36 @@ export default function Liste({
     try {
       const res = await charger()
       let liste = membres(res)
+
+      // TOUTES LES COLLECTIONS DE CETTE APPLICATION SONT COUPÉES À 30 LIGNES, ET RIEN NE LE DIT.
+      //
+      // `config/packages/api_platform.yaml` ne déclare aucun bloc `pagination` : les valeurs par
+      // défaut d'API Platform s'appliquent donc — 30 éléments par page, et
+      // `pagination_client_items_per_page` à `false`, ce qui signifie que **le client ne peut pas
+      // changer la taille de page**. Vérifié contre la préprod le 28/08 : `?itemsPerPage=1` a rendu
+      // les 3 lignes de la collection, le paramètre est purement ignoré.
+      //
+      // Conséquence : les ~350 `itemsPerPage: 100|200|500` de `api/client.js` sont DÉCORATIFS. Un
+      // catalogue de 40 produits en affiche 30, un annuaire de 200 clients en affiche 30 — même
+      // code 200, même forme de réponse, juste moins de lignes. C'est invisible tant que le jeu de
+      // données de démonstration tient sous 30, ce qui est le cas de la préprod aujourd'hui.
+      //
+      // On ne peut pas corriger ça d'ici — c'est une décision de configuration serveur. Ce qu'on
+      // peut faire, c'est refuser de rendre un tableau incomplet qui a l'air complet : la carte
+      // affiche désormais « 30 sur 47 ». Une liste tronquée qui l'annonce reste utilisable ; une
+      // liste tronquée qui se tait fait prendre une décision sur des données absentes.
+      const total = res?.totalItems ?? res?.['hydra:totalItems']
+      setTotalReel(typeof total === 'number' && membres(res).length < total ? total : null)
+
       if (transforme) liste = transforme(liste, res)
       setRows(liste)
     } catch (e) {
       setErreur(e.message || 'Chargement impossible.')
       setStatut(e.status || null)
       setRows([])
+      // Sans cette remise à zéro, un rechargement en échec garderait le « 30 sur 47 » du chargement
+      // précédent au-dessus d'un tableau vide.
+      setTotalReel(null)
     } finally {
       setChargement(false)
     }
@@ -56,6 +83,13 @@ export default function Liste({
     <section className="card">
       <div className="card-h">
         <h3>{titre}</h3>
+        {/* Le compte partiel est posé À CÔTÉ DU TITRE, pas en pied de tableau : on lit le titre
+            avant de lire les lignes, et c'est avant de les lire qu'il faut savoir qu'il en manque. */}
+        {totalReel !== null && (
+          <span className="badge warn" title="Le serveur limite chaque liste à 30 lignes.">
+            {rows.length} sur {totalReel}
+          </span>
+        )}
         {sous && <span className="sub">{sous}</span>}
         <div className="r" style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
           {actions}

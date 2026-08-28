@@ -43,6 +43,10 @@ export default function PrelevementsSepa({ etabActif, droits }) {
   const [rejets, setRejets] = useState([])
   const [config, setConfig] = useState(null)
   const [chargement, setChargement] = useState(true)
+  // Les collections dont le serveur a rendu MOINS de lignes qu'il n'en existe. Voir le bandeau et
+  // le commentaire de `tronquee()`, en bas de fichier : ici, une liste incomplète ne rend pas
+  // l'écran incomplet, elle le rend FAUX.
+  const [tronquees, setTronquees] = useState([])
 
   const [creationMandat, setCreationMandat] = useState(false)
   const [generation, setGeneration] = useState(false)
@@ -84,6 +88,14 @@ export default function PrelevementsSepa({ etabActif, droits }) {
     // reste écrit : un écran ne doit pas dépendre d'un filtrage qu'il ne fait pas lui-même.
     setConfig(c.status === 'fulfilled' ? configDeLEtablissement(membres(c.value), etabActif) : null)
 
+    setTronquees(
+      [
+        tronquee(m, 'les mandats'),
+        tronquee(l, 'le détail des remises'),
+        tronquee(j, 'les rejets'),
+      ].filter(Boolean),
+    )
+
     // On ne signale que l'échec de la lecture PRINCIPALE de l'onglet le plus consulté : signaler les
     // cinq ferait cinq bandeaux pour un seul incident réseau.
     if (m.status === 'rejected') setErreur(m.reason?.message || 'Lecture des mandats impossible.')
@@ -124,6 +136,23 @@ export default function PrelevementsSepa({ etabActif, droits }) {
     <>
       {erreur && <div className="banner banner-error">{erreur}</div>}
       {succes && <div className="banner banner-ok">{succes}</div>}
+
+      {/* UNE LISTE COUPÉE NE REND PAS CET ÉCRAN INCOMPLET : ELLE LE REND FAUX.
+          Trois affichages se calculent en recoupant deux listes chargées séparément — le nom du
+          débiteur d'une ligne de remise vient des mandats, et surtout le marquage « déjà rejetée »
+          vient des rejets. Au-delà d'une page, une ligne pourtant rejetée cesse d'être reconnue
+          comme telle : l'écran rouvre le bouton « Rejet reçu » dessus, et un second clic ouvrirait
+          un SECOND impayé sur la même échéance — donc un accès bloqué deux fois.
+          Le serveur ne pagine pas au-delà de ce qu'on demande, mais il ne prévient pas non plus
+          qu'il a coupé : `totalItems` le dit, encore faut-il le lire. */}
+      {tronquees.length > 0 && (
+        <div className="banner banner-warn">
+          <b>Toutes les données ne sont pas affichées.</b> Le serveur a renvoyé{' '}
+          {tronquees.join(', ')} en partie seulement. Les noms de débiteur peuvent manquer, et
+          surtout une ligne <b>déjà rejetée</b> peut ne pas être reconnue comme telle : n&rsquo;
+          enregistrez un rejet que si vous êtes certain qu&rsquo;il n&rsquo;a pas déjà été saisi.
+        </div>
+      )}
 
       {/* LE BANDEAU QUI EMMÈNE, PLUTÔT QUE CELUI QUI CONSTATE.
           Sans créancier déclaré, « Générer une remise » échoue côté serveur avec un message
@@ -1290,6 +1319,20 @@ function idDe(relation) {
   if (!relation) return null
   if (typeof relation === 'string') return relation.split('/').pop()
   return relation.id || (relation['@id'] ? String(relation['@id']).split('/').pop() : null)
+}
+
+// `totalItems` CONTRE LE NOMBRE DE LIGNES REÇUES : LE SEUL MOYEN DE SAVOIR QU'ON A ÉTÉ COUPÉ.
+//
+// API Platform rend une collection Hydra qui porte `totalItems` — le total RÉEL, pas la taille de la
+// page. Une réponse tronquée est donc parfaitement reconnaissable, et parfaitement silencieuse si
+// personne ne regarde : même code 200, même forme, juste moins de lignes.
+//
+// Rend le libellé de la collection quand elle est coupée, `null` sinon.
+function tronquee(resultat, libelle) {
+  if (resultat.status !== 'fulfilled') return null
+  const total = resultat.value?.totalItems ?? resultat.value?.['hydra:totalItems']
+  if (typeof total !== 'number') return null
+  return membres(resultat.value).length < total ? libelle : null
 }
 
 // LES DEUX FORMES, OBSERVÉES CÔTE À CÔTE DANS LA MÊME RÉPONSE.
