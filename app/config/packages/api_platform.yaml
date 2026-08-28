@@ -6,6 +6,10 @@ api_platform:
     mapping:
         paths:
             - '%kernel.project_dir%/src/Organisation/Entity'
+            # ⚠ C9 — cette liste est une liste blanche qui echoue EN SILENCE : un dossier absent
+            # rend ses ressources introuvables, sans erreur ni avertissement. Ajoute le 28/08 avec
+            # l'ouverture de structure (`Structure`, recherche d'entreprise + creation en un geste).
+            - '%kernel.project_dir%/src/Organisation/ApiResource'
             # C9 : `mapping.paths` est une LISTE BLANCHE explicite, dossier par dossier — rien n'est
             # decouvert automatiquement. Un module neuf est donc invisible de l'API tant que personne
             # n'ajoute sa ligne, et RIEN ne le signale : pas d'erreur au demarrage, la route n'existe

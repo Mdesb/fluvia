@@ -9,6 +9,7 @@ use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
+use App\Organisation\State\StampCreatorAffectationProcessor;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
@@ -28,7 +29,13 @@ use Symfony\Component\Validator\Constraints as Assert;
     operations: [
         new GetCollection(security: "is_granted('IS_AUTHENTICATED_FULLY')"),
         new Get(security: "is_granted('IS_AUTHENTICATED_FULLY')"),
-        new Post(security: "is_granted('PERM', 'organisation.gerer')"),
+        // L'auteur est rattache au site qu'il vient de creer. Sans cela, la creation reussit (201)
+        // et l'etablissement n'apparait NULLE PART : la liste est filtree sur les affectations du
+        // lecteur, et creer un site n'en cree pas. L'exploitant reclique, et fabrique des doublons.
+        new Post(
+            security: "is_granted('PERM', 'organisation.gerer')",
+            processor: StampCreatorAffectationProcessor::class,
+        ),
         new Patch(security: "is_granted('PERM', 'organisation.gerer')"),
         // PAS DE `Delete`, ET C'EST DELIBERE.
         //

@@ -15,6 +15,7 @@ use App\Caisse\Entity\PointDeVente;
 use App\Caisse\Entity\SessionCaisse;
 use App\Securite\Entity\Affectation;
 use App\Securite\Entity\Utilisateur;
+use App\Securite\Service\ContexteEtablissement;
 use App\Vente\Entity\Avoir;
 use App\Vente\Entity\CardRejection;
 use App\Vente\Entity\Vente;
@@ -57,6 +58,7 @@ final class PerimetreVenteExtension implements QueryCollectionExtensionInterface
 
     public function __construct(
         private readonly Security $security,
+        private readonly ContexteEtablissement $contexte,
     ) {
     }
 
@@ -106,17 +108,30 @@ final class PerimetreVenteExtension implements QueryCollectionExtensionInterface
 
         $chemin = str_replace('{root}', $rootAlias, self::CHEMINS[$resourceClass]);
 
+        // ── L'AXE EST L'ÉTABLISSEMENT ACTIF ──────────────────────────────────────────────────
+        //
+        // Corrigé le 28/08. Le filtre portait sur le PÉRIMÈTRE du lecteur : un exploitant affecté à
+        // trois sites voyait les caisses des trois, sous le titre d'un seul. Le tableau de bord d'un
+        // site créé le matin même annonçait une session ouverte — celle du voisin — et la pastille
+        // « prêt à vendre » s'allumait sur un site sans caisse.
+        //
+        // L'écran porte un sélecteur et titre ses pages du site actif : les données le suivent.
+        // Le périmètre dit ce qu'on a le DROIT de voir ; l'actif dit ce qu'on REGARDE.
+        //
+        // Le droit, lui, reste vérifié : `PermissionVoter` refuse déjà un établissement hors
+        // périmètre avant que cette requête ne soit construite. On filtre, on ne rejuge pas.
+        $actif = $this->contexte->idActif();
+        if ($actif === null) {
+            // Fermeture par défaut : sans établissement actif, rien. Une liste vide se remarque ;
+            // une liste inter-établissements a seulement l'air plus longue.
+            $queryBuilder->andWhere('1 = 0');
+
+            return;
+        }
+
         $queryBuilder
-            ->innerJoin(
-                Affectation::class,
-                'aff_perimetre_vente',
-                Join::WITH,
-                sprintf(
-                    'IDENTITY(aff_perimetre_vente.etablissement) = IDENTITY(%s) AND IDENTITY(aff_perimetre_vente.utilisateur) = :perimetre_vente_utilisateur',
-                    $chemin,
-                ),
-            )
-            ->setParameter('perimetre_vente_utilisateur', $utilisateur->getId(), 'uuid')
+            ->andWhere(sprintf('IDENTITY(%s) = :perimetre_vente_actif', $chemin))
+            ->setParameter('perimetre_vente_actif', $actif, 'uuid')
             ->distinct();
     }
 }

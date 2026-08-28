@@ -7,6 +7,8 @@ import ReferentielEditable from '../components/ReferentielEditable.jsx'
 import PretAVendre from '../components/PretAVendre.jsx'
 import RolesSection from '../components/RolesSection.jsx'
 import EtablissementsSection from '../components/EtablissementsSection.jsx'
+import RegionsSection from '../components/RegionsSection.jsx'
+import OuvrirStructure from '../components/OuvrirStructure.jsx'
 import { aLeDroit } from '../api/droits.js'
 import { mot } from '../api/vocabulaire.js'
 import { api, membres } from '../api/client.js'
@@ -333,6 +335,7 @@ function descripteurPointsDeVente(api, etabActif) {
 }
 
 export default function Parametres({ etabActif, etablissements, droits = [] }) {
+  const [ouvertureStructure, setOuvertureStructure] = useState(false)
   const [sousOnglet, setSousOnglet] = useState('entites')
 
   return (
@@ -353,6 +356,25 @@ export default function Parametres({ etabActif, etablissements, droits = [] }) {
 
       {sousOnglet === 'entites' && (
         <div className="resa-grid">
+          {aLeDroit(droits, 'organisation.gerer') && (
+            <section className="card">
+              <div className="card-h">
+                <h3>Nouveau client</h3>
+              </div>
+              <div className="card-b">
+                <p className="sub" style={{ marginTop: 0 }}>
+                  Tapez le nom de la société ou son SIREN : l’annuaire officiel remplit la
+                  dénomination, le SIRET, le numéro de TVA et l’adresse du siège. La structure est
+                  ouverte avec son point de vente, prête à encaisser.
+                </p>
+                <button className="btn primary" type="button" onClick={() => setOuvertureStructure(true)}>
+                  Ouvrir une structure
+                </button>
+              </div>
+            </section>
+          )}
+
+          <RegionsSection peutEcrire={aLeDroit(droits, 'organisation.gerer')} />
           <EtablissementsSection peutEcrire={aLeDroit(droits, 'organisation.gerer')} />
           {/* LES MOTS DU METIER, A COTE DE L'ETABLISSEMENT QU'ILS CONCERNENT.
               << Ressource >> veut dire praticien chez le coiffeur, ligne d'eau a la piscine. Le mettre
@@ -431,6 +453,16 @@ export default function Parametres({ etabActif, etablissements, droits = [] }) {
       )}
 
       {sousOnglet === 'capacites' && <Capacites etabActif={etabActif} />}
+
+      {/* ⚠ ENTRE LES CONDITIONNELS DE SOUS-ONGLET, et c'est le point.
+          Posée à l'intérieur de l'un d'eux — ce qui est arrivé deux fois — elle n'existe pas quand
+          on clique depuis un autre onglet : le bouton ne fait rien, sans erreur ni trace. Le bloc
+          « droits » court sur quatre cents lignes, ce qui rend la faute facile et invisible. */}
+      <OuvrirStructure
+        ouvert={ouvertureStructure}
+        onFermer={() => setOuvertureStructure(false)}
+        onOuverte={() => window.location.reload()}
+      />
     </div>
   )
 }

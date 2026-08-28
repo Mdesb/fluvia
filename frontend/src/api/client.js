@@ -599,6 +599,18 @@ export const api = {
   // --- Paramètres (référentiels, lecture) ---
   espaces: () => request('/api/espaces', { query: { itemsPerPage: 200 } }),
   regions: () => request('/api/regions', { query: { itemsPerPage: 100 } }),
+  // Un etablissement EXIGE une region : sans ces deux appels, une installation neuve ne pouvait
+  // creer aucun site. La lecture seule etait branchee, l'ecriture non.
+  // OUVRIR UNE STRUCTURE -- l'annuaire officiel des entreprises, interroge par le SERVEUR : la
+  // frappe de l'exploitant ne part pas chez un tiers depuis son poste.
+  chercherEntreprise: (q) => request('/api/organisation/entreprises', { query: { q } }),
+  // Cree d'un geste le groupe, la region, l'etablissement, l'affectation de l'auteur, le point de
+  // vente et l'identite legale.
+  ouvrirStructure: (corps) =>
+    request('/api/organisation/structures', { method: 'POST', body: corps, ld: true }),
+
+  creerRegion: (corps) => request('/api/regions', { method: 'POST', body: corps, ld: true }),
+  majRegion: (id, corps) => request(`/api/regions/${id}`, { method: 'PATCH', body: corps }),
   categories: () => request('/api/categories', { query: { itemsPerPage: 200 } }),
   creerCategorie: (corps) => request('/api/categories', { method: 'POST', body: corps, ld: true }),
   majCategorie: (id, corps) => request(`/api/categories/${id}`, { method: 'PATCH', body: corps }),

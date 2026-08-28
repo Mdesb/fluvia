@@ -29,20 +29,19 @@
         "Le script REFUSE de le relever. Un plafond qui remonte n est plus un cliquet, c est un",
         "compteur."
     ],
-    "plafond": 748,
+    "plafond": 746,
     "releve": {
-        "exposees": 1086,
+        "exposees": 1116,
         "sansEcran": 0,
-        "attendues": 1086,
-        "appelees": 342,
-        "atteignables": 338,
-        "inatteignables": 748,
+        "attendues": 1116,
+        "appelees": 373,
+        "atteignables": 370,
+        "inatteignables": 746,
         "orphelins": [
             "comptesComptables  (back-office)",
             "grilleTarifaires  (back-office)",
             "padelTournois  (back-office)",
-            "pieceCommerciale  (back-office)",
-            "supportTableauBord  (back-office)"
+            "pieceCommerciale  (back-office)"
         ],
         "declares": [],
         "marqueursSansRaison": [],
@@ -50,8 +49,8 @@
         "parFront": [
             {
                 "nom": "back-office",
-                "appelees": 321,
-                "atteignables": 317
+                "appelees": 352,
+                "atteignables": 349
             },
             {
                 "nom": "boutique en ligne",
@@ -73,11 +72,11 @@
                 16
             ],
             [
-                "support",
-                15
+                "editor",
+                14
             ],
             [
-                "editor",
+                "support",
                 14
             ],
             [
@@ -94,6 +93,10 @@
             ],
             [
                 "produits",
+                10
+            ],
+            [
+                "marketing",
                 10
             ],
             [
@@ -137,6 +140,14 @@
                 5
             ],
             [
+                "segments",
+                5
+            ],
+            [
+                "loyalty",
+                5
+            ],
+            [
                 "utilisateurs",
                 5
             ],
@@ -150,6 +161,10 @@
             ],
             [
                 "customer",
+                4
+            ],
+            [
+                "campaigns",
                 4
             ],
             [
@@ -193,11 +208,23 @@
                 3
             ],
             [
+                "offre",
+                3
+            ],
+            [
+                "referral",
+                3
+            ],
+            [
                 "groupe",
                 3
             ],
             [
                 "valeur",
+                3
+            ],
+            [
+                "regions",
                 3
             ],
             [
@@ -306,10 +333,6 @@
             ],
             [
                 "espaces",
-                1
-            ],
-            [
-                "regions",
                 1
             ],
             [
