@@ -9,6 +9,7 @@ use App\Organisation\Entity\Groupe;
 use App\Organisation\Entity\Region;
 use App\Securite\Entity\Affectation;
 use App\Securite\Entity\Utilisateur;
+use App\Securite\Service\CalculateurDroits;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Uid\Uuid;
 
@@ -24,6 +25,7 @@ final class PerimetreReportingResolver
 {
     public function __construct(
         private readonly EntityManagerInterface $em,
+        private readonly CalculateurDroits $calculateur,
     ) {
     }
 
@@ -40,14 +42,26 @@ final class PerimetreReportingResolver
             if ($role === null || $etablissement === null) {
                 continue;
             }
-            foreach ($role->getPermissions() as $permission) {
-                if ($permission->getModule() !== 'reporting') {
-                    continue;
-                }
-                if ($permission->getAction() === $action || $permission->getAction() === '*') {
-                    $ids[$etablissement->getId()->toRfc4122()] = $etablissement->getId();
-                    break;
-                }
+
+            // ── UN SEUL CALCUL, PLUSIEURS APPELANTS ──────────────────────────────────────────
+            //
+            // Cette boucle comparait elle-même `$permission->getModule()` à « reporting » et
+            // sautait donc le joker : un rôle ne portant que `*.lire` n'autorisait AUCUN
+            // établissement. Le contrôleur, lui, franchissait sa première barrière — elle passe par
+            // `CalculateurDroits::autorise()`, qui comprend les jokers. Le même droit, lu de deux
+            // façons : autorisé à l'entrée, « hors périmètre » trois lignes plus bas, 403 sur son
+            // propre tableau de bord pour un administrateur groupe.
+            //
+            // Ajouter « ou étoile » ici aurait refermé ce cas et laissé la cause en place : deux
+            // endroits interprètent le modèle de droits, et il suffit que l'un évolue. La lecture
+            // est déléguée.
+            $codes = array_map(
+                static fn ($permission): string => $permission->getCode(),
+                $role->getPermissions()->toArray(),
+            );
+
+            if ($this->calculateur->autorise($codes, 'reporting', $action)) {
+                $ids[$etablissement->getId()->toRfc4122()] = $etablissement->getId();
             }
         }
 

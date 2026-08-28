@@ -88,12 +88,25 @@ final class SupplierInvoiceEventTest extends FinanceApiTestCase
             ],
         ]);
 
-        self::assertCount(1, $captures);
-        /** @var DomainEvent $evenement */
-        $evenement = $captures[0];
-        // Le tenant est A (établissement RÉEL de la facture), pas B (contexte HTTP actif, D6).
-        self::assertSame($idEtablissementA, $evenement->tenant->establishmentId->toRfc4122());
-        self::assertNotSame($idEtablissementB, $evenement->tenant->establishmentId->toRfc4122());
+        // CE QUE LA BASCULE D'AXE A CHANGE. Ce scénario — corps portant l'établissement A, en-tête
+        // portant B — vérifiait que le tenant suivait l'ENTITÉ et non l'en-tête. C'était une menace
+        // réelle tant que le cloisonnement portait sur le PÉRIMÈTRE : le fournisseur de A était
+        // résolvable en regardant B, la facture se créait, et seul le calcul du tenant empêchait la
+        // fuite.
+        //
+        // Depuis que le filtre porte sur l'établissement ACTIF, le fournisseur de A n'est plus
+        // résolvable depuis B : la création est refusée avant tout événement. La divergence n'est
+        // plus surveillée, elle est devenue impossible par ce chemin.
+        //
+        // Les deux moitiés de l'assertion comptent. Le refus, évidemment ; mais surtout l'ABSENCE
+        // d'événement — un refus qui aurait tout de même publié porterait un tenant arbitraire dans
+        // tout le système aval, sans qu'aucune réponse HTTP ne le signale.
+        self::assertGreaterThanOrEqual(
+            400,
+            $client->getResponse()->getStatusCode(),
+            'Créer une facture citant une ressource hors de l\'établissement actif doit être refusé.',
+        );
+        self::assertCount(0, $captures, 'Une opération refusée ne doit publier aucun événement.');
     }
 
     public function testApprovedPaidDisputedEmisAuxTransitionsAttendues(): void

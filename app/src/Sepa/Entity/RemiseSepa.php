@@ -116,9 +116,11 @@ class RemiseSepa
      * jusqu'ici, où aucun préavis n'existait et où rien ne le disait.
      */
     #[ORM\Column(name: 'nb_exclues', options: ['default' => 0])]
+    #[Groups(['remise_sepa:read'])]
     private int $nbExclues = 0;
 
     #[ORM\Column(name: 'motif_exclusion', length: 255, nullable: true)]
+    #[Groups(['remise_sepa:read'])]
     private ?string $motifExclusion = null;
 
     public function getId(): Uuid

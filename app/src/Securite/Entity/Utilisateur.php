@@ -135,7 +135,20 @@ class Utilisateur implements UserInterface, PasswordAuthenticatedUserInterface
 
     #[ORM\Column(length: 180)]
     #[Assert\NotBlank]
-    #[Groups(['utilisateur:read', 'utilisateur:write', 'me:read'])]
+    // Cinq modules referencent `Utilisateur` sans qu'aucune de ses proprietes ne leur soit
+    // visible : la relation partait en IRI nue et l'ecran recevait une URL la ou il attend un
+    // nom. Le plus grave etait la file d'assistance, qui affichait « non affecte » sur un
+    // ticket pourtant pris en charge -- une absence deguisee en information.
+    //
+    // Seul `nom` rejoint ces groupes : une propriete sans groupe reste invisible meme quand
+    // son entite est embarquee, et c'est ce qui garde le reste de la fiche hors de portee.
+    //
+    // L'attribut tient sur UNE ligne, comme partout ailleurs dans le depot. La version repliee
+    // sur plusieurs lignes que j'avais ecrite d'abord etait valide pour PHP et illisible pour
+    // les outils : `relations-muettes.py` cessait de voir les groupes de cette propriete, et
+    // le compte des relations muettes MONTAIT au lieu de baisser. Une variante de forme qui
+    // n'apporte rien coute la mesure.
+    #[Groups(['utilisateur:read', 'utilisateur:write', 'me:read', 'caution_mouvement:read', 'activity:read', 'project_task:read', 'project:read', 'ticket:read', 'document_version:read'])]
     private string $nom = '';
 
     /**
