@@ -3,7 +3,14 @@ import { api, tokenStore } from '../api/client.js'
 
 export default function Login({ onConnecte }) {
   const [email, setEmail] = useState('admin@itcotation.com')
-  const [motDePasse, setMotDePasse] = useState('AdminSocle#2026')
+  // ⚠ DOIT VALOIR `SocleFixtures::ADMIN_MDP`. Les deux ont diverge le 27/08 quand les fixtures sont
+  // passees a « aaa » : l'ecran a continue d'annoncer un compte de demo pre-rempli, et de proposer
+  // un mot de passe que plus aucun compte ne portait. La premiere page du produit repondait
+  // « Identifiants incorrects » a qui cliquait, sans que rien ne relie la cause a l'effet.
+  //
+  // ⚠ CETTE COMMODITE N'A RIEN A FAIRE CHEZ UN CLIENT. Elle vit pour la demonstration et la
+  // preprod ; un deploiement reel doit vider ces deux champs.
+  const [motDePasse, setMotDePasse] = useState('aaa')
   const [erreur, setErreur] = useState(null)
   const [info, setInfo] = useState(null)
   const [enCours, setEnCours] = useState(false)

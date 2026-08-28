@@ -8,8 +8,8 @@ use ApiPlatform\Doctrine\Orm\Extension\QueryCollectionExtensionInterface;
 use ApiPlatform\Doctrine\Orm\Extension\QueryItemExtensionInterface;
 use ApiPlatform\Doctrine\Orm\Util\QueryNameGeneratorInterface;
 use ApiPlatform\Metadata\Operation;
-use App\Securite\Entity\Affectation;
 use App\Securite\Entity\Utilisateur;
+use App\Securite\Service\ContexteEtablissement;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder;
 use Symfony\Bundle\SecurityBundle\Security;
@@ -47,6 +47,7 @@ final readonly class MarketingScopeExtension implements QueryCollectionExtension
     public function __construct(
         private Security $security,
         private EntityManagerInterface $entityManager,
+        private ContexteEtablissement $contexte,
     ) {
     }
 
@@ -94,13 +95,30 @@ final readonly class MarketingScopeExtension implements QueryCollectionExtension
         $alias = $queryBuilder->getRootAliases()[0];
         $porteur = $this->cheminVersLEtablissement($queryBuilder, $resourceClass, $alias);
 
-        $sousRequete = 'SELECT aff_mkt.id FROM ' . Affectation::class . ' aff_mkt '
-            . 'WHERE IDENTITY(aff_mkt.utilisateur) = :perimetre_marketing_utilisateur '
-            . 'AND IDENTITY(aff_mkt.etablissement) = IDENTITY(' . $porteur . '.establishment)';
+        // ── L'AXE EST L'ÉTABLISSEMENT ACTIF, PAS LE PÉRIMÈTRE DU LECTEUR ─────────────────────
+        //
+        // Corrigé le 28/08, vu dans le navigateur : sur Patinoire B, l'onglet Fidélité affichait
+        // le barème de Piscine A comme s'il était le sien. Ce n'était pas une fuite —
+        // l'administratrice est affectée aux deux — c'était pire à sa manière : un chiffre juste
+        // au mauvais endroit, que rien ne signale. Elle aurait posé un palier en croyant
+        // configurer Patinoire B.
+        //
+        // Un barème, un palier, un segment, une campagne sont les réglages D'UN établissement.
+        // Même axe que les référentiels cloisonnés du module Offre.
+        $actif = $this->contexte->idActif();
+        if ($actif === null) {
+            // Fermeture par défaut : sans établissement actif, rien. Une liste vide se remarque ;
+            // une liste inter-établissements a seulement l'air plus longue.
+            $queryBuilder->andWhere('1 = 0');
 
+            return;
+        }
+
+        // Le droit d'être ici a déjà été vérifié par `PermissionVoter` contre cet établissement :
+        // l'en-tête est un sélecteur, et le voter est la preuve. On filtre donc, on ne rejuge pas.
         $queryBuilder
-            ->andWhere($queryBuilder->expr()->exists($sousRequete))
-            ->setParameter('perimetre_marketing_utilisateur', $utilisateur->getId(), 'uuid');
+            ->andWhere('IDENTITY(' . $porteur . '.establishment) = :marketing_etablissement_actif')
+            ->setParameter('marketing_etablissement_actif', $actif, 'uuid');
     }
 
     /**
