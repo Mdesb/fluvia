@@ -927,7 +927,7 @@ function ComptesDroits({ etabActif, etablissements, droits = [] }) {
 
       <RolesSection droits={droits} peutGerer={aLeDroit(droits, 'securite.gerer')} onChange={charger} />
 
-      <MatriceDroits roles={roles} etabActif={etabActif} />
+      <MatriceDroits roles={roles} etabActif={etabActif} affectations={affectations} utilisateurs={utilisateurs} />
 
       <section className="card" style={{ marginTop: 16 }}>
         <div className="card-h"><h3>Affectations</h3><span className="sub">rôle × utilisateur × établissement</span></div>
@@ -976,11 +976,92 @@ function ComptesDroits({ etabActif, etablissements, droits = [] }) {
   )
 }
 
-// Matrice « vivante » des droits : pour chaque rôle, on interroge `/roles/{id}/apercu-droits` sur
-// l'établissement actif (équivalent /me simulé). Rôles en colonnes, permissions en lignes (groupées
-// par module).
-function MatriceDroits({ roles, etabActif }) {
-  const [codesParRole, setCodesParRole] = useState({}) // roleId -> Set(codes)
+// LES NOMS DES MODULES, PARCE QUE `dms` ET `crm` NE SONT PAS DU FRANÇAIS.
+//
+// Le code `module.action` reste affiché à côté : c'est lui qu'on cite dans un ticket, et c'est lui
+// qui figure dans la modale d'édition d'un rôle. On traduit pour lire, on garde le code pour agir.
+const NOM_MODULE = {
+  '*': 'Tous les modules (joker)',
+  acces: 'Contrôle d’accès',
+  autorisation: 'Autorisations & plafonds',
+  boutique: 'Boutique en ligne',
+  caisse: 'Caisse',
+  campagne: 'Campagnes',
+  caution: 'Cautions',
+  compta: 'Comptabilité',
+  crm: 'Clients & affaires',
+  demo: 'Démonstration',
+  dms: 'Documents',
+  facturation: 'Facturation',
+  fidelite: 'Fidélité',
+  finance: 'Achats & trésorerie',
+  fonctionnalite: 'Modules en service',
+  lodging: 'Hébergement',
+  musee: 'Musée',
+  ocr: 'Lecture automatique de documents',
+  offre: 'Catalogue & offres',
+  organisation: 'Organisation & établissements',
+  padel: 'Padel',
+  patinoire: 'Patinoire',
+  personnel: 'Personnel',
+  piscine: 'Piscine',
+  recouvrement: 'Recouvrement',
+  reporting: 'Reporting',
+  reservation: 'Réservation',
+  revenue_recovery: 'Relance des recettes',
+  securite: 'Comptes & rôles',
+  sepa: 'Prélèvements SEPA',
+  smart_flow: 'Flux SmartFlow',
+  social: 'Publication sociale',
+  sport: 'Sport & fitness',
+  stay: 'Séjours',
+  stock: 'Stock',
+  support: 'Assistance',
+  vente: 'Vente',
+}
+
+function nomModule(code) {
+  return NOM_MODULE[code] || code
+}
+
+// UN RÔLE COUVRE-T-IL CE DROIT ? C'EST LA RÈGLE DU SERVEUR, PAS UNE ÉGALITÉ DE CHAÎNES.
+//
+// `GET /roles/{id}/apercu-droits` rend les codes BRUTS du rôle : un rôle qui porte `*` × `*` répond
+// `["*.*"]` et rien d'autre — le serveur n'étend pas le joker, il l'interprète à la demande.
+//
+// L'ancienne matrice testait `codes.has(code)`, une égalité stricte. Elle affichait donc
+// « Administrateur d'établissement » comme n'ayant qu'un seul droit alors qu'il les a tous, et
+// « Administrateur groupe » comme n'ayant que ses 98 lignes explicites. C'est la faute exacte
+// décrite en tête de `api/droits.js`, qui avait déjà vidé un menu : rejouer une règle
+// d'autorisation à moitié.
+//
+// `aLeDroit` est la règle entière, celle que le serveur applique. On s'en sert.
+function roleCouvre(codes, code) {
+  return aLeDroit([...codes], code)
+}
+
+// QUI PEUT FAIRE QUOI — LA MATRICE COMPLÈTE NE RÉPONDAIT À AUCUNE QUESTION.
+//
+// L'ancienne version affichait 251 permissions en lignes × tous les rôles en colonnes, remplies de
+// « ✓ » et de « · », avec les codes internes en clair. Sur la préprod : 57 colonnes, 200 lignes,
+// 11 400 cellules. Une session en revue avec Maxime l'a constaté à l'écran : illisible, alors que
+// c'est précisément l'écran censé répondre à « qui a le droit de quoi ».
+//
+// Une matrice n'est pas fausse en soi ; elle est fausse À CETTE TAILLE. On lit une matrice quand on
+// compare quelques colonnes sur quelques lignes. Personne ne compare 57 rôles à la fois : on se
+// demande « qui peut annuler une vente ? », et c'est une question qui porte sur UN module.
+//
+// D'où la portée par module : les lignes sont les actions de ce module, les colonnes les seuls
+// rôles qui en donnent au moins une. Sur `vente` cela fait 10 lignes et une poignée de colonnes —
+// une matrice qu'on peut effectivement lire.
+//
+// LE MODULE QUE PERSONNE NE PEUT TOUCHER EST UNE RÉPONSE, PAS UN VIDE. On part de `/api/permissions`
+// (le référentiel entier, 251 codes) et non de l'union de ce que les rôles accordent : sinon un
+// droit que personne ne détient disparaît de l'écran, et son absence devient invisible.
+function MatriceDroits({ roles, etabActif, affectations = [], utilisateurs = [] }) {
+  const [codesParRole, setCodesParRole] = useState({}) // roleId -> Set(codes bruts)
+  const [permissions, setPermissions] = useState([])
+  const [module, setModule] = useState('')
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
 
@@ -988,21 +1069,25 @@ function MatriceDroits({ roles, etabActif }) {
     setChargement(true)
     setErreur(null)
     try {
-      const entrees = await Promise.all(
-        roles.map(async (r) => {
-          try {
-            const res = await api.apercuDroitsRole(r.id, etabActif)
-            return [r.id, new Set(res.codes || [])]
-          } catch {
-            // Repli : dérive les codes depuis les permissions embarquées du rôle.
-            const codes = (r.permissions || []).map((p) => p.code || `${p.module}.${p.action}`)
-            return [r.id, new Set(codes)]
-          }
-        }),
-      )
+      const [perms, entrees] = await Promise.all([
+        api.permissions().catch(() => null),
+        Promise.all(
+          roles.map(async (r) => {
+            try {
+              const res = await api.apercuDroitsRole(r.id, etabActif)
+              return [r.id, new Set(res.codes || [])]
+            } catch {
+              // Repli : dérive les codes depuis les permissions embarquées du rôle.
+              const codes = (r.permissions || []).map((p) => p.code || `${p.module}.${p.action}`)
+              return [r.id, new Set(codes)]
+            }
+          }),
+        ),
+      ])
+      setPermissions(membres(perms))
       setCodesParRole(Object.fromEntries(entrees))
     } catch (e) {
-      setErreur(e.message || 'Chargement de la matrice impossible.')
+      setErreur(e.message || 'Chargement des droits impossible.')
     } finally {
       setChargement(false)
     }
@@ -1013,20 +1098,41 @@ function MatriceDroits({ roles, etabActif }) {
     else setChargement(false)
   }, [roles, charger])
 
-  // Union des codes conférés par au moins un rôle, groupés par module.
-  const tousCodes = [...new Set(Object.values(codesParRole).flatMap((s) => [...s]))].sort()
-  const parModule = {}
-  for (const code of tousCodes) {
-    const mod = code.split('.')[0]
-    ;(parModule[mod] ||= []).push(code)
+  const modules = [...new Set(permissions.map((p) => p.module))].sort((a, b) =>
+    nomModule(a).localeCompare(nomModule(b), 'fr'),
+  )
+
+  useEffect(() => {
+    if (!module && modules.length) setModule(modules.includes('vente') ? 'vente' : modules[0])
+  }, [modules, module])
+
+  const actions = permissions
+    .filter((p) => p.module === module)
+    .map((p) => p.code || `${p.module}.${p.action}`)
+    .sort()
+
+  // Les rôles qui donnent au moins une action de ce module — joker compris.
+  const rolesConcernes = roles.filter((r) => {
+    const codes = codesParRole[r.id]
+    if (!codes) return false
+    return actions.some((code) => roleCouvre(codes, code))
+  })
+
+  // Combien de comptes portent chaque rôle sur l'établissement affiché. « Un rôle que personne ne
+  // porte » et « un rôle porté par douze personnes » n'appellent pas la même vigilance.
+  const comptesParRole = {}
+  for (const a of affectations) {
+    const rid = typeof a.role === 'object' ? a.role?.id : String(a.role || '').split('/').pop()
+    const eid = typeof a.etablissement === 'object' ? a.etablissement?.id : String(a.etablissement || '').split('/').pop()
+    if (!rid || (etabActif && eid && eid !== etabActif)) continue
+    comptesParRole[rid] = (comptesParRole[rid] || 0) + 1
   }
-  const modules = Object.keys(parModule).sort()
 
   return (
-    <section className="card">
+    <section className="card" style={{ marginTop: 16 }}>
       <div className="card-h">
-        <h3>Matrice des droits</h3>
-        <span className="sub">rôles × permissions (établissement actif)</span>
+        <h3>Qui a le droit de quoi</h3>
+        <span className="sub">{utilisateurs.length} compte(s) · {roles.length} rôle(s)</span>
         <button className="btn ghost sm" style={{ marginLeft: 'auto' }} onClick={charger} disabled={chargement}>↻</button>
       </div>
       <div className="card-b" style={{ overflowX: 'auto' }}>
@@ -1034,48 +1140,83 @@ function MatriceDroits({ roles, etabActif }) {
           <div className="center" style={{ minHeight: 120 }}><div className="spinner" /></div>
         ) : erreur ? (
           <div className="banner banner-error">{erreur}</div>
-        ) : roles.length === 0 || tousCodes.length === 0 ? (
-          <div className="empty">Aucun droit à représenter.</div>
         ) : (
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Permission</th>
-                {roles.map((r) => <th key={r.id} className="num">{r.nom}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {modules.map((mod) => (
-                <RowsModule key={mod} module={mod} codes={parModule[mod]} roles={roles} codesParRole={codesParRole} />
-              ))}
-            </tbody>
-          </table>
+          <>
+            <div className="field" style={{ maxWidth: 420 }}>
+              <label htmlFor="md-module">De quoi voulez-vous voir les droits ?</label>
+              <select id="md-module" className="input" value={module} onChange={(e) => setModule(e.target.value)}>
+                {modules.map((m) => (
+                  <option key={m} value={m}>{nomModule(m)}</option>
+                ))}
+              </select>
+              <p className="hint">
+                Un rôle marqué « tout » porte le joker : il obtient aussi les droits qui seront
+                ajoutés plus tard, sans qu’on ait à le modifier.
+              </p>
+            </div>
+
+            {actions.length === 0 ? (
+              <div className="empty">Ce module n’expose aucune permission.</div>
+            ) : rolesConcernes.length === 0 ? (
+              <div className="banner banner-warn">
+                Aucun rôle ne donne le moindre droit sur « {nomModule(module)} ». Personne ne peut
+                s’en servir, quels que soient les comptes créés.
+              </div>
+            ) : (
+              <table className="tbl">
+                <thead>
+                  <tr>
+                    <th>Ce qu’on peut faire</th>
+                    {rolesConcernes.map((r) => (
+                      <th key={r.id} className="num" title={r.nom}>
+                        {r.nom}
+                        <div className="sub" style={{ fontWeight: 400 }}>
+                          {comptesParRole[r.id] ? `${comptesParRole[r.id]} compte(s)` : 'personne'}
+                        </div>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {actions.map((code) => {
+                    const donneurs = rolesConcernes.filter((r) => roleCouvre(codesParRole[r.id], code))
+                    return (
+                      <tr key={code}>
+                        <td>
+                          <span className="mono">{code}</span>
+                          {donneurs.length === 0 && (
+                            <div className="sub" style={{ color: 'var(--crit)' }}>aucun rôle ne le donne</div>
+                          )}
+                        </td>
+                        {rolesConcernes.map((r) => {
+                          const codes = codesParRole[r.id]
+                          const explicite = codes?.has(code)
+                          const couvert = roleCouvre(codes, code)
+                          return (
+                            <td key={r.id} className="num" aria-label={couvert ? 'accordé' : 'non accordé'}>
+                              {couvert ? (
+                                <span
+                                  style={{ color: 'var(--good)' }}
+                                  title={explicite ? 'Accordé explicitement.' : 'Accordé par un joker (« tout »).'}
+                                >
+                                  {explicite ? '✓' : '✓*'}
+                                </span>
+                              ) : (
+                                <span style={{ color: 'var(--ink-faint)' }}>·</span>
+                              )}
+                            </td>
+                          )
+                        })}
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            )}
+          </>
         )}
       </div>
     </section>
-  )
-}
-
-function RowsModule({ module, codes, roles, codesParRole }) {
-  return (
-    <>
-      <tr>
-        <td colSpan={roles.length + 1} style={{ background: 'var(--panel-2)', fontWeight: 700, textTransform: 'capitalize' }}>{module}</td>
-      </tr>
-      {codes.map((code) => (
-        <tr key={code}>
-          <td><span className="mono">{code}</span></td>
-          {roles.map((r) => {
-            const a = codesParRole[r.id]?.has(code)
-            return (
-              <td key={r.id} className="num" aria-label={a ? 'accordé' : 'non accordé'}>
-                {a ? <span style={{ color: 'var(--good)' }}>✓</span> : <span style={{ color: 'var(--ink-faint)' }}>·</span>}
-              </td>
-            )
-          })}
-        </tr>
-      ))}
-    </>
   )
 }
 
