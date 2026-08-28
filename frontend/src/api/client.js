@@ -951,6 +951,22 @@ export const api = {
     request('/api/patinoire_liste_attente_pointures', { query: { itemsPerPage: 100 } }),
   patinoireRetenues: () =>
     request('/api/patinoire_retenue_cautions', { query: { itemsPerPage: 100 } }),
+  // LE BARÈME DE LA PATINOIRE : QUATRE OPÉRATIONS EXPOSÉES, AUCUNE ATTEIGNABLE.
+  //
+  // Le socle a son barème générique (`caution_grille_retenues`, branché dans l'écran Cautions), mais
+  // la patinoire expose LE SIEN — même donnée vue par sa verticale, avec un motif en énumération
+  // (casse, non rendu, perte, restitution partielle) et un parc de patins au lieu d'un `sousCible`
+  // en texte libre.
+  //
+  // Ça change tout pour qui règle la retenue : sur l'écran central, il faut taper `patinoire.patins`
+  // à la main dans un champ libre — une faute de frappe y crée un barème que rien n'applique, sans
+  // erreur. Ici la cible est implicite et le motif se choisit dans une liste.
+  patinoireGrillesRetenue: () =>
+    request('/api/patinoire_grille_retenues', { query: { itemsPerPage: 100 } }),
+  creerPatinoireGrilleRetenue: (corps) =>
+    request('/api/patinoire_grille_retenues', { method: 'POST', body: corps, ld: true }),
+  majPatinoireGrilleRetenue: (id, corps) =>
+    request(`/api/patinoire_grille_retenues/${id}`, { method: 'PATCH', body: corps }),
   // Opérations sur mesure (`uriTemplate`) : elles portent `input: false`, leur processor lit le corps
   // brut. Pas de `ld: true` — l'ajouter ici serait exactement la correction que `verifier-formats`
   // cherche à éviter.

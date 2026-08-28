@@ -41,6 +41,7 @@ export default function Patinoire({ etabActif, droits }) {
   const [locations, setLocations] = useState([])
   const [attente, setAttente] = useState([])
   const [retenues, setRetenues] = useState([])
+  const [grilles, setGrilles] = useState([])
   const [beneficiaires, setBeneficiaires] = useState([])
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
@@ -50,16 +51,18 @@ export default function Patinoire({ etabActif, droits }) {
   const peutAffuter = aLeDroit(droits, 'patinoire.gerer_affutage')
   const peutAttente = aLeDroit(droits, 'patinoire.gerer_liste_attente')
   const peutForcer = aLeDroit(droits, 'patinoire.forcer_retenue')
+  const peutConfigurer = aLeDroit(droits, 'patinoire.configurer')
 
   const recharger = useCallback(async () => {
     setChargement(true)
     setErreur(null)
     try {
-      const [p, l, a, r] = await Promise.all([
+      const [p, l, a, r, g] = await Promise.all([
         api.patinoireParc(),
         api.patinoireLocations(),
         api.patinoireListeAttente(),
         api.patinoireRetenues(),
+        api.patinoireGrillesRetenue().catch(() => null),
       ])
       setParc(
         membres(p)
@@ -69,6 +72,7 @@ export default function Patinoire({ etabActif, droits }) {
       setLocations(membres(l))
       setAttente(membres(a))
       setRetenues(membres(r))
+      setGrilles(g ? membres(g) : [])
     } catch (e) {
       setErreur(e.message)
     } finally {
@@ -155,6 +159,15 @@ export default function Patinoire({ etabActif, droits }) {
             retenues={retenues}
             peutValider={peutLouer || peutForcer}
             peutForcer={peutForcer}
+            onFait={apres}
+            onErreur={setErreur}
+          />
+
+          <BaremeSection
+            grilles={grilles}
+            parc={parc}
+            peutConfigurer={peutConfigurer}
+            etabActif={etabActif}
             onFait={apres}
             onErreur={setErreur}
           />
@@ -829,6 +842,271 @@ function ValidationRetenueModal({ retenue, peutForcer, onClose, onFait, onErreur
 // --------------------------------------------------------------------------------------------
 // L'atelier d'affûtage.
 // --------------------------------------------------------------------------------------------
+// LE BARÈME DE RETENUE, LÀ OÙ ON RETIENT — et pas seulement dans l'écran central des cautions.
+//
+// La patinoire expose quatre opérations sur son propre barème (`patinoire_grille_retenues`) :
+// lecture, création, modification. **Aucune n'était atteignable.** Le régisseur voyait donc les
+// retenues à valider, juste au-dessus, sans jamais voir NI pouvoir régler la règle qui en fixe le
+// montant.
+//
+// Le barème générique du socle existe bien dans l'écran Cautions, et il couvre la même donnée. Mais
+// pour l'atteindre depuis la patinoire il faut quitter son écran, aller au registre central, et
+// taper `patinoire.patins` À LA MAIN dans un champ de texte libre — une faute de frappe y crée
+// silencieusement un barème que rien n'applique jamais. Ici la cible est implicite, et le motif se
+// choisit dans une liste fermée de quatre valeurs.
+//
+// > **La règle se règle là où on l'applique.** Un paramétrage qui n'est atteignable que depuis un
+// > autre écran est un paramétrage qu'on ne corrige pas : on constate la retenue, on la trouve
+// > fausse, et on la valide quand même.
+
+// LES QUATRE MOTIFS DE RETENUE, ET POURQUOI ILS NE PASSENT PAS PAR `mot()`.
+//
+// `mot()` est une carte GLOBALE : un code y a une seule traduction. Or `casse` et `non_rendu`
+// existent déjà dans ce module comme ÉTATS D'UNE PAIRE DE PATINS — ils y sont traduits « Cassés »
+// et « Non rendus », au pluriel, parce qu'ils qualifient des patins.
+//
+// Comme MOTIF de retenue, le même code désigne la cause, pas l'objet : on retient pour « casse »,
+// pas pour « cassés ». Vu à l'écran en créant la première ligne de barème — la table affichait
+// « Cassés » là où la liste de saisie proposait « Casse ».
+//
+// Deux sens pour un code dans le même module : la carte globale ne peut pas porter les deux. La
+// liste locale est la bonne réponse, et ce commentaire existe pour qu'on ne la « simplifie » pas en
+// la renvoyant vers `mot()`.
+const MOTIFS_RETENUE = {
+  casse: 'Casse',
+  non_rendu: 'Non rendu',
+  perte: 'Perte',
+  restitution_partielle: 'Restitution partielle',
+}
+
+function BaremeSection({ grilles, parc, peutConfigurer, etabActif, onFait, onErreur }) {
+  const [editee, setEditee] = useState(null)
+
+  const actives = grilles.filter((g) => g.actif !== false)
+  const inactives = grilles.filter((g) => g.actif === false)
+
+  return (
+    <section className="card" style={{ marginTop: 16 }}>
+      <div className="card-h">
+        <h3>Barème de retenue</h3>
+        <span className="sub">ce qu&rsquo;on garde sur la caution, et pour quoi</span>
+        {peutConfigurer && (
+          <div className="r">
+            <button className="btn primary sm" type="button" onClick={() => setEditee({})}>
+              ＋ Ajouter une ligne
+            </button>
+          </div>
+        )}
+      </div>
+      <div className="card-b" style={{ overflowX: 'auto' }}>
+        {grilles.length === 0 ? (
+          <div className="empty">
+            Aucun barème. Sans lui, chaque retenue est un montant décidé au guichet — donc un montant
+            qui se discute, et qui n&rsquo;est pas le même d&rsquo;un agent à l&rsquo;autre.
+          </div>
+        ) : (
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th>Motif</th>
+                <th>Parc concerné</th>
+                <th>Mode</th>
+                <th className="num">Montant</th>
+                <th>État</th>
+                {peutConfigurer && <th />}
+              </tr>
+            </thead>
+            <tbody>
+              {[...actives, ...inactives].map((g) => (
+                <tr key={g.id} style={g.actif === false ? { opacity: 0.55 } : undefined}>
+                  <td><span className="nm">{MOTIFS_RETENUE[g.motif] || mot(g.motif)}</span></td>
+                  <td>
+                    {/* `parcPatins` désigne une pointure précise du parc, ou rien : le barème vaut
+                        alors pour tout le parc. « Tout le parc » est une information, pas un blanc. */}
+                    {g.parcPatins
+                      ? (nomParc(g.parcPatins, parc) || <span className="sub">une pointure précise</span>)
+                      : <span className="sub">tout le parc</span>}
+                  </td>
+                  <td>
+                    {mot(g.mode)}
+                    {g.mode === 'valeur_remplacement' && (
+                      <div className="sub">le prix de rachat de la paire</div>
+                    )}
+                  </td>
+                  <td className="num">{euros(g.montantOuTaux)}</td>
+                  <td>
+                    <span className={`badge ${g.actif === false ? 'mut' : 'good'}`}>
+                      {g.actif === false ? 'Suspendu' : 'Appliqué'}
+                    </span>
+                  </td>
+                  {peutConfigurer && (
+                    <td className="num">
+                      <button className="btn ghost sm" type="button" onClick={() => setEditee(g)}>
+                        Modifier
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {grilles.length > 0 && (
+          <div className="hint">
+            Une ligne ne se supprime pas, elle se suspend : les retenues déjà faites la citent comme
+            justification, et l&rsquo;effacer les rendrait inexplicables.
+          </div>
+        )}
+      </div>
+
+      <BaremeModal
+        grille={editee}
+        parc={parc}
+        etabActif={etabActif}
+        onClose={() => setEditee(null)}
+        onFait={(m) => { setEditee(null); onFait(m) }}
+        onErreur={onErreur}
+      />
+    </section>
+  )
+}
+
+function BaremeModal({ grille, parc, etabActif, onClose, onFait, onErreur }) {
+  const edition = grille && grille.id
+  const [motif, setMotif] = useState('casse')
+  const [mode, setMode] = useState('forfait')
+  const [montant, setMontant] = useState('')
+  const [parcPatins, setParcPatins] = useState('')
+  const [actif, setActif] = useState(true)
+  const [enCours, setEnCours] = useState(false)
+
+  useEffect(() => {
+    if (!grille) return
+    setMotif(grille.motif || 'casse')
+    setMode(grille.mode || 'forfait')
+    setMontant(grille.montantOuTaux != null ? String(grille.montantOuTaux) : '')
+    setParcPatins(grille.parcPatins || '')
+    setActif(grille.actif !== false)
+  }, [grille])
+
+  async function envoyer(e) {
+    e.preventDefault()
+    setEnCours(true)
+    try {
+      // Le serveur attend une décimale en chaîne (`montantOuTaux`), pas des centimes : c'est lui qui
+      // convertit. On envoie donc ce que l'agent a tapé, virgule normalisée.
+      const corps = {
+        motif,
+        mode,
+        montantOuTaux: String(montant).replace(',', '.').trim() || '0.00',
+        parcPatins: parcPatins || null,
+        actif,
+      }
+      if (edition) {
+        await api.majPatinoireGrilleRetenue(grille.id, corps)
+      } else {
+        await api.creerPatinoireGrilleRetenue({
+          ...corps,
+          etablissement: `/api/etablissements/${etabActif}`,
+        })
+      }
+      onFait(edition ? 'Barème modifié.' : 'Ligne de barème ajoutée.')
+    } catch (err) {
+      onErreur(err.message || "Le barème n'a pas pu être enregistré.")
+    } finally {
+      setEnCours(false)
+    }
+  }
+
+  return (
+    <Modal
+      open={!!grille}
+      onClose={onClose}
+      titre={edition ? 'Modifier une ligne de barème' : 'Ajouter une ligne de barème'}
+    >
+      <form onSubmit={envoyer}>
+        <div className="field">
+          <label htmlFor="pb-motif">Motif de la retenue *</label>
+          <select id="pb-motif" className="input" value={motif} onChange={(e) => setMotif(e.target.value)}>
+            <option value="casse">Casse</option>
+            <option value="non_rendu">Non rendu</option>
+            <option value="perte">Perte</option>
+            <option value="restitution_partielle">Restitution partielle</option>
+          </select>
+          {/* LA LISTE FERMÉE EST LE POINT DE CET ÉCRAN.
+              Sur le barème générique du socle, le motif est un champ libre : deux agents écrivent
+              « casse » et « cassé », et ce sont deux règles. Ici la patinoire impose ses quatre
+              motifs, et c'est ce que le client lira sur son reçu. */}
+          <div className="hint">
+            C&rsquo;est la phrase que le client lira sur son reçu, et qu&rsquo;il contestera ou non.
+          </div>
+        </div>
+
+        <div className="field">
+          <label htmlFor="pb-parc">Pointure concernée</label>
+          <select id="pb-parc" className="input" value={parcPatins} onChange={(e) => setParcPatins(e.target.value)}>
+            <option value="">Tout le parc</option>
+            {parc.map((p) => (
+              <option key={p.id} value={p['@id'] || `/api/patinoire_parc_patins/${p.id}`}>
+                Pointure {p.pointure}
+              </option>
+            ))}
+          </select>
+          <div className="hint">
+            Laisser « tout le parc » sauf si une pointure vaut vraiment un autre prix — une paire de
+            grande taille, par exemple.
+          </div>
+        </div>
+
+        <div className="field">
+          <label htmlFor="pb-mode">Mode de calcul</label>
+          <select id="pb-mode" className="input" value={mode} onChange={(e) => setMode(e.target.value)}>
+            <option value="forfait">Forfait — un montant fixe</option>
+            <option value="valeur_remplacement">Valeur de remplacement — le prix de rachat</option>
+          </select>
+        </div>
+
+        <div className="field">
+          <label htmlFor="pb-montant">Montant (€) *</label>
+          <input
+            id="pb-montant"
+            className="input"
+            required
+            inputMode="decimal"
+            placeholder="15,00"
+            value={montant}
+            onChange={(e) => setMontant(e.target.value)}
+          />
+        </div>
+
+        <div className="field">
+          <label>
+            <input type="checkbox" checked={actif} onChange={(e) => setActif(e.target.checked)} />{' '}
+            Ligne appliquée
+          </label>
+          <div className="hint">
+            Décochez pour suspendre sans effacer : les retenues déjà faites continueront de la citer.
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
+          <button className="btn" type="button" onClick={onClose}>Annuler</button>
+          <button className="btn primary" type="submit" disabled={enCours || !montant.trim()}>
+            {enCours ? 'Enregistrement…' : edition ? 'Enregistrer' : 'Ajouter'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+// Le parc arrive en IRI dans la grille : on le retrouve dans la liste déjà chargée par l'écran.
+function nomParc(reference, parc) {
+  const id = String(reference).split('/').pop()
+  const p = (parc || []).find((x) => x.id === id)
+  return p ? `Pointure ${p.pointure}` : null
+}
+
 function AffutagesSection({ parc, peutAffuter, etabActif, onFait, onErreur }) {
   const [affutages, setAffutages] = useState([])
   const [nouveau, setNouveau] = useState(false)
