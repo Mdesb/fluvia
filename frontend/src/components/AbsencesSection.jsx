@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
+import Modal from './Modal.jsx'
 
 // Absences du personnel : déclarer, valider, refuser.
 //
@@ -131,81 +132,7 @@ export default function AbsencesSection({ etabActif, droits = [] }) {
         {erreur && <div className="banner banner-error">{erreur}</div>}
         {succes && <div className="banner banner-ok">{succes}</div>}
 
-        {declaration && (
-          <form onSubmit={declarer} className="card" style={{ marginBottom: 12 }}>
-            <div className="card-b">
-              <div className="grid g2" style={{ gap: 12 }}>
-                <div className="field" style={{ margin: 0 }}>
-                  <label htmlFor="ab-emp">Personne *</label>
-                  <select
-                    id="ab-emp"
-                    className="select"
-                    required
-                    value={declaration.employe}
-                    onChange={(e) => setDeclaration((s) => ({ ...s, employe: e.target.value }))}
-                  >
-                    {employes.map((emp) => (
-                      <option key={emp.id} value={emp.id}>
-                        {[emp.prenom, emp.nom].filter(Boolean).join(' ') || emp.matricule || 'Employé'}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="field" style={{ margin: 0 }}>
-                  <label htmlFor="ab-type">Motif</label>
-                  <select
-                    id="ab-type"
-                    className="select"
-                    value={declaration.type}
-                    onChange={(e) => setDeclaration((s) => ({ ...s, type: e.target.value }))}
-                  >
-                    {TYPES.map(([v, l]) => (
-                      <option key={v} value={v}>{l}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="field" style={{ margin: 0 }}>
-                  <label htmlFor="ab-debut">Du *</label>
-                  <input
-                    id="ab-debut"
-                    className="input"
-                    type="datetime-local"
-                    required
-                    value={declaration.debut}
-                    onChange={(e) => setDeclaration((s) => ({ ...s, debut: e.target.value }))}
-                  />
-                </div>
-                <div className="field" style={{ margin: 0 }}>
-                  <label htmlFor="ab-fin">Au *</label>
-                  <input
-                    id="ab-fin"
-                    className="input"
-                    type="datetime-local"
-                    required
-                    value={declaration.fin}
-                    onChange={(e) => setDeclaration((s) => ({ ...s, fin: e.target.value }))}
-                  />
-                </div>
-              </div>
-              <div className="field">
-                <label htmlFor="ab-motif">Précision</label>
-                <input
-                  id="ab-motif"
-                  className="input"
-                  value={declaration.motif}
-                  placeholder="Facultatif"
-                  onChange={(e) => setDeclaration((s) => ({ ...s, motif: e.target.value }))}
-                />
-              </div>
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                <button className="btn" type="button" onClick={() => setDeclaration(null)}>Annuler</button>
-                <button className="btn primary" type="submit" disabled={enCours !== null}>
-                  Déclarer
-                </button>
-              </div>
-            </div>
-          </form>
-        )}
+
 
         {chargement ? (
           <div className="center" style={{ minHeight: 80 }}><div className="spinner" /></div>
@@ -286,6 +213,91 @@ export default function AbsencesSection({ etabActif, droits = [] }) {
           </div>
         )}
       </div>
+
+      {/* LE FORMULAIRE EST PASSÉ EN MODALE (28/08), ET CE N’EST PAS COSMÉTIQUE.
+          Il s’insérait ENTRE l’en-tête et le tableau : déclarer une absence poussait vers le bas la
+          liste qu’on était en train de lire, et les lignes « à décider » disparaissaient sous le
+          pli au moment où l’on ouvrait le formulaire. Une modale laisse la liste où elle est. */}
+      <Modal
+        open={!!declaration}
+        onClose={() => setDeclaration(null)}
+        titre="Déclarer une absence"
+      >
+        {declaration && (
+          <form onSubmit={declarer}>
+            <div className="grid g2" style={{ gap: 12 }}>
+              <div className="field" style={{ margin: 0 }}>
+                <label htmlFor="ab-emp">Personne *</label>
+                <select
+                  id="ab-emp"
+                  className="select"
+                  required
+                  value={declaration.employe}
+                  onChange={(e) => setDeclaration((s) => ({ ...s, employe: e.target.value }))}
+                >
+                  {employes.map((emp) => (
+                    <option key={emp.id} value={emp.id}>
+                      {[emp.prenom, emp.nom].filter(Boolean).join(' ') || emp.matricule || 'Employé'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field" style={{ margin: 0 }}>
+                <label htmlFor="ab-type">Motif</label>
+                <select
+                  id="ab-type"
+                  className="select"
+                  value={declaration.type}
+                  onChange={(e) => setDeclaration((s) => ({ ...s, type: e.target.value }))}
+                >
+                  {TYPES.map(([v, l]) => (
+                    <option key={v} value={v}>{l}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="field" style={{ margin: 0 }}>
+                <label htmlFor="ab-debut">Du *</label>
+                <input
+                  id="ab-debut"
+                  className="input"
+                  type="datetime-local"
+                  required
+                  value={declaration.debut}
+                  onChange={(e) => setDeclaration((s) => ({ ...s, debut: e.target.value }))}
+                />
+              </div>
+              <div className="field" style={{ margin: 0 }}>
+                <label htmlFor="ab-fin">Au *</label>
+                <input
+                  id="ab-fin"
+                  className="input"
+                  type="datetime-local"
+                  required
+                  value={declaration.fin}
+                  onChange={(e) => setDeclaration((s) => ({ ...s, fin: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="field">
+              <label htmlFor="ab-motif">Précision</label>
+              <input
+                id="ab-motif"
+                className="input"
+                value={declaration.motif}
+                placeholder="Facultatif"
+                onChange={(e) => setDeclaration((s) => ({ ...s, motif: e.target.value }))}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn" type="button" onClick={() => setDeclaration(null)}>Annuler</button>
+              <button className="btn primary" type="submit" disabled={enCours !== null}>
+                Déclarer
+              </button>
+            </div>
+
+          </form>
+        )}
+      </Modal>
     </section>
   )
 }

@@ -124,9 +124,27 @@ Invariants :
 - L'erreur s'affiche **dans la modale**, pas derrière elle : sinon on ferme la modale pour lire
   pourquoi on n'a pas pu la valider.
 
-**Exceptions légitimes, à ne pas convertir :** un écran de travail continu où la saisie *est* la
-page (`Caisse`, `SessionCaisse`, `Login`, l'éditeur de boutique). Une modale y ajouterait un clic à
-chaque geste.
+**Le critère n'est pas « y a-t-il un `<form>` », c'est « est-ce que ça bouge ».**
+
+Un formulaire qui **apparaît au clic** au milieu de la page déplace la liste au moment précis où
+l'utilisateur la lisait — et souvent la ligne sur laquelle il vient de cliquer passe sous le pli.
+C'est le cas à convertir, et c'est le seul.
+
+Deux l'ont été le 28/08, tous deux de la même forme `{truc && (<form …>)}` :
+
+- `AbsencesSection` — déclarer une absence poussait vers le bas les lignes « à décider ».
+- `NoShowSection` — exonérer poussait vers le bas la ligne qu'on venait de désigner.
+
+**Ce qui a été examiné et laissé en place, avec la raison :**
+
+| Où | Pourquoi on ne convertit pas |
+|---|---|
+| `Catalogue` (3 formulaires) | Barres de saisie rapide **permanentes** (libellé, type, bouton, sur une ligne). Rien n'apparaît, donc rien ne bouge — et une modale ajouterait un clic à l'action la plus fréquente de l'écran. |
+| `Facturation` | Idem : le formulaire de création est la carte principale de l'écran, toujours visible. |
+| `TarifsProduit` | Rendu **à l'intérieur** de `ProduitFicheModal`. Une modale dans une modale est pire que le formulaire. |
+| `Caisse`, `SessionCaisse`, `Login`, l'éditeur | Écrans de travail continu où la saisie *est* la page. |
+
+Autrement dit : on convertit ce qui surgit, pas ce qui est déjà là.
 
 ## 4. Les listes
 
