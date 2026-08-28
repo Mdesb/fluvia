@@ -159,7 +159,10 @@ export default function ActivitesClient({ client, peutModifier }) {
  * l'écran le dit avant l'envoi : six semaines plus tard, « rappeler le 12 » ne dit ni pourquoi ni de
  * quoi parler, et l'appel ne se fait pas.
  */
-function SaisieEchange({ clientId, busy, setBusy, onFini, onAnnuler, onErreur }) {
+// Exporte pour que la LISTE des clients puisse noter un echange sans rouvrir la fiche : c'est le
+// geste qu'on fait juste apres avoir raccroche, et il ne merite pas trois clics de navigation.
+// Une seconde saisie ecrite a part aurait diverge de celle-ci au premier ajustement.
+export function SaisieEchange({ clientId, busy, setBusy, onFini, onAnnuler, onErreur }) {
   const [type, setType] = useState('call')
   const [resume, setResume] = useState('')
   const [date, setDate] = useState('')
