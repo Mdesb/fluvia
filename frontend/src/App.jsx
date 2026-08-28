@@ -265,7 +265,7 @@ export default function App() {
       {onglet === 'reservation' && <Reservation etabActif={etabActif} droits={droits} session={session} />}
       {onglet === 'supervision' && <Supervision etabActif={etabActif} />}
       {onglet === 'support' && <Support droits={droits} etabActif={etabActif} />}
-      {onglet === 'autorisations' && <Autorisations droits={droits} />}
+      {onglet === 'autorisations' && <Autorisations droits={droits} etabActif={etabActif} />}
       {onglet === 'legal' && <MentionsLegales etabActif={etabActif} droits={droits} />}
       {onglet === 'affaires' && <Pipeline etabActif={etabActif} droits={droits} onNaviguer={naviguer} />}
       {onglet === 'campagnes' && <Campagnes etabActif={etabActif} droits={droits} />}

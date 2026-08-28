@@ -1151,6 +1151,20 @@ export const api = {
     request(`/api/demandes-escalade/${id}/rejeter`, { method: 'POST', body: { motif } }),
   limitesAutorisation: () => request('/api/limite_autorisations', { query: { itemsPerPage: 200 } }),
   operationsSensibles: () => request('/api/operation_sensibles', { query: { itemsPerPage: 200 } }),
+  // LES PLAFONDS ÉTAIENT LISIBLES ET PAS MODIFIABLES, comme la règle de recouvrement ce matin.
+  //
+  // `POST`, `PATCH` et `DELETE` sur `/api/limite_autorisations` existent depuis le début, protégés
+  // par `autorisation.gerer`, et aucun écran ne les appelait — le pied de page de l'écran le disait
+  // même en toutes lettres : « la création et la modification passent encore par l'API ».
+  //
+  // Or un plafond REFUSE des opérations au guichet. Le voir sans pouvoir le corriger, c'est
+  // constater un blocage et devoir appeler quelqu'un pour le lever.
+  creerLimiteAutorisation: (corps) =>
+    request('/api/limite_autorisations', { method: 'POST', body: corps, ld: true }),
+  majLimiteAutorisation: (id, corps) =>
+    request(`/api/limite_autorisations/${id}`, { method: 'PATCH', body: corps }),
+  supprimerLimiteAutorisation: (id) =>
+    request(`/api/limite_autorisations/${id}`, { method: 'DELETE' }),
 
   // --- App\Legal — MENTIONS OBLIGATOIRES ---------------------------------------------------------
   //
