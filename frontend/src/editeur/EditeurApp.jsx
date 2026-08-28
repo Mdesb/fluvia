@@ -1,6 +1,18 @@
 import { useCallback, useEffect, useState } from 'react'
-import { api, tokenStore, etablissementStore, setUnauthorizedHandler } from '../api/client.js'
+import { api, membres, tokenStore, etablissementStore, setUnauthorizedHandler } from '../api/client.js'
 import Login from '../pages/Login.jsx'
+import { aUnDesDroits } from '../api/droits.js'
+import Agenda from '../pages/Agenda.jsx'
+import Documents from '../pages/Documents.jsx'
+import Finance from '../pages/Finance.jsx'
+import MentionsLegales from '../pages/MentionsLegales.jsx'
+import Parametres from '../pages/Parametres.jsx'
+import Pilotage from '../pages/Pilotage.jsx'
+import Pipeline from '../pages/Pipeline.jsx'
+import Projets from '../pages/Projets.jsx'
+import Sepa from '../pages/Sepa.jsx'
+import Social from '../pages/Social.jsx'
+import Support from '../pages/Support.jsx'
 import Abonnements from './pages/Abonnements.jsx'
 import Offres from './pages/Offres.jsx'
 import Clients from './pages/Clients.jsx'
@@ -25,6 +37,8 @@ export default function EditeurApp() {
   const [me, setMe] = useState(null)
   const [onglet, setOnglet] = useState('abonnements')
   const [refuse, setRefuse] = useState(false)
+  const [etablissements, setEtablissements] = useState([])
+  const [etabActif, setEtabActif] = useState(etablissementStore.get() || '')
 
   const deconnexion = useCallback(() => {
     tokenStore.clear()
@@ -38,6 +52,39 @@ export default function EditeurApp() {
     setUnauthorizedHandler(deconnexion)
   }, [deconnexion])
 
+  // ⚠ L'ÉTABLISSEMENT ACTIF SE POSE ICI, ET IL NE SE DEVINE PAS.
+  //
+  // Cet écran importait `etablissementStore` depuis toujours — pour l'EFFACER à la déconnexion, et
+  // jamais pour le poser. Tant qu'il ne servait que `/editor/*`, qui n'est pas cadré sur
+  // l'établissement, rien ne le signalait.
+  //
+  // Dès qu'on y branche un module cadré, deux défauts s'ouvrent, et aucun ne fait de bruit :
+  // sans en-tête `X-Etablissement` une collection rend une liste VIDE — pas une erreur — donc un
+  // écran normal qui annonce qu'il n'y a rien ; et si le même navigateur a servi l'application
+  // client, `localStorage` porte déjà l'identifiant du site d'un exploitant.
+  //
+  // On CONFRONTE donc l'identifiant mémorisé à la liste renvoyée par le serveur, qui est jointe aux
+  // affectations du compte : un identifiant étranger ou périmé n'y figure pas et tombe de lui-même.
+  const chargerContexte = useCallback(async () => {
+    const liste = membres(await api.etablissements())
+    setEtablissements(liste)
+    const memorise = etablissementStore.get()
+    const choisi = liste.find((e) => e.id === memorise)?.id || liste[0]?.id || ''
+    if (choisi) etablissementStore.set(choisi)
+    else etablissementStore.clear()
+    setEtabActif(choisi)
+  }, [])
+
+  useEffect(() => {
+    if (!authed) return
+    chargerContexte().catch(() => {
+      /* Le refus est dit par les écrans, pas deviné ici. */
+    })
+  }, [authed, chargerContexte])
+
+  // Le profil dépend de l'établissement ACTIF : les droits d'un compte ne sont pas les mêmes d'un
+  // site à l'autre. Le recharger au changement est ce qui évite qu'un éditeur passé sur le site
+  // d'un client garde à l'écran les droits de l'éditeur.
   useEffect(() => {
     if (!authed) return
     let vivant = true
@@ -52,7 +99,7 @@ export default function EditeurApp() {
     return () => {
       vivant = false
     }
-  }, [authed, deconnexion])
+  }, [authed, etabActif, deconnexion])
 
   if (!authed) {
     return <Login onConnecte={() => setAuthed(true)} />
@@ -66,6 +113,28 @@ export default function EditeurApp() {
     { id: 'reglements', ic: '⇄', label: 'Règlements' },
   ]
 
+  const droits = me?.droits || []
+
+  // LES ÉCRANS DU MÉTIER DE L'ÉDITEUR — ceux de l'application client, tels quels.
+  //
+  // Leurs permissions sont calculées sur l'ÉTABLISSEMENT ACTIF : un employé qui porte `crm.lire`
+  // chez l'éditeur voit ses affaires, un autre ne voit pas l'onglet. Aucune permission neuve n'est
+  // nécessaire — c'est ce que l'éditeur gagne à être un établissement comme un autre.
+  const ongletsMetier = [
+    { id: 'affaires', ic: '◨', label: 'Affaires', perms: ['crm.lire', 'crm.creer', 'crm.modifier'] },
+    { id: 'projets', ic: '◱', label: 'Projets', perms: ['personnel.lire', 'personnel.gerer', 'organisation.gerer'] },
+    { id: 'finance', ic: '€', label: 'Achats & trésorerie', perms: ['finance.read'] },
+    { id: 'sepa', ic: '⇄', label: 'Prélèvements SEPA', perms: ['sepa.lire', 'compta.lire'] },
+    { id: 'documents', ic: '🗎', label: 'Documents', perms: ['dms.read', 'dms.write'] },
+    { id: 'social', ic: '◎', label: 'Publication sociale', perms: ['social.read_post', 'social.publish', 'social.read_account'] },
+    { id: 'agenda', ic: '▤', label: 'Agenda' },
+    { id: 'pilotage', ic: '◨', label: 'Reporting', perms: ['reporting.lire', 'reporting.configurer', 'reporting.planifier'] },
+    { id: 'assistance', ic: '?', label: 'Assistance', perms: ['support.lire', 'support.ouvrir_ticket', 'support.lire_ticket_soi', 'support.traiter_ticket_n1', 'support.traiter_ticket_n2', 'support.administrer'] },
+    { id: 'parametres', ic: '⚙', label: 'Paramètres', perms: ['securite.gerer', 'securite.lire', 'organisation.gerer', 'offre.gerer', 'caisse.gerer', 'crm.parametrer'] },
+    { id: 'legal', ic: '§', label: 'Mentions légales', perms: ['organisation.gerer', 'boutique.gerer_vitrine'] },
+  ].filter((o) => !o.perms || aUnDesDroits(droits, o.perms))
+  const nomEtabActif = etablissements.find((e) => e.id === etabActif)?.nom || ''
+
   return (
     <div>
       <header className="editeur-barre">
@@ -75,7 +144,7 @@ export default function EditeurApp() {
         </div>
 
         <nav aria-label="Sections">
-          {onglets.map((o) => (
+          {[...onglets, ...ongletsMetier].map((o) => (
             <button
               key={o.id}
               type="button"
@@ -89,12 +158,50 @@ export default function EditeurApp() {
         </nav>
 
         <div className="editeur-compte">
+          {/*
+            LE SITE SUR LEQUEL ON TRAVAILLE EST TOUJOURS ÉCRIT, MÊME QUAND IL N'Y EN A QU'UN.
+            Le jour où un accès d'assistance ouvre le site d'un client, la question « où suis-je ? »
+            aura déjà sa réponse à l'écran. L'afficher seulement quand il y a un choix la ferait
+            apparaître au moment précis où l'on n'y prête pas attention.
+          */}
+          {etablissements.length > 1 ? (
+            <select
+              className="select"
+              value={etabActif}
+              onChange={(e) => {
+                etablissementStore.set(e.target.value)
+                setEtabActif(e.target.value)
+              }}
+              aria-label="Établissement actif"
+              title="Site sur lequel vous travaillez"
+            >
+              {etablissements.map((e) => (
+                <option key={e.id} value={e.id}>{e.nom}</option>
+              ))}
+            </select>
+          ) : (
+            nomEtabActif && <span className="mut">{nomEtabActif}</span>
+          )}
           <span className="mut">{me?.email || ''}</span>
           <button type="button" className="btn ghost sm" onClick={deconnexion}>
             Se déconnecter
           </button>
         </div>
       </header>
+
+      {/*
+        ⚠ `=== false` ET NON `!me?.estEditeur`. Tant que le profil n'est pas chargé, la propriété
+        est `undefined` — un `!` afficherait « vous êtes chez un client » pendant le chargement, à
+        chaque ouverture, y compris chez soi. Une alerte qui crie à tort est une alerte qu'on
+        apprend à ignorer, et c'est celle-là qu'on ignorera le jour où elle sera vraie.
+      */}
+      {me?.estEditeur === false && (
+        <div className="banner banner-warn" role="status">
+          Vous travaillez sur <strong>{nomEtabActif || 'le site d’un client'}</strong>, pas sur
+          l’établissement éditeur. Ce que vous écrivez ici appartient à ce client, et les chiffres
+          affichés sont les siens.
+        </div>
+      )}
 
       <main className="view">
         {/*
@@ -116,6 +223,23 @@ export default function EditeurApp() {
             {onglet === 'clients' && <Clients onRefus={() => setRefuse(true)} />}
             {onglet === 'facturation' && <Facturation onRefus={() => setRefuse(true)} />}
             {onglet === 'reglements' && <Reglements onRefus={() => setRefuse(true)} />}
+            {/*
+              Les deux écrans de l'application client, tels quels : leur API est cadrée sur
+              l'établissement, et l'éditeur en est un. Les recopier en « version éditeur » aurait
+              produit deux agendas et deux messageries à corriger séparément — et une seule des deux
+              le jour où l'on est pressé.
+            */}
+            {onglet === 'affaires' && <Pipeline droits={droits} etabActif={etabActif} onNaviguer={setOnglet} />}
+            {onglet === 'projets' && <Projets droits={droits} etabActif={etabActif} />}
+            {onglet === 'finance' && <Finance droits={droits} etabActif={etabActif} />}
+            {onglet === 'sepa' && <Sepa droits={droits} etabActif={etabActif} />}
+            {onglet === 'documents' && <Documents droits={droits} etabActif={etabActif} />}
+            {onglet === 'social' && <Social droits={droits} etabActif={etabActif} />}
+            {onglet === 'agenda' && <Agenda droits={droits} etabActif={etabActif} />}
+            {onglet === 'pilotage' && <Pilotage droits={droits} etabActif={etabActif} etablissements={etablissements} />}
+            {onglet === 'assistance' && <Support droits={droits} etabActif={etabActif} me={me} />}
+            {onglet === 'parametres' && <Parametres droits={droits} etabActif={etabActif} etablissements={etablissements} />}
+            {onglet === 'legal' && <MentionsLegales droits={droits} etabActif={etabActif} />}
           </>
         )}
       </main>
