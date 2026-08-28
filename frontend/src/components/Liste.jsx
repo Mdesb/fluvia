@@ -167,10 +167,38 @@ function afficher(v) {
 //
 // Elle accepte les DEUX formes — objet embarqué ou IRI — pour que l'écran continue de marcher le
 // jour où quelqu'un ajoute un `#[Groups]` côté serveur, sans qu'on ait à y revenir.
+// ⚠ UN OBJET N'EST PAS FORCÉMENT UNE DONNÉE : IL PEUT ÊTRE UNE IRI DÉGUISÉE.
+//
+// La première version rendait l'objet tel quel dès que ce n'était pas une chaîne. Ça paraissait
+// sûr, et c'était faux. API Platform embarque parfois un **talon** : `{ '@id', '@type', id }` et
+// rien d'autre — quand la classe cible n'expose que son `id` dans le groupe courant. C'est un
+// pointeur, pas un contenu.
+//
+// Constaté à l'écran le 28/08 : `PadelReservation.terrain` arrive ainsi. La résolution
+// court-circuitait sur le talon, et le tableau des parties ouvertes continuait d'afficher un
+// fragment d'UUID alors que la table voisine, elle, affichait le bon nom. **Une correction qui ne
+// marche qu'à moitié est pire qu'une correction absente : elle donne l'impression d'être faite.**
+//
+// On considère donc qu'un objet ne portant que des champs d'identité doit être résolu comme une
+// IRI — en retombant sur le talon si la liste ne contient pas mieux.
+const CHAMPS_IDENTITE = new Set(['@id', '@type', 'id', 'code'])
+
 export function resoudre(relation, liste) {
   if (!relation) return null
-  if (typeof relation === 'object') return relation
-  const id = String(relation).split('/').pop()
+
+  if (typeof relation === 'object') {
+    const porteAutreChose = Object.keys(relation).some((k) => !CHAMPS_IDENTITE.has(k))
+    if (porteAutreChose) return relation
+    // Talon : on tente la liste, et à défaut on rend le talon (il porte au moins l'identifiant).
+    return trouver(relation.id || relation['@id'], liste) || relation
+  }
+
+  return trouver(relation, liste)
+}
+
+function trouver(reference, liste) {
+  if (!reference) return null
+  const id = String(reference).split('/').pop()
   return (liste || []).find((x) => x.id === id || x.code === id) || null
 }
 

@@ -57,7 +57,7 @@ class Fournisseur
 
     #[ORM\Column(length: 180)]
     #[Assert\NotBlank]
-    #[Groups(['stock_fournisseur:read', 'stock_fournisseur:write'])]
+    #[Groups(['stock_fournisseur:read', 'stock_fournisseur:write', 'commande_achat:read', 'supplier_invoice:read'])]
     private string $raisonSociale = '';
 
     #[ORM\Column(length: 14, nullable: true)]

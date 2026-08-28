@@ -56,7 +56,7 @@ class Support
 
     #[ORM\Column(length: 128, unique: true)]
     #[Assert\NotBlank]
-    #[Groups(['support:read', 'support:write', 'appairage:read', 'passage:read', 'pertevol:read'])]
+    #[Groups(['support:read', 'support:write', 'appairage:read', 'passage:read', 'pertevol:read', 'sos:read'])]
     private string $identifiant = '';
 
     #[ORM\Column(length: 12, enumType: TypeSupport::class)]

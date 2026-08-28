@@ -96,7 +96,7 @@ class ArticleStock
 
     #[ORM\Column(length: 180)]
     #[Assert\NotBlank]
-    #[Groups(['article:read', 'article:write'])]
+    #[Groups(['article:read', 'article:write', 'ligne_commande_achat:read', 'mouvement:read'])]
     private string $libelle = '';
 
     #[ORM\Column(length: 10, enumType: Unite::class)]

@@ -246,8 +246,10 @@ fi
 #     monde. Une comparaison mal typée ne produit pas d'erreur, elle produit un vide.
 if [ -n "${REFERENCE:-}" ]; then
     executer "Liaisons d'objet (D58)" php_racine bin/garde-fou-liaisons-objet.php "--contre=$REFERENCE"
+    executer "Nullable sur colonne non nulle" php_racine bin/garde-fou-nullable-non-nul.php "--contre=$REFERENCE"
 else
     executer "Liaisons d'objet (D58)" php_racine bin/garde-fou-liaisons-objet.php
+    executer "Nullable sur colonne non nulle" php_racine bin/garde-fou-nullable-non-nul.php
 fi
 
 # 5. i18n : pas de chaîne d'UI en dur — SANS OBJET tant que la couche i18n n'existe pas (aucun

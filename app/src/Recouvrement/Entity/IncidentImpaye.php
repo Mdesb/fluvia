@@ -70,12 +70,12 @@ class IncidentImpaye
 
     /** Type de contrat porté par la verticale (ex. `sport.abonnement_fitness`), résolu via `RedevableRegistry`. */
     #[ORM\Column(length: 60)]
-    #[Groups(['incident:read'])]
+    #[Groups(['incident:read', 'representation:read'])]
     private string $typeRedevable = '';
 
     /** Identifiant opaque du contrat côté verticale (ex. l'UUID d'un `AbonnementFitness`). */
     #[ORM\Column(length: 64)]
-    #[Groups(['incident:read'])]
+    #[Groups(['incident:read', 'representation:read'])]
     private string $referenceRedevable = '';
 
     /** Identifiant opaque de l'échéance d'origine côté verticale, si connu. */
