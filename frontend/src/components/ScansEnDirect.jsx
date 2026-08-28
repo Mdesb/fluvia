@@ -75,7 +75,20 @@ export default function ScansEnDirect({ droits = [], etabActif }) {
     }
   })
   const [scans, setScans] = useState([])
-  const [replie, setReplie] = useState(false)
+  // SUR UN TÉLÉPHONE, LE BANDEAU COMMENCE REPLIÉ.
+  //
+  // Il est en position fixe dans le coin bas : sur un écran de 375 px, déplié à six lignes, il
+  // recouvre le bas de la caisse — c'est-à-dire les boutons d'encaissement. Un caissier qui ne
+  // peut plus encaisser parce qu'un panneau d'information est passé devant, c'est l'information
+  // qui empêche le métier. Replié, il garde son titre et son compteur de refus, et se déplie
+  // d'un doigt quand on en a besoin.
+  const [replie, setReplie] = useState(() => {
+    try {
+      return window.matchMedia('(max-width: 768px)').matches
+    } catch {
+      return false
+    }
+  })
   const [arrete, setArrete] = useState(null) // raison d'un arrêt : session perdue, droit refusé…
   const [trouEventuel, setTrouEventuel] = useState(false)
   const [billetOuvert, setBilletOuvert] = useState(null)
