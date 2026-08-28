@@ -55,6 +55,30 @@ export class ApiError extends Error {
 // C'est la forme la plus courante du défaut de cette semaine : une requête qui part, une réponse qui
 // arrive, un résultat plausible et faux. Ici il se serait traduit par « aucune option retenue » sur
 // un panier où le caissier venait d'en cocher trois — et le client aurait payé le prix de base.
+// ⚠ `itemsPerPage` NE FAIT RIEN. IL EST ÉCRIT ~350 FOIS DANS CE FICHIER, ET LE SERVEUR L'IGNORE.
+//
+// `config/packages/api_platform.yaml` ne déclare aucun bloc `pagination` : les valeurs par défaut
+// d'API Platform s'appliquent — **30 éléments par page**, et `pagination_client_items_per_page` à
+// `false`, ce qui interdit au client de changer la taille de page.
+//
+// Mesuré contre la préprod le 28/08, pas déduit :
+//     GET /api/mandat_sepas?itemsPerPage=1   →  rend les 3 lignes. Le paramètre est ignoré.
+//     debug:config api_platform              →  pagination.enabled: true, aucun items_per_page
+//                                               ni client_items_per_page dans `defaults`.
+//
+// Autrement dit : `itemsPerPage: 500` obtient 30 lignes, exactement comme `itemsPerPage: 100`. Un
+// catalogue de 40 produits en affiche 30, un annuaire de 200 clients en affiche 30 — même code 200,
+// même forme de réponse, juste moins de lignes.
+//
+// LES PARAMÈTRES SONT CONSERVÉS À DESSEIN : ils disent quelle taille chaque écran AURAIT BESOIN
+// d'obtenir, et ils redeviendront effectifs le jour où le serveur activera
+// `pagination_client_items_per_page`. Les retirer ferait perdre cette information sans rien gagner.
+//
+// EN ATTENDANT, C'EST L'AFFICHAGE QUI PORTE L'AVERTISSEMENT. La réponse Hydra contient `totalItems`
+// — le total réel, pas la taille de la page — donc une réponse tronquée est reconnaissable.
+// `components/Liste.jsx` affiche « 30 sur 47 » à côté du titre, et les trois écrans qui RECOUPENT
+// deux listes (SEPA, cautions, recouvrement) le signalent plus fort : chez eux, une liste coupée ne
+// rend pas l'écran incomplet, elle le rend faux.
 function qs(params) {
   if (!params) return ''
   const usp = new URLSearchParams()

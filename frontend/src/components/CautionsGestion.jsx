@@ -34,6 +34,8 @@ export default function CautionsGestion({ etabActif, droits }) {
   const [cautions, setCautions] = useState([])
   const [mouvements, setMouvements] = useState([])
   const [grilles, setGrilles] = useState([])
+  const [baremePartiel, setBaremePartiel] = useState(false)
+  const [cautionsPartielles, setCautionsPartielles] = useState(false)
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
@@ -56,6 +58,19 @@ export default function CautionsGestion({ etabActif, droits }) {
     setCautions(c.status === 'fulfilled' ? membres(c.value) : [])
     setMouvements(m.status === 'fulfilled' ? membres(m.value) : [])
     setGrilles(g.status === 'fulfilled' ? membres(g.value) : [])
+
+    // LE BARÈME TRONQUÉ NE REND PAS L'ÉCRAN INCOMPLET, IL LUI FAIT DIRE LE CONTRAIRE DU VRAI.
+    //
+    // Le serveur plafonne chaque collection à 30 lignes (l'explication est dans
+    // `components/Liste.jsx`). Le journal retrouve le barème d'une retenue en recoupant la liste
+    // des barèmes — et quand il n'y arrive pas, il affiche « montant libre », c'est-à-dire
+    // « quelqu'un a décidé cette somme à la main ».
+    //
+    // Sur un registre dont l'unique raison d'être est de répondre à une contestation, c'est une
+    // affirmation, pas un blanc : on dirait à un client que sa retenue n'obéissait à aucune règle
+    // alors qu'elle en appliquait une. Une liste coupée doit donc se dire.
+    setBaremePartiel(partielle(g))
+    setCautionsPartielles(partielle(c) || partielle(m))
     if (c.status === 'rejected') setErreur(c.reason?.message || 'Lecture des cautions impossible.')
     setChargement(false)
   }, [etabActif])
@@ -106,6 +121,18 @@ export default function CautionsGestion({ etabActif, droits }) {
     <>
       {erreur && <div className="banner banner-error">{erreur}</div>}
       {succes && <div className="banner banner-ok">{succes}</div>}
+
+      {(cautionsPartielles || baremePartiel) && (
+        <div className="banner banner-warn">
+          <b>Toutes les données ne sont pas affichées.</b> Le serveur limite chaque liste à 30 lignes.
+          {cautionsPartielles
+            && ' Des cautions ou des mouvements manquent : les totaux ci-dessous sont donc'
+              + ' inférieurs à la réalité.'}
+          {baremePartiel
+            && ' Le barème est incomplet : une retenue peut apparaître comme un « montant libre »'
+              + ' alors qu’elle appliquait bien une règle.'}
+        </div>
+      )}
 
       <Tabs
         onglets={[
@@ -686,6 +713,14 @@ function GrilleModal({ grille, etabActif, onClose, onFait }) {
 }
 
 // --- Utilitaires ---------------------------------------------------------------------------------
+
+// Une lecture aboutie dont le serveur a rendu moins de lignes qu'il n'en existe. `totalItems` porte
+// le total réel : une réponse coupée est reconnaissable, et silencieuse si personne ne la lit.
+function partielle(resultat) {
+  if (resultat.status !== 'fulfilled') return false
+  const total = resultat.value?.totalItems ?? resultat.value?.['hydra:totalItems']
+  return typeof total === 'number' && membres(resultat.value).length < total
+}
 
 function badgeStatut(statut) {
   if (statut === 'restituee') return 'mut'
