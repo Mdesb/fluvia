@@ -191,7 +191,7 @@ function FormulaireTopologie({ open, titre, champs, valeurs, setValeurs, onSubmi
             </div>
           )
         })}
-        <div className="modal-f" style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+        <div className="row" style={{ justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
           <button className="btn" type="button" onClick={onClose} disabled={enCours}>Annuler</button>
           <button className="btn primary" type="submit" disabled={enCours}>
             {enCours ? 'Enregistrement…' : 'Enregistrer'}
