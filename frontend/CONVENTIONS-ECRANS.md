@@ -161,6 +161,52 @@ Invariants :
 - L'erreur s'affiche **dans la modale**, pas derrière elle : sinon on ferme la modale pour lire
   pourquoi on n'a pas pu la valider.
 
+### 3 bis. L'erreur derrière la modale — quatre fois en un jour, sur quatre écrans
+
+C'est devenu le défaut le plus fréquent du dépôt, et il ne ressemble pas à un défaut : il ressemble à
+un bouton qui ne fait rien.
+
+Le 28/08, la même faute a été trouvée sur `RolesSection`, sur les trois modales du nouvel écran
+`Acces`, et sur `PlafondModal`. Dans les quatre cas le code **attrapait** l'erreur — il l'écrivait
+simplement dans le bandeau de la *carte*, c'est-à-dire **sous la fenêtre restée ouverte**. On clique
+« Enregistrer », la modale ne se ferme pas, rien ne bouge, et l'explication est cachée dessous.
+
+**Les messages concernés sont précisément ceux qui débloquent :**
+
+| Écran | Ce que le serveur répondait, et que personne ne voyait |
+|---|---|
+| `RolesSection` | « ce rôle est la seule source du droit d'administration de X — désignez un remplaçant avant de retirer ce droit » |
+| `Acces` | « support déjà appairé : révocation préalable requise », « support bloqué », « un terminal est déjà enrôlé pour cette référence ITBOX » |
+| `PlafondModal` | « une limite porte soit un rôle, soit un utilisateur, jamais les deux ni aucun » |
+
+Aucun ne dit non : tous disent **dans quel ordre faire**. Les cacher ne laisse qu'un bouton inerte.
+
+**La cause est structurelle, pas distraite.** Un écran a un `agir(fn, message)` mutualisé qui pose
+l'erreur dans l'état de la page ; on le réutilise pour les gestes de tableau *et* pour les modales,
+parce que c'est le même appel. Il faut deux chemins :
+
+```jsx
+// Gestes déclenchés depuis le TABLEAU : rien devant, le bandeau de l'écran convient.
+async function agir(fn, message) {
+  try { await fn(); setSucces(message); await recharger() }
+  catch (e) { setErreur(e.message); }
+}
+
+// Gestes déclenchés depuis une MODALE : on RELANCE, la modale affiche chez elle.
+async function agirDepuisModale(fn, message) {
+  const r = await fn()          // l'erreur remonte à l'appelant
+  setSucces(message); await recharger(); return r
+}
+```
+
+**Comment on le trouve :** en provoquant le refus, jamais en relisant. Réappairer deux fois le même
+numéro, retirer le dernier droit d'administration, enregistrer un plafond sans cible. Un écran qui
+n'a jamais reçu de 4xx n'a pas été essayé.
+
+**Le corollaire :** une modale ne doit pas non plus neutraliser sa propre fermeture. `onClose={() => {}}`
+laisse une croix affichée qui ne fait plus rien — un bouton mort, dans la famille qu'on corrige. Si la
+sortie doit être retenue, on retient le bouton principal et on dit pourquoi ; la croix ferme.
+
 **Le critère n'est pas « y a-t-il un `<form>` », c'est « est-ce que ça bouge ».**
 
 Un formulaire qui **apparaît au clic** au milieu de la page déplace la liste au moment précis où
