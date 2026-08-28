@@ -155,6 +155,46 @@ const MOTS = {
   resolu: 'Réglé',
   virement: 'Virement',
   caisse: 'Espèces au guichet',
+  // Le résultat d'une représentation bancaire. Sans ces deux lignes, le repli affichait « Reussie »
+  // et « Echouee » — sans accent, parce que le repli désoulignise un code, il ne parle pas français.
+  reussie: 'Réussie',
+  echouee: 'Échouée',
+  app_1_clic: "Réglé par le client dans l'application",
+
+  // --- SEPA ---
+  // Le cycle d'une remise : composée en brouillon, figée en XML, puis remise à la banque.
+  generee: 'Générée',
+  transmise: 'Transmise à la banque',
+  // `actif` / `revoque` (statut d'un mandat) sont déjà dans « Statuts courants » plus haut : les
+  // redéclarer ici serait une clé en double, que la dernière écrase silencieusement.
+
+  // LES QUATRE SÉQUENCES SEPA RESTENT DES SIGLES DANS LES FICHIERS, PAS SUR L'ÉCRAN.
+  //
+  // `FRST`, `RCUR`, `FNAL`, `OOFF` sont écrits tels quels dans le pain.008 et dans les retours de la
+  // banque : on ne les renomme pas *dans le fichier*. Mais l'écran s'adresse à un régisseur, pas à
+  // un analyste bancaire, et « FRST » ne veut rien dire pour lui. On affiche donc le mot, et le
+  // sigle en dessous en `mono` là où il sert à parler à la banque.
+  FRST: 'Première',
+  RCUR: 'Suivante',
+  FNAL: 'Dernière',
+  OOFF: 'Ponctuelle',
+
+  // --- Cautions ---
+  // Statuts d'une caution. « Retenue partielle » et « retenue totale » ne sont pas deux nuances du
+  // même mot : la première rend de l'argent au client, la seconde non — c'est la question qu'il pose.
+  consignee: 'Consignée',
+  restituee: 'Restituée',
+  retenue_partielle: 'Retenue partielle',
+  retenue_totale: 'Retenue totale',
+  // Mouvements portés au journal d'une caution.
+  consignation: 'Consignation',
+  restitution: 'Restitution',
+  retenue: 'Retenue',
+  relance: 'Relance',
+  forcage: 'Forçage',
+  // Mode de calcul d'une ligne de barème.
+  forfait: 'Forfait',
+  valeur_remplacement: 'Valeur de remplacement',
 
   // --- Comptabilite ---
   provisoire: 'Provisoire',

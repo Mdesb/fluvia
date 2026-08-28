@@ -42,6 +42,11 @@ const Parametres = lazy(() => import('./pages/Parametres.jsx'))
 const Stock = lazy(() => import('./pages/Stock.jsx'))
 const Musee = lazy(() => import('./pages/Musee.jsx'))
 const Padel = lazy(() => import('./pages/Padel.jsx'))
+// Différés comme la comptabilité, dont ils partagent les composants : trois écrans de gestion
+// financière qu'un caissier n'ouvrira jamais n'ont pas à peser sur le premier chargement.
+const Sepa = lazy(() => import('./pages/Sepa.jsx'))
+const Recouvrement = lazy(() => import('./pages/Recouvrement.jsx'))
+const Cautions = lazy(() => import('./pages/Cautions.jsx'))
 
 // Un compte est « administrateur » s'il porte l'un des droits d'administration du socle sur
 // l'établissement actif (matérialisés dans `me.droits`). Gouverne l'atterrissage sur le tableau
@@ -173,6 +178,12 @@ export default function App() {
       piscine: 'piscine.lire', patinoire: 'patinoire.lire', padel: 'padel.lire',
       musee: 'musee.lire', comptabilite: 'compta.lire', personnel: 'personnel.lire',
       facturation: 'facturation.lire',
+      // PAS D'ENTREE ICI POUR `sepa`, `recouvrement` ET `caution`, ET C'EST VOLONTAIRE.
+      // Cette garde ne sait tester QU'UNE permission, or ces trois ecrans s'ouvrent a plusieurs
+      // (`sepa.lire` OU `compta.lire`, `caution.lire` OU `caution.piloter`, ...) exactement comme le
+      // fait le serveur. Y mettre une seule permission renverrait a la caisse un comptable qui a le
+      // droit de les lire -- le piege decrit deux lignes plus bas, et paye une fois deja.
+      // Le filtrage se fait donc la ou il sait exprimer un OU : les `perms` du menu (`AppShell`).
     }
     if (onglet === 'dashboard' && me && !estAdministrateur(me)) setOnglet('caisse')
     else if (capRequise[onglet] && !caps.includes(capRequise[onglet])) setOnglet('caisse')
@@ -266,6 +277,9 @@ export default function App() {
         <Pilotage etabActif={etabActif} etablissements={etablissements} droits={droits} />
       )}
       {onglet === 'comptabilite' && <Comptabilite etabActif={etabActif} droits={droits} />}
+      {onglet === 'sepa' && <Sepa etabActif={etabActif} droits={droits} />}
+      {onglet === 'recouvrement' && <Recouvrement etabActif={etabActif} droits={droits} />}
+      {onglet === 'caution' && <Cautions etabActif={etabActif} droits={droits} />}
       {onglet === 'facturation' && <Facturation etabActif={etabActif} droits={droits} />}
       {onglet === 'clients' && <Clients etabActif={etabActif} cible={cible} onCibleConsommee={() => setCible(null)} droits={droits} />}
       {onglet === 'boutique' && <Boutique etabActif={etabActif} droits={droits} />}

@@ -1,11 +1,25 @@
 import { useState } from 'react'
-import Liste, { euroCentimes, dateFr, dateHeureFr } from '../components/Liste.jsx'
+import Liste, { euroCentimes, dateFr } from '../components/Liste.jsx'
 import Tabs from '../components/Tabs.jsx'
 import { api } from '../api/client.js'
 import ClotureComptable from '../components/ClotureComptable.jsx'
 import ImpayesRecouvrement from '../components/ImpayesRecouvrement.jsx'
+import PrelevementsSepa from '../components/PrelevementsSepa.jsx'
+import CautionsGestion from '../components/CautionsGestion.jsx'
 
 // Comptabilité / Régie (M6) + SEPA + impayés + cautions. Consultation multi-onglets.
+//
+// LES TROIS DERNIERS ONGLETS NE SONT PLUS ÉCRITS ICI, ET C'EST TOUT L'INTÉRÊT.
+//
+// SEPA, impayés et cautions ont désormais chacun leur entrée de menu. L'objection qui les tenait
+// fermées était juste : deux portes vers la même liste, c'est deux endroits à corriger et personne
+// qui sache lequel fait foi. Elle ne tient plus dès lors que les deux portes ouvrent sur le MÊME
+// COMPOSANT — `PrelevementsSepa`, `ImpayesRecouvrement`, `CautionsGestion`. Il n'y a qu'une
+// implémentation ; elle ne peut pas diverger d'elle-même.
+//
+// Les trois onglets restent donc là, où l'exploitant a l'habitude de les chercher, et ils montrent
+// exactement l'écran de l'entrée de menu. Le prix payé est une seconde rangée d'onglets à
+// l'intérieur de la première : c'est visible, et c'est moins cher que deux copies.
 export default function Comptabilite({ etabActif, droits }) {
   // La cloture est l'onglet par defaut : c'est le seul du module qui porte un TRAVAIL. Les huit
   // listes existantes repondent a des questions qu'on se pose ; la cloture repond a une echeance.
@@ -106,83 +120,11 @@ export default function Comptabilite({ etabActif, droits }) {
         </div>
       )}
 
-      {sousOnglet === 'sepa' && (
-        <div className="resa-grid">
-          <Liste
-            titre="Remises de prélèvement (pain.008)"
-            sous="lots SEPA"
-            deps={[etabActif]}
-            charger={api.remisesSepa}
-            vide="Aucune remise SEPA."
-            colonnes={[
-              { cle: 'messageId', entete: 'Message ID', rendu: (r) => <span className="mono">{r.messageId || '—'}</span> },
-              { cle: 'dateCollecte', entete: 'Collecte', rendu: (r) => dateFr(r.dateCollecte) },
-              { cle: 'nbTxs', entete: 'Nb tx', num: true, rendu: (r) => r.nbTxs ?? '—' },
-              { cle: 'ctrlSumCentimes', entete: 'Total', num: true, rendu: (r) => euroCentimes(r.ctrlSumCentimes) },
-              { cle: 'statut', entete: 'Statut', rendu: (r) => <span className="badge mut">{r.statut || '—'}</span> },
-            ]}
-          />
-          <Liste
-            titre="Mandats SEPA"
-            deps={[etabActif]}
-            charger={api.mandatsSepa}
-            vide="Aucun mandat."
-            colonnes={[
-              { cle: 'rum', entete: 'RUM', rendu: (r) => <span className="mono">{r.rum || '—'}</span> },
-              { cle: 'debiteurNom', entete: 'Débiteur', rendu: (r) => r.debiteurNom || '—' },
-              { cle: 'iban4Derniers', entete: 'IBAN', rendu: (r) => (r.iban4Derniers ? `••••${r.iban4Derniers}` : '—') },
-            ]}
-          />
-          {/* LES REJETS, QUI ETAIENT LA SEULE PIECE INVISIBLE DE LA CHAINE.
-              L'ecran montrait ce qu'on envoie a la banque (remises) et qui l'a autorise (mandats),
-              jamais ce que la banque RENVOIE. Or un rejet ouvre un incident d'impaye, programme des
-              representations et peut bloquer l'acces du redevable : c'est l'evenement qui declenche
-              tout le reste, et il n'apparaissait sur aucun ecran.
-              Le code motif de la banque est affiche brut a cote de son libelle : c'est lui qu'on
-              cite au telephone quand on rappelle sa banque, et le libelle traduit ne suffit pas. */}
-          <Liste
-            titre="Rejets bancaires"
-            sous="ce que la banque renvoie"
-            deps={[etabActif]}
-            charger={api.rejetsSepa}
-            vide="Aucun rejet. Les prelevements refuses par la banque apparaitront ici, et ouvriront un impaye."
-            colonnes={[
-              { cle: 'dateRejet', entete: 'Rejet', rendu: (r) => dateFr(r.dateRejet) },
-              { cle: 'mndtId', entete: 'Mandat', rendu: (r) => <span className="mono">{r.mndtId || '—'}</span> },
-              {
-                cle: 'codeMotif',
-                entete: 'Motif',
-                rendu: (r) => (
-                  <span>
-                    {r.libelleMotif || '—'}
-                    {r.codeMotif && <div className="sub mono">{r.codeMotif}</div>}
-                  </span>
-                ),
-              },
-              { cle: 'endToEndId', entete: 'Reference', rendu: (r) => <span className="mono">{r.endToEndId || '—'}</span> },
-            ]}
-          />
-        </div>
-      )}
+      {sousOnglet === 'sepa' && <PrelevementsSepa etabActif={etabActif} droits={droits} />}
 
       {sousOnglet === 'impayes' && <ImpayesRecouvrement etabActif={etabActif} droits={droits} />}
 
-      {sousOnglet === 'cautions' && (
-        <Liste
-          titre="Cautions"
-          sous="dépôts &amp; retenues"
-          deps={[etabActif]}
-          charger={api.cautions}
-          vide="Aucune caution."
-          colonnes={[
-            { cle: 'typeCible', entete: 'Type', rendu: (r) => r.typeCible || '—' },
-            { cle: 'referenceCible', entete: 'Référence', rendu: (r) => <span className="mono">{String(r.referenceCible || '').slice(0, 10) || '—'}</span> },
-            { cle: 'montantCentimes', entete: 'Montant', num: true, rendu: (r) => euroCentimes(r.montantCentimes) },
-            { cle: 'montantRetenuCentimes', entete: 'Retenu', num: true, rendu: (r) => euroCentimes(r.montantRetenuCentimes) },
-            { cle: 'statut', entete: 'Statut', rendu: (r) => <span className="badge mut">{r.statut || '—'}</span> },
-          ]}
-        />
-      )}
+      {sousOnglet === 'cautions' && <CautionsGestion etabActif={etabActif} droits={droits} />}
     </div>
   )
 }
