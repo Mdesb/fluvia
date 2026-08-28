@@ -26,6 +26,15 @@ enum CodeMotifRefus: string
     case SignatureInvalide = 'signature_invalide';
     /** `equipementId` hors de la portée (itboxRef) du `Terminal` authentifié (plan-acces-terminal.md §2.4). */
     case HorsPortee = 'hors_portee';
+    /**
+     * Le droit n'ouvre pas CET espace : le produit vendu ne donne pas accès à cette zone.
+     *
+     * ⚠ À ne pas confondre avec `HorsPortee`, qui parle du TERMINAL (un équipement hors de la
+     * portée déclarée d'une ITBOX). Celui-ci parle du DROIT : le porteur est au bon endroit, son
+     * billet ne couvre simplement pas cette zone. Les deux se ressemblent dans un journal et
+     * appellent deux gestes opposés — vérifier une installation, ou vendre un complément.
+     */
+    case ZoneNonAutorisee = 'zone_non_autorisee';
     /** Réconciliation gracieuse hors-ligne (CA-8, plan-acces-terminal.md §4.2) : passage accepté malgré
      *  un dépassement de crédit détecté au rejeu — actif uniquement derrière le flag
      *  `EvenementPassageDto::autoriserCreditNegatifSiHorsLigne` (désactivé par défaut). */
