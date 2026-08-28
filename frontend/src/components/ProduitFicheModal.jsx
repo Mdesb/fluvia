@@ -21,8 +21,24 @@ const CANAUX_PRODUIT = [
   { valeur: 'borne', libelle: 'Sur borne' },
 ]
 
-export default function ProduitFicheModal({ open, produit, onClose, peutModifier = false, onModifie }) {
+// Les trois règles de produit constaté d'avance du socle (`Offre\Enum\ReglePca`), dites en clair :
+// le code brut « etalement » ne dit pas ce qui est étalé ni pourquoi.
+const REGLES_PCA = {
+  aucune: 'Aucune — le chiffre d’affaires est acquis à la vente',
+  etalement: 'Étalement — réparti sur la durée de validité',
+  consommation: 'À la consommation — acquis au fur et à mesure des entrées',
+}
+
+export default function ProduitFicheModal({
+  open,
+  produit,
+  onClose,
+  peutModifier = false,
+  peutModifierCompta = false,
+  onModifie,
+}) {
   const [edition, setEdition] = useState(null)
+  const [editionCompta, setEditionCompta] = useState(null)
   const [enregistrement, setEnregistrement] = useState(false)
   const [detail, setDetail] = useState(null)
   const [liaisons, setLiaisons] = useState([])
@@ -305,6 +321,15 @@ export default function ProduitFicheModal({ open, produit, onClose, peutModifier
         />
       </Section>
 
+      {/* TROIS CHAMPS ÉCRIVABLES DEPUIS LE DÉBUT, AFFICHÉS ET JAMAIS PROPOSÉS.
+          `PATCH /produits/{id}/compta` existe, protégée par `offre.modifier_compta`, et accepte
+          `tauxTva`, `compteComptable` et `reglePca`. Le client ne l'appelait de nulle part : la
+          fiche montrait les trois valeurs, et le formulaire « Modifier » n'offrait que le nom, les
+          canaux, la couleur en caisse et la note interne.
+          Montrer un réglage sans donner le bouton est pire que ne rien montrer : l'exploitant sait
+          que ça existe et conclut que le logiciel ne le permet pas. Maxime l'a vu de lui-même.
+          Bouton séparé, parce que le DROIT est séparé : `offre.modifier_compta` n'est pas
+          `offre.modifier`. Qui peut renommer un produit ne peut pas forcément changer son compte. */}
       <Section titre="Comptabilité">
         {chargement && !detail ? (
           <div className="hint">Chargement…</div>
@@ -314,9 +339,23 @@ export default function ProduitFicheModal({ open, produit, onClose, peutModifier
             <Ligne libelle="Taux de TVA" valeur={p.tauxTva != null ? `${p.tauxTva} %` : '—'} />
             <Ligne
               libelle="Règle PCA"
-              valeur={p.reglePca || '—'}
+              valeur={REGLES_PCA[p.reglePca] || p.reglePca || '—'}
               aide="Produit constaté d'avance : comment le chiffre d'affaires est étalé dans le temps."
             />
+            {peutModifierCompta && (
+              <button
+                className="btn ghost sm"
+                type="button"
+                style={{ marginTop: 10 }}
+                onClick={() => setEditionCompta({
+                  tauxTva: p.tauxTva != null ? String(p.tauxTva) : '',
+                  compteComptable: p.compteComptable || '',
+                  reglePca: p.reglePca || 'aucune',
+                })}
+              >
+                Modifier la comptabilité
+              </button>
+            )}
           </>
         )}
       </Section>
@@ -327,6 +366,145 @@ export default function ProduitFicheModal({ open, produit, onClose, peutModifier
         <Section titre="Note interne">
           <div className="hint">{p.noteInterne}</div>
         </Section>
+      )}
+
+      <ComptaProduitModal
+        edition={editionCompta}
+        onClose={() => setEditionCompta(null)}
+        onEnregistre={async (corps) => {
+          await api.majComptaProduit(produitId, corps)
+          setDetail(await api.produit(produitId))
+          setEditionCompta(null)
+          onModifie?.()
+        }}
+      />
+    </Modal>
+  )
+}
+
+// LE TAUX DE TVA D'UN PRODUIT EST UNE VALEUR, PAS UNE RELATION, ET ÇA CHANGE LE FORMULAIRE.
+//
+// `Produit::$tauxTva` est une colonne `decimal(5,2)` nullable — pas une clé vers `TauxTva`. Le
+// produit ne « pointe » donc pas le référentiel : il recopie un pourcentage. On propose quand même
+// la liste des taux déclarés, parce que saisir 20 à la main quand l'établissement a déclaré 20,00
+// est le meilleur moyen de créer deux vérités ; mais on envoie bien la valeur, pas un identifiant.
+//
+// Et on part en CHAÎNE : la colonne est décimale, et le désérialiseur refuse un entier — c'est
+// exactement le défaut qui rendait la création d'un taux de TVA impossible.
+function ComptaProduitModal({ edition, onClose, onEnregistre }) {
+  const [taux, setTaux] = useState([])
+  const [valeurs, setValeurs] = useState(null)
+  const [erreur, setErreur] = useState(null)
+  const [envoi, setEnvoi] = useState(false)
+
+  useEffect(() => {
+    if (!edition) return
+    setValeurs(edition)
+    setErreur(null)
+  }, [edition])
+
+  useEffect(() => {
+    if (!edition) return undefined
+    let annule = false
+    api.tauxTvas()
+      // Un référentiel illisible (droits comptables absents) ne doit pas fermer le formulaire :
+      // la liste disparaît, la saisie libre reste.
+      .then((r) => { if (!annule) setTaux(membres(r).filter((t) => t.actif !== false)) })
+      .catch(() => { if (!annule) setTaux([]) })
+    return () => { annule = true }
+  }, [edition])
+
+  async function soumettre(e) {
+    e.preventDefault()
+    setErreur(null)
+    setEnvoi(true)
+    try {
+      await onEnregistre({
+        tauxTva: valeurs.tauxTva === '' ? null : String(valeurs.tauxTva),
+        compteComptable: valeurs.compteComptable.trim() || null,
+        reglePca: valeurs.reglePca,
+      })
+    } catch (err) {
+      setErreur(err.message || "L'enregistrement n'a pas abouti.")
+    } finally {
+      setEnvoi(false)
+    }
+  }
+
+  return (
+    <Modal open={!!edition} onClose={onClose} titre="Comptabilité du produit" taille="md">
+      {valeurs && (
+        <form onSubmit={soumettre}>
+          {erreur && <div className="banner banner-error">{erreur}</div>}
+
+          <div className="field">
+            <label htmlFor="pc-tva">Taux de TVA</label>
+            <select
+              id="pc-tva"
+              className="input"
+              value={valeurs.tauxTva}
+              onChange={(e) => setValeurs((s) => ({ ...s, tauxTva: e.target.value }))}
+            >
+              <option value="">Aucun taux</option>
+              {taux.map((t) => (
+                <option key={t.id} value={String(t.taux)}>
+                  {t.libelle} — {t.taux} %
+                </option>
+              ))}
+              {/* Un produit peut porter un taux qui n'est plus au référentiel (masqué depuis).
+                  Le retirer de la liste ferait perdre la valeur au premier enregistrement. */}
+              {valeurs.tauxTva !== '' && !taux.some((t) => String(t.taux) === String(valeurs.tauxTva)) && (
+                <option value={valeurs.tauxTva}>{valeurs.tauxTva} % (taux retiré du référentiel)</option>
+              )}
+            </select>
+            <p className="hint">
+              {taux.length === 0
+                ? 'Aucun taux n’est déclaré pour cet établissement : renseignez-les dans Paramètres › Catalogue & référentiels.'
+                : 'Le taux facturé sur ce produit, et celui qui remontera en comptabilité.'}
+            </p>
+          </div>
+
+          <div className="field">
+            <label htmlFor="pc-compte">Compte comptable</label>
+            <input
+              id="pc-compte"
+              className="input mono"
+              maxLength={32}
+              value={valeurs.compteComptable}
+              placeholder="706100"
+              onChange={(e) => setValeurs((s) => ({ ...s, compteComptable: e.target.value }))}
+            />
+            <p className="hint">
+              Le compte de produit sur lequel les ventes de cet article seront imputées. Saisie
+              libre : le plan comptable n’est pas exposé à cet écran.
+            </p>
+          </div>
+
+          <div className="field">
+            <label htmlFor="pc-pca">Règle de produit constaté d’avance</label>
+            <select
+              id="pc-pca"
+              className="input"
+              value={valeurs.reglePca}
+              onChange={(e) => setValeurs((s) => ({ ...s, reglePca: e.target.value }))}
+            >
+              {Object.entries(REGLES_PCA).map(([v, l]) => (
+                <option key={v} value={v}>{l}</option>
+              ))}
+            </select>
+            <p className="hint">
+              Décide du moment où l’argent encaissé devient du chiffre d’affaires. Un abonnement
+              annuel vendu en janvier ne se gagne pas en janvier.
+            </p>
+          </div>
+
+          <div className="row" style={{ justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>
+            <button type="button" className="btn" onClick={onClose}>Annuler</button>
+            <button type="submit" className="btn primary" disabled={envoi}>
+              {envoi ? 'Enregistrement…' : 'Enregistrer'}
+            </button>
+          </div>
+        </form>
       )}
     </Modal>
   )

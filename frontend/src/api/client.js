@@ -233,6 +233,16 @@ export const api = {
   // Le détail ajoute le groupe `produit:compta` (compte, TVA, règle PCA), absent de la collection.
   produit: (id) => request(`/api/produits/${id}`),
   majProduit: (id, corps) => request(`/api/produits/${id}`, { method: 'PATCH', body: corps }),
+  // L'ONGLET COMPTA D'UN PRODUIT : TROIS CHAMPS ECRIVABLES, AFFICHES ET JAMAIS PROPOSES.
+  //
+  // `PATCH /produits/{id}/compta` existe depuis le debut, avec son propre groupe (`produit:compta`)
+  // et son propre droit (`offre.modifier_compta`, distinct de `offre.modifier`). La fiche produit
+  // montrait compte, taux et regle PCA ; le formulaire << Modifier >> n'offrait que le nom, les
+  // canaux, la couleur en caisse et la note interne.
+  //
+  // Route sur mesure et `input: false` cote serveur : pas de `ld: true` a poser.
+  majComptaProduit: (id, corps) =>
+    request(`/api/produits/${id}/compta`, { method: 'PATCH', body: corps }),
   typeProduits: () => request('/api/type_produits'),
   creerProduit: (corps) =>
     request('/api/produits', { method: 'POST', body: corps, ld: true }),

@@ -264,6 +264,7 @@ function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = []
         open={!!produitFiche}
         produit={produitFiche}
         peutModifier={aLeDroit(droits, 'offre.modifier') || aLeDroit(droits, 'offre.gerer')}
+        peutModifierCompta={aLeDroit(droits, 'offre.modifier_compta') || aLeDroit(droits, 'offre.gerer')}
         onModifie={recharger}
         onClose={() => setProduitFiche(null)}
       />
