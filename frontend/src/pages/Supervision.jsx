@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { api, membres } from '../api/client.js'
 import { GLOSSAIRE } from '../api/vocabulaire.js'
+import { aLeDroit, aUnDesDroits } from '../api/droits.js'
+import Modal from '../components/Modal.jsx'
 import {
   ETAT_CLS,
   ETAT_CONTROLEUR,
@@ -75,7 +77,7 @@ function phraseIncident(i) {
 //    les jauges et les contrôleurs par établissement actif, mais sa requête des dix derniers refus
 //    ne porte aucun filtre. Rien dans la charge utile ne permet de les rattacher à un site : on ne
 //    peut donc pas les écarter ici. On le dit, faute de pouvoir le corriger d'ici.
-export default function Supervision({ etabActif }) {
+export default function Supervision({ etabActif, droits = [] }) {
   const [sup, setSup] = useState(null)
   const [verifBillet, setVerifBillet] = useState(false)
   const [passages, setPassages] = useState([])
@@ -84,13 +86,27 @@ export default function Supervision({ etabActif }) {
   const [sessionPerdue, setSessionPerdue] = useState(false)
   const [maj, setMaj] = useState(null)
   const [auto, setAuto] = useState(true)
+  const [equipements, setEquipements] = useState([])
+  // { genre: 'manuel'|'comptage', equipement, sens, motif, erreur, enCours }
+  const [geste, setGeste] = useState(null)
+  const [succes, setSucces] = useState(null)
   const timer = useRef(null)
+
+  const peutOuvrir = aLeDroit(droits, 'acces.ouvrir_manuel')
+  const peutCompter = aUnDesDroits(droits, ['acces.superviser', 'acces.controler'])
 
   const recharger = useCallback(async (silencieux = false) => {
     if (!silencieux) setChargement(true)
     try {
-      const [s, p] = await Promise.all([api.supervisionAcces(), api.passages().catch(() => null)])
+      // Les équipements ne servent qu'aux deux gestes ci-dessous : leur échec (droits, panne) ne
+      // doit pas emporter la supervision elle-même, d'où le `catch` séparé.
+      const [s, p, e] = await Promise.all([
+        api.supervisionAcces(),
+        api.passages().catch(() => null),
+        api.equipementsAcces().catch(() => null),
+      ])
       setSup(s)
+      if (e) setEquipements(membres(e))
       // Le serveur ignore `order[horodatage]` (aucun `OrderFilter` sur `Passage`) : sans ce tri,
       // la carte « Derniers passages » montrait les PREMIERS passages du site.
       if (p) setPassages(membres(p).sort((a, b) => (a.horodatage < b.horodatage ? 1 : -1)))
@@ -133,6 +149,44 @@ export default function Supervision({ etabActif }) {
     }
   }, [auto, sessionPerdue, recharger])
 
+  function ouvrirGeste(genre) {
+    setSucces(null)
+    setGeste({
+      genre,
+      equipement: equipements[0]?.id || '',
+      sens: 'entree',
+      motif: '',
+      erreur: null,
+      enCours: false,
+    })
+  }
+
+  // LE MOTIF EST OBLIGATOIRE, ET CE N'EST PAS UNE FORMALITÉ.
+  //
+  // Le serveur le refuse vide, mais la vraie raison est ailleurs : un franchissement forcé sans
+  // motif est indiscernable d'une fraude au moment où on relit le journal, six mois plus tard. La
+  // question n'est pas « qui a ouvert » — l'agent est déjà tracé — c'est « pourquoi il a fallu
+  // ouvrir ». C'est cette phrase qui dira si un lecteur est à changer ou une règle à corriger.
+  async function envoyerGeste(e) {
+    e.preventDefault()
+    setGeste((g) => ({ ...g, erreur: null, enCours: true }))
+    try {
+      const corps = { equipement: geste.equipement, motif: geste.motif.trim(), sens: geste.sens }
+      if (geste.genre === 'manuel') await api.ouvertureManuelle(corps)
+      else await api.comptageNonNominatif(corps)
+      setGeste(null)
+      setSucces(
+        geste.genre === 'manuel'
+          ? 'Ouverture enregistrée : elle figure au journal, avec son motif et votre nom.'
+          : 'Passage compté : la jauge et le journal en tiennent compte.',
+      )
+      await recharger(true)
+    } catch (err) {
+      // Dans la modale, jamais derrière : un 422 sur le motif se lit là où on vient de le saisir.
+      setGeste((g) => ({ ...g, erreur: err.message || "Le geste n'a pas abouti.", enCours: false }))
+    }
+  }
+
   const jauges = sup?.jauges || []
   const controleurs = sup?.controleurs || []
   const incidents = sup?.incidents || []
@@ -159,6 +213,16 @@ export default function Supervision({ etabActif }) {
             {auto ? '⏸ Auto' : '▶ Auto'}
           </button>
           <button className="btn" onClick={() => setVerifBillet(true)}>Vérifier un billet</button>
+          {peutOuvrir && (
+            <button className="btn" onClick={() => ouvrirGeste('manuel')} disabled={equipements.length === 0}>
+              Ouvrir manuellement
+            </button>
+          )}
+          {peutCompter && (
+            <button className="btn" onClick={() => ouvrirGeste('comptage')} disabled={equipements.length === 0}>
+              +1 sans support
+            </button>
+          )}
           <button className="btn" onClick={() => recharger()}>↻ Rafraîchir</button>
         </div>
       </div>
@@ -174,6 +238,8 @@ export default function Supervision({ etabActif }) {
           {sup && maj ? ` — les chiffres ci-dessous datent de ${heure(maj)}.` : ''}
         </div>
       ) : null}
+
+      {succes && <div className="banner banner-ok">{succes}</div>}
 
       {chargement && !sup ? (
         <div className="center" style={{ minHeight: 200 }}><div className="spinner" /></div>
@@ -336,6 +402,74 @@ export default function Supervision({ etabActif }) {
           </section>
         </>
       )}
+
+      <Modal
+        open={!!geste}
+        onClose={() => setGeste(null)}
+        titre={geste?.genre === 'manuel' ? 'Ouvrir manuellement' : 'Compter un passage sans support'}
+      >
+        {geste && (
+          <form onSubmit={envoyerGeste}>
+            <p className="hint" style={{ marginTop: 0 }}>
+              {geste.genre === 'manuel'
+                ? 'Le franchissement est forcé et tracé : votre nom, l’heure et le motif figureront au journal.'
+                : 'Pour qui entre sans badge — un groupe scolaire, un accompagnant. Le passage compte dans la jauge sans être rattaché à personne.'}
+            </p>
+            {geste.erreur && <div className="banner banner-error">{geste.erreur}</div>}
+
+            <div className="field">
+              <label htmlFor="geste-eq">Équipement *</label>
+              <select
+                id="geste-eq"
+                className="select"
+                value={geste.equipement}
+                onChange={(ev) => setGeste((g) => ({ ...g, equipement: ev.target.value }))}
+                required
+              >
+                {equipements.map((q) => (
+                  <option key={q.id} value={q.id}>{q.libelle}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="field">
+              <label htmlFor="geste-sens">Sens</label>
+              <select
+                id="geste-sens"
+                className="select"
+                value={geste.sens}
+                onChange={(ev) => setGeste((g) => ({ ...g, sens: ev.target.value }))}
+              >
+                <option value="entree">Entrée</option>
+                <option value="sortie">Sortie</option>
+              </select>
+            </div>
+
+            <div className="field">
+              <label htmlFor="geste-motif">Motif *</label>
+              <input
+                id="geste-motif"
+                className="input"
+                value={geste.motif}
+                onChange={(ev) => setGeste((g) => ({ ...g, motif: ev.target.value }))}
+                placeholder={geste.genre === 'manuel' ? 'Badge illisible, porteur identifié au guichet' : 'Groupe scolaire, 24 élèves'}
+                required
+              />
+              <div className="hint" style={{ marginTop: 4 }}>
+                Ce qui sera relu dans six mois. « Ouverture » n’explique rien ; « lecteur en panne,
+                porteur vérifié au guichet » explique tout.
+              </div>
+            </div>
+
+            <div className="row" style={{ justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+              <button className="btn" type="button" onClick={() => setGeste(null)} disabled={geste.enCours}>Annuler</button>
+              <button className="btn primary" type="submit" disabled={geste.enCours || !geste.motif.trim()}>
+                {geste.enCours ? 'Enregistrement…' : 'Enregistrer'}
+              </button>
+            </div>
+          </form>
+        )}
+      </Modal>
 
       <RechercheBilletModal open={verifBillet} onClose={() => setVerifBillet(false)} />
     </div>

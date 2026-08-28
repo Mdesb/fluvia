@@ -286,7 +286,7 @@ export default function App() {
       )}
       {onglet === 'catalogue' && <Catalogue etabActif={etabActif} cible={cible} onCibleConsommee={() => setCible(null)} droits={droits} />}
       {onglet === 'reservation' && <Reservation etabActif={etabActif} droits={droits} session={session} />}
-      {onglet === 'supervision' && <Supervision etabActif={etabActif} />}
+      {onglet === 'supervision' && <Supervision etabActif={etabActif} droits={droits} />}
       {onglet === 'acces' && <Acces etabActif={etabActif} droits={droits} />}
       {onglet === 'topologie_acces' && <TopologieAcces etabActif={etabActif} droits={droits} />}
       {onglet === 'agenda' && <Agenda droits={droits} etabActif={etabActif} />}

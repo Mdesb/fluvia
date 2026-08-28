@@ -725,6 +725,21 @@ export const api = {
   // silencieusement `horodatage[after]`. Passer les paramètres du journal rendrait un export NON
   // FILTRÉ qui a toutes les apparences d'un export filtré.
   exportPassages: (query) => request('/api/acces/passages/export', { query }),
+  // LES DEUX GESTES DE LA SUPERVISION, PREVUS PAR LA SPEC ET ATTEIGNABLES DEPUIS NULLE PART.
+  //
+  // L'écran A-03 décrit un agent qui, devant un porteur bloqué, ouvre la porte lui-même — et un
+  // comptage « +1 » pour qui entre sans support (un groupe scolaire, un accompagnant). Les deux
+  // opérations existent côté serveur depuis l'origine du module ; aucune interface ne les appelait.
+  // Sans elles, un exploitant devant une barrière qui refuse à tort n'a aucun recours dans le
+  // logiciel : il ouvre à la main, et le passage n'est nulle part.
+  //
+  // Le MOTIF est obligatoire côté serveur pour les deux, et c'est ce qui fait la différence entre un
+  // franchissement forcé et une trace exploitable : la question n'est pas « qui a ouvert » mais
+  // « pourquoi il a fallu ouvrir ». Corps : { equipement: uuid|iri, motif: string, sens?: entree|sortie }.
+  ouvertureManuelle: (corps) => request('/api/acces/passages/manuel', { method: 'POST', body: corps }),
+  comptageNonNominatif: (corps) =>
+    request('/api/acces/passages/non-nominatif', { method: 'POST', body: corps }),
+
   // État réseau des contrôleurs (bascule en ligne / hors ligne, US-L3-07).
   etatSynchroAcces: () => request('/api/acces/synchro/etat'),
 
