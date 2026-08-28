@@ -321,6 +321,8 @@ export default function ProduitFicheModal({ open, produit, onClose, peutModifier
         )}
       </Section>
 
+      <PhotosProduit produitId={p.id} peutModifier={peutModifier} />
+
       {p.noteInterne && (
         <Section titre="Note interne">
           <div className="hint">{p.noteInterne}</div>
@@ -454,5 +456,160 @@ function Ligne({ libelle, valeur, aide }) {
       <span className="sub" title={aide}>{libelle}</span>
       <span>{valeur}</span>
     </div>
+  )
+}
+
+/**
+ * LES PHOTOS DU PRODUIT — ce que le visiteur verra de lui.
+ *
+ * Deux choses que l'écran dit tout haut, parce que les taire ferait conclure à une panne :
+ *
+ *   - **le texte alternatif est exigé.** Une image sans alternative est invisible pour un lecteur
+ *     d'écran et pour un moteur de recherche ; pour un établissement public, le RGAA en fait un
+ *     critère. Le champ est demandé au téléversement, seul moment où quelqu'un sait ce que montre
+ *     la photo ;
+ *   - **une photo ne s'affiche en boutique que si le produit y est vendu.** Publié, et au canal
+ *     « en ligne ». Sans ce rappel, l'exploitant téléverse, ne voit rien, et cherche du côté du
+ *     fichier.
+ *
+ * La première photo est celle que la boutique montre. Les suivantes attendent une galerie.
+ */
+function PhotosProduit({ produitId, peutModifier }) {
+  const [etat, setEtat] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState(null)
+  const [alt, setAlt] = useState('')
+  const [fichier, setFichier] = useState(null)
+
+  useEffect(() => {
+    let vivant = true
+    if (!produitId) return undefined
+    api.photosProduit(produitId)
+      .then((r) => { if (vivant) setEtat(r) })
+      .catch(() => { if (vivant) setEtat(null) })
+
+    return () => { vivant = false }
+  }, [produitId])
+
+  async function recharger() {
+    try {
+      setEtat(await api.photosProduit(produitId))
+    } catch {
+      setEtat(null)
+    }
+  }
+
+  async function televerser() {
+    setBusy(true)
+    setErr(null)
+    try {
+      await api.televerserPhotoProduit(produitId, fichier, alt.trim())
+      setAlt('')
+      setFichier(null)
+      await recharger()
+    } catch (e) {
+      setErr(e.message || 'La photo n’a pas pu être ajoutée.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function retirer(id) {
+    setBusy(true)
+    setErr(null)
+    try {
+      await api.supprimerPhotoProduit(id)
+      await recharger()
+    } catch (e) {
+      setErr(e.message || 'La photo n’a pas pu être retirée.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!etat) return null
+
+  const photos = etat.photos || []
+
+  return (
+    <Section titre="Photos" aide="La première est celle qu’affiche la boutique en ligne.">
+      {!etat.visiblePubliquement && (
+        <div className="hint" style={{ marginBottom: 8 }}>
+          Ce produit n’est pas vendu en ligne : ses photos ne s’afficheront nulle part tant qu’il
+          n’est pas <strong>publié</strong> et ouvert au canal <strong>en ligne</strong>.
+        </div>
+      )}
+
+      {photos.length > 0 && (
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
+          {photos.map((photo, i) => (
+            <figure key={photo.id} style={{ margin: 0, width: 132 }}>
+              <img
+                src={photo.url}
+                alt={photo.altText}
+                style={{
+                  width: 132,
+                  height: 92,
+                  objectFit: 'cover',
+                  display: 'block',
+                  border: '1px solid var(--bord, #ddd)',
+                }}
+              />
+              <figcaption className="sub" style={{ marginTop: 4, lineHeight: 1.3 }}>
+                {i === 0 && <strong>Affichée en boutique — </strong>}
+                {photo.altText}
+              </figcaption>
+              {peutModifier && (
+                <button
+                  className="btn ghost sm"
+                  type="button"
+                  disabled={busy}
+                  style={{ marginTop: 4 }}
+                  onClick={() => retirer(photo.id)}
+                >
+                  Retirer
+                </button>
+              )}
+            </figure>
+          ))}
+        </div>
+      )}
+
+      {err && <div className="banner banner-error" style={{ marginBottom: 8 }}>{err}</div>}
+
+      {peutModifier && (
+        <div style={{ display: 'grid', gap: 8 }}>
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label>Fichier — JPEG, PNG, WEBP ou AVIF, 2 Mo maximum</label>
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/avif"
+              onChange={(e) => setFichier(e.target.files?.[0] || null)}
+            />
+          </div>
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label>Que montre cette photo ? — lu à voix haute aux visiteurs malvoyants</label>
+            <input
+              value={alt}
+              onChange={(e) => setAlt(e.target.value)}
+              placeholder="Le bassin nordique au coucher du soleil"
+              maxLength={160}
+            />
+          </div>
+          <div>
+            <button
+              className="btn primary sm"
+              type="button"
+              disabled={busy || !fichier || alt.trim().length < 3}
+              onClick={televerser}
+            >
+              Ajouter la photo
+            </button>
+          </div>
+        </div>
+      )}
+
+      {photos.length === 0 && !peutModifier && <div className="hint">Aucune photo.</div>}
+    </Section>
   )
 }

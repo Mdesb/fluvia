@@ -60,12 +60,24 @@ security:
         - { path: ^/docs, roles: PUBLIC_ACCESS }
         - { path: ^/index\.(json|jsonld|html)$, roles: PUBLIC_ACCESS }
         - { path: ^/$, roles: PUBLIC_ACCESS }
-        - { path: ^/me, roles: IS_AUTHENTICATED_FULLY }
+        # ⚠ ANCRE DE FIN OBLIGATOIRE. `^/me` matchait aussi `/media/...`, `/menu`, `/messages` —
+        # et `access_control` s'arrête à la PREMIÈRE règle qui matche. La route publique des photos
+        # de produit, déclarée plus bas, était donc rendue privée par cette ligne-ci, avec un 401
+        # « JWT Token not found » qui ne désignait rien.
+        #
+        # Il n'existe qu'une route `/me` : la borner est sans effet de bord, et sans elle toute
+        # future route commençant par « me » devient authentifiée sans que personne l'ait décidé.
+        - { path: ^/me$, roles: IS_AUTHENTICATED_FULLY }
         # Cycle de vie / MFA / mot de passe oublié (RG-M8-01, US-L7-03, US-L0-03 différée).
         - { path: ^/utilisateurs/activation, roles: PUBLIC_ACCESS }
         - { path: ^/mot-de-passe/oublie, roles: PUBLIC_ACCESS }
         - { path: ^/mot-de-passe/reinitialiser, roles: PUBLIC_ACCESS }
         - { path: ^/audit/export, roles: IS_AUTHENTICATED_FULLY }
+        # Photos de produit — lecture publique VOULUE : c'est le visuel du catalogue en ligne, il
+        # s'affiche chez des visiteurs qui n'ont pas de compte. Le contrôleur ne sert que des lignes
+        # de `offre_product_photo`, et seulement si le produit est publié ET vendu en ligne : la
+        # photo d'un brouillon reste privée. Aucun identifiant de document ne passe par cette porte.
+        - { path: ^/media/produit/, roles: PUBLIC_ACCESS }
 
 when@test:
     security:

@@ -11,6 +11,7 @@ use App\Boutique\Service\VitrineResolver;
 use App\Boutique\Security\PanierProprietaireGuard;
 use App\Boutique\Security\VitrineAccessibleGuard;
 use App\Boutique\Service\DisponibiliteAffichageHandler;
+use App\Offre\Entity\ProductPhoto;
 use App\Offre\Entity\Produit;
 use App\Offre\Enum\Canal;
 use App\Offre\Enum\StatutProduit;
@@ -95,7 +96,7 @@ final class CatalogueVitrineProvider implements ProviderInterface
                 'libelle' => $produit->getLibelle(),
                 'timedEntry' => $this->disponibilite->estTimedEntry($produit),
                 'disponibilite' => $this->disponibilite->disponibilitePourProduit($produit),
-                'visuel' => \is_string($produit->getChampsPerso()['visuelUrl'] ?? null) ? $produit->getChampsPerso()['visuelUrl'] : null,
+                'visuel' => $this->visuel($produit),
                 'prix' => $this->prixPublic($produit),
             ];
         }
@@ -115,6 +116,40 @@ final class CatalogueVitrineProvider implements ProviderInterface
             'langues' => $vitrine->getLangues(),
             'produits' => $catalogue,
         ]);
+    }
+
+    /**
+     * LE VISUEL DU PRODUIT — la photo téléversée d'abord, l'URL saisie à la main ensuite.
+     *
+     * Jusqu'au 28/08, la seule façon de donner une image à un produit était d'écrire une adresse
+     * dans `champsPerso['visuelUrl']` — un champ JSON libre, sans validation, pointant vers une
+     * image hébergée ailleurs. L'affichage existait ; c'est le téléversement qui manquait.
+     *
+     * Les deux chemins cohabitent, et l'ordre n'est pas neutre : une vitrine qui a déjà renseigné
+     * une URL continue de fonctionner sans qu'on y touche, et le jour où quelqu'un téléverse une
+     * vraie photo, c'est elle qui prend la place. Supprimer l'ancien chemin aurait vidé des
+     * catalogues en production le jour du déploiement.
+     */
+    private function visuel(Produit $produit): ?string
+    {
+        $photo = $this->em->getRepository(ProductPhoto::class)->createQueryBuilder('ph')
+            // ⚠ D58 — l'entité liée sans son type ne trouverait rien, et toutes les boutiques
+            // afficheraient un catalogue sans images sans qu'aucune erreur ne le dise.
+            ->andWhere('IDENTITY(ph.produit) = :produit')
+            ->setParameter('produit', $produit->getId(), 'uuid')
+            ->orderBy('ph.position', 'ASC')
+            ->addOrderBy('ph.createdAt', 'ASC')
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+
+        if ($photo instanceof ProductPhoto) {
+            return $photo->getUrl();
+        }
+
+        $ancienne = $produit->getChampsPerso()['visuelUrl'] ?? null;
+
+        return \is_string($ancienne) && $ancienne !== '' ? $ancienne : null;
     }
 
     /**

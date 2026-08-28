@@ -12,6 +12,7 @@ use App\Offre\Entity\ConversionType;
 use App\Offre\Entity\GrilleTarifaire;
 use App\Offre\Entity\PrixHistorique;
 use App\OptionProduit\Entity\OptionProduit;
+use App\Offre\Entity\ProductPhoto;
 use App\Offre\Entity\Produit;
 use App\Offre\Entity\Promotion;
 use App\Securite\Entity\Utilisateur;
@@ -83,6 +84,11 @@ final class PerimetreProduitExtension implements QueryCollectionExtensionInterfa
         // produit et rien ne le lui appliquait. Les options d'un produit disent la composition
         // d'une offre concurrente.
         OptionProduit::class => 'produit',
+
+        // Ajoutee le 28/08 avec les photos : elle tient son perimetre du produit, comme ses
+        // voisines. Une photo visible d un produit qui ne l est pas montrerait le visuel d une
+        // offre que personne n a encore annoncee.
+        ProductPhoto::class => 'produit',
     ];
 
     public function __construct(

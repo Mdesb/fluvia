@@ -332,6 +332,18 @@ export const api = {
 
   // FIDELITE -- solde, palier et historique d'un client. Tout est calcule : aucun compteur n'est
   // stocke, donc une vente annulee retire ses points d'elle-meme.
+  // PHOTOS DE PRODUIT -- le fichier part en multipart, sans en-tete Content-Type : le navigateur
+  // pose lui-meme la frontiere du corps, et l'ecrire a la main la casse.
+  photosProduit: (produitId) => request(`/api/offre/produits/${produitId}/photos`),
+  televerserPhotoProduit: (produitId, fichier, altText) => {
+    const corps = new FormData()
+    corps.append('file', fichier)
+    corps.append('altText', altText)
+
+    return request(`/api/offre/produits/${produitId}/photos`, { method: 'POST', formData: corps })
+  },
+  supprimerPhotoProduit: (id) => request(`/api/offre/photos-produit/${id}`, { method: 'DELETE' }),
+
   fidelite: (clientId) => request(`/api/marketing/fidelite/${clientId}`),
   mouvementFidelite: (corps) =>
     request('/api/marketing/fidelite/mouvements', { method: 'POST', body: corps, ld: true }),
