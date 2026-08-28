@@ -526,16 +526,34 @@ export default function Parametres({ etabActif, etablissements, droits = [] }) {
   )
 }
 
-// --- Moyens de paiement : éditables (activer/désactiver, ajouter, renommer). Écriture gardée par
+// --- Moyens de paiement : éditables (ajouter, modifier, activer/désactiver). Écriture gardée par
 // `compta.gerer` côté back : les erreurs (dont 403) sont surfacées proprement. ---
+//
+// ON POUVAIT TOUT RÉGLER À LA CRÉATION, ET PLUS RIEN ENSUITE.
+//
+// Les cinq propriétés de `MoyenPaiement` portent le groupe `moyen:write` et l'entité expose un
+// `Patch` : tout est modifiable côté serveur depuis le début. L'écran, lui, n'offrait après coup que
+// « Renommer » et « Activer / Désactiver ». Une case cochée de travers au moment de la création
+// devenait définitive — sauf à créer un second moyen et à désactiver le premier, ce qui laisse deux
+// lignes dans le référentiel et brouille les états de caisse.
+//
+// CE QUE FONT VRAIMENT CES TROIS CASES, LU DANS `PaiementHandler`, PAS DÉDUIT DE LEUR NOM.
+//
+//   autoriseRendu    ligne 97  : sans elle, encaisser PLUS que le reste à payer est refusé en 422.
+//                                C'est la case qui permet de rendre la monnaie.
+//   autoriseDiffere  ligne 90  : sans elle, un règlement marqué « différé » est refusé en 422.
+//   exigeReference   ligne 125 : le règlement PART AU TERMINAL BANCAIRE et n'est enregistré que s'il
+//                                revient accepté. Un refus ne crée aucun paiement.
+//
+// Le libellé « Exige une référence (TPE) » décrivait donc mal la troisième : elle ne demande pas une
+// saisie à l'agent, elle branche l'encaissement sur le TPE. Renommée en conséquence.
 function MoyensPaiement({ etabActif }) {
   const [rows, setRows] = useState([])
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [msg, setMsg] = useState(null)
   const [busy, setBusy] = useState(null) // id en cours de bascule
-  const [modalAjout, setModalAjout] = useState(false)
-  const [enRenommage, setEnRenommage] = useState(null) // moyen en cours de renommage
+  const [edition, setEdition] = useState(null) // { moyen: null } = création, { moyen } = modification
 
   const charger = useCallback(async () => {
     setChargement(true)
@@ -576,7 +594,7 @@ function MoyensPaiement({ etabActif }) {
         <h3>Moyens de paiement</h3>
         <span className="sub">éditable</span>
         <div className="r" style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-          <button className="btn sm" onClick={() => { setMsg(null); setErreur(null); setModalAjout(true) }}>+ Ajouter</button>
+          <button className="btn sm" onClick={() => { setMsg(null); setErreur(null); setEdition({ moyen: null }) }}>+ Ajouter</button>
           <button className="btn ghost sm" onClick={charger} disabled={chargement}>↻</button>
         </div>
       </div>
@@ -588,7 +606,7 @@ function MoyensPaiement({ etabActif }) {
         ) : (
           <table className="tbl">
             <thead>
-              <tr><th>Moyen</th><th>Code</th><th>TPE / réf.</th><th>État</th><th className="num">Actions</th></tr>
+              <tr><th>Moyen</th><th>Code</th><th>Ce qu’il permet en caisse</th><th>État</th><th className="num">Actions</th></tr>
             </thead>
             <tbody>
               {rows.map((m) => {
@@ -597,11 +615,34 @@ function MoyensPaiement({ etabActif }) {
                   <tr key={m.id}>
                     <td><span className="nm">{m.libelle || '—'}</span></td>
                     <td><span className="mono">{m.code || '—'}</span></td>
-                    <td>{m.exigeReference ? 'oui' : '—'}</td>
+                    <td>
+                      {/* Les trois réglages qui décident du comportement de l'encaissement étaient
+                          invisibles sauf un, et sous un nom qui disait autre chose que son effet. */}
+                      {m.exigeReference && (
+                        <span className="badge info" title="Le règlement part au terminal bancaire et n’est enregistré que s’il revient accepté.">
+                          terminal bancaire
+                        </span>
+                      )}{' '}
+                      {m.autoriseRendu && (
+                        <span className="badge info" title="On peut encaisser plus que le montant dû et rendre la différence.">
+                          rendu de monnaie
+                        </span>
+                      )}{' '}
+                      {m.autoriseDiffere && (
+                        <span className="badge info" title="Le règlement peut être enregistré comme différé (encaissement plus tard).">
+                          différé
+                        </span>
+                      )}
+                      {!m.exigeReference && !m.autoriseRendu && !m.autoriseDiffere && (
+                        <span className="sub" title="Encaissement du montant exact, sans terminal ni report.">
+                          montant exact, comptant
+                        </span>
+                      )}
+                    </td>
                     <td><span className={`badge ${actif ? 'good' : 'mut'}`}>{actif ? 'actif' : 'inactif'}</span></td>
                     <td className="num">
                       <div style={{ display: 'inline-flex', gap: 6 }}>
-                        <button className="btn ghost sm" onClick={() => { setMsg(null); setErreur(null); setEnRenommage(m) }}>Renommer</button>
+                        <button className="btn ghost sm" onClick={() => { setMsg(null); setErreur(null); setEdition({ moyen: m }) }}>Modifier</button>
                         <button
                           className="btn ghost sm"
                           onClick={() => basculerActif(m)}
@@ -622,22 +663,14 @@ function MoyensPaiement({ etabActif }) {
       </div>
 
       <ModalMoyenPaiement
-        open={modalAjout}
-        onClose={() => setModalAjout(false)}
+        edition={edition}
+        onClose={() => setEdition(null)}
         onEnregistre={async (corps) => {
-          await api.creerMoyenPaiement(corps)
-          setModalAjout(false)
-          setMsg(`Moyen « ${corps.libelle} » ajouté.`)
-          await charger()
-        }}
-      />
-      <ModalRenommage
-        moyen={enRenommage}
-        onClose={() => setEnRenommage(null)}
-        onEnregistre={async (libelle) => {
-          await api.majMoyenPaiement(enRenommage.id, { libelle })
-          setEnRenommage(null)
-          setMsg('Libellé mis à jour.')
+          const existant = edition?.moyen
+          if (existant) await api.majMoyenPaiement(existant.id, corps)
+          else await api.creerMoyenPaiement({ ...corps, actif: true })
+          setEdition(null)
+          setMsg(existant ? `« ${corps.libelle} » mis à jour.` : `Moyen « ${corps.libelle} » ajouté.`)
           await charger()
         }}
       />
@@ -645,7 +678,26 @@ function MoyensPaiement({ etabActif }) {
   )
 }
 
-function ModalMoyenPaiement({ open, onClose, onEnregistre }) {
+// LES CINQ CODES QUE LE LOGICIEL RECONNAÎT COMME DU PAPIER QU'ON DÉTIENT.
+//
+// `Vente\Port\MoyenPaiement::estFiduciaire()` est une LISTE DE CODES EN DUR, pas une propriété de
+// l'entité. Elle décide d'une seule chose, mais elle en décide une lourde : `PaiementHandler` ligne
+// 73 refuse un moyen fiduciaire hors session de caisse — sans espèces ni chèque, rien à compter,
+// donc rien à clôturer.
+//
+// Conséquence pour cet écran : un moyen créé ici avec un code hors de cette liste ne sera JAMAIS
+// traité comme du papier. Un exploitant qui ajoute « chèque sport » obtient un moyen encaissable en
+// vente directe, sans session, alors que quelqu'un tient physiquement le papier et devra en
+// répondre. Le docblock du serveur le dit lui-même et renvoie la propriété à `MoyenPaiement` —
+// demande écrite, pas encore faite.
+//
+// On ne peut pas le corriger depuis le front. On peut refuser de le laisser passer en silence.
+const CODES_FIDUCIAIRES = ['especes', 'cheque', 'cheque_vacances', 'cheque_culture', 'cheque_loisirs']
+
+function ModalMoyenPaiement({ edition, onClose, onEnregistre }) {
+  const moyen = edition?.moyen || null
+  const creation = !!edition && !moyen
+
   const [code, setCode] = useState('')
   const [libelle, setLibelle] = useState('')
   const [exigeReference, setExigeReference] = useState(false)
@@ -655,17 +707,22 @@ function ModalMoyenPaiement({ open, onClose, onEnregistre }) {
   const [envoi, setEnvoi] = useState(false)
 
   useEffect(() => {
-    if (open) {
-      setCode(''); setLibelle(''); setExigeReference(false); setAutoriseRendu(false); setAutoriseDiffere(false); setErreur(null)
-    }
-  }, [open])
+    if (!edition) return
+    setCode(moyen?.code || '')
+    setLibelle(moyen?.libelle || '')
+    setExigeReference(!!moyen?.exigeReference)
+    setAutoriseRendu(!!moyen?.autoriseRendu)
+    setAutoriseDiffere(!!moyen?.autoriseDiffere)
+    setErreur(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [edition])
 
   async function soumettre(e) {
     e.preventDefault()
     setErreur(null)
     setEnvoi(true)
     try {
-      await onEnregistre({ code: code.trim(), libelle: libelle.trim(), exigeReference, autoriseRendu, autoriseDiffere, actif: true })
+      await onEnregistre({ code: code.trim(), libelle: libelle.trim(), exigeReference, autoriseRendu, autoriseDiffere })
     } catch (err) {
       setErreur(erreurEcriture(err))
     } finally {
@@ -673,71 +730,77 @@ function ModalMoyenPaiement({ open, onClose, onEnregistre }) {
     }
   }
 
+  // Le code saisi ressemble-t-il à un instrument papier que le logiciel ne saura pas reconnaître ?
+  const codeNettoye = code.trim().toLowerCase()
+  const papierNonReconnu =
+    codeNettoye !== ''
+    && !CODES_FIDUCIAIRES.includes(codeNettoye)
+    && /(cheque|chèque|espece|espèce|liquide|ticket|bon)/.test(codeNettoye + ' ' + libelle.toLowerCase())
+
   return (
-    <Modal open={open} onClose={onClose} titre="Ajouter un moyen de paiement">
+    <Modal
+      open={!!edition}
+      onClose={onClose}
+      titre={creation ? 'Ajouter un moyen de paiement' : `Modifier « ${moyen?.libelle || ''} »`}
+    >
       <form onSubmit={soumettre}>
         {erreur && <div className="banner banner-error" style={{ marginBottom: 12 }}>{erreur}</div>}
+
         <div className="field">
           <label htmlFor="mp-code">Code</label>
-          <input id="mp-code" className="input" value={code} onChange={(e) => setCode(e.target.value)} required maxLength={32} placeholder="ex. CB, ESP, CHQ" />
+          <input id="mp-code" className="input" value={code} onChange={(e) => setCode(e.target.value)} required maxLength={32} placeholder="ex. cb, especes, cheque" />
+          <p className="hint">
+            Le code est ce que la caisse et la comptabilité manipulent ; le libellé n’est que
+            l’étiquette affichée. Le changer sur un moyen déjà utilisé ne renomme PAS les règlements
+            déjà encaissés : ils gardent l’ancien code en clair.
+          </p>
         </div>
+
+        {papierNonReconnu && (
+          <div className="banner banner-warn" style={{ marginBottom: 12 }}>
+            Ce moyen ressemble à un instrument qu’on remet en main propre, et le logiciel ne le
+            reconnaîtra pas comme tel : seuls {CODES_FIDUCIAIRES.join(', ')} obligent à ouvrir une
+            session de caisse. Avec un autre code, une vente directe l’acceptera sans qu’aucune
+            session ne réponde du papier reçu.
+          </div>
+        )}
+
         <div className="field">
           <label htmlFor="mp-libelle">Libellé</label>
           <input id="mp-libelle" className="input" value={libelle} onChange={(e) => setLibelle(e.target.value)} required maxLength={80} placeholder="ex. Carte bancaire" />
         </div>
+
         <div className="field">
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, flexDirection: 'row' }}>
-            <input type="checkbox" checked={exigeReference} onChange={(e) => setExigeReference(e.target.checked)} /> Exige une référence (TPE)
+            <input type="checkbox" checked={exigeReference} onChange={(e) => setExigeReference(e.target.checked)} /> Passe par le terminal bancaire
           </label>
+          <p className="hint">
+            Le règlement est envoyé au TPE et n’est enregistré que s’il revient accepté. Un refus ne
+            crée aucun règlement — et il est consigné.
+          </p>
+
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, flexDirection: 'row' }}>
-            <input type="checkbox" checked={autoriseRendu} onChange={(e) => setAutoriseRendu(e.target.checked)} /> Autorise le rendu monnaie
+            <input type="checkbox" checked={autoriseRendu} onChange={(e) => setAutoriseRendu(e.target.checked)} /> Autorise le rendu de monnaie
           </label>
+          <p className="hint">
+            Sans cette case, encaisser plus que le montant dû est refusé. C’est elle qui permet à un
+            caissier de prendre un billet de 20 € pour 13 € et de rendre la différence.
+          </p>
+
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, flexDirection: 'row' }}>
             <input type="checkbox" checked={autoriseDiffere} onChange={(e) => setAutoriseDiffere(e.target.checked)} /> Autorise le paiement différé
           </label>
+          <p className="hint">
+            Permet d’enregistrer la vente comme réglée plus tard. Sans cette case, tout règlement
+            marqué différé sur ce moyen est refusé.
+          </p>
         </div>
+
         <div className="r" style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <button type="button" className="btn ghost" onClick={onClose}>Annuler</button>
-          <button type="submit" className="btn" disabled={envoi}>{envoi ? 'Enregistrement…' : 'Ajouter'}</button>
-        </div>
-      </form>
-    </Modal>
-  )
-}
-
-function ModalRenommage({ moyen, onClose, onEnregistre }) {
-  const [libelle, setLibelle] = useState('')
-  const [erreur, setErreur] = useState(null)
-  const [envoi, setEnvoi] = useState(false)
-
-  useEffect(() => {
-    if (moyen) { setLibelle(moyen.libelle || ''); setErreur(null) }
-  }, [moyen])
-
-  async function soumettre(e) {
-    e.preventDefault()
-    setErreur(null)
-    setEnvoi(true)
-    try {
-      await onEnregistre(libelle.trim())
-    } catch (err) {
-      setErreur(erreurEcriture(err))
-    } finally {
-      setEnvoi(false)
-    }
-  }
-
-  return (
-    <Modal open={!!moyen} onClose={onClose} titre={`Renommer « ${moyen?.libelle || ''} »`}>
-      <form onSubmit={soumettre}>
-        {erreur && <div className="banner banner-error" style={{ marginBottom: 12 }}>{erreur}</div>}
-        <div className="field">
-          <label htmlFor="mp-rename">Nouveau libellé</label>
-          <input id="mp-rename" className="input" value={libelle} onChange={(e) => setLibelle(e.target.value)} required maxLength={80} />
-        </div>
-        <div className="r" style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button type="button" className="btn ghost" onClick={onClose}>Annuler</button>
-          <button type="submit" className="btn" disabled={envoi}>{envoi ? 'Enregistrement…' : 'Enregistrer'}</button>
+          <button type="submit" className="btn" disabled={envoi}>
+            {envoi ? 'Enregistrement…' : creation ? 'Ajouter' : 'Enregistrer'}
+          </button>
         </div>
       </form>
     </Modal>

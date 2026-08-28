@@ -29,14 +29,14 @@
         "Le script REFUSE de le relever. Un plafond qui remonte n est plus un cliquet, c est un",
         "compteur."
     ],
-    "plafond": 743,
+    "plafond": 726,
     "releve": {
-        "exposees": 1141,
+        "exposees": 1142,
         "sansEcran": 0,
-        "attendues": 1141,
-        "appelees": 402,
-        "atteignables": 398,
-        "inatteignables": 743,
+        "attendues": 1142,
+        "appelees": 420,
+        "atteignables": 416,
+        "inatteignables": 726,
         "orphelins": [
             "comptesComptables  (back-office)",
             "grilleTarifaires  (back-office)",
@@ -50,8 +50,8 @@
         "parFront": [
             {
                 "nom": "back-office",
-                "appelees": 381,
-                "atteignables": 377
+                "appelees": 399,
+                "atteignables": 395
             },
             {
                 "nom": "boutique en ligne",
@@ -73,16 +73,16 @@
                 16
             ],
             [
+                "patinoire",
+                16
+            ],
+            [
                 "editor",
                 14
             ],
             [
                 "support",
                 14
-            ],
-            [
-                "patinoire",
-                13
             ],
             [
                 "ventes",
@@ -101,7 +101,11 @@
                 10
             ],
             [
-                "ouverture",
+                "opening",
+                10
+            ],
+            [
+                "acces",
                 9
             ],
             [
@@ -161,7 +165,7 @@
                 5
             ],
             [
-                "agenda",
+                "calendar",
                 5
             ],
             [
@@ -209,6 +213,10 @@
                 4
             ],
             [
+                "limite",
+                4
+            ],
+            [
                 "point",
                 3
             ],
@@ -226,6 +234,10 @@
             ],
             [
                 "referral",
+                3
+            ],
+            [
+                "opportunities",
                 3
             ],
             [
@@ -270,10 +282,6 @@
             ],
             [
                 "projects",
-                2
-            ],
-            [
-                "opportunities",
                 2
             ],
             [
@@ -345,10 +353,6 @@
                 1
             ],
             [
-                "acces",
-                1
-            ],
-            [
                 "supports",
                 1
             ],
@@ -358,6 +362,14 @@
             ],
             [
                 "passages",
+                1
+            ],
+            [
+                "droit",
+                1
+            ],
+            [
+                "declaration",
                 1
             ],
             [
@@ -466,10 +478,6 @@
             ],
             [
                 "demande",
-                1
-            ],
-            [
-                "limite",
                 1
             ],
             [
