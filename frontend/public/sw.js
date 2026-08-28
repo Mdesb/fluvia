@@ -1,0 +1,93 @@
+/* eslint-disable no-restricted-globals */
+/*
+ * LE SERVICE WORKER DE FLUVIA — et tout ce qu'il refuse de faire.
+ *
+ * ── CE QU'IL EST LÀ POUR PERMETTRE ──────────────────────────────────────────────────────────────
+ *
+ * Une seule chose : que l'application s'installe sur un téléphone. Chrome n'affiche l'invite
+ * « Installer » que si le site déclare un manifeste ET un service worker qui répond quand le réseau
+ * manque. Sans ce fichier, la bannière n'apparaît jamais.
+ *
+ * ── CE QU'IL NE FAIT SURTOUT PAS ────────────────────────────────────────────────────────────────
+ *
+ * **Il ne met AUCUNE réponse d'API en cache.** Ni `/api`, ni `/auth`, ni `/me`. Un caissier qui
+ * verrait un solde de carte, une jauge de bassin ou une liste de passages vieux de dix minutes
+ * prendrait une décision sur une donnée fausse — et rien à l'écran ne lui dirait qu'elle est
+ * vieille. Un logiciel de caisse hors ligne qui ment est pire qu'un logiciel de caisse indisponible.
+ *
+ * > **On met en cache ce qui ne change pas entre deux versions, jamais ce qui change entre deux
+ * > minutes.**
+ *
+ * ── CE QU'IL MET EN CACHE, ET POURQUOI C'EST SANS RISQUE ────────────────────────────────────────
+ *
+ * Uniquement les fichiers de `/assets/`, que Vite nomme avec une empreinte de leur contenu
+ * (`App-JfSaL8rM.js`). Une URL d'asset désigne donc UN contenu, pour toujours : la servir depuis le
+ * cache ne peut pas rendre une version périmée. Un déploiement produit de nouveaux noms, et
+ * l'ancien cache est purgé au changement de version ci-dessous.
+ *
+ * La navigation, elle, part TOUJOURS au réseau d'abord. Le cache ne sert de secours que si le
+ * réseau échoue — sinon un déploiement resterait invisible jusqu'à ce que quelqu'un vide son
+ * navigateur, ce qui est exactement le défaut qu'on veut éviter.
+ */
+
+const VERSION = 'fluvia-v1'
+const COQUILLE = '/index.html'
+
+self.addEventListener('install', (evenement) => {
+  evenement.waitUntil(
+    caches.open(VERSION).then((cache) => cache.addAll([COQUILLE])).then(() => self.skipWaiting()),
+  )
+})
+
+self.addEventListener('activate', (evenement) => {
+  // Purge des versions précédentes : sans elle, chaque déploiement laisserait derrière lui un
+  // cache complet, et le stockage du téléphone finirait par être refusé.
+  evenement.waitUntil(
+    caches
+      .keys()
+      .then((noms) => Promise.all(noms.filter((n) => n !== VERSION).map((n) => caches.delete(n))))
+      .then(() => self.clients.claim()),
+  )
+})
+
+self.addEventListener('fetch', (evenement) => {
+  const requete = evenement.request
+  if (requete.method !== 'GET') return
+
+  const url = new URL(requete.url)
+  if (url.origin !== self.location.origin) return
+
+  // ⚠ LA LISTE QUI PROTÈGE CONTRE LA DONNÉE PÉRIMÉE. Tout ce qui parle au serveur métier passe au
+  // réseau, sans interception et sans repli. Si le réseau manque, la requête échoue — et l'écran
+  // affiche SON message d'erreur, ce qui est la vérité.
+  const versLeServeur = ['/api', '/auth', '/me', '/reporting', '/media', '/dms', '/sepa', '/agenda', '/calendar']
+  if (versLeServeur.some((prefixe) => url.pathname === prefixe || url.pathname.startsWith(prefixe + '/'))) {
+    return
+  }
+
+  // Assets à empreinte : une URL = un contenu, pour toujours. Cache d'abord, réseau ensuite.
+  if (url.pathname.startsWith('/assets/')) {
+    evenement.respondWith(
+      caches.match(requete).then(
+        (enCache) =>
+          enCache
+          || fetch(requete).then((reponse) => {
+            if (reponse && reponse.ok) {
+              const copie = reponse.clone()
+              caches.open(VERSION).then((cache) => cache.put(requete, copie))
+            }
+            return reponse
+          }),
+      ),
+    )
+    return
+  }
+
+  // Navigation : réseau d'abord, coquille en secours. Un déploiement doit être visible tout de
+  // suite ; le cache n'est là que pour l'avion et l'ascenseur.
+  if (requete.mode === 'navigate') {
+    evenement.respondWith(
+      fetch(requete).catch(() => caches.match(COQUILLE).then((r) => r || Response.error())),
+    )
+  }
+})

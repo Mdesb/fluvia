@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import RechercheGlobale from './RechercheGlobale.jsx'
 import { aLeDroit, aUnDesDroits } from '../api/droits.js'
+import InstallerSurLeTelephone from './InstallerSurLeTelephone.jsx'
 
 // `cap` = capacité requise (capacitesActives de /me) ; `perm` = permission requise (droits de /me) ;
 // `perms` = liste dont AU MOINS UNE suffit — pour les écrans qui servent plusieurs métiers, où
@@ -388,6 +389,11 @@ export default function AppShell({
             <button className="icon-btn" title="Déconnexion" onClick={onLogout}>⏻</button>
           </div>
         </div>
+        {/* AU-DESSUS DU CONTENU, SOUS LA BARRE : c'est une invitation, pas une alerte. La poser
+            en tete de page la ferait lire comme un avertissement ; la poser en bas, personne ne la
+            verrait. Elle ne s'affiche que quand le navigateur dit que l'installation est possible,
+            et un refus l'eteint pour de bon. */}
+        <InstallerSurLeTelephone />
         {children}
       </div>
     </div>

@@ -873,3 +873,18 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
    que personne ne l'a decide. */
 .cal-jour-f { position: absolute; top: 5px; right: 5px; width: 6px; height: 6px; border-radius: 50%;
   background: var(--warm); }
+
+/* ---- Installation sur le telephone ---- */
+/* Une INVITATION, pas une alerte : fond doux de l'accent, aucune couleur d'avertissement. Un
+   bandeau qui crie pour proposer un raccourci apprend a ignorer les bandeaux — y compris ceux qui
+   annoncent une consequence. */
+.pwa-bandeau { display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin: 16px 26px 0; padding: 10px 14px; border-radius: 10px;
+  background: var(--accent-soft); border: 1px solid var(--line); }
+.pwa-ic { font-size: 18px; color: var(--accent-2); line-height: 1; }
+.pwa-txt { flex: 1; min-width: 220px; font-size: 13.5px; color: var(--ink); }
+
+/* Sur un telephone, la marge de page n'existe pas : le bandeau colle aux bords comme le reste. */
+@media (max-width: 900px) {
+  .pwa-bandeau { margin: 12px 14px 0; }
+}
