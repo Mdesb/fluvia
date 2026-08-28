@@ -155,6 +155,24 @@ const METHODES_JS = new Set([
   'length', 'size', 'has', 'get', 'set', 'add', 'delete', 'clear',
 ])
 
+// CE QUI A DÉJÀ ÉTÉ TRANCHÉ, POUR QUE PERSONNE NE LE RÉEXAMINE.
+//
+// Chaque entrée est un faux positif VÉRIFIÉ le 28/08, avec sa raison. Sans cette liste, le prochain
+// qui lance l'outil recommence le même travail d'élimination — et un outil qu'on doit re-trier en
+// entier à chaque passage finit par ne plus être lancé.
+//
+// ⚠ On n'ajoute ici que ce qu'on a VÉRIFIÉ, jamais ce qu'on suppose. Une entrée de trop et l'outil
+// se met à taire un vrai défaut, ce qui est exactement ce qu'il sert à empêcher.
+const TRANCHES = new Map([
+  ['pmv', 'FicheClient360Provider compose « pmv » à la main comme un tableau simple : ce n’est pas '
+    + 'la relation PorteMonnaieVirtuel, juste le même nom.'],
+  ['etat', 'Carte locale (`etats[s.id]` dans Musée, `{ article, restant }` dans Stock), pas une '
+    + 'relation sérialisée.'],
+  ['grille', 'TypeTarif expose bien trois propriétés dans `grille:read` : la relation EST embarquée.'],
+  ['segment', 'Objet local de l’aperçu de campagne, qui porte déjà un segment complet lu depuis '
+    + '/api/segments.'],
+])
+
 const certains = []
 const aVerifier = []
 const dejaVus = new Set()
@@ -169,6 +187,7 @@ for (const fichier of fichiers(FRONT, (n) => n.endsWith('.jsx') || n.endsWith('.
       const declarations = parPropriete.get(propriete)
       if (!declarations) continue
       if (METHODES_JS.has(sousPropriete)) continue
+      if (TRANCHES.has(propriete)) continue
       // `.id` est le seul champ qu'une relation EMBARQUÉE porte toujours, et c'est aussi ce qu'on
       // extrait légitimement d'une IRI. On ne le signale pas.
       if (sousPropriete === 'id') continue
@@ -196,6 +215,12 @@ console.log(`  dont rendues en IRI nue        : ${relations.filter((r) => {
   const gc = groupesDeLaClasse.get(r.cible) || new Set()
   return !r.groupes.some((g) => gc.has(g))
 }).length}`)
+if (TRANCHES.size > 0) {
+  console.log(`${TRANCHES.size} nom(s) de propriété écarté(s), déjà tranchés comme faux positifs :`)
+  for (const [nom, raison] of TRANCHES) console.log(`  .${nom} — ${raison}`)
+  console.log('')
+}
+
 console.log('')
 
 if (certains.length === 0) {
