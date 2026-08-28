@@ -229,7 +229,15 @@ export const api = {
   // Creer et modifier un etablissement. Pas de suppression exposee : voir EtablissementsSection.
   creerEtablissement: (corps) => request('/api/etablissements', { method: 'POST', body: corps, ld: true }),
   majEtablissement: (id, corps) => request(`/api/etablissements/${id}`, { method: 'PATCH', body: corps }),
-  produits: () => request('/api/produits'),
+  // `Produit` declare un SearchFilter sur `code` (partiel), `libelleRecherche` (partiel), `statut`
+  // et `typeCode` -- quatre filtres testes cote serveur, et cette fonction n'en transmettait aucun :
+  // elle ne prenait meme pas d'argument. Le catalogue chargeait donc les trente premiers produits et
+  // n'offrait aucun moyen d'atteindre les suivants.
+  //
+  // Le piege qu'on evite en le corrigeant tout de suite : passer un objet a une fonction qui l'ignore
+  // ne leve rien. On aurait vu des champs de filtre a l'ecran, une requete partir, une reponse
+  // arriver -- et la meme liste. Un resultat plausible et faux.
+  produits: (params) => request('/api/produits', { query: params }),
   // Le détail ajoute le groupe `produit:compta` (compte, TVA, règle PCA), absent de la collection.
   produit: (id) => request(`/api/produits/${id}`),
   majProduit: (id, corps) => request(`/api/produits/${id}`, { method: 'PATCH', body: corps }),

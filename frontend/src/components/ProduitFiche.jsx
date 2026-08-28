@@ -29,10 +29,19 @@ const REGLES_PCA = {
   consommation: 'À la consommation — acquis au fur et à mesure des entrées',
 }
 
-export default function ProduitFicheModal({
-  open,
+// LA FICHE PRODUIT EST UNE PAGE, PLUS UNE MODALE -- demande de Maxime, 29/08, formulee deux fois
+// en deux minutes : << je pense que pour le produit on devrait faire pareil que pour le client. >>
+//
+// Ce n'est pas un changement d'emballage. Une modale se ferme, donc elle ne peut pas porter d'URL,
+// donc on ne peut ni la partager, ni y revenir apres une expiration de session. Et elle interdisait
+// une fenetre par-dessus : le commentaire de `TarifsProduit` disait << une modale dans une modale est
+// pire que le formulaire >>, ce qui obligeait a rendre les tarifs en ligne. En page, la contrainte
+// disparait.
+//
+// La modale de comptabilite ecrite plus tot aujourd'hui est DEPLACEE, pas reecrite : elle s'ouvre
+// desormais au-dessus d'une page, ce qui est le cas normal.
+export default function ProduitFiche({
   produit,
-  onClose,
   peutModifier = false,
   peutModifierCompta = false,
   onModifie,
@@ -51,7 +60,7 @@ export default function ProduitFicheModal({
   const produitId = produit?.id
 
   useEffect(() => {
-    if (!open || !produitId) return undefined
+    if (!produitId) return undefined
     let annule = false
 
     setDetail(null)
@@ -108,7 +117,7 @@ export default function ProduitFicheModal({
     return () => {
       annule = true
     }
-  }, [open, produitId])
+  }, [produitId])
 
   if (!produit) return null
 
@@ -152,7 +161,7 @@ export default function ProduitFicheModal({
 
   if (edition) {
     return (
-      <Modal open={open} onClose={onClose} titre={`Modifier — ${libelleProduit(p)}`} taille="lg">
+      <section className="card"><div className="card-h"><h3>Modifier — {libelleProduit(p)}</h3></div><div className="card-b">
         {erreur && <div className="banner banner-error">{erreur}</div>}
         <form onSubmit={enregistrer}>
           <div className="field">
@@ -235,12 +244,12 @@ export default function ProduitFicheModal({
             </button>
           </div>
         </form>
-      </Modal>
+      </div></section>
     )
   }
 
   return (
-    <Modal open={open} onClose={onClose} titre={libelleProduit(p)} taille="lg">
+    <>
       {erreur && <div className="banner banner-error">{erreur}</div>}
 
       <div className="fiche-ident" style={{ marginBottom: 12 }}>
@@ -378,7 +387,7 @@ export default function ProduitFicheModal({
           onModifie?.()
         }}
       />
-    </Modal>
+    </>
   )
 }
 

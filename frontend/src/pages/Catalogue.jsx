@@ -1,23 +1,32 @@
 import { useEffect, useState, useCallback } from 'react'
+import { useEtatUrl } from '../api/url.js'
 import { api, membres } from '../api/client.js'
 import { libelleProduit, prixIndicatif, euros, statutProduit, actionsStatut } from '../api/produit.js'
 import Tabs from '../components/Tabs.jsx'
 import ProduitOptionsModal from '../components/ProduitOptionsModal.jsx'
-import ProduitFicheModal from '../components/ProduitFicheModal.jsx'
+import ProduitFiche from '../components/ProduitFiche.jsx'
 import { humaniser } from '../api/vocabulaire.js'
 import { aLeDroit } from '../api/droits.js'
 
+// MEME MOTIF QUE CLIENTS, PARCE QUE MAXIME A DEMANDE LA MEME CHOSE : « je pense que pour le produit
+// on devrait faire pareil que pour le client. » Liste large, fiche en page, retour qui rend les
+// filtres. `useEtatUrl` (api/url.js) est ecrit pour servir aux deux plutot que recopie ici.
+const DEFAUTS = { tab: 'produits', q: '', statut: '', type: '', fiche: '' }
+
 export default function Catalogue({ etabActif, cible = null, onCibleConsommee, droits = [] }) {
-  const [tab, setTab] = useState('produits')
+  const [params, majParams] = useEtatUrl('catalogue', DEFAUTS)
+  const tab = params.tab
+  const setTab = (v) => majParams({ tab: v, fiche: '' })
 
   // Une cible « produit » arrive de la recherche globale : on s'assure d'être sur le bon onglet
   // avant que la liste ne tente de l'ouvrir.
   useEffect(() => {
-    if (cible?.type === 'produit') setTab('produits')
+    if (cible?.type === 'produit') majParams({ tab: 'produits' })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cible])
 
   return (
-    <div className="view">
+    <div className="view large">
       <div className="view-head">
         <div className="ttl">
           <h1>Catalogue</h1>
@@ -32,7 +41,14 @@ export default function Catalogue({ etabActif, cible = null, onCibleConsommee, d
       />
 
       {tab === 'produits' ? (
-        <OngletProduits etabActif={etabActif} cible={cible} onCibleConsommee={onCibleConsommee} droits={droits} />
+        <OngletProduits
+          etabActif={etabActif}
+          cible={cible}
+          onCibleConsommee={onCibleConsommee}
+          droits={droits}
+          params={params}
+          majParams={majParams}
+        />
       ) : (
         <OngletOptions />
       )}
@@ -42,8 +58,10 @@ export default function Catalogue({ etabActif, cible = null, onCibleConsommee, d
 
 /* ------------------------------------------------------------------ Produits */
 
-function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = [] }) {
+function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = [], params, majParams }) {
   const [produits, setProduits] = useState([])
+  const [total, setTotal] = useState(0)
+  const [saisie, setSaisie] = useState(params.q)
   const [types, setTypes] = useState([])
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
@@ -55,14 +73,28 @@ function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = []
 
   const [produitOptions, setProduitOptions] = useState(null) // produit dont on gère les options
   const [actionEnCours, setActionEnCours] = useState(null) // id du produit dont une action tourne
-  const [produitFiche, setProduitFiche] = useState(null) // produit dont on consulte la fiche
+  const selId = params.fiche || null
 
   const recharger = useCallback(async () => {
     setChargement(true)
     setErreur(null)
     try {
-      const [pc, tc] = await Promise.all([api.produits(), api.typeProduits()])
+      // QUATRE FILTRES DECLARES COTE SERVEUR, AUCUN ATTEIGNABLE.
+      //
+      // `Produit` porte un `SearchFilter` sur `code` (partiel), `libelleRecherche` (partiel),
+      // `statut` et `typeCode`. L'ecran appelait `api.produits()` sans le moindre parametre, et
+      // n'offrait meme pas un champ de recherche : au-dela de trente produits on ne retrouvait plus
+      // rien, puisque le serveur coupe la a defaut de pagination cliente.
+      const [pc, tc] = await Promise.all([
+        api.produits({
+          libelleRecherche: params.q || '',
+          statut: params.statut || '',
+          typeCode: params.type || '',
+        }),
+        api.typeProduits(),
+      ])
       setProduits(membres(pc))
+      setTotal(pc?.totalItems ?? pc?.['hydra:totalItems'] ?? membres(pc).length)
       const t = membres(tc)
       setTypes(t)
       setTypeId((prev) => prev || (t.length ? t[0].id : ''))
@@ -71,21 +103,28 @@ function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = []
     } finally {
       setChargement(false)
     }
-  }, [])
+  }, [params.q, params.statut, params.type])
 
   useEffect(() => {
     recharger()
   }, [etabActif, recharger])
+
+  // Recherche differee a la frappe : l'URL ne bouge qu'une fois la saisie posee.
+  useEffect(() => {
+    if (saisie === params.q) return undefined
+    const t = setTimeout(() => majParams({ q: saisie }), 300)
+    return () => clearTimeout(t)
+  }, [saisie, params.q, majParams])
 
   // Ouverture de la fiche demandée par la recherche globale. On prend l'objet complet s'il est déjà
   // chargé, sinon on ouvre avec le seul identifiant : la fiche va chercher le détail de toute façon,
   // et attendre la liste entière pour afficher un nom ferait patienter sans raison.
   useEffect(() => {
     if (cible?.type !== 'produit') return
-    const connu = produits.find((p) => String(p.id) === String(cible.id))
-    setProduitFiche(connu || { id: cible.id })
+    majParams({ fiche: String(cible.id) }, { pousser: true })
     onCibleConsommee?.()
-  }, [cible, produits, onCibleConsommee])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cible])
 
   async function creer(e) {
     e.preventDefault()
@@ -139,10 +178,77 @@ function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = []
     }
   }
 
+  // La fiche prend la page entiere : on n'affiche ni la liste ni le formulaire de creation derriere.
+  if (selId) {
+    const connu = produits.find((p) => String(p.id) === String(selId))
+    return (
+      <>
+        <button
+          className="btn ghost sm"
+          type="button"
+          style={{ marginBottom: 12 }}
+          onClick={() => majParams({ fiche: '' }, { pousser: true })}
+        >
+          ← Retour au catalogue
+        </button>
+        <ProduitFiche
+          produit={connu || { id: selId }}
+          peutModifier={aLeDroit(droits, 'offre.modifier') || aLeDroit(droits, 'offre.gerer')}
+          peutModifierCompta={aLeDroit(droits, 'offre.modifier_compta') || aLeDroit(droits, 'offre.gerer')}
+          onModifie={recharger}
+        />
+      </>
+    )
+  }
+
+  const tronquee = total > produits.length
+
   return (
     <>
       {erreur && <div className="banner banner-error">{erreur}</div>}
       {succes && <div className="banner banner-ok">{succes}</div>}
+
+      <section className="card" style={{ marginBottom: 16 }}>
+        <div className="card-b">
+          <div className="row" style={{ gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            <div className="field" style={{ margin: 0, flex: '2 1 260px' }}>
+              <label htmlFor="cat-q">Rechercher un produit</label>
+              <input
+                id="cat-q"
+                className="input"
+                placeholder="Nom du produit…"
+                value={saisie}
+                onChange={(e) => setSaisie(e.target.value)}
+              />
+            </div>
+            <div className="field" style={{ margin: 0, flex: '1 1 160px' }}>
+              <label htmlFor="cat-statut">État</label>
+              <select id="cat-statut" className="input" value={params.statut} onChange={(e) => majParams({ statut: e.target.value })}>
+                <option value="">Tous les états</option>
+                <option value="brouillon">Brouillons</option>
+                <option value="publie">Publiés</option>
+                <option value="archive">Archivés</option>
+              </select>
+            </div>
+            <div className="field" style={{ margin: 0, flex: '1 1 180px' }}>
+              <label htmlFor="cat-type">Type</label>
+              <select id="cat-type" className="input" value={params.type} onChange={(e) => majParams({ type: e.target.value })}>
+                <option value="">Tous les types</option>
+                {types.map((t) => (
+                  <option key={t.id} value={t.code || t.id}>{t.libelle}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          {/* Le serveur coupe a 30 et ignore `itemsPerPage` (voir `api/client.js`). Sur un catalogue,
+              une liste coupee en silence fait conclure qu'un produit n'existe pas. */}
+          {tronquee && (
+            <p className="hint" style={{ marginBottom: 0 }}>
+              {produits.length} produits affichés sur {total}. Affinez la recherche pour voir les autres.
+            </p>
+          )}
+        </div>
+      </section>
 
       <form className="card" onSubmit={creer} style={{ marginBottom: 16 }}>
         <div className="card-h"><h3>Nouveau produit</h3></div>
@@ -200,7 +306,7 @@ function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = []
                       <button
                         type="button"
                         className="lnk"
-                        onClick={() => setProduitFiche(p)}
+                        onClick={() => majParams({ fiche: String(p.id) }, { pousser: true })}
                         title="Ouvrir la fiche du produit"
                         style={{
                           background: 'none',
@@ -260,14 +366,6 @@ function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = []
         onClose={() => setProduitOptions(null)}
       />
 
-      <ProduitFicheModal
-        open={!!produitFiche}
-        produit={produitFiche}
-        peutModifier={aLeDroit(droits, 'offre.modifier') || aLeDroit(droits, 'offre.gerer')}
-        peutModifierCompta={aLeDroit(droits, 'offre.modifier_compta') || aLeDroit(droits, 'offre.gerer')}
-        onModifie={recharger}
-        onClose={() => setProduitFiche(null)}
-      />
     </>
   )
 }
