@@ -43,7 +43,7 @@ function versChampSimple(valeur, champ) {
   return valeur
 }
 
-export default function ReferentielEditable({ descripteur, peutEcrire }) {
+export default function ReferentielEditable({ descripteur, peutEcrire, onEcrit }) {
   const [lignes, setLignes] = useState([])
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
@@ -129,6 +129,7 @@ export default function ReferentielEditable({ descripteur, peutEcrire }) {
       if (edition.ligne) await modifier(edition.ligne.id, corps)
       else await creer(corps)
       setSucces(edition.ligne ? 'Modification enregistrée.' : 'Ajout enregistré.')
+      onEcrit?.()
       setEdition(null)
       await recharger()
     } catch (err) {
@@ -156,6 +157,7 @@ export default function ReferentielEditable({ descripteur, peutEcrire }) {
     try {
       await supprimer(ligne.id)
       setSucces('Suppression effectuée.')
+      onEcrit?.()
       await recharger()
     } catch (err) {
       setErreur(err.message || "La suppression n'a pas abouti.")

@@ -436,6 +436,11 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
   // La liste ne peut pas etre une constante : ce sont les moyens que CET etablissement a
   // declares, juste en dessous dans le meme onglet.
   // Le profil comptable de l'établissement : obligatoire sur un taux de TVA, jamais demandé.
+  // Incremente a chaque ecriture d'un reglage suivi par << Avant de pouvoir vendre >> : sans ca, la
+  // liste garde son ancien decompte et dit qu'il manque ce qu'on vient de creer.
+  const [versionReferentiels, setVersionReferentiels] = useState(0)
+  const referentielEcrit = useCallback(() => setVersionReferentiels((v) => v + 1), [])
+
   const [profils, setProfils] = useState([])
   useEffect(() => {
     let annule = false
@@ -470,7 +475,7 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
       {/* En tete, avant les onglets de contenu : c'est la premiere chose que voit quelqu'un qui
           arrive ici sans savoir par ou commencer. Il se replie tout seul des que les trois
           conditions sont remplies. */}
-      <PretAVendre etabActif={etabActif} droits={droits} onAller={setSousOnglet} />
+      <PretAVendre etabActif={etabActif} droits={droits} onAller={setSousOnglet} version={versionReferentiels} />
 
       {sousOnglet === 'ouverture' && <PlanningOuvertureSection droits={droits} etabActif={etabActif} />}
 
@@ -523,10 +528,12 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
           <div className="fiche-sec" style={{ marginBottom: 10 }}>Indispensable pour vendre</div>
           <ReferentielEditable
             descripteur={descripteurTypesTarif(api)}
+            onEcrit={referentielEcrit}
             peutEcrire={aLeDroit(droits, 'offre.gerer')}
           />
           <ReferentielEditable
             descripteur={descripteurTva(api, profils)}
+            onEcrit={referentielEcrit}
             peutEcrire={aLeDroit(droits, 'compta.gerer')}
           />
 
@@ -551,19 +558,10 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
         <div className="resa-grid">
           <ReferentielEditable
             descripteur={descripteurPointsDeVente(api, etabActif, moyens)}
+            onEcrit={referentielEcrit}
             peutEcrire={aLeDroit(droits, 'caisse.gerer')}
           />
-          <Liste
-            titre="Caisses"
-            deps={[etabActif]}
-            charger={api.caisses}
-            vide="Aucune caisse."
-            colonnes={[
-              { cle: 'libelle', entete: 'Caisse', rendu: (r) => <span className="nm">{r.libelle || '—'}</span> },
-              { cle: 'pointDeVente', entete: 'Point de vente', rendu: (r) => texte(r.pointDeVente?.libelle, '—') },
-              { cle: 'etat', entete: 'État', rendu: (r) => <span className="badge mut">{r.etat || '—'}</span> },
-            ]}
-          />
+          <CaissesSection etabActif={etabActif} peutGerer={aLeDroit(droits, 'caisse.gerer')} onEcrit={referentielEcrit} />
           <MoyensPaiement etabActif={etabActif} />
         </div>
       )}
@@ -754,6 +752,207 @@ function MoyensPaiement({ etabActif }) {
 //
 // On ne peut pas le corriger depuis le front. On peut refuser de le laisser passer en silence.
 const CODES_FIDUCIAIRES = ['especes', 'cheque', 'cheque_vacances', 'cheque_culture', 'cheque_loisirs']
+
+
+// --- Les caisses : le tiroir depuis lequel on encaisse. ---
+//
+// ON NE POUVAIT PAS EN CRÉER UNE, ET C'ÉTAIT LE DERNIER VERROU DE LA MISE EN VENTE.
+//
+// `POST /api/caisses` existe depuis le début (droit `caisse.gerer`) et n'était appelé d'aucun écran.
+// Cette liste était en lecture seule. Conséquence observée sur GI-ONE FITNESS : le formulaire
+// d'ouverture de session proposait « Aucune caisse » comme unique option — sans valeur — puis
+// refusait avec « Point de vente et caisse requis » alors que le point de vente était choisi. Il
+// reprochait deux champs quand un seul manquait, et celui-là était impossible à remplir.
+//
+// Sixième occurrence de la même famille : on crée une chose là où c'est le métier (§9.3 des
+// conventions), et le métier d'une caisse est ici, à côté de son point de vente.
+function CaissesSection({ etabActif, peutGerer, onEcrit }) {
+  const [caisses, setCaisses] = useState([])
+  const [pdvs, setPdvs] = useState([])
+  const [chargement, setChargement] = useState(true)
+  const [erreur, setErreur] = useState(null)
+  const [msg, setMsg] = useState(null)
+  const [edition, setEdition] = useState(null) // { caisse } ou { creation: true }
+
+  const charger = useCallback(async () => {
+    setChargement(true)
+    setErreur(null)
+    // Deux lectures, deux droits : sans les points de vente on peut encore LIRE les caisses, mais
+    // pas en créer — le formulaire le dira plutôt que de proposer une liste vide.
+    const [c, p] = await Promise.allSettled([api.caisses(), api.pointDeVentes()])
+    setCaisses(c.status === 'fulfilled' ? membres(c.value) : [])
+    setPdvs(p.status === 'fulfilled' ? membres(p.value) : [])
+    if (c.status === 'rejected') setErreur(c.reason?.message || 'Chargement impossible.')
+    setChargement(false)
+  }, [etabActif])
+
+  useEffect(() => { charger() }, [charger])
+
+  return (
+    <section className="card">
+      <div className="card-h">
+        <h3>Caisses</h3>
+        <span className="sub">le poste depuis lequel on encaisse</span>
+        {peutGerer && (
+          <div className="actions" style={{ marginLeft: 'auto' }}>
+            <button className="btn sm" type="button" onClick={() => { setMsg(null); setErreur(null); setEdition({ creation: true }) }}>
+              ＋ Ajouter
+            </button>
+            <button className="btn ghost sm" type="button" onClick={charger} disabled={chargement}>↻</button>
+          </div>
+        )}
+      </div>
+      <div className="card-b" style={{ overflowX: 'auto' }}>
+        {msg && <div className="banner banner-ok" style={{ margin: '0 0 12px' }}>{msg}</div>}
+        {erreur && <div className="banner banner-error" style={{ margin: '0 0 12px' }}>{erreur}</div>}
+
+        {chargement ? (
+          <div className="center" style={{ minHeight: 120 }}><div className="spinner" /></div>
+        ) : caisses.length === 0 ? (
+          <div className="empty">
+            Aucune caisse. Une caisse, c&rsquo;est le tiroir et le poste depuis lesquels on encaisse —
+            un comptoir d&rsquo;accueil, une buvette, une borne. Tant qu&rsquo;il n&rsquo;y en a pas,
+            aucune session ne peut s&rsquo;ouvrir et rien ne peut être vendu, même avec un point de
+            vente et des tarifs.
+          </div>
+        ) : (
+          <table className="tbl">
+            <thead>
+              <tr><th>Caisse</th><th>Point de vente</th><th>État</th>{peutGerer && <th className="num">Actions</th>}</tr>
+            </thead>
+            <tbody>
+              {caisses.map((c) => (
+                <tr key={c.id}>
+                  <td><span className="nm">{c.libelle || '—'}</span></td>
+                  <td>{c.pointDeVente?.libelle || <span className="sub">—</span>}</td>
+                  <td>
+                    {/* `securisee` est l'état NORMAL d'une caisse au repos, pas une alerte : elle
+                        exige le code régisseur pour être rouverte. La peindre en rouge ferait
+                        chercher un incident là où il n'y en a pas. */}
+                    <span className={`badge ${c.etat === 'ouverte' ? 'good' : 'mut'}`}>
+                      {mot(c.etat)}
+                    </span>
+                  </td>
+                  {peutGerer && (
+                    <td className="num">
+                      <button className="btn ghost sm" type="button" onClick={() => { setMsg(null); setErreur(null); setEdition({ caisse: c }) }}>
+                        Renommer
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <CaisseModal
+        edition={edition}
+        pdvs={pdvs}
+        onClose={() => setEdition(null)}
+        onEnregistre={async (corps) => {
+          const existante = edition?.caisse
+          if (existante) await api.majCaisse(existante.id, { libelle: corps.libelle })
+          else await api.creerCaisse(corps)
+          setEdition(null)
+          setMsg(existante ? 'Caisse renommée.' : `Caisse « ${corps.libelle} » créée.`)
+          await charger()
+          onEcrit?.()
+        }}
+      />
+    </section>
+  )
+}
+
+function CaisseModal({ edition, pdvs, onClose, onEnregistre }) {
+  const caisse = edition?.caisse || null
+  const creation = !!edition && !caisse
+  const [libelle, setLibelle] = useState('')
+  const [pdv, setPdv] = useState('')
+  const [erreur, setErreur] = useState(null)
+  const [envoi, setEnvoi] = useState(false)
+
+  useEffect(() => {
+    if (!edition) return
+    setLibelle(caisse?.libelle || '')
+    setPdv(caisse?.pointDeVente?.id || pdvs[0]?.id || '')
+    setErreur(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [edition])
+
+  async function soumettre(e) {
+    e.preventDefault()
+    setErreur(null)
+    if (!libelle.trim()) { setErreur('Donnez un nom à cette caisse.'); return }
+    if (creation && !pdv) { setErreur('Une caisse appartient à un point de vente : choisissez-en un.'); return }
+    setEnvoi(true)
+    try {
+      await onEnregistre({ libelle: libelle.trim(), pointDeVente: `/api/point_de_ventes/${pdv}` })
+    } catch (err) {
+      setErreur(erreurEcriture(err))
+    } finally {
+      setEnvoi(false)
+    }
+  }
+
+  return (
+    <Modal open={!!edition} onClose={onClose} titre={creation ? 'Ajouter une caisse' : `Renommer « ${caisse?.libelle || ''} »`}>
+      <form onSubmit={soumettre}>
+        {erreur && <div className="banner banner-error" style={{ marginBottom: 12 }}>{erreur}</div>}
+
+        <div className="field">
+          <label htmlFor="ca-lib">Nom de la caisse *</label>
+          <input
+            id="ca-lib"
+            className="input"
+            value={libelle}
+            maxLength={120}
+            placeholder="Comptoir 1, Buvette, Borne d’entrée…"
+            onChange={(e) => setLibelle(e.target.value)}
+          />
+          <p className="hint">
+            Ce que le caissier choisira en ouvrant sa session. Nommez l’endroit, pas le matériel :
+            c’est le poste qu’on reconnaît, pas le tiroir.
+          </p>
+        </div>
+
+        {creation && (
+          <div className="field">
+            <label htmlFor="ca-pdv">Point de vente *</label>
+            {/* LE POINT DE VENTE NE SE CHANGE PAS APRÈS COUP, ET CE N'EST PAS UN OUBLI.
+                Les sessions, les ventes et les clôtures Z d'une caisse restent rattachées à son
+                point de vente. Le déplacer ferait basculer un historique d'encaissement d'une régie
+                à une autre sans que rien ne le signale. On crée une seconde caisse. */}
+            {pdvs.length === 0 ? (
+              <div className="banner banner-warn">
+                Aucun point de vente sur cet établissement. Une caisse appartient à un point de
+                vente : créez-en un ci-dessus avant d’ajouter une caisse.
+              </div>
+            ) : (
+              <>
+                <select id="ca-pdv" className="input" value={pdv} onChange={(e) => setPdv(e.target.value)}>
+                  {pdvs.map((p) => <option key={p.id} value={p.id}>{p.libelle}</option>)}
+                </select>
+                <p className="hint">
+                  Il ne pourra plus être changé : les sessions, les ventes et les clôtures Z de cette
+                  caisse y resteront rattachées. Pour un autre point de vente, créez une autre caisse.
+                </p>
+              </>
+            )}
+          </div>
+        )}
+
+        <div className="r" style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button type="button" className="btn ghost" onClick={onClose}>Annuler</button>
+          <button type="submit" className="btn" disabled={envoi || (creation && pdvs.length === 0)}>
+            {envoi ? 'Enregistrement…' : creation ? 'Créer la caisse' : 'Enregistrer'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
 
 function ModalMoyenPaiement({ edition, onClose, onEnregistre }) {
   const moyen = edition?.moyen || null

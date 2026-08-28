@@ -343,6 +343,17 @@ export const api = {
   creerPointDeVente: (corps) => request('/api/point_de_ventes', { method: 'POST', body: corps, ld: true }),
   majPointDeVente: (id, corps) => request(`/api/point_de_ventes/${id}`, { method: 'PATCH', body: corps }),
   caisses: () => request('/api/caisses'),
+  // UNE CAISSE NE POUVAIT PAS ETRE CREEE, ET C'EST CE QUI BLOQUAIT LA VENTE.
+  //
+  // `POST /api/caisses` existe (droit `caisse.gerer`) et n'etait appele de nulle part. Consequence
+  // observee sur GI-ONE FITNESS : le formulaire d'ouverture de caisse propose << Aucune caisse >>
+  // comme unique option, sans valeur, avec le bouton actif -- puis refuse avec << Point de vente et
+  // caisse requis >> alors que le point de vente EST choisi. Il reproche deux champs quand un seul
+  // manque, et celui-la etait impossible a remplir depuis l'application.
+  //
+  // Operation API Platform standard (pas d'`uriTemplate`) : elle deserialise, donc `ld: true`.
+  creerCaisse: (corps) => request('/api/caisses', { method: 'POST', body: corps, ld: true }),
+  majCaisse: (id, corps) => request(`/api/caisses/${id}`, { method: 'PATCH', body: corps }),
   moyensPaiement: () => request('/api/moyen_paiements'),
   // Moyens de paiement — écriture (source M6, sécurité `compta.gerer`).
   creerMoyenPaiement: (corps) =>

@@ -317,21 +317,34 @@ function Plafonds({ peutGerer, etabActif }) {
   const [operations, setOperations] = useState([])
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
+  // Distinguer << il n'y en a pas >> de << je n'ai pas pu lire >>.
+  const [operationsIllisibles, setOperationsIllisibles] = useState(false)
+  const [rolesIllisibles, setRolesIllisibles] = useState(false)
 
   const recharger = useCallback(async () => {
     setChargement(true)
     setErreur(null)
     try {
-      const [l, o, r] = await Promise.all([
+      // AVALER UN ECHEC ET AFFICHER << AUCUN >> SONT DEUX CHOSES DIFFERENTES.
+      //
+      // Les trois lectures etaient rattrapees en `null`, puis rendues en liste vide. Sur l'ecran qui
+      // repond a << qui peut depasser quoi >>, une panne de lecture s'affichait donc comme
+      // << aucune operation declaree sensible >> -- c'est-a-dire comme une reponse rassurante.
+      //
+      // La distinction n'est pas << avaler ou pas >>, c'est CONFORT ou SUBSTANCE. Un fond de
+      // calendrier qui manque, on s'en passe. Un catalogue d'operations sensibles qui manque, on ne
+      // le presente pas comme vide.
+      const [l, o, r] = await Promise.allSettled([
         api.limitesAutorisation(),
-        api.operationsSensibles().catch(() => null),
-        // Les roles servent a designer A QUI un plafond s applique. Leur absence ne doit pas
-        // empecher de lire les plafonds : le champ sera simplement vide.
-        api.roles().catch(() => null),
+        api.operationsSensibles(),
+        api.roles(),
       ])
-      setLimites(membres(l))
-      setOperations(o ? membres(o) : [])
-      setRoles(r ? membres(r) : [])
+      if (l.status === 'rejected') throw l.reason
+      setLimites(membres(l.value))
+      setOperations(o.status === 'fulfilled' ? membres(o.value) : [])
+      setRoles(r.status === 'fulfilled' ? membres(r.value) : [])
+      setOperationsIllisibles(o.status === 'rejected')
+      setRolesIllisibles(r.status === 'rejected')
     } catch (e) {
       setErreur(e.message || 'Les plafonds n’ont pas pu être chargés.')
     } finally {
@@ -361,6 +374,15 @@ function Plafonds({ peutGerer, etabActif }) {
           )}
         </div>
         {erreur && <div className="banner banner-error">{erreur}</div>}
+        {/* Sans les rôles, la colonne « s'applique à » ne peut pas nommer sa cible : elle affiche
+            « un rôle précis (nom non transmis) », ce qui se lit comme un défaut de données alors
+            que c'est une lecture qui a échoué. */}
+        {rolesIllisibles && (
+          <div className="banner banner-warn">
+            La liste des rôles n’a pas pu être lue : les plafonds ci-dessous ne pourront pas nommer le
+            rôle qu’ils visent, et un nouveau plafond ne pourra pas en désigner un.
+          </div>
+        )}
         {chargement ? (
           <div className="center" style={{ minHeight: 120 }}><div className="spinner" /></div>
         ) : limites.length === 0 ? (
@@ -455,7 +477,13 @@ function Plafonds({ peutGerer, etabActif }) {
           <span>Opérations sensibles</span>
           <span className="sub">ce qui peut recevoir un plafond</span>
         </div>
-        {operations.length === 0 ? (
+        {operationsIllisibles ? (
+          <div className="banner banner-error">
+            Le catalogue des opérations sensibles n’a pas pu être lu. Ce tableau est vide parce que la
+            lecture a échoué, <b>pas</b> parce qu’aucune opération n’est surveillée : n’en concluez
+            rien sur ce qui est plafonné.
+          </div>
+        ) : operations.length === 0 ? (
           <div className="sub" style={{ textAlign: 'center', padding: 20 }}>
             Aucune opération déclarée sensible.
           </div>
