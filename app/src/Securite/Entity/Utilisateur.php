@@ -156,7 +156,7 @@ class Utilisateur implements UserInterface, PasswordAuthenticatedUserInterface
     // `relations-muettes.py` cessait de voir les groupes de cette propriete, et le compte des
     // relations muettes MONTAIT au lieu de baisser. Une variante de forme qui n'apporte rien
     // coute la mesure.
-    #[Groups(['utilisateur:read', 'utilisateur:write', 'me:read', 'caution_mouvement:read', 'activity:read', 'project_task:read', 'project:read', 'ticket:read', 'message:read', 'document_version:read'])]
+    #[Groups(['utilisateur:read', 'utilisateur:write', 'me:read', 'caution_mouvement:read', 'activity:read', 'project_task:read', 'project:read', 'ticket:read', 'message:read', 'document_version:read', 'session:read', 'sos:read'])]
     private string $nom = '';
 
     /**

@@ -65,7 +65,7 @@ class Role
 
     #[ORM\Column(length: 120)]
     #[Assert\NotBlank]
-    #[Groups(['role:read', 'role:write', 'affectation:read', 'me:read'])]
+    #[Groups(['role:read', 'role:write', 'affectation:read', 'me:read', 'limite:read'])]
     private string $nom = '';
 
     /** @var Collection<int, Permission> */
