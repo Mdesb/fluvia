@@ -58,19 +58,16 @@ const NAV = [
       // badge perdu et appairer une carte sont les deux gestes les plus frequents d'un exploitant,
       // et aucun des deux n'etait possible depuis l'application.
       { id: 'acces', ic: '▭', label: 'Badges & terminaux', cap: 'controle_acces', perms: ['acces.lire', 'acces.appairer', 'acces.bloquer_support', 'acces.gerer'] },
-      // POURQUOI CETTE ENTRÉE NE PORTE PAS `cap: 'controle_acces'`, ALORS QUE SES DEUX VOISINES SI.
+      // L'installation du contrôle d'accès : le plan du site, les lecteurs, et le journal complet.
+      // Même garde que ses deux voisines — la capacité DIT ce que le site a acheté, les permissions
+      // disent ce que ce compte a le droit d'en faire.
       //
-      // La capacité est inactive sur les tenants existants — les douze le sont — et l'écran qui les
-      // affiche est en LECTURE SEULE : personne ne peut l'activer depuis l'application. Une entrée
-      // gardée par cette capacité est donc invisible pour tout le monde, y compris pour celui qui
-      // vient d'installer ses tourniquets et cherche où les déclarer.
-      //
-      // `droits.js` a déjà tranché ce dilemme : « un menu trop permissif se corrige par un refus
-      // d'API, un menu vide enferme l'utilisateur hors de son propre logiciel ». Les permissions
-      // `acces.*` sont ce que le serveur contrôle réellement sur ces quatre ressources ; c'est donc
-      // ce qu'on demande ici. Le jour où les capacités gardent vraiment quelque chose, cette entrée
-      // rejoindra ses voisines — et ce commentaire disparaîtra avec.
-      { id: 'topologie_acces', ic: '⛬', label: 'Topologie & passages', perms: ['acces.lire', 'acces.gerer', 'acces.superviser'] },
+      // Cette entrée a d'abord été posée sans `cap`, parce que la capacité était inactive sur tous
+      // les tenants et que l'écran des modules ne permettait pas de l'activer : la garder aurait
+      // caché l'écran à celui-là même qui vient d'installer ses tourniquets. Ce n'est plus vrai
+      // depuis que Paramètres › Modules en service permet la mise en service — l'entrée rejoint donc
+      // ses voisines, et une topologie invisible se corrige là où elle doit l'être.
+      { id: 'topologie_acces', ic: '⛬', label: 'Topologie & passages', cap: 'controle_acces', perms: ['acces.lire', 'acces.gerer', 'acces.superviser'] },
     ],
   },
   {

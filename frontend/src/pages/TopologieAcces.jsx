@@ -61,8 +61,69 @@ const RESULTAT_PASSAGE = { valide: 'Validé', refuse: 'Refusé', compte: 'Compt�
 const RESULTAT_CLS = { valide: 'good', refuse: 'crit', compte: 'mut' }
 const SENS_PASSAGE = { entree: 'Entrée', sortie: 'Sortie' }
 
+// POURQUOI CHAQUE MOTIF PORTE UNE PHRASE ET UN GESTE, ET PAS SEULEMENT UN LIBELLÉ.
+//
+// « hors_marge » ne dit rien à l'agent qui a le porteur devant lui. Ce qu'il lui faut, c'est ce qui
+// s'est passé ET ce qu'il peut y faire — parce que les motifs ne sont PAS de la même nature :
+//
+//   — certains se corrigent en deux clics, ici ou dans Paramètres (site fermé, seuil atteint,
+//     tolérance trop courte) ;
+//   — d'autres sont une décision qu'on ne défait pas au comptoir (badge bloqué, code forgé) ;
+//   — d'autres encore sont des faits d'exploitation (carte épuisée : il faut la recharger).
+//
+// Les afficher tous du même gris envoie quelqu'un chercher une panne là où il y a un horaire.
+const MOTIF_REFUS = {
+  hors_marge: {
+    libelle: 'Hors créneau',
+    quoi: 'Le porteur s’est présenté trop tôt ou trop tard par rapport à la fenêtre de son droit.',
+    geste: 'Ajustez les tolérances d’avance et de retard sur l’équipement, dans le plan du site.',
+  },
+  anti_passback: {
+    libelle: 'Anti-passback',
+    quoi: 'Le même support a déjà été lu il y a moins que le délai configuré.',
+    geste: 'Si c’est un usage légitime (sortie puis retour), baissez le délai de l’espace ou désactivez-le sur cet équipement.',
+  },
+  credit_epuise: { libelle: 'Carte épuisée', quoi: 'Il ne reste plus d’entrée sur la carte.', geste: 'Rechargez la carte depuis la caisse.' },
+  support_bloque: {
+    libelle: 'Badge bloqué',
+    quoi: 'Le support a été déclaré perdu ou volé.',
+    geste: 'Le déblocage se fait dans Badges & terminaux › Pertes & vols.',
+  },
+  seuil_fmi: {
+    libelle: 'Jauge atteinte',
+    quoi: 'L’espace a atteint son seuil de fréquentation et le mode est « blocage ».',
+    geste: 'Relevez le seuil, ou passez l’espace en « alerte seule » si le blocage n’est pas voulu.',
+  },
+  droit_invalide: { libelle: 'Droit invalide', quoi: 'Support inconnu, non appairé, ou droit dévalidé.', geste: 'Vérifiez l’appairage dans Badges & terminaux.' },
+  sens_interdit: {
+    libelle: 'Sens interdit',
+    quoi: 'L’équipement n’accepte pas ce sens de franchissement.',
+    geste: 'Corrigez le sens de l’équipement dans le plan du site si le matériel a été retourné.',
+  },
+  non_nominatif: { libelle: 'Passage non nominatif', quoi: 'Comptage sans support identifié.', geste: '' },
+  ouverture_manuelle: { libelle: 'Ouverture manuelle', quoi: 'Un agent a forcé le passage, avec motif.', geste: '' },
+  federation_inactive: {
+    libelle: 'Fédération inactive',
+    quoi: 'Le droit vient d’un autre site du sous-réseau, mais le sous-réseau est désactivé ou le produit n’y est pas éligible.',
+    geste: 'Activez le sous-réseau, ou ajoutez le produit à ses droits éligibles.',
+  },
+  signature_invalide: { libelle: 'Code forgé', quoi: 'La signature du support ne correspond pas.', geste: 'Aucun : c’est un refus de sécurité.' },
+  hors_portee: { libelle: 'Hors portée', quoi: 'Le terminal n’a pas autorité sur cet équipement.', geste: 'Vérifiez la référence ITBOX du contrôleur.' },
+  credit_epuise_hors_ligne_litige: {
+    libelle: 'Litige hors ligne',
+    quoi: 'Le passage a été accepté hors ligne alors que le crédit était épuisé — accepté, puis constaté à la synchronisation.',
+    geste: 'Rien à faire dans l’instant : c’est une trace, pas un refus.',
+  },
+  hors_horaires_ouverture: {
+    libelle: 'Site fermé',
+    quoi: 'Le passage tombe hors des heures d’ouverture, et le refus hors horaires est activé.',
+    geste: 'Corrigez la plage dans Paramètres › Heures d’ouverture — ou décochez le refus hors horaires.',
+  },
+}
+
 const ONGLETS = [
   ['plan', 'Plan du site'],
+  ['lecteurs', 'Lecteurs'],
   ['reseaux', 'Sous-réseaux'],
   ['journal', 'Journal des passages'],
 ]
@@ -892,6 +953,18 @@ export default function TopologieAcces({ etabActif, droits }) {
         </>
       )}
 
+      {onglet === 'lecteurs' && (
+        <Lecteurs
+          equipements={equipements}
+          controleurs={controleurs}
+          espaces={espaces}
+          peutGerer={peutGerer}
+          chargement={chargement}
+          onEditer={(q) => ouvrirEquipement(q)}
+          onAjouter={() => ouvrirEquipement(null)}
+        />
+      )}
+
       {onglet === 'reseaux' && (
         <SousReseaux
           reseaux={reseaux}
@@ -920,6 +993,168 @@ export default function TopologieAcces({ etabActif, droits }) {
         />
       )}
     </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// LECTEURS — LA MÊME INSTALLATION, LUE PAR LE MATÉRIEL.
+//
+// Le plan du site part des zones, parce que c'est là que se règlent les seuils. Mais quand on
+// installe, quand on dépanne, ou quand on reçoit un ticket « le lecteur 3 ne passe plus », on ne
+// pense pas en zones : on pense en lecteurs. Les deux vues montrent les mêmes objets ; c'est la
+// question posée qui change.
+//
+// CE QUE CETTE VUE REND VISIBLE ET QUE L'ARBRE CACHE :
+//
+//  — la référence ITBOX de chaque lecteur, qui est ce qu'on lit sur le matériel et dans les
+//    échanges avec l'installateur. Elle n'est PAS portée par l'équipement : elle vit sur son
+//    contrôleur, et le serveur ne l'embarque pas dans `equipement:read` (les groupes de
+//    `Controleur` n'exposent que l'identifiant et le libellé). On la recroise donc côté client.
+//  — l'anti-passback EFFECTIF, c'est-à-dire ce qui s'appliquera vraiment : la surcharge de
+//    l'équipement quand elle existe, la valeur de la zone sinon. Lire « hérité » dans une colonne
+//    ne dit pas ce qui va se passer ; lire « 5 min (de la zone) », si.
+//
+// ⚠ UN LECTEUR N'APPARTIENT AUJOURD'HUI QU'À UNE SEULE ZONE, et ce n'est pas un choix d'écran :
+// c'est le modèle. Un `Equipement` a un `Controleur`, un `Controleur` a un `EspaceAcces` — la zone
+// se déduit par transitivité, elle ne se choisit pas. La colonne le dit plutôt que de laisser croire
+// à une liste. Rattacher un lecteur à plusieurs zones demande une relation qui n'existe pas encore.
+function Lecteurs({ equipements, controleurs, espaces, peutGerer, chargement, onEditer, onAjouter }) {
+  const [recherche, setRecherche] = useState('')
+
+  const lignes = useMemo(() => {
+    const parId = new Map(controleurs.map((c) => [c.id, c]))
+    const zonesParId = new Map(espaces.map((e) => [e.id, e]))
+    return equipements.map((q) => {
+      const controleur = parId.get(idDe(q.controleur)) || null
+      const zone = controleur ? zonesParId.get(idDe(controleur.espace)) || null : null
+      return { equipement: q, controleur, zone }
+    })
+  }, [equipements, controleurs, espaces])
+
+  const filtrees = useMemo(() => {
+    const q = recherche.trim().toLowerCase()
+    if (!q) return lignes
+    return lignes.filter((l) =>
+      [l.equipement.libelle, l.controleur?.libelle, l.controleur?.itboxRef, l.zone?.libelle]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q)),
+    )
+  }, [lignes, recherche])
+
+  return (
+    <section className="card">
+      <div className="card-h">
+        <h3>Lecteurs</h3>
+        <div className="r" style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+          <input
+            className="input"
+            style={{ maxWidth: 260 }}
+            placeholder="Nom, ITBOX, zone…"
+            value={recherche}
+            onChange={(e) => setRecherche(e.target.value)}
+            aria-label="Rechercher un lecteur"
+          />
+          {peutGerer && (
+            <button className="btn primary sm" onClick={onAjouter} disabled={controleurs.length === 0}>＋ Lecteur</button>
+          )}
+        </div>
+      </div>
+      <div className="card-b">
+        <p className="hint" style={{ marginTop: 0 }}>
+          Chaque lecteur est piloté par un contrôleur, lui-même rattaché à un ITBOX et à une zone.
+          L’état affiché est celui du contrôleur : c’est lui qui parle au réseau, pas le lecteur.
+        </p>
+
+        {chargement ? (
+          <div className="center" style={{ minHeight: 120 }}><div className="spinner" /></div>
+        ) : lignes.length === 0 ? (
+          <div className="empty" style={{ padding: 18 }}>
+            <div style={{ marginBottom: 10 }}>
+              {controleurs.length === 0
+                ? 'Aucun contrôleur déclaré : un lecteur se rattache toujours à un contrôleur, commencez par le plan du site.'
+                : 'Aucun lecteur déclaré. Tant qu’il n’y en a pas, l’ITBOX n’a rien à qui rapporter un scan.'}
+            </div>
+            {peutGerer && controleurs.length > 0 && (
+              <button className="btn primary sm" onClick={onAjouter}>＋ Déclarer le premier</button>
+            )}
+          </div>
+        ) : filtrees.length === 0 ? (
+          <div className="empty" style={{ padding: 18 }}>Aucun lecteur ne correspond à « {recherche} ».</div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>Lecteur</th>
+                  <th>Type</th>
+                  <th>Zone</th>
+                  <th>Contrôleur · ITBOX</th>
+                  <th>État</th>
+                  <th>Sens</th>
+                  <th>Anti-passback effectif</th>
+                  <th className="num">Tolérances</th>
+                  {peutGerer && <th />}
+                </tr>
+              </thead>
+              <tbody>
+                {filtrees.map(({ equipement: q, controleur, zone }) => {
+                  const surcharge = q.antiPassbackActif !== null && q.antiPassbackActif !== undefined
+                  const actif = surcharge ? q.antiPassbackActif : zone?.antiPassbackActif
+                  const delai = surcharge ? (q.antiPassbackDelai ?? zone?.antiPassbackDelai) : zone?.antiPassbackDelai
+                  return (
+                    <tr key={q.id}>
+                      <td className="nm">{q.libelle}</td>
+                      <td>{TYPE_EQUIPEMENT[q.type] || q.type}</td>
+                      <td>{zone ? zone.libelle : <span className="mut">zone hors de cette page</span>}</td>
+                      <td>
+                        {controleur ? (
+                          <>
+                            {controleur.libelle}
+                            <span className="mut"> · {texteOuTiret(controleur.itboxRef)}</span>
+                          </>
+                        ) : (
+                          <span className="mut">contrôleur hors de cette page</span>
+                        )}
+                      </td>
+                      <td>
+                        {controleur ? (
+                          <span className={`badge ${ETAT_CLS[controleur.etat] || 'mut'}`} title={`Dernier signe de vie ${depuis(controleur.dernierHeartbeat)}`}>
+                            {ETAT_CONTROLEUR[controleur.etat] || controleur.etat}
+                          </span>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                      <td>{SENS_EQUIPEMENT[q.sens] || q.sens}</td>
+                      <td>
+                        {actif === undefined ? (
+                          <span className="mut">—</span>
+                        ) : actif ? (
+                          <>
+                            {duree(delai)}
+                            <span className="mut">{surcharge ? ' (propre au lecteur)' : ' (de la zone)'}</span>
+                          </>
+                        ) : (
+                          <span className="mut">désactivé{surcharge ? ' ici' : ' sur la zone'}</span>
+                        )}
+                      </td>
+                      <td className="num">
+                        +{q.margeAvance ?? 0} / −{q.margeRetard ?? 0} min
+                      </td>
+                      {peutGerer && (
+                        <td className="num">
+                          <button className="btn ghost sm" onClick={() => onEditer(q)}>Modifier</button>
+                        </td>
+                      )}
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </section>
   )
 }
 
@@ -1102,7 +1337,7 @@ function SousReseaux({ reseaux, espaces, peutGerer, chargement, onChange }) {
 // que personne n'atteignait. Un refus se comprend en regardant les vingt qui l'entourent, pas
 // l'instant.
 function JournalPassages({ espaces, equipements, etabActif }) {
-  const [filtres, setFiltres] = useState({ depuis: '', jusqua: '', espace: '', equipement: '', resultat: '' })
+  const [filtres, setFiltres] = useState({ depuis: '', jusqua: '', espace: '', equipement: '', resultat: '', billet: '' })
   const [lignes, setLignes] = useState([])
   const [total, setTotal] = useState(null)
   const [chargement, setChargement] = useState(false)
@@ -1120,6 +1355,13 @@ function JournalPassages({ espaces, equipements, etabActif }) {
       if (filtres.espace) query.espace = filtres.espace
       if (filtres.equipement) query.equipement = filtres.equipement
       if (filtres.resultat) query.resultat = filtres.resultat
+      // ⚠ RECHERCHE PAR NUMÉRO DE BILLET : LE FILTRE EST `exact`, PAS UNE RECHERCHE PARTIELLE.
+      //
+      // `#[ApiFilter(SearchFilter::class, properties: ['support.identifiant' => 'exact'])]` — un
+      // numéro tronqué ne rend donc RIEN, et rien se lit « ce billet n'est jamais passé », qui est
+      // la pire réponse possible à un client qui affirme le contraire. D'où le libellé du champ et
+      // la phrase du résultat vide.
+      if (filtres.billet.trim()) query['support.identifiant'] = filtres.billet.trim()
       const reponse = await api.journalPassages(query)
       const recus = membres(reponse)
       setLignes(recus)
@@ -1169,15 +1411,23 @@ function JournalPassages({ espaces, equipements, etabActif }) {
       const aNous = etabActif ? tout.filter((p) => idDe(p.etablissement) === etabActif) : tout
       const ecartes = tout.length - aNous.length
 
-      if (aNous.length === 0) {
+      // Le provider d'export ne connaît PAS le numéro de billet : il lit `depuis`, `jusqua`,
+      // `espace`, `equipement`, `resultat`, et rien d'autre. Envoyer le filtre du journal produirait
+      // un fichier de TOUS les passages sous un nom qui promet un billet précis. On coupe donc ici,
+      // sur la donnée déjà reçue.
+      const filtrees = filtres.billet.trim()
+        ? aNous.filter((p) => p.support?.identifiant === filtres.billet.trim())
+        : aNous
+
+      if (filtrees.length === 0) {
         setInfo('Aucun passage à exporter pour ces filtres.')
         return
       }
-      telechargerCsv(aNous, espaces, equipements)
+      telechargerCsv(filtrees, espaces, equipements)
       setInfo(
         ecartes > 0
-          ? `${aNous.length} passage(s) exportés. ${ecartes} ligne(s) rendues par le serveur appartenaient à un autre établissement et ont été écartées (défaut de cloisonnement de l’export, signalé).`
-          : `${aNous.length} passage(s) exportés.`,
+          ? `${filtrees.length} passage(s) exportés. ${ecartes} ligne(s) rendues par le serveur appartenaient à un autre établissement et ont été écartées (défaut de cloisonnement de l’export, signalé).`
+          : `${filtrees.length} passage(s) exportés.`,
       )
     } catch (e) {
       setErreur(e.message || "L'export n'a pas abouti.")
@@ -1238,6 +1488,16 @@ function JournalPassages({ espaces, equipements, etabActif }) {
               ))}
             </select>
           </div>
+          <div className="field" style={{ margin: 0 }}>
+            <label htmlFor="j-billet">N° de billet ou de badge (exact)</label>
+            <input
+              id="j-billet"
+              className="input"
+              value={filtres.billet}
+              onChange={majFiltre('billet')}
+              placeholder="Le numéro complet"
+            />
+          </div>
         </div>
 
         {erreur && <div className="banner banner-error">{erreur}</div>}
@@ -1247,9 +1507,18 @@ function JournalPassages({ espaces, equipements, etabActif }) {
           <div className="center" style={{ minHeight: 140 }}><div className="spinner" /></div>
         ) : lignes.length === 0 ? (
           <div className="empty" style={{ padding: 18 }}>
-            {filtres.depuis || filtres.jusqua || filtres.espace || filtres.resultat
-              ? 'Aucun passage ne répond à ces filtres.'
-              : 'Aucun passage enregistré sur ce site. Le journal se remplit tout seul dès qu’un équipement lit un support.'}
+            {filtres.billet.trim() ? (
+              <>
+                Aucun passage pour le numéro « {filtres.billet.trim()} ». La recherche porte sur le
+                numéro <strong>complet</strong> : un numéro tronqué ou approché ne rend rien, ce qui
+                ne veut pas dire que ce billet n’est jamais passé. Vérifiez le numéro avant de
+                répondre au client.
+              </>
+            ) : filtres.depuis || filtres.jusqua || filtres.espace || filtres.resultat ? (
+              'Aucun passage ne répond à ces filtres.'
+            ) : (
+              'Aucun passage enregistré sur ce site. Le journal se remplit tout seul dès qu’un équipement lit un support.'
+            )}
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
@@ -1262,7 +1531,7 @@ function JournalPassages({ espaces, equipements, etabActif }) {
                   <th>Sens</th>
                   <th>Résultat</th>
                   <th>Support</th>
-                  <th>Motif</th>
+                  <th>Pourquoi</th>
                 </tr>
               </thead>
               <tbody>
@@ -1283,9 +1552,11 @@ function JournalPassages({ espaces, equipements, etabActif }) {
                       {p.enConflit && <span className="badge crit" title="Conflit détecté à la réconciliation">conflit</span>}
                     </td>
                     <td>{p.support?.identifiant || <span className="mut">non nominatif</span>}</td>
-                    {/* `codeMotif` est le code machine du refus, `motif` la phrase saisie ou calculée.
-                        Les deux peuvent être vides sur un passage validé — c'est normal. */}
-                    <td>{texteOuTiret(p.motif || p.codeMotif)}</td>
+                    {/* `codeMotif` est le code machine, `motif` la phrase saisie ou calculée par le
+                        moteur. On affiche LA PHRASE DE L'EXPLOITANT quand le code est connu, la
+                        phrase du serveur en dessous, et le code brut en dernier recours : un code
+                        qu'on n'a pas traduit ici vaut mieux affiché tel quel qu'escamoté. */}
+                    <td>{cellulePourquoi(p)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1294,6 +1565,30 @@ function JournalPassages({ espaces, equipements, etabActif }) {
         )}
       </div>
     </section>
+  )
+}
+
+// Ce qu'on met dans la colonne « Pourquoi » d'un passage.
+//
+// Trois sources, dans cet ordre : la traduction de `codeMotif` (une phrase pour l'exploitant, plus
+// le geste à faire), puis `motif` (la phrase du moteur, souvent plus précise sur le cas), puis le
+// code brut si on ne le connaît pas encore. Un code non traduit s'affiche tel quel : le masquer
+// ferait disparaître le seul indice d'un refus qu'on n'a pas prévu.
+function cellulePourquoi(p) {
+  const connu = p.codeMotif ? MOTIF_REFUS[p.codeMotif] : null
+  if (!connu && !p.motif && !p.codeMotif) return '—'
+  return (
+    <>
+      {connu && (
+        <div title={connu.geste ? `${connu.quoi}\n\nQue faire : ${connu.geste}` : connu.quoi}>
+          <strong>{connu.libelle}</strong>
+        </div>
+      )}
+      {connu ? <div className="mut">{connu.quoi}</div> : null}
+      {p.motif && p.motif !== connu?.quoi ? <div className="mut">{p.motif}</div> : null}
+      {!connu && p.codeMotif ? <div className="mut">code : {p.codeMotif}</div> : null}
+      {connu?.geste ? <div className="hint" style={{ margin: 0 }}>{connu.geste}</div> : null}
+    </>
   )
 }
 
@@ -1314,7 +1609,11 @@ function telechargerCsv(passages, espaces, equipements) {
       SENS_PASSAGE[p.sens] || p.sens || '',
       RESULTAT_PASSAGE[p.resultat] || p.resultat || '',
       p.support?.identifiant || '',
-      p.motif || p.codeMotif || '',
+      // Le fichier porte la phrase de l'exploitant, pas le code machine : un CSV se relit loin de
+      // l'application, par quelqu'un qui n'a pas la table sous les yeux.
+      [MOTIF_REFUS[p.codeMotif]?.libelle, p.motif || (MOTIF_REFUS[p.codeMotif] ? '' : p.codeMotif)]
+        .filter(Boolean)
+        .join(' — '),
       p.origineHorsLigne ? 'oui' : 'non',
       p.enConflit ? 'oui' : 'non',
     ]
