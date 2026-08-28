@@ -5,6 +5,8 @@ import Qr from '../components/Qr.jsx'
 import { texte } from '../components/Liste.jsx'
 import HistoriqueVentesModal from '../components/HistoriqueVentesModal.jsx'
 import Modal from '../components/Modal.jsx'
+import ScansEnDirect from '../components/ScansEnDirect.jsx'
+import RechercheBilletModal from '../components/RechercheBilletModal.jsx'
 import ChoixOptions from '../components/ChoixOptions.jsx'
 import ClientPicker, { nomClient } from '../components/ClientPicker.jsx'
 import SessionCaisse from './SessionCaisse.jsx'
@@ -26,6 +28,10 @@ const ORDRE_MOYENS = ['especes', 'cb', 'cheque', 'pmv']
 export default function Caisse({ me, etabActif, etablissements, session, capacites = [], droits = [], onSessionRefresh }) {
   const [caisseModale, setCaisseModale] = useState(false)
   const [historique, setHistorique] = useState(false)
+  // « Pourquoi mon billet ne passe pas ? » se demande AU GUICHET, pas en supervision.
+  // La fenêtre existait et n'était atteignable que depuis l'écran de supervision — que le
+  // caissier n'a jamais ouvert. Son propre commentaire le disait déjà.
+  const [verifBillet, setVerifBillet] = useState(false)
   const [choixTarif, setChoixTarif] = useState(null)
   const [choixOptions, setChoixOptions] = useState(null)
   const [produits, setProduits] = useState([])
@@ -577,12 +583,19 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
           </p>
         </div>
         <div className="actions">
+          <button className="btn" onClick={() => setVerifBillet(true)}>Vérifier un billet</button>
           <button className="btn" onClick={() => setHistorique(true)} disabled={enPaiement}>Historique</button>
           <button className="btn" onClick={() => setCaisseModale(true)} disabled={enPaiement}>Clôture Z</button>
         </div>
       </div>
 
       {erreur && <div className="banner banner-error">{erreur}</div>}
+
+      {/* Le bandeau des scans est en position fixe : il ne prend pas de place dans la grille de la
+          caisse et ne bouge pas quand le panier s'allonge. Il ne s'affiche que pour un compte qui a
+          le droit de lire les passages. */}
+      <ScansEnDirect droits={droits} etabActif={etabActif} />
+      <RechercheBilletModal open={verifBillet} onClose={() => setVerifBillet(false)} />
 
       <div className="caisse-grid">
         <aside style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>

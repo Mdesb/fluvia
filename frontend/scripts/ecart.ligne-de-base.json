@@ -29,17 +29,30 @@
         "Le script REFUSE de le relever. Un plafond qui remonte n est plus un cliquet, c est un",
         "compteur."
     ],
+<<<<<<< HEAD
     "plafond": 714,
+=======
+    "plafond": 711,
+>>>>>>> origin/front-acces-topologie
     "releve": {
         "exposees": 1142,
         "sansEcran": 0,
         "attendues": 1142,
+<<<<<<< HEAD
         "appelees": 435,
         "atteignables": 428,
         "inatteignables": 714,
         "orphelins": [
             "comptesComptables  (back-office)",
             "factureDepuisVente  (back-office)",
+=======
+        "appelees": 436,
+        "atteignables": 431,
+        "inatteignables": 711,
+        "orphelins": [
+            "comptesComptables  (back-office)",
+            "etatSynchroAcces  (back-office)",
+>>>>>>> origin/front-acces-topologie
             "grilleTarifaires  (back-office)",
             "majFactureDirecte  (back-office)",
             "padelTournois  (back-office)",
@@ -53,8 +66,13 @@
         "parFront": [
             {
                 "nom": "back-office",
+<<<<<<< HEAD
                 "appelees": 414,
                 "atteignables": 407
+=======
+                "appelees": 415,
+                "atteignables": 410
+>>>>>>> origin/front-acces-topologie
             },
             {
                 "nom": "boutique en ligne",
@@ -96,6 +114,10 @@
                 11
             ],
             [
+                "acces",
+                11
+            ],
+            [
                 "musee",
                 11
             ],
@@ -110,10 +132,6 @@
             [
                 "opening",
                 10
-            ],
-            [
-                "acces",
-                9
             ],
             [
                 "billing",
@@ -257,6 +275,22 @@
             ],
             [
                 "valeur",
+                3
+            ],
+            [
+                "espace",
+                3
+            ],
+            [
+                "controleurs",
+                3
+            ],
+            [
+                "equipements",
+                3
+            ],
+            [
+                "sous",
                 3
             ],
             [

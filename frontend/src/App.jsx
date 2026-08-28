@@ -53,6 +53,7 @@ const Recouvrement = lazy(() => import('./pages/Recouvrement.jsx'))
 const Cautions = lazy(() => import('./pages/Cautions.jsx'))
 // Differe pour la meme raison : un caissier n'enrole pas de terminal et ne bloque pas de badge.
 const Acces = lazy(() => import('./pages/Acces.jsx'))
+const TopologieAcces = lazy(() => import('./pages/TopologieAcces.jsx'))
 
 import { lireHash, ecrireHash } from './api/url.js'
 
@@ -333,6 +334,7 @@ export default function App() {
       {onglet === 'reservation' && <Reservation etabActif={etabActif} droits={droits} session={session} />}
       {onglet === 'supervision' && <Supervision etabActif={etabActif} />}
       {onglet === 'acces' && <Acces etabActif={etabActif} droits={droits} />}
+      {onglet === 'topologie_acces' && <TopologieAcces etabActif={etabActif} droits={droits} />}
       {onglet === 'agenda' && <Agenda droits={droits} etabActif={etabActif} />}
       {/* `me` porte l'identifiant du lecteur, et c'est ce qui donne un CÔTÉ aux bulles : sans lui
           la messagerie ne sait pas lesquelles sont les siennes et les aligne toutes à gauche. */}
