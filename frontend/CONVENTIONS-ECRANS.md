@@ -37,6 +37,43 @@ vocabulaire ci-dessous n'est donc plus une préférence : il est vérifié.** Av
 classe, cherchez-le dans `styles.css` — s'il n'y est pas, ou vous vous trompez de nom, ou il vous
 manque une règle.
 
+## 0 bis. La règle qui a coûté le plus de colonnes : la relation lue comme un objet
+
+Le 28/08, **seize défauts confirmés dans onze modules**, tous de la même cause — plus que toutes les
+autres règles de ce fichier réunies.
+
+API Platform n'embarque une relation **que si l'entité cible expose au moins une propriété dans le
+groupe de sérialisation courant**. Sinon elle rend une IRI nue : `"/api/mandat_sepas/xxx"`. Et côté
+écran, `x.relation?.propriete` sur une chaîne ne lève pas — il vaut `undefined`.
+
+> **`undefined` s'affiche comme une donnée manquante, jamais comme une erreur de lecture.** Le build
+> passe, les tests passent, la colonne sort vide, et un tiret se lit « il n'y en a pas ».
+
+Ce que ça a donné en vrai, écran par écran :
+
+| Écran | Ce que la colonne disait | Ce qui était vrai |
+|---|---|---|
+| Assistance | « non affecté » | le ticket avait un agent |
+| Autorisations | « tout le monde » | le plafond ne visait qu'un rôle |
+| Cautions | « montant libre » | la retenue appliquait un barème |
+| Tableau de bord | « — » | une caisse a toujours un opérateur (`nullable: false`) |
+| SEPA, Recouvrement, Achats, Stock, Sport, Projets, Documents | vide | la donnée existait |
+
+**Les trois premières sont pires que vides : elles affirment.** Un repli doit constater, jamais
+conclure.
+
+### Ce qu'on fait
+
+1. **Vérifier avant d'écrire** `x.relation.y` : l'entité cible déclare-t-elle une propriété dans le
+   groupe qui porte la relation ? `frontend/scripts/mesurer-relations.mjs` répond pour tout le dépôt.
+2. **Résoudre** contre une liste déjà chargée : `resoudre(relation, liste)` dans `components/Liste.jsx`.
+   Elle accepte l'IRI **et** l'objet embarqué, pour que l'écran se répare tout seul le jour où un
+   `#[Groups]` est ajouté côté serveur.
+3. **Distinguer les deux absences** quand on ne peut pas résoudre : `nomOuAbsence()` sépare « le
+   champ est nul » (personne) de « le champ est une IRI » (quelqu'un, dont on ne lit pas le nom).
+4. **Demander le `#[Groups]`** : la résolution côté écran est un contournement. Le prochain écran qui
+   lira la même relation retombera dans le trou.
+
 ## 1. L'ossature d'une page
 
 Toute page de `frontend/src/pages/` rend **exactement** cette ossature :
@@ -124,9 +161,27 @@ Invariants :
 - L'erreur s'affiche **dans la modale**, pas derrière elle : sinon on ferme la modale pour lire
   pourquoi on n'a pas pu la valider.
 
-**Exceptions légitimes, à ne pas convertir :** un écran de travail continu où la saisie *est* la
-page (`Caisse`, `SessionCaisse`, `Login`, l'éditeur de boutique). Une modale y ajouterait un clic à
-chaque geste.
+**Le critère n'est pas « y a-t-il un `<form>` », c'est « est-ce que ça bouge ».**
+
+Un formulaire qui **apparaît au clic** au milieu de la page déplace la liste au moment précis où
+l'utilisateur la lisait — et souvent la ligne sur laquelle il vient de cliquer passe sous le pli.
+C'est le cas à convertir, et c'est le seul.
+
+Deux l'ont été le 28/08, tous deux de la même forme `{truc && (<form …>)}` :
+
+- `AbsencesSection` — déclarer une absence poussait vers le bas les lignes « à décider ».
+- `NoShowSection` — exonérer poussait vers le bas la ligne qu'on venait de désigner.
+
+**Ce qui a été examiné et laissé en place, avec la raison :**
+
+| Où | Pourquoi on ne convertit pas |
+|---|---|
+| `Catalogue` (3 formulaires) | Barres de saisie rapide **permanentes** (libellé, type, bouton, sur une ligne). Rien n'apparaît, donc rien ne bouge — et une modale ajouterait un clic à l'action la plus fréquente de l'écran. |
+| `Facturation` | Idem : le formulaire de création est la carte principale de l'écran, toujours visible. |
+| `TarifsProduit` | Rendu **à l'intérieur** de `ProduitFicheModal`. Une modale dans une modale est pire que le formulaire. |
+| `Caisse`, `SessionCaisse`, `Login`, l'éditeur | Écrans de travail continu où la saisie *est* la page. |
+
+Autrement dit : on convertit ce qui surgit, pas ce qui est déjà là.
 
 ## 4. Les listes
 
@@ -181,3 +236,28 @@ docker exec billetterie-preprod-php-1 php bin/console debug:router | grep <modul
 
 C'est la contrepartie de la règle 1 : une page qui promet un geste que le serveur ne rend pas est
 pire qu'une page qui ne le promet pas.
+
+**Et « la route existe » ne veut pas dire « elle répond ».** Le 28/08, l'écran Affaires mesurait
+zéro opération inatteignable — ses deux gestes appelaient bien `PATCH /api/opportunities/{id}`.
+Sauf que cette ressource répondait **500** sur toutes ses opérations, à cause d'une ligne de
+cloisonnement côté serveur. L'écran s'affichait parfaitement et aucune de ses actions ne marchait.
+
+> **Atteignable et cassé sont deux choses différentes.** `mesurer-ecart.mjs` compte ce qu'un écran
+> appelle, pas ce qui lui répond. Le seul moyen de connaître la seconde, c'est de cliquer.
+
+## 8. Ce qui ne se vérifie qu'en exécutant
+
+Aucun des contrôles de ce dépôt n'aurait trouvé ce qui suit. Ils ont tous été trouvés en ouvrant
+l'écran contre un vrai serveur, le même jour :
+
+- une relation embarquée et une relation en IRI **dans la même réponse** (`ligne.remise` et
+  `ligne.mandat`), donc une colonne « Débiteur » vide que rien n'expliquait ;
+- une collection rendant les configurations **de deux établissements** sous l'en-tête d'un seul ;
+- un `POST` qui répond **201** en jetant silencieusement le champ qui rattache la pièce à son
+  client ;
+- une ressource entière en **500** derrière un écran qui s'affiche normalement ;
+- un `@` en double sur un identifiant de compte social.
+
+**Un écran qui n'a jamais tourné n'est pas livré.** Le 26/08, vingt écrans ont été livrés sans une
+seule exécution ; les défauts ci-dessus dormaient dedans. Monter un serveur de développement branché
+sur l'API de préprod prend deux minutes — c'est moins cher que n'importe lequel de ces défauts.

@@ -195,6 +195,20 @@ const MOTS = {
   // Mode de calcul d'une ligne de barème.
   forfait: 'Forfait',
   valeur_remplacement: 'Valeur de remplacement',
+  // LE SUPPORT SUR LEQUEL PORTE UNE CAUTION.
+  //
+  // Ces quatre codes ne viennent pas d'une énumération PHP mais de constantes `TYPE_CIBLE` posées
+  // par chaque verticale (`SortirPatinsProcessor`, `AttribuerCasierHandler`,
+  // `LouerMaterielProcessor`) : `App\Caution` ne dépend d'aucune verticale, la cible est un couple
+  // opaque `typeCible`/`referenceCible`. D'où des valeurs pointées, que le repli rendait
+  // « Patinoire.patins » — lisible, mais ce n'est pas ce qu'on dit à voix haute au guichet.
+  //
+  // Vérifié contre la préprod le 28/08 : `demo.cible` vient des fixtures et apparaît réellement
+  // dans la liste, donc il est traduit lui aussi plutôt que laissé au repli.
+  'patinoire.patins': 'Patins',
+  'piscine.casier': 'Casier',
+  'padel.materiel': 'Matériel de padel',
+  'demo.cible': 'Support de démonstration',
 
   // --- Comptabilite ---
   provisoire: 'Provisoire',

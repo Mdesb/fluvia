@@ -34,6 +34,8 @@ export default function CautionsGestion({ etabActif, droits }) {
   const [cautions, setCautions] = useState([])
   const [mouvements, setMouvements] = useState([])
   const [grilles, setGrilles] = useState([])
+  const [baremePartiel, setBaremePartiel] = useState(false)
+  const [cautionsPartielles, setCautionsPartielles] = useState(false)
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
@@ -56,6 +58,19 @@ export default function CautionsGestion({ etabActif, droits }) {
     setCautions(c.status === 'fulfilled' ? membres(c.value) : [])
     setMouvements(m.status === 'fulfilled' ? membres(m.value) : [])
     setGrilles(g.status === 'fulfilled' ? membres(g.value) : [])
+
+    // LE BARÈME TRONQUÉ NE REND PAS L'ÉCRAN INCOMPLET, IL LUI FAIT DIRE LE CONTRAIRE DU VRAI.
+    //
+    // Le serveur plafonne chaque collection à 30 lignes (l'explication est dans
+    // `components/Liste.jsx`). Le journal retrouve le barème d'une retenue en recoupant la liste
+    // des barèmes — et quand il n'y arrive pas, il affiche « montant libre », c'est-à-dire
+    // « quelqu'un a décidé cette somme à la main ».
+    //
+    // Sur un registre dont l'unique raison d'être est de répondre à une contestation, c'est une
+    // affirmation, pas un blanc : on dirait à un client que sa retenue n'obéissait à aucune règle
+    // alors qu'elle en appliquait une. Une liste coupée doit donc se dire.
+    setBaremePartiel(partielle(g))
+    setCautionsPartielles(partielle(c) || partielle(m))
     if (c.status === 'rejected') setErreur(c.reason?.message || 'Lecture des cautions impossible.')
     setChargement(false)
   }, [etabActif])
@@ -106,6 +121,18 @@ export default function CautionsGestion({ etabActif, droits }) {
     <>
       {erreur && <div className="banner banner-error">{erreur}</div>}
       {succes && <div className="banner banner-ok">{succes}</div>}
+
+      {(cautionsPartielles || baremePartiel) && (
+        <div className="banner banner-warn">
+          <b>Toutes les données ne sont pas affichées.</b> Le serveur limite chaque liste à 30 lignes.
+          {cautionsPartielles
+            && ' Des cautions ou des mouvements manquent : les totaux ci-dessous sont donc'
+              + ' inférieurs à la réalité.'}
+          {baremePartiel
+            && ' Le barème est incomplet : une retenue peut apparaître comme un « montant libre »'
+              + ' alors qu’elle appliquait bien une règle.'}
+        </div>
+      )}
 
       <Tabs
         onglets={[
@@ -298,6 +325,19 @@ function Journal({ mouvements, grillesParId }) {
   // prise contre la règle, et c'est le premier chiffre qu'un contrôle vient regarder.
   const forces = mouvements.filter((m) => m.forcee).length
 
+  // LA COLONNE « AGENT » S'ALLUME QUAND LE SERVEUR LA REMPLIT, ET PAS AVANT.
+  //
+  // `MouvementCaution` porte l'agent auteur du geste depuis toujours ; `Utilisateur` ne déclarait
+  // aucune propriété dans le groupe `caution_mouvement:read`, si bien que le champ revenait en IRI
+  // nue — sans nom. Une colonne entière de tirets, sur un registre dont l'unique raison d'être est
+  // de répondre à « qui a décidé de garder mon argent ? », ne dit pas « information indisponible » :
+  // elle dit « personne n'a signé ». C'est un mensonge sur la seule question qui compte.
+  //
+  // Le groupe a été ajouté côté serveur le 28/08. Plutôt que de le supposer déployé partout, on
+  // regarde ce qui arrive : si au moins un mouvement porte un nom lisible, la colonne apparaît ;
+  // sinon on l'omet et on dit pourquoi sous le tableau.
+  const montreAgent = mouvements.some((m) => nomAgent(m.agent))
+
   return (
     <section className="card">
       <div className="card-h">
@@ -339,6 +379,7 @@ function Journal({ mouvements, grillesParId }) {
                 <th className="num">Montant</th>
                 <th>Motif</th>
                 <th>Barème appliqué</th>
+                {montreAgent && <th>Agent</th>}
               </tr>
             </thead>
             <tbody>
@@ -376,23 +417,18 @@ function Journal({ mouvements, grillesParId }) {
                         <span className="sub">{m.type === 'retenue' ? 'montant libre' : '—'}</span>
                       )}
                     </td>
+                    {montreAgent && <td>{nomAgent(m.agent) || <span className="sub">—</span>}</td>}
                   </tr>
                 )
               })}
             </tbody>
           </table>
         )}
-        {/* ⚠ CE QUE CE JOURNAL NE PEUT PAS ENCORE DIRE.
-            `MouvementCaution` porte bien l'agent auteur du geste, mais `Utilisateur` ne déclare
-            aucune propriété dans le groupe `caution_mouvement:read` : le champ revient en IRI, sans
-            nom. Une colonne « Agent » entièrement remplie de tirets aurait laissé croire que
-            personne n'est enregistré — ce qui est faux, et dangereux à croire sur un registre de
-            contestation. On préfère le dire. */}
-        {visibles.length > 0 && (
+        {visibles.length > 0 && !montreAgent && (
           <div className="hint">
             Le nom de l&rsquo;agent qui a fait chaque geste <b>est enregistré</b> côté serveur, mais
-            n&rsquo;est pas rendu par l&rsquo;API : la colonne serait vide, elle n&rsquo;est donc pas
-            affichée plutôt que de faire croire que personne n&rsquo;a signé.
+            n&rsquo;est pas rendu par cette version de l&rsquo;API : la colonne serait vide, elle
+            n&rsquo;est donc pas affichée plutôt que de faire croire que personne n&rsquo;a signé.
           </div>
         )}
       </div>
@@ -678,6 +714,14 @@ function GrilleModal({ grille, etabActif, onClose, onFait }) {
 
 // --- Utilitaires ---------------------------------------------------------------------------------
 
+// Une lecture aboutie dont le serveur a rendu moins de lignes qu'il n'en existe. `totalItems` porte
+// le total réel : une réponse coupée est reconnaissable, et silencieuse si personne ne la lit.
+function partielle(resultat) {
+  if (resultat.status !== 'fulfilled') return false
+  const total = resultat.value?.totalItems ?? resultat.value?.['hydra:totalItems']
+  return typeof total === 'number' && membres(resultat.value).length < total
+}
+
 function badgeStatut(statut) {
   if (statut === 'restituee') return 'mut'
   if (statut === 'retenue_totale') return 'crit'
@@ -696,6 +740,15 @@ function idDe(relation) {
 // Le barème cité par un mouvement, résolu contre la liste déjà chargée. On accepte aussi la forme
 // embarquée : si quelqu'un ajoute un jour `caution_mouvement:read` aux propriétés de `GrilleRetenue`,
 // cet écran se mettra à l'utiliser sans qu'on ait à y revenir.
+// L'entité `Utilisateur` ne porte qu'un `nom` — pas de `prenom`, vérifié côté serveur. On accepte
+// quand même `prenom` s'il apparaît un jour, et `email` en dernier recours : sur un registre de
+// contestation, une adresse identifie encore quelqu'un, un tiret non.
+function nomAgent(agent) {
+  if (!agent || typeof agent === 'string') return null
+  const nom = [agent.prenom, agent.nom].filter(Boolean).join(' ').trim()
+  return nom || agent.email || null
+}
+
 function grilleDe(mouvement, grillesParId) {
   const ref = mouvement.grilleAppliquee
   if (!ref) return null

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Modal from './Modal.jsx'
 import { dateHeureFr } from './Liste.jsx'
 import { api, membres } from '../api/client.js'
@@ -36,6 +36,7 @@ import { mot } from '../api/vocabulaire.js'
 
 export default function ImpayesRecouvrement({ etabActif, droits }) {
   const [incidents, setIncidents] = useState([])
+  const [totalIncidents, setTotalIncidents] = useState(null)
   const [bord, setBord] = useState(null)
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
@@ -48,7 +49,14 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
   const recharger = useCallback(async () => {
     setChargement(true)
     try {
-      setIncidents(membres(await api.incidentsImpayes()))
+      const reponse = await api.incidentsImpayes()
+      setIncidents(membres(reponse))
+      // Le serveur plafonne chaque collection à 30 lignes (l'explication complète est dans
+      // `components/Liste.jsx`). Ici la conséquence n'est pas seulement une liste courte : le
+      // tableau des représentations retrouve le nom du redevable EN RECOUPANT cette liste. Au-delà
+      // d'une page, des représentations perdent leur redevable sans que rien ne le dise.
+      const total = reponse?.totalItems ?? reponse?.['hydra:totalItems']
+      setTotalIncidents(typeof total === 'number' ? total : null)
     } catch (e) {
       setErreur(e.message)
     } finally {
@@ -80,6 +88,8 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
       setErreur(e.message || "La résolution n'a pas abouti.")
     }
   }
+
+  const incidentsParId = useMemo(() => new Map(incidents.map((i) => [i.id, i])), [incidents])
 
   const ouverts = incidents.filter((i) => i.statut !== 'resolu')
   const resolus = incidents.filter((i) => i.statut === 'resolu')
@@ -249,7 +259,12 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
         </section>
       )}
 
-      <Representations peutPiloter={peutPiloter} onErreur={setErreur} />
+      <Representations
+        peutPiloter={peutPiloter}
+        incidentsParId={incidentsParId}
+        listeIncidentsPartielle={totalIncidents !== null && incidents.length < totalIncidents}
+        onErreur={setErreur}
+      />
 
       <Politique droits={droits} etabActif={etabActif} onSucces={setSucces} />
 
@@ -271,7 +286,7 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
 //
 // Un agent qui reçoit l'appel d'un abonné bloqué n'a que deux réponses utiles : « ce sera représenté
 // le 5 » ou « il faut régler maintenant ». Sans cette liste, il n'avait ni l'une ni l'autre.
-function Representations({ peutPiloter, onErreur }) {
+function Representations({ peutPiloter, incidentsParId, listeIncidentsPartielle, onErreur }) {
   const [lignes, setLignes] = useState([])
   const [chargement, setChargement] = useState(true)
   const [enCours, setEnCours] = useState(false)
@@ -318,6 +333,15 @@ function Representations({ peutPiloter, onErreur }) {
         </span>
       </div>
       <div className="card-b">
+        {/* Le nom du redevable est retrouvé en recoupant la liste des impayés. Si le serveur a
+            coupé cette liste, certaines lignes garderont un tiret — et un tiret ici se lirait
+            comme « pas de redevable » plutôt que comme « je n'ai pas pu le retrouver ». */}
+        {listeIncidentsPartielle && (
+          <div className="banner banner-warn">
+            La liste des impayés a été tronquée par le serveur : le redevable de certaines
+            représentations ne peut pas être retrouvé et reste affiché « — ».
+          </div>
+        )}
         <table className="tbl">
           <thead>
             <tr>
@@ -331,7 +355,7 @@ function Representations({ peutPiloter, onErreur }) {
           <tbody>
             {lignes.map((r) => (
               <tr key={r.id}>
-                <td>{r.incident?.referenceRedevable || r.incident?.typeRedevable || '—'}</td>
+                <td>{redevableDe(r, incidentsParId)}</td>
                 <td>{r.dateProgrammee ? dateHeureFr(r.dateProgrammee) : '—'}</td>
                 <td>{r.dateExecution ? dateHeureFr(r.dateExecution) : <span className="sub">—</span>}</td>
                 <td>
@@ -714,6 +738,33 @@ function ForcageModal({ incident, onClose, onFait, onErreur }) {
 
 // Les montants d'impayé sont en centimes entiers, pas en décimal : les passer à `euros` les
 // diviserait par cent de travers.
+// LA COLONNE « REDEVABLE » DES REPRÉSENTATIONS ÉTAIT VIDE DEPUIS TOUJOURS, ET PERSONNE NE L'AVAIT VU.
+//
+// Le code lisait `r.incident?.referenceRedevable`. Or `IncidentImpaye` ne déclare AUCUNE propriété
+// dans le groupe `representation:read` — vérifié dans l'entité, pas supposé : le champ `incident`
+// d'une représentation revient donc en IRI nue, et l'expression valait `undefined` sur chaque ligne.
+// La colonne affichait un tiret partout.
+//
+// Ce n'est pas cosmétique. Le commentaire au-dessus de ce tableau explique sa raison d'être : « un
+// agent qui reçoit l'appel d'un abonné bloqué n'a que deux réponses utiles — ce sera représenté le 5,
+// ou il faut régler maintenant ». Sans le nom, il ne peut pas savoir QUELLE ligne est celle de son
+// interlocuteur : le tableau ne répond plus à la seule question pour laquelle il existe.
+//
+// Même défaut que `ligne.mandat` dans l'écran SEPA, trouvé le même jour. Deux relations, deux
+// écrans, une seule cause : une expression optionnelle sur une relation non embarquée ne lève pas,
+// elle rend `undefined` — et `undefined` s'affiche comme une donnée manquante, pas comme un bug.
+function redevableDe(representation, incidentsParId) {
+  const ref = representation.incident
+  if (!ref) return '—'
+  // On accepte les deux formes : si quelqu'un ajoute un jour `representation:read` aux propriétés
+  // de l'incident, cet écran s'en servira sans qu'on ait à y revenir.
+  const incident = typeof ref === 'object'
+    ? ref
+    : incidentsParId.get(String(ref).split('/').pop())
+  if (!incident) return '—'
+  return incident.referenceRedevable || incident.typeRedevable || '—'
+}
+
 function centimes(v) {
   const n = Number(v)
   if (!Number.isFinite(n)) return '—'

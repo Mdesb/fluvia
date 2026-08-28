@@ -18,6 +18,19 @@ function Kpi({ label, valeur, accent, sous }) {
 // alertes d'exploitation à partir des endpoints existants (Reporting / Compta / Caisse). Chaque
 // source est isolée : un périmètre manquant (403) dégrade proprement la carte concernée sans casser
 // le reste du tableau.
+
+// Le nom de qui tient la caisse, ou l’aveu qu’on ne peut pas le lire — jamais un tiret, qui
+// se lirait « aucun opérateur » alors que le champ est obligatoire en base.
+function nomSession(session) {
+  const u = session.operateur || session.regisseur
+  if (!u) return '—'
+  if (typeof u === 'object') {
+    const nom = [u.prenom, u.nom].filter(Boolean).join(' ').trim()
+    if (nom) return nom
+  }
+  return 'nom non transmis'
+}
+
 export default function Dashboard({ etabActif, etablissements, droits = [], onNav }) {
   const [dash, setDash] = useState(null)
   const [dashInfo, setDashInfo] = useState(null)
@@ -183,7 +196,14 @@ export default function Dashboard({ etabActif, etablissements, droits = [], onNa
                       <td><span className="mono">{s.numero || '—'}</span></td>
                       <td>{s.pointDeVente?.libelle || '—'}</td>
                       <td>{s.caisse?.libelle || '—'}</td>
-                      <td>{s.operateur?.nom || s.regisseur?.nom || '—'}</td>
+                      {/* QUI TIENT CETTE CAISSE : la colonne était vide sur CHAQUE ligne.
+                          `SessionCaisse.operateur` et `.regisseur` pointent `Utilisateur`, qui
+                          n'expose aucune propriété dans le groupe `session:read` — le champ revient
+                          en IRI nue. Or la colonne est `nullable: false` en base : il y a TOUJOURS
+                          quelqu'un. Un tiret disait donc « personne » là où la réponse est « je ne
+                          sais pas le lire », sur le tableau qui sert justement à savoir qui a une
+                          caisse ouverte. */}
+                      <td>{nomSession(s)}</td>
                     </tr>
                   ))}
                 </tbody>

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, membres } from '../api/client.js'
+import { nomOuAbsence } from './Liste.jsx'
 
 /**
  * LA DEMANDE D'ASSISTANCE EST UNE CONVERSATION, PAS UN FORMULAIRE SUIVI D'UN TABLEAU.
@@ -80,13 +81,6 @@ function quandCourt(v) {
   return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
 }
 
-function nomUtilisateur(u) {
-  if (!u) return null
-  if (typeof u === 'string') return null // IRI seule : on ne devine pas un nom à partir d'une URL.
-  const complet = [u.prenom, u.nom].filter(Boolean).join(' ').trim()
-  return complet || u.email || null
-}
-
 /** L'identifiant d'un utilisateur, qu'il arrive en objet ou en IRI (`/api/utilisateurs/<uuid>`). */
 function idUtilisateur(u) {
   if (!u) return null
@@ -118,9 +112,13 @@ function initiales(nom) {
 function interlocuteur(ticket, monId) {
   const demandeur = ticket?.demandeur
   if (idUtilisateur(demandeur) === monId) {
-    return { objet: ticket?.affecteA, nom: nomUtilisateur(ticket?.affecteA) || 'Assistance' }
+    // ⚠ `nomOuAbsence` ET NON UN REPLI. « Assistance » affirmait que personne n'avait pris la
+    // demande, y compris quand quelqu'un l'avait prise et que la réponse ne portait pas son nom.
+    // Un ticket pris en charge s'annonçait libre : deux agents le prennent, ou personne ne le
+    // prend en croyant qu'un autre s'en occupe.
+    return { objet: ticket?.affecteA, nom: nomOuAbsence(ticket?.affecteA, 'Assistance') }
   }
-  return { objet: demandeur, nom: nomUtilisateur(demandeur) || 'Demandeur' }
+  return { objet: demandeur, nom: nomOuAbsence(demandeur, 'Demandeur') }
 }
 
 export default function MessagerieAssistance({
@@ -389,7 +387,9 @@ function FilDiscussion({ resume, agent, peut, monId, onChange }) {
             <div key={b.cle} className={classes.join(' ')}>
               {/* Le nom de l'auteur n'est écrit que sur les bulles des AUTRES. Sur les siennes, il
                   est déjà connu, et le répéter à chaque bulle encombre la lecture. */}
-              {!mien && <div className="msgr-b-a">{nomUtilisateur(b.auteur) || 'Auteur inconnu'}</div>}
+              {/* Même règle que pour l'interlocuteur : « auteur inconnu » affirmait qu'on ne
+                  savait pas QUI, alors qu'on ne savait pas lire son nom. */}
+              {!mien && <div className="msgr-b-a">{nomOuAbsence(b.auteur, 'Auteur inconnu')}</div>}
               {b.noteInterne && <div className="msgr-b-n">Note interne — invisible du demandeur</div>}
               <div className="msgr-b-c">{b.contenu}</div>
               <div className="msgr-b-t">{heure(b.date)}</div>
@@ -466,7 +466,7 @@ function FilDiscussion({ resume, agent, peut, monId, onChange }) {
             >
               <option value="">Réaffecter à…</option>
               {agents.map((u) => (
-                <option key={u.id} value={`/api/utilisateurs/${u.id}`}>{u.nom || u.email}</option>
+                <option key={u.id} value={`/api/utilisateurs/${u.id}`}>{nomOuAbsence(u, 'Sans nom')}</option>
               ))}
             </select>
             <button

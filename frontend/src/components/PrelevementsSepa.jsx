@@ -43,6 +43,10 @@ export default function PrelevementsSepa({ etabActif, droits }) {
   const [rejets, setRejets] = useState([])
   const [config, setConfig] = useState(null)
   const [chargement, setChargement] = useState(true)
+  // Les collections dont le serveur a rendu MOINS de lignes qu'il n'en existe. Voir le bandeau et
+  // le commentaire de `tronquee()`, en bas de fichier : ici, une liste incomplète ne rend pas
+  // l'écran incomplet, elle le rend FAUX.
+  const [tronquees, setTronquees] = useState([])
 
   const [creationMandat, setCreationMandat] = useState(false)
   const [generation, setGeneration] = useState(false)
@@ -71,7 +75,26 @@ export default function PrelevementsSepa({ etabActif, droits }) {
     setRemises(r.status === 'fulfilled' ? membres(r.value) : [])
     setLignes(l.status === 'fulfilled' ? membres(l.value) : [])
     setRejets(j.status === 'fulfilled' ? membres(j.value) : [])
-    setConfig(c.status === 'fulfilled' ? (membres(c.value)[0] || null) : null)
+    // LA CONFIGURATION DE **CET** ÉTABLISSEMENT, PAS LA PREMIÈRE DE LA LISTE.
+    //
+    // Constaté contre la préprod le 28/08 : `/api/config_creancier_sepas` a rendu DEUX
+    // configurations — celle de Piscine A et celle de Patinoire B — sur une requête portant
+    // `X-Etablissement: Piscine A`. Prendre `[0]` marchait par chance ce jour-là, et aurait affiché
+    // l'ICS et l'IBAN de collecte d'un AUTRE site le jour où l'ordre change. Sur un écran dont tout
+    // l'objet est « sur quel compte l'argent arrive », c'est le pire endroit pour se tromper.
+    //
+    // Le cloisonnement par établissement actif est en cours de bascule côté serveur ; quand il sera
+    // en place la liste n'en rendra qu'une, et ce filtre deviendra une redondance inoffensive. Il
+    // reste écrit : un écran ne doit pas dépendre d'un filtrage qu'il ne fait pas lui-même.
+    setConfig(c.status === 'fulfilled' ? configDeLEtablissement(membres(c.value), etabActif) : null)
+
+    setTronquees(
+      [
+        tronquee(m, 'les mandats'),
+        tronquee(l, 'le détail des remises'),
+        tronquee(j, 'les rejets'),
+      ].filter(Boolean),
+    )
 
     // On ne signale que l'échec de la lecture PRINCIPALE de l'onglet le plus consulté : signaler les
     // cinq ferait cinq bandeaux pour un seul incident réseau.
@@ -93,6 +116,9 @@ export default function PrelevementsSepa({ etabActif, droits }) {
     return carte
   }, [lignes])
 
+  // Les mandats indexés, pour résoudre le `mandat` d'une ligne de remise : il arrive en IRI nue.
+  const mandatsParId = useMemo(() => new Map(mandats.map((m) => [m.id, m])), [mandats])
+
   // Une ligne déjà rejetée ne doit pas pouvoir l'être une seconde fois : le serveur créerait un
   // second incident d'impayé pour la même échéance, et l'accès du redevable serait bloqué deux fois.
   const lignesRejetees = useMemo(
@@ -110,6 +136,23 @@ export default function PrelevementsSepa({ etabActif, droits }) {
     <>
       {erreur && <div className="banner banner-error">{erreur}</div>}
       {succes && <div className="banner banner-ok">{succes}</div>}
+
+      {/* UNE LISTE COUPÉE NE REND PAS CET ÉCRAN INCOMPLET : ELLE LE REND FAUX.
+          Trois affichages se calculent en recoupant deux listes chargées séparément — le nom du
+          débiteur d'une ligne de remise vient des mandats, et surtout le marquage « déjà rejetée »
+          vient des rejets. Au-delà d'une page, une ligne pourtant rejetée cesse d'être reconnue
+          comme telle : l'écran rouvre le bouton « Rejet reçu » dessus, et un second clic ouvrirait
+          un SECOND impayé sur la même échéance — donc un accès bloqué deux fois.
+          Le serveur ne pagine pas au-delà de ce qu'on demande, mais il ne prévient pas non plus
+          qu'il a coupé : `totalItems` le dit, encore faut-il le lire. */}
+      {tronquees.length > 0 && (
+        <div className="banner banner-warn">
+          <b>Toutes les données ne sont pas affichées.</b> Le serveur a renvoyé{' '}
+          {tronquees.join(', ')} en partie seulement. Les noms de débiteur peuvent manquer, et
+          surtout une ligne <b>déjà rejetée</b> peut ne pas être reconnue comme telle : n&rsquo;
+          enregistrez un rejet que si vous êtes certain qu&rsquo;il n&rsquo;a pas déjà été saisi.
+        </div>
+      )}
 
       {/* LE BANDEAU QUI EMMÈNE, PLUTÔT QUE CELUI QUI CONSTATE.
           Sans créancier déclaré, « Générer une remise » échoue côté serveur avec un message
@@ -152,6 +195,7 @@ export default function PrelevementsSepa({ etabActif, droits }) {
             <Remises
               remises={remises}
               lignesParRemise={lignesParRemise}
+              mandatsParId={mandatsParId}
               lignesRejetees={lignesRejetees}
               peutGerer={peutGerer}
               onGenerer={() => setGeneration(true)}
@@ -192,6 +236,7 @@ export default function PrelevementsSepa({ etabActif, droits }) {
       <DeclarationRejetModal
         cible={rejetSur}
         lignes={lignes}
+        mandatsParId={mandatsParId}
         lignesRejetees={lignesRejetees}
         onClose={() => setRejetSur(null)}
         onFait={(m) => { setRejetSur(null); apresEcriture(m) }}
@@ -249,10 +294,10 @@ function Mandats({ mandats, peutGerer, onCreer }) {
               {mandats.map((m) => (
                 <tr key={m.id}>
                   <td><span className="mono">{m.rum || '—'}</span></td>
-                  <td>
-                    <span className="nm">{m.debiteurNom || '—'}</span>
-                    {nomClient(m.client) && <div className="sub">{nomClient(m.client)}</div>}
-                  </td>
+                  {/* `client` arrive en IRI nue (vérifié contre la préprod) : le nom du client n'est
+                      pas dans la réponse, seul celui du TITULAIRE DU COMPTE l'est. C'est de toute
+                      façon celui qui compte ici — c'est lui que la banque lira. */}
+                  <td><span className="nm">{m.debiteurNom || '—'}</span></td>
                   <td>
                     {/* QUATRE CHIFFRES, ET C'EST TOUT CE QUE LE SERVEUR REND.
                         L'IBAN complet est tokenisé (non réversible) et chiffré au coffre : il ne
@@ -295,7 +340,7 @@ function Mandats({ mandats, peutGerer, onCreer }) {
 
 // --- Remises -----------------------------------------------------------------------------------
 
-function Remises({ remises, lignesParRemise, lignesRejetees, peutGerer, onGenerer, onRejeter, onErreur }) {
+function Remises({ remises, lignesParRemise, mandatsParId, lignesRejetees, peutGerer, onGenerer, onRejeter, onErreur }) {
   const [ouverte, setOuverte] = useState(null)
 
   // LE TÉLÉCHARGEMENT PASSE PAR UN `fetch`, PAS PAR UN LIEN, ET C'EST OBLIGATOIRE.
@@ -394,18 +439,25 @@ function Remises({ remises, lignesParRemise, lignesRejetees, peutGerer, onGenere
                         </>
                       ) : '—'}
                     </td>
-                    {/* ⚠ CE QUI MANQUE ICI, ET POURQUOI CE N'EST PAS UN OUBLI.
-                        `RemiseSepa` porte `nbExclues` et `motifExclusion` — combien d'échéances dues
-                        ont été ÉCARTÉES de la remise, et pourquoi. Son propre docblock explique que
-                        c'est l'information critique du module : « une remise à zéro ligne parce que
-                        tout a été exclu n'est pas une remise à zéro ligne parce qu'il n'y avait rien
-                        à collecter ».
-                        Ces deux propriétés n'ont AUCUN `#[Groups]` : elles ne sortent pas de l'API.
-                        Les afficher quand même donnerait `undefined` — donc un écran muet qui a l'air
-                        d'aller bien, exactement le défaut contre lequel le docblock met en garde.
-                        Deux lignes côté serveur (`#[Groups(['remise_sepa:read'])]`) suffisent à les
-                        ouvrir ; c'est signalé, ça ne s'invente pas ici. */}
-                    <td className="num">{r.nbTxs ?? 0}</td>
+                    {/* LES ÉCHÉANCES ÉCARTÉES, LE CHIFFRE QU'ON VIENT CHERCHER APRÈS COUP.
+                        `nbExclues` compte les échéances dues qui n'ont PAS pu entrer dans la remise.
+                        Le docblock de l'entité dit pourquoi ça compte : « une remise à zéro ligne
+                        parce que tout a été exclu n'est pas une remise à zéro ligne parce qu'il n'y
+                        avait rien à collecter ». Une remise de 40 lignes sur 47 échéances dues, ce
+                        sont sept clients qui ne seront pas prélevés ce mois-ci, et personne ne s'en
+                        apercevra avant la relance.
+                        La propriété n'avait aucun `#[Groups]` le 28/08 au matin : elle ne sortait pas
+                        de l'API. Signalé, et ajouté depuis côté serveur. Le test `> 0` fait que
+                        l'affichage reste muet tant que le champ est absent — jamais un `undefined`
+                        déguisé en donnée. */}
+                    <td className="num">
+                      {r.nbTxs ?? 0}
+                      {r.nbExclues > 0 && (
+                        <div className="sub" style={{ color: 'var(--warn)' }}>
+                          {r.nbExclues} exclue{r.nbExclues > 1 ? 's' : ''}
+                        </div>
+                      )}
+                    </td>
                     <td className="num">{euroCentimes(r.ctrlSumCentimes)}</td>
                     <td><span className={`badge ${r.statut === 'transmise' ? 'good' : 'mut'}`}>{mot(r.statut)}</span></td>
                     <td className="num">
@@ -423,8 +475,19 @@ function Remises({ remises, lignesParRemise, lignesRejetees, peutGerer, onGenere
                   deployee && (
                     <tr key={`${r.id}-detail`}>
                       <td colSpan={7} style={{ background: 'var(--panel-2)' }}>
+                        {r.nbExclues > 0 && (
+                          <div className="banner banner-warn" style={{ margin: '0 0 8px' }}>
+                            <b>
+                              {r.nbExclues} échéance{r.nbExclues > 1 ? 's' : ''} écartée
+                              {r.nbExclues > 1 ? 's' : ''} de cette remise
+                            </b>
+                            {r.motifExclusion ? ` — ${r.motifExclusion}` : '.'} Ces clients ne seront
+                            pas prélevés à cette date.
+                          </div>
+                        )}
                         <LignesRemise
                           lignes={sesLignes}
+                          mandatsParId={mandatsParId}
                           lignesRejetees={lignesRejetees}
                           peutGerer={peutGerer}
                           onRejeter={onRejeter}
@@ -448,7 +511,7 @@ function Remises({ remises, lignesParRemise, lignesRejetees, peutGerer, onGenere
   )
 }
 
-function LignesRemise({ lignes, lignesRejetees, peutGerer, onRejeter }) {
+function LignesRemise({ lignes, mandatsParId, lignesRejetees, peutGerer, onRejeter }) {
   if (lignes.length === 0) {
     return (
       <div className="empty">
@@ -472,12 +535,13 @@ function LignesRemise({ lignes, lignesRejetees, peutGerer, onRejeter }) {
       <tbody>
         {lignes.map((l) => {
           const rejetee = lignesRejetees.has(l.id)
+          const mandat = mandatDe(l, mandatsParId)
           return (
             <tr key={l.id}>
               <td><span className="mono">{l.endToEndId || '—'}</span></td>
               <td>
-                {l.mandat?.debiteurNom || '—'}
-                {l.mandat?.rum && <div className="sub mono">{l.mandat.rum}</div>}
+                {mandat?.debiteurNom || '—'}
+                {mandat?.rum && <div className="sub mono">{mandat.rum}</div>}
               </td>
               <td>
                 {l.libelle || '—'}
@@ -864,7 +928,7 @@ function GenerationRemiseModal({ open, onClose, onFait }) {
   )
 }
 
-function DeclarationRejetModal({ cible, lignes, lignesRejetees, onClose, onFait }) {
+function DeclarationRejetModal({ cible, lignes, mandatsParId, lignesRejetees, onClose, onFait }) {
   // `cible` vaut soit une ligne (venue du détail d'une remise), soit la chaîne 'choisir' (venue de
   // l'onglet Rejets, où l'on n'a pas encore désigné laquelle).
   const ligneImposee = cible && cible !== 'choisir' ? cible : null
@@ -948,7 +1012,7 @@ function DeclarationRejetModal({ cible, lignes, lignesRejetees, onClose, onFait 
             </div>
             <div>
               <span>Débiteur</span>
-              <span className="num">{ligneImposee.mandat?.debiteurNom || '—'}</span>
+              <span className="num">{mandatDe(ligneImposee, mandatsParId)?.debiteurNom || '—'}</span>
             </div>
             <div>
               <span>Montant</span>
@@ -968,7 +1032,7 @@ function DeclarationRejetModal({ cible, lignes, lignesRejetees, onClose, onFait 
               <option value="">Choisir…</option>
               {rejetables.map((l) => (
                 <option key={l.id} value={l.id}>
-                  {[l.mandat?.debiteurNom, euroCentimes(l.montantCentimes), l.endToEndId]
+                  {[mandatDe(l, mandatsParId)?.debiteurNom, euroCentimes(l.montantCentimes), l.endToEndId]
                     .filter(Boolean)
                     .join(' — ')}
                 </option>
@@ -1257,8 +1321,43 @@ function idDe(relation) {
   return relation.id || (relation['@id'] ? String(relation['@id']).split('/').pop() : null)
 }
 
-function nomClient(client) {
-  if (!client || typeof client === 'string') return null
-  const nom = [client.prenom, client.nom].filter(Boolean).join(' ').trim()
-  return nom || null
+// `totalItems` CONTRE LE NOMBRE DE LIGNES REÇUES : LE SEUL MOYEN DE SAVOIR QU'ON A ÉTÉ COUPÉ.
+//
+// API Platform rend une collection Hydra qui porte `totalItems` — le total RÉEL, pas la taille de la
+// page. Une réponse tronquée est donc parfaitement reconnaissable, et parfaitement silencieuse si
+// personne ne regarde : même code 200, même forme, juste moins de lignes.
+//
+// Rend le libellé de la collection quand elle est coupée, `null` sinon.
+function tronquee(resultat, libelle) {
+  if (resultat.status !== 'fulfilled') return null
+  const total = resultat.value?.totalItems ?? resultat.value?.['hydra:totalItems']
+  if (typeof total !== 'number') return null
+  return membres(resultat.value).length < total ? libelle : null
+}
+
+// LES DEUX FORMES, OBSERVÉES CÔTE À CÔTE DANS LA MÊME RÉPONSE.
+//
+// Sur `/api/ligne_remise_sepas`, la préprod rend `remise` EMBARQUÉE (`{ '@id', '@type', id }`) et
+// `mandat` en IRI NUE (`"/api/mandat_sepas/…"`). Deux relations de la même entité, deux formes,
+// parce que `RemiseSepa::$id` porte le groupe `ligne_remise_sepa:read` et qu'aucune propriété de
+// `MandatSepa` ne le porte. Rien dans le code de l'écran ne le laissait deviner.
+//
+// C'est ce qui rend cette famille de défauts coûteuse : `l.mandat?.debiteurNom` ne lève pas, il vaut
+// `undefined`, et la colonne « Débiteur » sort vide sur toutes les lignes. Un tableau de
+// prélèvements sans nom de débiteur a l'air d'un tableau de prélèvements.
+function mandatDe(ligne, mandatsParId) {
+  const ref = ligne.mandat
+  if (!ref) return null
+  if (typeof ref === 'object' && ref.debiteurNom) return ref
+  return mandatsParId.get(idDe(ref)) || null
+}
+
+// La configuration créancier qui porte l'établissement demandé. Repli sur l'unique élément quand la
+// liste n'en compte qu'un : le serveur a alors déjà filtré, et exiger la correspondance ferait
+// disparaître une configuration parfaitement valable.
+function configDeLEtablissement(configs, etabActif) {
+  if (configs.length === 0) return null
+  const sienne = configs.find((c) => idDe(c.etablissement) === etabActif)
+  if (sienne) return sienne
+  return configs.length === 1 ? configs[0] : null
 }

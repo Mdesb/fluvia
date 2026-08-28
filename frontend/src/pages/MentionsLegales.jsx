@@ -129,6 +129,7 @@ export default function MentionsLegales({ etabActif, droits = [] }) {
       ) : (
         <Documents
           documents={documents}
+          onAllerFiche={() => setOnglet('fiche')}
           fiche={fiche}
           peutGerer={peutGerer}
           onErreur={setErreur}
@@ -297,7 +298,7 @@ function Fiche({ fiche, peutGerer, onErreur, onSucces, onChange }) {
   )
 }
 
-function Documents({ documents, fiche, peutGerer, onErreur, onSucces, onChange }) {
+function Documents({ documents, fiche, peutGerer, onAllerFiche, onErreur, onSucces, onChange }) {
   const [edite, setEdite] = useState(null)
   const [texte, setTexte] = useState('')
   const [busy, setBusy] = useState(false)
@@ -308,12 +309,25 @@ function Documents({ documents, fiche, peutGerer, onErreur, onSucces, onChange }
 
   if (courants.length === 0) {
     return (
+      // UN MESSAGE DE VIDE QUI DÉSIGNE UN BOUTON ABSENT DE L'ÉCRAN QU'ON REGARDE.
+      //
+      // Il disait « utilisez “Générer les six documents” » — et ce bouton est sur l'AUTRE onglet.
+      // Constaté en ouvrant l'écran : on lit une consigne, on cherche le bouton, il n'y est pas.
+      // Un état vide doit porter le geste qui le remplit, ou au minimum y conduire ; l'indiquer
+      // sans y mener transforme une explication en devinette.
       <div className="card">
         <div className="sub" style={{ textAlign: 'center', padding: 28 }}>
           Aucun document pour l&rsquo;instant.{' '}
           {fiche?.id
-            ? 'Renseignez la fiche, puis utilisez « Générer les six documents ».'
-            : 'Commencez par renseigner vos informations dans l’onglet précédent.'}
+            ? 'Les six textes se composent depuis votre fiche, en un geste.'
+            : 'Renseignez d’abord vos informations : les textes en découlent.'}
+          {onAllerFiche && (
+            <div style={{ marginTop: 12 }}>
+              <button className="btn primary sm" type="button" onClick={onAllerFiche}>
+                {fiche?.id ? 'Aller générer les documents' : 'Renseigner la fiche'}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     )

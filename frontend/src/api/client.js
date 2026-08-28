@@ -55,6 +55,30 @@ export class ApiError extends Error {
 // C'est la forme la plus courante du défaut de cette semaine : une requête qui part, une réponse qui
 // arrive, un résultat plausible et faux. Ici il se serait traduit par « aucune option retenue » sur
 // un panier où le caissier venait d'en cocher trois — et le client aurait payé le prix de base.
+// ⚠ `itemsPerPage` NE FAIT RIEN. IL EST ÉCRIT ~350 FOIS DANS CE FICHIER, ET LE SERVEUR L'IGNORE.
+//
+// `config/packages/api_platform.yaml` ne déclare aucun bloc `pagination` : les valeurs par défaut
+// d'API Platform s'appliquent — **30 éléments par page**, et `pagination_client_items_per_page` à
+// `false`, ce qui interdit au client de changer la taille de page.
+//
+// Mesuré contre la préprod le 28/08, pas déduit :
+//     GET /api/mandat_sepas?itemsPerPage=1   →  rend les 3 lignes. Le paramètre est ignoré.
+//     debug:config api_platform              →  pagination.enabled: true, aucun items_per_page
+//                                               ni client_items_per_page dans `defaults`.
+//
+// Autrement dit : `itemsPerPage: 500` obtient 30 lignes, exactement comme `itemsPerPage: 100`. Un
+// catalogue de 40 produits en affiche 30, un annuaire de 200 clients en affiche 30 — même code 200,
+// même forme de réponse, juste moins de lignes.
+//
+// LES PARAMÈTRES SONT CONSERVÉS À DESSEIN : ils disent quelle taille chaque écran AURAIT BESOIN
+// d'obtenir, et ils redeviendront effectifs le jour où le serveur activera
+// `pagination_client_items_per_page`. Les retirer ferait perdre cette information sans rien gagner.
+//
+// EN ATTENDANT, C'EST L'AFFICHAGE QUI PORTE L'AVERTISSEMENT. La réponse Hydra contient `totalItems`
+// — le total réel, pas la taille de la page — donc une réponse tronquée est reconnaissable.
+// `components/Liste.jsx` affiche « 30 sur 47 » à côté du titre, et les trois écrans qui RECOUPENT
+// deux listes (SEPA, cautions, recouvrement) le signalent plus fort : chez eux, une liste coupée ne
+// rend pas l'écran incomplet, elle le rend faux.
 function qs(params) {
   if (!params) return ''
   const usp = new URLSearchParams()
@@ -448,6 +472,10 @@ export const api = {
   supprimerTacheProjet: (id) => request(`/api/project_tasks/${id}`, { method: 'DELETE' }),
   creerOpportunite: (corps) => request('/api/opportunities', { method: 'POST', body: corps, ld: true }),
   majOpportunite: (id, corps) => request(`/api/opportunities/${id}`, { method: 'PATCH', body: corps }),
+  // Le detail d'une affaire, pour retrouver SON CLIENT. La carte du pipeline ne porte que le nom
+  // affichable du client (`PipelineProvider` compose une chaine), pas son identifiant : impossible
+  // d'en faire un destinataire de devis sans relire l'affaire.
+  opportunite: (id) => request(`/api/opportunities/${id}`),
   // Rattache (ou crée) un client sur une vente ouverte (M2, CA-7). Corps : un de
   // { client: uuid } | { recherche: "..." } | { creer: { nom, prenom, email, telephone } }.
   rattacherClientVente: (venteId, corps) =>
@@ -1127,6 +1155,20 @@ export const api = {
     request(`/api/demandes-escalade/${id}/rejeter`, { method: 'POST', body: { motif } }),
   limitesAutorisation: () => request('/api/limite_autorisations', { query: { itemsPerPage: 200 } }),
   operationsSensibles: () => request('/api/operation_sensibles', { query: { itemsPerPage: 200 } }),
+  // LES PLAFONDS ÉTAIENT LISIBLES ET PAS MODIFIABLES, comme la règle de recouvrement ce matin.
+  //
+  // `POST`, `PATCH` et `DELETE` sur `/api/limite_autorisations` existent depuis le début, protégés
+  // par `autorisation.gerer`, et aucun écran ne les appelait — le pied de page de l'écran le disait
+  // même en toutes lettres : « la création et la modification passent encore par l'API ».
+  //
+  // Or un plafond REFUSE des opérations au guichet. Le voir sans pouvoir le corriger, c'est
+  // constater un blocage et devoir appeler quelqu'un pour le lever.
+  creerLimiteAutorisation: (corps) =>
+    request('/api/limite_autorisations', { method: 'POST', body: corps, ld: true }),
+  majLimiteAutorisation: (id, corps) =>
+    request(`/api/limite_autorisations/${id}`, { method: 'PATCH', body: corps }),
+  supprimerLimiteAutorisation: (id) =>
+    request(`/api/limite_autorisations/${id}`, { method: 'DELETE' }),
 
   // --- App\Legal — MENTIONS OBLIGATOIRES ---------------------------------------------------------
   //

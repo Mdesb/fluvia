@@ -344,6 +344,24 @@ function resumerCriteres(criteria) {
  * restrictif est le cas le plus fréquent, et le message doit envoyer l'exploitant vers ses critères
  * plutôt que le laisser conclure à une panne.
  */
+// « APERÇU — UNDEFINED » S'AFFICHAIT SUR CHAQUE APERÇU DE SEGMENT, ET PERSONNE NE L'AVAIT VU.
+//
+// L'appelant écrit `setApercu({ segment, ...reponse })`. Or la réponse du serveur porte elle-même
+// une clé `segment` — et c'est **le libellé, une chaîne**, pas l'objet. Le spread écrasait donc
+// l'objet local par cette chaîne, et `.label` d'une chaîne vaut `undefined`.
+//
+// Un `?.` n'aurait rien changé : ce n'était pas une valeur nulle, c'était la mauvaise FORME. C'est
+// ce qui rend ce défaut différent des seize relations muettes de la même journée — là, le serveur
+// ne donnait rien ; ici il donne exactement ce qu'il faut, au même nom, et c'est le code qui
+// regarde un cran trop loin.
+//
+// Trouvé en CLIQUANT le bouton « Combien de personnes ? ». Mon propre analyseur avait signalé cette
+// ligne ; je l'avais classée faux positif en raisonnant sur le code sans exécuter l'écran.
+function libelleSegment(segment) {
+  if (!segment) return 'segment'
+  return typeof segment === 'string' ? segment : (segment.label || 'segment')
+}
+
 function ApercuSegment({ apercu, onFermer }) {
   const vide = apercu && apercu.effectif === 0
 
@@ -351,7 +369,7 @@ function ApercuSegment({ apercu, onFermer }) {
     <Modal
       open={!!apercu}
       onClose={onFermer}
-      titre={apercu ? `Aperçu — ${apercu.segment.label}` : ''}
+      titre={apercu ? `Aperçu — ${libelleSegment(apercu.segment)}` : ''}
       taille="md"
     >
       {apercu && (

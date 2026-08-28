@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Modal from './Modal.jsx'
 import ReferentielEditable from './ReferentielEditable.jsx'
-import { dateHeureFr, jourLocal } from './Liste.jsx'
+import { dateHeureFr, jourLocal, resoudre } from './Liste.jsx'
 import { api, membres } from '../api/client.js'
 import { aUnDesDroits } from '../api/droits.js'
 import { mot } from '../api/vocabulaire.js'
@@ -46,6 +46,16 @@ export default function AchatsStock({ articles, droits, etabActif, onErreur, onF
   const recharger = useCallback(async () => {
     setChargement(true)
     try {
+      // LE FOURNISSEUR ET L'ARTICLE ARRIVENT EN IRI NUE, ET C'EST TOUT CE QU'ON VOYAIT.
+      //
+      // `CommandeAchat.fournisseur`, `LigneCommandeAchat.articleStock` : ni `Fournisseur` ni
+      // `ArticleStock` n'exposent la moindre propriété dans les groupes qui les portent — vérifié
+      // dans les entités, pas supposé. La colonne « Fournisseur » d'un bon de commande sortait donc
+      // vide, et une ligne affichait l'UUID de l'article à la place de son nom.
+      //
+      // Sur un écran d'achats, ce sont les deux seules informations qui disent CE QU'ON COMMANDE et
+      // À QUI. On les résout : les fournisseurs sont déjà chargés ici, et les articles arrivent en
+      // propriété depuis l'écran Stock — aucune requête de plus.
       const [f, c, l, r] = await Promise.all([
         api.stockFournisseurs(),
         api.stockCommandesAchat(),
@@ -154,7 +164,7 @@ export default function AchatsStock({ articles, droits, etabActif, onErreur, onF
                         <span className="nm">{c.numero || <span className="sub">numéro à l’envoi</span>}</span>
                         <div className="sub">{c.dateCommande ? dateHeureFr(c.dateCommande) : '—'}</div>
                       </td>
-                      <td>{c.fournisseur?.raisonSociale || '—'}</td>
+                      <td>{resoudre(c.fournisseur, fournisseurs)?.raisonSociale || '—'}</td>
                       <td className="num">{l.length}</td>
                       <td className="num">{euros(total.toFixed(2))}</td>
                       <td><span className={`badge ${etatBadge(c.statut)}`}>{mot(c.statut)}</span></td>
@@ -252,7 +262,7 @@ export default function AchatsStock({ articles, droits, etabActif, onErreur, onF
                 {closes.map((c) => (
                   <tr key={c.id}>
                     <td><span className="nm">{c.numero || '—'}</span></td>
-                    <td>{c.fournisseur?.raisonSociale || '—'}</td>
+                    <td>{resoudre(c.fournisseur, fournisseurs)?.raisonSociale || '—'}</td>
                     <td><span className={`badge ${etatBadge(c.statut)}`}>{mot(c.statut)}</span></td>
                   </tr>
                 ))}
@@ -458,7 +468,7 @@ function CompositionModal({ commande, lignes, articles, onClose, onChange, onErr
               <tbody>
                 {lignes.map((l) => (
                   <tr key={l.id}>
-                    <td>{l.articleStock?.libelle || String(l.articleStock || '').split('/').pop()}</td>
+                    <td>{resoudre(l.articleStock, articles)?.libelle || <span className="sub">article non transmis</span>}</td>
                     <td className="num">{l.quantiteCommandee}</td>
                     <td className="num">{euros(l.prixAchatUnitaireHT)}</td>
                     <td className="num">
@@ -600,7 +610,7 @@ function ReceptionModal({ etat, onClose, onFait, onErreur }) {
               <tbody>
                 {etat.lignes.map((l) => (
                   <tr key={l.id}>
-                    <td>{l.articleStock?.libelle || String(l.articleStock || '').split('/').pop()}</td>
+                    <td>{resoudre(l.articleStock, articles)?.libelle || <span className="sub">article non transmis</span>}</td>
                     <td className="num">{l.quantiteCommandee}</td>
                     <td className="num">{l.quantiteRecue || '0'}</td>
                     <td className="num">
@@ -674,7 +684,7 @@ function ReceptionsSection({ receptions, peutReceptionner, onValider }) {
             {[...brouillons, ...validees].map((r) => (
               <tr key={r.id}>
                 <td><span className="nm">{r.numeroBonLivraison || '—'}</span></td>
-                <td>{r.fournisseur?.raisonSociale || '—'}</td>
+                <td>{resoudre(r.fournisseur, fournisseurs)?.raisonSociale || '—'}</td>
                 <td>{r.date ? dateHeureFr(r.date) : '—'}</td>
                 <td>
                   <span className={`badge ${r.statut === 'brouillon' ? 'warn' : 'good'}`}>{mot(r.statut)}</span>
