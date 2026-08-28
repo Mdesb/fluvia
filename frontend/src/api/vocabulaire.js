@@ -149,6 +149,12 @@ const MOTS = {
   mandat_emis: 'Mandat émis',
   paye: 'Payé',
 
+  // --- Couverture d'un créneau du roster ---
+  // Trois valeurs, et le mot compte : « conflit » sonne comme un chevauchement d'horaires alors
+  // qu'il désigne une qualification manquante ou périmée. On le dit.
+  sous_couvert: 'Sous-couvert',
+  conflit: 'Qualification en défaut',
+
   // --- Recouvrement ---
   representation: 'Représentation bancaire',
   recouvrement: 'En recouvrement',
