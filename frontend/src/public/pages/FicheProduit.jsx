@@ -19,18 +19,6 @@ export default function FicheProduit({ produit, langue, onAjouter, onNaviguer })
   const prix = libellePrix(produit?.prix)
   const enRupture = typeof produit?.disponibilite === 'number' && produit.disponibilite <= 0
 
-  // Produit inconnu (lien périmé ou catalogue non chargé) : message clair plutôt qu'un écran cassé.
-  if (!produit) {
-    return (
-      <section>
-        <button type="button" className="btn ghost bq-retour" onClick={() => onNaviguer({ vue: 'vitrine' })}>
-          ← Retour à la boutique
-        </button>
-        <Erreur message="Ce billet n'est plus disponible ou le lien est incorrect." />
-      </section>
-    )
-  }
-
   useEffect(() => {
     if (!timedEntry || !produit?.produit) return
     let annule = false
@@ -81,6 +69,33 @@ export default function FicheProduit({ produit, langue, onAjouter, onNaviguer })
     timedEntry && creneauChoisi
       ? creneaux?.find((c) => c.creneau === creneauChoisi)?.reste
       : null
+
+  // ⚠ CE RETOUR ANTICIPÉ EST SOUS LES HOOKS, ET IL DOIT Y RESTER.
+  //
+  // Il était placé au-dessus du `useEffect` ci-dessus. React compte les hooks à chaque rendu et
+  // exige le même nombre : `PublicApp` passe `produit={metaProduits[route.produitId]}`, donc un
+  // client qui ouvre un LIEN DIRECT vers un billet rendait d'abord sans produit — sept hooks — puis
+  // avec — huit. « Rendered more hooks than during the previous render », écran blanc, au moment
+  // précis où la boutique finissait de charger.
+  //
+  // Ce n'est pas un cas limite : un lien de billet partagé par courriel EST une arrivée directe sur
+  // cette fiche, catalogue vide. Le commentaire ci-dessous nommait déjà la situation — « catalogue
+  // non chargé » — sans voir que c'était elle qui cassait.
+  //
+  // Ni le build ni le lint ne le voient : ce n'est pas une faute de syntaxe, c'est une règle
+  // d'exécution.
+  //
+  // Produit inconnu (lien périmé ou catalogue non chargé) : message clair plutôt qu'un écran cassé.
+  if (!produit) {
+    return (
+      <section>
+        <button type="button" className="btn ghost bq-retour" onClick={() => onNaviguer({ vue: 'vitrine' })}>
+          ← Retour à la boutique
+        </button>
+        <Erreur message="Ce billet n'est plus disponible ou le lien est incorrect." />
+      </section>
+    )
+  }
 
   return (
     <section aria-labelledby="bq-fp-titre">
