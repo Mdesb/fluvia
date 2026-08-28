@@ -472,6 +472,10 @@ export const api = {
   supprimerTacheProjet: (id) => request(`/api/project_tasks/${id}`, { method: 'DELETE' }),
   creerOpportunite: (corps) => request('/api/opportunities', { method: 'POST', body: corps, ld: true }),
   majOpportunite: (id, corps) => request(`/api/opportunities/${id}`, { method: 'PATCH', body: corps }),
+  // Le detail d'une affaire, pour retrouver SON CLIENT. La carte du pipeline ne porte que le nom
+  // affichable du client (`PipelineProvider` compose une chaine), pas son identifiant : impossible
+  // d'en faire un destinataire de devis sans relire l'affaire.
+  opportunite: (id) => request(`/api/opportunities/${id}`),
   // Rattache (ou crée) un client sur une vente ouverte (M2, CA-7). Corps : un de
   // { client: uuid } | { recherche: "..." } | { creer: { nom, prenom, email, telephone } }.
   rattacherClientVente: (venteId, corps) =>

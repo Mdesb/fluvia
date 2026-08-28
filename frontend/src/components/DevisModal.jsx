@@ -30,6 +30,9 @@ export default function DevisModal({ open, client, onClose, onCree }) {
   const [envoi, setEnvoi] = useState(false)
   const [erreur, setErreur] = useState(null)
   const [nonRattache, setNonRattache] = useState(false)
+  // La piece creee est conservee : l appelant en a besoin meme quand le rattachement n a pas pris
+  // (le pipeline la lie a l affaire par son propre champ, qui lui fonctionne).
+  const [creeSansLien, setCreeSansLien] = useState(null)
 
   // Le client imposé par l'appelant (fiche client) prime ; sinon on laisse choisir.
   const destinataire = client || choisi
@@ -41,6 +44,7 @@ export default function DevisModal({ open, client, onClose, onCree }) {
     setLignes([{ ...LIGNE_VIDE }])
     setErreur(null)
     setNonRattache(false)
+    setCreeSansLien(null)
     api.tauxTvas()
       .then((r) => setTauxTva(membres(r)))
       // Les taux absents n'empêchent pas d'ouvrir la modale : le champ restera vide et le formulaire
@@ -82,10 +86,11 @@ export default function DevisModal({ open, client, onClose, onCree }) {
       // devis figure au dossier du client alors qu'il n'y figure pas — et se taire tout seul le jour
       // où le serveur l'acceptera.
       if (destinataire && !cree?.destinataire?.clientRef) {
+        setCreeSansLien(cree)
         setNonRattache(true)
         return
       }
-      onCree?.()
+      onCree?.(cree)
     } catch (err) {
       setErreur(err instanceof ApiError ? err.message : 'Création impossible.')
     } finally {
@@ -114,7 +119,7 @@ export default function DevisModal({ open, client, onClose, onCree }) {
               {nomAffiche || 'ce client'}. Vous la retrouverez dans l&rsquo;écran{' '}
               <b>Facturation</b>. C&rsquo;est signalé et sera corrigé côté serveur.
               <div style={{ marginTop: 8 }}>
-                <button className="btn sm" type="button" onClick={() => { setNonRattache(false); onCree?.() }}>
+                <button className="btn sm" type="button" onClick={() => { setNonRattache(false); onCree?.(creeSansLien) }}>
                   J&rsquo;ai compris
                 </button>
               </div>
