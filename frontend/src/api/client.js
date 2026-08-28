@@ -1207,6 +1207,17 @@ export const api = {
   supprimerExceptionOuverture: (id) =>
     request(`/api/opening/opening_exceptions/${id}`, { method: 'DELETE' }),
   reglageOuverture: () => request('/api/opening/opening_settings'),
-  majReglageOuverture: (id, enforced) =>
-    request(`/api/opening/opening_settings/${id}`, { method: 'PATCH', body: { enforced } }),
+  // UN CORPS, PAS UN BOOLEEN. Le reglage porte trois champs — appliquer, zone scolaire, droit local
+  // d'Alsace-Moselle — et il en portera d'autres. Une fonction par champ, c'est une fonction qu'on
+  // oubliera d'ajouter.
+  majReglageOuverture: (id, corps) =>
+    request(`/api/opening/opening_settings/${id}`, { method: 'PATCH', body: corps }),
+
+  // CE QUE LE CALENDRIER SAIT SANS QU'ON LE SAISISSE.
+  //
+  // Deux natures dans une seule reponse, et elles ne se melangent pas : les JOURS FERIES sont des
+  // propositions de fermeture (l'exploitant coche), les VACANCES SCOLAIRES sont un fond de
+  // calendrier qui ne ferme rien. `schoolHolidaysAvailable` distingue « pas de vacances » de
+  // « le ministere n'a pas repondu » — deux phrases differentes a l'ecran.
+  indicesOuverture: (from, to) => request('/api/opening/calendar-hints', { query: { from, to } }),
 }

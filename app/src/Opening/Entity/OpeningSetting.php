@@ -9,6 +9,7 @@ use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
 use App\Organisation\Entity\Etablissement;
+use App\Opening\Enum\SchoolZone;
 use App\Opening\State\OpeningSettingProcessor;
 use App\Opening\State\OpeningSettingProvider;
 use Doctrine\ORM\Mapping as ORM;
@@ -78,6 +79,26 @@ class OpeningSetting
     #[Groups(['opening_setting:read', 'opening_setting:write'])]
     private bool $enforced = false;
 
+    /**
+     * Zone de vacances scolaires (A, B, C) — pour l'AFFICHAGE, jamais pour la fermeture.
+     *
+     * `null` : l'exploitant n'en a pas choisi, et on ne devine pas. Une zone inventée afficherait
+     * les vacances d'une académie qui n'est pas la sienne, et personne ne saurait d'où elles
+     * sortent.
+     */
+    #[ORM\Column(length: 1, nullable: true, enumType: SchoolZone::class)]
+    #[Groups(['opening_setting:read', 'opening_setting:write'])]
+    private ?SchoolZone $schoolZone = null;
+
+    /**
+     * Bas-Rhin, Haut-Rhin, Moselle : DEUX JOURS FÉRIÉS DE PLUS, le Vendredi saint et le 26
+     * décembre. Droit local applicable, pas une curiosité — un site qui l'ignore convoque du
+     * personnel un jour chômé.
+     */
+    #[ORM\Column]
+    #[Groups(['opening_setting:read', 'opening_setting:write'])]
+    private bool $alsaceMoselle = false;
+
     public function __construct()
     {
         $this->id = Uuid::v4();
@@ -108,6 +129,30 @@ class OpeningSetting
     public function setEnforced(bool $enforced): self
     {
         $this->enforced = $enforced;
+
+        return $this;
+    }
+
+    public function getSchoolZone(): ?SchoolZone
+    {
+        return $this->schoolZone;
+    }
+
+    public function setSchoolZone(?SchoolZone $schoolZone): self
+    {
+        $this->schoolZone = $schoolZone;
+
+        return $this;
+    }
+
+    public function isAlsaceMoselle(): bool
+    {
+        return $this->alsaceMoselle;
+    }
+
+    public function setAlsaceMoselle(bool $alsaceMoselle): self
+    {
+        $this->alsaceMoselle = $alsaceMoselle;
 
         return $this;
     }

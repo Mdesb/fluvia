@@ -59,7 +59,13 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ApiResource(
     shortName: 'OpeningSlot',
     operations: [
-        new GetCollection(security: "is_granted('PERM', 'acces.lire') or is_granted('PERM', 'organisation.gerer') or is_granted('PERM', 'reservation.lire')"),
+        // `paginationItemsPerPage` cote SERVEUR : `itemsPerPage` envoye par le client est ignore
+        // (`pagination_client_items_per_page` = false), et la valeur par defaut est TRENTE. Un
+        // planning tronque a trente lignes ne dit pas qu'il l'est.
+        new GetCollection(
+            security: "is_granted('PERM', 'acces.lire') or is_granted('PERM', 'organisation.gerer') or is_granted('PERM', 'reservation.lire')",
+            paginationItemsPerPage: 200,
+        ),
         new Get(security: "is_granted('PERM', 'acces.lire') or is_granted('PERM', 'organisation.gerer') or is_granted('PERM', 'reservation.lire')"),
         new Post(security: "is_granted('PERM', 'organisation.gerer') or is_granted('PERM', 'acces.gerer')", processor: OpeningWriteProcessor::class),
         new Patch(security: "is_granted('PERM', 'organisation.gerer') or is_granted('PERM', 'acces.gerer')", processor: OpeningWriteProcessor::class),

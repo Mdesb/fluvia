@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import VocabulaireMetier from '../components/VocabulaireMetier.jsx'
 import Liste, { texte, dateHeureFr } from '../components/Liste.jsx'
 import Tabs from '../components/Tabs.jsx'
+import PlanningOuvertureSection from '../components/PlanningOuvertureSection.jsx'
 import Modal from '../components/Modal.jsx'
 import ReferentielEditable from '../components/ReferentielEditable.jsx'
 import PretAVendre from '../components/PretAVendre.jsx'
@@ -21,6 +22,10 @@ const SOUS = [
   ['caisse', 'Caisse & moyens de paiement'],
   ['droits', 'Utilisateurs & droits'],
   ['capacites', 'Capacités activables'],
+  // Les horaires d'ouverture sont une CONFIGURATION du site, pas un écran de consultation : ils se
+  // saisissent deux fois par an. Ils portent surtout la case qui fait refuser un passage à la
+  // porte — elle n'a rien à faire dans un agenda qu'on ouvre pour regarder sa semaine.
+  ['ouverture', 'Horaires d’ouverture'],
 ]
 
 const STATUT_BADGE = { actif: 'good', invite: 'warn', suspendu: 'crit' }
@@ -353,6 +358,8 @@ export default function Parametres({ etabActif, etablissements, droits = [] }) {
           arrive ici sans savoir par ou commencer. Il se replie tout seul des que les trois
           conditions sont remplies. */}
       <PretAVendre etabActif={etabActif} droits={droits} onAller={setSousOnglet} />
+
+      {sousOnglet === 'ouverture' && <PlanningOuvertureSection droits={droits} etabActif={etabActif} />}
 
       {sousOnglet === 'entites' && (
         <div className="resa-grid">

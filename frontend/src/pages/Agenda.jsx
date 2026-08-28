@@ -4,7 +4,6 @@ import { aLeDroit } from '../api/droits.js'
 import Modal from '../components/Modal.jsx'
 import Tabs from '../components/Tabs.jsx'
 import CalendrierAgenda, { bornes, iso } from '../components/CalendrierAgenda.jsx'
-import PlanningOuvertureSection from '../components/PlanningOuvertureSection.jsx'
 
 /**
  * AGENDA — ce qui se passe ici, ce que j'ai à faire, et quand la porte est ouverte.
@@ -86,36 +85,36 @@ export default function Agenda({ droits = [], etabActif = null }) {
   }, [du, au, portee, etabActif])
 
   useEffect(() => {
-    if (onglet !== 'ouverture') recharger()
-  }, [onglet, recharger])
+    recharger()
+  }, [recharger])
 
   return (
     <div className="view">
       <div className="view-head">
         <div className="ttl">
           <h1>Agenda</h1>
-          <p>Ce qui se passe sur le site, ce que vous avez à faire, et les horaires d’ouverture</p>
+          <p>Ce qui se passe sur le site, et ce que vous avez à faire</p>
         </div>
-        {onglet !== 'ouverture' && (
-          <div className="actions">
-            <button className="btn primary" type="button" onClick={() => setAjout(true)}>
-              + Ajouter
-            </button>
-          </div>
-        )}
+        <div className="actions">
+          <button className="btn primary" type="button" onClick={() => setAjout(true)}>
+            + Ajouter
+          </button>
+        </div>
       </div>
 
+      {/* DEUX ONGLETS, PLUS TROIS. Le planning d'ouverture est parti dans Paramètres : un agenda
+          se consulte plusieurs fois par jour, des horaires se configurent deux fois par an — et la
+          case qui peut refuser du monde à la porte n'a rien à faire à un clic d'un écran qu'on
+          ouvre pour regarder sa semaine. L'agenda continue de LES LIRE, en fond de vue semaine. */}
       <Tabs
-        onglets={[['site', 'Le site'], ['moi', 'Moi'], ['ouverture', 'Ouverture']]}
+        onglets={[['site', 'Le site'], ['moi', 'Moi']]}
         actif={onglet}
         onChange={setOnglet}
       />
 
       {erreur && <div className="banner banner-error">{erreur}</div>}
 
-      {onglet === 'ouverture' ? (
-        <PlanningOuvertureSection droits={droits} etabActif={etabActif} />
-      ) : (
+      {(
         <>
           <div className="cal-barre">
             <Tabs onglets={VUES} actif={vue} onChange={setVue} style={{ marginBottom: 0 }} />

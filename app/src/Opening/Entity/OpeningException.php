@@ -49,7 +49,12 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ApiResource(
     shortName: 'OpeningException',
     operations: [
-        new GetCollection(security: "is_granted('PERM', 'acces.lire') or is_granted('PERM', 'organisation.gerer') or is_granted('PERM', 'reservation.lire')"),
+        // Voir `OpeningSlot` : trente par defaut, et une piscine depasse trente jours
+        // particuliers en une saison — feries, vidanges et nocturnes confondus.
+        new GetCollection(
+            security: "is_granted('PERM', 'acces.lire') or is_granted('PERM', 'organisation.gerer') or is_granted('PERM', 'reservation.lire')",
+            paginationItemsPerPage: 200,
+        ),
         new Get(security: "is_granted('PERM', 'acces.lire') or is_granted('PERM', 'organisation.gerer') or is_granted('PERM', 'reservation.lire')"),
         new Post(security: "is_granted('PERM', 'organisation.gerer') or is_granted('PERM', 'acces.gerer')", processor: OpeningWriteProcessor::class),
         new Patch(security: "is_granted('PERM', 'organisation.gerer') or is_granted('PERM', 'acces.gerer')", processor: OpeningWriteProcessor::class),

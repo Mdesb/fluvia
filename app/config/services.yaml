@@ -19,6 +19,13 @@ services:
     App\:
         resource: '../src/'
 
+    # LE CALENDRIER SCOLAIRE OFFICIEL, derriere un port.
+    #
+    # Une seule implementation aujourd'hui — l'open data du ministere. L'alias est explicite quand
+    # meme : le jour ou l'on ajoute un decorateur de cache ou un adaptateur de secours, l'autowiring
+    # ne saura plus choisir, et il choisira en silence.
+    App\Opening\Port\SchoolHolidaysInterface: '@App\Opening\Adapter\EducationGouvSchoolHolidays'
+
     # Point de passage unique vers le client (CMP-1). L'implementation par defaut JOURNALISE et
     # n'envoie rien : aucun prestataire n'est branche (D19, CMP-6). L'alias est explicite parce que
     # deux classes implementent l'interface — le journal et le decorateur de consentement de Crm —

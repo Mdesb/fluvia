@@ -211,6 +211,52 @@ final class OpeningScheduleTest extends AccesApiTestCase
         self::assertResponseStatusCodeSame(422);
     }
 
+    /**
+     * LES JOURS FÉRIÉS SONT PROPOSÉS, ET CE QUI EST DÉJÀ FERMÉ N'EST PAS REPROPOSÉ.
+     *
+     * Sans `alreadyClosed`, l'écran cocherait Noël à un exploitant qui l'a fermé l'an dernier — et
+     * une case cochée qui ne correspond à rien apprend à ne plus lire les cases.
+     */
+    public function testLesFeriesSontProposesEtDisentCeQuiEstDejaFerme(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+
+        $this->poserException('2026-12-25', OpeningExceptionType::Closure, null, null, 'Noël');
+
+        $indices = $client->request('GET', '/api/opening/calendar-hints?from=2026-01-01&to=2026-12-31', $entete)->toArray();
+        self::assertResponseIsSuccessful();
+        self::assertNotEmpty($indices['publicHolidays'], 'Sans férié, les assertions suivantes ne prouveraient rien.');
+
+        $parDate = [];
+        foreach ($indices['publicHolidays'] as $ferie) {
+            $parDate[$ferie['date']] = $ferie;
+        }
+
+        self::assertArrayHasKey('2026-12-25', $parDate);
+        self::assertTrue($parDate['2026-12-25']['alreadyClosed'], 'Noël est déjà fermé : ne pas le reproposer.');
+        self::assertArrayHasKey('2026-07-14', $parDate);
+        self::assertFalse($parDate['2026-07-14']['alreadyClosed']);
+
+        // Hors Alsace-Moselle par défaut : ni Vendredi saint, ni 26 décembre.
+        self::assertArrayNotHasKey('2026-04-03', $parDate);
+        self::assertArrayNotHasKey('2026-12-26', $parDate);
+    }
+
+    /**
+     * Sans zone choisie, on ne devine pas : le fournisseur rend la main AVANT d'appeler le
+     * ministère, et l'écran reçoit une phrase qui dit quoi faire plutôt qu'une liste vide.
+     */
+    public function testSansZoneScolaireOnNInterrogePersonneEtOnLeDit(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+
+        $indices = $client->request('GET', '/api/opening/calendar-hints?from=2026-01-01&to=2026-06-30', $entete)->toArray();
+        self::assertResponseIsSuccessful();
+        self::assertNull($indices['schoolZone']);
+        self::assertSame([], $indices['schoolHolidays']);
+        self::assertNotNull($indices['schoolHolidaysReason'], 'L’écran doit pouvoir dire pourquoi il n’affiche rien.');
+    }
+
     // ── Outillage ───────────────────────────────────────────────────────────────────────────────
 
     /**

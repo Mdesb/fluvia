@@ -50,7 +50,13 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ApiResource(
     shortName: 'CalendarEvent',
     operations: [
-        new GetCollection(security: "is_granted('IS_AUTHENTICATED_FULLY')"),
+        // Trente par defaut : un mois charge en depasse. La vue d'agenda passe par
+        // `/calendar/feed`, qui n'est pas pagine ; cette collection sert la relecture et la
+        // suppression, et elle doit rendre ce qu'elle annonce.
+        new GetCollection(
+            security: "is_granted('IS_AUTHENTICATED_FULLY')",
+            paginationItemsPerPage: 200,
+        ),
         new Get(security: "is_granted('IS_AUTHENTICATED_FULLY')"),
         new Post(security: "is_granted('IS_AUTHENTICATED_FULLY')", processor: CalendarEventProcessor::class),
         new Patch(security: "is_granted('IS_AUTHENTICATED_FULLY')", processor: CalendarEventProcessor::class),

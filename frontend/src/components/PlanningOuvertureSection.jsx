@@ -42,19 +42,28 @@ export default function PlanningOuvertureSection({ droits = [], etabActif = null
   const [busy, setBusy] = useState(false)
   const [ajoutPlage, setAjoutPlage] = useState(false)
   const [ajoutException, setAjoutException] = useState(false)
+  const [indices, setIndices] = useState(null)
 
   const recharger = useCallback(async () => {
     setChargement(true)
     setErreur(null)
     try {
-      const [r, p, e] = await Promise.all([
+      // L'ANNEE CIVILE EN COURS ET LA SUIVANTE : c'est la periode sur laquelle un exploitant
+      // prepare ses fermetures. Au-dela, il ne les saisit pas encore ; en deca, il les a deja.
+      const an = new Date().getFullYear()
+      const [r, p, e, h] = await Promise.all([
         api.reglageOuverture(),
         api.plagesOuverture(),
         api.exceptionsOuverture(),
+        // Les indices echouent en silence : ils sont un CONFORT. Si le calendrier scolaire ne
+        // repond pas, les horaires doivent rester saisissables — un service externe en panne ne
+        // ferme pas le produit.
+        api.indicesOuverture(`${an}-01-01`, `${an + 1}-12-31`).catch(() => null),
       ])
       setReglage(membres(r)[0] || null)
       setPlages(membres(p))
       setExceptions(membres(e))
+      setIndices(h)
     } catch (err) {
       setErreur(err.message || 'Le planning d’ouverture n’a pas pu être chargé.')
     } finally {
@@ -110,7 +119,7 @@ export default function PlanningOuvertureSection({ droits = [], etabActif = null
                 type="checkbox"
                 checked={applique}
                 disabled={busy || !reglage}
-                onChange={(e) => agir(() => api.majReglageOuverture(reglage.id, e.target.checked))}
+                onChange={(e) => agir(() => api.majReglageOuverture(reglage.id, { enforced: e.target.checked }))}
               />
               Refuser les passages hors des heures d’ouverture
             </label>
@@ -121,6 +130,26 @@ export default function PlanningOuvertureSection({ droits = [], etabActif = null
           )}
         </div>
       </div>
+
+      <ZoneEtDroitLocal
+        reglage={reglage}
+        peutGerer={peutGerer}
+        busy={busy}
+        onChanger={(corps) => agir(() => api.majReglageOuverture(reglage.id, corps))}
+      />
+
+      <JoursFeries
+        indices={indices}
+        exceptions={exceptions}
+        peutGerer={peutGerer}
+        busy={busy}
+        onFermer={(date, libelle) =>
+          agir(() => api.creerExceptionOuverture({ date, type: 'closure', reason: libelle }))
+        }
+        onRouvrir={(id) => agir(() => api.supprimerExceptionOuverture(id))}
+      />
+
+      <VacancesScolaires indices={indices} />
 
       <div className="card">
         <div className="card-h">
@@ -263,6 +292,189 @@ export default function PlanningOuvertureSection({ droits = [], etabActif = null
           recharger()
         }}
       />
+    </div>
+  )
+}
+
+/**
+ * ZONE SCOLAIRE ET DROIT LOCAL — deux réglages qui ne font pas la même chose, et l'écran le dit.
+ *
+ * La zone n'ouvre ni ne ferme : elle sert à voir les vacances en fond de calendrier. Le droit local
+ * d'Alsace-Moselle, lui, ajoute deux JOURS FÉRIÉS. Les présenter côte à côte sans écrire cette
+ * différence laisserait croire qu'une zone peut fermer un site.
+ */
+function ZoneEtDroitLocal({ reglage, peutGerer, busy, onChanger }) {
+  return (
+    <div className="card">
+      <div className="card-h">
+        <h3>Zone scolaire et droit local</h3>
+      </div>
+      <div className="card-b">
+        <div className="field">
+          <label htmlFor="op-zone">Zone de vacances scolaires</label>
+          <select
+            id="op-zone"
+            className="select"
+            style={{ maxWidth: 260 }}
+            value={reglage?.schoolZone || ''}
+            disabled={!peutGerer || busy || !reglage}
+            onChange={(e) => onChanger({ schoolZone: e.target.value || null })}
+          >
+            <option value="">Aucune — ne pas afficher les vacances</option>
+            <option value="A">Zone A</option>
+            <option value="B">Zone B</option>
+            <option value="C">Zone C</option>
+          </select>
+          <div className="hint">
+            Sert uniquement à afficher les périodes de vacances en fond d’agenda : elle ne ferme
+            rien. Choisissez la zone de votre clientèle, qui n’est pas toujours celle de votre
+            adresse.
+          </div>
+        </div>
+        <div className="field">
+          <label className="msgr-note-b" htmlFor="op-alsace">
+            <input
+              id="op-alsace"
+              type="checkbox"
+              checked={!!reglage?.alsaceMoselle}
+              disabled={!peutGerer || busy || !reglage}
+              onChange={(e) => onChanger({ alsaceMoselle: e.target.checked })}
+            />
+            Bas-Rhin, Haut-Rhin ou Moselle
+          </label>
+          <div className="hint">
+            Le droit local y ajoute <strong>deux jours fériés</strong> : le Vendredi saint et le
+            26 décembre. Ils apparaîtront ci-dessous.
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * LES JOURS FÉRIÉS SONT PROPOSÉS, JAMAIS IMPOSÉS.
+ *
+ * Ils sont calculés — huit dates fixes, trois dérivées de Pâques — donc toujours justes et
+ * disponibles hors ligne. Mais fermer un jour férié est une DÉCISION : une patinoire fait son année
+ * le 25 décembre, une salle de sport ouvre le 1er mai. Chaque ligne est donc une case, et cocher
+ * crée une fermeture journée entière — décocher la retire.
+ *
+ * La case reflète l'état RÉEL (une fermeture existe-t-elle à cette date ?) et non une intention :
+ * une case cochée qui ne correspond à rien apprend à ne plus lire les cases.
+ */
+function JoursFeries({ indices, exceptions, peutGerer, busy, onFermer, onRouvrir }) {
+  const feries = indices?.publicHolidays || []
+  const aujourdHui = new Date().toISOString().slice(0, 10)
+  const aVenir = feries.filter((f) => f.date >= aujourdHui)
+
+  // On retrouve la fermeture correspondante pour pouvoir la retirer. Match sur la date ET sur
+  // « journée entière » : une coupure de 14 h à 16 h le 14 juillet n'est pas une fermeture du
+  // 14 juillet, et la décocher ne doit pas l'effacer.
+  const fermetureDu = (date) =>
+    exceptions.find((e) => String(e.date).slice(0, 10) === date && e.type === 'closure' && e.allDay)
+
+  return (
+    <div className="card">
+      <div className="card-h">
+        <h3>Jours fériés</h3>
+        <span className="sub">calculés, pas téléchargés</span>
+      </div>
+      <div className="card-b">
+        {aVenir.length === 0 ? (
+          <div className="empty">
+            Aucun jour férié à venir sur les deux années en cours.
+          </div>
+        ) : (
+          <>
+            <p className="sub" style={{ marginTop: 0 }}>
+              Cochez ceux où votre site est fermé. Rien n’est coché d’avance : fermer un jour férié
+              est une décision, pas une règle.
+            </p>
+            <div className="cal-avenir">
+              {aVenir.map((f) => {
+                const fermeture = fermetureDu(f.date)
+                return (
+                  <label key={f.date} className="msgr-note-b">
+                    <input
+                      type="checkbox"
+                      checked={!!fermeture}
+                      disabled={!peutGerer || busy}
+                      onChange={(e) =>
+                        e.target.checked ? onFermer(f.date, f.label) : onRouvrir(fermeture.id)
+                      }
+                    />
+                    <span className="cal-avenir-q">
+                      {new Date(f.date).toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: 'long' })}
+                    </span>
+                    <span className="cal-avenir-t">{f.label}</span>
+                    {/* Un exploitant du Bas-Rhin qui compare avec un collègue parisien doit
+                        comprendre d'où sortent ces deux lignes de plus. */}
+                    {f.local && <span className="badge info">droit local</span>}
+                  </label>
+                )
+              })}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * LES VACANCES SCOLAIRES SONT EN LECTURE SEULE, ET C'EST LE POINT.
+ *
+ * Elles viennent d'un arrêté ministériel : personne ne les modifie depuis un logiciel de
+ * billetterie. Les rendre cliquables ferait croire le contraire.
+ *
+ * ⚠ « Aucune vacance » et « le ministère n'a pas répondu » sont deux phrases différentes, et
+ * l'écran les écrit différemment. Sans cette distinction, un jour de panne s'afficherait comme une
+ * année sans vacances scolaires — un mensonge tranquille, qui ne se découvre jamais.
+ */
+function VacancesScolaires({ indices }) {
+  if (!indices) return null
+  const periodes = indices.schoolHolidays || []
+
+  return (
+    <div className="card">
+      <div className="card-h">
+        <h3>Vacances scolaires</h3>
+        <span className="sub">source : calendrier officiel du ministère</span>
+      </div>
+      <div className="card-b">
+        {!indices.schoolHolidaysAvailable ? (
+          <div className="banner banner-warn">
+            {indices.schoolHolidaysReason || 'Le calendrier scolaire officiel n’a pas répondu.'} Les
+            horaires restent modifiables ; seul l’affichage des périodes manque.
+          </div>
+        ) : periodes.length === 0 ? (
+          <div className="empty">
+            {indices.schoolHolidaysReason
+              || 'Aucune période de vacances sur les deux années en cours pour cette zone.'}
+          </div>
+        ) : (
+          <>
+            <p className="sub" style={{ marginTop: 0 }}>
+              Elles ne ferment rien : elles expliquent une fréquentation. Adaptez vos tranches si
+              vous ouvrez différemment pendant ces périodes.
+            </p>
+            <div className="cal-avenir">
+              {periodes.map((p) => (
+                <div key={`${p.label}-${p.start}`} className="cal-avenir-l">
+                  <span className="cal-pastille" />
+                  <span className="cal-avenir-q">
+                    {new Date(p.start).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}
+                    {' → '}
+                    {new Date(p.end).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                  </span>
+                  <span className="cal-avenir-t">{p.label}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
     </div>
   )
 }
