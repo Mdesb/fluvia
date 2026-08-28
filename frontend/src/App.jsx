@@ -10,6 +10,7 @@ import {
 import { aLeDroit } from './api/droits.js'
 import Login from './pages/Login.jsx'
 import AppShell from './components/AppShell.jsx'
+import FrontiereErreur from './components/FrontiereErreur.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import Caisse from './pages/Caisse.jsx'
 import Catalogue from './pages/Catalogue.jsx'
@@ -246,6 +247,12 @@ export default function App() {
     >
       {/* Une seule frontiere de suspension pour tout le contenu : les ecrans differes s'y
           rattachent, et un ecran deja charge ne la declenche pas. */}
+      {/* ET UNE FRONTIÈRE D'ERREUR AUTOUR DU CONTENU, PAS AUTOUR DE LA COQUILLE.
+          Le 28/08, un identifiant oublié dans l'écran de reporting a fait passer TOUTE
+          l'application à l'écran blanc — plus de menu, plus de barre du haut, plus rien.
+          Ici, un écran qui plante affiche son erreur et laisse le menu debout : on part
+          ailleurs. La clé `onglet` remet l'ardoise propre au changement d'écran. */}
+      <FrontiereErreur cle={onglet}>
       <Suspense fallback={<div className="center" style={{ minHeight: 240 }}><div className="spinner" /></div>}>
       {onglet === 'dashboard' && estAdmin && (
         <Dashboard etabActif={etabActif} etablissements={etablissements} droits={droits} onNav={naviguer} />
@@ -294,6 +301,7 @@ export default function App() {
         <Parametres etabActif={etabActif} etablissements={etablissements} droits={droits} />
       )}
       </Suspense>
+      </FrontiereErreur>
     </AppShell>
   )
 }
