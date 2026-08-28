@@ -200,15 +200,37 @@ final class OpeningScheduleTest extends AccesApiTestCase
         // affiche un `S` vert et ne vérifie rien.
         $espaceAilleurs = $this->creerEspaceChezLeVoisin();
 
+        // `weekday` et non `day` : le renommage en anglais avait traduit cette cle de charge
+        // utile avec les cles de la reponse agregee, qui portent bien `day`. L'ecriture echouait
+        // de toute facon sur l'espace, donc rien ne l'avait signale.
         $client->request('POST', '/api/opening/opening_slots', $entete + [
             'json' => [
-                'day' => 1,
+                'weekday' => 1,
                 'startTime' => '09:00:00',
                 'endTime' => '18:00:00',
                 'space' => '/api/espace_acces/' . $espaceAilleurs,
             ],
         ]);
-        self::assertResponseStatusCodeSame(422);
+
+        // ── ON ASSERTE L'EFFET, PAS LE CODE ────────────────────────────────────────────────────
+        //
+        // DEUX remparts refusent ce rattachement, et le premier a changé le 28/08 : depuis que les
+        // lectures d'`EspaceAcces` suivent l'établissement actif, le dénormaliseur ne résout plus
+        // l'IRI du voisin (400) et `OpeningWriteProcessor` n'est même plus atteint (il rendait 422).
+        //
+        // Figer le code de statut ferait dépendre ce test du module d'un autre. « Aucune tranche
+        // n'a été écrite chez le voisin » reste vrai quel que soit le rempart qui refuse — et le
+        // restera si un troisième s'ajoute.
+        self::assertGreaterThanOrEqual(400, $client->getResponse()->getStatusCode());
+        self::assertLessThan(500, $client->getResponse()->getStatusCode(), 'Un refus, pas une panne.');
+
+        // ⚠ VÉRIFICATION PAR L'`EntityManager`, JAMAIS PAR L'API. La collection est bornée à
+        // l'établissement actif : l'interroger rendrait une liste vide MÊME si l'écriture avait
+        // réussi chez le voisin. Un test qui lirait par l'API serait vert pour la mauvaise raison.
+        $chezLeVoisin = $this->em()->getRepository(OpeningSlot::class)->findBy([
+            'space' => $this->em()->getRepository(EspaceAcces::class)->find(Uuid::fromString($espaceAilleurs)),
+        ]);
+        self::assertSame([], $chezLeVoisin, 'Une tranche a été écrite sur l’espace d’un autre établissement.');
     }
 
     /**
