@@ -3,6 +3,7 @@ import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import Modal from '../components/Modal.jsx'
 import Tabs from '../components/Tabs.jsx'
+import { useEtatUrl } from '../api/url.js'
 
 /**
  * CAMPAGNES — première étape : les segments, et l'effectif avant l'envoi.
@@ -49,13 +50,18 @@ const CRITERES = [
   },
 ]
 
+const DEFAUTS = { tab: 'campagnes' }
+
 export default function Campagnes({ etabActif, droits = [] }) {
   const peutGerer = aLeDroit(droits, 'campagne.gerer')
   // Lire le résultat, c'est compter des envois ; lire l'attribution, c'est lire ce que dépense une
   // part du fichier client. Deux droits, parce que ce ne sont pas les mêmes yeux.
   const peutLireJournal = aLeDroit(droits, 'campagne.lire_journal')
 
-  const [onglet, setOnglet] = useState('campagnes')
+  // Motif §9.2 : l'onglet vit dans l'URL, donc il survit au rechargement et se partage.
+  const [params, majParams] = useEtatUrl('campagnes', DEFAUTS)
+  const onglet = params.tab
+  const setOnglet = (v) => majParams({ tab: v })
   const [campagnes, setCampagnes] = useState([])
   const [redigee, setRedigee] = useState(null)
   const [resultat, setResultat] = useState(null)

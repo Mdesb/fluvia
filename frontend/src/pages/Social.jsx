@@ -25,8 +25,23 @@ import { aLeDroit } from '../api/droits.js'
 
 const RESEAUX = { mastodon: 'Mastodon', bluesky: 'Bluesky' }
 
+// « CONNECTÉ » PROMETTAIT UNE VÉRIFICATION QUI N'A JAMAIS EU LIEU.
+//
+// `SocialAccountStatus::Connected` est la valeur PAR DÉFAUT de la colonne : elle veut dire « un
+// jeton a été enregistré », pas « le lien fonctionne ». Rien ne l'éprouve — aucune route de test
+// n'existe, et le statut ne bascule en `token_expired` que lorsqu'une PUBLICATION échoue, dans
+// `PublishSocialPublicationHandler`. Vérifié dans l'entité et dans le handler, pas déduit.
+//
+// Un compte dont le jeton est faux depuis le premier jour s'affichait donc « connecté » en vert
+// jusqu'au premier message — et l'échec arrivait alors sur la file des messages, où on l'attribue
+// au réseau. Même famille que le contrôleur d'accès affiché « En ligne » sans avoir jamais parlé, et
+// que les opérations badgées « contrôlée » qu'aucun plafond ne limitait : l'écran affirmait un état
+// qu'il n'avait pas constaté.
+//
+// On dit donc ce qu'on sait — un jeton est enregistré — et le ton passe au neutre : le vert est
+// réservé à ce qu'on a vu marcher.
 const ETAT_COMPTE = {
-  connected: { libelle: 'connecté', ton: 'good' },
+  connected: { libelle: 'jeton enregistré', ton: 'info' },
   token_expired: { libelle: 'jeton expiré', ton: 'crit' },
   revoked: { libelle: 'révoqué', ton: 'crit' },
 }
@@ -169,6 +184,12 @@ export default function Social({ etabActif, droits = [] }) {
                   <span className={`badge ${etat.ton}`} style={{ marginTop: 4, display: 'inline-block' }}>
                     {etat.libelle}
                   </span>
+                  {c.status === 'connected' && (
+                    <div className="hint" style={{ margin: '4px 0 0' }}>
+                      Le lien n’est éprouvé qu’au premier message envoyé : personne ne l’a testé
+                      depuis l’enregistrement du jeton.
+                    </div>
+                  )}
                   {c.status === 'token_expired' && (
                     // Un jeton expire ne se voit qu'ici : sur la file de messages, il produit des
                     // echecs qu'on attribue au reseau. Le dire au bon endroit evite de republier
