@@ -15,20 +15,12 @@
         "verifie dans les deux sens. Il empeche la dette de croitre pendant quon la resorbe."
     ],
     "scelle": {
-        "plafond": 43
+        "plafond": 32
     },
     "entrees": {
-        "AbonnementFitness": {
-            "voie": "defaut",
-            "fichier": "Sport/Entity/AbonnementFitness.php"
-        },
         "Affectation": {
             "voie": "groupe",
             "fichier": "Securite/Entity/Affectation.php"
-        },
-        "Affutage": {
-            "voie": "defaut",
-            "fichier": "Patinoire/Entity/Affutage.php"
         },
         "Appairage": {
             "voie": "defaut",
@@ -45,10 +37,6 @@
         "BankAccount": {
             "voie": "groupe",
             "fichier": "Finance/Treasury/Entity/BankAccount.php"
-        },
-        "Casier": {
-            "voie": "groupe",
-            "fichier": "Piscine/Entity/Casier.php"
         },
         "ConfigCreancierSepa": {
             "voie": "groupe",
@@ -86,10 +74,6 @@
             "voie": "defaut",
             "fichier": "Facturation/Entity/Facture.php"
         },
-        "Guide": {
-            "voie": "groupe",
-            "fichier": "Musee/Entity/Guide.php"
-        },
         "IncidentImpaye": {
             "voie": "defaut",
             "fichier": "Recouvrement/Entity/IncidentImpaye.php"
@@ -102,14 +86,6 @@
             "voie": "groupe",
             "fichier": "Autorisation/Entity/LimiteAutorisation.php"
         },
-        "ListeAttentePointure": {
-            "voie": "defaut",
-            "fichier": "Patinoire/Entity/ListeAttentePointure.php"
-        },
-        "LocationPatins": {
-            "voie": "defaut",
-            "fichier": "Patinoire/Entity/LocationPatins.php"
-        },
         "MandatSepa": {
             "voie": "defaut",
             "fichier": "Sepa/Entity/MandatSepa.php"
@@ -117,10 +93,6 @@
         "MouvementStock": {
             "voie": "defaut",
             "fichier": "Stock/Entity/MouvementStock.php"
-        },
-        "NiveauJoueur": {
-            "voie": "defaut",
-            "fichier": "Padel/Entity/NiveauJoueur.php"
         },
         "PanierEnLigne": {
             "voie": "defaut",
@@ -130,17 +102,9 @@
             "voie": "groupe",
             "fichier": "Crm/Entity/ParametrePmvEtablissement.php"
         },
-        "ParcPatins": {
-            "voie": "groupe",
-            "fichier": "Patinoire/Entity/ParcPatins.php"
-        },
         "Passage": {
             "voie": "defaut",
             "fichier": "Acces/Entity/Passage.php"
-        },
-        "PlageHoraire": {
-            "voie": "groupe",
-            "fichier": "Padel/Entity/PlageHoraire.php"
         },
         "PointDeVente": {
             "voie": "groupe",
@@ -162,10 +126,6 @@
             "voie": "defaut",
             "fichier": "Boutique/Entity/RetraitClickCollect.php"
         },
-        "SaisonEphemere": {
-            "voie": "groupe",
-            "fichier": "Patinoire/Entity/SaisonEphemere.php"
-        },
         "SessionCaisse": {
             "voie": "defaut",
             "fichier": "Caisse/Entity/SessionCaisse.php"
@@ -177,10 +137,6 @@
         "Terminal": {
             "voie": "defaut",
             "fichier": "Acces/Entity/Terminal.php"
-        },
-        "Tournoi": {
-            "voie": "groupe",
-            "fichier": "Padel/Entity/Tournoi.php"
         },
         "TreasurySettings": {
             "voie": "groupe",

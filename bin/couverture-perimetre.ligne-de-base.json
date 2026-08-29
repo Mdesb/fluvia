@@ -44,7 +44,7 @@
     ],
     "scelle": {
         "gelee_le": "2026-08-28",
-        "plafond": 26,
+        "plafond": 25,
         "reference": "MESSAGES.md — claude-A, 28/08 : le garde-fou tenait « porte un champ etablissement » pour « est cloisonne ». Les 11 entrees ajoutees ce jour-la sont ce que la premisse cachait."
     },
     "entrees": {
@@ -179,26 +179,6 @@
                 "chemin": "",
                 "cible": "",
                 "note": "Signalee le 23/08. Migration."
-            }
-        },
-        "Padel/Entity/EvenementEclairage.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Padel",
-            "operations": [
-                "Get",
-                "GetCollection"
-            ],
-            "permissions": [
-                "padel.lire"
-            ],
-            "sensibilite": "argent",
-            "traitement": {
-                "groupe": "A",
-                "chemin": "terrain",
-                "cible": "TerrainPadel",
-                "note": "Porte aussi $reservation, egalement cloisonnee : deux chemins possibles, prendre le plus court."
             }
         },
         "Vente/Nf525/Entity/OperationScellee.php": {
