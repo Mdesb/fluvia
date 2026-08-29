@@ -1306,6 +1306,16 @@ export const api = {
   // Le parc par pointure : c'est lui qui dit ce qui est louable, pas la liste des locations.
   patinoireParc: () =>
     request('/api/patinoire_parc_patins', { query: { itemsPerPage: 200 } }),
+  // `POST /api/patinoire_parc_patins` existe depuis le début (droit `patinoire.configurer`) et
+  // n'était appelé de nulle part : la patinoire sortait, rendait et affûtait des patins qu'aucun
+  // écran ne savait déclarer.
+  //
+  // ⚠ CETTE ENTITÉ N'A AUCUNE CONTRAINTE ET AUCUNE SUPPRESSION. Un POST au corps vide rend 201 et
+  // crée une pointure 28 à zéro paire — vérifié, et payé : un parc vide traîne en préproduction,
+  // que `DELETE` refuse (405). D'où la validation faite ICI, dans le formulaire, faute d'en avoir
+  // une côté serveur. Signalé pour le moteur.
+  creerParcPatins: (corps) =>
+    request('/api/patinoire_parc_patins', { method: 'POST', body: corps, ld: true }),
   patinoireListeAttente: () =>
     request('/api/patinoire_liste_attente_pointures', { query: { itemsPerPage: 100 } }),
   patinoireRetenues: () =>

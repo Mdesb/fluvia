@@ -134,6 +134,7 @@ export default function Patinoire({ etabActif, droits }) {
             nommer={nommer}
             peutLouer={peutLouer}
             peutAttente={peutAttente}
+            peutConfigurer={peutConfigurer}
             onFait={apres}
             onErreur={setErreur}
           />
@@ -192,7 +193,8 @@ export default function Patinoire({ etabActif, droits }) {
 // --------------------------------------------------------------------------------------------
 // Le parc : une tuile par pointure, et la sortie part d'ici.
 // --------------------------------------------------------------------------------------------
-function ParcSection({ parc, attente, beneficiaires, nommer, peutLouer, peutAttente, onFait, onErreur }) {
+function ParcSection({ parc, attente, beneficiaires, nommer, peutLouer, peutAttente, peutConfigurer, onFait, onErreur }) {
+  const [creation, setCreation] = useState(false)
   const [sortie, setSortie] = useState(null)
   const [indispo, setIndispo] = useState(null)
 
@@ -227,12 +229,30 @@ function ParcSection({ parc, attente, beneficiaires, nommer, peutLouer, peutAtte
       <div className="card-h">
         <h3>Parc de patins</h3>
         <span className="sub">ce qui est louable, pointure par pointure</span>
+        {peutConfigurer && (
+          <div className="actions" style={{ marginLeft: 'auto' }}>
+            <button className="btn sm" type="button" onClick={() => setCreation(true)}>
+              ＋ Déclarer une pointure
+            </button>
+          </div>
+        )}
       </div>
       <div className="card-b">
         {parc.length === 0 ? (
           <div className="empty">
-            Aucune pointure n'est enregistrée pour cet établissement. Tant que le parc est vide, aucune
-            paire ne peut être louée : ajoutez vos pointures et leurs quantités dans le paramétrage.
+            {/* LA PHRASE ENVOYAIT « DANS LE PARAMÉTRAGE », OÙ IL N'Y A RIEN DE TEL.
+                Les six onglets de Paramètres ne portent ni pointure, ni terrain, ni salle. Une
+                absence laisse chercher ; une fausse piste fait chercher au mauvais endroit, puis
+                conclure qu'on n'a pas compris son propre logiciel. C'est pire que le silence. */}
+            Aucune pointure n'est enregistrée pour cet établissement. Tant que le parc est vide,
+            aucune paire ne peut être louée.{peutConfigurer ? ' Déclarez-en une avec le bouton ci-dessus.' : ''}
+            <ParcPatinsModal
+              open={creation}
+              parc={parc}
+              onClose={() => setCreation(false)}
+              onFait={() => { setCreation(false); onFait() }}
+              onErreur={onErreur}
+            />
           </div>
         ) : (
           <>
@@ -242,6 +262,13 @@ function ParcSection({ parc, attente, beneficiaires, nommer, peutLouer, peutAtte
                 voisines et l'inscription en liste d'attente.
               </div>
             )}
+            <ParcPatinsModal
+              open={creation}
+              parc={parc}
+              onClose={() => setCreation(false)}
+              onFait={() => { setCreation(false); onFait() }}
+              onErreur={onErreur}
+            />
             <div className="pat-parc">
               {parc.map((p) => {
                 const dispo = p.quantiteDisponible || 0
@@ -1309,5 +1336,115 @@ function ConflitsGlace({ etabActif }) {
         { cle: 'motif', entete: 'Motif', rendu: (r) => r.motif || '—' },
       ]}
     />
+  )
+}
+
+// DÉCLARER UNE POINTURE — deuxième des écrans qui savaient exploiter sans savoir créer.
+//
+// ⚠ TOUTE LA VALIDATION EST ICI, PARCE QU'IL N'Y EN A AUCUNE EN FACE.
+//
+// `ParcPatins` ne déclare ni `NotBlank`, ni `NotNull`, ni `Positive` : un POST au corps vide rend
+// **201** et crée une pointure 28 à zéro paire. Mesuré en le faisant, et payé — l'entité n'a pas
+// d'opération `Delete`, le parc vide ainsi créé est définitif (405 sur DELETE).
+//
+// Un formulaire n'est pas un garde-fou : quelqu'un qui appelle l'API directement passera toujours.
+// Mais tant que le serveur ne borne rien, c'est le seul endroit qui empêche d'enregistrer une
+// pointure 0 ou une quantité négative. Signalé pour le moteur ; en attendant, on borne ici et on
+// le dit plutôt que de laisser croire que le serveur vérifie.
+function ParcPatinsModal({ open, parc, onClose, onFait, onErreur }) {
+  const [pointure, setPointure] = useState('')
+  const [quantite, setQuantite] = useState('')
+  const [erreur, setErreur] = useState(null)
+  const [envoi, setEnvoi] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    setPointure('')
+    setQuantite('')
+    setErreur(null)
+  }, [open])
+
+  const n = Number(pointure)
+  const q = Number(quantite)
+  // Une pointure de patin descend rarement sous 25 et dépasse rarement 48 ; on ne l'interdit pas,
+  // on prévient. Le doublon, lui, se refuse : deux lignes pour la même pointure rendraient le
+  // décompte des paires ininterprétable.
+  const dejaLa = (parc || []).some((x) => Number(x.pointure) === n)
+  const pret = Number.isInteger(n) && n > 0 && Number.isInteger(q) && q > 0 && !dejaLa
+
+  async function soumettre(e) {
+    e.preventDefault()
+    setErreur(null)
+    setEnvoi(true)
+    try {
+      await api.creerParcPatins({ pointure: n, quantiteTotale: q })
+      onFait()
+    } catch (err) {
+      setErreur(err.message || 'La pointure n’a pas pu être déclarée.')
+    } finally {
+      setEnvoi(false)
+    }
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} titre="Déclarer une pointure">
+      <form onSubmit={soumettre}>
+        {erreur && <div className="banner banner-error" style={{ marginBottom: 'var(--esp-large)' }}>{erreur}</div>}
+
+        <div className="row" style={{ display: 'flex', gap: 'var(--esp-large)' }}>
+          <div className="field" style={{ flex: 1 }}>
+            <label htmlFor="pp-pointure">Pointure *</label>
+            <input
+              id="pp-pointure"
+              className="input"
+              type="number"
+              min="1"
+              value={pointure}
+              onChange={(e) => setPointure(e.target.value)}
+            />
+            {dejaLa && (
+              <span className="hint">
+                Cette pointure est déjà déclarée. Modifiez la ligne existante plutôt que d’en créer
+                une seconde : deux lignes pour la même taille rendraient le décompte des paires
+                impossible à lire.
+              </span>
+            )}
+            {!dejaLa && n > 0 && (n < 25 || n > 48) && (
+              <span className="hint">
+                {n} est inhabituel pour un patin — vérifiez avant d’enregistrer, la ligne ne pourra
+                pas être supprimée.
+              </span>
+            )}
+          </div>
+          <div className="field" style={{ flex: 1 }}>
+            <label htmlFor="pp-quantite">Paires possédées *</label>
+            <input
+              id="pp-quantite"
+              className="input"
+              type="number"
+              min="1"
+              value={quantite}
+              onChange={(e) => setQuantite(e.target.value)}
+            />
+            <span className="hint">
+              Le total détenu, pas le disponible : les paires sorties et en affûtage se déduisent
+              toutes seules.
+            </span>
+          </div>
+        </div>
+
+        <p className="hint">
+          ⚠ Une pointure déclarée ne peut pas être supprimée — le serveur n’offre pas cette
+          opération. Une erreur se corrige en ramenant la quantité à zéro.
+        </p>
+
+        <div className="r" style={{ display: 'flex', gap: 'var(--esp-normal)', justifyContent: 'flex-end' }}>
+          <button type="button" className="btn ghost" onClick={onClose}>Annuler</button>
+          <button type="submit" className="btn" disabled={envoi || !pret}>
+            {envoi ? 'Déclaration…' : 'Déclarer'}
+          </button>
+        </div>
+      </form>
+    </Modal>
   )
 }
