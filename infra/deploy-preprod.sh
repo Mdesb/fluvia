@@ -167,8 +167,15 @@ printf '{"commit":"%s","branche":"%s","construit":"%s","sujet":"%s"}\n' \
 # conclure quand le champ manque. Sauter la boucle produit un marqueur que le verificateur rejette.
 log "Boucle : l'URL publique rend-elle ce qu'on vient de construire ?"
 URL_PUBLIQUE="${URL_PUBLIQUE:-https://smartaccess.hector-conseil.com}"
+# ⚠ `|| true` EST INDISPENSABLE, ET IL A ETE APPRIS EN CASSANT CETTE GARDE. Sous `set -euo
+# pipefail`, un `curl` qui echoue interrompt le script AVANT l'affectation -- donc avant les dix
+# lignes d'explication ci-dessous. Eprouve : le script sortait avec le code 22 de curl, sans un mot.
+# Une garde contre les echecs muets qui echoue muette ne vaut rien.
+#
+# L'echec de la lecture est une INFORMATION que le bloc suivant sait interpreter, pas une raison de
+# s'arreter avant de l'avoir dite.
 SERVI="$(curl -sf -H 'Accept: application/json' "$URL_PUBLIQUE/version.json" 2>/dev/null \
-    | sed -n 's/.*"commit":"\([^"]*\)".*/\1/p')"
+    | sed -n 's/.*"commit":"\([^"]*\)".*/\1/p' || true)"
 
 if [ "$SERVI" != "$COMMIT_DEPLOYE" ]; then
     echo
