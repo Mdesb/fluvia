@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Liste, { texte } from '../components/Liste.jsx'
 import Tabs from '../components/Tabs.jsx'
+import Modal from '../components/Modal.jsx'
 import CasiersPiscine from '../components/CasiersPiscine.jsx'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
@@ -10,9 +11,32 @@ function heure(v) {
   return new Date(v).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
 }
 
-// Verticale Piscine (consultation) : bassins, créneaux et jauges grand public (FMI).
+// Verticale Piscine : bassins, créneaux et jauges grand public (FMI).
+//
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// CET ÉCRAN SAVAIT TOUT FAIRE D'UN BASSIN, SAUF EN DÉCLARER UN.
+//
+// Il attribue un casier, le libère, relance un retard, force une ouverture, lit les jauges — et
+// `POST /api/bassins`, protégé par `piscine.configurer`, n'était appelé de nulle part. Un
+// établissement qui démarre voyait « Aucun bassin déclaré » sans aucun moyen d'en sortir.
+//
+// ⚠ UN BASSIN N'EST PAS UN ESPACE, ET CE N'EST PAS UN DOUBLON — c'est une composition.
+//
+// `Paramètres › Espaces` liste les LIEUX de l'établissement (« Bassin principal », « Grand
+// bassin », « Piste de glace »…), chacun avec un type. `Bassin` est l'objet d'EXPLOITATION de la
+// piscine — lignes d'eau, capacité, occupation courante — et il porte une relation obligatoire
+// vers un espace : « Un espace du socle est requis (RG-SOCLE-01) ».
+//
+// Le voir comme deux listes concurrentes conduirait à en créer une troisième. Le formulaire
+// CHOISIT donc un espace existant au lieu d'en inventer un, et ne propose que ceux de type
+// « bassin » : les autres ne sont pas des lieux de baignade.
 export default function Piscine({ etabActif, droits }) {
   const [onglet, setOnglet] = useState('bassins')
+  const [creation, setCreation] = useState(false)
+  // Incrementé après une création : `Liste` recharge sur ses `deps`, sans que l'écran ait à
+  // connaître son état interne.
+  const [rechargement, setRechargement] = useState(0)
+  const peutConfigurer = aLeDroit(droits, 'piscine.configurer')
 
   return (
     <div className="view">
@@ -36,13 +60,24 @@ export default function Piscine({ etabActif, droits }) {
 
       {onglet === 'casiers' && <CasiersPiscine etabActif={etabActif} droits={droits} />}
 
+      <BassinModal
+        open={creation}
+        onClose={() => setCreation(false)}
+        onCree={() => { setCreation(false); setRechargement((n) => n + 1) }}
+      />
+
       <div className="resa-grid" style={{ display: onglet === 'bassins' ? undefined : 'none' }}>
         <Liste
           titre="Bassins"
           sous="capacité &amp; occupation"
-          deps={[etabActif]}
+          deps={[etabActif, rechargement]}
           charger={api.bassins}
-          vide="Aucun bassin déclaré."
+          vide="Aucun bassin déclaré. Un bassin porte les lignes d’eau, la capacité et l’occupation : sans lui, ni jauge ni créneau."
+          actions={peutConfigurer ? (
+            <button className="btn sm" type="button" onClick={() => setCreation(true)}>
+              ＋ Déclarer un bassin
+            </button>
+          ) : null}
           colonnes={[
             { cle: 'libelle', entete: 'Bassin', rendu: (r) => <span className="nm">{texte(r.libelle, r.code || 'Bassin')}</span> },
             { cle: 'nbLignes', entete: 'Lignes', num: true, rendu: (r) => r.nbLignes ?? '—' },
@@ -256,5 +291,142 @@ function CreneauxBassins({ etabActif, droits = [] }) {
         colonnes={colonnes}
       />
     </div>
+  )
+}
+
+// DÉCLARER UN BASSIN — le premier des sept écrans qui savaient exploiter sans savoir créer.
+//
+// Le formulaire est court parce que le serveur l'est : `libelle` et `espace` sont exigés,
+// `nbLignes` et `capacite` ont des valeurs par défaut positives. Sondé avec un corps vide plutôt
+// que déduit de l'entité — le 422 énonce exactement deux violations :
+//     libelle  This value should not be blank.
+//     espace   Un espace du socle est requis (RG-SOCLE-01).
+//
+// ⚠ ON NE CRÉE PAS L'ESPACE ICI, ON LE CHOISIT. Un bassin sans espace n'existe pas, mais un espace
+// est un objet du socle : il porte les droits d'accès, les tourniquets, les autres verticales. Le
+// créer depuis la piscine en ferait un objet de piscine, et la patinoire recréerait le sien à
+// côté. C'est exactement le doublon qu'on voulait éviter en ouvrant ce chantier.
+function BassinModal({ open, onClose, onCree }) {
+  const [espaces, setEspaces] = useState([])
+  const [bassins, setBassins] = useState([])
+  const [libelle, setLibelle] = useState('')
+  const [espace, setEspace] = useState('')
+  const [lignes, setLignes] = useState('1')
+  const [capacite, setCapacite] = useState('1')
+  const [erreur, setErreur] = useState(null)
+  const [envoi, setEnvoi] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    setLibelle('')
+    setLignes('1')
+    setCapacite('1')
+    setErreur(null)
+    Promise.allSettled([api.espaces(), api.bassins()]).then(([e, b]) => {
+      const liste = e.status === 'fulfilled' ? membres(e.value) : []
+      setEspaces(liste)
+      setBassins(b.status === 'fulfilled' ? membres(b.value) : [])
+      const premier = liste.find((x) => x.type === 'bassin')
+      setEspace(premier ? premier.id : '')
+    })
+  }, [open])
+
+  // Seuls les lieux de baignade. Les autres types — guichet, gradins, glace — sont des espaces du
+  // même établissement, et n'ont rien à faire dans ce choix.
+  const lieux = espaces.filter((e) => e.type === 'bassin')
+  const dejaPris = new Set(
+    bassins.map((b) => (typeof b.espace === 'string' ? b.espace.split('/').pop() : b.espace?.id)),
+  )
+
+  async function soumettre(evenement) {
+    evenement.preventDefault()
+    setErreur(null)
+    setEnvoi(true)
+    try {
+      await api.creerBassin({
+        libelle: libelle.trim(),
+        espace: `/api/espaces/${espace}`,
+        nbLignes: Number(lignes),
+        capacite: Number(capacite),
+      })
+      onCree()
+    } catch (e) {
+      setErreur(e.message || 'Le bassin n’a pas pu être déclaré.')
+    } finally {
+      setEnvoi(false)
+    }
+  }
+
+  const pret = libelle.trim() !== '' && espace !== '' && Number(lignes) > 0 && Number(capacite) > 0
+
+  return (
+    <Modal open={open} onClose={onClose} titre="Déclarer un bassin">
+      <form onSubmit={soumettre}>
+        {erreur && <div className="banner banner-error" style={{ marginBottom: 'var(--esp-large)' }}>{erreur}</div>}
+
+        {lieux.length === 0 ? (
+          <div className="banner banner-warn">
+            Aucun espace de type « bassin » n’est déclaré sur cet établissement. Un bassin s’appuie
+            sur un espace du socle — celui qui porte les accès et les tourniquets. Créez-le d’abord
+            dans <b>Paramètres › Espaces</b>, puis revenez ici.
+          </div>
+        ) : (
+          <>
+            <div className="field">
+              <label htmlFor="ba-lib">Nom du bassin *</label>
+              <input
+                id="ba-lib"
+                className="input"
+                value={libelle}
+                maxLength={120}
+                placeholder="Grand bassin, bassin d’apprentissage…"
+                onChange={(e) => setLibelle(e.target.value)}
+              />
+              <p className="hint">
+                Ce que le maître-nageur lit sur son planning et ce qui figure sur la jauge affichée
+                au public.
+              </p>
+            </div>
+
+            <div className="field">
+              <label htmlFor="ba-espace">Espace *</label>
+              <select id="ba-espace" className="input" value={espace} onChange={(e) => setEspace(e.target.value)}>
+                {lieux.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.nom}{dejaPris.has(l.id) ? ' — porte déjà un bassin' : ''}
+                  </option>
+                ))}
+              </select>
+              <p className="hint">
+                Le lieu, tel qu’il est déclaré dans <b>Paramètres › Espaces</b>. C’est lui qui porte
+                les droits d’accès et les tourniquets ; le bassin y ajoute les lignes d’eau et la
+                capacité.
+              </p>
+            </div>
+
+            <div className="row" style={{ display: 'flex', gap: 'var(--esp-large)' }}>
+              <div className="field" style={{ flex: 1 }}>
+                <label htmlFor="ba-lignes">Lignes d’eau *</label>
+                <input id="ba-lignes" className="input" type="number" min="1" value={lignes}
+                  onChange={(e) => setLignes(e.target.value)} />
+              </div>
+              <div className="field" style={{ flex: 1 }}>
+                <label htmlFor="ba-cap">Capacité *</label>
+                <input id="ba-cap" className="input" type="number" min="1" value={capacite}
+                  onChange={(e) => setCapacite(e.target.value)} />
+                <p className="hint">Le nombre de baigneurs simultanés : c’est lui qui borne la jauge.</p>
+              </div>
+            </div>
+          </>
+        )}
+
+        <div className="row" style={{ display: 'flex', gap: 'var(--esp-normal)', justifyContent: 'flex-end' }}>
+          <button type="button" className="btn ghost" onClick={onClose}>Annuler</button>
+          <button type="submit" className="btn" disabled={envoi || !pret || lieux.length === 0}>
+            {envoi ? 'Déclaration…' : 'Déclarer le bassin'}
+          </button>
+        </div>
+      </form>
+    </Modal>
   )
 }

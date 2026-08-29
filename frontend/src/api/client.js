@@ -1210,6 +1210,10 @@ export const api = {
   // --- Verticales (routes explicites privilégiées) ---
   // Piscine
   bassins: () => request('/api/bassins', { query: { itemsPerPage: 100 } }),
+  // `POST /api/bassins` existe depuis le debut, protege par `piscine.configurer`, et n'etait
+  // appele d'aucun ecran : la piscine savait attribuer un casier, relancer un retard et forcer une
+  // ouverture, mais pas declarer le bassin sur lequel tout cela porte.
+  creerBassin: (corps) => request('/api/bassins', { method: 'POST', body: corps, ld: true }),
   creneauxBassin: () => request('/api/creneau_bassins', { query: { itemsPerPage: 200 } }),
   jaugesGrandPublic: () =>
     request('/api/jauge_grand_public_calculees', { query: { itemsPerPage: 100 } }),
