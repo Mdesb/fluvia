@@ -115,15 +115,15 @@ export default function ScansEnDirect({ droits = [], etabActif }) {
     }
   }, [actif])
 
-  // Changer d'établissement remet le fil à zéro : les passages d'un autre site n'ont rien à faire
-  // dans le bandeau, et l'horodatage de repère non plus.
-  useEffect(() => {
-    dernier.current = null
-    amorce.current = false
-    setScans([])
-    setTrouEventuel(false)
-    setArrete(null)
-  }, [etabActif])
+  // CHANGER D'ÉTABLISSEMENT REMONTE CE BANDEAU (`key` posée à la caisse), IL NE LE RÉPARE PAS.
+  //
+  // Une remise à zéro par effet laisse deux trous. D'abord l'ordre : l'effet passe après le rendu,
+  // donc une interrogation partie juste avant peut revenir ensuite et déposer, sous le nouveau site,
+  // des passages appartenant à l'ancien — la requête portait l'en-tête d'établissement d'alors.
+  // Ensuite la duplication : le bandeau aurait deux façons de savoir de quel site il parle, ses
+  // états et sa propriété, qui peuvent diverger. Un remontage n'a ni l'un ni l'autre.
+  //
+  // `etabActif` reste dans les propriétés : il n'est plus lu ici, il sert de clé au parent.
 
   const interroger = useCallback(async () => {
     if (enVol.current) return
