@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api, membres } from '../api/client.js'
+import { aLeDroit } from '../api/droits.js'
 import Qr from '../components/Qr.jsx'
 // `texte` lit un libelle multilingue : le serveur rend `{ fr: '...' }`, pas une chaine.
 import { texte } from '../components/Liste.jsx'
@@ -95,10 +96,16 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
     [panier],
   )
 
+  // Le point de vente de la session — deux choses en dépendent maintenant : les moyens de paiement
+  // autorisés et les produits épinglés. Il était recalculé dans `moyensDispo` ; il en sort.
+  const pdvActif = useMemo(() => {
+    const pdvId = session?.pointDeVente?.id || session?.pointDeVente
+    return pdvs.find((p) => p.id === pdvId) || null
+  }, [pdvs, session])
+
   // Moyens réellement proposables : actifs et autorisés sur le point de vente de la session.
   const moyensDispo = useMemo(() => {
-    const pdvId = session?.pointDeVente?.id || session?.pointDeVente
-    const pdv = pdvs.find((p) => p.id === pdvId)
+    const pdv = pdvActif
     const autorises = pdv?.moyensAutorises || []
     let liste = moyens.filter((m) => autorises.length === 0 || autorises.includes(m.code))
     // PMV : uniquement si la capacité porte-monnaie est active sur l'établissement.
@@ -108,7 +115,50 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
       const ib = ORDRE_MOYENS.indexOf(b.code)
       return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib)
     })
-  }, [moyens, pdvs, session, capacites])
+  }, [moyens, pdvActif, capacites])
+
+  // LES FAVORIS SONT CEUX DU COMPTOIR, PAS CEUX DU CAISSIER — et il faut le dire.
+  //
+  // `PointDeVente::$favoris` est une liste d'identifiants de produits portée par le POINT DE VENTE.
+  // Deux personnes qui se relaient au même guichet voient donc les mêmes épingles, et celle qui
+  // épingle change l'écran de l'autre. Ce n'est pas un défaut — un comptoir vend les mêmes choses
+  // quelle que soit la personne derrière — mais quelqu'un qui croirait régler SON écran serait
+  // surpris, d'où l'infobulle qui le dit.
+  const favoris = pdvActif?.favoris || []
+
+  // Les épinglés d'abord, le reste dans son ordre d'origine. Un tri qui remonterait aussi par
+  // fréquence de vente serait plus malin et beaucoup moins prévisible : le caissier apprend la
+  // place de ses boutons, il ne la relit pas.
+  const produitsAffiches = useMemo(() => {
+    if (favoris.length === 0) return produits
+    const rang = (p) => (favoris.includes(p.id) ? 0 : 1)
+    return [...produits].sort((a, b) => rang(a) - rang(b))
+  }, [produits, favoris.join(',')])
+
+  async function basculerFavori(produitId) {
+    if (!pdvActif) return
+    const avant = pdvActif.favoris || []
+    const apres = avant.includes(produitId)
+      ? avant.filter((id) => id !== produitId)
+      : [...avant, produitId]
+    // On relit le point de vente depuis le serveur plutôt que de recopier l'état local : c'est lui
+    // qui fait foi, et une autre caisse du même comptoir peut avoir épinglé entre-temps.
+    try {
+      await api.majPointDeVente(pdvActif.id, { favoris: apres })
+      setPdvs(await membresPdv())
+    } catch (e) {
+      setErreur(e.message || 'L’épinglage n’a pas pu être enregistré.')
+    }
+  }
+
+  async function membresPdv() {
+    const r = await api.pointDeVentes()
+    return membres(r)
+  }
+
+  // `caisse.gerer` : le meme droit que celui qui protege le PATCH du point de vente cote serveur.
+  // Un caissier sans ce droit ne voit pas l'etoile, plutot que de la voir refuser au clic.
+  const peutEpingler = !!pdvActif && aLeDroit(droits, 'caisse.gerer')
 
   const moyenCourant = moyensDispo.find((m) => m.code === moyenSel) || null
   const reste = vente ? parseFloat(vente.reste || '0') : total
@@ -768,27 +818,48 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
               <div className="empty">Aucun produit disponible.</div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10 }}>
-                {produits.map((p) => {
+                {produitsAffiches.map((p) => {
                   const vendable = estVendable(p) && !enPaiement
                   const raison = raisonNonVendable(p)
+                  const epingle = favoris.includes(p.id)
                   return (
-                    <button
-                      key={p.id}
-                      className="prodtile"
-                      disabled={!vendable}
-                      onClick={() => choisirPuisAjouter(p)}
-                      title={
-                        enPaiement
-                          ? 'Encaissement en cours'
-                          : vendable
-                            ? 'Ajouter au panier'
-                            : expliqueNonVendable(p) || ''
-                      }
-                    >
-                      <span className="pn">{libelleProduit(p)}</span>
-                      {p.code && <span className="pc">{p.code}</span>}
-                      {raison ? <span className="pw">{raison}</span> : <span className="pp">{euros(prixIndicatif(p))}</span>}
-                    </button>
+                    /* L'étoile est un bouton, et la tuile aussi : l'un ne peut pas contenir
+                       l'autre. Ils sont donc frères dans une enveloppe positionnée — c'est ce qui
+                       permet d'épingler sans déclencher la vente. */
+                    <div className="prodcase" key={p.id}>
+                      <button
+                        className="prodtile"
+                        disabled={!vendable}
+                        onClick={() => choisirPuisAjouter(p)}
+                        title={
+                          enPaiement
+                            ? 'Encaissement en cours'
+                            : vendable
+                              ? 'Ajouter au panier'
+                              : expliqueNonVendable(p) || ''
+                        }
+                      >
+                        <span className="pn">{libelleProduit(p)}</span>
+                        {p.code && <span className="pc">{p.code}</span>}
+                        {raison ? <span className="pw">{raison}</span> : <span className="pp">{euros(prixIndicatif(p))}</span>}
+                      </button>
+                      {peutEpingler && (
+                        <button
+                          type="button"
+                          className={epingle ? 'prodfav on' : 'prodfav'}
+                          aria-pressed={epingle}
+                          aria-label={epingle ? 'Retirer des favoris' : 'Épingler en tête'}
+                          title={
+                            epingle
+                              ? 'Épinglé sur ce comptoir — cliquez pour retirer'
+                              : 'Épingler en tête. Les favoris appartiennent au comptoir : tout le monde les verra.'
+                          }
+                          onClick={() => basculerFavori(p.id)}
+                        >
+                          {epingle ? '★' : '☆'}
+                        </button>
+                      )}
+                    </div>
                   )
                 })}
               </div>

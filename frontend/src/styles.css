@@ -302,6 +302,15 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 
 /* ---- Caisse : produits ---- */
 .prodtile { text-align: left; cursor: pointer; border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 12px; font-family: inherit; color: var(--ink); transition: background .1s, border-color .1s; display: flex; flex-direction: column; gap: 2px; min-height: 74px; }
+/* L'enveloppe d'une tuile de produit : elle n'existe que pour porter l'etoile, qui ne peut pas
+ * vivre DANS la tuile -- un bouton ne s'imbrique pas dans un bouton. */
+.prodcase { position: relative; display: flex; }
+.prodcase > .prodtile { flex: 1; }
+/* Discrete au repos, franche une fois posee : une etoile pleine sur chaque tuile ferait un ecran
+ * constelle ou plus rien ne ressort, ce qui est exactement le contraire d'un favori. */
+.prodfav { position: absolute; top: 4px; right: 4px; border: 0; background: none; cursor: pointer; font-size: 15px; line-height: 1; padding: 3px; border-radius: 6px; color: var(--ink-faint); font-family: inherit; }
+.prodfav:hover { color: var(--warn); background: var(--panel-2); }
+.prodfav.on { color: var(--warn); }
 .prodtile:hover:not(:disabled) { background: var(--panel-2); border-color: var(--accent); }
 /* Option retenue : la bordure ET le fond changent. Une seule des deux ne se voit pas sur un
    ecran de caisse eclaire par une vitrine. */

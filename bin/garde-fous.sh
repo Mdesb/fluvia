@@ -321,6 +321,42 @@ if [ -f "$RACINE/frontend/scripts/verifier-profil-charge.mjs" ]; then
     fi
 fi
 
+# ── DEUX CONTROLES QUE LE PUSH EXIGEAIT ET QUE CE LANCEUR NE FAISAIT PAS TOURNER ────────────────
+#
+# `hooks/pre-receive` appelle sept scripts ; ce fichier n'en appelait que cinq. Manquaient
+# `verifier-formats.mjs` et `verifier-imports.mjs`. Consequence vecue le 29/08 : « 22 garde-fous
+# OK » en local sur un ecran de caisse qui appelait `aLeDroit()` sans l'importer -- le push aurait
+# ete refuse, et surtout l'ecran aurait plante au rendu.
+#
+# LE SENS DE L'ECART COMPTE. L'inverse -- un controle ici et pas dans le hook -- se voit tout de
+# suite : le push passe et on s'etonne. Celui-ci ne se voit JAMAIS en local ; il transforme un
+# lanceur vert en fausse assurance, ce qui est pire que pas de lanceur du tout.
+#
+# `verifier-imports` merite particulierement d'etre ici : il attrape ce que le build ne peut pas
+# voir. Vite ne fait pas d'analyse de portee sur le JSX, un identifiant inconnu n'existe qu'au
+# rendu. Le decouvrir au push, c'est le decouvrir apres avoir cru le travail fini.
+if [ -f "$RACINE/frontend/scripts/verifier-imports.mjs" ]; then
+    if command -v node >/dev/null 2>&1; then
+        executer "Imports manquants (n°10)" sh -c "cd '$RACINE/frontend' && node scripts/verifier-imports.mjs"
+    else
+        echo "─────────────────────────────────────────────────────────────"
+        echo "▶ Imports manquants"
+        echo "─────────────────────────────────────────────────────────────"
+        echo "· IGNORÉ — « node » indisponible ici. Le contrôle n'a PAS tourné."
+    fi
+fi
+
+if [ -f "$RACINE/frontend/scripts/verifier-formats.mjs" ]; then
+    if command -v node >/dev/null 2>&1; then
+        executer "Formats d'écriture (n°11)" sh -c "cd '$RACINE/frontend' && node scripts/verifier-formats.mjs"
+    else
+        echo "─────────────────────────────────────────────────────────────"
+        echo "▶ Formats d'écriture"
+        echo "─────────────────────────────────────────────────────────────"
+        echo "· IGNORÉ — « node » indisponible ici. Le contrôle n'a PAS tourné."
+    fi
+fi
+
 if [ -f "$RACINE/frontend/scripts/verifier-classes.mjs" ]; then
     if command -v node >/dev/null 2>&1; then
         executer "Classes CSS déclarées (n°16)" sh -c "cd '$RACINE/frontend' && node scripts/verifier-classes.mjs"
