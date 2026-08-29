@@ -298,6 +298,16 @@ while read -r ancien nouveau ref; do
         lancer garde-fou-filtres-declares.php
     fi
 
+    # Le prefixe `/editor/` ne protege rien : aucune regle `access_control` ne vise `^/api/editor`,
+    # la garde est portee par chaque operation via un provider qui appelle `assertEditor()`. Or il se
+    # LIT comme une barriere -- `/editor/plans` est publique (le catalogue d'un prospect) quand
+    # `/editor/catalog/plans` est reservee a l'editeur. Ce qu'on empeche n'est pas un defaut present,
+    # c'est que la prochaine route herite de l'apparence de surete sans la surete.
+    if [ -f "$ARBRE/bin/garde-fou-routes-editeur.php" ]; then
+        echo "── Routes éditeur"
+        lancer garde-fou-routes-editeur.php
+    fi
+
     # Une entite ne doit pas laisser ecrire son propre etablissement (D41). Ecrit par claude-C, qui a
     # au passage corrige mon compte : 49 entites concernees et non 35. Vingt-deux d'entre elles ne
     # declarent AUCUN `denormalizationContext` — c'est l'absence de declaration qui expose, et une
