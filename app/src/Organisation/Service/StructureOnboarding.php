@@ -9,6 +9,7 @@ use App\Fonctionnalite\Enum\Metier;
 use App\Fonctionnalite\Service\Fonctionnalites;
 use App\Legal\Entity\LegalIdentity;
 use App\Compta\Entity\ProfilExploitant;
+use App\Compta\Service\AccountingChartSeeder;
 use App\Compta\Entity\TauxTva;
 use App\Compta\Enum\ReferentielComptable;
 use App\Compta\Enum\TypeExploitant;
@@ -93,6 +94,7 @@ final readonly class StructureOnboarding
     public function __construct(
         private EntityManagerInterface $entityManager,
         private Fonctionnalites $presets,
+        private readonly AccountingChartSeeder $chartSeeder,
     ) {
     }
 
@@ -261,6 +263,18 @@ final readonly class StructureOnboarding
                 ->setLibelle(TauxTva::LIBELLE_HORS_CHAMP)
                 ->setActif(true)
         );
+
+        // ⚠ LE PROFIL ET LES TAUX NE SUFFISENT PAS : SANS PLAN DE COMPTES NI JOURNAUX, LA
+        // GÉNÉRATION D'ÉCRITURES NE DÉMARRE PAS.
+        //
+        // Les régimes résolvent leurs comptes par préfixe (511, 411, 4457, 487, 512, 706) et leurs
+        // journaux par code (VTE, ENC, REG, PCA, EXT), et lèvent une 422 quand ils ne trouvent rien.
+        // Sur un établissement réellement créé, aucun de ces objets n'existait — ils n'étaient posés
+        // que par les jeux d'essai, et rien dans l'application ne permettait d'en saisir.
+        //
+        // C'est de la nomenclature, pas un choix de gestion : même raison que pour les taux légaux
+        // ci-dessus, et même arbitrage.
+        $this->chartSeeder->poser($profil);
     }
 
     private function identiteLegale(array $donnees, string $raisonSociale, Etablissement $etablissement): LegalIdentity
