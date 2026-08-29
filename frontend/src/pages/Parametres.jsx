@@ -1217,7 +1217,20 @@ function ComptesDroits({ etabActif, etablissements, droits = [] }) {
         onInvite={async (payload) => {
           // Création du compte (invitation) puis, si un rôle + établissement sont choisis,
           // affectation du rôle sur ce périmètre.
-          const cree = await api.creerUtilisateur({ email: payload.email, nom: payload.nom })
+          // LE SERVEUR ACCEPTE LES DEUX CHEMINS, ET L'ECRAN N'EN OFFRAIT QU'UN.
+          //
+          // `UtilisateurProcessor` : si `motDePasseClair` est fourni, il le hache, efface la
+          // valeur en clair et active le compte immediatement — aucun jeton d'invitation n'est
+          // genere. Sinon il cree un jeton et appelle `InvitationMailer`.
+          //
+          // La modale n'exposait pas ce champ : le seul chemin restant passait donc par un
+          // courriel, et `MAILER_DSN` vaut `null://null`. Aucun utilisateur nouveau ne pouvait se
+          // connecter — ni caissier, ni comptable. Le logiciel ne savait inscrire personne.
+          const cree = await api.creerUtilisateur({
+            email: payload.email,
+            nom: payload.nom,
+            ...(payload.motDePasse ? { motDePasseClair: payload.motDePasse } : {}),
+          })
           if (payload.roleId && payload.etabId) {
             await api.creerAffectation({
               utilisateur: cree['@id'] || `/api/utilisateurs/${cree.id}`,
@@ -1226,7 +1239,12 @@ function ComptesDroits({ etabActif, etablissements, droits = [] }) {
             })
           }
           setModalInvit(false)
-          setMsg(`Invitation envoyée à ${payload.email}.`)
+          // ⚠ ON NE REDIT PAS LE MOT DE PASSE ICI. Il a ete saisi une fois, il est hache cote
+          // serveur, et le reafficher dans un bandeau le laisserait sur l'ecran d'un poste
+          // partage — souvent une caisse en libre-service.
+          setMsg(payload.motDePasse
+            ? `Compte créé pour ${payload.email}. Communiquez-lui son mot de passe de vive voix.`
+            : `Compte créé pour ${payload.email} — invitation NON envoyée, aucun envoi de courriel n’est branché.`)
           await charger()
         }}
       />
@@ -1485,9 +1503,16 @@ function ModalInvitation({ open, roles, etablissements, etabActif, onClose, onIn
   const [etabId, setEtabId] = useState('')
   const [erreur, setErreur] = useState(null)
   const [envoi, setEnvoi] = useState(false)
+  // 'motdepasse' : le compte est actif tout de suite. 'invitation' : le serveur emet un jeton et
+  // tente un courriel. Le defaut est le premier, parce que c'est le seul qui aboutisse aujourd'hui.
+  const [voie, setVoie] = useState('motdepasse')
+  const [motDePasse, setMotDePasse] = useState('')
 
   useEffect(() => {
-    if (open) { setEmail(''); setNom(''); setRoleId(''); setEtabId(etabActif || ''); setErreur(null) }
+    if (open) {
+      setEmail(''); setNom(''); setRoleId(''); setEtabId(etabActif || '')
+      setErreur(null); setVoie('motdepasse'); setMotDePasse('')
+    }
   }, [open, etabActif])
 
   async function soumettre(e) {
@@ -1495,7 +1520,13 @@ function ModalInvitation({ open, roles, etablissements, etabActif, onClose, onIn
     setErreur(null)
     setEnvoi(true)
     try {
-      await onInvite({ email: email.trim(), nom: nom.trim(), roleId, etabId })
+      await onInvite({
+        email: email.trim(),
+        nom: nom.trim(),
+        roleId,
+        etabId,
+        motDePasse: voie === 'motdepasse' ? motDePasse : '',
+      })
     } catch (err) {
       setErreur(err.message || "Échec de l'invitation.")
     } finally {
@@ -1504,7 +1535,7 @@ function ModalInvitation({ open, roles, etablissements, etabActif, onClose, onIn
   }
 
   return (
-    <Modal open={open} onClose={onClose} titre="Inviter un utilisateur">
+    <Modal open={open} onClose={onClose} titre="Donner accès à quelqu’un">
       <form onSubmit={soumettre}>
         {erreur && <div className="banner banner-error" style={{ marginBottom: 12 }}>{erreur}</div>}
         <div className="field">
@@ -1528,11 +1559,54 @@ function ModalInvitation({ open, roles, etablissements, etabActif, onClose, onIn
             <option value="">— Sélectionner —</option>
             {(etablissements || []).map((e) => <option key={e.id} value={e.id}>{e.nom}</option>)}
           </select>
-          <span className="hint">Le rôle n'est affecté que si un établissement est choisi. Sans mot de passe, le compte reçoit une invitation par e-mail.</span>
+          <span className="hint">Le rôle n'est affecté que si un établissement est choisi.</span>
         </div>
+
+        <div className="field">
+          <label htmlFor="inv-voie">Comment cette personne se connectera</label>
+          <select id="inv-voie" className="select" value={voie} onChange={(e) => setVoie(e.target.value)}>
+            <option value="motdepasse">Je pose un mot de passe maintenant</option>
+            <option value="invitation">Le compte reçoit une invitation par courriel</option>
+          </select>
+        </div>
+
+        {voie === 'motdepasse' ? (
+          <div className="field">
+            <label htmlFor="inv-mdp">Mot de passe initial</label>
+            <input
+              id="inv-mdp"
+              className="input"
+              type="password"
+              value={motDePasse}
+              autoComplete="new-password"
+              minLength={8}
+              onChange={(e) => setMotDePasse(e.target.value)}
+              required
+            />
+            {/* ⚠ ON NE PROMET PAS UN CHANGEMENT A LA PREMIERE CONNEXION : IL N'EXISTE PAS.
+                Cherche dans tout le serveur — aucun indicateur du genre `doitChangerMotDePasse`.
+                Ecrire « la personne devra le changer » serait la promesse creuse qu'on retire
+                partout ailleurs. On dit donc ce qui est vrai : ce mot de passe est connu de deux
+                personnes, et il le restera tant que l'interesse ne le change pas lui-meme. */}
+            <span className="hint">
+              Le compte est actif immédiatement. <b>Ce mot de passe sera connu de vous deux</b> —
+              rien n’oblige aujourd’hui la personne à le changer à sa première connexion :
+              demandez-lui de le faire.
+            </span>
+          </div>
+        ) : (
+          /* Meme geste que les boutons SMS de la caisse : on garde l'option, et on dit son etat. */
+          <div className="banner banner-warn">
+            <b>Aucun envoi de courriel n’est branché aujourd’hui.</b> Le compte sera créé et un jeton
+            d’invitation émis, mais <b>le message ne partira pas</b> : la personne ne pourra pas se
+            connecter. Tant qu’un prestataire d’envoi n’est pas raccordé, posez un mot de passe.
+          </div>
+        )}
         <div className="r" style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <button type="button" className="btn ghost" onClick={onClose}>Annuler</button>
-          <button type="submit" className="btn" disabled={envoi}>{envoi ? 'Envoi…' : 'Inviter'}</button>
+          <button type="submit" className="btn" disabled={envoi}>
+            {envoi ? 'Création…' : voie === 'motdepasse' ? 'Créer le compte' : 'Créer et inviter'}
+          </button>
         </div>
       </form>
     </Modal>
