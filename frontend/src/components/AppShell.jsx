@@ -31,6 +31,20 @@ import InstallerSurLeTelephone from './InstallerSurLeTelephone.jsx'
 // Ne figurent pas ici les services transverses sans usage direct (OCR, Audit) : ils sont consommés
 // par d'autres modules et n'ont pas vocation à un écran propre. Une entrée pour eux serait une
 // promesse qu'on n'a pas l'intention de tenir.
+// LES ONGLETS QUE L'APPLICATION CONNAIT, DERIVES DU MENU ET NON RECOPIES.
+//
+// `App.jsx` en a besoin pour distinguer une adresse valide d'une adresse inventee. Recopier la
+// liste la-bas aurait cree deux listes a maintenir — le defaut qu'on repare toute la semaine.
+// Mesure du 29/08 : les 34 identifiants du menu et les 34 aiguillages de `App.jsx` etaient
+// EXACTEMENT les memes, ce qui rend cette derivation sure.
+//
+// ⚠ Un ecran aiguille sans entree de menu serait ici tenu pour inconnu. C'est volontaire : tout
+// ecran a besoin d'un chemin, et un ecran sans entree de menu est deja un defaut. Si le cas
+// devenait legitime, il s'ajouterait ICI, une fois, et pas dans une seconde liste.
+export function ongletsConnus() {
+  return new Set(NAV.flatMap((section) => section.items.map((item) => item.id)))
+}
+
 const NAV = [
   {
     section: 'Exploitation',
