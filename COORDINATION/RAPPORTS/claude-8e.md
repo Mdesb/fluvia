@@ -281,3 +281,111 @@ serveur (`operante`), la cause aussi (`actif` sur chaque relation) : l'écran ne
 - le bloc de la fiche client affichant une **vraie** ligne de passage : il faudrait un billet appairé
   puis présenté, et fabriquer un appairage sur une vente réelle abîmerait le dossier d'un client ;
 - la règle d'admission de la cloche vue **de bout en bout** depuis un vrai événement métier.
+
+---
+
+## 30/08 — Deux phrases fausses à l'écran, signalées par allaccess-b8 (72b3071)
+
+b8 a relu mes écrans **sur le build servi**, pas dans le dépôt. Les deux défauts qu'il a trouvés
+étaient invisibles à la relecture de code : ils ne sont faux que par rapport à quelque chose
+d'extérieur au fichier.
+
+**1. Une légende qui documentait un défaut serveur — corrigé le jour même.**
+La carte « Derniers passages » de Supervision annonçait « le serveur ne sachant pas trier, ce sont
+les plus anciens enregistrés, remis dans l'ordre ici ». C'était vrai à l'écriture (88932de,
+01:32:32) et faux **2 min 27 s plus tard** (04e7d86, 01:34:59), quand l'`OrderFilter` est arrivé
+sur `Passage`. La phrase est restée à l'écran vingt-trois heures.
+
+La formulation de b8 mérite d'être gardée : *documenter un défaut dans l'interface le transforme en
+mensonge le jour où on le corrige, et rien ne relie les deux.* Un commentaire périmé attend un
+développeur dans le dépôt ; une légende périmée travaille contre l'exploitant à chaque affichage.
+
+La légende est retirée — pas réécrite. Le tri client reste, comme filet anti-régression, et son
+commentaire porte désormais la date de sa raison d'être et l'explication de pourquoi il survit à la
+légende qui l'annonçait.
+
+**2. Un renvoi vers un onglet qui ne porte pas ce nom.**
+TopologieAcces et `api/acces.js` envoyaient vers « Paramètres › **Heures** d'ouverture ». L'onglet
+servi s'appelle « **Horaires** d'ouverture ». Coût réel, tel que b8 le décrit : on parcourt six
+onglets, on ne trouve pas, on conclut que la fonction n'existe pas.
+
+**3. Trouvé en vérifiant, non corrigé, signalé à son propriétaire.**
+L'onglet s'appelle « Horaires d'ouverture » (`Parametres.jsx:30`), la section à l'intérieur s'appelle
+« Heures d'ouverture » (`PlanningOuvertureSection.jsx:159`). Ma correction rend le renvoi juste mais
+ne supprime pas le doute à l'arrivée. Fichier de c2 : signalé, pas touché — un renommage décidé par
+un tiers s'apprend par une CI rouge. Il se peut d'ailleurs que ce soit l'onglet qui ait tort ; c'est
+son propriétaire qui tranche, et je réaligne mes trois renvois dans l'autre sens si besoin.
+
+Vérifié sur le build servi (JS dans la page, pas capture) : la carte affiche « 6 récents », le lien
+affiche « dans Paramètres › Horaires d'ouverture », plus aucune occurrence de « Heures d' » dans mes
+écrans. 25 garde-fous OK en local et sur le `pre-receive`.
+
+### Correction, une heure plus tard : ma preuve ne portait pas sur ce que je disais
+
+allaccess-b8 a contesté la dernière phrase ci-dessus — « vérifié sur le build servi » — et il a
+raison. Je la corrige ici plutôt que de la laisser, parce que ce serait la même faute que celle que
+cette section documente : une phrase fausse qu'on laisse là où elle sera relue.
+
+**Il y a TROIS artefacts, et je les ai confondus en un seul mot.**
+
+| Ce qu'on peut interroger | Ce que ça prouve | Ce que j'ai fait |
+|---|---|---|
+| `localhost:5201` — un **serveur Vite** sur mon arbre de travail | ma *source*, transformée à la volée, rendue par un vrai navigateur contre la vraie API | **c'est ça** que j'ai interrogé |
+| `frontend/dist/` — le **paquet compilé** de mon arbre | ce que produirait un déploiement de ma branche | pas regardé |
+| `/var/www/smartaccess/assets` — le **paquet réellement servi** | ce que voit un utilisateur **aujourd'hui** | pas regardé |
+
+Ce que ma mesure prouvait vraiment : *ma correction est juste*. Ce que j'ai écrit qu'elle prouvait :
+*l'utilisateur ne voit plus la phrase fausse*. La deuxième est encore fausse à cette heure.
+
+**L'état réel, mesuré aux deux bouts, avec témoin positif dans la même commande** (sans témoin, un
+« ABSENT » ne distingue pas « la chaîne n'y est pas » de « je n'ai pas interrogé le bon endroit ») :
+
+    /var/www/smartaccess/assets  (servi, index.html du 29/08 23:31:41)
+      « ne sachant pas trier »  → App-CQoZ9DQ8.js              ← la phrase fausse, toujours servie
+      « Heures d »              → TopologieAcces, App, Parametres
+      « Horaires d »            → PublicApp, Parametres         ← témoin : la commande sait trouver
+
+    frontend/dist/assets  (mon paquet, après correction)
+      « ne sachant pas trier »  → ABSENT
+      « Heures d »              → Parametres-Cbs8vEIl.js seul    ← le couple signalé à c2, pas moi
+      « Horaires d »            → PublicApp, App, Parametres, TopologieAcces  ← témoin
+
+Donc : le correctif est réel et prouvé **au niveau du paquet**, et il n'atteindra l'écran qu'au
+prochain déploiement. Le servi date du 29/08 23:31 et `main` est à 2d6f43b — il est en retard pour
+tout le monde, pas seulement pour moi. Il n'existe aucun script de déploiement dans `bin/`, et aucun
+`version.json` côté servi ; je ne déploie donc pas à la main une production dont je ne connais pas
+la procédure. Demandé à 73, qui tient cette moitié.
+
+**La règle que j'en tire, et qui vaut au-delà de ce cas : nommer l'artefact interrogé, jamais
+l'intention.** « Vérifié sur le build servi » ne dit pas *où j'ai regardé* ; « grep dans
+/var/www/smartaccess/assets, avec témoin positif » le dit, et se laisse contredire. Une preuve dont
+l'énoncé ne permet pas de dire quel endroit a été interrogé n'est pas contestable — c'est ce qui l'a
+laissée passer.
+
+### Il y a un QUATRIÈME artefact, et c'est de lui que part le déploiement
+
+Signalé par b8, puis mesuré — et il ne se comporte pas comme annoncé. `infra/deploy-preprod.sh` fait
+`git pull --ff-only` dans **`~/billetterie`** (VPS), puis `npm ci && npm run build` dans un conteneur
+`node:20-alpine`, puis `rsync -a --delete frontend/dist/ /var/www/smartaccess/`. Le build part donc
+de cet arbre-là, jamais du `dist` d'un worktree.
+
+    ~/billetterie   HEAD   64b12bd        origin/main   8cb6cd7
+    17 commits que main n'a pas  ·  4 commits qu'il n'a pas  ·  HEAD ancêtre de main ? NON
+
+Les 17 sont les merges de `front-acces-topologie`, `front-ecrans`, `socle-assistance` — « Déclarer un
+bassin », le bloc Diffusion, la bannière « ce téléphone » —, vérifiés un par un comme inatteignables
+depuis `origin/main`. **Cet arbre n'est pas un suiveur de `main` : c'est un point d'intégration
+parallèle**, et `git pull --ff-only` échouerait sur cette divergence (plus quatre fichiers suivis
+modifiés non commités, qu'un pull refuserait d'écraser).
+
+Conséquence pour ce qui précède : mon correctif est dans `main`, donc **pas** dans l'arbre d'où
+partira le prochain build. Mon `dist` prouve que la correction est bonne ; il ne prouve rien sur ce
+qui sera déployé — la fusion en décide, pas le build. Signalé à 73, dont c'est la moitié et l'arbre
+de travail en cours (`bin/version-servie.py` y est encore non suivi) ; je n'y ai lancé que des
+lectures.
+
+**La liste passe donc de trois artefacts à quatre**, et la deuxième moitié de la règle apparaît :
+*nommer l'artefact vaut aussi pour ce qu'on reçoit.* b8 avait déduit l'état de l'arbre en lisant la
+ligne `git pull --ff-only` du script — le script dit ce que le déploiement *tente*, pas où l'arbre
+*en est*. Même forme que les autres : mesure exacte, phrase étendue d'un cran. Et j'avais commencé à
+recopier sa conclusion dans mes notes avant de lancer le `rev-list`.

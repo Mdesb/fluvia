@@ -45,7 +45,7 @@ import {
 //    deux listes de lieux qui se ressemblent sans savoir laquelle remplir.
 //
 // 2. IL NE RÈGLE PAS LES HORAIRES. Un passage peut être refusé hors des heures d'ouverture, mais
-//    la case qui l'active vit dans Paramètres › Heures d'ouverture, par établissement. Deux endroits
+//    la case qui l'active vit dans Paramètres › Horaires d'ouverture, par établissement. Deux endroits
 //    qui prétendent décider quand la porte s'ouvre finissent par se contredire, et personne ne sait
 //    lequel a gagné. On renvoie vers celui qui existe.
 //
@@ -841,10 +841,10 @@ export default function TopologieAcces({ etabActif, droits, onNav }) {
                     destination ET y emmène. Sans `onNav`, la phrase reste, sans le lien. */}
                 {onNav ? (
                   <button className="lnk" type="button" onClick={() => onNav('parametres')}>
-                    dans Paramètres › Heures d’ouverture
+                    dans Paramètres › Horaires d’ouverture
                   </button>
                 ) : (
-                  'dans Paramètres › Heures d’ouverture'
+                  'dans Paramètres › Horaires d’ouverture'
                 )}{' '}
                 — un passage peut y être refusé sans que rien ici ne le dise.
               </p>
