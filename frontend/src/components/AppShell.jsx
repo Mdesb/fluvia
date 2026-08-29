@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import RechercheGlobale from './RechercheGlobale.jsx'
 import { aLeDroit, aUnDesDroits } from '../api/droits.js'
+import { profondeurHistorique } from '../api/url.js'
 import InstallerSurLeTelephone from './InstallerSurLeTelephone.jsx'
 
 // `cap` = capacité requise (capacitesActives de /me) ; `perm` = permission requise (droits de /me) ;
@@ -176,6 +177,27 @@ const NAV = [
   },
 ]
 
+// La profondeur change sans que rien ne se remonte : on s'abonne aux deux événements qui la font
+// bouger, comme le fait déjà `useEtatUrl`.
+function useProfondeur() {
+  const [profondeur, setProfondeur] = useState(profondeurHistorique)
+  useEffect(() => {
+    const relire = () => setProfondeur(profondeurHistorique())
+    // Trois sources, parce qu'aucune ne couvre les autres : `popstate` pour les boutons du
+    // navigateur, `hashchange` pour `allerA`, et notre propre événement pour `pushState`, qui
+    // n'en émet aucun.
+    window.addEventListener('hashchange', relire)
+    window.addEventListener('popstate', relire)
+    window.addEventListener('fluvia:navigation', relire)
+    return () => {
+      window.removeEventListener('hashchange', relire)
+      window.removeEventListener('popstate', relire)
+      window.removeEventListener('fluvia:navigation', relire)
+    }
+  }, [])
+  return profondeur
+}
+
 function initiales(me) {
   const src = me?.nom || me?.email || 'Utilisateur'
   const parts = src.replace(/@.*/, '').split(/[\s.]+/).filter(Boolean)
@@ -264,6 +286,7 @@ export default function AppShell({
 
   const [theme, setTheme] = useState(() => document.documentElement.getAttribute('data-theme') || '')
   const [navOpen, setNavOpen] = useState(false)
+  const profondeur = useProfondeur()
 
   useEffect(() => {
     const stored = localStorage.getItem('fluvia-theme')
@@ -371,6 +394,25 @@ export default function AppShell({
       <div className="main">
         <div className="topbar">
           <button className="burger" aria-label="Menu" onClick={() => setNavOpen((v) => !v)}>☰</button>
+          {/* POURQUOI UN BOUTON « PRÉCÉDENT » ALORS QUE CELUI DU NAVIGATEUR MARCHE MAINTENANT.
+              Parce qu'il n'y en a pas toujours un. L'application s'installe sur un téléphone ou une
+              tablette de caisse (voir `InstallerSurLeTelephone`) : en mode autonome, la barre du
+              navigateur DISPARAÎT, et avec elle le geste que tout le monde connaît. Sur ces postes,
+              ce bouton est le seul retour possible.
+              Il ne s'affiche que s'il y a où revenir DANS l'application : la profondeur est portée
+              par l'entrée d'historique elle-même, pas par un compteur qui se désynchronise. Un
+              bouton de retour qui sort de l'application serait exactement le défaut qu'on répare. */}
+          {profondeur > 0 && (
+            <button
+              className="btn ghost sm"
+              type="button"
+              onClick={() => window.history.back()}
+              aria-label="Revenir à l’écran précédent"
+              title="Revenir à l’écran précédent"
+            >
+              ← Retour
+            </button>
+          )}
           {/* Le contexte d'établissement reste, en compact : le libellé « Établissement » disparaît,
               le sélecteur se suffit à lui-même et le nom est déjà rappelé dans la colonne. */}
           <div className="topbar-tenant">

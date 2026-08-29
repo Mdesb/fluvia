@@ -24,6 +24,21 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 // à rien, puisqu'au rechargement on serait revenu sur la caisse avec des filtres pointant un écran
 // qu'on ne regarde pas. L'onglet est donc dans l'URL lui aussi, et c'est ce qui rend le reste utile.
 
+// COMBIEN DE PAS EN ARRIÈRE RESTENT DANS L'APPLICATION — PORTÉ PAR L'ENTRÉE, PAS PAR UN COMPTEUR.
+//
+// Le bouton « Précédent » de la barre du haut ne doit s'afficher que s'il y a où revenir. Un
+// compteur en mémoire s'en approcherait, mais il se désynchronise à la première subtilité — un
+// « Suivant », un rechargement, une entrée posée par un autre écran — et un bouton de retour qui
+// SORT de l'application est pire que pas de bouton du tout : c'est précisément ce qu'on répare.
+//
+// L'historique, lui, sait déjà. Chaque entrée qu'on empile porte sa profondeur ; le navigateur la
+// restitue telle quelle en reculant, en avançant et après un rechargement. On lit, on ne compte pas.
+export function profondeurHistorique() {
+  if (typeof window === 'undefined') return 0
+  const n = window.history.state?.fluviaProfondeur
+  return typeof n === 'number' && n > 0 ? n : 0
+}
+
 /** Lit l'onglet et les paramètres portés par le hash courant. */
 export function lireHash() {
   const brut = (typeof window === 'undefined' ? '' : window.location.hash || '').replace(/^#/, '')
@@ -54,8 +69,16 @@ export function ecrireHash(onglet, params = {}, { pousser = false } = {}) {
   const q = usp.toString()
   const cible = `#${onglet}${q ? `?${q}` : ''}`
   if (window.location.hash === cible) return
-  if (pousser) window.history.pushState(null, '', cible)
-  else window.history.replaceState(null, '', cible)
+  // Empiler AJOUTE un pas ; remplacer garde celui de l'entrée qu'on réécrit — sinon changer un
+  // filtre effacerait la profondeur et ferait disparaître le bouton « Précédent » de la barre.
+  const profondeur = profondeurHistorique()
+  if (pousser) window.history.pushState({ fluviaProfondeur: profondeur + 1 }, '', cible)
+  else window.history.replaceState({ fluviaProfondeur: profondeur }, '', cible)
+  // ⚠ `pushState` ET `replaceState` N'ÉMETTENT RIEN — c'est écrit plus haut pour `allerA`, et ça
+  // vaut aussi pour ce qui OBSERVE la navigation. La barre du haut n'apprenait donc jamais qu'un
+  // pas venait d'être empilé : son bouton « Précédent » restait caché après trois changements
+  // d'écran, alors que la profondeur montait bien. Constaté à l'écran, pas déduit.
+  window.dispatchEvent(new Event('fluvia:navigation'))
 }
 
 /**
@@ -84,7 +107,12 @@ export function allerA(onglet, params = {}) {
     usp.append(cle, String(valeur))
   }
   const q = usp.toString()
+  // La profondeur se lit AVANT l'affectation : celle-ci empile une entrée neuve dont l'état est
+  // nul, et la relire ensuite rendrait zéro — le bouton « Précédent » disparaîtrait au moment
+  // précis où il devient utile.
+  const profondeur = profondeurHistorique()
   window.location.hash = onglet + (q ? '?' + q : '')
+  window.history.replaceState({ fluviaProfondeur: profondeur + 1 }, '')
 }
 
 /**
