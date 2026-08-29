@@ -167,7 +167,20 @@ final class ValidationPassageHandler
         //
         // Le sens sûr de l'erreur est d'ordinaire celui qui restreint. Pas ici : la restriction
         // n'existe que si quelqu'un l'a demandée.
-        if (!$droit->ouvre($espace)) {
+        // ⚠ LA DECISION PORTE SUR TOUS LES ESPACES DESSERVIS, PAS SUR LE SEUL PRINCIPAL.
+        //
+        // Un tourniquet place entre deux activites dessert les deux : le titre passe s'il ouvre
+        // l'une d'elles. Ce qui suit -- jauge, anti-passback, espace inscrit sur le passage --
+        // continue de porter sur `$espace`, le principal : le porteur a franchi CETTE porte.
+        $ouvertureAccordee = false;
+        foreach ($controleur?->espacesOuverts() ?? [$espace] as $desservi) {
+            if ($droit->ouvre($desservi)) {
+                $ouvertureAccordee = true;
+                break;
+            }
+        }
+
+        if (!$ouvertureAccordee) {
             return $this->refuser(
                 $espace, $controleur, $equipement, $support, $droit, $sens, $evt,
                 CodeMotifRefus::ZoneNonAutorisee,
