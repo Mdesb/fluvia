@@ -26,7 +26,7 @@ use Symfony\Component\Uid\Uuid;
 #[ORM\Entity]
 #[ORM\Table(name: 'crm_demande_rgpd')]
 #[ApiResource(
-    shortName: 'DemandeRGPD',
+    shortName: 'DemandeRgpd',
     operations: [
         new GetCollection(security: "is_granted('PERM', 'crm.rgpd_gerer')"),
         new Get(security: "is_granted('PERM', 'crm.rgpd_gerer')"),
