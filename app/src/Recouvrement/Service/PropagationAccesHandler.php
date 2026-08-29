@@ -29,7 +29,24 @@ final class PropagationAccesHandler
     ) {
     }
 
-    /** Restaure l'accès (dossier régularisé). */
+    /**
+     * Ouvre la porte, sans rien vérifier.
+     *
+     * ⚠ @internal — DANS LE DOMAINE DU RECOUVREMENT, APPELEZ `reevaluer()` À LA PLACE.
+     *
+     * Cette méthode est une PRIMITIVE : elle exécute, elle ne décide pas. Or la porte se ferme par
+     * REDEVABLE tandis que le drapeau `accesBloque` se pose par DOSSIER — un même client peut avoir
+     * plusieurs impayés, et l'appeler après en avoir réglé un rouvrirait l'accès alors qu'un autre
+     * reste dû. C'est le défaut corrigé le 30/08 : le tableau de bord comptait un « accès bloqué »
+     * dont la porte était ouverte, et un client qui devait encore de l'argent entrait parce qu'il
+     * avait réglé autre chose.
+     *
+     * `reevaluer()` porte cette décision. Elle est juste en dessous, et c'est elle qu'on veut
+     * presque toujours — cet avertissement est ici parce que `activer()` est le nom le plus évident
+     * des deux, donc celui qu'on trouve en premier sans lire l'autre.
+     *
+     * @see self::reevaluer()
+     */
     public function activer(string $typeRedevable, string $referenceRedevable): void
     {
         $this->appliquer($typeRedevable, $referenceRedevable, true);
