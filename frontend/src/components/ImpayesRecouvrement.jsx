@@ -92,10 +92,30 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
   const incidentsParId = useMemo(() => new Map(incidents.map((i) => [i.id, i])), [incidents])
 
   const ouverts = incidents.filter((i) => i.statut !== 'resolu')
-  // Le seul cas ou l'on peut affirmer qu'il n'y a rien a mesurer : aucun incident charge, et les
-  // trois compteurs du tableau de bord a zero. Voir la tuile du taux pour la limite exacte.
-  const aucunIncidentConnu = incidents.length === 0
-    && !bord?.nbEnRepresentation && !bord?.nbEnRecouvrement && !bord?.nbAccesBloques
+  // LE DENOMINATEUR EXACT, DEPUIS QUE LE SERVEUR EXPOSE `nbResolus` (main, bb1ff2e).
+  //
+  // Hier soir je ne pouvais trancher que le cas << rien nulle part >>, faute de connaitre le total :
+  // je l'avais ecrit dans le code plutot que de maquiller l'affichage. Le champ manquant a ete pose
+  // en reponse, et le taux se lit maintenant exactement -- avec son assiette, ce qui vaut mieux que
+  // le seul pourcentage : << 0 % sur 3 incidents >> et << 0 % sur 500 >> ne se lisent pas pareil.
+  //
+  // ⚠ ON NE L'APPELLE PAS `totalIncidents` : ce nom designe deja, plus haut, le total de PAGINATION
+  // de la liste (combien le serveur en a, pour signaler une liste tronquee). Deux totaux differents
+  // sous le meme nom sur le meme ecran, c'est la collision de vocabulaire qui fait lire un chiffre
+  // pour un autre -- la meme que << casse >> a la patinoire ou << caisse >> pour l'appairage.
+  //
+  // ⚠ ET LE CHAMP PEUT NE PAS ETRE SERVI. Mesure contre la preprod le 29/08 : `nbResolus` revient
+  // ABSENT sur les quatre etablissements -- le champ est sur `main`, pas encore deploye. Un
+  // `|| 0` aveugle ferait donc une assiette FAUSSE (trop basse) des qu'un incident existe, et
+  // l'ecran l'annoncerait avec aplomb. On distingue les deux : denominateur connu, ou pas.
+  const assietteConnue = bord != null && bord.nbResolus !== undefined && bord.nbResolus !== null
+  const assietteDuTaux = assietteConnue
+    ? (bord.nbEnRepresentation || 0) + (bord.nbEnRecouvrement || 0) + bord.nbResolus
+    : null
+  // Sans le champ, on retombe sur le seul cas qu'on sait trancher : rien nulle part.
+  const rienAMesurer = assietteConnue
+    ? assietteDuTaux === 0
+    : incidents.length === 0 && !bord?.nbEnRepresentation && !bord?.nbEnRecouvrement && !bord?.nbAccesBloques
   const resolus = incidents.filter((i) => i.statut === 'resolu')
 
   return (
@@ -134,25 +154,26 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
             <div className="st-lbl">En recouvrement</div>
           </div>
           {/* « 0 % » SUR ZÉRO INCIDENT SE LIT COMME UNE CONTRE-PERFORMANCE.
-              `TableauBordRecouvrementProvider` calcule ce taux sur
-              `nbEnRepresentation + nbEnRecouvrement + nbResolus`, et rend `0.0` quand ce total est
-              nul — la valeur mathématiquement sûre quand il n'y a rien à diviser. Affichée telle
-              quelle, elle annonce « nos clients ne régularisent jamais seuls » à un établissement
-              qui n'a simplement jamais eu d'impayé.
-              Même famille que la jauge du musée qui criait la saturation sur une salle vide : une
-              absence de mesure présentée comme un résultat.
-              ⚠ LA DISTINCTION N'EST PAS EXACTE, et il faut le dire : `nbResolus` n'est pas exposé,
-              donc l'écran ne connaît pas le dénominateur. On ne peut trancher avec certitude que le
-              cas « rien nulle part » — qui est justement celui qui trompe. Demande faite au serveur
-              d'exposer le total, ce qui permettrait d'écrire « 0 % sur 47 incidents ». */}
+              Le serveur rend `0.0` quand le dénominateur est nul — la valeur mathématiquement sûre
+              quand il n'y a rien à diviser. Affichée telle quelle, elle annonçait « nos clients ne
+              régularisent jamais seuls » à un établissement qui n'a jamais eu d'impayé. Même famille
+              que la jauge du musée qui criait la saturation sur une salle vide : une absence de
+              mesure présentée comme un résultat.
+              Le dénominateur est désormais reconstituable — `nbEnRepresentation + nbEnRecouvrement
+              + nbResolus` — donc on ne devine plus : ou bien il y a des incidents et on dit le taux
+              AVEC son assiette, ou bien il n'y en a pas et on dit qu'il n'y a rien à mesurer. */}
           <div className="stat-tile">
             <div className="st-val num">
-              {aucunIncidentConnu
+              {rienAMesurer
                 ? '—'
                 : `${Math.round((bord.tauxResolutionSelfService || 0) * 100)} %`}
             </div>
             <div className="st-lbl">
-              {aucunIncidentConnu ? 'Rien à mesurer : aucun impayé' : 'Réglés par le client seul'}
+              {rienAMesurer
+                ? 'Rien à mesurer : aucun impayé'
+                : assietteConnue
+                  ? `Réglés par le client seul, sur ${assietteDuTaux} incident${assietteDuTaux > 1 ? 's' : ''}`
+                  : 'Réglés par le client seul'}
             </div>
           </div>
         </div>
