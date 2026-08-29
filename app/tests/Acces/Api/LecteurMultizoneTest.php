@@ -98,6 +98,74 @@ final class LecteurMultizoneTest extends AccesApiTestCase
     }
 
     /**
+     * LA COLLECTION EST-ELLE ECRIVABLE PAR L'API — ET RETIRABLE ?
+     *
+     * ⚠ LES TROIS CAS CI-DESSUS APPELLENT `addServedSpace()` EN PHP. Ils prouvent que le domaine
+     * calcule juste ; ils ne traversent jamais le sérialiseur. Or c'est là qu'était le défaut :
+     *
+     *     PATCH /api/controleurs/{id}  { servedSpaces: [...] }  ->  200, servedSpaces: []
+     *
+     * La propriété s'appelait `servedSpaces` et les accesseurs `addServedSpace`. L'inflecteur
+     * anglais de Symfony ne singularise QUE LE DERNIER MOT : de `servedSpaces` il tire
+     * `espacesDesservi`, donc il cherchait `addEspacesDesservi`. Les noms ne se rencontraient jamais,
+     * la collection n'était pas modifiable, et **rien ne levait**.
+     *
+     * ⚠ PLUS VICIEUX QUE LES DEUX AUTRES « 200 MENTEURS ». Le premier manquait un `remove` : la
+     * relecture le voit. Ici les deux accesseurs existaient, et la relecture disait « ils sont là » —
+     * ce qui était vrai. Ce qui manquait n'était pas une méthode, c'était la rencontre entre deux
+     * noms, et elle se produit dans une bibliothèque qu'on ne lit pas.
+     *
+     * Trouvé par allaccess-8e en interrogeant l'inflecteur, pas en relisant le code.
+     *
+     * ⚠ LE RETRAIT COMPTE AUTANT QUE L'AJOUT, et il compte séparément : une collection sans `remove`
+     * accepte l'ajout et ignore la suppression, toujours en rendant 200.
+     */
+    public function testLesZonesDesserviesSEcriventEtSeRetirentParLApi(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $autre = $this->limiterLeDroitAUneAutreZone();
+        $iri = '/api/espace_acces/'.$autre->getId();
+
+        // ⚠ LES EN-TETES SE FUSIONNENT, ILS NE SE REMPLACENT PAS. `$entete + [...]` est une union :
+        // sur la cle `headers`, la gauche gagne et le `Content-Type` serait jete -- la requete
+        // partirait en `ld+json` et API Platform rendrait 415. Et remplacer `headers` tout court
+        // perdrait l'en-tete d'etablissement, donc le cloisonnement fermerait la requete : le test
+        // echouerait pour une raison qui n'a rien a voir avec ce qu'il mesure.
+        $patch = static fn (array $espaces): array => [
+            'auth_bearer' => $entete['auth_bearer'],
+            'headers' => $entete['headers'] + ['Content-Type' => 'application/merge-patch+json'],
+            'json' => ['servedSpaces' => $espaces],
+        ];
+
+        // ── L'AJOUT ─────────────────────────────────────────────────────────────────────────────
+        $client->request('PATCH', '/api/controleurs/'.$this->idControleur(), $patch([$iri]));
+        self::assertResponseIsSuccessful();
+
+        $apresAjout = $client->getResponse()->toArray()['servedSpaces'] ?? [];
+        self::assertCount(
+            1,
+            $apresAjout,
+            "Le serveur rend 200 : c'est ce qu'il ENREGISTRE qui décide, pas ce qu'il répond.",
+        );
+
+        // Relu depuis le serveur, et non depuis la réponse de l'écriture : une réponse peut refléter
+        // l'objet en mémoire sans que rien ne soit parti en base.
+        $relu = $client->request('GET', '/api/controleurs/'.$this->idControleur(), $entete)->toArray();
+        self::assertCount(1, $relu['servedSpaces'] ?? [], 'La zone desservie doit survivre à la relecture.');
+
+        // ── LE RETRAIT ──────────────────────────────────────────────────────────────────────────
+        $client->request('PATCH', '/api/controleurs/'.$this->idControleur(), $patch([]));
+        self::assertResponseIsSuccessful();
+
+        $apresRetrait = $client->request('GET', '/api/controleurs/'.$this->idControleur(), $entete)->toArray();
+        self::assertSame(
+            [],
+            $apresRetrait['servedSpaces'] ?? null,
+            'Sans `remove`, la collection accepte l\'ajout et ignore la suppression — en rendant 200.',
+        );
+    }
+
+    /**
      * Crée un espace distinct de celui de l'équipement et y limite le droit des fixtures.
      *
      * ⚠ `espaceSocle` est obligatoire en base : on reprend celui de l'espace existant plutôt que
@@ -131,7 +199,7 @@ final class LecteurMultizoneTest extends AccesApiTestCase
         $controleur = $em->getRepository(Controleur::class)->find($this->idControleur());
         self::assertInstanceOf(Controleur::class, $controleur);
 
-        $controleur->addEspaceDesservi($espace);
+        $controleur->addServedSpace($espace);
         $em->flush();
 
         return $controleur;
