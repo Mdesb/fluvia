@@ -337,4 +337,28 @@ final class MuseeFixtures extends Fixture implements DependentFixtureInterface
 
         return $utilisateur;
     }
+
+    /**
+     * Rend le role existant ou le cree. `Role.nom` porte une unicite **globale** : deux fixtures qui
+     * creent le meme nom, ou un rechargement sur une base qui les a deja, echouent sur « Duplicate
+     * entry » et laissent le chargement a mi-course. C'est ce qui a vide les droits des trente-quatre
+     * roles de la preproduction le 24/08.
+     *
+     * Le harnais de test ne le voyait pas : il recree le schema a chaque classe et charge les fixtures
+     * selectivement, donc elles partent toujours d'une base vide. Le seul endroit ou le defaut se voit
+     * — un chargement complet — n'etait jamais visite.
+     */
+    private function roleNomme(ObjectManager $manager, string $nom): Role
+    {
+        $existant = $manager->getRepository(Role::class)->findOneBy(['nom' => $nom]);
+
+        if ($existant instanceof Role) {
+            return $existant;
+        }
+
+        $role = (new Role())->setNom($nom);
+        $manager->persist($role);
+
+        return $role;
+    }
 }

@@ -40,6 +40,12 @@ use Symfony\Component\Uid\Uuid;
         new Post(
             uriTemplate: '/patinoire/affutages',
             read: false,
+            // D41 : le processeur lit le corps brut et ignore l'objet deserialise ; sans
+            // `input: false`, API Platform denormalise quand meme le corps dans l'entite, et
+            // cette entite n'ayant aucun `denormalizationContext`, toute propriete munie d'un
+            // mutateur devient ecrivable — l'etablissement compris. Meme forme que
+            // `/padel/niveaux/declarer` et `/sport/abonnements/souscrire`, qui la portent deja.
+            input: false,
             security: "is_granted('PERM', 'patinoire.gerer_affutage')",
             processor: DemarrerAffutageProcessor::class,
         ),
@@ -52,6 +58,12 @@ use Symfony\Component\Uid\Uuid;
         ),
     ],
     normalizationContext: ['groups' => ['affutage:read']],
+    // Fermeture **declaree** de la denormalisation (D41). Aucune propriete ne porte
+    // `affutage:write` : rien n'est ecrivable depuis le corps. Les operations de creation portent
+    // deja `input: false`, qui suffit techniquement — mais le garde-fou n12 ne sait pas le
+    // lire, et compterait cette entite comme exposee indefiniment. Une fermeture qu'aucun
+    // outil ne voit finit par etre "corrigee" une seconde fois par quelqu'un d'autre.
+    denormalizationContext: ['groups' => ['affutage:write']],
 )]
 #[ApiFilter(SearchFilter::class, properties: ['type' => 'exact', 'statut' => 'exact', 'parcPatins' => 'exact', 'etablissement' => 'exact'])]
 class Affutage
