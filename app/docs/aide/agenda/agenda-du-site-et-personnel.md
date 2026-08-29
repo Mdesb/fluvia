@@ -62,7 +62,7 @@ appartiennent à un autre module :
 
 - les **créneaux de réservation** et les **plannings du personnel** viennent de leurs écrans
   respectifs ;
-- les **plages d'ouverture** viennent de *Paramètres → Heures d'ouverture* ;
+- les **plages d'ouverture** viennent de *Paramètres → Horaires d'ouverture* ;
 - les **vacances scolaires**, quand une zone est configurée, teintent le fond du calendrier. Elles
   ne ferment rien : elles expliquent une fréquentation.
 

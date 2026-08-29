@@ -156,7 +156,11 @@ export default function PlanningOuvertureSection({ droits = [], etabActif = null
 
       <div className="card">
         <div className="card-h">
-          <h3>Heures d’ouverture</h3>
+          {/* « Horaires » et non « Heures » : c'est le libellé de l'ONGLET, celui que
+              l'utilisateur apprend — et celui vers lequel les écrans de contrôle d'accès
+              renvoient quand un passage est refusé pour cause d'horaires. Un renvoi juste
+              vers un onglet qui se renomme en cours de route fait chercher. */}
+          <h3>Horaires d’ouverture</h3>
           {peutGerer && (
             <div className="r">
               <button className="btn sm" type="button" onClick={() => setAjoutPlage(true)}>+ Ajouter une tranche</button>

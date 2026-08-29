@@ -1,5 +1,5 @@
 ---
-titre: "Heures d'ouverture, jours particuliers et contrôle d'accès"
+titre: "Horaires d'ouverture, jours particuliers et contrôle d'accès"
 categorie: ouverture-planning
 publicCible: agent
 portee: global
@@ -10,7 +10,7 @@ motsCles: [ouverture, horaires, fermeture, jours feries, vacances scolaires, con
 ---
 ## Où cela se règle
 
-*Paramètres → Heures d'ouverture*. Le réglage est **propre à l'établissement actif** : deux sites
+*Paramètres → Horaires d'ouverture*. Le réglage est **propre à l'établissement actif** : deux sites
 n'ouvrent pas aux mêmes heures, et changer d'établissement change ce que montre l'écran.
 
 ## ⚠ La première case est la seule qui peut refuser quelqu'un à la porte
