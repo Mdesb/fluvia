@@ -810,6 +810,20 @@ export const api = {
   comptageNonNominatif: (corps) =>
     request('/api/acces/passages/non-nominatif', { method: 'POST', body: corps }),
 
+  // « CE PRODUIT OUVRE TELLE ET TELLE ZONE » (ProductAccessZone).
+  //
+  // Une ligne = une zone ouverte par un produit. AUCUNE LIGNE = LE PRODUIT OUVRE TOUT : c'est la
+  // règle de compatibilité du serveur, et c'est l'inverse de ce qu'une liste vide laisse croire.
+  //
+  // `productRef` est un identifiant NU et non une relation : le module Accès ne dépend pas de
+  // l'Offre (D2). Il n'y a ni GET unitaire ni PATCH — une déclaration n'a rien à montrer seule, et
+  // la modifier c'est en retirer une et en poser une autre. L'établissement n'est jamais dans le
+  // corps : le serveur l'estampille depuis l'en-tête actif (D41).
+  zonesProduit: (productRef) => request('/api/product_access_zones', { query: { productRef } }),
+  declarerZoneProduit: (corps) =>
+    request('/api/product_access_zones', { method: 'POST', body: corps, ld: true }),
+  retirerZoneProduit: (id) => request(`/api/product_access_zones/${id}`, { method: 'DELETE' }),
+
   // État réseau des contrôleurs (bascule en ligne / hors ligne, US-L3-07).
   etatSynchroAcces: () => request('/api/acces/synchro/etat'),
 
