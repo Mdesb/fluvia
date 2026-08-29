@@ -6,6 +6,7 @@ namespace App\Recouvrement\Service;
 
 use App\Acces\Entity\DroitAcces;
 use App\Acces\Enum\StatutProjectionDroit;
+use App\Recouvrement\Entity\IncidentImpaye;
 use App\Recouvrement\Event\AccesRedevableChangeEvent;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
@@ -32,6 +33,42 @@ final class PropagationAccesHandler
     public function activer(string $typeRedevable, string $referenceRedevable): void
     {
         $this->appliquer($typeRedevable, $referenceRedevable, true);
+    }
+
+    /**
+     * ⚠ RÉÉVALUE AU LIEU D'OUVRIR : la porte se ferme par REDEVABLE, le drapeau se pose par DOSSIER.
+     *
+     * `activer()` remet le droit à « valide » sans rien regarder — c'est une primitive, et elle doit
+     * le rester. Mais un même client peut porter plusieurs impayés : rien n'empêche deux incidents
+     * simultanés, un abonnement mensuel rejeté deux mois de suite suffit. Régler celui de mars
+     * appelait `activer()` et rouvrait la porte alors qu'avril restait dû.
+     *
+     * Deux conséquences, et la seconde est la pire : le tableau de bord comptait un « accès bloqué »
+     * dont la porte était ouverte, et un client qui devait encore de l'argent retrouvait son accès
+     * parce qu'il avait réglé AUTRE CHOSE.
+     *
+     * ⚠ L'ASYMÉTRIE EST VOULUE. Un seul impayé bloquant suffit à fermer ; il faut qu'ils soient TOUS
+     * levés pour rouvrir. Fermer sur un doute est réparable d'un clic ; ouvrir à tort ne se rattrape
+     * pas — la personne est déjà entrée.
+     */
+    public function reevaluer(string $typeRedevable, string $referenceRedevable): void
+    {
+        $bloquantsRestants = (int) $this->em->createQueryBuilder()
+            ->select('COUNT(i.id)')
+            ->from(IncidentImpaye::class, 'i')
+            ->andWhere('i.typeRedevable = :type')
+            ->andWhere('i.referenceRedevable = :reference')
+            ->andWhere('i.accesBloque = true')
+            ->setParameter('type', $typeRedevable)
+            ->setParameter('reference', $referenceRedevable)
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        if ($bloquantsRestants > 0) {
+            return;
+        }
+
+        $this->activer($typeRedevable, $referenceRedevable);
     }
 
     /** Coupe l'accès (impayé non régularisé, selon la politique). */
