@@ -29,7 +29,31 @@ declare(strict_types=1);
  * existe — ce qui est la condition pour que le filtre s'applique du tout.
  */
 
-require dirname(__DIR__).'/app/vendor/autoload.php';
+// ── AUCUNE DEPENDANCE INSTALLEE : ON S'ABSTIENT, ON NE TUE PAS ────────────────────────────────
+//
+// Ce controle lit les attributs `#[ApiFilter]` par reflexion : il lui faut l'autochargeur, donc un
+// `composer install`. Or deux situations legitimes n'en ont pas :
+//
+//   — un worktree ou l'on ne travaille que le front (le mien l'a ete toute la nuit) ;
+//   — et surtout LE CROCHET `pre-receive`, qui extrait l'arbre pousse dans un repertoire temporaire
+//     ou aucune dependance n'est installee. Constate le 29/08 :
+//
+//         Fatal error: Failed opening required '/tmp/tmp.n9slrsF1rb/app/vendor/autoload.php'
+//         ✗ Push de front-acces-topologie REFUSE
+//
+//     Le controle ne refusait pas un defaut : il refusait TOUS les push, les siens compris.
+//
+// Un garde-fou qui ne peut pas s'executer doit le DIRE et rendre la main. Se taire ferait croire
+// qu'il a verifie ; mourir bloque tout le monde. La troisieme voie est la seule juste.
+$autochargeur = dirname(__DIR__).'/app/vendor/autoload.php';
+if (!is_file($autochargeur)) {
+    echo "Filtres declares : IGNORE — dependances PHP absentes (app/vendor). ",
+        "Ce controle exige un `composer install` ; il ne dit donc RIEN ici, ni bien ni mal.", PHP_EOL;
+
+    exit(0);
+}
+
+require $autochargeur;
 
 use ApiPlatform\Metadata\ApiFilter;
 use Doctrine\ORM\Mapping\ClassMetadata;
