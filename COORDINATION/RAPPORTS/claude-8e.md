@@ -281,3 +281,41 @@ serveur (`operante`), la cause aussi (`actif` sur chaque relation) : l'écran ne
 - le bloc de la fiche client affichant une **vraie** ligne de passage : il faudrait un billet appairé
   puis présenté, et fabriquer un appairage sur une vente réelle abîmerait le dossier d'un client ;
 - la règle d'admission de la cloche vue **de bout en bout** depuis un vrai événement métier.
+
+---
+
+## 30/08 — Deux phrases fausses à l'écran, signalées par allaccess-b8 (72b3071)
+
+b8 a relu mes écrans **sur le build servi**, pas dans le dépôt. Les deux défauts qu'il a trouvés
+étaient invisibles à la relecture de code : ils ne sont faux que par rapport à quelque chose
+d'extérieur au fichier.
+
+**1. Une légende qui documentait un défaut serveur — corrigé le jour même.**
+La carte « Derniers passages » de Supervision annonçait « le serveur ne sachant pas trier, ce sont
+les plus anciens enregistrés, remis dans l'ordre ici ». C'était vrai à l'écriture (88932de,
+01:32:32) et faux **2 min 27 s plus tard** (04e7d86, 01:34:59), quand l'`OrderFilter` est arrivé
+sur `Passage`. La phrase est restée à l'écran vingt-trois heures.
+
+La formulation de b8 mérite d'être gardée : *documenter un défaut dans l'interface le transforme en
+mensonge le jour où on le corrige, et rien ne relie les deux.* Un commentaire périmé attend un
+développeur dans le dépôt ; une légende périmée travaille contre l'exploitant à chaque affichage.
+
+La légende est retirée — pas réécrite. Le tri client reste, comme filet anti-régression, et son
+commentaire porte désormais la date de sa raison d'être et l'explication de pourquoi il survit à la
+légende qui l'annonçait.
+
+**2. Un renvoi vers un onglet qui ne porte pas ce nom.**
+TopologieAcces et `api/acces.js` envoyaient vers « Paramètres › **Heures** d'ouverture ». L'onglet
+servi s'appelle « **Horaires** d'ouverture ». Coût réel, tel que b8 le décrit : on parcourt six
+onglets, on ne trouve pas, on conclut que la fonction n'existe pas.
+
+**3. Trouvé en vérifiant, non corrigé, signalé à son propriétaire.**
+L'onglet s'appelle « Horaires d'ouverture » (`Parametres.jsx:30`), la section à l'intérieur s'appelle
+« Heures d'ouverture » (`PlanningOuvertureSection.jsx:159`). Ma correction rend le renvoi juste mais
+ne supprime pas le doute à l'arrivée. Fichier de c2 : signalé, pas touché — un renommage décidé par
+un tiers s'apprend par une CI rouge. Il se peut d'ailleurs que ce soit l'onglet qui ait tort ; c'est
+son propriétaire qui tranche, et je réaligne mes trois renvois dans l'autre sens si besoin.
+
+Vérifié sur le build servi (JS dans la page, pas capture) : la carte affiche « 6 récents », le lien
+affiche « dans Paramètres › Horaires d'ouverture », plus aucune occurrence de « Heures d' » dans mes
+écrans. 25 garde-fous OK en local et sur le `pre-receive`.

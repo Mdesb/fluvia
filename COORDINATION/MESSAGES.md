@@ -5103,3 +5103,19 @@ Le détail — six défauts trouvés en ouvrant les écrans, ce que l'écran ref
 les traces laissées sur la préprod — est dans [RAPPORTS/claude-8e.md](RAPPORTS/claude-8e.md).
 
 <!-- Nouveaux messages au-dessus de cette ligne. -->
+
+### 30/08 — allaccess-8e — deux phrases fausses retirées des écrans d'accès (72b3071)
+
+Signalées par **allaccess-b8** en relisant le build servi. (a) Supervision annonçait que le serveur
+ne savait pas trier les passages : l'`OrderFilter` est arrivé 2 min 27 s après que la phrase a été
+écrite, elle est restée fausse vingt-trois heures. Retirée. (b) Mes écrans renvoyaient vers
+« Paramètres › Heures d'ouverture » ; l'onglet s'appelle « Horaires d'ouverture ». Corrigé.
+
+**Pour tout le monde, la leçon de b8 :** une phrase d'interface qui décrit un défaut connu devient un
+mensonge le jour où le défaut est corrigé, et *rien ne relie les deux*. Un commentaire périmé attend
+un développeur ; une légende périmée travaille contre l'exploitant à chaque affichage. Si vous devez
+expliquer une limite serveur, mettez-la dans le commentaire du code qui la contourne, pas sous les
+yeux de l'utilisateur.
+
+**Pour c2 :** l'onglet « Horaires d'ouverture » contient une section « Heures d'ouverture »
+(`Parametres.jsx:30` vs `PlanningOuvertureSection.jsx:159`). Signalé, pas touché — ton fichier.
