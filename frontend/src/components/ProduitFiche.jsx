@@ -2,6 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { libelleProduit, prixIndicatif, euros, statutProduit } from '../api/produit.js'
 import Modal from './Modal.jsx'
+import Tabs from './Tabs.jsx'
+// Rendu Markdown en éléments React, jamais en HTML injecté. Écrit pour la boutique
+// publique ; réutilisé ici pour que la description s'affiche EXACTEMENT comme elle
+// s'affichera devant un client, et pour ne pas inventer un second format.
+import Markdown from '../public/components/Markdown.jsx'
 import { humaniser, mot } from '../api/vocabulaire.js'
 import ZonesAccesProduit from './ZonesAccesProduit.jsx'
 import TarifsProduit from './TarifsProduit.jsx'
@@ -74,6 +79,27 @@ function dureeNonExprimableEnJours(valeur) {
     && !/^P0Y0M0DT0H0M0S$/.test(valeur)
 }
 
+// La description est multilingue, comme le libellé : `{ fr: '…' }`, pas une chaîne. Un composant
+// qui lirait `p.description` directement afficherait « [object Object] ».
+function descriptionFr(p) {
+  const d = p?.description
+  if (!d) return ''
+  if (typeof d === 'string') return d
+  return d.fr || Object.values(d)[0] || ''
+}
+
+// Un produit associé arrive en IRI nu ou en objet réduit : on ne sait donc pas toujours son nom.
+// On le retrouve dans la liste du catalogue quand elle est là, et on affiche l'identifiant sinon —
+// jamais un blanc, qui se lirait comme « produit sans nom ».
+function nomProduitAssocie(assoc, catalogue) {
+  if (assoc && typeof assoc === 'object' && (assoc.libelle || assoc.nom)) {
+    return libelleProduit(assoc)
+  }
+  const id = idDeRef(assoc)
+  const connu = (catalogue || []).find((x) => String(x.id) === String(id))
+  return connu ? libelleProduit(connu) : (id || '—')
+}
+
 // Les trois axes de catégories (RG-M1-05), indépendants : un produit porte au plus une valeur
 // par axe. L'axe comptable est le seul qui ait un effet sur les écritures.
 const AXES = [['comptable', 'Axe comptable'], ['marketing', 'Axe marketing'], ['rayon', 'Rayon']]
@@ -93,11 +119,22 @@ export default function ProduitFiche({
   const [edition, setEdition] = useState(null)
   const [editionCompta, setEditionCompta] = useState(null)
   const [enregistrement, setEnregistrement] = useState(false)
+  // LA FICHE PORTE DEUX MÉTIERS, ET ILS NE SE LISENT PAS DANS LE MÊME ÉTAT D'ESPRIT.
+  //
+  // Demande de Maxime : « il doit y avoir une partie WYSIWYG et une autre config, ça peut faire
+  // l'objet d'onglets différents ». L'ordre d'avant était administratif — tarif, canaux, stock,
+  // tarifs, zones, options, diffusion, comptabilité, PHOTO en dernier, après le taux de TVA. Sur
+  // une fiche produit, l'image est la première chose qu'on regarde.
+  //
+  // L'onglet vit en état local et non dans l'URL : c'est une vue d'un même objet, pas une
+  // navigation. Le retour au catalogue et l'adresse de la fiche, eux, sont dans l'URL.
+  const [vueFiche, setVueFiche] = useState('vitrine')
   const [detail, setDetail] = useState(null)
   // Référentiels du bloc Diffusion. Chargés une fois par fiche, et leur absence n'empêche pas de
   // modifier le reste : `Promise.allSettled`, jamais `all`.
   const [etablissements, setEtablissements] = useState([])
   const [categories, setCategories] = useState([])
+  const [tousProduits, setTousProduits] = useState([])
   const [liaisons, setLiaisons] = useState([])
   const [valeurs, setValeurs] = useState({}) // groupeId -> valeurs
   // Le produit n'est pas commercialisable sur l'établissement actif : le guichet ne l'aurait pas.
@@ -108,9 +145,10 @@ export default function ProduitFiche({
   const produitId = produit?.id
 
   useEffect(() => {
-    Promise.allSettled([api.etablissements(), api.categories()]).then(([e, c]) => {
+    Promise.allSettled([api.etablissements(), api.categories(), api.produits()]).then(([e, c, pr]) => {
       setEtablissements(e.status === 'fulfilled' ? membres(e.value) : [])
       setCategories(c.status === 'fulfilled' ? membres(c.value) : [])
+      setTousProduits(pr.status === 'fulfilled' ? membres(pr.value) : [])
     })
   }, [])
 
@@ -194,6 +232,8 @@ export default function ProduitFiche({
       // comprises » — et l'écran qui énonce le problème ne porte pas le geste qui le résout.
       // Les trois champs sont pourtant en écriture côté serveur (`produit:write`), vérifié par un
       // aller-retour réel avant d'écrire ce formulaire.
+      description: descriptionFr(p),
+      produitsAssocies: (p.produitsAssocies || []).map(idDeRef).filter(Boolean),
       etablissements: (p.etablissements || []).map(idDeRef).filter(Boolean),
       categories: (p.categories || []).map(idDeRef).filter(Boolean),
       jours: joursDepuisIntervalle(p.dureeValidite),
@@ -212,6 +252,12 @@ export default function ProduitFiche({
         canaux: edition.canaux,
         couleurCaisse: edition.couleurCaisse || null,
         noteInterne: edition.noteInterne.trim() || null,
+        // Multilingue comme le libellé : on ne remplace que le français, sinon une traduction
+        // existante disparaîtrait sans que personne ne l'ait demandé.
+        description: edition.description.trim()
+          ? { ...(p.description && typeof p.description === 'object' ? p.description : {}), fr: edition.description.trim() }
+          : null,
+        produitsAssocies: edition.produitsAssocies.map((id) => `/api/produits/${id}`),
         etablissements: edition.etablissements.map((id) => `/api/etablissements/${id}`),
         categories: edition.categories.map((id) => `/api/categories/${id}`),
         // Le serveur rend la durée en forme développée (`P0Y0M1DT0H0M0S`) et accepte la forme
@@ -305,6 +351,65 @@ export default function ProduitFiche({
               onChange={(e) => setEdition((s) => ({ ...s, noteInterne: e.target.value }))}
             />
             <div className="hint">Visible de votre équipe seulement. Jamais affichée au client.</div>
+          </div>
+
+          <div className="fiche-sec" style={{ marginTop: 'var(--esp-bloc)' }}>Vitrine</div>
+
+          <div className="field">
+            <label htmlFor="pr-desc">Description</label>
+            <textarea
+              id="pr-desc"
+              className="input"
+              rows={6}
+              value={edition.description}
+              placeholder="Ce qu’on voit, ce qu’on fait, combien de temps ça dure."
+              onChange={(e) => setEdition((st) => ({ ...st, description: e.target.value }))}
+            />
+            {/* ⚠ MISE EN FORME LÉGÈRE, ET SURTOUT PAS DE HTML.
+                Le texte est saisi par l'exploitant, donc « de confiance » — sauf que la confiance
+                porte sur la PERSONNE, pas sur le CONTENU : un passage collé depuis un traitement
+                de texte ou une IA transporte du balisage que personne n'a voulu. Le rendu produit
+                des éléments React (`public/components/Markdown.jsx`) et n'interprète jamais de
+                HTML : l'injection devient structurellement impossible au lieu d'être improbable.
+                On ne l'assainit pas, on ne se pose pas la question. */}
+            <p className="hint">
+              Mise en forme légère&nbsp;: <code>**gras**</code>, <code>*italique*</code>, listes
+              avec un tiret, titres avec <code>#</code>. Le HTML n’est pas interprété — il
+              s’afficherait tel quel.
+            </p>
+            {edition.description.trim() && (
+              <div className="card" style={{ marginTop: 'var(--esp-normal)' }}>
+                <div className="card-b">
+                  <div className="sub" style={{ marginBottom: 'var(--esp-serre)' }}>Aperçu</div>
+                  <Markdown texte={edition.description} />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="field">
+            <label htmlFor="pr-assoc">Produits associés</label>
+            <div id="pr-assoc" style={{ display: 'grid', gap: 'var(--esp-serre)', maxHeight: 220, overflowY: 'auto' }}>
+              {tousProduits.filter((x) => String(x.id) !== String(produitId)).map((x) => (
+                <label key={x.id} style={{ display: 'flex', gap: 'var(--esp-normal)', alignItems: 'center' }}>
+                  <input
+                    type="checkbox"
+                    checked={edition.produitsAssocies.includes(x.id)}
+                    onChange={(ev) => setEdition((st) => ({
+                      ...st,
+                      produitsAssocies: ev.target.checked
+                        ? [...st.produitsAssocies, x.id]
+                        : st.produitsAssocies.filter((y) => y !== x.id),
+                    }))}
+                  />
+                  <span>{libelleProduit(x)}</span>
+                </label>
+              ))}
+            </div>
+            <p className="hint">
+              Ce qu’on propose avec&nbsp;: le cadenas avec l’entrée piscine, l’audioguide avec la
+              visite. Le produit lui-même ne figure pas dans la liste.
+            </p>
           </div>
 
           <div className="fiche-sec" style={{ marginTop: 'var(--esp-bloc)' }}>Diffusion</div>
@@ -468,6 +573,64 @@ export default function ProduitFiche({
         </div>
       </div>
 
+      <Tabs
+        onglets={[['vitrine', 'Vitrine'], ['config', 'Configuration']]}
+        actif={vueFiche}
+        onChange={setVueFiche}
+      />
+
+      {vueFiche === 'vitrine' && (
+        <>
+          {/* LA PHOTO REMONTE EN PREMIER. Elle était en dernier, après le taux de TVA et la règle
+              de comptabilisation — c'est-à-dire après tout ce qu'un client ne verra jamais. */}
+          <PhotosProduit produitId={p.id} peutModifier={peutModifier} />
+
+          <Section
+            titre="Description"
+            aide="Le texte que le visiteur lit avant d'acheter."
+          >
+            {descriptionFr(p) ? (
+              <Markdown texte={descriptionFr(p)} />
+            ) : (
+              <div className="empty">
+                Aucune description. C’est le texte qui donne envie&nbsp;: ce qu’on voit, ce qu’on
+                fait, combien de temps ça dure.
+              </div>
+            )}
+            {/* ⚠ ELLE N'EST AFFICHÉE NULLE PART AUJOURD'HUI, ET LE TAIRE SERAIT LE PIRE.
+                `Produit::$description` est en lecture et en écriture depuis le début, et la
+                boutique publique ne la lit pas — vérifié : le mot n'apparaît dans `src/public`
+                que dans l'extraction d'un message d'erreur. Quelqu'un qui écrirait une belle
+                description sans le savoir travaillerait pour personne. */}
+            <p className="hint">
+              <b>La boutique en ligne n’affiche pas encore ce texte.</b> Il est enregistré et
+              s’affichera dès que la fiche publique le reprendra — mais aujourd’hui, personne ne le
+              lit hors de cet écran.
+            </p>
+          </Section>
+
+          <Section
+            titre="Produits associés"
+            aide="Ce qu'on propose avec : le cadenas avec l'entrée piscine."
+          >
+            {(p.produitsAssocies || []).length === 0 ? (
+              <div className="empty">
+                Aucun produit associé. C’est ce qui permet de proposer le cadenas avec l’entrée, ou
+                l’audioguide avec la visite.
+              </div>
+            ) : (
+              <ul>
+                {(p.produitsAssocies || []).map((assoc) => (
+                  <li key={idDeRef(assoc)}>{nomProduitAssocie(assoc, tousProduits)}</li>
+                ))}
+              </ul>
+            )}
+          </Section>
+        </>
+      )}
+
+      {vueFiche === 'config' && (
+      <>
       <Section titre="Tarifs" aide="Le prix de ce produit, par type de tarif et par période.">
         <TarifsProduit
           produit={p}
@@ -555,12 +718,13 @@ export default function ProduitFiche({
         )}
       </Section>
 
-      <PhotosProduit produitId={p.id} peutModifier={peutModifier} />
 
       {p.noteInterne && (
         <Section titre="Note interne">
           <div className="hint">{p.noteInterne}</div>
         </Section>
+      )}
+      </>
       )}
 
       <ComptaProduitModal
