@@ -361,3 +361,31 @@ l'intention.** « Vérifié sur le build servi » ne dit pas *où j'ai regardé*
 /var/www/smartaccess/assets, avec témoin positif » le dit, et se laisse contredire. Une preuve dont
 l'énoncé ne permet pas de dire quel endroit a été interrogé n'est pas contestable — c'est ce qui l'a
 laissée passer.
+
+### Il y a un QUATRIÈME artefact, et c'est de lui que part le déploiement
+
+Signalé par b8, puis mesuré — et il ne se comporte pas comme annoncé. `infra/deploy-preprod.sh` fait
+`git pull --ff-only` dans **`~/billetterie`** (VPS), puis `npm ci && npm run build` dans un conteneur
+`node:20-alpine`, puis `rsync -a --delete frontend/dist/ /var/www/smartaccess/`. Le build part donc
+de cet arbre-là, jamais du `dist` d'un worktree.
+
+    ~/billetterie   HEAD   64b12bd        origin/main   8cb6cd7
+    17 commits que main n'a pas  ·  4 commits qu'il n'a pas  ·  HEAD ancêtre de main ? NON
+
+Les 17 sont les merges de `front-acces-topologie`, `front-ecrans`, `socle-assistance` — « Déclarer un
+bassin », le bloc Diffusion, la bannière « ce téléphone » —, vérifiés un par un comme inatteignables
+depuis `origin/main`. **Cet arbre n'est pas un suiveur de `main` : c'est un point d'intégration
+parallèle**, et `git pull --ff-only` échouerait sur cette divergence (plus quatre fichiers suivis
+modifiés non commités, qu'un pull refuserait d'écraser).
+
+Conséquence pour ce qui précède : mon correctif est dans `main`, donc **pas** dans l'arbre d'où
+partira le prochain build. Mon `dist` prouve que la correction est bonne ; il ne prouve rien sur ce
+qui sera déployé — la fusion en décide, pas le build. Signalé à 73, dont c'est la moitié et l'arbre
+de travail en cours (`bin/version-servie.py` y est encore non suivi) ; je n'y ai lancé que des
+lectures.
+
+**La liste passe donc de trois artefacts à quatre**, et la deuxième moitié de la règle apparaît :
+*nommer l'artefact vaut aussi pour ce qu'on reçoit.* b8 avait déduit l'état de l'arbre en lisant la
+ligne `git pull --ff-only` du script — le script dit ce que le déploiement *tente*, pas où l'arbre
+*en est*. Même forme que les autres : mesure exacte, phrase étendue d'un cran. Et j'avais commencé à
+recopier sa conclusion dans mes notes avant de lancer le `rev-list`.
