@@ -53,7 +53,23 @@ final class TicketProcessor implements ProcessorInterface
         // D44-bis — porté par la vente : une vente directe n'a pas de session d'où le déduire, et
         // lisait donc un seuil de 0 € qui la déclarait systématiquement au-dessus du seuil.
         $seuil = $this->calc->centimes($data->getPointDeVente()?->getSeuilImpression() ?? '0.00');
-        $auDessusSeuil = $this->calc->centimes($data->getTotal()) >= $seuil;
+        $totalCentimes = $this->calc->centimes($data->getTotal());
+
+        // ⚠ UNE VENTE ENTIEREMENT GRATUITE NE SORT PAS DE TICKET, ET CE N'EST PAS UNE QUESTION DE
+        // SEUIL.
+        //
+        // Le seuil par defaut vaut 0,00 : une vente a 0 € donnait `0 >= 0`, donc « au-dessus du
+        // seuil », donc impression. Une entree offerte, un badge de courtoisie, un lot de billets
+        // d'invitation faisaient sortir un ticket a zero que personne ne lit et que le caissier jette.
+        //
+        // « Vendus SEULS » est le mot important : un produit gratuit accompagne d'un produit payant
+        // donne un total non nul et le ticket sort normalement -- le client a paye quelque chose. Le
+        // critere est donc le TOTAL, jamais la presence d'une ligne a zero.
+        //
+        // La vente reste enregistree et comptabilisee : c'est le PAPIER qu'on ne sort pas, pas
+        // l'operation qu'on efface.
+        $venteGratuite = $totalCentimes === 0;
+        $auDessusSeuil = !$venteGratuite && $totalCentimes >= $seuil;
 
         $duplicata = false;
         if ($mode === 'imprimer' || $mode === 'duplicata') {
@@ -62,7 +78,9 @@ final class TicketProcessor implements ProcessorInterface
             $this->em->flush();
         }
 
-        $renvoiPropose = !$auDessusSeuil && $data->getClient() !== null;
+        // Le renvoi ne se propose pas davantage sur une vente gratuite : proposer d'envoyer par SMS
+        // un ticket a 0 € est le meme bruit, deplace sur un autre canal.
+        $renvoiPropose = !$auDessusSeuil && !$venteGratuite && $data->getClient() !== null;
         $renvoye = $mode === 'renvoyer' && $data->getClient() !== null;
 
         return new JsonResponse([
@@ -75,6 +93,10 @@ final class TicketProcessor implements ProcessorInterface
             'mode' => $mode,
             'imprime' => $data->isImprime(),
             'impressionAutomatique' => $auDessusSeuil,
+            // Dit POURQUOI l'impression n'est pas automatique : sans ce champ, l'écran ne peut pas
+            // distinguer « en dessous du seuil, propose le renvoi » de « gratuite, ne propose rien ».
+            // Deux situations, deux gestes, et un seul booléen ne les sépare pas.
+            'venteGratuite' => $venteGratuite,
             'duplicata' => $duplicata,
             'renvoiPropose' => $renvoiPropose,
             'renvoye' => $renvoye,
