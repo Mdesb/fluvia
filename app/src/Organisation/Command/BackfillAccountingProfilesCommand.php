@@ -7,6 +7,7 @@ namespace App\Organisation\Command;
 use App\Compta\Entity\ProfilExploitant;
 use App\Compta\Entity\TauxTva;
 use App\Compta\Service\AccountingChartSeeder;
+use App\Offre\Service\AccountingCategorySeeder;
 use App\Compta\Enum\ReferentielComptable;
 use App\Compta\Enum\TypeExploitant;
 use App\Organisation\Entity\Etablissement;
@@ -62,6 +63,7 @@ final class BackfillAccountingProfilesCommand extends Command
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly AccountingChartSeeder $chartSeeder,
+        private readonly AccountingCategorySeeder $categorySeeder,
     )
     {
         parent::__construct();
@@ -76,6 +78,16 @@ final class BackfillAccountingProfilesCommand extends Command
     {
         $io = new SymfonyStyle($input, $output);
         $ecrire = (bool) $input->getOption('ecrire');
+
+        // ── LES CATEGORIES COMPTABLES SONT GLOBALES : UNE FOIS, PAS PAR ETABLISSEMENT ────────
+        //
+        // Elles sont de portee socle (D51), donc partagees par tout le parc. Les poser dans la
+        // boucle ci-dessous les creerait une fois puis les retrouverait douze fois -- correct mais
+        // trompeur a la lecture du rapport, qui semblerait dire qu'il y avait douze choses a faire.
+        $categoriesManquantes = $this->categorySeeder->manquants();
+        if ($ecrire && $categoriesManquantes !== []) {
+            $this->categorySeeder->poser();
+        }
 
         $etablissements = $this->em->getRepository(Etablissement::class)->findAll();
 
@@ -154,6 +166,15 @@ final class BackfillAccountingProfilesCommand extends Command
                     ),
                 ];
             }
+        }
+
+        if ($categoriesManquantes !== []) {
+            $io->text(sprintf(
+                '%d catégorie(s) comptable(s) de socle %s : %s',
+                \count($categoriesManquantes),
+                $ecrire ? 'posée(s)' : 'à poser',
+                implode(', ', $categoriesManquantes),
+            ));
         }
 
         if ($ecrire) {

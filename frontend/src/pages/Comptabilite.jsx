@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import Liste, { euroCentimes, dateFr } from '../components/Liste.jsx'
 import Tabs from '../components/Tabs.jsx'
+import CorrespondancesComptables from '../components/CorrespondancesComptables.jsx'
 import { api } from '../api/client.js'
 import ClotureComptable from '../components/ClotureComptable.jsx'
 import ImpayesRecouvrement from '../components/ImpayesRecouvrement.jsx'
@@ -37,6 +38,7 @@ export default function Comptabilite({ etabActif, droits }) {
       <Tabs
         onglets={[
           ['cloture', 'Clôture'],
+          ['correspondances', 'Correspondances'],
           ['journaux', 'Journaux & écritures'],
           ['regie', 'Régie & versements'],
           ['sepa', 'SEPA'],
@@ -48,6 +50,13 @@ export default function Comptabilite({ etabActif, droits }) {
       />
 
       {sousOnglet === 'cloture' && <ClotureComptable etabActif={etabActif} droits={droits} />}
+
+      {/* Juste après la clôture, et avant les listes : c'est à la clôture qu'on découvre qu'une
+          catégorie n'était rattachée à rien, et c'est le seul onglet de ce module — avec elle —
+          qui porte un travail plutôt qu'une consultation. */}
+      {sousOnglet === 'correspondances' && (
+        <CorrespondancesComptables etabActif={etabActif} droits={droits} />
+      )}
 
       {sousOnglet === 'journaux' && (
         <div className="resa-grid">

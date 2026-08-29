@@ -10,6 +10,7 @@ use App\Fonctionnalite\Service\Fonctionnalites;
 use App\Legal\Entity\LegalIdentity;
 use App\Compta\Entity\ProfilExploitant;
 use App\Compta\Service\AccountingChartSeeder;
+use App\Offre\Service\AccountingCategorySeeder;
 use App\Compta\Entity\TauxTva;
 use App\Compta\Enum\ReferentielComptable;
 use App\Compta\Enum\TypeExploitant;
@@ -95,6 +96,7 @@ final readonly class StructureOnboarding
         private EntityManagerInterface $entityManager,
         private Fonctionnalites $presets,
         private readonly AccountingChartSeeder $chartSeeder,
+        private readonly AccountingCategorySeeder $categorySeeder,
     ) {
     }
 
@@ -275,6 +277,18 @@ final readonly class StructureOnboarding
         // C'est de la nomenclature, pas un choix de gestion : même raison que pour les taux légaux
         // ci-dessus, et même arbitrage.
         $this->chartSeeder->poser($profil);
+
+        // ── ET LES CATEGORIES COMPTABLES, POUR LA MEME RAISON ────────────────────────────────
+        //
+        // Une ligne libre de facture porte une categorie, et cette categorie decide du compte par
+        // `MappingComptable`. Sans categorie, l'ecran de correspondance serait vide et le resolveur
+        // se replierait EN SILENCE sur le compte par defaut -- une comptabilite qui ne distingue
+        // rien, et qui ne le dit pas.
+        //
+        // Portee socle : c'est de la nomenclature, partagee, et chacun peut toujours ajouter la
+        // sienne localement (D51). La CORRESPONDANCE, elle, reste un choix d'exploitant : elle
+        // depend de son plan de comptes et des habitudes de son comptable.
+        $this->categorySeeder->poser();
     }
 
     private function identiteLegale(array $donnees, string $raisonSociale, Etablissement $etablissement): LegalIdentity

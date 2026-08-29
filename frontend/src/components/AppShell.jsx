@@ -3,6 +3,7 @@ import { api, membres } from '../api/client.js'
 import RechercheGlobale from './RechercheGlobale.jsx'
 import { aLeDroit, aUnDesDroits } from '../api/droits.js'
 import { profondeurHistorique } from '../api/url.js'
+import Cloche from './Cloche.jsx'
 import InstallerSurLeTelephone from './InstallerSurLeTelephone.jsx'
 
 // `cap` = capacité requise (capacitesActives de /me) ; `perm` = permission requise (droits de /me) ;
@@ -432,6 +433,9 @@ export default function AppShell({
           <RechercheGlobale droits={droits} onNav={onNav} />
 
           <div className="topbar-right">
+            {/* En haut à droite, comme demandé — et à gauche du reste, parce que c'est ce qu'on
+                regarde en arrivant, avant l'état de la caisse et avant son propre nom. */}
+            <Cloche etabActif={etabActif} />
             {caisseOuverte !== null && (
               <button
                 type="button"

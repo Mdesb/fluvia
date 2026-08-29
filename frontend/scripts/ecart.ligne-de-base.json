@@ -29,16 +29,15 @@
         "Le script REFUSE de le relever. Un plafond qui remonte n est plus un cliquet, c est un",
         "compteur."
     ],
-    "plafond": 692,
+    "plafond": 688,
     "releve": {
         "exposees": 1145,
         "sansEcran": 0,
         "attendues": 1145,
-        "appelees": 459,
-        "atteignables": 453,
-        "inatteignables": 692,
+        "appelees": 465,
+        "atteignables": 457,
+        "inatteignables": 688,
         "orphelins": [
-            "comptesComptables  (back-office)",
             "etatSynchroAcces  (back-office)",
             "grilleTarifaires  (back-office)",
             "majFactureFournisseur  (back-office)",
@@ -46,14 +45,16 @@
             "pieceCommerciale  (back-office)",
             "planningOuverture  (back-office)"
         ],
+        "appelsSansServeur": [],
+        "marqueursPerimes": [],
         "declares": [],
         "marqueursSansRaison": [],
         "clientsNonDeclares": [],
         "parFront": [
             {
                 "nom": "back-office",
-                "appelees": 438,
-                "atteignables": 432
+                "appelees": 444,
+                "atteignables": 436
             },
             {
                 "nom": "boutique en ligne",
@@ -287,6 +288,10 @@
                 3
             ],
             [
+                "notifications",
+                3
+            ],
+            [
                 "regions",
                 3
             ],
@@ -296,6 +301,10 @@
             ],
             [
                 "taux",
+                3
+            ],
+            [
+                "mapping",
                 3
             ],
             [
