@@ -250,7 +250,7 @@ export default function Campagnes({ etabActif, droits = [] }) {
         {chargement ? (
           <div className="center" style={{ minHeight: 140 }}><div className="spinner" /></div>
         ) : segments.length === 0 ? (
-          <div className="sub" style={{ textAlign: 'center', padding: 26 }}>
+          <div className="sub" style={{ textAlign: 'center', padding: 'var(--esp-section)' }}>
             Aucun segment. Le premier qu’écrivent la plupart des exploitants&nbsp;: «&nbsp;sans visite
             depuis 90 jours&nbsp;».
           </div>
@@ -270,12 +270,11 @@ export default function Campagnes({ etabActif, droits = [] }) {
                     <td><span className="nm">{s.label}</span></td>
                     <td className="sub">{resumerCriteres(s.criteria)}</td>
                     <td>
-                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', gap: 'var(--esp-normal)', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                         <button
-                          className="btn sm"
+                          className="btn xs"
                           type="button"
                           disabled={busy}
-                          style={{ padding: '1px 8px', fontSize: 11.5 }}
                           onClick={() => ouvrirApercu(s)}
                         >
                           Combien de personnes ?
@@ -283,19 +282,17 @@ export default function Campagnes({ etabActif, droits = [] }) {
                         {peutGerer && (
                           <>
                             <button
-                              className="btn ghost sm"
+                              className="btn ghost xs"
                               type="button"
                               disabled={busy}
-                              style={{ padding: '1px 8px', fontSize: 11.5 }}
                               onClick={() => relire(s)}
                             >
                               Modifier
                             </button>
                             <button
-                              className="btn ghost sm"
+                              className="btn ghost xs"
                               type="button"
                               disabled={busy}
-                              style={{ padding: '1px 8px', fontSize: 11.5 }}
                               onClick={() => supprimer(s)}
                             >
                               Supprimer
@@ -379,7 +376,7 @@ function ApercuSegment({ apercu, onFermer }) {
       taille="md"
     >
       {apercu && (
-        <div style={{ display: 'grid', gap: 14 }}>
+        <div style={{ display: 'grid', gap: 'var(--esp-bloc)' }}>
           <div className="fiche-stats">
             <div>
               <div className="st-lib">Personnes touchées</div>
@@ -394,7 +391,7 @@ function ApercuSegment({ apercu, onFermer }) {
             </div>
           ) : (
             <div>
-              <div className="st-lib" style={{ marginBottom: 6 }}>Quelques-unes d’entre elles</div>
+              <div className="st-lib" style={{ marginBottom: 'var(--esp-serre)' }}>Quelques-unes d’entre elles</div>
               <div style={{ overflowX: 'auto' }}>
                 <table className="tbl">
                   <thead>
@@ -410,7 +407,7 @@ function ApercuSegment({ apercu, onFermer }) {
                   </tbody>
                 </table>
               </div>
-              <div className="sub" style={{ marginTop: 6 }}>
+              <div className="sub" style={{ marginTop: 'var(--esp-serre)' }}>
                 Un échantillon où vous ne reconnaissez personne veut dire que le critère est faux.
               </div>
             </div>
@@ -482,8 +479,8 @@ function EditionSegment({ segment, onFermer, onEnregistre, onErreur }) {
       titre={existant ? 'Modifier le segment' : 'Nouveau segment'}
       taille="md"
     >
-      <div style={{ display: 'grid', gap: 12 }}>
-        <label style={{ display: 'grid', gap: 4 }}>
+      <div style={{ display: 'grid', gap: 'var(--esp-large)' }}>
+        <label style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
           <span className="sub">Nom du segment</span>
           <input
             className="input"
@@ -494,9 +491,9 @@ function EditionSegment({ segment, onFermer, onEnregistre, onErreur }) {
           />
         </label>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--esp-large)' }}>
           {CRITERES.map((critere) => (
-            <label key={critere.cle} style={{ display: 'grid', gap: 4 }}>
+            <label key={critere.cle} style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
               <span className="sub">{critere.label}</span>
               {critere.type === 'choix' ? (
                 <select
@@ -527,7 +524,7 @@ function EditionSegment({ segment, onFermer, onEnregistre, onErreur }) {
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+        <div style={{ display: 'flex', gap: 'var(--esp-normal)', justifyContent: 'flex-end' }}>
           <button className="btn ghost" type="button" onClick={onFermer} disabled={busy}>Annuler</button>
           <button
             className="btn primary"
@@ -572,7 +569,7 @@ function ListeCampagnes({ campagnes, segments, peutGerer, busy, onRediger, onEnv
       <div className="card-h"><span>Campagnes</span></div>
 
       {campagnes.length === 0 ? (
-        <div className="sub" style={{ textAlign: 'center', padding: 26 }}>
+        <div className="sub" style={{ textAlign: 'center', padding: 'var(--esp-section)' }}>
           Aucune campagne. Une campagne, c’est un segment plus un message&nbsp;: commencez par le
           segment.
         </div>
@@ -601,13 +598,12 @@ function ListeCampagnes({ campagnes, segments, peutGerer, busy, onRediger, onEnv
                     <td><span className={`badge ${statut.ton}`}>{statut.libelle}</span></td>
                     <td className="num">{c.controlGroupPercent} %</td>
                     <td>
-                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', gap: 'var(--esp-normal)', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                         {partie ? (
                           <button
-                            className="btn sm"
+                            className="btn xs"
                             type="button"
                             disabled={busy}
-                            style={{ padding: '1px 8px', fontSize: 11.5 }}
                             onClick={() => onResultat(c)}
                           >
                             Résultat
@@ -615,19 +611,17 @@ function ListeCampagnes({ campagnes, segments, peutGerer, busy, onRediger, onEnv
                         ) : peutGerer && (
                           <>
                             <button
-                              className="btn ghost sm"
+                              className="btn ghost xs"
                               type="button"
                               disabled={busy}
-                              style={{ padding: '1px 8px', fontSize: 11.5 }}
                               onClick={() => onRediger(c)}
                             >
                               Modifier
                             </button>
                             <button
-                              className="btn sm"
+                              className="btn xs"
                               type="button"
                               disabled={busy}
-                              style={{ padding: '1px 8px', fontSize: 11.5 }}
                               onClick={() => onEnvoyer(c)}
                             >
                               Envoyer
@@ -667,7 +661,7 @@ function ResultatCampagne({ resultat, onFermer }) {
       taille="lg"
     >
       {resultat && (
-        <div style={{ display: 'grid', gap: 14 }}>
+        <div style={{ display: 'grid', gap: 'var(--esp-bloc)' }}>
           <div className="fiche-stats">
             <div>
               <div className="st-lib">Ciblés</div>
@@ -695,7 +689,7 @@ function ResultatCampagne({ resultat, onFermer }) {
 
           {resultat.exclus.length > 0 && (
             <div>
-              <div className="st-lib" style={{ marginBottom: 6 }}>Écartés, et pourquoi</div>
+              <div className="st-lib" style={{ marginBottom: 'var(--esp-serre)' }}>Écartés, et pourquoi</div>
               <div style={{ overflowX: 'auto' }}>
                 <table className="tbl">
                   <thead><tr><th>Motif</th><th className="num">Nombre</th></tr></thead>
@@ -709,7 +703,7 @@ function ResultatCampagne({ resultat, onFermer }) {
                   </tbody>
                 </table>
               </div>
-              <div className="sub" style={{ marginTop: 6 }}>
+              <div className="sub" style={{ marginTop: 'var(--esp-serre)' }}>
                 Beaucoup d’exclusions « sans consentement » veut dire qu’il faut travailler le
                 recueil du consentement — pas le message.
               </div>
@@ -797,14 +791,14 @@ function RedactionCampagne({ campagne, segments, onFermer, onEnregistre, onErreu
       titre={existante ? 'Modifier la campagne' : 'Nouvelle campagne'}
       taille="lg"
     >
-      <div style={{ display: 'grid', gap: 12 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <label style={{ display: 'grid', gap: 4 }}>
+      <div style={{ display: 'grid', gap: 'var(--esp-large)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--esp-large)' }}>
+          <label style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
             <span className="sub">Nom de la campagne</span>
             <input className="input" value={label} maxLength={120} onChange={(e) => setLabel(e.target.value)} />
           </label>
 
-          <label style={{ display: 'grid', gap: 4 }}>
+          <label style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
             <span className="sub">Audience</span>
             <select className="select" value={segment} onChange={(e) => setSegment(e.target.value)}>
               <option value="">Choisir un segment…</option>
@@ -813,7 +807,7 @@ function RedactionCampagne({ campagne, segments, onFermer, onEnregistre, onErreu
           </label>
         </div>
 
-        <label style={{ display: 'grid', gap: 4 }}>
+        <label style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
           <span className="sub">Canal</span>
           <select className="select" value={channel} onChange={(e) => setChannel(e.target.value)}>
             {CANAUX.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
@@ -823,12 +817,12 @@ function RedactionCampagne({ campagne, segments, onFermer, onEnregistre, onErreu
           </span>
         </label>
 
-        <label style={{ display: 'grid', gap: 4 }}>
+        <label style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
           <span className="sub">Objet</span>
           <input className="input" value={subject} maxLength={200} onChange={(e) => setSubject(e.target.value)} />
         </label>
 
-        <label style={{ display: 'grid', gap: 4 }}>
+        <label style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
           <span className="sub">Message</span>
           <textarea rows={7} value={body} onChange={(e) => setBody(e.target.value)} />
           <span className="sub" style={{ fontSize: 12 }}>
@@ -838,8 +832,8 @@ function RedactionCampagne({ campagne, segments, onFermer, onEnregistre, onErreu
           </span>
         </label>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <label style={{ display: 'grid', gap: 4 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--esp-large)' }}>
+          <label style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
             <span className="sub">Groupe témoin (%)</span>
             <input
               className="input"
@@ -855,7 +849,7 @@ function RedactionCampagne({ campagne, segments, onFermer, onEnregistre, onErreu
             </span>
           </label>
 
-          <label style={{ display: 'grid', gap: 4 }}>
+          <label style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
             <span className="sub">Fenêtre d’attribution (jours)</span>
             <input
               className="input"
@@ -872,7 +866,7 @@ function RedactionCampagne({ campagne, segments, onFermer, onEnregistre, onErreu
           </label>
         </div>
 
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+        <div style={{ display: 'flex', gap: 'var(--esp-normal)', justifyContent: 'flex-end' }}>
           <button className="btn ghost" type="button" onClick={onFermer} disabled={busy}>Annuler</button>
           <button
             className="btn primary"
@@ -923,7 +917,7 @@ function Attribution({ attribution }) {
 
   return (
     <div>
-      <div className="st-lib" style={{ marginBottom: 6 }}>
+      <div className="st-lib" style={{ marginBottom: 'var(--esp-serre)' }}>
         Ce que la campagne a produit — fenêtre de {fenetre.jours} jours
       </div>
 
@@ -945,20 +939,20 @@ function Attribution({ attribution }) {
       </div>
 
       {!attribution.comparable ? (
-        <div className="banner banner-warn" style={{ marginTop: 10, marginBottom: 0 }}>
+        <div className="banner banner-warn" style={{ marginTop: 'var(--esp-large)', marginBottom: 0 }}>
           <strong>Aucun effet ne peut être attribué à cette campagne.</strong> {attribution.raison}
           {' '}Les retours affichés sont ceux du groupe contacté : on ne sait pas combien seraient
           revenus sans le message.
         </div>
       ) : !attribution.concluant ? (
-        <div className="banner banner-warn" style={{ marginTop: 10, marginBottom: 0 }}>
+        <div className="banner banner-warn" style={{ marginTop: 'var(--esp-large)', marginBottom: 0 }}>
           <strong>On ne peut pas encore conclure.</strong> L’écart mesuré est de{' '}
           {signe(attribution.ecartPoints)} points, pour une marge d’incertitude de{' '}
           ± {nb(attribution.margeErreur)}. Plus petit que sa marge, il ne se distingue pas de zéro —
           un groupe témoin plus grand, ou une audience plus large, trancherait.
         </div>
       ) : attribution.ecartPoints > 0 ? (
-        <div className="banner banner-ok" style={{ marginTop: 10, marginBottom: 0 }}>
+        <div className="banner banner-ok" style={{ marginTop: 'var(--esp-large)', marginBottom: 0 }}>
           <strong>
             La campagne a ramené {nb(attribution.visitesGagnees)} personne(s) de plus
           </strong>{' '}
@@ -966,7 +960,7 @@ function Attribution({ attribution }) {
           d’affaires. Écart : {signe(attribution.ecartPoints)} points ± {nb(attribution.margeErreur)}.
         </div>
       ) : (
-        <div className="banner banner-error" style={{ marginTop: 10, marginBottom: 0 }}>
+        <div className="banner banner-error" style={{ marginTop: 'var(--esp-large)', marginBottom: 0 }}>
           <strong>Le groupe contacté est revenu MOINS que le témoin</strong> —{' '}
           {signe(attribution.ecartPoints)} points ± {nb(attribution.margeErreur)}. L’écart dépasse sa
           marge : ce n’est pas du bruit. Le message, le moment ou la cible ont desservi.
@@ -974,13 +968,13 @@ function Attribution({ attribution }) {
       )}
 
       {!fenetre.close && (
-        <div className="sub" style={{ marginTop: 6 }}>
+        <div className="sub" style={{ marginTop: 'var(--esp-serre)' }}>
           Mesure <strong>provisoire</strong> : la fenêtre se referme dans {fenetre.joursRestants}{' '}
           jour(s). Ces chiffres bougeront encore.
         </div>
       )}
 
-      <div className="sub" style={{ marginTop: 6 }}>
+      <div className="sub" style={{ marginTop: 'var(--esp-serre)' }}>
         Les ventes sont comptées où qu’elles aient eu lieu dans le groupe : la campagne a ramené une
         personne, pas une caisse.
       </div>
@@ -1047,7 +1041,7 @@ function ReglagesFidelite({ droits, onErreur }) {
   }
 
   return (
-    <div style={{ display: 'grid', gap: 16 }}>
+    <div style={{ display: 'grid', gap: 'var(--esp-bloc)' }}>
       <PanneauBaremes baremes={baremes} peutRegler={peutRegler} busy={busy} onAjouter={agir} />
       <PanneauPaliers paliers={paliers} peutRegler={peutRegler} busy={busy} onAgir={agir} />
       <PanneauParrainage programme={programme} peutRegler={peutRegler} busy={busy} onAgir={agir} />
@@ -1065,7 +1059,7 @@ function PanneauBaremes({ baremes, peutRegler, busy, onAjouter }) {
     <div className="card">
       <div className="card-h"><span>Barème — points par euro</span></div>
 
-      <div className="sub" style={{ marginBottom: 8 }}>
+      <div className="sub" style={{ marginBottom: 'var(--esp-normal)' }}>
         Un barème vaut <strong>à partir</strong> de sa date et jusqu’au suivant. On en ajoute un, on
         n’en corrige jamais : changer celui d’hier modifierait des soldes déjà annoncés aux clients.
       </div>
@@ -1087,7 +1081,7 @@ function PanneauBaremes({ baremes, peutRegler, busy, onAjouter }) {
       )}
 
       {peutRegler && (
-        <div className="r" style={{ gap: 8, marginTop: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+        <div className="r" style={{ gap: 'var(--esp-normal)', marginTop: 'var(--esp-large)', alignItems: 'flex-end', flexWrap: 'wrap' }}>
           <div className="field" style={{ marginBottom: 0 }}>
             <label>Points par euro</label>
             <input type="number" min="0" value={points} onChange={(e) => setPoints(e.target.value)} />
@@ -1123,7 +1117,7 @@ function PanneauPaliers({ paliers, peutRegler, busy, onAgir }) {
     <div className="card">
       <div className="card-h"><span>Paliers</span></div>
 
-      <div className="sub" style={{ marginBottom: 8 }}>
+      <div className="sub" style={{ marginBottom: 'var(--esp-normal)' }}>
         Le palier se lit sur les points gagnés sur <strong>douze mois glissants</strong>, pas sur le
         solde : dépenser ses points ne doit pas faire perdre son statut.
       </div>
@@ -1157,7 +1151,7 @@ function PanneauPaliers({ paliers, peutRegler, busy, onAgir }) {
       )}
 
       {peutRegler && (
-        <div className="r" style={{ gap: 8, marginTop: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+        <div className="r" style={{ gap: 'var(--esp-normal)', marginTop: 'var(--esp-large)', alignItems: 'flex-end', flexWrap: 'wrap' }}>
           <div className="field" style={{ marginBottom: 0 }}>
             <label>Nom du palier</label>
             <input value={libelle} onChange={(e) => setLibelle(e.target.value)} placeholder="Argent" />
@@ -1205,14 +1199,14 @@ function PanneauParrainage({ programme, peutRegler, busy, onAgir }) {
         )}
       </div>
 
-      <div className="sub" style={{ marginBottom: 8 }}>
+      <div className="sub" style={{ marginBottom: 'var(--esp-normal)' }}>
         Le <strong>montant minimum</strong> est le cœur du programme : il fait dépendre la récompense
         d’un achat encaissé, jamais d’une inscription. À zéro, on récompense quiconque sait créer une
         adresse e-mail.
       </div>
 
       {peutRegler ? (
-        <div className="r" style={{ gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+        <div className="r" style={{ gap: 'var(--esp-normal)', alignItems: 'flex-end', flexWrap: 'wrap' }}>
           <div className="field" style={{ marginBottom: 0 }}>
             <label>Points au parrain</label>
             <input type="number" min="1" value={points} onChange={(e) => setPoints(e.target.value)} />
