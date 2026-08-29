@@ -197,3 +197,78 @@ déclaration.
 Et une faute de coordination : **j'ai commandé le même écran à trois sessions.** Rien n'a été écrit en
 double, uniquement parce que l'une d'elles a demandé avant de commencer. Les demandes d'écran passent
 désormais par un point unique.
+
+---
+
+# Addendum — la fin de la nuit, et le point le plus important du rapport
+
+## ⚠ Aucun prélèvement SEPA ne peut partir aujourd'hui
+
+C'est la trouvaille la plus conséquente de la session, et elle change l'ordre de tes priorités.
+Trouvée par une autre session, vérifiée par une deuxième, re-vérifiée par moi en base.
+
+**Trois maillons, cassés en série :**
+
+1. **Aucun ordonnanceur ne tourne sur la machine.** Ni cron — la commande `crontab` n'existe même
+   pas — ni timer systemd, ni conteneur worker. Vingt-et-une tâches planifiées sont déclarées et
+   aucune ne s'est jamais exécutée.
+2. `sepa:preavis:annoncer` est le **seul** émetteur de préavis de prélèvement. Sans lui, aucun
+   préavis n'existe : **0 en base**, pour 12 échéances.
+3. `GenerationRemiseHandler` **exclut de la remise** toute échéance non couverte par un préavis
+   délivré. Une échéance sans préavis ne part pas.
+
+Conséquence : la remise sort vide, et personne ne le remarque.
+
+**Le système échoue FERMÉ, et c'est le bon comportement.** Il refuse de débiter quelqu'un qu'il n'a
+pas pu prévenir. Il n'y a donc **aucune violation** : personne n'a été débité sans préavis. C'est
+exactement ce qu'il faut légalement, et c'est aussi pour ça que le blocage est resté invisible — un
+refus prudent ressemble à une liste vide.
+
+⚠ **Et l'ordre des corrections compte.** Démarrer l'ordonnanceur ne suffirait pas : sans prestataire
+d'envoi de courriel, le préavis sortirait en « journalisé », donc non délivré, donc l'échéance
+resterait exclue. **Le transport d'abord, l'ordonnanceur ensuite.** L'inverse donnerait l'impression
+d'avoir réparé.
+
+Le déploiement annonce désormais les deux, à chaque passage.
+
+## Ce que ça t'oblige à décider, dans cet ordre
+
+1. **Le prestataire d'envoi de courriel.** Il commande le préavis SEPA, donc l'encaissement, mais
+   aussi les invitations d'utilisateurs, la réinitialisation de mot de passe, les confirmations de
+   commande. Six expéditeurs existent et aucun ne parle. Je ne peux ni choisir le prestataire ni
+   manipuler ses identifiants.
+2. **Le démarrage de l'ordonnanceur.** Je ne l'ai pas lancé et je ne le lancerai pas sans toi :
+   vingt-et-une tâches qui rattrapent des semaines d'arriéré d'un seul coup peuvent produire des
+   facturations, des purges et des bascules en série. Il faut d'abord un mode « à blanc » qui dise ce
+   qu'elles **feraient**. C'est un lot que je peux écrire.
+
+## Vingt-et-une tâches à l'arrêt ne sont pas vingt-et-un défauts
+
+Le tri compte plus que le chiffre, et il n'est pas fini. Certaines tâches ne font que marquer un
+enregistrement : une délégation de droits expirée n'accorde déjà plus rien, parce que l'expiration se
+vérifie **à la lecture**. La clôture quotidienne et la facturation d'abonnement ont un chemin
+d'interface. Restent à vérifier une par une : les no-show, la conservation RGPD, la purge des
+documents, les publications sociales programmées, la reprise mensuelle de PCA.
+
+⚠ Ma première mesure automatique de ce tri **ne valait rien** : elle comptait des références de
+classe et non des appels, et annonçait six appelants là où il y en avait un. Je l'ai refaite en
+lisant les fichiers. Je le signale parce que le chiffre faux était plus rassurant que le vrai.
+
+## Deux autres choses livrées depuis
+
+- **Un rejet SEPA ouvre enfin un impayé.** Le processeur écrivait une ligne au journal et s'arrêtait,
+  pendant que deux écrans affirmaient « un impayé est ouvert ». Une créance perdue, pas une
+  confusion. ⚠ Limite connue : le blocage d'accès passe par un port par type de contrat, et il n'en
+  existe qu'un (abonnement fitness). Un rejet sur un mandat de piscine ouvre un incident qui ne ferme
+  aucune porte.
+- **Un produit sans tarif n'est plus vendu au public.** Un billet s'ajoutait au panier sans prix,
+  sous la phrase « le tarif sera confirmé au paiement » — il n'y avait rien à confirmer. Corrigé au
+  niveau du service **et** de la donnée de démonstration ; pas côté écran, où un filtre aurait rendu
+  la garde serveur manquante invisible.
+
+## Une faute d'exploitation, à moi
+
+J'ai **supprimé le conteneur de base de test d'une autre session**, en l'identifiant par une
+ressemblance de nom au lieu de vérifier à qui il appartenait. Le dégât se limite à une exécution
+perdue. Je l'ai signalé immédiatement pour que personne ne cherche la cause ailleurs, et je n'emploie
+plus de suppression directe sur un conteneur que je n'ai pas créé dans la même commande.
