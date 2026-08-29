@@ -61,8 +61,7 @@ export default function CautionsGestion({ etabActif, droits }) {
 
     // LE BARÈME TRONQUÉ NE REND PAS L'ÉCRAN INCOMPLET, IL LUI FAIT DIRE LE CONTRAIRE DU VRAI.
     //
-    // Le serveur plafonne chaque collection à 30 lignes (l'explication est dans
-    // `components/Liste.jsx`). Le journal retrouve le barème d'une retenue en recoupant la liste
+    // Le serveur pagine chaque collection (l'explication est dans `components/Liste.jsx`). Le journal retrouve le barème d'une retenue en recoupant la liste
     // des barèmes — et quand il n'y arrive pas, il affiche « montant libre », c'est-à-dire
     // « quelqu'un a décidé cette somme à la main ».
     //
@@ -124,7 +123,7 @@ export default function CautionsGestion({ etabActif, droits }) {
 
       {(cautionsPartielles || baremePartiel) && (
         <div className="banner banner-warn">
-          <b>Toutes les données ne sont pas affichées.</b> Le serveur limite chaque liste à 30 lignes.
+          <b>Toutes les données ne sont pas affichées.</b> Les listes reçues sont plus courtes que leur total.
           {cautionsPartielles
             && ' Des cautions ou des mouvements manquent : les totaux ci-dessous sont donc'
               + ' inférieurs à la réalité.'}

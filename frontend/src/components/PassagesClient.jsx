@@ -27,13 +27,14 @@ import { RESULTAT_CLS, RESULTAT_PASSAGE, phraseMotif } from '../api/acces.js'
 // ─────────────────────────────────────────────────────────────────────────────────────────────
 // TROIS LIMITES, DITES À L'ÉCRAN PLUTÔT QUE DÉCOUVERTES
 //
-// 1. Les ventes sont plafonnées à 30 par le serveur (aucune configuration de pagination, et
-//    `itemsPerPage` est ignoré). Sur un client ancien, on ne remonte donc que ses 30 dernières
-//    ventes — et un passage rattaché à un billet plus vieux n'apparaîtra pas. Le bloc le dit.
+// 1. Les ventes arrivent paginées. Sur un client ancien, on ne remonte donc pas toutes ses
+//    ventes — et un passage rattaché à un billet plus vieux n'apparaîtra pas. Le bloc le dit, et
+//    il le CONSTATE en comparant `totalItems` au nombre reçu plutôt qu'en supposant un plafond :
+//    celui-ci est passé de 30 à 100 le 29/08 sans prévenir personne.
 // 2. Seuls les billets VENDUS avec un numéro de support sont traçables. Un badge appairé à la main,
 //    hors vente, n'a aucun lien avec un client : ses passages existent, mais rien ne les rattache
 //    ici. Ce n'est pas une perte de données, c'est l'absence d'un lien qui n'a jamais été créé.
-// 3. Les passages eux-mêmes sont plafonnés à 30. On affiche le compte réel quand il dépasse.
+// 3. Les passages eux-mêmes arrivent paginés. On affiche le compte réel quand il dépasse.
 //
 // Aucune de ces trois limites ne se corrige depuis l'écran ; les taire ferait lire « ce client n'est
 // jamais entré » là où la bonne phrase est « je ne vois pas plus loin ».
@@ -110,7 +111,7 @@ export default function PassagesClient({ clientId, droits = [] }) {
         <div className="center" style={{ minHeight: 60 }}><div className="spinner" /></div>
       ) : numeros === 0 ? (
         <div className="empty" style={{ padding: 12 }}>
-          Aucun billet nominatif vendu à ce client{ventesTronquees ? ' parmi ses 30 dernières ventes' : ''}.
+          Aucun billet nominatif vendu à ce client{ventesTronquees ? ' parmi les ventes reçues' : ''}.
           Les passages ne se rattachent à un client que par le numéro du billet qui lui a été vendu.
         </div>
       ) : passages.length === 0 ? (
@@ -154,10 +155,10 @@ export default function PassagesClient({ clientId, droits = [] }) {
           {(typeof total === 'number' && passages.length < total) || ventesTronquees ? (
             <div className="hint">
               {typeof total === 'number' && passages.length < total
-                ? `${passages.length} passages affichés sur ${total} — le serveur en rend 30 au maximum. `
+                ? `${passages.length} passages affichés sur ${total} — la liste est arrivée coupée. `
                 : ''}
               {ventesTronquees
-                ? 'Et seules les 30 dernières ventes de ce client ont été parcourues : un billet plus ancien n’est pas suivi ici. '
+                ? 'Et ses ventes n’ont pas toutes été parcourues : un billet plus ancien n’est pas suivi ici. '
                 : ''}
               Le journal complet est dans Topologie &amp; passages.
             </div>

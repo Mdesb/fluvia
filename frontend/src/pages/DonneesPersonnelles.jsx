@@ -122,8 +122,7 @@ export default function DonneesPersonnelles({ etabActif, droits }) {
   //
   // Signalé, corrigé le jour même par claude-A (`SearchFilter` remplacé par `UuidReferenceFilter`),
   // et REMESURÉ ici avant de rebrancher : les trois formes rendent 2. La restriction repart donc
-  // au serveur, ce qui la rend juste au-delà des trente lignes d'une page — ce que le tri local
-  // ne pouvait pas être.
+  // au serveur, ce qui la rend juste au-delà d'une page — ce que le tri local ne pouvait pas être.
   //
   // Ce qu'il faut en retenir tient en une phrase : un filtre déclaré n'est pas un filtre qui
   // répond, et cela se voit en une requête.
@@ -135,8 +134,9 @@ export default function DonneesPersonnelles({ etabActif, droits }) {
       ouvertes: ouvertes.length,
       horsDelai: ouvertes.filter((d) => joursRestants(d.dateDemande) < 0).length,
       traitees: toutes.filter((d) => d.statut === 'realisee').length,
-      // Le serveur plafonne toute collection à trente lignes. Au-delà, ces trois nombres comptent
-      // une PAGE et non la file — on le dit plutôt que d'afficher un total qu'on n'a pas mesuré.
+      // Le serveur pagine. Au-delà d'une page, ces trois nombres comptent une PAGE et non la file
+      // — on le dit plutôt que d'afficher un total qu'on n'a pas mesuré. La comparaison, et non un
+      // plafond appris par cœur : celui-ci a changé une fois déjà.
       partiels: total != null && total > toutes.length,
     }
   }, [toutes, total])

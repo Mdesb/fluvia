@@ -106,7 +106,7 @@ export default function Acces({ etabActif, droits }) {
 
     // UNE LISTE COUPÉE NE REND PAS CET ÉCRAN INCOMPLET, ELLE LUI FAIT DIRE LE CONTRAIRE DU VRAI.
     //
-    // Le serveur plafonne chaque collection à 30 lignes (l'explication est dans `api/client.js`).
+    // Le serveur pagine chaque collection (l'explication est dans `api/client.js`).
     // Cet écran recoupe QUATRE listes : un badge affiche son droit en croisant les appairages, un
     // appairage affiche sa nature en croisant les droits, un badge bloqué retrouve son motif en
     // croisant les déclarations. Quand le croisement échoue, la ligne n'est pas vide — elle affirme
@@ -228,7 +228,7 @@ export default function Acces({ etabActif, droits }) {
       {succes && <div className="banner banner-ok">{succes}</div>}
       {listesPartielles && (
         <div className="banner banner-warn">
-          Le serveur n’a rendu qu’une partie des listes (30 lignes par collection). Un badge dont le
+          Le serveur n’a rendu qu’une partie des listes. Un badge dont le
           droit ou la déclaration n’est pas dans la page affichera « aucun droit rattaché » alors
           qu’il en porte un. Utilisez la recherche par numéro plutôt que le tableau pour trancher.
         </div>
