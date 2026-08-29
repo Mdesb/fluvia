@@ -317,6 +317,11 @@ while read -r ancien nouveau ref; do
         lancer garde-fou-nullable-non-nul.php "--contre=$BASE"
     fi
 
+    if [ -f "$ARBRE/bin/garde-fou-vacuite-tests.php" ]; then
+        echo "── Vacuite des tests de cloisonnement"
+        lancer garde-fou-vacuite-tests.php "--contre=$BASE"
+    fi
+
     # ⚠ FILET DE COMPLÉTUDE — la leçon du 24/08, et elle a coûté cher.
     #
     # Ce hook n'appelle pas `bin/garde-fous.sh` : il doit calculer les fichiers ajoutés sur
