@@ -195,6 +195,7 @@ function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = []
           produit={connu || { id: selId }}
           peutModifier={aLeDroit(droits, 'offre.modifier') || aLeDroit(droits, 'offre.gerer')}
           peutModifierCompta={aLeDroit(droits, 'offre.modifier_compta') || aLeDroit(droits, 'offre.gerer')}
+          droits={droits}
           onModifie={recharger}
         />
       </>

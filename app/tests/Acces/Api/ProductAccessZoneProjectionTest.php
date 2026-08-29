@@ -128,7 +128,7 @@ final class ProductAccessZoneProjectionTest extends AccesApiTestCase
 
     private function declarer(EntityManagerInterface $em, Uuid $produit, EspaceAcces $espace, Etablissement $etablissement): ProductAccessZone
     {
-        $declaration = new ProductAccessZone($produit, $espace, $etablissement);
+        $declaration = (new ProductAccessZone($produit, $espace))->setEstablishment($etablissement);
         $em->persist($declaration);
         $em->flush();
 
