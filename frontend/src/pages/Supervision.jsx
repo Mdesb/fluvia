@@ -117,7 +117,17 @@ export default function Supervision({ etabActif, droits = [] }) {
       // Une lecture qui échoue n'efface pas la précédente : sur un écran de surveillance, l'état
       // d'il y a douze secondes reste plus utile qu'un écran vide — à condition de dire son âge.
       if (e.status === 401) setSessionPerdue(true)
-      setErreur(e.message || 'Supervision indisponible.')
+      // UN REFUS DE DROITS N'EST PAS UNE PANNE, ET « Access Denied » NE LE DIT À PERSONNE.
+      //
+      // Mesuré le 29/08 sur l'ensemble du front : quatorze écrans ne traitent pas le 403 et ne
+      // passent pas par `Liste.jsx`, qui l'explique. Celui-ci en faisait partie — il affichait le
+      // message brut du serveur, qui envoie chercher une panne là où il manque un droit.
+      setErreur(
+        e.status === 403
+          ? 'Ce compte n’a pas le droit de superviser les accès sur cet établissement. '
+            + 'Ce n’est pas une panne : demandez la permission `acces.superviser` à un administrateur.'
+          : e.message || 'Supervision indisponible.',
+      )
     } finally {
       if (!silencieux) setChargement(false)
     }
