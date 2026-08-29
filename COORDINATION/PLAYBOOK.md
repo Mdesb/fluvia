@@ -228,6 +228,25 @@ identifiants anglais · libellés en clés i18n · événements déclarés au ma
 **Avant de merger (intégrateur) :** CI verte · revue de cohérence · pas de régression voisine ·
 migration horodatée · MESSAGES.md répondu.
 
+### 10 bis. DEUX MOITIÉS, DEUX PREUVES — et aucune ne vaut pour l'autre
+
+Un mécanisme se prouve par morceaux, et **une preuve qui vaut pour un morceau se lit trop facilement
+comme valant pour l'ensemble**. La moitié des faux verts trouvés jusqu'ici viennent de là.
+
+L'exemple, parce qu'il est net (cloche de notification, 29/08) :
+
+| ce qu'on a fait | ce que ça prouve | ce que ça ne prouve PAS |
+|---|---|---|
+| quatre notifications écrites **en base** | l'écran : affichage, gravité, pastille, clic, cloisonnement | la règle d'admission ni le résolveur de destinataires — les lignes contournent le bus |
+| un test qui **retire le filtre de droits** et nomme la personne prévenue à tort | la règle d'admission et le résolveur | rien de l'écran : le test ne rend aucun HTML |
+
+Dire « la cloche marche » sur la première moitié aurait été un faux vert : un écran qui affiche des
+données plausibles ne dit rien du mécanisme censé les produire.
+
+**En pratique :** quand on annonce qu'une chose est vérifiée, dire **par quel chemin** — et nommer ce
+que ce chemin ne traverse pas. « Vérifié à l'écran » ne dit rien du producteur ; « les tests passent »
+ne dit rien de ce que l'utilisateur voit ; « la route répond » ne dit rien de ce qu'elle enregistre.
+
 ---
 
 ## 11. ÉTAT & FEUILLE DE ROUTE
