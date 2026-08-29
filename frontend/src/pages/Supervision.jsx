@@ -107,8 +107,19 @@ export default function Supervision({ etabActif, droits = [] }) {
       ])
       setSup(s)
       if (e) setEquipements(membres(e))
-      // Le serveur ignore `order[horodatage]` (aucun `OrderFilter` sur `Passage`) : sans ce tri,
-      // la carte « Derniers passages » montrait les PREMIERS passages du site.
+      // ⚠ CE TRI EST UN FILET, PLUS UN CORRECTIF — ET LA DIFFÉRENCE A UNE DATE.
+      //
+      // Il a été posé le 29/08 à 01h32 parce que `Passage` n'avait aucun `OrderFilter` : le
+      // `order[horodatage]=desc` demandé était ignoré en silence, et cette carte montrait les
+      // PREMIERS passages du site sous le titre « Derniers passages ». Le filtre serveur est arrivé
+      // à 01h35 — deux minutes et vingt-sept secondes plus tard.
+      //
+      // On garde le tri : il ne coûte rien sur vingt lignes et il protège d'une régression du
+      // filtre. Mais la LÉGENDE qui l'expliquait à l'exploitant, elle, a été retirée : elle
+      // annonçait un défaut serveur corrigé le jour même, et elle est restée fausse à l'écran
+      // vingt-trois heures. **Une phrase qui décrit un défaut doit mourir avec le défaut** — le
+      // commentaire vieillit dans le dépôt où seul un développeur le lit, la légende vieillit sous
+      // les yeux de celui qui s'en sert.
       if (p) setPassages(membres(p).sort((a, b) => (a.horodatage < b.horodatage ? 1 : -1)))
       setMaj(new Date())
       setErreur(null)
@@ -379,10 +390,7 @@ export default function Supervision({ etabActif, droits = [] }) {
           {/* Derniers passages */}
           <section className="card" style={{ marginTop: 16 }}>
             <div className="card-h"><h3>Derniers passages</h3>
-              <span className="sub">
-                {passages.length} lus — le serveur ne sachant pas trier, ce sont les plus anciens
-                enregistrés, remis dans l’ordre ici
-              </span></div>
+              <span className="sub">{passages.length} récents</span></div>
             <div className="card-b" style={{ overflowX: 'auto' }}>
               <table className="tbl">
                 <thead>

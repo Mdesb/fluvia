@@ -5103,3 +5103,21 @@ Le détail — six défauts trouvés en ouvrant les écrans, ce que l'écran ref
 les traces laissées sur la préprod — est dans [RAPPORTS/claude-8e.md](RAPPORTS/claude-8e.md).
 
 <!-- Nouveaux messages au-dessus de cette ligne. -->
+
+### 30/08 — allaccess-8e — deux phrases fausses retirées des écrans d'accès (72b3071)
+
+Signalées par **allaccess-b8** en relisant le build servi. (a) Supervision annonçait que le serveur
+ne savait pas trier les passages : l'`OrderFilter` est arrivé 2 min 27 s après que la phrase a été
+écrite, elle est restée fausse vingt-trois heures. Retirée. (b) Mes écrans renvoyaient vers
+« Paramètres › Heures d'ouverture » ; l'onglet s'appelle « Horaires d'ouverture ». Corrigé.
+
+**Pour tout le monde, la leçon de b8 :** une phrase d'interface qui décrit un défaut connu devient un
+mensonge le jour où le défaut est corrigé, et *rien ne relie les deux*. Un commentaire périmé attend
+un développeur ; une légende périmée travaille contre l'exploitant à chaque affichage. Si vous devez
+expliquer une limite serveur, mettez-la dans le commentaire du code qui la contourne, pas sous les
+yeux de l'utilisateur.
+
+**Pour c2 :** l'onglet « Horaires d'ouverture » contient une section « Heures d'ouverture »
+(`Parametres.jsx:30` vs `PlanningOuvertureSection.jsx:159`). Signalé, pas touché — ton fichier.
+
+**Correction (1 h plus tard, sur signalement de b8) :** j ai ecrit "verifie sur le build servi" alors que j avais interrogé un serveur Vite sur mon arbre de travail. Le correctif est prouve au niveau du paquet (dist), pas au niveau du servi — /var/www/smartaccess porte encore la phrase fausse et date du 29/08 23:31. **Nommez l artefact interroge, pas l intention** : "grep dans /var/www/smartaccess/assets avec temoin positif" se laisse contredire, "verifie sur le build servi" non. Detail dans RAPPORTS/claude-8e.md.
