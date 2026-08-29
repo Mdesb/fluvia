@@ -163,6 +163,31 @@ async function request(
     if (timer) clearTimeout(timer)
   }
 
+  // ⚠ DEUX SESSIONS ONT ÉCRIT CE MÊME BLOC INDÉPENDAMMENT, à une heure d'intervalle. Les deux
+  // versions étaient justes et disaient la même chose ; celle-ci a été retenue à la fusion. Le
+  // doublon n'a coûté qu'un conflit — il aurait pu coûter deux mécanismes concurrents dans la même
+  // fonction, dont un seul aurait servi.
+  // LE JETON SE RENOUVELLE PENDANT QU'ON TRAVAILLE, ET CA SE LIT ICI PARCE QU'ICI VOIT TOUT.
+  //
+  // Le serveur renvoie un jeton frais dans `X-JETON-RENOUVELE` des que le jeton courant a passe la
+  // moitie de sa vie. L'en-tete N'EST PAS sur toutes les reponses : son absence est le cas normal,
+  // pas une anomalie.
+  //
+  // Un seul endroit a modifier, et c'est deliberement celui-la : `request()` est la seule fonction
+  // qui voit toutes les reponses. Le poser ecran par ecran donnerait des ecrans qui prolongent la
+  // session et d'autres non, sans que rien ne distingue les deux.
+  //
+  // ⚠ CE MECANISME PEUT ETRE INERTE SANS QUE RIEN NE LE DISE. Lire l'en-tete et oublier de remplacer
+  // le jeton stocke marche exactement comme avant pendant une heure, puis ejecte -- et rien ne
+  // signale qu'il n'a jamais servi. Eprouve en comparant le jeton stocke AVANT et APRES une reponse
+  // qui porte l'en-tete, pas en constatant qu'on est encore connecte dix minutes plus tard.
+  //
+  // ET IL NE SUPPRIME PAS L'EXPIRATION. Passe douze heures depuis la premiere connexion, le serveur
+  // cesse de reemettre : une session qui se prolonge sans fin n'est plus une session, c'est un mot
+  // de passe. L'ecran de connexion doit donc toujours savoir apparaitre.
+  const renouvele = res.headers.get('X-JETON-RENOUVELE')
+  if (renouvele && auth) tokenStore.set(renouvele)
+
   if (res.status === 401 && auth) {
     tokenStore.clear()
     if (onUnauthorized) onUnauthorized()
@@ -229,10 +254,28 @@ export const api = {
   // Creer et modifier un etablissement. Pas de suppression exposee : voir EtablissementsSection.
   creerEtablissement: (corps) => request('/api/etablissements', { method: 'POST', body: corps, ld: true }),
   majEtablissement: (id, corps) => request(`/api/etablissements/${id}`, { method: 'PATCH', body: corps }),
-  produits: () => request('/api/produits'),
+  // `Produit` declare un SearchFilter sur `code` (partiel), `libelleRecherche` (partiel), `statut`
+  // et `typeCode` -- quatre filtres testes cote serveur, et cette fonction n'en transmettait aucun :
+  // elle ne prenait meme pas d'argument. Le catalogue chargeait donc les trente premiers produits et
+  // n'offrait aucun moyen d'atteindre les suivants.
+  //
+  // Le piege qu'on evite en le corrigeant tout de suite : passer un objet a une fonction qui l'ignore
+  // ne leve rien. On aurait vu des champs de filtre a l'ecran, une requete partir, une reponse
+  // arriver -- et la meme liste. Un resultat plausible et faux.
+  produits: (params) => request('/api/produits', { query: params }),
   // Le détail ajoute le groupe `produit:compta` (compte, TVA, règle PCA), absent de la collection.
   produit: (id) => request(`/api/produits/${id}`),
   majProduit: (id, corps) => request(`/api/produits/${id}`, { method: 'PATCH', body: corps }),
+  // L'ONGLET COMPTA D'UN PRODUIT : TROIS CHAMPS ECRIVABLES, AFFICHES ET JAMAIS PROPOSES.
+  //
+  // `PATCH /produits/{id}/compta` existe depuis le debut, avec son propre groupe (`produit:compta`)
+  // et son propre droit (`offre.modifier_compta`, distinct de `offre.modifier`). La fiche produit
+  // montrait compte, taux et regle PCA ; le formulaire << Modifier >> n'offrait que le nom, les
+  // canaux, la couleur en caisse et la note interne.
+  //
+  // Route sur mesure et `input: false` cote serveur : pas de `ld: true` a poser.
+  majComptaProduit: (id, corps) =>
+    request(`/api/produits/${id}/compta`, { method: 'PATCH', body: corps }),
   typeProduits: () => request('/api/type_produits'),
   creerProduit: (corps) =>
     request('/api/produits', { method: 'POST', body: corps, ld: true }),
@@ -264,10 +307,57 @@ export const api = {
   // ne pas savoir — c'est au code appelé d'être lisible.
   gestePiece: (id, geste) => GESTES_PIECE[geste](id),
 
+  // LES FACTURES : DIX OPERATIONS EXPOSEES, ZERO ROUTE DANS CE FICHIER.
+  //
+  // L'ecran << Facturation >> ne montrait pas des factures : il montrait des PIECES COMMERCIALES et
+  // enseignait une chaine devis -> commande -> livraison -> facture. Sa seule action etait
+  // << + Nouveau devis >>. Une facture emise sortait de l'ecran et n'etait plus visible NULLE PART :
+  // il n'existait aucune liste des factures, donc aucun moyen de savoir qui doit combien.
+  //
+  // C'est une chaine d'ERP imposee a des gens qui n'en ont pas besoin : une piscine facture une ecole
+  // pour une sortie de groupe, un club de padel facture une entreprise pour un tournoi. Ni devis, ni
+  // bon de livraison.
+  //
+  // QUATRE DROITS DISTINCTS, DONC QUATRE BOUTONS : emettre (`facturation.emettre_directe`), lettrer
+  // (`facturation.lettrer`), avoir (`facturation.avoir`), Chorus (`facturation.deposer_chorus`). Qui
+  // encaisse un reglement n'a pas a pouvoir annuler la facture par un avoir.
+  //
+  // Toutes ces routes portent un `uriTemplate` sur mesure et `input: false` : pas de `ld: true`.
+  factures: (params) => request('/api/factures', { query: params }),
+  facture: (id) => request(`/api/factures/${id}`),
+  // Cree un BROUILLON : aucun numero n'est consomme tant qu'on n'a pas emis (RG-FACT-01). C'est ce
+  // qui permet de se tromper sans trouer la sequence legale des numeros.
+  creerFactureDirecte: (corps) => request('/api/factures', { method: 'POST', body: corps }),
+  majFactureDirecte: (id, corps) => request(`/api/factures/${id}`, { method: 'PATCH', body: corps }),
+  emettreFacture: (id) => request(`/api/factures/${id}/emettre`, { method: 'POST', body: {} }),
+  // Corps : { montant: "150.00", moyen: "virement", reference?: "..." }.
+  enregistrerReglement: (id, corps) =>
+    request(`/api/factures/${id}/reglements`, { method: 'POST', body: corps }),
+  // Avoir TOTAL, sans corps : la simplification est assumee cote serveur (plan §7).
+  genererAvoirFacture: (id) => request(`/api/factures/${id}/avoir`, { method: 'POST', body: {} }),
+  // Corps : { numeroEngagement?, serviceExecutant? } -- exiges par certains donneurs d'ordre publics.
+  deposerFactureChorus: (id, corps) =>
+    request(`/api/factures/${id}/chorus`, { method: 'POST', body: corps }),
+  factureDepuisVente: (corps) =>
+    request('/api/factures/depuis-vente', { method: 'POST', body: corps }),
+  // Le controle d'integrite de la sequence : une facture ne se modifie pas, la chaine le prouve.
+  verifierChaineFactures: () => request('/api/factures/verifier-chaine'),
+
   pointDeVentes: () => request('/api/point_de_ventes'),
   creerPointDeVente: (corps) => request('/api/point_de_ventes', { method: 'POST', body: corps, ld: true }),
   majPointDeVente: (id, corps) => request(`/api/point_de_ventes/${id}`, { method: 'PATCH', body: corps }),
   caisses: () => request('/api/caisses'),
+  // UNE CAISSE NE POUVAIT PAS ETRE CREEE, ET C'EST CE QUI BLOQUAIT LA VENTE.
+  //
+  // `POST /api/caisses` existe (droit `caisse.gerer`) et n'etait appele de nulle part. Consequence
+  // observee sur GI-ONE FITNESS : le formulaire d'ouverture de caisse propose << Aucune caisse >>
+  // comme unique option, sans valeur, avec le bouton actif -- puis refuse avec << Point de vente et
+  // caisse requis >> alors que le point de vente EST choisi. Il reproche deux champs quand un seul
+  // manque, et celui-la etait impossible a remplir depuis l'application.
+  //
+  // Operation API Platform standard (pas d'`uriTemplate`) : elle deserialise, donc `ld: true`.
+  creerCaisse: (corps) => request('/api/caisses', { method: 'POST', body: corps, ld: true }),
+  majCaisse: (id, corps) => request(`/api/caisses/${id}`, { method: 'PATCH', body: corps }),
   moyensPaiement: () => request('/api/moyen_paiements'),
   // Moyens de paiement — écriture (source M6, sécurité `compta.gerer`).
   creerMoyenPaiement: (corps) =>
@@ -637,6 +727,77 @@ export const api = {
   passages: () =>
     request('/api/passages', { query: { itemsPerPage: 20, 'order[horodatage]': 'desc' } }),
 
+  // LE CONTRÔLE D'ACCÈS N'AVAIT QUE SA SUPERVISION : ON REGARDAIT, ON N'AGISSAIT PAS.
+  //
+  // Dix-huit opérations exposées, deux atteignables (`/acces/supervision` et `/api/passages`). Les
+  // deux gestes qu'un exploitant fait le plus souvent — bloquer un badge perdu, appairer une carte —
+  // n'étaient possibles depuis aucun écran. Un adhérent qui perd sa carte ne pouvait pas être
+  // protégé : le badge restait valide jusqu'à ce que quelqu'un touche la base.
+  //
+  // Toutes ces écritures portent un `uriTemplate` sur mesure et `input: false` : leur processor lit
+  // le corps brut, elles n'exigent donc PAS `application/ld+json` (cf. `scripts/verifier-formats.mjs`).
+  droitsAcces: () => request('/api/droit_acces', { query: { itemsPerPage: 200 } }),
+  declarationsPerteVol: () =>
+    request('/api/declaration_perte_vols', { query: { itemsPerPage: 200 } }),
+  terminauxAcces: () => request('/api/acces/terminaux', { query: { itemsPerPage: 100 } }),
+  // Corps : { identifiantSupport, typeSupport: QR|RFID|wallet, droit: iri|uuid, mode: caisse|autonome }.
+  // Le support est créé à la volée s'il n'existe pas — c'est le geste « appairer une carte neuve ».
+  appairerSupport: (corps) => request('/api/acces/appairages', { method: 'POST', body: corps }),
+  revoquerAppairage: (id) =>
+    request(`/api/acces/appairages/${id}/revoquer`, { method: 'POST', body: {} }),
+  // Perte/vol : blocage serveur immédiat + nouvelle version de liste de révocation pour chaque
+  // contrôleur (refus hors ligne aussi, à leur prochaine synchro). Motif OBLIGATOIRE côté serveur.
+  bloquerSupport: (id, motif) =>
+    request(`/api/acces/supports/${id}/bloquer`, { method: 'POST', body: { motif } }),
+  // Le déblocage passe par l'annulation de la DÉCLARATION, pas par le support : c'est la trace qui
+  // porte la réversibilité (qui a débloqué, quand), et le support suit.
+  annulerDeclarationPerteVol: (id) =>
+    request(`/api/acces/declarations/${id}/annuler`, { method: 'POST', body: {} }),
+  // Enrôlement et rotation renvoient LE SECRET EN CLAIR UNE SEULE FOIS (RG-SOCLE-06 : il est haché
+  // en base, jamais restitué ensuite). L'écran doit le montrer et le dire.
+  enrolerTerminal: (corps) => request('/api/acces/terminaux', { method: 'POST', body: corps }),
+  rotationJetonTerminal: (id) =>
+    request(`/api/acces/terminaux/${id}/jetons`, { method: 'POST', body: {} }),
+  revoquerTerminal: (id) =>
+    request(`/api/acces/terminaux/${id}/revoquer`, { method: 'POST', body: {} }),
+
+  // TOPOLOGIE DU CONTRÔLE D'ACCÈS (A-01) — QUATRE ENTITÉS COMPLÈTES, ZÉRO ÉCRAN.
+  //
+  // `EspaceAcces`, `Controleur`, `Equipement` et `SousReseau` exposent chacune GetCollection + Get
+  // + Post + Patch depuis l'origine du module, et aucune n'était atteignable : sur une installation
+  // neuve, déclarer un tourniquet passait par la base de données. Le seuil de jauge d'un espace, le
+  // mode au dépassement, le délai d'anti-passback et les marges d'avance/retard se réglaient au même
+  // endroit — c'est-à-dire nulle part, pour un exploitant.
+  //
+  // Les chemins ne sont PAS déductibles du nom de la ressource, et deux d'entre eux surprennent :
+  // `EspaceAcces` donne `/api/espace_acces` (pas de « s » final) et `SousReseau` donne
+  // `/api/sous_reseaus` (le pluriel est fabriqué mécaniquement). Vérifiés sur `debug:router`, pas
+  // supposés.
+  espacesAcces: () => request('/api/espace_acces', { query: { itemsPerPage: 200 } }),
+  creerEspaceAcces: (corps) => request('/api/espace_acces', { method: 'POST', body: corps, ld: true }),
+  majEspaceAcces: (id, corps) => request(`/api/espace_acces/${id}`, { method: 'PATCH', body: corps }),
+  controleursAcces: () => request('/api/controleurs', { query: { itemsPerPage: 200 } }),
+  creerControleur: (corps) => request('/api/controleurs', { method: 'POST', body: corps, ld: true }),
+  majControleur: (id, corps) => request(`/api/controleurs/${id}`, { method: 'PATCH', body: corps }),
+  equipementsAcces: () => request('/api/equipements', { query: { itemsPerPage: 200 } }),
+  creerEquipement: (corps) => request('/api/equipements', { method: 'POST', body: corps, ld: true }),
+  majEquipement: (id, corps) => request(`/api/equipements/${id}`, { method: 'PATCH', body: corps }),
+  sousReseauxAcces: () => request('/api/sous_reseaus', { query: { itemsPerPage: 100 } }),
+  creerSousReseau: (corps) => request('/api/sous_reseaus', { method: 'POST', body: corps, ld: true }),
+  majSousReseau: (id, corps) => request(`/api/sous_reseaus/${id}`, { method: 'PATCH', body: corps }),
+
+  // JOURNAL DES PASSAGES (A-05). `passages` ci-dessus rend les vingt derniers pour la supervision ;
+  // celui-ci porte les filtres du serveur (`espace`, `controleur`, `equipement`, `resultat` en
+  // SearchFilter, `horodatage` en DateFilter).
+  journalPassages: (query) => request('/api/passages', { query }),
+  // ⚠ L'EXPORT N'A PAS LES MÊMES NOMS DE PARAMÈTRES QUE LE JOURNAL. `PassageExportProvider` est écrit
+  // à la main : il lit `depuis`, `jusqua`, `espace`, `equipement`, `resultat` — et ignore
+  // silencieusement `horodatage[after]`. Passer les paramètres du journal rendrait un export NON
+  // FILTRÉ qui a toutes les apparences d'un export filtré.
+  exportPassages: (query) => request('/api/acces/passages/export', { query }),
+  // État réseau des contrôleurs (bascule en ligne / hors ligne, US-L3-07).
+  etatSynchroAcces: () => request('/api/acces/synchro/etat'),
+
   // Reporting / Pilotage (M7). Route hors /api (proxifiée via /reporting).
   dashboardEtablissement: (id) => request(`/reporting/dashboards/etablissement/${id}`),
   // Référentiel des indicateurs (M7).
@@ -711,9 +872,25 @@ export const api = {
   apercuDroitsRole: (id, etablissement) =>
     request(`/api/roles/${id}/apercu-droits`, { query: { etablissement } }),
 
-  // Capacités activables (feature flags par établissement).
+  // LES CAPACITÉS D'UN ÉTABLISSEMENT — ON POUVAIT LES LIRE, PAS LES ACTIVER.
+  //
+  // L'onglet s'appelait « Capacités activables » et n'offrait AUCUNE action : douze lignes toutes
+  // marquées « inactive », et rien pour en changer. Maxime, à la revue : « je ne sais pas ce que
+  // c'est ». Un onglet nommé « activables » où l'on ne peut rien activer n'explique pas ce qu'il
+  // fait — il laisse conclure que le logiciel ne le permet pas.
+  //
+  // Les deux écritures existaient depuis le début. Elles sont gardées par `fonctionnalite.gerer` ou
+  // `organisation.gerer`, contrôlé sur l'établissement DU CHEMIN et non sur l'établissement actif
+  // (RG-SOCLE-05) : c'est pour ça que l'identifiant est dans l'URL et pas dans un en-tête.
   catalogueCapacites: () => request('/api/fonctionnalites/catalogue'),
   fonctionnalitesEtablissement: (id) => request(`/api/etablissements/${id}/fonctionnalites`),
+  // Corps : { capaciteCode, active, parametres? }.
+  majFonctionnalite: (id, corps) =>
+    request(`/api/etablissements/${id}/fonctionnalites`, { method: 'PATCH', body: corps }),
+  // Corps : { metier: piscine|sport|padel|patinoire|musee }. ADDITIF : n'éteint jamais une capacité
+  // déjà active — vérifié dans `Fonctionnalites::appliquerPreset`, pas supposé.
+  appliquerPresetCapacites: (id, metier) =>
+    request(`/api/etablissements/${id}/appliquer-preset`, { method: 'POST', body: { metier } }),
 
   // --- Comptabilité / Régie (M6) ---
   journaux: () => request('/api/journals', { query: { itemsPerPage: 100 } }),
@@ -951,6 +1128,22 @@ export const api = {
     request('/api/patinoire_liste_attente_pointures', { query: { itemsPerPage: 100 } }),
   patinoireRetenues: () =>
     request('/api/patinoire_retenue_cautions', { query: { itemsPerPage: 100 } }),
+  // LE BARÈME DE LA PATINOIRE : QUATRE OPÉRATIONS EXPOSÉES, AUCUNE ATTEIGNABLE.
+  //
+  // Le socle a son barème générique (`caution_grille_retenues`, branché dans l'écran Cautions), mais
+  // la patinoire expose LE SIEN — même donnée vue par sa verticale, avec un motif en énumération
+  // (casse, non rendu, perte, restitution partielle) et un parc de patins au lieu d'un `sousCible`
+  // en texte libre.
+  //
+  // Ça change tout pour qui règle la retenue : sur l'écran central, il faut taper `patinoire.patins`
+  // à la main dans un champ libre — une faute de frappe y crée un barème que rien n'applique, sans
+  // erreur. Ici la cible est implicite et le motif se choisit dans une liste.
+  patinoireGrillesRetenue: () =>
+    request('/api/patinoire_grille_retenues', { query: { itemsPerPage: 100 } }),
+  creerPatinoireGrilleRetenue: (corps) =>
+    request('/api/patinoire_grille_retenues', { method: 'POST', body: corps, ld: true }),
+  majPatinoireGrilleRetenue: (id, corps) =>
+    request(`/api/patinoire_grille_retenues/${id}`, { method: 'PATCH', body: corps }),
   // Opérations sur mesure (`uriTemplate`) : elles portent `input: false`, leur processor lit le corps
   // brut. Pas de `ld: true` — l'ajouter ici serait exactement la correction que `verifier-formats`
   // cherche à éviter.

@@ -5,6 +5,7 @@ import Modal from '../components/Modal.jsx'
 import Tabs from '../components/Tabs.jsx'
 import { api } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
+import { mot } from '../api/vocabulaire.js'
 
 function heure(v) {
   if (!v) return '—'
@@ -13,7 +14,22 @@ function heure(v) {
 
 const STATUT_EMP = { Actif: 'good', actif: 'good', Suspendu: 'crit', suspendu: 'crit', Sorti: 'mut' }
 const STATUT_BADGE = { Actif: 'good', actif: 'good', Revoque: 'crit', revoque: 'crit', Suspendu: 'warn' }
-const COUV = { complet: 'good', partiel: 'warn', decouvert: 'crit', incomplet: 'crit' }
+// LA TABLE DES COULEURS ÉTAIT ÉCRITE POUR DES STATUTS QUE LE SERVEUR N'ÉMET JAMAIS.
+//
+// Elle listait `complet`, `partiel`, `decouvert`, `incomplet`. Or `RosterProvider` n'en produit que
+// trois, et deux d'entre eux n'y figuraient pas :
+//
+//     conflit       → qualification manquante ou périmée sur le créneau
+//     sous_couvert  → moins d'employés affectés que l'effectif requis
+//     complet       → le seul des trois que la table connaissait
+//
+// Les deux inconnus tombaient sur le repli `'mut'`, le badge **gris neutre**. L'écran était donc
+// vert quand tout allait bien, et gris quand ça n'allait pas — jamais alarmant. Un poste
+// sous-couvert et un poste en conflit de qualification avaient exactement le poids visuel d'une
+// information de service.
+//
+// Vérifié dans le `match` du fournisseur, pas déduit des noms.
+const COUV = { complet: 'good', sous_couvert: 'warn', conflit: 'crit' }
 
 // Module Personnel : employés, roster (planning), badges staff.
 export default function Personnel({ etabActif, droits = [] }) {
@@ -55,7 +71,33 @@ export default function Personnel({ etabActif, droits = [] }) {
             { cle: 'fin', entete: 'Fin', rendu: (r) => heure(r.fin) },
             { cle: 'effectifRequis', entete: 'Requis', num: true, rendu: (r) => r.effectifRequis ?? '—' },
             { cle: 'affectes', entete: 'Affectés', num: true, rendu: (r) => (Array.isArray(r.employesAffectes) ? r.employesAffectes.length : 0) },
-            { cle: 'statutCouverture', entete: 'Couverture', rendu: (r) => <span className={`badge ${COUV[r.statutCouverture] || 'mut'}`}>{r.statutCouverture || '—'}</span> },
+            // LA QUALIFICATION, PARCE QUE « CONFLIT » NE DIT PAS DE QUOI IL S'AGIT.
+            //
+            // `RosterHebdomadaire` publie `qualificationRequise` et `qualificationManquanteOuExpiree`,
+            // et l'écran n'affichait ni l'un ni l'autre. Le fournisseur replie bien le second dans
+            // `statutCouverture` — d'où « conflit » — mais « conflit » se lit d'abord comme un
+            // chevauchement d'horaires. Personne ne devine qu'il s'agit d'un diplôme périmé, ni
+            // duquel.
+            //
+            // Sur un poste de surveillance de bassin, la différence entre « il manque quelqu'un » et
+            // « la personne présente n'a plus le droit d'y être » n'est pas une nuance.
+            {
+              cle: 'qualification',
+              entete: 'Qualification',
+              rendu: (r) => (
+                r.qualificationManquanteOuExpiree ? (
+                  <>
+                    <span className="badge crit">manquante ou périmée</span>
+                    {r.qualificationRequise && <div className="sub">{r.qualificationRequise}</div>}
+                  </>
+                ) : r.qualificationRequise ? (
+                  <span className="sub">{r.qualificationRequise}</span>
+                ) : (
+                  <span className="sub">aucune requise</span>
+                )
+              ),
+            },
+            { cle: 'statutCouverture', entete: 'Couverture', rendu: (r) => <span className={`badge ${COUV[r.statutCouverture] || 'mut'}`}>{mot(r.statutCouverture)}</span> },
           ]}
         />
       )}

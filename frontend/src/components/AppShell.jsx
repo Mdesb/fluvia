@@ -54,6 +54,20 @@ const NAV = [
     section: 'Contrôle d’accès',
     items: [
       { id: 'supervision', ic: '◉', label: 'Supervision', cap: 'controle_acces' },
+      // Regarder ne suffisait pas : dix-huit operations exposees, deux atteignables. Bloquer un
+      // badge perdu et appairer une carte sont les deux gestes les plus frequents d'un exploitant,
+      // et aucun des deux n'etait possible depuis l'application.
+      { id: 'acces', ic: '▭', label: 'Badges & terminaux', cap: 'controle_acces', perms: ['acces.lire', 'acces.appairer', 'acces.bloquer_support', 'acces.gerer'] },
+      // L'installation du contrôle d'accès : le plan du site, les lecteurs, et le journal complet.
+      // Même garde que ses deux voisines — la capacité DIT ce que le site a acheté, les permissions
+      // disent ce que ce compte a le droit d'en faire.
+      //
+      // Cette entrée a d'abord été posée sans `cap`, parce que la capacité était inactive sur tous
+      // les tenants et que l'écran des modules ne permettait pas de l'activer : la garder aurait
+      // caché l'écran à celui-là même qui vient d'installer ses tourniquets. Ce n'est plus vrai
+      // depuis que Paramètres › Modules en service permet la mise en service — l'entrée rejoint donc
+      // ses voisines, et une topologie invisible se corrige là où elle doit l'être.
+      { id: 'topologie_acces', ic: '⛬', label: 'Topologie & passages', cap: 'controle_acces', perms: ['acces.lire', 'acces.gerer', 'acces.superviser'] },
     ],
   },
   {
@@ -145,7 +159,11 @@ const NAV = [
         perms: ['securite.gerer', 'securite.lire', 'organisation.gerer', 'offre.gerer', 'caisse.gerer', 'crm.parametrer'],
       },
       // Ouvert le 27/08. Voir le commentaire de l'entree << Assistance >> : meme motif, meme cout.
-      { id: 'autorisations', ic: '⚿', label: 'Autorisations', perms: ['autorisation.lire', 'autorisation.approuver', 'autorisation.gerer'] },
+      // « Autorisations » faisait chercher les droits ici, et on y tombait sur un journal vide :
+      // qui-a-le-droit-de-quoi vit dans Paramètres › Utilisateurs & droits. Cet écran porte les
+      // demandes d'escalade et les plafonds de montant — ce n'est pas la même question.
+      // Arbitré par Maxime à la revue : on renomme, on ne déplace pas les droits.
+      { id: 'autorisations', ic: '⚿', label: 'Escalades & plafonds', perms: ['autorisation.lire', 'autorisation.approuver', 'autorisation.gerer'] },
       // Les mentions obligatoires d'un site marchand. Sous Administration et non sous Boutique :
       // elles engagent l'exploitant, pas la vitrine, et un exploitant qui n'a pas encore ouvert
       // sa boutique doit pouvoir les preparer.
@@ -273,7 +291,15 @@ export default function AppShell({
 
       <aside className="sidebar">
         <div className="side-brand"><span className="logo">◈</span> Fluvia</div>
-        <div className="side-tenant"><b>{nomEtab}</b>Billetterie · Contrôle d'accès</div>
+        {/* LE SOUS-TITRE ANNONÇAIT UN MODULE QUE L'ÉTABLISSEMENT N'A PAS.
+            « Billetterie · Contrôle d'accès » était écrit en dur sous le nom du site. Sur un
+            établissement dont la capacité `controle_acces` est hors service — le cas de GI-ONE
+            FITNESS — l'application affirmait donc dans son en-tête un module que son propre écran
+            des modules déclarait absent, et dont aucune entrée n'apparaissait dans le menu.
+            Relevé par la session en revue avec Maxime.
+            La ligne dit maintenant ce qui est réellement en service. La billetterie ne se négocie
+            pas (caisse et catalogue existent partout) ; le reste se lit dans les capacités. */}
+        <div className="side-tenant"><b>{nomEtab}</b>{sousTitreDe(capacites)}</div>
         <nav className="side-nav">
           {navAvecEcran.map((grp) => (
             <div key={grp.section}>
@@ -398,4 +424,23 @@ export default function AppShell({
       </div>
     </div>
   )
+}
+
+// Ce que l'établissement fait vraiment, d'après ses capacités actives — pas d'après une chaîne
+// écrite en dur. On ne cite que ce qui se voit dans le menu : annoncer « Porte-monnaie virtuel »
+// sous le nom du site rendrait la ligne illisible sans rien apprendre à personne.
+//
+// La billetterie n'est pas une capacité : caisse et catalogue existent sur tous les établissements.
+const SOUS_TITRES = [
+  ['controle_acces', "Contrôle d'accès"],
+  ['reservation', 'Réservation'],
+  ['boutique_en_ligne', 'Boutique en ligne'],
+]
+
+function sousTitreDe(capacites = []) {
+  const parts = ['Billetterie']
+  for (const [code, libelle] of SOUS_TITRES) {
+    if (capacites.includes(code)) parts.push(libelle)
+  }
+  return parts.join(' · ')
 }

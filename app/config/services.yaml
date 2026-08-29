@@ -136,6 +136,19 @@ services:
         public: true
     App\Sepa\Adapter\RetourSepaStubAdapter:
         public: true
+    # ── SESSION GLISSANTE ───────────────────────────────────────────────────────────────────────
+    #
+    # `token_ttl` vaut 3600 : un caissier etait deconnecte au bout d'une heure, EN PLEINE VENTE et
+    # sans un mot — rien ne distingue « votre session a expire » d'une panne.
+    #
+    # La duree est LUE dans la configuration de Lexik plutot que recopiee ici : le jour ou quelqu'un
+    # change `token_ttl`, le seuil de reemission suit. Une valeur recopiee est une valeur qui derive,
+    # et celle-ci deriverait en silence.
+    App\Securite\Security\SlidingSessionListener:
+        arguments:
+            $dureeDeVie: '%lexik_jwt_authentication.token_ttl%'
+        tags: ['kernel.event_subscriber']
+
     # Tokenisation IBAN — HMAC applicatif (repris de App\Sport, ⚠ non un vrai coffre-fort PCI-DSS).
     App\Sepa\Port\TokenisationIbanInterface: '@App\Sepa\Adapter\TokenisationIbanHmacAdapter'
     App\Sepa\Adapter\TokenisationIbanHmacAdapter:

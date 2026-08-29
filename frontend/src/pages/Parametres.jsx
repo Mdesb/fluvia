@@ -21,12 +21,21 @@ const SOUS = [
   ['referentiels', 'Catalogue & référentiels'],
   ['caisse', 'Caisse & moyens de paiement'],
   ['droits', 'Utilisateurs & droits'],
-  ['capacites', 'Capacités activables'],
+  // « Capacités activables » était le nom interne d'un mécanisme, pas celui d'un réglage. Maxime,
+  // à la revue : « je ne sais pas ce que c'est ».
+  ['capacites', 'Modules en service'],
   // Les horaires d'ouverture sont une CONFIGURATION du site, pas un écran de consultation : ils se
   // saisissent deux fois par an. Ils portent surtout la case qui fait refuser un passage à la
   // porte — elle n'a rien à faire dans un agenda qu'on ouvre pour regarder sa semaine.
   ['ouverture', 'Horaires d’ouverture'],
 ]
+
+// Les trois formes d'exploitation que le socle connaît (`Compta\Enum\TypeExploitant`), en clair.
+const PROFILS_COMPTABLES = {
+  regie_directe: 'Régie directe',
+  dsp: 'Délégation de service public',
+  groupe_prive: 'Groupe privé',
+}
 
 const STATUT_BADGE = { actif: 'good', invite: 'warn', suspendu: 'crit' }
 
@@ -104,7 +113,7 @@ function descripteurTypesTarif(api) {
   }
 }
 
-function descripteurTva(api) {
+function descripteurTva(api, profils = []) {
   return {
     titre: 'Taux de TVA',
     aQuoiCaSert:
@@ -135,6 +144,48 @@ function descripteurTva(api) {
         requis: true,
         exemple: '20',
         aide: 'Le pourcentage appliqué au prix hors taxes. Saisissez 20 pour 20 %.',
+        // CRÉER UN TAUX DE TVA ÉTAIT IMPOSSIBLE, ET C'EST CE QUI BLOQUAIT TOUTE MISE EN VENTE.
+        //
+        // Le moteur envoie `Number(v)` pour un champ `type: 'nombre'` — donc `20`. Or
+        // `Compta\Entity\TauxTva::$taux` est déclaré `private string $taux = '0.00'` : le
+        // désérialiseur refuse en 422, « The type of the "taux" attribute must be "string",
+        // "integer" given ». Aucun taux ne pouvait donc être créé, et sans taux aucun produit ne
+        // peut être rattaché ni vendu — le troisième point de « Avant de pouvoir vendre » était
+        // infranchissable pour tout le monde.
+        //
+        // On ne corrige PAS le moteur : `Saison::$priorite` est un `int` et attend bien un nombre.
+        // Le type est une propriété du champ, pas du composant, d'où le `versCorps` — le crochet
+        // prévu exactement pour ça.
+        //
+        // Un montant part en chaîne dans tout ce dépôt (prix, plafonds, cautions) : la virgule
+        // flottante binaire ne représente pas 20,10 exactement, et sur de l'argent ça se voit.
+        versCorps: (v) => (v === '' || v == null ? null : String(v)),
+      },
+      {
+        // LE SECOND REFUS, CELUI QU'ON NE VOIT QU'APRÈS AVOIR LEVÉ LE PREMIER.
+        //
+        // `TauxTva::$profilExploitant` porte `nullable: false`, `NotNull`, ET le groupe
+        // `taux:write` : c'est au client de le fournir, aucun listener ne le pose. Une fois le type
+        // du taux corrigé, le serveur répondait « profilExploitant: This value should not be
+        // null » — constaté à l'écran, pas déduit. Corriger le premier défaut sans celui-ci aurait
+        // remplacé un message incompréhensible par un autre, et laissé la création tout aussi
+        // impossible.
+        nom: 'profilExploitant',
+        libelle: 'Profil comptable',
+        type: 'choix',
+        requis: true,
+        options: profils.map((p) => ({
+          valeur: p['@id'] || `/api/profil_exploitants/${p.id}`,
+          libelle: [PROFILS_COMPTABLES[p.type] || p.type, p.referentielComptable, p.siren]
+            .filter(Boolean)
+            .join(' · '),
+        })),
+        aide: profils.length === 0
+          ? "Aucun profil comptable n'existe pour cet établissement, et un taux de TVA doit en "
+            + 'porter un. Tant qu’il manque, aucun taux ne peut être créé — c’est lui qui fixe le '
+            + 'référentiel comptable (M57, M4…) auquel le taux se rattache.'
+          : 'Le référentiel comptable auquel ce taux appartient. C’est lui qui décide de la façon '
+            + 'dont la TVA remonte en comptabilité.',
       },
       {
         nom: 'actif',
@@ -294,7 +345,7 @@ function descripteurSaisons(api) {
   }
 }
 
-function descripteurPointsDeVente(api, etabActif) {
+function descripteurPointsDeVente(api, etabActif, moyens = []) {
   return {
     titre: 'Points de vente',
     aQuoiCaSert:
@@ -320,6 +371,34 @@ function descripteurPointsDeVente(api, etabActif) {
         exemple: 'Guichet principal',
         aide: 'Le nom que verra le caissier en ouvrant sa caisse.',
       },
+      // LES MOYENS DE PAIEMENT ÉTAIENT LISIBLES ET PAS RÉGLABLES.
+      //
+      // Le champ `moyensAutorises` est écrivable côté serveur depuis le début (groupe `pdv:write`,
+      // droit `caisse.gerer`) ; l'écran l'affichait en colonne et ne le mettait pas au formulaire.
+      // Signalé par Maxime à la revue des écrans.
+      //
+      // ⚠ RIEN DE COCHÉ = AUCUNE RESTRICTION, et c'est le contraire de ce qu'on lit spontanément.
+      // `PaiementHandler` teste `getMoyensAutorises() !== []` avant de vérifier quoi que ce soit :
+      // une liste vide laisse donc TOUT passer. Cocher trois moyens, c'est restreindre à ces trois ;
+      // n'en cocher aucun, c'est tout autoriser. L'aide le dit, parce qu'une case à cocher vide se
+      // lit d'habitude comme « rien n'est permis ».
+      {
+        nom: 'moyensAutorises',
+        libelle: 'Paiements acceptés à ce point de vente',
+        type: 'choix-multiples',
+        options: moyens.map((m) => ({ valeur: m.code, libelle: m.libelle || m.code })),
+        aide: moyens.length === 0
+          ? "Aucun moyen de paiement n'est déclaré pour cet établissement : renseignez-les plus bas, "
+            + 'puis revenez restreindre ce point de vente si besoin.'
+          : "Ne cochez rien pour accepter tous les moyens déclarés. Cochez-en pour n'autoriser "
+            + "que ceux-là : un caissier qui tentera un autre moyen se verra refuser l'encaissement.",
+      },
+      {
+        nom: 'tpe',
+        libelle: 'Un terminal bancaire est rattaché',
+        type: 'bool',
+        aide: 'Détermine si le paiement par carte passe par un terminal plutôt que par une saisie.',
+      },
     ],
     colonnes: [
       { cle: 'libelle', titre: 'Nom', rendu: (r) => <span className="nm">{r.libelle || '—'}</span> },
@@ -332,16 +411,55 @@ function descripteurPointsDeVente(api, etabActif) {
       {
         cle: 'moyensAutorises',
         titre: 'Paiements acceptés',
-        rendu: (r) =>
-          Array.isArray(r.moyensAutorises) && r.moyensAutorises.length ? r.moyensAutorises.join(', ') : 'tous',
+        // Le serveur stocke des CODES ; on affiche les libellés du référentiel. « tous » est exact :
+        // une liste vide vaut absence de restriction (voir l'aide du champ, plus haut).
+        rendu: (r) => {
+          const codes = Array.isArray(r.moyensAutorises) ? r.moyensAutorises : []
+          if (codes.length === 0) return <span className="sub">tous</span>
+          return codes.map((c) => moyens.find((m) => m.code === c)?.libelle || c).join(', ')
+        },
       },
     ],
   }
 }
 
-export default function Parametres({ etabActif, etablissements, droits = [] }) {
+export default function Parametres({ etabActif, etablissements, droits = [], onCapacitesChangees }) {
   const [ouvertureStructure, setOuvertureStructure] = useState(false)
   const [sousOnglet, setSousOnglet] = useState('entites')
+
+  // LES MOYENS DE PAIEMENT DU REFERENTIEL, POUR POUVOIR LES COCHER PAR POINT DE VENTE.
+  //
+  // Maxime, a la revue des ecrans : << on ne peut pas ajouter/enlever les moyens de paiement
+  // d une caisse >>. Le champ est ecrivable cote serveur depuis le debut ; l ecran l affichait
+  // en colonne et ne le proposait pas au formulaire.
+  //
+  // La liste ne peut pas etre une constante : ce sont les moyens que CET etablissement a
+  // declares, juste en dessous dans le meme onglet.
+  // Le profil comptable de l'établissement : obligatoire sur un taux de TVA, jamais demandé.
+  // Incremente a chaque ecriture d'un reglage suivi par << Avant de pouvoir vendre >> : sans ca, la
+  // liste garde son ancien decompte et dit qu'il manque ce qu'on vient de creer.
+  const [versionReferentiels, setVersionReferentiels] = useState(0)
+  const referentielEcrit = useCallback(() => setVersionReferentiels((v) => v + 1), [])
+
+  const [profils, setProfils] = useState([])
+  useEffect(() => {
+    let annule = false
+    api.profilsExploitant()
+      .then((r) => { if (!annule) setProfils(membres(r)) })
+      .catch(() => { if (!annule) setProfils([]) })
+    return () => { annule = true }
+  }, [etabActif])
+
+  const [moyens, setMoyens] = useState([])
+  useEffect(() => {
+    let annule = false
+    api.moyensPaiement()
+      .then((r) => { if (!annule) setMoyens(membres(r)) })
+      // Un referentiel illisible ne doit pas empecher de renommer un point de vente : la case
+      // a cocher disparait, le reste du formulaire fonctionne.
+      .catch(() => { if (!annule) setMoyens([]) })
+    return () => { annule = true }
+  }, [etabActif])
 
   return (
     <div className="view">
@@ -357,7 +475,7 @@ export default function Parametres({ etabActif, etablissements, droits = [] }) {
       {/* En tete, avant les onglets de contenu : c'est la premiere chose que voit quelqu'un qui
           arrive ici sans savoir par ou commencer. Il se replie tout seul des que les trois
           conditions sont remplies. */}
-      <PretAVendre etabActif={etabActif} droits={droits} onAller={setSousOnglet} />
+      <PretAVendre etabActif={etabActif} droits={droits} onAller={setSousOnglet} version={versionReferentiels} />
 
       {sousOnglet === 'ouverture' && <PlanningOuvertureSection droits={droits} etabActif={etabActif} />}
 
@@ -410,10 +528,12 @@ export default function Parametres({ etabActif, etablissements, droits = [] }) {
           <div className="fiche-sec" style={{ marginBottom: 10 }}>Indispensable pour vendre</div>
           <ReferentielEditable
             descripteur={descripteurTypesTarif(api)}
+            onEcrit={referentielEcrit}
             peutEcrire={aLeDroit(droits, 'offre.gerer')}
           />
           <ReferentielEditable
-            descripteur={descripteurTva(api)}
+            descripteur={descripteurTva(api, profils)}
+            onEcrit={referentielEcrit}
             peutEcrire={aLeDroit(droits, 'compta.gerer')}
           />
 
@@ -437,20 +557,11 @@ export default function Parametres({ etabActif, etablissements, droits = [] }) {
       {sousOnglet === 'caisse' && (
         <div className="resa-grid">
           <ReferentielEditable
-            descripteur={descripteurPointsDeVente(api, etabActif)}
+            descripteur={descripteurPointsDeVente(api, etabActif, moyens)}
+            onEcrit={referentielEcrit}
             peutEcrire={aLeDroit(droits, 'caisse.gerer')}
           />
-          <Liste
-            titre="Caisses"
-            deps={[etabActif]}
-            charger={api.caisses}
-            vide="Aucune caisse."
-            colonnes={[
-              { cle: 'libelle', entete: 'Caisse', rendu: (r) => <span className="nm">{r.libelle || '—'}</span> },
-              { cle: 'pointDeVente', entete: 'Point de vente', rendu: (r) => texte(r.pointDeVente?.libelle, '—') },
-              { cle: 'etat', entete: 'État', rendu: (r) => <span className="badge mut">{r.etat || '—'}</span> },
-            ]}
-          />
+          <CaissesSection etabActif={etabActif} peutGerer={aLeDroit(droits, 'caisse.gerer')} onEcrit={referentielEcrit} />
           <MoyensPaiement etabActif={etabActif} />
         </div>
       )}
@@ -459,7 +570,7 @@ export default function Parametres({ etabActif, etablissements, droits = [] }) {
         <ComptesDroits etabActif={etabActif} etablissements={etablissements} droits={droits} />
       )}
 
-      {sousOnglet === 'capacites' && <Capacites etabActif={etabActif} />}
+      {sousOnglet === 'capacites' && <Capacites etabActif={etabActif} onCapacitesChangees={onCapacitesChangees} />}
 
       {/* ⚠ ENTRE LES CONDITIONNELS DE SOUS-ONGLET, et c'est le point.
           Posée à l'intérieur de l'un d'eux — ce qui est arrivé deux fois — elle n'existe pas quand
@@ -474,16 +585,34 @@ export default function Parametres({ etabActif, etablissements, droits = [] }) {
   )
 }
 
-// --- Moyens de paiement : éditables (activer/désactiver, ajouter, renommer). Écriture gardée par
+// --- Moyens de paiement : éditables (ajouter, modifier, activer/désactiver). Écriture gardée par
 // `compta.gerer` côté back : les erreurs (dont 403) sont surfacées proprement. ---
+//
+// ON POUVAIT TOUT RÉGLER À LA CRÉATION, ET PLUS RIEN ENSUITE.
+//
+// Les cinq propriétés de `MoyenPaiement` portent le groupe `moyen:write` et l'entité expose un
+// `Patch` : tout est modifiable côté serveur depuis le début. L'écran, lui, n'offrait après coup que
+// « Renommer » et « Activer / Désactiver ». Une case cochée de travers au moment de la création
+// devenait définitive — sauf à créer un second moyen et à désactiver le premier, ce qui laisse deux
+// lignes dans le référentiel et brouille les états de caisse.
+//
+// CE QUE FONT VRAIMENT CES TROIS CASES, LU DANS `PaiementHandler`, PAS DÉDUIT DE LEUR NOM.
+//
+//   autoriseRendu    ligne 97  : sans elle, encaisser PLUS que le reste à payer est refusé en 422.
+//                                C'est la case qui permet de rendre la monnaie.
+//   autoriseDiffere  ligne 90  : sans elle, un règlement marqué « différé » est refusé en 422.
+//   exigeReference   ligne 125 : le règlement PART AU TERMINAL BANCAIRE et n'est enregistré que s'il
+//                                revient accepté. Un refus ne crée aucun paiement.
+//
+// Le libellé « Exige une référence (TPE) » décrivait donc mal la troisième : elle ne demande pas une
+// saisie à l'agent, elle branche l'encaissement sur le TPE. Renommée en conséquence.
 function MoyensPaiement({ etabActif }) {
   const [rows, setRows] = useState([])
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [msg, setMsg] = useState(null)
   const [busy, setBusy] = useState(null) // id en cours de bascule
-  const [modalAjout, setModalAjout] = useState(false)
-  const [enRenommage, setEnRenommage] = useState(null) // moyen en cours de renommage
+  const [edition, setEdition] = useState(null) // { moyen: null } = création, { moyen } = modification
 
   const charger = useCallback(async () => {
     setChargement(true)
@@ -524,7 +653,7 @@ function MoyensPaiement({ etabActif }) {
         <h3>Moyens de paiement</h3>
         <span className="sub">éditable</span>
         <div className="r" style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-          <button className="btn sm" onClick={() => { setMsg(null); setErreur(null); setModalAjout(true) }}>+ Ajouter</button>
+          <button className="btn sm" onClick={() => { setMsg(null); setErreur(null); setEdition({ moyen: null }) }}>+ Ajouter</button>
           <button className="btn ghost sm" onClick={charger} disabled={chargement}>↻</button>
         </div>
       </div>
@@ -536,7 +665,7 @@ function MoyensPaiement({ etabActif }) {
         ) : (
           <table className="tbl">
             <thead>
-              <tr><th>Moyen</th><th>Code</th><th>TPE / réf.</th><th>État</th><th className="num">Actions</th></tr>
+              <tr><th>Moyen</th><th>Code</th><th>Ce qu’il permet en caisse</th><th>État</th><th className="num">Actions</th></tr>
             </thead>
             <tbody>
               {rows.map((m) => {
@@ -545,11 +674,34 @@ function MoyensPaiement({ etabActif }) {
                   <tr key={m.id}>
                     <td><span className="nm">{m.libelle || '—'}</span></td>
                     <td><span className="mono">{m.code || '—'}</span></td>
-                    <td>{m.exigeReference ? 'oui' : '—'}</td>
+                    <td>
+                      {/* Les trois réglages qui décident du comportement de l'encaissement étaient
+                          invisibles sauf un, et sous un nom qui disait autre chose que son effet. */}
+                      {m.exigeReference && (
+                        <span className="badge info" title="Le règlement part au terminal bancaire et n’est enregistré que s’il revient accepté.">
+                          terminal bancaire
+                        </span>
+                      )}{' '}
+                      {m.autoriseRendu && (
+                        <span className="badge info" title="On peut encaisser plus que le montant dû et rendre la différence.">
+                          rendu de monnaie
+                        </span>
+                      )}{' '}
+                      {m.autoriseDiffere && (
+                        <span className="badge info" title="Le règlement peut être enregistré comme différé (encaissement plus tard).">
+                          différé
+                        </span>
+                      )}
+                      {!m.exigeReference && !m.autoriseRendu && !m.autoriseDiffere && (
+                        <span className="sub" title="Encaissement du montant exact, sans terminal ni report.">
+                          montant exact, comptant
+                        </span>
+                      )}
+                    </td>
                     <td><span className={`badge ${actif ? 'good' : 'mut'}`}>{actif ? 'actif' : 'inactif'}</span></td>
                     <td className="num">
                       <div style={{ display: 'inline-flex', gap: 6 }}>
-                        <button className="btn ghost sm" onClick={() => { setMsg(null); setErreur(null); setEnRenommage(m) }}>Renommer</button>
+                        <button className="btn ghost sm" onClick={() => { setMsg(null); setErreur(null); setEdition({ moyen: m }) }}>Modifier</button>
                         <button
                           className="btn ghost sm"
                           onClick={() => basculerActif(m)}
@@ -570,22 +722,14 @@ function MoyensPaiement({ etabActif }) {
       </div>
 
       <ModalMoyenPaiement
-        open={modalAjout}
-        onClose={() => setModalAjout(false)}
+        edition={edition}
+        onClose={() => setEdition(null)}
         onEnregistre={async (corps) => {
-          await api.creerMoyenPaiement(corps)
-          setModalAjout(false)
-          setMsg(`Moyen « ${corps.libelle} » ajouté.`)
-          await charger()
-        }}
-      />
-      <ModalRenommage
-        moyen={enRenommage}
-        onClose={() => setEnRenommage(null)}
-        onEnregistre={async (libelle) => {
-          await api.majMoyenPaiement(enRenommage.id, { libelle })
-          setEnRenommage(null)
-          setMsg('Libellé mis à jour.')
+          const existant = edition?.moyen
+          if (existant) await api.majMoyenPaiement(existant.id, corps)
+          else await api.creerMoyenPaiement({ ...corps, actif: true })
+          setEdition(null)
+          setMsg(existant ? `« ${corps.libelle} » mis à jour.` : `Moyen « ${corps.libelle} » ajouté.`)
           await charger()
         }}
       />
@@ -593,7 +737,227 @@ function MoyensPaiement({ etabActif }) {
   )
 }
 
-function ModalMoyenPaiement({ open, onClose, onEnregistre }) {
+// LES CINQ CODES QUE LE LOGICIEL RECONNAÎT COMME DU PAPIER QU'ON DÉTIENT.
+//
+// `Vente\Port\MoyenPaiement::estFiduciaire()` est une LISTE DE CODES EN DUR, pas une propriété de
+// l'entité. Elle décide d'une seule chose, mais elle en décide une lourde : `PaiementHandler` ligne
+// 73 refuse un moyen fiduciaire hors session de caisse — sans espèces ni chèque, rien à compter,
+// donc rien à clôturer.
+//
+// Conséquence pour cet écran : un moyen créé ici avec un code hors de cette liste ne sera JAMAIS
+// traité comme du papier. Un exploitant qui ajoute « chèque sport » obtient un moyen encaissable en
+// vente directe, sans session, alors que quelqu'un tient physiquement le papier et devra en
+// répondre. Le docblock du serveur le dit lui-même et renvoie la propriété à `MoyenPaiement` —
+// demande écrite, pas encore faite.
+//
+// On ne peut pas le corriger depuis le front. On peut refuser de le laisser passer en silence.
+const CODES_FIDUCIAIRES = ['especes', 'cheque', 'cheque_vacances', 'cheque_culture', 'cheque_loisirs']
+
+
+// --- Les caisses : le tiroir depuis lequel on encaisse. ---
+//
+// ON NE POUVAIT PAS EN CRÉER UNE, ET C'ÉTAIT LE DERNIER VERROU DE LA MISE EN VENTE.
+//
+// `POST /api/caisses` existe depuis le début (droit `caisse.gerer`) et n'était appelé d'aucun écran.
+// Cette liste était en lecture seule. Conséquence observée sur GI-ONE FITNESS : le formulaire
+// d'ouverture de session proposait « Aucune caisse » comme unique option — sans valeur — puis
+// refusait avec « Point de vente et caisse requis » alors que le point de vente était choisi. Il
+// reprochait deux champs quand un seul manquait, et celui-là était impossible à remplir.
+//
+// Sixième occurrence de la même famille : on crée une chose là où c'est le métier (§9.3 des
+// conventions), et le métier d'une caisse est ici, à côté de son point de vente.
+function CaissesSection({ etabActif, peutGerer, onEcrit }) {
+  const [caisses, setCaisses] = useState([])
+  const [pdvs, setPdvs] = useState([])
+  const [chargement, setChargement] = useState(true)
+  const [erreur, setErreur] = useState(null)
+  const [msg, setMsg] = useState(null)
+  const [edition, setEdition] = useState(null) // { caisse } ou { creation: true }
+
+  const charger = useCallback(async () => {
+    setChargement(true)
+    setErreur(null)
+    // Deux lectures, deux droits : sans les points de vente on peut encore LIRE les caisses, mais
+    // pas en créer — le formulaire le dira plutôt que de proposer une liste vide.
+    const [c, p] = await Promise.allSettled([api.caisses(), api.pointDeVentes()])
+    setCaisses(c.status === 'fulfilled' ? membres(c.value) : [])
+    setPdvs(p.status === 'fulfilled' ? membres(p.value) : [])
+    if (c.status === 'rejected') setErreur(c.reason?.message || 'Chargement impossible.')
+    setChargement(false)
+  }, [etabActif])
+
+  useEffect(() => { charger() }, [charger])
+
+  return (
+    <section className="card">
+      <div className="card-h">
+        <h3>Caisses</h3>
+        <span className="sub">le poste depuis lequel on encaisse</span>
+        {peutGerer && (
+          <div className="actions" style={{ marginLeft: 'auto' }}>
+            <button className="btn sm" type="button" onClick={() => { setMsg(null); setErreur(null); setEdition({ creation: true }) }}>
+              ＋ Ajouter
+            </button>
+            <button className="btn ghost sm" type="button" onClick={charger} disabled={chargement}>↻</button>
+          </div>
+        )}
+      </div>
+      <div className="card-b" style={{ overflowX: 'auto' }}>
+        {msg && <div className="banner banner-ok" style={{ margin: '0 0 12px' }}>{msg}</div>}
+        {erreur && <div className="banner banner-error" style={{ margin: '0 0 12px' }}>{erreur}</div>}
+
+        {chargement ? (
+          <div className="center" style={{ minHeight: 120 }}><div className="spinner" /></div>
+        ) : caisses.length === 0 ? (
+          <div className="empty">
+            Aucune caisse. Une caisse, c&rsquo;est le tiroir et le poste depuis lesquels on encaisse —
+            un comptoir d&rsquo;accueil, une buvette, une borne. Tant qu&rsquo;il n&rsquo;y en a pas,
+            aucune session ne peut s&rsquo;ouvrir et rien ne peut être vendu, même avec un point de
+            vente et des tarifs.
+          </div>
+        ) : (
+          <table className="tbl">
+            <thead>
+              <tr><th>Caisse</th><th>Point de vente</th><th>État</th>{peutGerer && <th className="num">Actions</th>}</tr>
+            </thead>
+            <tbody>
+              {caisses.map((c) => (
+                <tr key={c.id}>
+                  <td><span className="nm">{c.libelle || '—'}</span></td>
+                  <td>{c.pointDeVente?.libelle || <span className="sub">—</span>}</td>
+                  <td>
+                    {/* `securisee` est l'état NORMAL d'une caisse au repos, pas une alerte : elle
+                        exige le code régisseur pour être rouverte. La peindre en rouge ferait
+                        chercher un incident là où il n'y en a pas. */}
+                    <span className={`badge ${c.etat === 'ouverte' ? 'good' : 'mut'}`}>
+                      {mot(c.etat)}
+                    </span>
+                  </td>
+                  {peutGerer && (
+                    <td className="num">
+                      <button className="btn ghost sm" type="button" onClick={() => { setMsg(null); setErreur(null); setEdition({ caisse: c }) }}>
+                        Renommer
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <CaisseModal
+        edition={edition}
+        pdvs={pdvs}
+        onClose={() => setEdition(null)}
+        onEnregistre={async (corps) => {
+          const existante = edition?.caisse
+          if (existante) await api.majCaisse(existante.id, { libelle: corps.libelle })
+          else await api.creerCaisse(corps)
+          setEdition(null)
+          setMsg(existante ? 'Caisse renommée.' : `Caisse « ${corps.libelle} » créée.`)
+          await charger()
+          onEcrit?.()
+        }}
+      />
+    </section>
+  )
+}
+
+function CaisseModal({ edition, pdvs, onClose, onEnregistre }) {
+  const caisse = edition?.caisse || null
+  const creation = !!edition && !caisse
+  const [libelle, setLibelle] = useState('')
+  const [pdv, setPdv] = useState('')
+  const [erreur, setErreur] = useState(null)
+  const [envoi, setEnvoi] = useState(false)
+
+  useEffect(() => {
+    if (!edition) return
+    setLibelle(caisse?.libelle || '')
+    setPdv(caisse?.pointDeVente?.id || pdvs[0]?.id || '')
+    setErreur(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [edition])
+
+  async function soumettre(e) {
+    e.preventDefault()
+    setErreur(null)
+    if (!libelle.trim()) { setErreur('Donnez un nom à cette caisse.'); return }
+    if (creation && !pdv) { setErreur('Une caisse appartient à un point de vente : choisissez-en un.'); return }
+    setEnvoi(true)
+    try {
+      await onEnregistre({ libelle: libelle.trim(), pointDeVente: `/api/point_de_ventes/${pdv}` })
+    } catch (err) {
+      setErreur(erreurEcriture(err))
+    } finally {
+      setEnvoi(false)
+    }
+  }
+
+  return (
+    <Modal open={!!edition} onClose={onClose} titre={creation ? 'Ajouter une caisse' : `Renommer « ${caisse?.libelle || ''} »`}>
+      <form onSubmit={soumettre}>
+        {erreur && <div className="banner banner-error" style={{ marginBottom: 12 }}>{erreur}</div>}
+
+        <div className="field">
+          <label htmlFor="ca-lib">Nom de la caisse *</label>
+          <input
+            id="ca-lib"
+            className="input"
+            value={libelle}
+            maxLength={120}
+            placeholder="Comptoir 1, Buvette, Borne d’entrée…"
+            onChange={(e) => setLibelle(e.target.value)}
+          />
+          <p className="hint">
+            Ce que le caissier choisira en ouvrant sa session. Nommez l’endroit, pas le matériel :
+            c’est le poste qu’on reconnaît, pas le tiroir.
+          </p>
+        </div>
+
+        {creation && (
+          <div className="field">
+            <label htmlFor="ca-pdv">Point de vente *</label>
+            {/* LE POINT DE VENTE NE SE CHANGE PAS APRÈS COUP, ET CE N'EST PAS UN OUBLI.
+                Les sessions, les ventes et les clôtures Z d'une caisse restent rattachées à son
+                point de vente. Le déplacer ferait basculer un historique d'encaissement d'une régie
+                à une autre sans que rien ne le signale. On crée une seconde caisse. */}
+            {pdvs.length === 0 ? (
+              <div className="banner banner-warn">
+                Aucun point de vente sur cet établissement. Une caisse appartient à un point de
+                vente : créez-en un ci-dessus avant d’ajouter une caisse.
+              </div>
+            ) : (
+              <>
+                <select id="ca-pdv" className="input" value={pdv} onChange={(e) => setPdv(e.target.value)}>
+                  {pdvs.map((p) => <option key={p.id} value={p.id}>{p.libelle}</option>)}
+                </select>
+                <p className="hint">
+                  Il ne pourra plus être changé : les sessions, les ventes et les clôtures Z de cette
+                  caisse y resteront rattachées. Pour un autre point de vente, créez une autre caisse.
+                </p>
+              </>
+            )}
+          </div>
+        )}
+
+        <div className="r" style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button type="button" className="btn ghost" onClick={onClose}>Annuler</button>
+          <button type="submit" className="btn" disabled={envoi || (creation && pdvs.length === 0)}>
+            {envoi ? 'Enregistrement…' : creation ? 'Créer la caisse' : 'Enregistrer'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+function ModalMoyenPaiement({ edition, onClose, onEnregistre }) {
+  const moyen = edition?.moyen || null
+  const creation = !!edition && !moyen
+
   const [code, setCode] = useState('')
   const [libelle, setLibelle] = useState('')
   const [exigeReference, setExigeReference] = useState(false)
@@ -603,17 +967,22 @@ function ModalMoyenPaiement({ open, onClose, onEnregistre }) {
   const [envoi, setEnvoi] = useState(false)
 
   useEffect(() => {
-    if (open) {
-      setCode(''); setLibelle(''); setExigeReference(false); setAutoriseRendu(false); setAutoriseDiffere(false); setErreur(null)
-    }
-  }, [open])
+    if (!edition) return
+    setCode(moyen?.code || '')
+    setLibelle(moyen?.libelle || '')
+    setExigeReference(!!moyen?.exigeReference)
+    setAutoriseRendu(!!moyen?.autoriseRendu)
+    setAutoriseDiffere(!!moyen?.autoriseDiffere)
+    setErreur(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [edition])
 
   async function soumettre(e) {
     e.preventDefault()
     setErreur(null)
     setEnvoi(true)
     try {
-      await onEnregistre({ code: code.trim(), libelle: libelle.trim(), exigeReference, autoriseRendu, autoriseDiffere, actif: true })
+      await onEnregistre({ code: code.trim(), libelle: libelle.trim(), exigeReference, autoriseRendu, autoriseDiffere })
     } catch (err) {
       setErreur(erreurEcriture(err))
     } finally {
@@ -621,71 +990,77 @@ function ModalMoyenPaiement({ open, onClose, onEnregistre }) {
     }
   }
 
+  // Le code saisi ressemble-t-il à un instrument papier que le logiciel ne saura pas reconnaître ?
+  const codeNettoye = code.trim().toLowerCase()
+  const papierNonReconnu =
+    codeNettoye !== ''
+    && !CODES_FIDUCIAIRES.includes(codeNettoye)
+    && /(cheque|chèque|espece|espèce|liquide|ticket|bon)/.test(codeNettoye + ' ' + libelle.toLowerCase())
+
   return (
-    <Modal open={open} onClose={onClose} titre="Ajouter un moyen de paiement">
+    <Modal
+      open={!!edition}
+      onClose={onClose}
+      titre={creation ? 'Ajouter un moyen de paiement' : `Modifier « ${moyen?.libelle || ''} »`}
+    >
       <form onSubmit={soumettre}>
         {erreur && <div className="banner banner-error" style={{ marginBottom: 12 }}>{erreur}</div>}
+
         <div className="field">
           <label htmlFor="mp-code">Code</label>
-          <input id="mp-code" className="input" value={code} onChange={(e) => setCode(e.target.value)} required maxLength={32} placeholder="ex. CB, ESP, CHQ" />
+          <input id="mp-code" className="input" value={code} onChange={(e) => setCode(e.target.value)} required maxLength={32} placeholder="ex. cb, especes, cheque" />
+          <p className="hint">
+            Le code est ce que la caisse et la comptabilité manipulent ; le libellé n’est que
+            l’étiquette affichée. Le changer sur un moyen déjà utilisé ne renomme PAS les règlements
+            déjà encaissés : ils gardent l’ancien code en clair.
+          </p>
         </div>
+
+        {papierNonReconnu && (
+          <div className="banner banner-warn" style={{ marginBottom: 12 }}>
+            Ce moyen ressemble à un instrument qu’on remet en main propre, et le logiciel ne le
+            reconnaîtra pas comme tel : seuls {CODES_FIDUCIAIRES.join(', ')} obligent à ouvrir une
+            session de caisse. Avec un autre code, une vente directe l’acceptera sans qu’aucune
+            session ne réponde du papier reçu.
+          </div>
+        )}
+
         <div className="field">
           <label htmlFor="mp-libelle">Libellé</label>
           <input id="mp-libelle" className="input" value={libelle} onChange={(e) => setLibelle(e.target.value)} required maxLength={80} placeholder="ex. Carte bancaire" />
         </div>
+
         <div className="field">
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, flexDirection: 'row' }}>
-            <input type="checkbox" checked={exigeReference} onChange={(e) => setExigeReference(e.target.checked)} /> Exige une référence (TPE)
+            <input type="checkbox" checked={exigeReference} onChange={(e) => setExigeReference(e.target.checked)} /> Passe par le terminal bancaire
           </label>
+          <p className="hint">
+            Le règlement est envoyé au TPE et n’est enregistré que s’il revient accepté. Un refus ne
+            crée aucun règlement — et il est consigné.
+          </p>
+
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, flexDirection: 'row' }}>
-            <input type="checkbox" checked={autoriseRendu} onChange={(e) => setAutoriseRendu(e.target.checked)} /> Autorise le rendu monnaie
+            <input type="checkbox" checked={autoriseRendu} onChange={(e) => setAutoriseRendu(e.target.checked)} /> Autorise le rendu de monnaie
           </label>
+          <p className="hint">
+            Sans cette case, encaisser plus que le montant dû est refusé. C’est elle qui permet à un
+            caissier de prendre un billet de 20 € pour 13 € et de rendre la différence.
+          </p>
+
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, flexDirection: 'row' }}>
             <input type="checkbox" checked={autoriseDiffere} onChange={(e) => setAutoriseDiffere(e.target.checked)} /> Autorise le paiement différé
           </label>
+          <p className="hint">
+            Permet d’enregistrer la vente comme réglée plus tard. Sans cette case, tout règlement
+            marqué différé sur ce moyen est refusé.
+          </p>
         </div>
+
         <div className="r" style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <button type="button" className="btn ghost" onClick={onClose}>Annuler</button>
-          <button type="submit" className="btn" disabled={envoi}>{envoi ? 'Enregistrement…' : 'Ajouter'}</button>
-        </div>
-      </form>
-    </Modal>
-  )
-}
-
-function ModalRenommage({ moyen, onClose, onEnregistre }) {
-  const [libelle, setLibelle] = useState('')
-  const [erreur, setErreur] = useState(null)
-  const [envoi, setEnvoi] = useState(false)
-
-  useEffect(() => {
-    if (moyen) { setLibelle(moyen.libelle || ''); setErreur(null) }
-  }, [moyen])
-
-  async function soumettre(e) {
-    e.preventDefault()
-    setErreur(null)
-    setEnvoi(true)
-    try {
-      await onEnregistre(libelle.trim())
-    } catch (err) {
-      setErreur(erreurEcriture(err))
-    } finally {
-      setEnvoi(false)
-    }
-  }
-
-  return (
-    <Modal open={!!moyen} onClose={onClose} titre={`Renommer « ${moyen?.libelle || ''} »`}>
-      <form onSubmit={soumettre}>
-        {erreur && <div className="banner banner-error" style={{ marginBottom: 12 }}>{erreur}</div>}
-        <div className="field">
-          <label htmlFor="mp-rename">Nouveau libellé</label>
-          <input id="mp-rename" className="input" value={libelle} onChange={(e) => setLibelle(e.target.value)} required maxLength={80} />
-        </div>
-        <div className="r" style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button type="button" className="btn ghost" onClick={onClose}>Annuler</button>
-          <button type="submit" className="btn" disabled={envoi}>{envoi ? 'Enregistrement…' : 'Enregistrer'}</button>
+          <button type="submit" className="btn" disabled={envoi}>
+            {envoi ? 'Enregistrement…' : creation ? 'Ajouter' : 'Enregistrer'}
+          </button>
         </div>
       </form>
     </Modal>
@@ -810,7 +1185,7 @@ function ComptesDroits({ etabActif, etablissements, droits = [] }) {
 
       <RolesSection droits={droits} peutGerer={aLeDroit(droits, 'securite.gerer')} onChange={charger} />
 
-      <MatriceDroits roles={roles} etabActif={etabActif} />
+      <MatriceDroits roles={roles} etabActif={etabActif} affectations={affectations} utilisateurs={utilisateurs} />
 
       <section className="card" style={{ marginTop: 16 }}>
         <div className="card-h"><h3>Affectations</h3><span className="sub">rôle × utilisateur × établissement</span></div>
@@ -859,11 +1234,92 @@ function ComptesDroits({ etabActif, etablissements, droits = [] }) {
   )
 }
 
-// Matrice « vivante » des droits : pour chaque rôle, on interroge `/roles/{id}/apercu-droits` sur
-// l'établissement actif (équivalent /me simulé). Rôles en colonnes, permissions en lignes (groupées
-// par module).
-function MatriceDroits({ roles, etabActif }) {
-  const [codesParRole, setCodesParRole] = useState({}) // roleId -> Set(codes)
+// LES NOMS DES MODULES, PARCE QUE `dms` ET `crm` NE SONT PAS DU FRANÇAIS.
+//
+// Le code `module.action` reste affiché à côté : c'est lui qu'on cite dans un ticket, et c'est lui
+// qui figure dans la modale d'édition d'un rôle. On traduit pour lire, on garde le code pour agir.
+const NOM_MODULE = {
+  '*': 'Tous les modules (joker)',
+  acces: 'Contrôle d’accès',
+  autorisation: 'Autorisations & plafonds',
+  boutique: 'Boutique en ligne',
+  caisse: 'Caisse',
+  campagne: 'Campagnes',
+  caution: 'Cautions',
+  compta: 'Comptabilité',
+  crm: 'Clients & affaires',
+  demo: 'Démonstration',
+  dms: 'Documents',
+  facturation: 'Facturation',
+  fidelite: 'Fidélité',
+  finance: 'Achats & trésorerie',
+  fonctionnalite: 'Modules en service',
+  lodging: 'Hébergement',
+  musee: 'Musée',
+  ocr: 'Lecture automatique de documents',
+  offre: 'Catalogue & offres',
+  organisation: 'Organisation & établissements',
+  padel: 'Padel',
+  patinoire: 'Patinoire',
+  personnel: 'Personnel',
+  piscine: 'Piscine',
+  recouvrement: 'Recouvrement',
+  reporting: 'Reporting',
+  reservation: 'Réservation',
+  revenue_recovery: 'Relance des recettes',
+  securite: 'Comptes & rôles',
+  sepa: 'Prélèvements SEPA',
+  smart_flow: 'Flux SmartFlow',
+  social: 'Publication sociale',
+  sport: 'Sport & fitness',
+  stay: 'Séjours',
+  stock: 'Stock',
+  support: 'Assistance',
+  vente: 'Vente',
+}
+
+function nomModule(code) {
+  return NOM_MODULE[code] || code
+}
+
+// UN RÔLE COUVRE-T-IL CE DROIT ? C'EST LA RÈGLE DU SERVEUR, PAS UNE ÉGALITÉ DE CHAÎNES.
+//
+// `GET /roles/{id}/apercu-droits` rend les codes BRUTS du rôle : un rôle qui porte `*` × `*` répond
+// `["*.*"]` et rien d'autre — le serveur n'étend pas le joker, il l'interprète à la demande.
+//
+// L'ancienne matrice testait `codes.has(code)`, une égalité stricte. Elle affichait donc
+// « Administrateur d'établissement » comme n'ayant qu'un seul droit alors qu'il les a tous, et
+// « Administrateur groupe » comme n'ayant que ses 98 lignes explicites. C'est la faute exacte
+// décrite en tête de `api/droits.js`, qui avait déjà vidé un menu : rejouer une règle
+// d'autorisation à moitié.
+//
+// `aLeDroit` est la règle entière, celle que le serveur applique. On s'en sert.
+function roleCouvre(codes, code) {
+  return aLeDroit([...codes], code)
+}
+
+// QUI PEUT FAIRE QUOI — LA MATRICE COMPLÈTE NE RÉPONDAIT À AUCUNE QUESTION.
+//
+// L'ancienne version affichait 251 permissions en lignes × tous les rôles en colonnes, remplies de
+// « ✓ » et de « · », avec les codes internes en clair. Sur la préprod : 57 colonnes, 200 lignes,
+// 11 400 cellules. Une session en revue avec Maxime l'a constaté à l'écran : illisible, alors que
+// c'est précisément l'écran censé répondre à « qui a le droit de quoi ».
+//
+// Une matrice n'est pas fausse en soi ; elle est fausse À CETTE TAILLE. On lit une matrice quand on
+// compare quelques colonnes sur quelques lignes. Personne ne compare 57 rôles à la fois : on se
+// demande « qui peut annuler une vente ? », et c'est une question qui porte sur UN module.
+//
+// D'où la portée par module : les lignes sont les actions de ce module, les colonnes les seuls
+// rôles qui en donnent au moins une. Sur `vente` cela fait 10 lignes et une poignée de colonnes —
+// une matrice qu'on peut effectivement lire.
+//
+// LE MODULE QUE PERSONNE NE PEUT TOUCHER EST UNE RÉPONSE, PAS UN VIDE. On part de `/api/permissions`
+// (le référentiel entier, 251 codes) et non de l'union de ce que les rôles accordent : sinon un
+// droit que personne ne détient disparaît de l'écran, et son absence devient invisible.
+function MatriceDroits({ roles, etabActif, affectations = [], utilisateurs = [] }) {
+  const [codesParRole, setCodesParRole] = useState({}) // roleId -> Set(codes bruts)
+  const [permissions, setPermissions] = useState([])
+  const [module, setModule] = useState('')
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
 
@@ -871,21 +1327,25 @@ function MatriceDroits({ roles, etabActif }) {
     setChargement(true)
     setErreur(null)
     try {
-      const entrees = await Promise.all(
-        roles.map(async (r) => {
-          try {
-            const res = await api.apercuDroitsRole(r.id, etabActif)
-            return [r.id, new Set(res.codes || [])]
-          } catch {
-            // Repli : dérive les codes depuis les permissions embarquées du rôle.
-            const codes = (r.permissions || []).map((p) => p.code || `${p.module}.${p.action}`)
-            return [r.id, new Set(codes)]
-          }
-        }),
-      )
+      const [perms, entrees] = await Promise.all([
+        api.permissions().catch(() => null),
+        Promise.all(
+          roles.map(async (r) => {
+            try {
+              const res = await api.apercuDroitsRole(r.id, etabActif)
+              return [r.id, new Set(res.codes || [])]
+            } catch {
+              // Repli : dérive les codes depuis les permissions embarquées du rôle.
+              const codes = (r.permissions || []).map((p) => p.code || `${p.module}.${p.action}`)
+              return [r.id, new Set(codes)]
+            }
+          }),
+        ),
+      ])
+      setPermissions(membres(perms))
       setCodesParRole(Object.fromEntries(entrees))
     } catch (e) {
-      setErreur(e.message || 'Chargement de la matrice impossible.')
+      setErreur(e.message || 'Chargement des droits impossible.')
     } finally {
       setChargement(false)
     }
@@ -896,20 +1356,41 @@ function MatriceDroits({ roles, etabActif }) {
     else setChargement(false)
   }, [roles, charger])
 
-  // Union des codes conférés par au moins un rôle, groupés par module.
-  const tousCodes = [...new Set(Object.values(codesParRole).flatMap((s) => [...s]))].sort()
-  const parModule = {}
-  for (const code of tousCodes) {
-    const mod = code.split('.')[0]
-    ;(parModule[mod] ||= []).push(code)
+  const modules = [...new Set(permissions.map((p) => p.module))].sort((a, b) =>
+    nomModule(a).localeCompare(nomModule(b), 'fr'),
+  )
+
+  useEffect(() => {
+    if (!module && modules.length) setModule(modules.includes('vente') ? 'vente' : modules[0])
+  }, [modules, module])
+
+  const actions = permissions
+    .filter((p) => p.module === module)
+    .map((p) => p.code || `${p.module}.${p.action}`)
+    .sort()
+
+  // Les rôles qui donnent au moins une action de ce module — joker compris.
+  const rolesConcernes = roles.filter((r) => {
+    const codes = codesParRole[r.id]
+    if (!codes) return false
+    return actions.some((code) => roleCouvre(codes, code))
+  })
+
+  // Combien de comptes portent chaque rôle sur l'établissement affiché. « Un rôle que personne ne
+  // porte » et « un rôle porté par douze personnes » n'appellent pas la même vigilance.
+  const comptesParRole = {}
+  for (const a of affectations) {
+    const rid = typeof a.role === 'object' ? a.role?.id : String(a.role || '').split('/').pop()
+    const eid = typeof a.etablissement === 'object' ? a.etablissement?.id : String(a.etablissement || '').split('/').pop()
+    if (!rid || (etabActif && eid && eid !== etabActif)) continue
+    comptesParRole[rid] = (comptesParRole[rid] || 0) + 1
   }
-  const modules = Object.keys(parModule).sort()
 
   return (
-    <section className="card">
+    <section className="card" style={{ marginTop: 16 }}>
       <div className="card-h">
-        <h3>Matrice des droits</h3>
-        <span className="sub">rôles × permissions (établissement actif)</span>
+        <h3>Qui a le droit de quoi</h3>
+        <span className="sub">{utilisateurs.length} compte(s) · {roles.length} rôle(s)</span>
         <button className="btn ghost sm" style={{ marginLeft: 'auto' }} onClick={charger} disabled={chargement}>↻</button>
       </div>
       <div className="card-b" style={{ overflowX: 'auto' }}>
@@ -917,48 +1398,83 @@ function MatriceDroits({ roles, etabActif }) {
           <div className="center" style={{ minHeight: 120 }}><div className="spinner" /></div>
         ) : erreur ? (
           <div className="banner banner-error">{erreur}</div>
-        ) : roles.length === 0 || tousCodes.length === 0 ? (
-          <div className="empty">Aucun droit à représenter.</div>
         ) : (
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Permission</th>
-                {roles.map((r) => <th key={r.id} className="num">{r.nom}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {modules.map((mod) => (
-                <RowsModule key={mod} module={mod} codes={parModule[mod]} roles={roles} codesParRole={codesParRole} />
-              ))}
-            </tbody>
-          </table>
+          <>
+            <div className="field" style={{ maxWidth: 420 }}>
+              <label htmlFor="md-module">De quoi voulez-vous voir les droits ?</label>
+              <select id="md-module" className="input" value={module} onChange={(e) => setModule(e.target.value)}>
+                {modules.map((m) => (
+                  <option key={m} value={m}>{nomModule(m)}</option>
+                ))}
+              </select>
+              <p className="hint">
+                Un rôle marqué « tout » porte le joker : il obtient aussi les droits qui seront
+                ajoutés plus tard, sans qu’on ait à le modifier.
+              </p>
+            </div>
+
+            {actions.length === 0 ? (
+              <div className="empty">Ce module n’expose aucune permission.</div>
+            ) : rolesConcernes.length === 0 ? (
+              <div className="banner banner-warn">
+                Aucun rôle ne donne le moindre droit sur « {nomModule(module)} ». Personne ne peut
+                s’en servir, quels que soient les comptes créés.
+              </div>
+            ) : (
+              <table className="tbl">
+                <thead>
+                  <tr>
+                    <th>Ce qu’on peut faire</th>
+                    {rolesConcernes.map((r) => (
+                      <th key={r.id} className="num" title={r.nom}>
+                        {r.nom}
+                        <div className="sub" style={{ fontWeight: 400 }}>
+                          {comptesParRole[r.id] ? `${comptesParRole[r.id]} compte(s)` : 'personne'}
+                        </div>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {actions.map((code) => {
+                    const donneurs = rolesConcernes.filter((r) => roleCouvre(codesParRole[r.id], code))
+                    return (
+                      <tr key={code}>
+                        <td>
+                          <span className="mono">{code}</span>
+                          {donneurs.length === 0 && (
+                            <div className="sub" style={{ color: 'var(--crit)' }}>aucun rôle ne le donne</div>
+                          )}
+                        </td>
+                        {rolesConcernes.map((r) => {
+                          const codes = codesParRole[r.id]
+                          const explicite = codes?.has(code)
+                          const couvert = roleCouvre(codes, code)
+                          return (
+                            <td key={r.id} className="num" aria-label={couvert ? 'accordé' : 'non accordé'}>
+                              {couvert ? (
+                                <span
+                                  style={{ color: 'var(--good)' }}
+                                  title={explicite ? 'Accordé explicitement.' : 'Accordé par un joker (« tout »).'}
+                                >
+                                  {explicite ? '✓' : '✓*'}
+                                </span>
+                              ) : (
+                                <span style={{ color: 'var(--ink-faint)' }}>·</span>
+                              )}
+                            </td>
+                          )
+                        })}
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            )}
+          </>
         )}
       </div>
     </section>
-  )
-}
-
-function RowsModule({ module, codes, roles, codesParRole }) {
-  return (
-    <>
-      <tr>
-        <td colSpan={roles.length + 1} style={{ background: 'var(--panel-2)', fontWeight: 700, textTransform: 'capitalize' }}>{module}</td>
-      </tr>
-      {codes.map((code) => (
-        <tr key={code}>
-          <td><span className="mono">{code}</span></td>
-          {roles.map((r) => {
-            const a = codesParRole[r.id]?.has(code)
-            return (
-              <td key={r.id} className="num" aria-label={a ? 'accordé' : 'non accordé'}>
-                {a ? <span style={{ color: 'var(--good)' }}>✓</span> : <span style={{ color: 'var(--ink-faint)' }}>·</span>}
-              </td>
-            )
-          })}
-        </tr>
-      ))}
-    </>
   )
 }
 
@@ -1037,10 +1553,58 @@ function iriFin(v) {
 }
 
 // Capacités activables : catalogue socle croisé avec l'état par établissement (lecture).
-function Capacites({ etabActif }) {
+// LES MÉTIERS PROPOSÉS PAR LE SERVEUR, ET CE QUE CHACUN ALLUME.
+//
+// `App\Fonctionnalite\Config\PresetVerticale` fige un jeu de capacités par verticale. Le preset est
+// ADDITIF — vérifié dans `Fonctionnalites::appliquerPreset`, pas supposé : il n'éteint jamais une
+// capacité déjà active, et conserve les paramètres déjà saisis. C'est ce qui permet de le proposer
+// sans avertissement anxiogène : au pire il en allume une de trop, qu'on éteint d'un clic.
+const METIERS = [
+  ['piscine', 'Piscine'],
+  ['sport', 'Salle de sport / fitness'],
+  ['padel', 'Padel'],
+  ['patinoire', 'Patinoire'],
+  ['musee', 'Musée'],
+]
+
+// CE QUE CHANGE UNE ACTIVATION, ÉCRAN PAR ÉCRAN — ET SEULEMENT CE QU'ON PEUT PROUVER.
+//
+// Trois capacités commandent une entrée du menu de gauche (`components/AppShell.jsx`). Les autres
+// ouvrent des surfaces serveur (souscription, OCR, séjours, trésorerie) sans effet visible immédiat
+// dans cette application. On nomme les trois qu'on peut montrer, et on se tait sur les autres
+// plutôt que de promettre un effet qu'on n'a pas constaté.
+const EFFET_VISIBLE = {
+  controle_acces: 'Fait apparaître « Supervision » et « Badges & terminaux » dans le menu.',
+  reservation: 'Fait apparaître « Réservation » dans le menu.',
+  boutique_en_ligne: 'Fait apparaître « Boutique en ligne » dans le menu.',
+}
+
+const CATEGORIES = {
+  acces: 'Accès',
+  planning: 'Planning',
+  finance: 'Encaissement & recouvrement',
+  confort: 'Services aux visiteurs',
+  securite: 'Sécurité & réglementation',
+  vente: 'Vente',
+}
+
+// UN ONGLET NOMMÉ « ACTIVABLES » OÙ L'ON NE POUVAIT RIEN ACTIVER.
+//
+// L'écran lisait le catalogue et l'état, affichait douze lignes toutes marquées « inactive », et
+// n'offrait aucune action. Le sous-titre disait « feature flags par établissement » — du jargon de
+// développeur, en anglais, sur un écran d'exploitant. Maxime, à la revue : « je ne sais pas ce que
+// c'est ». Ce n'était pas un défaut de libellé : l'écran ne disait ni ce que ça fait, ni ce qu'on
+// est censé en faire, et le seul geste possible était de refermer l'onglet.
+//
+// `PATCH /etablissements/{id}/fonctionnalites` et `POST /etablissements/{id}/appliquer-preset`
+// existaient depuis le début.
+function Capacites({ etabActif, onCapacitesChangees }) {
   const [items, setItems] = useState([])
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
+  const [msg, setMsg] = useState(null)
+  const [busy, setBusy] = useState(null)
+  const [metier, setMetier] = useState('')
 
   const charger = useCallback(async () => {
     setChargement(true)
@@ -1065,35 +1629,121 @@ function Capacites({ etabActif }) {
     charger()
   }, [charger])
 
+  async function basculer(c) {
+    setBusy(c.code)
+    setMsg(null)
+    setErreur(null)
+    try {
+      await api.majFonctionnalite(etabActif, { capaciteCode: c.code, active: !c.active })
+      await charger()
+      // Le menu de gauche est construit sur `capacitesActives` de `/me` : sans ce rappel, on
+      // active « Réservation » et l'entrée n'apparaît qu'au prochain rechargement de la page.
+      await onCapacitesChangees?.()
+      setMsg(`« ${c.libelle || c.code} » ${c.active ? 'désactivé' : 'activé'}.`)
+    } catch (e) {
+      setErreur(erreurEcriture(e))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function appliquerPreset() {
+    if (!metier) return
+    setBusy('preset')
+    setMsg(null)
+    setErreur(null)
+    try {
+      const r = await api.appliquerPresetCapacites(etabActif, metier)
+      await charger()
+      await onCapacitesChangees?.()
+      const n = (r?.capacitesActivees || []).length
+      setMsg(`Jeu « ${METIERS.find(([v]) => v === metier)?.[1] || metier} » appliqué : ${n} capacité(s) active(s).`)
+    } catch (e) {
+      setErreur(erreurEcriture(e))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const actives = items.filter((c) => c.active).length
+  const parCategorie = []
+  for (const c of items) {
+    const groupe = parCategorie.find((g) => g.cle === c.categorie)
+    if (groupe) groupe.items.push(c)
+    else parCategorie.push({ cle: c.categorie, titre: CATEGORIES[c.categorie] || c.categorie || 'Autres', items: [c] })
+  }
+
   return (
     <section className="card">
       <div className="card-h">
-        <h3>Capacités activables</h3>
-        <span className="sub">feature flags par établissement</span>
+        <h3>Ce que fait votre établissement</h3>
+        <span className="sub">{actives} sur {items.length} en service</span>
         <button className="btn ghost sm" style={{ marginLeft: 'auto' }} onClick={charger} disabled={chargement}>↻</button>
       </div>
       <div className="card-b" style={{ overflowX: 'auto' }}>
+        {msg && <div className="banner banner-ok" style={{ margin: '0 0 12px' }}>{msg}</div>}
+        {erreur && <div className="banner banner-error" style={{ margin: '0 0 12px' }}>{erreur}</div>}
+
+        <p className="hint" style={{ marginTop: 0 }}>
+          Chaque ligne est une partie du logiciel qu’on met en service ou qu’on laisse de côté. Ce
+          n’est pas un réglage définitif : on active, on essaie, on désactive. Rien n’est effacé quand
+          on désactive — les données saisies restent et reviennent à la réactivation.
+        </p>
+
+        {/* On ne demande pas à un exploitant de deviner lesquelles vont ensemble : le serveur
+            connaît le jeu de chaque métier, et il est additif. */}
+        <div className="row" style={{ gap: 8, alignItems: 'flex-end', margin: '14px 0 18px', flexWrap: 'wrap' }}>
+          <div className="field" style={{ margin: 0, minWidth: 220 }}>
+            <label htmlFor="cap-metier">Vous exploitez plutôt…</label>
+            <select id="cap-metier" className="input" value={metier} onChange={(e) => setMetier(e.target.value)}>
+              <option value="">— choisir un métier —</option>
+              {METIERS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          </div>
+          <button className="btn" onClick={appliquerPreset} disabled={!metier || busy === 'preset'}>
+            {busy === 'preset' ? 'Application…' : 'Mettre en service le jeu correspondant'}
+          </button>
+          <span className="hint" style={{ margin: 0, flex: 1, minWidth: 240 }}>
+            Active d’un coup ce qu’un site de ce type utilise. N’éteint jamais rien de ce qui tourne
+            déjà.
+          </span>
+        </div>
+
         {chargement ? (
           <div className="center" style={{ minHeight: 140 }}><div className="spinner" /></div>
-        ) : erreur ? (
-          <div className="banner banner-error">{erreur}</div>
+        ) : items.length === 0 ? (
+          <div className="empty">Aucune capacité au catalogue.</div>
         ) : (
-          <table className="tbl">
-            <thead>
-              <tr><th>Capacité</th><th>Catégorie</th><th>Description</th><th>État (établissement)</th></tr>
-            </thead>
-            <tbody>
-              {items.map((c) => (
-                <tr key={c.code}>
-                  <td><span className="nm">{c.libelle || c.code}</span> <span className="mono" style={{ color: 'var(--ink-faint)' }}>{c.code}</span></td>
-                  <td>{c.categorie || '—'}</td>
-                  <td style={{ color: 'var(--ink-soft)' }}>{c.description || '—'}</td>
-                  <td><span className={`badge ${c.active ? 'good' : 'mut'}`}>{c.active ? 'activée' : 'inactive'}</span></td>
-                </tr>
-              ))}
-              {items.length === 0 && <tr><td colSpan={4} className="empty">Aucune capacité au catalogue.</td></tr>}
-            </tbody>
-          </table>
+          parCategorie.map((g) => (
+            <div key={g.cle} style={{ marginBottom: 18 }}>
+              <div className="sub" style={{ marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.04em' }}>{g.titre}</div>
+              <table className="tbl">
+                <tbody>
+                  {g.items.map((c) => (
+                    <tr key={c.code}>
+                      <td style={{ width: '32%' }}>
+                        <span className="nm">{c.libelle || c.code}</span>
+                        <div className="sub">{c.description || ''}</div>
+                        {EFFET_VISIBLE[c.code] && <div className="sub">{EFFET_VISIBLE[c.code]}</div>}
+                      </td>
+                      <td style={{ width: 120 }}>
+                        <span className={`badge ${c.active ? 'good' : 'mut'}`}>{c.active ? 'en service' : 'hors service'}</span>
+                      </td>
+                      <td className="num">
+                        <button
+                          className="btn ghost sm"
+                          onClick={() => basculer(c)}
+                          disabled={busy === c.code || !etabActif}
+                        >
+                          {busy === c.code ? '…' : c.active ? 'Mettre hors service' : 'Mettre en service'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))
         )}
       </div>
     </section>

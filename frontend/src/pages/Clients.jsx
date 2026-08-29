@@ -1,5 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
-import ActivitesClient from '../components/ActivitesClient.jsx'
+import Modal from '../components/Modal.jsx'
+import { useEtatUrl } from '../api/url.js'
+import ActivitesClient, { SaisieEchange } from '../components/ActivitesClient.jsx'
 import ContactsClient from '../components/ContactsClient.jsx'
 import { api } from '../api/client.js'
 import { euros } from '../api/produit.js'
@@ -7,6 +9,7 @@ import { aLeDroit } from '../api/droits.js'
 import { mot } from '../api/vocabulaire.js'
 import ClientEditionModal from '../components/ClientEditionModal.jsx'
 import DevisModal from '../components/DevisModal.jsx'
+import PassagesClient from '../components/PassagesClient.jsx'
 
 // Nom d'affichage d'un client (physique ou personne morale).
 function nomClient(c) {
@@ -39,26 +42,84 @@ function formatAdresse(a) {
   return [l1, l2, a.pays].filter(Boolean).join(' · ') || null
 }
 
-// Écran Clients (CRM) : liste + recherche et fiche client 360° enrichie.
+// LA LISTE PREND TOUT L'ÉCRAN, ET LA FICHE EST UNE PAGE — demande de Maxime, 29/08.
+//
+// « Sur client ce que je vois, c'est une liste comme ça mais sur tout l'écran avec plus de champs,
+// et quelques actions rapides ; quand on clique sur un client, on va sur sa fiche. Et il faudra un
+// bouton retour pour qu'on retourne sur la liste, et s'il y a eu des filtres il faudra qu'ils soient
+// encore en place. »
+//
+// L'écran affichait la liste dans une colonne étroite et la fiche à côté : quatre colonnes de
+// données sur un tiers de la largeur, et une fiche riche compressée sur les deux autres tiers. Les
+// deux perdaient. Une liste de travail se lit en largeur ; une fiche 360° se lit en hauteur.
+//
+// L'ÉTAT EST DANS L'URL, ET CE N'EST PAS POUR FAIRE JOLI. Le retour préserve les filtres parce
+// qu'ils n'ont jamais quitté l'URL — et par la même occasion la vue survit à une expiration de
+// session, qui tombe toutes les heures. Voir `api/url.js` pour le raisonnement complet.
+//
+// TROIS FILTRES QUE LE SERVEUR ACCEPTAIT ET QUE PERSONNE NE POUVAIT ATTEINDRE. `GET
+// /crm/clients/recherche` lit `statut`, `avecPmv`, `mineur`, `carte`, `page` et `itemsPerPage`.
+// L'écran n'envoyait que `q`. Le reste existait, testé, cloisonné — et hors de portée.
+//
+// ⚠ CE QUE CETTE LISTE NE PEUT PAS MONTRER, ET POURQUOI ON NE L'INVENTE PAS. La réponse de la
+// recherche est VOLONTAIREMENT minimale : ni e-mail, ni téléphone, ni adresse, ni date de naissance
+// (« données perso protégées », §5 plan-crm.md, lu dans `RechercheClientProvider`). Ajouter ces
+// colonnes rendrait des cases vides sur toutes les lignes — le défaut le plus fréquent de ce dépôt.
+// Le CA cumulé et le solde du porte-monnaie, eux, ne vivent que dans la fiche 360 : une colonne
+// coûterait une requête PAR LIGNE. On affiche donc ce que la recherche rend, et rien d'autre.
+const DEFAUTS = { q: '', statut: '', pmv: '', mineur: '', carte: '', page: '1', fiche: '' }
+
+const STATUTS = [
+  ['', 'Tous les statuts'],
+  ['actif', 'Actifs'],
+  ['inactif', 'Inactifs'],
+  ['archive', 'Archivés'],
+  ['anonymise', 'Anonymisés'],
+  ['fusionne', 'Fusionnés'],
+]
+
+const PAR_PAGE = 50
+
+// Écran Clients (CRM) : liste large, fiche en page, état porté par l'URL.
 export default function Clients({ etabActif, cible = null, onCibleConsommee, droits = [] }) {
-  const [edition, setEdition] = useState(false)
-  const [q, setQ] = useState('')
+  const [params, majParams] = useEtatUrl('clients', DEFAUTS)
+  const [edition, setEdition] = useState(null) // { id } = modification, { creation: true } = ajout
+
   const [items, setItems] = useState([])
   const [total, setTotal] = useState(0)
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
 
-  const [selId, setSelId] = useState(null)
+  // Saisie locale, pour ne pas réécrire l'URL à chaque touche.
+  const [saisie, setSaisie] = useState(params.q)
+
   const [fiche, setFiche] = useState(null)
   const [mouvements, setMouvements] = useState(null) // null = non chargé, [] = vide
   const [ficheLoading, setFicheLoading] = useState(false)
   const [ficheErr, setFicheErr] = useState(null)
+  const [fidelite, setFidelite] = useState(null)
+  const [echange, setEchange] = useState(null) // client dont on note un échange, depuis la liste
+  const [devisPour, setDevisPour] = useState(null)
 
-  const rechercher = useCallback(async (terme) => {
+  const selId = params.fiche || null
+  const page = Math.max(1, parseInt(params.page, 10) || 1)
+
+  const rechercher = useCallback(async () => {
     setChargement(true)
     setErreur(null)
     try {
-      const res = await api.rechercheClients({ q: terme || '', itemsPerPage: 30 })
+      const res = await api.rechercheClients({
+        q: params.q || '',
+        carte: params.carte || '',
+        statut: params.statut || '',
+        // `avecPmv` et `mineur` sont des booléens côté serveur : une chaîne vide ne veut pas dire
+        // « faux », elle veut dire « ne filtre pas ». `qs()` retire les valeurs vides, donc le
+        // paramètre n'est pas envoyé du tout — ce qui est exactement le sens voulu.
+        avecPmv: params.pmv,
+        mineur: params.mineur,
+        page,
+        itemsPerPage: PAR_PAGE,
+      })
       setItems(res.items || [])
       setTotal(res.total ?? (res.items || []).length)
     } catch (e) {
@@ -67,22 +128,16 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
     } finally {
       setChargement(false)
     }
-  }, [])
+  }, [params.q, params.carte, params.statut, params.pmv, params.mineur, page])
 
-  // Recherche initiale + à chaque changement d'établissement.
-  useEffect(() => {
-    setSelId(null)
-    setFiche(null)
-    rechercher('')
-  }, [etabActif, rechercher])
+  useEffect(() => { rechercher() }, [rechercher, etabActif])
 
-  // Recherche différée à la frappe.
+  // Recherche différée à la frappe : l'URL ne bouge qu'une fois la saisie posée.
   useEffect(() => {
-    const t = setTimeout(() => rechercher(q), 300)
+    if (saisie === params.q) return undefined
+    const t = setTimeout(() => majParams({ q: saisie, page: '1' }), 300)
     return () => clearTimeout(t)
-  }, [q, rechercher])
-
-  const [fidelite, setFidelite] = useState(null)
+  }, [saisie, params.q, majParams])
 
   // Le solde se relit APRÈS chaque geste : il se recalcule côté serveur, et le recopier ici ferait
   // diverger l'écran de la vérité au premier arrondi.
@@ -96,8 +151,7 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
     }
   }, [droits])
 
-  async function ouvrirFiche(id) {
-    setSelId(id)
+  const chargerFiche = useCallback(async (id) => {
     setFiche(null)
     setMouvements(null)
     setFicheErr(null)
@@ -123,122 +177,283 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
     } finally {
       setFicheLoading(false)
     }
+  }, [rechargerFidelite])
+
+  useEffect(() => {
+    if (selId) chargerFiche(selId)
+  }, [selId, chargerFiche])
+
+  // Ouvrir une fiche POUSSE une entrée d'historique : le « Précédent » du navigateur ramène alors à
+  // la liste, filtres compris, au lieu de quitter l'application.
+  function ouvrirFiche(id) {
+    majParams({ fiche: id }, { pousser: true })
   }
 
-  // Fiche demandee par la recherche globale. On la consomme immediatement : la garder ferait rouvrir
-  // la meme fiche a chaque retour sur l'onglet, sans moyen de l'en empecher.
+  function retourListe() {
+    majParams({ fiche: '' }, { pousser: true })
+  }
+
+  // Fiche demandee par la recherche globale.
   useEffect(() => {
     if (cible?.type !== 'client') return
-    ouvrirFiche(cible.id)
+    majParams({ fiche: cible.id }, { pousser: true })
     onCibleConsommee?.()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cible])
 
+  const peutModifier = aLeDroit(droits, 'crm.modifier')
+  const peutCreer = aLeDroit(droits, 'crm.creer')
+  const peutFacturer = aLeDroit(droits, 'facturation.gerer')
+
+  // ---------------------------------------------------------------- La fiche, en page
+  if (selId) {
+    return (
+      <div className="view large">
+        <div className="view-head">
+          <div className="ttl">
+            <button className="btn ghost sm" type="button" onClick={retourListe} style={{ marginBottom: 8 }}>
+              ← Retour à la liste
+            </button>
+            <h1>{fiche?.client ? nomClient(fiche.client) : 'Fiche client'}</h1>
+            <p>Fiche 360° · CRM</p>
+          </div>
+          {fiche?.client && peutModifier && (
+            <div className="actions">
+              <button className="btn" type="button" onClick={() => setEdition({ id: selId })}>Modifier</button>
+            </div>
+          )}
+        </div>
+
+        {ficheLoading ? (
+          <div className="center" style={{ minHeight: 240 }}><div className="spinner" /></div>
+        ) : ficheErr ? (
+          <div className="banner banner-error">{ficheErr}</div>
+        ) : fiche ? (
+          <section className="card"><div className="card-b">
+            <FicheContenu
+              fiche={fiche}
+              mouvements={mouvements}
+              fidelite={fidelite}
+              droits={droits}
+              onMouvement={() => rechargerFidelite(selId)}
+            />
+          </div></section>
+        ) : null}
+
+        <ClientEditionModal
+          open={!!edition}
+          clientId={edition?.id || null}
+          onClose={() => setEdition(null)}
+          onEnregistre={() => chargerFiche(selId)}
+        />
+      </div>
+    )
+  }
+
+  // ---------------------------------------------------------------- La liste, sur toute la largeur
+  const pages = Math.max(1, Math.ceil(total / PAR_PAGE))
+  const filtre = (cle, valeur) => majParams({ [cle]: valeur, page: '1' })
+
   return (
-    <div className="view">
+    <div className="view large">
       <div className="view-head">
         <div className="ttl">
           <h1>Clients</h1>
           <p>{total} fiche(s) · CRM</p>
         </div>
+        <div className="actions">
+          {peutCreer && (
+            // ON NE POUVAIT PAS CRÉER UN CLIENT DEPUIS L'ÉCRAN CLIENTS.
+            //
+            // `api.creerClient` existe et poste bien, mais n'était appelé que par `ClientPicker` —
+            // lui-même utilisé au milieu d'une vente, d'un mandat SEPA ou d'un devis. On ne pouvait
+            // donc créer un client qu'en train de faire autre chose, et sur un établissement sans
+            // caisse, pas du tout. L'écran dont le métier est de gérer les clients était le seul
+            // d'où l'on ne pouvait pas en ajouter un.
+            //
+            // « Ajouter un client » et non « Nouveau client » : la carte « Nouveau client · Ouvrir
+            // une structure » des Paramètres désigne une SOCIÉTÉ cliente de l'éditeur, pas un
+            // contact. Deux boutons du même nom pour deux objets sans rapport, c'est la collision
+            // qu'on n'aggrave pas.
+            <button className="btn primary" type="button" onClick={() => setEdition({ creation: true })}>
+              Ajouter un client
+            </button>
+          )}
+        </div>
       </div>
 
       {erreur && <div className="banner banner-error">{erreur}</div>}
 
-      <div className="clients-grid">
-        {/* Liste + recherche */}
-        <section className="card">
-          <div className="card-h">
-            <h3>Rechercher</h3>
-          </div>
-          <div className="card-b">
-            <div className="field" style={{ marginBottom: 12 }}>
+      <section className="card">
+        <div className="card-b">
+          <div className="row" style={{ gap: 10, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 14 }}>
+            <div className="field" style={{ margin: 0, flex: '2 1 260px' }}>
+              <label htmlFor="cl-q">Rechercher</label>
               <input
+                id="cl-q"
                 className="input"
                 placeholder="Nom, prénom, raison sociale, e-mail, téléphone…"
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
+                value={saisie}
+                onChange={(e) => setSaisie(e.target.value)}
                 autoFocus
               />
             </div>
-            {chargement ? (
-              <div className="center" style={{ minHeight: 160 }}><div className="spinner" /></div>
-            ) : (
-              <div style={{ overflowX: 'auto' }}>
-                <table className="tbl">
-                  <thead>
-                    <tr>
-                      <th>Client</th>
-                      <th>Type</th>
-                      <th>Statut</th>
-                      <th>PMV</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.map((c) => (
-                      <tr
-                        key={c.id}
-                        onClick={() => ouvrirFiche(c.id)}
-                        className={`row-click${selId === c.id ? ' row-active' : ''}`}
-                      >
-                        <td>
-                          <span className="nm">{nomClient(c)}</span>
-                          {c.estMineur && <span className="badge warn" style={{ marginLeft: 6 }}>mineur</span>}
-                        </td>
-                        <td>{c.type === 'morale' ? 'Personne morale' : 'Particulier'}</td>
-                        <td>
-                          <span className={`badge ${c.statut === 'actif' ? 'good' : 'mut'}`}>{c.statut}</span>
-                        </td>
-                        <td>{c.avecPmv ? <span className="badge info">●</span> : '—'}</td>
-                      </tr>
-                    ))}
-                    {items.length === 0 && (
-                      <tr><td colSpan={4} className="empty">Aucun client trouvé.</td></tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </section>
-
-        {/* Fiche 360 */}
-        <section className="card">
-          <div className="card-h">
-            <h3>Fiche client</h3>
-            {fiche?.client && <span className="sub" style={{ marginLeft: 'auto' }}>{nomClient(fiche.client)}</span>}
-            {fiche?.client && aLeDroit(droits, 'crm.modifier') && (
-              <div className="r">
-                <button className="btn ghost sm" type="button" onClick={() => setEdition(true)}>Modifier</button>
-              </div>
-            )}
-          </div>
-          <div className="card-b">
-            {!selId ? (
-              <div className="empty">Sélectionnez un client pour afficher sa fiche.</div>
-            ) : ficheLoading ? (
-              <div className="center" style={{ minHeight: 160 }}><div className="spinner" /></div>
-            ) : ficheErr ? (
-              <div className="banner banner-error">{ficheErr}</div>
-            ) : fiche ? (
-              <FicheContenu
-                fiche={fiche}
-                mouvements={mouvements}
-                fidelite={fidelite}
-                droits={droits}
-                onMouvement={() => rechargerFidelite(selId)}
+            <div className="field" style={{ margin: 0, flex: '1 1 150px' }}>
+              <label htmlFor="cl-carte">N° de carte</label>
+              <input
+                id="cl-carte"
+                className="input"
+                placeholder="Le numéro lu par le lecteur"
+                value={params.carte}
+                onChange={(e) => filtre('carte', e.target.value)}
               />
-            ) : null}
+            </div>
+            <div className="field" style={{ margin: 0, flex: '1 1 150px' }}>
+              <label htmlFor="cl-statut">Statut</label>
+              <select id="cl-statut" className="input" value={params.statut} onChange={(e) => filtre('statut', e.target.value)}>
+                {STATUTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+            </div>
+            <div className="field" style={{ margin: 0, flex: '1 1 150px' }}>
+              <label htmlFor="cl-pmv">Porte-monnaie</label>
+              <select id="cl-pmv" className="input" value={params.pmv} onChange={(e) => filtre('pmv', e.target.value)}>
+                <option value="">Peu importe</option>
+                <option value="true">Avec porte-monnaie</option>
+                <option value="false">Sans porte-monnaie</option>
+              </select>
+            </div>
+            <div className="field" style={{ margin: 0, flex: '1 1 150px' }}>
+              <label htmlFor="cl-mineur">Âge</label>
+              <select id="cl-mineur" className="input" value={params.mineur} onChange={(e) => filtre('mineur', e.target.value)}>
+                <option value="">Peu importe</option>
+                <option value="true">Mineurs</option>
+                <option value="false">Majeurs</option>
+              </select>
+            </div>
           </div>
-        </section>
-      </div>
+
+          {/* Les fiches fusionnées sont masquées par défaut CÔTÉ SERVEUR, sauf demande explicite.
+              Le dire ici évite de chercher pourquoi un doublon connu n'apparaît pas. */}
+          {params.statut === '' && (
+            <p className="hint" style={{ marginTop: 0 }}>
+              Les fiches fusionnées sont masquées ; choisissez « Fusionnés » pour les voir.
+            </p>
+          )}
+
+          {chargement ? (
+            <div className="center" style={{ minHeight: 200 }}><div className="spinner" /></div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table className="tbl">
+                <thead>
+                  <tr>
+                    <th>Client</th>
+                    <th>Type</th>
+                    <th>Statut</th>
+                    <th>Porte-monnaie</th>
+                    <th>Dernière visite</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((c) => (
+                    <tr key={c.id} className="row-click" onClick={() => ouvrirFiche(c.id)}>
+                      <td>
+                        <span className="nm">{nomClient(c)}</span>
+                        {c.estMineur && <span className="badge warn" style={{ marginLeft: 6 }}>mineur</span>}
+                      </td>
+                      <td>{c.type === 'morale' ? 'Personne morale' : 'Particulier'}</td>
+                      <td><span className={`badge ${c.statut === 'actif' ? 'good' : 'mut'}`}>{c.statut}</span></td>
+                      <td>{c.avecPmv ? <span className="badge info">oui</span> : <span className="sub">—</span>}</td>
+                      <td>
+                        {c.dateDerniereVisite
+                          ? dateFr(c.dateDerniereVisite)
+                          : <span className="sub">jamais venu</span>}
+                      </td>
+                      {/* `stopPropagation` : sans lui, chaque action rapide ouvrirait AUSSI la
+                          fiche derrière la modale qu'elle vient d'ouvrir. */}
+                      <td className="row" style={{ justifyContent: 'flex-end', gap: 6 }} onClick={(e) => e.stopPropagation()}>
+                        {peutFacturer && (
+                          <button className="btn sm" type="button" onClick={() => setDevisPour(c)}>Devis</button>
+                        )}
+                        {peutModifier && (
+                          <button className="btn sm" type="button" onClick={() => setEchange(c)}>Échange</button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {items.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="empty">
+                        {params.q || params.carte || params.statut || params.pmv || params.mineur
+                          ? 'Aucun client ne correspond à cette recherche.'
+                          : 'Aucun client enregistré. « Ajouter un client » crée la première fiche.'}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* CETTE LISTE-CI SE PAGINE VRAIMENT, ET C'EST UNE EXCEPTION DANS LE DÉPÔT.
+              `RechercheClientProvider` lit `page` et `itemsPerPage` (plafonné à 100) et les
+              applique. Les collections API Platform, elles, ignorent `itemsPerPage` et coupent à 30
+              — d'où l'avertissement « 30 sur 47 » ailleurs. Ici on peut réellement aller plus loin. */}
+          {pages > 1 && (
+            <div className="row" style={{ justifyContent: 'center', gap: 10, marginTop: 14 }}>
+              <button
+                className="btn sm"
+                type="button"
+                disabled={page <= 1}
+                onClick={() => majParams({ page: String(page - 1) })}
+              >
+                ← Précédents
+              </button>
+              <span className="sub">page {page} sur {pages}</span>
+              <button
+                className="btn sm"
+                type="button"
+                disabled={page >= pages}
+                onClick={() => majParams({ page: String(page + 1) })}
+              >
+                Suivants →
+              </button>
+            </div>
+          )}
+        </div>
+      </section>
 
       <ClientEditionModal
-        open={edition}
-        clientId={selId}
-        onClose={() => setEdition(false)}
-        onEnregistre={() => ouvrirFiche(selId)}
+        open={!!edition}
+        clientId={edition?.id || null}
+        onClose={() => setEdition(null)}
+        onEnregistre={(cree) => {
+          rechercher()
+          // Une fiche qu'on vient de créer s'ouvre : c'est ce qu'on veut faire ensuite.
+          if (cree?.id) majParams({ fiche: String(cree.id) }, { pousser: true })
+        }}
       />
+
+      <DevisModal
+        open={!!devisPour}
+        client={devisPour}
+        onClose={() => setDevisPour(null)}
+        onCree={() => setDevisPour(null)}
+      />
+
+      <Modal open={!!echange} onClose={() => setEchange(null)} titre={`Noter un échange — ${nomClient(echange)}`}>
+        {echange && (
+          <SaisieEchange
+            clientId={echange.id}
+            busy={false}
+            setBusy={() => {}}
+            onFini={async () => setEchange(null)}
+            onAnnuler={() => setEchange(null)}
+            onErreur={(m) => m && setErreur(m)}
+          />
+        )}
+      </Modal>
     </div>
   )
 }
@@ -457,6 +672,11 @@ function FicheContenu({ fiche, mouvements, fidelite, droits, onMouvement }) {
           <div className="empty" style={{ padding: 12 }}>Aucun achat enregistré.</div>
         )}
       </div>
+
+      {/* La fiche savait ce que le client a ACHETÉ, jamais s'il est ENTRÉ. Les deux questions du
+          comptoir sont pourtant celles-là : « a-t-il utilisé sa carte ? » et « il dit que la borne
+          l'a refusé hier ». Le bloc ne s'affiche pas pour un compte sans droit sur les accès. */}
+      <PassagesClient clientId={c.id} droits={droits} />
     </div>
   )
 }

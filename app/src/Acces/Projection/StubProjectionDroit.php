@@ -9,6 +9,7 @@ use App\Acces\Enum\StatutProjectionDroit;
 use App\Acces\Enum\TypeDroitAcces;
 use App\Acces\Port\ProjectionDroitInterface;
 use App\Acces\Service\CardExpiryCalculator;
+use App\Acces\Service\ProductAccessZoneResolver;
 use App\Offre\Entity\Produit;
 use App\Organisation\Entity\Etablissement;
 use App\Vente\Entity\BilletSupport;
@@ -36,6 +37,7 @@ final class StubProjectionDroit implements ProjectionDroitInterface
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly CardExpiryCalculator $cardExpiry,
+        private readonly ProductAccessZoneResolver $accessZones,
     ) {
     }
 
@@ -69,6 +71,18 @@ final class StubProjectionDroit implements ProjectionDroitInterface
                 $droit->setProduitRef($produit->getId());
             }
         }
+
+        // ⚠ APRES les deux branches, jamais dans l'une d'elles.
+        //
+        // Chacune pose `produitRef` a sa maniere ; une seule les rejoint. Recopier ici garantit que
+        // le jour ou un troisieme type de titre apparait, il herite de la regle au lieu de
+        // l'ignorer -- un oubli d'appel ne produirait pas d'erreur, il produirait un titre qui
+        // ouvre tout.
+        //
+        // C'est une SYNCHRONISATION : une re-projection avec une declaration modifiee retire aussi
+        // les zones qui n'y sont plus. Sans cela, retirer une zone d'un produit n'aurait aucun
+        // effet sur les titres deja emis, et n'en aurait aucun SANS RIEN DIRE.
+        $this->accessZones->applyTo($droit, $droit->getProduitRef(), $etablissement);
 
         $droit->setStatutProjection(StatutProjectionDroit::Valide);
         $droit->setSynchroniseLe(new \DateTimeImmutable());

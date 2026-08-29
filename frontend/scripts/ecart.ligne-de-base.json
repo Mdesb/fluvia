@@ -29,20 +29,24 @@
         "Le script REFUSE de le relever. Un plafond qui remonte n est plus un cliquet, c est un",
         "compteur."
     ],
-    "plafond": 743,
+    "plafond": 701,
     "releve": {
-        "exposees": 1141,
+        "exposees": 1142,
         "sansEcran": 0,
-        "attendues": 1141,
-        "appelees": 402,
-        "atteignables": 398,
-        "inatteignables": 743,
+        "attendues": 1142,
+        "appelees": 449,
+        "atteignables": 441,
+        "inatteignables": 701,
         "orphelins": [
             "comptesComptables  (back-office)",
+            "etatSynchroAcces  (back-office)",
+            "factureDepuisVente  (back-office)",
             "grilleTarifaires  (back-office)",
+            "majFactureDirecte  (back-office)",
             "padelTournois  (back-office)",
             "pieceCommerciale  (back-office)",
-            "planningOuverture  (back-office)"
+            "planningOuverture  (back-office)",
+            "verifierChaineFactures  (back-office)"
         ],
         "declares": [],
         "marqueursSansRaison": [],
@@ -50,8 +54,8 @@
         "parFront": [
             {
                 "nom": "back-office",
-                "appelees": 381,
-                "atteignables": 377
+                "appelees": 428,
+                "atteignables": 420
             },
             {
                 "nom": "boutique en ligne",
@@ -73,6 +77,10 @@
                 16
             ],
             [
+                "patinoire",
+                16
+            ],
+            [
                 "editor",
                 14
             ],
@@ -81,11 +89,15 @@
                 14
             ],
             [
-                "patinoire",
-                13
+                "produits",
+                11
             ],
             [
                 "ventes",
+                11
+            ],
+            [
+                "acces",
                 11
             ],
             [
@@ -93,7 +105,7 @@
                 11
             ],
             [
-                "produits",
+                "factures",
                 10
             ],
             [
@@ -101,8 +113,8 @@
                 10
             ],
             [
-                "ouverture",
-                9
+                "opening",
+                10
             ],
             [
                 "billing",
@@ -119,6 +131,10 @@
             [
                 "padel",
                 7
+            ],
+            [
+                "etablissements",
+                6
             ],
             [
                 "roles",
@@ -161,12 +177,8 @@
                 5
             ],
             [
-                "agenda",
+                "calendar",
                 5
-            ],
-            [
-                "etablissements",
-                4
             ],
             [
                 "customer",
@@ -209,7 +221,15 @@
                 4
             ],
             [
+                "limite",
+                4
+            ],
+            [
                 "point",
+                3
+            ],
+            [
+                "caisses",
                 3
             ],
             [
@@ -229,11 +249,31 @@
                 3
             ],
             [
+                "opportunities",
+                3
+            ],
+            [
                 "groupe",
                 3
             ],
             [
                 "valeur",
+                3
+            ],
+            [
+                "espace",
+                3
+            ],
+            [
+                "controleurs",
+                3
+            ],
+            [
+                "equipements",
+                3
+            ],
+            [
+                "sous",
                 3
             ],
             [
@@ -273,10 +313,6 @@
                 2
             ],
             [
-                "opportunities",
-                2
-            ],
-            [
                 "jauge",
                 2
             ],
@@ -307,10 +343,6 @@
             [
                 "demandes-escalade",
                 2
-            ],
-            [
-                "caisses",
-                1
             ],
             [
                 "session",
@@ -345,10 +377,6 @@
                 1
             ],
             [
-                "acces",
-                1
-            ],
-            [
                 "supports",
                 1
             ],
@@ -358,6 +386,14 @@
             ],
             [
                 "passages",
+                1
+            ],
+            [
+                "droit",
+                1
+            ],
+            [
+                "declaration",
                 1
             ],
             [
@@ -466,10 +502,6 @@
             ],
             [
                 "demande",
-                1
-            ],
-            [
-                "limite",
                 1
             ],
             [
