@@ -99,7 +99,7 @@ function idDe(v) {
 // (`EspaceAcces` expose son libellé dans `controleur:read`), mais on croise quand même par
 // identifiant : le jour où le groupe change, la colonne dirait « — » au lieu d'inventer.
 function zonesDesservies(controleur, espaces) {
-  return (controleur?.espacesDesservis || [])
+  return (controleur?.servedSpaces || [])
     .map((e) => (typeof e === 'object' && e.libelle) || espaces.find((x) => x.id === idDe(e))?.libelle)
     .filter(Boolean)
 }
@@ -394,14 +394,14 @@ export default function TopologieAcces({ etabActif, droits, onNav }) {
         ? {
             libelle: ligne.libelle || '',
             espace: idDe(ligne.espace) || '',
-            espacesDesservis: (ligne.espacesDesservis || []).map((e) => idDe(e)).filter(Boolean),
+            servedSpaces: (ligne.servedSpaces || []).map((e) => idDe(e)).filter(Boolean),
             itboxRef: ligne.itboxRef || '',
             etat: ligne.etat || 'en_ligne',
           }
         : {
             libelle: '',
             espace: espaceId || espaces[0]?.id || '',
-            espacesDesservis: [],
+            servedSpaces: [],
             itboxRef: '',
             etat: 'en_ligne',
           },
@@ -472,7 +472,7 @@ export default function TopologieAcces({ etabActif, droits, onNav }) {
           espace: `/api/espace_acces/${valeurs.espace}`,
           // L'emplacement ne se répète pas dans les zones desservies : il est déjà ouvert, et l'y
           // remettre ferait lire « ouvre aussi sa propre zone », ce qui n'apprend rien.
-          espacesDesservis: (valeurs.espacesDesservis || [])
+          servedSpaces: (valeurs.servedSpaces || [])
             .filter((id) => id !== valeurs.espace)
             .map((id) => `/api/espace_acces/${id}`),
           itboxRef: valeurs.itboxRef,
@@ -480,22 +480,25 @@ export default function TopologieAcces({ etabActif, droits, onNav }) {
         }
         const enregistre = ligne ? await api.majControleur(ligne.id, corps) : await api.creerControleur(corps)
 
-        // ⚠ LE SERVEUR ACCEPTE « OUVRE AUSSI » ET NE LE GARDE PAS. MESURÉ LE 29/08, PAS SUPPOSÉ.
+        // ⚠ CE CONTRÔLE RESTE, ALORS MÊME QUE LE DÉFAUT QUI L'A MOTIVÉ EST CORRIGÉ.
         //
-        // `PATCH /api/controleurs/{id}` avec `espacesDesservis: [IRI]` répond **200** et rend
-        // `espacesDesservis: []`. Cause trouvée en interrogeant l'inflecteur de Symfony dans le
-        // conteneur : il singularise `espacesDesservis` en `espacesDesservi`, donc il cherche
-        // `addEspacesDesservi` / `removeEspacesDesservi`. L'entité déclare `addEspaceDesservi` —
-        // « espace » au singulier — et la collection n'est donc pas modifiable. Aucune erreur.
+        // Le 29/08, `PATCH /api/controleurs/{id}` avec les zones desservies répondait **200** et
+        // rendait la collection **vide**. Cause trouvée en interrogeant l'inflecteur de Symfony, pas
+        // en relisant le code : il ne singularise que le DERNIER mot, tirait `espacesDesservi` de
+        // `servedSpaces`, et cherchait donc `addEspacesDesservi` quand l'entité déclarait
+        // `addEspaceDesservi`. Les deux accesseurs existaient — c'est la rencontre des noms qui
+        // manquait, et elle se produit dans une bibliothèque qu'on ne lit pas.
         //
-        // Même famille que le sous-réseau sans `removeEspace`, cause différente : là il manquait une
-        // méthode, ici les deux existent sous un nom que l'inflecteur ne dérive pas. C'est signalé.
+        // La propriété s'appelle désormais `servedSpaces` : l'inflection en tire `servedSpace`, et
+        // les noms se rencontrent. Un test passe par l'API — PATCH, relecture, puis retrait.
         //
-        // En attendant, l'écran refuse d'annoncer un enregistrement qui n'a pas eu lieu : un
-        // exploitant qui croit avoir ouvert le tourniquet aux abonnés de la salle laisserait des
-        // gens devant une porte.
-        const voulues = (corps.espacesDesservis || []).map((iri) => iri.split('/').pop()).sort()
-        const retenues = (enregistre?.espacesDesservis || []).map((e) => idDe(e)).filter(Boolean).sort()
+        // ⚠ ON GARDE LE CONTRÔLE QUAND MÊME. C'est lui qui a rendu ce défaut visible au lieu de le
+        // laisser passer pour un caprice, et rien ne garantit qu'un autre champ ne le refera pas :
+        // un exploitant qui croit avoir ouvert le tourniquet aux abonnés de la salle laisserait des
+        // gens devant une porte. Comparer ce qu'on a demandé à ce que le serveur rend coûte trois
+        // lignes.
+        const voulues = (corps.servedSpaces || []).map((iri) => iri.split('/').pop()).sort()
+        const retenues = (enregistre?.servedSpaces || []).map((e) => idDe(e)).filter(Boolean).sort()
         if (voulues.length !== retenues.length || voulues.some((v, i) => v !== retenues[i])) {
           setAvertissement(
             'Le serveur a accepté le contrôleur mais n’a pas retenu les zones de « Ouvre aussi » : '
@@ -623,7 +626,7 @@ export default function TopologieAcces({ etabActif, droits, onNav }) {
         + 'refusé par le serveur.',
     },
     {
-      nom: 'espacesDesservis',
+      nom: 'servedSpaces',
       libelle: 'Ouvre aussi',
       type: 'cases',
       options: espaces
