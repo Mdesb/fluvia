@@ -88,12 +88,34 @@ export default function App() {
   // se reconnecte et on retombe sur l'écran qu'on avait sous les yeux, filtres compris, au lieu de
   // tout refaire. Voir `api/url.js`.
   const [onglet, setOngletBrut] = useState(() => lireHash().onglet || 'caisse')
+  // CHANGER D’ÉCRAN EMPILE UNE ENTRÉE D’HISTORIQUE, ET C’EST TOUT LE SUJET.
+  //
+  // Maxime : « quand on clique sur le bouton retour du navigateur, on change carrément de page ».
+  // La cause était ici : `ecrireHash` sans `pousser` écrit par `replaceState`, donc naviguer de la
+  // caisse au catalogue puis aux clients laissait UNE seule entrée dans l'historique. Le
+  // « Précédent » du navigateur ne pouvait alors que sortir de l'application — il faisait
+  // exactement ce qu'on lui demandait, il n'y avait rien d'autre où aller.
+  //
+  // Un bouton « retour » posé dans chaque écran n'aurait pas réparé ça : il aurait ajouté un
+  // second geste à côté de celui que les gens font déjà, en laissant le premier casser. Le
+  // navigateur porte déjà le geste ; il fallait lui donner de quoi reculer.
+  //
+  // Les paramètres du précédent sont abandonnés au changement d'écran : ils ne veulent rien dire
+  // ailleurs. L'entrée empilée porte donc l'onglet seul, et le retour restitue l'écran — les
+  // filtres de la liste qu'on quitte, eux, sont dans SON entrée d'historique à elle.
   const setOnglet = useCallback((id) => {
     setOngletBrut((precedent) => {
-      // Changer d'écran abandonne les paramètres du précédent : ils ne veulent rien dire ailleurs.
-      if (id !== precedent) ecrireHash(id, {})
+      if (id !== precedent) ecrireHash(id, {}, { pousser: true })
       return id
     })
+  }, [])
+
+  // La première entrée doit exister avant qu'on empile dessus : sans elle, l'écran d'arrivée n'a
+  // pas d'adresse, et le premier retour sort de l'application au lieu d'y revenir. On la pose en
+  // REMPLAÇANT (pas en empilant) : elle décrit où l'on est déjà.
+  useEffect(() => {
+    if (!lireHash().onglet) ecrireHash(onglet, {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Le bouton « Précédent » du navigateur change le hash sans rien démonter.
