@@ -81,6 +81,11 @@ lancer_gf garde-fou-cloisonnement.php || ECHEC=1
 # seul un filet qui les compare a l'inventaire reel le voit.
 [ -f "$RACINE/bin/garde-fou-references-libres.php" ] && { lancer_gf garde-fou-references-libres.php || ECHEC=1; }
 
+# Une propriete declaree dans un `#[ApiFilter]` doit EXISTER : API Platform ignore une propriete
+# inconnue en silence, et la collection sort ENTIERE. Contrairement aux filtres qui rendent une liste
+# vide, celui-ci ne remonte jamais en reclamation -- des donnees qui s'affichent n'intriguent personne.
+[ -f "$RACINE/bin/garde-fou-filtres-declares.php" ] && { lancer_gf garde-fou-filtres-declares.php || ECHEC=1; }
+
 # Événements du catalogue (D2/D22) : abonné inerte, émission hors contrat, cliquet.
 [ -f "$RACINE/bin/garde-fou-evenements-orphelins.php" ] && { lancer_gf garde-fou-evenements-orphelins.php || ECHEC=1; }
 
