@@ -394,7 +394,7 @@ export default function App() {
       {onglet === 'stock' && <Stock etabActif={etabActif} droits={droits} />}
       {onglet === 'finance' && <Finance etabActif={etabActif} droits={droits} />}
       {onglet === 'parametres' && (
-        <Parametres etabActif={etabActif} etablissements={etablissements} droits={droits} onCapacitesChangees={rechargerMe} />
+        <Parametres etabActif={etabActif} etablissements={etablissements} droits={droits} onCapacitesChangees={rechargerMe} estEditeur={me?.estEditeur === true} />
       )}
       </Suspense>
       </FrontiereErreur>

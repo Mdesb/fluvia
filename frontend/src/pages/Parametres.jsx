@@ -423,7 +423,22 @@ function descripteurPointsDeVente(api, etabActif, moyens = []) {
   }
 }
 
-export default function Parametres({ etabActif, etablissements, droits = [], onCapacitesChangees }) {
+/**
+ * ⚠ `estEditeur` N'EST PAS UN DROIT, C'EST UNE IDENTITE DE TENANT.
+ *
+ * Deux sections de cet ecran — « Nouveau client » et la liste des etablissements — decrivent le
+ * parc de l'EDITEUR. Elles etaient gardees par `organisation.gerer`, que porte le role
+ * « Administrateur groupe », lequel est un role CLIENT : l'administrateur d'une regie voyait donc,
+ * dans son propre parametrage, le mecanisme commercial de son fournisseur.
+ *
+ * Aucune permission ne peut regler cela, parce que la question n'est pas « a-t-il le droit de
+ * gerer une organisation ? » — il l'a — mais « DE QUELLE organisation parle-t-on ? ». C'est une
+ * identite, et `/me` la rend deja sous `estEditeur`, calculee sur l'etablissement ACTIF.
+ *
+ * Valeur par defaut `false` : tant que le profil n'est pas charge, on CACHE. Montrer puis cacher
+ * ferait apparaitre une fraction de seconde, a un client, ce qu'on veut precisement lui epargner.
+ */
+export default function Parametres({ etabActif, etablissements, droits = [], onCapacitesChangees, estEditeur = false }) {
   const [ouvertureStructure, setOuvertureStructure] = useState(false)
   const [sousOnglet, setSousOnglet] = useState('entites')
 
@@ -481,7 +496,10 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
 
       {sousOnglet === 'entites' && (
         <div className="resa-grid">
-          {aLeDroit(droits, 'organisation.gerer') && (
+          {/* ⚠ RESERVE A L'EDITEUR. Ouvrir une structure, c'est creer un client de Fluvia : un
+              exploitant n'a rien a y faire, et le lui montrer revient a lui exposer le mecanisme
+              commercial de son fournisseur depuis l'interieur de son propre logiciel. */}
+          {estEditeur && aLeDroit(droits, 'organisation.gerer') && (
             <section className="card">
               <div className="card-h">
                 <h3>Nouveau client</h3>
@@ -499,8 +517,14 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
             </section>
           )}
 
+          {/* « Regions » reste : Maxime a nomme « Nouveau client » et « etablissement », pas les
+              regions. Il regardait un ecran, pas une liste exhaustive — la question lui est posee
+              plutot que tranchee ici. En attendant, on ne masque que ce qu'il a nomme. */}
           <RegionsSection peutEcrire={aLeDroit(droits, 'organisation.gerer')} />
-          <EtablissementsSection peutEcrire={aLeDroit(droits, 'organisation.gerer')} />
+          {/* ⚠ CONSEQUENCE ASSUMEE : un exploitant multi-sites perd ici la liste de SES
+              etablissements. C'est ce que Maxime a demande — « ce sont des infos uniquement pour
+              moi » — et c'est reversible d'une ligne s'il change d'avis en le voyant. */}
+          {estEditeur && <EtablissementsSection peutEcrire={aLeDroit(droits, 'organisation.gerer')} />}
           {/* LES MOTS DU METIER, A COTE DE L'ETABLISSEMENT QU'ILS CONCERNENT.
               << Ressource >> veut dire praticien chez le coiffeur, ligne d'eau a la piscine. Le mettre
               dans un onglet << apparence >> le ferait chercher ailleurs : c'est un reglage de
