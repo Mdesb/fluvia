@@ -245,6 +245,50 @@ final class CalendarTest extends AccesApiTestCase
     }
 
     /** Un jeton inconnu rend 404 et non 403 : un 403 confirmerait qu'une URL voisine existe. */
+    /**
+     * ⚠ L'ABONNEMENT DOIT CONTENIR CE QUE L'ONGLET « MOI » MONTRE.
+     *
+     * Le test voisin ne crée qu'un événement `siteWide: true` : il ne pouvait donc pas voir que le
+     * flux ne servait QUE la portée du site. `IcsFeedController` demandait la portée « moi » à un
+     * agrégateur qui n'entend que « mine » — il recevait le site deux fois, et l'abonné n'a jamais
+     * vu ses propres rendez-vous dans son téléphone.
+     *
+     * Rien ne le signalait : le flux répond, il est valide, il contient des événements. On croit
+     * avoir mal saisi son rendez-vous.
+     */
+    public function testLabonnementContientAussiMesEvenementsPersonnels(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+
+        // Date calculée depuis maintenant : le flux ne publie qu'une fenêtre glissante.
+        $dansUneSemaine = (new \DateTimeImmutable('+7 days'))->setTime(14, 0);
+        $client->request('POST', '/api/calendar/calendar_events', $entete + [
+            'json' => [
+                'title' => 'Rendez-vous médical personnel',
+                'start' => $dansUneSemaine->format(\DateTimeInterface::ATOM),
+                'end' => $dansUneSemaine->modify('+1 hour')->format(\DateTimeInterface::ATOM),
+                'type' => 'unavailability',
+                // Pas de `siteWide` : l'événement n'appartient qu'à son auteur.
+            ],
+        ]);
+        self::assertResponseIsSuccessful();
+
+        $abonnement = $client->request('GET', '/api/calendar/ics-subscription', $entete)->toArray();
+        self::assertResponseIsSuccessful();
+        $path = $abonnement['member'][0]['path'];
+
+        $corps = static::createClient()->request('GET', $path)->getContent();
+        self::assertResponseIsSuccessful();
+
+        // ⚠ ON DÉPLIE AVANT DE CHERCHER : au-delà de 75 octets une ligne est coupée par un CRLF
+        // suivi d'une espace, et le titre ne se trouverait plus d'un seul tenant.
+        self::assertStringContainsString(
+            'SUMMARY:Rendez-vous médical personnel',
+            str_replace("\r\n ", '', $corps),
+            'Un abonné ne reçoit pas ses propres rendez-vous : le flux ne sert que la portée du site.',
+        );
+    }
+
     public function testUnJetonInconnuRend404(): void
     {
         $anonyme = static::createClient();

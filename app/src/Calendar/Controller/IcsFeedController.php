@@ -63,7 +63,12 @@ final class IcsFeedController
         $au = $du->modify('+4 months');
 
         $evenements = array_merge(
-            $this->agregateur->evenements($etablissement, $utilisateur, $du, $au, 'moi'),
+            // ⚠ « mine » ET NON « moi ». `CalendarAggregator` lit `$portee === 'mine'` pour
+            // décider s'il borne sur le propriétaire. Avec « moi », il rendait les événements DU
+            // SITE — donc deux fois les mêmes, et jamais ceux de l'utilisateur. Le vocabulaire des
+            // ONGLETS de l'écran (« moi ») n'est pas celui du FIL (« mine ») ; le front traduit,
+            // ce contrôleur ne le faisait pas.
+            $this->agregateur->evenements($etablissement, $utilisateur, $du, $au, 'mine'),
             $this->agregateur->evenements($etablissement, $utilisateur, $du, $au, 'site'),
         );
 
