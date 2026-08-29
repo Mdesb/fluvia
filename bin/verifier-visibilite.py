@@ -48,6 +48,9 @@ EMPREINTES = [
     ("zone de depot photo", "Déposez une photo ici"),
     ("favoris de caisse", "Épingler en tête"),
     ("echelle d'espacement", "--esp-section"),
+    ("zones desservies par un lecteur", "Emplacement \u2014 la porte physique"),
+    ("bouton retour dans l'application", "Revenir \u00e0 l\u2019\u00e9cran pr\u00e9c\u00e9dent"),
+    ("insertion de variables de campagne", "endroit du curseur"),
 ]
 
 
