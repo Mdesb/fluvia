@@ -97,6 +97,12 @@ a { color: var(--accent); }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 .btn.primary:hover:not(:disabled) { background: var(--accent-2); }
 .btn.sm { padding: 6px 10px; font-size: 12.5px; }
+/* Plus petit que `sm` : le bouton d'action d'une cellule de tableau, la ou une rangee en
+ * porte trois et ou `sm` fait deborder la colonne. Ecrit six fois en ligne dans Campagnes
+ * avant d'etre nomme — un padding en ligne repete est une classe qui manque, pas un
+ * espacement a convertir. C'est la limite de l'echelle : elle ne remplace que ce qui EST
+ * un espacement. */
+.btn.xs { padding: 1px 8px; font-size: 11.5px; }
 .btn.ghost { background: none; border-color: transparent; }
 .btn.lg { padding: 12px 18px; font-size: 15px; width: 100%; justify-content: center; }
 /* L'APPLICATION N'AVAIT AUCUN BOUTON DESTRUCTEUR, PARCE QU'ELLE N'AVAIT AUCUN GESTE IRREVERSIBLE.
