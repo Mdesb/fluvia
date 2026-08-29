@@ -10,6 +10,7 @@ use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Post;
+use App\Crm\Filter\PrivacyRequestCustomerFilter;
 use App\Crm\Enum\StatutDemandeRgpd;
 use App\Crm\Enum\TypeDemandeRgpd;
 use App\Crm\State\TraiterDemandeRgpdProcessor;
@@ -44,7 +45,16 @@ use Symfony\Component\Uid\Uuid;
     normalizationContext: ['groups' => ['rgpd:read']],
     denormalizationContext: ['groups' => ['rgpd:write']],
 )]
-#[ApiFilter(SearchFilter::class, properties: ['client' => 'exact', 'statut' => 'exact'])]
+#[ApiFilter(SearchFilter::class, properties: ['statut' => 'exact'])]
+// ⚠ `client` A QUITTE LE `SearchFilter` : il rendait TOUJOURS une liste vide.
+//
+// Mesure sur une collection contenant deux demandes du meme client : `?statut=recue` rendait
+// 2, `?client=<IRI>` rendait 0. Les deux etaient pourtant declares dans la meme annotation.
+// L'ecran des demandes RGPD, ouvert depuis la fiche de quelqu'un, affichait donc « cette
+// personne n'a jamais demande l'effacement de ses donnees » alors qu'elle en avait deux en
+// cours -- sur le seul ecran de l'application qui porte un delai legal d'un mois.
+// Voir PrivacyRequestCustomerFilter, qui explique la mesure et ce qui a ete ecarte.
+#[ApiFilter(PrivacyRequestCustomerFilter::class)]
 class DemandeRGPD
 {
     #[ORM\Id]

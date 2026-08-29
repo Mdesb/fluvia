@@ -9,8 +9,10 @@ use ApiPlatform\State\ProcessorInterface;
 use App\Vente\Entity\Vente;
 use App\Vente\Service\LecteurCorps;
 use App\Vente\Service\PanierCalculateur;
+use App\Vente\Service\TicketPrintingPolicy;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
 /**
  * Ticket (POST /ventes/{id}/ticket, CA-11). Impression automatique au-dessus du seuil du point de
@@ -40,6 +42,7 @@ final class TicketProcessor implements ProcessorInterface
         private readonly EntityManagerInterface $em,
         private readonly LecteurCorps $lecteur,
         private readonly PanierCalculateur $calc,
+        private readonly TicketPrintingPolicy $politique,
     ) {
     }
 
@@ -52,24 +55,14 @@ final class TicketProcessor implements ProcessorInterface
 
         // D44-bis — porté par la vente : une vente directe n'a pas de session d'où le déduire, et
         // lisait donc un seuil de 0 € qui la déclarait systématiquement au-dessus du seuil.
-        $seuil = $this->calc->centimes($data->getPointDeVente()?->getSeuilImpression() ?? '0.00');
-        $totalCentimes = $this->calc->centimes($data->getTotal());
-
-        // ⚠ UNE VENTE ENTIEREMENT GRATUITE NE SORT PAS DE TICKET, ET CE N'EST PAS UNE QUESTION DE
-        // SEUIL.
+        // ⚠ LA REGLE VIT DANS `TicketPrintingPolicy`, ET NULLE PART AILLEURS.
         //
-        // Le seuil par defaut vaut 0,00 : une vente a 0 € donnait `0 >= 0`, donc « au-dessus du
-        // seuil », donc impression. Une entree offerte, un badge de courtoisie, un lot de billets
-        // d'invitation faisaient sortir un ticket a zero que personne ne lit et que le caissier jette.
-        //
-        // « Vendus SEULS » est le mot important : un produit gratuit accompagne d'un produit payant
-        // donne un total non nul et le ticket sort normalement -- le client a paye quelque chose. Le
-        // critere est donc le TOTAL, jamais la presence d'une ligne a zero.
-        //
-        // La vente reste enregistree et comptabilisee : c'est le PAPIER qu'on ne sort pas, pas
-        // l'operation qu'on efface.
-        $venteGratuite = $totalCentimes === 0;
-        $auDessusSeuil = !$venteGratuite && $totalCentimes >= $seuil;
+        // Elle etait ecrite ici ET dans `ValiderVenteService`. J'ai corrige celle-ci le 29/08 pour
+        // qu'une vente gratuite ne sorte pas de ticket, et laisse l'autre : une vente a 0 € en
+        // session restait marquee « imprimee » pour un document que ce meme fichier refusait
+        // d'editer. Une regle recopiee diverge au PREMIER correctif, pas au dixieme.
+        $venteGratuite = $this->politique->estGratuite($data);
+        $auDessusSeuil = $this->politique->impressionAutomatique($data);
 
         $duplicata = false;
         if ($mode === 'imprimer' || $mode === 'duplicata') {
@@ -81,7 +74,23 @@ final class TicketProcessor implements ProcessorInterface
         // Le renvoi ne se propose pas davantage sur une vente gratuite : proposer d'envoyer par SMS
         // un ticket a 0 € est le meme bruit, deplace sur un autre canal.
         $renvoiPropose = !$auDessusSeuil && !$venteGratuite && $data->getClient() !== null;
-        $renvoye = $mode === 'renvoyer' && $data->getClient() !== null;
+        // ⚠ « renvoyer » N'ENVOIE RIEN, ET ON LE DIT AU LIEU DE LE TAIRE.
+        //
+        // Il n'existe dans tout le module ni expediteur, ni passerelle SMS, ni evenement, ni
+        // message : le mode se contentait de rendre `renvoye: true`. Une reponse qui dit « fait »
+        // pour un geste dont le code n'existe pas est le pire de ce qu'on traque -- l'exploitant
+        // coche, ferme l'ecran, et le client n'a jamais rien recu.
+        //
+        // Et ce n'est PAS le transport nul : un `MAILER_DSN` correct ne changerait rien, il n'y a
+        // aucun code d'envoi a brancher dessus. Deux travaux, pas un.
+        if ($mode === 'renvoyer') {
+            throw new UnprocessableEntityHttpException(
+                'Le renvoi du ticket n\'est pas encore implémenté : aucun expéditeur ni passerelle SMS '
+                . 'n\'existe côté serveur. La demande est enregistrée au plan, mais rien ne partirait.'
+            );
+        }
+
+        $renvoye = false;
 
         return new JsonResponse([
             'vente' => (string) $data->getId(),
