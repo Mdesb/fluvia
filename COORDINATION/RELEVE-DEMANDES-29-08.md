@@ -139,3 +139,65 @@ comptabilisation.
 2. **Agrégateur bancaire** : quel prestataire, et quand ? C'est un contrat avant d'être du code.
 3. **Réception des factures par courriel** : adresse à jeton ou liste d'expéditeurs autorisés ?
 4. **Boutons retour ou vraies URL** : le second est plus coûteux et règle davantage.
+
+---
+
+## Addendum — un filtre qui rend toujours zéro, et ce qu'il ouvre
+
+Mesuré le 29/08 sur `DemandeRGPD`, sur une collection contenant bien deux demandes du même client :
+
+    ?statut=recue   →  200, total 2      la colonne scalaire répond
+    ?client=<IRI>   →  200, total 0      l'association ne répond pas
+
+Les deux propriétés étaient déclarées dans **la même annotation** `#[ApiFilter(SearchFilter…)]`.
+
+⚠ **Sur cet écran-là, le faux est le pire possible.** Ouvert depuis la fiche de quelqu'un, il
+affichait « cette personne n'a jamais demandé l'effacement de ses données » alors qu'elle en avait
+deux en cours — sur le seul écran de l'application qui porte un délai légal d'un mois. Une réponse
+rassurante, sans erreur, sur un sujet où l'on ne repasse pas.
+
+### Ce qui a été écarté, et pourquoi c'est important
+
+L'hypothèse transmise était la jointure du cloisonnement : `PerimetreCrmExtension` joint déjà
+`o.client` sous un alias fixe, et deux jointures sur la même association auraient pu déplacer la
+condition. Elle était plausible et elle expliquait même pourquoi `statut` marchait.
+
+**Testée en neutralisant la restriction de périmètre : le filtre rendait toujours zéro.** L'hypothèse
+était fausse. Sans cette vérification, j'aurais « corrigé » une jointure qui n'y était pour rien —
+et le filtre serait resté muet.
+
+La cause qui reste : l'identifiant de `Client` est un type Doctrine personnalisé stocké en
+`BINARY(16)`. Comparer une colonne binaire à une chaîne de 36 caractères ne trouve rien, et ne lève
+rien. Un filtre dédié qui lie le paramètre **avec** le type `uuid` répare — même famille que
+`SaleCustomerFilter` et `ProductRefFilter`, à ceci près que le champ est ici une vraie association.
+
+### Ce que ça ouvre : 149 propriétés à vérifier
+
+Balayage du dépôt, après avoir écarté les scalaires et les énumérations :
+
+| | |
+|---|---|
+| Propriétés de `SearchFilter` scalaires ou énumérations | 133 |
+| **Sur une association ou une référence libre** | **149** |
+| Tests du dépôt qui exercent un tel filtre | **0** |
+
+⚠ **Je n'affirme pas que les 149 sont cassées.** J'ai un cas confirmé, pas cent quarante-neuf, et un
+second cas n'a pas pu être mesuré faute de données (`Consentement` est en lecture seule, aucune
+fixture n'en crée). Annoncer 149 défauts serait exactement l'erreur qu'on évite depuis trois jours.
+
+Ce qui est certain : **aucun test du dépôt n'exerce un filtre par association**, ce qui est cohérent
+avec l'idée qu'ils pourraient tous être muets sans que personne l'ait jamais vu.
+
+C'est le balayage le plus rentable qui reste. Il se fait avec des mesures, une ressource à la fois,
+pas avec une correction recopiée 149 fois.
+
+### Le point général, qui dépasse ce filtre
+
+Un filtre inconnu ou inopérant rend **200 avec une liste vide, jamais une erreur**.
+`?client=nimportequoi` devrait être un 400. Tant que ce n'est pas le cas, aucun écran ne peut faire
+confiance à une liste filtrée : il ne peut pas distinguer « personne ne correspond » de « ce filtre
+ne marche pas ».
+
+C'est la même famille que le 200 qui n'écrit rien, du côté lecture cette fois, et elle mérite le même
+traitement global. Le filtre posé ici ferme au moins la collection sur une valeur illisible, plutôt
+que de rendre les demandes de tout le monde à qui se trompe de paramètre.

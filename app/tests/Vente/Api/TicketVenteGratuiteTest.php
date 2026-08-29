@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Vente\Api;
 
+use App\Caisse\Entity\PointDeVente;
 use App\Offre\DataFixtures\OffreFixtures;
 use App\Offre\Entity\GrilleTarifaire;
 use App\Offre\Entity\Produit;
@@ -13,6 +14,7 @@ use App\Offre\Entity\TypeTarif;
 use App\Offre\Enum\StatutProduit;
 use App\Organisation\Entity\Etablissement;
 use App\Tests\Vente\VenteApiTestCase;
+use App\Vente\Entity\Vente;
 use Doctrine\ORM\EntityManagerInterface;
 use ApiPlatform\Symfony\Bundle\Test\Client;
 
@@ -105,6 +107,93 @@ final class TicketVenteGratuiteTest extends VenteApiTestCase
         self::assertTrue($ticket['impressionAutomatique'], 'le client a payé quelque chose, le ticket sort');
     }
 
+    /**
+     * UNE VENTE GRATUITE VALIDEE EN SESSION N'EST PAS MARQUEE « IMPRIMEE ».
+     *
+     * ⚠ CE TEST AURAIT ATTRAPE MON PROPRE DEMI-CORRECTIF. La regle du seuil etait ecrite DEUX FOIS :
+     * dans `TicketProcessor` et dans `ValiderVenteService`. J'ai corrige la premiere et laisse la
+     * seconde, si bien qu'une vente a 0 € en session restait marquee imprimee -- pour un document
+     * que le meme depot refusait d'editer. La reedition suivante aurait annonce un DUPLICATA d'un
+     * ticket qui n'a jamais existe.
+     *
+     * Trouve par une session d'ecran en branchant la caisse, pas en relisant le code. Les deux
+     * appelants passent desormais par `TicketPrintingPolicy`.
+     */
+    public function testUneVenteGratuiteEnSessionNEstPasMarqueeImprimee(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $client->disableReboot();
+
+        // ⚠ LE SEUIL PAR DEFAUT, ET C'EST LA TOUT L'INTERET.
+        //
+        // Les fixtures posent 20,00 € : avec ce seuil, `0 >= 2000` est faux et une vente gratuite
+        // n'etait de toute facon pas marquee imprimee -- le test restait vert meme avec l'ancienne
+        // regle fautive. Or le defaut mord sur un etablissement NEUF, dont le seuil vaut 0,00 par
+        // defaut parce que personne ne configure ce champ : `0 >= 0` y est vrai.
+        //
+        // On reproduit donc la configuration reelle des nouveaux sites, pas celle du jeu d'essai.
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $pdv = $em->getRepository(PointDeVente::class)->find($this->idPointDeVente());
+        self::assertNotNull($pdv);
+        $pdv->setSeuilImpression('0.00');
+        $em->flush();
+
+        $session = $this->ouvrirSession($client, $entete);
+        $vente = $this->creerVente($client, $entete, $session['id']);
+        $this->ajouterProduitGratuit($client, $entete, $vente['id']);
+
+        $validee = $client->request('POST', '/api/ventes/' . $vente['id'] . '/valider', $entete + ['json' => []])->toArray();
+        self::assertResponseIsSuccessful((string) $client->getResponse()->getContent(false));
+        self::assertSame('validee', $validee['statut'], 'témoin : la vente gratuite se valide bien');
+
+        // ⚠ ON LIT L'ÉTAT EN BASE, ET AVANT TOUTE DEMANDE DE TICKET.
+        //
+        // Première version de ce test : je vérifiais `duplicata` sur la réponse du ticket. Éprouvé
+        // en rétablissant l'ancienne règle recopiée, il restait VERT — l'assertion ne distinguait
+        // pas les deux états. Et demander le ticket POSE le drapeau, ce qui effacerait la différence
+        // qu'on cherche à mesurer.
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $em->clear();
+        $enBase = $em->getRepository(Vente::class)->find($vente['id']);
+        self::assertNotNull($enBase);
+
+        self::assertFalse(
+            $enBase->isImprime(),
+            'une vente entièrement gratuite ne doit pas être marquée imprimée : le ticket n’est pas édité',
+        );
+    }
+
+    /**
+     * LE RENVOI PAR COURRIEL OU SMS REFUSE BRUYAMMENT, AU LIEU DE DIRE « FAIT ».
+     *
+     * ⚠ Il n'existe dans tout le module ni expediteur, ni passerelle SMS, ni evenement : le mode
+     * rendait pourtant `renvoye: true`. Une reponse qui dit « fait » pour un geste dont le code
+     * n'existe pas est le pire de ce qu'on traque -- l'exploitant coche, ferme l'ecran, et le client
+     * n'a jamais rien recu.
+     *
+     * Et ce n'est pas le transport nul : un `MAILER_DSN` correct ne changerait rien.
+     */
+    public function testLeRenvoiRefuseTantQuAucunEnvoiNExiste(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $client->disableReboot();
+
+        $vente = $client->request('POST', '/api/ventes', $entete + ['json' => ['origineHorsLigne' => false]])->toArray();
+        $this->ajouterProduitGratuit($client, $entete, $vente['id']);
+
+        $client->request('POST', '/api/ventes/' . $vente['id'] . '/ticket', $entete + [
+            'json' => ['mode' => 'renvoyer', 'canal' => 'email'],
+        ]);
+
+        self::assertResponseStatusCodeSame(422);
+        self::assertStringContainsString(
+            'pas encore implémenté',
+            (string) $client->getResponse()->getContent(false),
+            'le refus doit NOMMER ce qui manque, sinon on cherchera du cote de la configuration',
+        );
+    }
+
     // ── Montage ──────────────────────────────────────────────────────────────────────────────────
 
     /**
@@ -154,7 +243,13 @@ final class TicketVenteGratuiteTest extends VenteApiTestCase
             return $existant;
         }
 
-        $type = $em->getRepository(TypeProduit::class)->findOneBy([]);
+        // ⚠ PAS N'IMPORTE QUEL TYPE. `findOneBy([])` rendait le premier venu, et celui-la etait
+        // NOMINATIF : en session, l'ajout exigeait un beneficiaire (RG-M2-04) et le test echouait
+        // pour une raison sans rapport avec ce qu'il mesure. On reprend le type du produit d'entree
+        // des fixtures, qui se vend en caisse dans tout le reste de la suite.
+        $modele = $em->getRepository(Produit::class)->find($this->idProduit(OffreFixtures::PRODUIT_ENTREE));
+        self::assertInstanceOf(Produit::class, $modele);
+        $type = $modele->getType();
         self::assertInstanceOf(TypeProduit::class, $type);
         $tarifPlein = $em->getRepository(TypeTarif::class)->findOneBy(['nom' => OffreFixtures::TARIF_PLEIN]);
         self::assertInstanceOf(TypeTarif::class, $tarifPlein);

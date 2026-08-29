@@ -69,6 +69,7 @@ final class ValiderVenteService
         private readonly EntityManagerInterface $em,
         private readonly Connection $connection,
         private readonly PanierCalculateur $calculateur,
+        private readonly TicketPrintingPolicy $politiqueTicket,
         private readonly DecrementStockHandler $stock,
         private readonly ScellementHandler $scellement,
         private readonly AppairageAccesInterface $appairage,
@@ -155,8 +156,14 @@ final class ValiderVenteService
                 // D44-bis — une vente directe n'a pas de comptoir, donc pas d'imprimante : la marquer
                 // « imprimée » écrirait un fait qui n'a pas eu lieu. Le seuil par défaut valant 0 €,
                 // sans cette condition **toute** vente directe serait déclarée imprimée.
-                $seuil = $this->calculateur->centimes($pdv->getSeuilImpression());
-                if ($vente->getSession() !== null && $this->calculateur->centimes($vente->getTotal()) >= $seuil) {
+                // ⚠ LA MEME REGLE QUE `TicketProcessor`, ET DESORMAIS LE MEME CODE.
+                //
+                // Elle etait recopiee ici. Le 29/08, la version de `TicketProcessor` a ete corrigee
+                // pour qu'une vente entierement gratuite ne sorte pas de ticket -- et celle-ci ne
+                // l'a pas ete : une vente a 0 € en session restait marquee « imprimee » pour un
+                // document que l'autre refusait d'editer, et la reedition suivante aurait annonce
+                // un DUPLICATA d'un ticket qui n'a jamais existe.
+                if ($this->politiqueTicket->marqueImprimeeALaValidation($vente)) {
                     $vente->setImprime(true);
                 }
 
