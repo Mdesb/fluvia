@@ -434,3 +434,37 @@ serveur fait. « Anonymisé » n'est pas « supprimé ». La fiche subsiste, san
 passées y restent rattachées pour que la comptabilité reste juste. Un écran qui écrirait « supprimer
 définitivement » mentirait dans le seul sens qui coûte un contentieux : celui où l'on a promis à
 quelqu'un un effacement qui n'a pas eu lieu.
+
+## 11. L'espacement
+
+**Cinq jetons, définis dans `styles.css` :** `--esp-serre` (4 px), `--esp-normal` (8 px),
+`--esp-large` (12 px), `--esp-bloc` (16 px), `--esp-section` (24 px). Ils se prennent par le rôle,
+pas par la taille : « entre deux blocs » et non « seize pixels ».
+
+**Ils ont été constatés, pas inventés.** Relevé du 29/08 sur les 1 102 déclarations d'espacement en
+ligne du frontal : `gap` en porte 341, dont 42 % à la seule valeur 8 ; les marges verticales 404 ;
+l'intérieur 134, la famille la plus dispersée. Une échelle écrite dans l'abstrait aurait eu six
+valeurs plausibles, et son insuffisance se serait vue au quatrième écran converti — quand trois le
+sont déjà.
+
+**Trois choses ne se convertissent pas, et c'est mesuré :**
+
+- `margin: 0` (103 fois) est une **remise à zéro**, pas un espacement. `var(--esp-0)` n'existe pas.
+- `margin: auto` (52 fois) est un **centrage**. Même raison.
+- La plupart des `padding` en ligne compensent une **classe de composant qui manque**. Y poser un
+  jeton fige le contournement. La bonne réponse est la classe.
+
+Ensemble, cela fait 155 déclarations qu'une conversion mécanique aurait traitées sans rien
+améliorer — le compteur aurait baissé, le produit non. C'est le piège du chiffre qui mesure le
+travail plutôt que le résultat, et il aurait été invisible dans un rapport.
+
+**Les 6, 10 et 14 se rangent au palier voisin.** 265 occurrences, un quart des espacements, un
+déplacement de 2 px au maximum. On l'assume : une échelle qui garde huit valeurs pour ne fâcher
+personne n'est pas une échelle, c'est l'état actuel avec des noms de variables. Mais c'est
+exactement pourquoi **la conversion se fait à la main, écran par écran** — un remplacement
+automatique déplacerait ces 265 espacements sans que personne ne les ait regardés.
+
+**Ce que l'échelle ne traite pas.** Sur les 1 657 déclarations de mise en page du frontal, 555 sont
+`display`, `flexWrap`, `alignItems`, `justifyContent` : aucun jeton ne les remplace. Elles relèvent
+de classes de composant absentes, et c'est un second chantier. Un compteur qui s'arrête à 555 dira
+donc un chantier fini, pas un chantier à moitié raté.

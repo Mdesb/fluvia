@@ -107,6 +107,44 @@ a { color: var(--accent); }
  * critiques, remplissage au survol seulement. */
 .btn.danger { border-color: var(--crit); color: var(--crit); background: var(--panel); }
 
+/* ---- L'ECHELLE D'ESPACEMENT ----
+ *
+ * CONSTATEE, PAS INVENTEE. Relevee le 29/08 sur les 1 102 declarations d'espacement en ligne du
+ * frontal, en regardant QUELLE valeur porte QUELLE propriete :
+ *
+ *   gap                341 declarations — 8 en fait 42 % a lui seul, cinq valeurs couvrent 91 %
+ *   marges verticales  404 declarations — 0, 12, 16, 10, 14, 8, 4, 6
+ *   interieur          134 declarations — la plus dispersee, un quart de queue
+ *
+ * CINQ PALIERS, ET NON SIX. Un << --esp-0 >> n'existe pas : les 103 `margin: 0` du frontal sont des
+ * remises a zero, pas des espacements, et les 52 `auto` sont des centrages. Les nommer ferait
+ * baisser le compteur sans rien ameliorer -- le chiffre mesurerait le travail au lieu du resultat.
+ *
+ * ON ASSUME LE DEPLACEMENT DES 6, 10 ET 14. Ils representent 265 occurrences, soit un quart des
+ * espacements, et se rangent au palier voisin : 2 px au maximum, jamais visible isolement. Une
+ * echelle qui garderait huit valeurs pour ne facher personne ne serait pas une echelle, ce serait
+ * l'etat actuel avec des noms de variables.
+ *
+ * C'est aussi pourquoi la conversion se fait A LA MAIN, ecran par ecran : un remplacement
+ * automatique deplacerait ces 265 espacements sans que personne ne les ait regardes.
+ *
+ * NOMMES PAR ROLE, PAS PAR TAILLE. `--esp-8` interdirait de corriger la valeur sans renommer les
+ * appels. Le role, lui, survit -- et il se lit : chaque nom dit dans quel cas on le prend.
+ *
+ * ⚠ CE QUE CETTE ECHELLE NE TRAITE PAS. Sur les 1 657 declarations de mise en page du frontal,
+ * 555 sont `display`, `flexWrap`, `alignItems`, `justifyContent` : elles ne portent pas de valeur
+ * numerique et aucun jeton ne les remplace. Elles relevent de classes de composant qui manquent.
+ * De meme pour la plupart des `padding` en ligne, qui compensent presque toujours une classe
+ * absente : la bonne reponse y est une classe, pas un jeton. Un compteur qui s'arreterait a 555
+ * ne dira donc pas un chantier a moitie rate, mais un chantier fini et un autre a ouvrir. */
+:root {
+  --esp-serre: 4px;   /* a l'interieur d'un meme objet : une puce et son libelle, deux lignes liees */
+  --esp-normal: 8px;  /* le defaut — 42 % des `gap` du frontal ; entre elements d'une meme rangee */
+  --esp-large: 12px;  /* entre deux groupes distincts d'une meme carte */
+  --esp-bloc: 16px;   /* entre deux blocs : une carte et la suivante, un tableau et son resume */
+  --esp-section: 24px;/* entre deux sections d'ecran, la ou l'oeil doit marquer un arret */
+}
+
 /* ---- Zone de depot de fichier ----
  * Remplace le controle natif << Choisir un fichier · Aucun fichier choisi >>, qui s'affiche dans la
  * police du systeme, ignore le theme, et ne dit rien de ce qu'il accepte. Seul point de style
