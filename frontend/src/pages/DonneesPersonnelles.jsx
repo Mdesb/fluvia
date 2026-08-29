@@ -68,11 +68,12 @@ export default function DonneesPersonnelles({ etabActif, droits }) {
     try {
       const requete = {}
       if (params.statut) requete.statut = params.statut
+      if (params.client) requete.client = params.client
       // Deux lectures quand un filtre est actif, une seule sinon : la seconde n'existe que pour
       // rendre les compteurs vrais, et il serait absurde de la payer quand la page EST la file.
       const [reponse, entiere] = await Promise.all([
         api.demandesRgpd(requete),
-        params.statut ? api.demandesRgpd({}) : null,
+        params.statut ? api.demandesRgpd(params.client ? { client: params.client } : {}) : null,
       ])
       const liste = membres(reponse)
       setDemandes(liste)
@@ -107,27 +108,26 @@ export default function DonneesPersonnelles({ etabActif, droits }) {
 
   useEffect(() => { recharger() }, [recharger])
 
-  // LE FILTRE SERVEUR `client` EST DÉCLARÉ ET NE RAMÈNE JAMAIS RIEN — MESURÉ, PAS SUPPOSÉ.
+  // LE FILTRE PAR PERSONNE A ÉTÉ CASSÉ UNE JOURNÉE, ET L'HISTOIRE MÉRITE D'ÊTRE GARDÉE.
   //
-  // `DemandeRGPD` porte `#[ApiFilter(SearchFilter::class, properties: ['client' => 'exact', ...])]`
-  // et le contrat annoncé était `GET /api/demande_rgpds?client={uuid}`. Éprouvé contre la préprod
-  // le 29/08, sur une collection qui contenait bien deux demandes du même client :
+  // Le contrat annoncé était `GET /api/demande_rgpds?client={uuid}`. Éprouvé contre la préprod le
+  // 29/08 avant d'écrire une ligne, sur une collection contenant bien deux demandes du même
+  // client : `?statut=recue` rendait 2, et `?client=` rendait 0 — sur l'IRI, sur l'identifiant nu,
+  // encodé, non encodé, et jusque sur une valeur absurde. Toujours 200, jamais de 400, toujours
+  // vide. Les deux filtres étaient pourtant déclarés dans la même annotation.
   //
-  //   ?statut=recue                                     -> 200, total 2   (celui-là marche)
-  //   ?client=/api/clients/b4ca0377-…                    -> 200, total 0
-  //   ?client=b4ca0377-…                                 -> 200, total 0
-  //   ?client=<non encodé>, ?client=nimportequoi         -> 200, total 0
+  // Cru sur parole, cet écran aurait affirmé « cette personne n'a jamais demandé l'effacement de
+  // ses données » à quelqu'un qui en avait deux en cours — sur le seul écran de l'application qui
+  // porte un délai légal d'un mois.
   //
-  // Toujours 200, toujours vide. C'est la forme la plus coûteuse du défaut : pas d'erreur, pas de
-  // 400 sur une valeur absurde, juste un écran qui affirme « cette personne n'a rien demandé »
-  // alors qu'elle a deux demandes ouvertes — sur le seul écran qui porte un délai légal.
+  // Signalé, corrigé le jour même par claude-A (`SearchFilter` remplacé par `UuidReferenceFilter`),
+  // et REMESURÉ ici avant de rebrancher : les trois formes rendent 2. La restriction repart donc
+  // au serveur, ce qui la rend juste au-delà des trente lignes d'une page — ce que le tri local
+  // ne pouvait pas être.
   //
-  // On restreint donc ICI, sur ce qui est déjà chargé. Signalé pour le moteur ; le jour où le
-  // filtre serveur fonctionnera, ces trois lignes deviendront un raffinement, pas un contournement.
-  const affichees = useMemo(
-    () => (params.client ? demandes.filter((d) => idDeClient(d) === params.client) : demandes),
-    [demandes, params.client],
-  )
+  // Ce qu'il faut en retenir tient en une phrase : un filtre déclaré n'est pas un filtre qui
+  // répond, et cela se voit en une requête.
+  const affichees = demandes
 
   const compteurs = useMemo(() => {
     const ouvertes = toutes.filter((d) => d.statut === 'recue' || d.statut === 'en_cours')
@@ -326,15 +326,7 @@ export default function DonneesPersonnelles({ etabActif, droits }) {
             </table>
           )}
 
-          {params.client && total != null && total > demandes.length && (
-            <p className="hint">
-              Cette personne est recherchée parmi les {demandes.length} demandes chargées, sur
-              {' '}{total} au total : le tri se fait ici, faute d’un filtre serveur qui réponde.
-              Au-delà, une demande ancienne peut manquer.
-            </p>
-          )}
-
-          {!params.statut && !params.client && total != null && total > demandes.length && (
+          {!params.statut && total != null && total > demandes.length && (
             <p className="hint">
               {total} demandes au total, {demandes.length} affichées — le serveur ne rend que trente
               lignes par page. Filtrez par état pour atteindre les autres.
