@@ -28,6 +28,9 @@ use App\Musee\Enum\ModeDelestage;
 use App\Musee\Enum\PerimetreContingent;
 use App\Offre\DataFixtures\OffreFixtures;
 use App\Offre\Entity\Formule;
+use App\Offre\Entity\GrilleTarifaire;
+use App\Offre\Entity\Saison;
+use App\Offre\Entity\TypeTarif;
 use App\Offre\Entity\Produit;
 use App\Offre\Entity\TypeProduit;
 use App\Offre\Enum\PeriodiciteFormule;
@@ -254,6 +257,31 @@ final class MuseeFixtures extends Fixture implements DependentFixtureInterface
             ->setCode('PRD-AUDIOGUIDE')->setCanaux(['guichet', 'en_ligne'])->setTauxTva('10.00')
             ->setStatut(StatutProduit::Publie);
         $produitAudioguide->addEtablissement($etabA);
+
+        // ⚠ UN PRODUIT PUBLIE SANS TARIF EST UN ETAT QUE L'APPLICATION REFUSE DE PRODUIRE.
+        //
+        // `PublicationGuard` (RG-M1-09) exige un prix valide avant de publier. Cette fixture posait
+        // `Publie` en dur sur l'entite, sans passer par le processeur : l'audioguide sans tarif se
+        // retrouvait en vente sur la boutique PUBLIQUE, ajoutable au panier sous la phrase « le
+        // tarif applicable est calcule et confirme a l'etape de paiement » -- alors qu'il n'y avait
+        // rien a calculer.
+        //
+        // L'exposition, quelques lignes plus haut, a toujours eu son tarif. L'audioguide etait le
+        // seul a sortir du rang : un oubli, pas un choix.
+        $tarifPlein = $manager->getRepository(TypeTarif::class)->findOneBy(['nom' => OffreFixtures::TARIF_PLEIN]);
+        $saisonCourante = $manager->getRepository(Saison::class)->findOneBy(['actif' => true]);
+        if ($tarifPlein instanceof TypeTarif && $saisonCourante instanceof Saison) {
+            // La grille se persiste A PART : `Produit#grilles` ne cascade pas, et Doctrine refuse au
+            // flush une entite neuve atteinte par une relation non cascadee.
+            $grilleAudioguide = (new GrilleTarifaire())
+                ->setProduit($produitAudioguide)
+                ->setTypeTarif($tarifPlein)
+                ->setSaison($saisonCourante)
+                ->setPrix('4.00');
+            $produitAudioguide->addGrille($grilleAudioguide);
+            $manager->persist($grilleAudioguide);
+        }
+
         $manager->persist($produitAudioguide);
 
         $audioguide = (new Audioguide())->setProduit($produitAudioguide)->setLangues(['fr', 'en', 'es'])->setEtablissement($etabA);

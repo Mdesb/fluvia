@@ -36,7 +36,7 @@ final class OtaTest extends MuseeApiTestCase
 
         $client->request('POST', '/api/musee/reservations-ota', $entete + [
             'json' => [
-                'allocation' => '/api/musee_allocation_quota_o_t_as/' . $idAllocation,
+                'allocation' => '/api/musee_allocation_quota_otas/' . $idAllocation,
                 'beneficiaire' => '/api/beneficiaires/' . $idBeneficiaire,
             ],
         ]);
@@ -44,7 +44,7 @@ final class OtaTest extends MuseeApiTestCase
         $resaOta = $client->getResponse()->toArray();
         self::assertSame('confirmee', $resaOta['statutOta']);
 
-        $client->request('GET', '/api/musee_allocation_quota_o_t_as/' . $idAllocation, $entete);
+        $client->request('GET', '/api/musee_allocation_quota_otas/' . $idAllocation, $entete);
         self::assertSame(1, $client->getResponse()->toArray()['quotaConsomme'], 'CA-7 : quotaConsomme incrémenté.');
 
         // Même inventaire réel que la vente directe : la Reservation générique compte dans la jauge
@@ -64,7 +64,7 @@ final class OtaTest extends MuseeApiTestCase
         self::assertInstanceOf(PartenaireOTA::class, $partenaire);
         $client->request('POST', '/api/musee/reversements/generer', $entete + [
             'json' => [
-                'partenaire' => '/api/musee_partenaire_o_t_as/' . (string) $partenaire->getId(),
+                'partenaire' => '/api/musee_partenaire_otas/' . (string) $partenaire->getId(),
                 'periodeDebut' => (new \DateTimeImmutable('-1 day'))->format('Y-m-d'),
                 'periodeFin' => (new \DateTimeImmutable('+1 day'))->format('Y-m-d'),
             ],
@@ -93,7 +93,7 @@ final class OtaTest extends MuseeApiTestCase
 
         $client->request('POST', '/api/musee/reservations-ota', $entete + [
             'json' => [
-                'allocation' => '/api/musee_allocation_quota_o_t_as/' . (string) $allocation->getId(),
+                'allocation' => '/api/musee_allocation_quota_otas/' . (string) $allocation->getId(),
                 'beneficiaire' => '/api/beneficiaires/' . $this->idBeneficiairePayeur(),
             ],
         ]);
@@ -152,7 +152,7 @@ final class OtaTest extends MuseeApiTestCase
 
         $client->request('POST', '/api/musee/reservations-ota', $entete + [
             'json' => [
-                'allocation' => '/api/musee_allocation_quota_o_t_as/' . (string) $allocation->getId(),
+                'allocation' => '/api/musee_allocation_quota_otas/' . (string) $allocation->getId(),
                 'beneficiaire' => '/api/beneficiaires/' . $this->idBeneficiairePayeur(),
             ],
         ]);

@@ -90,6 +90,29 @@ final class CatalogueVitrineProvider implements ProviderInterface
             if (!$produit->aCanal(Canal::EnLigne)) {
                 continue;
             }
+            // ⚠ UN PRODUIT DONT AUCUN TARIF NE SE RÉSOUT N'EST PAS VENDABLE, QUEL QUE SOIT SON STATUT.
+            //
+            // Constaté sur la boutique publique : le billet « Audioguide » s'ajoutait au panier sans
+            // aucun prix, sous la phrase « le tarif applicable est calculé et confirmé à l'étape de
+            // paiement ». Il n'y avait aucun tarif du tout — donc rien à confirmer, et un client qui
+            // s'engage sans savoir combien.
+            //
+            // `PublicationGuard` refuse pourtant de publier un produit sans prix valide (RG-M1-09).
+            // La garde est bonne ; on ne passait simplement pas par elle : `MuseeFixtures` pose
+            // `StatutProduit::Publie` en dur sur l'entité. Un import ou une reprise de données
+            // produiraient le même état, d'où le contrôle ICI plutôt que dans la fixture — celle-ci
+            // referme le cas, celui-là referme la famille.
+            //
+            // Et surtout pas côté écran : un filtre dans la boutique compenserait la garde manquante
+            // en la rendant invisible, et on cesserait de la chercher.
+            //
+            // ⚠ Un produit GRATUIT n'est pas un produit sans prix : un tarif à 0,00 se résout et
+            // continue d'être servi. Seul disparaît celui dont aucun tarif ne se résout en ligne.
+            $prix = $this->prixPublic($produit);
+            if ($prix === null) {
+                continue;
+            }
+
             $catalogue[] = [
                 'produit' => (string) $produit->getId(),
                 'code' => $produit->getCode(),
@@ -97,7 +120,7 @@ final class CatalogueVitrineProvider implements ProviderInterface
                 'timedEntry' => $this->disponibilite->estTimedEntry($produit),
                 'disponibilite' => $this->disponibilite->disponibilitePourProduit($produit),
                 'visuel' => $this->visuel($produit),
-                'prix' => $this->prixPublic($produit),
+                'prix' => $prix,
             ];
         }
 
