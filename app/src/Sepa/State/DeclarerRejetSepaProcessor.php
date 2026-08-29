@@ -8,6 +8,9 @@ use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
 use App\Sepa\Entity\LigneRemiseSepa;
 use App\Sepa\Entity\RejetSepa;
+use App\Recouvrement\Entity\IncidentImpaye;
+use App\Recouvrement\Enum\StatutIncidentImpaye;
+use App\Recouvrement\Service\MoteurRecouvrementHandler;
 use App\Securite\Entity\Utilisateur;
 use App\Securite\Service\CalculateurDroits;
 use App\Vente\Service\LecteurCorps;
@@ -26,11 +29,22 @@ use Symfony\Component\Uid\Uuid;
  */
 final class DeclarerRejetSepaProcessor implements ProcessorInterface
 {
+    /**
+     * Type de redevable generique : le client porteur du mandat.
+     *
+     * ⚠ AUCUN PORT NE L'IMPLEMENTE ENCORE. `RedevableRegistry` n'en connait qu'un,
+     * `sport.abonnement_fitness` : un incident ouvert sous ce type-ci ne coupera donc aucun acces.
+     * La valeur est posee des maintenant pour que les incidents deja ouverts soient rattrapes le
+     * jour ou le port existera, plutot que de porter un type invente apres coup.
+     */
+    public const TYPE_REDEVABLE_CLIENT = 'crm.client';
+
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly LecteurCorps $lecteur,
         private readonly Security $security,
         private readonly CalculateurDroits $calculateur,
+        private readonly MoteurRecouvrementHandler $recouvrement,
     ) {
     }
 
@@ -67,7 +81,94 @@ final class DeclarerRejetSepaProcessor implements ProcessorInterface
         $this->em->persist($rejet);
         $this->em->flush();
 
+        $this->ouvrirIncident($rejet, $ligne, $dateRejet, $codeMotif, $libelle);
+
         return $rejet;
+    }
+
+    /**
+     * OUVRE L'IMPAYE QUE LE REJET DECLENCHE.
+     *
+     * Jusqu'ici, declarer un rejet n'ecrivait qu'une ligne au journal. Le moteur de recouvrement
+     * existait, son parametre `?RejetSepa $rejetSepa` avait ete prevu pour recevoir un retour
+     * bancaire reel, et personne ne le lui passait : son seul appelant etait une simulation du
+     * module Sport. Deux ecrans affirmaient pourtant qu'un impaye etait ouvert.
+     *
+     * ── LE REDEVABLE EST LE CLIENT DU MANDAT, ET C'EST PROVISOIRE ───────────────────────────────
+     *
+     * `PropagationAccesHandler` resout le droit d'acces a couper via un PORT par type de redevable,
+     * et il n'en existe qu'un : `sport.abonnement_fitness`. Un rejet sur un mandat qui n'est pas un
+     * abonnement fitness ouvre donc un incident qui ne ferme aucune porte.
+     *
+     * C'est sans danger — `appliquer()` rend `null` pour un type inconnu, ne modifie rien, et emet
+     * son evenement — mais c'est aussi sans effet. Tant qu'un port au niveau client n'existe pas,
+     * l'ecran ne doit pas promettre que l'acces est coupe.
+     *
+     * ── ON N'OUVRE PAS DEUX FOIS LE MEME IMPAYE ─────────────────────────────────────────────────
+     *
+     * Declarer deux fois le meme rejet est un geste d'exploitant courant — on rafraichit, on
+     * recommence. Sans garde, chaque declaration ouvrirait son incident, et le tableau de bord
+     * compterait deux impayes la ou il y en a un.
+     *
+     * ── ET SI LE REDEVABLE N'EST PAS RESOLVABLE, ON N'EMPECHE PAS L'ENREGISTREMENT ──────────────
+     *
+     * Le rejet lui-meme est deja ecrit et flushe. Un mandat sans client, ou une remise sans
+     * etablissement, ne doit pas faire echouer la saisie : perdre la trace du rejet serait pire que
+     * de ne pas ouvrir l'incident.
+     */
+    private function ouvrirIncident(
+        RejetSepa $rejet,
+        LigneRemiseSepa $ligne,
+        \DateTimeImmutable $dateRejet,
+        string $codeMotif,
+        ?string $libelleMotif,
+    ): void {
+        $etablissement = $ligne->getRemise()?->getEtablissement();
+        $client = $ligne->getMandat()?->getClient();
+        if ($etablissement === null || $client === null) {
+            return;
+        }
+
+        $reference = (string) $client->getId();
+        $origine = $ligne->getReferenceOrigine();
+
+        if ($origine !== null && $this->incidentDejaOuvert($origine, $reference)) {
+            return;
+        }
+
+        $this->recouvrement->detecterRejet(
+            etablissement: $etablissement,
+            typeRedevable: self::TYPE_REDEVABLE_CLIENT,
+            referenceRedevable: $reference,
+            montantCentimes: $ligne->getMontantCentimes(),
+            dateRejet: $dateRejet,
+            codeRetour: $codeMotif,
+            libelleRetour: $libelleMotif,
+            referenceEcheanceOrigine: $origine,
+            rejetSepa: $rejet,
+        );
+    }
+
+    /**
+     * Un impaye non solde existe-t-il deja pour cette echeance et ce redevable ?
+     *
+     * On borne sur le couple, et non sur la seule echeance : deux redevables peuvent partager une
+     * reference d'origine si une verticale la fabrique sans garantie d'unicite.
+     */
+    private function incidentDejaOuvert(string $origine, string $reference): bool
+    {
+        $existants = $this->em->getRepository(IncidentImpaye::class)->findBy([
+            'referenceEcheanceOrigine' => $origine,
+            'referenceRedevable' => $reference,
+        ]);
+
+        foreach ($existants as $incident) {
+            if ($incident->getStatut() !== StatutIncidentImpaye::Resolu) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
 
