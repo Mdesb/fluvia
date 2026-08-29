@@ -424,7 +424,14 @@ function JoursFeries({ indices, exceptions, peutGerer, busy, onFermer, onRouvrir
                       }
                     />
                     <span className="cal-avenir-q">
-                      {new Date(f.date).toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: 'long' })}
+                      {/* ⚠ L'ANNÉE EST AFFICHÉE, ET LA LISTE EN COUVRE DEUX. Sans elle, après
+                          « ven. 25 décembre » venait « ven. 01 janvier » sans qu'on sache lequel.
+                          Ce n'est pas une liste qu'on lit, c'est une liste sur laquelle on CLIQUE
+                          pour poser une fermeture : se tromper d'année, c'est fermer un site un
+                          jour où il devait ouvrir. Sur CHAQUE ligne — ne la mettre qu'au changement
+                          d'année demanderait au lecteur de déduire. Relevé par la revue d'écrans
+                          de Maxime, le 29/08. */}
+                      {new Date(f.date).toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: 'long', year: 'numeric' })}
                     </span>
                     <span className="cal-avenir-t">{f.label}</span>
                     {/* Un exploitant du Bas-Rhin qui compare avec un collègue parisien doit

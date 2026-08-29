@@ -36,6 +36,23 @@ namespace App\Opening\Service;
  * lesquels ferment son site — il y a des patinoires qui font leur année le 25 décembre. « Pré-
  * paramétré » veut dire proposé, pas imposé.
  */
+/**
+ * ⚠ CE MODULE EST FRANÇAIS PAR CONSTRUCTION, ET CE N'EST PAS UN OUBLI.
+ *
+ * Onze jours fériés du code du travail français, le calcul de Pâques, et le droit local
+ * d'Alsace-Moselle qui en ajoute deux. À côté, les vacances scolaires viennent d'un jeu de données
+ * ministériel français et se choisissent par zone A, B ou C.
+ *
+ * Maxime veut couvrir l'Europe (revue du 29/08). Ce paragraphe est écrit pour celui qui ajoutera la
+ * Belgique ou l'Espagne, parce que la forme de l'ajout dépend de ce qu'il aura lu :
+ *
+ *   · un pays de plus n'est PAS une option supplémentaire dans cet écran. Les zones scolaires, les
+ *     jours fériés et les règles locales ne se ressemblent pas d'un pays à l'autre — l'Allemagne
+ *     fixe ses fériés par Land, l'Espagne par communauté autonome ;
+ *   · le port `SchoolHolidaysInterface` existe déjà et attend un second adaptateur. Les fériés, eux,
+ *     n'ont pas encore de port : cette classe est appelée directement. C'est là que commencera le
+ *     travail, et il vaut mieux le savoir avant d'ajouter un `if` par pays ici.
+ */
 final readonly class FrenchPublicHolidays
 {
     /** Les huit dates fixes : [mois, jour, nom]. */

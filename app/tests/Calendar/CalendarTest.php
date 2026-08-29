@@ -289,6 +289,57 @@ final class CalendarTest extends AccesApiTestCase
         );
     }
 
+    /**
+     * ⚠ ET SES CRÉNEAUX DE TRAVAIL — le plus utile des deux, et le plus longtemps absent.
+     *
+     * `WorkShiftsCalendarSource` ne publie QUE pour la portée « mine ». Tant qu'elle n'était pas
+     * servie, aucun employé n'a jamais vu son planning dans le calendrier de son téléphone. C'est
+     * pourtant ce qu'on attend d'abord d'un agenda professionnel dans sa poche.
+     *
+     * Ce cas est distinct du précédent : un événement personnel est lu en base par l'agrégateur,
+     * un créneau de travail vient d'un module TIERS par le port `CalendarSourceInterface`. Le
+     * premier test ne dit rien du second chemin.
+     */
+    public function testLabonnementContientMesCreneauxDeTravail(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $em = $this->em();
+
+        // ⚠ DEPUIS MAINTENANT, PAS UNE DATE FIXE. Le flux ne publie qu'une fenêtre glissante ; une
+        // date de juin 2026 en est sortie, et le test serait vert sans rien mesurer.
+        $dansTroisJours = (new \DateTimeImmutable('+3 days'))->setTime(14, 0);
+
+        $creneauTravail = (new CreneauTravail())
+            ->setEtablissement($this->etablissementDeA())
+            ->setLibellePoste('Surveillance bassin du matin')
+            ->setDebut($dansTroisJours)
+            ->setFin($dansTroisJours->modify('+4 hours'));
+        $em->persist($creneauTravail);
+
+        $employe = (new Employe())
+            ->setNom('Socle')
+            ->setPrenom('Administratrice')
+            ->setPoste('Régisseur')
+            // `typeContrat` est obligatoire en base alors que la propriété PHP accepte `null` :
+            // sans cette ligne, MariaDB refuse au `flush()` et le message ne nomme que la colonne.
+            ->setTypeContrat(TypeContrat::Cdi)
+            ->setDateEntree(new \DateTimeImmutable('2020-01-01'))
+            ->setUtilisateur($this->utilisateurAdmin());
+        $em->persist($employe);
+        $em->persist((new AffectationTravail())->setCreneauTravail($creneauTravail)->setEmploye($employe));
+        $em->flush();
+
+        $abonnement = $client->request('GET', '/api/calendar/ics-subscription', $entete)->toArray();
+        self::assertResponseIsSuccessful();
+        $corps = static::createClient()->request('GET', $abonnement['member'][0]['path'])->getContent();
+
+        self::assertStringContainsString(
+            'Surveillance bassin du matin',
+            str_replace("\r\n ", '', $corps),
+            'Un employé abonné à son agenda ne voit pas ses créneaux de travail — la portée « mine » n’est pas servie.',
+        );
+    }
+
     public function testUnJetonInconnuRend404(): void
     {
         $anonyme = static::createClient();
