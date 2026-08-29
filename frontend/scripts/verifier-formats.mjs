@@ -71,9 +71,34 @@ function correspond(chemin, modele) {
   })
 }
 
+// LES OPTIONS SE LISENT EN COMPTANT LES ACCOLADES, PAS AVEC `[^}]*`.
+//
+// La capture s'arrêtait à la PREMIÈRE accolade fermante — donc au milieu des options dès qu'elles
+// en contiennent une : `{ method: 'POST', body: {}, ld: true }` se lisait `{ method: 'POST',
+// body: {`. Le `ld: true` tombait hors de la capture, et le contrôle réclamait un drapeau qui
+// était déjà là.
+//
+// Le faux positif est le pire cas pour un garde-fou : on ajoute ce qu'il demande, il refuse encore,
+// et on finit par le contourner. `body: {}` est pourtant l'idiome de toutes les opérations sans
+// corps — il y en a une douzaine dans ce client.
+function optionsDe(source, depart) {
+  const i = source.indexOf('{', depart)
+  if (i === -1) return ''
+  let profondeur = 0
+  for (let j = i; j < source.length; j += 1) {
+    if (source[j] === '{') profondeur += 1
+    else if (source[j] === '}') {
+      profondeur -= 1
+      if (profondeur === 0) return source.slice(i, j + 1)
+    }
+  }
+  return source.slice(i)
+}
+
 // `request('/api/...', { ... method: 'POST' ... })`
-for (const m of src.matchAll(/request\((`|')(\/api\/[^`']*)\1,\s*\{([^}]*)\}/g)) {
-  const [, , chemin, options] = m
+for (const m of src.matchAll(/request\((`|')(\/api\/[^`']*)\1,/g)) {
+  const [, , chemin] = m
+  const options = optionsDe(src, m.index + m[0].length)
   if (!/method:\s*'POST'/.test(options)) continue
   if (/\bld:\s*true/.test(options)) continue
 
