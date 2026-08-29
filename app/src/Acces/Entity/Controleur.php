@@ -11,6 +11,8 @@ use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\Acces\Enum\EtatControleur;
 use App\Organisation\Entity\Etablissement;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
@@ -58,6 +60,30 @@ class Controleur
     #[Groups(['controleur:read', 'controleur:write'])]
     private string $itboxRef = '';
 
+    /**
+     * LES AUTRES ZONES QUE CE LECTEUR DESSERT, EN PLUS DE LA SIENNE.
+     *
+     * Un tourniquet placé entre la piscine et la salle de sport dessert les deux. Sans cette
+     * collection, un abonnement salle s'y voyait refuser l'entrée dès qu'une déclaration de zone
+     * existait sur le produit — le contrôleur ne connaissait qu'un espace.
+     *
+     * ⚠ ELLE N'ÉLARGIT QUE LA DÉCISION, ET C'EST DÉLIBÉRÉ.
+     *
+     * `$espace` reste l'espace PRINCIPAL, celui de la porte physique. La jauge décrémentée, la
+     * portée de l'anti-passback et l'espace inscrit sur le passage restent les siens, même quand le
+     * titre est accepté au titre d'un espace desservi : le porteur a franchi CETTE porte, et c'est
+     * la seule chose qui reste vraie physiquement.
+     *
+     * Un exploitant qui veut deux jauges distinctes a besoin de deux lecteurs — le modèle le permet
+     * déjà, et l'inverse reviendrait à décompter une entrée à un endroit où personne n'est passé.
+     *
+     * @var Collection<int, EspaceAcces>
+     */
+    #[ORM\ManyToMany(targetEntity: EspaceAcces::class)]
+    #[ORM\JoinTable(name: 'access_controller_served_space')]
+    #[Groups(['controleur:read', 'controleur:write'])]
+    private Collection $espacesDesservis;
+
     #[ORM\Column(length: 16, enumType: EtatControleur::class, options: ['default' => 'en_ligne'])]
     #[Groups(['controleur:read', 'controleur:write'])]
     private EtatControleur $etat = EtatControleur::EnLigne;
@@ -78,6 +104,7 @@ class Controleur
     public function __construct()
     {
         $this->id = Uuid::v4();
+        $this->espacesDesservis = new ArrayCollection();
     }
 
     public function getId(): Uuid
@@ -170,5 +197,52 @@ class Controleur
         $this->etablissement = $etablissement;
 
         return $this;
+    }
+
+    /** @return Collection<int, EspaceAcces> */
+    public function getEspacesDesservis(): Collection
+    {
+        return $this->espacesDesservis;
+    }
+
+    public function addEspaceDesservi(EspaceAcces $espace): self
+    {
+        if (!$this->espacesDesservis->contains($espace)) {
+            $this->espacesDesservis->add($espace);
+        }
+
+        return $this;
+    }
+
+    /**
+     * ⚠ Posé en même temps que l'ajout, jamais après.
+     *
+     * Le sérialiseur de Symfony n'accepte une collection en écriture que si l'ajout ET le retrait
+     * existent ; sans les deux il ignore la propriété, sans erreur. `SousReseau` en est mort la
+     * nuit du 28 : `PATCH { espaces: [...] }` répondait 200 et n'enregistrait rien.
+     */
+    public function removeEspaceDesservi(EspaceAcces $espace): self
+    {
+        $this->espacesDesservis->removeElement($espace);
+
+        return $this;
+    }
+
+    /**
+     * Tous les espaces que ce lecteur dessert, le principal compris.
+     *
+     * Un seul calcul, plusieurs appelants : la décision d'accès s'y adosse plutôt que de recomposer
+     * l'union à chaque endroit — c'est ainsi qu'un appelant finit par en oublier une moitié.
+     *
+     * @return list<EspaceAcces>
+     */
+    public function espacesOuverts(): array
+    {
+        $espaces = $this->espace === null ? [] : [$this->espace];
+        foreach ($this->espacesDesservis as $desservi) {
+            $espaces[] = $desservi;
+        }
+
+        return $espaces;
     }
 }
