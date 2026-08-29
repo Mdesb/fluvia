@@ -72,6 +72,28 @@ if (mesure.clientsNonDeclares.length > 0) {
   process.exit(1)
 }
 
+// UN APPEL VERS UNE ROUTE QUE PERSONNE NE DÉCLARE : LE SEUL CAS SANS DETTE GELÉE.
+//
+// Le compte d'atteignables se laissait baisser par du vide — trois helpers vers des opérations pas
+// encore ouvertes ont fait descendre l'écart de trois, et le cliquet proposait de geler dessus. Le
+// sens était même inversé : un frontal qui appelle une route inexistante est un défaut, la mesure
+// en faisait un progrès.
+//
+// Ces appels ne comptent plus (voir `lib/ecart.mjs`), et ils échouent ici. Pas de ligne de base :
+// il n'y en avait AUCUN le jour où ce contrôle a été écrit — mesuré sur les 374 appels du produit,
+// zéro faux positif — donc le premier qui apparaît est nouveau, et se corrige tout de suite.
+if (mesure.appelsSansServeur.length > 0) {
+  console.error('✗ Appel(s) du front vers une route que rien ne déclare côté serveur :')
+  for (const a of mesure.appelsSansServeur) console.error(`    ${a}`)
+  console.error('')
+  console.error('  Soit le chemin est faux — une faute de frappe, un pluriel inventé, un préfixe')
+  console.error('  oublié — et l’écran échouera en 404 devant l’utilisateur. Soit l’opération')
+  console.error('  reste à ouvrir côté serveur, et l’appel est en avance sur elle.')
+  console.error('')
+  console.error('  Dans les deux cas il ne rend RIEN atteignable : ne le compte pas comme couvert.')
+  process.exit(1)
+}
+
 if (mesure.marqueursSansRaison.length > 0) {
   console.error('✗ Marqueur « @sans-ecran: » sans raison :')
   for (const f of mesure.marqueursSansRaison) console.error(`    ${f}`)

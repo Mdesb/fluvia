@@ -57,6 +57,13 @@ if (m.declares.length > 0) {
   }
 }
 
+if (m.appelsSansServeur.length > 0) {
+  console.log('')
+  console.log(`${m.appelsSansServeur.length} appel(s) vers une route que rien ne déclare côté serveur :`)
+  for (const a of m.appelsSansServeur) console.log(`  ${a}`)
+  console.log('  (ils ne comptent pas comme atteignables : ils ne rendent rien atteignable.)')
+}
+
 if (m.orphelins.length > 0) {
   console.log('')
   console.log(`${m.orphelins.length} appel(s) définis dans un client et utilisés par aucun écran :`)
