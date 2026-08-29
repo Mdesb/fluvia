@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { api, membres, tokenStore, etablissementStore, setUnauthorizedHandler } from '../api/client.js'
 import Login from '../pages/Login.jsx'
 import { aUnDesDroits } from '../api/droits.js'
+import InstallerSurLeTelephone from '../components/InstallerSurLeTelephone.jsx'
 import Agenda from '../pages/Agenda.jsx'
 import Documents from '../pages/Documents.jsx'
 import Finance from '../pages/Finance.jsx'
@@ -300,6 +301,17 @@ export default function EditeurApp() {
           </>
         )}
       </main>
+
+      {/*
+        LA BANNIÈRE D'INSTALLATION, ABSENTE JUSQU'ICI DE CETTE COQUILLE.
+        Elle n'était montée que dans celle de l'application client. Or ce sont les employés de
+        l'éditeur qui en ont le plus besoin : un agent qui prend un ticket à 7 h du matin le fait
+        depuis son téléphone, pas depuis un poste de guichet.
+
+        Elle ne s'affiche que si le navigateur émet `beforeinstallprompt` — donc seulement quand
+        l'installation est réellement possible — et jamais deux fois après un refus.
+      */}
+      <InstallerSurLeTelephone />
     </div>
   )
 }
