@@ -8,6 +8,7 @@ use ApiPlatform\Doctrine\Orm\Filter\DateFilter;
 use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
 use ApiPlatform\Doctrine\Orm\Filter\OrderFilter;
 use ApiPlatform\Metadata\ApiFilter;
+use App\Platform\Filter\UuidReferenceFilter;
 use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
@@ -80,9 +81,20 @@ use Symfony\Component\Uid\Uuid;
     ],
     normalizationContext: ['groups' => ['passage:read']],
 )]
+// ⚠ `espace`, `controleur` et `equipement` ONT QUITTE LE `SearchFilter` : ils rendaient TOUJOURS
+// une liste vide. Mesure sur une collection d'une ligne, chacun des trois filtres a rendu zero.
+//
+// Leur identifiant est un `Uuid`, stocke en `BINARY(16)` : le `SearchFilter` compare la colonne a
+// une chaine de 36 caracteres, ne trouve rien, et ne leve rien. Voir `UuidReferenceFilter`, qui
+// explique la mesure et l'hypothese ecartee.
+//
+// `resultat` reste au `SearchFilter` -- c'est une enumeration stockee en chaine, il la gere bien.
+// `support.identifiant` aussi : il traverse une association pour comparer un CHAMP, pas un
+// identifiant, et c'est precisement ce que le filtre standard sait faire.
 #[ApiFilter(SearchFilter::class, properties: [
-    'espace' => 'exact', 'controleur' => 'exact', 'equipement' => 'exact', 'resultat' => 'exact', 'support.identifiant' => 'exact',
+    'resultat' => 'exact', 'support.identifiant' => 'exact',
 ])]
+#[ApiFilter(UuidReferenceFilter::class, properties: ['espace', 'controleur', 'equipement'])]
 #[ApiFilter(DateFilter::class, properties: ['horodatage'])]
 /**
  * ⚠ SANS CE FILTRE, `order[horodatage]=desc` ETAIT IGNORE EN SILENCE.

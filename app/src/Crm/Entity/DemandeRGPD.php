@@ -6,11 +6,11 @@ namespace App\Crm\Entity;
 
 use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
 use ApiPlatform\Metadata\ApiFilter;
+use App\Platform\Filter\UuidReferenceFilter;
 use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Post;
-use App\Crm\Filter\PrivacyRequestCustomerFilter;
 use App\Crm\Enum\StatutDemandeRgpd;
 use App\Crm\Enum\TypeDemandeRgpd;
 use App\Crm\State\TraiterDemandeRgpdProcessor;
@@ -54,7 +54,7 @@ use Symfony\Component\Uid\Uuid;
 // personne n'a jamais demande l'effacement de ses donnees » alors qu'elle en avait deux en
 // cours -- sur le seul ecran de l'application qui porte un delai legal d'un mois.
 // Voir PrivacyRequestCustomerFilter, qui explique la mesure et ce qui a ete ecarte.
-#[ApiFilter(PrivacyRequestCustomerFilter::class)]
+#[ApiFilter(UuidReferenceFilter::class, properties: ['client'])]
 class DemandeRGPD
 {
     #[ORM\Id]
