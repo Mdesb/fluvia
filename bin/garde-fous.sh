@@ -247,6 +247,18 @@ executer "Références libres (D58)" php_racine bin/garde-fou-references-libres.
 # a la bonne forme, et personne ne le remet en cause.
 executer "Filtres déclarés" php_racine bin/garde-fou-filtres-declares.php
 
+# Le prefixe `/editor/` ne protege rien, et il a tout l'air du contraire. Aucune regle
+# `access_control` ne vise `^/api/editor` : la garde est portee par CHAQUE operation, via un provider
+# ou un processor qui appelle `assertEditor()`. Deux routes voisines suffisent a montrer le piege --
+# `/editor/plans` est PUBLIQUE (le catalogue que lit un prospect) tandis que `/editor/catalog/plans`
+# est reservee a l'editeur. Un mot d'ecart, deux publics opposes.
+#
+# ⚠ CE N'EST PAS UN DEFAUT PRESENT, C'EST CELUI D'APRES. Les vingt-deux routes actuelles sont dans le
+# bon camp ; ce qu'on empeche, c'est que la prochaine herite de l'APPARENCE de surete sans en heriter
+# de la surete. Ouvrir une route publique sous ce prefixe reste possible -- le tunnel de vente en a
+# besoin -- mais devient un geste ecrit dans `EXCEPTIONS`, donc relu.
+executer "Routes éditeur" php_racine bin/garde-fou-routes-editeur.php
+
 if [ -n "${REFERENCE:-}" ]; then
     executer "Établissement écrivable (D41)" php_racine bin/garde-fou-etablissement-ecrivable.php "--contre=$REFERENCE"
 else

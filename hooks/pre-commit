@@ -86,6 +86,12 @@ lancer_gf garde-fou-cloisonnement.php || ECHEC=1
 # vide, celui-ci ne remonte jamais en reclamation -- des donnees qui s'affichent n'intriguent personne.
 [ -f "$RACINE/bin/garde-fou-filtres-declares.php" ] && { lancer_gf garde-fou-filtres-declares.php || ECHEC=1; }
 
+# Le prefixe `/editor/` ne protege rien : aucune regle `access_control` ne vise `^/api/editor`, la
+# garde est portee par chaque operation. Or il se LIT comme une barriere -- `/editor/plans` est
+# publique quand `/editor/catalog/plans` est reservee a l'editeur. On empeche la prochaine route
+# d'heriter de l'apparence de surete sans la surete.
+[ -f "$RACINE/bin/garde-fou-routes-editeur.php" ] && { lancer_gf garde-fou-routes-editeur.php || ECHEC=1; }
+
 # Événements du catalogue (D2/D22) : abonné inerte, émission hors contrat, cliquet.
 [ -f "$RACINE/bin/garde-fou-evenements-orphelins.php" ] && { lancer_gf garde-fou-evenements-orphelins.php || ECHEC=1; }
 
