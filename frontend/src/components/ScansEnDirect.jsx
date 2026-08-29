@@ -31,8 +31,8 @@ import RechercheBilletModal from './RechercheBilletModal.jsx'
 //    normal la réponse est vide et ne coûte qu'un aller-retour ; sans ce filtre on retéléchargerait
 //    les mêmes vingt lignes toute la journée.
 //
-//    ⚠ ET C'EST AUSSI CE QUI REND LA PERTE VISIBLE. Le serveur plafonne toute collection à 30 lignes
-//    et ignore `itemsPerPage`. Si plus de 30 passages tombent entre deux interrogations, on en perd.
+//    ⚠ ET C'EST AUSSI CE QUI REND LA PERTE VISIBLE. Le serveur pagine. Si plus d'une page de
+//    passages tombe entre deux interrogations, on en perd.
 //    Avec le filtre par date on le SAIT (la page revient pleine) et on le dit ; sans lui, jamais.
 //
 // 4. ON S'ARRÊTE QUAND PERSONNE NE REGARDE. La caisse est l'écran qu'on laisse ouvert toute la
@@ -47,7 +47,7 @@ import RechercheBilletModal from './RechercheBilletModal.jsx'
 // support (son numéro), le droit (son identifiant et son type), l'espace, le contrôleur,
 // l'équipement, le résultat et le motif — jamais le produit vendu ni son prix. Les afficher
 // demanderait soit de les ajouter au groupe côté serveur, soit de croiser trois collections
-// plafonnées à 30 lignes à chaque scan, ce qui donnerait un nom faux une fois sur deux.
+// paginées à chaque scan, ce qui donnerait un nom faux une fois sur deux.
 //
 // D'où le compromis : le bandeau montre ce qui est certain (numéro, lieu, résultat, pourquoi), et
 // un clic ouvre la fiche du billet, qui va chercher le produit, le type et le solde. Le manque est

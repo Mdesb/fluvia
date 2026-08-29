@@ -51,7 +51,7 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
     try {
       const reponse = await api.incidentsImpayes()
       setIncidents(membres(reponse))
-      // Le serveur plafonne chaque collection à 30 lignes (l'explication complète est dans
+      // Le serveur pagine chaque collection (l'explication complète est dans
       // `components/Liste.jsx`). Ici la conséquence n'est pas seulement une liste courte : le
       // tableau des représentations retrouve le nom du redevable EN RECOUPANT cette liste. Au-delà
       // d'une page, des représentations perdent leur redevable sans que rien ne le dise.

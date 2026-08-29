@@ -42,11 +42,15 @@ export default function Liste({
 
       // TOUTES LES COLLECTIONS DE CETTE APPLICATION SONT COUPÉES À 30 LIGNES, ET RIEN NE LE DIT.
       //
-      // `config/packages/api_platform.yaml` ne déclare aucun bloc `pagination` : les valeurs par
-      // défaut d'API Platform s'appliquent donc — 30 éléments par page, et
-      // `pagination_client_items_per_page` à `false`, ce qui signifie que **le client ne peut pas
-      // changer la taille de page**. Vérifié contre la préprod le 28/08 : `?itemsPerPage=1` a rendu
-      // les 3 lignes de la collection, le paramètre est purement ignoré.
+      // Le serveur pagine : 100 lignes par défaut, jusqu'à 500 si l'écran en demande davantage
+      // (`pagination_client_items_per_page` est actif depuis le 29/08). Une collection plus longue
+      // arrive donc COUPÉE, avec le même code 200 et la même forme de réponse.
+      //
+      // ⚠ CE COMPTEUR NE DOIT PAS APPRENDRE CES NOMBRES PAR CŒUR. Ils ont déjà changé une fois :
+      // du 28 au 29/08, le plafond est passé de 30 imposé à 100 négociable, et treize endroits du
+      // frontal ont continué d'annoncer 30 — dont six bandeaux qui promettaient à l'exploitant des
+      // données manquantes qui ne manquaient plus. La comparaison ci-dessous, elle, est restée
+      // juste tout du long : elle CONSTATE au lieu de savoir.
       //
       // Conséquence : les ~350 `itemsPerPage: 100|200|500` de `api/client.js` sont DÉCORATIFS. Un
       // catalogue de 40 produits en affiche 30, un annuaire de 200 clients en affiche 30 — même
@@ -86,7 +90,7 @@ export default function Liste({
         {/* Le compte partiel est posé À CÔTÉ DU TITRE, pas en pied de tableau : on lit le titre
             avant de lire les lignes, et c'est avant de les lire qu'il faut savoir qu'il en manque. */}
         {totalReel !== null && (
-          <span className="badge warn" title="Le serveur limite chaque liste à 30 lignes.">
+          <span className="badge warn" title="Cette liste est plus longue que ce qui est affiché.">
             {rows.length} sur {totalReel}
           </span>
         )}

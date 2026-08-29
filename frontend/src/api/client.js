@@ -55,24 +55,30 @@ export class ApiError extends Error {
 // C'est la forme la plus courante du défaut de cette semaine : une requête qui part, une réponse qui
 // arrive, un résultat plausible et faux. Ici il se serait traduit par « aucune option retenue » sur
 // un panier où le caissier venait d'en cocher trois — et le client aurait payé le prix de base.
-// ⚠ `itemsPerPage` NE FAIT RIEN. IL EST ÉCRIT ~350 FOIS DANS CE FICHIER, ET LE SERVEUR L'IGNORE.
+// `itemsPerPage` EST HONORÉ DEPUIS LE 29/08. CE COMMENTAIRE A DIT LE CONTRAIRE PENDANT UN JOUR,
+// ET C'EST CE QUI REND L'HISTOIRE UTILE.
 //
-// `config/packages/api_platform.yaml` ne déclare aucun bloc `pagination` : les valeurs par défaut
-// d'API Platform s'appliquent — **30 éléments par page**, et `pagination_client_items_per_page` à
-// `false`, ce qui interdit au client de changer la taille de page.
+// Ce qui était écrit ici le 28/08, mesuré et exact ce jour-là : `api_platform.yaml` ne déclarait
+// aucun bloc `pagination`, donc 30 éléments par page et `pagination_client_items_per_page` à
+// `false` — le paramètre ne faisait rien. La preuve citée était
+// `GET /api/mandat_sepas?itemsPerPage=1 → rend les 3 lignes`.
 //
-// Mesuré contre la préprod le 28/08, pas déduit :
-//     GET /api/mandat_sepas?itemsPerPage=1   →  rend les 3 lignes. Le paramètre est ignoré.
-//     debug:config api_platform              →  pagination.enabled: true, aucun items_per_page
-//                                               ni client_items_per_page dans `defaults`.
+// La même mesure, refaite le 29/08 : **elle rend 1 ligne.** La configuration déclare désormais
+//     pagination_items_per_page: 100      (le défaut, quand l'écran ne demande rien)
+//     pagination_client_items_per_page: true
+//     pagination_maximum_items_per_page: 500
 //
-// Autrement dit : `itemsPerPage: 500` obtient 30 lignes, exactement comme `itemsPerPage: 100`. Un
-// catalogue de 40 produits en affiche 30, un annuaire de 200 clients en affiche 30 — même code 200,
-// même forme de réponse, juste moins de lignes.
+// LA LEÇON N'EST PAS « LE PLAFOND A CHANGÉ », C'EST QU'UNE MESURE PORTE UNE DATE. Celle-ci était
+// juste, datée, citée avec sa commande — et c'est précisément ce qui l'a rendue crédible pendant
+// vingt-quatre heures de trop. Dix-neuf endroits du frontal la répétaient, dont six bandeaux
+// affichés à l'exploitant : ils lui annonçaient des données manquantes qui ne manquaient plus.
 //
-// LES PARAMÈTRES SONT CONSERVÉS À DESSEIN : ils disent quelle taille chaque écran AURAIT BESOIN
-// d'obtenir, et ils redeviendront effectifs le jour où le serveur activera
-// `pagination_client_items_per_page`. Les retirer ferait perdre cette information sans rien gagner.
+// CE QUI RESTE VRAI, ET QUI EST LA SEULE CHOSE À RETENIR : un plafond, quel qu'il soit, tronque en
+// SILENCE. 100 par défaut, 500 au maximum — une collection plus longue arrive coupée avec un
+// code 200 et la même forme de réponse. `totalItems` porte le total réel : le comparer au nombre
+// de lignes reçues est la seule façon de transformer « il en manque » en « il en manque, et voici
+// combien ». C'est ce que fait `components/Liste.jsx`, et c'est ce qu'un écran doit faire plutôt
+// que d'annoncer un nombre appris par cœur.
 //
 // EN ATTENDANT, C'EST L'AFFICHAGE QUI PORTE L'AVERTISSEMENT. La réponse Hydra contient `totalItems`
 // — le total réel, pas la taille de la page — donc une réponse tronquée est reconnaissable.

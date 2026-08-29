@@ -68,9 +68,9 @@ import {
 // ignoré** : la collection sort dans l'ordre d'insertion, c'est-à-dire du plus ANCIEN au plus
 // récent. Vérifié le 29/08 contre la préprod, en comparant l'ordre demandé et l'ordre reçu.
 //
-// Conjugué au plafond de 30 lignes par collection, cela veut dire qu'une liste de passages montre
-// les 30 PREMIERS passages de l'histoire du site, jamais les 30 derniers. On trie donc ce qu'on a
-// reçu, faute de pouvoir choisir ce qu'on reçoit — et on le dit là où ça se voit.
+// Conjugué à la pagination, cela veut dire qu'une liste de passages montre les PREMIERS passages
+// de l'histoire du site, jamais les derniers. On trie donc ce qu'on a reçu, faute de pouvoir
+// choisir ce qu'on reçoit — et on le dit là où ça se voit.
 //
 // LE VOCABULAIRE GLOBAL NE SERT PAS ICI. `mot('valide')` rend « Accepté », qui qualifie le résultat
 // d'un passage ; `mot('caisse')` rend « Espèces au guichet ». Aucun de ces sens n'est celui des
@@ -105,10 +105,14 @@ function horodate(v) {
   return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString('fr-FR')
 }
 
-// Une réponse Hydra dit combien d'éléments existent VRAIMENT. Le serveur plafonne toute collection à
-// 30 lignes et ignore `itemsPerPage` (`api_platform.yaml` ne déclare aucun bloc `pagination`) : une
-// topologie de 40 équipements en montre 30, sans rien dire. Sur un plan de site, une liste tronquée
-// n'est pas incomplète, elle est FAUSSE — on croit voir l'installation entière.
+// Une réponse Hydra dit combien d'éléments existent VRAIMENT, et c'est la seule chose sur laquelle
+// s'appuyer : le serveur pagine, une collection plus longue que la page arrive coupée sans rien
+// dire. Sur un plan de site, une liste tronquée n'est pas incomplète, elle est FAUSSE — on croit
+// voir l'installation entière.
+//
+// ⚠ NE PAS REMPLACER CETTE COMPARAISON PAR UN NOMBRE. Elle a survécu au passage du plafond de 30 à
+// 100 le 29/08 ; les commentaires qui citaient « 30 » ne l'ont pas fait, et six bandeaux ont
+// annoncé pendant un jour des données manquantes qui ne manquaient plus.
 function totalReel(reponse, recus) {
   const total = reponse?.totalItems ?? reponse?.['hydra:totalItems']
   return typeof total === 'number' && recus < total ? total : null
@@ -696,7 +700,7 @@ export default function TopologieAcces({ etabActif, droits, onNav }) {
 
       {tronques.length > 0 && (
         <div className="banner" style={{ background: 'var(--warn-bg)', color: 'var(--warn)' }}>
-          Listes tronquées par le serveur (30 lignes par collection, quel que soit ce qu’on demande) :{' '}
+          Listes reçues incomplètes :{' '}
           {tronques.join(' · ')}. Le plan ci-dessous est donc incomplet.
         </div>
       )}
@@ -916,7 +920,7 @@ export default function TopologieAcces({ etabActif, droits, onNav }) {
               )}
 
               {/* Un contrôleur dont l'espace n'est pas dans la liste chargée n'est pas un contrôleur
-                  sans espace : c'est presque toujours la troncature à 30 lignes. Le cacher ferait
+                  sans espace : c'est presque toujours une liste arrivée coupée. Le cacher ferait
                   disparaître du matériel réel du plan. */}
               {parEspace.orphelins.length > 0 && (
                 <div className="banner" style={{ background: 'var(--warn-bg)', color: 'var(--warn)' }}>
@@ -1499,7 +1503,7 @@ function JournalPassages({ espaces, equipements, etabActif, cible }) {
         {total !== null && lignes.length < total && (
           <span
             className="badge warn"
-            title="Le serveur limite chaque liste à 30 lignes et ne sait pas les trier : ce sont les 30 plus anciennes."
+            title="Cette liste est arrivée incomplète, et le serveur ne sait pas la trier : ce sont les plus anciennes."
           >
             {lignes.length} sur {total}
           </span>
@@ -1579,7 +1583,7 @@ function JournalPassages({ espaces, equipements, etabActif, cible }) {
         {info && <div className="banner banner-ok">{info}</div>}
         {total !== null && lignes.length < total && (
           <div className="banner" style={{ background: 'var(--warn-bg)', color: 'var(--warn)' }}>
-            Le serveur rend 30 lignes au maximum et ne sait pas les trier : ce sont les{' '}
+            Cette liste est arrivée incomplète, et le serveur ne sait pas la trier : ce sont les{' '}
             <strong>{lignes.length} plus anciennes</strong> des {total} qui répondent à ces filtres, et
             non les plus récentes. Restreignez la période pour voir ce qui vous intéresse — l’export,
             lui, porte bien sur la totalité.
