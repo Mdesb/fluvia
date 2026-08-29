@@ -75,12 +75,36 @@ export default function ScansEnDirect({ droits = [], etabActif }) {
     }
   })
   const [scans, setScans] = useState([])
-  const [replie, setReplie] = useState(false)
+  // SUR UN TÉLÉPHONE, LE BANDEAU COMMENCE REPLIÉ.
+  //
+  // Il est en position fixe dans le coin bas : sur un écran de 375 px, déplié à six lignes, il
+  // recouvre le bas de la caisse — c'est-à-dire les boutons d'encaissement. Un caissier qui ne
+  // peut plus encaisser parce qu'un panneau d'information est passé devant, c'est l'information
+  // qui empêche le métier. Replié, il garde son titre et son compteur de refus, et se déplie
+  // d'un doigt quand on en a besoin.
+  const [replie, setReplie] = useState(() => {
+    try {
+      return window.matchMedia('(max-width: 768px)').matches
+    } catch {
+      return false
+    }
+  })
   const [arrete, setArrete] = useState(null) // raison d'un arrêt : session perdue, droit refusé…
   const [trouEventuel, setTrouEventuel] = useState(false)
   const [billetOuvert, setBilletOuvert] = useState(null)
   const dernier = useRef(null) // horodatage ISO du dernier passage connu
   const amorce = useRef(false)
+  // ⚠ DEUX INTERROGATIONS QUI SE CROISENT LISENT LE MÊME REPÈRE ET AFFICHENT DEUX FOIS.
+  //
+  // Constaté à l'écran : le bandeau montrait quatre lignes pour trois passages, dont deux
+  // doublons, ET annonçait comme neufs des passages déjà anciens. Deux appels partis presque
+  // ensemble — le battement et le retour d'onglet, ou simplement une réponse plus lente que la
+  // période — lisent tous deux `dernier.current` à `null`, reçoivent la même page, et le second
+  // trouve l'amorçage déjà marqué par le premier : il croit donc voir du neuf.
+  //
+  // Un verrou d'appel suffit, et il vaut mieux qu'un rattrapage : deux requêtes simultanées ne
+  // servent à rien de toute façon, la seconde ne peut rien apprendre de plus que la première.
+  const enVol = useRef(false)
 
   useEffect(() => {
     try {
@@ -102,6 +126,8 @@ export default function ScansEnDirect({ droits = [], etabActif }) {
   }, [etabActif])
 
   const interroger = useCallback(async () => {
+    if (enVol.current) return
+    enVol.current = true
     try {
       const query = { 'order[horodatage]': 'desc' }
       if (dernier.current) query['horodatage[strictly_after]'] = dernier.current
@@ -118,8 +144,13 @@ export default function ScansEnDirect({ droits = [], etabActif }) {
 
       if (recus.length === 0) return
 
-      // Le plus récent d'abord : c'est l'ordre demandé au serveur, et c'est celui du bandeau.
-      dernier.current = recus[0].horodatage
+      // ⚠ LE REPÈRE EST LE MAXIMUM, PAS LA PREMIÈRE LIGNE — parce que le serveur ne trie pas.
+      //
+      // `order[horodatage]=desc` est ignoré : `Passage` n'a pas d'`OrderFilter`, la collection sort
+      // dans l'ordre d'insertion. Prendre `recus[0]` posait donc le repère sur un passage ANCIEN, et
+      // l'interrogation suivante réannonçait comme neufs des passages déjà vus. C'est ce qui faisait
+      // apparaître au comptoir des scans qui n'avaient pas lieu.
+      dernier.current = recus.reduce((a, p) => (p.horodatage > a ? p.horodatage : a), recus[0].horodatage)
 
       // PREMIÈRE LECTURE NON VIDE : on prend le repère SANS annoncer les passages comme s'ils
       // venaient d'arriver. Ouvrir la caisse à 14 h et voir surgir le refus de 9 h 12 comme un
@@ -127,7 +158,16 @@ export default function ScansEnDirect({ droits = [], etabActif }) {
       if (premiere) return
 
       if (recus.length >= 30) setTrouEventuel(true)
-      setScans((s) => [...recus, ...s].slice(0, MAX_AFFICHES))
+      // Ceinture : même avec le verrou, un passage déjà affiché ne doit jamais l'être deux fois.
+      // Un doublon dans un bandeau de scans, ce n'est pas une ligne en trop — c'est un passage de
+      // plus, donc un comptage faux lu au comptoir.
+      setScans((s) => {
+        const vus = new Set(s.map((x) => x.id))
+        const neufs = recus.filter((x) => !vus.has(x.id))
+        if (neufs.length === 0) return s
+        // Le plus récent en haut : c'est le bandeau qui ordonne, puisque le serveur ne le fait pas.
+        return [...neufs, ...s].sort((a, b) => (a.horodatage < b.horodatage ? 1 : -1)).slice(0, MAX_AFFICHES)
+      })
     } catch (e) {
       // 401 : la session a expiré (le jeton vit une heure, sans rafraîchissement dans le projet).
       // On coupe le fil plutôt que de frapper toutes les quatre secondes dans le vide, et on le dit :
@@ -135,6 +175,8 @@ export default function ScansEnDirect({ droits = [], etabActif }) {
       if (e.status === 401) setArrete('Session expirée : le suivi des scans est arrêté.')
       else if (e.status === 403) setArrete('Ce compte n’a pas le droit de lire les passages.')
       else setArrete(e.message || 'Le suivi des scans est interrompu.')
+    } finally {
+      enVol.current = false
     }
   }, [])
 

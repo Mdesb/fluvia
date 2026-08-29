@@ -3,6 +3,7 @@ import { api, membres } from '../api/client.js'
 import { libelleProduit, prixIndicatif, euros, statutProduit } from '../api/produit.js'
 import Modal from './Modal.jsx'
 import { humaniser, mot } from '../api/vocabulaire.js'
+import ZonesAccesProduit from './ZonesAccesProduit.jsx'
 import TarifsProduit from './TarifsProduit.jsx'
 
 // Fiche produit détaillée — même niveau de détail que la fiche 360° client, en modale (D13 : la
@@ -45,6 +46,9 @@ export default function ProduitFiche({
   peutModifier = false,
   peutModifierCompta = false,
   onModifie,
+  // Les zones d'accès ne se règlent pas avec les droits de l'Offre : ouvrir une porte n'est pas
+  // modifier un prix. La section porte donc ses propres droits (`acces.lire` / `acces.gerer`).
+  droits = [],
 }) {
   const [edition, setEdition] = useState(null)
   const [editionCompta, setEditionCompta] = useState(null)
@@ -299,6 +303,13 @@ export default function ProduitFiche({
             onModifie?.()
           }}
         />
+      </Section>
+
+      <Section
+        titre="Zones d'accès"
+        aide="Les zones que ce produit ouvre aux tourniquets. Aucune zone déclarée = il les ouvre toutes."
+      >
+        <ZonesAccesProduit produitId={produitId} droits={droits} />
       </Section>
 
       <Section

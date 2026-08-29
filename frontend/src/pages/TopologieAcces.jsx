@@ -61,6 +61,17 @@ import {
 //    d'établissement actif, collection vide, appel en échec — se disent donc avec trois phrases
 //    différentes.
 //
+// ⚠ LE SERVEUR NE SAIT PAS TRIER LES PASSAGES, ET IL NE LE DIT PAS.
+//
+// `Passage` déclare un `SearchFilter` et un `DateFilter` — mais AUCUN `OrderFilter`. Le paramètre
+// `order[horodatage]=desc` que tout le front envoie depuis l'origine est donc **silencieusement
+// ignoré** : la collection sort dans l'ordre d'insertion, c'est-à-dire du plus ANCIEN au plus
+// récent. Vérifié le 29/08 contre la préprod, en comparant l'ordre demandé et l'ordre reçu.
+//
+// Conjugué au plafond de 30 lignes par collection, cela veut dire qu'une liste de passages montre
+// les 30 PREMIERS passages de l'histoire du site, jamais les 30 derniers. On trie donc ce qu'on a
+// reçu, faute de pouvoir choisir ce qu'on reçoit — et on le dit là où ça se voit.
+//
 // LE VOCABULAIRE GLOBAL NE SERT PAS ICI. `mot('valide')` rend « Accepté », qui qualifie le résultat
 // d'un passage ; `mot('caisse')` rend « Espèces au guichet ». Aucun de ces sens n'est celui des
 // énumérations de la topologie. D'où `api/acces.js` — les tables du module, partagées par les quatre
@@ -197,7 +208,7 @@ function nombreOuNul(v) {
   return Number.isFinite(n) ? n : null
 }
 
-export default function TopologieAcces({ etabActif, droits }) {
+export default function TopologieAcces({ etabActif, droits, onNav }) {
   const [onglet, setOnglet] = useState('plan')
   const [espaces, setEspaces] = useState([])
   const [controleurs, setControleurs] = useState([])
@@ -732,8 +743,17 @@ export default function TopologieAcces({ etabActif, droits }) {
                 Trois niveaux : un <strong>espace d’accès</strong> porte le seuil de fréquentation et
                 l’anti-passback ; un <strong>contrôleur</strong> est le boîtier qui décide ; un{' '}
                 <strong>équipement</strong> est le tourniquet ou le lecteur qu’on franchit.{' '}
-                Les heures d’ouverture, elles, se règlent dans Paramètres › Heures d’ouverture — un
-                passage peut y être refusé sans que rien ici ne le dise.
+                Les heures d’ouverture, elles, se règlent{' '}
+                {/* Un renvoi qu'on ne peut pas suivre est une devinette : l'écran nomme la
+                    destination ET y emmène. Sans `onNav`, la phrase reste, sans le lien. */}
+                {onNav ? (
+                  <button className="lnk" type="button" onClick={() => onNav('parametres')}>
+                    dans Paramètres › Heures d’ouverture
+                  </button>
+                ) : (
+                  'dans Paramètres › Heures d’ouverture'
+                )}{' '}
+                — un passage peut y être refusé sans que rien ici ne le dise.
               </p>
 
               {chargement ? (
@@ -1349,7 +1369,8 @@ function JournalPassages({ espaces, equipements, etabActif }) {
       // la phrase du résultat vide.
       if (filtres.billet.trim()) query['support.identifiant'] = filtres.billet.trim()
       const reponse = await api.journalPassages(query)
-      const recus = membres(reponse)
+      // Voir la note en tête de fichier : le tri demandé au serveur est ignoré, on trie ce qu'on a.
+      const recus = membres(reponse).sort((a, b) => (a.horodatage < b.horodatage ? 1 : -1))
       setLignes(recus)
       setTotal(reponse?.totalItems ?? reponse?.['hydra:totalItems'] ?? null)
     } catch (e) {
@@ -1429,7 +1450,10 @@ function JournalPassages({ espaces, equipements, etabActif }) {
       <div className="card-h">
         <h3>Journal des passages</h3>
         {total !== null && lignes.length < total && (
-          <span className="badge warn" title="Le serveur limite chaque liste à 30 lignes.">
+          <span
+            className="badge warn"
+            title="Le serveur limite chaque liste à 30 lignes et ne sait pas les trier : ce sont les 30 plus anciennes."
+          >
             {lignes.length} sur {total}
           </span>
         )}
@@ -1488,6 +1512,14 @@ function JournalPassages({ espaces, equipements, etabActif }) {
 
         {erreur && <div className="banner banner-error">{erreur}</div>}
         {info && <div className="banner banner-ok">{info}</div>}
+        {total !== null && lignes.length < total && (
+          <div className="banner" style={{ background: 'var(--warn-bg)', color: 'var(--warn)' }}>
+            Le serveur rend 30 lignes au maximum et ne sait pas les trier : ce sont les{' '}
+            <strong>{lignes.length} plus anciennes</strong> des {total} qui répondent à ces filtres, et
+            non les plus récentes. Restreignez la période pour voir ce qui vous intéresse — l’export,
+            lui, porte bien sur la totalité.
+          </div>
+        )}
 
         {chargement ? (
           <div className="center" style={{ minHeight: 140 }}><div className="spinner" /></div>

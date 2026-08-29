@@ -81,10 +81,25 @@ export const MOTIF_REFUS = {
     quoi: 'La signature du support ne correspond pas.',
     geste: 'Aucun : c’est un refus de sécurité.',
   },
+  // ⚠ CES DEUX MOTIFS SE RESSEMBLENT DANS UN JOURNAL ET APPELLENT DES GESTES OPPOSÉS.
+  //
+  // `hors_portee` parle du MATÉRIEL : le terminal qui rapporte n'a pas autorité sur cet équipement.
+  // C'est une installation à vérifier, et personne n'y peut rien au comptoir.
+  //
+  // `zone_non_autorisee` parle du DROIT : le porteur est au bon endroit, avec un titre valide, mais
+  // son produit ne couvre pas cette zone. C'est une VENTE à faire — un complément, un supplément —
+  // et c'est la seule des deux qu'un agent peut résoudre en trente secondes.
+  //
+  // Les afficher du même gris enverrait chercher un technicien là où il fallait un caissier.
   hors_portee: {
-    libelle: 'Hors portée',
-    quoi: 'Le terminal n’a pas autorité sur cet équipement.',
-    geste: 'Vérifiez la référence ITBOX du contrôleur.',
+    libelle: 'Hors portée du terminal',
+    quoi: 'Le terminal qui rapporte ce passage n’a pas autorité sur cet équipement.',
+    geste: 'Vérifiez la référence ITBOX du contrôleur : c’est une question d’installation, pas de titre.',
+  },
+  zone_non_autorisee: {
+    libelle: 'Zone non comprise dans le billet',
+    quoi: 'Le titre est valide et le porteur est au bon endroit : c’est son produit qui n’ouvre pas cette zone.',
+    geste: 'Vendez le complément qui couvre cette zone — ou corrigez les zones du produit s’il devait les ouvrir.',
   },
   credit_epuise_hors_ligne_litige: {
     libelle: 'Litige hors ligne',

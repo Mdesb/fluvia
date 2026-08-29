@@ -44,11 +44,37 @@ COMMUN="$(readlink -f "$COMMUN")"
 # On relève le chemin AVANT de nettoyer : c'est la seule information qu'on tire de l'environnement.
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_QUARANTINE_PATH GIT_PREFIX GIT_OBJECT_DIRECTORY
 
-[ "$(git -C "$COMMUN" rev-parse --is-bare-repository 2>/dev/null)" = "true" ] || exit 0
 [ -f "$COMMUN/hooks/GARDE-FOUS-DESACTIVES" ] && exit 0
 
-HOOKS="pre-receive post-receive post-commit post-merge"
-[ -f "$COMMUN/hooks/pre-commit" ] && HOOKS="$HOOKS pre-commit"
+# ── DEPOT NU ET CHECKOUT DE TRAVAIL : DEUX JEUX DE HOOKS, PAS UN ────────────────────────────────
+#
+# Ce script sortait ici si le depot commun n'etait pas nu. Il ne rafraichissait donc QUE les hooks
+# du depot nu -- et le `pre-commit` des checkouts de travail, la ou tout le monde commite en
+# realite, gelait indefiniment.
+#
+# Constate le 29/08 : le `pre-commit` installe dans le checkout de preprod datait d'avant l'ajout du
+# garde-fou de vacuite. Celui-ci etait present dans `bin/` depuis des heures et n'avait jamais ete
+# lance par un commit local. Rien ne cassait, rien n'alertait : un nouveau garde-fou etait
+# simplement inerte, chez tout le monde, jusqu'au prochain push.
+#
+# Le `pre-receive` du depot nu reste le vrai filet -- celui qu'on ne peut pas contourner. Mais le
+# `pre-commit` est le retour RAPIDE : il dit la faute pendant qu'on l'ecrit, pas dix commits plus
+# tard. Le laisser geler, c'est garder le filet et perdre l'avertissement.
+#
+# Les hooks installes different selon le cas, parce que leur nature differe : `pre-receive` et
+# `post-receive` ne s'executent qu'a la reception et n'ont aucun sens dans un checkout ; `pre-commit`
+# doit y etre pose meme s'il n'y etait pas encore, alors que sur le depot nu on ne l'ajoute que s'il
+# y est deja -- l'ajouter la serait un changement de comportement, pas une mise a jour.
+#
+# ⚠ Pour un worktree lie, `--git-common-dir` designe le `.git` du depot principal : les hooks sont
+# donc PARTAGES entre tous les worktrees d'un meme checkout. Un seul rafraichissement les couvre.
+if [ "$(git -C "$COMMUN" rev-parse --is-bare-repository 2>/dev/null)" = "true" ]; then
+    HOOKS="pre-receive post-receive post-commit post-merge"
+    [ -f "$COMMUN/hooks/pre-commit" ] && HOOKS="$HOOKS pre-commit"
+else
+    # NON NU : seuls les hooks cote client, et `pre-commit` inconditionnellement.
+    HOOKS="pre-commit post-commit post-merge"
+fi
 
 for nom in $HOOKS; do
     CIBLE="$COMMUN/hooks/$nom"
