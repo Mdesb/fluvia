@@ -18,6 +18,11 @@ services:
     # this creates a service per class whose id is the fully-qualified class name
     App\:
         resource: '../src/'
+        exclude:
+            # Patron de decorateur, jamais un service : UuidAwareSearchFilterPass en pose une
+            # instance par filtre decore. Enregistre ici, il serait etiquete comme filtre et le
+            # localisateur d'API Platform reclamerait un service que personne ne peut construire.
+            - '../src/Platform/Filter/UuidAwareSearchFilter.php'
 
     # LE CALENDRIER SCOLAIRE OFFICIEL, derriere un port.
     #
