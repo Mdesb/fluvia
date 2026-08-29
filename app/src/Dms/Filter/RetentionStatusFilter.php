@@ -26,11 +26,11 @@ final class RetentionStatusFilter implements FilterInterface
             return;
         }
 
-        $valeur = $context['filters']['retentionStatus'] ?? null;
-        if (!\is_string($valeur)) {
+        if (!\array_key_exists('retentionStatus', $context['filters'] ?? [])) {
             return;
         }
 
+        $valeur = $context['filters']['retentionStatus'];
         $alias = $queryBuilder->getRootAliases()[0];
 
         match ($valeur) {
@@ -45,7 +45,11 @@ final class RetentionStatusFilter implements FilterInterface
                 $alias,
                 $alias,
             )),
-            default => null,
+            // ⚠ UNE VALEUR ILLISIBLE FERME LA COLLECTION, ELLE NE L'OUVRE PAS. `default => null`
+            // abandonnait la contrainte : `?retentionStatus=activ` -- une lettre en moins -- rendait
+            // TOUS les documents, perimes compris, et rien ne le signalait. Le sens sûr de l'erreur
+            // est celui qui restreint.
+            default => $queryBuilder->andWhere('1 = 0'),
         };
     }
 

@@ -95,6 +95,15 @@ function idDe(v) {
   return String(v).split('/').pop()
 }
 
+// Les zones qu'un contrôleur dessert EN PLUS de son emplacement. La collection arrive en objets
+// (`EspaceAcces` expose son libellé dans `controleur:read`), mais on croise quand même par
+// identifiant : le jour où le groupe change, la colonne dirait « — » au lieu d'inventer.
+function zonesDesservies(controleur, espaces) {
+  return (controleur?.servedSpaces || [])
+    .map((e) => (typeof e === 'object' && e.libelle) || espaces.find((x) => x.id === idDe(e))?.libelle)
+    .filter(Boolean)
+}
+
 function texteOuTiret(v) {
   return v === null || v === undefined || v === '' ? '—' : v
 }
@@ -221,6 +230,7 @@ export default function TopologieAcces({ etabActif, droits, onNav }) {
   // le journal parlent des mêmes objets ; passer de l'un à l'autre ne devrait pas obliger à
   // retrouver son nom dans une liste déroulante.
   const [cibleJournal, setCibleJournal] = useState(null) // { espace|equipement, etab }
+  const [avertissement, setAvertissement] = useState(null)
   const [espaces, setEspaces] = useState([])
   const [controleurs, setControleurs] = useState([])
   const [equipements, setEquipements] = useState([])
@@ -384,10 +394,17 @@ export default function TopologieAcces({ etabActif, droits, onNav }) {
         ? {
             libelle: ligne.libelle || '',
             espace: idDe(ligne.espace) || '',
+            servedSpaces: (ligne.servedSpaces || []).map((e) => idDe(e)).filter(Boolean),
             itboxRef: ligne.itboxRef || '',
             etat: ligne.etat || 'en_ligne',
           }
-        : { libelle: '', espace: espaceId || espaces[0]?.id || '', itboxRef: '', etat: 'en_ligne' },
+        : {
+            libelle: '',
+            espace: espaceId || espaces[0]?.id || '',
+            servedSpaces: [],
+            itboxRef: '',
+            etat: 'en_ligne',
+          },
     })
   }
 
@@ -453,11 +470,44 @@ export default function TopologieAcces({ etabActif, droits, onNav }) {
         const corps = {
           libelle: valeurs.libelle,
           espace: `/api/espace_acces/${valeurs.espace}`,
+          // L'emplacement ne se répète pas dans les zones desservies : il est déjà ouvert, et l'y
+          // remettre ferait lire « ouvre aussi sa propre zone », ce qui n'apprend rien.
+          servedSpaces: (valeurs.servedSpaces || [])
+            .filter((id) => id !== valeurs.espace)
+            .map((id) => `/api/espace_acces/${id}`),
           itboxRef: valeurs.itboxRef,
           etat: valeurs.etat,
         }
-        if (ligne) await api.majControleur(ligne.id, corps)
-        else await api.creerControleur(corps)
+        const enregistre = ligne ? await api.majControleur(ligne.id, corps) : await api.creerControleur(corps)
+
+        // ⚠ CE CONTRÔLE RESTE, ALORS MÊME QUE LE DÉFAUT QUI L'A MOTIVÉ EST CORRIGÉ.
+        //
+        // Le 29/08, `PATCH /api/controleurs/{id}` avec les zones desservies répondait **200** et
+        // rendait la collection **vide**. Cause trouvée en interrogeant l'inflecteur de Symfony, pas
+        // en relisant le code : il ne singularise que le DERNIER mot, tirait `espacesDesservi` de
+        // `servedSpaces`, et cherchait donc `addEspacesDesservi` quand l'entité déclarait
+        // `addEspaceDesservi`. Les deux accesseurs existaient — c'est la rencontre des noms qui
+        // manquait, et elle se produit dans une bibliothèque qu'on ne lit pas.
+        //
+        // La propriété s'appelle désormais `servedSpaces` : l'inflection en tire `servedSpace`, et
+        // les noms se rencontrent. Un test passe par l'API — PATCH, relecture, puis retrait.
+        //
+        // ⚠ ON GARDE LE CONTRÔLE QUAND MÊME. C'est lui qui a rendu ce défaut visible au lieu de le
+        // laisser passer pour un caprice, et rien ne garantit qu'un autre champ ne le refera pas :
+        // un exploitant qui croit avoir ouvert le tourniquet aux abonnés de la salle laisserait des
+        // gens devant une porte. Comparer ce qu'on a demandé à ce que le serveur rend coûte trois
+        // lignes.
+        const voulues = (corps.servedSpaces || []).map((iri) => iri.split('/').pop()).sort()
+        const retenues = (enregistre?.servedSpaces || []).map((e) => idDe(e)).filter(Boolean).sort()
+        if (voulues.length !== retenues.length || voulues.some((v, i) => v !== retenues[i])) {
+          setAvertissement(
+            'Le serveur a accepté le contrôleur mais n’a pas retenu les zones de « Ouvre aussi » : '
+            + 'ce lecteur n’ouvre donc que son emplacement. C’est un défaut serveur connu, signalé — '
+            + 'le reste de la fiche, lui, est bien enregistré.',
+          )
+        } else {
+          setAvertissement(null)
+        }
       } else {
         const corps = {
           libelle: valeurs.libelle,
@@ -553,13 +603,40 @@ export default function TopologieAcces({ etabActif, droits, onNav }) {
 
   const champsControleur = [
     { nom: 'libelle', libelle: 'Nom du contrôleur', requis: true, exemple: 'Portique nord' },
+    // OÙ IL EST, PUIS CE QU'IL OUVRE — DEUX QUESTIONS, DEUX CHAMPS, ET C'EST LE VOCABULAIRE QUI
+    // DOIT LES SÉPARER.
+    //
+    // Le serveur porte les deux notions et elles ne se remplacent pas : l'emplacement est la porte
+    // PHYSIQUE — c'est sa jauge qui se décrémente, son anti-passback qui s'applique, et c'est lui
+    // qui s'inscrit sur le passage, même quand le titre est accepté au titre d'une autre zone. Les
+    // zones desservies n'élargissent que la DÉCISION.
+    //
+    // « Emplacement » et « Ouvre aussi » disent cette différence sans paragraphe : le premier
+    // répond à « où est ce lecteur », le second à « qui peut y passer ». Un exploitant qui veut
+    // deux jauges distinctes a besoin de deux lecteurs, et l'aide du second champ le dit.
     {
       nom: 'espace',
-      libelle: 'Espace d’accès',
+      libelle: 'Emplacement — la porte physique',
       type: 'choix',
       requis: true,
       options: espaces.map((e) => ({ valeur: e.id, libelle: e.libelle })),
-      aide: 'Un contrôleur sans espace est refusé par le serveur.',
+      aide:
+        'La zone où se trouve ce matériel. C’est SA jauge qui se décrémente et c’est elle qui '
+        + 'figure au journal, quel que soit le titre présenté. Un contrôleur sans emplacement est '
+        + 'refusé par le serveur.',
+    },
+    {
+      nom: 'servedSpaces',
+      libelle: 'Ouvre aussi',
+      type: 'cases',
+      options: espaces
+        .filter((e) => e.id !== (edition?.valeurs?.espace ?? ''))
+        .map((e) => ({ valeur: e.id, libelle: e.libelle })),
+      siVide: 'Aucune autre zone d’accès à desservir sur ce site.',
+      aide:
+        'Les titres de ces zones-là sont acceptés ici — le cas type est le tourniquet placé entre '
+        + 'la piscine et la salle de sport. Cela n’ajoute aucune jauge : la fréquentation reste '
+        + 'comptée sur l’emplacement. Pour deux jauges distinctes, il faut deux lecteurs.',
     },
     {
       nom: 'itboxRef',
@@ -706,6 +783,11 @@ export default function TopologieAcces({ etabActif, droits, onNav }) {
       )}
 
       {succes && <div className="banner banner-ok">{succes}</div>}
+      {avertissement && (
+        <div className="banner" style={{ background: 'var(--warn-bg)', color: 'var(--warn)' }}>
+          {avertissement}
+        </div>
+      )}
 
       <Tabs onglets={ONGLETS} actif={onglet} onChange={setOnglet} />
 
@@ -844,6 +926,14 @@ export default function TopologieAcces({ etabActif, droits, onNav }) {
                                 {ETAT_CONTROLEUR[controleur.etat] || controleur.etat}
                               </span>
                               <span className="mut">ITBOX {texteOuTiret(controleur.itboxRef)}</span>
+                              {zonesDesservies(controleur, espaces).length > 0 && (
+                                <span
+                                  className="badge mut"
+                                  title="Les titres de ces zones sont acceptés ici. La fréquentation, elle, reste comptée sur l’emplacement."
+                                >
+                                  ouvre aussi : {zonesDesservies(controleur, espaces).join(', ')}
+                                </span>
+                              )}
                               {(() => {
                                 const vie = signeDeVie(controleur)
                                 return vie.suspect ? (
@@ -1088,7 +1178,8 @@ function Lecteurs({ equipements, controleurs, espaces, peutGerer, chargement, on
                 <tr>
                   <th>Lecteur</th>
                   <th>Type</th>
-                  <th>Zone</th>
+                  <th title="La porte physique : c’est sa jauge qui se décrémente.">Emplacement</th>
+                  <th title="Les titres de ces zones sont acceptés ici, sans changer la jauge.">Ouvre aussi</th>
                   <th>Contrôleur · ITBOX</th>
                   <th>État</th>
                   <th>Sens</th>
@@ -1107,6 +1198,11 @@ function Lecteurs({ equipements, controleurs, espaces, peutGerer, chargement, on
                       <td className="nm">{q.libelle}</td>
                       <td>{TYPE_EQUIPEMENT[q.type] || q.type}</td>
                       <td>{zone ? zone.libelle : <span className="mut">zone hors de cette page</span>}</td>
+                      <td>
+                        {/* « — » veut dire « rien d'autre », pas « rien » : le lecteur ouvre
+                            toujours son emplacement, colonne d'à côté. */}
+                        {zonesDesservies(controleur, espaces).join(', ') || <span className="mut">—</span>}
+                      </td>
                       <td>
                         {controleur ? (
                           <>

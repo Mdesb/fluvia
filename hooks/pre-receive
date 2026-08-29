@@ -289,6 +289,15 @@ while read -r ancien nouveau ref; do
         lancer garde-fou-references-libres.php
     fi
 
+    # Une propriete declaree dans un `#[ApiFilter]` doit EXISTER : une propriete inconnue est ignoree
+    # en silence et la collection sort ENTIERE. Contrairement aux filtres qui rendent une liste vide,
+    # celui-ci ne remonte jamais en reclamation -- des donnees qui s'affichent ne sont interrogees
+    # par personne.
+    if [ -f "$ARBRE/bin/garde-fou-filtres-declares.php" ]; then
+        echo "── Filtres déclarés"
+        lancer garde-fou-filtres-declares.php
+    fi
+
     # Une entite ne doit pas laisser ecrire son propre etablissement (D41). Ecrit par claude-C, qui a
     # au passage corrige mon compte : 49 entites concernees et non 35. Vingt-deux d'entre elles ne
     # declarent AUCUN `denormalizationContext` — c'est l'absence de declaration qui expose, et une

@@ -186,6 +186,41 @@ final class OpeningScheduleTest extends AccesApiTestCase
     }
 
     /**
+     * UN FILTRE DÉCLARÉ DOIT FILTRER.
+     *
+     * `SearchFilter` portait sur `day`, alors que la propriété s'appelle `weekday`. API Platform
+     * ignore une propriété inconnue SANS RIEN DIRE : pas d'erreur au démarrage, pas d'exception à
+     * l'appel. Le filtre était annoncé dans la documentation de l'API et rendait la liste entière.
+     *
+     * Personne ne s'en servait — l'écran charge toutes les plages — donc aucune donnée fausse ne
+     * s'affichait. Mais celui qui l'emploierait recevrait tout en croyant avoir filtré, et c'est
+     * exactement le genre de réponse qu'on ne remet pas en cause : elle arrive, elle est pleine,
+     * elle a la bonne forme.
+     *
+     * ⚠ ON EXIGE LES DEUX CÔTÉS. « La liste ne contient que des lundis » serait vrai d'une liste
+     * VIDE — et une liste vide est précisément ce que rend un filtre qui ne trouve rien. On exige
+     * donc aussi qu'elle contienne le lundi qu'on vient d'écrire.
+     */
+    public function testLeFiltreParJourDeLaSemaineFiltreVraiment(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+
+        foreach ([['weekday' => 1, 'startTime' => '09:00:00'], ['weekday' => 3, 'startTime' => '14:00:00']] as $charge) {
+            $client->request('POST', '/api/opening/opening_slots', $entete + [
+                'json' => $charge + ['endTime' => '18:00:00'],
+            ]);
+            self::assertResponseIsSuccessful();
+        }
+
+        $lundis = $client->request('GET', '/api/opening/opening_slots?weekday=1', $entete)->toArray();
+        self::assertResponseIsSuccessful();
+
+        $jours = array_column($lundis['member'], 'weekday');
+        self::assertNotEmpty($jours, 'Une liste vide rendrait l’assertion suivante vraie sans rien prouver.');
+        self::assertSame([1], array_values(array_unique($jours)), 'Le filtre ne filtre pas : le mercredi est là aussi.');
+    }
+
+    /**
      * ⚠ CE TEST GARDE LA PORTE DU MODULE. `etablissement` n'est pas dans le groupe d'écriture, mais
      * l'ESPACE, lui, arrive du corps de requête : les extensions Doctrine ne filtrent que les
      * lectures (D8), et un espace du voisin accroché à nos horaires laisserait décider quand SA

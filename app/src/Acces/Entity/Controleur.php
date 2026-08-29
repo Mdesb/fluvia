@@ -82,7 +82,7 @@ class Controleur
     #[ORM\ManyToMany(targetEntity: EspaceAcces::class)]
     #[ORM\JoinTable(name: 'access_controller_served_space')]
     #[Groups(['controleur:read', 'controleur:write'])]
-    private Collection $espacesDesservis;
+    private Collection $servedSpaces;
 
     #[ORM\Column(length: 16, enumType: EtatControleur::class, options: ['default' => 'en_ligne'])]
     #[Groups(['controleur:read', 'controleur:write'])]
@@ -104,7 +104,7 @@ class Controleur
     public function __construct()
     {
         $this->id = Uuid::v4();
-        $this->espacesDesservis = new ArrayCollection();
+        $this->servedSpaces = new ArrayCollection();
     }
 
     public function getId(): Uuid
@@ -200,15 +200,15 @@ class Controleur
     }
 
     /** @return Collection<int, EspaceAcces> */
-    public function getEspacesDesservis(): Collection
+    public function getServedSpaces(): Collection
     {
-        return $this->espacesDesservis;
+        return $this->servedSpaces;
     }
 
-    public function addEspaceDesservi(EspaceAcces $espace): self
+    public function addServedSpace(EspaceAcces $espace): self
     {
-        if (!$this->espacesDesservis->contains($espace)) {
-            $this->espacesDesservis->add($espace);
+        if (!$this->servedSpaces->contains($espace)) {
+            $this->servedSpaces->add($espace);
         }
 
         return $this;
@@ -221,9 +221,9 @@ class Controleur
      * existent ; sans les deux il ignore la propriété, sans erreur. `SousReseau` en est mort la
      * nuit du 28 : `PATCH { espaces: [...] }` répondait 200 et n'enregistrait rien.
      */
-    public function removeEspaceDesservi(EspaceAcces $espace): self
+    public function removeServedSpace(EspaceAcces $espace): self
     {
-        $this->espacesDesservis->removeElement($espace);
+        $this->servedSpaces->removeElement($espace);
 
         return $this;
     }
@@ -239,7 +239,7 @@ class Controleur
     public function espacesOuverts(): array
     {
         $espaces = $this->espace === null ? [] : [$this->espace];
-        foreach ($this->espacesDesservis as $desservi) {
+        foreach ($this->servedSpaces as $desservi) {
             $espaces[] = $desservi;
         }
 

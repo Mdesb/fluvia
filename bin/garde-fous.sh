@@ -235,6 +235,17 @@ fi
 #     claude-G, parce qu'elle et moi lancions le meme script differemment -- c'est-a-dire par hasard.
 executer "Références libres (D58)" php_racine bin/garde-fou-references-libres.php
 
+# Une propriete declaree dans un `#[ApiFilter]` doit EXISTER. API Platform ignore une propriete
+# inconnue en silence : le filtre est publie dans la documentation, le parametre est accepte, et la
+# collection sort ENTIERE. Trouve par allaccess-c2 sur `OpeningSlot`, ou le filtre disait `day` et la
+# propriete s'appelait `weekday` -- quatrieme occurrence du meme renommage, manquee par trois
+# balayages successifs qui couvraient chacun un endroit ou le mot pouvait vivre.
+#
+# ⚠ CE DEFAUT-LA NE REMONTE JAMAIS EN RECLAMATION. Un filtre casse qui rend une liste VIDE finit par
+# etre signale : une absence intrigue. Celui-ci rend TOUT -- ca ressemble a des donnees, ca arrive, ca
+# a la bonne forme, et personne ne le remet en cause.
+executer "Filtres déclarés" php_racine bin/garde-fou-filtres-declares.php
+
 if [ -n "${REFERENCE:-}" ]; then
     executer "Établissement écrivable (D41)" php_racine bin/garde-fou-etablissement-ecrivable.php "--contre=$REFERENCE"
 else

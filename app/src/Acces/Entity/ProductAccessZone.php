@@ -9,7 +9,7 @@ use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Delete;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Post;
-use App\Acces\Filter\ProductRefFilter;
+use App\Platform\Filter\UuidReferenceFilter;
 use App\Acces\State\ProductAccessZoneStampProcessor;
 use App\Organisation\Entity\Etablissement;
 use Doctrine\ORM\Mapping as ORM;
@@ -39,7 +39,7 @@ use Symfony\Component\Uid\Uuid;
  * `App\Acces` ne dépend pas de `App\Offre`. Le produit est désigné par son identifiant, jamais par
  * une relation Doctrine — même patron que `DroitAcces::$produitRef`.
  *
- * ⚠ Corollaire D58 : d'où `ProductRefFilter` plutôt qu'un `SearchFilter`, qui rendrait une liste
+ * ⚠ Corollaire D58 : d'où `UuidReferenceFilter` plutôt qu'un `SearchFilter`, qui rendrait une liste
  * vide sans rien signaler.
  *
  * ── AUCUNE LIGNE = AUCUNE RESTRICTION ───────────────────────────────────────────────────────────
@@ -87,7 +87,7 @@ use Symfony\Component\Uid\Uuid;
     normalizationContext: ['groups' => ['produit_zone:read']],
     denormalizationContext: ['groups' => ['produit_zone:write']],
 )]
-#[ApiFilter(ProductRefFilter::class)]
+#[ApiFilter(UuidReferenceFilter::class, properties: ['productRef'])]
 class ProductAccessZone
 {
     #[ORM\Id]
