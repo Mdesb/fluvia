@@ -210,6 +210,13 @@ function nombreOuNul(v) {
 
 export default function TopologieAcces({ etabActif, droits, onNav }) {
   const [onglet, setOnglet] = useState('plan')
+  // ALLER DU MATÉRIEL À SES PASSAGES SANS REFAIRE LA RECHERCHE.
+  //
+  // On ne se demande jamais « quels passages ce mois-ci » dans l'abstrait : on se le demande
+  // parce qu'un lecteur précis refuse du monde, ou qu'une zone se remplit trop vite. Le plan et
+  // le journal parlent des mêmes objets ; passer de l'un à l'autre ne devrait pas obliger à
+  // retrouver son nom dans une liste déroulante.
+  const [cibleJournal, setCibleJournal] = useState(null) // { espace|equipement, etab }
   const [espaces, setEspaces] = useState([])
   const [controleurs, setControleurs] = useState([])
   const [equipements, setEquipements] = useState([])
@@ -782,6 +789,15 @@ export default function TopologieAcces({ etabActif, droits, onNav }) {
                       <h3>{espace.libelle}</h3>
                       <span className="sub">{nomEspaceSocle(espace)}</span>
                       <div className="r" style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+                        <button
+                          className="btn ghost sm"
+                          onClick={() => {
+                            setCibleJournal({ espace: espace.id, etab: etabActif })
+                            setOnglet('journal')
+                          }}
+                        >
+                          Passages
+                        </button>
                         {peutGerer && (
                           <>
                             <button className="btn ghost sm" onClick={() => ouvrirEspace(espace)}>Modifier</button>
@@ -923,6 +939,10 @@ export default function TopologieAcces({ etabActif, droits, onNav }) {
           chargement={chargement}
           onEditer={(q) => ouvrirEquipement(q)}
           onAjouter={() => ouvrirEquipement(null)}
+          onVoirPassages={(q) => {
+            setCibleJournal({ equipement: q.id, etab: etabActif })
+            setOnglet('journal')
+          }}
         />
       )}
 
@@ -937,7 +957,23 @@ export default function TopologieAcces({ etabActif, droits, onNav }) {
       )}
 
       {onglet === 'journal' && (
-        <JournalPassages espaces={espaces} equipements={equipements} etabActif={etabActif} />
+        <JournalPassages
+          // ⚠ UNE REMISE À ZÉRO PAR EFFET NE SUFFISAIT PAS, ET L'ÉCRAN L'A MONTRÉ.
+          //
+          // Premier essai : `key={etabActif}` pour remonter le journal, plus un effet qui vidait la
+          // cible au changement de site. Le filtre « Lecteur » restait pourtant posé sur un
+          // tourniquet de l'autre site — parce que l'effet s'exécute APRÈS le rendu : le journal
+          // remontait d'abord avec l'ancienne cible, la reposait, et le vidage arrivait ensuite,
+          // sans plus rien à vider.
+          //
+          // La cible porte donc son établissement, et n'est lue que si c'est encore le bon. Une
+          // dérivation n'a pas d'ordre d'exécution : elle est vraie au moment du rendu.
+          key={etabActif}
+          espaces={espaces}
+          equipements={equipements}
+          etabActif={etabActif}
+          cible={cibleJournal?.etab === etabActif ? cibleJournal : null}
+        />
       )}
 
       {edition && (
@@ -979,7 +1015,7 @@ export default function TopologieAcces({ etabActif, droits, onNav }) {
 // c'est le modèle. Un `Equipement` a un `Controleur`, un `Controleur` a un `EspaceAcces` — la zone
 // se déduit par transitivité, elle ne se choisit pas. La colonne le dit plutôt que de laisser croire
 // à une liste. Rattacher un lecteur à plusieurs zones demande une relation qui n'existe pas encore.
-function Lecteurs({ equipements, controleurs, espaces, peutGerer, chargement, onEditer, onAjouter }) {
+function Lecteurs({ equipements, controleurs, espaces, peutGerer, chargement, onEditer, onAjouter, onVoirPassages }) {
   const [recherche, setRecherche] = useState('')
 
   const lignes = useMemo(() => {
@@ -1054,7 +1090,7 @@ function Lecteurs({ equipements, controleurs, espaces, peutGerer, chargement, on
                   <th>Sens</th>
                   <th>Anti-passback effectif</th>
                   <th className="num">Tolérances</th>
-                  {peutGerer && <th />}
+                  <th />
                 </tr>
               </thead>
               <tbody>
@@ -1113,11 +1149,14 @@ function Lecteurs({ equipements, controleurs, espaces, peutGerer, chargement, on
                       <td className="num">
                         +{q.margeAvance ?? 0} / −{q.margeRetard ?? 0} min
                       </td>
-                      {peutGerer && (
-                        <td className="num">
-                          <button className="btn ghost sm" onClick={() => onEditer(q)}>Modifier</button>
-                        </td>
-                      )}
+                      <td className="num">
+                        <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                          <button className="btn ghost sm" onClick={() => onVoirPassages(q)}>Passages</button>
+                          {peutGerer && (
+                            <button className="btn ghost sm" onClick={() => onEditer(q)}>Modifier</button>
+                          )}
+                        </div>
+                      </td>
                     </tr>
                   )
                 })}
@@ -1342,7 +1381,7 @@ function SousReseaux({ reseaux, espaces, peutGerer, chargement, onChange }) {
 // porte des filtres (espace, contrôleur, équipement, résultat, période) et une opération d'export
 // que personne n'atteignait. Un refus se comprend en regardant les vingt qui l'entourent, pas
 // l'instant.
-function JournalPassages({ espaces, equipements, etabActif }) {
+function JournalPassages({ espaces, equipements, etabActif, cible }) {
   const [filtres, setFiltres] = useState({ depuis: '', jusqua: '', espace: '', equipement: '', resultat: '', billet: '' })
   const [lignes, setLignes] = useState([])
   const [total, setTotal] = useState(null)
@@ -1381,6 +1420,14 @@ function JournalPassages({ espaces, equipements, etabActif }) {
       setChargement(false)
     }
   }, [filtres])
+
+  // Une cible venue du plan ou de la liste des lecteurs pose le filtre correspondant. Elle ne
+  // remplace pas les filtres de période déjà saisis : on vient voir CE lecteur-là sur la fenêtre
+  // qu'on regardait, pas repartir de zéro.
+  useEffect(() => {
+    if (!cible) return
+    setFiltres((f) => ({ ...f, espace: cible.espace || '', equipement: cible.equipement || '' }))
+  }, [cible])
 
   useEffect(() => {
     charger()
@@ -1510,6 +1557,24 @@ function JournalPassages({ espaces, equipements, etabActif }) {
           </div>
         </div>
 
+        {/* UN FILTRE QU'ON NE VOIT PAS EST UN PIÈGE : sans cette étiquette, on lit « aucun passage »
+            en croyant regarder tout le site alors qu'on ne regarde qu'un tourniquet. Le sélecteur
+            d'espace est visible juste au-dessus ; celui d'équipement n'existe pas, d'où l'étiquette. */}
+        {filtres.equipement && (
+          <div className="row" style={{ gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+            <span className="badge mut">
+              Lecteur : {equipements.find((q) => q.id === filtres.equipement)?.libelle || 'sélectionné'}
+            </span>
+            <button
+              className="btn ghost sm"
+              type="button"
+              onClick={() => setFiltres((f) => ({ ...f, equipement: '' }))}
+            >
+              Retirer ce filtre
+            </button>
+          </div>
+        )}
+
         {erreur && <div className="banner banner-error">{erreur}</div>}
         {info && <div className="banner banner-ok">{info}</div>}
         {total !== null && lignes.length < total && (
@@ -1532,7 +1597,7 @@ function JournalPassages({ espaces, equipements, etabActif }) {
                 ne veut pas dire que ce billet n’est jamais passé. Vérifiez le numéro avant de
                 répondre au client.
               </>
-            ) : filtres.depuis || filtres.jusqua || filtres.espace || filtres.resultat ? (
+            ) : filtres.depuis || filtres.jusqua || filtres.espace || filtres.resultat || filtres.equipement ? (
               'Aucun passage ne répond à ces filtres.'
             ) : (
               'Aucun passage enregistré sur ce site. Le journal se remplit tout seul dès qu’un équipement lit un support.'

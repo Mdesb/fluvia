@@ -40,7 +40,7 @@ final class EditorCatalogProvider implements ProviderInterface
 
     public function provide(Operation $operation, array $uriVariables = [], array $context = []): object|array|null
     {
-        $this->editorOnly->assertEditor();
+        $this->editorOnly->assertEditor('editor.manage_offer');
 
         $pourOption = EditorPlanOption::class === $operation->getClass();
 

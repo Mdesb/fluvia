@@ -245,6 +245,101 @@ final class CalendarTest extends AccesApiTestCase
     }
 
     /** Un jeton inconnu rend 404 et non 403 : un 403 confirmerait qu'une URL voisine existe. */
+    /**
+     * ⚠ L'ABONNEMENT DOIT CONTENIR CE QUE L'ONGLET « MOI » MONTRE.
+     *
+     * Le test voisin ne crée qu'un événement `siteWide: true` : il ne pouvait donc pas voir que le
+     * flux ne servait QUE la portée du site. `IcsFeedController` demandait la portée « moi » à un
+     * agrégateur qui n'entend que « mine » — il recevait le site deux fois, et l'abonné n'a jamais
+     * vu ses propres rendez-vous dans son téléphone.
+     *
+     * Rien ne le signalait : le flux répond, il est valide, il contient des événements. On croit
+     * avoir mal saisi son rendez-vous.
+     */
+    public function testLabonnementContientAussiMesEvenementsPersonnels(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+
+        // Date calculée depuis maintenant : le flux ne publie qu'une fenêtre glissante.
+        $dansUneSemaine = (new \DateTimeImmutable('+7 days'))->setTime(14, 0);
+        $client->request('POST', '/api/calendar/calendar_events', $entete + [
+            'json' => [
+                'title' => 'Rendez-vous médical personnel',
+                'start' => $dansUneSemaine->format(\DateTimeInterface::ATOM),
+                'end' => $dansUneSemaine->modify('+1 hour')->format(\DateTimeInterface::ATOM),
+                'type' => 'unavailability',
+                // Pas de `siteWide` : l'événement n'appartient qu'à son auteur.
+            ],
+        ]);
+        self::assertResponseIsSuccessful();
+
+        $abonnement = $client->request('GET', '/api/calendar/ics-subscription', $entete)->toArray();
+        self::assertResponseIsSuccessful();
+        $path = $abonnement['member'][0]['path'];
+
+        $corps = static::createClient()->request('GET', $path)->getContent();
+        self::assertResponseIsSuccessful();
+
+        // ⚠ ON DÉPLIE AVANT DE CHERCHER : au-delà de 75 octets une ligne est coupée par un CRLF
+        // suivi d'une espace, et le titre ne se trouverait plus d'un seul tenant.
+        self::assertStringContainsString(
+            'SUMMARY:Rendez-vous médical personnel',
+            str_replace("\r\n ", '', $corps),
+            'Un abonné ne reçoit pas ses propres rendez-vous : le flux ne sert que la portée du site.',
+        );
+    }
+
+    /**
+     * ⚠ ET SES CRÉNEAUX DE TRAVAIL — le plus utile des deux, et le plus longtemps absent.
+     *
+     * `WorkShiftsCalendarSource` ne publie QUE pour la portée « mine ». Tant qu'elle n'était pas
+     * servie, aucun employé n'a jamais vu son planning dans le calendrier de son téléphone. C'est
+     * pourtant ce qu'on attend d'abord d'un agenda professionnel dans sa poche.
+     *
+     * Ce cas est distinct du précédent : un événement personnel est lu en base par l'agrégateur,
+     * un créneau de travail vient d'un module TIERS par le port `CalendarSourceInterface`. Le
+     * premier test ne dit rien du second chemin.
+     */
+    public function testLabonnementContientMesCreneauxDeTravail(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $em = $this->em();
+
+        // ⚠ DEPUIS MAINTENANT, PAS UNE DATE FIXE. Le flux ne publie qu'une fenêtre glissante ; une
+        // date de juin 2026 en est sortie, et le test serait vert sans rien mesurer.
+        $dansTroisJours = (new \DateTimeImmutable('+3 days'))->setTime(14, 0);
+
+        $creneauTravail = (new CreneauTravail())
+            ->setEtablissement($this->etablissementDeA())
+            ->setLibellePoste('Surveillance bassin du matin')
+            ->setDebut($dansTroisJours)
+            ->setFin($dansTroisJours->modify('+4 hours'));
+        $em->persist($creneauTravail);
+
+        $employe = (new Employe())
+            ->setNom('Socle')
+            ->setPrenom('Administratrice')
+            ->setPoste('Régisseur')
+            // `typeContrat` est obligatoire en base alors que la propriété PHP accepte `null` :
+            // sans cette ligne, MariaDB refuse au `flush()` et le message ne nomme que la colonne.
+            ->setTypeContrat(TypeContrat::Cdi)
+            ->setDateEntree(new \DateTimeImmutable('2020-01-01'))
+            ->setUtilisateur($this->utilisateurAdmin());
+        $em->persist($employe);
+        $em->persist((new AffectationTravail())->setCreneauTravail($creneauTravail)->setEmploye($employe));
+        $em->flush();
+
+        $abonnement = $client->request('GET', '/api/calendar/ics-subscription', $entete)->toArray();
+        self::assertResponseIsSuccessful();
+        $corps = static::createClient()->request('GET', $abonnement['member'][0]['path'])->getContent();
+
+        self::assertStringContainsString(
+            'Surveillance bassin du matin',
+            str_replace("\r\n ", '', $corps),
+            'Un employé abonné à son agenda ne voit pas ses créneaux de travail — la portée « mine » n’est pas servie.',
+        );
+    }
+
     public function testUnJetonInconnuRend404(): void
     {
         $anonyme = static::createClient();

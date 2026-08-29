@@ -621,8 +621,18 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
       <div className="view">
         <div className="view-head">
           <div className="ttl"><h1>Caisse</h1><p>{nomEtab}</p></div>
+          {/* CAISSE FERMÉE, LES TOURNIQUETS TOURNENT QUAND MÊME.
+              Un groupe passe à l'ouverture des portes avant que le guichet n'ouvre sa session, et
+              quelqu'un vient demander pourquoi son billet a été refusé. Priver l'agent de la
+              vérification et du fil des scans parce qu'aucune caisse n'est ouverte, c'est lui
+              retirer la réponse au moment précis où on la lui demande. */}
+          <div className="actions">
+            <button className="btn" onClick={() => setVerifBillet(true)}>Vérifier un billet</button>
+          </div>
         </div>
         {erreur && <div className="banner banner-error">{erreur}</div>}
+        <ScansEnDirect key={etabActif} droits={droits} etabActif={etabActif} />
+        <RechercheBilletModal open={verifBillet} onClose={() => setVerifBillet(false)} />
         <div className="card">
           <div className="card-b" style={{ textAlign: 'center', padding: '40px 20px' }}>
             <div style={{ fontSize: 40, marginBottom: 8 }}>🔒</div>
@@ -661,7 +671,10 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
       {/* Le bandeau des scans est en position fixe : il ne prend pas de place dans la grille de la
           caisse et ne bouge pas quand le panier s'allonge. Il ne s'affiche que pour un compte qui a
           le droit de lire les passages. */}
-      <ScansEnDirect droits={droits} etabActif={etabActif} />
+      {/* La clé remonte le bandeau au changement de site : une interrogation partie avant la
+          bascule reviendrait sinon déposer les passages de l'ancien établissement sous le nom
+          du nouveau. */}
+      <ScansEnDirect key={etabActif} droits={droits} etabActif={etabActif} />
       <RechercheBilletModal open={verifBillet} onClose={() => setVerifBillet(false)} />
 
       <div className="caisse-grid">

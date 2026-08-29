@@ -40,6 +40,33 @@
 //                   MÊME FRONT. Un helper de la boutique référencé par le nom d'une fonction du
 //                   back-office ne compte pas : les deux applications ne partagent pas de portée.
 //
+// UN APPEL VERS UNE ROUTE QUE PERSONNE NE DÉCLARE NE RENDAIT PAS L'API PLUS ATTEIGNABLE — ET LE
+// CHIFFRE DISAIT LE CONTRAIRE.
+//
+// `atteignables` comptait tout appel client porté par un helper qu'un écran référence, SANS vérifier
+// que le serveur déclare quoi que ce soit au bout. Trois helpers écrits le 29/08 vers des opérations
+// pas encore ouvertes ont fait baisser l'écart de trois — et le cliquet proposait de geler dessus.
+//
+//   > Un compteur de couverture qui se laisse baisser par du vide mesure l'intention, pas la
+//   > couverture. C'est la famille de mensonges que ce dépôt traque partout ailleurs.
+//
+// Pire : le sens était inversé. Un frontal qui appelle une route inexistante est un défaut — la
+// mesure en faisait un progrès. Ces appels sont donc retirés du compte ET signalés à part, où ils
+// FONT ÉCHOUER le garde-fou : c'est le seul cas de ce fichier qui n'admet aucune dette gelée, parce
+// qu'il n'y en avait aucun le jour où le contrôle a été écrit.
+//
+// COMMENT ON SAIT QU'UNE ROUTE EXISTE, SANS BOOTER SYMFONY. Deux preuves, l'une exacte, l'autre
+// nommée :
+//   — un `uriTemplate:` littéral qui porte le chemin — exact ;
+//   — le nom de la ressource retrouvé dans le segment du chemin (`sous_reseaus` → `SousReseau`,
+//     `product_access_zones` → `ProductAccessZone`, `opportunities` → `Opportunity`) — parce
+//     qu'API Platform dérive le chemin par défaut du nom, et qu'on ne peut pas le recalculer ici.
+//     Les deux premiers segments sont essayés : une ressource peut porter un préfixe de route
+//     (`/api/opening/opening_slots`).
+//
+// Mesuré avant d'être posé, sur les 374 appels du produit : ZÉRO faux positif. Et éprouvé en
+// fabriquant le cas — un appel vers `/api/zzz_inexistants` est bien signalé.
+//
 // CE QUE LA MESURE NE VOIT TOUJOURS PAS :
 //
 // Elle compte des opérations, pas des signaux. Un champ calculé que le serveur publie et qu'aucun
@@ -93,6 +120,24 @@ const OPERATIONS = [
 // était un choix ou un oubli. C'est la même exigence que `@cloisonnement-verifie:`.
 const MARQUEUR = '@sans-ecran:'
 
+// LE MARQUEUR SYMÉTRIQUE, CÔTÉ CLIENT — ET POURQUOI IL EXISTE.
+//
+// Le contrôle ci-dessous refuse un appel vers une route que rien ne déclare. Mais le dépôt travaille
+// souvent dans l'autre sens : l'écran d'abord, les opérations serveur ensuite, pour ne pas ouvrir
+// des opérations que personne n'appelle — c'est la règle que le cliquet impose par ailleurs. Sans
+// échappatoire, ces deux règles se contredisent et la seconde gagne toujours.
+//
+// Un helper peut donc annoncer qu'il précède son opération, avec sa raison sur la même ligne :
+//
+//     // @route-a-venir: opérations ouvertes par claude-A dans le même lot, contrat convenu.
+//     zonesProduit: (ref) => request('/api/product_access_zones', { query: { productRef: ref } }),
+//
+// Il reste NON COMPTÉ comme atteignable — il ne rend rien atteignable tant que la route n'existe
+// pas. Le marqueur dit « c'est voulu et voici pourquoi », il ne dit pas « c'est branché ». Un
+// marqueur nu, sans raison, ne vaut rien et échoue comme s'il était absent : même exigence que
+// `@sans-ecran:`.
+const MARQUEUR_ROUTE_A_VENIR = '@route-a-venir:'
+
 function fichiersPhp(repertoire) {
   const trouves = []
   for (const entree of readdirSync(repertoire)) {
@@ -141,11 +186,83 @@ function referenceDans(texte, nom) {
   return false
 }
 
+// Les clés qu'un segment de chemin peut désigner. L'inflecteur d'API Platform met au pluriel ;
+// on défait les trois formes qu'il produit dans ce dépôt.
+function clesDeSegment(segment) {
+  const nu = (segment || '').replace(/_/g, '')
+  const cles = new Set([nu])
+  if (nu.endsWith('s')) cles.add(nu.slice(0, -1))
+  if (nu.endsWith('es')) cles.add(nu.slice(0, -2))
+  if (nu.endsWith('ies')) cles.add(nu.slice(0, -3) + 'y')
+  return cles
+}
+
+// L'annonce ne vaut que dans le bloc de commentaires CONTIGU au-dessus du helper. Une fenêtre de
+// N caractères aurait fait déteindre le marqueur d'un helper sur son voisin — un contrôle qui se
+// trompe de propriétaire est pire qu'un contrôle absent.
+function annonceRouteAVenir(source, indexCle) {
+  const lignes = source.slice(0, indexCle).split('\n')
+  const bloc = []
+  let i = lignes.length - 1
+  // ⚠ La tranche s'arrête au DÉBUT de la ligne du helper : son dernier élément est donc une chaîne
+  // vide, et un `while` qui exige un commentaire s'arrêtait dessus sans avoir rien lu. Le marqueur
+  // n'était jamais trouvé — les deux cas d'essai, l'exemption et la péremption, tombaient à faux.
+  while (i >= 0 && lignes[i].trim() === '') i -= 1
+  while (i >= 0 && /^\s*\/\//.test(lignes[i])) {
+    bloc.unshift(lignes[i])
+    i -= 1
+  }
+  return /@route-a-venir:[ \t]*(\S[^\n]*)/.exec(bloc.join('\n'))
+}
+
+function adosseAuServeur(chemin, gabarits, noms) {
+  const sansApi = chemin.replace(/^\/api/, '')
+  if (gabarits.has(sansApi)) return true
+
+  // ── TROISIEME PREUVE : LE FRAGMENT EST UN PREFIXE D'UN GABARIT DECLARE ──────────────────────
+  //
+  // Un appel construit par concatenation ne livre que son debut :
+  //
+  //     request('/api/demandes-rgpd/' + id + '/traiter', ...)
+  //
+  // Le fragment litteral vaut donc `/demandes-rgpd/`, qui n'egale aucun gabarit et dont le premier
+  // segment -- tiret, pluriel irregulier -- ne se ramene a aucun nom de ressource. Les deux preuves
+  // precedentes echouent alors que `POST /demandes-rgpd/{id}/traiter` existe bel et bien.
+  //
+  // La regle reste etroite : on exige que le fragment PREFIXE un gabarit reellement declare. Un
+  // chemin invente ne prefixe rien et continue d'etre refuse.
+  if (prefixeDunGabarit(sansApi, gabarits)) return true
+
+  const segments = sansApi.split('/').filter(Boolean)
+  const cles = new Set([...clesDeSegment(segments[0]), ...clesDeSegment(segments[1])])
+  return [...cles].some((k) => k !== '' && noms.has(k))
+}
+
+/**
+ * Le fragment litteral d'un appel concatene prefixe-t-il un gabarit declare ?
+ *
+ * On compare SEGMENT PAR SEGMENT plutot que par `startsWith` : sans cela, `/factures-x` prefixerait
+ * `/factures-xyz/{id}` et le controle innocenterait un chemin qui n'existe pas.
+ */
+function prefixeDunGabarit(sansApi, gabarits) {
+  const attendus = sansApi.split('/').filter(Boolean)
+  if (attendus.length === 0) return false
+
+  for (const gabarit of gabarits) {
+    const reels = gabarit.split('/').filter(Boolean)
+    if (reels.length <= attendus.length) continue
+    if (attendus.every((s, i) => s === reels[i])) return true
+  }
+
+  return false
+}
+
 /**
  * @returns {{
  *   exposees: number, sansEcran: number, attendues: number,
  *   appelees: number, atteignables: number, inatteignables: number,
- *   orphelins: string[], declares: {fichier: string, operations: number, raison: string}[],
+ *   orphelins: string[], appelsSansServeur: string[], marqueursPerimes: string[],
+ *   declares: {fichier: string, operations: number, raison: string}[],
  *   marqueursSansRaison: string[], clientsNonDeclares: string[],
  *   parFront: {nom: string, appelees: number, atteignables: number}[],
  *   parPrefixe: [string, number][],
@@ -157,9 +274,23 @@ export function mesurer() {
   let sansEcran = 0
   const declares = []
   const marqueursSansRaison = []
+  // De quoi savoir qu'un chemin appelé existe : les gabarits littéraux, et les noms de ressource.
+  const gabaritsDeclares = new Set()
+  const nomsRessource = new Set()
 
   for (const fichier of fichiersPhp(join(RACINE, 'app', 'src'))) {
     const texte = readFileSync(fichier, 'utf8')
+
+    if (texte.includes('ApiResource')) {
+      for (const m of texte.matchAll(/uriTemplate:\s*'([^']+)'/g)) {
+        gabaritsDeclares.add(m[1].replace(/\{[^}]+\}/g, '{id}').replace(/^\/api/, ''))
+      }
+      for (const m of texte.matchAll(/shortName:\s*'([^']+)'/g)) nomsRessource.add(m[1].toLowerCase())
+      for (const m of texte.matchAll(/^(?:final\s+)?class\s+([A-Za-z0-9_]+)/gm)) {
+        nomsRessource.add(m[1].toLowerCase())
+      }
+    }
+
     let n = 0
     for (const operation of OPERATIONS) n += compterOccurrences(texte, operation)
     if (n === 0) continue
@@ -198,6 +329,8 @@ export function mesurer() {
   const appels = new Map()
   const appelsAtteignables = new Map()
   const orphelins = new Set()
+  const appelsSansServeur = new Set()
+  const marqueursPerimes = new Set()
   const parFront = []
 
   for (const front of FRONTS) {
@@ -252,11 +385,28 @@ export function mesurer() {
         // À quel helper appartient cet appel : la dernière clé déclarée avant lui.
         const derniere = [...source.slice(0, m.index).matchAll(/^ {2}([a-zA-Z][a-zA-Z0-9]*):\s/gm)].pop()
         const nom = derniere ? derniere[1] : null
-        if (nom !== null && !orphelinsDuFront.has(nom)) {
-          if (!appelsAtteignables.has(chemin)) appelsAtteignables.set(chemin, new Set())
-          appelsAtteignables.get(chemin).add(verbe)
-          if (!atteignablesDuFront.has(chemin)) atteignablesDuFront.set(chemin, new Set())
-          atteignablesDuFront.get(chemin).add(verbe)
+        const annonce = annonceRouteAVenir(source, derniere ? derniere.index : m.index)
+
+        if (!adosseAuServeur(chemin, gabaritsDeclares, nomsRessource)) {
+          // Appelé, référencé par un écran, et pourtant sans rien au bout : ce n'est pas une
+          // opération couverte, c'est un appel dans le vide. Il ne compte pas — et il se dit, sauf
+          // s'il annonce précéder son opération avec sa raison.
+          if (annonce === null) appelsSansServeur.add(`${chemin}  (${front.nom})`)
+        } else {
+          // LE MARQUEUR SE PÉRIME TOUT SEUL, SINON IL DEVIENT UN ANGLE MORT EN FORME DE COMMENTAIRE.
+          //
+          // Le jour où l'opération est ouverte, l'appel redevient légitime et l'annonce devient
+          // fausse — mais elle reste. Six mois plus tard, personne ne sait si `@route-a-venir:`
+          // désigne une route encore à venir ou une route posée depuis longtemps. Et tant qu'elle
+          // traîne, l'appel resterait non compté : le cliquet mentirait dans l'autre sens.
+          if (annonce !== null) marqueursPerimes.add(`${chemin}  (${front.nom})`)
+
+          if (nom !== null && !orphelinsDuFront.has(nom)) {
+            if (!appelsAtteignables.has(chemin)) appelsAtteignables.set(chemin, new Set())
+            appelsAtteignables.get(chemin).add(verbe)
+            if (!atteignablesDuFront.has(chemin)) atteignablesDuFront.set(chemin, new Set())
+            atteignablesDuFront.get(chemin).add(verbe)
+          }
         }
       }
       m = APPEL.exec(source)
@@ -292,6 +442,8 @@ export function mesurer() {
     // d'appel, `attendues` des déclarations, et les deux ne se recouvrent pas exactement.
     inatteignables: Math.max(0, attendues - atteignables),
     orphelins: [...orphelins].sort(),
+    appelsSansServeur: [...appelsSansServeur].sort(),
+    marqueursPerimes: [...marqueursPerimes].sort(),
     declares: declares.sort((a, b) => b.operations - a.operations),
     marqueursSansRaison,
     clientsNonDeclares,

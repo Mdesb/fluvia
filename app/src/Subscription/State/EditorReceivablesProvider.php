@@ -40,7 +40,7 @@ final class EditorReceivablesProvider implements ProviderInterface
     /** @return list<EditorReceivable> */
     public function provide(Operation $operation, array $uriVariables = [], array $context = []): array
     {
-        $this->editorOnly->assertEditor();
+        $this->editorOnly->assertEditor('editor.read_billing');
 
         $maintenant = new \DateTimeImmutable();
         $creances = [];

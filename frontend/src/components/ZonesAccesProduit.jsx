@@ -49,19 +49,35 @@ export default function ZonesAccesProduit({ produitId, droits = [] }) {
     if (!produitId || !peutLire) return
     setChargement(true)
     setErreur(null)
-    try {
-      const [z, e] = await Promise.all([api.zonesProduit(produitId), api.espacesAcces()])
-      setZones(membres(z))
-      setEspaces(membres(e))
-      setNonBranche(false)
-    } catch (err) {
-      // 404 sur la collection = la ressource n'est pas encore exposée. 403 = ce compte n'a pas le
-      // droit d'en connaître. Les deux se disent autrement qu'un « chargement impossible ».
-      if (err.status === 404) setNonBranche(true)
-      else setErreur(err.status === 403 ? 'Ce compte n’a pas le droit de lire les zones d’accès.' : err.message)
-    } finally {
+    // ⚠ DEUX LECTURES, DEUX DIAGNOSTICS — ET C'EST POUR ÇA QU'ELLES NE SONT PAS DANS LE MÊME `try`.
+    //
+    // Un `Promise.all` ne dit pas LAQUELLE a échoué. Un 404 venu de la liste des espaces se serait
+    // donc affiché « la déclaration des zones n'est pas encore ouverte par le serveur » — une phrase
+    // fausse, et rassurante, sur un écran dont tout l'intérêt est de ne pas rassurer à tort.
+    // Chaque appel porte son propre échec.
+    const [z, e] = await Promise.allSettled([api.zonesProduit(produitId), api.espacesAcces()])
+
+    if (z.status === 'rejected') {
+      // 404 = la ressource n'est pas encore exposée. 403 = ce compte n'a pas le droit d'en
+      // connaître. Les deux se disent autrement qu'un « chargement impossible ».
+      if (z.reason?.status === 404) setNonBranche(true)
+      else setErreur(z.reason?.status === 403 ? 'Ce compte n’a pas le droit de lire les zones d’accès.' : z.reason?.message)
       setChargement(false)
+      return
     }
+
+    setNonBranche(false)
+    setZones(membres(z.value))
+
+    if (e.status === 'fulfilled') {
+      setEspaces(membres(e.value))
+    } else {
+      // Les déclarations sont là, leurs noms non : sans cette phrase, chaque ligne afficherait
+      // « zone hors de ce site » — ce qui accuserait la donnée d'un défaut de lecture.
+      setEspaces([])
+      setErreur('Les zones sont déclarées, mais leur liste n’a pas pu être lue : les noms manquent.')
+    }
+    setChargement(false)
   }, [produitId, peutLire])
 
   useEffect(() => {

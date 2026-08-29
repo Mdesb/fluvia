@@ -359,11 +359,26 @@ function ZoneEtDroitLocal({ reglage, peutGerer, busy, onChanger }) {
               disabled={!peutGerer || busy || !reglage}
               onChange={(e) => onChanger({ alsaceMoselle: e.target.checked })}
             />
-            Bas-Rhin, Haut-Rhin ou Moselle
+            Établissement en Alsace-Moselle
           </label>
+          {/*
+            ⚠ CE TEXTE REPOND A UNE QUESTION QUI A ETE POSEE. Maxime, en revue le 29/08 :
+            « Pourquoi il n'y a que haut rhin bas rhin ou moselle ? »
+
+            L'ecran expliquait la CONSEQUENCE — deux jours feries de plus — et jamais la RAISON.
+            Lu vite, trois noms de departements ressemblent a une liste incomplete de lieux pris en
+            charge, et la question vient d'elle-meme : et les autres ?
+
+            C'est une liste EXHAUSTIVE d'exceptions, pas une liste partielle d'options. On le dit
+            donc, et on dit aussi ce qu'il faut faire ailleurs : rien.
+          */}
           <div className="hint">
-            Le droit local y ajoute <strong>deux jours fériés</strong> : le Vendredi saint et le
-            26 décembre. Ils apparaîtront ci-dessous.
+            <strong>Bas-Rhin, Haut-Rhin et Moselle uniquement.</strong> Ce sont les trois seuls
+            départements où un droit local, hérité du Concordat, ajoute <strong>deux jours
+            fériés</strong> : le Vendredi saint et le 26 décembre. Ils apparaîtront dans les
+            propositions ci-dessous. Partout ailleurs en France, il n’y a rien à cocher — non
+            parce que ce n’est pas pris en charge, mais parce qu’il n’y a pas de jour férié
+            supplémentaire.
           </div>
         </div>
       </div>
@@ -424,7 +439,14 @@ function JoursFeries({ indices, exceptions, peutGerer, busy, onFermer, onRouvrir
                       }
                     />
                     <span className="cal-avenir-q">
-                      {new Date(f.date).toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: 'long' })}
+                      {/* ⚠ L'ANNÉE EST AFFICHÉE, ET LA LISTE EN COUVRE DEUX. Sans elle, après
+                          « ven. 25 décembre » venait « ven. 01 janvier » sans qu'on sache lequel.
+                          Ce n'est pas une liste qu'on lit, c'est une liste sur laquelle on CLIQUE
+                          pour poser une fermeture : se tromper d'année, c'est fermer un site un
+                          jour où il devait ouvrir. Sur CHAQUE ligne — ne la mettre qu'au changement
+                          d'année demanderait au lecteur de déduire. Relevé par la revue d'écrans
+                          de Maxime, le 29/08. */}
+                      {new Date(f.date).toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: 'long', year: 'numeric' })}
                     </span>
                     <span className="cal-avenir-t">{f.label}</span>
                     {/* Un exploitant du Bas-Rhin qui compare avec un collègue parisien doit
