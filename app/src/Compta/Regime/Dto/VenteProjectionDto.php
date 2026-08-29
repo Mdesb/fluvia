@@ -22,6 +22,15 @@ final class VenteProjectionDto
         public readonly \DateTimeImmutable $date,
         public readonly array $lignes,
         public readonly int $totalTtcCentimes,
+        /**
+         * Les règlements de la vente, pour ventiler le débit d'encaissement par moyen.
+         *
+         * ⚠ Vide par défaut, et c'est ce qui rend le lot déployable : tout appelant existant
+         * continue de produire une ligne de débit unique, sans rien changer.
+         *
+         * @var list<SettlementProjectionDto>
+         */
+        public readonly array $reglements = [],
     ) {
     }
 }

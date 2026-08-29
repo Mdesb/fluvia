@@ -9,6 +9,7 @@ use App\Compta\Entity\ProfilExploitant;
 use App\Compta\Port\ProjectionVenteInterface;
 use App\Compta\Regime\Dto\AvoirProjectionDto;
 use App\Compta\Regime\Dto\LigneVenteProjectionDto;
+use App\Compta\Regime\Dto\SettlementProjectionDto;
 use App\Compta\Regime\Dto\VenteProjectionDto;
 use App\Offre\Entity\Produit;
 use App\Offre\Enum\AxeCategorie;
@@ -133,6 +134,26 @@ final class ProjectionVenteDoctrineAdapter implements ProjectionVenteInterface
             );
         }
 
+        // ⚠ LE MONTANT RETENU EST LE NET, RENDU DE MONNAIE DEDUIT.
+        //
+        // En especes, le client tend 50 pour 42,30 : `montant` vaut 50 et `rendu` 7,70. Prendre le
+        // montant brut ferait peser les especes au prorata du hasard des billets tendus, et
+        // fausserait la ventilation en faveur du seul moyen qui rend la monnaie.
+        //
+        // Un net nul ou negatif est ecarte : il ne represente aucun encaissement, et une part nulle
+        // dans une repartition au prorata n'ajouterait qu'une ligne a zero.
+        $reglements = [];
+        foreach ($vente->getPaiements() as $paiement) {
+            $net = $this->centimes($paiement->getMontant()) - $this->centimes($paiement->getRendu());
+            if ($net <= 0) {
+                continue;
+            }
+            $reglements[] = new SettlementProjectionDto(
+                paymentMethodCode: $paiement->getMoyenCode(),
+                netAmountCents: $net,
+            );
+        }
+
         return new VenteProjectionDto(
             id: $vente->getId(),
             numero: $vente->getNumero(),
@@ -140,6 +161,7 @@ final class ProjectionVenteDoctrineAdapter implements ProjectionVenteInterface
             date: $vente->getDate(),
             lignes: $lignes,
             totalTtcCentimes: $this->centimes($vente->getTotal()),
+            reglements: $reglements,
         );
     }
 

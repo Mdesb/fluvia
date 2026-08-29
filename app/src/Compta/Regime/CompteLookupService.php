@@ -6,6 +6,7 @@ namespace App\Compta\Regime;
 
 use App\Compta\Entity\CompteComptable;
 use App\Compta\Entity\Journal;
+use App\Compta\Entity\PaymentMethodAccount;
 use App\Compta\Entity\ProfilExploitant;
 use App\Compta\Entity\TauxTva;
 use Doctrine\ORM\EntityManagerInterface;
@@ -67,6 +68,37 @@ final class CompteLookupService
         }
 
         return $comptes[0];
+    }
+
+    /**
+     * Compte d'encaissement déclaré pour un moyen de paiement, ou `null` si rien n'est déclaré.
+     *
+     * ⚠ REND `null` PLUTÔT QUE DE LEVER, ET C'EST L'INVERSE DES AUTRES MÉTHODES DE CETTE CLASSE.
+     *
+     * Les autres résolvent des objets sans lesquels aucune écriture n'est possible : leur absence
+     * est une erreur de paramétrage qu'il faut annoncer. Ici l'absence est le cas NORMAL — la
+     * ventilation est une option, et un moyen non déclaré retombe sur le compte d'encaissement
+     * unique. Lever ferait échouer la génération d'écritures de tout exploitant qui active la
+     * ventilation sans l'avoir remplie jusqu'au bout.
+     *
+     * Le code du moyen vient de `Paiement::moyenCode` : la jointure sur `MoyenPaiement` évite de
+     * recopier le code dans la ventilation, où un renommage l'aurait silencieusement orphelinée.
+     */
+    public function comptePourMoyen(ProfilExploitant $profil, string $moyenCode): ?CompteComptable
+    {
+        $lignes = $this->em->createQueryBuilder()
+            ->select('v')
+            ->from(PaymentMethodAccount::class, 'v')
+            ->join('v.paymentMethod', 'm')
+            ->andWhere('IDENTITY(v.businessProfile) = :profil')
+            ->andWhere('m.code = :code')
+            ->setParameter('profil', $profil->getId(), 'uuid')
+            ->setParameter('code', $moyenCode)
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getResult();
+
+        return $lignes === [] ? null : $lignes[0]->getAccount();
     }
 
     /** Taux « hors champ » (0 %) utilisé pour les opérations non commerciales (versement, extourne miroir). */
