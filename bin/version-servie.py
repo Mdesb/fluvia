@@ -57,6 +57,23 @@ def version_servie(base):
     if not isinstance(donnees, dict) or not donnees.get("commit"):
         return None, "le marqueur ne porte pas de `commit` : il ne repond pas a la question posee"
 
+    # ⚠ `boucle` EST OBLIGATOIRE, ET C'EST LE COEUR DE CE CONTROLE.
+    #
+    # Ce champ n'est ecrit qu'apres que le deploiement a relu SON PROPRE URL PUBLIQUE et y a retrouve
+    # le commit qu'il venait de construire. Son absence signifie l'une de deux choses, et aucune ne
+    # permet de conclure : la verification a echoue, ou elle a ete sautee.
+    #
+    # C'est le remede a une ligne de controle qui disparait sans crier -- un `git reset --hard` en a
+    # emporte une, et le deploiement suivant est passe en silence. Une ligne FAUSSE crie ; une ligne
+    # ABSENTE ne crie pas. En rendant la verification necessaire a la conclusion, on transforme son
+    # absence en reponse. Formule par allaccess-8e.
+    if not donnees.get("boucle"):
+        return None, (
+            "le marqueur ne porte pas de `boucle` : le deploiement n'a pas relu son URL publique, "
+            "ou l'a relue sans y retrouver son commit. Le commit annonce n'est donc pas garanti "
+            "etre celui que cette URL sert."
+        )
+
     return donnees, None
 
 
@@ -69,7 +86,22 @@ if __name__ == "__main__":
         print("  ⚠ Ne concluez rien sur ce qui est deploye : l'absence de reponse n'est pas une reponse.")
         sys.exit(2)
 
+    # ⚠ ON NOMME CE QU'ON A INTERROGE, SANS PRETENDRE LE PROUVER. L'adresse resolue est une
+    # observation du CLIENT sur sa propre connexion : le fichier servi ne peut pas l'ecrire. Elle ne
+    # prouve pas qu'on parle a la bonne machine -- rien ne le prouve depuis l'exterieur -- mais elle
+    # rend le cas « mauvaise machine » visible au lieu de silencieux.
+    import socket
+    from urllib.parse import urlparse
+
+    hote = urlparse(BASE).hostname or "?"
+    try:
+        adresse = socket.gethostbyname(hote)
+    except Exception:
+        adresse = "non resolue"
+
     print("%s sert %s (%s)" % (BASE, donnees["commit"], donnees.get("branche", "branche inconnue")))
+    print("  interroge : %s → %s" % (hote, adresse))
+    print("  boucle verifiee par le deploiement sur %s" % donnees["boucle"])
     if donnees.get("sujet"):
         print("  %s" % donnees["sujet"])
     if donnees.get("construit"):

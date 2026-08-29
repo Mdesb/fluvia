@@ -142,10 +142,57 @@ fi
 # ⚠ PUBLIE APRES LE RSYNC, comme le tableau de bord : `--delete` efface tout ce qui n'est pas le
 # front, et un marqueur efface serait pire qu'absent -- il aurait existe une fois.
 log "Publication du marqueur de version"
+COMMIT_DEPLOYE="$(git rev-parse --short HEAD)"
 printf '{"commit":"%s","branche":"%s","construit":"%s","sujet":"%s"}\n' \
-    "$(git rev-parse --short HEAD)" \
+    "$COMMIT_DEPLOYE" \
     "$(git rev-parse --abbrev-ref HEAD)" \
     "$(date -Is)" \
+    "$(git log -1 --format=%s | tr -d '"' | cut -c1-120)" \
+    > "$WEB_ROOT/version.json"
+
+# ── LA BOUCLE : LE DEPLOIEMENT RELIT SA PROPRE URL PUBLIQUE ─────────────────────────────────────
+#
+# Un champ d'identite dans le marqueur ne prouverait rien : le marqueur est du CONTENU, et le contenu
+# voyage avec le rsync. Deux machines servant le meme `dist` porteraient le meme champ -- c'est-a-dire
+# precisement le cas qu'on veut detecter.
+#
+# Ce qui etablit l'identite, c'est le TRANSPORT. On relit donc l'URL publique et l'on exige d'y
+# retrouver le commit qu'on vient de construire. « Est-ce la bonne machine ? » est indecidable depuis
+# l'exterieur ; « mon deploiement a-t-il atteint l'URL que je pretends deployer ? » a une reponse, et
+# c'est maintenant qu'on la connait de source sure. Un cache interpose tombe dans le meme filet.
+#
+# ⚠ ET LE MARQUEUR GARDE LA TRACE DE CETTE VERIFICATION. Une ligne de controle qui disparait ne crie
+# pas -- c'est arrive a ce script meme, un `git reset --hard` l'a emportee et le deploiement suivant
+# est passe en silence. `boucle` rend la verification NECESSAIRE : `bin/version-servie.py` refuse de
+# conclure quand le champ manque. Sauter la boucle produit un marqueur que le verificateur rejette.
+log "Boucle : l'URL publique rend-elle ce qu'on vient de construire ?"
+URL_PUBLIQUE="${URL_PUBLIQUE:-https://smartaccess.hector-conseil.com}"
+SERVI="$(curl -sf -H 'Accept: application/json' "$URL_PUBLIQUE/version.json" 2>/dev/null \
+    | sed -n 's/.*"commit":"\([^"]*\)".*/\1/p')"
+
+if [ "$SERVI" != "$COMMIT_DEPLOYE" ]; then
+    echo
+    echo "✗ La boucle n'a pas bouclé."
+    echo "    construit ici : $COMMIT_DEPLOYE"
+    echo "    servi par $URL_PUBLIQUE : ${SERVI:-<rien ou illisible>}"
+    echo
+    echo "  Le déploiement a réussi localement mais n'atteint pas l'URL annoncée."
+    echo "  Trois causes possibles, dans cet ordre de fréquence :"
+    echo "    · un cache ou un proxy devant ;"
+    echo "    · WEB_ROOT ne correspond pas à ce que ce domaine sert ;"
+    echo "    · ce n'est pas la machine qui sert ce domaine."
+    echo
+    echo "  ⚠ Le marqueur reste SANS le champ « boucle » : bin/version-servie.py refusera de"
+    echo "    conclure à partir de lui, plutôt que de rendre un commit qu'on ne peut pas garantir."
+    exit 1
+fi
+
+# La boucle a bouclé : on le grave dans le marqueur, et le vérificateur l'exigera.
+printf '{"commit":"%s","branche":"%s","construit":"%s","boucle":"%s","sujet":"%s"}\n' \
+    "$COMMIT_DEPLOYE" \
+    "$(git rev-parse --abbrev-ref HEAD)" \
+    "$(date -Is)" \
+    "$URL_PUBLIQUE" \
     "$(git log -1 --format=%s | tr -d '"' | cut -c1-120)" \
     > "$WEB_ROOT/version.json"
 
