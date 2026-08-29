@@ -29,31 +29,20 @@ declare(strict_types=1);
  * existe — ce qui est la condition pour que le filtre s'applique du tout.
  */
 
-// ── AUCUNE DEPENDANCE INSTALLEE : ON S'ABSTIENT, ON NE TUE PAS ────────────────────────────────
+// ⚠ LE HOOK `pre-receive` EXTRAIT L'ARBRE POUSSE DANS UN REPERTOIRE TEMPORAIRE, SANS `app/vendor`.
+// Un `require` nu y est fatal : le controle plantait et REFUSAIT tous les pushs, les miens compris.
 //
-// Ce controle lit les attributs `#[ApiFilter]` par reflexion : il lui faut l'autochargeur, donc un
-// `composer install`. Or deux situations legitimes n'en ont pas :
-//
-//   — un worktree ou l'on ne travaille que le front (le mien l'a ete toute la nuit) ;
-//   — et surtout LE CROCHET `pre-receive`, qui extrait l'arbre pousse dans un repertoire temporaire
-//     ou aucune dependance n'est installee. Constate le 29/08 :
-//
-//         Fatal error: Failed opening required '/tmp/tmp.n9slrsF1rb/app/vendor/autoload.php'
-//         ✗ Push de front-acces-topologie REFUSE
-//
-//     Le controle ne refusait pas un defaut : il refusait TOUS les push, les siens compris.
-//
-// Un garde-fou qui ne peut pas s'executer doit le DIRE et rendre la main. Se taire ferait croire
-// qu'il a verifie ; mourir bloque tout le monde. La troisieme voie est la seule juste.
-$autochargeur = dirname(__DIR__).'/app/vendor/autoload.php';
-if (!is_file($autochargeur)) {
-    echo "Filtres declares : IGNORE — dependances PHP absentes (app/vendor). ",
-        "Ce controle exige un `composer install` ; il ne dit donc RIEN ici, ni bien ni mal.", PHP_EOL;
+// On se declare ignore plutot que de tomber -- et on le DIT. Un controle silencieusement saute
+// redevient un controle vert qui ne mesure rien, ce qui est precisement la famille de defauts que
+// celui-ci existe pour attraper. Il garde tout son mordant la ou les dependances sont presentes :
+// le `pre-commit` local, et `bin/garde-fous.sh`.
+if (!is_file(dirname(__DIR__).'/app/vendor/autoload.php')) {
+    fwrite(STDOUT, "Filtres déclarés : · IGNORÉ — dépendances Composer absentes. Le contrôle n'a PAS tourné.\n");
 
     exit(0);
 }
 
-require $autochargeur;
+require dirname(__DIR__).'/app/vendor/autoload.php';
 
 use ApiPlatform\Metadata\ApiFilter;
 use Doctrine\ORM\Mapping\ClassMetadata;
