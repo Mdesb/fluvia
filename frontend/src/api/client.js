@@ -856,6 +856,27 @@ export const api = {
   // État réseau des contrôleurs (bascule en ligne / hors ligne, US-L3-07).
   etatSynchroAcces: () => request('/api/acces/synchro/etat'),
 
+  // LA CLOCHE — trois opérations, et une règle d'admission qui les rend rares.
+  //
+  // Une notification est un ÉVÉNEMENT DE DOMAINE qu'on a décidé de montrer à quelqu'un : facture
+  // échue, prélèvement rejeté, devis expiré. Pas un refus au tourniquet — plusieurs par minute à
+  // l'ouverture des portes, et personne n'agit sur un refus isolé.
+  //
+  // Le compte de la pastille se lit sur `totalItems` de CETTE requête, jamais sur un point d'entrée
+  // séparé : deux sources qui comptent la même chose finissent par diverger.
+  //
+  // @route-a-venir: opérations écrites par claude-A, poussées dans le même lot que cet écran.
+  notifications: (params) =>
+    request('/api/notifications', {
+      query: { lue: false, 'order[horodatage]': 'desc', itemsPerPage: 20, ...(params || {}) },
+    }),
+  // @route-a-venir: idem — marquage d'une notification, rendu dans le même lot.
+  marquerNotificationLue: (id) =>
+    request(`/api/notifications/${id}/lue`, { method: 'POST', body: {}, ld: true }),
+  // @route-a-venir: idem — « tout marquer comme lu », borné au site actif côté serveur.
+  marquerToutesNotificationsLues: () =>
+    request('/api/notifications/tout-lu', { method: 'POST', body: {}, ld: true }),
+
   // Reporting / Pilotage (M7). Route hors /api (proxifiée via /reporting).
   dashboardEtablissement: (id) => request(`/reporting/dashboards/etablissement/${id}`),
   // Référentiel des indicateurs (M7).
