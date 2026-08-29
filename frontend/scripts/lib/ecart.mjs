@@ -197,6 +197,24 @@ function clesDeSegment(segment) {
   return cles
 }
 
+// L'annonce ne vaut que dans le bloc de commentaires CONTIGU au-dessus du helper. Une fenêtre de
+// N caractères aurait fait déteindre le marqueur d'un helper sur son voisin — un contrôle qui se
+// trompe de propriétaire est pire qu'un contrôle absent.
+function annonceRouteAVenir(source, indexCle) {
+  const lignes = source.slice(0, indexCle).split('\n')
+  const bloc = []
+  let i = lignes.length - 1
+  // ⚠ La tranche s'arrête au DÉBUT de la ligne du helper : son dernier élément est donc une chaîne
+  // vide, et un `while` qui exige un commentaire s'arrêtait dessus sans avoir rien lu. Le marqueur
+  // n'était jamais trouvé — les deux cas d'essai, l'exemption et la péremption, tombaient à faux.
+  while (i >= 0 && lignes[i].trim() === '') i -= 1
+  while (i >= 0 && /^\s*\/\//.test(lignes[i])) {
+    bloc.unshift(lignes[i])
+    i -= 1
+  }
+  return /@route-a-venir:[ \t]*(\S[^\n]*)/.exec(bloc.join('\n'))
+}
+
 function adosseAuServeur(chemin, gabarits, noms) {
   const sansApi = chemin.replace(/^\/api/, '')
   if (gabarits.has(sansApi)) return true
@@ -209,7 +227,7 @@ function adosseAuServeur(chemin, gabarits, noms) {
  * @returns {{
  *   exposees: number, sansEcran: number, attendues: number,
  *   appelees: number, atteignables: number, inatteignables: number,
- *   orphelins: string[], appelsSansServeur: string[],
+ *   orphelins: string[], appelsSansServeur: string[], marqueursPerimes: string[],
  *   declares: {fichier: string, operations: number, raison: string}[],
  *   marqueursSansRaison: string[], clientsNonDeclares: string[],
  *   parFront: {nom: string, appelees: number, atteignables: number}[],
@@ -278,6 +296,7 @@ export function mesurer() {
   const appelsAtteignables = new Map()
   const orphelins = new Set()
   const appelsSansServeur = new Set()
+  const marqueursPerimes = new Set()
   const parFront = []
 
   for (const front of FRONTS) {
@@ -332,18 +351,28 @@ export function mesurer() {
         // À quel helper appartient cet appel : la dernière clé déclarée avant lui.
         const derniere = [...source.slice(0, m.index).matchAll(/^ {2}([a-zA-Z][a-zA-Z0-9]*):\s/gm)].pop()
         const nom = derniere ? derniere[1] : null
+        const annonce = annonceRouteAVenir(source, derniere ? derniere.index : m.index)
+
         if (!adosseAuServeur(chemin, gabaritsDeclares, nomsRessource)) {
           // Appelé, référencé par un écran, et pourtant sans rien au bout : ce n'est pas une
           // opération couverte, c'est un appel dans le vide. Il ne compte pas — et il se dit, sauf
           // s'il annonce précéder son opération avec sa raison.
-          const avant = source.slice(Math.max(0, m.index - 400), m.index)
-          const annonce = /@route-a-venir:[ \t]*(\S[^\n]*)/.exec(avant)
           if (annonce === null) appelsSansServeur.add(`${chemin}  (${front.nom})`)
-        } else if (nom !== null && !orphelinsDuFront.has(nom)) {
-          if (!appelsAtteignables.has(chemin)) appelsAtteignables.set(chemin, new Set())
-          appelsAtteignables.get(chemin).add(verbe)
-          if (!atteignablesDuFront.has(chemin)) atteignablesDuFront.set(chemin, new Set())
-          atteignablesDuFront.get(chemin).add(verbe)
+        } else {
+          // LE MARQUEUR SE PÉRIME TOUT SEUL, SINON IL DEVIENT UN ANGLE MORT EN FORME DE COMMENTAIRE.
+          //
+          // Le jour où l'opération est ouverte, l'appel redevient légitime et l'annonce devient
+          // fausse — mais elle reste. Six mois plus tard, personne ne sait si `@route-a-venir:`
+          // désigne une route encore à venir ou une route posée depuis longtemps. Et tant qu'elle
+          // traîne, l'appel resterait non compté : le cliquet mentirait dans l'autre sens.
+          if (annonce !== null) marqueursPerimes.add(`${chemin}  (${front.nom})`)
+
+          if (nom !== null && !orphelinsDuFront.has(nom)) {
+            if (!appelsAtteignables.has(chemin)) appelsAtteignables.set(chemin, new Set())
+            appelsAtteignables.get(chemin).add(verbe)
+            if (!atteignablesDuFront.has(chemin)) atteignablesDuFront.set(chemin, new Set())
+            atteignablesDuFront.get(chemin).add(verbe)
+          }
         }
       }
       m = APPEL.exec(source)
@@ -380,6 +409,7 @@ export function mesurer() {
     inatteignables: Math.max(0, attendues - atteignables),
     orphelins: [...orphelins].sort(),
     appelsSansServeur: [...appelsSansServeur].sort(),
+    marqueursPerimes: [...marqueursPerimes].sort(),
     declares: declares.sort((a, b) => b.operations - a.operations),
     marqueursSansRaison,
     clientsNonDeclares,

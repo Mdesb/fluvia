@@ -94,6 +94,25 @@ if (mesure.appelsSansServeur.length > 0) {
   process.exit(1)
 }
 
+// UN MARQUEUR QUI A SURVÉCU À SA RAISON D'ÊTRE.
+//
+// `@route-a-venir:` autorise un appel vers une route absente. Le jour où l'opération est ouverte,
+// l'appel redevient légitime et le marqueur devient faux — et il reste. Dans six mois, personne ne
+// saurait plus s'il désigne une route encore à venir ou une route posée depuis longtemps : le
+// contrôle aurait un angle mort en forme de commentaire.
+//
+// Et le compteur mentirait dans l'autre sens : tant que le marqueur traîne, l'appel reste non
+// compté comme atteignable, alors qu'il l'est devenu.
+if (mesure.marqueursPerimes.length > 0) {
+  console.error('✗ Marqueur « @route-a-venir: » sur un appel dont la route EXISTE désormais :')
+  for (const a of mesure.marqueursPerimes) console.error(`    ${a}`)
+  console.error('')
+  console.error('  Retire le marqueur : l’opération est ouverte, l’appel est légitime, et il doit')
+  console.error('  redevenir comptable. Un marqueur qui survit à sa raison finit par en couvrir')
+  console.error('  d’autres, et personne ne sait plus lequel est encore vrai.')
+  process.exit(1)
+}
+
 if (mesure.marqueursSansRaison.length > 0) {
   console.error('✗ Marqueur « @sans-ecran: » sans raison :')
   for (const f of mesure.marqueursSansRaison) console.error(`    ${f}`)
