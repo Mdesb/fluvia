@@ -59,10 +59,33 @@ export const MOTIF_REFUS = {
     quoi: 'L’espace a atteint son seuil de fréquentation et le mode est « blocage ».',
     geste: 'Relevez le seuil, ou passez l’espace en « alerte seule » si le blocage n’est pas voulu.',
   },
+  // QUATRE ORIGINES, UN SEUL CODE — et la ligne de passage ne dit pas laquelle.
+  //
+  // Le serveur pose `Devalide` depuis quatre endroits qui n'ont rien à voir entre eux :
+  //   — support inconnu ou non appairé              → Badges & terminaux
+  //   — impayé bloquant     `Recouvrement/Service/PropagationAccesHandler`
+  //   — abonnement inactif  `Sport/Service/PropagationAccesFitnessHandler` (porte son propre motif)
+  //   — réservation révoquée `Reservation/Service/ProjectionAccesReservationHandler::revoquerSiProjete`
+  //
+  // Le geste n'en nommait qu'un, l'appairage. Trois personnes sur quatre parcouraient donc
+  // l'application sans rien trouver — le coût exact qu'on a mesuré ailleurs sur un renvoi qui
+  // désignait le mauvais onglet.
+  //
+  // ⚠ « IL A PAYÉ, POURQUOI ÇA NE S'OUVRE PAS » EST UNE QUESTION LÉGITIME, ET LA RÉPONSE PEUT ÊTRE
+  // « C'EST NORMAL ». La porte se ferme par REDEVABLE, le drapeau se pose par DOSSIER : régler un
+  // impayé ne rouvre rien tant qu'un autre reste bloquant sur le même client
+  // (`PropagationAccesHandler::reevaluer`, à ne pas confondre avec `activer()` qui, elle, ouvre sans
+  // regarder). L'asymétrie est voulue côté serveur : un seul impayé suffit à fermer, il faut qu'ils
+  // soient TOUS levés pour rouvrir — fermer à tort se répare d'un clic, ouvrir à tort ne se rattrape
+  // pas, la personne est déjà entrée. Le geste dit donc de VÉRIFIER, il n'affirme pas la règle : il
+  // reste juste que `reevaluer()` soit déjà en place ou non.
   droit_invalide: {
     libelle: 'Droit invalide',
-    quoi: 'Support inconnu, non appairé, ou droit dévalidé.',
-    geste: 'Vérifiez l’appairage dans Badges & terminaux.',
+    quoi: 'Support inconnu, non appairé, ou droit dévalidé — par un impayé, un abonnement inactif ou une réservation révoquée.',
+    geste:
+      'Cherchez d’abord la cause : appairage dans Badges & terminaux, sinon impayés du client, ' +
+      'abonnement, ou réservation. Si le client vient de régler, vérifiez qu’aucun autre impayé ne ' +
+      'bloque encore — un seul suffit à garder la porte fermée.',
   },
   sens_interdit: {
     libelle: 'Sens interdit',
