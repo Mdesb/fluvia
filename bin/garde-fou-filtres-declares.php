@@ -29,6 +29,19 @@ declare(strict_types=1);
  * existe — ce qui est la condition pour que le filtre s'applique du tout.
  */
 
+// ⚠ LE HOOK `pre-receive` EXTRAIT L'ARBRE POUSSE DANS UN REPERTOIRE TEMPORAIRE, SANS `app/vendor`.
+// Un `require` nu y est fatal : le controle plantait et REFUSAIT tous les pushs, les miens compris.
+//
+// On se declare ignore plutot que de tomber -- et on le DIT. Un controle silencieusement saute
+// redevient un controle vert qui ne mesure rien, ce qui est precisement la famille de defauts que
+// celui-ci existe pour attraper. Il garde tout son mordant la ou les dependances sont presentes :
+// le `pre-commit` local, et `bin/garde-fous.sh`.
+if (!is_file(dirname(__DIR__).'/app/vendor/autoload.php')) {
+    fwrite(STDOUT, "Filtres déclarés : · IGNORÉ — dépendances Composer absentes. Le contrôle n'a PAS tourné.\n");
+
+    exit(0);
+}
+
 require dirname(__DIR__).'/app/vendor/autoload.php';
 
 use ApiPlatform\Metadata\ApiFilter;
