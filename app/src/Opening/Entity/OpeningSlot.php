@@ -75,7 +75,11 @@ use Symfony\Component\Validator\Constraints as Assert;
     normalizationContext: ['groups' => ['opening_slot:read']],
     denormalizationContext: ['groups' => ['opening_slot:write']],
 )]
-#[ApiFilter(SearchFilter::class, properties: ['establishment' => 'exact', 'space' => 'exact', 'day' => 'exact'])]
+// ⚠ `weekday` ET NON `day` : la propriété s'appelle `weekday`, et API Platform ignore une
+// propriété inconnue SANS RIEN DIRE — le filtre était publié dans la documentation et ne filtrait
+// rien. Quatrième reste du passage du module en anglais, qui a traduit `jour` en `day` y compris
+// là où la propriété portait un autre nom.
+#[ApiFilter(SearchFilter::class, properties: ['establishment' => 'exact', 'space' => 'exact', 'weekday' => 'exact'])]
 class OpeningSlot
 {
     #[ORM\Id]
