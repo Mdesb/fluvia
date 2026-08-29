@@ -96,6 +96,27 @@ if [ -f avancement-dev.html ]; then
     cp avancement-dev.html "$WEB_ROOT/avancement-dev.html"
 fi
 
+# ── CE QUE LA PREPROD SERT, LISIBLE EN UNE REQUETE ──────────────────────────────────────────────
+#
+# Entre une fusion et le deploiement suivant, la preprod montre l'etat precedent -- la suite de
+# tests dure cinquante minutes. Quiconque la lit pendant cette fenetre juge du travail deja livre
+# sur un build qui ne le contient pas, et n'a aucun moyen de s'en apercevoir.
+#
+# Le 30/08 cela a coute une enquete complete a une session pour conclure qu'un bouton etait absent
+# du BUILD et non du code. Avec ce fichier, la question se pose en une requete :
+#
+#     curl -s https://smartaccess.hector-conseil.com/version.json
+#
+# ⚠ PUBLIE APRES LE RSYNC, comme le tableau de bord : `--delete` efface tout ce qui n'est pas le
+# front, et un marqueur efface serait pire qu'absent -- il aurait existe une fois.
+log "Publication du marqueur de version"
+printf '{"commit":"%s","branche":"%s","construit":"%s","sujet":"%s"}\n' \
+    "$(git rev-parse --short HEAD)" \
+    "$(git rev-parse --abbrev-ref HEAD)" \
+    "$(date -Is)" \
+    "$(git log -1 --format=%s | tr -d '"' | cut -c1-120)" \
+    > "$WEB_ROOT/version.json"
+
 # ── LE COURRIEL PART-IL VRAIMENT ? ──────────────────────────────────────────────────────────────
 #
 # `MAILER_DSN=null://null` avale tout en silence : les six expediteurs du depot s'executent, ne
