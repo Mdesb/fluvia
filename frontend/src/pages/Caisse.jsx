@@ -42,6 +42,8 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
 
   const [panier, setPanier] = useState([]) // { produit, quantite }
   const [ticket, setTicket] = useState(null)
+  // Ce que le serveur a decide de ce ticket, et ce qu'il reste a demander au client.
+  const [finVente, setFinVente] = useState(null)
 
   // Client rattaché à la vente (bénéficiaire des produits nominatifs, RG-M2-04 / CA-7).
   const [client, setClient] = useState(null)
@@ -65,6 +67,7 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
     setErreur(null)
     setPanier([])
     setTicket(null)
+    setFinVente(null)
     setVente(null)
     setPaiements([])
     setClient(null)
@@ -162,6 +165,7 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
    */
   async function ajouter(produit, grille, options = [], devisConnu = null) {
     setTicket(null)
+    setFinVente(null)
     const g = grille || grillesVendables(produit)[0]
     if (!g) return
 
@@ -290,6 +294,7 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
     setAvis(null)
     setBesoinClient(false)
     setTicket(null)
+    setFinVente(null)
     try {
       const v = await api.creerVente({ session: session.id })
       // Rattache le client à la vente (M2, CA-7) — préalable au bénéficiaire des lignes nominatives.
@@ -483,7 +488,19 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
       const infoTicket = await api.ticket(vente.id, 'imprimer')
       // Code de support signé (HMAC) émis à la validation : 1er support porteur d'un identifiant.
       const support = (venteValidee.supports || []).find((s) => s.identifiantSupport)
-      setTicket(construireTicket(infoTicket, paiements, support, true))
+
+      // « SOUHAITEZ-VOUS UN TICKET ? » — demande de Maxime, et le serveur savait deja repondre.
+      //
+      // Jusqu'ici l'ecran affichait le ticket dans tous les cas. Or `TicketProcessor` rend depuis
+      // toujours trois indications qu'aucun ecran ne lisait : `impressionAutomatique` (au-dessus
+      // du seuil du point de vente, le ticket sort, on ne demande rien), `venteGratuite` (total a
+      // zero : aucun ticket, et ce n'est pas une affaire de seuil) et `renvoiPropose` (en dessous
+      // du seuil, avec un client rattache, le renvoi a un sens).
+      //
+      // Trois situations, trois comportements — et un seul jusqu'a aujourd'hui.
+      const t = construireTicket(infoTicket, paiements, support, true)
+      if (infoTicket.impressionAutomatique) setTicket(t)
+      else setFinVente({ info: infoTicket, ticket: t })
       setPanier([])
       setVente(null)
       setPaiements([])
@@ -728,6 +745,14 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
             </div>
           </div>
 
+          {finVente && (
+            <FinDeVente
+              info={finVente.info}
+              onAfficher={() => { setTicket(finVente.ticket); setFinVente(null) }}
+              onSansTicket={() => setFinVente(null)}
+            />
+          )}
+
           {ticket && <TicketVente ticket={ticket} />}
         </aside>
 
@@ -922,13 +947,88 @@ function PanneauPaiement({
 
       {paye && (
         <button className="btn primary lg" onClick={onValider} disabled={busy}>
-          {busy ? 'Validation…' : 'Valider & imprimer'}
+          {/* LE BOUTON NE PROMET PLUS D'IMPRIMER, PARCE QU'IL N'EN SAIT RIEN.
+              « Valider & imprimer » était juste tant que l'écran imprimait dans tous les cas. Le
+              ticket ne sort désormais tout seul qu'au-dessus du seuil du point de vente ; en
+              dessous il se propose, et sur une vente gratuite il ne sort pas. Le caissier lit ce
+              bouton juste avant de le presser : lui annoncer une impression qui n'aura pas lieu
+              lui ferait chercher un ticket dans l'imprimante. */}
+          {busy ? 'Validation…' : 'Valider la vente'}
         </button>
       )}
 
       <button className="btn ghost sm" onClick={onAbandon} disabled={busy} style={{ alignSelf: 'center' }}>
         Abandonner la vente
       </button>
+    </div>
+  )
+}
+
+// LA FIN DE VENTE : CE QU'ON PROPOSE, ET CE QU'ON REFUSE DE PROMETTRE.
+//
+// ⚠ LES BOUTONS D'ENVOI SONT DESACTIVES, ET CE N'EST PAS UN OUBLI.
+//
+// `TicketProcessor` accepte `mode: "renvoyer"` avec un canal `email` ou `sms`, et rend
+// `renvoye: true`. Mais le processeur ne contient NI expediteur, NI passerelle SMS, NI evenement :
+// verifie ligne a ligne le 29/08, il ne fait que retourner le booleen. Et `MAILER_DSN` vaut
+// `null://null`, de sorte que meme un envoi ecrit ne partirait nulle part.
+//
+// Un bouton actif ici afficherait donc « Ticket envoye » pour un courriel jamais compose. C'est le
+// mensonge le plus cher du lot : le client repart sans rien, le caissier croit l'avoir servi, et
+// personne ne s'en apercoit avant la reclamation. On garde les boutons — Maxime les a demandes, et
+// les effacer ferait oublier la demande — mais ils disent leur etat.
+function FinDeVente({ info, onAfficher, onSansTicket }) {
+  // Une vente a zero euro ne sort pas de ticket, et ce n'est pas une question de seuil : une entree
+  // offerte ou un lot d'invitations faisait sortir un ticket a 0 € que le client jette.
+  if (info.venteGratuite) {
+    return (
+      <div className="card" style={{ marginTop: 12 }}>
+        <div className="card-b">
+          <div className="nm">Vente enregistrée — aucun ticket</div>
+          <p className="hint" style={{ marginTop: 6 }}>
+            Le total est de 0 € : il n’y a rien à justifier au client. La vente est bien
+            enregistrée et comptabilisée — c’est le papier qu’on ne sort pas, pas l’opération.
+          </p>
+          <button className="btn ghost sm" type="button" onClick={onSansTicket}>Fermer</button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="card" style={{ marginTop: 12 }}>
+      <div className="card-b">
+        <div className="nm">Souhaitez-vous un ticket ?</div>
+        <p className="hint" style={{ marginTop: 6 }}>
+          Le montant est en dessous du seuil d’impression de ce point de vente : le ticket ne sort
+          pas tout seul. Il reste éditable ici, et depuis l’historique des ventes.
+        </p>
+
+        <div className="row" style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+          <button className="btn primary" type="button" onClick={onAfficher}>Afficher le ticket</button>
+          <button className="btn ghost" type="button" onClick={onSansTicket}>Sans ticket</button>
+        </div>
+
+        {info.renvoiPropose ? (
+          <>
+            <div className="fiche-sec" style={{ marginTop: 14 }}>L’envoyer au client</div>
+            <div className="row" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button className="btn sm" type="button" disabled>Par courriel</button>
+              <button className="btn sm" type="button" disabled>Par SMS</button>
+            </div>
+            <p className="hint">
+              <b>Aucun envoi n’est branché aujourd’hui</b> — ni courriel, ni SMS. Le serveur accepte
+              la demande sans l’exécuter : un bouton actif annoncerait un envoi qui n’a pas lieu.
+              Ils s’activeront quand un expéditeur sera configuré.
+            </p>
+          </>
+        ) : (
+          <p className="hint" style={{ marginTop: 10 }}>
+            Aucun client n’est rattaché à cette vente : il n’y a pas d’adresse ni de numéro où
+            envoyer le ticket. Rattachez un client avant de valider pour pouvoir le lui envoyer.
+          </p>
+        )}
+      </div>
     </div>
   )
 }
