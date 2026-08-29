@@ -73,14 +73,27 @@ export default function FicheProduit({ produit, langue, onAjouter, onNaviguer })
   // ⚠ CE RETOUR ANTICIPÉ EST SOUS LES HOOKS, ET IL DOIT Y RESTER.
   //
   // Il était placé au-dessus du `useEffect` ci-dessus. React compte les hooks à chaque rendu et
-  // exige le même nombre : `PublicApp` passe `produit={metaProduits[route.produitId]}`, donc un
-  // client qui ouvre un LIEN DIRECT vers un billet rendait d'abord sans produit — sept hooks — puis
-  // avec — huit. « Rendered more hooks than during the previous render », écran blanc, au moment
-  // précis où la boutique finissait de charger.
+  // exige le même nombre : `PublicApp` passe `produit={metaProduits[route.produitId]}`, donc tout
+  // rendu où `produit` est absent puis présent fait passer le composant de sept hooks à huit —
+  // « Rendered more hooks than during the previous render », écran blanc.
   //
-  // Ce n'est pas un cas limite : un lien de billet partagé par courriel EST une arrivée directe sur
-  // cette fiche, catalogue vide. Le commentaire ci-dessous nommait déjà la situation — « catalogue
-  // non chargé » — sans voir que c'était elle qui cassait.
+  // ⚠ CORRECTION DE CE QUE J'AVAIS ÉCRIT ICI. J'affirmais que le chemin était « un client qui ouvre
+  // un lien direct vers un billet », et que ce n'était pas un cas limite. C'est faux, et mesuré
+  // deux fois : dans la page par la revue d'écrans — ouvrir une fiche ne change ni le chemin, ni le
+  // hash, ni la requête, l'URL reste `/b/` — et dans le code par moi : `PublicApp` n'extrait de
+  // l'URL qu'un identifiant de VITRINE (slug, `?vitrine=`, `#vitrine=`, sinon stockage local).
+  // Jamais de produit.
+  //
+  // LE DÉFAUT EST DONC LATENT, PAS ACTIF : `route.produitId` ne peut être posé que par un clic dans
+  // l'application déjà chargée, et `metaProduits` est alors rempli. Le correctif reste juste — un
+  // hook après un retour anticipé est une faute quoi qu'il arrive — mais décrire un chemin qui
+  // n'existe pas oriente la relecture, et avec autorité.
+  //
+  // CE QUI LE RENDRAIT ACTIF : donner une URL propre à une fiche produit. C'est une demande produit
+  // ouverte — une billetterie où l'on ne peut pas envoyer le lien d'un billet n'a ni partage, ni QR
+  // sur affiche, ni lien de campagne, et le bouton Précédent sort de la boutique. Celui qui
+  // l'implémentera rendra ce défaut atteignable le jour même : c'est pour lui que ces lignes sont
+  // écrites.
   //
   // Ni le build ni le lint ne le voient : ce n'est pas une faute de syntaxe, c'est une règle
   // d'exécution.
