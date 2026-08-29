@@ -113,6 +113,33 @@ if [ "$DSN" = "null://null" ] || [ -z "$DSN" ]; then
     echo "  Une invitation qui ne part pas laisse le compte « invite » indefiniment."
 fi
 
+# ── LES TACHES PLANIFIEES TOURNENT-ELLES ? ──────────────────────────────────────────────────────
+#
+# Ni crontab, ni timer systemd, ni conteneur worker ne lance `platform:scheduled-tasks:run` sur cette
+# machine. Vingt-et-une taches sont declarees et aucune ne s'execute.
+#
+# Toutes ne sont pas critiques -- certaines ne font que marquer un enregistrement dont l'effet est
+# deja calcule a la lecture. Mais `sepa:preavis:annoncer` est le SEUL emetteur de preavis de
+# prelevement, et `GenerationRemiseHandler` exclut de la remise toute echeance non couverte par un
+# preavis delivre. Sans ordonnanceur, aucun prelevement ne peut partir.
+#
+# On ne demarre rien ici : vingt-et-une taches qui rattrapent des semaines d'arriere d'un coup
+# meritent qu'on sache d'abord ce qu'elles feraient. On le DIT, c'est tout.
+TACHES_LANCEES=0
+command -v crontab >/dev/null 2>&1 && crontab -l 2>/dev/null | grep -q 'scheduled-tasks' && TACHES_LANCEES=1
+systemctl list-timers --all 2>/dev/null | grep -q 'fluvia\|billetterie' && TACHES_LANCEES=1
+docker ps --format '{{.Names}}' 2>/dev/null | grep -qiE 'worker|scheduler' && TACHES_LANCEES=1
+
+if [ "$TACHES_LANCEES" = "0" ]; then
+    printf '\n\033[1;33m⚠ AUCUNE TÂCHE PLANIFIÉE NE S EXÉCUTE SUR CETTE MACHINE.\033[0m\n'
+    echo "  Ni cron, ni timer systemd, ni conteneur worker ne lance l ordonnanceur."
+    echo "  Conséquence mesurée : sepa:preavis:annoncer est le seul émetteur de préavis de"
+    echo "  prélèvement, et une échéance sans préavis délivré est EXCLUE de la remise."
+    echo "  Aucun prélèvement ne peut donc partir — le système refuse de débiter sans prévenir."
+    echo "  ⚠ Démarrer l ordonnanceur ne suffira pas : sans transport de courriel, le préavis"
+    echo "  sort en « journalisé » et l échéance reste exclue. Le transport d abord."
+fi
+
 log "État de la stack"
 "${COMPOSE[@]}" ps
 
