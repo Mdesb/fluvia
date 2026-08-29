@@ -41,8 +41,48 @@ const REGLES_PCA = {
 //
 // La modale de comptabilite ecrite plus tot aujourd'hui est DEPLACEE, pas reecrite : elle s'ouvre
 // desormais au-dessus d'une page, ce qui est le cas normal.
+// Une relation sérialisée arrive tantôt en IRI nu, tantôt en objet réduit. Les deux formes se
+// présentent selon l'opération : on lit l'une et l'autre plutôt que de parier.
+function idDeRef(ref) {
+  if (!ref) return null
+  if (typeof ref === 'string') return ref.split('/').pop()
+  return ref.id || String(ref['@id'] || '').split('/').pop() || null
+}
+
+// LA DURÉE REVIENT DÉVELOPPÉE, ET C'EST UN PIÈGE D'ALLER-RETOUR.
+//
+// `dureeValidite: "P1D"` est accepté à l'écriture ; à la relecture le serveur rend
+// `P0Y0M1DT0H0M0S`. Un formulaire qui réécrirait cette chaîne telle quelle irait bien, mais un
+// formulaire qui la lirait comme un nombre de jours sans la comprendre écrirait n'importe quoi.
+//
+// On n'expose donc que les JOURS — la seule unité qu'une durée de validité de billet utilise en
+// pratique — et on rend `null` quand la valeur porte autre chose : mieux vaut un champ vide et un
+// avertissement qu'un champ qui affiche « 0 » pour six mois.
+function joursDepuisIntervalle(valeur) {
+  if (!valeur || typeof valeur !== 'string') return ''
+  const m = /^P(\d+)Y(\d+)M(\d+)DT(\d+)H(\d+)M(\d+)S$/.exec(valeur)
+    || /^P(?:(\d+)Y)?(?:(\d+)M)?(?:(\d+)D)?$/.exec(valeur)
+  if (!m) return ''
+  const [annees, mois, jours, heures, minutes, secondes] = m.slice(1).map((x) => Number(x || 0))
+  if (annees || mois || heures || minutes || secondes) return ''
+  return jours ? String(jours) : ''
+}
+
+// Une durée que le champ « jours » ne sait pas représenter : on le dit plutôt que de l'écraser.
+function dureeNonExprimableEnJours(valeur) {
+  return !!valeur && typeof valeur === 'string' && joursDepuisIntervalle(valeur) === ''
+    && !/^P0Y0M0DT0H0M0S$/.test(valeur)
+}
+
+// Les trois axes de catégories (RG-M1-05), indépendants : un produit porte au plus une valeur
+// par axe. L'axe comptable est le seul qui ait un effet sur les écritures.
+const AXES = [['comptable', 'Axe comptable'], ['marketing', 'Axe marketing'], ['rayon', 'Rayon']]
+
 export default function ProduitFiche({
   produit,
+  // Sert UNIQUEMENT à prévenir avant qu'une fiche ne sorte du périmètre de celui qui l'édite —
+  // voir l'avertissement des sites de commercialisation.
+  etabActif,
   peutModifier = false,
   peutModifierCompta = false,
   onModifie,
@@ -54,6 +94,10 @@ export default function ProduitFiche({
   const [editionCompta, setEditionCompta] = useState(null)
   const [enregistrement, setEnregistrement] = useState(false)
   const [detail, setDetail] = useState(null)
+  // Référentiels du bloc Diffusion. Chargés une fois par fiche, et leur absence n'empêche pas de
+  // modifier le reste : `Promise.allSettled`, jamais `all`.
+  const [etablissements, setEtablissements] = useState([])
+  const [categories, setCategories] = useState([])
   const [liaisons, setLiaisons] = useState([])
   const [valeurs, setValeurs] = useState({}) // groupeId -> valeurs
   // Le produit n'est pas commercialisable sur l'établissement actif : le guichet ne l'aurait pas.
@@ -62,6 +106,13 @@ export default function ProduitFiche({
   const [erreur, setErreur] = useState(null)
 
   const produitId = produit?.id
+
+  useEffect(() => {
+    Promise.allSettled([api.etablissements(), api.categories()]).then(([e, c]) => {
+      setEtablissements(e.status === 'fulfilled' ? membres(e.value) : [])
+      setCategories(c.status === 'fulfilled' ? membres(c.value) : [])
+    })
+  }, [])
 
   useEffect(() => {
     if (!produitId) return undefined
@@ -136,6 +187,16 @@ export default function ProduitFiche({
       canaux: Array.isArray(p.canaux) ? [...p.canaux] : [],
       couleurCaisse: p.couleurCaisse || '',
       noteInterne: p.noteInterne || '',
+      // LE BLOC DIFFUSION ÉTAIT AFFICHÉ ET RIEN NE LE CHANGEAIT.
+      //
+      // Conséquence exacte, relevée sur l'audioguide : la fiche affiche « Ce produit n'est pas
+      // commercialisé sur l'établissement actif : le guichet ne l'affichera pas ici, options
+      // comprises » — et l'écran qui énonce le problème ne porte pas le geste qui le résout.
+      // Les trois champs sont pourtant en écriture côté serveur (`produit:write`), vérifié par un
+      // aller-retour réel avant d'écrire ce formulaire.
+      etablissements: (p.etablissements || []).map(idDeRef).filter(Boolean),
+      categories: (p.categories || []).map(idDeRef).filter(Boolean),
+      jours: joursDepuisIntervalle(p.dureeValidite),
     })
   }
 
@@ -151,6 +212,11 @@ export default function ProduitFiche({
         canaux: edition.canaux,
         couleurCaisse: edition.couleurCaisse || null,
         noteInterne: edition.noteInterne.trim() || null,
+        etablissements: edition.etablissements.map((id) => `/api/etablissements/${id}`),
+        categories: edition.categories.map((id) => `/api/categories/${id}`),
+        // Le serveur rend la durée en forme développée (`P0Y0M1DT0H0M0S`) et accepte la forme
+        // courte : on renvoie `P<n>D`, ou `null` pour « sans limite ».
+        dureeValidite: edition.jours === '' ? null : `P${Number(edition.jours)}D`,
       })
       const rafraichi = await api.produit(produitId)
       setDetail(rafraichi)
@@ -239,6 +305,115 @@ export default function ProduitFiche({
               onChange={(e) => setEdition((s) => ({ ...s, noteInterne: e.target.value }))}
             />
             <div className="hint">Visible de votre équipe seulement. Jamais affichée au client.</div>
+          </div>
+
+          <div className="fiche-sec" style={{ marginTop: 'var(--esp-bloc)' }}>Diffusion</div>
+
+          <div className="field">
+            <label htmlFor="pr-etabs">Sites de commercialisation</label>
+            <div id="pr-etabs" style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
+              {etablissements.map((e) => (
+                <label key={e.id} style={{ display: 'flex', gap: 'var(--esp-normal)', alignItems: 'center' }}>
+                  <input
+                    type="checkbox"
+                    checked={edition.etablissements.includes(e.id)}
+                    onChange={(ev) => setEdition((st) => ({
+                      ...st,
+                      etablissements: ev.target.checked
+                        ? [...st.etablissements, e.id]
+                        : st.etablissements.filter((x) => x !== e.id),
+                    }))}
+                  />
+                  <span>{e.nom || e.libelle || e.id}</span>
+                </label>
+              ))}
+            </div>
+            {/* C'EST CE CHAMP QUI REND SOLUBLE LE MESSAGE AFFICHÉ PLUS HAUT.
+                « Ce produit n'est pas commercialisé sur l'établissement actif » n'avait aucun
+                geste correspondant : on constatait, on ne pouvait pas agir. */}
+            <div className="hint">
+              Un produit ne s’affiche au guichet que sur les sites cochés ici. <b>Aucun site coché
+              signifie qu’il reste visible partout</b> : c’est la liste qui restreint, pas
+              l’inverse. C’est ce que dit le message d’avertissement de la fiche, et c’est ici qu’il
+              se corrige.
+            </div>
+            {/* ⚠ COCHER DES SITES SANS Y METTRE LE SIEN FAIT DISPARAÎTRE LA FICHE À L'ENREGISTREMENT.
+                Mesuré, pas supposé : en attachant l'audioguide à GI-ONE depuis Piscine A, le PATCH
+                rend 200 et la relecture qui suit rend 404 — l'extension de périmètre a exclu le
+                produit dans l'intervalle. L'écran affichait « Not Found », un message qui ne dit ni
+                ce qui s'est passé ni que l'enregistrement a RÉUSSI.
+                On prévient donc avant, plutôt que d'expliquer après : la fiche ne sera plus
+                joignable depuis cet établissement, et il faudra basculer sur l'un des sites cochés
+                pour y revenir. */}
+            {edition.etablissements.length > 0 && etabActif
+              && !edition.etablissements.includes(etabActif) && (
+              <div className="banner banner-warn">
+                <b>Vous n’avez pas coché l’établissement où vous êtes.</b> L’enregistrement
+                réussira, puis ce produit sortira de votre périmètre&nbsp;: la fiche ne sera plus
+                accessible d’ici, et il faudra basculer sur l’un des sites cochés pour la rouvrir.
+              </div>
+            )}
+          </div>
+
+          <div className="field">
+            <label htmlFor="pr-cats">Catégories</label>
+            <div id="pr-cats" style={{ display: 'grid', gap: 'var(--esp-normal)' }}>
+              {AXES.map(([axe, libelleAxe]) => {
+                const duAxe = categories.filter((c) => c.axe === axe)
+                if (duAxe.length === 0) return null
+                const choisie = edition.categories.find((id) => duAxe.some((c) => c.id === id)) || ''
+                return (
+                  <label key={axe} style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
+                    <span className="sub">{libelleAxe}</span>
+                    <select
+                      className="input"
+                      value={choisie}
+                      onChange={(ev) => setEdition((st) => ({
+                        ...st,
+                        // UNE SEULE VALEUR PAR AXE (RG-M1-05) : choisir remplace la précédente du
+                        // même axe au lieu de s'y ajouter. Un produit à deux catégories comptables
+                        // s'imputerait sur deux comptes.
+                        categories: [
+                          ...st.categories.filter((id) => !duAxe.some((c) => c.id === id)),
+                          ...(ev.target.value ? [ev.target.value] : []),
+                        ],
+                      }))}
+                    >
+                      <option value="">— aucune —</option>
+                      {duAxe.map((c) => <option key={c.id} value={c.id}>{c.libelle || c.nom}</option>)}
+                    </select>
+                  </label>
+                )
+              })}
+            </div>
+            <div className="hint">
+              Une seule catégorie par axe. L’axe <b>comptable</b> décide du compte de produit :
+              sans lui, la vente n’est pas comptabilisée et ressort en anomalie à la clôture.
+            </div>
+          </div>
+
+          <div className="field">
+            <label htmlFor="pr-duree">Durée de validité (jours)</label>
+            <input
+              id="pr-duree"
+              className="input"
+              type="number"
+              min="0"
+              value={edition.jours}
+              placeholder="sans limite"
+              onChange={(e) => setEdition((st) => ({ ...st, jours: e.target.value }))}
+            />
+            {dureeNonExprimableEnJours(p.dureeValidite) ? (
+              <div className="banner banner-warn">
+                La durée enregistrée (<code>{p.dureeValidite}</code>) n’est pas exprimable en jours.
+                Ce champ est resté vide pour ne pas l’écraser par erreur — <b>enregistrer avec un
+                nombre de jours la remplacera</b>, et le laisser vide la supprimera.
+              </div>
+            ) : (
+              <div className="hint">
+                Combien de temps le billet reste utilisable après l’achat. Vide = sans limite.
+              </div>
+            )}
           </div>
 
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>

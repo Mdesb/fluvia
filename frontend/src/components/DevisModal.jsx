@@ -304,11 +304,22 @@ export default function DevisModal({ open, client, onClose, onCree, cible = 'dev
           ))}
 
           {/* ⚠ CE QUE LA CATÉGORIE CHANGE — ET AUJOURD'HUI, SUR CET ÉTABLISSEMENT, RIEN.
-              `ResolveurComptesFacturation` cherche une correspondance entre la catégorie et un
-              compte de produit ; s'il n'en trouve pas, il se replie SANS RIEN DIRE sur le compte
-              par défaut. Un champ qu'on remplit consciencieusement et qui n'a aucun effet est
-              exactement ce qu'on retire ailleurs : ici on le garde — il enregistre l'intention et
-              deviendra effectif — mais on dit son état. */}
+              `EmettreFactureDirecteHandler` demande à `ResolveurComptesFacturation` le compte de
+              chaque ligne ; sans correspondance il se replie sur le compte de produit par défaut,
+              et n'échoue (422) que si ce compte n'est pas paramétré non plus. Un champ qu'on
+              remplit consciencieusement et qui n'a aucun effet est exactement ce qu'on retire
+              ailleurs : ici on le garde — il enregistre l'intention et deviendra effectif — mais
+              on dit son état.
+
+              ⚠⚠ NE PAS CONFONDRE AVEC L'AUTRE CHEMIN COMPTABLE, ET LA CONFUSION A DÉJÀ EU LIEU.
+              Les VENTES ne passent pas par ici : `GenerateurEcrituresHandler` demande ses
+              anomalies à `MappingComptableGuard` et, si la catégorie n'a pas de correspondance,
+              la vente est **sautée** — aucune écriture, un signalement en anomalie à la clôture.
+              Aucun repli sur un compte par défaut de ce côté-là.
+              Deux modules, deux comportements opposés sur la même donnée manquante : facture =
+              repli silencieux, vente = non comptabilisée et signalée tard. L'affirmation « le
+              résolveur se replie » a circulé sur trois relais avant que quelqu'un n'ouvre le
+              second fichier, et elle a gagné en crédibilité à chaque passage. */}
           {categoriesComptables.length > 0 && mappings.length === 0 && (
             <p className="hint">
               Aucune correspondance comptable n’est déclarée pour l’instant : quelle que soit la

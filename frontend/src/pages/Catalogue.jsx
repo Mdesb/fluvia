@@ -193,6 +193,7 @@ function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = []
         </button>
         <ProduitFiche
           produit={connu || { id: selId }}
+          etabActif={etabActif}
           peutModifier={aLeDroit(droits, 'offre.modifier') || aLeDroit(droits, 'offre.gerer')}
           peutModifierCompta={aLeDroit(droits, 'offre.modifier_compta') || aLeDroit(droits, 'offre.gerer')}
           droits={droits}
