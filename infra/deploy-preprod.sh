@@ -19,8 +19,40 @@ log() { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
     exit 1
 }
 
-log "Récupération du code"
-git pull --ff-only
+# ── ON NE SERT QUE CE QUI EST DANS `main` ───────────────────────────────────────────────────────
+#
+# Cette ligne faisait `git pull --ff-only`, ce qui decrivait un SUIVEUR de `main`. Cet arbre est un
+# POINT D'INTEGRATION : on y fusionne les branches, on lance la suite, puis on pousse. Le `pull`
+# echouait donc des qu'il y avait des commits d'avance -- mais l'echec n'etait pas le probleme.
+#
+# ⚠ LE VRAI RISQUE ETAIT DE REUSSIR. Un `pull` qui passe pendant que l'arbre porte du travail non
+# pousse deploie ce travail SANS QU'IL SOIT DANS `main` : ce qui est servi n'est alors lisible nulle
+# part. C'est arrive le 30/08 -- « Declarer un bassin » etait servi et absent de `main`, et deux
+# sessions en ont tire des conclusions fausses en supposant l'inverse.
+#
+# La question posee par allaccess-b8 -- « ou regarder pour savoir si une chose est livree ? » -- a
+# desormais une reponse unique : `origin/main`. Le deploiement refuse tout le reste.
+log "Vérification : ce qui va être servi est-il dans main ?"
+git fetch origin --quiet
+TETE_LOCALE="$(git rev-parse HEAD)"
+TETE_MAIN="$(git rev-parse origin/main)"
+
+if [ "$TETE_LOCALE" != "$TETE_MAIN" ]; then
+    AVANCE="$(git rev-list --count origin/main..HEAD)"
+    RETARD="$(git rev-list --count HEAD..origin/main)"
+
+    echo
+    echo "✗ Déploiement refusé : cet arbre n'est pas origin/main."
+    echo "    ici et pas dans main : $AVANCE commit(s)"
+    echo "    dans main et pas ici : $RETARD commit(s)"
+    echo
+    echo "  Servir autre chose que main rendrait la question « est-ce livré ? » sans réponse :"
+    echo "  ce qui est en ligne ne serait lisible dans aucune branche."
+    echo
+    [ "$AVANCE" != "0" ] && echo "  → du travail intégré ici n'est pas poussé :   git push origin main"
+    [ "$RETARD" != "0" ] && echo "  → main a du travail que tu n'as pas :          git merge --no-edit origin/main"
+    exit 1
+fi
 
 log "Construction / démarrage des conteneurs"
 "${COMPOSE[@]}" build
