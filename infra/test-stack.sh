@@ -136,6 +136,21 @@ run)
     # verdict auquel on peut se fier, et D20 a deja tranche que la fiabilite passe avant la vitesse.
     rm -rf "$APP/var/cache/test" 2>/dev/null || true
 
+    # ⚠ LE DEPLOIEMENT RETIRE PHPUNIT, ET LE MESSAGE DE DOCKER NE LE DIT PAS.
+    #
+    # `deploy-preprod.sh` lance `composer install --no-dev` -- c'est juste pour la production. Sans
+    # cette garde, la suite echoue sur « exec: vendor/bin/phpunit: not found », qui ne nomme ni la
+    # cause ni le remede. Arrive trois fois le 30/08, dont deux relances completes pour rien.
+    #
+    # On ne reinstalle pas a la place de l'operateur : un harnais qui repare silencieusement l'etat
+    # de la machine finit par cacher autre chose. On dit ce qui manque et pourquoi.
+    if [ ! -x "$APP/vendor/bin/phpunit" ]; then
+        echo "✗ phpunit est absent : les dépendances de dev ont été retirées." >&2
+        echo "  Cause : le dernier déploiement a lancé « composer install --no-dev »." >&2
+        echo "  Remède : ./infra/reinstaller-dev.sh" >&2
+        exit 1
+    fi
+
     php_run vendor/bin/phpunit "$@"
     ;;
 
