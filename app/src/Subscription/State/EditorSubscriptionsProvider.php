@@ -41,7 +41,7 @@ final class EditorSubscriptionsProvider implements ProviderInterface
     /** @return list<EditorSubscription> */
     public function provide(Operation $operation, array $uriVariables = [], array $context = []): array
     {
-        $this->editorOnly->assertEditor();
+        $this->editorOnly->assertEditor('editor.read_subscription');
 
         $lignes = [];
 

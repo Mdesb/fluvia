@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { api, membres, tokenStore, etablissementStore, setUnauthorizedHandler } from '../api/client.js'
 import Login from '../pages/Login.jsx'
 import { aUnDesDroits } from '../api/droits.js'
+import InstallerSurLeTelephone from '../components/InstallerSurLeTelephone.jsx'
 import Agenda from '../pages/Agenda.jsx'
 import Documents from '../pages/Documents.jsx'
 import Finance from '../pages/Finance.jsx'
@@ -101,19 +102,47 @@ export default function EditeurApp() {
     }
   }, [authed, etabActif, deconnexion])
 
-  if (!authed) {
-    return <Login onConnecte={() => setAuthed(true)} />
-  }
-
-  const onglets = [
-    { id: 'abonnements', ic: '≡', label: 'Abonnements' },
-    { id: 'offres', ic: '▥', label: 'Offres' },
-    { id: 'clients', ic: '●', label: 'Clients' },
-    { id: 'facturation', ic: '€', label: 'Facturation' },
-    { id: 'reglements', ic: '⇄', label: 'Règlements' },
-  ]
-
+  // ⚠ TOUT CE QUI SUIT EST CALCULÉ AVANT LE RETOUR ANTICIPÉ DE L'ÉCRAN DE CONNEXION.
+  //
+  // Une première version plaçait le `useEffect` de recentrage APRÈS `if (!authed) return <Login/>`.
+  // React compte les hooks à chaque rendu et exige le même nombre : au moment précis où l'on se
+  // connecte, le composant passait de trois hooks à quatre, et levait « Rendered more hooks than
+  // during the previous render ». L'application ne s'ouvrait plus.
+  //
+  // Vite compilait sans rien dire — ce n'est pas une faute de syntaxe, c'est une règle d'exécution.
+  // Un build vert sur du code qui plante à la première action.
+  //
+  // Ces valeurs ne dépendent que de l'état : les calculer pendant qu'on affiche la connexion ne
+  // coûte que quelques tableaux filtrés sur un profil vide.
   const droits = me?.droits || []
+
+  // LES ÉCRANS PROPRES À L'ÉDITEUR — sociétés abonnées, abonnements Fluvia, créances d'abonnement.
+  //
+  // ⚠ Ils suivent les droits depuis que le SERVEUR les applique (`EditorOnly::assertEditor(...)`).
+  // Tant qu'il ne le faisait pas, les garder ici aurait donné l'illusion d'une protection — et une
+  // illusion est pire qu'une absence, parce qu'on cesse de chercher.
+  //
+  // Cacher n'est pas protéger : ce filtre évite seulement à un agent d'assistance de cliquer sur
+  // « Facturation » pour recevoir un refus. Si la garde serveur disparaissait, il ne rattraperait
+  // rien — et c'est voulu : un filtre d'affichage qui rattrape une garde manquante la fait oublier.
+  const onglets = [
+    { id: 'abonnements', ic: '≡', label: 'Abonnements', perms: ['editor.read_subscription'] },
+    { id: 'offres', ic: '▥', label: 'Offres', perms: ['editor.manage_offer'] },
+    { id: 'clients', ic: '●', label: 'Clients', perms: ['editor.read_customer'] },
+    { id: 'facturation', ic: '€', label: 'Facturation', perms: ['editor.read_billing'] },
+    { id: 'reglements', ic: '⇄', label: 'Règlements', perms: ['editor.read_billing'] },
+  ]
+    // ⚠ HORS DE L'ÉDITEUR, CES ÉCRANS RENDENT 404. Quand un accès d'assistance ouvre le site d'un
+    // client, l'établissement actif n'est plus l'éditeur et `EditorOnly` refuse les sept
+    // ressources. Les laisser visibles ferait cliquer un agent sur « Facturation » pour recevoir
+    // une page introuvable — et lui ferait se demander si l'écran est cassé plutôt que s'il est au
+    // bon endroit.
+    //
+    // `=== true` et non `!== false` : tant que le profil charge, la propriété est `undefined`. Avec
+    // `!==`, les cinq onglets apparaîtraient puis disparaîtraient — un écran qui clignote et un
+    // utilisateur qui clique sur ce qui s'en va.
+    .filter(() => me?.estEditeur === true)
+    .filter((o) => aUnDesDroits(droits, o.perms))
 
   // LES ÉCRANS DU MÉTIER DE L'ÉDITEUR — ceux de l'application client, tels quels.
   //
@@ -134,6 +163,35 @@ export default function EditeurApp() {
     { id: 'legal', ic: '§', label: 'Mentions légales', perms: ['organisation.gerer', 'boutique.gerer_vitrine'] },
   ].filter((o) => !o.perms || aUnDesDroits(droits, o.perms))
   const nomEtabActif = etablissements.find((e) => e.id === etabActif)?.nom || ''
+  const visibles = [...onglets, ...ongletsMetier]
+
+  // ⚠ L'ARRIVÉE SUIT CE QUI EST OUVERT. Le rendu ne consulte pas la liste des onglets : un onglet
+  // retiré de la navigation continue de s'afficher si `onglet` vaut encore son identifiant. Sans
+  // ce recentrage, un agent d'assistance atterrissait à chaque connexion sur « Abonnements » — un
+  // écran absent de son menu, et refusé par le serveur.
+  //
+  // On attend que la liste soit connue : tant que le profil charge, elle est vide, et basculer à ce
+  // moment-là ferait choisir puis rechoisir sous les yeux de l'utilisateur.
+  // ⚠ `me` D'ABORD : tant que le profil n'est pas là, `droits` est vide, donc tous les onglets qui
+  // exigent un droit ont disparu et `visibles` ne contient que ceux qui n'en exigent aucun. Agir
+  // sur cette liste-là, c'est prendre un état de CHARGEMENT pour un état de fait — et poser
+  // l'arrivée sur le seul onglet libre, pendant l'écran de connexion. Une fois connecté, cet onglet
+  // reste valide, donc plus aucun recentrage n'a lieu : l'éditeur atterrit là pour toujours.
+  //
+  // Même motif que la bannière en `=== false`. On ne sait pas qu'il n'y a qu'un onglet ; on sait
+  // qu'on ne sait pas encore.
+  //
+  // La dépendance porte sur les identifiants et non sur le tableau : `visibles` est reconstruit à
+  // chaque rendu, et l'effet rejouerait à chaque fois pour ne rien faire.
+  const idsVisibles = visibles.map((o) => o.id).join('|')
+  useEffect(() => {
+    if (!me || idsVisibles === '') return
+    if (!idsVisibles.split('|').includes(onglet)) setOnglet(idsVisibles.split('|')[0])
+  }, [me, idsVisibles, onglet])
+
+  if (!authed) {
+    return <Login onConnecte={() => setAuthed(true)} />
+  }
 
   return (
     <div>
@@ -144,7 +202,7 @@ export default function EditeurApp() {
         </div>
 
         <nav aria-label="Sections">
-          {[...onglets, ...ongletsMetier].map((o) => (
+          {visibles.map((o) => (
             <button
               key={o.id}
               type="button"
@@ -243,6 +301,17 @@ export default function EditeurApp() {
           </>
         )}
       </main>
+
+      {/*
+        LA BANNIÈRE D'INSTALLATION, ABSENTE JUSQU'ICI DE CETTE COQUILLE.
+        Elle n'était montée que dans celle de l'application client. Or ce sont les employés de
+        l'éditeur qui en ont le plus besoin : un agent qui prend un ticket à 7 h du matin le fait
+        depuis son téléphone, pas depuis un poste de guichet.
+
+        Elle ne s'affiche que si le navigateur émet `beforeinstallprompt` — donc seulement quand
+        l'installation est réellement possible — et jamais deux fois après un refus.
+      */}
+      <InstallerSurLeTelephone />
     </div>
   )
 }

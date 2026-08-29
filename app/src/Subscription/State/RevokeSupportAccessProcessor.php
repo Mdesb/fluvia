@@ -48,7 +48,7 @@ final class RevokeSupportAccessProcessor implements ProcessorInterface
      */
     public function process(mixed $data, Operation $operation, array $uriVariables = [], array $context = []): EditorSupportAccess
     {
-        $this->editorOnly->assertEditor();
+        $this->editorOnly->assertEditor('editor.support_access');
 
         $reference = $uriVariables['id'] ?? null;
         if (!\is_string($reference) || !Uuid::isValid($reference)) {

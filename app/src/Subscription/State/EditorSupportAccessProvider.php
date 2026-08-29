@@ -39,7 +39,7 @@ final class EditorSupportAccessProvider implements ProviderInterface
      */
     public function provide(Operation $operation, array $uriVariables = [], array $context = []): array
     {
-        $this->editorOnly->assertEditor();
+        $this->editorOnly->assertEditor('editor.support_access');
 
         $maintenant = new \DateTimeImmutable();
 

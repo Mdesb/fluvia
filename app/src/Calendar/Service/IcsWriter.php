@@ -19,7 +19,20 @@ namespace App\Calendar\Service;
  * la propriété en deux : « Réunion, salle B » devient un événement nommé « Réunion » et un
  * paramètre inconnu. Un saut de ligne dans une note casse le fichier entier — il devient `\n`.
  *
- * ── 3. LE `UID` EST STABLE ──────────────────────────────────────────────────────────────────────
+ * ── 3. UNE LIGNE NE DÉPASSE PAS 75 OCTETS ───────────────────────────────────────────────────────
+ *
+ * RFC 5545 §3.1. Au-delà, la ligne se PLIE : on coupe, et la suite commence par une espace, qu'un
+ * lecteur retire en recollant. Google Agenda accepte les lignes longues, Apple aussi la plupart du
+ * temps ; ce sont les agrégateurs et les Outlook anciens qui TRONQUENT — silencieusement, à 75
+ * octets. Le défaut n'est donc pas un abonnement en erreur, c'est un titre coupé au milieu d'un mot
+ * chez certains utilisateurs seulement, sans que personne ne fasse le lien avec sa longueur.
+ *
+ * On compte des OCTETS — un accent en occupe deux, et compter les caractères laisserait passer des
+ * lignes trop longues dans exactement les textes français où le défaut se produit. Mais on plie
+ * ENTRE des caractères : un pli au milieu d'un « é » produirait un fichier qui n'est plus de
+ * l'UTF-8 valide, et un lecteur qui refuse l'agenda entier plutôt qu'un événement.
+ *
+ * ── 4. LE `UID` EST STABLE ──────────────────────────────────────────────────────────────────────
  *
  * C'est lui qui fait la différence entre « l'événement a été déplacé » et « un nouvel événement est
  * apparu et l'ancien a disparu ». Un UID tiré au hasard à chaque publication ferait sonner tous les
@@ -78,8 +91,9 @@ final readonly class IcsWriter
 
         $lignes[] = 'END:VCALENDAR';
 
-        // CRLF, et une fin de fichier qui en porte un : voir la règle n°1.
-        return implode("\r\n", $lignes) . "\r\n";
+        // CRLF, et une fin de fichier qui en porte un : voir la règle n°1. Chaque ligne est pliée
+        // avant d'être jointe — voir la règle n°3.
+        return implode("\r\n", array_map([$this, 'plier'], $lignes)) . "\r\n";
     }
 
     /** Un instant ATOM devient un horodatage UTC `YmdTHisZ`, la seule forme qu'aucun client ne discute. */
@@ -95,6 +109,44 @@ final readonly class IcsWriter
         }
 
         return $date->setTimezone(new \DateTimeZone('UTC'))->format('Ymd\THis\Z');
+    }
+
+    /**
+     * PLIE UNE LIGNE À 75 OCTETS (RFC 5545 §3.1) — la suite commence par une espace.
+     *
+     * ⚠ L'ESPACE DE CONTINUATION COMPTE DANS LES 75. C'est l'erreur classique : plier à 75 puis
+     * ajouter l'espace donne 76, et l'on croit avoir corrigé le défaut.
+     *
+     * ⚠ ON N'UTILISE PAS `str_split`, QUI COUPE PAR OCTETS. Il trancherait un « é » en deux et
+     * produirait un fichier qui n'est plus de l'UTF-8 valide — un lecteur refuse alors l'agenda
+     * ENTIER, pas seulement l'événement fautif. On avance donc caractère par caractère en mesurant
+     * leur poids en octets : la limite est en octets, la coupure est entre caractères.
+     */
+    private function plier(string $ligne): string
+    {
+        if (\strlen($ligne) <= 75) {
+            return $ligne;
+        }
+
+        $caracteres = preg_split('//u', $ligne, -1, \PREG_SPLIT_NO_EMPTY);
+        if (!\is_array($caracteres)) {
+            return $ligne; // Chaîne non UTF-8 : on ne la découpe pas à l'aveugle.
+        }
+
+        $morceaux = [];
+        $courant = '';
+        foreach ($caracteres as $caractere) {
+            if (\strlen($courant) + \strlen($caractere) > 75) {
+                $morceaux[] = $courant;
+                $courant = ' ' . $caractere; // L'espace est déjà dans le budget de la ligne suivante.
+
+                continue;
+            }
+            $courant .= $caractere;
+        }
+        $morceaux[] = $courant;
+
+        return implode("\r\n", $morceaux);
     }
 
     /**

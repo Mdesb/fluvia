@@ -41,7 +41,7 @@ final class EditorBillingProvider implements ProviderInterface
     /** @return list<EditorBilling> */
     public function provide(Operation $operation, array $uriVariables = [], array $context = []): array
     {
-        $this->editorOnly->assertEditor();
+        $this->editorOnly->assertEditor('editor.read_billing');
 
         $mois = $this->moisDemande();
         $lignes = [];
