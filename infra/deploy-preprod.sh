@@ -96,6 +96,23 @@ if [ -f avancement-dev.html ]; then
     cp avancement-dev.html "$WEB_ROOT/avancement-dev.html"
 fi
 
+# ── LE COURRIEL PART-IL VRAIMENT ? ──────────────────────────────────────────────────────────────
+#
+# `MAILER_DSN=null://null` avale tout en silence : les six expediteurs du depot s'executent, ne
+# levent rien, et aucun message ne part. Un correctif de notification se lira alors comme un
+# correctif qui ne marche pas, alors que c'est le transport qui parle.
+#
+# On ne configure rien ici -- le choix du prestataire appartient a l'exploitant, et un envoi reel
+# depuis une preproduction ecrirait a de vraies personnes. On le DIT, c'est tout.
+DSN="$("${COMPOSE[@]}" exec -T php php bin/console debug:dotenv MAILER_DSN 2>/dev/null | grep -oE 'null://null|smtp://[^ ]*|sendmail://[^ ]*' | head -1)"
+if [ "$DSN" = "null://null" ] || [ -z "$DSN" ]; then
+    printf '\n\033[1;33m⚠ AUCUN COURRIEL NE PARTIRA DE CETTE INSTANCE.\033[0m\n'
+    echo "  MAILER_DSN vaut « null://null » : le transport nul accepte tout et n'envoie rien."
+    echo "  Concerne : mot de passe oublie, invitation d'utilisateur, liste d'attente,"
+    echo "  confirmation de commande, relance de panier, rapport planifie."
+    echo "  Une invitation qui ne part pas laisse le compte « invite » indefiniment."
+fi
+
 log "État de la stack"
 "${COMPOSE[@]}" ps
 
