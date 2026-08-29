@@ -127,12 +127,16 @@ export default function FacturesFournisseur({ etabActif, droits }) {
         </div>
       )}
 
+      {/* « ou importée » promettait un chemin qui n'existe pas : la voie OCR
+          (`POST /finance/supplier-invoices/extract`) n'est appelée par aucun écran, et le module
+          `Ocr` n'a aucune occurrence dans le client. Un mot qui annonce une capacité absente fait
+          chercher un bouton d'import pendant dix minutes. On dit la seule entrée qui existe. */}
       <TableauFactures
         fournisseurs={fournisseurs}
         titre="À approuver"
         sous={aTraiter.length === 0 ? 'aucune en attente' : `${aTraiter.length} en attente`}
         factures={aTraiter}
-        vide="Aucune facture à approuver. Une facture saisie ou importée arrive ici, et n'entre dans le circuit de paiement qu'une fois approuvée."
+        vide="Aucune facture à approuver. Une facture enregistrée ici y arrive, et n'entre dans le circuit de paiement qu'une fois approuvée."
         actions={(f) => (
           <>
             {peutApprouver && (
