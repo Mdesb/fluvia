@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Boutique\Api;
 
+use App\Boutique\Security\PanierProprietaireGuard;
 use App\Offre\DataFixtures\OffreFixtures;
 use App\Offre\Entity\GrilleTarifaire;
 use App\Offre\Entity\Produit;
@@ -104,6 +105,82 @@ final class CatalogueSansTarifTest extends BoutiqueApiTestCase
     // ── Montage ──────────────────────────────────────────────────────────────────────────────────
 
     /** @return list<string> */
+    /**
+     * ⚠ CACHER N'EST PAS REFUSER — LE CHEMIN QUI CONTOURNE LA VITRINE.
+     *
+     * Le catalogue ne sert plus un produit dont aucun tarif ne se résout. Mais
+     * `AjouterLignePanierProcessor` ne consulte aucun tarif : il vérifie le statut, le canal,
+     * l'établissement et le créneau. Un produit invisible en vitrine reste donc ajoutable par son
+     * identifiant — et un lien, un intégrateur, ou un panier repris n'ont aucune raison de passer
+     * par la vitrine.
+     *
+     * Le refus doit être là où l'on ENTRE, pas seulement là où l'on AFFICHE. Un filtre d'affichage
+     * qui compense une garde manquante rend la garde manquante invisible, et on cesse de la
+     * chercher.
+     *
+     * ⚠ LE TÉMOIN POSITIF EST LA MOITIÉ DU TEST. Sans lui, un processeur qui refuserait TOUT
+     * passerait : « le produit sans tarif est refusé » ne vaut que si « le produit avec tarif est
+     * accepté » est vrai en même temps.
+     */
+    public function testUnProduitSansTarifNEstPasAjoutableAuPanier(): void
+    {
+        $em = $this->em();
+
+        $tarifPlein = $em->getRepository(TypeTarif::class)->findOneBy(['nom' => OffreFixtures::TARIF_PLEIN]);
+        self::assertInstanceOf(TypeTarif::class, $tarifPlein);
+        $saison = $em->getRepository(Saison::class)->findOneBy(['actif' => true]);
+        self::assertInstanceOf(Saison::class, $saison, 'témoin : sans saison active, aucun tarif ne se résout et ce test ne mesurerait rien');
+
+        $sansTarif = (new Produit())
+            ->setType($this->unTypeDeProduit())
+            ->setLibelle(['fr' => 'Billet sans tarif — panier'])
+            ->setLibelleRecherche('Billet sans tarif panier')
+            ->setCode('PRD-PANIER-SANS-TARIF')
+            ->setCanaux(['en_ligne'])
+            ->setTauxTva('10.00')
+            ->setStatut(StatutProduit::Publie);
+        $sansTarif->addEtablissement($this->etablissementA());
+        $em->persist($sansTarif);
+
+        $avecTarif = (new Produit())
+            ->setType($this->unTypeDeProduit())
+            ->setLibelle(['fr' => 'Billet avec tarif — panier'])
+            ->setLibelleRecherche('Billet avec tarif panier')
+            ->setCode('PRD-PANIER-AVEC-TARIF')
+            ->setCanaux(['en_ligne'])
+            ->setTauxTva('10.00')
+            ->setStatut(StatutProduit::Publie);
+        $avecTarif->addEtablissement($this->etablissementA());
+        // La grille se persiste À PART : `Produit#grilles` ne cascade pas.
+        $grille = (new GrilleTarifaire())->setProduit($avecTarif)->setTypeTarif($tarifPlein)->setSaison($saison)->setPrix('12.00');
+        $avecTarif->addGrille($grille);
+        $em->persist($avecTarif);
+        $em->persist($grille);
+        $em->flush();
+
+        [$client, $panierId, $jeton] = $this->ouvrirPanierInviteA();
+        // ⚠ LA CONSTANTE, PAS LA CHAINE. J'avais ecrit « X-Panier-Jeton » de memoire ; l'en-tete
+        // s'appelle « X-Panier-Token ». Un en-tete mal orthographie ne leve pas : la garde ne
+        // trouve pas le jeton et refuse, et le test aurait ete VERT pour la mauvaise raison —
+        // il aurait mesure un refus de propriete, pas un refus de tarif.
+        $entete = ['headers' => [PanierProprietaireGuard::HEADER => $jeton]];
+
+        // 1. LE TÉMOIN : ce qui a un prix entre dans le panier.
+        $client->request('POST', '/api/boutique/paniers/' . $panierId . '/lignes', $entete + [
+            'json' => ['produit' => (string) $avecTarif->getId(), 'quantite' => 1],
+        ]);
+        self::assertResponseIsSuccessful('Témoin : un produit tarifé doit rester ajoutable, sinon l’assertion suivante serait vraie d’un processeur qui refuse tout.');
+
+        // 2. LE CAS : ce qui n'a aucun prix est refusé, même en contournant la vitrine.
+        $client->request('POST', '/api/boutique/paniers/' . $panierId . '/lignes', $entete + [
+            'json' => ['produit' => (string) $sansTarif->getId(), 'quantite' => 1],
+        ]);
+        self::assertResponseStatusCodeSame(
+            422,
+            'Un produit dont aucun tarif ne se résout est ajoutable au panier : la vitrine le cache, personne ne le refuse.',
+        );
+    }
+
     private function codesDuCatalogue(): array
     {
         $client = static::createClient();
