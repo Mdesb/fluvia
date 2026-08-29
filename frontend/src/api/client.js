@@ -1072,6 +1072,18 @@ export const api = {
     request('/api/bordereau_versements', { query: { itemsPerPage: 100 } }),
   comptesComptables: () =>
     request('/api/compte_comptables', { query: { itemsPerPage: 200 } }),
+  // LES CORRESPONDANCES COMPTABLES — ce qui décide du compte de produit d'une catégorie de vente.
+  //
+  // La table existait depuis l'origine du module et rien ne permettait de la remplir : UNE seule
+  // correspondance sur la préprod. Sans correspondance active, les ventes de la catégorie ne sont
+  // pas comptabilisées du tout — elles ressortent en anomalie à la génération (`MappingComptableGuard`
+  // puis `GenerateurEcrituresHandler`, qui saute la vente). Ce n'est pas un repli sur un compte
+  // par défaut : c'est une écriture qui n'existe pas.
+  mappingsComptables: () => request('/api/mapping_comptables', { query: { itemsPerPage: 200 } }),
+  creerMappingComptable: (corps) =>
+    request('/api/mapping_comptables', { method: 'POST', body: corps, ld: true }),
+  majMappingComptable: (id, corps) =>
+    request(`/api/mapping_comptables/${id}`, { method: 'PATCH', body: corps }),
   cautions: () => request('/api/cautions', { query: { itemsPerPage: 100 } }),
   // Le JOURNAL d'une caution, et le BARÈME qui chiffre ses retenues. Les deux ressources existaient
   // sans appelant : l'écran montrait un montant retenu sans jamais dire *qui* l'a retenu, *quand*,
