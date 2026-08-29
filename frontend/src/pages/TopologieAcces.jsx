@@ -216,7 +216,7 @@ export default function TopologieAcces({ etabActif, droits, onNav }) {
   // parce qu'un lecteur précis refuse du monde, ou qu'une zone se remplit trop vite. Le plan et
   // le journal parlent des mêmes objets ; passer de l'un à l'autre ne devrait pas obliger à
   // retrouver son nom dans une liste déroulante.
-  const [cibleJournal, setCibleJournal] = useState(null) // { espace } | { equipement }
+  const [cibleJournal, setCibleJournal] = useState(null) // { espace|equipement, etab }
   const [espaces, setEspaces] = useState([])
   const [controleurs, setControleurs] = useState([])
   const [equipements, setEquipements] = useState([])
@@ -792,7 +792,7 @@ export default function TopologieAcces({ etabActif, droits, onNav }) {
                         <button
                           className="btn ghost sm"
                           onClick={() => {
-                            setCibleJournal({ espace: espace.id })
+                            setCibleJournal({ espace: espace.id, etab: etabActif })
                             setOnglet('journal')
                           }}
                         >
@@ -940,7 +940,7 @@ export default function TopologieAcces({ etabActif, droits, onNav }) {
           onEditer={(q) => ouvrirEquipement(q)}
           onAjouter={() => ouvrirEquipement(null)}
           onVoirPassages={(q) => {
-            setCibleJournal({ equipement: q.id })
+            setCibleJournal({ equipement: q.id, etab: etabActif })
             setOnglet('journal')
           }}
         />
@@ -958,10 +958,21 @@ export default function TopologieAcces({ etabActif, droits, onNav }) {
 
       {onglet === 'journal' && (
         <JournalPassages
+          // ⚠ UNE REMISE À ZÉRO PAR EFFET NE SUFFISAIT PAS, ET L'ÉCRAN L'A MONTRÉ.
+          //
+          // Premier essai : `key={etabActif}` pour remonter le journal, plus un effet qui vidait la
+          // cible au changement de site. Le filtre « Lecteur » restait pourtant posé sur un
+          // tourniquet de l'autre site — parce que l'effet s'exécute APRÈS le rendu : le journal
+          // remontait d'abord avec l'ancienne cible, la reposait, et le vidage arrivait ensuite,
+          // sans plus rien à vider.
+          //
+          // La cible porte donc son établissement, et n'est lue que si c'est encore le bon. Une
+          // dérivation n'a pas d'ordre d'exécution : elle est vraie au moment du rendu.
+          key={etabActif}
           espaces={espaces}
           equipements={equipements}
           etabActif={etabActif}
-          cible={cibleJournal}
+          cible={cibleJournal?.etab === etabActif ? cibleJournal : null}
         />
       )}
 
