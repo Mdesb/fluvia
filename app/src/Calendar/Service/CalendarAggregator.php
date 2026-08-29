@@ -63,6 +63,23 @@ final readonly class CalendarAggregator
         \DateTimeImmutable $au,
         string $portee,
     ): array {
+        // ⚠ UNE PORTEE INCONNUE LEVE, ELLE NE RETOMBE PAS SUR « site ».
+        //
+        // La ligne suivante lit `$portee === 'mine'`. Sans ce controle, toute autre valeur donnait
+        // silencieusement l'agenda DU SITE — et c'est exactement ce qui est arrive : le controleur
+        // ICS demandait « moi », le vocabulaire des ONGLETS, et les abonnes n'ont jamais recu leurs
+        // evenements personnels. Aucun test, aucun journal, aucun ecran ne l'a dit.
+        //
+        // `CalendarFeedProvider` a un repli, et il a raison : il recoit un parametre d'URL tape par
+        // un humain, et un mot mal orthographie ne doit pas produire un ecran en erreur. Ici
+        // l'appelant est du CODE : un repli n'y masque pas une faute de frappe, il masque un bogue.
+        if (!\in_array($portee, ['mine', 'site'], true)) {
+            throw new \InvalidArgumentException(sprintf(
+                'Portee d\'agenda inconnue : "%s". Les valeurs du fil sont "mine" et "site" ; "moi" est le vocabulaire des onglets de l\'ecran.',
+                $portee,
+            ));
+        }
+
         $lignes = $this->evenementsSaisis($etablissement, $du, $au, $portee === 'mine' ? $utilisateur : null);
 
         foreach ($this->sources as $source) {
