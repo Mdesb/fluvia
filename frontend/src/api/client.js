@@ -874,6 +874,31 @@ export const api = {
   // État réseau des contrôleurs (bascule en ligne / hors ligne, US-L3-07).
   etatSynchroAcces: () => request('/api/acces/synchro/etat'),
 
+  // LA CLOCHE — trois opérations, et une règle d'admission qui les rend rares.
+  //
+  // Une notification est un ÉVÉNEMENT DE DOMAINE qu'on a décidé de montrer à quelqu'un : facture
+  // échue, prélèvement rejeté, devis expiré. Pas un refus au tourniquet — plusieurs par minute à
+  // l'ouverture des portes, et personne n'agit sur un refus isolé.
+  //
+  // Le compte de la pastille se lit sur `totalItems` de CETTE requête, jamais sur un point d'entrée
+  // séparé : deux sources qui comptent la même chose finissent par diverger.
+  //
+  // La liste de la cloche. Le compteur de la pastille se prend sur `totalItems` de CETTE
+  // requête : un second point d'entrée qui compterait la même chose finirait par diverger,
+  // et c'est la pastille qu'on croirait.
+  notifications: (params) =>
+    request('/api/notifications', {
+      query: { lue: false, 'order[horodatage]': 'desc', itemsPerPage: 20, ...(params || {}) },
+    }),
+  // Marquer lue est idempotent côté serveur : la date de première lecture ne se réécrit pas.
+  marquerNotificationLue: (id) =>
+    request(`/api/notifications/${id}/lue`, { method: 'POST', body: {}, ld: true }),
+  // « Tout marquer comme lu » ne vide QUE l'établissement actif : un geste qui effacerait
+  // aussi les autres sites ferait disparaître, sans les avoir affichées, des alertes que
+  // personne n'a vues.
+  marquerToutesNotificationsLues: () =>
+    request('/api/notifications/tout-lu', { method: 'POST', body: {}, ld: true }),
+
   // Reporting / Pilotage (M7). Route hors /api (proxifiée via /reporting).
   dashboardEtablissement: (id) => request(`/reporting/dashboards/etablissement/${id}`),
   // Référentiel des indicateurs (M7).
@@ -1070,6 +1095,18 @@ export const api = {
     request('/api/bordereau_versements', { query: { itemsPerPage: 100 } }),
   comptesComptables: () =>
     request('/api/compte_comptables', { query: { itemsPerPage: 200 } }),
+  // LES CORRESPONDANCES COMPTABLES — ce qui décide du compte de produit d'une catégorie de vente.
+  //
+  // La table existait depuis l'origine du module et rien ne permettait de la remplir : UNE seule
+  // correspondance sur la préprod. Sans correspondance active, les ventes de la catégorie ne sont
+  // pas comptabilisées du tout — elles ressortent en anomalie à la génération (`MappingComptableGuard`
+  // puis `GenerateurEcrituresHandler`, qui saute la vente). Ce n'est pas un repli sur un compte
+  // par défaut : c'est une écriture qui n'existe pas.
+  mappingsComptables: () => request('/api/mapping_comptables', { query: { itemsPerPage: 200 } }),
+  creerMappingComptable: (corps) =>
+    request('/api/mapping_comptables', { method: 'POST', body: corps, ld: true }),
+  majMappingComptable: (id, corps) =>
+    request(`/api/mapping_comptables/${id}`, { method: 'PATCH', body: corps }),
   cautions: () => request('/api/cautions', { query: { itemsPerPage: 100 } }),
   // Le JOURNAL d'une caution, et le BARÈME qui chiffre ses retenues. Les deux ressources existaient
   // sans appelant : l'écran montrait un montant retenu sans jamais dire *qui* l'a retenu, *quand*,

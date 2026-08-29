@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Offre\Entity;
 
+use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
+use ApiPlatform\Metadata\ApiFilter;
 use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Delete;
 use ApiPlatform\Metadata\Get;
@@ -39,6 +41,7 @@ use App\Platform\Scoping\ScopedReference;
     normalizationContext: ['groups' => ['cat:read']],
     denormalizationContext: ['groups' => ['cat:write']],
 )]
+#[ApiFilter(SearchFilter::class, properties: ['axe' => 'exact', 'portee' => 'exact'])]
 class Categorie
 {
     // D51 — socle partage + ajout local. Le trait porte `portee` et `etablissement`, et

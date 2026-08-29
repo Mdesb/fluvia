@@ -58,8 +58,10 @@ class TauxTva
     #[Groups(['taux:read', 'taux:write', 'ligne:read'])]
     private string $libelle = '';
 
+    // ⚠ Exposé dans `mapping:read` pour que l'écran des correspondances puisse dire POURQUOI
+    // une correspondance est inopérante : un verdict sans cause envoie chercher.
     #[ORM\Column(options: ['default' => true])]
-    #[Groups(['taux:read', 'taux:write'])]
+    #[Groups(['taux:read', 'taux:write', 'mapping:read'])]
     private bool $actif = true;
 
     public function __construct()

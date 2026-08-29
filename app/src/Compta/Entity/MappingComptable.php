@@ -133,4 +133,21 @@ class MappingComptable
         return $this->compteProduit !== null && $this->compteProduit->isActif()
             && $this->tauxTva !== null && $this->tauxTva->isActif();
     }
+
+    /**
+     * Cette correspondance produit-elle réellement une écriture ?
+     *
+     * ⚠ EXISTER NE SUFFIT PAS. Une correspondance dont le compte ou le taux a été désactivé produit
+     * exactement la même anomalie qu'une correspondance absente : la vente est écartée et aucune
+     * écriture n'est générée. L'écran la lisait pourtant « en place », faute de pouvoir le savoir.
+     *
+     * Le verdict est rendu par le serveur et non recalculé côté écran : la règle est `estValide()`,
+     * et une règle rejouée ailleurs diverge au premier correctif. La CAUSE, elle, se lit sur le
+     * `actif` du compte et du taux, exposés à côté — un verdict sans cause fait chercher.
+     */
+    #[Groups(['mapping:read'])]
+    public function isOperante(): bool
+    {
+        return $this->estValide();
+    }
 }
