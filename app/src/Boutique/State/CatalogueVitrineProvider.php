@@ -11,6 +11,7 @@ use App\Boutique\Service\VitrineResolver;
 use App\Boutique\Security\PanierProprietaireGuard;
 use App\Boutique\Security\VitrineAccessibleGuard;
 use App\Boutique\Service\DisponibiliteAffichageHandler;
+use App\Boutique\Service\OnlineSellability;
 use App\Offre\Entity\ProductPhoto;
 use App\Offre\Entity\Produit;
 use App\Offre\Enum\Canal;
@@ -38,6 +39,7 @@ final class CatalogueVitrineProvider implements ProviderInterface
         private readonly VitrineResolver $resolver,
         private readonly DisponibiliteAffichageHandler $disponibilite,
         private readonly ResolveurPrix $resolveurPrix,
+        private readonly OnlineSellability $vendabilite,
         private readonly VitrineAccessibleGuard $vitrineGuard,
     ) {
     }
@@ -186,18 +188,12 @@ final class CatalogueVitrineProvider implements ProviderInterface
      */
     private function prixPublic(Produit $produit): ?array
     {
-        $prix = [];
-        $maintenant = new \DateTimeImmutable();
-        foreach ($produit->getGrilles() as $grille) {
-            $typeTarif = $grille->getTypeTarif();
-            if ($typeTarif === null) {
-                continue;
-            }
-            $resolu = $this->resolveurPrix->resoudre($produit, $typeTarif, $maintenant, Canal::EnLigne);
-            if ($resolu !== null) {
-                $prix[] = (float) $resolu;
-            }
-        }
+        // ⚠ LA REGLE VIT DANS `OnlineSellability`, PAS ICI. Elle etait ecrite a cet endroit, et
+        // le processeur d'ajout au panier ne la consultait pas : un produit cache en vitrine
+        // restait ajoutable par son identifiant. La recopier la-bas aurait donne deux
+        // implementations qui divergent — la boutique afficherait un prix que le panier refuse,
+        // ou l'inverse, qui est pire.
+        $prix = $this->vendabilite->resolvedPrices($produit);
         if ($prix === []) {
             return null;
         }

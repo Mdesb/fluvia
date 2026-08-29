@@ -1,5 +1,15 @@
 import { useEffect, useState } from 'react'
 
+/*
+ * ⚠ LE NOM DE CE FICHIER AFFIRME UN APPAREIL, ET LE COMPOSANT NE LE FAIT PLUS.
+ *
+ * `InstallerSurLeTelephone` date du jour où la bannière ne visait que les téléphones. Elle
+ * s'affiche aussi sur un poste de bureau — Chrome y émet `beforeinstallprompt` — et son texte ne
+ * nomme donc plus d'appareil. Le fichier, lui, garde son nom : le renommer traverserait le
+ * garde-fou de nommage (un fichier renommé compte comme neuf) et deux imports, pendant que
+ * d'autres sessions travaillent dans ce répertoire. Le coût dépasse le gain — mais un nom qui ment
+ * en silence est pire qu'un nom qui ment en le disant.
+ */
 /**
  * « INSTALLER FLUVIA SUR CE TÉLÉPHONE » — la bannière qui apparaît quand c'est possible, et jamais
  * autrement.
@@ -62,7 +72,18 @@ export default function InstallerSurLeTelephone() {
     <div className="pwa-bandeau">
       <span className="pwa-ic" aria-hidden="true">◈</span>
       <span className="pwa-txt">
-        Installez Fluvia sur ce téléphone pour l’ouvrir en un geste, sans passer par le navigateur.
+        {/*
+          ⚠ NE NOMMEZ PAS L'APPAREIL : ON NE L'A PAS REGARDÉ. Cette phrase disait « sur ce
+          téléphone », et Chrome émet `beforeinstallprompt` sur un poste de bureau aussi — la
+          bannière s'affichait devant un régisseur, en lui parlant d'un appareil qu'il n'avait pas.
+          Il lisait une phrase qui ne le concernait pas et l'ignorait, alors que l'installation sur
+          un poste fixe est justement ce qui sort Fluvia de l'onglet parmi douze.
+
+          Distinguer sur la largeur ou le pointeur serait une heuristique, et une heuristique qui se
+          trompe REPRODUIT le défaut. On dit donc le bénéfice plutôt que le lieu : une icône au lieu
+          d'un onglet à retrouver. Chacun y lit sa propre situation.
+        */}
+        Installez Fluvia pour l’ouvrir d’une icône, sans le chercher parmi vos onglets.
       </span>
       <button
         className="btn primary sm"
