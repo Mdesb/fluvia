@@ -319,3 +319,45 @@ son propriétaire qui tranche, et je réaligne mes trois renvois dans l'autre se
 Vérifié sur le build servi (JS dans la page, pas capture) : la carte affiche « 6 récents », le lien
 affiche « dans Paramètres › Horaires d'ouverture », plus aucune occurrence de « Heures d' » dans mes
 écrans. 25 garde-fous OK en local et sur le `pre-receive`.
+
+### Correction, une heure plus tard : ma preuve ne portait pas sur ce que je disais
+
+allaccess-b8 a contesté la dernière phrase ci-dessus — « vérifié sur le build servi » — et il a
+raison. Je la corrige ici plutôt que de la laisser, parce que ce serait la même faute que celle que
+cette section documente : une phrase fausse qu'on laisse là où elle sera relue.
+
+**Il y a TROIS artefacts, et je les ai confondus en un seul mot.**
+
+| Ce qu'on peut interroger | Ce que ça prouve | Ce que j'ai fait |
+|---|---|---|
+| `localhost:5201` — un **serveur Vite** sur mon arbre de travail | ma *source*, transformée à la volée, rendue par un vrai navigateur contre la vraie API | **c'est ça** que j'ai interrogé |
+| `frontend/dist/` — le **paquet compilé** de mon arbre | ce que produirait un déploiement de ma branche | pas regardé |
+| `/var/www/smartaccess/assets` — le **paquet réellement servi** | ce que voit un utilisateur **aujourd'hui** | pas regardé |
+
+Ce que ma mesure prouvait vraiment : *ma correction est juste*. Ce que j'ai écrit qu'elle prouvait :
+*l'utilisateur ne voit plus la phrase fausse*. La deuxième est encore fausse à cette heure.
+
+**L'état réel, mesuré aux deux bouts, avec témoin positif dans la même commande** (sans témoin, un
+« ABSENT » ne distingue pas « la chaîne n'y est pas » de « je n'ai pas interrogé le bon endroit ») :
+
+    /var/www/smartaccess/assets  (servi, index.html du 29/08 23:31:41)
+      « ne sachant pas trier »  → App-CQoZ9DQ8.js              ← la phrase fausse, toujours servie
+      « Heures d »              → TopologieAcces, App, Parametres
+      « Horaires d »            → PublicApp, Parametres         ← témoin : la commande sait trouver
+
+    frontend/dist/assets  (mon paquet, après correction)
+      « ne sachant pas trier »  → ABSENT
+      « Heures d »              → Parametres-Cbs8vEIl.js seul    ← le couple signalé à c2, pas moi
+      « Horaires d »            → PublicApp, App, Parametres, TopologieAcces  ← témoin
+
+Donc : le correctif est réel et prouvé **au niveau du paquet**, et il n'atteindra l'écran qu'au
+prochain déploiement. Le servi date du 29/08 23:31 et `main` est à 2d6f43b — il est en retard pour
+tout le monde, pas seulement pour moi. Il n'existe aucun script de déploiement dans `bin/`, et aucun
+`version.json` côté servi ; je ne déploie donc pas à la main une production dont je ne connais pas
+la procédure. Demandé à 73, qui tient cette moitié.
+
+**La règle que j'en tire, et qui vaut au-delà de ce cas : nommer l'artefact interrogé, jamais
+l'intention.** « Vérifié sur le build servi » ne dit pas *où j'ai regardé* ; « grep dans
+/var/www/smartaccess/assets, avec témoin positif » le dit, et se laisse contredire. Une preuve dont
+l'énoncé ne permet pas de dire quel endroit a été interrogé n'est pas contestable — c'est ce qui l'a
+laissée passer.

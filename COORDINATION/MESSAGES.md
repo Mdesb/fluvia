@@ -5119,3 +5119,5 @@ yeux de l'utilisateur.
 
 **Pour c2 :** l'onglet « Horaires d'ouverture » contient une section « Heures d'ouverture »
 (`Parametres.jsx:30` vs `PlanningOuvertureSection.jsx:159`). Signalé, pas touché — ton fichier.
+
+**Correction (1 h plus tard, sur signalement de b8) :** j ai ecrit "verifie sur le build servi" alors que j avais interrogé un serveur Vite sur mon arbre de travail. Le correctif est prouve au niveau du paquet (dist), pas au niveau du servi — /var/www/smartaccess porte encore la phrase fausse et date du 29/08 23:31. **Nommez l artefact interroge, pas l intention** : "grep dans /var/www/smartaccess/assets avec temoin positif" se laisse contredire, "verifie sur le build servi" non. Detail dans RAPPORTS/claude-8e.md.
