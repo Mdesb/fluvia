@@ -59,6 +59,35 @@ export function ecrireHash(onglet, params = {}, { pousser = false } = {}) {
 }
 
 /**
+ * Va sur un AUTRE écran, en lui passant des paramètres.
+ *
+ * POURQUOI CE N'EST PAS `ecrireHash`, ET COMMENT LE DÉFAUT S'EST MONTRÉ.
+ *
+ * `ecrireHash` écrit par `pushState` / `replaceState` — et NI L'UN NI L'AUTRE N'ÉMET
+ * `hashchange`. C'est sans conséquence quand un écran décrit son propre état : il vient de mettre
+ * à jour son état React, l'URL ne fait que le refléter, et personne n'a besoin d'être prévenu.
+ *
+ * Pour changer d'écran, c'est l'inverse : `App` n'apprend l'existence d'un nouvel onglet que par
+ * `hashchange` ou `popstate`. Le 29/08, le bouton « Données personnelles » posé sur la fiche
+ * client appelait `ecrireHash('rgpd', …)` : l'adresse changeait dans la barre, et l'écran ne
+ * bougeait pas. Un bouton parfaitement inerte, dont rien ne signalait l'inertie — ni erreur, ni
+ * console, ni test rouge. Il a fallu cliquer dessus pour le voir.
+ *
+ * Affecter `location.hash` émet `hashchange` ET empile une entrée d'historique, ce qui est le
+ * comportement voulu : le « Précédent » du navigateur ramène d'où l'on vient.
+ */
+export function allerA(onglet, params = {}) {
+  if (typeof window === 'undefined' || !onglet) return
+  const usp = new URLSearchParams()
+  for (const [cle, valeur] of Object.entries(params)) {
+    if (valeur === '' || valeur === null || valeur === undefined || valeur === false) continue
+    usp.append(cle, String(valeur))
+  }
+  const q = usp.toString()
+  window.location.hash = onglet + (q ? '?' + q : '')
+}
+
+/**
  * État d'écran porté par l'URL.
  *
  * `defauts` donne les clés surveillées ET leurs valeurs par défaut : une clé absente du hash prend

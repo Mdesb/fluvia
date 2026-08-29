@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import Modal from '../components/Modal.jsx'
-import { useEtatUrl } from '../api/url.js'
+import { useEtatUrl, allerA } from '../api/url.js'
 import ActivitesClient, { SaisieEchange } from '../components/ActivitesClient.jsx'
 import ContactsClient from '../components/ContactsClient.jsx'
 import { api } from '../api/client.js'
@@ -488,13 +488,29 @@ function FicheContenu({ fiche, mouvements, fidelite, droits, onMouvement }) {
             devis n'était alors rattaché à aucune fiche, et n'apparaissait dans l'historique de
             personne. La modale est la même que celle de l'écran Facturation ; partant d'ici, elle
             envoie en plus `clientRef`, ce qui rattache la pièce à ce client. */}
-        {aLeDroit(droits, 'facturation.gerer') && (
-          <div style={{ marginLeft: 'auto' }}>
+        {/* LE MOMENT OÙ L'ON APPREND QU'UNE PERSONNE VEUT ÊTRE EFFACÉE, C'EST EN REGARDANT SA
+            FICHE — au téléphone, au guichet, un courrier à la main. L'écran des données
+            personnelles existe depuis ce matin, mais on n'y arrivait que par le menu, en
+            retrouvant la personne une seconde fois dans un sélecteur.
+            Le libellé reste neutre : « Demander l'effacement » posé à côté de « Établir un
+            devis » ferait d'un geste irréversible un bouton de fiche comme un autre. On mène à
+            l'écran qui explique ; on n'efface pas d'ici. */}
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+          {(aLeDroit(droits, 'crm.rgpd_gerer') || aLeDroit(droits, 'crm.rgpd_demander')) && (
+            <button
+              className="btn ghost sm"
+              type="button"
+              onClick={() => allerA('rgpd', { client: c.id })}
+            >
+              Données personnelles
+            </button>
+          )}
+          {aLeDroit(droits, 'facturation.gerer') && (
             <button className="btn sm" type="button" onClick={() => setDevis(true)}>
               Établir un devis
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       <DevisModal

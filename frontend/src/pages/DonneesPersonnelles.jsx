@@ -4,7 +4,7 @@ import ClientPicker, { nomClient } from '../components/ClientPicker.jsx'
 import { dateFr, dateHeureFr } from '../components/Liste.jsx'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
-import { useEtatUrl } from '../api/url.js'
+import { allerA, useEtatUrl } from '../api/url.js'
 
 // LE DROIT À L'EFFACEMENT — une obligation légale qui n'avait aucun chemin.
 //
@@ -107,6 +107,28 @@ export default function DonneesPersonnelles({ etabActif, droits }) {
 
   useEffect(() => { recharger() }, [recharger])
 
+  // LE FILTRE SERVEUR `client` EST DÉCLARÉ ET NE RAMÈNE JAMAIS RIEN — MESURÉ, PAS SUPPOSÉ.
+  //
+  // `DemandeRGPD` porte `#[ApiFilter(SearchFilter::class, properties: ['client' => 'exact', ...])]`
+  // et le contrat annoncé était `GET /api/demande_rgpds?client={uuid}`. Éprouvé contre la préprod
+  // le 29/08, sur une collection qui contenait bien deux demandes du même client :
+  //
+  //   ?statut=recue                                     -> 200, total 2   (celui-là marche)
+  //   ?client=/api/clients/b4ca0377-…                    -> 200, total 0
+  //   ?client=b4ca0377-…                                 -> 200, total 0
+  //   ?client=<non encodé>, ?client=nimportequoi         -> 200, total 0
+  //
+  // Toujours 200, toujours vide. C'est la forme la plus coûteuse du défaut : pas d'erreur, pas de
+  // 400 sur une valeur absurde, juste un écran qui affirme « cette personne n'a rien demandé »
+  // alors qu'elle a deux demandes ouvertes — sur le seul écran qui porte un délai légal.
+  //
+  // On restreint donc ICI, sur ce qui est déjà chargé. Signalé pour le moteur ; le jour où le
+  // filtre serveur fonctionnera, ces trois lignes deviendront un raffinement, pas un contournement.
+  const affichees = useMemo(
+    () => (params.client ? demandes.filter((d) => idDeClient(d) === params.client) : demandes),
+    [demandes, params.client],
+  )
+
   const compteurs = useMemo(() => {
     const ouvertes = toutes.filter((d) => d.statut === 'recue' || d.statut === 'en_cours')
     return {
@@ -121,6 +143,21 @@ export default function DonneesPersonnelles({ etabActif, droits }) {
 
   return (
     <div className="view large">
+      {/* RETOUR EXPLICITE — arbitré par Maxime le 29/08 : « boutons retour », pas seulement le
+          « Précédent » du navigateur. Il n'apparaît que si l'on vient d'une fiche, parce qu'un
+          bouton retour qui ne sait pas d'où l'on vient renvoie ailleurs que là où l'on était :
+          arrivé par le menu, celui-ci n'aurait aucune destination honnête à proposer. */}
+      {params.client && (
+        <button
+          className="btn ghost sm"
+          type="button"
+          style={{ alignSelf: 'flex-start', marginBottom: 4 }}
+          onClick={() => allerA('clients', { fiche: params.client })}
+        >
+          ← Retour à la fiche
+        </button>
+      )}
+
       <div className="view-head">
         <div className="ttl">
           <h1>Données personnelles</h1>
@@ -128,7 +165,18 @@ export default function DonneesPersonnelles({ etabActif, droits }) {
         </div>
         {peutDemander && (
           <div className="actions">
-            <button className="btn" type="button" onClick={() => { setSucces(null); setChoixClient(true) }}>
+            <button
+              className="btn"
+              type="button"
+              onClick={() => {
+                setSucces(null)
+                // Venu de la fiche de quelqu'un, on sait DÉJÀ de qui il s'agit : rouvrir un
+                // sélecteur reviendrait à lui demander de retrouver la personne qu'il regardait.
+                const connue = params.client ? fiches[params.client] : null
+                if (connue) setCreation(connue)
+                else setChoixClient(true)
+              }}
+            >
               ＋ Enregistrer une demande
             </button>
             <button className="btn ghost" type="button" onClick={recharger} disabled={chargement}>↻</button>
@@ -144,6 +192,22 @@ export default function DonneesPersonnelles({ etabActif, droits }) {
         elle, subsiste sans identité, et les ventes passées y restent rattachées : c’est ce qui
         permet à la comptabilité de rester juste sans conserver qui que ce soit.
       </div>
+
+      {/* UNE RESTRICTION QUI NE SE VOIT PAS EST UN MENSONGE PAR OMISSION : sans cette ligne,
+          l'écran affiche « aucune demande » alors qu'il en cache peut-être douze. */}
+      {params.client && (
+        <div className="banner banner-info">
+          Cet écran ne montre que les demandes de{' '}
+          <b>{fiches[params.client] ? nomClient(fiches[params.client]) : 'cette personne'}</b>.{' '}
+          <button
+            className="btn ghost sm"
+            type="button"
+            onClick={() => { setSucces(null); majParams({ client: '' }) }}
+          >
+            Voir toutes les demandes
+          </button>
+        </div>
+      )}
 
       {erreur && <div className="banner banner-error">{erreur}</div>}
       {succes && <div className="banner banner-ok">{succes}</div>}
@@ -197,10 +261,12 @@ export default function DonneesPersonnelles({ etabActif, droits }) {
         <div className="card-b" style={{ overflowX: 'auto' }}>
           {chargement ? (
             <div className="center" style={{ minHeight: 160 }}><div className="spinner" /></div>
-          ) : demandes.length === 0 ? (
+          ) : affichees.length === 0 ? (
             <div className="empty">
               {params.statut
                 ? 'Aucune demande dans cet état.'
+                : params.client
+                ? 'Cette personne n’a jamais demandé l’effacement de ses données.'
                 : 'Aucune demande enregistrée. Quand une personne réclame l’effacement de ses '
                   + 'données — par courrier, par courriel, au guichet — enregistrez-la ici : c’est '
                   + 'ce qui fait courir le délai, et ce qui prouve que vous y avez répondu.'}
@@ -219,7 +285,7 @@ export default function DonneesPersonnelles({ etabActif, droits }) {
                 </tr>
               </thead>
               <tbody>
-                {demandes.map((d) => {
+                {affichees.map((d) => {
                   const id = idDeClient(d)
                   const fiche = fiches[id]
                   return (
@@ -260,7 +326,15 @@ export default function DonneesPersonnelles({ etabActif, droits }) {
             </table>
           )}
 
-          {!params.statut && total != null && total > demandes.length && (
+          {params.client && total != null && total > demandes.length && (
+            <p className="hint">
+              Cette personne est recherchée parmi les {demandes.length} demandes chargées, sur
+              {' '}{total} au total : le tri se fait ici, faute d’un filtre serveur qui réponde.
+              Au-delà, une demande ancienne peut manquer.
+            </p>
+          )}
+
+          {!params.statut && !params.client && total != null && total > demandes.length && (
             <p className="hint">
               {total} demandes au total, {demandes.length} affichées — le serveur ne rend que trente
               lignes par page. Filtrez par état pour atteindre les autres.
@@ -307,7 +381,7 @@ export default function DonneesPersonnelles({ etabActif, droits }) {
   )
 }
 
-const DEFAUTS = { statut: '' }
+const DEFAUTS = { statut: '', client: '' }
 const NATURE = { effacement: 'Effacement des données', anonymisation: 'Anonymisation' }
 const ETAT = { recue: 'reçue', en_cours: 'en cours', realisee: 'traitée', refusee: 'refusée' }
 
