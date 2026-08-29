@@ -403,6 +403,33 @@ while read -r ancien nouveau ref; do
         ECHEC_GLOBAL=1
     else
         echo "✓ ${ref#refs/heads/} : garde-fous OK."
+
+        # ── ET CETTE BRANCHE N'EST PAS SERVIE ──────────────────────────────────────────────────
+        #
+        # Les garde-fous verts ne disent rien du deploiement. Le silence qui suit une poussee reussie
+        # se lit « c'est en ligne » -- c'est la fausse certitude qui a coute deux jours la semaine
+        # derniere, ou 29 commits annonces livres n'etaient visibles nulle part.
+        #
+        # ⚠ RIEN ICI NE PEUT FAIRE ECHOUER LA POUSSEE. Chaque calcul est avale : un avertissement qui
+        # refuserait un push serait pire que le silence qu'il corrige. Et `main` est reconnu par son
+        # nom EXACT, sinon `main-quelque-chose` echapperait au message ou le declencherait a tort.
+        BRANCHE_POUSSEE="${ref#refs/heads/}"
+        if [ "$BRANCHE_POUSSEE" != "main" ]; then
+            # ⚠ `$nouveau`, PAS `$ref` : dans un `pre-receive` le hook tourne AVANT la mise a jour,
+            # donc la reference poussee n'existe pas encore et `rev-list` echoue. Le SHA entrant est
+            # lu sur l'entree standard. Vu en eprouvant : le compte affichait `?` -- ce qui prouve au
+            # passage que le repli fonctionne, et qu'il dit « je ne sais pas » plutot qu'un zero
+            # rassurant.
+            EN_ATTENTE="$(git rev-list --count "refs/heads/main..$nouveau" 2>/dev/null || echo '?')"
+            SERVI_MAINTENANT="$(curl -sf -H 'Accept: application/json' \
+                https://smartaccess.hector-conseil.com/version.json 2>/dev/null \
+                | sed -n 's/.*"commit":"\([^"]*\)".*/\1/p' || true)"
+
+            echo
+            echo "⚠ CETTE BRANCHE N'EST PAS DÉPLOYÉE. Servi actuellement : ${SERVI_MAINTENANT:-inconnu}."
+            echo "  $EN_ATTENTE commit(s) attendent l'intégration dans main. Tant qu'ils n'y sont pas,"
+            echo "  ce travail n'est servi nulle part — et rien d'autre ne te le dira."
+        fi
     fi
 
     # En DERNIER, après le verdict : la sortie d'un push est longue et défile. Un avertissement
