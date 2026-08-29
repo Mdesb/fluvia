@@ -218,9 +218,43 @@ function annonceRouteAVenir(source, indexCle) {
 function adosseAuServeur(chemin, gabarits, noms) {
   const sansApi = chemin.replace(/^\/api/, '')
   if (gabarits.has(sansApi)) return true
+
+  // ── TROISIEME PREUVE : LE FRAGMENT EST UN PREFIXE D'UN GABARIT DECLARE ──────────────────────
+  //
+  // Un appel construit par concatenation ne livre que son debut :
+  //
+  //     request('/api/demandes-rgpd/' + id + '/traiter', ...)
+  //
+  // Le fragment litteral vaut donc `/demandes-rgpd/`, qui n'egale aucun gabarit et dont le premier
+  // segment -- tiret, pluriel irregulier -- ne se ramene a aucun nom de ressource. Les deux preuves
+  // precedentes echouent alors que `POST /demandes-rgpd/{id}/traiter` existe bel et bien.
+  //
+  // La regle reste etroite : on exige que le fragment PREFIXE un gabarit reellement declare. Un
+  // chemin invente ne prefixe rien et continue d'etre refuse.
+  if (prefixeDunGabarit(sansApi, gabarits)) return true
+
   const segments = sansApi.split('/').filter(Boolean)
   const cles = new Set([...clesDeSegment(segments[0]), ...clesDeSegment(segments[1])])
   return [...cles].some((k) => k !== '' && noms.has(k))
+}
+
+/**
+ * Le fragment litteral d'un appel concatene prefixe-t-il un gabarit declare ?
+ *
+ * On compare SEGMENT PAR SEGMENT plutot que par `startsWith` : sans cela, `/factures-x` prefixerait
+ * `/factures-xyz/{id}` et le controle innocenterait un chemin qui n'existe pas.
+ */
+function prefixeDunGabarit(sansApi, gabarits) {
+  const attendus = sansApi.split('/').filter(Boolean)
+  if (attendus.length === 0) return false
+
+  for (const gabarit of gabarits) {
+    const reels = gabarit.split('/').filter(Boolean)
+    if (reels.length <= attendus.length) continue
+    if (attendus.every((s, i) => s === reels[i])) return true
+  }
+
+  return false
 }
 
 /**
