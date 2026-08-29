@@ -168,3 +168,49 @@ installation à vérifier, l'autre une vente à faire, et ils se ressemblent dan
 `front-acces-topologie`, fusionnée avec `origin/main`, poussée. 19 garde-fous verts, cliquet regelé à
 699 — **443 opérations atteignables contre 416 au début de la nuit**. Les quatre onglets, la
 supervision, la caisse et la fiche client revérifiés à l'écran après la fusion.
+
+---
+
+## Fin de nuit — la boucle est fermée
+
+### « Ce produit ouvre telle zone » : vérifié de bout en bout
+
+L'intégrateur a ouvert les trois opérations (`GET ?productRef=`, `POST`, `DELETE`) dans la foulée de
+l'écran. Cycle complet vérifié sur la préprod : état initial « **Aucune restriction : ce produit
+ouvre toutes les zones** », déclaration d'une zone, la zone quitte le sélecteur pour éviter le
+doublon, l'avertissement sur les titres déjà vendus s'affiche, puis retrait et retour à l'état
+initial. **Aucune trace laissée** — c'est la seule ressource de la nuit qui expose un DELETE.
+
+La demande de Maxime est donc servie de bout en bout : le moteur refuse une zone non couverte, et
+l'exploitant peut le déclarer depuis la fiche produit.
+
+### Trois défauts de plus, trouvés en changeant de site ou d'écran
+
+10. **Le filtre « Lecteur » du journal survivait au changement d'établissement.** Piscine A → 
+    Patinoire B affichait « aucun passage ne répond à ces filtres » sur un site qui en a peut-être.
+    C'est le défaut que cet écran passe son temps à éviter ailleurs : un vide qui a l'air d'une
+    absence. **Et la première correction ne marchait pas** : `key` + effet de remise à zéro laisse
+    l'effet passer APRÈS le rendu, donc le journal reposait l'ancien filtre avant d'être vidé. La
+    cible porte maintenant son établissement — une dérivation n'a pas d'ordre d'exécution.
+11. **Caisse fermée, les tourniquets tournent quand même.** L'écran sans session ouverte était un
+    cul-de-sac : ni fil des scans, ni vérification de billet. Un groupe passe avant l'ouverture du
+    guichet, quelqu'un vient demander pourquoi son billet a été refusé, et l'agent n'a pas la
+    réponse au moment où on la lui demande.
+12. **Une ancre de remplacement présente deux fois a posé un effet dans le mauvais composant** —
+    `cible is not defined`, écran blanc derrière la frontière d'erreur, build et garde-fous au vert.
+    Compter les occurrences avant de remplacer, dans un fichier à plusieurs composants.
+
+### Le cliquet, et ce qu'il ne mesure pas
+
+Signalé à l'intégrateur : `lib/ecart.mjs` compte comme « atteignable » **tout appel client référencé
+par un écran**, sans vérifier que le serveur déclare l'opération. Mes trois helpers de zones ont donc
+fait baisser l'écart de trois **avant** que les opérations n'existent. Je n'ai pas gelé le plafond
+sur ce chiffre ; une fois les opérations ouvertes, le compte est retombé juste — 446 atteignables sur
+1145, 699 inatteignables pour un plafond de 699.
+
+### État final
+
+`front-acces-topologie` fusionnée dans `main` par l'intégrateur, puis re-synchronisée. **20
+garde-fous verts.** Écrans revérifiés après chaque fusion : plan, lecteurs, sous-réseaux, journal,
+supervision, caisse (session ouverte et fermée), fiche client, fiche produit — en clair et en sombre,
+sur deux établissements.
