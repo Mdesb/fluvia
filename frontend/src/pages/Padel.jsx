@@ -57,6 +57,21 @@ export default function Padel({ etabActif, droits }) {
 // --------------------------------------------------------------------------------------------
 // Les terrains, les parties ouvertes, et l'éclairage.
 // --------------------------------------------------------------------------------------------
+// L'HORAIRE D'UNE PARTIE, RESOLU CONTRE LES RESERVATIONS DU SOCLE.
+//
+// `reservation` arrive en IRI ; on la retrouve dans la liste chargee a part, et on lit son CRENEAU.
+// Quand la resolution echoue (liste tronquee a 30 par le serveur), on ne dit pas << aucune date >> :
+// on dit qu'on ne l'a pas. Une partie sans horaire et une partie dont on n'a pas lu l'horaire
+// n'appellent pas la meme reaction -- la premiere est une anomalie, la seconde un ecran incomplet.
+function quandDe(reference, reservations) {
+  if (!reference) return <span className="sub">sans réservation</span>
+  const id = typeof reference === 'string' ? reference.split('/').pop() : reference.id
+  const trouvee = reservations.find((x) => String(x.id) === String(id))
+  const debut = trouvee?.creneau?.debut
+  if (debut) return dateHeureFr(debut)
+  return <span className="sub">horaire non chargé</span>
+}
+
 function TerrainsSection({ etabActif, droits }) {
   const [terrains, setTerrains] = useState([])
   const [reservations, setReservations] = useState([])
@@ -68,6 +83,7 @@ function TerrainsSection({ etabActif, droits }) {
   const [eclairage, setEclairage] = useState(null)
   const [rejoindre, setRejoindre] = useState(null)
   const [ressources, setRessources] = useState([])
+  const [reservationsCoeur, setReservationsCoeur] = useState([])
 
   const peutReserver = aUnDesDroits(droits, ['padel.reserver', 'padel.reserver_soi', 'padel.gerer'])
   const peutForcerEclairage = aUnDesDroits(droits, ['padel.acces_forcer', 'padel.gerer'])
@@ -81,16 +97,29 @@ function TerrainsSection({ etabActif, droits }) {
       //
       // Quelqu un avait vu le symptome et pose ce repli plutot que d en chercher la cause : le
       // meme geste que l UUID d article dans le journal de stock. On charge les ressources.
-      const [t, r, b, res] = await Promise.all([
+      const [t, r, b, res, coeur] = await Promise.all([
         api.padelTerrains(),
         api.padelReservations(),
         api.beneficiaires(),
         api.reservationRessources().catch(() => null),
+        // LA COLONNE << QUAND >> D'UNE PARTIE OUVERTE NE POUVAIT RIEN AFFICHER, JAMAIS.
+        //
+        // Elle lisait `r.reservation?.debut`, et c'etait faux DEUX FOIS :
+        //   1. `Reservation` n'expose AUCUNE propriete dans le groupe `reservation_padel:read` --
+        //      verifie dans l'entite -- donc `reservation` arrive en IRI nue et `?.debut` vaut
+        //      `undefined` sur chaque ligne ;
+        //   2. et meme embarquee, une `Reservation` NE PORTE PAS `debut` : l'horaire vit sur son
+        //      `creneau`. Mesure sur la reponse reelle, pas deduite.
+        //
+        // Le tiret s'affichait donc toujours -- sur la colonne qui repond a << c'est quand ? >>,
+        // dans un ecran dont le geste principal est d'inscrire un joueur a une partie.
+        api.reservations().catch(() => null),
       ])
       setTerrains(membres(t))
       setReservations(membres(r))
       setBeneficiaires(membres(b))
       setRessources(res ? membres(res) : [])
+      setReservationsCoeur(coeur ? membres(coeur) : [])
     } catch (e) {
       setErreur(e.message)
     } finally {
@@ -143,7 +172,7 @@ function TerrainsSection({ etabActif, droits }) {
                 {ouvertes.map((r) => (
                   <tr key={r.id}>
                     <td><span className="nm">{nomTerrain(r.terrain, ressources, terrains)}</span></td>
-                    <td>{r.reservation?.debut ? dateHeureFr(r.reservation.debut) : '—'}</td>
+                    <td>{quandDe(r.reservation, reservationsCoeur)}</td>
                     <td>
                       {r.niveauViseMin != null || r.niveauViseMax != null ? (
                         `${r.niveauViseMin ?? '?'} à ${r.niveauViseMax ?? '?'}`
@@ -413,7 +442,7 @@ function RejoindreModal({ partie, ressources, terrains, beneficiaires, onClose, 
         <form onSubmit={envoyer}>
           <p style={{ marginTop: 0 }}>
             {nomTerrain(partie.terrain, ressources, terrains)}
-            {partie.reservation?.debut ? ` — ${dateHeureFr(partie.reservation.debut)}` : ''}.
+            {' — '}{quandDe(partie.reservation, reservationsCoeur)}.
           </p>
 
           <div className="field">

@@ -92,6 +92,30 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
   const incidentsParId = useMemo(() => new Map(incidents.map((i) => [i.id, i])), [incidents])
 
   const ouverts = incidents.filter((i) => i.statut !== 'resolu')
+  // LE DENOMINATEUR EXACT, DEPUIS QUE LE SERVEUR EXPOSE `nbResolus` (main, bb1ff2e).
+  //
+  // Hier soir je ne pouvais trancher que le cas << rien nulle part >>, faute de connaitre le total :
+  // je l'avais ecrit dans le code plutot que de maquiller l'affichage. Le champ manquant a ete pose
+  // en reponse, et le taux se lit maintenant exactement -- avec son assiette, ce qui vaut mieux que
+  // le seul pourcentage : << 0 % sur 3 incidents >> et << 0 % sur 500 >> ne se lisent pas pareil.
+  //
+  // ⚠ ON NE L'APPELLE PAS `totalIncidents` : ce nom designe deja, plus haut, le total de PAGINATION
+  // de la liste (combien le serveur en a, pour signaler une liste tronquee). Deux totaux differents
+  // sous le meme nom sur le meme ecran, c'est la collision de vocabulaire qui fait lire un chiffre
+  // pour un autre -- la meme que << casse >> a la patinoire ou << caisse >> pour l'appairage.
+  //
+  // ⚠ ET LE CHAMP PEUT NE PAS ETRE SERVI. Mesure contre la preprod le 29/08 : `nbResolus` revient
+  // ABSENT sur les quatre etablissements -- le champ est sur `main`, pas encore deploye. Un
+  // `|| 0` aveugle ferait donc une assiette FAUSSE (trop basse) des qu'un incident existe, et
+  // l'ecran l'annoncerait avec aplomb. On distingue les deux : denominateur connu, ou pas.
+  const assietteConnue = bord != null && bord.nbResolus !== undefined && bord.nbResolus !== null
+  const assietteDuTaux = assietteConnue
+    ? (bord.nbEnRepresentation || 0) + (bord.nbEnRecouvrement || 0) + bord.nbResolus
+    : null
+  // Sans le champ, on retombe sur le seul cas qu'on sait trancher : rien nulle part.
+  const rienAMesurer = assietteConnue
+    ? assietteDuTaux === 0
+    : incidents.length === 0 && !bord?.nbEnRepresentation && !bord?.nbEnRecouvrement && !bord?.nbAccesBloques
   const resolus = incidents.filter((i) => i.statut === 'resolu')
 
   return (
@@ -129,11 +153,28 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
             <div className="st-val num">{bord.nbEnRecouvrement}</div>
             <div className="st-lbl">En recouvrement</div>
           </div>
+          {/* « 0 % » SUR ZÉRO INCIDENT SE LIT COMME UNE CONTRE-PERFORMANCE.
+              Le serveur rend `0.0` quand le dénominateur est nul — la valeur mathématiquement sûre
+              quand il n'y a rien à diviser. Affichée telle quelle, elle annonçait « nos clients ne
+              régularisent jamais seuls » à un établissement qui n'a jamais eu d'impayé. Même famille
+              que la jauge du musée qui criait la saturation sur une salle vide : une absence de
+              mesure présentée comme un résultat.
+              Le dénominateur est désormais reconstituable — `nbEnRepresentation + nbEnRecouvrement
+              + nbResolus` — donc on ne devine plus : ou bien il y a des incidents et on dit le taux
+              AVEC son assiette, ou bien il n'y en a pas et on dit qu'il n'y a rien à mesurer. */}
           <div className="stat-tile">
             <div className="st-val num">
-              {Math.round((bord.tauxResolutionSelfService || 0) * 100)} %
+              {rienAMesurer
+                ? '—'
+                : `${Math.round((bord.tauxResolutionSelfService || 0) * 100)} %`}
             </div>
-            <div className="st-lbl">Réglés par le client seul</div>
+            <div className="st-lbl">
+              {rienAMesurer
+                ? 'Rien à mesurer : aucun impayé'
+                : assietteConnue
+                  ? `Réglés par le client seul, sur ${assietteDuTaux} incident${assietteDuTaux > 1 ? 's' : ''}`
+                  : 'Réglés par le client seul'}
+            </div>
           </div>
         </div>
       )}
@@ -149,9 +190,27 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
           {chargement ? (
             <div className="center" style={{ minHeight: 80 }}><div className="spinner" /></div>
           ) : ouverts.length === 0 ? (
+            <>
+            {/* CETTE PHRASE PROMETTAIT UNE CHAÎNE QUI N'EXISTE PAS, ET JE L'AI VÉRIFIÉ EN LA
+                PARCOURANT. Elle disait « un prélèvement rejeté par la banque arrive ici ».
+                Éprouvé le 29/08 avec l'accord de Maxime, sur un mandat de démonstration : rejet
+                déclaré (`POST /api/rejet_sepas`, 201), puis mesuré — ZÉRO incident créé, tableau de
+                bord inchangé, mandat toujours `actif`, aucun support bloqué. Le rejet n'a produit
+                qu'une ligne dans le journal des rejets.
+                La cause est lisible : `DeclarerRejetSepaProcessor` n'émet aucun événement et
+                n'appelle pas `MoteurRecouvrementHandler`. Les deux seuls appelants de
+                `detecterRejet()` sont la simulation d'échéance du module Sport et le résultat d'une
+                représentation. Un rejet SEPA ordinaire ne rejoint donc jamais cet écran.
+                On décrit ce qui remplit réellement cette liste. Signalé au serveur : c'est là que le
+                chaînage manque, pas ici. */}
             <div className="empty">
-              Aucun impayé en cours. Un prélèvement rejeté par la banque arrive ici, bloque l'accès du
-              redevable, et en repart quand le paiement est régularisé.
+              Aucun impayé en cours. Un impayé s’ouvre aujourd’hui à partir d’une échéance
+              d’abonnement rejetée, ou du résultat négatif d’une représentation bancaire — il bloque
+              alors l’accès du redevable et en repart quand le paiement est régularisé.
+              <div style={{ marginTop: 8 }}>
+                <b>Un rejet SEPA déclaré depuis l’écran Prélèvements n’ouvre pas d’impayé</b> : il
+                est enregistré au journal des rejets et rien d’autre. Vérifié en le faisant.
+              </div>
               {resolus.length > 0 && (
                 <div style={{ marginTop: 8 }}>
                   {resolus.length} impayé{resolus.length > 1 ? 's ont' : ' a'} été régularisé
@@ -159,6 +218,7 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
                 </div>
               )}
             </div>
+            </>
           ) : (
             <table className="tbl">
               <thead>

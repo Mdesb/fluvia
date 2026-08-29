@@ -29,24 +29,22 @@
         "Le script REFUSE de le relever. Un plafond qui remonte n est plus un cliquet, c est un",
         "compteur."
     ],
-    "plafond": 699,
+    "plafond": 692,
     "releve": {
-        "exposees": 1142,
+        "exposees": 1145,
         "sansEcran": 0,
-        "attendues": 1142,
-        "appelees": 451,
-        "atteignables": 443,
-        "inatteignables": 699,
+        "attendues": 1145,
+        "appelees": 459,
+        "atteignables": 453,
+        "inatteignables": 692,
         "orphelins": [
             "comptesComptables  (back-office)",
             "etatSynchroAcces  (back-office)",
-            "factureDepuisVente  (back-office)",
             "grilleTarifaires  (back-office)",
-            "majFactureDirecte  (back-office)",
+            "majFactureFournisseur  (back-office)",
             "padelTournois  (back-office)",
             "pieceCommerciale  (back-office)",
-            "planningOuverture  (back-office)",
-            "verifierChaineFactures  (back-office)"
+            "planningOuverture  (back-office)"
         ],
         "declares": [],
         "marqueursSansRaison": [],
@@ -54,8 +52,8 @@
         "parFront": [
             {
                 "nom": "back-office",
-                "appelees": 430,
-                "atteignables": 422
+                "appelees": 438,
+                "atteignables": 432
             },
             {
                 "nom": "boutique en ligne",
@@ -105,10 +103,6 @@
                 11
             ],
             [
-                "factures",
-                10
-            ],
-            [
                 "marketing",
                 10
             ],
@@ -118,6 +112,10 @@
             ],
             [
                 "billing",
+                8
+            ],
+            [
+                "factures",
                 8
             ],
             [
@@ -213,6 +211,10 @@
                 4
             ],
             [
+                "supplier",
+                4
+            ],
+            [
                 "recouvrement",
                 4
             ],
@@ -238,6 +240,10 @@
             ],
             [
                 "crm",
+                3
+            ],
+            [
+                "demande",
                 3
             ],
             [
@@ -274,6 +280,10 @@
             ],
             [
                 "sous",
+                3
+            ],
+            [
+                "product",
                 3
             ],
             [
@@ -346,6 +356,10 @@
             ],
             [
                 "session",
+                1
+            ],
+            [
+                "demandes-rgpd",
                 1
             ],
             [
@@ -425,7 +439,7 @@
                 1
             ],
             [
-                "supplier",
+                "expense",
                 1
             ],
             [
@@ -498,10 +512,6 @@
             ],
             [
                 "posses",
-                1
-            ],
-            [
-                "demande",
                 1
             ],
             [

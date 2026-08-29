@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
+import { useEtatUrl } from '../api/url.js'
 import Modal from '../components/Modal.jsx'
 import { nomOuAbsence } from '../components/Liste.jsx'
 
@@ -45,6 +46,11 @@ function jour(v) {
   return Number.isNaN(d.getTime()) ? null : d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })
 }
 
+// Motif §9.2 : la fiche d'un projet vit dans l'URL. Un projet se suit a plusieurs -- << regarde le
+// projet vestiaires >> se copie-colle -- et l'ouvrir pousse une entree d'historique, donc le
+// << Precedent >> du navigateur ramene a la liste au lieu de quitter l'application.
+const DEFAUTS = { fiche: '' }
+
 export default function Projets({ etabActif, droits = [] }) {
   const peutGerer = aLeDroit(droits, 'personnel.gerer') || aLeDroit(droits, 'organisation.gerer')
 
@@ -52,7 +58,7 @@ export default function Projets({ etabActif, droits = [] }) {
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [nouveau, setNouveau] = useState(false)
-  const [ouvert, setOuvert] = useState(null)
+  const [params, majParams] = useEtatUrl('projets', DEFAUTS)
   const [busy, setBusy] = useState(false)
 
   const recharger = useCallback(async () => {
@@ -87,6 +93,10 @@ export default function Projets({ etabActif, droits = [] }) {
   if (chargement) return <div className="center" style={{ minHeight: 200 }}><div className="spinner" /></div>
 
   const projets = tableau?.projets || []
+  // La fiche est designee par l'URL : on la retrouve dans la liste deja chargee. Un identifiant qui
+  // ne correspond a rien (lien perime, projet clos et filtre) laisse simplement la fiche fermee --
+  // plutot qu'une modale vide qui ferait croire a une panne.
+  const ouvert = params.fiche ? projets.find((p) => String(p.id) === params.fiche) || null : null
   const ouverts = projets.filter((p) => p.statut !== 'done' && p.statut !== 'cancelled')
   const clos = projets.filter((p) => p.statut === 'done' || p.statut === 'cancelled')
 
@@ -130,7 +140,7 @@ export default function Projets({ etabActif, droits = [] }) {
                   {p.responsable || 'sans responsable'}
                   {jour(p.echeance) ? ` · échéance ${jour(p.echeance)}` : ''}
                 </span>
-                <button className="btn ghost sm" type="button" onClick={() => setOuvert(p)}>Ouvrir</button>
+                <button className="btn ghost sm" type="button" onClick={() => majParams({ fiche: String(p.id) }, { pousser: true })}>Ouvrir</button>
               </div>
 
               <div style={{ padding: '10px 14px 14px' }}>
@@ -171,7 +181,7 @@ export default function Projets({ etabActif, droits = [] }) {
       <FicheProjet
         projet={ouvert}
         peutGerer={peutGerer}
-        onFermer={() => setOuvert(null)}
+        onFermer={() => majParams({ fiche: '' }, { pousser: true })}
         onChange={recharger}
       />
     </div>

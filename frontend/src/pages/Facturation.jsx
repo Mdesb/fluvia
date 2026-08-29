@@ -116,6 +116,7 @@ export default function Facturation({ etabActif, droits, onNaviguer }) {
   const [nouveauDevis, setNouveauDevis] = useState(false)
   const [nouvelleFacture, setNouvelleFacture] = useState(false)
   const [reglementPour, setReglementPour] = useState(null)
+  const [brouillonEdite, setBrouillonEdite] = useState(null)
 
   const peutGerer = aLeDroit(droits, 'facturation.gerer')
   const peutEmettre = aLeDroit(droits, 'facturation.emettre_directe')
@@ -320,14 +321,23 @@ export default function Facturation({ etabActif, droits, onNaviguer }) {
                           <td><span className={`badge ${st.ton}`}>{st.libelle}</span></td>
                           <td className="row" style={{ justifyContent: 'flex-end', gap: 6 }}>
                             {peutEmettre && brouillon && (
-                              <button
-                                className="btn sm"
-                                type="button"
-                                title="Consomme un numéro et rend la facture inaltérable."
-                                onClick={() => agir(() => api.emettreFacture(f.id), `Facture ${f.numero || ''} émise.`)}
-                              >
-                                Émettre
-                              </button>
+                              <>
+                                {/* UN BROUILLON ERRONE ETAIT DEFINITIF. `Facture` n'expose aucune
+                                    suppression -- et c'est voulu, la serie des numeros ne se troue
+                                    pas. Sans correction possible, une facture mal saisie serait
+                                    restee dans la liste pour toujours. */}
+                                <button className="btn sm" type="button" onClick={() => setBrouillonEdite(f)}>
+                                  Corriger
+                                </button>
+                                <button
+                                  className="btn sm"
+                                  type="button"
+                                  title="Consomme un numéro et rend la facture inaltérable."
+                                  onClick={() => agir(() => api.emettreFacture(f.id), `Facture ${f.numero || ''} émise.`)}
+                                >
+                                  Émettre
+                                </button>
+                              </>
                             )}
                             {peutLettrer && !brouillon && solde > 0 && (
                               <button className="btn sm" type="button" onClick={() => setReglementPour(f)}>
@@ -436,6 +446,14 @@ export default function Facturation({ etabActif, droits, onNaviguer }) {
           setSucces('Brouillon de facture créé. Il ne prendra son numéro qu’à l’émission.')
           recharger()
         }}
+      />
+
+      <DevisModal
+        open={!!brouillonEdite}
+        cible="facture"
+        existante={brouillonEdite}
+        onClose={() => setBrouillonEdite(null)}
+        onCree={() => { setBrouillonEdite(null); setSucces('Brouillon corrigé.'); recharger() }}
       />
 
       <ReglementModal

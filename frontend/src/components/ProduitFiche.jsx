@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { libelleProduit, prixIndicatif, euros, statutProduit } from '../api/produit.js'
 import Modal from './Modal.jsx'
@@ -657,6 +657,114 @@ function Ligne({ libelle, valeur, aide }) {
   )
 }
 
+// LA ZONE DE DÉPÔT — le seul point de style que Maxime ait signalé de lui-même.
+//
+// Ses mots, devant la fiche produit : « le choisir un fichier et que montre cette photo c'est
+// horrible. » Le contrôle natif d'un navigateur affiche « Choisir un fichier · Aucun fichier
+// choisi » dans la police du système, sans rapport avec le reste de l'écran, et ne dit RIEN de ce
+// qu'il accepte. On apprend qu'un fichier est trop lourd après l'avoir téléversé.
+//
+// LES LIMITES SONT ÉCRITES DANS LA ZONE, PAS DANS LE MESSAGE D'ERREUR. C'est la moitié utile du
+// changement : « JPEG, PNG, WebP ou AVIF · 2 Mo maximum » avant le dépôt évite l'aller-retour que
+// le contrôle natif imposait.
+//
+// ⚠ LE FILTRE D'ICI EST UN CONFORT, PAS UNE GARDE, ET IL NE FAUT PAS LE PRENDRE POUR AUTRE CHOSE.
+//
+// `UploadProductPhotoProcessor` mesure le type RÉEL du fichier avec `getimagesize()` — il lit les
+// octets au lieu de croire ce que le navigateur déclare — parce que cette photo est publiée en
+// ligne. Ce que la zone refuse ici, elle le refuse pour épargner un téléversement inutile ; ce qui
+// passerait quand même est arrêté au serveur. On ne déplace pas la vérification, on ajoute du
+// confort par-dessus : une illusion de protection vaut moins qu'une absence de protection, parce
+// qu'elle fait cesser de chercher.
+const TYPES_PHOTO = ['image/jpeg', 'image/png', 'image/webp', 'image/avif']
+const TAILLE_MAX_PHOTO = 2 * 1024 * 1024
+
+function ZoneDepotPhoto({ fichier, onFichier, onRefus }) {
+  const champ = useRef(null)
+  const [survol, setSurvol] = useState(false)
+  const [apercu, setApercu] = useState(null)
+
+  // L'aperçu est une URL d'objet : sans révocation, chaque fichier essayé laisse ses octets en
+  // mémoire jusqu'au rechargement de la page.
+  useEffect(() => {
+    if (!fichier) { setApercu(null); return undefined }
+    const url = URL.createObjectURL(fichier)
+    setApercu(url)
+    return () => URL.revokeObjectURL(url)
+  }, [fichier])
+
+  function retenir(f) {
+    if (!f) return
+    if (!TYPES_PHOTO.includes(f.type)) {
+      onRefus('Ce fichier n’est pas une image acceptée : il faut du JPEG, du PNG, du WebP ou de l’AVIF.')
+      return
+    }
+    if (f.size > TAILLE_MAX_PHOTO) {
+      // Les deux nombres passent par le meme formatage : « 2049 Ko » face a « 2 048 Ko » se lit
+      // comme deux unites differentes, et fait douter de la comparaison au moment ou l'on
+      // cherche justement a savoir de combien on depasse.
+      const ko = (o) => Math.round(o / 1024).toLocaleString('fr-FR')
+      onRefus(
+        `Cette image pèse ${ko(f.size)} Ko ; la limite est de ${ko(TAILLE_MAX_PHOTO)} Ko. `
+        + 'Redimensionnez-la avant de la déposer — au-delà, la boutique la ferait attendre à '
+        + 'chaque visiteur.',
+      )
+      return
+    }
+    onFichier(f)
+  }
+
+  return (
+    <div>
+      <div
+        className={survol ? 'depot survol' : 'depot'}
+        onDragOver={(e) => { e.preventDefault(); setSurvol(true) }}
+        onDragLeave={() => setSurvol(false)}
+        onDrop={(e) => {
+          e.preventDefault()
+          setSurvol(false)
+          retenir(e.dataTransfer.files?.[0])
+        }}
+      >
+        {apercu ? (
+          <div className="depot-choisi">
+            <img src={apercu} alt="" className="depot-apercu" />
+            <div style={{ minWidth: 0 }}>
+              <div className="nm" style={{ overflowWrap: 'anywhere' }}>{fichier.name}</div>
+              <div className="sub">{Math.round(fichier.size / 1024)} Ko</div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+                <button className="btn ghost sm" type="button" onClick={() => champ.current?.click()}>
+                  Changer
+                </button>
+                <button className="btn ghost sm" type="button" onClick={() => onFichier(null)}>
+                  Retirer
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <button className="depot-vide" type="button" onClick={() => champ.current?.click()}>
+            <span className="depot-signe" aria-hidden="true">▣</span>
+            <span className="depot-titre">Déposez une photo ici, ou cliquez pour la choisir</span>
+            <span className="sub">JPEG, PNG, WebP ou AVIF · 2 Mo maximum</span>
+          </button>
+        )}
+      </div>
+
+      {/* Le champ natif reste dans la page : c'est lui qui ouvre le sélecteur du système, et c'est
+          par lui que la zone reste utilisable au clavier et par un lecteur d'écran. Il est masqué,
+          pas supprimé — le remplacer par un faux bouton aurait retiré l'accès clavier. */}
+      <input
+        ref={champ}
+        type="file"
+        className="depot-champ"
+        accept={TYPES_PHOTO.join(',')}
+        onChange={(e) => { retenir(e.target.files?.[0]); e.target.value = '' }}
+      />
+    </div>
+  )
+}
+
 /**
  * LES PHOTOS DU PRODUIT — ce que le visiteur verra de lui.
  *
@@ -776,24 +884,41 @@ function PhotosProduit({ produitId, peutModifier }) {
       {err && <div className="banner banner-error" style={{ marginBottom: 8 }}>{err}</div>}
 
       {peutModifier && (
-        <div style={{ display: 'grid', gap: 8 }}>
-          <div className="field" style={{ marginBottom: 0 }}>
-            <label>Fichier — JPEG, PNG, WEBP ou AVIF, 2 Mo maximum</label>
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/avif"
-              onChange={(e) => setFichier(e.target.files?.[0] || null)}
-            />
-          </div>
-          <div className="field" style={{ marginBottom: 0 }}>
-            <label>Que montre cette photo ? — lu à voix haute aux visiteurs malvoyants</label>
-            <input
-              value={alt}
-              onChange={(e) => setAlt(e.target.value)}
-              placeholder="Le bassin nordique au coucher du soleil"
-              maxLength={160}
-            />
-          </div>
+        <div style={{ display: 'grid', gap: 10 }}>
+          <ZoneDepotPhoto
+            fichier={fichier}
+            onFichier={(f) => { setErr(null); setFichier(f) }}
+            onRefus={setErr}
+          />
+
+          {/* LE TEXTE ALTERNATIF NE SE DEMANDE QU'UNE FOIS LA PHOTO DÉPOSÉE.
+              On décrit ce qu'on voit, pas ce qu'on va choisir : demandé au-dessus d'un sélecteur
+              vide, le champ appelait une description de mémoire — et c'est ainsi qu'on obtient
+              « photo du produit », qui ne décrit rien pour celui qui ne voit pas l'image. */}
+          {fichier && (
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label htmlFor="ph-alt">
+                Que montre cette photo ? — lu à voix haute aux visiteurs malvoyants
+              </label>
+              <input
+                id="ph-alt"
+                className="input"
+                value={alt}
+                onChange={(e) => setAlt(e.target.value)}
+                placeholder="Ce qu’on voit sur l’image, en une phrase"
+                maxLength={160}
+              />
+              {/* L'exemple d'origine — « Le bassin nordique au coucher du soleil » — s'affichait
+                  tel quel sur un audioguide. Un exemple qui contredit le produit qu'on regarde
+                  s'apprend comme une consigne de remplissage, pas comme un modèle. */}
+              <p className="hint">
+                Décrivez la scène, pas le produit : « Bassin extérieur chauffé, vu depuis la
+                terrasse » plutôt que « photo du produit ». C’est ce que le visiteur malvoyant
+                entendra à la place de l’image.
+              </p>
+            </div>
+          )}
+
           <div>
             <button
               className="btn primary sm"
@@ -801,7 +926,7 @@ function PhotosProduit({ produitId, peutModifier }) {
               disabled={busy || !fichier || alt.trim().length < 3}
               onClick={televerser}
             >
-              Ajouter la photo
+              {busy ? 'Ajout…' : 'Ajouter la photo'}
             </button>
           </div>
         </div>

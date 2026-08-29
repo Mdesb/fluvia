@@ -338,10 +338,22 @@ export const api = {
   // Corps : { numeroEngagement?, serviceExecutant? } -- exiges par certains donneurs d'ordre publics.
   deposerFactureChorus: (id, corps) =>
     request(`/api/factures/${id}/chorus`, { method: 'POST', body: corps }),
-  factureDepuisVente: (corps) =>
-    request('/api/factures/depuis-vente', { method: 'POST', body: corps }),
-  // Le controle d'integrite de la sequence : une facture ne se modifie pas, la chaine le prouve.
-  verifierChaineFactures: () => request('/api/factures/verifier-chaine'),
+  // ⚠ DEUX ROUTES DECLAREES QUE JE NE BRANCHE PAS, ET CHACUNE POUR SA RAISON.
+  //
+  // `/factures/verifier-chaine` REPOND 404. Declaree en `GetCollection` avec ce `uriTemplate`, elle
+  // est captee par l'operation d'item `/factures/{id}` qui lit << verifier-chaine >> comme un
+  // identifiant : le serveur repond << Invalid uri variables >>. Mesure contre la preprod le 29/08 :
+  //     /api/factures?itemsPerPage=1   200
+  //     /api/factures/verifier-chaine  404
+  //     /api/mes-factures              200
+  // Le bouton etait ecrit ; je l'ai retire plutot que d'en livrer un qui echoue. Signale au serveur.
+  // C'est la meme famille que le GET du padel sur une route POST : << la route existe >> ne veut pas
+  // dire << elle repond >>.
+  //
+  // `/factures/depuis-vente` fonctionne, mais son geste appartient a l'historique des ventes -- on
+  // emet une facture justificative EN REGARDANT une vente, pas en regardant la liste des factures.
+  // La brancher ici aurait demande de ressaisir la vente, c'est-a-dire exactement ce que la facture
+  // justificative existe pour eviter.
 
   pointDeVentes: () => request('/api/point_de_ventes'),
   creerPointDeVente: (corps) => request('/api/point_de_ventes', { method: 'POST', body: corps, ld: true }),
@@ -405,6 +417,17 @@ export const api = {
   // Création rapide d'une fiche client (US-L5-02). L'établissement de création / le groupe sont
   // fixés côté back depuis l'établissement actif (en-tête X-Etablissement).
   creerClient: (corps) => request('/api/clients', { method: 'POST', body: corps, ld: true }),
+
+  // RGPD — le droit a l'effacement (RG-M4-08/09). Trois routes qui existaient depuis le debut et
+  // qu'aucun ecran n'appelait : une obligation legale sans aucun chemin dans le produit.
+  //
+  // `traiter` porte un `uriTemplate` sur mesure et `input: false` cote serveur : pas de corps du
+  // tout, et donc pas de `ld: true` -- seul l'identifiant de la route compte. La creation, elle,
+  // est une operation API Platform standard : elle deserialise, d'ou `ld: true` et l'IRI du client.
+  demandesRgpd: (params) => request('/api/demande_rgpds', { query: params }),
+  creerDemandeRgpd: (corps) =>
+    request('/api/demande_rgpds', { method: 'POST', body: corps, ld: true }),
+  traiterDemandeRgpd: (id) => request('/api/demandes-rgpd/' + id + '/traiter', { method: 'POST' }),
 
   // CONTACTS D'UN CLIENT PROFESSIONNEL. `Beneficiaire` porte une semantique de FAMILLE
   // (payeur, beneficiaire) : elle ne sait pas dire << directrice >> ni << comptabilite >>.
@@ -948,6 +971,39 @@ export const api = {
   // --- Achats & tresorerie ---
   facturesFournisseur: () =>
     request('/api/supplier_invoices', { query: { itemsPerPage: 200 } }),
+  // ON POUVAIT APPROUVER UNE FACTURE FOURNISSEUR, ON NE POUVAIT PAS EN ENREGISTRER UNE.
+  //
+  // Maxime : << Achats & tresorerie -- on ne peut pas enregistrer une facture fournisseur, il faut
+  // donc creer le module fournisseur. >> L'ecran savait rapprocher, approuver, contester, resoudre un
+  // litige et annuler : il traitait une file qu'aucun geste ne remplissait.
+  //
+  // LE MODULE FOURNISSEUR AU SENS DES TIERS EXISTE DEJA (`creerFournisseur`, cote Stock). Ce qui
+  // manquait est l'ENTREE de la facture -- un formulaire, pas une chaine d'extraction.
+  //
+  // Operations API Platform STANDARD (pas d'`uriTemplate`) : elles deserialisent, donc `ld: true`,
+  // et les relations partent en IRI.
+  creerFactureFournisseur: (corps) =>
+    request('/api/supplier_invoices', { method: 'POST', body: corps, ld: true }),
+  // Modification libre TANT QUE brouillon : le serveur repond 409 << Facture scellee >> au-dela.
+  majFactureFournisseur: (id, corps) =>
+    request(`/api/supplier_invoices/${id}`, { method: 'PATCH', body: corps }),
+  // LES LIGNES SONT UNE RESSOURCE A PART, ET CE N'EST PAS UN DETAIL D'IMPLEMENTATION.
+  //
+  // `SupplierInvoice.lines` ne porte AUCUN groupe d'ecriture : les lignes ne s'embarquent pas dans le
+  // corps de la facture, elles se posent une a une sur une facture deja creee. Verifie dans l'entite
+  // avant d'ecrire le formulaire, pas devine -- l'envoi groupe aurait ete accepte en 201 avec une
+  // facture a zero euro et aucune ligne.
+  creerLigneFactureFournisseur: (corps) =>
+    request('/api/supplier_invoice_lines', { method: 'POST', body: corps, ld: true }),
+  // ⚠ PAS DE SUPPRESSION DE LIGNE : `SupplierInvoiceLine` ne declare ni `Delete` ni desactivation.
+  // Une ligne posee sur un brouillon y reste. Le formulaire compose donc la facture AVANT de la
+  // creer, et ne pose ses lignes qu'une fois -- se tromper coute une facture a annuler, pas une
+  // ligne a retirer. Verifie dans l'entite, et signale : c'est une lacune du serveur, pas un choix
+  // de cet ecran.
+  // Le referentiel des natures de depense : c'est lui qui dit sur quel compte une ligne s'impute.
+  // Une nature SANS mapping laisse la facture sans imputation comptable -- l'ecran le signale.
+  mappingsDepense: () =>
+    request('/api/expense_account_mappings', { query: { itemsPerPage: 200 } }),
   // Le rapprochement a trois voies : facture contre commande contre reception. Charge AVANT
   // d'afficher le bouton d'approbation — approuver, c'est engager le paiement.
   rapprochementFactureFournisseur: (id) =>

@@ -54,6 +54,9 @@ const Cautions = lazy(() => import('./pages/Cautions.jsx'))
 // Differe pour la meme raison : un caissier n'enrole pas de terminal et ne bloque pas de badge.
 const Acces = lazy(() => import('./pages/Acces.jsx'))
 const TopologieAcces = lazy(() => import('./pages/TopologieAcces.jsx'))
+// Differe : une demande d'effacement se traite quelques fois par an. L'ecran ne doit peser sur
+// le premier chargement de personne -- mais il doit exister, ce qui n'etait pas le cas.
+const DonneesPersonnelles = lazy(() => import('./pages/DonneesPersonnelles.jsx'))
 
 import { lireHash, ecrireHash } from './api/url.js'
 
@@ -359,6 +362,7 @@ export default function App() {
       {onglet === 'caution' && <Cautions etabActif={etabActif} droits={droits} />}
       {onglet === 'facturation' && <Facturation etabActif={etabActif} droits={droits} onNaviguer={naviguer} />}
       {onglet === 'clients' && <Clients etabActif={etabActif} cible={cible} onCibleConsommee={() => setCible(null)} droits={droits} />}
+      {onglet === 'rgpd' && <DonneesPersonnelles etabActif={etabActif} droits={droits} />}
       {onglet === 'boutique' && <Boutique etabActif={etabActif} droits={droits} />}
       {onglet === 'piscine' && <Piscine etabActif={etabActif} droits={droits} />}
       {onglet === 'patinoire' && <Patinoire etabActif={etabActif} droits={droits} />}

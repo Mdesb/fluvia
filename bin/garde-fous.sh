@@ -301,6 +301,26 @@ fi
 # plutôt qu'à une panne — donc personne ne va lire la feuille de style.
 #
 # Il tourne sur l'HÔTE comme les deux contrôles suivants : node n'est pas dans l'image PHP.
+# PROFIL CHARGÉ AVANT LE PREMIER RENDU — l'invariant dont dépendent 75 contrôles de droits.
+#
+# `aLeDroit(droits, code)` rend `false` aussi bien pour « refusé » que pour « pas encore chargé ».
+# Le 29/08, ça a renvoyé à la caisse quiconque ouvrait un lien profond vers un écran protégé : la
+# garde d'onglet lisait des droits vides et concluait « permission absente » avant que /me réponde.
+#
+# Ce qui rend les soixante-quinze AUTRES appels sûrs n'est pas la fonction, c'est un invariant :
+# aucun écran ne se monte avant que le profil soit là. Ce contrôle vérifie ce fait-là, pas une
+# convention — et il échoue le jour où quelqu'un le brise sans le savoir.
+if [ -f "$RACINE/frontend/scripts/verifier-profil-charge.mjs" ]; then
+    if command -v node >/dev/null 2>&1; then
+        executer "Profil chargé avant le rendu" sh -c "cd '$RACINE/frontend' && node scripts/verifier-profil-charge.mjs"
+    else
+        echo "─────────────────────────────────────────────────────────────"
+        echo "▶ Profil chargé avant le rendu"
+        echo "─────────────────────────────────────────────────────────────"
+        echo "· IGNORÉ — « node » indisponible ici. Le contrôle n'a PAS tourné."
+    fi
+fi
+
 if [ -f "$RACINE/frontend/scripts/verifier-classes.mjs" ]; then
     if command -v node >/dev/null 2>&1; then
         executer "Classes CSS déclarées (n°16)" sh -c "cd '$RACINE/frontend' && node scripts/verifier-classes.mjs"

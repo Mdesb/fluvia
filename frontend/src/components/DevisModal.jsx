@@ -32,7 +32,13 @@ import { api, membres, ApiError } from '../api/client.js'
 // propres a la facture (echeance, conditions de reglement), et l'avertissement de non-rattachement
 // qui ne concerne QUE le devis -- le constructeur de facture directe lit `clientRef`, celui du
 // document commercial ne le lit pas.
-export default function DevisModal({ open, client, onClose, onCree, cible = 'devis' }) {
+// `existante` ouvre le formulaire SUR un brouillon deja cree, pour le corriger avant emission.
+//
+// Sans ca, un brouillon errone etait definitif : `Facture` n'expose aucune suppression -- et c'est
+// voulu, la serie des numeros ne se troue pas -- donc une facture mal saisie serait restee dans la
+// liste pour toujours. `PATCH /factures/{id}` accepte la modification libre TANT QUE brouillon, et
+// refuse explicitement une facture emise (elle est inalterable).
+export default function DevisModal({ open, client, onClose, onCree, cible = 'devis', existante = null }) {
   const facture = cible === 'facture'
   const [echeance, setEcheance] = useState('')
   const [tauxTva, setTauxTva] = useState([])
@@ -53,12 +59,26 @@ export default function DevisModal({ open, client, onClose, onCree, cible = 'dev
   useEffect(() => {
     if (!open) return
     setChoisi(null)
-    setRaisonSociale('')
-    setLignes([{ ...LIGNE_VIDE }])
     setErreur(null)
     setNonRattache(false)
     setCreeSansLien(null)
-    setEcheance('')
+    if (existante) {
+      const d = existante.destinataire || {}
+      setRaisonSociale(d.raisonSociale || [d.prenom, d.nom].filter(Boolean).join(' ').trim() || '')
+      setLignes(
+        (existante.lignes || []).map((l) => ({
+          designation: l.designation || '',
+          quantite: l.quantite ?? 1,
+          prixUnitaireHT: String(l.prixUnitaireHT ?? ''),
+          tauxTva: idDe(l.tauxTva),
+        })),
+      )
+      setEcheance((existante.dateEcheance || '').slice(0, 10))
+    } else {
+      setRaisonSociale('')
+      setLignes([{ ...LIGNE_VIDE }])
+      setEcheance('')
+    }
     api.tauxTvas()
       // UN TAUX MASQUE RESTAIT PROPOSE, ET C'EST L'INVERSE DE CE QUE << masque >> VEUT DIRE.
       //
@@ -92,7 +112,11 @@ export default function DevisModal({ open, client, onClose, onCree, cible = 'dev
         })),
       }
       if (facture && echeance) corps.dateEcheance = echeance
-      const cree = facture ? await api.creerFactureDirecte(corps) : await api.creerDevis(corps)
+      const cree = existante
+        ? await api.majFactureDirecte(existante.id, corps)
+        : facture
+          ? await api.creerFactureDirecte(corps)
+          : await api.creerDevis(corps)
 
       // La facture directe RETIENT le rattachement au client : `FactureDirecteBuilder` lit
       // `clientRef`. L'avertissement ci-dessous ne vaut donc que pour le devis.
@@ -134,7 +158,7 @@ export default function DevisModal({ open, client, onClose, onCree, cible = 'dev
 
   return (
     <>
-      <Modal open={open} onClose={onClose} titre={facture ? 'Facturer un client' : 'Nouveau devis'}>
+      <Modal open={open} onClose={onClose} titre={existante ? 'Corriger le brouillon' : facture ? 'Facturer un client' : 'Nouveau devis'}>
         <form onSubmit={soumettre}>
           {erreur && <div className="banner banner-error">{erreur}</div>}
 
@@ -272,7 +296,9 @@ export default function DevisModal({ open, client, onClose, onCree, cible = 'dev
           )}
 
           <p className="hint">
-            {facture
+            {existante
+              ? 'Cette facture n’est pas encore émise : elle se corrige librement. Une fois émise, elle sera inaltérable et ne pourra plus être annulée que par un avoir.'
+              : facture
               ? 'La facture part en BROUILLON : aucun numéro n’est consommé tant que vous ne l’avez pas émise. C’est ce qui permet de se tromper sans trouer la série légale des numéros.'
               : 'Le devis part en brouillon : rien ne sort tant que vous ne l’avez pas émis, et un numéro n’est consommé qu’à l’émission — un numéro pris par une pièce qu’on jette laisse un trou dans la série.'}
           </p>
@@ -280,7 +306,7 @@ export default function DevisModal({ open, client, onClose, onCree, cible = 'dev
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
             <button className="btn" type="button" onClick={onClose}>Annuler</button>
             <button className="btn primary" type="submit" disabled={envoi || !pretAEnvoyer}>
-              {envoi ? 'Création…' : facture ? 'Créer le brouillon' : 'Créer le devis'}
+              {envoi ? 'Enregistrement…' : existante ? 'Enregistrer' : facture ? 'Créer le brouillon' : 'Créer le devis'}
             </button>
           </div>
         </form>

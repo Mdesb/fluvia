@@ -3,6 +3,7 @@ import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import Modal from '../components/Modal.jsx'
 import Tabs from '../components/Tabs.jsx'
+import { useEtatUrl } from '../api/url.js'
 import MessagerieAssistance from '../components/MessagerieAssistance.jsx'
 
 /**
@@ -34,6 +35,8 @@ const PRIORITES = {
   critique: { libelle: 'Critique', cls: 'crit' },
 }
 
+const DEFAUTS = { tab: 'tickets', statut: '', priorite: '' }
+
 export default function Support({ droits = [], etabActif, me = null }) {
   // ⚠ `droits.includes(code)` NE VOIT PAS LE JOKER, et le garde-fou n°13 me l'a refuse a raison.
   //
@@ -46,10 +49,20 @@ export default function Support({ droits = [], etabActif, me = null }) {
   )
   const agent = peut('support.traiter_ticket_n1') || peut('support.traiter_ticket_n2')
 
-  const [onglet, setOnglet] = useState('tickets')
+  // TROISIEME APPLICATION DU MOTIF DE §9.2 : l'etat de l'ecran vit dans l'URL.
+  //
+  // Ici le gain est direct et quotidien : un ticket devient PARTAGEABLE. << Regarde la demande de la
+  // piscine >> se copie-colle au lieu de se decrire. Et une file triee par priorite survit a
+  // l'expiration de session, qui tombe toutes les heures -- sans ca, l'agent se reconnecte sur la
+  // caisse et refait son tri.
+  const [params, majParams] = useEtatUrl('support', DEFAUTS)
+  const onglet = params.tab
+  const setOnglet = (v) => majParams({ tab: v })
+  const filtreStatut = params.statut
+  const filtrePriorite = params.priorite
+  const setFiltreStatut = (v) => majParams({ statut: v })
+  const setFiltrePriorite = (v) => majParams({ priorite: v })
   const [tickets, setTickets] = useState([])
-  const [filtreStatut, setFiltreStatut] = useState('')
-  const [filtrePriorite, setFiltrePriorite] = useState('')
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   // Plus d'etat `ouvert` : la messagerie tient elle-meme le fil choisi. Le garder ici en ferait
