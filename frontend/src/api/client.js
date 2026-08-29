@@ -24,7 +24,34 @@ export const etablissementStore = {
 }
 
 // Extrait un message d'erreur lisible d'une réponse API (auth, API Platform, opérations custom).
+//
+// ── UN REFUS DE DROIT NE DOIT PAS RESSEMBLER À UNE PANNE ─────────────────────────────────────
+//
+// Sur un refus d'autorisation, API Platform rend `detail: "Access Denied."`. Affiché tel quel, en
+// anglais, dans un bandeau rouge, ce texte se lit comme une erreur technique : l'exploitant
+// appelle au support et cherche une panne, alors qu'il lui manque une permission.
+//
+// `allaccess-8e` a relevé que QUATORZE écrans affichent le message brut du serveur sans traiter
+// le 403 — ils n'utilisent pas `components/Liste.jsx`, qui, lui, l'explique depuis toujours.
+// Corriger quatorze écrans aurait produit quatorze phrases légèrement différentes ; la traduction
+// se fait donc ICI, au seul endroit où le message est fabriqué, et les quatorze en profitent
+// d'un coup. La formulation reprend celle de `Liste.jsx` pour que l'application dise la même
+// chose au même moment.
+//
+// ⚠ ON NE REMPLACE QUE LE MESSAGE GÉNÉRIQUE. Certains 403 portent une raison précise — un motif
+// métier, une règle nommée — et l'écraser par une phrase générale ferait perdre l'information la
+// plus utile. On ne traduit donc que « Access Denied », pas ce que le serveur a pris la peine
+// d'écrire.
 function messageFromPayload(payload, status) {
+  if (status === 403) {
+    const brut = payload?.detail || payload?.message || payload?.['hydra:description'] || ''
+    if (!brut || /access denied/i.test(brut)) {
+      return 'Accès non autorisé pour ce compte sur cet établissement (droits insuffisants). '
+        + "Ce n'est pas une panne : demandez la permission à un administrateur, ou vérifiez que "
+        + "vous êtes sur le bon établissement."
+    }
+    return brut
+  }
   if (!payload) return `Erreur ${status}`
   return (
     payload.message ||
