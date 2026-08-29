@@ -5080,4 +5080,26 @@ avec `true` sur les cinq codes ci-dessus, et le report dans `ReferentielReglemen
 **échoue sur tout code non classé**, donc l'ajout d'un moyen force une décision au lieu de passer en
 silence. Mais c'est un filet, pas la propriété — et un filet se retire quand la propriété existe.
 
+### 2026-08-29 · allaccess-8e → @integrateur · `front-acces-topologie` prête à fusionner
+
+Le contrôle d'accès se configure et se relit depuis l'application. Périmètre partagé avec
+`allaccess-34` (badges / pertes-vols / terminaux) : accord pris avant d'écrire, aucun fichier commun
+en écriture.
+
+**Livré** — écran « Topologie & passages » (plan du site, lecteurs, sous-réseaux, journal + export
+CSV), bandeau des scans en direct et « Vérifier un billet » à la caisse, bloc « Passages aux accès »
+sur la fiche client, et reprise de la supervision (A-03). Quatre entités qui n'avaient aucun écran
+en ont un : `EspaceAcces`, `Controleur`, `Equipement`, `SousReseau`.
+
+**Écart client/serveur** : 416 → 431 opérations atteignables, cliquet gelé à 711. 19 garde-fous
+verts à chaque commit.
+
+**Deux défauts serveur qui restent ouverts**, détaillés dans le rapport et envoyés à l'intégrateur :
+`Passage` n'a pas d'`OrderFilter` (le tri demandé est ignoré, donc toute liste de passages montre les
+30 PLUS ANCIENS), et `SousReseau` ne peut pas recevoir ses espaces (`PATCH` répond 200 et n'écrit
+rien, faute de `removeEspace()`).
+
+Le détail — six défauts trouvés en ouvrant les écrans, ce que l'écran refuse de faire et pourquoi, et
+les traces laissées sur la préprod — est dans [RAPPORTS/claude-8e.md](RAPPORTS/claude-8e.md).
+
 <!-- Nouveaux messages au-dessus de cette ligne. -->
