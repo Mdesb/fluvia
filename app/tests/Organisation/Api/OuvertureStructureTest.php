@@ -33,7 +33,7 @@ final class OuvertureStructureTest extends SecuriteApiTestCase
 
         $client->request('POST', '/api/organisation/structures', $entete + [
             'json' => [
-                'nom' => 'Club de test — société privée',
+                'nomCommercial' => 'Club de test — société privée',
                 'denomination' => 'CLUB TEST SAS',
                 'siret' => '81240390500019',
                 'formeJuridique' => '5710',
@@ -59,7 +59,7 @@ final class OuvertureStructureTest extends SecuriteApiTestCase
         $valeurs = array_map(static fn (TauxTva $t): string => $t->getTaux(), $taux);
         sort($valeurs);
 
-        self::assertSame(['0.00', '10.00', '2.10', '20.00', '5.50'], $valeurs, 'les cinq taux légaux français');
+        self::assertSame(['0.00', '2.10', '5.50', '10.00', '20.00'], $valeurs, 'les cinq taux légaux français');
     }
 
     /**
@@ -76,7 +76,7 @@ final class OuvertureStructureTest extends SecuriteApiTestCase
 
         $client->request('POST', '/api/organisation/structures', $entete + [
             'json' => [
-                'nom' => 'Piscine municipale de test',
+                'nomCommercial' => 'Piscine municipale de test',
                 'denomination' => 'COMMUNE DE TEST',
                 'siret' => '21240390500019',
                 'formeJuridique' => '4210',
