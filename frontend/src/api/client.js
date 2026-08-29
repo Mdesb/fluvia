@@ -418,6 +418,17 @@ export const api = {
   // fixés côté back depuis l'établissement actif (en-tête X-Etablissement).
   creerClient: (corps) => request('/api/clients', { method: 'POST', body: corps, ld: true }),
 
+  // RGPD — le droit a l'effacement (RG-M4-08/09). Trois routes qui existaient depuis le debut et
+  // qu'aucun ecran n'appelait : une obligation legale sans aucun chemin dans le produit.
+  //
+  // `traiter` porte un `uriTemplate` sur mesure et `input: false` cote serveur : pas de corps du
+  // tout, et donc pas de `ld: true` -- seul l'identifiant de la route compte. La creation, elle,
+  // est une operation API Platform standard : elle deserialise, d'ou `ld: true` et l'IRI du client.
+  demandesRgpd: (params) => request('/api/demande_rgpds', { query: params }),
+  creerDemandeRgpd: (corps) =>
+    request('/api/demande_rgpds', { method: 'POST', body: corps, ld: true }),
+  traiterDemandeRgpd: (id) => request('/api/demandes-rgpd/' + id + '/traiter', { method: 'POST' }),
+
   // CONTACTS D'UN CLIENT PROFESSIONNEL. `Beneficiaire` porte une semantique de FAMILLE
   // (payeur, beneficiaire) : elle ne sait pas dire << directrice >> ni << comptabilite >>.
   //

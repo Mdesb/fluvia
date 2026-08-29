@@ -74,6 +74,10 @@ const NAV = [
     section: 'Gestion',
     items: [
       { id: 'clients', ic: '☺', label: 'Clients', perms: ['crm.lire', 'crm.creer', 'crm.modifier'] },
+      // Juste sous Clients, parce qu'une demande d'effacement porte sur une fiche client et se
+      // traite en la relisant. Pas dans Parametres : ce n'est pas un reglage, c'est une file
+      // d'attente avec un delai legal d'un mois.
+      { id: 'rgpd', ic: '⛊', label: 'Données personnelles', perms: ['crm.rgpd_gerer', 'crm.rgpd_demander'] },
       // Une entree propre plutot qu'un onglet dans Clients : un commercial cherche << ses
       // affaires >>, pas un onglet dans un annuaire. Et le pipeline se lit tous les jours,
       // alors qu'une fiche client s'ouvre a l'occasion.

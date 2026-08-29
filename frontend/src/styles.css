@@ -99,6 +99,14 @@ a { color: var(--accent); }
 .btn.sm { padding: 6px 10px; font-size: 12.5px; }
 .btn.ghost { background: none; border-color: transparent; }
 .btn.lg { padding: 12px 18px; font-size: 15px; width: 100%; justify-content: center; }
+/* L'APPLICATION N'AVAIT AUCUN BOUTON DESTRUCTEUR, PARCE QU'ELLE N'AVAIT AUCUN GESTE IRREVERSIBLE.
+ * L'anonymisation RGPD est le premier : elle efface les donnees d'une personne reelle, ne se defait
+ * pas et ne se rejoue pas. Le peindre en `.primary` le rendrait identique a << Enregistrer >> --
+ * c'est le bouton qu'on clique sans lire, et ici on ne peut pas se le permettre.
+ * Pas de fond plein : un aplat rouge attire le clic autant qu'il en avertit. Contour et texte
+ * critiques, remplissage au survol seulement. */
+.btn.danger { border-color: var(--crit); color: var(--crit); background: var(--panel); }
+.btn.danger:hover:not(:disabled) { background: var(--crit-bg); }
 
 /* DEUX UTILITAIRES UTILISES 400 FOIS ET DEFINIS NULLE PART — MEME DEFAUT QUE `.num` PLUS BAS.
  *

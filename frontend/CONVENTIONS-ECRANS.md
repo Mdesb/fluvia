@@ -398,3 +398,39 @@ Stock, lui, le fait : « + Ajouter », « + Créer le premier », « + Lancer un
 **Et quand le DROIT est séparé, le bouton l'est aussi.** `offre.modifier_compta` n'est pas
 `offre.modifier` : qui peut renommer un produit n'a pas à décider du compte sur lequel ses ventes
 s'imputent. Un seul bouton aurait fait porter les deux gestes par le droit le plus faible.
+
+## 10. Le geste qui ne se défait pas
+
+Écrit en posant l'écran **Données personnelles** (RGPD), qui a apporté à l'application son premier
+geste irréversible : l'anonymisation d'une fiche client. Jusque-là, tout se rattrapait — une facture
+s'annule, un badge se réappaire, un projet se rouvre, une caisse se renomme. Rien n'obligeait à
+distinguer visuellement « enregistrer » de « détruire », et rien ne le faisait.
+
+**La règle : un geste irréversible se raconte avant, jamais après.**
+
+Le serveur, lui, se défend très bien : il refuse la seconde tentative en 409 et verrouille l'entité.
+Mais un refus arrive *après* le clic, et le clic est le moment où le dommage est fait. Le 409 protège
+la base ; il ne protège pas la personne dont on vient d'effacer la fiche par erreur.
+
+Quatre exigences, dans l'ordre où l'utilisateur les rencontre :
+
+1. **Le bouton ne ressemble pas à « Enregistrer ».** `.btn.danger` — contour et texte critiques, pas
+   d'aplat rouge : un aplat attire le clic autant qu'il en avertit. Le bouton dit ce qu'il fait
+   (« Anonymiser définitivement »), pas ce qu'il valide (« OK », « Confirmer »).
+
+2. **La modale dit ce qui va se passer, en termes de conséquences, pas de mécanismes.** Quels champs
+   partent, ce qui subsiste, ce qui reste rattaché. Pas « lance le handler d'effacement ».
+
+3. **Une case à cocher, et une seule dans toute l'application.** Partout ailleurs une confirmation
+   superflue apprend à cliquer sans lire, et abîme donc celle-ci. Elle se réarme à chaque ouverture
+   de la modale — un bouton destructeur déjà armé serait pire que pas de case du tout.
+
+4. **L'erreur reste dans la modale.** Renvoyée au bandeau de l'écran, elle est masquée par la modale
+   restée ouverte : c'est le défaut déjà payé sur l'écran des accès, où l'on relançait un appairage
+   en boucle sans jamais voir le refus.
+
+**Et le corollaire, qui n'est pas une question d'interface :** ne jamais promettre plus que ce que le
+serveur fait. « Anonymisé » n'est pas « supprimé ». La fiche subsiste, sans identité, et les ventes
+passées y restent rattachées pour que la comptabilité reste juste. Un écran qui écrirait « supprimer
+définitivement » mentirait dans le seul sens qui coûte un contentieux : celui où l'on a promis à
+quelqu'un un effacement qui n'a pas eu lieu.
