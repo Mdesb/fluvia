@@ -57,6 +57,17 @@ use Symfony\Component\Uid\Uuid;
  * Une déclaration n'a rien à montrer seule : elle n'existe que dans la liste d'un produit. Et la
  * modifier n'a pas de sens — on en retire une, on en pose une autre. Deux opérations en moins, donc
  * deux cloisonnements en moins à tenir et deux charges utiles en moins à faire évoluer.
+ *
+ * ⚠ LE ROUTEUR MONTRE POURTANT UN `GET /api/product_access_zones/{id}`. IL N'EST PAS EXPOSÉ.
+ *
+ * API Platform a besoin d'une cible pour les IRI qu'il génère — un `Delete` n'a pas d'URI sans elle —
+ * et fabrique donc une opération `NotExposed` quand aucun `Get` n'est déclaré. Elle répond
+ * invariablement 404 avec « This route does not aim to be called. », y compris sur un identifiant
+ * existant et sans jeton. Vérifié sur des lignes réelles avant d'écrire ces lignes : j'avais d'abord
+ * conclu à une faille, et la mesure l'a réfutée.
+ *
+ * Ne pas « corriger » cela en déclarant un `Get` : ce serait ouvrir une lecture que personne ne
+ * demande, et la faire compter au cliquet d'écart.
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'access_product_zone')]
