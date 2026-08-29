@@ -92,6 +92,10 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
   const incidentsParId = useMemo(() => new Map(incidents.map((i) => [i.id, i])), [incidents])
 
   const ouverts = incidents.filter((i) => i.statut !== 'resolu')
+  // Le seul cas ou l'on peut affirmer qu'il n'y a rien a mesurer : aucun incident charge, et les
+  // trois compteurs du tableau de bord a zero. Voir la tuile du taux pour la limite exacte.
+  const aucunIncidentConnu = incidents.length === 0
+    && !bord?.nbEnRepresentation && !bord?.nbEnRecouvrement && !bord?.nbAccesBloques
   const resolus = incidents.filter((i) => i.statut === 'resolu')
 
   return (
@@ -129,11 +133,27 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
             <div className="st-val num">{bord.nbEnRecouvrement}</div>
             <div className="st-lbl">En recouvrement</div>
           </div>
+          {/* « 0 % » SUR ZÉRO INCIDENT SE LIT COMME UNE CONTRE-PERFORMANCE.
+              `TableauBordRecouvrementProvider` calcule ce taux sur
+              `nbEnRepresentation + nbEnRecouvrement + nbResolus`, et rend `0.0` quand ce total est
+              nul — la valeur mathématiquement sûre quand il n'y a rien à diviser. Affichée telle
+              quelle, elle annonce « nos clients ne régularisent jamais seuls » à un établissement
+              qui n'a simplement jamais eu d'impayé.
+              Même famille que la jauge du musée qui criait la saturation sur une salle vide : une
+              absence de mesure présentée comme un résultat.
+              ⚠ LA DISTINCTION N'EST PAS EXACTE, et il faut le dire : `nbResolus` n'est pas exposé,
+              donc l'écran ne connaît pas le dénominateur. On ne peut trancher avec certitude que le
+              cas « rien nulle part » — qui est justement celui qui trompe. Demande faite au serveur
+              d'exposer le total, ce qui permettrait d'écrire « 0 % sur 47 incidents ». */}
           <div className="stat-tile">
             <div className="st-val num">
-              {Math.round((bord.tauxResolutionSelfService || 0) * 100)} %
+              {aucunIncidentConnu
+                ? '—'
+                : `${Math.round((bord.tauxResolutionSelfService || 0) * 100)} %`}
             </div>
-            <div className="st-lbl">Réglés par le client seul</div>
+            <div className="st-lbl">
+              {aucunIncidentConnu ? 'Rien à mesurer : aucun impayé' : 'Réglés par le client seul'}
+            </div>
           </div>
         </div>
       )}

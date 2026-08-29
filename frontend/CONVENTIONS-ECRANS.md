@@ -375,8 +375,15 @@ exactement où il était — vérifié en supprimant le jeton et en se reconnect
 Le point 4 non plus : une modale ne porte pas d'URL, donc elle n'est ni partageable, ni restituable,
 et elle s'interdit d'ouvrir une fenêtre par-dessus.
 
-**Ce motif n'est pas « le motif clients ».** C'est celui de toute collection de l'application.
-`Clients` et `Catalogue` l'appliquent depuis le 29/08 ; il n'est pas à recopier, il est à réutiliser.
+**Ce motif n'est pas « le motif clients ».** C'est celui de toute collection de l'application. Au
+29/08 il sert **cinq** écrans — `Clients`, `Catalogue`, `Assistance`, `Campagnes`, `Projets` — sans
+être recopié une seule fois : tous appellent `useEtatUrl`. Ce qu'ils en tirent diffère, et c'est
+normal : une fiche client devient une PAGE, une fiche projet reste une modale que l'URL désigne. Le
+motif porte l'état, pas la mise en page.
+
+**Un identifiant qui ne correspond à rien laisse la fiche fermée.** Un lien périmé, un enregistrement
+archivé puis filtré : on résout contre la liste déjà chargée, et l'absence est un silence. Ouvrir une
+fiche vide ferait croire à une panne.
 
 ### 9.3 Les actions : on crée une chose là où c'est le métier
 
