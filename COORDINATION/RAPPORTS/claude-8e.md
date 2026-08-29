@@ -214,3 +214,70 @@ sur ce chiffre ; une fois les opérations ouvertes, le compte est retombé juste
 garde-fous verts.** Écrans revérifiés après chaque fusion : plan, lecteurs, sous-réseaux, journal,
 supervision, caisse (session ouverte et fermée), fiche client, fiche produit — en clair et en sombre,
 sur deux établissements.
+
+---
+
+## Deuxième journée — ce qui a été livré après le contrôle d'accès
+
+### Les boutons retour : la cause plutôt que le symptôme
+
+Maxime : « quand on clique sur le bouton retour du navigateur, on change carrément de page. Donc il
+nous faut des boutons-retour un peu partout. »
+
+La cause était une option manquante : changer d'écran écrivait l'adresse **en remplaçant** au lieu
+d'empiler. Toute la session tenait dans une entrée d'historique, et le « Précédent » ne pouvait que
+sortir de l'application. **Des boutons dans les écrans n'auraient pas réparé le geste que les gens
+font réellement** — ils auraient ajouté un second chemin à côté d'un premier cassé.
+
+Un bouton dans la barre du haut a été ajouté quand même, pour une raison précise : l'application
+s'installe sur une tablette de caisse, et **en mode autonome la barre du navigateur disparaît**. Il
+ne s'affiche que s'il y a où revenir DANS l'application, la profondeur étant portée par l'entrée
+d'historique et non par un compteur qui se désynchroniserait.
+
+### La cloche de notification
+
+Écran livré contre un contrat négocié avant d'écrire. Deux propriétés tiennent tout :
+
+- **la pastille compte ce que la liste montre** — même requête, jamais un second compteur ;
+- **chaque ligne mène quelque part** — le clic marque lu ET navigue vers l'écran concerné.
+
+Vérifié à l'écran : pastille à 3 quand une quatrième notification est adressée à quelqu'un d'autre,
+gravités et textes affichés, clic qui marque et navigue (pastille et serveur d'accord après coup),
+et 404 sur la notification d'un collègue.
+
+**Avec la réserve qui compte** : ces quatre notifications ont été écrites en base et contournent le
+bus d'événements. Elles prouvent l'écran, **pas** la règle qui le remplit — celle-là est prouvée par
+son propre test. Deux moitiés, deux preuves (voir PLAYBOOK §10 bis).
+
+Un des cinq faits admis a été **retiré sur mon avis** : `expense_report.submitted`, parce qu'aucun
+écran ne permet de soumettre ni de valider une note de frais. La notification aurait annoncé un fait
+improvocable et mené à un écran sans geste.
+
+### Les correspondances comptables
+
+Le défaut : une seule correspondance existait, donc **les ventes catégorisées n'étaient pas
+comptabilisées du tout** — pas « rangées sur un compte par défaut », comme deux messages me l'avaient
+décrit. Mesuré dans trois endroits concordants du code avant d'écrire la phrase de l'écran.
+
+La liste part des **catégories**, pas des correspondances : lister les correspondances montrerait ce
+qui est fait et cacherait ce qui manque. Et il y a trois états, pas deux — une correspondance qui
+pointe un compte désactivé est **inopérante**, avec le même effet qu'une absence. Le verdict vient du
+serveur (`operante`), la cause aussi (`actif` sur chaque relation) : l'écran ne rejoue pas la règle.
+
+### Ce qui a été trouvé sans être cherché
+
+- **Un garde-fou neuf refusait tous les push** : il chargeait des dépendances absentes du crochet.
+  Corrigé — un garde-fou qui ne peut pas s'exécuter doit le dire et rendre la main.
+- **Le cliquet d'écart se laissait baisser par du vide** : il comptait comme atteignable tout appel
+  client, même vers une route inexistante. Le sens était inversé — un appel dans le vide est un
+  défaut, la mesure en faisait un progrès.
+- **Un billet QR vendu au guichet est refusé au tourniquet.** Vendre crée un `BilletSupport` ; le
+  contrôle d'accès ne connaît que les `Support` créés à l'appairage. Les deux ne se rencontrent
+  nulle part, et `ValidationPassageHandler` refuse « support inconnu ». Trouvé en éprouvant le bloc
+  de passages de la fiche client ; remonté, pas corrigé — ça touche la vente et l'accès à la fois.
+
+### Ce qui reste non prouvé, et qui est dit comme tel
+
+- le bloc de la fiche client affichant une **vraie** ligne de passage : il faudrait un billet appairé
+  puis présenté, et fabriquer un appairage sur une vente réelle abîmerait le dossier d'un client ;
+- la règle d'admission de la cloche vue **de bout en bout** depuis un vrai événement métier.
