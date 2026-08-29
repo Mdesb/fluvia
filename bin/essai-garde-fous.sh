@@ -209,6 +209,16 @@ namespace App\Offre\Entity;
 use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Post;
 use App\Offre\State\BancSansLectureProcessor;
+/**
+ * ⚠ SONDE DE BANC : elle n'aura JAMAIS d'ecran, et ce n'est pas une dette.
+ *
+ * @sans-ecran: sonde du banc d'essai des garde-fous, jamais appelee par une interface.
+ *
+ * Sans cette declaration, le cliquet d'ecart n15 -- gele a la valeur courante -- compte cette
+ * operation comme une inatteignable de plus et fait ECHOUER le cas, quel que soit le garde-fou que
+ * le cas visait. Un banc rouge en permanence ne se lit plus : on s'habitue a l'echec connu, et le
+ * prochain, reel, se range dans la meme case.
+ */
 #[ApiResource(operations: [
     new Post(
         uriTemplate: '/banc/sonde',
@@ -244,6 +254,16 @@ namespace App\Offre\Entity;
 use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Post;
 use App\Offre\State\BancSansLectureProcessor;
+/**
+ * ⚠ SONDE DE BANC : elle n'aura JAMAIS d'ecran, et ce n'est pas une dette.
+ *
+ * @sans-ecran: sonde du banc d'essai des garde-fous, jamais appelee par une interface.
+ *
+ * Sans cette declaration, le cliquet d'ecart n15 -- gele a la valeur courante -- compte cette
+ * operation comme une inatteignable de plus et fait ECHOUER le cas, quel que soit le garde-fou que
+ * le cas visait. Un banc rouge en permanence ne se lit plus : on s'habitue a l'echec connu, et le
+ * prochain, reel, se range dans la meme case.
+ */
 #[ApiResource(operations: [
     new Post(
         uriTemplate: '/banc/sonde',
