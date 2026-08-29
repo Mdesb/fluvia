@@ -296,6 +296,22 @@ class DroitAcces
     }
 
     /**
+     * ⚠ POSE AVANT D'EN AVOIR BESOIN, ET C'EST DELIBERE.
+     *
+     * Le serialiseur de Symfony n'accepte une collection en ecriture que si l'AJOUT ET LE RETRAIT
+     * existent. Sans les deux, il ignore la propriete -- sans erreur. `SousReseau` en est mort la
+     * meme nuit : `PATCH { espaces: [...] }` repondait 200 en n'enregistrant rien.
+     *
+     * Deux lignes maintenant valent une soiree plus tard.
+     */
+    public function removeAuthorisedSpace(EspaceAcces $space): self
+    {
+        $this->authorisedSpaces->removeElement($space);
+
+        return $this;
+    }
+
+    /**
      * Ce droit ouvre-t-il cet espace ?
      *
      * Vide = ouvre tout : voir le docbloc de la propriété. La comparaison porte sur la

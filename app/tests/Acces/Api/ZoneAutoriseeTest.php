@@ -105,7 +105,15 @@ final class ZoneAutoriseeTest extends AccesApiTestCase
     {
         $em = $this->em();
 
-        $autre = (new EspaceAcces())->setLibelle('Zone d’épreuve, sans équipement');
+        // ⚠ `espaceSocle` est obligatoire en base : un espace d'accès est toujours la déclinaison
+        // d'un espace du socle. On reprend celui de l'espace existant plutôt que d'en inventer un —
+        // le test porte sur la zone, pas sur la topologie.
+        $existant = $em->getRepository(EspaceAcces::class)->find($this->idEspaceAcces());
+        self::assertInstanceOf(EspaceAcces::class, $existant);
+
+        $autre = (new EspaceAcces())
+            ->setLibelle('Zone d’épreuve, sans équipement')
+            ->setEspaceSocle($existant->getEspaceSocle());
         $em->persist($autre);
 
         $this->droit($em)->addAuthorisedSpace($autre);
