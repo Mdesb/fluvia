@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import Modal from '../components/Modal.jsx'
@@ -448,6 +448,7 @@ function EditionSegment({ segment, onFermer, onEnregistre, onErreur }) {
   const aucunCritere = Object.entries(valeurs)
     .filter(([, v]) => v !== '' && v !== null && v !== undefined).length === 0
 
+
   async function enregistrer() {
     setBusy(true)
     onErreur(null)
@@ -548,6 +549,9 @@ const STATUTS = {
 }
 
 const CANAUX = [['email', 'Courriel'], ['sms', 'SMS']]
+// Doit rester le miroir de `MessageVariables::CONNUES` côté serveur. Deux listes qui divergent
+// donneraient un bouton qui insère une variable refusée à l'enregistrement.
+const VARIABLES = [['prenom', 'Prénom'], ['nom', 'Nom'], ['civilite', 'Civilité']]
 
 function idDe(ref) {
   if (!ref) return null
@@ -742,6 +746,49 @@ function RedactionCampagne({ campagne, segments, onFermer, onEnregistre, onErreu
   const [channel, setChannel] = useState('email')
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
+  const champCorps = useRef(null)
+  const curseurVoulu = useRef(null)
+
+  // Le message porte-t-il au moins une variable ? Sert à dire que l'audience réelle sera plus
+  // petite que l'effectif du segment — voir l'avertissement sous le champ.
+  const personnalise = /\{\{\s*[a-z_]+\s*\}\}/i.test(subject + ' ' + body)
+
+  useEffect(() => {
+    if (curseurVoulu.current == null || !champCorps.current) return
+    const position = curseurVoulu.current
+    curseurVoulu.current = null
+    champCorps.current.focus()
+    champCorps.current.setSelectionRange(position, position)
+  }, [body])
+
+  // LES VARIABLES S'INSÈRENT, ELLES NE SE RECOPIENT PLUS.
+  //
+  // Elles étaient documentées sous le champ et devaient être tapées à la main. Le serveur refuse
+  // bien une variable inconnue à l'enregistrement — `Campaign::validerVariables` — donc une faute
+  // de frappe ne part pas en production. Mais elle coûte un aller-retour, un message d'erreur, et
+  // la relecture d'un texte pour trouver la lettre manquante. Trois boutons suppriment la classe
+  // d'erreur entière, et rendent au passage la fonction visible : personne ne cherche une syntaxe
+  // de gabarit sous un champ de saisie.
+  function insererVariable(nom) {
+    const jeton = '{{' + nom + '}}'
+    const el = champCorps.current
+    if (!el) {
+      setBody((b) => b + jeton)
+      return
+    }
+    const debut = el.selectionStart ?? body.length
+    const fin = el.selectionEnd ?? debut
+    setBody(body.slice(0, debut) + jeton + body.slice(fin))
+    // ON MÉMORISE OÙ LE CURSEUR DOIT ALLER ; C'EST L'EFFET QUI L'Y MET, APRÈS LE RENDU.
+    //
+    // Première version : `requestAnimationFrame` juste après `setBody`. Elle plaçait bien le
+    // curseur — puis React réécrivait la valeur du champ et le renvoyait à la fin. Insérer une
+    // seconde variable l'ajoutait donc en bout de texte au lieu de la suite de la première.
+    //
+    // Le commentaire d'origine affirmait corriger ce défaut. Il ne le corrigeait pas : c'est en
+    // insérant deux variables d'affilée dans l'écran que ça s'est vu, jamais à la lecture.
+    curseurVoulu.current = debut + jeton.length
+  }
   const [temoin, setTemoin] = useState(10)
   const [fenetre, setFenetre] = useState(30)
   const [busy, setBusy] = useState(false)
@@ -765,7 +812,11 @@ function RedactionCampagne({ campagne, segments, onFermer, onEnregistre, onErreu
         label: label.trim(),
         segment: `/api/segments/${segment}`,
         channel,
-        subject: subject.trim(),
+        // UN SMS N'A PAS D'OBJET, et en envoyer un vide vaut mieux qu'en envoyer un ignoré :
+        // `Campaign::validerVariables` inspecte `subject . ' ' . body`, donc un objet oublié dans
+        // le formulaire ferait refuser une campagne SMS pour une variable qu'on ne voit plus.
+        // La saisie, elle, est conservée : revenir au courriel la retrouve intacte.
+        subject: channel === 'sms' ? '' : subject.trim(),
         body,
         controlGroupPercent: Number(temoin),
         attributionWindowDays: Number(fenetre),
@@ -817,19 +868,52 @@ function RedactionCampagne({ campagne, segments, onFermer, onEnregistre, onErreu
           </span>
         </label>
 
-        <label style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
-          <span className="sub">Objet</span>
-          <input className="input" value={subject} maxLength={200} onChange={(e) => setSubject(e.target.value)} />
-        </label>
+        {channel !== 'sms' && (
+          <label style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
+            <span className="sub">Objet</span>
+            <input className="input" value={subject} maxLength={200} onChange={(e) => setSubject(e.target.value)} />
+          </label>
+        )}
 
         <label style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
           <span className="sub">Message</span>
-          <textarea rows={7} value={body} onChange={(e) => setBody(e.target.value)} />
-          <span className="sub" style={{ fontSize: 12 }}>
-            Variables disponibles&nbsp;: <code>{'{{prenom}}'}</code> <code>{'{{nom}}'}</code>{' '}
-            <code>{'{{civilite}}'}</code>. Une variable que le serveur ne sait pas remplir écarte la
-            personne concernée plutôt que d’écrire «&nbsp;Bonjour ,&nbsp;».
-          </span>
+          <textarea ref={champCorps} rows={7} value={body} onChange={(e) => setBody(e.target.value)} />
+
+          <div style={{ display: 'flex', gap: 'var(--esp-serre)', alignItems: 'center', flexWrap: 'wrap' }}>
+            <span className="sub" style={{ fontSize: 12 }}>Insérer&nbsp;:</span>
+            {VARIABLES.map(([nom, libelle]) => (
+              <button
+                key={nom}
+                type="button"
+                className="btn ghost xs"
+                onClick={() => insererVariable(nom)}
+                title={'Insère {{' + nom + '}} à l’endroit du curseur'}
+              >
+                {libelle}
+              </button>
+            ))}
+            {channel === 'sms' && (
+              <span className="sub" style={{ fontSize: 12, marginLeft: 'auto' }}>
+                {body.length} caractère(s) — un SMS en tient 160, au-delà l’opérateur le découpe.
+              </span>
+            )}
+          </div>
+
+          {/* PERSONNALISER RÉDUIT L'AUDIENCE, ET C'EST LE GENRE DE CHOSE QUE PERSONNE N'ANTICIPE.
+              `MessageVariables::remplir` rend `null` dès qu'une variable est vide pour un client —
+              une chaîne vide compte comme absente — et l'envoi écarte alors la personne plutôt que
+              d'écrire « Bonjour , ». C'est le bon choix côté serveur. Mais vu de l'écran, ajouter
+              « {{prenom}} » à un message peut retirer des centaines de destinataires d'un segment
+              qui en annonçait mille, sans qu'aucun compteur ne bouge : l'effectif du segment est
+              calculé AVANT le message. */}
+          {personnalise && (
+            <span className="sub" style={{ fontSize: 12 }}>
+              ⚠ Ce message est personnalisé. Les personnes dont le champ utilisé est vide seront
+              <strong> écartées de l’envoi</strong> — mieux vaut ça qu’un «&nbsp;Bonjour
+              ,&nbsp;»&nbsp;— mais elles comptent dans l’effectif du segment affiché plus haut, qui
+              sera donc supérieur au nombre réellement contacté.
+            </span>
+          )}
         </label>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--esp-large)' }}>
