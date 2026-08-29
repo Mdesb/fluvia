@@ -895,6 +895,11 @@ export const api = {
   creerRegion: (corps) => request('/api/regions', { method: 'POST', body: corps, ld: true }),
   majRegion: (id, corps) => request(`/api/regions/${id}`, { method: 'PATCH', body: corps }),
   categories: () => request('/api/categories', { query: { itemsPerPage: 200 } }),
+  // LES CORRESPONDANCES COMPTABLES : quelle catégorie s'impute sur quel compte de produit.
+  // Exposées depuis le début, appelées par aucun écran. Sans elles, impossible de dire à
+  // l'exploitant si la catégorie qu'il choisit sur une ligne de facture change quoi que ce soit —
+  // et `ResolveurComptesFacturation` se replie silencieusement sur le compte par défaut.
+  mappingsComptables: () => request('/api/mapping_comptables', { query: { itemsPerPage: 200 } }),
   creerCategorie: (corps) => request('/api/categories', { method: 'POST', body: corps, ld: true }),
   majCategorie: (id, corps) => request(`/api/categories/${id}`, { method: 'PATCH', body: corps }),
   supprimerCategorie: (id) => request(`/api/categories/${id}`, { method: 'DELETE' }),
