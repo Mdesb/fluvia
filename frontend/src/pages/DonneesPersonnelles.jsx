@@ -249,7 +249,7 @@ export default function DonneesPersonnelles({ etabActif, droits }) {
                               Traiter
                             </button>
                           ) : (
-                            <span className="sub">close</span>
+                            <span className="sub">demande close</span>
                           )}
                         </td>
                       )}
