@@ -38,11 +38,21 @@ import { aLeDroit } from '../api/droits.js'
 // ⚠ UNE CORRESPONDANCE PEUT EXISTER ET NE RIEN FAIRE. `MappingComptable::estValide()` exige que le
 // compte ET le taux soient ACTIFS. Une correspondance qui pointe un compte désactivé produit la même
 // anomalie qu'une correspondance absente — et se lit « en place » si on ne regarde que sa présence.
-// L'état est donc calculé, pas déduit de l'existence de la ligne.
 //
-// ⚠ ET `actif` N'EST PAS DANS LA CHARGE UTILE DE LA CORRESPONDANCE : `mapping:read` embarque le
-// compte et le taux avec leur libellé, sans leur `actif`. On croise donc avec les référentiels, qu'on
-// charge de toute façon pour les menus.
+// LE VERDICT VIENT DU SERVEUR, LA CAUSE AUSSI — ET C'EST UN CHANGEMENT DE CE MATIN.
+//
+// La première version de cet écran rejouait la règle : elle croisait les référentiels pour savoir si
+// le compte et le taux étaient actifs. C'était la seule façon de le savoir, `mapping:read` ne portant
+// alors ni l'un ni l'autre. Mais un écran qui réimplémente une règle du serveur finit par en
+// diverger — c'est la leçon écrite dans `droits.js`, payée sur les permissions joker.
+//
+// La charge utile porte désormais les deux, mesurée à l'écran avant d'être utilisée :
+//
+//     operante   le VERDICT, calculé par `estValide()` côté serveur
+//     actif      sur le compte ET sur le taux embarqués — la CAUSE, pour dire lequel
+//
+// On lit donc le verdict, et on ne s'en sert des référentiels que pour ce que la charge utile ne
+// dit pas : qu'une référence pointe hors du site.
 
 // Le filtre `axe` n'existe pas sur `/api/categories` : vérifié en comparant les réponses avec et
 // sans — même total, même contenu. L'envoyer donnerait une liste NON filtrée qui a l'air filtrée,
@@ -108,9 +118,22 @@ export default function CorrespondancesComptables({ etabActif, droits = [] }) {
       const compte = mapping ? compteParId.get(idDe(mapping.compteProduit)) : null
       const tva = mapping ? tauxParId.get(idDe(mapping.tauxTva)) : null
       // Le référentiel fait foi sur `actif` : la charge utile de la correspondance ne le porte pas.
-      const inactif = mapping !== null && ((compte && compte.actif === false) || (tva && tva.actif === false))
+      // Le verdict est celui du serveur. `operante` absent (serveur plus ancien) : on retombe sur la
+      // lecture des `actif` embarqués plutôt que de conclure « en place » par défaut — l'ancien
+      // défaut était précisément de croire qu'une ligne présente était une ligne qui agit.
+      const inactif =
+        mapping !== null
+        && (mapping.operante === false
+          || (mapping.operante === undefined
+            && ((compte && compte.actif === false) || (tva && tva.actif === false))))
+      // La cause, pour que la phrase contienne son geste : c'est le compte, ou le taux, ou les deux.
+      const causes = []
+      if (mapping) {
+        if (mapping.compteProduit?.actif === false || compte?.actif === false) causes.push('le compte')
+        if (mapping.tauxTva?.actif === false || tva?.actif === false) causes.push('le taux de TVA')
+      }
       const introuvable = mapping !== null && (!compte || !tva)
-      return { categorie: cat, mapping, compte, tva, inactif, introuvable }
+      return { categorie: cat, mapping, compte, tva, inactif, introuvable, causes }
     })
   }, [categories, mappings, comptes, taux])
 
@@ -220,9 +243,16 @@ export default function CorrespondancesComptables({ etabActif, droits = [] }) {
                           référence introuvable
                         </span>
                       ) : l.inactif ? (
-                        <span className="badge crit" title="Un compte ou un taux désactivé rend la correspondance inopérante : même effet qu’une absence.">
-                          inopérante
-                        </span>
+                        <>
+                          <span className="badge crit">inopérante</span>
+                          {/* Un verdict sans cause fait chercher : sans cette phrase, l'exploitant
+                              ouvre le plan de comptes, puis les taux, et compare à la main. */}
+                          <div className="mut">
+                            {l.causes.length > 0
+                              ? `${l.causes.join(' et ')} ${l.causes.length > 1 ? 'sont désactivés' : 'est désactivé'}`
+                              : 'compte ou taux désactivé'}
+                          </div>
+                        </>
                       ) : (
                         <span className="badge good">en place</span>
                       )}
