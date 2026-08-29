@@ -6,6 +6,7 @@ namespace App\Organisation\Command;
 
 use App\Compta\Entity\ProfilExploitant;
 use App\Compta\Entity\TauxTva;
+use App\Compta\Service\AccountingChartSeeder;
 use App\Compta\Enum\ReferentielComptable;
 use App\Compta\Enum\TypeExploitant;
 use App\Organisation\Entity\Etablissement;
@@ -58,7 +59,10 @@ final class BackfillAccountingProfilesCommand extends Command
         ['2.10', 'Taux particulier 2,1 %'],
     ];
 
-    public function __construct(private readonly EntityManagerInterface $em)
+    public function __construct(
+        private readonly EntityManagerInterface $em,
+        private readonly AccountingChartSeeder $chartSeeder,
+    )
     {
         parent::__construct();
     }
@@ -78,6 +82,8 @@ final class BackfillAccountingProfilesCommand extends Command
         $profilsCrees = 0;
         $tauxCrees = 0;
         $lignes = [];
+
+        $comptesEtJournauxCrees = 0;
 
         foreach ($etablissements as $etablissement) {
             $profil = $this->em->getRepository(ProfilExploitant::class)
@@ -118,11 +124,34 @@ final class BackfillAccountingProfilesCommand extends Command
                 }
             }
 
-            if ($creeProfil || $manquants !== []) {
+            // ⚠ LE PROFIL ET LES TAUX NE SUFFISENT PAS.
+            //
+            // Les régimes résolvent leurs comptes par préfixe (511, 411, 4457, 487, 512, 706) et
+            // leurs journaux par code (VTE, ENC, REG, PCA, EXT) : sans eux, la génération
+            // d'écritures lève une 422. Poser le profil seul déplace le message d'erreur, il ne
+            // débloque rien — c'est ce que j'avais annoncé comme « mise en service débloquée » alors
+            // que quatre maillons sur six manquaient encore.
+            //
+            // Le CONSTAT lit `manquants()`, la POSE appelle `poser()` : même source, donc le mode
+            // constat ne peut pas annoncer autre chose que ce que le mode écriture ferait.
+            $chartManquants = $this->chartSeeder->manquants($profil);
+            $aPoser = \count($chartManquants['journaux']) + \count($chartManquants['comptes']);
+            $comptesEtJournauxCrees += $aPoser;
+
+            if ($ecrire && $aPoser > 0) {
+                $this->chartSeeder->poser($profil);
+            }
+
+            if ($creeProfil || $manquants !== [] || $aPoser > 0) {
                 $lignes[] = [
                     $etablissement->getNom(),
                     $creeProfil ? 'profil créé' : 'profil existant',
                     \count($manquants) . ' taux à poser',
+                    sprintf(
+                        '%d journal(aux), %d compte(s)',
+                        \count($chartManquants['journaux']),
+                        \count($chartManquants['comptes']),
+                    ),
                 ];
             }
         }
@@ -131,8 +160,8 @@ final class BackfillAccountingProfilesCommand extends Command
             $this->em->flush();
         }
 
-        $io->table(['Établissement', 'Profil', 'Taux'], $lignes);
-        $io->writeln(sprintf('  %d profil(s), %d taux.', $profilsCrees, $tauxCrees));
+        $io->table(['Établissement', 'Profil', 'Taux', 'Plan de comptes'], $lignes);
+        $io->writeln(sprintf('  %d profil(s), %d taux, %d objet(s) de plan comptable.', $profilsCrees, $tauxCrees, $comptesEtJournauxCrees));
 
         if (!$ecrire) {
             $io->note('Constat seulement. Relance avec --ecrire pour appliquer.');
