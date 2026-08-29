@@ -9,7 +9,7 @@ import {
 } from './api/client.js'
 import { aLeDroit } from './api/droits.js'
 import Login from './pages/Login.jsx'
-import AppShell from './components/AppShell.jsx'
+import AppShell, { ongletsConnus } from './components/AppShell.jsx'
 import FrontiereErreur from './components/FrontiereErreur.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import Caisse from './pages/Caisse.jsx'
@@ -340,6 +340,30 @@ export default function App() {
           Ici, un écran qui plante affiche son erreur et laisse le menu debout : on part
           ailleurs. La clé `onglet` remet l'ardoise propre au changement d'écran. */}
       <FrontiereErreur cle={onglet}>
+      {/* UNE ADRESSE INCONNUE RENDAIT UNE PAGE BLANCHE, ET C'EST MOI QUI L'AI RENDUE ATTEIGNABLE.
+          Tant que l'onglet vivait dans l'état du composant, on ne pouvait pas en demander un qui
+          n'existe pas. Depuis qu'il est dans l'URL, un favori d'avant la refonte, un lien tronqué
+          dans un message ou un écran renommé suffisent : `#topologie` au lieu de
+          `#topologie_acces` rendait la coquille — menu, en-tête, bannière — et RIEN dans la zone
+          de contenu. Pas de message, pas d'erreur en console, un écran qui a l'air de charger
+          pour toujours.
+          ON NE REDIRIGE PAS EN SILENCE : ça donnerait l'impression que le lien a marché, et la
+          personne chercherait ailleurs pourquoi elle n'a pas ce qu'elle demandait. */}
+      {!ongletsConnus().has(onglet) && (
+        <div className="view">
+          <div className="empty">
+            <b>Cet écran n’existe pas, ou il a été renommé.</b>
+            <p className="hint">
+              L’adresse demandée est <code>#{onglet}</code>. Si elle vient d’un favori ou d’un lien
+              reçu, elle a pu vieillir : le reste de l’application fonctionne, choisissez un écran
+              dans le menu.
+            </p>
+            <button className="btn" type="button" onClick={() => naviguer(estAdmin ? 'dashboard' : 'caisse')}>
+              {estAdmin ? 'Aller au tableau de bord' : 'Aller à la caisse'}
+            </button>
+          </div>
+        </div>
+      )}
       <Suspense fallback={<div className="center" style={{ minHeight: 240 }}><div className="spinner" /></div>}>
       {onglet === 'dashboard' && estAdmin && (
         <Dashboard etabActif={etabActif} etablissements={etablissements} droits={droits} onNav={naviguer} />

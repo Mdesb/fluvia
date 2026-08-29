@@ -56,12 +56,7 @@ export default function ActivitesClient({ client, peutModifier }) {
     if (!client?.id) return
     setChargement(true)
     try {
-      const tous = membres(await api.activitesCommerciales())
-      const miennes = tous.filter((a) => {
-        const ref = a.customer
-        const id = typeof ref === 'string' ? ref.split('/').pop() : ref?.id
-        return String(id) === String(client.id)
-      })
+      const miennes = membres(await api.activitesCommerciales(client.id))
       // Du plus récent au plus ancien : un historique se lit par le haut.
       miennes.sort((a, b) => String(b.occurredAt || '').localeCompare(String(a.occurredAt || '')))
       setActivites(miennes)
