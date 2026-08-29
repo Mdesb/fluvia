@@ -47,7 +47,7 @@ final class EditorCatalogProcessor implements ProcessorInterface
 
     public function process(mixed $data, Operation $operation, array $uriVariables = [], array $context = []): mixed
     {
-        $this->editorOnly->assertEditor();
+        $this->editorOnly->assertEditor('editor.manage_offer');
 
         if ($operation instanceof DeleteOperationInterface) {
             $this->supprimer($data, $uriVariables);

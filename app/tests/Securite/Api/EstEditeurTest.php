@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Tests\Securite\Api;
 
+use App\DataFixtures\SocleFixtures;
+use App\Securite\Service\ContexteEtablissement;
 use App\Tests\Securite\SecuriteApiTestCase;
 
 /**
@@ -50,5 +52,52 @@ final class EstEditeurTest extends SecuriteApiTestCase
             $profil['estEditeur'],
             'Aucun éditeur n’est désigné dans cet environnement : la réponse doit être « personne », jamais « tout le monde ».',
         );
+    }
+
+    /**
+     * ⚠ LE CAS POSITIF, SANS LEQUEL LES DEUX AUTRES NE GARDENT RIEN.
+     *
+     * Un booléen qui rend TOUJOURS `false` passe les assertions précédentes : la bannière ne
+     * s'afficherait jamais à tort — ni jamais à raison. `return false;` serait une implémentation
+     * valide de tout ce qui précède. Il faut donc voir la réponse basculer.
+     *
+     * La désignation vient du déploiement, alors le test la pose comme le ferait un déploiement :
+     * il cherche l'établissement éditeur par son nom et renseigne `EDITOR_TENANT_ID`. L'identifiant
+     * est engendré à la création — pas de setter sur `Etablissement`, et il ne doit pas y en avoir
+     * sur l'entité pivot du cloisonnement.
+     */
+    public function testSurLEtablissementEditeurLaReponseBascule(): void
+    {
+        $idEditeur = $this->idEtablissement(SocleFixtures::ETAB_EDITEUR_NOM);
+
+        // Un noyau déjà démarré a pu résoudre la variable et la garder en cache : sans ce
+        // redémarrage, le résultat dépendrait de ce qui a tourné avant — une dépendance qui se
+        // découvre trois semaines plus tard, sur une autre machine.
+        self::ensureKernelShutdown();
+        $_ENV['EDITOR_TENANT_ID'] = $idEditeur;
+        $_SERVER['EDITOR_TENANT_ID'] = $idEditeur;
+        putenv('EDITOR_TENANT_ID=' . $idEditeur);
+
+        try {
+            $client = static::createClient();
+            $jeton = $this->jeton($client, SocleFixtures::ADMIN_EMAIL, SocleFixtures::ADMIN_MDP);
+
+            $profil = $client->request('GET', '/me', [
+                'auth_bearer' => $jeton,
+                'headers' => [ContexteEtablissement::HEADER => $idEditeur],
+            ])->toArray();
+            self::assertResponseIsSuccessful();
+
+            self::assertTrue(
+                $profil['estEditeur'],
+                'Sur l’établissement désigné par EDITOR_TENANT_ID, la réponse doit basculer — sinon le booléen ne mesure rien.',
+            );
+        } finally {
+            // La variable ne doit pas fuir vers les tests suivants : ils vérifient précisément
+            // qu'un déploiement sans désignation n'a pas d'éditeur.
+            unset($_ENV['EDITOR_TENANT_ID'], $_SERVER['EDITOR_TENANT_ID']);
+            putenv('EDITOR_TENANT_ID=');
+            self::ensureKernelShutdown();
+        }
     }
 }

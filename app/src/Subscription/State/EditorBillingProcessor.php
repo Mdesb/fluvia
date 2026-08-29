@@ -47,7 +47,7 @@ final class EditorBillingProcessor implements ProcessorInterface
 
     public function process(mixed $data, Operation $operation, array $uriVariables = [], array $context = []): EditorBilling
     {
-        $this->editorOnly->assertEditor();
+        $this->editorOnly->assertEditor('editor.read_billing');
 
         $corps = $this->lecteur->corps();
         $abonnement = $this->abonnement($corps['subscriptionId'] ?? null);

@@ -106,6 +106,58 @@ final class EditorCustomersApiTest extends SocleApiTestCase
     // ---------------------------------------------------------------- montage
 
     /** @return array<string, mixed> */
+    /**
+     * ⚠ « L'ARGENT EST UN RÔLE À PART » — et ce test dit ce que ça veut dire concrètement.
+     *
+     * Une permission sur la ressource n'y suffisait pas : la fiche PORTE les montants. Autoriser
+     * l'assistance à la lire lui aurait donné le chiffre d'affaires de chaque client. C'est donc la
+     * RÉPONSE qui se tait, pas l'accès qui se ferme — l'agent garde ce dont il a besoin, le libellé
+     * du plan, et perd ce qui ne le regarde pas.
+     *
+     * ⚠ LES DEUX FACES SONT VÉRIFIÉES, ET LA SECONDE EST CELLE QUI COMPTE. Sans elle,
+     * `monthlyPriceCents === null` serait vert même si le champ était toujours nul — donc même si
+     * rien ne marchait. Une assertion vraie pour une raison qui n'est pas la sienne.
+     */
+    public function testLassistanceLitLaFicheMaisPasCeQueLeClientPaie(): void
+    {
+        $this->sauterSiRouteAbsente('/editor/customers');
+
+        $prospect = $this->client(SocleFixtures::ETAB_A_NOM, self::PROSPECT, 'contact@campingdespins.test');
+        $this->abonnement($prospect);
+        $url = '/api/editor/customers/'.$prospect->getId()->toRfc4122();
+
+        // 1. L'assistance : la fiche, sans l'argent.
+        $client = static::createClient();
+        $fiche = $client->request('GET', $url, $this->commeAssistance($client))->toArray();
+        self::assertResponseIsSuccessful();
+
+        self::assertSame(self::PROSPECT, $fiche['name'], 'L’agent doit savoir de quel client on parle.');
+        self::assertSame('Essentiel', $fiche['subscriptions'][0]['planLabel'], 'Le plan reste : un agent doit savoir sur quelle offre est son interlocuteur.');
+        self::assertNull($fiche['subscriptions'][0]['monthlyPriceCents'], 'Le prix ne le regarde pas.');
+        self::assertNull($fiche['mandate'], 'Les coordonnées bancaires non plus.');
+
+        // 2. L'écran de facturation lui est refusé — 403 et non 404 : il est chez lui, lui cacher
+        //    l'existence de l'écran ne protégerait rien et l'empêcherait de comprendre.
+        $client->request('GET', '/api/editor/billing', $this->commeAssistance($client));
+        self::assertResponseStatusCodeSame(403);
+
+        // 3. ⚠ LA MÊME FICHE, VUE PAR QUI A LE DROIT. Sans cette lecture, tout ce qui précède
+        //    serait vrai d'un champ mort.
+        $ficheDirection = $client->request('GET', $url, $this->commeEditeur($client))->toArray();
+        self::assertResponseIsSuccessful();
+        self::assertSame(4900, $ficheDirection['subscriptions'][0]['monthlyPriceCents'], 'Le champ existe et se remplit : le nul précédent est bien un silence, pas un vide.');
+    }
+
+    /** Un compte de l'éditeur qui porte l'assistance et rien d'autre. */
+    private function commeAssistance(object $client): array
+    {
+        /** @var \ApiPlatform\Symfony\Bundle\Test\Client $client */
+        return [
+            'auth_bearer' => $this->jeton($client, SocleFixtures::ASSISTANCE_EDITEUR_EMAIL, SocleFixtures::ASSISTANCE_EDITEUR_MDP),
+            'headers' => ['X-Etablissement' => $this->idEtablissement(SocleFixtures::ETAB_A_NOM)],
+        ];
+    }
+
     private function commeEditeur(object $client): array
     {
         /** @var \ApiPlatform\Symfony\Bundle\Test\Client $client */
