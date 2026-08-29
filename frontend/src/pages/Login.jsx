@@ -1,7 +1,20 @@
 import { useState } from 'react'
 import { api, tokenStore } from '../api/client.js'
 
-export default function Login({ onConnecte }) {
+/**
+ * ⚠ `sousTitre` EXISTE PARCE QUE CET ECRAN SERT TROIS PRODUITS.
+ *
+ * `Root.jsx` choisit entre le back-office, la vitrine et l'administration de l'editeur, et sa
+ * regle est explicite : trois produits, trois publics. La connexion, elle, est restee commune --
+ * ce qui est le bon choix, un seul formulaire a maintenir -- mais son sous-titre ne l'est pas :
+ * « Accedez a la caisse et au catalogue » accueillait l'administration de l'editeur.
+ *
+ * C'est la seule page visible avant d'avoir un compte : celle de la demonstration, et celle sur
+ * laquelle on doute quand on s'est trompe d'adresse. Elle doit dire ou l'on est.
+ *
+ * La valeur par defaut est celle du back-office : l'appelant qui ne dit rien garde l'existant.
+ */
+export default function Login({ onConnecte, sousTitre = 'Accédez à la caisse et au catalogue.' }) {
   const [email, setEmail] = useState('admin@itcotation.com')
   // ⚠ DOIT VALOIR `SocleFixtures::ADMIN_MDP`. Les deux ont diverge le 27/08 quand les fixtures sont
   // passees a « aaa » : l'ecran a continue d'annoncer un compte de demo pre-rempli, et de proposer
@@ -54,7 +67,7 @@ export default function Login({ onConnecte }) {
           <span className="logo">◈</span> Fluvia
         </div>
         <h1>Connexion</h1>
-        <p className="login-sub">Accédez à la caisse et au catalogue.</p>
+        <p className="login-sub">{sousTitre}</p>
 
         {erreur && <div className="banner banner-error">{erreur}</div>}
         {info && <div className="banner banner-ok">{info}</div>}

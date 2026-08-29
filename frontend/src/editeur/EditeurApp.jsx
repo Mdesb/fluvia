@@ -190,7 +190,9 @@ export default function EditeurApp() {
   }, [me, idsVisibles, onglet])
 
   if (!authed) {
-    return <Login onConnecte={() => setAuthed(true)} />
+    // Le sous-titre nomme CE produit : la connexion est partagée avec le back-office, dont la
+    // phrase par défaut parle de caisse et de catalogue — ce qui n'est pas ce qu'on administre ici.
+    return <Login onConnecte={() => setAuthed(true)} sousTitre="Administration de Fluvia : clients, formules et assistance." />
   }
 
   return (
