@@ -389,3 +389,28 @@ lectures.
 ligne `git pull --ff-only` du script — le script dit ce que le déploiement *tente*, pas où l'arbre
 *en est*. Même forme que les autres : mesure exacte, phrase étendue d'un cran. Et j'avais commencé à
 recopier sa conclusion dans mes notes avant de lancer le `rev-list`.
+
+### Bouclé — mesuré au bon endroit, cette fois (préprod à `6c21736`, 30/08 00:35:31)
+
+73 a déployé. Vérification refaite à l'artefact que j'avais annoncé et pas interrogé, en cherchant
+**l'absence de la chaîne fautive ET la présence de son remplaçant dans la même commande** — sans quoi
+un « ABSENT » ne distingue pas « c'est corrigé » de « je regarde au mauvais endroit » :
+
+    /var/www/smartaccess/assets  —  index.html du 2026-08-30 00:35:31
+      « ne sachant pas trier »  → ABSENT
+      « récents »               → App-Cepn9QOd.js          ← le remplaçant est là
+      « Horaires d »            → TopologieAcces, App, PublicApp, Parametres
+      « Heures d »              → Parametres-B8i05eNY.js SEUL   ← le couple signalé à c2, intact
+
+Et le marqueur, lu sur le réseau et non sur le disque (`http=200`, `type=application/json`, donc pas
+le repli SPA) : `{"commit":"6c21736","branche":"main",...}`.
+
+**Le déploiement refuse désormais de servir ce qui n'est pas dans `main`** — c'est 73 qui l'a ajouté
+après le constat de divergence ci-dessus. La question « où regarder pour savoir si une chose est
+livrée » a maintenant une réponse unique, et elle tient parce que le script refuse le contraire.
+
+**Le piège suivant, rapporté par 73, et qui est l'exact inverse du mien :** en éprouvant ce refus,
+un `git reset --hard HEAD~1` a emporté sa modification non commitée du script ; le déploiement
+suivant est passé **sans afficher la vérification**. Ma faute était une ligne devenue fausse ; la
+sienne, une ligne devenue absente. *Une ligne absente ne crie pas.* Les deux passent le build, les
+tests et les vingt-cinq garde-fous.
