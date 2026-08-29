@@ -980,7 +980,18 @@ function DeclarationRejetModal({ cible, lignes, mandatsParId, lignesRejetees, on
         libelleMotif: libelleMotif.trim() || undefined,
         dateRejet,
       })
-      onFait("Rejet enregistré. Un impayé est ouvert : il est traité dans l'écran Recouvrement.")
+      // CE MESSAGE ANNONCAIT UN IMPAYE QUI NE S'OUVRE PAS. Eprouve le 29/08 avec l'accord de
+      // Maxime, sur un mandat de demonstration : le rejet part en 201 et ne cree AUCUN incident --
+      // tableau de bord du recouvrement inchange, mandat toujours actif, aucun acces bloque.
+      // `DeclarerRejetSepaProcessor` n'emet aucun evenement et n'appelle pas le moteur de
+      // recouvrement ; ses deux seuls declencheurs sont la simulation d'echeance du module Sport et
+      // le resultat d'une representation.
+      // Annoncer la prise en charge fait fermer l'ecran en croyant l'affaire suivie. On dit ce qui
+      // s'est reellement passe, et ce qu'il reste a faire.
+      onFait(
+        'Rejet enregistré au journal. ⚠ Aucun impayé n’est ouvert automatiquement : le suivi du '
+        + 'recouvrement doit être déclenché à part.',
+      )
     } catch (err) {
       setErreur(err.message || "Le rejet n'a pas pu être enregistré.")
     } finally {
