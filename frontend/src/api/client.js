@@ -438,9 +438,23 @@ export const api = {
   // CONTACTS D'UN CLIENT PROFESSIONNEL. `Beneficiaire` porte une semantique de FAMILLE
   // (payeur, beneficiaire) : elle ne sait pas dire << directrice >> ni << comptabilite >>.
   //
-  // Charges entiers puis filtres a l'ecran : le `SearchFilter` sur `customer` est de la famille
-  // D58 -- il rend soit tout, soit rien, sans jamais lever.
-  contactsClient: () => request('/api/customer_contacts', { query: { itemsPerPage: 300 } }),
+  // LE FILTRE SERVEUR EST REVENU, ET LE TRI LOCAL EST PARTI AVEC.
+  //
+  // Ces trois lectures chargeaient la collection entiere et triaient dans le navigateur, parce que
+  // le `SearchFilter` sur un identifiant Uuid rendait soit tout, soit rien, sans jamais lever
+  // (famille D58). Le 29/08, un decorateur de plateforme a repare les 145 proprietes concernees.
+  //
+  // Mesure faite avant de retirer, sur des donnees fabriquees pour l'occasion puis effacees :
+  //     2 contacts sur 2 clients differents
+  //     ?customer=<IRI du client 1>  -> 1     le filtre discrimine
+  //     ?customer=nimportequoi       -> 0     et il se ferme sur une valeur illisible
+  //
+  // ⚠ L'IRI EST CONSTRUIT SANS GARDE, ET C'EST VOULU. Un identifiant absent donne
+  // `/api/clients/undefined`, que le serveur ne resout pas : la reponse est VIDE. C'est le bon
+  // echec. La garde -- `clientId ? … : undefined` -- retirerait le parametre, et `qs()` rendrait
+  // alors la collection ENTIERE : les contacts de tout le monde sous le nom d'une seule personne.
+  contactsClient: (clientId) =>
+    request('/api/customer_contacts', { query: { customer: `/api/clients/${clientId}` } }),
   creerContactClient: (corps) =>
     request('/api/customer_contacts', { method: 'POST', body: corps, ld: true }),
   majContactClient: (id, corps) =>
@@ -544,8 +558,10 @@ export const api = {
   // /!\ La collection est chargee entiere puis filtree cote ecran. `CommercialActivity` porte un
   // SearchFilter sur `customer` -- famille D58, ou le filtre rend soit tout soit rien, sans jamais
   // lever. Un historique vide ressemble a un client qu'on n'a jamais appele : on ne l'emprunte pas.
-  activitesCommerciales: () =>
-    request('/api/commercial_activities', { query: { itemsPerPage: 500 } }),
+  // Filtree par le serveur — voir `contactsClient` pour la mesure et pour la raison de ne pas
+  // garder l'identifiant absent.
+  activitesCommerciales: (clientId) =>
+    request('/api/commercial_activities', { query: { customer: `/api/clients/${clientId}` } }),
   creerActivite: (corps) =>
     request('/api/commercial_activities', { method: 'POST', body: corps, ld: true }),
 
@@ -603,7 +619,9 @@ export const api = {
   tableauProjets: () => request('/api/projets/tableau'),
   creerProjet: (corps) => request('/api/projects', { method: 'POST', body: corps, ld: true }),
   majProjet: (id, corps) => request(`/api/projects/${id}`, { method: 'PATCH', body: corps }),
-  tachesProjet: () => request('/api/project_tasks', { query: { itemsPerPage: 500 } }),
+  // Filtrees par le serveur — voir `contactsClient`.
+  tachesProjet: (projetId) =>
+    request('/api/project_tasks', { query: { project: `/api/projects/${projetId}` } }),
   creerTacheProjet: (corps) => request('/api/project_tasks', { method: 'POST', body: corps, ld: true }),
   majTacheProjet: (id, corps) => request(`/api/project_tasks/${id}`, { method: 'PATCH', body: corps }),
   supprimerTacheProjet: (id) => request(`/api/project_tasks/${id}`, { method: 'DELETE' }),

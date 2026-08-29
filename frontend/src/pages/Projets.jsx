@@ -258,14 +258,7 @@ function FicheProjet({ projet, peutGerer, onFermer, onChange }) {
     if (!projet?.id) return
     setChargement(true)
     try {
-      // Chargees entieres puis filtrees : le `SearchFilter` sur `project` est de la famille D58, ou
-      // le filtre rend soit tout soit rien, sans jamais lever.
-      const toutes = membres(await api.tachesProjet())
-      setTaches(toutes.filter((t) => {
-        const ref = t.project
-        const id = typeof ref === 'string' ? ref.split('/').pop() : ref?.id
-        return String(id) === String(projet.id)
-      }))
+      setTaches(membres(await api.tachesProjet(projet.id)))
     } catch (e) {
       setErreur(e.message || 'Les tâches n’ont pas pu être chargées.')
     } finally {
