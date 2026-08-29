@@ -96,3 +96,65 @@ qu'on touche de toute façon.
 Il mesure le dépôt, il ne juge pas le rendu. Les sessions d'écran voient l'application ; moi je vois
 des fichiers. Si l'une d'elles a des chantiers de style en cours, c'est son état qui fait foi, pas
 ce comptage.
+
+---
+
+## Addendum — le chantier est ouvert (décision de Maxime, 29/08)
+
+Maxime a tranché : « ouvre-le ». Le chantier de l'échelle d'espacement démarre.
+
+### Où est la masse : la moitié tient dans 17 fichiers
+
+Compté sur les seules propriétés de **mise en page** — `display`, `flex`, `gap`, `margin*`,
+`padding*`, `gridTemplate*`, `alignItems`, `justifyContent`. La couleur et la typographie sont
+exclues : elles tiennent déjà par les variables, et les compter gonflerait le constat sans désigner
+de travail.
+
+| | |
+|---|---|
+| Déclarations de mise en page écrites en ligne | **1 657** |
+| Fichiers concernés | 81 |
+| **Fichiers portant la moitié du total** | **17** |
+
+    1. pages/Campagnes.jsx              99      11. components/Disponibilites.jsx    45
+    2. pages/Parametres.jsx             64      12. pages/Support.jsx                44
+    3. pages/TopologieAcces.jsx         64      13. components/VitrinesBoutique.jsx  43
+    4. pages/Clients.jsx                62      14. pages/Social.jsx                 40
+    5. components/ProduitFiche.jsx      49      15. components/ActivitesClient.jsx   37
+    6. pages/Patinoire.jsx              48      16. pages/Catalogue.jsx              36
+    7. pages/MentionsLegales.jsx        47      17. components/ClotureComptable.jsx  36
+    8. pages/Projets.jsx                45
+    9. pages/Padel.jsx                  45
+   10. pages/Pipeline.jsx               45
+
+⚠ **Ce classement ne dit pas de tout reprendre.** Il dit par où commencer si on commence — et il
+confirme le point 4 : on convertit les écrans qu'on rouvre de toute façon, en priorité ceux-là.
+
+`Campagnes` porte à lui seul 6 % du total. C'est aussi l'un des cinq écrans qui attendent une saisie
+enrichie : il vaut d'être rouvert une fois, pas deux.
+
+### L'ordre compte, et il n'est pas celui qu'on croit
+
+**1. L'échelle d'abord, le cliquet ensuite.**
+
+Un garde-fou qui gèlerait le nombre de styles en ligne dès aujourd'hui refuserait tout écran neuf
+**sans offrir d'alternative** — l'échelle n'existant pas encore. C'est exactement le conflit de deux
+règles rencontré sur le cliquet d'écart : sans échappatoire, la nouvelle règle gagne toujours et
+bloque le travail.
+
+Le cliquet se posera donc **après** l'échelle, gelé à la valeur mesurée ce jour-là. Il n'aura alors
+qu'un rôle, et c'est le seul qui compte : empêcher que le nombre remonte pendant qu'on le fait
+baisser. Sans lui, un écran converti d'un côté est compensé par un écran neuf de l'autre, et le
+chantier ne finit jamais.
+
+**2. L'échelle est posée par qui tient les écrans.**
+
+Une convention écrite par quelqu'un qui ne les tient pas est une convention de plus que personne
+n'applique. C'est `allaccess-34` qui la pose ; les autres s'y adossent.
+
+### Ce que le chantier n'est pas
+
+Ce n'est pas une réécriture. L'argument décisif ne vient pas du coût mais du risque : **chaque écran
+rouvert cette semaine a livré un défaut qui dormait** — le renvoi de ticket qui n'envoyait rien, la
+colonne « Quand » du padel qui était vide depuis toujours, un bouton inerte. Rouvrir 81 fichiers d'un
+coup, c'est découvrir 81 fois la même chose sans avoir prévu le temps de la traiter.
