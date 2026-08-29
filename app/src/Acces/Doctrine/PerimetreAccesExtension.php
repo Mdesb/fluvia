@@ -19,6 +19,7 @@ use App\Acces\Entity\JetonTerminal;
 use App\Acces\Entity\JournalReconciliation;
 use App\Acces\Entity\ListeRevocation;
 use App\Acces\Entity\Passage;
+use App\Acces\Entity\ProductAccessZone;
 use App\Acces\Entity\Support;
 use App\Acces\Entity\Terminal;
 use App\Securite\Entity\Utilisateur;
@@ -41,6 +42,9 @@ final class PerimetreAccesExtension implements QueryCollectionExtensionInterface
         Support::class => '{root}.etablissement',
         Appairage::class => '{root}.etablissement',
         DroitAcces::class => '{root}.etablissement',
+        // Posee avant l'ouverture de la ressource, pas apres : une entite exposee sans
+        // cloisonnement ne produit pas d'erreur, elle produit des lignes en trop.
+        ProductAccessZone::class => '{root}.establishment',
         Passage::class => '{root}.etablissement',
         DeclarationPerteVol::class => '{root}.etablissement',
         JaugeFmi::class => 'jfmi_esp.etablissement',

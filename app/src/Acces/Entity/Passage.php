@@ -6,6 +6,7 @@ namespace App\Acces\Entity;
 
 use ApiPlatform\Doctrine\Orm\Filter\DateFilter;
 use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
+use ApiPlatform\Doctrine\Orm\Filter\OrderFilter;
 use ApiPlatform\Metadata\ApiFilter;
 use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Get;
@@ -83,6 +84,19 @@ use Symfony\Component\Uid\Uuid;
     'espace' => 'exact', 'controleur' => 'exact', 'equipement' => 'exact', 'resultat' => 'exact', 'support.identifiant' => 'exact',
 ])]
 #[ApiFilter(DateFilter::class, properties: ['horodatage'])]
+/**
+ * ⚠ SANS CE FILTRE, `order[horodatage]=desc` ETAIT IGNORE EN SILENCE.
+ *
+ * La collection sortait dans l'ordre d'insertion — du plus ANCIEN au plus recent — et le plafond de
+ * trente lignes par page donnait alors le contraire exact de ce qu'on demande partout : les trente
+ * PREMIERS passages de l'histoire du site, jamais les trente derniers.
+ *
+ * Constate a l'usage : une carte « Derniers passages » qui montrait les premiers, et un bandeau de
+ * caisse qui reannoncait comme neufs des scans deja vus, parce qu'il prenait la premiere ligne pour
+ * repere. Un tri cote ecran n'y pouvait rien : il reordonne les trente lignes recues, pas le CHOIX
+ * de ces trente-la.
+ */
+#[ApiFilter(OrderFilter::class, properties: ['horodatage'], arguments: ['orderParameterName' => 'order'])]
 class Passage
 {
     #[ORM\Id]

@@ -10,6 +10,8 @@ use ApiPlatform\Metadata\GetCollection;
 use App\Acces\Enum\StatutProjectionDroit;
 use App\Acces\Enum\TypeDroitAcces;
 use App\Organisation\Entity\Etablissement;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
@@ -79,6 +81,25 @@ class DroitAcces
     #[Groups(['droit:read'])]
     private ?SousReseau $sousReseau = null;
 
+    /**
+     * Les espaces que ce droit ouvre. VIDE = il les ouvre TOUS.
+     *
+     * ⚠ Le vide n'est pas une omission, c'est la règle de compatibilité. Les droits déjà projetés
+     * n'en portent aucun : les refuser partout à la seconde où la migration passe fermerait des
+     * portes devant des gens qui ont payé, sur un mécanisme dont ils ignorent le changement. La
+     * restriction n'existe que si quelqu'un l'a demandée.
+     *
+     * Recopiés à la PROJECTION et non lus depuis le produit : c'est ce droit-ci que les terminaux
+     * embarquent pour décider hors ligne. Une règle qui ne vivrait que côté produit serait
+     * inapplicable par un lecteur déconnecté — c'est-à-dire précisément quand elle compte.
+     *
+     * @var Collection<int, EspaceAcces>
+     */
+    #[ORM\ManyToMany(targetEntity: EspaceAcces::class)]
+    #[ORM\JoinTable(name: 'acces_droit_espace_autorise')]
+    #[Groups(['droit:read'])]
+    private Collection $authorisedSpaces;
+
     #[ORM\Column(length: 12, enumType: StatutProjectionDroit::class, options: ['default' => 'valide'])]
     #[Groups(['droit:read'])]
     private StatutProjectionDroit $statutProjection = StatutProjectionDroit::Valide;
@@ -94,6 +115,7 @@ class DroitAcces
 
     public function __construct()
     {
+        $this->authorisedSpaces = new ArrayCollection();
         $this->id = Uuid::v4();
     }
 
@@ -256,5 +278,58 @@ class DroitAcces
         $this->synchroniseLe = $synchroniseLe;
 
         return $this;
+    }
+
+    /** @return Collection<int, EspaceAcces> */
+    public function getAuthorisedSpaces(): Collection
+    {
+        return $this->authorisedSpaces;
+    }
+
+    public function addAuthorisedSpace(EspaceAcces $space): self
+    {
+        if (!$this->authorisedSpaces->contains($space)) {
+            $this->authorisedSpaces->add($space);
+        }
+
+        return $this;
+    }
+
+    /**
+     * ⚠ POSE AVANT D'EN AVOIR BESOIN, ET C'EST DELIBERE.
+     *
+     * Le serialiseur de Symfony n'accepte une collection en ecriture que si l'AJOUT ET LE RETRAIT
+     * existent. Sans les deux, il ignore la propriete -- sans erreur. `SousReseau` en est mort la
+     * meme nuit : `PATCH { espaces: [...] }` repondait 200 en n'enregistrant rien.
+     *
+     * Deux lignes maintenant valent une soiree plus tard.
+     */
+    public function removeAuthorisedSpace(EspaceAcces $space): self
+    {
+        $this->authorisedSpaces->removeElement($space);
+
+        return $this;
+    }
+
+    /**
+     * Ce droit ouvre-t-il cet espace ?
+     *
+     * Vide = ouvre tout : voir le docbloc de la propriété. La comparaison porte sur la
+     * représentation textuelle de l'identifiant — `getId()` rend des objets `Uuid`, qu'une
+     * comparaison stricte d'objets distinguerait à tort (D58).
+     */
+    public function ouvre(EspaceAcces $space): bool
+    {
+        if ($this->authorisedSpaces->isEmpty()) {
+            return true;
+        }
+
+        foreach ($this->authorisedSpaces as $autorise) {
+            if ((string) $autorise->getId() === (string) $space->getId()) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

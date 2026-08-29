@@ -127,8 +127,17 @@ final class ValidationPassageHandler
             return $this->refuser($espace, $controleur, $equipement, $support, $droit, $sens, $evt, CodeMotifRefus::DroitInvalide, 'Droit dévalidé.');
         }
 
-        // Sous-réseau / fédération (US-L3-12, CA-13) : un droit fédéré doit franchir un équipement
-        // dont l'espace appartient au même sous-réseau actif et éligible ; sinon refus.
+        // Sous-réseau / fédération (US-L3-12, CA-13).
+        //
+        // ⚠ CE COMMENTAIRE DISAIT « SINON REFUS », ET LE CODE NE LE FAISAIT PAS. Corrigé le 29/08 :
+        // c'est le commentaire qui était faux, pas le code. Le contrôle ne s'applique QUE lorsque
+        // l'espace appartient au sous-réseau du droit — franchissement inter-entités. Un espace
+        // hors du sous-réseau n'est pas refusé ici : `sousReseau` dit sous quelle fédération le
+        // droit a été émis, il ne dit pas que le porteur perd l'accès à SON PROPRE site. Refuser
+        // « sinon » fermerait la porte d'un adhérent chez lui parce que son abonnement porte une
+        // mention de fédération.
+        //
+        // La restriction par zone, elle, est explicite et se trouve juste en dessous.
         if ($droit->getSousReseau() !== null) {
             $sousReseau = $droit->getSousReseau();
             $memeSousReseau = $espace->getSousReseau() !== null && $espace->getSousReseau()->getId()->equals($sousReseau->getId());
@@ -141,6 +150,29 @@ final class ValidationPassageHandler
                     return $this->refuser($espace, $controleur, $equipement, $support, $droit, $sens, $evt, CodeMotifRefus::FederationInactive, 'Droit non éligible au sous-réseau.');
                 }
             }
+        }
+
+        // ── CE DROIT OUVRE-T-IL CETTE ZONE ? ─────────────────────────────────────────────────
+        //
+        // La question ne se posait nulle part. L'espace était résolu dès l'entrée mais ne servait
+        // qu'à la jauge et à l'enregistrement : un billet de piscine ouvrait la porte de la salle
+        // de sport du même établissement. Sur un site multi-activités, c'est le cœur du contrôle
+        // d'accès qui manquait.
+        //
+        // ⚠ UN DROIT SANS AUCUN ESPACE OUVRE TOUT — `DroitAcces::ouvre()` le dit et le docbloc de
+        // la propriété explique pourquoi : c'est le comportement d'hier, et c'est ce qui rend le
+        // déploiement sans danger. Les droits déjà projetés n'ont aucun espace ; les refuser
+        // partout à la seconde où la migration passe fermerait des portes devant des gens qui ont
+        // payé, sur un mécanisme dont ils ignorent le changement.
+        //
+        // Le sens sûr de l'erreur est d'ordinaire celui qui restreint. Pas ici : la restriction
+        // n'existe que si quelqu'un l'a demandée.
+        if (!$droit->ouvre($espace)) {
+            return $this->refuser(
+                $espace, $controleur, $equipement, $support, $droit, $sens, $evt,
+                CodeMotifRefus::ZoneNonAutorisee,
+                sprintf('Ce titre n\'ouvre pas « %s ».', $espace->getLibelle()),
+            );
         }
 
         // Étape 4 — sens compatible avec l'équipement.
