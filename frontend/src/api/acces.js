@@ -109,7 +109,7 @@ export const MOTIF_REFUS = {
   hors_horaires_ouverture: {
     libelle: 'Site fermé',
     quoi: 'Le passage tombe hors des heures d’ouverture, et le refus hors horaires est activé.',
-    geste: 'Corrigez la plage dans Paramètres › Heures d’ouverture — ou décochez le refus hors horaires.',
+    geste: 'Corrigez la plage dans Paramètres › Horaires d’ouverture — ou décochez le refus hors horaires.',
   },
 }
 

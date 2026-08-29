@@ -27,11 +27,16 @@ import { aLeDroit } from '../api/droits.js'
  * ne plus savoir lequel désigne quoi. La traduction, si elle vient, se fera dans `vocabulaire.js`,
  * pour tous les écrans à la fois.
  *
- * ⚠ **Les collections sont chargées entières, pas filtrées, et c'est délibéré.** Les deux ressources
- * portent un `SearchFilter` sur `ressource` — la famille de pièges D58 : sur un identifiant à type
- * personnalisé, ce filtre rend soit la collection ENTIÈRE (paramètre ignoré), soit RIEN (identifiant
- * lié sans type). Aucune des deux ne lève. Le regroupement se fait donc ici, où il est visible ; les
- * volumes le permettent largement — une poignée de ressources et sept jours.
+ * ⚠ **Les collections sont chargées entières, pas filtrées, et c'est délibéré.** Cet écran montre
+ * TOUTES les ressources côte à côte : il lui faut la collection entière de toute façon, et filtrer
+ * par ressource ferait une requête par ressource pour reconstituer ce qu'une seule rend déjà. Le
+ * regroupement se fait donc ici, où il est visible.
+ *
+ * La justification d'origine invoquait la famille D58 — un `SearchFilter` sur identifiant Uuid qui
+ * rendait soit tout, soit rien, sans jamais lever. Ce défaut a été réparé le 29/08 par un
+ * décorateur de plateforme, et trois écrans ont perdu leur tri local à cette occasion. Celui-ci
+ * l'a gardé : la raison a changé, pas la décision. C'est la différence entre un contournement,
+ * qu'on retire quand le défaut disparaît, et un choix de chargement, qui tient tout seul.
  */
 
 const JOURS = [

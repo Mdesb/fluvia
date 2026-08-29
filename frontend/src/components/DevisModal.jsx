@@ -42,6 +42,11 @@ export default function DevisModal({ open, client, onClose, onCree, cible = 'dev
   const facture = cible === 'facture'
   const [echeance, setEcheance] = useState('')
   const [tauxTva, setTauxTva] = useState([])
+  const [categories, setCategories] = useState([])
+  const [mappings, setMappings] = useState([])
+  // Seul l'axe comptable impute. Les trois axes de M1 (marketing, comptable, rayon) sont
+  // indépendants : proposer une catégorie marketing ici donnerait un choix sans effet.
+  const categoriesComptables = categories.filter((c) => c.axe === 'comptable')
   const [choisi, setChoisi] = useState(null)
   const [pickerOuvert, setPickerOuvert] = useState(false)
   const [raisonSociale, setRaisonSociale] = useState('')
@@ -79,6 +84,12 @@ export default function DevisModal({ open, client, onClose, onCree, cible = 'dev
       setLignes([{ ...LIGNE_VIDE }])
       setEcheance('')
     }
+    // Deux lectures de confort : leur absence ne doit pas empêcher d'établir une pièce.
+    Promise.allSettled([api.categories(), api.mappingsComptables()]).then(([c, m]) => {
+      setCategories(c.status === 'fulfilled' ? membres(c.value) : [])
+      setMappings(m.status === 'fulfilled' ? membres(m.value) : [])
+    })
+
     api.tauxTvas()
       // UN TAUX MASQUE RESTAIT PROPOSE, ET C'EST L'INVERSE DE CE QUE << masque >> VEUT DIRE.
       //
@@ -106,6 +117,9 @@ export default function DevisModal({ open, client, onClose, onCree, cible = 'dev
         destinataire: corpsDestinataire(destinataire, raisonSociale),
         lignes: lignes.map((l) => ({
           designation: l.designation,
+          // `FactureDirecteBuilder` ne retient la catégorie que si c'est un UUID valide ; une
+          // chaîne vide est ignorée sans erreur, ce qui est le comportement voulu ici.
+          ...(l.categorieComptable ? { categorieComptable: l.categorieComptable } : {}),
           quantite: Number(l.quantite) || 1,
           prixUnitaireHT: String(l.prixUnitaireHT || '0'),
           tauxTva: l.tauxTva,
@@ -265,9 +279,55 @@ export default function DevisModal({ open, client, onClose, onCree, cible = 'dev
                     <option key={idDe(t)} value={idDe(t)}>{t.libelle}</option>
                   ))}
                 </select>
+                {/* LA CATÉGORIE COMPTABLE DÉCIDE SUR QUEL COMPTE LA LIGNE S'IMPUTE, et la ligne
+                    partait sans elle. `FactureDirecteBuilder` l'accepte depuis le début ; aucun
+                    écran ne l'envoyait, si bien que tout le chiffre d'affaires facturé à la main
+                    tombait dans un seul compte — ou faisait refuser l'émission en 422 quand aucun
+                    compte par défaut n'est paramétré.
+                    Facultative à dessein : une pièce doit pouvoir s'établir sans que le comptable
+                    soit là. */}
+                {categoriesComptables.length > 0 && (
+                  <select
+                    className="input"
+                    value={ligne.categorieComptable || ''}
+                    onChange={(e) => majLigne(i, 'categorieComptable', e.target.value)}
+                    aria-label={`Catégorie comptable de la ligne ${i + 1}`}
+                  >
+                    <option value="">Catégorie comptable…</option>
+                    {categoriesComptables.map((c) => (
+                      <option key={idDe(c)} value={idDe(c)}>{c.libelle || c.nom}</option>
+                    ))}
+                  </select>
+                )}
               </div>
             </div>
           ))}
+
+          {/* ⚠ CE QUE LA CATÉGORIE CHANGE — ET AUJOURD'HUI, SUR CET ÉTABLISSEMENT, RIEN.
+              `EmettreFactureDirecteHandler` demande à `ResolveurComptesFacturation` le compte de
+              chaque ligne ; sans correspondance il se replie sur le compte de produit par défaut,
+              et n'échoue (422) que si ce compte n'est pas paramétré non plus. Un champ qu'on
+              remplit consciencieusement et qui n'a aucun effet est exactement ce qu'on retire
+              ailleurs : ici on le garde — il enregistre l'intention et deviendra effectif — mais
+              on dit son état.
+
+              ⚠⚠ NE PAS CONFONDRE AVEC L'AUTRE CHEMIN COMPTABLE, ET LA CONFUSION A DÉJÀ EU LIEU.
+              Les VENTES ne passent pas par ici : `GenerateurEcrituresHandler` demande ses
+              anomalies à `MappingComptableGuard` et, si la catégorie n'a pas de correspondance,
+              la vente est **sautée** — aucune écriture, un signalement en anomalie à la clôture.
+              Aucun repli sur un compte par défaut de ce côté-là.
+              Deux modules, deux comportements opposés sur la même donnée manquante : facture =
+              repli silencieux, vente = non comptabilisée et signalée tard. L'affirmation « le
+              résolveur se replie » a circulé sur trois relais avant que quelqu'un n'ouvre le
+              second fichier, et elle a gagné en crédibilité à chaque passage. */}
+          {categoriesComptables.length > 0 && mappings.length === 0 && (
+            <p className="hint">
+              Aucune correspondance comptable n’est déclarée pour l’instant : quelle que soit la
+              catégorie choisie, la ligne s’imputera au <b>compte de produit par défaut</b>. La
+              catégorie est enregistrée et deviendra effective dès qu’une correspondance sera posée
+              dans le paramétrage comptable.
+            </p>
+          )}
 
           <button
             type="button"
@@ -321,7 +381,7 @@ export default function DevisModal({ open, client, onClose, onCree, cible = 'dev
   )
 }
 
-const LIGNE_VIDE = { designation: '', quantite: 1, prixUnitaireHT: '', tauxTva: '' }
+const LIGNE_VIDE = { designation: '', quantite: 1, prixUnitaireHT: '', tauxTva: '' , categorieComptable: ''}
 
 function nomDe(client) {
   if (client.raisonSociale) return client.raisonSociale

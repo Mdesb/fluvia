@@ -25,20 +25,44 @@ export default function Catalogue({ etabActif, cible = null, onCibleConsommee, d
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cible])
 
+  // DEUX NIVEAUX DE NAVIGATION EMPILÉS, ET LE SECOND NE PARLAIT PLUS DE CE QU'ON REGARDAIT.
+  //
+  // Sur la fiche d'un produit, la page affichait encore le titre « Catalogue / Produits et
+  // options » et les onglets « Produits | Options » du niveau LISTE, au-dessus du bouton
+  // « ← Retour au catalogue » de la fiche. Relevé tel quel dans le texte de la page :
+  //
+  //     Catalogue / Produits et options
+  //     Produits   Options            ← les onglets de la LISTE
+  //     ← Retour au catalogue         ← le retour de la FICHE
+  //     Audioguide …
+  //
+  // Cliquer « Options » depuis une fiche produit fait donc quitter la fiche sans le dire, et
+  // « Produits », qui a l'air actif, ne ramène nulle part. Ce sont les onglets d'un écran qu'on a
+  // quitté.
+  //
+  // C'est le préalable à la refonte de la fiche : y ajouter ses propres onglets sans retirer ceux
+  // du parent donnerait deux rangées superposées qui ne désignent pas la même chose — pire que
+  // l'état d'avant.
+  const ficheOuverte = tab === 'produits' && !!params.fiche
+
   return (
     <div className="view large">
-      <div className="view-head">
-        <div className="ttl">
-          <h1>Catalogue</h1>
-          <p>Produits et options</p>
-        </div>
-      </div>
+      {!ficheOuverte && (
+        <>
+          <div className="view-head">
+            <div className="ttl">
+              <h1>Catalogue</h1>
+              <p>Produits et options</p>
+            </div>
+          </div>
 
-      <Tabs
-        onglets={[['produits', 'Produits'], ['options', 'Options']]}
-        actif={tab}
-        onChange={setTab}
-      />
+          <Tabs
+            onglets={[['produits', 'Produits'], ['options', 'Options']]}
+            actif={tab}
+            onChange={setTab}
+          />
+        </>
+      )}
 
       {tab === 'produits' ? (
         <OngletProduits
@@ -193,6 +217,7 @@ function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = []
         </button>
         <ProduitFiche
           produit={connu || { id: selId }}
+          etabActif={etabActif}
           peutModifier={aLeDroit(droits, 'offre.modifier') || aLeDroit(droits, 'offre.gerer')}
           peutModifierCompta={aLeDroit(droits, 'offre.modifier_compta') || aLeDroit(droits, 'offre.gerer')}
           droits={droits}

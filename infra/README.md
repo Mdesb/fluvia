@@ -101,6 +101,29 @@ cp infra/env.preprod.example infra/.env.preprod
 
 ### 4. Exposition via Nginx + HTTPS
 
+> ⚠ **CETTE PROCEDURE EST CELLE D'UNE MACHINE NEUVE. Sur une machine deja en service, ne recopiez
+> pas ce fichier sans avoir lu le diff.**
+>
+> `infra/nginx/billetterie-preprod.conf` n'est **pas** deploye par `deploy-preprod.sh` : il n'est
+> applique que si quelqu'un le recopie a la main. Il a donc derive de la machine, et la derive n'est
+> pas theorique — le depot declare un `auth_basic` que la preproduction a **leve le 28/08 a la
+> demande de Maxime**, pour pouvoir ouvrir les ecrans dans un navigateur. Recopier le fichier tel
+> quel remet cette authentification.
+>
+> Avant toute recopie sur une machine existante :
+>
+> ```bash
+> diff /etc/nginx/sites-available/billetterie-preprod.conf infra/nginx/billetterie-preprod.conf
+> ```
+>
+> et **lire ce que la difference ferait**, plutot que de supposer que le depot a raison.
+>
+> Corollaire, et il porte plus loin que l'authentification : tant que l'ecart n'est pas reduit,
+> toute affirmation tiree de la LECTURE de ce fichier — un en-tete, un `try_files`, une limite de
+> taille — vaut comme hypothese, pas comme fait. Pour savoir ce que la machine fait vraiment, on
+> l'interroge : `bin/version-servie.py`, `bin/verifier-deploiement.py`, ou un `curl` avec un temoin
+> de controle sur une URL inventee.
+
 ```bash
 sudo cp infra/nginx/billetterie-preprod.conf /etc/nginx/sites-available/
 sudo sed -i 's/preprod.CHANGEME.fr/preprod.tondomaine.fr/' /etc/nginx/sites-available/billetterie-preprod.conf

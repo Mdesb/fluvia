@@ -130,7 +130,8 @@ else
     echo "─────────────────────────────────────────────────────────────"
     echo "▶ Manifeste vs catalogue (RG-PLAT-06)"
     echo "─────────────────────────────────────────────────────────────"
-    echo "IGNORÉ : app/vendor absent. Installe les dépendances de dev, sinon ce contrôle ne tourne pas."
+    echo "IGNORÉ : phpunit absent (dépendances de dev retirées par le dernier déploiement)."
+    echo "  Ce contrôle n'a PAS tourné. Pour le lancer : ./infra/reinstaller-dev.sh"
     echo "         ./infra/test-stack.sh up <token>"
 fi
 

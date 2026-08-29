@@ -24,7 +24,34 @@ export const etablissementStore = {
 }
 
 // Extrait un message d'erreur lisible d'une réponse API (auth, API Platform, opérations custom).
+//
+// ── UN REFUS DE DROIT NE DOIT PAS RESSEMBLER À UNE PANNE ─────────────────────────────────────
+//
+// Sur un refus d'autorisation, API Platform rend `detail: "Access Denied."`. Affiché tel quel, en
+// anglais, dans un bandeau rouge, ce texte se lit comme une erreur technique : l'exploitant
+// appelle au support et cherche une panne, alors qu'il lui manque une permission.
+//
+// `allaccess-8e` a relevé que QUATORZE écrans affichent le message brut du serveur sans traiter
+// le 403 — ils n'utilisent pas `components/Liste.jsx`, qui, lui, l'explique depuis toujours.
+// Corriger quatorze écrans aurait produit quatorze phrases légèrement différentes ; la traduction
+// se fait donc ICI, au seul endroit où le message est fabriqué, et les quatorze en profitent
+// d'un coup. La formulation reprend celle de `Liste.jsx` pour que l'application dise la même
+// chose au même moment.
+//
+// ⚠ ON NE REMPLACE QUE LE MESSAGE GÉNÉRIQUE. Certains 403 portent une raison précise — un motif
+// métier, une règle nommée — et l'écraser par une phrase générale ferait perdre l'information la
+// plus utile. On ne traduit donc que « Access Denied », pas ce que le serveur a pris la peine
+// d'écrire.
 function messageFromPayload(payload, status) {
+  if (status === 403) {
+    const brut = payload?.detail || payload?.message || payload?.['hydra:description'] || ''
+    if (!brut || /access denied/i.test(brut)) {
+      return 'Accès non autorisé pour ce compte sur cet établissement (droits insuffisants). '
+        + "Ce n'est pas une panne : demandez la permission à un administrateur, ou vérifiez que "
+        + "vous êtes sur le bon établissement."
+    }
+    return brut
+  }
   if (!payload) return `Erreur ${status}`
   return (
     payload.message ||
@@ -438,9 +465,23 @@ export const api = {
   // CONTACTS D'UN CLIENT PROFESSIONNEL. `Beneficiaire` porte une semantique de FAMILLE
   // (payeur, beneficiaire) : elle ne sait pas dire << directrice >> ni << comptabilite >>.
   //
-  // Charges entiers puis filtres a l'ecran : le `SearchFilter` sur `customer` est de la famille
-  // D58 -- il rend soit tout, soit rien, sans jamais lever.
-  contactsClient: () => request('/api/customer_contacts', { query: { itemsPerPage: 300 } }),
+  // LE FILTRE SERVEUR EST REVENU, ET LE TRI LOCAL EST PARTI AVEC.
+  //
+  // Ces trois lectures chargeaient la collection entiere et triaient dans le navigateur, parce que
+  // le `SearchFilter` sur un identifiant Uuid rendait soit tout, soit rien, sans jamais lever
+  // (famille D58). Le 29/08, un decorateur de plateforme a repare les 145 proprietes concernees.
+  //
+  // Mesure faite avant de retirer, sur des donnees fabriquees pour l'occasion puis effacees :
+  //     2 contacts sur 2 clients differents
+  //     ?customer=<IRI du client 1>  -> 1     le filtre discrimine
+  //     ?customer=nimportequoi       -> 0     et il se ferme sur une valeur illisible
+  //
+  // ⚠ L'IRI EST CONSTRUIT SANS GARDE, ET C'EST VOULU. Un identifiant absent donne
+  // `/api/clients/undefined`, que le serveur ne resout pas : la reponse est VIDE. C'est le bon
+  // echec. La garde -- `clientId ? … : undefined` -- retirerait le parametre, et `qs()` rendrait
+  // alors la collection ENTIERE : les contacts de tout le monde sous le nom d'une seule personne.
+  contactsClient: (clientId) =>
+    request('/api/customer_contacts', { query: { customer: `/api/clients/${clientId}` } }),
   creerContactClient: (corps) =>
     request('/api/customer_contacts', { method: 'POST', body: corps, ld: true }),
   majContactClient: (id, corps) =>
@@ -544,8 +585,10 @@ export const api = {
   // /!\ La collection est chargee entiere puis filtree cote ecran. `CommercialActivity` porte un
   // SearchFilter sur `customer` -- famille D58, ou le filtre rend soit tout soit rien, sans jamais
   // lever. Un historique vide ressemble a un client qu'on n'a jamais appele : on ne l'emprunte pas.
-  activitesCommerciales: () =>
-    request('/api/commercial_activities', { query: { itemsPerPage: 500 } }),
+  // Filtree par le serveur — voir `contactsClient` pour la mesure et pour la raison de ne pas
+  // garder l'identifiant absent.
+  activitesCommerciales: (clientId) =>
+    request('/api/commercial_activities', { query: { customer: `/api/clients/${clientId}` } }),
   creerActivite: (corps) =>
     request('/api/commercial_activities', { method: 'POST', body: corps, ld: true }),
 
@@ -603,7 +646,9 @@ export const api = {
   tableauProjets: () => request('/api/projets/tableau'),
   creerProjet: (corps) => request('/api/projects', { method: 'POST', body: corps, ld: true }),
   majProjet: (id, corps) => request(`/api/projects/${id}`, { method: 'PATCH', body: corps }),
-  tachesProjet: () => request('/api/project_tasks', { query: { itemsPerPage: 500 } }),
+  // Filtrees par le serveur — voir `contactsClient`.
+  tachesProjet: (projetId) =>
+    request('/api/project_tasks', { query: { project: `/api/projects/${projetId}` } }),
   creerTacheProjet: (corps) => request('/api/project_tasks', { method: 'POST', body: corps, ld: true }),
   majTacheProjet: (id, corps) => request(`/api/project_tasks/${id}`, { method: 'PATCH', body: corps }),
   supprimerTacheProjet: (id) => request(`/api/project_tasks/${id}`, { method: 'DELETE' }),
@@ -902,6 +947,11 @@ export const api = {
   creerRegion: (corps) => request('/api/regions', { method: 'POST', body: corps, ld: true }),
   majRegion: (id, corps) => request(`/api/regions/${id}`, { method: 'PATCH', body: corps }),
   categories: () => request('/api/categories', { query: { itemsPerPage: 200 } }),
+  // LES CORRESPONDANCES COMPTABLES : quelle catégorie s'impute sur quel compte de produit.
+  // Exposées depuis le début, appelées par aucun écran. Sans elles, impossible de dire à
+  // l'exploitant si la catégorie qu'il choisit sur une ligne de facture change quoi que ce soit —
+  // et `ResolveurComptesFacturation` se replie silencieusement sur le compte par défaut.
+  mappingsComptables: () => request('/api/mapping_comptables', { query: { itemsPerPage: 200 } }),
   creerCategorie: (corps) => request('/api/categories', { method: 'POST', body: corps, ld: true }),
   majCategorie: (id, corps) => request(`/api/categories/${id}`, { method: 'PATCH', body: corps }),
   supprimerCategorie: (id) => request(`/api/categories/${id}`, { method: 'DELETE' }),
@@ -1224,6 +1274,10 @@ export const api = {
   // --- Verticales (routes explicites privilégiées) ---
   // Piscine
   bassins: () => request('/api/bassins', { query: { itemsPerPage: 100 } }),
+  // `POST /api/bassins` existe depuis le debut, protege par `piscine.configurer`, et n'etait
+  // appele d'aucun ecran : la piscine savait attribuer un casier, relancer un retard et forcer une
+  // ouverture, mais pas declarer le bassin sur lequel tout cela porte.
+  creerBassin: (corps) => request('/api/bassins', { method: 'POST', body: corps, ld: true }),
   creneauxBassin: () => request('/api/creneau_bassins', { query: { itemsPerPage: 200 } }),
   jaugesGrandPublic: () =>
     request('/api/jauge_grand_public_calculees', { query: { itemsPerPage: 100 } }),
@@ -1252,6 +1306,16 @@ export const api = {
   // Le parc par pointure : c'est lui qui dit ce qui est louable, pas la liste des locations.
   patinoireParc: () =>
     request('/api/patinoire_parc_patins', { query: { itemsPerPage: 200 } }),
+  // `POST /api/patinoire_parc_patins` existe depuis le début (droit `patinoire.configurer`) et
+  // n'était appelé de nulle part : la patinoire sortait, rendait et affûtait des patins qu'aucun
+  // écran ne savait déclarer.
+  //
+  // ⚠ CETTE ENTITÉ N'A AUCUNE CONTRAINTE ET AUCUNE SUPPRESSION. Un POST au corps vide rend 201 et
+  // crée une pointure 28 à zéro paire — vérifié, et payé : un parc vide traîne en préproduction,
+  // que `DELETE` refuse (405). D'où la validation faite ICI, dans le formulaire, faute d'en avoir
+  // une côté serveur. Signalé pour le moteur.
+  creerParcPatins: (corps) =>
+    request('/api/patinoire_parc_patins', { method: 'POST', body: corps, ld: true }),
   patinoireListeAttente: () =>
     request('/api/patinoire_liste_attente_pointures', { query: { itemsPerPage: 100 } }),
   patinoireRetenues: () =>

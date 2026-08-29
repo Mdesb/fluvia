@@ -2,6 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { libelleProduit, prixIndicatif, euros, statutProduit } from '../api/produit.js'
 import Modal from './Modal.jsx'
+import Tabs from './Tabs.jsx'
+// Rendu Markdown en éléments React, jamais en HTML injecté. Écrit pour la boutique
+// publique ; réutilisé ici pour que la description s'affiche EXACTEMENT comme elle
+// s'affichera devant un client, et pour ne pas inventer un second format.
+import Markdown from '../public/components/Markdown.jsx'
 import { humaniser, mot } from '../api/vocabulaire.js'
 import ZonesAccesProduit from './ZonesAccesProduit.jsx'
 import TarifsProduit from './TarifsProduit.jsx'
@@ -41,8 +46,69 @@ const REGLES_PCA = {
 //
 // La modale de comptabilite ecrite plus tot aujourd'hui est DEPLACEE, pas reecrite : elle s'ouvre
 // desormais au-dessus d'une page, ce qui est le cas normal.
+// Une relation sérialisée arrive tantôt en IRI nu, tantôt en objet réduit. Les deux formes se
+// présentent selon l'opération : on lit l'une et l'autre plutôt que de parier.
+function idDeRef(ref) {
+  if (!ref) return null
+  if (typeof ref === 'string') return ref.split('/').pop()
+  return ref.id || String(ref['@id'] || '').split('/').pop() || null
+}
+
+// LA DURÉE REVIENT DÉVELOPPÉE, ET C'EST UN PIÈGE D'ALLER-RETOUR.
+//
+// `dureeValidite: "P1D"` est accepté à l'écriture ; à la relecture le serveur rend
+// `P0Y0M1DT0H0M0S`. Un formulaire qui réécrirait cette chaîne telle quelle irait bien, mais un
+// formulaire qui la lirait comme un nombre de jours sans la comprendre écrirait n'importe quoi.
+//
+// On n'expose donc que les JOURS — la seule unité qu'une durée de validité de billet utilise en
+// pratique — et on rend `null` quand la valeur porte autre chose : mieux vaut un champ vide et un
+// avertissement qu'un champ qui affiche « 0 » pour six mois.
+function joursDepuisIntervalle(valeur) {
+  if (!valeur || typeof valeur !== 'string') return ''
+  const m = /^P(\d+)Y(\d+)M(\d+)DT(\d+)H(\d+)M(\d+)S$/.exec(valeur)
+    || /^P(?:(\d+)Y)?(?:(\d+)M)?(?:(\d+)D)?$/.exec(valeur)
+  if (!m) return ''
+  const [annees, mois, jours, heures, minutes, secondes] = m.slice(1).map((x) => Number(x || 0))
+  if (annees || mois || heures || minutes || secondes) return ''
+  return jours ? String(jours) : ''
+}
+
+// Une durée que le champ « jours » ne sait pas représenter : on le dit plutôt que de l'écraser.
+function dureeNonExprimableEnJours(valeur) {
+  return !!valeur && typeof valeur === 'string' && joursDepuisIntervalle(valeur) === ''
+    && !/^P0Y0M0DT0H0M0S$/.test(valeur)
+}
+
+// La description est multilingue, comme le libellé : `{ fr: '…' }`, pas une chaîne. Un composant
+// qui lirait `p.description` directement afficherait « [object Object] ».
+function descriptionFr(p) {
+  const d = p?.description
+  if (!d) return ''
+  if (typeof d === 'string') return d
+  return d.fr || Object.values(d)[0] || ''
+}
+
+// Un produit associé arrive en IRI nu ou en objet réduit : on ne sait donc pas toujours son nom.
+// On le retrouve dans la liste du catalogue quand elle est là, et on affiche l'identifiant sinon —
+// jamais un blanc, qui se lirait comme « produit sans nom ».
+function nomProduitAssocie(assoc, catalogue) {
+  if (assoc && typeof assoc === 'object' && (assoc.libelle || assoc.nom)) {
+    return libelleProduit(assoc)
+  }
+  const id = idDeRef(assoc)
+  const connu = (catalogue || []).find((x) => String(x.id) === String(id))
+  return connu ? libelleProduit(connu) : (id || '—')
+}
+
+// Les trois axes de catégories (RG-M1-05), indépendants : un produit porte au plus une valeur
+// par axe. L'axe comptable est le seul qui ait un effet sur les écritures.
+const AXES = [['comptable', 'Axe comptable'], ['marketing', 'Axe marketing'], ['rayon', 'Rayon']]
+
 export default function ProduitFiche({
   produit,
+  // Sert UNIQUEMENT à prévenir avant qu'une fiche ne sorte du périmètre de celui qui l'édite —
+  // voir l'avertissement des sites de commercialisation.
+  etabActif,
   peutModifier = false,
   peutModifierCompta = false,
   onModifie,
@@ -53,7 +119,22 @@ export default function ProduitFiche({
   const [edition, setEdition] = useState(null)
   const [editionCompta, setEditionCompta] = useState(null)
   const [enregistrement, setEnregistrement] = useState(false)
+  // LA FICHE PORTE DEUX MÉTIERS, ET ILS NE SE LISENT PAS DANS LE MÊME ÉTAT D'ESPRIT.
+  //
+  // Demande de Maxime : « il doit y avoir une partie WYSIWYG et une autre config, ça peut faire
+  // l'objet d'onglets différents ». L'ordre d'avant était administratif — tarif, canaux, stock,
+  // tarifs, zones, options, diffusion, comptabilité, PHOTO en dernier, après le taux de TVA. Sur
+  // une fiche produit, l'image est la première chose qu'on regarde.
+  //
+  // L'onglet vit en état local et non dans l'URL : c'est une vue d'un même objet, pas une
+  // navigation. Le retour au catalogue et l'adresse de la fiche, eux, sont dans l'URL.
+  const [vueFiche, setVueFiche] = useState('vitrine')
   const [detail, setDetail] = useState(null)
+  // Référentiels du bloc Diffusion. Chargés une fois par fiche, et leur absence n'empêche pas de
+  // modifier le reste : `Promise.allSettled`, jamais `all`.
+  const [etablissements, setEtablissements] = useState([])
+  const [categories, setCategories] = useState([])
+  const [tousProduits, setTousProduits] = useState([])
   const [liaisons, setLiaisons] = useState([])
   const [valeurs, setValeurs] = useState({}) // groupeId -> valeurs
   // Le produit n'est pas commercialisable sur l'établissement actif : le guichet ne l'aurait pas.
@@ -62,6 +143,14 @@ export default function ProduitFiche({
   const [erreur, setErreur] = useState(null)
 
   const produitId = produit?.id
+
+  useEffect(() => {
+    Promise.allSettled([api.etablissements(), api.categories(), api.produits()]).then(([e, c, pr]) => {
+      setEtablissements(e.status === 'fulfilled' ? membres(e.value) : [])
+      setCategories(c.status === 'fulfilled' ? membres(c.value) : [])
+      setTousProduits(pr.status === 'fulfilled' ? membres(pr.value) : [])
+    })
+  }, [])
 
   useEffect(() => {
     if (!produitId) return undefined
@@ -136,6 +225,18 @@ export default function ProduitFiche({
       canaux: Array.isArray(p.canaux) ? [...p.canaux] : [],
       couleurCaisse: p.couleurCaisse || '',
       noteInterne: p.noteInterne || '',
+      // LE BLOC DIFFUSION ÉTAIT AFFICHÉ ET RIEN NE LE CHANGEAIT.
+      //
+      // Conséquence exacte, relevée sur l'audioguide : la fiche affiche « Ce produit n'est pas
+      // commercialisé sur l'établissement actif : le guichet ne l'affichera pas ici, options
+      // comprises » — et l'écran qui énonce le problème ne porte pas le geste qui le résout.
+      // Les trois champs sont pourtant en écriture côté serveur (`produit:write`), vérifié par un
+      // aller-retour réel avant d'écrire ce formulaire.
+      description: descriptionFr(p),
+      produitsAssocies: (p.produitsAssocies || []).map(idDeRef).filter(Boolean),
+      etablissements: (p.etablissements || []).map(idDeRef).filter(Boolean),
+      categories: (p.categories || []).map(idDeRef).filter(Boolean),
+      jours: joursDepuisIntervalle(p.dureeValidite),
     })
   }
 
@@ -151,6 +252,17 @@ export default function ProduitFiche({
         canaux: edition.canaux,
         couleurCaisse: edition.couleurCaisse || null,
         noteInterne: edition.noteInterne.trim() || null,
+        // Multilingue comme le libellé : on ne remplace que le français, sinon une traduction
+        // existante disparaîtrait sans que personne ne l'ait demandé.
+        description: edition.description.trim()
+          ? { ...(p.description && typeof p.description === 'object' ? p.description : {}), fr: edition.description.trim() }
+          : null,
+        produitsAssocies: edition.produitsAssocies.map((id) => `/api/produits/${id}`),
+        etablissements: edition.etablissements.map((id) => `/api/etablissements/${id}`),
+        categories: edition.categories.map((id) => `/api/categories/${id}`),
+        // Le serveur rend la durée en forme développée (`P0Y0M1DT0H0M0S`) et accepte la forme
+        // courte : on renvoie `P<n>D`, ou `null` pour « sans limite ».
+        dureeValidite: edition.jours === '' ? null : `P${Number(edition.jours)}D`,
       })
       const rafraichi = await api.produit(produitId)
       setDetail(rafraichi)
@@ -241,6 +353,174 @@ export default function ProduitFiche({
             <div className="hint">Visible de votre équipe seulement. Jamais affichée au client.</div>
           </div>
 
+          <div className="fiche-sec" style={{ marginTop: 'var(--esp-bloc)' }}>Vitrine</div>
+
+          <div className="field">
+            <label htmlFor="pr-desc">Description</label>
+            <textarea
+              id="pr-desc"
+              className="input"
+              rows={6}
+              value={edition.description}
+              placeholder="Ce qu’on voit, ce qu’on fait, combien de temps ça dure."
+              onChange={(e) => setEdition((st) => ({ ...st, description: e.target.value }))}
+            />
+            {/* ⚠ MISE EN FORME LÉGÈRE, ET SURTOUT PAS DE HTML.
+                Le texte est saisi par l'exploitant, donc « de confiance » — sauf que la confiance
+                porte sur la PERSONNE, pas sur le CONTENU : un passage collé depuis un traitement
+                de texte ou une IA transporte du balisage que personne n'a voulu. Le rendu produit
+                des éléments React (`public/components/Markdown.jsx`) et n'interprète jamais de
+                HTML : l'injection devient structurellement impossible au lieu d'être improbable.
+                On ne l'assainit pas, on ne se pose pas la question. */}
+            <p className="hint">
+              Mise en forme légère&nbsp;: <code>**gras**</code>, <code>*italique*</code>, listes
+              avec un tiret, titres avec <code>#</code>. Le HTML n’est pas interprété — il
+              s’afficherait tel quel.
+            </p>
+            {edition.description.trim() && (
+              <div className="card" style={{ marginTop: 'var(--esp-normal)' }}>
+                <div className="card-b">
+                  <div className="sub" style={{ marginBottom: 'var(--esp-serre)' }}>Aperçu</div>
+                  <Markdown texte={edition.description} />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="field">
+            <label htmlFor="pr-assoc">Produits associés</label>
+            <div id="pr-assoc" style={{ display: 'grid', gap: 'var(--esp-serre)', maxHeight: 220, overflowY: 'auto' }}>
+              {tousProduits.filter((x) => String(x.id) !== String(produitId)).map((x) => (
+                <label key={x.id} style={{ display: 'flex', gap: 'var(--esp-normal)', alignItems: 'center' }}>
+                  <input
+                    type="checkbox"
+                    checked={edition.produitsAssocies.includes(x.id)}
+                    onChange={(ev) => setEdition((st) => ({
+                      ...st,
+                      produitsAssocies: ev.target.checked
+                        ? [...st.produitsAssocies, x.id]
+                        : st.produitsAssocies.filter((y) => y !== x.id),
+                    }))}
+                  />
+                  <span>{libelleProduit(x)}</span>
+                </label>
+              ))}
+            </div>
+            <p className="hint">
+              Ce qu’on propose avec&nbsp;: le cadenas avec l’entrée piscine, l’audioguide avec la
+              visite. Le produit lui-même ne figure pas dans la liste.
+            </p>
+          </div>
+
+          <div className="fiche-sec" style={{ marginTop: 'var(--esp-bloc)' }}>Diffusion</div>
+
+          <div className="field">
+            <label htmlFor="pr-etabs">Sites de commercialisation</label>
+            <div id="pr-etabs" style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
+              {etablissements.map((e) => (
+                <label key={e.id} style={{ display: 'flex', gap: 'var(--esp-normal)', alignItems: 'center' }}>
+                  <input
+                    type="checkbox"
+                    checked={edition.etablissements.includes(e.id)}
+                    onChange={(ev) => setEdition((st) => ({
+                      ...st,
+                      etablissements: ev.target.checked
+                        ? [...st.etablissements, e.id]
+                        : st.etablissements.filter((x) => x !== e.id),
+                    }))}
+                  />
+                  <span>{e.nom || e.libelle || e.id}</span>
+                </label>
+              ))}
+            </div>
+            {/* C'EST CE CHAMP QUI REND SOLUBLE LE MESSAGE AFFICHÉ PLUS HAUT.
+                « Ce produit n'est pas commercialisé sur l'établissement actif » n'avait aucun
+                geste correspondant : on constatait, on ne pouvait pas agir. */}
+            <div className="hint">
+              Un produit ne s’affiche au guichet que sur les sites cochés ici. <b>Aucun site coché
+              signifie qu’il reste visible partout</b> : c’est la liste qui restreint, pas
+              l’inverse. C’est ce que dit le message d’avertissement de la fiche, et c’est ici qu’il
+              se corrige.
+            </div>
+            {/* ⚠ COCHER DES SITES SANS Y METTRE LE SIEN FAIT DISPARAÎTRE LA FICHE À L'ENREGISTREMENT.
+                Mesuré, pas supposé : en attachant l'audioguide à GI-ONE depuis Piscine A, le PATCH
+                rend 200 et la relecture qui suit rend 404 — l'extension de périmètre a exclu le
+                produit dans l'intervalle. L'écran affichait « Not Found », un message qui ne dit ni
+                ce qui s'est passé ni que l'enregistrement a RÉUSSI.
+                On prévient donc avant, plutôt que d'expliquer après : la fiche ne sera plus
+                joignable depuis cet établissement, et il faudra basculer sur l'un des sites cochés
+                pour y revenir. */}
+            {edition.etablissements.length > 0 && etabActif
+              && !edition.etablissements.includes(etabActif) && (
+              <div className="banner banner-warn">
+                <b>Vous n’avez pas coché l’établissement où vous êtes.</b> L’enregistrement
+                réussira, puis ce produit sortira de votre périmètre&nbsp;: la fiche ne sera plus
+                accessible d’ici, et il faudra basculer sur l’un des sites cochés pour la rouvrir.
+              </div>
+            )}
+          </div>
+
+          <div className="field">
+            <label htmlFor="pr-cats">Catégories</label>
+            <div id="pr-cats" style={{ display: 'grid', gap: 'var(--esp-normal)' }}>
+              {AXES.map(([axe, libelleAxe]) => {
+                const duAxe = categories.filter((c) => c.axe === axe)
+                if (duAxe.length === 0) return null
+                const choisie = edition.categories.find((id) => duAxe.some((c) => c.id === id)) || ''
+                return (
+                  <label key={axe} style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
+                    <span className="sub">{libelleAxe}</span>
+                    <select
+                      className="input"
+                      value={choisie}
+                      onChange={(ev) => setEdition((st) => ({
+                        ...st,
+                        // UNE SEULE VALEUR PAR AXE (RG-M1-05) : choisir remplace la précédente du
+                        // même axe au lieu de s'y ajouter. Un produit à deux catégories comptables
+                        // s'imputerait sur deux comptes.
+                        categories: [
+                          ...st.categories.filter((id) => !duAxe.some((c) => c.id === id)),
+                          ...(ev.target.value ? [ev.target.value] : []),
+                        ],
+                      }))}
+                    >
+                      <option value="">— aucune —</option>
+                      {duAxe.map((c) => <option key={c.id} value={c.id}>{c.libelle || c.nom}</option>)}
+                    </select>
+                  </label>
+                )
+              })}
+            </div>
+            <div className="hint">
+              Une seule catégorie par axe. L’axe <b>comptable</b> décide du compte de produit :
+              sans lui, la vente n’est pas comptabilisée et ressort en anomalie à la clôture.
+            </div>
+          </div>
+
+          <div className="field">
+            <label htmlFor="pr-duree">Durée de validité (jours)</label>
+            <input
+              id="pr-duree"
+              className="input"
+              type="number"
+              min="0"
+              value={edition.jours}
+              placeholder="sans limite"
+              onChange={(e) => setEdition((st) => ({ ...st, jours: e.target.value }))}
+            />
+            {dureeNonExprimableEnJours(p.dureeValidite) ? (
+              <div className="banner banner-warn">
+                La durée enregistrée (<code>{p.dureeValidite}</code>) n’est pas exprimable en jours.
+                Ce champ est resté vide pour ne pas l’écraser par erreur — <b>enregistrer avec un
+                nombre de jours la remplacera</b>, et le laisser vide la supprimera.
+              </div>
+            ) : (
+              <div className="hint">
+                Combien de temps le billet reste utilisable après l’achat. Vide = sans limite.
+              </div>
+            )}
+          </div>
+
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
             <button className="btn" type="button" onClick={() => setEdition(null)}>Annuler</button>
             <button className="btn primary" type="submit" disabled={enregistrement}>
@@ -293,6 +573,64 @@ export default function ProduitFiche({
         </div>
       </div>
 
+      <Tabs
+        onglets={[['vitrine', 'Vitrine'], ['config', 'Configuration']]}
+        actif={vueFiche}
+        onChange={setVueFiche}
+      />
+
+      {vueFiche === 'vitrine' && (
+        <>
+          {/* LA PHOTO REMONTE EN PREMIER. Elle était en dernier, après le taux de TVA et la règle
+              de comptabilisation — c'est-à-dire après tout ce qu'un client ne verra jamais. */}
+          <PhotosProduit produitId={p.id} peutModifier={peutModifier} />
+
+          <Section
+            titre="Description"
+            aide="Le texte que le visiteur lit avant d'acheter."
+          >
+            {descriptionFr(p) ? (
+              <Markdown texte={descriptionFr(p)} />
+            ) : (
+              <div className="empty">
+                Aucune description. C’est le texte qui donne envie&nbsp;: ce qu’on voit, ce qu’on
+                fait, combien de temps ça dure.
+              </div>
+            )}
+            {/* ⚠ ELLE N'EST AFFICHÉE NULLE PART AUJOURD'HUI, ET LE TAIRE SERAIT LE PIRE.
+                `Produit::$description` est en lecture et en écriture depuis le début, et la
+                boutique publique ne la lit pas — vérifié : le mot n'apparaît dans `src/public`
+                que dans l'extraction d'un message d'erreur. Quelqu'un qui écrirait une belle
+                description sans le savoir travaillerait pour personne. */}
+            <p className="hint">
+              <b>La boutique en ligne n’affiche pas encore ce texte.</b> Il est enregistré et
+              s’affichera dès que la fiche publique le reprendra — mais aujourd’hui, personne ne le
+              lit hors de cet écran.
+            </p>
+          </Section>
+
+          <Section
+            titre="Produits associés"
+            aide="Ce qu'on propose avec : le cadenas avec l'entrée piscine."
+          >
+            {(p.produitsAssocies || []).length === 0 ? (
+              <div className="empty">
+                Aucun produit associé. C’est ce qui permet de proposer le cadenas avec l’entrée, ou
+                l’audioguide avec la visite.
+              </div>
+            ) : (
+              <ul>
+                {(p.produitsAssocies || []).map((assoc) => (
+                  <li key={idDeRef(assoc)}>{nomProduitAssocie(assoc, tousProduits)}</li>
+                ))}
+              </ul>
+            )}
+          </Section>
+        </>
+      )}
+
+      {vueFiche === 'config' && (
+      <>
       <Section titre="Tarifs" aide="Le prix de ce produit, par type de tarif et par période.">
         <TarifsProduit
           produit={p}
@@ -380,12 +718,13 @@ export default function ProduitFiche({
         )}
       </Section>
 
-      <PhotosProduit produitId={p.id} peutModifier={peutModifier} />
 
       {p.noteInterne && (
         <Section titre="Note interne">
           <div className="hint">{p.noteInterne}</div>
         </Section>
+      )}
+      </>
       )}
 
       <ComptaProduitModal

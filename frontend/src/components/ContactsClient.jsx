@@ -29,12 +29,7 @@ export default function ContactsClient({ client, peutModifier }) {
     if (!client?.id) return
     setChargement(true)
     try {
-      const tous = membres(await api.contactsClient())
-      setContacts(tous.filter((c) => {
-        const ref = c.customer
-        const id = typeof ref === 'string' ? ref.split('/').pop() : ref?.id
-        return String(id) === String(client.id)
-      }))
+      setContacts(membres(await api.contactsClient(client.id)))
     } catch (e) {
       setErreur(e.message || 'Les contacts n’ont pas pu être chargés.')
     } finally {
