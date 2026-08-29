@@ -181,6 +181,19 @@ class Facture
     #[Groups(['facture:read'])]
     private ?self $factureCorrigee = null;
 
+    /**
+     * LA FACTURE DE SOLDE QUE CET ACOMPTE VIENDRA DIMINUER.
+     *
+     * Porte par l'ACOMPTE et non par le solde : un solde peut avoir plusieurs acomptes, un acompte
+     * n'a qu'un solde. Le sens de la relation suit la cardinalite, pas l'ordre chronologique.
+     *
+     * ⚠ Nul sur une facture ordinaire. Rempli uniquement quand `nature` vaut `Acompte`.
+     */
+    #[ORM\ManyToOne(targetEntity: self::class)]
+    #[ORM\JoinColumn(name: 'facture_soldee_id', nullable: true)]
+    #[Groups(['facture:read'])]
+    private ?self $factureSoldee = null;
+
     #[ORM\ManyToOne(targetEntity: ProfilExploitant::class)]
     #[ORM\JoinColumn(nullable: false)]
     #[Groups(['facture:read'])]
@@ -385,6 +398,24 @@ class Facture
         $this->factureCorrigee = $factureCorrigee;
 
         return $this;
+    }
+
+    public function getFactureSoldee(): ?self
+    {
+        return $this->factureSoldee;
+    }
+
+    public function setFactureSoldee(?self $factureSoldee): self
+    {
+        $this->factureSoldee = $factureSoldee;
+
+        return $this;
+    }
+
+    /** Vrai si cette facture est un acompte destiné à être déduit d'un solde. */
+    public function estAcompte(): bool
+    {
+        return $this->nature === NatureFacture::Acompte;
     }
 
     public function getProfilExploitant(): ?ProfilExploitant

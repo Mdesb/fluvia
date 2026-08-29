@@ -42,6 +42,7 @@ final class EmettreFactureDirecteHandler
         private readonly EntityManagerInterface $em,
         private readonly ResolveurComptesFacturation $comptes,
         private readonly GenerateurNumeroFacture $generateur,
+        private readonly DepositInvoiceHandler $acomptes,
         private readonly ScellementEcritureHandler $scellementEcriture,
         private readonly ScellementFactureHandler $scellementFacture,
     ) {
@@ -55,6 +56,17 @@ final class EmettreFactureDirecteHandler
         if ($facture->getLignes()->isEmpty()) {
             throw new UnprocessableEntityHttpException('Une facture sans ligne ne peut pas être émise.');
         }
+
+        // ⚠ LES ACOMPTES SE DÉDUISENT ICI, AVANT LA RÉSOLUTION DES COMPTES.
+        //
+        // Les lignes de déduction sont des lignes comme les autres : elles doivent recevoir leur
+        // compte produit dans la boucle qui suit. Posées plus tard, elles resteraient sans compte et
+        // l'écriture partirait déséquilibrée.
+        //
+        // Et ce n'est PAS une option de l'écran : un acompte non déduit facture le client DEUX FOIS
+        // — une fois à l'acompte, une fois au solde. La déduction n'a pas à être demandée, et
+        // surtout elle ne doit pas pouvoir être oubliée.
+        $this->acomptes->deduire($facture);
 
         $profil = $facture->getProfilExploitant();
         \assert($profil !== null);
