@@ -87,6 +87,21 @@ services:
     # Ce que l'adaptateur accorde — les droits d'un administrateur — est une decision de Maxime du
     # 31/08, avec sa contrepartie : la trace, journalisee contre l'etablissement DU CLIENT.
     App\Securite\Port\SupportAccessRightsInterface: '@App\Subscription\Adapter\SupportAccessRights'
+
+    # ED-4 -- le pendant du precedent : quels etablissements l'assistance rend VISIBLES.
+    #
+    # Les droits repondent « que peut faire cet agent ICI ? », sur un etablissement deja designe par
+    # l'en-tete. Cette question-la ne suffit a rien d'autre : sans le port de visibilite, l'agent
+    # avait tous les droits sur un etablissement qui n'apparaissait dans AUCUNE liste. Le selecteur
+    # ne le proposait pas, et l'unique facon d'y entrer etait de forger l'en-tete a la main.
+    #
+    # ⚠ C'EST LE MEME DEFAUT QUE CELUI DU PORT PRECEDENT, UNE COUCHE PLUS HAUT : un mecanisme
+    # complet et inatteignable. Un acces d'assistance qu'on ne peut pas emprunter est un acces qui
+    # n'existe pas — et le contournement redevient l'affectation permanente que RG-ED-07 interdit.
+    #
+    # `NoSupportAccessScope` reste le defaut : sans le module d'abonnement, le cloisonnement
+    # ordinaire s'applique inchange.
+    App\Securite\Port\SupportAccessScopeInterface: '@App\Subscription\Adapter\SupportAccessScope'
     # Porte-monnaie virtuel (frontière M4, RG-M4-03, §2.1 plan-crm.md) : câblé à l'adaptateur réel
     # (débit atomique) — remplace le stub L2. Modification prudente de PaiementHandler/
     # ContrePassationHandler (T9) : comportement par défaut inchangé si aucun port n'est fourni.

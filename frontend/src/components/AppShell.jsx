@@ -245,6 +245,15 @@ export default function AppShell({
   nav: navFournie = null,
   // Rendu a droite de la barre du haut, avant la recherche. L'editeur y met « Mode support ».
   actionsBarre = null,
+  // ⚠ EPINGLE : l'onglet est verrouille sur son etablissement, et le selecteur disparait.
+  //
+  // Sert au mode support. Sans cela, l'agent pourrait changer d'etablissement dans un onglet dont
+  // le bandeau continue de nommer le client : l'ecran dirait une chose et l'en-tete une autre, et
+  // c'est exactement la confusion que le bandeau existe pour empecher.
+  epingle = false,
+  // Rendu tout en haut de la zone principale, au-dessus de la barre. Null par defaut, donc le
+  // back-office ordinaire est inchange.
+  bandeau = null,
   children,
 }) {
   // État de la session de caisse, affiché en permanence dans la barre du haut.
@@ -423,6 +432,9 @@ export default function AppShell({
       </aside>
 
       <div className="main">
+        {/* Au-dessus de la barre, donc au-dessus de tout : un bandeau qu'on peut faire defiler hors
+            de l'ecran n'est pas un bandeau permanent. */}
+        {bandeau}
         <div className="topbar">
           <button className="burger" aria-label="Menu" onClick={() => setNavOpen((v) => !v)}>☰</button>
           {/* POURQUOI UN BOUTON « PRÉCÉDENT » ALORS QUE CELUI DU NAVIGATEUR MARCHE MAINTENANT.
@@ -447,17 +459,23 @@ export default function AppShell({
           {/* Le contexte d'établissement reste, en compact : le libellé « Établissement » disparaît,
               le sélecteur se suffit à lui-même et le nom est déjà rappelé dans la colonne. */}
           <div className="topbar-tenant">
-            <select
-              className="select"
-              value={etabActif}
-              onChange={(e) => onChangeEtab(e.target.value)}
-              aria-label="Établissement actif"
-              title="Établissement sur lequel vous travaillez"
-            >
-              {etablissements.map((e) => (
-                <option key={e.id} value={e.id}>{e.nom}</option>
-              ))}
-            </select>
+            {epingle ? (
+              /* Epingle : le nom, pas le choix. Voir la prop `epingle` — un onglet de support est
+                 verrouille sur son client, et le bandeau juste au-dessus le nomme deja. */
+              <span className="badge">{nomEtab}</span>
+            ) : (
+              <select
+                className="select"
+                value={etabActif}
+                onChange={(e) => onChangeEtab(e.target.value)}
+                aria-label="Établissement actif"
+                title="Établissement sur lequel vous travaillez"
+              >
+                {etablissements.map((e) => (
+                  <option key={e.id} value={e.id}>{e.nom}</option>
+                ))}
+              </select>
+            )}
           </div>
 
           {/* Rendu avant la recherche : l editeur y met « Mode support ». Null par defaut, donc
