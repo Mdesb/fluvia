@@ -115,6 +115,29 @@ docker run --rm \
     node:20-alpine sh -c 'npm ci --no-audit --no-fund && npm run build'
 
 log "Publication du frontend"
+# ── LE SERVICE WORKER PREND LE COMMIT POUR NOM DE CACHE ─────────────────────────────────────────
+#
+# Sans cela, `VERSION` reste constant d'une construction a l'autre, et DEUX gardes tombent ensemble :
+# la purge des anciens caches ne trouve jamais d'autre nom a supprimer, et `install` ne se rejoue
+# jamais -- donc la coquille en cache continue de nommer des assets que le `rsync --delete` ci-dessous
+# vient de faire disparaitre. Hors ligne, l'utilisateur obtient une page blanche.
+#
+# ⚠ ET LA SUBSTITUTION EST VERIFIEE, PAS SUPPOSEE. Une substitution sautee rendrait la constante et
+# le defaut sans que rien ne le dise : c'est l'absence qui ne crie pas.
+log "Service worker : nom de cache au commit"
+sed -i "s/fluvia-__COMMIT__/fluvia-$(git rev-parse --short HEAD)/" frontend/dist/sw.js
+
+if grep -q '__COMMIT__' frontend/dist/sw.js; then
+    echo "✗ Le jeton de version du service worker n'a pas été substitué." >&2
+    echo "  Le cache garderait un nom constant : purge inerte, et coquille périmée hors ligne." >&2
+    exit 1
+fi
+
+if ! grep -q "fluvia-$(git rev-parse --short HEAD)" frontend/dist/sw.js; then
+    echo "✗ Le service worker ne porte pas le commit courant après substitution." >&2
+    exit 1
+fi
+
 rsync -a --delete frontend/dist/ "$WEB_ROOT/"
 
 # Le tableau de bord d'avancement, que Maxime consulte. Il est publie APRES le rsync ci-dessus, et

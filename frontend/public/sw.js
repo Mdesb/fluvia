@@ -23,14 +23,24 @@
  * Uniquement les fichiers de `/assets/`, que Vite nomme avec une empreinte de leur contenu
  * (`App-JfSaL8rM.js`). Une URL d'asset désigne donc UN contenu, pour toujours : la servir depuis le
  * cache ne peut pas rendre une version périmée. Un déploiement produit de nouveaux noms, et
- * l'ancien cache est purgé au changement de version ci-dessous.
+ * l'ancien cache est purgé au changement de version ci-dessous — ce qui n'a été VRAI qu'à partir du
+ * 30/08 : `VERSION` valait une constante, donc cette phrase décrivait une intention et non le code.
  *
  * La navigation, elle, part TOUJOURS au réseau d'abord. Le cache ne sert de secours que si le
  * réseau échoue — sinon un déploiement resterait invisible jusqu'à ce que quelqu'un vide son
  * navigateur, ce qui est exactement le défaut qu'on veut éviter.
  */
 
-const VERSION = 'fluvia-v1'
+// ⚠ CE JETON EST REMPLACE PAR LE COMMIT AU DEPLOIEMENT, ET LES DEUX GARDES DE CE FICHIER EN
+// DEPENDENT. Tant qu'il valait une constante (`fluvia-v1`), la purge de `activate` ne pouvait rien
+// supprimer -- aucun autre nom n'existait -- et `install` ne se rejouait jamais, donc la coquille
+// mise en cache continuait de nommer des assets que `rsync --delete` avait fait disparaitre :
+// hors ligne, page blanche, au premier deploiement suivant l'installation.
+//
+// La substitution est faite par `infra/deploy-preprod.sh`, qui VERIFIE ensuite que le jeton a
+// disparu et que le fichier servi porte bien le commit courant. Sans cette verification, une
+// substitution sautee rendrait la constante -- et le defaut -- sans que rien ne le dise.
+const VERSION = 'fluvia-__COMMIT__'
 const COQUILLE = '/index.html'
 
 self.addEventListener('install', (evenement) => {
