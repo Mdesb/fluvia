@@ -161,7 +161,22 @@ function fichiersAjoutes(string $ref): array
         exit(2);
     }
 
-    return array_values(array_filter($sortie, static function (string $chemin): bool {
+    // ── ET CE QUI N'EST PAS ENCORE COMMITÉ ──────────────────────────────────────────────────────
+    //
+    // `git diff ref...HEAD` ne voit que les commits. Or ce contrôle se lance surtout AVANT de
+    // commiter : sans ces deux listes, il répondait « aucun fichier ajouté à contrôler » à quelqu'un
+    // dont l'arbre portait quatre fichiers neufs — un vert qui répond à une question que personne
+    // n'a posée. Le crochet, lui, les voyait, et refusait le commit dix secondes plus tard.
+    //
+    // On ajoute donc les ajouts mis en index et les fichiers non suivis : le lanceur et le crochet
+    // contrôlent enfin le même ensemble.
+    $enCours = [];
+    exec('git diff --cached --diff-filter=A --name-only 2>/dev/null', $enCours);
+    exec('git ls-files --others --exclude-standard 2>/dev/null', $enCours);
+
+    $tous = array_unique(array_merge($sortie, $enCours));
+
+    return array_values(array_filter($tous, static function (string $chemin): bool {
         if (!str_ends_with($chemin, '.php')) {
             return false;
         }
