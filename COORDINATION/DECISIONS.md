@@ -2801,3 +2801,126 @@ pas avoir, et que son remplacement aurait introduit si on l'avait oublié.
 **Éprouvé par deux témoins qui discriminent :** remettre le stub fait rougir *seulement* « le billet
 ouvre » ; retirer la garde de zone fait rougir *seulement* « sans zone, il n'ouvre rien ». Chacun
 mesure sa moitié.
+
+### 2026-08-30 · D86 — Un billet vendu est TOUJOURS connu du contrôle d'accès ; seules les portes qu'il ouvre dépendent de la déclaration
+
+Tranché par **Maxime**, après qu'il a signalé le cas que la conception précédente ne couvrait pas :
+« certains n'ont pas de contrôle d'accès, mais le billet pourra être quand même validé par un
+contrôle manuel ».
+
+**Deux questions que le code confondait, et qu'il faut séparer :**
+
+    « ce billet est-il valide ? »            existence, fenêtre de validité, pas déjà consommé
+    « ce billet ouvre-t-il CETTE porte ? »   la zone déclarée sur le produit
+
+Un agent qui contrôle à la main n'a besoin que de la **première**, et n'a pas d'équipement.
+
+⚠ **Ce que j'avais construit faisait l'inverse, et c'est corrigé par cette décision.**
+`SaleAccessPairingAdapter` ne projetait RIEN quand le produit ne déclarait pas de zone — donc un
+billet vendu sur un site sans matériel n'existait pas du tout côté accès, et **aucun agent n'aurait
+eu quoi que ce soit à interroger**. La garde était juste contre le passe-partout, et fausse contre le
+contrôle manuel. Je ne l'avais pas vu ; Maxime l'a nommé en une phrase.
+
+**Nouvelle règle :** la vente projette toujours le support et le droit. La déclaration de zone décide
+de ce qui s'ouvre, pas de ce qui existe.
+
+⚠ **ET L'ORDRE DE MISE EN ŒUVRE EST CONTRE-INTUITIF, IL DOIT ÊTRE RESPECTÉ.** Retirer la garde avant
+que `DroitAcces::ouvre()` ne devienne strict (D87) ferait de chaque billet vendu un passe-partout des
+huit espaces — un droit sans espace ouvre tout aujourd'hui. **`ouvre()` d'abord, la garde ensuite.**
+
+### 2026-08-30 · D87 — `DroitAcces::ouvre()` devient strict, et un outil de scan prend en charge le contrôle manuel
+
+Tranché par **Maxime** en deux temps.
+
+**D'abord :** un droit sans espace autorisé n'ouvre plus rien, quel que soit le chemin qui l'a créé —
+vente ou appairage manuel au comptoir. Fini l'asymétrie où deux billets identiques se comportaient à
+l'inverse selon un chemin invisible à l'exploitant.
+
+**Raison, et c'est une fenêtre qui ne reviendra pas :** le comportement permissif existait pour ne pas
+fermer des portes devant des porteurs déjà équipés. Maxime a rappelé qu'**il n'y a pas encore de
+commercialisation** — trois droits en base, tous des données de test. Le changement est donc gratuit
+aujourd'hui et coûteux dès le premier client.
+
+**Ensuite, et c'est ce qui rend le strict tenable :** « on doit faire un outil de scan ».
+
+Mesuré avant de poser la question : `POST /api/acces/passages` et `POST /api/acces/passages/manuel`
+passent **tous deux** par `ValidationPassageHandler::valider()`, donc par le contrôle de zone, et
+**exigent tous deux un équipement**. Il n'existe aujourd'hui aucun chemin pour « un agent contrôle un
+billet sur un site sans matériel ». Ce que Maxime décrivait était un besoin, pas une capacité.
+
+**Ce que l'outil de scan doit être, et ce qu'il ne doit pas être :** l'agent scanne ou saisit le code,
+le système répond *valide* / *déjà utilisé* / *expiré*, et marque le billet consommé. **Sans
+équipement, sans zone, sans porte.** ⚠ S'il passait par `ValidationPassageHandler`, il hériterait du
+contrôle de zone et le problème reviendrait entier — c'est précisément le chemin à ne pas réutiliser
+malgré la tentation, puisque tout le reste y est déjà.
+
+**Ordre d'exécution :** `ouvre()` strict (module Accès) → retrait de la garde de zone dans
+l'adaptateur de vente → outil de scan. Les deux premiers sont indissociables ; le troisième est ce qui
+rend l'ensemble utilisable sur un site sans matériel.
+
+### 2026-08-30 · D88 — Les zones d'un badge de personnel viennent de la FONCTION, pas du badge
+
+Tranché par **Maxime**, contre les deux autres options proposées.
+
+Les zones se rattachent au rôle — accueil, technique, direction, maître-nageur — et le badge en
+hérite. Un agent d'accueil ouvre l'accueil ; un technicien ouvre les locaux techniques.
+
+**Raison :** moins de saisie qu'un badge à la fois, et ça colle à la façon dont on recrute — un
+saisonnier prend une fonction, pas un jeu de portes. ⚠ La contrepartie, énoncée avant le choix : **il
+faut que les rôles existent déjà et soient justes.** Un rôle trop large donne à tous ceux qui le
+portent les portes du plus privilégié d'entre eux.
+
+⚠ **Le trou que cette décision comble, trouvé par `allaccess-8e` en éprouvant D87 au lieu de la
+croire :** `EmissionBadgeStaffHandler` et `RecalculFenetreBadgeHandler` ne posent **aucune** zone —
+mesuré, 0 occurrence de `addAuthorisedSpace`. Un badge de personnel n'a pas de produit, donc aucune
+zone produit à hériter : **il n'avait, jusqu'ici, aucun moyen de dire ce qu'il ouvre.**
+
+### 2026-08-30 · D89 — Les zones d'une réservation viennent de l'ACTIVITÉ réservée
+
+Tranché par **Maxime**.
+
+Un cours d'aquagym ouvre le bassin où il a lieu. L'activité connaît déjà sa ressource : c'est la
+donnée la plus proche de la vérité, et elle existe — rien à ressaisir.
+
+**Raison :** l'alternative (déclarer la zone sur le produit vendu) aurait obligé à répéter sur chaque
+produit une information que l'activité porte déjà, avec la divergence garantie au premier changement
+de bassin.
+
+Même origine que D88 : `ProjectionAccesReservationHandler` ne pose aucune zone non plus.
+
+### 2026-08-30 · D90 — Transitoire assumé : badges et réservations continuent d'ouvrir, la règle stricte s'applique aux billets vendus
+
+Tranché par **Maxime**, en connaissance de ce que ça recrée.
+
+    règle stricte                billets vendus, dès maintenant
+    ancien régime maintenu       badges de personnel, droits nés d'une réservation
+
+⚠ **On recrée volontairement l'asymétrie que D87 venait de supprimer.** La différence, et c'est toute
+la différence : elle est **écrite, bornée et attribuée**, au lieu d'être un effet de bord que
+personne ne nomme. Une asymétrie connue se répare ; une asymétrie invisible se découvre au pire
+moment.
+
+**Ce qui l'éteint :** la livraison de D88 et D89. Pas une date — une condition. Une date inventée
+ici serait fausse le jour où elle passe sans que personne n'ait rien fait ; la condition, elle, se
+vérifie.
+
+**Forme exigée de la mise en œuvre, et ce n'est pas un détail :** l'exception doit être **une
+constante nommée** portant les seuls types de source concernés, avec en commentaire ce qui la fait
+disparaître. Pas une condition dispersée, pas un `if` implicite. Le jour où D88 et D89 sont livrées,
+retirer la constante doit être un geste, et son absence doit se voir.
+
+⚠ **Et elle ne doit pas survivre en silence.** Un contrôle doit refuser le jour où un droit d'un type
+exempté porte *déjà* des zones déclarées : cela signifie que le mécanisme existe, donc que
+l'exception n'a plus d'objet. C'est ce qui évite qu'un transitoire devienne un permanent —
+exactement le sort du commentaire de `ValidationPassageHandler`, dont l'argument était mort avant
+qu'on ne s'en aperçoive.
+
+**Mesure au moment de la décision**, en préproduction :
+
+    source_type    droits   avec zone
+    billet              1           0
+    booking             1           0
+    carte_quota         2           1     ← celui vendu par le pont du 30/08
+
+Quatre droits, tous de test. Aucun badge de personnel en base : le chemin existe, il n'a jamais
+servi.
