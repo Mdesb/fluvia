@@ -77,7 +77,10 @@ export default function Musee({ etabActif, droits }) {
 function SallesSection({ etabActif, droits }) {
   const peutConfigurer = aLeDroit(droits, 'musee.configurer')
   const [creation, setCreation] = useState(false)
-  const [salles, setSalles] = useState([])
+  // ⚠ `null` = PAS LU. << Aucune salle configuree >> est suivi d'une consequence
+  // (<< rien ne dit combien de personnes se trouvent dans le musee ni ou >>) et d'un geste
+  // (<< Declarez-en une >>). Sur une lecture refusee, on envoie declarer des salles qui existent.
+  const [salles, setSalles] = useState(null)
   const [etats, setEtats] = useState({})
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
@@ -97,6 +100,7 @@ function SallesSection({ etabActif, droits }) {
       setEtats(Object.fromEntries(resultats))
     } catch (e) {
       setErreur(e.message)
+      setSalles(null)
     } finally {
       setChargement(false)
     }
@@ -119,7 +123,7 @@ function SallesSection({ etabActif, droits }) {
   //
   // Le fournisseur calcule pourtant `seuilAtteint` et `preAlerteAtteinte`, que rien ne lisait.
   // Ce sont eux qui décident si la consigne s'applique MAINTENANT.
-  const messages = salles
+  const messages = (salles || [])
     .map((s) => ({ salle: s, etat: etats[s.id] }))
     .filter((x) => x.etat?.messageAgent && (x.etat.seuilAtteint || x.etat.preAlerteAtteinte))
 
@@ -160,6 +164,12 @@ function SallesSection({ etabActif, droits }) {
         <div className="card-b">
           {chargement ? (
             <div className="center" style={{ minHeight: 100 }}><div className="spinner" /></div>
+          ) : salles === null ? (
+            <div className="banner banner-error">
+              Les salles n’ont pas pu être lues. <b>N’en concluez pas qu’aucune n’est
+              configurée</b>&nbsp;: les compteurs de présence existent peut-être, ils n’ont pas été
+              obtenus.
+            </div>
           ) : salles.length === 0 ? (
             <div className="empty">
               {/* LA PHRASE NE DISAIT MEME PAS OU ALLER. Ses deux voisines — patinoire et padel —
@@ -235,7 +245,7 @@ function SallesSection({ etabActif, droits }) {
 // Les visites guidées.
 // --------------------------------------------------------------------------------------------
 function VisitesSection({ etabActif, droits }) {
-  const [visites, setVisites] = useState([])
+  const [visites, setVisites] = useState(null)
   const [guides, setGuides] = useState([])
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
@@ -252,6 +262,7 @@ function VisitesSection({ etabActif, droits }) {
       setGuides(membres(g))
     } catch (e) {
       setErreur(e.message)
+      setVisites(null)
     } finally {
       setChargement(false)
     }
@@ -272,8 +283,8 @@ function VisitesSection({ etabActif, droits }) {
     }
   }
 
-  const planifiees = visites.filter((v) => v.statut === 'planifiee')
-  const autres = visites.filter((v) => v.statut !== 'planifiee')
+  const planifiees = (visites || []).filter((v) => v.statut === 'planifiee')
+  const autres = (visites || []).filter((v) => v.statut !== 'planifiee')
 
   return (
     <>
@@ -284,7 +295,9 @@ function VisitesSection({ etabActif, droits }) {
         <div className="card-h">
           <h3>Visites à confirmer</h3>
           <span className="sub">
-            {planifiees.length === 0 ? 'aucune en attente' : `${planifiees.length} planifiée${planifiees.length > 1 ? 's' : ''}`}
+            {visites === null
+              ? 'état inconnu — la lecture n’a pas abouti'
+              : planifiees.length === 0 ? 'aucune en attente' : `${planifiees.length} planifiée${planifiees.length > 1 ? 's' : ''}`}
           </span>
           {peutGerer && (
             <div className="r">
@@ -297,6 +310,11 @@ function VisitesSection({ etabActif, droits }) {
         <div className="card-b">
           {chargement ? (
             <div className="center" style={{ minHeight: 80 }}><div className="spinner" /></div>
+          ) : visites === null ? (
+            <div className="banner banner-error">
+              Les visites guidées n’ont pas pu être lues&nbsp;: <b>ne concluez pas qu’aucune n’attend
+              d’être confirmée</b>.
+            </div>
           ) : planifiees.length === 0 ? (
             <div className="empty">
               Aucune visite en attente de confirmation. Une visite se planifie avec son thème, sa
