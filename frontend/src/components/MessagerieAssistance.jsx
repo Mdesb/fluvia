@@ -145,11 +145,11 @@ export default function MessagerieAssistance({
   // plus — un état que l'utilisateur ne peut ni comprendre ni annuler.
   useEffect(() => {
     if (chargement) return
-    if (choisi && tickets.some((t) => t.id === choisi)) return
-    setChoisi(tickets[0]?.id || null)
+    if (choisi && (tickets || []).some((t) => t.id === choisi)) return
+    setChoisi((tickets || [])[0]?.id || null)
   }, [tickets, chargement, choisi])
 
-  const ticketChoisi = useMemo(() => tickets.find((t) => t.id === choisi) || null, [tickets, choisi])
+  const ticketChoisi = useMemo(() => (tickets || []).find((t) => t.id === choisi) || null, [tickets, choisi])
 
   return (
     <div className="msgr">
@@ -180,6 +180,12 @@ export default function MessagerieAssistance({
         <div className="msgr-fils">
           {chargement ? (
             <div className="center" style={{ minHeight: 120 }}><div className="spinner" /></div>
+          ) : tickets === null ? (
+            <div className="empty">
+              La liste des demandes n’a pas pu être lue&nbsp;: elle est vide parce que la lecture a
+              échoué, pas parce qu’aucune demande n’est ouverte. N’en rouvrez pas une avant d’avoir
+              rechargé.
+            </div>
           ) : tickets.length === 0 ? (
             // D54 : le fait sur la donnée d'abord. « Aucune demande » et « le filtre n'en laisse
             // aucune » ne demandent pas la même action de la part du lecteur.
@@ -189,7 +195,7 @@ export default function MessagerieAssistance({
                 : 'Aucune conversation. Ouvrez une demande : un agent y répondra ici même.'}
             </div>
           ) : (
-            tickets.map((t) => {
+            (tickets || []).map((t) => {
               const autre = interlocuteur(t, monId)
               const st = STATUTS[t.statut] || { libelle: t.statut, cls: 'mut' }
               return (
