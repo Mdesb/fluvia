@@ -159,14 +159,14 @@ final class ValidationPassageHandler
         // de sport du même établissement. Sur un site multi-activités, c'est le cœur du contrôle
         // d'accès qui manquait.
         //
-        // ⚠ UN DROIT SANS AUCUN ESPACE OUVRE TOUT — `DroitAcces::ouvre()` le dit et le docbloc de
-        // la propriété explique pourquoi : c'est le comportement d'hier, et c'est ce qui rend le
-        // déploiement sans danger. Les droits déjà projetés n'ont aucun espace ; les refuser
-        // partout à la seconde où la migration passe fermerait des portes devant des gens qui ont
-        // payé, sur un mécanisme dont ils ignorent le changement.
+        // ⚠ UN DROIT SANS AUCUN ESPACE N'OUVRE RIEN (D87, 30/08/2026). Le sens sûr de l'erreur est
+        // ici celui qui restreint : une porte fermée à tort se rouvre en déclarant une zone, une
+        // porte ouverte à tort a déjà laissé passer quelqu'un.
         //
-        // Le sens sûr de l'erreur est d'ordinaire celui qui restreint. Pas ici : la restriction
-        // n'existe que si quelqu'un l'a demandée.
+        // Ce paragraphe disait l'inverse jusqu'au 30/08, et son argument — « refuser fermerait des
+        // portes devant des gens qui ont payé » — était déjà faux quand il servait encore : quatre
+        // droits en base, trois sans espace, tous de test. Il pesait sur la discussion qui a mené à
+        // D87. Une phrase périmée qui sert d'argument est la forme la plus coûteuse du genre.
         // ⚠ LA DECISION PORTE SUR TOUS LES ESPACES DESSERVIS, PAS SUR LE SEUL PRINCIPAL.
         //
         // Un tourniquet place entre deux activites dessert les deux : le titre passe s'il ouvre

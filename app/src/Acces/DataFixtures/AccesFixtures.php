@@ -161,6 +161,19 @@ final class AccesFixtures extends Fixture implements DependentFixtureInterface
         } else {
             $droit->setCreditRestant(12);
         }
+
+        // ⚠ LA ZONE EST DÉSORMAIS OBLIGATOIRE POUR QU'UN DROIT DE VENTE OUVRE QUOI QUE CE SOIT (D87).
+        //
+        // Ce droit est de type `CarteQuota`, donc soumis à la règle stricte : sans cette ligne, il
+        // n'ouvre aucune porte, et vingt-sept tests qui n'ont RIEN à voir avec les zones — crédit,
+        // jauge FMI, signature de code, fenêtre nocturne — échouent sur un `refuse` qu'ils ne savent
+        // pas expliquer.
+        //
+        // La déclarer ici n'est pas un contournement : c'est ce qu'un exploitant doit faire depuis
+        // l'écran « Zones d'accès » de la fiche produit. Un jeu de données qui ne la porterait pas
+        // décrirait une exploitation impossible.
+        $droit->addAuthorisedSpace($espaceAcces);
+
         $manager->persist($droit);
 
         // --- Support QR appairé au droit ci-dessus (mode caisse, US-L3-02) ---

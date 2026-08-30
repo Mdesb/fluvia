@@ -86,6 +86,12 @@ final class SousReseauTest extends AccesApiTestCase
             ->setStatutProjection(StatutProjectionDroit::Valide)
             ->setSousReseau($sousReseau)
             ->setEtablissement($etab);
+
+        // D87 : sans zone déclarée, ce droit n'ouvrirait aucune porte, et le test de FÉDÉRATION
+        // échouerait pour une raison qui n'a rien à voir avec le sous-réseau. On déclare l'espace
+        // fédéré B, celui que l'équipement franchi dessert.
+        $droit->addAuthorisedSpace($espaceB);
+
         $em->persist($droit);
 
         $identifiant = 'FED-' . substr((string) Uuid::v4(), 0, 8);
