@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api, membres } from '../api/client.js'
+import ControleBillet from '../components/ControleBillet.jsx'
 import { aLeDroit } from '../api/droits.js'
 import Qr from '../components/Qr.jsx'
 // `texte` lit un libelle multilingue : le serveur rend `{ fr: '...' }`, pas une chaine.
@@ -632,7 +633,7 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
         </div>
         {erreur && <div className="banner banner-error">{erreur}</div>}
         <ScansEnDirect key={etabActif} droits={droits} etabActif={etabActif} />
-        <RechercheBilletModal open={verifBillet} onClose={() => setVerifBillet(false)} />
+        <RechercheBilletModal open={verifBillet} onClose={() => setVerifBillet(false)} droits={droits} />
         <div className="card">
           <div className="card-b" style={{ textAlign: 'center', padding: '40px 20px' }}>
             <div style={{ fontSize: 40, marginBottom: 8 }}>🔒</div>
@@ -675,7 +676,7 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
           bascule reviendrait sinon déposer les passages de l'ancien établissement sous le nom
           du nouveau. */}
       <ScansEnDirect key={etabActif} droits={droits} etabActif={etabActif} />
-      <RechercheBilletModal open={verifBillet} onClose={() => setVerifBillet(false)} />
+      <RechercheBilletModal open={verifBillet} onClose={() => setVerifBillet(false)} droits={droits} />
 
       <div className="caisse-grid">
         <aside style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -817,6 +818,7 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
           )}
 
           {ticket && <TicketVente ticket={ticket} />}
+
         </aside>
 
         <section className="card">
