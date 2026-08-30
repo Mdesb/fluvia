@@ -8,7 +8,10 @@ use ApiPlatform\Metadata\Operation;
 use ApiPlatform\Metadata\Post;
 use ApiPlatform\State\ProcessorInterface;
 use App\Offre\Entity\Produit;
+use App\Offre\Entity\TypeProduit;
 use App\Securite\Service\ContexteEtablissement;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use App\Offre\Service\GenerateurCodeProduit;
 use App\Offre\Service\ResolveurFacettes;
 use App\Offre\Service\DefaultCategoryResolver;
@@ -33,6 +36,7 @@ final class ProduitProcessor implements ProcessorInterface
         private readonly DefaultCategoryResolver $categoriesParDefaut,
         private readonly GenerateurCodeProduit $generateurCode,
         private readonly ContexteEtablissement $contexte,
+        private readonly EntityManagerInterface $em,
     ) {
     }
 
@@ -52,12 +56,79 @@ final class ProduitProcessor implements ProcessorInterface
             //
             // Un defaut n'est pas une regle : les axes deja renseignes ne sont jamais ecrases.
             $this->categoriesParDefaut->appliquer($data);
-            $this->facettes->purgerOrphelins($data);
+            $this->refuserSaisieContradictoire($data);
             $this->rattacherALEtablissementActif($data, $operation);
             $data->toucherModifieLe();
         }
 
         return $this->persistProcessor->process($data, $operation, $uriVariables, $context);
+    }
+
+    /**
+     * REFUSE une saisie qui contredit le type — et ne detruit JAMAIS ce qui existait deja.
+     *
+     * ⚠ CETTE METHODE REMPLACE UN APPEL A `purgerOrphelins()` QUI DETRUISAIT EN SILENCE.
+     *
+     * Jusqu'au 30/08, chaque enregistrement purgeait : modifier la **couleur de caisse** d'un produit
+     * suffisait a lui faire perdre son stock. Reponse 200, aucun message, aucune trace — et a l'ecran,
+     * la cause et l'effet n'ont aucun rapport. Deux produits de la preproduction etaient dans ce cas.
+     *
+     * ── POURQUOI REFUSER EST DESORMAIS LE BON CHOIX ────────────────────────────────────────────
+     *
+     * Il ne l'etait pas tant qu'on ignorait ou vivait une jauge : refuser un stock sur une entree
+     * aurait rendu « Place limitee, 200 places » inexprimable. Maxime a tranche — **la capacite vit
+     * sur l'événement**, parce que plusieurs produits (plein, reduit, scolaire) doivent decompter le
+     * MEME compteur : sinon vendre 150 pleins et 60 reduits met 210 personnes dans une salle de 200.
+     *
+     * Un stock sur une entree unitaire est donc une erreur de modele, pas un besoin a accueillir.
+     * On peut le refuser sans rien rendre impossible.
+     *
+     * ── ET ON NE REFUSE QUE CE QUI VIENT D'ETRE ECRIT ──────────────────────────────────────────
+     *
+     * Une donnee contradictoire deja en base est laissee en place. La refuser rendrait le produit
+     * inmodifiable — on ne pourrait plus corriger son libelle — jusqu'a ce que quelqu'un repare la
+     * donnee par un autre chemin. Ce serait pire que le defaut d'origine : le silence detruisait une
+     * donnee, ce refus-la bloquerait un produit.
+     *
+     * L'instantane Doctrine (`getOriginalEntityData`) porte l'etat charge depuis la base, AVANT la
+     * deserialisation de la requete. Il est vide a la creation, ce qui est correct : tout ce qui est
+     * present vient alors d'etre ecrit.
+     */
+    private function refuserSaisieContradictoire(Produit $produit): void
+    {
+        $conflits = $this->facettes->conflits($produit);
+
+        if ($conflits === []) {
+            return;
+        }
+
+        $instantane = $this->em->getUnitOfWork()->getOriginalEntityData($produit);
+        $nouveaux = [];
+
+        foreach ($conflits as $facette => $propriete) {
+            $avant = $instantane[$propriete] ?? null;
+
+            if ($avant !== $produit->{'get'.ucfirst($propriete)}()) {
+                $nouveaux[] = $facette;
+            }
+        }
+
+        if ($nouveaux === []) {
+            return;
+        }
+
+        $message = sprintf(
+            'Le type « %s » ne gère pas : %s. Ce champ ne peut pas être renseigné sur ce produit.',
+            $produit->getType()?->getLibelle() ?? '(sans type)',
+            implode(', ', $nouveaux),
+        );
+
+        if (in_array(TypeProduit::FACETTE_STOCK, $nouveaux, true)) {
+            $message .= ' Un stock de marchandise appartient à un produit de type boutique ; le nombre'
+                .' de places d\'un événement se pose sur l\'événement, pas sur le produit.';
+        }
+
+        throw new UnprocessableEntityHttpException($message);
     }
 
     /**

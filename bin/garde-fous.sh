@@ -284,10 +284,14 @@ if [ -n "${REFERENCE:-}" ]; then
     executer "Liaisons d'objet (D58)" php_racine bin/garde-fou-liaisons-objet.php "--contre=$REFERENCE"
     executer "Nullable sur colonne non nulle" php_racine bin/garde-fou-nullable-non-nul.php "--contre=$REFERENCE"
     executer "Vacuite des tests de cloisonnement" php_racine bin/garde-fou-vacuite-tests.php
+    executer "Espacement en ligne" php_racine bin/garde-fou-espacement-en-ligne.php
+    executer "Champ de cloisonnement" php_racine bin/garde-fou-champ-cloisonnement.php
 else
     executer "Liaisons d'objet (D58)" php_racine bin/garde-fou-liaisons-objet.php
     executer "Nullable sur colonne non nulle" php_racine bin/garde-fou-nullable-non-nul.php
     executer "Vacuite des tests de cloisonnement" php_racine bin/garde-fou-vacuite-tests.php
+    executer "Espacement en ligne" php_racine bin/garde-fou-espacement-en-ligne.php
+    executer "Champ de cloisonnement" php_racine bin/garde-fou-champ-cloisonnement.php
 fi
 
 # 5. i18n : pas de chaîne d'UI en dur — SANS OBJET tant que la couche i18n n'existe pas (aucun

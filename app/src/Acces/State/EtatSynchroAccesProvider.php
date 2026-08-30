@@ -33,8 +33,13 @@ final class EtatSynchroAccesProvider implements ProviderInterface
         /** @var list<Controleur> $controleurs */
         // `findAll()` rendait les controleurs de TOUS les sites, avec leurs libelles et leurs etats
         // de synchronisation. Meme cause que l'export des passages : un fournisseur sur mesure ne
-        // passe par aucune extension. `SupervisionProvider`, ecrit dans ce meme dossier, lit bien
-        // l'etablissement actif — la regle etait connue, c'est ici qu'elle manquait.
+        // passe par aucune extension.
+        //
+        // ⚠ CE COMMENTAIRE DISAIT QUE `SupervisionProvider` « lit bien l'etablissement actif », ET
+        // C'ETAIT FAUX : il le lisait, puis retombait sur `findBy([])` — donc sur TOUS les sites —
+        // quand il n'y en avait pas. Corrige le 30/08, mesure a l'appui. La phrase est rappelee ici
+        // parce qu'un voisin cite en exemple est precisement ce qui dispense d'aller verifier : elle
+        // a servi de caution a la fuite qu'elle etait censee ecarter.
         $actif = $this->contexte->idActif();
         if ($actif === null) {
             return [];
