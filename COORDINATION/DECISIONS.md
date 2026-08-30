@@ -2492,3 +2492,312 @@ Le garde-fou n°14 surveille les propriétés `*Ref` et les relations déclarée
 C'est la sixième forme du même piège, et elle vient de coûter un faux « tout est libre ». À élargir,
 avec le cas de reproduction de `claude-G` — et **vu refuser avant d'être livré**, pas seulement vert sur
 le correctif.
+
+---
+
+### 2026-08-30 · D68 — La capacité d'un événement vit sur l'événement, jamais sur le produit
+
+Tranché par **Maxime**, en réponse au constat que deux produits de préprod portaient un stock que
+leur type ne déclarait pas.
+
+Le concert du 12 mars a 200 places. Plein tarif, tarif réduit et scolaire sont **trois produits** qui
+vendent dessus, et tous décomptent le **même compteur**.
+
+**Raison :** c'est le seul modèle où vendre 150 pleins et 60 réduits ne met pas 210 personnes dans
+une salle de 200. Si la capacité vivait sur le produit, chaque tarif aurait son compteur et rien ne
+s'opposerait au dépassement — un défaut qui ne se voit qu'à la porte, le soir, devant les clients.
+
+**Conséquence immédiate :** un `stock` sur une entrée unitaire est une **erreur de modèle**, pas un
+besoin à accueillir. `ProduitProcessor` ne le purge plus en silence, il le **refuse en 422** et dit
+où poser la donnée. Voir D69.
+
+**Ce que la décision ne dit pas encore :** les sous-quotas par produit (« au plus 50 places en tarif
+réduit ») ont été écartés pour l'instant. Maxime a choisi le compteur unique ; si la billetterie de
+spectacle les réclame, ils s'ajoutent **sous** l'événement, jamais sur le produit.
+
+### 2026-08-30 · D69 — Une écriture qui contredit le type est refusée ; ce qui existe n'est jamais détruit
+
+Jusqu'au 30/08, `ProduitProcessor` appelait `purgerOrphelins()` à **chaque** enregistrement :
+modifier la **couleur de caisse** d'un produit lui faisait perdre son stock. Réponse 200, aucun
+message, aucune trace, et à l'écran la cause et l'effet n'ont aucun rapport.
+
+Désormais, deux moitiés :
+
+1. Une saisie contradictoire est **refusée en 422**, avec un message qui nomme le type *et* la
+   destination — la boutique pour un stock de marchandise, l'événement pour une jauge.
+2. Une donnée contradictoire **déjà en base est laissée en place**, et le produit reste modifiable.
+
+**Raison de la seconde moitié, qui est celle qu'on oublie :** un refus total serait pire que le
+défaut d'origine. Le silence détruisait une donnée ; un refus sans discernement **bloquerait le
+produit** — on ne pourrait plus corriger son libellé tant que personne n'aurait réparé la donnée par
+un autre chemin. On compare donc à l'instantané Doctrine et on ne refuse que ce qui vient d'être
+écrit.
+
+La purge subsiste pour le seul endroit où elle a du sens : la **conversion assistée de type**, où
+l'exploitant a demandé le changement et où l'écran lui annonce ce qu'il perd.
+
+⚠ **Cette décision n'était pas prenable avant D68.** Refuser un stock sur une entrée aurait rendu
+« Place limitée, 200 places » inexprimable. C'est la réponse de Maxime sur *où vit une jauge* qui a
+rendu le refus sans conséquence — et c'est la raison pour laquelle le défaut est resté ouvert un
+jour de plus au lieu d'être corrigé de travers.
+
+### 2026-08-30 · D70 — Carte cadeau et porte-monnaie virtuel sont deux objets distincts
+
+Tranché par **Maxime**.
+
+**Raison :** une carte cadeau s'achète **pour quelqu'un d'autre**, se transmet, et a un porteur
+inconnu au moment de l'émission. Un PMV est **nominatif**, attaché à un client identifié. Les
+confondre rendrait impossible d'offrir une carte — et le choix est **irréversible une fois des cartes
+vendues**, ce qui l'a placé en deuxième position par coût d'erreur.
+
+**État mesuré au moment de la décision :** le PMV existe et est câblé sur son vrai adaptateur
+(`PorteMonnaieVirtuelAdapter`, pas le stub). Ses trois verbes sont `solde`, `debiter`, `recrediter`
+— et `recrediter` est le **remboursement d'une vente annulée**, pas l'achat d'un avoir. Il manque
+donc un **crédit à la vente** des deux côtés : pour recharger un PMV, et pour émettre une carte
+cadeau.
+
+### 2026-08-30 · D71 — Le créneau est un type de produit, et l'agenda échange dans les deux sens
+
+Tranché par **Maxime** : « oui, et n'oublie pas qu'il peut aussi y avoir un lien avec l'agenda et
+d'autres modules ».
+
+Un créneau obtient sa grille tarifaire, sa TVA, sa catégorie comptable et son billet **comme
+n'importe quel produit**. Une seule façon de vendre dans tout le logiciel.
+
+**Raison :** l'alternative — une réservation vendable hors du catalogue — obligeait à dupliquer la
+tarification et la comptabilité, et *une règle recopiée diverge au premier correctif*.
+
+**L'agenda circule dans les deux sens :** on peut poser une séance depuis l'agenda ou depuis le
+catalogue, et les deux se reflètent. ⚠ C'est le choix le plus confortable à l'usage et **le plus
+exigeant** : deux écritures sur un même objet. Il faudra une seule source de vérité pour la séance,
+et deux écrans qui écrivent dedans — jamais deux modèles qui se synchronisent.
+
+### 2026-08-30 · D72 — Événement et créneau restent deux objets, mais partagent le mécanisme de capacité
+
+Tranché par **Maxime**, **contre** la recommandation qui proposait de les fondre.
+
+Un événement est **ponctuel et communiqué** — affiche, programme, plan de salle. Un créneau est
+**récurrent et opérationnel** — le cours du lundi 14 h.
+
+⚠ **La mise en garde énoncée avant le choix, et retenue :** deux objets, c'est deux mécanismes de
+capacité à tenir en accord, et ils divergeront au premier correctif si on les écrit deux fois. La
+décision est donc assortie d'une contrainte de mise en œuvre : **le décompte de places, la liste
+d'attente et l'émargement s'écrivent UNE fois** et servent les deux objets. Ce qui diffère entre
+événement et créneau est ce qui justifie la séparation — la communication, la récurrence — pas la
+mécanique de remplissage.
+
+### 2026-08-30 · D73 — Un service se vend à l'unité ET s'inclut dans une formule ; son lien au planning est optionnel
+
+Tranché par **Maxime** sur les deux points.
+
+Le même objet — une séance de coaching, un massage — se vend seul au comptoir **ou** entre dans un
+abonnement. Et il occupe un créneau et une ressource **selon le service** : un massage prend une
+cabine et une heure ; un forfait « prêt de serviette » ne prend rien.
+
+**Raison :** c'est le plus proche du métier, et le plus exigeant — il faut que les deux chemins de
+vente partagent **la même définition** du service, sinon le quota inclus dans la formule et le
+produit vendu au comptoir désignent deux choses portant le même nom.
+
+**État mesuré :** `Offre\Entity\ServiceInclus` existe mais n'est **pas** cet objet — c'est une
+prestation incluse dans une formule, à quota décompté en semaine calendaire sans report, non
+vendable seule. Le service vendable reste à construire, et devra englober celui-là plutôt que
+coexister avec lui.
+
+### 2026-08-30 · D74 — Une carte désigne ce que son crédit ouvre
+
+Tranché par **Maxime**, qui a posé le cas : « une carte de 10 piscine va permettre l'entrée dans la
+piscine ; par contre une carte de 10 = 12 aquagym va permettre de **réserver** son cours ».
+
+Une carte porte donc deux choses : un **crédit** (dix entrées) et la **destination** de ce crédit —
+une zone d'accès, où le tourniquet décompte, ou une activité, où la réservation décompte.
+
+**Raison :** c'est le même objet métier — une carte multi-entrées — et il serait faux d'en faire deux
+typologies. Un seul paramètre suffit à les distinguer, et il garde exprimable la carte mixte (dix
+entrées utilisables à la piscine *ou* en aquagym), que deux types séparés rendraient impossible.
+
+⚠ **Conséquence sur le modèle existant :** `CarteMultiEntrees` ne porte aujourd'hui qu'un nombre de
+compostages. Il lui manque **ce que ces compostages achètent**. Et la projection d'accès
+(`StubProjectionDroit`) produit un droit `carte_quota` **sans distinguer les deux cas** : une carte
+aquagym projetée aujourd'hui ouvrirait un tourniquet.
+
+### 2026-08-30 · D75 — Une carte de réservation décompte à la réservation, et rend l'entrée si l'annulation est à temps
+
+Tranché par **Maxime**.
+
+Réserver prend une entrée. Annuler avant le délai la rend. Un absent qui n'a pas prévenu la perd.
+
+**Raison :** la place est tenue pour celui qui a réservé, le client peut se raviser, et le no-show
+coûte — ce qui est aussi ce qui fait revenir les places dans le circuit. Décompter à la **présence**
+aurait laissé quelqu'un réserver cinq cours et en faire un : les places partent et la salle reste
+vide.
+
+**Le délai d'annulation n'est pas fixé ici.** `Reservation\Entity\RegleAnnulation` existe déjà ; c'est
+lui qui doit le porter, pas une constante.
+
+### 2026-08-30 · D76 — Séance à l'unité et forfait coexistent, et décomptent la même capacité
+
+Tranché par **Maxime** : on peut acheter la séance d'aquagym du lundi 14 h, **ou** le trimestre.
+
+⚠ **La contrainte que cette décision impose, et qui est tout son coût :** les deux chemins de vente
+doivent décompter **le même compteur de places**. Deux compteurs — un pour les abonnés, un pour les
+ventes à l'unité — mettraient plus de monde dans le bassin que le bassin n'en contient, et le défaut
+ne se voit qu'au bord de l'eau. C'est la même exigence que D68 pour l'événement, appliquée au
+créneau : *une place, un compteur, plusieurs façons de l'acheter*.
+
+### 2026-08-30 · D77 — L'inscription d'office au forfait est un paramètre de l'activité
+
+Tranché par **Maxime** : « au choix de l'établissement ».
+
+Payer le trimestre inscrit d'emblée sur toutes les séances **pour les activités configurées ainsi** —
+un cours à effectif fixe, un stage. Pour les autres, le forfait paie et la place se prend séance par
+séance, ce qui rend les absences aux ventes à l'unité et remplit mieux.
+
+**Raison :** les deux régimes existent dans la vraie vie et ne se déduisent pas l'un de l'autre. Un
+cours de natation enfant a une liste nominative ; un créneau de musculation n'en a pas.
+
+⚠ **Et le paramètre porte sur l'ACTIVITÉ, pas sur le produit ni sur l'établissement.** Un même site
+a des cours des deux régimes. Le mettre sur l'établissement obligerait à trancher pour tout le monde ;
+le mettre sur le produit le dupliquerait à chaque tarif.
+
+### 2026-08-30 · D78 — Une carte cadeau s'émet en code ou en support physique selon le canal, avec un seul solde derrière
+
+Tranché par **Maxime** : « les deux, selon le canal de vente ».
+
+Un code remis à l'achat en ligne, une carte physique au guichet — et **le même avoir** derrière.
+
+**Raison :** offrir se fait par message autant que de la main à la main. ⚠ Le coût était énoncé avant
+le choix et il est retenu : **deux chemins d'émission pour un seul solde**. La conséquence de
+conception est que l'avoir est l'objet, et le code comme la carte n'en sont que des **supports** —
+jamais l'inverse. Un modèle où le code *serait* l'avoir rendrait impossible de le remplacer après une
+perte.
+
+### 2026-08-30 · D79 — Un service est le même objet, qu'il soit inclus dans une formule ou vendu à l'unité
+
+Tranché par **Maxime**, précisant D73.
+
+« Séance de coaching » est défini **une fois**. Une formule peut l'inclure avec un quota ; la caisse
+peut le vendre à l'unité.
+
+**Raison :** deux définitions du même service divergeraient au premier correctif — on changerait sa
+durée ou sa ressource d'un côté et pas de l'autre, et deux « coaching » porteraient le même nom sans
+être la même chose.
+
+**Ce que ça implique de reprise :** `Offre\Entity\ServiceInclus` n'est pas cet objet — c'est un quota
+dans une formule, non vendable seul. Il devra être **englobé** par le service vendable, pas coexister
+avec lui. Migration des formules existantes à prévoir.
+
+### 2026-08-30 · D80 — En attente : la recharge d'une carte
+
+Maxime, 30/08 : « à voir », et il préfère attendre son débrief sur les cartes.
+
+**Ce qui se construit sans elle :** le crédit d'une carte, la destination de ce crédit (D74), le
+décompte (D75), la validité. **Rien de tout cela ne préjuge** de la réponse — la recharge sera soit un
+tarif de plus dans la grille du même produit, soit un produit distinct, et les deux se posent sur le
+modèle ci-dessus sans le modifier.
+
+C'est le cas où attendre ne coûte rien, et il est signalé comme tel pour qu'on ne le confonde pas
+avec un blocage.
+
+### 2026-08-30 · D81 — Ce qui décide qu'un billet vendu ouvre une porte : la zone déclarée sur le produit, et rien d'autre
+
+Tranché par **Maxime**, en réponse au paramétrage QR qu'il avait annoncé vouloir détailler.
+
+Un produit déclare quelle zone il ouvre (`Acces\Entity\ProductAccessZone`). Ses billets ouvrent cette
+zone-là. Un produit qui ne déclare rien n'ouvre rien.
+
+**Raison :** aucun réglage supplémentaire à expliquer, et le paramétrage est là où l'exploitant le
+cherche — sur le produit. Un interrupteur par établissement en plus aurait créé deux endroits où
+chercher quand ça n'ouvre pas.
+
+⚠ **Et la variante « au premier scan » a été écartée pour une raison technique dite avant le
+choix :** elle obligerait le tourniquet à interroger la vente en direct, donc supprimerait le
+fonctionnement hors ligne — qui est la raison d'être même de la projection locale (valider en moins
+d'une seconde, y compris coupé du réseau).
+
+**Ce que ça a permis de construire :** `App\Acces\Adapter\SaleAccessPairingAdapter`, l'implémentation
+du port `App\Vente\Port\AppairageAccesInterface` que le stub annonçait tenir en attendant. Voir D85.
+
+### 2026-08-30 · D82 — Le courriel passe par un service transactionnel dédié ; le prestataire reste à désigner
+
+Tranché par **Maxime** : un service transactionnel dédié, plutôt que le SMTP mutualisé de
+l'hébergeur. Le prestataire exact (Brevo, Mailjet, Postmark…) est remis à plus tard.
+
+**Raison :** le préavis SEPA a besoin d'une **preuve d'envoi** — sans elle, l'échéance reste exclue
+de la remise et aucun prélèvement ne peut partir. Un SMTP mutualisé ne rend ni suivi de
+délivrabilité ni retour de rejet exploitable, et ses quotas conviennent mal à des relances en série.
+
+**Ce qui se prépare sans le prestataire :** la configuration lit déjà `MAILER_DSN`. Il n'y aura donc
+qu'une variable à poser le jour venu. ⚠ **La clé n'est jamais manipulée par une session Claude** —
+elle est posée par Maxime.
+
+### 2026-08-30 · D83 — L'ordonnanceur démarre après le transport de courriel, pas avant
+
+Tranché par **Maxime**.
+
+Vingt-trois tâches planifiées sont écrites, aucune n'a jamais tourné.
+
+**Raison, énoncée avant le choix :** sans transport, `sepa:preavis:annoncer` sort en « journalisé »,
+et une échéance sans préavis délivré est **exclue de la remise**. Démarrer l'ordonnanceur maintenant
+donnerait donc l'illusion que le système tourne, **sans qu'un seul prélèvement puisse partir** — une
+panne plus coûteuse que l'arrêt actuel, parce qu'elle est invisible.
+
+⚠ **L'ordre n'est pas réversible sans confusion.** Une fois l'ordonnanceur démarré, distinguer « le
+préavis n'est pas parti parce qu'il n'y a pas de transport » de « le préavis n'est pas parti parce
+que la tâche a échoué » demande de lire les journaux. Avant démarrage, la cause est unique.
+
+**Et le démarrage lui-même reste en deux temps :** huit tâches anodines peuvent partir seules ;
+quatorze exigent un premier passage supervisé, une par une — dont la facturation mensuelle,
+l'effacement RGPD et la purge documentaire. Ce sont quatorze décisions séparées, pas une.
+
+### 2026-08-30 · D84 — L'exemption durable de blocage : même droit que le forçage, jusqu'à retrait, motif obligatoire
+
+Tranché par **Maxime**, sur les deux points.
+
+La collectivité qui produit un impayé par mois et qu'on ne veut jamais bloquer obtient une exemption
+**qui ne s'éteint pas toute seule** — c'est le point : la réinscrire chaque mois reviendrait au
+forçage manuel qu'elle remplace. Motif obligatoire et agent tracé, comme le forçage.
+
+**Le droit est celui qui existe déjà** (`forcer la réouverture`), plutôt qu'un droit dédié. ⚠ La
+contrepartie était énoncée avant le choix et elle est retenue : **un agent de caisse peut exempter un
+client pour toujours**. Le motif obligatoire et la trace de l'agent sont donc la seule garde — d'où
+l'exigence qu'ils soient réellement obligatoires, pas seulement suggérés.
+
+⚠ **Une date de fin obligatoire a été écartée, et pour une raison qui vaut d'être gardée :** une
+exemption qui expire un lundi matin bloque un client à la porte **sans que personne n'ait rien décidé
+ce jour-là**. Le retrait doit être un geste, comme la pose.
+
+**Ce qui ne change pas :** le blocage lui-même reste prudent — posé à la détection, levé seulement
+quand tous les dossiers du client sont réglés. L'exemption s'ajoute, elle ne l'assouplit pas.
+
+### 2026-08-30 · D85 — Un billet vendu crée son support et son droit d'accès, sans appairage manuel
+
+Conséquence directe de D81, et réponse à Maxime : « je vois qu'un QR code n'ouvre toujours pas le
+contrôle d'accès ».
+
+**Ce qui manquait n'était pas ce qu'on croyait.** `ValiderVenteService:149` appelait déjà
+`appairer()` à chaque vente. Le port `App\Vente\Port\AppairageAccesInterface` était simplement câblé
+sur `AppairageAccesStub`, qui bascule un statut et **ne parle jamais au module Accès**. Mesuré :
+5 billets vendus, 5 supports d'accès, **aucun croisement** — le tourniquet vérifiait pourtant
+correctement la signature du code avant de conclure « support inconnu ».
+
+**⚠ Et on ne pouvait pas se contenter de rebrancher.** `DroitAcces::ouvre()` rend `true` quand aucun
+espace n'est autorisé : **un droit sans espace ouvre tout**. Mesuré le 30/08 : **0 produit sur 17**
+déclarait une zone, pour 8 espaces existants. Projeter sans condition aurait fait de chaque billet
+vendu un passe-partout des huit espaces, à l'échelle de toutes les ventes, et en silence.
+
+**⚠ Et « pas de zone » ne pouvait pas non plus être un échec.** `ValiderVenteService` traite un échec
+d'appairage en bloquant la **remise du support** : rendre `false` pour un produit sans zone aurait
+bloqué la remise de tous les billets de tous les produits. Et ce serait faux au fond — une bouteille
+d'eau, un cadenas, un article de boutique n'ouvrent aucune porte, et c'est normal. **Un produit sans
+zone ne rate pas son appairage : il n'en a pas.**
+
+`false` reste donc réservé à un vrai échec — code déjà appairé, support bloqué — c'est-à-dire aux cas
+où remettre le billet serait une faute.
+
+**L'annulation révoque aussi côté accès.** Le stub se contentait du statut côté vente ; ne pas
+révoquer laisserait un billet annulé continuer d'ouvrir la porte — un défaut que le stub ne pouvait
+pas avoir, et que son remplacement aurait introduit si on l'avait oublié.
+
+**Éprouvé par deux témoins qui discriminent :** remettre le stub fait rougir *seulement* « le billet
+ouvre » ; retirer la garde de zone fait rougir *seulement* « sans zone, il n'ouvre rien ». Chacun
+mesure sa moitié.
