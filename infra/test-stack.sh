@@ -42,8 +42,26 @@ DATABASE_URL="mysql://app:app@db:3306/app?serverVersion=11.4.2-MariaDB&charset=u
 # suite le dépasse — le schéma est recréé par classe de test sur ~90 tables. Sans ce montage, la suite
 # meurt en « Allowed memory size exhausted » au bout de quelques centaines de tests, ce qui se lit
 # comme une régression alors que c'est un défaut d'environnement.
+#
+# ⚠ ET LE CONTENEUR PORTE LE NOM DU JETON, CE QUI REFUSE UNE SECONDE EXECUTION SIMULTANEE.
+#
+# Deux `run` sur le meme jeton partagent la meme base, et `SchemaDuHarnais` TRUNCATE au demarrage de
+# chaque classe : la seconde vide les tables sous les pieds de la premiere. Le verdict des deux perd
+# toute valeur — un faux rouge coute une heure, un faux vert coute la confiance dans la suite
+# entiere. Commis le 30/08, et rien ne l'avait signale.
+#
+# Avec un nom fixe, Docker refuse la seconde avec « name is already in use ». Le message n'est pas
+# limpide, d'ou la garde explicite ci-dessous qui le traduit avant que Docker ne s'en charge.
 php_run() {
-    docker run --rm --network "$NET" -u "$(id -u):$(id -g)" \
+    if [ -n "$(docker ps -q --filter "name=^${TOKEN}-run$" 2>/dev/null)" ]; then
+        echo "✗ Une exécution tourne déjà sur le jeton « $TOKEN » (conteneur ${TOKEN}-run)." >&2
+        echo "  Deux exécutions sur le même jeton partagent la même base et se corrompent :" >&2
+        echo "  la seconde TRUNCATE les tables de la première. Le verdict des deux serait faux." >&2
+        echo "  Remède : attendre la fin, ou lancer sur un autre jeton (ex. ${TOKEN}2)." >&2
+        exit 1
+    fi
+
+    docker run --rm --name "${TOKEN}-run" --network "$NET" -u "$(id -u):$(id -g)" \
         -e "TEST_TOKEN=$TOKEN" \
         -e "DATABASE_URL=$DATABASE_URL" \
         -v "$REPO:/repo" \
@@ -156,8 +174,30 @@ run)
 
 down)
     docker rm -f "$DB" >/dev/null 2>&1 || true
-    docker network rm "$NET" >/dev/null 2>&1 || true
-    echo "stack $TOKEN supprimée (les clés JWT du worktree sont conservées)"
+
+    # ⚠ CE `|| true` ANNONCAIT UNE SUPPRESSION QUI N'AVAIT PAS EU LIEU.
+    #
+    # `docker network rm` echoue quand des conteneurs sont encore attaches — une execution bloquee,
+    # par exemple. Le `|| true` avalait l'echec et le script disait « stack supprimee ». Le reseau
+    # restait la, et le `up` suivant faisait repartir les executions bloquees dessus. Constate le
+    # 30/08 : le message etait faux depuis le premier jour.
+    #
+    # On ne force pas : supprimer d'autorite le conteneur de quelqu'un d'autre serait pire que de le
+    # signaler. On dit ce qui reste, et qui.
+    if docker network rm "$NET" >/dev/null 2>&1; then
+        echo "stack $TOKEN supprimée (les clés JWT du worktree sont conservées)"
+    else
+        RESTANTS="$(docker network inspect "$NET" --format '{{range .Containers}}{{.Name}} {{end}}' 2>/dev/null || true)"
+        if [ -z "$RESTANTS" ]; then
+            echo "stack $TOKEN supprimée (le réseau $NET n'existait pas)"
+        else
+            echo "⚠ Base supprimée, mais le réseau $NET SUBSISTE : des conteneurs y sont attachés." >&2
+            echo "  Restants : $RESTANTS" >&2
+            echo "  Un « up » sur ce jeton les ferait repartir sur la base neuve et fausserait tout." >&2
+            echo "  Arrête-les puis relance « down », ou travaille sur un autre jeton." >&2
+            exit 1
+        fi
+    fi
     ;;
 
 *)
