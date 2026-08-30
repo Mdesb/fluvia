@@ -60,9 +60,22 @@ export default function Sport({ etabActif, droits = [] }) {
   const peutGererAbonnement = aLeDroit(droits, 'sport.gerer_abonnement')
   const [souscription, setSouscription] = useState(false)
 
-  const [sos, setSos] = useState([])
-  const [alertes, setAlertes] = useState([])
-  const [abonnements, setAbonnements] = useState([])
+  // ⚠ `null` VEUT DIRE << PAS LU >>, `[]` VEUT DIRE << LU ET VIDE >>. SUR CET ECRAN, LA
+  // DIFFERENCE EST UNE QUESTION DE SECURITE.
+  //
+  // Ces trois etats partaient a `[]` et y RESTAIENT quand la lecture echouait. L'ecran annoncait
+  // alors << aucune alerte en cours >>, << Aucun appel d'urgence en cours >> et << Aucune presence
+  // isolee signalee >> -- trois phrases qui disent a un exploitant qu'il peut etre tranquille,
+  // alors que personne n'a pu demander. Sur un module de travailleur isole, c'est la pire phrase
+  // que ce produit puisse afficher.
+  //
+  // Le commentaire du bloc SOS, quinze lignes plus bas, enonce deja le principe : << un bloc absent
+  // ne se distingue pas d'un bloc qu'on a oublie de charger >>. Il avait ete applique au VIDE et
+  // pas au NON-LU -- si bien que le raisonnement qui a motive le bloc etait defait par l'etat
+  // manquant.
+  const [sos, setSos] = useState(null)
+  const [alertes, setAlertes] = useState(null)
+  const [abonnements, setAbonnements] = useState(null)
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -88,11 +101,18 @@ export default function Sport({ etabActif, droits = [] }) {
         api.espaces().catch(() => null),
       ])
       setSos(membres(s))
-      setAlertes(a ? membres(a) : [])
-      setAbonnements(ab ? membres(ab) : [])
+      // ⚠ `a ? … : []` TRANSFORMAIT UN ECHEC EN LISTE VIDE. Les trois lectures tolerees rendent
+      // `null` sur echec (le `.catch` ci-dessus) : les convertir en `[]` effacait la distinction
+      // au moment meme ou on l'avait. On garde `null`.
+      setAlertes(a ? membres(a) : null)
+      setAbonnements(ab ? membres(ab) : null)
       setEspaces(es ? membres(es) : [])
     } catch (e) {
       setErreur(e.message || 'Le module n’a pas pu être chargé.')
+      // On ne garde rien de partiel : un decompte a moitie lu a l'air normal.
+      setSos(null)
+      setAlertes(null)
+      setAbonnements(null)
     } finally {
       setChargement(false)
     }
@@ -122,8 +142,8 @@ export default function Sport({ etabActif, droits = [] }) {
 
   if (chargement) return <div className="center" style={{ minHeight: 200 }}><div className="spinner" /></div>
 
-  const ouverts = sos.filter((e) => e.statut === 'ouverte')
-  const traites = sos.filter((e) => e.statut !== 'ouverte')
+  const ouverts = (sos || []).filter((e) => e.statut === 'ouverte')
+  const traites = (sos || []).filter((e) => e.statut !== 'ouverte')
 
   return (
     <div className="view">
@@ -131,9 +151,11 @@ export default function Sport({ etabActif, droits = [] }) {
         <div className="ttl">
           <h1>Sport &amp; fitness</h1>
           <div className="sub">
-            {ouverts.length > 0
-              ? `${ouverts.length} alerte${ouverts.length > 1 ? 's' : ''} à traiter`
-              : 'aucune alerte en cours'}
+            {sos === null
+              ? 'état des alertes inconnu — la lecture n’a pas abouti'
+              : ouverts.length > 0
+                ? `${ouverts.length} alerte${ouverts.length > 1 ? 's' : ''} à traiter`
+                : 'aucune alerte en cours'}
           </div>
         </div>
       </div>
@@ -149,8 +171,16 @@ export default function Sport({ etabActif, droits = [] }) {
           {ouverts.length > 0 && <span className="badge crit" style={{ marginLeft: 8 }}>{ouverts.length} ouvert{ouverts.length > 1 ? 's' : ''}</span>}
         </div>
 
-        {ouverts.length === 0 ? (
-          <div className="sub" style={{ textAlign: 'center', padding: 22 }}>
+        {sos === null ? (
+          // ⚠ TON D'ALERTE, PAS TON NEUTRE. Un exploitant qui survole cet ecran doit s'arreter ici :
+          // ne pas savoir s'il y a un appel en cours est un evenement, pas une absence d'evenement.
+          <div className="banner banner-error" style={{ margin: 'var(--esp-large)' }}>
+            <b>Les appels d’urgence n’ont pas pu être lus.</b> Cet écran ne peut pas dire s’il y en a
+            un en cours. Rechargez, et si le refus persiste, prévenez quelqu’un sur place plutôt que
+            de conclure que tout va bien.
+          </div>
+        ) : ouverts.length === 0 ? (
+          <div className="empty">
             Aucun appel d&rsquo;urgence en cours.
           </div>
         ) : (
@@ -199,8 +229,13 @@ export default function Sport({ etabActif, droits = [] }) {
 
       <section className="card" style={{ marginBottom: 14 }}>
         <div className="card-h"><span>Présences isolées détectées</span></div>
-        {alertes.length === 0 ? (
-          <div className="sub" style={{ textAlign: 'center', padding: 22 }}>
+        {alertes === null ? (
+          <div className="banner banner-error" style={{ margin: 'var(--esp-large)' }}>
+            Les présences isolées n’ont pas pu être lues. Il y en a peut-être une en cours&nbsp;:
+            cet écran ne le sait pas.
+          </div>
+        ) : alertes.length === 0 ? (
+          <div className="empty">
             Aucune présence isolée signalée.
           </div>
         ) : (
@@ -230,7 +265,7 @@ export default function Sport({ etabActif, droits = [] }) {
       <section className="card">
         <div className="card-h">
           <span>Abonnements</span>
-          <span className="sub" style={{ marginLeft: 8 }}>{abonnements.length}</span>
+          <span className="sub" style={{ marginLeft: 8 }}>{abonnements === null ? '—' : abonnements.length}</span>
           {peutGererAbonnement && (
             <div className="actions" style={{ marginLeft: 'auto' }}>
               <button className="btn sm" type="button" onClick={() => setSouscription(true)}>
@@ -239,7 +274,11 @@ export default function Sport({ etabActif, droits = [] }) {
             </div>
           )}
         </div>
-        {abonnements.length === 0 ? (
+        {abonnements === null ? (
+          <div className="empty">
+            La liste des abonnements n’a pas pu être lue.
+          </div>
+        ) : abonnements.length === 0 ? (
           <div className="sub" style={{ textAlign: 'center', padding: 22 }}>Aucun abonnement fitness.</div>
         ) : (
           <div style={{ overflowX: 'auto' }}>

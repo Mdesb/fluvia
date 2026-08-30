@@ -1,6 +1,6 @@
 {
     "scelle": {
-        "plafond": 692
+        "plafond": 690
     },
     "fichiers": {
         "components/AbsencesSection.jsx": 5,
@@ -69,7 +69,7 @@
         "pages/Reservation.jsx": 2,
         "pages/SessionCaisse.jsx": 7,
         "pages/Social.jsx": 9,
-        "pages/Sport.jsx": 12,
+        "pages/Sport.jsx": 10,
         "pages/Stock.jsx": 13,
         "pages/Supervision.jsx": 7,
         "pages/Support.jsx": 19,
