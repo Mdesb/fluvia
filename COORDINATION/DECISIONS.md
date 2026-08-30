@@ -2857,3 +2857,70 @@ malgré la tentation, puisque tout le reste y est déjà.
 **Ordre d'exécution :** `ouvre()` strict (module Accès) → retrait de la garde de zone dans
 l'adaptateur de vente → outil de scan. Les deux premiers sont indissociables ; le troisième est ce qui
 rend l'ensemble utilisable sur un site sans matériel.
+
+### 2026-08-30 · D88 — Les zones d'un badge de personnel viennent de la FONCTION, pas du badge
+
+Tranché par **Maxime**, contre les deux autres options proposées.
+
+Les zones se rattachent au rôle — accueil, technique, direction, maître-nageur — et le badge en
+hérite. Un agent d'accueil ouvre l'accueil ; un technicien ouvre les locaux techniques.
+
+**Raison :** moins de saisie qu'un badge à la fois, et ça colle à la façon dont on recrute — un
+saisonnier prend une fonction, pas un jeu de portes. ⚠ La contrepartie, énoncée avant le choix : **il
+faut que les rôles existent déjà et soient justes.** Un rôle trop large donne à tous ceux qui le
+portent les portes du plus privilégié d'entre eux.
+
+⚠ **Le trou que cette décision comble, trouvé par `allaccess-8e` en éprouvant D87 au lieu de la
+croire :** `EmissionBadgeStaffHandler` et `RecalculFenetreBadgeHandler` ne posent **aucune** zone —
+mesuré, 0 occurrence de `addAuthorisedSpace`. Un badge de personnel n'a pas de produit, donc aucune
+zone produit à hériter : **il n'avait, jusqu'ici, aucun moyen de dire ce qu'il ouvre.**
+
+### 2026-08-30 · D89 — Les zones d'une réservation viennent de l'ACTIVITÉ réservée
+
+Tranché par **Maxime**.
+
+Un cours d'aquagym ouvre le bassin où il a lieu. L'activité connaît déjà sa ressource : c'est la
+donnée la plus proche de la vérité, et elle existe — rien à ressaisir.
+
+**Raison :** l'alternative (déclarer la zone sur le produit vendu) aurait obligé à répéter sur chaque
+produit une information que l'activité porte déjà, avec la divergence garantie au premier changement
+de bassin.
+
+Même origine que D88 : `ProjectionAccesReservationHandler` ne pose aucune zone non plus.
+
+### 2026-08-30 · D90 — Transitoire assumé : badges et réservations continuent d'ouvrir, la règle stricte s'applique aux billets vendus
+
+Tranché par **Maxime**, en connaissance de ce que ça recrée.
+
+    règle stricte                billets vendus, dès maintenant
+    ancien régime maintenu       badges de personnel, droits nés d'une réservation
+
+⚠ **On recrée volontairement l'asymétrie que D87 venait de supprimer.** La différence, et c'est toute
+la différence : elle est **écrite, bornée et attribuée**, au lieu d'être un effet de bord que
+personne ne nomme. Une asymétrie connue se répare ; une asymétrie invisible se découvre au pire
+moment.
+
+**Ce qui l'éteint :** la livraison de D88 et D89. Pas une date — une condition. Une date inventée
+ici serait fausse le jour où elle passe sans que personne n'ait rien fait ; la condition, elle, se
+vérifie.
+
+**Forme exigée de la mise en œuvre, et ce n'est pas un détail :** l'exception doit être **une
+constante nommée** portant les seuls types de source concernés, avec en commentaire ce qui la fait
+disparaître. Pas une condition dispersée, pas un `if` implicite. Le jour où D88 et D89 sont livrées,
+retirer la constante doit être un geste, et son absence doit se voir.
+
+⚠ **Et elle ne doit pas survivre en silence.** Un contrôle doit refuser le jour où un droit d'un type
+exempté porte *déjà* des zones déclarées : cela signifie que le mécanisme existe, donc que
+l'exception n'a plus d'objet. C'est ce qui évite qu'un transitoire devienne un permanent —
+exactement le sort du commentaire de `ValidationPassageHandler`, dont l'argument était mort avant
+qu'on ne s'en aperçoive.
+
+**Mesure au moment de la décision**, en préproduction :
+
+    source_type    droits   avec zone
+    billet              1           0
+    booking             1           0
+    carte_quota         2           1     ← celui vendu par le pont du 30/08
+
+Quatre droits, tous de test. Aucun badge de personnel en base : le chemin existe, il n'a jamais
+servi.
