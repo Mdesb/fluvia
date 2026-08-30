@@ -49,6 +49,20 @@ self.addEventListener('install', (evenement) => {
   )
 })
 
+// ── COMMENT PROUVER QUE LA PURGE CI-DESSOUS PURGE ──────────────────────────────────────────────
+//
+// Elle ne se prouve pas en la lisant : trois lignes manifestement justes ont passé deux jours à ne
+// rien supprimer, parce que `VERSION` était constant et qu'aucun autre nom n'existait jamais.
+//
+// ⚠ ET ELLE NE SE PROUVE PAS NON PLUS EN FABRIQUANT UN FAUX CACHE. Essayé le 30/08 : un cache posé à
+// la main survivait à une désinscription suivie d'une réinscription. Cause — `unregister()` est
+// DIFFÉRÉ tant qu'un client est contrôlé, donc la réinscription retrouve le worker existant : ni
+// `installing`, ni `waiting`, aucun `activate`. On mesure un silence, et on le lit comme un refus.
+//
+// Le seul montage qui exerce le cycle : DEUX DÉPLOIEMENTS SUCCESSIFS et un navigateur qui traverse
+// les deux. Lire `caches.keys()` avant, déployer, recharger, relire. Un seul nom, portant le
+// NOUVEAU commit, prouve les deux choses à la fois : `install` s'est rejoué, et `activate` a
+// supprimé le précédent. Deux noms signifieraient une purge inerte.
 self.addEventListener('activate', (evenement) => {
   // Purge des versions précédentes : sans elle, chaque déploiement laisserait derrière lui un
   // cache complet, et le stockage du téléphone finirait par être refusé.
