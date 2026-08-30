@@ -35,10 +35,18 @@ import { euros, libelleProduit } from '../api/produit.js'
 // pourquoi. Le jour où le champ serveur existe, l'agrégation et ce garde-fou disparaissent ensemble.
 
 export default function Stock({ etabActif, droits }) {
-  const [articles, setArticles] = useState([])
+  // ⚠ `null` = PAS LU. Sur une lecture refusee, l'ecran annoncait << 0 reference >> puis
+  // << Aucun article de stock. Un article, c'est ce que vous achetez et comptez [...] >> --
+  // c'est-a-dire le message d'accueil d'un etablissement neuf, servi a un exploitant dont le stock
+  // existe et n'a simplement pas pu etre lu.
+  const [articles, setArticles] = useState(null)
   const [lots, setLots] = useState([])
   const [lotsTronques, setLotsTronques] = useState(false)
-  const [alertes, setAlertes] = useState([])
+  // ⚠ `null` = PAS LU · `[]` = LU ET VIDE. Ici la phrase de l'etat vide VANTE le filet :
+  // << Aucun article sous son seuil. Cette liste se remplit toute seule [...] c'est le seul endroit
+  // qui vous previent avant la rupture. >> Elle s'affichait quand la lecture avait ECHOUE, c'est-a-dire
+  // exactement quand le filet n'etait pas pose. On ne rassure pas au nom d'un controle qui n'a pas eu lieu.
+  const [alertes, setAlertes] = useState(null)
   const [mouvements, setMouvements] = useState([])
   const [parametrage, setParametrage] = useState(null)
   const [chargement, setChargement] = useState(true)
@@ -71,10 +79,13 @@ export default function Stock({ etabActif, droits }) {
       setMouvements(membres(m))
     } catch (e) {
       setErreur(e.message)
+      setArticles(null)
     } finally {
       setChargement(false)
     }
-    api.stockAlertesReappro().then((r) => setAlertes(Array.isArray(r) ? r : membres(r))).catch(() => setAlertes([]))
+    // `catch(() => setAlertes([]))` transformait l'echec en << rien a recommander >>. La tolerance
+    // reste -- une alerte manquante ne doit pas emporter l'ecran -- mais l'echec est RETENU.
+    api.stockAlertesReappro().then((r) => setAlertes(Array.isArray(r) ? r : membres(r))).catch(() => setAlertes(null))
     api.stockParametrage().then((r) => setParametrage(membres(r)[0] || null)).catch(() => setParametrage(null))
   }, [etabActif])
 
@@ -95,8 +106,10 @@ export default function Stock({ etabActif, droits }) {
 
   const filtres = useMemo(() => {
     const q = recherche.trim().toLowerCase()
-    if (!q) return articles
-    return articles.filter(
+    // `articles` vaut `null` quand la lecture a echoue : la recherche porte alors sur rien, et
+    // c'est le decompte `total` -- laisse a `null` -- qui dit pourquoi.
+    if (!q) return articles || []
+    return (articles || []).filter(
       (a) => (a.libelle || '').toLowerCase().includes(q) || (a.codeEAN || '').toLowerCase().includes(q),
     )
   }, [articles, recherche])
@@ -135,7 +148,7 @@ export default function Stock({ etabActif, droits }) {
         <ValorisationStock etabActif={etabActif} onErreur={setErreur} />
       ) : onglet === 'achats' ? (
         <AchatsStock
-          articles={articles}
+          articles={articles || []}
           droits={droits}
           etabActif={etabActif}
           onErreur={setErreur}
@@ -147,7 +160,7 @@ export default function Stock({ etabActif, droits }) {
 
           <ArticlesSection
             articles={filtres}
-            total={articles.length}
+            total={articles === null ? null : articles.length}
             restantParArticle={restantParArticle}
             lotsCharges={lots.length}
             tronque={lotsTronques}
@@ -156,7 +169,7 @@ export default function Stock({ etabActif, droits }) {
             peutAjuster={peutAjuster && !lotsTronques}
             onAjuster={(a) => setAjustement({ article: a, restant: restantParArticle[a.id] || 0 })}
             onRattacher={peutGererArticle ? (a) => setRattachement(a) : null}
-            nonSuivis={articles.filter((a) => !a.produit).length}
+            nonSuivis={(articles || []).filter((a) => !a.produit).length}
           />
 
           {peutGererArticle && <ArticlesEdition onChange={recharger} />}
@@ -164,7 +177,7 @@ export default function Stock({ etabActif, droits }) {
           <RegleEcart parametrage={parametrage} droits={droits} />
 
           <InventaireStock
-            articles={articles}
+            articles={articles || []}
             droits={droits}
             etabActif={etabActif}
             onErreur={setErreur}
@@ -196,6 +209,24 @@ export default function Stock({ etabActif, droits }) {
 // Ce qui appelle une action aujourd'hui.
 // --------------------------------------------------------------------------------------------
 function AlertesSection({ alertes }) {
+  if (alertes === null) {
+    return (
+      <section className="card">
+        <div className="card-h">
+          <h3>À recommander</h3>
+          <span className="sub">articles passés sous leur seuil</span>
+        </div>
+        <div className="card-b">
+          <div className="banner banner-error">
+            Les alertes de réapprovisionnement n’ont pas pu être lues. <b>Ne concluez pas qu’il n’y a
+            rien à recommander</b>&nbsp;: cette liste n’a pas été obtenue. Rechargez, ou vérifiez les
+            seuils directement sur les fiches article.
+          </div>
+        </div>
+      </section>
+    )
+  }
+
   if (alertes.length === 0) {
     return (
       <section className="card">
@@ -266,7 +297,7 @@ function ArticlesSection({
     <section className="card" style={{ marginTop: 16 }}>
       <div className="card-h">
         <h3>Articles</h3>
-        <span className="sub">{total} référence{total > 1 ? 's' : ''}</span>
+        <span className="sub">{total === null ? '—' : `${total} référence${total > 1 ? 's' : ''}`}</span>
         <div className="r" style={{ minWidth: 240 }}>
           <input
             className="input"
@@ -277,7 +308,12 @@ function ArticlesSection({
         </div>
       </div>
       <div className="card-b">
-        {total === 0 ? (
+        {total === null ? (
+          <div className="banner banner-error">
+            La liste des articles n’a pas pu être lue. Ce tableau est vide parce que la lecture a
+            échoué, <b>pas</b> parce que cet établissement n’a pas de stock.
+          </div>
+        ) : total === 0 ? (
           <div className="empty">
             Aucun article de stock. Un article, c'est ce que vous achetez et comptez — une canette, une
             paire de lacets, un sac de sel. Il devient vendable en le rattachant à un produit du

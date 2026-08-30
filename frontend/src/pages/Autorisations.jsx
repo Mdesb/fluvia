@@ -103,7 +103,11 @@ export default function Autorisations({ droits = [], etabActif }) {
 }
 
 function FileDemandes({ peutApprouver }) {
-  const [demandes, setDemandes] = useState([])
+  // ⚠ `null` = PAS LU · `[]` = LU ET VIDE. L'etat vide affirmait DEUX choses :
+  // << Aucune demande d'escalade. Les operations restent dans les plafonds en vigueur. >>
+  // La seconde est une conclusion tiree de la premiere -- et sur une lecture refusee, elle dit a un
+  // responsable que personne n'attend son accord, alors que quelqu'un attend peut-etre.
+  const [demandes, setDemandes] = useState(null)
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [aRejeter, setARejeter] = useState(null)
@@ -119,6 +123,7 @@ function FileDemandes({ peutApprouver }) {
       setDemandes(membres(await api.demandesEscalade()))
     } catch (e) {
       setErreur(e.message || 'Les demandes n’ont pas pu être chargées.')
+      setDemandes(null)
     } finally {
       setChargement(false)
     }
@@ -148,7 +153,7 @@ function FileDemandes({ peutApprouver }) {
 
   // Les demandes en attente d'abord, et parmi elles la plus proche de l'expiration. C'est le seul
   // ordre qui fasse traiter en premier ce qui va être perdu.
-  const triees = [...demandes].sort((a, b) => {
+  const triees = [...(demandes || [])].sort((a, b) => {
     const aEnAttente = a.statut === 'en_attente' ? 0 : 1
     const bEnAttente = b.statut === 'en_attente' ? 0 : 1
     if (aEnAttente !== bEnAttente) return aEnAttente - bEnAttente
@@ -171,8 +176,13 @@ function FileDemandes({ peutApprouver }) {
 
       {chargement ? (
         <div className="center" style={{ minHeight: 120 }}><div className="spinner" /></div>
+      ) : demandes === null ? (
+        <div className="banner banner-error">
+          La file des demandes d’escalade n’a pas pu être lue. <b>N’en concluez pas que personne
+          n’attend votre accord</b>&nbsp;: cette liste n’a pas été obtenue.
+        </div>
       ) : triees.length === 0 ? (
-        <div className="sub" style={{ textAlign: 'center', padding: 24 }}>
+        <div className="empty">
           Aucune demande d&rsquo;escalade. Les opérations restent dans les plafonds en vigueur.
         </div>
       ) : (
@@ -319,6 +329,11 @@ function Plafonds({ peutGerer, etabActif }) {
   const [erreur, setErreur] = useState(null)
   // Distinguer << il n'y en a pas >> de << je n'ai pas pu lire >>.
   const [operationsIllisibles, setOperationsIllisibles] = useState(false)
+  // Les plafonds eux-memes : la lecture les fait echouer l'ecran (`throw`), mais le rendu affichait
+  // quand meme << Aucun plafond defini : les operations sensibles ne sont limitees que par les
+  // permissions >> sous le bandeau. C'est une affirmation sur l'etat du controle d'acces, faite sans
+  // l'avoir lu.
+  const [limitesIllisibles, setLimitesIllisibles] = useState(false)
   const [rolesIllisibles, setRolesIllisibles] = useState(false)
 
   const recharger = useCallback(async () => {
@@ -341,12 +356,28 @@ function Plafonds({ peutGerer, etabActif }) {
       ])
       if (l.status === 'rejected') throw l.reason
       setLimites(membres(l.value))
+      setLimitesIllisibles(false)
       setOperations(o.status === 'fulfilled' ? membres(o.value) : [])
       setRoles(r.status === 'fulfilled' ? membres(r.value) : [])
       setOperationsIllisibles(o.status === 'rejected')
       setRolesIllisibles(r.status === 'rejected')
     } catch (e) {
       setErreur(e.message || 'Les plafonds n’ont pas pu être chargés.')
+      // ⚠ LES TROIS DRAPEAUX, PAS SEULEMENT CELUI DES PLAFONDS.
+      //
+      // `if (l.status === 'rejected') throw l.reason` saute par-dessus les trois `setXIllisibles`
+      // places plus bas. La garde posee sur `operations` ne protegeait donc que l'echec PARTIEL --
+      // plafonds lus, catalogue refuse. Sur un refus TOTAL, elle etait contournee et l'ecran
+      // reaffichait << Aucune operation declaree sensible >>, c'est-a-dire la phrase meme qu'elle
+      // avait ete ecrite pour empecher.
+      //
+      // Une garde qui ne couvre qu'un des deux chemins d'echec est plus dangereuse qu'aucune garde :
+      // on la voit dans le code et on croit le sujet traite.
+      setLimitesIllisibles(true)
+      setOperationsIllisibles(true)
+      setRolesIllisibles(true)
+      setLimites([])
+      setOperations([])
     } finally {
       setChargement(false)
     }
@@ -385,6 +416,12 @@ function Plafonds({ peutGerer, etabActif }) {
         )}
         {chargement ? (
           <div className="center" style={{ minHeight: 120 }}><div className="spinner" /></div>
+        ) : limitesIllisibles ? (
+          <div className="banner banner-error">
+            Les plafonds n’ont pas pu être lus. Ce tableau est vide parce que la lecture a échoué,
+            <b> pas</b> parce qu’aucun plafond n’est défini&nbsp;: n’en concluez rien sur ce qui est
+            limité aujourd’hui.
+          </div>
         ) : limites.length === 0 ? (
           <div className="sub" style={{ textAlign: 'center', padding: 24 }}>
             Aucun plafond défini : les opérations sensibles ne sont limitées que par les permissions.
