@@ -26,6 +26,13 @@ enum CodeMotifRefus: string
     case SignatureInvalide = 'signature_invalide';
     /** `equipementId` hors de la portée (itboxRef) du `Terminal` authentifié (plan-acces-terminal.md §2.4). */
     case HorsPortee = 'hors_portee';
+
+    /**
+     * Cle d'idempotence fournie mais malformee (attendu : un UUID). L'entree est ECARTEE du rejeu et
+     * jamais rejouee sous une cle engendree : une cle fournie puis remplacee ferait croire a
+     * l'appelant qu'il est protege des doublons alors que chaque envoi en creerait de nouveaux.
+     */
+    case CleIdempotenceInvalide = 'cle_idempotence_invalide';
     /**
      * Le droit n'ouvre pas CET espace : le produit vendu ne donne pas accès à cette zone.
      *
