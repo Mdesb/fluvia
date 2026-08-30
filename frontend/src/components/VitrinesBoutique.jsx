@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
+import Modal from './Modal.jsx'
 
 /**
  * LES VITRINES, AVEC LEUR ADRESSE ET DE QUOI L'INTÉGRER.
@@ -26,6 +27,7 @@ import { aLeDroit } from '../api/droits.js'
  */
 export default function VitrinesBoutique({ droits = [] }) {
   const peutGerer = aLeDroit(droits, 'boutique.gerer_vitrine')
+  const [creation, setCreation] = useState(false)
 
   const [vitrines, setVitrines] = useState([])
   const [chargement, setChargement] = useState(true)
@@ -77,9 +79,34 @@ export default function VitrinesBoutique({ droits = [] }) {
       {erreur && <div className="banner banner-error">{erreur}</div>}
       {succes && <div className="banner banner-ok">{succes}</div>}
 
+      <VitrineModal
+        open={creation}
+        onClose={() => setCreation(false)}
+        onFait={(nom) => {
+          setCreation(false)
+          setSucces(`Boutique en ligne ouverte à l’adresse /b/${nom}.`)
+          charger()
+        }}
+        onErreur={setErreur}
+      />
+
       {vitrines.length === 0 ? (
         <div className="card">
-          <div className="sub" style={{ textAlign: 'center', padding: 24 }}>Aucune vitrine configurée.</div>
+          <div className="card-b" style={{ textAlign: 'center' }}>
+            {/* « Aucune vitrine configurée » etait exact et sans issue : c'est l'etat d'un
+                etablissement neuf, et rien ne permettait d'en sortir. Une vitrine est la CONDITION
+                de la vente en ligne — sans elle, publier un produit au canal « en ligne » ne le
+                rend visible nulle part. */}
+            <p className="sub">
+              Aucune vitrine. C’est la boutique en ligne de cet établissement&nbsp;: sans elle,
+              un produit publié au canal <b>en ligne</b> ne s’affiche nulle part.
+            </p>
+            {peutGerer && (
+              <button className="btn" type="button" onClick={() => setCreation(true)}>
+                ＋ Ouvrir la boutique en ligne
+              </button>
+            )}
+          </div>
         </div>
       ) : (
         vitrines.map((v) => {
@@ -307,5 +334,100 @@ function DomainesIntegration({ vitrine, onEnregistre, onErreur }) {
         (<code>php bin/console app:integration:csp</code>) et la recharge.
       </div>
     </div>
+  )
+}
+
+// OUVRIR LA BOUTIQUE EN LIGNE — le geste qui manquait pour qu'un établissement neuf vende.
+//
+// L'écran savait renommer une vitrine, changer ses couleurs, lire ses remboursements. Il ne savait
+// pas en ouvrir une, et `POST /boutique/vitrines` existe depuis le début. Un établissement sans
+// vitrine peut publier ses produits au canal « en ligne » : ils ne s'affichent nulle part, et rien
+// ne le dit.
+//
+// ⚠ UNE SEULE VITRINE PAR ÉTABLISSEMENT : `Vitrine::$etablissement` est une relation OneToOne. Le
+// bouton n'apparaît donc que sur l'état vide, et jamais à côté d'une vitrine existante — proposer
+// d'en « ajouter » une seconde ferait promettre un refus.
+//
+// ⚠ ET L'ÉTABLISSEMENT NE PART PAS DANS LE CORPS. Il est estampillé par le serveur depuis la
+// session. La vitrine étant un point d'entrée PUBLIC en lecture, laisser l'appelant choisir son
+// rattachement serait une faille : on ouvrirait la boutique de quelqu'un d'autre.
+function VitrineModal({ open, onClose, onFait, onErreur }) {
+  const [slug, setSlug] = useState('')
+  const [erreur, setErreur] = useState(null)
+  const [envoi, setEnvoi] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    setSlug('')
+    setErreur(null)
+  }, [open])
+
+  // Le slug vit dans une URL publique : on borne à ce qui s'écrit sans surprise dans un courriel
+  // ou sur une affiche. Le serveur exige l'unicité ; la forme, personne ne la vérifie.
+  const propre = slug.trim().toLowerCase()
+  const valide = /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(propre) && propre.length >= 3 && propre.length <= 80
+
+  async function soumettre(e) {
+    e.preventDefault()
+    setErreur(null)
+    setEnvoi(true)
+    try {
+      await api.creerVitrine({ slug: propre })
+      onFait(propre)
+    } catch (err) {
+      // ⚠ L'erreur reste DANS la modale : renvoyée au bandeau de l'écran, elle serait masquée par
+      // la modale restée ouverte, et l'on réessaierait sans jamais voir le refus.
+      setErreur(err.message || 'La boutique n’a pas pu être ouverte.')
+    } finally {
+      setEnvoi(false)
+    }
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} titre="Ouvrir la boutique en ligne">
+      <form onSubmit={soumettre}>
+        {erreur && <div className="banner banner-error" style={{ marginBottom: 'var(--esp-large)' }}>{erreur}</div>}
+
+        <div className="field">
+          <label htmlFor="vt-slug">Adresse de la boutique *</label>
+          <div className="row" style={{ display: 'flex', gap: 'var(--esp-serre)', alignItems: 'center' }}>
+            <span className="sub">{window.location.origin}/b/</span>
+            <input
+              id="vt-slug"
+              className="input"
+              value={slug}
+              maxLength={80}
+              placeholder="piscine-municipale"
+              onChange={(e) => setSlug(e.target.value)}
+              style={{ flex: 1 }}
+            />
+          </div>
+          {slug.trim() !== '' && !valide ? (
+            <p className="hint">
+              Lettres sans accent, chiffres et tirets seulement, entre 3 et 80 caractères. Cette
+              adresse sera imprimée sur des affiches et collée dans des courriels&nbsp;: elle doit
+              se lire et se recopier sans hésitation.
+            </p>
+          ) : (
+            <p className="hint">
+              C’est l’adresse publique de votre billetterie. Elle est modifiable ensuite, mais un
+              lien déjà envoyé continuera de fonctionner par son identifiant.
+            </p>
+          )}
+        </div>
+
+        <p className="hint">
+          ⚠ Une seule boutique par établissement, et elle ne se supprime pas — le serveur n’offre
+          pas cette opération. Vous pourrez en changer l’adresse, les couleurs et les langues.
+        </p>
+
+        <div className="r" style={{ display: 'flex', gap: 'var(--esp-normal)', justifyContent: 'flex-end' }}>
+          <button type="button" className="btn ghost" onClick={onClose}>Annuler</button>
+          <button type="submit" className="btn" disabled={envoi || !valide}>
+            {envoi ? 'Ouverture…' : 'Ouvrir la boutique'}
+          </button>
+        </div>
+      </form>
+    </Modal>
   )
 }

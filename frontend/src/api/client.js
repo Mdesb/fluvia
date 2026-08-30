@@ -1259,6 +1259,19 @@ export const api = {
   comptesClientBoutique: () =>
     request('/api/compte_clients', { query: { itemsPerPage: 100 } }),
   vitrines: () => request('/api/boutique/vitrines', { query: { itemsPerPage: 100 } }),
+  // `POST /boutique/vitrines` existe depuis le debut (droit `boutique.gerer_vitrine`) et n'etait
+  // appele de nulle part : l'ecran savait renommer une vitrine, changer ses couleurs et lire ses
+  // remboursements, mais un etablissement neuf n'avait aucun moyen d'en ouvrir une — donc aucune
+  // boutique en ligne, donc aucune vente en ligne.
+  //
+  // ⚠ L'ETABLISSEMENT N'EST PAS DANS LE CORPS, ET IL NE FAUT PAS L'Y METTRE. Il est estampille par
+  // `EstablishmentStampProcessor` depuis la session serveur. La vitrine est un point d'entree
+  // PUBLIC en lecture : laisser l'appelant choisir son rattachement serait une faille, pas une
+  // commodite. C'est aussi pourquoi l'entite ne porte PAS d'`Assert\NotNull` sur ce champ — la
+  // validation s'execute avant l'estampillage et refusait une valeur que le serveur allait poser
+  // lui-meme.
+  creerVitrine: (corps) =>
+    request('/api/boutique/vitrines', { method: 'POST', body: corps, ld: true }),
   // Le nom d'URL de la boutique. PATCH partiel : on n'envoie que `slug`, pour ne pas
   // reecrire par megarde une couleur ou une langue qu'un autre onglet vient de changer.
   majVitrine: (id, corps) => request(`/api/boutique/vitrines/${id}`, { method: 'PATCH', body: corps }),
