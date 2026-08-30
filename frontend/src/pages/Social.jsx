@@ -98,6 +98,18 @@ export default function Social({ etabActif, droits = [] }) {
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
   const [busy, setBusy] = useState(false)
+  // ⚠ `lu` DISTINGUE << charge et vide >> DE << pas charge >>, ET C'EST TOUT LE SUJET.
+  //
+  // `comptes` et `messages` partent a `[]`. Sur une lecture refusee ils y RESTENT, et l'ecran
+  // annoncait alors << 0 compte · 0 message >> juste au-dessus du bandeau qui disait qu'il n'avait
+  // pas pu demander. Zero et << je n'ai pas pu demander >> sont des affirmations opposees : la
+  // premiere se verifie, rassure, et fait renoncer a chercher plus loin.
+  //
+  // Un booleen separe de `erreur` est necessaire : `erreur` porte aussi les echecs d'ENVOI, et
+  // dans ce cas les donnees sont bien chargees et les comptes bien reels.
+  const [lu, setLu] = useState(false)
+  // Le detail par compte est lu a part et son echec est tolere -- mais il est RETENU. Voir plus bas.
+  const [detailIndisponible, setDetailIndisponible] = useState(false)
 
   const [texte, setTexte] = useState('')
   const [quandEnvoyer, setQuandEnvoyer] = useState('')
@@ -107,16 +119,32 @@ export default function Social({ etabActif, droits = [] }) {
     setChargement(true)
     setErreur(null)
     try {
+      // ⚠ L'ECHEC DU DETAIL EST TOLERE MAIS PLUS AVALE.
+      //
+      // `catch(() => null)` laissait le detail par compte disparaitre en silence. Or c'est lui qui
+      // distingue << recommence >> de << corrige d'abord >> : un message `partially_failed` sans
+      // detail se lit << aucun detail disponible >>, alors que la verite est << je n'ai pas pu le
+      // lire >>. On garde la tolerance -- ce detail ne doit pas emporter l'ecran entier -- et on
+      // retient l'echec pour le dire a l'endroit exact ou le detail manque.
+      let detailKo = false
       const [c, m, p] = await Promise.all([
         api.comptesSociaux(),
         api.messagesSociaux(),
-        api.publicationsSociales().catch(() => null),
+        api.publicationsSociales().catch(() => { detailKo = true; return null }),
       ])
       setComptes(membres(c))
       setMessages(membres(m))
       setPublications(p ? membres(p) : [])
+      setDetailIndisponible(detailKo)
+      setLu(true)
     } catch (e) {
       setErreur(e.message || 'Les publications n’ont pas pu être chargées.')
+      // On ne garde pas de donnees a moitie lues : un decompte partiel est aussi trompeur qu'un
+      // zero invente, et il a en plus l'air normal.
+      setLu(false)
+      setComptes([])
+      setMessages([])
+      setPublications([])
     } finally {
       setChargement(false)
     }
@@ -156,7 +184,11 @@ export default function Social({ etabActif, droits = [] }) {
       <div className="view-head">
         <div className="ttl">
           <h1>Publication sociale</h1>
-          <div className="sub">{comptes.length} compte{comptes.length > 1 ? 's' : ''} · {messages.length} message{messages.length > 1 ? 's' : ''}</div>
+          <div className="sub">
+            {lu
+              ? `${comptes.length} compte${comptes.length > 1 ? 's' : ''} · ${messages.length} message${messages.length > 1 ? 's' : ''}`
+              : 'Comptes et messages non lus — la lecture n’a pas abouti.'}
+          </div>
         </div>
       </div>
 
@@ -165,13 +197,20 @@ export default function Social({ etabActif, droits = [] }) {
 
       <section className="card" style={{ marginBottom: 14 }}>
         <div className="card-h"><span>Comptes</span></div>
-        {comptes.length === 0 ? (
-          <div className="sub" style={{ textAlign: 'center', padding: 22 }}>
+        {!lu ? (
+          // ⚠ PAS L'ETAT VIDE. << Aucun compte connecte >> est une phrase sure d'elle, qui explique
+          // meme comment en connecter un : affichee sur une lecture refusee, elle envoie chercher
+          // une autorisation OAuth pour un compte qui existe peut-etre deja.
+          <div className="empty">
+            La liste des comptes n&rsquo;a pas pu être lue. Il y en a peut-être&nbsp;: on ne le sait pas.
+          </div>
+        ) : comptes.length === 0 ? (
+          <div className="empty">
             Aucun compte connecté. La connexion d&rsquo;un compte se fait par le réseau lui-même
             (autorisation OAuth) : elle ne se saisit pas ici.
           </div>
         ) : (
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', padding: 14 }}>
+          <div style={{ display: 'flex', gap: 'var(--esp-normal)', flexWrap: 'wrap', padding: 'var(--esp-large)' }}>
             {comptes.map((c) => {
               const etat = ETAT_COMPTE[c.status] || { libelle: c.status, ton: 'mut' }
               return (
@@ -208,7 +247,7 @@ export default function Social({ etabActif, droits = [] }) {
       {peutPublier && utilisables.length > 0 && (
         <section className="card" style={{ marginBottom: 14 }}>
           <div className="card-h"><span>Écrire</span></div>
-          <div style={{ display: 'grid', gap: 10, padding: 14 }}>
+          <div style={{ display: 'grid', gap: 'var(--esp-normal)', padding: 'var(--esp-large)' }}>
             <textarea
               className="input"
               rows={4}
@@ -259,15 +298,19 @@ export default function Social({ etabActif, droits = [] }) {
 
       <section className="card">
         <div className="card-h"><span>Messages</span></div>
-        {messages.length === 0 ? (
-          <div className="sub" style={{ textAlign: 'center', padding: 22 }}>Aucun message.</div>
+        {!lu ? (
+          <div className="empty">
+            La file des messages n&rsquo;a pas pu être lue.
+          </div>
+        ) : messages.length === 0 ? (
+          <div className="empty">Aucun message.</div>
         ) : (
-          <div style={{ display: 'grid', gap: 10, padding: 14 }}>
+          <div style={{ display: 'grid', gap: 'var(--esp-normal)', padding: 'var(--esp-large)' }}>
             {messages.map((m) => {
               const etat = ETAT_MESSAGE[m.status] || { libelle: m.status, ton: 'mut' }
               const siennes = publications.filter((p) => idDe(p.post) === String(m.id))
               return (
-                <article key={m.id} className="card" style={{ padding: 12, border: '1px solid var(--line)' }}>
+                <article key={m.id} className="card" style={{ padding: 'var(--esp-large)', border: '1px solid var(--line)' }}>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
                     <span className={`badge ${etat.ton}`}>{etat.libelle}</span>
                     {m.scheduledFor && <span className="sub">pour le {quand(m.scheduledFor)}</span>}
@@ -279,6 +322,16 @@ export default function Social({ etabActif, droits = [] }) {
                   {/* LE DETAIL PAR COMPTE, A COTE DU STATUT GLOBAL.
                       C'est lui qui distingue << recommence >> de << corrige d'abord >>, et il evite de
                       republier partout pour rattraper un seul echec. */}
+                  {/* Le detail manque parce qu'on n'a pas pu le lire : on le dit ICI, a la place
+                      exacte ou il devrait etre. Dit en haut de l'ecran, il se perdrait ; tu
+                      conclurais que ce message n'a simplement pas de detail. */}
+                  {detailIndisponible && (
+                    <div className="sub" style={{ fontSize: 12 }}>
+                      Détail par compte indisponible — cette lecture a échoué. Le statut ci-dessus
+                      reste juste, mais il ne dit pas <i>quel</i> compte a échoué.
+                    </div>
+                  )}
+
                   {siennes.length > 0 && (
                     <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', fontSize: 12 }}>
                       {siennes.map((p) => {

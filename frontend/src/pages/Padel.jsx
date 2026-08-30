@@ -3,7 +3,7 @@ import Modal from '../components/Modal.jsx'
 import Tabs from '../components/Tabs.jsx'
 import { dateHeureFr, resoudre } from '../components/Liste.jsx'
 import { api, membres } from '../api/client.js'
-import { aUnDesDroits } from '../api/droits.js'
+import { aLeDroit, aUnDesDroits } from '../api/droits.js'
 import { mot } from '../api/vocabulaire.js'
 
 // Padel — cinquante-six opérations exposées, une seule appelée jusqu'ici.
@@ -73,6 +73,9 @@ function quandDe(reference, reservations) {
 }
 
 function TerrainsSection({ etabActif, droits }) {
+  // Le droit exige par `POST /padel/terrains`, et lui seul.
+  const peutGererTerrain = aLeDroit(droits, 'padel.gerer_terrain')
+  const [creation, setCreation] = useState(false)
   const [terrains, setTerrains] = useState([])
   const [reservations, setReservations] = useState([])
   const [beneficiaires, setBeneficiaires] = useState([])
@@ -200,16 +203,33 @@ function TerrainsSection({ etabActif, droits }) {
         </div>
       </section>
 
-      <section className="card" style={{ marginTop: 16 }}>
+      <section className="card" style={{ marginTop: 'var(--esp-bloc)' }}>
         <div className="card-h">
           <h3>Terrains</h3>
           <span className="sub">{terrains.length} terrain{terrains.length > 1 ? 's' : ''}</span>
+          {peutGererTerrain && (
+            <div className="actions" style={{ marginLeft: 'auto' }}>
+              <button className="btn sm" type="button" onClick={() => setCreation(true)}>
+                ＋ Créer un terrain
+              </button>
+            </div>
+          )}
         </div>
+        <TerrainModal
+          open={creation}
+          terrains={terrains}
+          onClose={() => setCreation(false)}
+          onFait={() => { setCreation(false); recharger() }}
+        />
         <div className="card-b">
           {terrains.length === 0 ? (
             <div className="empty">
-              Aucun terrain déclaré. Sans terrain, aucune réservation n'est possible : ils se créent
-              dans le paramétrage, avec leur type et les durées de partie autorisées.
+              {/* LA PHRASE ENVOYAIT « DANS LE PARAMÉTRAGE », QUI N'A PAS DE PLACE POUR UN TERRAIN.
+                  Troisième des trois — patinoire, padel, musée — et la plus coûteuse des trois
+                  formes : une absence laisse chercher, une fausse piste fait chercher au mauvais
+                  endroit, puis conclure qu'on n'a pas compris son propre logiciel. */}
+              Aucun terrain déclaré. Sans terrain, aucune réservation n'est possible.
+              {peutGererTerrain ? ' Créez-en un avec le bouton ci-dessus.' : ''}
             </div>
           ) : (
             <table className="tbl">
@@ -231,7 +251,7 @@ function TerrainsSection({ etabActif, droits }) {
                     </td>
                     {(peutReserver || peutForcerEclairage) && (
                       <td className="num">
-                        <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                        <div style={{ display: 'flex', gap: 'var(--esp-serre)', justifyContent: 'flex-end' }}>
                           {peutReserver && (
                             <button className="btn primary sm" type="button" onClick={() => setReservation(t)}>
                               Réserver
@@ -339,7 +359,7 @@ function ReservationModal({ terrain, ressources, terrains, beneficiaires, onClos
     <Modal open={!!terrain} onClose={onClose} titre={terrain ? `Réserver — ${nomTerrain(terrain, ressources, terrains)}` : ''}>
       {terrain && (
         <form onSubmit={envoyer}>
-          <div className="grid" style={{ gridTemplateColumns: '2fr 1fr', gap: 10 }}>
+          <div className="grid" style={{ gridTemplateColumns: '2fr 1fr', gap: 'var(--esp-normal)' }}>
             <div className="field" style={{ margin: 0 }}>
               <label htmlFor="pd-debut">Début *</label>
               <input id="pd-debut" className="input" type="datetime-local" required value={debut} onChange={(e) => setDebut(e.target.value)} />
@@ -373,7 +393,7 @@ function ReservationModal({ terrain, ressources, terrains, beneficiaires, onClos
           </div>
 
           <div className="field">
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 400 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--esp-normal)', fontWeight: 400 }}>
               <input type="checkbox" checked={ouverte} onChange={(e) => setOuverte(e.target.checked)} />
               Partie ouverte — publier le créneau pour trouver des joueurs
             </label>
@@ -384,7 +404,7 @@ function ReservationModal({ terrain, ressources, terrains, beneficiaires, onClos
           </div>
 
           {ouverte && (
-            <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 'var(--esp-normal)' }}>
               <div className="field" style={{ margin: 0 }}>
                 <label htmlFor="pd-nmin">Niveau minimum</label>
                 <input id="pd-nmin" className="input" type="number" value={niveauMin} onChange={(e) => setNiveauMin(e.target.value)} />
@@ -403,7 +423,7 @@ function ReservationModal({ terrain, ressources, terrains, beneficiaires, onClos
             </div>
           )}
 
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
+          <div style={{ display: 'flex', gap: 'var(--esp-normal)', justifyContent: 'flex-end', marginTop: 'var(--esp-large)' }}>
             <button className="btn" type="button" onClick={onClose}>Annuler</button>
             <button className="btn primary" type="submit" disabled={enCours || !debut || !organisateur}>
               {enCours ? 'Réservation…' : 'Réserver'}
@@ -469,7 +489,7 @@ function RejoindreModal({ partie, ressources, terrains, beneficiaires, onClose, 
             </div>
           )}
 
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
+          <div style={{ display: 'flex', gap: 'var(--esp-normal)', justifyContent: 'flex-end', marginTop: 'var(--esp-large)' }}>
             <button className="btn" type="button" onClick={onClose}>Annuler</button>
             <button className="btn primary" type="submit" disabled={enCours || !joueur}>
               {enCours ? 'Inscription…' : 'Inscrire'}
@@ -522,8 +542,8 @@ function EclairageModal({ terrain, ressources, terrains, onClose, onFait, onErre
             ['allumage', 'Allumer', "La commande automatique n'a pas pris, ou la partie se prolonge."],
             ['extinction', 'Éteindre', 'Le terrain est libéré avant la fin prévue.'],
           ].map(([v, titre, aide]) => (
-            <label key={v} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '8px 0', fontWeight: 400 }}>
-              <input type="radio" name="ecl" checked={action === v} onChange={() => setAction(v)} style={{ marginTop: 3 }} />
+            <label key={v} style={{ display: 'flex', gap: 'var(--esp-normal)', alignItems: 'flex-start', padding: '8px 0', fontWeight: 400 }}>
+              <input type="radio" name="ecl" checked={action === v} onChange={() => setAction(v)} style={{ marginTop: 'var(--esp-serre)' }} />
               <span>
                 <b>{titre}</b>
                 <div className="sub">{aide}</div>
@@ -547,7 +567,7 @@ function EclairageModal({ terrain, ressources, terrains, onClose, onFait, onErre
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
+          <div style={{ display: 'flex', gap: 'var(--esp-normal)', justifyContent: 'flex-end', marginTop: 'var(--esp-large)' }}>
             <button className="btn" type="button" onClick={onClose}>Annuler</button>
             <button className="btn primary" type="submit" disabled={enCours || !motif.trim()}>
               {enCours ? 'Commande…' : action === 'allumage' ? 'Allumer' : 'Éteindre'}
@@ -681,8 +701,8 @@ function RetourMaterielModal({ location, onClose, onFait, onErreur }) {
             ['rendu', 'Rendu', 'Le matériel revient au parc et la caution est restituée.'],
             ['non_rendu', 'Non rendu', 'Le matériel est retiré du parc et la caution est retenue.'],
           ].map(([v, titre, effet]) => (
-            <label key={v} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '8px 0', fontWeight: 400 }}>
-              <input type="radio" name="ret-mat" checked={statut === v} onChange={() => setStatut(v)} style={{ marginTop: 3 }} />
+            <label key={v} style={{ display: 'flex', gap: 'var(--esp-normal)', alignItems: 'flex-start', padding: '8px 0', fontWeight: 400 }}>
+              <input type="radio" name="ret-mat" checked={statut === v} onChange={() => setStatut(v)} style={{ marginTop: 'var(--esp-serre)' }} />
               <span>
                 <b>{titre}</b>
                 <div className="sub">{effet}</div>
@@ -701,7 +721,7 @@ function RetourMaterielModal({ location, onClose, onFait, onErreur }) {
             </div>
           )}
 
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
+          <div style={{ display: 'flex', gap: 'var(--esp-normal)', justifyContent: 'flex-end', marginTop: 'var(--esp-large)' }}>
             <button className="btn" type="button" onClick={onClose}>Annuler</button>
             <button className="btn primary" type="submit" disabled={enCours}>
               {enCours ? 'Enregistrement…' : 'Enregistrer le retour'}
@@ -733,4 +753,111 @@ function nomTerrain(t, ressources, terrains) {
   return r?.libelle || r?.nom
     || terrain?.ressource?.libelle || terrain?.ressource?.nom || terrain?.libelle
     || `Terrain ${String(terrain?.id || (typeof t === 'string' ? t.split('/').pop() : '') || '').slice(0, 8)}`
+}
+
+// CRÉER UN TERRAIN — dernier des trois écrans dont le message envoyait « dans le paramétrage ».
+//
+// ⚠ ON NE CRÉE PAS LA RESSOURCE, LE SERVEUR S'EN CHARGE. `CreerTerrainProcessor` cascade la
+// `Ressource` du socle (`codeType='terrain_padel'`) puis pose l'overlay padel. Créer la ressource
+// depuis l'écran en produirait DEUX pour un seul terrain, et le planning ne saurait plus laquelle
+// réserver — c'est la même erreur que si le musée créait ses propres espaces.
+//
+// ⚠ ET LA CRÉATION N'EST PAS SUR LA COLLECTION : `POST /api/padel_terrains` rend 405, la route est
+// `/api/padel/terrains`. Mesuré avant d'écrire, pas déduit du nom.
+//
+// Le processeur donne un défaut à TOUT — libellé « Terrain padel », type indoor, durées [60, 90].
+// Un corps vide créerait donc un terrain fantôme parfaitement valide. C'est pourquoi le formulaire
+// exige un libellé : le serveur ne le fera pas.
+function TerrainModal({ open, terrains, onClose, onFait }) {
+  const [libelle, setLibelle] = useState('')
+  const [type, setType] = useState('indoor')
+  const [durees, setDurees] = useState('60, 90')
+  const [erreur, setErreur] = useState(null)
+  const [envoi, setEnvoi] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    setLibelle('')
+    setType('indoor')
+    setDurees('60, 90')
+    setErreur(null)
+  }, [open])
+
+  const listeDurees = durees
+    .split(',')
+    .map((x) => parseInt(x.trim(), 10))
+    .filter((x) => Number.isInteger(x) && x > 0)
+
+  const dejaLa = (terrains || []).some(
+    (t) => (t.ressource?.libelle || t.libelle || '').trim().toLowerCase() === libelle.trim().toLowerCase(),
+  )
+  const pret = libelle.trim() !== '' && listeDurees.length > 0 && !dejaLa
+
+  async function soumettre(e) {
+    e.preventDefault()
+    setErreur(null)
+    setEnvoi(true)
+    try {
+      await api.creerTerrainPadel({
+        libelle: libelle.trim(),
+        type,
+        dureesAutoriseesMinutes: listeDurees,
+      })
+      onFait()
+    } catch (err) {
+      setErreur(err.message || 'Le terrain n’a pas pu être créé.')
+    } finally {
+      setEnvoi(false)
+    }
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} titre="Créer un terrain">
+      <form onSubmit={soumettre}>
+        {erreur && <div className="banner banner-error" style={{ marginBottom: 'var(--esp-large)' }}>{erreur}</div>}
+
+        <div className="field">
+          <label htmlFor="tp-libelle">Nom du terrain *</label>
+          <input id="tp-libelle" className="input" value={libelle} maxLength={120}
+            placeholder="Terrain 1, court couvert…"
+            onChange={(e) => setLibelle(e.target.value)} />
+          {dejaLa ? (
+            <p className="hint">
+              Un terrain porte déjà ce nom. Deux terrains homonymes rendent le planning illisible :
+              le joueur ne sait pas lequel il a réservé.
+            </p>
+          ) : (
+            <p className="hint">Ce que le joueur lit sur le planning et sur sa confirmation.</p>
+          )}
+        </div>
+
+        <div className="row" style={{ display: 'flex', gap: 'var(--esp-large)', flexWrap: 'wrap' }}>
+          <div className="field" style={{ flex: '1 1 180px' }}>
+            <label htmlFor="tp-type">Type *</label>
+            <select id="tp-type" className="input" value={type} onChange={(e) => setType(e.target.value)}>
+              <option value="indoor">Couvert</option>
+              <option value="outdoor">Découvert</option>
+            </select>
+            <p className="hint">Un terrain découvert dépend de la météo ; c’est ce qui justifie une annulation.</p>
+          </div>
+          <div className="field" style={{ flex: '1 1 220px' }}>
+            <label htmlFor="tp-durees">Durées de partie (minutes) *</label>
+            <input id="tp-durees" className="input" value={durees}
+              onChange={(e) => setDurees(e.target.value)} />
+            <p className="hint">
+              Séparées par des virgules. Ce sont les seules durées que le joueur pourra choisir :
+              {listeDurees.length > 0 ? ` ${listeDurees.join(' et ')} minutes.` : ' aucune pour l’instant.'}
+            </p>
+          </div>
+        </div>
+
+        <div className="r" style={{ display: 'flex', gap: 'var(--esp-normal)', justifyContent: 'flex-end' }}>
+          <button type="button" className="btn ghost" onClick={onClose}>Annuler</button>
+          <button type="submit" className="btn" disabled={envoi || !pret}>
+            {envoi ? 'Création…' : 'Créer le terrain'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  )
 }
