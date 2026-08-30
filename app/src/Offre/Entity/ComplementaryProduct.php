@@ -4,6 +4,12 @@ declare(strict_types=1);
 
 namespace App\Offre\Entity;
 
+use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
+use ApiPlatform\Metadata\ApiFilter;
+use ApiPlatform\Metadata\ApiResource;
+use ApiPlatform\Metadata\Delete;
+use ApiPlatform\Metadata\GetCollection;
+use ApiPlatform\Metadata\Post;
 use App\Offre\Enum\ComplementMode;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
@@ -47,6 +53,22 @@ use Symfony\Component\Validator\Constraints as Assert;
  * seul à quelqu'un qui a déjà son entrée. Deux lignes sont donc nécessaires pour un lien
  * réciproque, et ce sera presque toujours faux d'en poser deux.
  */
+#[ApiResource(
+    shortName: 'ComplementaryProduct',
+    normalizationContext: ['groups' => ['complement:read']],
+    denormalizationContext: ['groups' => ['complement:write']],
+    operations: [
+        new GetCollection(security: "is_granted('PERM', 'offre.lire')"),
+        new Post(security: "is_granted('PERM', 'offre.modifier')"),
+        // Pas de `Patch` : changer le mode revient a retirer le lien et a le reposer. Une operation
+        // qu'aucun ecran n'appelle coute un cloisonnement a tenir et un test a maintenir, pour
+        // personne.
+        new Delete(security: "is_granted('PERM', 'offre.modifier')"),
+    ],
+)]
+// Le filtre est DECLARE, et sa propriete existe au mapping : un filtre sur une propriete inconnue
+// est ignore en silence par API Platform, le parametre est accepte, et la collection sort ENTIERE.
+#[ApiFilter(SearchFilter::class, properties: ['product' => 'exact', 'complement' => 'exact'])]
 #[ORM\Entity]
 #[ORM\Table(name: 'off_complementary_product')]
 #[ORM\UniqueConstraint(name: 'uniq_complementary_product_pair', columns: ['product_id', 'complement_id'])]

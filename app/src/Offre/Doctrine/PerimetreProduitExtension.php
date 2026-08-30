@@ -94,6 +94,7 @@ final class PerimetreProduitExtension implements QueryCollectionExtensionInterfa
         // l extension ecrit « etablissement » en dur, doit rester francais. Le garde-fou n°28 ne
         // verifie que ce champ final : un segment intermediaire faux lui echappe, et il rendait
         // donc « aucun ecart » sur cette ligne, qui disait « produit » pour une propriete « product ».
+        ComplementaryProduct::class => 'product',
 
         // Ajoutee le 28/08 avec les photos : elle tient son perimetre du produit, comme ses
         // voisines. Une photo visible d un produit qui ne l est pas montrerait le visuel d une

@@ -104,6 +104,19 @@ function nomProduitAssocie(assoc, catalogue) {
 // par axe. L'axe comptable est le seul qui ait un effet sur les écritures.
 const AXES = [['comptable', 'Axe comptable'], ['marketing', 'Axe marketing'], ['rayon', 'Rayon']]
 
+/**
+ * Le mode, en mots de l'utilisateur.
+ *
+ * ⚠ « Obligatoire » n'est pas une nuance d'affichage : un complément obligatoire dont le produit
+ * devient invendable rend la vente du PARENT impossible. Le libellé doit dire la conséquence, pas
+ * traduire l'énumération.
+ */
+function libelleMode(mode) {
+  if (mode === 'required') return 'Obligatoire — la vente refuse sans lui'
+  if (mode === 'optional') return 'Proposé'
+  return 'Suggéré'
+}
+
 export default function ProduitFiche({
   produit,
   // Sert UNIQUEMENT à prévenir avant qu'une fiche ne sorte du périmètre de celui qui l'édite —
@@ -136,6 +149,46 @@ export default function ProduitFiche({
   const [categories, setCategories] = useState([])
   const [tousProduits, setTousProduits] = useState([])
   const [liaisons, setLiaisons] = useState([])
+  const [complements, setComplements] = useState([])
+  const [ajoutComplement, setAjoutComplement] = useState({ produit: '', mode: 'suggested', quantite: 1 })
+
+  // ⚠ CES DEUX GESTES ECRIVENT IMMEDIATEMENT, hors du cycle « Enregistrer / Annuler » de la fiche.
+  // Les complements sont des entites a part : les faire passer par le formulaire ferait qu'un lien
+  // ajoute puis annule resterait pose, et « Annuler » cesserait de vouloir dire ce qu'il dit.
+  async function ajouterLeComplement() {
+    if (!ajoutComplement.produit) return
+    try {
+      await api.ajouterComplement(
+        produitId,
+        ajoutComplement.produit,
+        ajoutComplement.mode,
+        ajoutComplement.quantite,
+      )
+      setComplements(membres(await api.complementsDeProduit(produitId)))
+      setAjoutComplement({ produit: '', mode: 'suggested', quantite: 1 })
+      setErreur(null)
+    } catch (e) {
+      setErreur(e.message || "Le complément n'a pas pu être ajouté.")
+    }
+  }
+
+  async function retirerLeComplement(lien) {
+    // On demande confirmation seulement pour « obligatoire » : c'est le seul mode dont le retrait
+    // change ce qui peut etre vendu. Confirmer les trois habituerait a cliquer sans lire.
+    if (lien.mode === 'required'
+      && !window.confirm(
+        'Retirer ce complément obligatoire ?\n\nLa vente du produit ne l’exigera plus.',
+      )) {
+      return
+    }
+    try {
+      await api.retirerComplement(lien.id)
+      setComplements(membres(await api.complementsDeProduit(produitId)))
+      setErreur(null)
+    } catch (e) {
+      setErreur(e.message || "Le complément n'a pas pu être retiré.")
+    }
+  }
   const [valeurs, setValeurs] = useState({}) // groupeId -> valeurs
   // Le produit n'est pas commercialisable sur l'établissement actif : le guichet ne l'aurait pas.
   const [horsSite, setHorsSite] = useState(false)
@@ -183,13 +236,18 @@ export default function ProduitFiche({
         // Le guichet répond 404 quand le produit n'appartient PAS à l'établissement actif. Ce n'est pas
         // une panne à signaler en rouge : c'est le seul contrôle de la chaîne qui vérifie réellement
         // l'appartenance, et sa réponse est une information à afficher telle quelle.
-        const [d, dispo] = await Promise.all([
+        const [d, dispo, comps] = await Promise.all([
           api.produit(produitId),
           api.optionsDisponibles(produitId).catch(() => 'hors-site'),
+          // Un echec ici ne doit pas priver de la fiche : on perd la liste des complements, pas le
+          // produit. Le tableau vide est distinct de « aucun complement » seulement dans ce commentaire,
+          // et c'est assumé — l'ecran ne promet rien sur la disponibilite de ce bloc.
+          api.complementsDeProduit(produitId).then(membres).catch(() => []),
         ])
         if (annule) return
         setDetail(d)
         setHorsSite(dispo === 'hors-site')
+        setComplements(comps)
 
         const groupes = dispo === 'hors-site' ? [] : (dispo?.groupes || [])
         setLiaisons(
@@ -233,7 +291,9 @@ export default function ProduitFiche({
       // Les trois champs sont pourtant en écriture côté serveur (`produit:write`), vérifié par un
       // aller-retour réel avant d'écrire ce formulaire.
       description: descriptionFr(p),
-      produitsAssocies: (p.produitsAssocies || []).map(idDeRef).filter(Boolean),
+      // `produitsAssocies` n'est plus edite ici : remplace par les complements, qui sont des
+      // entites a part. Le champ reste en base jusqu'a son retrait par allaccess-73.
+
       etablissements: (p.etablissements || []).map(idDeRef).filter(Boolean),
       categories: (p.categories || []).map(idDeRef).filter(Boolean),
       jours: joursDepuisIntervalle(p.dureeValidite),
@@ -257,7 +317,10 @@ export default function ProduitFiche({
         description: edition.description.trim()
           ? { ...(p.description && typeof p.description === 'object' ? p.description : {}), fr: edition.description.trim() }
           : null,
-        produitsAssocies: edition.produitsAssocies.map((id) => `/api/produits/${id}`),
+        // ⚠ On n'envoie plus `produitsAssocies` : rien ne le lisait cote serveur, et l'ecran
+        // ecrivait donc dans le vide avec un enregistrement qui reussissait. Ne plus l'envoyer
+        // n'efface pas les valeurs existantes ; elles partiront avec la table.
+
         etablissements: edition.etablissements.map((id) => `/api/etablissements/${id}`),
         categories: edition.categories.map((id) => `/api/categories/${id}`),
         // Le serveur rend la durée en forme développée (`P0Y0M1DT0H0M0S`) et accepte la forme
@@ -387,28 +450,99 @@ export default function ProduitFiche({
             )}
           </div>
 
+          {/* ⚠ LES COMPLÉMENTS S'ENREGISTRENT IMMÉDIATEMENT, pas au « Enregistrer » de la fiche.
+              Ce sont des entités à part, avec leurs propres routes. Mélanger les deux temps ferait
+              qu'un lien ajouté puis « annulé » resterait posé — un bouton qui ne défait pas ce
+              qu'il annonce. */}
           <div className="field">
-            <label htmlFor="pr-assoc">Produits associés</label>
-            <div id="pr-assoc" style={{ display: 'grid', gap: 'var(--esp-serre)', maxHeight: 220, overflowY: 'auto' }}>
-              {tousProduits.filter((x) => String(x.id) !== String(produitId)).map((x) => (
-                <label key={x.id} style={{ display: 'flex', gap: 'var(--esp-normal)', alignItems: 'center' }}>
-                  <input
-                    type="checkbox"
-                    checked={edition.produitsAssocies.includes(x.id)}
-                    onChange={(ev) => setEdition((st) => ({
-                      ...st,
-                      produitsAssocies: ev.target.checked
-                        ? [...st.produitsAssocies, x.id]
-                        : st.produitsAssocies.filter((y) => y !== x.id),
-                    }))}
-                  />
-                  <span>{libelleProduit(x)}</span>
-                </label>
-              ))}
+            <label htmlFor="pr-complements">Produits complémentaires</label>
+            {complements.length === 0 ? (
+              <div className="empty">
+                Aucun complément. C’est ce qui permet de proposer le casier avec l’entrée, ou
+                l’audioguide avec la visite.
+              </div>
+            ) : (
+              <table className="tbl" id="pr-complements">
+                <thead>
+                  <tr>
+                    <th>Produit proposé</th>
+                    <th>Comment</th>
+                    <th className="num">Qté</th>
+                    <th className="num">Retirer</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {complements.map((c) => (
+                    <tr key={c.id}>
+                      <td>{nomProduitAssocie(c.complement, tousProduits)}</td>
+                      <td>{libelleMode(c.mode)}</td>
+                      <td className="num">{c.defaultQuantity}</td>
+                      <td className="num">
+                        <button
+                          className="btn ghost sm"
+                          type="button"
+                          onClick={() => retirerLeComplement(c)}
+                        >
+                          Retirer
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+
+            <div className="field">
+              <label htmlFor="pr-comp-ajout">Ajouter un complément</label>
+              <select
+                id="pr-comp-ajout"
+                className="select"
+                value={ajoutComplement.produit}
+                onChange={(ev) => setAjoutComplement((st) => ({ ...st, produit: ev.target.value }))}
+              >
+                <option value="">Choisir un produit…</option>
+                {tousProduits
+                  .filter((x) => String(x.id) !== String(produitId))
+                  .filter((x) => !complements.some((c) => idDeRef(c.complement) === String(x.id)))
+                  .map((x) => (
+                    <option key={x.id} value={x.id}>{libelleProduit(x)}</option>
+                  ))}
+              </select>
+              <select
+                className="select"
+                aria-label="Comment le proposer"
+                value={ajoutComplement.mode}
+                onChange={(ev) => setAjoutComplement((st) => ({ ...st, mode: ev.target.value }))}
+              >
+                <option value="optional">Proposé — l’agent le voit, il choisit</option>
+                <option value="suggested">Suggéré — coché d’avance, l’agent peut retirer</option>
+                <option value="required">Obligatoire — la vente refuse sans lui</option>
+              </select>
+              <input
+                className="input"
+                type="number"
+                min="1"
+                aria-label="Quantité proposée par défaut"
+                value={ajoutComplement.quantite}
+                onChange={(ev) => setAjoutComplement((st) => ({ ...st, quantite: Number(ev.target.value) || 1 }))}
+              />
+              <button
+                className="btn"
+                type="button"
+                disabled={!ajoutComplement.produit}
+                onClick={ajouterLeComplement}
+              >
+                Ajouter
+              </button>
+              <div className="hint">
+                ⚠ « Obligatoire » refuse la vente du produit tant que le complément n’est pas
+                vendable — s’il passe en rupture, c’est ce produit-ci qu’on ne peut plus vendre.
+              </div>
             </div>
+
             <p className="hint">
-              Ce qu’on propose avec&nbsp;: le cadenas avec l’entrée piscine, l’audioguide avec la
-              visite. Le produit lui-même ne figure pas dans la liste.
+              Un complément est un produit entier : il fait sa propre ligne, avec sa TVA et son
+              tarif. Pour un simple supplément sans TVA propre, utilisez plutôt une option.
             </p>
           </div>
 
@@ -610,18 +744,21 @@ export default function ProduitFiche({
           </Section>
 
           <Section
-            titre="Produits associés"
-            aide="Ce qu'on propose avec : le cadenas avec l'entrée piscine."
+            titre="Produits complémentaires"
+            aide="Ce qu'on propose avec : le casier avec l'entrée piscine."
           >
-            {(p.produitsAssocies || []).length === 0 ? (
+            {complements.length === 0 ? (
               <div className="empty">
-                Aucun produit associé. C’est ce qui permet de proposer le cadenas avec l’entrée, ou
+                Aucun complément. C’est ce qui permet de proposer le casier avec l’entrée, ou
                 l’audioguide avec la visite.
               </div>
             ) : (
               <ul>
-                {(p.produitsAssocies || []).map((assoc) => (
-                  <li key={idDeRef(assoc)}>{nomProduitAssocie(assoc, tousProduits)}</li>
+                {complements.map((c) => (
+                  <li key={c.id}>
+                    {nomProduitAssocie(c.complement, tousProduits)} — {libelleMode(c.mode)}
+                    {c.defaultQuantity > 1 ? ` (×${c.defaultQuantity})` : ''}
+                  </li>
                 ))}
               </ul>
             )}

@@ -298,6 +298,27 @@ export const api = {
   produits: (params) => request('/api/produits', { query: params }),
   // Le détail ajoute le groupe `produit:compta` (compte, TVA, règle PCA), absent de la collection.
   produit: (id) => request(`/api/produits/${id}`),
+
+  // Les complements d'un produit — « le casier avec l'entree ». Ce lien remplace `produitsAssocies`,
+  // qui etait un ManyToMany sans `remove` que rien ne lisait cote serveur : l'ecran y ecrivait dans
+  // le vide, et l'enregistrement reussissait.
+  complementsDeProduit: (produitId) =>
+    request('/api/complementary_products', {
+      query: { product: `/api/produits/${produitId}`, itemsPerPage: 100 },
+    }),
+  ajouterComplement: (produitId, complementId, mode, quantite) =>
+    // ⚠ method sur la MEME ligne que request( : la mesure d ecart detecte la methode sur le
+    // reste de la ligne de l appel. Ecrite en dessous, elle retombait sur le defaut GET et se
+    // confondait avec le GET du meme chemin. Corrige par allaccess-73, pas encore integre.
+    request('/api/complementary_products', { method: 'POST', ld: true,
+      body: {
+        product: `/api/produits/${produitId}`,
+        complement: `/api/produits/${complementId}`,
+        mode,
+        defaultQuantity: quantite,
+      },
+    }),
+  retirerComplement: (id) => request(`/api/complementary_products/${id}`, { method: 'DELETE' }),
   majProduit: (id, corps) => request(`/api/produits/${id}`, { method: 'PATCH', body: corps }),
   // L'ONGLET COMPTA D'UN PRODUIT : TROIS CHAMPS ECRIVABLES, AFFICHES ET JAMAIS PROPOSES.
   //
