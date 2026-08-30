@@ -70,6 +70,22 @@ const MOTIF_NON_APPARTENANCE = '/self::assert(NotContains|ArrayNotHasKey|StringN
 const MOTIF_GARDE = '/self::assert(NotEmpty|Count|Contains|GreaterThan|ArrayHasKey|StringContainsString|Same\(\s*\d+\s*,\s*\\\\?count)\s*\(/';
 
 /** Le test parle-t-il à l'API ? Une assertion sur un objet en mémoire n'est pas concernée. */
+// ⚠ TROISIEME FORME, TROUVEE PAR allaccess-b8 : LA BOUCLE QUI NE TOURNE PAS.
+//
+//     foreach ($membres as $item) {
+//         self::assertNotSame('Espace Acces B prive', $item['libelle']);
+//     }
+//
+// Une liste vide n'execute jamais le corps : zero assertion jouee, test vert. Le motif general
+// ne voyait que `assertNotContains` et ses deux cousins ; `assertNotSame` dans une boucle lui
+// echappait, et les trois fichiers concernes n'etaient meme pas dans sa dette gelee.
+//
+// L'extension exige la CONJONCTION boucle + non-egalite. Ajouter `assertNotSame` au motif
+// general aurait signale des centaines de comparaisons legitimes — et un garde-fou qui refuse
+// du travail correct finit desactive.
+const MOTIF_BOUCLE = '/\bforeach\s*\(/';
+const MOTIF_NON_EGALITE = '/self::assert(NotSame|NotEquals)\s*\(/';
+
 const MOTIF_REQUETE = '/->request\(\s*[\'"](GET|POST|PATCH|PUT|DELETE)[\'"]/';
 
 const MOTIF_ANNOTATION = '/@vacuite-sans-objet\s*:\s*\S/';
@@ -83,6 +99,60 @@ const MOTIF_ANNOTATION = '/@vacuite-sans-objet\s*:\s*\S/';
  *
  * @return array<string, string>
  */
+/**
+ * Une non-egalite se trouve-t-elle A L'INTERIEUR d'un `foreach` ?
+ *
+ * ⚠ LA COEXISTENCE NE SUFFIT PAS, ET LE PREMIER ESSAI L'A PROUVE.
+ *
+ * Exiger seulement qu'un `foreach` et un `assertNotSame` figurent dans le meme corps a signale a
+ * tort `PublicCatalogApiTest::testLaVitrineNePublieRienSurLesClients` : le decoupage par
+ * `function test…` fait deborder le corps sur les aides privees qui suivent, et il y a ramasse un
+ * `foreach` d'un cote, un `assertNotSame([], $membres)` de l'autre — ce dernier etant une GARDE.
+ *
+ * Deux fragments sans rapport, lus ensemble, et le controle concluait. On lit donc l'interieur des
+ * blocs, en comptant les accolades : le seul endroit ou la question a un sens.
+ */
+function nonEgaliteDansUneBoucle(string $corps): bool
+{
+    $decalage = 0;
+
+    while (preg_match(MOTIF_BOUCLE, $corps, $trouve, PREG_OFFSET_CAPTURE, $decalage) === 1) {
+        $debut = strpos($corps, '{', $trouve[0][1]);
+        if ($debut === false) {
+            break;
+        }
+
+        // Fin du bloc : l'accolade qui ramene la profondeur a zero. Un `foreach` non accolade
+        // (instruction unique) n'est pas couvert — il ne se rencontre pas dans ces tests, et le
+        // supposer serait ajouter une hypothese a un controle qui doit rester lisible.
+        $profondeur = 0;
+        $fin = null;
+        for ($i = $debut, $n = strlen($corps); $i < $n; ++$i) {
+            if ($corps[$i] === '{') {
+                ++$profondeur;
+            } elseif ($corps[$i] === '}') {
+                --$profondeur;
+                if ($profondeur === 0) {
+                    $fin = $i;
+                    break;
+                }
+            }
+        }
+
+        if ($fin === null) {
+            break;
+        }
+
+        if (preg_match(MOTIF_NON_EGALITE, substr($corps, $debut, $fin - $debut)) === 1) {
+            return true;
+        }
+
+        $decalage = $fin;
+    }
+
+    return false;
+}
+
 function methodes(string $source): array
 {
     if (preg_match_all('/\bfunction\s+(test\w+)\s*\(/', $source, $noms, PREG_OFFSET_CAPTURE) === 0) {
@@ -123,7 +193,12 @@ function methodesSansGarde(string $racine): array
             if (preg_match(MOTIF_REQUETE, $corps) !== 1) {
                 continue;
             }
-            if (preg_match(MOTIF_NON_APPARTENANCE, $corps) !== 1) {
+            // Non-appartenance directe, OU boucle sur une collection dont le corps n'affirme
+            // qu'une non-egalite : les deux passent a coup sur sur une liste vide.
+            $nonAppartenance = preg_match(MOTIF_NON_APPARTENANCE, $corps) === 1;
+            $boucleVide = nonEgaliteDansUneBoucle($corps);
+
+            if (!$nonAppartenance && !$boucleVide) {
                 continue;
             }
             if (preg_match(MOTIF_GARDE, $corps) === 1) {
