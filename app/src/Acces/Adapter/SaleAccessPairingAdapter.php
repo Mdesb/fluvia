@@ -10,7 +10,6 @@ use App\Acces\Enum\ModeAppairage;
 use App\Acces\Enum\TypeSupport as TypeSupportAcces;
 use App\Acces\Port\ProjectionDroitInterface;
 use App\Acces\Service\AppairageHandler;
-use App\Acces\Service\ProductAccessZoneResolver;
 use App\Vente\Entity\BilletSupport;
 use App\Vente\Enum\StatutAppairage;
 use App\Vente\Enum\TypeSupport as TypeSupportVente;
@@ -68,7 +67,6 @@ final class SaleAccessPairingAdapter implements AppairageAccesInterface
         private readonly EntityManagerInterface $em,
         private readonly ProjectionDroitInterface $projection,
         private readonly AppairageHandler $pairings,
-        private readonly ProductAccessZoneResolver $zones,
         private readonly GenerateurCodeSupport $codeGenerator,
         private readonly LoggerInterface $logger,
     ) {
@@ -112,16 +110,25 @@ final class SaleAccessPairingAdapter implements AppairageAccesInterface
             return true;
         }
 
-        // ⚠ LA DÉCISION TIENT ICI, ET ELLE EST VOLONTAIREMENT AVANT LA PROJECTION.
+        // ⚠ IL N'Y A PLUS DE GARDE DE ZONE ICI, ET SON RETRAIT A DEMANDÉ DEUX CHANGEMENTS DANS
+        // L'ORDRE INVERSE DE CELUI QU'ON CROIT.
         //
-        // Interroger les zones d'abord évite de créer un `DroitAcces` qu'on ne veut pas : la
-        // projection écrit en base, et un droit sans espace ouvre tout. On ne fabrique donc jamais
-        // l'objet dangereux, plutôt que de le fabriquer puis de tenter de le neutraliser.
-        if ($this->zones->spacesFor($productRef, $establishment) === []) {
-            $support->setStatutAppairage(StatutAppairage::Actif);
-
-            return true;
-        }
+        // Jusqu'au 30/08, cette méthode ne projetait RIEN quand le produit ne déclarait aucune zone.
+        // C'était nécessaire : `DroitAcces::ouvre()` rendait alors `true` sur une collection vide —
+        // un droit sans espace ouvrait TOUT. Projeter sans condition aurait fait de chaque billet
+        // vendu un passe-partout des huit espaces, silencieusement.
+        //
+        // ⚠ Mais cette garde était FAUSSE, pas seulement prudente. D86 : un billet vendu doit
+        // TOUJOURS être connu du contrôle d'accès, même sans zone — sinon l'agent qui contrôle à la
+        // main, là où il n'y a pas de matériel, n'a **rien à interroger**. Ne rien projeter rendait
+        // le billet inexistant côté accès, ce qui est exactement le cas que Maxime a signalé.
+        //
+        // Une seule condition traitait donc deux besoins opposés : ne pas ouvrir toutes les portes,
+        // et rester vérifiable. `ouvre()` strict (D87, posé par `allaccess-8e`) prend le premier ;
+        // cette méthode garde le second.
+        //
+        // L'ORDRE ÉTAIT CONTRE-INTUITIF ET IL A ÉTÉ TENU : l'inversion d'abord, le retrait ensuite.
+        // Dans l'autre sens, chaque billet vendu serait devenu un passe-partout entre les deux.
 
         try {
             $right = $this->projection->projeter($support->getId(), $establishment);
