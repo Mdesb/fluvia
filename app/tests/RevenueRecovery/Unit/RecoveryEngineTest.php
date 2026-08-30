@@ -107,6 +107,64 @@ final class RecoveryEngineTest extends RevenueRecoveryApiTestCase
         ]));
     }
 
+    /**
+     * ⚠ DEUX IMPAYÉS DU MÊME CLIENT OUVRENT DEUX CAMPAGNES — comportement ACTUEL, écrit pour qu'un
+     * changement se voie.
+     *
+     * Le test voisin pin l'idempotence : un même sujet deux fois ne rouvre pas de dossier. Celui-ci
+     * pin le cas que personne n'avait écrit, et c'est le cas nominal du recouvrement : un client qui
+     * produit un impayé par mois. Chaque rejet crée son propre `IncidentImpaye`, et le pont publie
+     * `EventSubject('PaymentIncident', incident->getId())` — donc deux `subjectRef` distincts, donc
+     * deux `RecoveryCase` parallèles sur la MÊME personne.
+     *
+     * La déduplication de `handle()` porte sur le SUJET ; une relance s'adresse à un REDEVABLE. Les
+     * deux ne coïncident que tant qu'un client n'a qu'un dossier à la fois.
+     *
+     * ⚠ CE TEST EST VERT, ET C'EST VOULU. Il ne dénonce rien : « une campagne par personne » ou « une
+     * par dossier avec fusion des envois » est une décision produit qui n'est pas prise. Le jour où
+     * elle le sera, ce test rougira et posera la question à qui change le code — au lieu de le
+     * laisser croire qu'il n'a rien modifié.
+     *
+     * ⚠ CE QU'IL NE MESURE PAS : le nombre de courriers reçus. Rien ne part aujourd'hui — aucune
+     * séquence n'est semée (RG-RR-02) et `SendDueRecoveryAttemptsCommand` n'est déclenchée par rien.
+     * Ce test crée donc une séquence à la main et mesure la règle d'OUVERTURE des dossiers.
+     */
+    public function testDeuxImpayesDuMemeClientOuvrentDeuxCampagnes(): void
+    {
+        $etablissement = $this->etablissementA();
+        $this->creerSequenceActive($etablissement, RecoveryTriggerType::PaymentFailed, [
+            ['delayDays' => 1, 'channel' => 'email', 'templateCode' => 'payment_failed_j1'],
+        ], 3);
+
+        // Deux incidents distincts — c'est ce que produit un abonnement rejeté deux mois de suite.
+        $premierIncident = (string) Uuid::v4();
+        $secondIncident = (string) Uuid::v4();
+
+        $premier = $this->engine()->handle(
+            $this->evenement($etablissement, 'PaymentIncident', $premierIncident),
+            RecoveryTriggerType::PaymentFailed,
+        );
+        $second = $this->engine()->handle(
+            $this->evenement($etablissement, 'PaymentIncident', $secondIncident),
+            RecoveryTriggerType::PaymentFailed,
+        );
+
+        self::assertNotNull($premier, 'témoin : sans premier dossier, ce test ne mesure rien');
+        self::assertNotNull($second);
+        self::assertNotSame(
+            $premier->getId()->toRfc4122(),
+            $second->getId()->toRfc4122(),
+            'Comportement figé : deux incidents distincts ouvrent deux campagnes. Si ce test rougit, '
+            .'quelqu’un a fait porter la déduplication sur le redevable — c’est peut-être la bonne '
+            .'décision, mais c’est une décision produit : elle change ce qu’une vraie personne reçoit.',
+        );
+
+        self::assertCount(2, $this->em()->getRepository(RecoveryCase::class)->findBy([
+            'establishment' => $etablissement,
+            'triggerType' => RecoveryTriggerType::PaymentFailed,
+        ]));
+    }
+
     /** US-RR-03/CA-1, RG-RR-03 : client sans consentement Email accordé -> tentative sautée, jamais bloquante. */
     public function testConsentementAbsentTentativeSauteeSkippedNoConsent(): void
     {
