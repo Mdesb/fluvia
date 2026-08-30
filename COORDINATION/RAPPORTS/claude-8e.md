@@ -483,3 +483,86 @@ n'était pas arrivée. La cause est mon propre code — le battement se met en p
 panneau montrait la dernière lecture visible. Ouvrir le panneau ne relit pas. **Un composant qui
 économise le réseau devient un instrument périmé dès qu'on le mesure sans le remonter** ; la mesure
 n'a valu qu'après un rechargement complet.
+
+### Vérifié sur le paquet servi — `16c7d63`, construit le 30/08 à 03:04:42
+
+Trois maillons, chacun prouvé séparément, parce qu'aucun ne vaut pour les autres :
+
+**1. Le code se comporte comme annoncé** — mesuré sur mon arbre : comptes d'appels réseau
+(ouverture 0→1, fermeture 1→1, réouverture 1→2) et largeurs en pixels aux quatre longueurs de titre.
+
+**2. Ce code est dans le commit servi** — `git merge-base --is-ancestor` sur les quatre commits, tous
+dedans, et `16c7d63` est bien dans `main`. Rien de moi en attente (`16c7d63..origin/main` est vide).
+
+**3. Le paquet servi a bien été construit à partir de là** — `version.json` rend `16c7d63`,
+`index.html` date de 03:04:41, et la trace du correctif est dans les octets servis :
+
+    flexShrink:0             → App-C4l8toKu.js        ← le correctif de mise en page
+    « ne sachant pas trier » → ABSENT
+    « récents »              → App-C4l8toKu.js        ← témoin
+    « Heures d »             → ABSENT PARTOUT         ← le renommage de c2 est servi aussi
+    « Horaires d »           → PublicApp, TopologieAcces, Parametres, App
+
+⚠ **MON PREMIER TÉMOIN NÉGATIF NE POUVAIT PAS ÉCHOUER, ET JE NE L'AI VU QU'APRÈS L'AVOIR LANCÉ.**
+J'avais choisi un commit de rapport « poussé après », pour vérifier que le contrôle savait dire non.
+Il répondait « dans le servi » — non pas parce que le contrôle est cassé, mais parce que ce commit
+avait été poussé **avant** la construction de 03:04. Un témoin négatif qui ne peut pas échouer est
+aussi creux qu'un témoin positif absent : il faut le choisir pour qu'il ÉCHOUE si l'instrument est
+faux. Le bon était le sens inverse — `16c7d63` ancêtre d'un de mes vieux commits — qui rend
+correctement « non ».
+
+**Et un fait découvert en passant, qui corrige ce que j'avais dit à c2 :** `f0b201e`, sa réévaluation
+des impayés, **est dans le commit servi**. Je lui avais écrit qu'elle ne serait pas servie tant
+qu'elle ne serait pas fusionnée ; elle l'a été depuis. Le motif `droit_invalide` que j'ai réécrit
+décrit donc un comportement serveur désormais réel — et il demande toujours de *vérifier* plutôt
+qu'il n'affirme la règle, ce qui reste le bon choix.
+
+### Le service worker : sa purge ne peut pas se déclencher, et son secours hors ligne rote
+
+Trouvé en cherchant, dans mon domaine, l'équivalent de ce que c2 a trouvé dans le sien : un code
+déployé sur le disque n'est pas un code qui s'exécute. Côté PHP, c'est `opcache`. Côté frontal, c'est
+le service worker et le cache du navigateur.
+
+**LA BONNE NOUVELLE D'ABORD — le chemin en ligne est sain, et mes correctifs s'exécutent bien.**
+`frontend/public/sw.js` ne touche ni `/api`, ni `/auth`, ni `/me` ; les assets sont à empreinte de
+contenu, donc « cache d'abord » ne peut pas rendre une version périmée ; et la navigation part au
+réseau d'abord, le cache ne servant qu'en secours. Un déploiement est donc visible immédiatement.
+`index.html` est servi sans `Cache-Control` (revalidation par `ETag`), les assets en
+`public, immutable, max-age=31536000` — ce qui est exactement le bon partage.
+
+**LE DÉFAUT : `const VERSION = 'fluvia-v1'` ne change jamais entre deux constructions.** Deux
+conséquences, et la seconde est celle qui se voit.
+
+**1. La purge est inerte.** `activate` supprime les caches dont le nom diffère de `VERSION`. Comme
+`VERSION` est une constante, il n'existe jamais d'autre nom : la purge ne peut, par construction,
+rien supprimer. Or le commentaire au-dessus d'elle dit pourquoi elle existe — « sans elle, chaque
+déploiement laisserait derrière lui un cache complet, et le stockage du téléphone finirait par être
+refusé ». Le cache d'assets s'accumule donc indéfiniment, exactement ce que la purge dit empêcher.
+**Un garde-fou qui documente une intention qu'il ne remplit pas** : c'est la famille qu'on traque
+depuis deux jours, et ici il est écrit, relu, et sans effet.
+
+**2. Le secours hors ligne pointe vers des fichiers supprimés.** `install` met `/index.html` en cache
+**une seule fois** — il ne se rejoue que si les octets de `sw.js` changent, ce que `VERSION` constant
+garantit de ne pas faire. Et la branche de navigation ne réécrit jamais le cache : elle lit au
+réseau, et ne retombe sur la coquille qu'en cas d'échec. La coquille en cache reste donc celle du
+jour de l'installation, et elle nomme des assets qui n'existent plus. Mesuré :
+
+    assets/App-C4l8toKu.js   http=200   ← la version servie
+    assets/App-Cepn9QOd.js   http=404   ← déploiement précédent
+    assets/App-CQoZ9DQ8.js   http=404
+    assets/App-DZCjmDF0.js   http=404
+
+Le `rsync --delete` du déploiement fait disparaître les anciennes empreintes, et c'est correct. Mais
+hors ligne, l'utilisateur reçoit une coquille qui demande `App-Cepn9QOd.js` : page blanche. **La
+seule raison d'être déclarée du fichier — « répondre quand le réseau manque » — cesse d'être remplie
+au premier déploiement qui suit l'installation.**
+
+**Le correctif tient en un mot, et l'ingrédient existe déjà** : que `VERSION` porte le commit de la
+construction, que 73 publie déjà dans `version.json`. Chaque déploiement installerait alors un
+nouveau service worker, qui recacherait la coquille et purgerait la précédente — les deux défauts
+tombent ensemble.
+
+**Je ne touche pas au fichier** : il n'est pas de moi (`ccc572b`), et un service worker mal remplacé
+se répare mal — il survit aux rechargements, et l'ancien continue de servir jusqu'à ce que tous les
+onglets soient fermés. C'est typiquement ce qu'on ne veut pas voir décidé par un tiers pendant la
+nuit. Signalé, pas corrigé.
