@@ -8,10 +8,9 @@ conteste, et se retire quand sa raison disparaît.
 
 ---
 
-## 30/08 — garde-fou n°11 (formats d'écriture), contourné une fois
+## 30/08 — garde-fou n°11 : contournement local tenté, puis CORRIGÉ
 
-**Par** allaccess-c2, **avec l'accord explicite de Maxime**, sur le lot du
-compostage de billet.
+**Par** allaccess-c2, sur le lot du compostage de billet.
 
 **Ce que le contrôle disait :**
 
@@ -25,18 +24,41 @@ classait standard **par défaut**. Il affirmait une propriété de la route qu'i
 déduisait de son absence.
 
 Vérifié auprès de 8e : sa route est en `uriTemplate` sur mesure + `input: false`,
-comme les quatre autres `POST` de son module. Suivre le conseil aurait posé un
-`ld: true` que sa route refuse en 415 — le contrôle n'aurait pas signalé un
-défaut, il en aurait fait poser un.
+comme les quatre autres `POST` de son module. **Suivre le conseil aurait posé un
+`ld: true` que sa route refuse en 415** — le contrôle n'aurait pas signalé un
+défaut, il en aurait fait poser un, et serait redevenu vert.
 
-**Pourquoi ne pas attendre.** Deux cliquets corrects se verrouillaient l'un
-l'autre : le n°15 exige qu'une route ait un écran, le n°11 exige qu'un appel
-client ait une route. Un lot coupé en deux moitiés qui se conditionnent ne peut
-entrer que si l'une passe d'abord. `@route-a-venir:` est le mécanisme prévu pour
-cette fenêtre — il n'était câblé que dans le n°15. Le correctif du n°11 existait
-depuis deux heures, non publié.
+**Ce qui s'est réellement passé, dans l'ordre.**
 
-**Ce qui reste vrai** : les 27 autres garde-fous étaient verts, le marqueur
-`@route-a-venir:` est en place, et il redevient sans objet dès que la route
-existe. Ce contournement n'a plus de raison d'être après l'intégration du lot de
-8e — si vous le relisez après, il est périmé.
+1. Maxime a autorisé un contournement, une fois, écrit ici.
+2. `git commit --no-verify` a passé le crochet **local** — mais le crochet de
+   **réception** rejoue les mêmes contrôles sur l'arbre poussé, et l'a refusé. Le
+   seul interrupteur qui l'aurait franchi désactive les garde-fous pour les neuf
+   sessions : hors de proportion avec le problème.
+3. J'ai donc **corrigé le contrôle** plutôt que de le contourner : il honore
+   désormais `@route-a-venir:`, le marqueur qui existait déjà et n'était câblé que
+   dans le n°15.
+
+**Le contournement n'a donc pas eu lieu au-delà du local.** Cette entrée reste
+parce qu'un `--no-verify` figure dans l'historique de ce lot, et qu'un
+`--no-verify` sans explication est indiscernable d'une négligence.
+
+**Le blocage qui l'avait rendu nécessaire.** Deux cliquets corrects se
+verrouillaient l'un l'autre : le n°15 exige qu'une route ait un écran, le n°11
+exige qu'un appel client ait une route. Un lot coupé en deux moitiés qui se
+conditionnent ne peut entrer que si l'une passe d'abord.
+
+> Tout contrôle qui juge la relation client↔serveur doit connaître le marqueur,
+> sinon il rouvre le blocage que l'autre a résolu.
+
+⚠ **La correction est minimale et provisoire.** allaccess-73 a une version plus
+riche sur sa machine — un troisième état « route introuvable », qui distingue une
+route annoncée d'une route mal orthographiée. La sienne est meilleure et doit
+remplacer celle-ci à la fusion ; la mienne se borne à honorer le marqueur, sans
+rien changer ailleurs.
+
+**Éprouvée sur trois cas**, dont celui qu'on oublie en corrigeant un faux positif :
+
+    route annoncée par le marqueur        → silence
+    route standard sans `ld: true`        → REFUS   ⟵ le vrai positif, toujours armé
+    arbre réel                            → silence
