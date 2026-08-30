@@ -82,13 +82,19 @@ use Symfony\Component\Validator\Constraints as Assert;
         // Sans ça, API Platform construit un `BlockingExemption` vide, le valide AVANT le processeur,
         // et rend un 422 qui parle de `debtorType` — un nom de colonne que l'appelant n'a jamais
         // employé. Le refus doit nommer ce que l'utilisateur a écrit, pas ce que la base attend.
-        // ⚠ CHEMIN SUFFIXE D'UN VERBE, comme `/incidents/{id}/resoudre` juste a cote.
+        // ⚠ CHEMIN SUFFIXE D'UN VERBE, comme `/incidents/{id}/resoudre` juste a cote — par
+        // convention du module, et NON par contrainte de mesure.
         //
-        // Un POST sur `/recouvrement/exemptions` serait plus canonique en REST, et il partagerait
-        // son chemin avec le GET de la collection. Or la mesure d'ecart client/serveur indexe les
-        // appels PAR CHEMIN : deux operations sur un meme chemin n'en rendent qu'une atteignable,
-        // et l'autre est comptee comme un ecran manquant qui n'existe pas. Le verbe explicite dit
-        // la meme chose et se mesure juste.
+        // J'avais d'abord ecrit ici que la mesure d'ecart client/serveur indexait les appels par
+        // CHEMIN, et que deux operations sur un meme chemin n'en rendaient donc qu'une atteignable.
+        // C'etait faux, et allaccess-73 l'a mesure : elle indexe bien par (chemin, METHODE). Ce qui
+        // echouait etait la DETECTION de la methode, qui ne lisait que le reste de la ligne de
+        // l'appel — mon `method: 'POST'` etant a la ligne suivante, il retombait sur le defaut GET
+        // et se confondait avec le GET du meme chemin. 107 appels sur 454 etaient dans ce cas.
+        //
+        // Corrige depuis, plafond passe de 685 a 684. Un GET et un POST canoniques sur un meme
+        // chemin sont donc parfaitement mesurables : si vous en avez besoin, ne renoncez pas sur la
+        // foi de ce qui etait ecrit ici. Ce chemin-ci reste parce qu'il est plus lisible.
         new Post(
             uriTemplate: '/recouvrement/exemptions/accorder',
             read: false,
