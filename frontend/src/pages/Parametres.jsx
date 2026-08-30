@@ -521,9 +521,17 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
               regions. Il regardait un ecran, pas une liste exhaustive — la question lui est posee
               plutot que tranchee ici. En attendant, on ne masque que ce qu'il a nomme. */}
           <RegionsSection peutEcrire={aLeDroit(droits, 'organisation.gerer')} />
-          {/* ⚠ CONSEQUENCE ASSUMEE : un exploitant multi-sites perd ici la liste de SES
-              etablissements. C'est ce que Maxime a demande — « ce sont des infos uniquement pour
-              moi » — et c'est reversible d'une ligne s'il change d'avis en le voyant. */}
+          {/* ⚠ ON NE RETIRE QUE LA GESTION, PAS L'ACCES. Un exploitant multi-sites continue de voir
+              ses etablissements et d'en changer : le selecteur vit dans la barre du haut
+              (`AppShell`, `aria-label="Etablissement actif"`), sans garde ni permission, et il n'a
+              jamais dependu de cette section. Ce qui part ici est CREER / RENOMMER / EDITER — les
+              « infos uniquement pour moi » de Maxime.
+
+              J'avais d'abord ecrit l'inverse — « il perd la liste de SES etablissements » — sans le
+              verifier. La phrase etait plausible et prudente, donc personne ne l'a mesuree : elle a
+              ete relayee de session en session jusqu'a etre classee regression fonctionnelle en tete
+              des decisions en attente. Une mise en garde non mesuree coute autant qu'une affirmation
+              fausse, et elle se propage mieux, parce que la contredire a l'air imprudent. */}
           {estEditeur && <EtablissementsSection peutEcrire={aLeDroit(droits, 'organisation.gerer')} />}
           {/* LES MOTS DU METIER, A COTE DE L'ETABLISSEMENT QU'ILS CONCERNENT.
               << Ressource >> veut dire praticien chez le coiffeur, ligne d'eau a la piscine. Le mettre
