@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace App\Tests\Audit\Api;
 
+use App\Audit\Entity\EntreeAudit;
 use App\DataFixtures\SocleFixtures;
+use App\Organisation\Entity\Etablissement;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\Uid\Uuid;
 use App\Tests\Securite\SecuriteApiTestCase;
 
 /**
@@ -91,6 +95,62 @@ final class AuditAvantApresTest extends SecuriteApiTestCase
         self::assertStringContainsString('text/csv', $export->getHeaders()['content-type'][0] ?? '');
         $contenu = $export->getContent();
         self::assertStringContainsString('id;dateHeure;auteur;action;cibleType;cibleId;etablissement', $contenu);
+    }
+
+    /**
+     * ⚠ L'EXPORT CSV NE DOIT PAS TRAVERSER LES ÉTABLISSEMENTS.
+     *
+     * `ResidualScopeExtension` cloisonne `EntreeAudit`, mais une extension Doctrine ne s'applique
+     * qu'aux opérations d'API Platform : `ExportAuditController` construit sa requête à la main et
+     * n'en bénéficiait pas. La collection JSON était bornée, l'export CSV de la même donnée ne
+     * l'était par rien — et `securite.gerer` est porté par « Administrateur groupe », un rôle
+     * CLIENT. Un administrateur de groupe exportait donc l'audit de tous les établissements.
+     *
+     * ⚠ ON LIT LE CONTENU, PAS LE STATUT. L'export répondait déjà 200 avant la correction : c'est
+     * exactement le problème. Un test sur le code HTTP aurait été vert dans les deux versions.
+     */
+    public function testExportNeTraversePasLesEtablissements(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+
+        $idA = $this->idEtablissement(SocleFixtures::ETAB_A_NOM);
+        $idB = $this->idEtablissement(SocleFixtures::ETAB_B_NOM);
+        self::assertNotSame($idA, $idB, 'témoin : deux établissements distincts sont nécessaires pour mesurer une traversée');
+        $voisin = $em->getRepository(Etablissement::class)->find(Uuid::fromString($idB));
+        $soi = $em->getRepository(Etablissement::class)->find(Uuid::fromString($idA));
+        self::assertNotNull($voisin);
+        self::assertNotNull($soi);
+
+        // Une entrée chez le voisin, et une chez soi : la seconde est le témoin positif.
+        $cibleVoisin = 'CIBLE-VOISIN-' . bin2hex(random_bytes(6));
+        $cibleSoi = 'CIBLE-SOI-' . bin2hex(random_bytes(6));
+        foreach ([[$voisin->getId(), $cibleVoisin], [$soi->getId(), $cibleSoi]] as [$etab, $cible]) {
+            $entree = new EntreeAudit();
+            $entree->setAction('creation')
+                ->setCibleType('BancExport')
+                ->setCibleId($cible)
+                ->setEtablissement($etab);
+            $em->persist($entree);
+        }
+        $em->flush();
+
+        $export = $client->request('GET', '/audit/export', $entete);
+        self::assertResponseIsSuccessful();
+        $contenu = $export->getContent();
+
+        self::assertStringContainsString(
+            $cibleSoi,
+            $contenu,
+            'témoin positif : l’entrée de l’établissement actif doit figurer, sinon un export vide rendrait ce test vert sans rien prouver',
+        );
+        self::assertStringNotContainsString(
+            $cibleVoisin,
+            $contenu,
+            'L’export CSV contient une entrée d’audit d’un AUTRE établissement : le contrôleur écrit à la main échappe au cloisonnement que la collection applique.',
+        );
     }
 
     /** L'export est refusé sans permission securite.gerer/securite.exporter. */
