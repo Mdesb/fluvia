@@ -566,3 +566,37 @@ tombent ensemble.
 se répare mal — il survit aux rechargements, et l'ancien continue de servir jusqu'à ce que tous les
 onglets soient fermés. C'est typiquement ce qu'on ne veut pas voir décidé par un tiers pendant la
 nuit. Signalé, pas corrigé.
+
+### Le service worker corrigé : une moitié mesurée, l'autre non — et elle est nommée
+
+73 a fait porter le commit à `VERSION` (`fluvia-__COMMIT__` substitué au déploiement, avec deux
+contrôles). Vérifié dans un vrai navigateur, **sur l'origine réelle** :
+
+    service worker        inscrit, actif, contrôle la page
+    nom du cache          fluvia-e576f73          ← il porte le commit
+    coquille en cache     présente
+    ses assets            index-D9QFuyzE.js → 200 · index-DmqTx5UZ.css → 200
+    témoin négatif        /assets/index-ZZZZZZZZ.js → 404   (construit par négation du prédicat)
+
+**Le second défaut est réglé : le secours hors ligne pointe vers des fichiers qui existent.** Et le
+nom du cache est une confirmation *indépendante* de la substitution — pas une relecture du script.
+
+⚠ **LA PURGE, ELLE, RESTE VÉRIFIÉE PAR LECTURE SEULEMENT. Deux instruments défaillants, pas deux
+résultats négatifs.**
+
+*Première tentative* — cache `fluvia-AVANT-DEPLOIEMENT` fabriqué, service worker désinscrit puis
+réinscrit, neuf secondes d'attente : le faux cache survit. J'ai failli écrire que la purge ne
+marchait pas. Elle n'a **jamais été appelée** : `unregister()` est différé tant qu'un client est
+contrôlé, donc la réinscription a retrouvé le worker existant — ni `installing`, ni `waiting`, aucun
+`activate`. *J'ai mesuré un silence et j'ai failli le lire comme un refus* — la faute exacte que ce
+rapport documente depuis le début, au huitième exemplaire.
+
+*Seconde tentative* — rejouer le cycle sur le serveur de dev, où les octets sont modifiables :
+`/sw.js` s'y sert correctement, mais `register()` échoue trois fois de suite dans ce navigateur.
+
+**Ce qu'il faudrait pour la prouver : deux déploiements successifs et un navigateur qui traverse les
+deux.** Au prochain déploiement, `caches.keys()` sur l'origine devra rendre **un seul** nom, celui du
+nouveau commit. La preuve tombera gratuitement pour qui aura le réflexe de regarder à ce moment-là.
+
+**Nettoyé** : le faux cache est supprimé du navigateur, la substitution d'essai retirée de
+`frontend/public/sw.js` (`fluvia-__COMMIT__` restauré, arbre propre, aucun écart avec `main`).
