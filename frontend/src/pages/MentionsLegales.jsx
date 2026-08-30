@@ -316,7 +316,7 @@ function Documents({ documents, fiche, peutGerer, onAllerFiche, onErreur, onSucc
       // Un état vide doit porter le geste qui le remplit, ou au minimum y conduire ; l'indiquer
       // sans y mener transforme une explication en devinette.
       <div className="card">
-        <div className="sub" style={{ textAlign: 'center', padding: 28 }}>
+        <div className="empty">
           Aucun document pour l&rsquo;instant.{' '}
           {fiche?.id
             ? 'Les six textes se composent depuis votre fiche, en un geste.'

@@ -9,6 +9,7 @@ use App\Acces\Entity\Controleur;
 use App\Acces\Entity\EspaceAcces;
 use App\Acces\Entity\Passage;
 use App\Acces\Enum\SensPassage;
+use App\Acces\Enum\CodeMotifRefus;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Uid\Uuid;
 
@@ -142,7 +143,34 @@ final class SynchroPassageHandler
         $passages = [];
 
         foreach ($lot as $entree) {
-            $cle = $this->uuid($entree['cleIdempotence'] ?? null) ?? Uuid::v4();
+            // ⚠ UNE CLE FOURNIE ET JETEE EST PIRE QUE PAS DE CLE DU TOUT.
+            //
+            // Ce code faisait `?? Uuid::v4()` sur les DEUX cas : cle absente, et cle presente mais
+            // malformee. Le second engendrait une cle NEUVE a chaque envoi, donc un rejeu du meme
+            // lot — le geste normal apres une reprise reseau — recreait tous les passages. Mesure du
+            // 31/08 : deux envois d'un lot d'une entree portant une cle en chaine libre ont produit
+            // deux passages et deux `statut: accepte`. Avec un UUID, le second repond `doublon`.
+            //
+            // On ne peut pas refuser l'absence : `rejouer()` est partage avec `POST /acces/synchro`,
+            // dont le contrat est declare inchange et dont des appelants s'appuient sur la
+            // generation serveur. L'absence reste donc engendree ; seule la MALFORMATION est
+            // refusee, parce qu'elle seule trahit une intention d'idempotence.
+            $cleBrute = $entree['cleIdempotence'] ?? null;
+            $cle = $this->uuid($cleBrute);
+
+            if ($cle === null && \is_string($cleBrute) && $cleBrute !== '') {
+                $details[] = [
+                    'cleIdempotence' => $cleBrute,
+                    'statut' => 'rejete',
+                    'codeMotif' => CodeMotifRefus::CleIdempotenceInvalide->value,
+                    'enConflit' => false,
+                    'passage' => null,
+                ];
+
+                continue;
+            }
+
+            $cle ??= Uuid::v4();
 
             $existant = $this->em->getRepository(Passage::class)->findOneBy(['cleIdempotence' => $cle]);
             if ($existant instanceof Passage) {

@@ -2996,3 +2996,116 @@ le dit dans son en-tête ; il sera élargi à tous les prérequis quand les sept
 ⚠ **Et une valeur reste inexpliquée :** la base de préprod portait un défaut comptable sur
 `boutique_stock` qu'**aucune ligne du dépôt n'écrit** — `StockFixtures` crée ce type sans défauts.
 Elle a été remplacée, son origine reste inconnue.
+
+---
+
+## D94 — Un canal non raccordé refuse ; il n'annonce jamais un succès
+
+**Décidé par Maxime le 31/08.** Deux adaptateurs câblés en production rendaient `StatutEnvoi::Transmis`
+sans rien transmettre :
+
+    ChorusProStubAdapter::deposer()  →  Transmis     (dépôt B2G, Chorus Pro)
+    PdpStubAdapter::deposer()        →  Transmis     (e-reporting, réforme française)
+
+L'exploitant voyait ses factures B2G **marquées transmises**, et l'aurait découvert par une relance de
+sa collectivité — au moment et par la voie les plus coûteuses. Côté e-reporting, l'enjeu dépasse une
+facture : une déclaration marquée transmise est **une obligation déclarative que plus personne ne sait
+manquante**.
+
+⚠ **Le dépôt portait déjà les deux traitements opposés du même cas.** `ItboxAdapter` lève une
+exception explicite pour ce motif exact, et le dit dans son en-tête : *« un adaptateur muet est pire
+qu'un adaptateur absent »*. Deux réponses contraires à la même question, à deux modules d'écart.
+
+**La règle, désormais générale :** un port sans implémentation réelle **refuse explicitement**. Il ne
+rend jamais un statut de succès, et son message nomme ce qui **n'a pas eu lieu**.
+
+**Forme retenue :** `ServiceUnavailableHttpException` (503). L'appelant n'a rien fait de mal et n'a
+rien à corriger — un 4xx l'enverrait relire sa facture. Les deux handlers appellent `deposer()` avant
+`persist()`/`flush()`, donc rien n'est écrit : aucun demi-état, et le dépôt reste rejouable tel quel le
+jour du raccordement, sans nouveau numéro (RG-FACT-07 §7).
+
+### Ce que le refus coûte, et comment on le paie
+
+Le test d'API ne peut plus atteindre le rejeu-sans-nouveau-numéro : le canal refuse avant. Cette règle
+a donc changé de niveau — elle est éprouvée contre un **adaptateur d'essai**, au niveau du handler.
+
+**C'est plus juste, pas seulement plus commode :** cet invariant est le NÔTRE. Le vérifier à travers un
+adaptateur qui ment revenait à faire dépendre notre propre règle d'une intégration absente.
+
+⚠ **Et l'ancien test scellait le mensonge.** Il affirmait `statutEnvoi === 'transmis'` — assertion
+**vraie et sans valeur**. Un test qui décrit un défaut le protège : il devient le gardien de ce qu'il
+aurait dû signaler.
+
+### Ce que cette décision ne règle pas
+
+Aucun format de facture électronique n'existe dans le code — mesuré le 31/08 : ni **EN 16931**, ni
+**UBL**, ni **CII**, ni **Peppol**, et « Factur-X » n'apparaît qu'une fois, dans une spécification,
+comme question ouverte. La spécification de facturation le dit elle-même : *« aucune implémentation
+n'est livrée »*. C'était le câblage qui affirmait le contraire ; il ne l'affirme plus.
+
+**Bloquant avant commercialisation**, au même titre que le choix de la PDP.
+
+---
+
+## D95 — `reservation:no-show:basculer` ne démarre pas tant qu'aucun écran n'écrit la présence
+
+**Interdiction, pas précaution.** Mesuré par `allaccess-c2` et `allaccess-b8`, deux mesures
+indépendantes qui se recoupent :
+
+    BasculerNoShowCommand:80   if ($reservation->isPresenceConfirmee())  → Honoree
+                        :82   else                                      → NoShowFacture
+
+    seul écrivain du drapeau, hors entité   EmargerProcessor:63
+    appels du frontal à /emarger            0
+    en base                                 6 réservations · 0 présence confirmée
+
+⚠ **La branche `Honoree` est du code mort depuis l'origine.** Rien n'a jamais pu écrire ce drapeau,
+donc `isPresenceConfirmee()` est faux pour toute réservation ayant jamais existé. Lancer la tâche
+aujourd'hui produirait **six factures d'absence** — sur un créneau réel de vingt personnes toutes
+présentes, elle en produirait vingt.
+
+**C'est le symétrique exact de la garde tarifaire du même jour** (D91), dont le décompte rendait
+toujours zéro et qui refusait donc *tout* vidage de prix. L'une refuse tout, l'autre laisse tout
+passer ; dans les deux cas la protection est écrite, lisible, et **n'a jamais pu s'exercer**.
+
+Et dans les deux cas, ce qui la démasque est le cas qu'on n'a aucune raison d'écrire — ici
+« une personne présente ne doit PAS être facturée ».
+
+**La condition de levée, et elle est vérifiable :** un écran appelle `/emarger`, et une présence
+confirmée existe en base. `allaccess-c2` construit `emarger` et `annuler`, et a inverti son ordre
+pour mettre `emarger` d'abord à cause de ceci.
+
+**Ce qui reste ouvert :** `SourcePresence` déclare `EmargementManuel` **et** `PassageAcces`. Le
+second n'est produit nulle part — le contrôle d'accès ne remonte pas la présence à la réservation.
+Un chemin nommé dans une énumération et jamais construit se lit comme un fait ; c'est la même
+famille que les vingt-trois commandes planifiées que rien ne déclenche.
+
+## D96 — Les trois listes de garde-fous se comptent elles-mêmes
+
+Un contrôle doit être appelé par `bin/garde-fous.sh`, `hooks/pre-commit` **et** `hooks/pre-receive`.
+La règle existait ; rien ne la vérifiait pour les contrôles du frontal.
+
+**Mesure du 31/08 :** cinq contrôles frontaux sur huit n'étaient pas câblés dans `pre-commit`.
+
+    verifier-formats · verifier-imports · verifier-classes
+    verifier-dates-locales · verifier-profil-charge
+
+Rien ne passait — `pre-receive` les porte tous les huit. Ce qui se perdait est le **moment** du
+retour : au push au lieu du commit, donc après plusieurs commits empilés, donc avec la tentation du
+`--no-verify` pour ne pas tout refaire.
+
+**La cause était dans la forme.** Les trois câblés l'étaient par trois copies du même bloc de sept
+lignes ; ajouter un contrôle demandait d'en recopier une quatrième. Une règle recopiée diverge au
+premier correctif — celle-ci a divergé **par omission**, ce qui est plus discret et se voit moins.
+
+**Désormais :** un seul bloc (`lancer_front`) et huit appels d'une ligne, plus un filet de complétude
+dans chacune des trois listes.
+
+⚠ **Le prédicat vise l'APPEL, pas la mention** — sauf dans `pre-receive`, où le hook poussé appelle
+ses contrôles par une boucle et ne contient donc jamais le nom littéral. La différence est voulue et
+écrite sur place.
+
+**Le nom sépare les deux familles du répertoire**, et c'est délibérément lisible :
+
+    verifier-*.mjs · garde-fou-*.mjs   des CONTRÔLES, ils doivent tourner
+    mesurer-*.mjs                      des SONDES, lancées à la main

@@ -51,7 +51,11 @@ const ONGLETS = [
 
 export default function Acces({ etabActif, droits }) {
   const [onglet, setOnglet] = useState('badges')
-  const [supports, setSupports] = useState([])
+  // ⚠ `null` = PAS LU. << Aucun badge sur cet etablissement >> est suivi d'une consigne
+  // (<< Un badge nait de son premier appairage >>) : sur une lecture refusee, on envoie appairer
+  // une carte qui existe deja. L'ecran lui-meme dit, quinze lignes plus bas, que le pire sens
+  // d'erreur ici est d'affirmer qu'une carte n'ouvre rien.
+  const [supports, setSupports] = useState(null)
   const [appairages, setAppairages] = useState([])
   const [droitsAcces, setDroitsAcces] = useState([])
   const [declarations, setDeclarations] = useState([])
@@ -114,7 +118,10 @@ export default function Acces({ etabActif, droits }) {
     // réalité toutes les portes, c'est le pire des deux sens d'erreur.
     setListesPartielles([s, a, d, p].some(partielle))
 
-    if (s.status === 'rejected') setErreur(s.reason?.message || 'Lecture des badges impossible.')
+    if (s.status === 'rejected') {
+      setErreur(s.reason?.message || 'Lecture des badges impossible.')
+      setSupports(null)
+    }
     setChargement(false)
   }, [etabActif])
 
@@ -166,11 +173,11 @@ export default function Acces({ etabActif, droits }) {
 
   const badgesFiltres = useMemo(() => {
     const q = recherche.trim().toLowerCase()
-    if (!q) return supports
-    return supports.filter((s) => (s.identifiant || '').toLowerCase().includes(q))
+    if (!q) return supports || []
+    return (supports || []).filter((s) => (s.identifiant || '').toLowerCase().includes(q))
   }, [supports, recherche])
 
-  const bloques = supports.filter((s) => s.statut === 'bloque').length
+  const bloques = (supports || []).filter((s) => s.statut === 'bloque').length
 
   // Les gestes déclenchés DEPUIS LE TABLEAU : bloquer, débloquer, détacher, révoquer. Il n'y a pas
   // de fenêtre ouverte devant, le bandeau de l'écran est le bon endroit.
@@ -243,7 +250,9 @@ export default function Acces({ etabActif, droits }) {
           <div className="card-h">
             <h3>Badges</h3>
             <span className="sub">
-              {supports.length} support(s){bloques > 0 ? ` · ${bloques} bloqué(s)` : ''}
+              {supports === null
+                ? 'badges non lus'
+                : `${supports.length} support(s)${bloques > 0 ? ` · ${bloques} bloqué(s)` : ''}`}
             </span>
             <div className="actions" style={{ marginLeft: 'auto' }}>
               <input
@@ -335,9 +344,11 @@ export default function Acces({ etabActif, droits }) {
                 {badgesFiltres.length === 0 && (
                   <tr>
                     <td colSpan={5} className="empty">
-                      {supports.length === 0
-                        ? 'Aucun badge sur cet établissement. Un badge naît de son premier appairage : « Appairer une carte » crée le support et lui rattache un droit.'
-                        : `Aucun badge ne porte « ${recherche.trim()} ».`}
+                      {supports === null
+                        ? 'La liste des badges n’a pas pu être lue : ce tableau est vide parce que la lecture a échoué, pas parce que cet établissement n’a pas de badge.'
+                        : supports.length === 0
+                          ? 'Aucun badge sur cet établissement. Un badge naît de son premier appairage : « Appairer une carte » crée le support et lui rattache un droit.'
+                          : `Aucun badge ne porte « ${recherche.trim()} ».`}
                     </td>
                   </tr>
                 )}

@@ -193,7 +193,7 @@ export default function PriseRendezVous({ onReserve }) {
             // D54 : le fait sur la donnee, et la cause probable. << Aucune proposition >> ne dit pas
             // si tout est pris ou si personne n'a la competence exigee -- deux situations qui
             // n'appellent pas la meme action.
-            <div className="sub" style={{ textAlign: 'center', padding: 24 }}>
+            <div className="empty">
               {resultat.ressourcesInterrogees === 0
                 ? 'Aucune ressource ne peut assurer cette prestation : vérifiez la compétence exigée.'
                 : 'Aucun créneau ce jour-là. Essayez une autre date, ou vérifiez les horaires de la ressource.'}

@@ -36,7 +36,10 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   const [verifBillet, setVerifBillet] = useState(false)
   const [choixTarif, setChoixTarif] = useState(null)
   const [choixOptions, setChoixOptions] = useState(null)
-  const [produits, setProduits] = useState([])
+  // ⚠ `null` = PAS LU. << Aucun produit disponible. >> lu par un caissier signifie << il n'y a
+  // rien a vendre >>, et il ferme la caisse ou appelle un responsable. Sur une lecture refusee,
+  // le catalogue existe et n'a simplement pas ete obtenu.
+  const [produits, setProduits] = useState(null)
   const [moyens, setMoyens] = useState([])
   const [pdvs, setPdvs] = useState([])
   const [chargement, setChargement] = useState(true)
@@ -81,7 +84,7 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
         setMoyens(membres(mc).filter((m) => m.actif !== false))
         setPdvs(membres(dc))
       })
-      .catch((e) => !annule && setErreur(e.message))
+      .catch((e) => !annule && (setErreur(e.message), setProduits(null)))
       .finally(() => !annule && setChargement(false))
     return () => {
       annule = true
@@ -131,9 +134,9 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   // fréquence de vente serait plus malin et beaucoup moins prévisible : le caissier apprend la
   // place de ses boutons, il ne la relit pas.
   const produitsAffiches = useMemo(() => {
-    if (favoris.length === 0) return produits
+    if (favoris.length === 0) return produits || []
     const rang = (p) => (favoris.includes(p.id) ? 0 : 1)
-    return [...produits].sort((a, b) => rang(a) - rang(b))
+    return [...(produits || [])].sort((a, b) => rang(a) - rang(b))
   }, [produits, favoris.join(',')])
 
   async function basculerFavori(produitId) {
@@ -829,6 +832,11 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
           <div className="card-b">
             {chargement ? (
               <div className="center" style={{ minHeight: 200 }}><div className="spinner" /></div>
+            ) : produits === null ? (
+              <div className="banner banner-error">
+                Le catalogue n’a pas pu être lu. <b>Ne concluez pas qu’il n’y a rien à vendre</b>&nbsp;:
+                cette liste n’a pas été obtenue. Rechargez avant d’ouvrir la caisse.
+              </div>
             ) : produits.length === 0 ? (
               <div className="empty">Aucun produit disponible.</div>
             ) : (

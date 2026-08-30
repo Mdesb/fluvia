@@ -146,7 +146,7 @@ export default function Disponibilites({ droits = [] }) {
 
       {ressources.length === 0 ? (
         <div className="card">
-          <div className="sub" style={{ textAlign: 'center', padding: 24 }}>
+          <div className="empty">
             Aucune ressource. Un praticien, un terrain ou une salle se déclare comme ressource avant de
             pouvoir recevoir des horaires.
           </div>

@@ -32,6 +32,18 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP="$REPO/app"
 NET="${TOKEN}-net"
 DB="${TOKEN}-db"
+
+# ⚠ LE JETON N'ISOLAIT PAS LE CONTENEUR COMPILE.
+#
+# Reseau, base, nom de conteneur : tout etait separe, sauf `var/cache/test`, partage par toutes les
+# executions et purge par chacune au demarrage. Deux sessions simultanees se detruisaient donc le
+# cache mutuellement, et l'une pouvait lire un conteneur compile a moitie par l'autre.
+#
+# Le 31/08, ca s'est presente comme six tests en 404 sur une route qui existait — donc comme une
+# regression du voisin, pas comme un defaut d'environnement.
+#
+# `App\Kernel::getCacheDir()` lit `TEST_TOKEN` (deja transmis a chaque conteneur) et rend ce chemin.
+CACHE="$APP/var/cache/test-$(printf '%s' "$TOKEN" | tr -cd 'A-Za-z0-9_-')"
 PHP_IMAGE="${PHP_IMAGE:-billetterie-preprod-php}"
 DB_IMAGE="${DB_IMAGE:-mariadb:11.4}"
 DATABASE_URL="mysql://app:app@db:3306/app?serverVersion=11.4.2-MariaDB&charset=utf8mb4"
@@ -152,7 +164,7 @@ run)
     #
     # On purge donc avant chaque execution. Cela coute un demarrage a froid ; c'est le prix d'un
     # verdict auquel on peut se fier, et D20 a deja tranche que la fiabilite passe avant la vitesse.
-    rm -rf "$APP/var/cache/test" 2>/dev/null || true
+    rm -rf "$CACHE" 2>/dev/null || true
 
     # ⚠ LE DEPLOIEMENT RETIRE PHPUNIT, ET LE MESSAGE DE DOCKER NE LE DIT PAS.
     #
@@ -173,6 +185,7 @@ run)
     ;;
 
 down)
+    rm -rf "$CACHE" 2>/dev/null || true
     docker rm -f "$DB" >/dev/null 2>&1 || true
 
     # ⚠ CE `|| true` ANNONCAIT UNE SUPPRESSION QUI N'AVAIT PAS EU LIEU.

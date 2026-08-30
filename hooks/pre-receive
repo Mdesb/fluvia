@@ -256,7 +256,7 @@ while read -r ancien nouveau ref; do
             # le nom COMPLET du fichier dans ce hook. Ecrits sans `.mjs`, les deux controles
             # seraient declares « appeles par aucun hook » et feraient refuser toute poussee. Le
             # filet se refermerait sur ce qu'il protege.
-            for script in verifier-droits.mjs verifier-formats.mjs verifier-imports.mjs verifier-classes.mjs verifier-cache.mjs verifier-profil-charge.mjs garde-fou-ecart.mjs; do
+            for script in verifier-droits.mjs verifier-formats.mjs verifier-imports.mjs verifier-classes.mjs verifier-cache.mjs verifier-dates-locales.mjs verifier-profil-charge.mjs garde-fou-ecart.mjs; do
                 [ -f "$ARBRE/frontend/scripts/$script" ] || continue
                 if docker run --rm --network none \
                         -u "$(id -u):$(id -g)" \
@@ -404,7 +404,15 @@ while read -r ancien nouveau ref; do
     # Le filet couvre aussi les controles du front : ils ne s'appellent pas `garde-fou-*.php`, donc
     # le glob ci-dessous les manquait. Un controle qu'on peut retirer du hook sans que rien ne le
     # dise retombe exactement dans le defaut qu'il corrige.
-    for chemin in "$ARBRE"/bin/garde-fou-*.php "$ARBRE"/frontend/scripts/verifier-*.mjs; do
+    # ⚠ LES DEUX GLOBS DU FRONT, PAS UN SEUL. Le second manquait, donc `garde-fou-ecart.mjs`
+    # — l'ecart client/serveur, le controle le plus souvent contourne — pouvait etre retire de
+    # la liste appelee sans que ce filet ne le dise. Releve le 31/08 en comptant les trois
+    # listes a la main, apres qu'un controle neuf s'est retrouve cable dans deux sur trois.
+    #
+    # Le predicat reste une MENTION du nom, et non `node scripts/<nom>` comme dans les deux
+    # autres listes : ici le hook pousse appelle ses controles par une boucle `for script in`,
+    # donc la forme d'invocation ne contient jamais le nom litteral. La difference est voulue.
+    for chemin in "$ARBRE"/bin/garde-fou-*.php "$ARBRE"/frontend/scripts/verifier-*.mjs "$ARBRE"/frontend/scripts/garde-fou-*.mjs; do
         [ -f "$chemin" ] || continue
         nom="$(basename "$chemin")"
 
