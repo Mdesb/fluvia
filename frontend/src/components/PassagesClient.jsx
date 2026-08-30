@@ -136,7 +136,7 @@ export default function PassagesClient({ clientId, droits = [] }) {
                 {passages.map((p) => (
                   <tr key={p.id}>
                     <td>{dateHeure(p.horodatage)}</td>
-                    <td>{p.espace?.libelle || '—'}</td>
+                    <td>{p.espace?.libelle || 'Contrôlé à la main'}</td>
                     <td>{p.equipement?.libelle || <span className="mut">—</span>}</td>
                     <td>
                       <span className={`badge ${RESULTAT_CLS[p.resultat] || 'mut'}`}>
