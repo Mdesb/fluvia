@@ -272,6 +272,21 @@ export default function PublicApp() {
         />
       ) : route.vue === 'compte' ? (
         <MonCompte connecte={connecte} onConnexionChange={setConnecte} onNaviguer={onNaviguer} />
+      ) : erreur ? (
+        // ⚠ LE REPLI RENDAIT LA BOUTIQUE SANS LA GARDE D'ERREUR, ET C'EST UNE PAGE PUBLIQUE.
+        //
+        // La branche `vitrine` teste `erreur` avant d'afficher le catalogue ; celle-ci, non. Sur une
+        // lecture echouee, `catalogue` vaut `null`, donc `produits` vaut `[]`, donc la page annonce
+        // au client << Aucun billet en vente. Cette boutique ne propose aucun billet pour le
+        // moment. >> C'est le mensonge du zero sur la surface la plus exposee du produit : un
+        // acheteur s'en va, et rien n'aura signale de panne.
+        //
+        // ⚠ CETTE BRANCHE EST INATTEIGNABLE AUJOURD'HUI, et je le dis plutot que de laisser croire
+        // a une correction : les six vues (`vitrine`, `produit`, `panier`, `tunnel`, `legal`,
+        // `compte`) sont toutes traitees au-dessus, et ce sont les seules que `onNaviguer` emette.
+        // C'est une prevention, pas un correctif -- le jour ou quelqu'un ajoute une vue, il herite
+        // du bon comportement au lieu d'un mensonge silencieux.
+        <Erreur message={erreur} onReessayer={() => chargerVitrine(vitrineId)} />
       ) : (
         <Vitrine catalogue={catalogue} langue={langue} onNaviguer={onNaviguer} />
       )}
