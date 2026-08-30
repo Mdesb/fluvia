@@ -40,7 +40,7 @@
 // La substitution est faite par `infra/deploy-preprod.sh`, qui VERIFIE ensuite que le jeton a
 // disparu et que le fichier servi porte bien le commit courant. Sans cette verification, une
 // substitution sautee rendrait la constante -- et le defaut -- sans que rien ne le dise.
-const VERSION = 'fluvia-__JETON_QUI_NE_SERA_PAS_SUBSTITUE__'
+const VERSION = 'fluvia-__COMMIT__'
 const COQUILLE = '/index.html'
 
 self.addEventListener('install', (evenement) => {
