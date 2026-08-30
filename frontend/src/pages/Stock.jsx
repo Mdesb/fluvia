@@ -48,7 +48,13 @@ export default function Stock({ etabActif, droits }) {
   // exactement quand le filet n'etait pas pose. On ne rassure pas au nom d'un controle qui n'a pas eu lieu.
   const [alertes, setAlertes] = useState(null)
   const [mouvements, setMouvements] = useState([])
+  // ⚠ `null` DISAIT DEUX CHOSES : << aucun seuil configure >> ET << pas lu >>. Le second etat a
+  // son propre drapeau, parce que le bloc en tire une AFFIRMATION en rouge : << aucun ecart
+  // d'inventaire n'est considere comme significatif, la validation par un responsable ne se
+  // declenchera donc jamais >>. Dite sur une lecture echouee, elle envoie regler un seuil qui est
+  // peut-etre deja en place -- ou pire, rassure sur un controle qu'on croit absent.
   const [parametrage, setParametrage] = useState(null)
+  const [parametrageLu, setParametrageLu] = useState(false)
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
@@ -86,7 +92,9 @@ export default function Stock({ etabActif, droits }) {
     // `catch(() => setAlertes([]))` transformait l'echec en << rien a recommander >>. La tolerance
     // reste -- une alerte manquante ne doit pas emporter l'ecran -- mais l'echec est RETENU.
     api.stockAlertesReappro().then((r) => setAlertes(Array.isArray(r) ? r : membres(r))).catch(() => setAlertes(null))
-    api.stockParametrage().then((r) => setParametrage(membres(r)[0] || null)).catch(() => setParametrage(null))
+    api.stockParametrage()
+      .then((r) => { setParametrage(membres(r)[0] || null); setParametrageLu(true) })
+      .catch(() => { setParametrage(null); setParametrageLu(false) })
   }, [etabActif])
 
   useEffect(() => {
@@ -174,7 +182,7 @@ export default function Stock({ etabActif, droits }) {
 
           {peutGererArticle && <ArticlesEdition onChange={recharger} />}
 
-          <RegleEcart parametrage={parametrage} droits={droits} />
+          <RegleEcart parametrage={parametrage} lu={parametrageLu} droits={droits} />
 
           <InventaireStock
             articles={articles || []}
@@ -769,7 +777,7 @@ function RattachementModal({ article, onClose, onFait, onErreur }) {
 //
 // Cet encadré existe pour que ça se voie. Il ne réclame rien à l'utilisateur — il lui dit dans quel
 // état est son garde-fou.
-function RegleEcart({ parametrage, droits }) {
+function RegleEcart({ parametrage, lu, droits }) {
   const pourcentage = parametrage?.seuilEcartSignificatifPourcentage
   const montant = parametrage?.seuilEcartSignificatifMontant
   const regle = pourcentage != null || montant != null
@@ -782,7 +790,13 @@ function RegleEcart({ parametrage, droits }) {
         <span className="sub">qui peut valider un écart, et à partir de quand</span>
       </div>
       <div className="card-b">
-        {regle ? (
+        {!lu ? (
+          <div className="banner banner-warn">
+            Le paramétrage des seuils n’a pas pu être lu. <b>N’en concluez pas qu’aucun seuil n’est
+            réglé</b>&nbsp;: cet écran ne sait pas, pour l’instant, à partir de quel écart une
+            validation est exigée.
+          </div>
+        ) : regle ? (
           <>
             <p style={{ marginTop: 0 }}>
               Un écart d'inventaire est <b>significatif</b>, et demande alors la validation d'un

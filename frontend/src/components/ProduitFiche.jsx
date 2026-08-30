@@ -192,6 +192,8 @@ export default function ProduitFiche({
   const [valeurs, setValeurs] = useState({}) // groupeId -> valeurs
   // Le produit n'est pas commercialisable sur l'établissement actif : le guichet ne l'aurait pas.
   const [horsSite, setHorsSite] = useState(false)
+  // ⚠ TROIS ETATS, PAS DEUX : l'echec de lecture des options n'est pas une reponse.
+  const [optionsIllisibles, setOptionsIllisibles] = useState(null)
   const [chargement, setChargement] = useState(false)
   const [erreur, setErreur] = useState(null)
 
@@ -214,6 +216,7 @@ export default function ProduitFiche({
     setLiaisons([])
     setValeurs({})
     setHorsSite(false)
+    setOptionsIllisibles(null)
     setErreur(null)
     setChargement(true)
     ;(async () => {
@@ -238,7 +241,10 @@ export default function ProduitFiche({
         // l'appartenance, et sa réponse est une information à afficher telle quelle.
         const [d, dispo, comps] = await Promise.all([
           api.produit(produitId),
-          api.optionsDisponibles(produitId).catch(() => 'hors-site'),
+          // ⚠ ON RETIENT LE STATUT AU LIEU DE CONCLURE. `catch(() => 'hors-site')` transformait
+          // N'IMPORTE QUEL echec -- 500, coupure reseau, refus de droit -- en une affirmation sur
+          // le perimetre du produit. Seul un 404 dit quelque chose ici, et encore : voir plus bas.
+          api.optionsDisponibles(produitId).catch((e) => ({ __echec: true, statut: e.status || null })),
           // Un echec ici ne doit pas priver de la fiche : on perd la liste des complements, pas le
           // produit. Le tableau vide est distinct de « aucun complement » seulement dans ce commentaire,
           // et c'est assumé — l'ecran ne promet rien sur la disponibilite de ce bloc.
@@ -246,10 +252,30 @@ export default function ProduitFiche({
         ])
         if (annule) return
         setDetail(d)
-        setHorsSite(dispo === 'hors-site')
         setComplements(comps)
 
-        const groupes = dispo === 'hors-site' ? [] : (dispo?.groupes || [])
+        // ⚠ << AUCUN SITE >> VEUT DIRE << TOUS >>, ET L'ECRAN L'AFFIRMAIT A L'ENVERS.
+        //
+        // `PerimetreProduitExtension` traite un produit sans etablissement comme le SOCLE PARTAGE
+        // -- son en-tete le dit en toutes lettres, et le formulaire de cette fiche aussi :
+        // << Aucun site coche signifie qu'il reste visible partout : c'est la liste qui restreint,
+        // pas l'inverse. >> L'ecran enoncait donc la regle a un endroit et la contredisait a deux
+        // autres.
+        //
+        // Mesure du 31/08 sur GI-ONE : les HUIT produits publies ont `etablissements: []`, et
+        // `GET /produits/{id}/options-disponibles` rend 404 << Produit introuvable >> pour chacun
+        // -- exactement comme pour un identifiant invente (temoin verifie). Le frontal ne peut donc
+        // pas distinguer << hors de mon perimetre >> de << n'existe pas >> de << cette route ignore
+        // la regle du socle >>. Il n'affirme plus rien dans ce cas.
+        const echec = dispo && dispo.__echec === true
+        const socle = ((d?.etablissements || []).length === 0)
+        // On n'affirme le hors-perimetre que si le produit DECLARE des sites et que le serveur a
+        // repondu 404. Sinon on dit qu'on n'a pas pu lire, ce qui est le fait.
+        const vraimentHorsSite = echec && dispo.statut === 404 && !socle
+        setHorsSite(vraimentHorsSite)
+        setOptionsIllisibles(echec && !vraimentHorsSite ? { statut: dispo.statut, socle } : null)
+
+        const groupes = echec ? [] : (dispo?.groupes || [])
         setLiaisons(
           groupes.map((g) => ({
             id: g.optionProduit,
@@ -805,9 +831,23 @@ export default function ProduitFiche({
           <div className="center" style={{ minHeight: 60 }}><div className="spinner" /></div>
         ) : horsSite ? (
           // D54 : d'abord le fait sur la donnée, jamais un vide muet ni un rouge sans cause.
-          <div className="sub" style={{ textAlign: 'center', padding: '10px 0' }}>
+          <div className="empty">
             Ce produit n'est pas commercialisé sur l'établissement actif : le guichet ne l'affichera
             pas ici, options comprises.
+          </div>
+        ) : optionsIllisibles ? (
+          <div className="banner banner-warn">
+            {optionsIllisibles.socle ? (
+              <>
+                Les options n’ont pas pu être lues pour ce produit. <b>N’en concluez pas qu’il n’est
+                pas vendable ici</b>&nbsp;: il n’est rattaché à aucun site, ce qui signifie
+                <b> visible partout</b> — le catalogue et la caisse de cet établissement l’affichent.
+                C’est cette lecture-là qui a échoué, pas la vente.
+              </>
+            ) : (
+              <>Les options de ce produit n’ont pas pu être lues&nbsp;: ce cadre est vide parce que
+                la lecture a échoué, pas parce qu’il n’y a pas d’option.</>
+            )}
           </div>
         ) : liaisons.length === 0 ? (
           <div className="empty">Aucune option rattachée : le produit se vend tel quel.</div>
@@ -817,7 +857,14 @@ export default function ProduitFiche({
       </Section>
 
       <Section titre="Diffusion">
-        <Ligne libelle="Sites de commercialisation" valeur={(p.etablissements || []).length || '—'} />
+        {/* ⚠ << — >> SE LIT << AUCUN >>, ET LA VALEUR SIGNIFIE << TOUS >>. C'est la liste qui
+            restreint : un produit sans site coche est du socle, partage par tous les
+            etablissements. Afficher un tiret ici faisait croire a un rattachement manquant, et
+            invitait a << reparer >> ce qui n'etait pas casse. */}
+        <Ligne
+          libelle="Sites de commercialisation"
+          valeur={(p.etablissements || []).length || 'Tous — aucun site coché, donc socle partagé'}
+        />
         <Ligne libelle="Catégories" valeur={(p.categories || []).length || '—'} />
         <Ligne
           libelle="Durée de validité"
