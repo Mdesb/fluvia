@@ -451,3 +451,35 @@ déploiement de l'ancrage, la cloche montrera quatre lignes sans référence et 
 échantillon qui donne à croire que la fonction marche une fois sur cinq. Elles seront marquées lues
 dès que 73 aura posé la sienne — pas avant, pour ne pas vider la cloche au moment où il veut la
 montrer.
+
+### La cinquième ligne, vue à l'écran — et un nettoyage annulé faute de raison
+
+73 a posé la notification au nouveau format. Mesurée **sur données réelles**, à travers le composant,
+et non plus par injection :
+
+    « Un paiement a échoué — ECH-2026-0147 »   36 car.
+      titre 148 px sur 3 lignes · heure « il y a 13 min » 85 px, entière · pastille 3 = 3 lignes
+
+C'est le pire cas rencontré jusqu'ici, et pas celui que j'avais simulé : « il y a 13 min » fait
+**85 px** là où « il y a 4 h » en faisait 59. Titre long *et* heure longue tombaient ensemble, et
+c'est exactement la combinaison que l'ancien `flex` aurait écrasée.
+
+**Les deux moitiés sont désormais prouvées séparément** : la chaîne `payment.failed` → règle → titre
+par le test de 73, qui échoue quand il neutralise l'ancrage ; l'affichage par cette mesure-ci. Aucune
+ne traverse le domaine de l'autre — la ligne de démonstration est posée en base et contourne le bus.
+
+**LE NETTOYAGE QUE J'AVAIS ANNONCÉ N'AURA PAS LIEU, ET C'EST LA MESURE QUI L'A DÉCIDÉ.** Je voulais
+marquer mes lignes `demo.` comme lues pour qu'on ne lise pas « l'ancrage marche une fois sur cinq ».
+En vérifiant, la question se réduit à une seule : *existe-t-il une notification de paiement sans
+référence ?* Réponse : une seule, `demo.payment`, **et elle est déjà lue** — donc absente de la
+cloche. Les deux autres non lues sont `demo.treasury` et `demo.expense`, deux familles que 73 a
+délibérément laissées sans ancre parce qu'elles sont uniques par nature. Leur absence de référence
+est donc **juste**, pas trompeuse. Rien à nettoyer : le risque que j'avais décrit n'existe pas dans
+les données.
+
+⚠ **Et la cloche m'a menti une fois de plus, par mon propre fait.** Ma première lecture donnait deux
+lignes et une pastille à 2, quand l'API en rendait trois : j'ai failli écrire que la ligne de 73
+n'était pas arrivée. La cause est mon propre code — le battement se met en pause onglet caché, et le
+panneau montrait la dernière lecture visible. Ouvrir le panneau ne relit pas. **Un composant qui
+économise le réseau devient un instrument périmé dès qu'on le mesure sans le remonter** ; la mesure
+n'a valu qu'après un rechargement complet.
