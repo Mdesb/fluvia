@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Modal from '../components/Modal.jsx'
+import { jourLocal } from '../components/Liste.jsx'
 import Tabs from '../components/Tabs.jsx'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
@@ -18,7 +19,6 @@ import {
   duree,
   signeDeVie,
 } from '../api/acces.js'
-import { jourLocal } from '../components/Liste.jsx'
 
 // TOPOLOGIE & PASSAGES — CONFIGURER LE CONTRÔLE D'ACCÈS, ET RELIRE CE QU'IL A FAIT.
 //
@@ -1735,7 +1735,7 @@ function JournalPassages({ espaces, equipements, etabActif, cible }) {
                 {lignes.map((p) => (
                   <tr key={p.id}>
                     <td>{horodate(p.horodatage)}</td>
-                    <td>{p.espace?.libelle || '—'}</td>
+                    <td>{p.espace?.libelle || 'Contrôlé à la main'}</td>
                     <td>
                       {p.equipement?.libelle || <span className="mut">sans équipement</span>}
                       {p.controleur?.libelle ? <span className="mut"> · {p.controleur.libelle}</span> : null}
@@ -1821,6 +1821,11 @@ function telechargerCsv(passages, espaces, equipements) {
   const url = URL.createObjectURL(new Blob([contenu], { type: 'text/csv;charset=utf-8' }))
   const a = document.createElement('a')
   a.href = url
+  // ⚠ `toISOString().slice(0, 10)` REND DE L'UTC, DONC LA VEILLE ENTRE MINUIT ET 2 H À PARIS L'ÉTÉ.
+  // Sur un nom de fichier, ce n'est pas anodin : l'exploitant qui exporte à 00 h 30 obtient un
+  // fichier daté de la veille, à côté de celui qu'il a peut-être déjà exporté ce jour-là. Deux
+  // fichiers homonymes, ou un nom qui ne correspond pas aux lignes qu'il contient.
+  // `jourLocal()` rend le jour de CELUI QUI REGARDE — garde-fou n°31.
   a.download = `passages-${jourLocal()}.csv`
   document.body.appendChild(a)
   a.click()

@@ -94,6 +94,23 @@ final class StockFixtures extends Fixture implements DependentFixtureInterface
             ->setCode(self::TYPE_BOUTIQUE)
             ->setLibelle('Boutique (marchandise)')
             ->setFacettes([TypeProduit::FACETTE_STOCK, TypeProduit::FACETTE_CONSOMMATEUR]);
+
+        // ⚠ UNE MARCHANDISE NE S'IMPUTE PAS EN BILLETTERIE.
+        //
+        // Ce type n'avait aucun defaut declare ici, et la base de preprod en portait un —
+        // « Billetterie (compte 7061) » — qu'aucune ligne du depot n'ecrit. Un mug vendu tombait
+        // donc sur le compte de la billetterie. L'application ne le signale pas : l'ecran accepte,
+        // la vente passe, l'ecriture part, et l'erreur se decouvre a l'export FEC.
+        //
+        // La categorie est designee par son LIBELLE et jamais par un identifiant (D51) : « Boutique »
+        // fait partie de la nomenclature socle posee par `AccountingCategorySeeder`, donc elle existe
+        // chez tout le monde. Le numero de compte, lui, n'est PAS dans le libelle — il vit dans
+        // `CompteComptable`, et le rattachement est un choix d'exploitant porte par
+        // `MappingComptable`. Un libelle qui nomme un compte mentirait chez le premier client qui
+        // impute autrement.
+        //
+        // Arbitre par Maxime le 31/08.
+        $typeBoutique->setDefauts(['categories' => ['comptable' => 'Boutique']]);
         $manager->persist($typeBoutique);
 
         $etabA = $manager->getRepository(Etablissement::class)->findOneBy(['nom' => SocleFixtures::ETAB_A_NOM]);

@@ -299,7 +299,6 @@ export const api = {
   // Le détail ajoute le groupe `produit:compta` (compte, TVA, règle PCA), absent de la collection.
   produit: (id) => request(`/api/produits/${id}`),
 
-  // @route-a-venir: ouverte par allaccess-8e dans le meme lot, contrat convenu et arrete ensemble.
   // Controler un billet SANS materiel : ni equipement, ni espace, ni porte. C'est l'outil des sites
   // sans tourniquet, ou un billet vendu est aujourd'hui invendable en pratique faute de pouvoir le
   // controler a l'entree.
