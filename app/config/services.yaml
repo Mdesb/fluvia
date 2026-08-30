@@ -55,7 +55,21 @@ services:
     # relève d'une coordination M2/M4 hors périmètre de ce lot (priorité « zéro régression M2 »).
     App\Vente\Port\ClientM4Interface: '@App\Vente\Port\ClientM4Stub'
     # Appairage/invalidation des supports d'accès (frontière module Accès L3, US-L2-08/09).
-    App\Vente\Port\AppairageAccesInterface: '@App\Vente\Port\AppairageAccesStub'
+    # ── LE PONT VENTE → CONTROLE D'ACCES ───────────────────────────────────────────────────────
+    #
+    # Jusqu'au 30/08 ce port pointait sur `App\Vente\Port\AppairageAccesStub`, qui bascule un statut
+    # sur le BilletSupport et ne parle JAMAIS au module Acces. Mesure : 5 billets vendus, 5 supports
+    # d'acces, AUCUN croisement — le tourniquet repondait « Support inconnu » a un code dont il
+    # savait pourtant verifier la signature.
+    #
+    # `ValiderVenteService:149` appelait deja `appairer()` a chaque vente. Rien n'etait a ecrire cote
+    # vente : il manquait l'implementation du port, c'est-a-dire ce que le stub annoncait tenir en
+    # attendant la couche L3.
+    #
+    # ⚠ L'adaptateur ne projette QUE si le produit declare une zone d'acces. Un droit sans espace
+    # ouvre TOUT (`DroitAcces::ouvre()`), et 0 produit sur 17 en declarait une : projeter sans
+    # condition aurait fait de chaque billet vendu un passe-partout des 8 espaces.
+    App\Vente\Port\AppairageAccesInterface: '@App\Acces\Adapter\SaleAccessPairingAdapter'
 
     # ED-4 -- le seul chemin par lequel un agent de l editeur lit l etablissement d un client.
     # Le defaut n accorde RIEN : le socle doit tourner sans le module d abonnement, et le repli sur
