@@ -185,6 +185,19 @@ final class LecteurMultizoneTest extends AccesApiTestCase
 
         $droit = $em->getRepository(DroitAcces::class)->find($this->idDroit());
         self::assertInstanceOf(DroitAcces::class, $droit);
+
+        // ⚠ « LIMITER À UNE AUTRE ZONE » DOIT REMPLACER, PAS AJOUTER — ET CE N'ÉTAIT PAS LE CAS.
+        //
+        // Tant que le jeu de données ne déclarait aucune zone, `add` suffisait : le droit passait de
+        // « aucune » à « une autre », donc de « ouvre tout » à « ouvre ailleurs ». Depuis D87 la
+        // fixture déclare la zone de l'équipement — `add` donnait alors un droit qui ouvre LES DEUX,
+        // et le test attendait un refus en obtenant une validation.
+        //
+        // Le nom promettait « limiter » ; le code ajoutait. La différence ne se voyait que parce
+        // qu'une donnée voisine était vide.
+        foreach ($droit->getAuthorisedSpaces()->toArray() as $dejaOuvert) {
+            $droit->removeAuthorisedSpace($dejaOuvert);
+        }
         $droit->addAuthorisedSpace($autre);
 
         $em->flush();
