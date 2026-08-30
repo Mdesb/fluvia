@@ -6,6 +6,11 @@
 const TOKEN_KEY = 'billetterie.token'
 const ETAB_KEY = 'billetterie.etablissement'
 
+// ⚠ `sessionStorage`, PAS `localStorage` — voir `supportStore` ci-dessous. Le nom diffère du
+// préfixe des deux autres clés pour qu'une inspection du stockage distingue d'un coup d'œil ce qui
+// est partagé entre onglets de ce qui ne l'est pas.
+const SUPPORT_KEY = 'fluvia.support.onglet'
+
 let onUnauthorized = null
 export function setUnauthorizedHandler(fn) {
   onUnauthorized = fn
@@ -17,8 +22,59 @@ export const tokenStore = {
   clear: () => localStorage.removeItem(TOKEN_KEY),
 }
 
+// ── MODE SUPPORT : LE CONTEXTE D'UN SEUL ONGLET ──────────────────────────────────────────────
+//
+// Un agent de l'éditeur bascule chez un client ; Maxime a choisi que cela ouvre un NOUVEL ONGLET,
+// pour pouvoir répondre au ticket dans le premier pendant qu'on regarde chez le client dans le
+// second.
+//
+// ⚠ ET C'EST EXACTEMENT LÀ QUE `localStorage` PIÈGE : il est PARTAGÉ entre tous les onglets d'une
+// même origine. Poser l'établissement du client dans `localStorage` aurait changé l'établissement
+// actif de l'onglet principal — l'agent y serait revenu, se serait retrouvé chez le client sans
+// l'avoir demandé, sans bandeau, sans rien qui le dise. Il aurait encaissé chez quelqu'un d'autre.
+//
+// `sessionStorage` est PAR ONGLET. C'est la seule propriété qui rend le choix de Maxime tenable.
+//
+// On y garde le nom en plus de l'identifiant : le bandeau doit pouvoir se dessiner AVANT que la
+// liste des établissements soit revenue du serveur. Un bandeau qui apparaît une seconde après le
+// reste de l'écran est un bandeau qu'on peut ne pas voir.
+export const supportStore = {
+  get: () => {
+    try {
+      const brut = sessionStorage.getItem(SUPPORT_KEY)
+      return brut ? JSON.parse(brut) : null
+    } catch {
+      // Onglet privé, stockage refusé, JSON corrompu : pas de mode support, et l'onglet se comporte
+      // comme un onglet ordinaire. Le repli d'un mécanisme d'accès est de ne pas ouvrir.
+      return null
+    }
+  },
+  set: (contexte) => {
+    try {
+      sessionStorage.setItem(SUPPORT_KEY, JSON.stringify(contexte))
+    } catch {
+      // Ignoré volontairement : voir ci-dessus.
+    }
+  },
+  clear: () => {
+    try {
+      sessionStorage.removeItem(SUPPORT_KEY)
+    } catch {
+      // Ignoré volontairement : voir ci-dessus.
+    }
+  },
+}
+
 export const etablissementStore = {
-  get: () => localStorage.getItem(ETAB_KEY),
+  // ⚠ LE CONTEXTE DE SUPPORT L'EMPORTE, et c'est ce qui rend le mode support automatique : toute
+  // requête de cet onglet part avec l'établissement du client, sans qu'aucun écran n'ait à le
+  // savoir ni à être modifié.
+  get: () => supportStore.get()?.etablissementId || localStorage.getItem(ETAB_KEY),
+
+  // ⚠ `set` ET `clear` NE TOUCHENT PAS AU CONTEXTE DE SUPPORT, DÉLIBÉRÉMENT. Un onglet de support
+  // est épinglé sur son client, et on en sort par le bandeau — un geste explicite. Si le sélecteur
+  // d'établissement pouvait écrire ici, l'onglet dériverait hors du client pendant que le bandeau
+  // continuerait de le nommer : l'écran dirait une chose, l'en-tête une autre.
   set: (id) => localStorage.setItem(ETAB_KEY, id),
   clear: () => localStorage.removeItem(ETAB_KEY),
 }
@@ -1612,6 +1668,27 @@ export const api = {
   // Fiche client de l'éditeur (ED-6). La collection ne rend QUE les clients du CRM de l'éditeur :
   // les clients finaux des exploitants vivent dans la même table et n'ont rien à faire ici.
   editorCustomers: () => request('/api/editor/customers'),
+
+  // ── ACCES D'ASSISTANCE ────────────────────────────────────────────────────────────────────────
+  //
+  // Les accès encore ouverts, tous agents confondus. Sert au bandeau — un accès qu'on ne voit nulle
+  // part est un accès que personne ne referme.
+  editorSupportAccesses: () => request('/api/editor/support-accesses'),
+
+  // Ouvrir un accès. Corps : { granteeId, establishmentId, reason, hours? }
+  //
+  // ⚠ `input: false` côté serveur : le processeur lit le corps lui-même, donc JSON simple et
+  // surtout PAS de `ld: true` — une écriture en ld+json sur une opération sans input part et ne
+  // pose rien, sans erreur.
+  //
+  // `hours` est plafonné à 8 par le serveur, et vaut 2 par défaut. Le motif est obligatoire et
+  // sera lu par le client s'il le demande : ce n'est pas un champ de formulaire, c'est la trace.
+  ouvrirAccesAssistance: (corps) =>
+    request('/api/editor/support-accesses', { method: 'POST', body: corps }),
+
+  // Refermer avant le terme. L'entrée reste : c'est l'historique de qui a pu voir quoi.
+  revoquerAccesAssistance: (id) =>
+    request(`/api/editor/support-accesses/${id}/revoke`, { method: 'POST', body: {} }),
   editorCustomer: (id) => request(`/api/editor/customers/${id}`),
 
   // Facturation des abonnements (ED-7). La collection remonte en tête ce qui n'a PAS été facturé :

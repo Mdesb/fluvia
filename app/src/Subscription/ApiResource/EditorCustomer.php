@@ -49,7 +49,11 @@ final class EditorCustomer
     /**
      * Ses abonnements, du plus récent au plus ancien.
      *
-     * @var list<array{id: string, planLabel: string, status: string, monthlyPriceCents: int, startedAt: ?string, provisioningStatus: ?string, provisioningFailure: ?string, establishmentName: ?string}>
+     * `establishmentId` sert à ouvrir un accès d'assistance depuis cette fiche : c'est la seule
+     * source qui le porte, et sans lui l'écran ne pourrait désigner l'établissement que par son nom,
+     * qui n'est pas unique.
+     *
+     * @var list<array{id: string, planLabel: string, status: string, monthlyPriceCents: ?int, startedAt: ?string, provisioningStatus: ?string, provisioningFailure: ?string, establishmentName: ?string, establishmentId: ?string}>
      */
     public array $subscriptions = [];
 

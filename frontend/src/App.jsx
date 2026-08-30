@@ -5,6 +5,7 @@ import {
   membres,
   tokenStore,
   etablissementStore,
+  supportStore,
   setUnauthorizedHandler,
 } from './api/client.js'
 import { aLeDroit } from './api/droits.js'
@@ -12,6 +13,7 @@ import Login from './pages/Login.jsx'
 import AppShell, { ongletsConnus } from './components/AppShell.jsx'
 import FrontiereErreur from './components/FrontiereErreur.jsx'
 import Dashboard from './pages/Dashboard.jsx'
+import BandeauSupport from './components/BandeauSupport.jsx'
 import ControleBillet from './components/ControleBillet.jsx'
 import Caisse from './pages/Caisse.jsx'
 import Catalogue from './pages/Catalogue.jsx'
@@ -71,6 +73,43 @@ export function estAdministrateur(me) {
   // puissant du logiciel — il n'atterrissait pas sur son tableau de bord et n'en voyait pas l'entree.
   return aLeDroit(droits, 'securite.gerer') || aLeDroit(droits, 'organisation.gerer')
 }
+
+// ⚠ LE MODE SUPPORT SE DECLARE AVANT LE PREMIER RENDU, PAS DANS UN `useEffect`.
+//
+// `etabActif` est initialise depuis `etablissementStore.get()` a la toute premiere ligne du
+// composant. Poser le contexte de support dans un effet l'aurait fait arriver APRES : le premier
+// rendu serait parti sur l'etablissement de l'agent, les premieres requetes aussi, et l'onglet
+// aurait affiche une fraction de seconde les donnees du mauvais etablissement avant de basculer.
+// Sur un ecran de caisse, cette fraction de seconde suffit a cliquer.
+//
+// D'ou une lecture au chargement du module, une seule fois, avant tout React.
+//
+// ⚠ ET L'URL EST NETTOYEE DANS LA FOULEE. Sans cela, `/?support=<id>` reste dans la barre : le lien
+// se copie, s'envoie, se met en favori — et rouvre un onglet qui se croit en mode support alors
+// qu'aucun acces n'a ete ouvert. Le bandeau parlerait dans le vide, et pire, il aurait l'air
+// legitime. Ce qui fait foi est l'acces cote serveur ; ce parametre n'est qu'un passage.
+function amorcerModeSupport() {
+  try {
+    const params = new URLSearchParams(window.location.search)
+    const cible = params.get('support')
+    if (!cible) return
+
+    supportStore.set({ etablissementId: cible })
+
+    params.delete('support')
+    const reste = params.toString()
+    window.history.replaceState(
+      window.history.state,
+      '',
+      window.location.pathname + (reste ? `?${reste}` : '') + window.location.hash,
+    )
+  } catch {
+    // URL illisible ou stockage refuse : l'onglet se comporte comme un onglet ordinaire. Le repli
+    // d'un mecanisme d'acces est de ne pas ouvrir.
+  }
+}
+
+amorcerModeSupport()
 
 export default function App() {
   const [booting, setBooting] = useState(true)
@@ -319,6 +358,10 @@ export default function App() {
   const capacites = me?.capacitesActives || []
   const droits = me?.droits || []
   const estAdmin = estAdministrateur(me)
+  // Lu a chaque rendu et non mis en etat : `BandeauSupport` efface le contexte quand le serveur a
+  // referme l'acces, et cette lecture-ci doit suivre. Un etat local aurait garde « en mode
+  // support » apres la fin, donc un selecteur toujours cache dans un onglet redevenu ordinaire.
+  const enModeSupport = Boolean(supportStore.get())
 
   return (
     <AppShell
@@ -332,6 +375,15 @@ export default function App() {
       capacites={capacites}
       droits={droits}
       estAdmin={estAdmin}
+      epingle={enModeSupport}
+      bandeau={
+        enModeSupport ? (
+          <BandeauSupport
+            etablissements={etablissements}
+            onFin={() => setEtabActif(etablissementStore.get() || '')}
+          />
+        ) : null
+      }
     >
       {/* Une seule frontiere de suspension pour tout le contenu : les ecrans differes s'y
           rattachent, et un ecran deja charge ne la declenche pas. */}
