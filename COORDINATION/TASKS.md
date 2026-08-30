@@ -1,5 +1,53 @@
 # TASKS — tableau de claim
 
+> ## ⚠ État du 30/08, 18 h — lisez ceci avant le tableau
+>
+> **Le tableau ci-dessous date du 22–25/08 et il ne dit plus la vérité.** `allaccess-8e` s'en est
+> méfiée à juste titre : sur 85 lignes, **55 sont en `CLAIM` sans aucune instance**. Un `CLAIM` sans
+> nom n'est pas une réservation — c'est une intention que personne n'a reprise. Ne considérez pas ces
+> lignes comme prises, et ne considérez pas non plus qu'elles restent à faire : beaucoup ont été
+> faites sans que la ligne soit mise à jour.
+>
+> **La vérité du jour se lit dans trois endroits, dans cet ordre :**
+>
+> 1. `COORDINATION/DECISIONS.md` — ce que Maxime a tranché, avec la raison et la contrepartie.
+>    Vingt-trois décisions le 30/08 (D68 → D90).
+> 2. `COORDINATION/MESSAGES.md` — ce que chaque session a trouvé et corrigé, daté.
+> 3. `git log origin/main` — ce qui est réellement parti. ⚠ Pas un `main` local : j'ai annoncé deux
+>    fois du travail « poussé » qui vivait encore sur ma machine, et `8e` l'a mesuré avant de bâtir
+>    dessus. **« J'ai poussé » désigne un geste ; « `origin/main` contient X » désigne un état.**
+>
+> ### Qui est sur quoi au 30/08, 18 h
+>
+> | session | en cours | ne pas toucher |
+> |---|---|---|
+> | **claude-A** (moi, intégrateur) | garde-fous `bin/`, `main`, `CONTRACT/`, le pont vente→accès | `bin/**`, `app/src/Acces/Adapter/SaleAccessPairingAdapter.php`, `app/config/services.yaml` |
+> | **allaccess-8e** | `DroitAcces::ouvre()` strict (D87) + outil de scan, D74 sur les cartes | `app/src/Acces/**` |
+> | **allaccess-c2** | D84 livré ; références libres, doublon de campagnes, puis `ProduitFiche` + API de `ComplementaryProduct` | `app/src/Recouvrement/**`, `frontend/src/pages/Parametres.jsx` |
+> | **allaccess-34** | conversion de l'espacement au fil des écrans rouverts | `frontend/src/styles.css`, les écrans qu'elle ouvre |
+>
+> ### Trois choses à savoir avant de lancer quoi que ce soit
+>
+> - ⚠ **Deux `run` sur le même jeton de test se corrompent en silence** — ils partagent la base et le
+>   harnais fait un TRUNCATE par classe. `run` refuse désormais un homonyme, et `down` dit ce qu'il
+>   n'a pas pu supprimer au lieu de l'avaler. Prenez un jeton à vous.
+> - ⚠ **N'éditez pas un script shell pendant qu'il tourne.** Bash lit par décalage d'octets : une
+>   suite de 53 minutes a repris sa lecture au milieu d'un mot, et l'erreur désignait une ligne
+>   parfaitement valide sur le disque.
+> - ⚠ **Tout antislash ou accent grave passe par un fichier écrit puis copié**, jamais par un heredoc
+>   à travers `ssh`. Douze occurrences à ce jour, dont deux aujourd'hui en connaissant la règle : un
+>   mot a disparu d'un commentaire et `bash` a tenté de l'exécuter.
+>
+> ### Deux garde-fous neufs qui peuvent refuser votre commit
+>
+> - **n°27, espacement en ligne** — le nombre de déclarations d'espacement écrites à la main ne peut
+>   plus remonter (756, plafond 756). Il nomme le fichier qui a monté. L'échelle est dans
+>   `styles.css` : `--esp-serre` à `--esp-section`. Non comptés : `0`, `auto`, et les composites.
+> - **n°28, champ de cloisonnement** — compare le champ que chaque extension de périmètre *filtre* à
+>   celui que l'entité *déclare*, segments du chemin de jointure compris. ⚠ Deux règles de nommage
+>   cohabitent : les **segments** sont des propriétés d'entité, donc anglais (D5) ; le **champ final**
+>   est écrit en dur par l'extension, donc français. Les confondre produit l'erreur inverse.
+
 Avant de démarrer un chantier, ajoute une ligne ici avec ton instance + statut. Statuts :
 `CLAIM` (réservé) · `WIP` (en cours) · `REVIEW` (en revue de cohérence) · `DONE` · `BLOCKED`.
 Ne touche pas un chemin déjà en `WIP` par une autre instance.
