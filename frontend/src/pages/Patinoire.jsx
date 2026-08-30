@@ -46,7 +46,10 @@ export default function Patinoire({ etabActif, droits }) {
   const [locations, setLocations] = useState(null)
   const [attente, setAttente] = useState(null)
   const [retenues, setRetenues] = useState([])
-  const [grilles, setGrilles] = useState([])
+  // ⚠ `null` = PAS LU. << Aucun bareme. Sans lui, chaque retenue est un montant decide au
+  // guichet >> annonce une consequence : on facture une retenue a la main, sur la foi d'un
+  // bareme qu'on n'a pas pu lire.
+  const [grilles, setGrilles] = useState(null)
   const [beneficiaires, setBeneficiaires] = useState([])
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
@@ -77,7 +80,7 @@ export default function Patinoire({ etabActif, droits }) {
       setLocations(membres(l))
       setAttente(membres(a))
       setRetenues(membres(r))
-      setGrilles(g ? membres(g) : [])
+      setGrilles(g ? membres(g) : null)
     } catch (e) {
       setErreur(e.message)
       setParc(null)
@@ -936,8 +939,8 @@ const MOTIFS_RETENUE = {
 function BaremeSection({ grilles, parc, peutConfigurer, etabActif, onFait, onErreur }) {
   const [editee, setEditee] = useState(null)
 
-  const actives = grilles.filter((g) => g.actif !== false)
-  const inactives = grilles.filter((g) => g.actif === false)
+  const actives = (grilles || []).filter((g) => g.actif !== false)
+  const inactives = (grilles || []).filter((g) => g.actif === false)
 
   return (
     <section className="card" style={{ marginTop: 16 }}>
@@ -953,7 +956,12 @@ function BaremeSection({ grilles, parc, peutConfigurer, etabActif, onFait, onErr
         )}
       </div>
       <div className="card-b" style={{ overflowX: 'auto' }}>
-        {grilles.length === 0 ? (
+        {grilles === null ? (
+          <div className="banner banner-error">
+            Le barème de retenue n’a pas pu être lu. <b>N’en concluez pas qu’il n’y en a
+            pas</b>&nbsp;: décider un montant au guichet sur cette base serait une erreur.
+          </div>
+        ) : grilles.length === 0 ? (
           <div className="empty">
             Aucun barème. Sans lui, chaque retenue est un montant décidé au guichet — donc un montant
             qui se discute, et qui n&rsquo;est pas le même d&rsquo;un agent à l&rsquo;autre.
@@ -1005,7 +1013,7 @@ function BaremeSection({ grilles, parc, peutConfigurer, etabActif, onFait, onErr
             </tbody>
           </table>
         )}
-        {grilles.length > 0 && (
+        {(grilles?.length || 0) > 0 && (
           <div className="hint">
             Une ligne ne se supprime pas, elle se suspend : les retenues déjà faites la citent comme
             justification, et l&rsquo;effacer les rendrait inexplicables.
@@ -1162,7 +1170,9 @@ function nomParc(reference, parc) {
 }
 
 function AffutagesSection({ parc, peutAffuter, etabActif, onFait, onErreur }) {
-  const [affutages, setAffutages] = useState([])
+  // ⚠ `null` = PAS LU. Une lame a l'atelier qui n'apparait pas se lit << la paire est au
+  // parc >>, et on la loue.
+  const [affutages, setAffutages] = useState(null)
   const [nouveau, setNouveau] = useState(false)
   const [rafraichir, setRafraichir] = useState(0)
 
@@ -1170,7 +1180,7 @@ function AffutagesSection({ parc, peutAffuter, etabActif, onFait, onErreur }) {
     api
       .patinoireAffutages()
       .then((c) => setAffutages(membres(c)))
-      .catch(() => setAffutages([]))
+      .catch(() => setAffutages(null))
   }, [etabActif, rafraichir])
 
   async function terminer(a) {
@@ -1183,13 +1193,13 @@ function AffutagesSection({ parc, peutAffuter, etabActif, onFait, onErreur }) {
     }
   }
 
-  const ouverts = affutages.filter((a) => a.statut !== 'termine')
+  const ouverts = (affutages || []).filter((a) => a.statut !== 'termine')
 
   return (
     <section className="card" style={{ marginTop: 16 }}>
       <div className="card-h">
         <h3>Atelier d'affûtage</h3>
-        <span className="sub">{ouverts.length} en cours</span>
+        <span className="sub">{affutages === null ? '—' : `${ouverts.length} en cours`}</span>
         {peutAffuter && (
           <div className="r">
             <button className="btn primary sm" type="button" onClick={() => setNouveau(true)}>
@@ -1199,7 +1209,12 @@ function AffutagesSection({ parc, peutAffuter, etabActif, onFait, onErreur }) {
         )}
       </div>
       <div className="card-b">
-        {affutages.length === 0 ? (
+        {affutages === null ? (
+          <div className="banner banner-error">
+            Les affûtages n’ont pas pu être lus. <b>Ne concluez pas que toutes les lames sont au
+            parc</b>&nbsp;: certaines sont peut-être à l’atelier.
+          </div>
+        ) : affutages.length === 0 ? (
           <div className="empty">
             Aucun affûtage. On enregistre ici les lames confiées à l'atelier — celles du parc, qui
             sortent alors du stock louable, et celles apportées par un client.
@@ -1216,7 +1231,7 @@ function AffutagesSection({ parc, peutAffuter, etabActif, onFait, onErreur }) {
               </tr>
             </thead>
             <tbody>
-              {affutages.map((a) => (
+              {(affutages || []).map((a) => (
                 <tr key={a.id}>
                   <td>{mot(a.type)}</td>
                   <td>{a.parcPatins?.pointure ?? <span className="sub">patins du client</span>}</td>
