@@ -116,6 +116,27 @@ export default function Cloche({ etabActif }) {
     charger()
   }
 
+  // OUVRIR, C'EST DEMANDER — DONC C'EST RELIRE.
+  //
+  // Le battement se met en pause onglet caché, et c'est voulu : une cloche qui frappe dans le vide
+  // toutes les minutes ne signale plus rien. Mais l'effet de bord se paie au moment le plus
+  // trompeur — le panneau s'ouvrait sur la DERNIÈRE lecture visible. Sur soixante secondes c'est
+  // sans conséquence ; sur un onglet resté caché deux heures, la cloche s'ouvrait sur deux heures de
+  // retard SANS LE DIRE.
+  //
+  // Trouvé en me mesurant moi-même : le panneau montrait deux lignes et une pastille à 2 quand le
+  // serveur en rendait trois, et j'ai failli conclure qu'une notification n'était pas arrivée. Un
+  // composant qui économise le réseau devient un instrument périmé dès qu'on le consulte sans le
+  // remonter — y compris pour celui qui l'a écrit.
+  //
+  // Pas de verrou de concurrence ici, à la différence du suivi des scans : cette lecture REMPLACE la
+  // liste au lieu d'y ajouter, donc deux réponses dans le désordre affichent au pire une liste d'une
+  // seconde trop vieille, que le battement suivant corrige. Ce n'est pas un oubli.
+  function basculer() {
+    if (!ouverte) charger()
+    setOuverte((v) => !v)
+  }
+
   async function toutMarquer() {
     setEnCours(true)
     try {
@@ -138,7 +159,7 @@ export default function Cloche({ etabActif }) {
       <button
         type="button"
         className="btn ghost sm"
-        onClick={() => setOuverte((v) => !v)}
+        onClick={basculer}
         aria-label={total > 0 ? `Notifications : ${total} non lue(s)` : 'Notifications'}
         title={arretee ? 'Session expirée : les notifications ne sont plus rafraîchies' : 'Notifications'}
       >
