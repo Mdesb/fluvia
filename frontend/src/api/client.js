@@ -552,8 +552,22 @@ export const api = {
 
   // PARRAINAGE -- le code est CREE au premier appel : demander son code est le geste qui l'attribue.
   codeParrainage: (clientId) => request(`/api/marketing/parrainage/code/${clientId}`),
+  // ⚠ ON ENVOIE LE PARAMÈTRE MÊME VIDE, ET C'EST DÉLIBÉRÉ.
+  //
+  // La forme précédente — `parrain ? { parrain } : {}` — échoue OUVERT : sans identifiant, aucun
+  // filtre ne part et le serveur rend TOUS les parrainages, que l'écran affiche alors sous le nom
+  // de la personne ouverte. La fiche client se garde bien (`if (!clientId) return`), mais cette
+  // garde tient à une ligne dans un seul appelant.
+  //
+  // Mesuré ailleurs le 30/08 : `/api/ventes?client=nimportequoi` rendait les 15 ventes au lieu de
+  // zéro — un filtre écrit à la main abandonnait la contrainte sur une valeur illisible. Corrigé
+  // depuis côté serveur, mais le frontal n'a pas à compter là-dessus.
+  //
+  // Un identifiant absent donne donc `parrain=undefined`, que le serveur ne résout pas : la
+  // réponse est vide. C'est le bon échec — « je ne montre rien » se remarque, « je montre tout »
+  // ressemble à des données.
   parrainages: (parrain) =>
-    request('/api/marketing/parrainages', { query: parrain ? { parrain } : {} }),
+    request('/api/marketing/parrainages', { query: { parrain: String(parrain) } }),
   declarerParrainage: (corps) =>
     request('/api/marketing/parrainages', { method: 'POST', body: corps, ld: true }),
   // Le versement est EXPLICITE : une lecture qui verse verserait deux fois si on la rafraichit.
