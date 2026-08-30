@@ -146,7 +146,10 @@ final class SousQuotaSalleTest extends MuseeApiTestCase
         $identifiantA = 'SALLE-A-' . substr((string) Uuid::v4(), 0, 8);
         $identifiantB = 'SALLE-B-' . substr((string) Uuid::v4(), 0, 8);
         foreach ([$identifiantA, $identifiantB] as $identifiant) {
+            // D87 : un droit de vente sans zone déclarée n'ouvre aucune porte. Ce test porte sur le
+            // SEUIL d'occupation, pas sur les zones — il lui faut des droits qui ouvrent la salle.
             $droit = (new DroitAcces())->setSourceType(TypeDroitAcces::Billet)->setStatutProjection(StatutProjectionDroit::Valide)->setEtablissement($etab);
+            $droit->addAuthorisedSpace($espaceAcces);
             $em->persist($droit);
             $support = (new Support())->setIdentifiant($identifiant)->setType(TypeSupport::Qr)->setEtablissement($etab);
             $em->persist($support);

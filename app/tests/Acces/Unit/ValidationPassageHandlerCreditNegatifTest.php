@@ -6,7 +6,9 @@ namespace App\Tests\Acces\Unit;
 
 use App\Acces\Dto\EvenementPassageDto;
 use App\Acces\Entity\Appairage;
+use App\Acces\DataFixtures\AccesFixtures;
 use App\Acces\Entity\DroitAcces;
+use App\Acces\Entity\EspaceAcces;
 use App\Acces\Entity\JournalReconciliation;
 use App\Acces\Entity\Support;
 use App\Acces\Enum\CodeMotifRefus;
@@ -131,6 +133,13 @@ final class ValidationPassageHandlerCreditNegatifTest extends AccesApiTestCase
             ->setCreditRestant($credit)
             ->setStatutProjection(StatutProjectionDroit::Valide)
             ->setEtablissement($etab);
+
+        // D87 : sans zone déclarée, ce droit n'ouvrirait aucune porte. Ce test porte sur le PLANCHER
+        // du crédit négatif hors ligne — il lui faut des passages qui aboutissent.
+        $espace = $em->getRepository(EspaceAcces::class)->findOneBy(['libelle' => AccesFixtures::ESPACE_LIBELLE]);
+        self::assertInstanceOf(EspaceAcces::class, $espace);
+        $droit->addAuthorisedSpace($espace);
+
         $em->persist($droit);
 
         $supportA = (new Support())->setIdentifiant('CN-A-' . substr((string) Uuid::v4(), 0, 8))->setType(TypeSupport::Qr)->setEtablissement($etab);

@@ -7,6 +7,7 @@ namespace App\Tests\Acces\Api;
 use App\Acces\DataFixtures\AccesFixtures;
 use App\Acces\Entity\Appairage;
 use App\Acces\Entity\DroitAcces;
+use App\Acces\Entity\EspaceAcces;
 use App\Acces\Entity\Support;
 use App\Acces\Enum\ModeAppairage;
 use App\Acces\Enum\StatutProjectionDroit;
@@ -163,6 +164,13 @@ final class ValidationPassageTest extends AccesApiTestCase
             ->setCreditRestant(1)
             ->setStatutProjection(StatutProjectionDroit::Valide)
             ->setEtablissement($etab);
+
+        // D87 : sans zone déclarée, ce droit n'ouvrirait aucune porte. Ce test porte sur la
+        // CONCURRENCE du décrément de crédit — il lui faut deux passages qui aboutissent.
+        $espace = $em->getRepository(EspaceAcces::class)->findOneBy(['libelle' => AccesFixtures::ESPACE_LIBELLE]);
+        self::assertInstanceOf(EspaceAcces::class, $espace);
+        $droit->addAuthorisedSpace($espace);
+
         $em->persist($droit);
 
         $supportA = (new Support())->setIdentifiant('CONC-A-' . substr((string) Uuid::v4(), 0, 8))->setType(TypeSupport::Qr)->setEtablissement($etab);

@@ -1551,19 +1551,30 @@ function JournalPassages({ espaces, equipements, etabActif, cible }) {
       const reponse = await api.exportPassages(query)
       const tout = membres(reponse)
 
-      // ⚠ CE FILTRE N'EST PAS DE LA PRUDENCE, IL COUVRE UN DÉFAUT SERVEUR CONSTATÉ.
+      // ⚠ CE FILTRE N'EST PLUS UN PANSEMENT, C'EST UN TÉMOIN DE RÉGRESSION — ET LA DIFFÉRENCE A
+      // UNE DATE.
       //
-      // `PassageExportProvider` construit son propre QueryBuilder. Or le cloisonnement multi-entités
-      // (`PerimetreAccesExtension`) n'est appliqué qu'aux collections passant par le provider
-      // standard d'API Platform : un provider sur mesure le contourne. L'export rend donc les
-      // passages de TOUS les établissements, alors que la même donnée lue en liste est cloisonnée.
+      // Il a été écrit le 28/08 parce que `PassageExportProvider` construisait son propre
+      // QueryBuilder : le cloisonnement (`PerimetreAccesExtension`) ne s'applique qu'aux collections
+      // servies par le provider standard, donc l'export rendait les passages de TOUS les sites. La
+      // borne serveur est arrivée le 29/08 (`b2b5acc`) ; ce provider porte désormais son
+      // `IDENTITY(p.etablissement) = :export_etablissement`.
       //
-      // On ne peut pas corriger ça d'ici (c'est `app/src`, hors de cet écran), et il est signalé.
-      // Mais on refuse d'écrire dans un fichier remis à un exploitant les passages du site voisin :
-      // on garde ce qui appartient à l'établissement actif, et on DIT combien de lignes ont été
-      // écartées — le silence ferait passer le défaut pour un export normal.
-      const aNous = etabActif ? tout.filter((p) => idDe(p.etablissement) === etabActif) : tout
-      const ecartes = tout.length - aNous.length
+      // Le filtre écarte donc zéro ligne à chaque appel, et un contournement mort se fait retirer
+      // par le prochain lecteur qui croit nettoyer — ou garder sans que personne ne sache pourquoi.
+      // On le garde pour une raison qui, elle, vaut au présent : **il mesure que la borne tient.**
+      // Si `ecartes` repasse au-dessus de zéro, c'est que quelqu'un a défait `b2b5acc`, et cet écran
+      // est le seul endroit du produit qui le verrait.
+      //
+      // ⚠ ET LE ZÉRO DOIT ÊTRE UN ZÉRO MESURÉ, PAS UN ZÉRO PAR CONSTRUCTION. La version précédente
+      // écrivait `etabActif ? filtrer : tout` : sans établissement actif, elle ne comparait rien et
+      // rendait « 0 écartée », c'est-à-dire un satisfecit obtenu en ne regardant pas. Même chose si
+      // le serveur cesse d'exposer `etablissement` sur les lignes. On exige donc de pouvoir
+      // comparer, et on distingue « rien à signaler » de « je n'ai pas pu vérifier ».
+      const peutComparer =
+        Boolean(etabActif) && tout.length > 0 && tout.every((p) => idDe(p.etablissement))
+      const aNous = peutComparer ? tout.filter((p) => idDe(p.etablissement) === etabActif) : tout
+      const ecartes = peutComparer ? tout.length - aNous.length : null
 
       // Le provider d'export ne connaît PAS le numéro de billet : il lit `depuis`, `jusqua`,
       // `espace`, `equipement`, `resultat`, et rien d'autre. Envoyer le filtre du journal produirait
@@ -1579,8 +1590,10 @@ function JournalPassages({ espaces, equipements, etabActif, cible }) {
       }
       telechargerCsv(filtrees, espaces, equipements)
       setInfo(
-        ecartes > 0
-          ? `${filtrees.length} passage(s) exportés. ${ecartes} ligne(s) rendues par le serveur appartenaient à un autre établissement et ont été écartées (défaut de cloisonnement de l’export, signalé).`
+        ecartes === null
+          ? `${filtrees.length} passage(s) exportés. Le cloisonnement de l’export n’a PAS pu être vérifié ici (établissement actif ou champ « etablissement » absent des lignes) : ce n’est pas un satisfecit.`
+          : ecartes > 0
+          ? `⚠ ${filtrees.length} passage(s) exportés, mais ${ecartes} ligne(s) rendues par le serveur appartiennent à un AUTRE établissement et ont été écartées ici. La borne de cloisonnement de l’export a régressé côté serveur — signalez-le, le fichier remis serait autrement celui du site voisin.`
           : `${filtrees.length} passage(s) exportés.`,
       )
     } catch (e) {
