@@ -125,9 +125,9 @@ export default function ZonesAccesProduit({ produitId, droits = [] }) {
   if (nonBranche) {
     return (
       <div className="hint" style={{ margin: 0 }}>
-        La déclaration des zones n’est pas encore ouverte par le serveur. Tant qu’elle ne l’est pas,
-        <strong> ce produit ouvre toutes les zones</strong> du site — c’est le comportement d’avant, et
-        rien n’a changé pour les porteurs.
+        La déclaration des zones n’est pas encore ouverte par le serveur : <strong>vous ne pouvez
+        pas restreindre ce produit depuis cet écran</strong>. Ce qu’un billet ouvre reste alors décidé
+        par le paramétrage d’accès du site.
       </div>
     )
   }
@@ -139,12 +139,28 @@ export default function ZonesAccesProduit({ produitId, droits = [] }) {
       {chargement ? (
         <div className="center" style={{ minHeight: 60 }}><div className="spinner" /></div>
       ) : zones.length === 0 ? (
-        // ⚠ LA PHRASE LA PLUS IMPORTANTE DE CET ÉCRAN. Voir l'en-tête du fichier.
+        // ⚠ LA PHRASE LA PLUS IMPORTANTE DE CET ÉCRAN — ET ELLE A UNE DATE DE PÉREMPTION CONNUE.
+        //
+        // Elle disait : « Aucune restriction : ce produit ouvre toutes les zones. » C'est vrai
+        // AUJOURD'HUI — `DroitAcces::ouvre()` rend `true` quand la collection d'espaces est vide.
+        // Ça cesse de l'être dès qu'un adaptateur de projection (en cours, hors de `main` au 30/08)
+        // ne projette plus que les produits déclarant une zone : un produit sans zone n'ouvrira
+        // alors plus RIEN, l'exact contraire.
+        //
+        // Un exploitant aurait lu « ouvre toutes les zones », conclu qu'il n'avait rien à faire, et
+        // son QR n'aurait ouvert aucune porte. C'est mot pour mot la panne signalée.
+        //
+        // ⚠ D'OÙ LA RÈGLE APPLIQUÉE ICI : **décrire le geste, jamais l'état du serveur.** « Déclarez
+        // les zones que ce billet doit ouvrir » est vrai avant la bascule et après ; « ouvre toutes
+        // les zones » n'est vrai que d'un côté, et rien ne relierait la phrase à ce qui l'annule.
+        // On perd une information exacte ce matin pour ne pas poser un mensonge la semaine
+        // prochaine — et c'est le bon échange, parce que personne ne repasse relire une phrase.
         <div className="empty" style={{ padding: 12 }}>
-          <strong>Aucune restriction : ce produit ouvre toutes les zones.</strong>
+          <strong>Aucune zone déclarée.</strong>
           <div style={{ marginTop: 6 }}>
-            Ajoutez une zone ci-dessous pour le restreindre — à partir de là, il n’ouvrira plus que
-            les zones listées.
+            Déclarez ci-dessous les zones que ce billet doit ouvrir. Tant qu’aucune n’est déclarée,
+            ce que le billet ouvre dépend du paramétrage d’accès du site — ne le supposez pas :
+            vendez-en un et présentez-le à un lecteur.
           </div>
         </div>
       ) : (

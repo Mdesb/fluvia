@@ -30,7 +30,7 @@ jamais par le type. Un produit boutique affiche les mêmes onglets qu'un abonnem
 
 La règle décrit une intention. Le code servi ne l'applique pas.
 
-### 3 ⚠ En revanche le type pilote une **destruction silencieuse** côté serveur
+### 3 ✓ Le type pilotait une **destruction silencieuse** côté serveur — **corrigé le 30/08**
 
 `ResolveurFacettes::purgerOrphelins()` est appelé par `ProduitProcessor` à **chaque**
 enregistrement : si le type ne déclare pas la facette, `formule`, `carte` ou `stock` sont détachés.
@@ -52,12 +52,36 @@ donc sans `stock` :
     PRD-PLACE01     « Place limitée (stock 1) »
     PRD-CADENAS01   « Cadenas vestiaire (rupture) »
 
-Les deux perdront leur stock à la première modification, quelle qu'elle soit.
+~~Les deux perdront leur stock à la première modification.~~ **Plus depuis `D69`** : ils ne risquent
+plus rien, mais leur donnée contredit toujours leur type et reste à statuer — le cadenas est
+vraisemblablement un produit boutique, la place limitée un événement.
 
-⚠ **Et le désaccord est de fond, pas technique.** Maxime définit « produit simple » comme *sans
-stock* — ce qui donne raison aux facettes. Mais « Place limitée » est un besoin réel : une entrée
-avec une jauge n'est pas de la marchandise. **La question n'est pas « faut-il purger », c'est « où
-vit une jauge ».** Elle appartient au débrief.
+## ✓ Corrigé le 30/08, et **c'est la réponse de Maxime qui l'a rendu possible**
+
+Le désaccord était de fond, pas technique : « produit simple » est défini *sans stock*, ce qui donne
+raison aux facettes, mais « Place limitée » est un besoin réel. **La question n'était pas « faut-il
+purger », c'était « où vit une jauge ».**
+
+Maxime a tranché (`D68`) : **la capacité vit sur l'événement**, parce que plein tarif, réduit et
+scolaire doivent décompter le même compteur. Un stock sur une entrée unitaire est donc une erreur de
+modèle, pas un besoin à accueillir — et le refuser ne rend plus rien inexprimable.
+
+`ProduitProcessor` refuse désormais en **422** (`D69`), avec un message qui nomme le type *et* la
+destination. Et il **ne détruit jamais l'existant** : on compare à l'instantané Doctrine et on ne
+refuse que ce qui vient d'être écrit. Un refus sans discernement aurait bloqué le produit — pire que
+le défaut d'origine, qui ne détruisait qu'une donnée.
+
+    stock écrit sur une entrée unitaire     → 422, et le message dit où le poser
+    couleur modifiée sur un produit portant
+    un stock hérité                          → 200, la couleur passe, le stock RESTE
+    stock écrit sur un produit boutique      → 200, enregistré
+
+`app/tests/Offre/Api/FacetteContradictoireTest.php` tient la règle. ⚠ Vérifié en remettant l'ancien
+comportement une minute : les deux premiers virent au rouge, **le troisième reste vert** — c'est lui
+qui prouve que les deux autres ne mesurent pas simplement « tout refuser ».
+
+La purge subsiste pour le seul endroit où elle a du sens : la **conversion assistée de type**, où
+l'exploitant a demandé le changement et où l'écran lui annonce ce qu'il perd.
 
 ---
 
@@ -180,18 +204,66 @@ une location d'une heure) ? Si oui, rien n'existe et c'est la neuvième à const
 
 ---
 
-## Ce qu'il faut de toi, par ordre de coût si on se trompe
+## Ce que Maxime a tranché le 30/08 — treize décisions
 
-1. **Où vit une jauge ?** Deux produits de préprod perdront leur stock à la première modification. La
-   réponse décide s'il faut un refus explicite, une facette de plus, ou un autre type.
-2. **Carte cadeau = PMV, ou deux objets ?** Transmissible à un tiers ou attaché à un client : c'est
-   la seule question qui compte pour le modèle.
-3. **Le créneau est-il un produit ?** Elle décide si le module `Reservation` reste à côté de l'offre
-   ou entre dedans.
-4. **« Services » : prestation vendable, ou `ServiceInclus` ?**
-5. **Récurrent : produit ou créneau ?**
-6. **La recharge d'une carte : même produit ou produit distinct ?**
+Toutes au journal `COORDINATION/DECISIONS.md`, avec leur raison et leur coût de mise en œuvre.
 
-Et deux constats qui n'attendent pas de décision, seulement une priorité :
-**aucune tâche planifiée ne tourne** (donc aucune facturation d'abonnement ne part), et
-**la vente ne projette aucun droit d'accès** (donc un billet vendu n'ouvre rien).
+| | |
+|---|---|
+| `D68` | La capacité vit sur l'événement, jamais sur le produit |
+| `D69` | Une écriture qui contredit le type est refusée ; ce qui existe n'est jamais détruit |
+| `D70` | Carte cadeau et porte-monnaie sont deux objets distincts |
+| `D71` | Le créneau est un type de produit, et l'agenda échange dans les deux sens |
+| `D72` | Événement et créneau restent deux objets, mais partagent le mécanisme de capacité |
+| `D73` | Un service se vend à l'unité et s'inclut dans une formule ; son lien au planning est optionnel |
+| `D74` | Une carte désigne ce que son crédit ouvre — une zone d'accès, ou une activité à réserver |
+| `D75` | Une carte de réservation décompte à la réservation, et rend l'entrée si l'annulation est à temps |
+| `D76` | Séance à l'unité et forfait coexistent, et décomptent la même capacité |
+| `D77` | L'inscription d'office au forfait est un paramètre de l'activité |
+| `D78` | Une carte cadeau s'émet en code ou en support physique selon le canal, un seul solde derrière |
+| `D79` | Un service est le même objet, inclus ou vendu |
+| `D80` | **En attente** : la recharge d'une carte — le débrief cartes de Maxime |
+
+## Les points de vigilance qui découlent de ces choix
+
+Chacun est la contrepartie d'une décision, énoncée **avant** le choix et retenue avec lui.
+
+**Un compteur, pas deux** (`D68`, `D72`, `D76`). Trois décisions imposent la même contrainte sous
+trois formes : plusieurs tarifs sur un événement, événement et créneau séparés, forfait et vente à
+l'unité qui coexistent. Dans les trois cas, le décompte de places s'écrit **une seule fois**. Deux
+compteurs mettraient plus de monde dans le bassin qu'il n'en contient, et ça ne se voit qu'au bord de
+l'eau.
+
+⚠ **Une carte aquagym ouvrirait un tourniquet** (`D74`, à corriger). `StubProjectionDroit` produit un
+droit `carte_quota` **sans distinguer ce que la carte ouvre**. Le paramètre à ajouter à la carte doit
+être **lu par la projection**, pas seulement stocké — sinon une carte de réservation projetée telle
+quelle laisserait entrer directement.
+
+**L'avoir est l'objet, pas le code** (`D78`). Deux chemins d'émission pour un seul solde : le code et
+la carte sont des *supports*. Un modèle où le code serait l'avoir rendrait impossible de le remplacer
+après une perte.
+
+**Deux écrans écrivent sur la même séance** (`D71`). L'agenda dans les deux sens suppose une seule
+source de vérité, avec deux écrans qui écrivent dedans — jamais deux modèles qui se synchronisent.
+
+## Ce qui reste ouvert
+
+**Une seule question de produit :** la **recharge d'une carte** (`D80`), que Maxime prefere trancher
+avec son debrief cartes. Rien de ce qui se construit ne prejuge de la reponse -- la recharge sera
+soit un tarif de plus dans la grille du meme produit, soit un produit distinct, et les deux se posent
+sur le modele de carte sans le modifier. C'est le cas ou attendre ne coute rien, signale comme tel
+pour qu'on ne le confonde pas avec un blocage.
+
+**Deux produits de preprod a statuer :** `PRD-PLACE01` et `PRD-CADENAS01` portent un stock que leur
+type ne declare pas. Ils ne risquent plus rien depuis `D69`, mais leur donnee contredit toujours leur
+type -- le cadenas est vraisemblablement un produit boutique, la place limitee un evenement. Ce n'est
+pas un nettoyage a faire d'autorite : c'est le premier cas concret ou appliquer `D68`.
+
+**Un constat de mesure encore ouvert :** le type de produit ne change rien a l'ecran (constat 2). Les
+facettes ne sont lues nulle part dans le front. Ce n'est pas urgent tant que le serveur refuse les
+saisies contradictoires -- mais tant que ce sera vrai, l'exploitant verra des onglets qui ne le
+concernent pas, et decouvrira au 422 que ce champ n'etait pas pour lui.
+
+**Et deux faits qui n'attendent qu'une priorite :** aucune tache planifiee ne tourne (donc aucune
+facturation d'abonnement ne part), et la vente ne projette aucun droit d'acces (donc un billet vendu
+n'ouvre rien -- la projection existe, elle n'est jamais appelee par la vente).
