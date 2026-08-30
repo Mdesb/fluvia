@@ -116,7 +116,21 @@ final class ZoneAutoriseeTest extends AccesApiTestCase
             ->setEspaceSocle($existant->getEspaceSocle());
         $em->persist($autre);
 
-        $this->droit($em)->addAuthorisedSpace($autre);
+        $droitCible = $this->droit($em);
+
+        // ⚠ « LIMITER À UNE AUTRE ZONE » DOIT REMPLACER, PAS AJOUTER — ET CE N'ÉTAIT PAS LE CAS.
+        //
+        // Tant que le jeu de données ne déclarait aucune zone, `add` suffisait : le droit passait de
+        // « aucune » à « une autre », donc de « ouvre tout » à « ouvre ailleurs ». Depuis D87 la
+        // fixture déclare la zone de l'équipement — `add` donnait alors un droit qui ouvre LES DEUX,
+        // et le test attendait un refus en obtenant une validation.
+        //
+        // Le nom promettait « limiter » ; le code ajoutait. La différence ne se voyait que parce
+        // qu'une donnée voisine était vide.
+        foreach ($droitCible->getAuthorisedSpaces()->toArray() as $dejaOuvert) {
+            $droitCible->removeAuthorisedSpace($dejaOuvert);
+        }
+        $droitCible->addAuthorisedSpace($autre);
         $em->flush();
     }
 

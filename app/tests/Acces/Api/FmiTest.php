@@ -157,7 +157,10 @@ final class FmiTest extends AccesApiTestCase
         $identifiantA = 'FMI-A-' . substr((string) Uuid::v4(), 0, 8);
         $identifiantB = 'FMI-B-' . substr((string) Uuid::v4(), 0, 8);
         foreach ([$identifiantA, $identifiantB] as $identifiant) {
+            // D87 : un droit de vente sans zone déclarée n'ouvre aucune porte. Ce test ne porte pas
+            // sur les zones — il lui faut simplement un droit qui ouvre l'équipement franchi.
             $droit = (new DroitAcces())->setSourceType(TypeDroitAcces::Billet)->setStatutProjection(StatutProjectionDroit::Valide)->setEtablissement($etab);
+            $droit->addAuthorisedSpace($espace);
             $em->persist($droit);
             $support = (new Support())->setIdentifiant($identifiant)->setType(TypeSupport::Qr)->setEtablissement($etab);
             $em->persist($support);
