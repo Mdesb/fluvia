@@ -1,6 +1,6 @@
 {
     "scelle": {
-        "plafond": 756
+        "plafond": 726
     },
     "fichiers": {
         "components/AbsencesSection.jsx": 5,
@@ -45,7 +45,7 @@
         "components/Tabs.jsx": 1,
         "components/TarifsProduit.jsx": 8,
         "components/ValorisationStock.jsx": 3,
-        "components/VitrinesBoutique.jsx": 19,
+        "components/VitrinesBoutique.jsx": 18,
         "components/VocabulaireMetier.jsx": 4,
         "components/ZonesAccesProduit.jsx": 4,
         "pages/Acces.jsx": 11,
@@ -59,8 +59,6 @@
         "pages/DonneesPersonnelles.jsx": 8,
         "pages/Facturation.jsx": 5,
         "pages/MentionsLegales.jsx": 25,
-        "pages/Musee.jsx": 12,
-        "pages/Padel.jsx": 17,
         "pages/Parametres.jsx": 23,
         "pages/Patinoire.jsx": 24,
         "pages/Personnel.jsx": 4,
