@@ -172,7 +172,16 @@ function compterOccurrences(texte, aiguille) {
 // écrire `\s` qui devient `s`, et le contrôle passait au vert en ne vérifiant rien.
 const APPEL = /request\(\s*[`'"]([^`'"]+)[`'"]([^\n]*)/g
 const INTERPOLATION = /\$\{[^}]*\}/g
-const METHODE = /method:\s*'([A-Z]+)'/
+// ⚠ LES DEUX QUOTES, ET SUR PLUSIEURS LIGNES.
+//
+// Une premiere version ne cherchait que `method: 'VERBE'` entre apostrophes simples, ET seulement
+// sur le reste de la ligne de l'appel. Un helper ecrit sur plusieurs lignes retombait donc sur le
+// defaut 'GET' et se confondait avec le GET du meme chemin. Mesure du 30/08 sur `client.js` :
+// 107 appels sur 454 etaient concernes.
+//
+// L'ecart s'en trouvait sur-estime, et surtout une paire GET+POST neuve sur un meme chemin ne
+// comptait que pour une operation atteignable : le cliquet refusait du travail correct.
+const METHODE = /method:\s*['"]([A-Z]+)['"]/
 const CLE = /^ {2}([a-zA-Z][a-zA-Z0-9]*):\s/gm
 
 function referenceDans(texte, nom) {
@@ -374,7 +383,14 @@ export function mesurer() {
     while (m !== null) {
       const chemin = m[1].replace(INTERPOLATION, '{id}')
       if (chemin.startsWith('/api/')) {
-        const suite = METHODE.exec(m[2])
+        // ⚠ BORNE AU PROCHAIN `request(` : sans cette limite, un appel SANS methode ramasserait
+        // le `method:` du suivant, et un GET deviendrait un POST. L'instrument mentirait alors dans
+        // l'autre sens, ce qui est pire que le defaut d'origine — un sur-comptage se voit moins.
+        const restant = source.slice(m.index)
+        const prochain = restant.indexOf('request(', 8)
+        const corpsAppel = prochain === -1 ? restant : restant.slice(0, prochain)
+
+        const suite = METHODE.exec(corpsAppel)
         const verbe = suite ? suite[1] : 'GET'
 
         if (!appels.has(chemin)) appels.set(chemin, new Set())
