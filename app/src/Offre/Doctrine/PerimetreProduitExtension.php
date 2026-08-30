@@ -88,7 +88,12 @@ final class PerimetreProduitExtension implements QueryCollectionExtensionInterfa
         // Posee AVANT l'ouverture de la ressource : l'entite n'a pas encore d'operations d'API, et
         // c'est precisement le bon moment. Une entite exposee sans cloisonnement ne produit pas
         // d'erreur, elle produit des lignes en trop.
-        ComplementaryProduct::class => 'produit',
+        // ⚠ CHAINE CORRIGEE : elle disait « produit », la propriete se nomme « product ».
+        // « product » : ce segment est un CHEMIN DE PROPRIETE vers le produit porteur, et la
+        // propriete de cette entite neuve se nomme en anglais (D5). Seul le champ FINAL, sur lequel
+        // l extension ecrit « etablissement » en dur, doit rester francais. Le garde-fou n°28 ne
+        // verifie que ce champ final : un segment intermediaire faux lui echappe, et il rendait
+        // donc « aucun ecart » sur cette ligne, qui disait « produit » pour une propriete « product ».
 
         // Ajoutee le 28/08 avec les photos : elle tient son perimetre du produit, comme ses
         // voisines. Une photo visible d un produit qui ne l est pas montrerait le visuel d une
