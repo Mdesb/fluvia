@@ -299,6 +299,13 @@ export const api = {
   // Le détail ajoute le groupe `produit:compta` (compte, TVA, règle PCA), absent de la collection.
   produit: (id) => request(`/api/produits/${id}`),
 
+  // @route-a-venir: ouverte par allaccess-8e dans le meme lot, contrat convenu et arrete ensemble.
+  // Controler un billet SANS materiel : ni equipement, ni espace, ni porte. C'est l'outil des sites
+  // sans tourniquet, ou un billet vendu est aujourd'hui invendable en pratique faute de pouvoir le
+  // controler a l'entree.
+  controlerBillet: (identifiantSupport) =>
+    request('/api/acces/controle-billet', { method: 'POST', body: { identifiantSupport } }),
+
   // Les complements d'un produit — « le casier avec l'entree ». Ce lien remplace `produitsAssocies`,
   // qui etait un ManyToMany sans `remove` que rien ne lisait cote serveur : l'ecran y ecrivait dans
   // le vide, et l'enregistrement reussissait.

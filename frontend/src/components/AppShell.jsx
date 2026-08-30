@@ -53,6 +53,11 @@ const NAV = [
       // La caisse sert le caissier comme le responsable : encaisser, ouvrir une session, consulter.
       // Exiger le seul `caisse.lire` retirerait l'écran à un caissier qui n'a que les droits de vente.
       { id: 'caisse', ic: '▤', label: 'Caisse', perms: ['caisse.lire', 'caisse.ouvrir', 'vente.creer', 'vente.encaisser'] },
+      // ⚠ SON PROPRE DROIT, ET C'EST TOUT L'INTERET DE CETTE ENTREE. Composter un billet n'est pas
+      // un geste de caisse : un guide qui controle l'entree d'une visite n'a aucune raison d'avoir
+      // acces au tiroir-caisse. Le mettre dans « Caisse » obligeait a donner ce droit pour une
+      // raison qui n'est pas la sienne — et personne ne pense a retirer un droit donne de biais.
+      { id: 'composter', ic: '✓', label: 'Composter', perm: 'acces.controler' },
       { id: 'catalogue', ic: '▥', label: 'Catalogue', perms: ['offre.lire', 'offre.gerer', 'offre.creer', 'offre.modifier'] },
       { id: 'reservation', ic: '◷', label: 'Réservation', cap: 'reservation' },
       // Écran métier de l'établissement (une seule entrée visible selon le type de site).

@@ -310,6 +310,7 @@ export default function ScansEnDirect({ droits = [], etabActif }) {
         open={!!billetOuvert}
         numeroInitial={billetOuvert || ''}
         onClose={() => setBilletOuvert(null)}
+        droits={droits}
       />
     </>
   )

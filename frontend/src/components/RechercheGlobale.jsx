@@ -192,6 +192,7 @@ export default function RechercheGlobale({ droits = [], onNav }) {
         open={!!billetOuvert}
         numeroInitial={billetOuvert || ''}
         onClose={() => setBilletOuvert(null)}
+        droits={droits}
       />
 
       {montrerPanneau && (

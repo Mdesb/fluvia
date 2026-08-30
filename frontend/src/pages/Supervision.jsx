@@ -489,7 +489,7 @@ export default function Supervision({ etabActif, droits = [] }) {
         )}
       </Modal>
 
-      <RechercheBilletModal open={verifBillet} onClose={() => setVerifBillet(false)} />
+      <RechercheBilletModal open={verifBillet} onClose={() => setVerifBillet(false)} droits={droits} />
     </div>
   )
 }
