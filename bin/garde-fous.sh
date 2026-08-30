@@ -526,6 +526,39 @@ for chemin in "$RACINE"/bin/garde-fou-*; do
     esac
 done
 
+# ⚠ ET LE MEME FILET POUR LES CONTROLES FRONTAUX, QUI N'EN AVAIENT AUCUN.
+#
+# Ce lanceur en appelle huit, un par bloc `if [ -f ... ]`. Un neuvieme ajoute au depot n'y serait
+# pas, et rien ne le dirait : la sortie afficherait « ✓ N garde-fou(s) OK » en l'ayant ignore.
+#
+# Mesure du 31/08 : `verifier-dates-locales.mjs` etait cable ici et dans `pre-receive`, ABSENT de
+# `pre-commit`. Trois listes, et aucune ne savait dire qu'il manquait a une autre.
+#
+# Le predicat vise l'APPEL, pas la mention : chercher le nom du script serait satisfait par un
+# commentaire qui le nomme sans l'appeler. On cherche `node scripts/<nom>`, forme d'invocation
+# reelle et unique.
+#
+# Le nom distingue les deux familles du repertoire :
+#     verifier-*.mjs · garde-fou-*.mjs   des CONTROLES, ils doivent tourner
+#     mesurer-*.mjs                      des SONDES, lancees a la main
+for chemin in "$RACINE"/frontend/scripts/verifier-*.mjs "$RACINE"/frontend/scripts/garde-fou-*.mjs; do
+    [ -f "$chemin" ] || continue
+    nom="$(basename "$chemin")"
+    if ! grep -q "node scripts/$nom" "$RACINE/bin/garde-fous.sh"; then
+        echo "═════════════════════════════════════════════════════════════" >&2
+        echo "✗ Controle frontal present dans l'arbre mais jamais lance par ce script : $nom" >&2
+        echo "" >&2
+        echo "  Un lanceur qui ignore un controle rend un vert au nom d'une verification" >&2
+        echo "  qui n'a pas eu lieu." >&2
+        echo "" >&2
+        echo "  Ajoute son bloc ici, ET dans les deux autres listes :" >&2
+        echo "    hooks/pre-commit      (ligne « lancer_front $nom »)" >&2
+        echo "    hooks/pre-receive     (liste « for script in ... »)" >&2
+        echo "═════════════════════════════════════════════════════════════" >&2
+        ECHECS=$((ECHECS + 1))
+    fi
+done
+
 # Les libelles ne sont tous connus qu'ici : le controle des doublons ne peut pas se faire plus tot.
 if ! verifier_numeros_uniques $(printf '%s' "$LIBELLES" | tr '|' ' '); then
     ECHECS=$((ECHECS + 1))
