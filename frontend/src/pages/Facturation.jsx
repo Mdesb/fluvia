@@ -132,8 +132,13 @@ export default function Facturation({ etabActif, droits, onNaviguer }) {
       api.factures({ statut: params.statut || '', 'order[creeLe]': 'desc' }),
       api.piecesCommerciales(),
     ])
-    setFactures(f.status === 'fulfilled' ? membres(f.value) : [])
-    setPieces(p.status === 'fulfilled' ? membres(p.value) : [])
+    // ⚠ `null` = PAS LU · `[]` = LU ET VIDE. Le rejet etait DEJA connu ici -- il alimente
+    // `setErreur` juste en dessous -- et l'information etait perdue en le convertissant en `[]`.
+    // Consequence : trois indicateurs d'argent a zero (<< Reste du 0,00 € >>, << Factures impayees
+    // 0 >>, << Dont en retard 0 >>) et << Aucune facture >>, au-dessus du bandeau qui dit que la
+    // lecture a echoue. Un exploitant qui lit << 0 impayee >> ferme l'ecran.
+    setFactures(f.status === 'fulfilled' ? membres(f.value) : null)
+    setPieces(p.status === 'fulfilled' ? membres(p.value) : null)
     setErreur(f.status === 'rejected' ? (f.reason?.message || 'Chargement des factures impossible.') : null)
     setChargement(false)
   }, [params.statut])
@@ -174,7 +179,7 @@ export default function Facturation({ etabActif, droits, onNaviguer }) {
   // envoyee : nul ne la doit, et son echeance ne court pas. C'est le meme defaut que la jauge du
   // musee qui criait la saturation sur une salle vide -- une alarme qui se declenche sans cause
   // apprend a ignorer l'alarme.
-  const emises = factures.filter((f) => f.statut !== 'brouillon')
+  const emises = (factures || []).filter((f) => f.statut !== 'brouillon')
   const impayees = emises.filter((f) => Number(f.soldeDu || 0) > 0)
   const enRetard = impayees.filter((f) => f.dateEcheance && jours(f.dateEcheance) > 0)
   const duTotal = impayees.reduce((s, f) => s + Number(f.soldeDu || 0), 0)
@@ -205,8 +210,8 @@ export default function Facturation({ etabActif, droits, onNaviguer }) {
 
       <Tabs
         onglets={[
-          ['factures', `Factures${factures.length ? ` (${factures.length})` : ''}`],
-          ['devis', `Devis & pièces${pieces.length ? ` (${pieces.length})` : ''}`],
+          ['factures', `Factures${factures?.length ? ` (${factures.length})` : ''}`],
+          ['devis', `Devis & pièces${pieces?.length ? ` (${pieces.length})` : ''}`],
         ]}
         actif={params.tab}
         onChange={(v) => majParams({ tab: v })}
@@ -219,16 +224,18 @@ export default function Facturation({ etabActif, droits, onNaviguer }) {
           <div className="grid g4" style={{ marginBottom: 16 }}>
             <div className="kpi">
               <div className="lbl">Reste dû</div>
-              <div className="val">{euros(duTotal)}</div>
+              {/* ⚠ `euros(0)` rend << 0,00 € >>, ce qui se lit << tout est encaisse >>. Sur une
+                  lecture refusee, c'est la phrase la plus couteuse de cet ecran. */}
+              <div className="val">{factures === null ? '—' : euros(duTotal)}</div>
             </div>
             <div className="kpi">
               <div className="lbl">Factures impayées</div>
-              <div className="val">{impayees.length}</div>
+              <div className="val">{factures === null ? '—' : impayees.length}</div>
             </div>
             <div className="kpi">
               <div className="lbl">Dont en retard</div>
               <div className="val" style={{ color: enRetard.length ? 'var(--crit)' : undefined }}>
-                {enRetard.length}
+                {factures === null ? '—' : enRetard.length}
               </div>
             </div>
           </div>
@@ -267,6 +274,11 @@ export default function Facturation({ etabActif, droits, onNaviguer }) {
             <div className="card-b" style={{ overflowX: 'auto' }}>
               {chargement ? (
                 <div className="center" style={{ minHeight: 160 }}><div className="spinner" /></div>
+              ) : factures === null ? (
+                <div className="banner banner-error">
+                  La liste des factures n’a pas pu être lue. <b>N’en concluez rien sur ce qui reste
+                  dû</b>&nbsp;: ni le tableau ci-dessous ni les compteurs ci-dessus n’ont été obtenus.
+                </div>
               ) : factures.length === 0 ? (
                 // §9.1 des conventions : on dit ce qu'EST la chose, et comment elle vient à exister.
                 <div className="empty">
@@ -290,7 +302,7 @@ export default function Facturation({ etabActif, droits, onNaviguer }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {factures.map((f) => {
+                    {(factures || []).map((f) => {
                       const st = STATUT_FACTURE[f.statut] || { libelle: f.statut, ton: 'mut' }
                       const solde = Number(f.soldeDu || 0)
                       const brouillon = f.statut === 'brouillon'
@@ -385,11 +397,16 @@ export default function Facturation({ etabActif, droits, onNaviguer }) {
         <section className="card">
           <div className="card-h">
             <h3>Devis &amp; pièces commerciales</h3>
-            <span className="sub">{pieces.length} en cours</span>
+            <span className="sub">{pieces === null ? '—' : `${pieces.length} en cours`}</span>
           </div>
           <div className="card-b" style={{ overflowX: 'auto' }}>
             {chargement ? (
               <div className="empty">Chargement…</div>
+            ) : pieces === null ? (
+              <div className="banner banner-error">
+                Les devis et pièces commerciales n’ont pas pu être lus&nbsp;: ce tableau est vide
+                parce que la lecture a échoué.
+              </div>
             ) : pieces.length === 0 ? (
               <div className="empty">
                 <p>Aucune pièce commerciale.</p>
@@ -415,7 +432,7 @@ export default function Facturation({ etabActif, droits, onNaviguer }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {pieces.map((p) => (
+                  {(pieces || []).map((p) => (
                     <LignePiece
                       key={idDe(p)}
                       piece={p}

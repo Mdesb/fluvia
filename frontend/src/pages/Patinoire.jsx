@@ -37,9 +37,14 @@ import { euros } from '../api/produit.js'
 // la cherche.
 
 export default function Patinoire({ etabActif, droits }) {
-  const [parc, setParc] = useState([])
-  const [locations, setLocations] = useState([])
-  const [attente, setAttente] = useState([])
+  // ⚠ `null` = PAS LU · `[]` = LU ET VIDE.
+  //
+  // Sur un refus, ces trois listes restaient a `[]` et l'ecran annoncait << Aucune paire n'est
+  // sortie >>, << Personne n'attend >> et << Aucune pointure n'est enregistree >>. La premiere est
+  // la plus couteuse : on la lit pour savoir si tout le materiel est rentre avant de fermer.
+  const [parc, setParc] = useState(null)
+  const [locations, setLocations] = useState(null)
+  const [attente, setAttente] = useState(null)
   const [retenues, setRetenues] = useState([])
   const [grilles, setGrilles] = useState([])
   const [beneficiaires, setBeneficiaires] = useState([])
@@ -75,6 +80,9 @@ export default function Patinoire({ etabActif, droits }) {
       setGrilles(g ? membres(g) : [])
     } catch (e) {
       setErreur(e.message)
+      setParc(null)
+      setLocations(null)
+      setAttente(null)
     } finally {
       setChargement(false)
     }
@@ -200,7 +208,7 @@ function ParcSection({ parc, attente, beneficiaires, nommer, peutLouer, peutAtte
 
   const enAttenteParParc = useMemo(() => {
     const c = {}
-    for (const l of attente) {
+    for (const l of attente || []) {
       if (l.statut !== 'en_attente' && l.statut !== 'proposee') continue
       const id = l.parcPatins?.id || String(l.parcPatins || '').split('/').pop()
       c[id] = (c[id] || 0) + 1
@@ -211,7 +219,7 @@ function ParcSection({ parc, attente, beneficiaires, nommer, peutLouer, peutAtte
   // Les pointures voisines réellement disponibles, les plus proches d'abord. C'est ce que le serveur
   // calcule pour son message de refus ; le calculer ici permet de le proposer avant le refus.
   function voisines(ligne) {
-    return parc
+    return (parc || [])
       .filter((p) => p.id !== ligne.id && (p.quantiteDisponible || 0) > 0)
       .map((p) => ({ ...p, ecart: Math.abs((p.pointure || 0) - (ligne.pointure || 0)) }))
       .sort((a, b) => a.ecart - b.ecart)
@@ -238,7 +246,12 @@ function ParcSection({ parc, attente, beneficiaires, nommer, peutLouer, peutAtte
         )}
       </div>
       <div className="card-b">
-        {parc.length === 0 ? (
+        {parc === null ? (
+          <div className="banner banner-error">
+            Le parc de patins n’a pas pu être lu. Ce cadre est vide parce que la lecture a échoué,
+            <b> pas</b> parce qu’aucune pointure n’est enregistrée.
+          </div>
+        ) : parc.length === 0 ? (
           <div className="empty">
             {/* LA PHRASE ENVOYAIT « DANS LE PARAMÉTRAGE », OÙ IL N'Y A RIEN DE TEL.
                 Les six onglets de Paramètres ne portent ni pointure, ni terrain, ni salle. Une
@@ -481,16 +494,24 @@ function IndisponibleModal({ etat, beneficiaires, nommer, peutAttente, onClose, 
 // --------------------------------------------------------------------------------------------
 function LocationsSection({ locations, nommer, peutLouer, onFait, onErreur }) {
   const [retour, setRetour] = useState(null)
-  const enCours = locations.filter((l) => l.statut === 'en_cours')
+  const enCours = (locations || []).filter((l) => l.statut === 'en_cours')
 
   return (
     <section className="card">
       <div className="card-h">
         <h3>Paires sorties</h3>
-        <span className="sub">{enCours.length} en circulation</span>
+        <span className="sub">{locations === null ? '—' : `${enCours.length} en circulation`}</span>
       </div>
       <div className="card-b">
-        {enCours.length === 0 ? (
+        {locations === null ? (
+          // ⚠ TON D'ALERTE. C'est le cadre qu'on lit avant de fermer, pour savoir si tout le
+          // materiel est rentre. << Aucune paire n'est sortie >> sur une lecture refusee fait
+          // fermer sur des paires dehors.
+          <div className="banner banner-error">
+            Les locations n’ont pas pu être lues. <b>Ne concluez pas que tout est rentré</b>&nbsp;:
+            cette liste n’a pas été obtenue.
+          </div>
+        ) : enCours.length === 0 ? (
           <div className="empty">
             Aucune paire n'est sortie. Les locations apparaissent ici dès qu'une pointure quitte le
             parc, et en disparaissent au retour.
@@ -659,7 +680,7 @@ function RetourModal({ location, onClose, onFait, onErreur }) {
 // La liste d'attente.
 // --------------------------------------------------------------------------------------------
 function ListeAttenteSection({ attente, nommer, peutAttente, onFait, onErreur }) {
-  const ouvertes = attente
+  const ouvertes = (attente || [])
     .filter((l) => l.statut === 'en_attente' || l.statut === 'proposee')
     .sort((a, b) => (a.rang || 0) - (b.rang || 0))
 
@@ -683,10 +704,16 @@ function ListeAttenteSection({ attente, nommer, peutAttente, onFait, onErreur })
     <section className="card">
       <div className="card-h">
         <h3>Liste d'attente</h3>
-        <span className="sub">{ouvertes.length} personne{ouvertes.length > 1 ? 's' : ''}</span>
+        <span className="sub">
+          {attente === null ? '—' : `${ouvertes.length} personne${ouvertes.length > 1 ? 's' : ''}`}
+        </span>
       </div>
       <div className="card-b">
-        {ouvertes.length === 0 ? (
+        {attente === null ? (
+          <div className="banner banner-error">
+            La liste d’attente n’a pas pu être lue. <b>Ne concluez pas que personne n’attend</b>.
+          </div>
+        ) : ouvertes.length === 0 ? (
           <div className="empty">
             Personne n'attend. On inscrit ici les clients dont la pointure est épuisée, pour les
             rappeler dans l'ordre dès qu'une paire revient.
@@ -1073,7 +1100,7 @@ function BaremeModal({ grille, parc, etabActif, onClose, onFait, onErreur }) {
           <label htmlFor="pb-parc">Pointure concernée</label>
           <select id="pb-parc" className="input" value={parcPatins} onChange={(e) => setParcPatins(e.target.value)}>
             <option value="">Tout le parc</option>
-            {parc.map((p) => (
+            {(parc || []).map((p) => (
               <option key={p.id} value={p['@id'] || `/api/patinoire_parc_patins/${p.id}`}>
                 Pointure {p.pointure}
               </option>
@@ -1285,7 +1312,7 @@ function AffutageModal({ open, parc, onClose, onFait, onErreur }) {
             <label htmlFor="af-parc">Pointure concernée *</label>
             <select id="af-parc" className="input" required value={parcPatins} onChange={(e) => setParcPatins(e.target.value)}>
               <option value="">Choisir…</option>
-              {parc.map((p) => (
+              {(parc || []).map((p) => (
                 <option key={p.id} value={p.id}>
                   Pointure {p.pointure} — {p.quantiteDisponible || 0} dispo
                 </option>
