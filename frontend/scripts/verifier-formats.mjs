@@ -47,43 +47,6 @@ const src = readFileSync(CLIENT, 'utf8')
 const anomalies = []
 const introuvables = []
 
-// ⚠ LE MARQUEUR NE VAUT QUE DANS LE BLOC DE COMMENTAIRES CONTIGU AU-DESSUS DE L'APPEL.
-//
-// Même forme que dans `lib/ecart.mjs`, et pour la même raison : une fenêtre de N caractères ferait
-// déteindre le marqueur d'un helper sur son voisin, et un contrôle qui se trompe de propriétaire
-// est pire qu'un contrôle absent.
-//
-// ⚠ La tranche s'arrête au DÉBUT de la ligne de l'appel : son dernier élément est une chaîne vide.
-// Une boucle qui exigerait un commentaire s'arrêterait dessus sans rien lire, et le marqueur ne
-// serait JAMAIS trouvé — le contrôle refuserait alors une route dûment annoncée, c'est-à-dire
-// exactement le défaut qu'on corrige. C'est le piège que `lib/ecart.mjs` documente déjà.
-function annonceRouteAVenir(source, index) {
-  const lignes = source.slice(0, index).split('\n')
-  const bloc = []
-  let i = lignes.length - 1
-
-  // ⚠ ON REMONTE D'ABORD JUSQU'À LA CLÉ DU HELPER. Le bloc de commentaires est au-dessus d'ELLE,
-  // pas au-dessus de `request(` : en partant de l'appel, la remontée bute sur
-  // `monHelper: (x) => …`, qui n'est pas un commentaire, et s'arrête sans avoir rien lu. Le
-  // marqueur n'est alors jamais trouvé, et une route dûment annoncée est refusée quand même.
-  //
-  // BORNÉE à quelques lignes : sans borne, un appel sans clé au-dessus remonterait jusqu'au haut du
-  // fichier et attraperait le marqueur d'un AUTRE helper.
-  while (i >= 0 && lignes[i].trim() === '') i -= 1
-  for (let saut = 0; i >= 0 && saut < 4; saut += 1) {
-    if (/^\s*\/\//.test(lignes[i]) || lignes[i].trim() === '') break
-    if (/^\s*[A-Za-z_$][\w$]*\s*:/.test(lignes[i])) { i -= 1; break }
-    i -= 1
-  }
-
-  while (i >= 0 && lignes[i].trim() === '') i -= 1
-  while (i >= 0 && /^\s*\/\//.test(lignes[i])) {
-    bloc.unshift(lignes[i])
-    i -= 1
-  }
-  return /@route-a-venir:[ \t]*(\S[^\n]*)/.test(bloc.join('\n'))
-}
-
 // Un chemin du client correspond-il a un `uriTemplate` declare ?
 //
 // LE FAUX POSITIF QUE CETTE FONCTION CORRIGE, TROUVE PAR `claude-D`.
@@ -155,7 +118,6 @@ for (const m of src.matchAll(/request\((`|')(\/api\/[^`']*)\1,/g)) {
   //
   // Le marqueur ne dit pas « c'est branché », il dit « c'est voulu et voici pourquoi ». Il devient
   // sans objet dès que la route existe — elle tombe alors dans `surMesure` juste au-dessus.
-  if (annonceRouteAVenir(src, m.index)) continue
 
   const ligne = src.slice(0, m.index).split('\n').length
 
