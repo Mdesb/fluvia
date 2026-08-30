@@ -71,6 +71,8 @@ export default function Pipeline({ etabActif, droits = [], onNaviguer }) {
   // elle s'ouvrirait vide le temps de deux requêtes.
   const [devisPour, setDevisPour] = useState(null)
   const [clientDevis, setClientDevis] = useState(null)
+  // Le refus remonte des relances arrive ici pour etre compare a celui du pipeline.
+  const [erreurRelances, setErreurRelances] = useState(null)
 
   // LA CARTE NE PORTE QUE LE NOM DU CLIENT, PAS SON IDENTIFIANT.
   //
@@ -149,14 +151,24 @@ export default function Pipeline({ etabActif, droits = [], onNaviguer }) {
   if (chargement) return <div className="center" style={{ minHeight: 200 }}><div className="spinner" /></div>
 
   const colonnes = tableau?.colonnes || []
+  const messages = [erreur, erreurRelances].filter(Boolean).filter((m, i, t) => t.indexOf(m) === i)
+  // ⚠ `tableau` NUL NE VEUT PAS DIRE ZERO AFFAIRE. Il veut dire qu'on n'a pas pu compter.
+  const lectureRefusee = !tableau && Boolean(erreur)
 
   return (
     <div className="view">
       <div className="view-head">
         <div className="ttl">
           <h1>Affaires</h1>
+          {/* ⚠ << 0 AFFAIRE >> ET << JE N'AI PAS PU DEMANDER >> SONT DES AFFIRMATIONS OPPOSEES.
+              `tableau?.total || 0` rendait << 0 affaire >> quand la lecture avait ete REFUSEE :
+              l'ecran annoncait un chiffre qu'il n'avait pas obtenu, juste au-dessus du bandeau
+              qui disait qu'il n'avait pas pu le demander. Un zero se verifie et rassure a tort ;
+              une lecture refusee doit se dire comme telle. */}
           <div className="sub">
-            {tableau?.total || 0} affaire{(tableau?.total || 0) > 1 ? 's' : ''} · montants prévisionnels
+            {lectureRefusee
+              ? 'Nombre d’affaires inconnu — la lecture n’a pas abouti.'
+              : `${tableau?.total || 0} affaire${(tableau?.total || 0) > 1 ? 's' : ''} · montants prévisionnels`}
           </div>
         </div>
         {peutModifier && (
@@ -166,7 +178,12 @@ export default function Pipeline({ etabActif, droits = [], onNaviguer }) {
         )}
       </div>
 
-      {erreur && <div className="banner banner-error">{erreur}</div>}
+      {/* UN MEME REFUS NE SE DIT QU'UNE FOIS.
+          L'ecran fait deux lectures independantes -- le pipeline et les relances. Sur un refus de
+          droit elles echouent toutes les deux avec le MEME message, et l'utilisateur lisait deux
+          fois le meme paragraphe. On dedoublonne par le texte, pas par la source : deux messages
+          differents restent deux problemes distincts et meritent chacun leur bandeau. */}
+      {messages.map((m) => <div className="banner banner-error" key={m}>{m}</div>)}
       {succes && <div className="banner banner-ok">{succes}</div>}
 
       {/* CE QU'IL RESTE A FAIRE, AVANT LE TABLEAU DES AFFAIRES.
@@ -176,8 +193,12 @@ export default function Pipeline({ etabActif, droits = [], onNaviguer }) {
       <Relances
         etabActif={etabActif}
         onOuvrirClient={onNaviguer ? (id) => onNaviguer('clients', { type: 'client', id }) : null}
+        onErreur={setErreurRelances}
       />
 
+      {/* Et on ne peint pas non plus le tableau vide : des colonnes a zero se lisent << aucune
+          affaire >>, ce qui est la meme affirmation fausse sous une autre forme. */}
+      {lectureRefusee ? null : (
       <div style={{ display: 'grid', gridTemplateColumns: `repeat(${colonnes.length}, minmax(210px, 1fr))`, gap: 12, overflowX: 'auto' }}>
         {colonnes.map((col) => (
           <section className="card" key={col.etape} style={{ minWidth: 210 }}>
@@ -274,6 +295,7 @@ export default function Pipeline({ etabActif, droits = [], onNaviguer }) {
           </section>
         ))}
       </div>
+      )}
 
       <NouvelleAffaire
         open={nouvelle}
