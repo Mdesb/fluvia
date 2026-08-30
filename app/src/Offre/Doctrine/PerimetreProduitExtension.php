@@ -88,7 +88,11 @@ final class PerimetreProduitExtension implements QueryCollectionExtensionInterfa
         // Posee AVANT l'ouverture de la ressource : l'entite n'a pas encore d'operations d'API, et
         // c'est precisement le bon moment. Une entite exposee sans cloisonnement ne produit pas
         // d'erreur, elle produit des lignes en trop.
-        ComplementaryProduct::class => 'produit',
+        // Le segment est une PROPRIETE de l'entite, donc anglais sur un fichier neuf (D5).
+        // Le champ final `etablissement`, ecrit en dur par cette extension, reste francais.
+        // Les deux regles cohabitent dans la meme ligne, et les confondre produit l'erreur
+        // inverse : signale par allaccess-c2, corrige par le garde-fou n°28 elargi aux segments.
+        ComplementaryProduct::class => 'product',
 
         // Ajoutee le 28/08 avec les photos : elle tient son perimetre du produit, comme ses
         // voisines. Une photo visible d un produit qui ne l est pas montrerait le visuel d une

@@ -63,6 +63,8 @@ $fichiers = fichiersPhp(RACINE);
 
 // ── 1. Le nom de champ « établissement » que chaque entité déclare ──────────────────────────────
 $champParEntite = [];
+/** @var array<string, array<string, string>> $relations entité => propriété => entité cible */
+$relations = [];
 $entitesLues = 0;
 
 foreach ($fichiers as $chemin) {
@@ -75,9 +77,45 @@ foreach ($fichiers as $chemin) {
     }
     ++$entitesLues;
 
+    // Les imports de CETTE entité, pour résoudre `targetEntity: X::class` en nom complet.
+    preg_match_all('/^use\s+([^;]+);/m', $contenu, $usesEntite);
+    $imports = [];
+    foreach ($usesEntite[1] as $import) {
+        $import = trim($import);
+        $imports[substr($import, strrpos($import, '\\') + 1)] = $import;
+    }
+    $imports[$cl[1]] = trim($ns[1]) . '\\' . $cl[1];
+    $espaceCourant = trim($ns[1]);
+
+    $fqcn = trim($ns[1]) . '\\' . $cl[1];
+
     // Une relation vers Etablissement, quel que soit le nom de la propriété.
     if (preg_match_all('/targetEntity:\s*Etablissement::class[\s\S]{0,400}?private\s+\??\w+\s+\$(\w+)/', $contenu, $props)) {
-        $champParEntite[trim($ns[1]) . '\\' . $cl[1]] = array_values(array_unique($props[1]));
+        $champParEntite[$fqcn] = array_values(array_unique($props[1]));
+    }
+
+    // ── ET TOUTES SES RELATIONS, POUR POUVOIR SUIVRE UN CHEMIN DE JOINTURE ─────────────────────
+    //
+    // `Classe::class => 'grille.produit'` désigne un chemin : joindre `grille`, puis `produit`, et
+    // filtrer l'établissement au bout. Vérifier le seul champ final laissait les segments dans un
+    // angle mort — `ComplementaryProduct::class => 'produit'` pointait sur une propriété nommée
+    // `$product`, et le contrôle rendait « aucun écart ».
+    if (preg_match_all(
+        '/targetEntity:\s*(\w+)::class[\s\S]{0,400}?private\s+\??\\?[\w\\\\]*\s+\$(\w+)/',
+        $contenu,
+        $rels,
+        PREG_SET_ORDER
+    )) {
+        foreach ($rels as $rel) {
+            // ⚠ UN NOM NON IMPORTE DESIGNE LA CLASSE DU MEME ESPACE DE NOMS.
+            //
+            // C'est la regle de resolution de PHP, et ce controle ne l'appliquait pas.
+            // `GrilleTarifaire::$produit` porte `targetEntity: Produit::class` SANS import,
+            // les deux vivant dans le meme espace de noms : la resolution retombait sur le nom
+            // court, qui ne correspond a aucune cle, et le chemin `grille.produit` etait
+            // signale a tort.
+            $relations[$fqcn][$rel[2]] = $imports[$rel[1]] ?? ($espaceCourant . '\\' . $rel[1]);
+        }
     }
 }
 
@@ -144,6 +182,60 @@ foreach ($fichiers as $chemin) {
     $directes = [];
     if (preg_match_all('/(\w+)::class\s*=>\s*\[\s*\]/', $contenu, $vides)) {
         $directes = array_values(array_unique($vides[1]));
+    }
+
+    // ── LES CHEMINS DE JOINTURE, SEGMENT PAR SEGMENT ──────────────────────────────────────────
+    //
+    // ⚠ DEUX RÈGLES DE NOMMAGE COHABITENT DANS LA MÊME LIGNE, ET LA CONFUSION EST FACILE :
+    //
+    //     Classe::class => 'grille.produit'   puis l'extension filtre `.etablissement` en dur
+    //                       ^^^^^^^^^^^^^^                            ^^^^^^^^^^^^^
+    //                       SEGMENTS : suivent D5          CHAMP FINAL : reste français
+    //
+    // Les segments sont des propriétés d'entités, donc anglais dans un fichier neuf. Le champ final
+    // est écrit en dur par l'extension, donc français tant que les extensions le sont. Lire ce
+    // garde-fou comme « tout en français » produirait l'erreur inverse.
+    // ⚠ LES ALIAS DE REQUETE NE SONT PAS DES PROPRIETES, ET LES CONFONDRE SIGNALE DES INNOCENTS.
+    //
+    // `PerimetrePersonnelExtension` declare `AffectationTravail::class => 'pp_ct.etablissement'`
+    // — `pp_ct` est un ALIAS cree par `innerJoin($rootAlias.'.creneauTravail', 'pp_ct')` plus bas
+    // dans le meme fichier. Une premiere version le prenait pour une propriete et signalait deux
+    // entites a tort.
+    //
+    // On recolte donc les alias que l'extension declare ELLE-MEME, plutot que de deviner d'apres
+    // leur forme : une heuristique sur le tiret bas aurait tenu jusqu'au premier alias nomme
+    // autrement, et personne n'aurait su pourquoi le controle s'est mis a mentir.
+    $alias = [];
+    if (preg_match_all('/(?:inner|left)Join\([^,]+,\s*[\'"](\w+)[\'"]/i', $contenu, $joints)) {
+        $alias = array_flip($joints[1]);
+    }
+
+    if (preg_match_all('/(\w+)::class\s*=>\s*[\'"]([\w.]+)[\'"]/', $contenu, $chemins, PREG_SET_ORDER)) {
+        foreach ($chemins as $paire) {
+            $depart = $imports[$paire[1]] ?? null;
+            if ($depart === null || !isset($relations[$depart])) {
+                continue;
+            }
+
+            $segments = explode('.', $paire[2]);
+            if (isset($alias[$segments[0]])) {
+                continue;
+            }
+
+            $courant = $depart;
+            foreach ($segments as $segment) {
+                if (!isset($relations[$courant][$segment])) {
+                    $ecarts[] = [
+                        'extension' => substr($chemin, strlen(RACINE) + 1),
+                        'entite' => $depart,
+                        'filtre' => ['chemin « '.$paire[2].' », segment « '.$segment.' »'],
+                        'declare' => array_keys($relations[$courant] ?? []),
+                    ];
+                    break;
+                }
+                $courant = $relations[$courant][$segment];
+            }
+        }
     }
 
     foreach ($directes as $court) {
