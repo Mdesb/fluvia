@@ -413,7 +413,7 @@ fi
 # cache. L'ordre est tout, et aucune expression régulière ne le voit.
 #
 # Il tourne sur l'HÔTE comme les autres contrôles front : node n'est pas dans l'image PHP.
-# DATES LOCALES (n°29) — `toISOString().slice(0, 10)` rend la veille entre minuit et deux heures.
+# DATES LOCALES (n°31) — `toISOString().slice(0, 10)` rend la veille entre minuit et deux heures.
 #
 # Douze occurrences vivantes le 30/08/2026, sur des champs qui DATENT DES FAITS : facture
 # fournisseur, signature de mandat SEPA, exécution d'un prélèvement, rejet bancaire, entrée d'un
@@ -422,10 +422,10 @@ fi
 # ce qu'un garde-fou attrape et qu'un commentaire ne peut pas.
 if [ -f "$RACINE/frontend/scripts/verifier-dates-locales.mjs" ]; then
     if command -v node >/dev/null 2>&1; then
-        executer "Dates locales (n°29)" sh -c "cd '$RACINE/frontend' && node scripts/verifier-dates-locales.mjs"
+        executer "Dates locales (n°31)" sh -c "cd '$RACINE/frontend' && node scripts/verifier-dates-locales.mjs"
     else
         echo "─────────────────────────────────────────────────────────────"
-        echo "▶ Dates locales (n°29)"
+        echo "▶ Dates locales (n°31)"
         echo "─────────────────────────────────────────────────────────────"
         echo "· IGNORÉ — « node » indisponible ici. Le contrôle n'a PAS tourné."
     fi
