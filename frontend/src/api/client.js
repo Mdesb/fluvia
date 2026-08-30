@@ -1463,6 +1463,16 @@ export const api = {
   // Deux routes qui se ressemblent (`/padel/terrains` et `/padel_terrains`), l'une en écriture et
   // l'autre en lecture : c'est le genre de confusion que seul un appel réel révèle.
   padelTerrains: () => request('/api/padel_terrains', { query: { itemsPerPage: 100 } }),
+  // ⚠ LA CREATION N'EST PAS SUR LA COLLECTION : elle porte un `uriTemplate` a elle,
+  // `/padel/terrains`. Un POST sur `/api/padel_terrains` rend 405 — mesure du 30/08, faite avant
+  // d'ecrire cette ligne.
+  //
+  // `CreerTerrainProcessor` cascade la `Ressource` du socle (`codeType='terrain_padel'`) puis pose
+  // l'overlay padel : on ne cree donc PAS la ressource ici, et il ne faut pas le faire — deux
+  // ressources pour un terrain, et le planning ne saurait plus laquelle reserver.
+  // Corps : { libelle, type: 'indoor'|'outdoor', dureesAutoriseesMinutes?: [60, 90] }
+  creerTerrainPadel: (corps) =>
+    request('/api/padel/terrains', { method: 'POST', body: corps }),
   padelReservations: () =>
     request('/api/padel_reservations', { query: { itemsPerPage: 200 } }),
   padelLocationsMateriel: () =>
