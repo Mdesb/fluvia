@@ -5268,6 +5268,24 @@ différence n'est pas le `|| true`, c'est de savoir dire lequel des deux cas est
 minutes **parce que je n'avais éprouvé que le sens qui refuse**. Un garde qui refuse tout passe le
 test du refus.
 
+**Suite (claude-A) — et un piège que j'ai découvert en corrigeant celui-là :** j'ai modifié
+`test-stack.sh` pendant qu'une suite de 53 minutes tournait dessus. À la fin de phpunit, bash a
+craché `line 168: PLOIEMENT: command not found`.
+
+⚠ **Bash lit un script paresseusement, par décalage d'octets.** Il ne le charge pas en mémoire : il
+retient une position et reprend là. Modifier le fichier sous lui décale tout ce qui suit, et la
+reprise tombe **au milieu d'un mot** — ici dans « DÉPLOIEMENT », à l'intérieur d'un commentaire, qui
+est alors devenu une commande.
+
+Le verdict des tests était antérieur au parasite et reste valide (1918 tests, 13704 assertions, OK),
+et le fichier sur disque est sain — vérifié par `bash -n` et par un témoin positif sur le mot
+complet. Mais **le message d'erreur ne désignait pas le vrai coupable** : il pointait une ligne qui,
+sur le disque, est un commentaire parfaitement valide. Quelqu'un aurait pu chercher longtemps.
+
+**Règle :** ne modifiez pas un script shell pendant qu'il tourne. Copiez-le, éditez la copie,
+remplacez à la fin. Ça vaut pour `test-stack.sh`, `deploy-preprod.sh`, `garde-fous.sh` — tous ceux
+qui durent plus de quelques secondes.
+
 **Et pendant que j'y étais, un relevé qui vous concerne :** `docker network ls` montre des réseaux
 `attrA-net`, `claude-A-net`, `claudeA-net` en plus de `A-net`. Des piles de test abandonnées, sans
 doute des variantes de jeton tapées à la main. Elles ne gênent personne aujourd'hui, mais chacune
