@@ -6,6 +6,7 @@ import Disponibilites from '../components/Disponibilites.jsx'
 import PriseRendezVous from '../components/PriseRendezVous.jsx'
 import Tabs from '../components/Tabs.jsx'
 import { euros } from '../api/produit.js'
+import { aLeDroit } from '../api/droits.js'
 import NoShowSection from '../components/NoShowSection.jsx'
 
 // --- Helpers de lecture (structures API Platform / module Réservation) ---
@@ -44,6 +45,51 @@ function labelBeneficiaire(b) {
 
 // Écran Réservation / Planning (M5) : ressources, créneaux (capacité vs réservations) et
 // réservation d'un créneau (unique écriture de cet écran).
+// ⚠ CE QUI OCCUPE UNE PLACE, ET NON CE QUI N'EST PAS ANNULÉ.
+//
+// L'occupation excluait `r.statut === 'annulee'`. `StatutReservation` ne contient pas `'annulee'` :
+// ses valeurs sont `confirmee`, `liste_attente`, `annulee_libre`, `annulee_tardive_facturee`,
+// `no_show_facture`, `honoree`. Ce filtre n'a donc jamais rien exclu.
+//
+// C'était invisible tant que RIEN ne pouvait annuler une réservation — précisément le défaut qu'on
+// corrige dans le même lot. Le bouton posé, une réservation annulée aurait continué de compter
+// contre la jauge : créneau affiché complet avec une place libre, et personne pour relier le
+// comptage faux au bouton neuf.
+//
+// On n'a donc pas corrigé la chaîne, on a inversé la règle. Le serveur dit déjà ce qui occupe —
+// `StatutReservation::occupePlace()` rend vrai pour `confirmee` et `honoree`, et rien d'autre.
+// Compter positivement reste juste quels que soient les statuts à venir ; une liste d'exclusions
+// redevient fausse au premier statut ajouté.
+const STATUTS_QUI_OCCUPENT = new Set(['confirmee', 'honoree'])
+
+// ⚠ D'OÙ VIENT LA PRÉSENCE — ET NON PAS SEULEMENT QU'ELLE EST ACQUISE.
+//
+// `SourcePresence` déclare deux valeurs. `emargement_manuel` est écrit par cet écran ;
+// `passage_acces` est prévu pour le contrôle d'accès et n'est produit par personne aujourd'hui —
+// la chaîne existe pourtant en entier (`Passage → DroitAcces → reservationRef → Reservation`), et
+// un droit d'accès de type `booking` porte déjà une réservation en base. Il manque un écouteur,
+// pas une structure (relevé par allaccess-b8).
+//
+// L'écran affiche donc la source dès maintenant, y compris celle que rien ne produit encore. La
+// raison n'est pas l'anticipation : c'est que le moment où l'on ouvrira cette liste est celui d'une
+// contestation de facture d'absence, et « présent (tourniquet, 14h02) » ne se défend pas comme
+// « présent (émargé à la main) ». Une présence sans provenance oblige à croire quelqu'un sur parole.
+const LIBELLE_SOURCE = {
+  emargement_manuel: 'émargé à la main',
+  passage_acces: 'tourniquet',
+}
+
+// La valeur brute (`annulee_tardive_facturee`) est un identifiant, pas une phrase : affichée telle
+// quelle au comptoir, elle se lit comme un défaut de l'écran.
+const LIBELLE_STATUT = {
+  confirmee: 'Confirmée',
+  liste_attente: 'Liste d’attente',
+  annulee_libre: 'Annulée',
+  annulee_tardive_facturee: 'Annulée hors délai, facturée',
+  no_show_facture: 'Absence facturée',
+  honoree: 'Honorée',
+}
+
 export default function Reservation({ etabActif, droits = [], session }) {
   const [ressources, setRessources] = useState([])
   const [creneaux, setCreneaux] = useState([])
@@ -56,6 +102,19 @@ export default function Reservation({ etabActif, droits = [], session }) {
   const [vue, setVue] = useState('semaine')
   const [jour, setJour] = useState('')
   const [reserverPour, setReserverPour] = useState(null) // id du créneau en cours de réservation
+  const [inscritsPour, setInscritsPour] = useState(null) // id du créneau dont on déplie les inscrits
+  const [gesteEnCours, setGesteEnCours] = useState(null) // id de la réservation en cours de geste
+
+  // ⚠ LES DROITS DE L'API, PAS D'AUTRES. `/emarger` exige `reservation.emarger`, `/annuler` exige
+  // `reservation.annuler`. Un geste caché derrière un droit différent produirait soit un bouton qui
+  // refuse au clic, soit une fonction cachée à quelqu'un qui y a droit.
+  //
+  // On n'expose PAS `reservation.annuler_soi` ici : ce droit-là est celui du client qui annule sa
+  // propre réservation, et il vient avec un refus explicite hors délai franc. Le confondre avec
+  // celui de l'agent — qui, lui, peut qualifier une annulation tardive — écraserait la distinction
+  // que le serveur tient dans sa règle de sécurité.
+  const peutEmarger = aLeDroit(droits, 'reservation.emarger')
+  const peutAnnuler = aLeDroit(droits, 'reservation.annuler')
   const [organisateur, setOrganisateur] = useState('')
   const [enCours, setEnCours] = useState(false)
 
@@ -86,13 +145,34 @@ export default function Reservation({ etabActif, droits = [], session }) {
     recharger()
   }, [etabActif, recharger])
 
-  // Réservations non annulées par créneau -> occupation.
+  // Occupation : voir `STATUTS_QUI_OCCUPENT` ci-dessus — on compte ce qui prend une place, on
+  // n'exclut pas ce qui n'en prend plus.
+  //
+  // ⚠ ET ON COMPTE `quantity`, PAS LES LIGNES. Une réservation peut porter plusieurs places
+  // (`AnnulerReservationProcessor` rend `$data->getQuantity()` à la jauge, « on rend exactement ce
+  // qui avait été pris, pas une unité »). Compter une ligne pour une réservation de quatre
+  // affichait trois places libres de trop, et laissait sur-réserver.
   const occupation = useMemo(() => {
     const m = {}
     for (const r of reservations) {
-      if (r.statut === 'annulee') continue
+      if (!STATUTS_QUI_OCCUPENT.has(r.statut)) continue
       const cid = idDepuisIri(r.creneau)
-      if (cid) m[cid] = (m[cid] || 0) + 1
+      if (cid) m[cid] = (m[cid] || 0) + (r.quantity ?? 1)
+    }
+    return m
+  }, [reservations])
+
+  // Les réservations d'un créneau, du plus ancien au plus récent — l'ordre d'inscription est celui
+  // qu'on suit quand on émarge une liste à l'entrée.
+  const inscritsParCreneau = useMemo(() => {
+    const m = {}
+    for (const r of reservations) {
+      const cid = idDepuisIri(r.creneau)
+      if (!cid) continue
+      ;(m[cid] ||= []).push(r)
+    }
+    for (const liste of Object.values(m)) {
+      liste.sort((a, b) => new Date(a.dateCreation) - new Date(b.dateCreation))
     }
     return m
   }, [reservations])
@@ -114,6 +194,61 @@ export default function Reservation({ etabActif, droits = [], session }) {
         .sort((a, b) => new Date(a.debut) - new Date(b.debut)),
     [creneaux, jour],
   )
+
+  // ── ÉMARGER ────────────────────────────────────────────────────────────────────────────────
+  //
+  // ⚠ CE GESTE EST LA SEULE ÉCRITURE DE `presenceConfirmee` DANS TOUT LE LOGICIEL. Mesuré :
+  // `setPresenceConfirmee` et `confirmerPresence` n'ont qu'un appelant hors de l'entité,
+  // `EmargerProcessor`, et aucune écriture SQL directe de la colonne n'existe.
+  //
+  // Ce que ça implique tant que personne n'émarge : `BasculerNoShowCommand` fait, pour chaque
+  // réservation encore confirmée après le créneau, `isPresenceConfirmee() ? Honoree :
+  // NoShowFacture`. Le drapeau étant faux pour TOUTE réservation ayant jamais existé, la branche
+  // `Honoree` est du code mort — et un créneau de vingt personnes toutes venues produirait vingt
+  // factures d'absence le jour où l'ordonnanceur lancerait cette tâche.
+  //
+  // Émarger n'est donc pas un confort de gestion : c'est la seule chose entre l'ordonnanceur et une
+  // facture envoyée à chaque client qui s'est présenté.
+  async function emarger(reservation, statut) {
+    setGesteEnCours(reservation.id)
+    setErreur(null)
+    setSucces(null)
+    try {
+      await api.emargerReservation(reservation.id, statut)
+      setSucces(statut === 'present' ? 'Présence enregistrée.' : 'Absence enregistrée.')
+      await recharger()
+    } catch (e) {
+      setErreur(e.message || 'L’émargement n’a pas abouti.')
+    } finally {
+      setGesteEnCours(null)
+    }
+  }
+
+  // ── ANNULER ────────────────────────────────────────────────────────────────────────────────
+  //
+  // ⚠ L'ÉCRAN NE DÉCIDE RIEN, ET C'EST VOULU. `AnnulerReservationProcessor` tient toute la règle :
+  // dans le délai franc, l'annulation est libre — place rendue, crédit restitué, avoir émis si la
+  // vente était validée, liste d'attente promue. Hors délai, le serveur refuse en libre-service, et
+  // seul `reservation.annuler` permet de qualifier l'issue en annulation tardive facturée
+  // (RG-M5-09).
+  //
+  // On n'écrit donc aucune condition ici et on affiche le refus du serveur tel quel : un second
+  // énoncé de la règle divergerait du premier le jour où elle bouge, et c'est celui de l'écran
+  // qu'on croirait.
+  async function annuler(reservation) {
+    setGesteEnCours(reservation.id)
+    setErreur(null)
+    setSucces(null)
+    try {
+      await api.annulerReservation(reservation.id)
+      setSucces('Réservation annulée. La place est rendue au créneau.')
+      await recharger()
+    } catch (e) {
+      setErreur(e.message || 'L’annulation n’a pas abouti.')
+    } finally {
+      setGesteEnCours(null)
+    }
+  }
 
   async function reserver(creneau) {
     if (!organisateur) return
@@ -279,6 +414,116 @@ export default function Reservation({ etabActif, droits = [], session }) {
                           >
                             {complet ? 'Complet' : !annulable ? 'Indisponible' : '＋ Réserver'}
                           </button>
+                        )}
+
+                        {/* LA LISTE DES INSCRITS, DÉPLIABLE.
+                            Repliée par défaut : un créneau de vingt personnes rendrait la grille
+                            illisible, et on ne l'ouvre qu'au moment d'émarger ou d'annuler.
+                            Absente s'il n'y a personne — un bouton « Voir 0 inscrit » se clique une
+                            fois et déçoit. */}
+                        {(inscritsParCreneau[c.id]?.length ?? 0) > 0 && (peutEmarger || peutAnnuler) && (
+                          <button
+                            type="button"
+                            className="btn ghost sm"
+                            onClick={() => setInscritsPour(inscritsPour === c.id ? null : c.id)}
+                          >
+                            {inscritsPour === c.id
+                              ? 'Masquer les inscrits'
+                              : `Voir les ${inscritsParCreneau[c.id].length} inscrit(s)`}
+                          </button>
+                        )}
+
+                        {inscritsPour === c.id && (
+                          <div className="resa-inscrits">
+                            {inscritsParCreneau[c.id].map((r) => {
+                              // La limite est portée par la réservation, posée à la réservation
+                              // depuis `RegleAnnulation.delaiFrancMinutes`. On l'affiche pour que
+                              // l'agent sache AVANT de cliquer si l'annulation sera libre ou
+                              // facturée — mais c'est le serveur qui tranche, pas ce calcul.
+                              const limite = r.dateLimiteAnnulation ? new Date(r.dateLimiteAnnulation) : null
+                              const horsDelai = limite !== null && new Date() > limite
+                              const occupe = STATUTS_QUI_OCCUPENT.has(r.statut)
+                              return (
+                                <div key={r.id} className="resa-inscrit">
+                                  <div className="resa-inscrit-h">
+                                    <span className="nm">{labelBeneficiaire(r.organisateur) || court(r.id)}</span>
+                                    <span className={`badge ${r.statut === 'confirmee' ? 'info' : occupe ? 'good' : 'mut'}`}>
+                                      {LIBELLE_STATUT[r.statut] || r.statut}
+                                    </span>
+                                    {r.presenceConfirmee && (
+                                      <span className="badge good">
+                                        Présent
+                                        {r.sourcePresence ? ` · ${LIBELLE_SOURCE[r.sourcePresence] || r.sourcePresence}` : ''}
+                                        {r.dateConfirmationPresence ? ` · ${heure(r.dateConfirmationPresence)}` : ''}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {r.quantity > 1 && <div className="hint">{r.quantity} places</div>}
+
+                                  {/* Les gestes ne s'affichent que tant que la réservation occupe
+                                      une place : émarger une réservation annulée n'a pas de sens, et
+                                      le serveur refuserait — un bouton qui refuse au clic fait
+                                      chercher une panne là où il n'y a qu'un état. */}
+                                  {occupe && (
+                                    <div className="resa-inscrit-act">
+                                      {peutEmarger && (
+                                        <>
+                                          <button
+                                            type="button"
+                                            className="btn sm"
+                                            disabled={gesteEnCours === r.id}
+                                            onClick={() => emarger(r, 'present')}
+                                            title="Enregistre la présence. Sans cet émargement, la bascule des absences facturerait ce client."
+                                          >
+                                            Présent
+                                          </button>
+                                          {/* ⚠ « CORRIGER » ET NON « ABSENT » QUAND LA PRÉSENCE EST
+                                              ACQUISE. Deux boutons de même poids à côté d'une
+                                              présence déjà enregistrée se lisent comme un choix à
+                                              faire, alors que l'un des deux DÉFAIT ce qui vient
+                                              d'être constaté — par un tourniquet, le plus souvent,
+                                              qui ne se trompe pas souvent. Le nommer « corriger »
+                                              dit qu'on revient sur une constatation. */}
+                                          <button
+                                            type="button"
+                                            className="btn ghost sm"
+                                            disabled={gesteEnCours === r.id}
+                                            onClick={() => emarger(r, 'absent')}
+                                            title={
+                                              r.presenceConfirmee
+                                                ? 'Revient sur la présence enregistrée — par exemple un passage attribué à la mauvaise réservation.'
+                                                : 'Enregistre l’absence constatée.'
+                                            }
+                                          >
+                                            {r.presenceConfirmee ? 'Corriger : absent' : 'Absent'}
+                                          </button>
+                                        </>
+                                      )}
+                                      {peutAnnuler && (
+                                        <button
+                                          type="button"
+                                          className="btn ghost sm"
+                                          disabled={gesteEnCours === r.id}
+                                          onClick={() => annuler(r)}
+                                          title={
+                                            horsDelai
+                                              ? 'Hors délai franc : l’annulation sera qualifiée en annulation tardive facturée (RG-M5-09).'
+                                              : 'Dans le délai franc : annulation libre, la place et le crédit sont rendus.'
+                                          }
+                                        >
+                                          {gesteEnCours === r.id
+                                            ? '…'
+                                            : horsDelai
+                                              ? 'Annuler (hors délai)'
+                                              : 'Annuler'}
+                                        </button>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
                         )}
                       </div>
                     )
