@@ -102,6 +102,32 @@ final class ValiderVenteService
             throw new UnprocessableEntityHttpException('Reste dû non nul : validation impossible sans paiement différé (RG-M2-03).');
         }
 
+        // ⚠ UNE VENTE SANS AUCUNE LIGNE SCELLAIT UNE OPÉRATION FISCALE POUR RIEN.
+        //
+        // Trouvé le 30/08 en vendant un vrai billet en préproduction : l'ajout de ligne avait échoué
+        // sur une option obligatoire, la vente est restée vide, et `POST /valider` a rendu 201 —
+        // consommant le numéro 1 de la chaîne NF525 et posant l'empreinte que la vente suivante
+        // chaîne. Cette chaîne est **inaltérable par construction** : le numéro ne se libère pas,
+        // l'entrée ne se retire pas. À une vraie caisse, un clic de trop laisse une écriture fiscale
+        // définitive, et la clôture du jour la compte.
+        //
+        // ⚠ La garde du reste dû ne pouvait pas l'attraper : une vente sans ligne a un reste dû de
+        // ZÉRO. Elle passait donc en satisfaisant parfaitement le contrôle — le même piège qu'une
+        // assertion vacueusement vraie, qui réussit d'autant mieux qu'il n'y a rien à contrôler.
+        //
+        // ── « AUCUNE LIGNE » ET NON « TOTAL NUL », ET LA NUANCE COMPTE ─────────────────────────
+        //
+        // Un total nul est LÉGITIME : un billet offert, une remise de 100 %, un geste commercial.
+        // Ces ventes-là portent des lignes, elles disent ce qui a été remis, et elles ont toute leur
+        // place au journal. Refuser sur le total interdirait un cas réel ; refuser sur l'absence de
+        // ligne ne refuse rien qui ait un sens.
+        if ($vente->getLignes()->isEmpty()) {
+            throw new UnprocessableEntityHttpException(
+                'Une vente sans aucune ligne ne peut pas être validée : le scellement NF525 est '
+                .'irréversible et consommerait un numéro de séquence pour rien.'
+            );
+        }
+
         // D44-bis — porté par la vente : une vente directe n'a pas de session d'où le déduire.
         $pdv = $vente->getPointDeVente();
         if ($pdv === null) {
