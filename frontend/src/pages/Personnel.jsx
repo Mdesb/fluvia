@@ -309,6 +309,12 @@ function MotifBadge({ demande, busy, onFermer, onConfirmer }) {
  */
 function ListeEmployes({ etabActif, droits = [], onBadgeEmis }) {
   const peutGerer = aLeDroit(droits, 'personnel.gerer_badge')
+  // DEUX DROITS DISTINCTS, ET C'EST VOULU : emettre un badge n'est pas embaucher. Le serveur exige
+  // `personnel.gerer_employe` sur la creation, et `personnel.gerer_badge` sur les badges. Utiliser
+  // le second pour afficher le bouton de creation produirait un 403 au clic, decouvert trop tard.
+  const peutGererEmploye = aLeDroit(droits, 'personnel.gerer_employe')
+  const [creation, setCreation] = useState(false)
+  const [rechargement, setRechargement] = useState(0)
   const [busy, setBusy] = useState(false)
   const [erreur, setErreur] = useState(null)
 
@@ -361,11 +367,147 @@ function ListeEmployes({ etabActif, droits = [], onBadgeEmis }) {
       <Liste
         titre="Employés"
         sous="effectif de l'établissement"
-        deps={[etabActif]}
+        deps={[etabActif, rechargement]}
         charger={api.employes}
-        vide="Aucun employé."
+        vide="Aucun employé déclaré. Sans effectif, ni planning, ni absence, ni badge de service."
         colonnes={colonnes}
+        actions={peutGererEmploye ? (
+          <button className="btn sm" type="button" onClick={() => setCreation(true)}>
+            ＋ Déclarer un employé
+          </button>
+        ) : null}
+      />
+
+      <EmployeModal
+        open={creation}
+        onClose={() => setCreation(false)}
+        onFait={() => { setCreation(false); setRechargement((n) => n + 1) }}
       />
     </div>
   )
 }
+
+// DÉCLARER UN EMPLOYÉ — l'écran gérait absences et badges d'un effectif qu'il ne savait pas créer.
+//
+// ⚠ UN DOSSIER D'EMPLOYÉ NE SE SUPPRIME PAS, ET C'EST JUSTE. `Employe` expose `Post`, `Patch`,
+// `suspendre` et `reactiver` — pas de `Delete`. Un départ se traite par une date de sortie et une
+// suspension, jamais par un effacement : le planning passé, les absences et les badges émis
+// resteraient sans titulaire, et la paie ne se relit plus.
+//
+// C'est l'exemple type d'un `Post` sans `Delete` qui est un CHOIX, pas un oubli — la distinction
+// que `allaccess-c2` cherche à faire déclarer, entité par entité, plutôt qu'à corriger en masse.
+// L'écran le dit sous le formulaire, parce que celui qui saisit ne le devine pas.
+function EmployeModal({ open, onClose, onFait }) {
+  const [nom, setNom] = useState('')
+  const [prenom, setPrenom] = useState('')
+  const [poste, setPoste] = useState('')
+  const [contrat, setContrat] = useState('cdi')
+  const [matricule, setMatricule] = useState('')
+  const [entree, setEntree] = useState('')
+  const [erreur, setErreur] = useState(null)
+  const [envoi, setEnvoi] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    setNom(''); setPrenom(''); setPoste(''); setContrat('cdi')
+    setMatricule(''); setEntree(''); setErreur(null)
+  }, [open])
+
+  const pret = nom.trim() && prenom.trim() && poste.trim() && contrat
+
+  async function soumettre(e) {
+    e.preventDefault()
+    setErreur(null)
+    setEnvoi(true)
+    try {
+      await api.creerEmploye({
+        nom: nom.trim(),
+        prenom: prenom.trim(),
+        poste: poste.trim(),
+        typeContrat: contrat,
+        ...(matricule.trim() ? { matricule: matricule.trim() } : {}),
+        ...(entree ? { dateEntree: entree } : {}),
+      })
+      onFait()
+    } catch (err) {
+      setErreur(err.message || 'L’employé n’a pas pu être déclaré.')
+    } finally {
+      setEnvoi(false)
+    }
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} titre="Déclarer un employé">
+      <form onSubmit={soumettre}>
+        {erreur && <div className="banner banner-error" style={{ marginBottom: 'var(--esp-large)' }}>{erreur}</div>}
+
+        <div className="row" style={{ display: 'flex', gap: 'var(--esp-large)', flexWrap: 'wrap' }}>
+          <div className="field" style={{ flex: '1 1 200px' }}>
+            <label htmlFor="em-prenom">Prénom *</label>
+            <input id="em-prenom" className="input" value={prenom} maxLength={100}
+              onChange={(e) => setPrenom(e.target.value)} />
+          </div>
+          <div className="field" style={{ flex: '1 1 200px' }}>
+            <label htmlFor="em-nom">Nom *</label>
+            <input id="em-nom" className="input" value={nom} maxLength={100}
+              onChange={(e) => setNom(e.target.value)} />
+          </div>
+        </div>
+
+        <div className="row" style={{ display: 'flex', gap: 'var(--esp-large)', flexWrap: 'wrap' }}>
+          <div className="field" style={{ flex: '1 1 220px' }}>
+            <label htmlFor="em-poste">Poste *</label>
+            <input id="em-poste" className="input" value={poste} maxLength={80}
+              placeholder="Maître-nageur, caissier, agent d’accueil…"
+              onChange={(e) => setPoste(e.target.value)} />
+            <span className="hint">Ce qui apparaît sur le planning, pas l’intitulé du contrat.</span>
+          </div>
+          <div className="field" style={{ flex: '1 1 180px' }}>
+            <label htmlFor="em-contrat">Type de contrat *</label>
+            <select id="em-contrat" className="input" value={contrat} onChange={(e) => setContrat(e.target.value)}>
+              {CONTRATS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <div className="row" style={{ display: 'flex', gap: 'var(--esp-large)', flexWrap: 'wrap' }}>
+          <div className="field" style={{ flex: '1 1 200px' }}>
+            <label htmlFor="em-matricule">Matricule</label>
+            <input id="em-matricule" className="input" value={matricule} maxLength={40}
+              onChange={(e) => setMatricule(e.target.value)} />
+            <span className="hint">Facultatif — celui de votre logiciel de paie, si vous en avez un.</span>
+          </div>
+          <div className="field" style={{ flex: '1 1 200px' }}>
+            <label htmlFor="em-entree">Date d’entrée</label>
+            <input id="em-entree" className="input" type="date" value={entree}
+              onChange={(e) => setEntree(e.target.value)} />
+          </div>
+        </div>
+
+        <p className="hint">
+          ⚠ Un dossier d’employé ne se supprime pas. Un départ se déclare par une date de sortie et
+          une suspension&nbsp;: le planning passé, les absences et les badges émis doivent rester
+          rattachés à quelqu’un.
+        </p>
+
+        <div className="r" style={{ display: 'flex', gap: 'var(--esp-normal)', justifyContent: 'flex-end' }}>
+          <button type="button" className="btn ghost" onClick={onClose}>Annuler</button>
+          <button type="submit" className="btn" disabled={envoi || !pret}>
+            {envoi ? 'Déclaration…' : 'Déclarer'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+// Les six formes de `TypeContrat`, en toutes lettres : « vacataire » et « prestataire » ne se
+// devinent pas depuis un code, et le choix a des conséquences en paie.
+const CONTRATS = [
+  ['cdi', 'CDI'],
+  ['cdd', 'CDD'],
+  ['vacataire', 'Vacataire'],
+  ['saisonnier', 'Saisonnier'],
+  ['stagiaire', 'Stagiaire'],
+  ['prestataire', 'Prestataire'],
+]

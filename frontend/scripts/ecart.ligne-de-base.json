@@ -29,14 +29,14 @@
         "Le script REFUSE de le relever. Un plafond qui remonte n est plus un cliquet, c est un",
         "compteur."
     ],
-    "plafond": 685,
+    "plafond": 681,
     "releve": {
         "exposees": 1148,
         "sansEcran": 0,
         "attendues": 1148,
-        "appelees": 469,
-        "atteignables": 463,
-        "inatteignables": 685,
+        "appelees": 473,
+        "atteignables": 467,
+        "inatteignables": 681,
         "orphelins": [
             "etatSynchroAcces  (back-office)",
             "grilleTarifaires  (back-office)",
@@ -54,8 +54,8 @@
         "parFront": [
             {
                 "nom": "back-office",
-                "appelees": 448,
-                "atteignables": 442
+                "appelees": 452,
+                "atteignables": 446
             },
             {
                 "nom": "boutique en ligne",
@@ -70,7 +70,7 @@
             ],
             [
                 "boutique",
-                25
+                26
             ],
             [
                 "patinoire",
@@ -93,15 +93,15 @@
                 13
             ],
             [
+                "musee",
+                12
+            ],
+            [
                 "produits",
                 11
             ],
             [
                 "ventes",
-                11
-            ],
-            [
-                "musee",
                 11
             ],
             [
@@ -125,12 +125,12 @@
                 8
             ],
             [
-                "legal",
+                "padel",
                 8
             ],
             [
-                "padel",
-                7
+                "legal",
+                8
             ],
             [
                 "etablissements",
@@ -365,6 +365,10 @@
                 2
             ],
             [
+                "employes",
+                2
+            ],
+            [
                 "bassins",
                 2
             ],
@@ -494,10 +498,6 @@
             ],
             [
                 "representation",
-                1
-            ],
-            [
-                "employes",
                 1
             ],
             [

@@ -1287,6 +1287,15 @@ export const api = {
 
   // --- Personnel ---
   employes: () => request('/api/employes', { query: { itemsPerPage: 200 } }),
+  // `POST /api/employes` existe depuis le debut (droit `personnel.gerer_employe`) et n'etait
+  // appele de nulle part : l'ecran declarait des absences, emettait et revoquait des badges pour
+  // des employes qu'aucun ecran ne savait creer.
+  //
+  // Contrat LU dans l'entite, pas sonde : `Employe` n'offre aucune operation de suppression, et
+  // sonder par un corps vide y laisserait une trace definitive. `nom`, `prenom` et `poste` portent
+  // `Assert\NotBlank` ; `typeContrat` est une enumeration ; le reste est facultatif.
+  creerEmploye: (corps) =>
+    request('/api/employes', { method: 'POST', body: corps, ld: true }),
   // Absences : declarer, accepter, refuser. Trois operations qui n'avaient aucun bouton.
   absences: () => request('/api/absences', { query: { itemsPerPage: 200 } }),
   declarerAbsence: (corps) => request('/api/personnel/absences', { method: 'POST', body: corps }),
