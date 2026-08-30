@@ -5,6 +5,7 @@ import { useEtatUrl } from '../api/url.js'
 import { api, membres, ApiError } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import DevisModal from '../components/DevisModal.jsx'
+import FactureRendu from '../components/FactureRendu.jsx'
 import { mot } from '../api/vocabulaire.js'
 
 const NATURE_BADGE = { quote: 'info', sales_order: 'warn', delivery_note: 'mut' }
@@ -116,6 +117,9 @@ export default function Facturation({ etabActif, droits, onNaviguer }) {
   const [nouveauDevis, setNouveauDevis] = useState(false)
   const [nouvelleFacture, setNouvelleFacture] = useState(false)
   const [reglementPour, setReglementPour] = useState(null)
+  // La facture dont on regarde le document. Un brouillon n'a pas de numero et ne se remet pas :
+  // le bouton n'apparait donc que sur une facture emise.
+  const [documentPour, setDocumentPour] = useState(null)
   const [brouillonEdite, setBrouillonEdite] = useState(null)
 
   const peutGerer = aLeDroit(droits, 'facturation.gerer')
@@ -351,6 +355,20 @@ export default function Facturation({ etabActif, droits, onNaviguer }) {
                                 </button>
                               </>
                             )}
+                            {/* VOIR LA FACTURE — le geste qui manquait pour qu'elle serve.
+                                Sur une facture EMISE seulement : un brouillon n'a pas de numero,
+                                et remettre un document sans numero serait pire que ne rien
+                                remettre. */}
+                            {!brouillon && (
+                              <button
+                                className="btn sm"
+                                type="button"
+                                title="Affiche le document légal, imprimable ou enregistrable en PDF."
+                                onClick={() => setDocumentPour(f)}
+                              >
+                                Voir
+                              </button>
+                            )}
                             {peutLettrer && !brouillon && solde > 0 && (
                               <button className="btn sm" type="button" onClick={() => setReglementPour(f)}>
                                 Encaisser
@@ -478,6 +496,12 @@ export default function Facturation({ etabActif, droits, onNaviguer }) {
         onClose={() => setReglementPour(null)}
         onFait={() => { setReglementPour(null); recharger() }}
       />
+
+      {/* Montee seulement quand une facture est choisie : le composant lit le document a
+          l'ouverture, et le monter en permanence declencherait une lecture par rendu. */}
+      {documentPour && (
+        <FactureRendu facture={documentPour} onClose={() => setDocumentPour(null)} />
+      )}
     </div>
   )
 }
