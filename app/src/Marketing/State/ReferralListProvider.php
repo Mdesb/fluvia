@@ -47,7 +47,15 @@ final readonly class ReferralListProvider implements ProviderInterface
             ->setParameter('etab', $etablissement->getId(), 'uuid')
             ->orderBy('r.createdAt', 'DESC');
 
+        // ⚠ ILLISIBLE ⇒ AUCUN RÉSULTAT, JAMAIS TOUS. La forme précédente sautait le filtre sur une
+        // valeur invalide : on demandait les filleuls d'un parrain et on recevait la liste entière de
+        // l'établissement. Ici on ne refuse pas en erreur — cette collection alimente une liste, pas
+        // un export — mais on rend une condition impossible, pour que « je n'ai pas compris » ne se
+        // traduise jamais par « en voici davantage ».
         $parrain = $this->requetes->getCurrentRequest()?->query->get('parrain');
+        if (\is_string($parrain) && $parrain !== '' && !Uuid::isValid($parrain)) {
+            $qb->andWhere('1 = 0');
+        }
         if (\is_string($parrain) && Uuid::isValid($parrain)) {
             // ⚠ D58 — sans le type explicite, la comparaison ne trouve RIEN et ne lève pas : la
             // fiche client afficherait « aucun filleul » à un parrain qui en a dix.
