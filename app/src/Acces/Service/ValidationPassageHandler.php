@@ -43,6 +43,14 @@ final class ValidationPassageHandler
         private readonly ResolveurMarges $marges,
         private readonly PiloteAcces $pilote,
         private readonly GenerateurCodeSupport $generateurCode,
+        /**
+         * « Ce billet est-il valide ? » — la moitié de la décision qui ne demande aucun matériel.
+         * Elle vit dans un service à part depuis le 30/08 (D86) pour que le contrôle manuel et le
+         * franchissement partagent la MÊME règle. Ce n'est pas une extraction cosmétique : sans
+         * elle, l'outil de scan aurait dû réimplémenter six contrôles, et deux implémentations de
+         * « ce billet est-il valide » finissent toujours par se contredire devant une porte.
+         */
+        private readonly VerdictBilletHandler $verdict,
         private readonly VersionSnapshotSequencer $sequencer,
         /**
          * Le planning d'ouverture du site. Injecté ici plutôt que consulté à la volée : une
@@ -81,50 +89,38 @@ final class ValidationPassageHandler
             return $this->refuser($espace, $controleur, $equipement, null, null, SensPassage::Entree, $evt, CodeMotifRefus::SensInterdit, 'Sens requis (équipement bidirectionnel).');
         }
 
-        // Étape 1 — résolution support/droit.
-        if ($evt->identifiantSupport === null) {
-            return $this->refuser($espace, $controleur, $equipement, null, null, $sens, $evt, CodeMotifRefus::DroitInvalide, 'Support requis.');
-        }
+        // ── ÉTAPES 1 À 3 : « CE BILLET EST-IL VALIDE ? » ────────────────────────────────────
+        //
+        // Support requis, signature, support connu, non bloqué, appairé, droit trouvé, droit non
+        // dévalidé. Ces six contrôles vivaient ici et n'utilisaient la topologie que pour construire
+        // l'objet de refus — jamais pour décider. Ils sont désormais dans `VerdictBilletHandler`,
+        // que l'outil de contrôle manuel appelle aussi (D86).
+        //
+        // ⚠ CE N'EST PAS UNE DÉLÉGATION DE CONFORT. Un site sans tourniquet n'avait aucun chemin
+        // pour contrôler un billet, parce que cette méthode exige un équipement dès sa première
+        // ligne. Dupliquer ces six contrôles ailleurs aurait donné deux règles qui divergent un
+        // jour, sur un porteur, devant une porte — et personne pour dire laquelle a raison.
+        $verdict = $this->verdict->evaluer(
+            $evt->identifiantSupport,
+            $evt->ignorerRevocationSiPosterieure,
+            $evt->horodatage,
+        );
+        $support = $verdict->support;
+        $droit = $verdict->droit;
+        $enConflit = $verdict->enConflitRevocation;
 
-        // Étape 1bis — vérification cryptographique (CA-12/RG-ACC-07) : un code au format d'un code
-        // de support signé (`App\Vente\Service\GenerateurCodeSupport` — billet/carte/abonnement/billet
-        // boutique) doit porter une signature HMAC valide, sinon il s'agit d'un code forgé/altéré —
-        // refusé avant même la résolution en base (aucune fuite d'info « support inconnu » vs
-        // « signature invalide »). Les identifiants historiques/manuels (RFID, QR de démonstration…)
-        // ne correspondent pas à ce format et ne sont pas concernés (rétrocompatibilité totale).
-        if ($this->generateurCode->estCodeSigne($evt->identifiantSupport) && !$this->generateurCode->verifier($evt->identifiantSupport)) {
-            return $this->refuser($espace, $controleur, $equipement, null, null, $sens, $evt, CodeMotifRefus::SignatureInvalide, 'Code de support forgé ou altéré (signature invalide).');
-        }
-
-        $support = $this->em->getRepository(Support::class)->findOneBy(['identifiant' => $evt->identifiantSupport]);
-        if (!$support instanceof Support) {
-            return $this->refuser($espace, $controleur, $equipement, null, null, $sens, $evt, CodeMotifRefus::DroitInvalide, 'Support inconnu.');
-        }
-
-        // Étape 2 — support bloqué (statut = source de vérité locale = « liste embarquée »,
-        // valable online ET hors-ligne, RG-ACC-07). Cas particulier synchro : révocation postérieure
-        // au passage hors-ligne = conflit tracé, passage conservé (§4.6, hypothèse retenue).
-        $enConflit = false;
-        if ($support->getStatut() === StatutSupport::Bloque) {
-            if ($evt->ignorerRevocationSiPosterieure && $this->revoqueApresPassage($support, $evt->horodatage)) {
-                $enConflit = true;
-            } else {
-                return $this->refuser($espace, $controleur, $equipement, $support, null, $sens, $evt, CodeMotifRefus::SupportBloque, 'Support bloqué (perte/vol).');
-            }
-        }
-
-        $appairage = $this->em->getRepository(Appairage::class)->findOneBy(['support' => $support, 'actif' => true]);
-        if (!$appairage instanceof Appairage) {
-            return $this->refuser($espace, $controleur, $equipement, $support, null, $sens, $evt, CodeMotifRefus::DroitInvalide, 'Support non appairé à un droit actif.');
-        }
-        $droit = $appairage->getDroit();
-        if (!$droit instanceof DroitAcces) {
-            return $this->refuser($espace, $controleur, $equipement, $support, null, $sens, $evt, CodeMotifRefus::DroitInvalide, 'Droit introuvable.');
-        }
-
-        // Étape 3 — droit valide (non dévalidé M2).
-        if ($droit->getStatutProjection() !== StatutProjectionDroit::Valide) {
-            return $this->refuser($espace, $controleur, $equipement, $support, $droit, $sens, $evt, CodeMotifRefus::DroitInvalide, 'Droit dévalidé.');
+        if (!$verdict->valide) {
+            return $this->refuser(
+                $espace,
+                $controleur,
+                $equipement,
+                $support,
+                $droit,
+                $sens,
+                $evt,
+                $verdict->codeMotif ?? CodeMotifRefus::DroitInvalide,
+                $verdict->message,
+            );
         }
 
         // Sous-réseau / fédération (US-L3-12, CA-13).
