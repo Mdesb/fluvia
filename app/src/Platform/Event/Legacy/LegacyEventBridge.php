@@ -71,6 +71,10 @@ final class LegacyEventBridge implements EventSubscriberInterface
             'amount_cents' => $evenement->montantCentimes,
             'cause' => $evenement->incident->getMotifBancaire(),
             'rejected_at' => $evenement->date->format(\DATE_ATOM),
+            // ⚠ DE QUOI RECONNAITRE LE CAS PARMI TROIS. Sans elle, trois rejets le meme matin
+            // donnent trois notifications rigoureusement identiques : la phrase dit le geste, pas
+            // LEQUEL des trois. C'est une reference interne — ni nom, ni coordonnee bancaire.
+            'instalment_ref' => $evenement->incident->getReferenceEcheanceOrigine(),
         ]);
     }
 
@@ -87,6 +91,7 @@ final class LegacyEventBridge implements EventSubscriberInterface
     {
         $this->publier('payment.incident_reopened', $evenement->incident, [
             'amount_cents' => $evenement->incident->getMontantCentimes(),
+            'instalment_ref' => $evenement->incident->getReferenceEcheanceOrigine(),
         ]);
     }
 

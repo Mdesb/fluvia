@@ -54,6 +54,19 @@ final class NotificationRule
         public readonly string $paramName,
         public readonly string $title,
         public readonly string $text,
+        /**
+         * La cle de charge utile qui NOMME le cas, ou `null` si le titre suffit.
+         *
+         * ⚠ TROIS LIGNES IDENTIQUES NE SE HIERARCHISENT PAS. Trois rejets le meme matin donnaient
+         * trois fois « Un paiement a echoue » : la phrase disait le geste, pas lequel des trois.
+         * Le clic desambiguise, la liste non — et c'est la liste qu'on lit pour decider par ou
+         * commencer. Constate a l'ecran par allaccess-8e, qui a reduit sa demande a ceci apres
+         * l'avoir vu : une reference courte, pas une phrase de plus.
+         *
+         * Les evenements rares au point d'etre uniques n'en ont pas besoin : un ecart de tresorerie
+         * ou une facture contestee ne se presentent pas par trois.
+         */
+        public readonly ?string $anchorKey = null,
     ) {
     }
 
@@ -70,6 +83,7 @@ final class NotificationRule
                 'incident',
                 'Un paiement a échoué',
                 'Un prélèvement a été rejeté. Tant que l’incident reste ouvert, l’accès du client peut être bloqué : ouvrez le recouvrement pour voir le motif et relancer.',
+                'instalment_ref',
             ),
             new self(
                 'payment.incident_reopened',
@@ -80,6 +94,7 @@ final class NotificationRule
                 'incident',
                 'Un impayé a été rouvert',
                 'Un incident déjà résolu a été rouvert. Il ne se refermera pas tout seul : vérifiez ce qui a changé.',
+                'instalment_ref',
             ),
             new self(
                 'treasury.discrepancy_detected',

@@ -129,7 +129,66 @@ final class NotificationFromEventTest extends SocleApiTestCase
         self::assertSame([], $surA);
     }
 
+    /**
+     * L'ANCRE NOMME LE CAS QUAND LA CHARGE UTILE LA PORTE, ET DISPARAIT PROPREMENT SINON.
+     *
+     * ⚠ TROIS LIGNES IDENTIQUES NE SE HIERARCHISENT PAS. Constate a l'ecran par allaccess-8e : trois
+     * rejets le meme matin donnaient trois fois « Un paiement a echoue ». La phrase dit la
+     * consequence et le geste — c'est deja mieux que la plupart des notifications — mais elle ne dit
+     * pas LEQUEL des trois ouvrir en premier. Le clic desambiguise, la liste non, et c'est la liste
+     * qu'on lit pour decider.
+     *
+     * ⚠ ET LA SECONDE MOITIE COMPTE AUTANT. Un evenement sans la cle ne doit pas produire « Un
+     * paiement a echoue — » : une ligne qui montre son gabarit a l'air abimee, et on cherche ce qui
+     * manque au lieu de lire.
+     */
+    public function testLAncreNommeLeCasSansJamaisLaisserUnGabaritVide(): void
+    {
+        $etablissement = $this->etablissement(SocleFixtures::ETAB_A_NOM);
+
+        $this->publierAvec('payment.failed', $etablissement, ['instalment_ref' => 'ECH-2026-0147']);
+        $avecAncre = $this->notificationsDe('payment.failed');
+        self::assertNotEmpty($avecAncre, 'Temoin absent : sans notification, l\'ancrage ne se mesure pas.');
+
+        foreach ($avecAncre as $notification) {
+            self::assertSame('Un paiement a échoué — ECH-2026-0147', $notification->getTitre());
+        }
+
+        // ── L'AUTRE BRANCHE ─────────────────────────────────────────────────────────────────────
+        $this->em()->createQuery('DELETE FROM '.Notification::class.' n')->execute();
+        $this->em()->clear();
+
+        $this->publierAvec('payment.failed', $etablissement, []);
+        $sansAncre = $this->notificationsDe('payment.failed');
+        self::assertNotEmpty($sansAncre, 'Temoin absent : le mecanisme doit rester vivant sans la cle.');
+
+        foreach ($sansAncre as $notification) {
+            self::assertSame(
+                'Un paiement a échoué',
+                $notification->getTitre(),
+                'Sans ancre, le titre reste entier : jamais un tiret suivi de rien.',
+            );
+        }
+    }
+
     // ── Aides ───────────────────────────────────────────────────────────────────────────────────
+
+    /** @param array<string, scalar|null> $charge */
+    private function publierAvec(string $nom, Etablissement $etablissement, array $charge): void
+    {
+        $bus = static::getContainer()->get(EventBus::class);
+        self::assertInstanceOf(EventBus::class, $bus);
+
+        $bus->publish(new DomainEvent(
+            $nom,
+            new EventTenant($etablissement->getId()),
+            new EventSubject('PaymentIncident', (string) Uuid::v4()),
+            $charge,
+        ));
+
+        $this->em()->flush();
+        $this->em()->clear();
+    }
 
     private function publier(string $nom, Etablissement $etablissement, string $sujet): void
     {

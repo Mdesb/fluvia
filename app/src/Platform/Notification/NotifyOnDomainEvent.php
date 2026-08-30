@@ -55,6 +55,29 @@ final class NotifyOnDomainEvent implements EventSubscriberInterface
         return $abonnements;
     }
 
+    /**
+     * Le titre, suivi de ce qui NOMME le cas quand la charge utile le porte.
+     *
+     * ⚠ L'ABSENCE D'ANCRE N'EST PAS UNE ERREUR. Un evenement peut ne pas porter la cle — un incident
+     * sans echeance d'origine, par exemple. On rend alors le titre seul plutot qu'un titre suivi
+     * d'un tiret et de rien : une ligne qui montre son gabarit est pire qu'une ligne courte.
+     *
+     * @param array<string, scalar|array|null> $payload
+     */
+    private function titreAncre(NotificationRule $regle, array $payload): string
+    {
+        if ($regle->anchorKey === null) {
+            return $regle->title;
+        }
+
+        $ancre = $payload[$regle->anchorKey] ?? null;
+        if (!\is_scalar($ancre) || (string) $ancre === '') {
+            return $regle->title;
+        }
+
+        return $regle->title.' — '.(string) $ancre;
+    }
+
     public function onDomainEvent(DomainEvent $event): void
     {
         try {
@@ -81,7 +104,7 @@ final class NotifyOnDomainEvent implements EventSubscriberInterface
                     ->setEtablissement($etablissement)
                     ->setHorodatage($event->occurredAt)
                     ->setGravite($regle->severity)
-                    ->setTitre($regle->title)
+                    ->setTitre($this->titreAncre($regle, $event->payload))
                     ->setTexte($regle->text)
                     ->setEcran($regle->screen)
                     ->setParams([$regle->paramName => $event->subject->id])
