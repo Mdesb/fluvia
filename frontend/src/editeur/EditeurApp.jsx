@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { api, membres, tokenStore, etablissementStore, setUnauthorizedHandler } from '../api/client.js'
 import Login from '../pages/Login.jsx'
 import { aUnDesDroits } from '../api/droits.js'
+import AppShell from '../components/AppShell.jsx'
 import InstallerSurLeTelephone from '../components/InstallerSurLeTelephone.jsx'
 import Agenda from '../pages/Agenda.jsx'
 import Documents from '../pages/Documents.jsx'
@@ -125,6 +126,10 @@ export default function EditeurApp() {
   // Cacher n'est pas protéger : ce filtre évite seulement à un agent d'assistance de cliquer sur
   // « Facturation » pour recevoir un refus. Si la garde serveur disparaissait, il ne rattraperait
   // rien — et c'est voulu : un filtre d'affichage qui rattrape une garde manquante la fait oublier.
+  // Les cinq ecrans qui n'existent que pour l'editeur. Le reste — agenda, assistance, documents… —
+  // sont les outils communs du produit, employes ici comme partout ailleurs.
+  const EDITEUR = new Set(['abonnements', 'offres', 'clients', 'facturation', 'reglements'])
+
   const onglets = [
     { id: 'abonnements', ic: '≡', label: 'Abonnements', perms: ['editor.read_subscription'] },
     { id: 'offres', ic: '▥', label: 'Offres', perms: ['editor.manage_offer'] },
@@ -195,59 +200,32 @@ export default function EditeurApp() {
     return <Login onConnecte={() => setAuthed(true)} sousTitre="Administration de Fluvia : clients, formules et assistance." />
   }
 
+  // ⚠ LES SECTIONS SONT CONSTRUITES ICI, PAS DANS LA COQUILLE. `AppShell` filtre sur les droits et
+  // les capacites ; il ne connait pas l'identite de tenant, et `visibles` porte deja le filtre
+  // `estEditeur`. Lui apprendre cette notion pour un seul appelant la disperserait.
+  const sections = [
+    {
+      section: 'Éditeur',
+      items: visibles.filter((o) => EDITEUR.has(o.id)),
+    },
+    {
+      section: 'Outils',
+      items: visibles.filter((o) => !EDITEUR.has(o.id)),
+    },
+  ].filter((s) => s.items.length > 0)
+
   return (
-    <div>
-      <header className="editeur-barre">
-        <div className="editeur-marque">
-          <span className="editeur-point" aria-hidden="true" />
-          <strong>Administration</strong>
-        </div>
-
-        <nav aria-label="Sections">
-          {visibles.map((o) => (
-            <button
-              key={o.id}
-              type="button"
-              className={`btn ${onglet === o.id ? 'primary' : 'ghost'} sm`}
-              aria-current={onglet === o.id ? 'page' : undefined}
-              onClick={() => setOnglet(o.id)}
-            >
-              <span aria-hidden="true">{o.ic}</span> {o.label}
-            </button>
-          ))}
-        </nav>
-
-        <div className="editeur-compte">
-          {/*
-            LE SITE SUR LEQUEL ON TRAVAILLE EST TOUJOURS ÉCRIT, MÊME QUAND IL N'Y EN A QU'UN.
-            Le jour où un accès d'assistance ouvre le site d'un client, la question « où suis-je ? »
-            aura déjà sa réponse à l'écran. L'afficher seulement quand il y a un choix la ferait
-            apparaître au moment précis où l'on n'y prête pas attention.
-          */}
-          {etablissements.length > 1 ? (
-            <select
-              className="select"
-              value={etabActif}
-              onChange={(e) => {
-                etablissementStore.set(e.target.value)
-                setEtabActif(e.target.value)
-              }}
-              aria-label="Établissement actif"
-              title="Site sur lequel vous travaillez"
-            >
-              {etablissements.map((e) => (
-                <option key={e.id} value={e.id}>{e.nom}</option>
-              ))}
-            </select>
-          ) : (
-            nomEtabActif && <span className="mut">{nomEtabActif}</span>
-          )}
-          <span className="mut">{me?.email || ''}</span>
-          <button type="button" className="btn ghost sm" onClick={deconnexion}>
-            Se déconnecter
-          </button>
-        </div>
-      </header>
+    <AppShell
+      me={me}
+      etablissements={etablissements}
+      etabActif={etabActif}
+      onChangeEtab={(id) => { etablissementStore.set(id); setEtabActif(id) }}
+      onglet={onglet}
+      onNav={setOnglet}
+      onLogout={deconnexion}
+      droits={droits}
+      nav={sections}
+    >
 
       {/*
         ⚠ `=== false` ET NON `!me?.estEditeur`. Tant que le profil n'est pas chargé, la propriété
@@ -314,6 +292,6 @@ export default function EditeurApp() {
         l'installation est réellement possible — et jamais deux fois après un refus.
       */}
       <InstallerSurLeTelephone />
-    </div>
+    </AppShell>
   )
 }
