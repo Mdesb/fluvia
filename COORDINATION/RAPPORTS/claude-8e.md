@@ -414,3 +414,40 @@ un `git reset --hard HEAD~1` a emporté sa modification non commitée du script 
 suivant est passé **sans afficher la vérification**. Ma faute était une ligne devenue fausse ; la
 sienne, une ligne devenue absente. *Une ligne absente ne crie pas.* Les deux passent le build, les
 tests et les vingt-cinq garde-fous.
+
+### La cloche : l'heure cédait, parce qu'elle était la plus courte
+
+73 ajoute la référence d'échéance au titre des notifications de recouvrement. La ligne de la cloche
+est un flex saturé — gravité + titre + horodatage tiennent exactement dans 334 px — et sans
+`flex-shrink: 0`, **c'est l'horodatage qui cède**, parce qu'il est le plus court des trois.
+
+    « Un paiement a échoué »                       20 car. → heure 59 px
+    « Un paiement a échoué — ECH-2026-0147 »       36 car. → heure 46 px
+    « Un incident de paiement a été rouvert — … »  53 car. → heure 35 px
+    référence longue                               69 car. → heure 27 px
+
+Après correction (`b287fc3`) : **59 px aux quatre longueurs**, c'est le titre qui passe à la ligne.
+
+**Ce défaut n'aurait été signalé par personne : une heure comprimée ne ressemble pas à un défaut,
+elle ressemble à une heure.** Il ne se déclenchait que sur la branche `payment.incident_reopened`,
+qui porte le titre le plus long — donc sur la notification la plus urgente des quatre.
+
+**Deux erreurs de mesure dans les dix minutes, et ce qui les a attrapées.** Ma première lecture
+donnait un titre de 41 caractères large de 71 px, ce qui aurait dit « tronqué » alors que le vrai
+chiffre est 231. Ce qui m'a arrêté n'est pas le 71 : c'est un `largeurPanneau: 2` dans le même
+résultat — un panneau de deux pixels n'existe pas. **Un nombre impossible à côté d'un nombre
+plausible dénonce l'instrument, pas la page** ; mon sélecteur `.card[style*="360"]` attrapait une
+carte dont le style contenait « 360 » pour tout autre chose. Puis la mesure suivante s'est bloquée
+quarante-cinq secondes sur un `requestAnimationFrame` qui ne se déclenche jamais dans un onglet
+caché — le correctif est de forcer le calcul par une lecture de `offsetHeight`, qui, lui, est
+synchrone.
+
+Mesuré par injection DOM sur la ligne servie : **cela prouve la mise en page, et rien d'autre.** Que
+le serveur produise le titre avec sa référence et que la cloche le reçoive n'en est pas traversé
+d'un pouce — 73 pose une notification de démonstration au nouveau format pour cette moitié-là.
+
+⚠ **Et les quatre lignes `demo.` que j'ai laissées en préprod portent l'ancien titre.** Après le
+déploiement de l'ancrage, la cloche montrera quatre lignes sans référence et une avec : un
+échantillon qui donne à croire que la fonction marche une fois sur cinq. Elles seront marquées lues
+dès que 73 aura posé la sienne — pas avant, pour ne pas vider la cloche au moment où il veut la
+montrer.

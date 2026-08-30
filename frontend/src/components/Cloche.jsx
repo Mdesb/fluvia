@@ -207,10 +207,23 @@ export default function Cloche({ etabActif }) {
                     color: 'inherit',
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span className={`badge ${GRAVITE_CLS[n.gravite] || 'mut'}`}>{n.gravite}</span>
-                    <span className="nm">{n.titre}</span>
-                    <span className="mut" style={{ marginLeft: 'auto' }}>{depuis(n.horodatage)}</span>
+                  {/* L'HEURE NE SE LAISSE PAS COMPRIMER PAR LE TITRE.
+                      Mesuré : sans `flexShrink: 0`, un titre de 53 caractères réduisait « il y a
+                      12 min » de 59 px à 35, et un de 69 caractères à 27 — l'heure devenait illisible
+                      au moment précis où la ligne devenait intéressante. Les titres s'allongent :
+                      ceux du recouvrement portent désormais leur référence d'échéance. C'est au titre
+                      de passer à la ligne, jamais à l'horodatage de disparaître. */}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                    <span className={`badge ${GRAVITE_CLS[n.gravite] || 'mut'}`} style={{ flexShrink: 0 }}>
+                      {n.gravite}
+                    </span>
+                    <span className="nm" style={{ minWidth: 0 }}>{n.titre}</span>
+                    <span
+                      className="mut"
+                      style={{ marginLeft: 'auto', flexShrink: 0, whiteSpace: 'nowrap' }}
+                    >
+                      {depuis(n.horodatage)}
+                    </span>
                   </div>
                   {n.texte && <div className="mut">{n.texte}</div>}
                   {/* Une notification sans destination le dit, plutôt que de faire cliquer dans le

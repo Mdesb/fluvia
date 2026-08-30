@@ -197,6 +197,72 @@ final class MoteurRecouvrementTest extends RecouvrementApiTestCase
         );
     }
 
+    /**
+     * ⚠ DEUX ÉCHÉANCES REJETÉES DU MÊME CLIENT FONT DEUX INCIDENTS, ET C'EST VOULU.
+     *
+     * `MoteurRecouvrementHandler` crée l'incident sans chercher s'il en existe un ouvert pour ce
+     * redevable. Ça ressemble à l'oubli classique du contrôle d'existant — d'où ce test, qui existe
+     * pour empêcher qu'on le « corrige ». Dédoublonner par client serait une régression :
+     *
+     *   · l'entité porte `referenceEcheanceOrigine` et `rejetOrigine` : un dossier unique par
+     *     redevable ne saurait pas quoi y mettre au second rejet ;
+     *   · la représentation se fait PAR MONTANT — deux échéances se représentent séparément à la
+     *     banque, un dossier fusionné n'aurait plus qu'un montant ;
+     *   · « ce qui a été rejeté, quand, pour quel motif » est une pièce justificative : elle sert à
+     *     expliquer une porte fermée et à tenir un litige bancaire.
+     *
+     * ⚠ ET QUELQUE CHOSE DÉDOUBLONNE DÉJÀ, EN AMONT — ne l'ajoutez pas ici. `DeclarerRejetSepaProcessor`,
+     * le chemin des VRAIS rejets bancaires, refuse un incident si un impayé non soldé existe pour le
+     * couple (échéance, redevable) : réimporter un fichier de retour est un geste humain ordinaire, et
+     * il ne doit pas produire deux dossiers pour un seul rejet. Cette garde-là porte sur L'ÉCHÉANCE.
+     * Celle qu'on serait tenté d'ajouter ici porterait sur le REDEVABLE — et fusionnerait deux rejets
+     * bien distincts. Les deux se ressemblent dans une revue ; une seule est juste.
+     *
+     * ⚠ CE QUE CE TEST NE PROUVE PAS. Il compte des incidents, pas des courriers. Le doublon qui
+     * atteindrait un client vit dans `RecoveryEngine`, qui dédoublonne ses campagnes sur l'INCIDENT
+     * et non sur le redevable — latent aujourd'hui, et hors de ce module.
+     */
+    public function testDeuxEcheancesRejeteesDuMemeClientFontDeuxIncidents(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $abonnement = $em->getRepository(AbonnementFitness::class)->findOneBy([], ['dateSouscription' => 'ASC']);
+        self::assertNotNull($abonnement);
+        $echeances = $em->getRepository(EcheanceSepa::class)
+            ->findBy(['abonnement' => $abonnement], ['dateProgrammee' => 'ASC'], 2);
+        self::assertCount(2, $echeances, 'témoin : il faut deux échéances du même contrat, sinon ce test ne mesure rien');
+
+        $ids = [];
+        foreach ($echeances as $echeance) {
+            $client->request('POST', '/api/sport/echeances/' . $echeance->getId() . '/simuler-rejet', $entete + [
+                'json' => ['codeRetour' => 'AM04'],
+            ]);
+            self::assertResponseIsSuccessful();
+            $ids[] = $client->getResponse()->toArray()['id'];
+        }
+
+        self::assertNotSame($ids[0], $ids[1], 'Le second rejet a été fusionné dans le premier : la trace du dossier d’avril est perdue.');
+
+        $em->clear();
+        $premier = $em->getRepository(IncidentImpaye::class)->find($ids[0]);
+        $second = $em->getRepository(IncidentImpaye::class)->find($ids[1]);
+        self::assertNotNull($premier);
+        self::assertNotNull($second);
+
+        // Le même redevable — sinon ce sont deux clients, et le test ne dit rien du doublon.
+        self::assertSame($premier->getTypeRedevable(), $second->getTypeRedevable());
+        self::assertSame($premier->getReferenceRedevable(), $second->getReferenceRedevable());
+
+        // Et deux échéances distinctes : c'est CE champ que la fusion rendrait indéfinissable.
+        self::assertNotSame(
+            $premier->getReferenceEcheanceOrigine(),
+            $second->getReferenceEcheanceOrigine(),
+            'Les deux incidents désignent la même échéance : la trace ne distingue plus ce qui a été rejeté.',
+        );
+    }
+
     private function creerIncident(\ApiPlatform\Symfony\Bundle\Test\Client $client, array $entete): string
     {
         $echeance = $this->premiereEcheanceContratDemo();
