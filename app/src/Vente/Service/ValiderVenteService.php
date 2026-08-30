@@ -66,6 +66,7 @@ final class ValiderVenteService
     private array $evenementsEnAttente = [];
 
     public function __construct(
+        private readonly RequiredComplementGuard $complementsObligatoires,
         private readonly EntityManagerInterface $em,
         private readonly Connection $connection,
         private readonly PanierCalculateur $calculateur,
@@ -106,6 +107,14 @@ final class ValiderVenteService
         if ($pdv === null) {
             throw new UnprocessableEntityHttpException('Point de vente introuvable pour le scellement.');
         }
+
+        // ── LES COMPLÉMENTS OBLIGATOIRES, AVANT TOUTE ÉCRITURE ─────────────────────────────────
+        //
+        // Un produit peut en exiger un autre — le bonnet de bain avec l'entrée bassin, quand le
+        // règlement intérieur l'impose. La vérification est ici, et non après l'ouverture de la
+        // transaction : un refus ne doit rien avoir commencé à écrire, sinon on découvre le
+        // manquant au milieu d'un décrément de stock.
+        $this->complementsObligatoires->verifier($vente);
 
         // Voir le docblock de classe (RG-CQ1-08) : cette transaction englobe le décrément de stock, la
         // création/recharge des supports ET le flush qui scelle l'OperationScellee.

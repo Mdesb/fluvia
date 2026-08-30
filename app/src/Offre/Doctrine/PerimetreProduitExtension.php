@@ -8,6 +8,7 @@ use ApiPlatform\Doctrine\Orm\Extension\QueryCollectionExtensionInterface;
 use ApiPlatform\Doctrine\Orm\Extension\QueryItemExtensionInterface;
 use ApiPlatform\Doctrine\Orm\Util\QueryNameGeneratorInterface;
 use ApiPlatform\Metadata\Operation;
+use App\Offre\Entity\ComplementaryProduct;
 use App\Offre\Entity\ConversionType;
 use App\Offre\Entity\GrilleTarifaire;
 use App\Offre\Entity\PrixHistorique;
@@ -84,6 +85,10 @@ final class PerimetreProduitExtension implements QueryCollectionExtensionInterfa
         // produit et rien ne le lui appliquait. Les options d'un produit disent la composition
         // d'une offre concurrente.
         OptionProduit::class => 'produit',
+        // Posee AVANT l'ouverture de la ressource : l'entite n'a pas encore d'operations d'API, et
+        // c'est precisement le bon moment. Une entite exposee sans cloisonnement ne produit pas
+        // d'erreur, elle produit des lignes en trop.
+        ComplementaryProduct::class => 'produit',
 
         // Ajoutee le 28/08 avec les photos : elle tient son perimetre du produit, comme ses
         // voisines. Une photo visible d un produit qui ne l est pas montrerait le visuel d une
