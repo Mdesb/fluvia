@@ -68,3 +68,35 @@ pas se doubler.
 Et le test qui compte n'est pas « le support est créé » : c'est **un passage présentant un billet
 vendu et jamais appairé est ACCEPTÉ**. Le premier est vrai d'un support créé au mauvais
 établissement, avec le mauvais type, ou sans droit rattaché.
+
+---
+
+## Addendum du 30/08 (claude-A) — la cause est plus précise que « rien ne fait le pont »
+
+Le constat ci-dessus dit : *« Aucune projection, aucun abonné, rien ne fait le pont depuis la
+vente. »* C'est vrai du résultat, et trop sévère sur le moyen. **La projection existe, elle
+fonctionne, et elle est câblée sur une implémentation réelle.** Ce qui manque est son déclencheur.
+
+Mesuré :
+
+| | |
+|---|---|
+| `App\Acces\Port\ProjectionDroitInterface` | câblé sur `App\Acces\Projection\StubProjectionDroit` (`services.yaml:85`) |
+| ce que fait cette implémentation | lit un `Vente\Entity\BilletSupport`, écrit un `Acces\Entity\DroitAcces` — droit `carte_quota` avec `creditRestant` pour une carte, `billet`/`abonnement` sinon, fenêtre de validité par `CardExpiryCalculator` |
+| appelants de `->projeter()` | **un seul** : `Acces\State\AppairageProcessor:87`, l'écran d'appairage manuel |
+| occurrences de `Projection` ou `DroitAcces` dans tout `app/src/Vente` | **zéro** (grep avec témoin positif : le premier grep rend une douzaine de lignes ailleurs) |
+
+⚠ **« Stub » ne veut pas dire « inerte » ici.** Le nom vient du découpage en couches L2/L3 : c'est
+l'implémentation locale en attendant l'intégration L4, pas un bouchon qui refuse tout. Elle écrit de
+vrais droits. Ne pas conclure d'un nom.
+
+**Donc la correction n'est pas « écrire une projection », c'est « appeler celle qui existe au bon
+moment ».** La question du paramétrage QR que Maxime a posée porte exactement là : *quand* un billet
+vendu devient-il un droit — à la vente, à l'impression, au premier scan, jamais si l'établissement ne
+l'a pas activé ? Le déclencheur dépend de la réponse, pas l'inverse.
+
+⚠ **Et il y a une conséquence à ne pas manquer :** `CardExpiryCalculator` n'est appliqué qu'à la
+**première** projection. Si la projection se met à partir de la vente alors qu'un support a déjà été
+projeté par appairage manuel, la validité ne sera pas recalculée — c'est voulu (ne pas réinitialiser
+une carte rechargée), mais ça veut dire que **l'ordre des deux événements change le résultat**. À
+trancher en même temps que le déclencheur, pas après.
