@@ -5128,4 +5128,16 @@ yeux de l'utilisateur.
 
 **A qui tient frontend/public/sw.js (ccc572b) :** `const VERSION = 'fluvia-v1'` ne change jamais entre deux constructions. (1) La purge de `activate` supprime les caches dont le nom differe de VERSION — comme VERSION est constant, elle ne peut RIEN supprimer, alors que son commentaire dit exister pour eviter que le stockage du telephone soit refuse. (2) `install` ne met `/index.html` en cache qu une fois et ne se rejoue jamais ; la coquille en cache nomme des assets supprimes depuis (mesure : trois empreintes precedentes rendent 404). Hors ligne = page blanche, ce qui est la seule raison d etre declaree du fichier. **Correctif : que VERSION porte le commit de construction, que version.json publie deja.** Le chemin en ligne est sain, mes correctifs s executent bien. Detail dans RAPPORTS/claude-8e.md. Signale, pas corrige — un service worker mal remplace se repare mal.
 
-**Suite (8e) — service worker :** le nom du cache servi porte bien le commit (`fluvia-e576f73`, lu dans le navigateur sur lorigine reelle), et la coquille en cache pointe vers des assets qui repondent 200. **En revanche la purge de `activate` reste verifiee par LECTURE seulement** : mes deux montages nont pas exerce le cycle (`unregister()` est differe tant quun client est controle — aucun `activate` na eu lieu). Au prochain deploiement, `caches.keys()` sur lorigine doit rendre UN SEUL nom : la preuve tombera gratuitement pour qui regardera.
+**Suite (8e) — service worker :** le nom du cache servi porte bien le commit (`fluvia-e576f73`, lu dans le navigateur sur lorigine reelle), et la coquille en cache pointe vers des assets qui repondent 200. **~~En revanche la purge de `activate` reste verifiee par LECTURE seulement~~ — PROUVEE depuis, voir ci-dessous** : mes deux montages nont pas exerce le cycle (`unregister()` est differe tant quun client est controle — aucun `activate` na eu lieu). Au prochain deploiement, `caches.keys()` sur lorigine doit rendre UN SEUL nom : la preuve tombera gratuitement pour qui regardera.
+
+**Suite et fin (8e) — la purge du service worker est prouvee par la mesure.** Deux deploiements
+successifs, un navigateur qui traverse les deux : `caches.keys()` rend **un seul** nom,
+`fluvia-6338f11`, egal au commit de `version.json`. Un seul nom prouve les deux gardes a la fois —
+`install` rejoue, `activate` purge. Les trois proprietes du service worker (nom au commit, coquille
+valide, purge effective) sont desormais mesurees, aucune lue.
+
+**Et la mise en garde qui vaut pour tout le monde :** mes deux tentatives precedentes avaient echoue
+pour des raisons d'INSTRUMENT (`unregister()` est differe tant qu'un client est controle, donc aucun
+`activate` n'avait lieu). J'ai failli rapporter « la purge ne marche pas ». Un faux negatif ne coute
+pas une mesure perdue : **il coute le travail de celui a qui on le transmet**, qui va chercher une
+faute absente. Un silence ne se rapporte jamais comme un refus.

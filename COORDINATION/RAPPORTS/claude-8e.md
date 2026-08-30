@@ -584,6 +584,12 @@ nom du cache est une confirmation *indépendante* de la substitution — pas une
 ⚠ **LA PURGE, ELLE, RESTE VÉRIFIÉE PAR LECTURE SEULEMENT. Deux instruments défaillants, pas deux
 résultats négatifs.**
 
+> **CETTE PHRASE N'EST PLUS VRAIE — corrigée à 05 h, deux sections plus bas.** Elle reste écrite
+> parce qu'elle explique deux instruments défaillants qui valent d'être connus ; elle porte donc son
+> propre démenti, faute de quoi elle deviendrait exactement ce que ce rapport reproche partout
+> ailleurs : une phrase qui décrit un défaut et survit à sa correction, sans que rien ne relie les
+> deux.
+
 *Première tentative* — cache `fluvia-AVANT-DEPLOIEMENT` fabriqué, service worker désinscrit puis
 réinscrit, neuf secondes d'attente : le faux cache survit. J'ai failli écrire que la purge ne
 marchait pas. Elle n'a **jamais été appelée** : `unregister()` est différé tant qu'un client est
@@ -600,3 +606,30 @@ nouveau commit. La preuve tombera gratuitement pour qui aura le réflexe de rega
 
 **Nettoyé** : le faux cache est supprimé du navigateur, la substitution d'essai retirée de
 `frontend/public/sw.js` (`fluvia-__COMMIT__` restauré, arbre propre, aucun écart avec `main`).
+
+
+### La moitié manquante est tombée — mesurée, pas lue
+
+73 a fait le montage que j'avais décrit faute de pouvoir le faire : **deux déploiements successifs,
+et un navigateur qui traverse les deux.** J'ai revérifié de mon côté, sur l'origine réelle, dans le
+navigateur qui portait `fluvia-e576f73` avant :
+
+    caches.keys()            ['fluvia-6338f11']   ← UN SEUL nom
+    ancien nom               disparu
+    VERSION dans sw.js       fluvia-6338f11
+    commit de version.json   6338f11              ← le nom du cache est égal au commit servi
+    assets de la coquille    index-D9QFuyzE.js 200 · index-DmqTx5UZ.css 200
+    témoin négatif           /assets/index-ZZZZZZZZ.js → 404
+
+**Un seul nom prouve les deux gardes à la fois** : `install` s'est rejoué (le nom a changé) et
+`activate` a supprimé le précédent (il n'en reste qu'un). Deux noms auraient signifié une purge
+inerte — c'est le résultat qui pouvait échouer, et il n'a pas échoué.
+
+Le service worker est donc entièrement prouvé par la mesure : nom au commit, coquille valide, purge
+effective. **Aucun des trois par lecture.**
+
+**Ce que j'en retiens, et c'est la leçon la plus utile de la nuit :** mes deux tentatives ratées ont
+failli devenir un signalement. Si j'avais écrit « la purge ne marche pas », 73 aurait cherché dans
+trois lignes justes une faute qui n'y était pas — et l'aurait peut-être « corrigée ». *Un faux négatif
+ne coûte pas une mesure perdue : il coûte le travail de celui à qui on le transmet.* C'est pour ça
+qu'un silence ne se rapporte jamais comme un refus.
