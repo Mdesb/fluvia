@@ -341,6 +341,14 @@ while read -r ancien nouveau ref; do
         lancer garde-fou-vacuite-tests.php "--contre=$BASE"
     fi
 
+    # Le cliquet d'espacement ne prend pas `--contre` : il compare a une ligne de base scellee dans
+    # `bin/`, pas a une revision. C'est voulu -- le nombre a geler est une propriete de l'arbre, pas
+    # de l'ecart entre deux commits.
+    if [ -f "$ARBRE/bin/garde-fou-espacement-en-ligne.php" ]; then
+        echo "── Espacement en ligne"
+        lancer garde-fou-espacement-en-ligne.php
+    fi
+
     # ⚠ FILET DE COMPLÉTUDE — la leçon du 24/08, et elle a coûté cher.
     #
     # Ce hook n'appelle pas `bin/garde-fous.sh` : il doit calculer les fichiers ajoutés sur
