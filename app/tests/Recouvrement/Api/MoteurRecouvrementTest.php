@@ -211,6 +211,13 @@ final class MoteurRecouvrementTest extends RecouvrementApiTestCase
      *   · « ce qui a été rejeté, quand, pour quel motif » est une pièce justificative : elle sert à
      *     expliquer une porte fermée et à tenir un litige bancaire.
      *
+     * ⚠ ET QUELQUE CHOSE DÉDOUBLONNE DÉJÀ, EN AMONT — ne l'ajoutez pas ici. `DeclarerRejetSepaProcessor`,
+     * le chemin des VRAIS rejets bancaires, refuse un incident si un impayé non soldé existe pour le
+     * couple (échéance, redevable) : réimporter un fichier de retour est un geste humain ordinaire, et
+     * il ne doit pas produire deux dossiers pour un seul rejet. Cette garde-là porte sur L'ÉCHÉANCE.
+     * Celle qu'on serait tenté d'ajouter ici porterait sur le REDEVABLE — et fusionnerait deux rejets
+     * bien distincts. Les deux se ressemblent dans une revue ; une seule est juste.
+     *
      * ⚠ CE QUE CE TEST NE PROUVE PAS. Il compte des incidents, pas des courriers. Le doublon qui
      * atteindrait un client vit dans `RecoveryEngine`, qui dédoublonne ses campagnes sur l'INCIDENT
      * et non sur le redevable — latent aujourd'hui, et hors de ce module.
