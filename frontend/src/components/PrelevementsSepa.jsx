@@ -876,12 +876,24 @@ function GenerationRemiseModal({ open, onClose, onFait }) {
     setErreur(null)
     try {
       const remise = await api.genererRemiseSepa(dateExecution)
-      // On annonce ce que la remise CONTIENT. Ce qu'elle a écarté (`nbExclues`) ne sort pas de
-      // l'API — voir le commentaire du tableau des remises. D'où la phrase de rappel : un total qui
-      // paraît petit peut être un total amputé, et il n'y a aujourd'hui aucun moyen de le savoir.
+      // ⚠ ON ANNONCE AUSSI CE QUI A ÉTÉ ÉCARTÉ, ET C'EST LA MOITIÉ QUI MANQUAIT.
+      //
+      // Le cas « tout est écarté » lève un 422 qui nomme la raison. Le cas « une partie est
+      // écartée » réussissait en silence : on composait 40 lignes là où l'exploitant en attendait
+      // 60, et le message de succès ne disait rien des 20 autres. Le cas total échoue bruyamment ;
+      // le partiel avait l'air d'avoir marché.
+      //
+      // Le commentaire qui vivait ici affirmait que `nbExclues` « ne sort pas de l'API ». C'était
+      // vrai quand il a été écrit ; les groupes de sérialisation ont été posés depuis, et personne
+      // n'a relu la phrase. Mesuré avant de la remplacer, et cloué par un test.
+      const exclues = Number(remise?.nbExclues ?? 0)
+      const motif = remise?.motifExclusion
       onFait(
-        `Remise composée : ${remise?.nbTxs ?? 0} prélèvement(s) pour ${euroCentimes(remise?.ctrlSumCentimes)}. `
-          + 'Vérifiez ce nombre contre les échéances que vous attendiez.',
+        `Remise composée : ${remise?.nbTxs ?? 0} prélèvement(s) pour ${euroCentimes(remise?.ctrlSumCentimes)}.`
+          + (exclues > 0
+            ? ` ⚠ ${exclues} échéance(s) ont été ÉCARTÉES${motif ? ` : ${motif}` : ''}.`
+              + ' Elles ne seront pas prélevées ; corrigez la cause puis recomposez.'
+            : ' Vérifiez ce nombre contre les échéances que vous attendiez.'),
       )
     } catch (err) {
       setErreur(err.message || "La remise n'a pas pu être composée.")

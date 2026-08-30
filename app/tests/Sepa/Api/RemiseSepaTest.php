@@ -81,6 +81,52 @@ final class RemiseSepaTest extends SepaApiTestCase
         self::assertResponseStatusCodeSame(422);
     }
 
+    /**
+     * ⚠ CE QUI A ETE ECARTE DOIT SORTIR DE L'API — sinon une remise amputee a l'air reussie.
+     *
+     * Le cas « tout est ecarte » leve un 422 qui nomme la raison legale. Le cas « une partie est
+     * ecartee » reussit : l'ecran annonce le nombre de lignes COMPOSEES, et rien ne dit que
+     * d'autres sont restees dehors faute de preavis. Un total qui parait petit peut etre un total
+     * amputé.
+     *
+     * `nbExclues` et `motifExclusion` portent le groupe de lecture ; ce test le cloue. S'ils le
+     * perdaient, l'ecran retomberait dans le silence sans qu'aucune erreur ne le dise — et le
+     * commentaire de l'ecran, qui affirmait deja ce silence par le passe, redeviendrait vrai sans
+     * que personne ne le sache.
+     */
+    public function testCeQuiAEteEcarteSortDeLApi(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+
+        $remise = $this->remiseDemoRegie();
+
+        // ⚠ ON POSE UN MOTIF AVANT DE LIRE. API Platform omet les proprietes nulles : sans exclusion
+        // reelle, le motif serait absent de la charge utile pour une raison qui n'a rien a
+        // voir avec sa serialisation, et le test conclurait a un defaut inexistant. C'est ce qui
+        // s'est passe a ma premiere version.
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $remise->setNbExclues(3)->setMotifExclusion('Preavis non parti : aucun expediteur configure.');
+        $em->flush();
+
+        $charge = $client->request('GET', '/api/remise_sepas/' . $remise->getId(), $entete)->toArray();
+
+        self::assertArrayHasKey(
+            'nbExclues',
+            $charge,
+            'Le nombre d’échéances écartées ne sort pas de l’API : une remise amputée sera indiscernable d’une remise complète.',
+        );
+        self::assertArrayHasKey(
+            'motifExclusion',
+            $charge,
+            'Le motif d’exclusion ne sort pas de l’API : l’écran pourra dire QUE des lignes manquent, jamais POURQUOI.',
+        );
+
+        // Témoin : la fiche est bien celle qu'on croit, sinon les deux clés ci-dessus pourraient
+        // manquer pour une raison sans rapport avec la sérialisation.
+        self::assertSame((string) $remise->getId(), $charge['id'] ?? null);
+    }
+
     private function remiseDemoRegie(): RemiseSepa
     {
         /** @var EntityManagerInterface $em */

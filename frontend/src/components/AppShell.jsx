@@ -230,6 +230,16 @@ export default function AppShell({
   capacites = [],
   droits = [],
   estAdmin = false,
+  // ⚠ LA NAVIGATION EST PARAMETRABLE, ET SA VALEUR PAR DEFAUT EST CELLE DU BACK-OFFICE.
+  //
+  // L'application editeur employait sa propre barre : deux habillages a tenir, et l'un des deux
+  // prenait du retard — Maxime l'a vu du premier coup d'oeil. Elle passe desormais SA navigation a
+  // cette coquille-ci.
+  //
+  // Additif : l'application principale ne passe rien et se comporte exactement comme avant.
+  nav: navFournie = null,
+  // Rendu a droite de la barre du haut, avant la recherche. L'editeur y met « Mode support ».
+  actionsBarre = null,
   children,
 }) {
   // État de la session de caisse, affiché en permanence dans la barre du haut.
@@ -260,7 +270,8 @@ export default function AppShell({
 
   // Filtre les entrées selon les capacités actives, les droits effectifs de l'établissement courant
   // et le statut administrateur.
-  const nav = NAV
+  const navSource = navFournie ?? NAV
+  const nav = navSource
     .map((grp) => ({
       ...grp,
       items: grp.items.filter(
@@ -284,7 +295,7 @@ export default function AppShell({
 
   const navFinale = nav.length > 0
     ? nav
-    : NAV
+    : navSource
         .map((grp) => ({
           ...grp,
           items: grp.items.filter((it) => !it.cap && !it.admin),
@@ -443,6 +454,10 @@ export default function AppShell({
               ))}
             </select>
           </div>
+
+          {/* Rendu avant la recherche : l editeur y met « Mode support ». Null par defaut, donc
+              la barre du back-office est inchangee. */}
+          {actionsBarre}
 
           <RechercheGlobale droits={droits} onNav={onNav} />
 
