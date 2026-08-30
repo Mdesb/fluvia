@@ -8,6 +8,7 @@ use App\Acces\Entity\DroitAcces;
 use App\Acces\Enum\StatutProjectionDroit;
 use App\Recouvrement\Entity\IncidentImpaye;
 use App\Recouvrement\Event\AccesRedevableChangeEvent;
+use App\Recouvrement\Port\BlockingExemptionLookup;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
@@ -26,6 +27,7 @@ final class PropagationAccesHandler
         private readonly EntityManagerInterface $em,
         private readonly RedevableRegistry $redevables,
         private readonly EventDispatcherInterface $dispatcher,
+        private readonly BlockingExemptionLookup $exemptions,
     ) {
     }
 
@@ -70,6 +72,18 @@ final class PropagationAccesHandler
      */
     public function reevaluer(string $typeRedevable, string $referenceRedevable): void
     {
+        // ⚠ L'EXEMPTION SE CONSULTE AVANT LE COMPTE, SINON ELLE NE SERVIRAIT QU'AUX IMPAYES FUTURS.
+        //
+        // Le cas qui a motivé la fonctionnalité est une collectivité **déjà bloquée** au moment où
+        // l'on décide de l'exempter. Si l'exemption n'était lue qu'à la fermeture, poser l'exemption
+        // ne rouvrirait rien : il faudrait encore forcer chaque dossier à la main, c'est-à-dire
+        // exactement ce qu'elle remplace.
+        if ($this->exemptions->estExempte($typeRedevable, $referenceRedevable)) {
+            $this->activer($typeRedevable, $referenceRedevable);
+
+            return;
+        }
+
         $bloquantsRestants = (int) $this->em->createQueryBuilder()
             ->select('COUNT(i.id)')
             ->from(IncidentImpaye::class, 'i')
@@ -81,16 +95,56 @@ final class PropagationAccesHandler
             ->getQuery()
             ->getSingleScalarResult();
 
-        if ($bloquantsRestants > 0) {
+        // ⚠ ON CONCLUT DANS LES DEUX SENS. La version d'origine sortait quand il restait des
+        // bloquants : juste tant que la fonction n'etait appelee que depuis une porte DEJA fermee —
+        // ce qui etait le cas de ses trois appelants, et que rien n'ecrivait nulle part. Au retrait
+        // d'une exemption la porte est OUVERTE : ne rien faire y laisse entrer un client qui doit
+        // encore de l'argent.
+        $this->conclure($typeRedevable, $referenceRedevable, $bloquantsRestants === 0);
+    }
+
+    /**
+     * Porte l'etat voulu, et n'ecrit que s'il differe de l'etat courant.
+     *
+     * `appliquer()` publie `AccesRedevableChangeEvent` a chaque appel. Un evenement qui annonce un
+     * changement qui n'a pas eu lieu ne casse rien ici — le pont l'exclut des notifications et son
+     * unique ecouteur est idempotent — mais c'est un mensonge bon marche, et ceux-la finissent par
+     * etre crus.
+     */
+    private function conclure(string $typeRedevable, string $referenceRedevable, bool $ouvrir): void
+    {
+        $droit = $this->redevables->droitAcces($typeRedevable, $referenceRedevable);
+        if ($droit instanceof DroitAcces) {
+            $voulu = $ouvrir ? StatutProjectionDroit::Valide : StatutProjectionDroit::Devalide;
+            if ($droit->getStatutProjection() === $voulu) {
+                return;
+            }
+        }
+
+        $this->appliquer($typeRedevable, $referenceRedevable, $ouvrir);
+    }
+
+    /**
+     * Coupe l'accès (impayé non régularisé, selon la politique) — sauf redevable exempté.
+     *
+     * ⚠ LA GARDE EST ICI, PAS CHEZ LES DEUX APPELANTS.
+     *
+     * `MoteurRecouvrementHandler` coupe à deux endroits distincts (échéance dépassée, N
+     * représentations échouées). Recopier la condition aux deux ferait diverger la règle au premier
+     * correctif ; la poser au point unique où la porte se ferme la rend vraie pour tout appelant
+     * futur, y compris celui qu'on n'a pas encore écrit.
+     *
+     * ⚠ ET L'EXEMPTION NE MASQUE PAS L'IMPAYE. Le drapeau `IncidentImpaye::accesBloque` continue
+     * d'être posé par le moteur, le dossier reste dû, la relance continue. Ce qui est exempté est la
+     * **conséquence sur la porte**, pas la dette : le tableau de bord doit toujours montrer que ce
+     * client doit de l'argent.
+     */
+    public function desactiver(string $typeRedevable, string $referenceRedevable): void
+    {
+        if ($this->exemptions->estExempte($typeRedevable, $referenceRedevable)) {
             return;
         }
 
-        $this->activer($typeRedevable, $referenceRedevable);
-    }
-
-    /** Coupe l'accès (impayé non régularisé, selon la politique). */
-    public function desactiver(string $typeRedevable, string $referenceRedevable): void
-    {
         $this->appliquer($typeRedevable, $referenceRedevable, false);
     }
 

@@ -973,3 +973,15 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 @media (max-width: 900px) {
   .pwa-bandeau { margin: 12px 14px 0; }
 }
+
+/* Les boutons d'une modale, alignés à droite.
+   ⚠ DÉCLARÉE plutôt que recopiée en style en ligne : les modales voisines alignent leurs boutons
+   avec `style={{ display:'flex', gap:8, justifyContent:'flex-end', marginTop:12 }}`, et le cliquet
+   des espacements écrits à la main refuse toute nouvelle occurrence. La contrainte a produit le
+   meilleur des deux : une classe, et l'échelle d'espacement au lieu d'un nombre. */
+.modal-actions {
+  display: flex;
+  gap: var(--esp-serre);
+  justify-content: flex-end;
+  margin-top: var(--esp-bloc);
+}

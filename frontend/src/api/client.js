@@ -1116,6 +1116,17 @@ export const api = {
 
   // Recouvrement : les deux gestes qui closent un impaye, et le compteur d'acces bloques.
   tableauBordRecouvrement: () => request('/api/recouvrement/tableau-bord'),
+
+  // D84 — « ce redevable n'est jamais bloque ». L'exemption porte sur le REDEVABLE, pas sur le
+  // dossier : forcer une reouverture vaut pour un impaye, l'exemption vaut aussi pour ceux a venir.
+  exemptionsBlocage: () => request('/api/recouvrement/exemptions', { query: { itemsPerPage: 100 } }),
+  exempterRedevable: (typeRedevable, referenceRedevable, motif) =>
+    request('/api/recouvrement/exemptions/accorder', {
+      method: 'POST',
+      body: { typeRedevable, referenceRedevable, motif },
+    }),
+  retirerExemption: (id) =>
+    request(`/api/recouvrement/exemptions/${id}/retirer`, { method: 'POST', body: {} }),
   // Ecarts de caisse.  est calcule par le serveur a la lecture — aucun drapeau stocke,
   // donc aucun drapeau a maintenir. C'est lui qui fait descendre la liste (D55).
   alertesEcartCaisse: () =>
