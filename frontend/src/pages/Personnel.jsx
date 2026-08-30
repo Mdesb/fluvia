@@ -403,17 +403,26 @@ function EmployeModal({ open, onClose, onFait }) {
   const [poste, setPoste] = useState('')
   const [contrat, setContrat] = useState('cdi')
   const [matricule, setMatricule] = useState('')
-  const [entree, setEntree] = useState('')
+  const [entree, setEntree] = useState(dateDuJour())
   const [erreur, setErreur] = useState(null)
   const [envoi, setEnvoi] = useState(false)
 
   useEffect(() => {
     if (!open) return
     setNom(''); setPrenom(''); setPoste(''); setContrat('cdi')
-    setMatricule(''); setEntree(''); setErreur(null)
+    setMatricule(''); setEntree(dateDuJour()); setErreur(null)
   }, [open])
 
-  const pret = nom.trim() && prenom.trim() && poste.trim() && contrat
+  // ⚠ `dateEntree` EST OBLIGATOIRE, et l'écran l'affichait en facultative.
+  //
+  // `Employe::$dateEntree` porte `Assert\NotNull` sur une colonne `date_immutable` NON NULLE.
+  // La première version de cette modale ne l'étoilait pas, ne l'exigeait pas et ne l'envoyait
+  // que si elle était remplie : qui saisissait les trois champs étoilés obtenait un 422 au clic,
+  // sur un formulaire qui venait de lui dire qu'il était complet.
+  //
+  // Trouvé en RELISANT l'entité après coup, pas en l'écrivant — la première lecture avait retenu
+  // les trois `NotBlank` et manqué les deux `NotNull` juste en dessous.
+  const pret = nom.trim() && prenom.trim() && poste.trim() && contrat && entree
 
   async function soumettre(e) {
     e.preventDefault()
@@ -426,7 +435,7 @@ function EmployeModal({ open, onClose, onFait }) {
         poste: poste.trim(),
         typeContrat: contrat,
         ...(matricule.trim() ? { matricule: matricule.trim() } : {}),
-        ...(entree ? { dateEntree: entree } : {}),
+        dateEntree: entree,
       })
       onFait()
     } catch (err) {
@@ -478,9 +487,10 @@ function EmployeModal({ open, onClose, onFait }) {
             <span className="hint">Facultatif — celui de votre logiciel de paie, si vous en avez un.</span>
           </div>
           <div className="field" style={{ flex: '1 1 200px' }}>
-            <label htmlFor="em-entree">Date d’entrée</label>
+            <label htmlFor="em-entree">Date d’entrée *</label>
             <input id="em-entree" className="input" type="date" value={entree}
               onChange={(e) => setEntree(e.target.value)} />
+            <span className="hint">Obligatoire — c’est elle qui datera l’ancienneté et les plannings.</span>
           </div>
         </div>
 
@@ -503,6 +513,16 @@ function EmployeModal({ open, onClose, onFait }) {
 
 // Les six formes de `TypeContrat`, en toutes lettres : « vacataire » et « prestataire » ne se
 // devinent pas depuis un code, et le choix a des conséquences en paie.
+// ⚠ EN HEURE LOCALE, PAS `toISOString()`. Cette dernière rend de l'UTC : ouverte à Paris entre
+// minuit et deux heures du matin en été, elle daterait l'entrée de LA VEILLE. Le champ est un
+// `<input type="date">`, qui attend `AAAA-MM-JJ` dans le calendrier de celui qui saisit.
+function dateDuJour() {
+  const d = new Date()
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const jj = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${mm}-${jj}`
+}
+
 const CONTRATS = [
   ['cdi', 'CDI'],
   ['cdd', 'CDD'],
