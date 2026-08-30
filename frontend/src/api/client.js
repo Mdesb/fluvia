@@ -1485,6 +1485,11 @@ export const api = {
   museeVisitesGuidees: () =>
     request('/api/musee_visite_guidees', { query: { itemsPerPage: 100 } }),
   museeSalles: () => request('/api/musee_salles', { query: { itemsPerPage: 100 } }),
+  // `POST /api/musee_salles` existe depuis le debut (droit `musee.configurer`) et n'etait appele
+  // de nulle part : l'ecran comptait les presents salle par salle sans savoir declarer une salle.
+  // Contrat sonde : un corps vide rend 422 et n'ecrit rien -- `nom` non vide et `espace` requis.
+  creerSalleMusee: (corps) =>
+    request('/api/musee_salles', { method: 'POST', body: corps, ld: true }),
   museeGuides: () => request('/api/musee_guides', { query: { itemsPerPage: 100 } }),
   museeContingentsGratuite: () =>
     request('/api/musee_contingent_gratuites', { query: { itemsPerPage: 50 } }),
