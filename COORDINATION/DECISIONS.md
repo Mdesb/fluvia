@@ -2996,3 +2996,51 @@ le dit dans son en-tête ; il sera élargi à tous les prérequis quand les sept
 ⚠ **Et une valeur reste inexpliquée :** la base de préprod portait un défaut comptable sur
 `boutique_stock` qu'**aucune ligne du dépôt n'écrit** — `StockFixtures` crée ce type sans défauts.
 Elle a été remplacée, son origine reste inconnue.
+
+---
+
+## D94 — Un canal non raccordé refuse ; il n'annonce jamais un succès
+
+**Décidé par Maxime le 31/08.** Deux adaptateurs câblés en production rendaient `StatutEnvoi::Transmis`
+sans rien transmettre :
+
+    ChorusProStubAdapter::deposer()  →  Transmis     (dépôt B2G, Chorus Pro)
+    PdpStubAdapter::deposer()        →  Transmis     (e-reporting, réforme française)
+
+L'exploitant voyait ses factures B2G **marquées transmises**, et l'aurait découvert par une relance de
+sa collectivité — au moment et par la voie les plus coûteuses. Côté e-reporting, l'enjeu dépasse une
+facture : une déclaration marquée transmise est **une obligation déclarative que plus personne ne sait
+manquante**.
+
+⚠ **Le dépôt portait déjà les deux traitements opposés du même cas.** `ItboxAdapter` lève une
+exception explicite pour ce motif exact, et le dit dans son en-tête : *« un adaptateur muet est pire
+qu'un adaptateur absent »*. Deux réponses contraires à la même question, à deux modules d'écart.
+
+**La règle, désormais générale :** un port sans implémentation réelle **refuse explicitement**. Il ne
+rend jamais un statut de succès, et son message nomme ce qui **n'a pas eu lieu**.
+
+**Forme retenue :** `ServiceUnavailableHttpException` (503). L'appelant n'a rien fait de mal et n'a
+rien à corriger — un 4xx l'enverrait relire sa facture. Les deux handlers appellent `deposer()` avant
+`persist()`/`flush()`, donc rien n'est écrit : aucun demi-état, et le dépôt reste rejouable tel quel le
+jour du raccordement, sans nouveau numéro (RG-FACT-07 §7).
+
+### Ce que le refus coûte, et comment on le paie
+
+Le test d'API ne peut plus atteindre le rejeu-sans-nouveau-numéro : le canal refuse avant. Cette règle
+a donc changé de niveau — elle est éprouvée contre un **adaptateur d'essai**, au niveau du handler.
+
+**C'est plus juste, pas seulement plus commode :** cet invariant est le NÔTRE. Le vérifier à travers un
+adaptateur qui ment revenait à faire dépendre notre propre règle d'une intégration absente.
+
+⚠ **Et l'ancien test scellait le mensonge.** Il affirmait `statutEnvoi === 'transmis'` — assertion
+**vraie et sans valeur**. Un test qui décrit un défaut le protège : il devient le gardien de ce qu'il
+aurait dû signaler.
+
+### Ce que cette décision ne règle pas
+
+Aucun format de facture électronique n'existe dans le code — mesuré le 31/08 : ni **EN 16931**, ni
+**UBL**, ni **CII**, ni **Peppol**, et « Factur-X » n'apparaît qu'une fois, dans une spécification,
+comme question ouverte. La spécification de facturation le dit elle-même : *« aucune implémentation
+n'est livrée »*. C'était le câblage qui affirmait le contraire ; il ne l'affirme plus.
+
+**Bloquant avant commercialisation**, au même titre que le choix de la PDP.
