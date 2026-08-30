@@ -5,6 +5,20 @@ api_platform:
     # attributs #[ApiFilter] des entités hors src/Entity soient enregistrés (resource_class_directories).
     mapping:
         paths:
+            # ⚠ AJOUTES LE 30/08 APRES MESURE : leurs `#[ApiFilter]` etaient DECLARES ET MUETS.
+            #
+            #     GET /api/bank_statement_lines?statementImport=<uuid inexistant>  →  1 ligne, pas 0
+            #
+            # `AttributeFilterPass` ne parcourt que cette liste. Un dossier absent ne casse pas la
+            # ressource — il rend ses filtres muets, donc la collection sort ENTIERE. Une liste vide
+            # intrigue ; une liste pleine, jamais. Neuf declarations etaient dans ce cas, sur des
+            # factures fournisseurs, des notes de frais et des lignes de releve bancaire.
+            - '%kernel.project_dir%/src/Finance/ExpenseReport/Entity'
+            - '%kernel.project_dir%/src/Finance/SupplierInvoice/Entity'
+            - '%kernel.project_dir%/src/Finance/Treasury/Entity'
+            # `Caution/Entity` ne declare aujourd'hui aucun filtre : la ligne est posee pour que la
+            # premiere declaration ne soit pas muette a son tour, sans qu'on ait a s'en souvenir.
+            - '%kernel.project_dir%/src/Caution/Entity'
             - '%kernel.project_dir%/src/Organisation/Entity'
             # Le centre de notification (Maxime, 29/08). ⚠ Ajoute APRES avoir bute dessus : les
             # routes de la ressource fonctionnaient sans cette ligne, mais `AttributeFilterPass`

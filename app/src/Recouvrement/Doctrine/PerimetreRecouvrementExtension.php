@@ -8,6 +8,7 @@ use ApiPlatform\Doctrine\Orm\Extension\QueryCollectionExtensionInterface;
 use ApiPlatform\Doctrine\Orm\Extension\QueryItemExtensionInterface;
 use ApiPlatform\Doctrine\Orm\Util\QueryNameGeneratorInterface;
 use ApiPlatform\Metadata\Operation;
+use App\Recouvrement\Entity\BlockingExemption;
 use App\Recouvrement\Entity\IncidentImpaye;
 use App\Recouvrement\Entity\PolitiqueRecouvrement;
 use App\Recouvrement\Entity\RepresentationSepa;
@@ -26,6 +27,8 @@ final class PerimetreRecouvrementExtension implements QueryCollectionExtensionIn
     private const CHAINES = [
         PolitiqueRecouvrement::class => [],
         IncidentImpaye::class => [],
+        // D84 — l'exemption porte directement l'établissement : aucune relation à traverser.
+        BlockingExemption::class => [],
         RepresentationSepa::class => ['incident'],
     ];
 

@@ -45,6 +45,8 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
 
   const peutPiloter = aLeDroit(droits, 'recouvrement.piloter')
   const peutForcer = aLeDroit(droits, 'recouvrement.forcer_acces')
+  const [exemptions, setExemptions] = useState([])
+  const [exemption, setExemption] = useState(null)
 
   const recharger = useCallback(async () => {
     setChargement(true)
@@ -64,11 +66,50 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
     }
     // Le tableau de bord est un complément : son absence ne doit pas priver de la liste.
     api.tableauBordRecouvrement().then(setBord).catch(() => setBord(null))
+    // Même raison pour les exemptions : sans elles la liste reste juste, on perd seulement la
+    // pastille « exempté ». Une erreur ici ne doit pas masquer les impayés.
+    api.exemptionsBlocage().then((r) => setExemptions(membres(r))).catch(() => setExemptions([]))
   }, [etabActif])
 
   useEffect(() => {
     recharger()
   }, [recharger])
+
+  // ⚠ On compare le COUPLE, pas la seule référence. Deux verticales peuvent fabriquer la même
+  // référence sans se concerter : le recouvrement identifie un redevable par son type ET sa
+  // référence, et cet écran doit dire la même chose que le serveur.
+  const actives = exemptions.filter((e) => !e.revokedAt)
+  const estExempte = (incident) =>
+    actives.some(
+      (e) => e.debtorType === incident.typeRedevable && e.debtorRef === incident.referenceRedevable,
+    )
+
+  // ⚠ On affiche le nom si un impaye du meme redevable est charge, sinon la reference brute.
+  // Inventer un libelle « client inconnu » ferait croire a une donnee manquante ; la reference est
+  // laide mais vraie, et elle permet de retrouver la ligne.
+  const nomRedevable = (type, reference) => {
+    const connu = incidents.find((i) => i.typeRedevable === type && i.referenceRedevable === reference)
+    return connu?.nomRedevable || connu?.libelleRedevable || reference
+  }
+
+  async function retirerExemption(e) {
+    if (
+      !window.confirm(
+        'Retirer cette exemption ?\n\nLe client redeviendra bloquable, et si un impayé reste dû '
+          + 'son accès sera coupé immédiatement.',
+      )
+    ) {
+      return
+    }
+    try {
+      await api.retirerExemption(e.id)
+      setSucces('Exemption retirée. Si un impayé reste dû, l’accès vient d’être coupé.')
+      setErreur(null)
+      recharger()
+    } catch (err) {
+      setErreur(err.message || "Le retrait n'a pas abouti.")
+    }
+  }
 
   async function resoudre(incident) {
     if (
@@ -263,6 +304,19 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
                               Rouvrir quand même
                             </button>
                           )}
+                          {/* Le geste se pose ICI, devant le client qui revient tous les mois —
+                              c'est là qu'on s'aperçoit qu'on force le même depuis six mois. */}
+                          {peutForcer && !estExempte(i) && (
+                            <button
+                              className="btn ghost sm"
+                              type="button"
+                              title="Ce client ne sera plus jamais bloqué pour impayé. La dette reste due."
+                              onClick={() => setExemption(i)}
+                            >
+                              Ne plus bloquer
+                            </button>
+                          )}
+                          {estExempte(i) && <span className="badge">exempté</span>}
                         </div>
                       </td>
                     )}
@@ -282,6 +336,57 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
           )}
         </div>
       </section>
+
+      {/* ⚠ LA LISTE DES EXEMPTIONS EST LA MOITIÉ QUI REND LE GESTE RÉVERSIBLE. Sans elle, « ne plus
+          jamais bloquer » serait une porte à sens unique : posable d'un clic, retirable par
+          personne. Le garde-fou d'écart l'a d'ailleurs dit avant moi — la fonction de retrait
+          existait, aucun écran ne l'appelait. */}
+      {actives.length > 0 && (
+        <section className="card">
+          <div className="card-h">
+            <h3>Clients jamais bloqués</h3>
+            <span className="sub">la dette reste due — seul le blocage d'accès est levé</span>
+          </div>
+          <div className="card-b">
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>Redevable</th>
+                  <th>Motif</th>
+                  <th>Depuis</th>
+                  {peutForcer && <th className="num">Action</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {actives.map((e) => (
+                  <tr key={e.id}>
+                    <td>{nomRedevable(e.debtorType, e.debtorRef)}</td>
+                    <td>{e.reason}</td>
+                    <td>{dateHeureFr(e.grantedAt)}</td>
+                    {peutForcer && (
+                      <td className="num">
+                        <button
+                          className="btn ghost sm"
+                          type="button"
+                          title="Le client redeviendra bloquable ; si un impayé reste dû, son accès sera coupé."
+                          onClick={() => retirerExemption(e)}
+                        >
+                          Retirer
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="hint">
+              Une exemption n'a pas de date de fin : elle dure jusqu'à ce que quelqu'un la retire.
+              C'est ce qui la distingue d'une réouverture forcée, qui ne vaut que pour un impayé.
+            </div>
+          </div>
+        </section>
+      )}
+
 
       {resolus.length > 0 && (
         <section className="card" style={{ marginTop: 16 }}>
@@ -327,6 +432,13 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
       />
 
       <Politique droits={droits} etabActif={etabActif} onSucces={setSucces} />
+
+      <ExemptionModal
+        incident={exemption}
+        onClose={() => setExemption(null)}
+        onFait={(m) => { setExemption(null); setSucces(m); setErreur(null); recharger() }}
+        onErreur={(m) => setErreur(m)}
+      />
 
       <ForcageModal
         incident={forcage}
@@ -727,6 +839,83 @@ function PolitiqueModal({ politique, etabActif, onClose, onFait }) {
           </button>
         </div>
       </form>
+    </Modal>
+  )
+}
+
+/**
+ * « Ne plus jamais bloquer ce client » — l'exemption durable (D84).
+ *
+ * ⚠ ELLE N'EFFACE PAS LA DETTE, et c'est ce que cet écran doit dire avant tout le reste. Le libellé
+ * du bouton se lit spontanément comme « passer l'éponge » ; l'impayé reste pourtant ouvert, le
+ * dossier reste dû et la relance continue. Ce qui est exempté est la conséquence sur la PORTE.
+ *
+ * ⚠ ELLE N'A PAS DE DATE DE FIN, ET LE DIRE FAIT PARTIE DU GESTE. Maxime a écarté l'expiration
+ * obligatoire : « une exemption qui expire un lundi matin bloque un client à la porte sans que
+ * personne n'ait rien décidé ce jour-là ». Elle dure donc jusqu'à ce qu'on la retire à la main —
+ * l'écrire ici évite qu'on la pose en croyant qu'elle s'éteindra seule.
+ */
+function ExemptionModal({ incident, onClose, onFait, onErreur }) {
+  const [motif, setMotif] = useState('')
+  const [enCours, setEnCours] = useState(false)
+
+  useEffect(() => {
+    if (incident) setMotif('')
+  }, [incident])
+
+  async function envoyer(e) {
+    e.preventDefault()
+    setEnCours(true)
+    try {
+      await api.exempterRedevable(incident.typeRedevable, incident.referenceRedevable, motif.trim())
+      onFait("Ce client ne sera plus bloqué pour impayé. La dette reste due et le recouvrement continue.")
+    } catch (err) {
+      onErreur(err.message || "L'exemption n'a pas abouti.")
+    } finally {
+      setEnCours(false)
+    }
+  }
+
+  return (
+    <Modal open={!!incident} onClose={onClose} titre="Ne plus jamais bloquer ce client">
+      {incident && (
+        <form onSubmit={envoyer}>
+          <div className="banner banner-warn">
+            <b>La dette reste due.</b> Vous levez seulement le blocage d'accès, pour cet impayé
+            <b> et pour ceux à venir</b>. Les impayés continueront d'apparaître dans cette liste et
+            le recouvrement suit son cours.
+          </div>
+
+          <p>
+            Sans date de fin : l'exemption dure jusqu'à ce que quelqu'un la retire. C'est le
+            comportement voulu — une exemption qui expire toute seule bloquerait un client un matin
+            sans que personne ne l'ait décidé ce jour-là.
+          </p>
+
+          <div className="field">
+            <label htmlFor="ex-motif">Pourquoi ce client ne doit-il jamais être bloqué ? *</label>
+            <textarea
+              id="ex-motif"
+              className="input"
+              rows={3}
+              value={motif}
+              onChange={(ev) => setMotif(ev.target.value)}
+              placeholder="Ex. : collectivité payant à 45 jours — convention 2026."
+            />
+            <div className="hint">
+              Ce motif est la seule trace de la décision : c'est lui qu'on lira dans six mois pour
+              comprendre pourquoi ce client ne bloque jamais.
+            </div>
+          </div>
+
+          <div className="modal-actions">
+            <button className="btn ghost" type="button" onClick={onClose}>Annuler</button>
+            <button className="btn primary" type="submit" disabled={enCours || motif.trim() === ''}>
+              {enCours ? 'En cours…' : 'Ne plus bloquer ce client'}
+            </button>
+          </div>
+        </form>
+      )}
     </Modal>
   )
 }

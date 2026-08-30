@@ -52,24 +52,80 @@ final class PassageExportProvider implements ProviderInterface
             ->setParameter('export_etablissement', $actif, 'uuid')
             ->orderBy('p.horodatage', 'ASC');
 
+        // ⚠ UNE VALEUR ILLISIBLE NE DOIT JAMAIS ÉLARGIR LE RÉSULTAT.
+        //
+        // La forme précédente était `si présent ET valide, alors filtre` — qui se lit comme une
+        // précaution et fait l'inverse : l'appelant demande à RÉDUIRE, et sur une valeur illisible on
+        // lui rend TOUT. Dans un export, c'est le pire endroit : le fichier s'ouvre, il contient des
+        // lignes, elles sont plausibles, et personne ne compte les lignes d'un CSV.
+        //
+        // Absent ⇒ pas de filtre : « tout », et c'est une demande légitime. Présent mais illisible ⇒
+        // on refuse en NOMMANT le paramètre. On ne répond pas à une question mal comprise en donnant
+        // plus que ce qui était demandé.
         if ($request !== null) {
-            if (($depuis = $request->query->get('depuis')) !== null) {
-                $qb->andWhere('p.horodatage >= :depuis')->setParameter('depuis', new \DateTimeImmutable((string) $depuis));
+            $depuis = $this->dateOuRefus($request->query->get('depuis'), 'depuis');
+            if ($depuis !== null) {
+                $qb->andWhere('p.horodatage >= :depuis')->setParameter('depuis', $depuis);
             }
-            if (($jusqua = $request->query->get('jusqua')) !== null) {
-                $qb->andWhere('p.horodatage <= :jusqua')->setParameter('jusqua', new \DateTimeImmutable((string) $jusqua));
+            $jusqua = $this->dateOuRefus($request->query->get('jusqua'), 'jusqua');
+            if ($jusqua !== null) {
+                $qb->andWhere('p.horodatage <= :jusqua')->setParameter('jusqua', $jusqua);
             }
-            if (($espace = $request->query->get('espace')) !== null && Uuid::isValid((string) $espace)) {
+            $espace = $this->uuidOuRefus($request->query->get('espace'), 'espace');
+            if ($espace !== null) {
                 $qb->andWhere('IDENTITY(p.espace) = :espace')->setParameter('espace', $espace, 'uuid');
             }
-            if (($equipement = $request->query->get('equipement')) !== null && Uuid::isValid((string) $equipement)) {
+            $equipement = $this->uuidOuRefus($request->query->get('equipement'), 'equipement');
+            if ($equipement !== null) {
                 $qb->andWhere('IDENTITY(p.equipement) = :equipement')->setParameter('equipement', $equipement, 'uuid');
             }
-            if (($resultat = $request->query->get('resultat')) !== null) {
+            if (($resultat = $request->query->get('resultat')) !== null && (string) $resultat !== '') {
                 $qb->andWhere('p.resultat = :resultat')->setParameter('resultat', (string) $resultat);
             }
         }
 
         return $qb->getQuery()->getResult();
+    }
+
+    /**
+     * Un identifiant lisible, ou un refus qui nomme le paramètre.
+     *
+     * ⚠ La chaîne vide vaut « absent ». Un formulaire qui n'a rien saisi envoie souvent `espace=` :
+     * refuser là-dessus ferait échouer un export légitime, alors que l'utilisateur n'a rien demandé.
+     */
+    private function uuidOuRefus(mixed $valeur, string $parametre): ?string
+    {
+        if ($valeur === null || (string) $valeur === '') {
+            return null;
+        }
+        if (!Uuid::isValid((string) $valeur)) {
+            throw new UnprocessableEntityHttpException(sprintf(
+                'Le paramètre « %s » n\'est pas un identifiant valide. L\'export a été refusé plutôt que rendu sans ce filtre.',
+                $parametre,
+            ));
+        }
+
+        return (string) $valeur;
+    }
+
+    /**
+     * Une date lisible, ou un refus qui nomme le paramètre.
+     *
+     * ⚠ Avant, `new \DateTimeImmutable()` jetait sur une valeur malformée : l'appelant recevait une
+     * erreur 500, c'est-à-dire sa propre faute présentée comme une panne du logiciel.
+     */
+    private function dateOuRefus(mixed $valeur, string $parametre): ?\DateTimeImmutable
+    {
+        if ($valeur === null || (string) $valeur === '') {
+            return null;
+        }
+        try {
+            return new \DateTimeImmutable((string) $valeur);
+        } catch (\Exception) {
+            throw new UnprocessableEntityHttpException(sprintf(
+                'Le paramètre « %s » n\'est pas une date lisible.',
+                $parametre,
+            ));
+        }
     }
 }

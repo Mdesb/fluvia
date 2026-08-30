@@ -117,6 +117,8 @@ lancer_gf garde-fou-cloisonnement.php || ECHEC=1
 [ -f "$RACINE/bin/garde-fou-vacuite-tests.php" ] && { lancer_gf garde-fou-vacuite-tests.php || ECHEC=1; }
 [ -f "$RACINE/bin/garde-fou-espacement-en-ligne.php" ] && { lancer_gf garde-fou-espacement-en-ligne.php || ECHEC=1; }
 [ -f "$RACINE/bin/garde-fou-champ-cloisonnement.php" ] && { lancer_gf garde-fou-champ-cloisonnement.php || ECHEC=1; }
+[ -f "$RACINE/bin/garde-fou-post-sans-suppression.php" ] && { lancer_gf garde-fou-post-sans-suppression.php || ECHEC=1; }
+[ -f "$RACINE/bin/garde-fou-filtres-muets.php" ] && { lancer_gf garde-fou-filtres-muets.php || ECHEC=1; }
 
 # Nommage : sur les fichiers **indexés** et ajoutés. `--cached` est ce qui sera réellement commité,
 # et c'est aussi ce qui évite de dépendre d'une révision de référence inexistante à ce stade.

@@ -263,6 +263,164 @@ final class MoteurRecouvrementTest extends RecouvrementApiTestCase
         );
     }
 
+    /**
+     * ⚠ EXEMPTER UN REDEVABLE DEJA BLOQUE DOIT ROUVRIR SA PORTE IMMEDIATEMENT.
+     *
+     * C'est le cas qui a motive la fonctionnalite (D84) : la collectivite qui produit un impaye par
+     * mois est DEJA bloquee au moment ou l'on decide de ne plus jamais la bloquer. Si l'exemption
+     * n'etait consultee qu'a la fermeture, la poser ne rouvrirait rien — il faudrait encore forcer
+     * chaque dossier a la main, c'est-a-dire exactement ce qu'elle remplace.
+     *
+     * ⚠ ON OBSERVE LA PORTE, PAS LA LIGNE EN BASE. Verifier que l'exemption est enregistree ne
+     * prouverait rien : elle l'etait aussi dans la version qui ne rouvrait pas. Ce qui change est
+     * `DroitAcces.statutProjection`.
+     */
+    public function testExempterUnRedevableDejaBloqueRouvreSaPorte(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+
+        $incidentId = $this->creerIncidentBloquant($client, $entete);
+
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $em->clear();
+        $incident = $em->getRepository(IncidentImpaye::class)->find($incidentId);
+        self::assertNotNull($incident);
+
+        $registre = static::getContainer()->get(RedevableRegistry::class);
+        $droit = $registre->droitAcces($incident->getTypeRedevable(), $incident->getReferenceRedevable());
+        self::assertNotNull($droit, 'témoin : sans droit d’accès résolu, il n’y a pas de porte à observer');
+        self::assertSame(
+            StatutProjectionDroit::Devalide,
+            $droit->getStatutProjection(),
+            'témoin : le redevable doit être bloqué AVANT l’exemption, sinon ce test ne mesure rien',
+        );
+
+        $client->request('POST', '/api/recouvrement/exemptions/accorder', $entete + [
+            'json' => [
+                'typeRedevable' => $incident->getTypeRedevable(),
+                'referenceRedevable' => $incident->getReferenceRedevable(),
+                'motif' => 'Collectivité payant à 45 jours — jamais bloquée (convention 2026).',
+            ],
+        ]);
+        self::assertResponseIsSuccessful();
+
+        $em->clear();
+        $droit = $registre->droitAcces($incident->getTypeRedevable(), $incident->getReferenceRedevable());
+        self::assertSame(
+            StatutProjectionDroit::Valide,
+            $droit->getStatutProjection(),
+            'L’exemption a été enregistrée mais la porte est restée fermée : elle ne vaut que pour les impayés futurs, ce qui n’est pas ce qui a été demandé.',
+        );
+    }
+
+    /**
+     * ⚠ UN NOUVEL IMPAYE NE REFERME PAS LA PORTE D'UN EXEMPTE.
+     *
+     * C'est l'autre moitie, et c'est ce qui distingue une exemption d'un forcage : le forcage vaut
+     * pour UN dossier, l'exemption vaut pour le redevable et donc pour les dossiers a venir.
+     */
+    public function testUnNouvelImpayeNeBloquePasUnRedevableExempte(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+
+        $premier = $this->creerIncidentBloquant($client, $entete);
+
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $incident = $em->getRepository(IncidentImpaye::class)->find($premier);
+        self::assertNotNull($incident);
+        $type = $incident->getTypeRedevable();
+        $reference = $incident->getReferenceRedevable();
+
+        $client->request('POST', '/api/recouvrement/exemptions/accorder', $entete + [
+            'json' => ['typeRedevable' => $type, 'referenceRedevable' => $reference, 'motif' => 'Convention 2026.'],
+        ]);
+        self::assertResponseIsSuccessful();
+
+        // Un SECOND impayé, postérieur à l'exemption, mené jusqu'au blocage.
+        $this->creerIncidentBloquant($client, $entete);
+
+        $em->clear();
+        $registre = static::getContainer()->get(RedevableRegistry::class);
+        $droit = $registre->droitAcces($type, $reference);
+        self::assertSame(
+            StatutProjectionDroit::Valide,
+            $droit->getStatutProjection(),
+            'Un nouvel impayé a bloqué un redevable exempté : l’exemption ne vaut que pour le passé, donc ce n’est qu’un forçage renommé.',
+        );
+    }
+
+    /**
+     * ⚠ RETIRER L'EXEMPTION REFERME LA PORTE SI DE L'ARGENT RESTE DU — et pas autrement.
+     *
+     * Retirer ne doit pas « fermer » : ca doit REEVALUER. Sans reevaluation au retrait, on retirerait
+     * l'exemption d'un client qui doit de l'argent et sa porte resterait ouverte en silence, jusqu'au
+     * prochain incident. C'est le defaut du 30/08, dans l'autre sens.
+     */
+    public function testRetirerLexemptionRefermeLaPorteSiUnImpayeResteDu(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+
+        $incidentId = $this->creerIncidentBloquant($client, $entete);
+
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $incident = $em->getRepository(IncidentImpaye::class)->find($incidentId);
+        self::assertNotNull($incident);
+        $type = $incident->getTypeRedevable();
+        $reference = $incident->getReferenceRedevable();
+
+        $client->request('POST', '/api/recouvrement/exemptions/accorder', $entete + [
+            'json' => ['typeRedevable' => $type, 'referenceRedevable' => $reference, 'motif' => 'Convention 2026.'],
+        ]);
+        self::assertResponseIsSuccessful();
+        $exemptionId = $client->getResponse()->toArray()['id'];
+
+        $em->clear();
+        $registre = static::getContainer()->get(RedevableRegistry::class);
+        self::assertSame(
+            StatutProjectionDroit::Valide,
+            $registre->droitAcces($type, $reference)->getStatutProjection(),
+            'témoin : la porte doit être ouverte avant le retrait, sinon le test ne mesure pas le retrait',
+        );
+
+        $client->request('POST', '/api/recouvrement/exemptions/' . $exemptionId . '/retirer', $entete);
+        self::assertResponseIsSuccessful();
+
+        $em->clear();
+        self::assertSame(
+            StatutProjectionDroit::Devalide,
+            $registre->droitAcces($type, $reference)->getStatutProjection(),
+            'L’exemption a été retirée mais la porte est restée ouverte : un client qui doit de l’argent entre encore.',
+        );
+    }
+
+    /** ⚠ Le motif est la SEULE garde de ce geste : sans lui, l'API doit refuser. */
+    public function testUneExemptionSansMotifEstRefusee(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+
+        $client->request('POST', '/api/recouvrement/exemptions/accorder', $entete + [
+            'json' => ['typeRedevable' => 'client', 'referenceRedevable' => (string) \Symfony\Component\Uid\Uuid::v4(), 'motif' => '   '],
+        ]);
+        self::assertResponseStatusCodeSame(422);
+    }
+
+    /** Un incident mené jusqu'au blocage effectif : rejet, puis représentation échouée. */
+    private function creerIncidentBloquant(\ApiPlatform\Symfony\Bundle\Test\Client $client, array $entete): string
+    {
+        $incidentId = $this->creerIncident($client, $entete);
+
+        $representation = $this->representationDe($incidentId);
+        $client->request('POST', '/api/recouvrement/representations/' . $representation->getId() . '/enregistrer-resultat', $entete + [
+            'json' => ['resultat' => 'echouee'],
+        ]);
+        self::assertResponseIsSuccessful();
+
+        return $incidentId;
+    }
+
     private function creerIncident(\ApiPlatform\Symfony\Bundle\Test\Client $client, array $entete): string
     {
         $echeance = $this->premiereEcheanceContratDemo();

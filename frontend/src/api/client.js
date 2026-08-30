@@ -298,6 +298,34 @@ export const api = {
   produits: (params) => request('/api/produits', { query: params }),
   // Le détail ajoute le groupe `produit:compta` (compte, TVA, règle PCA), absent de la collection.
   produit: (id) => request(`/api/produits/${id}`),
+
+  // @route-a-venir: ouverte par allaccess-8e dans le meme lot, contrat convenu et arrete ensemble.
+  // Controler un billet SANS materiel : ni equipement, ni espace, ni porte. C'est l'outil des sites
+  // sans tourniquet, ou un billet vendu est aujourd'hui invendable en pratique faute de pouvoir le
+  // controler a l'entree.
+  controlerBillet: (identifiantSupport) =>
+    request('/api/acces/controle-billet', { method: 'POST', body: { identifiantSupport } }),
+
+  // Les complements d'un produit — « le casier avec l'entree ». Ce lien remplace `produitsAssocies`,
+  // qui etait un ManyToMany sans `remove` que rien ne lisait cote serveur : l'ecran y ecrivait dans
+  // le vide, et l'enregistrement reussissait.
+  complementsDeProduit: (produitId) =>
+    request('/api/complementary_products', {
+      query: { product: `/api/produits/${produitId}`, itemsPerPage: 100 },
+    }),
+  ajouterComplement: (produitId, complementId, mode, quantite) =>
+    // ⚠ method sur la MEME ligne que request( : la mesure d ecart detecte la methode sur le
+    // reste de la ligne de l appel. Ecrite en dessous, elle retombait sur le defaut GET et se
+    // confondait avec le GET du meme chemin. Corrige par allaccess-73, pas encore integre.
+    request('/api/complementary_products', { method: 'POST', ld: true,
+      body: {
+        product: `/api/produits/${produitId}`,
+        complement: `/api/produits/${complementId}`,
+        mode,
+        defaultQuantity: quantite,
+      },
+    }),
+  retirerComplement: (id) => request(`/api/complementary_products/${id}`, { method: 'DELETE' }),
   majProduit: (id, corps) => request(`/api/produits/${id}`, { method: 'PATCH', body: corps }),
   // L'ONGLET COMPTA D'UN PRODUIT : TROIS CHAMPS ECRIVABLES, AFFICHES ET JAMAIS PROPOSES.
   //
@@ -1130,6 +1158,17 @@ export const api = {
 
   // Recouvrement : les deux gestes qui closent un impaye, et le compteur d'acces bloques.
   tableauBordRecouvrement: () => request('/api/recouvrement/tableau-bord'),
+
+  // D84 — « ce redevable n'est jamais bloque ». L'exemption porte sur le REDEVABLE, pas sur le
+  // dossier : forcer une reouverture vaut pour un impaye, l'exemption vaut aussi pour ceux a venir.
+  exemptionsBlocage: () => request('/api/recouvrement/exemptions', { query: { itemsPerPage: 100 } }),
+  exempterRedevable: (typeRedevable, referenceRedevable, motif) =>
+    request('/api/recouvrement/exemptions/accorder', {
+      method: 'POST',
+      body: { typeRedevable, referenceRedevable, motif },
+    }),
+  retirerExemption: (id) =>
+    request(`/api/recouvrement/exemptions/${id}/retirer`, { method: 'POST', body: {} }),
   // Ecarts de caisse.  est calcule par le serveur a la lecture — aucun drapeau stocke,
   // donc aucun drapeau a maintenir. C'est lui qui fait descendre la liste (D55).
   alertesEcartCaisse: () =>

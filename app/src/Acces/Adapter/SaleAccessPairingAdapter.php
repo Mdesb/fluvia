@@ -10,7 +10,6 @@ use App\Acces\Enum\ModeAppairage;
 use App\Acces\Enum\TypeSupport as TypeSupportAcces;
 use App\Acces\Port\ProjectionDroitInterface;
 use App\Acces\Service\AppairageHandler;
-use App\Acces\Service\ProductAccessZoneResolver;
 use App\Vente\Entity\BilletSupport;
 use App\Vente\Enum\StatutAppairage;
 use App\Vente\Enum\TypeSupport as TypeSupportVente;
@@ -68,7 +67,6 @@ final class SaleAccessPairingAdapter implements AppairageAccesInterface
         private readonly EntityManagerInterface $em,
         private readonly ProjectionDroitInterface $projection,
         private readonly AppairageHandler $pairings,
-        private readonly ProductAccessZoneResolver $zones,
         private readonly GenerateurCodeSupport $codeGenerator,
         private readonly LoggerInterface $logger,
     ) {
@@ -112,27 +110,76 @@ final class SaleAccessPairingAdapter implements AppairageAccesInterface
             return true;
         }
 
-        // ⚠ LA DÉCISION TIENT ICI, ET ELLE EST VOLONTAIREMENT AVANT LA PROJECTION.
+        // ⚠ IL N'Y A PLUS DE GARDE DE ZONE ICI, ET SON RETRAIT A DEMANDÉ DEUX CHANGEMENTS DANS
+        // L'ORDRE INVERSE DE CELUI QU'ON CROIT.
         //
-        // Interroger les zones d'abord évite de créer un `DroitAcces` qu'on ne veut pas : la
-        // projection écrit en base, et un droit sans espace ouvre tout. On ne fabrique donc jamais
-        // l'objet dangereux, plutôt que de le fabriquer puis de tenter de le neutraliser.
-        if ($this->zones->spacesFor($productRef, $establishment) === []) {
+        // Jusqu'au 30/08, cette méthode ne projetait RIEN quand le produit ne déclarait aucune zone.
+        // C'était nécessaire : `DroitAcces::ouvre()` rendait alors `true` sur une collection vide —
+        // un droit sans espace ouvrait TOUT. Projeter sans condition aurait fait de chaque billet
+        // vendu un passe-partout des huit espaces, silencieusement.
+        //
+        // ⚠ Mais cette garde était FAUSSE, pas seulement prudente. D86 : un billet vendu doit
+        // TOUJOURS être connu du contrôle d'accès, même sans zone — sinon l'agent qui contrôle à la
+        // main, là où il n'y a pas de matériel, n'a **rien à interroger**. Ne rien projeter rendait
+        // le billet inexistant côté accès, ce qui est exactement le cas que Maxime a signalé.
+        //
+        // Une seule condition traitait donc deux besoins opposés : ne pas ouvrir toutes les portes,
+        // et rester vérifiable. `ouvre()` strict (D87, posé par `allaccess-8e`) prend le premier ;
+        // cette méthode garde le second.
+        //
+        // L'ORDRE ÉTAIT CONTRE-INTUITIF ET IL A ÉTÉ TENU : l'inversion d'abord, le retrait ensuite.
+        // Dans l'autre sens, chaque billet vendu serait devenu un passe-partout entre les deux.
+
+        // ⚠ UN BILLET EST SON CODE ; UNE CARTE EST UN OBJET QU'ON PREND DANS UN TIROIR.
+        //
+        // Un billet imprime EST son identifiant : le papier sort de l'imprimante avec le code
+        // dessus, et il n'existait pas avant la vente. Une carte est un support physique VIERGE
+        // qu'un agent choisit et associe au droit — son identifiant existe avant la vente, et ce
+        // n'est pas celui que la vente genere.
+        //
+        // Appairer une carte a la vente lierait donc le droit a un code que personne ne porte, et
+        // empecherait ensuite d'y lier la vraie carte : « Support deja appaire a un droit actif ».
+        // 15 tests de `CardRechargeTest` l'ont dit, et l'en-tete de leur fichier explique pourquoi
+        // l'appairage explicite est « precondition sine qua non » pour une carte.
+        //
+        // ⚠ Et ce n'est pas une exception technique : c'est la seule difference qui compte ici. On
+        // n'automatise que ce dont la vente CONNAIT le support, parce qu'elle vient de le fabriquer.
+        if (in_array($support->getType(), [TypeSupportVente::Carte, TypeSupportVente::Bracelet], true)) {
             $support->setStatutAppairage(StatutAppairage::Actif);
 
             return true;
         }
 
         try {
+            // La projection est rejouee dans TOUS les cas : c'est elle qui rafraichit le credit
+            // restant d'une carte. `StubProjectionDroit` distingue deja une premiere projection
+            // d'une re-projection — il n'applique la validite qu'a la premiere, pour ne pas
+            // reinitialiser celle d'une carte rechargee.
             $right = $this->projection->projeter($support->getId(), $establishment);
 
-            $this->pairings->appairer(
-                $identifier,
-                $this->accessType($support->getType()),
-                $right,
-                ModeAppairage::Caisse,
-                $establishment,
-            );
+            // ⚠ MAIS ON N'APPAIRE PAS DEUX FOIS, ET LA NUANCE A COUTE 15 TESTS.
+            //
+            // Appairer, c'est LIER un support neuf a un droit. Recharger, c'est CREDITER un support
+            // qui l'est deja. Les deux passent par ce meme port, et se ressemblent au point qu'on
+            // les confond — mais `AppairageHandler` refuse le second, a juste titre :
+            // « Support deja appaire a un droit actif : revocation prealable requise (CA-2). »
+            //
+            // Le refus etait correct ; c'est l'appel qui ne l'etait pas. Tant que ma garde de zone
+            // existait, une recharge ne projetait rien et le cas restait invisible : le retrait de
+            // la garde ne l'a pas cree, il l'a REVELE.
+            $existant = $this->em->getRepository(Support::class)->findOneBy(['identifiant' => $identifier]);
+            $dejaAppaire = $existant instanceof Support
+                && null !== $this->em->getRepository(Appairage::class)->findOneBy(['support' => $existant, 'actif' => true]);
+
+            if (!$dejaAppaire) {
+                $this->pairings->appairer(
+                    $identifier,
+                    $this->accessType($support->getType()),
+                    $right,
+                    ModeAppairage::Caisse,
+                    $establishment,
+                );
+            }
         } catch (\Throwable $e) {
             // ⚠ UN ÉCHEC ICI NE DOIT PAS ANNULER LA VENTE. `appairer()` est appelé DANS la
             // transaction de validation : laisser remonter un conflit ferait échouer un encaissement

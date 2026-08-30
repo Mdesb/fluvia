@@ -30,6 +30,24 @@ declare(strict_types=1);
  *
  * **La règle : sur une référence libre, on compare en SQL avec `UNHEX`, jamais en DQL ni par filtre.**
  *
+ * ⚠ **CETTE RÈGLE EST PLUS LARGE QUE LE DANGER, ET IL FAUT LE SAVOIR AVANT DE PAYER UN CONTOURNEMENT.**
+ *
+ * Mesuré le 30/08 sur `EntreeAudit.etablissement`, qui est une référence libre :
+ *
+ *     ->andWhere('e.etablissement = :actif')
+ *     ->setParameter('actif', $uuid, 'uuid')      ← fonctionne
+ *
+ * Le témoin positif d'un test le montre — l'entrée de l'établissement actif figure dans le résultat,
+ * celle du voisin non. Ce qui échoue est la comparaison **sans type déclaré**, ou avec un objet
+ * entité passé en paramètre : c'est la conversion qui manque, pas le DQL en soi.
+ *
+ * Pourquoi le dire ici plutôt que dans un fil de discussion : **une règle plus large que son danger
+ * ne se conteste pas.** Elle est verte, donc elle a l'air juste, et elle fait écrire du SQL brut là
+ * où deux lignes de DQL suffisaient — à des gens qui n'ont ni le temps ni la raison de vérifier. Le
+ * contrôle reste inchangé et continue de tout refuser : on précise ce qu'il couvre en trop, on ne
+ * l'assouplit pas. Le jour où quelqu'un a besoin de la forme typée, il saura qu'elle marche et
+ * pourquoi elle est quand même refusée ici.
+ *
  * Usage :
  *   php bin/garde-fou-references-libres.php
  *   php bin/garde-fou-references-libres.php --fichiers=a.php,b.php
