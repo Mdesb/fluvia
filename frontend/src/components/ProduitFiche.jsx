@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, membres } from '../api/client.js'
-import { libelleProduit, prixIndicatif, euros, statutProduit } from '../api/produit.js'
+import { libelleProduit, prixIndicatif, euros, statutProduit, sansTarifConnu } from '../api/produit.js'
 import Modal from './Modal.jsx'
 import Tabs from './Tabs.jsx'
 // Rendu Markdown en éléments React, jamais en HTML injecté. Écrit pour la boutique
@@ -294,9 +294,9 @@ export default function ProduitFiche({
 
           <div className="field">
             <label>Où ce produit est vendu</label>
-            <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 'var(--esp-large)', flexWrap: 'wrap' }}>
               {CANAUX_PRODUIT.map((c) => (
-                <label key={c.valeur} style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 400 }}>
+                <label key={c.valeur} style={{ display: 'flex', alignItems: 'center', gap: 'var(--esp-serre)', fontWeight: 400 }}>
                   <input
                     type="checkbox"
                     checked={edition.canaux.includes(c.valeur)}
@@ -320,7 +320,7 @@ export default function ProduitFiche({
 
           <div className="field">
             <label htmlFor="pr-coul">Couleur en caisse</label>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--esp-normal)' }}>
               <input
                 id="pr-coul"
                 type="color"
@@ -521,7 +521,7 @@ export default function ProduitFiche({
             )}
           </div>
 
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
+          <div style={{ display: 'flex', gap: 'var(--esp-normal)', justifyContent: 'flex-end', marginTop: 'var(--esp-large)' }}>
             <button className="btn" type="button" onClick={() => setEdition(null)}>Annuler</button>
             <button className="btn primary" type="submit" disabled={enregistrement}>
               {enregistrement ? 'Enregistrement…' : 'Enregistrer'}
@@ -536,7 +536,7 @@ export default function ProduitFiche({
     <>
       {erreur && <div className="banner banner-error">{erreur}</div>}
 
-      <div className="fiche-ident" style={{ marginBottom: 12 }}>
+      <div className="fiche-ident" style={{ marginBottom: 'var(--esp-large)' }}>
         <div>
           <div className="fiche-nom">{libelleProduit(p)}</div>
           <div className="sub">
@@ -547,7 +547,7 @@ export default function ProduitFiche({
           {st.libelle}
         </span>
         {peutModifier && (
-          <button className="btn ghost sm" type="button" onClick={ouvrirEdition} style={{ marginLeft: 10 }}>
+          <button className="btn ghost sm" type="button" onClick={ouvrirEdition} style={{ marginLeft: 'var(--esp-normal)' }}>
             Modifier
           </button>
         )}
@@ -558,6 +558,16 @@ export default function ProduitFiche({
         <div>
           <div className="st-lib">Tarif indicatif</div>
           <div className="st-val num">{euros(base)}</div>
+          {/* UN TIRET N'EST PAS UNE EXPLICATION. `euros(null)` rend « — », qui se lit « prix non
+              renseigné pour l'instant » alors que la conséquence est totale : sans grille, le
+              produit ne peut être vendu nulle part, y compris publié et ouvert à tous les canaux.
+              On le dit à côté du tiret, là où on le lit. */}
+          {p?.statut === 'publie' && sansTarifConnu(p) === true && (
+            <div className="hint">
+              Aucun tarif : ce produit est publié mais invendable. Ajoutez une grille dans
+              <b> Tarifs</b>, plus bas.
+            </div>
+          )}
         </div>
         <div>
           <div className="st-lib" title="Les endroits où ce produit peut être vendu.">Vendu</div>
@@ -704,7 +714,7 @@ export default function ProduitFiche({
               <button
                 className="btn ghost sm"
                 type="button"
-                style={{ marginTop: 10 }}
+                style={{ marginTop: 'var(--esp-normal)' }}
                 onClick={() => setEditionCompta({
                   tauxTva: p.tauxTva != null ? String(p.tauxTva) : '',
                   compteComptable: p.compteComptable || '',
@@ -857,7 +867,7 @@ function ComptaProduitModal({ edition, onClose, onEnregistre }) {
             </p>
           </div>
 
-          <div className="row" style={{ justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>
+          <div className="row" style={{ justifyContent: 'flex-end', gap: 'var(--esp-normal)', marginTop: 'var(--esp-large)' }}>
             <button type="button" className="btn" onClick={onClose}>Annuler</button>
             <button type="submit" className="btn primary" disabled={envoi}>
               {envoi ? 'Enregistrement…' : 'Enregistrer'}
@@ -883,7 +893,7 @@ function ApercuCaisse({ liaisons, valeurs, base }) {
 
   return (
     <>
-      <div className="hint" style={{ marginBottom: 10 }}>
+      <div className="hint" style={{ marginBottom: 'var(--esp-normal)' }}>
         Aperçu de ce que le guichet affichera pour ce produit.
       </div>
 
@@ -893,9 +903,9 @@ function ApercuCaisse({ liaisons, valeurs, base }) {
         const multiple = g.modeSelection === 'multiple'
 
         return (
-          <div key={op.id} className="card" style={{ marginBottom: 10 }}>
+          <div key={op.id} className="card" style={{ marginBottom: 'var(--esp-normal)' }}>
             <div className="card-b">
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--esp-normal)', marginBottom: 'var(--esp-serre)' }}>
                 <b>{g.libelle || 'Groupe'}</b>
                 <span
                   className={`badge ${op.obligatoire ? 'good' : 'mut'}`}
@@ -980,7 +990,7 @@ function calculExemple(liaisons, valeurs, prixBase) {
 
 function Section({ titre, aide, children }) {
   return (
-    <div style={{ marginTop: 14 }}>
+    <div style={{ marginTop: 'var(--esp-large)' }}>
       <div className="fiche-sec" title={aide}>{titre}</div>
       {children}
     </div>
@@ -989,7 +999,7 @@ function Section({ titre, aide, children }) {
 
 function Ligne({ libelle, valeur, aide }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '4px 0' }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--esp-large)', padding: '4px 0' }}>
       <span className="sub" title={aide}>{libelle}</span>
       <span>{valeur}</span>
     </div>
@@ -1071,7 +1081,7 @@ function ZoneDepotPhoto({ fichier, onFichier, onRefus }) {
             <div style={{ minWidth: 0 }}>
               <div className="nm" style={{ overflowWrap: 'anywhere' }}>{fichier.name}</div>
               <div className="sub">{Math.round(fichier.size / 1024)} Ko</div>
-              <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+              <div style={{ display: 'flex', gap: 'var(--esp-normal)', marginTop: 'var(--esp-serre)' }}>
                 <button className="btn ghost sm" type="button" onClick={() => champ.current?.click()}>
                   Changer
                 </button>
@@ -1179,14 +1189,14 @@ function PhotosProduit({ produitId, peutModifier }) {
   return (
     <Section titre="Photos" aide="La première est celle qu’affiche la boutique en ligne.">
       {!etat.visiblePubliquement && (
-        <div className="hint" style={{ marginBottom: 8 }}>
+        <div className="hint" style={{ marginBottom: 'var(--esp-normal)' }}>
           Ce produit n’est pas vendu en ligne : ses photos ne s’afficheront nulle part tant qu’il
           n’est pas <strong>publié</strong> et ouvert au canal <strong>en ligne</strong>.
         </div>
       )}
 
       {photos.length > 0 && (
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
+        <div style={{ display: 'flex', gap: 'var(--esp-normal)', flexWrap: 'wrap', marginBottom: 'var(--esp-normal)' }}>
           {photos.map((photo, i) => (
             <figure key={photo.id} style={{ margin: 0, width: 132 }}>
               <img
@@ -1200,7 +1210,7 @@ function PhotosProduit({ produitId, peutModifier }) {
                   border: '1px solid var(--bord, #ddd)',
                 }}
               />
-              <figcaption className="sub" style={{ marginTop: 4, lineHeight: 1.3 }}>
+              <figcaption className="sub" style={{ marginTop: 'var(--esp-serre)', lineHeight: 1.3 }}>
                 {i === 0 && <strong>Affichée en boutique — </strong>}
                 {photo.altText}
               </figcaption>
@@ -1209,7 +1219,7 @@ function PhotosProduit({ produitId, peutModifier }) {
                   className="btn ghost sm"
                   type="button"
                   disabled={busy}
-                  style={{ marginTop: 4 }}
+                  style={{ marginTop: 'var(--esp-serre)' }}
                   onClick={() => retirer(photo.id)}
                 >
                   Retirer
@@ -1220,10 +1230,10 @@ function PhotosProduit({ produitId, peutModifier }) {
         </div>
       )}
 
-      {err && <div className="banner banner-error" style={{ marginBottom: 8 }}>{err}</div>}
+      {err && <div className="banner banner-error" style={{ marginBottom: 'var(--esp-normal)' }}>{err}</div>}
 
       {peutModifier && (
-        <div style={{ display: 'grid', gap: 10 }}>
+        <div style={{ display: 'grid', gap: 'var(--esp-normal)' }}>
           <ZoneDepotPhoto
             fichier={fichier}
             onFichier={(f) => { setErr(null); setFichier(f) }}

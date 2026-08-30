@@ -1,6 +1,6 @@
 {
     "scelle": {
-        "plafond": 717
+        "plafond": 692
     },
     "fichiers": {
         "components/AbsencesSection.jsx": 5,
@@ -34,7 +34,7 @@
         "components/PrelevementsSepa.jsx": 10,
         "components/PretAVendre.jsx": 5,
         "components/PriseRendezVous.jsx": 8,
-        "components/ProduitFiche.jsx": 27,
+        "components/ProduitFiche.jsx": 2,
         "components/ProduitOptionsModal.jsx": 3,
         "components/Qr.jsx": 1,
         "components/RechercheBilletModal.jsx": 8,

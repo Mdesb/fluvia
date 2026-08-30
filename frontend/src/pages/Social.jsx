@@ -201,11 +201,11 @@ export default function Social({ etabActif, droits = [] }) {
           // ⚠ PAS L'ETAT VIDE. << Aucun compte connecte >> est une phrase sure d'elle, qui explique
           // meme comment en connecter un : affichee sur une lecture refusee, elle envoie chercher
           // une autorisation OAuth pour un compte qui existe peut-etre deja.
-          <div className="sub" style={{ textAlign: 'center', padding: 'var(--esp-section)' }}>
+          <div className="empty">
             La liste des comptes n&rsquo;a pas pu être lue. Il y en a peut-être&nbsp;: on ne le sait pas.
           </div>
         ) : comptes.length === 0 ? (
-          <div className="sub" style={{ textAlign: 'center', padding: 'var(--esp-section)' }}>
+          <div className="empty">
             Aucun compte connecté. La connexion d&rsquo;un compte se fait par le réseau lui-même
             (autorisation OAuth) : elle ne se saisit pas ici.
           </div>
@@ -299,11 +299,11 @@ export default function Social({ etabActif, droits = [] }) {
       <section className="card">
         <div className="card-h"><span>Messages</span></div>
         {!lu ? (
-          <div className="sub" style={{ textAlign: 'center', padding: 'var(--esp-section)' }}>
+          <div className="empty">
             La file des messages n&rsquo;a pas pu être lue.
           </div>
         ) : messages.length === 0 ? (
-          <div className="sub" style={{ textAlign: 'center', padding: 'var(--esp-section)' }}>Aucun message.</div>
+          <div className="empty">Aucun message.</div>
         ) : (
           <div style={{ display: 'grid', gap: 'var(--esp-normal)', padding: 'var(--esp-large)' }}>
             {messages.map((m) => {
