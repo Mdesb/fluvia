@@ -3,7 +3,7 @@ import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import { useEtatUrl } from '../api/url.js'
 import Modal from '../components/Modal.jsx'
-import { nomOuAbsence } from '../components/Liste.jsx'
+import { jourLocal, nomOuAbsence } from '../components/Liste.jsx'
 
 /**
  * PROJETS — le travail interne qui a une fin, un responsable et des tâches.
@@ -286,7 +286,7 @@ function FicheProjet({ projet, peutGerer, onFermer, onChange }) {
     }
   }
 
-  const aujourdhui = new Date().toISOString().slice(0, 10)
+  const aujourdhui = jourLocal()
 
   return (
     <Modal open={!!projet} onClose={onFermer} titre={projet?.nom || 'Projet'} taille="lg">

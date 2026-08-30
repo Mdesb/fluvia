@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import Modal from './Modal.jsx'
-import { resoudre } from './Liste.jsx'
+import { jourLocal, resoudre } from './Liste.jsx'
 import { api, membres, ApiError } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import { mot } from '../api/vocabulaire.js'
@@ -268,7 +268,7 @@ function SaisieFactureModal({ open, fournisseurs, etabActif, onClose, onFait }) 
   useEffect(() => {
     if (!open) return undefined
     setNumero('')
-    setDateFacture(new Date().toISOString().slice(0, 10))
+    setDateFacture(jourLocal())
     setEcheance('')
     setLignes([{ ...LIGNE_FOURNISSEUR_VIDE }])
     setErreur(null)

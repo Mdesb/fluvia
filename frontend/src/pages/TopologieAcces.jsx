@@ -18,6 +18,7 @@ import {
   duree,
   signeDeVie,
 } from '../api/acces.js'
+import { jourLocal } from '../components/Liste.jsx'
 
 // TOPOLOGIE & PASSAGES — CONFIGURER LE CONTRÔLE D'ACCÈS, ET RELIRE CE QU'IL A FAIT.
 //
@@ -1820,7 +1821,7 @@ function telechargerCsv(passages, espaces, equipements) {
   const url = URL.createObjectURL(new Blob([contenu], { type: 'text/csv;charset=utf-8' }))
   const a = document.createElement('a')
   a.href = url
-  a.download = `passages-${new Date().toISOString().slice(0, 10)}.csv`
+  a.download = `passages-${jourLocal()}.csv`
   document.body.appendChild(a)
   a.click()
   document.body.removeChild(a)

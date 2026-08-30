@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import Modal from '../components/Modal.jsx'
+import { jourLocal } from './Liste.jsx'
 
 /**
  * LE PLANNING D'OUVERTURE — les heures du site, et la case qui les rend opposables.
@@ -403,7 +404,7 @@ function ZoneEtDroitLocal({ reglage, peutGerer, busy, onChanger }) {
  */
 function JoursFeries({ indices, exceptions, peutGerer, busy, onFermer, onRouvrir }) {
   const feries = indices?.publicHolidays || []
-  const aujourdHui = new Date().toISOString().slice(0, 10)
+  const aujourdHui = jourLocal()
   const aVenir = feries.filter((f) => f.date >= aujourdHui)
 
   // On retrouve la fermeture correspondante pour pouvoir la retirer. Match sur la date ET sur

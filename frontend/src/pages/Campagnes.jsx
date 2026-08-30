@@ -4,6 +4,7 @@ import { aLeDroit } from '../api/droits.js'
 import Modal from '../components/Modal.jsx'
 import Tabs from '../components/Tabs.jsx'
 import { useEtatUrl } from '../api/url.js'
+import { jourLocal } from '../components/Liste.jsx'
 
 /**
  * CAMPAGNES — première étape : les segments, et l'effectif avant l'envoi.
@@ -1135,7 +1136,7 @@ function ReglagesFidelite({ droits, onErreur }) {
 
 function PanneauBaremes({ baremes, peutRegler, busy, onAjouter }) {
   const [points, setPoints] = useState('1')
-  const [depuis, setDepuis] = useState(() => new Date().toISOString().slice(0, 10))
+  const [depuis, setDepuis] = useState(() => jourLocal())
 
   const tries = [...baremes].sort((a, b) => (a.validFrom < b.validFrom ? 1 : -1))
 

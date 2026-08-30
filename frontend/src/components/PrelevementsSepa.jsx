@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import Modal from './Modal.jsx'
 import Tabs from './Tabs.jsx'
 import ClientPicker from './ClientPicker.jsx'
-import { euroCentimes, dateFr, dateHeureFr } from './Liste.jsx'
+import { dateFr, dateHeureFr, euroCentimes, jourLocal } from './Liste.jsx'
 import { api, membres, tokenStore, etablissementStore } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import { mot } from '../api/vocabulaire.js'
@@ -709,14 +709,14 @@ function CreationMandatModal({ open, etabActif, onClose, onFait }) {
   const [debiteurNom, setDebiteurNom] = useState('')
   const [iban, setIban] = useState('')
   const [bic, setBic] = useState('')
-  const [dateSignature, setDateSignature] = useState(() => new Date().toISOString().slice(0, 10))
+  const [dateSignature, setDateSignature] = useState(() => jourLocal())
   const [enCours, setEnCours] = useState(false)
   const [erreur, setErreur] = useState(null)
 
   useEffect(() => {
     if (!open) return
     setClient(null); setDebiteurNom(''); setIban(''); setBic('')
-    setDateSignature(new Date().toISOString().slice(0, 10))
+    setDateSignature(jourLocal())
     setErreur(null)
   }, [open])
 
@@ -859,13 +859,13 @@ function CreationMandatModal({ open, etabActif, onClose, onFait }) {
 }
 
 function GenerationRemiseModal({ open, onClose, onFait }) {
-  const [dateExecution, setDateExecution] = useState(() => new Date().toISOString().slice(0, 10))
+  const [dateExecution, setDateExecution] = useState(() => jourLocal())
   const [enCours, setEnCours] = useState(false)
   const [erreur, setErreur] = useState(null)
 
   useEffect(() => {
     if (open) {
-      setDateExecution(new Date().toISOString().slice(0, 10))
+      setDateExecution(jourLocal())
       setErreur(null)
     }
   }, [open])
@@ -935,7 +935,7 @@ function DeclarationRejetModal({ cible, lignes, mandatsParId, lignesRejetees, on
   const [ligneId, setLigneId] = useState('')
   const [codeMotif, setCodeMotif] = useState('')
   const [libelleMotif, setLibelleMotif] = useState('')
-  const [dateRejet, setDateRejet] = useState(() => new Date().toISOString().slice(0, 10))
+  const [dateRejet, setDateRejet] = useState(() => jourLocal())
   const [enCours, setEnCours] = useState(false)
   const [erreur, setErreur] = useState(null)
 
@@ -943,7 +943,7 @@ function DeclarationRejetModal({ cible, lignes, mandatsParId, lignesRejetees, on
     if (!cible) return
     setLigneId(ligneImposee?.id || '')
     setCodeMotif(''); setLibelleMotif('')
-    setDateRejet(new Date().toISOString().slice(0, 10))
+    setDateRejet(jourLocal())
     setErreur(null)
   }, [cible, ligneImposee])
 

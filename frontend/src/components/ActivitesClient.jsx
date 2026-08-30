@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, membres } from '../api/client.js'
+import { jourLocal } from './Liste.jsx'
 
 /**
  * L'HISTORIQUE DES ÉCHANGES D'UN CLIENT — et le prochain geste.
@@ -76,7 +77,7 @@ export default function ActivitesClient({ client, peutModifier }) {
   // il ressortirait des relances déjà honorées, et la liste deviendrait du bruit qu'on cesse de lire.
   const dernier = activites[0]
   const relance = dernier?.nextActionAt ? dernier : null
-  const enRetard = relance && relance.nextActionAt < new Date().toISOString().slice(0, 10)
+  const enRetard = relance && relance.nextActionAt < jourLocal()
 
   return (
     <div>
