@@ -349,6 +349,13 @@ while read -r ancien nouveau ref; do
         lancer garde-fou-espacement-en-ligne.php
     fi
 
+    # Compare le champ que chaque extension de perimetre FILTRE a celui que l'entite DECLARE. Un
+    # ecart ne leve pas d'erreur : il produit des lignes en trop.
+    if [ -f "$ARBRE/bin/garde-fou-champ-cloisonnement.php" ]; then
+        echo "── Champ de cloisonnement"
+        lancer garde-fou-champ-cloisonnement.php
+    fi
+
     # ⚠ FILET DE COMPLÉTUDE — la leçon du 24/08, et elle a coûté cher.
     #
     # Ce hook n'appelle pas `bin/garde-fous.sh` : il doit calculer les fichiers ajoutés sur
