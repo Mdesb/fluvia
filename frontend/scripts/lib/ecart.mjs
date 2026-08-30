@@ -209,7 +209,7 @@ function clesDeSegment(segment) {
 // L'annonce ne vaut que dans le bloc de commentaires CONTIGU au-dessus du helper. Une fenêtre de
 // N caractères aurait fait déteindre le marqueur d'un helper sur son voisin — un contrôle qui se
 // trompe de propriétaire est pire qu'un contrôle absent.
-function annonceRouteAVenir(source, indexCle) {
+export function annonceRouteAVenir(source, indexCle) {
   const lignes = source.slice(0, indexCle).split('\n')
   const bloc = []
   let i = lignes.length - 1
@@ -224,7 +224,7 @@ function annonceRouteAVenir(source, indexCle) {
   return /@route-a-venir:[ \t]*(\S[^\n]*)/.exec(bloc.join('\n'))
 }
 
-function adosseAuServeur(chemin, gabarits, noms) {
+export function adosseAuServeur(chemin, gabarits, noms) {
   const sansApi = chemin.replace(/^\/api/, '')
   if (gabarits.has(sansApi)) return true
 
@@ -277,6 +277,45 @@ function prefixeDunGabarit(sansApi, gabarits) {
  *   parPrefixe: [string, number][],
  * }}
  */
+/**
+ * Les routes que le serveur declare : gabarits litteraux et noms de ressource.
+ *
+ * ⚠ POURQUOI CETTE FONCTION EXISTE, ET POURQUOI ELLE DUPLIQUE QUELQUES LIGNES DE `mesurer()`.
+ *
+ * `verifier-formats.mjs` traitait comme « standard » — donc exigeant `ld: true` — tout chemin client
+ * ne correspondant a aucun `uriTemplate`. Il affirmait donc une propriete de la route (« elle
+ * deserialise le corps ») a partir d'une donnee MANQUANTE. Sur une route encore a ouvrir, son
+ * conseil etait FAUX : le suivre aurait pose un `ld: true` que la route refuse en 415.
+ *
+ * Signale par `allaccess-c2`, qui a refuse d'obeir au message plutot que de le suivre.
+ *
+ * Les memes lignes vivent dans `mesurer()`, et c'est deliberement qu'on ne les y a pas remplacees :
+ * `mesurer()` produit les chiffres d'un cliquet gele. Y toucher pour un besoin annexe risquerait de
+ * deplacer un plafond sans que personne ne le voie. Une duplication de collecte se relit ; un
+ * plafond qui a bouge pour une raison qu'on a oubliee, non.
+ *
+ * @returns {{gabarits: Set<string>, noms: Set<string>}}
+ */
+export function routesDeclarees() {
+  const gabarits = new Set()
+  const noms = new Set()
+
+  for (const fichier of fichiersPhp(join(RACINE, 'app', 'src'))) {
+    const texte = readFileSync(fichier, 'utf8')
+    if (!texte.includes('ApiResource')) continue
+
+    for (const m of texte.matchAll(/uriTemplate:\s*'([^']+)'/g)) {
+      gabarits.add(m[1].replace(/\{[^}]+\}/g, '{id}').replace(/^\/api/, ''))
+    }
+    for (const m of texte.matchAll(/shortName:\s*'([^']+)'/g)) noms.add(m[1].toLowerCase())
+    for (const m of texte.matchAll(/^(?:final\s+)?class\s+([A-Za-z0-9_]+)/gm)) {
+      noms.add(m[1].toLowerCase())
+    }
+  }
+
+  return { gabarits, noms }
+}
+
 export function mesurer() {
   // ── CÔTÉ SERVEUR ──────────────────────────────────────────────────────────────────────────────
   let exposees = 0
