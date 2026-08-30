@@ -222,7 +222,7 @@ export default function Documents({ etabActif, droits = [] }) {
         {chargement ? (
           <div className="center" style={{ minHeight: 140 }}><div className="spinner" /></div>
         ) : visibles.length === 0 ? (
-          <div className="sub" style={{ textAlign: 'center', padding: 26 }}>
+          <div className="empty">
             {documents === null
               ? 'La bibliothèque n’a pas pu être lue : ce tableau est vide parce que la lecture a échoué, pas parce qu’aucun document n’a été déposé.'
               : documents.length === 0

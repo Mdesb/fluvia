@@ -423,7 +423,7 @@ function Plafonds({ peutGerer, etabActif }) {
             limité aujourd’hui.
           </div>
         ) : limites.length === 0 ? (
-          <div className="sub" style={{ textAlign: 'center', padding: 24 }}>
+          <div className="empty">
             Aucun plafond défini : les opérations sensibles ne sont limitées que par les permissions.
             {peutGerer && ' Un plafond ajoute une limite de montant par-dessus le droit — et permet de demander l’accord d’un responsable au lieu de refuser.'}
           </div>
@@ -521,7 +521,7 @@ function Plafonds({ peutGerer, etabActif }) {
             rien sur ce qui est plafonné.
           </div>
         ) : operations.length === 0 ? (
-          <div className="sub" style={{ textAlign: 'center', padding: 20 }}>
+          <div className="empty">
             Aucune opération déclarée sensible.
           </div>
         ) : (

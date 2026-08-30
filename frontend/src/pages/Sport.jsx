@@ -279,7 +279,7 @@ export default function Sport({ etabActif, droits = [] }) {
             La liste des abonnements n’a pas pu être lue.
           </div>
         ) : abonnements.length === 0 ? (
-          <div className="sub" style={{ textAlign: 'center', padding: 22 }}>Aucun abonnement fitness.</div>
+          <div className="empty">Aucun abonnement fitness.</div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table className="tbl">
