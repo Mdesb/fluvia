@@ -194,6 +194,7 @@ final class MuseeFixtures extends Fixture implements DependentFixtureInterface
             ->setStatut(StatutProduit::Publie);
         $produitExpo->addEtablissement($etabA);
         $manager->persist($produitExpo);
+        $this->ajouterTarifPlein($manager, $produitExpo, '12.00');
 
         $expo = (new Exposition())->setProduit($produitExpo)
             ->setDateDebut(new \DateTimeImmutable('-1 month'))
@@ -266,23 +267,17 @@ final class MuseeFixtures extends Fixture implements DependentFixtureInterface
         // tarif applicable est calcule et confirme a l'etape de paiement » -- alors qu'il n'y avait
         // rien a calculer.
         //
-        // L'exposition, quelques lignes plus haut, a toujours eu son tarif. L'audioguide etait le
-        // seul a sortir du rang : un oubli, pas un choix.
-        $tarifPlein = $manager->getRepository(TypeTarif::class)->findOneBy(['nom' => OffreFixtures::TARIF_PLEIN]);
-        $saisonCourante = $manager->getRepository(Saison::class)->findOneBy(['actif' => true]);
-        if ($tarifPlein instanceof TypeTarif && $saisonCourante instanceof Saison) {
-            // La grille se persiste A PART : `Produit#grilles` ne cascade pas, et Doctrine refuse au
-            // flush une entite neuve atteinte par une relation non cascadee.
-            $grilleAudioguide = (new GrilleTarifaire())
-                ->setProduit($produitAudioguide)
-                ->setTypeTarif($tarifPlein)
-                ->setSaison($saisonCourante)
-                ->setPrix('4.00');
-            $produitAudioguide->addGrille($grilleAudioguide);
-            $manager->persist($grilleAudioguide);
-        }
-
+        // ⚠ CETTE PHRASE DISAIT LE CONTRAIRE, ET ELLE ETAIT FAUSSE. Elle affirmait que
+        // « l'exposition a toujours eu son tarif » et que l'audioguide etait seul a sortir du rang.
+        // Mesure du 31/08 : les TROIS produits publies de ce fichier — audioguide, exposition, pass
+        // annuel — n'avaient AUCUNE grille en base, et la seule grille ecrite dans ce fichier etait
+        // celle de l'audioguide.
+        //
+        // Une phrase ecrite pour signaler un defaut devient un mensonge le jour ou on en corrige un
+        // seul : elle disculpait alors les deux qui restaient, avec l'autorite du commentaire qui
+        // avait su voir le premier.
         $manager->persist($produitAudioguide);
+        $this->ajouterTarifPlein($manager, $produitAudioguide, '4.00');
 
         $audioguide = (new Audioguide())->setProduit($produitAudioguide)->setLangues(['fr', 'en', 'es'])->setEtablissement($etabA);
         $manager->persist($audioguide);
@@ -308,6 +303,7 @@ final class MuseeFixtures extends Fixture implements DependentFixtureInterface
                     ->setCanaux(['guichet', 'en_ligne'])->setFormule($formule)->setStatut(StatutProduit::Publie);
                 $produitPass->addEtablissement($etabA);
                 $manager->persist($produitPass);
+                $this->ajouterTarifPlein($manager, $produitPass, '45.00');
 
                 $support = (new Support())->setIdentifiant('MUSEE-PASS-DEMO-001')->setType(TypeSupport::Qr)->setEtablissement($etabA);
                 $manager->persist($support);
@@ -322,6 +318,35 @@ final class MuseeFixtures extends Fixture implements DependentFixtureInterface
         $manager->flush();
     }
 
+    /**
+     * Pose le tarif plein de la saison courante sur un produit. UN SEUL APPELANT DU CALCUL, PARCE
+     * QUE LA VERSION RECOPIEE A DEJA DIVERGE : le bloc etait ecrit en ligne pour l'audioguide et
+     * absent des deux autres produits publies du meme fichier.
+     *
+     * La saison est cherchee PAR SON NOM, pas par `actif = true` : la preprod en porte deux actives
+     * (« Saison 2026 » et « Saison patinoire ephemere demo »), et `findOneBy` en choisit une sans
+     * critere — le tarif serait alors pose sur la saison d'un autre metier, une fois sur deux.
+     *
+     * ⚠ La grille se persiste A PART : `Produit#grilles` ne cascade pas, et Doctrine refuse au
+     * flush une entite neuve atteinte par une relation non cascadee.
+     */
+    private function ajouterTarifPlein(ObjectManager $manager, Produit $produit, string $prix): void
+    {
+        $tarifPlein = $manager->getRepository(TypeTarif::class)->findOneBy(['nom' => OffreFixtures::TARIF_PLEIN]);
+        $saison = $manager->getRepository(Saison::class)->findOneBy(['nom' => OffreFixtures::SAISON]);
+
+        if (!$tarifPlein instanceof TypeTarif || !$saison instanceof Saison) {
+            return;
+        }
+
+        $grille = (new GrilleTarifaire())
+            ->setProduit($produit)
+            ->setTypeTarif($tarifPlein)
+            ->setSaison($saison)
+            ->setPrix($prix);
+        $produit->addGrille($grille);
+        $manager->persist($grille);
+    }
     private function utilisateur(ObjectManager $manager, string $email, string $motDePasse, string $nom): Utilisateur
     {
         $existant = $manager->getRepository(Utilisateur::class)->findOneBy(['email' => $email]);
