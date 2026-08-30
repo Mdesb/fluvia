@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import { resoudre, nomOuAbsence } from '../components/Liste.jsx'
+import Modal from '../components/Modal.jsx'
+import { libelleProduit } from '../api/produit.js'
 
 /**
  * SPORT & FITNESS — et d'abord **les alertes que personne n'entendait**.
@@ -54,6 +56,9 @@ export default function Sport({ etabActif, droits = [] }) {
   // bouton a qui ne l'a pas produirait un 403 sur un geste d'urgence -- le pire moment pour
   // decouvrir qu'on n'avait pas le droit.
   const peutTraiter = aLeDroit(droits, 'sport.superviser_nocturne')
+  // Le droit exige par `POST /sport/abonnements/souscrire`, et lui seul.
+  const peutGererAbonnement = aLeDroit(droits, 'sport.gerer_abonnement')
+  const [souscription, setSouscription] = useState(false)
 
   const [sos, setSos] = useState([])
   const [alertes, setAlertes] = useState([])
@@ -226,6 +231,13 @@ export default function Sport({ etabActif, droits = [] }) {
         <div className="card-h">
           <span>Abonnements</span>
           <span className="sub" style={{ marginLeft: 8 }}>{abonnements.length}</span>
+          {peutGererAbonnement && (
+            <div className="actions" style={{ marginLeft: 'auto' }}>
+              <button className="btn sm" type="button" onClick={() => setSouscription(true)}>
+                ＋ Souscrire un abonnement
+              </button>
+            </div>
+          )}
         </div>
         {abonnements.length === 0 ? (
           <div className="sub" style={{ textAlign: 'center', padding: 22 }}>Aucun abonnement fitness.</div>
@@ -261,9 +273,15 @@ export default function Sport({ etabActif, droits = [] }) {
           </div>
         )}
         <div className="hint">
-          Souscription, pause, résiliation et réengagement passent encore par l&rsquo;API : cet écran
-          les montre et traite les alertes, il ne les édite pas.
+          Pause, résiliation et réengagement passent encore par l&rsquo;API : cet écran les montre,
+          il ne les édite pas. La souscription, elle, se fait ici.
         </div>
+
+        <SouscriptionModal
+          open={souscription}
+          onClose={() => setSouscription(false)}
+          onFait={() => { setSouscription(false); recharger() }}
+        />
       </section>
 
       {/* « 2 APPELS DÉJÀ TRAITÉS » N'EST PAS UN REGISTRE, C'EST UN COMPTEUR.
@@ -308,5 +326,193 @@ export default function Sport({ etabActif, droits = [] }) {
         </section>
       )}
     </div>
+  )
+}
+
+// SOUSCRIRE UN ABONNEMENT — le premier pas d'une chaîne dont nous avions bâti tout l'aval.
+//
+//     souscription → échéance → prélèvement SEPA → rejet → impayé
+//                  → représentation → blocage d'accès → recouvrement
+//
+// L'écran Recouvrement explique très bien qu'« un impayé s'ouvre à partir d'une échéance
+// d'abonnement rejetée ». C'est vrai, et le premier maillon n'existait dans aucun écran : deux
+// endroits du serveur instancient un abonnement, tous deux hors de portée du frontal. Un
+// exploitant de salle ne pouvait pas inscrire un adhérent — la seule chose que son métier fait
+// tous les jours, et la seule qui produise du revenu récurrent.
+//
+// ⚠ UNE FORMULE N'A PAS DE ROUTE À ELLE : elle est portée par un produit (`Produit::$formule`).
+// On choisit donc le PRODUIT, et on envoie l'identifiant de sa formule. Un produit sans formule
+// n'est pas un abonnement et n'a rien à faire dans cette liste.
+//
+// ⚠ ET SOUSCRIRE N'OUVRE PAS LE TOURNIQUET. `Formule::$droitAcces` est une CONFIGURATION
+// (`{ mode: 'illimite' }`), pas un droit. Le vrai `DroitAcces` naît de l'appairage d'un support
+// physique, et `POST /sport/abonnements/{id}/rattacher-droit-acces` le relie à l'abonnement. Tant
+// que ce rattachement n'a pas eu lieu, l'adhérent paie et la porte refuse. La modale le dit — ce
+// serait le symétrique exact du blocage pour impayé qu'on vient de démêler, en pire : celui-là
+// frapperait quelqu'un qui est en règle.
+function SouscriptionModal({ open, onClose, onFait }) {
+  const [beneficiaires, setBeneficiaires] = useState([])
+  const [clients, setClients] = useState([])
+  const [produits, setProduits] = useState([])
+  const [adherent, setAdherent] = useState('')
+  const [payeur, setPayeur] = useState('')
+  const [produit, setProduit] = useState('')
+  const [periodicite, setPeriodicite] = useState('mensuel')
+  const [duree, setDuree] = useState('12')
+  const [montant, setMontant] = useState('')
+  const [iban, setIban] = useState('')
+  const [titulaire, setTitulaire] = useState('')
+  const [erreur, setErreur] = useState(null)
+  const [envoi, setEnvoi] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    setAdherent(''); setPayeur(''); setProduit(''); setPeriodicite('mensuel')
+    setDuree('12'); setMontant(''); setIban(''); setTitulaire(''); setErreur(null)
+    Promise.allSettled([api.beneficiaires(), api.rechercheClients({ itemsPerPage: 100 }), api.produits()])
+      .then(([b, c, p]) => {
+        setBeneficiaires(b.status === 'fulfilled' ? membres(b.value) : [])
+        setClients(c.status === 'fulfilled' ? (c.value?.items || membres(c.value)) : [])
+        setProduits(p.status === 'fulfilled' ? membres(p.value) : [])
+      })
+  }, [open])
+
+  const formules = produits.filter((p) => p.formule?.id)
+  const centimes = Math.round(Number(String(montant).replace(',', '.')) * 100)
+  const pret = adherent && payeur && produit && periodicite
+    && Number(duree) > 0 && centimes > 0 && iban.trim() && titulaire.trim()
+
+  async function soumettre(e) {
+    e.preventDefault()
+    setErreur(null)
+    setEnvoi(true)
+    try {
+      const choisi = formules.find((p) => p.id === produit)
+      await api.souscrireAbonnement({
+        adherent,
+        payeur,
+        formule: choisi.formule.id,
+        periodicite,
+        dureeEngagementMois: Number(duree),
+        montantCentimes: centimes,
+        iban: iban.trim(),
+        titulaireMandat: titulaire.trim(),
+      })
+      onFait()
+    } catch (err) {
+      setErreur(err.message || 'La souscription n’a pas abouti.')
+    } finally {
+      setEnvoi(false)
+    }
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} titre="Souscrire un abonnement" taille="lg">
+      <form onSubmit={soumettre}>
+        {erreur && <div className="banner banner-error" style={{ marginBottom: 'var(--esp-large)' }}>{erreur}</div>}
+
+        {formules.length === 0 && (
+          <div className="banner banner-warn">
+            Aucun produit ne porte de formule d’abonnement. Une souscription s’appuie sur une
+            formule : créez d’abord un produit de type abonnement dans <b>Catalogue</b>.
+          </div>
+        )}
+
+        <div className="row" style={{ display: 'flex', gap: 'var(--esp-large)', flexWrap: 'wrap' }}>
+          <div className="field" style={{ flex: '1 1 240px' }}>
+            <label htmlFor="ab-adherent">Adhérent *</label>
+            <select id="ab-adherent" className="input" value={adherent} onChange={(e) => setAdherent(e.target.value)}>
+              <option value="">— choisir —</option>
+              {beneficiaires.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {[b.prenom, b.nom].filter(Boolean).join(' ') || b.id}
+                </option>
+              ))}
+            </select>
+            <span className="hint">Celui qui vient s’entraîner.</span>
+          </div>
+          <div className="field" style={{ flex: '1 1 240px' }}>
+            <label htmlFor="ab-payeur">Payeur *</label>
+            <select id="ab-payeur" className="input" value={payeur} onChange={(e) => setPayeur(e.target.value)}>
+              <option value="">— choisir —</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.raisonSociale || [c.prenom, c.nom].filter(Boolean).join(' ') || c.id}
+                </option>
+              ))}
+            </select>
+            {/* Deux personnes différentes dans le cas courant : un parent règle pour son enfant.
+                Les confondre ferait prélever le mineur. */}
+            <span className="hint">Celui qui sera prélevé — souvent le parent, pas l’adhérent.</span>
+          </div>
+        </div>
+
+        <div className="field">
+          <label htmlFor="ab-formule">Formule *</label>
+          <select id="ab-formule" className="input" value={produit} onChange={(e) => setProduit(e.target.value)}>
+            <option value="">— choisir —</option>
+            {formules.map((p) => (
+              <option key={p.id} value={p.id}>{libelleProduit(p)}{p.code ? ` (${p.code})` : ''}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="row" style={{ display: 'flex', gap: 'var(--esp-large)', flexWrap: 'wrap' }}>
+          <div className="field" style={{ flex: '1 1 160px' }}>
+            <label htmlFor="ab-periodicite">Périodicité *</label>
+            <select id="ab-periodicite" className="input" value={periodicite} onChange={(e) => setPeriodicite(e.target.value)}>
+              <option value="mensuel">Mensuelle</option>
+              <option value="hebdomadaire">Hebdomadaire</option>
+            </select>
+          </div>
+          <div className="field" style={{ flex: '1 1 160px' }}>
+            <label htmlFor="ab-duree">Engagement (mois) *</label>
+            <input id="ab-duree" className="input" type="number" min="1" value={duree}
+              onChange={(e) => setDuree(e.target.value)} />
+          </div>
+          <div className="field" style={{ flex: '1 1 160px' }}>
+            <label htmlFor="ab-montant">Montant par échéance (€) *</label>
+            <input id="ab-montant" className="input" type="text" inputMode="decimal" value={montant}
+              placeholder="39,90" onChange={(e) => setMontant(e.target.value)} />
+            <span className="hint">C’est ce qui sera prélevé à chaque échéance.</span>
+          </div>
+        </div>
+
+        <div className="fiche-sec" style={{ marginTop: 'var(--esp-bloc)' }}>Mandat de prélèvement</div>
+        <div className="row" style={{ display: 'flex', gap: 'var(--esp-large)', flexWrap: 'wrap' }}>
+          <div className="field" style={{ flex: '1 1 260px' }}>
+            <label htmlFor="ab-iban">IBAN *</label>
+            <input id="ab-iban" className="input" value={iban} autoComplete="off"
+              onChange={(e) => setIban(e.target.value)} />
+            {/* L'IBAN ne transite qu'ici : le serveur le tokenise avant de persister, et ne le
+                remontera jamais en clair. Une erreur de saisie se corrige donc en signant un
+                nouveau mandat, pas en relisant celui-ci. */}
+            <span className="hint">
+              Saisi une seule fois. Le serveur le chiffre immédiatement et ne le rendra plus jamais :
+              une erreur se corrige en signant un nouveau mandat.
+            </span>
+          </div>
+          <div className="field" style={{ flex: '1 1 260px' }}>
+            <label htmlFor="ab-titulaire">Titulaire du compte *</label>
+            <input id="ab-titulaire" className="input" value={titulaire}
+              onChange={(e) => setTitulaire(e.target.value)} />
+            <span className="hint">Le nom tel qu’il figure sur le compte bancaire du payeur.</span>
+          </div>
+        </div>
+
+        <div className="banner banner-warn">
+          <b>Souscrire n’ouvre pas encore la porte.</b> L’adhérent pourra être prélevé, mais le
+          tourniquet le refusera tant qu’un badge ne lui aura pas été appairé et son droit d’accès
+          rattaché à cet abonnement. Faites-le dans <b>Badges &amp; terminaux</b> juste après.
+        </div>
+
+        <div className="r" style={{ display: 'flex', gap: 'var(--esp-normal)', justifyContent: 'flex-end' }}>
+          <button type="button" className="btn ghost" onClick={onClose}>Annuler</button>
+          <button type="submit" className="btn" disabled={envoi || !pret}>
+            {envoi ? 'Souscription…' : 'Souscrire'}
+          </button>
+        </div>
+      </form>
+    </Modal>
   )
 }

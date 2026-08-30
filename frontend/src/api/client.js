@@ -641,7 +641,23 @@ export const api = {
   evenementsSOS: () => request('/api/evenement_s_o_s', { query: { itemsPerPage: 100 } }),
   traiterSOS: (id) => request(`/api/sport/sos/${id}/traiter`, { method: 'POST', body: {} }),
   alertesPresenceIsolee: () => request('/api/alerte_presence_isolees', { query: { itemsPerPage: 100 } }),
-  abonnementsFitness: () => request('/api/abonnement_fitness', { query: { itemsPerPage: 200 } }),
+  // ⚠ LA ROUTE ETAIT AU SINGULIER, ET ELLE RENDAIT 404 DEPUIS TOUJOURS.
+  //
+  // Mesure du 30/08 : `/api/abonnement_fitness` -> 404, `/api/abonnement_fitnesses` -> 200. Le
+  // pluriel est celui qu'API Platform derive du `shortName: 'AbonnementFitness'`. L'ecran Sport
+  // avalait l'echec (`.catch(() => null)`) et affichait « Aucun abonnement fitness » — un vide qui
+  // ressemblait a une absence de donnees et qui etait une adresse fausse.
+  abonnementsFitness: () => request('/api/abonnement_fitnesses', { query: { itemsPerPage: 200 } }),
+  // SOUSCRIRE : le premier pas de la chaine souscription -> echeance -> prelevement -> rejet ->
+  // impaye -> recouvrement. Tout l'aval avait ete construit ; l'entree, non.
+  // `input: false` cote serveur, le processeur lit le corps brut : pas de `ld: true`.
+  souscrireAbonnement: (corps) =>
+    request('/api/sport/abonnements/souscrire', { method: 'POST', body: corps }),
+  rattacherDroitAccesAbonnement: (abonnementId, droitAccesId) =>
+    request(`/api/sport/abonnements/${abonnementId}/rattacher-droit-acces`, {
+      method: 'POST',
+      body: { droitAcces: droitAccesId },
+    }),
 
   tableauProjets: () => request('/api/projets/tableau'),
   creerProjet: (corps) => request('/api/projects', { method: 'POST', body: corps, ld: true }),
