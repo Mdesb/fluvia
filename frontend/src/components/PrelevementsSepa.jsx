@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import Modal from './Modal.jsx'
 import Tabs from './Tabs.jsx'
 import ClientPicker from './ClientPicker.jsx'
-import { euroCentimes, dateFr, dateHeureFr } from './Liste.jsx'
+import { dateFr, dateHeureFr, euroCentimes, jourLocal } from './Liste.jsx'
 import { api, membres, tokenStore, etablissementStore } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import { mot } from '../api/vocabulaire.js'
@@ -37,7 +37,10 @@ export default function PrelevementsSepa({ etabActif, droits }) {
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
 
-  const [mandats, setMandats] = useState([])
+  // ⚠ `null` = PAS LU. << aucun mandat actif >> se lit << personne n'est prelevable >>, et
+  // << Aucun mandat >> est suivi de l'explication de ce qu'est un mandat -- l'accueil d'un
+  // etablissement neuf, servi a quelqu'un dont les mandats existent.
+  const [mandats, setMandats] = useState(null)
   const [remises, setRemises] = useState([])
   const [lignes, setLignes] = useState([])
   const [rejets, setRejets] = useState([])
@@ -71,7 +74,7 @@ export default function PrelevementsSepa({ etabActif, droits }) {
       api.rejetsSepa(),
       api.configsCreancierSepa(),
     ])
-    setMandats(m.status === 'fulfilled' ? membres(m.value) : [])
+    setMandats(m.status === 'fulfilled' ? membres(m.value) : null)
     setRemises(r.status === 'fulfilled' ? membres(r.value) : [])
     setLignes(l.status === 'fulfilled' ? membres(l.value) : [])
     setRejets(j.status === 'fulfilled' ? membres(j.value) : [])
@@ -117,7 +120,7 @@ export default function PrelevementsSepa({ etabActif, droits }) {
   }, [lignes])
 
   // Les mandats indexés, pour résoudre le `mandat` d'une ligne de remise : il arrive en IRI nue.
-  const mandatsParId = useMemo(() => new Map(mandats.map((m) => [m.id, m])), [mandats])
+  const mandatsParId = useMemo(() => new Map((mandats || []).map((m) => [m.id, m])), [mandats])
 
   // Une ligne déjà rejetée ne doit pas pouvoir l'être une seconde fois : le serveur créerait un
   // second incident d'impayé pour la même échéance, et l'accès du redevable serait bloqué deux fois.
@@ -170,7 +173,7 @@ export default function PrelevementsSepa({ etabActif, droits }) {
 
       <Tabs
         onglets={[
-          ['mandats', `Mandats${mandats.length ? ` (${mandats.length})` : ''}`],
+          ['mandats', `Mandats${mandats?.length ? ` (${mandats.length})` : ''}`],
           ['remises', `Remises${remises.length ? ` (${remises.length})` : ''}`],
           ['rejets', `Rejets${rejets.length ? ` (${rejets.length})` : ''}`],
           ['creancier', 'Créancier'],
@@ -184,6 +187,12 @@ export default function PrelevementsSepa({ etabActif, droits }) {
       ) : (
         <>
           {onglet === 'mandats' && (
+            /* ⚠ CE COMPOSANT-CI RECOIT L'ETAT, PAS UN TABLEAU, ET C'EST L'EXCEPTION A LA REGLE.
+               La regle generale est de passer des tableaux aux enfants et de garder l'etat de
+               lecture chez le parent -- un composant de rendu n'a pas a connaitre la distinction
+               lu/non-lu. Mais `Mandats` PORTE le message (<< aucun mandat actif >>, << Aucun
+               mandat >>) : lui passer `mandats || []` neutralise la garde qu'il contient, ce que
+               j'ai fait avant de le voir a l'ecran. Qui porte la phrase doit recevoir l'etat. */
             <Mandats
               mandats={mandats}
               peutGerer={peutGerer}
@@ -256,14 +265,16 @@ export default function PrelevementsSepa({ etabActif, droits }) {
 // --- Mandats -----------------------------------------------------------------------------------
 
 function Mandats({ mandats, peutGerer, onCreer }) {
-  const actifs = mandats.filter((m) => m.statut !== 'revoque')
+  const actifs = (mandats || []).filter((m) => m.statut !== 'revoque')
 
   return (
     <section className="card">
       <div className="card-h">
         <h3>Mandats de prélèvement</h3>
         <span className="sub">
-          {actifs.length === 0 ? 'aucun mandat actif' : `${actifs.length} actif${actifs.length > 1 ? 's' : ''}`}
+          {mandats === null
+            ? 'état inconnu — la lecture n’a pas abouti'
+            : actifs.length === 0 ? 'aucun mandat actif' : `${actifs.length} actif${actifs.length > 1 ? 's' : ''}`}
         </span>
         {peutGerer && (
           <div className="r" style={{ marginLeft: 'auto' }}>
@@ -272,7 +283,12 @@ function Mandats({ mandats, peutGerer, onCreer }) {
         )}
       </div>
       <div className="card-b" style={{ overflowX: 'auto' }}>
-        {mandats.length === 0 ? (
+        {mandats === null ? (
+          <div className="banner banner-error">
+            Les mandats n’ont pas pu être lus. <b>N’en concluez pas qu’aucun client n’est
+            prélevable</b>&nbsp;: cette liste n’a pas été obtenue.
+          </div>
+        ) : mandats.length === 0 ? (
           <div className="empty">
             Aucun mandat. Un mandat est l&rsquo;autorisation écrite du client de prélever son compte :
             sans lui, aucune de ses échéances n&rsquo;entrera dans une remise.
@@ -291,7 +307,7 @@ function Mandats({ mandats, peutGerer, onCreer }) {
               </tr>
             </thead>
             <tbody>
-              {mandats.map((m) => (
+              {(mandats || []).map((m) => (
                 <tr key={m.id}>
                   <td><span className="mono">{m.rum || '—'}</span></td>
                   {/* `client` arrive en IRI nue (vérifié contre la préprod) : le nom du client n'est
@@ -326,7 +342,7 @@ function Mandats({ mandats, peutGerer, onCreer }) {
             </tbody>
           </table>
         )}
-        {mandats.length > 0 && (
+        {(mandats?.length || 0) > 0 && (
           <div className="hint">
             La « prochaine séquence » est ce que la banque lira dans le fichier : une première
             collecte (FRST) et une suivante (RCUR) ne suivent pas le même circuit de contrôle, et
@@ -709,14 +725,14 @@ function CreationMandatModal({ open, etabActif, onClose, onFait }) {
   const [debiteurNom, setDebiteurNom] = useState('')
   const [iban, setIban] = useState('')
   const [bic, setBic] = useState('')
-  const [dateSignature, setDateSignature] = useState(() => new Date().toISOString().slice(0, 10))
+  const [dateSignature, setDateSignature] = useState(() => jourLocal())
   const [enCours, setEnCours] = useState(false)
   const [erreur, setErreur] = useState(null)
 
   useEffect(() => {
     if (!open) return
     setClient(null); setDebiteurNom(''); setIban(''); setBic('')
-    setDateSignature(new Date().toISOString().slice(0, 10))
+    setDateSignature(jourLocal())
     setErreur(null)
   }, [open])
 
@@ -859,13 +875,13 @@ function CreationMandatModal({ open, etabActif, onClose, onFait }) {
 }
 
 function GenerationRemiseModal({ open, onClose, onFait }) {
-  const [dateExecution, setDateExecution] = useState(() => new Date().toISOString().slice(0, 10))
+  const [dateExecution, setDateExecution] = useState(() => jourLocal())
   const [enCours, setEnCours] = useState(false)
   const [erreur, setErreur] = useState(null)
 
   useEffect(() => {
     if (open) {
-      setDateExecution(new Date().toISOString().slice(0, 10))
+      setDateExecution(jourLocal())
       setErreur(null)
     }
   }, [open])
@@ -947,7 +963,7 @@ function DeclarationRejetModal({ cible, lignes, mandatsParId, lignesRejetees, on
   const [ligneId, setLigneId] = useState('')
   const [codeMotif, setCodeMotif] = useState('')
   const [libelleMotif, setLibelleMotif] = useState('')
-  const [dateRejet, setDateRejet] = useState(() => new Date().toISOString().slice(0, 10))
+  const [dateRejet, setDateRejet] = useState(() => jourLocal())
   const [enCours, setEnCours] = useState(false)
   const [erreur, setErreur] = useState(null)
 
@@ -955,7 +971,7 @@ function DeclarationRejetModal({ cible, lignes, mandatsParId, lignesRejetees, on
     if (!cible) return
     setLigneId(ligneImposee?.id || '')
     setCodeMotif(''); setLibelleMotif('')
-    setDateRejet(new Date().toISOString().slice(0, 10))
+    setDateRejet(jourLocal())
     setErreur(null)
   }, [cible, ligneImposee])
 

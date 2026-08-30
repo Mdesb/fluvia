@@ -3,7 +3,7 @@ import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import { useEtatUrl } from '../api/url.js'
 import Modal from '../components/Modal.jsx'
-import { nomOuAbsence } from '../components/Liste.jsx'
+import { jourLocal, nomOuAbsence } from '../components/Liste.jsx'
 
 /**
  * PROJETS — le travail interne qui a une fin, un responsable et des tâches.
@@ -92,6 +92,9 @@ export default function Projets({ etabActif, droits = [] }) {
 
   if (chargement) return <div className="center" style={{ minHeight: 200 }}><div className="spinner" /></div>
 
+  // ⚠ `tableau` NUL NE VEUT PAS DIRE << AUCUN PROJET >>. Il veut dire qu'on n'a pas pu lire.
+  // Le decompte annoncait << 0 en cours · 0 clos >>, ce qui se lit comme un service au repos.
+  const lectureRefusee = tableau === null && Boolean(erreur)
   const projets = tableau?.projets || []
   // La fiche est designee par l'URL : on la retrouve dans la liste deja chargee. Un identifiant qui
   // ne correspond a rien (lien perime, projet clos et filtre) laisse simplement la fiche fermee --
@@ -105,7 +108,11 @@ export default function Projets({ etabActif, droits = [] }) {
       <div className="view-head">
         <div className="ttl">
           <h1>Projets</h1>
-          <div className="sub">{ouverts.length} en cours · {clos.length} clos</div>
+          <div className="sub">
+            {lectureRefusee
+              ? 'nombre de projets inconnu — la lecture n’a pas abouti'
+              : `${ouverts.length} en cours · ${clos.length} clos`}
+          </div>
         </div>
         {peutGerer && (
           <button className="btn primary" type="button" onClick={() => setNouveau(true)}>+ Nouveau projet</button>
@@ -114,9 +121,9 @@ export default function Projets({ etabActif, droits = [] }) {
 
       {erreur && <div className="banner banner-error">{erreur}</div>}
 
-      {projets.length === 0 ? (
+      {lectureRefusee ? null : projets.length === 0 ? (
         <div className="card">
-          <div className="sub" style={{ textAlign: 'center', padding: 28 }}>
+          <div className="empty">
             Aucun projet. Un projet, c&rsquo;est un travail interne qui a une fin — pas une demande
             d&rsquo;assistance, pas une tâche automatique.
           </div>
@@ -286,7 +293,7 @@ function FicheProjet({ projet, peutGerer, onFermer, onChange }) {
     }
   }
 
-  const aujourdhui = new Date().toISOString().slice(0, 10)
+  const aujourdhui = jourLocal()
 
   return (
     <Modal open={!!projet} onClose={onFermer} titre={projet?.nom || 'Projet'} taille="lg">

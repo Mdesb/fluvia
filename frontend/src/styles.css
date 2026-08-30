@@ -1058,3 +1058,46 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
   justify-content: flex-end;
   margin-top: var(--esp-bloc);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────────────────────
+   LE DOCUMENT DE FACTURE — affiche a l'ecran, imprime par le navigateur.
+
+   Pas de bibliotheque PDF : l'impression du navigateur produit deja un PDF, elle ne depend
+   d'aucun prestataire, et elle marche le jour ou on la demande. Une dependance de plus se
+   justifierait si le rendu manquait de quelque chose ; il ne manque de rien.
+
+   ⚠ LES ESPACEMENTS SONT ICI ET NON EN LIGNE. Une facture est le seul ecran ou la mise en page
+   EST le produit : la mettre dans la feuille permet de la relire d'un bloc, et l'impression a
+   besoin de regles que `style={{}}` ne sait pas porter (`@page`, `break-inside`).
+   ───────────────────────────────────────────────────────────────────────────────────────────── */
+
+.fact-doc { background: var(--panel); color: var(--ink); padding: 24px; }
+.fact-tete { display: flex; gap: 24px; justify-content: space-between; flex-wrap: wrap; }
+.fact-bloc { min-width: 220px; }
+.fact-bloc-titre { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 4px; }
+.fact-nom { font-weight: 600; font-size: 15px; }
+.fact-ligne-info { font-size: 12.5px; color: var(--ink-soft); }
+.fact-titre { margin: 24px 0 4px; font-size: 20px; font-weight: 700; }
+.fact-dates { font-size: 12.5px; color: var(--ink-soft); margin-bottom: 16px; }
+.fact-tbl { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; }
+.fact-tbl th { text-align: left; border-bottom: 1px solid var(--line); padding: 6px 8px; color: var(--ink-faint); font-weight: 600; font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; }
+.fact-tbl td { border-bottom: 1px solid var(--line); padding: 6px 8px; }
+.fact-tbl .num { text-align: right; font-variant-numeric: tabular-nums; }
+.fact-totaux { margin-top: 16px; margin-left: auto; width: 280px; font-size: 13px; }
+.fact-totaux div { display: flex; justify-content: space-between; padding: 3px 0; }
+.fact-totaux .fact-ttc { border-top: 1px solid var(--line); margin-top: 4px; padding-top: 6px; font-weight: 700; font-size: 15px; }
+.fact-cond { margin-top: 24px; font-size: 12.5px; color: var(--ink-soft); }
+.fact-acquittee { margin-top: 12px; font-weight: 600; color: var(--ok, var(--ink)); }
+/* Le destinataire manquant est marque DANS le document : un bloc vide se remet par megarde. */
+.fact-manque { color: var(--crit); font-weight: 600; }
+
+@media print {
+  /* On masque tout sans defaire la mise en page, puis on revele le document seul. */
+  body * { visibility: hidden; }
+  .fact-doc, .fact-doc * { visibility: visible; }
+  .fact-doc { position: absolute; left: 0; top: 0; width: 100%; padding: 0; background: #fff; color: #000; }
+  .fact-noprint { display: none !important; }
+  .fact-tbl th, .fact-tbl td { border-color: #999; }
+  .fact-tbl tr, .fact-totaux { break-inside: avoid; }
+  @page { margin: 16mm; }
+}

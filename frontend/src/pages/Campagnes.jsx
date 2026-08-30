@@ -4,6 +4,7 @@ import { aLeDroit } from '../api/droits.js'
 import Modal from '../components/Modal.jsx'
 import Tabs from '../components/Tabs.jsx'
 import { useEtatUrl } from '../api/url.js'
+import { jourLocal } from '../components/Liste.jsx'
 
 /**
  * CAMPAGNES — première étape : les segments, et l'effectif avant l'envoi.
@@ -62,10 +63,11 @@ export default function Campagnes({ etabActif, droits = [] }) {
   const [params, majParams] = useEtatUrl('campagnes', DEFAUTS)
   const onglet = params.tab
   const setOnglet = (v) => majParams({ tab: v })
-  const [campagnes, setCampagnes] = useState([])
+  // ⚠ `null` = PAS LU.
+  const [campagnes, setCampagnes] = useState(null)
   const [redigee, setRedigee] = useState(null)
   const [resultat, setResultat] = useState(null)
-  const [segments, setSegments] = useState([])
+  const [segments, setSegments] = useState(null)
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
@@ -82,6 +84,8 @@ export default function Campagnes({ etabActif, droits = [] }) {
       setCampagnes(membres(ca))
     } catch (e) {
       setErreur(e.message || 'Les segments n’ont pas pu être chargés.')
+      setSegments(null)
+      setCampagnes(null)
     } finally {
       setChargement(false)
     }
@@ -128,7 +132,7 @@ export default function Campagnes({ etabActif, droits = [] }) {
   }
 
   async function envoyer(campagne) {
-    const segment = segments.find((s) => idDe(campagne.segment) === s.id)
+    const segment = (segments || []).find((s) => idDe(campagne.segment) === s.id)
     let effectif = null
     try {
       effectif = segment ? (await api.apercuSegment(segment.id)).effectif : null
@@ -198,7 +202,9 @@ export default function Campagnes({ etabActif, droits = [] }) {
         <div className="ttl">
           <h1>Campagnes</h1>
           <div className="sub">
-            {segments.length} segment{segments.length > 1 ? 's' : ''} · l’effectif se calcule à chaque lecture
+            {segments === null
+              ? 'segments non lus — la lecture n’a pas abouti'
+              : `${segments.length} segment${segments.length > 1 ? 's' : ''} · l’effectif se calcule à chaque lecture`}
           </div>
         </div>
         {peutGerer && onglet !== 'fidelite' && (
@@ -249,6 +255,11 @@ export default function Campagnes({ etabActif, droits = [] }) {
 
         {chargement ? (
           <div className="center" style={{ minHeight: 140 }}><div className="spinner" /></div>
+        ) : segments === null ? (
+          <div className="banner banner-error">
+            Les segments n’ont pas pu être lus&nbsp;: ce cadre est vide parce que la lecture a
+            échoué, <b>pas</b> parce qu’aucun segment n’existe.
+          </div>
         ) : segments.length === 0 ? (
           <div className="sub" style={{ textAlign: 'center', padding: 'var(--esp-section)' }}>
             Aucun segment. Le premier qu’écrivent la plupart des exploitants&nbsp;: «&nbsp;sans visite
@@ -265,7 +276,7 @@ export default function Campagnes({ etabActif, droits = [] }) {
                 </tr>
               </thead>
               <tbody>
-                {segments.map((s) => (
+                {(segments || []).map((s) => (
                   <tr key={s.id}>
                     <td><span className="nm">{s.label}</span></td>
                     <td className="sub">{resumerCriteres(s.criteria)}</td>
@@ -566,13 +577,17 @@ function idDe(ref) {
  * plus simple de brûler un canal, et un bouton suffirait.
  */
 function ListeCampagnes({ campagnes, segments, peutGerer, busy, onRediger, onEnvoyer, onResultat }) {
-  const nomSegment = (ref) => segments.find((s) => s.id === idDe(ref))?.label || '—'
+  const nomSegment = (ref) => (segments || []).find((s) => s.id === idDe(ref))?.label || '—'
 
   return (
     <div className="card">
       <div className="card-h"><span>Campagnes</span></div>
 
-      {campagnes.length === 0 ? (
+      {campagnes === null ? (
+        <div className="banner banner-error">
+          Les campagnes n’ont pas pu être lues&nbsp;: <b>n’en concluez pas qu’aucune n’existe</b>.
+        </div>
+      ) : campagnes.length === 0 ? (
         <div className="sub" style={{ textAlign: 'center', padding: 'var(--esp-section)' }}>
           Aucune campagne. Une campagne, c’est un segment plus un message&nbsp;: commencez par le
           segment.
@@ -591,7 +606,7 @@ function ListeCampagnes({ campagnes, segments, peutGerer, busy, onRediger, onEnv
               </tr>
             </thead>
             <tbody>
-              {campagnes.map((c) => {
+              {(campagnes || []).map((c) => {
                 const statut = STATUTS[c.status] || { libelle: c.status, ton: 'mut' }
                 const partie = c.status === 'envoyee' || c.status === 'arretee'
                 return (
@@ -853,7 +868,7 @@ function RedactionCampagne({ campagne, segments, onFermer, onEnregistre, onErreu
             <span className="sub">Audience</span>
             <select className="select" value={segment} onChange={(e) => setSegment(e.target.value)}>
               <option value="">Choisir un segment…</option>
-              {segments.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+              {(segments || []).map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
             </select>
           </label>
         </div>
@@ -1135,7 +1150,7 @@ function ReglagesFidelite({ droits, onErreur }) {
 
 function PanneauBaremes({ baremes, peutRegler, busy, onAjouter }) {
   const [points, setPoints] = useState('1')
-  const [depuis, setDepuis] = useState(() => new Date().toISOString().slice(0, 10))
+  const [depuis, setDepuis] = useState(() => jourLocal())
 
   const tries = [...baremes].sort((a, b) => (a.validFrom < b.validFrom ? 1 : -1))
 

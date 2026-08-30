@@ -455,6 +455,24 @@ fi
 # cache. L'ordre est tout, et aucune expression régulière ne le voit.
 #
 # Il tourne sur l'HÔTE comme les autres contrôles front : node n'est pas dans l'image PHP.
+# DATES LOCALES (n°31) — `toISOString().slice(0, 10)` rend la veille entre minuit et deux heures.
+#
+# Douze occurrences vivantes le 30/08/2026, sur des champs qui DATENT DES FAITS : facture
+# fournisseur, signature de mandat SEPA, exécution d'un prélèvement, rejet bancaire, entrée d'un
+# employé. Le remède existait déjà — `jourLocal()` dans `components/Liste.jsx` — avec le commentaire
+# qui l'explique. Le savoir était posé à un endroit et douze autres l'ignoraient : c'est exactement
+# ce qu'un garde-fou attrape et qu'un commentaire ne peut pas.
+if [ -f "$RACINE/frontend/scripts/verifier-dates-locales.mjs" ]; then
+    if command -v node >/dev/null 2>&1; then
+        executer "Dates locales (n°31)" sh -c "cd '$RACINE/frontend' && node scripts/verifier-dates-locales.mjs"
+    else
+        echo "─────────────────────────────────────────────────────────────"
+        echo "▶ Dates locales (n°31)"
+        echo "─────────────────────────────────────────────────────────────"
+        echo "· IGNORÉ — « node » indisponible ici. Le contrôle n'a PAS tourné."
+    fi
+fi
+
 if [ -f "$RACINE/frontend/scripts/verifier-cache.mjs" ]; then
     if command -v node >/dev/null 2>&1; then
         executer "Cache du service worker (n°18)" sh -c "cd '$RACINE/frontend' && node scripts/verifier-cache.mjs"

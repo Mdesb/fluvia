@@ -39,11 +39,13 @@ import { mot } from '../api/vocabulaire.js'
 // et au moment de cliquer on ne se souvient jamais s'il est rattrapable.
 
 export default function ClotureComptable({ etabActif, droits }) {
-  const [profils, setProfils] = useState([])
-  const [periodes, setPeriodes] = useState([])
-  const [ecritures, setEcritures] = useState([])
-  const [journaux, setJournaux] = useState([])
-  const [exports, setExports] = useState([])
+  // ⚠ `null` = PAS LU · `[]` = LU ET VIDE. Sur cet ecran, << tout est valide >> est une
+  // affirmation comptable : elle dit qu'aucune ecriture n'attend, donc qu'on peut cloturer.
+  const [profils, setProfils] = useState(null)
+  const [periodes, setPeriodes] = useState(null)
+  const [ecritures, setEcritures] = useState(null)
+  const [journaux, setJournaux] = useState(null)
+  const [exports, setExports] = useState(null)
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
@@ -73,6 +75,11 @@ export default function ClotureComptable({ etabActif, droits }) {
       setExports(membres(ex))
     } catch (err) {
       setErreur(err.message)
+      setProfils(null)
+      setEcritures(null)
+      setPeriodes(null)
+      setJournaux(null)
+      setExports(null)
     } finally {
       setChargement(false)
     }
@@ -139,8 +146,8 @@ export default function ClotureComptable({ etabActif, droits }) {
     )
   }
 
-  const aValider = ecritures.filter((e) => e.statut === 'provisoire' || e.statut === 'controlee')
-  const ouvertes = periodes.filter((p) => p.statut !== 'cloturee')
+  const aValider = (ecritures || []).filter((e) => e.statut === 'provisoire' || e.statut === 'controlee')
+  const ouvertes = (periodes || []).filter((p) => p.statut !== 'cloturee')
 
   return (
     <>
@@ -156,8 +163,8 @@ export default function ClotureComptable({ etabActif, droits }) {
               <button
                 className="btn primary sm"
                 type="button"
-                disabled={enCours || profils.length === 0}
-                title={profils.length === 0 ? "Aucun profil d'exploitant n'est configuré." : undefined}
+                disabled={enCours || !profils?.length}
+                title={!profils?.length ? "Aucun profil d'exploitant utilisable : soit aucun n'est configuré, soit la lecture a échoué." : undefined}
                 onClick={generer}
               >
                 {enCours ? 'Génération…' : 'Générer les écritures'}
@@ -166,7 +173,12 @@ export default function ClotureComptable({ etabActif, droits }) {
           )}
         </div>
         <div className="card-b">
-          {profils.length === 0 ? (
+          {profils === null ? (
+            <div className="banner banner-error">
+              Les profils d’exploitant n’ont pas pu être lus. <b>N’en concluez pas qu’aucun n’est
+              configuré</b> : la génération d’écritures est désactivée par prudence, pas par constat.
+            </div>
+          ) : profils.length === 0 ? (
             <div className="empty">
               Aucun profil d'exploitant n'est configuré. C'est lui qui porte le régime comptable et le
               plan de comptes : sans lui, aucune écriture ne peut être générée.
@@ -186,11 +198,18 @@ export default function ClotureComptable({ etabActif, droits }) {
         <div className="card-h">
           <h3>Écritures à valider</h3>
           <span className="sub">
-            {aValider.length === 0 ? 'tout est validé' : `${aValider.length} en attente`}
+            {ecritures === null
+              ? 'état inconnu — la lecture n’a pas abouti'
+              : aValider.length === 0 ? 'tout est validé' : `${aValider.length} en attente`}
           </span>
         </div>
         <div className="card-b">
-          {aValider.length === 0 ? (
+          {ecritures === null ? (
+            <div className="banner banner-error">
+              Les écritures n’ont pas pu être lues. <b>Ne concluez pas que tout est validé</b> avant
+              de clôturer&nbsp;: cette liste n’a pas été obtenue.
+            </div>
+          ) : aValider.length === 0 ? (
             <div className="empty">
               Aucune écriture en attente. Une écriture générée reste provisoire jusqu'à sa validation :
               c'est la validation qui la scelle et l'inscrit dans la chaîne.
@@ -230,9 +249,9 @@ export default function ClotureComptable({ etabActif, droits }) {
             </table>
           )}
 
-          {peutValider && ecritures.some((e) => e.statut === 'validee' || e.statut === 'exportee') && (
+          {peutValider && (ecritures || []).some((e) => e.statut === 'validee' || e.statut === 'exportee') && (
             <ExtourneSection
-              ecritures={ecritures.filter((e) => e.statut === 'validee' || e.statut === 'exportee')}
+              ecritures={(ecritures || []).filter((e) => e.statut === 'validee' || e.statut === 'exportee')}
               onExtourner={(e) =>
                 surEcriture(e, api.extournerEcriture, "Écriture extournée : la contre-écriture est datée d'aujourd'hui.")}
             />
@@ -244,11 +263,18 @@ export default function ClotureComptable({ etabActif, droits }) {
         <div className="card-h">
           <h3>Périodes</h3>
           <span className="sub">
-            {ouvertes.length === 0 ? 'aucune période ouverte' : `${ouvertes.length} ouverte${ouvertes.length > 1 ? 's' : ''}`}
+            {periodes === null
+              ? 'état inconnu — la lecture n’a pas abouti'
+              : ouvertes.length === 0 ? 'aucune période ouverte' : `${ouvertes.length} ouverte${ouvertes.length > 1 ? 's' : ''}`}
           </span>
         </div>
         <div className="card-b">
-          {periodes.length === 0 ? (
+          {periodes === null ? (
+            <div className="banner banner-error">
+              Les périodes comptables n’ont pas pu être lues. <b>N’en concluez pas qu’aucune n’est
+              ouverte</b>&nbsp;: cette liste n’a pas été obtenue.
+            </div>
+          ) : periodes.length === 0 ? (
             <div className="empty">
               Aucune période comptable. Les périodes découpent l'exercice ; on les clôture une à une,
               et une période clôturée ne se rouvre pas.
@@ -264,7 +290,7 @@ export default function ClotureComptable({ etabActif, droits }) {
                 </tr>
               </thead>
               <tbody>
-                {periodes.map((p) => (
+                {(periodes || []).map((p) => (
                   <tr key={p.id}>
                     <td>{jour(p.dateDebut)}</td>
                     <td>{jour(p.dateFin)}</td>
@@ -443,7 +469,7 @@ function ExtourneSection({ ecritures, onExtourner }) {
               <tr><th>Date</th><th>Libellé</th><th>État</th><th /></tr>
             </thead>
             <tbody>
-              {ecritures.map((e) => (
+              {(ecritures || []).map((e) => (
                 <tr key={e.id}>
                   <td>{jour(e.dateEcriture)}</td>
                   <td>{e.libelle || '—'}</td>
@@ -500,7 +526,11 @@ function ChaineSection({ journaux, rapport, onVerifier, onFermer }) {
         <span className="sub">contrôle de la chaîne NF525, journal par journal</span>
       </div>
       <div className="card-b">
-        {journaux.length === 0 ? (
+        {journaux === null ? (
+          <div className="banner banner-error">
+            Les journaux comptables n’ont pas pu être lus.
+          </div>
+        ) : journaux.length === 0 ? (
           <div className="empty">Aucun journal comptable.</div>
         ) : (
           <>
@@ -510,7 +540,7 @@ function ChaineSection({ journaux, rapport, onVerifier, onFermer }) {
               coup. À lancer avant une clôture, et lors d'un contrôle.
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {journaux.map((j) => (
+              {(journaux || []).map((j) => (
                 <button key={j.id} className="btn" type="button" onClick={() => onVerifier(j)}>
                   Vérifier « {j.libelle || j.code || 'journal'} »
                 </button>
@@ -582,7 +612,7 @@ function ExportsSection({ exports, profils, peutExporter, onChange, onErreur, on
       <div className="card-h">
         <h3>Exports comptables</h3>
         <span className="sub">FEC et formats d'échange</span>
-        {peutExporter && profils.length > 0 && (
+        {peutExporter && (profils?.length || 0) > 0 && (
           <div className="r">
             <button className="btn primary sm" type="button" onClick={() => setNouveau(true)}>
               ＋ Nouvel export
@@ -591,7 +621,12 @@ function ExportsSection({ exports, profils, peutExporter, onChange, onErreur, on
         )}
       </div>
       <div className="card-b">
-        {exports.length === 0 ? (
+        {exports === null ? (
+          <div className="banner banner-error">
+            La liste des exports n’a pas pu être lue&nbsp;: <b>ne concluez pas qu’aucun FEC n’a été
+            produit</b> pour cet exercice.
+          </div>
+        ) : exports.length === 0 ? (
           <div className="empty">
             Aucun export. Le FEC est le fichier que réclame l'administration en cas de contrôle : il se
             génère sur une période et se télécharge ici.
@@ -607,7 +642,7 @@ function ExportsSection({ exports, profils, peutExporter, onChange, onErreur, on
               </tr>
             </thead>
             <tbody>
-              {exports.map((e) => (
+              {(exports || []).map((e) => (
                 <tr key={e.id}>
                   <td><span className="badge mut">{String(e.format || '—').toUpperCase()}</span></td>
                   <td>{jour(e.periodeDebut)} → {jour(e.periodeFin)}</td>

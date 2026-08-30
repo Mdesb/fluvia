@@ -28,7 +28,9 @@ const STATUTS = {
 }
 
 export default function AbsencesSection({ etabActif, droits = [] }) {
-  const [lignes, setLignes] = useState([])
+  // ⚠ `null` = PAS LU. << Aucune absence enregistree >> decide d'un planning : on affecte
+  // quelqu'un qui est peut-etre en arret.
+  const [lignes, setLignes] = useState(null)
   const [employes, setEmployes] = useState([])
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
@@ -47,6 +49,7 @@ export default function AbsencesSection({ etabActif, droits = [] }) {
       setLignes(membres(await api.absences()))
     } catch (e) {
       setErreur(e.message)
+      setLignes(null)
     } finally {
       setChargement(false)
     }
@@ -107,7 +110,7 @@ export default function AbsencesSection({ etabActif, droits = [] }) {
     }
   }
 
-  const aDecider = lignes.filter((l) => l.statut === 'declaree').length
+  const aDecider = (lignes || []).filter((l) => l.statut === 'declaree').length
 
   return (
     <section className="card" style={{ marginTop: 16 }}>
@@ -136,6 +139,11 @@ export default function AbsencesSection({ etabActif, droits = [] }) {
 
         {chargement ? (
           <div className="center" style={{ minHeight: 80 }}><div className="spinner" /></div>
+        ) : lignes === null ? (
+          <div className="banner banner-error">
+            Les absences n’ont pas pu être lues. <b>Ne bâtissez pas un planning sur ce cadre</b>&nbsp;:
+            quelqu’un est peut-être en congé ou en arrêt sans que cet écran le sache.
+          </div>
         ) : lignes.length === 0 ? (
           <div className="empty" style={{ padding: 18 }}>
             Aucune absence enregistrée. Les congés, arrêts et formations déclarés apparaîtront ici, et
@@ -154,7 +162,7 @@ export default function AbsencesSection({ etabActif, droits = [] }) {
                 </tr>
               </thead>
               <tbody>
-                {lignes.map((l) => {
+                {(lignes || []).map((l) => {
                   const st = STATUTS[l.statut] || { libelle: l.statut, ton: 'mut' }
                   const emp = l.employe || {}
                   return (

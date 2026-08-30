@@ -56,7 +56,8 @@ function quand(v) {
 export default function Documents({ etabActif, droits = [] }) {
   const peutEcrire = aLeDroit(droits, 'dms.write')
 
-  const [documents, setDocuments] = useState([])
+  // ⚠ `null` = PAS LU.
+  const [documents, setDocuments] = useState(null)
   const [versions, setVersions] = useState([])
   const [historique, setHistorique] = useState(null)
   const [aRenommer, setARenommer] = useState(null)
@@ -87,6 +88,7 @@ export default function Documents({ etabActif, droits = [] }) {
       setVersions(vers ? membres(vers) : [])
     } catch (e) {
       setErreur(e.message || 'Les documents n’ont pas pu être chargés.')
+      setDocuments(null)
     } finally {
       setChargement(false)
     }
@@ -98,7 +100,7 @@ export default function Documents({ etabActif, droits = [] }) {
 
   const visibles = useMemo(() => {
     const q = recherche.trim().toLowerCase()
-    return documents
+    return (documents || [])
       .filter((d) => d.status !== 'deleted')
       .filter((d) => !categorie || d.category === categorie)
       .filter((d) => !q || (d.title || '').toLowerCase().includes(q))
@@ -171,7 +173,11 @@ export default function Documents({ etabActif, droits = [] }) {
       <div className="view-head">
         <div className="ttl">
           <h1>Documents</h1>
-          <div className="sub">{visibles.length} document{visibles.length > 1 ? 's' : ''}</div>
+          <div className="sub">
+            {documents === null
+              ? 'bibliothèque non lue — la lecture n’a pas abouti'
+              : `${visibles.length} document${visibles.length > 1 ? 's' : ''}`}
+          </div>
         </div>
         {peutEcrire && (
           <>
@@ -216,10 +222,12 @@ export default function Documents({ etabActif, droits = [] }) {
         {chargement ? (
           <div className="center" style={{ minHeight: 140 }}><div className="spinner" /></div>
         ) : visibles.length === 0 ? (
-          <div className="sub" style={{ textAlign: 'center', padding: 26 }}>
-            {documents.length === 0
-              ? 'Aucun document. Contrats, rapports d’intervention et pièces comptables se déposent ici.'
-              : 'Aucun document ne correspond à ce filtre.'}
+          <div className="empty">
+            {documents === null
+              ? 'La bibliothèque n’a pas pu être lue : ce tableau est vide parce que la lecture a échoué, pas parce qu’aucun document n’a été déposé.'
+              : documents.length === 0
+                ? 'Aucun document. Contrats, rapports d’intervention et pièces comptables se déposent ici.'
+                : 'Aucun document ne correspond à ce filtre.'}
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>

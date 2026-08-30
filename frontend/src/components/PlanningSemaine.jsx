@@ -253,7 +253,7 @@ export default function PlanningSemaine({ creneaux, occupation, ressources, onCr
       </div>
 
       {visibles.length === 0 && (
-        <div className="sub" style={{ textAlign: 'center', padding: 20 }}>
+        <div className="empty">
           Aucun créneau cette semaine{ressourceId ? ' pour cette ressource' : ''}.
         </div>
       )}

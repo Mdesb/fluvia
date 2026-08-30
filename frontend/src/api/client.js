@@ -441,6 +441,14 @@ export const api = {
   // Toutes ces routes portent un `uriTemplate` sur mesure et `input: false` : pas de `ld: true`.
   factures: (params) => request('/api/factures', { query: params }),
   facture: (id) => request(`/api/factures/${id}`),
+  // LE DOCUMENT LEGAL LUI-MEME. `FactureRenduProvider` existait depuis le debut et n'etait appele
+  // par AUCUN ecran : Fluvia savait creer, numeroter, sceller, emettre, encaisser et deposer sur
+  // Chorus une facture -- mais pas la DONNER a celui qui doit la payer.
+  //
+  // Le rendu porte les montants FIGES (par ligne, par taux, et les trois totaux). L'ecran les
+  // affiche verbatim et n'additionne rien : recalculer depuis `tauxTva`, qui est lu vivant sur la
+  // fiche du taux, fabriquerait un troisieme chiffre.
+  renduFacture: (id) => request(`/api/factures/${id}/rendu`),
   // Cree un BROUILLON : aucun numero n'est consomme tant qu'on n'a pas emis (RG-FACT-01). C'est ce
   // qui permet de se tromper sans trouer la sequence legale des numeros.
   creerFactureDirecte: (corps) => request('/api/factures', { method: 'POST', body: corps }),

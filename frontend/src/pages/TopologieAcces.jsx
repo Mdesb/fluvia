@@ -1825,7 +1825,7 @@ function telechargerCsv(passages, espaces, equipements) {
   // Sur un nom de fichier, ce n'est pas anodin : l'exploitant qui exporte à 00 h 30 obtient un
   // fichier daté de la veille, à côté de celui qu'il a peut-être déjà exporté ce jour-là. Deux
   // fichiers homonymes, ou un nom qui ne correspond pas aux lignes qu'il contient.
-  // `jourLocal()` rend le jour de CELUI QUI REGARDE — signalé par allaccess-34, garde-fou n°29.
+  // `jourLocal()` rend le jour de CELUI QUI REGARDE — garde-fou n°31.
   a.download = `passages-${jourLocal()}.csv`
   document.body.appendChild(a)
   a.click()

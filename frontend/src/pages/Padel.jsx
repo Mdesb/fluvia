@@ -66,7 +66,7 @@ export default function Padel({ etabActif, droits }) {
 function quandDe(reference, reservations) {
   if (!reference) return <span className="sub">sans réservation</span>
   const id = typeof reference === 'string' ? reference.split('/').pop() : reference.id
-  const trouvee = reservations.find((x) => String(x.id) === String(id))
+  const trouvee = (reservations || []).find((x) => String(x.id) === String(id))
   const debut = trouvee?.creneau?.debut
   if (debut) return dateHeureFr(debut)
   return <span className="sub">horaire non chargé</span>
@@ -76,8 +76,11 @@ function TerrainsSection({ etabActif, droits }) {
   // Le droit exige par `POST /padel/terrains`, et lui seul.
   const peutGererTerrain = aLeDroit(droits, 'padel.gerer_terrain')
   const [creation, setCreation] = useState(false)
-  const [terrains, setTerrains] = useState([])
-  const [reservations, setReservations] = useState([])
+  // ⚠ `null` = PAS LU. << Aucun terrain declare. Sans terrain, aucune reservation n'est
+  // possible. >> annonce une CONSEQUENCE : sur une lecture refusee, on refuse une reservation
+  // pour un terrain qui existe.
+  const [terrains, setTerrains] = useState(null)
+  const [reservations, setReservations] = useState(null)
   const [beneficiaires, setBeneficiaires] = useState([])
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
@@ -125,6 +128,8 @@ function TerrainsSection({ etabActif, droits }) {
       setReservationsCoeur(coeur ? membres(coeur) : [])
     } catch (e) {
       setErreur(e.message)
+      setTerrains(null)
+      setReservations(null)
     } finally {
       setChargement(false)
     }
@@ -135,7 +140,7 @@ function TerrainsSection({ etabActif, droits }) {
   }, [recharger])
 
   const ouvertes = useMemo(
-    () => reservations.filter((r) => r.ouverte && r.statutPartie !== 'complete'),
+    () => (reservations || []).filter((r) => r.ouverte && r.statutPartie !== 'complete'),
     [reservations],
   )
 
@@ -148,12 +153,19 @@ function TerrainsSection({ etabActif, droits }) {
         <div className="card-h">
           <h3>Parties ouvertes</h3>
           <span className="sub">
-            {ouvertes.length === 0 ? 'aucune partie cherche des joueurs' : `${ouvertes.length} cherche${ouvertes.length > 1 ? 'nt' : ''} des joueurs`}
+            {reservations === null
+              ? 'état inconnu — la lecture n’a pas abouti'
+              : ouvertes.length === 0 ? 'aucune partie cherche des joueurs' : `${ouvertes.length} cherche${ouvertes.length > 1 ? 'nt' : ''} des joueurs`}
           </span>
         </div>
         <div className="card-b">
           {chargement ? (
             <div className="center" style={{ minHeight: 80 }}><div className="spinner" /></div>
+          ) : reservations === null ? (
+            <div className="banner banner-error">
+              Les parties n’ont pas pu être lues&nbsp;: <b>ne concluez pas qu’aucune ne cherche de
+              joueurs</b>.
+            </div>
           ) : ouvertes.length === 0 ? (
             <div className="empty">
               Aucune partie ouverte. Un terrain de padel se joue à quatre : une partie ouverte permet
@@ -206,7 +218,9 @@ function TerrainsSection({ etabActif, droits }) {
       <section className="card" style={{ marginTop: 'var(--esp-bloc)' }}>
         <div className="card-h">
           <h3>Terrains</h3>
-          <span className="sub">{terrains.length} terrain{terrains.length > 1 ? 's' : ''}</span>
+          <span className="sub">
+            {terrains === null ? '—' : `${terrains.length} terrain${terrains.length > 1 ? 's' : ''}`}
+          </span>
           {peutGererTerrain && (
             <div className="actions" style={{ marginLeft: 'auto' }}>
               <button className="btn sm" type="button" onClick={() => setCreation(true)}>
@@ -217,12 +231,17 @@ function TerrainsSection({ etabActif, droits }) {
         </div>
         <TerrainModal
           open={creation}
-          terrains={terrains}
+          terrains={terrains || []}
           onClose={() => setCreation(false)}
           onFait={() => { setCreation(false); recharger() }}
         />
         <div className="card-b">
-          {terrains.length === 0 ? (
+          {terrains === null ? (
+            <div className="banner banner-error">
+              Les terrains n’ont pas pu être lus. <b>N’en concluez pas qu’aucun n’est déclaré</b>&nbsp;:
+              une réservation reste peut-être possible.
+            </div>
+          ) : terrains.length === 0 ? (
             <div className="empty">
               {/* LA PHRASE ENVOYAIT « DANS LE PARAMÉTRAGE », QUI N'A PAS DE PLACE POUR UN TERRAIN.
                   Troisième des trois — patinoire, padel, musée — et la plus coûteuse des trois
@@ -242,7 +261,7 @@ function TerrainsSection({ etabActif, droits }) {
                 </tr>
               </thead>
               <tbody>
-                {terrains.map((t) => (
+                {(terrains || []).map((t) => (
                   <tr key={t.id}>
                     <td><span className="nm">{nomTerrain(t, ressources, terrains)}</span></td>
                     <td>{t.type ? mot(t.type) : '—'}</td>
@@ -280,7 +299,7 @@ function TerrainsSection({ etabActif, droits }) {
 
       <ReservationModal
         ressources={ressources}
-        terrains={terrains}
+        terrains={terrains || []}
         terrain={reservation}
         beneficiaires={beneficiaires}
         onClose={() => setReservation(null)}
@@ -290,7 +309,7 @@ function TerrainsSection({ etabActif, droits }) {
 
       <RejoindreModal
         ressources={ressources}
-        terrains={terrains}
+        terrains={terrains || []}
         partie={rejoindre}
         beneficiaires={beneficiaires}
         onClose={() => setRejoindre(null)}
@@ -300,7 +319,7 @@ function TerrainsSection({ etabActif, droits }) {
 
       <EclairageModal
         ressources={ressources}
-        terrains={terrains}
+        terrains={terrains || []}
         terrain={eclairage}
         onClose={() => setEclairage(null)}
         onFait={(m) => { setEclairage(null); setSucces(m) }}

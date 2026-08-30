@@ -62,7 +62,9 @@ export default function Support({ droits = [], etabActif, me = null }) {
   const filtrePriorite = params.priorite
   const setFiltreStatut = (v) => majParams({ statut: v })
   const setFiltrePriorite = (v) => majParams({ priorite: v })
-  const [tickets, setTickets] = useState([])
+  // ⚠ `null` = PAS LU. << Aucune conversation. Ouvrez une demande : un agent y repondra ici
+  // meme. >> invite a REOUVRIR une demande deja ouverte, dont on n'a pas pu lire l'existence.
+  const [tickets, setTickets] = useState(null)
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   // Plus d'etat `ouvert` : la messagerie tient elle-meme le fil choisi. Le garder ici en ferait
@@ -89,6 +91,7 @@ export default function Support({ droits = [], etabActif, me = null }) {
       })))
     } catch (e) {
       setErreur(e.message || 'Les tickets n’ont pas pu être chargés.')
+      setTickets(null)
     } finally {
       setChargement(false)
     }
@@ -377,7 +380,7 @@ function BaseConnaissances({ droits = [], etabActif }) {
       {chargement ? (
         <div className="center" style={{ minHeight: 120 }}><div className="spinner" /></div>
       ) : visibles.length === 0 ? (
-        <div className="sub" style={{ textAlign: 'center', padding: 24 }}>
+        <div className="empty">
           {q.trim().length >= 2
             ? `Aucun article ne correspond à « ${q.trim()} ».`
             : peutEcrire

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import AbsencesSection from '../components/AbsencesSection.jsx'
-import Liste, { dateFr, dateHeureFr } from '../components/Liste.jsx'
+import Liste, { dateFr, dateHeureFr, jourLocal } from '../components/Liste.jsx'
 import Modal from '../components/Modal.jsx'
 import Tabs from '../components/Tabs.jsx'
 import { api } from '../api/client.js'
@@ -403,14 +403,14 @@ function EmployeModal({ open, onClose, onFait }) {
   const [poste, setPoste] = useState('')
   const [contrat, setContrat] = useState('cdi')
   const [matricule, setMatricule] = useState('')
-  const [entree, setEntree] = useState(dateDuJour())
+  const [entree, setEntree] = useState(jourLocal())
   const [erreur, setErreur] = useState(null)
   const [envoi, setEnvoi] = useState(false)
 
   useEffect(() => {
     if (!open) return
     setNom(''); setPrenom(''); setPoste(''); setContrat('cdi')
-    setMatricule(''); setEntree(dateDuJour()); setErreur(null)
+    setMatricule(''); setEntree(jourLocal()); setErreur(null)
   }, [open])
 
   // ⚠ `dateEntree` EST OBLIGATOIRE, et l'écran l'affichait en facultative.
@@ -513,16 +513,6 @@ function EmployeModal({ open, onClose, onFait }) {
 
 // Les six formes de `TypeContrat`, en toutes lettres : « vacataire » et « prestataire » ne se
 // devinent pas depuis un code, et le choix a des conséquences en paie.
-// ⚠ EN HEURE LOCALE, PAS `toISOString()`. Cette dernière rend de l'UTC : ouverte à Paris entre
-// minuit et deux heures du matin en été, elle daterait l'entrée de LA VEILLE. Le champ est un
-// `<input type="date">`, qui attend `AAAA-MM-JJ` dans le calendrier de celui qui saisit.
-function dateDuJour() {
-  const d = new Date()
-  const mm = String(d.getMonth() + 1).padStart(2, '0')
-  const jj = String(d.getDate()).padStart(2, '0')
-  return `${d.getFullYear()}-${mm}-${jj}`
-}
-
 const CONTRATS = [
   ['cdi', 'CDI'],
   ['cdd', 'CDD'],

@@ -124,7 +124,16 @@ export default function Piscine({ etabActif, droits }) {
 // Le rafraîchissement est manuel et daté. Un compteur de sécurité qui change tout seul pendant
 // qu'on le lit ne se cite pas à voix haute — et c'est exactement ce qu'un maître-nageur fait avec.
 function SurveillancePoss({ etabActif }) {
-  const [etats, setEtats] = useState([])
+  // ⚠ `null` = PAS LU · `[]` = LU, AUCUN PLAN DECLARE. Le bloc les confondait, et les deux
+  // menaient au meme `return null` : la section DISPARAISSAIT.
+  //
+  // C'est la contradiction la plus couteuse trouvee sur cet ecran, parce que le commentaire
+  // ci-dessus enonce exactement ce que le code defait : << on ne range pas une limite de securite
+  // derriere un clic >>. On ne la fait pas disparaitre non plus. Un bandeau absent ne laisse
+  // AUCUNE trace -- pas meme un vide qu'on remarquerait -- et un maitre-nageur qui survole le haut
+  // de l'ecran conclut qu'il n'y a rien a surveiller.
+  const [etats, setEtats] = useState(null)
+  const [erreur, setErreur] = useState(null)
   const [chargement, setChargement] = useState(true)
   const [luA, setLuA] = useState(null)
 
@@ -141,9 +150,13 @@ function SurveillancePoss({ etabActif }) {
         ),
       )
       setEtats(resultats)
+      setErreur(null)
       setLuA(new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }))
-    } catch {
-      setEtats([])
+    } catch (e) {
+      // `catch { setEtats([]) }` avalait l'erreur ET effacait la distinction : plus de message,
+      // plus de liste, plus de bloc. Trois informations perdues en deux mots.
+      setEtats(null)
+      setErreur(e?.message || 'Le plan de surveillance n’a pas pu être lu.')
     } finally {
       setChargement(false)
     }
@@ -153,10 +166,59 @@ function SurveillancePoss({ etabActif }) {
     recharger()
   }, [recharger])
 
-  if (chargement || etats.length === 0) return null
+  // Pendant le tout premier chargement on ne peint rien : un cadre qui clignote sur un compteur
+  // de securite est pire qu'un cadre qui arrive une seconde plus tard.
+  if (chargement && etats === null && !erreur) return null
+
+  // ⚠ LA LECTURE A ECHOUE : LE BLOC RESTE, ET IL LE DIT.
+  if (etats === null) {
+    return (
+      <section className="card" style={{ marginBottom: 'var(--esp-bloc)' }}>
+        <div className="card-h">
+          <h3>Surveillance</h3>
+          <span className="sub">seuil du plan de surveillance</span>
+          <div className="r">
+            <button className="btn ghost sm" type="button" onClick={recharger}>Actualiser</button>
+          </div>
+        </div>
+        <div className="card-b">
+          <div className="banner banner-error">
+            <b>Le seuil de surveillance n’a pas pu être lu.</b> Cet écran ne peut pas dire combien
+            de baigneurs sont présents ni si le plan est dépassé. <b>N’en concluez pas que tout va
+            bien</b> : comptez sur place, ou rechargez.
+            {erreur ? <div className="sub" style={{ marginTop: 'var(--esp-serre)' }}>{erreur}</div> : null}
+          </div>
+        </div>
+      </section>
+    )
+  }
+
+  // Lu, et aucun plan declare. Ce n'est pas rien a dire : une piscine sans POSS declare n'a pas de
+  // seuil oppose au guichet, et personne ne l'apprenait puisque le bloc s'effacait.
+  if (etats.length === 0) {
+    return (
+      <section className="card" style={{ marginBottom: 'var(--esp-bloc)' }}>
+        <div className="card-h">
+          <h3>Surveillance</h3>
+          <span className="sub">seuil du plan de surveillance</span>
+          {/* Le bouton est present dans les deux autres etats : l'omettre ici obligerait a changer
+              d'ecran pour revoir le bloc apres avoir declare un plan. */}
+          <div className="r">
+            <button className="btn ghost sm" type="button" onClick={recharger}>Actualiser</button>
+          </div>
+        </div>
+        <div className="card-b">
+          <div className="empty">
+            Aucun plan de surveillance déclaré pour cet établissement. Tant qu’il n’y en a pas,
+            aucun seuil de fréquentation n’est opposé à la vente ni affiché ici.
+          </div>
+        </div>
+      </section>
+    )
+  }
 
   return (
-    <section className="card" style={{ marginBottom: 16 }}>
+    <section className="card" style={{ marginBottom: 'var(--esp-bloc)' }}>
       <div className="card-h">
         <h3>Surveillance</h3>
         <span className="sub">

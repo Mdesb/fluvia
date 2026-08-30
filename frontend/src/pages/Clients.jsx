@@ -124,7 +124,11 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
       setTotal(res.total ?? (res.items || []).length)
     } catch (e) {
       setErreur(e.message)
-      setItems([])
+      // ⚠ `null` = PAS LU. L'ecran annoncait << 0 fiche(s) >> puis << Aucun client enregistre.
+      // "Ajouter un client" cree la premiere fiche. >> -- le message d'accueil d'un fichier vide,
+      // servi a quelqu'un dont le fichier client existe et n'a pas pu etre lu.
+      setItems(null)
+      setTotal(null)
     } finally {
       setChargement(false)
     }
@@ -259,7 +263,7 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
       <div className="view-head">
         <div className="ttl">
           <h1>Clients</h1>
-          <p>{total} fiche(s) · CRM</p>
+          <p>{total === null ? 'fichier non lu — la lecture n’a pas abouti' : `${total} fiche(s) · CRM`}</p>
         </div>
         <div className="actions">
           {peutCreer && (
@@ -356,7 +360,7 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map((c) => (
+                  {(items || []).map((c) => (
                     <tr key={c.id} className="row-click" onClick={() => ouvrirFiche(c.id)}>
                       <td>
                         <span className="nm">{nomClient(c)}</span>
@@ -382,7 +386,15 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
                       </td>
                     </tr>
                   ))}
-                  {items.length === 0 && (
+                  {items === null && (
+                    <tr>
+                      <td colSpan={6} className="empty">
+                        Le fichier client n’a pas pu être lu&nbsp;: ce tableau est vide parce que la
+                        lecture a échoué, pas parce qu’aucune fiche n’existe.
+                      </td>
+                    </tr>
+                  )}
+                  {items !== null && items.length === 0 && (
                     <tr>
                       <td colSpan={6} className="empty">
                         {params.q || params.carte || params.statut || params.pmv || params.mineur
