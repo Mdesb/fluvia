@@ -144,12 +144,17 @@ export default function ScansEnDirect({ droits = [], etabActif }) {
 
       if (recus.length === 0) return
 
-      // ⚠ LE REPÈRE EST LE MAXIMUM, PAS LA PREMIÈRE LIGNE — parce que le serveur ne trie pas.
+      // ⚠ LE REPÈRE EST LE MAXIMUM, PAS LA PREMIÈRE LIGNE — et il le reste même depuis que le
+      // serveur trie.
       //
-      // `order[horodatage]=desc` est ignoré : `Passage` n'a pas d'`OrderFilter`, la collection sort
-      // dans l'ordre d'insertion. Prendre `recus[0]` posait donc le repère sur un passage ANCIEN, et
-      // l'interrogation suivante réannonçait comme neufs des passages déjà vus. C'est ce qui faisait
-      // apparaître au comptoir des scans qui n'avaient pas lieu.
+      // Ce commentaire disait « `Passage` n'a pas d'`OrderFilter` ». C'était vrai à l'écriture ;
+      // `Passage.php` en porte un depuis le 29/08 à 01:34. La phrase a survécu à son défaut.
+      //
+      // Le code, lui, ne change pas : prendre le maximum est juste QUEL QUE SOIT le tri, alors que
+      // `recus[0]` ne l'est qu'à condition d'un tri décroissant — une condition qui vit ailleurs et
+      // que rien ne relie à cette ligne. Le défaut d'origine reste utile à connaître : le repère se
+      // posait sur un passage ANCIEN, et l'interrogation suivante réannonçait comme neufs des
+      // passages déjà vus, faisant apparaître au comptoir des scans qui n'avaient pas eu lieu.
       dernier.current = recus.reduce((a, p) => (p.horodatage > a ? p.horodatage : a), recus[0].horodatage)
 
       // PREMIÈRE LECTURE NON VIDE : on prend le repère SANS annoncer les passages comme s'ils
@@ -169,7 +174,13 @@ export default function ScansEnDirect({ droits = [], etabActif }) {
         return [...neufs, ...s].sort((a, b) => (a.horodatage < b.horodatage ? 1 : -1)).slice(0, MAX_AFFICHES)
       })
     } catch (e) {
-      // 401 : la session a expiré (le jeton vit une heure, sans rafraîchissement dans le projet).
+      // 401 : la session a expiré. ⚠ Ce commentaire ajoutait « sans rafraîchissement dans le
+      // projet » — faux depuis le 29/08 à 00:59 : `SlidingSessionListener` forge un jeton frais à
+      // chaque réponse, `api/client.js` le lit dans `X-JETON-RENOUVELE` et le remplace. La session
+      // glisse tant qu'on s'en sert, dans la limite du plafond absolu de douze heures.
+      //
+      // Un 401 ici veut donc dire que ce plafond est atteint, ou que le jeton a été révoqué —
+      // pas qu'une heure s'est écoulée.
       // On coupe le fil plutôt que de frapper toutes les quatre secondes dans le vide, et on le dit :
       // un bandeau qui se tait ressemble à un calme d'exploitation.
       if (e.status === 401) setArrete('Session expirée : le suivi des scans est arrêté.')

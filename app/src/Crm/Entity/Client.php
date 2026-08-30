@@ -12,6 +12,7 @@ use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\Crm\Enum\StatutClient;
+use App\Crm\Service\GeographicRegionResolver;
 use App\Crm\Enum\TypeClient;
 use App\Crm\State\ClientEcritureProcessor;
 use App\Crm\State\EnregistrerConsentementProcessor;
@@ -39,6 +40,10 @@ use Symfony\Component\Validator\Constraints as Assert;
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'crm_client')]
+// ⚠ L'INDEX EXISTE POUR LA RAISON D'ÊTRE DE LA COLONNE : elle n'est pas là pour être lue sur une
+// fiche, elle est là pour être GROUPÉE. Sans index, un `GROUP BY` sur la table des clients devient
+// un balayage complet, et la colonne perd l'avantage qui l'a fait préférer au calcul à la volée.
+#[ORM\Index(name: 'idx_client_region_geographique', columns: ['region_geographique'])]
 #[ApiResource(
     shortName: 'Client',
     operations: [
@@ -102,7 +107,7 @@ use Symfony\Component\Validator\Constraints as Assert;
     normalizationContext: ['groups' => ['client:read']],
     denormalizationContext: ['groups' => ['client:write']],
 )]
-#[ApiFilter(SearchFilter::class, properties: ['nom' => 'partial', 'prenom' => 'partial', 'email' => 'partial', 'telephone' => 'partial', 'statut' => 'exact'])]
+#[ApiFilter(SearchFilter::class, properties: ['nom' => 'partial', 'prenom' => 'partial', 'email' => 'partial', 'telephone' => 'partial', 'statut' => 'exact', 'regionGeographique' => 'exact'])]
 #[Assert\Callback('validerCoherenceType')]
 class Client
 {
@@ -176,6 +181,25 @@ class Client
     #[ORM\Column(nullable: true)]
     #[Groups(['client:read', 'client:write', 'fiche360:read'])]
     private ?array $adresse = null;
+
+    /**
+     * La région administrative déduite du code postal — statistique, jamais saisie.
+     *
+     * ⚠ CE N'EST PAS `Organisation\Entity\Region`, et les confondre coûterait cher. Celle-là
+     * regroupe les ÉTABLISSEMENTS d'un exploitant pour une direction régionale : arbitraire, propre
+     * à chacun — l'un met tout le Grand Est, l'autre découpe Nord et Grand Est. Celle-ci est une
+     * donnée géographique sur une PERSONNE, la même pour tout le monde, et qui se calcule.
+     *
+     * ⚠ EN LECTURE SEULE (D41). Elle est déduite par `setAdresse()` ; si l'appelant pouvait la
+     * poser, elle divergerait du code postal et plus rien ne dirait laquelle croire.
+     *
+     * ⚠ `null` VEUT DIRE « ON NE SAIT PAS RATTACHER » — adresse absente, pays étranger, code
+     * invalide. Jamais « aucune région » : la France entière en a une. Un écran qui affiche ce
+     * champ doit donc écrire « non déterminée » et non un tiret, qui se lit comme une donnée perdue.
+     */
+    #[ORM\Column(name: 'region_geographique', length: 64, nullable: true)]
+    #[Groups(['client:read', 'fiche360:read'])]
+    private ?string $regionGeographique = null;
 
     /** @var list<string>|null Champs saisis manuellement, jamais écrasés par l'auto-enrichissement (RG-M4-01/11). */
     #[ORM\Column(nullable: true)]
@@ -377,11 +401,30 @@ class Client
     }
 
     /** @param array<string, mixed>|null $adresse */
+    /**
+     * ⚠ ÉCRIRE L'ADRESSE RECALCULE LA RÉGION, ET C'EST LE SEUL ENDROIT QUI LA POSE.
+     *
+     * Toute écriture passe ici — API, import, commande, fixture — donc la région ne peut pas se
+     * désynchroniser de l'adresse. Un écouteur Doctrine couvrirait autant de chemins, mais il
+     * faudrait y recalculer le changeset à la main : l'oublier ne produit aucune erreur, la valeur
+     * est simplement calculée et jamais écrite.
+     *
+     * `GeographicRegionResolver` est une fonction pure — pas d'état, pas de dépendance, pas
+     * d'entrée-sortie — ce qui rend cette instanciation dans une entité acceptable. Elle est écrite
+     * ici pour qu'on ne la prenne pas pour une négligence.
+     */
     public function setAdresse(?array $adresse): self
     {
         $this->adresse = $adresse;
+        $this->regionGeographique = (new GeographicRegionResolver())->pourAdresse($adresse);
 
         return $this;
+    }
+
+    /** La région administrative déduite du code postal, ou `null` si on ne sait pas rattacher. */
+    public function getRegionGeographique(): ?string
+    {
+        return $this->regionGeographique;
     }
 
     /** @return list<string> */
