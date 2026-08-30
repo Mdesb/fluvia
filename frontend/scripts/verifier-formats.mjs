@@ -20,6 +20,7 @@
 
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
+import { adosseAuServeur, annonceRouteAVenir, routesDeclarees } from './lib/ecart.mjs'
 
 const CLIENT = new URL('../src/api/client.js', import.meta.url).pathname
 const SERVEUR = new URL('../../app/src/', import.meta.url).pathname
@@ -38,45 +39,13 @@ for (const f of php(SERVEUR)) {
   for (const m of readFileSync(f, 'utf8').matchAll(/uriTemplate:\s*'([^']+)'/g)) surMesure.add(m[1])
 }
 
+// ⚠ On reutilise le calcul de `lib/ecart.mjs` plutot que d'en ecrire un second : deux
+// definitions de « cette route existe » divergeraient au premier correctif.
+const { gabarits, noms } = routesDeclarees()
+
 const src = readFileSync(CLIENT, 'utf8')
 const anomalies = []
-
-// ⚠ LE MARQUEUR NE VAUT QUE DANS LE BLOC DE COMMENTAIRES CONTIGU AU-DESSUS DE L'APPEL.
-//
-// Même forme que dans `lib/ecart.mjs`, et pour la même raison : une fenêtre de N caractères ferait
-// déteindre le marqueur d'un helper sur son voisin, et un contrôle qui se trompe de propriétaire
-// est pire qu'un contrôle absent.
-//
-// ⚠ La tranche s'arrête au DÉBUT de la ligne de l'appel : son dernier élément est une chaîne vide.
-// Une boucle qui exigerait un commentaire s'arrêterait dessus sans rien lire, et le marqueur ne
-// serait JAMAIS trouvé — le contrôle refuserait alors une route dûment annoncée, c'est-à-dire
-// exactement le défaut qu'on corrige. C'est le piège que `lib/ecart.mjs` documente déjà.
-function annonceRouteAVenir(source, index) {
-  const lignes = source.slice(0, index).split('\n')
-  const bloc = []
-  let i = lignes.length - 1
-
-  // ⚠ ON REMONTE D'ABORD JUSQU'À LA CLÉ DU HELPER. Le bloc de commentaires est au-dessus d'ELLE,
-  // pas au-dessus de `request(` : en partant de l'appel, la remontée bute sur
-  // `monHelper: (x) => …`, qui n'est pas un commentaire, et s'arrête sans avoir rien lu. Le
-  // marqueur n'est alors jamais trouvé, et une route dûment annoncée est refusée quand même.
-  //
-  // BORNÉE à quelques lignes : sans borne, un appel sans clé au-dessus remonterait jusqu'au haut du
-  // fichier et attraperait le marqueur d'un AUTRE helper.
-  while (i >= 0 && lignes[i].trim() === '') i -= 1
-  for (let saut = 0; i >= 0 && saut < 4; saut += 1) {
-    if (/^\s*\/\//.test(lignes[i]) || lignes[i].trim() === '') break
-    if (/^\s*[A-Za-z_$][\w$]*\s*:/.test(lignes[i])) { i -= 1; break }
-    i -= 1
-  }
-
-  while (i >= 0 && lignes[i].trim() === '') i -= 1
-  while (i >= 0 && /^\s*\/\//.test(lignes[i])) {
-    bloc.unshift(lignes[i])
-    i -= 1
-  }
-  return /@route-a-venir:[ \t]*(\S[^\n]*)/.test(bloc.join('\n'))
-}
+const introuvables = []
 
 // Un chemin du client correspond-il a un `uriTemplate` declare ?
 //
@@ -149,14 +118,47 @@ for (const m of src.matchAll(/request\((`|')(\/api\/[^`']*)\1,/g)) {
   //
   // Le marqueur ne dit pas « c'est branché », il dit « c'est voulu et voici pourquoi ». Il devient
   // sans objet dès que la route existe — elle tombe alors dans `surMesure` juste au-dessus.
-  if (annonceRouteAVenir(src, m.index)) continue
 
   const ligne = src.slice(0, m.index).split('\n').length
+
+  // ⚠ TROISIEME CAS : LE CHEMIN NE CORRESPOND A RIEN DU TOUT.
+  //
+  // Ne pas trouver une route n'est pas la meme chose que trouver une route standard. Le controle
+  // concluait la seconde de la premiere, et affirmait « elle deserialise le corps » sur une donnee
+  // manquante — conseil FAUX pour une route sur mesure a venir, qui refuse `ld: true` en 415.
+  //
+  // On garde le signal (une faute de frappe cote client reste vue) et on change le diagnostic.
+  if (!adosseAuServeur(chemin, gabarits, noms)) {
+    // ⚠ L'INDEX DE LA CLE DU HELPER, PAS CELUI DE L'APPEL.
+    //
+    // `annonceRouteAVenir` remonte le bloc de commentaires contigu au-dessus de la CLE. Passer
+    // l'index de `request(` — une ligne plus bas — fait buter la remontee sur la ligne de la
+    // cle elle-meme, qui n'est pas un commentaire : le marqueur n'etait jamais trouve, et une
+    // route dument annoncee etait refusee quand meme.
+    const cle = [...src.slice(0, m.index).matchAll(/^ {2}([a-zA-Z][a-zA-Z0-9]*):\s/gm)].pop()
+    if (annonceRouteAVenir(src, cle ? cle.index : m.index) === null) {
+      introuvables.push(
+        `api/client.js:${ligne} — POST ${chemin} : aucune route de ce nom cote serveur. ` +
+          "Ce n'est PAS un defaut de format : le controle ne sait pas si cette operation est " +
+          'standard ou sur mesure, et ne conclut donc rien. Soit le chemin est faux, soit la route ' +
+          "n'est pas encore ouverte — dans ce cas, annonce-la par `@route-a-venir: <raison>` " +
+          'au-dessus du helper.',
+      )
+    }
+    continue
+  }
+
   anomalies.push(
     `api/client.js:${ligne} — POST ${chemin} sans \`ld: true\`. Cette opération est standard : elle ` +
       "désérialise le corps et n'accepte que `application/ld+json`. Sans le drapeau, le serveur " +
       'répondra 415 et la création échouera sans que rien ne le laisse prévoir.',
   )
+}
+
+if (introuvables.length > 0) {
+  console.error(`✗ Formats : ${introuvables.length} chemin(s) sans route correspondante.\n`)
+  for (const a of introuvables) console.error(`  ${a}\n`)
+  process.exit(1)
 }
 
 if (anomalies.length === 0) {

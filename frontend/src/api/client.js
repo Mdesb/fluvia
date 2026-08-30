@@ -580,8 +580,22 @@ export const api = {
 
   // PARRAINAGE -- le code est CREE au premier appel : demander son code est le geste qui l'attribue.
   codeParrainage: (clientId) => request(`/api/marketing/parrainage/code/${clientId}`),
+  // ⚠ ON ENVOIE LE PARAMÈTRE MÊME VIDE, ET C'EST DÉLIBÉRÉ.
+  //
+  // La forme précédente — `parrain ? { parrain } : {}` — échoue OUVERT : sans identifiant, aucun
+  // filtre ne part et le serveur rend TOUS les parrainages, que l'écran affiche alors sous le nom
+  // de la personne ouverte. La fiche client se garde bien (`if (!clientId) return`), mais cette
+  // garde tient à une ligne dans un seul appelant.
+  //
+  // Mesuré ailleurs le 30/08 : `/api/ventes?client=nimportequoi` rendait les 15 ventes au lieu de
+  // zéro — un filtre écrit à la main abandonnait la contrainte sur une valeur illisible. Corrigé
+  // depuis côté serveur, mais le frontal n'a pas à compter là-dessus.
+  //
+  // Un identifiant absent donne donc `parrain=undefined`, que le serveur ne résout pas : la
+  // réponse est vide. C'est le bon échec — « je ne montre rien » se remarque, « je montre tout »
+  // ressemble à des données.
   parrainages: (parrain) =>
-    request('/api/marketing/parrainages', { query: parrain ? { parrain } : {} }),
+    request('/api/marketing/parrainages', { query: { parrain: String(parrain) } }),
   declarerParrainage: (corps) =>
     request('/api/marketing/parrainages', { method: 'POST', body: corps, ld: true }),
   // Le versement est EXPLICITE : une lecture qui verse verserait deux fois si on la rafraichit.
@@ -1284,6 +1298,19 @@ export const api = {
   comptesClientBoutique: () =>
     request('/api/compte_clients', { query: { itemsPerPage: 100 } }),
   vitrines: () => request('/api/boutique/vitrines', { query: { itemsPerPage: 100 } }),
+  // `POST /boutique/vitrines` existe depuis le debut (droit `boutique.gerer_vitrine`) et n'etait
+  // appele de nulle part : l'ecran savait renommer une vitrine, changer ses couleurs et lire ses
+  // remboursements, mais un etablissement neuf n'avait aucun moyen d'en ouvrir une — donc aucune
+  // boutique en ligne, donc aucune vente en ligne.
+  //
+  // ⚠ L'ETABLISSEMENT N'EST PAS DANS LE CORPS, ET IL NE FAUT PAS L'Y METTRE. Il est estampille par
+  // `EstablishmentStampProcessor` depuis la session serveur. La vitrine est un point d'entree
+  // PUBLIC en lecture : laisser l'appelant choisir son rattachement serait une faille, pas une
+  // commodite. C'est aussi pourquoi l'entite ne porte PAS d'`Assert\NotNull` sur ce champ — la
+  // validation s'execute avant l'estampillage et refusait une valeur que le serveur allait poser
+  // lui-meme.
+  creerVitrine: (corps) =>
+    request('/api/boutique/vitrines', { method: 'POST', body: corps, ld: true }),
   // Le nom d'URL de la boutique. PATCH partiel : on n'envoie que `slug`, pour ne pas
   // reecrire par megarde une couleur ou une langue qu'un autre onglet vient de changer.
   majVitrine: (id, corps) => request(`/api/boutique/vitrines/${id}`, { method: 'PATCH', body: corps }),
@@ -1299,6 +1326,15 @@ export const api = {
 
   // --- Personnel ---
   employes: () => request('/api/employes', { query: { itemsPerPage: 200 } }),
+  // `POST /api/employes` existe depuis le debut (droit `personnel.gerer_employe`) et n'etait
+  // appele de nulle part : l'ecran declarait des absences, emettait et revoquait des badges pour
+  // des employes qu'aucun ecran ne savait creer.
+  //
+  // Contrat LU dans l'entite, pas sonde : `Employe` n'offre aucune operation de suppression, et
+  // sonder par un corps vide y laisserait une trace definitive. `nom`, `prenom` et `poste` portent
+  // `Assert\NotBlank` ; `typeContrat` est une enumeration ; le reste est facultatif.
+  creerEmploye: (corps) =>
+    request('/api/employes', { method: 'POST', body: corps, ld: true }),
   // Absences : declarer, accepter, refuser. Trois operations qui n'avaient aucun bouton.
   absences: () => request('/api/absences', { query: { itemsPerPage: 200 } }),
   declarerAbsence: (corps) => request('/api/personnel/absences', { method: 'POST', body: corps }),
@@ -1502,6 +1538,16 @@ export const api = {
   // Deux routes qui se ressemblent (`/padel/terrains` et `/padel_terrains`), l'une en écriture et
   // l'autre en lecture : c'est le genre de confusion que seul un appel réel révèle.
   padelTerrains: () => request('/api/padel_terrains', { query: { itemsPerPage: 100 } }),
+  // ⚠ LA CREATION N'EST PAS SUR LA COLLECTION : elle porte un `uriTemplate` a elle,
+  // `/padel/terrains`. Un POST sur `/api/padel_terrains` rend 405 — mesure du 30/08, faite avant
+  // d'ecrire cette ligne.
+  //
+  // `CreerTerrainProcessor` cascade la `Ressource` du socle (`codeType='terrain_padel'`) puis pose
+  // l'overlay padel : on ne cree donc PAS la ressource ici, et il ne faut pas le faire — deux
+  // ressources pour un terrain, et le planning ne saurait plus laquelle reserver.
+  // Corps : { libelle, type: 'indoor'|'outdoor', dureesAutoriseesMinutes?: [60, 90] }
+  creerTerrainPadel: (corps) =>
+    request('/api/padel/terrains', { method: 'POST', body: corps }),
   padelReservations: () =>
     request('/api/padel_reservations', { query: { itemsPerPage: 200 } }),
   padelLocationsMateriel: () =>
@@ -1524,6 +1570,11 @@ export const api = {
   museeVisitesGuidees: () =>
     request('/api/musee_visite_guidees', { query: { itemsPerPage: 100 } }),
   museeSalles: () => request('/api/musee_salles', { query: { itemsPerPage: 100 } }),
+  // `POST /api/musee_salles` existe depuis le debut (droit `musee.configurer`) et n'etait appele
+  // de nulle part : l'ecran comptait les presents salle par salle sans savoir declarer une salle.
+  // Contrat sonde : un corps vide rend 422 et n'ecrit rien -- `nom` non vide et `espace` requis.
+  creerSalleMusee: (corps) =>
+    request('/api/musee_salles', { method: 'POST', body: corps, ld: true }),
   museeGuides: () => request('/api/musee_guides', { query: { itemsPerPage: 100 } }),
   museeContingentsGratuite: () =>
     request('/api/musee_contingent_gratuites', { query: { itemsPerPage: 50 } }),

@@ -87,15 +87,29 @@ final class BilletVenduOuvreLaPorteTest extends AccesApiTestCase
      * Sans lui, le premier test serait également vert si l'adaptateur projetait sans condition — et
      * ce serait exactement le défaut à ne pas introduire.
      */
-    public function testSansZoneDeclareeLeBilletNOuvreRienEtLaVentePasse(): void
+    public function testSansZoneDeclareeLeBilletEstConnuMaisNOuvreRien(): void
     {
         // Aucune zone déclarée : on ne touche pas au produit.
         $identifiant = $this->vendreUneEntreeEtRecupererSonCode();
 
         $this->em()->clear();
-        self::assertNull(
+
+        // ⚠ LES DEUX MOITIÉS, ET CE TEST AFFIRMAIT L'INVERSE DE LA PREMIÈRE JUSQU'AU 30/08.
+        //
+        // Il exigeait alors qu'AUCUN support ne soit créé. C'était juste tant que `ouvre()` rendait
+        // `true` sur une collection vide : projeter aurait fait un passe-partout des huit espaces.
+        //
+        // D86 et D87 ont séparé les deux questions. Le billet est désormais TOUJOURS connu du
+        // contrôle d'accès — sinon l'agent qui contrôle à la main, là où il n'y a pas de matériel,
+        // n'aurait rien à interroger — et il n'ouvre que ce qui est déclaré.
+        //
+        // ⚠ Vérifier seulement « le tourniquet refuse » serait également vrai d'un billet qui
+        // n'existe pas du tout, c'est-à-dire du défaut que D86 corrige. La première moitié est ce
+        // qui distingue « connu mais sans porte » de « inconnu ».
+        self::assertNotNull(
             $this->em()->getRepository(Support::class)->findOneBy(['identifiant' => $identifiant]),
-            "Sans zone déclarée, aucun droit ne doit être projeté — un droit sans espace ouvrirait TOUT.",
+            'Le billet doit être connu du contrôle d\'accès même sans zone (D86), sinon aucun agent '
+            .'ne peut le contrôler à la main.',
         );
 
         $reponse = static::createClient()->request('POST', '/api/terminal/passages', $this->terminalEntete() + [
@@ -107,7 +121,11 @@ final class BilletVenduOuvreLaPorteTest extends AccesApiTestCase
         ]);
 
         self::assertSame(200, $reponse->getStatusCode(), (string) $reponse->getContent(false));
-        self::assertSame('refuse', $reponse->toArray()['resultat'], 'Le billet ne doit rien ouvrir.');
+        self::assertSame(
+            'refuse',
+            $reponse->toArray()['resultat'],
+            "Connu, mais sans zone déclarée : il n'ouvre aucune porte (D87).",
+        );
     }
 
     // ── Ce que fait l'exploitant : dire quelle porte ce produit ouvre ───────────────────────────

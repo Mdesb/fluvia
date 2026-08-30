@@ -172,7 +172,16 @@ function compterOccurrences(texte, aiguille) {
 // écrire `\s` qui devient `s`, et le contrôle passait au vert en ne vérifiant rien.
 const APPEL = /request\(\s*[`'"]([^`'"]+)[`'"]([^\n]*)/g
 const INTERPOLATION = /\$\{[^}]*\}/g
-const METHODE = /method:\s*'([A-Z]+)'/
+// ⚠ LES DEUX QUOTES, ET SUR PLUSIEURS LIGNES.
+//
+// Une premiere version ne cherchait que `method: 'VERBE'` entre apostrophes simples, ET seulement
+// sur le reste de la ligne de l'appel. Un helper ecrit sur plusieurs lignes retombait donc sur le
+// defaut 'GET' et se confondait avec le GET du meme chemin. Mesure du 30/08 sur `client.js` :
+// 107 appels sur 454 etaient concernes.
+//
+// L'ecart s'en trouvait sur-estime, et surtout une paire GET+POST neuve sur un meme chemin ne
+// comptait que pour une operation atteignable : le cliquet refusait du travail correct.
+const METHODE = /method:\s*['"]([A-Z]+)['"]/
 const CLE = /^ {2}([a-zA-Z][a-zA-Z0-9]*):\s/gm
 
 function referenceDans(texte, nom) {
@@ -200,7 +209,7 @@ function clesDeSegment(segment) {
 // L'annonce ne vaut que dans le bloc de commentaires CONTIGU au-dessus du helper. Une fenêtre de
 // N caractères aurait fait déteindre le marqueur d'un helper sur son voisin — un contrôle qui se
 // trompe de propriétaire est pire qu'un contrôle absent.
-function annonceRouteAVenir(source, indexCle) {
+export function annonceRouteAVenir(source, indexCle) {
   const lignes = source.slice(0, indexCle).split('\n')
   const bloc = []
   let i = lignes.length - 1
@@ -215,7 +224,7 @@ function annonceRouteAVenir(source, indexCle) {
   return /@route-a-venir:[ \t]*(\S[^\n]*)/.exec(bloc.join('\n'))
 }
 
-function adosseAuServeur(chemin, gabarits, noms) {
+export function adosseAuServeur(chemin, gabarits, noms) {
   const sansApi = chemin.replace(/^\/api/, '')
   if (gabarits.has(sansApi)) return true
 
@@ -268,6 +277,45 @@ function prefixeDunGabarit(sansApi, gabarits) {
  *   parPrefixe: [string, number][],
  * }}
  */
+/**
+ * Les routes que le serveur declare : gabarits litteraux et noms de ressource.
+ *
+ * ⚠ POURQUOI CETTE FONCTION EXISTE, ET POURQUOI ELLE DUPLIQUE QUELQUES LIGNES DE `mesurer()`.
+ *
+ * `verifier-formats.mjs` traitait comme « standard » — donc exigeant `ld: true` — tout chemin client
+ * ne correspondant a aucun `uriTemplate`. Il affirmait donc une propriete de la route (« elle
+ * deserialise le corps ») a partir d'une donnee MANQUANTE. Sur une route encore a ouvrir, son
+ * conseil etait FAUX : le suivre aurait pose un `ld: true` que la route refuse en 415.
+ *
+ * Signale par `allaccess-c2`, qui a refuse d'obeir au message plutot que de le suivre.
+ *
+ * Les memes lignes vivent dans `mesurer()`, et c'est deliberement qu'on ne les y a pas remplacees :
+ * `mesurer()` produit les chiffres d'un cliquet gele. Y toucher pour un besoin annexe risquerait de
+ * deplacer un plafond sans que personne ne le voie. Une duplication de collecte se relit ; un
+ * plafond qui a bouge pour une raison qu'on a oubliee, non.
+ *
+ * @returns {{gabarits: Set<string>, noms: Set<string>}}
+ */
+export function routesDeclarees() {
+  const gabarits = new Set()
+  const noms = new Set()
+
+  for (const fichier of fichiersPhp(join(RACINE, 'app', 'src'))) {
+    const texte = readFileSync(fichier, 'utf8')
+    if (!texte.includes('ApiResource')) continue
+
+    for (const m of texte.matchAll(/uriTemplate:\s*'([^']+)'/g)) {
+      gabarits.add(m[1].replace(/\{[^}]+\}/g, '{id}').replace(/^\/api/, ''))
+    }
+    for (const m of texte.matchAll(/shortName:\s*'([^']+)'/g)) noms.add(m[1].toLowerCase())
+    for (const m of texte.matchAll(/^(?:final\s+)?class\s+([A-Za-z0-9_]+)/gm)) {
+      noms.add(m[1].toLowerCase())
+    }
+  }
+
+  return { gabarits, noms }
+}
+
 export function mesurer() {
   // ── CÔTÉ SERVEUR ──────────────────────────────────────────────────────────────────────────────
   let exposees = 0
@@ -374,7 +422,14 @@ export function mesurer() {
     while (m !== null) {
       const chemin = m[1].replace(INTERPOLATION, '{id}')
       if (chemin.startsWith('/api/')) {
-        const suite = METHODE.exec(m[2])
+        // ⚠ BORNE AU PROCHAIN `request(` : sans cette limite, un appel SANS methode ramasserait
+        // le `method:` du suivant, et un GET deviendrait un POST. L'instrument mentirait alors dans
+        // l'autre sens, ce qui est pire que le defaut d'origine — un sur-comptage se voit moins.
+        const restant = source.slice(m.index)
+        const prochain = restant.indexOf('request(', 8)
+        const corpsAppel = prochain === -1 ? restant : restant.slice(0, prochain)
+
+        const suite = METHODE.exec(corpsAppel)
         const verbe = suite ? suite[1] : 'GET'
 
         if (!appels.has(chemin)) appels.set(chemin, new Set())

@@ -80,8 +80,41 @@ export const STATUTS_PRODUIT = {
   },
 }
 
+// PUBLIE SANS AUCUN TARIF : L'ECRAN PROMETTAIT UNE MISE EN VENTE IMPOSSIBLE.
+//
+// `STATUTS_PRODUIT.publie` dit << En vente sur les canaux configures pour ce produit >>, en vert.
+// Un produit sans grille tarifaire n'est vendable NULLE PART -- `estVendable` le dit vingt lignes
+// plus haut -- et `actionsStatut('brouillon')` annonce meme que publier << exige un tarif >>.
+// L'application enonce donc la regle, et l'affichage promet le contraire.
+//
+// Ce n'est pas un cas de bord : mesure du 30/08 sur les quatre etablissements, 3 produits publies
+// sur 8 n'ont aucune grille -- PRD-AUDIOGUIDE, PRD-PASS-MUSEE, PRD-EXPO-EGYPTE, tous ouverts au
+// guichet ET en ligne, tous sans le moindre prix. Le badge vert les declarait en vente.
+//
+// ⚠ TROIS ETATS, PAS DEUX : `null` VEUT DIRE << JE NE SAIS PAS >>.
+//
+// Si la charge utile ne porte pas `grilles` -- groupe de serialisation plus etroit, reponse
+// partielle -- alors l'absence du champ ne dit RIEN de l'absence de tarif. Repondre `true` ferait
+// crier au defaut sur des produits parfaitement tarifes : on remplacerait un mensonge par l'autre,
+// dans l'autre sens. Champ absent n'est pas valeur absente.
+export function sansTarifConnu(p) {
+  if (!p || !Array.isArray(p.grilles)) return null
+  return grillesVendables(p).length === 0
+}
+
 export function statutProduit(p) {
-  return STATUTS_PRODUIT[p?.statut] || { libelle: p?.statut || '—', ton: 'mut', aide: '' }
+  const base = STATUTS_PRODUIT[p?.statut] || { libelle: p?.statut || '—', ton: 'mut', aide: '' }
+  if (p?.statut === 'publie' && sansTarifConnu(p) === true) {
+    return {
+      // Le libelle NE CHANGE PAS : le statut serveur est bien << publie >>, et le renommer ferait
+      // chercher un etat qui n'existe pas. C'est le TON et l'AIDE qui disent ce qui cloche.
+      libelle: base.libelle,
+      ton: 'warn',
+      aide: "Publié, mais sans aucun tarif : ce produit n'est vendable sur aucun canal, "
+        + 'ni au guichet ni en ligne. Ajoutez-lui une grille tarifaire.',
+    }
+  }
+  return base
 }
 
 // Actions offertes pour un statut donné.

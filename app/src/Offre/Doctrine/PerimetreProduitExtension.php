@@ -88,12 +88,19 @@ final class PerimetreProduitExtension implements QueryCollectionExtensionInterfa
         // Posee AVANT l'ouverture de la ressource : l'entite n'a pas encore d'operations d'API, et
         // c'est precisement le bon moment. Une entite exposee sans cloisonnement ne produit pas
         // d'erreur, elle produit des lignes en trop.
-        // ⚠ CHAINE CORRIGEE : elle disait « produit », la propriete se nomme « product ».
-        // « product » : ce segment est un CHEMIN DE PROPRIETE vers le produit porteur, et la
-        // propriete de cette entite neuve se nomme en anglais (D5). Seul le champ FINAL, sur lequel
-        // l extension ecrit « etablissement » en dur, doit rester francais. Le garde-fou n°28 ne
-        // verifie que ce champ final : un segment intermediaire faux lui echappe, et il rendait
-        // donc « aucun ecart » sur cette ligne, qui disait « produit » pour une propriete « product ».
+        // ⚠ CHAINE CORRIGEE : elle disait `produit`, la propriete se nomme `product`.
+        //
+        // DEUX REGLES DE NOMMAGE COHABITENT DANS CETTE LIGNE, ET LES CONFONDRE PRODUIT L'ERREUR
+        // INVERSE. Le segment est un CHEMIN DE PROPRIETE vers le produit porteur : la propriete
+        // d'une entite neuve se nomme en anglais (D5). Seul le champ FINAL, sur lequel cette
+        // extension ecrit `etablissement` en dur, reste francais.
+        //
+        // Signale par allaccess-c2 en ouvrant l'API de ComplementaryProduct : la jointure
+        // portait sur un chemin inexistant. Le defaut etait LATENT — l'extension ne s'executait
+        // jamais sur une entite sans operation — et il s'est reveille a la premiere route.
+        //
+        // Le garde-fou n°28 ne verifiait alors que le champ final ; il a ete elargi aux SEGMENTS
+        // le meme jour, en reponse a ce signalement. Un segment faux ne lui echappe plus.
         ComplementaryProduct::class => 'product',
 
         // Ajoutee le 28/08 avec les photos : elle tient son perimetre du produit, comme ses

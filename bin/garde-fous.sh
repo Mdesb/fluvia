@@ -72,8 +72,46 @@ php_app() {
     fi
 }
 
+# ⚠ DEUX CONTROLES NE PEUVENT PAS PORTER LE MEME NUMERO.
+#
+# Le 30/08, deux sessions ont attribue « n°29 » a deux controles differents, le meme soir, sans se
+# voir. Un compteur partage sans verrou, incremente par neuf sessions : le telescopage n'etait pas
+# une faute, c'etait une question de temps.
+#
+# Le numero du LIBELLE est l'identite durable — c'est lui qu'on cite dans les messages de commit et
+# qu'on cherche des mois plus tard. Un numero qui designe deux choses est donc un NOM QUI MENT,
+# exactement la famille que ce depot traque partout ailleurs.
+#
+# ⚠ Une premiere version faisait numeroter le lanceur par POSITION. C'etait pire : les libelles
+# portent deja leur numero, et l'affichage en montrait deux qui se contredisaient —
+# `▶ n°28 — Classes CSS declarees (n°16)`. On ne renumerote donc pas : on refuse le doublon.
+#
+# Ce controle-la n'a pas de numero. Il porte un libelle, et c'est deliberement le seul.
+verifier_numeros_uniques() {
+    local doublons
+    doublons="$(printf '%s\n' "$@" \
+        | grep -oE 'n[°o][0-9]+' \
+        | sort | uniq -d)"
+
+    [ -z "$doublons" ] && return 0
+
+    echo "═════════════════════════════════════════════════════════════" >&2
+    echo "✗ NUMEROS EN DOUBLE dans les libelles de garde-fous :" >&2
+    printf '    %s\n' $doublons >&2
+    echo "" >&2
+    echo "  Un numero qui designe deux controles est un nom qui ment : on le cite" >&2
+    echo "  dans des messages de commit, et il ne designe plus rien." >&2
+    echo "  Prends le suivant libre, et renomme celui qui n'est cite nulle part." >&2
+    echo "═════════════════════════════════════════════════════════════" >&2
+
+    return 1
+}
+
+LIBELLES=""
+
 executer() {
     local nom="$1"; shift
+    LIBELLES="$LIBELLES|$nom"
     TOTAL=$((TOTAL + 1))
 
     # Trace du SCRIPT réellement lancé, pour le filet de complétude en fin de course. On lit les
@@ -286,12 +324,16 @@ if [ -n "${REFERENCE:-}" ]; then
     executer "Vacuite des tests de cloisonnement" php_racine bin/garde-fou-vacuite-tests.php
     executer "Espacement en ligne" php_racine bin/garde-fou-espacement-en-ligne.php
     executer "Champ de cloisonnement" php_racine bin/garde-fou-champ-cloisonnement.php
+    executer "Creations irreversibles" php_racine bin/garde-fou-post-sans-suppression.php
+    executer "Filtres muets" php_racine bin/garde-fou-filtres-muets.php
 else
     executer "Liaisons d'objet (D58)" php_racine bin/garde-fou-liaisons-objet.php
     executer "Nullable sur colonne non nulle" php_racine bin/garde-fou-nullable-non-nul.php
     executer "Vacuite des tests de cloisonnement" php_racine bin/garde-fou-vacuite-tests.php
     executer "Espacement en ligne" php_racine bin/garde-fou-espacement-en-ligne.php
     executer "Champ de cloisonnement" php_racine bin/garde-fou-champ-cloisonnement.php
+    executer "Creations irreversibles" php_racine bin/garde-fou-post-sans-suppression.php
+    executer "Filtres muets" php_racine bin/garde-fou-filtres-muets.php
 fi
 
 # 5. i18n : pas de chaîne d'UI en dur — SANS OBJET tant que la couche i18n n'existe pas (aucun
@@ -465,6 +507,11 @@ for chemin in "$RACINE"/bin/garde-fou-*; do
             ;;
     esac
 done
+
+# Les libelles ne sont tous connus qu'ici : le controle des doublons ne peut pas se faire plus tot.
+if ! verifier_numeros_uniques $(printf '%s' "$LIBELLES" | tr '|' ' '); then
+    ECHECS=$((ECHECS + 1))
+fi
 
 echo "─────────────────────────────────────────────────────────────"
 if [ "$ECHECS" -gt 0 ]; then

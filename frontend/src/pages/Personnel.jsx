@@ -309,6 +309,12 @@ function MotifBadge({ demande, busy, onFermer, onConfirmer }) {
  */
 function ListeEmployes({ etabActif, droits = [], onBadgeEmis }) {
   const peutGerer = aLeDroit(droits, 'personnel.gerer_badge')
+  // DEUX DROITS DISTINCTS, ET C'EST VOULU : emettre un badge n'est pas embaucher. Le serveur exige
+  // `personnel.gerer_employe` sur la creation, et `personnel.gerer_badge` sur les badges. Utiliser
+  // le second pour afficher le bouton de creation produirait un 403 au clic, decouvert trop tard.
+  const peutGererEmploye = aLeDroit(droits, 'personnel.gerer_employe')
+  const [creation, setCreation] = useState(false)
+  const [rechargement, setRechargement] = useState(0)
   const [busy, setBusy] = useState(false)
   const [erreur, setErreur] = useState(null)
 
@@ -361,11 +367,167 @@ function ListeEmployes({ etabActif, droits = [], onBadgeEmis }) {
       <Liste
         titre="Employés"
         sous="effectif de l'établissement"
-        deps={[etabActif]}
+        deps={[etabActif, rechargement]}
         charger={api.employes}
-        vide="Aucun employé."
+        vide="Aucun employé déclaré. Sans effectif, ni planning, ni absence, ni badge de service."
         colonnes={colonnes}
+        actions={peutGererEmploye ? (
+          <button className="btn sm" type="button" onClick={() => setCreation(true)}>
+            ＋ Déclarer un employé
+          </button>
+        ) : null}
+      />
+
+      <EmployeModal
+        open={creation}
+        onClose={() => setCreation(false)}
+        onFait={() => { setCreation(false); setRechargement((n) => n + 1) }}
       />
     </div>
   )
 }
+
+// DÉCLARER UN EMPLOYÉ — l'écran gérait absences et badges d'un effectif qu'il ne savait pas créer.
+//
+// ⚠ UN DOSSIER D'EMPLOYÉ NE SE SUPPRIME PAS, ET C'EST JUSTE. `Employe` expose `Post`, `Patch`,
+// `suspendre` et `reactiver` — pas de `Delete`. Un départ se traite par une date de sortie et une
+// suspension, jamais par un effacement : le planning passé, les absences et les badges émis
+// resteraient sans titulaire, et la paie ne se relit plus.
+//
+// C'est l'exemple type d'un `Post` sans `Delete` qui est un CHOIX, pas un oubli — la distinction
+// que `allaccess-c2` cherche à faire déclarer, entité par entité, plutôt qu'à corriger en masse.
+// L'écran le dit sous le formulaire, parce que celui qui saisit ne le devine pas.
+function EmployeModal({ open, onClose, onFait }) {
+  const [nom, setNom] = useState('')
+  const [prenom, setPrenom] = useState('')
+  const [poste, setPoste] = useState('')
+  const [contrat, setContrat] = useState('cdi')
+  const [matricule, setMatricule] = useState('')
+  const [entree, setEntree] = useState(dateDuJour())
+  const [erreur, setErreur] = useState(null)
+  const [envoi, setEnvoi] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    setNom(''); setPrenom(''); setPoste(''); setContrat('cdi')
+    setMatricule(''); setEntree(dateDuJour()); setErreur(null)
+  }, [open])
+
+  // ⚠ `dateEntree` EST OBLIGATOIRE, et l'écran l'affichait en facultative.
+  //
+  // `Employe::$dateEntree` porte `Assert\NotNull` sur une colonne `date_immutable` NON NULLE.
+  // La première version de cette modale ne l'étoilait pas, ne l'exigeait pas et ne l'envoyait
+  // que si elle était remplie : qui saisissait les trois champs étoilés obtenait un 422 au clic,
+  // sur un formulaire qui venait de lui dire qu'il était complet.
+  //
+  // Trouvé en RELISANT l'entité après coup, pas en l'écrivant — la première lecture avait retenu
+  // les trois `NotBlank` et manqué les deux `NotNull` juste en dessous.
+  const pret = nom.trim() && prenom.trim() && poste.trim() && contrat && entree
+
+  async function soumettre(e) {
+    e.preventDefault()
+    setErreur(null)
+    setEnvoi(true)
+    try {
+      await api.creerEmploye({
+        nom: nom.trim(),
+        prenom: prenom.trim(),
+        poste: poste.trim(),
+        typeContrat: contrat,
+        ...(matricule.trim() ? { matricule: matricule.trim() } : {}),
+        dateEntree: entree,
+      })
+      onFait()
+    } catch (err) {
+      setErreur(err.message || 'L’employé n’a pas pu être déclaré.')
+    } finally {
+      setEnvoi(false)
+    }
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} titre="Déclarer un employé">
+      <form onSubmit={soumettre}>
+        {erreur && <div className="banner banner-error" style={{ marginBottom: 'var(--esp-large)' }}>{erreur}</div>}
+
+        <div className="row" style={{ display: 'flex', gap: 'var(--esp-large)', flexWrap: 'wrap' }}>
+          <div className="field" style={{ flex: '1 1 200px' }}>
+            <label htmlFor="em-prenom">Prénom *</label>
+            <input id="em-prenom" className="input" value={prenom} maxLength={100}
+              onChange={(e) => setPrenom(e.target.value)} />
+          </div>
+          <div className="field" style={{ flex: '1 1 200px' }}>
+            <label htmlFor="em-nom">Nom *</label>
+            <input id="em-nom" className="input" value={nom} maxLength={100}
+              onChange={(e) => setNom(e.target.value)} />
+          </div>
+        </div>
+
+        <div className="row" style={{ display: 'flex', gap: 'var(--esp-large)', flexWrap: 'wrap' }}>
+          <div className="field" style={{ flex: '1 1 220px' }}>
+            <label htmlFor="em-poste">Poste *</label>
+            <input id="em-poste" className="input" value={poste} maxLength={80}
+              placeholder="Maître-nageur, caissier, agent d’accueil…"
+              onChange={(e) => setPoste(e.target.value)} />
+            <span className="hint">Ce qui apparaît sur le planning, pas l’intitulé du contrat.</span>
+          </div>
+          <div className="field" style={{ flex: '1 1 180px' }}>
+            <label htmlFor="em-contrat">Type de contrat *</label>
+            <select id="em-contrat" className="input" value={contrat} onChange={(e) => setContrat(e.target.value)}>
+              {CONTRATS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <div className="row" style={{ display: 'flex', gap: 'var(--esp-large)', flexWrap: 'wrap' }}>
+          <div className="field" style={{ flex: '1 1 200px' }}>
+            <label htmlFor="em-matricule">Matricule</label>
+            <input id="em-matricule" className="input" value={matricule} maxLength={40}
+              onChange={(e) => setMatricule(e.target.value)} />
+            <span className="hint">Facultatif — celui de votre logiciel de paie, si vous en avez un.</span>
+          </div>
+          <div className="field" style={{ flex: '1 1 200px' }}>
+            <label htmlFor="em-entree">Date d’entrée *</label>
+            <input id="em-entree" className="input" type="date" value={entree}
+              onChange={(e) => setEntree(e.target.value)} />
+            <span className="hint">Obligatoire — c’est elle qui datera l’ancienneté et les plannings.</span>
+          </div>
+        </div>
+
+        <p className="hint">
+          ⚠ Un dossier d’employé ne se supprime pas. Un départ se déclare par une date de sortie et
+          une suspension&nbsp;: le planning passé, les absences et les badges émis doivent rester
+          rattachés à quelqu’un.
+        </p>
+
+        <div className="r" style={{ display: 'flex', gap: 'var(--esp-normal)', justifyContent: 'flex-end' }}>
+          <button type="button" className="btn ghost" onClick={onClose}>Annuler</button>
+          <button type="submit" className="btn" disabled={envoi || !pret}>
+            {envoi ? 'Déclaration…' : 'Déclarer'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+// Les six formes de `TypeContrat`, en toutes lettres : « vacataire » et « prestataire » ne se
+// devinent pas depuis un code, et le choix a des conséquences en paie.
+// ⚠ EN HEURE LOCALE, PAS `toISOString()`. Cette dernière rend de l'UTC : ouverte à Paris entre
+// minuit et deux heures du matin en été, elle daterait l'entrée de LA VEILLE. Le champ est un
+// `<input type="date">`, qui attend `AAAA-MM-JJ` dans le calendrier de celui qui saisit.
+function dateDuJour() {
+  const d = new Date()
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const jj = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${mm}-${jj}`
+}
+
+const CONTRATS = [
+  ['cdi', 'CDI'],
+  ['cdd', 'CDD'],
+  ['vacataire', 'Vacataire'],
+  ['saisonnier', 'Saisonnier'],
+  ['stagiaire', 'Stagiaire'],
+  ['prestataire', 'Prestataire'],
+]

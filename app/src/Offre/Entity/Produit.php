@@ -266,12 +266,6 @@ class Produit
     #[Groups(['produit:read'])]
     private Collection $grilles;
 
-    /** @var Collection<int, Produit> */
-    #[ORM\ManyToMany(targetEntity: self::class)]
-    #[ORM\JoinTable(name: 'off_produit_associe')]
-    #[Groups(['produit:read', 'produit:write'])]
-    private Collection $produitsAssocies;
-
     #[ORM\Column(type: 'datetime_immutable')]
     #[Groups(['produit:read', 'produit:list'])]
     private \DateTimeImmutable $creeLe;
@@ -286,7 +280,6 @@ class Produit
         $this->etablissements = new ArrayCollection();
         $this->categories = new ArrayCollection();
         $this->grilles = new ArrayCollection();
-        $this->produitsAssocies = new ArrayCollection();
         $this->creeLe = new \DateTimeImmutable();
         $this->modifieLe = new \DateTimeImmutable();
     }
@@ -585,21 +578,6 @@ class Produit
         if (!$this->grilles->contains($grille)) {
             $this->grilles->add($grille);
             $grille->setProduit($this);
-        }
-
-        return $this;
-    }
-
-    /** @return Collection<int, Produit> */
-    public function getProduitsAssocies(): Collection
-    {
-        return $this->produitsAssocies;
-    }
-
-    public function addProduitAssocie(self $produit): self
-    {
-        if (!$this->produitsAssocies->contains($produit)) {
-            $this->produitsAssocies->add($produit);
         }
 
         return $this;

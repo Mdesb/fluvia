@@ -58,6 +58,13 @@ use Symfony\Component\Validator\Constraints as Assert;
  * par redevable » est un index partiel, que MariaDB ne connaît pas. La règle est donc tenue par
  * `BlockingExemptionRegistry` — et c'est précisément pour cela qu'elle y est écrite une seule fois.
  */
+/**
+ * @sans-suppression: le retrait bascule `revokedAt` au lieu d'effacer la ligne. Supprimer
+ * perdrait la reponse a « qui avait exempte ce client, et pourquoi, avant qu'on ne le rebloque » —
+ * c'est la meme raison qui rend le motif obligatoire a la pose : une exemption est une decision,
+ * et une decision se relit. Marqueur pose par claude-A a l'integration ; la raison est celle
+ * qu'allaccess-c2 a ecrite dans le docbloc ci-dessus.
+ */
 #[ApiResource(
     shortName: 'BlockingExemption',
     normalizationContext: ['groups' => ['blocking_exemption:read']],

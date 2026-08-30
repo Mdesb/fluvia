@@ -84,9 +84,41 @@ export default function TarifsProduit({ produit, grilles, peutModifier, onChange
     <>
       {erreur && <div className="banner banner-error">{erreur}</div>}
 
+      {/* ⚠ LA MEME PHRASE ETAIT VRAIE ET FAUSSE SELON LE PRODUIT QUI LA PORTAIT.
+          << sa publication sera refusee >> est exact pour un brouillon : `PublicationGuard`
+          exige un libelle, un site, un canal, un prix et une categorie comptable, et
+          `TransitionProduitHandler::publier()` rend 422 en les listant. Mais la phrase
+          s'affichait AUSSI sous un produit deja publie, ou elle annonce au futur un refus
+          que rien n'a oppose -- juste sous un badge qui dit << Publie >>.
+          Mesure du 30/08 : 3 produits publies sur 8 n'ont aucune grille, sur les quatre
+          etablissements -- PRD-AUDIOGUIDE, PRD-PASS-MUSEE, PRD-EXPO-EGYPTE.
+
+          D'OU VIENT CET ETAT, mesure et non suppose. La garde ne s'execute QUE sur la
+          transition `/publier`, et rien ne la rejoue ensuite. Mais aucun ecran ne peut y
+          conduire : `GrilleTarifaire` n'expose pas `Delete`, et l'entree de prix porte
+          `required` -- on ne peut ni supprimer un tarif, ni le vider. Et `statut` n'est
+          dans aucun groupe d'ecriture : l'API ne permet pas de publier autrement que par
+          la transition. Ces trois produits viennent donc des donnees de demarrage, qui
+          ecrivent en base sans passer par la garde.
+
+          Ce qui reste vrai malgre tout : `prix` est nullable et `Patch` est expose sur la
+          grille. Un appelant direct peut donc remettre un prix a null (`Un prix null vaut
+          << non commercialise >>`, dit l'entite) sur le seul tarif d'un produit publie, et
+          RIEN ne le detectera. L'ecran doit donc savoir afficher cet etat -- c'est ce qu'il
+          fait ici -- meme s'il ne sait pas le produire. */}
       {(grilles || []).length === 0 ? (
         <div className="empty" style={{ padding: 14 }}>
-          Aucun tarif. Un produit sans tarif ne peut pas être vendu, et sa publication sera refusée.
+          {produit?.statut === 'publie' ? (
+            <>
+              Aucun tarif — et ce produit est <b>publié</b>. Il n’est donc vendable nulle part,
+              ni au guichet ni en ligne, malgré son statut. Ajoutez-lui un tarif ci-dessous.
+            </>
+          ) : (
+            <>
+              Aucun tarif. Un produit sans tarif ne peut pas être vendu, et sa publication sera
+              refusée : il faut aussi un site, un canal et une catégorie comptable.
+            </>
+          )}
         </div>
       ) : (
         <table className="tbl">

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api/client.js'
 
 /**
@@ -29,17 +29,36 @@ function jour(v) {
   return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long' })
 }
 
-export default function Relances({ etabActif, onOuvrirClient }) {
+// ⚠ CE COMPOSANT NE PEINT PLUS SON REFUS LUI-MEME QUAND LE PARENT SAIT LE FAIRE.
+//
+// Monte dans l'ecran Affaires, il lisait `/crm/relances` pendant que la page lisait `/crm/pipeline`.
+// Sur un refus de droit les deux lectures echouent, et l'ecran affichait DEUX FOIS le meme
+// paragraphe de six lignes. Deux bandeaux identiques ne disent pas deux problemes : ils donnent
+// l'impression d'une panne en cascade, et le second efface la credibilite du premier.
+//
+// Le composant remonte donc son message par `onErreur`, et le parent decide. Il garde son propre
+// bandeau quand `onErreur` n'est pas fourni : monte ailleurs sans parent qui l'ecoute, il doit
+// continuer a dire ce qui ne va pas plutot que d'echouer en silence.
+export default function Relances({ etabActif, onOuvrirClient, onErreur }) {
   const [charge, setCharge] = useState(null)
   const [erreur, setErreur] = useState(null)
   const [ouvert, setOuvert] = useState(true)
 
+  // ⚠ PAR UNE REFERENCE, PAS PAR UNE DEPENDANCE. Le parent passe une fonction anonyme, qui change
+  // a chaque rendu : la mettre dans les dependances de `useCallback` relancerait la lecture en
+  // boucle. La reference suit la derniere valeur sans declencher de nouveau chargement.
+  const remonter = useRef(onErreur)
+  useEffect(() => { remonter.current = onErreur })
+
   const recharger = useCallback(async () => {
     setErreur(null)
+    if (remonter.current) remonter.current(null)
     try {
       setCharge(await api.relances())
     } catch (e) {
-      setErreur(e.message || 'Les relances n’ont pas pu être chargées.')
+      const message = e.message || 'Les relances n’ont pas pu être chargées.'
+      if (remonter.current) remonter.current(message)
+      else setErreur(message)
     }
   }, [etabActif])
 
