@@ -45,8 +45,10 @@ function labelBeneficiaire(b) {
 // Écran Réservation / Planning (M5) : ressources, créneaux (capacité vs réservations) et
 // réservation d'un créneau (unique écriture de cet écran).
 export default function Reservation({ etabActif, droits = [], session }) {
-  const [ressources, setRessources] = useState([])
-  const [creneaux, setCreneaux] = useState([])
+  // ⚠ `null` = PAS LU. << 0 ressource(s) · 0 créneau(x) >> se lit << ce site n'a rien de
+  // reservable >>, ce qui fait refuser une reservation au telephone.
+  const [ressources, setRessources] = useState(null)
+  const [creneaux, setCreneaux] = useState(null)
   const [reservations, setReservations] = useState([])
   const [beneficiaires, setBeneficiaires] = useState([])
   const [chargement, setChargement] = useState(true)
@@ -75,6 +77,8 @@ export default function Reservation({ etabActif, droits = [], session }) {
       setBeneficiaires(membres(bc))
     } catch (e) {
       setErreur(e.message || 'Chargement du planning impossible.')
+      setRessources(null)
+      setCreneaux(null)
     } finally {
       setChargement(false)
     }
@@ -99,7 +103,7 @@ export default function Reservation({ etabActif, droits = [], session }) {
 
   // Jours distincts présents dans les créneaux.
   const jours = useMemo(() => {
-    const set = new Set(creneaux.map((c) => jourCle(c.debut)).filter(Boolean))
+    const set = new Set((creneaux || []).map((c) => jourCle(c.debut)).filter(Boolean))
     return [...set].sort()
   }, [creneaux])
 
@@ -109,7 +113,7 @@ export default function Reservation({ etabActif, droits = [], session }) {
 
   const creneauxJour = useMemo(
     () =>
-      creneaux
+      (creneaux || [])
         .filter((c) => jourCle(c.debut) === jour)
         .sort((a, b) => new Date(a.debut) - new Date(b.debut)),
     [creneaux, jour],
@@ -141,7 +145,11 @@ export default function Reservation({ etabActif, droits = [], session }) {
       <div className="view-head">
         <div className="ttl">
           <h1>Réservation</h1>
-          <p>{ressources.length} ressource(s) · {creneaux.length} créneau(x)</p>
+          <p>
+            {ressources === null || creneaux === null
+              ? 'planning non lu — la lecture n’a pas abouti'
+              : `${ressources.length} ressource(s) · ${creneaux.length} créneau(x)`}
+          </p>
         </div>
       </div>
 
@@ -187,9 +195,9 @@ export default function Reservation({ etabActif, droits = [], session }) {
         <Disponibilites droits={droits} />
       ) : vue === 'semaine' ? (
         <PlanningSemaine
-          creneaux={creneaux}
+          creneaux={creneaux || []}
           occupation={occupation}
-          ressources={ressources}
+          ressources={ressources || []}
           onCreneau={(cr) => {
             // Cliquer un bloc bascule sur la liste du jour concerne : la grille sert a TROUVER,
             // la liste a AGIR. Ouvrir un formulaire de reservation dans une case de 40 px produirait
@@ -297,7 +305,7 @@ export default function Reservation({ etabActif, droits = [], session }) {
                   <tr><th>Ressource</th><th>Type</th><th className="num">Capacité</th><th>Occ.</th><th>Accès</th></tr>
                 </thead>
                 <tbody>
-                  {ressources.map((r) => (
+                  {(ressources || []).map((r) => (
                     <tr key={r.id}>
                       <td>
                         <span className="nm">{r.libelle}</span>
@@ -309,7 +317,15 @@ export default function Reservation({ etabActif, droits = [], session }) {
                       <td>{r.ouvreAcces ? <span className="badge good">ouvre</span> : <span className="badge mut">—</span>}</td>
                     </tr>
                   ))}
-                  {ressources.length === 0 && (
+                  {ressources === null && (
+                    <tr>
+                      <td colSpan={5} className="empty">
+                        Les ressources n’ont pas pu être lues&nbsp;: ce tableau est vide parce que la
+                        lecture a échoué.
+                      </td>
+                    </tr>
+                  )}
+                  {ressources !== null && ressources.length === 0 && (
                     <tr><td colSpan={5} className="empty">Aucune ressource.</td></tr>
                   )}
                 </tbody>
