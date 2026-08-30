@@ -18,6 +18,7 @@ use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Validator\Constraints as Assert;
+use App\Offre\State\PriceGridProcessor;
 
 /**
  * Case de grille tarifaire : un prix déterminé par le triplet produit × type de tarif × saison
@@ -34,7 +35,10 @@ use Symfony\Component\Validator\Constraints as Assert;
         new GetCollection(security: "is_granted('PERM', 'offre.lire')"),
         new Get(security: "is_granted('PERM', 'offre.lire')"),
         new Post(security: "is_granted('PERM', 'offre.creer')"),
-        new Patch(security: "is_granted('PERM', 'offre.modifier')"),
+        new Patch(
+            security: "is_granted('PERM', 'offre.modifier')",
+            processor: PriceGridProcessor::class,
+        ),
     ],
     normalizationContext: ['groups' => ['grille:read']],
     denormalizationContext: ['groups' => ['grille:write']],

@@ -289,7 +289,12 @@ export default function ScansEnDirect({ droits = [], etabActif }) {
                       <span className="mut" style={{ marginLeft: 'auto' }}>{heure(p.horodatage)}</span>
                     </div>
                     <div className="mut">
-                      {p.espace?.libelle || '—'}
+{/* ⚠ « CONTRÔLÉ À LA MAIN » N'EST PAS UN TIRET. Un passage sans espace n'a pas un lieu
+                          MANQUANT : il n'a pas de lieu, parce qu'aucune porte n'a été franchie
+                          (D86). Un « — » dans un historique se lit comme une donnée perdue, donc
+                          comme une panne — et c'est exactement la distinction que ce produit passe
+                          son temps à ne pas faire. */}
+                      {p.espace?.libelle || 'Contrôlé à la main'}
                       {p.equipement?.libelle ? ` · ${p.equipement.libelle}` : ''}
                     </div>
                     {/* Le pourquoi n'est affiché que quand il en faut un : sur un passage accepté, une

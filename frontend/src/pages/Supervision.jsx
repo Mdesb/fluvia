@@ -402,7 +402,7 @@ export default function Supervision({ etabActif, droits = [] }) {
                       <td className="mono">{heure(p.horodatage)}</td>
                       <td><span className={`badge ${RESULTAT_CLS[p.resultat] || 'mut'}`}>{RESULTAT_PASSAGE[p.resultat] || p.resultat}</span></td>
                       <td>{SENS_PASSAGE[p.sens] || p.sens}</td>
-                      <td>{libelleDe(p.espace)}</td>
+                      <td>{p.espace ? libelleDe(p.espace) : 'Contrôlé à la main'}</td>
                       <td>{libelleDe(p.controleur)}</td>
                       <td>
                         {p.codeMotif && MOTIF_REFUS[p.codeMotif]

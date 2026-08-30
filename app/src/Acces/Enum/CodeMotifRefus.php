@@ -50,4 +50,19 @@ enum CodeMotifRefus: string
      * motif, et un motif emprunté est une statistique fausse.
      */
     case HorsHorairesOuverture = 'hors_horaires_ouverture';
+    /**
+     * Ce billet a DÉJÀ été contrôlé — par l'outil de scan, sur un site sans matériel (D86, 30/08).
+     *
+     * ⚠ DISTINCT DE `CreditEpuise`, ET LES CONFONDRE DONNERAIT LE MAUVAIS GESTE À L'AGENT. Un
+     * crédit épuisé se recharge à la caisse : le porteur a consommé ce qu'il avait acheté. Un billet
+     * déjà contrôlé n'appelle pas une recharge — il appelle une QUESTION, parce que deux causes
+     * opposées produisent le même code : l'agent qui a scanné deux fois pour vérifier, et quelqu'un
+     * d'autre qui se présente avec le même billet.
+     *
+     * C'est pourquoi la réponse porte l'HEURE du contrôle précédent à côté du motif, et pas
+     * seulement dans la phrase : « il y a trente secondes » et « ce matin » appellent des gestes
+     * inverses, et un écran qui devrait analyser une phrase française pour retrouver l'heure
+     * casserait le jour où on corrige une faute d'orthographe.
+     */
+    case DejaConsomme = 'deja_consomme';
 }

@@ -2924,3 +2924,75 @@ qu'on ne s'en aperçoive.
 
 Quatre droits, tous de test. Aucun badge de personnel en base : le chemin existe, il n'a jamais
 servi.
+
+---
+
+## D91 — Un produit publié ne peut pas perdre son dernier prix
+
+**Décidé par Maxime le 31/08.** `PublicationGuard` (RG-M1-09) exige ≥1 prix valide pour publier, et
+il n'était rejoué nulle part ensuite. Un `PATCH` sur une case de grille pouvait donc rendre
+invendable un produit qui restait « Publié » : pas d'erreur, pas de changement de statut, rien.
+
+**La règle vaut désormais aux deux portes.** `PriceGridProcessor` refuse une écriture qui ne
+laisserait **aucun** prix valide à un produit **publié**.
+
+⚠ **Il ne refuse que ce cas-là.** Vider un tarif parmi plusieurs reste permis : un prix null veut
+dire « non commercialisé » (≠ gratuit, CA-5), et retirer un tarif de la vente est un geste métier.
+Un brouillon reste librement modifiable.
+
+**Deux chemins mènent au même état**, et le second ne vient pas à l'esprit : effacer le prix, ou
+**déplacer la case vers un autre produit**. Les deux passent par ce `PATCH`.
+
+**Forme exigée :** le contrôle interroge la BASE et non les collections en mémoire. `setProduit()`
+est une affectation simple — la collection du produit de destination ne contient pas encore la case,
+celle du produit d'origine la contient toujours. `Produit::aPrixValide()` répondrait faux des deux
+côtés, en sens inverse.
+
+## D92 — Un produit publié est rattaché à son site ; « aucun site » reste le socle
+
+**Décidé par Maxime le 31/08**, après mesure : aucun des 8 produits publiés de la préprod n'avait
+d'établissement. Deux règles se rencontraient là, chacune juste séparément :
+
+    PublicationGuard          « ≥1 site est un PRÉREQUIS pour publier »
+    PerimetreProduitExtension « aucun établissement = SOCLE, partagé par tous » (leftJoin voulu)
+
+**Le mécanisme du socle est conservé** — il est délibéré, commenté, et il a un usage. **Ce qui est
+tranché, c'est que la donnée ne doit pas y tomber par défaut.** L'exigence de site à la publication
+est maintenue, et les produits existants ont été rattachés.
+
+**Ce que ça valait, mesuré sur les deux vitrines publiques, sans authentification :**
+
+    avant   Piscine A → 7 produits   ·   Patinoire B → les MÊMES 7
+    après   Piscine A → 7 produits   ·   Patinoire B → "produits":[]
+
+⚠ **La boutique publique d'un établissement servait le catalogue d'un autre.** En préprod, avec un
+seul client, invisible. Le jour de la commercialisation, une fuite inter-clients sur le web public.
+
+**Conséquence à retenir pour les écrans :** une liste de produits vide sur un établissement est
+désormais une réponse JUSTE, à distinguer d'une lecture échouée.
+
+## D93 — Le libellé d'une catégorie comptable ne porte jamais un numéro de compte
+
+**Décidé par Maxime le 31/08** en tranchant le cas du type « Boutique (marchandise) », dont le
+défaut comptable était « Billetterie (compte 7061) » : un mug vendu s'imputait en billetterie.
+
+**Une marchandise va en « Boutique ».** Et la règle générale que ce cas révèle :
+
+- **La catégorie est de la nomenclature** — `AccountingCategorySeeder` pose les huit libellés usuels
+  en portée socle (D51). Ils sont courts, et **sans numéro** : « Billetterie », « Boutique »,
+  « Locations ».
+- **Le numéro vit dans `CompteComptable`**, et le rattachement de l'un à l'autre est un choix
+  d'exploitant porté par `MappingComptable`.
+
+⚠ Un libellé qui nomme un compte mentirait chez le premier client qui impute autrement — et il ne
+lèverait rien : `DefaultCategoryResolver` **n'applique rien** quand le libellé n'existe pas pour
+l'établissement, en silence.
+
+**Ce qui reste ouvert et n'est PAS tranché :** sept produits publiés par les semis n'ont aucune
+catégorie comptable, parce que les fixtures écrivent `setStatut(Publie)` en dur et ne passent par
+aucune garde. Le trou est mesuré, pas comblé. `SemisSansPrixTrait` ne contrôle donc que le prix, et
+le dit dans son en-tête ; il sera élargi à tous les prérequis quand les sept auront leur catégorie.
+
+⚠ **Et une valeur reste inexpliquée :** la base de préprod portait un défaut comptable sur
+`boutique_stock` qu'**aucune ligne du dépôt n'écrit** — `StockFixtures` crée ce type sans défauts.
+Elle a été remplacée, son origine reste inconnue.

@@ -290,8 +290,18 @@ function analyser(string $fichier, array $proprietes, array $filtrables): array
                     }
                 }
 
+                // ⚠ DEUX ECRITURES DU MEME TYPE, ET LA CONSTANTE EST LA MEILLEURE.
+                //
+                // `UuidType::NAME` vaut 'uuid' — mais elle survit a un renommage et se cherche par
+                // son symbole. Le predicat ne connaissait que le littoral : il refusait donc la
+                // forme la plus sure, et enseignait d'ecrire l'autre.
+                //
+                // Signale le 31/08 en ecrivant `PriceGridProcessor`, dont la ligne etait CORRIGEE
+                // au moment ou le controle l'a accusee. Un garde-fou qui teste l'orthographe du
+                // remede plutot que le remede finit par produire des contournements plutot que des
+                // corrections.
                 if (preg_match(
-                    '/setParameter\s*\(\s*[\'"]' . preg_quote($m[1], '/') . '[\'"].{0,300}?[\'"]uuid[\'"]/s',
+                    '/setParameter\s*\(\s*[\'"]' . preg_quote($m[1], '/') . '[\'"].{0,300}?([\'"]uuid[\'"]|UuidType::NAME)/s',
                     $fenetre
                 ) !== 1) {
                     $forme = 'comparaison DQL sans type explicite';
