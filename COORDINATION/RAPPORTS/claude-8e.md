@@ -483,3 +483,36 @@ n'était pas arrivée. La cause est mon propre code — le battement se met en p
 panneau montrait la dernière lecture visible. Ouvrir le panneau ne relit pas. **Un composant qui
 économise le réseau devient un instrument périmé dès qu'on le mesure sans le remonter** ; la mesure
 n'a valu qu'après un rechargement complet.
+
+### Vérifié sur le paquet servi — `16c7d63`, construit le 30/08 à 03:04:42
+
+Trois maillons, chacun prouvé séparément, parce qu'aucun ne vaut pour les autres :
+
+**1. Le code se comporte comme annoncé** — mesuré sur mon arbre : comptes d'appels réseau
+(ouverture 0→1, fermeture 1→1, réouverture 1→2) et largeurs en pixels aux quatre longueurs de titre.
+
+**2. Ce code est dans le commit servi** — `git merge-base --is-ancestor` sur les quatre commits, tous
+dedans, et `16c7d63` est bien dans `main`. Rien de moi en attente (`16c7d63..origin/main` est vide).
+
+**3. Le paquet servi a bien été construit à partir de là** — `version.json` rend `16c7d63`,
+`index.html` date de 03:04:41, et la trace du correctif est dans les octets servis :
+
+    flexShrink:0             → App-C4l8toKu.js        ← le correctif de mise en page
+    « ne sachant pas trier » → ABSENT
+    « récents »              → App-C4l8toKu.js        ← témoin
+    « Heures d »             → ABSENT PARTOUT         ← le renommage de c2 est servi aussi
+    « Horaires d »           → PublicApp, TopologieAcces, Parametres, App
+
+⚠ **MON PREMIER TÉMOIN NÉGATIF NE POUVAIT PAS ÉCHOUER, ET JE NE L'AI VU QU'APRÈS L'AVOIR LANCÉ.**
+J'avais choisi un commit de rapport « poussé après », pour vérifier que le contrôle savait dire non.
+Il répondait « dans le servi » — non pas parce que le contrôle est cassé, mais parce que ce commit
+avait été poussé **avant** la construction de 03:04. Un témoin négatif qui ne peut pas échouer est
+aussi creux qu'un témoin positif absent : il faut le choisir pour qu'il ÉCHOUE si l'instrument est
+faux. Le bon était le sens inverse — `16c7d63` ancêtre d'un de mes vieux commits — qui rend
+correctement « non ».
+
+**Et un fait découvert en passant, qui corrige ce que j'avais dit à c2 :** `f0b201e`, sa réévaluation
+des impayés, **est dans le commit servi**. Je lui avais écrit qu'elle ne serait pas servie tant
+qu'elle ne serait pas fusionnée ; elle l'a été depuis. Le motif `droit_invalide` que j'ai réécrit
+décrit donc un comportement serveur désormais réel — et il demande toujours de *vérifier* plutôt
+qu'il n'affirme la règle, ce qui reste le bon choix.
