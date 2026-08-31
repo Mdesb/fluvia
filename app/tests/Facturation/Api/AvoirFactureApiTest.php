@@ -49,7 +49,7 @@ final class AvoirFactureApiTest extends FacturationApiTestCase
         [$client, $entete] = $this->adminSurA();
         $vente = $this->creerVenteValidee($client, $entete);
         $facture = $client->request('POST', '/api/factures/depuis-vente', $entete + [
-            'json' => ['vente' => '/api/ventes/' . $vente['id']],
+            'json' => ['vente' => '/api/ventes/' . $vente['id'], 'destinataire' => ['type' => 'personne_morale', 'raisonSociale' => 'Client de test', 'siret' => '12345678900011', 'adresse' => ['rue' => '1 rue de Test', 'cp' => '75000', 'ville' => 'Paris', 'pays' => 'FR']]],
         ])->toArray();
 
         /** @var EntityManagerInterface $em */

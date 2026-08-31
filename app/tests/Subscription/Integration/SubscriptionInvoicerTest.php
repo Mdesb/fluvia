@@ -232,6 +232,9 @@ final class SubscriptionInvoicerTest extends FacturationApiTestCase
         $client = (new Client())
             ->setType(TypeClient::Morale)
             ->setRaisonSociale(self::CLIENT)
+            // SIRET et adresse : mentions legales obligatoires sur une facture (RG-FACT-08).
+            ->setSiret('12345678900011')
+            ->setAdresse(['rue' => '9 rue des Abonnes', 'cp' => '75016', 'ville' => 'Paris', 'pays' => 'FR'])
             ->setEmail('contact@campingdespins.test')
             ->setGroupe($editeur->getRegion()?->getGroupe())
             ->setEtablissementCreation($editeur);

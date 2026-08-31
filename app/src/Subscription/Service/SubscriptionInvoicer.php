@@ -267,6 +267,17 @@ final class SubscriptionInvoicer
             'raisonSociale' => '' !== $raisonSociale ? $raisonSociale : null,
             'nom' => $client->getNom(),
             'prenom' => $client->getPrenom(),
+            // ⚠ SIRET ET ADRESSE : MENTIONS LEGALES OBLIGATOIRES, ET ELLES ETAIENT OMISES.
+            //
+            // La fiche client les porte — `EmissionFactureJustificativeHandler` les recopie deja sur
+            // son propre chemin. Ici, elles etaient simplement absentes de la liste, et personne ne
+            // s'en apercevait parce que RG-FACT-08 n'avait aucun appelant : rien ne demandait jamais
+            // si la facture etait complete.
+            //
+            // Sans elles, les factures d'abonnement de Fluvia a ses PROPRES clients ne comportaient
+            // ni SIRET ni adresse du destinataire.
+            'siret' => $client->getSiret(),
+            'adresse' => $client->getAdresse() ?? [],
             // La référence permet de retrouver la fiche depuis la facture sans la dupliquer.
             'clientRef' => $client->getId()->toRfc4122(),
         ];

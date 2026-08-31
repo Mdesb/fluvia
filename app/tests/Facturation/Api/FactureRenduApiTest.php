@@ -33,7 +33,7 @@ final class FactureRenduApiTest extends FacturationApiTestCase
         [$clientA, $enteteA] = $this->adminSurA();
         $vente = $this->creerVenteValidee($clientA, $enteteA);
         $facture = $clientA->request('POST', '/api/factures/depuis-vente', $enteteA + [
-            'json' => ['vente' => '/api/ventes/' . $vente['id']],
+            'json' => ['vente' => '/api/ventes/' . $vente['id'], 'destinataire' => ['type' => 'personne_morale', 'raisonSociale' => 'Client de test', 'siret' => '12345678900011', 'adresse' => ['rue' => '1 rue de Test', 'cp' => '75000', 'ville' => 'Paris', 'pays' => 'FR']]],
         ])->toArray();
 
         // Un lecteur facturation sur B UNIQUEMENT : il passe la sécurité de route, mais n'a aucun droit
@@ -81,7 +81,7 @@ final class FactureRenduApiTest extends FacturationApiTestCase
         [$client, $entete] = $this->adminSurA();
         $vente = $this->creerVenteValidee($client, $entete);
         $facture = $client->request('POST', '/api/factures/depuis-vente', $entete + [
-            'json' => ['vente' => '/api/ventes/' . $vente['id']],
+            'json' => ['vente' => '/api/ventes/' . $vente['id'], 'destinataire' => ['type' => 'personne_morale', 'raisonSociale' => 'Client de test', 'siret' => '12345678900011', 'adresse' => ['rue' => '1 rue de Test', 'cp' => '75000', 'ville' => 'Paris', 'pays' => 'FR']]],
         ])->toArray();
 
         $rendu = $client->request('GET', '/api/factures/' . $facture['id'] . '/rendu', $entete)->toArray();
