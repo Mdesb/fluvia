@@ -26,6 +26,7 @@
 | 07:00 | **Présentation** — `claude-C`. **Fil n°4 livré** : garde-fou n°13, suppressions en migration, cliquet à 10 + échappatoire annotée. **Et un cas de banc qui mentait** — il visait une entité cloisonnée depuis, donc passait au vert sans rien tester. Rendu autonome. | ton fil est épuisé — périmètre disponible | rien |
 | 08:00 | **FERMETURE DE SESSION** — décision de Maxime, qui lève sa propre consigne et D30. Rien en cours, rien de non poussé, aucune pile ouverte. **Passation ci-dessous** : quatre choses t'attendent, aucune n'est dans mon périmètre. | — | — |
 | 09:00 | **Présentation** — `claude-C`. **D53 appliquée aux treize** (3 sorties retirées, revue exhaustive). **Attribution corrigée — et ta cause n'était pas la bonne.** Banc réparé deux fois : il mentait, puis il échouait pour une raison étrangère. 33/33, banc 17/17. | — | — |
+| 12:00 | **Présentation** — `claude-C`. Chantier pris seul : la dérive de schéma. **Mon garde-fou ne lisait qu'un tiers du SQL des migrations** — heredoc et concaténation invisibles. 147 → **209** `DEFAULT` lus, une dérive réelle apparue chez toi. **71 index à déclarer** pour la flotte. | — | — |
 
 ---
 
@@ -1322,3 +1323,85 @@ donc pas sur mon seul terrain. Je n'ai pas de vérification supplémentaire à t
 
 **Ce qui reste ouvert et qui n'est pas à moi** : `OperationScellee` et les jointures du groupe A,
 `claude-G` toujours sur le dépôt nu, le registre d'attente du n°6 à valider ou retirer.
+
+
+---
+
+### 2026-09-01 · 12:00 — Mon garde-fou lisait un tiers des migrations
+
+**`claude-C`, en ligne.** Remote Control actif. Pas d'ordre en attente, j'ai pris le seul angle de D32
+que personne n'avait couvert : les `RENAME INDEX` que claude-F avait vus sur base propre, et qui ne se
+voient que sur une **base vivante**.
+
+**La mesure, faite comme elle devait l'être.** J'ai monté une pile, vidé la base, et l'ai rebâtie
+**par les migrations** — pas par le mapping, sinon elle correspond par construction et ne dit rien.
+Puis j'ai demandé à Doctrine ce qu'il changerait :
+
+| | |
+|---|---|
+| renommages d'index proposés | **71** |
+| vus par ma lecture statique | **19** |
+| en commun | **0** |
+
+**Deux ensembles disjoints.** Ce n'est pas « je lis mal », c'est « je ne lis pas la même chose ».
+
+---
+
+**Ce que je ne lisais pas : trois quarts du SQL.**
+
+Le dépôt écrit ses requêtes de quatre façons — chaîne simple, chaîne double, **heredoc**,
+**concaténation de fragments**. Mon extraction ne captait que le premier littéral suivant `addSql(`.
+
+**52 migrations sur 147 écrivent en heredoc.** Douze index de plus sont créés dans des chaînes
+concaténées. L'extraction est remplacée par une lecture à parenthèses équilibrées qui subsume les
+quatre formes — et couvre celles à venir.
+
+**L'effet se chiffre : 147 `DEFAULT` lus avant, 209 après.** Soixante-deux déclarations que le
+garde-fou n'avait jamais vues depuis sa livraison.
+
+**Et une dérive réelle en est sortie**, invisible jusqu'ici :
+
+```
+sepa_config_creancier.prenotification_delay_days   DEFAULT 14
+```
+
+Le mapping ne le déclare pas, donc la colonne ressort en modification dans le diff de **toutes** les
+sessions. `app/src/Sepa` — hors de mon périmètre, je la signale sans la corriger. Une ligne.
+
+**Un second défaut au passage** : mon motif d'exclusion des noms auto-générés était **insensible à la
+casse**. Il écartait `idx_prenotification_mandate`, `fk_..._etab`, `uniq_...` comme s'ils venaient de
+Doctrine. Or Doctrine génère `IDX_` suivi d'**hexadécimal en majuscules** ; un nom lisible n'est jamais
+auto-généré, quelle que soit sa casse.
+
+---
+
+**J'ai retiré la règle des index, mesure à l'appui — et c'est le point que je te demande de valider.**
+
+Une fois l'extraction corrigée, la lecture statique signalait **220** index contre **71** réels, dont
+61 seulement en commun. Un cliquet à 220 aurait gelé environ **cent cinquante non-défauts**, et le
+signal de résorption n'aurait plus rien voulu dire.
+
+La cause n'est pas un motif de plus à écrire : la question *« cet index dérive-t-il ? »* se décide
+contre une **base**. Le nom que Doctrine attend dépend de son algorithme et du mapping résolu — aucune
+lecture de texte ne le reproduit fidèlement. C'est ta règle appliquée à mon propre travail : **précis
+d'abord, exhaustif ensuite.**
+
+**À la place : `bin/verifier-derive-schema.sh`.** Il monte une pile, rebâtit par les migrations,
+mesure, liste les index fautifs, et **démonte toujours** — y compris en cas d'échec, vérifié. Ce n'est
+pas un garde-fou : trop lent pour une poussée, et il lui faut une base. On le lance quand on veut
+savoir. Il refuse aussi de monter s'il reste moins de trois réseaux.
+
+---
+
+**Ce que ça donne comme dette pour la flotte : 71 index à déclarer**, une ligne chacun sur l'entité —
+`#[ORM\Index(name: 'idx_...', fields: [...])]`. Tant qu'ils ne le sont pas, chacun ressort dans le
+diff de **toute** session qui régénère une migration, indéfiniment. C'est la quatrième cause
+structurelle de D32, et la seule qui restait entière.
+
+**Une remarque sur mes cinq échecs de banc, parce qu'ils m'ont coûté un quart d'heure.** Cinq cas
+d'acceptation refusés d'un coup, dont *« commit anodin sur un dépôt sain »*. La cause : mon arbre avait
+**neuf commits de retard**, et un garde-fou frontal ajouté entre-temps n'était pas câblé dans ma copie.
+C'est exactement le cas que mes propres messages nomment en premier depuis hier — *« ta branche est
+simplement en retard »*. Je l'ai lu après l'avoir cherché.
+
+**Lanceur 34/34, banc 17/17**, aucune pile laissée, pool à 28.
