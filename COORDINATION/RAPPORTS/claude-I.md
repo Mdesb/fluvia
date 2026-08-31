@@ -29,6 +29,7 @@
 | 01/09 00:20 | **T6 : le libelle de la tache etait perime.** Les fixtures sont **deja** rejouables — mesure sur les 329 tables, deux chargements successifs, zero difference. Le vrai manque etait le second : la commande n-existe pas en preproduction. Livre : bundle en production, `app:demo:charger`, et **la purge refusee hors dev/test**. | Verification de non-regression du harnais. | Rien. |
 | 01/09 00:05 | **T6 termine et verifie.** `tests/Platform` 84/422 vert (mon test de garde en fait partie), `Piscine` 35/213 vert. `Sport` a 4 echecs — **preexistants** : meme resultat au caractere pres sur `origin/main`, verifie et non suppose. Pile demontee, base de verification supprimee, worktree rendu. | Plus rien. | Rien. |
 | 01/09 01:10 | **CORRECTION IMPORTANTE : mes « 4 echecs Sport preexistants » etaient faux.** Mon vendor datait du 24/08 — une semaine de retard. Sport est **vert** (35/262). Et en reverifiant T6 avec un vendor a jour, j-ai trouve le vrai bloqueur : **la demonstration ne se chargeait pas du tout** sur une base construite par migrations. Corrige, verifie. | Suites de non-regression. | Rien. |
+| 01/09 00:45 | **T6 reellement clos.** Huit suites vertes (**495 tests**) apres le correctif de `ComptaFixtures`. Chargement verifie sur base construite par migrations : premier, second, et 331 tables sans derive. Bases de verification supprimees, aucun conteneur, worktree rendu. | Plus rien. | Rien. |
 
 ---
 
@@ -938,3 +939,58 @@ m-a confie, et tu n-etais pas joignable. Le diff est de sept lignes plus un comm
 ne vaut que si son point de depart est celui du reel. Un cache de production perime m-a fait conclure
 faux deux fois ; un schema construit autrement qu-en production m-a cache un bloqueur complet. Les
 deux fois, l-essai s-executait normalement et affichait un resultat plausible.
+
+---
+
+## 2026-09-01 00:45 · T6 clos pour de bon — non-regression et carte des risques restants
+
+`ComptaFixtures` est consommee par une bonne partie du depot ; j-ai donc passe large.
+
+| Suite | Resultat |
+|---|---|
+| Compta | 94 tests, 760 assertions |
+| Vente | 109 tests, 1036 assertions |
+| Facturation | 70 tests, 492 assertions |
+| Reporting | 48 tests, 267 assertions |
+| Platform | 89 tests, 429 assertions |
+| Sport | 35 tests, 262 assertions |
+| Piscine | 35 tests, 213 assertions |
+| Caisse | 15 tests, 140 assertions |
+
+**495 tests, toutes vertes.**
+
+### La carte des risques qui restent, et pourquoi ce ne sont pas des defauts
+
+Le defaut que j-ai corrige a une forme generale : **une fixture recree ce qu-une migration a deja
+insere**. J-ai donc croise les deux. **Quatorze tables sont alimentees par une migration** ; six
+d-entre elles sont aussi construites par une fixture :
+
+| Table semee par migration | Fixture qui la construit aussi |
+|---|---|
+| `atz_operation_sensible` | `ExpenseReportFixtures` |
+| `caution_grille_retenue` | `CautionFixtures` |
+| `caution_caution` | `CautionFixtures`, `PatinoireFixtures`, `PiscineFixtures` |
+| `compta_journal` | `ComptaFixtures`, `ExpenseReportFixtures`, `FinanceFixtures` |
+| `crm_parametre_pmv_etablissement` | `CrmFixtures` |
+| `dms_retention_policy` | `DmsFixtures` |
+
+**Aucune ne collisionne aujourd-hui** — et je ne le deduis pas de la lecture : le chargement complet
+sur une base construite par migrations **passe**, deux fois, sans derive sur 331 tables. Ce sont donc
+des endroits ou le motif *pourrait* reapparaitre, pas des bogues. Je les consigne pour la personne qui
+ajoutera la prochaine ligne a l-une de ces fixtures — elle ne saura pas, autrement, qu-une migration
+occupe deja le terrain.
+
+`sec_role`, `sec_permission` et `compta_moyen_paiement` sont les trois cas ou le motif s-est
+reellement produit ; les trois sont desormais gardes.
+
+### Ce que je te laisse
+
+- **Le lot** est sur `claude-I-t6`, dix commits, garde-fous verts. `app/src/Compta` en fait partie —
+  hors de mon perimetre, signale au battement de 01:10, sept lignes.
+- **La ligne T6 du carnet** reste a corriger : « 38 classes ne peuvent pas etre rejouees » est faux
+  dans les deux moities de sa phrase. Elles sont 37, elles se rejouent — ce qui manquait etait la
+  commande, et une collision avec les migrations que personne n-avait vue.
+- **Deux suggestions d-outillage**, nees d-erreurs que j-ai commises et pas d-une precaution
+  theorique : vider `app/var/cache/prod` avant toute verification en `prod`, et construire une base de
+  verification **par les migrations**, jamais par `doctrine:schema:create` — sinon on verifie un
+  produit qui n-existe nulle part.
