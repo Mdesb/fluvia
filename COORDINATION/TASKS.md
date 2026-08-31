@@ -31,6 +31,38 @@ git fetch origin && git merge --no-edit origin/main
 
 Le second doit être vert AVANT que tu commences, sinon tu hériteras d'un rouge qui n'est pas le tien.
 
+### ⚠ Déployer tue toute suite en cours — la tienne comme celle des autres
+
+`./infra/deploy-preprod.sh` lance `composer install --no-dev`, qui **retire phpunit** du `vendor/`
+que les conteneurs de test partagent par montage. Une suite qui tourne meurt alors en plein milieu,
+et son message accuse l'opérateur de ne pas avoir réinstallé — alors qu'il l'avait fait.
+
+Constaté le 31/08 : déploiement à 12:04:32, déploiement d'une autre session à 12:05:50, suite
+complète perdue **sans qu'un seul test soit exécuté**. La notification de tâche annonçait « exit
+code 0 ».
+
+**Ce n'est la faute de personne : c'est structurel.** Toute session qui déploie casse toute session
+qui teste, et la flotte s'agrandit à d'autres comptes.
+
+On ne supprime pas la collision, et c'est délibéré : le garde-fou n°20 existe parce que
+`symfony/http-client` était déclaré en `require-dev` alors que huit classes de production
+l'utilisaient — un défaut *invisible partout où on le cherche, et visible seulement sur la machine
+déployée*. La préprod sans dépendances de dev est le seul endroit où cette classe se voit.
+
+Donc la collision est rendue **bruyante**, pas supprimée :
+
+- `test-stack.sh run` pose `/tmp/suite-en-cours-<jeton>`, retiré par `trap`.
+- `deploy-preprod.sh` les liste avant de retirer les dépendances, et nomme le remède.
+- **Il avertit, il ne bloque pas.** Bloquer transformerait une gêne en panne : la suite complète
+  dure des heures et personne ne pourrait livrer pendant ce temps.
+
+**Ce qu'on te demande :** lis l'avertissement. S'il liste un jeton qui n'est pas le tien, préviens
+avant de déployer. Et si ta suite meurt sur « phpunit est absent », ce n'est pas toi :
+
+```
+./infra/reinstaller-dev.sh
+```
+
 ---
 
 ## 2. Qui tient quoi au 31/08
@@ -74,7 +106,6 @@ Ordonné par ce que ça débloque, pas par difficulté.
 | **T1** | **L'API publique pour les tiers** — clés délivrables, webhooks sortants, versions | ⚠ **Commande trois des quatre autres axes** (D102). Sans elle, l'appli mobile, les agrégateurs et les machines connectées produisent trois couplages privés au lieu d'une surface | *(libre)* |
 | **T2** | **Reprise initiale d'un client** — `ImportBatch`, deux temps, `externalRef` | Bloque une signature : sans elle un client ressaisit son fichier d'abonnés et les crédits de ses cartes. Spec écrite : `COORDINATION/specs/import/` | *(libre)* |
 | **T3** | **Résoudre la boutique depuis l'HÔTE** et non le slug d'URL | Petit maintenant, gros plus tard (D104). Condition de la marque blanche | *(libre)* |
-| **T4** | **Noms de sous-domaines réservés** (`pro`, `api`, `www`…) | Une constante, un refus à la création de vitrine (D106). Empêche une collision qu'on ne verra qu'en production | *(libre)* |
 | **T5** | **Catégorie comptable sur les 7 produits publiés par les semis** | Les fixtures publient dans un état que l'API refuse (RG-M1-05). ⚠ Le choix du compte est une décision comptable — demander à Maxime avant | *(libre)* |
 | **T6** | **Fixtures rejouables en préproduction** | `doctrine:fixtures:load` est absente (`--no-dev`). 38 classes décrivent la démo et ne peuvent pas être rejouées : la démonstration dérive | *(libre)* |
 | **T7** | **Format de facture électronique** — Factur-X / EN 16931 | Aucun format n'existe. Chorus Pro et l'e-reporting REFUSENT désormais au lieu de mentir (D94), mais ne transmettent toujours rien | *(libre)* |
