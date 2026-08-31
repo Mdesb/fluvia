@@ -71,13 +71,28 @@ final class FactureRenduProvider implements ProviderInterface
 
         $destinataire = $facture->getDestinataire();
 
+        // ⚠ LE TAUX VIENT DE L'INSTANTANE SCELLE, PAS DU REFERENTIEL VIVANT.
+        //
+        // Ce tableau melangeait deux temps : `tauxTva` etait relu en direct pendant que les trois
+        // montants restaient figes. Apres un changement de taux, un client recevait une facture
+        // montrant 5,5 % en face de 20 € de TVA sur 100 € HT.
+        //
+        // Il n'en conclut pas que le referentiel a bouge : il conclut que la facture est fausse — et
+        // un document qui ne s'additionne pas EST faux. C'est le seul defaut de cette famille qu'un
+        // client voit.
+        //
+        // Les montants sont deja figes en base et proteges par le garde d'inalterabilite. Le taux
+        // etait la SEULE valeur derivee d'un referentiel ici, donc la seule a pouvoir contredire les
+        // autres.
+        $tauxScelle = $this->tauxParLigne($facture);
+
         $lignes = [];
         foreach ($facture->getLignes() as $ligne) {
             $lignes[] = [
                 'designation' => $ligne->getDesignation(),
                 'quantite' => $ligne->getQuantite(),
                 'prixUnitaireHT' => $ligne->getPrixUnitaireHT(),
-                'tauxTva' => $ligne->getTauxTvaValeur(),
+                'tauxTva' => $tauxScelle[(string) $ligne->getId()] ?? $ligne->getTauxTvaValeur(),
                 'montantHT' => $ligne->getMontantHT(),
                 'montantTva' => $ligne->getMontantTva(),
                 'montantTTC' => $ligne->getMontantTTC(),
@@ -110,4 +125,36 @@ final class FactureRenduProvider implements ProviderInterface
             'acquitteeReference' => $facture->getAcquitteeReference(),
         ]);
     }
+
+    /**
+     * Le taux tel qu'il a ete SCELLE, par identifiant de ligne.
+     *
+     * On lit l'instantane conserve au scellement plutot que d'ajouter une colonne : un seul endroit
+     * dit ce qui a ete scelle, et le rendu s'y adosse au lieu d'en faire une seconde copie qui
+     * divergerait au premier correctif.
+     *
+     * ⚠ Vide quand le document a ete scelle AVANT qu'on ne conserve l'instantane, ou quand il n'est
+     * pas encore scelle. L'appelant retombe alors sur la valeur vivante : on ne peut pas inventer ce
+     * qu'on n'a pas garde, et une degradation dite vaut mieux qu'une valeur fabriquee.
+     *
+     * @return array<string, string>
+     */
+    private function tauxParLigne(Facture $facture): array
+    {
+        $instantane = $facture->getPayloadCanonique();
+
+        if (!\is_array($instantane) || !\is_array($instantane['lignes'] ?? null)) {
+            return [];
+        }
+
+        $taux = [];
+        foreach ($instantane['lignes'] as $ligne) {
+            if (\is_array($ligne) && isset($ligne['id'], $ligne['taux'])) {
+                $taux[(string) $ligne['id']] = (string) $ligne['taux'];
+            }
+        }
+
+        return $taux;
+    }
+
 }

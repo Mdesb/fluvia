@@ -186,4 +186,62 @@ final class InstantaneScelleTest extends FacturationApiTestCase
         $this->expectExceptionMessage('inaltérable');
         $this->em()->flush();
     }
+
+    /**
+     * 5. LA FACTURE RENDUE S'ADDITIONNE, MEME APRES UN CHANGEMENT DE TAUX.
+     *
+     * `FactureRenduProvider` melangeait deux temps : le taux etait relu en direct pendant que les
+     * trois montants restaient figes. Apres un changement, un client recevait un document montrant
+     * 5,5 % en face de 20 € de TVA sur 100 € HT.
+     *
+     * ⚠ Il n'en conclut pas que le referentiel a bouge. Il conclut que la facture est fausse — et un
+     * document qui ne s'additionne pas EST faux. C'est le seul defaut de cette famille qu'un CLIENT
+     * voit.
+     *
+     * L'assertion est celle qu'il ferait lui-meme : la TVA affichee correspond-elle au taux affiche
+     * applique au HT affiche ? On ne compare a aucune valeur litterale — on verifie la coherence
+     * INTERNE du document, qui est la seule chose qu'il puisse controler.
+     */
+    public function testLaFactureRenduesAdditionneApresUnChangementDeTaux(): void
+    {
+        [$client, $entete, $id] = $this->factureEmise();
+
+        $coherent = static function (array $rendu): void {
+            foreach ($rendu['lignes'] as $ligne) {
+                $attendu = round((float) $ligne['montantHT'] * (float) $ligne['tauxTva'] / 100, 2);
+                self::assertSame(
+                    $attendu,
+                    round((float) $ligne['montantTva'], 2),
+                    sprintf(
+                        'Le document doit s\'additionner : %s %% de %s devrait faire %s, il affiche %s.',
+                        $ligne['tauxTva'],
+                        $ligne['montantHT'],
+                        $attendu,
+                        $ligne['montantTva']
+                    )
+                );
+            }
+        };
+
+        // Temoin : il s'additionne AVANT qu'on ne touche au referentiel.
+        $avant = $client->request('GET', '/api/factures/' . $id . '/rendu', $entete)->toArray();
+        self::assertNotEmpty($avant['lignes'], 'Temoin : le rendu porte bien des lignes.');
+        $coherent($avant);
+
+        /** @var TauxTva $taux */
+        $taux = $this->em()->getRepository(TauxTva::class)->find(Uuid::fromString($this->idTauxTva('Taux normal 20 %')));
+        $taux->setTaux('5.50');
+        $this->em()->flush();
+        $this->em()->clear();
+
+        $apres = $client->request('GET', '/api/factures/' . $id . '/rendu', $entete)->toArray();
+        $coherent($apres);
+
+        self::assertSame(
+            $avant['lignes'][0]['tauxTva'],
+            $apres['lignes'][0]['tauxTva'],
+            'Le taux affiche est celui qui a ete SCELLE, pas celui du referentiel du jour.'
+        );
+    }
+
 }
