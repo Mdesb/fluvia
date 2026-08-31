@@ -84,9 +84,29 @@ class ParametreFacturationEtablissement
     #[Groups(['parametre_facturation:read'])]
     private ?ProfilExploitant $profilExploitant = null;
 
-    /** @var array<string, mixed> {denomination, adresse, siret, tvaIntra} */
+    /**
+     * ⚠ **OBSOLETE DEPUIS LE 01/09 — CETTE COLONNE NE FAIT PLUS FOI.**
+     *
+     * L'identite legale du vendeur vit desormais sur `ProfilExploitant` : `raisonSociale`,
+     * `tvaIntracommunautaire`, `adresse`. Champs structures, parce qu'EN 16931 exige des termes
+     * distincts (BT-27, BT-31, BT-35/37/38/40) qu'une plateforme controle un par un -- ce qu'un
+     * tableau JSON libre ne permet pas.
+     *
+     * Les valeurs ont ete recopiees vers le profil (`Version20260901000000`), et
+     * `FactureRenduProvider` lit le profil. Cette colonne est conservee **le temps d'un
+     * deploiement** : retirer une colonne se fait en deux temps -- le code cesse de l'ecrire, on
+     * deploie, puis on la supprime.
+     *
+     * ⚠ **NE PAS LA RENSEIGNER.** Deux sources pour le meme fait sur un document opposable, c'est
+     * exactement le defaut qu'on vient de refermer : pendant quelques heures, le rendu affichait
+     * une identite et le controle de completude en reclamait une autre.
+     *
+     * @var array<string, mixed> {denomination, adresse, siret, tvaIntra}
+     *
+     * @deprecated Lire `ProfilExploitant` — voir Version20260901000000.
+     */
     #[ORM\Column]
-    #[Groups(['parametre_facturation:read', 'parametre_facturation:write'])]
+    #[Groups(['parametre_facturation:read'])]
     private array $mentionsLegalesEmetteur = [];
 
     #[ORM\Column(type: 'text')]

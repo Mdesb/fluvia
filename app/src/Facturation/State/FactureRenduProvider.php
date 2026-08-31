@@ -66,8 +66,26 @@ final class FactureRenduProvider implements ProviderInterface
             throw new NotFoundHttpException('Facture introuvable.');
         }
 
+        // ── L'IDENTITE DU VENDEUR VIENT DU PROFIL, ET DE LUI SEUL ──────────────────────────────
+        //
+        // ⚠ ELLE VENAIT DE `ParametreFacturationEtablissement::mentionsLegalesEmetteur`, un tableau
+        // JSON libre. Le 31/08, le lot EN 16931 a ajoute les memes faits en champs structures sur
+        // `ProfilExploitant` -- et pendant quelques heures les DEUX ont existe : le rendu affichait
+        // « Regie piscine A » pendant que le controle de completude disait « il manque la raison
+        // sociale ». Deux reponses, sur un document opposable, sans regle disant laquelle gagne.
+        //
+        // Le profil gagne parce qu'un tableau JSON libre ne se valide pas champ par champ, et
+        // qu'EN 16931 exige des termes distincts (BT-27, BT-31, BT-35/37/38/40) qu'une plateforme
+        // controle un par un. L'ancienne colonne a ete recopiee ici (Version20260901000000) et ne
+        // fait plus foi.
         $profil = $facture->getProfilExploitant();
-        $emetteur = $profil !== null ? $this->comptes->parametre($profil)?->getMentionsLegalesEmetteur() : null;
+
+        $emetteur = $profil === null ? null : array_filter([
+            'denomination' => $profil->getRaisonSociale(),
+            'adresse' => $profil->getAdresse() !== [] ? $profil->getAdresse() : null,
+            'siret' => $profil->getSiren() !== '' ? $profil->getSiren() : null,
+            'tvaIntra' => $profil->getTvaIntracommunautaire(),
+        ], static fn (mixed $v): bool => $v !== null);
 
         $destinataire = $facture->getDestinataire();
 

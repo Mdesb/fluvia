@@ -4,6 +4,8 @@ import Tabs from '../components/Tabs.jsx'
 import LettrageEcritures from '../components/LettrageEcritures.jsx'
 import SaisieEcritureManuelle from '../components/SaisieEcritureManuelle.jsx'
 import VersementRegie from '../components/VersementRegie.jsx'
+import MarquerImpayeeRegie from '../components/MarquerImpayeeRegie.jsx'
+import BordereauxPayFip from '../components/BordereauxPayFip.jsx'
 import CorrespondancesComptables from '../components/CorrespondancesComptables.jsx'
 import { api } from '../api/client.js'
 import ClotureComptable from '../components/ClotureComptable.jsx'
@@ -115,18 +117,9 @@ export default function Comptabilite({ etabActif, droits }) {
               Une regie de recettes se lit par ce qu'elle a encaisse ET par ce qui lui manque. Ranger
               les impayes dans un autre ecran laisse regarder le solde sans son complement -- et un
               solde lu seul a l'air bon. */}
-          <Liste
-            titre="Ventes impayées"
-            sous="à recouvrer par la régie"
-            deps={[etabActif]}
-            charger={api.ventesImpayeesRegie}
-            vide="Aucune vente impayée."
-            colonnes={[
-              { cle: 'dateMarquage', entete: 'Marquée le', rendu: (r) => dateFr(r.dateMarquage) },
-              { cle: 'motif', entete: 'Motif', rendu: (r) => <span className="nm">{r.motif || '—'}</span> },
-              { cle: 'venteOrigine', entete: 'Vente', rendu: (r) => <span className="mono sub">{String(r.venteOrigine || '').slice(0, 8) || '—'}</span> },
-            ]}
-          />
+          {/* La liste etait en LECTURE SEULE : elle ne pouvait que rester vide, ce qui se lit
+              « aucun impaye » au lieu de « rien ne peut en creer ». Le composant liste ET marque. */}
+          <MarquerImpayeeRegie etabActif={etabActif} droits={droits} />
           <Liste
             titre="Bordereaux de versement"
             deps={[etabActif, versements]}
@@ -138,6 +131,10 @@ export default function Comptabilite({ etabActif, droits }) {
               { cle: 'ecritureGeneree', entete: 'Écriture', rendu: (r) => (r.ecritureGeneree ? <span className="badge good">générée</span> : <span className="badge mut">—</span>) },
             ]}
           />
+          {/* PayFiP a cote de la regie, parce que c'est le meme metier : encaisser pour le compte
+              du Tresor. Le referentiel entier etait invisible — un paiement dont le retour ne
+              revient jamais restait en attente sans que personne puisse le constater. */}
+          <BordereauxPayFip etabActif={etabActif} />
         </div>
       )}
 
