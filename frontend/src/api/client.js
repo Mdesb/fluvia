@@ -462,17 +462,32 @@ export const api = {
   // Corps : { numeroEngagement?, serviceExecutant? } -- exiges par certains donneurs d'ordre publics.
   deposerFactureChorus: (id, corps) =>
     request(`/api/factures/${id}/chorus`, { method: 'POST', body: corps }),
-  // ⚠ DEUX ROUTES DECLAREES QUE JE NE BRANCHE PAS, ET CHACUNE POUR SA RAISON.
+  // INTEGRITE DE LA CHAINE DES FACTURES (NF525).
   //
-  // `/factures/verifier-chaine` REPOND 404. Declaree en `GetCollection` avec ce `uriTemplate`, elle
-  // est captee par l'operation d'item `/factures/{id}` qui lit << verifier-chaine >> comme un
-  // identifiant : le serveur repond << Invalid uri variables >>. Mesure contre la preprod le 29/08 :
-  //     /api/factures?itemsPerPage=1   200
-  //     /api/factures/verifier-chaine  404
-  //     /api/mes-factures              200
-  // Le bouton etait ecrit ; je l'ai retire plutot que d'en livrer un qui echoue. Signale au serveur.
-  // C'est la meme famille que le GET du padel sur une route POST : << la route existe >> ne veut pas
-  // dire << elle repond >>.
+  // ⚠ CE COMMENTAIRE A TENU LE BOUTON DEBRANCHE DEUX JOURS APRES LA CORRECTION DU DEFAUT QU'IL
+  // DECRIT. Il disait, et c'etait vrai le 29/08 :
+  //
+  //     « `/factures/verifier-chaine` REPOND 404. Declaree en `GetCollection` avec ce
+  //       `uriTemplate`, elle est captee par l'operation d'item `/factures/{id}` qui lit
+  //       "verifier-chaine" comme un identifiant. […] Le bouton etait ecrit ; je l'ai retire
+  //       plutot que d'en livrer un qui echoue. Signale au serveur. »
+  //
+  // Il a ete signale, il a ete corrige, et personne n'est revenu rebrancher le bouton. La phrase
+  // est restee juste dans sa date et fausse dans le present -- et rien ne reliait les deux. On
+  // garde la date et la raison, on retire la conclusion. Signale par `allaccess-b8`.
+  //
+  // Remesure le 31/08, authentifie, avec DEUX TEMOINS NEGATIFS dans la meme passe :
+  //     /api/factures/verifier-chaine                    200   { intacte, nbDocuments, anomalies }
+  //     /api/factures/00000000-0000-4000-8000-0000…      404   temoin : identifiant inconnu
+  //     /api/factures/route-inexistante                  404   temoin : rien ici
+  // Le routeur declare desormais la route litterale AVANT le motif `{id}` : la collision n'a
+  // plus lieu.
+  //
+  // ⚠ Sans les temoins, un 200 ne prouverait rien : `Accept` mal negocie rend 406 sur TOUT, y
+  // compris sur les routes qui marchent. C'est le piege qui a failli tromper b8.
+  verifierChaineFactures: () => request('/api/factures/verifier-chaine'),
+  //
+  // L'AUTRE ROUTE RESTE DEBRANCHEE, ET POUR UNE RAISON QUI N'A PAS CHANGE :
   //
   // `/factures/depuis-vente` fonctionne, mais son geste appartient a l'historique des ventes -- on
   // emet une facture justificative EN REGARDANT une vente, pas en regardant la liste des factures.
@@ -533,11 +548,40 @@ export const api = {
   // CRM.
   rechercheClients: (params) => request('/api/crm/clients/recherche', { query: params }),
   ficheClient: (id) => request(`/api/clients/${id}/fiche-360`),
+
+  // ⚠ TROIS PIEGES DE ROUTAGE SUR LA FUSION, MESURES LE 31/08 CONTRE LA PREPROD. Ils sont
+  // consignes ici parce que DEUX sessions ont ecrit cet ecran le meme jour sans se voir, et que
+  // la seconde n'avait pas ces mesures.
+  //
+  //   1. LA COLLECTION N'EST PAS SOUS `/crm/fusions`. Le `POST` occupe ce chemin ; le
+  //      `GetCollection` n'a pas d'`uriTemplate` et vit donc sous le nom derive de l'entite.
+  //          GET /api/crm/fusions      -> 405 Method Not Allowed   (et non 404)
+  //          GET /api/journal_fusions  -> 200
+  //      Un 405 se lit << mauvaise methode >>, pas << mauvais chemin >>.
+  //
+  //   2. LA PREVISUALISATION PREND DES UUID, LA FUSION PREND DES IRI. Le provider lit
+  //      `?maitre=<uuid>&sources[]=<uuid>` ; le processeur lit `{ maitre: iri, sources: [iri] }`.
+  //
+  //   3. LES DEUX `POST` SONT EN `input: false` : corps BRUT, pas de `ld: true`.
   // La fiche 360 ne porte qu'un sous-ensemble des champs : pour modifier, il faut le client entier.
   client: (id) => request(`/api/clients/${id}`),
   majClient: (id, corps) => request(`/api/clients/${id}`, { method: 'PATCH', body: corps }),
   // Relevé de mouvements du porte-monnaie virtuel (US-L5-04). Renvoie { mouvements: [...] }.
   pmvMouvements: (id) => request(`/api/clients/${id}/pmv/mouvements`),
+  // RECHARGER UN PORTE-MONNAIE — le geste qui manquait pour que le solde puisse remonter.
+  //
+  // `Caisse.jsx` accepte `pmv` comme moyen de paiement depuis toujours ; le seul appel PMV du
+  // frontal etait la lecture des mouvements. Un client qui verse 50 EUR au comptoir n'avait aucun
+  // chemin : les soldes se vidaient sans jamais remonter.
+  //
+  // ⚠ CONTRAT MESURE CONTRE L'API, PAS SUPPOSE -- et paye : voir le message de commit.
+  //   `montant` est REQUIS et doit etre STRICTEMENT POSITIF (0 et -10 rendent 422).
+  //   La reponse porte { mouvement, montant, soldeApres, dateEcheance, statutPmv, motif }.
+  //   ⚠ DEUX EFFETS, PAS UN : l'operation credite le solde ET REPOUSSE L'ECHEANCE du
+  //   porte-monnaie. L'ecran doit donc reafficher les deux, sinon il montre une moitie de verite.
+  //   Le mouvement cree porte `canal: "caisse"` : c'est un encaissement, pas un ajustement.
+  rechargerPmv: (id, corps) =>
+    request(`/api/clients/${id}/pmv/recharger`, { method: 'POST', body: corps, ld: true }),
   // Création rapide d'une fiche client (US-L5-02). L'établissement de création / le groupe sont
   // fixés côté back depuis l'établissement actif (en-tête X-Etablissement).
   creerClient: (corps) => request('/api/clients', { method: 'POST', body: corps, ld: true }),
@@ -927,7 +971,10 @@ export const api = {
   // Un objet vide signifie que les fiches ne se contredisent nulle part — la fusion est alors sans
   // arbitrage.
   previsualiserFusion: (maitre, sources) =>
-    request('/api/crm/fusions/previsualiser', { query: { maitre, 'sources[]': sources } }),
+    // ⚠ `sources` SANS CROCHETS : `qs()` les ajoute lui-meme pour un tableau. Ecrit
+    // `'sources[]'`, il produisait `sources[][]=…`, que le serveur ne lit pas -- la
+    // previsualisation rendait alors 422 << sources[] requis >>. Mesure le 31/08.
+    request('/api/crm/fusions/previsualiser', { query: { maitre, sources } }),
 
   // Corps : { portee: 'client', sources: [iri], maitre: iri, champsArbitres?: {...}, motif?: '…' }
   //
@@ -1484,6 +1531,44 @@ export const api = {
   // de cet ecran.
   // Le referentiel des natures de depense : c'est lui qui dit sur quel compte une ligne s'impute.
   // Une nature SANS mapping laisse la facture sans imputation comptable -- l'ecran le signale.
+  // ─── NOTES DE FRAIS ──────────────────────────────────────────────────────────────────────
+  //
+  // Module ENTIER sans ecran : lister, creer, soumettre, rouvrir, finaliser une escalade, passer
+  // en comptabilite, rembourser. Un salarie qui avance des frais n'avait aucun chemin, et un
+  // remboursement qu'on ne peut pas tracer se regle de travers puis se discute apres coup.
+  //
+  // ⚠ DEUX FAMILLES DE CHEMINS, ET C'EST DELIBERE COTE SERVEUR :
+  //   la ressource elle-meme vit sous `/api/expense_reports` (collection, item, PATCH) ;
+  //   les GESTES vivent sous `/api/finance/expense-reports/{id}/…`. Confondre les deux rend 404.
+  //
+  // Contrat LU dans l'entite et le catalogue des permissions, pas sonde -- j'ai deja paye une
+  // sonde aujourd'hui. Droits : `finance.expense_report_submit` pour creer et soumettre,
+  // `finance.expense_report_post_to_ledger` pour comptabiliser et rembourser, et la lecture
+  // s'ouvre aussi a `finance.expense_report_read_own`.
+  notesDeFrais: (params) =>
+    request('/api/expense_reports', { query: { itemsPerPage: 200, ...(params || {}) } }),
+  creerNoteDeFrais: (corps) =>
+    request('/api/expense_reports', { method: 'POST', body: corps, ld: true }),
+  majNoteDeFrais: (id, corps) =>
+    request(`/api/expense_reports/${id}`, { method: 'PATCH', body: corps }),
+  // La ligne porte la nature, la date, le montant TTC et la piece justificative.
+  creerLigneFrais: (corps) =>
+    request('/api/expense_lines', { method: 'POST', body: corps, ld: true }),
+  supprimerLigneFrais: (id) =>
+    request(`/api/expense_lines/${id}`, { method: 'DELETE' }),
+  soumettreNoteDeFrais: (id) =>
+    request(`/api/finance/expense-reports/${id}/submit`, { method: 'POST', body: {} }),
+  rouvrirNoteDeFrais: (id) =>
+    request(`/api/finance/expense-reports/${id}/reopen`, { method: 'POST', body: {} }),
+  finaliserEscaladeNoteDeFrais: (id) =>
+    request(`/api/finance/expense-reports/${id}/finalize-escalade`, { method: 'POST', body: {} }),
+  passerEnComptaNoteDeFrais: (id) =>
+    request(`/api/finance/expense-reports/${id}/post-to-ledger`, { method: 'POST', body: {} }),
+  // Le remboursement est une RESSOURCE, pas un simple geste : il porte une date, un montant, un
+  // moyen de paiement et une reference. C'est ce qui permettra de le rapprocher en banque.
+  rembourserNoteDeFrais: (id, corps) =>
+    request(`/api/finance/expense-reports/${id}/reimbursements`, { method: 'POST', body: corps, ld: true }),
+
   mappingsDepense: () =>
     request('/api/expense_account_mappings', { query: { itemsPerPage: 200 } }),
   // Le rapprochement a trois voies : facture contre commande contre reception. Charge AVANT
@@ -1704,6 +1789,35 @@ export const api = {
     request(`/api/personnel/badges/${id}/reactiver`, { method: 'POST', body: {}, ld: true }),
   emettreBadgeStaff: (employeId) =>
     request(`/api/personnel/employes/${employeId}/badges`, { method: 'POST', body: {}, ld: true }),
+
+  // ─── LE PLANNING, LA SORTIE, L'INCIDENT ──────────────────────────────────────────────────
+  //
+  // L'ecran savait declarer un employe, ses absences et emettre ses badges. Il ne savait ni le
+  // PLANIFIER, ni le faire SORTIR, ni signaler un badge perdu. Quatre gestes servis, zero appel.
+  //
+  // ⚠ `POST /personnel/creneaux-travail` LIT LE CORPS BRUT (pas de `ld: true`), et son
+  // `etablissement` est un UUID ou une IRI recoupe cote serveur. Contraintes COMPTEES dans
+  // l'entite, pas survolees -- `libellePoste` NotBlank, `debut` et `fin` NotNull, `effectifRequis`
+  // >= 1 -- plus un validateur de CLASSE, `TopologieTravailCoherente`, qui exige en outre
+  // `fin > debut` et un etablissement resolu. C'est lui qui produirait le 422 surprenant.
+  creneauxTravail: (params) =>
+    request('/api/creneau_travails', { query: { itemsPerPage: 200, ...(params || {}) } }),
+  creerCreneauTravail: (corps) =>
+    request('/api/personnel/creneaux-travail', { method: 'POST', body: corps }),
+  annulerCreneauTravail: (id) =>
+    request(`/api/personnel/creneaux-travail/${id}/annuler`, { method: 'POST', body: {} }),
+
+  // ⚠ SUSPENDRE UN EMPLOYE SUSPEND AUSSI SES BADGES. Le processeur le fait en cascade
+  // (« Suspension de l'employe »), et la reactivation les remet. Ce n'est pas un detail : la
+  // personne perd ses acces physiques a l'instant du clic. L'ecran le dit avant, pas apres.
+  suspendreEmploye: (id) =>
+    request(`/api/personnel/employes/${id}/suspendre`, { method: 'POST', body: {} }),
+  reactiverEmploye: (id) =>
+    request(`/api/personnel/employes/${id}/reactiver`, { method: 'POST', body: {} }),
+
+  // Perte ou vol : le serveur exige un `motif` non vide, et lui seul est lu au corps.
+  declarerIncidentBadge: (id, motif) =>
+    request(`/api/personnel/badges/${id}/declarer-incident`, { method: 'POST', body: { motif } }),
 
   // --- Verticales (routes explicites privilégiées) ---
   // Piscine

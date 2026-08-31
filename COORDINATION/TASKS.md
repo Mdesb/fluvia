@@ -215,12 +215,37 @@ routes présentes au routeur, **zéro appel du frontal**. C'est du travail déj�
 rien tant qu'aucun écran ne l'ouvre — la forme la plus coûteuse d'inachèvement, parce qu'elle ne se
 voit pas.
 
-| # | lot | routes servies, appels du frontal |
-|---|---|---|
-| **T25** | **Fusion de clients** — fusionner, prévisualiser, défusionner | `/api/crm/fusions` ×3 · **0 appel**. Tout déploiement réel accumule des doublons, et le serveur sait déjà prévisualiser puis défusionner — c est un mécanisme complet sans porte | **fait** — `c2`, 31/08. Prévisualisation champ par champ avant toute écriture, arbitrage, motif au journal. ⚠ **Le journal des fusions est livré avec** : sans lui la défusion serait inatteignable, et on aurait donné le pouvoir d écraser deux fiches sans celui de revenir |
-| **T26** | **Trésorerie** — comptes bancaires, import de relevés, rapprochement | `/api/bank_accounts`, `/api/bank_statement_imports`, `/api/bank_statement_lines` · **0 appel** |
-| **T27** | **Personnel** — créneaux de travail, badges | `/api/creneau_travails` · **0 appel** ; `/api/badge_staffs` · 1 appel seulement |
-| **T28** | **Comptabilité** — lettrage groupé | **fait** — `c2`, 31/08. Onglet « Lettrage » : les lignes non soldées, le solde de la sélection affiché en permanence. ⚠ **Le serveur n exige PAS l équilibre** — mesuré, et c est défendable (un lettrage partiel solde un règlement en plusieurs fois), donc l écran montre l écart sans jamais bloquer. ⚠ Et si la liste des lettrages existants ne se charge pas, l écran s arrête au lieu de proposer de tout lettrer : sans elle on ne distingue plus le soldé du dû |
+⚠ **DEUX SESSIONS ONT ÉCRIT L'ÉCRAN DE FUSION LE MÊME JOUR, SANS SE VOIR** (`c2` et
+`allaccess-89`). Les branches étaient indépendantes : ni l'une ni l'autre n'a « repris » le travail
+de l'autre, elles l'ont fait deux fois. Résolu à la fusion en gardant **la version de `c2`**, sur
+un critère mesurable et non sur la paternité : son point d'entrée est meilleur — on clique
+« Fusionner » sur la ligne du doublon qu'on regarde, au lieu de choisir les deux fiches à partir de
+rien. Le doublon a coûté une demi-journée à quelqu'un.
+
+⚠ **Et la fusion Git n'a signalé AUCUN conflit sur les fichiers partagés.** `client.js` s'est
+retrouvé avec **trois clés en double** dans l'objet `api` (`previsualiserFusion`,
+`fusionnerClients`, `defusionner`) — la dernière définition gagne en silence — et `Clients.jsx`
+avec **deux imports identiques** (erreur de syntaxe) et **deux montages** du composant. Un `git
+merge` propre n'est pas un fichier correct. Nettoyé le 31/08.
+
+| # | lot | routes servies, appels du frontal | état |
+|---|---|---|---|
+| **T25** | **Fusion de clients** — fusionner, prévisualiser, défusionner | `/api/crm/fusions` ×3 | **fait** — `c2`, 31/08. Prévisualisation champ par champ avant toute écriture, arbitrage, motif au journal. ⚠ **Le journal des fusions est livré avec** : sans lui la défusion serait inatteignable, et on aurait donné le pouvoir d'écraser deux fiches sans celui de revenir |
+| **T26** | **Trésorerie** — comptes bancaires, import de relevés, rapprochement | `/api/bank_accounts`, `/api/bank_statement_imports`, `/api/bank_statement_lines` · **0 appel** | *(libre)* |
+| **T27** | **Personnel** — créneaux de travail, sortie d'un salarié, badge perdu | `/api/creneau_travails` · **0 appel** ; `/api/badge_staffs` · 1 appel seulement | **allaccess-89** |
+| **T28** | **Comptabilité** — lettrage groupé | | **fait** — `c2`, 31/08. Onglet « Lettrage » : les lignes non soldées, le solde de la sélection affiché en permanence. ⚠ **Le serveur n'exige PAS l'équilibre** — mesuré, et c'est défendable (un lettrage partiel solde un règlement en plusieurs fois), donc l'écran montre l'écart sans jamais bloquer |
+
+⚠ **T27 avant T26, pour une raison mesurée et non par préférence :** `/api/employes` rend
+**0 employé sur les deux établissements**. Or une note de frais exige un salarié
+(`employee`, `JoinColumn(nullable: false)`), et un badge de service aussi. L'écran des notes de
+frais livré en `a719568` est donc **inutilisable tant que T27 n'est pas fait** — il l'annonce
+lui-même et renvoie vers Personnel. Un lot qui débloque un lot déjà livré passe devant.
+
+⚠ **Trois pièges de routage sur la fusion, mesurés le 31/08 et consignés dans `client.js`**, parce
+qu'ils ont coûté du temps aux deux sessions : `GET /api/crm/fusions` rend **405** et non 404 (la
+collection vit sous `/api/journal_fusions`) ; la prévisualisation prend des **UUID** quand la
+fusion prend des **IRI** ; et `qs()` ajoute lui-même les crochets d'un tableau, donc écrire
+`'sources[]'` produit `sources[][]=…` que le serveur ne lit pas.
 
 Relevés par `allaccess-89`, qui les tenait de `34`. Deux autres de la même liste sont **faits et
 poussés depuis** : le porte-monnaie virtuel et les notes de frais.
