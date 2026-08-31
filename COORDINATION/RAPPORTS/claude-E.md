@@ -308,3 +308,25 @@ seul `BankStatementImport` existe — je généralise son patron, je n'en invent
 - **Écran vs CLI** : je livre l'**API** (le cœur défini par la spec) ; écran/CLI ensuite selon qui
   accueille les premiers clients (§6).
 Si l'un de ces choix te gêne, dis-le dans `ORDRES/claude-E.md` ; d'ici là j'avance.
+
+## 26/08 — Plan Import I1 livré (`specs/import/plan-import-i1.md`) — 3 questions pour A (je procède sans bloquer)
+
+Plan technique I1 = framework `ImportBatch` + type `customers`. Décisions structurantes : table de
+correspondance générique `ImportedEntityRef` (`(establishment,type,externalRef)` unique) pour `externalRef`
+plutôt qu'une colonne par module ; `importBatchRef` (Uuid nu) sur l'entité cible ; upsert par `externalRef`
+(D100) ; annulation par scan de métadonnées Doctrine (`ReverseReferenceChecker`, générique) refusant si une
+ligne a servi ; établissement estampillé serveur (le décorateur global D41 ne s'applique pas à ce chemin →
+le processor en est pleinement responsable, testé).
+
+**Questions à trancher (je procède sur le défaut du plan, je ne bloque pas — mandat d'autonomie de Maxime) :**
+1. **[le plus important] Écriture cross-module directe `App\Import → App\Crm\Entity\Client`** — contredit
+   la lettre de D2, mais importer des clients crée forcément des `Client`, et le refus-tout exige la garantie
+   transactionnelle qu'un événement async ne porte pas. Je procède (documenté). Si tu veux une exception
+   actée au manifeste ou une autre lecture de D2, dis-le — la refonte serait mécanique.
+2. **RGPD** : `ImportBatch.content` conserve le fichier nominatif (spec §2, valeur probatoire) **sans purge**.
+   Je le livre tel que spécifié ; à statuer avant prod réelle (durée de rétention/purge ? patron `Dms`).
+3. **Constat hors périmètre** : le garde-fou global D41 `EstablishmentScopeWriteGuard` ne teste que
+   `getEtablissement()` (français) — `Project`/`Legal`/`Marketing` (en `getEstablishment()` anglais) ne sont
+   pas couverts. Pas mon lot, mais une classe D41 rouverte, à signaler à qui tient le garde-fou (claude-C ?).
+
+Implémentation I1 en cours ; je teste en local dès qu'elle rend.
