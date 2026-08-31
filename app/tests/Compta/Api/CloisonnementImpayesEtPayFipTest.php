@@ -5,10 +5,15 @@ declare(strict_types=1);
 namespace App\Tests\Compta\Api;
 
 use App\Compta\Entity\BordereauPayFiP;
+use App\Compta\Entity\FactureB2G;
+use App\Compta\Entity\ProfilExploitant;
 use App\Compta\Entity\VenteImpayeeRegie;
 use App\Caisse\Entity\PointDeVente;
 use App\DataFixtures\SocleFixtures;
+use App\Facturation\Entity\DestinataireFacturation;
+use App\Facturation\Entity\Facture;
 use App\Organisation\Entity\Etablissement;
+use App\Securite\Entity\Utilisateur;
 use App\Tests\Compta\ComptaApiTestCase;
 use App\Vente\Entity\Vente;
 use Doctrine\ORM\EntityManagerInterface;
@@ -116,6 +121,91 @@ final class CloisonnementImpayesEtPayFipTest extends ComptaApiTestCase
             $ids,
             'l’encaissement d’un autre établissement ne doit pas être lisible',
         );
+    }
+
+    /**
+     * ⚠ CELLE-CI SE CLOISONNE A L'ENVERS, ET C'EST LE SEUL SENS QUI EXISTE.
+     *
+     * `FactureB2G` ne porte aucune relation vers la facture : c'est `Facture::$factureB2G` qui
+     * pointe vers elle. Le docblock de l'extension cherchait un chemin depuis `clientRef` — champ
+     * qui vient du destinataire, avec un `Uuid::v4()` en repli, donc un identifiant qui ne designe
+     * rien — et concluait a l'absence de chemin. Il etait de l'autre cote.
+     */
+    public function testUneFactureB2GNestVisibleQueDansSonEtablissement(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+
+        $etabA = $em->getRepository(Etablissement::class)->find($this->idEtablissement(SocleFixtures::ETAB_A_NOM));
+        $etabB = $em->getRepository(Etablissement::class)->findOneBy(['nom' => SocleFixtures::ETAB_B_NOM]);
+        self::assertInstanceOf(Etablissement::class, $etabA, 'témoin : l’établissement A doit exister');
+        self::assertInstanceOf(Etablissement::class, $etabB, 'témoin : l’établissement B doit exister');
+
+        $propre = $this->b2gRattacheeA($em, $etabA);
+        $etranger = $this->b2gRattacheeA($em, $etabB);
+        $em->flush();
+
+        $idPropre = (string) $propre->getId();
+        $idEtranger = (string) $etranger->getId();
+
+        $client->request('GET', '/api/facture_b2_gs', $entete);
+        self::assertResponseIsSuccessful();
+        $ids = $this->identifiants($client->getResponse()->toArray());
+
+        self::assertContains(
+            $idPropre,
+            $ids,
+            'témoin : l’établissement doit voir SA propre facture B2G — sans quoi une sous-requête '
+            . 'à l’envers malformée ferait passer le refus mesuré juste après',
+        );
+
+        self::assertNotContains(
+            $idEtranger,
+            $ids,
+            'la facture B2G d’un autre établissement ne doit pas être lisible',
+        );
+    }
+
+    private function b2gRattacheeA(EntityManagerInterface $em, Etablissement $etablissement): FactureB2G
+    {
+        $b2g = new FactureB2G();
+        $b2g->setClientRef(Uuid::v4());
+        $em->persist($b2g);
+
+        // ⚠ SANS LA FACTURE, LE BORDEREAU EST ORPHELIN — donc invisible de partout, et le test
+        // passerait sans rien prouver. C'est la facture qui porte l'etablissement.
+        //
+        // Le profil exploitant est NOT NULL sur la facture, et `etablissement_principal_id` porte
+        // une contrainte UNIQUE : il y a AU PLUS UN profil par etablissement. On reprend donc celui
+        // qui existe, et on n'en cree un que la ou il manque — en creer un second sur A faisait
+        // echouer l'insertion, pas le cloisonnement.
+        $profil = $em->getRepository(ProfilExploitant::class)
+            ->findOneBy(['etablissementPrincipal' => $etablissement]);
+        if (!$profil instanceof ProfilExploitant) {
+            $profil = new ProfilExploitant();
+            $profil->setSiren(substr((string) random_int(100000000, 999999999), 0, 9));
+            $profil->setEtablissementPrincipal($etablissement);
+            $em->persist($profil);
+        }
+
+        // Le destinataire est NOT NULL et se persiste en cascade depuis la facture. Aucun de ses
+        // champs n'est requis : ce test ne mesure pas la facturation, seulement le chemin qui mene
+        // de la facture B2G a un etablissement.
+        $destinataire = new DestinataireFacturation();
+
+        $facture = new Facture();
+        $facture->setEtablissement($etablissement);
+        $facture->setProfilExploitant($profil);
+        $facture->setDestinataire($destinataire);
+        // NOT NULL egalement. Peu importe QUI : le cloisonnement passe par l'etablissement de la
+        // facture, pas par son auteur.
+        $facture->setCreePar($em->getRepository(Utilisateur::class)->find($this->idAdmin()));
+        $facture->setFactureB2G($b2g);
+        $em->persist($facture);
+
+        return $b2g;
     }
 
     /**
