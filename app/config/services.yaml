@@ -13,6 +13,10 @@ services:
     _defaults:
         autowire: true      # Automatically injects dependencies in your services.
         autoconfigure: true # Automatically registers your services as commands, event subscribers, etc.
+        bind:
+            # D104 : le domaine sous lequel vivent les sous-domaines clients. Lie explicitement
+            # parce que l'autowiring ne devine pas une chaine.
+            string $domaineDePlateforme: '%env(PLATFORM_BASE_DOMAIN)%'
 
     # makes classes in src/ available to be used as services
     # this creates a service per class whose id is the fully-qualified class name

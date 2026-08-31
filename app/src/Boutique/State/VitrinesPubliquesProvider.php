@@ -7,6 +7,7 @@ namespace App\Boutique\State;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProviderInterface;
 use App\Boutique\Entity\Vitrine;
+use App\Boutique\Service\VitrineResolver;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 
@@ -24,6 +25,7 @@ final class VitrinesPubliquesProvider implements ProviderInterface
 {
     public function __construct(
         private readonly EntityManagerInterface $em,
+        private readonly VitrineResolver $resolveur,
     ) {
     }
 
@@ -32,13 +34,14 @@ final class VitrinesPubliquesProvider implements ProviderInterface
         $vitrines = [];
         foreach ($this->em->getRepository(Vitrine::class)->findAll() as $vitrine) {
             \assert($vitrine instanceof Vitrine);
+            // ⚠ La regle de publication vit desormais dans le resolveur, parce que la resolution
+            // par hote (D104) en a besoin AUSSI. Recopiee, l'une des deux copies aurait fini par
+            // bouger seule -- et un hote aurait servi une vitrine depubliee.
+            if (!$this->resolveur->estVisibleDuPublic($vitrine)) {
+                continue;
+            }
             $etablissement = $vitrine->getEtablissement();
-            if ($etablissement === null || !$etablissement->isActif()) {
-                continue;
-            }
-            if (!\in_array('en_ligne', $vitrine->getCanauxActifs(), true)) {
-                continue;
-            }
+            \assert($etablissement !== null);
 
             $vitrines[] = [
                 'id' => (string) $vitrine->getId(),

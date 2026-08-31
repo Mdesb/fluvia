@@ -58,27 +58,46 @@ log "Construction / démarrage des conteneurs"
 "${COMPOSE[@]}" build
 "${COMPOSE[@]}" up -d
 
-# ⚠ CE QUI SUIT RETIRE PHPUNIT, ET TUE TOUTE SUITE EN COURS.
+# ⚠ CE QUI SUIT RETIRE PHPUNIT DU `vendor/` DE CET ARBRE, ET TUE TOUTE SUITE QUI EN DEPEND.
 #
-# `composer install --no-dev` supprime les paquets de developpement du `vendor/` que les conteneurs
-# de test partagent par montage. Une suite qui tourne meurt alors en plein milieu, avec un message
-# qui accuse l'operateur de ne pas avoir reinstalle -- alors qu'il l'avait fait.
+# `composer install --no-dev` supprime les paquets de developpement. Une suite qui tourne meurt
+# alors en plein milieu, avec un message qui accuse l'operateur de ne pas avoir reinstalle -- alors
+# qu'il l'avait fait. Constate le 31/08 : deux deploiements a quarante secondes d'ecart, une suite
+# complete perdue sans qu'un seul test soit execute.
 #
-# Constate le 31/08 : deux sessions, quarante secondes d'ecart, une suite complete perdue.
+# ── SEULES LES SUITES DU MEME ARBRE SONT CONCERNEES ────────────────────────────────────────────
 #
-# On AVERTIT sans bloquer. Bloquer transformerait une gene en panne : la suite complete dure des
-# heures et personne ne pourrait livrer pendant ce temps. Ce qui manquait n'etait pas un verrou,
-# c'etait de SAVOIR.
-if ls /tmp/suite-en-cours-* >/dev/null 2>&1; then
+# Ma premiere version avertissait pour toutes. C'etait faux, et allaccess-8e l'a mesure : `git
+# worktree` partage le `.git`, PAS le `vendor/`. Chaque worktree a le sien (deux inodes distincts,
+# verifie). Il y a dix worktrees ici : avertir pour les dix apprend a tout le monde a sauter la
+# ligne -- ce que j'ai moi-meme fait une heure apres l'avoir ecrite.
+#
+# On lit donc le MONTAGE des conteneurs de test, pas un fichier : il dit quel arbre chaque suite
+# utilise, et il ne peut pas devenir perime -- alors qu'un marqueur survit a un processus tue.
+#
+# IL AVERTIT, IL NE BLOQUE PAS. Bloquer transformerait une gene en panne : la suite complete dure
+# des heures et personne ne pourrait livrer pendant ce temps.
+CONCERNEES=""
+for conteneur in $(docker ps --filter 'name=-run' --format '{{.Names}}' 2>/dev/null); do
+    monte="$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/repo"}}{{.Source}}{{end}}{{end}}' "$conteneur" 2>/dev/null)"
+    if [ "$monte" = "$REPO_ROOT" ]; then
+        CONCERNEES="$CONCERNEES $conteneur"
+    fi
+done
+
+if [ -n "$CONCERNEES" ]; then
     echo
-    echo "  ⚠  Une suite de tests tourne en ce moment :"
-    for m in /tmp/suite-en-cours-*; do
-        echo "       $(cat "$m" 2>/dev/null || basename "$m")"
+    echo "  ⚠  Une suite de tests tourne SUR CET ARBRE ($REPO_ROOT) :"
+    for conteneur in $CONCERNEES; do
+        echo "       $conteneur"
     done
     echo
     echo "     Ce déploiement va retirer phpunit et la faire mourir en plein milieu."
     echo "     Elle rendra un message qui accuse l'opérateur, pas ce déploiement."
     echo "     Préviens, ou attends — puis « ./infra/reinstaller-dev.sh » et relance-la."
+    echo
+    echo "     (Les suites montées sur un worktree ne sont PAS concernées : chaque worktree"
+    echo "      a son propre vendor/. Elles ne sont pas listées ici.)"
     echo
 fi
 

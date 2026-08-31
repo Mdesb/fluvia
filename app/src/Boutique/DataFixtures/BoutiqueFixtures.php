@@ -168,6 +168,18 @@ final class BoutiqueFixtures extends Fixture implements DependentFixtureInterfac
 
         // --- Vitrine régie directe (établissement A, réutilise le ProfilExploitant M6 existant) ---
         $vitrineA = (new Vitrine())->setEtablissement($etabA)
+            // ⚠ LE SLUG MANQUAIT ICI, ET LA PREPROD EN AVAIT UN.
+            //
+            // La migration qui a cree la colonne dit : « les deux vitrines de demonstration sont
+            // nommees par UNE OPERATION D'EXPLOITATION » -- a la main, une fois. Resultat mesure le
+            // 31/08 : `piscine-a` en preprod, NULL en base de test. Rejouer les semis ne
+            // reproduisait donc pas l'etat servi, et rien de ce qui depend du slug (resolution par
+            // nom, resolution par hote D104, `BuildFrameAncestorsMap`) n'etait exerce par la
+            // donnee de demonstration.
+            //
+            // Les valeurs sont celles DEJA en preprod, pour que rejouer converge vers l'etat
+            // existant au lieu d'en fabriquer un troisieme.
+            ->setSlug('piscine-a')
             ->setLogo('/assets/vitrine-a-logo.svg')
             ->setCouleurs(['primaire' => '#0B6E4F', 'secondaire' => '#F4A300'])
             ->setLangues(['fr', 'en'])
@@ -188,6 +200,7 @@ final class BoutiqueFixtures extends Fixture implements DependentFixtureInterfac
             $manager->persist($profilPrive);
 
             $vitrineB = (new Vitrine())->setEtablissement($etabB)
+                ->setSlug('patinoire-b')
                 ->setLogo('/assets/vitrine-b-logo.svg')
                 ->setCouleurs(['primaire' => '#1B1F3B', 'secondaire' => '#E63946'])
                 ->setLangues(['fr'])
