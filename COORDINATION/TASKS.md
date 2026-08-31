@@ -280,6 +280,16 @@ séparation. Ce qui dépayse n'est probablement pas la séparation mais le fait 
 **à la saisie** : un écran qui cherche dans les deux et propose « créer le bénéficiaire à partir
 de ce client » règle ça sans rien fusionner.
 
+| **T33** | **Fiche produit — le bandeau du haut** (relevé par `b8`, arbitré par Maxime le 01/09) | Sa plainte : « c'est moche et pas pratique, on a l'impression de faire deux fois ». ⚠ **Ce n'est pas un doublon de code** — `b8` a vérifié qu'il n'y en a aucun — **c'est un doublon d'attention** : deux des trois tuiles (`Tarif`, `Vendu`) affichaient des valeurs qu'on modifie dans les sections plus bas, et le code le disait lui-même (« ajoutez une grille dans Tarifs, **plus bas** »). **Fait** — 01/09 : trois tuiles hautes → une ligne de sous-titre, valeurs cliquables vers leur section. ⚠ **L'état reste au badge** : `statutProduit()` le passe déjà en orange quand un produit publié n'a aucun tarif — le remettre dans le bandeau aurait déplacé le doublon au lieu de le supprimer. ⚠ **Stock reste gris et sans lien** : aucune section de la fiche ne le porte, un faux raccourci coûte plus qu'une valeur sans raccourci | `c2` |
+
+### Reste ouvert sur la fiche produit
+
+| # | ce qui reste | mesuré par |
+|---|---|---|
+| **T33-a** | **Le déséquilibre 2 / 6.** Vitrine porte deux rubriques, Configuration six, et mélange trois natures sans le dire : ce qui se vend (Tarifs, Diffusion), ce qui donne accès (Zones, Options), ce qui comptabilise. Les regrouper par nature ferait chercher moins | `b8` |
+| **T33-b** | **La description ne s'affiche nulle part.** En tête de l'onglet Vitrine — donc le premier champ qu'on remplit — et la boutique publique ne la lit pas. L'écran le dit honnêtement, mais c'est du travail pour personne. Soit on la branche, soit on la sort de la Vitrine : à mesurer avant de proposer | `b8` |
+| **T33-c** | **La vendabilité n'a qu'un seul critère connu du frontal** : `sansTarifConnu`. Rien sur une zone d'accès manquante, une option obligatoire non configurée, une date échue. ⚠ **C'est ce qui a fait écarter le « résumé d'état »** : une pastille verte « Prêt à vendre » affirmerait une complétude que le code n'a pas. Énumérer et vérifier les vrais blocages rendrait ce résumé possible — et il serait alors meilleur que la ligne | `c2` |
+
 ### Signalements de `allaccess-b8`, 31/08 — inscrits pour que la décision existe
 
 ⚠ Aucun n'est pris. Ils sont ici parce qu'un signalement qui ne vit que dans un fil de messages
