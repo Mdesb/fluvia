@@ -3,15 +3,91 @@ import Modal from '../components/Modal.jsx'
 import { useEtatUrl, allerA } from '../api/url.js'
 import ActivitesClient, { SaisieEchange } from '../components/ActivitesClient.jsx'
 import ContactsClient from '../components/ContactsClient.jsx'
-import { api } from '../api/client.js'
+import { api, membres } from '../api/client.js'
 import { euros } from '../api/produit.js'
 import { aLeDroit } from '../api/droits.js'
+import FusionClients from '../components/FusionClients.jsx'
 import { mot } from '../api/vocabulaire.js'
 import ClientEditionModal from '../components/ClientEditionModal.jsx'
 import DevisModal from '../components/DevisModal.jsx'
 import PassagesClient from '../components/PassagesClient.jsx'
 
 // Nom d'affichage d'un client (physique ou personne morale).
+/**
+ * LE JOURNAL DES FUSIONS — qui a fusionne quoi, quand, pourquoi, et comment revenir.
+ *
+ * ⚠ IL N'EST PAS UN CONFORT D'AUDIT : c'est le seul chemin vers `defusionner`. Sans lui, la fusion
+ * serait irreversible en pratique meme si le serveur sait la defaire, et personne de sense ne
+ * fusionnerait les deux fiches d'un client qui reclame.
+ *
+ * Une fusion defaite RESTE au journal : c'est l'historique de ce qui a ete tente, et il vaut autant
+ * que celui de ce qui a tenu.
+ */
+function JournalDesFusions() {
+  const [entrees, setEntrees] = useState(null)
+  const [erreur, setErreur] = useState(null)
+  const [busy, setBusy] = useState(null)
+
+  const charger = useCallback(() => {
+    api.journalFusions()
+      .then((r) => setEntrees(membres(r)))
+      .catch((e) => setErreur(e.message || 'Le journal des fusions n’a pas pu être lu.'))
+  }, [])
+
+  useEffect(charger, [charger])
+
+  async function defaire(entree) {
+    if (!window.confirm(
+      'Défusionner ? Les fiches absorbées sont restaurées à l’identique, et cette opération reste '
+      + 'au journal.',
+    )) return
+    setBusy(entree.id)
+    setErreur(null)
+    try {
+      await api.defusionner(entree.id)
+      charger()
+    } catch (e) {
+      setErreur(e.message || 'La défusion n’a pas abouti.')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  if (entrees !== null && entrees.length === 0) return null
+
+  return (
+    <section className="card card-espacee">
+      <div className="card-h"><h3>Fusions effectuées</h3></div>
+      <div className="card-b">
+        {erreur && <div className="banner banner-error">{erreur}</div>}
+        {entrees === null && !erreur && <div className="empty">Chargement…</div>}
+        {(entrees ?? []).map((e) => (
+          <div key={e.id} className="sup-acces">
+            <div className="sup-acces-t">
+              <span className="mono">{String(e.id).slice(0, 8)}</span>
+              <span className="badge">{e.portee || 'client'}</span>
+              {e.defusionneLe && <span className="badge mut">défusionnée</span>}
+            </div>
+            <div className="hint">{e.motif || 'sans motif'}</div>
+            <div className="hint">{dateHeureFr(e.dateFusion)}</div>
+            {!e.defusionneLe && (
+              <button
+                type="button"
+                className="btn ghost sm"
+                disabled={busy === e.id}
+                onClick={() => defaire(e)}
+                title="Restaure les fiches absorbées à l’identique. L’opération reste au journal."
+              >
+                {busy === e.id ? 'Restauration…' : 'Défusionner'}
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 function nomClient(c) {
   if (!c) return '—'
   if (c.raisonSociale) return c.raisonSociale
@@ -208,6 +284,9 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
   const peutModifier = aLeDroit(droits, 'crm.modifier')
   const peutCreer = aLeDroit(droits, 'crm.creer')
   const peutFacturer = aLeDroit(droits, 'facturation.gerer')
+  // Le droit de l'API, et lui seul : `crm.fusionner` garde les trois operations.
+  const peutFusionner = aLeDroit(droits, 'crm.fusionner')
+  const [fusionPour, setFusionPour] = useState(null)
 
   // ---------------------------------------------------------------- La fiche, en page
   if (selId) {
@@ -390,6 +469,14 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
                         {peutModifier && (
                           <button className="btn sm" type="button" onClick={() => setEchange(c)}>Échange</button>
                         )}
+                        {/* ⚠ FUSIONNER EST UN GESTE D'EXPLOITATION COURANT, PAS UNE OPERATION RARE.
+                            Le meme adherent inscrit deux fois — une fois en ligne par lui-meme, une
+                            fois au guichet par un agent qui n'a pas trouve sa fiche — produit deux
+                            cartes, deux soldes, deux historiques. Tout deploiement reel en accumule,
+                            et rien ne les resorbe sans ce bouton. */}
+                        {peutFusionner && (
+                          <button className="btn sm" type="button" onClick={() => setFusionPour(c)}>Fusionner</button>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -443,6 +530,12 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
         </div>
       </section>
 
+      {/* ⚠ LE CHEMIN DU RETOUR, DANS LE MEME LOT QUE LE BOUTON QUI FUSIONNE.
+          Le serveur sait defaire une fusion — les fiches sources sont restaurees a l'identique —
+          mais sans cet ecran, personne ne saurait ou cliquer. On aurait donne le pouvoir d'ecraser
+          deux fiches en une sans donner celui de revenir, ce qui est pire que de ne rien livrer. */}
+      {peutFusionner && <JournalDesFusions />}
+
       <ClientEditionModal
         open={!!edition}
         clientId={edition?.id || null}
@@ -459,6 +552,13 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
         client={devisPour}
         onClose={() => setDevisPour(null)}
         onCree={() => setDevisPour(null)}
+      />
+
+      <FusionClients
+        open={!!fusionPour}
+        client={fusionPour}
+        onClose={() => setFusionPour(null)}
+        onFusionnee={() => { setFusionPour(null); rechercher() }}
       />
 
       <Modal open={!!echange} onClose={() => setEchange(null)} titre={`Noter un échange — ${nomClient(echange)}`}>
