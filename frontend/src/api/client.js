@@ -1405,6 +1405,44 @@ export const api = {
   // de cet ecran.
   // Le referentiel des natures de depense : c'est lui qui dit sur quel compte une ligne s'impute.
   // Une nature SANS mapping laisse la facture sans imputation comptable -- l'ecran le signale.
+  // ─── NOTES DE FRAIS ──────────────────────────────────────────────────────────────────────
+  //
+  // Module ENTIER sans ecran : lister, creer, soumettre, rouvrir, finaliser une escalade, passer
+  // en comptabilite, rembourser. Un salarie qui avance des frais n'avait aucun chemin, et un
+  // remboursement qu'on ne peut pas tracer se regle de travers puis se discute apres coup.
+  //
+  // ⚠ DEUX FAMILLES DE CHEMINS, ET C'EST DELIBERE COTE SERVEUR :
+  //   la ressource elle-meme vit sous `/api/expense_reports` (collection, item, PATCH) ;
+  //   les GESTES vivent sous `/api/finance/expense-reports/{id}/…`. Confondre les deux rend 404.
+  //
+  // Contrat LU dans l'entite et le catalogue des permissions, pas sonde -- j'ai deja paye une
+  // sonde aujourd'hui. Droits : `finance.expense_report_submit` pour creer et soumettre,
+  // `finance.expense_report_post_to_ledger` pour comptabiliser et rembourser, et la lecture
+  // s'ouvre aussi a `finance.expense_report_read_own`.
+  notesDeFrais: (params) =>
+    request('/api/expense_reports', { query: { itemsPerPage: 200, ...(params || {}) } }),
+  creerNoteDeFrais: (corps) =>
+    request('/api/expense_reports', { method: 'POST', body: corps, ld: true }),
+  majNoteDeFrais: (id, corps) =>
+    request(`/api/expense_reports/${id}`, { method: 'PATCH', body: corps }),
+  // La ligne porte la nature, la date, le montant TTC et la piece justificative.
+  creerLigneFrais: (corps) =>
+    request('/api/expense_lines', { method: 'POST', body: corps, ld: true }),
+  supprimerLigneFrais: (id) =>
+    request(`/api/expense_lines/${id}`, { method: 'DELETE' }),
+  soumettreNoteDeFrais: (id) =>
+    request(`/api/finance/expense-reports/${id}/submit`, { method: 'POST', body: {} }),
+  rouvrirNoteDeFrais: (id) =>
+    request(`/api/finance/expense-reports/${id}/reopen`, { method: 'POST', body: {} }),
+  finaliserEscaladeNoteDeFrais: (id) =>
+    request(`/api/finance/expense-reports/${id}/finalize-escalade`, { method: 'POST', body: {} }),
+  passerEnComptaNoteDeFrais: (id) =>
+    request(`/api/finance/expense-reports/${id}/post-to-ledger`, { method: 'POST', body: {} }),
+  // Le remboursement est une RESSOURCE, pas un simple geste : il porte une date, un montant, un
+  // moyen de paiement et une reference. C'est ce qui permettra de le rapprocher en banque.
+  rembourserNoteDeFrais: (id, corps) =>
+    request(`/api/finance/expense-reports/${id}/reimbursements`, { method: 'POST', body: corps, ld: true }),
+
   mappingsDepense: () =>
     request('/api/expense_account_mappings', { query: { itemsPerPage: 200 } }),
   // Le rapprochement a trois voies : facture contre commande contre reception. Charge AVANT
