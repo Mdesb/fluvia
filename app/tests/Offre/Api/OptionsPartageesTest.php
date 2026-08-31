@@ -6,6 +6,8 @@ namespace App\Tests\Offre\Api;
 
 use App\DataFixtures\SocleFixtures;
 use App\OptionProduit\Entity\GroupeOption;
+use App\OptionProduit\Entity\ValeurOption;
+use App\OptionProduit\Enum\ImpactOptionType;
 use App\OptionProduit\Enum\ModeSelectionOption;
 use App\Organisation\Entity\Etablissement;
 use App\Securite\Service\ContexteEtablissement;
@@ -110,6 +112,73 @@ final class OptionsPartageesTest extends OffreApiTestCase
             $cree,
             $this->collection($client, $token, SocleFixtures::ETAB_B_NOM),
             'et il ne doit pas apparaitre ailleurs',
+        );
+    }
+
+    /**
+     * ⚠ LA JOINTURE DE CLOISONNEMENT SURVIT-ELLE A UNE REQUETE FILTREE ?
+     *
+     * `FilterEagerLoadingExtension` reconstruit la requete quand des filtres entrent en jeu, et perd
+     * SILENCIEUSEMENT les jointures libres ajoutees par une extension. Un `EXISTS` autonome y
+     * survit ; une jointure, non. Sa disparition ne se verrait qu'aux lignes en trop — la fuite
+     * qu'on croyait fermee.
+     *
+     * `ValeurOption` declare deux filtres et son cloisonnement passe par une JOINTURE sur son
+     * groupe. Elle est donc exactement dans le cas decrit, et les autres tests de ce fichier ne
+     * peuvent pas l'attraper : ils listent SANS filtre, donc le mecanisme dangereux n'entre jamais
+     * en jeu.
+     *
+     * On passe `actif`, un filtre declare mais etranger au cloisonnement : il declenche la
+     * reconstruction sans influer sur ce qu'on mesure.
+     */
+    public function testLeCloisonnementDesValeursSurvitAUneRequeteFiltree(): void
+    {
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+
+        $ids = [];
+        foreach ([SocleFixtures::ETAB_A_NOM => 'valeur-de-A', SocleFixtures::ETAB_B_NOM => 'valeur-de-B'] as $nom => $libelle) {
+            $etab = $em->getRepository(Etablissement::class)->findOneBy(['nom' => $nom]);
+            self::assertInstanceOf(Etablissement::class, $etab);
+
+            $groupe = (new GroupeOption())->setLibelle('Groupe ' . $libelle)->setModeSelection(ModeSelectionOption::Unique);
+            $groupe->setEtablissement($etab);
+            $em->persist($groupe);
+
+            $valeur = (new ValeurOption())->setLibelle($libelle)->setActif(true)
+                ->setImpactType(ImpactOptionType::Montant)->setImpactValeur('5.00');
+            $valeur->setGroupeOption($groupe);
+            $em->persist($valeur);
+
+            $ids[$libelle] = $valeur;
+        }
+        $em->flush();
+
+        $client = static::createClient();
+        $token = $this->jeton($client, SocleFixtures::ADMIN_EMAIL, SocleFixtures::ADMIN_MDP);
+
+        $client->request('GET', '/api/valeur_options', [
+            'auth_bearer' => $token,
+            'headers' => [ContexteEtablissement::HEADER => $this->idEtablissement(SocleFixtures::ETAB_A_NOM)],
+            'query' => ['actif' => '1', 'itemsPerPage' => 200],
+        ]);
+        self::assertResponseIsSuccessful('temoin : la collection filtree doit repondre');
+
+        $corps = $client->getResponse()->getContent(false);
+
+        self::assertStringContainsString(
+            'valeur-de-A',
+            $corps,
+            'temoin : ma propre valeur doit passer le filtre, sinon la mesure suivante porte sur '
+            . 'une liste vide',
+        );
+
+        self::assertStringNotContainsString(
+            'valeur-de-B',
+            $corps,
+            'la valeur d\'un autre etablissement ne doit pas reapparaitre sous filtre : si elle le '
+            . 'fait, `FilterEagerLoadingExtension` a perdu la jointure de cloisonnement, et il faut '
+            . 'un `EXISTS` autonome',
         );
     }
 
