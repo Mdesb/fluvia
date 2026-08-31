@@ -50,6 +50,13 @@ export default function DevisModal({ open, client, onClose, onCree, cible = 'dev
   const [choisi, setChoisi] = useState(null)
   const [pickerOuvert, setPickerOuvert] = useState(false)
   const [raisonSociale, setRaisonSociale] = useState('')
+  // ⚠ TROIS ÉTATS, PAS DEUX. `null` = pas encore lu · `[]` = lu et vraiment vide · `'refus'` =
+  //    la lecture a échoué. « Aucun produit au catalogue » et « je n'ai pas pu demander le
+  //    catalogue » sont des affirmations opposées, et la seconde ne doit jamais s'afficher comme
+  //    la première : elle rassurerait à tort quelqu'un qui cherche pourquoi sa liste est vide.
+  const [produits, setProduits] = useState(null)
+  const [filtreProduit, setFiltreProduit] = useState('')
+
   const [lignes, setLignes] = useState([{ ...LIGNE_VIDE }])
   const [envoi, setEnvoi] = useState(false)
   const [erreur, setErreur] = useState(null)
@@ -102,10 +109,115 @@ export default function DevisModal({ open, client, onClose, onCree, cible = 'dev
       // Les taux absents n'empêchent pas d'ouvrir la modale : le champ restera vide et le formulaire
       // refusera la validation, ce qui est plus clair qu'une modale qui ne s'ouvre pas.
       .catch(() => setTauxTva([]))
+
+    // LE CATALOGUE EST UN CONFORT : son absence n'empêche pas de saisir une ligne à la main, et la
+    // modale s'ouvre quand même. Mais elle doit se VOIR — voir plus bas, où le refus s'affiche.
+    api.produits({ itemsPerPage: 200 })
+      .then((r) => setProduits(membres(r)))
+      .catch(() => setProduits('refus'))
   }, [open])
 
   function majLigne(i, champ, valeur) {
     setLignes((precedent) => precedent.map((l, j) => (i === j ? { ...l, [champ]: valeur } : l)))
+  }
+
+  function majLignes(i, champs) {
+    setLignes((precedent) => precedent.map((l, j) => (i === j ? { ...l, ...champs } : l)))
+  }
+
+  // ── REPRENDRE UN PRODUIT DU CATALOGUE ───────────────────────────────────────────────────────
+  //
+  // ⚠ CE QUE CETTE FONCTION NE FAIT PAS EST PLUS IMPORTANT QUE CE QU'ELLE FAIT. Trois valeurs du
+  //    catalogue ne se versent PAS telles quelles dans une ligne de facture, et chacune pour une
+  //    raison mesurée le 31/08 contre la préprod :
+  //
+  //   1. LE PRIX DU CATALOGUE EST TTC. `GrilleTarifaire::$prix` porte le commentaire « Prix TTC.
+  //      null = non commercialisé (≠ gratuit) », et `LigneFacture::$prixUnitaireHT` attend du HT.
+  //      Le verser directement fausserait la facture du montant de la TVA, en silence.
+  //
+  //   2. LE TAUX DU PRODUIT EST UNE VALEUR, PAS UNE RÉFÉRENCE. `Produit::$tauxTva` est un décimal
+  //      (« 10.00 ») ; `FactureDirecteBuilder` exige l'UUID d'un `TauxTva` appartenant à
+  //      l'exploitant (RG-M6-05, puis RG-SOCLE-05 sur le cloisonnement). Il faut donc APPARIER —
+  //      et deux taux de l'exploitant peuvent porter la même valeur. Mesuré : « Taux réduit 5,5 % »
+  //      et « Taux réduit 2025 » valent tous deux 5.50. Le second est inactif aujourd'hui, donc
+  //      l'appariement est unique — aujourd'hui. On ne construit pas sur cette chance.
+  //
+  //   3. LE PRODUIT NE PORTE PAS DE CATÉGORIE COMPTABLE. Il porte `compteComptable`, une CHAÎNE de
+  //      32 caractères ; la ligne attend l'UUID d'une `Categorie` d'axe comptable. Ce ne sont pas
+  //      les mêmes objets et rien ne les relie. Aucune reprise possible, et l'écran le dit.
+  //
+  // On remplit donc la désignation, et on POSE SOUS LA LIGNE ce que le catalogue sait, avec un
+  // geste explicite pour le reprendre. Jamais de valeur glissée sans que personne ne la regarde :
+  // c'est une facture.
+  //
+  // ⚠ ET IL FAUT EFFACER CE QUE LE PRÉCÉDENT PRODUIT AVAIT REMPLI. Vu à l'écran le 31/08 : on
+  //    reprend « Audioguide » (3,64 € HT, TVA 10 %), on change pour « Test » — la désignation
+  //    devient « Test », et le prix comme le taux d'Audioguide RESTENT. La ligne facturait alors
+  //    un produit au prix d'un autre, sans que rien ne le dise. Exactement le nombre faux
+  //    silencieux que cet écran existe pour empêcher.
+  //
+  //    On n'efface QUE ce que le catalogue avait posé : `prixRepris` et `tauxRepris` gardent la
+  //    valeur qu'on a écrite, et si l'utilisateur l'a changée depuis, elle ne correspond plus et
+  //    on n'y touche pas. Effacer une saisie manuelle serait le défaut symétrique.
+  async function reprendreProduit(i, produitId) {
+    setLignes((precedent) => precedent.map((l, j) => {
+      if (j !== i) return l
+      const efface = {}
+      if (l.prixRepris && l.prixUnitaireHT === l.prixRepris) {
+        efface.prixUnitaireHT = ''
+        efface.prixRepris = ''
+      }
+      if (l.tauxRepris && l.tauxTva === l.tauxRepris) {
+        efface.tauxTva = ''
+        efface.tauxRepris = ''
+      }
+      return {
+        ...l,
+        ...efface,
+        produit: produitId,
+        catalogue: produitId ? { chargement: true } : null,
+      }
+    }))
+    if (!produitId) return
+    let p
+    try {
+      // ⚠ L'ITEM, PAS LA COLLECTION. `GET /api/produits` sérialise `produit:read` + `produit:list`
+      //    et ne publie NI `tauxTva` NI `compteComptable` ; seul `GET /api/produits/{id}` ajoute
+      //    le groupe `produit:compta`. Mesuré : la collection n'a jamais ces clés, le détail oui.
+      p = await api.produit(produitId)
+    } catch {
+      majLignes(i, { catalogue: { refus: true } })
+      return
+    }
+
+    const grilles = (p.grilles || [])
+      .filter((g) => g && typeof g === 'object')
+      .filter((g) => g.prix !== null && g.prix !== undefined && g.prix !== '')
+
+    // Appariement par VALEUR, sur les seuls taux déjà retenus (les inactifs sont écartés plus haut).
+    const tauxProduit = p.tauxTva === null || p.tauxTva === undefined ? null : Number(p.tauxTva)
+    const candidats = tauxProduit === null
+      ? []
+      : tauxTva.filter((t) => Number(t.taux) === tauxProduit)
+
+    majLignes(i, {
+      designation: libelleProduit(p),
+      // Un seul candidat : on présélectionne, et on le DIT sous la ligne. Plusieurs : on ne touche
+      // à rien — choisir pour l'utilisateur entre deux taux fiscaux serait le pire des deux mondes.
+      ...(candidats.length === 1 ? { tauxTva: idDe(candidats[0]), tauxRepris: idDe(candidats[0]) } : {}),
+      catalogue: {
+        nom: libelleProduit(p),
+        tauxProduit,
+        candidats: candidats.map((t) => ({ id: idDe(t), libelle: t.libelle, taux: t.taux })),
+        grilles: grilles.map((g) => ({
+          id: idDe(g),
+          prixTtc: g.prix,
+          tarif: (g.typeTarif || {}).nom || null,
+          saison: (g.saison || {}).nom || null,
+        })),
+        compteComptable: p.compteComptable || null,
+      },
+    })
   }
 
   async function soumettre(e) {
@@ -237,9 +349,52 @@ export default function DevisModal({ open, client, onClose, onCree, cible = 'dev
             )}
           </div>
 
+          {/* L'ÉTAT DU CATALOGUE SE DIT UNE FOIS, PAS PAR LIGNE — sinon le même avertissement
+              se répète autant de fois qu'il y a de lignes et on cesse de le lire. */}
+          {produits === 'refus' && (
+            <div className="banner banner-warn">
+              <b>Le catalogue n’a pas pu être lu.</b> Vous pouvez saisir les lignes à la main —
+              c’est le seul effet. N’en concluez pas qu’il est vide : cet écran n’a pas eu de
+              réponse, ce qui n’est pas la même chose qu’une réponse vide.
+            </div>
+          )}
+          {Array.isArray(produits) && produits.length === 0 && (
+            <p className="hint">
+              Aucun produit au catalogue pour cet établissement. Les lignes se saisissent à la main.
+            </p>
+          )}
+          {Array.isArray(produits) && produits.length > 12 && (
+            <div className="field">
+              <label htmlFor="dm-filtre-produit">Filtrer le catalogue</label>
+              <input
+                id="dm-filtre-produit"
+                className="input"
+                value={filtreProduit}
+                onChange={(e) => setFiltreProduit(e.target.value)}
+                placeholder="Nom du produit"
+              />
+            </div>
+          )}
+
           {lignes.map((ligne, i) => (
             <div className="field" key={i}>
               <label htmlFor={`dm-ligne-${i}`}>Ligne {i + 1}</label>
+              {Array.isArray(produits) && produits.length > 0 && (
+                <select
+                  className="input"
+                  value={ligne.produit || ''}
+                  onChange={(e) => reprendreProduit(i, e.target.value)}
+                  aria-label={`Produit du catalogue pour la ligne ${i + 1}`}
+                >
+                  <option value="">Reprendre un produit du catalogue…</option>
+                  {produits
+                    .filter((p) => !filtreProduit
+                      || libelleProduit(p).toLowerCase().includes(filtreProduit.toLowerCase()))
+                    .map((p) => (
+                      <option key={p.id} value={p.id}>{libelleProduit(p)}</option>
+                    ))}
+                </select>
+              )}
               <input
                 id={`dm-ligne-${i}`}
                 className="input"
@@ -300,6 +455,14 @@ export default function DevisModal({ open, client, onClose, onCree, cible = 'dev
                   </select>
                 )}
               </div>
+              {ligne.catalogue && (
+                <RepriseCatalogue
+                  info={ligne.catalogue}
+                  tauxChoisi={tauxTva.find((t) => idDe(t) === ligne.tauxTva) || null}
+                  onPrix={(v) => majLignes(i, { prixUnitaireHT: v, prixRepris: v })}
+                  onTaux={(v) => majLignes(i, { tauxTva: v, tauxRepris: v })}
+                />
+              )}
             </div>
           ))}
 
@@ -381,7 +544,13 @@ export default function DevisModal({ open, client, onClose, onCree, cible = 'dev
   )
 }
 
-const LIGNE_VIDE = { designation: '', quantite: 1, prixUnitaireHT: '', tauxTva: '' , categorieComptable: ''}
+const LIGNE_VIDE = {
+  designation: '', quantite: 1, prixUnitaireHT: '', tauxTva: '', categorieComptable: '',
+  // `produit` et `catalogue` ne partent PAS au serveur : `soumettre` compose son corps avec des
+  // clés explicites, donc tout le reste est ignoré. Ils vivent sur la ligne parce qu'une ligne
+  // s'ajoute et se retire, et qu'un état indexé à côté se désynchroniserait au premier retrait.
+  produit: '', catalogue: null, prixRepris: '', tauxRepris: '',
+}
 
 function nomDe(client) {
   if (client.raisonSociale) return client.raisonSociale
@@ -405,6 +574,137 @@ function corpsDestinataire(client, raisonSocialeLibre) {
       ? { raisonSociale: client.raisonSociale || nomDe(client) }
       : { nom: client.nom || nomDe(client), prenom: client.prenom || null }),
   }
+}
+
+/** `{ fr: 'Audioguide' }` — le libellé est multilingue, et `fr` n'est pas garanti. */
+function libelleProduit(p) {
+  const l = p && p.libelle
+  if (typeof l === 'string') return l
+  if (l && typeof l === 'object') return l.fr || Object.values(l)[0] || '(sans libellé)'
+  return p && p.code ? String(p.code) : '(sans libellé)'
+}
+
+function euros(v) {
+  const n = Number(v)
+  return Number.isNaN(n) ? '—' : n.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })
+}
+
+// ⚠ LE DIVISEUR AFFICHÉ DOIT ÊTRE CELUI QU'ON DIVISE. Écrit `.toFixed(2)`, un taux à 5,5 %
+// s'affichait « ÷ 1,06 » alors que le calcul emploie 1,055 : l'arithmétique montrée ne
+// retombait pas sur le résultat montré, et c'est pire que de ne rien montrer.
+const pourcent = (v) => `${Number(v).toLocaleString('fr-FR')} %`
+
+const diviseur = (taux) => Number((1 + Number(taux) / 100).toFixed(4)).toLocaleString('fr-FR')
+
+const htDepuisTtc = (ttc, taux) => (Number(ttc) / (1 + Number(taux) / 100)).toFixed(2)
+const ttcDepuisHt = (ht, taux) => (Number(ht) * (1 + Number(taux) / 100)).toFixed(2)
+
+// ── CE QUE LE CATALOGUE SAIT, POSÉ SOUS LA LIGNE — ET JAMAIS DEDANS TOUT SEUL ──────────────────
+//
+// Chaque valeur reprise l'est par un GESTE. C'est une facture : un montant qui apparaît sans que
+// personne ne l'ait regardé est exactement ce qu'on ne veut pas, même quand il est juste.
+function RepriseCatalogue({ info, tauxChoisi, onPrix, onTaux }) {
+  if (info.chargement) return <p className="hint">Lecture du produit…</p>
+  const choisi = tauxChoisi ? info.candidats.find((c) => c.id === idDe(tauxChoisi)) || null : null
+
+  if (info.refus) {
+    return (
+      <div className="banner banner-warn">
+        Le détail de ce produit n’a pas pu être lu : ni son tarif ni son taux ne sont proposés.
+        La ligne reste saisissable à la main.
+      </div>
+    )
+  }
+
+  return (
+    <div className="hint">
+      {/* ── LE TARIF ─────────────────────────────────────────────────────────────────────── */}
+      {info.grilles.length === 0 ? (
+        <p>
+          <b>{info.nom}</b> n’a aucun tarif au catalogue. ⚠ « Non commercialisé » n’est pas
+          « gratuit » : si vous facturez ce produit, le prix se décide ici.
+        </p>
+      ) : (
+        info.grilles.map((g) => {
+          // ⚠ LE TARIF CATALOGUE EST TTC, LA LIGNE DE FACTURE EST HT. Le reprendre tel quel
+          //    fausserait la facture du montant de la TVA — et rien ne l'aurait signalé.
+          const ht = tauxChoisi ? htDepuisTtc(g.prixTtc, tauxChoisi.taux) : null
+          const retour = ht === null ? null : ttcDepuisHt(ht, tauxChoisi.taux)
+          const ecart = retour !== null && Number(retour) !== Number(g.prixTtc)
+          return (
+            <p key={g.id}>
+              Tarif catalogue{[g.tarif, g.saison].filter(Boolean).length > 0
+                ? ` (${[g.tarif, g.saison].filter(Boolean).join(' · ')})`
+                : ''} : <b>{euros(g.prixTtc)} TTC</b>.{' '}
+              {ht === null ? (
+                <>Choisissez le taux de TVA pour pouvoir le convertir en HT.</>
+              ) : (
+                <>
+                  <button type="button" className="btn ghost xs" onClick={() => onPrix(ht)}>
+                    Reprendre {euros(ht)} HT
+                  </button>{' '}
+                  ({euros(g.prixTtc)} ÷ {diviseur(tauxChoisi.taux)}).
+                  {ecart && (
+                    <>
+                      {' '}⚠ Ce HT redonne <b>{euros(retour)} TTC</b>, pas {euros(g.prixTtc)} :
+                      l’arrondi ne retombe pas juste. Le serveur recalcule le TTC depuis le HT,
+                      donc c’est ce montant-là que le client verra.
+                    </>
+                  )}
+                </>
+              )}
+            </p>
+          )
+        })
+      )}
+
+      {/* ── LE TAUX ──────────────────────────────────────────────────────────────────────── */}
+      {info.tauxProduit === null ? (
+        <p>Ce produit ne porte pas de taux de TVA au catalogue : le taux se choisit ici.</p>
+      ) : info.candidats.length === 0 ? (
+        <p>
+          ⚠ Le produit porte <b>{pourcent(info.tauxProduit)}</b>, et <b>aucun taux actif de l’exploitant
+          ne correspond</b>. Le taux se choisit donc à la main — la facture ne peut pas citer un
+          taux qui n’est pas le vôtre.
+        </p>
+      ) : info.candidats.length === 1 ? (
+        <p>Taux repris du produit : <b>{info.candidats[0].libelle}</b> ({pourcent(info.tauxProduit)}).</p>
+      ) : (
+        <p>
+          ⚠ <b>{info.candidats.length} taux de l’exploitant valent {pourcent(info.tauxProduit)}</b>
+          {' '}— le produit ne dit pas lequel, il ne porte qu’une valeur.{' '}
+          {/* ⚠ CETTE PHRASE DEVENAIT FAUSSE AU CLIC. Elle disait « rien n’a été choisi » et le
+              restait après qu’on avait choisi, juste au-dessus du taux sélectionné. Une phrase
+              qui décrit un état doit se calculer sur l’état, pas sur la raison de l’afficher. */}
+          {choisi
+            ? <>Vous avez retenu <b>{choisi.libelle}</b>.</>
+            : <>Rien n’a été choisi.</>}
+          {info.candidats.map((c) => (
+            <span key={c.id}>
+              {' '}
+              <button
+                type="button"
+                className="btn ghost xs"
+                onClick={() => onTaux(c.id)}
+                disabled={choisi ? choisi.id === c.id : false}
+              >
+                {c.libelle}
+              </button>
+            </span>
+          ))}
+        </p>
+      )}
+
+      {/* ── LA CATÉGORIE COMPTABLE, QUI NE SE REPREND PAS ────────────────────────────────── */}
+      {info.compteComptable && (
+        <p>
+          Le produit porte le compte comptable <b>{info.compteComptable}</b>, mais la ligne attend
+          une <b>catégorie</b> comptable — deux objets différents, que rien ne relie dans le
+          modèle. La catégorie se choisit donc à la main, ci-dessus.
+        </p>
+      )}
+    </div>
+  )
 }
 
 function idDe(v) {
