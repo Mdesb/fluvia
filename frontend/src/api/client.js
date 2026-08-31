@@ -1266,11 +1266,6 @@ export const api = {
   creerRegion: (corps) => request('/api/regions', { method: 'POST', body: corps, ld: true }),
   majRegion: (id, corps) => request(`/api/regions/${id}`, { method: 'PATCH', body: corps }),
   categories: () => request('/api/categories', { query: { itemsPerPage: 200 } }),
-  // LES CORRESPONDANCES COMPTABLES : quelle catégorie s'impute sur quel compte de produit.
-  // Exposées depuis le début, appelées par aucun écran. Sans elles, impossible de dire à
-  // l'exploitant si la catégorie qu'il choisit sur une ligne de facture change quoi que ce soit —
-  // et `ResolveurComptesFacturation` se replie silencieusement sur le compte par défaut.
-  mappingsComptables: () => request('/api/mapping_comptables', { query: { itemsPerPage: 200 } }),
   creerCategorie: (corps) => request('/api/categories', { method: 'POST', body: corps, ld: true }),
   majCategorie: (id, corps) => request(`/api/categories/${id}`, { method: 'PATCH', body: corps }),
   supprimerCategorie: (id) => request(`/api/categories/${id}`, { method: 'DELETE' }),
@@ -1557,6 +1552,21 @@ export const api = {
   // pas comptabilisées du tout — elles ressortent en anomalie à la génération (`MappingComptableGuard`
   // puis `GenerateurEcrituresHandler`, qui saute la vente). Ce n'est pas un repli sur un compte
   // par défaut : c'est une écriture qui n'existe pas.
+  //
+  // ⚠ ET LA FACTURATION, ELLE, SE REPLIE — CE N'EST PAS LE MÊME CHEMIN.
+  //
+  // Ce helper était déclaré deux fois dans cet objet, avec deux commentaires qui se lisaient comme
+  // une contradiction. Mesuré dans `ResolveurComptesFacturation::compteProduit()` :
+  //
+  //   1. `MappingComptable` résolu depuis la catégorie comptable de la ligne ;
+  //   2. à défaut, `ParametreFacturationEtablissement::compteProduitDefaut` ;
+  //   3. à défaut des deux, un 422 explicite qui nomme les deux sorties.
+  //
+  // Donc le repli existe côté FACTURE, et son échec n'est pas silencieux. Ce qui est décrit
+  // au-dessus vaut pour la GÉNÉRATION D'ÉCRITURES, où la vente est sautée sans repli.
+  //
+  // Aucun des deux commentaires n'était faux ; aucun ne nommait son périmètre. C'est ce qui les
+  // faisait se contredire.
   mappingsComptables: () => request('/api/mapping_comptables', { query: { itemsPerPage: 200 } }),
   creerMappingComptable: (corps) =>
     request('/api/mapping_comptables', { method: 'POST', body: corps, ld: true }),
