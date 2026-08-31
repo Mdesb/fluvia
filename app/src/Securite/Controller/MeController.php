@@ -8,6 +8,7 @@ use App\Fonctionnalite\Service\Fonctionnalites;
 use App\Securite\Entity\Utilisateur;
 use App\Organisation\Service\EditorTenantResolver;
 use App\Securite\Service\CalculateurDroits;
+use App\Platform\Notification\ExpediteurCourriel;
 use App\Securite\Service\ContexteEtablissement;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -29,6 +30,7 @@ final class MeController
         private readonly CalculateurDroits $calculateur,
         private readonly Fonctionnalites $fonctionnalites,
         private readonly EditorTenantResolver $editeur,
+        private readonly ExpediteurCourriel $courriel,
     ) {
     }
 
@@ -60,6 +62,17 @@ final class MeController
             // exact, et non « tout le monde l'est ».
             'estEditeur' => $this->editeur->isEditor($etablissementActifEntite),
             'capacitesActives' => $etablissementActifEntite !== null ? $this->fonctionnalites->actives($etablissementActifEntite) : [],
+            // ⚠ « MON COURRIEL PARTIRA-T-IL ? » — un fait d'exécution, pas une constante.
+            //
+            // Six services de ce dépôt composent un courriel et n'envoient rien : le transport
+            // nul avale tout en silence. Les écrans doivent cesser de promettre ces envois — et
+            // surtout cesser de le promettre le jour où ils marcheront. Une phrase écrite en dur
+            // serait vraie aujourd'hui et fausse au premier expéditeur branché, en six
+            // exemplaires, sans que rien ne relie la phrase à ce qui l'a rendue fausse.
+            //
+            // Publié ici parce qu'aucun écran ne se rend avant d'avoir reçu `/me` — c'est un
+            // garde-fou du dépôt, donc l'information est disponible partout, gratuitement.
+            'envoiCourrielBranche' => $this->courriel->estBranche(),
         ]);
     }
 }

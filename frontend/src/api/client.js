@@ -1194,6 +1194,17 @@ export const api = {
   // pour moi » se fait côté serveur, où le profil comptable est connu : le laisser à l'écran, c'est
   // deux requêtes qui peuvent échouer séparément et un croisement à refaire dans chaque écran qui
   // affichera un jour cette liste.
+  // MOT DE PASSE OUBLIÉ — la seule route du produit appelée SANS être authentifié.
+  //
+  // `auth: false` est indispensable : le transport pose sinon un en-tête `Authorization` vide, et
+  // le serveur répond 401 sur une route qui doit justement servir à quelqu'un qui n'a pas de jeton.
+  //
+  // ⚠ La réponse porte `envoiCourrielBranche`. C'est le seul moyen pour cet écran de connaître ce
+  // fait : `/me` ne lui a rien rendu, puisque personne n'est connecté. Le déduire d'une constante
+  // reproduirait exactement le défaut qu'on corrige.
+  demanderReinitialisation: (email) =>
+    request('/mot-de-passe/oublie', { method: 'POST', body: { email }, auth: false }),
+
   catalogueTauxTva: (pays) =>
     request('/api/compta/vat-rate-catalog', { query: pays ? { country: pays } : undefined }),
 

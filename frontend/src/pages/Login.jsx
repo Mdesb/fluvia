@@ -25,8 +25,38 @@ export default function Login({ onConnecte, sousTitre = 'Accédez à la caisse e
   // preprod ; un deploiement reel doit vider ces deux champs.
   const [motDePasse, setMotDePasse] = useState('aaa')
   const [erreur, setErreur] = useState(null)
+  const [oubliEnCours, setOubliEnCours] = useState(false)
+  const [reponseOubli, setReponseOubli] = useState(null)
   const [info, setInfo] = useState(null)
   const [enCours, setEnCours] = useState(false)
+
+  // ⚠ CET ÉCRAN EST LE SEUL QUI PARLE À QUELQU'UN DE NON AUTHENTIFIÉ, ET ÇA CHANGE TOUT.
+  //
+  // Partout ailleurs, un fait d'exécution comme « un expéditeur de courriel est-il configuré » se
+  // lit dans `/me`, qu'aucun écran ne peut ne pas avoir reçu. Ici, personne n'est connecté : `/me`
+  // n'a rien rendu. La seule source honnête est donc la RÉPONSE de la demande elle-même, qui porte
+  // `envoiCourrielBranche` — un fait global de l'instance, qui ne dit rien sur l'adresse saisie et
+  // ne compromet donc pas l'anti-énumération du serveur.
+  //
+  // L'écrire en constante ici aurait reproduit très exactement le défaut qu'on corrige : une phrase
+  // vraie aujourd'hui, fausse le jour où un expéditeur est branché, et que rien ne relierait à ce
+  // qui l'a rendue fausse.
+  async function demanderMdp() {
+    if (!email.trim()) {
+      setErreur('Renseignez votre adresse e-mail, puis redemandez.')
+      return
+    }
+    setOubliEnCours(true)
+    setErreur(null)
+    try {
+      const r = await api.demanderReinitialisation(email.trim())
+      setReponseOubli({ message: r?.message || 'Demande enregistrée.', branche: !!r?.envoiCourrielBranche })
+    } catch (err) {
+      setErreur(err.message || 'La demande n’a pas pu être envoyée.')
+    } finally {
+      setOubliEnCours(false)
+    }
+  }
 
   async function soumettre(e) {
     e.preventDefault()
@@ -100,6 +130,25 @@ export default function Login({ onConnecte, sousTitre = 'Accédez à la caisse e
         <button className="btn primary lg" type="submit" disabled={enCours}>
           {enCours ? 'Connexion…' : 'Se connecter'}
         </button>
+
+        <button
+          className="btn ghost sm"
+          type="button"
+          style={{ marginTop: 'var(--esp-normal)' }}
+          onClick={demanderMdp}
+          disabled={oubliEnCours}
+        >
+          {oubliEnCours ? 'Envoi…' : 'Mot de passe oublié ?'}
+        </button>
+
+        {reponseOubli && (
+          <div
+            className={reponseOubli.branche ? 'banner banner-ok' : 'banner banner-warn'}
+            style={{ marginTop: 'var(--esp-normal)' }}
+          >
+            {reponseOubli.message}
+          </div>
+        )}
 
         <p className="login-hint">Compte de démo pré-rempli · IT Cotation</p>
       </form>
