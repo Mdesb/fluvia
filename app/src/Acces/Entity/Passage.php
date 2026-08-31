@@ -13,6 +13,9 @@ use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Post;
+use ApiPlatform\OpenApi\Model\Operation as OpenApiOperation;
+use ApiPlatform\OpenApi\Model\RequestBody as OpenApiRequestBody;
+use ApiPlatform\OpenApi\Model\Response as OpenApiResponse;
 use App\Acces\Enum\CodeMotifRefus;
 use App\Acces\Enum\ResultatPassage;
 use App\Acces\Enum\SensPassage;
@@ -63,6 +66,97 @@ use Symfony\Component\Uid\Uuid;
             input: false,
             security: "is_granted('PERM_TERMINAL', 'acces.ingestion')",
             processor: TerminalPassageProcessor::class,
+            // T21 (plan-acces-terminal.md §7 Lot E) : la réponse est un `JsonResponse` construit à la
+            // main (`TerminalPassageProcessor::reponse()`) — API Platform ne peut pas l'inférer. On
+            // documente donc explicitement le corps de requête et le schéma `message`/`affichage`, sans
+            // quoi l'OpenAPI généré expose l'opération sans réponse typée. Les listes d'enum reflètent
+            // `ResultatPassage`, `CodeMotifRefus` et `CodeMessageAffichage` (tenues à jour à la main :
+            // les arguments d'attribut n'autorisent pas d'appel de fonction).
+            openapi: new OpenApiOperation(
+                summary: 'Valider un passage en ligne depuis une borne (ITBOX).',
+                description: 'Façade authentifiée-terminal de la validation en ligne : délègue au même moteur que '
+                    . '`POST /acces/passages`, puis enrichit la réponse technique de `message` (catalogue fermé, '
+                    . 'destiné à l\'écran de la borne) et `affichage` (données porteur, `null` sur refus signature/droit '
+                    . 'invalide). `POST /acces/passages` reste strictement inchangé.',
+                requestBody: new OpenApiRequestBody(
+                    description: 'Événement de passage lu par la borne.',
+                    content: new \ArrayObject([
+                        'application/json' => [
+                            'schema' => [
+                                'type' => 'object',
+                                'required' => ['equipementId', 'cleIdempotence'],
+                                'properties' => [
+                                    'equipementId' => ['type' => 'string', 'format' => 'uuid', 'description' => 'Équipement scanné ; doit appartenir à la portée du terminal authentifié (sinon 403).'],
+                                    'cleIdempotence' => ['type' => 'string', 'format' => 'uuid', 'description' => 'Clé stable engendrée par la borne au scan et rejouée à l\'identique en cas de retransmission réseau (anti-doublon).'],
+                                    'identifiantSupport' => ['type' => 'string', 'nullable' => true, 'description' => 'Identifiant lu sur le support (QR, badge…).'],
+                                    'sens' => ['type' => 'string', 'enum' => ['entree', 'sortie'], 'nullable' => true, 'description' => 'App\\Acces\\Enum\\SensPassage.'],
+                                    'horodatageBorne' => ['type' => 'string', 'format' => 'date-time', 'nullable' => true, 'description' => 'Horloge de la borne ; un écart > 5 min est signalé (`ecartHorlogeSuspect`) sans jamais bloquer.'],
+                                ],
+                            ],
+                        ],
+                    ]),
+                    required: true,
+                ),
+                responses: [
+                    '200' => new OpenApiResponse(
+                        description: 'Décision de passage, enrichie pour l\'affichage borne (rendue aussi au rejeu d\'une clé d\'idempotence déjà vue).',
+                        content: new \ArrayObject([
+                            'application/json' => [
+                                'schema' => [
+                                    'type' => 'object',
+                                    'required' => ['resultat', 'horodatageServeur', 'message'],
+                                    'properties' => [
+                                        'resultat' => ['type' => 'string', 'enum' => ['valide', 'refuse', 'compte'], 'description' => 'App\\Acces\\Enum\\ResultatPassage.'],
+                                        'codeMotif' => ['type' => 'string', 'nullable' => true, 'description' => 'Motif du refus, `null` si `resultat=valide`. App\\Acces\\Enum\\CodeMotifRefus.', 'enum' => [
+                                            'hors_marge', 'anti_passback', 'credit_epuise', 'support_bloque', 'seuil_fmi',
+                                            'droit_invalide', 'sens_interdit', 'non_nominatif', 'ouverture_manuelle',
+                                            'federation_inactive', 'signature_invalide', 'hors_portee', 'cle_idempotence_invalide',
+                                            'zone_non_autorisee', 'credit_epuise_hors_ligne_litige', 'hors_horaires_ouverture', 'deja_consomme',
+                                        ]],
+                                        'horodatageServeur' => ['type' => 'string', 'format' => 'date-time'],
+                                        'message' => [
+                                            'type' => 'object',
+                                            'description' => 'Message à afficher sur la borne (catalogue fermé). App\\Acces\\Enum\\CodeMessageAffichage.',
+                                            'required' => ['codeMessage', 'libelle'],
+                                            'properties' => [
+                                                'codeMessage' => ['type' => 'string', 'enum' => [
+                                                    'BONNE_SEANCE', 'PASSAGE_COMPTE', 'HORS_MARGE', 'DEJA_PASSE', 'CARTE_EPUISEE',
+                                                    'SUPPORT_BLOQUE', 'JAUGE_ATTEINTE', 'DROIT_INVALIDE', 'SENS_INTERDIT', 'FEDERATION_INACTIVE', 'CODE_INVALIDE',
+                                                ]],
+                                                'libelle' => ['type' => 'string', 'description' => 'Libellé prêt à afficher (ex. « Bonne séance ! »).'],
+                                            ],
+                                        ],
+                                        'affichage' => [
+                                            'type' => 'object',
+                                            'nullable' => true,
+                                            'description' => 'Données porteur pour l\'écran de la borne ; `null` sur un refus « signature invalide » ou « droit invalide » (anti-fuite, §4.2 spec).',
+                                            'properties' => [
+                                                'nomPorteur' => ['type' => 'string', 'nullable' => true, 'description' => 'Systématiquement `null` en v1 (le modèle ne porte pas encore le nom, R-3).'],
+                                                'numeroBillet' => ['type' => 'string', 'nullable' => true],
+                                                'typeSupport' => ['type' => 'string', 'nullable' => true, 'description' => 'Type du support d\'accès (ex. QR).'],
+                                                'compostagesRestants' => ['type' => 'integer', 'nullable' => true, 'description' => 'Renseigné pour une carte à quota, `null` sinon.'],
+                                                'validiteAbonnement' => [
+                                                    'type' => 'object',
+                                                    'nullable' => true,
+                                                    'description' => 'Renseigné pour un droit de type abonnement, `null` sinon.',
+                                                    'properties' => [
+                                                        'valide' => ['type' => 'boolean'],
+                                                        'debut' => ['type' => 'string', 'format' => 'date-time', 'nullable' => true],
+                                                        'fin' => ['type' => 'string', 'format' => 'date-time', 'nullable' => true],
+                                                    ],
+                                                ],
+                                            ],
+                                        ],
+                                    ],
+                                ],
+                            ],
+                        ]),
+                    ),
+                    '401' => new OpenApiResponse(description: 'Jeton terminal invalide, inconnu, expiré ou révoqué (message générique, aucune distinction — anti-énumération).'),
+                    '403' => new OpenApiResponse(description: 'L\'équipement visé n\'appartient pas à la portée du terminal authentifié (refus avant tout appel moteur).'),
+                    '422' => new OpenApiResponse(description: 'Requête invalide : `equipementId` ou `cleIdempotence` manquant ou mal formé (UUID attendu).'),
+                ],
+            ),
         ),
         new Post(
             uriTemplate: '/acces/passages/manuel',
