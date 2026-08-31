@@ -31,6 +31,31 @@ git fetch origin && git merge --no-edit origin/main
 
 Le second doit être vert AVANT que tu commences, sinon tu hériteras d'un rouge qui n'est pas le tien.
 
+### ⚠ Une suite verte ne dit RIEN de ce que le web sert
+
+`opcache.validate_timestamps=0` : **FPM ne relit jamais les fichiers.** Il sert le code tel qu'il
+était à son dernier démarrage. Et `opcache.enable_cli=0` : **phpunit et `bin/console` voient toujours
+le code frais.**
+
+Les deux ensemble : ta suite peut être verte sur un code que le web ne sert pas.
+
+Mesuré le 31/08 — un correctif de cloisonnement écrit à 13:38 sur un conteneur démarré à 13:31 est
+resté hors d'opcache treize minutes, pendant que tout était vert. Trouvé par `b8`.
+
+⚠ **Lire le fichier dans le conteneur ne prouve rien** : le volume est monté, donc le fichier est
+frais, et opcache sert quand même une image figée. La seule mesure qui vaut vient du processus.
+
+    curl -s -H 'Accept: application/json' https://smartaccess.hector-conseil.com/api/plateforme/version-chargee
+
+Ce point d'entrée rend le commit **que PHP a chargé**. Le marqueur est un fichier PHP : si opcache
+sert du code figé, il sert la constante figée avec elle — l'instrument hérite du défaut qu'il mesure.
+`version.json`, lui, voyage avec le `rsync` du frontal : il ne décrit que la moitié frontale.
+
+**Trois versions à comparer, pas deux** : l'arbre, le frontal servi, le PHP chargé.
+`./infra/deploy-preprod.sh` les vérifie désormais toutes les trois.
+
+---
+
 ### ⚠ Déployer tue toute suite en cours — la tienne comme celle des autres
 
 `./infra/deploy-preprod.sh` lance `composer install --no-dev`, qui **retire phpunit** du `vendor/`
