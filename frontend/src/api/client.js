@@ -916,6 +916,21 @@ export const api = {
   annulerReservation: (id) =>
     request(`/api/reservation/reservations/${id}/annuler`, { method: 'POST', body: {} }),
 
+  // ── DEPLACER UNE SEULE SEANCE (RG-M5-07, CA-6) ────────────────────────────────────────────────
+  //
+  // Corps : { debut?, fin?, ressource? } en ISO. PATCH, donc `application/merge-patch+json` — pose
+  // par `request` des que la methode est PATCH.
+  //
+  // Ne touche PAS a la serie : les autres occurrences restent ou elles sont, et celle-ci se marque
+  // `occurrenceModifiee` pour se distinguer. Le serveur refuse le chevauchement avec le meme garde
+  // que la creation.
+  //
+  // ⚠ AUCUNE NOTIFICATION N'EST ENVOYEE AUX PERSONNES DEJA INSCRITES — mesure faite :
+  // `NotificationReservationInterface` ne declare que la promotion de liste d'attente et
+  // l'arbitrage. L'ecran le dit avant d'agir plutot que de laisser croire le contraire.
+  modifierCreneau: (id, corps) =>
+    request(`/api/reservation/creneaux/${id}`, { method: 'PATCH', body: corps }),
+
   // ── ARBITRER UN CONFLIT DE RECURRENCE (RG-M5-11) ──────────────────────────────────────────────
   //
   // Une occurrence de recurrence qui chevauche une autre occupation est desormais CREEE, marquee

@@ -62,6 +62,18 @@ function labelBeneficiaire(b) {
 // redevient fausse au premier statut ajouté.
 const STATUTS_QUI_OCCUPENT = new Set(['confirmee', 'honoree'])
 
+// Une date ISO vers la valeur d'un `<input type="datetime-local">`, EN HEURE LOCALE.
+//
+// ⚠ PAS `toISOString().slice(0, 16)`, qui est le réflexe et qui est faux : il rend l'heure UTC, donc
+// une séance de 10 h s'afficherait à 8 h en été. Le garde-fou des dates locales refuse d'ailleurs
+// cette troncature. On compose à la main depuis les accesseurs locaux.
+function pourSaisieLocale(iso) {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
 // ⚠ D'OÙ VIENT LA PRÉSENCE — ET NON PAS SEULEMENT QU'ELLE EST ACQUISE.
 //
 // `SourcePresence` déclare deux valeurs. `emargement_manuel` est écrit par cet écran ;
@@ -136,6 +148,11 @@ export default function Reservation({ etabActif, droits = [], session }) {
 
   const [arbitragePour, setArbitragePour] = useState(null)
   const [arbitrageRessource, setArbitrageRessource] = useState('')
+
+  const [modifierPour, setModifierPour] = useState(null)
+  const [modifDebut, setModifDebut] = useState('')
+  const [modifFin, setModifFin] = useState('')
+  const [modifRessource, setModifRessource] = useState('')
 
   const [listesAttente, setListesAttente] = useState([])
   const [attentePour, setAttentePour] = useState(null) // id du créneau dont on ouvre la liste d'attente
@@ -354,6 +371,45 @@ export default function Reservation({ etabActif, droits = [], session }) {
       await recharger()
     } catch (e) {
       setErreur(e.message || 'L’annulation n’a pas abouti.')
+    } finally {
+      setGesteEnCours(null)
+    }
+  }
+
+  // ── DÉPLACER UNE SEULE SÉANCE (RG-M5-07, CA-6) ─────────────────────────────────────────────
+  //
+  // ⚠ LA CONFIRMATION DIT CE QU'ON NE FERA PAS. Déplacer une séance déjà réservée ne prévient
+  // personne : `NotificationReservationInterface` ne déclare que la promotion de liste d'attente et
+  // l'arbitrage — mesuré, pas supposé. Les clients se présenteraient à l'ancienne heure.
+  //
+  // On ne fabrique pas la notification manquante ici — ce serait un lot à soi seul, avec un canal,
+  // un gabarit et une décision sur qui reçoit quoi. On rend la conséquence visible au moment du
+  // geste, ce qui est la seule chose honnête à faire d'un manque qu'on ne comble pas.
+  async function modifierSeance(creneau) {
+    const inscrits = (inscritsParCreneau[creneau.id] ?? []).filter((r) => STATUTS_QUI_OCCUPENT.has(r.statut))
+    if (inscrits.length > 0) {
+      const phrase = inscrits.length === 1
+        ? 'Déplacer cette séance ? 1 personne y est inscrite et ne sera PAS prévenue : prévenez-la vous-même.'
+        : `Déplacer cette séance ? ${inscrits.length} personnes y sont inscrites et ne seront PAS prévenues : prévenez-les vous-même.`
+      if (!window.confirm(phrase)) return
+    }
+
+    const corps = {}
+    if (modifDebut) corps.debut = new Date(modifDebut).toISOString()
+    if (modifFin) corps.fin = new Date(modifFin).toISOString()
+    if (modifRessource) corps.ressource = `/api/reservation_ressources/${modifRessource}`
+    if (Object.keys(corps).length === 0) return
+
+    setGesteEnCours(creneau.id)
+    setErreur(null)
+    setSucces(null)
+    try {
+      await api.modifierCreneau(creneau.id, corps)
+      setModifierPour(null)
+      setSucces('Séance déplacée. Les autres séances de la série n’ont pas bougé.')
+      await recharger()
+    } catch (e) {
+      setErreur(e.message || 'Le déplacement n’a pas abouti.')
     } finally {
       setGesteEnCours(null)
     }
@@ -756,6 +812,71 @@ export default function Reservation({ etabActif, droits = [], session }) {
                           >
                             Annuler le créneau
                           </button>
+                        )}
+
+                        {/* Déplacer CETTE séance, sans toucher à la série — « le cours du 21 passe
+                            à 16 h, les autres ne bougent pas ». La marque `occurrenceModifiee` que
+                            le serveur pose ensuite est ce qui distingue une exception d'une série. */}
+                        {peutGererCreneau && annulable && (
+                          <button
+                            type="button"
+                            className="btn ghost sm"
+                            onClick={() => {
+                              const ouvrir = modifierPour !== c.id
+                              setModifierPour(ouvrir ? c.id : null)
+                              setModifDebut(ouvrir ? pourSaisieLocale(c.debut) : '')
+                              setModifFin(ouvrir ? pourSaisieLocale(c.fin) : '')
+                              setModifRessource('')
+                            }}
+                          >
+                            {modifierPour === c.id ? 'Annuler la modification' : 'Déplacer cette séance'}
+                          </button>
+                        )}
+
+                        {modifierPour === c.id && (
+                          <div className="resa-attente">
+                            <div className="resa-part-form">
+                              <input
+                                className="input"
+                                type="datetime-local"
+                                value={modifDebut}
+                                onChange={(e) => setModifDebut(e.target.value)}
+                                aria-label="Nouveau début de la séance"
+                              />
+                              <input
+                                className="input"
+                                type="datetime-local"
+                                value={modifFin}
+                                onChange={(e) => setModifFin(e.target.value)}
+                                aria-label="Nouvelle fin de la séance"
+                              />
+                            </div>
+                            <div className="resa-part-form">
+                              <select
+                                className="select"
+                                value={modifRessource}
+                                onChange={(e) => setModifRessource(e.target.value)}
+                                aria-label="Nouvelle ressource"
+                              >
+                                <option value="">Garder {c.ressource?.libelle || 'la ressource'}</option>
+                                {(ressourcesEquivalentes[c.ressource?.id] ?? []).map((r) => (
+                                  <option key={r.id} value={r.id}>{r.libelle}</option>
+                                ))}
+                              </select>
+                              <button
+                                type="button"
+                                className="btn"
+                                disabled={gesteEnCours === c.id}
+                                onClick={() => modifierSeance(c)}
+                              >
+                                Déplacer
+                              </button>
+                            </div>
+                            <p className="hint">
+                              Seule cette séance bouge. Les personnes déjà inscrites ne sont pas
+                              prévenues automatiquement.
+                            </p>
+                          </div>
                         )}
 
                         {/* ⚠ « COMPLET » ÉTAIT UN CUL-DE-SAC, ET C'EST LÀ QUE LA LISTE D'ATTENTE
