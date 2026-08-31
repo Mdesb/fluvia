@@ -66,7 +66,7 @@ final class IdentifierPanierProcessor implements ProcessorInterface
 
         // Revue de sécurité — faille majeure (anti-bruteforce) : ce mode valide un mot de passe hors
         // firewall Symfony Security (aucun throttling natif applicable ici) — cf.
-        // `TentativeIdentificationLimiter` pour le détail du repli (composant rate-limiter absent).
+        // `TentativeIdentificationLimiter` : fenetre glissante du composant `symfony/rate-limiter`.
         $this->limiter->verifierAvantTentative($email);
 
         $utilisateur = $this->em->getRepository(Utilisateur::class)->findOneBy(['email' => $email]);
