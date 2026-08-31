@@ -30,6 +30,13 @@ export default function Login({ onConnecte, sousTitre = 'Accédez à la caisse e
   const [info, setInfo] = useState(null)
   const [enCours, setEnCours] = useState(false)
 
+  // ⚠ LE JETON PRE-AUTH NE VA PAS DANS `tokenStore`. Il ne vaut que pour `/auth/mfa-verifier`, il
+  // porte le claim `mfaEnAttente`, et le poser dans le stockage ferait croire à toute l'application
+  // qu'on est connecté — avec un jeton que chaque écran verrait refuser. Il vit ici, le temps de la
+  // seconde étape, et disparaît avec le composant.
+  const [defiMfa, setDefiMfa] = useState(null)
+  const [codeMfa, setCodeMfa] = useState('')
+
   // ⚠ CET ÉCRAN EST LE SEUL QUI PARLE À QUELQU'UN DE NON AUTHENTIFIÉ, ET ÇA CHANGE TOUT.
   //
   // Partout ailleurs, un fait d'exécution comme « un expéditeur de courriel est-il configuré » se
@@ -66,11 +73,41 @@ export default function Login({ onConnecte, sousTitre = 'Accédez à la caisse e
     try {
       const data = await api.login(email.trim(), motDePasse)
 
+      // ── SECOND FACTEUR ────────────────────────────────────────────────────────────────────
+      //
+      // ⚠ CE BLOC RÉPONDAIT « contactez l'administrateur », ET C'ÉTAIT UNE IMPASSE. Le serveur sait
+      // relever le défi depuis l'origine — code TOTP ou code de récupération, cinq échecs et
+      // verrouillage, les deux issues tracées — mais aucun écran ne l'appelait. Un compte protégé
+      // ne pouvait plus entrer, ce qui faisait de l'activation du MFA un piège.
+      //
       // Cas MFA en attente : l'API renvoie un jeton intermédiaire à confirmer.
-      if (data?.mfaEnAttente || data?.mfa_en_attente || data?.mfaRequired) {
-        setInfo(
-          "Authentification à deux facteurs requise. Cette étape n'est pas encore gérée par cette interface — contactez l'administrateur.",
-        )
+      //
+      // ⚠ CE GESTIONNAIRE NE S'EST JAMAIS DÉCLENCHÉ. Il testait `mfaEnAttente`, `mfa_en_attente` et
+      // `mfaRequired` — trois orthographes, et aucune n'est celle du serveur. `MfaVerifierAction`
+      // répond `{mfaRequis: true, jetonPreAuth}` ; `mfaEnAttente` est le nom du CLAIM porté par le
+      // jeton intermédiaire, pas du champ de la réponse.
+      //
+      // Conséquence : un compte avec MFA actif ne voyait pas le message ci-dessous, qui explique.
+      // Il tombait sur « Réponse inattendue de l'API (jeton manquant) », une erreur technique qui
+      // envoie chercher une panne. Même famille qu'un `grep` sensible à la casse sur un en-tête en
+      // capitales : une chaîne qui ne correspond jamais se lit comme une absence.
+      //
+      // Les trois anciennes sont conservées — elles ne coûtent rien, et rien ne dit qu'aucun dérivé
+      // de l'API ne les emploie. Ce qui manquait était la vraie.
+      //
+      // ⚠ CECI N'IMPLÉMENTE PAS LE MFA : le second facteur à la connexion reste à construire, et
+      // c'est pourquoi le message dit d'appeler l'administrateur plutôt que de proposer un code.
+      if (data?.mfaRequis || data?.mfaEnAttente || data?.mfa_en_attente || data?.mfaRequired) {
+        const preAuth = data.jetonPreAuth ?? data.jeton_pre_auth ?? null
+        if (!preAuth) {
+          // Défi annoncé sans jeton pour le relever : on le dit plutôt que d'afficher un champ de
+          // code qui ne pourrait aboutir. Une impasse nommée vaut mieux qu'une impasse déguisée.
+          setErreur('Second facteur demandé, mais le serveur n’a pas fourni de jeton intermédiaire.')
+          return
+        }
+        setDefiMfa(preAuth)
+        setCodeMfa('')
+        setInfo('Saisissez le code de votre application d’authentification, ou un code de récupération.')
         return
       }
 
@@ -88,6 +125,84 @@ export default function Login({ onConnecte, sousTitre = 'Accédez à la caisse e
     } finally {
       setEnCours(false)
     }
+  }
+
+  // ⚠ LE CODE PEUT ÊTRE UN CODE DE RÉCUPÉRATION, ET C'EST CE QUI SAUVE LES COMPTES.
+  //
+  // Le serveur accepte les deux et consomme le code de récupération s'il est employé. Sans cette
+  // seconde forme, un téléphone perdu enfermerait dehors — et la seule issue serait la
+  // réinitialisation par un administrateur, qui n'existe pas non plus côté écran.
+  //
+  // Les échecs comptent comme ceux du mot de passe : cinq tentatives, puis verrouillage. On ne
+  // reformule donc pas le refus du serveur, qui distingue « code invalide » de « compte
+  // verrouillé ».
+  async function verifierSecondFacteur(e) {
+    e.preventDefault()
+    if (!codeMfa.trim()) return
+    setEnCours(true)
+    setErreur(null)
+    setInfo(null)
+    try {
+      const data = await api.mfaVerifier(defiMfa, codeMfa.trim())
+      if (!data?.token) {
+        throw new Error('Réponse inattendue de l’API (jeton manquant).')
+      }
+      tokenStore.set(data.token)
+      onConnecte()
+    } catch (err) {
+      setErreur(err?.message || 'Code refusé.')
+    } finally {
+      setEnCours(false)
+    }
+  }
+
+  // L'écran du second facteur remplace le formulaire plutôt que de s'y ajouter : garder l'e-mail et
+  // le mot de passe sous les yeux inviterait à les resoumettre, ce qui ferait repartir la première
+  // étape et invaliderait le jeton intermédiaire qu'on vient d'obtenir.
+  if (defiMfa !== null) {
+    return (
+      <div className="login-wrap">
+        <form className="login-card" onSubmit={verifierSecondFacteur}>
+          <div className="side-brand">
+            <span className="logo">◈</span> Fluvia
+          </div>
+          <h1>Vérification en deux étapes</h1>
+          <p className="login-sub">Votre compte est protégé par une double authentification.</p>
+
+          {erreur && <div className="banner banner-error">{erreur}</div>}
+          {info && <div className="banner banner-ok">{info}</div>}
+
+          <div className="field">
+            <label htmlFor="code-mfa">Code à six chiffres</label>
+            <input
+              id="code-mfa"
+              className="input"
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              autoFocus
+              value={codeMfa}
+              onChange={(e) => setCodeMfa(e.target.value)}
+              required
+            />
+            <p className="login-hint">
+              Un code de récupération fonctionne aussi, et il est alors consommé.
+            </p>
+          </div>
+
+          <button className="btn primary" type="submit" disabled={enCours || !codeMfa.trim()}>
+            {enCours ? 'Vérification…' : 'Valider'}
+          </button>
+          <button
+            className="btn ghost"
+            type="button"
+            onClick={() => { setDefiMfa(null); setCodeMfa(''); setInfo(null); setErreur(null) }}
+          >
+            Revenir à la connexion
+          </button>
+        </form>
+      </div>
+    )
   }
 
   return (

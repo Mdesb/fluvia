@@ -218,5 +218,33 @@ export const boutique = {
     request('/auth', { method: 'POST', body: { email, motDePasse } }),
   moiCompte: () => request('/api/boutique/comptes/me', { auth: true }),
   mesCommandes: () => request('/api/boutique/comptes/me/commandes', { auth: true }),
+
+  // Souscrire un abonnement en ligne. Corps :
+  // { produit, vitrine, iban, bicDebiteur?, debiteurNom, dateSignature? }
+  //
+  // ⚠ CE N'EST PAS UN AJOUT AU PANIER. L'appel cree une VENTE et signe un MANDAT DE PRELEVEMENT
+  // dans le meme geste : pas de tunnel, pas de paiement a l'etape suivante, rien a retirer ensuite.
+  //
+  // ⚠ `vitrine` DESIGNE LA BOUTIQUE OU L'ACHAT A LIEU, et pas celle ou le compte est ne. Sans lui,
+  // le serveur retombe sur la vitrine de creation du compte : un client inscrit chez Piscine A qui
+  // s'abonne chez Patinoire B ferait entrer l'abonnement, le mandat et l'argent DANS LES COMPTES DE
+  // PISCINE A. Un compte global est une identite, pas une appartenance commerciale.
+  //
+  // Le serveur refuse les invites, les produits sans facette SEPA, et un `iban` ou un `debiteurNom`
+  // vide. L'ecran evite les trois avant le clic plutot que d'afficher son refus apres.
+  souscrireAbonnement: (corps) =>
+    request('/api/boutique/abonnements/souscrire', { method: 'POST', body: corps, auth: true }),
+
+  // Demander le remboursement d'une commande. Corps : { vente, ligne?, motif, piecesJustificatives? }
+  //
+  // ⚠ AUCUN REMBOURSEMENT N'EST AUTOMATIQUE : la demande est deposee, motivee, et un humain tranche
+  // (RG-M3-15). Le serveur refuse une commande qui n'appartient pas au compte connecte, et exige un
+  // motif non vide.
+  //
+  // ⚠ ET LE CLIENT NE PEUT PAS LISTER SES DEMANDES : la collection est reservee a l'exploitant
+  // (`boutique.lire`), seule la lecture d'UNE demande lui est ouverte. L'ecran ne peut donc pas
+  // afficher « demande en cours » apres un rechargement — il le dit plutot que de le laisser croire.
+  deposerDemandeRemboursement: (corps) =>
+    request('/api/boutique/demandes-remboursement', { method: 'POST', body: corps, auth: true }),
   mesBillets: () => request('/api/boutique/comptes/me/billets', { auth: true }),
 }

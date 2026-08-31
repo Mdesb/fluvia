@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Boutique\Service;
 
+use App\Boutique\Config\ReservedHostnames;
 use App\Boutique\Entity\Vitrine;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\String\Slugger\AsciiSlugger;
@@ -99,6 +100,16 @@ final class VitrineResolver
 
         if ($slug === '') {
             return 'boutique-' . substr(bin2hex(random_bytes(4)), 0, 6);
+        }
+
+        // ⚠ UN ETABLISSEMENT NOMME « Pro » PRODUIRAIT L'HOTE DU BACK-OFFICE (D106).
+        //
+        // Le refus pose sur l'entite ne suffit pas ici : `EstablishmentStampProcessor` appelle
+        // cette fabrique depuis un *processor*, donc APRES la validation. Ce chemin-la ne passe
+        // devant aucun `Assert`, et c'est celui que personne ne regarde -- l'exploitant ne saisit
+        // rien, le nom apparait tout seul.
+        if (ReservedHostnames::isReserved($slug)) {
+            $slug .= '-boutique';
         }
 
         return mb_substr($slug, 0, 70);

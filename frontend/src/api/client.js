@@ -916,6 +916,65 @@ export const api = {
   annulerReservation: (id) =>
     request(`/api/reservation/reservations/${id}/annuler`, { method: 'POST', body: {} }),
 
+  // ── DOUBLE AUTHENTIFICATION (§2.3 plan-backoffice.md) ─────────────────────────────────────────
+  //
+  // Cinq points d'entree, tous serves et tous eprouves par `MfaTest` — et aucun n'etait appele.
+  //
+  // ⚠ CE QUE LEUR ABSENCE A COUTE : `AffectationProcessor` exigeait le MFA avant d'affecter un role
+  // a privileges. Comme aucun ecran ne l'activait, on ne pouvait nommer AUCUN administrateur, chez
+  // aucun client. La garde est suspendue depuis le 31/08 ; ces appels sont ce qui permettra de la
+  // retablir.
+  //
+  // Le secret et les codes de recuperation ne sont rendus QU'UNE FOIS, a l'activation : le serveur
+  // ne stocke que leur forme chiffree ou hachee. Un ecran qui ne les montre pas a ce moment-la les
+  // perd definitivement.
+  mfaActiver: (id) =>
+    request(`/api/utilisateurs/${id}/mfa/activer`, { method: 'POST', body: {} }),
+
+  // Confirme l'activation avec un code de l'application d'authentification. Tant qu'on n'a pas
+  // confirme, `mfaActif` reste faux : un secret pose sans confirmation n'enferme personne dehors.
+  mfaConfirmer: (id, code) =>
+    request(`/api/utilisateurs/${id}/mfa/confirmer`, { method: 'POST', body: { code } }),
+
+  // Desactive, avec un code TOTP ou un code de recuperation. ⚠ Le serveur REFUSE si le compte
+  // detient un role a privileges — la regle vit la-bas, l'ecran affiche son message.
+  mfaDesactiver: (id, code) =>
+    request(`/api/utilisateurs/${id}/mfa/desactiver`, { method: 'POST', body: { code } }),
+
+  // Reinitialisation par un administrateur : appareil perdu et codes de recuperation epuises. Trace
+  // dans le journal d'audit, avec l'etat avant et apres.
+  mfaReinitialiser: (id) =>
+    request(`/api/utilisateurs/${id}/mfa/reinitialiser`, { method: 'POST', body: {} }),
+
+  // ⚠ LE SECOND FACTEUR A LA CONNEXION S'AUTHENTIFIE AVEC LE JETON PRE-AUTH, PAS AVEC CELUI DU
+  // STOCKAGE — qui n'existe pas encore a ce stade. D'ou `auth: false` et l'en-tete pose a la main :
+  // sans cela, `request` ecraserait l'`Authorization` par le jeton courant, absent, et le serveur
+  // repondrait « non authentifie » sur une requete parfaitement formee.
+  //
+  // Le code accepte est un code TOTP OU un code de recuperation ; le serveur consomme ce dernier.
+  mfaVerifier: (jetonPreAuth, code) =>
+    request('/auth/mfa-verifier', {
+      method: 'POST',
+      body: { code },
+      auth: false,
+      headers: { Authorization: `Bearer ${jetonPreAuth}` },
+    }),
+
+  // ── DEPLACER UNE SEULE SEANCE (RG-M5-07, CA-6) ────────────────────────────────────────────────
+  //
+  // Corps : { debut?, fin?, ressource? } en ISO. PATCH, donc `application/merge-patch+json` — pose
+  // par `request` des que la methode est PATCH.
+  //
+  // Ne touche PAS a la serie : les autres occurrences restent ou elles sont, et celle-ci se marque
+  // `occurrenceModifiee` pour se distinguer. Le serveur refuse le chevauchement avec le meme garde
+  // que la creation.
+  //
+  // ⚠ AUCUNE NOTIFICATION N'EST ENVOYEE AUX PERSONNES DEJA INSCRITES — mesure faite :
+  // `NotificationReservationInterface` ne declare que la promotion de liste d'attente et
+  // l'arbitrage. L'ecran le dit avant d'agir plutot que de laisser croire le contraire.
+  modifierCreneau: (id, corps) =>
+    request(`/api/reservation/creneaux/${id}`, { method: 'PATCH', body: corps }),
+
   // ── ARBITRER UN CONFLIT DE RECURRENCE (RG-M5-11) ──────────────────────────────────────────────
   //
   // Une occurrence de recurrence qui chevauche une autre occupation est desormais CREEE, marquee

@@ -125,6 +125,13 @@ lancer_gf garde-fou-cloisonnement.php || ECHEC=1
 [ -f "$RACINE/bin/garde-fou-post-sans-suppression.php" ] && { lancer_gf garde-fou-post-sans-suppression.php || ECHEC=1; }
 [ -f "$RACINE/bin/garde-fou-filtres-muets.php" ] && { lancer_gf garde-fou-filtres-muets.php || ECHEC=1; }
 
+# Appels du frontal dans le vide (n°33) : un chemin qu'aucune route ne sert rend un 404, que le
+# `catch` de l'ecran transforme en liste vide. Le defaut ne se voit JAMAIS a l'ecran.
+#
+# ⚠ Ce controle demarre le noyau Symfony pour lire `debug:router` — deux secondes, et c'est la seule
+# source qui dise ce que le serveur sert vraiment. Il porte lui-meme son environnement et sa memoire.
+[ -f "$RACINE/bin/garde-fou-appels-dans-le-vide.php" ] && { lancer_gf garde-fou-appels-dans-le-vide.php || ECHEC=1; }
+
 # Nommage : sur les fichiers **indexés** et ajoutés. `--cached` est ce qui sera réellement commité,
 # et c'est aussi ce qui évite de dépendre d'une révision de référence inexistante à ce stade.
 if [ -f "$RACINE/bin/garde-fou-nommage-anglais.php" ]; then

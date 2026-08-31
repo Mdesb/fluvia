@@ -45,7 +45,16 @@ class Bassin
 
     #[ORM\Column(length: 120)]
     #[Assert\NotBlank]
-    #[Groups(['bassin:read', 'bassin:write'])]
+    // ⚠ LES MEMES GROUPES QUE L'IDENTIFIANT, ET C'EST LE POINT.
+    //
+    // `$id` porte deja `poss:read`, `ligne:read` et `creneau:read` : la relation sort donc en objet
+    // partout, mais son NOM n'y etait pas. `Piscine.jsx` lisait `r.bassin?.libelle`, obtenait
+    // `undefined`, et repliait sur la fin de l'IRI — un plan de surveillance affichant
+    // « 4f2a1c8e » la ou un maitre-nageur attend « Petit bain ».
+    //
+    // Montrer l'identite d'un objet sans son nom n'expose rien de moins ; ca oblige seulement
+    // l'ecran a inventer un repli. Releve par le garde-fou n°32.
+    #[Groups(['bassin:read', 'bassin:write', 'poss:read', 'ligne:read', 'creneau:read'])]
     private string $libelle = '';
 
     #[ORM\ManyToOne(targetEntity: Espace::class)]

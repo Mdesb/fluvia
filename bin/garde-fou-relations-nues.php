@@ -51,9 +51,26 @@ declare(strict_types=1);
  *     **Non réparable sans analyse de flot** : `l.controleur?.itboxRef` et
  *     `r.ressourceAffectee.libelle` ont exactement la même allure.
  *
+ *   · **La collection de premier niveau.** Généralisation des deux précédents, relevée par
+ *     `allaccess-73` : le quantificateur parcourt les RELATIONS nommées X, et un objet peut venir
+ *     d'une collection chargée directement — où la ressource expose bien davantage, sous son propre
+ *     groupe. Deux des trois premières entrées étaient de ce type.
+ *
  * D'où le marqueur `@lecture-locale: <relation>.<propriété>` — que `allaccess-73` avait proposé et
  * que j'avais écarté en croyant le contrôle exact. Leur avertissement visait juste avant que le
  * défaut n'existe : « sinon il refusera des choses justes et finira désactivé ».
+ *
+ * ⚠ **LE PLAFOND NE DIT PAS COMBIEN DE DÉFAUTS RESTENT, ET IL NE FAUT PAS LE LIRE AINSI.** Il a
+ * valu 3 alors que deux des trois étaient des accusations fausses. Ce qu'il compte, ce sont des
+ * lectures que le contrôle **n'a pas su innocenter** — ce qui est autre chose. Chaque entrée se
+ * vérifie à la main avant d'être crue, et la façon de le faire est celle qu'ont employée `73` et
+ * `8e` : remonter d'où l'objet vient dans l'écran, et lire le contrat que le serveur publie
+ * (`/api/contexts/<Ressource>`, avec un témoin négatif sur un nom inexistant).
+ *
+ * ⚠ **ET UN CONTRÔLE QUI A RAISON POUR LA MAUVAISE RAISON AURA TORT LE JOUR OÙ ELLE DISPARAÎT.**
+ * `TopologieAcces.jsx` cesse d'être accusé parce qu'un homonyme — `SynchronisationAcces::$controleurs`,
+ * un champ libre de DTO — entre dans les origines plausibles. Correct par conservatisme, pas par
+ * compréhension. Le marqueur y est posé pour cette raison précise.
  *
  * ── CE QUE LE CONTRÔLE AFFIRME, ET CE QU'IL N'AFFIRME PAS ─────────────────────────────────────
  *
@@ -91,7 +108,33 @@ foreach ($it as $f) {
     if (!preg_match('/^(?:final\s+)?(?:readonly\s+)?class\s+(\w+)/m', $src, $mc)) {
         continue;
     }
-    $classe = $mc[1];
+
+    // ⚠ NOM PLEINEMENT QUALIFIÉ, ET CE N'EST PAS DU ZÈLE : 18 noms courts sont partagés par deux
+    // classes dans ce dépôt — `StatutCaution`, `ModeRetenue`, `MoyenPaiement`, `TypeSupport`…
+    // Indexer par nom court faisait écraser la première lue par la seconde, et le verdict pouvait
+    // être faux DANS LES DEUX SENS : accuser une lecture juste parce que la cible examinée était
+    // l'homonyme, ou se taire sur une vraie parce que l'homonyme exposait la propriété.
+    //
+    // Trouvé en construisant un autre contrôle, dont les deux seuls résultats étaient faux pour
+    // cette raison exacte. Aucun résultat de celui-ci ne l'était — mais c'était de la chance.
+    $espace = preg_match('/^namespace\s+([^;]+);/m', $src, $mn) ? trim($mn[1]) : '';
+    $classe = ($espace !== '' ? $espace.'\\' : '').$mc[1];
+
+    // Les `use` du fichier : c'est ainsi que PHP résout `X::class`, et donc la seule façon juste de
+    // savoir quelle classe `targetEntity: X::class` désigne.
+    $alias = [];
+    if (preg_match_all('/^use\s+([^;]+);/m', $src, $mu)) {
+        foreach ($mu[1] as $chemin_use) {
+            $chemin_use = trim($chemin_use);
+            if (preg_match('/^(.+)\s+as\s+(\w+)$/i', $chemin_use, $ma)) {
+                $alias[$ma[2]] = trim($ma[1]);
+            } else {
+                $court = substr($chemin_use, strrpos($chemin_use, '\\') === false ? 0 : strrpos($chemin_use, '\\') + 1);
+                $alias[$court] = $chemin_use;
+            }
+        }
+    }
+
     $lignes = explode("\n", $src);
     $proprietes[$classe] ??= [];
 
@@ -111,7 +154,11 @@ foreach ($it as $f) {
         if (preg_match('/ORM\\\\(?:ManyToOne|OneToOne|OneToMany|ManyToMany)\(/', $ligne)) {
             $bloc = $ligne . ($lignes[$i + 1] ?? '') . ($lignes[$i + 2] ?? '');
             if (preg_match('/targetEntity:\s*(\w+)::class/', $bloc, $mt)) {
-                $cible = $mt[1] === 'self' ? $classe : $mt[1];
+                // `self` désigne la classe courante ; sinon on résout par les `use`, et à défaut
+                // c'est une classe du même espace de noms — exactement les règles de PHP.
+                $cible = $mt[1] === 'self'
+                    ? $classe
+                    : ($alias[$mt[1]] ?? (($espace !== '' ? $espace.'\\' : '').$mt[1]));
             }
             continue;
         }
