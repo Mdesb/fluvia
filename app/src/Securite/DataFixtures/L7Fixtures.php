@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Securite\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\DataFixtures\SocleFixtures;
 use App\Organisation\Entity\Etablissement;
 use App\Securite\Entity\Affectation;
@@ -24,6 +25,8 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
  */
 final class L7Fixtures extends Fixture implements DependentFixtureInterface
 {
+    use FixturesIdempotentes;
+
     public const INVITE_EMAIL = 'invite.valide@itcotation.com';
     public const INVITE_JETON_CLAIR = 'jeton-invitation-test-clair-01';
     public const INVITE_EXPIRE_EMAIL = 'invite.expire@itcotation.com';
@@ -74,15 +77,32 @@ final class L7Fixtures extends Fixture implements DependentFixtureInterface
         // Constaté le 24/08 en voulant régénérer les données de démonstration de la préproduction.
         foreach ([['securite', 'lire'], ['securite', 'exporter']] as [$module, $action]) {
             if (null === $manager->getRepository(Permission::class)->findOneBy(['module' => $module, 'action' => $action])) {
-                $manager->persist((new Permission())->setModule($module)->setAction($action));
+                $manager->persist($this->permissionNommee($manager, $module, $action));
             }
         }
 
         // --- Rôles-modèles vides (§5.3 plan, cahier M8-02) : idem, dupliqué de la migration. ---
         foreach (['Caissier', 'Responsable de site', 'Contrôleur', 'Comptable'] as $nomRoleModele) {
             if (null === $manager->getRepository(Role::class)->findOneBy(['nom' => $nomRoleModele])) {
-                $manager->persist((new Role())->setNom($nomRoleModele)->setEstModele(true));
+                $manager->persist($this->roleNomme($manager, $nomRoleModele)->setEstModele(true));
             }
+        }
+
+        // ── LE BLOC DE DÉMONSTRATION NE SE POSE QU'UNE FOIS ──────────────────────────────────
+        //
+        // Tout ce qui suit est un jeu de données cohérent, pas un référentiel : le reposer sur une
+        // base qui l'a déjà écraserait ce qui a été corrigé à la main depuis, ou le dupliquerait
+        // pour les entités sans contrainte d'unicité — silencieusement.
+        //
+        // Les permissions et les rôles restent AU-DESSUS de cette garde : ils doivent être rejoués à
+        // chaque chargement, sans quoi un droit ajouté au code n'atteindrait jamais une base
+        // existante.
+        if ($manager->getRepository(\App\Securite\Entity\Utilisateur::class)
+            ->findOneBy(['email' => self::INVITE_EMAIL]) !== null
+        ) {
+            $manager->flush();
+
+            return;
         }
 
         // --- Utilisateurs invités (RG-M8-01, CA-1/CA-2) ---
@@ -106,26 +126,26 @@ final class L7Fixtures extends Fixture implements DependentFixtureInterface
         $admin2 = (new Utilisateur())->setEmail(self::ADMIN2_EMAIL)->setNom('Second Administrateur A')->setActif(true);
         $admin2->setMotDePasse($this->hasher->hashPassword($admin2, self::ADMIN2_MDP));
         $manager->persist($admin2);
-        $manager->persist((new Affectation())->setUtilisateur($admin2)->setRole($roleAdmin)->setEtablissement($etabA));
+        $this->affectationUnique($manager, $admin2, $roleAdmin, $etabA);
 
         // --- Administrateur d'établissement restreint (CA-10, RG-M8-09, plafond d'attribution) ---
-        $roleRespA = (new Role())->setNom(self::ROLE_RESP_A_NOM);
+        $roleRespA = $this->roleNomme($manager, self::ROLE_RESP_A_NOM);
         $roleRespA->addPermission($permSecuriteGerer)->addPermission($permOrganisationGerer);
         $manager->persist($roleRespA);
 
         $respA = (new Utilisateur())->setEmail(self::RESP_A_EMAIL)->setNom('Responsable Établissement A')->setActif(true);
         $respA->setMotDePasse($this->hasher->hashPassword($respA, self::RESP_A_MDP));
         $manager->persist($respA);
-        $manager->persist((new Affectation())->setUtilisateur($respA)->setRole($roleRespA)->setEtablissement($etabA));
+        $this->affectationUnique($manager, $respA, $roleRespA, $etabA);
 
-        $permDemo = (new Permission())->setModule(self::PERMISSION_DEMO_MODULE)->setAction(self::PERMISSION_DEMO_ACTION);
+        $permDemo = $this->permissionNommee($manager, self::PERMISSION_DEMO_MODULE, self::PERMISSION_DEMO_ACTION);
         $manager->persist($permDemo);
-        $roleTropPuissant = (new Role())->setNom(self::ROLE_TROP_PUISSANT_NOM);
+        $roleTropPuissant = $this->roleNomme($manager, self::ROLE_TROP_PUISSANT_NOM);
         $roleTropPuissant->addPermission($permSecuriteGerer)->addPermission($permDemo);
         $manager->persist($roleTropPuissant);
 
         // --- Rôle dédié à la délégation temporaire (CA-7/8/9, US-L7-07) ---
-        $roleDelegation = (new Role())->setNom(self::ROLE_DELEGATION_NOM);
+        $roleDelegation = $this->roleNomme($manager, self::ROLE_DELEGATION_NOM);
         $roleDelegation->addPermission($permOrganisationGerer);
         $manager->persist($roleDelegation);
 

@@ -10,6 +10,8 @@ use ApiPlatform\Metadata\GetCollection;
 use App\Acces\Enum\StatutProjectionDroit;
 use App\Acces\Enum\TypeDroitAcces;
 use App\Organisation\Entity\Etablissement;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
@@ -79,6 +81,60 @@ class DroitAcces
     #[Groups(['droit:read'])]
     private ?SousReseau $sousReseau = null;
 
+    /**
+     * ⚠ EXCEPTION TRANSITOIRE À D87 — CE QUI L'ÉTEINT EST UNE CONDITION, PAS UNE DATE (D90).
+     *
+     * Ces deux types de source n'ont, à ce jour, **aucun moyen de déclarer les zones qu'ils
+     * ouvrent** : un badge de personnel n'a pas de produit dont hériter, et un droit né d'une
+     * réservation non plus. Les soumettre à la règle stricte ne les restreindrait pas, ça les
+     * fermerait — le personnel resterait dehors.
+     *
+     * **Ce qui fait disparaître cette constante :** la livraison de D88 (les zones d'un badge
+     * viennent de la FONCTION) et de D89 (celles d'une réservation viennent de l'ACTIVITÉ). Le jour
+     * où l'une des deux existe, retirer le type correspondant d'ici est un geste, et son absence se
+     * voit.
+     *
+     * ⚠ Et l'exception ne doit pas survivre en silence : `DroitAccesExceptionTransitoireTest`
+     * ÉCHOUE le jour où un droit d'un type exempté porte déjà des zones déclarées — parce que cela
+     * prouve que le mécanisme existe, donc que l'exception n'a plus d'objet. Sans ce contrôle, un
+     * transitoire devient un permanent que personne ne remesure ; c'est exactement le sort qu'a
+     * connu le paragraphe de `ValidationPassageHandler` qu'on vient de retirer, dont l'argument
+     * était mort bien avant qu'on s'en aperçoive.
+     *
+     * @var list<TypeDroitAcces>
+     */
+    public const TYPES_EXEMPTES_DE_ZONE = [
+        TypeDroitAcces::Personnel,
+        TypeDroitAcces::Booking,
+    ];
+
+    /**
+     * Les espaces que ce droit ouvre. VIDE = il n'en ouvre AUCUN (D87, 30/08/2026) — sauf pour les
+     * types listés dans `TYPES_EXEMPTES_DE_ZONE` ci-dessus, et c'est transitoire.
+     *
+     * ⚠ CETTE RÈGLE A ÉTÉ L'INVERSE, ET SAVOIR POURQUOI ÉVITE DE LA RETOURNER À NOUVEAU. Le vide
+     * ouvrait tout, par compatibilité : les droits déjà projetés n'en portaient aucun, et les
+     * refuser d'un coup aurait fermé des portes devant des gens qui avaient payé.
+     *
+     * Cet argument est mort le jour où on l'a mesuré : quatre droits en base, trois sans espace,
+     * tous des données de test — personne devant la porte. Maxime a tranché en le rappelant :
+     * la commercialisation n'a pas commencé. Le changement était gratuit ce jour-là et coûteux dès
+     * le premier client, d'où l'urgence de le faire pendant que la fenêtre existait.
+     *
+     * Le sens de l'erreur est désormais celui qui restreint : une porte fermée à tort se rouvre en
+     * déclarant une zone ; une porte ouverte à tort a déjà laissé passer quelqu'un.
+     *
+     * Recopiés à la PROJECTION et non lus depuis le produit : c'est ce droit-ci que les terminaux
+     * embarquent pour décider hors ligne. Une règle qui ne vivrait que côté produit serait
+     * inapplicable par un lecteur déconnecté — c'est-à-dire précisément quand elle compte.
+     *
+     * @var Collection<int, EspaceAcces>
+     */
+    #[ORM\ManyToMany(targetEntity: EspaceAcces::class)]
+    #[ORM\JoinTable(name: 'acces_droit_espace_autorise')]
+    #[Groups(['droit:read'])]
+    private Collection $authorisedSpaces;
+
     #[ORM\Column(length: 12, enumType: StatutProjectionDroit::class, options: ['default' => 'valide'])]
     #[Groups(['droit:read'])]
     private StatutProjectionDroit $statutProjection = StatutProjectionDroit::Valide;
@@ -94,6 +150,7 @@ class DroitAcces
 
     public function __construct()
     {
+        $this->authorisedSpaces = new ArrayCollection();
         $this->id = Uuid::v4();
     }
 
@@ -256,5 +313,64 @@ class DroitAcces
         $this->synchroniseLe = $synchroniseLe;
 
         return $this;
+    }
+
+    /** @return Collection<int, EspaceAcces> */
+    public function getAuthorisedSpaces(): Collection
+    {
+        return $this->authorisedSpaces;
+    }
+
+    public function addAuthorisedSpace(EspaceAcces $space): self
+    {
+        if (!$this->authorisedSpaces->contains($space)) {
+            $this->authorisedSpaces->add($space);
+        }
+
+        return $this;
+    }
+
+    /**
+     * ⚠ POSE AVANT D'EN AVOIR BESOIN, ET C'EST DELIBERE.
+     *
+     * Le serialiseur de Symfony n'accepte une collection en ecriture que si l'AJOUT ET LE RETRAIT
+     * existent. Sans les deux, il ignore la propriete -- sans erreur. `SousReseau` en est mort la
+     * meme nuit : `PATCH { espaces: [...] }` repondait 200 en n'enregistrant rien.
+     *
+     * Deux lignes maintenant valent une soiree plus tard.
+     */
+    public function removeAuthorisedSpace(EspaceAcces $space): self
+    {
+        $this->authorisedSpaces->removeElement($space);
+
+        return $this;
+    }
+
+    /**
+     * Ce droit ouvre-t-il cet espace ?
+     *
+     * Vide = ouvre tout : voir le docbloc de la propriété. La comparaison porte sur la
+     * représentation textuelle de l'identifiant — `getId()` rend des objets `Uuid`, qu'une
+     * comparaison stricte d'objets distinguerait à tort (D58).
+     */
+    public function ouvre(EspaceAcces $space): bool
+    {
+        // VIDE = AUCUNE PORTE (D87). Voir le docbloc de `$authorisedSpaces` pour l'histoire de ce
+        // `false`, qui a été un `true` jusqu'au 30/08/2026.
+        //
+        // ⚠ Ceci ne dit rien de la VALIDITÉ du billet, seulement des portes qu'il ouvre (D86). Un
+        // billet vendu est toujours connu du contrôle d'accès : un agent peut le contrôler à la
+        // main là où il n'y a pas de matériel, et cette méthode n'est pas sur ce chemin-là.
+        if ($this->authorisedSpaces->isEmpty()) {
+            return in_array($this->sourceType, self::TYPES_EXEMPTES_DE_ZONE, true);
+        }
+
+        foreach ($this->authorisedSpaces as $autorise) {
+            if ((string) $autorise->getId() === (string) $space->getId()) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

@@ -1,10 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api, membres } from '../api/client.js'
+import ControleBillet from '../components/ControleBillet.jsx'
+import { aLeDroit } from '../api/droits.js'
 import Qr from '../components/Qr.jsx'
 // `texte` lit un libelle multilingue : le serveur rend `{ fr: '...' }`, pas une chaine.
 import { texte } from '../components/Liste.jsx'
 import HistoriqueVentesModal from '../components/HistoriqueVentesModal.jsx'
 import Modal from '../components/Modal.jsx'
+import ScansEnDirect from '../components/ScansEnDirect.jsx'
+import RechercheBilletModal from '../components/RechercheBilletModal.jsx'
+import ChoixOptions from '../components/ChoixOptions.jsx'
 import ClientPicker, { nomClient } from '../components/ClientPicker.jsx'
 import SessionCaisse from './SessionCaisse.jsx'
 import {
@@ -25,8 +30,16 @@ const ORDRE_MOYENS = ['especes', 'cb', 'cheque', 'pmv']
 export default function Caisse({ me, etabActif, etablissements, session, capacites = [], droits = [], onSessionRefresh }) {
   const [caisseModale, setCaisseModale] = useState(false)
   const [historique, setHistorique] = useState(false)
+  // « Pourquoi mon billet ne passe pas ? » se demande AU GUICHET, pas en supervision.
+  // La fenêtre existait et n'était atteignable que depuis l'écran de supervision — que le
+  // caissier n'a jamais ouvert. Son propre commentaire le disait déjà.
+  const [verifBillet, setVerifBillet] = useState(false)
   const [choixTarif, setChoixTarif] = useState(null)
-  const [produits, setProduits] = useState([])
+  const [choixOptions, setChoixOptions] = useState(null)
+  // ⚠ `null` = PAS LU. << Aucun produit disponible. >> lu par un caissier signifie << il n'y a
+  // rien a vendre >>, et il ferme la caisse ou appelle un responsable. Sur une lecture refusee,
+  // le catalogue existe et n'a simplement pas ete obtenu.
+  const [produits, setProduits] = useState(null)
   const [moyens, setMoyens] = useState([])
   const [pdvs, setPdvs] = useState([])
   const [chargement, setChargement] = useState(true)
@@ -34,11 +47,21 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
 
   const [panier, setPanier] = useState([]) // { produit, quantite }
   const [ticket, setTicket] = useState(null)
+  // Ce que le serveur a decide de ce ticket, et ce qu'il reste a demander au client.
+  const [finVente, setFinVente] = useState(null)
 
   // Client rattaché à la vente (bénéficiaire des produits nominatifs, RG-M2-04 / CA-7).
   const [client, setClient] = useState(null)
   const [pickerOuvert, setPickerOuvert] = useState(false)
   const [besoinClient, setBesoinClient] = useState(false)
+  // ⚠ LE SOLDE DU PORTE-MONNAIE, QUE CET ECRAN NE LISAIT PAS.
+  //
+  // `null` = pas de porte-monnaie, ou pas encore lu. La caisse proposait `pmv` comme moyen de
+  // paiement en testant UNIQUEMENT la capacite `porte_monnaie` de l'etablissement -- jamais le
+  // client, jamais son solde. Un caissier pouvait donc choisir << porte-monnaie >> sans client
+  // rattache (il n'y a alors aucun porte-monnaie a debiter) ou sur un solde vide, et decouvrir le
+  // refus au moment de valider, devant la personne.
+  const [pmvClient, setPmvClient] = useState(null)
 
   // Phase de paiement (encaissement scindé sur une vente ouverte).
   const [vente, setVente] = useState(null) // { id, reste }
@@ -57,9 +80,11 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
     setErreur(null)
     setPanier([])
     setTicket(null)
+    setFinVente(null)
     setVente(null)
     setPaiements([])
     setClient(null)
+    setPmvClient(null)
     setBesoinClient(false)
     Promise.all([api.produits(), api.moyensPaiement(), api.pointDeVentes()])
       .then(([pc, mc, dc]) => {
@@ -68,7 +93,7 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
         setMoyens(membres(mc).filter((m) => m.actif !== false))
         setPdvs(membres(dc))
       })
-      .catch((e) => !annule && setErreur(e.message))
+      .catch((e) => !annule && (setErreur(e.message), setProduits(null)))
       .finally(() => !annule && setChargement(false))
     return () => {
       annule = true
@@ -84,20 +109,80 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
     [panier],
   )
 
+  // Le point de vente de la session — deux choses en dépendent maintenant : les moyens de paiement
+  // autorisés et les produits épinglés. Il était recalculé dans `moyensDispo` ; il en sort.
+  const pdvActif = useMemo(() => {
+    const pdvId = session?.pointDeVente?.id || session?.pointDeVente
+    return pdvs.find((p) => p.id === pdvId) || null
+  }, [pdvs, session])
+
   // Moyens réellement proposables : actifs et autorisés sur le point de vente de la session.
   const moyensDispo = useMemo(() => {
-    const pdvId = session?.pointDeVente?.id || session?.pointDeVente
-    const pdv = pdvs.find((p) => p.id === pdvId)
+    const pdv = pdvActif
     const autorises = pdv?.moyensAutorises || []
     let liste = moyens.filter((m) => autorises.length === 0 || autorises.includes(m.code))
-    // PMV : uniquement si la capacité porte-monnaie est active sur l'établissement.
-    if (!capacites.includes('porte_monnaie')) liste = liste.filter((m) => m.code !== 'pmv')
+    // PMV : trois conditions, et l'écran n'en vérifiait qu'une.
+    //
+    //   1. la capacité `porte_monnaie` est active sur l'établissement  ← seule vérifiée avant
+    //   2. un client est rattaché à la vente — sans lui, aucun porte-monnaie à débiter
+    //   3. ce client a un porte-monnaie actif avec un solde strictement positif
+    //
+    // Proposer un moyen de paiement qui sera refusé n'est pas neutre : le caissier le découvre en
+    // validant, devant la personne, et doit tout reprendre.
+    const pmvUtilisable = capacites.includes('porte_monnaie')
+      && Boolean(client?.id)
+      && pmvClient?.statut === 'actif'
+      && Number(pmvClient?.solde || 0) > 0
+    if (!pmvUtilisable) liste = liste.filter((m) => m.code !== 'pmv')
     return liste.sort((a, b) => {
       const ia = ORDRE_MOYENS.indexOf(a.code)
       const ib = ORDRE_MOYENS.indexOf(b.code)
       return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib)
     })
-  }, [moyens, pdvs, session, capacites])
+  }, [moyens, pdvActif, capacites, client, pmvClient])
+
+  // LES FAVORIS SONT CEUX DU COMPTOIR, PAS CEUX DU CAISSIER — et il faut le dire.
+  //
+  // `PointDeVente::$favoris` est une liste d'identifiants de produits portée par le POINT DE VENTE.
+  // Deux personnes qui se relaient au même guichet voient donc les mêmes épingles, et celle qui
+  // épingle change l'écran de l'autre. Ce n'est pas un défaut — un comptoir vend les mêmes choses
+  // quelle que soit la personne derrière — mais quelqu'un qui croirait régler SON écran serait
+  // surpris, d'où l'infobulle qui le dit.
+  const favoris = pdvActif?.favoris || []
+
+  // Les épinglés d'abord, le reste dans son ordre d'origine. Un tri qui remonterait aussi par
+  // fréquence de vente serait plus malin et beaucoup moins prévisible : le caissier apprend la
+  // place de ses boutons, il ne la relit pas.
+  const produitsAffiches = useMemo(() => {
+    if (favoris.length === 0) return produits || []
+    const rang = (p) => (favoris.includes(p.id) ? 0 : 1)
+    return [...(produits || [])].sort((a, b) => rang(a) - rang(b))
+  }, [produits, favoris.join(',')])
+
+  async function basculerFavori(produitId) {
+    if (!pdvActif) return
+    const avant = pdvActif.favoris || []
+    const apres = avant.includes(produitId)
+      ? avant.filter((id) => id !== produitId)
+      : [...avant, produitId]
+    // On relit le point de vente depuis le serveur plutôt que de recopier l'état local : c'est lui
+    // qui fait foi, et une autre caisse du même comptoir peut avoir épinglé entre-temps.
+    try {
+      await api.majPointDeVente(pdvActif.id, { favoris: apres })
+      setPdvs(await membresPdv())
+    } catch (e) {
+      setErreur(e.message || 'L’épinglage n’a pas pu être enregistré.')
+    }
+  }
+
+  async function membresPdv() {
+    const r = await api.pointDeVentes()
+    return membres(r)
+  }
+
+  // `caisse.gerer` : le meme droit que celui qui protege le PATCH du point de vente cote serveur.
+  // Un caissier sans ce droit ne voit pas l'etoile, plutot que de la voir refuser au clic.
+  const peutEpingler = !!pdvActif && aLeDroit(droits, 'caisse.gerer')
 
   const moyenCourant = moyensDispo.find((m) => m.code === moyenSel) || null
   const reste = vente ? parseFloat(vente.reste || '0') : total
@@ -107,16 +192,131 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   // vente courante d'une famille au guichet.
   const cleLigne = (produitId, tarifId) => `${produitId}|${tarifId}`
 
-  function ajouter(produit, grille) {
+  /**
+   * LES GROUPES QUI DEMANDENT VRAIMENT UNE DÉCISION DU CAISSIER.
+   *
+   * Maxime, en voyant la première version : *« c'est trop complexe ou trop chargé pour le client
+   * final »*. Il avait raison, et la faute était nette — la modale s'ouvrait dès qu'un produit portait
+   * **une** option, y compris facultative. Vendre une entrée passait de un clic à trois, pour poser une
+   * question dont la réponse par défaut est « non ».
+   *
+   * Un groupe **facultatif** n'est pas une décision : ne rien prendre est une réponse valide, et le
+   * caissier peut l'ajouter après si le client le demande. Un groupe **obligatoire à valeur unique**
+   * n'en est pas une non plus : il n'y a rien à arbitrer, seulement une formalité que le serveur
+   * exigera. **Reste le seul vrai cas : obligatoire, et plusieurs valeurs disponibles.**
+   */
+  const decisionsOuvertes = (devis) =>
+    (devis?.options ?? []).filter(
+      (g) => g.obligatoire && (g.valeurs ?? []).filter((v) => v.disponible !== false).length > 1,
+    )
+
+  /**
+   * Ce qui se choisit tout seul : un groupe obligatoire dont une seule valeur est disponible.
+   *
+   * Sans ça, l'écran ouvrirait une fenêtre pour faire cocher l'unique case possible — ou, pire, laisserait
+   * partir la ligne que `AjoutLigneHandler` refusera en RG-OPT-03, après que le caissier a annoncé un prix.
+   */
+  const optionsImposees = (devis) => {
+    const retenues = []
+    for (const g of devis?.options ?? []) {
+      if (!g.obligatoire) continue
+      const dispo = (g.valeurs ?? []).filter((v) => v.disponible !== false)
+      if (dispo.length === 1) retenues.push(dispo[0].valeurOption)
+    }
+    return retenues
+  }
+
+  /**
+   * Ajoute au panier — en demandant AU SERVEUR le prix et les options proposables.
+   *
+   * **Un clic reste un clic quand il n'y a rien à choisir.** Si le produit n'a aucune option, la ligne
+   * part immédiatement ; la modale ne s'ouvre que pour ceux qui ont un choix à faire. Une caisse se juge
+   * au nombre de gestes par vente.
+   *
+   * **Et le prix vient du devis, plus de la grille.** L'écran choisissait la première grille vendable ;
+   * le serveur applique le tarif réellement dû — saison, quotient familial. Les deux peuvent différer
+   * sans que personne ne soit en faute, et c'est ce montant que le caissier annonce à voix haute.
+   */
+  async function ajouter(produit, grille, options = [], devisConnu = null) {
     setTicket(null)
+    setFinVente(null)
     const g = grille || grillesVendables(produit)[0]
     if (!g) return
-    const cle = cleLigne(produit.id, g.typeTarif.id)
+
+    let devis = devisConnu
+    if (!devis) {
+      try {
+        devis = await api.tarifProduit(produit.id, { typeTarif: g.typeTarif.id })
+      } catch (e) {
+        setErreur(e.message || "Le prix n'a pas pu être obtenu.")
+        return
+      }
+      // On n'ouvre que pour un arbitrage réel — jamais pour une case à cocher sans alternative.
+      if (decisionsOuvertes(devis).length > 0) {
+        setChoixOptions({ produit, grille: g, devis, selection: optionsImposees(devis) })
+        return
+      }
+
+      // Les formalités se règlent sans le caissier, mais PAS SANS LE SERVEUR : le prix change, et un
+      // prix annoncé qui n'est pas celui qui sera facturé est précisément ce qu'on corrige depuis
+      // trois jours. On redemande le devis plutôt que d'ajouter l'impact ici.
+      const imposees = optionsImposees(devis)
+      if (imposees.length > 0) {
+        try {
+          devis = await api.tarifProduit(produit.id, {
+            typeTarif: g.typeTarif.id,
+            canal: devis.canal,
+            options: imposees,
+          })
+          options = imposees
+        } catch (e) {
+          setErreur(e.message || "Le prix n'a pas pu être obtenu.")
+          return
+        }
+      }
+    }
+
+    ajouterLigne(produit, g, options, devis)
+  }
+
+  /**
+   * Rouvrir les options d'une ligne déjà au panier.
+   *
+   * C'est ce qui permet au premier clic de rester un clic : le caissier vend, et n'ouvre cette fenêtre
+   * que si le client réclame quelque chose. L'ordre naturel du comptoir — on encaisse, puis on ajuste —
+   * plutôt que l'ordre du formulaire.
+   */
+  async function ajusterOptions(l) {
+    setErreur(null)
+    try {
+      const devis = await api.tarifProduit(l.produit.id, {
+        typeTarif: l.typeTarifId,
+        options: l.options ?? [],
+      })
+      setChoixOptions({
+        produit: l.produit,
+        grille: l.grille,
+        devis,
+        selection: l.options ?? [],
+        remplace: l.cle,
+      })
+    } catch (e) {
+      setErreur(e.message || "Les options n'ont pas pu être relues.")
+    }
+  }
+
+  function ajouterLigne(produit, g, options, devis, remplace = null) {
+    const cle = cleLigne(produit.id, g.typeTarif.id) + (options.length ? `|${[...options].sort().join(',')}` : '')
     setPanier((p) => {
+      // AJUSTER N'EST PAS AJOUTER. Changer les options change la clé de ligne ; sans ce retrait, le
+      // panier garderait l'ancienne version à côté de la nouvelle et facturerait les deux.
+      const quantiteReprise = remplace !== null ? p.find((l) => l.cle === remplace)?.quantite : null
+      if (remplace !== null && remplace !== cle) p = p.filter((l) => l.cle !== remplace)
       const i = p.findIndex((l) => l.cle === cle)
       if (i >= 0) {
         const copie = [...p]
-        copie[i] = { ...copie[i], quantite: copie[i].quantite + 1 }
+        // Un ajustement ne vend pas une unité de plus : il rhabille celle qui est déjà là.
+        copie[i] = { ...copie[i], quantite: copie[i].quantite + (remplace !== null ? 0 : 1) }
         return copie
       }
       return [
@@ -124,10 +324,20 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
         {
           cle,
           produit,
-          quantite: 1,
+          quantite: quantiteReprise ?? 1,
           typeTarifId: g.typeTarif.id,
           tarifLibelle: libelleTarif(g),
-          prix: g.prix,
+          // Conservées pour rouvrir les options sans redemander au catalogue ce qu'on a déjà.
+          grille: g,
+          aOptions: (devis?.options ?? []).length > 0,
+          // Le prix du DEVIS, pas celui de la grille : c'est celui qui sera facturé.
+          prix: devis?.totalUnitaire ?? devis?.prixUnitaire ?? g.prix,
+          options,
+          // Les libellés servent à afficher la ligne sans redemander ; les montants viennent du devis.
+          optionsLibelles: (devis?.options ?? [])
+            .flatMap((groupe) => groupe.valeurs)
+            .filter((valeur) => options.includes(valeur.valeurOption))
+            .map((valeur) => valeur.libelle),
         },
       ]
     })
@@ -158,6 +368,7 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
     setAvis(null)
     setBesoinClient(false)
     setTicket(null)
+    setFinVente(null)
     try {
       const v = await api.creerVente({ session: session.id })
       // Rattache le client à la vente (M2, CA-7) — préalable au bénéficiaire des lignes nominatives.
@@ -174,6 +385,9 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
         const tarif = l.typeTarifId || typeTarifId(l.produit)
         if (!tarif) throw new Error(`« ${libelleProduit(l.produit)} » n'a pas de tarif au guichet.`)
         const corps = { produit: l.produit.id, typeTarif: tarif, quantite: l.quantite }
+        // Les options retenues suivent la ligne : sans elles, le serveur facturerait le prix de base
+        // et le caissier aurait annoncé autre chose.
+        if (l.options?.length) corps.options = l.options
         // Bénéficiaire requis pour les produits nominatifs (RG-M2-04) : on passe le client rattaché.
         if (client) corps.beneficiaire = client.id
         courant = await api.ajouterLigne(v.id, corps)
@@ -276,7 +490,23 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
 // Les ventes antérieures à la migration portent le nom que le produit a *aujourd'hui* : cette
 // information n'avait jamais été écrite et ne se reconstitue pas. Un duplicata n'est réellement
 // opposable qu'à partir de cette migration.
-function construireTicket(infoTicket, paiements, support) {
+/**
+ * @param {boolean} premiereEdition vrai quand le ticket est édité dans la foulée de la vente.
+ *
+ * **Pourquoi ce drapeau existe.** `TicketProcessor` déclare « duplicata » dès que la vente porte déjà
+ * `imprime`. Or `ValiderVenteService` la marque imprimée **à la validation**, au titre de l'impression
+ * automatique au-dessus du seuil — et ce seuil vaut 0 € par défaut. **Toute vente encaissée sortait donc
+ * son premier ticket estampillé DUPLICATA.**
+ *
+ * L'impression automatique et cette édition-ci sont **le même événement**, pas deux. Seul l'appelant
+ * sait le distinguer : il vient de créer la vente. Une réimpression demandée depuis l'historique, elle,
+ * reste un duplicata et le dit.
+ *
+ * Le modèle confond deux choses — « un ticket a été émis » et « une impression a été ordonnée » —, comme
+ * la clôture Z confondait le comptage et l'arrêté. On ne les sépare pas ici : ce serait toucher à un
+ * comportement scellé et testé, sur un écran qu'on est en train de vérifier.
+ */
+function construireTicket(infoTicket, paiements, support, premiereEdition = false) {
   const lignes = (infoTicket.lignes || []).map((l) => {
     const nom = texte(l.libelle, 'Article')
     return {
@@ -288,6 +518,16 @@ function construireTicket(infoTicket, paiements, support) {
       // `montantLigne` est le montant réellement facturé pour la ligne : options et remises
       // comprises. C'est lui qu'on affiche à droite, et non un produit qu'on recalculerait.
       montant: l.montantLigne ?? null,
+      // LE DÉTAIL DES OPTIONS, PARCE QUE SANS LUI LE TICKET NE S'EXPLIQUE PAS.
+      //
+      // Le serveur les renvoyait déjà — figées à l'ajout au panier — et l'écran ne les lisait pas.
+      // Un client qui paie 21,20 € pour un produit affiché 15,00 € voyait un écart sans cause : le
+      // ticket s'additionnait, et restait incompréhensible. C'est le même défaut que le prix indicatif
+      // d'hier, déplacé d'un cran — non plus un chiffre faux, mais un chiffre juste sans son motif.
+      options: (l.optionsSelectionnees || []).map((o) => ({
+        libelle: texte(o.libelle, 'Option'),
+        montant: o.montantUnitaireApplique ?? null,
+      })),
     }
   })
 
@@ -306,7 +546,7 @@ function construireTicket(infoTicket, paiements, support) {
     detailIndisponible: lignes.length === 0,
     total: infoTicket.total ?? '0.00',
     ecartDetail: lignes.length > 0 && Math.abs(somme - total) > 0.005,
-    duplicata: !!infoTicket.duplicata,
+    duplicata: !premiereEdition && !!infoTicket.duplicata,
     paiements,
     codeSupport: support?.identifiantSupport || null,
   }
@@ -322,7 +562,19 @@ function construireTicket(infoTicket, paiements, support) {
       const infoTicket = await api.ticket(vente.id, 'imprimer')
       // Code de support signé (HMAC) émis à la validation : 1er support porteur d'un identifiant.
       const support = (venteValidee.supports || []).find((s) => s.identifiantSupport)
-      setTicket(construireTicket(infoTicket, paiements, support))
+
+      // « SOUHAITEZ-VOUS UN TICKET ? » — demande de Maxime, et le serveur savait deja repondre.
+      //
+      // Jusqu'ici l'ecran affichait le ticket dans tous les cas. Or `TicketProcessor` rend depuis
+      // toujours trois indications qu'aucun ecran ne lisait : `impressionAutomatique` (au-dessus
+      // du seuil du point de vente, le ticket sort, on ne demande rien), `venteGratuite` (total a
+      // zero : aucun ticket, et ce n'est pas une affaire de seuil) et `renvoiPropose` (en dessous
+      // du seuil, avec un client rattache, le renvoi a un sens).
+      //
+      // Trois situations, trois comportements — et un seul jusqu'a aujourd'hui.
+      const t = construireTicket(infoTicket, paiements, support, true)
+      if (infoTicket.impressionAutomatique) setTicket(t)
+      else setFinVente({ info: infoTicket, ticket: t })
       setPanier([])
       setVente(null)
       setPaiements([])
@@ -357,6 +609,17 @@ function construireTicket(infoTicket, paiements, support) {
     setPickerOuvert(false)
     setBesoinClient(false)
     if (besoinClient) setErreur(null)
+    // Un appel de plus, sur un geste EXPLICITE du caissier : on lit le porte-monnaie du client
+    // qu'il vient de rattacher. `fiche-360` porte deja `pmv: { solde, devise, statut,
+    // dateEcheance }` -- rien a ajouter cote serveur.
+    setPmvClient(null)
+    if (c?.id) {
+      api.ficheClient(c.id)
+        .then((f) => setPmvClient(f?.pmv || null))
+        // ⚠ ON NE DEDUIT RIEN D'UN ECHEC. Sans solde lu, `pmv` reste indisponible et l'ecran le
+        // dit : mieux vaut un moyen de paiement absent qu'un moyen propose sur une supposition.
+        .catch(() => setPmvClient(null))
+    }
   }
 
   // Modale d'ouverture / clôture Z, déclenchée depuis l'écran Caisse. Réutilise SessionCaisse
@@ -393,8 +656,18 @@ function construireTicket(infoTicket, paiements, support) {
       <div className="view">
         <div className="view-head">
           <div className="ttl"><h1>Caisse</h1><p>{nomEtab}</p></div>
+          {/* CAISSE FERMÉE, LES TOURNIQUETS TOURNENT QUAND MÊME.
+              Un groupe passe à l'ouverture des portes avant que le guichet n'ouvre sa session, et
+              quelqu'un vient demander pourquoi son billet a été refusé. Priver l'agent de la
+              vérification et du fil des scans parce qu'aucune caisse n'est ouverte, c'est lui
+              retirer la réponse au moment précis où on la lui demande. */}
+          <div className="actions">
+            <button className="btn" onClick={() => setVerifBillet(true)}>Vérifier un billet</button>
+          </div>
         </div>
         {erreur && <div className="banner banner-error">{erreur}</div>}
+        <ScansEnDirect key={etabActif} droits={droits} etabActif={etabActif} />
+        <RechercheBilletModal open={verifBillet} onClose={() => setVerifBillet(false)} droits={droits} />
         <div className="card">
           <div className="card-b" style={{ textAlign: 'center', padding: '40px 20px' }}>
             <div style={{ fontSize: 40, marginBottom: 8 }}>🔒</div>
@@ -422,12 +695,22 @@ function construireTicket(infoTicket, paiements, support) {
           </p>
         </div>
         <div className="actions">
+          <button className="btn" onClick={() => setVerifBillet(true)}>Vérifier un billet</button>
           <button className="btn" onClick={() => setHistorique(true)} disabled={enPaiement}>Historique</button>
           <button className="btn" onClick={() => setCaisseModale(true)} disabled={enPaiement}>Clôture Z</button>
         </div>
       </div>
 
       {erreur && <div className="banner banner-error">{erreur}</div>}
+
+      {/* Le bandeau des scans est en position fixe : il ne prend pas de place dans la grille de la
+          caisse et ne bouge pas quand le panier s'allonge. Il ne s'affiche que pour un compte qui a
+          le droit de lire les passages. */}
+      {/* La clé remonte le bandeau au changement de site : une interrogation partie avant la
+          bascule reviendrait sinon déposer les passages de l'ancien établissement sous le nom
+          du nouveau. */}
+      <ScansEnDirect key={etabActif} droits={droits} etabActif={etabActif} />
+      <RechercheBilletModal open={verifBillet} onClose={() => setVerifBillet(false)} droits={droits} />
 
       <div className="caisse-grid">
         <aside style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -487,6 +770,28 @@ function construireTicket(infoTicket, paiements, support) {
                             )}
                             {euros(pu)}
                           </div>
+                          {/* CE QUI EST FACTURÉ SE LIT SUR LA LIGNE QUI LE FACTURE.
+                              Le panier affichait un prix options comprises sans nommer les options :
+                              le caissier annonçait un montant qu'il ne pouvait pas justifier au client
+                              qui le lui demandait. */}
+                          {l.optionsLibelles?.length > 0 && (
+                            <div className="cp" style={{ opacity: 0.8 }}>
+                              {l.optionsLibelles.join(' · ')}
+                            </div>
+                          )}
+                          {!enPaiement && l.aOptions && (
+                            // Présent seulement quand le produit porte des options : sinon le bouton
+                            // ouvrirait une fenêtre vide, et un bouton qui ne fait rien s'apprend une
+                            // fois puis se contourne pour toujours.
+                            <button
+                              type="button"
+                              className="btn ghost sm"
+                              style={{ marginTop: 4, padding: '1px 8px', fontSize: 11.5 }}
+                              onClick={() => ajusterOptions(l)}
+                            >
+                              {l.optionsLibelles?.length > 0 ? 'Modifier les options' : '+ Options'}
+                            </button>
+                          )}
                         </div>
                         {!enPaiement ? (
                           <div className="qty">
@@ -538,7 +843,16 @@ function construireTicket(infoTicket, paiements, support) {
             </div>
           </div>
 
+          {finVente && (
+            <FinDeVente
+              info={finVente.info}
+              onAfficher={() => { setTicket(finVente.ticket); setFinVente(null) }}
+              onSansTicket={() => setFinVente(null)}
+            />
+          )}
+
           {ticket && <TicketVente ticket={ticket} />}
+
         </aside>
 
         <section className="card">
@@ -549,31 +863,57 @@ function construireTicket(infoTicket, paiements, support) {
           <div className="card-b">
             {chargement ? (
               <div className="center" style={{ minHeight: 200 }}><div className="spinner" /></div>
+            ) : produits === null ? (
+              <div className="banner banner-error">
+                Le catalogue n’a pas pu être lu. <b>Ne concluez pas qu’il n’y a rien à vendre</b>&nbsp;:
+                cette liste n’a pas été obtenue. Rechargez avant d’ouvrir la caisse.
+              </div>
             ) : produits.length === 0 ? (
               <div className="empty">Aucun produit disponible.</div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10 }}>
-                {produits.map((p) => {
+                {produitsAffiches.map((p) => {
                   const vendable = estVendable(p) && !enPaiement
                   const raison = raisonNonVendable(p)
+                  const epingle = favoris.includes(p.id)
                   return (
-                    <button
-                      key={p.id}
-                      className="prodtile"
-                      disabled={!vendable}
-                      onClick={() => choisirPuisAjouter(p)}
-                      title={
-                        enPaiement
-                          ? 'Encaissement en cours'
-                          : vendable
-                            ? 'Ajouter au panier'
-                            : expliqueNonVendable(p) || ''
-                      }
-                    >
-                      <span className="pn">{libelleProduit(p)}</span>
-                      {p.code && <span className="pc">{p.code}</span>}
-                      {raison ? <span className="pw">{raison}</span> : <span className="pp">{euros(prixIndicatif(p))}</span>}
-                    </button>
+                    /* L'étoile est un bouton, et la tuile aussi : l'un ne peut pas contenir
+                       l'autre. Ils sont donc frères dans une enveloppe positionnée — c'est ce qui
+                       permet d'épingler sans déclencher la vente. */
+                    <div className="prodcase" key={p.id}>
+                      <button
+                        className="prodtile"
+                        disabled={!vendable}
+                        onClick={() => choisirPuisAjouter(p)}
+                        title={
+                          enPaiement
+                            ? 'Encaissement en cours'
+                            : vendable
+                              ? 'Ajouter au panier'
+                              : expliqueNonVendable(p) || ''
+                        }
+                      >
+                        <span className="pn">{libelleProduit(p)}</span>
+                        {p.code && <span className="pc">{p.code}</span>}
+                        {raison ? <span className="pw">{raison}</span> : <span className="pp">{euros(prixIndicatif(p))}</span>}
+                      </button>
+                      {peutEpingler && (
+                        <button
+                          type="button"
+                          className={epingle ? 'prodfav on' : 'prodfav'}
+                          aria-pressed={epingle}
+                          aria-label={epingle ? 'Retirer des favoris' : 'Épingler en tête'}
+                          title={
+                            epingle
+                              ? 'Épinglé sur ce comptoir — cliquez pour retirer'
+                              : 'Épingler en tête. Les favoris appartiennent au comptoir : tout le monde les verra.'
+                          }
+                          onClick={() => basculerFavori(p.id)}
+                        >
+                          {epingle ? '★' : '☆'}
+                        </button>
+                      )}
+                    </div>
                   )
                 })}
               </div>
@@ -613,6 +953,21 @@ function construireTicket(infoTicket, paiements, support) {
           </div>
         )}
       </Modal>
+
+      <ChoixOptions
+        ouvert={!!choixOptions}
+        produit={choixOptions?.produit}
+        typeTarifId={choixOptions?.grille?.typeTarif?.id}
+        tarifLibelle={choixOptions ? libelleTarif(choixOptions.grille) : null}
+        devis={choixOptions?.devis}
+        selectionInitiale={choixOptions?.selection}
+        ajustement={choixOptions?.remplace != null}
+        onFermer={() => setChoixOptions(null)}
+        onValider={(retenues, devis) => {
+          ajouterLigne(choixOptions.produit, choixOptions.grille, retenues, devis, choixOptions.remplace ?? null)
+          setChoixOptions(null)
+        }}
+      />
 
       <HistoriqueVentesModal
         open={historique}
@@ -717,13 +1072,88 @@ function PanneauPaiement({
 
       {paye && (
         <button className="btn primary lg" onClick={onValider} disabled={busy}>
-          {busy ? 'Validation…' : 'Valider & imprimer'}
+          {/* LE BOUTON NE PROMET PLUS D'IMPRIMER, PARCE QU'IL N'EN SAIT RIEN.
+              « Valider & imprimer » était juste tant que l'écran imprimait dans tous les cas. Le
+              ticket ne sort désormais tout seul qu'au-dessus du seuil du point de vente ; en
+              dessous il se propose, et sur une vente gratuite il ne sort pas. Le caissier lit ce
+              bouton juste avant de le presser : lui annoncer une impression qui n'aura pas lieu
+              lui ferait chercher un ticket dans l'imprimante. */}
+          {busy ? 'Validation…' : 'Valider la vente'}
         </button>
       )}
 
       <button className="btn ghost sm" onClick={onAbandon} disabled={busy} style={{ alignSelf: 'center' }}>
         Abandonner la vente
       </button>
+    </div>
+  )
+}
+
+// LA FIN DE VENTE : CE QU'ON PROPOSE, ET CE QU'ON REFUSE DE PROMETTRE.
+//
+// ⚠ LES BOUTONS D'ENVOI SONT DESACTIVES, ET CE N'EST PAS UN OUBLI.
+//
+// `TicketProcessor` accepte `mode: "renvoyer"` avec un canal `email` ou `sms`, et rend
+// `renvoye: true`. Mais le processeur ne contient NI expediteur, NI passerelle SMS, NI evenement :
+// verifie ligne a ligne le 29/08, il ne fait que retourner le booleen. Et `MAILER_DSN` vaut
+// `null://null`, de sorte que meme un envoi ecrit ne partirait nulle part.
+//
+// Un bouton actif ici afficherait donc « Ticket envoye » pour un courriel jamais compose. C'est le
+// mensonge le plus cher du lot : le client repart sans rien, le caissier croit l'avoir servi, et
+// personne ne s'en apercoit avant la reclamation. On garde les boutons — Maxime les a demandes, et
+// les effacer ferait oublier la demande — mais ils disent leur etat.
+function FinDeVente({ info, onAfficher, onSansTicket }) {
+  // Une vente a zero euro ne sort pas de ticket, et ce n'est pas une question de seuil : une entree
+  // offerte ou un lot d'invitations faisait sortir un ticket a 0 € que le client jette.
+  if (info.venteGratuite) {
+    return (
+      <div className="card" style={{ marginTop: 12 }}>
+        <div className="card-b">
+          <div className="nm">Vente enregistrée — aucun ticket</div>
+          <p className="hint" style={{ marginTop: 6 }}>
+            Le total est de 0 € : il n’y a rien à justifier au client. La vente est bien
+            enregistrée et comptabilisée — c’est le papier qu’on ne sort pas, pas l’opération.
+          </p>
+          <button className="btn ghost sm" type="button" onClick={onSansTicket}>Fermer</button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="card" style={{ marginTop: 12 }}>
+      <div className="card-b">
+        <div className="nm">Souhaitez-vous un ticket ?</div>
+        <p className="hint" style={{ marginTop: 6 }}>
+          Le montant est en dessous du seuil d’impression de ce point de vente : le ticket ne sort
+          pas tout seul. Il reste éditable ici, et depuis l’historique des ventes.
+        </p>
+
+        <div className="row" style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+          <button className="btn primary" type="button" onClick={onAfficher}>Afficher le ticket</button>
+          <button className="btn ghost" type="button" onClick={onSansTicket}>Sans ticket</button>
+        </div>
+
+        {info.renvoiPropose ? (
+          <>
+            <div className="fiche-sec" style={{ marginTop: 14 }}>L’envoyer au client</div>
+            <div className="row" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button className="btn sm" type="button" disabled>Par courriel</button>
+              <button className="btn sm" type="button" disabled>Par SMS</button>
+            </div>
+            <p className="hint">
+              <b>Aucun envoi n’est branché aujourd’hui</b> — ni courriel, ni SMS. Le serveur accepte
+              la demande sans l’exécuter : un bouton actif annoncerait un envoi qui n’a pas lieu.
+              Ils s’activeront quand un expéditeur sera configuré.
+            </p>
+          </>
+        ) : (
+          <p className="hint" style={{ marginTop: 10 }}>
+            Aucun client n’est rattaché à cette vente : il n’y a pas d’adresse ni de numéro où
+            envoyer le ticket. Rattachez un client avant de valider pour pouvoir le lui envoyer.
+          </p>
+        )}
+      </div>
     </div>
   )
 }
@@ -738,11 +1168,19 @@ function TicketVente({ ticket }) {
       <div className="tb">
         <div className="tnum">Ticket {ticket.numero}</div>
         {ticket.lignes.map((l, i) => (
-          <div className="trow" key={i}>
+          <div key={i}>
+          <div className="trow">
             <span>{l.quantite} × {l.libelle}</span>
             <span className="num">
               {euros(l.montant != null ? l.montant : parseFloat(l.pu || '0') * l.quantite)}
             </span>
+          </div>
+          {l.options.map((o, j) => (
+            <div className="trow" key={`o${j}`} style={{ paddingLeft: 14, opacity: 0.75, fontSize: 13 }}>
+              <span>· {o.libelle}</span>
+              <span className="num">{o.montant != null ? euros(o.montant) : ''}</span>
+            </div>
+          ))}
           </div>
         ))}
         {ticket.duplicata && (

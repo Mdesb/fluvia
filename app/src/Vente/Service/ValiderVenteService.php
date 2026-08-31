@@ -66,9 +66,11 @@ final class ValiderVenteService
     private array $evenementsEnAttente = [];
 
     public function __construct(
+        private readonly RequiredComplementGuard $complementsObligatoires,
         private readonly EntityManagerInterface $em,
         private readonly Connection $connection,
         private readonly PanierCalculateur $calculateur,
+        private readonly TicketPrintingPolicy $politiqueTicket,
         private readonly DecrementStockHandler $stock,
         private readonly ScellementHandler $scellement,
         private readonly AppairageAccesInterface $appairage,
@@ -100,11 +102,45 @@ final class ValiderVenteService
             throw new UnprocessableEntityHttpException('Reste dû non nul : validation impossible sans paiement différé (RG-M2-03).');
         }
 
+        // ⚠ UNE VENTE SANS AUCUNE LIGNE SCELLAIT UNE OPÉRATION FISCALE POUR RIEN.
+        //
+        // Trouvé le 30/08 en vendant un vrai billet en préproduction : l'ajout de ligne avait échoué
+        // sur une option obligatoire, la vente est restée vide, et `POST /valider` a rendu 201 —
+        // consommant le numéro 1 de la chaîne NF525 et posant l'empreinte que la vente suivante
+        // chaîne. Cette chaîne est **inaltérable par construction** : le numéro ne se libère pas,
+        // l'entrée ne se retire pas. À une vraie caisse, un clic de trop laisse une écriture fiscale
+        // définitive, et la clôture du jour la compte.
+        //
+        // ⚠ La garde du reste dû ne pouvait pas l'attraper : une vente sans ligne a un reste dû de
+        // ZÉRO. Elle passait donc en satisfaisant parfaitement le contrôle — le même piège qu'une
+        // assertion vacueusement vraie, qui réussit d'autant mieux qu'il n'y a rien à contrôler.
+        //
+        // ── « AUCUNE LIGNE » ET NON « TOTAL NUL », ET LA NUANCE COMPTE ─────────────────────────
+        //
+        // Un total nul est LÉGITIME : un billet offert, une remise de 100 %, un geste commercial.
+        // Ces ventes-là portent des lignes, elles disent ce qui a été remis, et elles ont toute leur
+        // place au journal. Refuser sur le total interdirait un cas réel ; refuser sur l'absence de
+        // ligne ne refuse rien qui ait un sens.
+        if ($vente->getLignes()->isEmpty()) {
+            throw new UnprocessableEntityHttpException(
+                'Une vente sans aucune ligne ne peut pas être validée : le scellement NF525 est '
+                .'irréversible et consommerait un numéro de séquence pour rien.'
+            );
+        }
+
         // D44-bis — porté par la vente : une vente directe n'a pas de session d'où le déduire.
         $pdv = $vente->getPointDeVente();
         if ($pdv === null) {
             throw new UnprocessableEntityHttpException('Point de vente introuvable pour le scellement.');
         }
+
+        // ── LES COMPLÉMENTS OBLIGATOIRES, AVANT TOUTE ÉCRITURE ─────────────────────────────────
+        //
+        // Un produit peut en exiger un autre — le bonnet de bain avec l'entrée bassin, quand le
+        // règlement intérieur l'impose. La vérification est ici, et non après l'ouverture de la
+        // transaction : un refus ne doit rien avoir commencé à écrire, sinon on découvre le
+        // manquant au milieu d'un décrément de stock.
+        $this->complementsObligatoires->verifier($vente);
 
         // Voir le docblock de classe (RG-CQ1-08) : cette transaction englobe le décrément de stock, la
         // création/recharge des supports ET le flush qui scelle l'OperationScellee.
@@ -155,8 +191,14 @@ final class ValiderVenteService
                 // D44-bis — une vente directe n'a pas de comptoir, donc pas d'imprimante : la marquer
                 // « imprimée » écrirait un fait qui n'a pas eu lieu. Le seuil par défaut valant 0 €,
                 // sans cette condition **toute** vente directe serait déclarée imprimée.
-                $seuil = $this->calculateur->centimes($pdv->getSeuilImpression());
-                if ($vente->getSession() !== null && $this->calculateur->centimes($vente->getTotal()) >= $seuil) {
+                // ⚠ LA MEME REGLE QUE `TicketProcessor`, ET DESORMAIS LE MEME CODE.
+                //
+                // Elle etait recopiee ici. Le 29/08, la version de `TicketProcessor` a ete corrigee
+                // pour qu'une vente entierement gratuite ne sorte pas de ticket -- et celle-ci ne
+                // l'a pas ete : une vente a 0 € en session restait marquee « imprimee » pour un
+                // document que l'autre refusait d'editer, et la reedition suivante aurait annonce
+                // un DUPLICATA d'un ticket qui n'a jamais existe.
+                if ($this->politiqueTicket->marqueImprimeeALaValidation($vente)) {
                     $vente->setImprime(true);
                 }
 

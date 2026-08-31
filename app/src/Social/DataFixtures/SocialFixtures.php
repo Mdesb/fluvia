@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Social\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\DataFixtures\SocleFixtures;
 use App\Organisation\Entity\Etablissement;
 use App\Securite\Entity\Permission;
@@ -30,6 +31,8 @@ use Doctrine\Persistence\ObjectManager;
  */
 final class SocialFixtures extends Fixture implements DependentFixtureInterface
 {
+    use FixturesIdempotentes;
+
     /** Jeton inerte de démonstration — aucune valeur chez aucun réseau. */
     public const DEMO_ACCESS_TOKEN = 'demo-social-access-token-0000000000';
 
@@ -58,7 +61,7 @@ final class SocialFixtures extends Fixture implements DependentFixtureInterface
         foreach (['read_account', 'manage_account', 'read_post', 'publish'] as $action) {
             $permission = $manager->getRepository(Permission::class)->findOneBy(['module' => 'social', 'action' => $action]);
             if (!$permission instanceof Permission) {
-                $permission = (new Permission())->setModule('social')->setAction($action);
+                $permission = $this->permissionNommee($manager, 'social', $action);
                 $manager->persist($permission);
             }
             $permissions[] = $permission;
@@ -74,6 +77,21 @@ final class SocialFixtures extends Fixture implements DependentFixtureInterface
         $etabA = $manager->getRepository(Etablissement::class)->findOneBy(['nom' => SocleFixtures::ETAB_A_NOM]);
         $etabB = $manager->getRepository(Etablissement::class)->findOneBy(['nom' => SocleFixtures::ETAB_B_NOM]);
         if (!$etabA instanceof Etablissement || !$etabB instanceof Etablissement) {
+            $manager->flush();
+
+            return;
+        }
+
+        // ── LE BLOC DE DÉMONSTRATION NE SE POSE QU'UNE FOIS ──────────────────────────────────
+        //
+        // Tout ce qui suit est un jeu de données cohérent, pas un référentiel : le reposer sur une
+        // base qui l'a déjà écraserait ce qui a été corrigé à la main depuis, ou le dupliquerait
+        // pour les entités sans contrainte d'unicité — silencieusement.
+        //
+        // Les permissions et les rôles restent AU-DESSUS de cette garde : ils doivent être rejoués à
+        // chaque chargement, sans quoi un droit ajouté au code n'atteindrait jamais une base
+        // existante.
+        if ($manager->getRepository(SocialAccount::class)->findOneBy([]) !== null) {
             $manager->flush();
 
             return;

@@ -122,9 +122,20 @@ final class FixturesIdempotentesTest extends KernelTestCase
         $comptes = [];
 
         foreach ($connexion->createSchemaManager()->listTableNames() as $table) {
-            // L'historique des migrations n'est pas une donnée de démonstration : il bouge pour des
-            // raisons qui n'ont rien à voir avec l'idempotence des fixtures.
-            if ($table === 'doctrine_migration_versions') {
+            // DEUX JOURNAUX, PAS DES DONNEES.
+            //
+            // L'historique des migrations bouge pour des raisons qui n'ont rien a voir avec
+            // l'idempotence des fixtures.
+            //
+            // `audit_entree` est un REGISTRE : il enregistre que quelque chose a ete touche. Un
+            // second chargement qui remet a jour le nom d'un compte de demonstration produit
+            // legitimement une entree d'audit -- et c'est meme la preuve que l'audit fonctionne.
+            // Exiger qu'il ne bouge pas reviendrait a exiger que les fixtures n'ecrivent RIEN, ce
+            // qui n'est pas l'idempotence : l'idempotence dit que l'ETAT ne change pas, pas que
+            // l'histoire ne s'ecrit pas.
+            //
+            // > Un journal qui ne grandit pas est un journal qui ne sert a rien.
+            if (\in_array($table, ['doctrine_migration_versions', 'audit_entree'], true)) {
                 continue;
             }
 

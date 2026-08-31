@@ -13,6 +13,7 @@ use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\Organisation\Entity\Etablissement;
 use App\Padel\Enum\LibellePlageHoraire;
+use App\Padel\State\EstablishmentStampProcessor;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
@@ -31,7 +32,7 @@ use Symfony\Component\Validator\Constraints as Assert;
     operations: [
         new GetCollection(security: "is_granted('PERM', 'padel.lire')"),
         new Get(security: "is_granted('PERM', 'padel.lire')"),
-        new Post(security: "is_granted('PERM', 'padel.parametrer')"),
+        new Post(security: "is_granted('PERM', 'padel.parametrer')", processor: EstablishmentStampProcessor::class),
         new Patch(security: "is_granted('PERM', 'padel.parametrer')"),
     ],
     normalizationContext: ['groups' => ['plage:read']],
@@ -47,8 +48,7 @@ class PlageHoraire
 
     #[ORM\ManyToOne(targetEntity: Etablissement::class)]
     #[ORM\JoinColumn(nullable: false)]
-    #[Assert\NotNull]
-    #[Groups(['plage:read', 'plage:write'])]
+    #[Groups(['plage:read'])]
     private ?Etablissement $etablissement = null;
 
     #[ORM\Column(length: 8, enumType: LibellePlageHoraire::class)]

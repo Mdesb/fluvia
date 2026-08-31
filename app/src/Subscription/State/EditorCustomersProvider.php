@@ -18,6 +18,7 @@ use App\Subscription\Entity\SupportAccess;
 use App\Subscription\Security\EditorOnly;
 use App\Subscription\Service\OfferCatalog;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Uid\Uuid;
 
@@ -40,12 +41,13 @@ final class EditorCustomersProvider implements ProviderInterface
         private readonly EditorOnly $editorOnly,
         private readonly EditorTenantResolver $editorTenant,
         private readonly OfferCatalog $catalog,
+        private readonly Security $securite,
     ) {
     }
 
     public function provide(Operation $operation, array $uriVariables = [], array $context = []): object|array|null
     {
-        $this->editorOnly->assertEditor();
+        $this->editorOnly->assertEditor('editor.read_customer');
 
         if ($operation instanceof CollectionOperationInterface) {
             return array_map([$this, 'fiche'], $this->clientsDeLediteur());
@@ -88,6 +90,12 @@ final class EditorCustomersProvider implements ProviderInterface
         return $client;
     }
 
+    /** Qui porte `editor.read_billing` voit les montants et le mandat ; les autres, non. */
+    private function voitLArgent(): bool
+    {
+        return $this->securite->isGranted('PERM', 'editor.read_billing');
+    }
+
     private function fiche(Client $client): EditorCustomer
     {
         $vue = new EditorCustomer();
@@ -110,15 +118,35 @@ final class EditorCustomersProvider implements ProviderInterface
                 'id' => $abonnement->getId()->toRfc4122(),
                 'planLabel' => $abonnement->getPlan()?->getLabel() ?? '',
                 'status' => $abonnement->getStatus()->value,
-                'monthlyPriceCents' => $this->prix($abonnement),
+                // ⚠ LA FICHE SE TAIT SUR L'ARGENT SANS `editor.read_billing`.
+                //
+                // Une permission sur la ressource ne suffisait pas : la fiche PORTE les montants,
+                // donc autoriser l'assistance à la lire lui aurait donné le chiffre d'affaires de
+                // chaque client — exactement ce que « l'argent est un rôle à part » exclut.
+                //
+                // Le libellé du plan et le statut restent : un agent doit savoir sur quelle offre
+                // est son interlocuteur. Le prix, non — c'est une information fonctionnelle d'un
+                // côté, commerciale de l'autre.
+                'monthlyPriceCents' => $this->voitLArgent() ? $this->prix($abonnement) : null,
                 'startedAt' => $abonnement->getStartedAt()?->format(\DateTimeInterface::ATOM),
                 'provisioningStatus' => $demande?->getStatus()->value,
                 'provisioningFailure' => $demande?->getFailureReason(),
                 'establishmentName' => $etablissement?->getNom(),
+
+                // ⚠ L'IDENTIFIANT, ET PAS SEULEMENT LE NOM. Sans lui, l'écran qui choisit chez quel
+                // client basculer peut afficher l'établissement et ne peut pas ouvrir l'accès :
+                // `POST /editor/support-accesses` attend un `establishmentId`, et cette fiche est la
+                // seule source qui l'ait. Le seul contournement possible serait de retrouver
+                // l'établissement par son NOM — qui n'est pas unique, et qui ferait donc ouvrir un
+                // accès chez le mauvais client une fois de temps en temps.
+                'establishmentId' => $etablissement?->getId()->toRfc4122(),
             ];
         }
 
-        $vue->mandate = $this->mandat($client);
+        // Même règle pour le mandat : il porte les quatre derniers chiffres de l'IBAN. Utile pour
+        // reconnaître un compte au téléphone quand on traite un impayé ; sans objet pour qui n'a
+        // pas à traiter d'impayés.
+        $vue->mandate = $this->voitLArgent() ? $this->mandat($client) : null;
         $vue->supportAccesses = $this->acces(array_values($etablissements));
 
         return $vue;

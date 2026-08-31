@@ -12,6 +12,7 @@ use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\Offre\Entity\Saison;
+use App\Patinoire\State\EstablishmentStampProcessor;
 use App\Organisation\Entity\Etablissement;
 use App\Patinoire\Enum\BasculeSaisonEphemere;
 use Doctrine\ORM\Mapping as ORM;
@@ -37,7 +38,7 @@ use Symfony\Component\Validator\Constraints as Assert;
     operations: [
         new GetCollection(security: "is_granted('PERM', 'patinoire.lire')"),
         new Get(security: "is_granted('PERM', 'patinoire.lire')"),
-        new Post(security: "is_granted('PERM', 'patinoire.configurer')"),
+        new Post(security: "is_granted('PERM', 'patinoire.configurer')", processor: EstablishmentStampProcessor::class),
         new Patch(security: "is_granted('PERM', 'patinoire.configurer')"),
     ],
     normalizationContext: ['groups' => ['saison_ephemere:read']],
@@ -53,8 +54,7 @@ class SaisonEphemere
 
     #[ORM\ManyToOne(targetEntity: Etablissement::class)]
     #[ORM\JoinColumn(nullable: false)]
-    #[Assert\NotNull]
-    #[Groups(['saison_ephemere:read', 'saison_ephemere:write'])]
+    #[Groups(['saison_ephemere:read'])]
     private ?Etablissement $etablissement = null;
 
     #[ORM\Column(length: 120)]

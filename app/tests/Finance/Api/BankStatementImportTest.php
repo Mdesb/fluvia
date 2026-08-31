@@ -143,5 +143,19 @@ final class BankStatementImportTest extends TreasuryApiTestCase
 
         $lignes = $client->request('GET', '/api/bank_statement_lines', $entete + ['query' => ['statementImport' => $import['id']]])->toArray();
         self::assertSame('unmatched', $lignes['member'][0]['status'], 'Aucune suggestion sur un compte inactif.');
+
+        // ⚠ LE FILTRE DOIT REDUIRE — et il ne le faisait pas. Le test ci-dessus filtre puis lit
+        // member[0] : avec un filtre inerte il lisait la meme ligne, la fixture n en ayant qu une.
+        // Il passait donc dans les deux cas.
+        //
+        // Un import INEXISTANT doit rendre zero. Mesure du 30/08 avant correction : 1 ligne. La
+        // cause etait Finance/Treasury/Entity absent de mapping.paths, la liste que parcourt
+        // AttributeFilterPass — le filtre etait declare, documente, accepte, et ignore.
+        //
+        // Une liste vide intrigue ; une liste pleine, jamais.
+        $horsPortee = $client->request('GET', '/api/bank_statement_lines', $entete + [
+            'query' => ['statementImport' => '00000000-0000-4000-8000-000000000000'],
+        ])->toArray();
+        self::assertCount(0, $horsPortee['member'], 'Le filtre statementImport ne reduit rien : il est declare mais jamais enregistre.');
     }
 }

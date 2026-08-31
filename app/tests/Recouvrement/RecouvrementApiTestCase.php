@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Recouvrement;
 
+use App\Tests\SchemaDuHarnais;
 use ApiPlatform\Symfony\Bundle\Test\ApiTestCase;
 use ApiPlatform\Symfony\Bundle\Test\Client;
 use App\Acces\DataFixtures\AccesFixtures;
@@ -21,7 +22,6 @@ use App\Sport\Entity\AbonnementFitness;
 use App\Sport\Entity\EcheanceSepa;
 use App\Tests\DdlHorsMapping;
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Tools\SchemaTool;
 
 /**
  * Base des tests d'API du moteur de recouvrement partagé (`App\Recouvrement`). Le seul port
@@ -44,15 +44,9 @@ abstract class RecouvrementApiTestCase extends ApiTestCase
         /** @var EntityManagerInterface $em */
         $em = $container->get('doctrine')->getManager();
 
-        $tool = new SchemaTool($em);
-        $metadata = $em->getMetadataFactory()->getAllMetadata();
-        // FK_CHECKS désactivé le temps du drop/create (nombreuses tables inter-référencées) : évite les
-        // échecs d'ordonnancement DROP/CREATE observés lors de l'introduction du schéma recouvrement_*.
-        $connexion = $em->getConnection();
-        $connexion->executeStatement('SET FOREIGN_KEY_CHECKS=0');
-        $tool->dropSchema($metadata);
-        $tool->createSchema($metadata);
-        $connexion->executeStatement('SET FOREIGN_KEY_CHECKS=1');
+        // Le schéma est construit UNE FOIS par processus, puis vidé entre les tests.
+        // Le faire détruire et reconstruire par chaque `setUp()` coûtait ~10 s par test.
+        SchemaDuHarnais::reinitialiser($em);
 
         DdlHorsMapping::appliquer($em);
 

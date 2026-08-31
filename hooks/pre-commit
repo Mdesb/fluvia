@@ -64,6 +64,9 @@ lancer_gf garde-fou-cloisonnement.php || ECHEC=1
 # Secrets : sur l'arbre de travail également.
 [ -f "$RACINE/bin/garde-fou-secrets.php" ] && { lancer_gf garde-fou-secrets.php || ECHEC=1; }
 
+# Dependances de dev (n°20) : du code de production qui importe un paquet absent en production.
+[ -f "$RACINE/bin/garde-fou-dependances-dev.php" ] && { lancer_gf garde-fou-dependances-dev.php || ECHEC=1; }
+
 # Couverture de perimetre en lecture (voir hooks/pre-receive).
 [ -f "$RACINE/bin/garde-fou-couverture-perimetre.php" ] && { lancer_gf garde-fou-couverture-perimetre.php || ECHEC=1; }
 
@@ -77,6 +80,22 @@ lancer_gf garde-fou-cloisonnement.php || ECHEC=1
 # La lecon n'est pas « faire attention » : c'est que trois listes redites se desynchronisent, et que
 # seul un filet qui les compare a l'inventaire reel le voit.
 [ -f "$RACINE/bin/garde-fou-references-libres.php" ] && { lancer_gf garde-fou-references-libres.php || ECHEC=1; }
+
+# Une propriete declaree dans un `#[ApiFilter]` doit EXISTER : API Platform ignore une propriete
+# inconnue en silence, et la collection sort ENTIERE. Contrairement aux filtres qui rendent une liste
+# vide, celui-ci ne remonte jamais en reclamation -- des donnees qui s'affichent n'intriguent personne.
+[ -f "$RACINE/bin/garde-fou-filtres-declares.php" ] && { lancer_gf garde-fou-filtres-declares.php || ECHEC=1; }
+
+# Le prefixe `/editor/` ne protege rien : aucune regle `access_control` ne vise `^/api/editor`, la
+# garde est portee par chaque operation. Or il se LIT comme une barriere -- `/editor/plans` est
+# publique quand `/editor/catalog/plans` est reservee a l'editeur. On empeche la prochaine route
+# d'heriter de l'apparence de surete sans la surete.
+[ -f "$RACINE/bin/garde-fou-routes-editeur.php" ] && { lancer_gf garde-fou-routes-editeur.php || ECHEC=1; }
+
+# Une lecture frontale qui vaut toujours `undefined` : la propriete lue n'est dans aucun groupe que
+# porte la relation, donc le serveur n'envoie qu'un identifiant. Cliquet — la dette du jour est
+# gelee, son augmentation refusee.
+[ -f "$RACINE/bin/garde-fou-relations-nues.php" ] && { lancer_gf garde-fou-relations-nues.php || ECHEC=1; }
 
 # Événements du catalogue (D2/D22) : abonné inerte, émission hors contrat, cliquet.
 [ -f "$RACINE/bin/garde-fou-evenements-orphelins.php" ] && { lancer_gf garde-fou-evenements-orphelins.php || ECHEC=1; }
@@ -96,6 +115,29 @@ lancer_gf garde-fou-cloisonnement.php || ECHEC=1
 # Une suppression dans un up() de migration doit etre voulue et le dire (D32).
 [ -f "$RACINE/bin/garde-fou-drop-migrations.php" ] && { lancer_gf garde-fou-drop-migrations.php || ECHEC=1; }
 
+# Lier un OBJET a un parametre de requete sans dire son type (D58). Doctrine passe l'identifiant
+# sans son type `uuid` : la requete reste valide et compte zero, sans rien signaler.
+[ -f "$RACINE/bin/garde-fou-liaisons-objet.php" ] && { lancer_gf garde-fou-liaisons-objet.php || ECHEC=1; }
+[ -f "$RACINE/bin/garde-fou-nullable-non-nul.php" ] && { lancer_gf garde-fou-nullable-non-nul.php || ECHEC=1; }
+[ -f "$RACINE/bin/garde-fou-vacuite-tests.php" ] && { lancer_gf garde-fou-vacuite-tests.php || ECHEC=1; }
+[ -f "$RACINE/bin/garde-fou-espacement-en-ligne.php" ] && { lancer_gf garde-fou-espacement-en-ligne.php || ECHEC=1; }
+[ -f "$RACINE/bin/garde-fou-champ-cloisonnement.php" ] && { lancer_gf garde-fou-champ-cloisonnement.php || ECHEC=1; }
+[ -f "$RACINE/bin/garde-fou-post-sans-suppression.php" ] && { lancer_gf garde-fou-post-sans-suppression.php || ECHEC=1; }
+[ -f "$RACINE/bin/garde-fou-filtres-muets.php" ] && { lancer_gf garde-fou-filtres-muets.php || ECHEC=1; }
+
+# Appels du frontal dans le vide (n°33) : un chemin qu'aucune route ne sert rend un 404, que le
+# `catch` de l'ecran transforme en liste vide. Le defaut ne se voit JAMAIS a l'ecran.
+#
+# ⚠ Ce controle demarre le noyau Symfony pour lire `debug:router` — deux secondes, et c'est la seule
+# source qui dise ce que le serveur sert vraiment. Il porte lui-meme son environnement et sa memoire.
+[ -f "$RACINE/bin/garde-fou-appels-dans-le-vide.php" ] && { lancer_gf garde-fou-appels-dans-le-vide.php || ECHEC=1; }
+
+# Classes fantomes (n°37) : une classe CSS citee par un ecran et definie dans aucune feuille. Pas
+# de dependance, pas de noyau -- une lecture de fichiers, donc il tourne partout.
+[ -f "$RACINE/bin/garde-fou-classes-fantomes.php" ] && { lancer_gf garde-fou-classes-fantomes.php || ECHEC=1; }
+# ⚠ Un .md casse se lit comme si de rien n'etait : aucun compilateur ne le voit.
+[ -x "$RACINE/bin/garde-fou-marqueurs-de-conflit.sh" ] && { echo "── Marqueurs de conflit (n°38)"; "$RACINE/bin/garde-fou-marqueurs-de-conflit.sh" || ECHEC=1; }
+
 # Nommage : sur les fichiers **indexés** et ajoutés. `--cached` est ce qui sera réellement commité,
 # et c'est aussi ce qui évite de dépendre d'une révision de référence inexistante à ce stade.
 if [ -f "$RACINE/bin/garde-fou-nommage-anglais.php" ]; then
@@ -108,14 +150,52 @@ if [ -f "$RACINE/bin/garde-fou-nommage-anglais.php" ]; then
     fi
 fi
 
-# Droits du frontend (D39), ecrit par claude-H. Sur l'hote : node n'est pas dans l'image PHP.
-if [ -f "$RACINE/frontend/scripts/verifier-droits.mjs" ]; then
-    if command -v node >/dev/null 2>&1; then
-        ( cd "$RACINE/frontend" && node scripts/verifier-droits.mjs ) || ECHEC=1
-    else
-        echo "· Droits du frontend IGNORÉ — « node » indisponible. Le contrôle n'a PAS tourné."
+# ⚠ UN SEUL BLOC, HUIT APPELANTS — ET C'EST LA COPIE QUI AVAIT FAIT LE TROU.
+#
+# Trois contrôles frontaux étaient câblés ici par trois copies du même bloc de sept lignes. Les cinq
+# autres ne l'étaient pas : ajouter un contrôle demandait de recopier une quatrième fois, et cinq
+# fois personne ne l'a fait. Mesuré le 31/08, en fusionnant `verifier-dates-locales.mjs` — câblé
+# dans `bin/garde-fous.sh` et `hooks/pre-receive`, absent d'ici.
+#
+# Rien ne passait pour autant, `pre-receive` les porte tous les huit. Ce qui se perdait est le
+# MOMENT du retour : au push au lieu du commit, donc après plusieurs commits empilés, donc avec la
+# tentation du `--no-verify` pour ne pas tout refaire.
+#
+# `node` n'est pas dans l'image PHP : sur l'hôte, on le dit plutôt que de faire silence — un
+# contrôle sauté sans un mot se lit comme un contrôle passé.
+FRONT_LANCES=""
+
+lancer_front() {
+    script="$1"
+    libelle="$2"
+
+    # Enregistré AVANT toute sortie anticipée : le filet de complétude vérifie que ce hook CONNAÎT
+    # le contrôle, pas qu'il a pu le lancer. Un script absent de l'arbre ou un `node` manquant sont
+    # des circonstances ; un script que le hook ignore est un défaut.
+    FRONT_LANCES="$FRONT_LANCES $script"
+
+    [ -f "$RACINE/frontend/scripts/$script" ] || return 0
+
+    if ! command -v node >/dev/null 2>&1; then
+        echo "· $libelle IGNORÉ — « node » indisponible. Le contrôle n'a PAS tourné."
+        return 0
     fi
-fi
+
+    ( cd "$RACINE/frontend" && node "scripts/$script" ) || ECHEC=1
+}
+
+lancer_front verifier-droits.mjs        "Droits du frontend (D39)"
+lancer_front verifier-cache.mjs         "Cache du service worker (n°18)"
+lancer_front garde-fou-ecart.mjs        "Écart client/serveur (n°15)"
+lancer_front verifier-formats.mjs       "Formats d'écriture (n°11)"
+lancer_front verifier-imports.mjs       "Imports manquants (n°10)"
+lancer_front verifier-cles-doubles.mjs  "Clés en double (n°37)"
+lancer_front verifier-classes.mjs       "Classes CSS déclarées (n°16)"
+lancer_front verifier-dates-locales.mjs "Dates locales"
+lancer_front verifier-profil-charge.mjs "Profil chargé avant le rendu"
+lancer_front verifier-boutons-nommes.mjs "Boutons nommés"
+lancer_front verifier-clic-clavier.mjs   "Clic au clavier"
+lancer_front verifier-contrastes.mjs     "Contrastes"
 
 # ⚠ FILET DE COMPLÉTUDE — même leçon que `pre-receive`, même remède.
 #
@@ -142,11 +222,47 @@ for chemin in "$RACINE"/bin/garde-fou-*.php; do
     esac
 done
 
+# ⚠ ET LE MEME FILET POUR LES CONTRÔLES FRONTAUX, QUI N'EN AVAIENT AUCUN.
+#
+# Celui du dessus ratisse `bin/garde-fou-*.php` et rien d'autre. Un contrôle frontal neuf pouvait
+# donc être ajouté sans qu'aucun crochet ne s'en aperçoive — c'est précisément ce qui est arrivé à
+# cinq d'entre eux, et personne ne l'a vu jusqu'à ce qu'on compte les trois listes à la main.
+#
+# Le nom distingue les deux familles du répertoire, et c'est délibérément lisible :
+#
+#     verifier-*.mjs · garde-fou-*.mjs   des CONTRÔLES, ils doivent tourner
+#     mesurer-*.mjs                      des SONDES, lancées à la main quand on cherche quelque chose
+for chemin in "$RACINE"/frontend/scripts/verifier-*.mjs "$RACINE"/frontend/scripts/garde-fou-*.mjs; do
+    [ -f "$chemin" ] || continue
+    nom="$(basename "$chemin")"
+    case " $FRONT_LANCES " in
+        *" $nom "*) ;;
+        *)
+            echo "✗ Contrôle frontal présent dans l'arbre mais jamais lancé par ce hook : $nom"
+            echo "  Ajoute une ligne « lancer_front $nom » dans hooks/pre-commit,"
+            echo "  et vérifie les deux autres listes : bin/garde-fous.sh et hooks/pre-receive."
+            ECHEC=1
+            ;;
+    esac
+done
+
 if [ "$ECHEC" -ne 0 ]; then
     echo
     echo "✗ Commit refusé : au moins un garde-fou a échoué."
-    echo "  Reproduis : ./bin/garde-fous.sh"
-    echo "  Si tu dois vraiment passer outre : git commit --no-verify, et dis pourquoi dans MESSAGES.md."
+    echo
+    echo "  Le message du contrôle qui a échoué, plus haut, dit ce qui est cassé."
+    echo "  Reproduis-le autant de fois qu'il faut :  ./bin/garde-fous.sh"
+    echo
+    echo "  Chacun de ces contrôles existe parce que le défaut qu'il refuse est déjà arrivé,"
+    echo "  et qu'il n'avait produit aucun symptôme visible."
+    # ⚠ D53 : ON N'ECRIT PAS LE CONTOURNEMENT ICI.
+    #
+    # Cette sortie disait « si tu dois vraiment passer outre : git commit --no-verify ». C'est le
+    # cas exact que D53 refuse : « un garde-fou qui propose son propre contournement transforme une
+    # question technique en question de caractere -- et le caractere cede un vendredi soir ».
+    #
+    # Le contournement est documente dans l'en-tete de ce fichier, ou celui qui le cherche le
+    # trouvera. Celui qui est presse ne tombera pas dessus.
     exit 1
 fi
 

@@ -23,6 +23,28 @@ use Symfony\Component\Uid\Uuid;
  */
 final class CalculateurDroits
 {
+    /**
+     * LES TROIS DROITS QUE PORTE TOUT COMPTE RATTACHE A UN ETABLISSEMENT.
+     *
+     * Demander de l'aide n'est pas une fonctionnalite qu'on achete, ni un role qu'un exploitant
+     * doit penser a distribuer. Le jour ou sa caisse ne s'ouvre pas, l'agent d'accueil doit
+     * pouvoir le dire — et il ne peut pas, si le droit de le dire depend d'un role que personne
+     * ne lui a donne. La porte de l'assistance etait donc fermee exactement pour les comptes qui
+     * en ont le plus besoin : ceux qu'on n'a pas configures.
+     *
+     * On accorde donc trois droits, et strictement trois : lire la base de connaissances, ouvrir
+     * un ticket, suivre LES SIENS. Rien de plus. Traiter la file, lire les tickets des autres,
+     * ecrire la base restent des roles — l'assistance est ouverte a tous, elle n'est pas
+     * administrable par tous.
+     *
+     * @var list<string>
+     */
+    private const ASSISTANCE_DE_SOCLE = [
+        'support.lire',
+        'support.ouvrir_ticket',
+        'support.lire_ticket_soi',
+    ];
+
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly SupportAccessRightsInterface $supportAccessRights,
@@ -50,11 +72,15 @@ final class CalculateurDroits
         $affectations = $this->em->getRepository(Affectation::class)->findBy($criteres);
 
         $codes = [];
+        // Rattachement, et non « a des droits » : un role vide est un role quand meme. C'est
+        // l'appartenance a l'etablissement qui ouvre l'assistance, pas le contenu du role.
+        $rattache = false;
         foreach ($affectations as $affectation) {
             $role = $affectation->getRole();
             if ($role === null) {
                 continue;
             }
+            $rattache = true;
             foreach ($role->getPermissions() as $permission) {
                 $codes[$permission->getCode()] = true;
             }
@@ -81,8 +107,27 @@ final class CalculateurDroits
             if ($role === null) {
                 continue;
             }
+            $rattache = true;
             foreach ($role->getPermissions() as $permission) {
                 $codes[$permission->getCode()] = true;
+            }
+        }
+
+        // --- L'ASSISTANCE EST DU SOCLE, PAS UNE OPTION ---
+        //
+        // Place APRES les affectations et les delegations, et avant l'acces d'assistance de
+        // l'editeur : ce bloc ne peut qu'AJOUTER, il ne retire ni ne remplace rien. Un compte qui
+        // porte deja `support.administrer` par son role le garde ; il gagne ici, au pire, des
+        // droits qu'il possedait.
+        //
+        // Garde par le rattachement : un compte sans aucune affectation sur l'etablissement actif
+        // n'en obtient rien. Sans cette garde, `support.lire_ticket_soi` s'accorderait sur un
+        // etablissement ou l'on n'est pas — le cloisonnement le rattraperait (les extensions
+        // Doctrine filtrent), mais on aurait fait dependre l'etancheite d'un second rempart au
+        // lieu du premier.
+        if ($rattache) {
+            foreach (self::ASSISTANCE_DE_SOCLE as $codeSocle) {
+                $codes[$codeSocle] = true;
             }
         }
 

@@ -29,7 +29,14 @@ final class ReplaceDocumentVersionApiTest extends DmsApiTestCase
 
         self::assertResponseIsSuccessful();
         $corps = $reponse->toArray();
-        self::assertStringNotContainsString($idV1, $corps['currentVersion'], 'currentVersion doit pointer une nouvelle version, pas v1.');
+        // `currentVersion` sortait en IRI nue ; depuis que `DocumentVersion` expose ses champs
+        // dans `document:read`, la relation est embarquee et le champ est un objet. L'intention ne
+        // change pas -- l'identifiant est lu quel que soit le format, pour que l'assertion survive
+        // au prochain changement de groupe.
+        $version = $corps['currentVersion'];
+        $iriVersion = \is_array($version) ? (string) ($version['@id'] ?? '') : (string) $version;
+        self::assertNotSame('', $iriVersion, 'currentVersion absent de la reponse.');
+        self::assertStringNotContainsString($idV1, $iriVersion, 'currentVersion doit pointer une nouvelle version, pas v1.');
 
         // v1 reste GET-able (historique des versions).
         $client->request('GET', '/api/document_versions/' . $idV1, $entete);

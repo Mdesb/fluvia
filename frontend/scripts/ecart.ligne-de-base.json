@@ -1,0 +1,561 @@
+{
+    "_lisez_moi": [
+        "Ligne de base GELEE du garde-fou n15 — ecart client/serveur.",
+        "",
+        "Invariant : une operation exposee par l API doit etre ATTEIGNABLE depuis un ecran, ou",
+        "declarer explicitement pourquoi elle ne l est pas, par le marqueur `@sans-ecran:` suivi de",
+        "sa raison dans le fichier PHP.",
+        "",
+        "Ce qui est refuse n est pas l absence d ecran. C est l absence de DECISION : aujourd hui",
+        "rien ne distingue une surface volontairement sans interface — destinee a des integrateurs,",
+        "a une machine, a un module encore sans front — d une operation simplement oubliee. C est ce",
+        "silence qui a laisse l ecart passer de 1042 a 1086 operations exposees en une semaine,",
+        "pendant qu on le mesurait chaque jour.",
+        "",
+        "Une mesure qui ne refuse rien ne fait que documenter la derive.",
+        "",
+        "LE PLAFOND N EST PAS UN OBJECTIF A ZERO. Les 786 operations inatteignables d aujourd hui ne",
+        "sont pas 786 ecrans manquants : une partie est probablement du produit assume. Le cliquet ne",
+        "demande pas de les rattraper, il demande que le nombre ne monte plus. C est exactement ce qui",
+        "a stabilise les treize autres dettes de ce depot, dont aucune n a ete resorbee d un coup.",
+        "",
+        "POURQUOI UN PLAFOND GLOBAL ET PAS UNE LISTE NOMMEE. La mesure compte des declarations",
+        "(`new Get(`) d un cote, des chemins d appel de l autre : les deux ne portent pas la meme",
+        "identite. Les apparier une a une donnerait une liste fausse qu on croirait exacte. Le plafond,",
+        "lui, est vrai.",
+        "",
+        "POUR ABAISSER LE PLAFOND apres avoir branche des ecrans :",
+        "    node frontend/scripts/garde-fou-ecart.mjs --geler",
+        "Le script REFUSE de le relever. Un plafond qui remonte n est plus un cliquet, c est un",
+        "compteur."
+    ],
+    "plafond": 630,
+    "releve": {
+        "exposees": 1161,
+        "sansEcran": 1,
+        "attendues": 1160,
+        "appelees": 538,
+        "atteignables": 530,
+        "inatteignables": 630,
+        "orphelins": [
+            "etatSynchroAcces  (back-office)",
+            "grilleTarifaires  (back-office)",
+            "majFactureFournisseur  (back-office)",
+            "majNoteDeFrais  (back-office)",
+            "padelTournois  (back-office)",
+            "pieceCommerciale  (back-office)",
+            "planningOuverture  (back-office)",
+            "rattacherDroitAccesAbonnement  (back-office)",
+            "supprimerLigneFrais  (back-office)"
+        ],
+        "appelsSansServeur": [],
+        "marqueursPerimes": [],
+        "declares": [
+            {
+                "fichier": "app/src/Platform/ApiResource/LoadedBuild.php",
+                "operations": 1,
+                "raison": "consommée par le déploiement pour vérifier que FPM a chargé le code livré, jamais par une interface."
+            }
+        ],
+        "marqueursSansRaison": [],
+        "clientsNonDeclares": [],
+        "parFront": [
+            {
+                "nom": "back-office",
+                "appelees": 514,
+                "atteignables": 506
+            },
+            {
+                "nom": "boutique en ligne",
+                "appelees": 24,
+                "atteignables": 24
+            }
+        ],
+        "parPrefixe": [
+            [
+                "stock",
+                30
+            ],
+            [
+                "boutique",
+                29
+            ],
+            [
+                "reservation",
+                26
+            ],
+            [
+                "patinoire",
+                17
+            ],
+            [
+                "editor",
+                17
+            ],
+            [
+                "support",
+                15
+            ],
+            [
+                "acces",
+                14
+            ],
+            [
+                "compta",
+                14
+            ],
+            [
+                "personnel",
+                13
+            ],
+            [
+                "musee",
+                12
+            ],
+            [
+                "produits",
+                11
+            ],
+            [
+                "ventes",
+                11
+            ],
+            [
+                "finance",
+                11
+            ],
+            [
+                "factures",
+                10
+            ],
+            [
+                "marketing",
+                10
+            ],
+            [
+                "opening",
+                10
+            ],
+            [
+                "utilisateurs",
+                9
+            ],
+            [
+                "billing",
+                8
+            ],
+            [
+                "padel",
+                8
+            ],
+            [
+                "legal",
+                8
+            ],
+            [
+                "recouvrement",
+                7
+            ],
+            [
+                "etablissements",
+                6
+            ],
+            [
+                "crm",
+                6
+            ],
+            [
+                "clients",
+                6
+            ],
+            [
+                "roles",
+                6
+            ],
+            [
+                "expense",
+                6
+            ],
+            [
+                "piscine",
+                6
+            ],
+            [
+                "article",
+                6
+            ],
+            [
+                "type",
+                5
+            ],
+            [
+                "segments",
+                5
+            ],
+            [
+                "loyalty",
+                5
+            ],
+            [
+                "calendar",
+                5
+            ],
+            [
+                "customer",
+                4
+            ],
+            [
+                "campaigns",
+                4
+            ],
+            [
+                "documents",
+                4
+            ],
+            [
+                "social",
+                4
+            ],
+            [
+                "project",
+                4
+            ],
+            [
+                "option",
+                4
+            ],
+            [
+                "categories",
+                4
+            ],
+            [
+                "saisons",
+                4
+            ],
+            [
+                "supplier",
+                4
+            ],
+            [
+                "caution",
+                4
+            ],
+            [
+                "limite",
+                4
+            ],
+            [
+                "complementary",
+                3
+            ],
+            [
+                "point",
+                3
+            ],
+            [
+                "caisses",
+                3
+            ],
+            [
+                "moyen",
+                3
+            ],
+            [
+                "demande",
+                3
+            ],
+            [
+                "offre",
+                3
+            ],
+            [
+                "referral",
+                3
+            ],
+            [
+                "sport",
+                3
+            ],
+            [
+                "opportunities",
+                3
+            ],
+            [
+                "groupe",
+                3
+            ],
+            [
+                "valeur",
+                3
+            ],
+            [
+                "espace",
+                3
+            ],
+            [
+                "controleurs",
+                3
+            ],
+            [
+                "equipements",
+                3
+            ],
+            [
+                "sous",
+                3
+            ],
+            [
+                "product",
+                3
+            ],
+            [
+                "notifications",
+                3
+            ],
+            [
+                "regions",
+                3
+            ],
+            [
+                "grille",
+                3
+            ],
+            [
+                "taux",
+                3
+            ],
+            [
+                "parametres-facturation",
+                3
+            ],
+            [
+                "mapping",
+                3
+            ],
+            [
+                "config",
+                3
+            ],
+            [
+                "politique",
+                3
+            ],
+            [
+                "sessions-caisse",
+                2
+            ],
+            [
+                "commercial",
+                2
+            ],
+            [
+                "alerte",
+                2
+            ],
+            [
+                "projects",
+                2
+            ],
+            [
+                "jauge",
+                2
+            ],
+            [
+                "organisation",
+                2
+            ],
+            [
+                "affectations",
+                2
+            ],
+            [
+                "export",
+                2
+            ],
+            [
+                "bordereau",
+                2
+            ],
+            [
+                "compte",
+                2
+            ],
+            [
+                "rejet",
+                2
+            ],
+            [
+                "sepa",
+                2
+            ],
+            [
+                "employes",
+                2
+            ],
+            [
+                "creneau",
+                2
+            ],
+            [
+                "bassins",
+                2
+            ],
+            [
+                "demandes-escalade",
+                2
+            ],
+            [
+                "session",
+                1
+            ],
+            [
+                "demandes-rgpd",
+                1
+            ],
+            [
+                "document",
+                1
+            ],
+            [
+                "evenement",
+                1
+            ],
+            [
+                "abonnement",
+                1
+            ],
+            [
+                "projets",
+                1
+            ],
+            [
+                "journal",
+                1
+            ],
+            [
+                "reservations",
+                1
+            ],
+            [
+                "beneficiaires",
+                1
+            ],
+            [
+                "supports",
+                1
+            ],
+            [
+                "appairages",
+                1
+            ],
+            [
+                "passages",
+                1
+            ],
+            [
+                "droit",
+                1
+            ],
+            [
+                "declaration",
+                1
+            ],
+            [
+                "indicateurs",
+                1
+            ],
+            [
+                "espaces",
+                1
+            ],
+            [
+                "permissions",
+                1
+            ],
+            [
+                "fonctionnalites",
+                1
+            ],
+            [
+                "journals",
+                1
+            ],
+            [
+                "profil",
+                1
+            ],
+            [
+                "periode",
+                1
+            ],
+            [
+                "lettrage",
+                1
+            ],
+            [
+                "ecriture",
+                1
+            ],
+            [
+                "regie",
+                1
+            ],
+            [
+                "vente",
+                1
+            ],
+            [
+                "cautions",
+                1
+            ],
+            [
+                "remise",
+                1
+            ],
+            [
+                "mandat",
+                1
+            ],
+            [
+                "ligne",
+                1
+            ],
+            [
+                "incident",
+                1
+            ],
+            [
+                "representation",
+                1
+            ],
+            [
+                "absences",
+                1
+            ],
+            [
+                "badge",
+                1
+            ],
+            [
+                "casiers",
+                1
+            ],
+            [
+                "bracelet",
+                1
+            ],
+            [
+                "posses",
+                1
+            ],
+            [
+                "operation",
+                1
+            ],
+            [
+                "categorie",
+                1
+            ]
+        ]
+    }
+}

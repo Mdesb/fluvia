@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Autorisation\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\Securite\Entity\Permission;
 use App\Securite\Entity\Role;
 use Doctrine\Bundle\FixturesBundle\Fixture;
@@ -27,6 +28,8 @@ use Doctrine\Persistence\ObjectManager;
  */
 final class AutorisationPermissionFixtures extends Fixture
 {
+    use FixturesIdempotentes;
+
     /** Rôle qui administre les limites et lit le journal des escalades. */
     public const ADMIN_ROLE = 'Autorisations Administrateur';
 
@@ -42,7 +45,7 @@ final class AutorisationPermissionFixtures extends Fixture
                 ->findOneBy(['module' => 'autorisation', 'action' => $action]);
 
             if (!$existing instanceof Permission) {
-                $existing = (new Permission())->setModule('autorisation')->setAction($action);
+                $existing = $this->permissionNommee($manager, 'autorisation', $action);
                 $manager->persist($existing);
             }
 
@@ -53,12 +56,12 @@ final class AutorisationPermissionFixtures extends Fixture
         // n'est pas cosmétique sur ce module : `gerer` permet de relever le plafond au-delà duquel une
         // opération exige une escalade, donc de désarmer le contrôle qu'on est censé surveiller.
         $admin = $manager->getRepository(Role::class)->findOneBy(['nom' => self::ADMIN_ROLE])
-            ?? (new Role())->setNom(self::ADMIN_ROLE);
+            ?? $this->roleNomme($manager, self::ADMIN_ROLE);
         $admin->addPermission($permissions['gerer'])->addPermission($permissions['lire']);
         $manager->persist($admin);
 
         $reader = $manager->getRepository(Role::class)->findOneBy(['nom' => self::READER_ROLE])
-            ?? (new Role())->setNom(self::READER_ROLE);
+            ?? $this->roleNomme($manager, self::READER_ROLE);
         $reader->addPermission($permissions['lire']);
         $manager->persist($reader);
 

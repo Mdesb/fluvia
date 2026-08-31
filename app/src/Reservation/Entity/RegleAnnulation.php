@@ -110,7 +110,7 @@ class RegleAnnulation
      * projeter ce que dirait la règle aujourd'hui, distinctement de ce qui a réellement été décidé
      * (`FacturationNoShow.issueCreditNoShow`, RG-CQ5-06).
      */
-    #[ORM\Column(length: 24, enumType: IssueCreditNoShow::class)]
+    #[ORM\Column(length: 24, enumType: IssueCreditNoShow::class, options: ['default' => 'restored_with_reschedule'])]
     #[Groups(['regle_annulation:read', 'regle_annulation:write', 'facturation_no_show:read'])]
     private IssueCreditNoShow $issueCreditNoShow = IssueCreditNoShow::RestoredWithReschedule;
 

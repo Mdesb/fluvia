@@ -21,6 +21,7 @@ use App\Acces\Enum\StatutProjectionDroit;
 use App\Acces\Enum\StatutSupport;
 use App\Acces\Enum\TypeDroitAcces;
 use App\Acces\Port\PiloteAcces;
+use App\Opening\Service\OpeningCalendar;
 use App\Vente\Service\GenerateurCodeSupport;
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
@@ -42,7 +43,21 @@ final class ValidationPassageHandler
         private readonly ResolveurMarges $marges,
         private readonly PiloteAcces $pilote,
         private readonly GenerateurCodeSupport $generateurCode,
+        /**
+         * « Ce billet est-il valide ? » — la moitié de la décision qui ne demande aucun matériel.
+         * Elle vit dans un service à part depuis le 30/08 (D86) pour que le contrôle manuel et le
+         * franchissement partagent la MÊME règle. Ce n'est pas une extraction cosmétique : sans
+         * elle, l'outil de scan aurait dû réimplémenter six contrôles, et deux implémentations de
+         * « ce billet est-il valide » finissent toujours par se contredire devant une porte.
+         */
+        private readonly VerdictBilletHandler $verdict,
         private readonly VersionSnapshotSequencer $sequencer,
+        /**
+         * Le planning d'ouverture du site. Injecté ici plutôt que consulté à la volée : une
+         * dépendance explicite se voit dans la signature, et le jour où quelqu'un se demandera
+         * pourquoi un passage est refusé, la réponse est dans la liste des collaborateurs.
+         */
+        private readonly OpeningCalendar $ouverture,
         /**
          * Plancher du crédit négatif borné (CA-8, plan-acces-terminal.md §4.2) — global MVP, pas encore
          * par établissement (§8 spec pt.5). N'a d'effet que si
@@ -74,54 +89,51 @@ final class ValidationPassageHandler
             return $this->refuser($espace, $controleur, $equipement, null, null, SensPassage::Entree, $evt, CodeMotifRefus::SensInterdit, 'Sens requis (équipement bidirectionnel).');
         }
 
-        // Étape 1 — résolution support/droit.
-        if ($evt->identifiantSupport === null) {
-            return $this->refuser($espace, $controleur, $equipement, null, null, $sens, $evt, CodeMotifRefus::DroitInvalide, 'Support requis.');
+        // ── ÉTAPES 1 À 3 : « CE BILLET EST-IL VALIDE ? » ────────────────────────────────────
+        //
+        // Support requis, signature, support connu, non bloqué, appairé, droit trouvé, droit non
+        // dévalidé. Ces six contrôles vivaient ici et n'utilisaient la topologie que pour construire
+        // l'objet de refus — jamais pour décider. Ils sont désormais dans `VerdictBilletHandler`,
+        // que l'outil de contrôle manuel appelle aussi (D86).
+        //
+        // ⚠ CE N'EST PAS UNE DÉLÉGATION DE CONFORT. Un site sans tourniquet n'avait aucun chemin
+        // pour contrôler un billet, parce que cette méthode exige un équipement dès sa première
+        // ligne. Dupliquer ces six contrôles ailleurs aurait donné deux règles qui divergent un
+        // jour, sur un porteur, devant une porte — et personne pour dire laquelle a raison.
+        $verdict = $this->verdict->evaluer(
+            $evt->identifiantSupport,
+            $evt->ignorerRevocationSiPosterieure,
+            $evt->horodatage,
+        );
+        $support = $verdict->support;
+        $droit = $verdict->droit;
+        $enConflit = $verdict->enConflitRevocation;
+
+        if (!$verdict->valide) {
+            return $this->refuser(
+                $espace,
+                $controleur,
+                $equipement,
+                $support,
+                $droit,
+                $sens,
+                $evt,
+                $verdict->codeMotif ?? CodeMotifRefus::DroitInvalide,
+                $verdict->message,
+            );
         }
 
-        // Étape 1bis — vérification cryptographique (CA-12/RG-ACC-07) : un code au format d'un code
-        // de support signé (`App\Vente\Service\GenerateurCodeSupport` — billet/carte/abonnement/billet
-        // boutique) doit porter une signature HMAC valide, sinon il s'agit d'un code forgé/altéré —
-        // refusé avant même la résolution en base (aucune fuite d'info « support inconnu » vs
-        // « signature invalide »). Les identifiants historiques/manuels (RFID, QR de démonstration…)
-        // ne correspondent pas à ce format et ne sont pas concernés (rétrocompatibilité totale).
-        if ($this->generateurCode->estCodeSigne($evt->identifiantSupport) && !$this->generateurCode->verifier($evt->identifiantSupport)) {
-            return $this->refuser($espace, $controleur, $equipement, null, null, $sens, $evt, CodeMotifRefus::SignatureInvalide, 'Code de support forgé ou altéré (signature invalide).');
-        }
-
-        $support = $this->em->getRepository(Support::class)->findOneBy(['identifiant' => $evt->identifiantSupport]);
-        if (!$support instanceof Support) {
-            return $this->refuser($espace, $controleur, $equipement, null, null, $sens, $evt, CodeMotifRefus::DroitInvalide, 'Support inconnu.');
-        }
-
-        // Étape 2 — support bloqué (statut = source de vérité locale = « liste embarquée »,
-        // valable online ET hors-ligne, RG-ACC-07). Cas particulier synchro : révocation postérieure
-        // au passage hors-ligne = conflit tracé, passage conservé (§4.6, hypothèse retenue).
-        $enConflit = false;
-        if ($support->getStatut() === StatutSupport::Bloque) {
-            if ($evt->ignorerRevocationSiPosterieure && $this->revoqueApresPassage($support, $evt->horodatage)) {
-                $enConflit = true;
-            } else {
-                return $this->refuser($espace, $controleur, $equipement, $support, null, $sens, $evt, CodeMotifRefus::SupportBloque, 'Support bloqué (perte/vol).');
-            }
-        }
-
-        $appairage = $this->em->getRepository(Appairage::class)->findOneBy(['support' => $support, 'actif' => true]);
-        if (!$appairage instanceof Appairage) {
-            return $this->refuser($espace, $controleur, $equipement, $support, null, $sens, $evt, CodeMotifRefus::DroitInvalide, 'Support non appairé à un droit actif.');
-        }
-        $droit = $appairage->getDroit();
-        if (!$droit instanceof DroitAcces) {
-            return $this->refuser($espace, $controleur, $equipement, $support, null, $sens, $evt, CodeMotifRefus::DroitInvalide, 'Droit introuvable.');
-        }
-
-        // Étape 3 — droit valide (non dévalidé M2).
-        if ($droit->getStatutProjection() !== StatutProjectionDroit::Valide) {
-            return $this->refuser($espace, $controleur, $equipement, $support, $droit, $sens, $evt, CodeMotifRefus::DroitInvalide, 'Droit dévalidé.');
-        }
-
-        // Sous-réseau / fédération (US-L3-12, CA-13) : un droit fédéré doit franchir un équipement
-        // dont l'espace appartient au même sous-réseau actif et éligible ; sinon refus.
+        // Sous-réseau / fédération (US-L3-12, CA-13).
+        //
+        // ⚠ CE COMMENTAIRE DISAIT « SINON REFUS », ET LE CODE NE LE FAISAIT PAS. Corrigé le 29/08 :
+        // c'est le commentaire qui était faux, pas le code. Le contrôle ne s'applique QUE lorsque
+        // l'espace appartient au sous-réseau du droit — franchissement inter-entités. Un espace
+        // hors du sous-réseau n'est pas refusé ici : `sousReseau` dit sous quelle fédération le
+        // droit a été émis, il ne dit pas que le porteur perd l'accès à SON PROPRE site. Refuser
+        // « sinon » fermerait la porte d'un adhérent chez lui parce que son abonnement porte une
+        // mention de fédération.
+        //
+        // La restriction par zone, elle, est explicite et se trouve juste en dessous.
         if ($droit->getSousReseau() !== null) {
             $sousReseau = $droit->getSousReseau();
             $memeSousReseau = $espace->getSousReseau() !== null && $espace->getSousReseau()->getId()->equals($sousReseau->getId());
@@ -136,9 +148,65 @@ final class ValidationPassageHandler
             }
         }
 
+        // ── CE DROIT OUVRE-T-IL CETTE ZONE ? ─────────────────────────────────────────────────
+        //
+        // La question ne se posait nulle part. L'espace était résolu dès l'entrée mais ne servait
+        // qu'à la jauge et à l'enregistrement : un billet de piscine ouvrait la porte de la salle
+        // de sport du même établissement. Sur un site multi-activités, c'est le cœur du contrôle
+        // d'accès qui manquait.
+        //
+        // ⚠ UN DROIT SANS AUCUN ESPACE N'OUVRE RIEN (D87, 30/08/2026). Le sens sûr de l'erreur est
+        // ici celui qui restreint : une porte fermée à tort se rouvre en déclarant une zone, une
+        // porte ouverte à tort a déjà laissé passer quelqu'un.
+        //
+        // Ce paragraphe disait l'inverse jusqu'au 30/08, et son argument — « refuser fermerait des
+        // portes devant des gens qui ont payé » — était déjà faux quand il servait encore : quatre
+        // droits en base, trois sans espace, tous de test. Il pesait sur la discussion qui a mené à
+        // D87. Une phrase périmée qui sert d'argument est la forme la plus coûteuse du genre.
+        // ⚠ LA DECISION PORTE SUR TOUS LES ESPACES DESSERVIS, PAS SUR LE SEUL PRINCIPAL.
+        //
+        // Un tourniquet place entre deux activites dessert les deux : le titre passe s'il ouvre
+        // l'une d'elles. Ce qui suit -- jauge, anti-passback, espace inscrit sur le passage --
+        // continue de porter sur `$espace`, le principal : le porteur a franchi CETTE porte.
+        $ouvertureAccordee = false;
+        foreach ($controleur?->espacesOuverts() ?? [$espace] as $desservi) {
+            if ($droit->ouvre($desservi)) {
+                $ouvertureAccordee = true;
+                break;
+            }
+        }
+
+        if (!$ouvertureAccordee) {
+            return $this->refuser(
+                $espace, $controleur, $equipement, $support, $droit, $sens, $evt,
+                CodeMotifRefus::ZoneNonAutorisee,
+                sprintf('Ce titre n\'ouvre pas « %s ».', $espace->getLibelle()),
+            );
+        }
+
         // Étape 4 — sens compatible avec l'équipement.
         if (!$equipement->getSens()->accepte($sens)) {
             return $this->refuser($espace, $controleur, $equipement, $support, $droit, $sens, $evt, CodeMotifRefus::SensInterdit, 'Sens non autorisé sur cet équipement.');
+        }
+
+        // Étape 4-bis — le site est-il ouvert ? (module App\Opening, 28/08)
+        //
+        // ── PLACÉE AVANT LES MARGES, ET C'EST VOULU ────────────────────────────────────────────
+        //
+        // Les marges disent si LE DROIT vaut à cette heure ; le planning dit si LE SITE est ouvert.
+        // Quand les deux refusent, le motif utile à l'exploitant est le second : « nous sommes
+        // fermés » se comprend et se corrige, « hors fenêtre autorisée » envoie chercher un défaut
+        // de tarification qui n'existe pas.
+        //
+        // ── NE REFUSE RIEN TANT QUE L'EXPLOITANT NE L'A PAS DEMANDÉ ────────────────────────────
+        //
+        // `autoriseLePassage()` rend `true` dès que le réglage de l'établissement n'est pas coché —
+        // c'est-à-dire partout, tant que personne n'a activé la règle. Arbitrage de Maxime du
+        // 28/08 : le sens sûr de l'erreur est d'ordinaire celui qui restreint, sauf quand
+        // restreindre veut dire refuser des clients qui ont payé. Aucun site existant ne se met
+        // donc à refuser du monde parce qu'on a déployé ce module.
+        if (!$this->ouverture->autoriseLePassage($espace->getEtablissement(), $evt->horodatage, $espace)) {
+            return $this->refuser($espace, $controleur, $equipement, $support, $droit, $sens, $evt, CodeMotifRefus::HorsHorairesOuverture, 'Site fermé à cette heure (planning d’ouverture).');
         }
 
         // Étape 5 — marges (intersection droit ∩ équipement, §4.2).

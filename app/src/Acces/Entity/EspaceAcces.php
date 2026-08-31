@@ -47,7 +47,7 @@ class EspaceAcces
 
     #[ORM\Column(length: 120)]
     #[Assert\NotBlank]
-    #[Groups(['espace_acces:read', 'espace_acces:write', 'controleur:read', 'passage:read'])]
+    #[Groups(['espace_acces:read', 'espace_acces:write', 'controleur:read', 'passage:read', 'sos:read'])]
     private string $libelle = '';
 
     #[ORM\ManyToOne(targetEntity: Espace::class)]

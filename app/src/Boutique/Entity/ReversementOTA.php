@@ -23,7 +23,7 @@ use Symfony\Component\Uid\Uuid;
 #[ORM\Entity]
 #[ORM\Table(name: 'bou_reversement_ota')]
 #[ApiResource(
-    shortName: 'ReversementOTA',
+    shortName: 'ReversementOta',
     operations: [
         new GetCollection(security: "is_granted('PERM', 'boutique.lire')"),
         new Get(security: "is_granted('PERM', 'boutique.lire')"),

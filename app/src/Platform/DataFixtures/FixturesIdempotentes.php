@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Platform\DataFixtures;
 
-use App\Organisation\Entity\Affectation;
+use App\Securite\Entity\Affectation;
 use App\Organisation\Entity\Etablissement;
 use App\Securite\Entity\Permission;
 use App\Securite\Entity\Role;
@@ -161,6 +161,14 @@ trait FixturesIdempotentes
      * droits qui repose sur des données fausses.
      *
      * Trouvé par `claude-G` en cherchant tout autre chose.
+     *
+     * ⚠ **Et ce patron a vécu un mois avec un import cassé** — `App\Organisation\Entity\Affectation`
+     * au lieu de `App\Securite\Entity\Affectation`. Personne ne l'a vu parce que **personne ne
+     * l'appelait** : PHP ne résout un `use` qu'au moment où la classe est réellement demandée.
+     *
+     * > **Une aide qu'on écrit et que personne n'utilise n'est pas testée par son existence.**
+     *
+     * Le défaut est apparu à la seconde exacte où douze fixtures ont commencé à s'en servir.
      */
     private function affectationUnique(
         ObjectManager $manager,

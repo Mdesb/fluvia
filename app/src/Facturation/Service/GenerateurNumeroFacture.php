@@ -55,6 +55,12 @@ final class GenerateurNumeroFacture
             throw new ConflictHttpException('Exploitant et exercice sont requis pour numéroter une facture.');
         }
 
+        // ⚠ L'ACOMPTE PREND LA SERIE DES FACTURES, PAS UNE SERIE A LUI.
+        //
+        // Une facture d'acompte EST une facture au sens legal : elle porte de la TVA et ouvre le
+        // droit a deduction. La placer dans la sequence des factures est correct, et c'est surtout
+        // un objet de moins qui peut manquer -- une serie dediee devrait etre creee par quelqu'un,
+        // et un etablissement neuf n'en aurait pas.
         $prefixe = $facture->getNature() === NatureFacture::Avoir ? PrefixeSerie::Avoir : PrefixeSerie::Facture;
         $serie = $this->serieVerrouillee($profil, $periode, $prefixe);
 

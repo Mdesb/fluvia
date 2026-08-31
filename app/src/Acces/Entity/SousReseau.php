@@ -122,6 +122,25 @@ class SousReseau
         return $this;
     }
 
+    /**
+     * ⚠ SANS CETTE METHODE, `PATCH { espaces: [...] }` REPONDAIT 200 SANS RIEN ENREGISTRER.
+     *
+     * Le serialiseur de Symfony ne considere une collection comme modifiable que si l'AJOUT ET LE
+     * RETRAIT existent. `addEspace()` seul ne suffit pas : la propriete est ignoree, sans erreur et
+     * sans avertissement.
+     *
+     * Un sous-reseau sans espaces ne federe rien. L'exploitant croyait avoir mutualise une jauge qui
+     * ne l'etait pas — et le serveur le lui confirmait par un 200.
+     *
+     *   > Une erreur se corrige ; un 200 menteur se propage.
+     */
+    public function removeEspace(EspaceAcces $espace): self
+    {
+        $this->espaces->removeElement($espace);
+
+        return $this;
+    }
+
     /** @return list<string>|null */
     public function getDroitsEligiblesRef(): ?array
     {

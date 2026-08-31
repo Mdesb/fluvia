@@ -9,8 +9,10 @@ use ApiPlatform\State\ProcessorInterface;
 use App\Vente\Entity\Vente;
 use App\Vente\Service\LecteurCorps;
 use App\Vente\Service\PanierCalculateur;
+use App\Vente\Service\TicketPrintingPolicy;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
 /**
  * Ticket (POST /ventes/{id}/ticket, CA-11). Impression automatique au-dessus du seuil du point de
@@ -40,6 +42,7 @@ final class TicketProcessor implements ProcessorInterface
         private readonly EntityManagerInterface $em,
         private readonly LecteurCorps $lecteur,
         private readonly PanierCalculateur $calc,
+        private readonly TicketPrintingPolicy $politique,
     ) {
     }
 
@@ -52,8 +55,14 @@ final class TicketProcessor implements ProcessorInterface
 
         // D44-bis — porté par la vente : une vente directe n'a pas de session d'où le déduire, et
         // lisait donc un seuil de 0 € qui la déclarait systématiquement au-dessus du seuil.
-        $seuil = $this->calc->centimes($data->getPointDeVente()?->getSeuilImpression() ?? '0.00');
-        $auDessusSeuil = $this->calc->centimes($data->getTotal()) >= $seuil;
+        // ⚠ LA REGLE VIT DANS `TicketPrintingPolicy`, ET NULLE PART AILLEURS.
+        //
+        // Elle etait ecrite ici ET dans `ValiderVenteService`. J'ai corrige celle-ci le 29/08 pour
+        // qu'une vente gratuite ne sorte pas de ticket, et laisse l'autre : une vente a 0 € en
+        // session restait marquee « imprimee » pour un document que ce meme fichier refusait
+        // d'editer. Une regle recopiee diverge au PREMIER correctif, pas au dixieme.
+        $venteGratuite = $this->politique->estGratuite($data);
+        $auDessusSeuil = $this->politique->impressionAutomatique($data);
 
         $duplicata = false;
         if ($mode === 'imprimer' || $mode === 'duplicata') {
@@ -62,8 +71,26 @@ final class TicketProcessor implements ProcessorInterface
             $this->em->flush();
         }
 
-        $renvoiPropose = !$auDessusSeuil && $data->getClient() !== null;
-        $renvoye = $mode === 'renvoyer' && $data->getClient() !== null;
+        // Le renvoi ne se propose pas davantage sur une vente gratuite : proposer d'envoyer par SMS
+        // un ticket a 0 € est le meme bruit, deplace sur un autre canal.
+        $renvoiPropose = !$auDessusSeuil && !$venteGratuite && $data->getClient() !== null;
+        // ⚠ « renvoyer » N'ENVOIE RIEN, ET ON LE DIT AU LIEU DE LE TAIRE.
+        //
+        // Il n'existe dans tout le module ni expediteur, ni passerelle SMS, ni evenement, ni
+        // message : le mode se contentait de rendre `renvoye: true`. Une reponse qui dit « fait »
+        // pour un geste dont le code n'existe pas est le pire de ce qu'on traque -- l'exploitant
+        // coche, ferme l'ecran, et le client n'a jamais rien recu.
+        //
+        // Et ce n'est PAS le transport nul : un `MAILER_DSN` correct ne changerait rien, il n'y a
+        // aucun code d'envoi a brancher dessus. Deux travaux, pas un.
+        if ($mode === 'renvoyer') {
+            throw new UnprocessableEntityHttpException(
+                'Le renvoi du ticket n\'est pas encore implémenté : aucun expéditeur ni passerelle SMS '
+                . 'n\'existe côté serveur. La demande est enregistrée au plan, mais rien ne partirait.'
+            );
+        }
+
+        $renvoye = false;
 
         return new JsonResponse([
             'vente' => (string) $data->getId(),
@@ -75,6 +102,10 @@ final class TicketProcessor implements ProcessorInterface
             'mode' => $mode,
             'imprime' => $data->isImprime(),
             'impressionAutomatique' => $auDessusSeuil,
+            // Dit POURQUOI l'impression n'est pas automatique : sans ce champ, l'écran ne peut pas
+            // distinguer « en dessous du seuil, propose le renvoi » de « gratuite, ne propose rien ».
+            // Deux situations, deux gestes, et un seul booléen ne les sépare pas.
+            'venteGratuite' => $venteGratuite,
             'duplicata' => $duplicata,
             'renvoiPropose' => $renvoiPropose,
             'renvoye' => $renvoye,

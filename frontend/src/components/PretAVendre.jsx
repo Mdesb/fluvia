@@ -2,14 +2,15 @@ import { useCallback, useEffect, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 
-// « Avant de pouvoir vendre » — les trois conditions techniques, cochées automatiquement.
+// « Avant de pouvoir vendre » — les conditions techniques d'une mise en vente, cochées
+// automatiquement.
 //
 // POURQUOI PAS UN ASSISTANT EN PLUSIEURS ÉTAPES. Un assistant prend la main, impose un ordre et
 // enferme : celui qui sait déjà où aller le subit, et celui qui l'abandonne au milieu ne sait plus où
 // il en est. Ici, rien n'est bloqué et rien n'est imposé — c'est une liste qui se coche toute seule
 // pendant qu'on paramètre, dans l'ordre qu'on veut.
 //
-// POURQUOI IL DISPARAÎT. Une fois les trois conditions remplies, il se réduit à une ligne. Un bandeau
+// POURQUOI IL DISPARAÎT. Une fois toutes les conditions remplies, il se réduit à une ligne. Un bandeau
 // permanent qui répète « tout va bien » devient un meuble qu'on ne lit plus — et le jour où il
 // annonce un vrai problème, personne ne le voit.
 //
@@ -23,7 +24,15 @@ import { aLeDroit } from '../api/droits.js'
 // vente » à quelqu'un qui n'a simplement pas le droit de les lire serait un mensonge, et il chercherait
 // longtemps.
 
-export default function PretAVendre({ etabActif, droits = [], onAller, masquerSiComplet = false }) {
+// LA LISTE NE SE REVERIFIAIT QU'AU CHANGEMENT D'ETABLISSEMENT, ET C'ETAIT VISIBLE.
+//
+// Constate en creant la caisse manquante : la ligne restait barree de rouge et le compteur affichait
+// toujours << 3 sur 4 >>, alors que la condition venait d'etre remplie sous les yeux de celui qui
+// l'avait remplie. Une liste qui se coche << toute seule >> et qui ne se coche pas fait douter du
+// geste qu'on vient de faire -- on le refait, et on cree une seconde caisse.
+//
+// `version` est incremente par les sections qui ecrivent l'un des quatre reglages suivis.
+export default function PretAVendre({ etabActif, droits = [], onAller, masquerSiComplet = false, version = 0 }) {
   const [etat, setEtat] = useState(null)
   const [deplie, setDeplie] = useState(false)
 
@@ -32,10 +41,11 @@ export default function PretAVendre({ etabActif, droits = [], onAller, masquerSi
   const peutLireCaisse = aLeDroit(droits, 'caisse.lire')
 
   const verifier = useCallback(async () => {
-    const [tarifs, taux, points] = await Promise.all([
+    const [tarifs, taux, points, caisses] = await Promise.all([
       peutLireOffre ? api.typeTarifs().catch(() => null) : null,
       peutLireCompta ? api.tauxTvas().catch(() => null) : null,
       peutLireCaisse ? api.pointDeVentes().catch(() => null) : null,
+      peutLireCaisse ? api.caisses().catch(() => null) : null,
     ])
 
     const conditions = []
@@ -85,12 +95,35 @@ export default function PretAVendre({ etabActif, droits = [], onAller, masquerSi
       })
     }
 
+    // LA LISTE ANNONÇAIT « 2 SUR 3 » ET IL EN MANQUAIT UNE QUATRIÈME.
+    //
+    // La caisse n'était pas comptée. La liste promettait donc qu'il ne restait qu'une chose à faire,
+    // et celui qui la faisait butait ensuite sur un écran d'ouverture de session sans option — sans
+    // que rien, nulle part, ait annoncé qu'une caisse manquait.
+    //
+    // Une liste de conditions qui en oublie une ne rend pas le travail plus court : elle le rend
+    // imprévisible. Et elle est pire qu'absente, parce qu'on lui fait confiance.
+    if (caisses) {
+      const liste = membres(caisses)
+      conditions.push({
+        cle: 'caisse',
+        titre: 'Une caisse',
+        fait: liste.length > 0,
+        rappel: liste.map((c) => c.libelle).filter(Boolean).slice(0, 3).join(', '),
+        pourquoi:
+          "Un point de vente ne suffit pas : c'est la caisse qu'on ouvre pour encaisser. Sans elle, "
+          + "aucune session ne peut être ouverte et aucune vente ne peut être enregistrée.",
+        action: 'Créer une caisse',
+        vers: 'caisse',
+      })
+    }
+
     setEtat(conditions.length ? conditions : null)
   }, [peutLireOffre, peutLireCompta, peutLireCaisse])
 
   useEffect(() => {
     verifier()
-  }, [verifier, etabActif])
+  }, [verifier, etabActif, version])
 
   if (!etat) return null
 
@@ -128,7 +161,10 @@ export default function PretAVendre({ etabActif, droits = [], onAller, masquerSi
       <div className="card-b">
         <p className="hint" style={{ marginTop: 0 }}>
           {complet
-            ? 'Les trois réglages nécessaires sont en place.'
+            // Un décompte figé dans une phrase se périme dès qu'on ajoute une condition — ce qui vient
+            // d'arriver en comptant la caisse : la liste affichait « 4 sur 4 » juste au-dessus de
+            // « les trois réglages nécessaires ». On le calcule.
+            ? `Les ${total} réglages nécessaires sont en place.`
             : 'Ces réglages sont nécessaires pour qu’un produit puisse être mis en vente. Vous pouvez les faire dans l’ordre que vous voulez.'}
         </p>
 

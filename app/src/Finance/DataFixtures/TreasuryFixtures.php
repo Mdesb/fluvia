@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Finance\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\Compta\DataFixtures\ComptaFixtures;
 use App\DataFixtures\SocleFixtures;
 use App\Securite\Entity\Permission;
@@ -20,6 +21,8 @@ use Doctrine\Persistence\ObjectManager;
  */
 final class TreasuryFixtures extends Fixture implements DependentFixtureInterface
 {
+    use FixturesIdempotentes;
+
     /** @var list<string> */
     public const ACTIONS = ['treasury_manage_account', 'treasury_import_statement', 'treasury_reconcile'];
 
@@ -33,7 +36,7 @@ final class TreasuryFixtures extends Fixture implements DependentFixtureInterfac
         $perms = [];
         foreach (self::ACTIONS as $action) {
             $existante = $manager->getRepository(Permission::class)->findOneBy(['module' => 'finance', 'action' => $action]);
-            $perms[$action] = $existante ?? (new Permission())->setModule('finance')->setAction($action);
+            $perms[$action] = $existante ?? $this->permissionNommee($manager, 'finance', $action);
             if ($existante === null) {
                 $manager->persist($perms[$action]);
             }

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { euros } from '../api/produit.js'
 import { aLeDroit } from '../api/droits.js'
+import Modal from './Modal.jsx'
 
 // No-show : facturer ou exonérer, et voir ce qu'il advient du crédit.
 //
@@ -130,34 +131,7 @@ export default function NoShowSection({ etabActif, droits = [], session }) {
         {erreur && <div className="banner banner-error">{erreur}</div>}
         {succes && <div className="banner banner-ok">{succes}</div>}
 
-        {exoneration && (
-          <form onSubmit={exonerer} className="card" style={{ marginBottom: 12 }}>
-            <div className="card-b">
-              <div className="field" style={{ margin: 0 }}>
-                <label htmlFor="ns-motif">Motif de l'exonération *</label>
-                <input
-                  id="ns-motif"
-                  className="input"
-                  required
-                  autoFocus
-                  value={exoneration.motif}
-                  placeholder="Justificatif médical, erreur de créneau…"
-                  onChange={(ev) => setExoneration((s) => ({ ...s, motif: ev.target.value }))}
-                />
-                <div className="hint">
-                  Obligatoire, et conservé : c'est ce qui justifiera la décision si le client la
-                  conteste plus tard.
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 10 }}>
-                <button className="btn" type="button" onClick={() => setExoneration(null)}>Annuler</button>
-                <button className="btn primary" type="submit" disabled={enCours !== null}>
-                  Confirmer l'exonération
-                </button>
-              </div>
-            </div>
-          </form>
-        )}
+
 
         {chargement ? (
           <div className="center" style={{ minHeight: 80 }}><div className="spinner" /></div>
@@ -241,6 +215,43 @@ export default function NoShowSection({ etabActif, droits = [], session }) {
           </div>
         )}
       </div>
+
+      {/* MÊME GESTE QUE POUR LES ABSENCES : le formulaire d’exonération s’insérait entre le
+          texte d’explication et la liste des absences à traiter, et poussait vers le bas la ligne
+          même sur laquelle on venait de cliquer. */}
+      <Modal
+        open={!!exoneration}
+        onClose={() => setExoneration(null)}
+        titre="Exonérer une absence non prévenue"
+        taille="sm"
+      >
+        {exoneration && (
+          <form onSubmit={exonerer}>
+            <div className="field" style={{ margin: 0 }}>
+              <label htmlFor="ns-motif">Motif de l'exonération *</label>
+              <input
+                id="ns-motif"
+                className="input"
+                required
+                autoFocus
+                value={exoneration.motif}
+                placeholder="Justificatif médical, erreur de créneau…"
+                onChange={(ev) => setExoneration((s) => ({ ...s, motif: ev.target.value }))}
+              />
+              <div className="hint">
+                Obligatoire, et conservé : c'est ce qui justifiera la décision si le client la
+                conteste plus tard.
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 10 }}>
+              <button className="btn" type="button" onClick={() => setExoneration(null)}>Annuler</button>
+              <button className="btn primary" type="submit" disabled={enCours !== null}>
+                Confirmer l'exonération
+              </button>
+            </div>
+          </form>
+        )}
+      </Modal>
     </section>
   )
 }

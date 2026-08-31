@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Finance\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\Autorisation\Entity\OperationSensible;
 use App\Compta\DataFixtures\ComptaFixtures;
 use App\Compta\Entity\CompteComptable;
@@ -33,6 +34,8 @@ use Doctrine\Persistence\ObjectManager;
  */
 final class ExpenseReportFixtures extends Fixture implements DependentFixtureInterface
 {
+    use FixturesIdempotentes;
+
     public const ROLE_SALARIE = 'Salarié Note de frais Test';
     public const ROLE_COMPTABLE = 'Comptable Notes de frais Test';
     public const ROLE_SUPERVISEUR = 'Superviseur Notes de frais Test';
@@ -55,7 +58,7 @@ final class ExpenseReportFixtures extends Fixture implements DependentFixtureInt
         $permissions = [];
         foreach (['expense_report_submit', 'expense_report_read_own', 'expense_report_post_to_ledger', 'expense_report_approve'] as $action) {
             $existante = $manager->getRepository(Permission::class)->findOneBy(['module' => 'finance', 'action' => $action]);
-            $permissions[$action] = $existante ?? (new Permission())->setModule('finance')->setAction($action);
+            $permissions[$action] = $existante ?? $this->permissionNommee($manager, 'finance', $action);
             if ($existante === null) {
                 $manager->persist($permissions[$action]);
             }
@@ -67,7 +70,7 @@ final class ExpenseReportFixtures extends Fixture implements DependentFixtureInt
         // `PersonnelFixtures::permissionAcces()`).
         $permApprouver = $manager->getRepository(Permission::class)->findOneBy(['module' => 'autorisation', 'action' => 'approuver']);
         if ($permApprouver === null) {
-            $permApprouver = (new Permission())->setModule('autorisation')->setAction('approuver');
+            $permApprouver = $this->permissionNommee($manager, 'autorisation', 'approuver');
             $manager->persist($permApprouver);
         }
 
@@ -115,6 +118,22 @@ final class ExpenseReportFixtures extends Fixture implements DependentFixtureInt
         // --- Comptabilité : journal NDF, compte salarié 421, compte de charge + mapping ---
         $profil = $manager->getRepository(ProfilExploitant::class)->findOneBy(['siren' => ComptaFixtures::PROFIL_SIREN]);
         if (!$profil instanceof ProfilExploitant) {
+            $manager->flush();
+
+            return;
+        }
+
+        // ── LE BLOC DE DEMONSTRATION NE SE POSE QU'UNE FOIS ──────────────────────────────────
+        //
+        // La sentinelle est le JOURNAL, pas le mapping comptable : celui-ci n'est cree que si le taux
+        // de TVA a 20 % existe, et une sentinelle conditionnelle n'est jamais posee quand la
+        // condition manque -- le bloc se rejoue alors indefiniment.
+        //
+        // Elle vise le couple (profil, code) et non « un journal quelconque » : la comptabilite en
+        // compte plusieurs, et une sentinelle large ferait sauter ce bloc.
+        if ($manager->getRepository(Journal::class)
+            ->findOneBy(['profilExploitant' => $profil, 'code' => self::JOURNAL_CODE]) !== null
+        ) {
             $manager->flush();
 
             return;

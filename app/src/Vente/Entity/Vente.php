@@ -12,7 +12,7 @@ use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Post;
-use App\Vente\Filter\SaleCustomerFilter;
+use App\Platform\Filter\UuidReferenceFilter;
 use App\Caisse\Entity\PointDeVente;
 use App\Caisse\Entity\SessionCaisse;
 use App\Organisation\Entity\Etablissement;
@@ -167,7 +167,7 @@ use Symfony\Component\Uid\Uuid;
 // c'est ainsi qu'on lit un historique.
 #[ApiFilter(OrderFilter::class, properties: ['date' => 'DESC', 'numero' => 'ASC'], arguments: ['orderParameterName' => 'order'])]
 #[ApiFilter(DateFilter::class, properties: ['date'])]
-#[ApiFilter(SaleCustomerFilter::class)]
+#[ApiFilter(UuidReferenceFilter::class, properties: ['client'])]
 class Vente
 {
     #[ORM\Id]

@@ -75,8 +75,27 @@ final class MfaTest extends SecuriteApiTestCase
         self::assertResponseIsSuccessful();
     }
 
-    /** CA-4 — Affectation vers un rôle à privilèges sans MFA ⇒ 422 ; avec MFA actif ⇒ OK. */
-    public function testCa4GardeMfaSurAffectationRoleAPrivileges(): void
+    /**
+     * CA-4 — LA GARDE MFA SUR L'AFFECTATION EST SUSPENDUE, ET CE TEST DIT DANS QUEL SENS.
+     *
+     * Il affirmait l'inverse : un rôle à privilèges sans MFA rendait 422. La règle était bonne et
+     * impossible à satisfaire — aucun écran n'active le MFA, donc **on ne pouvait nommer aucun
+     * administrateur, chez aucun client**. Mesuré le 31/08 par allaccess-b8 : 6 rôles à privilèges,
+     * 0 utilisateur avec MFA actif.
+     *
+     * **Décision de Maxime du 31/08** entre trois voies : lever maintenant, construire le parcours
+     * MFA ensuite. Voir `AffectationProcessor::MFA_EXIGE_POUR_ROLE_A_PRIVILEGES`, qui porte la
+     * règle, sa date et sa condition de rétablissement.
+     *
+     * ⚠ **CE TEST EST CELUI QU'IL FAUDRA RETOURNER LE JOUR DU RÉTABLISSEMENT** : remettre `true` à
+     * la constante et rendre à la première assertion son 422. Il est écrit pour que ce soit une
+     * ligne, pas une enquête.
+     *
+     * ⚠ **ET IL VÉRIFIE QU'ON A LEVÉ LA PRÉCONDITION, PAS LA GARDE ENTIÈRE.** La seconde moitié —
+     * avec MFA actif, l'affectation passe — est conservée telle quelle : un correctif qui aurait
+     * supprimé tout le bloc serait invisible à la première assertion seule.
+     */
+    public function testCa4GardeMfaSuspendueEnAttenteDUnEcran(): void
     {
         [$client, $entete] = $this->adminSurA();
         $idLecteur = $this->idUtilisateur(SocleFixtures::LECTEUR_EMAIL);
@@ -90,7 +109,19 @@ final class MfaTest extends SecuriteApiTestCase
                 'etablissement' => '/api/etablissements/' . $idEtabA,
             ],
         ]);
-        self::assertResponseStatusCodeSame(422);
+        self::assertResponseStatusCodeSame(
+            201,
+            'Un rôle à privilèges reste refusé faute de MFA : la garde est censée être suspendue, '
+            .'et sans cela on ne peut nommer aucun administrateur chez aucun client.',
+        );
+
+        // ⚠ ON DÉFAIT L'AFFECTATION POUR QUE LA SUITE MESURE CE QU'ELLE PRÉTEND. Sans cela, la
+        // seconde tentative porterait sur un couple déjà affecté, et son succès ne dirait rien du
+        // MFA — `Affectation` porte d'ailleurs une contrainte d'unicité sur (utilisateur, rôle,
+        // établissement).
+        $idAffectation = $client->getResponse()->toArray()['id'];
+        $client->request('DELETE', '/api/affectations/' . $idAffectation, $entete);
+        self::assertResponseStatusCodeSame(204, 'témoin : l’affectation doit pouvoir être défaite avant la seconde mesure.');
 
         // Active le MFA du lecteur (self-service, jeton propre).
         $tokenLecteur = $this->jeton($client, SocleFixtures::LECTEUR_EMAIL, SocleFixtures::LECTEUR_MDP);

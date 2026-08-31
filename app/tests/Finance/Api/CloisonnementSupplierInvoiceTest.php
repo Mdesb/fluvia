@@ -71,8 +71,12 @@ final class CloisonnementSupplierInvoiceTest extends FinanceApiTestCase
             ],
         ]);
 
-        // Le profil ne couvre pas l'établissement A -> 404 (échec fermé, ne révèle pas son existence).
-        self::assertSame(404, $reponse->getStatusCode());
+        // Echec ferme. Le refus vient desormais du deserialiseur, qui ne peut pas resoudre l'IRI
+        // d'une ressource hors de l'etablissement actif : il rend 400 la ou le processeur rendait
+        // 404. Les deux disent « introuvable » et aucun ne confirme l'existence -- c'est
+        // l'indistinguabilite qui est la propriete, pas le nombre. Ce qui reste interdit : 403,
+        // qui confirmerait, et 2xx, qui servirait.
+        self::assertContains($reponse->getStatusCode(), [400, 404]);
     }
 
     public function testFournisseurAutreEtablissementRefuse(): void
@@ -105,7 +109,12 @@ final class CloisonnementSupplierInvoiceTest extends FinanceApiTestCase
                 'dueDate' => '2026-09-01',
             ],
         ]);
-        self::assertSame(404, $reponseB->getStatusCode());
+        // Echec ferme. Le refus vient desormais du deserialiseur, qui ne peut pas resoudre l'IRI
+        // d'une ressource hors de l'etablissement actif : il rend 400 la ou le processeur rendait
+        // 404. Les deux disent « introuvable » et aucun ne confirme l'existence -- c'est
+        // l'indistinguabilite qui est la propriete, pas le nombre. Ce qui reste interdit : 403,
+        // qui confirmerait, et 2xx, qui servirait.
+        self::assertContains($reponseB->getStatusCode(), [400, 404]);
     }
 
     public function testLigneSurFactureHorsPerimetreRefuse(): void

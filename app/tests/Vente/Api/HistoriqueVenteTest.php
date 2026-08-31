@@ -62,6 +62,50 @@ final class HistoriqueVenteTest extends VenteApiTestCase
         self::assertSame([$recente], $duClient, 'Le filtre client doit être exact, pas approchant.');
     }
 
+    /**
+     * UNE VALEUR ILLISIBLE FERME L'HISTORIQUE, ELLE NE L'OUVRE PAS.
+     *
+     * Mesuré par allaccess-34 sur la préproduction, et c'est ce qui a motivé ce test :
+     *
+     *     /api/ventes?client=<IRI valide>  ->  1
+     *     /api/ventes?client=nimportequoi  ->  15   ← TOUTE la collection
+     *
+     * `SaleCustomerFilter` sortait par un `return` nu quand la valeur ne se lisait pas : la
+     * contrainte n'était pas appliquée de travers, elle était ABANDONNÉE.
+     *
+     * ⚠ POURQUOI C'EST PIRE QU'UNE LISTE VIDE. Une absence intrigue et finit par être signalée ; des
+     * données qui s'affichent ne sont interrogées par personne. Sur une fiche client, cela montrait
+     * l'historique d'achat de tout l'établissement sous le nom d'une seule personne. Seul un garde
+     * d'écran l'empêchait — une ligne, dans un seul composant.
+     */
+    public function testUneValeurIllisibleFermeLHistoriqueAuLieuDeLOuvrir(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $client->disableReboot();
+        $session = $this->ouvrirSession($client, $entete);
+
+        $this->creerVente($client, $entete, $session['id']);
+        $this->creerVente($client, $entete, $session['id']);
+
+        // ── LE TÉMOIN ───────────────────────────────────────────────────────────────────────────
+        // Il y a bien quelque chose à rendre. Sans lui, « la collection est fermée » ne se distingue
+        // pas de « il n'y avait rien à montrer » — et le test serait vert pour une autre raison.
+        $toutes = $this->ids($client, $entete, ['itemsPerPage' => 100]);
+        self::assertGreaterThanOrEqual(
+            2,
+            \count($toutes),
+            'Témoin absent : sans ventes, la fermeture de la collection ne prouve rien.',
+        );
+
+        // ── LA MESURE ───────────────────────────────────────────────────────────────────────────
+        $absurde = $this->ids($client, $entete, ['client' => 'nimportequoi', 'itemsPerPage' => 100]);
+        self::assertSame(
+            [],
+            $absurde,
+            'Une valeur de filtre illisible doit fermer la collection, jamais la rendre entière.',
+        );
+    }
+
     private function dater(EntityManagerInterface $em, string $idVente, string $date, ?Uuid $client = null): void
     {
         $vente = $em->getRepository(Vente::class)->find($idVente);

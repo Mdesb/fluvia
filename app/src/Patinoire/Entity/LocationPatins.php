@@ -40,6 +40,12 @@ use Symfony\Component\Uid\Uuid;
         new Post(
             uriTemplate: '/patinoire/locations',
             read: false,
+            // D41 : le processeur lit le corps brut et ignore l'objet deserialise ; sans
+            // `input: false`, API Platform denormalise quand meme le corps dans l'entite, et
+            // cette entite n'ayant aucun `denormalizationContext`, toute propriete munie d'un
+            // mutateur devient ecrivable — l'etablissement compris. Meme forme que
+            // `/padel/niveaux/declarer` et `/sport/abonnements/souscrire`, qui la portent deja.
+            input: false,
             security: "is_granted('PERM', 'patinoire.gerer_location')",
             processor: SortirPatinsProcessor::class,
         ),
@@ -53,6 +59,12 @@ use Symfony\Component\Uid\Uuid;
         ),
     ],
     normalizationContext: ['groups' => ['location:read']],
+    // Fermeture **declaree** de la denormalisation (D41). Aucune propriete ne porte
+    // `location:write` : rien n'est ecrivable depuis le corps. Les operations de creation portent
+    // deja `input: false`, qui suffit techniquement — mais le garde-fou n12 ne sait pas le
+    // lire, et compterait cette entite comme exposee indefiniment. Une fermeture qu'aucun
+    // outil ne voit finit par etre "corrigee" une seconde fois par quelqu'un d'autre.
+    denormalizationContext: ['groups' => ['location:write']],
 )]
 #[ApiFilter(SearchFilter::class, properties: ['statut' => 'exact', 'beneficiaire' => 'exact', 'parcPatins' => 'exact', 'etablissement' => 'exact'])]
 class LocationPatins

@@ -51,7 +51,21 @@ final class EReportingTest extends ComptaApiTestCase
         $htAttendu = $ttcInclusCentimes - $tvaAttendue;
         self::assertSame($htAttendu, $totalBaseHT, 'La vente marquée ImpayeRegie doit être exclue de l\'agrégat (RG-M6-09).');
 
-        $transmise = $client->request('POST', '/api/compta/e-reporting/' . $declaration['id'] . '/transmettre', $entete)->toArray();
-        self::assertSame('transmis', $transmise['statutEnvoi']);
+        // ⚠ CETTE ASSERTION DISAIT « transmis », ET ELLE ETAIT VRAIE SANS VALEUR.
+        //
+        // `PdpStubAdapter` rendait `Transmis` sans rien transmettre. Une declaration d'e-reporting
+        // marquee transmise mais jamais deposee est une obligation declarative que plus personne ne
+        // sait manquante. Arbitre par Maxime le 31/08 : un canal non raccorde refuse.
+        $client->request('POST', '/api/compta/e-reporting/' . $declaration['id'] . '/transmettre', $entete);
+        self::assertResponseStatusCodeSame(503, 'Aucune PDP n\'est raccordee : le depot ne peut pas reussir.');
+
+        $corps = $client->getResponse()->getContent(false);
+        self::assertStringContainsString('PAS été transmise', $corps, 'Le message doit dire ce qui n\'a PAS eu lieu.');
+
+        // Et la declaration garde son statut : elle reste transmissible le jour du raccordement.
+        // La declaration se relit sur sa route standard : `/api/compta/e-reporting` ne porte que
+        // le POST de creation et la transmission. Verifie sur le routeur, pas suppose.
+        $apres = $client->request('GET', '/api/declaration_e_reportings/' . $declaration['id'], $entete)->toArray();
+        self::assertSame('prepare', $apres['statutEnvoi'], 'Un depot refuse ne degrade pas la declaration.');
     }
 }

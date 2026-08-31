@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Facturation\Api;
 
+use App\Compta\DataFixtures\ComptaFixtures;
 use App\DataFixtures\SocleFixtures;
 use App\Organisation\Entity\Etablissement;
 use App\Securite\Entity\Affectation;
@@ -33,7 +34,7 @@ final class FactureRenduApiTest extends FacturationApiTestCase
         [$clientA, $enteteA] = $this->adminSurA();
         $vente = $this->creerVenteValidee($clientA, $enteteA);
         $facture = $clientA->request('POST', '/api/factures/depuis-vente', $enteteA + [
-            'json' => ['vente' => '/api/ventes/' . $vente['id']],
+            'json' => ['vente' => '/api/ventes/' . $vente['id'], 'destinataire' => ['type' => 'personne_morale', 'raisonSociale' => 'Client de test', 'siret' => '12345678900011', 'adresse' => ['rue' => '1 rue de Test', 'cp' => '75000', 'ville' => 'Paris', 'pays' => 'FR']]],
         ])->toArray();
 
         // Un lecteur facturation sur B UNIQUEMENT : il passe la sécurité de route, mais n'a aucun droit
@@ -76,12 +77,61 @@ final class FactureRenduApiTest extends FacturationApiTestCase
         return [$email, $mdp];
     }
 
+    /**
+     * ⚠ **UN TEST DE PRESENCE NE PEUT PAS VOIR UNE VALEUR FAUSSE.**
+     *
+     * `testCa8RenduPortesLesMentionsLegales`, juste en dessous, verifie que les mentions sont
+     * PORTEES. Il est reste vert le 01/09 pendant que le rendu publiait le SIREN sous la cle
+     * `siret` — neuf chiffres au lieu de quatorze. Le champ etait present, non vide, numerique :
+     * ni test ni garde-fou ne pouvait le voir.
+     *
+     * Un SIRET, ce sont les 9 chiffres du SIREN **plus le NIC a 5 chiffres qui designe
+     * l'ETABLISSEMENT** — la partie qui dit quel site facture, et la seule qui manquait. Sur un
+     * document opposable, la ligne annoncait un numero qui n'existe pas sous ce nom.
+     *
+     * Releve par `allaccess-37` en comparant deux appels du meme rendu a deux heures d'intervalle.
+     * Sa lecon de methode : **un remplacement de source se prouve par l'egalite de la SORTIE, pas
+     * par la presence des champs.**
+     *
+     * Les trois assertions ensemble ne peuvent pas etre satisfaites par accident. La longueur
+     * seule laisserait passer quatorze chiffres quelconques ; le prefixe seul laisserait passer le
+     * SIREN nu ; la difference seule laisserait passer n'importe quoi d'autre.
+     */
+    public function testLeSiretPublieEstUnSiretEtPasUnSiren(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $vente = $this->creerVenteValidee($client, $entete);
+        $facture = $client->request('POST', '/api/factures/depuis-vente', $entete + [
+            'json' => ['vente' => '/api/ventes/' . $vente['id'], 'destinataire' => ['type' => 'personne_morale', 'raisonSociale' => 'Client de test', 'siret' => '12345678900011', 'adresse' => ['rue' => '1 rue de Test', 'cp' => '75000', 'ville' => 'Paris', 'pays' => 'FR']]],
+        ])->toArray();
+
+        $rendu = $client->request('GET', '/api/factures/' . $facture['id'] . '/rendu', $entete)->toArray();
+
+        $siret = $rendu['emetteur']['siret'] ?? null;
+        self::assertIsString($siret, 'La mention SIRET est exigee sur une facture francaise.');
+
+        self::assertMatchesRegularExpression(
+            '/^\\d{14}$/',
+            $siret,
+            sprintf('« %s » n’est pas un SIRET : 14 chiffres attendus, %d reçus.', $siret, \strlen($siret)),
+        );
+
+        $siren = ComptaFixtures::PROFIL_SIREN;
+        self::assertStringStartsWith(
+            $siren,
+            $siret,
+            'Un SIRET commence par le SIREN de l’entreprise, puis porte le NIC de l’établissement.',
+        );
+
+        self::assertNotSame($siren, $siret, 'Le SIRET publié ne doit pas être le SIREN nu.');
+    }
+
     public function testCa8RenduPortesLesMentionsLegales(): void
     {
         [$client, $entete] = $this->adminSurA();
         $vente = $this->creerVenteValidee($client, $entete);
         $facture = $client->request('POST', '/api/factures/depuis-vente', $entete + [
-            'json' => ['vente' => '/api/ventes/' . $vente['id']],
+            'json' => ['vente' => '/api/ventes/' . $vente['id'], 'destinataire' => ['type' => 'personne_morale', 'raisonSociale' => 'Client de test', 'siret' => '12345678900011', 'adresse' => ['rue' => '1 rue de Test', 'cp' => '75000', 'ville' => 'Paris', 'pays' => 'FR']]],
         ])->toArray();
 
         $rendu = $client->request('GET', '/api/factures/' . $facture['id'] . '/rendu', $entete)->toArray();

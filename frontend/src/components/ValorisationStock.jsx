@@ -46,10 +46,16 @@ const SORTIES = [
 ]
 
 export default function ValorisationStock({ etabActif, onErreur }) {
-  const [lignes, setLignes] = useState([])
+  // ⚠ `null` = PAS LU. << Rien a valoriser >> est une affirmation sur la VALEUR DU STOCK,
+  // c'est-a-dire sur de l'argent. Elle s'affichait quand `stockValorisation` echouait au premier
+  // chargement, le message d'erreur partant ailleurs par `onErreur` -- donc dans un bandeau en
+  // haut de l'ecran, loin du cadre qui, lui, affirmait tranquillement qu'il n'y a rien.
+  const [lignes, setLignes] = useState(null)
   const [mouvements, setMouvements] = useState([])
   const [imputations, setImputations] = useState([])
   const [imputationsTronquees, setImputationsTronquees] = useState(false)
+  // Distinct de la troncature : ici la lecture n'a pas abouti du tout.
+  const [controleIndisponible, setControleIndisponible] = useState(false)
   const [chargement, setChargement] = useState(true)
   const [detail, setDetail] = useState(null)
 
@@ -60,6 +66,7 @@ export default function ValorisationStock({ etabActif, onErreur }) {
       setLignes(Array.isArray(v) ? v : membres(v))
     } catch (e) {
       onErreur(e.message)
+      setLignes(null)
     } finally {
       setChargement(false)
     }
@@ -72,9 +79,18 @@ export default function ValorisationStock({ etabActif, onErreur }) {
       const annonces = i?.totalItems ?? i?.['hydra:totalItems'] ?? lus.length
       setImputations(lus)
       setImputationsTronquees(annonces > lus.length)
+      setControleIndisponible(false)
     } catch {
+      // ⚠ CE DRAPEAU SERVAIT DEUX CAUSES ET N'EN EXPLIQUAIT QU'UNE.
+      //
+      // `imputationsTronquees` etait pose ici comme sur une vraie troncature de pagination, et le
+      // bandeau annonce alors << il y a plus de lignes d'imputation que cet ecran n'en charge >>.
+      // Sur un ECHEC, cette phrase est fabriquee : il n'y a pas << plus de lignes >>, il n'y en a
+      // aucune, et le controle n'a pas ete tente. Un symptome juste avec une cause inventee est
+      // plus trompeur qu'un symptome muet : on va chercher une pagination qui n'existe pas.
       setImputations([])
-      setImputationsTronquees(true)
+      setImputationsTronquees(false)
+      setControleIndisponible(true)
     }
   }, [etabActif, onErreur])
 
@@ -82,7 +98,7 @@ export default function ValorisationStock({ etabActif, onErreur }) {
     recharger()
   }, [recharger])
 
-  const total = lignes.reduce((s, l) => s + (parseFloat(l.valorisation) || 0), 0)
+  const total = (lignes || []).reduce((s, l) => s + (parseFloat(l.valorisation) || 0), 0)
 
   // Les sorties dont le coût ne couvre pas la quantité.
   const malCouverts = useMemo(() => {
@@ -121,14 +137,26 @@ export default function ValorisationStock({ etabActif, onErreur }) {
           <span className="sub">au coût d'achat, aujourd'hui</span>
         </div>
         <div className="card-b">
-          {lignes.length === 0 ? (
+          {lignes === null ? (
+            <div className="banner banner-error">
+              <b>La valeur du stock n’a pas pu être lue.</b> Ce cadre est vide parce que la lecture a
+              échoué, <b>pas</b> parce que le stock ne vaut rien.
+            </div>
+          ) : lignes.length === 0 ? (
             <div className="empty">
               Rien à valoriser. La valeur du stock est celle des lots encore ouverts, au coût auquel
               ils sont entrés — pas au prix de vente.
             </div>
           ) : (
             <>
-              {imputationsTronquees ? (
+              {controleIndisponible ? (
+                <div className="banner banner-warn">
+                  <b>Le contrôle de couverture des coûts n’a pas pu être fait&nbsp;:</b> les lignes
+                  d’imputation n’ont pas pu être lues. Les valeurs ci-dessous viennent du serveur et
+                  restent valides&nbsp;; c’est leur vérification qui manque, et on ne sait pas ce
+                  qu’elle aurait dit.
+                </div>
+              ) : imputationsTronquees ? (
                 <div className="banner banner-warn">
                   <b>Le contrôle de couverture des coûts n'a pas pu être fait.</b> Il y a plus de
                   lignes d'imputation que cet écran n'en charge, et un verdict rendu sur une partie ne
@@ -154,7 +182,7 @@ export default function ValorisationStock({ etabActif, onErreur }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {lignes.map((l) => (
+                  {(lignes || []).map((l) => (
                     <tr key={l.articleStock}>
                       <td><span className="nm">{l.libelle || '—'}</span></td>
                       <td className="num">{euros(l.valorisation)}</td>

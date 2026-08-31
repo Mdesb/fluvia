@@ -12,6 +12,7 @@ use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\Organisation\Entity\Etablissement;
+use App\Patinoire\State\EstablishmentStampProcessor;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
@@ -35,7 +36,7 @@ use Symfony\Component\Validator\Constraints as Assert;
     operations: [
         new GetCollection(security: "is_granted('PERM', 'patinoire.lire')"),
         new Get(security: "is_granted('PERM', 'patinoire.lire')"),
-        new Post(security: "is_granted('PERM', 'patinoire.configurer')"),
+        new Post(security: "is_granted('PERM', 'patinoire.configurer')", processor: EstablishmentStampProcessor::class),
         new Patch(security: "is_granted('PERM', 'patinoire.configurer')"),
     ],
     normalizationContext: ['groups' => ['parc_patins:read']],
@@ -51,8 +52,7 @@ class ParcPatins
 
     #[ORM\ManyToOne(targetEntity: Etablissement::class)]
     #[ORM\JoinColumn(nullable: false)]
-    #[Assert\NotNull]
-    #[Groups(['parc_patins:read', 'parc_patins:write'])]
+    #[Groups(['parc_patins:read'])]
     private ?Etablissement $etablissement = null;
 
     #[ORM\Column(type: 'smallint')]

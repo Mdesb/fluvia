@@ -19,6 +19,7 @@ use App\Reservation\State\ArbitrerConflitRecurrenceProcessor;
 use App\Reservation\State\CreerCreneauProcessor;
 use App\Reservation\State\InscrireListeAttenteProcessor;
 use App\Reservation\State\ModifierOccurrenceProcessor;
+use App\Reservation\State\FreeSlotProvider;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
@@ -35,6 +36,21 @@ use Symfony\Component\Uid\Uuid;
 #[ApiResource(
     shortName: 'ReservationCreneau',
     operations: [
+        // LES DEBUTS POSSIBLES POUR UNE PRESTATION, UN JOUR DONNE (placement libre).
+        //
+        // Le module savait reserver un creneau QUI EXISTE DEJA. Ce point d'entree rend les debuts
+        // ou un rendez-vous TIENDRAIT -- le seul modele possible pour un coiffeur ou un masseur,
+        // ou rien n'existe avant que le client n'appelle. Il ne reserve rien : la reservation
+        // reste la creation d'un Creneau, protegee par ChevauchementCreneauGuard.
+        //
+        // Parametres en QUERY et non en segments d'URL : une variable d'URL est convertie par API
+        // Platform avant d'atteindre le fournisseur, et une date n'a rien a faire dans un chemin
+        // de ressource.
+        new GetCollection(
+            uriTemplate: '/reservation/creneaux-libres',
+            security: "is_granted('PERM', 'reservation.lire')",
+            provider: FreeSlotProvider::class,
+        ),
         new GetCollection(security: "is_granted('PERM', 'reservation.lire')"),
         new Get(security: "is_granted('PERM', 'reservation.lire')"),
         new Post(

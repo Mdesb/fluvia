@@ -28,7 +28,7 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ORM\Entity]
 #[ORM\Table(name: 'bou_allocation_quota_ota')]
 #[ApiResource(
-    shortName: 'BoutiqueAllocationQuotaOTA',
+    shortName: 'BoutiqueAllocationQuotaOta',
     operations: [
         new GetCollection(security: "is_granted('PERM', 'boutique.lire')"),
         new Get(security: "is_granted('PERM', 'boutique.lire')"),

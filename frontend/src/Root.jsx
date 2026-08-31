@@ -26,6 +26,12 @@ const PublicApp = lazy(() => import('./public/PublicApp.jsx'))
 const EditeurApp = lazy(() => import('./editeur/EditeurApp.jsx'))
 
 function brancheDe(chemin) {
+  // `/b/<nom-de-la-boutique>` — l'adresse qu'on donne a un client.
+  //
+  // `…/vitrine?vitrine=77eee25d-0ab5-4e69-9e17-85242e79d5aa` ne s'imprime pas sur une affiche et ne se
+  // dicte pas au telephone. `/b/piscine-a` si. Les deux formes marchent : un lien deja envoye dans un
+  // courriel de confirmation ne se casse pas parce qu'on a trouve mieux.
+  if (chemin === '/b' || chemin.startsWith('/b/')) return 'vitrine'
   if (chemin === '/vitrine' || chemin.startsWith('/vitrine/')) return 'vitrine'
   if (chemin === '/editeur' || chemin.startsWith('/editeur/')) return 'editeur'
   return 'staff'

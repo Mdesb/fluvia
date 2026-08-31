@@ -36,11 +36,20 @@ import { euros } from '../api/produit.js'
 // qui survit à sa propre correction est pire que pas de limite du tout, parce que plus personne ne
 // la cherche.
 
-export default function Patinoire({ etabActif, droits }) {
-  const [parc, setParc] = useState([])
-  const [locations, setLocations] = useState([])
-  const [attente, setAttente] = useState([])
+export default function Patinoire({ etabActif, droits, envoiCourriel = false }) {
+  // ⚠ `null` = PAS LU · `[]` = LU ET VIDE.
+  //
+  // Sur un refus, ces trois listes restaient a `[]` et l'ecran annoncait << Aucune paire n'est
+  // sortie >>, << Personne n'attend >> et << Aucune pointure n'est enregistree >>. La premiere est
+  // la plus couteuse : on la lit pour savoir si tout le materiel est rentre avant de fermer.
+  const [parc, setParc] = useState(null)
+  const [locations, setLocations] = useState(null)
+  const [attente, setAttente] = useState(null)
   const [retenues, setRetenues] = useState([])
+  // ⚠ `null` = PAS LU. << Aucun bareme. Sans lui, chaque retenue est un montant decide au
+  // guichet >> annonce une consequence : on facture une retenue a la main, sur la foi d'un
+  // bareme qu'on n'a pas pu lire.
+  const [grilles, setGrilles] = useState(null)
   const [beneficiaires, setBeneficiaires] = useState([])
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
@@ -50,16 +59,18 @@ export default function Patinoire({ etabActif, droits }) {
   const peutAffuter = aLeDroit(droits, 'patinoire.gerer_affutage')
   const peutAttente = aLeDroit(droits, 'patinoire.gerer_liste_attente')
   const peutForcer = aLeDroit(droits, 'patinoire.forcer_retenue')
+  const peutConfigurer = aLeDroit(droits, 'patinoire.configurer')
 
   const recharger = useCallback(async () => {
     setChargement(true)
     setErreur(null)
     try {
-      const [p, l, a, r] = await Promise.all([
+      const [p, l, a, r, g] = await Promise.all([
         api.patinoireParc(),
         api.patinoireLocations(),
         api.patinoireListeAttente(),
         api.patinoireRetenues(),
+        api.patinoireGrillesRetenue().catch(() => null),
       ])
       setParc(
         membres(p)
@@ -69,8 +80,12 @@ export default function Patinoire({ etabActif, droits }) {
       setLocations(membres(l))
       setAttente(membres(a))
       setRetenues(membres(r))
+      setGrilles(g ? membres(g) : null)
     } catch (e) {
       setErreur(e.message)
+      setParc(null)
+      setLocations(null)
+      setAttente(null)
     } finally {
       setChargement(false)
     }
@@ -130,6 +145,7 @@ export default function Patinoire({ etabActif, droits }) {
             nommer={nommer}
             peutLouer={peutLouer}
             peutAttente={peutAttente}
+            peutConfigurer={peutConfigurer}
             onFait={apres}
             onErreur={setErreur}
           />
@@ -137,6 +153,8 @@ export default function Patinoire({ etabActif, droits }) {
           <div className="resa-grid" style={{ marginTop: 16 }}>
             <LocationsSection
               locations={locations}
+              attente={attente}
+              envoiCourriel={envoiCourriel}
               nommer={nommer}
               peutLouer={peutLouer}
               onFait={apres}
@@ -155,6 +173,15 @@ export default function Patinoire({ etabActif, droits }) {
             retenues={retenues}
             peutValider={peutLouer || peutForcer}
             peutForcer={peutForcer}
+            onFait={apres}
+            onErreur={setErreur}
+          />
+
+          <BaremeSection
+            grilles={grilles}
+            parc={parc}
+            peutConfigurer={peutConfigurer}
+            etabActif={etabActif}
             onFait={apres}
             onErreur={setErreur}
           />
@@ -179,13 +206,14 @@ export default function Patinoire({ etabActif, droits }) {
 // --------------------------------------------------------------------------------------------
 // Le parc : une tuile par pointure, et la sortie part d'ici.
 // --------------------------------------------------------------------------------------------
-function ParcSection({ parc, attente, beneficiaires, nommer, peutLouer, peutAttente, onFait, onErreur }) {
+function ParcSection({ parc, attente, beneficiaires, nommer, peutLouer, peutAttente, peutConfigurer, onFait, onErreur }) {
+  const [creation, setCreation] = useState(false)
   const [sortie, setSortie] = useState(null)
   const [indispo, setIndispo] = useState(null)
 
   const enAttenteParParc = useMemo(() => {
     const c = {}
-    for (const l of attente) {
+    for (const l of attente || []) {
       if (l.statut !== 'en_attente' && l.statut !== 'proposee') continue
       const id = l.parcPatins?.id || String(l.parcPatins || '').split('/').pop()
       c[id] = (c[id] || 0) + 1
@@ -196,7 +224,7 @@ function ParcSection({ parc, attente, beneficiaires, nommer, peutLouer, peutAtte
   // Les pointures voisines réellement disponibles, les plus proches d'abord. C'est ce que le serveur
   // calcule pour son message de refus ; le calculer ici permet de le proposer avant le refus.
   function voisines(ligne) {
-    return parc
+    return (parc || [])
       .filter((p) => p.id !== ligne.id && (p.quantiteDisponible || 0) > 0)
       .map((p) => ({ ...p, ecart: Math.abs((p.pointure || 0) - (ligne.pointure || 0)) }))
       .sort((a, b) => a.ecart - b.ecart)
@@ -214,12 +242,35 @@ function ParcSection({ parc, attente, beneficiaires, nommer, peutLouer, peutAtte
       <div className="card-h">
         <h3>Parc de patins</h3>
         <span className="sub">ce qui est louable, pointure par pointure</span>
+        {peutConfigurer && (
+          <div className="actions" style={{ marginLeft: 'auto' }}>
+            <button className="btn sm" type="button" onClick={() => setCreation(true)}>
+              ＋ Déclarer une pointure
+            </button>
+          </div>
+        )}
       </div>
       <div className="card-b">
-        {parc.length === 0 ? (
+        {parc === null ? (
+          <div className="banner banner-error">
+            Le parc de patins n’a pas pu être lu. Ce cadre est vide parce que la lecture a échoué,
+            <b> pas</b> parce qu’aucune pointure n’est enregistrée.
+          </div>
+        ) : parc.length === 0 ? (
           <div className="empty">
-            Aucune pointure n'est enregistrée pour cet établissement. Tant que le parc est vide, aucune
-            paire ne peut être louée : ajoutez vos pointures et leurs quantités dans le paramétrage.
+            {/* LA PHRASE ENVOYAIT « DANS LE PARAMÉTRAGE », OÙ IL N'Y A RIEN DE TEL.
+                Les six onglets de Paramètres ne portent ni pointure, ni terrain, ni salle. Une
+                absence laisse chercher ; une fausse piste fait chercher au mauvais endroit, puis
+                conclure qu'on n'a pas compris son propre logiciel. C'est pire que le silence. */}
+            Aucune pointure n'est enregistrée pour cet établissement. Tant que le parc est vide,
+            aucune paire ne peut être louée.{peutConfigurer ? ' Déclarez-en une avec le bouton ci-dessus.' : ''}
+            <ParcPatinsModal
+              open={creation}
+              parc={parc}
+              onClose={() => setCreation(false)}
+              onFait={() => { setCreation(false); onFait() }}
+              onErreur={onErreur}
+            />
           </div>
         ) : (
           <>
@@ -229,6 +280,13 @@ function ParcSection({ parc, attente, beneficiaires, nommer, peutLouer, peutAtte
                 voisines et l'inscription en liste d'attente.
               </div>
             )}
+            <ParcPatinsModal
+              open={creation}
+              parc={parc}
+              onClose={() => setCreation(false)}
+              onFait={() => { setCreation(false); onFait() }}
+              onErreur={onErreur}
+            />
             <div className="pat-parc">
               {parc.map((p) => {
                 const dispo = p.quantiteDisponible || 0
@@ -439,18 +497,42 @@ function IndisponibleModal({ etat, beneficiaires, nommer, peutAttente, onClose, 
 // --------------------------------------------------------------------------------------------
 // Les locations en cours, et le retour.
 // --------------------------------------------------------------------------------------------
-function LocationsSection({ locations, nommer, peutLouer, onFait, onErreur }) {
+function LocationsSection({ locations, attente, envoiCourriel = false, nommer, peutLouer, onFait, onErreur }) {
+  // ⚠ LE MÊME COMPTAGE QUE `ParcSection`, ET IL EST DÉLIBÉRÉMENT REFAIT PLUTÔT QUE PARTAGÉ.
+  //
+  // Les deux sections en ont besoin, et remonter le calcul dans la page pour le passer aux deux
+  // ajouterait une dépendance entre elles pour trois lignes. Ce qui compte est que le CRITÈRE soit
+  // le même — `en_attente` ou `proposee` — parce qu'une personne « proposée » attend toujours : on
+  // lui a réservé la paire, on ne l'a pas prévenue.
+  const enAttenteParParc = useMemo(() => {
+    const c = {}
+    for (const l of attente || []) {
+      if (l.statut !== 'en_attente' && l.statut !== 'proposee') continue
+      const id = l.parcPatins?.id || String(l.parcPatins || '').split('/').pop()
+      c[id] = (c[id] || 0) + 1
+    }
+    return c
+  }, [attente])
+
   const [retour, setRetour] = useState(null)
-  const enCours = locations.filter((l) => l.statut === 'en_cours')
+  const enCours = (locations || []).filter((l) => l.statut === 'en_cours')
 
   return (
     <section className="card">
       <div className="card-h">
         <h3>Paires sorties</h3>
-        <span className="sub">{enCours.length} en circulation</span>
+        <span className="sub">{locations === null ? '—' : `${enCours.length} en circulation`}</span>
       </div>
       <div className="card-b">
-        {enCours.length === 0 ? (
+        {locations === null ? (
+          // ⚠ TON D'ALERTE. C'est le cadre qu'on lit avant de fermer, pour savoir si tout le
+          // materiel est rentre. << Aucune paire n'est sortie >> sur une lecture refusee fait
+          // fermer sur des paires dehors.
+          <div className="banner banner-error">
+            Les locations n’ont pas pu être lues. <b>Ne concluez pas que tout est rentré</b>&nbsp;:
+            cette liste n’a pas été obtenue.
+          </div>
+        ) : enCours.length === 0 ? (
           <div className="empty">
             Aucune paire n'est sortie. Les locations apparaissent ici dès qu'une pointure quitte le
             parc, et en disparaissent au retour.
@@ -485,6 +567,8 @@ function LocationsSection({ locations, nommer, peutLouer, onFait, onErreur }) {
 
       <RetourModal
         location={retour}
+        enAttenteParParc={enAttenteParParc}
+        envoiCourriel={envoiCourriel}
         onClose={() => setRetour(null)}
         onFait={(m) => { setRetour(null); onFait(m) }}
         onErreur={onErreur}
@@ -514,7 +598,7 @@ const ETATS_RETOUR = [
   },
 ]
 
-function RetourModal({ location, onClose, onFait, onErreur }) {
+function RetourModal({ location, enAttenteParParc = {}, envoiCourriel = false, onClose, onFait, onErreur }) {
   const [etat, setEtat] = useState('bon')
   const [partielle, setPartielle] = useState(false)
   const [motif, setMotif] = useState('')
@@ -533,10 +617,31 @@ function RetourModal({ location, onClose, onFait, onErreur }) {
         ...(etat === 'non_rendu' && partielle ? { restitutionPartielle: true } : {}),
         ...(motif.trim() ? { motif: motif.trim() } : {}),
       })
+      // ⚠ RENDRE UNE PAIRE PROMEUT QUELQU'UN DE LA LISTE D'ATTENTE — ET PERSONNE NE LE PRÉVIENT.
+      //
+      // Le serveur appelle `PromotionListeAttenteHandler::promouvoir()` au retour, qui compose un
+      // courriel. Ce courriel ne part pas : cette instance n'a pas d'expéditeur configuré. Rien à
+      // l'écran ne le disait, donc l'opérateur rendait la paire en croyant la personne prévenue —
+      // et elle attend un message qui ne viendra jamais.
+      //
+      // ⚠ CE N'EST PAS UNE PROMESSE NON TENUE, C'EST UNE ABSENCE DE PROMESSE. L'écran ne mentait
+      // pas : il ne disait simplement rien. C'est plus difficile à trouver qu'un mensonge, parce
+      // qu'il n'y a aucune phrase à contredire — et c'est plus coûteux, parce que le geste qui
+      // manque (décrocher son téléphone) n'est demandé à personne.
+      //
+      // La phrase suit `/me` : le jour où un expéditeur est branché, elle disparaît d'elle-même.
+      const idParc = location?.parcPatins?.id || String(location?.parcPatins || '').split('/').pop()
+      const enAttente = enAttenteParParc[idParc] || 0
+
+      const base = etat === 'bon'
+        ? 'Paire rendue, caution à restituer.'
+        : 'Retour enregistré. Une retenue sur caution attend votre validation.'
+
       onFait(
-        etat === 'bon'
-          ? 'Paire rendue, caution à restituer.'
-          : 'Retour enregistré. Une retenue sur caution attend votre validation.',
+        enAttente > 0 && !envoiCourriel
+          ? `${base} ⚠ ${enAttente} personne(s) attendent cette pointure et ne seront PAS prévenues : `
+            + `cette instance n’envoie aucun courriel. Contactez la première de la liste.`
+          : base,
       )
     } catch (err) {
       onErreur(err.message || "Le retour n'a pas abouti.")
@@ -619,7 +724,7 @@ function RetourModal({ location, onClose, onFait, onErreur }) {
 // La liste d'attente.
 // --------------------------------------------------------------------------------------------
 function ListeAttenteSection({ attente, nommer, peutAttente, onFait, onErreur }) {
-  const ouvertes = attente
+  const ouvertes = (attente || [])
     .filter((l) => l.statut === 'en_attente' || l.statut === 'proposee')
     .sort((a, b) => (a.rang || 0) - (b.rang || 0))
 
@@ -643,10 +748,16 @@ function ListeAttenteSection({ attente, nommer, peutAttente, onFait, onErreur })
     <section className="card">
       <div className="card-h">
         <h3>Liste d'attente</h3>
-        <span className="sub">{ouvertes.length} personne{ouvertes.length > 1 ? 's' : ''}</span>
+        <span className="sub">
+          {attente === null ? '—' : `${ouvertes.length} personne${ouvertes.length > 1 ? 's' : ''}`}
+        </span>
       </div>
       <div className="card-b">
-        {ouvertes.length === 0 ? (
+        {attente === null ? (
+          <div className="banner banner-error">
+            La liste d’attente n’a pas pu être lue. <b>Ne concluez pas que personne n’attend</b>.
+          </div>
+        ) : ouvertes.length === 0 ? (
           <div className="empty">
             Personne n'attend. On inscrit ici les clients dont la pointure est épuisée, pour les
             rappeler dans l'ordre dès qu'une paire revient.
@@ -829,8 +940,280 @@ function ValidationRetenueModal({ retenue, peutForcer, onClose, onFait, onErreur
 // --------------------------------------------------------------------------------------------
 // L'atelier d'affûtage.
 // --------------------------------------------------------------------------------------------
+// LE BARÈME DE RETENUE, LÀ OÙ ON RETIENT — et pas seulement dans l'écran central des cautions.
+//
+// La patinoire expose quatre opérations sur son propre barème (`patinoire_grille_retenues`) :
+// lecture, création, modification. **Aucune n'était atteignable.** Le régisseur voyait donc les
+// retenues à valider, juste au-dessus, sans jamais voir NI pouvoir régler la règle qui en fixe le
+// montant.
+//
+// Le barème générique du socle existe bien dans l'écran Cautions, et il couvre la même donnée. Mais
+// pour l'atteindre depuis la patinoire il faut quitter son écran, aller au registre central, et
+// taper `patinoire.patins` À LA MAIN dans un champ de texte libre — une faute de frappe y crée
+// silencieusement un barème que rien n'applique jamais. Ici la cible est implicite, et le motif se
+// choisit dans une liste fermée de quatre valeurs.
+//
+// > **La règle se règle là où on l'applique.** Un paramétrage qui n'est atteignable que depuis un
+// > autre écran est un paramétrage qu'on ne corrige pas : on constate la retenue, on la trouve
+// > fausse, et on la valide quand même.
+
+// LES QUATRE MOTIFS DE RETENUE, ET POURQUOI ILS NE PASSENT PAS PAR `mot()`.
+//
+// `mot()` est une carte GLOBALE : un code y a une seule traduction. Or `casse` et `non_rendu`
+// existent déjà dans ce module comme ÉTATS D'UNE PAIRE DE PATINS — ils y sont traduits « Cassés »
+// et « Non rendus », au pluriel, parce qu'ils qualifient des patins.
+//
+// Comme MOTIF de retenue, le même code désigne la cause, pas l'objet : on retient pour « casse »,
+// pas pour « cassés ». Vu à l'écran en créant la première ligne de barème — la table affichait
+// « Cassés » là où la liste de saisie proposait « Casse ».
+//
+// Deux sens pour un code dans le même module : la carte globale ne peut pas porter les deux. La
+// liste locale est la bonne réponse, et ce commentaire existe pour qu'on ne la « simplifie » pas en
+// la renvoyant vers `mot()`.
+const MOTIFS_RETENUE = {
+  casse: 'Casse',
+  non_rendu: 'Non rendu',
+  perte: 'Perte',
+  restitution_partielle: 'Restitution partielle',
+}
+
+function BaremeSection({ grilles, parc, peutConfigurer, etabActif, onFait, onErreur }) {
+  const [editee, setEditee] = useState(null)
+
+  const actives = (grilles || []).filter((g) => g.actif !== false)
+  const inactives = (grilles || []).filter((g) => g.actif === false)
+
+  return (
+    <section className="card" style={{ marginTop: 16 }}>
+      <div className="card-h">
+        <h3>Barème de retenue</h3>
+        <span className="sub">ce qu&rsquo;on garde sur la caution, et pour quoi</span>
+        {peutConfigurer && (
+          <div className="r">
+            <button className="btn primary sm" type="button" onClick={() => setEditee({})}>
+              ＋ Ajouter une ligne
+            </button>
+          </div>
+        )}
+      </div>
+      <div className="card-b" style={{ overflowX: 'auto' }}>
+        {grilles === null ? (
+          <div className="banner banner-error">
+            Le barème de retenue n’a pas pu être lu. <b>N’en concluez pas qu’il n’y en a
+            pas</b>&nbsp;: décider un montant au guichet sur cette base serait une erreur.
+          </div>
+        ) : grilles.length === 0 ? (
+          <div className="empty">
+            Aucun barème. Sans lui, chaque retenue est un montant décidé au guichet — donc un montant
+            qui se discute, et qui n&rsquo;est pas le même d&rsquo;un agent à l&rsquo;autre.
+          </div>
+        ) : (
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th>Motif</th>
+                <th>Parc concerné</th>
+                <th>Mode</th>
+                <th className="num">Montant</th>
+                <th>État</th>
+                {peutConfigurer && <th />}
+              </tr>
+            </thead>
+            <tbody>
+              {[...actives, ...inactives].map((g) => (
+                <tr key={g.id} style={g.actif === false ? { opacity: 0.55 } : undefined}>
+                  <td><span className="nm">{MOTIFS_RETENUE[g.motif] || mot(g.motif)}</span></td>
+                  <td>
+                    {/* `parcPatins` désigne une pointure précise du parc, ou rien : le barème vaut
+                        alors pour tout le parc. « Tout le parc » est une information, pas un blanc. */}
+                    {g.parcPatins
+                      ? (nomParc(g.parcPatins, parc) || <span className="sub">une pointure précise</span>)
+                      : <span className="sub">tout le parc</span>}
+                  </td>
+                  <td>
+                    {mot(g.mode)}
+                    {g.mode === 'valeur_remplacement' && (
+                      <div className="sub">le prix de rachat de la paire</div>
+                    )}
+                  </td>
+                  <td className="num">{euros(g.montantOuTaux)}</td>
+                  <td>
+                    <span className={`badge ${g.actif === false ? 'mut' : 'good'}`}>
+                      {g.actif === false ? 'Suspendu' : 'Appliqué'}
+                    </span>
+                  </td>
+                  {peutConfigurer && (
+                    <td className="num">
+                      <button className="btn ghost sm" type="button" onClick={() => setEditee(g)}>
+                        Modifier
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {(grilles?.length || 0) > 0 && (
+          <div className="hint">
+            Une ligne ne se supprime pas, elle se suspend : les retenues déjà faites la citent comme
+            justification, et l&rsquo;effacer les rendrait inexplicables.
+          </div>
+        )}
+      </div>
+
+      <BaremeModal
+        grille={editee}
+        parc={parc}
+        etabActif={etabActif}
+        onClose={() => setEditee(null)}
+        onFait={(m) => { setEditee(null); onFait(m) }}
+        onErreur={onErreur}
+      />
+    </section>
+  )
+}
+
+function BaremeModal({ grille, parc, etabActif, onClose, onFait, onErreur }) {
+  const edition = grille && grille.id
+  const [motif, setMotif] = useState('casse')
+  const [mode, setMode] = useState('forfait')
+  const [montant, setMontant] = useState('')
+  const [parcPatins, setParcPatins] = useState('')
+  const [actif, setActif] = useState(true)
+  const [enCours, setEnCours] = useState(false)
+
+  useEffect(() => {
+    if (!grille) return
+    setMotif(grille.motif || 'casse')
+    setMode(grille.mode || 'forfait')
+    setMontant(grille.montantOuTaux != null ? String(grille.montantOuTaux) : '')
+    setParcPatins(grille.parcPatins || '')
+    setActif(grille.actif !== false)
+  }, [grille])
+
+  async function envoyer(e) {
+    e.preventDefault()
+    setEnCours(true)
+    try {
+      // Le serveur attend une décimale en chaîne (`montantOuTaux`), pas des centimes : c'est lui qui
+      // convertit. On envoie donc ce que l'agent a tapé, virgule normalisée.
+      const corps = {
+        motif,
+        mode,
+        montantOuTaux: String(montant).replace(',', '.').trim() || '0.00',
+        parcPatins: parcPatins || null,
+        actif,
+      }
+      if (edition) {
+        await api.majPatinoireGrilleRetenue(grille.id, corps)
+      } else {
+        await api.creerPatinoireGrilleRetenue({
+          ...corps,
+          etablissement: `/api/etablissements/${etabActif}`,
+        })
+      }
+      onFait(edition ? 'Barème modifié.' : 'Ligne de barème ajoutée.')
+    } catch (err) {
+      onErreur(err.message || "Le barème n'a pas pu être enregistré.")
+    } finally {
+      setEnCours(false)
+    }
+  }
+
+  return (
+    <Modal
+      open={!!grille}
+      onClose={onClose}
+      titre={edition ? 'Modifier une ligne de barème' : 'Ajouter une ligne de barème'}
+    >
+      <form onSubmit={envoyer}>
+        <div className="field">
+          <label htmlFor="pb-motif">Motif de la retenue *</label>
+          <select id="pb-motif" className="input" value={motif} onChange={(e) => setMotif(e.target.value)}>
+            <option value="casse">Casse</option>
+            <option value="non_rendu">Non rendu</option>
+            <option value="perte">Perte</option>
+            <option value="restitution_partielle">Restitution partielle</option>
+          </select>
+          {/* LA LISTE FERMÉE EST LE POINT DE CET ÉCRAN.
+              Sur le barème générique du socle, le motif est un champ libre : deux agents écrivent
+              « casse » et « cassé », et ce sont deux règles. Ici la patinoire impose ses quatre
+              motifs, et c'est ce que le client lira sur son reçu. */}
+          <div className="hint">
+            C&rsquo;est la phrase que le client lira sur son reçu, et qu&rsquo;il contestera ou non.
+          </div>
+        </div>
+
+        <div className="field">
+          <label htmlFor="pb-parc">Pointure concernée</label>
+          <select id="pb-parc" className="input" value={parcPatins} onChange={(e) => setParcPatins(e.target.value)}>
+            <option value="">Tout le parc</option>
+            {(parc || []).map((p) => (
+              <option key={p.id} value={p['@id'] || `/api/patinoire_parc_patins/${p.id}`}>
+                Pointure {p.pointure}
+              </option>
+            ))}
+          </select>
+          <div className="hint">
+            Laisser « tout le parc » sauf si une pointure vaut vraiment un autre prix — une paire de
+            grande taille, par exemple.
+          </div>
+        </div>
+
+        <div className="field">
+          <label htmlFor="pb-mode">Mode de calcul</label>
+          <select id="pb-mode" className="input" value={mode} onChange={(e) => setMode(e.target.value)}>
+            <option value="forfait">Forfait — un montant fixe</option>
+            <option value="valeur_remplacement">Valeur de remplacement — le prix de rachat</option>
+          </select>
+        </div>
+
+        <div className="field">
+          <label htmlFor="pb-montant">Montant (€) *</label>
+          <input
+            id="pb-montant"
+            className="input"
+            required
+            inputMode="decimal"
+            placeholder="15,00"
+            value={montant}
+            onChange={(e) => setMontant(e.target.value)}
+          />
+        </div>
+
+        <div className="field">
+          <label>
+            <input type="checkbox" checked={actif} onChange={(e) => setActif(e.target.checked)} />{' '}
+            Ligne appliquée
+          </label>
+          <div className="hint">
+            Décochez pour suspendre sans effacer : les retenues déjà faites continueront de la citer.
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
+          <button className="btn" type="button" onClick={onClose}>Annuler</button>
+          <button className="btn primary" type="submit" disabled={enCours || !montant.trim()}>
+            {enCours ? 'Enregistrement…' : edition ? 'Enregistrer' : 'Ajouter'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+// Le parc arrive en IRI dans la grille : on le retrouve dans la liste déjà chargée par l'écran.
+function nomParc(reference, parc) {
+  const id = String(reference).split('/').pop()
+  const p = (parc || []).find((x) => x.id === id)
+  return p ? `Pointure ${p.pointure}` : null
+}
+
 function AffutagesSection({ parc, peutAffuter, etabActif, onFait, onErreur }) {
-  const [affutages, setAffutages] = useState([])
+  // ⚠ `null` = PAS LU. Une lame a l'atelier qui n'apparait pas se lit << la paire est au
+  // parc >>, et on la loue.
+  const [affutages, setAffutages] = useState(null)
   const [nouveau, setNouveau] = useState(false)
   const [rafraichir, setRafraichir] = useState(0)
 
@@ -838,7 +1221,7 @@ function AffutagesSection({ parc, peutAffuter, etabActif, onFait, onErreur }) {
     api
       .patinoireAffutages()
       .then((c) => setAffutages(membres(c)))
-      .catch(() => setAffutages([]))
+      .catch(() => setAffutages(null))
   }, [etabActif, rafraichir])
 
   async function terminer(a) {
@@ -851,13 +1234,13 @@ function AffutagesSection({ parc, peutAffuter, etabActif, onFait, onErreur }) {
     }
   }
 
-  const ouverts = affutages.filter((a) => a.statut !== 'termine')
+  const ouverts = (affutages || []).filter((a) => a.statut !== 'termine')
 
   return (
     <section className="card" style={{ marginTop: 16 }}>
       <div className="card-h">
         <h3>Atelier d'affûtage</h3>
-        <span className="sub">{ouverts.length} en cours</span>
+        <span className="sub">{affutages === null ? '—' : `${ouverts.length} en cours`}</span>
         {peutAffuter && (
           <div className="r">
             <button className="btn primary sm" type="button" onClick={() => setNouveau(true)}>
@@ -867,7 +1250,12 @@ function AffutagesSection({ parc, peutAffuter, etabActif, onFait, onErreur }) {
         )}
       </div>
       <div className="card-b">
-        {affutages.length === 0 ? (
+        {affutages === null ? (
+          <div className="banner banner-error">
+            Les affûtages n’ont pas pu être lus. <b>Ne concluez pas que toutes les lames sont au
+            parc</b>&nbsp;: certaines sont peut-être à l’atelier.
+          </div>
+        ) : affutages.length === 0 ? (
           <div className="empty">
             Aucun affûtage. On enregistre ici les lames confiées à l'atelier — celles du parc, qui
             sortent alors du stock louable, et celles apportées par un client.
@@ -884,7 +1272,7 @@ function AffutagesSection({ parc, peutAffuter, etabActif, onFait, onErreur }) {
               </tr>
             </thead>
             <tbody>
-              {affutages.map((a) => (
+              {(affutages || []).map((a) => (
                 <tr key={a.id}>
                   <td>{mot(a.type)}</td>
                   <td>{a.parcPatins?.pointure ?? <span className="sub">patins du client</span>}</td>
@@ -980,7 +1368,7 @@ function AffutageModal({ open, parc, onClose, onFait, onErreur }) {
             <label htmlFor="af-parc">Pointure concernée *</label>
             <select id="af-parc" className="input" required value={parcPatins} onChange={(e) => setParcPatins(e.target.value)}>
               <option value="">Choisir…</option>
-              {parc.map((p) => (
+              {(parc || []).map((p) => (
                 <option key={p.id} value={p.id}>
                   Pointure {p.pointure} — {p.quantiteDisponible || 0} dispo
                 </option>
@@ -1031,5 +1419,115 @@ function ConflitsGlace({ etabActif }) {
         { cle: 'motif', entete: 'Motif', rendu: (r) => r.motif || '—' },
       ]}
     />
+  )
+}
+
+// DÉCLARER UNE POINTURE — deuxième des écrans qui savaient exploiter sans savoir créer.
+//
+// ⚠ TOUTE LA VALIDATION EST ICI, PARCE QU'IL N'Y EN A AUCUNE EN FACE.
+//
+// `ParcPatins` ne déclare ni `NotBlank`, ni `NotNull`, ni `Positive` : un POST au corps vide rend
+// **201** et crée une pointure 28 à zéro paire. Mesuré en le faisant, et payé — l'entité n'a pas
+// d'opération `Delete`, le parc vide ainsi créé est définitif (405 sur DELETE).
+//
+// Un formulaire n'est pas un garde-fou : quelqu'un qui appelle l'API directement passera toujours.
+// Mais tant que le serveur ne borne rien, c'est le seul endroit qui empêche d'enregistrer une
+// pointure 0 ou une quantité négative. Signalé pour le moteur ; en attendant, on borne ici et on
+// le dit plutôt que de laisser croire que le serveur vérifie.
+function ParcPatinsModal({ open, parc, onClose, onFait, onErreur }) {
+  const [pointure, setPointure] = useState('')
+  const [quantite, setQuantite] = useState('')
+  const [erreur, setErreur] = useState(null)
+  const [envoi, setEnvoi] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    setPointure('')
+    setQuantite('')
+    setErreur(null)
+  }, [open])
+
+  const n = Number(pointure)
+  const q = Number(quantite)
+  // Une pointure de patin descend rarement sous 25 et dépasse rarement 48 ; on ne l'interdit pas,
+  // on prévient. Le doublon, lui, se refuse : deux lignes pour la même pointure rendraient le
+  // décompte des paires ininterprétable.
+  const dejaLa = (parc || []).some((x) => Number(x.pointure) === n)
+  const pret = Number.isInteger(n) && n > 0 && Number.isInteger(q) && q > 0 && !dejaLa
+
+  async function soumettre(e) {
+    e.preventDefault()
+    setErreur(null)
+    setEnvoi(true)
+    try {
+      await api.creerParcPatins({ pointure: n, quantiteTotale: q })
+      onFait()
+    } catch (err) {
+      setErreur(err.message || 'La pointure n’a pas pu être déclarée.')
+    } finally {
+      setEnvoi(false)
+    }
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} titre="Déclarer une pointure">
+      <form onSubmit={soumettre}>
+        {erreur && <div className="banner banner-error" style={{ marginBottom: 'var(--esp-large)' }}>{erreur}</div>}
+
+        <div className="row" style={{ display: 'flex', gap: 'var(--esp-large)' }}>
+          <div className="field" style={{ flex: 1 }}>
+            <label htmlFor="pp-pointure">Pointure *</label>
+            <input
+              id="pp-pointure"
+              className="input"
+              type="number"
+              min="1"
+              value={pointure}
+              onChange={(e) => setPointure(e.target.value)}
+            />
+            {dejaLa && (
+              <span className="hint">
+                Cette pointure est déjà déclarée. Modifiez la ligne existante plutôt que d’en créer
+                une seconde : deux lignes pour la même taille rendraient le décompte des paires
+                impossible à lire.
+              </span>
+            )}
+            {!dejaLa && n > 0 && (n < 25 || n > 48) && (
+              <span className="hint">
+                {n} est inhabituel pour un patin — vérifiez avant d’enregistrer, la ligne ne pourra
+                pas être supprimée.
+              </span>
+            )}
+          </div>
+          <div className="field" style={{ flex: 1 }}>
+            <label htmlFor="pp-quantite">Paires possédées *</label>
+            <input
+              id="pp-quantite"
+              className="input"
+              type="number"
+              min="1"
+              value={quantite}
+              onChange={(e) => setQuantite(e.target.value)}
+            />
+            <span className="hint">
+              Le total détenu, pas le disponible : les paires sorties et en affûtage se déduisent
+              toutes seules.
+            </span>
+          </div>
+        </div>
+
+        <p className="hint">
+          ⚠ Une pointure déclarée ne peut pas être supprimée — le serveur n’offre pas cette
+          opération. Une erreur se corrige en ramenant la quantité à zéro.
+        </p>
+
+        <div className="r" style={{ display: 'flex', gap: 'var(--esp-normal)', justifyContent: 'flex-end' }}>
+          <button type="button" className="btn ghost" onClick={onClose}>Annuler</button>
+          <button type="submit" className="btn" disabled={envoi || !pret}>
+            {envoi ? 'Déclaration…' : 'Déclarer'}
+          </button>
+        </div>
+      </form>
+    </Modal>
   )
 }

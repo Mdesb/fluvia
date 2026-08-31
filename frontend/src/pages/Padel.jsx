@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Modal from '../components/Modal.jsx'
 import Tabs from '../components/Tabs.jsx'
-import { dateHeureFr } from '../components/Liste.jsx'
+import { dateHeureFr, resoudre } from '../components/Liste.jsx'
 import { api, membres } from '../api/client.js'
-import { aUnDesDroits } from '../api/droits.js'
+import { aLeDroit, aUnDesDroits } from '../api/droits.js'
 import { mot } from '../api/vocabulaire.js'
 
 // Padel — cinquante-six opérations exposées, une seule appelée jusqu'ici.
@@ -57,9 +57,30 @@ export default function Padel({ etabActif, droits }) {
 // --------------------------------------------------------------------------------------------
 // Les terrains, les parties ouvertes, et l'éclairage.
 // --------------------------------------------------------------------------------------------
+// L'HORAIRE D'UNE PARTIE, RESOLU CONTRE LES RESERVATIONS DU SOCLE.
+//
+// `reservation` arrive en IRI ; on la retrouve dans la liste chargee a part, et on lit son CRENEAU.
+// Quand la resolution echoue (liste tronquee a 30 par le serveur), on ne dit pas << aucune date >> :
+// on dit qu'on ne l'a pas. Une partie sans horaire et une partie dont on n'a pas lu l'horaire
+// n'appellent pas la meme reaction -- la premiere est une anomalie, la seconde un ecran incomplet.
+function quandDe(reference, reservations) {
+  if (!reference) return <span className="sub">sans réservation</span>
+  const id = typeof reference === 'string' ? reference.split('/').pop() : reference.id
+  const trouvee = (reservations || []).find((x) => String(x.id) === String(id))
+  const debut = trouvee?.creneau?.debut
+  if (debut) return dateHeureFr(debut)
+  return <span className="sub">horaire non chargé</span>
+}
+
 function TerrainsSection({ etabActif, droits }) {
-  const [terrains, setTerrains] = useState([])
-  const [reservations, setReservations] = useState([])
+  // Le droit exige par `POST /padel/terrains`, et lui seul.
+  const peutGererTerrain = aLeDroit(droits, 'padel.gerer_terrain')
+  const [creation, setCreation] = useState(false)
+  // ⚠ `null` = PAS LU. << Aucun terrain declare. Sans terrain, aucune reservation n'est
+  // possible. >> annonce une CONSEQUENCE : sur une lecture refusee, on refuse une reservation
+  // pour un terrain qui existe.
+  const [terrains, setTerrains] = useState(null)
+  const [reservations, setReservations] = useState(null)
   const [beneficiaires, setBeneficiaires] = useState([])
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
@@ -67,6 +88,8 @@ function TerrainsSection({ etabActif, droits }) {
   const [reservation, setReservation] = useState(null)
   const [eclairage, setEclairage] = useState(null)
   const [rejoindre, setRejoindre] = useState(null)
+  const [ressources, setRessources] = useState([])
+  const [reservationsCoeur, setReservationsCoeur] = useState([])
 
   const peutReserver = aUnDesDroits(droits, ['padel.reserver', 'padel.reserver_soi', 'padel.gerer'])
   const peutForcerEclairage = aUnDesDroits(droits, ['padel.acces_forcer', 'padel.gerer'])
@@ -74,16 +97,39 @@ function TerrainsSection({ etabActif, droits }) {
   const recharger = useCallback(async () => {
     setChargement(true)
     try {
-      const [t, r, b] = await Promise.all([
+      // UN TERRAIN DE PADEL N A PAS DE NOM A LUI : il le tient de sa RESSOURCE de reservation,
+      // qui revient en IRI nue. Le repli affichait donc un fragment d UUID sur chaque ligne, y
+      // compris dans le titre de la modale de reservation.
+      //
+      // Quelqu un avait vu le symptome et pose ce repli plutot que d en chercher la cause : le
+      // meme geste que l UUID d article dans le journal de stock. On charge les ressources.
+      const [t, r, b, res, coeur] = await Promise.all([
         api.padelTerrains(),
         api.padelReservations(),
         api.beneficiaires(),
+        api.reservationRessources().catch(() => null),
+        // LA COLONNE << QUAND >> D'UNE PARTIE OUVERTE NE POUVAIT RIEN AFFICHER, JAMAIS.
+        //
+        // Elle lisait `r.reservation?.debut`, et c'etait faux DEUX FOIS :
+        //   1. `Reservation` n'expose AUCUNE propriete dans le groupe `reservation_padel:read` --
+        //      verifie dans l'entite -- donc `reservation` arrive en IRI nue et `?.debut` vaut
+        //      `undefined` sur chaque ligne ;
+        //   2. et meme embarquee, une `Reservation` NE PORTE PAS `debut` : l'horaire vit sur son
+        //      `creneau`. Mesure sur la reponse reelle, pas deduite.
+        //
+        // Le tiret s'affichait donc toujours -- sur la colonne qui repond a << c'est quand ? >>,
+        // dans un ecran dont le geste principal est d'inscrire un joueur a une partie.
+        api.reservations().catch(() => null),
       ])
       setTerrains(membres(t))
       setReservations(membres(r))
       setBeneficiaires(membres(b))
+      setRessources(res ? membres(res) : [])
+      setReservationsCoeur(coeur ? membres(coeur) : [])
     } catch (e) {
       setErreur(e.message)
+      setTerrains(null)
+      setReservations(null)
     } finally {
       setChargement(false)
     }
@@ -94,7 +140,7 @@ function TerrainsSection({ etabActif, droits }) {
   }, [recharger])
 
   const ouvertes = useMemo(
-    () => reservations.filter((r) => r.ouverte && r.statutPartie !== 'complete'),
+    () => (reservations || []).filter((r) => r.ouverte && r.statutPartie !== 'complete'),
     [reservations],
   )
 
@@ -107,12 +153,19 @@ function TerrainsSection({ etabActif, droits }) {
         <div className="card-h">
           <h3>Parties ouvertes</h3>
           <span className="sub">
-            {ouvertes.length === 0 ? 'aucune partie cherche des joueurs' : `${ouvertes.length} cherche${ouvertes.length > 1 ? 'nt' : ''} des joueurs`}
+            {reservations === null
+              ? 'état inconnu — la lecture n’a pas abouti'
+              : ouvertes.length === 0 ? 'aucune partie cherche des joueurs' : `${ouvertes.length} cherche${ouvertes.length > 1 ? 'nt' : ''} des joueurs`}
           </span>
         </div>
         <div className="card-b">
           {chargement ? (
             <div className="center" style={{ minHeight: 80 }}><div className="spinner" /></div>
+          ) : reservations === null ? (
+            <div className="banner banner-error">
+              Les parties n’ont pas pu être lues&nbsp;: <b>ne concluez pas qu’aucune ne cherche de
+              joueurs</b>.
+            </div>
           ) : ouvertes.length === 0 ? (
             <div className="empty">
               Aucune partie ouverte. Un terrain de padel se joue à quatre : une partie ouverte permet
@@ -133,8 +186,8 @@ function TerrainsSection({ etabActif, droits }) {
               <tbody>
                 {ouvertes.map((r) => (
                   <tr key={r.id}>
-                    <td><span className="nm">{nomTerrain(r.terrain)}</span></td>
-                    <td>{r.reservation?.debut ? dateHeureFr(r.reservation.debut) : '—'}</td>
+                    <td><span className="nm">{nomTerrain(r.terrain, ressources, terrains)}</span></td>
+                    <td>{quandDe(r.reservation, reservationsCoeur)}</td>
                     <td>
                       {r.niveauViseMin != null || r.niveauViseMax != null ? (
                         `${r.niveauViseMin ?? '?'} à ${r.niveauViseMax ?? '?'}`
@@ -162,16 +215,40 @@ function TerrainsSection({ etabActif, droits }) {
         </div>
       </section>
 
-      <section className="card" style={{ marginTop: 16 }}>
+      <section className="card" style={{ marginTop: 'var(--esp-bloc)' }}>
         <div className="card-h">
           <h3>Terrains</h3>
-          <span className="sub">{terrains.length} terrain{terrains.length > 1 ? 's' : ''}</span>
+          <span className="sub">
+            {terrains === null ? '—' : `${terrains.length} terrain${terrains.length > 1 ? 's' : ''}`}
+          </span>
+          {peutGererTerrain && (
+            <div className="actions" style={{ marginLeft: 'auto' }}>
+              <button className="btn sm" type="button" onClick={() => setCreation(true)}>
+                ＋ Créer un terrain
+              </button>
+            </div>
+          )}
         </div>
+        <TerrainModal
+          open={creation}
+          terrains={terrains || []}
+          onClose={() => setCreation(false)}
+          onFait={() => { setCreation(false); recharger() }}
+        />
         <div className="card-b">
-          {terrains.length === 0 ? (
+          {terrains === null ? (
+            <div className="banner banner-error">
+              Les terrains n’ont pas pu être lus. <b>N’en concluez pas qu’aucun n’est déclaré</b>&nbsp;:
+              une réservation reste peut-être possible.
+            </div>
+          ) : terrains.length === 0 ? (
             <div className="empty">
-              Aucun terrain déclaré. Sans terrain, aucune réservation n'est possible : ils se créent
-              dans le paramétrage, avec leur type et les durées de partie autorisées.
+              {/* LA PHRASE ENVOYAIT « DANS LE PARAMÉTRAGE », QUI N'A PAS DE PLACE POUR UN TERRAIN.
+                  Troisième des trois — patinoire, padel, musée — et la plus coûteuse des trois
+                  formes : une absence laisse chercher, une fausse piste fait chercher au mauvais
+                  endroit, puis conclure qu'on n'a pas compris son propre logiciel. */}
+              Aucun terrain déclaré. Sans terrain, aucune réservation n'est possible.
+              {peutGererTerrain ? ' Créez-en un avec le bouton ci-dessus.' : ''}
             </div>
           ) : (
             <table className="tbl">
@@ -184,16 +261,16 @@ function TerrainsSection({ etabActif, droits }) {
                 </tr>
               </thead>
               <tbody>
-                {terrains.map((t) => (
+                {(terrains || []).map((t) => (
                   <tr key={t.id}>
-                    <td><span className="nm">{nomTerrain(t)}</span></td>
+                    <td><span className="nm">{nomTerrain(t, ressources, terrains)}</span></td>
                     <td>{t.type ? mot(t.type) : '—'}</td>
                     <td>
                       {(t.dureesAutoriseesMinutes || []).map((d) => `${d} min`).join(' · ') || '—'}
                     </td>
                     {(peutReserver || peutForcerEclairage) && (
                       <td className="num">
-                        <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                        <div style={{ display: 'flex', gap: 'var(--esp-serre)', justifyContent: 'flex-end' }}>
                           {peutReserver && (
                             <button className="btn primary sm" type="button" onClick={() => setReservation(t)}>
                               Réserver
@@ -221,6 +298,8 @@ function TerrainsSection({ etabActif, droits }) {
       </section>
 
       <ReservationModal
+        ressources={ressources}
+        terrains={terrains || []}
         terrain={reservation}
         beneficiaires={beneficiaires}
         onClose={() => setReservation(null)}
@@ -229,6 +308,8 @@ function TerrainsSection({ etabActif, droits }) {
       />
 
       <RejoindreModal
+        ressources={ressources}
+        terrains={terrains || []}
         partie={rejoindre}
         beneficiaires={beneficiaires}
         onClose={() => setRejoindre(null)}
@@ -237,6 +318,8 @@ function TerrainsSection({ etabActif, droits }) {
       />
 
       <EclairageModal
+        ressources={ressources}
+        terrains={terrains || []}
         terrain={eclairage}
         onClose={() => setEclairage(null)}
         onFait={(m) => { setEclairage(null); setSucces(m) }}
@@ -246,7 +329,7 @@ function TerrainsSection({ etabActif, droits }) {
   )
 }
 
-function ReservationModal({ terrain, beneficiaires, onClose, onFait, onErreur }) {
+function ReservationModal({ terrain, ressources, terrains, beneficiaires, onClose, onFait, onErreur }) {
   const [debut, setDebut] = useState('')
   const [duree, setDuree] = useState('')
   const [organisateur, setOrganisateur] = useState('')
@@ -292,10 +375,10 @@ function ReservationModal({ terrain, beneficiaires, onClose, onFait, onErreur })
   }
 
   return (
-    <Modal open={!!terrain} onClose={onClose} titre={terrain ? `Réserver — ${nomTerrain(terrain)}` : ''}>
+    <Modal open={!!terrain} onClose={onClose} titre={terrain ? `Réserver — ${nomTerrain(terrain, ressources, terrains)}` : ''}>
       {terrain && (
         <form onSubmit={envoyer}>
-          <div className="grid" style={{ gridTemplateColumns: '2fr 1fr', gap: 10 }}>
+          <div className="grid" style={{ gridTemplateColumns: '2fr 1fr', gap: 'var(--esp-normal)' }}>
             <div className="field" style={{ margin: 0 }}>
               <label htmlFor="pd-debut">Début *</label>
               <input id="pd-debut" className="input" type="datetime-local" required value={debut} onChange={(e) => setDebut(e.target.value)} />
@@ -329,7 +412,7 @@ function ReservationModal({ terrain, beneficiaires, onClose, onFait, onErreur })
           </div>
 
           <div className="field">
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 400 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--esp-normal)', fontWeight: 400 }}>
               <input type="checkbox" checked={ouverte} onChange={(e) => setOuverte(e.target.checked)} />
               Partie ouverte — publier le créneau pour trouver des joueurs
             </label>
@@ -340,7 +423,7 @@ function ReservationModal({ terrain, beneficiaires, onClose, onFait, onErreur })
           </div>
 
           {ouverte && (
-            <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 'var(--esp-normal)' }}>
               <div className="field" style={{ margin: 0 }}>
                 <label htmlFor="pd-nmin">Niveau minimum</label>
                 <input id="pd-nmin" className="input" type="number" value={niveauMin} onChange={(e) => setNiveauMin(e.target.value)} />
@@ -359,7 +442,7 @@ function ReservationModal({ terrain, beneficiaires, onClose, onFait, onErreur })
             </div>
           )}
 
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
+          <div style={{ display: 'flex', gap: 'var(--esp-normal)', justifyContent: 'flex-end', marginTop: 'var(--esp-large)' }}>
             <button className="btn" type="button" onClick={onClose}>Annuler</button>
             <button className="btn primary" type="submit" disabled={enCours || !debut || !organisateur}>
               {enCours ? 'Réservation…' : 'Réserver'}
@@ -371,7 +454,7 @@ function ReservationModal({ terrain, beneficiaires, onClose, onFait, onErreur })
   )
 }
 
-function RejoindreModal({ partie, beneficiaires, onClose, onFait, onErreur }) {
+function RejoindreModal({ partie, ressources, terrains, beneficiaires, onClose, onFait, onErreur }) {
   const [joueur, setJoueur] = useState('')
   const [enCours, setEnCours] = useState(false)
 
@@ -397,8 +480,8 @@ function RejoindreModal({ partie, beneficiaires, onClose, onFait, onErreur }) {
       {partie && (
         <form onSubmit={envoyer}>
           <p style={{ marginTop: 0 }}>
-            {nomTerrain(partie.terrain)}
-            {partie.reservation?.debut ? ` — ${dateHeureFr(partie.reservation.debut)}` : ''}.
+            {nomTerrain(partie.terrain, ressources, terrains)}
+            {' — '}{quandDe(partie.reservation, reservationsCoeur)}.
           </p>
 
           <div className="field">
@@ -425,7 +508,7 @@ function RejoindreModal({ partie, beneficiaires, onClose, onFait, onErreur }) {
             </div>
           )}
 
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
+          <div style={{ display: 'flex', gap: 'var(--esp-normal)', justifyContent: 'flex-end', marginTop: 'var(--esp-large)' }}>
             <button className="btn" type="button" onClick={onClose}>Annuler</button>
             <button className="btn primary" type="submit" disabled={enCours || !joueur}>
               {enCours ? 'Inscription…' : 'Inscrire'}
@@ -442,7 +525,7 @@ function RejoindreModal({ partie, beneficiaires, onClose, onFait, onErreur }) {
 // Ce n'est pas un interrupteur : c'est le fait de passer outre l'automatisme. On le fait quand la
 // commande automatique n'a pas fonctionné, ou pour une partie qui se prolonge — et l'oubli
 // d'extinction se lit sur la facture d'électricité, pas sur un écran.
-function EclairageModal({ terrain, onClose, onFait, onErreur }) {
+function EclairageModal({ terrain, ressources, terrains, onClose, onFait, onErreur }) {
   const [action, setAction] = useState('allumage')
   const [motif, setMotif] = useState('')
   const [enCours, setEnCours] = useState(false)
@@ -465,7 +548,7 @@ function EclairageModal({ terrain, onClose, onFait, onErreur }) {
   }
 
   return (
-    <Modal open={!!terrain} onClose={onClose} titre={terrain ? `Éclairage — ${nomTerrain(terrain)}` : ''}>
+    <Modal open={!!terrain} onClose={onClose} titre={terrain ? `Éclairage — ${nomTerrain(terrain, ressources, terrains)}` : ''}>
       {terrain && (
         <form onSubmit={envoyer}>
           <div className="banner banner-warn">
@@ -478,8 +561,8 @@ function EclairageModal({ terrain, onClose, onFait, onErreur }) {
             ['allumage', 'Allumer', "La commande automatique n'a pas pris, ou la partie se prolonge."],
             ['extinction', 'Éteindre', 'Le terrain est libéré avant la fin prévue.'],
           ].map(([v, titre, aide]) => (
-            <label key={v} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '8px 0', fontWeight: 400 }}>
-              <input type="radio" name="ecl" checked={action === v} onChange={() => setAction(v)} style={{ marginTop: 3 }} />
+            <label key={v} style={{ display: 'flex', gap: 'var(--esp-normal)', alignItems: 'flex-start', padding: '8px 0', fontWeight: 400 }}>
+              <input type="radio" name="ecl" checked={action === v} onChange={() => setAction(v)} style={{ marginTop: 'var(--esp-serre)' }} />
               <span>
                 <b>{titre}</b>
                 <div className="sub">{aide}</div>
@@ -503,7 +586,7 @@ function EclairageModal({ terrain, onClose, onFait, onErreur }) {
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
+          <div style={{ display: 'flex', gap: 'var(--esp-normal)', justifyContent: 'flex-end', marginTop: 'var(--esp-large)' }}>
             <button className="btn" type="button" onClick={onClose}>Annuler</button>
             <button className="btn primary" type="submit" disabled={enCours || !motif.trim()}>
               {enCours ? 'Commande…' : action === 'allumage' ? 'Allumer' : 'Éteindre'}
@@ -637,8 +720,8 @@ function RetourMaterielModal({ location, onClose, onFait, onErreur }) {
             ['rendu', 'Rendu', 'Le matériel revient au parc et la caution est restituée.'],
             ['non_rendu', 'Non rendu', 'Le matériel est retiré du parc et la caution est retenue.'],
           ].map(([v, titre, effet]) => (
-            <label key={v} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '8px 0', fontWeight: 400 }}>
-              <input type="radio" name="ret-mat" checked={statut === v} onChange={() => setStatut(v)} style={{ marginTop: 3 }} />
+            <label key={v} style={{ display: 'flex', gap: 'var(--esp-normal)', alignItems: 'flex-start', padding: '8px 0', fontWeight: 400 }}>
+              <input type="radio" name="ret-mat" checked={statut === v} onChange={() => setStatut(v)} style={{ marginTop: 'var(--esp-serre)' }} />
               <span>
                 <b>{titre}</b>
                 <div className="sub">{effet}</div>
@@ -657,7 +740,7 @@ function RetourMaterielModal({ location, onClose, onFait, onErreur }) {
             </div>
           )}
 
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
+          <div style={{ display: 'flex', gap: 'var(--esp-normal)', justifyContent: 'flex-end', marginTop: 'var(--esp-large)' }}>
             <button className="btn" type="button" onClick={onClose}>Annuler</button>
             <button className="btn primary" type="submit" disabled={enCours}>
               {enCours ? 'Enregistrement…' : 'Enregistrer le retour'}
@@ -671,6 +754,129 @@ function RetourMaterielModal({ location, onClose, onFait, onErreur }) {
 
 // Un terrain n'a pas de nom propre : il porte une ressource. Le repli sur l'identifiant court évite
 // une ligne vide dans un tableau où chaque ligne est un lieu physique.
-function nomTerrain(t) {
-  return t?.ressource?.libelle || t?.ressource?.nom || t?.libelle || `Terrain ${String(t?.id || '').slice(0, 8)}`
+// LE NOM D UN TERRAIN VIENT DE SA RESSOURCE, QUI ARRIVE EN IRI.
+//
+// `PadelTerrain` ne porte pas de nom : il tient le sien de `ReservationRessource`, rendue
+// en IRI nue. Le repli affichait donc un fragment d UUID -- constate a l ecran le 28/08, sur le seul
+// terrain de la preprod. On resout contre la liste des ressources ; le repli reste, pour le cas
+// ou la lecture des ressources echoue, mais il ne sert plus au cas normal.
+function nomTerrain(t, ressources, terrains) {
+  // DEUX NIVEAUX D IRI, ET LE PREMIER SE VOYAIT MOINS QUE LE SECOND.
+  //
+  // Corriger la resolution de la RESSOURCE a fait apparaitre les noms dans le tableau des
+  // terrains -- et pas dans celui des parties ouvertes, ou `partie.terrain` est lui-meme une
+  // IRI. Une correction partielle est une correction qui ment sur son etendue : on resout donc
+  // le terrain avant sa ressource.
+  const terrain = resoudre(t, terrains) || t
+  const r = resoudre(terrain?.ressource, ressources)
+  return r?.libelle || r?.nom
+    || terrain?.ressource?.libelle || terrain?.ressource?.nom || terrain?.libelle
+    || `Terrain ${String(terrain?.id || (typeof t === 'string' ? t.split('/').pop() : '') || '').slice(0, 8)}`
+}
+
+// CRÉER UN TERRAIN — dernier des trois écrans dont le message envoyait « dans le paramétrage ».
+//
+// ⚠ ON NE CRÉE PAS LA RESSOURCE, LE SERVEUR S'EN CHARGE. `CreerTerrainProcessor` cascade la
+// `Ressource` du socle (`codeType='terrain_padel'`) puis pose l'overlay padel. Créer la ressource
+// depuis l'écran en produirait DEUX pour un seul terrain, et le planning ne saurait plus laquelle
+// réserver — c'est la même erreur que si le musée créait ses propres espaces.
+//
+// ⚠ ET LA CRÉATION N'EST PAS SUR LA COLLECTION : `POST /api/padel_terrains` rend 405, la route est
+// `/api/padel/terrains`. Mesuré avant d'écrire, pas déduit du nom.
+//
+// Le processeur donne un défaut à TOUT — libellé « Terrain padel », type indoor, durées [60, 90].
+// Un corps vide créerait donc un terrain fantôme parfaitement valide. C'est pourquoi le formulaire
+// exige un libellé : le serveur ne le fera pas.
+function TerrainModal({ open, terrains, onClose, onFait }) {
+  const [libelle, setLibelle] = useState('')
+  const [type, setType] = useState('indoor')
+  const [durees, setDurees] = useState('60, 90')
+  const [erreur, setErreur] = useState(null)
+  const [envoi, setEnvoi] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    setLibelle('')
+    setType('indoor')
+    setDurees('60, 90')
+    setErreur(null)
+  }, [open])
+
+  const listeDurees = durees
+    .split(',')
+    .map((x) => parseInt(x.trim(), 10))
+    .filter((x) => Number.isInteger(x) && x > 0)
+
+  const dejaLa = (terrains || []).some(
+    (t) => (t.ressource?.libelle || t.libelle || '').trim().toLowerCase() === libelle.trim().toLowerCase(),
+  )
+  const pret = libelle.trim() !== '' && listeDurees.length > 0 && !dejaLa
+
+  async function soumettre(e) {
+    e.preventDefault()
+    setErreur(null)
+    setEnvoi(true)
+    try {
+      await api.creerTerrainPadel({
+        libelle: libelle.trim(),
+        type,
+        dureesAutoriseesMinutes: listeDurees,
+      })
+      onFait()
+    } catch (err) {
+      setErreur(err.message || 'Le terrain n’a pas pu être créé.')
+    } finally {
+      setEnvoi(false)
+    }
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} titre="Créer un terrain">
+      <form onSubmit={soumettre}>
+        {erreur && <div className="banner banner-error" style={{ marginBottom: 'var(--esp-large)' }}>{erreur}</div>}
+
+        <div className="field">
+          <label htmlFor="tp-libelle">Nom du terrain *</label>
+          <input id="tp-libelle" className="input" value={libelle} maxLength={120}
+            placeholder="Terrain 1, court couvert…"
+            onChange={(e) => setLibelle(e.target.value)} />
+          {dejaLa ? (
+            <p className="hint">
+              Un terrain porte déjà ce nom. Deux terrains homonymes rendent le planning illisible :
+              le joueur ne sait pas lequel il a réservé.
+            </p>
+          ) : (
+            <p className="hint">Ce que le joueur lit sur le planning et sur sa confirmation.</p>
+          )}
+        </div>
+
+        <div className="row" style={{ display: 'flex', gap: 'var(--esp-large)', flexWrap: 'wrap' }}>
+          <div className="field" style={{ flex: '1 1 180px' }}>
+            <label htmlFor="tp-type">Type *</label>
+            <select id="tp-type" className="input" value={type} onChange={(e) => setType(e.target.value)}>
+              <option value="indoor">Couvert</option>
+              <option value="outdoor">Découvert</option>
+            </select>
+            <p className="hint">Un terrain découvert dépend de la météo ; c’est ce qui justifie une annulation.</p>
+          </div>
+          <div className="field" style={{ flex: '1 1 220px' }}>
+            <label htmlFor="tp-durees">Durées de partie (minutes) *</label>
+            <input id="tp-durees" className="input" value={durees}
+              onChange={(e) => setDurees(e.target.value)} />
+            <p className="hint">
+              Séparées par des virgules. Ce sont les seules durées que le joueur pourra choisir :
+              {listeDurees.length > 0 ? ` ${listeDurees.join(' et ')} minutes.` : ' aucune pour l’instant.'}
+            </p>
+          </div>
+        </div>
+
+        <div className="r" style={{ display: 'flex', gap: 'var(--esp-normal)', justifyContent: 'flex-end' }}>
+          <button type="button" className="btn ghost" onClick={onClose}>Annuler</button>
+          <button type="submit" className="btn" disabled={envoi || !pret}>
+            {envoi ? 'Création…' : 'Créer le terrain'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  )
 }

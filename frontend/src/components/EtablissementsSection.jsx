@@ -17,8 +17,17 @@ import ReferentielEditable from './ReferentielEditable.jsx'
 // réversible. Une fermeture définitive, si elle doit exister un jour, mérite un geste dédié avec ses
 // propres avertissements — pas la même croix que pour un taux de TVA.
 //
-// Ce composant charge les régions avant de rendre le formulaire : proposer un choix vide ferait
-// enregistrer un établissement sans région, ce que le modèle accepte et qu'aucun écran ne rattraperait.
+// LA RÉGION EST OBLIGATOIRE, et ce commentaire disait le contraire.
+//
+// Il affirmait que « le modèle accepte » un établissement sans région. C'est faux : l'entité porte
+// `nullable: false` et `Assert\NotNull`. L'option « Aucune », posée sur cette croyance, produisait
+// un message technique anglais affiché tel quel à l'exploitant — vu dans le navigateur le 28/08 :
+//
+//     The type of the "region" attribute must be "array" (nested document) or "string" (IRI),
+//     "NULL" given.
+//
+// Le champ est donc requis, et sans valeur vide. Si aucune région n'existe encore, l'écran le dit
+// et renvoie vers la section qui permet d'en créer une — elle non plus n'existait pas avant ce jour.
 
 export default function EtablissementsSection({ peutEcrire, onChange }) {
   const [regions, setRegions] = useState([])
@@ -67,13 +76,14 @@ export default function EtablissementsSection({ peutEcrire, onChange }) {
         nom: 'region',
         libelle: 'Région',
         type: 'choix',
-        options: [
-          { valeur: '', libelle: 'Aucune' },
-          ...regions.map((r) => ({ valeur: `/api/regions/${r.id}`, libelle: r.nom })),
-        ],
-        aide: 'Sert à regrouper vos sites dans les tableaux de bord de pilotage.',
+        requis: true,
+        options: regions.map((r) => ({ valeur: `/api/regions/${r.id}`, libelle: r.nom })),
+        aide: regions.length === 0
+          ? 'Aucune région n’existe encore. Créez-en une juste au-dessus : un établissement ne peut '
+            + 'pas exister sans elle.'
+          : 'Obligatoire. C’est par la région que les tableaux de bord regroupent plusieurs sites.',
         versValeur: (l) => (l.region?.id ? `/api/regions/${l.region.id}` : ''),
-        versCorps: (v) => v || null,
+        versCorps: (v) => v,
       },
       {
         nom: 'actif',

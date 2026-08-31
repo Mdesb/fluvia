@@ -8,13 +8,12 @@ use ApiPlatform\Doctrine\Orm\Extension\QueryCollectionExtensionInterface;
 use ApiPlatform\Doctrine\Orm\Extension\QueryItemExtensionInterface;
 use ApiPlatform\Doctrine\Orm\Util\QueryNameGeneratorInterface;
 use ApiPlatform\Metadata\Operation;
-use App\Securite\Entity\Affectation;
 use App\Securite\Entity\Utilisateur;
+use App\Securite\Service\ContexteEtablissement;
 use App\Social\Entity\SocialAccount;
 use App\Social\Entity\SocialMetricSnapshot;
 use App\Social\Entity\SocialPost;
 use App\Social\Entity\SocialPublication;
-use Doctrine\ORM\Query\Expr\Join;
 use Doctrine\ORM\QueryBuilder;
 use Symfony\Bundle\SecurityBundle\Security;
 
@@ -53,6 +52,7 @@ final class SocialScopeExtension implements QueryCollectionExtensionInterface, Q
 
     public function __construct(
         private readonly Security $security,
+        private readonly ContexteEtablissement $contexte,
     ) {
     }
 
@@ -101,17 +101,16 @@ final class SocialScopeExtension implements QueryCollectionExtensionInterface, Q
             $alias = $newAlias;
         }
 
+        $actif = $this->contexte->idActif();
+        if ($actif === null) {
+            $queryBuilder->andWhere('1 = 0');
+
+            return;
+        }
+
         $queryBuilder
-            ->innerJoin(
-                Affectation::class,
-                'aff_scope_social',
-                Join::WITH,
-                sprintf(
-                    'IDENTITY(aff_scope_social.etablissement) = IDENTITY(%s.establishment) AND IDENTITY(aff_scope_social.utilisateur) = :social_scope_user',
-                    $alias,
-                ),
-            )
-            ->setParameter('social_scope_user', $user->getId(), 'uuid')
+            ->andWhere(sprintf('IDENTITY(%s.establishment) = :social_scope_actif', $alias))
+            ->setParameter('social_scope_actif', $actif, 'uuid')
             ->distinct();
     }
 }

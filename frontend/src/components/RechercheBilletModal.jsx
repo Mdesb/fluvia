@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { api, membres } from '../api/client.js'
+import { aLeDroit } from '../api/droits.js'
 import { libelleProduit } from '../api/produit.js'
 import { mot } from '../api/vocabulaire.js'
 import Modal from './Modal.jsx'
@@ -19,15 +20,53 @@ import Modal from './Modal.jsx'
 // elle n'en crée jamais un second. Si plusieurs droits actifs apparaissent pour un même support, ce
 // n'est pas une richesse à afficher : c'est un défaut, et l'écran le dit au lieu de le maquiller.
 
-export default function RechercheBilletModal({ open, onClose }) {
+/**
+ * @param {string} [numeroInitial] numero deja connu — la fiche s'ouvre alors DIRECTEMENT dessus.
+ *
+ * Ouverte depuis la recherche globale, cette fenetre connait deja le support : refaire saisir le
+ * numero qu'on vient de choisir dans une liste serait absurde, et surtout ce serait rendre lente une
+ * fonction dont le seul interet est d'etre rapide.
+ */
+export default function RechercheBilletModal({ open, onClose, numeroInitial = '', droits = [] }) {
   const [numero, setNumero] = useState('')
   const [resultat, setResultat] = useState(null)
   const [chargement, setChargement] = useState(false)
   const [erreur, setErreur] = useState(null)
+  const [compostage, setCompostage] = useState(null)
+  const [compostageEnCours, setCompostageEnCours] = useState(false)
 
-  async function chercher(e) {
-    e.preventDefault()
-    const q = numero.trim()
+  // ⚠ LE DROIT DE L'API, PAS UN AUTRE. La route de compostage exige `acces.controler` ; garder ce
+  // bouton derriere un droit different produirait un bouton qui refuse au clic, ou une fonction
+  // cachee a quelqu'un qui y a droit. Absent des droits recus = pas de bouton : un appelant qui
+  // oublie de les passer perd une commodite, il n'ouvre pas un pouvoir par accident.
+  const peutComposter = aLeDroit(droits, 'acces.controler')
+
+  async function composter(identifiant) {
+    setCompostageEnCours(true)
+    try {
+      setCompostage(await api.controlerBillet(identifiant))
+    } catch (e) {
+      setCompostage({ resultat: 'refuse', libelleMotif: e.message || 'Le compostage n’a pas abouti.' })
+    } finally {
+      setCompostageEnCours(false)
+    }
+  }
+
+  // A l'ouverture avec un numero connu : on cherche tout de suite. Sans `open` dans les dependances,
+  // rouvrir la fenetre sur le meme billet n'aurait rien relance et afficherait l'etat precedent --
+  // sur un controle d'acces, montrer un ancien resultat serait pire que ne rien montrer.
+  useEffect(() => {
+    if (!open) return
+    setNumero(numeroInitial || '')
+    setResultat(null)
+    setErreur(null)
+    if (numeroInitial) chercher(null, numeroInitial)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, numeroInitial])
+
+  async function chercher(e, force) {
+    e?.preventDefault?.()
+    const q = (force ?? numero).trim()
     if (!q) return
     setChargement(true)
     setErreur(null)
@@ -108,6 +147,57 @@ export default function RechercheBilletModal({ open, onClose }) {
               {mot(resultat.support.statut)}
             </span>
           </div>
+
+          {/* ⚠ VERIFIER NE CONSOMME RIEN ; COMPOSTER CONSOMME. Cette fenêtre sert d'abord à
+              regarder — il ne faut pas que le compostage devienne un effet de bord de la
+              consultation. D'où un geste explicite, et la phrase qui dit la différence. */}
+          {peutComposter && (
+            <div className="field">
+              <button
+                className="btn primary"
+                type="button"
+                disabled={compostageEnCours}
+                onClick={() => composter(resultat.support.identifiant)}
+              >
+                {compostageEnCours ? 'Compostage…' : 'Composter ce billet'}
+              </button>
+              <div className="hint">
+                Le compostage <b>consomme</b> le titre. Vérifier ne consomme rien&nbsp;: c'est ce
+                bouton, et lui seul, qui marque le billet comme utilisé.
+              </div>
+              {compostage && (
+                <div
+                  className={
+                    compostage.codeMotif === 'deja_consomme'
+                      ? 'banner banner-warn'
+                      : compostage.resultat === 'valide'
+                        ? 'banner banner-ok'
+                        : 'banner banner-error'
+                  }
+                  role="status"
+                >
+                  <b>
+                    {compostage.codeMotif === 'deja_consomme'
+                      ? 'Déjà composté'
+                      : compostage.resultat === 'valide'
+                        ? 'Composté'
+                        : 'Refusé'}
+                  </b>
+                  {compostage.libelleMotif ? ` — ${compostage.libelleMotif}` : ''}
+                  {compostage.dejaControleLe && (
+                    <div>
+                      Déjà contrôlé le{' '}
+                      {new Date(compostage.dejaControleLe).toLocaleString('fr-FR', {
+                        dateStyle: 'short',
+                        timeStyle: 'short',
+                      })}
+                      .
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {resultat.appairages.length === 0 ? (
             <div className="empty" style={{ padding: 18 }}>

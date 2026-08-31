@@ -35,6 +35,128 @@ services:
       # Phrase secrète protégeant la clé privée JWT. Propre à la préprod : celle
       # de app/.env est une valeur de développement, publique dans le dépôt.
       JWT_PASSPHRASE: ${JWT_PASSPHRASE:?JWT_PASSPHRASE manquant dans .env.preprod}
+      # ── CLES DE CHIFFREMENT ET DE SCELLEMENT ───────────────────────────────────────────────
+      #
+      # ⚠ `:?` ET NON UNE VALEUR PAR DEFAUT. Une valeur par defaut ferait demarrer le conteneur
+      # sans qu'on apprenne jamais qu'il manque un secret -- c'est exactement comme ca que les cles
+      # du depot se sont propagees. Ici l'absence est BRUYANTE.
+      # Documents de la GED, chiffres au repos.
+      DMS_ENCRYPTION_KEY: ${DMS_ENCRYPTION_KEY:?DMS_ENCRYPTION_KEY manquante dans .env.preprod}
+      # Second facteur d'authentification.
+      MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:?MFA_ENCRYPTION_KEY manquante dans .env.preprod}
+      # Coordonnees bancaires (mandats SEPA).
+      SEPA_IBAN_KEY: ${SEPA_IBAN_KEY:?SEPA_IBAN_KEY manquante dans .env.preprod}
+      # Cles d'API tierces confiees par le client.
+      OCR_API_KEY_ENCRYPTION_KEY: ${OCR_API_KEY_ENCRYPTION_KEY:?OCR_API_KEY_ENCRYPTION_KEY manquante dans .env.preprod}
+      # Jetons des comptes de reseaux sociaux.
+      SOCIAL_TOKEN_ENCRYPTION_KEY: ${SOCIAL_TOKEN_ENCRYPTION_KEY:?SOCIAL_TOKEN_ENCRYPTION_KEY manquante dans .env.preprod}
+      # Signature du scellement Vente.
+      NF525_SEAL_KEY: ${NF525_SEAL_KEY:?NF525_SEAL_KEY manquante dans .env.preprod}
+      # Signature du scellement Compta.
+      NF525_COMPTA_SEAL_KEY: ${NF525_COMPTA_SEAL_KEY:?NF525_COMPTA_SEAL_KEY manquante dans .env.preprod}
+      # Signature du scellement Facturation.
+      NF525_FACTURATION_SEAL_KEY: ${NF525_FACTURATION_SEAL_KEY:?NF525_FACTURATION_SEAL_KEY manquante dans .env.preprod}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ── ORDONNANCEUR ────────────────────────────────────────────────────────────────────────────
+  #
+  # L'appel periodique qui manquait. Vingt-deux taches cataloguees, un lanceur capable de les
+  # executer, et personne pour l'appeler : les vingt-deux a « JAMAIS » au 31/08.
+  #
+  # ⚠ SOUS PROFIL, DONC PAS DEMARRE PAR UN DEPLOIEMENT DE ROUTINE :
+  #
+  #     docker compose -f infra/compose.preprod.yaml --env-file infra/.env.preprod \
+  #         --profile ordonnanceur up -d scheduler
+  #
+  # La premiere execution REVOQUE des droits reellement perimes. C'est l'effet voulu et il se defait
+  # en reattribuant — mais c'est un effet, et `deploy-preprod.sh` ne doit pas le declencher a l'insu
+  # de celui qui deploie.
+  #
+  # La liste des taches autorisees vit dans `infra/ordonnanceur.sh`, pas ici : elle merite d'etre lue
+  # avec ses raisons, et un fichier de composition n'est pas l'endroit ou on argumente. Deux taches
+  # aujourd'hui, arbitrees par Maxime le 31/08.
+  #
+  # Ce qui a REELLEMENT tourne se lit ailleurs, et c'est la seule reponse qui vaille :
+  #     php bin/console platform:scheduler:run --status
+  scheduler:
+    profiles: ["ordonnanceur"]
+    build:
+      context: ../docker/php
+    restart: unless-stopped
+    mem_limit: 512m
+    working_dir: /app
+    entrypoint: ["/bin/sh", "/infra/ordonnanceur.sh"]
+    volumes:
+      - ../app:/app
+      - app_var:/app/var
+      - ../infra:/infra:ro
+      - ../docker/php/conf.d/zz-memory.ini:/usr/local/etc/php/conf.d/zz-memory.ini:ro
+    environment:
+      APP_ENV: prod
+      APP_DEBUG: "0"
+      APP_SECRET: ${APP_SECRET:?APP_SECRET manquant dans .env.preprod}
+      DATABASE_URL: "mysql://${DB_USER}:${DB_PASSWORD}@db:3306/${DB_NAME}?serverVersion=11.4.2-MariaDB&charset=utf8mb4"
+      JWT_PASSPHRASE: ${JWT_PASSPHRASE:?JWT_PASSPHRASE manquant dans .env.preprod}
+      # ── CLES DE CHIFFREMENT ET DE SCELLEMENT ───────────────────────────────────────────────
+      #
+      # ⚠ `:?` ET NON UNE VALEUR PAR DEFAUT. Une valeur par defaut ferait demarrer le conteneur
+      # sans qu'on apprenne jamais qu'il manque un secret -- c'est exactement comme ca que les cles
+      # du depot se sont propagees. Ici l'absence est BRUYANTE.
+      # Documents de la GED, chiffres au repos.
+      DMS_ENCRYPTION_KEY: ${DMS_ENCRYPTION_KEY:?DMS_ENCRYPTION_KEY manquante dans .env.preprod}
+      # Second facteur d'authentification.
+      MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:?MFA_ENCRYPTION_KEY manquante dans .env.preprod}
+      # Coordonnees bancaires (mandats SEPA).
+      SEPA_IBAN_KEY: ${SEPA_IBAN_KEY:?SEPA_IBAN_KEY manquante dans .env.preprod}
+      # Cles d'API tierces confiees par le client.
+      OCR_API_KEY_ENCRYPTION_KEY: ${OCR_API_KEY_ENCRYPTION_KEY:?OCR_API_KEY_ENCRYPTION_KEY manquante dans .env.preprod}
+      # Jetons des comptes de reseaux sociaux.
+      SOCIAL_TOKEN_ENCRYPTION_KEY: ${SOCIAL_TOKEN_ENCRYPTION_KEY:?SOCIAL_TOKEN_ENCRYPTION_KEY manquante dans .env.preprod}
+      # Signature du scellement Vente.
+      NF525_SEAL_KEY: ${NF525_SEAL_KEY:?NF525_SEAL_KEY manquante dans .env.preprod}
+      # Signature du scellement Compta.
+      NF525_COMPTA_SEAL_KEY: ${NF525_COMPTA_SEAL_KEY:?NF525_COMPTA_SEAL_KEY manquante dans .env.preprod}
+      # Signature du scellement Facturation.
+      NF525_FACTURATION_SEAL_KEY: ${NF525_FACTURATION_SEAL_KEY:?NF525_FACTURATION_SEAL_KEY manquante dans .env.preprod}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ── SAUVEGARDE DE LA BASE ───────────────────────────────────────────────────────────────────
+  #
+  # Il n'y en avait AUCUNE. Mesure du 31/08 : pas de dump, pas de tache qui en fasse, et
+  # `doctrine:fixtures:load` absente en preprod — `composer install --no-dev` retire le paquet. Les
+  # 38 classes de fixtures decrivent tout le jeu de demonstration et ne peuvent pas etre rejouees.
+  #
+  # Le volume `db_data` est persistant : c'est de la DURABILITE, pas de la RECUPERABILITE. Il
+  # survit a un redemarrage, pas a un DELETE. Deux ecritures irreversibles ont eu lieu le meme jour,
+  # sans operation inverse dans l'API.
+  #
+  # ⚠ PAS DE PROFIL, contrairement a l'ordonnanceur : une sauvegarde qu'il faut penser a demarrer
+  # est une sauvegarde qui n'existera pas le jour ou elle servirait. L'ordonnanceur revoque des
+  # droits — c'est un effet, il se demande. Celle-ci ne fait que lire.
+  #
+  # La destination est HORS DU DEPOT : un dump contient des donnees personnelles, meme de
+  # demonstration, et n'a rien a faire dans un arbre git.
+  #
+  # Restauration — ecrite ici parce qu'une sauvegarde dont personne ne connait la commande n'en est
+  # pas une :
+  #     gunzip -c /home/debian/sauvegardes-billetterie/<fichier>.sql.gz \
+  #       | docker exec -i billetterie-preprod-db-1 mariadb -u root -p<motdepasse> <base>
+  sauvegarde:
+    image: mariadb:11.4
+    restart: unless-stopped
+    mem_limit: 256m
+    entrypoint: ["/bin/sh", "/infra/sauvegarde-base.sh"]
+    volumes:
+      - ../infra:/infra:ro
+      - /home/debian/sauvegardes-billetterie:/sauvegardes
+    environment:
+      DB_NAME: ${DB_NAME}
+      DB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD manquant dans .env.preprod}
+      SAUVEGARDE_RETENTION_JOURS: "14"
     depends_on:
       db:
         condition: service_healthy

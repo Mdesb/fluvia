@@ -6,6 +6,11 @@
 const TOKEN_KEY = 'billetterie.token'
 const ETAB_KEY = 'billetterie.etablissement'
 
+// ⚠ `sessionStorage`, PAS `localStorage` — voir `supportStore` ci-dessous. Le nom diffère du
+// préfixe des deux autres clés pour qu'une inspection du stockage distingue d'un coup d'œil ce qui
+// est partagé entre onglets de ce qui ne l'est pas.
+const SUPPORT_KEY = 'fluvia.support.onglet'
+
 let onUnauthorized = null
 export function setUnauthorizedHandler(fn) {
   onUnauthorized = fn
@@ -17,14 +22,92 @@ export const tokenStore = {
   clear: () => localStorage.removeItem(TOKEN_KEY),
 }
 
+// ── MODE SUPPORT : LE CONTEXTE D'UN SEUL ONGLET ──────────────────────────────────────────────
+//
+// Un agent de l'éditeur bascule chez un client ; Maxime a choisi que cela ouvre un NOUVEL ONGLET,
+// pour pouvoir répondre au ticket dans le premier pendant qu'on regarde chez le client dans le
+// second.
+//
+// ⚠ ET C'EST EXACTEMENT LÀ QUE `localStorage` PIÈGE : il est PARTAGÉ entre tous les onglets d'une
+// même origine. Poser l'établissement du client dans `localStorage` aurait changé l'établissement
+// actif de l'onglet principal — l'agent y serait revenu, se serait retrouvé chez le client sans
+// l'avoir demandé, sans bandeau, sans rien qui le dise. Il aurait encaissé chez quelqu'un d'autre.
+//
+// `sessionStorage` est PAR ONGLET. C'est la seule propriété qui rend le choix de Maxime tenable.
+//
+// On y garde le nom en plus de l'identifiant : le bandeau doit pouvoir se dessiner AVANT que la
+// liste des établissements soit revenue du serveur. Un bandeau qui apparaît une seconde après le
+// reste de l'écran est un bandeau qu'on peut ne pas voir.
+export const supportStore = {
+  get: () => {
+    try {
+      const brut = sessionStorage.getItem(SUPPORT_KEY)
+      return brut ? JSON.parse(brut) : null
+    } catch {
+      // Onglet privé, stockage refusé, JSON corrompu : pas de mode support, et l'onglet se comporte
+      // comme un onglet ordinaire. Le repli d'un mécanisme d'accès est de ne pas ouvrir.
+      return null
+    }
+  },
+  set: (contexte) => {
+    try {
+      sessionStorage.setItem(SUPPORT_KEY, JSON.stringify(contexte))
+    } catch {
+      // Ignoré volontairement : voir ci-dessus.
+    }
+  },
+  clear: () => {
+    try {
+      sessionStorage.removeItem(SUPPORT_KEY)
+    } catch {
+      // Ignoré volontairement : voir ci-dessus.
+    }
+  },
+}
+
 export const etablissementStore = {
-  get: () => localStorage.getItem(ETAB_KEY),
+  // ⚠ LE CONTEXTE DE SUPPORT L'EMPORTE, et c'est ce qui rend le mode support automatique : toute
+  // requête de cet onglet part avec l'établissement du client, sans qu'aucun écran n'ait à le
+  // savoir ni à être modifié.
+  get: () => supportStore.get()?.etablissementId || localStorage.getItem(ETAB_KEY),
+
+  // ⚠ `set` ET `clear` NE TOUCHENT PAS AU CONTEXTE DE SUPPORT, DÉLIBÉRÉMENT. Un onglet de support
+  // est épinglé sur son client, et on en sort par le bandeau — un geste explicite. Si le sélecteur
+  // d'établissement pouvait écrire ici, l'onglet dériverait hors du client pendant que le bandeau
+  // continuerait de le nommer : l'écran dirait une chose, l'en-tête une autre.
   set: (id) => localStorage.setItem(ETAB_KEY, id),
   clear: () => localStorage.removeItem(ETAB_KEY),
 }
 
 // Extrait un message d'erreur lisible d'une réponse API (auth, API Platform, opérations custom).
+//
+// ── UN REFUS DE DROIT NE DOIT PAS RESSEMBLER À UNE PANNE ─────────────────────────────────────
+//
+// Sur un refus d'autorisation, API Platform rend `detail: "Access Denied."`. Affiché tel quel, en
+// anglais, dans un bandeau rouge, ce texte se lit comme une erreur technique : l'exploitant
+// appelle au support et cherche une panne, alors qu'il lui manque une permission.
+//
+// `allaccess-8e` a relevé que QUATORZE écrans affichent le message brut du serveur sans traiter
+// le 403 — ils n'utilisent pas `components/Liste.jsx`, qui, lui, l'explique depuis toujours.
+// Corriger quatorze écrans aurait produit quatorze phrases légèrement différentes ; la traduction
+// se fait donc ICI, au seul endroit où le message est fabriqué, et les quatorze en profitent
+// d'un coup. La formulation reprend celle de `Liste.jsx` pour que l'application dise la même
+// chose au même moment.
+//
+// ⚠ ON NE REMPLACE QUE LE MESSAGE GÉNÉRIQUE. Certains 403 portent une raison précise — un motif
+// métier, une règle nommée — et l'écraser par une phrase générale ferait perdre l'information la
+// plus utile. On ne traduit donc que « Access Denied », pas ce que le serveur a pris la peine
+// d'écrire.
 function messageFromPayload(payload, status) {
+  if (status === 403) {
+    const brut = payload?.detail || payload?.message || payload?.['hydra:description'] || ''
+    if (!brut || /access denied/i.test(brut)) {
+      return 'Accès non autorisé pour ce compte sur cet établissement (droits insuffisants). '
+        + "Ce n'est pas une panne : demandez la permission à un administrateur, ou vérifiez que "
+        + "vous êtes sur le bon établissement."
+    }
+    return brut
+  }
   if (!payload) return `Erreur ${status}`
   return (
     payload.message ||
@@ -45,11 +128,58 @@ export class ApiError extends Error {
 }
 
 // Construit une query string à partir d'un objet (ignore null/undefined/'').
+//
+// ⚠ UN TABLEAU DEVIENT `k[]=a&k[]=b`, ET CE N'EST PAS UNE PRÉFÉRENCE DE STYLE.
+//
+// La version précédente faisait `String(v)` sur tout, donc un tableau partait en `k=a,b` — une seule
+// valeur contenant une virgule. Côté serveur, `$request->query->all('k')` attend des entrées
+// répétées : il n'aurait rien trouvé, **sans lever**, et le filtre serait resté silencieusement vide.
+//
+// C'est la forme la plus courante du défaut de cette semaine : une requête qui part, une réponse qui
+// arrive, un résultat plausible et faux. Ici il se serait traduit par « aucune option retenue » sur
+// un panier où le caissier venait d'en cocher trois — et le client aurait payé le prix de base.
+// `itemsPerPage` EST HONORÉ DEPUIS LE 29/08. CE COMMENTAIRE A DIT LE CONTRAIRE PENDANT UN JOUR,
+// ET C'EST CE QUI REND L'HISTOIRE UTILE.
+//
+// Ce qui était écrit ici le 28/08, mesuré et exact ce jour-là : `api_platform.yaml` ne déclarait
+// aucun bloc `pagination`, donc 30 éléments par page et `pagination_client_items_per_page` à
+// `false` — le paramètre ne faisait rien. La preuve citée était
+// `GET /api/mandat_sepas?itemsPerPage=1 → rend les 3 lignes`.
+//
+// La même mesure, refaite le 29/08 : **elle rend 1 ligne.** La configuration déclare désormais
+//     pagination_items_per_page: 100      (le défaut, quand l'écran ne demande rien)
+//     pagination_client_items_per_page: true
+//     pagination_maximum_items_per_page: 500
+//
+// LA LEÇON N'EST PAS « LE PLAFOND A CHANGÉ », C'EST QU'UNE MESURE PORTE UNE DATE. Celle-ci était
+// juste, datée, citée avec sa commande — et c'est précisément ce qui l'a rendue crédible pendant
+// vingt-quatre heures de trop. Dix-neuf endroits du frontal la répétaient, dont six bandeaux
+// affichés à l'exploitant : ils lui annonçaient des données manquantes qui ne manquaient plus.
+//
+// CE QUI RESTE VRAI, ET QUI EST LA SEULE CHOSE À RETENIR : un plafond, quel qu'il soit, tronque en
+// SILENCE. 100 par défaut, 500 au maximum — une collection plus longue arrive coupée avec un
+// code 200 et la même forme de réponse. `totalItems` porte le total réel : le comparer au nombre
+// de lignes reçues est la seule façon de transformer « il en manque » en « il en manque, et voici
+// combien ». C'est ce que fait `components/Liste.jsx`, et c'est ce qu'un écran doit faire plutôt
+// que d'annoncer un nombre appris par cœur.
+//
+// EN ATTENDANT, C'EST L'AFFICHAGE QUI PORTE L'AVERTISSEMENT. La réponse Hydra contient `totalItems`
+// — le total réel, pas la taille de la page — donc une réponse tronquée est reconnaissable.
+// `components/Liste.jsx` affiche « 30 sur 47 » à côté du titre, et les trois écrans qui RECOUPENT
+// deux listes (SEPA, cautions, recouvrement) le signalent plus fort : chez eux, une liste coupée ne
+// rend pas l'écran incomplet, elle le rend faux.
 function qs(params) {
   if (!params) return ''
   const usp = new URLSearchParams()
   for (const [k, v] of Object.entries(params)) {
     if (v === null || v === undefined || v === '') continue
+    if (Array.isArray(v)) {
+      for (const element of v) {
+        if (element === null || element === undefined || element === '') continue
+        usp.append(`${k}[]`, String(element))
+      }
+      continue
+    }
     usp.append(k, String(v))
   }
   const s = usp.toString()
@@ -58,10 +188,20 @@ function qs(params) {
 
 async function request(
   path,
-  { method = 'GET', body, ld = false, auth = true, headers: extra = {}, query, timeoutMs } = {},
+  { method = 'GET', body, formData, ld = false, auth = true, headers: extra = {}, query, timeoutMs } = {},
 ) {
   const headers = { ...extra }
-  if (body !== undefined) {
+  // ⚠ ON NE POSE PAS `Content-Type` SUR UN ENVOI MULTIPART, ET C'EST CONTRE-INTUITIF.
+  //
+  // Le navigateur doit le composer lui-même, parce qu'il y ajoute la *frontière* (`boundary`) qui
+  // sépare les parties du corps. Un `Content-Type: multipart/form-data` écrit à la main arrive donc
+  // SANS frontière : PHP reçoit un corps qu'il ne sait pas découper, `$request->files` est vide, et
+  // le serveur répond « fichier manquant » sur une requête qui contenait le fichier.
+  //
+  // Le symptôme accuse l'appelant ; la cause est cet en-tête de trop.
+  if (formData !== undefined) {
+    // rien : le navigateur s'en charge
+  } else if (body !== undefined) {
     // API Platform impose `application/merge-patch+json` sur les PATCH (sinon 415) ; les autres
     // écritures acceptent JSON simple, ou JSON-LD quand l'opération l'exige (`ld: true`).
     headers['Content-Type'] = method === 'PATCH'
@@ -92,7 +232,7 @@ async function request(
     res = await fetch(path, {
       method,
       headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      body: formData !== undefined ? formData : (body !== undefined ? JSON.stringify(body) : undefined),
       signal: abort?.signal,
     })
   } catch (e) {
@@ -112,6 +252,31 @@ async function request(
     if (timer) clearTimeout(timer)
   }
 
+  // ⚠ DEUX SESSIONS ONT ÉCRIT CE MÊME BLOC INDÉPENDAMMENT, à une heure d'intervalle. Les deux
+  // versions étaient justes et disaient la même chose ; celle-ci a été retenue à la fusion. Le
+  // doublon n'a coûté qu'un conflit — il aurait pu coûter deux mécanismes concurrents dans la même
+  // fonction, dont un seul aurait servi.
+  // LE JETON SE RENOUVELLE PENDANT QU'ON TRAVAILLE, ET CA SE LIT ICI PARCE QU'ICI VOIT TOUT.
+  //
+  // Le serveur renvoie un jeton frais dans `X-JETON-RENOUVELE` des que le jeton courant a passe la
+  // moitie de sa vie. L'en-tete N'EST PAS sur toutes les reponses : son absence est le cas normal,
+  // pas une anomalie.
+  //
+  // Un seul endroit a modifier, et c'est deliberement celui-la : `request()` est la seule fonction
+  // qui voit toutes les reponses. Le poser ecran par ecran donnerait des ecrans qui prolongent la
+  // session et d'autres non, sans que rien ne distingue les deux.
+  //
+  // ⚠ CE MECANISME PEUT ETRE INERTE SANS QUE RIEN NE LE DISE. Lire l'en-tete et oublier de remplacer
+  // le jeton stocke marche exactement comme avant pendant une heure, puis ejecte -- et rien ne
+  // signale qu'il n'a jamais servi. Eprouve en comparant le jeton stocke AVANT et APRES une reponse
+  // qui porte l'en-tete, pas en constatant qu'on est encore connecte dix minutes plus tard.
+  //
+  // ET IL NE SUPPRIME PAS L'EXPIRATION. Passe douze heures depuis la premiere connexion, le serveur
+  // cesse de reemettre : une session qui se prolonge sans fin n'est plus une session, c'est un mot
+  // de passe. L'ecran de connexion doit donc toujours savoir apparaitre.
+  const renouvele = res.headers.get('X-JETON-RENOUVELE')
+  if (renouvele && auth) tokenStore.set(renouvele)
+
   if (res.status === 401 && auth) {
     tokenStore.clear()
     if (onUnauthorized) onUnauthorized()
@@ -123,7 +288,25 @@ async function request(
     try {
       payload = JSON.parse(text)
     } catch {
-      payload = { message: text }
+      // UNE RÉPONSE QUI N'EST PAS DU JSON NE SE RECOPIE PAS TELLE QUELLE DANS L'ÉCRAN.
+      //
+      // `{ message: text }` mettait le corps BRUT dans le message d'erreur. Or toutes les erreurs
+      // ne viennent pas d'API Platform : un 405 sorti du routeur, un 502 de nginx, une page de
+      // maintenance rendent du HTML. Constaté le 28/08 sur l'écran Padel — la page affichait
+      // « <!DOCTYPE html> <html lang="en"> <head>… » dans son bandeau d'erreur, sur toute la
+      // largeur, à la place du message.
+      //
+      // Le corps reste dans `payload` pour qui débogue ; ce qui remonte à l'utilisateur est une
+      // phrase. Un message illisible ne dit pas seulement « erreur » : il fait croire à un bug de
+      // l'affichage plutôt qu'à un appel qui a échoué, et on cherche au mauvais endroit.
+      const ressembleAduHtml = /^\s*<(?:!doctype|html|\?xml)/i.test(text)
+      payload = {
+        message: ressembleAduHtml
+          ? `Le serveur a répondu une page (${res.status}) au lieu de données. `
+            + "L'appel n'a probablement pas atteint l'API."
+          : text.slice(0, 300),
+        corpsBrut: text,
+      }
     }
   }
 
@@ -160,10 +343,55 @@ export const api = {
   // Creer et modifier un etablissement. Pas de suppression exposee : voir EtablissementsSection.
   creerEtablissement: (corps) => request('/api/etablissements', { method: 'POST', body: corps, ld: true }),
   majEtablissement: (id, corps) => request(`/api/etablissements/${id}`, { method: 'PATCH', body: corps }),
-  produits: () => request('/api/produits'),
+  // `Produit` declare un SearchFilter sur `code` (partiel), `libelleRecherche` (partiel), `statut`
+  // et `typeCode` -- quatre filtres testes cote serveur, et cette fonction n'en transmettait aucun :
+  // elle ne prenait meme pas d'argument. Le catalogue chargeait donc les trente premiers produits et
+  // n'offrait aucun moyen d'atteindre les suivants.
+  //
+  // Le piege qu'on evite en le corrigeant tout de suite : passer un objet a une fonction qui l'ignore
+  // ne leve rien. On aurait vu des champs de filtre a l'ecran, une requete partir, une reponse
+  // arriver -- et la meme liste. Un resultat plausible et faux.
+  produits: (params) => request('/api/produits', { query: params }),
   // Le détail ajoute le groupe `produit:compta` (compte, TVA, règle PCA), absent de la collection.
   produit: (id) => request(`/api/produits/${id}`),
+
+  // Controler un billet SANS materiel : ni equipement, ni espace, ni porte. C'est l'outil des sites
+  // sans tourniquet, ou un billet vendu est aujourd'hui invendable en pratique faute de pouvoir le
+  // controler a l'entree.
+  controlerBillet: (identifiantSupport) =>
+    request('/api/acces/controle-billet', { method: 'POST', body: { identifiantSupport } }),
+
+  // Les complements d'un produit — « le casier avec l'entree ». Ce lien remplace `produitsAssocies`,
+  // qui etait un ManyToMany sans `remove` que rien ne lisait cote serveur : l'ecran y ecrivait dans
+  // le vide, et l'enregistrement reussissait.
+  complementsDeProduit: (produitId) =>
+    request('/api/complementary_products', {
+      query: { product: `/api/produits/${produitId}`, itemsPerPage: 100 },
+    }),
+  ajouterComplement: (produitId, complementId, mode, quantite) =>
+    // ⚠ method sur la MEME ligne que request( : la mesure d ecart detecte la methode sur le
+    // reste de la ligne de l appel. Ecrite en dessous, elle retombait sur le defaut GET et se
+    // confondait avec le GET du meme chemin. Corrige par allaccess-73, pas encore integre.
+    request('/api/complementary_products', { method: 'POST', ld: true,
+      body: {
+        product: `/api/produits/${produitId}`,
+        complement: `/api/produits/${complementId}`,
+        mode,
+        defaultQuantity: quantite,
+      },
+    }),
+  retirerComplement: (id) => request(`/api/complementary_products/${id}`, { method: 'DELETE' }),
   majProduit: (id, corps) => request(`/api/produits/${id}`, { method: 'PATCH', body: corps }),
+  // L'ONGLET COMPTA D'UN PRODUIT : TROIS CHAMPS ECRIVABLES, AFFICHES ET JAMAIS PROPOSES.
+  //
+  // `PATCH /produits/{id}/compta` existe depuis le debut, avec son propre groupe (`produit:compta`)
+  // et son propre droit (`offre.modifier_compta`, distinct de `offre.modifier`). La fiche produit
+  // montrait compte, taux et regle PCA ; le formulaire << Modifier >> n'offrait que le nom, les
+  // canaux, la couleur en caisse et la note interne.
+  //
+  // Route sur mesure et `input: false` cote serveur : pas de `ld: true` a poser.
+  majComptaProduit: (id, corps) =>
+    request(`/api/produits/${id}/compta`, { method: 'PATCH', body: corps }),
   typeProduits: () => request('/api/type_produits'),
   creerProduit: (corps) =>
     request('/api/produits', { method: 'POST', body: corps, ld: true }),
@@ -195,10 +423,92 @@ export const api = {
   // ne pas savoir — c'est au code appelé d'être lisible.
   gestePiece: (id, geste) => GESTES_PIECE[geste](id),
 
+  // LES FACTURES : DIX OPERATIONS EXPOSEES, ZERO ROUTE DANS CE FICHIER.
+  //
+  // L'ecran << Facturation >> ne montrait pas des factures : il montrait des PIECES COMMERCIALES et
+  // enseignait une chaine devis -> commande -> livraison -> facture. Sa seule action etait
+  // << + Nouveau devis >>. Une facture emise sortait de l'ecran et n'etait plus visible NULLE PART :
+  // il n'existait aucune liste des factures, donc aucun moyen de savoir qui doit combien.
+  //
+  // C'est une chaine d'ERP imposee a des gens qui n'en ont pas besoin : une piscine facture une ecole
+  // pour une sortie de groupe, un club de padel facture une entreprise pour un tournoi. Ni devis, ni
+  // bon de livraison.
+  //
+  // QUATRE DROITS DISTINCTS, DONC QUATRE BOUTONS : emettre (`facturation.emettre_directe`), lettrer
+  // (`facturation.lettrer`), avoir (`facturation.avoir`), Chorus (`facturation.deposer_chorus`). Qui
+  // encaisse un reglement n'a pas a pouvoir annuler la facture par un avoir.
+  //
+  // Toutes ces routes portent un `uriTemplate` sur mesure et `input: false` : pas de `ld: true`.
+  factures: (params) => request('/api/factures', { query: params }),
+  facture: (id) => request(`/api/factures/${id}`),
+  // LE DOCUMENT LEGAL LUI-MEME. `FactureRenduProvider` existait depuis le debut et n'etait appele
+  // par AUCUN ecran : Fluvia savait creer, numeroter, sceller, emettre, encaisser et deposer sur
+  // Chorus une facture -- mais pas la DONNER a celui qui doit la payer.
+  //
+  // Le rendu porte les montants FIGES (par ligne, par taux, et les trois totaux). L'ecran les
+  // affiche verbatim et n'additionne rien : recalculer depuis `tauxTva`, qui est lu vivant sur la
+  // fiche du taux, fabriquerait un troisieme chiffre.
+  renduFacture: (id) => request(`/api/factures/${id}/rendu`),
+  // Cree un BROUILLON : aucun numero n'est consomme tant qu'on n'a pas emis (RG-FACT-01). C'est ce
+  // qui permet de se tromper sans trouer la sequence legale des numeros.
+  creerFactureDirecte: (corps) => request('/api/factures', { method: 'POST', body: corps }),
+  majFactureDirecte: (id, corps) => request(`/api/factures/${id}`, { method: 'PATCH', body: corps }),
+  emettreFacture: (id) => request(`/api/factures/${id}/emettre`, { method: 'POST', body: {} }),
+  // Corps : { montant: "150.00", moyen: "virement", reference?: "..." }.
+  enregistrerReglement: (id, corps) =>
+    request(`/api/factures/${id}/reglements`, { method: 'POST', body: corps }),
+  // Avoir TOTAL, sans corps : la simplification est assumee cote serveur (plan §7).
+  genererAvoirFacture: (id) => request(`/api/factures/${id}/avoir`, { method: 'POST', body: {} }),
+  // Corps : { numeroEngagement?, serviceExecutant? } -- exiges par certains donneurs d'ordre publics.
+  deposerFactureChorus: (id, corps) =>
+    request(`/api/factures/${id}/chorus`, { method: 'POST', body: corps }),
+  // INTEGRITE DE LA CHAINE DES FACTURES (NF525).
+  //
+  // ⚠ CE COMMENTAIRE A TENU LE BOUTON DEBRANCHE DEUX JOURS APRES LA CORRECTION DU DEFAUT QU'IL
+  // DECRIT. Il disait, et c'etait vrai le 29/08 :
+  //
+  //     « `/factures/verifier-chaine` REPOND 404. Declaree en `GetCollection` avec ce
+  //       `uriTemplate`, elle est captee par l'operation d'item `/factures/{id}` qui lit
+  //       "verifier-chaine" comme un identifiant. […] Le bouton etait ecrit ; je l'ai retire
+  //       plutot que d'en livrer un qui echoue. Signale au serveur. »
+  //
+  // Il a ete signale, il a ete corrige, et personne n'est revenu rebrancher le bouton. La phrase
+  // est restee juste dans sa date et fausse dans le present -- et rien ne reliait les deux. On
+  // garde la date et la raison, on retire la conclusion. Signale par `allaccess-b8`.
+  //
+  // Remesure le 31/08, authentifie, avec DEUX TEMOINS NEGATIFS dans la meme passe :
+  //     /api/factures/verifier-chaine                    200   { intacte, nbDocuments, anomalies }
+  //     /api/factures/00000000-0000-4000-8000-0000…      404   temoin : identifiant inconnu
+  //     /api/factures/route-inexistante                  404   temoin : rien ici
+  // Le routeur declare desormais la route litterale AVANT le motif `{id}` : la collision n'a
+  // plus lieu.
+  //
+  // ⚠ Sans les temoins, un 200 ne prouverait rien : `Accept` mal negocie rend 406 sur TOUT, y
+  // compris sur les routes qui marchent. C'est le piege qui a failli tromper b8.
+  verifierChaineFactures: () => request('/api/factures/verifier-chaine'),
+  //
+  // L'AUTRE ROUTE RESTE DEBRANCHEE, ET POUR UNE RAISON QUI N'A PAS CHANGE :
+  //
+  // `/factures/depuis-vente` fonctionne, mais son geste appartient a l'historique des ventes -- on
+  // emet une facture justificative EN REGARDANT une vente, pas en regardant la liste des factures.
+  // La brancher ici aurait demande de ressaisir la vente, c'est-a-dire exactement ce que la facture
+  // justificative existe pour eviter.
+
   pointDeVentes: () => request('/api/point_de_ventes'),
   creerPointDeVente: (corps) => request('/api/point_de_ventes', { method: 'POST', body: corps, ld: true }),
   majPointDeVente: (id, corps) => request(`/api/point_de_ventes/${id}`, { method: 'PATCH', body: corps }),
   caisses: () => request('/api/caisses'),
+  // UNE CAISSE NE POUVAIT PAS ETRE CREEE, ET C'EST CE QUI BLOQUAIT LA VENTE.
+  //
+  // `POST /api/caisses` existe (droit `caisse.gerer`) et n'etait appele de nulle part. Consequence
+  // observee sur GI-ONE FITNESS : le formulaire d'ouverture de caisse propose << Aucune caisse >>
+  // comme unique option, sans valeur, avec le bouton actif -- puis refuse avec << Point de vente et
+  // caisse requis >> alors que le point de vente EST choisi. Il reproche deux champs quand un seul
+  // manque, et celui-la etait impossible a remplir depuis l'application.
+  //
+  // Operation API Platform standard (pas d'`uriTemplate`) : elle deserialise, donc `ld: true`.
+  creerCaisse: (corps) => request('/api/caisses', { method: 'POST', body: corps, ld: true }),
+  majCaisse: (id, corps) => request(`/api/caisses/${id}`, { method: 'PATCH', body: corps }),
   moyensPaiement: () => request('/api/moyen_paiements'),
   // Moyens de paiement — écriture (source M6, sécurité `compta.gerer`).
   creerMoyenPaiement: (corps) =>
@@ -238,14 +548,281 @@ export const api = {
   // CRM.
   rechercheClients: (params) => request('/api/crm/clients/recherche', { query: params }),
   ficheClient: (id) => request(`/api/clients/${id}/fiche-360`),
+
+  // ⚠ TROIS PIEGES DE ROUTAGE SUR LA FUSION, MESURES LE 31/08 CONTRE LA PREPROD. Ils sont
+  // consignes ici parce que DEUX sessions ont ecrit cet ecran le meme jour sans se voir, et que
+  // la seconde n'avait pas ces mesures.
+  //
+  //   1. LA COLLECTION N'EST PAS SOUS `/crm/fusions`. Le `POST` occupe ce chemin ; le
+  //      `GetCollection` n'a pas d'`uriTemplate` et vit donc sous le nom derive de l'entite.
+  //          GET /api/crm/fusions      -> 405 Method Not Allowed   (et non 404)
+  //          GET /api/journal_fusions  -> 200
+  //      Un 405 se lit << mauvaise methode >>, pas << mauvais chemin >>.
+  //
+  //   2. LA PREVISUALISATION PREND DES UUID, LA FUSION PREND DES IRI. Le provider lit
+  //      `?maitre=<uuid>&sources[]=<uuid>` ; le processeur lit `{ maitre: iri, sources: [iri] }`.
+  //
+  //   3. LES DEUX `POST` SONT EN `input: false` : corps BRUT, pas de `ld: true`.
   // La fiche 360 ne porte qu'un sous-ensemble des champs : pour modifier, il faut le client entier.
   client: (id) => request(`/api/clients/${id}`),
   majClient: (id, corps) => request(`/api/clients/${id}`, { method: 'PATCH', body: corps }),
   // Relevé de mouvements du porte-monnaie virtuel (US-L5-04). Renvoie { mouvements: [...] }.
   pmvMouvements: (id) => request(`/api/clients/${id}/pmv/mouvements`),
+  // RECHARGER UN PORTE-MONNAIE — le geste qui manquait pour que le solde puisse remonter.
+  //
+  // `Caisse.jsx` accepte `pmv` comme moyen de paiement depuis toujours ; le seul appel PMV du
+  // frontal etait la lecture des mouvements. Un client qui verse 50 EUR au comptoir n'avait aucun
+  // chemin : les soldes se vidaient sans jamais remonter.
+  //
+  // ⚠ CONTRAT MESURE CONTRE L'API, PAS SUPPOSE -- et paye : voir le message de commit.
+  //   `montant` est REQUIS et doit etre STRICTEMENT POSITIF (0 et -10 rendent 422).
+  //   La reponse porte { mouvement, montant, soldeApres, dateEcheance, statutPmv, motif }.
+  //   ⚠ DEUX EFFETS, PAS UN : l'operation credite le solde ET REPOUSSE L'ECHEANCE du
+  //   porte-monnaie. L'ecran doit donc reafficher les deux, sinon il montre une moitie de verite.
+  //   Le mouvement cree porte `canal: "caisse"` : c'est un encaissement, pas un ajustement.
+  rechargerPmv: (id, corps) =>
+    request(`/api/clients/${id}/pmv/recharger`, { method: 'POST', body: corps, ld: true }),
   // Création rapide d'une fiche client (US-L5-02). L'établissement de création / le groupe sont
   // fixés côté back depuis l'établissement actif (en-tête X-Etablissement).
   creerClient: (corps) => request('/api/clients', { method: 'POST', body: corps, ld: true }),
+
+  // RGPD — le droit a l'effacement (RG-M4-08/09). Trois routes qui existaient depuis le debut et
+  // qu'aucun ecran n'appelait : une obligation legale sans aucun chemin dans le produit.
+  //
+  // `traiter` porte un `uriTemplate` sur mesure et `input: false` cote serveur : pas de corps du
+  // tout, et donc pas de `ld: true` -- seul l'identifiant de la route compte. La creation, elle,
+  // est une operation API Platform standard : elle deserialise, d'ou `ld: true` et l'IRI du client.
+  demandesRgpd: (params) => request('/api/demande_rgpds', { query: params }),
+  creerDemandeRgpd: (corps) =>
+    request('/api/demande_rgpds', { method: 'POST', body: corps, ld: true }),
+  traiterDemandeRgpd: (id) => request('/api/demandes-rgpd/' + id + '/traiter', { method: 'POST' }),
+
+  // CONTACTS D'UN CLIENT PROFESSIONNEL. `Beneficiaire` porte une semantique de FAMILLE
+  // (payeur, beneficiaire) : elle ne sait pas dire << directrice >> ni << comptabilite >>.
+  //
+  // LE FILTRE SERVEUR EST REVENU, ET LE TRI LOCAL EST PARTI AVEC.
+  //
+  // Ces trois lectures chargeaient la collection entiere et triaient dans le navigateur, parce que
+  // le `SearchFilter` sur un identifiant Uuid rendait soit tout, soit rien, sans jamais lever
+  // (famille D58). Le 29/08, un decorateur de plateforme a repare les 145 proprietes concernees.
+  //
+  // Mesure faite avant de retirer, sur des donnees fabriquees pour l'occasion puis effacees :
+  //     2 contacts sur 2 clients differents
+  //     ?customer=<IRI du client 1>  -> 1     le filtre discrimine
+  //     ?customer=nimportequoi       -> 0     et il se ferme sur une valeur illisible
+  //
+  // ⚠ L'IRI EST CONSTRUIT SANS GARDE, ET C'EST VOULU. Un identifiant absent donne
+  // `/api/clients/undefined`, que le serveur ne resout pas : la reponse est VIDE. C'est le bon
+  // echec. La garde -- `clientId ? … : undefined` -- retirerait le parametre, et `qs()` rendrait
+  // alors la collection ENTIERE : les contacts de tout le monde sous le nom d'une seule personne.
+  contactsClient: (clientId) =>
+    request('/api/customer_contacts', { query: { customer: `/api/clients/${clientId}` } }),
+  creerContactClient: (corps) =>
+    request('/api/customer_contacts', { method: 'POST', body: corps, ld: true }),
+  majContactClient: (id, corps) =>
+    request(`/api/customer_contacts/${id}`, { method: 'PATCH', body: corps }),
+  supprimerContactClient: (id) =>
+    request(`/api/customer_contacts/${id}`, { method: 'DELETE' }),
+
+  // AFFAIRES EN COURS -- ce qui vit entre << un client appelle >> et << un devis part >>.
+  //
+  // `/crm/pipeline` rend les colonnes avec l'etape EFFECTIVE : des qu'un devis est rattache,
+  // c'est lui qui dit ou en est l'affaire. Rien n'est recopie -- une copie prend du retard, et
+  // une etape en retard est pire qu'absente parce qu'elle a l'air d'etre a jour.
+  pipeline: () => request('/api/crm/pipeline'),
+
+  // SEGMENTS -- une DEFINITION de clients, jamais une liste.
+  //
+  // Les membres se calculent a chaque lecture : c'est ce que veut dire << segment dynamique >>, et
+  // c'est ce qu'exige son critere d'acceptation (<< immediatement disponible et a jour >>). Une
+  // liste stockee serait juste le jour de sa creation et fausse le lendemain, avec exactement la
+  // meme allure.
+  segments: () => request('/api/segments', { query: { itemsPerPage: 200 } }),
+  // Relu avant edition : la ligne du tableau date du dernier chargement, et un collegue a pu
+  // changer les criteres entre-temps.
+  segment: (id) => request(`/api/segments/${id}`),
+  creerSegment: (corps) => request('/api/segments', { method: 'POST', body: corps, ld: true }),
+  majSegment: (id, corps) => request(`/api/segments/${id}`, { method: 'PATCH', body: corps }),
+  supprimerSegment: (id) => request(`/api/segments/${id}`, { method: 'DELETE' }),
+
+  // L'EFFECTIF AVANT L'ENVOI. Sans ce chiffre, l'exploitant decouvre l'ampleur de son geste apres
+  // l'avoir fait -- et un message parti ne se rattrape pas. Rend aussi un echantillon nominatif :
+  // un compte ne se verifie pas, des noms se reconnaissent.
+  apercuSegment: (id) => request(`/api/marketing/segments/${id}/apercu`),
+
+  // CAMPAGNES -- un message, une audience, et la trace de ce qui s'est passe.
+  campagnes: () => request('/api/campaigns', { query: { itemsPerPage: 200 } }),
+  creerCampagne: (corps) => request('/api/campaigns', { method: 'POST', body: corps, ld: true }),
+  majCampagne: (id, corps) => request(`/api/campaigns/${id}`, { method: 'PATCH', body: corps }),
+  campagne: (id) => request(`/api/campaigns/${id}`),
+
+  // L'ENVOI -- le geste qu'on ne rattrape pas. Rend le detail PAR MOTIF : << 310 exclus faute de
+  // consentement >> dit qu'il faut travailler le recueil du consentement, << 930 envoyes >> ne dit
+  // rien.
+  envoyerCampagne: (id) =>
+    request(`/api/marketing/campagnes/${id}/envoyer`, { method: 'POST', body: {} }),
+  resultatCampagne: (id) => request(`/api/marketing/campagnes/${id}/resultat`),
+
+  // L'ATTRIBUTION -- ce que la campagne a produit EN PLUS de ce qui serait arrive sans elle.
+  // Droit distinct (campagne.lire_journal) : la reponse expose du chiffre d'affaires par groupe.
+  attributionCampagne: (id) => request(`/api/marketing/campagnes/${id}/attribution`),
+
+  // FIDELITE -- solde, palier et historique d'un client. Tout est calcule : aucun compteur n'est
+  // stocke, donc une vente annulee retire ses points d'elle-meme.
+  // PHOTOS DE PRODUIT -- le fichier part en multipart, sans en-tete Content-Type : le navigateur
+  // pose lui-meme la frontiere du corps, et l'ecrire a la main la casse.
+  photosProduit: (produitId) => request(`/api/offre/produits/${produitId}/photos`),
+  televerserPhotoProduit: (produitId, fichier, altText) => {
+    const corps = new FormData()
+    corps.append('file', fichier)
+    corps.append('altText', altText)
+
+    return request(`/api/offre/produits/${produitId}/photos`, { method: 'POST', formData: corps })
+  },
+  supprimerPhotoProduit: (id) => request(`/api/offre/photos-produit/${id}`, { method: 'DELETE' }),
+
+  fidelite: (clientId) => request(`/api/marketing/fidelite/${clientId}`),
+  mouvementFidelite: (corps) =>
+    request('/api/marketing/fidelite/mouvements', { method: 'POST', body: corps, ld: true }),
+
+  // PARRAINAGE -- le code est CREE au premier appel : demander son code est le geste qui l'attribue.
+  codeParrainage: (clientId) => request(`/api/marketing/parrainage/code/${clientId}`),
+  // ⚠ ON ENVOIE LE PARAMÈTRE MÊME VIDE, ET C'EST DÉLIBÉRÉ.
+  //
+  // La forme précédente — `parrain ? { parrain } : {}` — échoue OUVERT : sans identifiant, aucun
+  // filtre ne part et le serveur rend TOUS les parrainages, que l'écran affiche alors sous le nom
+  // de la personne ouverte. La fiche client se garde bien (`if (!clientId) return`), mais cette
+  // garde tient à une ligne dans un seul appelant.
+  //
+  // Mesuré ailleurs le 30/08 : `/api/ventes?client=nimportequoi` rendait les 15 ventes au lieu de
+  // zéro — un filtre écrit à la main abandonnait la contrainte sur une valeur illisible. Corrigé
+  // depuis côté serveur, mais le frontal n'a pas à compter là-dessus.
+  //
+  // Un identifiant absent donne donc `parrain=undefined`, que le serveur ne résout pas : la
+  // réponse est vide. C'est le bon échec — « je ne montre rien » se remarque, « je montre tout »
+  // ressemble à des données.
+  parrainages: (parrain) =>
+    request('/api/marketing/parrainages', { query: { parrain: String(parrain) } }),
+  declarerParrainage: (corps) =>
+    request('/api/marketing/parrainages', { method: 'POST', body: corps, ld: true }),
+  // Le versement est EXPLICITE : une lecture qui verse verserait deux fois si on la rafraichit.
+  recompenserParrainage: (id) =>
+    request(`/api/marketing/parrainages/${id}/recompenser`, { method: 'POST', body: {} }),
+
+  // PARAMETRAGE -- un bareme est DATE : il vaut a partir d'un jour et ne reecrit pas le passe.
+  // C'est pour cela qu'on en AJOUTE un et qu'on n'en modifie jamais : corriger un bareme passe
+  // changerait des soldes deja annonces aux clients.
+  baremesFidelite: () => request('/api/loyalty_rules', { query: { itemsPerPage: 100 } }),
+  creerBaremeFidelite: (corps) => request('/api/loyalty_rules', { method: 'POST', body: corps, ld: true }),
+
+  paliersFidelite: () => request('/api/loyalty_tiers', { query: { itemsPerPage: 100 } }),
+  creerPalierFidelite: (corps) => request('/api/loyalty_tiers', { method: 'POST', body: corps, ld: true }),
+  supprimerPalierFidelite: (id) => request(`/api/loyalty_tiers/${id}`, { method: 'DELETE' }),
+
+  programmesParrainage: () => request('/api/referral_programs', { query: { itemsPerPage: 100 } }),
+  creerProgrammeParrainage: (corps) =>
+    request('/api/referral_programs', { method: 'POST', body: corps, ld: true }),
+  majProgrammeParrainage: (id, corps) =>
+    request(`/api/referral_programs/${id}`, { method: 'PATCH', body: corps }),
+
+  // ECHANGES COMMERCIAUX -- ce qui s'est passe avec un client, et le prochain geste.
+  //
+  // Distinct d'un ticket d'assistance : un ticket est SUBI et se ferme, un echange est DECIDE et la
+  // relation continue. Les ranger ensemble forcerait un statut << ferme >> sur un client qu'on
+  // rappellera dans six mois.
+  //
+  // /!\ La collection est chargee entiere puis filtree cote ecran. `CommercialActivity` porte un
+  // SearchFilter sur `customer` -- famille D58, ou le filtre rend soit tout soit rien, sans jamais
+  // lever. Un historique vide ressemble a un client qu'on n'a jamais appele : on ne l'emprunte pas.
+  // Filtree par le serveur — voir `contactsClient` pour la mesure et pour la raison de ne pas
+  // garder l'identifiant absent.
+  activitesCommerciales: (clientId) =>
+    request('/api/commercial_activities', { query: { customer: `/api/clients/${clientId}` } }),
+  creerActivite: (corps) =>
+    request('/api/commercial_activities', { method: 'POST', body: corps, ld: true }),
+
+  // RELANCES EN ATTENTE -- deduites, jamais stockees.
+  //
+  // Une relance tient tant qu'aucun echange plus recent n'existe sur la meme cible : rappeler suffit
+  // a la faire disparaitre. Il n'y a donc rien a cocher, et pas de seconde boite de taches a cote
+  // du module Projets -- personne ne regarde les deux.
+  relances: () => request('/api/crm/relances'),
+
+  // PROJETS -- travail interne qui a une fin. A ne pas confondre avec un ticket d'assistance
+  // (arrive de l'exterieur) ni avec une tache planifiee (machine, cron).
+  //
+  // `/projets/tableau` rend l'avancement COMPTE et le retard DEDUIT : rien de tout cela n'est
+  // stocke. Un pourcentage recopie serait faux entre deux rafraichissements, et un pourcentage
+  // faux est pire qu'absent parce qu'il rassure.
+  // DOCUMENTS (App\Dms) -- 15 operations, aucun appelant jusqu'ici.
+  //
+  // Le televersement est en multipart : `request()` laisse alors le navigateur composer l'en-tete,
+  // frontiere comprise. Le telechargement, lui, n'est pas une operation API Platform mais un
+  // controleur qui diffuse le flux -- on ouvre donc l'URL, on ne la lit pas en JSON.
+  documentsDms: (params) => request('/api/documents', { query: { itemsPerPage: 100, ...(params || {}) } }),
+  televerserDocument: (formData) => request('/api/documents', { method: 'POST', formData }),
+  majDocumentDms: (id, corps) => request(`/api/documents/${id}`, { method: 'PATCH', body: corps }),
+  remplacerVersionDocument: (id, formData) =>
+    request(`/api/documents/${id}/replace-version`, { method: 'POST', formData }),
+  versionsDocument: () => request('/api/document_versions', { query: { itemsPerPage: 300 } }),
+  urlTelechargementDocument: (id) => `/dms/documents/${id}/download`,
+
+  // PUBLICATION SOCIALE -- onze operations, aucun appelant jusqu'ici.
+  //
+  // Les publications sont chargees SEPAREMENT des messages : c'est le detail par compte qui distingue
+  // un envoi a moitie reussi d'un echec complet. Un statut global sur une action partielle est faux
+  // dans les deux sens, et le lecteur ne peut pas savoir lequel.
+  comptesSociaux: () => request('/api/social_accounts', { query: { itemsPerPage: 50 } }),
+  messagesSociaux: () => request('/api/social_posts', { query: { itemsPerPage: 100 } }),
+  publicationsSociales: () => request('/api/social_publications', { query: { itemsPerPage: 300 } }),
+  creerMessageSocial: (corps) => request('/api/social_posts', { method: 'POST', body: corps, ld: true }),
+
+  // SPORT & FITNESS -- et d'abord les alertes que personne n'entendait.
+  //
+  // `EvenementSOS` porte un statut << ouverte >> et une operation << traiter >>, sans aucun ecran :
+  // une alarme qu'aucune interface ne montre cree la croyance qu'on serait prevenu.
+  // ⚠ `/api/evenement_s_o_s` et non `evenement_sos` : API Platform transforme le nom court
+  // `EvenementSOS` caractere par caractere -- chaque majuscule devient un segment. Devine, le
+  // chemin rend 404, et l'ecran conclut << aucune alerte >> sur une salle qui en a.
+  //
+  // C'est la troisieme fois aujourd'hui qu'un chemin suppose se revele faux. On les releve
+  // desormais dans `debug:router`, jamais par deduction depuis le nom de la classe.
+  evenementsSOS: () => request('/api/evenement_s_o_s', { query: { itemsPerPage: 100 } }),
+  traiterSOS: (id) => request(`/api/sport/sos/${id}/traiter`, { method: 'POST', body: {} }),
+  alertesPresenceIsolee: () => request('/api/alerte_presence_isolees', { query: { itemsPerPage: 100 } }),
+  // ⚠ LA ROUTE ETAIT AU SINGULIER, ET ELLE RENDAIT 404 DEPUIS TOUJOURS.
+  //
+  // Mesure du 30/08 : `/api/abonnement_fitness` -> 404, `/api/abonnement_fitnesses` -> 200. Le
+  // pluriel est celui qu'API Platform derive du `shortName: 'AbonnementFitness'`. L'ecran Sport
+  // avalait l'echec (`.catch(() => null)`) et affichait « Aucun abonnement fitness » — un vide qui
+  // ressemblait a une absence de donnees et qui etait une adresse fausse.
+  abonnementsFitness: () => request('/api/abonnement_fitnesses', { query: { itemsPerPage: 200 } }),
+  // SOUSCRIRE : le premier pas de la chaine souscription -> echeance -> prelevement -> rejet ->
+  // impaye -> recouvrement. Tout l'aval avait ete construit ; l'entree, non.
+  // `input: false` cote serveur, le processeur lit le corps brut : pas de `ld: true`.
+  souscrireAbonnement: (corps) =>
+    request('/api/sport/abonnements/souscrire', { method: 'POST', body: corps }),
+  rattacherDroitAccesAbonnement: (abonnementId, droitAccesId) =>
+    request(`/api/sport/abonnements/${abonnementId}/rattacher-droit-acces`, {
+      method: 'POST',
+      body: { droitAcces: droitAccesId },
+    }),
+
+  tableauProjets: () => request('/api/projets/tableau'),
+  creerProjet: (corps) => request('/api/projects', { method: 'POST', body: corps, ld: true }),
+  majProjet: (id, corps) => request(`/api/projects/${id}`, { method: 'PATCH', body: corps }),
+  // Filtrees par le serveur — voir `contactsClient`.
+  tachesProjet: (projetId) =>
+    request('/api/project_tasks', { query: { project: `/api/projects/${projetId}` } }),
+  creerTacheProjet: (corps) => request('/api/project_tasks', { method: 'POST', body: corps, ld: true }),
+  majTacheProjet: (id, corps) => request(`/api/project_tasks/${id}`, { method: 'PATCH', body: corps }),
+  supprimerTacheProjet: (id) => request(`/api/project_tasks/${id}`, { method: 'DELETE' }),
+  creerOpportunite: (corps) => request('/api/opportunities', { method: 'POST', body: corps, ld: true }),
+  majOpportunite: (id, corps) => request(`/api/opportunities/${id}`, { method: 'PATCH', body: corps }),
+  // Le detail d'une affaire, pour retrouver SON CLIENT. La carte du pipeline ne porte que le nom
+  // affichable du client (`PipelineProvider` compose une chaine), pas son identifiant : impossible
+  // d'en faire un destinataire de devis sans relire l'affaire.
+  opportunite: (id) => request(`/api/opportunities/${id}`),
   // Rattache (ou crée) un client sur une vente ouverte (M2, CA-7). Corps : un de
   // { client: uuid } | { recherche: "..." } | { creer: { nom, prenom, email, telephone } }.
   rattacherClientVente: (venteId, corps) =>
@@ -257,24 +834,71 @@ export const api = {
   creerGroupeOption: (corps) => request('/api/groupe_options', { method: 'POST', body: corps, ld: true }),
   majGroupeOption: (id, corps) =>
     request(`/api/groupe_options/${id}`, { method: 'PATCH', body: corps }),
-  // Valeurs d'un groupe (impact prix fixe/%). Filtrable par groupe (SearchFilter exact).
+  // ⚠ UN FILTRE DE RELATION PREND UNE IRI, ET UN IDENTIFIANT NU LE FAIT ABANDONNER.
+  //
+  // C'est le piège D58 sous sa **septième forme**, et la seule qui rende **plus** au lieu de moins.
+  //
+  // `SearchFilter::filterProperty` résout la valeur d'un filtre de relation par `getResourceFromIri`.
+  // Un UUID nu n'est pas une IRI : la résolution lève, le repli teste la valeur contre le type Doctrine
+  // de l'identifiant — ici le type personnalisé `uuid`, absent de la liste admise — et la déclare
+  // invalide. Le filtre est alors **retiré de la requête** :
+  //
+  //     $this->logger->notice('Invalid filter ignored', …);
+  //     return;   // ← aucune condition ajoutée
+  //
+  // La bibliothèque commente elle-même la ligne au-dessus : « Shouldn't this actually fail harder? »
+  //
+  // **La collection revient entière.** Les six formes connues de D58 rendent « rien » — ça ressemble à
+  // une absence, et une absence intrigue. Celle-ci rend « tout » : ça ressemble à des données, et
+  // personne n'interroge des données qui s'affichent. Sur la fiche produit, chacun des deux groupes
+  // d'options listait les cinq valeurs des deux groupes.
+  //
+  // L'IRI supprime le repli : la résolution réussit, le filtre s'applique.
   valeurOptions: (groupeId) =>
     request('/api/valeur_options', {
-      query: { itemsPerPage: 300, ...(groupeId ? { groupeOption: groupeId } : {}) },
+      query: { itemsPerPage: 300, ...(groupeId ? { groupeOption: `/api/groupe_options/${groupeId}` } : {}) },
     }),
   creerValeurOption: (corps) => request('/api/valeur_options', { method: 'POST', body: corps, ld: true }),
   majValeurOption: (id, corps) =>
     request(`/api/valeur_options/${id}`, { method: 'PATCH', body: corps }),
-  // Rattachements groupe↔produit (pivot). Filtrable par produit (SearchFilter exact).
+  // Rattachements groupe↔produit (pivot). IRI et non identifiant nu — voir `valeurOptions` ci-dessus.
+  //
+  // Celui-ci était plus discret : sans filtre effectif, la fiche d'un produit montrait les groupes
+  // rattachés à **tous** les produits. Un seul produit en démonstration le rendait invisible.
   optionProduits: (produitId) =>
     request('/api/option_produits', {
-      query: { itemsPerPage: 300, ...(produitId ? { produit: produitId } : {}) },
+      query: { itemsPerPage: 300, ...(produitId ? { produit: `/api/produits/${produitId}` } : {}) },
     }),
   creerOptionProduit: (corps) => request('/api/option_produits', { method: 'POST', body: corps, ld: true }),
   majOptionProduit: (id, corps) =>
     request(`/api/option_produits/${id}`, { method: 'PATCH', body: corps }),
   supprimerOptionProduit: (id) =>
     request(`/api/option_produits/${id}`, { method: 'DELETE' }),
+  // LE PRIX APPLICABLE, OPTIONS COMPRISES, RENDU PAR LE SERVEUR.
+  //
+  // `GET /produits/{id}/tarif` appelle **le même service que la composition d'une ligne de vente** :
+  // ce n'est pas une estimation parallèle, c'est le calcul qui facturera. Il rend les groupes
+  // d'options avec leur prix, **les indisponibles comprises et leur motif**, plus `totalUnitaire` et
+  // `totalLigne`.
+  //
+  // L'écran n'additionne donc rien. La raison n'est pas que l'addition serait difficile : un plafond
+  // sur le cumul, une remise « pack », une option qui en rend une autre gratuite — et une somme faite
+  // ici deviendrait fausse **en continuant de rendre un nombre plausible**.
+  //
+  // `options` est une liste d'identifiants de valeurs retenues ; le serveur ignore celles qu'il
+  // refuse et le dit dans sa réponse.
+  tarifProduit: (produitId, { typeTarif, canal = 'guichet', date, qf, options = [], quantite = 1 } = {}) =>
+    request(`/api/produits/${produitId}/tarif`, {
+      query: {
+        typeTarif,
+        canal,
+        ...(date ? { date } : {}),
+        ...(qf !== undefined && qf !== null && qf !== '' ? { qf } : {}),
+        ...(options.length ? { options } : {}),
+        quantite,
+      },
+    }),
+
   // Options proposables à la vente pour un produit sur l'établissement actif (RG-OPT-07/08).
   optionsDisponibles: (produitId) => request(`/api/produits/${produitId}/options-disponibles`),
 
@@ -282,8 +906,243 @@ export const api = {
 
   // Réservation / Planning (M5).
   reservationRessources: () => request('/api/reservation_ressources', { query: { itemsPerPage: 100 } }),
+  // LA JAUGE D'UNE RESSOURCE ETAIT AFFICHEE A DEUX ENDROITS ET MODIFIABLE NULLE PART.
+  //
+  // `capacitePropre` porte deja la jauge par ressource -- un terrain de padel a 4, un court de
+  // tennis en simple a 2, un bassin en a cinquante. Le modele savait donc les distinguer depuis
+  // le debut ; aucun ecran ne permettait de poser la valeur. C'etait la demande de Maxime
+  // << jauge differente padel/tennis >>, et il ne manquait que ceci.
+  majRessourceReservation: (id, corps) =>
+    request(`/api/reservation_ressources/${id}`, { method: 'PATCH', body: corps }),
   reservationCreneaux: () => request('/api/reservation_creneaus', { query: { itemsPerPage: 200 } }),
+  // HORAIRES ET ABSENCES D'UNE RESSOURCE -- exposes en CRUD complet depuis le debut, sans un
+  // seul appelant. Un coiffeur ne pouvait pas declarer qu'il travaille le mardi.
+  //
+  // Chargees ENTIERES, sans le `SearchFilter` sur `ressource` : c'est la famille D58, ou le
+  // filtre rend soit tout (parametre ignore) soit rien (identifiant lie sans type), sans jamais
+  // lever. Le regroupement se fait a l'ecran, ou il est visible ; les volumes le permettent.
+  reservationDisponibilites: () =>
+    request('/api/reservation_disponibilites', { query: { itemsPerPage: 300 } }),
+  creerDisponibilite: (corps) =>
+    request('/api/reservation_disponibilites', { method: 'POST', body: corps, ld: true }),
+  supprimerDisponibilite: (id) =>
+    request(`/api/reservation_disponibilites/${id}`, { method: 'DELETE' }),
+  reservationIndisponibilites: () =>
+    request('/api/reservation_indisponibilites', { query: { itemsPerPage: 300 } }),
+  creerIndisponibilite: (corps) =>
+    request('/api/reservation_indisponibilites', { method: 'POST', body: corps, ld: true }),
+  supprimerIndisponibilite: (id) =>
+    request(`/api/reservation_indisponibilites/${id}`, { method: 'DELETE' }),
   reservationActivites: () => request('/api/reservation_activites', { query: { itemsPerPage: 100 } }),
+  // PLACEMENT LIBRE : les debuts ou un rendez-vous TIENDRAIT, un jour donne.
+  //
+  // Sans `ressource`, on interroge tous les praticiens capables -- le mode << avec qui est
+  // libre >>, qui est celui qui remplit un agenda. Ce point d'entree ne reserve rien : il
+  // propose, et la reservation reste la creation d'un creneau puis d'une reservation.
+  creneauxLibres: (params) => request('/api/reservation/creneaux-libres', { query: params }),
+  creerCreneau: (corps) =>
+    request('/api/reservation/creneaux', { method: 'POST', body: corps }),
+  // ── ANNULER UNE RESERVATION ───────────────────────────────────────────────────────────────────
+  //
+  // ⚠ L'ECRAN N'A RIEN A DECIDER : tout vit dans `AnnulerReservationProcessor`. Dans le delai franc
+  // porte par `dateLimiteAnnulation`, l'annulation est libre — la place est rendue, le credit
+  // restitue, un avoir emis si la vente etait validee, et la liste d'attente promue. Hors delai, le
+  // serveur REFUSE en libre-service et seul un agent portant `reservation.annuler` peut qualifier
+  // l'issue en annulation tardive facturee (RG-M5-09).
+  //
+  // Le message de refus est formule par le serveur ; on l'affiche tel quel plutot que d'en ecrire
+  // un second qui divergerait le jour ou la regle bouge.
+  //
+  // ⚠ ET C'EST LA CONDITION D'ENTREE D'UNE PROTECTION DEJA ECRITE. `BasculerNoShowCommand` ne
+  // bascule que les reservations encore `Confirmee` : une reservation annulee en sort. Mais tant
+  // qu'aucun ecran n'annule, l'exploitant note sur un carnet, la reservation reste `Confirmee`, et
+  // la protection ne se declenche jamais. Elle est la ; rien ne l'atteignait.
+  annulerReservation: (id) =>
+    request(`/api/reservation/reservations/${id}/annuler`, { method: 'POST', body: {} }),
+
+  // ── FUSION DE FICHES CLIENTS (US-L5-08, RG-M4-06) ─────────────────────────────────────────────
+  //
+  // ⚠ TROIS TEMPS, ET LE PREMIER EST CE QUI REND LE GESTE PRATICABLE. On ne fusionne pas a
+  // l'aveugle : on demande d'abord CE QUI DIVERGE entre les fiches, on tranche champ par champ, et
+  // seulement ensuite on ecrit. Sans cette etape, fusionner reviendrait a ecraser des donnees qu'on
+  // n'a pas regardees.
+  //
+  // Rend `{ maitre, sources, champsDivergents: { champ: { maitre, sources: { id: valeur } } } }`.
+  // Un objet vide signifie que les fiches ne se contredisent nulle part — la fusion est alors sans
+  // arbitrage.
+  previsualiserFusion: (maitre, sources) =>
+    // ⚠ `sources` SANS CROCHETS : `qs()` les ajoute lui-meme pour un tableau. Ecrit
+    // `'sources[]'`, il produisait `sources[][]=…`, que le serveur ne lit pas -- la
+    // previsualisation rendait alors 422 << sources[] requis >>. Mesure le 31/08.
+    request('/api/crm/fusions/previsualiser', { query: { maitre, sources } }),
+
+  // Corps : { portee: 'client', sources: [iri], maitre: iri, champsArbitres?: {...}, motif?: '…' }
+  //
+  // ⚠ `champsArbitres` NE PORTE QUE CE QU'ON A TRANCHE. Un champ absent garde la valeur du maitre :
+  // c'est le defaut sur, et il evite qu'un ecran distrait impose une valeur qu'il n'a pas montree.
+  fusionnerClients: (corps) =>
+    request('/api/crm/fusions', { method: 'POST', body: corps }),
+
+  // ⚠ CE QUI REND LA FUSION ACCEPTABLE : elle se defait. Les fiches sources sont restaurees a
+  // l'identique. Sans ce retour en arriere, personne de sense ne fusionnerait deux fiches d'un
+  // client qui reclame.
+  defusionner: (idJournal) =>
+    request(`/api/crm/fusions/${idJournal}/defusionner`, { method: 'POST', body: {} }),
+
+  // Le journal des fusions : c'est lui qui rend la defusion atteignable, et qui dit qui a fusionne
+  // quoi, quand, et pourquoi.
+  journalFusions: () => request('/api/journal_fusions', { query: { itemsPerPage: 50 } }),
+
+  // ── DOUBLE AUTHENTIFICATION (§2.3 plan-backoffice.md) ─────────────────────────────────────────
+  //
+  // Cinq points d'entree, tous serves et tous eprouves par `MfaTest` — et aucun n'etait appele.
+  //
+  // ⚠ CE QUE LEUR ABSENCE A COUTE : `AffectationProcessor` exigeait le MFA avant d'affecter un role
+  // a privileges. Comme aucun ecran ne l'activait, on ne pouvait nommer AUCUN administrateur, chez
+  // aucun client. La garde est suspendue depuis le 31/08 ; ces appels sont ce qui permettra de la
+  // retablir.
+  //
+  // Le secret et les codes de recuperation ne sont rendus QU'UNE FOIS, a l'activation : le serveur
+  // ne stocke que leur forme chiffree ou hachee. Un ecran qui ne les montre pas a ce moment-la les
+  // perd definitivement.
+  mfaActiver: (id) =>
+    request(`/api/utilisateurs/${id}/mfa/activer`, { method: 'POST', body: {} }),
+
+  // Confirme l'activation avec un code de l'application d'authentification. Tant qu'on n'a pas
+  // confirme, `mfaActif` reste faux : un secret pose sans confirmation n'enferme personne dehors.
+  mfaConfirmer: (id, code) =>
+    request(`/api/utilisateurs/${id}/mfa/confirmer`, { method: 'POST', body: { code } }),
+
+  // Desactive, avec un code TOTP ou un code de recuperation. ⚠ Le serveur REFUSE si le compte
+  // detient un role a privileges — la regle vit la-bas, l'ecran affiche son message.
+  mfaDesactiver: (id, code) =>
+    request(`/api/utilisateurs/${id}/mfa/desactiver`, { method: 'POST', body: { code } }),
+
+  // Reinitialisation par un administrateur : appareil perdu et codes de recuperation epuises. Trace
+  // dans le journal d'audit, avec l'etat avant et apres.
+  mfaReinitialiser: (id) =>
+    request(`/api/utilisateurs/${id}/mfa/reinitialiser`, { method: 'POST', body: {} }),
+
+  // ⚠ LE SECOND FACTEUR A LA CONNEXION S'AUTHENTIFIE AVEC LE JETON PRE-AUTH, PAS AVEC CELUI DU
+  // STOCKAGE — qui n'existe pas encore a ce stade. D'ou `auth: false` et l'en-tete pose a la main :
+  // sans cela, `request` ecraserait l'`Authorization` par le jeton courant, absent, et le serveur
+  // repondrait « non authentifie » sur une requete parfaitement formee.
+  //
+  // Le code accepte est un code TOTP OU un code de recuperation ; le serveur consomme ce dernier.
+  mfaVerifier: (jetonPreAuth, code) =>
+    request('/auth/mfa-verifier', {
+      method: 'POST',
+      body: { code },
+      auth: false,
+      headers: { Authorization: `Bearer ${jetonPreAuth}` },
+    }),
+
+  // ── DEPLACER UNE SEULE SEANCE (RG-M5-07, CA-6) ────────────────────────────────────────────────
+  //
+  // Corps : { debut?, fin?, ressource? } en ISO. PATCH, donc `application/merge-patch+json` — pose
+  // par `request` des que la methode est PATCH.
+  //
+  // Ne touche PAS a la serie : les autres occurrences restent ou elles sont, et celle-ci se marque
+  // `occurrenceModifiee` pour se distinguer. Le serveur refuse le chevauchement avec le meme garde
+  // que la creation.
+  //
+  // ⚠ AUCUNE NOTIFICATION N'EST ENVOYEE AUX PERSONNES DEJA INSCRITES — mesure faite :
+  // `NotificationReservationInterface` ne declare que la promotion de liste d'attente et
+  // l'arbitrage. L'ecran le dit avant d'agir plutot que de laisser croire le contraire.
+  modifierCreneau: (id, corps) =>
+    request(`/api/reservation/creneaux/${id}`, { method: 'PATCH', body: corps }),
+
+  // ── ARBITRER UN CONFLIT DE RECURRENCE (RG-M5-11) ──────────────────────────────────────────────
+  //
+  // Une occurrence de recurrence qui chevauche une autre occupation est desormais CREEE, marquee
+  // `enAttenteArbitrage`, et non reservable — au lieu d'etre perdue en silence. Decision de Maxime
+  // du 31/08 : « ne jamais deplacer tout seul ».
+  //
+  // Deux gestes, un seul appel : avec `idRessource`, on deplace la seance ; sans, on la confirme
+  // telle quelle. Dans les deux cas le drapeau tombe et la seance devient reservable.
+  //
+  // ⚠ LE SERVEUR REFUSE UNE RESSOURCE OCCUPEE (409) : arbitrer ne peut pas deplacer le conflit
+  // ailleurs. On affiche son message tel quel — il nomme la ressource.
+  arbitrerCreneau: (id, idRessource) =>
+    request(`/api/reservation/creneaux/${id}/arbitrer`, {
+      method: 'POST',
+      body: idRessource ? { ressource: idRessource } : {},
+    }),
+
+  // ── ANNULER UN CRENEAU (le geste de l'exploitant, pas du client) ──────────────────────────────
+  //
+  // ⚠ CE N'EST PAS UNE ANNULATION DE RESERVATION EN GROS. `AnnulerCreneauProcessor` bascule TOUTES
+  // les reservations en `annulee_libre` — aucun no-show, aucun frais, le credit restitue — parce
+  // que c'est l'exploitant qui annule et que le client n'y est pour rien. La regle du delai franc
+  // ne s'applique pas : il n'y a rien a arbitrer, la seance revient toujours.
+  //
+  // C'est la difference qui compte a l'ecran : le meme mot « annuler » designe deux gestes dont
+  // l'un facture et l'autre jamais.
+  annulerCreneau: (id) =>
+    request(`/api/reservation/creneaux/${id}/annuler`, { method: 'POST', body: {} }),
+
+  // ── AFFECTER UNE INSTANCE A UNE RESERVATION FAITE SUR UN TYPE (ACT-1, D16) ────────────────────
+  //
+  // « Personne ne reserve la chambre 214 : on reserve une chambre double. » L'instance s'affecte
+  // apres coup. Corps : { ressource }.
+  //
+  // Le serveur refuse trois choses, et la troisieme protege un client reel : une instance qui n'est
+  // pas un enfant du type reserve, une instance d'un autre etablissement (404, pas 403), et une
+  // instance DEJA affectee a une reservation qui chevauche. Sans ce dernier refus, deux personnes
+  // recoivent la chambre 214 pour la meme nuit et personne ne s'en apercoit avant l'arrivee.
+  affecterRessource: (idReservation, idRessource) =>
+    request(`/api/reservation/reservations/${idReservation}/affecter`, {
+      method: 'POST',
+      body: { ressource: idRessource },
+    }),
+
+  // ── LISTE D'ATTENTE ───────────────────────────────────────────────────────────────────────────
+  //
+  // Les inscriptions, tous creneaux confondus. Le rang est calcule par le serveur a l'inscription ;
+  // l'ecran ne le pose jamais lui-meme — deux personnes inscrites au meme instant depuis deux
+  // postes obtiendraient le meme rang si le client le calculait.
+  reservationListesAttente: () =>
+    request('/api/reservation_liste_attentes', { query: { itemsPerPage: 200 } }),
+
+  // S'inscrire sur un creneau. Corps : { beneficiaire, quantity? }.
+  //
+  // ⚠ `quantity` COMPTE : on attend pour N unites, pas pour « une place ». Une table de huit qui
+  // s'inscrirait pour une seule serait promue sur une place libre et ne pourrait pas s'asseoir.
+  inscrireListeAttente: (idCreneau, corps) =>
+    request(`/api/reservation/creneaux/${idCreneau}/liste-attente`, { method: 'POST', body: corps }),
+
+  // ── PAIEMENT PARTAGE ──────────────────────────────────────────────────────────────────────────
+  //
+  // Ajouter un participant a une reservation. Corps : { personne, estOrganisateur?, partMontant? }.
+  // `personne` accepte un UUID ou une IRI ; a defaut de `partMontant`, le serveur repartit le
+  // `montantDu` restant a parts egales entre les participants deja declares et le nouveau.
+  //
+  // ⚠ LE BENEFICIAIRE PASSE PAR LE CONTROLE DE PERIMETRE (D3/D8). Sans lui, on ajoutait a sa propre
+  // reservation la fiche de n'importe qui — elle apparait ensuite dans la liste des participants,
+  // avec son identite et sa part. Le serveur rend le meme message pour « inconnu » et « hors
+  // perimetre », volontairement : les distinguer offrirait un oracle d'enumeration sur les fiches
+  // clients. L'ecran affiche donc ce message tel quel, sans chercher a preciser.
+  ajouterParticipant: (idReservation, corps) =>
+    request(`/api/reservation/reservations/${idReservation}/participants`, { method: 'POST', body: corps }),
+
+  // Marquer une part encaissee. `{id}` est celui du PARTICIPANT, pas de la reservation.
+  payerPartParticipant: (idParticipant) =>
+    request(`/api/reservation/participants/${idParticipant}/payer`, { method: 'POST', body: {} }),
+
+  // ── EMARGER ───────────────────────────────────────────────────────────────────────────────────
+  //
+  // Corps : { statut: 'present' | 'absent', compteRendu? }. `input: false` cote serveur, donc JSON
+  // simple et pas de `ld: true`.
+  //
+  // ⚠ SEUL ECRIVAIN DE `presenceConfirmee` DANS TOUT LE DEPOT — voir l'en-tete de ce fichier de
+  // correctif. Sans cet appel, la branche `Honoree` de la bascule no-show n'est atteignable par
+  // aucun chemin, et tout client qui s'est presente serait facture pour son absence.
+  emargerReservation: (id, statut, compteRendu) =>
+    request(`/api/reservation/reservations/${id}/emarger`, {
+      method: 'POST',
+      body: compteRendu ? { statut, compteRendu } : { statut },
+    }),
+
   reservations: () => request('/api/reservations', { query: { itemsPerPage: 200 } }),
   // No-show (D27) : les deux operations existaient et n'etaient appelees de nulle part.
   facturationsNoShow: () => request('/api/reservation_facturation_no_shows', { query: { itemsPerPage: 100 } }),
@@ -308,6 +1167,131 @@ export const api = {
   passages: () =>
     request('/api/passages', { query: { itemsPerPage: 20, 'order[horodatage]': 'desc' } }),
 
+  // LE CONTRÔLE D'ACCÈS N'AVAIT QUE SA SUPERVISION : ON REGARDAIT, ON N'AGISSAIT PAS.
+  //
+  // Dix-huit opérations exposées, deux atteignables (`/acces/supervision` et `/api/passages`). Les
+  // deux gestes qu'un exploitant fait le plus souvent — bloquer un badge perdu, appairer une carte —
+  // n'étaient possibles depuis aucun écran. Un adhérent qui perd sa carte ne pouvait pas être
+  // protégé : le badge restait valide jusqu'à ce que quelqu'un touche la base.
+  //
+  // Toutes ces écritures portent un `uriTemplate` sur mesure et `input: false` : leur processor lit
+  // le corps brut, elles n'exigent donc PAS `application/ld+json` (cf. `scripts/verifier-formats.mjs`).
+  droitsAcces: () => request('/api/droit_acces', { query: { itemsPerPage: 200 } }),
+  declarationsPerteVol: () =>
+    request('/api/declaration_perte_vols', { query: { itemsPerPage: 200 } }),
+  terminauxAcces: () => request('/api/acces/terminaux', { query: { itemsPerPage: 100 } }),
+  // Corps : { identifiantSupport, typeSupport: QR|RFID|wallet, droit: iri|uuid, mode: caisse|autonome }.
+  // Le support est créé à la volée s'il n'existe pas — c'est le geste « appairer une carte neuve ».
+  appairerSupport: (corps) => request('/api/acces/appairages', { method: 'POST', body: corps }),
+  revoquerAppairage: (id) =>
+    request(`/api/acces/appairages/${id}/revoquer`, { method: 'POST', body: {} }),
+  // Perte/vol : blocage serveur immédiat + nouvelle version de liste de révocation pour chaque
+  // contrôleur (refus hors ligne aussi, à leur prochaine synchro). Motif OBLIGATOIRE côté serveur.
+  bloquerSupport: (id, motif) =>
+    request(`/api/acces/supports/${id}/bloquer`, { method: 'POST', body: { motif } }),
+  // Le déblocage passe par l'annulation de la DÉCLARATION, pas par le support : c'est la trace qui
+  // porte la réversibilité (qui a débloqué, quand), et le support suit.
+  annulerDeclarationPerteVol: (id) =>
+    request(`/api/acces/declarations/${id}/annuler`, { method: 'POST', body: {} }),
+  // Enrôlement et rotation renvoient LE SECRET EN CLAIR UNE SEULE FOIS (RG-SOCLE-06 : il est haché
+  // en base, jamais restitué ensuite). L'écran doit le montrer et le dire.
+  enrolerTerminal: (corps) => request('/api/acces/terminaux', { method: 'POST', body: corps }),
+  rotationJetonTerminal: (id) =>
+    request(`/api/acces/terminaux/${id}/jetons`, { method: 'POST', body: {} }),
+  revoquerTerminal: (id) =>
+    request(`/api/acces/terminaux/${id}/revoquer`, { method: 'POST', body: {} }),
+
+  // TOPOLOGIE DU CONTRÔLE D'ACCÈS (A-01) — QUATRE ENTITÉS COMPLÈTES, ZÉRO ÉCRAN.
+  //
+  // `EspaceAcces`, `Controleur`, `Equipement` et `SousReseau` exposent chacune GetCollection + Get
+  // + Post + Patch depuis l'origine du module, et aucune n'était atteignable : sur une installation
+  // neuve, déclarer un tourniquet passait par la base de données. Le seuil de jauge d'un espace, le
+  // mode au dépassement, le délai d'anti-passback et les marges d'avance/retard se réglaient au même
+  // endroit — c'est-à-dire nulle part, pour un exploitant.
+  //
+  // Les chemins ne sont PAS déductibles du nom de la ressource, et deux d'entre eux surprennent :
+  // `EspaceAcces` donne `/api/espace_acces` (pas de « s » final) et `SousReseau` donne
+  // `/api/sous_reseaus` (le pluriel est fabriqué mécaniquement). Vérifiés sur `debug:router`, pas
+  // supposés.
+  espacesAcces: () => request('/api/espace_acces', { query: { itemsPerPage: 200 } }),
+  creerEspaceAcces: (corps) => request('/api/espace_acces', { method: 'POST', body: corps, ld: true }),
+  majEspaceAcces: (id, corps) => request(`/api/espace_acces/${id}`, { method: 'PATCH', body: corps }),
+  controleursAcces: () => request('/api/controleurs', { query: { itemsPerPage: 200 } }),
+  creerControleur: (corps) => request('/api/controleurs', { method: 'POST', body: corps, ld: true }),
+  majControleur: (id, corps) => request(`/api/controleurs/${id}`, { method: 'PATCH', body: corps }),
+  equipementsAcces: () => request('/api/equipements', { query: { itemsPerPage: 200 } }),
+  creerEquipement: (corps) => request('/api/equipements', { method: 'POST', body: corps, ld: true }),
+  majEquipement: (id, corps) => request(`/api/equipements/${id}`, { method: 'PATCH', body: corps }),
+  sousReseauxAcces: () => request('/api/sous_reseaus', { query: { itemsPerPage: 100 } }),
+  creerSousReseau: (corps) => request('/api/sous_reseaus', { method: 'POST', body: corps, ld: true }),
+  majSousReseau: (id, corps) => request(`/api/sous_reseaus/${id}`, { method: 'PATCH', body: corps }),
+
+  // JOURNAL DES PASSAGES (A-05). `passages` ci-dessus rend les vingt derniers pour la supervision ;
+  // celui-ci porte les filtres du serveur (`espace`, `controleur`, `equipement`, `resultat` en
+  // SearchFilter, `horodatage` en DateFilter).
+  journalPassages: (query) => request('/api/passages', { query }),
+  // ⚠ L'EXPORT N'A PAS LES MÊMES NOMS DE PARAMÈTRES QUE LE JOURNAL. `PassageExportProvider` est écrit
+  // à la main : il lit `depuis`, `jusqua`, `espace`, `equipement`, `resultat` — et ignore
+  // silencieusement `horodatage[after]`. Passer les paramètres du journal rendrait un export NON
+  // FILTRÉ qui a toutes les apparences d'un export filtré.
+  exportPassages: (query) => request('/api/acces/passages/export', { query }),
+  // LES DEUX GESTES DE LA SUPERVISION, PREVUS PAR LA SPEC ET ATTEIGNABLES DEPUIS NULLE PART.
+  //
+  // L'écran A-03 décrit un agent qui, devant un porteur bloqué, ouvre la porte lui-même — et un
+  // comptage « +1 » pour qui entre sans support (un groupe scolaire, un accompagnant). Les deux
+  // opérations existent côté serveur depuis l'origine du module ; aucune interface ne les appelait.
+  // Sans elles, un exploitant devant une barrière qui refuse à tort n'a aucun recours dans le
+  // logiciel : il ouvre à la main, et le passage n'est nulle part.
+  //
+  // Le MOTIF est obligatoire côté serveur pour les deux, et c'est ce qui fait la différence entre un
+  // franchissement forcé et une trace exploitable : la question n'est pas « qui a ouvert » mais
+  // « pourquoi il a fallu ouvrir ». Corps : { equipement: uuid|iri, motif: string, sens?: entree|sortie }.
+  ouvertureManuelle: (corps) => request('/api/acces/passages/manuel', { method: 'POST', body: corps }),
+  comptageNonNominatif: (corps) =>
+    request('/api/acces/passages/non-nominatif', { method: 'POST', body: corps }),
+
+  // « CE PRODUIT OUVRE TELLE ET TELLE ZONE » (ProductAccessZone).
+  //
+  // Une ligne = une zone ouverte par un produit. AUCUNE LIGNE = LE PRODUIT OUVRE TOUT : c'est la
+  // règle de compatibilité du serveur, et c'est l'inverse de ce qu'une liste vide laisse croire.
+  //
+  // `productRef` est un identifiant NU et non une relation : le module Accès ne dépend pas de
+  // l'Offre (D2). Il n'y a ni GET unitaire ni PATCH — une déclaration n'a rien à montrer seule, et
+  // la modifier c'est en retirer une et en poser une autre. L'établissement n'est jamais dans le
+  // corps : le serveur l'estampille depuis l'en-tête actif (D41).
+  zonesProduit: (productRef) => request('/api/product_access_zones', { query: { productRef } }),
+  declarerZoneProduit: (corps) =>
+    request('/api/product_access_zones', { method: 'POST', body: corps, ld: true }),
+  retirerZoneProduit: (id) => request(`/api/product_access_zones/${id}`, { method: 'DELETE' }),
+
+  // État réseau des contrôleurs (bascule en ligne / hors ligne, US-L3-07).
+  etatSynchroAcces: () => request('/api/acces/synchro/etat'),
+
+  // LA CLOCHE — trois opérations, et une règle d'admission qui les rend rares.
+  //
+  // Une notification est un ÉVÉNEMENT DE DOMAINE qu'on a décidé de montrer à quelqu'un : facture
+  // échue, prélèvement rejeté, devis expiré. Pas un refus au tourniquet — plusieurs par minute à
+  // l'ouverture des portes, et personne n'agit sur un refus isolé.
+  //
+  // Le compte de la pastille se lit sur `totalItems` de CETTE requête, jamais sur un point d'entrée
+  // séparé : deux sources qui comptent la même chose finissent par diverger.
+  //
+  // La liste de la cloche. Le compteur de la pastille se prend sur `totalItems` de CETTE
+  // requête : un second point d'entrée qui compterait la même chose finirait par diverger,
+  // et c'est la pastille qu'on croirait.
+  notifications: (params) =>
+    request('/api/notifications', {
+      query: { lue: false, 'order[horodatage]': 'desc', itemsPerPage: 20, ...(params || {}) },
+    }),
+  // Marquer lue est idempotent côté serveur : la date de première lecture ne se réécrit pas.
+  marquerNotificationLue: (id) =>
+    request(`/api/notifications/${id}/lue`, { method: 'POST', body: {}, ld: true }),
+  // « Tout marquer comme lu » ne vide QUE l'établissement actif : un geste qui effacerait
+  // aussi les autres sites ferait disparaître, sans les avoir affichées, des alertes que
+  // personne n'a vues.
+  marquerToutesNotificationsLues: () =>
+    request('/api/notifications/tout-lu', { method: 'POST', body: {}, ld: true }),
+
   // Reporting / Pilotage (M7). Route hors /api (proxifiée via /reporting).
   dashboardEtablissement: (id) => request(`/reporting/dashboards/etablissement/${id}`),
   // Référentiel des indicateurs (M7).
@@ -316,6 +1300,18 @@ export const api = {
   // --- Paramètres (référentiels, lecture) ---
   espaces: () => request('/api/espaces', { query: { itemsPerPage: 200 } }),
   regions: () => request('/api/regions', { query: { itemsPerPage: 100 } }),
+  // Un etablissement EXIGE une region : sans ces deux appels, une installation neuve ne pouvait
+  // creer aucun site. La lecture seule etait branchee, l'ecriture non.
+  // OUVRIR UNE STRUCTURE -- l'annuaire officiel des entreprises, interroge par le SERVEUR : la
+  // frappe de l'exploitant ne part pas chez un tiers depuis son poste.
+  chercherEntreprise: (q) => request('/api/organisation/entreprises', { query: { q } }),
+  // Cree d'un geste le groupe, la region, l'etablissement, l'affectation de l'auteur, le point de
+  // vente et l'identite legale.
+  ouvrirStructure: (corps) =>
+    request('/api/organisation/structures', { method: 'POST', body: corps, ld: true }),
+
+  creerRegion: (corps) => request('/api/regions', { method: 'POST', body: corps, ld: true }),
+  majRegion: (id, corps) => request(`/api/regions/${id}`, { method: 'PATCH', body: corps }),
   categories: () => request('/api/categories', { query: { itemsPerPage: 200 } }),
   creerCategorie: (corps) => request('/api/categories', { method: 'POST', body: corps, ld: true }),
   majCategorie: (id, corps) => request(`/api/categories/${id}`, { method: 'PATCH', body: corps }),
@@ -337,6 +1333,70 @@ export const api = {
   majSaison: (id, corps) => request(`/api/saisons/${id}`, { method: 'PATCH', body: corps }),
   supprimerSaison: (id) => request(`/api/saisons/${id}`, { method: 'DELETE' }),
   tauxTvas: () => request('/api/taux_tvas', { query: { itemsPerPage: 100 } }),
+
+  // LE CATALOGUE DES TAUX LÉGAUX — ce que la loi fixe, par opposition à `tauxTvas` qui est ce que
+  // CET exploitant emploie. Les deux cohabitent à l'écran et ne se remplacent pas : le premier se
+  // consulte, le second se possède.
+  //
+  // ⚠ UNE SEULE LECTURE, ET ELLE REND AUSSI LES MASQUAGES. Le croisement « quels taux sont masqués
+  // pour moi » se fait côté serveur, où le profil comptable est connu : le laisser à l'écran, c'est
+  // deux requêtes qui peuvent échouer séparément et un croisement à refaire dans chaque écran qui
+  // affichera un jour cette liste.
+  // MOT DE PASSE OUBLIÉ — la seule route du produit appelée SANS être authentifié.
+  //
+  // `auth: false` est indispensable : le transport pose sinon un en-tête `Authorization` vide, et
+  // le serveur répond 401 sur une route qui doit justement servir à quelqu'un qui n'a pas de jeton.
+  //
+  // ⚠ La réponse porte `envoiCourrielBranche`. C'est le seul moyen pour cet écran de connaître ce
+  // fait : `/me` ne lui a rien rendu, puisque personne n'est connecté. Le déduire d'une constante
+  // reproduirait exactement le défaut qu'on corrige.
+  demanderReinitialisation: (email) =>
+    request('/mot-de-passe/oublie', { method: 'POST', body: { email }, auth: false }),
+
+  // PARAMÉTRAGE DE FACTURATION — une ressource complète (Get, Post, Patch) que RIEN n'appelait.
+  //
+  // ⚠ CE N'ÉTAIT PAS UN CONFORT MANQUANT. Deux manques signalés ailleurs viennent de là :
+  //
+  //   — `tauxPenaliteRetard` est nullable et personne ne pouvait le renseigner. Le taux de
+  //     pénalités « absent des factures » n'était pas absent du modèle, il était inatteignable ;
+  //   — `ResolveurComptesFacturation` dit « renseignez une catégorie comptable mappée, OU un compte
+  //     de produit par défaut dans le paramétrage de facturation ». La seconde voie n'existait pas :
+  //     un repli qu'on ne pouvait pas armer.
+  parametresFacturation: () =>
+    request('/api/parametres-facturation', { query: { itemsPerPage: 50 } }),
+  creerParametreFacturation: (corps) =>
+    request('/api/parametres-facturation', { method: 'POST', body: corps, ld: true }),
+  majParametreFacturation: (id, corps) =>
+    request(`/api/parametres-facturation/${id}`, { method: 'PATCH', body: corps }),
+
+  catalogueTauxTva: (pays) =>
+    request('/api/compta/vat-rate-catalog', { query: pays ? { country: pays } : undefined }),
+
+  // « Reprendre » : on n'envoie qu'un identifiant. Le serveur lit le libellé, la valeur et le profil
+  // comptable à la source — l'écran n'a pas à les connaître, et ne peut donc pas les recopier de
+  // travers. Il rend le catalogue à jour, ce qui évite une seconde requête pendant laquelle l'écran
+  // afficherait l'inverse de ce qui vient de se passer.
+  reprendreTauxLegal: (idTauxLegal) =>
+    request('/api/compta/vat-rate-catalog/adopt', {
+      method: 'POST',
+      body: { legalVatRateId: idTauxLegal },
+      ld: true,
+    }),
+  // Masquer et démasquer par le MÊME identifiant, tous deux en POST sur la vue. Le référentiel
+  // n'étant pas une ressource exposée, il n'a pas d'IRI à donner — et la symétrie a un second
+  // mérite : l'écran n'a aucune ligne de préférence à retenir entre deux chargements.
+  masquerTauxLegal: (idTauxLegal) =>
+    request('/api/compta/vat-rate-catalog/hide', {
+      method: 'POST',
+      body: { legalVatRateId: idTauxLegal },
+      ld: true,
+    }),
+  demasquerTauxLegal: (idTauxLegal) =>
+    request('/api/compta/vat-rate-catalog/unhide', {
+      method: 'POST',
+      body: { legalVatRateId: idTauxLegal },
+      ld: true,
+    }),
   creerTauxTva: (corps) => request('/api/taux_tvas', { method: 'POST', body: corps, ld: true }),
   majTauxTva: (id, corps) => request(`/api/taux_tvas/${id}`, { method: 'PATCH', body: corps }),
 
@@ -370,9 +1430,25 @@ export const api = {
   apercuDroitsRole: (id, etablissement) =>
     request(`/api/roles/${id}/apercu-droits`, { query: { etablissement } }),
 
-  // Capacités activables (feature flags par établissement).
+  // LES CAPACITÉS D'UN ÉTABLISSEMENT — ON POUVAIT LES LIRE, PAS LES ACTIVER.
+  //
+  // L'onglet s'appelait « Capacités activables » et n'offrait AUCUNE action : douze lignes toutes
+  // marquées « inactive », et rien pour en changer. Maxime, à la revue : « je ne sais pas ce que
+  // c'est ». Un onglet nommé « activables » où l'on ne peut rien activer n'explique pas ce qu'il
+  // fait — il laisse conclure que le logiciel ne le permet pas.
+  //
+  // Les deux écritures existaient depuis le début. Elles sont gardées par `fonctionnalite.gerer` ou
+  // `organisation.gerer`, contrôlé sur l'établissement DU CHEMIN et non sur l'établissement actif
+  // (RG-SOCLE-05) : c'est pour ça que l'identifiant est dans l'URL et pas dans un en-tête.
   catalogueCapacites: () => request('/api/fonctionnalites/catalogue'),
   fonctionnalitesEtablissement: (id) => request(`/api/etablissements/${id}/fonctionnalites`),
+  // Corps : { capaciteCode, active, parametres? }.
+  majFonctionnalite: (id, corps) =>
+    request(`/api/etablissements/${id}/fonctionnalites`, { method: 'PATCH', body: corps }),
+  // Corps : { metier: piscine|sport|padel|patinoire|musee }. ADDITIF : n'éteint jamais une capacité
+  // déjà active — vérifié dans `Fonctionnalites::appliquerPreset`, pas supposé.
+  appliquerPresetCapacites: (id, metier) =>
+    request(`/api/etablissements/${id}/appliquer-preset`, { method: 'POST', body: { metier } }),
 
   // --- Comptabilité / Régie (M6) ---
   journaux: () => request('/api/journals', { query: { itemsPerPage: 100 } }),
@@ -393,6 +1469,40 @@ export const api = {
     request(`/api/compta/ecritures/${id}/valider`, { method: 'POST', body: {} }),
   extournerEcriture: (id) =>
     request(`/api/compta/ecritures/${id}/extourne`, { method: 'POST', body: {} }),
+  // ── LETTRAGE (US-L4-14, RG-M6-14) ─────────────────────────────────────────────────────────────
+  //
+  // Les lettrages existants : c'est ce qui permet de distinguer une ligne SOLDEE d'une ligne qui
+  // reste due. Sans cette liste, un ecran de lettrage proposerait de relettrer ce qui l'est deja.
+  // ── SAISIE MANUELLE D'ECRITURE (US-L4-11, RG-M6-11) ───────────────────────────────────────────
+  //
+  // Corps : { businessProfile, journal, date, label, lines: [{ account, vatRate, debit|credit, label? }] }
+  //
+  // ⚠ QUATRE REFUS DU SERVEUR, MESURES EN LISANT `SaisirEcritureManuelleHandler` :
+  //  1. debit != credit  -> 422. L'ECRAN BLOQUE, contrairement au lettrage qui tolere un partiel.
+  //  2. une ligne portant a la fois un debit et un credit, ou aucun des deux -> 422.
+  //  3. un compte inactif -> 422 (`actif` est lisible : on ne propose que les comptes actifs).
+  //  4. `vatRate` absent -> 422. Le taux est OBLIGATOIRE sur chaque ligne, meme une OD.
+  //
+  // ⚠ ET UN CINQUIEME QUI NE VIENT PAS DU HANDLER : la periode doit exister ET etre ouverte. C'est
+  // `DirectLedgerEntryBuilder` qui refuse, via `estOuverte()` — chercher le mot « Cloturee » ne le
+  // trouve pas, le garde-fou est ecrit a l'endroit et non a l'envers.
+  saisirEcritureManuelle: (corps) =>
+    request('/api/compta/journal-entries/manual', { method: 'POST', body: corps }),
+
+  lettragesEcritures: () =>
+    request('/api/lettrage_ecritures', { query: { itemsPerPage: 500 } }),
+
+  // Lettrer un groupe de lignes. Corps : { lines: [id, ...] } — au moins deux.
+  //
+  // ⚠ LE SERVEUR N'EXIGE PAS L'EQUILIBRE, et c'est mesure en le lisant. Il verifie deux lignes
+  // minimum, un profil exploitant commun, et le cloisonnement de chacune. Un lettrage partiel est un
+  // geste comptable legitime — solder un reglement en plusieurs fois — donc l'ecran AFFICHE l'ecart
+  // sans jamais bloquer.
+  //
+  // Un identifiant nu suffit : `idDepuisReference` accepte l'IRI comme l'UUID.
+  lettrerGroupe: (idsLignes) =>
+    request('/api/compta/lettrages/groupe', { method: 'POST', body: { lines: idsLignes } }),
+
   verifierChaineEcritures: (journalId) =>
     request('/api/compta/ecritures/verifier-chaine', { query: { journal: journalId } }),
   cloturerPeriode: (id) =>
@@ -401,6 +1511,88 @@ export const api = {
   // --- Achats & tresorerie ---
   facturesFournisseur: () =>
     request('/api/supplier_invoices', { query: { itemsPerPage: 200 } }),
+  // ON POUVAIT APPROUVER UNE FACTURE FOURNISSEUR, ON NE POUVAIT PAS EN ENREGISTRER UNE.
+  //
+  // Maxime : << Achats & tresorerie -- on ne peut pas enregistrer une facture fournisseur, il faut
+  // donc creer le module fournisseur. >> L'ecran savait rapprocher, approuver, contester, resoudre un
+  // litige et annuler : il traitait une file qu'aucun geste ne remplissait.
+  //
+  // LE MODULE FOURNISSEUR AU SENS DES TIERS EXISTE DEJA (`creerFournisseur`, cote Stock). Ce qui
+  // manquait est l'ENTREE de la facture -- un formulaire, pas une chaine d'extraction.
+  //
+  // Operations API Platform STANDARD (pas d'`uriTemplate`) : elles deserialisent, donc `ld: true`,
+  // et les relations partent en IRI.
+  // ⚠ LA LECTURE AUTOMATIQUE D'UN DOCUMENT — elle existait cote serveur et personne ne l'appelait.
+  //
+  // Le contrat : `{ content: <base64>, mimeType }`. Elle rend le fournisseur, le numero, la date,
+  // les montants HT/TTC, la TVA et son taux — plus un SCORE DE CONFIANCE, qui est la seule chose
+  // qui distingue une suggestion d'une saisie.
+  extraireFactureFournisseur: (content, mimeType) =>
+    request('/api/finance/supplier-invoices/extract', {
+      method: 'POST',
+      body: { content, mimeType },
+      ld: true,
+    }),
+  creerFactureFournisseur: (corps) =>
+    request('/api/supplier_invoices', { method: 'POST', body: corps, ld: true }),
+  // Modification libre TANT QUE brouillon : le serveur repond 409 << Facture scellee >> au-dela.
+  majFactureFournisseur: (id, corps) =>
+    request(`/api/supplier_invoices/${id}`, { method: 'PATCH', body: corps }),
+  // LES LIGNES SONT UNE RESSOURCE A PART, ET CE N'EST PAS UN DETAIL D'IMPLEMENTATION.
+  //
+  // `SupplierInvoice.lines` ne porte AUCUN groupe d'ecriture : les lignes ne s'embarquent pas dans le
+  // corps de la facture, elles se posent une a une sur une facture deja creee. Verifie dans l'entite
+  // avant d'ecrire le formulaire, pas devine -- l'envoi groupe aurait ete accepte en 201 avec une
+  // facture a zero euro et aucune ligne.
+  creerLigneFactureFournisseur: (corps) =>
+    request('/api/supplier_invoice_lines', { method: 'POST', body: corps, ld: true }),
+  // ⚠ PAS DE SUPPRESSION DE LIGNE : `SupplierInvoiceLine` ne declare ni `Delete` ni desactivation.
+  // Une ligne posee sur un brouillon y reste. Le formulaire compose donc la facture AVANT de la
+  // creer, et ne pose ses lignes qu'une fois -- se tromper coute une facture a annuler, pas une
+  // ligne a retirer. Verifie dans l'entite, et signale : c'est une lacune du serveur, pas un choix
+  // de cet ecran.
+  // Le referentiel des natures de depense : c'est lui qui dit sur quel compte une ligne s'impute.
+  // Une nature SANS mapping laisse la facture sans imputation comptable -- l'ecran le signale.
+  // ─── NOTES DE FRAIS ──────────────────────────────────────────────────────────────────────
+  //
+  // Module ENTIER sans ecran : lister, creer, soumettre, rouvrir, finaliser une escalade, passer
+  // en comptabilite, rembourser. Un salarie qui avance des frais n'avait aucun chemin, et un
+  // remboursement qu'on ne peut pas tracer se regle de travers puis se discute apres coup.
+  //
+  // ⚠ DEUX FAMILLES DE CHEMINS, ET C'EST DELIBERE COTE SERVEUR :
+  //   la ressource elle-meme vit sous `/api/expense_reports` (collection, item, PATCH) ;
+  //   les GESTES vivent sous `/api/finance/expense-reports/{id}/…`. Confondre les deux rend 404.
+  //
+  // Contrat LU dans l'entite et le catalogue des permissions, pas sonde -- j'ai deja paye une
+  // sonde aujourd'hui. Droits : `finance.expense_report_submit` pour creer et soumettre,
+  // `finance.expense_report_post_to_ledger` pour comptabiliser et rembourser, et la lecture
+  // s'ouvre aussi a `finance.expense_report_read_own`.
+  notesDeFrais: (params) =>
+    request('/api/expense_reports', { query: { itemsPerPage: 200, ...(params || {}) } }),
+  creerNoteDeFrais: (corps) =>
+    request('/api/expense_reports', { method: 'POST', body: corps, ld: true }),
+  majNoteDeFrais: (id, corps) =>
+    request(`/api/expense_reports/${id}`, { method: 'PATCH', body: corps }),
+  // La ligne porte la nature, la date, le montant TTC et la piece justificative.
+  creerLigneFrais: (corps) =>
+    request('/api/expense_lines', { method: 'POST', body: corps, ld: true }),
+  supprimerLigneFrais: (id) =>
+    request(`/api/expense_lines/${id}`, { method: 'DELETE' }),
+  soumettreNoteDeFrais: (id) =>
+    request(`/api/finance/expense-reports/${id}/submit`, { method: 'POST', body: {} }),
+  rouvrirNoteDeFrais: (id) =>
+    request(`/api/finance/expense-reports/${id}/reopen`, { method: 'POST', body: {} }),
+  finaliserEscaladeNoteDeFrais: (id) =>
+    request(`/api/finance/expense-reports/${id}/finalize-escalade`, { method: 'POST', body: {} }),
+  passerEnComptaNoteDeFrais: (id) =>
+    request(`/api/finance/expense-reports/${id}/post-to-ledger`, { method: 'POST', body: {} }),
+  // Le remboursement est une RESSOURCE, pas un simple geste : il porte une date, un montant, un
+  // moyen de paiement et une reference. C'est ce qui permettra de le rapprocher en banque.
+  rembourserNoteDeFrais: (id, corps) =>
+    request(`/api/finance/expense-reports/${id}/reimbursements`, { method: 'POST', body: corps, ld: true }),
+
+  mappingsDepense: () =>
+    request('/api/expense_account_mappings', { query: { itemsPerPage: 200 } }),
   // Le rapprochement a trois voies : facture contre commande contre reception. Charge AVANT
   // d'afficher le bouton d'approbation — approuver, c'est engager le paiement.
   rapprochementFactureFournisseur: (id) =>
@@ -416,6 +1608,17 @@ export const api = {
 
   // Recouvrement : les deux gestes qui closent un impaye, et le compteur d'acces bloques.
   tableauBordRecouvrement: () => request('/api/recouvrement/tableau-bord'),
+
+  // D84 — « ce redevable n'est jamais bloque ». L'exemption porte sur le REDEVABLE, pas sur le
+  // dossier : forcer une reouverture vaut pour un impaye, l'exemption vaut aussi pour ceux a venir.
+  exemptionsBlocage: () => request('/api/recouvrement/exemptions', { query: { itemsPerPage: 100 } }),
+  exempterRedevable: (typeRedevable, referenceRedevable, motif) =>
+    request('/api/recouvrement/exemptions/accorder', {
+      method: 'POST',
+      body: { typeRedevable, referenceRedevable, motif },
+    }),
+  retirerExemption: (id) =>
+    request(`/api/recouvrement/exemptions/${id}/retirer`, { method: 'POST', body: {} }),
   // Ecarts de caisse.  est calcule par le serveur a la lecture — aucun drapeau stocke,
   // donc aucun drapeau a maintenir. C'est lui qui fait descendre la liste (D55).
   alertesEcartCaisse: () =>
@@ -434,19 +1637,151 @@ export const api = {
   regieRecettes: () => request('/api/regie_recettes', { query: { itemsPerPage: 100 } }),
   ventesImpayeesRegie: () =>
     request('/api/vente_impayee_regies', { query: { itemsPerPage: 100 } }),
+  // ── VERSER UNE REGIE (US-L4-02, CA-5) ─────────────────────────────────────────────────────────
+  //
+  // Corps : { montant: '123.45', justificatifs?: ['ref', ...] }
+  //
+  // ⚠ CE N'EST PAS UN CONFORT : `ClotureGuard` refuse la cloture d'une periode tant qu'une regie
+  // depasse son plafond d'encaisse. Sans cet appel, le comptable lisait « versement requis » sans
+  // aucun endroit ou verser — une obligation legale sans sortie.
+  //
+  // Deux refus du serveur, anticipes par l'ecran : montant <= 0 -> 422, montant > solde -> 409.
+  //
+  // Le handler genere l'ecriture comptable du versement dans la foulee : elle ne se saisit pas a la
+  // main dans l'onglet voisin.
+  verserRegie: (idRegie, corps) =>
+    request(`/api/compta/regies/${idRegie}/versements`, { method: 'POST', body: corps }),
+
+  // ── IMPAYES DE REGIE (RG-M6-09) ───────────────────────────────────────────────────────────────
+  //
+  // Corps : { motif?: string }. Sans motif, le serveur enregistre « Recette de regie » — ce qui ne
+  // dira rien a qui relira la ligne dans six mois, donc l'ecran encourage a le remplir.
+  //
+  // ⚠ Refus du serveur : 409 si la vente est DEJA marquee. L'ecran ne peut prevenir que dans un
+  // sens — trouvee dans la liste chargee => deja marquee ; l'absence ne prouve rien, la liste est
+  // paginee.
+  marquerImpayeeRegie: (idVente, corps) =>
+    request(`/api/compta/ventes/${idVente}/marquer-impayee-regie`, { method: 'POST', body: corps }),
+
+  // ── ENCAISSEMENTS PAYFIP ──────────────────────────────────────────────────────────────────────
+  //
+  // Le referentiel entier n'avait aucune trace dans l'interface. Un bordereau bloque en
+  // `en_attente` etait invisible de partout.
+  //
+  // ⚠ IL N'Y A PAS D'APPEL DE REJEU ICI, ET C'EST DELIBERE. `rejouer()` n'incremente qu'un compteur
+  // de tentatives : il n'interroge pas la DGFiP et ne change aucun statut. L'exposer donnerait
+  // l'illusion d'avoir relance. Le vrai rejeu depend de la signature des rappels du Tresor —
+  // bloqueur externe E-7.
+  bordereauxPayFip: () =>
+    request('/api/bordereau_pay_fi_ps', { query: { itemsPerPage: 100 } }),
+
   bordereauxVersement: () =>
     request('/api/bordereau_versements', { query: { itemsPerPage: 100 } }),
   comptesComptables: () =>
     request('/api/compte_comptables', { query: { itemsPerPage: 200 } }),
+  // LES CORRESPONDANCES COMPTABLES — ce qui décide du compte de produit d'une catégorie de vente.
+  //
+  // La table existait depuis l'origine du module et rien ne permettait de la remplir : UNE seule
+  // correspondance sur la préprod. Sans correspondance active, les ventes de la catégorie ne sont
+  // pas comptabilisées du tout — elles ressortent en anomalie à la génération (`MappingComptableGuard`
+  // puis `GenerateurEcrituresHandler`, qui saute la vente). Ce n'est pas un repli sur un compte
+  // par défaut : c'est une écriture qui n'existe pas.
+  //
+  // ⚠ Côté FACTURE en revanche, `ResolveurComptesFacturation` se replie bel et bien en silence sur
+  // le compte par défaut — deux comportements opposés pour la même donnée absente, selon le chemin.
+  // (Enseignement d'une seconde définition de cette clé, retirée le 31/08 : elle était en double
+  // dans cet objet, produite par une fusion sans conflit, et la dernière gagnait en silence.)
+  mappingsComptables: () => request('/api/mapping_comptables', { query: { itemsPerPage: 200 } }),
+  creerMappingComptable: (corps) =>
+    request('/api/mapping_comptables', { method: 'POST', body: corps, ld: true }),
+  majMappingComptable: (id, corps) =>
+    request(`/api/mapping_comptables/${id}`, { method: 'PATCH', body: corps }),
   cautions: () => request('/api/cautions', { query: { itemsPerPage: 100 } }),
+  // Le JOURNAL d'une caution, et le BARÈME qui chiffre ses retenues. Les deux ressources existaient
+  // sans appelant : l'écran montrait un montant retenu sans jamais dire *qui* l'a retenu, *quand*,
+  // ni *au nom de quelle règle* — les trois seules choses qu'un client conteste au guichet.
+  cautionMouvements: () => request('/api/caution_mouvements', { query: { itemsPerPage: 200 } }),
+  grillesRetenue: () => request('/api/caution_grille_retenues', { query: { itemsPerPage: 100 } }),
+  // Opérations STANDARD : elles désérialisent, donc `ld: true` (cf. `creerExportComptable`).
+  creerGrilleRetenue: (corps) =>
+    request('/api/caution_grille_retenues', { method: 'POST', body: corps, ld: true }),
+  majGrilleRetenue: (id, corps) =>
+    request(`/api/caution_grille_retenues/${id}`, { method: 'PATCH', body: corps }),
 
   // SEPA : remises de prélèvement (pain.008), mandats, rejets.
   remisesSepa: () => request('/api/remise_sepas', { query: { itemsPerPage: 100 } }),
   mandatsSepa: () => request('/api/mandat_sepas', { query: { itemsPerPage: 100 } }),
   rejetsSepa: () => request('/api/rejet_sepas', { query: { itemsPerPage: 100 } }),
 
+  // LES QUATRE ÉCRITURES SEPA, QUI EXISTAIENT TOUTES SANS APPELANT.
+  //
+  // `/api/sepa/mandats` et `/api/sepa/remises/generer` sont des opérations à corps brut (elles
+  // passent par `LecteurCorps`, pas par la désérialisation d'API Platform) : PAS de `ld: true`,
+  // sinon on annonce un type que l'opération n'attend pas.
+  //
+  // `/api/rejet_sepas` en POST est l'inverse : opération STANDARD, donc `ld: true` obligatoire —
+  // sans lui API Platform répond 415 et la déclaration de rejet échoue. Je l'avais écrite sans le
+  // drapeau ; c'est `scripts/verifier-formats.mjs` qui l'a arrêtée, pas une relecture.
+  creerMandatSepa: (corps) => request('/api/sepa/mandats', { method: 'POST', body: corps }),
+  genererRemiseSepa: (dateExecution) =>
+    request('/api/sepa/remises/generer', {
+      method: 'POST',
+      body: dateExecution ? { dateExecution } : {},
+      // La génération parcourt toutes les échéances dues de l'établissement et compose le XML :
+      // c'est la plus lente des écritures SEPA, et un spinner sans fin s'y lirait comme un blocage.
+      timeoutMs: 30000,
+    }),
+  declarerRejetSepa: (corps) =>
+    request('/api/rejet_sepas', { method: 'POST', body: corps, ld: true }),
+
+  // LES LIGNES D'UNE REMISE — ET POURQUOI ON LES CHARGE TOUTES.
+  //
+  // `LigneRemiseSepa` n'a AUCUN filtre déclaré côté serveur (aucun `#[ApiFilter]` sur l'entité) :
+  // `?remise=...` serait accepté par l'URL et IGNORÉ par Doctrine. On aurait alors la liste complète
+  // en croyant lire celle d'une remise — un résultat plausible et faux, exactement le défaut que la
+  // fonction `qs()` en tête de ce fichier documente. On charge donc large et on filtre côté client,
+  // et c'est écrit ici pour que personne n'ajoute un paramètre qui ne sert à rien.
+  lignesRemiseSepa: () => request('/api/ligne_remise_sepas', { query: { itemsPerPage: 500 } }),
+
+  // Le PARAMÉTRAGE du créancier : ICS, nom, IBAN de collecte. Sans lui, aucune remise ne peut être
+  // composée — c'est la première chose à remplir du module, et elle n'avait pas d'écran.
+  configsCreancierSepa: () =>
+    request('/api/config_creancier_sepas', { query: { itemsPerPage: 20 } }),
+  creerConfigCreancierSepa: (corps) =>
+    request('/api/config_creancier_sepas', { method: 'POST', body: corps, ld: true }),
+  majConfigCreancierSepa: (id, corps) =>
+    request(`/api/config_creancier_sepas/${id}`, { method: 'PATCH', body: corps }),
+
+  // Le pain.008 n'est PAS une opération API Platform mais un contrôleur simple qui rend du XML.
+  // Même patron que `urlTelechargementDocument` : une URL, pas un appel — le jeton doit voyager
+  // dans l'en-tête, donc l'appelant fait son `fetch` et lit un blob (voir `PrelevementsSepa.jsx`).
+  //
+  // ⚠ Cette route est hors `/api` : elle doit être routée explicitement vers Symfony (proxy Vite en
+  // dev, bloc nginx en préprod). Sans ça le SPA rend son propre `index.html` avec un 200, et le
+  // « fichier » téléchargé est une page HTML portant l'extension .xml.
+  urlPain008: (id) => `/sepa/remises/${id}/pain008`,
+
   // Recouvrement / impayés.
   incidentsImpayes: () => request('/api/incident_impayes', { query: { itemsPerPage: 100 } }),
+  // Les REPRÉSENTATIONS bancaires et la POLITIQUE qui les gouverne : deux ressources exposées depuis
+  // le début, sans appelant. Sans elles, l'écran montrait des accès bloqués sans jamais dire *quand*
+  // la banque va réessayer, ni *quelle règle* a décidé de couper — donc rien de ce qui permet de
+  // répondre à l'abonné qui appelle.
+  representationsRecouvrement: () =>
+    request('/api/representation_recouvrements', { query: { itemsPerPage: 100 } }),
+  enregistrerResultatRepresentation: (id, resultat) =>
+    request(`/api/recouvrement/representations/${id}/enregistrer-resultat`, {
+      method: 'POST',
+      body: { resultat },
+    }),
+  politiquesRecouvrement: () => request('/api/politique_recouvrements', { query: { itemsPerPage: 50 } }),
+  // LA RÈGLE ÉTAIT LISIBLE ET PAS MODIFIABLE, alors que le serveur accepte POST et PATCH depuis le
+  // début. Un exploitant qui trouvait le blocage d'accès trop brutal pouvait le constater sur
+  // l'écran, et nulle part le corriger : il en concluait que le logiciel était comme ça.
+  creerPolitiqueRecouvrement: (corps) =>
+    request('/api/politique_recouvrements', { method: 'POST', body: corps, ld: true }),
+  majPolitiqueRecouvrement: (id, corps) =>
+    request(`/api/politique_recouvrements/${id}`, { method: 'PATCH', body: corps }),
 
   // --- Boutique en ligne (M3, vue admin) ---
   // Les paniers en ligne ne sont pas listables (accès par id) : la vue admin s'appuie sur les
@@ -456,6 +1791,22 @@ export const api = {
   comptesClientBoutique: () =>
     request('/api/compte_clients', { query: { itemsPerPage: 100 } }),
   vitrines: () => request('/api/boutique/vitrines', { query: { itemsPerPage: 100 } }),
+  // `POST /boutique/vitrines` existe depuis le debut (droit `boutique.gerer_vitrine`) et n'etait
+  // appele de nulle part : l'ecran savait renommer une vitrine, changer ses couleurs et lire ses
+  // remboursements, mais un etablissement neuf n'avait aucun moyen d'en ouvrir une — donc aucune
+  // boutique en ligne, donc aucune vente en ligne.
+  //
+  // ⚠ L'ETABLISSEMENT N'EST PAS DANS LE CORPS, ET IL NE FAUT PAS L'Y METTRE. Il est estampille par
+  // `EstablishmentStampProcessor` depuis la session serveur. La vitrine est un point d'entree
+  // PUBLIC en lecture : laisser l'appelant choisir son rattachement serait une faille, pas une
+  // commodite. C'est aussi pourquoi l'entite ne porte PAS d'`Assert\NotNull` sur ce champ — la
+  // validation s'execute avant l'estampillage et refusait une valeur que le serveur allait poser
+  // lui-meme.
+  creerVitrine: (corps) =>
+    request('/api/boutique/vitrines', { method: 'POST', body: corps, ld: true }),
+  // Le nom d'URL de la boutique. PATCH partiel : on n'envoie que `slug`, pour ne pas
+  // reecrire par megarde une couleur ou une langue qu'un autre onglet vient de changer.
+  majVitrine: (id, corps) => request(`/api/boutique/vitrines/${id}`, { method: 'PATCH', body: corps }),
   // `montant` absent = remboursement total, c'est le defaut du serveur. On ne l'envoie donc que
   // lorsque l'utilisateur a explicitement choisi un remboursement partiel.
   accepterRemboursement: (id, montant) =>
@@ -468,6 +1819,15 @@ export const api = {
 
   // --- Personnel ---
   employes: () => request('/api/employes', { query: { itemsPerPage: 200 } }),
+  // `POST /api/employes` existe depuis le debut (droit `personnel.gerer_employe`) et n'etait
+  // appele de nulle part : l'ecran declarait des absences, emettait et revoquait des badges pour
+  // des employes qu'aucun ecran ne savait creer.
+  //
+  // Contrat LU dans l'entite, pas sonde : `Employe` n'offre aucune operation de suppression, et
+  // sonder par un corps vide y laisserait une trace definitive. `nom`, `prenom` et `poste` portent
+  // `Assert\NotBlank` ; `typeContrat` est une enumeration ; le reste est facultatif.
+  creerEmploye: (corps) =>
+    request('/api/employes', { method: 'POST', body: corps, ld: true }),
   // Absences : declarer, accepter, refuser. Trois operations qui n'avaient aucun bouton.
   absences: () => request('/api/absences', { query: { itemsPerPage: 200 } }),
   declarerAbsence: (corps) => request('/api/personnel/absences', { method: 'POST', body: corps }),
@@ -478,9 +1838,59 @@ export const api = {
   revoquerBadgeStaff: (id, motif) =>
     request(`/api/personnel/badges/${id}/revoquer`, { method: 'POST', body: { motif }, ld: true }),
 
+  // LE CYCLE DE VIE COMPLET D'UN BADGE, ET NON LA SEULE LECTURE.
+  //
+  // Quatre operations existaient cote serveur -- emettre, suspendre, revoquer, reactiver -- et
+  // l'ecran n'affichait qu'une liste. Un badge est une CLE PHYSIQUE : ne pas pouvoir le desactiver
+  // n'est pas une gene d'interface, c'est un acces qui reste ouvert.
+  //
+  // Suspendre et revoquer ne sont pas la meme chose et ne se remplacent pas : on suspend un badge
+  // egare qu'on retrouvera peut-etre, on revoque celui d'une personne qui est partie. Confondre les
+  // deux, c'est soit rendre une carte a quelqu'un qui n'a plus rien a faire ici, soit re-emettre un
+  // badge pour rien.
+  suspendreBadgeStaff: (id, motif) =>
+    request(`/api/personnel/badges/${id}/suspendre`, { method: 'POST', body: { motif }, ld: true }),
+  reactiverBadgeStaff: (id) =>
+    request(`/api/personnel/badges/${id}/reactiver`, { method: 'POST', body: {}, ld: true }),
+  emettreBadgeStaff: (employeId) =>
+    request(`/api/personnel/employes/${employeId}/badges`, { method: 'POST', body: {}, ld: true }),
+
+  // ─── LE PLANNING, LA SORTIE, L'INCIDENT ──────────────────────────────────────────────────
+  //
+  // L'ecran savait declarer un employe, ses absences et emettre ses badges. Il ne savait ni le
+  // PLANIFIER, ni le faire SORTIR, ni signaler un badge perdu. Quatre gestes servis, zero appel.
+  //
+  // ⚠ `POST /personnel/creneaux-travail` LIT LE CORPS BRUT (pas de `ld: true`), et son
+  // `etablissement` est un UUID ou une IRI recoupe cote serveur. Contraintes COMPTEES dans
+  // l'entite, pas survolees -- `libellePoste` NotBlank, `debut` et `fin` NotNull, `effectifRequis`
+  // >= 1 -- plus un validateur de CLASSE, `TopologieTravailCoherente`, qui exige en outre
+  // `fin > debut` et un etablissement resolu. C'est lui qui produirait le 422 surprenant.
+  creneauxTravail: (params) =>
+    request('/api/creneau_travails', { query: { itemsPerPage: 200, ...(params || {}) } }),
+  creerCreneauTravail: (corps) =>
+    request('/api/personnel/creneaux-travail', { method: 'POST', body: corps }),
+  annulerCreneauTravail: (id) =>
+    request(`/api/personnel/creneaux-travail/${id}/annuler`, { method: 'POST', body: {} }),
+
+  // ⚠ SUSPENDRE UN EMPLOYE SUSPEND AUSSI SES BADGES. Le processeur le fait en cascade
+  // (« Suspension de l'employe »), et la reactivation les remet. Ce n'est pas un detail : la
+  // personne perd ses acces physiques a l'instant du clic. L'ecran le dit avant, pas apres.
+  suspendreEmploye: (id) =>
+    request(`/api/personnel/employes/${id}/suspendre`, { method: 'POST', body: {} }),
+  reactiverEmploye: (id) =>
+    request(`/api/personnel/employes/${id}/reactiver`, { method: 'POST', body: {} }),
+
+  // Perte ou vol : le serveur exige un `motif` non vide, et lui seul est lu au corps.
+  declarerIncidentBadge: (id, motif) =>
+    request(`/api/personnel/badges/${id}/declarer-incident`, { method: 'POST', body: { motif } }),
+
   // --- Verticales (routes explicites privilégiées) ---
   // Piscine
   bassins: () => request('/api/bassins', { query: { itemsPerPage: 100 } }),
+  // `POST /api/bassins` existe depuis le debut, protege par `piscine.configurer`, et n'etait
+  // appele d'aucun ecran : la piscine savait attribuer un casier, relancer un retard et forcer une
+  // ouverture, mais pas declarer le bassin sur lequel tout cela porte.
+  creerBassin: (corps) => request('/api/bassins', { method: 'POST', body: corps, ld: true }),
   creneauxBassin: () => request('/api/creneau_bassins', { query: { itemsPerPage: 200 } }),
   jaugesGrandPublic: () =>
     request('/api/jauge_grand_public_calculees', { query: { itemsPerPage: 100 } }),
@@ -509,10 +1919,36 @@ export const api = {
   // Le parc par pointure : c'est lui qui dit ce qui est louable, pas la liste des locations.
   patinoireParc: () =>
     request('/api/patinoire_parc_patins', { query: { itemsPerPage: 200 } }),
+  // `POST /api/patinoire_parc_patins` existe depuis le début (droit `patinoire.configurer`) et
+  // n'était appelé de nulle part : la patinoire sortait, rendait et affûtait des patins qu'aucun
+  // écran ne savait déclarer.
+  //
+  // ⚠ CETTE ENTITÉ N'A AUCUNE CONTRAINTE ET AUCUNE SUPPRESSION. Un POST au corps vide rend 201 et
+  // crée une pointure 28 à zéro paire — vérifié, et payé : un parc vide traîne en préproduction,
+  // que `DELETE` refuse (405). D'où la validation faite ICI, dans le formulaire, faute d'en avoir
+  // une côté serveur. Signalé pour le moteur.
+  creerParcPatins: (corps) =>
+    request('/api/patinoire_parc_patins', { method: 'POST', body: corps, ld: true }),
   patinoireListeAttente: () =>
     request('/api/patinoire_liste_attente_pointures', { query: { itemsPerPage: 100 } }),
   patinoireRetenues: () =>
     request('/api/patinoire_retenue_cautions', { query: { itemsPerPage: 100 } }),
+  // LE BARÈME DE LA PATINOIRE : QUATRE OPÉRATIONS EXPOSÉES, AUCUNE ATTEIGNABLE.
+  //
+  // Le socle a son barème générique (`caution_grille_retenues`, branché dans l'écran Cautions), mais
+  // la patinoire expose LE SIEN — même donnée vue par sa verticale, avec un motif en énumération
+  // (casse, non rendu, perte, restitution partielle) et un parc de patins au lieu d'un `sousCible`
+  // en texte libre.
+  //
+  // Ça change tout pour qui règle la retenue : sur l'écran central, il faut taper `patinoire.patins`
+  // à la main dans un champ libre — une faute de frappe y crée un barème que rien n'applique, sans
+  // erreur. Ici la cible est implicite et le motif se choisit dans une liste.
+  patinoireGrillesRetenue: () =>
+    request('/api/patinoire_grille_retenues', { query: { itemsPerPage: 100 } }),
+  creerPatinoireGrilleRetenue: (corps) =>
+    request('/api/patinoire_grille_retenues', { method: 'POST', body: corps, ld: true }),
+  majPatinoireGrilleRetenue: (id, corps) =>
+    request(`/api/patinoire_grille_retenues/${id}`, { method: 'PATCH', body: corps }),
   // Opérations sur mesure (`uriTemplate`) : elles portent `input: false`, leur processor lit le corps
   // brut. Pas de `ld: true` — l'ajouter ici serait exactement la correction que `verifier-formats`
   // cherche à éviter.
@@ -614,7 +2050,26 @@ export const api = {
     request(`/api/stock/receptions-achat/${id}/valider`, { method: 'POST', body: {} }),
 
   // Padel
-  padelTerrains: () => request('/api/padel/terrains', { query: { itemsPerPage: 100 } }),
+  // ⚠ `/api/padel/terrains` N'EXISTE QU'EN POST — c'est la création d'un terrain.
+  //
+  // La LECTURE de la collection est `/api/padel_terrains`, la route standard d'API Platform. Le
+  // client faisait un GET sur la route de création : le routeur répond **405**, et un 405 sorti du
+  // routeur rend une page HTML, pas du JSON. L'écran Padel affichait donc « <!DOCTYPE html>… » dans
+  // son bandeau d'erreur et ne listait AUCUN terrain — alors qu'il y en a.
+  //
+  // Deux routes qui se ressemblent (`/padel/terrains` et `/padel_terrains`), l'une en écriture et
+  // l'autre en lecture : c'est le genre de confusion que seul un appel réel révèle.
+  padelTerrains: () => request('/api/padel_terrains', { query: { itemsPerPage: 100 } }),
+  // ⚠ LA CREATION N'EST PAS SUR LA COLLECTION : elle porte un `uriTemplate` a elle,
+  // `/padel/terrains`. Un POST sur `/api/padel_terrains` rend 405 — mesure du 30/08, faite avant
+  // d'ecrire cette ligne.
+  //
+  // `CreerTerrainProcessor` cascade la `Ressource` du socle (`codeType='terrain_padel'`) puis pose
+  // l'overlay padel : on ne cree donc PAS la ressource ici, et il ne faut pas le faire — deux
+  // ressources pour un terrain, et le planning ne saurait plus laquelle reserver.
+  // Corps : { libelle, type: 'indoor'|'outdoor', dureesAutoriseesMinutes?: [60, 90] }
+  creerTerrainPadel: (corps) =>
+    request('/api/padel/terrains', { method: 'POST', body: corps }),
   padelReservations: () =>
     request('/api/padel_reservations', { query: { itemsPerPage: 200 } }),
   padelLocationsMateriel: () =>
@@ -637,6 +2092,11 @@ export const api = {
   museeVisitesGuidees: () =>
     request('/api/musee_visite_guidees', { query: { itemsPerPage: 100 } }),
   museeSalles: () => request('/api/musee_salles', { query: { itemsPerPage: 100 } }),
+  // `POST /api/musee_salles` existe depuis le debut (droit `musee.configurer`) et n'etait appele
+  // de nulle part : l'ecran comptait les presents salle par salle sans savoir declarer une salle.
+  // Contrat sonde : un corps vide rend 422 et n'ecrit rien -- `nom` non vide et `espace` requis.
+  creerSalleMusee: (corps) =>
+    request('/api/musee_salles', { method: 'POST', body: corps, ld: true }),
   museeGuides: () => request('/api/musee_guides', { query: { itemsPerPage: 100 } }),
   museeContingentsGratuite: () =>
     request('/api/musee_contingent_gratuites', { query: { itemsPerPage: 50 } }),
@@ -675,6 +2135,27 @@ export const api = {
   // Fiche client de l'éditeur (ED-6). La collection ne rend QUE les clients du CRM de l'éditeur :
   // les clients finaux des exploitants vivent dans la même table et n'ont rien à faire ici.
   editorCustomers: () => request('/api/editor/customers'),
+
+  // ── ACCES D'ASSISTANCE ────────────────────────────────────────────────────────────────────────
+  //
+  // Les accès encore ouverts, tous agents confondus. Sert au bandeau — un accès qu'on ne voit nulle
+  // part est un accès que personne ne referme.
+  editorSupportAccesses: () => request('/api/editor/support-accesses'),
+
+  // Ouvrir un accès. Corps : { granteeId, establishmentId, reason, hours? }
+  //
+  // ⚠ `input: false` côté serveur : le processeur lit le corps lui-même, donc JSON simple et
+  // surtout PAS de `ld: true` — une écriture en ld+json sur une opération sans input part et ne
+  // pose rien, sans erreur.
+  //
+  // `hours` est plafonné à 8 par le serveur, et vaut 2 par défaut. Le motif est obligatoire et
+  // sera lu par le client s'il le demande : ce n'est pas un champ de formulaire, c'est la trace.
+  ouvrirAccesAssistance: (corps) =>
+    request('/api/editor/support-accesses', { method: 'POST', body: corps }),
+
+  // Refermer avant le terme. L'entrée reste : c'est l'historique de qui a pu voir quoi.
+  revoquerAccesAssistance: (id) =>
+    request(`/api/editor/support-accesses/${id}/revoke`, { method: 'POST', body: {} }),
   editorCustomer: (id) => request(`/api/editor/customers/${id}`),
 
   // Facturation des abonnements (ED-7). La collection remonte en tête ce qui n'a PAS été facturé :
@@ -685,4 +2166,161 @@ export const api = {
   // Ce qui reste du a l'editeur (ED-8). Une facture soldee ne figure pas dans la reponse : le
   // serveur la retire, l'ecran n'a pas a decider ce qu'il montre.
   editorReceivables: () => request('/api/editor/receivables'),
+
+  // --- App\Support — ASSISTANCE ------------------------------------------------------------------
+  //
+  // Onze opérations de tickets et sept d'articles d'aide, **et pas un seul appelant** jusqu'au 27/08.
+  // Le module était complet côté serveur — statuts, escalade N1→N2, réaffectation, notes internes,
+  // base de connaissances versionnée et publiable — et l'entrée de menu portait `absent: true`.
+  //
+  // C'est la forme la plus coûteuse de travail perdu du dépôt : `CARTE-MODULES.md` compte **815
+  // opérations sans porte** contre 234 atteignables. Ce qui manque n'est presque jamais la règle
+  // métier ; c'est le chemin qui y mène.
+  //
+  // ⚠ Les actions sont des POST à `input: false` : API Platform ne désérialise pas le corps, et c'est
+  // le processeur qui le lit directement dans la requête. Le corps part donc tel quel, sans IRI.
+  supportTickets: (params) => request('/api/support/tickets', { query: { itemsPerPage: 100, ...(params || {}) } }),
+  supportTicket: (id) => request(`/api/support/tickets/${id}`),
+  ouvrirTicket: (corps) => request('/api/support/tickets', { method: 'POST', body: corps, ld: true }),
+  prendreEnChargeTicket: (id) => request(`/api/support/tickets/${id}/prendre-en-charge`, { method: 'POST', body: {} }),
+  changerStatutTicket: (id, statut, motifFermeture) =>
+    request(`/api/support/tickets/${id}/statut`, {
+      method: 'POST',
+      body: { statut, ...(motifFermeture ? { motifFermeture } : {}) },
+    }),
+  rouvrirTicket: (id) => request(`/api/support/tickets/${id}/rouvrir`, { method: 'POST', body: {} }),
+  escaladerTicket: (id, affecteA) =>
+    request(`/api/support/tickets/${id}/escalader`, { method: 'POST', body: affecteA ? { affecteA } : {} }),
+  reaffecterTicket: (id, affecteA) =>
+    request(`/api/support/tickets/${id}/reaffecter`, { method: 'POST', body: { affecteA } }),
+  lierArticleTicket: (id, articleId) =>
+    request(`/api/support/tickets/${id}/lier-article`, { method: 'POST', body: { articleId } }),
+
+  messagesTicket: (ticketId) => request(`/api/support/tickets/${ticketId}/messages`, { query: { itemsPerPage: 200 } }),
+  repondreTicket: (ticketId, contenu, noteInterne = false) =>
+    request(`/api/support/tickets/${ticketId}/messages`, {
+      method: 'POST',
+      body: { contenu, noteInterne },
+      ld: true,
+    }),
+
+  // --- App\Autorisation — PLAFONDS ET ESCALADES ---------------------------------------------------
+  //
+  // Treize opérations, aucun appelant jusqu'au 27/08. Un module d'autorisation sans écran n'est pas
+  // une fonctionnalité en attente : c'est un mécanisme qui refuse et que personne ne peut débloquer.
+  // La demande d'escalade d'un caissier partait, n'arrivait nulle part, et expirait.
+  demandesEscalade: (params) =>
+    request('/api/demande_escalades', { query: { itemsPerPage: 100, ...(params || {}) } }),
+  approuverEscalade: (id) => request(`/api/demandes-escalade/${id}/approuver`, { method: 'POST', body: {} }),
+  rejeterEscalade: (id, motif) =>
+    request(`/api/demandes-escalade/${id}/rejeter`, { method: 'POST', body: { motif } }),
+  limitesAutorisation: () => request('/api/limite_autorisations', { query: { itemsPerPage: 200 } }),
+  operationsSensibles: () => request('/api/operation_sensibles', { query: { itemsPerPage: 200 } }),
+  // LES PLAFONDS ÉTAIENT LISIBLES ET PAS MODIFIABLES, comme la règle de recouvrement ce matin.
+  //
+  // `POST`, `PATCH` et `DELETE` sur `/api/limite_autorisations` existent depuis le début, protégés
+  // par `autorisation.gerer`, et aucun écran ne les appelait — le pied de page de l'écran le disait
+  // même en toutes lettres : « la création et la modification passent encore par l'API ».
+  //
+  // Or un plafond REFUSE des opérations au guichet. Le voir sans pouvoir le corriger, c'est
+  // constater un blocage et devoir appeler quelqu'un pour le lever.
+  creerLimiteAutorisation: (corps) =>
+    request('/api/limite_autorisations', { method: 'POST', body: corps, ld: true }),
+  majLimiteAutorisation: (id, corps) =>
+    request(`/api/limite_autorisations/${id}`, { method: 'PATCH', body: corps }),
+  supprimerLimiteAutorisation: (id) =>
+    request(`/api/limite_autorisations/${id}`, { method: 'DELETE' }),
+
+  // --- App\Legal — MENTIONS OBLIGATOIRES ---------------------------------------------------------
+  //
+  // Une fiche saisie une fois, six documents composes a partir d'elle. Le champ qui decide de tout
+  // est `activities` : le droit de retractation n'est pas le meme pour un billet date (aucune
+  // retractation) et pour une marchandise (quatorze jours, formulaire type obligatoire).
+  identitesLegales: () => request('/api/legal_identities', { query: { itemsPerPage: 20 } }),
+  creerIdentiteLegale: (corps) => request('/api/legal_identities', { method: 'POST', body: corps, ld: true }),
+  majIdentiteLegale: (id, corps) => request(`/api/legal_identities/${id}`, { method: 'PATCH', body: corps }),
+  genererDocumentsLegaux: (id, nomSite) =>
+    request(`/api/legal/identites/${id}/generer`, { method: 'POST', body: nomSite ? { nomSite } : {} }),
+
+  documentsLegaux: () => request('/api/legal_documents', { query: { itemsPerPage: 50 } }),
+  majDocumentLegal: (id, corps) => request(`/api/legal_documents/${id}`, { method: 'PATCH', body: corps }),
+  publierDocumentLegal: (id) => request(`/api/legal/documents/${id}/publier`, { method: 'POST', body: {} }),
+
+  // Lecture PUBLIQUE, sans jeton : la LCEN exige des mentions << aisement accessibles >>, et le
+  // visiteur qui hesite a acheter est justement celui qui n'a pas encore de compte.
+
+  // Base de connaissances. `/publics` et `/recherche` sont en accès public : ce sont elles que la
+  // webapp cliente interroge, sans jeton.
+  articlesAide: (params) => request('/api/support/articles/publics', { query: { itemsPerPage: 100, ...(params || {}) } }),
+  rechercheArticles: (q) => request('/api/support/articles/recherche', { query: { q, itemsPerPage: 20 } }),
+  categoriesAide: () => request('/api/categorie_aides', { query: { itemsPerPage: 100 } }),
+
+  // REDACTION DE LA BASE DE CONNAISSANCES.
+  //
+  // Sept operations d'ecriture existaient cote serveur -- creer, modifier, publier, archiver -- et
+  // AUCUN appel ne les atteignait. L'ecran affichait donc une base de connaissances en lecture seule,
+  // qui ne pouvait jamais contenir un seul article : personne n'avait de moyen d'en ecrire un.
+  //
+  // /!\ `articlesAideStaff` lit la collection PRIVEE et non `/support/articles/publics`. La publique
+  // ne rend que les articles PUBLIES : un brouillon qu'on vient d'ecrire y serait invisible, et le
+  // redacteur conclurait que l'enregistrement a echoue. Il rechercherait ensuite dans le mauvais
+  // endroit un article qui existe.
+  articlesAideStaff: (params) =>
+    request('/api/article_aides', { query: { itemsPerPage: 200, ...(params || {}) } }),
+  creerArticleAide: (corps) => request('/api/article_aides', { method: 'POST', body: corps, ld: true }),
+  majArticleAide: (id, corps) => request(`/api/article_aides/${id}`, { method: 'PATCH', body: corps }),
+  publierArticleAide: (id) =>
+    request(`/api/support/articles/${id}/publier`, { method: 'POST', body: {} }),
+  archiverArticleAide: (id) =>
+    request(`/api/support/articles/${id}/archiver`, { method: 'POST', body: {} }),
+
+  // ── AGENDA ────────────────────────────────────────────────────────────────────────────────────
+  //
+  // UN SEUL APPEL POUR TOUT CE QUI OCCUPE L'INTERVALLE, et c'est délibéré. L'agenda agrège des
+  // créneaux de réservation, des créneaux de travail, des plages d'ouverture et des événements
+  // saisis à la main. Un appel par source, assemblé ici, ferait dépendre l'affichage de l'ordre
+  // d'arrivée des réponses et obligerait chaque écran à réécrire la règle de tri.
+  journalAgenda: (du, au, scope = 'site') =>
+    request('/api/calendar/feed', { query: { du, au, scope } }),
+  // `duSite` n'est pas une propriété de l'entité : c'est une INTENTION, lue par le serveur pour
+  // décider si l'événement appartient au site ou à son auteur. Elle ne se relit pas telle quelle.
+  creerEvenementAgenda: (corps) =>
+    request('/api/calendar/calendar_events', { method: 'POST', body: corps, ld: true }),
+  supprimerEvenementAgenda: (id) =>
+    request(`/api/calendar/calendar_events/${id}`, { method: 'DELETE' }),
+  abonnementIcs: () => request('/api/calendar/ics-subscription'),
+  regenererIcs: () => request('/api/calendar/ics-subscription/regenerate', { method: 'POST', body: {} }),
+
+  // ── PLANNING D'OUVERTURE ──────────────────────────────────────────────────────────────────────
+  //
+  // `planningOuverture` rend les fenêtres RÉSOLUES — exceptions appliquées, traversée de minuit
+  // comprise, fuseau de l'établissement compris. Les tranches brutes (`plagesOuverture`) ne servent
+  // qu'à l'écran de SAISIE : les résoudre ici, côté client, ferait dessiner une ouverture pendant
+  // laquelle la porte refuse.
+  planningOuverture: (du, au) => request('/api/opening/schedule', { query: { du, au } }),
+  plagesOuverture: () => request('/api/opening/opening_slots', { query: { itemsPerPage: 200 } }),
+  creerPlageOuverture: (corps) =>
+    request('/api/opening/opening_slots', { method: 'POST', body: corps, ld: true }),
+  supprimerPlageOuverture: (id) =>
+    request(`/api/opening/opening_slots/${id}`, { method: 'DELETE' }),
+  exceptionsOuverture: () =>
+    request('/api/opening/opening_exceptions', { query: { itemsPerPage: 200 } }),
+  creerExceptionOuverture: (corps) =>
+    request('/api/opening/opening_exceptions', { method: 'POST', body: corps, ld: true }),
+  supprimerExceptionOuverture: (id) =>
+    request(`/api/opening/opening_exceptions/${id}`, { method: 'DELETE' }),
+  reglageOuverture: () => request('/api/opening/opening_settings'),
+  // UN CORPS, PAS UN BOOLEEN. Le reglage porte trois champs — appliquer, zone scolaire, droit local
+  // d'Alsace-Moselle — et il en portera d'autres. Une fonction par champ, c'est une fonction qu'on
+  // oubliera d'ajouter.
+  majReglageOuverture: (id, corps) =>
+    request(`/api/opening/opening_settings/${id}`, { method: 'PATCH', body: corps }),
+
+  // CE QUE LE CALENDRIER SAIT SANS QU'ON LE SAISISSE.
+  //
+  // Deux natures dans une seule reponse, et elles ne se melangent pas : les JOURS FERIES sont des
+  // propositions de fermeture (l'exploitant coche), les VACANCES SCOLAIRES sont un fond de
+  // calendrier qui ne ferme rien. `schoolHolidaysAvailable` distingue « pas de vacances » de
+  // « le ministere n'a pas repondu » — deux phrases differentes a l'ecran.
+  indicesOuverture: (from, to) => request('/api/opening/calendar-hints', { query: { from, to } }),
 }

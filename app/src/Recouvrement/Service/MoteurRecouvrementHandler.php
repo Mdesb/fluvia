@@ -105,7 +105,8 @@ final class MoteurRecouvrementHandler
                 ->setDateResolution(new \DateTimeImmutable());
             $this->em->flush();
 
-            $this->propagation->activer($incident->getTypeRedevable(), $incident->getReferenceRedevable());
+            // ⚠ RÉÉVALUER, PAS ACTIVER : un autre impayé du même client peut encore bloquer.
+            $this->propagation->reevaluer($incident->getTypeRedevable(), $incident->getReferenceRedevable());
             $this->dispatcher->dispatch(new IncidentImpayeResoluEvent($incident, $incident->getMontantCentimes(), new \DateTimeImmutable(), 'representation_reussie'));
 
             return;

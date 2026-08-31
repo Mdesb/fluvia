@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Compta\Unit;
 
+use App\Tests\SchemaDuHarnais;
 use App\Compta\DataFixtures\ComptaFixtures;
 use App\Compta\Dto\DirectLedgerEntryLine;
 use App\Compta\Entity\CompteComptable;
@@ -16,7 +17,6 @@ use App\Compta\Service\DirectLedgerEntryBuilder;
 use App\DataFixtures\SocleFixtures;
 use App\Offre\DataFixtures\OffreFixtures;
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Tools\SchemaTool;
 use Doctrine\ORM\UnitOfWork;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
@@ -44,12 +44,10 @@ final class DirectLedgerEntryBuilderTest extends KernelTestCase
         $em = $container->get('doctrine')->getManager();
         $this->em = $em;
 
-        $tool = new SchemaTool($em);
-        $metadata = $em->getMetadataFactory()->getAllMetadata();
-        $em->getConnection()->executeStatement('SET FOREIGN_KEY_CHECKS=0');
-        $tool->dropSchema($metadata);
-        $tool->createSchema($metadata);
-        $em->getConnection()->executeStatement('SET FOREIGN_KEY_CHECKS=1');
+        // Le schéma est construit UNE FOIS par processus, puis vidé entre les tests. Le faire
+        // détruire et reconstruire par chaque `setUp()` coûtait ~10 s par test — six heures sur
+        // la suite complète, et donc une suite que personne ne lançait.
+        SchemaDuHarnais::reinitialiser($em);
 
         foreach ([SocleFixtures::class, OffreFixtures::class, ComptaFixtures::class] as $classe) {
             $container->get($classe)->load($em);

@@ -10,6 +10,37 @@
 set -uo pipefail
 [ "$(git rev-parse --abbrev-ref HEAD 2>/dev/null)" = "main" ] || exit 0
 RACINE="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
-[ -x "$RACINE/bin/reinstaller-hooks.sh" ] || exit 0
-bash "$RACINE/bin/reinstaller-hooks.sh"
+[ -x "$RACINE/bin/reinstaller-hooks.sh" ] && bash "$RACINE/bin/reinstaller-hooks.sh"
+
+# ── UN COMMIT SUR MAIN QUI NE PART PAS BLOQUE LE DEPLOIEMENT DE TOUT LE MONDE ────────────────────
+#
+# `deploy-preprod.sh` refuse de servir un arbre qui n'est pas `origin/main` — et il a raison. Mais le
+# refus arrive chez CELUI QUI DEPLOIE, des heures plus tard, jamais chez celui qui a commite.
+#
+# ⚠ Le symptome n'est pas une erreur : c'est « la preproduction ne bouge pas ». Personne ne remonte
+# de la a un commit qui dort dans un clone. Arrive DEUX FOIS dans la nuit du 30 au 31/08, diagnostique
+# les deux fois par une autre session qui cherchait pourquoi son travail n'etait pas visible.
+#
+# Ce hook n'empeche rien — on commite legitimement plusieurs fois avant de pousser. Ce qu'il corrige,
+# c'est que cet etat soit MUET : il le rend bruyant a l'instant ou il se cree.
+#
+# Pas de `git fetch` : ce hook tourne apres CHAQUE commit, une commande reseau y serait lente et
+# faillible. On compare a l'`origin/main` deja connu — on vient de commiter, donc on est en avance
+# sur tout ce qu'on savait.
+if git rev-parse --verify --quiet origin/main >/dev/null 2>&1; then
+    AVANCE_MAIN="$(git rev-list --count origin/main..HEAD 2>/dev/null || echo 0)"
+
+    if [ "${AVANCE_MAIN:-0}" -gt 0 ]; then
+        echo
+        echo "  ⚠  $AVANCE_MAIN commit(s) sur main, non pousses."
+        echo
+        echo "     Le deploiement lit CE clone et refuse tout ce qui n'est pas origin/main."
+        echo "     Tant qu'ils dorment ici, PERSONNE ne peut deployer — et le symptome, chez"
+        echo "     les autres, est « la preproduction ne bouge pas ». Pas une erreur."
+        echo
+        echo "         git push origin main"
+        echo
+    fi
+fi
+
 exit 0

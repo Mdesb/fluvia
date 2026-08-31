@@ -20,6 +20,7 @@
 
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
+import { adosseAuServeur, annonceRouteAVenir, routesDeclarees } from './lib/ecart.mjs'
 
 const CLIENT = new URL('../src/api/client.js', import.meta.url).pathname
 const SERVEUR = new URL('../../app/src/', import.meta.url).pathname
@@ -38,8 +39,13 @@ for (const f of php(SERVEUR)) {
   for (const m of readFileSync(f, 'utf8').matchAll(/uriTemplate:\s*'([^']+)'/g)) surMesure.add(m[1])
 }
 
+// ⚠ On reutilise le calcul de `lib/ecart.mjs` plutot que d'en ecrire un second : deux
+// definitions de « cette route existe » divergeraient au premier correctif.
+const { gabarits, noms } = routesDeclarees()
+
 const src = readFileSync(CLIENT, 'utf8')
 const anomalies = []
+const introuvables = []
 
 // Un chemin du client correspond-il a un `uriTemplate` declare ?
 //
@@ -71,20 +77,88 @@ function correspond(chemin, modele) {
   })
 }
 
+// LES OPTIONS SE LISENT EN COMPTANT LES ACCOLADES, PAS AVEC `[^}]*`.
+//
+// La capture s'arrêtait à la PREMIÈRE accolade fermante — donc au milieu des options dès qu'elles
+// en contiennent une : `{ method: 'POST', body: {}, ld: true }` se lisait `{ method: 'POST',
+// body: {`. Le `ld: true` tombait hors de la capture, et le contrôle réclamait un drapeau qui
+// était déjà là.
+//
+// Le faux positif est le pire cas pour un garde-fou : on ajoute ce qu'il demande, il refuse encore,
+// et on finit par le contourner. `body: {}` est pourtant l'idiome de toutes les opérations sans
+// corps — il y en a une douzaine dans ce client.
+function optionsDe(source, depart) {
+  const i = source.indexOf('{', depart)
+  if (i === -1) return ''
+  let profondeur = 0
+  for (let j = i; j < source.length; j += 1) {
+    if (source[j] === '{') profondeur += 1
+    else if (source[j] === '}') {
+      profondeur -= 1
+      if (profondeur === 0) return source.slice(i, j + 1)
+    }
+  }
+  return source.slice(i)
+}
+
 // `request('/api/...', { ... method: 'POST' ... })`
-for (const m of src.matchAll(/request\((`|')(\/api\/[^`']*)\1,\s*\{([^}]*)\}/g)) {
-  const [, , chemin, options] = m
+for (const m of src.matchAll(/request\((`|')(\/api\/[^`']*)\1,/g)) {
+  const [, , chemin] = m
+  const options = optionsDe(src, m.index + m[0].length)
   if (!/method:\s*'POST'/.test(options)) continue
   if (/\bld:\s*true/.test(options)) continue
 
   if ([...surMesure].some((modele) => correspond(chemin.replace(/^\/api/, ''), modele))) continue
 
+  // ⚠ UNE ROUTE ANNONCÉE N'EST PAS UNE ROUTE STANDARD.
+  //
+  // Sans ce test, le contrôle déduisait de l'ABSENCE d'une route qu'elle désérialise le corps, et
+  // réclamait un `ld: true` que la route, écrite ensuite en `input: false`, refuse en 415. Il ne
+  // signalait pas un défaut : il en faisait poser un, puis redevenait vert.
+  //
+  // Le marqueur ne dit pas « c'est branché », il dit « c'est voulu et voici pourquoi ». Il devient
+  // sans objet dès que la route existe — elle tombe alors dans `surMesure` juste au-dessus.
+
   const ligne = src.slice(0, m.index).split('\n').length
+
+  // ⚠ TROISIEME CAS : LE CHEMIN NE CORRESPOND A RIEN DU TOUT.
+  //
+  // Ne pas trouver une route n'est pas la meme chose que trouver une route standard. Le controle
+  // concluait la seconde de la premiere, et affirmait « elle deserialise le corps » sur une donnee
+  // manquante — conseil FAUX pour une route sur mesure a venir, qui refuse `ld: true` en 415.
+  //
+  // On garde le signal (une faute de frappe cote client reste vue) et on change le diagnostic.
+  if (!adosseAuServeur(chemin, gabarits, noms)) {
+    // ⚠ L'INDEX DE LA CLE DU HELPER, PAS CELUI DE L'APPEL.
+    //
+    // `annonceRouteAVenir` remonte le bloc de commentaires contigu au-dessus de la CLE. Passer
+    // l'index de `request(` — une ligne plus bas — fait buter la remontee sur la ligne de la
+    // cle elle-meme, qui n'est pas un commentaire : le marqueur n'etait jamais trouve, et une
+    // route dument annoncee etait refusee quand meme.
+    const cle = [...src.slice(0, m.index).matchAll(/^ {2}([a-zA-Z][a-zA-Z0-9]*):\s/gm)].pop()
+    if (annonceRouteAVenir(src, cle ? cle.index : m.index) === null) {
+      introuvables.push(
+        `api/client.js:${ligne} — POST ${chemin} : aucune route de ce nom cote serveur. ` +
+          "Ce n'est PAS un defaut de format : le controle ne sait pas si cette operation est " +
+          'standard ou sur mesure, et ne conclut donc rien. Soit le chemin est faux, soit la route ' +
+          "n'est pas encore ouverte — dans ce cas, annonce-la par `@route-a-venir: <raison>` " +
+          'au-dessus du helper.',
+      )
+    }
+    continue
+  }
+
   anomalies.push(
     `api/client.js:${ligne} — POST ${chemin} sans \`ld: true\`. Cette opération est standard : elle ` +
       "désérialise le corps et n'accepte que `application/ld+json`. Sans le drapeau, le serveur " +
       'répondra 415 et la création échouera sans que rien ne le laisse prévoir.',
   )
+}
+
+if (introuvables.length > 0) {
+  console.error(`✗ Formats : ${introuvables.length} chemin(s) sans route correspondante.\n`)
+  for (const a of introuvables) console.error(`  ${a}\n`)
+  process.exit(1)
 }
 
 if (anomalies.length === 0) {

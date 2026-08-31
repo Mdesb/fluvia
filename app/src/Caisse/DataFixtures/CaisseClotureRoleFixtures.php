@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Caisse\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\DataFixtures\SocleFixtures;
 use App\Organisation\Entity\Etablissement;
 use App\Securite\Entity\Affectation;
@@ -26,6 +27,8 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
  */
 final class CaisseClotureRoleFixtures extends Fixture implements DependentFixtureInterface
 {
+    use FixturesIdempotentes;
+
     public const CAISSIER_EMAIL = 'caissier@itcotation.com';
     public const CAISSIER_MDP = 'aaa';
     public const REGISSEUR_EMAIL = 'regisseur@itcotation.com';
@@ -150,7 +153,7 @@ final class CaisseClotureRoleFixtures extends Fixture implements DependentFixtur
             return $existante;
         }
 
-        $permission = (new Permission())->setModule($module)->setAction($action);
+        $permission = $this->permissionNommee($manager, $module, $action);
         $manager->persist($permission);
 
         return $permission;
@@ -186,6 +189,6 @@ final class CaisseClotureRoleFixtures extends Fixture implements DependentFixtur
             return;
         }
 
-        $manager->persist((new Affectation())->setUtilisateur($utilisateur)->setRole($role)->setEtablissement($etablissement));
+        $this->affectationUnique($manager, $utilisateur, $role, $etablissement);
     }
 }

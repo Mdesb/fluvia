@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import EcartsCaisse from '../components/EcartsCaisse.jsx'
 import { api } from '../api/client.js'
 import { euros } from '../api/produit.js'
+import { mot, GLOSSAIRE } from '../api/vocabulaire.js'
 
 // Petit graphe SVG « maison » (pas de lib externe) : occupation FMI par espace vs seuil.
 function GrapheJauges({ jauges }) {

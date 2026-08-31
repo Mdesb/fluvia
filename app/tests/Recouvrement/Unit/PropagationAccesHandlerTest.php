@@ -8,6 +8,7 @@ use App\Acces\Entity\DroitAcces;
 use App\Organisation\Entity\Etablissement;
 use App\Recouvrement\Event\AccesRedevableChangeEvent;
 use App\Recouvrement\Port\RedevablePort;
+use App\Recouvrement\Port\BlockingExemptionLookup;
 use App\Recouvrement\Service\PropagationAccesHandler;
 use App\Recouvrement\Service\RedevableRegistry;
 use Doctrine\ORM\EntityManagerInterface;
@@ -36,7 +37,7 @@ final class PropagationAccesHandlerTest extends TestCase
 
         [$dispatcher, $capture] = $this->dispatcherCapteur();
 
-        (new PropagationAccesHandler($em, $registre, $dispatcher))->desactiver('demo.contrat', 'ref-1');
+        (new PropagationAccesHandler($em, $registre, $dispatcher, $this->exemptionsVides()))->desactiver('demo.contrat', 'ref-1');
 
         self::assertInstanceOf(AccesRedevableChangeEvent::class, $capture->evenement);
         self::assertSame(
@@ -58,13 +59,35 @@ final class PropagationAccesHandlerTest extends TestCase
 
         [$dispatcher, $capture] = $this->dispatcherCapteur();
 
-        (new PropagationAccesHandler($em, $registre, $dispatcher))->activer('demo.contrat', 'ref-inconnue');
+        (new PropagationAccesHandler($em, $registre, $dispatcher, $this->exemptionsVides()))->activer('demo.contrat', 'ref-inconnue');
 
         self::assertInstanceOf(AccesRedevableChangeEvent::class, $capture->evenement);
         self::assertNull(
             $capture->evenement->etablissementId,
             'Aucun droit résolu -> etablissementId null ; l\'événement reste dispatché (comportement existant).',
         );
+    }
+
+    /**
+     * Un port d'exemption qui n'exempte personne.
+     *
+     * ⚠ CES CAS TESTENT LA PROPAGATION, PAS L'EXEMPTION. Ils doivent donc fournir une reponse, pas
+     * une infrastructure : le registre reel irait chercher en base, ce qui rendrait ces tests
+     * unitaires dependants d'un schema et masquerait ce qu'ils mesurent.
+     *
+     * J'y avais d'abord mis un double qui LEVAIT une exception, en supposant que ces cas ne
+     * consultaient pas les exemptions. Il l'a levee, et il avait raison de le faire : 
+     * les consulte, evidemment, puisque c'est la qu'on refuse de bloquer un exempte. La supposition
+     * etait fausse ; c'est ce qui a fait extraire le port.
+     */
+    private function exemptionsVides(): BlockingExemptionLookup
+    {
+        return new class implements BlockingExemptionLookup {
+            public function estExempte(string $typeRedevable, string $referenceRedevable): bool
+            {
+                return false;
+            }
+        };
     }
 
     private function portQuiResout(string $type, string $ref, ?DroitAcces $droit): RedevablePort

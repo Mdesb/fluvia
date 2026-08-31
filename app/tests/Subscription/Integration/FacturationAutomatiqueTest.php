@@ -127,7 +127,19 @@ final class FacturationAutomatiqueTest extends FacturationApiTestCase
         self::assertSame(SocleFixtures::ADMIN_EMAIL, $factures[0]->getCreePar()?->getEmail());
     }
 
-    /** Le mode à blanc n'émet rien. */
+    /**
+     * Le mode à blanc n'émet rien — ALORS QU'IL Y AVAIT QUELQUE CHOSE À ÉMETTRE.
+     *
+     * ⚠ LA SECONDE MOITIÉ DE CETTE PHRASE EST LE TEST. Compter zéro facture après un `--a-blanc`
+     * ne dit rien tout seul : zéro est aussi ce qu'on obtient si l'abonnement n'était pas
+     * facturable ce mois-là, si le montant était nul, ou si la commande s'était arrêtée avant
+     * d'arriver aux abonnements. Le test resterait vert dans les trois cas — et il garde une
+     * commande qui émet des factures.
+     *
+     * On relance donc la même commande, sur le même abonnement et le même mois, SANS l'option : une
+     * facture doit apparaître. C'est ce qui transforme « rien n'a été émis » en « rien n'a été émis
+     * alors qu'il y avait quelque chose à émettre ».
+     */
     public function testLeModeABlancNemetRien(): void
     {
         $this->abonnementActif('Camping des Pins');
@@ -137,6 +149,16 @@ final class FacturationAutomatiqueTest extends FacturationApiTestCase
 
         self::assertStringContainsString('Rien n a ete emis', $testeur->getDisplay());
         self::assertCount(0, $this->em()->getRepository(Facture::class)->findAll());
+
+        // ── LE TÉMOIN : la même passe, sans l'option, DOIT facturer ────────────────────────────
+        $this->commande()->execute([]);
+
+        self::assertGreaterThan(
+            0,
+            \count($this->em()->getRepository(Facture::class)->findAll()),
+            'témoin : cet abonnement doit être facturable, sinon le zéro obtenu à blanc ne prouve '
+            .'rien sur le mode à blanc — il dirait seulement qu’il n’y avait rien à facturer.',
+        );
     }
 
     // ---------------------------------------------------------------- montage
@@ -164,6 +186,10 @@ final class FacturationAutomatiqueTest extends FacturationApiTestCase
         $client = (new Client())
             ->setType(TypeClient::Morale)
             ->setRaisonSociale($raisonSociale)
+            // Un client d'abonnement est une entreprise ou une collectivite : SIRET et adresse sont
+            // des mentions legales obligatoires sur la facture (RG-FACT-08).
+            ->setSiret('12345678900011')
+            ->setAdresse(['rue' => '9 rue des Abonnes', 'cp' => '75016', 'ville' => 'Paris', 'pays' => 'FR'])
             ->setEmail(md5($raisonSociale).'@exemple.test')
             ->setGroupe($editeur->getRegion()?->getGroupe())
             ->setEtablissementCreation($editeur);

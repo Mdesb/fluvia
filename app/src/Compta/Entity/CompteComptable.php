@@ -66,8 +66,10 @@ class CompteComptable
     #[Groups(['compte:read', 'compte:write'])]
     private SensCompte $sens = SensCompte::Debit;
 
+    // ⚠ Exposé dans `mapping:read` pour que l'écran des correspondances puisse dire POURQUOI
+    // une correspondance est inopérante : un verdict sans cause envoie chercher.
     #[ORM\Column(options: ['default' => true])]
-    #[Groups(['compte:read', 'compte:write'])]
+    #[Groups(['compte:read', 'compte:write', 'mapping:read'])]
     private bool $actif = true;
 
     public function __construct()

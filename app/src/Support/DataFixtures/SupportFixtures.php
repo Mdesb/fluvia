@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Support\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\Organisation\Entity\Etablissement;
 use App\Organisation\Entity\Groupe;
 use App\Organisation\Entity\Region;
@@ -26,6 +27,8 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
  */
 final class SupportFixtures extends Fixture
 {
+    use FixturesIdempotentes;
+
     public const GROUPE_NOM = 'Groupe Démo Support';
     public const REGION_NOM = 'Région Démo Support';
     public const ETAB_A_NOM = 'Site A Support';
@@ -42,6 +45,14 @@ final class SupportFixtures extends Fixture
     public const EMAIL_AGENT_N1 = 'support.agent.n1@itcotation.com';
     public const EMAIL_AGENT_N2 = 'support.agent.n2@itcotation.com';
     public const EMAIL_ADMIN = 'support.admin@itcotation.com';
+    /**
+     * LE COMPTE QUE PERSONNE N'A CONFIGURE POUR L'ASSISTANCE — et c'est tout son interet.
+     *
+     * Son role ne porte que `caisse.lire`. Il ne peut donc rien demander au module d'assistance
+     * par ses roles ; ce qu'il peut y faire, il le tient du socle et de rien d'autre. Un test
+     * ecrit sur l'un des neuf autres comptes serait vert meme si le socle etait retire.
+     */
+    public const EMAIL_SANS_ROLE_SUPPORT = 'support.compte.ordinaire@itcotation.com';
 
     /** @var list<string> */
     public const ACTIONS = [
@@ -100,6 +111,12 @@ final class SupportFixtures extends Fixture
         $roleAdmin = $this->roleNomme($manager, 'Support Administrateur');
         $roleAdmin->addPermission($perms['administrer'])->addPermission($perms['lire']);
 
+        // Un role de terrain, sans le moindre droit d'assistance. `permissionNommee` vient du trait
+        // et cherche avant de creer : pas de doublon si un autre jeu de donnees a deja pose
+        // `caisse.lire`.
+        $roleSansAssistance = $this->roleNomme($manager, 'Caisse (sans droit d’assistance)');
+        $roleSansAssistance->addPermission($this->permissionNommee($manager, 'caisse', 'lire'));
+
         $redacteurGlobal = $this->creerUtilisateur($manager, self::EMAIL_REDACTEUR_GLOBAL, 'Rédacteur KB Global');
         $redacteurLocalA = $this->creerUtilisateur($manager, self::EMAIL_REDACTEUR_LOCAL_A, 'Rédacteur KB Local A');
         $redacteurLocalB = $this->creerUtilisateur($manager, self::EMAIL_REDACTEUR_LOCAL_B, 'Rédacteur KB Local B');
@@ -110,6 +127,7 @@ final class SupportFixtures extends Fixture
         $agentN1 = $this->creerUtilisateur($manager, self::EMAIL_AGENT_N1, 'Agent Support N1');
         $agentN2 = $this->creerUtilisateur($manager, self::EMAIL_AGENT_N2, 'Agent Support N2');
         $admin = $this->creerUtilisateur($manager, self::EMAIL_ADMIN, 'Administrateur Support');
+        $sansRoleSupport = $this->creerUtilisateur($manager, self::EMAIL_SANS_ROLE_SUPPORT, 'Compte ordinaire');
 
         $this->affectationUnique($manager, $redacteurGlobal, $roleRedacteurGlobal, $etabA);
         $this->affectationUnique($manager, $redacteurGlobal, $roleRedacteurGlobal, $etabB);
@@ -125,6 +143,7 @@ final class SupportFixtures extends Fixture
         $this->affectationUnique($manager, $agentN2, $roleAgentN2, $etabB);
         $this->affectationUnique($manager, $admin, $roleAdmin, $etabA);
         $this->affectationUnique($manager, $admin, $roleAdmin, $etabB);
+        $this->affectationUnique($manager, $sansRoleSupport, $roleSansAssistance, $etabA);
 
         $manager->flush();
     }
@@ -155,7 +174,7 @@ final class SupportFixtures extends Fixture
             return $existante;
         }
 
-        $permission = (new Permission())->setModule('support')->setAction($action);
+        $permission = $this->permissionNommee($manager, 'support', $action);
         $manager->persist($permission);
 
         return $permission;

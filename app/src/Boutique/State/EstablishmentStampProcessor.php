@@ -8,6 +8,7 @@ use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
 use App\Boutique\Entity\PartenaireOTA;
 use App\Boutique\Entity\Vitrine;
+use App\Boutique\Service\VitrineResolver;
 use App\Securite\Service\ContexteEtablissement;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
@@ -45,6 +46,7 @@ final class EstablishmentStampProcessor implements ProcessorInterface
         #[Autowire(service: 'api_platform.doctrine.orm.state.persist_processor')]
         private readonly ProcessorInterface $persist,
         private readonly ContexteEtablissement $contexte,
+        private readonly VitrineResolver $resolver,
     ) {
     }
 
@@ -61,6 +63,15 @@ final class EstablishmentStampProcessor implements ProcessorInterface
             }
 
             $data->setEtablissement($etablissement);
+        }
+
+        // UNE VITRINE NEUVE RECOIT UNE ADRESSE LISIBLE, SANS QUE PERSONNE N'AIT A Y PENSER.
+        //
+        // Laisser le champ vide jusqu'a ce que l'exploitant le remplisse produirait exactement l'etat
+        // qu'on corrige : une boutique en ligne dont la seule URL connue porte un UUID. Le defaut est
+        // fabrique depuis le nom de l'etablissement, et reste modifiable -- c'est son adresse.
+        if ($data instanceof Vitrine && ($data->getSlug() === null || trim($data->getSlug()) === '')) {
+            $data->setSlug($this->resolver->slugLibre($data->getEtablissement()?->getNom() ?? 'boutique', $data));
         }
 
         return $this->persist->process($data, $operation, $uriVariables, $context);

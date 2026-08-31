@@ -78,7 +78,7 @@ final class ClotureCommandeTest extends VenteApiTestCase
         self::assertSame(1, $testeur->getStatusCode(), 'Un échec doit se voir de l\'ordonnanceur.');
         $sortie = $testeur->getDisplay();
         self::assertStringContainsString('NON close', $sortie);
-        self::assertStringContainsString((new \DateTimeImmutable('-4 days'))->format('Y-m-d'), $sortie, 'Le refus nomme la journée à traiter.');
+        self::assertStringContainsString($this->jourComptable('-4 days'), $sortie, 'Le refus nomme la journée à traiter.');
         self::assertNull($this->clotureDu('yesterday'), 'Et surtout : rien n\'est scellé de travers.');
     }
 
@@ -125,7 +125,7 @@ final class ClotureCommandeTest extends VenteApiTestCase
         $this->em()->clear();
 
         return $this->em()->getRepository(DailyClosure::class)->findOneBy([
-            'businessDay' => (new \DateTimeImmutable($quand))->setTime(0, 0),
+            'businessDay' => new \DateTimeImmutable($this->jourComptable($quand) . ' 00:00:00'),
         ]);
     }
 
@@ -151,7 +151,7 @@ final class ClotureCommandeTest extends VenteApiTestCase
         $em = $this->em();
         $em->getConnection()->executeStatement(
             'UPDATE vente_vente SET date = ? WHERE id = UNHEX(REPLACE(?, "-", ""))',
-            [(new \DateTimeImmutable($quand))->format('Y-m-d H:i:s'), $vente['id']],
+            [$this->momentUtc($quand), $vente['id']],
         );
         $em->clear();
     }

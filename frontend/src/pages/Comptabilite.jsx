@@ -1,15 +1,38 @@
 import { useState } from 'react'
-import Liste, { euroCentimes, dateFr, dateHeureFr } from '../components/Liste.jsx'
+import Liste, { euroCentimes, dateFr } from '../components/Liste.jsx'
 import Tabs from '../components/Tabs.jsx'
+import LettrageEcritures from '../components/LettrageEcritures.jsx'
+import SaisieEcritureManuelle from '../components/SaisieEcritureManuelle.jsx'
+import VersementRegie from '../components/VersementRegie.jsx'
+import MarquerImpayeeRegie from '../components/MarquerImpayeeRegie.jsx'
+import BordereauxPayFip from '../components/BordereauxPayFip.jsx'
+import CorrespondancesComptables from '../components/CorrespondancesComptables.jsx'
 import { api } from '../api/client.js'
 import ClotureComptable from '../components/ClotureComptable.jsx'
 import ImpayesRecouvrement from '../components/ImpayesRecouvrement.jsx'
+import PrelevementsSepa from '../components/PrelevementsSepa.jsx'
+import CautionsGestion from '../components/CautionsGestion.jsx'
 
 // Comptabilité / Régie (M6) + SEPA + impayés + cautions. Consultation multi-onglets.
+//
+// LES TROIS DERNIERS ONGLETS NE SONT PLUS ÉCRITS ICI, ET C'EST TOUT L'INTÉRÊT.
+//
+// SEPA, impayés et cautions ont désormais chacun leur entrée de menu. L'objection qui les tenait
+// fermées était juste : deux portes vers la même liste, c'est deux endroits à corriger et personne
+// qui sache lequel fait foi. Elle ne tient plus dès lors que les deux portes ouvrent sur le MÊME
+// COMPOSANT — `PrelevementsSepa`, `ImpayesRecouvrement`, `CautionsGestion`. Il n'y a qu'une
+// implémentation ; elle ne peut pas diverger d'elle-même.
+//
+// Les trois onglets restent donc là, où l'exploitant a l'habitude de les chercher, et ils montrent
+// exactement l'écran de l'entrée de menu. Le prix payé est une seconde rangée d'onglets à
+// l'intérieur de la première : c'est visible, et c'est moins cher que deux copies.
 export default function Comptabilite({ etabActif, droits }) {
   // La cloture est l'onglet par defaut : c'est le seul du module qui porte un TRAVAIL. Les huit
   // listes existantes repondent a des questions qu'on se pose ; la cloture repond a une echeance.
   const [sousOnglet, setSousOnglet] = useState('cloture')
+  // Un versement emet un bordereau : sans ce compteur, la liste voisine afficherait encore
+  // « Aucun bordereau » juste apres en avoir cree un.
+  const [versements, setVersements] = useState(0)
 
   return (
     <div className="view">
@@ -23,7 +46,10 @@ export default function Comptabilite({ etabActif, droits }) {
       <Tabs
         onglets={[
           ['cloture', 'Clôture'],
+          ['correspondances', 'Correspondances'],
           ['journaux', 'Journaux & écritures'],
+          ['saisie', 'Saisie manuelle'],
+          ['lettrage', 'Lettrage'],
           ['regie', 'Régie & versements'],
           ['sepa', 'SEPA'],
           ['impayes', 'Impayés'],
@@ -34,6 +60,21 @@ export default function Comptabilite({ etabActif, droits }) {
       />
 
       {sousOnglet === 'cloture' && <ClotureComptable etabActif={etabActif} droits={droits} />}
+
+      {/* Juste après la clôture, et avant les listes : c'est à la clôture qu'on découvre qu'une
+          catégorie n'était rattachée à rien, et c'est le seul onglet de ce module — avec elle —
+          qui porte un travail plutôt qu'une consultation. */}
+      {sousOnglet === 'correspondances' && (
+        <CorrespondancesComptables etabActif={etabActif} droits={droits} />
+      )}
+
+      {/* Apres les journaux, parce qu'on lettre ce qu'on vient d'y lire — et avant les listes de
+          consultation, parce que c'est un des rares onglets de ce module qui porte un TRAVAIL. */}
+      {/* Avant le lettrage, parce qu'on lettre ce qu'on a saisi — et parce que ces deux onglets sont
+          les seuls du module ou le comptable ECRIT plutot qu'il ne consulte. */}
+      {sousOnglet === 'saisie' && <SaisieEcritureManuelle etabActif={etabActif} droits={droits} />}
+
+      {sousOnglet === 'lettrage' && <LettrageEcritures etabActif={etabActif} droits={droits} />}
 
       {sousOnglet === 'journaux' && (
         <div className="resa-grid">
@@ -65,20 +106,23 @@ export default function Comptabilite({ etabActif, droits }) {
 
       {sousOnglet === 'regie' && (
         <div className="resa-grid">
-          <Liste
-            titre="Régies de recettes"
-            deps={[etabActif]}
-            charger={api.regieRecettes}
-            vide="Aucune régie."
-            colonnes={[
-              { cle: 'libelle', entete: 'Régie', rendu: (r) => <span className="nm">{r.libelle || '—'}</span> },
-              { cle: 'soldeEncaisseCentimes', entete: 'Solde encaisse', num: true, rendu: (r) => euroCentimes(r.soldeEncaisseCentimes) },
-              { cle: 'plafondEncaisseCentimes', entete: 'Plafond', num: true, rendu: (r) => euroCentimes(r.plafondEncaisseCentimes) },
-            ]}
+          {/* La liste des regies etait en LECTURE SEULE, et c'est ce qui bloquait la cloture :
+              on y lisait « au-dessus du plafond » sans pouvoir verser. */}
+          <VersementRegie
+            etabActif={etabActif}
+            droits={droits}
+            onVersement={() => setVersements((n) => n + 1)}
           />
+          {/* LES IMPAYES, A COTE DES ENCAISSEMENTS ET PAS AILLEURS.
+              Une regie de recettes se lit par ce qu'elle a encaisse ET par ce qui lui manque. Ranger
+              les impayes dans un autre ecran laisse regarder le solde sans son complement -- et un
+              solde lu seul a l'air bon. */}
+          {/* La liste etait en LECTURE SEULE : elle ne pouvait que rester vide, ce qui se lit
+              « aucun impaye » au lieu de « rien ne peut en creer ». Le composant liste ET marque. */}
+          <MarquerImpayeeRegie etabActif={etabActif} droits={droits} />
           <Liste
             titre="Bordereaux de versement"
-            deps={[etabActif]}
+            deps={[etabActif, versements]}
             charger={api.bordereauxVersement}
             vide="Aucun bordereau."
             colonnes={[
@@ -87,57 +131,18 @@ export default function Comptabilite({ etabActif, droits }) {
               { cle: 'ecritureGeneree', entete: 'Écriture', rendu: (r) => (r.ecritureGeneree ? <span className="badge good">générée</span> : <span className="badge mut">—</span>) },
             ]}
           />
+          {/* PayFiP a cote de la regie, parce que c'est le meme metier : encaisser pour le compte
+              du Tresor. Le referentiel entier etait invisible — un paiement dont le retour ne
+              revient jamais restait en attente sans que personne puisse le constater. */}
+          <BordereauxPayFip etabActif={etabActif} />
         </div>
       )}
 
-      {sousOnglet === 'sepa' && (
-        <div className="resa-grid">
-          <Liste
-            titre="Remises de prélèvement (pain.008)"
-            sous="lots SEPA"
-            deps={[etabActif]}
-            charger={api.remisesSepa}
-            vide="Aucune remise SEPA."
-            colonnes={[
-              { cle: 'messageId', entete: 'Message ID', rendu: (r) => <span className="mono">{r.messageId || '—'}</span> },
-              { cle: 'dateCollecte', entete: 'Collecte', rendu: (r) => dateFr(r.dateCollecte) },
-              { cle: 'nbTxs', entete: 'Nb tx', num: true, rendu: (r) => r.nbTxs ?? '—' },
-              { cle: 'ctrlSumCentimes', entete: 'Total', num: true, rendu: (r) => euroCentimes(r.ctrlSumCentimes) },
-              { cle: 'statut', entete: 'Statut', rendu: (r) => <span className="badge mut">{r.statut || '—'}</span> },
-            ]}
-          />
-          <Liste
-            titre="Mandats SEPA"
-            deps={[etabActif]}
-            charger={api.mandatsSepa}
-            vide="Aucun mandat."
-            colonnes={[
-              { cle: 'rum', entete: 'RUM', rendu: (r) => <span className="mono">{r.rum || '—'}</span> },
-              { cle: 'debiteurNom', entete: 'Débiteur', rendu: (r) => r.debiteurNom || '—' },
-              { cle: 'iban4Derniers', entete: 'IBAN', rendu: (r) => (r.iban4Derniers ? `••••${r.iban4Derniers}` : '—') },
-            ]}
-          />
-        </div>
-      )}
+      {sousOnglet === 'sepa' && <PrelevementsSepa etabActif={etabActif} droits={droits} />}
 
       {sousOnglet === 'impayes' && <ImpayesRecouvrement etabActif={etabActif} droits={droits} />}
 
-      {sousOnglet === 'cautions' && (
-        <Liste
-          titre="Cautions"
-          sous="dépôts &amp; retenues"
-          deps={[etabActif]}
-          charger={api.cautions}
-          vide="Aucune caution."
-          colonnes={[
-            { cle: 'typeCible', entete: 'Type', rendu: (r) => r.typeCible || '—' },
-            { cle: 'referenceCible', entete: 'Référence', rendu: (r) => <span className="mono">{String(r.referenceCible || '').slice(0, 10) || '—'}</span> },
-            { cle: 'montantCentimes', entete: 'Montant', num: true, rendu: (r) => euroCentimes(r.montantCentimes) },
-            { cle: 'montantRetenuCentimes', entete: 'Retenu', num: true, rendu: (r) => euroCentimes(r.montantRetenuCentimes) },
-            { cle: 'statut', entete: 'Statut', rendu: (r) => <span className="badge mut">{r.statut || '—'}</span> },
-          ]}
-        />
-      )}
+      {sousOnglet === 'cautions' && <CautionsGestion etabActif={etabActif} droits={droits} />}
     </div>
   )
 }

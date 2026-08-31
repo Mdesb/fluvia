@@ -80,6 +80,27 @@ class Activite
     #[Groups(['activite:read', 'activite:write'])]
     private int $dureeMinutes = 60;
 
+    /**
+     * LE TEMPS ENTRE DEUX CLIENTS, QUI APPARTIENT A LA PRESTATION ET NON AU RENDEZ-VOUS.
+     *
+     * Nettoyer une cabine de massage prend un quart d'heure ; remettre un fauteuil en etat, deux
+     * minutes. Ce temps decide de ce qu'on peut proposer ensuite, sans faire partie de ce que le
+     * client a achete.
+     *
+     * **Il n'allonge donc PAS le creneau.** Un creneau allonge ferait voir au client un rendez-vous
+     * d'1 h 15 pour un soin d'une heure, porterait la mauvaise duree sur son ticket, et le jour ou
+     * l'exploitant reduit son battement, tous les rendez-vous passes mentiraient retroactivement.
+     *
+     * C'est une regle de PLACEMENT, lue par `FreeSlotFinder` : chaque occupation existante y est
+     * elargie du battement de sa propre prestation.
+     *
+     * Defaut a 0 : une piscine ou un cours collectif n'en a pas, et une valeur non nulle par defaut
+     * retirerait silencieusement des creneaux a tous les etablissements existants.
+     */
+    #[ORM\Column(type: 'smallint', options: ['default' => 0])]
+    #[Groups(['activite:read', 'activite:write'])]
+    private int $battementMinutes = 0;
+
     #[ORM\Column(length: 60, nullable: true)]
     #[Groups(['activite:read', 'activite:write'])]
     private ?string $niveauRequis = null;
@@ -145,6 +166,20 @@ class Activite
     public function setTypeActivite(string $typeActivite): self
     {
         $this->typeActivite = $typeActivite;
+
+        return $this;
+    }
+
+    public function getBattementMinutes(): int
+    {
+        return $this->battementMinutes;
+    }
+
+    public function setBattementMinutes(int $battementMinutes): self
+    {
+        // Un battement negatif ferait se chevaucher deux rendez-vous : on le refuse ici plutot que
+        // de compter dessus plus loin.
+        $this->battementMinutes = max(0, $battementMinutes);
 
         return $this;
     }

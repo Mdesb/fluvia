@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Stay\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\Crm\Entity\Client;
 use App\Crm\Enum\TypeClient;
 use App\DataFixtures\SocleFixtures;
@@ -26,6 +27,8 @@ use Doctrine\Persistence\ObjectManager;
  */
 final class StayFixtures extends Fixture implements DependentFixtureInterface
 {
+    use FixturesIdempotentes;
+
     public const REFERENCE_A = 'SEJ-TEST-A';
     public const REFERENCE_B = 'SEJ-TEST-B';
 
@@ -47,7 +50,7 @@ final class StayFixtures extends Fixture implements DependentFixtureInterface
         foreach (['read', 'write', 'charge', 'settle'] as $action) {
             $permission = $manager->getRepository(Permission::class)->findOneBy(['module' => 'stay', 'action' => $action]);
             if (!$permission instanceof Permission) {
-                $permission = (new Permission())->setModule('stay')->setAction($action);
+                $permission = $this->permissionNommee($manager, 'stay', $action);
                 $manager->persist($permission);
             }
             $permissions[] = $permission;
@@ -73,7 +76,13 @@ final class StayFixtures extends Fixture implements DependentFixtureInterface
 
         // Une ligne sur le séjour de A, pour que la note ne soit pas vide : un solde de zéro ne
         // distingue pas « rien consommé » de « lignes invisibles ».
-        if ($sejourA instanceof Stay) {
+        // `UNIQ_STAY_CHARGE_SOURCE` porte le couple (source, reference source) : la ligne ne se
+        // recree pas. On cherche par sa reference, pas par « une charge quelconque » -- un sejour
+        // reel en porte plusieurs.
+        $chargeExistante = $manager->getRepository(StayCharge::class)
+            ->findOneBy(['sourceSubjectId' => 'fixture-charge-a']);
+
+        if ($sejourA instanceof Stay && $chargeExistante === null) {
             $manager->persist(new StayCharge(
                 $sejourA,
                 'Bar - 2 demis',
@@ -100,11 +109,23 @@ final class StayFixtures extends Fixture implements DependentFixtureInterface
             return null;
         }
 
+        // LE SEJOUR DE DEMONSTRATION NE SE CREE QU'UNE FOIS.
+        //
+        // `UNIQ_STAY_ETAB_REFERENCE` porte le couple (etablissement, reference) : un second
+        // chargement s'y heurte. On cherche donc CE sejour precis -- pas « un sejour quelconque »,
+        // puisque le helper est appele une fois par etablissement.
+        $existant = $manager->getRepository(Stay::class)
+            ->findOneBy(['establishment' => $etablissement, 'reference' => $reference]);
+        if ($existant instanceof Stay) {
+            return $existant;
+        }
+
         $client = (new Client())
             ->setType(TypeClient::Physique)
             ->setGroupe($groupe)
             ->setEtablissementCreation($etablissement)
             ->setNom($nom)
+            ->setAdresse(['rue' => '5 rue du Sejour', 'cp' => '75014', 'ville' => 'Paris', 'pays' => 'FR'])
             ->setPrenom($prenom);
         $manager->persist($client);
 

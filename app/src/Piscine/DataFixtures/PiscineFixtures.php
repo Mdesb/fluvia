@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Piscine\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\Acces\DataFixtures\AccesFixtures;
 use App\Acces\Entity\EspaceAcces;
 use App\Acces\Entity\Support;
@@ -40,6 +41,8 @@ use Doctrine\Persistence\ObjectManager;
  */
 final class PiscineFixtures extends Fixture implements DependentFixtureInterface
 {
+    use FixturesIdempotentes;
+
     public const BASSIN_LIBELLE = 'Grand bassin';
     public const CASIER_ZONE = 'Vestiaire A';
     public const CASIER_NUMERO = 1;
@@ -55,7 +58,7 @@ final class PiscineFixtures extends Fixture implements DependentFixtureInterface
         // --- Permissions piscine.* + octroi à l'administrateur (RG-SOCLE-02/03) ---
         $perms = [];
         foreach (['configurer', 'gerer_casier', 'forcer_casier', 'lire', 'gerer'] as $action) {
-            $perm = (new Permission())->setModule('piscine')->setAction($action);
+            $perm = $this->permissionNommee($manager, 'piscine', $action);
             $manager->persist($perm);
             $perms[$action] = $perm;
         }
@@ -68,6 +71,21 @@ final class PiscineFixtures extends Fixture implements DependentFixtureInterface
 
         $etabA = $manager->getRepository(Etablissement::class)->findOneBy(['nom' => SocleFixtures::ETAB_A_NOM]);
         if (!$etabA instanceof Etablissement) {
+            $manager->flush();
+
+            return;
+        }
+
+        // ── LE BLOC DE DÉMONSTRATION NE SE POSE QU'UNE FOIS ──────────────────────────────────
+        //
+        // Tout ce qui suit est un jeu de données cohérent, pas un référentiel : le reposer sur une
+        // base qui l'a déjà écraserait ce qui a été corrigé à la main depuis, ou le dupliquerait
+        // pour les entités sans contrainte d'unicité — silencieusement.
+        //
+        // Les permissions et les rôles, eux, restent AU-DESSUS de cette garde : ils doivent être
+        // rejoués à chaque chargement, sans quoi un droit ajouté au code n'atteindrait jamais une
+        // base existante.
+        if ($manager->getRepository(Bassin::class)->findOneBy([]) !== null) {
             $manager->flush();
 
             return;

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Vente\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\Caisse\Entity\Caisse;
 use App\Caisse\Entity\PointDeVente;
 use App\Caisse\Enum\EtatCaisse;
@@ -33,6 +34,8 @@ use Doctrine\Persistence\ObjectManager;
  */
 final class VenteFixtures extends Fixture implements DependentFixtureInterface
 {
+    use FixturesIdempotentes;
+
     public const PDV_LIBELLE = 'Guichet principal Piscine A';
     public const CAISSE_LIBELLE = 'Caisse 1';
     public const PROMO_ENTREE = 'Promo guichet -10% entrée';
@@ -51,8 +54,8 @@ final class VenteFixtures extends Fixture implements DependentFixtureInterface
     public function load(ObjectManager $manager): void
     {
         // --- Permissions vente.* / caisse.* + octroi à l'administrateur (RG-SOCLE-02/03) ---
-        $permVente = (new Permission())->setModule('vente')->setAction('*');
-        $permCaisse = (new Permission())->setModule('caisse')->setAction('*');
+        $permVente = $this->permissionNommee($manager, 'vente', '*');
+        $permCaisse = $this->permissionNommee($manager, 'caisse', '*');
         $manager->persist($permVente);
         $manager->persist($permCaisse);
         // `corriger_reglement` (D45) et `vente_directe` (D44-bis) sont **volontairement distincts** de
@@ -60,10 +63,10 @@ final class VenteFixtures extends Fixture implements DependentFixtureInterface
         // le second permet de vendre sans qu'aucun tiroir ne réponde de la transaction. Les fondre
         // dans `encaisser` les aurait donnés à tous les caissiers.
         foreach (['lire', 'creer', 'encaisser', 'annuler', 'rembourser', 'forcer_prix', 'corriger_reglement', 'vente_directe', 'cloture_journaliere'] as $action) {
-            $manager->persist((new Permission())->setModule('vente')->setAction($action));
+            $manager->persist($this->permissionNommee($manager, 'vente', $action));
         }
         foreach (['lire', 'ouvrir', 'cloturer', 'mouvement', 'gerer'] as $action) {
-            $manager->persist((new Permission())->setModule('caisse')->setAction($action));
+            $manager->persist($this->permissionNommee($manager, 'caisse', $action));
         }
 
         $roleAdmin = $manager->getRepository(Role::class)->findOneBy(['nom' => 'Administrateur groupe']);
@@ -72,6 +75,26 @@ final class VenteFixtures extends Fixture implements DependentFixtureInterface
         }
 
         $etabA = $manager->getRepository(Etablissement::class)->findOneBy(['nom' => SocleFixtures::ETAB_A_NOM]);
+
+        // ── LE BLOC DE DEMONSTRATION NE SE POSE QU'UNE FOIS ──────────────────────────────────
+        //
+        // Tout ce qui suit est un jeu de donnees coherent, pas un referentiel : le reposer sur une
+        // base qui l'a deja ecraserait ce qui a ete corrige a la main depuis, ou le dupliquerait
+        // pour les entites sans contrainte d'unicite -- silencieusement.
+        //
+        // Les permissions et les roles restent AU-DESSUS de cette garde : ils doivent etre rejoues a
+        // chaque chargement, sans quoi un droit ajoute au code n'atteindrait jamais une base
+        // existante.
+        //
+        // La classe est ecrite en nom pleinement qualifie, sans `use` : deviner le namespace d'apres
+        // le dossier de la fixture m'a fait ecraser deux imports corrects.
+        if ($manager->getRepository(\App\Caisse\Entity\PointDeVente::class)
+            ->findOneBy(['libelle' => self::PDV_LIBELLE]) !== null
+        ) {
+            $manager->flush();
+
+            return;
+        }
 
         // --- Point de vente + caisse sur l'établissement A ---
         $pdv = (new PointDeVente())

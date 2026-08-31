@@ -28,7 +28,7 @@ use Symfony\Component\Uid\Uuid;
 #[ORM\Table(name: 'musee_reservation_ota')]
 #[ORM\UniqueConstraint(name: 'uniq_resa_ota_reservation', columns: ['reservation_rattachee_id'])]
 #[ApiResource(
-    shortName: 'MuseeReservationOTA',
+    shortName: 'MuseeReservationOta',
     operations: [
         new GetCollection(security: "is_granted('PERM', 'musee.lire')"),
         new Get(security: "is_granted('PERM', 'musee.lire')"),

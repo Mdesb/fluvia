@@ -31,6 +31,16 @@ final class AffectationProcessor implements ProcessorInterface
      * @param ProcessorInterface<Affectation, Affectation> $persistProcessor
      * @param ProcessorInterface<Affectation, null>         $removeProcessor
      */
+    /**
+     * La garde MFA sur l'affectation d'un rôle à privilèges — voir son explication dans `process()`.
+     *
+     * ⚠ `false` DEPUIS LE 31/08, DÉCISION DE MAXIME. Une constante plutôt qu'un bloc commenté :
+     * un contrôle mis en commentaire disparaît de la lecture, du diff et de la recherche, et
+     * personne ne sait plus qu'il a existé. Celui-ci reste compilé, lisible, et se rétablit en
+     * remettant `true`.
+     */
+    private const MFA_EXIGE_POUR_ROLE_A_PRIVILEGES = false;
+
     public function __construct(
         #[Autowire(service: 'api_platform.doctrine.orm.state.persist_processor')]
         private readonly ProcessorInterface $persistProcessor,
@@ -64,7 +74,41 @@ final class AffectationProcessor implements ProcessorInterface
             }
         }
 
-        if ($role !== null && $beneficiaire !== null
+        // ── ⚠ GARDE SUSPENDUE LE 31/08, PAS SUPPRIMÉE ─────────────────────────────────────────
+        //
+        // **Ce qu'elle exigeait** : un rôle à privilèges — celui qui porte une permission du module
+        // `securite` ou le joker `*` — ne s'affecte qu'à un bénéficiaire dont le MFA est actif.
+        // Écrite délibérément, et bonne dans son principe.
+        //
+        // **Pourquoi elle est en attente.** Aucun écran n'active le MFA. Les points d'entrée
+        // serveur existent et fonctionnent — `MfaTest` les emprunte pour activer puis affecter —
+        // mais l'interface ne les appelle nulle part. Mesuré le 31/08 : 6 rôles à privilèges,
+        // 0 utilisateur avec MFA actif, et `grep -i mfa frontend/src` ne rend que deux affichages
+        // en lecture seule dans les paramètres.
+        //
+        // Conséquence exacte : **on ne peut nommer aucun administrateur, chez aucun client**, et le
+        // message d'erreur demandait de faire une chose que personne ne pouvait faire. Le joker
+        // couvre même « Lecture seule », qui porte `*.lire`.
+        //
+        // ⚠ **ET LE CONTOURNEMENT ÉVIDENT EST LE PIRE CHEMIN.** Activer le MFA par l'API pour
+        // satisfaire la garde enfermerait le compte dehors : le serveur répond alors
+        // `{mfaRequis: true, jetonPreAuth}` et l'écran de connexion ne sait pas relever ce défi.
+        //
+        // **Décision de Maxime du 31/08**, entre trois voies — lever puis construire, tout
+        // construire d'abord, ou retirer définitivement : lever maintenant, construire ensuite.
+        // Relayée par allaccess-b8, qui la lui a posée.
+        //
+        // **À RÉTABLIR quand le parcours MFA existe côté écran** : activation, confirmation, et le
+        // second facteur à la connexion. Remettre `true` ci-dessous suffit — c'est tout ce qu'il y
+        // aura à faire, et `MfaTest::testCa4GardeMfaSuspendueEnAttenteDUnEcran` porte le test à
+        // remettre dans l'autre sens.
+        //
+        // ⚠ **CE QUI N'EST PAS LEVÉ** : l'exigence du second facteur À LA CONNEXION. Un compte qui
+        // porte `mfaActif` — aucun aujourd'hui, mais un semis ou un appel d'API peut en créer —
+        // continue d'être mis au défi par le serveur. Ce qui est suspendu est la PRÉCONDITION à
+        // l'affectation, pas la VÉRIFICATION à l'entrée.
+        if (self::MFA_EXIGE_POUR_ROLE_A_PRIVILEGES
+            && $role !== null && $beneficiaire !== null
             && $this->roleAPrivileges->estAPrivileges($role) && !$beneficiaire->isMfaActif()
         ) {
             throw new UnprocessableEntityHttpException(

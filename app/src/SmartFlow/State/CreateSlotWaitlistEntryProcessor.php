@@ -79,9 +79,14 @@ final class CreateSlotWaitlistEntryProcessor implements ProcessorInterface
         $rangMax = (int) $this->em->getRepository(SlotWaitlistEntry::class)->createQueryBuilder('e')
             ->select('COALESCE(MAX(e.rank), 0)')
             ->andWhere('e.resourceId = :resourceId')
-            ->andWhere('e.establishment = :establishment')
+            // ⚠ D58 vaut aussi pour l'ASSOCIATION : `e.establishment = :establishment` avec
+            // l'entité lie son identifiant SANS son type `uuid`. La requête ne trouvait rien,
+            // `COALESCE(MAX(rank), 0)` rendait 0, et chaque inscrit repartait au rang 1 — une file
+            // d'attente sans ordre. Le durcissement de cohérence était juste ; sa liaison de
+            // paramètre l'annulait en silence.
+            ->andWhere('IDENTITY(e.establishment) = :establishment')
             ->setParameter('resourceId', $resourceId, 'uuid')
-            ->setParameter('establishment', $etablissement)
+            ->setParameter('establishment', $etablissement->getId(), 'uuid')
             ->getQuery()
             ->getSingleScalarResult();
 

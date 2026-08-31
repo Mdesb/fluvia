@@ -57,7 +57,7 @@ class MandatSepa
     private Uuid $id;
 
     #[ORM\Column(length: 35, unique: true)]
-    #[Groups(['mandat_sepa:read', 'abonnement:read'])]
+    #[Groups(['mandat_sepa:read', 'abonnement:read', 'ligne_remise_sepa:read', 'rejet_sepa:read'])]
     private string $rum = '';
 
     /**
@@ -84,7 +84,7 @@ class MandatSepa
     private string $bicDebiteur = '';
 
     #[ORM\Column(length: 180)]
-    #[Groups(['mandat_sepa:read'])]
+    #[Groups(['mandat_sepa:read', 'ligne_remise_sepa:read', 'rejet_sepa:read'])]
     private string $debiteurNom = '';
 
     #[ORM\Column(type: 'date_immutable')]

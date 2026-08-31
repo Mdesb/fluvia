@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Personnel\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\Acces\Entity\Controleur;
 use App\Acces\Entity\EspaceAcces;
 use App\Acces\Entity\Equipement;
@@ -35,6 +36,8 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
  */
 final class PersonnelFixtures extends Fixture
 {
+    use FixturesIdempotentes;
+
     public const GROUPE_NOM = 'Groupe Démo Personnel';
     public const REGION_NOM = 'Région Démo Personnel';
     public const ETAB_A_NOM = 'Site A Personnel';
@@ -174,7 +177,7 @@ final class PersonnelFixtures extends Fixture
             return $existante;
         }
 
-        $permission = (new Permission())->setModule('acces')->setAction($action);
+        $permission = $this->permissionNommee($manager, 'acces', $action);
         $manager->persist($permission);
 
         return $permission;

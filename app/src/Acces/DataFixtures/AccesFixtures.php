@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Acces\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\Acces\Entity\Appairage;
 use App\Acces\Entity\Controleur;
 use App\Acces\Entity\DroitAcces;
@@ -40,6 +41,8 @@ use Doctrine\Persistence\ObjectManager;
  */
 final class AccesFixtures extends Fixture implements DependentFixtureInterface
 {
+    use FixturesIdempotentes;
+
     public const ESPACE_LIBELLE = 'Zone tourniquets Piscine A';
     public const CONTROLEUR_LIBELLE = 'Contrôleur Entrée A1';
     public const EQUIPEMENT_LIBELLE = 'Tourniquet Entrée A1';
@@ -103,6 +106,23 @@ final class AccesFixtures extends Fixture implements DependentFixtureInterface
             return;
         }
 
+        // ── LE BLOC DE DÉMONSTRATION NE SE POSE QU'UNE FOIS ──────────────────────────────────
+        //
+        // Tout ce qui suit est un jeu de données cohérent, pas un référentiel : le reposer sur une
+        // base qui l'a déjà écraserait ce qui a été corrigé à la main depuis, ou le dupliquerait
+        // pour les entités sans contrainte d'unicité — silencieusement.
+        //
+        // Les permissions et les rôles restent AU-DESSUS de cette garde : ils doivent être rejoués à
+        // chaque chargement, sans quoi un droit ajouté au code n'atteindrait jamais une base
+        // existante.
+        if ($manager->getRepository(\App\Acces\Entity\Controleur::class)
+            ->findOneBy(['itboxRef' => self::ITBOX_REF]) !== null
+        ) {
+            $manager->flush();
+
+            return;
+        }
+
         // --- Topologie : 1 espace d'accès + 1 contrôleur + 1 tourniquet d'entrée (établissement A) ---
         $espaceSocle = (new Espace())->setNom('Bassin principal')->setEtablissement($etabA)->setType('bassin');
         $manager->persist($espaceSocle);
@@ -141,6 +161,19 @@ final class AccesFixtures extends Fixture implements DependentFixtureInterface
         } else {
             $droit->setCreditRestant(12);
         }
+
+        // ⚠ LA ZONE EST DÉSORMAIS OBLIGATOIRE POUR QU'UN DROIT DE VENTE OUVRE QUOI QUE CE SOIT (D87).
+        //
+        // Ce droit est de type `CarteQuota`, donc soumis à la règle stricte : sans cette ligne, il
+        // n'ouvre aucune porte, et vingt-sept tests qui n'ont RIEN à voir avec les zones — crédit,
+        // jauge FMI, signature de code, fenêtre nocturne — échouent sur un `refuse` qu'ils ne savent
+        // pas expliquer.
+        //
+        // La déclarer ici n'est pas un contournement : c'est ce qu'un exploitant doit faire depuis
+        // l'écran « Zones d'accès » de la fiche produit. Un jeu de données qui ne la porterait pas
+        // décrirait une exploitation impossible.
+        $droit->addAuthorisedSpace($espaceAcces);
+
         $manager->persist($droit);
 
         // --- Support QR appairé au droit ci-dessus (mode caisse, US-L3-02) ---
@@ -196,7 +229,7 @@ final class AccesFixtures extends Fixture implements DependentFixtureInterface
             return $existante;
         }
 
-        $permission = (new Permission())->setModule('acces')->setAction($action);
+        $permission = $this->permissionNommee($manager, 'acces', $action);
         $manager->persist($permission);
 
         return $permission;

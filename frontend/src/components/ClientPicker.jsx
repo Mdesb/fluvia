@@ -14,21 +14,43 @@ export function nomClient(c) {
 // (produit nominatif, RG-M2-04 / CA-7). Deux onglets : rechercher un client existant
 // (GET /api/crm/clients/recherche) ou en créer un (POST /api/clients). `onSelect` reçoit
 // l'objet client retenu ({ id, nom, prenom, ... }).
-export default function ClientPicker({ open, onClose, onSelect }) {
+//
+// DEUX RÉGLAGES, PARCE QUE « DÉSIGNER QUELQU'UN » N'EST PAS TOUJOURS « LE RATTACHER À UNE VENTE ».
+//
+// `titre` : le libellé « Rattacher un client » décrit le premier usage, pas le composant. Sur
+// l'écran des données personnelles, on ne rattache personne — on désigne la personne qui a écrit.
+//
+// `avecCreation` : l'onglet de création n'a pas sa place partout. Sur l'écran RGPD il proposerait
+// de CRÉER une fiche là où l'on vient précisément d'en effacer une — et une fiche créée là serait
+// aussitôt anonymisée, c'est-à-dire de la donnée personnelle collectée pour rien.
+//
+// Les deux gardent le comportement d'origine par défaut : les appelants existants ne changent pas.
+export default function ClientPicker({
+  open,
+  onClose,
+  onSelect,
+  titre = 'Rattacher un client',
+  avecCreation = true,
+}) {
   const [mode, setMode] = useState('recherche') // 'recherche' | 'creer'
 
   return (
-    <Modal open={open} onClose={onClose} titre="Rattacher un client" taille="md">
-      <div className="seg" style={{ marginBottom: 14 }}>
-        <button type="button" className={mode === 'recherche' ? 'on' : ''} onClick={() => setMode('recherche')}>
-          Rechercher
-        </button>
-        <button type="button" className={mode === 'creer' ? 'on' : ''} onClick={() => setMode('creer')}>
-          Créer un client
-        </button>
-      </div>
-      {mode === 'recherche' ? (
-        <RechercheClient onSelect={onSelect} onBasculerCreation={() => setMode('creer')} />
+    <Modal open={open} onClose={onClose} titre={titre} taille="md">
+      {avecCreation && (
+        <div className="seg" style={{ marginBottom: 14 }}>
+          <button type="button" className={mode === 'recherche' ? 'on' : ''} onClick={() => setMode('recherche')}>
+            Rechercher
+          </button>
+          <button type="button" className={mode === 'creer' ? 'on' : ''} onClick={() => setMode('creer')}>
+            Créer un client
+          </button>
+        </div>
+      )}
+      {mode === 'recherche' || !avecCreation ? (
+        <RechercheClient
+          onSelect={onSelect}
+          onBasculerCreation={avecCreation ? () => setMode('creer') : null}
+        />
       ) : (
         <CreationClient onCree={onSelect} />
       )}
@@ -104,9 +126,11 @@ function RechercheClient({ onSelect, onBasculerCreation }) {
                 <tr>
                   <td colSpan={3} className="empty">
                     Aucun client trouvé.{' '}
-                    <button className="btn ghost sm" type="button" onClick={onBasculerCreation}>
-                      Créer un client
-                    </button>
+                    {onBasculerCreation && (
+                      <button className="btn ghost sm" type="button" onClick={onBasculerCreation}>
+                        Créer un client
+                      </button>
+                    )}
                   </td>
                 </tr>
               )}

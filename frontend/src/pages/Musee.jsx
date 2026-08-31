@@ -3,7 +3,7 @@ import Liste, { dateHeureFr, jourLocal } from '../components/Liste.jsx'
 import Modal from '../components/Modal.jsx'
 import Tabs from '../components/Tabs.jsx'
 import { api, membres } from '../api/client.js'
-import { aUnDesDroits } from '../api/droits.js'
+import { aLeDroit, aUnDesDroits } from '../api/droits.js'
 import { mot } from '../api/vocabulaire.js'
 
 // Musée — soixante-sept opérations exposées, deux appelées jusqu'ici.
@@ -50,7 +50,7 @@ export default function Musee({ etabActif, droits }) {
         onChange={setOnglet}
       />
 
-      {onglet === 'salles' && <SallesSection etabActif={etabActif} />}
+      {onglet === 'salles' && <SallesSection etabActif={etabActif} droits={droits} />}
       {onglet === 'visites' && <VisitesSection etabActif={etabActif} droits={droits} />}
       {onglet === 'groupes' && <GroupesSection etabActif={etabActif} droits={droits} />}
       {onglet === 'expositions' && (
@@ -74,8 +74,13 @@ export default function Musee({ etabActif, droits }) {
 // --------------------------------------------------------------------------------------------
 // Les salles, et le message que le serveur écrit pour l'agent.
 // --------------------------------------------------------------------------------------------
-function SallesSection({ etabActif }) {
-  const [salles, setSalles] = useState([])
+function SallesSection({ etabActif, droits }) {
+  const peutConfigurer = aLeDroit(droits, 'musee.configurer')
+  const [creation, setCreation] = useState(false)
+  // ⚠ `null` = PAS LU. << Aucune salle configuree >> est suivi d'une consequence
+  // (<< rien ne dit combien de personnes se trouvent dans le musee ni ou >>) et d'un geste
+  // (<< Declarez-en une >>). Sur une lecture refusee, on envoie declarer des salles qui existent.
+  const [salles, setSalles] = useState(null)
   const [etats, setEtats] = useState({})
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
@@ -95,6 +100,7 @@ function SallesSection({ etabActif }) {
       setEtats(Object.fromEntries(resultats))
     } catch (e) {
       setErreur(e.message)
+      setSalles(null)
     } finally {
       setChargement(false)
     }
@@ -104,9 +110,22 @@ function SallesSection({ etabActif }) {
     recharger()
   }, [recharger])
 
-  const messages = salles
+  // UNE ALERTE TOUJOURS ALLUMEE EST UNE ALERTE QUE PERSONNE NE LIT.
+  //
+  // `messageAgent` n'est PAS un événement : c'est le texte configuré de la politique de délestage
+  // — la consigne à donner AU MOMENT où la salle sature. `SalleEtatLiveProvider` le rend
+  // inconditionnellement, saturation ou non.
+  //
+  // L ecran le montrait donc en permanence, en bandeau d avertissement en tete de page. Constate
+  // sur la preprod : << Salle des sarcophages -- Salle saturee : reguler l entree >> affiche sur
+  // une salle a ZERO present pour un seuil de vingt. Le jour ou elle sature vraiment, le bandeau
+  // est identique -- donc il ne dit plus rien.
+  //
+  // Le fournisseur calcule pourtant `seuilAtteint` et `preAlerteAtteinte`, que rien ne lisait.
+  // Ce sont eux qui décident si la consigne s'applique MAINTENANT.
+  const messages = (salles || [])
     .map((s) => ({ salle: s, etat: etats[s.id] }))
-    .filter((x) => x.etat?.messageAgent)
+    .filter((x) => x.etat?.messageAgent && (x.etat.seuilAtteint || x.etat.preAlerteAtteinte))
 
   return (
     <>
@@ -127,18 +146,39 @@ function SallesSection({ etabActif }) {
           <h3>Fréquentation des salles</h3>
           <span className="sub">présents, seuils et délestage</span>
           <div className="r">
+            {peutConfigurer && (
+              <button className="btn sm" type="button" onClick={() => setCreation(true)}>
+                ＋ Déclarer une salle
+              </button>
+            )}
             <button className="btn ghost sm" type="button" onClick={recharger} disabled={chargement}>
               Actualiser
             </button>
           </div>
         </div>
+        <SalleModal
+          open={creation}
+          onClose={() => setCreation(false)}
+          onFait={() => { setCreation(false); recharger() }}
+        />
         <div className="card-b">
           {chargement ? (
             <div className="center" style={{ minHeight: 100 }}><div className="spinner" /></div>
+          ) : salles === null ? (
+            <div className="banner banner-error">
+              Les salles n’ont pas pu être lues. <b>N’en concluez pas qu’aucune n’est
+              configurée</b>&nbsp;: les compteurs de présence existent peut-être, ils n’ont pas été
+              obtenus.
+            </div>
           ) : salles.length === 0 ? (
             <div className="empty">
+              {/* LA PHRASE NE DISAIT MEME PAS OU ALLER. Ses deux voisines — patinoire et padel —
+                  envoyaient « dans le paramétrage », qui ne porte rien de tel ; celle-ci ne
+                  proposait rien du tout. Les deux se corrigent de la même façon : le geste vient
+                  à l'écran qui constate le manque. */}
               Aucune salle configurée. Les salles portent les compteurs de présence : sans elles, rien
               ne dit combien de personnes se trouvent dans le musée ni où.
+              {peutConfigurer ? ' Déclarez-en une avec le bouton ci-dessus.' : ''}
             </div>
           ) : (
             <>
@@ -205,7 +245,7 @@ function SallesSection({ etabActif }) {
 // Les visites guidées.
 // --------------------------------------------------------------------------------------------
 function VisitesSection({ etabActif, droits }) {
-  const [visites, setVisites] = useState([])
+  const [visites, setVisites] = useState(null)
   const [guides, setGuides] = useState([])
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
@@ -222,6 +262,7 @@ function VisitesSection({ etabActif, droits }) {
       setGuides(membres(g))
     } catch (e) {
       setErreur(e.message)
+      setVisites(null)
     } finally {
       setChargement(false)
     }
@@ -242,8 +283,8 @@ function VisitesSection({ etabActif, droits }) {
     }
   }
 
-  const planifiees = visites.filter((v) => v.statut === 'planifiee')
-  const autres = visites.filter((v) => v.statut !== 'planifiee')
+  const planifiees = (visites || []).filter((v) => v.statut === 'planifiee')
+  const autres = (visites || []).filter((v) => v.statut !== 'planifiee')
 
   return (
     <>
@@ -254,7 +295,9 @@ function VisitesSection({ etabActif, droits }) {
         <div className="card-h">
           <h3>Visites à confirmer</h3>
           <span className="sub">
-            {planifiees.length === 0 ? 'aucune en attente' : `${planifiees.length} planifiée${planifiees.length > 1 ? 's' : ''}`}
+            {visites === null
+              ? 'état inconnu — la lecture n’a pas abouti'
+              : planifiees.length === 0 ? 'aucune en attente' : `${planifiees.length} planifiée${planifiees.length > 1 ? 's' : ''}`}
           </span>
           {peutGerer && (
             <div className="r">
@@ -267,6 +310,11 @@ function VisitesSection({ etabActif, droits }) {
         <div className="card-b">
           {chargement ? (
             <div className="center" style={{ minHeight: 80 }}><div className="spinner" /></div>
+          ) : visites === null ? (
+            <div className="banner banner-error">
+              Les visites guidées n’ont pas pu être lues&nbsp;: <b>ne concluez pas qu’aucune n’attend
+              d’être confirmée</b>.
+            </div>
           ) : planifiees.length === 0 ? (
             <div className="empty">
               Aucune visite en attente de confirmation. Une visite se planifie avec son thème, sa
@@ -314,7 +362,7 @@ function VisitesSection({ etabActif, droits }) {
       </section>
 
       {autres.length > 0 && (
-        <section className="card" style={{ marginTop: 16 }}>
+        <section className="card" style={{ marginTop: 'var(--esp-bloc)' }}>
           <div className="card-h">
             <h3>Visites confirmées et annulées</h3>
             <span className="sub">pour mémoire</span>
@@ -402,7 +450,7 @@ function NouvelleVisiteModal({ open, guides, onClose, onFait, onErreur }) {
           <input id="vg-theme" className="input" required value={theme} placeholder="Les collections égyptiennes" onChange={(e) => setTheme(e.target.value)} />
         </div>
 
-        <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 'var(--esp-normal)' }}>
           <div className="field" style={{ margin: 0 }}>
             <label htmlFor="vg-langue">Langue</label>
             <select id="vg-langue" className="input" value={langue} onChange={(e) => setLangue(e.target.value)}>
@@ -419,7 +467,7 @@ function NouvelleVisiteModal({ open, guides, onClose, onFait, onErreur }) {
           </div>
         </div>
 
-        <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 'var(--esp-normal)' }}>
           <div className="field" style={{ margin: 0 }}>
             <label htmlFor="vg-debut">Début *</label>
             <input id="vg-debut" className="input" type="datetime-local" required value={debut} onChange={(e) => setDebut(e.target.value)} />
@@ -450,7 +498,7 @@ function NouvelleVisiteModal({ open, guides, onClose, onFait, onErreur }) {
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
+        <div style={{ display: 'flex', gap: 'var(--esp-normal)', justifyContent: 'flex-end', marginTop: 'var(--esp-large)' }}>
           <button className="btn" type="button" onClick={onClose}>Annuler</button>
           <button className="btn primary" type="submit" disabled={enCours || !theme.trim() || !debut || !fin}>
             {enCours ? 'Planification…' : 'Planifier'}
@@ -580,7 +628,7 @@ function GroupesSection({ etabActif, droits }) {
       </section>
 
       {suite.length > 0 && (
-        <section className="card" style={{ marginTop: 16 }}>
+        <section className="card" style={{ marginTop: 'var(--esp-bloc)' }}>
           <div className="card-h">
             <h3>Dossiers engagés</h3>
             <span className="sub">bon de commande, mandat ou payés</span>
@@ -721,7 +769,7 @@ function ConfirmationDossierModal({ dossier, onClose, onFait, onErreur }) {
 
               <div className="fiche-sec">Entrées gratuites accordées</div>
 
-              <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 'var(--esp-normal)' }}>
                 <div className="field" style={{ margin: 0 }}>
                   <label htmlFor="cd-ge">Élèves</label>
                   <input id="cd-ge" className="input" type="number" min="0" value={gratuitesEleve} onChange={(e) => setGratuitesEleve(e.target.value)} />
@@ -762,7 +810,7 @@ function ConfirmationDossierModal({ dossier, onClose, onFait, onErreur }) {
             </>
           )}
 
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
+          <div style={{ display: 'flex', gap: 'var(--esp-normal)', justifyContent: 'flex-end', marginTop: 'var(--esp-large)' }}>
             <button className="btn" type="button" onClick={onClose}>Annuler</button>
             <button className="btn primary" type="submit" disabled={enCours || chargement || !responsable}>
               {enCours ? 'Confirmation…' : 'Confirmer le dossier'}
@@ -818,7 +866,7 @@ function NouveauDossierModal({ open, creneaux, onClose, onFait, onErreur }) {
           <input id="dg-ecole" className="input" required value={ecole} placeholder="Collège Jean-Moulin, Beauvais" onChange={(e) => setEcole(e.target.value)} />
         </div>
 
-        <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 'var(--esp-normal)' }}>
           <div className="field" style={{ margin: 0 }}>
             <label htmlFor="dg-eff">Nombre d'élèves *</label>
             <input id="dg-eff" className="input" type="number" min="1" required value={effectif} onChange={(e) => setEffectif(e.target.value)} />
@@ -857,7 +905,7 @@ function NouveauDossierModal({ open, creneaux, onClose, onFait, onErreur }) {
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
+        <div style={{ display: 'flex', gap: 'var(--esp-normal)', justifyContent: 'flex-end', marginTop: 'var(--esp-large)' }}>
           <button className="btn" type="button" onClick={onClose}>Annuler</button>
           <button className="btn primary" type="submit" disabled={enCours || !ecole.trim() || !effectif || !creneau}>
             {enCours ? 'Création…' : "Créer l'option"}
@@ -873,4 +921,91 @@ function NouveauDossierModal({ open, creneaux, onClose, onFait, onErreur }) {
 function nomGuide(g) {
   const u = g?.utilisateur
   return u?.nomComplet || u?.email || `Guide ${String(g?.id || '').slice(0, 8)}`
+}
+
+// DÉCLARER UNE SALLE — même forme que le bassin, et pour la même raison.
+//
+// `Salle::$espace` est requis (`JoinColumn(nullable: false)`) : une salle de musée s'appuie sur un
+// espace du socle, celui qui porte les accès. On CHOISIT donc un espace existant au lieu d'en
+// créer un — sinon le musée aurait sa liste de lieux, la piscine la sienne, et personne ne saurait
+// laquelle fait foi devant un tourniquet.
+//
+// Contrat sondé, pas déduit : un POST au corps vide rend 422 et n'écrit rien —
+//     nom      This value should not be blank.
+//     espace   This value should not be null.
+function SalleModal({ open, onClose, onFait }) {
+  const [espaces, setEspaces] = useState([])
+  const [nom, setNom] = useState('')
+  const [espace, setEspace] = useState('')
+  const [erreur, setErreur] = useState(null)
+  const [envoi, setEnvoi] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    setNom(''); setErreur('')
+    api.espaces()
+      .then((r) => {
+        const liste = membres(r)
+        setEspaces(liste)
+        setEspace(liste[0]?.id || '')
+      })
+      .catch(() => setEspaces([]))
+  }, [open])
+
+  async function soumettre(e) {
+    e.preventDefault()
+    setErreur(null)
+    setEnvoi(true)
+    try {
+      await api.creerSalleMusee({ nom: nom.trim(), espace: `/api/espaces/${espace}` })
+      onFait()
+    } catch (err) {
+      setErreur(err.message || 'La salle n’a pas pu être déclarée.')
+    } finally {
+      setEnvoi(false)
+    }
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} titre="Déclarer une salle">
+      <form onSubmit={soumettre}>
+        {erreur && <div className="banner banner-error" style={{ marginBottom: 'var(--esp-large)' }}>{erreur}</div>}
+
+        {espaces.length === 0 ? (
+          <div className="banner banner-warn">
+            Aucun espace n’est déclaré sur cet établissement. Une salle s’appuie sur un espace du
+            socle — celui qui porte les accès et les tourniquets. Créez-le d’abord dans
+            <b> Paramètres › Espaces</b>, puis revenez ici.
+          </div>
+        ) : (
+          <>
+            <div className="field">
+              <label htmlFor="sa-nom">Nom de la salle *</label>
+              <input id="sa-nom" className="input" value={nom} maxLength={120}
+                placeholder="Salle des sarcophages, galerie nord…"
+                onChange={(e) => setNom(e.target.value)} />
+              <p className="hint">Ce que l’agent lit sur son écran de fréquentation.</p>
+            </div>
+            <div className="field">
+              <label htmlFor="sa-espace">Espace *</label>
+              <select id="sa-espace" className="input" value={espace} onChange={(e) => setEspace(e.target.value)}>
+                {espaces.map((x) => <option key={x.id} value={x.id}>{x.nom}</option>)}
+              </select>
+              <p className="hint">
+                Le lieu tel qu’il est déclaré dans <b>Paramètres › Espaces</b> : c’est lui qui porte
+                les accès, la salle y ajoute le comptage des présents.
+              </p>
+            </div>
+          </>
+        )}
+
+        <div className="r" style={{ display: 'flex', gap: 'var(--esp-normal)', justifyContent: 'flex-end' }}>
+          <button type="button" className="btn ghost" onClick={onClose}>Annuler</button>
+          <button type="submit" className="btn" disabled={envoi || !nom.trim() || !espace}>
+            {envoi ? 'Déclaration…' : 'Déclarer la salle'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  )
 }

@@ -117,8 +117,17 @@ final class PaiementTest extends VenteApiTestCase
         $valideBasse = $client->request('POST', '/api/ventes/' . $venteBasse['id'] . '/valider', $entete + ['json' => []])->toArray();
         self::assertFalse($valideBasse['imprime'], 'Total < seuil → pas d\'impression automatique.');
 
-        $ticket = $client->request('POST', '/api/ventes/' . $venteBasse['id'] . '/ticket', $entete + ['json' => ['mode' => 'renvoyer', 'canal' => 'email']])->toArray();
-        self::assertTrue($ticket['renvoye']);
+        // ⚠ CE TEST AFFIRMAIT `renvoye: true`. IL CONSACRAIT UN MENSONGE.
+        //
+        // Il n'existe dans tout le module ni expéditeur, ni passerelle SMS, ni événement : le mode
+        // « renvoyer » se contentait de retourner « fait ». Un test vert qui garantit qu'une réponse
+        // fausse le reste est la pire forme de couverture — il empêche la correction au lieu de
+        // l'appeler.
+        //
+        // Et ce n'est PAS le transport nul (`MAILER_DSN=null://null`) : un DSN correct ne changerait
+        // rien, il n'y a aucun code d'envoi à brancher dessus. Deux travaux, pas un.
+        $client->request('POST', '/api/ventes/' . $venteBasse['id'] . '/ticket', $entete + ['json' => ['mode' => 'renvoyer', 'canal' => 'email']]);
+        self::assertResponseStatusCodeSame(422, 'le renvoi refuse tant qu’aucun envoi n’existe, au lieu de dire « fait »');
     }
 
     /** CA-12 / RG-M2-04 — Appairage support : actif à la validation ; échec → remise bloquée. */

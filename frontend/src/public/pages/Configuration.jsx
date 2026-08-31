@@ -33,11 +33,11 @@ export default function Configuration({ onValider }) {
   }
 
   return (
-    <section aria-labelledby="pub-choix-titre" className="pub-narrow" style={{ maxWidth: 720, margin: '24px auto' }}>
-      <div className="pub-view-head">
+    <section aria-labelledby="bq-choix-titre" className="bq-narrow" style={{ maxWidth: 720, margin: '24px auto' }}>
+      <div className="bq-view-head">
         <div>
-          <h1 id="pub-choix-titre">Choisissez votre boutique</h1>
-          <p className="pub-sub">Sélectionnez l'organisme dont vous souhaitez réserver des billets.</p>
+          <h1 id="bq-choix-titre">Choisissez votre boutique</h1>
+          <p className="bq-sub">Sélectionnez l'organisme dont vous souhaitez réserver des billets.</p>
         </div>
       </div>
 
@@ -51,30 +51,39 @@ export default function Configuration({ onValider }) {
           texte="Aucune boutique n'est ouverte au public pour le moment. Si vous disposez d'un lien direct, utilisez le champ ci-dessous."
         />
       ) : (
-        <ul className="pub-vitrines" aria-label="Boutiques disponibles">
+        <ul className="bq-vitrines" aria-label="Boutiques disponibles">
           {vitrines.map((v) => (
             <li key={v.id}>
               <button
                 type="button"
-                className="pub-vitrine-carte"
+                className="bq-vitrine-carte"
                 onClick={() => onValider(v.id)}
               >
-                <span className="pub-vitrine-logo" aria-hidden="true">
+                <span className="bq-vitrine-logo" aria-hidden="true">
                   {v.logo ? (
-                    <img src={v.logo} alt="" loading="lazy" />
+                    <img
+                      src={v.logo}
+                      alt=""
+                      loading="lazy"
+                      // Même défaut, même remède : sur une liste de vitrines, une seule image morte
+                      // suffit à faire douter des autres.
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none'
+                      }}
+                    />
                   ) : (
                     <span>{(v.nom || '?').slice(0, 1).toUpperCase()}</span>
                   )}
                 </span>
-                <span className="pub-vitrine-nom">{v.nom || 'Boutique'}</span>
-                <span className="pub-vitrine-go" aria-hidden="true">→</span>
+                <span className="bq-vitrine-nom">{v.nom || 'Boutique'}</span>
+                <span className="bq-vitrine-go" aria-hidden="true">→</span>
               </button>
             </li>
           ))}
         </ul>
       )}
 
-      <details className="pub-manuel">
+      <details className="bq-manuel">
         <summary>J'ai un lien ou un identifiant de boutique</summary>
         <form className="card" onSubmit={soumettreManuel} style={{ marginTop: 12 }}>
           <div className="card-b">

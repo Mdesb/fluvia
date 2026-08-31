@@ -180,6 +180,11 @@ while read -r ancien nouveau ref; do
         lancer garde-fou-secrets.php
     fi
 
+    if [ -f "$ARBRE/bin/garde-fou-dependances-dev.php" ]; then
+        echo "── Dépendances de dev (n°20)"
+        lancer garde-fou-dependances-dev.php
+    fi
+
     # Couverture de perimetre en lecture : une entite exposee que rien ne peut filtrer. Aucun des
     # controles ci-dessus ne pouvait la voir — ils surveillent les ecritures, pas les collections.
     if [ -f "$ARBRE/bin/garde-fou-couverture-perimetre.php" ]; then
@@ -251,7 +256,7 @@ while read -r ancien nouveau ref; do
             # le nom COMPLET du fichier dans ce hook. Ecrits sans `.mjs`, les deux controles
             # seraient declares « appeles par aucun hook » et feraient refuser toute poussee. Le
             # filet se refermerait sur ce qu'il protege.
-            for script in verifier-droits.mjs verifier-formats.mjs verifier-imports.mjs; do
+            for script in verifier-droits.mjs verifier-formats.mjs verifier-imports.mjs verifier-cles-doubles.mjs verifier-classes.mjs verifier-cache.mjs verifier-dates-locales.mjs verifier-profil-charge.mjs verifier-boutons-nommes.mjs verifier-clic-clavier.mjs verifier-contrastes.mjs garde-fou-ecart.mjs; do
                 [ -f "$ARBRE/frontend/scripts/$script" ] || continue
                 if docker run --rm --network none \
                         -u "$(id -u):$(id -g)" \
@@ -284,6 +289,33 @@ while read -r ancien nouveau ref; do
         lancer garde-fou-references-libres.php
     fi
 
+    # Une propriete declaree dans un `#[ApiFilter]` doit EXISTER : une propriete inconnue est ignoree
+    # en silence et la collection sort ENTIERE. Contrairement aux filtres qui rendent une liste vide,
+    # celui-ci ne remonte jamais en reclamation -- des donnees qui s'affichent ne sont interrogees
+    # par personne.
+    if [ -f "$ARBRE/bin/garde-fou-filtres-declares.php" ]; then
+        echo "── Filtres déclarés"
+        lancer garde-fou-filtres-declares.php
+    fi
+
+    # Le prefixe `/editor/` ne protege rien : aucune regle `access_control` ne vise `^/api/editor`,
+    # la garde est portee par chaque operation via un provider qui appelle `assertEditor()`. Or il se
+    # LIT comme une barriere -- `/editor/plans` est publique (le catalogue d'un prospect) quand
+    # `/editor/catalog/plans` est reservee a l'editeur. Ce qu'on empeche n'est pas un defaut present,
+    # c'est que la prochaine route herite de l'apparence de surete sans la surete.
+    if [ -f "$ARBRE/bin/garde-fou-routes-editeur.php" ]; then
+        echo "── Routes éditeur"
+        lancer garde-fou-routes-editeur.php
+    fi
+
+    # Une lecture frontale qui vaut toujours `undefined`. La propriete lue n'est dans aucun groupe
+    # que porte la relation : le serveur n'envoie qu'un identifiant, et l'ecran affiche le mot
+    # « undefined ». Aucun test n'echoue la-dessus — une chaine interpolee ne leve pas.
+    if [ -f "$ARBRE/bin/garde-fou-relations-nues.php" ]; then
+        echo "── Lectures indéfinies"
+        lancer garde-fou-relations-nues.php
+    fi
+
     # Une entite ne doit pas laisser ecrire son propre etablissement (D41). Ecrit par claude-C, qui a
     # au passage corrige mon compte : 49 entites concernees et non 35. Vingt-deux d'entre elles ne
     # declarent AUCUN `denormalizationContext` — c'est l'absence de declaration qui expose, et une
@@ -300,6 +332,75 @@ while read -r ancien nouveau ref; do
         lancer garde-fou-drop-migrations.php "--contre=$BASE"
     fi
 
+
+    # Lier un OBJET a un parametre de requete sans dire son type (D58).
+    if [ -f "$ARBRE/bin/garde-fou-liaisons-objet.php" ]; then
+        echo "── Nullable sur colonne non nulle"
+        lancer garde-fou-liaisons-objet.php "--contre=$BASE"
+    fi
+
+    if [ -f "$ARBRE/bin/garde-fou-nullable-non-nul.php" ]; then
+        echo "── Nullable sur colonne non nulle"
+        lancer garde-fou-nullable-non-nul.php "--contre=$BASE"
+    fi
+
+    if [ -f "$ARBRE/bin/garde-fou-vacuite-tests.php" ]; then
+        echo "── Vacuite des tests de cloisonnement"
+        lancer garde-fou-vacuite-tests.php "--contre=$BASE"
+    fi
+
+    # Le cliquet d'espacement ne prend pas `--contre` : il compare a une ligne de base scellee dans
+    # `bin/`, pas a une revision. C'est voulu -- le nombre a geler est une propriete de l'arbre, pas
+    # de l'ecart entre deux commits.
+    if [ -f "$ARBRE/bin/garde-fou-espacement-en-ligne.php" ]; then
+        echo "── Espacement en ligne"
+        lancer garde-fou-espacement-en-ligne.php
+    fi
+
+    # Compare le champ que chaque extension de perimetre FILTRE a celui que l'entite DECLARE. Un
+    # ecart ne leve pas d'erreur : il produit des lignes en trop.
+    if [ -f "$ARBRE/bin/garde-fou-champ-cloisonnement.php" ]; then
+        echo "── Champ de cloisonnement"
+        lancer garde-fou-champ-cloisonnement.php
+    fi
+
+    # Une creation qu'aucun Delete ne rattrape doit dire pourquoi. La ligne de base est une LISTE,
+    # pas un compteur : deux mesures independantes du meme defaut ont rendu des nombres differents,
+    # et un cliquet sur un compteur aurait fige ce desaccord.
+    if [ -f "$ARBRE/bin/garde-fou-post-sans-suppression.php" ]; then
+        echo "── Creations irreversibles"
+        lancer garde-fou-post-sans-suppression.php
+    fi
+
+    # Un #[ApiFilter] declare hors de `mapping.paths` est MUET : accepte en parametre, documente, et
+    # sans aucun effet — la collection sort entiere a qui passe un filtre.
+    if [ -f "$ARBRE/bin/garde-fou-filtres-muets.php" ]; then
+        echo "── Filtres muets"
+        lancer garde-fou-filtres-muets.php
+    fi
+
+    # Un chemin qu'aucune route ne sert rend un 404, que le `catch` de l'ecran transforme en liste
+    # vide : le defaut ne se voit JAMAIS a l'ecran. Le controle s'abstient ici faute de `vendor/` --
+    # il tourne au commit et dans `bin/garde-fous.sh` -- mais il reste cable pour le jour ou l'arbre
+    # de reception aura ses dependances. Un controle retire d'une liste ne revient jamais.
+    if [ -f "$ARBRE/bin/garde-fou-appels-dans-le-vide.php" ]; then
+        echo "── Appels du frontal dans le vide (n°33)"
+        lancer garde-fou-appels-dans-le-vide.php
+    fi
+
+    # ⚠ Contrairement au precedent, celui-ci NE S'ABSTIENT PAS ici : il ne lit que des fichiers de
+    # `frontend/src`, sans `vendor/` ni noyau Symfony. L'arbre de reception lui suffit.
+    # Le seul controle du lot qui n'a besoin ni de `vendor/` ni de `node_modules` : il lit
+    # l'index git, rien d'autre. Il tourne donc ici sans condition.
+    if [ -x "$ARBRE/bin/garde-fou-marqueurs-de-conflit.sh" ]; then
+        echo "── Marqueurs de conflit (n°38)"
+        (cd "$ARBRE" && ./bin/garde-fou-marqueurs-de-conflit.sh) || ECHEC=1
+    fi
+
+    if [ -f "$ARBRE/bin/garde-fou-classes-fantomes.php" ]; then
+        echo "── Classes fantomes (n°37)"
+        lancer garde-fou-classes-fantomes.php
+    fi
 
     # ⚠ FILET DE COMPLÉTUDE — la leçon du 24/08, et elle a coûté cher.
     #
@@ -334,7 +435,15 @@ while read -r ancien nouveau ref; do
     # Le filet couvre aussi les controles du front : ils ne s'appellent pas `garde-fou-*.php`, donc
     # le glob ci-dessous les manquait. Un controle qu'on peut retirer du hook sans que rien ne le
     # dise retombe exactement dans le defaut qu'il corrige.
-    for chemin in "$ARBRE"/bin/garde-fou-*.php "$ARBRE"/frontend/scripts/verifier-*.mjs; do
+    # ⚠ LES DEUX GLOBS DU FRONT, PAS UN SEUL. Le second manquait, donc `garde-fou-ecart.mjs`
+    # — l'ecart client/serveur, le controle le plus souvent contourne — pouvait etre retire de
+    # la liste appelee sans que ce filet ne le dise. Releve le 31/08 en comptant les trois
+    # listes a la main, apres qu'un controle neuf s'est retrouve cable dans deux sur trois.
+    #
+    # Le predicat reste une MENTION du nom, et non `node scripts/<nom>` comme dans les deux
+    # autres listes : ici le hook pousse appelle ses controles par une boucle `for script in`,
+    # donc la forme d'invocation ne contient jamais le nom litteral. La difference est voulue.
+    for chemin in "$ARBRE"/bin/garde-fou-*.php "$ARBRE"/frontend/scripts/verifier-*.mjs "$ARBRE"/frontend/scripts/garde-fou-*.mjs; do
         [ -f "$chemin" ] || continue
         nom="$(basename "$chemin")"
 
@@ -363,6 +472,33 @@ while read -r ancien nouveau ref; do
         ECHEC_GLOBAL=1
     else
         echo "✓ ${ref#refs/heads/} : garde-fous OK."
+
+        # ── ET CETTE BRANCHE N'EST PAS SERVIE ──────────────────────────────────────────────────
+        #
+        # Les garde-fous verts ne disent rien du deploiement. Le silence qui suit une poussee reussie
+        # se lit « c'est en ligne » -- c'est la fausse certitude qui a coute deux jours la semaine
+        # derniere, ou 29 commits annonces livres n'etaient visibles nulle part.
+        #
+        # ⚠ RIEN ICI NE PEUT FAIRE ECHOUER LA POUSSEE. Chaque calcul est avale : un avertissement qui
+        # refuserait un push serait pire que le silence qu'il corrige. Et `main` est reconnu par son
+        # nom EXACT, sinon `main-quelque-chose` echapperait au message ou le declencherait a tort.
+        BRANCHE_POUSSEE="${ref#refs/heads/}"
+        if [ "$BRANCHE_POUSSEE" != "main" ]; then
+            # ⚠ `$nouveau`, PAS `$ref` : dans un `pre-receive` le hook tourne AVANT la mise a jour,
+            # donc la reference poussee n'existe pas encore et `rev-list` echoue. Le SHA entrant est
+            # lu sur l'entree standard. Vu en eprouvant : le compte affichait `?` -- ce qui prouve au
+            # passage que le repli fonctionne, et qu'il dit « je ne sais pas » plutot qu'un zero
+            # rassurant.
+            EN_ATTENTE="$(git rev-list --count "refs/heads/main..$nouveau" 2>/dev/null || echo '?')"
+            SERVI_MAINTENANT="$(curl -sf -H 'Accept: application/json' \
+                https://smartaccess.hector-conseil.com/version.json 2>/dev/null \
+                | sed -n 's/.*"commit":"\([^"]*\)".*/\1/p' || true)"
+
+            echo
+            echo "⚠ CETTE BRANCHE N'EST PAS DÉPLOYÉE. Servi actuellement : ${SERVI_MAINTENANT:-inconnu}."
+            echo "  $EN_ATTENTE commit(s) attendent l'intégration dans main. Tant qu'ils n'y sont pas,"
+            echo "  ce travail n'est servi nulle part — et rien d'autre ne te le dira."
+        fi
     fi
 
     # En DERNIER, après le verdict : la sortie d'un push est longue et défile. Un avertissement

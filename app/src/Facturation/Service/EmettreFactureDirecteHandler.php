@@ -42,8 +42,10 @@ final class EmettreFactureDirecteHandler
         private readonly EntityManagerInterface $em,
         private readonly ResolveurComptesFacturation $comptes,
         private readonly GenerateurNumeroFacture $generateur,
+        private readonly DepositInvoiceHandler $acomptes,
         private readonly ScellementEcritureHandler $scellementEcriture,
         private readonly ScellementFactureHandler $scellementFacture,
+        private readonly RecipientCompletenessGuard $destinataires,
     ) {
     }
 
@@ -55,6 +57,28 @@ final class EmettreFactureDirecteHandler
         if ($facture->getLignes()->isEmpty()) {
             throw new UnprocessableEntityHttpException('Une facture sans ligne ne peut pas être émise.');
         }
+
+        // ⚠ RG-FACT-08 EXISTAIT ET N'AVAIT AUCUN APPELANT.
+        //
+        // `DestinataireFacturation::anomalies()` implémente la règle depuis l'origine, et personne
+        // ne l'appelait — relevé avec témoin : une définition, zéro appel. Mesure en base le 31/08 :
+        // trois destinataires, trois sans adresse, deux sans nom. L'adresse étant une mention légale
+        // obligatoire, aucune facture émise ne serait conforme.
+        //
+        // Placé ICI, avec les autres refus qui précèdent toute consommation : rien n'est numéroté,
+        // aucune écriture partielle n'est ouverte.
+        $this->destinataires->assertComplete($facture->getDestinataire());
+
+        // ⚠ LES ACOMPTES SE DÉDUISENT ICI, AVANT LA RÉSOLUTION DES COMPTES.
+        //
+        // Les lignes de déduction sont des lignes comme les autres : elles doivent recevoir leur
+        // compte produit dans la boucle qui suit. Posées plus tard, elles resteraient sans compte et
+        // l'écriture partirait déséquilibrée.
+        //
+        // Et ce n'est PAS une option de l'écran : un acompte non déduit facture le client DEUX FOIS
+        // — une fois à l'acompte, une fois au solde. La déduction n'a pas à être demandée, et
+        // surtout elle ne doit pas pouvoir être oubliée.
+        $this->acomptes->deduire($facture);
 
         $profil = $facture->getProfilExploitant();
         \assert($profil !== null);

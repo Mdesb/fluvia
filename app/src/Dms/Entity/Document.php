@@ -44,6 +44,8 @@ use Symfony\Component\Uid\Uuid;
 #[ORM\Table(name: 'dms_document')]
 #[ORM\Index(columns: ['establishment_id', 'category'], name: 'IDX_DMS_DOCUMENT_ETAB_CATEGORY')]
 #[ORM\Index(columns: ['establishment_id', 'status'], name: 'IDX_DMS_DOCUMENT_ETAB_STATUS')]
+// La revue des documents arrivant a echeance de conservation (RGPD) balaie cette colonne.
+#[ORM\Index(columns: ['retain_until'], name: 'idx_dms_document_retain_until')]
 #[ApiResource(
     shortName: 'Document',
     operations: [
@@ -132,7 +134,7 @@ class Document
     #[Groups(['document:read'])]
     private ?DocumentVersion $currentVersion = null;
 
-    #[ORM\Column(length: 10, enumType: DocumentStatus::class)]
+    #[ORM\Column(length: 10, enumType: DocumentStatus::class, options: ['default' => 'active'])]
     #[Groups(['document:read'])]
     private DocumentStatus $status = DocumentStatus::Active;
 

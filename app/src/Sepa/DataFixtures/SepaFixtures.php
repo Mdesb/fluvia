@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Sepa\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\Compta\DataFixtures\ComptaFixtures;
 use App\Crm\DataFixtures\CrmFixtures;
 use App\Crm\Entity\Client;
@@ -38,6 +39,8 @@ use Doctrine\Persistence\ObjectManager;
  */
 final class SepaFixtures extends Fixture implements DependentFixtureInterface
 {
+    use FixturesIdempotentes;
+
     public const REGIE_IBAN_DEMO = 'FR7630006000011234567890189';
     public const PRIVE_IBAN_DEMO = 'FR7630004000031234567890143';
 
@@ -58,7 +61,7 @@ final class SepaFixtures extends Fixture implements DependentFixtureInterface
         // --- Permissions sepa.* + octroi à l'administrateur (RG-SOCLE-02/03) ---
         $perms = [];
         foreach (['lire', 'gerer', 'generer_remise', 'declarer_rejet'] as $action) {
-            $perm = (new Permission())->setModule('sepa')->setAction($action);
+            $perm = $this->permissionNommee($manager, 'sepa', $action);
             $manager->persist($perm);
             $perms[$action] = $perm;
         }
@@ -82,6 +85,21 @@ final class SepaFixtures extends Fixture implements DependentFixtureInterface
         $etabB = $manager->getRepository(Etablissement::class)->findOneBy(['nom' => SocleFixtures::ETAB_B_NOM]);
         $payeur = $manager->getRepository(Client::class)->findOneBy(['email' => CrmFixtures::PAYEUR_EMAIL]);
         if (!$etabA instanceof Etablissement || !$etabB instanceof Etablissement || !$payeur instanceof Client) {
+            $manager->flush();
+
+            return;
+        }
+
+        // ── LE BLOC DE DÉMONSTRATION NE SE POSE QU'UNE FOIS ──────────────────────────────────
+        //
+        // Tout ce qui suit est un jeu de données cohérent, pas un référentiel : le reposer sur une
+        // base qui l'a déjà écraserait ce qui a été corrigé à la main depuis, ou le dupliquerait
+        // pour les entités sans contrainte d'unicité — silencieusement.
+        //
+        // Les permissions et les rôles restent AU-DESSUS de cette garde : ils doivent être rejoués à
+        // chaque chargement, sans quoi un droit ajouté au code n'atteindrait jamais une base
+        // existante.
+        if ($manager->getRepository(ConfigCreancierSepa::class)->findOneBy([]) !== null) {
             $manager->flush();
 
             return;

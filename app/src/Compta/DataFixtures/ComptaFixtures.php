@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Compta\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\Compta\Entity\CompteComptable;
 use App\Compta\Entity\Journal;
 use App\Compta\Entity\MappingComptable;
@@ -33,6 +34,8 @@ use Doctrine\Persistence\ObjectManager;
  */
 final class ComptaFixtures extends Fixture implements DependentFixtureInterface
 {
+    use FixturesIdempotentes;
+
     public const PROFIL_SIREN = '130025265';
     public const REGIE_LIBELLE = 'Régie piscine A';
 
@@ -44,15 +47,15 @@ final class ComptaFixtures extends Fixture implements DependentFixtureInterface
     public function load(ObjectManager $manager): void
     {
         // --- Permissions compta.* + caisse.versement + octroi à l'administrateur ---
-        $permComptaTout = (new Permission())->setModule('compta')->setAction('*');
+        $permComptaTout = $this->permissionNommee($manager, 'compta', '*');
         $manager->persist($permComptaTout);
         // `record_manual_entry` (FIN-1, US-L4-11) : nouvelle action, couverte par le joker `compta.*`
         // déjà accordé à l'Administrateur groupe ; créée explicitement ici comme toute autre action du
         // référentiel (§3 spec-comptabilite-generale.md), pour un octroi fin à un rôle non-wildcard.
         foreach (['lire', 'lettrer', 'valider', 'exporter', 'cloturer', 'gerer', 'lire_rad', 'lire_consolide', 'record_manual_entry'] as $action) {
-            $manager->persist((new Permission())->setModule('compta')->setAction($action));
+            $manager->persist($this->permissionNommee($manager, 'compta', $action));
         }
-        $permVersement = (new Permission())->setModule('caisse')->setAction('versement');
+        $permVersement = $this->permissionNommee($manager, 'caisse', 'versement');
         $manager->persist($permVersement);
 
         $roleAdmin = $manager->getRepository(Role::class)->findOneBy(['nom' => 'Administrateur groupe']);
@@ -62,6 +65,23 @@ final class ComptaFixtures extends Fixture implements DependentFixtureInterface
         }
 
         $etabA = $manager->getRepository(Etablissement::class)->findOneBy(['nom' => SocleFixtures::ETAB_A_NOM]);
+
+        // ── LE BLOC DE DÉMONSTRATION NE SE POSE QU'UNE FOIS ──────────────────────────────────
+        //
+        // Tout ce qui suit est un jeu de données cohérent, pas un référentiel : le reposer sur une
+        // base qui l'a déjà écraserait ce qui a été corrigé à la main depuis, ou le dupliquerait
+        // pour les entités sans contrainte d'unicité — silencieusement.
+        //
+        // Les permissions et les rôles restent AU-DESSUS de cette garde : ils doivent être rejoués à
+        // chaque chargement, sans quoi un droit ajouté au code n'atteindrait jamais une base
+        // existante.
+        if ($manager->getRepository(\App\Compta\Entity\ProfilExploitant::class)
+            ->findOneBy(['siren' => self::PROFIL_SIREN]) !== null
+        ) {
+            $manager->flush();
+
+            return;
+        }
 
         // --- Profil exploitant : régie directe / M57 ---
         $profil = new ProfilExploitant();

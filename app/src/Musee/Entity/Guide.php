@@ -11,6 +11,7 @@ use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Post;
 use App\Organisation\Entity\Etablissement;
+use App\Musee\State\EstablishmentStampProcessor;
 use App\Securite\Entity\Utilisateur;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
@@ -30,7 +31,7 @@ use Symfony\Component\Validator\Constraints as Assert;
     operations: [
         new GetCollection(security: "is_granted('PERM', 'musee.lire')"),
         new Get(security: "is_granted('PERM', 'musee.lire')"),
-        new Post(security: "is_granted('PERM', 'musee.gerer')"),
+        new Post(security: "is_granted('PERM', 'musee.gerer')", processor: EstablishmentStampProcessor::class),
     ],
     normalizationContext: ['groups' => ['guide:read']],
     denormalizationContext: ['groups' => ['guide:write']],
@@ -51,8 +52,7 @@ class Guide
 
     #[ORM\ManyToOne(targetEntity: Etablissement::class)]
     #[ORM\JoinColumn(nullable: false)]
-    #[Assert\NotNull]
-    #[Groups(['guide:read', 'guide:write'])]
+    #[Groups(['guide:read'])]
     private ?Etablissement $etablissement = null;
 
     public function __construct()

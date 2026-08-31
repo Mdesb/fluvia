@@ -12,12 +12,10 @@ use App\Finance\ExpenseReport\Entity\ExpenseLine;
 use App\Finance\ExpenseReport\Entity\ExpenseReport;
 use App\Finance\ExpenseReport\Entity\Reimbursement;
 use App\Personnel\Entity\Employe;
-use App\Securite\Entity\Affectation;
 use App\Securite\Entity\Utilisateur;
 use App\Securite\Service\CalculateurDroits;
 use App\Securite\Service\ContexteEtablissement;
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Query\Expr\Join;
 use Doctrine\ORM\QueryBuilder;
 use Symfony\Bundle\SecurityBundle\Security;
 
@@ -99,17 +97,33 @@ final class PerimetreFinanceExtension implements QueryCollectionExtensionInterfa
             return;
         }
 
+        // ── L'AXE EST L'ÉTABLISSEMENT ACTIF ──────────────────────────────────────────────────
+        //
+        // Bascule du 28/08. Le filtre portait sur le PÉRIMÈTRE du lecteur : un exploitant affecté à
+        // plusieurs sites voyait les données de tous, sous le titre d'un seul. Constaté à l'écran —
+        // un site créé le matin même, sans caisse, annonçait une session de caisse ouverte, celle
+        // du voisin, et sa pastille « prêt à vendre » s'allumait.
+        //
+        // L'écran porte un sélecteur d'établissement et titre ses pages du site actif : les données
+        // le suivent. Le périmètre dit ce qu'on a le DROIT de voir ; l'actif dit ce qu'on REGARDE.
+        //
+        // Le droit reste vérifié ailleurs, et c'est ce qui rend la bascule sûre :
+        // `ContexteEtablissement::idActif()` ne fait que lire l'en-tête — c'est un sélecteur, pas
+        // une preuve — mais `CalculateurDroits::codesEffectifs()` ne retient que les affectations
+        // portant SUR cet établissement, donc un en-tête hors périmètre ne donne aucun droit et le
+        // voter refuse avant que cette requête n'existe. Éprouvé par `AxeEtablissementActifTest`.
+        $actif = $this->contexte->idActif();
+        if ($actif === null) {
+            // Fermeture par défaut : une liste vide se remarque, une liste inter-établissements a
+            // seulement l'air plus longue.
+            $queryBuilder->andWhere('1 = 0');
+
+            return;
+        }
+
         $queryBuilder
-            ->innerJoin(
-                Affectation::class,
-                'exp_report_aff_perimetre',
-                Join::WITH,
-                sprintf(
-                    'IDENTITY(exp_report_aff_perimetre.etablissement) = IDENTITY(%s.establishment) AND IDENTITY(exp_report_aff_perimetre.utilisateur) = :exp_report_perimetre_utilisateur',
-                    $alias,
-                ),
-            )
-            ->setParameter('exp_report_perimetre_utilisateur', $utilisateur->getId(), 'uuid')
+            ->andWhere(sprintf('IDENTITY(%s.establishment) = :exp_report_perimetre_actif', $alias))
+            ->setParameter('exp_report_perimetre_actif', $actif, 'uuid')
             ->distinct();
     }
 

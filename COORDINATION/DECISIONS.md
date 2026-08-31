@@ -2492,3 +2492,946 @@ Le garde-fou n°14 surveille les propriétés `*Ref` et les relations déclarée
 C'est la sixième forme du même piège, et elle vient de coûter un faux « tout est libre ». À élargir,
 avec le cas de reproduction de `claude-G` — et **vu refuser avant d'être livré**, pas seulement vert sur
 le correctif.
+
+---
+
+### 2026-08-30 · D68 — La capacité d'un événement vit sur l'événement, jamais sur le produit
+
+Tranché par **Maxime**, en réponse au constat que deux produits de préprod portaient un stock que
+leur type ne déclarait pas.
+
+Le concert du 12 mars a 200 places. Plein tarif, tarif réduit et scolaire sont **trois produits** qui
+vendent dessus, et tous décomptent le **même compteur**.
+
+**Raison :** c'est le seul modèle où vendre 150 pleins et 60 réduits ne met pas 210 personnes dans
+une salle de 200. Si la capacité vivait sur le produit, chaque tarif aurait son compteur et rien ne
+s'opposerait au dépassement — un défaut qui ne se voit qu'à la porte, le soir, devant les clients.
+
+**Conséquence immédiate :** un `stock` sur une entrée unitaire est une **erreur de modèle**, pas un
+besoin à accueillir. `ProduitProcessor` ne le purge plus en silence, il le **refuse en 422** et dit
+où poser la donnée. Voir D69.
+
+**Ce que la décision ne dit pas encore :** les sous-quotas par produit (« au plus 50 places en tarif
+réduit ») ont été écartés pour l'instant. Maxime a choisi le compteur unique ; si la billetterie de
+spectacle les réclame, ils s'ajoutent **sous** l'événement, jamais sur le produit.
+
+### 2026-08-30 · D69 — Une écriture qui contredit le type est refusée ; ce qui existe n'est jamais détruit
+
+Jusqu'au 30/08, `ProduitProcessor` appelait `purgerOrphelins()` à **chaque** enregistrement :
+modifier la **couleur de caisse** d'un produit lui faisait perdre son stock. Réponse 200, aucun
+message, aucune trace, et à l'écran la cause et l'effet n'ont aucun rapport.
+
+Désormais, deux moitiés :
+
+1. Une saisie contradictoire est **refusée en 422**, avec un message qui nomme le type *et* la
+   destination — la boutique pour un stock de marchandise, l'événement pour une jauge.
+2. Une donnée contradictoire **déjà en base est laissée en place**, et le produit reste modifiable.
+
+**Raison de la seconde moitié, qui est celle qu'on oublie :** un refus total serait pire que le
+défaut d'origine. Le silence détruisait une donnée ; un refus sans discernement **bloquerait le
+produit** — on ne pourrait plus corriger son libellé tant que personne n'aurait réparé la donnée par
+un autre chemin. On compare donc à l'instantané Doctrine et on ne refuse que ce qui vient d'être
+écrit.
+
+La purge subsiste pour le seul endroit où elle a du sens : la **conversion assistée de type**, où
+l'exploitant a demandé le changement et où l'écran lui annonce ce qu'il perd.
+
+⚠ **Cette décision n'était pas prenable avant D68.** Refuser un stock sur une entrée aurait rendu
+« Place limitée, 200 places » inexprimable. C'est la réponse de Maxime sur *où vit une jauge* qui a
+rendu le refus sans conséquence — et c'est la raison pour laquelle le défaut est resté ouvert un
+jour de plus au lieu d'être corrigé de travers.
+
+### 2026-08-30 · D70 — Carte cadeau et porte-monnaie virtuel sont deux objets distincts
+
+Tranché par **Maxime**.
+
+**Raison :** une carte cadeau s'achète **pour quelqu'un d'autre**, se transmet, et a un porteur
+inconnu au moment de l'émission. Un PMV est **nominatif**, attaché à un client identifié. Les
+confondre rendrait impossible d'offrir une carte — et le choix est **irréversible une fois des cartes
+vendues**, ce qui l'a placé en deuxième position par coût d'erreur.
+
+**État mesuré au moment de la décision :** le PMV existe et est câblé sur son vrai adaptateur
+(`PorteMonnaieVirtuelAdapter`, pas le stub). Ses trois verbes sont `solde`, `debiter`, `recrediter`
+— et `recrediter` est le **remboursement d'une vente annulée**, pas l'achat d'un avoir. Il manque
+donc un **crédit à la vente** des deux côtés : pour recharger un PMV, et pour émettre une carte
+cadeau.
+
+### 2026-08-30 · D71 — Le créneau est un type de produit, et l'agenda échange dans les deux sens
+
+Tranché par **Maxime** : « oui, et n'oublie pas qu'il peut aussi y avoir un lien avec l'agenda et
+d'autres modules ».
+
+Un créneau obtient sa grille tarifaire, sa TVA, sa catégorie comptable et son billet **comme
+n'importe quel produit**. Une seule façon de vendre dans tout le logiciel.
+
+**Raison :** l'alternative — une réservation vendable hors du catalogue — obligeait à dupliquer la
+tarification et la comptabilité, et *une règle recopiée diverge au premier correctif*.
+
+**L'agenda circule dans les deux sens :** on peut poser une séance depuis l'agenda ou depuis le
+catalogue, et les deux se reflètent. ⚠ C'est le choix le plus confortable à l'usage et **le plus
+exigeant** : deux écritures sur un même objet. Il faudra une seule source de vérité pour la séance,
+et deux écrans qui écrivent dedans — jamais deux modèles qui se synchronisent.
+
+### 2026-08-30 · D72 — Événement et créneau restent deux objets, mais partagent le mécanisme de capacité
+
+Tranché par **Maxime**, **contre** la recommandation qui proposait de les fondre.
+
+Un événement est **ponctuel et communiqué** — affiche, programme, plan de salle. Un créneau est
+**récurrent et opérationnel** — le cours du lundi 14 h.
+
+⚠ **La mise en garde énoncée avant le choix, et retenue :** deux objets, c'est deux mécanismes de
+capacité à tenir en accord, et ils divergeront au premier correctif si on les écrit deux fois. La
+décision est donc assortie d'une contrainte de mise en œuvre : **le décompte de places, la liste
+d'attente et l'émargement s'écrivent UNE fois** et servent les deux objets. Ce qui diffère entre
+événement et créneau est ce qui justifie la séparation — la communication, la récurrence — pas la
+mécanique de remplissage.
+
+### 2026-08-30 · D73 — Un service se vend à l'unité ET s'inclut dans une formule ; son lien au planning est optionnel
+
+Tranché par **Maxime** sur les deux points.
+
+Le même objet — une séance de coaching, un massage — se vend seul au comptoir **ou** entre dans un
+abonnement. Et il occupe un créneau et une ressource **selon le service** : un massage prend une
+cabine et une heure ; un forfait « prêt de serviette » ne prend rien.
+
+**Raison :** c'est le plus proche du métier, et le plus exigeant — il faut que les deux chemins de
+vente partagent **la même définition** du service, sinon le quota inclus dans la formule et le
+produit vendu au comptoir désignent deux choses portant le même nom.
+
+**État mesuré :** `Offre\Entity\ServiceInclus` existe mais n'est **pas** cet objet — c'est une
+prestation incluse dans une formule, à quota décompté en semaine calendaire sans report, non
+vendable seule. Le service vendable reste à construire, et devra englober celui-là plutôt que
+coexister avec lui.
+
+### 2026-08-30 · D74 — Une carte désigne ce que son crédit ouvre
+
+Tranché par **Maxime**, qui a posé le cas : « une carte de 10 piscine va permettre l'entrée dans la
+piscine ; par contre une carte de 10 = 12 aquagym va permettre de **réserver** son cours ».
+
+Une carte porte donc deux choses : un **crédit** (dix entrées) et la **destination** de ce crédit —
+une zone d'accès, où le tourniquet décompte, ou une activité, où la réservation décompte.
+
+**Raison :** c'est le même objet métier — une carte multi-entrées — et il serait faux d'en faire deux
+typologies. Un seul paramètre suffit à les distinguer, et il garde exprimable la carte mixte (dix
+entrées utilisables à la piscine *ou* en aquagym), que deux types séparés rendraient impossible.
+
+⚠ **Conséquence sur le modèle existant :** `CarteMultiEntrees` ne porte aujourd'hui qu'un nombre de
+compostages. Il lui manque **ce que ces compostages achètent**. Et la projection d'accès
+(`StubProjectionDroit`) produit un droit `carte_quota` **sans distinguer les deux cas** : une carte
+aquagym projetée aujourd'hui ouvrirait un tourniquet.
+
+### 2026-08-30 · D75 — Une carte de réservation décompte à la réservation, et rend l'entrée si l'annulation est à temps
+
+Tranché par **Maxime**.
+
+Réserver prend une entrée. Annuler avant le délai la rend. Un absent qui n'a pas prévenu la perd.
+
+**Raison :** la place est tenue pour celui qui a réservé, le client peut se raviser, et le no-show
+coûte — ce qui est aussi ce qui fait revenir les places dans le circuit. Décompter à la **présence**
+aurait laissé quelqu'un réserver cinq cours et en faire un : les places partent et la salle reste
+vide.
+
+**Le délai d'annulation n'est pas fixé ici.** `Reservation\Entity\RegleAnnulation` existe déjà ; c'est
+lui qui doit le porter, pas une constante.
+
+### 2026-08-30 · D76 — Séance à l'unité et forfait coexistent, et décomptent la même capacité
+
+Tranché par **Maxime** : on peut acheter la séance d'aquagym du lundi 14 h, **ou** le trimestre.
+
+⚠ **La contrainte que cette décision impose, et qui est tout son coût :** les deux chemins de vente
+doivent décompter **le même compteur de places**. Deux compteurs — un pour les abonnés, un pour les
+ventes à l'unité — mettraient plus de monde dans le bassin que le bassin n'en contient, et le défaut
+ne se voit qu'au bord de l'eau. C'est la même exigence que D68 pour l'événement, appliquée au
+créneau : *une place, un compteur, plusieurs façons de l'acheter*.
+
+### 2026-08-30 · D77 — L'inscription d'office au forfait est un paramètre de l'activité
+
+Tranché par **Maxime** : « au choix de l'établissement ».
+
+Payer le trimestre inscrit d'emblée sur toutes les séances **pour les activités configurées ainsi** —
+un cours à effectif fixe, un stage. Pour les autres, le forfait paie et la place se prend séance par
+séance, ce qui rend les absences aux ventes à l'unité et remplit mieux.
+
+**Raison :** les deux régimes existent dans la vraie vie et ne se déduisent pas l'un de l'autre. Un
+cours de natation enfant a une liste nominative ; un créneau de musculation n'en a pas.
+
+⚠ **Et le paramètre porte sur l'ACTIVITÉ, pas sur le produit ni sur l'établissement.** Un même site
+a des cours des deux régimes. Le mettre sur l'établissement obligerait à trancher pour tout le monde ;
+le mettre sur le produit le dupliquerait à chaque tarif.
+
+### 2026-08-30 · D78 — Une carte cadeau s'émet en code ou en support physique selon le canal, avec un seul solde derrière
+
+Tranché par **Maxime** : « les deux, selon le canal de vente ».
+
+Un code remis à l'achat en ligne, une carte physique au guichet — et **le même avoir** derrière.
+
+**Raison :** offrir se fait par message autant que de la main à la main. ⚠ Le coût était énoncé avant
+le choix et il est retenu : **deux chemins d'émission pour un seul solde**. La conséquence de
+conception est que l'avoir est l'objet, et le code comme la carte n'en sont que des **supports** —
+jamais l'inverse. Un modèle où le code *serait* l'avoir rendrait impossible de le remplacer après une
+perte.
+
+### 2026-08-30 · D79 — Un service est le même objet, qu'il soit inclus dans une formule ou vendu à l'unité
+
+Tranché par **Maxime**, précisant D73.
+
+« Séance de coaching » est défini **une fois**. Une formule peut l'inclure avec un quota ; la caisse
+peut le vendre à l'unité.
+
+**Raison :** deux définitions du même service divergeraient au premier correctif — on changerait sa
+durée ou sa ressource d'un côté et pas de l'autre, et deux « coaching » porteraient le même nom sans
+être la même chose.
+
+**Ce que ça implique de reprise :** `Offre\Entity\ServiceInclus` n'est pas cet objet — c'est un quota
+dans une formule, non vendable seul. Il devra être **englobé** par le service vendable, pas coexister
+avec lui. Migration des formules existantes à prévoir.
+
+### 2026-08-30 · D80 — En attente : la recharge d'une carte
+
+Maxime, 30/08 : « à voir », et il préfère attendre son débrief sur les cartes.
+
+**Ce qui se construit sans elle :** le crédit d'une carte, la destination de ce crédit (D74), le
+décompte (D75), la validité. **Rien de tout cela ne préjuge** de la réponse — la recharge sera soit un
+tarif de plus dans la grille du même produit, soit un produit distinct, et les deux se posent sur le
+modèle ci-dessus sans le modifier.
+
+C'est le cas où attendre ne coûte rien, et il est signalé comme tel pour qu'on ne le confonde pas
+avec un blocage.
+
+### 2026-08-30 · D81 — Ce qui décide qu'un billet vendu ouvre une porte : la zone déclarée sur le produit, et rien d'autre
+
+Tranché par **Maxime**, en réponse au paramétrage QR qu'il avait annoncé vouloir détailler.
+
+Un produit déclare quelle zone il ouvre (`Acces\Entity\ProductAccessZone`). Ses billets ouvrent cette
+zone-là. Un produit qui ne déclare rien n'ouvre rien.
+
+**Raison :** aucun réglage supplémentaire à expliquer, et le paramétrage est là où l'exploitant le
+cherche — sur le produit. Un interrupteur par établissement en plus aurait créé deux endroits où
+chercher quand ça n'ouvre pas.
+
+⚠ **Et la variante « au premier scan » a été écartée pour une raison technique dite avant le
+choix :** elle obligerait le tourniquet à interroger la vente en direct, donc supprimerait le
+fonctionnement hors ligne — qui est la raison d'être même de la projection locale (valider en moins
+d'une seconde, y compris coupé du réseau).
+
+**Ce que ça a permis de construire :** `App\Acces\Adapter\SaleAccessPairingAdapter`, l'implémentation
+du port `App\Vente\Port\AppairageAccesInterface` que le stub annonçait tenir en attendant. Voir D85.
+
+### 2026-08-30 · D82 — Le courriel passe par un service transactionnel dédié ; le prestataire reste à désigner
+
+Tranché par **Maxime** : un service transactionnel dédié, plutôt que le SMTP mutualisé de
+l'hébergeur. Le prestataire exact (Brevo, Mailjet, Postmark…) est remis à plus tard.
+
+**Raison :** le préavis SEPA a besoin d'une **preuve d'envoi** — sans elle, l'échéance reste exclue
+de la remise et aucun prélèvement ne peut partir. Un SMTP mutualisé ne rend ni suivi de
+délivrabilité ni retour de rejet exploitable, et ses quotas conviennent mal à des relances en série.
+
+**Ce qui se prépare sans le prestataire :** la configuration lit déjà `MAILER_DSN`. Il n'y aura donc
+qu'une variable à poser le jour venu. ⚠ **La clé n'est jamais manipulée par une session Claude** —
+elle est posée par Maxime.
+
+### 2026-08-30 · D83 — L'ordonnanceur démarre après le transport de courriel, pas avant
+
+Tranché par **Maxime**.
+
+Vingt-trois tâches planifiées sont écrites, aucune n'a jamais tourné.
+
+**Raison, énoncée avant le choix :** sans transport, `sepa:preavis:annoncer` sort en « journalisé »,
+et une échéance sans préavis délivré est **exclue de la remise**. Démarrer l'ordonnanceur maintenant
+donnerait donc l'illusion que le système tourne, **sans qu'un seul prélèvement puisse partir** — une
+panne plus coûteuse que l'arrêt actuel, parce qu'elle est invisible.
+
+⚠ **L'ordre n'est pas réversible sans confusion.** Une fois l'ordonnanceur démarré, distinguer « le
+préavis n'est pas parti parce qu'il n'y a pas de transport » de « le préavis n'est pas parti parce
+que la tâche a échoué » demande de lire les journaux. Avant démarrage, la cause est unique.
+
+**Et le démarrage lui-même reste en deux temps :** huit tâches anodines peuvent partir seules ;
+quatorze exigent un premier passage supervisé, une par une — dont la facturation mensuelle,
+l'effacement RGPD et la purge documentaire. Ce sont quatorze décisions séparées, pas une.
+
+### 2026-08-30 · D84 — L'exemption durable de blocage : même droit que le forçage, jusqu'à retrait, motif obligatoire
+
+Tranché par **Maxime**, sur les deux points.
+
+La collectivité qui produit un impayé par mois et qu'on ne veut jamais bloquer obtient une exemption
+**qui ne s'éteint pas toute seule** — c'est le point : la réinscrire chaque mois reviendrait au
+forçage manuel qu'elle remplace. Motif obligatoire et agent tracé, comme le forçage.
+
+**Le droit est celui qui existe déjà** (`forcer la réouverture`), plutôt qu'un droit dédié. ⚠ La
+contrepartie était énoncée avant le choix et elle est retenue : **un agent de caisse peut exempter un
+client pour toujours**. Le motif obligatoire et la trace de l'agent sont donc la seule garde — d'où
+l'exigence qu'ils soient réellement obligatoires, pas seulement suggérés.
+
+⚠ **Une date de fin obligatoire a été écartée, et pour une raison qui vaut d'être gardée :** une
+exemption qui expire un lundi matin bloque un client à la porte **sans que personne n'ait rien décidé
+ce jour-là**. Le retrait doit être un geste, comme la pose.
+
+**Ce qui ne change pas :** le blocage lui-même reste prudent — posé à la détection, levé seulement
+quand tous les dossiers du client sont réglés. L'exemption s'ajoute, elle ne l'assouplit pas.
+
+### 2026-08-30 · D85 — Un billet vendu crée son support et son droit d'accès, sans appairage manuel
+
+Conséquence directe de D81, et réponse à Maxime : « je vois qu'un QR code n'ouvre toujours pas le
+contrôle d'accès ».
+
+**Ce qui manquait n'était pas ce qu'on croyait.** `ValiderVenteService:149` appelait déjà
+`appairer()` à chaque vente. Le port `App\Vente\Port\AppairageAccesInterface` était simplement câblé
+sur `AppairageAccesStub`, qui bascule un statut et **ne parle jamais au module Accès**. Mesuré :
+5 billets vendus, 5 supports d'accès, **aucun croisement** — le tourniquet vérifiait pourtant
+correctement la signature du code avant de conclure « support inconnu ».
+
+**⚠ Et on ne pouvait pas se contenter de rebrancher.** `DroitAcces::ouvre()` rend `true` quand aucun
+espace n'est autorisé : **un droit sans espace ouvre tout**. Mesuré le 30/08 : **0 produit sur 17**
+déclarait une zone, pour 8 espaces existants. Projeter sans condition aurait fait de chaque billet
+vendu un passe-partout des huit espaces, à l'échelle de toutes les ventes, et en silence.
+
+**⚠ Et « pas de zone » ne pouvait pas non plus être un échec.** `ValiderVenteService` traite un échec
+d'appairage en bloquant la **remise du support** : rendre `false` pour un produit sans zone aurait
+bloqué la remise de tous les billets de tous les produits. Et ce serait faux au fond — une bouteille
+d'eau, un cadenas, un article de boutique n'ouvrent aucune porte, et c'est normal. **Un produit sans
+zone ne rate pas son appairage : il n'en a pas.**
+
+`false` reste donc réservé à un vrai échec — code déjà appairé, support bloqué — c'est-à-dire aux cas
+où remettre le billet serait une faute.
+
+**L'annulation révoque aussi côté accès.** Le stub se contentait du statut côté vente ; ne pas
+révoquer laisserait un billet annulé continuer d'ouvrir la porte — un défaut que le stub ne pouvait
+pas avoir, et que son remplacement aurait introduit si on l'avait oublié.
+
+**Éprouvé par deux témoins qui discriminent :** remettre le stub fait rougir *seulement* « le billet
+ouvre » ; retirer la garde de zone fait rougir *seulement* « sans zone, il n'ouvre rien ». Chacun
+mesure sa moitié.
+
+### 2026-08-30 · D86 — Un billet vendu est TOUJOURS connu du contrôle d'accès ; seules les portes qu'il ouvre dépendent de la déclaration
+
+Tranché par **Maxime**, après qu'il a signalé le cas que la conception précédente ne couvrait pas :
+« certains n'ont pas de contrôle d'accès, mais le billet pourra être quand même validé par un
+contrôle manuel ».
+
+**Deux questions que le code confondait, et qu'il faut séparer :**
+
+    « ce billet est-il valide ? »            existence, fenêtre de validité, pas déjà consommé
+    « ce billet ouvre-t-il CETTE porte ? »   la zone déclarée sur le produit
+
+Un agent qui contrôle à la main n'a besoin que de la **première**, et n'a pas d'équipement.
+
+⚠ **Ce que j'avais construit faisait l'inverse, et c'est corrigé par cette décision.**
+`SaleAccessPairingAdapter` ne projetait RIEN quand le produit ne déclarait pas de zone — donc un
+billet vendu sur un site sans matériel n'existait pas du tout côté accès, et **aucun agent n'aurait
+eu quoi que ce soit à interroger**. La garde était juste contre le passe-partout, et fausse contre le
+contrôle manuel. Je ne l'avais pas vu ; Maxime l'a nommé en une phrase.
+
+**Nouvelle règle :** la vente projette toujours le support et le droit. La déclaration de zone décide
+de ce qui s'ouvre, pas de ce qui existe.
+
+⚠ **ET L'ORDRE DE MISE EN ŒUVRE EST CONTRE-INTUITIF, IL DOIT ÊTRE RESPECTÉ.** Retirer la garde avant
+que `DroitAcces::ouvre()` ne devienne strict (D87) ferait de chaque billet vendu un passe-partout des
+huit espaces — un droit sans espace ouvre tout aujourd'hui. **`ouvre()` d'abord, la garde ensuite.**
+
+### 2026-08-30 · D87 — `DroitAcces::ouvre()` devient strict, et un outil de scan prend en charge le contrôle manuel
+
+Tranché par **Maxime** en deux temps.
+
+**D'abord :** un droit sans espace autorisé n'ouvre plus rien, quel que soit le chemin qui l'a créé —
+vente ou appairage manuel au comptoir. Fini l'asymétrie où deux billets identiques se comportaient à
+l'inverse selon un chemin invisible à l'exploitant.
+
+**Raison, et c'est une fenêtre qui ne reviendra pas :** le comportement permissif existait pour ne pas
+fermer des portes devant des porteurs déjà équipés. Maxime a rappelé qu'**il n'y a pas encore de
+commercialisation** — trois droits en base, tous des données de test. Le changement est donc gratuit
+aujourd'hui et coûteux dès le premier client.
+
+**Ensuite, et c'est ce qui rend le strict tenable :** « on doit faire un outil de scan ».
+
+Mesuré avant de poser la question : `POST /api/acces/passages` et `POST /api/acces/passages/manuel`
+passent **tous deux** par `ValidationPassageHandler::valider()`, donc par le contrôle de zone, et
+**exigent tous deux un équipement**. Il n'existe aujourd'hui aucun chemin pour « un agent contrôle un
+billet sur un site sans matériel ». Ce que Maxime décrivait était un besoin, pas une capacité.
+
+**Ce que l'outil de scan doit être, et ce qu'il ne doit pas être :** l'agent scanne ou saisit le code,
+le système répond *valide* / *déjà utilisé* / *expiré*, et marque le billet consommé. **Sans
+équipement, sans zone, sans porte.** ⚠ S'il passait par `ValidationPassageHandler`, il hériterait du
+contrôle de zone et le problème reviendrait entier — c'est précisément le chemin à ne pas réutiliser
+malgré la tentation, puisque tout le reste y est déjà.
+
+**Ordre d'exécution :** `ouvre()` strict (module Accès) → retrait de la garde de zone dans
+l'adaptateur de vente → outil de scan. Les deux premiers sont indissociables ; le troisième est ce qui
+rend l'ensemble utilisable sur un site sans matériel.
+
+### 2026-08-30 · D88 — Les zones d'un badge de personnel viennent de la FONCTION, pas du badge
+
+Tranché par **Maxime**, contre les deux autres options proposées.
+
+Les zones se rattachent au rôle — accueil, technique, direction, maître-nageur — et le badge en
+hérite. Un agent d'accueil ouvre l'accueil ; un technicien ouvre les locaux techniques.
+
+**Raison :** moins de saisie qu'un badge à la fois, et ça colle à la façon dont on recrute — un
+saisonnier prend une fonction, pas un jeu de portes. ⚠ La contrepartie, énoncée avant le choix : **il
+faut que les rôles existent déjà et soient justes.** Un rôle trop large donne à tous ceux qui le
+portent les portes du plus privilégié d'entre eux.
+
+⚠ **Le trou que cette décision comble, trouvé par `allaccess-8e` en éprouvant D87 au lieu de la
+croire :** `EmissionBadgeStaffHandler` et `RecalculFenetreBadgeHandler` ne posent **aucune** zone —
+mesuré, 0 occurrence de `addAuthorisedSpace`. Un badge de personnel n'a pas de produit, donc aucune
+zone produit à hériter : **il n'avait, jusqu'ici, aucun moyen de dire ce qu'il ouvre.**
+
+### 2026-08-30 · D89 — Les zones d'une réservation viennent de l'ACTIVITÉ réservée
+
+Tranché par **Maxime**.
+
+Un cours d'aquagym ouvre le bassin où il a lieu. L'activité connaît déjà sa ressource : c'est la
+donnée la plus proche de la vérité, et elle existe — rien à ressaisir.
+
+**Raison :** l'alternative (déclarer la zone sur le produit vendu) aurait obligé à répéter sur chaque
+produit une information que l'activité porte déjà, avec la divergence garantie au premier changement
+de bassin.
+
+Même origine que D88 : `ProjectionAccesReservationHandler` ne pose aucune zone non plus.
+
+### 2026-08-30 · D90 — Transitoire assumé : badges et réservations continuent d'ouvrir, la règle stricte s'applique aux billets vendus
+
+Tranché par **Maxime**, en connaissance de ce que ça recrée.
+
+    règle stricte                billets vendus, dès maintenant
+    ancien régime maintenu       badges de personnel, droits nés d'une réservation
+
+⚠ **On recrée volontairement l'asymétrie que D87 venait de supprimer.** La différence, et c'est toute
+la différence : elle est **écrite, bornée et attribuée**, au lieu d'être un effet de bord que
+personne ne nomme. Une asymétrie connue se répare ; une asymétrie invisible se découvre au pire
+moment.
+
+**Ce qui l'éteint :** la livraison de D88 et D89. Pas une date — une condition. Une date inventée
+ici serait fausse le jour où elle passe sans que personne n'ait rien fait ; la condition, elle, se
+vérifie.
+
+**Forme exigée de la mise en œuvre, et ce n'est pas un détail :** l'exception doit être **une
+constante nommée** portant les seuls types de source concernés, avec en commentaire ce qui la fait
+disparaître. Pas une condition dispersée, pas un `if` implicite. Le jour où D88 et D89 sont livrées,
+retirer la constante doit être un geste, et son absence doit se voir.
+
+⚠ **Et elle ne doit pas survivre en silence.** Un contrôle doit refuser le jour où un droit d'un type
+exempté porte *déjà* des zones déclarées : cela signifie que le mécanisme existe, donc que
+l'exception n'a plus d'objet. C'est ce qui évite qu'un transitoire devienne un permanent —
+exactement le sort du commentaire de `ValidationPassageHandler`, dont l'argument était mort avant
+qu'on ne s'en aperçoive.
+
+**Mesure au moment de la décision**, en préproduction :
+
+    source_type    droits   avec zone
+    billet              1           0
+    booking             1           0
+    carte_quota         2           1     ← celui vendu par le pont du 30/08
+
+Quatre droits, tous de test. Aucun badge de personnel en base : le chemin existe, il n'a jamais
+servi.
+
+---
+
+## D91 — Un produit publié ne peut pas perdre son dernier prix
+
+**Décidé par Maxime le 31/08.** `PublicationGuard` (RG-M1-09) exige ≥1 prix valide pour publier, et
+il n'était rejoué nulle part ensuite. Un `PATCH` sur une case de grille pouvait donc rendre
+invendable un produit qui restait « Publié » : pas d'erreur, pas de changement de statut, rien.
+
+**La règle vaut désormais aux deux portes.** `PriceGridProcessor` refuse une écriture qui ne
+laisserait **aucun** prix valide à un produit **publié**.
+
+⚠ **Il ne refuse que ce cas-là.** Vider un tarif parmi plusieurs reste permis : un prix null veut
+dire « non commercialisé » (≠ gratuit, CA-5), et retirer un tarif de la vente est un geste métier.
+Un brouillon reste librement modifiable.
+
+**Deux chemins mènent au même état**, et le second ne vient pas à l'esprit : effacer le prix, ou
+**déplacer la case vers un autre produit**. Les deux passent par ce `PATCH`.
+
+**Forme exigée :** le contrôle interroge la BASE et non les collections en mémoire. `setProduit()`
+est une affectation simple — la collection du produit de destination ne contient pas encore la case,
+celle du produit d'origine la contient toujours. `Produit::aPrixValide()` répondrait faux des deux
+côtés, en sens inverse.
+
+## D92 — Un produit publié est rattaché à son site ; « aucun site » reste le socle
+
+**Décidé par Maxime le 31/08**, après mesure : aucun des 8 produits publiés de la préprod n'avait
+d'établissement. Deux règles se rencontraient là, chacune juste séparément :
+
+    PublicationGuard          « ≥1 site est un PRÉREQUIS pour publier »
+    PerimetreProduitExtension « aucun établissement = SOCLE, partagé par tous » (leftJoin voulu)
+
+**Le mécanisme du socle est conservé** — il est délibéré, commenté, et il a un usage. **Ce qui est
+tranché, c'est que la donnée ne doit pas y tomber par défaut.** L'exigence de site à la publication
+est maintenue, et les produits existants ont été rattachés.
+
+**Ce que ça valait, mesuré sur les deux vitrines publiques, sans authentification :**
+
+    avant   Piscine A → 7 produits   ·   Patinoire B → les MÊMES 7
+    après   Piscine A → 7 produits   ·   Patinoire B → "produits":[]
+
+⚠ **La boutique publique d'un établissement servait le catalogue d'un autre.** En préprod, avec un
+seul client, invisible. Le jour de la commercialisation, une fuite inter-clients sur le web public.
+
+**Conséquence à retenir pour les écrans :** une liste de produits vide sur un établissement est
+désormais une réponse JUSTE, à distinguer d'une lecture échouée.
+
+## D93 — Le libellé d'une catégorie comptable ne porte jamais un numéro de compte
+
+**Décidé par Maxime le 31/08** en tranchant le cas du type « Boutique (marchandise) », dont le
+défaut comptable était « Billetterie (compte 7061) » : un mug vendu s'imputait en billetterie.
+
+**Une marchandise va en « Boutique ».** Et la règle générale que ce cas révèle :
+
+- **La catégorie est de la nomenclature** — `AccountingCategorySeeder` pose les huit libellés usuels
+  en portée socle (D51). Ils sont courts, et **sans numéro** : « Billetterie », « Boutique »,
+  « Locations ».
+- **Le numéro vit dans `CompteComptable`**, et le rattachement de l'un à l'autre est un choix
+  d'exploitant porté par `MappingComptable`.
+
+⚠ Un libellé qui nomme un compte mentirait chez le premier client qui impute autrement — et il ne
+lèverait rien : `DefaultCategoryResolver` **n'applique rien** quand le libellé n'existe pas pour
+l'établissement, en silence.
+
+**Ce qui reste ouvert et n'est PAS tranché :** sept produits publiés par les semis n'ont aucune
+catégorie comptable, parce que les fixtures écrivent `setStatut(Publie)` en dur et ne passent par
+aucune garde. Le trou est mesuré, pas comblé. `SemisSansPrixTrait` ne contrôle donc que le prix, et
+le dit dans son en-tête ; il sera élargi à tous les prérequis quand les sept auront leur catégorie.
+
+⚠ **Et une valeur reste inexpliquée :** la base de préprod portait un défaut comptable sur
+`boutique_stock` qu'**aucune ligne du dépôt n'écrit** — `StockFixtures` crée ce type sans défauts.
+Elle a été remplacée, son origine reste inconnue.
+
+---
+
+## D94 — Un canal non raccordé refuse ; il n'annonce jamais un succès
+
+**Décidé par Maxime le 31/08.** Deux adaptateurs câblés en production rendaient `StatutEnvoi::Transmis`
+sans rien transmettre :
+
+    ChorusProStubAdapter::deposer()  →  Transmis     (dépôt B2G, Chorus Pro)
+    PdpStubAdapter::deposer()        →  Transmis     (e-reporting, réforme française)
+
+L'exploitant voyait ses factures B2G **marquées transmises**, et l'aurait découvert par une relance de
+sa collectivité — au moment et par la voie les plus coûteuses. Côté e-reporting, l'enjeu dépasse une
+facture : une déclaration marquée transmise est **une obligation déclarative que plus personne ne sait
+manquante**.
+
+⚠ **Le dépôt portait déjà les deux traitements opposés du même cas.** `ItboxAdapter` lève une
+exception explicite pour ce motif exact, et le dit dans son en-tête : *« un adaptateur muet est pire
+qu'un adaptateur absent »*. Deux réponses contraires à la même question, à deux modules d'écart.
+
+**La règle, désormais générale :** un port sans implémentation réelle **refuse explicitement**. Il ne
+rend jamais un statut de succès, et son message nomme ce qui **n'a pas eu lieu**.
+
+**Forme retenue :** `ServiceUnavailableHttpException` (503). L'appelant n'a rien fait de mal et n'a
+rien à corriger — un 4xx l'enverrait relire sa facture. Les deux handlers appellent `deposer()` avant
+`persist()`/`flush()`, donc rien n'est écrit : aucun demi-état, et le dépôt reste rejouable tel quel le
+jour du raccordement, sans nouveau numéro (RG-FACT-07 §7).
+
+### Ce que le refus coûte, et comment on le paie
+
+Le test d'API ne peut plus atteindre le rejeu-sans-nouveau-numéro : le canal refuse avant. Cette règle
+a donc changé de niveau — elle est éprouvée contre un **adaptateur d'essai**, au niveau du handler.
+
+**C'est plus juste, pas seulement plus commode :** cet invariant est le NÔTRE. Le vérifier à travers un
+adaptateur qui ment revenait à faire dépendre notre propre règle d'une intégration absente.
+
+⚠ **Et l'ancien test scellait le mensonge.** Il affirmait `statutEnvoi === 'transmis'` — assertion
+**vraie et sans valeur**. Un test qui décrit un défaut le protège : il devient le gardien de ce qu'il
+aurait dû signaler.
+
+### Ce que cette décision ne règle pas
+
+Aucun format de facture électronique n'existe dans le code — mesuré le 31/08 : ni **EN 16931**, ni
+**UBL**, ni **CII**, ni **Peppol**, et « Factur-X » n'apparaît qu'une fois, dans une spécification,
+comme question ouverte. La spécification de facturation le dit elle-même : *« aucune implémentation
+n'est livrée »*. C'était le câblage qui affirmait le contraire ; il ne l'affirme plus.
+
+**Bloquant avant commercialisation**, au même titre que le choix de la PDP.
+
+---
+
+## D95 — `reservation:no-show:basculer` ne démarre pas tant qu'aucun écran n'écrit la présence
+
+**Interdiction, pas précaution.** Mesuré par `allaccess-c2` et `allaccess-b8`, deux mesures
+indépendantes qui se recoupent :
+
+    BasculerNoShowCommand:80   if ($reservation->isPresenceConfirmee())  → Honoree
+                        :82   else                                      → NoShowFacture
+
+    seul écrivain du drapeau, hors entité   EmargerProcessor:63
+    appels du frontal à /emarger            0
+    en base                                 6 réservations · 0 présence confirmée
+
+⚠ **La branche `Honoree` est du code mort depuis l'origine.** Rien n'a jamais pu écrire ce drapeau,
+donc `isPresenceConfirmee()` est faux pour toute réservation ayant jamais existé. Lancer la tâche
+aujourd'hui produirait **six factures d'absence** — sur un créneau réel de vingt personnes toutes
+présentes, elle en produirait vingt.
+
+**C'est le symétrique exact de la garde tarifaire du même jour** (D91), dont le décompte rendait
+toujours zéro et qui refusait donc *tout* vidage de prix. L'une refuse tout, l'autre laisse tout
+passer ; dans les deux cas la protection est écrite, lisible, et **n'a jamais pu s'exercer**.
+
+Et dans les deux cas, ce qui la démasque est le cas qu'on n'a aucune raison d'écrire — ici
+« une personne présente ne doit PAS être facturée ».
+
+**La condition de levée, et elle est vérifiable :** un écran appelle `/emarger`, et une présence
+confirmée existe en base. `allaccess-c2` construit `emarger` et `annuler`, et a inverti son ordre
+pour mettre `emarger` d'abord à cause de ceci.
+
+**Ce qui reste ouvert :** `SourcePresence` déclare `EmargementManuel` **et** `PassageAcces`. Le
+second n'est produit nulle part — le contrôle d'accès ne remonte pas la présence à la réservation.
+Un chemin nommé dans une énumération et jamais construit se lit comme un fait ; c'est la même
+famille que les vingt-trois commandes planifiées que rien ne déclenche.
+
+## D96 — Les trois listes de garde-fous se comptent elles-mêmes
+
+Un contrôle doit être appelé par `bin/garde-fous.sh`, `hooks/pre-commit` **et** `hooks/pre-receive`.
+La règle existait ; rien ne la vérifiait pour les contrôles du frontal.
+
+**Mesure du 31/08 :** cinq contrôles frontaux sur huit n'étaient pas câblés dans `pre-commit`.
+
+    verifier-formats · verifier-imports · verifier-classes
+    verifier-dates-locales · verifier-profil-charge
+
+Rien ne passait — `pre-receive` les porte tous les huit. Ce qui se perdait est le **moment** du
+retour : au push au lieu du commit, donc après plusieurs commits empilés, donc avec la tentation du
+`--no-verify` pour ne pas tout refaire.
+
+**La cause était dans la forme.** Les trois câblés l'étaient par trois copies du même bloc de sept
+lignes ; ajouter un contrôle demandait d'en recopier une quatrième. Une règle recopiée diverge au
+premier correctif — celle-ci a divergé **par omission**, ce qui est plus discret et se voit moins.
+
+**Désormais :** un seul bloc (`lancer_front`) et huit appels d'une ligne, plus un filet de complétude
+dans chacune des trois listes.
+
+⚠ **Le prédicat vise l'APPEL, pas la mention** — sauf dans `pre-receive`, où le hook poussé appelle
+ses contrôles par une boucle et ne contient donc jamais le nom littéral. La différence est voulue et
+écrite sur place.
+
+**Le nom sépare les deux familles du répertoire**, et c'est délibérément lisible :
+
+    verifier-*.mjs · garde-fou-*.mjs   des CONTRÔLES, ils doivent tourner
+    mesurer-*.mjs                      des SONDES, lancées à la main
+
+---
+
+## D97 — La reprise initiale d'un client passe avant les autres imports
+
+**Décidé par Maxime le 31/08.** Mesure préalable : l'export est mûr (Cegid, Ciel, Sage, EBP,
+reporting, audit, passages), **l'import n'existe qu'une fois** — les relevés bancaires — et rien
+n'existe pour les données d'un client.
+
+Trois familles, qui n'ont pas les mêmes règles : la **reprise initiale** (un coup, gros enjeu,
+annulable), les **flux récurrents** (petits, fréquents, rejoués), les **corrections en masse**.
+
+La reprise passe d'abord parce qu'elle bloque une signature : sans elle, un client ressaisit à la
+main son fichier d'abonnés et les crédits restants de ses cartes. Elle est aussi la plus dure, donc
+elle donne le patron aux deux autres.
+
+## D98 — Un import refuse tout, ou n'écrit rien
+
+**Décidé par Maxime le 31/08.** Sur dix mille lignes dont douze sont mauvaises : rien n'entre tant
+que le fichier n'est pas propre, et la réponse **nomme les lignes**.
+
+**Conséquence de forme, et c'est elle qui compte :** un import qui écrit et valide en même temps ne
+*peut pas* tenir cette règle — quand il découvre la ligne 4 217, les 4 216 premières sont déjà là.
+La décision impose donc **deux temps** :
+
+    POST /imports                  analyse et valide TOUT, n'écrit rien en base métier
+    POST /imports/{id}/appliquer   applique, en une transaction
+
+⚠ La simulation cesse d'être une option à cocher : elle est la première phase. On obtient le refus
+total **et** la prévisualisation sans avoir à choisir entre les deux.
+
+**Ce que ça coûte, et il faut le savoir :** un client qui met trois jours à corriger douze lignes
+n'avance pas pendant trois jours. C'est assumé — l'alternative, importer 9 988 lignes, exige une
+idempotence ligne à ligne sans laquelle un second dépôt du fichier corrigé recrée les 9 988.
+
+## D99 — Les ventes historiques ne sont pas reprises
+
+**Décidé par Maxime le 31/08.** L'ancien logiciel garde son historique le temps légal ; le nôtre
+commence à la bascule.
+
+⚠ **NF525 scelle les ventes en chaîne** : chaque opération porte l'empreinte de la précédente. Y
+injecter des ventes qu'on n'a pas produites fabrique des écritures scellées fausses — pas une
+approximation, un faux au sens où un contrôle l'entend.
+
+**Ce qui n'est PAS fermé :** un espace « antériorité » hors chaîne, consultable et exclu de tout
+calcul comptable. Il demanderait de tenir la frontière dans chaque écran, chaque export et chaque
+clôture — et une frontière tenue à 95 % en comptabilité ne vaut rien. La question se rouvrira avec un
+expert-comptable, pas seule.
+
+## D100 — Le rapprochement d'identité se fait par référence externe, jamais par le nom
+
+**Corollaire de D97, posé à la conception.** C'est le point où une reprise se gagne ou se perd :
+« Dupont Jean » existe-t-il déjà ? Une mauvaise réponse **fusionne deux personnes** ou **en duplique
+une**, et les deux se découvrent des mois plus tard, par une réclamation.
+
+⚠ **Aucune heuristique sur le nom n'est acceptable** — ni « nom + prénom », ni « nom + date de
+naissance », ni un score de similarité. Elles marchent sur 98 % des lignes, et les 2 % restants sont
+exactement les familles nombreuses, les homonymes et les fratries : la clientèle d'une piscine
+municipale.
+
+**La règle :** chaque ligne porte `externalRef`, la clé de l'enregistrement dans le logiciel
+précédent du client. Obligatoire, unique par établissement et par type.
+
+Elle fait deux choses d'un coup : le rapprochement devient **exact** (connue = mise à jour, inconnue
+= création, sans devinette), et l'idempotence devient **ligne à ligne** — rejouer un fichier corrigé
+ne duplique pas ce qui était déjà entré. Même garantie que la clé d'idempotence du rejeu hors ligne,
+et pour la même raison.
+
+⚠ **Ça déplace une charge sur le client**, et il faut le dire franchement : son extraction doit
+porter ses identifiants. Tout logiciel en a ; peu les exportent spontanément. C'est un aller-retour
+de plus à la reprise, contre une classe entière d'erreurs qui ne se rattrapent pas.
+
+**Aucune notion de référence externe n'existe aujourd'hui dans le dépôt** — mesuré le 31/08, six
+graphies cherchées, zéro occurrence. Elle est à introduire.
+
+---
+
+## D101 — Cinq axes pour les développements à venir
+
+**Décidé par Maxime le 31/08**, après comparaison avec la place de marché Magicline (86 intégrations,
+sept catégories).
+
+    1. Appli mobile adhérent, en marque blanche
+    2. Agrégateurs — et pas seulement fitness
+    3. Balances et machines connectées
+    4. Assistant IA
+    5. L'API
+
+⚠ **Le constat qui a produit cette liste n'est pas un manque de fonctionnalités.** Fluvia a 47
+modules, plus de largeur qu'aucun concurrent fitness. Ce qui manque, c'est **le dehors** : sur 25
+adaptateurs, **18 sont des simulacres** — paiement carte, prélèvement SEPA remis en banque, matériel
+d'accès, facturation électronique, connecteurs OTA, fournisseur d'identité.
+
+Et surtout : Magicline ne vend pas 86 fonctionnalités, il vend **le fait que 86 sociétés ont
+construit dessus**. C'est un effet de réseau, et il ne se rattrape pas en développant plus vite.
+
+## D102 — L'API passe en premier, parce qu'elle commande trois des quatre autres
+
+**Ordre imposé par la dépendance, pas par la préférence.**
+
+    appli mobile          consomme l'API
+    agrégateurs           consomment l'API
+    machines connectées   consomment l'API
+    assistant IA          consomme l'API
+
+⚠ **Construire les trois avant l'API produit trois couplages privés au lieu d'une surface publique.**
+Chacun aurait son point d'entrée, sa version, ses règles — et la place de marché deviendrait
+impossible à ouvrir sans tout reprendre.
+
+**Ce qui manque aujourd'hui pour qu'un tiers puisse s'intégrer**, mesuré le 31/08 :
+
+- aucune clé d'API délivrable à un tiers — les seules existantes servent à consommer *les leurs*
+  (Anthropic, réseaux sociaux) ;
+- aucun webhook sortant — les cinq occurrences sont internes ;
+- ni OAuth, ni modèle de partenaire, ni portail développeur.
+
+Un tiers qui voudrait s'intégrer à Fluvia aujourd'hui **n'aurait par où commencer**. C'est
+exactement ce qu'a montré le guide remis à IT Cotation : notre seul intégrateur potentiel attend une
+spécification de notre part, et il n'existe aucun chemin générique.
+
+## D103 — Architecture de domaines pour `fluvia-app.com`
+
+**Décidé par Maxime le 31/08.** Aujourd'hui la préprod sert TOUT sur un seul hôte : l'API derrière
+une regex de chemin, l'application sur `/`, la boutique par slug d'URL.
+
+    fluvia-app.com              vitrine marketing
+    pro.fluvia-app.com          back-office exploitant
+    api.fluvia-app.com          l'API publique, versionnée
+    <client>.fluvia-app.com     la boutique publique de chaque client
+
+### ⚠ La boutique publique ne partage jamais un hôte avec le back-office
+
+Trois raisons concrètes :
+
+- **Les cookies.** Un cookie de session du back-office ne doit pas être lisible depuis une page qui
+  embarque le script d'un prestataire de paiement.
+- **La politique de sécurité de contenu.** La boutique doit autoriser les scripts du PSP, le
+  back-office doit les interdire. Une CSP unique pour les deux, c'est la plus permissive qui gagne.
+- **L'indexation.** La boutique doit être référencée, le back-office jamais. Un `robots.txt` par hôte
+  règle ça ; il n'y en a qu'un aujourd'hui.
+
+**Règle qui va avec :** les cookies se posent sur l'hôte exact, **jamais sur `.fluvia-app.com`**.
+Sinon la boutique d'un client peut lire la session d'un autre.
+
+### Deux portes pour la même application
+
+`api.` a son propre hôte parce qu'un partenaire ne doit pas être couplé à l'hôte du back-office.
+
+⚠ **Le coût honnête** : un hôte distinct impose du CORS à notre propre frontal. La parade retenue —
+le back-office continue d'appeler `pro.fluvia-app.com/api` (même origine, zéro CORS), les tiers
+passent par `api.fluvia-app.com`. Même application, deux portes : l'une privée et rapide, l'autre
+publique et contractuelle.
+
+## D104 — Une boutique par sous-domaine, et le client se résout depuis l'HÔTE
+
+**Décidé par Maxime le 31/08.** `piscine-ville.fluvia-app.com` plutôt qu'un chemin sur un hôte
+unique.
+
+⚠ **La conséquence technique est petite aujourd'hui et grosse plus tard.** Le code résout
+actuellement la vitrine par un slug d'URL (`/boutique/vitrines/{slug}/catalogue`). Il doit apprendre
+à la résoudre depuis l'hôte. Ajouter cela maintenant coûte peu ; le rétro-adapter quand vingt clients
+ont des liens en circulation coûte cher.
+
+**Ce que ça ouvre :** un client peut brancher son propre domaine (`billetterie.ville-x.fr`) sans
+casser ses liens. C'est la condition de la marque blanche.
+
+**Certificats :** un joker `*.fluvia-app.com` couvre les sous-domaines clients. Un domaine propre à
+un client demande une émission par domaine — Let's Encrypt automatisé, à prévoir, pas à faire avant
+le premier client qui le demande.
+
+## D105 — Appli mobile : une commune, plus une déclinaison dédiée en option payante
+
+**Décidé par Maxime le 31/08.** L'appli commune sert tous les clients, avec le logo et les couleurs
+de l'établissement choisi. Une publication dédiée — nom, icône et fiche du club sur les magasins —
+est vendue à ceux qui la veulent.
+
+⚠ **La condition de viabilité, et elle est stricte : les deux doivent rester identiques
+fonctionnellement.** Une seule base de code, un seul jeu d'écrans, la déclinaison ne changeant que
+l'identité visuelle et la fiche du magasin.
+
+Le jour où la version commune devient la parente pauvre, elle cesse d'être vendable — et on se
+retrouve à maintenir autant d'applications qu'on a de clients, ce que la première moitié de la
+décision existait précisément pour éviter.
+
+**Ce que ça coûte, dit franchement :** chaque version publiée doit être revalidée par Apple et Google
+autant de fois qu'il y a de déclinaisons. Ce coût croît avec le nombre de clients, pas avec le
+produit — c'est le prix de l'option, et il doit se retrouver dans son tarif.
+
+## D106 — Les sous-domaines techniques sont réservés, et la liste est dans le code
+
+**Conséquence directe de D104, posée à la conception.** Le back-office, l'API et les boutiques
+clientes partagent le **même espace de noms**.
+
+Un client nommé « pro », « api » ou « www » entrerait donc en collision avec un hôte technique — et le
+symptôme serait une boutique qui sert le back-office, ou l'inverse.
+
+⚠ **Ce genre de collision ne se découvre pas en revue de code : elle se découvre le jour où un
+commercial saisit le nom d'un nouveau client.** La liste doit donc vivre là où le nom est validé, pas
+dans une consigne.
+
+    pro · api · www · app · admin · mail · static · assets · cdn · status · dev · test
+
+**Forme exigée :** une constante nommée, refusée à la création d'une vitrine, avec un message qui
+dit pourquoi. Pas un contrôle dispersé, pas une convention orale. Ça coûte une constante aujourd'hui
+et évite un incident de production plus tard.
+
+---
+
+## D107 — On n'émet pas une facture sans savoir à qui, et la règle ne porte pas sur le montant
+
+**Décidé le 31/08.** RG-FACT-08 existait depuis l'origine, écrite et juste, et n'avait **aucun
+appelant** — relevé avec témoin par `allaccess-b8` : une définition, zéro appel.
+
+### Pourquoi pas le seuil de la facture simplifiée
+
+Le droit admet une facture **simplifiée** en B2C sous un certain seuil. On aurait pu y adosser la
+garde. ⚠ **On ne l'a pas fait, délibérément :** ce serait faire dépendre une mention légale d'un
+nombre qu'on ne peut pas vérifier depuis le code et qui bouge avec les textes.
+
+La règle porte donc sur **qui est le destinataire**, jamais sur combien il doit :
+
+    personne morale · organisme public   raison sociale + SIRET + adresse, toujours, sans seuil
+    particulier nommé                    adresse exigée — nommer quelqu'un, c'est pouvoir l'atteindre
+    aucun destinataire                   ce n'est pas une facture, c'est un ticket
+
+**C'est le troisième cas qui débloquait tout.** Neuf tests facturaient une vente **sans dire à qui**.
+Ce n'est pas une facture simplifiée : aucune lecture du droit n'appelle ça une facture. Et le point
+d'entrée accepte déjà un destinataire — c'est le geste du guichet : le client demande une facture,
+l'agent lui demande son nom et son adresse.
+
+### ⚠ Ce que la garde a révélé, et qui n'était pas un défaut de test
+
+`SubscriptionInvoicer::destinataire()` recopiait le nom, le prénom et la raison sociale depuis la
+fiche client — **mais ni le SIRET ni l'adresse**, que la fiche porte pourtant.
+
+**Les factures d'abonnement de Fluvia à ses propres clients n'auraient comporté ni SIRET ni adresse
+du destinataire.** Notre propre facturation n'était pas conforme, et personne ne le voyait parce que
+rien ne demandait jamais si une facture était complète.
+
+C'est la même famille que tout ce qu'on a trouvé cette nuit : **la donnée existait, le code ne la
+portait pas.**
+
+### Le coût, assumé
+
+Aujourd'hui on peut facturer une vente anonyme, demain non. C'est un vrai changement de
+comportement, pas un durcissement cosmétique. Il est défendable parce qu'une facture sans
+destinataire identifiable n'a jamais été une facture.
+
+## D108 — `fluvia-app.com` est un choix contraint, pas un oubli
+
+`fluvia.com` et `fluvia.fr` **ne sont pas disponibles** (vérifié par Maxime le 31/08). La vitrine
+marketing ira donc sur `fluvia-app.com`, malgré le « app » dans un domaine qui sert d'abord à
+présenter le produit.
+
+⚠ **C'est écrit ici pour que personne ne rouvre le sujet en croyant à une inadvertance.** Si l'un des
+deux se libère un jour, le déplacement se fera — et il coûtera d'autant plus cher qu'il y aura de
+liens en circulation. C'est une raison de plus pour que les clients aient leur propre sous-domaine
+(D104) : leurs liens à eux ne dépendent pas du nôtre.
+
+---
+
+## D109 — La supervision se revendique, elle ne s'infère pas de la forme de l'appel
+
+**Deux défauts mesurés par `allaccess-b8`, et le premier masquait le second.**
+
+`RunScheduledTasksCommand` retient une tâche jamais exécutée et non marquée sûre au premier passage :
+elle rattraperait tout son retard en une fois. **Quatorze tâches du catalogue sont dans ce cas**, dont
+`dms:purge-expired-documents` (suppression), `crm:rgpd:appliquer-conservation` (effacement RGPD),
+`subscription:facturer-le-mois` (facturation) et `padel:eclairage:commander` (matériel).
+
+La levée du verrou se lisait `$supervise = is_string($only) && $only !== ''` — autrement dit
+**« lancé avec `--only` » valait « regardé par un humain »**. Or `infra/ordonnanceur.sh` appelle
+`--only` **pour chaque tâche, à chaque cycle**. Le verrou était donc court-circuité en permanence,
+depuis sa naissance, et la supervision qu'il suppose n'a jamais existé.
+
+> **Ce qui protégeait réellement n'était pas ce verrou, c'était la liste blanche du shell.** Les deux
+> mécanismes avaient l'air complémentaires ; en réalité l'un désactivait l'autre.
+
+**La règle.** La supervision est une **attestation**, pas une déduction. Un `--supervise` explicite,
+absent par défaut. Qui l'oublie retombe sous le verrou : l'oubli échoue du côté conservateur. La forme
+inverse — un `--automatique` que la boucle passerait — échouerait dans le mauvais sens, car l'oubli
+vaudrait alors « un humain regarde » pendant que personne ne regarde.
+
+**Le motif général :** *la forme d'un appel ne dit rien de qui l'a lancé.* Chaque fois qu'un contrôle
+infère une intention humaine d'un détail syntaxique, il infère faux dès qu'une machine adopte le même
+détail.
+
+**Le filet.** `app/tests/Platform/Unit/VerrouPremierPassageTest.php`. Vu rouge avant d'être cru vert :
+l'ancienne dérivation remise une minute, `vente:cloture:journee` — clôture de journée, non sûre — est
+passée de « premier passage » à `due` + « 1 tâche exécutée ». **Deux des trois tests sont restés verts
+pendant ce sabotage**, et c'est le signe que le filet désigne bien ce qu'il annonce.
+
+**La levée, qui vit ici et nulle part ailleurs (D53).** Le premier passage d'une tâche non sûre se
+lance à la main avec `--only=<tâche> --supervise`, après avoir regardé `--dry-run` et `--status`. Le
+message d'échec, lui, ne nomme plus aucune option : il imprimait `--only=<tâche>`, c'est-à-dire
+exactement la porte qui s'ouvrait toute seule à chaque cycle.
+
+---
+
+## D110 — Une liste évaluée au démarrage doit crier quand le fichier a bougé
+
+**Le même signalement de `allaccess-b8`, et c'est lui qui rendait D109 invisible.**
+
+`infra/ordonnanceur.sh` évalue `TACHES_AUTORISEES=` **une seule fois, au démarrage**, puis boucle sur
+la variable. Le 31/08, une quatrième tâche a été ajoutée au fichier à 15h34 ; le conteneur tournait
+depuis 12h42. Résultat mesuré : **zéro occurrence dans tout le journal, trois lignes dans la table de
+traces au lieu de quatre**, pendant neuf heures.
+
+> ⚠ **Et c'est invisible par construction.** Chaque cycle imprimait trois `ok`. Trois succès se lisent
+> comme un ordonnanceur en bonne santé — c'est le **quatrième, absent, qui ne crie pas**.
+
+**On ne recharge pas à chaud, et c'est délibéré.** Relire la liste à chaque cycle ferait prendre effet
+une édition du fichier monté, sans relecture ni commit. Comme D109 vient de l'établir, cette liste
+blanche est le seul mécanisme qui protégeait réellement les quatorze tâches non sûres : elle doit
+rester une décision versionnée. **Le défaut n'est pas qu'un redémarrage soit nécessaire — c'est que
+rien ne le disait.**
+
+La boucle compare donc, à chaque cycle, la liste que le shell porte à celle que le fichier déclare, et
+imprime une erreur tant qu'elles divergent. `--lister` le dit aussi. Témoin des deux côtés : l'alarme
+sonne sur la divergence **et se tait sur la concordance** — un détecteur qui crie toujours ne vaut pas
+mieux qu'un détecteur muet.
+
+**Où D109 et D110 se rejoignent.** Tant que la liste ne bougeait pas au démarrage, le court-circuit de
+D109 ne se voyait pas. Corriger D110 seul — redémarrer pour activer la quatrième tâche — aurait donc
+**levé le verrou sur tout ce qu'on aurait ajouté entre-temps**. C'est pour cela que D109 a été corrigé
+et prouvé **avant** le redémarrage, et non l'inverse.

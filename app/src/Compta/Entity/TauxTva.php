@@ -58,8 +58,33 @@ class TauxTva
     #[Groups(['taux:read', 'taux:write', 'ligne:read'])]
     private string $libelle = '';
 
+    // ⚠ Exposé dans `mapping:read` pour que l'écran des correspondances puisse dire POURQUOI
+    // une correspondance est inopérante : un verdict sans cause envoie chercher.
+    /**
+     * L'entrée du référentiel légal dont ce taux est issu — `null` pour les taux saisis à la main.
+     *
+     * ⚠ NULLABLE, ET CE N'EST PAS UNE FACILITÉ. Trente et un taux existaient déjà en base avant ce
+     * référentiel ; leur inventer une origine serait affirmer une filiation que personne n'a
+     * établie. `null` dit la vérité sur eux : on ne sait pas d'où ils viennent, et c'est justement
+     * le problème que le référentiel résout pour la suite.
+     *
+     * ⚠ EN LECTURE SEULE POUR LE CLIENT. La filiation se pose a la reprise, par
+     * `AdoptLegalVatRateProcessor`, qui lit le referentiel a la source. Laisser l'ecran l'ecrire
+     * supposerait que le referentiel soit une ressource exposee — il ne l'est volontairement
+     * pas — et permettrait d'affirmer une filiation avec une valeur qui ne correspond pas.
+     *
+     * ⚠ ET CE LIEN NE DOIT JAMAIS DEVENIR LA SOURCE DU TAUX. La valeur reste dans `$taux`, sur
+     * cette ligne. Faire lire `origineLegale->getRate()` ferait dépendre d'une table externe une
+     * valeur que les deux chaînes de scellement NF525 embarquent — c'est exactement le défaut qu'on
+     * ne veut pas aggraver.
+     */
+    #[ORM\ManyToOne(targetEntity: LegalVatRate::class)]
+    #[ORM\JoinColumn(nullable: true)]
+    #[Groups(['taux:read'])]
+    private ?LegalVatRate $origineLegale = null;
+
     #[ORM\Column(options: ['default' => true])]
-    #[Groups(['taux:read', 'taux:write'])]
+    #[Groups(['taux:read', 'taux:write', 'mapping:read'])]
     private bool $actif = true;
 
     public function __construct()
@@ -121,6 +146,18 @@ class TauxTva
     public function setActif(bool $actif): self
     {
         $this->actif = $actif;
+
+        return $this;
+    }
+
+    public function getOrigineLegale(): ?LegalVatRate
+    {
+        return $this->origineLegale;
+    }
+
+    public function setOrigineLegale(?LegalVatRate $origineLegale): self
+    {
+        $this->origineLegale = $origineLegale;
 
         return $this;
     }

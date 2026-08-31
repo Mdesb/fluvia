@@ -1,0 +1,19 @@
+{
+    "_lisez_moi": [
+        "Ligne de base GELEE du garde-fou n°16 — liaisons d'objet sans type (D58).",
+        "",
+        "Chaque entree est un `setParameter('x', $objet)` sans troisieme argument. Ce n'est PAS",
+        "une autorisation : tant que ce n'est pas corrige, la requete peut compter zero sans rien",
+        "signaler. Deux bugs du 28/08 venaient de la — solde de fidelite fige, file d'attente sans",
+        "ordre.",
+        "",
+        "Corriger : `IDENTITY(x.assoc) = :p` et `setParameter('p', $objet->getId(), 'uuid')`.",
+        "Declarer : `@liaison-verifiee : <pourquoi c'est correct>` dans le fichier."
+    ],
+    "scelle": {
+        "gelee_le": "2026-08-28",
+        "plafond": 0,
+        "reference": "claude-A, 28/08 : idiome trouve deux fois dans la meme nuit, dans deux modules."
+    },
+    "entrees": []
+}

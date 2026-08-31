@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Padel\Unit;
 
+use App\Tests\SchemaDuHarnais;
 use App\Compta\DataFixtures\ComptaFixtures;
 use App\Crm\DataFixtures\CrmFixtures;
 use App\Crm\Entity\Beneficiaire;
@@ -19,7 +20,6 @@ use App\Reservation\DataFixtures\ReservationFixtures;
 use App\Sepa\DataFixtures\SepaFixtures;
 use App\Vente\DataFixtures\VenteFixtures;
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Tools\SchemaTool;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 /** Résolution du tarif terrain (plage × statut, RG-PADEL-02), CA-1, matrice pleine/creuse × membre/non-membre. */
@@ -32,12 +32,10 @@ final class CalculateurTarifTerrainHandlerTest extends KernelTestCase
         /** @var EntityManagerInterface $em */
         $em = $container->get('doctrine')->getManager();
 
-        $tool = new SchemaTool($em);
-        $metadata = $em->getMetadataFactory()->getAllMetadata();
-        $em->getConnection()->executeStatement('SET FOREIGN_KEY_CHECKS=0');
-        $tool->dropSchema($metadata);
-        $tool->createSchema($metadata);
-        $em->getConnection()->executeStatement('SET FOREIGN_KEY_CHECKS=1');
+        // Le schéma est construit UNE FOIS par processus, puis vidé entre les tests. Le faire
+        // détruire et reconstruire par chaque `setUp()` coûtait ~10 s par test — six heures sur
+        // la suite complète, et donc une suite que personne ne lançait.
+        SchemaDuHarnais::reinitialiser($em);
 
         foreach ([
             SocleFixtures::class, OffreFixtures::class, ComptaFixtures::class, VenteFixtures::class,

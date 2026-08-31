@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Crm\State;
 
+use App\Crm\Doctrine\CustomerScope;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProviderInterface;
 use App\Crm\Entity\Client;
@@ -53,18 +54,14 @@ final class RechercheClientProvider implements ProviderInterface
         $qb = $this->em->createQueryBuilder();
         $qb->select('c')->from(Client::class, 'c');
 
-        // Cloisonnement Groupe (RG-SOCLE-05, §6 plan-crm.md) : ce provider personnalisé contourne le
-        // pipeline standard d'API Platform (donc `PerimetreCrmExtension`) — la restriction est donc
-        // reproduite explicitement ici, même logique (EXISTS auto-contenu).
+        // Cloisonnement Groupe (RG-SOCLE-05) : ce fournisseur sur mesure court-circuite le
+        // pipeline d'API Platform, donc `PerimetreCrmExtension` ne s'applique pas. La clause était
+        // RECOPIÉE ici — ce que le commentaire d'origine documentait honnêtement. Deux copies d'une
+        // règle de sécurité divergent le jour où l'on n'en corrige qu'une, et c'est la périmée qui
+        // décide alors qui voit quoi.
         $utilisateur = $this->security->getUser();
         if ($utilisateur instanceof Utilisateur) {
-            $sousRequetePerimetre = 'SELECT aff_rcp.id FROM ' . Affectation::class . ' aff_rcp '
-                . 'INNER JOIN ' . Etablissement::class . ' etb_rcp WITH etb_rcp = aff_rcp.etablissement '
-                . 'INNER JOIN ' . Region::class . ' reg_rcp WITH reg_rcp = etb_rcp.region '
-                . 'WHERE IDENTITY(aff_rcp.utilisateur) = :perimetre_rcp_utilisateur '
-                . 'AND IDENTITY(reg_rcp.groupe) = IDENTITY(c.groupe)';
-            $qb->andWhere('EXISTS (' . $sousRequetePerimetre . ')')
-                ->setParameter('perimetre_rcp_utilisateur', $utilisateur->getId(), 'uuid');
+            CustomerScope::restreindreAuGroupe($qb, 'c', $utilisateur->getId());
         }
 
         if ($statut !== '') {

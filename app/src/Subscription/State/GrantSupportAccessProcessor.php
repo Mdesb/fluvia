@@ -63,7 +63,7 @@ final class GrantSupportAccessProcessor implements ProcessorInterface
      */
     public function process(mixed $data, Operation $operation, array $uriVariables = [], array $context = []): EditorSupportAccess
     {
-        $this->editorOnly->assertEditor();
+        $this->editorOnly->assertEditor('editor.support_access');
 
         $corps = $this->lecteur->corps();
         $maintenant = new \DateTimeImmutable();

@@ -31,6 +31,100 @@ final class SupportAccessGuardTest extends SocleApiTestCase
 {
     private const AGENT_EMAIL = 'assistance@editeur.test';
 
+    /**
+     * ⚠ UN ACCÈS OUVERT CONFÈRE LES DROITS D'UN ADMINISTRATEUR — décision de Maxime du 31/08.
+     *
+     * Ce test manquait, et son absence coûtait cher : le port `SupportAccessRightsInterface` était
+     * câblé sur l'implémentation qui n'accorde JAMAIS rien. Toute la chaîne existait — ouvrir,
+     * tracer, expirer, révoquer, refuser — sauf le maillon qui sert. Ouvrir un accès d'assistance
+     * ne changeait strictement rien, et aucune erreur ne le signalait.
+     *
+     * Sept tests verts autour d'un mécanisme sans effet : chaque pièce éprouvée, l'assemblage
+     * jamais.
+     *
+     * ⚠ ON OBSERVE `CalculateurDroits`, PAS LE GARDE. Le garde répondait déjà « cet agent peut
+     * lire » — c'est ce que vérifie le test voisin. Ce qui manquait est que cette réponse se
+     * TRANSFORME en permissions effectives, et ce chemin passe par le port et son câblage.
+     *
+     * ⚠ LE TÉMOIN NÉGATIF EST LA MOITIÉ QUI COMPTE : sans accès, aucun droit. Sans lui, un
+     * calculateur qui accorderait tout à tout le monde rendrait ce test vert.
+     */
+    public function testUnAccesOuvertConfereLesDroitsDAdministrateur(): void
+    {
+        $agent = $this->agent();
+        $client = $this->etablissementClient('Camping des Écluses');
+
+        /** @var \App\Securite\Service\CalculateurDroits $calculateur */
+        $calculateur = static::getContainer()->get(\App\Securite\Service\CalculateurDroits::class);
+
+        // ── TÉMOIN : sans accès, l'agent n'a rien chez ce client ──────────────────────────────
+        $avant = $calculateur->codesEffectifs($agent, $client->getId());
+        self::assertSame(
+            [],
+            $avant,
+            'témoin : sans accès d’assistance, un agent de l’éditeur ne doit rien avoir chez un client. '
+            .'Si ce tableau n’est pas vide, la suite ne prouve rien sur l’accès.',
+        );
+
+        // ⚠ LA FENÊTRE ENTOURE L'HEURE RÉELLE, ET NON LE `maintenant()` FIXE DU FICHIER.
+        //
+        // Les sept tests voisins passent leur instant explicitement au garde, qui le reçoit en
+        // argument — ils peuvent donc vivre au 15/09/2026. Celui-ci observe la chaîne par
+        // `CalculateurDroits::codesEffectifs()`, qui ne prend pas d'instant : il forge son propre
+        // `new \DateTimeImmutable()`. Une fenêtre posée autour d'une date fixe serait donc dans le
+        // futur au moment où le calculateur interroge, et l'accès ne vaudrait rien.
+        //
+        // ⚠ CE DÉTAIL EXPLIQUE L'ANGLE MORT QU'ON COMBLE ICI : le garde reçoit son instant, donc il
+        // se teste à l'instant qu'on veut ; le calculateur le fabrique, donc il ne se teste qu'à
+        // l'instant qu'il est. Les tests se sont massés du côté commode, et le maillon manquant
+        // était de l'autre.
+        $reel = new \DateTimeImmutable();
+        $this->guard()->grant(
+            $agent,
+            $client,
+            'Ticket 5102 — la caisse ne s’ouvre pas',
+            $reel->modify('-1 hour'),
+            $reel->modify('+1 hour'),
+            'chef@editeur.test',
+        );
+
+        $apres = $calculateur->codesEffectifs($agent, $client->getId());
+        self::assertNotSame(
+            [],
+            $apres,
+            'Un accès d’assistance ouvert ne confère aucun droit : le port est câblé sur une '
+            .'implémentation qui n’accorde rien, et ouvrir un accès ne change strictement rien.',
+        );
+        self::assertContains(
+            '*.*',
+            $apres,
+            'Maxime a tranché « tout, comme un administrateur » : le joker doit être accordé.',
+        );
+    }
+
+    /**
+     * ⚠ L'ACCÈS EST CIBLÉ : il ne déborde pas sur un autre établissement du même client.
+     *
+     * Sans cette borne, ouvrir un accès pour dépanner une piscine donnerait aussi la patinoire d'à
+     * côté — et le motif écrit à l'ouverture ne couvrirait plus ce qui a été vu.
+     */
+    public function testLAccesNeDebordePasSurUnAutreEtablissement(): void
+    {
+        $agent = $this->agent();
+        $depanne = $this->etablissementClient('Camping des Écluses');
+        $voisin = $this->etablissementClient('Camping des Peupliers');
+
+        // Fenêtre à l'heure réelle : voir le test précédent — le calculateur forge son propre instant.
+        $reel = new \DateTimeImmutable();
+        $this->guard()->grant($agent, $depanne, 'Ticket 5102', $reel->modify('-1 hour'), $reel->modify('+1 hour'), 'chef@editeur.test');
+
+        /** @var \App\Securite\Service\CalculateurDroits $calculateur */
+        $calculateur = static::getContainer()->get(\App\Securite\Service\CalculateurDroits::class);
+
+        self::assertNotSame([], $calculateur->codesEffectifs($agent, $depanne->getId()), 'témoin : l’accès doit valoir sur l’établissement dépanné');
+        self::assertSame([], $calculateur->codesEffectifs($agent, $voisin->getId()), 'L’accès déborde sur un établissement voisin : le motif écrit ne couvre plus ce qui a été vu.');
+    }
+
     /** L'accès ouvert autorise la lecture, et le passage est tracé. */
     public function testUnAccesOuvertAutoriseEtLaisseUneTrace(): void
     {

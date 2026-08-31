@@ -26,8 +26,8 @@ export function Erreur({ message, onReessayer, id }) {
 
 export function Vide({ titre = 'Rien à afficher', texte }) {
   return (
-    <div className="pub-vide" role="status">
-      <p className="pub-vide-t">{titre}</p>
+    <div className="bq-vide" role="status">
+      <p className="bq-vide-t">{titre}</p>
       {texte && <p className="empty" style={{ padding: 0 }}>{texte}</p>}
     </div>
   )
@@ -36,16 +36,16 @@ export function Vide({ titre = 'Rien à afficher', texte }) {
 // Fil d'étapes du tunnel (accessible : liste ordonnée, étape courante marquée aria-current).
 export function Etapes({ etapes, courant }) {
   return (
-    <nav aria-label="Étapes de commande" className="pub-steps">
+    <nav aria-label="Étapes de commande" className="bq-steps">
       <ol>
         {etapes.map((e, i) => {
           const etat = i < courant ? 'faite' : i === courant ? 'active' : 'apres'
           return (
-            <li key={e} className={`pub-step ${etat}`} aria-current={i === courant ? 'step' : undefined}>
-              <span className="pub-step-num" aria-hidden="true">
+            <li key={e} className={`bq-step ${etat}`} aria-current={i === courant ? 'step' : undefined}>
+              <span className="bq-step-num" aria-hidden="true">
                 {i < courant ? '✓' : i + 1}
               </span>
-              <span className="pub-step-lbl">{e}</span>
+              <span className="bq-step-lbl">{e}</span>
             </li>
           )
         })}

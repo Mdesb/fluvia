@@ -38,6 +38,16 @@ final class TableauBordRecouvrement
     #[Groups(['dashboard_recouvrement:read'])]
     public int $nbEnRecouvrement = 0;
 
+    /**
+     * La troisieme part du denominateur du taux ci-dessous.
+     *
+     * Sans elle, l'appelant recoit un pourcentage sans savoir sur combien il porte : « 0 % » se lit
+     * alors comme un constat sur la clientele, alors qu'il ne dit souvent rien du tout. Avec les
+     * deux champs precedents, l'ecran refait le total et peut distinguer les deux situations.
+     */
+    #[Groups(['dashboard_recouvrement:read'])]
+    public int $nbResolus = 0;
+
     #[Groups(['dashboard_recouvrement:read'])]
     public int $nbAccesBloques = 0;
 

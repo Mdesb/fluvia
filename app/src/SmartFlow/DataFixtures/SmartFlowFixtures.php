@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\SmartFlow\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\DataFixtures\SocleFixtures;
 use App\Securite\Entity\Permission;
 use Doctrine\Bundle\FixturesBundle\Fixture;
@@ -19,6 +20,8 @@ use Doctrine\Persistence\ObjectManager;
  */
 final class SmartFlowFixtures extends Fixture implements DependentFixtureInterface
 {
+    use FixturesIdempotentes;
+
     public function getDependencies(): array
     {
         return [SocleFixtures::class];
@@ -27,7 +30,7 @@ final class SmartFlowFixtures extends Fixture implements DependentFixtureInterfa
     public function load(ObjectManager $manager): void
     {
         foreach (['read', 'reschedule_manage', 'reschedule_read_own', 'manage'] as $action) {
-            $permission = (new Permission())->setModule('smart_flow')->setAction($action);
+            $permission = $this->permissionNommee($manager, 'smart_flow', $action);
             $manager->persist($permission);
         }
 

@@ -72,6 +72,15 @@ const MOTS = {
   tripode: 'Tripode',
   lecteur: 'Lecteur',
 
+  // --- États d'une caisse ---
+  //
+  // « Sécurisée » est le mot du modèle, pas celui de l'exploitant : c'est l'état NORMAL d'une caisse
+  // fermée, celle qui exige le code régisseur pour rouvrir. Affiché tel quel, il se lit comme un
+  // incident de sécurité -- et il l'était dans le menu d'ouverture de session, où chaque caisse
+  // s'annonçait « securisee » sans accent.
+  securisee: 'Au repos',
+  en_fermeture: 'En fermeture',
+
   // --- Statuts courants ---
   actif: 'Actif',
   inactif: 'Inactif',
@@ -149,12 +158,72 @@ const MOTS = {
   mandat_emis: 'Mandat émis',
   paye: 'Payé',
 
+  // --- Couverture d'un créneau du roster ---
+  // Trois valeurs, et le mot compte : « conflit » sonne comme un chevauchement d'horaires alors
+  // qu'il désigne une qualification manquante ou périmée. On le dit.
+  sous_couvert: 'Sous-couvert',
+  conflit: 'Qualification en défaut',
+
   // --- Recouvrement ---
   representation: 'Représentation bancaire',
   recouvrement: 'En recouvrement',
   resolu: 'Réglé',
   virement: 'Virement',
   caisse: 'Espèces au guichet',
+  // Le résultat d'une représentation bancaire. Sans ces deux lignes, le repli affichait « Reussie »
+  // et « Echouee » — sans accent, parce que le repli désoulignise un code, il ne parle pas français.
+  reussie: 'Réussie',
+  echouee: 'Échouée',
+  app_1_clic: "Réglé par le client dans l'application",
+
+  // --- SEPA ---
+  // Le cycle d'une remise : composée en brouillon, figée en XML, puis remise à la banque.
+  generee: 'Générée',
+  transmise: 'Transmise à la banque',
+  // `actif` / `revoque` (statut d'un mandat) sont déjà dans « Statuts courants » plus haut : les
+  // redéclarer ici serait une clé en double, que la dernière écrase silencieusement.
+
+  // LES QUATRE SÉQUENCES SEPA RESTENT DES SIGLES DANS LES FICHIERS, PAS SUR L'ÉCRAN.
+  //
+  // `FRST`, `RCUR`, `FNAL`, `OOFF` sont écrits tels quels dans le pain.008 et dans les retours de la
+  // banque : on ne les renomme pas *dans le fichier*. Mais l'écran s'adresse à un régisseur, pas à
+  // un analyste bancaire, et « FRST » ne veut rien dire pour lui. On affiche donc le mot, et le
+  // sigle en dessous en `mono` là où il sert à parler à la banque.
+  FRST: 'Première',
+  RCUR: 'Suivante',
+  FNAL: 'Dernière',
+  OOFF: 'Ponctuelle',
+
+  // --- Cautions ---
+  // Statuts d'une caution. « Retenue partielle » et « retenue totale » ne sont pas deux nuances du
+  // même mot : la première rend de l'argent au client, la seconde non — c'est la question qu'il pose.
+  consignee: 'Consignée',
+  restituee: 'Restituée',
+  retenue_partielle: 'Retenue partielle',
+  retenue_totale: 'Retenue totale',
+  // Mouvements portés au journal d'une caution.
+  consignation: 'Consignation',
+  restitution: 'Restitution',
+  retenue: 'Retenue',
+  relance: 'Relance',
+  forcage: 'Forçage',
+  // Mode de calcul d'une ligne de barème.
+  forfait: 'Forfait',
+  valeur_remplacement: 'Valeur de remplacement',
+  // LE SUPPORT SUR LEQUEL PORTE UNE CAUTION.
+  //
+  // Ces quatre codes ne viennent pas d'une énumération PHP mais de constantes `TYPE_CIBLE` posées
+  // par chaque verticale (`SortirPatinsProcessor`, `AttribuerCasierHandler`,
+  // `LouerMaterielProcessor`) : `App\Caution` ne dépend d'aucune verticale, la cible est un couple
+  // opaque `typeCible`/`referenceCible`. D'où des valeurs pointées, que le repli rendait
+  // « Patinoire.patins » — lisible, mais ce n'est pas ce qu'on dit à voix haute au guichet.
+  //
+  // Vérifié contre la préprod le 28/08 : `demo.cible` vient des fixtures et apparaît réellement
+  // dans la liste, donc il est traduit lui aussi plutôt que laissé au repli.
+  'patinoire.patins': 'Patins',
+  'piscine.casier': 'Casier',
+  'padel.materiel': 'Matériel de padel',
+  'demo.cible': 'Support de démonstration',
 
   // --- Comptabilite ---
   provisoire: 'Provisoire',
@@ -187,9 +256,31 @@ export function humaniser(code) {
   return t.charAt(0).toUpperCase() + t.slice(1)
 }
 
+// LES MOTS DU METIER, PAR ETABLISSEMENT -- poses PAR-DESSUS la table statique, jamais a la place.
+//
+// << Ressource >> veut dire *praticien* dans un salon de coiffure, *ligne d'eau* dans une piscine,
+// *court* au padel. Traduire une fois pour tout le monde rendrait le logiciel faux partout sauf a un
+// endroit.
+//
+// Un code absent des remplacements garde sa traduction par defaut : un etablissement qui ne renseigne
+// rien continue de voir exactement ce qu'il voyait. C'est la seule facon d'ajouter cette souplesse
+// sans risquer de vider un mot quelque part.
+//
+// Etat de module et non contexte React, deliberement : `mot()` est appelee depuis des fonctions pures,
+// des colonnes de tableau, des titres -- la faire dependre d'un contexte obligerait a la transformer
+// en hook et a toucher trente appels pour une fonctionnalite que la plupart des etablissements
+// n'utiliseront jamais.
+let vocabulaireLocal = {}
+
+/** @param {Record<string,string>|null|undefined} mots */
+export function setVocabulaireLocal(mots) {
+  vocabulaireLocal = mots && typeof mots === 'object' ? mots : {}
+}
+
 export function mot(code) {
   if (code === null || code === undefined || code === '') return '—'
-  return MOTS[String(code)] || humaniser(code)
+  const cle = String(code)
+  return vocabulaireLocal[cle] || MOTS[cle] || humaniser(cle)
 }
 
 // Glossaire des sigles qu'on ne peut pas remplacer — ils figurent sur les équipements, dans les

@@ -36,7 +36,20 @@ final class CalculateurDroitsDelegationTest extends SecuriteApiTestCase
         self::assertNotNull($etabA);
 
         $codes = $calculateur->codesEffectifs($lecteur, $etabA->getId());
-        self::assertSame(['*.lire'], $codes);
+
+        // `*.lire` vient de l'affectation. Les trois `support.*` ne viennent d'aucun role : ce sont
+        // ceux du SOCLE D'ASSISTANCE (28/08) — tout compte rattache a un etablissement peut lire la
+        // base de connaissances, ouvrir un ticket et suivre les siens.
+        //
+        // L'EGALITE STRICTE EST CONSERVEE A DESSEIN. C'est elle qui fait rougir ce test le jour ou
+        // un droit s'ajoute en silence a tous les comptes ; la remplacer par `assertContains`
+        // rendrait le test vert pour n'importe quel elargissement futur, c'est-a-dire aveugle a
+        // exactement ce qu'il surveille.
+        sort($codes);
+        self::assertSame(
+            ['*.lire', 'support.lire', 'support.lire_ticket_soi', 'support.ouvrir_ticket'],
+            $codes,
+        );
     }
 
     /** Une délégation active enrichit les droits effectifs du bénéficiaire ; expirée, elle disparaît. */

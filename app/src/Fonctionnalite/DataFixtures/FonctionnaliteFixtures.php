@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Fonctionnalite\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\DataFixtures\SocleFixtures;
 use App\Fonctionnalite\Enum\Metier;
 use App\Fonctionnalite\Service\Fonctionnalites;
@@ -24,6 +25,8 @@ use Doctrine\Persistence\ObjectManager;
  */
 final class FonctionnaliteFixtures extends Fixture implements DependentFixtureInterface
 {
+    use FixturesIdempotentes;
+
     public function __construct(
         private readonly Fonctionnalites $fonctionnalites,
     ) {
@@ -41,7 +44,7 @@ final class FonctionnaliteFixtures extends Fixture implements DependentFixtureIn
         // --- Permissions fonctionnalite.* + octroi aux rôles administrateurs (RG-SOCLE-02/03) ---
         $perms = [];
         foreach (['lire', 'gerer'] as $action) {
-            $perm = (new Permission())->setModule('fonctionnalite')->setAction($action);
+            $perm = $this->permissionNommee($manager, 'fonctionnalite', $action);
             $manager->persist($perm);
             $perms[$action] = $perm;
         }
