@@ -3,6 +3,7 @@ import Liste, { euroCentimes, dateFr } from '../components/Liste.jsx'
 import Tabs from '../components/Tabs.jsx'
 import LettrageEcritures from '../components/LettrageEcritures.jsx'
 import SaisieEcritureManuelle from '../components/SaisieEcritureManuelle.jsx'
+import VersementRegie from '../components/VersementRegie.jsx'
 import CorrespondancesComptables from '../components/CorrespondancesComptables.jsx'
 import { api } from '../api/client.js'
 import ClotureComptable from '../components/ClotureComptable.jsx'
@@ -27,6 +28,9 @@ export default function Comptabilite({ etabActif, droits }) {
   // La cloture est l'onglet par defaut : c'est le seul du module qui porte un TRAVAIL. Les huit
   // listes existantes repondent a des questions qu'on se pose ; la cloture repond a une echeance.
   const [sousOnglet, setSousOnglet] = useState('cloture')
+  // Un versement emet un bordereau : sans ce compteur, la liste voisine afficherait encore
+  // « Aucun bordereau » juste apres en avoir cree un.
+  const [versements, setVersements] = useState(0)
 
   return (
     <div className="view">
@@ -100,16 +104,12 @@ export default function Comptabilite({ etabActif, droits }) {
 
       {sousOnglet === 'regie' && (
         <div className="resa-grid">
-          <Liste
-            titre="Régies de recettes"
-            deps={[etabActif]}
-            charger={api.regieRecettes}
-            vide="Aucune régie."
-            colonnes={[
-              { cle: 'libelle', entete: 'Régie', rendu: (r) => <span className="nm">{r.libelle || '—'}</span> },
-              { cle: 'soldeEncaisseCentimes', entete: 'Solde encaisse', num: true, rendu: (r) => euroCentimes(r.soldeEncaisseCentimes) },
-              { cle: 'plafondEncaisseCentimes', entete: 'Plafond', num: true, rendu: (r) => euroCentimes(r.plafondEncaisseCentimes) },
-            ]}
+          {/* La liste des regies etait en LECTURE SEULE, et c'est ce qui bloquait la cloture :
+              on y lisait « au-dessus du plafond » sans pouvoir verser. */}
+          <VersementRegie
+            etabActif={etabActif}
+            droits={droits}
+            onVersement={() => setVersements((n) => n + 1)}
           />
           {/* LES IMPAYES, A COTE DES ENCAISSEMENTS ET PAS AILLEURS.
               Une regie de recettes se lit par ce qu'elle a encaisse ET par ce qui lui manque. Ranger
@@ -129,7 +129,7 @@ export default function Comptabilite({ etabActif, droits }) {
           />
           <Liste
             titre="Bordereaux de versement"
-            deps={[etabActif]}
+            deps={[etabActif, versements]}
             charger={api.bordereauxVersement}
             vide="Aucun bordereau."
             colonnes={[

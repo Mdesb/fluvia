@@ -1546,6 +1546,21 @@ export const api = {
   regieRecettes: () => request('/api/regie_recettes', { query: { itemsPerPage: 100 } }),
   ventesImpayeesRegie: () =>
     request('/api/vente_impayee_regies', { query: { itemsPerPage: 100 } }),
+  // ── VERSER UNE REGIE (US-L4-02, CA-5) ─────────────────────────────────────────────────────────
+  //
+  // Corps : { montant: '123.45', justificatifs?: ['ref', ...] }
+  //
+  // ⚠ CE N'EST PAS UN CONFORT : `ClotureGuard` refuse la cloture d'une periode tant qu'une regie
+  // depasse son plafond d'encaisse. Sans cet appel, le comptable lisait « versement requis » sans
+  // aucun endroit ou verser — une obligation legale sans sortie.
+  //
+  // Deux refus du serveur, anticipes par l'ecran : montant <= 0 -> 422, montant > solde -> 409.
+  //
+  // Le handler genere l'ecriture comptable du versement dans la foulee : elle ne se saisit pas a la
+  // main dans l'onglet voisin.
+  verserRegie: (idRegie, corps) =>
+    request(`/api/compta/regies/${idRegie}/versements`, { method: 'POST', body: corps }),
+
   bordereauxVersement: () =>
     request('/api/bordereau_versements', { query: { itemsPerPage: 100 } }),
   comptesComptables: () =>
