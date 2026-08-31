@@ -25,6 +25,7 @@
 | 26/08 13:10 | **D41 termine chez moi : 11 resorbees sur 11.** Dette globale 49 -> 38. Voie A (6) par processeur de rattachement, voie B (5) par `input: false` **plus** fermeture declaree. | Verification des suites — le risque est qu-une operation dependait de la denormalisation par defaut. | Un angle mort de ton garde-fou n12, ci-dessous. |
 | 26/08 13:20 | **D41 clos et verifie** : Padel 24, Patinoire 30, Sport 31, Platform 62 — toutes vertes. Aucune operation ne dependait de la denormalisation par defaut, c-etait le risque reel du lot. Pile demontee, worktree rendu. | Plus rien d-assigne. | Rien. |
 | 26/08 23:40 | Session fermee par Maxime. Rien en cours, rien a moitie ecrit, aucune pile de test, worktree VPS rendu a `claude-I`. | **Deux taches assignees non commencees** : le preavis SEPA de `Sport` (prioritaire) et `AlertePresenceIsolee` (en troisieme, sur ta consigne). | **69 commits a moi non fusionnes dans `main`.** |
+| 31/08 23:30 | Session rouverte apres cinq jours. **Je prends T6** (fixtures rejouables en preproduction) — Maxime me l-a attribuee explicitement, hors de mon perimetre habituel. Mes deux taches assignees sont **sans objet**, preuves ci-dessous. | Mesure empirique : rejouer reellement un chargement complet, deux fois. | Rien. |
 
 ---
 
@@ -727,3 +728,48 @@ sept) · la restitution de l-arbitrage OTA (credit, acces, jauge) · fixtures id
 
 **Environnement** : aucune pile de test, aucun conteneur, worktree `/home/debian/wt/claude-I` rendu a sa
 branche. Rien a nettoyer apres moi.
+
+---
+
+## 2026-08-31 23:30 · Mes deux taches assignees sont sans objet — et je prends T6
+
+Cinq jours d-arret de mon cote. Reprise, et d-abord le menage sur ce que tu m-avais confie.
+
+### 1. « `Sport` preleve sans prevenir personne » — reglee en amont, pas par moi
+
+`GenererRemiseSepaHandler` ne fait que **deleguer** a `GenerationRemiseHandler`, qui porte desormais
+le controle de couverture livre par `claude-D`. Sport herite de la correction sans avoir ete touche.
+Le `preavisPour()` ajoute au test n-est pas un test rafistole : c-est la mise en situation, puisqu-en
+production c-est la tache planifiee qui emet les preavis. Ton avertissement etait juste, il ne
+s-applique simplement plus.
+
+### 2. « `AlertePresenceIsolee` ne peut que grandir » — la premisse est fausse
+
+Ton ordre dit qu-elle « porte un statut de chose a traiter ». **Elle n-en porte aucun.** Quatre
+proprietes : `id`, `espaceAcces`, `horodatage`, `nbPersonnesDetectees`. Pas de trait, pas de classe
+parente, **zero occurrence** de statut/traite/resolu dans tout le fichier.
+
+Or `claude-H` donne lui-meme le critere dans le meme ordre : *une collection sans champ de statut est
+un journal, pas une file d-attente, et un journal qui grandit se comporte correctement.*
+
+Et l-entite voisine, `EvenementSOS`, qui **a** un statut (`ouverte`/`traitee`), **a deja son geste de
+cloture** : `POST /sport/sos/{id}/traiter`. Le defaut cherche n-existe ni chez l-une ni chez l-autre.
+
+D55 reste juste ; c-est son application a cette entite qui ne tient pas. **Je ne l-implemente pas** —
+lui poser un statut pour pouvoir le clore serait fabriquer le probleme afin de le resoudre.
+
+### 3. Je prends T6 — sur attribution explicite de Maxime
+
+Hors de mon perimetre, donc je le dis clairement : **c-est Maxime qui l-a deplace**, pas moi et pas
+toi. Je m-y suis proposee parce que j-ai deja rendu cinq fixtures idempotentes et que je connais le
+piege exact.
+
+**Premiere mesure, et elle corrige le libelle de la tache.** Sur les **37** classes (pas 38), l-axe
+roles/permissions est **entierement traite** : mon balayage ne trouve que deux candidats, et les deux
+sont des faux positifs — ce sont les methodes de garde elles-memes, dans `SocleFixtures` et
+`L11Fixtures`.
+
+Autrement dit, la partie que la flotte a corrigee a la main est finie. **Ce qui reste n-est pas
+mesurable au grep** : une fixture peut echouer au rechargement sur n-importe quelle autre contrainte
+d-unicite. Je passe donc a la seule preuve qui vaille — **rejouer un chargement complet, deux fois**,
+et corriger ce qui tombe. Je te dirai ce que ca donne, y compris si ca ne tombe pas.
