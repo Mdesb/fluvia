@@ -34,8 +34,26 @@ declare(strict_types=1);
  *     on rassemble TOUTES les sources possibles d'une propriété nommée X
  *     si AUCUNE ne rend Y lisible → `.X.Y` vaut `undefined`, quelle que soit l'origine de l'objet
  *
- * On n'a pas besoin de savoir d'où vient l'objet, puisque aucune origine ne convient. **Zéro faux
- * positif par construction** — au prix de rater les cas qu'une homonymie innocente.
+ * On n'a pas besoin de savoir d'où vient l'objet **si l'ensemble des origines est complet**.
+ *
+ * ⚠ J'AI ÉCRIT « ZÉRO FAUX POSITIF PAR CONSTRUCTION », ET C'ÉTAIT FAUX. Deux des trois premiers
+ * résultats étaient de fausses accusations, trouvées par `allaccess-8e` en moins d'une heure. Mon
+ * ensemble d'origines était trop étroit de deux façons :
+ *
+ *   · **Le pluriel.** `.grille.typeTarif` venait de `Produit::$grilles`, pas de
+ *     `PrixHistorique::$grille`. Une boucle sur `grilles` nomme son élément `grille`. Réparé : les
+ *     noms singularisés entrent dans l'ensemble.
+ *
+ *   · **La résolution locale.** `TopologieAcces.jsx` charge la collection des contrôleurs et résout
+ *     par identifiant (`parId.get(...)`) : la variable s'appelle `controleur` sans être la relation
+ *     d'une autre entité, et les groupes à consulter sont ceux de SA collection. Motif fréquent ici,
+ *     et pour une bonne raison — les relations arrivent en IRI, donc les écrans compensent.
+ *     **Non réparable sans analyse de flot** : `l.controleur?.itboxRef` et
+ *     `r.ressourceAffectee.libelle` ont exactement la même allure.
+ *
+ * D'où le marqueur `@lecture-locale: <relation>.<propriété>` — que `allaccess-73` avait proposé et
+ * que j'avais écarté en croyant le contrôle exact. Leur avertissement visait juste avant que le
+ * défaut n'existe : « sinon il refusera des choses justes et finira désactivé ».
  *
  * ── CE QUE LE CONTRÔLE AFFIRME, ET CE QU'IL N'AFFIRME PAS ─────────────────────────────────────
  *
@@ -167,21 +185,63 @@ foreach ($it2 as $f) {
         continue;
     }
 
+    // ⚠ LA PORTE, ET POURQUOI ELLE EST INDISPENSABLE.
+    //
+    // Un objet peut venir d'une RESOLUTION LOCALE : l'ecran charge une collection a part et resout
+    // par identifiant (`parId.get(...)`) — motif frequent ici, precisement parce que les relations
+    // arrivent en IRI et que les ecrans compensent. La variable porte alors le nom d'une relation
+    // sans en etre une, et les groupes a consulter sont ceux de SA collection.
+    //
+    // Aucune forme textuelle ne separe les deux cas : `l.controleur?.itboxRef` et
+    // `r.ressourceAffectee.libelle` ont exactement la meme allure. Les distinguer demanderait de
+    // suivre l'origine de la variable.
+    //
+    // On laisse donc une porte, et on exige qu'elle soit MOTIVEE — une ligne de commentaire dans le
+    // fichier concerne :
+    //
+    //     // @lecture-locale: controleur.itboxRef  resolu depuis api.controleursAcces(), l.1120
+    //
+    // 73 l'avait demandee des le depart. Je l'avais ecartee en croyant le controle exact ; il ne
+    // l'etait pas, et leur avertissement disait exactement pourquoi : « sinon il refusera des choses
+    // justes et finira desactive ».
+    $marques = [];
+    if (preg_match_all('/@lecture-locale:\s*([\w.]+)/', $brut, $mm)) {
+        foreach ($mm[1] as $marque) {
+            $marques[$marque] = true;
+        }
+    }
+
     $vus = [];
     foreach ($tous as [$_, $rel, $sous]) {
         $cle = $rel . '.' . $sous;
-        if (isset($vus[$cle])) {
+        if (isset($vus[$cle]) || isset($marques[$cle])) {
             continue;
         }
         $vus[$cle] = true;
 
-        if (!isset($parNom[$rel]) || isset($champsLibres[$rel])) {
+        // ⚠ LE PLURIEL COMPTE. `.grille.typeTarif` etait accuse parce que la seule relation nommee
+        // `grille` est `PrixHistorique::$grille` [prix:read] — or l'objet vient de `p.grilles`, la
+        // relation PLURIELLE de `Produit`, ou `typeTarif` est bien expose. Une boucle sur `grilles`
+        // nomme naturellement son element `grille`, et ne pas le voir accuse un ecran juste.
+        $noms = [$rel, $rel . 's', $rel . 'x'];
+        $origines = [];
+        foreach ($noms as $n) {
+            if (isset($champsLibres[$n])) {
+                $origines = null;
+                break;
+            }
+            foreach ($parNom[$n] ?? [] as $k) {
+                $origines[] = $k;
+            }
+        }
+
+        if ($origines === null || $origines === []) {
             continue;
         }
 
         $plausible = false;
         $candidats = [];
-        foreach ($parNom[$rel] as $k) {
+        foreach ($origines as $k) {
             $r = $relations[$k];
             $candidats[] = $r;
 
