@@ -3109,3 +3109,77 @@ ses contrôles par une boucle et ne contient donc jamais le nom littéral. La di
 
     verifier-*.mjs · garde-fou-*.mjs   des CONTRÔLES, ils doivent tourner
     mesurer-*.mjs                      des SONDES, lancées à la main
+
+---
+
+## D97 — La reprise initiale d'un client passe avant les autres imports
+
+**Décidé par Maxime le 31/08.** Mesure préalable : l'export est mûr (Cegid, Ciel, Sage, EBP,
+reporting, audit, passages), **l'import n'existe qu'une fois** — les relevés bancaires — et rien
+n'existe pour les données d'un client.
+
+Trois familles, qui n'ont pas les mêmes règles : la **reprise initiale** (un coup, gros enjeu,
+annulable), les **flux récurrents** (petits, fréquents, rejoués), les **corrections en masse**.
+
+La reprise passe d'abord parce qu'elle bloque une signature : sans elle, un client ressaisit à la
+main son fichier d'abonnés et les crédits restants de ses cartes. Elle est aussi la plus dure, donc
+elle donne le patron aux deux autres.
+
+## D98 — Un import refuse tout, ou n'écrit rien
+
+**Décidé par Maxime le 31/08.** Sur dix mille lignes dont douze sont mauvaises : rien n'entre tant
+que le fichier n'est pas propre, et la réponse **nomme les lignes**.
+
+**Conséquence de forme, et c'est elle qui compte :** un import qui écrit et valide en même temps ne
+*peut pas* tenir cette règle — quand il découvre la ligne 4 217, les 4 216 premières sont déjà là.
+La décision impose donc **deux temps** :
+
+    POST /imports                  analyse et valide TOUT, n'écrit rien en base métier
+    POST /imports/{id}/appliquer   applique, en une transaction
+
+⚠ La simulation cesse d'être une option à cocher : elle est la première phase. On obtient le refus
+total **et** la prévisualisation sans avoir à choisir entre les deux.
+
+**Ce que ça coûte, et il faut le savoir :** un client qui met trois jours à corriger douze lignes
+n'avance pas pendant trois jours. C'est assumé — l'alternative, importer 9 988 lignes, exige une
+idempotence ligne à ligne sans laquelle un second dépôt du fichier corrigé recrée les 9 988.
+
+## D99 — Les ventes historiques ne sont pas reprises
+
+**Décidé par Maxime le 31/08.** L'ancien logiciel garde son historique le temps légal ; le nôtre
+commence à la bascule.
+
+⚠ **NF525 scelle les ventes en chaîne** : chaque opération porte l'empreinte de la précédente. Y
+injecter des ventes qu'on n'a pas produites fabrique des écritures scellées fausses — pas une
+approximation, un faux au sens où un contrôle l'entend.
+
+**Ce qui n'est PAS fermé :** un espace « antériorité » hors chaîne, consultable et exclu de tout
+calcul comptable. Il demanderait de tenir la frontière dans chaque écran, chaque export et chaque
+clôture — et une frontière tenue à 95 % en comptabilité ne vaut rien. La question se rouvrira avec un
+expert-comptable, pas seule.
+
+## D100 — Le rapprochement d'identité se fait par référence externe, jamais par le nom
+
+**Corollaire de D97, posé à la conception.** C'est le point où une reprise se gagne ou se perd :
+« Dupont Jean » existe-t-il déjà ? Une mauvaise réponse **fusionne deux personnes** ou **en duplique
+une**, et les deux se découvrent des mois plus tard, par une réclamation.
+
+⚠ **Aucune heuristique sur le nom n'est acceptable** — ni « nom + prénom », ni « nom + date de
+naissance », ni un score de similarité. Elles marchent sur 98 % des lignes, et les 2 % restants sont
+exactement les familles nombreuses, les homonymes et les fratries : la clientèle d'une piscine
+municipale.
+
+**La règle :** chaque ligne porte `externalRef`, la clé de l'enregistrement dans le logiciel
+précédent du client. Obligatoire, unique par établissement et par type.
+
+Elle fait deux choses d'un coup : le rapprochement devient **exact** (connue = mise à jour, inconnue
+= création, sans devinette), et l'idempotence devient **ligne à ligne** — rejouer un fichier corrigé
+ne duplique pas ce qui était déjà entré. Même garantie que la clé d'idempotence du rejeu hors ligne,
+et pour la même raison.
+
+⚠ **Ça déplace une charge sur le client**, et il faut le dire franchement : son extraction doit
+porter ses identifiants. Tout logiciel en a ; peu les exportent spontanément. C'est un aller-retour
+de plus à la reprise, contre une classe entière d'erreurs qui ne se rattrapent pas.
+
+**Aucune notion de référence externe n'existe aujourd'hui dans le dépôt** — mesuré le 31/08, six
+graphies cherchées, zéro occurrence. Elle est à introduire.
