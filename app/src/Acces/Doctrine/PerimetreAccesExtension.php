@@ -20,6 +20,7 @@ use App\Acces\Entity\JournalReconciliation;
 use App\Acces\Entity\ListeRevocation;
 use App\Acces\Entity\Passage;
 use App\Acces\Entity\ProductAccessZone;
+use App\Acces\Entity\SousReseau;
 use App\Acces\Entity\Support;
 use App\Acces\Entity\Terminal;
 use App\Securite\Entity\Utilisateur;
@@ -37,6 +38,22 @@ final class PerimetreAccesExtension implements QueryCollectionExtensionInterface
     /** @var array<class-string, string> Chemin (relatif à l'alias racine) vers l'établissement. */
     private const CHEMINS = [
         EspaceAcces::class => '{root}.etablissement',
+
+        // ⚠ AJOUTEE LE 31/08 -- ET ELLE NE RESSEMBLE PAS AUX AUTRES.
+        //
+        // `SousReseau` ne porte aucun rattachement : c'est un regroupement nomme d'espaces.
+        // Ce qui fuyait n'etait donc pas SON contenu mais celui qu'elle DESIGNE -- la relation
+        // `espaces` est serialisee en liste d'IRI, et une serialisation de relation ne passe
+        // pas par le fournisseur d'item : le cloisonnement d'`EspaceAcces` ne s'y appliquait
+        // pas. Un lecteur recevait 404 sur un espace etranger, et son identifiant ici.
+        //
+        // ⚠ ET CET IDENTIFIANT SUFFIT A AGIR : `POST /sport/espaces/{id}/sos` est
+        // `PUBLIC_ACCESS` -- declenchement physique, sans authentification ni permission. La
+        // seule protection etait que l'identifiant ne soit pas devinable.
+        //
+        // Le cloisonnement porte sur l'espace joint, pas sur la racine : un sous-reseau est
+        // visible s'il contient un espace du site actif.
+        SousReseau::class => 'sr_esp.etablissement',
         Controleur::class => '{root}.etablissement',
         Equipement::class => '{root}.etablissement',
         Support::class => '{root}.etablissement',
@@ -105,6 +122,19 @@ final class PerimetreAccesExtension implements QueryCollectionExtensionInterface
             $queryBuilder->innerJoin($rootAlias . '.espace', 'jfmi_esp');
         } elseif ($resourceClass === ListeRevocation::class) {
             $queryBuilder->innerJoin($rootAlias . '.controleur', 'jfmi_ctrl');
+        } elseif ($resourceClass === SousReseau::class) {
+            // ⚠ SEULE JOINTURE ManyToMany DE CETTE EXTENSION, ET C'EST CE QUI LA REND SENSIBLE.
+            //
+            // Les autres joignent un ManyToOne : une ligne racine, une ligne jointe. Celle-ci
+            // multiplie la racine par le nombre d'espaces du site actif -- un sous-reseau de trois
+            // espaces sortirait trois fois, et `totalItems` mentirait a la pagination.
+            //
+            // La deduplication vient du `->distinct()` qui termine `restreindre()`, plus bas : il
+            // s'applique a toutes les requetes restreintes, et il est le SEUL a compter ici. En
+            // ajouter un second sur cette ligne ne ferait que suggerer, faussement, que la
+            // deduplication est locale -- et enverrait chercher ailleurs le jour ou celui d'en bas
+            // disparaitrait. `testUnSousReseauDePlusieursEspacesNApparaitQuUneFois` garde CELUI-LA.
+            $queryBuilder->innerJoin($rootAlias . '.espaces', 'sr_esp');
         }
 
         $chemin = str_replace('{root}', $rootAlias, self::CHEMINS[$resourceClass]);
