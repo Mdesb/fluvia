@@ -390,6 +390,13 @@ while read -r ancien nouveau ref; do
 
     # ⚠ Contrairement au precedent, celui-ci NE S'ABSTIENT PAS ici : il ne lit que des fichiers de
     # `frontend/src`, sans `vendor/` ni noyau Symfony. L'arbre de reception lui suffit.
+    # Le seul controle du lot qui n'a besoin ni de `vendor/` ni de `node_modules` : il lit
+    # l'index git, rien d'autre. Il tourne donc ici sans condition.
+    if [ -x "$ARBRE/bin/garde-fou-marqueurs-de-conflit.sh" ]; then
+        echo "── Marqueurs de conflit (n°38)"
+        (cd "$ARBRE" && ./bin/garde-fou-marqueurs-de-conflit.sh) || ECHEC=1
+    fi
+
     if [ -f "$ARBRE/bin/garde-fou-classes-fantomes.php" ]; then
         echo "── Classes fantomes (n°37)"
         lancer garde-fou-classes-fantomes.php
