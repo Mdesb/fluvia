@@ -47,6 +47,25 @@ $racine = \dirname(__DIR__);
 $app = $racine . '/app';
 $front = $racine . '/frontend/src';
 
+// ── ABSTENTION SI LES DÉPENDANCES SONT ABSENTES ─────────────────────────────────────────────────
+//
+// Le hook `pre-receive` extrait l'arbre poussé par `git archive` : il n'a donc PAS `vendor/`
+// (gitignoré). Or ce contrôle a besoin de `bin/console debug:router`, donc de l'autoloader Composer.
+// Sans lui, le noyau ne démarre pas, la table de routes ressort vide, et une table vide ferait
+// déclarer TOUS les appels du frontal orphelins — le contraire d'un contrôle.
+//
+// Le hook le dit déjà en toutes lettres (« Le contrôle s'abstient ici faute de vendor/ — il tourne au
+// commit et dans bin/garde-fous.sh »), mais cette abstention n'était écrite NULLE PART : le contrôle
+// échouait donc à la poussée (« INSTRUMENT MORT ») et bloquait toute la flotte. On l'écrit ici, à sa
+// vraie place. `vendor/` présent mais table quand même vide reste un vrai défaut : on ne s'abstient
+// que faute de dépendances, et l'échec « instrument mort » plus bas garde tout son sens.
+if (!is_file($app . '/vendor/autoload.php')) {
+    echo "Appels dans le vide : abstention — `vendor/` absent (dépendances non installées).\n";
+    echo "  Ce contrôle exige `bin/console debug:router`, donc l'autoloader Composer. Il tourne au\n";
+    echo "  commit et dans `bin/garde-fous.sh` — jamais dans un arbre `git archive` sans dépendances.\n";
+    exit(0);
+}
+
 // ── LA TABLE DE ROUTES, ET SON TÉMOIN ───────────────────────────────────────────────────────────
 //
 // ⚠ UN ZÉRO SE SOUPÇONNE. Une commande absente, un noyau qui ne démarre pas, un `2>/dev/null` de
