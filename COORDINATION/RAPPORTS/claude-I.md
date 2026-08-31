@@ -28,6 +28,7 @@
 | 31/08 23:30 | Session rouverte apres cinq jours. **Je prends T6** (fixtures rejouables en preproduction) — Maxime me l-a attribuee explicitement, hors de mon perimetre habituel. Mes deux taches assignees sont **sans objet**, preuves ci-dessous. | Mesure empirique : rejouer reellement un chargement complet, deux fois. | Rien. |
 | 01/09 00:20 | **T6 : le libelle de la tache etait perime.** Les fixtures sont **deja** rejouables — mesure sur les 329 tables, deux chargements successifs, zero difference. Le vrai manque etait le second : la commande n-existe pas en preproduction. Livre : bundle en production, `app:demo:charger`, et **la purge refusee hors dev/test**. | Verification de non-regression du harnais. | Rien. |
 | 01/09 00:05 | **T6 termine et verifie.** `tests/Platform` 84/422 vert (mon test de garde en fait partie), `Piscine` 35/213 vert. `Sport` a 4 echecs — **preexistants** : meme resultat au caractere pres sur `origin/main`, verifie et non suppose. Pile demontee, base de verification supprimee, worktree rendu. | Plus rien. | Rien. |
+| 01/09 01:10 | **CORRECTION IMPORTANTE : mes « 4 echecs Sport preexistants » etaient faux.** Mon vendor datait du 24/08 — une semaine de retard. Sport est **vert** (35/262). Et en reverifiant T6 avec un vendor a jour, j-ai trouve le vrai bloqueur : **la demonstration ne se chargeait pas du tout** sur une base construite par migrations. Corrige, verifie. | Suites de non-regression. | Rien. |
 
 ---
 
@@ -880,3 +881,60 @@ ouvre pas de ma propre initiative : Maxime m-a attribue T6, pas un retour aux ve
 **Etat** : aucune pile de test, base de verification supprimee, worktree rendu. Deux entrees de
 `git stash` a mon nom trainent sur le VPS (`reference.php` genere) ; je les laisse, les indices se
 decalent et le reste de la pile appartient a `claude-A`.
+
+---
+
+## 2026-09-01 01:10 · Je retire ce que j-ai dit sur Sport, et T6 avait un bloqueur que je n-avais pas vu
+
+### D-abord la correction : ne cherche pas les 4 echecs Sport, ils n-existent pas
+
+Je t-ai ecrit hier que `tests/Sport` avait **4 echecs preexistants, verifies sur `origin/main`**.
+**C-est faux, et l-erreur est de methode.** Le vendor de mon worktree datait du **24 aout** :
+`symfony/rate-limiter` avait ete ajoute depuis et n-y etait pas installe. Les quatre tests tombaient
+sur « `RateLimiterFactory` not found ».
+
+Ma comparaison avec `main` ne valait rien : **les deux passages partageaient le meme vendor perime**.
+Elle prouvait « ce n-est pas mon lot », pas « c-est un defaut de `main` » — et j-ai rapporte la seconde
+conclusion. Apres `composer install`, **Sport est vert : 35 tests, 262 assertions**. Le frein du bouton
+SOS fonctionne.
+
+Si quelqu-un a commence a chercher ce defaut sur ma foi, qu-il s-arrete.
+
+### Et ce que la reverification a fait remonter : T6 ne marchait pas
+
+Mes verifications de T6 ayant tourne sur ce meme vendor perime, je les ai toutes rejouees. C-est la
+que le vrai bloqueur est apparu — et il n-a rien a voir avec le vendor.
+
+**Je construisais la base de verification avec `doctrine:schema:create`.** La preproduction, elle, la
+construit avec **les migrations**. Ce n-est pas le meme point de depart : les migrations **inserent des
+donnees**, `SchemaTool` non.
+
+Sur une base construite par migrations, **le chargement echouait des la premiere fixture qui compte** :
+
+    Duplicate entry 'especes' for key 'uniq_moyen_code'
+
+`Version20260814231600` insere les onze moyens de paiement (`INSERT IGNORE`). `ComptaFixtures` les
+recree sans garde. Toute base de preproduction les a donc **avant qu-aucune fixture n-ait tourne**.
+
+**Pourquoi la garde d-entree de la classe ne protegeait pas.** `ComptaFixtures` s-arrete si le profil
+exploitant existe — un temoin cense representer tout son bloc. Or la migration pose les moyens de
+paiement **sans** poser le profil. Le temoin est absent, la fixture repart, et heurte des lignes qui
+sont deja la. **Un temoin present ne garantit pas que tout le bloc qu-il represente le soit** ; c-est
+la meme famille que D52, un cran au-dessus.
+
+**Corrige** : chaque moyen est cherche avant d-etre cree, comme `permissionPour`. `app/src/Compta`
+n-est pas mon perimetre — je le dis franchement — mais c-est le bloqueur exact du chantier que Maxime
+m-a confie, et tu n-etais pas joignable. Le diff est de sept lignes plus un commentaire.
+
+### Verifie, cette fois dans les conditions reelles
+
+| Scenario | Resultat |
+|---|---|
+| base construite par **migrations**, premier chargement | **37 classes, « rien n-a ete supprime »** |
+| second chargement | **37 classes, succes** |
+| troisieme chargement, comparaison des **331 tables** | **aucune difference** |
+
+**La lecon, et c-est la deuxieme fois en deux jours que la meme famille me piege** : une verification
+ne vaut que si son point de depart est celui du reel. Un cache de production perime m-a fait conclure
+faux deux fois ; un schema construit autrement qu-en production m-a cache un bloqueur complet. Les
+deux fois, l-essai s-executait normalement et affichait un resultat plausible.
