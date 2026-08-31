@@ -1,0 +1,200 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Tests\Platform\Unit;
+
+use PHPUnit\Framework\TestCase;
+
+/**
+ * QUELLES RESSOURCES UN CORPS VIDE SUFFIRAIT-IL A CREER ?
+ *
+ * Le 30/08, un POST au corps vide sur `/api/patinoire_parc_patins` a rendu 201 et cree une ligne
+ * definitive sur un etablissement de demonstration. Toutes les proprietes avaient une valeur par
+ * defaut, et les deux seules contraintes — `Range(28, 48)` et `PositiveOrZero` — etaient satisfaites
+ * par ces defauts. L'enregistrement obtenu avait l'air d'une saisie voulue : pointure 28, zero
+ * paire, en service. Rien ne le distinguait.
+ *
+ * ⚠ CE CONTROLE EST UN CLIQUET, PAS UNE LISTE DE DEFAUTS.
+ *
+ * Les vingt entrees gelees ci-dessous ne sont PAS vingt trous confirmes : c'est une mesure statique,
+ * et certaines ont peut-etre un processeur qui exige quelque chose ou une garde qui refuse. Ce que
+ * ce test interdit, c'est la VINGT-ET-UNIEME — celle que personne n'a encore ecrite.
+ *
+ * Le plafond ne remonte pas. Corriger une entree (exiger ce qui doit l'etre, ou offrir une
+ * suppression) la fait sortir du compte, et le plafond s'abaisse.
+ *
+ * ⚠ POURQUOI UN TEST STATIQUE ET NON UN APPEL REEL. Verifier par un POST vide reviendrait a creer
+ * l'enregistrement qu'on redoute — la sonde supposerait ce qu'elle mesure. Sur vingt ressources, ce
+ * seraient vingt traces indelebiles, dont une identite legale et un parametrage de facturation.
+ * C'est exactement la faute qui a produit le cas connu.
+ */
+final class CorpsVideCreeUneLigneTest extends TestCase
+{
+    /**
+     * Le plafond gele au 31/08/2026. Il s'abaisse quand une ressource est corrigee ; il ne remonte
+     * pas. Une ressource neuve qui entre dans le critere fait echouer ce test, et c'est le but.
+     */
+    private const PLAFOND = 20;
+
+    /** Le cas connu, qui sert de temoin positif : la mesure doit le voir ET le classer a risque. */
+    private const TEMOIN = 'Patinoire/Entity/ParcPatins.php';
+
+    public function testAucuneNouvelleRessourceCreableAVide(): void
+    {
+        $racine = \dirname(__DIR__, 3) . '/src';
+        $concernes = [];
+        $vues = 0;
+        $temoinVu = false;
+
+        foreach ($this->fichiersPhp($racine) as $chemin) {
+            $source = file_get_contents($chemin);
+            if (!\is_string($source) || !str_contains($source, '#[ApiResource') || !str_contains($source, 'new Post(')) {
+                continue;
+            }
+
+            $proprietes = $this->proprietes($source);
+            if ($proprietes === []) {
+                continue;
+            }
+
+            ++$vues;
+            $relatif = str_replace($racine . '/', '', $chemin);
+
+            if ($this->creableAVide($source, $proprietes)) {
+                $concernes[] = $relatif;
+                if ($relatif === self::TEMOIN) {
+                    $temoinVu = true;
+                }
+            }
+        }
+
+        // ⚠ DEUX TEMOINS, POUR DEUX FACONS DE SE TROMPER.
+        //
+        // Le premier : la mesure a-t-elle lu quelque chose ? Une expression reguliere trop stricte
+        // rendrait « zero ressource concernee » en ayant tout lu et rien vu — un zero rassurant et
+        // faux. C'est arrive : le motif initial s'arretait sur les crochets INTERNES d'un
+        // `#[Groups(['a', 'b'])]` et ne retrouvait jamais `private`.
+        //
+        // Le second : le critere mesure-t-il ce qu'on croit ? Un critere trop strict verrait le cas
+        // connu et le declarerait sain. Meme zero, autre cause.
+        self::assertGreaterThan(100, $vues, 'la mesure ne lit presque rien : elle ne prouve pas ce qu elle affirme');
+        self::assertTrue($temoinVu, self::TEMOIN . ' doit etre classe a risque : sinon le critere ne mesure pas ce qu on croit');
+
+        self::assertLessThanOrEqual(
+            self::PLAFOND,
+            \count($concernes),
+            sprintf(
+                "Une ressource de plus peut etre creee par un corps VIDE, sans suppression possible.\n\n%s\n\n"
+                . "Deux sorties :\n"
+                . "  - exiger ce qui doit l'etre (Assert\\NotBlank, Assert\\NotNull) sur ce sans quoi\n"
+                . "    l'enregistrement n'a pas de sens ;\n"
+                . "  - ou offrir une sortie : un Delete, ou un drapeau `actif` que l'ecran sait poser.\n\n"
+                . "Si la ressource est corrigee, ABAISSE le plafond (%d) au nombre reel.",
+                implode("\n", array_map(static fn (string $f): string => '  - ' . $f, $concernes)),
+                self::PLAFOND,
+            ),
+        );
+    }
+
+    /**
+     * ⚠ LE SECOND SENS, ET IL COMPTE AUTANT QUE LE PREMIER.
+     *
+     * Un critere trop LARGE ferait echouer le test sur des ressources parfaitement saines, et un
+     * controle qui crie sur des innocents finit desarme. On verifie donc qu'une ressource qui exige
+     * quelque chose n'est PAS comptee — sur un cas fabrique, pour ne dependre d'aucun fichier du
+     * depot qui pourrait changer.
+     */
+    public function testUneRessourceQuiExigeQuelqueChoseNEstPasComptee(): void
+    {
+        $avecExigence = <<<'PHP'
+            #[ApiResource(operations: [new Post()])]
+            class Exemple
+            {
+                #[ORM\Column(length: 80)]
+                #[Assert\NotBlank]
+                #[Groups(['x:read', 'x:write'])]
+                private string $libelle = '';
+            }
+            PHP;
+
+        $sansExigence = <<<'PHP'
+            #[ApiResource(operations: [new Post()])]
+            class Exemple
+            {
+                #[ORM\Column(length: 80)]
+                #[Groups(['x:read', 'x:write'])]
+                private string $libelle = '';
+            }
+            PHP;
+
+        self::assertNotEmpty($this->proprietes($sansExigence), 'temoin : la lecture des proprietes doit fonctionner sur ce cas');
+
+        self::assertFalse(
+            $this->creableAVide($avecExigence, $this->proprietes($avecExigence)),
+            'une ressource qui exige une valeur ne doit pas etre comptee',
+        );
+        self::assertTrue(
+            $this->creableAVide($sansExigence, $this->proprietes($sansExigence)),
+            'une ressource dont tout est par defaut doit etre comptee — sinon ce controle ne refuse rien',
+        );
+    }
+
+    /**
+     * @return list<array{0: string, 1: string, 2: string}>
+     */
+    private function proprietes(string $source): array
+    {
+        // Fenetre bornee plutot que « tout sauf un crochet » : un `#[Groups(['a', 'b'])]` porte des
+        // crochets internes, et une classe negative s'y arrete.
+        preg_match_all(
+            '/#\[ORM\\\\Column[\s\S]{0,300}?private\s+(\??[\w\\\\]+)\s+\$(\w+)\s*(=)?/',
+            $source,
+            $trouves,
+            PREG_SET_ORDER,
+        );
+
+        return $trouves;
+    }
+
+    /**
+     * @param list<array{0: string, 1: string, 2: string}> $proprietes
+     */
+    private function creableAVide(string $source, array $proprietes): bool
+    {
+        // `Range` et `PositiveOrZero` n'exigent RIEN : elles sont satisfaites par 28 et par 0. Seules
+        // les contraintes de PRESENCE refusent un corps vide.
+        if (preg_match('/#\[Assert\\\\(NotBlank|NotNull|Count|Valid)\b/', $source) === 1) {
+            return false;
+        }
+
+        if (str_contains($source, 'new Delete(')) {
+            return false;
+        }
+
+        // `$id` n'a pas de valeur par defaut mais est pose par le constructeur : on tolere un seul
+        // champ sans defaut avant de considerer qu'une saisie est reellement exigee.
+        $sansDefaut = 0;
+        foreach ($proprietes as $p) {
+            if (!isset($p[3]) || $p[3] === '') {
+                ++$sansDefaut;
+            }
+        }
+
+        return $sansDefaut <= 1;
+    }
+
+    /** @return list<string> */
+    private function fichiersPhp(string $racine): array
+    {
+        $out = [];
+        $it = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($racine, \FilesystemIterator::SKIP_DOTS));
+        foreach ($it as $f) {
+            if ($f instanceof \SplFileInfo && $f->getExtension() === 'php') {
+                $out[] = $f->getPathname();
+            }
+        }
+
+        return $out;
+    }
+}

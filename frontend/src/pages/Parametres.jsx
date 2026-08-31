@@ -439,7 +439,7 @@ function descripteurPointsDeVente(api, etabActif, moyens = []) {
  * Valeur par defaut `false` : tant que le profil n'est pas charge, on CACHE. Montrer puis cacher
  * ferait apparaitre une fraction de seconde, a un client, ce qu'on veut precisement lui epargner.
  */
-export default function Parametres({ etabActif, etablissements, droits = [], onCapacitesChangees, estEditeur = false }) {
+export default function Parametres({ etabActif, etablissements, droits = [], onCapacitesChangees, estEditeur = false, envoiCourriel = false }) {
   const [ouvertureStructure, setOuvertureStructure] = useState(false)
   const [sousOnglet, setSousOnglet] = useState('entites')
 
@@ -1265,6 +1265,7 @@ function ComptesDroits({ etabActif, etablissements, droits = [] }) {
       </section>
 
       <ModalInvitation
+        envoiCourriel={envoiCourriel}
         open={modalInvit}
         roles={roles}
         etablissements={etablissements}
@@ -1298,9 +1299,23 @@ function ComptesDroits({ etabActif, etablissements, droits = [] }) {
           // ⚠ ON NE REDIT PAS LE MOT DE PASSE ICI. Il a ete saisi une fois, il est hache cote
           // serveur, et le reafficher dans un bandeau le laisserait sur l'ecran d'un poste
           // partage — souvent une caisse en libre-service.
+          // ⚠ CETTE PHRASE ÉTAIT ÉCRITE EN DUR, ET ELLE SERAIT DEVENUE FAUSSE SANS PRÉVENIR.
+          //
+          // « aucun envoi de courriel n'est branché » était vrai à l'écriture. Le jour où Maxime
+          // configure un expéditeur, elle annoncerait une invitation non partie alors qu'elle
+          // serait partie — et rien ne relierait la phrase à ce qui l'a rendue fausse. C'est le
+          // défaut qu'on a passé la nuit à retirer d'ailleurs ; il n'y a pas de raison de le
+          // laisser ici.
+          //
+          // `envoiCourriel` vient de `/me` (`ExpediteurCourriel::estBranche()`), donc la phrase
+          // suit l'état réel de l'instance et se corrigera toute seule.
           setMsg(payload.motDePasse
             ? `Compte créé pour ${payload.email}. Communiquez-lui son mot de passe de vive voix.`
-            : `Compte créé pour ${payload.email} — invitation NON envoyée, aucun envoi de courriel n’est branché.`)
+            : envoiCourriel
+              ? `Compte créé pour ${payload.email} — une invitation lui a été envoyée par courriel.`
+              : `Compte créé pour ${payload.email} — invitation NON envoyée : cette instance n’a pas `
+                + `d’expéditeur de courriel. Posez-lui un mot de passe depuis sa fiche, ou `
+                + `recréez-le en choisissant « Je pose un mot de passe maintenant ».`)
           await charger()
         }}
       />
@@ -1552,7 +1567,7 @@ function MatriceDroits({ roles, etabActif, affectations = [], utilisateurs = [] 
   )
 }
 
-function ModalInvitation({ open, roles, etablissements, etabActif, onClose, onInvite }) {
+function ModalInvitation({ open, roles, etablissements, etabActif, onClose, onInvite, envoiCourriel = false }) {
   const [email, setEmail] = useState('')
   const [nom, setNom] = useState('')
   const [roleId, setRoleId] = useState('')
@@ -1622,8 +1637,23 @@ function ModalInvitation({ open, roles, etablissements, etabActif, onClose, onIn
           <label htmlFor="inv-voie">Comment cette personne se connectera</label>
           <select id="inv-voie" className="select" value={voie} onChange={(e) => setVoie(e.target.value)}>
             <option value="motdepasse">Je pose un mot de passe maintenant</option>
-            <option value="invitation">Le compte reçoit une invitation par courriel</option>
+            {/* ⚠ ON NE DÉSACTIVE PAS CE CHOIX, ON DIT CE QU'IL FAIT AUJOURD'HUI.
+                L'invitation par courriel est le bon parcours et redeviendra le parcours normal dès
+                qu'un expéditeur sera configuré. La désactiver obligerait à s'en souvenir ce jour-là
+                — et personne ne repasse sur un `disabled` posé six mois plus tôt. Le libellé, lui,
+                suit `/me` et se corrige tout seul. */}
+            <option value="invitation">
+              {envoiCourriel
+                ? 'Le compte reçoit une invitation par courriel'
+                : 'Invitation par courriel — aucun expéditeur configuré, rien ne partira'}
+            </option>
           </select>
+          {!envoiCourriel && (
+            <span className="hint">
+              Cette instance n’envoie aucun courriel. Le compte sera créé et restera « invité »
+              jusqu’à ce qu’un mot de passe lui soit posé — préférez le premier choix.
+            </span>
+          )}
         </div>
 
         {voie === 'motdepasse' ? (
