@@ -1561,6 +1561,29 @@ export const api = {
   verserRegie: (idRegie, corps) =>
     request(`/api/compta/regies/${idRegie}/versements`, { method: 'POST', body: corps }),
 
+  // ── IMPAYES DE REGIE (RG-M6-09) ───────────────────────────────────────────────────────────────
+  //
+  // Corps : { motif?: string }. Sans motif, le serveur enregistre « Recette de regie » — ce qui ne
+  // dira rien a qui relira la ligne dans six mois, donc l'ecran encourage a le remplir.
+  //
+  // ⚠ Refus du serveur : 409 si la vente est DEJA marquee. L'ecran ne peut prevenir que dans un
+  // sens — trouvee dans la liste chargee => deja marquee ; l'absence ne prouve rien, la liste est
+  // paginee.
+  marquerImpayeeRegie: (idVente, corps) =>
+    request(`/api/compta/ventes/${idVente}/marquer-impayee-regie`, { method: 'POST', body: corps }),
+
+  // ── ENCAISSEMENTS PAYFIP ──────────────────────────────────────────────────────────────────────
+  //
+  // Le referentiel entier n'avait aucune trace dans l'interface. Un bordereau bloque en
+  // `en_attente` etait invisible de partout.
+  //
+  // ⚠ IL N'Y A PAS D'APPEL DE REJEU ICI, ET C'EST DELIBERE. `rejouer()` n'incremente qu'un compteur
+  // de tentatives : il n'interroge pas la DGFiP et ne change aucun statut. L'exposer donnerait
+  // l'illusion d'avoir relance. Le vrai rejeu depend de la signature des rappels du Tresor —
+  // bloqueur externe E-7.
+  bordereauxPayFip: () =>
+    request('/api/bordereau_pay_fi_ps', { query: { itemsPerPage: 100 } }),
+
   bordereauxVersement: () =>
     request('/api/bordereau_versements', { query: { itemsPerPage: 100 } }),
   comptesComptables: () =>
