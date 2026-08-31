@@ -8,6 +8,52 @@ conteste, et se retire quand sa raison disparaît.
 
 ---
 
+## 31/08 — filet de complétude : le garde-fou n°37 refuse le commit qui l'ajoute
+
+**Par** le worktree `claude-A`, sur le lot des classes CSS fantômes.
+
+**Ce que le contrôle disait :**
+
+    ✗ Garde-fou présent dans l'arbre mais jamais lancé par ce hook :
+      garde-fou-classes-fantomes.php
+      Ajoute son appel dans hooks/pre-commit.
+
+**Il a parfaitement raison, et je l'ai fait.** Les trois listes sont câblées dans
+ce commit : `bin/garde-fous.sh` (les deux branches), `hooks/pre-commit` et
+`hooks/pre-receive`.
+
+**Pourquoi il refuse quand même.** Le crochet qui s'exécute n'est pas celui du
+dépôt : c'est la copie installée dans le répertoire commun, partagée par tous les
+worktrees, et `post-receive` la réinstalle depuis `main` (D28). Ma ligne existe
+donc dans `hooks/pre-commit` sans exister dans le crochet qui la vérifie. Le filet
+est cohérent avec `main`, pas avec mon arbre — et il le sera de nouveau dès
+l'intégration.
+
+**Ce n'est pas un défaut du filet.** Il est délibéré, et sa raison tient : trois
+garde-fous avaient jadis été écrits, câblés au lanceur, annoncés livrés, et
+n'avaient jamais tourné. Un contrôle qui ne tourne pas est pire qu'absent — il
+donne le vert.
+
+⚠ **Et je n'ai PAS réinstallé le crochet pour passer.** La réinstallation suivante
+l'effacerait, et entre-temps j'aurais changé le contrôle que subissent les huit
+autres worktrees sans que personne l'ait décidé. Contourner chez moi ne coûte
+qu'à moi ; réinstaller coûte à tout le monde.
+
+**Ce que j'ai lancé à la main avant de passer outre**, et qui couvre exactement ce
+que le crochet aurait fait :
+
+    bash bin/garde-fous.sh        ->  ✓ 37 garde-fou(s) OK
+    npx vite build                ->  ✓ built
+    le n°37 vu ÉCHOUER            ->  un fichier témoin jetable portant une classe
+                                      inventée le fait échouer, avec nom et ligne ;
+                                      retiré, il repasse
+
+**Quand cette entrée disparaît :** à l'intégration de `front-ecrans` dans `main`.
+Le crochet installé se réinstallera alors avec la ligne, et le contournement
+n'aura plus d'objet.
+
+---
+
 ## 30/08 — garde-fou n°11 : contournement local tenté, puis CORRIGÉ
 
 **Par** allaccess-c2, sur le lot du compostage de billet.

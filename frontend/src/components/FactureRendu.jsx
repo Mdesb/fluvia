@@ -59,6 +59,27 @@ const EMETTEUR_MENTIONS = [
   { cle: 'ape', libelle: 'APE', phrase: 'code APE', attendue: false },
 ]
 
+// ── UN SIRET FAIT QUATORZE CHIFFRES, UN SIREN NEUF ────────────────────────────────────────────
+//
+// Les neuf premiers sont le SIREN, qui désigne l'ENTREPRISE. Les cinq suivants sont le NIC, qui
+// désigne l'ÉTABLISSEMENT — c'est-à-dire lequel de ses sites facture. C'est le SIRET complet qui
+// est la mention exigée sur une facture française.
+//
+// ⚠ ET LA SUBSTITUTION EST INVISIBLE À TOUT CE QUI VÉRIFIE. Mesuré le 01/09 sur `/rendu` :
+//
+//       la veille   "siret": "13002526500012"    14 chiffres
+//       le lendemain "siret": "130025265"          9 chiffres
+//
+// Le champ était toujours présent, toujours non vide, toujours numérique. Aucun test ne tombe,
+// aucun garde-fou ne parle, le build passe — et le document affirme « SIRET » sous un numéro qui
+// n'en est pas un. Un écran qui pose une mention légale sans en vérifier la forme la CERTIFIE.
+function formeIdentifiant(v) {
+  const chiffres = String(v ?? '').replace(/\D/g, '')
+  if (chiffres.length === 14) return { libelle: 'SIRET', complet: true }
+  if (chiffres.length === 9) return { libelle: 'SIREN', complet: false, siren: true }
+  return { libelle: 'Identifiant', complet: false }
+}
+
 /** Une valeur qu'on peut poser telle quelle sur le document. On n'additionne, ne formate et
  *  n'unifie rien ici : un capital social arrive comme le serveur le donne. */
 const imprimable = (v) => v !== null && v !== undefined && v !== '' && typeof v !== 'object'
@@ -86,9 +107,21 @@ function lireEmetteur(emetteur) {
     lignes.push({ cle: c, libelle: humaniser(c), valeur: String(e[c]) })
   })
 
+  const identifiant = formeIdentifiant(e.siret)
+
   return {
     lignes,
-    absentes: EMETTEUR_MENTIONS.filter((m) => m.attendue && !imprimable(e[m.cle])).map((m) => m.phrase),
+    identifiant,
+    absentes: [
+      ...EMETTEUR_MENTIONS.filter((m) => m.attendue && !imprimable(e[m.cle])).map((m) => m.phrase),
+      // ⚠ Le SIRET n'est pas « absent » au sens du tableau libre : la clé existe et porte une
+      //    valeur. Il est absent au sens qui compte — le document n'en porte pas un.
+      ...(identifiant.complet
+        ? []
+        : [identifiant.siren
+          ? 'numéro SIRET (le document porte un SIREN, qui désigne l’entreprise et non l’établissement)'
+          : 'numéro SIRET']),
+    ],
     // ⚠ Une valeur non primitive ne se pose pas sur le document, mais on ne la fait pas
     //    disparaître pour autant : on la NOMME à l'écran. Muet est le seul état interdit.
     nonRendues: autres.filter((c) => !imprimable(e[c]) && e[c] !== null && e[c] !== undefined && e[c] !== ''),
@@ -214,7 +247,13 @@ export default function FactureRendu({ facture, onClose }) {
                 <div className="fact-bloc-titre">Émetteur</div>
                 <div className="fact-nom">{rendu.emetteur?.denomination || '—'}</div>
                 <AdresseBloc adresse={rendu.emetteur?.adresse} />
-                {rendu.emetteur?.siret && <div className="fact-ligne-info">SIRET {rendu.emetteur.siret}</div>}
+                {/* ⚠ LE LIBELLÉ SUIT LA VALEUR, IL NE LA DÉCRÈTE PAS. Écrire « SIRET » devant neuf
+                    chiffres, c'est le document lui-même qui ment — et il est opposable. */}
+                {rendu.emetteur?.siret && (
+                  <div className="fact-ligne-info">
+                    {emetteur.identifiant.libelle} {rendu.emetteur.siret}
+                  </div>
+                )}
                 {rendu.emetteur?.tvaIntra && <div className="fact-ligne-info">TVA {rendu.emetteur.tvaIntra}</div>}
                 {/* Tout le reste du tableau libre, connu ou non. Une clé que ce fichier n’a
                     jamais vue s’imprime avec un libellé approximatif plutôt que de disparaître. */}

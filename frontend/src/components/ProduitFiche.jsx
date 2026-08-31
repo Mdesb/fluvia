@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useMemo, useEffect, useRef, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { libelleProduit, prixIndicatif, euros, statutProduit, sansTarifConnu } from '../api/produit.js'
 import Modal from './Modal.jsx'
@@ -128,6 +128,12 @@ export default function ProduitFiche({
   // Les zones d'accès ne se règlent pas avec les droits de l'Offre : ouvrir une porte n'est pas
   // modifier un prix. La section porte donc ses propres droits (`acces.lire` / `acces.gerer`).
   droits = [],
+  // Les capacités ACTIVES de l'établissement (`me.capacitesActives`), qui décident des onglets.
+  //
+  // ⚠ Le défaut est la liste VIDE, donc le jeu minimal : Présentation et Vente. Un défaut
+  // « tout afficher » aurait rendu la composition invisible tant qu'aucun appelant ne passe la
+  // prop — l'écran aurait paru marcher, et n'aurait rien composé.
+  capacites = [],
 }) {
   const [edition, setEdition] = useState(null)
   const [editionCompta, setEditionCompta] = useState(null)
@@ -142,6 +148,49 @@ export default function ProduitFiche({
   // L'onglet vit en état local et non dans l'URL : c'est une vue d'un même objet, pas une
   // navigation. Le retour au catalogue et l'adresse de la fiche, eux, sont dans l'URL.
   const [vueFiche, setVueFiche] = useState('vitrine')
+
+  // ── LES ONGLETS SE COMPOSENT, ILS NE SONT PAS UNE LISTE FIXE ─────────────────────────────────
+  //
+  // Le controle d'acces, la comptabilite et le stock sont trois MODULES SEPARES : un exploitant
+  // peut n'en avoir aucun, ou les trois. Un onglet fixe « Acces & comptabilite » serait a moitie
+  // vide chez qui n'a que l'un des deux, et mentirait sur ce que le produit sait faire.
+  //
+  // ⚠ ABSENT, JAMAIS GRISE. Un onglet grise fait chercher ce qui manque et invite a « debloquer »
+  // ce qui n'est pas bloque ; un onglet absent ne pose aucune question. Meme regle que les actions
+  // de statut, plus haut dans ce module.
+  const onglets = useMemo(() => {
+    const liste = [['vitrine', 'Présentation'], ['vente', 'Vente']]
+    if (capacites.includes('agenda')) liste.push(['agenda', 'Agenda'])
+    if (capacites.includes('controle_acces')) liste.push(['acces', 'Accès'])
+    if (capacites.includes('stock')) liste.push(['stock', 'Stock'])
+    if (capacites.includes('comptabilite')) liste.push(['compta', 'Comptabilité'])
+    return liste
+  }, [capacites])
+
+  // ⚠ SANS CE REPLI, LA FICHE PEUT SE RENDRE VIDE. `capacitesActives` depend de l'etablissement
+  // ACTIF : en changer pendant qu'on est sur « Comptabilité » laisserait `vueFiche` sur un onglet
+  // qui n'existe plus, et aucun bloc ne rendrait rien — un ecran blanc, sans erreur.
+  const vueConnue = onglets.some(([cle]) => cle === vueFiche)
+  const vue = vueConnue ? vueFiche : 'vitrine'
+
+  // ALLER A UNE SECTION DEPUIS LA LIGNE COMPACTE. Les deux cibles vivent dans l'onglet « Vente ».
+  //
+  // ⚠ LE DEFILEMENT ATTEND QUE REACT AIT RENDU L'ONGLET : avant la validation du rendu, l'ancre
+  // n'existe pas dans le document et `getElementById` rend `null`. Deux `requestAnimationFrame`
+  // imbriques garantissent qu'on passe apres.
+  //
+  // ⚠ Et `scroll-margin-top` (styles.css) decale l'arret sous la barre collante de 62 px — sans
+  // elle, la section visee arrive DESSOUS. Trouve en cliquant, pas en lisant.
+  function allerA(ancre) {
+    setVueFiche('vente')
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const cible = document.getElementById(ancre)
+      if (!cible) return
+      const doux = !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      cible.scrollIntoView({ behavior: doux ? 'smooth' : 'auto', block: 'start' })
+    }))
+  }
+
   const [detail, setDetail] = useState(null)
   // Référentiels du bloc Diffusion. Chargés une fois par fiche, et leur absence n'empêche pas de
   // modifier le reste : `Promise.allSettled`, jamais `all`.
@@ -713,43 +762,80 @@ export default function ProduitFiche({
         )}
       </div>
 
-      {/* Ce que l'exploitant cherche en premier : combien, où, et combien il en reste. */}
-      <div className="fiche-stats">
-        <div>
-          <div className="st-lib">Tarif indicatif</div>
-          <div className="st-val num">{euros(base)}</div>
-          {/* UN TIRET N'EST PAS UNE EXPLICATION. `euros(null)` rend « — », qui se lit « prix non
-              renseigné pour l'instant » alors que la conséquence est totale : sans grille, le
-              produit ne peut être vendu nulle part, y compris publié et ouvert à tous les canaux.
-              On le dit à côté du tiret, là où on le lit. */}
-          {p?.statut === 'publie' && sansTarifConnu(p) === true && (
-            <div className="hint">
-              Aucun tarif : ce produit est publié mais invendable. Ajoutez une grille dans
-              <b> Tarifs</b>, plus bas.
-            </div>
+      {/* ── LA LIGNE COMPACTE ────────────────────────────────────────────────────────────────
+          Trois tuiles hautes remplacees par une ligne de sous-titre. Deux des trois valeurs se
+          modifiaient PLUS BAS — `Tarif` dans la section Tarifs, `Vendu` dans Diffusion — et le
+          bandeau le disait lui-meme (« ajoutez une grille dans Tarifs, plus bas »). On lisait, on
+          descendait, on relisait, on modifiait : c'est ca, « faire deux fois ».
+
+          Elles restent lisibles d'un coup d'oeil, mais elles MENENT desormais a leur section au
+          lieu d'y renvoyer par une phrase.
+
+          ⚠ L'ETAT N'EST PAS ICI, ET C'EST VOULU. Le badge de la ligne d'identite le porte deja —
+          `statutProduit()` le passe en orange quand un produit publie n'a aucun tarif. Le remettre
+          ici recreerait le doublon qu'on supprime, deplace d'un cran. */}
+      <div className="fiche-ligne">
+        <span className="fl-item">
+          <span className="fl-lib">Tarif</span>
+          {/* ⚠ `sansTarifConnu` rend `null` quand les grilles ne sont pas chargees, et on ne
+              conclut RIEN d'un `null` : on n'ecrit « invendable » que sur un `true` franc. */}
+          {p?.statut === 'publie' && sansTarifConnu(p) === true ? (
+            <button
+              type="button"
+              className="fl-val alerte"
+              onClick={() => allerA('prod-tarifs')}
+              aria-label="Aucun tarif, produit invendable — aller à la section Tarifs"
+            >
+              aucun — invendable
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="fl-val"
+              onClick={() => allerA('prod-tarifs')}
+              aria-label={`Tarif indicatif ${euros(base)} — aller à la section Tarifs`}
+            >
+              {euros(base)}
+            </button>
           )}
-        </div>
-        <div>
-          <div className="st-lib" title="Les endroits où ce produit peut être vendu.">Vendu</div>
-          <div className="st-val">{(p.canaux || []).map(mot).join(', ') || '—'}</div>
-        </div>
-        <div>
-          <div className="st-lib" title="Quantité disponible à la vente, tenue par le module Stock.">
+        </span>
+
+        <span className="fl-sep" aria-hidden="true">·</span>
+
+        <span className="fl-item">
+          <span className="fl-lib">Vendu</span>
+          <button
+            type="button"
+            className="fl-val"
+            onClick={() => allerA('prod-diffusion')}
+            aria-label="Canaux de vente — aller à la section Diffusion"
+          >
+            {(p.canaux || []).map(mot).join(', ') || 'aucun canal'}
+          </button>
+        </span>
+
+        <span className="fl-sep" aria-hidden="true">·</span>
+
+        {/* ⚠ NI SOULIGNE NI CLIQUABLE. Aucune section de cette fiche ne porte le stock — le module
+            Stock le tient de son cote. Il n'y a donc nulle part ou aller, et un faux raccourci
+            coute plus cher qu'une valeur sans raccourci. */}
+        <span className="fl-item">
+          <span className="fl-lib" title="Quantité disponible à la vente, tenue par le module Stock.">
             Stock
-          </div>
-          <div className="st-val num">
-            {p.stock && typeof p.stock.disponibilite === 'number' ? p.stock.disponibilite : 'Non suivi'}
-          </div>
-        </div>
+          </span>
+          <span className="fl-val muet">
+            {p.stock && typeof p.stock.disponibilite === 'number' ? p.stock.disponibilite : 'non suivi'}
+          </span>
+        </span>
       </div>
 
       <Tabs
-        onglets={[['vitrine', 'Vitrine'], ['config', 'Configuration']]}
+        onglets={onglets}
         actif={vueFiche}
         onChange={setVueFiche}
       />
 
-      {vueFiche === 'vitrine' && (
+      {vue === 'vitrine' && (
         <>
           {/* LA PHOTO REMONTE EN PREMIER. Elle était en dernier, après le taux de TVA et la règle
               de comptabilisation — c'est-à-dire après tout ce qu'un client ne verra jamais. */}
@@ -802,9 +888,12 @@ export default function ProduitFiche({
         </>
       )}
 
-      {vueFiche === 'config' && (
+      {/* VENTE, premier bloc. Le second (Diffusion) est plus bas : entre les deux vivent les
+          sections d'acces, qui ne rendent rien quand on est sur Vente — a l'ecran, Tarifs et
+          Diffusion se suivent donc bien. */}
+      {vue === 'vente' && (
       <>
-      <Section titre="Tarifs" aide="Le prix de ce produit, par type de tarif et par période.">
+      <Section titre="Tarifs" ancre="prod-tarifs" aide="Le prix de ce produit, par type de tarif et par période.">
         <TarifsProduit
           produit={p}
           grilles={grilles}
@@ -816,6 +905,12 @@ export default function ProduitFiche({
         />
       </Section>
 
+      </>
+      )}
+
+      {/* ACCES — n'existe que si l'etablissement porte la capacite `controle_acces`. */}
+      {vue === 'acces' && (
+      <>
       <Section
         titre="Zones d'accès"
         aide="Les zones que ce produit ouvre aux tourniquets. Aucune zone déclarée = il les ouvre toutes."
@@ -856,7 +951,13 @@ export default function ProduitFiche({
         )}
       </Section>
 
-      <Section titre="Diffusion">
+      </>
+      )}
+
+      {/* VENTE, second bloc — voir le commentaire du premier. */}
+      {vue === 'vente' && (
+      <>
+      <Section titre="Diffusion" ancre="prod-diffusion">
         {/* ⚠ << — >> SE LIT << AUCUN >>, ET LA VALEUR SIGNIFIE << TOUS >>. C'est la liste qui
             restreint : un produit sans site coche est du socle, partage par tous les
             etablissements. Afficher un tiret ici faisait croire a un rattachement manquant, et
@@ -882,6 +983,13 @@ export default function ProduitFiche({
           que ça existe et conclut que le logiciel ne le permet pas. Maxime l'a vu de lui-même.
           Bouton séparé, parce que le DROIT est séparé : `offre.modifier_compta` n'est pas
           `offre.modifier`. Qui peut renommer un produit ne peut pas forcément changer son compte. */}
+      </>
+      )}
+
+      {/* COMPTABILITE — n'existe que si l'etablissement tient ses comptes ici. La note interne la
+          suit : c'est le seul autre endroit de la fiche qui ne regarde ni le client ni la vente. */}
+      {vue === 'compta' && (
+      <>
       <Section titre="Comptabilité">
         {chargement && !detail ? (
           <div className="hint">Chargement…</div>
@@ -920,6 +1028,43 @@ export default function ProduitFiche({
       )}
       </>
       )}
+
+      {/* STOCK — n'existe que si l'etablissement suit ses stocks. Ces valeurs n'etaient visibles
+          nulle part ailleurs sur la fiche : la ligne du haut n'en montre que le nombre. */}
+      {vue === 'stock' && (
+        <Section titre="Stock" aide="Quantité disponible à la vente, tenue par le module Stock.">
+          {!p.stock ? (
+            <div className="hint">
+              Ce produit n’est pas suivi en stock : il peut être vendu sans limite de quantité.
+            </div>
+          ) : (
+            <>
+              <Ligne
+                libelle="Type de stock"
+                valeur={p.stock.type === 'pool' ? 'Partagé (pool)' : 'Dédié à ce produit'}
+                aide="Un stock dédié n'appartient qu'à ce produit ; un pool est partagé entre plusieurs."
+              />
+              <Ligne libelle="Disponible" valeur={String(p.stock.disponibilite ?? '—')} />
+              {/* ⚠ ON NE LIT `pool.libelle` QUE SI LE POOL EST LA. `pool` est nullable, et une
+                  lecture en profondeur sur `null` rendrait `undefined` — un tiret qui ne dirait
+                  pas s'il n'y a pas de pool ou si on n'a pas su le lire. */}
+              {p.stock.pool && (
+                <>
+                  <Ligne libelle="Pool" valeur={p.stock.pool.libelle || '—'} />
+                  <Ligne
+                    libelle="Disponible dans le pool"
+                    valeur={String(p.stock.pool.disponibilite ?? '—')}
+                    aide="Ce que le pool a en tout, tous produits confondus."
+                  />
+                </>
+              )}
+            </>
+          )}
+        </Section>
+      )}
+
+      {/* AGENDA — n'existe que si l'etablissement vend du date. */}
+      {vue === 'agenda' && <AgendaProduit produitId={produitId} />}
 
       <ComptaProduitModal
         edition={editionCompta}
@@ -1172,9 +1317,88 @@ function calculExemple(liaisons, valeurs, prixBase) {
 
 /* ------------------------------------------------------------------ Petits blocs */
 
-function Section({ titre, aide, children }) {
+/**
+ * LES DATES AUXQUELLES CE PRODUIT EST PROPOSE.
+ *
+ * ⚠ « DATE » N'EST PAS UNE PROPRIETE DU PRODUIT. Un produit porte une `dureeValidite` — combien de
+ * temps le billet reste utilisable — et rien qui ressemble a une date. Ce qui date un produit,
+ * c'est ce qui POINTE VERS LUI : une `Exposition` (produit + dates + jauge). La Reservation, elle,
+ * ne reference aucun produit — verifie, temoin positif a l'appui.
+ *
+ * Cet ecran MONTRE donc ces dates ; il n'en cree pas. En creer supposerait de decider ou vit la
+ * date, ce qui est une decision de modele et pas d'ecran.
+ *
+ * ⚠ ET IL DISTINGUE TROIS SILENCES. « Aucune date », « je n'ai pas le droit de savoir » et « la
+ * lecture a echoue » se ressemblent tous les trois a l'ecran s'ils rendent une liste vide — et le
+ * premier est le seul qui soit une reponse.
+ */
+function AgendaProduit({ produitId }) {
+  const [dates, setDates] = useState(null)
+  const [refus, setRefus] = useState(false)
+  const [erreur, setErreur] = useState(null)
+
+  useEffect(() => {
+    let vivant = true
+    api.expositionsDuProduit(produitId)
+      .then((r) => { if (vivant) setDates(membres(r)) })
+      .catch((e) => {
+        if (!vivant) return
+        // 403 : la lecture des expositions demande `musee.lire`, que ce lecteur n'a pas.
+        if (e?.statut === 403 || /403/.test(String(e?.message))) setRefus(true)
+        else setErreur(e?.message || 'Les dates n’ont pas pu être lues.')
+      })
+    return () => { vivant = false }
+  }, [produitId])
+
+  if (refus) {
+    return (
+      <Section titre="Agenda">
+        <div className="hint">
+          Vous n’avez pas le droit de lire l’agenda de ce produit — il peut en avoir un. Ce droit
+          est celui du module Musée, pas celui du catalogue.
+        </div>
+      </Section>
+    )
+  }
+
+  if (erreur) {
+    return (
+      <Section titre="Agenda">
+        <div className="banner banner-error">{erreur}</div>
+      </Section>
+    )
+  }
+
   return (
-    <div style={{ marginTop: 'var(--esp-large)' }}>
+    <Section titre="Agenda" aide="Les dates auxquelles ce produit est proposé.">
+      {dates === null && <div className="hint">Chargement…</div>}
+      {dates !== null && dates.length === 0 && (
+        <div className="hint">
+          Ce produit n’est proposé à aucune date : il est vendable en permanence.
+        </div>
+      )}
+      {(dates ?? []).map((d) => (
+        <Ligne
+          key={d.id}
+          libelle={`${dateFr(d.dateDebut)} → ${dateFr(d.dateFin)}`}
+          valeur={d.aJauge ? `jauge ${d.jaugeGlobale ?? '—'}` : 'sans jauge'}
+        />
+      ))}
+    </Section>
+  )
+}
+
+function dateFr(valeur) {
+  const s = String(valeur || '').slice(0, 10)
+  const [a, m, j] = s.split('-')
+  return j ? `${j}/${m}/${a}` : '—'
+}
+
+function Section({ titre, aide, children, ancre }) {
+  return (
+    // `ancre` est facultative : seules les sections vers lesquelles la ligne compacte renvoie en
+    // portent une. En donner une a toutes creerait des identifiants que rien n'utilise.
+    <div id={ancre} style={{ marginTop: 'var(--esp-large)' }}>
       <div className="fiche-sec" title={aide}>{titre}</div>
       {children}
     </div>

@@ -132,6 +132,12 @@ lancer_gf garde-fou-cloisonnement.php || ECHEC=1
 # source qui dise ce que le serveur sert vraiment. Il porte lui-meme son environnement et sa memoire.
 [ -f "$RACINE/bin/garde-fou-appels-dans-le-vide.php" ] && { lancer_gf garde-fou-appels-dans-le-vide.php || ECHEC=1; }
 
+# Classes fantomes (n°37) : une classe CSS citee par un ecran et definie dans aucune feuille. Pas
+# de dependance, pas de noyau -- une lecture de fichiers, donc il tourne partout.
+[ -f "$RACINE/bin/garde-fou-classes-fantomes.php" ] && { lancer_gf garde-fou-classes-fantomes.php || ECHEC=1; }
+# ⚠ Un .md casse se lit comme si de rien n'etait : aucun compilateur ne le voit.
+[ -x "$RACINE/bin/garde-fou-marqueurs-de-conflit.sh" ] && { echo "── Marqueurs de conflit (n°38)"; "$RACINE/bin/garde-fou-marqueurs-de-conflit.sh" || ECHEC=1; }
+
 # Nommage : sur les fichiers **indexés** et ajoutés. `--cached` est ce qui sera réellement commité,
 # et c'est aussi ce qui évite de dépendre d'une révision de référence inexistante à ce stade.
 if [ -f "$RACINE/bin/garde-fou-nommage-anglais.php" ]; then
@@ -183,6 +189,7 @@ lancer_front verifier-cache.mjs         "Cache du service worker (n°18)"
 lancer_front garde-fou-ecart.mjs        "Écart client/serveur (n°15)"
 lancer_front verifier-formats.mjs       "Formats d'écriture (n°11)"
 lancer_front verifier-imports.mjs       "Imports manquants (n°10)"
+lancer_front verifier-cles-doubles.mjs  "Clés en double (n°37)"
 lancer_front verifier-classes.mjs       "Classes CSS déclarées (n°16)"
 lancer_front verifier-dates-locales.mjs "Dates locales"
 lancer_front verifier-profil-charge.mjs "Profil chargé avant le rendu"
@@ -242,8 +249,20 @@ done
 if [ "$ECHEC" -ne 0 ]; then
     echo
     echo "✗ Commit refusé : au moins un garde-fou a échoué."
-    echo "  Reproduis : ./bin/garde-fous.sh"
-    echo "  Si tu dois vraiment passer outre : git commit --no-verify, et dis pourquoi dans MESSAGES.md."
+    echo
+    echo "  Le message du contrôle qui a échoué, plus haut, dit ce qui est cassé."
+    echo "  Reproduis-le autant de fois qu'il faut :  ./bin/garde-fous.sh"
+    echo
+    echo "  Chacun de ces contrôles existe parce que le défaut qu'il refuse est déjà arrivé,"
+    echo "  et qu'il n'avait produit aucun symptôme visible."
+    # ⚠ D53 : ON N'ECRIT PAS LE CONTOURNEMENT ICI.
+    #
+    # Cette sortie disait « si tu dois vraiment passer outre : git commit --no-verify ». C'est le
+    # cas exact que D53 refuse : « un garde-fou qui propose son propre contournement transforme une
+    # question technique en question de caractere -- et le caractere cede un vendredi soir ».
+    #
+    # Le contournement est documente dans l'en-tete de ce fichier, ou celui qui le cherche le
+    # trouvera. Celui qui est presse ne tombera pas dessus.
     exit 1
 fi
 

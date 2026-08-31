@@ -44,75 +44,10 @@
     ],
     "scelle": {
         "gelee_le": "2026-08-28",
-        "plafond": 21,
+        "plafond": 17,
         "reference": "MESSAGES.md — claude-A, 28/08 : le garde-fou tenait « porte un champ etablissement » pour « est cloisonne ». Les 11 entrees ajoutees ce jour-la sont ce que la premisse cachait."
     },
     "entrees": {
-        "Compta/Entity/BordereauPayFiP.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Compta",
-            "operations": [
-                "Get",
-                "GetCollection",
-                "Post"
-            ],
-            "permissions": [
-                "compta.lire",
-                "compta.valider"
-            ],
-            "sensibilite": "argent",
-            "traitement": {
-                "groupe": "C",
-                "chemin": "",
-                "cible": "",
-                "note": "Enregistrement financier par etablissement sans aucun rattachement. Migration, pas une ligne."
-            }
-        },
-        "Compta/Entity/FactureB2G.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Compta",
-            "operations": [
-                "Get",
-                "GetCollection",
-                "Post"
-            ],
-            "permissions": [
-                "compta.gerer",
-                "compta.lire"
-            ],
-            "sensibilite": "argent",
-            "traitement": {
-                "groupe": "C",
-                "chemin": "",
-                "cible": "",
-                "note": "Facture Chorus Pro sans rattachement. Migration."
-            }
-        },
-        "Compta/Entity/LettrageEcriture.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Compta",
-            "operations": [
-                "GetCollection",
-                "Post"
-            ],
-            "permissions": [
-                "compta.lettrer",
-                "compta.lire"
-            ],
-            "sensibilite": "argent",
-            "traitement": {
-                "groupe": "A",
-                "chemin": "ligne.ecriture.profilExploitant",
-                "cible": "EcritureComptable",
-                "note": "ATTENTION : la Compta ne se cloisonne PAS sur etablissement mais sur profilExploitant (AccountingScopeExtension:68) ; getEtablissement() y est derive de profilExploitant->getEtablissementPrincipal(). Trois sauts, et sur un autre axe que le reste du depot."
-            }
-        },
         "Compta/Entity/MoyenPaiement.php": {
             "depuis": "2026-08-23",
             "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
@@ -157,28 +92,6 @@
                 "chemin": "",
                 "cible": "",
                 "note": "Referentiel presume global. NON CONFIRME par l'integrateur au 24/08 — tant que ce mot manque, l'entree reste comptee."
-            }
-        },
-        "Compta/Entity/VenteImpayeeRegie.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Compta",
-            "operations": [
-                "Get",
-                "GetCollection",
-                "Post"
-            ],
-            "permissions": [
-                "compta.gerer",
-                "compta.lire"
-            ],
-            "sensibilite": "argent",
-            "traitement": {
-                "groupe": "C",
-                "chemin": "",
-                "cible": "",
-                "note": "Signalee le 23/08. Migration."
             }
         },
         "Autorisation/Entity/OperationSensible.php": {

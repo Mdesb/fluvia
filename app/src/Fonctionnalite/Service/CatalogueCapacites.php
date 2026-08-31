@@ -101,6 +101,24 @@ final class CatalogueCapacites
                 'Suivi des qualifications des encadrants (MNS/BNSSA, coachs).',
                 'securite',
             ),
+            CapaciteCode::Comptabilite => new DescripteurCapacite(
+                $code->value,
+                'Comptabilité',
+                'Journaux, écritures, lettrage et clôture tenus ici plutôt que dans un logiciel tiers.',
+                'finance',
+            ),
+            CapaciteCode::Stock => new DescripteurCapacite(
+                $code->value,
+                'Suivi de stock',
+                'Quantités disponibles, réassort et rupture sur les produits vendus à l\'unité.',
+                'vente',
+            ),
+            CapaciteCode::Agenda => new DescripteurCapacite(
+                $code->value,
+                'Produits datés',
+                'Séances, expositions et créneaux proposés à une date plutôt qu\'en permanence.',
+                'planning',
+            ),
             CapaciteCode::BoutiqueEnLigne => new DescripteurCapacite(
                 $code->value,
                 'Boutique en ligne',
