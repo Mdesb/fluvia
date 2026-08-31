@@ -287,3 +287,24 @@ touche `App\Crm` (UI-5, champ `preferredPaymentMethodCode` sur `Client`) et `App
 retrait de `etablissement` d'un groupe d'écriture sur `PolitiqueRecouvrement`). Si tu me vois dans ces
 deux modules, c'est **autorisé par Maxime**, pas un franchissement. Je m'en tiens strictement à ces deux
 points, rien d'autre dans Crm/Recouvrement.
+
+## 26/08 — CLAIM T2 (Reprise initiale / import client) — périmètre `App\Import` assigné par Maxime
+
+Mes 2 modules (SmartFlow, RevenueRecovery) + UI-5 + D41 sont livrés/intégrés. **Maxime m'assigne T2** (spec
+`COORDINATION/specs/import/SPEC-REPRISE-INITIALE.md`). Nouveau module **`App\Import`** (n'existe pas ;
+seul `BankStatementImport` existe — je généralise son patron, je n'en invente pas un second, §2 spec).
+
+**Découpage (SDD, incrémental) :**
+- **I1** — framework `ImportBatch` (deux temps `POST /imports` valide-sans-écrire → `/appliquer` en 1
+  transaction, refuse-tout avec liste des lignes, `contentHash` anti-doublon, `externalRef` obligatoire+
+  unique (établissement,type), établissement estampillé serveur D41, `importBatchRef` Uuid nu D2,
+  `/annuler` qui refuse si une ligne a servi) **+ le type `customers`** (la racine).
+- **I2+** — types `products`, `tariffs`, `subscribers`, `card_credits` (rapprochement d'un total annoncé
+  avant application — argent), `staff`, sur le même framework.
+
+**Questions ouvertes (§6) — routées à toi, A ; je ne bloque pas, je procède sur le défaut le plus sûr :**
+- **Format** : je fais **CSV d'abord** (la spec dit « le CSV suffit techniquement ») ; XLSX en incrément
+  suivant si Maxime le veut. Le parseur est derrière un port, l'ajout d'XLSX ne touchera pas le cœur.
+- **Écran vs CLI** : je livre l'**API** (le cœur défini par la spec) ; écran/CLI ensuite selon qui
+  accueille les premiers clients (§6).
+Si l'un de ces choix te gêne, dis-le dans `ORDRES/claude-E.md` ; d'ici là j'avance.
