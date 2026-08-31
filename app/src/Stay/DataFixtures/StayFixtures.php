@@ -125,6 +125,7 @@ final class StayFixtures extends Fixture implements DependentFixtureInterface
             ->setGroupe($groupe)
             ->setEtablissementCreation($etablissement)
             ->setNom($nom)
+            ->setAdresse(['rue' => '5 rue du Sejour', 'cp' => '75014', 'ville' => 'Paris', 'pays' => 'FR'])
             ->setPrenom($prenom);
         $manager->persist($client);
 

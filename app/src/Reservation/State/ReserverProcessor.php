@@ -72,6 +72,27 @@ final class ReserverProcessor implements ProcessorInterface
             throw new ConflictHttpException('Ce créneau n\'est plus ouvert à la réservation.');
         }
 
+        // ⚠ SANS CE REFUS, LA CRÉATION D'OCCURRENCES EN CONFLIT SERAIT UNE RÉGRESSION.
+        //
+        // `CreerCreneauProcessor` crée désormais les occurrences de récurrence en conflit plutôt que
+        // de les perdre en silence, marquées `enAttenteArbitrage` (décision de Maxime du 31/08).
+        // Elles chevauchent, par construction, une autre occupation de la même ressource. Sans ce
+        // contrôle, elles seraient réservables : deux personnes recevraient le même court à la même
+        // heure — exactement ce que RG-M5-03 interdit à la création, obtenu par la porte de derrière.
+        //
+        // Mesuré avant d'écrire : ce drapeau n'était consulté NULLE PART. Sans conséquence tant que
+        // rien ne le posait ; grave à la seconde où quelque chose le pose.
+        //
+        // Le message dit quoi faire et pas seulement que c'est non : la séance existe, elle attend
+        // une décision, et l'écran de planning porte l'arbitrage.
+        if ($creneau->isEnAttenteArbitrage()) {
+            throw new ConflictHttpException(
+                'Cette séance attend un arbitrage : elle chevauche une autre occupation de la même '
+                .'ressource. Depuis le planning, choisissez une autre ressource ou confirmez-la telle '
+                .'quelle — elle deviendra réservable (RG-M5-11).'
+            );
+        }
+
         if (!$this->security->isGranted('PERM', 'reservation.reserver')) {
             $utilisateur = $this->security->getUser();
             $clientLie = $utilisateur instanceof Utilisateur ? $utilisateur->getClientLie() : null;

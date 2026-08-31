@@ -916,6 +916,23 @@ export const api = {
   annulerReservation: (id) =>
     request(`/api/reservation/reservations/${id}/annuler`, { method: 'POST', body: {} }),
 
+  // ── ARBITRER UN CONFLIT DE RECURRENCE (RG-M5-11) ──────────────────────────────────────────────
+  //
+  // Une occurrence de recurrence qui chevauche une autre occupation est desormais CREEE, marquee
+  // `enAttenteArbitrage`, et non reservable — au lieu d'etre perdue en silence. Decision de Maxime
+  // du 31/08 : « ne jamais deplacer tout seul ».
+  //
+  // Deux gestes, un seul appel : avec `idRessource`, on deplace la seance ; sans, on la confirme
+  // telle quelle. Dans les deux cas le drapeau tombe et la seance devient reservable.
+  //
+  // ⚠ LE SERVEUR REFUSE UNE RESSOURCE OCCUPEE (409) : arbitrer ne peut pas deplacer le conflit
+  // ailleurs. On affiche son message tel quel — il nomme la ressource.
+  arbitrerCreneau: (id, idRessource) =>
+    request(`/api/reservation/creneaux/${id}/arbitrer`, {
+      method: 'POST',
+      body: idRessource ? { ressource: idRessource } : {},
+    }),
+
   // ── ANNULER UN CRENEAU (le geste de l'exploitant, pas du client) ──────────────────────────────
   //
   // ⚠ CE N'EST PAS UNE ANNULATION DE RESERVATION EN GROS. `AnnulerCreneauProcessor` bascule TOUTES

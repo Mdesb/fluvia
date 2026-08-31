@@ -130,6 +130,12 @@ export default function Reservation({ etabActif, droits = [], session }) {
   // serveur : c'est un acte de comptoir, pas une administration.
   const peutPartager = aLeDroit(droits, 'reservation.reserver')
   const peutGererCreneau = aLeDroit(droits, 'reservation.gerer_creneau')
+  // Droit distinct de `gerer_creneau` : trancher un conflit de récurrence engage le planning de
+  // plusieurs personnes, et le serveur le sépare. Le confondre ici offrirait un bouton qui refuse.
+  const peutArbitrer = aLeDroit(droits, 'reservation.arbitrer_recurrence')
+
+  const [arbitragePour, setArbitragePour] = useState(null)
+  const [arbitrageRessource, setArbitrageRessource] = useState('')
 
   const [listesAttente, setListesAttente] = useState([])
   const [attentePour, setAttentePour] = useState(null) // id du créneau dont on ouvre la liste d'attente
@@ -225,6 +231,27 @@ export default function Reservation({ etabActif, droits = [], session }) {
     },
     [ressources],
   )
+
+  // Les ressources qu'on peut proposer en remplacement : même type, capacité suffisante, et pas
+  // celle qui pose problème.
+  //
+  // ⚠ MÊMES CRITÈRES QUE `RecurrenceReportHandler` CÔTÉ SERVEUR — même type, capacité ≥ — pour que
+  // l'écran propose ce que le domaine considère équivalent. Le serveur, lui, ne vérifie que le
+  // cloisonnement et la disponibilité : proposer n'importe quoi ici ferait donc passer des
+  // remplacements que personne n'a jugés équivalents.
+  const ressourcesEquivalentes = useMemo(() => {
+    const m = {}
+    for (const source of ressources) {
+      m[source.id] = ressources.filter(
+        (r) =>
+          r.id !== source.id
+          && r.codeType === source.codeType
+          && (r.capacitePropre ?? 0) >= (source.capacitePropre ?? 0)
+          && r.actif !== false,
+      )
+    }
+    return m
+  }, [ressources])
 
   // Les inscriptions en attente d'un créneau, dans l'ordre du rang — celui que le SERVEUR a posé.
   //
@@ -327,6 +354,32 @@ export default function Reservation({ etabActif, droits = [], session }) {
       await recharger()
     } catch (e) {
       setErreur(e.message || 'L’annulation n’a pas abouti.')
+    } finally {
+      setGesteEnCours(null)
+    }
+  }
+
+  // ── ARBITRER (RG-M5-11) ────────────────────────────────────────────────────────────────────
+  //
+  // ⚠ CE GESTE EST LA SEULE SORTIE D'UN CRÉNEAU EN ATTENTE. Sans lui, la séance existe, se voit,
+  // et ne peut ni se réserver ni se débloquer — ce qui serait pire que l'ancien comportement, où
+  // elle était au moins absente.
+  //
+  // `idRessource` vide = « confirmer telle quelle » : l'exploitant assume le chevauchement. C'est
+  // un choix légitime — deux activités peuvent partager un gymnase — et c'est à lui de le dire.
+  async function arbitrer(creneau, idRessource) {
+    setGesteEnCours(creneau.id)
+    setErreur(null)
+    setSucces(null)
+    try {
+      await api.arbitrerCreneau(creneau.id, idRessource || null)
+      setArbitragePour(null)
+      setSucces(idRessource ? 'Séance déplacée et débloquée.' : 'Séance confirmée telle quelle et débloquée.')
+      await recharger()
+    } catch (e) {
+      // Le refus qui compte : « ressource déjà occupée ». Le serveur nomme la ressource, on
+      // n'essaie pas de reformuler.
+      setErreur(e.message || 'L’arbitrage n’a pas abouti.')
     } finally {
       setGesteEnCours(null)
     }
@@ -631,11 +684,62 @@ export default function Reservation({ etabActif, droits = [], session }) {
                         ) : (
                           <button
                             className="btn primary creneau-btn"
-                            disabled={complet || !annulable}
+                            disabled={complet || !annulable || c.enAttenteArbitrage}
                             onClick={() => { setReserverPour(c.id); setOrganisateur(''); setSucces(null) }}
+                            title={
+                              c.enAttenteArbitrage
+                                ? 'Cette séance chevauche une autre occupation de la même ressource : elle attend un arbitrage avant d’être réservable.'
+                                : undefined
+                            }
                           >
-                            {complet ? 'Complet' : !annulable ? 'Indisponible' : '＋ Réserver'}
+                            {c.enAttenteArbitrage
+                              ? 'En attente d’arbitrage'
+                              : complet ? 'Complet' : !annulable ? 'Indisponible' : '＋ Réserver'}
                           </button>
+                        )}
+
+                        {/* ── ARBITRAGE D'UN CONFLIT DE RÉCURRENCE (RG-M5-11) ────────────────────
+                            Cette séance existe parce qu'elle chevauche : avant ce lot, elle était
+                            simplement absente, et l'exploitant croyait avoir douze séances quand il
+                            en avait neuf. Elle est visible, bloquée, et se débloque ici. */}
+                        {c.enAttenteArbitrage && peutArbitrer && (
+                          <div className="resa-attente">
+                            <p className="hint">
+                              Cette séance chevauche une autre occupation de{' '}
+                              <strong>{c.ressource?.libelle || 'la même ressource'}</strong>. Elle a
+                              été créée mais reste bloquée tant que personne n’a tranché.
+                            </p>
+                            <div className="resa-part-form">
+                              <select
+                                className="select"
+                                value={arbitragePour === c.id ? (arbitrageRessource || '') : ''}
+                                onChange={(e) => { setArbitragePour(c.id); setArbitrageRessource(e.target.value) }}
+                                aria-label="Ressource de remplacement"
+                              >
+                                <option value="">Déplacer sur…</option>
+                                {(ressourcesEquivalentes[c.ressource?.id] ?? []).map((r) => (
+                                  <option key={r.id} value={r.id}>{r.libelle}</option>
+                                ))}
+                              </select>
+                              <button
+                                type="button"
+                                className="btn"
+                                disabled={gesteEnCours === c.id || arbitragePour !== c.id || !arbitrageRessource}
+                                onClick={() => arbitrer(c, arbitrageRessource)}
+                              >
+                                Déplacer
+                              </button>
+                              <button
+                                type="button"
+                                className="btn ghost"
+                                disabled={gesteEnCours === c.id}
+                                onClick={() => arbitrer(c, null)}
+                                title="Assume le chevauchement : la séance devient réservable telle quelle. Légitime quand deux activités partagent réellement le lieu."
+                              >
+                                Confirmer telle quelle
+                              </button>
+                            </div>
+                          </div>
                         )}
 
                         {/* Annuler le créneau : geste de l'exploitant, distinct de l'annulation

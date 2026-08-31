@@ -3183,3 +3183,134 @@ de plus à la reprise, contre une classe entière d'erreurs qui ne se rattrapent
 
 **Aucune notion de référence externe n'existe aujourd'hui dans le dépôt** — mesuré le 31/08, six
 graphies cherchées, zéro occurrence. Elle est à introduire.
+
+---
+
+## D101 — Cinq axes pour les développements à venir
+
+**Décidé par Maxime le 31/08**, après comparaison avec la place de marché Magicline (86 intégrations,
+sept catégories).
+
+    1. Appli mobile adhérent, en marque blanche
+    2. Agrégateurs — et pas seulement fitness
+    3. Balances et machines connectées
+    4. Assistant IA
+    5. L'API
+
+⚠ **Le constat qui a produit cette liste n'est pas un manque de fonctionnalités.** Fluvia a 47
+modules, plus de largeur qu'aucun concurrent fitness. Ce qui manque, c'est **le dehors** : sur 25
+adaptateurs, **18 sont des simulacres** — paiement carte, prélèvement SEPA remis en banque, matériel
+d'accès, facturation électronique, connecteurs OTA, fournisseur d'identité.
+
+Et surtout : Magicline ne vend pas 86 fonctionnalités, il vend **le fait que 86 sociétés ont
+construit dessus**. C'est un effet de réseau, et il ne se rattrape pas en développant plus vite.
+
+## D102 — L'API passe en premier, parce qu'elle commande trois des quatre autres
+
+**Ordre imposé par la dépendance, pas par la préférence.**
+
+    appli mobile          consomme l'API
+    agrégateurs           consomment l'API
+    machines connectées   consomment l'API
+    assistant IA          consomme l'API
+
+⚠ **Construire les trois avant l'API produit trois couplages privés au lieu d'une surface publique.**
+Chacun aurait son point d'entrée, sa version, ses règles — et la place de marché deviendrait
+impossible à ouvrir sans tout reprendre.
+
+**Ce qui manque aujourd'hui pour qu'un tiers puisse s'intégrer**, mesuré le 31/08 :
+
+- aucune clé d'API délivrable à un tiers — les seules existantes servent à consommer *les leurs*
+  (Anthropic, réseaux sociaux) ;
+- aucun webhook sortant — les cinq occurrences sont internes ;
+- ni OAuth, ni modèle de partenaire, ni portail développeur.
+
+Un tiers qui voudrait s'intégrer à Fluvia aujourd'hui **n'aurait par où commencer**. C'est
+exactement ce qu'a montré le guide remis à IT Cotation : notre seul intégrateur potentiel attend une
+spécification de notre part, et il n'existe aucun chemin générique.
+
+## D103 — Architecture de domaines pour `fluvia-app.com`
+
+**Décidé par Maxime le 31/08.** Aujourd'hui la préprod sert TOUT sur un seul hôte : l'API derrière
+une regex de chemin, l'application sur `/`, la boutique par slug d'URL.
+
+    fluvia-app.com              vitrine marketing
+    pro.fluvia-app.com          back-office exploitant
+    api.fluvia-app.com          l'API publique, versionnée
+    <client>.fluvia-app.com     la boutique publique de chaque client
+
+### ⚠ La boutique publique ne partage jamais un hôte avec le back-office
+
+Trois raisons concrètes :
+
+- **Les cookies.** Un cookie de session du back-office ne doit pas être lisible depuis une page qui
+  embarque le script d'un prestataire de paiement.
+- **La politique de sécurité de contenu.** La boutique doit autoriser les scripts du PSP, le
+  back-office doit les interdire. Une CSP unique pour les deux, c'est la plus permissive qui gagne.
+- **L'indexation.** La boutique doit être référencée, le back-office jamais. Un `robots.txt` par hôte
+  règle ça ; il n'y en a qu'un aujourd'hui.
+
+**Règle qui va avec :** les cookies se posent sur l'hôte exact, **jamais sur `.fluvia-app.com`**.
+Sinon la boutique d'un client peut lire la session d'un autre.
+
+### Deux portes pour la même application
+
+`api.` a son propre hôte parce qu'un partenaire ne doit pas être couplé à l'hôte du back-office.
+
+⚠ **Le coût honnête** : un hôte distinct impose du CORS à notre propre frontal. La parade retenue —
+le back-office continue d'appeler `pro.fluvia-app.com/api` (même origine, zéro CORS), les tiers
+passent par `api.fluvia-app.com`. Même application, deux portes : l'une privée et rapide, l'autre
+publique et contractuelle.
+
+## D104 — Une boutique par sous-domaine, et le client se résout depuis l'HÔTE
+
+**Décidé par Maxime le 31/08.** `piscine-ville.fluvia-app.com` plutôt qu'un chemin sur un hôte
+unique.
+
+⚠ **La conséquence technique est petite aujourd'hui et grosse plus tard.** Le code résout
+actuellement la vitrine par un slug d'URL (`/boutique/vitrines/{slug}/catalogue`). Il doit apprendre
+à la résoudre depuis l'hôte. Ajouter cela maintenant coûte peu ; le rétro-adapter quand vingt clients
+ont des liens en circulation coûte cher.
+
+**Ce que ça ouvre :** un client peut brancher son propre domaine (`billetterie.ville-x.fr`) sans
+casser ses liens. C'est la condition de la marque blanche.
+
+**Certificats :** un joker `*.fluvia-app.com` couvre les sous-domaines clients. Un domaine propre à
+un client demande une émission par domaine — Let's Encrypt automatisé, à prévoir, pas à faire avant
+le premier client qui le demande.
+
+## D105 — Appli mobile : une commune, plus une déclinaison dédiée en option payante
+
+**Décidé par Maxime le 31/08.** L'appli commune sert tous les clients, avec le logo et les couleurs
+de l'établissement choisi. Une publication dédiée — nom, icône et fiche du club sur les magasins —
+est vendue à ceux qui la veulent.
+
+⚠ **La condition de viabilité, et elle est stricte : les deux doivent rester identiques
+fonctionnellement.** Une seule base de code, un seul jeu d'écrans, la déclinaison ne changeant que
+l'identité visuelle et la fiche du magasin.
+
+Le jour où la version commune devient la parente pauvre, elle cesse d'être vendable — et on se
+retrouve à maintenir autant d'applications qu'on a de clients, ce que la première moitié de la
+décision existait précisément pour éviter.
+
+**Ce que ça coûte, dit franchement :** chaque version publiée doit être revalidée par Apple et Google
+autant de fois qu'il y a de déclinaisons. Ce coût croît avec le nombre de clients, pas avec le
+produit — c'est le prix de l'option, et il doit se retrouver dans son tarif.
+
+## D106 — Les sous-domaines techniques sont réservés, et la liste est dans le code
+
+**Conséquence directe de D104, posée à la conception.** Le back-office, l'API et les boutiques
+clientes partagent le **même espace de noms**.
+
+Un client nommé « pro », « api » ou « www » entrerait donc en collision avec un hôte technique — et le
+symptôme serait une boutique qui sert le back-office, ou l'inverse.
+
+⚠ **Ce genre de collision ne se découvre pas en revue de code : elle se découvre le jour où un
+commercial saisit le nom d'un nouveau client.** La liste doit donc vivre là où le nom est validé, pas
+dans une consigne.
+
+    pro · api · www · app · admin · mail · static · assets · cdn · status · dev · test
+
+**Forme exigée :** une constante nommée, refusée à la création d'une vitrine, avec un message qui
+dit pourquoi. Pas un contrôle dispersé, pas une convention orale. Ça coûte une constante aujourd'hui
+et évite un incident de production plus tard.

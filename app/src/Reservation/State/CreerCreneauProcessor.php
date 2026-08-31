@@ -23,9 +23,30 @@ use Symfony\Component\Uid\Uuid;
 
 /**
  * Crée un Créneau (POST /reservation/creneaux) et, le cas échéant, expanse une récurrence
- * (RG-M5-07). Bloque tout chevauchement de ressource à la création (RG-M5-03, CA-2). Les occurrences
- * de récurrence en conflit sont simplement ignorées à la création initiale (le report/l'arbitrage
- * RG-M5-11 s'applique aux conflits détectés *après coup*, via `RecurrenceReportHandler`).
+ * (RG-M5-07). Bloque tout chevauchement de ressource à la création (RG-M5-03, CA-2).
+ *
+ * ── ⚠ UNE OCCURRENCE EN CONFLIT EST CRÉÉE EN ATTENTE D'ARBITRAGE, PLUS JAMAIS PERDUE ──────────
+ *
+ * Cette méthode écrivait `continue` sur une occurrence en conflit. Un cours hebdomadaire de douze
+ * séances dont trois tombent sur un court déjà pris en créait **neuf**, l'API rendait 200, et rien
+ * ne disait que trois manquaient. L'exploitant l'apprenait quand un client ne pouvait pas réserver
+ * une date — ou ne l'apprenait pas.
+ *
+ * Tout ce qu'il fallait pour faire mieux existait déjà, et **rien n'y menait** :
+ * `Creneau::$enAttenteArbitrage` n'avait aucun appelant en production, `RecurrenceReportHandler`
+ * était appelé par quatre tests et zéro code de production, et
+ * `ArbitrerConflitRecurrenceProcessor` résolvait un état que rien ne produisait.
+ *
+ * **Décision de Maxime du 31/08, entre quatre options : « ne jamais déplacer tout seul ».**
+ * L'occurrence est donc créée, marquée `enAttenteArbitrage`, et **non réservable** — voir
+ * `ReserverProcessor`, qui la refuse. Un humain tranche depuis l'écran : une autre ressource, ou
+ * la confirmation telle quelle.
+ *
+ * ⚠ `RecurrenceReportHandler` reste volontairement débranché : il implémente le report
+ * **automatique** (`RegleConflitRecurrence::ReportAuto`, valeur par défaut du champ), que la
+ * décision écarte. Le laisser inerte en le disant vaut mieux que le brancher contre la décision, ou
+ * que le supprimer — l'arbitrage manuel réutilisera sa recherche de ressource équivalente le jour
+ * où l'écran proposera des candidats.
  *
  * @implements ProcessorInterface<mixed, Creneau>
  */
@@ -81,10 +102,19 @@ final class CreerCreneauProcessor implements ProcessorInterface
                 if ($index === 0) {
                     continue; // déjà créé ci-dessus.
                 }
-                if ($this->guard->enConflit($ressource, $occurrence['debut'], $occurrence['fin'])) {
-                    continue; // occurrence en conflit : ignorée à la création initiale.
-                }
                 $suivant = $this->construireCreneau($ressource, $activite, $occurrence['debut'], $occurrence['fin'], $capacite, $corps, $recurrence);
+
+                // ⚠ CRÉÉE MALGRÉ LE CONFLIT, ET MARQUÉE. Elle existe donc, elle se voit, et elle ne
+                // se réserve pas — `ReserverProcessor` la refuse. Une séance perdue en silence est
+                // pire qu'une séance visiblement en attente : la première ne se rattrape jamais.
+                //
+                // On ne cherche PAS de ressource de remplacement : décision de Maxime du 31/08,
+                // « ne jamais déplacer tout seul ». Un cours qui change de court sans que personne
+                // ne l'ait validé est un problème invisible à la place d'un problème constaté.
+                if ($this->guard->enConflit($ressource, $occurrence['debut'], $occurrence['fin'])) {
+                    $suivant->setEnAttenteArbitrage(true);
+                }
+
                 $this->em->persist($suivant);
             }
         }
