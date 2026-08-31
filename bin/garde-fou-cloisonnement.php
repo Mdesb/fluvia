@@ -65,6 +65,11 @@ const MOTIFS_CONTROLE = [
     // datee et attribuable, alors qu'une detection assouplie ouvre un trou pour tout le monde et
     // sans trace. L'annotation doit porter une raison — le deux-points suivi de texte est exige.
     //
+    // ⚠ D53 — cette sortie n'est PLUS proposee dans le message d'echec, et c'est delibere. Un
+    // garde-fou qui met en avant son propre contournement transforme une question technique en
+    // question de caractere, et le caractere cede un vendredi soir. Elle vit ici : qui la cherche
+    // la trouve, qui est presse ne tombe pas dessus.
+    //
     //     @cloisonnement-verifie : <pourquoi ce fichier est controle, et par qui>
     //
     // Pour auditer les exemptions : grep -rn "@cloisonnement-verifie" app/src
@@ -88,9 +93,7 @@ const AIDE_CORRECTION = <<<'TXT'
       - 404 et non 403 : distinguer « hors périmètre » de « inexistant » permet d'énumérer l'activité
         d'un autre établissement, ce qui est déjà une fuite.
 
-    Si ce fichier n'a légitimement pas de périmètre (ressource publique, tâche système), ce n'est PAS
-    à la ligne de base de l'absorber : documente-le dans le fichier lui-même et viens en parler dans
-    MESSAGES.md. La ligne de base est gelée et ne peut que rétrécir.
+    La ligne de base est gelée et ne peut que rétrécir : elle n'absorbera pas ce fichier.
     TXT;
 
 // ---------------------------------------------------------------------------- analyse
@@ -425,12 +428,7 @@ const AIDE_RESOLUTION = <<<'TXT'
 
     ⚠ `verify()` n'en fait PAS partie, et c'est délibéré : le même nom sert à vérifier une signature,
     un jeton ou un mot de passe. Le reconnaître comme un contrôle de périmètre masquerait de vrais
-    défauts ailleurs. Si ton contrôle s'appelle ainsi, nomme la propriété qui le porte (`$scopeGuard`)
-    ou pose l'annotation ci-dessous.
-
-    Si ton contrôle passe par une forme que ce garde-fou ne sait toujours pas lire, pose
-    `@cloisonnement-verifie : <raison>` — elle est greppable, datée et attribuable, contrairement à
-    un assouplissement de la détection qui ouvre un trou pour tout le monde et sans trace.
+    défauts ailleurs. Si ton contrôle s'appelle ainsi, nomme la propriété qui le porte : `$scopeGuard`.
     TXT;
 
 // ---------------------------------------------------------------- ligne de base

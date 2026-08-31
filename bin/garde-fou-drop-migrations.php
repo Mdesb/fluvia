@@ -24,7 +24,11 @@ declare(strict_types=1);
  * `down()` de la migration qui **crée** cette table. Un garde-fou qui confond les deux transforme
  * chaque migration correcte en faute.
  *
- * ── L'ÉCHAPPATOIRE, ET POURQUOI ELLE EST PRÉFÉRABLE ─────────────────────────────────────────────
+ * ── L'ÉCHAPPATOIRE — DOCUMENTÉE ICI, JAMAIS DANS LE MESSAGE D'ÉCHEC (D53) ───────────────────────
+ *
+ * Le message de refus dit ce qui est cassé et comment le réparer. Il ne propose PAS cette sortie :
+ * un garde-fou qui met en avant son propre contournement transforme une question technique en
+ * question de caractère, et le caractère cède un vendredi soir. Qui la cherche la trouve ici.
  *
  * Un `DROP` volontaire se déclare dans la migration elle-même :
  *
@@ -181,13 +185,8 @@ if ($nouveaux !== []) {
     echo "\n  `migrations:diff` compare les métadonnées à la base ENTIÈRE : il ramasse la dérive laissée\n";
     echo "  par les autres sessions et te la présente comme ton travail. Le brouillon de claude-D\n";
     echo "  contenait 104 instructions dont 6 à elle (D32).\n";
-    echo "\n  Relis ce que tu supprimes. Deux cas, deux issues :\n\n";
-    echo "  · ce n'est PAS ton lot — retire la ligne. Une migration ne contient que ce que son lot a\n";
-    echo "    introduit.\n\n";
-    echo "  · c'est voulu — dis-le dans la migration elle-même, avec la raison :\n\n";
-    echo "        @drop-voulu : <pourquoi cet objet disparaît, et ce qui le remplace>\n\n";
-    echo "  L'annotation est greppable, datée et attribuable ; un assouplissement de la détection ne\n";
-    echo "  le serait pas. Pour auditer : grep -rn \"@drop-voulu\" app/migrations\n";
+    echo "\n  Relis ce que tu supprimes, ligne à ligne. Une migration ne contient que ce que SON lot a\n";
+    echo "  introduit : tout le reste appartient à quelqu'un d'autre et doit sortir du fichier.\n";
 }
 
 if (count($drops) > $plafond) {
