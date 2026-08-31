@@ -57,6 +57,37 @@ ne changeront plus jamais.
 
 ---
 
+### ⚠ Un changement de schéma doit tenir avec les DEUX versions du code
+
+`deploy-preprod.sh` applique les migrations **avant** de redémarrer FPM. Entre les deux, le schéma
+est neuf et le code est ancien. La fenêtre dure quelques secondes en temps normal — **elle a duré
+deux heures le 31/08**, parce que j'ai migré sans déployer dans la foulée.
+
+Ce qui s'est passé :
+
+    base          `adresse JSON NOT NULL`, aucun défaut
+    PHP servi     une classe qui ne connaît pas ce champ (21 commits de retard)
+
+Un `POST /api/profil_exploitants` aurait omis une colonne obligatoire sans défaut : **erreur SQL,
+500**, sur un chemin exposé. Relevé par `b8`.
+
+⚠ **Inverser l'ordre ne résout rien** : du code neuf sur un schéma ancien casse tout autant. La
+seule forme qui tient est un changement compatible avec les **deux** versions.
+
+**En pratique, pour toute migration :**
+
+- une colonne neuve `NOT NULL` porte un **`DEFAULT`** — l'ancien code ne l'écrit pas, la base la
+  remplit ; le nouveau l'écrit, et le défaut ne sert plus ;
+- le `DEFAULT` se déclare **aussi au mapping** (`options: ['default' => …]`), sinon le garde-fou D32
+  refuse un défaut que la base porte et que le mapping ignore ;
+- retirer une colonne se fait en **deux temps** : le code cesse de l'écrire, on déploie, puis on la
+  supprime.
+
+**Et après avoir migré, déploie.** Une migration appliquée sans déploiement laisse la fenêtre
+ouverte aussi longtemps que personne ne s'en aperçoit.
+
+---
+
 ### ⚠ Une suite verte ne dit RIEN de ce que le web sert
 
 `opcache.validate_timestamps=0` : **FPM ne relit jamais les fichiers.** Il sert le code tel qu'il
@@ -184,10 +215,10 @@ routes présentes au routeur, **zéro appel du frontal**. C'est du travail déj�
 rien tant qu'aucun écran ne l'ouvre — la forme la plus coûteuse d'inachèvement, parce qu'elle ne se
 voit pas.
 
-⚠ **DEUX SESSIONS ONT ÉCRIT L'ÉCRAN DE FUSION LE MÊME JOUR, SANS SE VOIR** (`c2` et
-`allaccess-89`). Les branches étaient indépendantes : ni l'une ni l'autre n'a « repris » le travail
-de l'autre, elles l'ont fait deux fois. Résolu à la fusion en gardant **la version de `c2`**, sur
-un critère mesurable et non sur la paternité : son point d'entrée est meilleur — on clique
+⚠ **DEUX SESSIONS ONT ÉCRIT L'ÉCRAN DE FUSION LE MÊME JOUR, SANS SE VOIR** (`c2` et le worktree
+`claude-A`). Les branches étaient indépendantes : ni l'une ni l'autre n'a « repris » le travail de
+l'autre, elles l'ont fait deux fois. Résolu à la fusion en gardant **la version de `c2`**, sur un
+critère mesurable et non sur la paternité : son point d'entrée est meilleur — on clique
 « Fusionner » sur la ligne du doublon qu'on regarde, au lieu de choisir les deux fiches à partir de
 rien. Le doublon a coûté une demi-journée à quelqu'un.
 
@@ -197,17 +228,34 @@ retrouvé avec **trois clés en double** dans l'objet `api` (`previsualiserFusio
 avec **deux imports identiques** (erreur de syntaxe) et **deux montages** du composant. Un `git
 merge` propre n'est pas un fichier correct. Nettoyé le 31/08.
 
+⚠ **Le nom de session n'identifie personne durablement.** Le worktree `claude-A` s'est appelé
+`allaccess-89` puis `allaccess-37` dans la même journée. Les lignes ci-dessous nomment le
+**worktree**, qui ne change pas.
+
 | # | lot | routes servies, appels du frontal | état |
 |---|---|---|---|
-| **T25** | **Fusion de clients** — fusionner, prévisualiser, défusionner | `/api/crm/fusions` ×3 | **fait** — `c2`, 31/08. Prévisualisation champ par champ avant toute écriture, arbitrage, motif au journal. ⚠ **Le journal des fusions est livré avec** : sans lui la défusion serait inatteignable, et on aurait donné le pouvoir d'écraser deux fiches sans celui de revenir |
-| **T26** | **Trésorerie** — comptes bancaires, import de relevés, rapprochement | `/api/bank_accounts`, `/api/bank_statement_imports`, `/api/bank_statement_lines` · **0 appel** | *(libre)* |
-| **T27** | **Personnel** — créneaux de travail, sortie d'un salarié, badge perdu | `/api/creneau_travails` · **0 appel** ; `/api/badge_staffs` · 1 appel seulement | **allaccess-89** |
-| **T28** | **Comptabilité** — lettrage groupé | | **fait** — `c2`, 31/08. Onglet « Lettrage » : les lignes non soldées, le solde de la sélection affiché en permanence. ⚠ **Le serveur n'exige PAS l'équilibre** — mesuré, et c'est défendable (un lettrage partiel solde un règlement en plusieurs fois), donc l'écran montre l'écart sans jamais bloquer |
+| **T25** | **Fusion de clients** — fusionner, prévisualiser, défusionner | `/api/crm/fusions` ×3 · **0 appel**. Tout déploiement réel accumule des doublons, et le serveur sait déjà prévisualiser puis défusionner — c est un mécanisme complet sans porte | **fait** — `c2`, 31/08. Prévisualisation champ par champ avant toute écriture, arbitrage, motif au journal. ⚠ **Le journal des fusions est livré avec** : sans lui la défusion serait inatteignable, et on aurait donné le pouvoir d écraser deux fiches sans celui de revenir |
+| **T26** | **Trésorerie** — comptes bancaires, import de relevés, rapprochement | `/api/bank_accounts`, `/api/bank_statement_imports`, `/api/bank_statement_lines` · **0 appel** |
+| **T27** | **Personnel** — créneaux de travail, sortie d'un salarié, badge perdu | `/api/creneau_travails` · **0 appel** ; `/api/badge_staffs` · 1 appel seulement | **fait** — `claude-A`, 31/08. Onglet « Planning » **avant** le Roster : le créneau dit ce qu'il faut couvrir, le roster dit si ça l'est. ⚠ **Un créneau est un BESOIN, pas une affectation** — rattacher un salarié est un second geste, servi par une autre route. ⚠ **Suspendre un employé suspend ses badges en cascade**, donc la confirmation le dit avant ; la réactivation, elle, ne demande rien — un geste réversible qui demande « êtes-vous sûr ? » apprend à cliquer oui sans lire. « Perte ou vol » est un **troisième** geste sur un badge, pas un synonyme de suspendre ou révoquer |
+| **T28** | **Comptabilité** — lettrage groupé **et saisie manuelle** | **fait** — `c2`, 31/08. Onglet « Lettrage » : les lignes non soldées, le solde de la sélection affiché en permanence. ⚠ **Le serveur n exige PAS l équilibre** — mesuré, et c est défendable (un lettrage partiel solde un règlement en plusieurs fois), donc l écran montre l écart sans jamais bloquer. ⚠ Et si la liste des lettrages existants ne se charge pas, l écran s arrête au lieu de proposer de tout lettrer : sans elle on ne distingue plus le soldé du dû. **Seconde moitié faite** — `c2`, 31/08 : onglet « Saisie manuelle ». ⚠ **Ici l'équilibre EST imposé** (422 du serveur) : l'inverse du lettrage, mesuré et non déduit de l'écran voisin. Le taux de TVA est obligatoire sur chaque ligne, les comptes inactifs ne sont pas proposés, et la période est vérifiée avant le clic. ⚠ J'ai failli ajouter un verrou qui existait : chercher `Cloturee` ne trouve rien, c'est `DirectLedgerEntryBuilder::estOuverte()` qui refuse |
+| **T29** | **Comptabilité — verser une régie** : `POST /compta/regies/{id}/versements` · **0 appel** | ⚠ **Ce n'est pas un écran manquant, c'est une CLÔTURE BLOQUÉE.** `ClotureHandler` refuse la clôture quand une régie dépasse son plafond d'encaisse sans versement — vu en vrai dans la sortie des tests. `ClotureComptable.jsx` affiche le refus tel quel (« versement requis ») et **aucun écran ne verse** : l'onglet Régie ne fait que lister les bordereaux. Le champ « versement » de `SessionCaisse` est la clôture Z d'une caisse, autre opération — vérifié. Témoin positif pris avant de conclure à l'absence. **Fait** — 31/08 : l'onglet Régie verse au lieu de seulement lister. Il nomme la conséquence (« la clôture est refusée tant que… ») et le minimum qui en sort (`solde - plafond`), anticipe les deux refus du serveur (montant nul → 422, montant > encaisse → 409), et annonce que l'écriture comptable est générée automatiquement — sans quoi on la saisirait une seconde fois dans l'onglet voisin | `c2` |
 
-⚠ **T27 avant T26, pour une raison mesurée et non par préférence :** `/api/employes` rend
-**0 employé sur les deux établissements**. Or une note de frais exige un salarié
+### Signalements de `allaccess-b8`, 31/08 — inscrits pour que la décision existe
+
+⚠ Aucun n'est pris. Ils sont ici parce qu'un signalement qui ne vit que dans un fil de messages
+disparaît avec la session qui l'a reçu.
+
+| # | ce qui a été mesuré | ce que j'ai vérifié en plus | urgence réelle |
+|---|---|---|---|
+| **S1** | `Crm/Command/AppliquerConservationCommand` sélectionne sur `dateCreation` — **l'ancienneté de l'inscription, pas l'inactivité**. Une règle à 36 mois anonymiserait d'abord les clients les plus fidèles, irréversiblement. Le bon champ existe : `Client::dateDerniereVisite` | ⚠ **Le correctif de b8 ne suffit pas.** `dateDerniereVisite` n'est écrite que par `EnrichissementClientSubscriber`, sur une **vente validée** — et **rien dans `Sepa` ni `Subscription` ne produit de vente validée** (mesuré). Donc un adhérent prélevé chaque mois, qui vient tous les jours, a sa « dernière visite » figée au jour de sa souscription. Il faut au minimum protéger aussi tout client portant un `AbonnementFitness` dont le statut n'est pas `resilie` — dont **`impaye`** : anonymiser un débiteur effacerait la créance. `Acces/Entity/Passage` ne porte pas de client, donc la porte n'est pas un signal exploitable en l'état | **latente** : zéro règle posée, et la tâche planifiée ne tourne pas. Deux raisons indépendantes. Mais elle s'exécute en une passe le jour où Maxime pose sa première règle RGPD |
+| **S2** | Modèle de conservation trop pauvre : `RegleConservation` porte une durée et **aucun déclencheur** (codé en dur dans la commande). `categorieDonnee` est une chaîne libre comparée en dur à `'identite'` — une règle posée avec une autre valeur est **inerte en silence**. Le patron existe côté `Dms` : échéance stockée par enregistrement, base légale portée par la règle | non vérifié par moi | après S1 |
+| **S3** | **14 écritures publiques dans `Boutique/`, un seul limiteur** (`TentativeIdentificationLimiter`, sur l'identification). Créer un panier et y ajouter des lignes **consomme du stock** pendant 15 min, sans frein : l'inventaire d'un exploitant se gèle en continu, anonymement. Et `CreationCompteHandler` est un **oracle d'énumération** (409 explicite, anonyme, sans cadence) : on déduit qui fréquente quelle piscine | non vérifié par moi | **réelle mais bornée** : `boutique:liberer-paniers-expires` tourne depuis le 31/08, fenêtre ~20 min |
+| **S4** | Sans vitrine dans l'URL, la boutique publie **la liste des exploitants** (`vitrinesPubliques`) à tout visiteur | non vérifié par moi | **disparaît avec D104** (une boutique par sous-domaine). ⚠ Ne pas supprimer la **saisie manuelle d'identifiant** en repli, qui reste légitime |
+
+⚠ **T27 est passé devant T26 pour une raison mesurée et non par préférence :** `/api/employes`
+rendait **0 employé sur les deux établissements**. Or une note de frais exige un salarié
 (`employee`, `JoinColumn(nullable: false)`), et un badge de service aussi. L'écran des notes de
-frais livré en `a719568` est donc **inutilisable tant que T27 n'est pas fait** — il l'annonce
+frais livré en `a719568` était donc **inutilisable tant que T27 n'était pas fait** — il l'annonce
 lui-même et renvoie vers Personnel. Un lot qui débloque un lot déjà livré passe devant.
 
 ⚠ **Trois pièges de routage sur la fusion, mesurés le 31/08 et consignés dans `client.js`**, parce
@@ -215,6 +263,11 @@ qu'ils ont coûté du temps aux deux sessions : `GET /api/crm/fusions` rend **40
 collection vit sous `/api/journal_fusions`) ; la prévisualisation prend des **UUID** quand la
 fusion prend des **IRI** ; et `qs()` ajoute lui-même les crochets d'un tableau, donc écrire
 `'sources[]'` produit `sources[][]=…` que le serveur ne lit pas.
+
+⚠ **Et aucun garde-fou ne voit cette dernière famille.** Le n°33 prouve qu'une route existe et
+qu'aucun appel n'est orphelin ; il ne compose jamais l'URL, donc il est muet sur les paramètres —
+celui en trop, celui qui manque, le tableau doublement crocheté, l'IRI envoyée là où le serveur
+lit un UUID. C'est ce qui a laissé passer `sources[][]` jusqu'au premier clic d'un utilisateur.
 
 Relevés par `allaccess-89`, qui les tenait de `34`. Deux autres de la même liste sont **faits et
 poussés depuis** : le porte-monnaie virtuel et les notes de frais.
