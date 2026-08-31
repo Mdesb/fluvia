@@ -109,6 +109,31 @@ verifier_numeros_uniques() {
 
 LIBELLES=""
 
+# ⚠ UN CONTROLE SAUTE N'EST PAS UN CONTROLE VERT. Dix endroits de ce script renoncent a lancer un
+# controle quand son outil manque (`phpunit` retire par un deploiement `--no-dev`, `node` absent de
+# la machine). C'est le bon comportement -- mais tant que le saut ne touchait aucun compteur, le
+# verdict final disait « ✓ N garde-fou(s) OK » avec un N simplement plus petit, et personne ne
+# compare N avec celui d'hier.
+#
+# Mesure du 01/09 : 39 puis 38 a vingt minutes d'intervalle, sans un seul echec affiche.
+IGNORES=0
+IGNORES_NOMS=""
+
+ignorer() {
+    local nom="$1"; shift
+    local raison="$1"; shift
+    IGNORES=$((IGNORES + 1))
+    IGNORES_NOMS="$IGNORES_NOMS|$nom"
+    echo "─────────────────────────────────────────────────────────────"
+    echo "▶ $nom"
+    echo "─────────────────────────────────────────────────────────────"
+    echo "· NON EXÉCUTÉ — $raison"
+    local ligne
+    for ligne in "$@"; do
+        echo "  $ligne"
+    done
+}
+
 executer() {
     local nom="$1"; shift
     LIBELLES="$LIBELLES|$nom"
@@ -165,12 +190,10 @@ if [ -f app/vendor/bin/phpunit ]; then
     executer "Manifeste vs catalogue (RG-PLAT-06)" \
         php_app vendor/bin/phpunit --filter ManifestCatalogueTest
 else
-    echo "─────────────────────────────────────────────────────────────"
-    echo "▶ Manifeste vs catalogue (RG-PLAT-06)"
-    echo "─────────────────────────────────────────────────────────────"
-    echo "IGNORÉ : phpunit absent (dépendances de dev retirées par le dernier déploiement)."
-    echo "  Ce contrôle n'a PAS tourné. Pour le lancer : ./infra/reinstaller-dev.sh"
-    echo "         ./infra/test-stack.sh up <token>"
+    ignorer "Manifeste vs catalogue (RG-PLAT-06)" \
+        "phpunit absent (dépendances de dev retirées par le dernier déploiement)." \
+        "Pour le lancer : ./infra/reinstaller-dev.sh" \
+        "                 ./infra/test-stack.sh up <token>"
 fi
 
 # 3. Nommage anglais (D5) — uniquement sur les fichiers AJOUTÉS : l'existant est français et le
@@ -373,10 +396,7 @@ if [ -f "$RACINE/frontend/scripts/verifier-droits.mjs" ]; then
     if command -v node >/dev/null 2>&1; then
         executer "Droits du frontend (D39)" sh -c "cd '$RACINE/frontend' && node scripts/verifier-droits.mjs"
     else
-        echo "─────────────────────────────────────────────────────────────"
-        echo "▶ Droits du frontend (D39)"
-        echo "─────────────────────────────────────────────────────────────"
-        echo "· IGNORÉ — « node » indisponible ici. Le contrôle n'a PAS tourné."
+        ignorer "Droits du frontend (D39)" "« node » indisponible ici."
     fi
 fi
 
@@ -404,10 +424,7 @@ if [ -f "$RACINE/frontend/scripts/verifier-profil-charge.mjs" ]; then
     if command -v node >/dev/null 2>&1; then
         executer "Profil chargé avant le rendu" sh -c "cd '$RACINE/frontend' && node scripts/verifier-profil-charge.mjs"
     else
-        echo "─────────────────────────────────────────────────────────────"
-        echo "▶ Profil chargé avant le rendu"
-        echo "─────────────────────────────────────────────────────────────"
-        echo "· IGNORÉ — « node » indisponible ici. Le contrôle n'a PAS tourné."
+        ignorer "Profil chargé avant le rendu" "« node » indisponible ici."
     fi
 fi
 
@@ -429,10 +446,7 @@ if [ -f "$RACINE/frontend/scripts/verifier-imports.mjs" ]; then
     if command -v node >/dev/null 2>&1; then
         executer "Imports manquants (n°10)" sh -c "cd '$RACINE/frontend' && node scripts/verifier-imports.mjs"
     else
-        echo "─────────────────────────────────────────────────────────────"
-        echo "▶ Imports manquants"
-        echo "─────────────────────────────────────────────────────────────"
-        echo "· IGNORÉ — « node » indisponible ici. Le contrôle n'a PAS tourné."
+        ignorer "Imports manquants" "« node » indisponible ici."
     fi
 fi
 
@@ -444,10 +458,7 @@ if [ -f "$RACINE/frontend/scripts/verifier-cles-doubles.mjs" ]; then
     if command -v node >/dev/null 2>&1; then
         executer "Cles en double (n37)" sh -c "cd '$RACINE/frontend' && node scripts/verifier-cles-doubles.mjs"
     else
-        echo "─────────────────────────────────────────────────────────────"
-        echo "▶ Cles en double"
-        echo "─────────────────────────────────────────────────────────────"
-        echo "· IGNORÉ — « node » indisponible ici. Le contrôle n'a PAS tourné."
+        ignorer "Cles en double" "« node » indisponible ici."
     fi
 fi
 
@@ -455,10 +466,7 @@ if [ -f "$RACINE/frontend/scripts/verifier-formats.mjs" ]; then
     if command -v node >/dev/null 2>&1; then
         executer "Formats d'écriture (n°11)" sh -c "cd '$RACINE/frontend' && node scripts/verifier-formats.mjs"
     else
-        echo "─────────────────────────────────────────────────────────────"
-        echo "▶ Formats d'écriture"
-        echo "─────────────────────────────────────────────────────────────"
-        echo "· IGNORÉ — « node » indisponible ici. Le contrôle n'a PAS tourné."
+        ignorer "Formats d'écriture" "« node » indisponible ici."
     fi
 fi
 
@@ -497,10 +505,7 @@ if [ -f "$RACINE/frontend/scripts/verifier-classes.mjs" ]; then
     if command -v node >/dev/null 2>&1; then
         executer "Classes CSS déclarées (n°16)" sh -c "cd '$RACINE/frontend' && node scripts/verifier-classes.mjs"
     else
-        echo "─────────────────────────────────────────────────────────────"
-        echo "▶ Classes CSS déclarées (n°16)"
-        echo "─────────────────────────────────────────────────────────────"
-        echo "· IGNORÉ — « node » indisponible ici. Le contrôle n'a PAS tourné."
+        ignorer "Classes CSS déclarées (n°16)" "« node » indisponible ici."
     fi
 fi
 
@@ -532,10 +537,7 @@ if [ -f "$RACINE/frontend/scripts/verifier-dates-locales.mjs" ]; then
     if command -v node >/dev/null 2>&1; then
         executer "Dates locales (n°31)" sh -c "cd '$RACINE/frontend' && node scripts/verifier-dates-locales.mjs"
     else
-        echo "─────────────────────────────────────────────────────────────"
-        echo "▶ Dates locales (n°31)"
-        echo "─────────────────────────────────────────────────────────────"
-        echo "· IGNORÉ — « node » indisponible ici. Le contrôle n'a PAS tourné."
+        ignorer "Dates locales (n°31)" "« node » indisponible ici."
     fi
 fi
 
@@ -543,10 +545,7 @@ if [ -f "$RACINE/frontend/scripts/verifier-cache.mjs" ]; then
     if command -v node >/dev/null 2>&1; then
         executer "Cache du service worker (n°18)" sh -c "cd '$RACINE/frontend' && node scripts/verifier-cache.mjs"
     else
-        echo "─────────────────────────────────────────────────────────────"
-        echo "▶ Cache du service worker (n°18)"
-        echo "─────────────────────────────────────────────────────────────"
-        echo "· IGNORÉ — « node » indisponible ici. Le contrôle n'a PAS tourné."
+        ignorer "Cache du service worker (n°18)" "« node » indisponible ici."
     fi
 fi
 
@@ -561,10 +560,7 @@ if [ -f "$RACINE/frontend/scripts/garde-fou-ecart.mjs" ]; then
     if command -v node >/dev/null 2>&1; then
         executer "Écart client/serveur (n°15)" sh -c "cd '$RACINE/frontend' && node scripts/garde-fou-ecart.mjs"
     else
-        echo "─────────────────────────────────────────────────────────────"
-        echo "▶ Écart client/serveur (n°15)"
-        echo "─────────────────────────────────────────────────────────────"
-        echo "· IGNORÉ — « node » indisponible ici. Le contrôle n'a PAS tourné."
+        ignorer "Écart client/serveur (n°15)" "« node » indisponible ici."
     fi
 fi
 
@@ -631,8 +627,25 @@ if ! verifier_numeros_uniques $(printf '%s' "$LIBELLES" | tr '|' ' '); then
 fi
 
 echo "─────────────────────────────────────────────────────────────"
+
+# ⚠ LE SAUT EST DIT ICI, PAS SEULEMENT LA OU IL A LIEU. Il l'etait deja la-bas, a la 18e ligne
+# d'une sortie qui en fait des centaines -- et le verdict, la seule ligne que tout le monde lit,
+# n'en portait aucune trace. Un total qui baisse sans echec se lit comme « tout va bien ».
+if [ "$IGNORES" -gt 0 ]; then
+    echo "⚠ $IGNORES garde-fou(s) NON EXÉCUTÉ(S) — leur outil manquait sur cette machine :"
+    printf '%s' "$IGNORES_NOMS" | tr '|' '\n' | sed '/^$/d;s/^/    · /'
+    echo ""
+    echo "  Ce qui suit ne porte QUE sur les $TOTAL qui ont tourné."
+    echo "─────────────────────────────────────────────────────────────"
+fi
+
 if [ "$ECHECS" -gt 0 ]; then
     echo "✗ $ECHECS garde-fou(s) en échec sur $TOTAL."
     exit 1
 fi
-echo "✓ $TOTAL garde-fou(s) OK."
+
+if [ "$IGNORES" -gt 0 ]; then
+    echo "✓ $TOTAL garde-fou(s) OK, $IGNORES NON EXÉCUTÉ(S)."
+else
+    echo "✓ $TOTAL garde-fou(s) OK."
+fi
