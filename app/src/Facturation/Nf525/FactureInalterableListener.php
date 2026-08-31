@@ -88,6 +88,32 @@ final class FactureInalterableListener
             return false;
         }
 
-        return array_diff(array_keys($changeSet), self::CHAMPS_AUTORISES_APRES_SCELLEMENT) !== [];
+        $champsModifies = array_keys($changeSet);
+
+        // ⚠ `payloadCanonique` N'EST NI DU SUIVI NI DU CONTENU, ET LA LISTE BLANCHE NE SAIT PAS
+        // L'EXPRIMER.
+        //
+        // Il n'est pas du contenu : il ENREGISTRE le contenu tel qu'il a été scellé. Mais l'ajouter
+        // simplement à la liste ci-dessus laisserait RÉÉCRIRE un instantané existant — c'est-à-dire
+        // changer après coup ce qu'un document est censé avoir été. Ce serait ouvrir précisément la
+        // porte que ce garde ferme.
+        //
+        // La règle est donc plus étroite que la liste blanche, qui raisonne par nom de champ :
+        //
+        //     null   → valeur    autorisé UNE FOIS, on enregistre ce qui manquait
+        //     valeur → autre     REFUSÉ, c'est le seul cas où ce champ pourrait mentir
+        //
+        // Écrire l'instantané d'un document déjà scellé n'est permis que si son empreinte se vérifie
+        // encore — la coïncidence étant alors la preuve qu'il est bien d'origine. Cette condition-là
+        // vit dans `reprendreInstantane()` ; ici on garantit seulement l'irréversibilité.
+        if (isset($changeSet['payloadCanonique'])) {
+            if ($changeSet['payloadCanonique'][0] !== null) {
+                return true;
+            }
+
+            $champsModifies = array_values(array_diff($champsModifies, ['payloadCanonique']));
+        }
+
+        return array_diff($champsModifies, self::CHAMPS_AUTORISES_APRES_SCELLEMENT) !== [];
     }
 }

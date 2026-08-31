@@ -71,6 +71,30 @@ final class EcritureInalterableListener
         }
 
         $champsModifies = array_keys($changeSet);
+
+        // ⚠ `payloadCanonique` N'EST NI DU SUIVI NI DU CONTENU, ET LA LISTE BLANCHE NE SAIT PAS
+        // L'EXPRIMER.
+        //
+        // Il n'est pas du contenu : il ENREGISTRE le contenu tel qu'il a été scellé. Mais l'ajouter
+        // simplement à la liste ci-dessus laisserait RÉÉCRIRE un instantané existant — donc changer
+        // après coup ce qu'une écriture est censée avoir été. Ce serait ouvrir précisément la porte
+        // que ce garde ferme.
+        //
+        // La règle est donc plus étroite que la liste blanche, qui raisonne par nom de champ :
+        //
+        //     null   → valeur    autorisé UNE FOIS, on enregistre ce qui manquait
+        //     valeur → autre     REFUSÉ, c'est le seul cas où ce champ pourrait mentir
+        //
+        // La condition qui décide si l'écriture est légitime — l'empreinte se vérifie-t-elle encore ?
+        // — vit dans `reprendreInstantane()`. Ici on ne garantit que l'irréversibilité.
+        if (isset($changeSet['payloadCanonique'])) {
+            if ($changeSet['payloadCanonique'][0] !== null) {
+                return true;
+            }
+
+            $champsModifies = array_values(array_diff($champsModifies, ['payloadCanonique']));
+        }
+
         $champsNonAutorises = array_diff($champsModifies, self::CHAMPS_AUTORISES_APRES_SCELLEMENT);
 
         return $champsNonAutorises !== [];
