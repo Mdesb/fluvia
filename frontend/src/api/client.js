@@ -549,42 +549,20 @@ export const api = {
   rechercheClients: (params) => request('/api/crm/clients/recherche', { query: params }),
   ficheClient: (id) => request(`/api/clients/${id}/fiche-360`),
 
-  // ─── FUSION DE FICHES CLIENTS ────────────────────────────────────────────────────────────
-  //
-  // Trois operations servies, zero appel. Tout deploiement reel accumule des doublons -- meme
-  // personne saisie deux fois au guichet, une fois en ligne -- et deux fiches pour un client
-  // signifient deux historiques, deux soldes, deux abonnements qu'on ne voit pas ensemble.
-  //
-  // ⚠ QUELQU'UN A CONCU CECI AVEC SOIN, ET CA SE VOIT A DEUX CHOSES : la PREVISUALISATION (on
-  // voit ce qui diverge avant de decider) et la DEFUSION (on revient en arriere). Ecrire une
-  // defusion coute cher ; sa presence dit que le geste a ete pense comme reversible, ce qui est
-  // rare dans ce depot ou la plupart des ecritures sont definitives.
-  //
-  // ⚠ TROIS PIEGES DE ROUTAGE, MESURES LE 31/08 CONTRE LA PREPROD :
+  // ⚠ TROIS PIEGES DE ROUTAGE SUR LA FUSION, MESURES LE 31/08 CONTRE LA PREPROD. Ils sont
+  // consignes ici parce que DEUX sessions ont ecrit cet ecran le meme jour sans se voir, et que
+  // la seconde n'avait pas ces mesures.
   //
   //   1. LA COLLECTION N'EST PAS SOUS `/crm/fusions`. Le `POST` occupe ce chemin ; le
   //      `GetCollection` n'a pas d'`uriTemplate` et vit donc sous le nom derive de l'entite.
   //          GET /api/crm/fusions      -> 405 Method Not Allowed   (et non 404)
   //          GET /api/journal_fusions  -> 200
-  //      Un 405 se lit << mauvaise methode >>, pas << mauvais chemin >> : le lecteur suivant
-  //      cherchera longtemps.
+  //      Un 405 se lit << mauvaise methode >>, pas << mauvais chemin >>.
   //
   //   2. LA PREVISUALISATION PREND DES UUID, LA FUSION PREND DES IRI. Le provider lit
-  //      `?maitre=<uuid>&sources[]=<uuid>` dans la requete ; le processeur lit `{ maitre: iri,
-  //      sources: [iri] }` dans le corps. Les deux formes dans le meme geste.
+  //      `?maitre=<uuid>&sources[]=<uuid>` ; le processeur lit `{ maitre: iri, sources: [iri] }`.
   //
-  //   3. LES DEUX `POST` SONT EN `input: false` : ils lisent le corps BRUT. Pas de `ld: true`.
-  fusions: () => request('/api/journal_fusions', { query: { itemsPerPage: 100 } }),
-  previsualiserFusion: (maitreId, sourceIds) =>
-    request('/api/crm/fusions/previsualiser', {
-      // ⚠ `sources` SANS CROCHETS : `qs()` les ajoute lui-meme pour un tableau. Ecrire
-      // `'sources[]'` produirait `sources[][]=…`, que le serveur ne lit pas.
-      query: { maitre: maitreId, sources: sourceIds },
-    }),
-  fusionnerClients: (corps) =>
-    request('/api/crm/fusions', { method: 'POST', body: corps }),
-  defusionner: (journalId) =>
-    request(`/api/crm/fusions/${journalId}/defusionner`, { method: 'POST', body: {} }),
+  //   3. LES DEUX `POST` SONT EN `input: false` : corps BRUT, pas de `ld: true`.
   // La fiche 360 ne porte qu'un sous-ensemble des champs : pour modifier, il faut le client entier.
   client: (id) => request(`/api/clients/${id}`),
   majClient: (id, corps) => request(`/api/clients/${id}`, { method: 'PATCH', body: corps }),
@@ -982,6 +960,39 @@ export const api = {
   annulerReservation: (id) =>
     request(`/api/reservation/reservations/${id}/annuler`, { method: 'POST', body: {} }),
 
+  // ── FUSION DE FICHES CLIENTS (US-L5-08, RG-M4-06) ─────────────────────────────────────────────
+  //
+  // ⚠ TROIS TEMPS, ET LE PREMIER EST CE QUI REND LE GESTE PRATICABLE. On ne fusionne pas a
+  // l'aveugle : on demande d'abord CE QUI DIVERGE entre les fiches, on tranche champ par champ, et
+  // seulement ensuite on ecrit. Sans cette etape, fusionner reviendrait a ecraser des donnees qu'on
+  // n'a pas regardees.
+  //
+  // Rend `{ maitre, sources, champsDivergents: { champ: { maitre, sources: { id: valeur } } } }`.
+  // Un objet vide signifie que les fiches ne se contredisent nulle part — la fusion est alors sans
+  // arbitrage.
+  previsualiserFusion: (maitre, sources) =>
+    // ⚠ `sources` SANS CROCHETS : `qs()` les ajoute lui-meme pour un tableau. Ecrit
+    // `'sources[]'`, il produisait `sources[][]=…`, que le serveur ne lit pas -- la
+    // previsualisation rendait alors 422 << sources[] requis >>. Mesure le 31/08.
+    request('/api/crm/fusions/previsualiser', { query: { maitre, sources } }),
+
+  // Corps : { portee: 'client', sources: [iri], maitre: iri, champsArbitres?: {...}, motif?: '…' }
+  //
+  // ⚠ `champsArbitres` NE PORTE QUE CE QU'ON A TRANCHE. Un champ absent garde la valeur du maitre :
+  // c'est le defaut sur, et il evite qu'un ecran distrait impose une valeur qu'il n'a pas montree.
+  fusionnerClients: (corps) =>
+    request('/api/crm/fusions', { method: 'POST', body: corps }),
+
+  // ⚠ CE QUI REND LA FUSION ACCEPTABLE : elle se defait. Les fiches sources sont restaurees a
+  // l'identique. Sans ce retour en arriere, personne de sense ne fusionnerait deux fiches d'un
+  // client qui reclame.
+  defusionner: (idJournal) =>
+    request(`/api/crm/fusions/${idJournal}/defusionner`, { method: 'POST', body: {} }),
+
+  // Le journal des fusions : c'est lui qui rend la defusion atteignable, et qui dit qui a fusionne
+  // quoi, quand, et pourquoi.
+  journalFusions: () => request('/api/journal_fusions', { query: { itemsPerPage: 50 } }),
+
   // ── DOUBLE AUTHENTIFICATION (§2.3 plan-backoffice.md) ─────────────────────────────────────────
   //
   // Cinq points d'entree, tous serves et tous eprouves par `MfaTest` — et aucun n'etait appele.
@@ -1347,6 +1358,22 @@ export const api = {
   demanderReinitialisation: (email) =>
     request('/mot-de-passe/oublie', { method: 'POST', body: { email }, auth: false }),
 
+  // PARAMÉTRAGE DE FACTURATION — une ressource complète (Get, Post, Patch) que RIEN n'appelait.
+  //
+  // ⚠ CE N'ÉTAIT PAS UN CONFORT MANQUANT. Deux manques signalés ailleurs viennent de là :
+  //
+  //   — `tauxPenaliteRetard` est nullable et personne ne pouvait le renseigner. Le taux de
+  //     pénalités « absent des factures » n'était pas absent du modèle, il était inatteignable ;
+  //   — `ResolveurComptesFacturation` dit « renseignez une catégorie comptable mappée, OU un compte
+  //     de produit par défaut dans le paramétrage de facturation ». La seconde voie n'existait pas :
+  //     un repli qu'on ne pouvait pas armer.
+  parametresFacturation: () =>
+    request('/api/parametres-facturation', { query: { itemsPerPage: 50 } }),
+  creerParametreFacturation: (corps) =>
+    request('/api/parametres-facturation', { method: 'POST', body: corps, ld: true }),
+  majParametreFacturation: (id, corps) =>
+    request(`/api/parametres-facturation/${id}`, { method: 'PATCH', body: corps }),
+
   catalogueTauxTva: (pays) =>
     request('/api/compta/vat-rate-catalog', { query: pays ? { country: pays } : undefined }),
 
@@ -1447,6 +1474,24 @@ export const api = {
     request(`/api/compta/ecritures/${id}/valider`, { method: 'POST', body: {} }),
   extournerEcriture: (id) =>
     request(`/api/compta/ecritures/${id}/extourne`, { method: 'POST', body: {} }),
+  // ── LETTRAGE (US-L4-14, RG-M6-14) ─────────────────────────────────────────────────────────────
+  //
+  // Les lettrages existants : c'est ce qui permet de distinguer une ligne SOLDEE d'une ligne qui
+  // reste due. Sans cette liste, un ecran de lettrage proposerait de relettrer ce qui l'est deja.
+  lettragesEcritures: () =>
+    request('/api/lettrage_ecritures', { query: { itemsPerPage: 500 } }),
+
+  // Lettrer un groupe de lignes. Corps : { lines: [id, ...] } — au moins deux.
+  //
+  // ⚠ LE SERVEUR N'EXIGE PAS L'EQUILIBRE, et c'est mesure en le lisant. Il verifie deux lignes
+  // minimum, un profil exploitant commun, et le cloisonnement de chacune. Un lettrage partiel est un
+  // geste comptable legitime — solder un reglement en plusieurs fois — donc l'ecran AFFICHE l'ecart
+  // sans jamais bloquer.
+  //
+  // Un identifiant nu suffit : `idDepuisReference` accepte l'IRI comme l'UUID.
+  lettrerGroupe: (idsLignes) =>
+    request('/api/compta/lettrages/groupe', { method: 'POST', body: { lines: idsLignes } }),
+
   verifierChaineEcritures: (journalId) =>
     request('/api/compta/ecritures/verifier-chaine', { query: { journal: journalId } }),
   cloturerPeriode: (id) =>

@@ -440,7 +440,7 @@ function descripteurPointsDeVente(api, etabActif, moyens = []) {
  * Valeur par defaut `false` : tant que le profil n'est pas charge, on CACHE. Montrer puis cacher
  * ferait apparaitre une fraction de seconde, a un client, ce qu'on veut precisement lui epargner.
  */
-export default function Parametres({ etabActif, etablissements, droits = [], onCapacitesChangees, estEditeur = false, me = null }) {
+export default function Parametres({ etabActif, etablissements, droits = [], onCapacitesChangees, estEditeur = false, me = null, envoiCourriel = false }) {
   const [ouvertureStructure, setOuvertureStructure] = useState(false)
   const [sousOnglet, setSousOnglet] = useState('entites')
 
@@ -711,7 +711,7 @@ function MoyensPaiement({ etabActif }) {
         <span className="sub">éditable</span>
         <div className="r" style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
           <button className="btn sm" onClick={() => { setMsg(null); setErreur(null); setEdition({ moyen: null }) }}>+ Ajouter</button>
-          <button className="btn ghost sm" onClick={charger} disabled={chargement}>↻</button>
+          <button title="Actualiser" className="btn ghost sm" onClick={charger} disabled={chargement}>↻</button>
         </div>
       </div>
       <div className="card-b" style={{ overflowX: 'auto' }}>
@@ -855,7 +855,7 @@ function CaissesSection({ etabActif, peutGerer, onEcrit }) {
             <button className="btn sm" type="button" onClick={() => { setMsg(null); setErreur(null); setEdition({ creation: true }) }}>
               ＋ Ajouter
             </button>
-            <button className="btn ghost sm" type="button" onClick={charger} disabled={chargement}>↻</button>
+            <button title="Actualiser" className="btn ghost sm" type="button" onClick={charger} disabled={chargement}>↻</button>
           </div>
         )}
       </div>
@@ -1365,7 +1365,7 @@ function ComptesDroits({ etabActif, etablissements, droits = [], me = null }) {
           <span className="sub">{utilisateurs.length} compte(s)</span>
           <div className="r" style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
             <button className="btn sm" onClick={() => { setMsg(null); setErreur(null); setModalInvit(true) }}>+ Inviter un utilisateur</button>
-            <button className="btn ghost sm" onClick={charger}>↻</button>
+            <button title="Actualiser" className="btn ghost sm" onClick={charger}>↻</button>
           </div>
         </div>
         <div className="card-b" style={{ overflowX: 'auto' }}>
@@ -1452,6 +1452,7 @@ function ComptesDroits({ etabActif, etablissements, droits = [], me = null }) {
       </section>
 
       <ModalInvitation
+        envoiCourriel={envoiCourriel}
         open={modalInvit}
         roles={roles}
         etablissements={etablissements}
@@ -1485,9 +1486,23 @@ function ComptesDroits({ etabActif, etablissements, droits = [], me = null }) {
           // ⚠ ON NE REDIT PAS LE MOT DE PASSE ICI. Il a ete saisi une fois, il est hache cote
           // serveur, et le reafficher dans un bandeau le laisserait sur l'ecran d'un poste
           // partage — souvent une caisse en libre-service.
+          // ⚠ CETTE PHRASE ÉTAIT ÉCRITE EN DUR, ET ELLE SERAIT DEVENUE FAUSSE SANS PRÉVENIR.
+          //
+          // « aucun envoi de courriel n'est branché » était vrai à l'écriture. Le jour où Maxime
+          // configure un expéditeur, elle annoncerait une invitation non partie alors qu'elle
+          // serait partie — et rien ne relierait la phrase à ce qui l'a rendue fausse. C'est le
+          // défaut qu'on a passé la nuit à retirer d'ailleurs ; il n'y a pas de raison de le
+          // laisser ici.
+          //
+          // `envoiCourriel` vient de `/me` (`ExpediteurCourriel::estBranche()`), donc la phrase
+          // suit l'état réel de l'instance et se corrigera toute seule.
           setMsg(payload.motDePasse
             ? `Compte créé pour ${payload.email}. Communiquez-lui son mot de passe de vive voix.`
-            : `Compte créé pour ${payload.email} — invitation NON envoyée, aucun envoi de courriel n’est branché.`)
+            : envoiCourriel
+              ? `Compte créé pour ${payload.email} — une invitation lui a été envoyée par courriel.`
+              : `Compte créé pour ${payload.email} — invitation NON envoyée : cette instance n’a pas `
+                + `d’expéditeur de courriel. Posez-lui un mot de passe depuis sa fiche, ou `
+                + `recréez-le en choisissant « Je pose un mot de passe maintenant ».`)
           await charger()
         }}
       />
@@ -1652,7 +1667,7 @@ function MatriceDroits({ roles, etabActif, affectations = [], utilisateurs = [] 
       <div className="card-h">
         <h3>Qui a le droit de quoi</h3>
         <span className="sub">{utilisateurs.length} compte(s) · {roles.length} rôle(s)</span>
-        <button className="btn ghost sm" style={{ marginLeft: 'auto' }} onClick={charger} disabled={chargement}>↻</button>
+        <button title="Actualiser" className="btn ghost sm" style={{ marginLeft: 'auto' }} onClick={charger} disabled={chargement}>↻</button>
       </div>
       <div className="card-b" style={{ overflowX: 'auto' }}>
         {chargement ? (
@@ -1739,7 +1754,7 @@ function MatriceDroits({ roles, etabActif, affectations = [], utilisateurs = [] 
   )
 }
 
-function ModalInvitation({ open, roles, etablissements, etabActif, onClose, onInvite }) {
+function ModalInvitation({ open, roles, etablissements, etabActif, onClose, onInvite, envoiCourriel = false }) {
   const [email, setEmail] = useState('')
   const [nom, setNom] = useState('')
   const [roleId, setRoleId] = useState('')
@@ -1809,8 +1824,23 @@ function ModalInvitation({ open, roles, etablissements, etabActif, onClose, onIn
           <label htmlFor="inv-voie">Comment cette personne se connectera</label>
           <select id="inv-voie" className="select" value={voie} onChange={(e) => setVoie(e.target.value)}>
             <option value="motdepasse">Je pose un mot de passe maintenant</option>
-            <option value="invitation">Le compte reçoit une invitation par courriel</option>
+            {/* ⚠ ON NE DÉSACTIVE PAS CE CHOIX, ON DIT CE QU'IL FAIT AUJOURD'HUI.
+                L'invitation par courriel est le bon parcours et redeviendra le parcours normal dès
+                qu'un expéditeur sera configuré. La désactiver obligerait à s'en souvenir ce jour-là
+                — et personne ne repasse sur un `disabled` posé six mois plus tôt. Le libellé, lui,
+                suit `/me` et se corrige tout seul. */}
+            <option value="invitation">
+              {envoiCourriel
+                ? 'Le compte reçoit une invitation par courriel'
+                : 'Invitation par courriel — aucun expéditeur configuré, rien ne partira'}
+            </option>
           </select>
+          {!envoiCourriel && (
+            <span className="hint">
+              Cette instance n’envoie aucun courriel. Le compte sera créé et restera « invité »
+              jusqu’à ce qu’un mot de passe lui soit posé — préférez le premier choix.
+            </span>
+          )}
         </div>
 
         {voie === 'motdepasse' ? (
@@ -2006,7 +2036,7 @@ function Capacites({ etabActif, onCapacitesChangees }) {
       <div className="card-h">
         <h3>Ce que fait votre établissement</h3>
         <span className="sub">{actives} sur {items.length} en service</span>
-        <button className="btn ghost sm" style={{ marginLeft: 'auto' }} onClick={charger} disabled={chargement}>↻</button>
+        <button title="Actualiser" className="btn ghost sm" style={{ marginLeft: 'auto' }} onClick={charger} disabled={chargement}>↻</button>
       </div>
       <div className="card-b" style={{ overflowX: 'auto' }}>
         {msg && <div className="banner banner-ok" style={{ margin: '0 0 12px' }}>{msg}</div>}

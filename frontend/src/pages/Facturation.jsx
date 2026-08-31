@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import ParametresFacturation from '../components/ParametresFacturation.jsx'
 import Modal from '../components/Modal.jsx'
 import Tabs from '../components/Tabs.jsx'
 import { useEtatUrl } from '../api/url.js'
@@ -219,12 +220,18 @@ export default function Facturation({ etabActif, droits, onNaviguer }) {
         onglets={[
           ['factures', `Factures${factures?.length ? ` (${factures.length})` : ''}`],
           ['devis', `Devis & pièces${pieces?.length ? ` (${pieces.length})` : ''}`],
+          // Le paramétrage vit ici et non dans Paramètres : ce qu'il règle — délai, pénalités,
+          // mentions — ne se comprend qu'en regardant une facture. On le met à côté de ce qu'il
+          // gouverne, pas dans un hub d'administration où personne ne le cherche.
+          ['reglages', 'Paramétrage'],
         ]}
         actif={params.tab}
         onChange={(v) => majParams({ tab: v })}
       />
 
-      {params.tab === 'factures' ? (
+      {params.tab === 'reglages' ? (
+        <ParametresFacturation peutModifier={peutGerer} />
+      ) : params.tab === 'factures' ? (
         <>
           {/* Trois chiffres bornés, qui appellent une décision : ils restent sur la page.
               La liste, elle, peut grandir sans limite — d'où le tableau filtrable en dessous. */}

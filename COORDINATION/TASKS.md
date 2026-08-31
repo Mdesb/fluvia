@@ -31,6 +31,98 @@ git fetch origin && git merge --no-edit origin/main
 
 Le second doit être vert AVANT que tu commences, sinon tu hériteras d'un rouge qui n'est pas le tien.
 
+### ⚠ La chaîne NF525 de la préprod rend « intacte: false », et c'est NORMAL
+
+`POST /api/nf525/verifier-chaine` répond, sur la préprod :
+
+    "intacte": false, "anomalies": [{ "sequence": 1, "probleme": "signature invalide" }, …]
+
+**Ce n'est pas une panne, et il n'y a rien à réparer.** Les clés de scellement ont été régénérées le
+31/08 (décision de Maxime : une clé par installation). Les opérations scellées AVANT portent une
+signature calculée avec l'ancienne clé.
+
+⚠ **Lis le type d'anomalie, pas le booléen.** Deux mots différents, deux gravités opposées :
+
+| ce que dit l'anomalie | ce que ça veut dire |
+|---|---|
+| `signature invalide` | la clé a changé depuis le scellement — attendu ici |
+| `empreinte incohérente` | **la donnée a été altérée** — ça, c'est grave |
+
+L'empreinte ne dépend d'aucune clé (`hash(payload + empreinte précédente)`) ; seule la signature en
+dépend (`hash_hmac(empreinte, clé)`). La chaîne est donc toujours vérifiable, et le contrôle le dit
+correctement : zéro `empreinte incohérente` sur les 14 opérations.
+
+**En production, ce ne sera jamais normal** — les clés y seront générées au premier déploiement et
+ne changeront plus jamais.
+
+---
+
+### ⚠ Une suite verte ne dit RIEN de ce que le web sert
+
+`opcache.validate_timestamps=0` : **FPM ne relit jamais les fichiers.** Il sert le code tel qu'il
+était à son dernier démarrage. Et `opcache.enable_cli=0` : **phpunit et `bin/console` voient toujours
+le code frais.**
+
+Les deux ensemble : ta suite peut être verte sur un code que le web ne sert pas.
+
+Mesuré le 31/08 — un correctif de cloisonnement écrit à 13:38 sur un conteneur démarré à 13:31 est
+resté hors d'opcache treize minutes, pendant que tout était vert. Trouvé par `b8`.
+
+⚠ **Lire le fichier dans le conteneur ne prouve rien** : le volume est monté, donc le fichier est
+frais, et opcache sert quand même une image figée. La seule mesure qui vaut vient du processus.
+
+    curl -s -H 'Accept: application/json' https://smartaccess.hector-conseil.com/api/plateforme/version-chargee
+
+Ce point d'entrée rend le commit **que PHP a chargé**. Le marqueur est un fichier PHP : si opcache
+sert du code figé, il sert la constante figée avec elle — l'instrument hérite du défaut qu'il mesure.
+`version.json`, lui, voyage avec le `rsync` du frontal : il ne décrit que la moitié frontale.
+
+**Trois versions à comparer, pas deux** : l'arbre, le frontal servi, le PHP chargé.
+`./infra/deploy-preprod.sh` les vérifie désormais toutes les trois.
+
+---
+
+### ⚠ Déployer tue toute suite en cours — la tienne comme celle des autres
+
+`./infra/deploy-preprod.sh` lance `composer install --no-dev`, qui **retire phpunit** du `vendor/`
+**de l'arbre d'où part le déploiement**. Une suite qui tourne sur cet arbre meurt alors en plein
+milieu, et son message accuse l'opérateur de ne pas avoir réinstallé — alors qu'il l'avait fait.
+
+⚠ **Les worktrees ne sont PAS concernés, et ma première version disait le contraire.** `git worktree`
+partage le `.git`, pas le `vendor/` : chaque worktree a le sien (deux inodes distincts, mesuré par
+`8e` puis vérifié). Il y a **dix worktrees** ici — avertir pour les dix apprenait à tout le monde à
+sauter la ligne, ce que j'ai fait moi-même une heure après l'avoir écrite. Le déploiement lit
+désormais le **montage** des conteneurs de test, pas un fichier, et ne nomme que les suites du même
+arbre.
+
+Constaté le 31/08 : déploiement à 12:04:32, déploiement d'une autre session à 12:05:50, suite
+complète perdue **sans qu'un seul test soit exécuté**. La notification de tâche annonçait « exit
+code 0 ».
+
+**Ce n'est la faute de personne : c'est structurel.** Toute session qui déploie casse toute session
+qui teste, et la flotte s'agrandit à d'autres comptes.
+
+On ne supprime pas la collision, et c'est délibéré : le garde-fou n°20 existe parce que
+`symfony/http-client` était déclaré en `require-dev` alors que huit classes de production
+l'utilisaient — un défaut *invisible partout où on le cherche, et visible seulement sur la machine
+déployée*. La préprod sans dépendances de dev est le seul endroit où cette classe se voit.
+
+Donc la collision est rendue **bruyante**, pas supprimée :
+
+- `test-stack.sh run` pose `/tmp/suite-en-cours-<jeton>`, retiré par `trap` — il dit qu'une suite
+  tourne, y compris entre deux conteneurs.
+- `deploy-preprod.sh` lit le montage `/repo` des conteneurs `*-run` et ne nomme que ceux montés sur
+  **son propre** arbre. Un montage ne peut pas devenir périmé ; un marqueur survit à un processus tué.
+- **Il avertit, il ne bloque pas.** Bloquer transformerait une gêne en panne : la suite complète
+  dure des heures et personne ne pourrait livrer pendant ce temps.
+
+**Ce qu'on te demande :** lis l'avertissement. S'il liste un jeton qui n'est pas le tien, préviens
+avant de déployer. Et si ta suite meurt sur « phpunit est absent », ce n'est pas toi :
+
+```
+./infra/reinstaller-dev.sh
+```
+
 ---
 
 ## 2. Qui tient quoi au 31/08
@@ -73,14 +165,14 @@ Ordonné par ce que ça débloque, pas par difficulté.
 |---|---|---|---|
 | **T1** | **L'API publique pour les tiers** — clés délivrables, webhooks sortants, versions | ⚠ **Commande trois des quatre autres axes** (D102). Sans elle, l'appli mobile, les agrégateurs et les machines connectées produisent trois couplages privés au lieu d'une surface | *(libre)* |
 | **T2** | **Reprise initiale d'un client** — `ImportBatch`, deux temps, `externalRef` | Bloque une signature : sans elle un client ressaisit son fichier d'abonnés et les crédits de ses cartes. Spec écrite : `COORDINATION/specs/import/` | *(libre)* |
-| **T3** | **Résoudre la boutique depuis l'HÔTE** et non le slug d'URL | Petit maintenant, gros plus tard (D104). Condition de la marque blanche | *(libre)* |
-| **T4** | **Noms de sous-domaines réservés** (`pro`, `api`, `www`…) | Une constante, un refus à la création de vitrine (D106). Empêche une collision qu'on ne verra qu'en production | *(libre)* |
-| **T5** | **Catégorie comptable sur les 7 produits publiés par les semis** | Les fixtures publient dans un état que l'API refuse (RG-M1-05). ⚠ Le choix du compte est une décision comptable — demander à Maxime avant | *(libre)* |
+| **T24** | **Garde-fou n°35 — une entité rattachable absente de la liste blanche de son module** | ⚠ **Trois oublis de la MÊME liste, dont le dernier fermé aujourd'hui.** `CardRejection` et `DailyClosure` ajoutées le 28/08 ; `OperationScellee` le 31/08 — et celle-là exposait `payloadCanonique`, le contenu canonique de chaque transaction. Le commentaire de l'extension disait déjà la leçon : *« une liste blanche ne protège que ce qu'on a pensé à y écrire, et son oubli ne se voit pas »*. Écrire la leçon n'a pas suffi. **Motif** : comparer les entités d'un module portant une relation de rattachement (`pointDeVente`, `etablissement`, `profilExploitant`, `groupe`) à celles que son extension énumère. **Trois témoins historiques pour le calibrer** : les trois doivent ressortir sur le dépôt d'avant leur correctif, aucun sur le dépôt actuel. ⚠ **Il criera sur les référentiels globaux légitimes et sur ce qui est cloisonné AUTREMENT** — par un fournisseur, par `RattachementNiveauInterface`, par une table de relations. Il lui faut une dette gelée dès le départ ET une exclusion explicite **avec sa raison écrite**, sinon il crie tous les jours et on cesse de le lire. Proposé par `b8`, sur une mesure de `8e` | *(libre)* |
+| **T22** | **Garde-fou n°34 — la validation s'exécute AVANT les processeurs** | Deux sessions s'y sont cassées le même jour, dans les deux sens (voir §3 quinquies). ⚠ **Détecteur écrit, mais il rate son propre témoin positif** : il trouve 31 candidats et ne voit pas `Vitrine::$slug`, que je sais être un cas. Les trois composants marchent isolément (processeur désigné, `setSlug` présent, propriété lue) ; assemblés, non. Script sur le VPS : `/tmp/jarvis-gf34c.py`. **Ne pas geler les 31 comme dette avant d'avoir un témoin qui passe** | *(libre)* |
+| **T23** | **Le frontal public bascule sur la résolution par hôte** | Le serveur sait le faire depuis T3 (`GET /boutique/vitrine-courante`, D104) et `PublicApp.jsx` l'appelle déjà en repli. Reste : servir le front sous `<slug>.fluvia-app.com` (nginx + joker TLS), et faire du chemin `/b/<slug>` une redirection plutôt qu'une forme parallèle | *(libre)* |
 | **T6** | **Fixtures rejouables en préproduction** | `doctrine:fixtures:load` est absente (`--no-dev`). 38 classes décrivent la démo et ne peuvent pas être rejouées : la démonstration dérive | *(libre)* |
-| **T7** | **Format de facture électronique** — Factur-X / EN 16931 | Aucun format n'existe. Chorus Pro et l'e-reporting REFUSENT désormais au lieu de mentir (D94), mais ne transmettent toujours rien | *(libre)* |
+| **T7** | **Format de facture électronique** — EN 16931 | Aucun format n'existe. Chorus Pro et l'e-reporting REFUSENT désormais au lieu de mentir (D94), mais ne transmettent toujours rien. ⚠ **Le modèle sémantique EN 16931 est COMMUN** à la France, l'Espagne, l'Italie et l'Allemagne : le construire une fois sert les quatre. Les plateformes nationales (Chorus/PDP, VeriFactu, SdI, XRechnung) ne sont que des transports par-dessus. Mesuré le 31/08 : 0 fichier pour chacune, et « Factur-X » n'apparaît que dans les commentaires de deux bouchons | **Jarvis** — en cours |
 | **T8** | **Notion de pays** — champ, devise configurable, TVA par pays | Aujourd'hui : aucun champ pays, `EUR` en dur, e-reporting indexé sur le SIREN. Vendre hors de France demande ça d'abord | *(libre)* |
-| **T9** | **Accessibilité — la navigation au clavier** | ⚠ **Ma première mesure était fausse** : « 6 fichiers sur 118 portent un `alt=` » comptait des FICHIERS et concluait à une couverture. Recompté : **7 balises `<img>`, aucune sans alternative**, et `lang="fr"` est bien déclaré dans `index.html`. Ce qui est mince, c'est le clavier — **2 `tabIndex` et 5 `onKeyDown` sur 115 fichiers**, contre 308 `htmlFor` et 72 `aria-label`. Le lot est donc : parcours au clavier, gestion du focus, contrastes | *(libre)* |
-| **T10** | **Vingt tâches planifiées à démarrer**, une par une | 2 sur 22 tournent. Chacune demande de vérifier `safeOnFirstRun` et de la voir mordre **et épargner** | *(libre)* |
+| **T9** | **Accessibilité — la navigation au clavier** | ⚠ **Ma première mesure était fausse** : « 6 fichiers sur 118 portent un `alt=` » comptait des FICHIERS et concluait à une couverture. Recompté : **7 balises `<img>`, aucune sans alternative**, et `lang="fr"` est bien déclaré dans `index.html`. Ce qui est mince, c'est le clavier — **2 `tabIndex` et 5 `onKeyDown` sur 115 fichiers**, contre 308 `htmlFor` et 72 `aria-label`. Le lot est donc : parcours au clavier, gestion du focus, contrastes.<br>⚠ **Un troisième manque que ni l'un ni l'autre n'avait compté, et qui est fait** : **neuf boutons `↻` sans nom accessible** — un symbole n'est pas prononçable, un lecteur d'écran annonçait « bouton » et rien d'autre, sur des écrans qui en comptent trente. Nommés, et `frontend/scripts/verifier-boutons-nommes.mjs` les compte désormais tous (666 lus, invariant à zéro, pas de cliquet). Fait aussi : `lang` suit la langue de la vitrine — `index.html` portait `fr` en dur, et une vitrine en anglais était lue avec la prononciation française. ⚠ **Et « 2 `tabIndex` sur 115 fichiers » ne se lit pas non plus comme un déficit** : `<button>`, `<a href>` et `<input>` reçoivent le focus sans qu'on écrive rien, et ajouter `tabIndex` est le plus souvent le signe qu'on a rendu cliquable ce qui ne l'était pas. Le vrai défaut se comptait autrement — **sept éléments inertes rendus cliquables, dont cinq sans aucun chemin au clavier**, parmi lesquels le seul accès à la fiche d'un client. Corrigés par un vrai bouton dans la cellule identifiante (et **non** par `role="button"` sur un `<tr>`, qui casse la structure annoncée par les lecteurs d'écran). Garde-fou : `verifier-clic-clavier.mjs`.<br>⚠ **Les contrastes non plus n'etaient pas la ou on croyait** : sept paires sous le seuil WCAG, **toutes dans le theme clair sauf une**, et les pires etaient les trois pastilles d'etat (« attention » a 2,84 pour 4,5 requis) — celles qu'on lit d'un coup d'oeil sans les lire. Corrigees sur decision de Maxime en **deplacant leur clarte** et non en choisissant des couleurs : teinte et saturation gardees, pas de 1 %, arret au premier passage. Le turquoise bouge de quatre unites. Garde-fou : `verifier-contrastes.mjs`, plafond a **zero**, invariant.<br>Enfin le focus : le back-office n'avait **ni lien d'evitement ni deplacement du focus au changement d'ecran** — soixante tabulations pour lire trois ecrans, la colonne de gauche comptant trente entrees. La boutique publique avait les deux depuis toujours. **Fait.**<br><br>⚠ **CE QU'IL FAUT RETENIR DE CE LOT** : les TROIS chiffres qui le decrivaient — `alt`, `lang`, `tabIndex` — etaient vrais et trompeurs, chacun comptant une chose pour une autre. Les trois vrais defauts (boutons anonymes, lignes inatteignables, pastilles illisibles) n'etaient dans aucun des trois. Une tache mal mesuree ne coute pas du temps : elle donne l'impression d'avoir couvert le sujet quand on a corrige ce qu'elle nommait. | **fait** — `c2`, 31/08 |
+| **T10** | **Dix-huit tâches planifiées à démarrer**, une par une | **4 sur 22 tournent** (`securite:delegations:expirer`, `autorisation:escalades:expirer`, `boutique:liberer-paniers-expires`, `personnel:recalculer-fenetres-badges`). ⚠ **`personnel:qualifications:verifier` est à NE PAS planifier en l'état** : elle n'écrit rien, elle **imprime**. La planifier la ferait tourner dans les journaux d'un conteneur que personne ne lit — « la tâche tourne » pendant que l'information n'atteint personne. Il lui faut d'abord une **destination**. ⚠ Et son en-tête affirmait « aucun écran ne l'affiche », ce qui est **faux depuis que `Personnel.jsx` rend le badge** : corrigé le 31/08. ⚠ `social:collect-metrics` appelle des API tierces — effet au dehors, pas à planifier sans arbitrage. Chacune des autres demande de vérifier `safeOnFirstRun` et de la voir mordre Chacune demande de vérifier `safeOnFirstRun` et de la voir mordre **et épargner** | *(libre)* |
 | **T18** | **La boutique en ligne est en boucle fermée** — remboursement et souscription | ⚠ L'exploitant peut **accepter et refuser** des demandes de remboursement qui **ne peuvent pas naître** : `POST /boutique/demandes-remboursement` n'est appelée par personne, et `grep remboursement frontend/src/public/` ne rend rien. Et l'écran lui affirme « un client qui demande un remboursement apparaît ici ». Second manque du même parcours : `/boutique/abonnements/souscrire` n'est appelée nulle part — **aucun abonnement ne se vend en ligne**, alors que la vente au guichet existe depuis le 29/08. Mesuré par `b8` | **fait** — `c2`, 31/08. Le client demande depuis ses commandes ; l abonnement se souscrit depuis la fiche produit, avec mandat. ⚠ Deux restes : aucun contrôle de délai de rétractation côté serveur, et le client ne peut pas LISTER ses demandes (collection réservée à l exploitant) — donc l écran ne peut pas afficher « demande en cours » après rechargement, et il le dit |
 
 ---
@@ -92,24 +184,37 @@ routes présentes au routeur, **zéro appel du frontal**. C'est du travail déj�
 rien tant qu'aucun écran ne l'ouvre — la forme la plus coûteuse d'inachèvement, parce qu'elle ne se
 voit pas.
 
-⚠ **DEUX LOTS PORTENT LE NUMÉRO T18** — celui-ci et « la boutique en ligne est en boucle fermée »
-(§3 bis, tenu par `allaccess-c2`). Un numéro qui désigne deux choses est un nom qui ment, et il sera
-cité dans des messages de commit pendant des semaines. Je ne renumérote pas moi-même : les deux
-sont déjà référencés ailleurs, et l'arbitrage revient à l'intégrateur. Signalé le 31/08 par
-`allaccess-89`, qui avait exactement la même collision sur ses garde-fous il y a deux jours.
+⚠ **DEUX SESSIONS ONT ÉCRIT L'ÉCRAN DE FUSION LE MÊME JOUR, SANS SE VOIR** (`c2` et
+`allaccess-89`). Les branches étaient indépendantes : ni l'une ni l'autre n'a « repris » le travail
+de l'autre, elles l'ont fait deux fois. Résolu à la fusion en gardant **la version de `c2`**, sur
+un critère mesurable et non sur la paternité : son point d'entrée est meilleur — on clique
+« Fusionner » sur la ligne du doublon qu'on regarde, au lieu de choisir les deux fiches à partir de
+rien. Le doublon a coûté une demi-journée à quelqu'un.
 
-| # | lot | routes servies, appels du frontal | tenu par |
+⚠ **Et la fusion Git n'a signalé AUCUN conflit sur les fichiers partagés.** `client.js` s'est
+retrouvé avec **trois clés en double** dans l'objet `api` (`previsualiserFusion`,
+`fusionnerClients`, `defusionner`) — la dernière définition gagne en silence — et `Clients.jsx`
+avec **deux imports identiques** (erreur de syntaxe) et **deux montages** du composant. Un `git
+merge` propre n'est pas un fichier correct. Nettoyé le 31/08.
+
+| # | lot | routes servies, appels du frontal | état |
 |---|---|---|---|
-| ~~**T18**~~ | ~~**Fusion de clients**~~ — **FAIT** (`623f323`) : prévisualisation, arbitrage champ par champ, défusion. ⚠ La fusion et la défusion elles-mêmes ne sont **pas observées** — les éprouver abîmerait les fiches de démonstration pour prouver qu'elles se restaurent | `/api/crm/fusions` ×3 · 4 appels | allaccess-89 |
-| **T19** | **Trésorerie** — comptes bancaires, import de relevés, rapprochement | `/api/bank_accounts`, `/api/bank_statement_imports`, `/api/bank_statement_lines` · **0 appel** | *(libre)* |
-| **T20** | **Personnel** — créneaux de travail, badges, suspension | `/api/creneau_travails` · **0 appel** ; `/api/badge_staffs` · 1 appel seulement | **allaccess-89** |
-| **T21** | **Comptabilité** — lettrage groupé, écriture manuelle | `/api/compta/lettrages/groupe` · **0 appel** | *(libre)* ⚠ `8e` tient `App\Compta` |
+| **T25** | **Fusion de clients** — fusionner, prévisualiser, défusionner | `/api/crm/fusions` ×3 | **fait** — `c2`, 31/08. Prévisualisation champ par champ avant toute écriture, arbitrage, motif au journal. ⚠ **Le journal des fusions est livré avec** : sans lui la défusion serait inatteignable, et on aurait donné le pouvoir d'écraser deux fiches sans celui de revenir |
+| **T26** | **Trésorerie** — comptes bancaires, import de relevés, rapprochement | `/api/bank_accounts`, `/api/bank_statement_imports`, `/api/bank_statement_lines` · **0 appel** | *(libre)* |
+| **T27** | **Personnel** — créneaux de travail, sortie d'un salarié, badge perdu | `/api/creneau_travails` · **0 appel** ; `/api/badge_staffs` · 1 appel seulement | **allaccess-89** |
+| **T28** | **Comptabilité** — lettrage groupé | | **fait** — `c2`, 31/08. Onglet « Lettrage » : les lignes non soldées, le solde de la sélection affiché en permanence. ⚠ **Le serveur n'exige PAS l'équilibre** — mesuré, et c'est défendable (un lettrage partiel solde un règlement en plusieurs fois), donc l'écran montre l'écart sans jamais bloquer |
 
-⚠ **T20 avant T19 et T21, pour une raison mesurée et non par préférence :** `/api/employes` rend
+⚠ **T27 avant T26, pour une raison mesurée et non par préférence :** `/api/employes` rend
 **0 employé sur les deux établissements**. Or une note de frais exige un salarié
 (`employee`, `JoinColumn(nullable: false)`), et un badge de service aussi. L'écran des notes de
-frais livré en `a719568` est donc **inutilisable tant que T20 n'est pas fait** — il l'annonce
+frais livré en `a719568` est donc **inutilisable tant que T27 n'est pas fait** — il l'annonce
 lui-même et renvoie vers Personnel. Un lot qui débloque un lot déjà livré passe devant.
+
+⚠ **Trois pièges de routage sur la fusion, mesurés le 31/08 et consignés dans `client.js`**, parce
+qu'ils ont coûté du temps aux deux sessions : `GET /api/crm/fusions` rend **405** et non 404 (la
+collection vit sous `/api/journal_fusions`) ; la prévisualisation prend des **UUID** quand la
+fusion prend des **IRI** ; et `qs()` ajoute lui-même les crochets d'un tableau, donc écrire
+`'sources[]'` produit `sources[][]=…` que le serveur ne lit pas.
 
 Relevés par `allaccess-89`, qui les tenait de `34`. Deux autres de la même liste sont **faits et
 poussés depuis** : le porte-monnaie virtuel et les notes de frais.
@@ -138,6 +243,16 @@ reprendre.
 | **T15** | **Refonte graphique aux couleurs de Fluvia** | Les écrans portent aujourd'hui une identité par défaut. ⚠ À faire **avant** T11 : une appli en marque blanche décline une identité — s'il n'y en a pas, elle décline le vide |
 | **T16** | **Site vitrine** sur `fluvia-app.com` | Aucune vitrine n'existe. Hôte séparé du back-office (D103) : elle porte des traceurs, il porte des sessions |
 | **T17** | **Accueil d'un nouveau client (onboarding)** | ⚠ **Ce n'est PAS T2.** T2 reprend les données d'un client ; T17 est tout le chemin de la signature à une installation qui marche : créer le locataire, semer les référentiels, poser les types de produits et leurs comptes, le premier utilisateur, la formation. **T2 en est une étape.** Les confondre les ferait faire deux fois |
+
+---
+
+## 3 quinquies. Mesuré en passant, pas corrigé — à prendre par qui tient la zone
+
+| ce qui a été mesuré | comment le revoir | pourquoi ça compte |
+|---|---|---|
+| **Aucun `trusted_hosts` déclaré.** L'`Host` vient de l'appelant. La résolution par hôte (D104) n'est pas concernée — elle échoue fermée — mais **tout ce qui fabrique une URL depuis la requête** l'est : liens de courriel, redirections | `grep -rn trusted config/packages/` rend zéro | Un lien de réinitialisation de mot de passe pointant vers un hôte choisi par l'appelant |
+| **La validation s'exécute AVANT les processeurs**, et deux sessions s'y sont cassées le même jour. Chez moi : `EstablishmentStampProcessor` pose le slug d'une vitrine *après* la validation — un établissement nommé « Pro » aurait traversé l'`Assert` sans être vu. Chez `8e` : un `Assert\NotNull` sur un champ posé par un processeur refusait la requête avant qu'il puisse le compléter (création de région impossible, 422, sur un écran qui dit « créez-en une avant votre premier établissement ») | — | Le correctif est juste, invisible, et **vert nulle part**. Garde-fou n°34 à écrire : toute propriété écrite par un processeur ET porteuse d'une contrainte de non-vacuité |
+| **`/tmp` est partagé entre les sessions.** J'ai écrasé mon propre message de commit avec celui d'une autre session, en écrivant dans `/tmp/msg2.txt` | — | Préfixe tes fichiers de travail par ton nom : `/tmp/<session>-…` |
 
 ---
 

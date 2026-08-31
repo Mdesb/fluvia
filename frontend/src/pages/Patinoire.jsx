@@ -36,7 +36,7 @@ import { euros } from '../api/produit.js'
 // qui survit à sa propre correction est pire que pas de limite du tout, parce que plus personne ne
 // la cherche.
 
-export default function Patinoire({ etabActif, droits }) {
+export default function Patinoire({ etabActif, droits, envoiCourriel = false }) {
   // ⚠ `null` = PAS LU · `[]` = LU ET VIDE.
   //
   // Sur un refus, ces trois listes restaient a `[]` et l'ecran annoncait << Aucune paire n'est
@@ -153,6 +153,8 @@ export default function Patinoire({ etabActif, droits }) {
           <div className="resa-grid" style={{ marginTop: 16 }}>
             <LocationsSection
               locations={locations}
+              attente={attente}
+              envoiCourriel={envoiCourriel}
               nommer={nommer}
               peutLouer={peutLouer}
               onFait={apres}
@@ -495,7 +497,23 @@ function IndisponibleModal({ etat, beneficiaires, nommer, peutAttente, onClose, 
 // --------------------------------------------------------------------------------------------
 // Les locations en cours, et le retour.
 // --------------------------------------------------------------------------------------------
-function LocationsSection({ locations, nommer, peutLouer, onFait, onErreur }) {
+function LocationsSection({ locations, attente, envoiCourriel = false, nommer, peutLouer, onFait, onErreur }) {
+  // ⚠ LE MÊME COMPTAGE QUE `ParcSection`, ET IL EST DÉLIBÉRÉMENT REFAIT PLUTÔT QUE PARTAGÉ.
+  //
+  // Les deux sections en ont besoin, et remonter le calcul dans la page pour le passer aux deux
+  // ajouterait une dépendance entre elles pour trois lignes. Ce qui compte est que le CRITÈRE soit
+  // le même — `en_attente` ou `proposee` — parce qu'une personne « proposée » attend toujours : on
+  // lui a réservé la paire, on ne l'a pas prévenue.
+  const enAttenteParParc = useMemo(() => {
+    const c = {}
+    for (const l of attente || []) {
+      if (l.statut !== 'en_attente' && l.statut !== 'proposee') continue
+      const id = l.parcPatins?.id || String(l.parcPatins || '').split('/').pop()
+      c[id] = (c[id] || 0) + 1
+    }
+    return c
+  }, [attente])
+
   const [retour, setRetour] = useState(null)
   const enCours = (locations || []).filter((l) => l.statut === 'en_cours')
 
@@ -549,6 +567,8 @@ function LocationsSection({ locations, nommer, peutLouer, onFait, onErreur }) {
 
       <RetourModal
         location={retour}
+        enAttenteParParc={enAttenteParParc}
+        envoiCourriel={envoiCourriel}
         onClose={() => setRetour(null)}
         onFait={(m) => { setRetour(null); onFait(m) }}
         onErreur={onErreur}
@@ -578,7 +598,7 @@ const ETATS_RETOUR = [
   },
 ]
 
-function RetourModal({ location, onClose, onFait, onErreur }) {
+function RetourModal({ location, enAttenteParParc = {}, envoiCourriel = false, onClose, onFait, onErreur }) {
   const [etat, setEtat] = useState('bon')
   const [partielle, setPartielle] = useState(false)
   const [motif, setMotif] = useState('')
@@ -597,10 +617,31 @@ function RetourModal({ location, onClose, onFait, onErreur }) {
         ...(etat === 'non_rendu' && partielle ? { restitutionPartielle: true } : {}),
         ...(motif.trim() ? { motif: motif.trim() } : {}),
       })
+      // ⚠ RENDRE UNE PAIRE PROMEUT QUELQU'UN DE LA LISTE D'ATTENTE — ET PERSONNE NE LE PRÉVIENT.
+      //
+      // Le serveur appelle `PromotionListeAttenteHandler::promouvoir()` au retour, qui compose un
+      // courriel. Ce courriel ne part pas : cette instance n'a pas d'expéditeur configuré. Rien à
+      // l'écran ne le disait, donc l'opérateur rendait la paire en croyant la personne prévenue —
+      // et elle attend un message qui ne viendra jamais.
+      //
+      // ⚠ CE N'EST PAS UNE PROMESSE NON TENUE, C'EST UNE ABSENCE DE PROMESSE. L'écran ne mentait
+      // pas : il ne disait simplement rien. C'est plus difficile à trouver qu'un mensonge, parce
+      // qu'il n'y a aucune phrase à contredire — et c'est plus coûteux, parce que le geste qui
+      // manque (décrocher son téléphone) n'est demandé à personne.
+      //
+      // La phrase suit `/me` : le jour où un expéditeur est branché, elle disparaît d'elle-même.
+      const idParc = location?.parcPatins?.id || String(location?.parcPatins || '').split('/').pop()
+      const enAttente = enAttenteParParc[idParc] || 0
+
+      const base = etat === 'bon'
+        ? 'Paire rendue, caution à restituer.'
+        : 'Retour enregistré. Une retenue sur caution attend votre validation.'
+
       onFait(
-        etat === 'bon'
-          ? 'Paire rendue, caution à restituer.'
-          : 'Retour enregistré. Une retenue sur caution attend votre validation.',
+        enAttente > 0 && !envoiCourriel
+          ? `${base} ⚠ ${enAttente} personne(s) attendent cette pointure et ne seront PAS prévenues : `
+            + `cette instance n’envoie aucun courriel. Contactez la première de la liste.`
+          : base,
       )
     } catch (err) {
       onErreur(err.message || "Le retour n'a pas abouti.")

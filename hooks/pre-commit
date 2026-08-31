@@ -186,6 +186,9 @@ lancer_front verifier-imports.mjs       "Imports manquants (n°10)"
 lancer_front verifier-classes.mjs       "Classes CSS déclarées (n°16)"
 lancer_front verifier-dates-locales.mjs "Dates locales"
 lancer_front verifier-profil-charge.mjs "Profil chargé avant le rendu"
+lancer_front verifier-boutons-nommes.mjs "Boutons nommés"
+lancer_front verifier-clic-clavier.mjs   "Clic au clavier"
+lancer_front verifier-contrastes.mjs     "Contrastes"
 
 # ⚠ FILET DE COMPLÉTUDE — même leçon que `pre-receive`, même remède.
 #

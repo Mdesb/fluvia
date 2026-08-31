@@ -44,7 +44,7 @@
     ],
     "scelle": {
         "gelee_le": "2026-08-28",
-        "plafond": 25,
+        "plafond": 21,
         "reference": "MESSAGES.md — claude-A, 28/08 : le garde-fou tenait « porte un champ etablissement » pour « est cloisonne ». Les 11 entrees ajoutees ce jour-la sont ce que la premisse cachait."
     },
     "entrees": {
@@ -181,51 +181,6 @@
                 "note": "Signalee le 23/08. Migration."
             }
         },
-        "Vente/Nf525/Entity/OperationScellee.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Vente",
-            "operations": [
-                "Get",
-                "GetCollection",
-                "Post"
-            ],
-            "permissions": [
-                "caisse.lire"
-            ],
-            "sensibilite": "argent",
-            "traitement": {
-                "groupe": "A",
-                "chemin": "pointDeVente",
-                "cible": "PointDeVente",
-                "note": "Chaine NF525 brute, listable d'un etablissement a l'autre en caisse.lire. Le plus urgent des 36."
-            }
-        },
-        "Acces/Entity/SousReseau.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Acces",
-            "operations": [
-                "Get",
-                "GetCollection",
-                "Patch",
-                "Post"
-            ],
-            "permissions": [
-                "acces.gerer",
-                "acces.lire"
-            ],
-            "sensibilite": "acces",
-            "traitement": {
-                "groupe": "A",
-                "chemin": "espaces.etablissement",
-                "cible": "EspaceAcces",
-                "note": "Reclasse de B? en A le 24/08 : ce n'est pas un referentiel. Voir risque_ecriture — la ManyToMany vers EspaceAcces est ecrivable et pilote un franchissement d'acces. Le cloisonnement passe par ses espaces."
-            },
-            "risque_ecriture": "ManyToMany EspaceAcces (groupe sous_reseau:write), Post et Patch en acces.gerer. GRAVE : un sous-reseau est un ACCES FEDERE (US-L3-12) — ValidationPassageHandler:125-128 autorise le franchissement quand le droit et l'espace partagent le sous-reseau. Y rattacher l'EspaceAcces d'un autre etablissement federe les acces par-dessus la frontiere. Aucun processor, aucun validateur : le serialiseur denormalise l'IRI tel quel."
-        },
         "Autorisation/Entity/OperationSensible.php": {
             "depuis": "2026-08-23",
             "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
@@ -293,28 +248,6 @@
                 "chemin": "",
                 "cible": "",
                 "note": "Referentiel presume global, avec une raison verifiee le 24/08 plutot que supposee : la DEFINITION d'un role est partagee, c'est son ATTRIBUTION qui est par etablissement et elle vit dans Affectation. NON CONFIRME par l'integrateur."
-            }
-        },
-        "Securite/Entity/Utilisateur.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Securite",
-            "operations": [
-                "Get",
-                "GetCollection",
-                "Patch",
-                "Post"
-            ],
-            "permissions": [
-                "securite.gerer"
-            ],
-            "sensibilite": "acces",
-            "traitement": {
-                "groupe": "A",
-                "chemin": "Affectation.etablissement (jointure inverse)",
-                "cible": "Affectation",
-                "note": "RECLASSE de B en A le 24/08 — mon classement precedent etait faux. Ce n'est PAS un referentiel : Securite/Entity/Affectation porte (Utilisateur, Role, Etablissement), donc un utilisateur EST rattachable. GetCollection en securite.gerer expose aujourd'hui, d'un etablissement a l'autre : email, nom, statut, dernierAcces, rolesSecurite, clientLie et mfaActif. Ce dernier est un indicateur de posture : il permet de lister les comptes SANS second facteur avant de les viser. Le cloisonnement demande une extension avec jointure inverse sur Affectation, pas une simple entree de table."
             }
         },
         "Dms/Entity/RetentionPolicy.php": {
@@ -539,29 +472,6 @@
                 "cible": "ArticleStock"
             },
             "risque_ecriture": "ManyToOne ArticleStock ecrivable : on rattache une valeur d'option a l'article de stock d'un autre etablissement."
-        },
-        "Organisation/Entity/Groupe.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Organisation",
-            "operations": [
-                "Delete",
-                "Get",
-                "GetCollection",
-                "Patch",
-                "Post"
-            ],
-            "permissions": [
-                "organisation.gerer"
-            ],
-            "sensibilite": "autre",
-            "traitement": {
-                "groupe": "B",
-                "chemin": "",
-                "cible": "",
-                "note": "Entite de STRUCTURE et non referentiel : Organisation/Entity/Groupe est au-dessus de Region, elle-meme au-dessus d'Etablissement. Elle est globale par construction, pas par convention. NON CONFIRME par l'integrateur."
-            }
         },
         "Reporting/Entity/AxeAnalytique.php": {
             "depuis": "2026-08-23",

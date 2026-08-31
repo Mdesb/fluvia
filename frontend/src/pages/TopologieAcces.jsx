@@ -1635,7 +1635,7 @@ function JournalPassages({ espaces, equipements, etabActif, cible }) {
           </span>
         )}
         <div className="r" style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-          <button className="btn ghost sm" onClick={charger} disabled={chargement}>↻</button>
+          <button title="Actualiser" className="btn ghost sm" onClick={charger} disabled={chargement}>↻</button>
           <button className="btn sm" onClick={exporter} disabled={exportEnCours}>
             {exportEnCours ? 'Export…' : '⤓ Exporter (CSV)'}
           </button>

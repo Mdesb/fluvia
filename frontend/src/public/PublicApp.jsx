@@ -16,6 +16,10 @@ import MonCompte from './pages/MonCompte.jsx'
 // dans le même esprit que l'app staff qui route par `onglet`.
 export default function PublicApp() {
   const [vitrineId, setVitrineId] = useState(() => lireVitrineInitiale())
+  // ⚠ « Pas de boutique » et « on ne sait pas encore » ne sont pas la meme chose, et les confondre
+  // fait clignoter l'ecran de configuration a chaque ouverture. Tant que l'hote n'a pas tranche, on
+  // charge ; on ne propose pas de choisir.
+  const [hoteTranche, setHoteTranche] = useState(() => !!lireVitrineInitiale())
   const [vitrine, setVitrine] = useState(null)
   const [catalogue, setCatalogue] = useState(null)
   const [chargement, setChargement] = useState(!!vitrineId)
@@ -30,6 +34,20 @@ export default function PublicApp() {
   const [route, setRoute] = useState({ vue: 'vitrine' })
 
   const langue = vitrine?.langues?.[0] || catalogue?.langues?.[0] || 'fr'
+
+  // ⚠ LE DOCUMENT DOIT ANNONCER LA LANGUE QU'IL REND, ET `index.html` PORTE `fr` EN DUR.
+  //
+  // Une vitrine qui déclare `en` rend un contenu anglais dans un document annoncé français : une
+  // synthèse vocale le lit avec la prononciation française. Le texte est juste, la voix est
+  // inintelligible — et c'est un défaut qu'on n'entend jamais en relisant du code.
+  //
+  // On pose l'attribut sur l'élément racine plutôt que sur un conteneur : c'est celui que les
+  // technologies d'assistance consultent, et le seul qui vaille pour la page entière.
+  useEffect(() => {
+    if (typeof document !== 'undefined' && langue) {
+      document.documentElement.lang = langue
+    }
+  }, [langue])
 
   // Métadonnées produits (libellé, timed-entry…) indexées par id, pour enrichir panier & tunnel.
   const metaProduits = useMemo(() => {
@@ -82,6 +100,35 @@ export default function PublicApp() {
       chargerVitrine(vitrineId)
     }
   }, [vitrineId, chargerVitrine])
+
+  // D104 — AUCUNE FORME D'URL : on demande au serveur ce que dit l'HÔTE.
+  //
+  // `piscine-ville.fluvia-app.com` désigne une boutique sans rien mettre dans le chemin. Le
+  // découpage se fait côté serveur (`VitrineResolver`), jamais ici : le navigateur ne connaît pas le
+  // domaine de la plateforme, et le lui apprendre en dur le figerait.
+  //
+  // ⚠ La mémoire ne sert QU'APRÈS ce refus. Un 404 ici est le cas NORMAL en développement et en
+  // préprod, où l'hôte est `localhost` — ce n'est pas une erreur à montrer.
+  useEffect(() => {
+    if (vitrineId) return
+    let annule = false
+    boutique
+      .vitrineCourante()
+      .then((v) => {
+        if (annule) return
+        if (v?.id) setVitrineId(v.id)
+        else setVitrineId(vitrineStore.get() || '')
+        setHoteTranche(true)
+      })
+      .catch(() => {
+        if (annule) return
+        setVitrineId(vitrineStore.get() || '')
+        setHoteTranche(true)
+      })
+    return () => {
+      annule = true
+    }
+  }, [vitrineId])
 
   // Restaure un panier en cours (id + jeton conservés en local) au démarrage.
   useEffect(() => {
@@ -196,7 +243,11 @@ export default function PublicApp() {
   if (!vitrineId) {
     return (
       <Cadre vitrine={null} nbArticles={0} connecte={connecte} vue={route.vue} onNaviguer={onNaviguer}>
-        <Configuration onValider={(id) => setVitrineId(id)} />
+        {hoteTranche ? (
+          <Configuration onValider={(id) => setVitrineId(id)} />
+        ) : (
+          <Chargement texte="Ouverture de la boutique…" />
+        )}
       </Cadre>
     )
   }
@@ -312,7 +363,10 @@ function Cadre({ vitrine, etablissementId, nbArticles, connecte, vue, onNaviguer
   )
 }
 
-// Priorité : `/b/<slug>`, puis `?vitrine=<id>`, puis la dernière vitrine mémorisée.
+// Priorité : `/b/<slug>`, puis `?vitrine=<id>`, puis `#vitrine=<id>`.
+//
+// L'HÔTE (D104) et la dernière vitrine mémorisée viennent APRÈS, dans un effet — parce que l'hôte se
+// résout par un appel serveur, et qu'un appel n'est pas synchrone.
 //
 // LE CHEMIN PASSE DEVANT LE PARAMÈTRE, ET C'EST L'ORDRE QUI COMPTE.
 //
@@ -337,5 +391,8 @@ function lireVitrineInitiale() {
   } catch {
     /* ignore */
   }
-  return vitrineStore.get() || ''
+  // ⚠ PLUS DE REPLI SUR LA MEMOIRE ICI. Il descend d'un cran, APRES la resolution par hote (D104) :
+  // sur `piscine-a.fluvia-app.com`, la vitrine visitee hier ne doit pas gagner. Ce serait la
+  // « boutique du voisin » decrite plus haut, sous une forme neuve.
+  return ''
 }

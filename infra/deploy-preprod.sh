@@ -55,8 +55,71 @@ if [ "$TETE_LOCALE" != "$TETE_MAIN" ]; then
 fi
 
 log "Construction / démarrage des conteneurs"
+# ── GENERATION DES CLES DE CHIFFREMENT ET DE SCELLEMENT ─────────────────────────────────────────
+#
+# ⚠ UNE CLE PAR INSTALLATION (decision de Maxime, 31/08). Elles vivaient dans `app/.env`, VERSIONNE :
+# toute installation qui suivait la procedure heritait des cles du depot, et un chiffrement au repos
+# ne protege alors de rien contre quiconque a acces au depot.
+#
+# ⚠ GENEREES UNE FOIS, JAMAIS REGENEREES. Les changer rend indechiffrable ce qui a ete chiffre
+# avant, et inverifiables les signatures deja posees -- exactement comme regenerer les cles JWT
+# invaliderait tous les jetons emis. On n'ecrit donc QUE ce qui manque.
+#
+# 32 octets base64 : ces valeurs passent par `base64_decode()` et doivent faire exactement 32 octets
+# une fois decodees. `openssl rand -hex 32` produirait une cle que le code refuse (RG-DMS-25).
+log "Cles de chiffrement (generation au premier deploiement)"
+for cle in DMS_ENCRYPTION_KEY MFA_ENCRYPTION_KEY SEPA_IBAN_KEY OCR_API_KEY_ENCRYPTION_KEY SOCIAL_TOKEN_ENCRYPTION_KEY NF525_SEAL_KEY NF525_COMPTA_SEAL_KEY NF525_FACTURATION_SEAL_KEY; do
+    if ! grep -q "^${cle}=." infra/.env.preprod 2>/dev/null; then
+        echo "  + $cle (absente, generee)"
+        printf '%s=%s\n' "$cle" "$(openssl rand -base64 32)" >> infra/.env.preprod
+    fi
+done
+
 "${COMPOSE[@]}" build
 "${COMPOSE[@]}" up -d
+
+# ⚠ CE QUI SUIT RETIRE PHPUNIT DU `vendor/` DE CET ARBRE, ET TUE TOUTE SUITE QUI EN DEPEND.
+#
+# `composer install --no-dev` supprime les paquets de developpement. Une suite qui tourne meurt
+# alors en plein milieu, avec un message qui accuse l'operateur de ne pas avoir reinstalle -- alors
+# qu'il l'avait fait. Constate le 31/08 : deux deploiements a quarante secondes d'ecart, une suite
+# complete perdue sans qu'un seul test soit execute.
+#
+# ── SEULES LES SUITES DU MEME ARBRE SONT CONCERNEES ────────────────────────────────────────────
+#
+# Ma premiere version avertissait pour toutes. C'etait faux, et allaccess-8e l'a mesure : `git
+# worktree` partage le `.git`, PAS le `vendor/`. Chaque worktree a le sien (deux inodes distincts,
+# verifie). Il y a dix worktrees ici : avertir pour les dix apprend a tout le monde a sauter la
+# ligne -- ce que j'ai moi-meme fait une heure apres l'avoir ecrite.
+#
+# On lit donc le MONTAGE des conteneurs de test, pas un fichier : il dit quel arbre chaque suite
+# utilise, et il ne peut pas devenir perime -- alors qu'un marqueur survit a un processus tue.
+#
+# IL AVERTIT, IL NE BLOQUE PAS. Bloquer transformerait une gene en panne : la suite complete dure
+# des heures et personne ne pourrait livrer pendant ce temps.
+CONCERNEES=""
+for conteneur in $(docker ps --filter 'name=-run' --format '{{.Names}}' 2>/dev/null); do
+    monte="$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/repo"}}{{.Source}}{{end}}{{end}}' "$conteneur" 2>/dev/null)"
+    if [ "$monte" = "$REPO_ROOT" ]; then
+        CONCERNEES="$CONCERNEES $conteneur"
+    fi
+done
+
+if [ -n "$CONCERNEES" ]; then
+    echo
+    echo "  ⚠  Une suite de tests tourne SUR CET ARBRE ($REPO_ROOT) :"
+    for conteneur in $CONCERNEES; do
+        echo "       $conteneur"
+    done
+    echo
+    echo "     Ce déploiement va retirer phpunit et la faire mourir en plein milieu."
+    echo "     Elle rendra un message qui accuse l'opérateur, pas ce déploiement."
+    echo "     Préviens, ou attends — puis « ./infra/reinstaller-dev.sh » et relance-la."
+    echo
+    echo "     (Les suites montées sur un worktree ne sont PAS concernées : chaque worktree"
+    echo "      a son propre vendor/. Elles ne sont pas listées ici.)"
+    echo
+fi
 
 log "Dépendances Composer (sans les paquets de dev)"
 "${COMPOSE[@]}" exec -T php composer install --no-dev --optimize-autoloader --no-interaction
@@ -101,6 +164,32 @@ log "Droits sur var/"
 
 # opcache tourne avec validate_timestamps=0 (cf. docker/php/conf.d/zz-opcache.ini) :
 # sans redémarrage du master FPM, le code servi resterait celui d'avant le déploiement.
+# ── LE MARQUEUR QUE PHP CHARGERA ────────────────────────────────────────────────────────────────
+#
+# ⚠ ECRIT AVANT LE REDEMARRAGE, et c'est tout l'interet : FPM le chargera au demarrage suivant. Si
+# quelqu'un modifie du code sans redemarrer, la constante restera celle d'avant -- exactement comme
+# le code servi. L'instrument herite du defaut qu'il mesure.
+#
+# `version.json` ne dit que la moitie frontale du produit : il voyage avec le `rsync`. Celui-ci dit
+# la moitie serveur, et il est le seul a pouvoir la dire.
+log "Marqueur de version pour PHP"
+
+# ⚠ ECRIT DANS LE CONTENEUR, PAS SUR L'HOTE.
+#
+#     - ../app:/app          l'arbre est partage
+#     - app_var:/app/var     SAUF var/, volume nomme qui MASQUE celui de l'hote
+#
+# Un `printf > app/var/...` depuis l'hote ecrit dans un repertoire que le conteneur ne voit pas.
+# Constate le 31/08 : fichier present sur l'hote, `is_file()` faux dans le conteneur.
+#
+# Les valeurs passent par l'environnement : une chaine imbriquee dans un `sh -c` dans un `exec`
+# ajoute un niveau de guillemets a chaque etage, et le shell finit par evaluer ce qu'on voulait
+# ecrire.
+"${COMPOSE[@]}" exec -T \
+    -e MARQUEUR_COMMIT="$(git rev-parse --short HEAD)" \
+    -e MARQUEUR_ECRIT="$(date -Is)" \
+    php sh -c 'mkdir -p /app/var && printf "<?php\n\nreturn [\"commit\" => \"%s\", \"ecrit\" => \"%s\"];\n" "$MARQUEUR_COMMIT" "$MARQUEUR_ECRIT" > /app/var/build-version.php' 
+
 log "Redémarrage de PHP-FPM (opcache)"
 "${COMPOSE[@]}" restart php
 
@@ -199,6 +288,46 @@ URL_PUBLIQUE="${URL_PUBLIQUE:-https://smartaccess.hector-conseil.com}"
 # s'arreter avant de l'avoir dite.
 SERVI="$(curl -sf -H 'Accept: application/json' "$URL_PUBLIQUE/version.json" 2>/dev/null \
     | sed -n 's/.*"commit":"\([^"]*\)".*/\1/p' || true)"
+
+# ── LA SECONDE BOUCLE : CE QUE PHP A CHARGE ────────────────────────────────────────────────────
+#
+# La boucle ci-dessus interroge `version.json`, un fichier statique servi par nginx. Elle prouve que
+# le FRONTAL est arrive. Elle ne dit rien du serveur : le 31/08, un correctif de cloisonnement etait
+# sur le disque et hors d'opcache pendant treize minutes, sans que rien ne le signale.
+#
+# ⚠ Cette lecture-ci traverse PHP. Elle ne peut donc pas repondre juste si PHP sert du code d'avant.
+# ⚠ FPM N'ECOUTE PAS ENCORE QUAND `restart` REND LA MAIN.
+#
+# La premiere version de ce bloc interrogeait aussitot, lisait vide, et annoncait un echec a CHAQUE
+# deploiement -- alors que le point d'entree rendait le bon commit quelques secondes plus tard.
+#
+# Un controle qui crie pour rien apprend a tout le monde a le sauter, et use la confiance des
+# autres controles avec lui. On reessaie donc, BORNE : l'echec apres N tentatives reste un vrai
+# echec, on ne remplace pas un faux positif par une patience infinie.
+TENTATIVES_CHARGE=10
+CHARGE=""
+for _ in $(seq 1 "$TENTATIVES_CHARGE"); do
+    CHARGE="$(curl -sf -H 'Accept: application/json' "$URL_PUBLIQUE/api/plateforme/version-chargee" 2>/dev/null \
+        | sed -n 's/.*"commit":"\([^"]*\)".*/\1/p' || true)"
+    [ -n "$CHARGE" ] && break
+    sleep 2
+done
+
+if [ "$CHARGE" != "$COMMIT_DEPLOYE" ]; then
+    echo
+    echo "✗ PHP ne sert pas le code qu'on vient de déployer."
+    echo "    déployé ici          : $COMMIT_DEPLOYE"
+    echo "    chargé par PHP       : ${CHARGE:-<rien ou illisible>}"
+    echo
+    echo '  opcache.validate_timestamps=0 : FPM ne relit jamais les fichiers. Il sert le code tel'
+    echo "  qu'il était à son dernier démarrage."
+    echo
+    echo "  ⚠ Lire le fichier dans le conteneur ne prouve rien : le volume est monté, donc le"
+    echo "    fichier est frais, et opcache sert quand même une image figée."
+    echo
+    echo "      docker compose -p billetterie-preprod restart php"
+    echo
+fi
 
 if [ "$SERVI" != "$COMMIT_DEPLOYE" ]; then
     echo

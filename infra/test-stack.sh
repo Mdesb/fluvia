@@ -181,6 +181,18 @@ run)
         exit 1
     fi
 
+    # ⚠ UN MARQUEUR TANT QUE LA SUITE TOURNE, POUR QUE LE DEPLOIEMENT PUISSE LE VOIR.
+    #
+    # `deploy-preprod.sh` retire phpunit (`composer install --no-dev`). Une suite en cours meurt
+    # alors en plein milieu, avec un message qui accuse l'operateur de ne pas avoir reinstalle --
+    # alors qu'il l'avait fait. Constate le 31/08 : deux sessions, quarante secondes d'ecart.
+    #
+    # On ne supprime pas la collision : la preprod sans dependances de dev est le SEUL endroit ou
+    # se voit la classe de defaut que le garde-fou n°20 traque. On la rend visible.
+    MARQUEUR_SUITE="/tmp/suite-en-cours-$TOKEN"
+    printf '%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ) jeton=$TOKEN" > "$MARQUEUR_SUITE"
+    trap 'rm -f "$MARQUEUR_SUITE"' EXIT INT TERM
+
     php_run vendor/bin/phpunit "$@"
     ;;
 

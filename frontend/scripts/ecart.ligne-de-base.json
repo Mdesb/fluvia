@@ -29,14 +29,14 @@
         "Le script REFUSE de le relever. Un plafond qui remonte n est plus un cliquet, c est un",
         "compteur."
     ],
-    "plafond": 640,
+    "plafond": 635,
     "releve": {
-        "exposees": 1159,
-        "sansEcran": 0,
-        "attendues": 1159,
-        "appelees": 527,
-        "atteignables": 519,
-        "inatteignables": 640,
+        "exposees": 1161,
+        "sansEcran": 1,
+        "attendues": 1160,
+        "appelees": 533,
+        "atteignables": 525,
+        "inatteignables": 635,
         "orphelins": [
             "etatSynchroAcces  (back-office)",
             "grilleTarifaires  (back-office)",
@@ -50,19 +50,25 @@
         ],
         "appelsSansServeur": [],
         "marqueursPerimes": [],
-        "declares": [],
+        "declares": [
+            {
+                "fichier": "app/src/Platform/ApiResource/LoadedBuild.php",
+                "operations": 1,
+                "raison": "consommée par le déploiement pour vérifier que FPM a chargé le code livré, jamais par une interface."
+            }
+        ],
         "marqueursSansRaison": [],
         "clientsNonDeclares": [],
         "parFront": [
             {
                 "nom": "back-office",
-                "appelees": 504,
-                "atteignables": 496
+                "appelees": 509,
+                "atteignables": 501
             },
             {
                 "nom": "boutique en ligne",
-                "appelees": 23,
-                "atteignables": 23
+                "appelees": 24,
+                "atteignables": 24
             }
         ],
         "parPrefixe": [
@@ -72,7 +78,7 @@
             ],
             [
                 "boutique",
-                28
+                29
             ],
             [
                 "reservation",
@@ -111,15 +117,15 @@
                 11
             ],
             [
+                "compta",
+                11
+            ],
+            [
                 "factures",
                 10
             ],
             [
                 "marketing",
-                10
-            ],
-            [
-                "compta",
                 10
             ],
             [
@@ -323,6 +329,10 @@
                 3
             ],
             [
+                "parametres-facturation",
+                3
+            ],
+            [
                 "config",
                 3
             ],
@@ -395,10 +405,6 @@
                 1
             ],
             [
-                "journal",
-                1
-            ],
-            [
                 "demandes-rgpd",
                 1
             ],
@@ -416,6 +422,10 @@
             ],
             [
                 "projets",
+                1
+            ],
+            [
+                "journal",
                 1
             ],
             [
@@ -472,6 +482,10 @@
             ],
             [
                 "periode",
+                1
+            ],
+            [
+                "lettrage",
                 1
             ],
             [
