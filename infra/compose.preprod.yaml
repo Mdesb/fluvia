@@ -39,6 +39,49 @@ services:
       db:
         condition: service_healthy
 
+  # ── ORDONNANCEUR ────────────────────────────────────────────────────────────────────────────
+  #
+  # L'appel periodique qui manquait. Vingt-deux taches cataloguees, un lanceur capable de les
+  # executer, et personne pour l'appeler : les vingt-deux a « JAMAIS » au 31/08.
+  #
+  # ⚠ SOUS PROFIL, DONC PAS DEMARRE PAR UN DEPLOIEMENT DE ROUTINE :
+  #
+  #     docker compose -f infra/compose.preprod.yaml --env-file infra/.env.preprod \
+  #         --profile ordonnanceur up -d scheduler
+  #
+  # La premiere execution REVOQUE des droits reellement perimes. C'est l'effet voulu et il se defait
+  # en reattribuant — mais c'est un effet, et `deploy-preprod.sh` ne doit pas le declencher a l'insu
+  # de celui qui deploie.
+  #
+  # La liste des taches autorisees vit dans `infra/ordonnanceur.sh`, pas ici : elle merite d'etre lue
+  # avec ses raisons, et un fichier de composition n'est pas l'endroit ou on argumente. Deux taches
+  # aujourd'hui, arbitrees par Maxime le 31/08.
+  #
+  # Ce qui a REELLEMENT tourne se lit ailleurs, et c'est la seule reponse qui vaille :
+  #     php bin/console platform:scheduler:run --status
+  scheduler:
+    profiles: ["ordonnanceur"]
+    build:
+      context: ../docker/php
+    restart: unless-stopped
+    mem_limit: 512m
+    working_dir: /app
+    entrypoint: ["/bin/sh", "/infra/ordonnanceur.sh"]
+    volumes:
+      - ../app:/app
+      - app_var:/app/var
+      - ../infra:/infra:ro
+      - ../docker/php/conf.d/zz-memory.ini:/usr/local/etc/php/conf.d/zz-memory.ini:ro
+    environment:
+      APP_ENV: prod
+      APP_DEBUG: "0"
+      APP_SECRET: ${APP_SECRET:?APP_SECRET manquant dans .env.preprod}
+      DATABASE_URL: "mysql://${DB_USER}:${DB_PASSWORD}@db:3306/${DB_NAME}?serverVersion=11.4.2-MariaDB&charset=utf8mb4"
+      JWT_PASSPHRASE: ${JWT_PASSPHRASE:?JWT_PASSPHRASE manquant dans .env.preprod}
+    depends_on:
+      db:
+        condition: service_healthy
+
   web:
     image: nginx:1.27-alpine
     restart: unless-stopped
