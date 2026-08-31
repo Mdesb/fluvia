@@ -7,34 +7,84 @@
 //    stocké sous une clé DIFFÉRENTE du token staff pour ne jamais les mélanger.
 // Chemins relatifs proxifiés par Vite (/auth, /api) — même origine, pas de CORS.
 
+/**
+ * STOCKAGE LOCAL QUI NE JETTE JAMAIS — parce que la boutique est faite pour vivre en IFRAME.
+ *
+ * Maxime, le 27/08 : *« l'iframe il faut faire attention je pense avec les differents navigateurs,
+ * il faut que ce soit nickel »*. Le piege n'est pas la mise en page, c'est le stockage.
+ *
+ * Dans une iframe servie depuis un autre domaine que la page qui l'heberge, Safari et Firefox
+ * **cloisonnent** le stockage par site parent, et Safari le **refuse purement et simplement** dans
+ * certaines configurations. `localStorage.getItem` leve alors une `SecurityError`.
+ *
+ * Le cout exact, si on n'y fait rien : `panierStore.getToken()` leve au premier rendu, l'application
+ * ne monte pas, et **le client voit une page blanche**. Pas un message, pas un panier vide -- rien.
+ *
+ * Le repli en memoire garde la boutique fonctionnelle sur la duree de la visite. Ce qui se perd, c'est
+ * la persistance entre deux ouvertures d'onglet -- une degradation reelle, et sans commune mesure avec
+ * une page blanche.
+ *
+ * > **Un stockage indisponible est un cas courant, pas une panne. Ce qui casse, ce n'est pas son
+ * > absence : c'est de ne pas l'avoir prevue.**
+ */
+const memoire = new Map()
+
+const stockage = {
+  get(cle) {
+    try {
+      return window.localStorage.getItem(cle)
+    } catch {
+      return memoire.get(cle) ?? null
+    }
+  },
+  set(cle, valeur) {
+    // On ecrit TOUJOURS en memoire, meme quand localStorage marche : si le quota explose en cours de
+    // visite -- un navigateur en navigation privee le fait -- le panier reste lisible.
+    memoire.set(cle, valeur)
+    try {
+      window.localStorage.setItem(cle, valeur)
+    } catch {
+      /* la memoire a deja la valeur */
+    }
+  },
+  remove(cle) {
+    memoire.delete(cle)
+    try {
+      window.localStorage.removeItem(cle)
+    } catch {
+      /* rien a faire */
+    }
+  },
+}
+
 const PANIER_TOKEN_KEY = 'boutique.panierToken'
 const PANIER_ID_KEY = 'boutique.panierId'
 const CLIENT_TOKEN_KEY = 'boutique.clientToken'
 const VITRINE_KEY = 'boutique.vitrine'
 
 export const panierStore = {
-  getToken: () => localStorage.getItem(PANIER_TOKEN_KEY),
-  getId: () => localStorage.getItem(PANIER_ID_KEY),
+  getToken: () => stockage.get(PANIER_TOKEN_KEY),
+  getId: () => stockage.get(PANIER_ID_KEY),
   set: (id, token) => {
-    if (id) localStorage.setItem(PANIER_ID_KEY, id)
-    if (token) localStorage.setItem(PANIER_TOKEN_KEY, token)
+    if (id) stockage.set(PANIER_ID_KEY, id)
+    if (token) stockage.set(PANIER_TOKEN_KEY, token)
   },
   clear: () => {
-    localStorage.removeItem(PANIER_ID_KEY)
-    localStorage.removeItem(PANIER_TOKEN_KEY)
+    stockage.remove(PANIER_ID_KEY)
+    stockage.remove(PANIER_TOKEN_KEY)
   },
 }
 
 export const clientTokenStore = {
-  get: () => localStorage.getItem(CLIENT_TOKEN_KEY),
-  set: (t) => localStorage.setItem(CLIENT_TOKEN_KEY, t),
-  clear: () => localStorage.removeItem(CLIENT_TOKEN_KEY),
+  get: () => stockage.get(CLIENT_TOKEN_KEY),
+  set: (t) => stockage.set(CLIENT_TOKEN_KEY, t),
+  clear: () => stockage.remove(CLIENT_TOKEN_KEY),
 }
 
 export const vitrineStore = {
-  get: () => localStorage.getItem(VITRINE_KEY),
-  set: (id) => localStorage.setItem(VITRINE_KEY, id),
-  clear: () => localStorage.removeItem(VITRINE_KEY),
+  get: () => stockage.get(VITRINE_KEY),
+  set: (id) => stockage.set(VITRINE_KEY, id),
+  clear: () => stockage.remove(VITRINE_KEY),
 }
 
 export class ApiError extends Error {
@@ -113,9 +163,20 @@ export const boutique = {
   // Liste publique des vitrines ouvertes (sans auth) : sert d'écran de choix quand aucune
   // vitrine n'est passée dans l'URL (?vitrine=<id>).
   vitrinesPubliques: () => request('/api/boutique/vitrines-publiques'),
+  // D104 : la boutique designee par l'HOTE (`piscine-ville.fluvia-app.com`). Rend 404 quand l'hote
+  // n'est pas un sous-domaine client connu -- ce qui est le cas en developpement et en preprod, ou
+  // l'on tombe alors sur les formes d'URL existantes.
+  vitrineCourante: () => request('/api/boutique/vitrine-courante'),
   vitrine: (id) => request(`/api/boutique/vitrines/${id}`),
   catalogue: (id) => request(`/api/boutique/vitrines/${id}/catalogue`),
   creneaux: (produitId) => request(`/api/boutique/produits/${produitId}/creneaux`),
+
+  // Mentions obligatoires, en acces PUBLIC et sans jeton.
+  //
+  // La LCEN exige des mentions << aisement accessibles >>. Les mettre derriere une authentification
+  // les rendrait inaccessibles a exactement la personne qui en a besoin : le visiteur qui hesite a
+  // acheter, et qui n'a pas encore de compte.
+  documentsLegaux: (etablissementId) => request(`/api/legal/publics/${etablissementId}`),
 
   // --- Panier (invité, jeton applicatif) ---
   ouvrirPanier: (vitrineId, email) =>
@@ -161,5 +222,33 @@ export const boutique = {
     request('/auth', { method: 'POST', body: { email, motDePasse } }),
   moiCompte: () => request('/api/boutique/comptes/me', { auth: true }),
   mesCommandes: () => request('/api/boutique/comptes/me/commandes', { auth: true }),
+
+  // Souscrire un abonnement en ligne. Corps :
+  // { produit, vitrine, iban, bicDebiteur?, debiteurNom, dateSignature? }
+  //
+  // ⚠ CE N'EST PAS UN AJOUT AU PANIER. L'appel cree une VENTE et signe un MANDAT DE PRELEVEMENT
+  // dans le meme geste : pas de tunnel, pas de paiement a l'etape suivante, rien a retirer ensuite.
+  //
+  // ⚠ `vitrine` DESIGNE LA BOUTIQUE OU L'ACHAT A LIEU, et pas celle ou le compte est ne. Sans lui,
+  // le serveur retombe sur la vitrine de creation du compte : un client inscrit chez Piscine A qui
+  // s'abonne chez Patinoire B ferait entrer l'abonnement, le mandat et l'argent DANS LES COMPTES DE
+  // PISCINE A. Un compte global est une identite, pas une appartenance commerciale.
+  //
+  // Le serveur refuse les invites, les produits sans facette SEPA, et un `iban` ou un `debiteurNom`
+  // vide. L'ecran evite les trois avant le clic plutot que d'afficher son refus apres.
+  souscrireAbonnement: (corps) =>
+    request('/api/boutique/abonnements/souscrire', { method: 'POST', body: corps, auth: true }),
+
+  // Demander le remboursement d'une commande. Corps : { vente, ligne?, motif, piecesJustificatives? }
+  //
+  // ⚠ AUCUN REMBOURSEMENT N'EST AUTOMATIQUE : la demande est deposee, motivee, et un humain tranche
+  // (RG-M3-15). Le serveur refuse une commande qui n'appartient pas au compte connecte, et exige un
+  // motif non vide.
+  //
+  // ⚠ ET LE CLIENT NE PEUT PAS LISTER SES DEMANDES : la collection est reservee a l'exploitant
+  // (`boutique.lire`), seule la lecture d'UNE demande lui est ouverte. L'ecran ne peut donc pas
+  // afficher « demande en cours » apres un rechargement — il le dit plutot que de le laisser croire.
+  deposerDemandeRemboursement: (corps) =>
+    request('/api/boutique/demandes-remboursement', { method: 'POST', body: corps, auth: true }),
   mesBillets: () => request('/api/boutique/comptes/me/billets', { auth: true }),
 }

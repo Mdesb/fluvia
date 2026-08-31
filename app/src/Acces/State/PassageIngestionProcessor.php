@@ -25,6 +25,17 @@ use Symfony\Component\Uid\Uuid;
  */
 final class PassageIngestionProcessor implements ProcessorInterface
 {
+    /**
+     * Canaux de recharge RÉELLEMENT implémentés, proposés quand un passage est refusé pour crédit
+     * épuisé (CQ-4). Seule la recharge au guichet existe aujourd'hui (CQ-1, `ValiderVenteService`
+     * branche recharge) — la borne libre-service et l'application ne sont pas encore câblées : ne pas
+     * les annoncer tant que leur flux n'existe pas (promesse creuse). Réintroduire chaque canal ici au
+     * moment où son flux de recharge est livré.
+     *
+     * @var list<string>
+     */
+    private const CANAUX_RECHARGE_DISPONIBLES = ['caisse'];
+
     public function __construct(
         private readonly LecteurCorps $lecteur,
         private readonly ValidationPassageHandler $handler,
@@ -61,7 +72,7 @@ final class PassageIngestionProcessor implements ProcessorInterface
             'codeMotif' => $passage->getCodeMotif()?->value,
             'motif' => $passage->getMotif(),
             'horodatage' => $passage->getHorodatage()->format(DATE_ATOM),
-            'propositionRecharge' => $passage->getCodeMotif()?->value === 'credit_epuise' ? ['caisse', 'borne', 'app'] : null,
+            'propositionRecharge' => $passage->getCodeMotif()?->value === 'credit_epuise' ? self::CANAUX_RECHARGE_DISPONIBLES : null,
         ], JsonResponse::HTTP_OK);
     }
 

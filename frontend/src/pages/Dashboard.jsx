@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { api, membres } from '../api/client.js'
 import { euros } from '../api/produit.js'
 import { euroCentimes } from '../components/Liste.jsx'
+import PretAVendre from '../components/PretAVendre.jsx'
 
 function Kpi({ label, valeur, accent, sous }) {
   return (
@@ -17,7 +18,20 @@ function Kpi({ label, valeur, accent, sous }) {
 // alertes d'exploitation à partir des endpoints existants (Reporting / Compta / Caisse). Chaque
 // source est isolée : un périmètre manquant (403) dégrade proprement la carte concernée sans casser
 // le reste du tableau.
-export default function Dashboard({ etabActif, etablissements }) {
+
+// Le nom de qui tient la caisse, ou l’aveu qu’on ne peut pas le lire — jamais un tiret, qui
+// se lirait « aucun opérateur » alors que le champ est obligatoire en base.
+function nomSession(session) {
+  const u = session.operateur || session.regisseur
+  if (!u) return '—'
+  if (typeof u === 'object') {
+    const nom = [u.prenom, u.nom].filter(Boolean).join(' ').trim()
+    if (nom) return nom
+  }
+  return 'nom non transmis'
+}
+
+export default function Dashboard({ etabActif, etablissements, droits = [], onNav }) {
   const [dash, setDash] = useState(null)
   const [dashInfo, setDashInfo] = useState(null)
   const [sessions, setSessions] = useState([])
@@ -89,6 +103,10 @@ export default function Dashboard({ etabActif, etablissements }) {
 
   return (
     <div className="view">
+      {/* Avant tout le reste : quelqu'un qui ne peut pas encore vendre doit l'apprendre ici, pas en
+          cherchant dans les Parametres qu'il n'a aucune raison d'ouvrir. Disparait des que les trois
+          conditions sont remplies. */}
+      <PretAVendre etabActif={etabActif} droits={droits} onAller={() => onNav?.('parametres')} masquerSiComplet />
       <div className="view-head">
         <div className="ttl">
           <h1>Tableau de bord</h1>
@@ -178,7 +196,14 @@ export default function Dashboard({ etabActif, etablissements }) {
                       <td><span className="mono">{s.numero || '—'}</span></td>
                       <td>{s.pointDeVente?.libelle || '—'}</td>
                       <td>{s.caisse?.libelle || '—'}</td>
-                      <td>{s.operateur?.nom || s.regisseur?.nom || '—'}</td>
+                      {/* QUI TIENT CETTE CAISSE : la colonne était vide sur CHAQUE ligne.
+                          `SessionCaisse.operateur` et `.regisseur` pointent `Utilisateur`, qui
+                          n'expose aucune propriété dans le groupe `session:read` — le champ revient
+                          en IRI nue. Or la colonne est `nullable: false` en base : il y a TOUJOURS
+                          quelqu'un. Un tiret disait donc « personne » là où la réponse est « je ne
+                          sais pas le lire », sur le tableau qui sert justement à savoir qui a une
+                          caisse ouverte. */}
+                      <td>{nomSession(s)}</td>
                     </tr>
                   ))}
                 </tbody>

@@ -7,11 +7,15 @@ namespace App\Vente\State;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
 use App\Caisse\Entity\PointDeVente;
+use App\Securite\Entity\Utilisateur;
+use App\Securite\Service\CalculateurDroits;
 use App\Vente\Nf525\ScellementHandler;
 use App\Vente\Nf525\SignataireOperation;
 use App\Vente\Service\LecteurCorps;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\Uid\Uuid;
 
@@ -29,6 +33,8 @@ final class VerifierChaineProcessor implements ProcessorInterface
         private readonly LecteurCorps $lecteur,
         private readonly ScellementHandler $scellement,
         private readonly SignataireOperation $signataire,
+        private readonly Security $security,
+        private readonly CalculateurDroits $calculateur,
     ) {
     }
 
@@ -44,11 +50,33 @@ final class VerifierChaineProcessor implements ProcessorInterface
             throw new UnprocessableEntityHttpException('Point de vente introuvable.');
         }
 
+        // Cloisonnement (D3/D8) — opération `input: false` : le pointDeVente est lu au corps de la
+        // requête et résolu par un `find()`, hors des extensions Doctrine. On recalcule l'autorité
+        // (`caisse.lire`, permission de l'opération) contre l'établissement du PDV, jamais contre
+        // l'en-tête X-Etablissement : sans quoi un agent `caisse.lire` sur A pouvait sonder l'intégrité
+        // de la chaîne NF525 (signal de conformité fiscale) d'un point de vente d'un autre établissement.
+        // Échec fermé en 404 (anti-oracle).
+        $this->assertPdvDansLePerimetre($pdv);
+
         $rapport = $this->signataire->verifieChaine($this->scellement->chaine($pdv));
 
         return new JsonResponse(
             ['pointDeVente' => (string) $pdv->getId()] + $rapport->toArray(),
             $rapport->intacte ? JsonResponse::HTTP_OK : JsonResponse::HTTP_CONFLICT,
         );
+    }
+
+    private function assertPdvDansLePerimetre(PointDeVente $pdv): void
+    {
+        $utilisateur = $this->security->getUser();
+        $etablissement = $pdv->getEtablissement();
+
+        $codes = $utilisateur instanceof Utilisateur && $etablissement !== null
+            ? $this->calculateur->codesEffectifs($utilisateur, $etablissement->getId())
+            : [];
+
+        if (!$this->calculateur->autorise($codes, 'caisse', 'lire')) {
+            throw new NotFoundHttpException('Point de vente introuvable.');
+        }
     }
 }

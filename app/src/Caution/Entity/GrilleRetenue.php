@@ -10,6 +10,7 @@ use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\Caution\Enum\ModeRetenue;
+use App\Caution\State\EstablishmentStampProcessor;
 use App\Organisation\Entity\Etablissement;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
@@ -33,7 +34,10 @@ use Symfony\Component\Validator\Constraints as Assert;
     operations: [
         new GetCollection(security: "is_granted('PERM', 'caution.lire')"),
         new Get(security: "is_granted('PERM', 'caution.lire')"),
-        new Post(security: "is_granted('PERM', 'caution.parametrer')"),
+        new Post(
+            security: "is_granted('PERM', 'caution.parametrer')",
+            processor: EstablishmentStampProcessor::class,
+        ),
         new Patch(security: "is_granted('PERM', 'caution.parametrer')"),
     ],
     normalizationContext: ['groups' => ['caution_grille:read']],
@@ -48,8 +52,12 @@ class GrilleRetenue
 
     #[ORM\ManyToOne(targetEntity: Etablissement::class)]
     #[ORM\JoinColumn(nullable: false)]
-    #[Assert\NotNull]
-    #[Groups(['caution_grille:read', 'caution_grille:write'])]
+    // D41 — hors groupe d'ecriture : l'etablissement vient de la session serveur, pose par
+    // `EstablishmentStampProcessor`, jamais du corps de la requete. Plus d'`Assert\NotNull` non plus :
+    // la validation s'execute AVANT l'ecriture, donc avant l'estampillage, et echouerait en 422 sur
+    // une valeur que le serveur allait poser lui-meme. L'invariant tient par l'estampilleur, qui
+    // refuse plutot que de deviner, par la colonne NOT NULL, et par le garde global D41.
+    #[Groups(['caution_grille:read'])]
     private ?Etablissement $etablissement = null;
 
     #[ORM\Column(length: 40)]

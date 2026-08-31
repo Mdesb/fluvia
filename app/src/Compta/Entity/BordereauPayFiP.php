@@ -30,7 +30,18 @@ use Symfony\Component\Uid\Uuid;
             uriTemplate: '/compta/payfip/retour',
             read: false,
             input: false,
-            security: 'is_granted(\'IS_AUTHENTICATED_FULLY\')',
+            // n°8 (D8, 23/08) — cette route etait ouverte a **tout compte authentifie**, sans aucune
+            // permission, et elle **ecrit un fait financier** : elle marque un paiement recu, et cree
+            // meme le bordereau s'il n'existe pas. N'importe quel titulaire de compte pouvait donc
+            // declarer encaissee n'importe quelle vente, dans n'importe quel etablissement.
+            //
+            // On aligne sur la permission de la route soeur `/rejouer`. C'est une mesure de
+            // repli assumee : un rappel de prestataire n'est pas un utilisateur connecte, et la
+            // vraie garde est une preuve d'authenticite du rappel (signature DGFiP). Elle est
+            // inconnue de nous et consignee au registre des bloqueurs externes (E-7) — voir la note
+            // de ce fichier. Maxime a confirme le 23/08 que **rien n'appelle cette route aujourd'hui**,
+            // ce qui rend ce durcissement sans risque de rupture.
+            security: "is_granted('PERM', 'compta.valider')",
             processor: PayFipRetourProcessor::class,
         ),
         new Post(

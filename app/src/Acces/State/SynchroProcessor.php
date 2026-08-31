@@ -8,9 +8,13 @@ use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
 use App\Acces\Entity\Controleur;
 use App\Acces\Service\SynchroPassageHandler;
+use App\Securite\Entity\Utilisateur;
+use App\Securite\Service\CalculateurDroits;
 use App\Vente\Service\LecteurCorps;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\Uid\Uuid;
 
@@ -28,6 +32,8 @@ final class SynchroProcessor implements ProcessorInterface
         private readonly LecteurCorps $lecteur,
         private readonly SynchroPassageHandler $handler,
         private readonly EntityManagerInterface $em,
+        private readonly Security $security,
+        private readonly CalculateurDroits $calculateur,
     ) {
     }
 
@@ -39,6 +45,19 @@ final class SynchroProcessor implements ProcessorInterface
         $controleur = $controleurId !== null ? $this->em->getRepository(Controleur::class)->find($controleurId) : null;
         if (!$controleur instanceof Controleur) {
             throw new UnprocessableEntityHttpException('Contrôleur introuvable.');
+        }
+
+        // Cloisonnement (D3/D8) — l'opération est `input: false` : le contrôleur est résolu depuis le
+        // corps par un `find()` direct, hors des extensions. On recalcule l'autorité de l'agent
+        // (sécurité de route : acces.ingestion) contre l'établissement du CONTRÔLEUR VISÉ, pas
+        // l'en-tête X-Etablissement (D6). Sans quoi on remonte un lot hors-ligne sur un contrôleur d'un
+        // autre établissement. Échec fermé en 404 (anti-oracle).
+        $agent = $this->security->getUser();
+        $codes = $agent instanceof Utilisateur
+            ? $this->calculateur->codesEffectifs($agent, $controleur->getEtablissement()?->getId())
+            : [];
+        if (!$this->calculateur->autorise($codes, 'acces', 'ingestion')) {
+            throw new NotFoundHttpException('Contrôleur introuvable.');
         }
 
         $lot = \is_array($corps['lot'] ?? null) ? $corps['lot'] : [];

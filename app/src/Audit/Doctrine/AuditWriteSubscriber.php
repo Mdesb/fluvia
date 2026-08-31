@@ -256,10 +256,15 @@ final class AuditWriteSubscriber
         if ($entity instanceof Etablissement) {
             return $entity->getId();
         }
-        if (method_exists($entity, 'getEtablissement')) {
-            $etab = $entity->getEtablissement();
-            if ($etab instanceof Etablissement) {
-                return $etab->getId();
+        // Deux orthographes cohabitent dans le dépôt : `etablissement` sur les entités d'avant D5,
+        // `establishment` sur celles d'après. N'en lire qu'une laissait les secondes SANS
+        // rattachement — donc hors de tout cloisonnement du journal, sans que rien ne le signale.
+        foreach (['getEtablissement', 'getEstablishment'] as $accesseur) {
+            if (method_exists($entity, $accesseur)) {
+                $etab = $entity->{$accesseur}();
+                if ($etab instanceof Etablissement) {
+                    return $etab->getId();
+                }
             }
         }
 

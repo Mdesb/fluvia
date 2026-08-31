@@ -1,0 +1,34 @@
+{
+  "name": "Fluvia",
+  "short_name": "Fluvia",
+  "description": "Billetterie et contrôle d'accès",
+  "lang": "fr",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0e2a30",
+  "theme_color": "#0d7d88",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/fluvia-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/fluvia-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/fluvia-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

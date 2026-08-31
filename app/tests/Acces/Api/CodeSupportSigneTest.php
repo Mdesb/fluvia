@@ -97,6 +97,14 @@ final class CodeSupportSigneTest extends AccesApiTestCase
         $droit->setSourceType(TypeDroitAcces::Billet)
             ->setStatutProjection(StatutProjectionDroit::Valide)
             ->setEtablissement($etab);
+
+        // D87 : un droit de vente sans zone déclarée n'ouvre aucune porte. Ce test porte sur la
+        // SIGNATURE du code de support, pas sur les zones — il lui faut un droit qui ouvre la porte
+        // franchie, et on la prend sur l'équipement plutôt que de la nommer une seconde fois.
+        $espaceDeLEquipement = $equipement->getControleur()?->getEspace();
+        self::assertNotNull($espaceDeLEquipement, 'topologie de fixture incomplète : l’équipement n’a pas d’espace');
+        $droit->addAuthorisedSpace($espaceDeLEquipement);
+
         $em->persist($droit);
 
         $identifiant = $generateur->genererPourType(VenteTypeSupport::Qr);

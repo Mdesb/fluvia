@@ -115,8 +115,25 @@ final class TicketSupportApiTest extends SupportApiTestCase
         self::assertResponseIsSuccessful();
         $messagesApres = $clientN1->request('GET', '/api/support/tickets/' . $ticket['id'] . '/messages', $enteteN1)->toArray();
         $listeMessagesApres = $this->extraireHydraMembers($messagesApres);
-        $dernierMessage = end($listeMessagesApres);
-        self::assertFalse($dernierMessage['noteInterne']);
+
+        // On retrouve le message par son contenu, pas par sa position. Les trois messages du ticket
+        // naissent dans la meme seconde : le tri par `dateCreation` est alors ambigu, et `end()`
+        // rendait tantot le message du demandeur, tantot la note interne de l'agent — d'ou un echec
+        // intermittent, visible seulement en suite complete et jamais en execution isolee.
+        //
+        // Et ce n'est pas qu'une question de stabilite : l'assertion porte desormais sur ce que le
+        // test veut reellement prouver — que **ce message-la** n'a pas ete accepte comme note interne
+        // — au lieu de dependre de l'ordre de la liste.
+        $messageDuDemandeur = null;
+        foreach ($listeMessagesApres as $message) {
+            if (($message['contenu'] ?? null) === 'Tentative de note interne côté demandeur.') {
+                $messageDuDemandeur = $message;
+                break;
+            }
+        }
+
+        self::assertNotNull($messageDuDemandeur, 'Le message du demandeur est absent de la liste.');
+        self::assertFalse($messageDuDemandeur['noteInterne']);
     }
 
     public function testCa12LienArticleVisibleDuDemandeur(): void

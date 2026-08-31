@@ -13,6 +13,7 @@ use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\Offre\Entity\Produit;
 use App\Organisation\Entity\Etablissement;
+use App\Reservation\State\EstablishmentStampProcessor;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
@@ -37,7 +38,7 @@ use Symfony\Component\Validator\Constraints as Assert;
     operations: [
         new GetCollection(security: "is_granted('PERM', 'reservation.lire')"),
         new Get(security: "is_granted('PERM', 'reservation.lire')"),
-        new Post(security: "is_granted('PERM', 'reservation.gerer_ressource')"),
+        new Post(security: "is_granted('PERM', 'reservation.gerer_ressource')", processor: EstablishmentStampProcessor::class),
         new Patch(security: "is_granted('PERM', 'reservation.gerer_ressource')"),
     ],
     normalizationContext: ['groups' => ['activite:read']],
@@ -53,8 +54,15 @@ class Activite
 
     #[ORM\ManyToOne(targetEntity: Etablissement::class)]
     #[ORM\JoinColumn(nullable: false)]
-    #[Assert\NotNull]
-    #[Groups(['activite:read', 'activite:write'])]
+    // D41 — plus d'`Assert\NotNull` ici : la contrainte protegeait d'un client qui OMETTAIT
+    // le champ, or il ne peut plus l'envoyer du tout. La validation s'execute avant l'ecriture,
+    // donc avant l'estampillage — elle echouait sur une valeur que le serveur allait poser
+    // lui-meme (verifie : 422 avant d'atteindre le processor). L'invariant est desormais tenu
+    // par trois choses plus solides qu'une annotation : l'estampilleur, qui refuse plutot que
+    // de deviner ; la colonne NOT NULL ; et le garde global D41.
+    // D41 — hors groupe d'ecriture : l'etablissement vient de la session serveur, pose par
+    // `EstablishmentStampProcessor`, jamais du corps de la requete.
+    #[Groups(['activite:read'])]
     private ?Etablissement $etablissement = null;
 
     #[ORM\Column(length: 120)]
@@ -71,6 +79,27 @@ class Activite
     #[Assert\Positive]
     #[Groups(['activite:read', 'activite:write'])]
     private int $dureeMinutes = 60;
+
+    /**
+     * LE TEMPS ENTRE DEUX CLIENTS, QUI APPARTIENT A LA PRESTATION ET NON AU RENDEZ-VOUS.
+     *
+     * Nettoyer une cabine de massage prend un quart d'heure ; remettre un fauteuil en etat, deux
+     * minutes. Ce temps decide de ce qu'on peut proposer ensuite, sans faire partie de ce que le
+     * client a achete.
+     *
+     * **Il n'allonge donc PAS le creneau.** Un creneau allonge ferait voir au client un rendez-vous
+     * d'1 h 15 pour un soin d'une heure, porterait la mauvaise duree sur son ticket, et le jour ou
+     * l'exploitant reduit son battement, tous les rendez-vous passes mentiraient retroactivement.
+     *
+     * C'est une regle de PLACEMENT, lue par `FreeSlotFinder` : chaque occupation existante y est
+     * elargie du battement de sa propre prestation.
+     *
+     * Defaut a 0 : une piscine ou un cours collectif n'en a pas, et une valeur non nulle par defaut
+     * retirerait silencieusement des creneaux a tous les etablissements existants.
+     */
+    #[ORM\Column(type: 'smallint', options: ['default' => 0])]
+    #[Groups(['activite:read', 'activite:write'])]
+    private int $battementMinutes = 0;
 
     #[ORM\Column(length: 60, nullable: true)]
     #[Groups(['activite:read', 'activite:write'])]
@@ -137,6 +166,20 @@ class Activite
     public function setTypeActivite(string $typeActivite): self
     {
         $this->typeActivite = $typeActivite;
+
+        return $this;
+    }
+
+    public function getBattementMinutes(): int
+    {
+        return $this->battementMinutes;
+    }
+
+    public function setBattementMinutes(int $battementMinutes): self
+    {
+        // Un battement negatif ferait se chevaucher deux rendez-vous : on le refuse ici plutot que
+        // de compter dessus plus loin.
+        $this->battementMinutes = max(0, $battementMinutes);
 
         return $this;
     }

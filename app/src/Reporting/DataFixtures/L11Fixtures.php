@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Reporting\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\Acces\Entity\Controleur;
 use App\Acces\Entity\EspaceAcces;
 use App\Acces\Entity\JaugeFmi;
@@ -56,6 +57,8 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
  */
 final class L11Fixtures extends Fixture
 {
+    use FixturesIdempotentes;
+
     public const GROUPE_NOM = 'Groupe Démo Reporting';
     public const REGION_A_NOM = 'Région A Reporting';
     public const REGION_B_NOM = 'Région B Reporting';
@@ -87,36 +90,33 @@ final class L11Fixtures extends Fixture
         $this->chargerReferentiel($manager);
 
         // --- Hiérarchie ---
-        $groupe = (new Groupe())->setNom(self::GROUPE_NOM);
-        $manager->persist($groupe);
-        $regionA = (new Region())->setNom(self::REGION_A_NOM)->setGroupe($groupe);
-        $regionB = (new Region())->setNom(self::REGION_B_NOM)->setGroupe($groupe);
-        $manager->persist($regionA);
-        $manager->persist($regionB);
+        $groupe = $this->parNom($manager, Groupe::class, self::GROUPE_NOM);
 
-        $siteA1 = (new Etablissement())->setNom(self::SITE_A1_NOM)->setRegion($regionA)->setActif(true);
-        $siteA2 = (new Etablissement())->setNom(self::SITE_A2_NOM)->setRegion($regionA)->setActif(true);
-        $siteB1 = (new Etablissement())->setNom(self::SITE_B1_NOM)->setRegion($regionB)->setActif(true);
-        $manager->persist($siteA1);
-        $manager->persist($siteA2);
-        $manager->persist($siteB1);
+        $regionA = $this->parNom($manager, Region::class, self::REGION_A_NOM);
+        $regionA->setGroupe($groupe);
+        $regionB = $this->parNom($manager, Region::class, self::REGION_B_NOM);
+        $regionB->setGroupe($groupe);
+
+        $siteA1 = $this->parNom($manager, Etablissement::class, self::SITE_A1_NOM);
+        $siteA1->setRegion($regionA)->setActif(true);
+        $siteA2 = $this->parNom($manager, Etablissement::class, self::SITE_A2_NOM);
+        $siteA2->setRegion($regionA)->setActif(true);
+        $siteB1 = $this->parNom($manager, Etablissement::class, self::SITE_B1_NOM);
+        $siteB1->setRegion($regionB)->setActif(true);
 
         // --- Permissions reporting.* (redondant avec la migration, nécessaire car les tests
         // recréent le schéma en base de test, cf. `ReportingApiTestCase`) ---
-        $permLire = (new Permission())->setModule('reporting')->setAction('lire');
-        $permPlanifier = (new Permission())->setModule('reporting')->setAction('planifier');
-        $permConfigurer = (new Permission())->setModule('reporting')->setAction('configurer');
-        $manager->persist($permLire);
-        $manager->persist($permPlanifier);
-        $manager->persist($permConfigurer);
+        $permLire = $this->permissionNommee($manager, 'reporting', 'lire');
+        $permPlanifier = $this->permissionNommee($manager, 'reporting', 'planifier');
+        $permConfigurer = $this->permissionNommee($manager, 'reporting', 'configurer');
 
-        $roleSite = (new Role())->setNom('Reporting Directeur Site');
+        $roleSite = $this->roleNomme($manager, 'Reporting Directeur Site');
         $roleSite->addPermission($permLire);
-        $roleRegion = (new Role())->setNom('Reporting Directeur Régional');
+        $roleRegion = $this->roleNomme($manager, 'Reporting Directeur Régional');
         $roleRegion->addPermission($permLire)->addPermission($permPlanifier);
-        $roleGroupe = (new Role())->setNom('Reporting Direction Générale');
+        $roleGroupe = $this->roleNomme($manager, 'Reporting Direction Générale');
         $roleGroupe->addPermission($permLire)->addPermission($permPlanifier);
-        $roleAdmin = (new Role())->setNom('Reporting Administrateur');
+        $roleAdmin = $this->roleNomme($manager, 'Reporting Administrateur');
         $roleAdmin->addPermission($permLire)->addPermission($permPlanifier)->addPermission($permConfigurer);
         foreach ([$roleSite, $roleRegion, $roleGroupe, $roleAdmin] as $role) {
             $manager->persist($role);
@@ -129,32 +129,41 @@ final class L11Fixtures extends Fixture
         $utilisateurNonContigu = $this->creerUtilisateur($manager, self::EMAIL_NON_CONTIGU, 'Utilisateur Non Contigu');
 
         // Directeur de site : A1 uniquement.
-        $manager->persist((new Affectation())->setUtilisateur($utilisateurSite)->setRole($roleSite)->setEtablissement($siteA1));
+        $this->affectationUnique($manager, $utilisateurSite, $roleSite, $siteA1);
         // Directeur régional : A1 + A2 = Région A ENTIÈRE.
-        $manager->persist((new Affectation())->setUtilisateur($utilisateurRegion)->setRole($roleRegion)->setEtablissement($siteA1));
-        $manager->persist((new Affectation())->setUtilisateur($utilisateurRegion)->setRole($roleRegion)->setEtablissement($siteA2));
+        $this->affectationUnique($manager, $utilisateurRegion, $roleRegion, $siteA1);
+        $this->affectationUnique($manager, $utilisateurRegion, $roleRegion, $siteA2);
         // DG : A1 + A2 + B1 = Groupe ENTIER.
-        $manager->persist((new Affectation())->setUtilisateur($utilisateurGroupe)->setRole($roleGroupe)->setEtablissement($siteA1));
-        $manager->persist((new Affectation())->setUtilisateur($utilisateurGroupe)->setRole($roleGroupe)->setEtablissement($siteA2));
-        $manager->persist((new Affectation())->setUtilisateur($utilisateurGroupe)->setRole($roleGroupe)->setEtablissement($siteB1));
+        $this->affectationUnique($manager, $utilisateurGroupe, $roleGroupe, $siteA1);
+        $this->affectationUnique($manager, $utilisateurGroupe, $roleGroupe, $siteA2);
+        $this->affectationUnique($manager, $utilisateurGroupe, $roleGroupe, $siteB1);
         // Administrateur : idem DG + reporting.configurer.
-        $manager->persist((new Affectation())->setUtilisateur($utilisateurAdmin)->setRole($roleAdmin)->setEtablissement($siteA1));
-        $manager->persist((new Affectation())->setUtilisateur($utilisateurAdmin)->setRole($roleAdmin)->setEtablissement($siteA2));
-        $manager->persist((new Affectation())->setUtilisateur($utilisateurAdmin)->setRole($roleAdmin)->setEtablissement($siteB1));
+        $this->affectationUnique($manager, $utilisateurAdmin, $roleAdmin, $siteA1);
+        $this->affectationUnique($manager, $utilisateurAdmin, $roleAdmin, $siteA2);
+        $this->affectationUnique($manager, $utilisateurAdmin, $roleAdmin, $siteB1);
         // Non contigu : A1 + B1 (aucune région/groupe entièrement couverte, cas limite §7 spec).
-        $manager->persist((new Affectation())->setUtilisateur($utilisateurNonContigu)->setRole($roleSite)->setEtablissement($siteA1));
-        $manager->persist((new Affectation())->setUtilisateur($utilisateurNonContigu)->setRole($roleSite)->setEtablissement($siteB1));
+        $this->affectationUnique($manager, $utilisateurNonContigu, $roleSite, $siteA1);
+        $this->affectationUnique($manager, $utilisateurNonContigu, $roleSite, $siteB1);
 
         // --- Profils exploitant (RG-M6-01, RG-REPORT-09) : A1 régie, A2 DSP, B1 régie. ---
-        $profilA1 = (new ProfilExploitant())->setType(TypeExploitant::RegieDirecte)->setSiren('111111111')->setEtablissementPrincipal($siteA1);
-        $profilA1->addEtablissementRattache($siteA1);
-        $profilA2 = (new ProfilExploitant())->setType(TypeExploitant::Dsp)->setSiren('222222222')->setEtablissementPrincipal($siteA2);
-        $profilA2->addEtablissementRattache($siteA2);
-        $profilB1 = (new ProfilExploitant())->setType(TypeExploitant::RegieDirecte)->setSiren('333333333')->setEtablissementPrincipal($siteB1);
-        $profilB1->addEtablissementRattache($siteB1);
-        $manager->persist($profilA1);
-        $manager->persist($profilA2);
-        $manager->persist($profilB1);
+        $this->profilExploitant($manager, '111111111', TypeExploitant::RegieDirecte, $siteA1);
+        $this->profilExploitant($manager, '222222222', TypeExploitant::Dsp, $siteA2);
+        $this->profilExploitant($manager, '333333333', TypeExploitant::RegieDirecte, $siteB1);
+
+        // ── LE BLOC DE DÉMONSTRATION NE SE POSE QU'UNE FOIS ──────────────────────────────────
+        //
+        // Tout ce qui suit est un jeu de données cohérent, pas un référentiel : le reposer sur une
+        // base qui l'a déjà écraserait ce qui a été corrigé à la main depuis, ou le dupliquerait
+        // pour les entités sans contrainte d'unicité — silencieusement.
+        //
+        // Les permissions et les rôles restent AU-DESSUS de cette garde : ils doivent être rejoués à
+        // chaque chargement, sans quoi un droit ajouté au code n'atteindrait jamais une base
+        // existante.
+        if ($manager->getRepository(Passage::class)->findOneBy([]) !== null) {
+            $manager->flush();
+
+            return;
+        }
 
         // --- Ventes (M2) : CA du jour par site ---
         $this->creerVenteEtSession($manager, $siteA1, self::CA_A1, $utilisateurAdmin);
@@ -174,6 +183,13 @@ final class L11Fixtures extends Fixture
 
     private function creerUtilisateur(ObjectManager $manager, string $email, string $nom): Utilisateur
     {
+        $existant = $manager->getRepository(Utilisateur::class)->findOneBy(['email' => $email]);
+
+        if ($existant instanceof Utilisateur) {
+            return $existant->setNom($nom)->setActif(true);
+        }
+
+        // Le mot de passe n'est posé qu'à la création : le rejouer écraserait un mot de passe changé.
         $utilisateur = (new Utilisateur())->setEmail($email)->setNom($nom)->setActif(true);
         $utilisateur->setMotDePasse($this->hasher->hashPassword($utilisateur, self::MDP));
         $manager->persist($utilisateur);
@@ -183,6 +199,16 @@ final class L11Fixtures extends Fixture
 
     private function creerVenteEtSession(ObjectManager $manager, Etablissement $etablissement, string $total, Utilisateur $operateur): void
     {
+        // Les pieces de vente portent un numero deterministe : si la vente existe deja, tout ce qui
+        // suit existe aussi. Sans cette garde, un rechargement empile une seconde vente et un second
+        // paiement -- rien ne leve, et le chiffre d'affaires de demonstration double.
+        $dejaLa = $manager->getRepository(Vente::class)
+            ->findOneBy(['numero' => 'V-' . $etablissement->getNom()]);
+
+        if ($dejaLa instanceof Vente) {
+            return;
+        }
+
         $pdv = (new PointDeVente())->setLibelle('PDV ' . $etablissement->getNom())->setEtablissement($etablissement)->setMoyensAutorises(['especes']);
         $manager->persist($pdv);
         $caisse = (new Caisse())->setLibelle('Caisse ' . $etablissement->getNom())->setPointDeVente($pdv)->setEtat(EtatCaisse::Ouverte);
@@ -222,6 +248,15 @@ final class L11Fixtures extends Fixture
         int $seuil,
         int $nombrePassagesEntree,
     ): void {
+        // Meme raisonnement que pour la vente : l'espace porte un nom deterministe, et tout le reste
+        // (acces, controleur, jauge, passages) en decoule. Les passages sont le cas le plus parlant --
+        // ils n'ont aucune unicite, donc un rechargement doublerait la frequentation affichee.
+        $deja = $manager->getRepository(Espace::class)->findOneBy(['nom' => 'Zone ' . $libellePrefixe]);
+
+        if ($deja instanceof Espace) {
+            return;
+        }
+
         $espaceSocle = (new Espace())->setNom('Zone ' . $libellePrefixe)->setEtablissement($etablissement)->setType('zone');
         $manager->persist($espaceSocle);
 
@@ -271,11 +306,11 @@ final class L11Fixtures extends Fixture
             ['canal', 'Canal', TypeAxeAnalytique::Canal, null, true],
         ];
         foreach ($axes as [$code, $libelle, $type, $granularites, $estExtension]) {
-            $axe = (new AxeAnalytique())->setCode($code)->setLibelle($libelle)->setType($type)->setEstExtension($estExtension);
+            $axe = $this->parCode($manager, AxeAnalytique::class, $code);
+            $axe->setLibelle($libelle)->setType($type)->setEstExtension($estExtension);
             if ($granularites !== null) {
                 $axe->setGranularites($granularites);
             }
-            $manager->persist($axe);
         }
 
         $indicateurs = [
@@ -290,17 +325,156 @@ final class L11Fixtures extends Fixture
             ['FOND_CAISSE', 'Fond de caisse théorique', UniteIndicateur::Euro, ModeCalculIndicateur::Somme, NatureIndicateur::Instantane, SourceModuleIndicateur::Compta],
         ];
         foreach ($indicateurs as [$code, $libelle, $unite, $modeCalcul, $nature, $sourceModule]) {
-            $indicateur = (new Indicateur())
-                ->setCode($code)
-                ->setLibelle($libelle)
+            $indicateur = $this->parCode($manager, Indicateur::class, $code);
+            $indicateur->setLibelle($libelle)
                 ->setUnite($unite)
                 ->setModeCalcul($modeCalcul)
                 ->setNature($nature)
                 ->setSourceModule($sourceModule)
                 ->setSeuilCompletudeMinutes(60);
-            $manager->persist($indicateur);
         }
 
         $manager->flush();
+    }
+
+    /**
+     * Un rôle existant plutôt qu'un doublon.
+     *
+     * `Role.nom` porte une unicité **globale** : recharger les fixtures sur une base qui les a déjà
+     * échoue sur « Duplicate entry ». Ce n'est pas théorique — c'est exactement ce qui m'a empêché de
+     * régénérer les données de démonstration de la préproduction le 24/08, et qui a fini par me faire
+     * effacer les rattachements de droits de trente-quatre rôles.
+     *
+     * Le harnais de test ne voit jamais ce cas : il recrée le schéma depuis les entités à chaque classe
+     * de test, donc les fixtures partent toujours d'une base vide. Les deux mondes ne se croisent pas.
+     */
+    private function roleNomme(ObjectManager $manager, string $nom): Role
+    {
+        $existant = $manager->getRepository(Role::class)->findOneBy(['nom' => $nom]);
+
+        if ($existant instanceof Role) {
+            return $existant;
+        }
+
+        $role = (new Role())->setNom($nom);
+        $manager->persist($role);
+
+        return $role;
+    }
+
+    /**
+     * **Dix-neuf types construits ici, un seul était gardé.**
+     *
+     * Le rechargement complet a buté sur `Duplicate entry 'site' for key 'uniq_axe_code'` — les axes
+     * analytiques. `claude-G`, qui déroulait la chaîne, l'a relevé ainsi : *« troisième fixture
+     * d'affilée où la famille corrigée est celle qui criait. Ce n'est plus une coïncidence, c'est la
+     * signature de la méthode "suivre les erreurs". »* Elle avait raison les trois fois.
+     *
+     * D'où l'inventaire, et non la correction de la ligne 266 : hiérarchie, permissions, onze
+     * affectations, profils, utilisateurs, référentiel, ventes de démonstration, topologie d'accès.
+     *
+     * **Les plus dangereux ne crient pas.** Les `Passage` n'ont aucune unicité : un rechargement
+     * doublerait la fréquentation affichée dans le reporting, sans une seule erreur. Idem pour la vente
+     * de démonstration, dont le doublement fausserait le chiffre d'affaires — c'est-à-dire exactement
+     * les chiffres que ce module existe pour produire. Une fixture de reporting qui se duplique
+     * n'abîme pas des données de test : elle **ment sur les indicateurs**.
+     *
+     * @template T of object
+     * @param class-string<T> $classe
+     * @return T
+     */
+    private function parNom(ObjectManager $manager, string $classe, string $nom): object
+    {
+        $existant = $manager->getRepository($classe)->findOneBy(['nom' => $nom]);
+
+        if ($existant !== null) {
+            return $existant;
+        }
+
+        $entite = new $classe();
+        $entite->setNom($nom);
+        $manager->persist($entite);
+
+        return $entite;
+    }
+
+    /**
+     * @template T of object
+     * @param class-string<T> $classe
+     * @return T
+     */
+    private function parCode(ObjectManager $manager, string $classe, string $code): object
+    {
+        $existant = $manager->getRepository($classe)->findOneBy(['code' => $code]);
+
+        if ($existant !== null) {
+            return $existant;
+        }
+
+        $entite = new $classe();
+        $entite->setCode($code);
+        $manager->persist($entite);
+
+        return $entite;
+    }
+
+    private function permissionNommee(ObjectManager $manager, string $module, string $action): Permission
+    {
+        $existante = $manager->getRepository(Permission::class)
+            ->findOneBy(['module' => $module, 'action' => $action]);
+
+        if ($existante instanceof Permission) {
+            return $existante;
+        }
+
+        $permission = (new Permission())->setModule($module)->setAction($action);
+        $manager->persist($permission);
+
+        return $permission;
+    }
+
+    /**
+     * `Affectation` ne porte aucune unicité en base : un rechargement empile des doublons sans lever,
+     * et les droits effectifs se calculent en parcourant ces lignes. Trouvé par `claude-G`.
+     */
+    private function affectationUnique(
+        ObjectManager $manager,
+        Utilisateur $utilisateur,
+        Role $role,
+        Etablissement $etablissement,
+    ): void {
+        $existante = $manager->getRepository(Affectation::class)->findOneBy([
+            'utilisateur' => $utilisateur,
+            'role' => $role,
+            'etablissement' => $etablissement,
+        ]);
+
+        if ($existante instanceof Affectation) {
+            return;
+        }
+
+        $manager->persist(
+            (new Affectation())->setUtilisateur($utilisateur)->setRole($role)->setEtablissement($etablissement)
+        );
+    }
+
+    private function profilExploitant(
+        ObjectManager $manager,
+        string $siren,
+        TypeExploitant $type,
+        Etablissement $etablissement,
+    ): void {
+        $existant = $manager->getRepository(ProfilExploitant::class)->findOneBy(['siren' => $siren]);
+
+        if ($existant instanceof ProfilExploitant) {
+            return;
+        }
+
+        $profil = (new ProfilExploitant())
+            ->setType($type)
+            ->setSiren($siren)
+            ->setEtablissementPrincipal($etablissement);
+        $profil->addEtablissementRattache($etablissement);
+        $manager->persist($profil);
     }
 }

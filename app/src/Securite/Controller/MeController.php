@@ -6,7 +6,9 @@ namespace App\Securite\Controller;
 
 use App\Fonctionnalite\Service\Fonctionnalites;
 use App\Securite\Entity\Utilisateur;
+use App\Organisation\Service\EditorTenantResolver;
 use App\Securite\Service\CalculateurDroits;
+use App\Platform\Notification\ExpediteurCourriel;
 use App\Securite\Service\ContexteEtablissement;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -27,6 +29,8 @@ final class MeController
         private readonly ContexteEtablissement $contexte,
         private readonly CalculateurDroits $calculateur,
         private readonly Fonctionnalites $fonctionnalites,
+        private readonly EditorTenantResolver $editeur,
+        private readonly ExpediteurCourriel $courriel,
     ) {
     }
 
@@ -48,7 +52,27 @@ final class MeController
             'actif' => $utilisateur->isActif(),
             'etablissementActif' => $etablissementActif !== null ? (string) $etablissementActif : null,
             'droits' => $this->calculateur->codesEffectifs($utilisateur, $etablissementActif),
+            // ⚠ « SUIS-JE CHEZ MOI OU CHEZ UN CLIENT ? » — la question que se pose un employé de
+            // l'éditeur entré sur le site d'un client par un accès d'assistance. Sans réponse à
+            // l'écran, il écrira une note au mauvais endroit, ou lira des chiffres en croyant que
+            // ce sont ceux de l'éditeur.
+            //
+            // `isEditor()` ne lève jamais et rend `false` quand la désignation manque : fermé par
+            // défaut. Un déploiement sans `EDITOR_TENANT_ID` n'a donc pas d'éditeur — ce qui est
+            // exact, et non « tout le monde l'est ».
+            'estEditeur' => $this->editeur->isEditor($etablissementActifEntite),
             'capacitesActives' => $etablissementActifEntite !== null ? $this->fonctionnalites->actives($etablissementActifEntite) : [],
+            // ⚠ « MON COURRIEL PARTIRA-T-IL ? » — un fait d'exécution, pas une constante.
+            //
+            // Six services de ce dépôt composent un courriel et n'envoient rien : le transport
+            // nul avale tout en silence. Les écrans doivent cesser de promettre ces envois — et
+            // surtout cesser de le promettre le jour où ils marcheront. Une phrase écrite en dur
+            // serait vraie aujourd'hui et fausse au premier expéditeur branché, en six
+            // exemplaires, sans que rien ne relie la phrase à ce qui l'a rendue fausse.
+            //
+            // Publié ici parce qu'aucun écran ne se rend avant d'avoir reçu `/me` — c'est un
+            // garde-fou du dépôt, donc l'information est disponible partout, gratuitement.
+            'envoiCourrielBranche' => $this->courriel->estBranche(),
         ]);
     }
 }

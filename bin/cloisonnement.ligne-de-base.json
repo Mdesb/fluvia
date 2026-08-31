@@ -12,219 +12,10 @@
     ],
     "scelle": {
         "gelee_le": "2026-08-20",
-        "plafond": 45,
+        "plafond": 16,
         "reference": "MESSAGES.md — claude-A -> claude-C, 19/08, option (a) et ses 3 conditions"
     },
     "entrees": {
-        "Compta/State/MarquerImpayeeRegieProcessor.php": {
-            "depuis": "2026-08-20",
-            "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
-            "raison": "Antérieur au gel de la ligne de base : non revu, non corrigé. N'est PAS une dérogation permanente — à ouvrir par le propriétaire du module.",
-            "sensibilite": "argent",
-            "entites_resolues": [
-                "VenteImpayeeRegie"
-            ],
-            "ecrit": true
-        },
-        "Compta/State/PayFipRetourProcessor.php": {
-            "depuis": "2026-08-20",
-            "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
-            "raison": "Antérieur au gel de la ligne de base : non revu, non corrigé. N'est PAS une dérogation permanente — à ouvrir par le propriétaire du module.",
-            "sensibilite": "argent",
-            "entites_resolues": [
-                "BordereauPayFiP"
-            ],
-            "ecrit": true
-        },
-        "Compta/State/PreparerEReportingProcessor.php": {
-            "depuis": "2026-08-20",
-            "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
-            "raison": "Antérieur au gel de la ligne de base : non revu, non corrigé. N'est PAS une dérogation permanente — à ouvrir par le propriétaire du module.",
-            "sensibilite": "argent",
-            "entites_resolues": [
-                "ProfilExploitant"
-            ],
-            "ecrit": true
-        },
-        "Compta/State/RapprochementPcaProvider.php": {
-            "depuis": "2026-08-20",
-            "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
-            "raison": "Antérieur au gel de la ligne de base : non revu, non corrigé. N'est PAS une dérogation permanente — à ouvrir par le propriétaire du module.",
-            "sensibilite": "argent",
-            "entites_resolues": [
-                "EtalementPca",
-                "MouvementPca"
-            ],
-            "ecrit": false
-        },
-        "Crm/State/FicheClient360Provider.php": {
-            "depuis": "2026-08-20",
-            "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
-            "raison": "Antérieur au gel de la ligne de base : non revu, non corrigé. N'est PAS une dérogation permanente — à ouvrir par le propriétaire du module.",
-            "sensibilite": "argent",
-            "entites_resolues": [
-                "Beneficiaire",
-                "Client",
-                "Consentement",
-                "PorteMonnaieVirtuel"
-            ],
-            "ecrit": false
-        },
-        "Crm/State/PmvMouvementsProvider.php": {
-            "depuis": "2026-08-20",
-            "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
-            "raison": "Antérieur au gel de la ligne de base : non revu, non corrigé. N'est PAS une dérogation permanente — à ouvrir par le propriétaire du module.",
-            "sensibilite": "argent",
-            "entites_resolues": [
-                "Client",
-                "MouvementPmv",
-                "PorteMonnaieVirtuel"
-            ],
-            "ecrit": false
-        },
-        "Crm/State/PmvProvider.php": {
-            "depuis": "2026-08-20",
-            "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
-            "raison": "Antérieur au gel de la ligne de base : non revu, non corrigé. N'est PAS une dérogation permanente — à ouvrir par le propriétaire du module.",
-            "sensibilite": "argent",
-            "entites_resolues": [
-                "Client",
-                "PorteMonnaieVirtuel"
-            ],
-            "ecrit": false
-        },
-        "Facturation/State/EmettreFactureJustificativeProcessor.php": {
-            "depuis": "2026-08-20",
-            "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
-            "raison": "Antérieur au gel de la ligne de base : non revu, non corrigé. N'est PAS une dérogation permanente — à ouvrir par le propriétaire du module.",
-            "sensibilite": "argent",
-            "entites_resolues": [
-                "Vente"
-            ],
-            "ecrit": true
-        },
-        "Facturation/State/FactureRenduProvider.php": {
-            "depuis": "2026-08-20",
-            "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
-            "raison": "Antérieur au gel de la ligne de base : non revu, non corrigé. N'est PAS une dérogation permanente — à ouvrir par le propriétaire du module.",
-            "sensibilite": "argent",
-            "entites_resolues": [
-                "Facture"
-            ],
-            "ecrit": false
-        },
-        "Padel/State/RetournerMaterielProcessor.php": {
-            "depuis": "2026-08-20",
-            "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
-            "raison": "Antérieur au gel de la ligne de base : non revu, non corrigé. N'est PAS une dérogation permanente — à ouvrir par le propriétaire du module.",
-            "sensibilite": "argent",
-            "entites_resolues": [
-                "CautionMateriel"
-            ],
-            "ecrit": true
-        },
-        "Patinoire/State/RetournerPatinsProcessor.php": {
-            "depuis": "2026-08-20",
-            "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
-            "raison": "Antérieur au gel de la ligne de base : non revu, non corrigé. N'est PAS une dérogation permanente — à ouvrir par le propriétaire du module.",
-            "sensibilite": "argent",
-            "entites_resolues": [
-                "CautionLocationPatins"
-            ],
-            "ecrit": true
-        },
-        "Patinoire/State/ValiderRetenueProcessor.php": {
-            "depuis": "2026-08-20",
-            "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
-            "raison": "Antérieur au gel de la ligne de base : non revu, non corrigé. N'est PAS une dérogation permanente — à ouvrir par le propriétaire du module.",
-            "sensibilite": "argent",
-            "entites_resolues": [
-                "CautionLocationPatins",
-                "MouvementCaution"
-            ],
-            "ecrit": true
-        },
-        "Reservation/State/EmettreVenteNoShowProcessor.php": {
-            "depuis": "2026-08-20",
-            "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
-            "raison": "Antérieur au gel de la ligne de base : non revu, non corrigé. N'est PAS une dérogation permanente — à ouvrir par le propriétaire du module.",
-            "sensibilite": "argent",
-            "entites_resolues": [
-                "SessionCaisse"
-            ],
-            "ecrit": true
-        },
-        "Stock/State/RattacherProduitProcessor.php": {
-            "depuis": "2026-08-20",
-            "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
-            "raison": "Antérieur au gel de la ligne de base : non revu, non corrigé. N'est PAS une dérogation permanente — à ouvrir par le propriétaire du module.",
-            "sensibilite": "argent",
-            "entites_resolues": [
-                "Produit"
-            ],
-            "ecrit": true
-        },
-        "Vente/State/VerifierChaineProcessor.php": {
-            "depuis": "2026-08-20",
-            "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
-            "raison": "Antérieur au gel de la ligne de base : non revu, non corrigé. N'est PAS une dérogation permanente — à ouvrir par le propriétaire du module.",
-            "sensibilite": "argent",
-            "entites_resolues": [
-                "PointDeVente"
-            ],
-            "ecrit": true
-        },
-        "Acces/State/PassageManuelProcessor.php": {
-            "depuis": "2026-08-20",
-            "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
-            "raison": "Antérieur au gel de la ligne de base : non revu, non corrigé. N'est PAS une dérogation permanente — à ouvrir par le propriétaire du module.",
-            "sensibilite": "acces",
-            "entites_resolues": [
-                "Equipement"
-            ],
-            "ecrit": true
-        },
-        "Acces/State/PassageNonNominatifProcessor.php": {
-            "depuis": "2026-08-20",
-            "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
-            "raison": "Antérieur au gel de la ligne de base : non revu, non corrigé. N'est PAS une dérogation permanente — à ouvrir par le propriétaire du module.",
-            "sensibilite": "acces",
-            "entites_resolues": [
-                "Equipement"
-            ],
-            "ecrit": true
-        },
-        "Acces/State/SynchroProcessor.php": {
-            "depuis": "2026-08-20",
-            "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
-            "raison": "Antérieur au gel de la ligne de base : non revu, non corrigé. N'est PAS une dérogation permanente — à ouvrir par le propriétaire du module.",
-            "sensibilite": "acces",
-            "entites_resolues": [
-                "Controleur"
-            ],
-            "ecrit": true
-        },
-        "Personnel/State/AnnulerDeclarationIncidentBadgeProcessor.php": {
-            "depuis": "2026-08-20",
-            "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
-            "raison": "Antérieur au gel de la ligne de base : non revu, non corrigé. N'est PAS une dérogation permanente — à ouvrir par le propriétaire du module.",
-            "sensibilite": "acces",
-            "entites_resolues": [
-                "BadgeStaff",
-                "DeclarationPerteVol"
-            ],
-            "ecrit": true
-        },
-        "Personnel/State/DeclarerIncidentBadgeProcessor.php": {
-            "depuis": "2026-08-20",
-            "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
-            "raison": "Antérieur au gel de la ligne de base : non revu, non corrigé. N'est PAS une dérogation permanente — à ouvrir par le propriétaire du module.",
-            "sensibilite": "acces",
-            "entites_resolues": [
-                "DeclarationPerteVol"
-            ],
-            "ecrit": true
-        },
         "Sport/State/DeclencherSosProcessor.php": {
             "depuis": "2026-08-20",
             "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
@@ -276,46 +67,6 @@
             "entites_resolues": [],
             "ecrit": true
         },
-        "Support/State/EscaladerTicketProcessor.php": {
-            "depuis": "2026-08-20",
-            "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
-            "raison": "Antérieur au gel de la ligne de base : non revu, non corrigé. N'est PAS une dérogation permanente — à ouvrir par le propriétaire du module.",
-            "sensibilite": "donnees-personnelles",
-            "entites_resolues": [
-                "Utilisateur"
-            ],
-            "ecrit": true
-        },
-        "Support/State/LierArticleTicketProcessor.php": {
-            "depuis": "2026-08-20",
-            "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
-            "raison": "Antérieur au gel de la ligne de base : non revu, non corrigé. N'est PAS une dérogation permanente — à ouvrir par le propriétaire du module.",
-            "sensibilite": "donnees-personnelles",
-            "entites_resolues": [
-                "ArticleAide"
-            ],
-            "ecrit": true
-        },
-        "Support/State/ReaffecterTicketProcessor.php": {
-            "depuis": "2026-08-20",
-            "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
-            "raison": "Antérieur au gel de la ligne de base : non revu, non corrigé. N'est PAS une dérogation permanente — à ouvrir par le propriétaire du module.",
-            "sensibilite": "donnees-personnelles",
-            "entites_resolues": [
-                "Utilisateur"
-            ],
-            "ecrit": true
-        },
-        "Support/State/RechercheArticleAideProvider.php": {
-            "depuis": "2026-08-20",
-            "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
-            "raison": "Antérieur au gel de la ligne de base : non revu, non corrigé. N'est PAS une dérogation permanente — à ouvrir par le propriétaire du module.",
-            "sensibilite": "donnees-personnelles",
-            "entites_resolues": [
-                "ArticleAide"
-            ],
-            "ecrit": false
-        },
         "Fonctionnalite/State/ResolutionEtablissementCheminTrait.php": {
             "depuis": "2026-08-20",
             "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
@@ -346,17 +97,6 @@
                 "SousQuotaSalle"
             ],
             "ecrit": false
-        },
-        "Offre/State/ActionsDeMasseProcessor.php": {
-            "depuis": "2026-08-20",
-            "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
-            "raison": "Antérieur au gel de la ligne de base : non revu, non corrigé. N'est PAS une dérogation permanente — à ouvrir par le propriétaire du module.",
-            "sensibilite": "autre",
-            "entites_resolues": [
-                "Categorie",
-                "Produit"
-            ],
-            "ecrit": true
         },
         "Offre/State/ConvertirProcessor.php": {
             "depuis": "2026-08-20",
@@ -429,35 +169,6 @@
             ],
             "ecrit": true
         },
-        "Piscine/State/AttribuerCasierProcessor.php": {
-            "depuis": "2026-08-20",
-            "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
-            "raison": "Antérieur au gel de la ligne de base : non revu, non corrigé. N'est PAS une dérogation permanente — à ouvrir par le propriétaire du module.",
-            "sensibilite": "autre",
-            "entites_resolues": [
-                "BraceletEtanche"
-            ],
-            "ecrit": true
-        },
-        "Reservation/State/AjouterParticipantProcessor.php": {
-            "depuis": "2026-08-20",
-            "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
-            "raison": "Antérieur au gel de la ligne de base : non revu, non corrigé. N'est PAS une dérogation permanente — à ouvrir par le propriétaire du module.",
-            "sensibilite": "autre",
-            "entites_resolues": [],
-            "ecrit": true
-        },
-        "Reservation/State/ArbitrerConflitRecurrenceProcessor.php": {
-            "depuis": "2026-08-20",
-            "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
-            "raison": "Antérieur au gel de la ligne de base : non revu, non corrigé. N'est PAS une dérogation permanente — à ouvrir par le propriétaire du module.",
-            "sensibilite": "autre",
-            "entites_resolues": [
-                "Reservation",
-                "Ressource"
-            ],
-            "ecrit": true
-        },
         "Reservation/State/EmargerProcessor.php": {
             "depuis": "2026-08-20",
             "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
@@ -467,16 +178,62 @@
                 "Emargement"
             ],
             "ecrit": true
+        }
+    },
+    "scelle_resolution": {
+        "gelee_le": "2026-08-23",
+        "plafond": 7,
+        "reference": "MESSAGES.md — saut d'affectation, IDOR n7 (23/08)"
+    },
+    "entrees_resolution": {
+        "Boutique/State/CreerCompteClientProcessor.php:48:$panier": {
+            "depuis": "2026-08-23",
+            "accorde_par": "claude-C — revelees par le saut d'affectation du 23/08, pas par un relachement",
+            "raison": "Le controle de perimetre ne porte pas sur l'entite resolue. Rendue visible par l'amelioration de detection (identifiant client transitant par une variable), pas nouvellement introduite. A ouvrir par le proprietaire du module.",
+            "sensibilite": "argent",
+            "module": "Boutique"
         },
-        "Reservation/State/InscrireListeAttenteProcessor.php": {
-            "depuis": "2026-08-20",
-            "accorde_par": "claude-C (C4), sur validation de claude-A (intégrateur) — MESSAGES.md du 19/08",
-            "raison": "Antérieur au gel de la ligne de base : non revu, non corrigé. N'est PAS une dérogation permanente — à ouvrir par le propriétaire du module.",
+        "Boutique/State/IdentifierPanierProcessor.php:70:$utilisateur": {
+            "depuis": "2026-08-23",
+            "accorde_par": "claude-C — revelees par le saut d'affectation du 23/08, pas par un relachement",
+            "raison": "Le controle de perimetre ne porte pas sur l'entite resolue. Rendue visible par l'amelioration de detection (identifiant client transitant par une variable), pas nouvellement introduite. A ouvrir par le proprietaire du module.",
+            "sensibilite": "argent",
+            "module": "Boutique"
+        },
+        "Padel/State/DeclarerNiveauProcessor.php:73:$niveauJoueur": {
+            "depuis": "2026-08-23",
+            "accorde_par": "claude-C — revelees par le saut d'affectation du 23/08, pas par un relachement",
+            "raison": "Le controle de perimetre ne porte pas sur l'entite resolue. Rendue visible par l'amelioration de detection (identifiant client transitant par une variable), pas nouvellement introduite. A ouvrir par le proprietaire du module.",
+            "sensibilite": "argent",
+            "module": "Padel"
+        },
+        "Acces/State/EnrolerTerminalProcessor.php:50:(résolution non affectée)": {
+            "depuis": "2026-08-23",
+            "accorde_par": "claude-C — revelees par le saut d'affectation du 23/08, pas par un relachement",
+            "raison": "Le controle de perimetre ne porte pas sur l'entite resolue. Rendue visible par l'amelioration de detection (identifiant client transitant par une variable), pas nouvellement introduite. A ouvrir par le proprietaire du module.",
+            "sensibilite": "acces",
+            "module": "Acces"
+        },
+        "Acces/State/TerminalPassageProcessor.php:73:(résolution non affectée)": {
+            "depuis": "2026-08-23",
+            "accorde_par": "claude-C — revelees par le saut d'affectation du 23/08, pas par un relachement",
+            "raison": "Le controle de perimetre ne porte pas sur l'entite resolue. Rendue visible par l'amelioration de detection (identifiant client transitant par une variable), pas nouvellement introduite. A ouvrir par le proprietaire du module.",
+            "sensibilite": "acces",
+            "module": "Acces"
+        },
+        "Personnel/State/EmissionBadgeStaffProcessor.php:58:$employe": {
+            "depuis": "2026-08-23",
+            "accorde_par": "claude-C — revelees par le saut d'affectation du 23/08, pas par un relachement",
+            "raison": "Le controle de perimetre ne porte pas sur l'entite resolue. Rendue visible par l'amelioration de detection (identifiant client transitant par une variable), pas nouvellement introduite. A ouvrir par le proprietaire du module.",
+            "sensibilite": "acces",
+            "module": "Personnel"
+        },
+        "Reporting/State/RapportPlanifieProcessor.php:55:$rapport": {
+            "depuis": "2026-08-23",
+            "accorde_par": "claude-C — revelees par le saut d'affectation du 23/08, pas par un relachement",
+            "raison": "Le controle de perimetre ne porte pas sur l'entite resolue. Rendue visible par l'amelioration de detection (identifiant client transitant par une variable), pas nouvellement introduite. A ouvrir par le proprietaire du module.",
             "sensibilite": "autre",
-            "entites_resolues": [
-                "ListeAttente"
-            ],
-            "ecrit": true
+            "module": "Reporting"
         }
     }
 }

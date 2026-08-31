@@ -13,4 +13,11 @@ enum NatureFacture: string
 {
     case Facture = 'facture';
     case Avoir = 'avoir';
+    /**
+     * Facture d'ACOMPTE : elle constate une somme percue d'avance, avec sa TVA.
+     *
+     * Elle est deduite de la facture de solde a l'emission de celle-ci, ligne a ligne. Sans cette
+     * deduction, le client serait facture deux fois -- une fois l'acompte, une fois le total.
+     */
+    case Acompte = 'acompte';
 }

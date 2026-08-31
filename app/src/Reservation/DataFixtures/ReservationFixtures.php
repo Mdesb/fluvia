@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Reservation\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\Compta\DataFixtures\ComptaFixtures;
 use App\Crm\DataFixtures\CrmFixtures;
 use App\Crm\Entity\Beneficiaire;
@@ -40,6 +41,8 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
  */
 final class ReservationFixtures extends Fixture implements DependentFixtureInterface
 {
+    use FixturesIdempotentes;
+
     public const RESSOURCE_TERRAIN_LIBELLE = 'Terrain padel n°1';
     public const RESSOURCE_BASSIN_LIBELLE = 'Bassin sportif';
     public const RESSOURCE_LIGNE_1_LIBELLE = 'Ligne 1';
@@ -79,8 +82,7 @@ final class ReservationFixtures extends Fixture implements DependentFixtureInter
         }
 
         // --- Permissions reservation.* + octroi complet à l'administrateur (RG-SOCLE-02/03) ---
-        $permReservationTout = (new Permission())->setModule('reservation')->setAction('*');
-        $manager->persist($permReservationTout);
+        $permReservationTout = $this->permission($manager, 'reservation', '*');
         $actions = [
             'lire', 'lire_soi', 'gerer_ressource', 'gerer_creneau', 'parametrer_annulation',
             'reserver', 'reserver_soi', 'annuler', 'annuler_soi', 'emarger', 'exonerer', 'forcer',
@@ -88,8 +90,7 @@ final class ReservationFixtures extends Fixture implements DependentFixtureInter
         ];
         $permissions = [];
         foreach ($actions as $action) {
-            $permissions[$action] = (new Permission())->setModule('reservation')->setAction($action);
-            $manager->persist($permissions[$action]);
+            $permissions[$action] = $this->permission($manager, 'reservation', $action);
         }
 
         $roleAdmin = $manager->getRepository(Role::class)->findOneBy(['nom' => 'Administrateur groupe']);
@@ -98,34 +99,34 @@ final class ReservationFixtures extends Fixture implements DependentFixtureInter
         }
 
         // --- Rôle « Gestionnaire de planning » (§3 spec) ---
-        $roleGestionnaire = (new Role())->setNom('Gestionnaire de planning');
+        $roleGestionnaire = $this->roleNomme($manager, 'Gestionnaire de planning');
         foreach (['lire', 'gerer_ressource', 'gerer_creneau', 'parametrer_annulation', 'arbitrer_recurrence'] as $action) {
             $roleGestionnaire->addPermission($permissions[$action]);
         }
         $manager->persist($roleGestionnaire);
         $gestionnaire = $this->utilisateur($manager, self::GESTIONNAIRE_EMAIL, self::GESTIONNAIRE_MDP, 'Gestionnaire Planning');
-        $manager->persist((new Affectation())->setUtilisateur($gestionnaire)->setRole($roleGestionnaire)->setEtablissement($etabA));
+        $this->affectation($manager, $gestionnaire, $roleGestionnaire, $etabA);
 
         // --- Rôle « Agent d'accueil » (§3 spec) ---
-        $roleAgent = (new Role())->setNom('Agent d\'accueil réservation');
+        $roleAgent = $this->roleNomme($manager, 'Agent d\'accueil réservation');
         foreach (['lire', 'reserver', 'annuler', 'facturer'] as $action) {
             $roleAgent->addPermission($permissions[$action]);
         }
         $manager->persist($roleAgent);
         $agent = $this->utilisateur($manager, self::AGENT_EMAIL, self::AGENT_MDP, 'Agent Accueil Réservation');
-        $manager->persist((new Affectation())->setUtilisateur($agent)->setRole($roleAgent)->setEtablissement($etabA));
+        $this->affectation($manager, $agent, $roleAgent, $etabA);
 
         // --- Rôle « Opérateur de ressource » (§3 spec) ---
-        $roleOperateur = (new Role())->setNom('Opérateur de ressource');
+        $roleOperateur = $this->roleNomme($manager, 'Opérateur de ressource');
         foreach (['lire', 'emarger'] as $action) {
             $roleOperateur->addPermission($permissions[$action]);
         }
         $manager->persist($roleOperateur);
         $operateur = $this->utilisateur($manager, self::OPERATEUR_EMAIL, self::OPERATEUR_MDP, 'Opérateur Ressource');
-        $manager->persist((new Affectation())->setUtilisateur($operateur)->setRole($roleOperateur)->setEtablissement($etabA));
+        $this->affectation($manager, $operateur, $roleOperateur, $etabA);
 
         // --- Rôle « Client/Organisateur » (§3 spec, lié au client CRM payeur de démonstration) ---
-        $roleClient = (new Role())->setNom('Client Organisateur Réservation');
+        $roleClient = $this->roleNomme($manager, 'Client Organisateur Réservation');
         foreach (['lire_soi', 'reserver_soi', 'annuler_soi'] as $action) {
             $roleClient->addPermission($permissions[$action]);
         }
@@ -135,9 +136,26 @@ final class ReservationFixtures extends Fixture implements DependentFixtureInter
         if ($payeur instanceof Client) {
             $clientUtilisateur->setClientLie($payeur->getId());
         }
-        $manager->persist((new Affectation())->setUtilisateur($clientUtilisateur)->setRole($roleClient)->setEtablissement($etabA));
+        $this->affectation($manager, $clientUtilisateur, $roleClient, $etabA);
 
         // --- Ressources de types variés (RG-M5-03/05/08) ---
+        // ── LE BLOC DE DEMONSTRATION NE SE POSE QU'UNE FOIS ──────────────────────────────────
+        //
+        // `reservation_ressource` NE PORTE AUCUNE CONTRAINTE D'UNICITE : un second chargement n'y
+        // echoue pas, il double les six ressources en silence. C'est le cas que seul le comptage de
+        // lignes attrape -- et celui qui fausse le plus de choses en aval, puisque les creneaux et
+        // les reservations s'y rattachent.
+        //
+        // La sentinelle est la premiere ressource de l'etablissement A : elle est creee juste apres,
+        // inconditionnellement.
+        if ($manager->getRepository(Ressource::class)
+            ->findOneBy(['etablissement' => $etabA, 'codeType' => 'terrain']) !== null
+        ) {
+            $manager->flush();
+
+            return;
+        }
+
         $terrain = (new Ressource())->setEtablissement($etabA)->setCodeType('terrain')
             ->setLibelle(self::RESSOURCE_TERRAIN_LIBELLE)->setCapacitePropre(4);
         $manager->persist($terrain);
@@ -204,8 +222,65 @@ final class ReservationFixtures extends Fixture implements DependentFixtureInter
         $manager->flush();
     }
 
+    /**
+     * Cherche avant de creer. `Role.nom` porte une unicite **globale** et quatorze fixtures creent
+     * des roles : sans cette garde, un chargement complet echoue sur « Duplicate entry ». Le harnais
+     * de test ne le voyait pas — il repart d'une base vide a chaque classe. Le seul geste qui revele
+     * le defaut est de charger **deux fois**.
+     */
+    private function roleNomme(ObjectManager $manager, string $nom): Role
+    {
+        $existant = $manager->getRepository(Role::class)->findOneBy(['nom' => $nom]);
+        if ($existant instanceof Role) {
+            return $existant;
+        }
+
+        $role = (new Role())->setNom($nom);
+        $manager->persist($role);
+
+        return $role;
+    }
+
+    /** Le couple (module, action) porte lui aussi une unicite. */
+    private function permission(ObjectManager $manager, string $module, string $action): Permission
+    {
+        $existante = $manager->getRepository(Permission::class)->findOneBy(['module' => $module, 'action' => $action]);
+        if ($existante instanceof Permission) {
+            return $existante;
+        }
+
+        $permission = $this->permissionNommee($manager, $module, $action);
+        $manager->persist($permission);
+
+        return $permission;
+    }
+
+    /**
+     * `Affectation` ne porte pas d'unicite en base : un second chargement ne casserait pas, il
+     * **empilerait** des doublons — silencieux, et faux, puisque les droits effectifs se calculent
+     * en parcourant les affectations.
+     */
+    private function affectation(ObjectManager $manager, Utilisateur $utilisateur, Role $role, Etablissement $etablissement): void
+    {
+        $existante = $manager->getRepository(Affectation::class)->findOneBy([
+            'utilisateur' => $utilisateur,
+            'role' => $role,
+            'etablissement' => $etablissement,
+        ]);
+        if ($existante instanceof Affectation) {
+            return;
+        }
+
+        $this->affectationUnique($manager, $utilisateur, $role, $etablissement);
+    }
+
     private function utilisateur(ObjectManager $manager, string $email, string $motDePasse, string $nom): Utilisateur
     {
+        $existant = $manager->getRepository(Utilisateur::class)->findOneBy(['email' => $email]);
+        if ($existant instanceof Utilisateur) {
+            return $existant;
+        }
+
         $utilisateur = (new Utilisateur())->setEmail($email)->setNom($nom)->setActif(true);
         $utilisateur->setMotDePasse($this->hasher->hashPassword($utilisateur, $motDePasse));
         $manager->persist($utilisateur);

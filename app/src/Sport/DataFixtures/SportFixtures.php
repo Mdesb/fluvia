@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Sport\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\Acces\DataFixtures\AccesFixtures;
 use App\Acces\Entity\DroitAcces;
 use App\Acces\Entity\EspaceAcces;
@@ -37,6 +38,8 @@ use Doctrine\Persistence\ObjectManager;
  */
 final class SportFixtures extends Fixture implements DependentFixtureInterface
 {
+    use FixturesIdempotentes;
+
     public const ADHERENT_IBAN_DEMO = 'FR7630006000011234567890189';
     public const ADHERENT_TITULAIRE = 'Marie Dupont';
     public const MONTANT_MENSUEL_CENTIMES = 3990;
@@ -62,7 +65,7 @@ final class SportFixtures extends Fixture implements DependentFixtureInterface
             'configurer_nocturne', 'superviser_nocturne', 'lire_soi',
             'pause_demander_soi', 'resilier_demander_soi',
         ] as $action) {
-            $perm = (new Permission())->setModule('sport')->setAction($action);
+            $perm = $this->permissionNommee($manager, 'sport', $action);
             $manager->persist($perm);
             $perms[$action] = $perm;
         }
@@ -88,6 +91,20 @@ final class SportFixtures extends Fixture implements DependentFixtureInterface
             return;
         }
 
+        // ── LE BLOC DE DEMONSTRATION NE SE POSE QU'UNE FOIS ──────────────────────────────────
+        //
+        // Tout ce qui suit est un jeu de donnees coherent, pas un referentiel : le reposer sur une
+        // base qui l'a deja ecraserait ce qui a ete corrige a la main depuis, ou le dupliquerait
+        // pour les entites sans contrainte d'unicite -- silencieusement.
+        //
+        // Les permissions, les roles et les affectations restent AU-DESSUS : ils doivent etre
+        // rejoues a chaque chargement, sans quoi un droit ajoute au code n'atteindrait jamais une
+        // base existante.
+        if ($manager->getRepository(\App\Recouvrement\Entity\PolitiqueRecouvrement::class)->findOneBy([]) !== null) {
+            $manager->flush();
+
+            return;
+        }
         // --- Politique de recouvrement par défaut (établissement A, moteur partagé App\Recouvrement) ---
         $politique = (new PolitiqueRecouvrement())
             ->setEtablissement($etabA)

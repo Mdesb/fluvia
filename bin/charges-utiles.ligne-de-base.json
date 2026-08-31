@@ -1,0 +1,204 @@
+{
+    "_lisez_moi": [
+        "Ligne de base GELEE du garde-fou n7 — conformite des charges utiles au catalogue.",
+        "",
+        "Les 49 entrees du catalogue decrivent leur charge en langage courant (amount, lines,",
+        "customer?), pas en noms de cles PHP. Les emissions anterieures au 24/08 ne peuvent donc",
+        "PAS y correspondre : ce ne sont pas des defauts, c est un contrat redige avant que la",
+        "convention de nommage des cles n existe.",
+        "",
+        "Ce qui est tenu, c est le NEUF. Toute emission ajoutee apres le 24/08 doit porter les cles",
+        "que le catalogue annonce — quitte a mettre le catalogue a jour d abord (D2, le contrat",
+        "precede le code).",
+        "",
+        "Origine : le 24/08, booking.cancelled a ete emis avec slotId/leadTimeMinutes/withinFreeWindow",
+        "quand le catalogue annoncait slot/lead_time. Rien ne l a vu — RG-PLAT-06 ne lit que les noms",
+        "d evenements, jamais la colonne charge utile."
+    ],
+    "scelle": {
+        "plafond": 11
+    },
+    "entrees": {
+        "document.stored": {
+            "fichier": "Dms/Service/UploadDocumentHandler.php",
+            "emises": [
+                "category",
+                "versionId",
+                "mimeType",
+                "sizeBytes",
+                "sourceModule"
+            ],
+            "manquantes": [
+                "mime",
+                "size"
+            ],
+            "en_trop": [
+                "mimeType",
+                "sizeBytes"
+            ]
+        },
+        "document.version_added": {
+            "fichier": "Dms/Service/ReplaceVersionHandler.php",
+            "emises": [
+                "versionId",
+                "versionNumber",
+                "previousVersionId",
+                "mimeType",
+                "sizeBytes"
+            ],
+            "manquantes": [
+                "mime",
+                "size"
+            ],
+            "en_trop": [
+                "mimeType",
+                "sizeBytes"
+            ]
+        },
+        "expense_report.approved": {
+            "fichier": "Finance/ExpenseReport/Service/SubmitExpenseReportHandler.php",
+            "emises": [
+                "amountCents",
+                "approverId"
+            ],
+            "manquantes": [
+                "report",
+                "amount"
+            ],
+            "en_trop": [
+                "amountCents",
+                "approverId"
+            ]
+        },
+        "expense_report.reimbursed": {
+            "fichier": "Finance/ExpenseReport/Service/ReimburseExpenseReportHandler.php",
+            "emises": [
+                "amountCents",
+                "date"
+            ],
+            "manquantes": [
+                "report",
+                "amount",
+                "method"
+            ],
+            "en_trop": [
+                "amountCents",
+                "date"
+            ]
+        },
+        "expense_report.submitted": {
+            "fichier": "Finance/ExpenseReport/Service/SubmitExpenseReportHandler.php",
+            "emises": [
+                "employeeId",
+                "amountCents"
+            ],
+            "manquantes": [
+                "employee",
+                "amount"
+            ],
+            "en_trop": [
+                "employeeId",
+                "amountCents"
+            ]
+        },
+        "supplier_invoice.approved": {
+            "fichier": "Finance/SupplierInvoice/Service/SupplierInvoiceApprovalHandler.php",
+            "emises": [
+                "amountInclTaxCents",
+                "dueDate"
+            ],
+            "manquantes": [
+                "invoice",
+                "amount"
+            ],
+            "en_trop": [
+                "amountInclTaxCents",
+                "dueDate"
+            ]
+        },
+        "supplier_invoice.disputed": {
+            "fichier": "Finance/SupplierInvoice/Service/SupplierInvoiceDisputeHandler.php",
+            "emises": [
+                "reason"
+            ],
+            "manquantes": [
+                "invoice"
+            ],
+            "en_trop": []
+        },
+        "supplier_invoice.paid": {
+            "fichier": "Finance/SupplierInvoice/Service/SupplierPaymentHandler.php",
+            "emises": [
+                "amountInclTaxCents",
+                "date",
+                "paymentMethod"
+            ],
+            "manquantes": [
+                "invoice",
+                "amount",
+                "method"
+            ],
+            "en_trop": [
+                "amountInclTaxCents",
+                "date",
+                "paymentMethod"
+            ]
+        },
+        "supplier_invoice.recorded": {
+            "fichier": "Finance/SupplierInvoice/State/SupplierInvoiceProcessor.php",
+            "emises": [
+                "supplierId",
+                "supplierInvoiceNumber",
+                "amountInclTaxCents",
+                "source"
+            ],
+            "manquantes": [
+                "supplier",
+                "amount",
+                "ocr"
+            ],
+            "en_trop": [
+                "supplierId",
+                "supplierInvoiceNumber",
+                "amountInclTaxCents",
+                "source"
+            ]
+        },
+        "treasury.discrepancy_detected": {
+            "fichier": "Finance/Treasury/Command/DetecterEcartsCommand.php",
+            "emises": [
+                "bankAccountId",
+                "amountCents",
+                "unmatchedSinceDays"
+            ],
+            "manquantes": [
+                "amount",
+                "statement"
+            ],
+            "en_trop": [
+                "bankAccountId",
+                "amountCents",
+                "unmatchedSinceDays"
+            ]
+        },
+        "treasury.reconciliation_completed": {
+            "fichier": "Finance/Treasury/Service/BankReconciliationHandler.php",
+            "emises": [
+                "bankAccountId",
+                "ledgerLineId",
+                "amountCents",
+                "reconciliationCode"
+            ],
+            "manquantes": [
+                "statement",
+                "matched_count"
+            ],
+            "en_trop": [
+                "bankAccountId",
+                "ledgerLineId",
+                "amountCents",
+                "reconciliationCode"
+            ]
+        }
+    }
+}

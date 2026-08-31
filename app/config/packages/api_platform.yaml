@@ -5,10 +5,70 @@ api_platform:
     # attributs #[ApiFilter] des entités hors src/Entity soient enregistrés (resource_class_directories).
     mapping:
         paths:
+            # ⚠ AJOUTES LE 30/08 APRES MESURE : leurs `#[ApiFilter]` etaient DECLARES ET MUETS.
+            #
+            #     GET /api/bank_statement_lines?statementImport=<uuid inexistant>  →  1 ligne, pas 0
+            #
+            # `AttributeFilterPass` ne parcourt que cette liste. Un dossier absent ne casse pas la
+            # ressource — il rend ses filtres muets, donc la collection sort ENTIERE. Une liste vide
+            # intrigue ; une liste pleine, jamais. Neuf declarations etaient dans ce cas, sur des
+            # factures fournisseurs, des notes de frais et des lignes de releve bancaire.
+            - '%kernel.project_dir%/src/Finance/ExpenseReport/Entity'
+            - '%kernel.project_dir%/src/Finance/SupplierInvoice/Entity'
+            - '%kernel.project_dir%/src/Finance/Treasury/Entity'
+            # `Caution/Entity` ne declare aujourd'hui aucun filtre : la ligne est posee pour que la
+            # premiere declaration ne soit pas muette a son tour, sans qu'on ait a s'en souvenir.
+            - '%kernel.project_dir%/src/Caution/Entity'
             - '%kernel.project_dir%/src/Organisation/Entity'
+            # Le centre de notification (Maxime, 29/08). ⚠ Ajoute APRES avoir bute dessus : les
+            # routes de la ressource fonctionnaient sans cette ligne, mais `AttributeFilterPass`
+            # parcourt CETTE liste — les filtres n'etaient donc jamais enregistres, et
+            # `?order[horodatage]=desc` rendait le meme ordre que `asc`. Un dossier absent ne casse
+            # pas la ressource, il rend ses filtres muets.
+            - '%kernel.project_dir%/src/Platform/Entity'
+            # ⚠ C9 — cette liste est une liste blanche qui echoue EN SILENCE : un dossier absent
+            # rend ses ressources introuvables, sans erreur ni avertissement. Ajoute le 28/08 avec
+            # l'ouverture de structure (`Structure`, recherche d'entreprise + creation en un geste).
+            - '%kernel.project_dir%/src/Organisation/ApiResource'
+            # C9 : `mapping.paths` est une LISTE BLANCHE explicite, dossier par dossier — rien n'est
+            # decouvert automatiquement. Un module neuf est donc invisible de l'API tant que personne
+            # n'ajoute sa ligne, et RIEN ne le signale : pas d'erreur au demarrage, la route n'existe
+            # simplement pas. Diagnostic pose par claude-D le 24/08 en butant dessus (`No route found
+            # for GET /editor/plans`), apres quatre jours ou C9 est restee BLOCKED faute de savoir
+            # quel etait le mecanisme reel.
+            #
+            # ET LA LISTE EST FAIL-HARD : un dossier liste qui n existe pas fait echouer la
+            # CONSTRUCTION DU CONTENEUR, donc toute la suite de tests de toutes les sessions. On
+            # n ajoute donc jamais une ligne par anticipation — le dossier doit exister sur main
+            # AVANT sa ligne. Verifie a mes depens le 24/08 : 32 erreurs.
+            - '%kernel.project_dir%/src/Subscription/ApiResource'
+            - '%kernel.project_dir%/src/Subscription/Entity'
             - '%kernel.project_dir%/src/Securite/Entity'
             - '%kernel.project_dir%/src/Audit/Entity'
             - '%kernel.project_dir%/src/Offre/Entity'
+            - '%kernel.project_dir%/src/Marketing/Entity'
+            # Absent jusqu'au 27/08, et le symptome n'etait pas une route manquante.
+            # Les routes CRUD des options repondaient 200 ; c'est le SERVICE DE FILTRE qui
+            # n'existait pas -- `debug:container` en comptait 4 pour Offre (dossier liste) et
+            # 0 pour OptionProduit. API Platform ignore alors le parametre `groupeOption` et
+            # RENVOIE LA COLLECTION ENTIERE : sur la fiche produit, chacun des deux groupes
+            # listait les cinq valeurs des deux groupes.
+            #
+            # C9 dit qu'un module absent de cette liste est invisible de l'API. Le cas des
+            # options montre le mode de defaillance intermediaire, et c'est le pire des deux :
+            # les routes marchent, le filtre est silencieusement inerte, et la reponse EN DIT
+            # PLUS que demande. Une route absente se remarque au premier appel ; un filtre
+            # absent rend des donnees plausibles, que personne ne va verifier.
+            - '%kernel.project_dir%/src/OptionProduit/Entity'
+            # Sans cette ligne, les routes du module Legal n'existent pas du tout -- et les
+            # mentions obligatoires d'une boutique ne sont pas une fonctionnalite qu'on peut
+            # livrer a moitie. Voir le commentaire d'OptionProduit ci-dessus pour le mode de
+            # defaillance intermediaire, plus vicieux : routes presentes, filtres inertes.
+            - '%kernel.project_dir%/src/Legal/Entity'
+            # Gestion de projet : un travail HUMAIN, decide en interne, avec une echeance --
+            # a ne pas confondre avec `Platform\ScheduledTask` (tache machine, cron) ni avec un
+            # ticket `Support` (arrive de l'exterieur, se ferme quand on a repondu).
+            - '%kernel.project_dir%/src/Project/Entity'
             - '%kernel.project_dir%/src/Caisse/Entity'
             - '%kernel.project_dir%/src/Vente/Entity'
             - '%kernel.project_dir%/src/Vente/Nf525/Entity'
@@ -44,7 +104,41 @@ api_platform:
             - '%kernel.project_dir%/src/Autorisation/Entity'
             - '%kernel.project_dir%/src/Facturation/Entity'
             - '%kernel.project_dir%/src/Ocr/Entity'
+            - '%kernel.project_dir%/src/Dms/Entity'
+            - '%kernel.project_dir%/src/SmartFlow/Entity'
+            - '%kernel.project_dir%/src/RevenueRecovery/Entity'
+            # Planning d'ouverture (28/08). Les deux dossiers existent sur disque AVANT cette ligne :
+            # la liste est fail-hard, un dossier absent fait echouer la construction du conteneur,
+            # donc la suite de tests de toutes les sessions.
+            - '%kernel.project_dir%/src/Opening/Entity'
+            - '%kernel.project_dir%/src/Opening/ApiResource'
+            # Agenda (28/08). Meme regle que ci-dessus : les dossiers existent avant leur ligne.
+            - '%kernel.project_dir%/src/Calendar/Entity'
+            - '%kernel.project_dir%/src/Calendar/ApiResource'
     defaults:
         stateless: true
         cache_headers:
             vary: ['Content-Type', 'Authorization', 'Origin']
+
+        # ── PAGINATION ──────────────────────────────────────────────────────────────────────────
+        #
+        # Aucun bloc `pagination` n'etait declare : les defauts du composant s'appliquaient, soit
+        # 30 lignes par page et un client sans droit de le changer. Toutes les collections etaient
+        # donc coupees a 30, et les ~350 `itemsPerPage` ecrits dans `frontend/src/api/client.js`
+        # etaient sans effet -- verifie sur le reseau, `?itemsPerPage=1` rendait la liste entiere.
+        #
+        # Invisible chez nous : la plus grosse collection de la preproduction compte 15 lignes. Le
+        # defaut n'apparait qu'au trente-et-unieme enregistrement, c'est-a-dire chez le premier
+        # vrai client et jamais dans nos tests.
+        #
+        # `client_items_per_page` accorde au code ce qu'il demandait deja. `maximum_items_per_page`
+        # borne ce qu'on peut reclamer : sans plafond, une boucle qui demande cent mille lignes
+        # emporte la memoire du serveur.
+        #
+        # ⚠ Un plafond, quel qu'il soit, tronque en SILENCE. `totalItems` est dans chaque reponse
+        # et c'est a l'ecran de le comparer au nombre de lignes recues : c'est la seule chose qui
+        # transforme « il en manque » en « il en manque, et voici combien ».
+        pagination_enabled: true
+        pagination_client_items_per_page: true
+        pagination_items_per_page: 100
+        pagination_maximum_items_per_page: 500

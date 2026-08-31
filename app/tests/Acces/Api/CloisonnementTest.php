@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Acces\Api;
 
+use App\Acces\DataFixtures\AccesFixtures;
 use App\Acces\Entity\EspaceAcces;
 use App\Acces\Entity\Terminal;
 use App\Acces\Enum\StatutTerminal;
@@ -48,9 +49,23 @@ final class CloisonnementTest extends AccesApiTestCase
         self::assertResponseIsSuccessful();
         $liste = $client->getResponse()->toArray();
         $membres = $liste['member'] ?? $liste['hydra:member'];
-        foreach ($membres as $item) {
-            self::assertNotSame('Espace Accès B privé', $item['libelle']);
-        }
+
+        // ⚠ LES DEUX MOITIÉS, ET UNE SEULE NE PROUVE RIEN.
+        //
+        // La boucle seule passait sur une liste VIDE — le corps ne s'exécute jamais, zéro
+        // assertion jouée, test vert. Elle était donc également vraie d'un filtre cassé,
+        // d'un en-tête d'établissement mal passé, ou d'une fixture qui ne crée plus rien.
+        // Le défaut d'uuid en BINARY(16) rendait une liste vide à 145 filtres : ce test
+        // était vert pendant tout ce temps.
+        //
+        // On affirme donc ce que A VOIT avant d'affirmer ce qu'il ne voit pas.
+        $libelles = array_column($membres, 'libelle');
+        self::assertContains(
+            AccesFixtures::ESPACE_LIBELLE,
+            $libelles,
+            'A doit voir SES espaces : sans cette moitié, le test est vrai d\'un point d\'entrée mort.',
+        );
+        self::assertNotContains('Espace Accès B privé', $libelles);
     }
 
     /**

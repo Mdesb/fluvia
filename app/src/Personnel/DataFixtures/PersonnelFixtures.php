@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Personnel\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\Acces\Entity\Controleur;
 use App\Acces\Entity\EspaceAcces;
 use App\Acces\Entity\Equipement;
@@ -35,6 +36,8 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
  */
 final class PersonnelFixtures extends Fixture
 {
+    use FixturesIdempotentes;
+
     public const GROUPE_NOM = 'Groupe Démo Personnel';
     public const REGION_NOM = 'Région Démo Personnel';
     public const ETAB_A_NOM = 'Site A Personnel';
@@ -60,47 +63,37 @@ final class PersonnelFixtures extends Fixture
     {
         $this->creerSequenceSnapshotSiManquante($manager);
 
-        $groupe = (new Groupe())->setNom(self::GROUPE_NOM);
-        $manager->persist($groupe);
-        $region = (new Region())->setNom(self::REGION_NOM)->setGroupe($groupe);
-        $manager->persist($region);
+        $groupe = $this->parNom($manager, Groupe::class, self::GROUPE_NOM);
 
-        $etabA = (new Etablissement())->setNom(self::ETAB_A_NOM)->setRegion($region)->setActif(true);
-        $etabB = (new Etablissement())->setNom(self::ETAB_B_NOM)->setRegion($region)->setActif(true);
-        $manager->persist($etabA);
-        $manager->persist($etabB);
+        $region = $this->parNom($manager, Region::class, self::REGION_NOM);
+        $region->setGroupe($groupe);
+
+        $etabA = $this->parNom($manager, Etablissement::class, self::ETAB_A_NOM);
+        $etabA->setRegion($region)->setActif(true);
+
+        $etabB = $this->parNom($manager, Etablissement::class, self::ETAB_B_NOM);
+        $etabB->setRegion($region)->setActif(true);
 
         // --- Topologie Accès (établissement A) : espace + contrôleur + tourniquet d'entrée ---
-        $espaceSocle = (new Espace())->setNom('Zone Personnel A')->setEtablissement($etabA)->setType('zone');
-        $manager->persist($espaceSocle);
+        $espaceSocle = $this->parNom($manager, Espace::class, 'Zone Personnel A');
+        $espaceSocle->setEtablissement($etabA)->setType('zone');
 
-        $espaceAcces = (new EspaceAcces())
-            ->setLibelle(self::ESPACE_LIBELLE)
-            ->setEspaceSocle($espaceSocle)
-            ->setSeuilFmi(100)
-            ->setModeSeuil(ModeSeuil::Blocage);
-        $manager->persist($espaceAcces);
+        $espaceAcces = $this->parLibelle($manager, EspaceAcces::class, self::ESPACE_LIBELLE);
+        $espaceAcces->setEspaceSocle($espaceSocle)->setSeuilFmi(100)->setModeSeuil(ModeSeuil::Blocage);
 
-        $controleur = (new Controleur())
-            ->setLibelle(self::CONTROLEUR_LIBELLE)
-            ->setEspace($espaceAcces)
-            ->setItboxRef('ITBOX-PERSONNEL-A1');
-        $manager->persist($controleur);
+        $controleur = $this->parLibelle($manager, Controleur::class, self::CONTROLEUR_LIBELLE);
+        $controleur->setEspace($espaceAcces)->setItboxRef('ITBOX-PERSONNEL-A1');
 
-        $equipement = (new Equipement())
-            ->setLibelle(self::EQUIPEMENT_LIBELLE)
-            ->setControleur($controleur)
+        $equipement = $this->parLibelle($manager, Equipement::class, self::EQUIPEMENT_LIBELLE);
+        $equipement->setControleur($controleur)
             ->setType(TypeEquipement::Tourniquet)
             ->setSens(SensEquipement::Entree);
-        $manager->persist($equipement);
 
         // --- Permissions personnel.* + acces.bloquer_support (délégation, §3 spec) ---
         $actions = ['gerer_employe', 'gerer_qualification', 'gerer_badge', 'gerer_planning', 'valider_absence', 'lire', 'lire_soi', 'declarer_absence_soi'];
         $perms = [];
         foreach ($actions as $action) {
-            $perm = (new Permission())->setModule('personnel')->setAction($action);
-            $manager->persist($perm);
-            $perms[$action] = $perm;
+            $perms[$action] = $this->permissionNommee($manager, 'personnel', $action);
         }
         $permBloquerSupport = $this->permissionAcces($manager, 'bloquer_support');
         // `acces.ingestion` : permet aux tests de passage badge staff (CA-9) de soumettre un
@@ -108,25 +101,25 @@ final class PersonnelFixtures extends Fixture
         // (RG-PERSO-07) — en production, ce compte technique serait dédié au contrôleur/ITBOX.
         $permIngestion = $this->permissionAcces($manager, 'ingestion');
 
-        $roleRh = (new Role())->setNom('Personnel Administrateur RH');
+        $roleRh = $this->roleNomme($manager, 'Personnel Administrateur RH');
         $roleRh->addPermission($perms['gerer_employe'])->addPermission($perms['gerer_qualification'])
             ->addPermission($perms['gerer_badge'])->addPermission($perms['lire'])
             ->addPermission($permIngestion);
         $manager->persist($roleRh);
 
-        $rolePlanning = (new Role())->setNom('Personnel Responsable Planning');
+        $rolePlanning = $this->roleNomme($manager, 'Personnel Responsable Planning');
         $rolePlanning->addPermission($perms['gerer_planning'])->addPermission($perms['valider_absence'])->addPermission($perms['lire']);
         $manager->persist($rolePlanning);
 
-        $roleLecture = (new Role())->setNom('Personnel Lecture seule');
+        $roleLecture = $this->roleNomme($manager, 'Personnel Lecture seule');
         $roleLecture->addPermission($perms['lire']);
         $manager->persist($roleLecture);
 
-        $roleAccueil = (new Role())->setNom('Personnel Agent Accueil');
+        $roleAccueil = $this->roleNomme($manager, 'Personnel Agent Accueil');
         $roleAccueil->addPermission($permBloquerSupport);
         $manager->persist($roleAccueil);
 
-        $roleEmploye = (new Role())->setNom('Personnel Employé (soi)');
+        $roleEmploye = $this->roleNomme($manager, 'Personnel Employé (soi)');
         $roleEmploye->addPermission($perms['lire_soi'])->addPermission($perms['declarer_absence_soi']);
         $manager->persist($roleEmploye);
 
@@ -136,13 +129,13 @@ final class PersonnelFixtures extends Fixture
         $utilisateurAccueil = $this->creerUtilisateur($manager, self::EMAIL_ACCUEIL, 'Agent Accueil');
         $utilisateurSoi = $this->creerUtilisateur($manager, self::EMAIL_EMPLOYE_SOI, 'Employé Soi-même');
 
-        $manager->persist((new Affectation())->setUtilisateur($utilisateurRh)->setRole($roleRh)->setEtablissement($etabA));
-        $manager->persist((new Affectation())->setUtilisateur($utilisateurRh)->setRole($roleRh)->setEtablissement($etabB));
-        $manager->persist((new Affectation())->setUtilisateur($utilisateurPlanning)->setRole($rolePlanning)->setEtablissement($etabA));
-        $manager->persist((new Affectation())->setUtilisateur($utilisateurPlanning)->setRole($rolePlanning)->setEtablissement($etabB));
-        $manager->persist((new Affectation())->setUtilisateur($utilisateurLecture)->setRole($roleLecture)->setEtablissement($etabA));
-        $manager->persist((new Affectation())->setUtilisateur($utilisateurAccueil)->setRole($roleAccueil)->setEtablissement($etabA));
-        $manager->persist((new Affectation())->setUtilisateur($utilisateurSoi)->setRole($roleEmploye)->setEtablissement($etabA));
+        $this->affectationUnique($manager, $utilisateurRh, $roleRh, $etabA);
+        $this->affectationUnique($manager, $utilisateurRh, $roleRh, $etabB);
+        $this->affectationUnique($manager, $utilisateurPlanning, $rolePlanning, $etabA);
+        $this->affectationUnique($manager, $utilisateurPlanning, $rolePlanning, $etabB);
+        $this->affectationUnique($manager, $utilisateurLecture, $roleLecture, $etabA);
+        $this->affectationUnique($manager, $utilisateurAccueil, $roleAccueil, $etabA);
+        $this->affectationUnique($manager, $utilisateurSoi, $roleEmploye, $etabA);
 
         $manager->flush();
     }
@@ -184,7 +177,7 @@ final class PersonnelFixtures extends Fixture
             return $existante;
         }
 
-        $permission = (new Permission())->setModule('acces')->setAction($action);
+        $permission = $this->permissionNommee($manager, 'acces', $action);
         $manager->persist($permission);
 
         return $permission;
@@ -192,10 +185,143 @@ final class PersonnelFixtures extends Fixture
 
     private function creerUtilisateur(ObjectManager $manager, string $email, string $nom): Utilisateur
     {
+        $existant = $manager->getRepository(Utilisateur::class)->findOneBy(['email' => $email]);
+
+        if ($existant instanceof Utilisateur) {
+            return $existant->setNom($nom)->setActif(true);
+        }
+
+        // Le mot de passe n'est posé qu'à la création : le rejouer écraserait un mot de passe changé
+        // depuis, et réécrirait un hachage pour rien à chaque chargement.
         $utilisateur = (new Utilisateur())->setEmail($email)->setNom($nom)->setActif(true);
         $utilisateur->setMotDePasse($this->hasher->hashPassword($utilisateur, self::MDP));
         $manager->persist($utilisateur);
 
         return $utilisateur;
+    }
+
+    /**
+     * Un rôle existant plutôt qu'un doublon.
+     *
+     * `Role.nom` porte une unicité **globale** : recharger les fixtures sur une base qui les a déjà
+     * échoue sur « Duplicate entry ». Ce n'est pas théorique — c'est exactement ce qui m'a empêché de
+     * régénérer les données de démonstration de la préproduction le 24/08, et qui a fini par me faire
+     * effacer les rattachements de droits de trente-quatre rôles.
+     *
+     * Le harnais de test ne voit jamais ce cas : il recrée le schéma depuis les entités à chaque classe
+     * de test, donc les fixtures partent toujours d'une base vide. Les deux mondes ne se croisent pas.
+     */
+    private function roleNomme(ObjectManager $manager, string $nom): Role
+    {
+        $existant = $manager->getRepository(Role::class)->findOneBy(['nom' => $nom]);
+
+        if ($existant instanceof Role) {
+            return $existant;
+        }
+
+        $role = (new Role())->setNom($nom);
+        $manager->persist($role);
+
+        return $role;
+    }
+
+    /**
+     * **Les sept familles qui manquaient, trouvées en inventoriant et non en suivant les échecs.**
+     *
+     * Ce fichier avait servi de patron pour `roleNomme()` — et ne gardait que ses **rôles**. Le
+     * rechargement complet a buté dessus sur `personnel-gerer_employe`, signalé par `claude-G`, qui a
+     * ajouté : *« la fixture modèle a été corrigée sur la famille qui criait, et l'inventaire n'a pas
+     * été fait sur les six autres. »*
+     *
+     * Onze types construits ici. Quatre étaient gardés. Les sept autres sont traités d'un coup, parce
+     * que corriger celui qui bloque fait avancer le curseur d'un cran sans rendre la fixture idempotente
+     * — c'est la troisième fois de la journée que ce motif se vérifie (D52).
+     *
+     * **Et quatre d'entre eux ne criaient pas** : `Groupe`, `Region`, `Etablissement`, plus toute la
+     * topologie d'accès. Aucune contrainte d'unicité métier, donc aucune erreur au second chargement —
+     * juste un second « Site A Personnel » et un second tourniquet. `Etablissement` est le pire : c'est
+     * la frontière de cloisonnement à laquelle tout est rattaché.
+     *
+     * @template T of object
+     * @param class-string<T> $classe
+     * @return T
+     */
+    private function parNom(ObjectManager $manager, string $classe, string $nom): object
+    {
+        $existant = $manager->getRepository($classe)->findOneBy(['nom' => $nom]);
+
+        if ($existant !== null) {
+            return $existant;
+        }
+
+        $entite = new $classe();
+        $entite->setNom($nom);
+        $manager->persist($entite);
+
+        return $entite;
+    }
+
+    /**
+     * Même chose pour la topologie d'accès, qui s'identifie par un libellé et non par un nom.
+     *
+     * @template T of object
+     * @param class-string<T> $classe
+     * @return T
+     */
+    private function parLibelle(ObjectManager $manager, string $classe, string $libelle): object
+    {
+        $existant = $manager->getRepository($classe)->findOneBy(['libelle' => $libelle]);
+
+        if ($existant !== null) {
+            return $existant;
+        }
+
+        $entite = new $classe();
+        $entite->setLibelle($libelle);
+        $manager->persist($entite);
+
+        return $entite;
+    }
+
+    private function permissionNommee(ObjectManager $manager, string $module, string $action): Permission
+    {
+        $existante = $manager->getRepository(Permission::class)
+            ->findOneBy(['module' => $module, 'action' => $action]);
+
+        if ($existante instanceof Permission) {
+            return $existante;
+        }
+
+        $permission = (new Permission())->setModule($module)->setAction($action);
+        $manager->persist($permission);
+
+        return $permission;
+    }
+
+    /**
+     * **`Affectation` ne porte aucune unicité en base.** Un second chargement n'échoue donc pas : il
+     * empile des doublons, silencieusement. Et les droits effectifs d'un utilisateur se calculent en
+     * parcourant ses affectations — un doublon n'est pas cosmétique, c'est un calcul de droits sur des
+     * données fausses. Trouvé par `claude-G`.
+     */
+    private function affectationUnique(
+        ObjectManager $manager,
+        Utilisateur $utilisateur,
+        Role $role,
+        Etablissement $etablissement,
+    ): void {
+        $existante = $manager->getRepository(Affectation::class)->findOneBy([
+            'utilisateur' => $utilisateur,
+            'role' => $role,
+            'etablissement' => $etablissement,
+        ]);
+
+        if ($existante instanceof Affectation) {
+            return;
+        }
+
+        $manager->persist(
+            (new Affectation())->setUtilisateur($utilisateur)->setRole($role)->setEtablissement($etablissement)
+        );
     }
 }

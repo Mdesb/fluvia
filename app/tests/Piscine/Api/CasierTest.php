@@ -7,6 +7,7 @@ namespace App\Tests\Piscine\Api;
 use App\Organisation\Entity\Etablissement;
 use App\Piscine\Entity\BraceletEtanche;
 use App\Piscine\Entity\Casier;
+use App\Piscine\Entity\CautionCasier;
 use App\Piscine\Entity\RelanceCasier;
 use App\Piscine\Enum\EtatCasier;
 use App\DataFixtures\SocleFixtures;
@@ -137,6 +138,83 @@ final class CasierTest extends PiscineApiTestCase
 
         $client->request('POST', '/api/piscine/casiers/' . $this->idCasier() . '/forcer', $entete + ['json' => ['motif' => '']]);
         self::assertResponseStatusCodeSame(422, 'RG-SOCLE-07 : le motif est requis pour un forçage journalisé.');
+    }
+
+    /**
+     * Non-régression du n°12 (D8, corrigé le 23/08), trouvé par claude-C en auditant le seau qu'il
+     * jugeait lui-même le moins prioritaire — et qui contenait un défaut touchant de l'argent.
+     *
+     * **Le défaut.** `bracelet` arrive dans le corps de la requête et était résolu par un `find()`
+     * direct, sans aucun contrôle de périmètre. Le fichier ne contenait pas une seule occurrence
+     * d'établissement.
+     *
+     * **Pourquoi il était invisible.** Le casier hôte, lui, **est** bien cloisonné (`read: true`). On
+     * croyait donc l'opération protégée parce que sa ressource principale l'était — c'est exactement
+     * le raisonnement qui laisse passer cette famille de défauts.
+     *
+     * **Pourquoi ce n'est pas « juste un casier ».** Le handler crée une `CautionCasier` avec un moyen
+     * d'encaissement et un montant. On rattachait donc le bracelet d'un établissement au casier d'un
+     * autre, **et on posait de l'argent dessus**.
+     *
+     * **Deux assertions.** Le 404 — et non 403, qui confirmerait l'existence du bracelet ailleurs — et
+     * surtout l'**absence de caution créée** : un refus partiel qui laisserait passer l'encaissement
+     * serait pire qu'aucun contrôle.
+     */
+    public function testBraceletDunAutreEtablissementNouvrePasLeCasierEtNencaisseRien(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+
+        $casierDeA = $this->creerCasierLibre();
+        $braceletDeB = $this->creerBraceletSurEtablissement('RFID-CASIER-INTRUS', SocleFixtures::ETAB_B_NOM);
+
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $cautionsAvant = (int) $em->getRepository(CautionCasier::class)->createQueryBuilder('c')
+            ->select('COUNT(c.id)')->getQuery()->getSingleScalarResult();
+
+        $reponse = $client->request('POST', '/api/piscine/casiers/' . $casierDeA . '/attribuer', $entete + [
+            'json' => ['bracelet' => '/api/bracelet_etanches/' . $braceletDeB],
+        ]);
+
+        self::assertSame(
+            404,
+            $reponse->getStatusCode(),
+            'Un bracelet d\'un autre établissement doit être introuvable, jamais interdit : '
+            . (string) $reponse->getContent(false),
+        );
+
+        $em->clear();
+        $cautionsApres = (int) $em->getRepository(CautionCasier::class)->createQueryBuilder('c')
+            ->select('COUNT(c.id)')->getQuery()->getSingleScalarResult();
+
+        self::assertSame(
+            $cautionsAvant,
+            $cautionsApres,
+            'Aucune caution ne doit avoir été encaissée sur un rattachement refusé.',
+        );
+    }
+
+    /** Contrôle positif : sur son propre établissement, la même attribution passe (cf. CA-9 ci-dessus). */
+    private function creerBraceletSurEtablissement(string $identifiant, string $nomEtablissement): string
+    {
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $etab = $em->getRepository(Etablissement::class)->findOneBy(['nom' => $nomEtablissement]);
+        self::assertNotNull($etab);
+
+        $support = (new \App\Acces\Entity\Support())
+            ->setIdentifiant($identifiant)
+            ->setType(\App\Acces\Enum\TypeSupport::Rfid)
+            ->setEtablissement($etab);
+        $em->persist($support);
+
+        $bracelet = (new BraceletEtanche())
+            ->setSupport($support)
+            ->setRoles([BraceletEtanche::ROLE_ACCES, BraceletEtanche::ROLE_CASIER]);
+        $em->persist($bracelet);
+        $em->flush();
+
+        return (string) $bracelet->getId();
     }
 
     private function creerCasierLibre(): string

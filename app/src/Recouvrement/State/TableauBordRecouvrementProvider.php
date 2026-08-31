@@ -37,7 +37,7 @@ final class TableauBordRecouvrementProvider implements ProviderInterface
 
         $vue->nbEnRepresentation = $this->compterIncidents($etablissement, StatutIncidentImpaye::Representation);
         $vue->nbEnRecouvrement = $this->compterIncidents($etablissement, StatutIncidentImpaye::Recouvrement);
-        $nbResolus = $this->compterIncidents($etablissement, StatutIncidentImpaye::Resolu);
+        $vue->nbResolus = $this->compterIncidents($etablissement, StatutIncidentImpaye::Resolu);
 
         $vue->nbAccesBloques = (int) $this->em->createQueryBuilder()
             ->select('COUNT(i.id)')
@@ -47,7 +47,7 @@ final class TableauBordRecouvrementProvider implements ProviderInterface
             ->setParameter('etab', $etablissement->getId(), 'uuid')
             ->getQuery()->getSingleScalarResult();
 
-        $totalIncidents = $vue->nbEnRepresentation + $vue->nbEnRecouvrement + $nbResolus;
+        $totalIncidents = $vue->nbEnRepresentation + $vue->nbEnRecouvrement + $vue->nbResolus;
         $nbApp1Clic = (int) $this->em->createQueryBuilder()
             ->select('COUNT(i.id)')
             ->from(IncidentImpaye::class, 'i')
@@ -57,6 +57,15 @@ final class TableauBordRecouvrementProvider implements ProviderInterface
             ->setParameter('canal', CanalResolutionImpaye::App1Clic->value)
             ->getQuery()->getSingleScalarResult();
 
+        // ⚠ 0.0 SUR UN ENSEMBLE VIDE N'EST PAS UN TAUX, C'EST UNE ABSENCE DE TAUX.
+        //
+        // La valeur est conservee a 0.0 pour ne pas changer le type d'un champ deja consomme, mais
+        // elle ne veut alors RIEN dire. C'est pour cela que les trois comptes sont exposes : un
+        // appelant qui affiche ce pourcentage sans verifier que leur somme est non nulle annonce
+        // « 0 % regles par le client seul » a un etablissement qui n'a jamais eu d'impaye.
+        //
+        // Si un jour plus personne ne lit ce champ sans le denominateur, le rendre nullable serait
+        // meilleur : l'absence de donnee se dirait a la source au lieu de se deduire.
         $vue->tauxResolutionSelfService = $totalIncidents > 0 ? round($nbApp1Clic / $totalIncidents, 4) : 0.0;
 
         return $vue;

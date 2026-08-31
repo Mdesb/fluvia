@@ -8,8 +8,8 @@ use ApiPlatform\Doctrine\Orm\Extension\QueryCollectionExtensionInterface;
 use ApiPlatform\Doctrine\Orm\Extension\QueryItemExtensionInterface;
 use ApiPlatform\Doctrine\Orm\Util\QueryNameGeneratorInterface;
 use ApiPlatform\Metadata\Operation;
-use App\Securite\Entity\Affectation;
 use App\Securite\Entity\Utilisateur;
+use App\Securite\Service\ContexteEtablissement;
 use App\Stock\Entity\ArticleStock;
 use App\Stock\Entity\CatalogueFournisseur;
 use App\Stock\Entity\CommandeAchat;
@@ -24,7 +24,6 @@ use App\Stock\Entity\MouvementStock;
 use App\Stock\Entity\ParametrageStock;
 use App\Stock\Entity\ReceptionAchat;
 use App\Stock\Entity\TransfertStock;
-use Doctrine\ORM\Query\Expr\Join;
 use Doctrine\ORM\QueryBuilder;
 use Symfony\Bundle\SecurityBundle\Security;
 
@@ -55,6 +54,7 @@ final class PerimetreStockExtension implements QueryCollectionExtensionInterface
 
     public function __construct(
         private readonly Security $security,
+        private readonly ContexteEtablissement $contexte,
     ) {
     }
 
@@ -91,7 +91,7 @@ final class PerimetreStockExtension implements QueryCollectionExtensionInterface
         }
 
         if ($resourceClass === TransfertStock::class) {
-            $this->restreindreTransfert($queryBuilder, $utilisateur);
+            $this->restreindreTransfert($queryBuilder);
 
             return;
         }
@@ -107,35 +107,62 @@ final class PerimetreStockExtension implements QueryCollectionExtensionInterface
             $alias = $nouvelAlias;
         }
 
+        // ── L'AXE EST L'ÉTABLISSEMENT ACTIF ──────────────────────────────────────────────────
+        //
+        // Bascule du 28/08. Le filtre portait sur le PÉRIMÈTRE du lecteur : un exploitant affecté à
+        // plusieurs sites voyait les données de tous, sous le titre d'un seul. Constaté à l'écran —
+        // un site créé le matin même, sans caisse, annonçait une session de caisse ouverte, celle
+        // du voisin, et sa pastille « prêt à vendre » s'allumait.
+        //
+        // L'écran porte un sélecteur d'établissement et titre ses pages du site actif : les données
+        // le suivent. Le périmètre dit ce qu'on a le DROIT de voir ; l'actif dit ce qu'on REGARDE.
+        //
+        // Le droit reste vérifié ailleurs, et c'est ce qui rend la bascule sûre :
+        // `ContexteEtablissement::idActif()` ne fait que lire l'en-tête — c'est un sélecteur, pas
+        // une preuve — mais `CalculateurDroits::codesEffectifs()` ne retient que les affectations
+        // portant SUR cet établissement, donc un en-tête hors périmètre ne donne aucun droit et le
+        // voter refuse avant que cette requête n'existe. Éprouvé par `AxeEtablissementActifTest`.
+        $actif = $this->contexte->idActif();
+        if ($actif === null) {
+            // Fermeture par défaut : une liste vide se remarque, une liste inter-établissements a
+            // seulement l'air plus longue.
+            $queryBuilder->andWhere('1 = 0');
+
+            return;
+        }
+
         $queryBuilder
-            ->innerJoin(
-                Affectation::class,
-                'stock_aff_perimetre',
-                Join::WITH,
-                sprintf(
-                    'IDENTITY(stock_aff_perimetre.etablissement) = IDENTITY(%s.etablissement) AND IDENTITY(stock_aff_perimetre.utilisateur) = :stock_perimetre_utilisateur',
-                    $alias,
-                ),
-            )
-            ->setParameter('stock_perimetre_utilisateur', $utilisateur->getId(), 'uuid')
+            ->andWhere(sprintf('IDENTITY(%s.etablissement) = :stock_perimetre_actif', $alias))
+            ->setParameter('stock_perimetre_actif', $actif, 'uuid')
             ->distinct();
     }
 
-    private function restreindreTransfert(QueryBuilder $queryBuilder, Utilisateur $utilisateur): void
+    /**
+     * UN TRANSFERT APPARTIENT AUX DEUX ETABLISSEMENTS, PAS A UN SEUL.
+     *
+     * Il part d'un site et arrive dans un autre. Le rendre invisible depuis l'un des deux ferait
+     * disparaitre du stock sans trace pour celui qui l'attend -- et un ecart de stock qu'on ne peut
+     * pas expliquer se solde toujours par un inventaire. La regle « source OU destination » est donc
+     * conservee telle quelle ; seul le terme de comparaison change, du perimetre vers l'actif.
+     */
+    private function restreindreTransfert(QueryBuilder $queryBuilder): void
     {
+        $actif = $this->contexte->idActif();
+        if ($actif === null) {
+            $queryBuilder->andWhere('1 = 0');
+
+            return;
+        }
+
         $alias = $queryBuilder->getRootAliases()[0];
         $queryBuilder
             ->innerJoin($alias . '.articleStockSource', 'stock_transfert_source')
             ->innerJoin($alias . '.articleStockDestination', 'stock_transfert_destination')
-            ->innerJoin(
-                Affectation::class,
-                'stock_transfert_aff',
-                Join::WITH,
-                '(IDENTITY(stock_transfert_aff.etablissement) = IDENTITY(stock_transfert_source.etablissement)'
-                . ' OR IDENTITY(stock_transfert_aff.etablissement) = IDENTITY(stock_transfert_destination.etablissement))'
-                . ' AND IDENTITY(stock_transfert_aff.utilisateur) = :stock_transfert_utilisateur',
+            ->andWhere(
+                'IDENTITY(stock_transfert_source.etablissement) = :stock_transfert_actif'
+                . ' OR IDENTITY(stock_transfert_destination.etablissement) = :stock_transfert_actif',
             )
-            ->setParameter('stock_transfert_utilisateur', $utilisateur->getId(), 'uuid')
+            ->setParameter('stock_transfert_actif', $actif, 'uuid')
             ->distinct();
     }
 }

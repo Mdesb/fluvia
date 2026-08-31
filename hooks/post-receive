@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+#
+# Hook `post-receive` — réinstalle les hooks du dépôt nu quand `main` les modifie (D28).
+#
+# ── POURQUOI CE HOOK NE SUFFISAIT PAS ───────────────────────────────────────────────────────────
+#
+# Il ne couvre qu'un des deux chemins par lesquels `main` change : la **réception** d'un push. Or
+# l'intégrateur fusionne dans son worktree `wt/main`, ce qui met la ref à jour **sans réception** —
+# le reflog de `main` du 25/08 ne contient que des `merge`. Ce hook n'y a donc jamais servi.
+#
+# `hooks/post-commit` et `hooks/post-merge` couvrent ce second chemin. Les trois appellent le **même**
+# script, `bin/reinstaller-hooks.sh` : trois déclencheurs, un seul énoncé — la leçon des listes redites
+# qui se désynchronisent, appliquée avant qu'elle ne se répète une quatrième fois.
+#
+# ── POURQUOI IL EXTRAIT LE SCRIPT PLUTÔT QUE DE L'APPELER ───────────────────────────────────────
+#
+# Un dépôt nu n'a pas d'arbre de travail : `bin/reinstaller-hooks.sh` n'existe nulle part sur le
+# disque de son côté. On le lit donc dans `main`, qui est précisément la référence dont on veut
+# aligner les hooks. Si `main` ne le contient pas encore, il n'y a rien à faire et on sort.
+
+set -uo pipefail
+
+BARE="$(pwd)"
+
+main_a_bouge=0
+while read -r _ancien _nouveau ref; do
+    [ "$ref" = "refs/heads/main" ] && main_a_bouge=1
+done
+
+[ "$main_a_bouge" -eq 0 ] && exit 0
+[ -f "$BARE/hooks/GARDE-FOUS-DESACTIVES" ] && exit 0
+
+SCRIPT="$(mktemp)" || exit 0
+trap 'rm -f "$SCRIPT"' EXIT
+
+if ! git --git-dir="$BARE" show "refs/heads/main:bin/reinstaller-hooks.sh" > "$SCRIPT" 2>/dev/null \
+   || [ ! -s "$SCRIPT" ]; then
+    exit 0
+fi
+
+# Un script de réinstallation syntaxiquement cassé ne doit pas s'exécuter à moitié.
+bash -n "$SCRIPT" 2>/dev/null || exit 0
+
+(cd "$BARE" && bash "$SCRIPT")
+
+exit 0

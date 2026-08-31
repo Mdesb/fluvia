@@ -59,6 +59,12 @@ final class ValiderRetenueProcessor implements ProcessorInterface
         $agentUtilisateur = $agent instanceof Utilisateur ? $agent : null;
         $autoriseForcage = $this->security->isGranted('PERM', 'patinoire.forcer_retenue');
 
+        // @cloisonnement-verifie : $data (RetenueCaution) est chargé par l'opération `read: true`
+        // /patinoire/retenues/{id}/valider et DÉJÀ confronté au périmètre par
+        // PerimetrePatinoireExtension::applyToItem (RetenueCaution -> location -> etablissement) — 404 au
+        // read pour un {id} d'un autre établissement. Le MouvementCaution ci-dessous (clefé par le ref
+        // stocké SUR $data) et la CautionLocationPatins plus bas (clefée par $data->getLocation()) sont
+        // donc transitivement dans le périmètre, aucune résolution par identifiant client non contrôlé.
         $mouvementGenerique = $data->getMouvementGeneriqueRef() !== null
             ? $this->em->getRepository(MouvementCaution::class)->find($data->getMouvementGeneriqueRef())
             : null;

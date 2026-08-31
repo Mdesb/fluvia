@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Patinoire\Unit;
 
+use App\Tests\SchemaDuHarnais;
 use App\Caution\Entity\GrilleRetenue as GrilleRetenueGenerique;
 use App\Caution\Enum\ModeRetenue as ModeRetenueGenerique;
 use App\Caution\Service\GestionCaution;
@@ -15,7 +16,6 @@ use App\Patinoire\Entity\ParcPatins;
 use App\Patinoire\Enum\MotifRetenue;
 use App\Patinoire\State\GrilleRetenueProvider;
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Tools\SchemaTool;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 /**
@@ -33,12 +33,10 @@ final class ResolveurGrilleRetenueHandlerTest extends KernelTestCase
         /** @var EntityManagerInterface $em */
         $em = $container->get('doctrine')->getManager();
 
-        $tool = new SchemaTool($em);
-        $metadata = $em->getMetadataFactory()->getAllMetadata();
-        $em->getConnection()->executeStatement('SET FOREIGN_KEY_CHECKS=0');
-        $tool->dropSchema($metadata);
-        $tool->createSchema($metadata);
-        $em->getConnection()->executeStatement('SET FOREIGN_KEY_CHECKS=1');
+        // Le schéma est construit UNE FOIS par processus, puis vidé entre les tests. Le faire
+        // détruire et reconstruire par chaque `setUp()` coûtait ~10 s par test — six heures sur
+        // la suite complète, et donc une suite que personne ne lançait.
+        SchemaDuHarnais::reinitialiser($em);
 
         foreach ([SocleFixtures::class, CrmFixtures::class, PatinoireFixtures::class] as $classe) {
             $container->get($classe)->load($em);

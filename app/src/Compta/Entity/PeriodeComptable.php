@@ -10,6 +10,7 @@ use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Post;
 use App\Compta\Enum\StatutPeriode;
 use App\Compta\State\CloturerPeriodeProcessor;
+use App\Compta\State\SimulateClosureProcessor;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
@@ -28,6 +29,13 @@ use Symfony\Component\Uid\Uuid;
         new GetCollection(security: "is_granted('PERM', 'compta.lire')"),
         new Get(security: "is_granted('PERM', 'compta.lire')"),
         new Post(security: "is_granted('PERM', 'compta.gerer')"),
+        new Post(
+            uriTemplate: '/compta/periodes/{id}/simuler-cloture',
+            read: true,
+            input: false,
+            security: "is_granted('PERM', 'compta.cloturer')",
+            processor: SimulateClosureProcessor::class,
+        ),
         new Post(
             uriTemplate: '/compta/periodes/{id}/cloturer',
             read: true,
@@ -148,9 +156,27 @@ class PeriodeComptable
         return $this;
     }
 
+    /**
+     * ⚠ UNE PERIODE COMPTABLE COUVRE DES JOURS, PAS DES INSTANTS.
+     *
+     * `dateDebut` et `dateFin` portent des dates, donc minuit. La comparaison brute
+     * `$date <= $this->dateFin` excluait donc TOUT LE DERNIER JOUR passe 00:00:00 : le 31/08 a
+     * 00:00:01, une periode se terminant « le 31/08 » ne couvrait plus « maintenant », et toute
+     * facture emise ce jour-la etait refusee.
+     *
+     * Le defaut mordait UN JOUR PAR MOIS, le dernier, et disparaissait le lendemain — la forme la
+     * plus desagreable : irreproductible pour qui le cherche un autre jour, systematique pour qui le
+     * subit. Constate le 31/08 sur vingt tests repartis dans deux sessions, sans qu'aucun code n'ait
+     * change.
+     *
+     * Les bornes sont donc ramenees au jour entier. Le correctif ELARGIT : une date deja couverte le
+     * reste, seules des dates qui auraient du l'etre le deviennent. Aucune ecriture ne peut se
+     * trouver refusee a tort par ce changement.
+     */
     public function couvre(\DateTimeImmutable $date): bool
     {
-        return $date >= $this->dateDebut && $date <= $this->dateFin;
+        return $date >= $this->dateDebut->setTime(0, 0)
+            && $date <= $this->dateFin->setTime(23, 59, 59);
     }
 
     public function estOuverte(): bool

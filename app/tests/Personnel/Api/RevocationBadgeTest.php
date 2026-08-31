@@ -95,6 +95,59 @@ final class RevocationBadgeTest extends PersonnelApiTestCase
         self::assertSame(StatutSupport::Actif, $badgeReactive->getSupport()->getStatut());
     }
 
+    /**
+     * **LA RÉVOCATION, ET SON IRRÉVERSIBILITÉ.**
+     *
+     * Ce fichier porte son nom et ne la parcourait pas : il exerçait l'incident, la suspension et la
+     * réactivation. Or c'est la seule des quatre dont l'échec laisse **une porte ouverte** — un
+     * badge révoqué qui continue d'ouvrir ne se signale nulle part, sinon par quelqu'un qui entre.
+     *
+     * Deux affirmations, et la seconde est celle qui compte :
+     *
+     *   1. révoquer marque le badge `revoque` et bloque son support physique ;
+     *   2. **une révocation ne se rattrape pas.** Réactiver un badge révoqué est refusé en 409
+     *        (§4.8 de la spec) : il faut un nouveau badge, donc un nouvel appairage. Si ce refus
+     *        cédait, la révocation ne serait plus qu'une suspension déguisée.
+     */
+    public function testRevocationDefinitiveEtIrreversible(): void
+    {
+        [$clientRh, $enteteRh] = $this->rhSurA();
+
+        $idEmploye = $clientRh->request('POST', '/api/employes', $enteteRh + [
+            'json' => ['nom' => 'Revoque', 'prenom' => 'Test', 'poste' => 'Agent', 'typeContrat' => 'cdi', 'dateEntree' => '2024-01-01'],
+        ])->toArray()['id'];
+        $this->rattacher($clientRh, $enteteRh, $idEmploye, $this->idEtablissementA());
+
+        $badge = $clientRh->request('POST', '/api/personnel/employes/' . $idEmploye . '/badges', $enteteRh + [
+            'json' => [
+                'etablissement' => '/api/etablissements/' . $this->idEtablissementA(),
+                'modeHoraire' => 'permanent',
+                'espacesAutorises' => ['/api/espace_acces/' . $this->idEspaceAcces()],
+            ],
+        ])->toArray();
+
+        $clientRh->request('POST', '/api/personnel/badges/' . $badge['id'] . '/revoquer', $enteteRh + [
+            'json' => ['motif' => 'Départ immédiat'],
+        ]);
+        self::assertResponseIsSuccessful();
+        self::assertSame('revoque', $clientRh->getResponse()->toArray()['statut']);
+
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $em->clear();
+        $revoque = $em->getRepository(BadgeStaff::class)->find($badge['id']);
+        self::assertSame(StatutBadgeStaff::Revoque, $revoque->getStatut());
+        self::assertNotNull($revoque->getDateRevocation(), 'Une révocation sans date ne se prouve pas.');
+
+        // LE REFUS QUI FAIT TOUT. Sans lui, révoquer et suspendre seraient le même geste.
+        $reponse = $clientRh->request('POST', '/api/personnel/badges/' . $badge['id'] . '/reactiver', $enteteRh);
+        self::assertSame(
+            409,
+            $reponse->getStatusCode(),
+            'Une révocation est définitive : il faut un nouveau badge, donc un nouvel appairage.',
+        );
+    }
+
     public function testSuspensionReversibleSansReAppairage(): void
     {
         [$clientRh, $enteteRh] = $this->rhSurA();

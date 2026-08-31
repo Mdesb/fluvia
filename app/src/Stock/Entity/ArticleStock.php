@@ -12,6 +12,7 @@ use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\Offre\Entity\Produit;
+use App\Stock\State\EstablishmentStampProcessor;
 use App\Organisation\Entity\Etablissement;
 use App\Stock\Enum\MethodeValorisation;
 use App\Stock\Enum\Unite;
@@ -20,7 +21,7 @@ use App\Stock\State\RattacherProduitProcessor;
 use App\Stock\Validator\CodeEanValide;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
-use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
+use App\Stock\Validator as AppAssert;
 use Symfony\Component\Serializer\Attribute\Groups;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Validator\Constraints as Assert;
@@ -36,13 +37,16 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ORM\Table(name: 'stk_article')]
 #[ORM\UniqueConstraint(name: 'uniq_article_ean_etab', columns: ['etablissement_id', 'code_ean'])]
 #[ORM\UniqueConstraint(name: 'uniq_article_produit', columns: ['produit_id'])]
-#[UniqueEntity(fields: ['etablissement', 'codeEAN'], message: 'Ce code-barres est déjà utilisé sur cet établissement (RG-STOCK-02).')]
+#[AppAssert\UniqueEanPerEstablishment]
 #[ApiResource(
     shortName: 'ArticleStock',
     operations: [
         new GetCollection(security: "is_granted('PERM', 'stock.lire')"),
         new Get(security: "is_granted('PERM', 'stock.lire')"),
-        new Post(security: "is_granted('PERM', 'stock.gerer_article') or is_granted('PERM', 'stock.gerer')"),
+        new Post(
+            security: "is_granted('PERM', 'stock.gerer_article') or is_granted('PERM', 'stock.gerer')",
+            processor: EstablishmentStampProcessor::class,
+        ),
         new Patch(security: "is_granted('PERM', 'stock.gerer_article') or is_granted('PERM', 'stock.gerer')"),
         new Post(
             uriTemplate: '/stock/articles/{id}/rattacher-produit',
@@ -71,8 +75,12 @@ class ArticleStock
 
     #[ORM\ManyToOne(targetEntity: Etablissement::class)]
     #[ORM\JoinColumn(nullable: false)]
-    #[Assert\NotNull]
-    #[Groups(['article:read', 'article:write'])]
+    // D41 — hors groupe d'ecriture : l'etablissement vient de la session serveur, pose par
+    // `EstablishmentStampProcessor`, jamais du corps de la requete. Plus d'`Assert\NotNull` non plus :
+    // la validation s'execute AVANT l'ecriture, donc avant l'estampillage, et echouerait en 422 sur
+    // une valeur que le serveur allait poser lui-meme. L'invariant tient par l'estampilleur, qui
+    // refuse plutot que de deviner, par la colonne NOT NULL, et par le garde global D41.
+    #[Groups(['article:read'])]
     private ?Etablissement $etablissement = null;
 
     #[ORM\ManyToOne(targetEntity: Produit::class)]
@@ -88,7 +96,7 @@ class ArticleStock
 
     #[ORM\Column(length: 180)]
     #[Assert\NotBlank]
-    #[Groups(['article:read', 'article:write'])]
+    #[Groups(['article:read', 'article:write', 'ligne_commande_achat:read', 'mouvement:read'])]
     private string $libelle = '';
 
     #[ORM\Column(length: 10, enumType: Unite::class)]

@@ -43,6 +43,12 @@ final class RetournerMaterielProcessor implements ProcessorInterface
         $statut = StatutRetourMateriel::tryFrom(\is_string($corps['statutRetour'] ?? null) ? $corps['statutRetour'] : '') ?? StatutRetourMateriel::Rendu;
         $data->setStatutRetour($statut);
 
+        // @cloisonnement-verifie : les deux résolutions ci-dessous sont clefées par $data
+        // (LocationMateriel), lui-même chargé par l'opération `read: true` /padel/locations/{id}/retour
+        // et donc DÉJÀ confronté au périmètre par PerimetrePadelExtension::applyToItem (LocationMateriel
+        // -> reservation.etablissement). Un {id} d'un autre établissement renvoie 404 au read, avant
+        // même ce processor : la CautionMateriel et la Caution générique liées à $data sont
+        // transitivement dans le périmètre, aucune résolution par identifiant client non contrôlé ici.
         $caution = $this->em->getRepository(CautionMateriel::class)->findOneBy(['location' => $data, 'locationActive' => $data->getId()]);
         $cautionGenerique = $this->gestionCaution->cautionActivePour(LouerMaterielProcessor::TYPE_CIBLE, $data->getId());
 

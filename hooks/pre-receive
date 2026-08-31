@@ -6,9 +6,14 @@
 # où les garde-fous s'exécutent sans dépendre de la bonne volonté de qui pousse. Un push refusé ici
 # ne l'est pour personne d'autre : rien n'entre dans le dépôt partagé.
 #
-# Il ne lance que les trois contrôles **statiques** (aucune dépendance Composer, aucune base) :
-# cloisonnement, nommage anglais, secrets en dur. Le contrôle du manifeste passe par PHPUnit et donc
-# par `vendor/` — trop lourd pour un hook, il reste à `./infra/test-stack.sh`.
+# Il lance **tous** les garde-fous statiques présents dans l'arbre poussé — ceux qui n'ont besoin ni
+# de Composer ni de base de données. Le nombre n'est volontairement pas écrit ici : cette ligne a
+# annoncé « trois contrôles » pendant que le hook en lançait sept, et une documentation qui se périme
+# est ce qui a permis au trou du 24/08 de passer inaperçu. Le filet de complétude en fin de boucle
+# est désormais l'énoncé faisant foi : tout `bin/garde-fou-*.php` de l'arbre doit avoir été lancé.
+#
+# Le contrôle du manifeste passe par PHPUnit et donc par `vendor/` — trop lourd pour un hook, il
+# reste à `./infra/test-stack.sh`.
 #
 # ── INTERRUPTEUR ────────────────────────────────────────────────────────────────────────────────
 # Créer le fichier `hooks/GARDE-FOUS-DESACTIVES` dans le dépôt bare désactive ce hook. C'est
@@ -23,6 +28,8 @@ BARE="$(pwd)"                       # git place le hook dans le répertoire du d
 BRANCHE_REFERENCE="refs/heads/main"
 ZERO="0000000000000000000000000000000000000000"
 IMAGE="billetterie-preprod-php"
+# Les controles du front tournent dans l'image du deploiement, sans dependances ni reseau.
+IMAGE_NODE="node:20-alpine"
 
 if [ -f "$BARE/hooks/GARDE-FOUS-DESACTIVES" ]; then
     echo "⚠ Garde-fous DÉSACTIVÉS ($BARE/hooks/GARDE-FOUS-DESACTIVES). Push accepté sans contrôle."
@@ -38,6 +45,51 @@ if ! command -v docker >/dev/null 2>&1 || ! docker image inspect "$IMAGE" >/dev/
 fi
 
 ECHEC_GLOBAL=0
+
+# ── D28 : le hook installé sait-il qu'il est périmé ? ────────────────────────────────────────
+#
+# Ce fichier existe en deux exemplaires : versionné dans `hooks/` et installé ici, sur le dépôt nu.
+# Fusionner le premier ne met pas à jour le second, et c'est ainsi que quatre garde-fous sur sept
+# ont cessé d'être opposables pendant deux jours sans que personne ne le voie (D28).
+#
+# La comparaison se fait contre `main`, PAS contre la branche poussée. Comparer à la branche
+# ferait crier le hook chaque fois qu'une branche est simplement en retard sur `hooks/` — un
+# avertissement qui se déclenche à tort finit ignoré, donc inutile. `main` est la référence que
+# celui qui pousse ne choisit pas.
+#
+# On avertit sans refuser : refuser bloquerait précisément la poussée qui apporte la mise à jour.
+HOOK_PERIME=0
+HOOK_LANCES_INSTALLE=0
+HOOK_LANCES_REFERENCE=0
+
+compter_garde_fous() {
+    grep -o 'garde-fou-[a-z-]*\.php' 2>/dev/null | sort -u | wc -l | tr -d ' '
+}
+
+if git --git-dir="$BARE" rev-parse --verify "$BRANCHE_REFERENCE" >/dev/null 2>&1 \
+   && git --git-dir="$BARE" cat-file -e "$BRANCHE_REFERENCE:hooks/pre-receive" 2>/dev/null; then
+    REFERENCE_HOOK="$(git --git-dir="$BARE" show "$BRANCHE_REFERENCE:hooks/pre-receive" 2>/dev/null)"
+    if [ -n "$REFERENCE_HOOK" ] \
+       && ! printf '%s\n' "$REFERENCE_HOOK" | cmp -s - "$BARE/hooks/pre-receive"; then
+        HOOK_PERIME=1
+        HOOK_LANCES_INSTALLE="$(compter_garde_fous < "$BARE/hooks/pre-receive")"
+        HOOK_LANCES_REFERENCE="$(printf '%s\n' "$REFERENCE_HOOK" | compter_garde_fous)"
+    fi
+fi
+
+avertir_si_hook_perime() {
+    [ "$HOOK_PERIME" -eq 0 ] && return 0
+    echo ""
+    echo "⚠ ─────────────────────────────────────────────────────────────────────────────"
+    echo "⚠  LE HOOK INSTALLÉ N'EST PAS CELUI DE main — les contrôles ci-dessus ne sont"
+    echo "⚠  pas forcément ceux que le dépôt croit appliquer (D28)."
+    echo "⚠"
+    echo "⚠  Garde-fous référencés : $HOOK_LANCES_INSTALLE installé(s), $HOOK_LANCES_REFERENCE sur main."
+    echo "⚠"
+    echo "⚠  Réinstalle dans le même geste que la fusion :"
+    echo "⚠      bash bin/installer-hooks.sh $BARE"
+    echo "⚠ ─────────────────────────────────────────────────────────────────────────────"
+}
 
 while read -r ancien nouveau ref; do
     # Suppression de branche : rien à contrôler.
@@ -86,8 +138,17 @@ while read -r ancien nouveau ref; do
 
     ECHEC_REF=0
 
+    # Liste des garde-fous effectivement lances, pour le filet de completude en fin de boucle.
+    LANCES=""
+
+    lancer() {
+        nom="$1"; shift
+        LANCES="$LANCES $nom"
+        php_dans_arbre "bin/$nom" "$@" || ECHEC_REF=1
+    }
+
     echo "── Cloisonnement (D3/D8)"
-    php_dans_arbre bin/garde-fou-cloisonnement.php "--contre=$BASE" || ECHEC_REF=1
+    lancer garde-fou-cloisonnement.php "--contre=$BASE"
 
     if [ -f "$ARBRE/bin/garde-fou-nommage-anglais.php" ]; then
         echo "── Nommage anglais (D5)"
@@ -105,16 +166,287 @@ while read -r ancien nouveau ref; do
                     -- 'app/src' 'app/migrations' 2>/dev/null | paste -sd, -)"
 
         if [ -z "$AJOUTES" ]; then
+            # Rien a comparer : le controle est traite. On l'enregistre quand meme, sinon le
+            # filet de completude le croirait oublie.
+            LANCES="$LANCES garde-fou-nommage-anglais.php"
             echo "Nommage anglais : OK — aucun fichier ajouté sous app/src ou app/migrations."
         else
-            php_dans_arbre bin/garde-fou-nommage-anglais.php "--fichiers=$AJOUTES" || ECHEC_REF=1
+            lancer garde-fou-nommage-anglais.php "--fichiers=$AJOUTES"
         fi
     fi
 
     if [ -f "$ARBRE/bin/garde-fou-secrets.php" ]; then
         echo "── Secrets en dur"
-        php_dans_arbre bin/garde-fou-secrets.php || ECHEC_REF=1
+        lancer garde-fou-secrets.php
     fi
+
+    if [ -f "$ARBRE/bin/garde-fou-dependances-dev.php" ]; then
+        echo "── Dépendances de dev (n°20)"
+        lancer garde-fou-dependances-dev.php
+    fi
+
+    # Couverture de perimetre en lecture : une entite exposee que rien ne peut filtrer. Aucun des
+    # controles ci-dessus ne pouvait la voir — ils surveillent les ecritures, pas les collections.
+    if [ -f "$ARBRE/bin/garde-fou-couverture-perimetre.php" ]; then
+        echo "── Couverture de périmètre (lecture)"
+        lancer garde-fou-couverture-perimetre.php
+    fi
+
+    # Evenements du catalogue (D2/D22) : abonne inerte, emission hors contrat, cliquet.
+    if [ -f "$ARBRE/bin/garde-fou-evenements-orphelins.php" ]; then
+        echo "── Événements orphelins (D2/D22)"
+        lancer garde-fou-evenements-orphelins.php "--contre=$BASE"
+    fi
+
+    # Conformite des charges utiles a ce que le catalogue annonce (D2).
+    if [ -f "$ARBRE/bin/garde-fou-charges-utiles.php" ]; then
+        echo "── Charges utiles vs catalogue (D2)"
+        lancer garde-fou-charges-utiles.php "--contre=$BASE"
+    fi
+
+    # Ecriture qui traverse la frontiere (D3/D8) : proprietaire non cloisonne portant une
+    # relation ecrivable vers du cloisonne.
+    if [ -f "$ARBRE/bin/garde-fou-ecriture-transfrontiere.php" ]; then
+        echo "── Écriture transfrontière (D3/D8)"
+        lancer garde-fou-ecriture-transfrontiere.php "--contre=$BASE"
+    fi
+
+    # Un DEFAULT pose en migration doit etre declare au mapping (D32).
+    if [ -f "$ARBRE/bin/garde-fou-defauts-mapping.php" ]; then
+        echo "── Défauts au mapping (D32)"
+        lancer garde-fou-defauts-mapping.php "--contre=$BASE"
+    fi
+
+    # ── Contrôles du front (D50) ──
+    #
+    # Le front parle à l'API dans deux formats selon l'opération, et **rien dans la signature ne dit
+    # lequel** : une opération à `uriTemplate` sur mesure porte `input: false` et lit le corps brut,
+    # une opération standard désérialise et exige `ld+json`. 236 écritures standard contre 232 sur
+    # mesure — presque la moitié de l'API bascule sur une distinction invisible.
+    #
+    # Treize appels de création répondaient 415, dont sept **depuis toujours** : créer un client, un
+    # utilisateur, un moyen de paiement, une option produit… Personne ne l'avait signalé, parce que
+    # personne ne voit un code HTTP : on voit un bouton qui ne fait rien. C'est Maxime qui l'a trouvé,
+    # en production, en essayant d'ajouter un tarif.
+    #
+    # `claude-H` a écrit les deux contrôles et les a prouvés dans les deux sens. Ils étaient lançables
+    # par `npm run verifier` — donc facultatifs, donc suspendus à ce que quelqu'un y pense. Le jour
+    # même, deux cliquets du dépôt annonçaient leur résorption à chaque poussée depuis plusieurs
+    # jours, commande à l'appui, et personne ne l'avait lancée. **Un garde-fou facultatif n'est pas un
+    # garde-fou, c'est une documentation exécutable.**
+    #
+    # ⚠ LE MONTAGE EST LA RACINE DU DÉPÔT, PAS `frontend/`. `verifier-formats` lit `app/src` pour
+    # connaître les `uriTemplate` du serveur. Monté sur `frontend/` seul il ne verrait aucune opération
+    # sur mesure et crierait 27 faux positifs — dont la caisse. Un contrôle qui crie au loup finit
+    # désactivé, ce qui coûte plus cher que son absence.
+    #
+    # Aucune dépendance : les scripts n'utilisent que `node:fs`, `node:path`, `node:url`. Donc pas de
+    # `npm install`, donc `--network none` comme les autres. L'image est celle du déploiement.
+    if [ -f "$ARBRE/frontend/scripts/verifier-formats.mjs" ]; then
+        # Inutile de lancer node quand la poussée ne touche ni le front ni les opérations du serveur
+        # que le contrôle lit.
+        TOUCHE_FRONT="$(git --git-dir="$BARE" diff --name-only "$BASE...$nouveau" \
+                        -- 'frontend' 'app/src' 2>/dev/null | head -1)"
+
+        if [ -z "$TOUCHE_FRONT" ]; then
+            echo "── Contrôles du front : OK — la poussée ne touche ni frontend/ ni app/src."
+        else
+            echo "── Contrôles du front (D50)"
+            # Les noms portent leur extension parce que le filet de completude, plus bas, cherche
+            # le nom COMPLET du fichier dans ce hook. Ecrits sans `.mjs`, les deux controles
+            # seraient declares « appeles par aucun hook » et feraient refuser toute poussee. Le
+            # filet se refermerait sur ce qu'il protege.
+            for script in verifier-droits.mjs verifier-formats.mjs verifier-imports.mjs verifier-classes.mjs verifier-cache.mjs verifier-dates-locales.mjs verifier-profil-charge.mjs verifier-boutons-nommes.mjs verifier-clic-clavier.mjs verifier-contrastes.mjs garde-fou-ecart.mjs; do
+                [ -f "$ARBRE/frontend/scripts/$script" ] || continue
+                if docker run --rm --network none \
+                        -u "$(id -u):$(id -g)" \
+                        -v "$ARBRE:$ARBRE" \
+                        -w "$ARBRE/frontend" "$IMAGE_NODE" \
+                        node "scripts/$script"; then
+                    :
+                else
+                    ECHEC_REF=1
+                fi
+            done
+        fi
+    fi
+
+    # Une reference libre ne se compare ni en DQL ni par filtre (D58).
+    #
+    # Le depot franchit les frontieres de module par un `?Uuid` nu plutot que par une relation
+    # Doctrine -- c'est deliberе, une relation creerait une dependance de mapping entre deux modules
+    # qui doivent vivre separement. 23 proprietes suivent cette convention.
+    #
+    # Doctrine ne convertit pas un type personnalise sur une colonne `uuid` nue, faute de relation a
+    # consulter -- et il ne s'en plaint pas. Un `SearchFilter` rend une liste vide, un `IN (:liste)`
+    # ne trouve rien. AUCUNE de ces formes ne leve : elles ressemblent a « il n'y a rien ».
+    #
+    # claude-G s'est fait avoir trois fois cette semaine, sur trois modules, EN CONNAISSANT le piege.
+    # Quand la meme erreur revient une troisieme fois, on ne la corrige plus : on supprime ce qui la
+    # rend possible.
+    if [ -f "$ARBRE/bin/garde-fou-references-libres.php" ]; then
+        echo "── Références libres (D58)"
+        lancer garde-fou-references-libres.php
+    fi
+
+    # Une propriete declaree dans un `#[ApiFilter]` doit EXISTER : une propriete inconnue est ignoree
+    # en silence et la collection sort ENTIERE. Contrairement aux filtres qui rendent une liste vide,
+    # celui-ci ne remonte jamais en reclamation -- des donnees qui s'affichent ne sont interrogees
+    # par personne.
+    if [ -f "$ARBRE/bin/garde-fou-filtres-declares.php" ]; then
+        echo "── Filtres déclarés"
+        lancer garde-fou-filtres-declares.php
+    fi
+
+    # Le prefixe `/editor/` ne protege rien : aucune regle `access_control` ne vise `^/api/editor`,
+    # la garde est portee par chaque operation via un provider qui appelle `assertEditor()`. Or il se
+    # LIT comme une barriere -- `/editor/plans` est publique (le catalogue d'un prospect) quand
+    # `/editor/catalog/plans` est reservee a l'editeur. Ce qu'on empeche n'est pas un defaut present,
+    # c'est que la prochaine route herite de l'apparence de surete sans la surete.
+    if [ -f "$ARBRE/bin/garde-fou-routes-editeur.php" ]; then
+        echo "── Routes éditeur"
+        lancer garde-fou-routes-editeur.php
+    fi
+
+    # Une lecture frontale qui vaut toujours `undefined`. La propriete lue n'est dans aucun groupe
+    # que porte la relation : le serveur n'envoie qu'un identifiant, et l'ecran affiche le mot
+    # « undefined ». Aucun test n'echoue la-dessus — une chaine interpolee ne leve pas.
+    if [ -f "$ARBRE/bin/garde-fou-relations-nues.php" ]; then
+        echo "── Lectures indéfinies"
+        lancer garde-fou-relations-nues.php
+    fi
+
+    # Une entite ne doit pas laisser ecrire son propre etablissement (D41). Ecrit par claude-C, qui a
+    # au passage corrige mon compte : 49 entites concernees et non 35. Vingt-deux d'entre elles ne
+    # declarent AUCUN `denormalizationContext` — c'est l'absence de declaration qui expose, et une
+    # lecture qui cherche des groupes d'ecriture ne la voit pas. La voie la moins visible est la plus
+    # large.
+    if [ -f "$ARBRE/bin/garde-fou-etablissement-ecrivable.php" ]; then
+        echo "── Établissement écrivable (D41)"
+        lancer garde-fou-etablissement-ecrivable.php "--contre=$BASE"
+    fi
+
+    # Une suppression dans un up() de migration doit etre voulue et le dire (D32).
+    if [ -f "$ARBRE/bin/garde-fou-drop-migrations.php" ]; then
+        echo "── Suppressions en migration (D32)"
+        lancer garde-fou-drop-migrations.php "--contre=$BASE"
+    fi
+
+
+    # Lier un OBJET a un parametre de requete sans dire son type (D58).
+    if [ -f "$ARBRE/bin/garde-fou-liaisons-objet.php" ]; then
+        echo "── Nullable sur colonne non nulle"
+        lancer garde-fou-liaisons-objet.php "--contre=$BASE"
+    fi
+
+    if [ -f "$ARBRE/bin/garde-fou-nullable-non-nul.php" ]; then
+        echo "── Nullable sur colonne non nulle"
+        lancer garde-fou-nullable-non-nul.php "--contre=$BASE"
+    fi
+
+    if [ -f "$ARBRE/bin/garde-fou-vacuite-tests.php" ]; then
+        echo "── Vacuite des tests de cloisonnement"
+        lancer garde-fou-vacuite-tests.php "--contre=$BASE"
+    fi
+
+    # Le cliquet d'espacement ne prend pas `--contre` : il compare a une ligne de base scellee dans
+    # `bin/`, pas a une revision. C'est voulu -- le nombre a geler est une propriete de l'arbre, pas
+    # de l'ecart entre deux commits.
+    if [ -f "$ARBRE/bin/garde-fou-espacement-en-ligne.php" ]; then
+        echo "── Espacement en ligne"
+        lancer garde-fou-espacement-en-ligne.php
+    fi
+
+    # Compare le champ que chaque extension de perimetre FILTRE a celui que l'entite DECLARE. Un
+    # ecart ne leve pas d'erreur : il produit des lignes en trop.
+    if [ -f "$ARBRE/bin/garde-fou-champ-cloisonnement.php" ]; then
+        echo "── Champ de cloisonnement"
+        lancer garde-fou-champ-cloisonnement.php
+    fi
+
+    # Une creation qu'aucun Delete ne rattrape doit dire pourquoi. La ligne de base est une LISTE,
+    # pas un compteur : deux mesures independantes du meme defaut ont rendu des nombres differents,
+    # et un cliquet sur un compteur aurait fige ce desaccord.
+    if [ -f "$ARBRE/bin/garde-fou-post-sans-suppression.php" ]; then
+        echo "── Creations irreversibles"
+        lancer garde-fou-post-sans-suppression.php
+    fi
+
+    # Un #[ApiFilter] declare hors de `mapping.paths` est MUET : accepte en parametre, documente, et
+    # sans aucun effet — la collection sort entiere a qui passe un filtre.
+    if [ -f "$ARBRE/bin/garde-fou-filtres-muets.php" ]; then
+        echo "── Filtres muets"
+        lancer garde-fou-filtres-muets.php
+    fi
+
+    # Un chemin qu'aucune route ne sert rend un 404, que le `catch` de l'ecran transforme en liste
+    # vide : le defaut ne se voit JAMAIS a l'ecran. Le controle s'abstient ici faute de `vendor/` --
+    # il tourne au commit et dans `bin/garde-fous.sh` -- mais il reste cable pour le jour ou l'arbre
+    # de reception aura ses dependances. Un controle retire d'une liste ne revient jamais.
+    if [ -f "$ARBRE/bin/garde-fou-appels-dans-le-vide.php" ]; then
+        echo "── Appels du frontal dans le vide (n°33)"
+        lancer garde-fou-appels-dans-le-vide.php
+    fi
+
+    # ⚠ FILET DE COMPLÉTUDE — la leçon du 24/08, et elle a coûté cher.
+    #
+    # Ce hook n'appelle pas `bin/garde-fous.sh` : il doit calculer les fichiers ajoutés sur
+    # l'hôte (quarantaine d'objets, voir plus haut) et pointer `--contre` sur la base réelle du
+    # push. Il REDIT donc la liste des garde-fous — et une liste redite se désynchronise. Les
+    # garde-fous n°6, n°7 et n°8 ont été écrits, câblés au lanceur, annoncés livrés, et n'ont
+    # JAMAIS tourné à la poussée : personne ne les avait ajoutés ici. Le même défaut avait déjà
+    # été corrigé dans le workflow GitHub le 22/08, avec le commentaire qui l'expliquait — et
+    # laissé intact dans le hook, c'est-à-dire dans le seul des deux qui tourne vraiment.
+    #
+    # Désormais l'oubli n'est plus possible : tout `garde-fou-*.php` présent dans l'arbre poussé
+    # doit avoir été lancé. Ajouter un garde-fou sans l'appeler ici fait refuser le push qui
+    # l'ajoute — donc l'erreur se voit à la seconde où elle est commise.
+    # Le glob s'arrête à `.php`, et c'est délibéré : le garde-fou de topologie est un `.sh` qui
+    # répond à « par où passent mes commits ». Dans un hook, la question n'a pas de sens — on
+    # analyse un arbre extrait dans un `mktemp`, sans remote ni worktree. Sa complétude est donc
+    # assurée par le filet de `bin/garde-fous.sh`, qui lui globe sans extension.
+    # ⚠ On compare l'inventaire de l'arbre poussé aux appels du hook DE L'ARBRE POUSSÉ — pas à ceux
+    # du hook installé.
+    #
+    # La première version comparait aux appels de CE hook-ci, c'est-à-dire celui de `main`. Il ne peut
+    # évidemment pas connaître un garde-fou qui arrive avec la poussée : **plus aucun garde-fou neuf ne
+    # pouvait entrer dans le dépôt**, même câblé correctement dans le même commit. Constaté le 26/08 en
+    # poussant le n°10 — le filet s'était refermé sur lui-même.
+    #
+    # La bonne question n'est pas « ce run a-t-il tout lancé ? » (il ne lance que ce qu'il connaît),
+    # c'est « la version qu'on pousse est-elle cohérente avec elle-même ? ». La protection est intacte,
+    # et même plus juste : c'est le hook poussé qui tournera une fois installé.
+    HOOK_POUSSE="$ARBRE/hooks/pre-receive"
+
+    # Le filet couvre aussi les controles du front : ils ne s'appellent pas `garde-fou-*.php`, donc
+    # le glob ci-dessous les manquait. Un controle qu'on peut retirer du hook sans que rien ne le
+    # dise retombe exactement dans le defaut qu'il corrige.
+    # ⚠ LES DEUX GLOBS DU FRONT, PAS UN SEUL. Le second manquait, donc `garde-fou-ecart.mjs`
+    # — l'ecart client/serveur, le controle le plus souvent contourne — pouvait etre retire de
+    # la liste appelee sans que ce filet ne le dise. Releve le 31/08 en comptant les trois
+    # listes a la main, apres qu'un controle neuf s'est retrouve cable dans deux sur trois.
+    #
+    # Le predicat reste une MENTION du nom, et non `node scripts/<nom>` comme dans les deux
+    # autres listes : ici le hook pousse appelle ses controles par une boucle `for script in`,
+    # donc la forme d'invocation ne contient jamais le nom litteral. La difference est voulue.
+    for chemin in "$ARBRE"/bin/garde-fou-*.php "$ARBRE"/frontend/scripts/verifier-*.mjs "$ARBRE"/frontend/scripts/garde-fou-*.mjs; do
+        [ -f "$chemin" ] || continue
+        nom="$(basename "$chemin")"
+
+        if [ -f "$HOOK_POUSSE" ] && grep -q "$nom" "$HOOK_POUSSE"; then
+            continue
+        fi
+
+        # Repli quand l'arbre poussé ne versionne pas le hook : on retombe sur ce qui a tourné ici.
+        if [ ! -f "$HOOK_POUSSE" ]; then
+            case " $LANCES " in *" $nom "*) continue ;; esac
+        fi
+
+        echo "✗ Garde-fou présent dans l'arbre mais appelé par aucun hook : $nom"
+        echo "  Ajoute son appel dans hooks/pre-receive, dans le même commit que le garde-fou —"
+        echo "  un contrôle qui ne tourne pas rend un vert au nom d'une vérification qui n'a pas eu lieu."
+        ECHEC_REF=1
+    done
 
     rm -rf "$ARBRE"
     trap - EXIT
@@ -126,7 +458,38 @@ while read -r ancien nouveau ref; do
         ECHEC_GLOBAL=1
     else
         echo "✓ ${ref#refs/heads/} : garde-fous OK."
+
+        # ── ET CETTE BRANCHE N'EST PAS SERVIE ──────────────────────────────────────────────────
+        #
+        # Les garde-fous verts ne disent rien du deploiement. Le silence qui suit une poussee reussie
+        # se lit « c'est en ligne » -- c'est la fausse certitude qui a coute deux jours la semaine
+        # derniere, ou 29 commits annonces livres n'etaient visibles nulle part.
+        #
+        # ⚠ RIEN ICI NE PEUT FAIRE ECHOUER LA POUSSEE. Chaque calcul est avale : un avertissement qui
+        # refuserait un push serait pire que le silence qu'il corrige. Et `main` est reconnu par son
+        # nom EXACT, sinon `main-quelque-chose` echapperait au message ou le declencherait a tort.
+        BRANCHE_POUSSEE="${ref#refs/heads/}"
+        if [ "$BRANCHE_POUSSEE" != "main" ]; then
+            # ⚠ `$nouveau`, PAS `$ref` : dans un `pre-receive` le hook tourne AVANT la mise a jour,
+            # donc la reference poussee n'existe pas encore et `rev-list` echoue. Le SHA entrant est
+            # lu sur l'entree standard. Vu en eprouvant : le compte affichait `?` -- ce qui prouve au
+            # passage que le repli fonctionne, et qu'il dit « je ne sais pas » plutot qu'un zero
+            # rassurant.
+            EN_ATTENTE="$(git rev-list --count "refs/heads/main..$nouveau" 2>/dev/null || echo '?')"
+            SERVI_MAINTENANT="$(curl -sf -H 'Accept: application/json' \
+                https://smartaccess.hector-conseil.com/version.json 2>/dev/null \
+                | sed -n 's/.*"commit":"\([^"]*\)".*/\1/p' || true)"
+
+            echo
+            echo "⚠ CETTE BRANCHE N'EST PAS DÉPLOYÉE. Servi actuellement : ${SERVI_MAINTENANT:-inconnu}."
+            echo "  $EN_ATTENTE commit(s) attendent l'intégration dans main. Tant qu'ils n'y sont pas,"
+            echo "  ce travail n'est servi nulle part — et rien d'autre ne te le dira."
+        fi
     fi
+
+    # En DERNIER, après le verdict : la sortie d'un push est longue et défile. Un avertissement
+    # placé en tête serait vrai et invisible.
+    avertir_si_hook_perime
 done
 
 exit "$ECHEC_GLOBAL"

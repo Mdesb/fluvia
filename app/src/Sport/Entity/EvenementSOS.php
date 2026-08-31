@@ -28,6 +28,15 @@ use Symfony\Component\Uid\Uuid;
 #[ORM\Entity]
 #[ORM\Table(name: 'sport_evenement_sos')]
 #[ApiResource(
+    // ⚠ CE SIGLE RESTE EN MAJUSCULES, ET C'EST DELIBERE.
+    //
+    // API Platform coupe l'URL a chaque majuscule : ce nom produit `/api/evenement_s_o_s`, illisible.
+    // Les sept autres ressources a sigle du depot ont ete corrigees le 29/08 parce qu'AUCUN ecran ne
+    // les appelait -- renommer un `shortName` change l'URL et l'IRI, c'est gratuit tant qu'il n'y a
+    // pas d'appelant et couteux des le premier.
+    //
+    // Celle-ci en a DEUX dans `client.js`. La corriger casserait deux ecrans qui marchent, pour une
+    // question de lisibilite. Le moment de la reprendre est celui ou ces appels changeront.
     shortName: 'EvenementSOS',
     operations: [
         new GetCollection(security: "is_granted('PERM', 'sport.superviser_nocturne')"),

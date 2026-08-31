@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Stock;
 
+use App\Tests\SchemaDuHarnais;
 use ApiPlatform\Symfony\Bundle\Test\ApiTestCase;
 use ApiPlatform\Symfony\Bundle\Test\Client;
 use App\DataFixtures\SocleFixtures;
@@ -17,7 +18,6 @@ use App\Securite\Service\ContexteEtablissement;
 use App\Stock\DataFixtures\StockFixtures;
 use App\Vente\DataFixtures\VenteFixtures;
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Tools\SchemaTool;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 
 /** Base des tests d'API du module `App\Stock` : schéma recréé, fixtures socle + offre + vente + stock. */
@@ -33,12 +33,10 @@ abstract class StockApiTestCase extends ApiTestCase
         /** @var EntityManagerInterface $em */
         $em = $container->get('doctrine')->getManager();
 
-        $tool = new SchemaTool($em);
-        $metadata = $em->getMetadataFactory()->getAllMetadata();
-        $em->getConnection()->executeStatement('SET FOREIGN_KEY_CHECKS=0');
-        $tool->dropSchema($metadata);
-        $tool->createSchema($metadata);
-        $em->getConnection()->executeStatement('SET FOREIGN_KEY_CHECKS=1');
+        // Le schéma est construit UNE FOIS par processus, puis vidé entre les tests. Le faire
+        // détruire et reconstruire par chaque `setUp()` coûtait ~10 s par test — six heures sur
+        // la suite complète, et donc une suite que personne ne lançait.
+        SchemaDuHarnais::reinitialiser($em);
 
         foreach ([SocleFixtures::class, OffreFixtures::class, VenteFixtures::class, StockFixtures::class] as $classe) {
             $container->get($classe)->load($em);
@@ -63,6 +61,26 @@ abstract class StockApiTestCase extends ApiTestCase
         $entete = ['auth_bearer' => $token, 'headers' => [ContexteEtablissement::HEADER => $idA]];
 
         return [$client, $entete, $idA];
+    }
+
+    /**
+     * Le même appelant, mais **placé dans un autre établissement**.
+     *
+     * D41 : l'établissement d'une création ne vient plus du corps de la requête, il est estampillé
+     * depuis la session serveur. Un test qui voulait créer « chez B » en le nommant dans la charge
+     * utile doit donc désormais se placer chez B — ce que l'administrateur du groupe a parfaitement le
+     * droit de faire, puisqu'il est affecté aux deux. Ce n'est pas un contournement de la règle, c'est
+     * la façon légitime de faire ce que le test faisait déjà.
+     *
+     * @param array<string, mixed> $entete
+     *
+     * @return array<string, mixed>
+     */
+    protected function enteteSur(array $entete, string $nomEtablissement): array
+    {
+        $entete['headers'][ContexteEtablissement::HEADER] = $this->idEtablissement($nomEtablissement);
+
+        return $entete;
     }
 
     /** @return array{0: Client, 1: array<string, mixed>, 2: string} client, entête auth+étab, id établissement B */

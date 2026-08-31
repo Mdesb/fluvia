@@ -6,7 +6,16 @@
   "scripts": {
     "dev": "vite --host --port 5173",
     "build": "vite build",
-    "preview": "vite preview --port 5173"
+    "preview": "vite preview --port 5173",
+    "verifier-droits": "node scripts/verifier-droits.mjs",
+    "verifier-formats": "node scripts/verifier-formats.mjs",
+    "verifier": "npm run verifier-droits && npm run verifier-formats && npm run verifier-imports && npm run verifier-cache",
+    "mesurer-ecart": "node scripts/mesurer-ecart.mjs",
+    "verifier-imports": "node scripts/verifier-imports.mjs",
+    "verifier-cache": "node scripts/verifier-cache.mjs",
+    "mesurer-signaux-muets": "node scripts/mesurer-signaux-muets.mjs",
+    "garde-fou-ecart": "node scripts/garde-fou-ecart.mjs",
+    "geler-ecart": "node scripts/garde-fou-ecart.mjs --geler"
   },
   "dependencies": {
     "qrcode": "^1.5.4",

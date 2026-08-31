@@ -33,6 +33,7 @@ declare(strict_types=1);
  */
 
 const RACINE_SRC = 'app/src';
+const RACINE_DEPOT = __DIR__ . '/..';
 
 /**
  * Jetons qui désignent un secret. On raisonne par **jeton** (découpage camelCase) et non par
@@ -145,6 +146,112 @@ function analyser(string $racine): array
 
 $trouvailles = analyser(RACINE_SRC);
 
+// ── SECONDE PASSE : LES `.env` VERSIONNÉS ───────────────────────────────────────────────────────
+//
+// ⚠ CE GARDE-FOU NE LISAIT QUE `app/src`, ET SON MESSAGE LAISSAIT CROIRE AUTRE CHOSE.
+//
+// « Aucune clé cryptographique en valeur par défaut » est vrai de ce qu'il contrôlait. Quiconque le
+// lisait concluait « pas de clé dans le dépôt ». Huit secrets réels vivaient dans `app/.env`, qui
+// est versionné — dont les trois clés de scellement NF525.
+//
+// Toute installation qui suivait la procédure documentée héritait donc des clés du dépôt.
+// Silencieusement : le conteneur démarre très bien, la clé est là.
+//
+// LA RÈGLE : UN BOUCHON DIT QU'IL EST UN BOUCHON — en clair, ou une fois décodé en base64.
+//
+// Juger sur la longueur ou l'entropie laisserait passer un vrai secret court et refuserait un
+// bouchon long. Exempter `.env.test` en bloc créerait un endroit où cacher un vrai secret sans que
+// rien ne le dise. On exige donc que la valeur SE NOMME.
+const FICHIERS_ENV = ['app/.env', 'app/.env.test'];
+const MOTS_DE_BOUCHON = ['test', 'change', 'exemple', 'a_generer', 'todo', 'placeholder', 'factice', 'bidon'];
+
+$secretsEnv = [];
+
+foreach (FICHIERS_ENV as $relatif) {
+    $chemin = RACINE_DEPOT . '/' . $relatif;
+    if (!is_file($chemin)) {
+        continue;
+    }
+    $lignes = preg_split('/\R/', (string) file_get_contents($chemin)) ?: [];
+
+    foreach ($lignes as $i => $ligne) {
+        if (preg_match('/^([A-Z][A-Z0-9_]*(?:KEY|SECRET|PASSPHRASE|TOKEN))=(.*)$/', $ligne, $m) !== 1) {
+            continue;
+        }
+        $nom = $m[1];
+        $valeur = trim($m[2], " \t\"'");
+
+        // Une valeur vide est le bon état : l'installation la fournit.
+        if ($valeur === '') {
+            continue;
+        }
+        // Un chemin de fichier n'est pas un secret : `JWT_SECRET_KEY` POINTE vers une clé, il
+        // n'en est pas une.
+        //
+        // ⚠ ON RECONNAIT UN CHEMIN A SON DEBUT, PAS A SES CARACTERES. Ma première version écartait
+        // toute valeur CONTENANT un `/` — or l'alphabet base64 contient `/`, et une clé de 32
+        // octets en base64 en porte un une fois sur deux. Le contrôle épargnait donc la moitié des
+        // secrets qu'il devait nommer, tout en refusant correctement les autres : il paraissait
+        // sain. Seul un témoin — un vrai secret glissé exprès — l'a démasqué.
+        if (str_starts_with($valeur, '%') || str_starts_with($valeur, '/') || str_starts_with($valeur, './')) {
+            continue;
+        }
+
+        // Le bouchon doit se nommer — en clair, ou une fois décodé.
+        $candidats = [strtolower($valeur)];
+        $decode = base64_decode($valeur, true);
+        if ($decode !== false) {
+            $candidats[] = strtolower($decode);
+        }
+
+        $seNomme = false;
+        foreach ($candidats as $texte) {
+            foreach (MOTS_DE_BOUCHON as $mot) {
+                if (str_contains($texte, $mot)) {
+                    $seNomme = true;
+                    break 2;
+                }
+            }
+        }
+
+        if (!$seNomme) {
+            $secretsEnv[] = ['fichier' => $relatif, 'ligne' => $i + 1, 'nom' => $nom];
+        }
+    }
+}
+
+if ($secretsEnv !== []) {
+    fwrite(STDERR, "\n✗ Secrets : valeur réelle dans un fichier .env VERSIONNÉ\n\n");
+    foreach ($secretsEnv as $s) {
+        fwrite(STDERR, sprintf("  %s:%d  %s\n", $s['fichier'], $s['ligne'], $s['nom']));
+    }
+    fwrite(STDERR, <<<'TXT'
+
+Ces fichiers partent avec le dépôt. Toute installation qui suit la procédure hérite de la valeur —
+silencieusement, puisque le conteneur démarre : la clé est là. Un chiffrement au repos ne protège
+alors de rien contre quiconque a accès au dépôt, et toutes les installations partagent le secret.
+
+Deux sorties, et une seule est bonne :
+
+  1. La variable est un VRAI secret — laisse-la VIDE ici, déclare-la dans
+     `infra/env.preprod.example` et laisse le déploiement la générer au premier passage.
+
+  2. C'est un bouchon de développement ou de test — alors QU'IL LE DISE. Sa valeur doit contenir
+     l'un de ces mots, en clair ou une fois décodée en base64 :
+
+         test · change · exemple · a_generer · todo · placeholder · factice · bidon
+
+⚠ Un statut de « valeur de convenance » qui ne tient qu'à un commentaire ne tient à rien : le jour
+où quelqu'un colle une vraie clé à cet endroit, plus rien ne distingue les deux.
+
+Pas de liste de dérogation ici non plus. Rendre un bouchon reconnaissable coûte une seconde ;
+l'inscrire sur une liste coûte la règle.
+
+TXT);
+    exit(1);
+}
+
+
 if (in_array('--liste', array_slice($argv, 1), true)) {
     echo sprintf("Secrets en valeur par défaut : %d\n", count($trouvailles));
     foreach ($trouvailles as $t) {
@@ -184,8 +291,14 @@ Le motif attendu, déjà employé huit fois dans ce dépôt :
     ) {}
 
 Pas de valeur par défaut : si la variable manque, le conteneur refuse de démarrer. Échec fermé.
-Déclare ensuite la variable dans .env avec un commentaire disant à quoi elle sert, comme
-NF525_SEAL_KEY et NF525_COMPTA_SEAL_KEY.
+
+Déclare ensuite la variable dans `infra/env.preprod.example`, VIDE, avec un commentaire disant à
+quoi elle sert — le déploiement la génère au premier passage.
+
+⚠ PAS dans `app/.env`, QUI EST VERSIONNÉ. Ce paragraphe disait le contraire jusqu'au 31/08, et
+citait NF525_SEAL_KEY et NF525_COMPTA_SEAL_KEY comme exemples à suivre : c'étaient deux des huit
+secrets réels qui dormaient dans le dépôt. Ce garde-fou recommandait le défaut qu'il aurait dû
+refuser, en affichant vert.
 
 Ce garde-fou n'a pas de liste de dérogation, et n'en aura pas : une clé en dur n'est pas une dette
 qu'on étale, c'est un secret publié. Il n'y a rien à geler — il y a à corriger.

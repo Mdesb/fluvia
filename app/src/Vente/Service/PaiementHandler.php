@@ -33,6 +33,10 @@ final class PaiementHandler
         // d'origine (moyen `pmv` traité comme un code de règlement ordinaire) si aucun port n'est
         // câblé — ne casse aucun test M2 existant qui n'exerce pas le moyen `pmv` en détail.
         private readonly ?PorteMonnaieVirtuelInterface $pmv = null,
+        // PAY-3 — nullable pour la même raison que `$pmv` : les tests unitaires qui construisent ce
+        // gestionnaire à la main n'ont pas à connaître le bus d'événements pour exercer un rendu de
+        // monnaie. En service câblé, il est toujours présent.
+        private readonly ?CardRejectionRecorder $refusCarte = null,
     ) {
     }
 
@@ -53,9 +57,24 @@ final class PaiementHandler
             throw new UnprocessableEntityHttpException(sprintf('Moyen de paiement inconnu : « %s ».', $code));
         }
 
-        $pdv = $vente->getSession()?->getPointDeVente();
+        // D44-bis — porté par la vente : une vente directe n'a pas de session d'où le déduire.
+        $pdv = $vente->getPointDeVente();
         if ($pdv !== null && $pdv->getMoyensAutorises() !== [] && !$pdv->autoriseMoyen($code)) {
             throw new UnprocessableEntityHttpException(sprintf('Moyen « %s » non autorisé sur ce point de vente (RG-M2-02).', $code));
+        }
+
+        // D44-bis — **la phrase qui justifie toute la vente directe** : sans espèces, il n'y a rien à
+        // compter, donc rien à clôturer, donc pas besoin de session. Ce contrôle est ce qui rend cette
+        // phrase vraie ; sans lui, on aurait ouvert un chemin pour encaisser du liquide sans fonds de
+        // caisse, sans Z et sans personne pour en répondre.
+        //
+        // Le critère est l'absence de session, pas un drapeau sur la vente : c'est la même chose, mais
+        // celle-là ne peut pas être requalifiée après coup.
+        if ($vente->getSession() === null && $moyen->estFiduciaire()) {
+            throw new UnprocessableEntityHttpException(sprintf(
+                'Moyen « %s » impossible hors session de caisse : une vente directe n\'encaisse pas d\'espèces (D44-bis).',
+                $code,
+            ));
         }
 
         $resteCentimes = $this->calculateur->centimes($vente->getResteAPayer());
@@ -107,6 +126,18 @@ final class PaiementHandler
             $resultat = $this->tpe->demander($pdv, $paiement->getMontant());
             $paiement->setStatutTPE($resultat->statut);
             if (!$resultat->estAccepte()) {
+                // PAY-3 — **le refus est un fait, et il ne laissait aucune trace.** Aucun `Paiement`
+                // n'est créé (c'est la règle CA-10), donc jusqu'ici la seule chose qui restait d'une
+                // carte refusée était un code de statut dans une réponse HTTP que personne ne
+                // conserve. On l'écrit, puis on l'annonce — dans cet ordre, voir le service.
+                $this->refusCarte?->consigner(
+                    $vente,
+                    $code,
+                    $paiement->getMontant(),
+                    $resultat->statut,
+                    $resultat->reference,
+                );
+
                 return ['paiement' => null, 'statutTPE' => $resultat->statut];
             }
             $paiement->setRefTPE($resultat->reference);

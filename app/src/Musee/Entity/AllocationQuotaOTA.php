@@ -28,7 +28,7 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ORM\Table(name: 'musee_allocation_quota_ota')]
 #[ORM\UniqueConstraint(name: 'uniq_allocation_partenaire_creneau', columns: ['partenaire_id', 'creneau_id'])]
 #[ApiResource(
-    shortName: 'MuseeAllocationQuotaOTA',
+    shortName: 'MuseeAllocationQuotaOta',
     operations: [
         new GetCollection(security: "is_granted('PERM', 'musee.lire')"),
         new Get(security: "is_granted('PERM', 'musee.lire')"),

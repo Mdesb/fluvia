@@ -6,7 +6,9 @@ namespace App\Acces\Entity;
 
 use ApiPlatform\Doctrine\Orm\Filter\DateFilter;
 use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
+use ApiPlatform\Doctrine\Orm\Filter\OrderFilter;
 use ApiPlatform\Metadata\ApiFilter;
+use App\Platform\Filter\UuidReferenceFilter;
 use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
@@ -79,10 +81,34 @@ use Symfony\Component\Uid\Uuid;
     ],
     normalizationContext: ['groups' => ['passage:read']],
 )]
+// ⚠ `espace`, `controleur` et `equipement` ONT QUITTE LE `SearchFilter` : ils rendaient TOUJOURS
+// une liste vide. Mesure sur une collection d'une ligne, chacun des trois filtres a rendu zero.
+//
+// Leur identifiant est un `Uuid`, stocke en `BINARY(16)` : le `SearchFilter` compare la colonne a
+// une chaine de 36 caracteres, ne trouve rien, et ne leve rien. Voir `UuidReferenceFilter`, qui
+// explique la mesure et l'hypothese ecartee.
+//
+// `resultat` reste au `SearchFilter` -- c'est une enumeration stockee en chaine, il la gere bien.
+// `support.identifiant` aussi : il traverse une association pour comparer un CHAMP, pas un
+// identifiant, et c'est precisement ce que le filtre standard sait faire.
 #[ApiFilter(SearchFilter::class, properties: [
-    'espace' => 'exact', 'controleur' => 'exact', 'equipement' => 'exact', 'resultat' => 'exact', 'support.identifiant' => 'exact',
+    'resultat' => 'exact', 'support.identifiant' => 'exact',
 ])]
+#[ApiFilter(UuidReferenceFilter::class, properties: ['espace', 'controleur', 'equipement'])]
 #[ApiFilter(DateFilter::class, properties: ['horodatage'])]
+/**
+ * ⚠ SANS CE FILTRE, `order[horodatage]=desc` ETAIT IGNORE EN SILENCE.
+ *
+ * La collection sortait dans l'ordre d'insertion — du plus ANCIEN au plus recent — et le plafond de
+ * trente lignes par page donnait alors le contraire exact de ce qu'on demande partout : les trente
+ * PREMIERS passages de l'histoire du site, jamais les trente derniers.
+ *
+ * Constate a l'usage : une carte « Derniers passages » qui montrait les premiers, et un bandeau de
+ * caisse qui reannoncait comme neufs des scans deja vus, parce qu'il prenait la premiere ligne pour
+ * repere. Un tri cote ecran n'y pouvait rien : il reordonne les trente lignes recues, pas le CHOIX
+ * de ces trente-la.
+ */
+#[ApiFilter(OrderFilter::class, properties: ['horodatage'], arguments: ['orderParameterName' => 'order'])]
 class Passage
 {
     #[ORM\Id]
@@ -94,8 +120,27 @@ class Passage
     #[Groups(['passage:read'])]
     private \DateTimeImmutable $horodatage;
 
+    /**
+     * Le lieu franchi — ABSENT quand il n'y en a pas eu (D86, 30/08/2026).
+     *
+     * ⚠ NULLABLE DEPUIS QUE LE CONTRÔLE MANUEL EXISTE, et l'absence n'est pas une donnée manquante.
+     * Un agent qui scanne un billet sur un site sans matériel ne fait franchir aucune porte : il n'a
+     * pas un lieu inconnu, il n'a PAS de lieu. Les deux se ressemblent en base et ne se disent pas
+     * pareil à l'écran — c'est pourquoi les écrans écrivent « contrôlé à la main » et non « — », qui
+     * se lirait comme une panne.
+     *
+     * Les deux autres issues envisagées ont été écartées : ne rien écrire aurait creusé un trou dans
+     * l'historique exactement là où il n'y a pas de matériel, donc là où on a le plus besoin de
+     * savoir qui est entré ; et inscrire une zone quelconque aurait écrit qu'un porteur a franchi
+     * une porte qu'il n'a pas franchie — un historique qui invente est pire qu'un historique
+     * incomplet.
+     *
+     * Coût mesuré avant de trancher : une seule lecture de `$passage->getEspace()` existe dans
+     * `app/src` (`SynchroPassageHandler`), et elle gardait déjà le cas nul — le getter rend
+     * `?EspaceAcces` depuis toujours, seule la colonne l'interdisait.
+     */
     #[ORM\ManyToOne(targetEntity: EspaceAcces::class)]
-    #[ORM\JoinColumn(nullable: false)]
+    #[ORM\JoinColumn(nullable: true)]
     #[Groups(['passage:read'])]
     private ?EspaceAcces $espace = null;
 

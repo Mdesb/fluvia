@@ -8,14 +8,13 @@ use ApiPlatform\Doctrine\Orm\Extension\QueryCollectionExtensionInterface;
 use ApiPlatform\Doctrine\Orm\Extension\QueryItemExtensionInterface;
 use ApiPlatform\Doctrine\Orm\Util\QueryNameGeneratorInterface;
 use ApiPlatform\Metadata\Operation;
-use App\Securite\Entity\Affectation;
 use App\Securite\Entity\Utilisateur;
+use App\Securite\Service\ContexteEtablissement;
 use App\Sepa\Entity\ConfigCreancierSepa;
 use App\Sepa\Entity\LigneRemiseSepa;
 use App\Sepa\Entity\MandatSepa;
 use App\Sepa\Entity\RejetSepa;
 use App\Sepa\Entity\RemiseSepa;
-use Doctrine\ORM\Query\Expr\Join;
 use Doctrine\ORM\QueryBuilder;
 use Symfony\Bundle\SecurityBundle\Security;
 
@@ -38,6 +37,7 @@ final class PerimetreSepaExtension implements QueryCollectionExtensionInterface,
 
     public function __construct(
         private readonly Security $security,
+        private readonly ContexteEtablissement $contexte,
     ) {
     }
 
@@ -83,17 +83,33 @@ final class PerimetreSepaExtension implements QueryCollectionExtensionInterface,
             $alias = $nouvelAlias;
         }
 
+        // ── L'AXE EST L'ÉTABLISSEMENT ACTIF ──────────────────────────────────────────────────
+        //
+        // Bascule du 28/08. Le filtre portait sur le PÉRIMÈTRE du lecteur : un exploitant affecté à
+        // plusieurs sites voyait les données de tous, sous le titre d'un seul. Constaté à l'écran —
+        // un site créé le matin même, sans caisse, annonçait une session de caisse ouverte, celle
+        // du voisin, et sa pastille « prêt à vendre » s'allumait.
+        //
+        // L'écran porte un sélecteur d'établissement et titre ses pages du site actif : les données
+        // le suivent. Le périmètre dit ce qu'on a le DROIT de voir ; l'actif dit ce qu'on REGARDE.
+        //
+        // Le droit reste vérifié ailleurs, et c'est ce qui rend la bascule sûre :
+        // `ContexteEtablissement::idActif()` ne fait que lire l'en-tête — c'est un sélecteur, pas
+        // une preuve — mais `CalculateurDroits::codesEffectifs()` ne retient que les affectations
+        // portant SUR cet établissement, donc un en-tête hors périmètre ne donne aucun droit et le
+        // voter refuse avant que cette requête n'existe. Éprouvé par `AxeEtablissementActifTest`.
+        $actif = $this->contexte->idActif();
+        if ($actif === null) {
+            // Fermeture par défaut : une liste vide se remarque, une liste inter-établissements a
+            // seulement l'air plus longue.
+            $queryBuilder->andWhere('1 = 0');
+
+            return;
+        }
+
         $queryBuilder
-            ->innerJoin(
-                Affectation::class,
-                'aff_perimetre_sepa',
-                Join::WITH,
-                sprintf(
-                    'IDENTITY(aff_perimetre_sepa.etablissement) = IDENTITY(%s.etablissement) AND IDENTITY(aff_perimetre_sepa.utilisateur) = :perimetre_sepa_utilisateur',
-                    $alias,
-                ),
-            )
-            ->setParameter('perimetre_sepa_utilisateur', $utilisateur->getId(), 'uuid')
+            ->andWhere(sprintf('IDENTITY(%s.etablissement) = :perimetre_sepa_actif', $alias))
+            ->setParameter('perimetre_sepa_actif', $actif, 'uuid')
             ->distinct();
     }
 }

@@ -1,0 +1,271 @@
+#!/usr/bin/env bash
+#
+# Hook `pre-commit` — pour le worktree d'intégration (C16 bis).
+#
+# **Pourquoi il existe.** Le hook `pre-receive` ne s'exécute que sur un *push*. Or `main` est
+# désormais **checked out** dans un worktree du dépôt bare (`/home/debian/wt/main`) : qui y commite
+# met à jour la référence `main` sans push, donc **sans que `pre-receive` ne voie jamais rien**.
+#
+# Concrètement, les branches de claude-B et claude-C sont contrôlées, et les intégrations — celles
+# qui fusionnent tout le reste — ne le sont pas. Ce n'est pas un reproche : c'est une conséquence
+# mécanique de la topologie, et elle est invisible tant qu'on ne la cherche pas. Aujourd'hui l'arbre
+# de `main` passe les garde-fous ; ce hook fait que ça continue d'être vrai par construction plutôt
+# que par vigilance.
+#
+# ── INSTALLATION ────────────────────────────────────────────────────────────────────────────────
+#   ./bin/installer-hooks.sh /home/debian/wt/main --pre-commit
+# ── INTERRUPTEUR ────────────────────────────────────────────────────────────────────────────────
+#   touch <worktree>/.git/GARDE-FOUS-DESACTIVES     ou     git commit --no-verify
+# Contrairement à `pre-receive`, un `pre-commit` se contourne côté client par `--no-verify` : c'est
+# un garde-fou de confort, pas une barrière. La barrière reste `pre-receive` pour qui pousse.
+# ────────────────────────────────────────────────────────────────────────────────────────────────
+
+set -uo pipefail
+
+RACINE="$(git rev-parse --show-toplevel)"
+INTERRUPTEUR="$(git rev-parse --git-dir)/GARDE-FOUS-DESACTIVES"
+IMAGE="billetterie-preprod-php"
+
+if [ -f "$INTERRUPTEUR" ]; then
+    echo "⚠ Garde-fous désactivés ($INTERRUPTEUR) — commit non contrôlé."
+    exit 0
+fi
+
+[ -f "$RACINE/bin/garde-fou-cloisonnement.php" ] || exit 0   # commit antérieur aux garde-fous
+
+if command -v php >/dev/null 2>&1; then
+    lancer() { (cd "$RACINE" && php "$@"); }
+elif command -v docker >/dev/null 2>&1 && docker image inspect "$IMAGE" >/dev/null 2>&1; then
+    lancer() {
+        docker run --rm --network none -u "$(id -u):$(id -g)" \
+            -v "$RACINE:$RACINE" -w "$RACINE" "$IMAGE" php "$@"
+    }
+else
+    echo "✗ Ni php ni l'image « $IMAGE » : impossible de contrôler ce commit."
+    echo "  Corrige l'outillage, ou pose $INTERRUPTEUR en le justifiant dans MESSAGES.md."
+    exit 1
+fi
+
+ECHEC=0
+LANCES=""
+
+# `lancer` est déjà défini plus haut selon php local / docker ; on l'enveloppe pour tenir la
+# liste sans toucher aux deux définitions.
+lancer_gf() { # lancer_gf <nom-du-script> [args...]
+    nom="$1"; shift
+    LANCES="$LANCES $nom"
+    lancer "bin/$nom" "$@"
+}
+
+# Cloisonnement + C19 : sur l'arbre de travail. Pas de `--contre` ici — il n'y a pas encore de
+# branche cible à comparer ; la ligne de base et son plafond suffisent à refuser tout cas nouveau.
+lancer_gf garde-fou-cloisonnement.php || ECHEC=1
+
+# Secrets : sur l'arbre de travail également.
+[ -f "$RACINE/bin/garde-fou-secrets.php" ] && { lancer_gf garde-fou-secrets.php || ECHEC=1; }
+
+# Dependances de dev (n°20) : du code de production qui importe un paquet absent en production.
+[ -f "$RACINE/bin/garde-fou-dependances-dev.php" ] && { lancer_gf garde-fou-dependances-dev.php || ECHEC=1; }
+
+# Couverture de perimetre en lecture (voir hooks/pre-receive).
+[ -f "$RACINE/bin/garde-fou-couverture-perimetre.php" ] && { lancer_gf garde-fou-couverture-perimetre.php || ECHEC=1; }
+
+# Une reference libre ne se compare ni en DQL ni par filtre (D58).
+#
+# TROISIEME endroit ou ce garde-fou a du etre branche : hooks/pre-receive, bin/garde-fous.sh, et ici.
+# Je les ai oublies dans cet ordre, et chaque fois c'est un filet de completude qui me l'a dit -- pas
+# ma relecture. Le second oubli a coute une poussee refusee a claude-D apres un vert local ; le
+# troisieme a ete attrape par ce hook lui-meme, le jour ou je venais de l'installer.
+#
+# La lecon n'est pas « faire attention » : c'est que trois listes redites se desynchronisent, et que
+# seul un filet qui les compare a l'inventaire reel le voit.
+[ -f "$RACINE/bin/garde-fou-references-libres.php" ] && { lancer_gf garde-fou-references-libres.php || ECHEC=1; }
+
+# Une propriete declaree dans un `#[ApiFilter]` doit EXISTER : API Platform ignore une propriete
+# inconnue en silence, et la collection sort ENTIERE. Contrairement aux filtres qui rendent une liste
+# vide, celui-ci ne remonte jamais en reclamation -- des donnees qui s'affichent n'intriguent personne.
+[ -f "$RACINE/bin/garde-fou-filtres-declares.php" ] && { lancer_gf garde-fou-filtres-declares.php || ECHEC=1; }
+
+# Le prefixe `/editor/` ne protege rien : aucune regle `access_control` ne vise `^/api/editor`, la
+# garde est portee par chaque operation. Or il se LIT comme une barriere -- `/editor/plans` est
+# publique quand `/editor/catalog/plans` est reservee a l'editeur. On empeche la prochaine route
+# d'heriter de l'apparence de surete sans la surete.
+[ -f "$RACINE/bin/garde-fou-routes-editeur.php" ] && { lancer_gf garde-fou-routes-editeur.php || ECHEC=1; }
+
+# Une lecture frontale qui vaut toujours `undefined` : la propriete lue n'est dans aucun groupe que
+# porte la relation, donc le serveur n'envoie qu'un identifiant. Cliquet — la dette du jour est
+# gelee, son augmentation refusee.
+[ -f "$RACINE/bin/garde-fou-relations-nues.php" ] && { lancer_gf garde-fou-relations-nues.php || ECHEC=1; }
+
+# Événements du catalogue (D2/D22) : abonné inerte, émission hors contrat, cliquet.
+[ -f "$RACINE/bin/garde-fou-evenements-orphelins.php" ] && { lancer_gf garde-fou-evenements-orphelins.php || ECHEC=1; }
+
+# Conformité des charges utiles au catalogue (D2).
+[ -f "$RACINE/bin/garde-fou-charges-utiles.php" ] && { lancer_gf garde-fou-charges-utiles.php || ECHEC=1; }
+
+# Écriture qui traverse la frontière (D3/D8).
+[ -f "$RACINE/bin/garde-fou-ecriture-transfrontiere.php" ] && { lancer_gf garde-fou-ecriture-transfrontiere.php || ECHEC=1; }
+
+# Un DEFAULT pose en migration doit etre declare au mapping (D32).
+[ -f "$RACINE/bin/garde-fou-defauts-mapping.php" ] && { lancer_gf garde-fou-defauts-mapping.php || ECHEC=1; }
+
+# Une entite ne doit pas laisser ecrire son propre etablissement (D41).
+[ -f "$RACINE/bin/garde-fou-etablissement-ecrivable.php" ] && { lancer_gf garde-fou-etablissement-ecrivable.php || ECHEC=1; }
+
+# Une suppression dans un up() de migration doit etre voulue et le dire (D32).
+[ -f "$RACINE/bin/garde-fou-drop-migrations.php" ] && { lancer_gf garde-fou-drop-migrations.php || ECHEC=1; }
+
+# Lier un OBJET a un parametre de requete sans dire son type (D58). Doctrine passe l'identifiant
+# sans son type `uuid` : la requete reste valide et compte zero, sans rien signaler.
+[ -f "$RACINE/bin/garde-fou-liaisons-objet.php" ] && { lancer_gf garde-fou-liaisons-objet.php || ECHEC=1; }
+[ -f "$RACINE/bin/garde-fou-nullable-non-nul.php" ] && { lancer_gf garde-fou-nullable-non-nul.php || ECHEC=1; }
+[ -f "$RACINE/bin/garde-fou-vacuite-tests.php" ] && { lancer_gf garde-fou-vacuite-tests.php || ECHEC=1; }
+[ -f "$RACINE/bin/garde-fou-espacement-en-ligne.php" ] && { lancer_gf garde-fou-espacement-en-ligne.php || ECHEC=1; }
+[ -f "$RACINE/bin/garde-fou-champ-cloisonnement.php" ] && { lancer_gf garde-fou-champ-cloisonnement.php || ECHEC=1; }
+[ -f "$RACINE/bin/garde-fou-post-sans-suppression.php" ] && { lancer_gf garde-fou-post-sans-suppression.php || ECHEC=1; }
+[ -f "$RACINE/bin/garde-fou-filtres-muets.php" ] && { lancer_gf garde-fou-filtres-muets.php || ECHEC=1; }
+
+# Appels du frontal dans le vide (n°33) : un chemin qu'aucune route ne sert rend un 404, que le
+# `catch` de l'ecran transforme en liste vide. Le defaut ne se voit JAMAIS a l'ecran.
+#
+# ⚠ Ce controle demarre le noyau Symfony pour lire `debug:router` — deux secondes, et c'est la seule
+# source qui dise ce que le serveur sert vraiment. Il porte lui-meme son environnement et sa memoire.
+[ -f "$RACINE/bin/garde-fou-appels-dans-le-vide.php" ] && { lancer_gf garde-fou-appels-dans-le-vide.php || ECHEC=1; }
+
+# Nommage : sur les fichiers **indexés** et ajoutés. `--cached` est ce qui sera réellement commité,
+# et c'est aussi ce qui évite de dépendre d'une révision de référence inexistante à ce stade.
+if [ -f "$RACINE/bin/garde-fou-nommage-anglais.php" ]; then
+    AJOUTES="$(git diff --cached --diff-filter=A --name-only -- 'app/src' 'app/migrations' | paste -sd, -)"
+    if [ -n "$AJOUTES" ]; then
+        lancer_gf garde-fou-nommage-anglais.php "--fichiers=$AJOUTES" || ECHEC=1
+    else
+        # Rien d'ajouté : le contrôle est traité, on l'enregistre pour le filet.
+        LANCES="$LANCES garde-fou-nommage-anglais.php"
+    fi
+fi
+
+# ⚠ UN SEUL BLOC, HUIT APPELANTS — ET C'EST LA COPIE QUI AVAIT FAIT LE TROU.
+#
+# Trois contrôles frontaux étaient câblés ici par trois copies du même bloc de sept lignes. Les cinq
+# autres ne l'étaient pas : ajouter un contrôle demandait de recopier une quatrième fois, et cinq
+# fois personne ne l'a fait. Mesuré le 31/08, en fusionnant `verifier-dates-locales.mjs` — câblé
+# dans `bin/garde-fous.sh` et `hooks/pre-receive`, absent d'ici.
+#
+# Rien ne passait pour autant, `pre-receive` les porte tous les huit. Ce qui se perdait est le
+# MOMENT du retour : au push au lieu du commit, donc après plusieurs commits empilés, donc avec la
+# tentation du `--no-verify` pour ne pas tout refaire.
+#
+# `node` n'est pas dans l'image PHP : sur l'hôte, on le dit plutôt que de faire silence — un
+# contrôle sauté sans un mot se lit comme un contrôle passé.
+FRONT_LANCES=""
+
+lancer_front() {
+    script="$1"
+    libelle="$2"
+
+    # Enregistré AVANT toute sortie anticipée : le filet de complétude vérifie que ce hook CONNAÎT
+    # le contrôle, pas qu'il a pu le lancer. Un script absent de l'arbre ou un `node` manquant sont
+    # des circonstances ; un script que le hook ignore est un défaut.
+    FRONT_LANCES="$FRONT_LANCES $script"
+
+    [ -f "$RACINE/frontend/scripts/$script" ] || return 0
+
+    if ! command -v node >/dev/null 2>&1; then
+        echo "· $libelle IGNORÉ — « node » indisponible. Le contrôle n'a PAS tourné."
+        return 0
+    fi
+
+    ( cd "$RACINE/frontend" && node "scripts/$script" ) || ECHEC=1
+}
+
+lancer_front verifier-droits.mjs        "Droits du frontend (D39)"
+lancer_front verifier-cache.mjs         "Cache du service worker (n°18)"
+lancer_front garde-fou-ecart.mjs        "Écart client/serveur (n°15)"
+lancer_front verifier-formats.mjs       "Formats d'écriture (n°11)"
+lancer_front verifier-imports.mjs       "Imports manquants (n°10)"
+lancer_front verifier-classes.mjs       "Classes CSS déclarées (n°16)"
+lancer_front verifier-dates-locales.mjs "Dates locales"
+lancer_front verifier-profil-charge.mjs "Profil chargé avant le rendu"
+lancer_front verifier-boutons-nommes.mjs "Boutons nommés"
+lancer_front verifier-clic-clavier.mjs   "Clic au clavier"
+lancer_front verifier-contrastes.mjs     "Contrastes"
+
+# ⚠ FILET DE COMPLÉTUDE — même leçon que `pre-receive`, même remède.
+#
+# Ce hook redit la liste des garde-fous au lieu d'appeler `bin/garde-fous.sh`, parce qu'il n'a ni
+# révision de référence ni `--contre` à fournir. Une liste redite se désynchronise : celle-ci en
+# appelait quatre sur sept le 24/08, et c'est le SEUL contrôle des commits d'intégration sur
+# `main`, qui ne passent jamais par `pre-receive`.
+#
+# Tout `bin/garde-fou-*.php` non appelé fait échouer le commit qui l'ajoute.
+# Le glob s'arrête à `.php`, et c'est délibéré : le garde-fou de topologie est un `.sh` qui
+# répond à « par où passent mes commits ». Dans un hook, la question n'a pas de sens — on
+# analyse un arbre extrait dans un `mktemp`, sans remote ni worktree. Sa complétude est donc
+# assurée par le filet de `bin/garde-fous.sh`, qui lui globe sans extension.
+for chemin in "$RACINE"/bin/garde-fou-*.php; do
+    [ -f "$chemin" ] || continue
+    nom="$(basename "$chemin")"
+    case " $LANCES " in
+        *" $nom "*) ;;
+        *)
+            echo "✗ Garde-fou présent dans l'arbre mais jamais lancé par ce hook : $nom"
+            echo "  Ajoute son appel dans hooks/pre-commit."
+            ECHEC=1
+            ;;
+    esac
+done
+
+# ⚠ ET LE MEME FILET POUR LES CONTRÔLES FRONTAUX, QUI N'EN AVAIENT AUCUN.
+#
+# Celui du dessus ratisse `bin/garde-fou-*.php` et rien d'autre. Un contrôle frontal neuf pouvait
+# donc être ajouté sans qu'aucun crochet ne s'en aperçoive — c'est précisément ce qui est arrivé à
+# cinq d'entre eux, et personne ne l'a vu jusqu'à ce qu'on compte les trois listes à la main.
+#
+# Le nom distingue les deux familles du répertoire, et c'est délibérément lisible :
+#
+#     verifier-*.mjs · garde-fou-*.mjs   des CONTRÔLES, ils doivent tourner
+#     mesurer-*.mjs                      des SONDES, lancées à la main quand on cherche quelque chose
+for chemin in "$RACINE"/frontend/scripts/verifier-*.mjs "$RACINE"/frontend/scripts/garde-fou-*.mjs; do
+    [ -f "$chemin" ] || continue
+    nom="$(basename "$chemin")"
+    case " $FRONT_LANCES " in
+        *" $nom "*) ;;
+        *)
+            echo "✗ Contrôle frontal présent dans l'arbre mais jamais lancé par ce hook : $nom"
+            echo "  Ajoute une ligne « lancer_front $nom » dans hooks/pre-commit,"
+            echo "  et vérifie les deux autres listes : bin/garde-fous.sh et hooks/pre-receive."
+            ECHEC=1
+            ;;
+    esac
+done
+
+if [ "$ECHEC" -ne 0 ]; then
+    echo
+    echo "✗ Commit refusé : au moins un garde-fou a échoué."
+    echo "  Reproduis : ./bin/garde-fous.sh"
+    echo "  Si tu dois vraiment passer outre : git commit --no-verify, et dis pourquoi dans MESSAGES.md."
+    exit 1
+fi
+
+# CE QUE CE HOOK NE VERIFIE PAS, ET POURQUOI IL DOIT LE DIRE.
+#
+# Il tourne SANS reference : il compare l'arbre a la ligne de base LOCALE. Or un cliquet ne se juge
+# que contre un etat anterieur — sans reference, il ne verifie que la coherence interne, jamais qu'un
+# plafond a baisse ailleurs. Le `pre-receive`, lui, compare a `origin/main`.
+#
+# claude-G l'a vécu : quatorze verts ici a la seconde pres, poussee REFUSEE juste apres, parce que
+# quelqu'un avait resorbe cinq entrees du cliquet « Etablissement ecrivable » sur `main` pendant
+# qu'elle travaillait. Sa ligne de base disait 48, celle de `main` disait 43.
+#
+# Ce n'est pas une omission qu'on corrige : c'est structurel, il manque a ce hook une information qui
+# n'existe que cote serveur. Ce qui SE corrige, c'est de le dire — quatorze verts silencieux laissent
+# croire a une garantie que ce hook ne donne pas.
+#
+# C'est le motif de la journee du 26/08, applique a nous-memes : un controle qui repond quelque chose
+# avec l'air d'avoir tout verifie. Signale par claude-G, qui n'a pas touche a `hooks/` pour autant.
+echo
+echo "✓ Garde-fous locaux OK — cliquets non vérifiés contre origin/main, le push tranchera."
+echo "  Si ta branche est en retard, un plafond peut avoir baissé sans que tu le voies :"
+echo "    git fetch origin && git merge --no-edit origin/main"
+
+exit 0

@@ -47,12 +47,18 @@ final class ScellementFactureHandler
         $empreintePrecedente = $precedente?->getEmpreinte();
         $sequence = $precedente === null ? 1 : $precedente->getNumeroSequence() + 1;
 
-        $empreinte = $this->calculerEmpreinte($this->payloadCanonique($facture), $empreintePrecedente);
+        // ⚠ L'INSTANTANÉ EST CONSERVÉ, PLUS RECONSTRUIT. Sans lui, la vérification relisait les
+        // entités VIVANTES : un taux de TVA corrigé — geste légitime, un décret change les taux —
+        // faisait dériver l'empreinte recalculée de tout document scellé avec ce taux. Même patron
+        // que `OperationScellee`, la seule des trois chaînes qui faisait bien.
+        $payload = $this->payloadCanonique($facture);
+        $empreinte = $this->calculerEmpreinte($payload, $empreintePrecedente);
 
         $facture->setNumeroSequence($sequence);
         $facture->setEmpreintePrecedente($empreintePrecedente);
         $facture->setEmpreinte($empreinte);
         $facture->setSignature($this->signer($empreinte));
+        $facture->setPayloadCanonique($payload);
 
         return $facture;
     }
@@ -99,9 +105,35 @@ final class ScellementFactureHandler
                 $anomalies[] = ['sequence' => $sequence, 'probleme' => 'chaînage rompu : empreinte précédente incohérente'];
             }
 
-            $recalculee = $this->calculerEmpreinte($this->payloadCanonique($facture), $facture->getEmpreintePrecedente());
+            // ⚠ DEUX CAS QUE L'ANCIEN CODE CONFONDAIT, ET LE MOT COMPTE.
+            //
+            // Avec l'instantané stocké, un écart PROUVE une altération : on compare la donnée à
+            // elle-même. Sans lui, on ne compare qu'à une reconstruction — et un référentiel qui a
+            // bougé depuis suffit à la faire différer, sans que rien n'ait été touché.
+            //
+            // L'ancien message disait « la donnée a été altérée » dans les deux cas. Le logiciel
+            // accusait son utilisateur de falsification pour un geste qu'il l'autorise lui-même à
+            // faire. Devant un expert-comptable, c'est le pire mot possible.
+            $instantane = $facture->getPayloadCanonique();
+            $recalculee = $this->calculerEmpreinte($instantane ?? $this->payloadCanonique($facture), $facture->getEmpreintePrecedente());
+
+            // ⚠ SECONDE GARANTIE, INDEPENDANTE DE LA PREMIERE. L'empreinte prouve que la chaîne est
+            // entière ; elle ne dit rien de ce qui a pu être touché en base DEPUIS le scellement,
+            // puisqu'on la recalcule depuis une copie que personne n'atteint.
+            if ($instantane !== null && !$this->instantaneDecritEncore($instantane, $facture)) {
+                $anomalies[] = [
+                    'sequence' => $sequence,
+                    'probleme' => 'la donnée a été altérée depuis le scellement : le document en base ne correspond plus à ce qui a été scellé',
+                ];
+            }
+
             if (!hash_equals($recalculee, $facture->getEmpreinte())) {
-                $anomalies[] = ['sequence' => $sequence, 'probleme' => 'empreinte incohérente : la donnée a été altérée'];
+                $anomalies[] = [
+                    'sequence' => $sequence,
+                    'probleme' => $instantane !== null
+                        ? 'empreinte incohérente : la donnée a été altérée'
+                        : 'non vérifiable : ce document a été scellé avant que l\'instantané ne soit conservé, et sa reconstruction ne redonne pas l\'empreinte — un référentiel a pu changer depuis',
+                ];
             } elseif (!hash_equals($this->signer($facture->getEmpreinte()), $facture->getSignature())) {
                 $anomalies[] = ['sequence' => $sequence, 'probleme' => 'signature invalide'];
             }
@@ -182,4 +214,77 @@ final class ScellementFactureHandler
 
         return $valeur;
     }
+
+    /**
+     * REPREND L'INSTANTANÉ D'UN DOCUMENT SCELLÉ AVANT QU'ON NE LE CONSERVE — SI ET SEULEMENT SI ON
+     * PEUT PROUVER QUE C'EST BIEN LE SIEN.
+     *
+     * ⚠ La condition n'est pas une précaution, elle sépare une reprise d'une fabrication de preuve.
+     *
+     * Si l'instantané recalculé aujourd'hui redonne EXACTEMENT l'empreinte scellée hier, il est
+     * démontré que c'est celui d'origine : une empreinte sha256 ne se retrouve pas par hasard. La
+     * coïncidence est la preuve.
+     *
+     * Sinon, on ne sait pas si un référentiel a bougé ou si la donnée a été touchée. Écrire un
+     * instantané dans ce cas fabriquerait la preuve qu'on prétend conserver — c'est précisément le
+     * geste qu'un contrôle reprocherait. On laisse donc `null`, et la vérification dit
+     * « non vérifiable » au lieu d'accuser.
+     *
+     * Arbitré par Maxime le 31/08.
+     *
+     * @return bool vrai si le document porte désormais son instantané
+     */
+    public function reprendreInstantane(Facture $facture): bool
+    {
+        if ($facture->getPayloadCanonique() !== null) {
+            return true;
+        }
+
+        if ($facture->getEmpreinte() === '') {
+            return false;
+        }
+
+        $instantane = $this->payloadCanonique($facture);
+        $recalculee = $this->calculerEmpreinte($instantane, $facture->getEmpreintePrecedente());
+
+        if (!hash_equals($recalculee, $facture->getEmpreinte())) {
+            return false;
+        }
+
+        $facture->setPayloadCanonique($instantane);
+
+        return true;
+    }
+
+
+    /**
+     * L'instantané décrit-il ENCORE le document ? Question distincte de « l'empreinte tient-elle ».
+     *
+     * ⚠ Vérifier l'empreinte contre l'instantané stocké supprime les fausses accusations — mais
+     * cesse aussi de voir une ligne altérée en base : l'empreinte se recalcule alors depuis une
+     * copie que personne n'a touchée, donc elle correspond toujours. Les deux garanties sont
+     * indépendantes et il faut les deux.
+     *
+     * **Seul `taux` est neutralisé**, parce qu'il vient d'un référentiel PARTAGÉ que l'exploitant a
+     * le droit de corriger. Tout le reste appartient au document — montants, désignations,
+     * quantités, numéro, dates, destinataire — et le garde d'inaltérabilité en interdit la
+     * modification. Un écart sur eux EST une altération, et le mot est mérité.
+     *
+     * @param array<string, mixed> $instantane
+     */
+    private function instantaneDecritEncore(array $instantane, Facture $facture): bool
+    {
+        $vivant = $this->payloadCanonique($facture);
+
+        // Le taux est recopié depuis l'instantané : c'est la seule valeur dont on accepte qu'elle
+        // ait bougé sans que le document n'ait été touché.
+        foreach ($vivant['lignes'] as $index => $ligne) {
+            if (isset($instantane['lignes'][$index]['taux'])) {
+                $vivant['lignes'][$index]['taux'] = $instantane['lignes'][$index]['taux'];
+            }
+        }
+
+        return $vivant == $instantane;
+    }
+
 }

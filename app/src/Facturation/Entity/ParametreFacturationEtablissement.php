@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Facturation\Entity;
 
+use App\Compta\Entity\TauxTva;
 use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
@@ -11,6 +12,7 @@ use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\Compta\Entity\CompteComptable;
 use App\Compta\Entity\ProfilExploitant;
+use App\Facturation\State\BillingSettingsStampProcessor;
 use App\Facturation\Service\Montant;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
@@ -41,11 +43,13 @@ use Symfony\Component\Uid\Uuid;
             security: "is_granted('PERM', 'facturation.lire')",
         ),
         new Post(
+            processor: BillingSettingsStampProcessor::class,
             uriTemplate: '/parametres-facturation',
             security: "is_granted('PERM', 'facturation.gerer')",
             denormalizationContext: ['groups' => ['parametre_facturation:write']],
         ),
         new Patch(
+            processor: BillingSettingsStampProcessor::class,
             uriTemplate: '/parametres-facturation/{id}',
             security: "is_granted('PERM', 'facturation.gerer')",
             denormalizationContext: ['groups' => ['parametre_facturation:write']],
@@ -60,9 +64,24 @@ class ParametreFacturationEtablissement
     #[Groups(['parametre_facturation:read'])]
     private Uuid $id;
 
+    /**
+     * ⚠ SORTI DU GROUPE D'ECRITURE LE 31/08 : le serveur le pose, le client ne le choisit pas.
+     *
+     * Il portait `parametre_facturation:write` et `nullable: false`, sans que rien ne le pose cote
+     * serveur. Deux consequences, mesurees sur une base jetable :
+     *
+     *   — un POST sans ce champ rendait un 500 « Column profil_exploitant_id cannot be null », pas
+     *     un refus propre. La ressource etait donc inutilisable, ce qui explique qu'aucun ecran ne
+     *     l'ait jamais appelee ;
+     *   — un POST AVEC un profil etranger aurait ecrit le parametrage de facturation du voisin —
+     *     ses conditions de reglement, son taux de penalites. Le symptome aurait ete un reglage qui
+     *     change tout seul chez quelqu'un d'autre, ce qu'on n'impute jamais a une requete etrangere.
+     *
+     * `BillingSettingsStampProcessor` le resout depuis l'etablissement actif.
+     */
     #[ORM\ManyToOne(targetEntity: ProfilExploitant::class)]
     #[ORM\JoinColumn(nullable: false)]
-    #[Groups(['parametre_facturation:read', 'parametre_facturation:write'])]
+    #[Groups(['parametre_facturation:read'])]
     private ?ProfilExploitant $profilExploitant = null;
 
     /** @var array<string, mixed> {denomination, adresse, siret, tvaIntra} */
@@ -87,6 +106,28 @@ class ParametreFacturationEtablissement
     #[ORM\Column(type: 'decimal', precision: 10, scale: 2, options: ['default' => '40.00'])]
     #[Groups(['parametre_facturation:read', 'parametre_facturation:write'])]
     private string $indemniteForfaitaireRecouvrement = '40.00';
+
+    /**
+     * Le taux de TVA applicable aux abonnements de la plateforme.
+     *
+     * **Volontairement `null` par défaut, et ce n'est pas un oubli.** Un exploitant français porte
+     * couramment quatre taux actifs — 20 %, 10 %, 5,5 % et hors champ — constaté par `claude-D` sur les
+     * données de démonstration, qui reflètent ici la réalité et non un artefact de test. Poser un taux
+     * par défaut reviendrait donc à en choisir un à la place de l'exploitant, une fois sur quatre au
+     * hasard. **Facturer au mauvais taux se corrige par un avoir et se voit sur une déclaration.**
+     *
+     * **Ce que ce champ débloque.** Tant que le taux devait être choisi à chaque émission, la
+     * facturation mensuelle ne pouvait pas être automatisée : une tâche périodique qui exige un
+     * arbitrage humain n'en est pas une. Renseigné une fois, il rend la tâche exécutable ; laissé vide,
+     * l'émission échoue explicitement en demandant de le préciser — jamais en devinant.
+     *
+     * `null` signifie donc « non décidé », pas « exonéré ». L'exonération, elle, se dit par un taux à
+     * zéro et se justifie par `mentionTvaSpecifique`.
+     */
+    #[ORM\ManyToOne(targetEntity: TauxTva::class)]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'RESTRICT')]
+    #[Groups(['parametre_facturation:read', 'parametre_facturation:write'])]
+    private ?TauxTva $tauxTvaAbonnement = null;
 
     /** Franchise en base (art. 293 B du CGI) — optionnel, ⚠ hypothèse §4.2 de la spec. */
     #[ORM\Column(length: 255, nullable: true)]
@@ -236,5 +277,17 @@ class ParametreFacturationEtablissement
         }
 
         return $texte;
+    }
+
+    public function getTauxTvaAbonnement(): ?TauxTva
+    {
+        return $this->tauxTvaAbonnement;
+    }
+
+    public function setTauxTvaAbonnement(?TauxTva $tauxTvaAbonnement): self
+    {
+        $this->tauxTvaAbonnement = $tauxTvaAbonnement;
+
+        return $this;
     }
 }

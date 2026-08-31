@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Offre\Entity;
 
+use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
+use ApiPlatform\Metadata\ApiFilter;
 use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Delete;
 use ApiPlatform\Metadata\Get;
@@ -16,6 +18,8 @@ use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Validator\Constraints as Assert;
+use App\Offre\State\LocalReferenceProcessor;
+use App\Platform\Scoping\ScopedReference;
 
 /**
  * Catégorie d'un des trois axes indépendants (marketing / comptable / rayon) — RG-M1-05.
@@ -29,15 +33,22 @@ use Symfony\Component\Validator\Constraints as Assert;
     operations: [
         new GetCollection(security: "is_granted('PERM', 'offre.lire')"),
         new Get(security: "is_granted('PERM', 'offre.lire')"),
-        new Post(security: "is_granted('PERM', 'offre.gerer')"),
-        new Patch(security: "is_granted('PERM', 'offre.gerer')"),
+        // D51 — l ajout est LOCAL, la modification du socle est refusee : voir LocalReferenceProcessor.
+        new Post(security: "is_granted('PERM', 'offre.gerer')", processor: LocalReferenceProcessor::class),
+        new Patch(security: "is_granted('PERM', 'offre.gerer')", processor: LocalReferenceProcessor::class),
         new Delete(security: "is_granted('PERM', 'offre.gerer')"),
     ],
     normalizationContext: ['groups' => ['cat:read']],
     denormalizationContext: ['groups' => ['cat:write']],
 )]
+#[ApiFilter(SearchFilter::class, properties: ['axe' => 'exact', 'portee' => 'exact'])]
 class Categorie
 {
+    // D51 — socle partage + ajout local. Le trait porte `portee` et `etablissement`, et
+    // `ScopedReferenceQuery` fait la lecture ; les deux vont ensemble, le trait seul rendrait la
+    // donnee lisible par tous.
+    use ScopedReference;
+
     #[ORM\Id]
     #[ORM\Column(type: UuidType::NAME, unique: true)]
     #[Groups(['cat:read', 'produit:read'])]

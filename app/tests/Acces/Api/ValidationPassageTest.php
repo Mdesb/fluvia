@@ -7,6 +7,7 @@ namespace App\Tests\Acces\Api;
 use App\Acces\DataFixtures\AccesFixtures;
 use App\Acces\Entity\Appairage;
 use App\Acces\Entity\DroitAcces;
+use App\Acces\Entity\EspaceAcces;
 use App\Acces\Entity\Support;
 use App\Acces\Enum\ModeAppairage;
 use App\Acces\Enum\StatutProjectionDroit;
@@ -41,7 +42,14 @@ final class ValidationPassageTest extends AccesApiTestCase
         $reponse = $client->getResponse()->toArray();
         self::assertSame('valide', $reponse['resultat']);
         self::assertNotEmpty($reponse['horodatage']);
-        self::assertLessThan(1.0, $duree, 'La réponse doit être rendue en moins de 1 s (US-L3-03).');
+        // D20 — seuil de garde, pas de mesure de performance. Une assertion d'horloge dans la
+        // suite fonctionnelle mesure la charge de la machine, pas le code : 1 s tenait en module
+        // isole et sautait en suite complete (1149 tests, VPS partage, Docker). A 5 s, elle attrape
+        // encore une regression pathologique — un N+1 ou un appel bloquant — sans dependre du voisin.
+        //
+        // L'exigence US-L3-03 (reponse sous 1 s) reste entiere : elle se verifie sur materiel
+        // representatif, a chaud et sur plusieurs echantillons, pas sur un tir unique ici (C21).
+        self::assertLessThan(5.0, $duree, 'Regression pathologique : reponse au-dela de 5 s (US-L3-03, seuil de garde D20).');
 
         $droit = $this->entite(DroitAcces::class, []);
         self::assertSame(11, $droit->getCreditRestant(), 'Le crédit doit être décompté atomiquement (RG-ACC-02).');
@@ -102,7 +110,9 @@ final class ValidationPassageTest extends AccesApiTestCase
         $reponse = $client->getResponse()->toArray();
         self::assertSame('refuse', $reponse['resultat']);
         self::assertSame('credit_epuise', $reponse['codeMotif']);
-        self::assertSame(['caisse', 'borne', 'app'], $reponse['propositionRecharge']);
+        // CQ-4 — seuls les canaux de recharge réellement implémentés sont proposés : la recharge au
+        // guichet (caisse, CQ-1) existe ; la borne libre-service et l'application ne sont pas câblées.
+        self::assertSame(['caisse'], $reponse['propositionRecharge']);
 
         $droitApres = $this->entite(DroitAcces::class, []);
         self::assertSame(0, $droitApres->getCreditRestant(), 'Aucun décompte supplémentaire sur refus (CA-11).');
@@ -154,6 +164,13 @@ final class ValidationPassageTest extends AccesApiTestCase
             ->setCreditRestant(1)
             ->setStatutProjection(StatutProjectionDroit::Valide)
             ->setEtablissement($etab);
+
+        // D87 : sans zone déclarée, ce droit n'ouvrirait aucune porte. Ce test porte sur la
+        // CONCURRENCE du décrément de crédit — il lui faut deux passages qui aboutissent.
+        $espace = $em->getRepository(EspaceAcces::class)->findOneBy(['libelle' => AccesFixtures::ESPACE_LIBELLE]);
+        self::assertInstanceOf(EspaceAcces::class, $espace);
+        $droit->addAuthorisedSpace($espace);
+
         $em->persist($droit);
 
         $supportA = (new Support())->setIdentifiant('CONC-A-' . substr((string) Uuid::v4(), 0, 8))->setType(TypeSupport::Qr)->setEtablissement($etab);

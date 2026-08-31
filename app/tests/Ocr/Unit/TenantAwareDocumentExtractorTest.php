@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Ocr\Unit;
 
+use App\Tests\SchemaDuHarnais;
 use App\Ocr\Adapter\ManualExtractorAdapter;
 use App\Ocr\Dto\DocumentToExtract;
 use App\Ocr\Entity\ExtractionAttempt;
@@ -20,7 +21,6 @@ use App\Organisation\Entity\Groupe;
 use App\Organisation\Entity\Region;
 use App\Securite\Service\ContexteEtablissement;
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Tools\SchemaTool;
 use Psr\Log\NullLogger;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Bundle\SecurityBundle\Security;
@@ -49,12 +49,9 @@ final class TenantAwareDocumentExtractorTest extends KernelTestCase
         self::bootKernel();
         $this->em = static::getContainer()->get('doctrine')->getManager();
 
-        $tool = new SchemaTool($this->em);
-        $metadata = $this->em->getMetadataFactory()->getAllMetadata();
-        $this->em->getConnection()->executeStatement('SET FOREIGN_KEY_CHECKS=0');
-        $tool->dropSchema($metadata);
-        $tool->createSchema($metadata);
-        $this->em->getConnection()->executeStatement('SET FOREIGN_KEY_CHECKS=1');
+        // Le schéma est construit UNE FOIS par processus, puis vidé entre les tests.
+        // Le faire détruire et reconstruire par chaque `setUp()` coûtait ~10 s par test.
+        SchemaDuHarnais::reinitialiser($this->em);
     }
 
     public function testAucuneConfigDelegueAManualEtJournaliseUneTentative(): void

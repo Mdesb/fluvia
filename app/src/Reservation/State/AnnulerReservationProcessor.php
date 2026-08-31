@@ -6,12 +6,20 @@ namespace App\Reservation\State;
 
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
+use App\Platform\Event\DomainEvent;
+use App\Platform\Event\EventActor;
+use App\Platform\Event\EventBus;
+use App\Platform\Event\EventSubject;
+use App\Platform\Event\EventTenant;
 use App\Reservation\Entity\Reservation;
+use App\Reservation\Enum\IssueCreditNoShow;
 use App\Reservation\Enum\StatutReservation;
 use App\Reservation\Service\AnnulationVenteReservationHandler;
 use App\Reservation\Service\DeclencherFacturationNoShowHandler;
 use App\Reservation\Service\JaugeRessourceMereHandler;
+use App\Reservation\Service\ProjectionAccesReservationHandler;
 use App\Reservation\Service\PromotionListeAttenteHandler;
+use App\Reservation\Service\StockCardCreditHandler;
 use App\Securite\Entity\Utilisateur;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
@@ -32,9 +40,12 @@ final class AnnulerReservationProcessor implements ProcessorInterface
         private readonly EntityManagerInterface $em,
         private readonly Security $security,
         private readonly JaugeRessourceMereHandler $jaugeMere,
+        private readonly StockCardCreditHandler $carteStock,
         private readonly PromotionListeAttenteHandler $promotion,
         private readonly DeclencherFacturationNoShowHandler $facturationHandler,
         private readonly AnnulationVenteReservationHandler $annulationVente,
+        private readonly ProjectionAccesReservationHandler $projectionAcces,
+        private readonly EventBus $eventBus,
     ) {
     }
 
@@ -59,11 +70,22 @@ final class AnnulerReservationProcessor implements ProcessorInterface
         $creneau = $data->getCreneau();
         $ressource = $creneau?->getRessource();
 
+        $facturationNoShow = null;
         if ($dansDelai) {
             $data->setStatut(StatutReservation::AnnuleeLibre);
             $this->em->flush();
+            $this->projectionAcces->revoquerSiProjete($data);
+            // CQ-3 + CQ-6 — le décompte a lieu à la réservation : une annulation dans les délais qui
+            // ne rendrait pas l'unité volerait une séance au client. Uniquement dans cette branche :
+            // la branche tardive relève de l'issue sur le crédit (D27, CQ-5), qui est une décision
+            // commerciale et non une symétrie comptable — les recoller effacerait D27.
+            $this->carteStock->restituer($data->getCreditDroitRef());
         } else {
-            $this->facturationHandler->declencher($data, StatutReservation::AnnuleeTardiveFacturee);
+            // Branche tardive (RG-ACC3-05) : la révocation est câblée dans
+            // DeclencherFacturationNoShowHandler::declencher(), point de passage partagé avec la
+            // branche no-show de BasculerNoShowCommand. Retour capturé (RG-CQ5-08) pour construire le
+            // payload étendu de booking.cancelled / publier booking.reschedule_requested ci-dessous.
+            $facturationNoShow = $this->facturationHandler->declencher($data, StatutReservation::AnnuleeTardiveFacturee);
         }
 
         // --- ajout G1/G2 (RG-RESAENC-09/10) : avoir de remboursement (délai franc, Vente validee) ou
@@ -74,12 +96,68 @@ final class AnnulerReservationProcessor implements ProcessorInterface
         $this->em->flush();
 
         if ($ressource !== null) {
-            $this->jaugeMere->decrementer($ressource);
+            // ACT-1 — on rend exactement ce qui avait été pris, pas une unité.
+            $this->jaugeMere->decrementer($ressource, $data->getQuantity());
             $this->em->flush();
         }
 
         if ($creneau !== null) {
             $this->promotion->promouvoirSiPlaceDisponible($creneau);
+        }
+
+        // SF-1 / D22 — `booking.cancelled`, declare au catalogue depuis l'origine et publie par
+        // personne jusqu'ici. Smart Flow en depend pour reproposer un creneau libere, et Revenue
+        // Recovery pour la relance.
+        //
+        // Emis depuis **les deux branches** — annulation libre et annulation tardive facturee — parce
+        // que les deux sont des annulations : ce qui les distingue est la facturation, pas la nature
+        // de l'acte. Et emis **ici** plutot que depuis `DeclencherFacturationNoShowHandler`, qui est
+        // pourtant le point de passage commode : ce handler recoit le statut cible **en argument**, il
+        // ne sait donc pas lequel de `booking.cancelled` ou `booking.no_show` il est en train de
+        // produire. Emettre depuis lui confondrait les deux (remarque de claude-C, 24/08).
+        //
+        // `leadTimeMinutes` est la charge utile qui compte : c'est le delai entre l'annulation et le
+        // debut du creneau, donc ce qui permet a Smart Flow de decider si la place est revendable.
+        $etablissement = $data->getEtablissement();
+        if ($creneau !== null && $etablissement !== null) {
+            $this->eventBus->publish(new DomainEvent(
+                'booking.cancelled',
+                new EventTenant($etablissement->getId()),
+                new EventSubject('Reservation', (string) $data->getId()),
+                [
+                    'slotId' => (string) $creneau->getId(),
+                    'leadTimeMinutes' => max(0, (int) round(
+                        ($creneau->getDebut()->getTimestamp() - $maintenant->getTimestamp()) / 60
+                    )),
+                    'withinFreeWindow' => $dansDelai,
+                    // RG-CQ5-08 — extension additive (plan-cq5.md §3.8), branche tardive uniquement :
+                    // la branche libre n'a jamais résolu de RegleAnnulation.
+                    ...(!$dansDelai && $facturationNoShow !== null ? [
+                        'creditIssue' => $facturationNoShow->getIssueCreditNoShow()?->value,
+                        'creditRestoredAmount' => ($facturationNoShow->isCreditActionne() && $facturationNoShow->isCreditRestitue()) ? 1 : 0,
+                    ] : []),
+                ],
+                new EventActor($utilisateur->getId()),
+            ));
+
+            // RG-CQ5-08 — même condition et même acteur que booking.cancelled ci-dessus, cohérence
+            // avec BasculerNoShowCommand.
+            if (!$dansDelai
+                && $facturationNoShow?->getIssueCreditNoShow() === IssueCreditNoShow::RestoredWithReschedule
+                && $facturationNoShow->isCreditActionne() && $facturationNoShow->isCreditRestitue()) {
+                $this->eventBus->publish(new DomainEvent(
+                    'booking.reschedule_requested',
+                    new EventTenant($etablissement->getId()),
+                    new EventSubject('Reservation', (string) $data->getId()),
+                    [
+                        'customerId' => (string) $data->getOrganisateur()?->getId(),
+                        'reservationRef' => (string) $data->getId(),
+                        'slotId' => (string) $creneau->getId(),
+                        'droitId' => (string) $facturationNoShow->getDroitAccesRestitueRef(),
+                    ],
+                    new EventActor($utilisateur->getId()),
+                ));
+            }
         }
 
         return $data;

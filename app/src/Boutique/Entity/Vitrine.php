@@ -10,12 +10,15 @@ use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\Boutique\State\VitrinePubliqueProvider;
+use App\Boutique\State\EstablishmentStampProcessor;
 use App\Organisation\Entity\Etablissement;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
 use Symfony\Component\Uid\Uuid;
+use App\Boutique\Config\ReservedHostnames;
 use Symfony\Component\Validator\Constraints as Assert;
+use Symfony\Component\Validator\Context\ExecutionContextInterface;
 
 /**
  * Vitrine white-label par établissement (US-L8-01, RG-M3-01/08). Porte l'identité visuelle, les
@@ -34,7 +37,11 @@ use Symfony\Component\Validator\Constraints as Assert;
             security: "is_granted('PUBLIC_ACCESS')",
             provider: VitrinePubliqueProvider::class,
         ),
-        new Post(uriTemplate: '/boutique/vitrines', security: "is_granted('PERM', 'boutique.gerer_vitrine')"),
+        new Post(
+            uriTemplate: '/boutique/vitrines',
+            security: "is_granted('PERM', 'boutique.gerer_vitrine')",
+            processor: EstablishmentStampProcessor::class,
+        ),
         new Patch(uriTemplate: '/boutique/vitrines/{id}', security: "is_granted('PERM', 'boutique.gerer_vitrine')"),
     ],
     normalizationContext: ['groups' => ['vitrine:read']],
@@ -47,11 +54,32 @@ class Vitrine
     #[Groups(['vitrine:read', 'panier:read'])]
     private Uuid $id;
 
+    // D41 — hors groupe d'ecriture : l'etablissement vient de la session serveur, pose par
+    // `EstablishmentStampProcessor`, jamais du corps de la requete. La vitrine est un point d'entree
+    // PUBLIC en lecture ; laisser l'appelant choisir son rattachement etait d'autant moins tenable.
+    //
+    // Plus d'`Assert\NotNull` non plus : la validation s'execute AVANT l'ecriture, donc avant
+    // l'estampillage, et echouait en 422 sur une valeur que le serveur allait poser lui-meme
+    // (constat de `claude-G`, paye de deux essais, que je ne refais pas). L'invariant tient par
+    // l'estampilleur qui refuse plutot que de deviner, la colonne NOT NULL, et le garde global D41.
     #[ORM\OneToOne(targetEntity: Etablissement::class)]
     #[ORM\JoinColumn(nullable: false)]
-    #[Assert\NotNull]
-    #[Groups(['vitrine:read', 'vitrine:write'])]
+    #[Groups(['vitrine:read'])]
     private ?Etablissement $etablissement = null;
+
+    /**
+     * LE NOM DE LA BOUTIQUE DANS L'URL : `/b/piscine-municipale`.
+     *
+     * Nullable, et c'est un choix de compatibilite : les vitrines creees avant le 27/08 n'en ont pas,
+     * et leur URL par identifiant continue de marcher. Un lien deja envoye dans un courriel de
+     * confirmation ne se casse pas parce qu'on a trouve mieux.
+     *
+     * Modifiable par l'exploitant (`vitrine:write`) : c'est SON adresse, elle porte son nom, et le
+     * defaut fabrique depuis le nom de l'etablissement n'est qu'une proposition.
+     */
+    #[ORM\Column(length: 80, unique: true, nullable: true)]
+    #[Groups(['vitrine:read', 'vitrine:write'])]
+    private ?string $slug = null;
 
     #[ORM\Column(length: 255, nullable: true)]
     #[Groups(['vitrine:read', 'vitrine:write'])]
@@ -77,6 +105,30 @@ class Vitrine
     #[Groups(['vitrine:read', 'vitrine:write'])]
     private int $delaiExpirationPanierMinutes = 15;
 
+    /**
+     * LES SITES QUI ONT LE DROIT D'ENCADRER CETTE BOUTIQUE.
+     *
+     * Sans en-tete `frame-ancestors`, n'importe quel site peut afficher cette boutique dans une
+     * iframe, sous son propre nom. Le visiteur paie sur une page qu'il croit etre celle du site
+     * encadrant. Rien ne casse et rien n'alerte -- c'est pour ca que personne ne le remarque.
+     *
+     * **Vide = encadrable nulle part**, et c'est le sens sur de l'erreur : une integration qui ne
+     * marche pas se signale et se corrige en une ligne ; une boutique encadrable par tout le monde ne
+     * se signale jamais.
+     *
+     * On stocke des ORIGINES (`https://exemple.fr`), pas des noms d'hote : c'est ce que la directive
+     * CSP attend, et un `http://` accepte par erreur ouvrirait l'encadrement a un intermediaire.
+     * `https://*.exemple.fr` est accepte pour un client qui a plusieurs sous-domaines.
+     *
+     * La valeur ne sert pas ici : elle alimente `php bin/console app:integration:csp`, qui ecrit la
+     * carte nginx. C'est nginx qui sert le front statique, donc lui seul peut poser l'en-tete.
+     *
+     * @var list<string>
+     */
+    #[ORM\Column(type: 'json')]
+    #[Groups(['vitrine:read', 'vitrine:write'])]
+    private array $domainesIntegration = [];
+
     public function __construct()
     {
         $this->id = Uuid::v4();
@@ -95,6 +147,18 @@ class Vitrine
     public function setEtablissement(?Etablissement $etablissement): self
     {
         $this->etablissement = $etablissement;
+
+        return $this;
+    }
+
+    public function getSlug(): ?string
+    {
+        return $this->slug;
+    }
+
+    public function setSlug(?string $slug): self
+    {
+        $this->slug = $slug;
 
         return $this;
     }
@@ -163,5 +227,93 @@ class Vitrine
         $this->delaiExpirationPanierMinutes = $delaiExpirationPanierMinutes;
 
         return $this;
+    }
+
+    /** @return list<string> */
+    public function getDomainesIntegration(): array
+    {
+        return $this->domainesIntegration;
+    }
+
+    /** @param list<string> $domainesIntegration */
+    public function setDomainesIntegration(array $domainesIntegration): self
+    {
+        // Normalise : un espace ou une barre finale collee par un copier-coller ferait echouer la
+        // comparaison d'origine cote navigateur, sans aucun message.
+        $this->domainesIntegration = array_values(array_filter(array_map(
+            static fn (mixed $d): string => rtrim(trim((string) $d), '/'),
+            $domainesIntegration,
+        ), static fn (string $d): bool => $d !== ''));
+
+        return $this;
+    }
+
+    /**
+     * UN DOMAINE MAL ECRIT N'OUVRE RIEN ET NE DIT RIEN.
+     *
+     * Le navigateur compare l'origine caractere par caractere. `exemple.fr` sans schema, ou une barre
+     * finale, ne correspond a rien -- l'iframe reste blanche et l'exploitant conclut que la
+     * fonctionnalite ne marche pas. On refuse a la saisie, la ou la faute se corrige.
+     */
+    /**
+     * LE NOM DANS L'URL : reserve interdit, format impose.
+     *
+     * ── POURQUOI UN FORMAT, ALORS QUE T4 NE DEMANDAIT QUE LES NOMS RESERVES ──────────────────
+     *
+     * En cherchant ou poser le refus, j'ai trouve que ce champ est `vitrine:write` -- l'exploitant
+     * ecrit SON adresse -- et qu'il ne portait aucune contrainte : pas de `Regex`, pas de
+     * `Length`, aucun validateur ailleurs. Les noms FABRIQUES sont surs, parce qu'`AsciiSlugger`
+     * les nettoie. Les noms ECRITS ne passaient par rien.
+     *
+     * Un nom ecrit avec une espace, une majuscule ou un `/` produit une URL `/b/<nom>` qui ne
+     * designe rien, et le seul endroit ou ca se voit est le navigateur d'un client.
+     *
+     * ⚠ La borne est 80 et pas 70 : la colonne accepte 80, et `fabriquerSlug()` s'arrete a 70.
+     * Valider plus large que la colonne ferait remonter une violation d'integrite Doctrine au lieu
+     * d'un message lisible ; valider a 70 refuserait un nom que la base accepte.
+     */
+    #[Assert\Callback]
+    public function validerNomDUrl(ExecutionContextInterface $context): void
+    {
+        if ($this->slug === null || $this->slug === '') {
+            return;
+        }
+
+        if (ReservedHostnames::isReserved($this->slug)) {
+            $context->buildViolation('« {{ valeur }} » est un nom technique réservé (back-office, API, courriel). Choisis-en un autre : il entrerait en collision avec un hôte de la plateforme.')
+                ->setParameter('{{ valeur }}', $this->slug)
+                ->atPath('slug')
+                ->addViolation();
+
+            return;
+        }
+
+        if (preg_match('/^[a-z0-9]+(-[a-z0-9]+)*$/', $this->slug) !== 1) {
+            $context->buildViolation('« {{ valeur }} » n’est pas un nom d’URL valide. Attendu : minuscules, chiffres et tirets simples (ex. piscine-municipale).')
+                ->setParameter('{{ valeur }}', $this->slug)
+                ->atPath('slug')
+                ->addViolation();
+
+            return;
+        }
+
+        if (mb_strlen($this->slug) > 80) {
+            $context->buildViolation('Ce nom d’URL dépasse 80 caractères.')
+                ->atPath('slug')
+                ->addViolation();
+        }
+    }
+
+    #[Assert\Callback]
+    public function validerDomainesIntegration(ExecutionContextInterface $context): void
+    {
+        foreach ($this->domainesIntegration as $i => $domaine) {
+            if (preg_match('#^https://(\\*\\.)?[a-z0-9-]+(\\.[a-z0-9-]+)+(:[0-9]{1,5})?$#i', $domaine) !== 1) {
+                $context->buildViolation('« {{ valeur }} » n’est pas une origine valide. Attendu : https://exemple.fr (ou https://*.exemple.fr).')
+                    ->setParameter('{{ valeur }}', $domaine)
+                    ->atPath(sprintf('domainesIntegration[%d]', $i))
+                    ->addViolation();
+            }
+        }
     }
 }

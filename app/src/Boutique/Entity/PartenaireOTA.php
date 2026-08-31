@@ -9,6 +9,7 @@ use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
+use App\Boutique\State\EstablishmentStampProcessor;
 use App\Organisation\Entity\Etablissement;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
@@ -24,11 +25,14 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ORM\Entity]
 #[ORM\Table(name: 'bou_partenaire_ota')]
 #[ApiResource(
-    shortName: 'BoutiquePartenaireOTA',
+    shortName: 'BoutiquePartenaireOta',
     operations: [
         new GetCollection(security: "is_granted('PERM', 'boutique.lire')"),
         new Get(security: "is_granted('PERM', 'boutique.lire')"),
-        new Post(security: "is_granted('PERM', 'boutique.gerer_connecteur_ota')"),
+        new Post(
+            security: "is_granted('PERM', 'boutique.gerer_connecteur_ota')",
+            processor: EstablishmentStampProcessor::class,
+        ),
         new Patch(security: "is_granted('PERM', 'boutique.gerer_connecteur_ota')"),
     ],
     normalizationContext: ['groups' => ['partenaire_ota:read']],
@@ -69,6 +73,10 @@ class PartenaireOTA
     #[Groups(['partenaire_ota:read', 'partenaire_ota:write'])]
     private bool $actif = true;
 
+    // D41 — l'etablissement n'est expose dans AUCUN groupe, ce qui est juste ; mais rien ne le
+    // posait non plus, alors que la colonne est NOT NULL et qu'aucun processor n'etait branche sur
+    // le `Post`. Toute creation finissait donc en violation d'integrite. `EstablishmentStampProcessor`
+    // le pose depuis la session serveur.
     #[ORM\ManyToOne(targetEntity: Etablissement::class)]
     #[ORM\JoinColumn(nullable: false)]
     private ?Etablissement $etablissement = null;

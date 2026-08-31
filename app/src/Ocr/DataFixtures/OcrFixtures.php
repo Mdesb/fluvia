@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Ocr\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\DataFixtures\SocleFixtures;
 use App\Ocr\Entity\ExtractionAttempt;
 use App\Ocr\Entity\OcrProviderConfig;
@@ -28,6 +29,8 @@ use Doctrine\Persistence\ObjectManager;
  */
 final class OcrFixtures extends Fixture implements DependentFixtureInterface
 {
+    use FixturesIdempotentes;
+
     public const DEMO_API_KEY = 'sk-ant-demo-0000000000000000000000';
 
     public function __construct(
@@ -43,8 +46,8 @@ final class OcrFixtures extends Fixture implements DependentFixtureInterface
     public function load(ObjectManager $manager): void
     {
         // --- Permissions ocr.* + octroi à l'administrateur socle (RG-SOCLE-02/03) ---
-        $permConfigurer = (new Permission())->setModule('ocr')->setAction('configure');
-        $permLireExtraction = (new Permission())->setModule('ocr')->setAction('read_extraction');
+        $permConfigurer = $this->permissionNommee($manager, 'ocr', 'configure');
+        $permLireExtraction = $this->permissionNommee($manager, 'ocr', 'read_extraction');
         $manager->persist($permConfigurer);
         $manager->persist($permLireExtraction);
 
@@ -57,6 +60,21 @@ final class OcrFixtures extends Fixture implements DependentFixtureInterface
         $etabB = $manager->getRepository(Etablissement::class)->findOneBy(['nom' => SocleFixtures::ETAB_B_NOM]);
         $admin = $manager->getRepository(Utilisateur::class)->findOneBy(['email' => SocleFixtures::ADMIN_EMAIL]);
         if (!$etabA instanceof Etablissement || !$etabB instanceof Etablissement) {
+            $manager->flush();
+
+            return;
+        }
+
+        // ── LE BLOC DE DÉMONSTRATION NE SE POSE QU'UNE FOIS ──────────────────────────────────
+        //
+        // Tout ce qui suit est un jeu de données cohérent, pas un référentiel : le reposer sur une
+        // base qui l'a déjà écraserait ce qui a été corrigé à la main depuis, ou le dupliquerait
+        // pour les entités sans contrainte d'unicité — silencieusement.
+        //
+        // Les permissions et les rôles restent AU-DESSUS de cette garde : ils doivent être rejoués à
+        // chaque chargement, sans quoi un droit ajouté au code n'atteindrait jamais une base
+        // existante.
+        if ($manager->getRepository(OcrProviderConfig::class)->findOneBy([]) !== null) {
             $manager->flush();
 
             return;

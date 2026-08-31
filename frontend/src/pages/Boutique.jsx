@@ -1,15 +1,12 @@
 import { useState } from 'react'
-import Liste, { dateHeureFr, texte } from '../components/Liste.jsx'
+import VitrinesBoutique from '../components/VitrinesBoutique.jsx'
+import Liste, { texte } from '../components/Liste.jsx'
 import Tabs from '../components/Tabs.jsx'
+import DemandesRemboursement from '../components/DemandesRemboursement.jsx'
 import { api } from '../api/client.js'
 
-const STATUT_REMB = {
-  Recue: 'warn', recue: 'warn', Acceptee: 'good', acceptee: 'good',
-  Refusee: 'crit', refusee: 'crit', Traitee: 'good',
-}
-
 // Boutique en ligne (M3, vue admin) : demandes de remboursement, comptes clients, vitrines.
-export default function Boutique({ etabActif }) {
+export default function Boutique({ etabActif, droits }) {
   const [sousOnglet, setSousOnglet] = useState('remboursements')
 
   return (
@@ -32,20 +29,7 @@ export default function Boutique({ etabActif }) {
       />
 
       {sousOnglet === 'remboursements' && (
-        <Liste
-          titre="Demandes de remboursement"
-          sous="workflow reçue → acceptée / refusée"
-          deps={[etabActif]}
-          charger={api.demandesRemboursement}
-          vide="Aucune demande de remboursement."
-          colonnes={[
-            { cle: 'id', entete: 'Réf.', rendu: (r) => <span className="mono">{String(r.id || '').slice(0, 8)}</span> },
-            { cle: 'motif', entete: 'Motif', rendu: (r) => r.motif || '—' },
-            { cle: 'origineAutomatique', entete: 'Origine', rendu: (r) => (r.origineAutomatique ? 'auto' : 'manuelle') },
-            { cle: 'dateDemande', entete: 'Demandée le', rendu: (r) => dateHeureFr(r.dateDemande) },
-            { cle: 'statut', entete: 'Statut', rendu: (r) => <span className={`badge ${STATUT_REMB[r.statut] || 'mut'}`}>{r.statut || '—'}</span> },
-          ]}
-        />
+        <DemandesRemboursement etabActif={etabActif} droits={droits} />
       )}
 
       {sousOnglet === 'comptes' && (
@@ -63,19 +47,9 @@ export default function Boutique({ etabActif }) {
         />
       )}
 
-      {sousOnglet === 'vitrines' && (
-        <Liste
-          titre="Vitrines"
-          sous="points de vente en ligne"
-          deps={[etabActif]}
-          charger={api.vitrines}
-          vide="Aucune vitrine configurée."
-          colonnes={[
-            { cle: 'libelle', entete: 'Vitrine', rendu: (r) => <span className="nm">{texte(r.libelle, r.nom || r.code || 'Vitrine')}</span> },
-            { cle: 'statut', entete: 'Statut', rendu: (r) => <span className="badge mut">{r.statut || r.etat || '—'}</span> },
-          ]}
-        />
-      )}
+      {/* La liste generique montrait un libelle et un statut -- jamais l'ADRESSE. Un exploitant qui
+          vient d'ouvrir sa boutique n'avait aucun moyen de savoir ou elle est. */}
+      {sousOnglet === 'vitrines' && <VitrinesBoutique droits={droits} />}
     </div>
   )
 }

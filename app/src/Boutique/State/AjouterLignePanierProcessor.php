@@ -11,6 +11,7 @@ use App\Boutique\Entity\PanierEnLigne;
 use App\Boutique\Enum\StatutPanier;
 use App\Boutique\Security\BeneficiaireProprieteGuard;
 use App\Boutique\Security\PanierProprietaireGuard;
+use App\Boutique\Service\OnlineSellability;
 use App\Boutique\Security\ProduitEtablissementGuard;
 use App\Boutique\Service\DisponibiliteAffichageHandler;
 use App\Crm\Entity\Beneficiaire;
@@ -38,6 +39,7 @@ final class AjouterLignePanierProcessor implements ProcessorInterface
         private readonly LecteurCorps $lecteur,
         private readonly PanierProprietaireGuard $guard,
         private readonly DisponibiliteAffichageHandler $disponibilite,
+        private readonly OnlineSellability $vendabilite,
         private readonly ProduitEtablissementGuard $etablissementGuard,
         private readonly BeneficiaireProprieteGuard $beneficiaireGuard,
     ) {
@@ -60,6 +62,22 @@ final class AjouterLignePanierProcessor implements ProcessorInterface
         if ($produit->getStatut() !== StatutProduit::Publie || !$produit->aCanal(Canal::EnLigne)) {
             throw new UnprocessableEntityHttpException('Produit non publié ou non visible au canal en ligne (RG-M1-07/09).');
         }
+        // ⚠ CACHER N'EST PAS REFUSER. La vitrine ne sert plus un produit dont aucun tarif ne se
+        // résout ; ce processeur, lui, résolvait le produit par sa référence sans consulter aucun
+        // tarif. Un produit invisible en vitrine restait donc ajoutable par son identifiant — et
+        // un lien, un intégrateur ou un panier repris n'ont aucune raison de passer par la vitrine.
+        //
+        // Le refus doit être là où l'on ENTRE, pas seulement là où l'on affiche. Un client qui
+        // s'engage sans savoir combien découvre le prix au paiement, ou ne le découvre jamais.
+        //
+        // ⚠ Un produit GRATUIT passe : un tarif à 0,00 se résout. Seul est refusé celui dont AUCUN
+        // tarif ne se résout — il n'y a alors rien à confirmer plus tard.
+        if (!$this->vendabilite->isSellableOnline($produit)) {
+            throw new UnprocessableEntityHttpException(
+                'Ce produit n\'a aucun tarif applicable en ligne : il ne peut pas être ajouté au panier (RG-M1-09).'
+            );
+        }
+
         // Revue de sécurité — faille bloquante : le produit doit être rattaché à l'établissement du
         // panier (cloisonnement établissement, sinon un produit d'un tiers exploitant est achetable).
         $etablissementPanier = $data->getEtablissement() ?? $data->getVitrine()?->getEtablissement();

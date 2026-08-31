@@ -9,6 +9,7 @@ use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
+use App\Stock\State\EstablishmentStampProcessor;
 use App\Organisation\Entity\Etablissement;
 use App\Stock\Enum\MethodeValorisation;
 use Doctrine\ORM\Mapping as ORM;
@@ -31,7 +32,10 @@ use Symfony\Component\Validator\Constraints as Assert;
     operations: [
         new GetCollection(security: "is_granted('PERM', 'stock.lire')"),
         new Get(security: "is_granted('PERM', 'stock.lire')"),
-        new Post(security: "is_granted('PERM', 'stock.parametrer') or is_granted('PERM', 'stock.gerer')"),
+        new Post(
+            security: "is_granted('PERM', 'stock.parametrer') or is_granted('PERM', 'stock.gerer')",
+            processor: EstablishmentStampProcessor::class,
+        ),
         new Patch(security: "is_granted('PERM', 'stock.parametrer') or is_granted('PERM', 'stock.gerer')"),
     ],
     normalizationContext: ['groups' => ['parametrage:read']],
@@ -46,8 +50,12 @@ class ParametrageStock
 
     #[ORM\OneToOne(targetEntity: Etablissement::class)]
     #[ORM\JoinColumn(nullable: false)]
-    #[Assert\NotNull]
-    #[Groups(['parametrage:read', 'parametrage:write'])]
+    // D41 — hors groupe d'ecriture : l'etablissement vient de la session serveur, pose par
+    // `EstablishmentStampProcessor`, jamais du corps de la requete. Plus d'`Assert\NotNull` non plus :
+    // la validation s'execute AVANT l'ecriture, donc avant l'estampillage, et echouerait en 422 sur
+    // une valeur que le serveur allait poser lui-meme. L'invariant tient par l'estampilleur, qui
+    // refuse plutot que de deviner, par la colonne NOT NULL, et par le garde global D41.
+    #[Groups(['parametrage:read'])]
     private ?Etablissement $etablissement = null;
 
     #[ORM\Column(length: 4, enumType: MethodeValorisation::class)]

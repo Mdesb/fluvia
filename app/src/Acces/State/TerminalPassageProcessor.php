@@ -64,9 +64,19 @@ final class TerminalPassageProcessor implements ProcessorInterface
         // protège pas contre une retransmission réseau (chaque tentative recevrait une clé différente,
         // cassant l'anti-doublon). La borne doit fournir sa propre clé stable, rejouée à l'identique en
         // cas de retransmission.
-        $cleIdempotence = $this->uuid($corps['cleIdempotence'] ?? null);
+        $cleBrute = $corps['cleIdempotence'] ?? null;
+        $cleIdempotence = $this->uuid($cleBrute);
         if ($cleIdempotence === null) {
-            throw new UnprocessableEntityHttpException('Clé d\'idempotence obligatoire.');
+            // ⚠ DEUX CAUSES, DEUX MESSAGES. L'ancien disait « obligatoire » a un appelant qui
+            // l'avait ENVOYEE : elle n'etait simplement pas un UUID. Il relisait son code, y voyait
+            // le champ, et cherchait ailleurs. Un message qui designe une cause fausse coute plus
+            // cher qu'un message vague — il envoie chercher au mauvais endroit, avec l'autorite
+            // d'une reponse du serveur. Rencontre en exercant l'API pour le guide IT Cotation.
+            throw new UnprocessableEntityHttpException(
+                \is_string($cleBrute) && $cleBrute !== ''
+                    ? 'Clé d\'idempotence invalide : un UUID est attendu.'
+                    : 'Clé d\'idempotence obligatoire : engendrez un UUID au moment du scan et conservez-le pour le rejeu.'
+            );
         }
 
         // Résolution de portée AVANT tout appel moteur (§4.1/4.2 spec) : refus sans fuite d'info.

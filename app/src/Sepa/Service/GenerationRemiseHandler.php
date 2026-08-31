@@ -13,6 +13,7 @@ use App\Sepa\Enum\SeqTpSepa;
 use App\Sepa\Enum\StatutRemiseSepa;
 use App\Sepa\Port\CollecteurSepaInterface;
 use App\Sepa\Port\EcheanceSepaSource;
+use App\Sepa\Service\DebitPreNotifier;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
@@ -30,6 +31,7 @@ final class GenerationRemiseHandler
         private readonly SeqTpResolver $seqTpResolver,
         private readonly Pain008Generator $generator,
         private readonly CollecteurSepaInterface $collecteur,
+        private readonly DebitPreNotifier $preNotifier,
     ) {
     }
 
@@ -57,12 +59,31 @@ final class GenerationRemiseHandler
 
         $referencesOrigine = [];
         $seqTpVus = [];
+        $nbExclues = 0;
+        /** @var array<string, true> $motifsExclusion */
+        $motifsExclusion = [];
         $totalCentimes = 0;
         $index = 0;
         foreach ($dues as $due) {
             $mandat = $this->em->getRepository(MandatSepa::class)->find($due->mandatId);
             if (!$mandat instanceof MandatSepa) {
                 // Défensif : une échéance dont le mandat n'existe plus n'est pas incluse dans la remise.
+                continue;
+            }
+
+            // PAY-2 — on ne prélève pas quelqu'un qu'on n'a pas prévenu. L'échéance non couverte sort
+            // de la remise au lieu de la faire échouer : celles qui sont en règle partent, et ce qui
+            // est retenu est compté et expliqué plus bas. Un tout-ou-rien retiendrait aussi les
+            // échéances régulières, sans rien apprendre à personne.
+            $raison = $this->preNotifier->reasonNotCovered(
+                $mandat,
+                $due->referenceOrigine,
+                $due->montantCentimes,
+                $dateExecution,
+            );
+            if (null !== $raison) {
+                ++$nbExclues;
+                $motifsExclusion[$raison] = true;
                 continue;
             }
 
@@ -84,7 +105,23 @@ final class GenerationRemiseHandler
             $mandat->setSequenceCourante($seqTp);
         }
 
+        $remise->setNbExclues($nbExclues)
+            ->setMotifExclusion([] === $motifsExclusion ? null : implode(' ; ', array_keys($motifsExclusion)));
+
         if ($remise->getLignes()->isEmpty()) {
+            // Une remise vide parce que TOUT a été exclu n'est pas une remise vide faute d'échéances.
+            // Les confondre ferait chercher un défaut de mandat là où il manque un préavis.
+            if ($nbExclues > 0) {
+                throw new UnprocessableEntityHttpException(sprintf(
+                    'Aucun prélèvement n\'est autorisé : %d échéance(s) due(s) sur %d écartée(s) faute de préavis (%s). '
+                    .'Prévenir le débiteur du montant et de la date est ce qui rend le prélèvement licite ; '
+                    .'tant que le préavis ne part pas, rien ne peut être collecté.',
+                    $nbExclues,
+                    \count($dues),
+                    implode(' ; ', array_keys($motifsExclusion)),
+                ));
+            }
+
             throw new UnprocessableEntityHttpException('Aucune échéance due ne référence un mandat SEPA existant.');
         }
 

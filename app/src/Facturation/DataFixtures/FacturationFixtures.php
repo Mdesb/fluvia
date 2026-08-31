@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Facturation\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\Compta\DataFixtures\ComptaFixtures;
 use App\Compta\Entity\CompteComptable;
 use App\Compta\Entity\PeriodeComptable;
@@ -23,6 +24,8 @@ use Doctrine\Persistence\ObjectManager;
  */
 final class FacturationFixtures extends Fixture implements DependentFixtureInterface
 {
+    use FixturesIdempotentes;
+
     public function getDependencies(): array
     {
         return [SocleFixtures::class, ComptaFixtures::class];
@@ -30,10 +33,10 @@ final class FacturationFixtures extends Fixture implements DependentFixtureInter
 
     public function load(ObjectManager $manager): void
     {
-        $permFacturationTout = (new Permission())->setModule('facturation')->setAction('*');
+        $permFacturationTout = $this->permissionNommee($manager, 'facturation', '*');
         $manager->persist($permFacturationTout);
         foreach (['lire', 'lire_soi', 'emettre_justificative', 'emettre_directe', 'avoir', 'lettrer', 'deposer_chorus', 'gerer'] as $action) {
-            $manager->persist((new Permission())->setModule('facturation')->setAction($action));
+            $manager->persist($this->permissionNommee($manager, 'facturation', $action));
         }
 
         $roleAdmin = $manager->getRepository(Role::class)->findOneBy(['nom' => 'Administrateur groupe']);
@@ -48,6 +51,20 @@ final class FacturationFixtures extends Fixture implements DependentFixtureInter
             return;
         }
 
+        // ── LE BLOC DE DEMONSTRATION NE SE POSE QU'UNE FOIS ──────────────────────────────────
+        //
+        // Tout ce qui suit est un jeu de donnees coherent, pas un referentiel : le reposer sur une
+        // base qui l'a deja ecraserait ce qui a ete corrige a la main depuis, ou le dupliquerait
+        // pour les entites sans contrainte d'unicite -- silencieusement.
+        //
+        // Les permissions, les roles et les affectations restent AU-DESSUS : ils doivent etre
+        // rejoues a chaque chargement, sans quoi un droit ajoute au code n'atteindrait jamais une
+        // base existante.
+        if ($manager->getRepository(\App\Compta\Entity\PeriodeComptable::class)->findOneBy([]) !== null) {
+            $manager->flush();
+
+            return;
+        }
         $periode = new PeriodeComptable();
         $periode->setProfilExploitant($profil);
         $periode->setDateDebut(new \DateTimeImmutable('first day of this month'));

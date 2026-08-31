@@ -67,8 +67,8 @@ use Symfony\Component\Uid\Uuid;
             processor: ExtourneEcritureProcessor::class,
         ),
         new GetCollection(
-            uriTemplate: '/compta/ecritures/verifier-chaine',
             security: "is_granted('PERM', 'compta.lire')",
+            uriTemplate: '/compta/ecritures/verifier-chaine',
             provider: VerifierChaineEcritureProcessor::class,
         ),
     ],
@@ -134,6 +134,23 @@ class EcritureComptable
     #[ORM\Column(length: 512)]
     #[Groups(['ecriture:read', 'nf525:read'])]
     private string $signature = '';
+
+    /**
+     * L'INSTANTANE EXACT SUR LEQUEL L'EMPREINTE A ETE CALCULEE.
+     *
+     * Sans lui, la verification reconstruit le payload depuis les entites VIVANTES : un taux de TVA
+     * corrige, un destinataire retype, et l'empreinte recalculee ne correspond plus — alors que rien
+     * n'a ete altere. Meme patron que `App\Vente\Nf525\Entity\OperationScellee`, la seule des
+     * trois chaines qui faisait bien.
+     *
+     * ⚠ `null` = scelle AVANT la conservation de l'instantane. Ce n'est pas un vide, c'est une date :
+     * la verification ne peut alors que reconstruire, et elle doit le DIRE au lieu d'accuser.
+     *
+     * @var array<string, mixed>|null
+     */
+    #[ORM\Column(type: 'json', nullable: true)]
+    #[Groups(['nf525:read'])]
+    private ?array $payloadCanonique = null;
 
     /** @var Collection<int, LigneEcriture> */
     #[ORM\OneToMany(targetEntity: LigneEcriture::class, mappedBy: 'ecriture', cascade: ['persist'], orphanRemoval: true)]
@@ -357,4 +374,19 @@ class EcritureComptable
     {
         return $this->empreinte !== '';
     }
+
+    /** @return array<string, mixed>|null null = scelle avant la conservation de l'instantane */
+    public function getPayloadCanonique(): ?array
+    {
+        return $this->payloadCanonique;
+    }
+
+    /** @param array<string, mixed>|null $payloadCanonique */
+    public function setPayloadCanonique(?array $payloadCanonique): self
+    {
+        $this->payloadCanonique = $payloadCanonique;
+
+        return $this;
+    }
+
 }

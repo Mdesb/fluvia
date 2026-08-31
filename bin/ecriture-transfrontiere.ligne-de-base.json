@@ -1,0 +1,40 @@
+{
+    "_lisez_moi": [
+        "Ligne de base GELEE du garde-fou n8 — ecriture qui traverse la frontiere.",
+        "",
+        "Invariant : une entite que RIEN ne permet de cloisonner ne doit pas porter une relation",
+        "ECRIVABLE vers une entite qui, elle, l est. Il n y a alors aucune frontiere : ni en lecture",
+        "(aucune extension ne filtre le proprietaire), ni en ecriture (le serialiseur denormalise l IRI",
+        "de la charge sans verifier a quel etablissement appartient la cible).",
+        "",
+        "Ces cas echappent au garde-fou n1 par construction : il cherche find()/findOneBy() depuis",
+        "l entree client DANS un Processor, or il n y a pas de Processor du tout.",
+        "",
+        "Perimetre volontairement etroit : 74 relations ecrivables du depot pointent vers une entite",
+        "cloisonnee, mais la plupart sont legitimes car leur proprietaire est lui-meme cloisonne. Ce",
+        "controle ne parle que du cas ou il n y a AUCUNE frontiere.",
+        "",
+        "Le plus grave est SousReseau : un sous-reseau est un ACCES FEDERE (US-L3-12) et",
+        "ValidationPassageHandler s en sert pour autoriser un franchissement."
+    ],
+    "scelle": {
+        "plafond": 3
+    },
+    "entrees": {
+        "PieceJointeAide::ArticleAide": {
+            "entite": "PieceJointeAide",
+            "relation": "ManyToOne",
+            "cible": "ArticleAide"
+        },
+        "SousReseau::EspaceAcces": {
+            "entite": "SousReseau",
+            "relation": "ManyToMany",
+            "cible": "EspaceAcces"
+        },
+        "ValeurOption::ArticleStock": {
+            "entite": "ValeurOption",
+            "relation": "ManyToOne",
+            "cible": "ArticleStock"
+        }
+    }
+}

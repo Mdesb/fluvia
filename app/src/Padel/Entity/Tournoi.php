@@ -13,6 +13,7 @@ use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\Organisation\Entity\Etablissement;
 use App\Padel\Enum\FormatTournoi;
+use App\Padel\State\EstablishmentStampProcessor;
 use App\Padel\Enum\StatutTournoi;
 use App\Padel\State\GenererPoulesProcessor;
 use Doctrine\ORM\Mapping as ORM;
@@ -29,7 +30,7 @@ use Symfony\Component\Validator\Constraints as Assert;
     operations: [
         new GetCollection(security: "is_granted('PERM', 'padel.lire')"),
         new Get(security: "is_granted('PERM', 'padel.lire')"),
-        new Post(security: "is_granted('PERM', 'padel.tournoi_gerer')"),
+        new Post(security: "is_granted('PERM', 'padel.tournoi_gerer')", processor: EstablishmentStampProcessor::class),
         new Patch(security: "is_granted('PERM', 'padel.tournoi_gerer')"),
         // Génère les poules et bloque les terrains nécessaires (US-PADEL-05, CA-6).
         new Post(
@@ -53,8 +54,7 @@ class Tournoi
 
     #[ORM\ManyToOne(targetEntity: Etablissement::class)]
     #[ORM\JoinColumn(nullable: false)]
-    #[Assert\NotNull]
-    #[Groups(['tournoi:read', 'tournoi:write'])]
+    #[Groups(['tournoi:read'])]
     private ?Etablissement $etablissement = null;
 
     #[ORM\Column(length: 150)]

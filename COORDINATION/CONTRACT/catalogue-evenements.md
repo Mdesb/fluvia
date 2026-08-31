@@ -24,6 +24,7 @@ The first-class events published on the bus by the core and the modules. An even
 |---|---|---|---|
 | `sale.completed` | Sale/POS | amount, lines, customer? | Reporting, Revenue Recovery |
 | `sale.cancelled` | Sale/POS | reason, amount | Accounting, Authorization |
+| `sale.card_payment_rejected` | Sale/POS (`CardRejectionRecorder`, PAY-3) | rejectionId, saleId, amountCents, establishmentId, customerId? | **SEPA** (`CardDebitFallback`, PAY-2) |
 | `cart.abandoned` | Shop | amount, customer | Revenue Recovery |
 | `payment.succeeded` | Payment | amount, method | Accounting, Invoicing |
 | `payment.failed` | Payment / SEPA | amount, cause | **Revenue Recovery**, dunning |
@@ -34,14 +35,18 @@ The first-class events published on the bus by the core and the modules. An even
 | `invoice.paid` | Invoicing | amount, date | Accounting |
 | `credit_note.issued` | Invoicing | amount | Accounting |
 | `booking.created` | Reservation | slot, resource | Smart Flow |
-| `booking.cancelled` | Reservation | slot, lead_time | **Smart Flow**, Revenue Recovery |
-| `booking.no_show` | Reservation | customer, amount_at_risk | **Revenue Recovery**, Smart Flow |
+| `booking.cancelled` | Reservation | slotId, leadTimeMinutes, withinFreeWindow, creditIssue?, creditRestoredAmount? | **Smart Flow**, Revenue Recovery |
+| `booking.no_show` | Reservation | customerId, amountAtRisk, hasBillingRule, slotId, creditIssue?, creditRestoredAmount? | **Revenue Recovery**, Smart Flow |
+| `booking.reschedule_requested` | Reservation (CQ-5) | customerId, reservationRef, slotId, droitId | **Smart Flow** (SF-2, zéro consommateur aujourd'hui) |
 | `booking.completed` | Reservation | duration | Reporting |
 | `slot.released` | Smart Flow | slot, resource | **Smart Flow** (slot recovery), waitlist |
 | `subscription.created` | SEPA/Subscription | recurring_amount | Accounting |
 | `subscription.suspended` | SEPA/Subscription | reason | Revenue Recovery |
+| `subscription.activated` | Subscription (`SubscriptionActivator`, ED-3) | planCode, capabilities, effectiveFrom | **Subscription** (provisioning ED-3) |
+| `establishment.provisioned` | Subscription (`ProvisionOnSubscriptionActivated`, ED-3) | establishmentId, adminUserId, idempotencyKey | **Subscription** (courriel de bienvenue, ED-9) |
 | `access.recorded` | Access control | door, credential | Reporting, Smart Flow (footfall) |
 | `access.denied` | Access control | reason | Supervision |
+| `access.card_recharged` | Access control (`CardRechargeHandler`, CQ-1) | droitId, supportId, creditsAdded, creditBalanceAfter, newExpiryAt?, saleId | Reporting, CRM, Smart Flow |
 | `quote.sent` | Quote | amount, due_date | Revenue Recovery |
 | `quote.expired` | Quote | amount | **Revenue Recovery** |
 | `quote.accepted` | Quote | amount | Invoicing |

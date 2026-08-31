@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Finance\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\Autorisation\Entity\OperationSensible;
 use App\Compta\DataFixtures\ComptaFixtures;
 use App\Compta\Entity\CompteComptable;
@@ -33,6 +34,8 @@ use Doctrine\Persistence\ObjectManager;
  */
 final class ExpenseReportFixtures extends Fixture implements DependentFixtureInterface
 {
+    use FixturesIdempotentes;
+
     public const ROLE_SALARIE = 'Salarié Note de frais Test';
     public const ROLE_COMPTABLE = 'Comptable Notes de frais Test';
     public const ROLE_SUPERVISEUR = 'Superviseur Notes de frais Test';
@@ -55,7 +58,7 @@ final class ExpenseReportFixtures extends Fixture implements DependentFixtureInt
         $permissions = [];
         foreach (['expense_report_submit', 'expense_report_read_own', 'expense_report_post_to_ledger', 'expense_report_approve'] as $action) {
             $existante = $manager->getRepository(Permission::class)->findOneBy(['module' => 'finance', 'action' => $action]);
-            $permissions[$action] = $existante ?? (new Permission())->setModule('finance')->setAction($action);
+            $permissions[$action] = $existante ?? $this->permissionNommee($manager, 'finance', $action);
             if ($existante === null) {
                 $manager->persist($permissions[$action]);
             }
@@ -67,7 +70,7 @@ final class ExpenseReportFixtures extends Fixture implements DependentFixtureInt
         // `PersonnelFixtures::permissionAcces()`).
         $permApprouver = $manager->getRepository(Permission::class)->findOneBy(['module' => 'autorisation', 'action' => 'approuver']);
         if ($permApprouver === null) {
-            $permApprouver = (new Permission())->setModule('autorisation')->setAction('approuver');
+            $permApprouver = $this->permissionNommee($manager, 'autorisation', 'approuver');
             $manager->persist($permApprouver);
         }
 
@@ -91,23 +94,46 @@ final class ExpenseReportFixtures extends Fixture implements DependentFixtureInt
         }
 
         // --- Rôles de test ---
-        $roleSalarie = (new Role())->setNom(self::ROLE_SALARIE);
+        //
+        // Cherchés avant d'être créés (D49) : `Role.nom` porte une unicité GLOBALE, et quatorze
+        // fixtures créent des rôles. Un rechargement complet sur une base qui les a déjà échoue sur
+        // « Duplicate entry » — ce qui est arrivé le 24/08 en préproduction, après que le chargement
+        // eut tronqué les rattachements droits-rôles : trente-quatre rôles se sont retrouvés à zéro
+        // droit. Le harnais de test ne le voyait pas, parce qu'il repart d'une base vide à chaque
+        // classe et charge les fixtures sélectivement. Les deux mondes ne se croisaient jamais.
+        $roleSalarie = $this->roleNomme($manager, self::ROLE_SALARIE);
         $roleSalarie->addPermission($permissions['expense_report_submit'])
             ->addPermission($permissions['expense_report_read_own'])
             ->addPermission($permissions['expense_report_approve']);
         $manager->persist($roleSalarie);
 
-        $roleComptable = (new Role())->setNom(self::ROLE_COMPTABLE);
+        $roleComptable = $this->roleNomme($manager, self::ROLE_COMPTABLE);
         $roleComptable->addPermission($permissions['expense_report_post_to_ledger']);
         $manager->persist($roleComptable);
 
-        $roleSuperviseur = (new Role())->setNom(self::ROLE_SUPERVISEUR);
+        $roleSuperviseur = $this->roleNomme($manager, self::ROLE_SUPERVISEUR);
         $roleSuperviseur->addPermission($permApprouver);
         $manager->persist($roleSuperviseur);
 
         // --- Comptabilité : journal NDF, compte salarié 421, compte de charge + mapping ---
         $profil = $manager->getRepository(ProfilExploitant::class)->findOneBy(['siren' => ComptaFixtures::PROFIL_SIREN]);
         if (!$profil instanceof ProfilExploitant) {
+            $manager->flush();
+
+            return;
+        }
+
+        // ── LE BLOC DE DEMONSTRATION NE SE POSE QU'UNE FOIS ──────────────────────────────────
+        //
+        // La sentinelle est le JOURNAL, pas le mapping comptable : celui-ci n'est cree que si le taux
+        // de TVA a 20 % existe, et une sentinelle conditionnelle n'est jamais posee quand la
+        // condition manque -- le bloc se rejoue alors indefiniment.
+        //
+        // Elle vise le couple (profil, code) et non « un journal quelconque » : la comptabilite en
+        // compte plusieurs, et une sentinelle large ferait sauter ce bloc.
+        if ($manager->getRepository(Journal::class)
+            ->findOneBy(['profilExploitant' => $profil, 'code' => self::JOURNAL_CODE]) !== null
+        ) {
             $manager->flush();
 
             return;
@@ -142,4 +168,26 @@ final class ExpenseReportFixtures extends Fixture implements DependentFixtureInt
 
         $manager->flush();
     }
+
+    /**
+     * Le rôle portant ce nom, existant ou créé.
+     *
+     * **`addPermission` est idempotent de son côté** : la collection est une `ManyToMany` que Doctrine
+     * dédoublonne. Rendre un rôle déjà présent puis lui rattacher les mêmes permissions ne produit
+     * donc pas de doublon de rattachement — c'est ce qui permet de recharger sans rien casser.
+     */
+    private function roleNomme(ObjectManager $manager, string $nom): Role
+    {
+        $existant = $manager->getRepository(Role::class)->findOneBy(['nom' => $nom]);
+
+        if ($existant instanceof Role) {
+            return $existant;
+        }
+
+        $role = (new Role())->setNom($nom);
+        $manager->persist($role);
+
+        return $role;
+    }
+
 }

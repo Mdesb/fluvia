@@ -25,7 +25,7 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ORM\Entity]
 #[ORM\Table(name: 'musee_partenaire_ota')]
 #[ApiResource(
-    shortName: 'MuseePartenaireOTA',
+    shortName: 'MuseePartenaireOta',
     operations: [
         new GetCollection(security: "is_granted('PERM', 'musee.lire')"),
         new Get(security: "is_granted('PERM', 'musee.lire')"),

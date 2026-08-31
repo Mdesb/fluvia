@@ -3,7 +3,17 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Billetterie — IT Cotation</title>
+    <!-- LE NOM DU PRODUIT, PAS CELUI DU DEPOT. Ce titre est l'onglet du navigateur, le libelle de
+         l'icone une fois l'application installee, et ce que l'utilisateur cherche dans sa liste de
+         fenetres. « Billetterie » y nommait un depot que personne d'autre que nous ne connait. -->
+    <title>Fluvia — IT Cotation</title>
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <!-- Colore la barre systeme d'Android une fois l'application installee. Sans elle, un bandeau
+         blanc coupe l'ecran en haut, et l'application a l'air d'une page web dans un cadre. -->
+    <meta name="theme-color" content="#0d7d88" />
+    <!-- iOS ignore le manifeste : c'est cette balise qui donne l'icone de l'ecran d'accueil. -->
+    <link rel="apple-touch-icon" href="/fluvia-192.png" />
+    <meta name="apple-mobile-web-app-title" content="Fluvia" />
   </head>
   <body>
     <div id="root"></div>

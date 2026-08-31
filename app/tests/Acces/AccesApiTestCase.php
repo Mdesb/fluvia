@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Acces;
 
+use App\Tests\SchemaDuHarnais;
 use ApiPlatform\Symfony\Bundle\Test\ApiTestCase;
 use ApiPlatform\Symfony\Bundle\Test\Client;
 use App\Acces\DataFixtures\AccesFixtures;
@@ -12,14 +13,17 @@ use App\Acces\Entity\DroitAcces;
 use App\Acces\Entity\Equipement;
 use App\Acces\Entity\EspaceAcces;
 use App\Acces\Entity\Support;
+use App\Caisse\Entity\Caisse;
+use App\Caisse\Entity\PointDeVente;
 use App\DataFixtures\SocleFixtures;
 use App\Offre\DataFixtures\OffreFixtures;
+use App\Offre\Entity\Produit;
+use App\Offre\Entity\TypeTarif;
 use App\Organisation\Entity\Etablissement;
 use App\Securite\Entity\Utilisateur;
 use App\Securite\Service\ContexteEtablissement;
 use App\Vente\DataFixtures\VenteFixtures;
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Tools\SchemaTool;
 
 /**
  * Base des tests d'API L3 : schéma recréé et fixtures socle + offre + vente + accès rechargées avant
@@ -38,14 +42,10 @@ abstract class AccesApiTestCase extends ApiTestCase
         /** @var EntityManagerInterface $em */
         $em = $container->get('doctrine')->getManager();
 
-        $tool = new SchemaTool($em);
-        $metadata = $em->getMetadataFactory()->getAllMetadata();
-        // FK_CHECKS désactivé le temps du drop/create (nombreuses tables inter-référencées) : évite les
-        // échecs d'ordonnancement DROP/CREATE observés après l'introduction du schéma recouvrement_*.
-        $em->getConnection()->executeStatement('SET FOREIGN_KEY_CHECKS=0');
-        $tool->dropSchema($metadata);
-        $tool->createSchema($metadata);
-        $em->getConnection()->executeStatement('SET FOREIGN_KEY_CHECKS=1');
+        // Le schéma est construit UNE FOIS par processus, puis vidé entre les tests. Le faire
+        // détruire et reconstruire par chaque `setUp()` coûtait ~10 s par test — six heures sur
+        // la suite complète, et donc une suite que personne ne lançait.
+        SchemaDuHarnais::reinitialiser($em);
 
         foreach ([SocleFixtures::class, OffreFixtures::class, VenteFixtures::class, AccesFixtures::class] as $classe) {
             $fixture = $container->get($classe);
@@ -122,6 +122,64 @@ abstract class AccesApiTestCase extends ApiTestCase
     protected function idTerminal(): string
     {
         return (string) $this->entite(\App\Acces\Entity\Terminal::class, ['nom' => AccesFixtures::TERMINAL_NOM])->getId();
+    }
+
+    // --- Raccourcis M2 (Vente & Caisse) — même patron que `App\Tests\Vente\VenteApiTestCase`, dupliqué
+    // ici (comme `App\Tests\Crm\CrmApiTestCase`) pour composer un scénario « vente → appairage →
+    // recharge » (CQ-1) sans faire dépendre les tests L3 de la base de tests L2. ---
+
+    protected function idPointDeVente(): string
+    {
+        return (string) $this->entite(PointDeVente::class, ['libelle' => VenteFixtures::PDV_LIBELLE])->getId();
+    }
+
+    protected function idCaisse(): string
+    {
+        return (string) $this->entite(Caisse::class, ['libelle' => VenteFixtures::CAISSE_LIBELLE])->getId();
+    }
+
+    protected function idProduit(string $libelleRecherche): string
+    {
+        return (string) $this->entite(Produit::class, ['libelleRecherche' => $libelleRecherche])->getId();
+    }
+
+    protected function idTarif(string $nom): string
+    {
+        return (string) $this->entite(TypeTarif::class, ['nom' => $nom])->getId();
+    }
+
+    /**
+     * Ouvre une session de caisse et renvoie sa représentation JSON.
+     *
+     * @param array<string, mixed> $entete
+     *
+     * @return array<string, mixed>
+     */
+    protected function ouvrirSession(Client $client, array $entete, string $fond = '50.00'): array
+    {
+        return $client->request('POST', '/api/sessions-caisse/ouvrir', $entete + [
+            'json' => [
+                'pointDeVente' => '/api/point_de_ventes/' . $this->idPointDeVente(),
+                'caisse' => '/api/caisses/' . $this->idCaisse(),
+                'regisseur' => '/api/utilisateurs/' . $this->idAdmin(),
+                'codeRegisseur' => 'CODE-REGIE-2026',
+                'fondDeCaisse' => $fond,
+            ],
+        ])->toArray();
+    }
+
+    /**
+     * Ouvre un panier (vente) sur une session.
+     *
+     * @param array<string, mixed> $entete
+     *
+     * @return array<string, mixed>
+     */
+    protected function creerVente(Client $client, array $entete, string $sessionId): array
+    {
+        return $client->request('POST', '/api/ventes', $entete + [
+            'json' => ['session' => '/api/session_caisses/' . $sessionId],
+        ])->toArray();
     }
 
     /**

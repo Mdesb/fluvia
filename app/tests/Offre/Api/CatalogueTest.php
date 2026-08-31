@@ -71,6 +71,179 @@ final class CatalogueTest extends OffreApiTestCase
         self::assertSame('archive', $gold['statut']);
     }
 
+    /**
+     * RG-SOCLE-05 — une promotion ne doit pas être visible hors de ses sites.
+     *
+     * Avant ce lot, `Promotion` ne portait **aucun** rattachement : la collection était lisible par
+     * tous les exploitants de la base, y compris d'un groupe à l'autre. Une promotion est une arme
+     * commerciale, et elle était visible des concurrents **avant même sa date de début** — ce test
+     * pose justement une promotion à venir, pour que ce point-là soit couvert et pas seulement dit.
+     */
+    public function testUnePromotionNestPasVisibleHorsDeSesSites(): void
+    {
+        [$client, $token, $idA] = $this->adminSurA();
+        $entete = ['auth_bearer' => $token, 'headers' => [ContexteEtablissement::HEADER => $idA]];
+
+        /** @var \Doctrine\ORM\EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $etabAEntite = $em->getRepository(\App\Organisation\Entity\Etablissement::class)->find($idA);
+        self::assertNotNull($etabAEntite);
+        $etranger = (new \App\Organisation\Entity\Etablissement())
+            ->setNom('Etablissement hors perimetre ' . uniqid())
+            ->setRegion($etabAEntite->getRegion());
+        $em->persist($etranger);
+
+        $promo = (new \App\Offre\Entity\Promotion())
+            ->setNom('Offre de rentree du concurrent ' . uniqid())
+            ->setType(\App\Offre\Enum\TypePromotion::cases()[0])
+            ->setDateDebut(new \DateTimeImmutable('+3 months'));
+        $promo->addEtablissement($etranger);
+        $em->persist($promo);
+        $em->flush();
+
+        $client->request('GET', '/api/promotions', $entete + ['query' => ['itemsPerPage' => 100]]);
+        self::assertResponseIsSuccessful();
+        $membres = $client->getResponse()->toArray()['member'] ?? $client->getResponse()->toArray()['hydra:member'];
+        $ids = array_map(static fn (array $p): string => $p['id'], $membres);
+        self::assertNotContains((string) $promo->getId(), $ids, 'Une promotion a venir d un autre site ne doit pas etre lisible.');
+    }
+
+    /**
+     * Le piège que le cloisonnement ouvre : une promotion sans site serait invisible pour tout le
+     * monde, y compris son auteur, après un 201 rassurant. Le défaut la rattache au site actif.
+     */
+    public function testUnePromotionCreeeSansSiteEstRattacheeAuSiteActif(): void
+    {
+        [$client, $token, $idA] = $this->adminSurA();
+        $entete = ['auth_bearer' => $token, 'headers' => [ContexteEtablissement::HEADER => $idA]];
+
+        $cree = $client->request('POST', '/api/promotions', $entete + [
+            'json' => ['nom' => 'Promo sans site ' . uniqid(), 'type' => \App\Offre\Enum\TypePromotion::cases()[0]->value],
+        ])->toArray();
+        self::assertResponseStatusCodeSame(201);
+
+        $client->request('GET', '/api/promotions', $entete + ['query' => ['itemsPerPage' => 100]]);
+        $membres = $client->getResponse()->toArray()['member'] ?? $client->getResponse()->toArray()['hydra:member'];
+        $ids = array_map(static fn (array $p): string => $p['id'], $membres);
+        self::assertContains($cree['id'], $ids, 'Son auteur doit la voir : sinon la creation reussit et la ressource disparait.');
+    }
+
+    /**
+     * RG-SOCLE-05 — la grille tarifaire ne porte pas d'établissement : elle le tient de son produit.
+     *
+     * Sans jointure, la collection était lisible d'un établissement à l'autre : on lisait **les prix
+     * pratiqués par un voisin**, tarif par tarif et saison par saison. Ce n'est pas de la
+     * configuration partagée, c'est sa politique commerciale.
+     */
+    public function testLaGrilleTarifaireDunProduitHorsPerimetreNestPasListee(): void
+    {
+        [$client, $token, $idA] = $this->adminSurA();
+        $entete = ['auth_bearer' => $token, 'headers' => [ContexteEtablissement::HEADER => $idA]];
+
+        $produit = $client->request('POST', '/api/produits', $entete + [
+            'json' => [
+                'libelle' => ['fr' => 'Produit a grille hors perimetre'],
+                'type' => '/api/type_produits/' . $this->idType(OffreFixtures::TYPE_ENTREE),
+                'canaux' => ['guichet'],
+                'etablissements' => ['/api/etablissements/' . $idA],
+            ],
+        ])->toArray();
+        self::assertResponseStatusCodeSame(201);
+
+        /** @var \Doctrine\ORM\EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $entite = $em->getRepository(\App\Offre\Entity\Produit::class)->find($produit['id']);
+        self::assertNotNull($entite);
+
+        $etabAEntite = $em->getRepository(\App\Organisation\Entity\Etablissement::class)->find($idA);
+        self::assertNotNull($etabAEntite);
+        $etranger = (new \App\Organisation\Entity\Etablissement())
+            ->setNom('Etablissement hors perimetre ' . uniqid())
+            ->setRegion($etabAEntite->getRegion());
+        $em->persist($etranger);
+
+        // La grille est creee AVANT le deplacement : on teste bien la lecture, pas l'ecriture.
+        $grille = (new \App\Offre\Entity\GrilleTarifaire())->setProduit($entite)
+            ->setTypeTarif($em->getRepository(\App\Offre\Entity\TypeTarif::class)->find($this->idTarif(OffreFixtures::TARIF_PLEIN)))
+            ->setSaison($em->getRepository(\App\Offre\Entity\Saison::class)->find($this->idSaison(OffreFixtures::SAISON)))
+            ->setPrix('42.00');
+        $em->persist($grille);
+
+        foreach ($entite->getEtablissements()->toArray() as $ancien) {
+            $entite->getEtablissements()->removeElement($ancien);
+        }
+        $entite->getEtablissements()->add($etranger);
+        $em->flush();
+
+        $client->request('GET', '/api/grille_tarifaires', $entete + ['query' => ['itemsPerPage' => 100]]);
+        self::assertResponseIsSuccessful();
+        $membres = $client->getResponse()->toArray()['member'] ?? $client->getResponse()->toArray()['hydra:member'];
+        $ids = array_map(static fn (array $g): string => $g['id'], $membres);
+        self::assertNotContains((string) $grille->getId(), $ids, 'La grille d\'un produit hors perimetre ne doit pas etre listee.');
+    }
+
+    /**
+     * D3/D8 — une action de masse ne doit pas atteindre le produit d'un établissement hors périmètre.
+     *
+     * Les identifiants viennent du corps de la requête, et l'action de masse en accepte une liste
+     * entière : un `find()` sec permettait d'archiver — **irréversiblement** — le catalogue de
+     * quelqu'un d'autre à qui savait deviner des UUID.
+     *
+     * Le produit est déplacé sur l'établissement C, du groupe voisin, où l'admin du groupe A n'a
+     * aucune affectation (même montage que `testAdminNeVoitPasLesRessourcesDunAutreGroupe` côté
+     * réservation). L'admin est affecté à A **et** à B : un test bâti sur B ne prouverait rien.
+     */
+    public function testActionDeMasseNAtteintPasLeProduitDunAutreGroupe(): void
+    {
+        [$client, $token, $idA] = $this->adminSurA();
+        $entete = ['auth_bearer' => $token, 'headers' => [ContexteEtablissement::HEADER => $idA]];
+
+        $produit = $client->request('POST', '/api/produits', $entete + [
+            'json' => [
+                'libelle' => ['fr' => 'Produit deplace hors perimetre'],
+                'type' => '/api/type_produits/' . $this->idType(OffreFixtures::TYPE_ENTREE),
+                'canaux' => ['guichet'],
+                'etablissements' => ['/api/etablissements/' . $idA],
+            ],
+        ])->toArray();
+        self::assertResponseStatusCodeSame(201);
+
+        // Bascule hors périmètre : commercialisé uniquement sur l'établissement C.
+        /** @var \Doctrine\ORM\EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $entite = $em->getRepository(\App\Offre\Entity\Produit::class)->find($produit['id']);
+        self::assertNotNull($entite);
+        // Un établissement neuf, sur lequel l'admin n'a aucune affectation. Construit ici plutôt
+        // que pris dans les fixtures : l'admin de démonstration est affecté à A **et** à B, donc
+        // aucun des deux ne prouverait quoi que ce soit.
+        $etabAEntite = $em->getRepository(\App\Organisation\Entity\Etablissement::class)->find($idA);
+        self::assertNotNull($etabAEntite);
+        $etabC = (new \App\Organisation\Entity\Etablissement())
+            ->setNom('Etablissement hors perimetre ' . uniqid())
+            ->setRegion($etabAEntite->getRegion());
+        $em->persist($etabC);
+        foreach ($entite->getEtablissements()->toArray() as $ancien) {
+            $entite->getEtablissements()->removeElement($ancien);
+        }
+        $entite->getEtablissements()->add($etabC);
+        $em->flush();
+        $statutAvant = $entite->getStatut()->value;
+
+        $reponse = $client->request('POST', '/api/produits/actions-de-masse', $entete + [
+            'json' => ['action' => 'archiver', 'produits' => [$produit['id']], 'confirmer' => true],
+        ])->toArray();
+
+        // Même forme de réponse qu'un identifiant inexistant : pas d'oracle d'énumération.
+        self::assertSame(0, $reponse['nbTraites']);
+        self::assertSame('introuvable', $reponse['echecs'][0]['raison'] ?? null);
+
+        // Et surtout : le produit n'a pas bougé. L'archivage est irréversible.
+        $em->clear();
+        $apres = $em->getRepository(\App\Offre\Entity\Produit::class)->find($produit['id']);
+        self::assertNotNull($apres);
+        self::assertSame($statutAvant, $apres->getStatut()->value, 'Aucune transition sur un produit hors périmètre.');
+    }
+
     /** RG-SOCLE-05 — Un lecteur affecté à A ne voit pas un produit rattaché à B seulement. */
     public function testCloisonnementEtablissement(): void
     {

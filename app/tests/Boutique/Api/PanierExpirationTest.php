@@ -66,4 +66,61 @@ final class PanierExpirationTest extends BoutiqueApiTestCase
             ->getQuery()->getResult();
         self::assertCount(0, $reservations, 'CA-3 : aucune Reservation créée pour un panier jamais payé.');
     }
+    /**
+     * ⚠ **ELLE MORD — MAIS ÉPARGNE-T-ELLE ?** Rien ne le prouvait.
+     *
+     * Le test ci-dessus force un panier au-delà de son délai et vérifie qu'il devient `Expire`.
+     * C'est la moitié mordante. Si la borne temporelle disparaissait du `andWhere` — une ligne
+     * retirée en refactorisant — la commande expirerait **tous** les paniers ouverts, y compris
+     * celui d'un client en train de payer, et ce test resterait vert : son panier à lui est bien
+     * expiré.
+     *
+     * On ne planifie pas une tâche sur une seule moitié de preuve. Celle-ci tourne toutes les cinq
+     * minutes sans personne devant l'écran, et son sur-déclenchement ne se verrait que chez le
+     * client dont le panier disparaît pendant qu'il saisit sa carte.
+     *
+     * **Les deux paniers passent dans la MÊME exécution.** C'est ce qui distingue « elle épargne »
+     * de « elle n'a rien trouvé » : si la commande ne faisait rien du tout, l'expiré ne serait pas
+     * expiré et le témoin le dirait.
+     */
+    public function testElleEpargneUnPanierEncoreValide(): void
+    {
+        [, $expireId] = $this->ouvrirPanierInviteA();
+        [, $fraisId] = $this->ouvrirPanierInviteA();
+
+        $em = $this->em();
+
+        $expire = $em->getRepository(PanierEnLigne::class)->find($expireId);
+        self::assertInstanceOf(PanierEnLigne::class, $expire);
+        $expire->setDateExpiration(new \DateTimeImmutable('-1 minute'));
+
+        $frais = $em->getRepository(PanierEnLigne::class)->find($fraisId);
+        self::assertInstanceOf(PanierEnLigne::class, $frais);
+        $frais->setDateExpiration(new \DateTimeImmutable('+30 minutes'));
+
+        $em->flush();
+        $em->clear();
+
+        $application = new Application(static::getContainer()->get('kernel'));
+        $tester = new CommandTester($application->find('boutique:liberer-paniers-expires'));
+        $tester->execute([]);
+        self::assertSame(0, $tester->getStatusCode());
+
+        $em->clear();
+
+        // Témoin : elle a bien agi. Sans lui, « le panier frais est intact » serait aussi vrai
+        // d'une commande qui ne fait rien.
+        self::assertSame(
+            StatutPanier::Expire,
+            $em->getRepository(PanierEnLigne::class)->find($expireId)?->getStatut(),
+            'Témoin : la commande a bien expiré ce qui devait l’être.'
+        );
+
+        self::assertSame(
+            StatutPanier::Ouvert,
+            $em->getRepository(PanierEnLigne::class)->find($fraisId)?->getStatut(),
+            'Un panier encore dans son délai ne doit pas être touché : c’est celui d’un client en train de payer.'
+        );
+    }
+
 }

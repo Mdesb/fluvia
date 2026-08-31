@@ -50,14 +50,19 @@ final class EventTenantTreasuryTest extends TreasuryApiTestCase
             $dispatcher->removeListener('treasury.reconciliation_completed', $listener);
         }
 
-        self::assertCount(1, $captures);
-        /** @var DomainEvent $evenement */
-        $evenement = $captures[0];
-        self::assertSame($idEtablissementA, $evenement->tenant->establishmentId->toRfc4122());
-        self::assertNotSame($idEtablissementB, $evenement->tenant->establishmentId->toRfc4122());
-        self::assertSame('BankStatementLine', $evenement->subject->type);
-        self::assertSame($ligneReleve['id'], $evenement->subject->id);
-        self::assertArrayHasKey('reconciliationCode', $evenement->payload);
-        self::assertArrayNotHasKey('iban', $evenement->payload);
+        // Même histoire que `SupplierInvoiceEventTest`. Ce test vérifiait que le tenant de
+        // l'événement suivait la ligne de relevé (établissement A) et non l'en-tête (B). Depuis la
+        // bascule sur l'établissement ACTIF, la ligne de A n'est plus résolvable depuis B : le
+        // rapprochement est refusé avant tout événement.
+        //
+        // La surveillance devient une garantie, et c'est elle qu'on affirme ici — refus, ET aucun
+        // événement publié. Un événement émis malgré le refus porterait un tenant arbitraire dans
+        // tout l'aval comptable, sans trace côté HTTP.
+        self::assertGreaterThanOrEqual(
+            400,
+            $client->getResponse()->getStatusCode(),
+            'Rapprocher une ligne hors de l\'établissement actif doit être refusé.',
+        );
+        self::assertCount(0, $captures, 'Une opération refusée ne doit publier aucun événement.');
     }
 }

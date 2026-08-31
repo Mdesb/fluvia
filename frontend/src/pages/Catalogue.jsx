@@ -1,36 +1,91 @@
 import { useEffect, useState, useCallback } from 'react'
+import { useEtatUrl } from '../api/url.js'
 import { api, membres } from '../api/client.js'
-import { libelleProduit, prixIndicatif, euros } from '../api/produit.js'
+import { libelleProduit, prixIndicatif, euros, statutProduit, actionsStatut } from '../api/produit.js'
 import Tabs from '../components/Tabs.jsx'
 import ProduitOptionsModal from '../components/ProduitOptionsModal.jsx'
+import ProduitFiche from '../components/ProduitFiche.jsx'
+import { humaniser } from '../api/vocabulaire.js'
+import { aLeDroit } from '../api/droits.js'
 
-export default function Catalogue({ etabActif }) {
-  const [tab, setTab] = useState('produits')
+// MEME MOTIF QUE CLIENTS, PARCE QUE MAXIME A DEMANDE LA MEME CHOSE : « je pense que pour le produit
+// on devrait faire pareil que pour le client. » Liste large, fiche en page, retour qui rend les
+// filtres. `useEtatUrl` (api/url.js) est ecrit pour servir aux deux plutot que recopie ici.
+const DEFAUTS = { tab: 'produits', q: '', statut: '', type: '', fiche: '' }
+
+export default function Catalogue({ etabActif, cible = null, onCibleConsommee, droits = [] }) {
+  const [params, majParams] = useEtatUrl('catalogue', DEFAUTS)
+  const tab = params.tab
+  const setTab = (v) => majParams({ tab: v, fiche: '' })
+
+  // Une cible « produit » arrive de la recherche globale : on s'assure d'être sur le bon onglet
+  // avant que la liste ne tente de l'ouvrir.
+  useEffect(() => {
+    if (cible?.type === 'produit') majParams({ tab: 'produits' })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cible])
+
+  // DEUX NIVEAUX DE NAVIGATION EMPILÉS, ET LE SECOND NE PARLAIT PLUS DE CE QU'ON REGARDAIT.
+  //
+  // Sur la fiche d'un produit, la page affichait encore le titre « Catalogue / Produits et
+  // options » et les onglets « Produits | Options » du niveau LISTE, au-dessus du bouton
+  // « ← Retour au catalogue » de la fiche. Relevé tel quel dans le texte de la page :
+  //
+  //     Catalogue / Produits et options
+  //     Produits   Options            ← les onglets de la LISTE
+  //     ← Retour au catalogue         ← le retour de la FICHE
+  //     Audioguide …
+  //
+  // Cliquer « Options » depuis une fiche produit fait donc quitter la fiche sans le dire, et
+  // « Produits », qui a l'air actif, ne ramène nulle part. Ce sont les onglets d'un écran qu'on a
+  // quitté.
+  //
+  // C'est le préalable à la refonte de la fiche : y ajouter ses propres onglets sans retirer ceux
+  // du parent donnerait deux rangées superposées qui ne désignent pas la même chose — pire que
+  // l'état d'avant.
+  const ficheOuverte = tab === 'produits' && !!params.fiche
 
   return (
-    <div className="view">
-      <div className="view-head">
-        <div className="ttl">
-          <h1>Catalogue</h1>
-          <p>Produits et options</p>
-        </div>
-      </div>
+    <div className="view large">
+      {!ficheOuverte && (
+        <>
+          <div className="view-head">
+            <div className="ttl">
+              <h1>Catalogue</h1>
+              <p>Produits et options</p>
+            </div>
+          </div>
 
-      <Tabs
-        onglets={[['produits', 'Produits'], ['options', 'Options']]}
-        actif={tab}
-        onChange={setTab}
-      />
+          <Tabs
+            onglets={[['produits', 'Produits'], ['options', 'Options']]}
+            actif={tab}
+            onChange={setTab}
+          />
+        </>
+      )}
 
-      {tab === 'produits' ? <OngletProduits etabActif={etabActif} /> : <OngletOptions />}
+      {tab === 'produits' ? (
+        <OngletProduits
+          etabActif={etabActif}
+          cible={cible}
+          onCibleConsommee={onCibleConsommee}
+          droits={droits}
+          params={params}
+          majParams={majParams}
+        />
+      ) : (
+        <OngletOptions />
+      )}
     </div>
   )
 }
 
 /* ------------------------------------------------------------------ Produits */
 
-function OngletProduits({ etabActif }) {
+function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = [], params, majParams }) {
   const [produits, setProduits] = useState([])
+  const [total, setTotal] = useState(0)
+  const [saisie, setSaisie] = useState(params.q)
   const [types, setTypes] = useState([])
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
@@ -41,13 +96,29 @@ function OngletProduits({ etabActif }) {
   const [enCours, setEnCours] = useState(false)
 
   const [produitOptions, setProduitOptions] = useState(null) // produit dont on gère les options
+  const [actionEnCours, setActionEnCours] = useState(null) // id du produit dont une action tourne
+  const selId = params.fiche || null
 
   const recharger = useCallback(async () => {
     setChargement(true)
     setErreur(null)
     try {
-      const [pc, tc] = await Promise.all([api.produits(), api.typeProduits()])
+      // QUATRE FILTRES DECLARES COTE SERVEUR, AUCUN ATTEIGNABLE.
+      //
+      // `Produit` porte un `SearchFilter` sur `code` (partiel), `libelleRecherche` (partiel),
+      // `statut` et `typeCode`. L'ecran appelait `api.produits()` sans le moindre parametre, et
+      // n'offrait meme pas un champ de recherche : au-dela de trente produits on ne retrouvait plus
+      // rien, puisque le serveur coupe la a defaut de pagination cliente.
+      const [pc, tc] = await Promise.all([
+        api.produits({
+          libelleRecherche: params.q || '',
+          statut: params.statut || '',
+          typeCode: params.type || '',
+        }),
+        api.typeProduits(),
+      ])
       setProduits(membres(pc))
+      setTotal(pc?.totalItems ?? pc?.['hydra:totalItems'] ?? membres(pc).length)
       const t = membres(tc)
       setTypes(t)
       setTypeId((prev) => prev || (t.length ? t[0].id : ''))
@@ -56,11 +127,28 @@ function OngletProduits({ etabActif }) {
     } finally {
       setChargement(false)
     }
-  }, [])
+  }, [params.q, params.statut, params.type])
 
   useEffect(() => {
     recharger()
   }, [etabActif, recharger])
+
+  // Recherche differee a la frappe : l'URL ne bouge qu'une fois la saisie posee.
+  useEffect(() => {
+    if (saisie === params.q) return undefined
+    const t = setTimeout(() => majParams({ q: saisie }), 300)
+    return () => clearTimeout(t)
+  }, [saisie, params.q, majParams])
+
+  // Ouverture de la fiche demandée par la recherche globale. On prend l'objet complet s'il est déjà
+  // chargé, sinon on ouvre avec le seul identifiant : la fiche va chercher le détail de toute façon,
+  // et attendre la liste entière pour afficher un nom ferait patienter sans raison.
+  useEffect(() => {
+    if (cible?.type !== 'produit') return
+    majParams({ fiche: String(cible.id) }, { pousser: true })
+    onCibleConsommee?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cible])
 
   async function creer(e) {
     e.preventDefault()
@@ -86,10 +174,107 @@ function OngletProduits({ etabActif }) {
     }
   }
 
+  // Appels de cycle de vie, dans l'ordre exact des actions déclarées par `actionsStatut`.
+  const APPELS = {
+    publier: api.publierProduit,
+    depublier: api.depublierProduit,
+    archiver: api.archiverProduit,
+    reactiver: api.reactiverProduit,
+  }
+
+  // Une action peut échouer pour une raison métier parfaitement légitime — publier un produit sans
+  // tarif ou sans site de commercialisation. On affiche le message du serveur TEL QUEL plutôt qu'un
+  // « échec » générique : c'est lui qui dit ce qui manque, et c'est la seule chose sur laquelle
+  // l'exploitant peut agir.
+  async function agir(produit, action) {
+    if (action.confirmation && !window.confirm(action.confirmation.replace('%s', libelleProduit(produit)))) return
+    setErreur(null)
+    setSucces(null)
+    setActionEnCours(produit.id)
+    try {
+      await APPELS[action.id](produit.id)
+      setSucces(`« ${libelleProduit(produit)} » : ${action.confirme}`)
+      await recharger()
+    } catch (err) {
+      setErreur(err.message || "L'action n'a pas abouti.")
+    } finally {
+      setActionEnCours(null)
+    }
+  }
+
+  // La fiche prend la page entiere : on n'affiche ni la liste ni le formulaire de creation derriere.
+  if (selId) {
+    const connu = produits.find((p) => String(p.id) === String(selId))
+    return (
+      <>
+        <button
+          className="btn ghost sm"
+          type="button"
+          style={{ marginBottom: 12 }}
+          onClick={() => majParams({ fiche: '' }, { pousser: true })}
+        >
+          ← Retour au catalogue
+        </button>
+        <ProduitFiche
+          produit={connu || { id: selId }}
+          etabActif={etabActif}
+          peutModifier={aLeDroit(droits, 'offre.modifier') || aLeDroit(droits, 'offre.gerer')}
+          peutModifierCompta={aLeDroit(droits, 'offre.modifier_compta') || aLeDroit(droits, 'offre.gerer')}
+          droits={droits}
+          onModifie={recharger}
+        />
+      </>
+    )
+  }
+
+  const tronquee = total > produits.length
+
   return (
     <>
       {erreur && <div className="banner banner-error">{erreur}</div>}
       {succes && <div className="banner banner-ok">{succes}</div>}
+
+      <section className="card" style={{ marginBottom: 16 }}>
+        <div className="card-b">
+          <div className="row" style={{ gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            <div className="field" style={{ margin: 0, flex: '2 1 260px' }}>
+              <label htmlFor="cat-q">Rechercher un produit</label>
+              <input
+                id="cat-q"
+                className="input"
+                placeholder="Nom du produit…"
+                value={saisie}
+                onChange={(e) => setSaisie(e.target.value)}
+              />
+            </div>
+            <div className="field" style={{ margin: 0, flex: '1 1 160px' }}>
+              <label htmlFor="cat-statut">État</label>
+              <select id="cat-statut" className="input" value={params.statut} onChange={(e) => majParams({ statut: e.target.value })}>
+                <option value="">Tous les états</option>
+                <option value="brouillon">Brouillons</option>
+                <option value="publie">Publiés</option>
+                <option value="archive">Archivés</option>
+              </select>
+            </div>
+            <div className="field" style={{ margin: 0, flex: '1 1 180px' }}>
+              <label htmlFor="cat-type">Type</label>
+              <select id="cat-type" className="input" value={params.type} onChange={(e) => majParams({ type: e.target.value })}>
+                <option value="">Tous les types</option>
+                {types.map((t) => (
+                  <option key={t.id} value={t.code || t.id}>{t.libelle}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          {/* Le serveur coupe a 30 et ignore `itemsPerPage` (voir `api/client.js`). Sur un catalogue,
+              une liste coupee en silence fait conclure qu'un produit n'existe pas. */}
+          {tronquee && (
+            <p className="hint" style={{ marginBottom: 0 }}>
+              {produits.length} produits affichés sur {total}. Affinez la recherche pour voir les autres.
+            </p>
+          )}
+        </div>
+      </section>
 
       <form className="card" onSubmit={creer} style={{ marginBottom: 16 }}>
         <div className="card-h"><h3>Nouveau produit</h3></div>
@@ -143,16 +328,52 @@ function OngletProduits({ etabActif }) {
               <tbody>
                 {produits.map((p) => (
                   <tr key={p.id}>
-                    <td><span className="nm">{libelleProduit(p)}</span></td>
-                    <td>{p.typeCode || '—'}</td>
                     <td>
-                      <span className={`badge ${p.statut === 'publie' ? 'good' : 'mut'}`}>{p.statut || '—'}</span>
+                      <button
+                        type="button"
+                        className="lnk"
+                        onClick={() => majParams({ fiche: String(p.id) }, { pousser: true })}
+                        title="Ouvrir la fiche du produit"
+                        style={{
+                          background: 'none',
+                          border: 0,
+                          padding: 0,
+                          font: 'inherit',
+                          color: 'inherit',
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                          textDecoration: 'underline',
+                          textUnderlineOffset: 3,
+                        }}
+                      >
+                        <span className="nm">{libelleProduit(p)}</span>
+                      </button>
+                    </td>
+                    <td>{p.type?.libelle || humaniser(p.typeCode)}</td>
+                    <td>
+                      <span className={`badge ${statutProduit(p).ton}`} title={statutProduit(p).aide}>
+                        {statutProduit(p).libelle}
+                      </span>
                     </td>
                     <td className="num">{euros(prixIndicatif(p))}</td>
                     <td className="num">
-                      <button className="btn ghost sm" type="button" onClick={() => setProduitOptions(p)}>
-                        Options
-                      </button>
+                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                        {actionsStatut(p.statut).map((a) => (
+                          <button
+                            key={a.id}
+                            className={`btn ${a.ton} sm`}
+                            type="button"
+                            title={a.aide}
+                            disabled={actionEnCours === p.id}
+                            onClick={() => agir(p, a)}
+                          >
+                            {actionEnCours === p.id ? '…' : a.libelle}
+                          </button>
+                        ))}
+                        <button className="btn ghost sm" type="button" onClick={() => setProduitOptions(p)}>
+                          Options
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -170,6 +391,7 @@ function OngletProduits({ etabActif }) {
         produit={produitOptions}
         onClose={() => setProduitOptions(null)}
       />
+
     </>
   )
 }
@@ -292,7 +514,12 @@ function OngletOptions() {
                       onClick={() => setSelId(g.id)}
                       className={`row-click${selId === g.id ? ' row-active' : ''}`}
                     >
-                      <td><span className="nm">{g.libelle}</span></td>
+                      <td>
+                        {/* Le clic sur la ligne reste ; le clavier a besoin d'une cible réelle. */}
+                        <button type="button" className="lnk nm" onClick={() => setSelId(g.id)}>
+                          {g.libelle}
+                        </button>
+                      </td>
                       <td><span className="badge mut">{g.modeSelection === 'multiple' ? 'multiple' : 'unique'}</span></td>
                       <td>
                         <button

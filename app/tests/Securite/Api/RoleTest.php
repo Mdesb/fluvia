@@ -20,13 +20,22 @@ final class RoleTest extends SecuriteApiTestCase
         [$client, $entete] = $this->adminSurA();
         $idRoleAdmin = $this->idRole('Administrateur groupe');
 
+        // ⚠ ON COMPTE L'ORIGINAL, ON NE CODE PAS SON NOMBRE EN DUR.
+        //
+        // Ce test affirmait `assertCount(3, ...)` — trois étant la taille du rôle le jour où il a
+        // été écrit. CA-12 vérifie pourtant une FIDÉLITÉ (« nouveau rôle, mêmes permissions »), pas
+        // un cardinal. Un nombre en dur fait rougir sur toute évolution légitime du rôle, et il ne
+        // dit rien de plus : si l'on retirait une permission à l'original en en ajoutant une autre,
+        // le compte resterait bon et la copie serait fausse.
+        $attendu = \count($this->entite(Role::class, ['nom' => 'Administrateur groupe'])->getPermissions());
+
         $reponse = $client->request('POST', '/api/roles/' . $idRoleAdmin . '/dupliquer', $entete + [
             'json' => ['nom' => 'Administrateur groupe (copie test)'],
         ]);
         self::assertResponseStatusCodeSame(201);
         $donnees = $reponse->toArray();
         self::assertNotSame($idRoleAdmin, $donnees['id'] ?? null);
-        self::assertCount(3, $donnees['permissions']);
+        self::assertCount($attendu, $donnees['permissions'], 'La copie doit porter exactement les permissions de l’original.');
 
         /** @var EntityManagerInterface $em */
         $em = static::getContainer()->get('doctrine')->getManager();

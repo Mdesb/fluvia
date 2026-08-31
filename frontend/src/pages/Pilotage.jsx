@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
+import EcartsCaisse from '../components/EcartsCaisse.jsx'
 import { api } from '../api/client.js'
 import { euros } from '../api/produit.js'
+import { mot, GLOSSAIRE } from '../api/vocabulaire.js'
 
 // Petit graphe SVG « maison » (pas de lib externe) : occupation FMI par espace vs seuil.
 function GrapheJauges({ jauges }) {
@@ -55,7 +57,7 @@ function Kpi({ label, valeur, accent }) {
 
 // Écran Reporting / Pilotage (M7) : dashboard établissement (lecture directe des modules
 // producteurs). En l'absence de périmètre Reporting, repli sur la supervision accès accessible.
-export default function Pilotage({ etabActif, etablissements }) {
+export default function Pilotage({ etabActif, etablissements, droits }) {
   const [dash, setDash] = useState(null)
   const [repli, setRepli] = useState(null) // données de supervision si dashboard hors périmètre
   const [chargement, setChargement] = useState(true)
@@ -77,7 +79,13 @@ export default function Pilotage({ etabActif, etablissements }) {
     } catch (e) {
       // Le dashboard M7 exige un périmètre Reporting (affectation dédiée). Repli lisible.
       if (e.status === 403) {
-        setInfo("Aucun périmètre Reporting n'est rattaché à ce compte pour cet établissement (le tableau de bord M7 requiert une affectation « reporting »). Vue de repli à partir de la supervision accès.")
+        // « M7 » etait notre code de module interne. On dit ce qui manque et ce qu'il faut faire,
+        // sans nommer notre decoupage : l'exploitant n'a pas a le connaitre pour se debloquer.
+        setInfo(
+          "Votre compte n'a pas encore acces aux indicateurs de reporting pour cet etablissement. "
+          + 'Les chiffres ci-dessous sont ceux du controle d acces, qui reste disponible. '
+          + 'Un administrateur peut vous donner cet acces depuis Parametres, onglet Utilisateurs et droits.',
+        )
       } else if (e.status === 404) {
         setInfo('Tableau de bord Reporting indisponible pour cet établissement.')
       } else {
@@ -123,7 +131,14 @@ export default function Pilotage({ etabActif, etablissements }) {
           <p>{dash?.etablissementNom || nomEtab} · indicateurs du jour</p>
         </div>
         <div className="actions">
-          <span className={`badge ${dash ? 'good' : 'warn'}`}>{dash ? 'Temps réel (M7)' : 'Repli supervision'}</span>
+          <span
+            className={`badge ${dash ? 'good' : 'warn'}`}
+            title={dash
+              ? 'Chiffres issus du reporting, mis a jour en continu.'
+              : "Chiffres issus du controle d acces, faute d acces au reporting."}
+          >
+            {dash ? 'Temps réel' : 'Chiffres partiels'}
+          </span>
           <button className="btn" onClick={charger}>↻ Rafraîchir</button>
         </div>
       </div>
@@ -133,10 +148,24 @@ export default function Pilotage({ etabActif, etablissements }) {
 
       {/* KPIs */}
       <div className="grid g4" style={{ marginBottom: 16 }}>
-        <Kpi label="CA encaissé (jour)" valeur={dash ? euros(dash.caJour) : 'n/d'} accent="var(--accent-2)" />
+        <Kpi
+          label="Encaissé aujourd'hui"
+          valeur={dash ? euros(dash.caJour) : '—'}
+          sous={dash ? undefined : GLOSSAIRE.indisponible}
+          accent="var(--accent-2)"
+        />
         <Kpi label="Fréquentation (jour)" valeur={Number(frequentation || 0).toLocaleString('fr-FR')} />
-        <Kpi label="FMI max (occupation)" valeur={fmiMax.toLocaleString('fr-FR')} accent={enAlerte ? 'var(--crit)' : undefined} />
-        <Kpi label="Fond de caisse" valeur={dash ? euros(dash.fondDeCaisse) : 'n/d'} />
+        <Kpi
+          label="Occupation maximale (FMI)"
+          valeur={fmiMax.toLocaleString('fr-FR')}
+          sous={GLOSSAIRE.fmi}
+          accent={enAlerte ? 'var(--crit)' : undefined}
+        />
+        <Kpi
+          label="Fond de caisse"
+          valeur={dash ? euros(dash.fondDeCaisse) : '—'}
+          sous={dash ? undefined : GLOSSAIRE.indisponible}
+        />
       </div>
 
       <div className="grid g2" style={{ marginBottom: 16 }}>
@@ -169,7 +198,7 @@ export default function Pilotage({ etabActif, etablissements }) {
                       <td className="num">{j.valeurCourante ?? 0}</td>
                       <td className="num">{j.seuil || '—'}</td>
                       <td className="num">{j.cumulJour ?? 0}</td>
-                      <td><span className={`badge ${etat === 'alerte' ? 'crit' : 'good'}`}>{etat}</span></td>
+                      <td><span className={`badge ${etat === 'alerte' ? 'crit' : 'good'}`}>{mot(etat)}</span></td>
                     </tr>
                   )
                 })}
@@ -180,8 +209,12 @@ export default function Pilotage({ etabActif, etablissements }) {
         </section>
       </div>
 
+      {/* Les écarts de caisse sont ici et non sur l'écran de caisse : c'est un travail de
+          responsable, fait après la clôture, pas pendant le service. */}
+      <EcartsCaisse etabActif={etabActif} droits={droits} />
+
       <p className="hint" style={{ marginTop: 14 }}>
-        No-show et impayés sont issus des mesures pré-agrégées (M7 région/groupe) : non affichés ici tant
+        Les absences non prévenues et les impayés sont calculés à l'échelle du groupe : ils apparaîtront ici dès qu'une mesure existe pour ce périmètre. Non affichés tant
         qu'aucune mesure n'est générée pour le périmètre.
       </p>
     </div>

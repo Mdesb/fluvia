@@ -13,11 +13,36 @@ services:
     _defaults:
         autowire: true      # Automatically injects dependencies in your services.
         autoconfigure: true # Automatically registers your services as commands, event subscribers, etc.
+        bind:
+            # D104 : le domaine sous lequel vivent les sous-domaines clients. Lie explicitement
+            # parce que l'autowiring ne devine pas une chaine.
+            string $domaineDePlateforme: '%env(PLATFORM_BASE_DOMAIN)%'
+            # Le marqueur de version chargee vit dans `var/`, hors du depot : le provider a besoin
+            # de la racine pour le trouver.
+            string $projectDir: '%kernel.project_dir%'
 
     # makes classes in src/ available to be used as services
     # this creates a service per class whose id is the fully-qualified class name
     App\:
         resource: '../src/'
+        exclude:
+            # Patron de decorateur, jamais un service : UuidAwareSearchFilterPass en pose une
+            # instance par filtre decore. Enregistre ici, il serait etiquete comme filtre et le
+            # localisateur d'API Platform reclamerait un service que personne ne peut construire.
+            - '../src/Platform/Filter/UuidAwareSearchFilter.php'
+
+    # LE CALENDRIER SCOLAIRE OFFICIEL, derriere un port.
+    #
+    # Une seule implementation aujourd'hui — l'open data du ministere. L'alias est explicite quand
+    # meme : le jour ou l'on ajoute un decorateur de cache ou un adaptateur de secours, l'autowiring
+    # ne saura plus choisir, et il choisira en silence.
+    App\Opening\Port\SchoolHolidaysInterface: '@App\Opening\Adapter\EducationGouvSchoolHolidays'
+
+    # Point de passage unique vers le client (CMP-1). L'implementation par defaut JOURNALISE et
+    # n'envoie rien : aucun prestataire n'est branche (D19, CMP-6). L'alias est explicite parce que
+    # deux classes implementent l'interface — le journal et le decorateur de consentement de Crm —
+    # et l'autowiring ne peut pas choisir seul.
+    App\Platform\Notification\ClientNotifierInterface: '@App\Platform\Notification\LogClientNotifier'
 
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones
@@ -37,7 +62,53 @@ services:
     # relève d'une coordination M2/M4 hors périmètre de ce lot (priorité « zéro régression M2 »).
     App\Vente\Port\ClientM4Interface: '@App\Vente\Port\ClientM4Stub'
     # Appairage/invalidation des supports d'accès (frontière module Accès L3, US-L2-08/09).
-    App\Vente\Port\AppairageAccesInterface: '@App\Vente\Port\AppairageAccesStub'
+    # ── LE PONT VENTE → CONTROLE D'ACCES ───────────────────────────────────────────────────────
+    #
+    # Jusqu'au 30/08 ce port pointait sur `App\Vente\Port\AppairageAccesStub`, qui bascule un statut
+    # sur le BilletSupport et ne parle JAMAIS au module Acces. Mesure : 5 billets vendus, 5 supports
+    # d'acces, AUCUN croisement — le tourniquet repondait « Support inconnu » a un code dont il
+    # savait pourtant verifier la signature.
+    #
+    # `ValiderVenteService:149` appelait deja `appairer()` a chaque vente. Rien n'etait a ecrire cote
+    # vente : il manquait l'implementation du port, c'est-a-dire ce que le stub annoncait tenir en
+    # attendant la couche L3.
+    #
+    # ⚠ L'adaptateur ne projette QUE si le produit declare une zone d'acces. Un droit sans espace
+    # ouvre TOUT (`DroitAcces::ouvre()`), et 0 produit sur 17 en declarait une : projeter sans
+    # condition aurait fait de chaque billet vendu un passe-partout des 8 espaces.
+    App\Vente\Port\AppairageAccesInterface: '@App\Acces\Adapter\SaleAccessPairingAdapter'
+
+    # ED-4 -- le seul chemin par lequel un agent de l editeur lit l etablissement d un client.
+    # Le defaut n accorde RIEN : le socle doit tourner sans le module d abonnement, et le repli sur
+    # d un mecanisme d acces est de ne pas ouvrir. L adaptateur reel vit dans Subscription, qui tient
+    # SupportAccess -- une dependance directe ferait dependre le calcul des droits d un module metier.
+    # ⚠ CABLE SUR L'ADAPTATEUR REEL LE 31/08. Jusque-la, le port pointait sur le defaut qui
+    # n'accorde RIEN : ouvrir un acces d'assistance ne changeait strictement rien, et aucune erreur
+    # ne le signalait. Toute la chaine etait construite — ouvrir, tracer, expirer, revoquer,
+    # refuser — sauf le maillon qui sert.
+    #
+    # `NoSupportAccessRights` reste dans le depot : le socle doit tourner sans le module
+    # d'abonnement, et le repli sur d'un mecanisme d'acces est de ne pas ouvrir. C'est le CABLAGE
+    # qui change, pas la regle.
+    #
+    # Ce que l'adaptateur accorde — les droits d'un administrateur — est une decision de Maxime du
+    # 31/08, avec sa contrepartie : la trace, journalisee contre l'etablissement DU CLIENT.
+    App\Securite\Port\SupportAccessRightsInterface: '@App\Subscription\Adapter\SupportAccessRights'
+
+    # ED-4 -- le pendant du precedent : quels etablissements l'assistance rend VISIBLES.
+    #
+    # Les droits repondent « que peut faire cet agent ICI ? », sur un etablissement deja designe par
+    # l'en-tete. Cette question-la ne suffit a rien d'autre : sans le port de visibilite, l'agent
+    # avait tous les droits sur un etablissement qui n'apparaissait dans AUCUNE liste. Le selecteur
+    # ne le proposait pas, et l'unique facon d'y entrer etait de forger l'en-tete a la main.
+    #
+    # ⚠ C'EST LE MEME DEFAUT QUE CELUI DU PORT PRECEDENT, UNE COUCHE PLUS HAUT : un mecanisme
+    # complet et inatteignable. Un acces d'assistance qu'on ne peut pas emprunter est un acces qui
+    # n'existe pas — et le contournement redevient l'affectation permanente que RG-ED-07 interdit.
+    #
+    # `NoSupportAccessScope` reste le defaut : sans le module d'abonnement, le cloisonnement
+    # ordinaire s'applique inchange.
+    App\Securite\Port\SupportAccessScopeInterface: '@App\Subscription\Adapter\SupportAccessScope'
     # Porte-monnaie virtuel (frontière M4, RG-M4-03, §2.1 plan-crm.md) : câblé à l'adaptateur réel
     # (débit atomique) — remplace le stub L2. Modification prudente de PaiementHandler/
     # ContrePassationHandler (T9) : comportement par défaut inchangé si aucun port n'est fourni.
@@ -66,6 +137,9 @@ services:
     # utilisé en production par App\Acces\Service\SynchroPassageHandler).
     App\Acces\Service\RecalageFmiHandler:
         public: true
+    # Recharge de carte multi-entrées (frontière module Accès, US-CQ1, RG-CQ1-09) : implémentation
+    # réelle dès ce lot — pas de stub, Accès est propriétaire de DroitAcces/Support/Appairage.
+    App\Vente\Port\CardRechargeInterface: '@App\Acces\Service\CardRechargeHandler'
 
     # --- M6 Comptabilité & Régie (L4) : liaisons des ports (§3/§4/§7 du plan-compta) ---
     App\Compta\Port\ProjectionVenteInterface: '@App\Compta\Adapter\ProjectionVenteDoctrineAdapter'
@@ -114,6 +188,19 @@ services:
         public: true
     App\Sepa\Adapter\RetourSepaStubAdapter:
         public: true
+    # ── SESSION GLISSANTE ───────────────────────────────────────────────────────────────────────
+    #
+    # `token_ttl` vaut 3600 : un caissier etait deconnecte au bout d'une heure, EN PLEINE VENTE et
+    # sans un mot — rien ne distingue « votre session a expire » d'une panne.
+    #
+    # La duree est LUE dans la configuration de Lexik plutot que recopiee ici : le jour ou quelqu'un
+    # change `token_ttl`, le seuil de reemission suit. Une valeur recopiee est une valeur qui derive,
+    # et celle-ci deriverait en silence.
+    App\Securite\Security\SlidingSessionListener:
+        arguments:
+            $dureeDeVie: '%lexik_jwt_authentication.token_ttl%'
+        tags: ['kernel.event_subscriber']
+
     # Tokenisation IBAN — HMAC applicatif (repris de App\Sport, ⚠ non un vrai coffre-fort PCI-DSS).
     App\Sepa\Port\TokenisationIbanInterface: '@App\Sepa\Adapter\TokenisationIbanHmacAdapter'
     App\Sepa\Adapter\TokenisationIbanHmacAdapter:
@@ -279,5 +366,15 @@ services:
 when@test:
     services:
         App\Tests\Boutique\Support\MailCollector:
+            public: true
+            tags: ['kernel.event_subscriber']
+        # Collecteur `access.card_recharged` (CQ-1, tests d'atomicité recharge ⇄ vente, D7-bis) — même
+        # patron que MailCollector ci-dessus.
+        App\Tests\Acces\Support\CardRechargedEventCollector:
+            public: true
+            tags: ['kernel.event_subscriber']
+        # Collecteur `booking.no_show`/`booking.cancelled`/`booking.reschedule_requested` (CQ-5,
+        # plan-cq5.md §7 T11) — même patron que CardRechargedEventCollector ci-dessus.
+        App\Tests\Reservation\Support\NoShowCreditEventCollector:
             public: true
             tags: ['kernel.event_subscriber']

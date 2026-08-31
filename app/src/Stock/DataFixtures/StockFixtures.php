@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Stock\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\DataFixtures\SocleFixtures;
 use App\Offre\DataFixtures\OffreFixtures;
 use App\Offre\Entity\GrilleTarifaire;
@@ -31,6 +32,8 @@ use Doctrine\Persistence\ObjectManager;
  */
 final class StockFixtures extends Fixture implements DependentFixtureInterface
 {
+    use FixturesIdempotentes;
+
     /** @var list<string> */
     public const ACTIONS = [
         'gerer_article', 'gerer_fournisseur', 'gerer_achat', 'receptionner', 'ajuster',
@@ -47,11 +50,11 @@ final class StockFixtures extends Fixture implements DependentFixtureInterface
 
     public function load(ObjectManager $manager): void
     {
+        // Idempotence (ordre A 26/08) : `Permission(module, action)` porte une unicité globale ; un
+        // rechargement sur une base peuplée échouait sur « Duplicate entry ». On cherche avant de créer.
         $perms = [];
         foreach (self::ACTIONS as $action) {
-            $perm = (new Permission())->setModule('stock')->setAction($action);
-            $manager->persist($perm);
-            $perms[$action] = $perm;
+            $perms[$action] = $this->permissionStock($manager, $action);
         }
 
         $roleAdmin = $manager->getRepository(Role::class)->findOneBy(['nom' => 'Administrateur groupe']);
@@ -59,6 +62,21 @@ final class StockFixtures extends Fixture implements DependentFixtureInterface
             foreach ($perms as $perm) {
                 $roleAdmin->addPermission($perm);
             }
+        }
+
+        // ── LE BLOC DE DÉMONSTRATION NE SE POSE QU'UNE FOIS ──────────────────────────────────
+        //
+        // Tout ce qui suit est un jeu de données cohérent, pas un référentiel : le reposer sur une
+        // base qui l'a déjà écraserait ce qui a été corrigé à la main depuis, ou le dupliquerait
+        // pour les entités sans contrainte d'unicité — silencieusement.
+        //
+        // Les permissions et les rôles restent AU-DESSUS de cette garde : ils doivent être rejoués à
+        // chaque chargement, sans quoi un droit ajouté au code n'atteindrait jamais une base
+        // existante.
+        if ($manager->getRepository(ParametrageStock::class)->findOneBy([]) !== null) {
+            $manager->flush();
+
+            return;
         }
 
         foreach ([SocleFixtures::ETAB_A_NOM, SocleFixtures::ETAB_B_NOM] as $nomEtab) {
@@ -76,6 +94,23 @@ final class StockFixtures extends Fixture implements DependentFixtureInterface
             ->setCode(self::TYPE_BOUTIQUE)
             ->setLibelle('Boutique (marchandise)')
             ->setFacettes([TypeProduit::FACETTE_STOCK, TypeProduit::FACETTE_CONSOMMATEUR]);
+
+        // ⚠ UNE MARCHANDISE NE S'IMPUTE PAS EN BILLETTERIE.
+        //
+        // Ce type n'avait aucun defaut declare ici, et la base de preprod en portait un —
+        // « Billetterie (compte 7061) » — qu'aucune ligne du depot n'ecrit. Un mug vendu tombait
+        // donc sur le compte de la billetterie. L'application ne le signale pas : l'ecran accepte,
+        // la vente passe, l'ecriture part, et l'erreur se decouvre a l'export FEC.
+        //
+        // La categorie est designee par son LIBELLE et jamais par un identifiant (D51) : « Boutique »
+        // fait partie de la nomenclature socle posee par `AccountingCategorySeeder`, donc elle existe
+        // chez tout le monde. Le numero de compte, lui, n'est PAS dans le libelle — il vit dans
+        // `CompteComptable`, et le rattachement est un choix d'exploitant porte par
+        // `MappingComptable`. Un libelle qui nomme un compte mentirait chez le premier client qui
+        // impute autrement.
+        //
+        // Arbitre par Maxime le 31/08.
+        $typeBoutique->setDefauts(['categories' => ['comptable' => 'Boutique']]);
         $manager->persist($typeBoutique);
 
         $etabA = $manager->getRepository(Etablissement::class)->findOneBy(['nom' => SocleFixtures::ETAB_A_NOM]);
@@ -101,5 +136,19 @@ final class StockFixtures extends Fixture implements DependentFixtureInterface
         }
 
         $manager->flush();
+    }
+
+    /** Le couple `(module, action)` est unique — rendre l'existant plutôt qu'un doublon (ordre A 26/08). */
+    private function permissionStock(ObjectManager $manager, string $action): Permission
+    {
+        $existante = $manager->getRepository(Permission::class)->findOneBy(['module' => 'stock', 'action' => $action]);
+        if ($existante instanceof Permission) {
+            return $existante;
+        }
+
+        $permission = $this->permissionNommee($manager, 'stock', $action);
+        $manager->persist($permission);
+
+        return $permission;
     }
 }

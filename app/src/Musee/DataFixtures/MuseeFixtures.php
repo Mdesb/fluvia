@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Musee\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\Acces\Entity\EspaceAcces;
 use App\Acces\Entity\Support;
 use App\Acces\Enum\ModeSeuil;
@@ -27,6 +28,9 @@ use App\Musee\Enum\ModeDelestage;
 use App\Musee\Enum\PerimetreContingent;
 use App\Offre\DataFixtures\OffreFixtures;
 use App\Offre\Entity\Formule;
+use App\Offre\Entity\GrilleTarifaire;
+use App\Offre\Entity\Saison;
+use App\Offre\Entity\TypeTarif;
 use App\Offre\Entity\Produit;
 use App\Offre\Entity\TypeProduit;
 use App\Offre\Enum\PeriodiciteFormule;
@@ -54,6 +58,8 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
  */
 final class MuseeFixtures extends Fixture implements DependentFixtureInterface
 {
+    use FixturesIdempotentes;
+
     public const GESTIONNAIRE_EMAIL = 'gestionnaire.musee@itcotation.com';
     public const GESTIONNAIRE_MDP = 'aaa';
     public const COORDINATEUR_EMAIL = 'coordinateur.visites@itcotation.com';
@@ -87,12 +93,12 @@ final class MuseeFixtures extends Fixture implements DependentFixtureInterface
         }
 
         // --- Permissions musee.* + octroi complet à l'administrateur (RG-SOCLE-02/03) ---
-        $permMuseeTout = (new Permission())->setModule('musee')->setAction('*');
+        $permMuseeTout = $this->permissionNommee($manager, 'musee', '*');
         $manager->persist($permMuseeTout);
         $actions = ['lire', 'configurer', 'superviser_salle', 'gerer_visite', 'gerer_dossier_groupe', 'gerer_pass', 'gerer_ota', 'gerer'];
         $permissions = [];
         foreach ($actions as $action) {
-            $permissions[$action] = (new Permission())->setModule('musee')->setAction($action);
+            $permissions[$action] = $this->permissionNommee($manager, 'musee', $action);
             $manager->persist($permissions[$action]);
         }
 
@@ -105,7 +111,7 @@ final class MuseeFixtures extends Fixture implements DependentFixtureInterface
         $permOffreModifier = $manager->getRepository(Permission::class)->findOneBy(['module' => 'offre', 'action' => 'modifier']);
 
         // --- Rôle « Gestionnaire d'offre culturelle » (§3 spec-musee.md) ---
-        $roleGestionnaire = (new Role())->setNom('Gestionnaire offre culturelle');
+        $roleGestionnaire = $this->roleNomme($manager, 'Gestionnaire offre culturelle');
         foreach (['lire', 'configurer'] as $action) {
             $roleGestionnaire->addPermission($permissions[$action]);
         }
@@ -117,34 +123,49 @@ final class MuseeFixtures extends Fixture implements DependentFixtureInterface
         }
         $manager->persist($roleGestionnaire);
         $gestionnaire = $this->utilisateur($manager, self::GESTIONNAIRE_EMAIL, self::GESTIONNAIRE_MDP, 'Gestionnaire Offre Culturelle');
-        $manager->persist((new Affectation())->setUtilisateur($gestionnaire)->setRole($roleGestionnaire)->setEtablissement($etabA));
+        $this->affectationUnique($manager, $gestionnaire, $roleGestionnaire, $etabA);
 
         // --- Rôle « Coordinateur de visites guidées » ---
-        $roleCoordinateur = (new Role())->setNom('Coordinateur visites guidées');
+        $roleCoordinateur = $this->roleNomme($manager, 'Coordinateur visites guidées');
         foreach (['lire', 'gerer_visite'] as $action) {
             $roleCoordinateur->addPermission($permissions[$action]);
         }
         $manager->persist($roleCoordinateur);
         $coordinateur = $this->utilisateur($manager, self::COORDINATEUR_EMAIL, self::COORDINATEUR_MDP, 'Coordinateur Visites Guidées');
-        $manager->persist((new Affectation())->setUtilisateur($coordinateur)->setRole($roleCoordinateur)->setEtablissement($etabA));
+        $this->affectationUnique($manager, $coordinateur, $roleCoordinateur, $etabA);
 
         // --- Rôle « Agent d'accueil / caisse » ---
-        $roleAgent = (new Role())->setNom('Agent accueil musée');
+        $roleAgent = $this->roleNomme($manager, 'Agent accueil musée');
         foreach (['lire', 'gerer_dossier_groupe', 'gerer_pass', 'superviser_salle'] as $action) {
             $roleAgent->addPermission($permissions[$action]);
         }
         $manager->persist($roleAgent);
         $agent = $this->utilisateur($manager, self::AGENT_EMAIL, self::AGENT_MDP, 'Agent Accueil Musée');
-        $manager->persist((new Affectation())->setUtilisateur($agent)->setRole($roleAgent)->setEtablissement($etabA));
+        $this->affectationUnique($manager, $agent, $roleAgent, $etabA);
 
         // --- Rôle « Gestionnaire de distribution OTA » ---
-        $roleOta = (new Role())->setNom('Gestionnaire distribution OTA');
+        $roleOta = $this->roleNomme($manager, 'Gestionnaire distribution OTA');
         foreach (['lire', 'gerer_ota'] as $action) {
             $roleOta->addPermission($permissions[$action]);
         }
         $manager->persist($roleOta);
         $gestionnaireOta = $this->utilisateur($manager, self::GESTIONNAIRE_OTA_EMAIL, self::GESTIONNAIRE_OTA_MDP, 'Gestionnaire Distribution OTA');
-        $manager->persist((new Affectation())->setUtilisateur($gestionnaireOta)->setRole($roleOta)->setEtablissement($etabA));
+        $this->affectationUnique($manager, $gestionnaireOta, $roleOta, $etabA);
+
+        // ── LE BLOC DE DÉMONSTRATION NE SE POSE QU'UNE FOIS ──────────────────────────────────
+        //
+        // Tout ce qui suit est un jeu de données cohérent, pas un référentiel : le reposer sur une
+        // base qui l'a déjà écraserait ce qui a été corrigé à la main depuis, ou le dupliquerait
+        // pour les entités sans contrainte d'unicité — silencieusement.
+        //
+        // Les permissions et les rôles, eux, restent AU-DESSUS de cette garde : ils doivent être
+        // rejoués à chaque chargement, sans quoi un droit ajouté au code n'atteindrait jamais une
+        // base existante.
+        if ($manager->getRepository(Exposition::class)->findOneBy([]) !== null) {
+            $manager->flush();
+
+            return;
+        }
 
         // --- Paramètres établissement (décision n°7 du plan) ---
         $parametre = (new ParametreMuseeEtablissement())->setEtablissement($etabA)
@@ -173,6 +194,7 @@ final class MuseeFixtures extends Fixture implements DependentFixtureInterface
             ->setStatut(StatutProduit::Publie);
         $produitExpo->addEtablissement($etabA);
         $manager->persist($produitExpo);
+        $this->ajouterTarifPlein($manager, $produitExpo, '12.00');
 
         $expo = (new Exposition())->setProduit($produitExpo)
             ->setDateDebut(new \DateTimeImmutable('-1 month'))
@@ -236,7 +258,26 @@ final class MuseeFixtures extends Fixture implements DependentFixtureInterface
             ->setCode('PRD-AUDIOGUIDE')->setCanaux(['guichet', 'en_ligne'])->setTauxTva('10.00')
             ->setStatut(StatutProduit::Publie);
         $produitAudioguide->addEtablissement($etabA);
+
+        // ⚠ UN PRODUIT PUBLIE SANS TARIF EST UN ETAT QUE L'APPLICATION REFUSE DE PRODUIRE.
+        //
+        // `PublicationGuard` (RG-M1-09) exige un prix valide avant de publier. Cette fixture posait
+        // `Publie` en dur sur l'entite, sans passer par le processeur : l'audioguide sans tarif se
+        // retrouvait en vente sur la boutique PUBLIQUE, ajoutable au panier sous la phrase « le
+        // tarif applicable est calcule et confirme a l'etape de paiement » -- alors qu'il n'y avait
+        // rien a calculer.
+        //
+        // ⚠ CETTE PHRASE DISAIT LE CONTRAIRE, ET ELLE ETAIT FAUSSE. Elle affirmait que
+        // « l'exposition a toujours eu son tarif » et que l'audioguide etait seul a sortir du rang.
+        // Mesure du 31/08 : les TROIS produits publies de ce fichier — audioguide, exposition, pass
+        // annuel — n'avaient AUCUNE grille en base, et la seule grille ecrite dans ce fichier etait
+        // celle de l'audioguide.
+        //
+        // Une phrase ecrite pour signaler un defaut devient un mensonge le jour ou on en corrige un
+        // seul : elle disculpait alors les deux qui restaient, avec l'autorite du commentaire qui
+        // avait su voir le premier.
         $manager->persist($produitAudioguide);
+        $this->ajouterTarifPlein($manager, $produitAudioguide, '4.00');
 
         $audioguide = (new Audioguide())->setProduit($produitAudioguide)->setLangues(['fr', 'en', 'es'])->setEtablissement($etabA);
         $manager->persist($audioguide);
@@ -262,6 +303,7 @@ final class MuseeFixtures extends Fixture implements DependentFixtureInterface
                     ->setCanaux(['guichet', 'en_ligne'])->setFormule($formule)->setStatut(StatutProduit::Publie);
                 $produitPass->addEtablissement($etabA);
                 $manager->persist($produitPass);
+                $this->ajouterTarifPlein($manager, $produitPass, '45.00');
 
                 $support = (new Support())->setIdentifiant('MUSEE-PASS-DEMO-001')->setType(TypeSupport::Qr)->setEtablissement($etabA);
                 $manager->persist($support);
@@ -276,12 +318,72 @@ final class MuseeFixtures extends Fixture implements DependentFixtureInterface
         $manager->flush();
     }
 
+    /**
+     * Pose le tarif plein de la saison courante sur un produit. UN SEUL APPELANT DU CALCUL, PARCE
+     * QUE LA VERSION RECOPIEE A DEJA DIVERGE : le bloc etait ecrit en ligne pour l'audioguide et
+     * absent des deux autres produits publies du meme fichier.
+     *
+     * La saison est cherchee PAR SON NOM, pas par `actif = true` : la preprod en porte deux actives
+     * (« Saison 2026 » et « Saison patinoire ephemere demo »), et `findOneBy` en choisit une sans
+     * critere — le tarif serait alors pose sur la saison d'un autre metier, une fois sur deux.
+     *
+     * ⚠ La grille se persiste A PART : `Produit#grilles` ne cascade pas, et Doctrine refuse au
+     * flush une entite neuve atteinte par une relation non cascadee.
+     */
+    private function ajouterTarifPlein(ObjectManager $manager, Produit $produit, string $prix): void
+    {
+        $tarifPlein = $manager->getRepository(TypeTarif::class)->findOneBy(['nom' => OffreFixtures::TARIF_PLEIN]);
+        $saison = $manager->getRepository(Saison::class)->findOneBy(['nom' => OffreFixtures::SAISON]);
+
+        if (!$tarifPlein instanceof TypeTarif || !$saison instanceof Saison) {
+            return;
+        }
+
+        $grille = (new GrilleTarifaire())
+            ->setProduit($produit)
+            ->setTypeTarif($tarifPlein)
+            ->setSaison($saison)
+            ->setPrix($prix);
+        $produit->addGrille($grille);
+        $manager->persist($grille);
+    }
     private function utilisateur(ObjectManager $manager, string $email, string $motDePasse, string $nom): Utilisateur
     {
+        $existant = $manager->getRepository(Utilisateur::class)->findOneBy(['email' => $email]);
+        if ($existant instanceof Utilisateur) {
+            // Le mot de passe n'est pas repose : le rejouer ecraserait un mot de passe change
+            // depuis, et recalculerait un hachage pour rien a chaque chargement.
+            return $existant->setNom($nom)->setActif(true);
+        }
+
         $utilisateur = (new Utilisateur())->setEmail($email)->setNom($nom)->setActif(true);
         $utilisateur->setMotDePasse($this->hasher->hashPassword($utilisateur, $motDePasse));
         $manager->persist($utilisateur);
 
         return $utilisateur;
+    }
+
+    /**
+     * Rend le role existant ou le cree. `Role.nom` porte une unicite **globale** : deux fixtures qui
+     * creent le meme nom, ou un rechargement sur une base qui les a deja, echouent sur « Duplicate
+     * entry » et laissent le chargement a mi-course. C'est ce qui a vide les droits des trente-quatre
+     * roles de la preproduction le 24/08.
+     *
+     * Le harnais de test ne le voyait pas : il recree le schema a chaque classe et charge les fixtures
+     * selectivement, donc elles partent toujours d'une base vide. Le seul endroit ou le defaut se voit
+     * — un chargement complet — n'etait jamais visite.
+     */
+    private function roleNomme(ObjectManager $manager, string $nom): Role
+    {
+        $existant = $manager->getRepository(Role::class)->findOneBy(['nom' => $nom]);
+
+        if ($existant instanceof Role) {
+            return $existant;
+        }
+
+        $role = (new Role())->setNom($nom);
+        $manager->persist($role);
+
+        return $role;
     }
 }

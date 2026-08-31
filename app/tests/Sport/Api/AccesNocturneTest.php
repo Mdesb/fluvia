@@ -148,7 +148,10 @@ final class AccesNocturneTest extends SportApiTestCase
         $identifiantA = 'NUIT-A-' . substr((string) Uuid::v4(), 0, 8);
         $identifiantB = 'NUIT-B-' . substr((string) Uuid::v4(), 0, 8);
         foreach ([$identifiantA, $identifiantB] as $identifiant) {
+            // D87 : sans zone déclarée, ce droit n'ouvrirait aucune porte. Ce test ne porte pas sur
+            // les zones — il lui faut un droit qui ouvre l'espace créé juste au-dessus.
             $droit = (new DroitAcces())->setSourceType(TypeDroitAcces::Billet)->setStatutProjection(StatutProjectionDroit::Valide)->setEtablissement($etab);
+            $droit->addAuthorisedSpace($espace);
             $em->persist($droit);
             $support = (new Support())->setIdentifiant($identifiant)->setType(TypeSupport::Qr)->setEtablissement($etab);
             $em->persist($support);

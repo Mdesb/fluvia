@@ -1,0 +1,28 @@
+{
+    "_lisez_moi": [
+        "Ligne de base GELEE du garde-fou n10 — DEFAULT pose en migration, absent du mapping ORM.",
+        "",
+        "Une colonne creee avec DEFAULT x dont lentite ne declare pas options default x ressort en",
+        "CHANGE dans doctrine:migrations:diff chez TOUT LE MONDE et eternellement. Chaque session",
+        "ramasse la derive des autres et la presente comme son propre travail : troisieme cause",
+        "structurelle de D32.",
+        "",
+        "Famille trouvee par claude-F le 25/08 en verifiant sa migration sur une base repartie de zero.",
+        "Elle etait de quatre cas sur deux sessions ; trois sont tombees pendant la mesure.",
+        "",
+        "Le cliquet est a 1. Cest letat ideal : presque rien a geler, et tout nouveau DEFAULT non",
+        "declare est refuse des son apparition."
+    ],
+    "scelle": {
+        "plafond": 1
+    },
+    "entrees": {
+        "index:support_ft_article_recherche": {
+            "table": "support_article_aide",
+            "colonne": "INDEX support_ft_article_recherche",
+            "valeur": "(non déclaré au mapping)",
+            "migration": "Version20260817205431.php",
+            "entite": "Support/Entity/ArticleAide.php"
+        }
+    }
+}

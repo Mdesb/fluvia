@@ -14,6 +14,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\Uid\Uuid;
+use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
 /**
  * GET /compta/ecritures/verifier-chaine?journal=... (CA-13) : recalcule la chaîne NF525 d'un journal
@@ -32,17 +33,35 @@ final class VerifierChaineEcritureProcessor implements ProviderInterface
 
     public function provide(Operation $operation, array $uriVariables = [], array $context = []): JsonResponse
     {
+        // ⚠ UNE ABSENCE DE PERIMETRE N'EST PAS UNE CHAINE INTACTE.
+        //
+        // Ces deux retours rendaient `['intacte' => true, 'nbOperations' => 0]` — donc appeler ce
+        // point SANS AUCUN PARAMETRE repondait « tout va bien ». C'est la reponse qu'un controleur
+        // lirait, et elle serait fausse : on n'a rien verifie du tout.
         $journalId = $this->requestStack->getCurrentRequest()?->query->get('journal');
         if (!\is_string($journalId) || !Uuid::isValid($journalId)) {
-            return new JsonResponse(['intacte' => true, 'nbOperations' => 0, 'anomalies' => []]);
+            throw new UnprocessableEntityHttpException(
+                'La chaine n\'a PAS ete verifiee : precisez le journal a controler (`?journal=<uuid>`).'
+            );
         }
 
         $journal = $this->em->getRepository(Journal::class)->find(Uuid::fromString($journalId));
         if ($journal === null) {
-            return new JsonResponse(['intacte' => true, 'nbOperations' => 0, 'anomalies' => []]);
+            throw new UnprocessableEntityHttpException(
+                'La chaine n\'a PAS ete verifiee : ce journal n\'existe pas.'
+            );
         }
 
-        $ecritures = $this->em->getRepository(EcritureComptable::class)->findBy(['journal' => $journal->getId()]);
+        // ⚠ SEULES LES ECRITURES SCELLEES SONT DANS LA CHAINE — une ecriture non scellee porte
+        // `numeroSequence = 0` et decalerait toute la sequence, produisant des anomalies sur une
+        // chaine saine.
+        $ecritures = $this->em->getRepository(EcritureComptable::class)->createQueryBuilder('e')
+            ->andWhere('IDENTITY(e.journal) = :journal')
+            ->andWhere('e.numeroSequence > 0')
+            ->setParameter('journal', $journal->getId(), 'uuid')
+            ->orderBy('e.numeroSequence', 'ASC')
+            ->getQuery()
+            ->getResult();
         $rapport = $this->scellement->verifieChaine($ecritures);
 
         return new JsonResponse($rapport);

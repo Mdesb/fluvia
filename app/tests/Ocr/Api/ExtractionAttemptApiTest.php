@@ -71,7 +71,12 @@ final class ExtractionAttemptApiTest extends OcrApiTestCase
     /** @see self::testFiltreParDocumentKind() pour l'explication du markTestSkipped conditionnel. */
     public function testFiltreParStatus(): void
     {
-        [$client, $entete] = $this->adminSurA();
+        // La tentative en faible confiance appartient a l'etablissement B (`OcrFixtures`). Ce test
+        // la lisait depuis A : le cloisonnement par PERIMETRE la rendait visible, parce que
+        // l'administratrice est affectee aux deux sites. Depuis la bascule sur l'etablissement
+        // ACTIF, on ne voit que ce qu'on regarde -- le test s'appuyait donc sur le defaut meme
+        // qu'on corrige. Il est deplace la ou la donnee vit, et non elargi.
+        [$client, $entete] = $this->adminSurB();
 
         $client->request('GET', '/api/extraction_attempts?status=low_confidence', $entete);
         self::assertResponseIsSuccessful();

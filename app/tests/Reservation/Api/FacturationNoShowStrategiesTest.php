@@ -6,6 +6,7 @@ namespace App\Tests\Reservation\Api;
 
 use App\Caisse\Entity\PointDeVente;
 use App\Caisse\Entity\SessionCaisse;
+use App\DataFixtures\SocleFixtures;
 use App\Reservation\Command\BasculerNoShowCommand;
 use App\Reservation\DataFixtures\ReservationFixtures;
 use App\Reservation\Entity\Activite;
@@ -15,6 +16,7 @@ use App\Reservation\Entity\Reservation;
 use App\Reservation\Enum\ModeFacturationNoShow;
 use App\Reservation\Enum\ModeMontantAnnulation;
 use App\Reservation\Enum\PorteeRegleAnnulation;
+use App\Organisation\Entity\Etablissement;
 use App\Reservation\Sepa\ReservationEcheanceSepaSource;
 use App\Tests\Reservation\ReservationApiTestCase;
 use App\Vente\DataFixtures\VenteFixtures;
@@ -54,6 +56,64 @@ final class FacturationNoShowStrategiesTest extends ReservationApiTestCase
         $facturation = $em->getRepository(FacturationNoShow::class)->find($idFacturation);
         self::assertNotNull($facturation->getVenteRattachee(), 'CA-11 : une vente M2 est traçable jusqu\'à la réservation d\'origine.');
         self::assertInstanceOf(Vente::class, $em->getRepository(Vente::class)->find($facturation->getVenteRattachee()->getId()));
+    }
+
+    /**
+     * Non-régression de l'IDOR n°5 (D8, corrigé le 22/08), trouvé par claude-C en auditant la ligne de
+     * base du garde-fou de cloisonnement.
+     *
+     * **Le défaut.** La session de caisse arrive dans le **corps de la requête** et était résolue par un
+     * `find()` direct. `security: "is_granted('PERM', 'reservation.facturer')"` couvre l'opération, et
+     * `read: true` protège bien la `FacturationNoShow` — mais la session n'en dépend pas et échappait
+     * donc à tout contrôle. La suite du traitement vérifiait que la session existe et qu'elle est
+     * **ouverte** (RG-M2-01), jamais **à qui elle appartient**.
+     *
+     * **La conséquence.** Un agent portant `reservation.facturer` sur A, connaissant l'UUID d'une
+     * session ouverte de B, encaissait une vente no-show dans la caisse de B.
+     *
+     * **Le montage.** On réutilise une session réellement ouverte, puis on ne change **que son
+     * établissement**. Tout le reste — route, permissions, état de la session — est identique au cas
+     * légitime testé plus haut : ce qui isole exactement la propriété vérifiée.
+     *
+     * **Deux assertions, pas une.** Le 404 (et non 403, qui ferait de la route un oracle
+     * d'énumération), et surtout **l'absence de vente** : le refus doit être total, pas partiel.
+     */
+    public function testCa11SessionDunAutreEtablissementEstIntrouvableEtRienNestEncaisse(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+        $client->disableReboot();
+
+        $idFacturation = $this->creerFacturationNoShow($client, $entete, ModeFacturationNoShow::VenteDiffereeAgent);
+
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $sessionOuverte = $em->getRepository(SessionCaisse::class)->findOneBy([
+            'pointDeVente' => $em->getRepository(PointDeVente::class)->findOneBy(['libelle' => VenteFixtures::PDV_LIBELLE]),
+        ]);
+        self::assertNotNull($sessionOuverte);
+
+        $etabB = $em->getRepository(Etablissement::class)->findOneBy(['nom' => SocleFixtures::ETAB_B_NOM]);
+        self::assertNotNull($etabB);
+        $sessionOuverte->setEtablissement($etabB);
+        $em->flush();
+
+        $reponse = $client->request('POST', '/api/reservation/facturations-no-show/' . $idFacturation . '/emettre-vente', $entete + [
+            'json' => ['session' => '/api/session_caisses/' . $sessionOuverte->getId()],
+        ]);
+
+        self::assertSame(
+            404,
+            $reponse->getStatusCode(),
+            'Une session hors périmètre doit être introuvable, jamais interdite : ' . (string) $reponse->getContent(false),
+        );
+
+        $em->clear();
+        $facturation = $em->getRepository(FacturationNoShow::class)->find($idFacturation);
+        self::assertNotNull($facturation);
+        self::assertNull(
+            $facturation->getVenteRattachee(),
+            'Aucune vente ne doit avoir été encaissée dans la caisse d\'un autre établissement.',
+        );
     }
 
     public function testCa11DebitPmvAutomatiqueSansAgent(): void

@@ -19,6 +19,12 @@ use App\Acces\Entity\ListeRevocation;
  */
 interface PiloteAcces
 {
+    /**
+     * Ce que ce pilote sait reellement faire (D17). **A implementer en premier** dans tout nouvel
+     * adaptateur : la plateforme s'y fie pour ne promettre que le tenable, et une declaration
+     * optimiste est pire que pas d'adaptateur du tout.
+     */
+    public function capabilities(): AccessDriverCapabilities;
     /** Commande l'ouverture physique d'un équipement (franchissement autorisé ou ouverture manuelle). */
     public function ouvrir(Equipement $equipement, OuvertureContexte $contexte): ResultatCommande;
 

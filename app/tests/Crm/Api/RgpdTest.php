@@ -26,7 +26,7 @@ final class RgpdTest extends CrmApiTestCase
         self::assertResponseIsSuccessful();
         $venteId = $vente['id'];
 
-        $demande = $client->request('POST', '/api/demande_r_g_p_ds', $entete + [
+        $demande = $client->request('POST', '/api/demande_rgpds', $entete + [
             'json' => ['client' => '/api/clients/' . $payeurId, 'type' => 'anonymisation'],
         ])->toArray();
         self::assertResponseIsSuccessful();
@@ -55,7 +55,7 @@ final class RgpdTest extends CrmApiTestCase
         [$client, $entete] = $this->adminSurA();
         $payeurId = $this->idPayeur();
 
-        $demande = $client->request('POST', '/api/demande_r_g_p_ds', $entete + [
+        $demande = $client->request('POST', '/api/demande_rgpds', $entete + [
             'json' => ['client' => '/api/clients/' . $payeurId, 'type' => 'anonymisation'],
         ])->toArray();
         $client->request('POST', '/api/demandes-rgpd/' . $demande['id'] . '/traiter', $entete);

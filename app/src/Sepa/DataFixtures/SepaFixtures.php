@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Sepa\DataFixtures;
 
+use App\Platform\DataFixtures\FixturesIdempotentes;
 use App\Compta\DataFixtures\ComptaFixtures;
 use App\Crm\DataFixtures\CrmFixtures;
 use App\Crm\Entity\Client;
@@ -11,7 +12,10 @@ use App\DataFixtures\SocleFixtures;
 use App\Organisation\Entity\Etablissement;
 use App\Sepa\Dto\EcheanceSepaDue;
 use App\Sepa\Entity\ConfigCreancierSepa;
+use App\Platform\Notification\NotificationOutcome;
+use App\Sepa\Entity\DebitPreNotification;
 use App\Sepa\Entity\MandatSepa;
+use App\Sepa\Enum\PreNotificationReason;
 use App\Sepa\Entity\RemiseSepa;
 use App\Sepa\Enum\StatutMandatSepa;
 use App\Sepa\Enum\VarianteCreancierSepa;
@@ -35,6 +39,8 @@ use Doctrine\Persistence\ObjectManager;
  */
 final class SepaFixtures extends Fixture implements DependentFixtureInterface
 {
+    use FixturesIdempotentes;
+
     public const REGIE_IBAN_DEMO = 'FR7630006000011234567890189';
     public const PRIVE_IBAN_DEMO = 'FR7630004000031234567890143';
 
@@ -55,7 +61,7 @@ final class SepaFixtures extends Fixture implements DependentFixtureInterface
         // --- Permissions sepa.* + octroi à l'administrateur (RG-SOCLE-02/03) ---
         $perms = [];
         foreach (['lire', 'gerer', 'generer_remise', 'declarer_rejet'] as $action) {
-            $perm = (new Permission())->setModule('sepa')->setAction($action);
+            $perm = $this->permissionNommee($manager, 'sepa', $action);
             $manager->persist($perm);
             $perms[$action] = $perm;
         }
@@ -79,6 +85,21 @@ final class SepaFixtures extends Fixture implements DependentFixtureInterface
         $etabB = $manager->getRepository(Etablissement::class)->findOneBy(['nom' => SocleFixtures::ETAB_B_NOM]);
         $payeur = $manager->getRepository(Client::class)->findOneBy(['email' => CrmFixtures::PAYEUR_EMAIL]);
         if (!$etabA instanceof Etablissement || !$etabB instanceof Etablissement || !$payeur instanceof Client) {
+            $manager->flush();
+
+            return;
+        }
+
+        // ── LE BLOC DE DÉMONSTRATION NE SE POSE QU'UNE FOIS ──────────────────────────────────
+        //
+        // Tout ce qui suit est un jeu de données cohérent, pas un référentiel : le reposer sur une
+        // base qui l'a déjà écraserait ce qui a été corrigé à la main depuis, ou le dupliquerait
+        // pour les entités sans contrainte d'unicité — silencieusement.
+        //
+        // Les permissions et les rôles restent AU-DESSUS de cette garde : ils doivent être rejoués à
+        // chaque chargement, sans quoi un droit ajouté au code n'atteindrait jamais une base
+        // existante.
+        if ($manager->getRepository(ConfigCreancierSepa::class)->findOneBy([]) !== null) {
             $manager->flush();
 
             return;
@@ -175,6 +196,46 @@ final class SepaFixtures extends Fixture implements DependentFixtureInterface
             }
         };
 
+        // PAY-2 — le préavis, sans lequel la remise ne pourrait plus être générée.
+        //
+        // **La fixture énonce un fait passé, elle ne contourne pas le contrôle.** Elle affirme que ce
+        // client a été prévenu vingt jours plus tôt, exactement comme elle affirme qu'il a signé un
+        // mandat. `GenerationRemiseHandler` relit ce préavis et vérifie le montant et le délai comme
+        // pour n'importe quelle échéance : ce qui est fabriqué, c'est l'envoi, pas la vérification.
+        //
+        // On l'écrit directement plutôt que de passer par `DebitPreNotifier::announce()` parce
+        // qu'aucun prestataire d'envoi n'existe (D19) : `announce()` rendrait `Journalisee`, le jeu de
+        // démonstration n'aurait plus aucune remise, et on aurait perdu l'écran au lieu de montrer le
+        // blocage. Le blocage, lui, reste entier en production — c'est le chemin réel qui est barré.
+        $this->preavisDemo($manager, $mandatRegie, 'demo-regie-1', 6300);
+
         $this->generationRemiseHandler->generer($etabA, new \DateTimeImmutable('today'), $source);
+    }
+
+    /**
+     * Le préavis de démonstration, cherché avant d'être créé (D49).
+     *
+     * `uniq_prenotification_mandate_origin` refuserait un second chargement, et les fixtures se
+     * rechargent : quatorze d'entre elles créaient aveuglément des objets à contrainte d'unicité, ce
+     * qui a coûté une préproduction le 24/08.
+     */
+    private function preavisDemo(ObjectManager $manager, MandatSepa $mandat, string $reference, int $montantCentimes): void
+    {
+        $existant = $manager->getRepository(DebitPreNotification::class)->findOneBy([
+            'mandate' => $mandat,
+            'originReference' => $reference,
+        ]);
+
+        $preavis = $existant instanceof DebitPreNotification ? $existant : new DebitPreNotification();
+        $preavis->setMandate($mandat)
+            ->setOriginReference($reference)
+            ->setAmountCents($montantCentimes)
+            ->setAnnouncedDueDate(new \DateTimeImmutable('today'))
+            ->setSentAt(new \DateTimeImmutable('today -20 days'))
+            ->setReason(PreNotificationReason::Schedule)
+            ->setOutcome(NotificationOutcome::Envoyee);
+
+        $manager->persist($preavis);
+        $manager->flush();
     }
 }

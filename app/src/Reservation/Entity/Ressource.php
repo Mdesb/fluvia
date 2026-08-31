@@ -14,6 +14,7 @@ use ApiPlatform\Metadata\Post;
 use App\Organisation\Entity\Espace;
 use App\Organisation\Entity\Etablissement;
 use App\Reservation\Validator\TypeRessourceValide;
+use App\Reservation\State\EstablishmentStampProcessor;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
@@ -34,7 +35,7 @@ use Symfony\Component\Validator\Constraints as Assert;
     operations: [
         new GetCollection(security: "is_granted('PERM', 'reservation.lire')"),
         new Get(security: "is_granted('PERM', 'reservation.lire')"),
-        new Post(security: "is_granted('PERM', 'reservation.gerer_ressource')"),
+        new Post(security: "is_granted('PERM', 'reservation.gerer_ressource')", processor: EstablishmentStampProcessor::class),
         new Patch(security: "is_granted('PERM', 'reservation.gerer_ressource')"),
     ],
     normalizationContext: ['groups' => ['ressource:read']],
@@ -50,8 +51,15 @@ class Ressource
 
     #[ORM\ManyToOne(targetEntity: Etablissement::class)]
     #[ORM\JoinColumn(nullable: false)]
-    #[Assert\NotNull]
-    #[Groups(['ressource:read', 'ressource:write'])]
+    // D41 — plus d'`Assert\NotNull` ici : la contrainte protegeait d'un client qui OMETTAIT
+    // le champ, or il ne peut plus l'envoyer du tout. La validation s'execute avant l'ecriture,
+    // donc avant l'estampillage — elle echouait sur une valeur que le serveur allait poser
+    // lui-meme (verifie : 422 avant d'atteindre le processor). L'invariant est desormais tenu
+    // par trois choses plus solides qu'une annotation : l'estampilleur, qui refuse plutot que
+    // de deviner ; la colonne NOT NULL ; et le garde global D41.
+    // D41 — hors groupe d'ecriture : l'etablissement vient de la session serveur, pose par
+    // `EstablishmentStampProcessor`, jamais du corps de la requete.
+    #[Groups(['ressource:read'])]
     private ?Etablissement $etablissement = null;
 
     #[ORM\ManyToOne(targetEntity: Espace::class)]

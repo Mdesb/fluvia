@@ -10,6 +10,7 @@ use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Post;
 use App\Organisation\Entity\Etablissement;
 use App\Piscine\Enum\EtatCasier;
+use App\Piscine\State\EstablishmentStampProcessor;
 use App\Piscine\State\AttribuerCasierProcessor;
 use App\Piscine\State\ForcerCasierProcessor;
 use App\Piscine\State\LibererCasierProcessor;
@@ -32,7 +33,7 @@ use Symfony\Component\Validator\Constraints as Assert;
     operations: [
         new GetCollection(security: "is_granted('PERM', 'piscine.lire')"),
         new Get(security: "is_granted('PERM', 'piscine.lire')"),
-        new Post(security: "is_granted('PERM', 'piscine.configurer')"),
+        new Post(security: "is_granted('PERM', 'piscine.configurer')", processor: EstablishmentStampProcessor::class),
         new Post(
             uriTemplate: '/piscine/casiers/{id}/attribuer',
             read: true,
@@ -93,7 +94,7 @@ class Casier
 
     #[ORM\ManyToOne(targetEntity: Etablissement::class)]
     #[ORM\JoinColumn(nullable: false)]
-    #[Groups(['casier:read', 'casier:write'])]
+    #[Groups(['casier:read'])]
     private ?Etablissement $etablissement = null;
 
     public function __construct()

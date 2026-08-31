@@ -8,12 +8,12 @@ use ApiPlatform\Doctrine\Orm\Extension\QueryCollectionExtensionInterface;
 use ApiPlatform\Doctrine\Orm\Extension\QueryItemExtensionInterface;
 use ApiPlatform\Doctrine\Orm\Util\QueryNameGeneratorInterface;
 use ApiPlatform\Metadata\Operation;
+use App\Facturation\Entity\CommercialDocument;
 use App\Facturation\Entity\Facture;
 use App\Facturation\Entity\ParametreFacturationEtablissement;
 use App\Facturation\Entity\SerieNumerotation;
-use App\Securite\Entity\Affectation;
 use App\Securite\Entity\Utilisateur;
-use Doctrine\ORM\Query\Expr\Join;
+use App\Securite\Service\ContexteEtablissement;
 use Doctrine\ORM\QueryBuilder;
 use Symfony\Bundle\SecurityBundle\Security;
 
@@ -22,7 +22,8 @@ use Symfony\Bundle\SecurityBundle\Security;
  * utilisateur ne voit que les ressources rattachées à un établissement où il possède au moins une
  * affectation. Même patron que `App\Vente\Doctrine\PerimetreVenteExtension`.
  *
- *  - `Facture` porte directement `etablissement` ;
+ *  - `Facture` et `CommercialDocument` (FAC-1 : devis, bon de commande, bon de livraison) portent
+ *    directement `etablissement` ;
  *  - `ParametreFacturationEtablissement` et `SerieNumerotation` (correctif revue de cohérence, défaut
  *    3 — sans ce durcissement, `GET /parametres-facturation` et `/series-numerotation` renvoyaient
  *    toutes les lignes tous établissements, fuite SIRET/TVA/numéros inter-tenants) ne portent qu'un
@@ -36,13 +37,14 @@ use Symfony\Bundle\SecurityBundle\Security;
 final class PerimetreFacturationExtension implements QueryCollectionExtensionInterface, QueryItemExtensionInterface
 {
     /** Ressources cloisonnées directement via un champ `etablissement` sur la racine. */
-    private const RESOURCES_ETABLISSEMENT_DIRECT = [Facture::class];
+    private const RESOURCES_ETABLISSEMENT_DIRECT = [Facture::class, CommercialDocument::class];
 
     /** Ressources cloisonnées via `{root}.profilExploitant` (principal ou rattachés). */
     private const RESOURCES_VIA_PROFIL = [ParametreFacturationEtablissement::class, SerieNumerotation::class];
 
     public function __construct(
         private readonly Security $security,
+        private readonly ContexteEtablissement $contexte,
     ) {
     }
 
@@ -84,6 +86,13 @@ final class PerimetreFacturationExtension implements QueryCollectionExtensionInt
 
         $rootAlias = $queryBuilder->getRootAliases()[0];
 
+        $actif = $this->contexte->idActif();
+        if ($actif === null) {
+            $queryBuilder->andWhere('1 = 0');
+
+            return;
+        }
+
         if ($viaProfil) {
             // `ParametreFacturationEtablissement`/`SerieNumerotation` ne portent qu'un profil
             // exploitant : le rattachement à un établissement passe par
@@ -92,19 +101,20 @@ final class PerimetreFacturationExtension implements QueryCollectionExtensionInt
                 ->innerJoin($rootAlias . '.profilExploitant', 'profil_perimetre_facturation')
                 ->leftJoin('profil_perimetre_facturation.etablissementsRattaches', 'etab_rattache_perimetre_facturation');
 
-            $condition = '(IDENTITY(aff_perimetre_facturation.etablissement) = IDENTITY(profil_perimetre_facturation.etablissementPrincipal)'
-                . ' OR aff_perimetre_facturation.etablissement = etab_rattache_perimetre_facturation)'
-                . ' AND IDENTITY(aff_perimetre_facturation.utilisateur) = :perimetre_facturation_utilisateur';
+            // Principal OU rattaché : un site rattaché doit continuer de voir ce qu'on facture en
+            // son nom. La règle ne change pas, seul son terme de comparaison.
+            $condition = '(IDENTITY(profil_perimetre_facturation.etablissementPrincipal) = :perimetre_facturation_actif'
+                . ' OR etab_rattache_perimetre_facturation.id = :perimetre_facturation_actif)';
         } else {
             $condition = sprintf(
-                'IDENTITY(aff_perimetre_facturation.etablissement) = IDENTITY(%s.etablissement) AND IDENTITY(aff_perimetre_facturation.utilisateur) = :perimetre_facturation_utilisateur',
+                'IDENTITY(%s.etablissement) = :perimetre_facturation_actif',
                 $rootAlias,
             );
         }
 
         $queryBuilder
-            ->innerJoin(Affectation::class, 'aff_perimetre_facturation', Join::WITH, $condition)
-            ->setParameter('perimetre_facturation_utilisateur', $utilisateur->getId(), 'uuid')
+            ->andWhere($condition)
+            ->setParameter('perimetre_facturation_actif', $actif, 'uuid')
             ->distinct();
     }
 }

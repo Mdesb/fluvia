@@ -87,6 +87,8 @@ Détail : [CONTRACT/catalogue-modules.md](CONTRACT/catalogue-modules.md).
 
 ---
 
+> **Cadence (D25).** Pousse sur ta branche **au moins une fois par heure**, même incomplet, en prefixant le sujet par `WIP :`. Rien n'entre dans `main` sans fusion de l'integrateur, donc un commit intermediaire ne met rien en danger.
+
 ## 4. LE CONTRAT
 
 ### 4.1 Noyau commun (tout module peut le supposer présent)
@@ -225,6 +227,25 @@ pages) et les écrans de terminal (plein écran). Détail et garde-fous d'access
 identifiants anglais · libellés en clés i18n · événements déclarés au manifeste · TASKS.md à jour.
 **Avant de merger (intégrateur) :** CI verte · revue de cohérence · pas de régression voisine ·
 migration horodatée · MESSAGES.md répondu.
+
+### 10 bis. DEUX MOITIÉS, DEUX PREUVES — et aucune ne vaut pour l'autre
+
+Un mécanisme se prouve par morceaux, et **une preuve qui vaut pour un morceau se lit trop facilement
+comme valant pour l'ensemble**. La moitié des faux verts trouvés jusqu'ici viennent de là.
+
+L'exemple, parce qu'il est net (cloche de notification, 29/08) :
+
+| ce qu'on a fait | ce que ça prouve | ce que ça ne prouve PAS |
+|---|---|---|
+| quatre notifications écrites **en base** | l'écran : affichage, gravité, pastille, clic, cloisonnement | la règle d'admission ni le résolveur de destinataires — les lignes contournent le bus |
+| un test qui **retire le filtre de droits** et nomme la personne prévenue à tort | la règle d'admission et le résolveur | rien de l'écran : le test ne rend aucun HTML |
+
+Dire « la cloche marche » sur la première moitié aurait été un faux vert : un écran qui affiche des
+données plausibles ne dit rien du mécanisme censé les produire.
+
+**En pratique :** quand on annonce qu'une chose est vérifiée, dire **par quel chemin** — et nommer ce
+que ce chemin ne traverse pas. « Vérifié à l'écran » ne dit rien du producteur ; « les tests passent »
+ne dit rien de ce que l'utilisateur voit ; « la route répond » ne dit rien de ce qu'elle enregistre.
 
 ---
 

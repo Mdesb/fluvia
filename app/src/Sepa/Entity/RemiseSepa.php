@@ -107,6 +107,22 @@ class RemiseSepa
         $this->lignes = new ArrayCollection();
     }
 
+    /**
+     * Combien d'échéances dues ont été écartées faute de préavis, et pourquoi (PAY-2).
+     *
+     * **Porté par la remise et non journalisé ailleurs.** Une remise à zéro ligne parce que tout a été
+     * exclu n'est pas une remise à zéro ligne parce qu'il n'y avait rien à collecter. Si les deux se
+     * ressemblent, personne ne verra jamais le blocage — et c'est exactement ce qui s'est passé
+     * jusqu'ici, où aucun préavis n'existait et où rien ne le disait.
+     */
+    #[ORM\Column(name: 'nb_exclues', options: ['default' => 0])]
+    #[Groups(['remise_sepa:read'])]
+    private int $nbExclues = 0;
+
+    #[ORM\Column(name: 'motif_exclusion', length: 255, nullable: true)]
+    #[Groups(['remise_sepa:read'])]
+    private ?string $motifExclusion = null;
+
     public function getId(): Uuid
     {
         return $this->id;
@@ -244,6 +260,30 @@ class RemiseSepa
             $this->lignes->add($ligne);
             $ligne->setRemise($this);
         }
+
+        return $this;
+    }
+
+    public function getNbExclues(): int
+    {
+        return $this->nbExclues;
+    }
+
+    public function setNbExclues(int $nbExclues): self
+    {
+        $this->nbExclues = $nbExclues;
+
+        return $this;
+    }
+
+    public function getMotifExclusion(): ?string
+    {
+        return $this->motifExclusion;
+    }
+
+    public function setMotifExclusion(?string $motifExclusion): self
+    {
+        $this->motifExclusion = $motifExclusion;
 
         return $this;
     }
