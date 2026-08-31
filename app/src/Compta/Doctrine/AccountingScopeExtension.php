@@ -21,6 +21,7 @@ use App\Compta\Entity\MappingComptable;
 use App\Compta\Entity\MouvementPca;
 use App\Compta\Entity\PeriodeComptable;
 use App\Compta\Entity\ProfilExploitant;
+use App\Compta\Entity\QualificationEquipement;
 use App\Compta\Entity\Rad;
 use App\Compta\Entity\RegieRecettes;
 use App\Compta\Entity\TauxTva;
@@ -87,6 +88,22 @@ final class AccountingScopeExtension implements QueryCollectionExtensionInterfac
      *
      * @var array<class-string, string>
      */
+    /**
+     * ⚠ TROISIEME CHEMIN : PAR L'ESPACE, QUI PORTE L'ETABLISSEMENT DIRECTEMENT.
+     *
+     * Les deux cartes ci-dessus atteignent l'etablissement par le profil exploitant.
+     * `QualificationEquipement` n'a pas de profil : elle qualifie un `Espace` du socle, et c'est
+     * l'espace qui porte l'etablissement. Elle etait donc hors de portee de la structure — pas
+     * oubliee d'une liste, mais sans chemin pour y entrer.
+     *
+     * Ce que la fuite exposait : pour chaque equipement de chaque client, son existence (via l'IRI
+     * de l'espace) et sa qualification fiscale SPIC/SPA. Mesure du 31/08,
+     * `CloisonnementQualificationTest`.
+     */
+    private const VIA_ESPACE = [
+        QualificationEquipement::class => 'espace',
+    ];
+
     private const VIA_RELATION = [
         BordereauVersement::class => 'regie',
         MouvementPca::class => 'ecritureLiee',
@@ -143,6 +160,11 @@ final class AccountingScopeExtension implements QueryCollectionExtensionInterfac
                 ->innerJoin($racine . '.' . self::VIA_RELATION[$resourceClass], 'rel_scope')
                 ->innerJoin('rel_scope.profilExploitant', 'pe_scope');
             $chemin = 'pe_scope.etablissementPrincipal';
+        } elseif (isset(self::VIA_ESPACE[$resourceClass])) {
+            // L'espace porte l'etablissement sans passer par un profil : un seul saut, et l'axe
+            // reste le meme — l'etablissement ACTIF, comme partout ailleurs dans ce fichier.
+            $queryBuilder->innerJoin($racine . '.' . self::VIA_ESPACE[$resourceClass], 'esp_scope');
+            $chemin = 'esp_scope.etablissement';
         } else {
             return;
         }
