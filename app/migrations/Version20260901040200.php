@@ -15,7 +15,7 @@ use Doctrine\Migrations\AbstractMigration;
  * `?Uuid` nu, **pas** de FK vers `import_batch` (D2 littéral de la spec, §5) : posé une seule fois à la
  * création d'un client par reprise, jamais réécrit par une mise à jour ultérieure.
  */
-final class Version20260831220200 extends AbstractMigration
+final class Version20260901040200 extends AbstractMigration
 {
     public function getDescription(): string
     {

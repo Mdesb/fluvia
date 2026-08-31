@@ -16,7 +16,7 @@ use Doctrine\Migrations\AbstractMigration;
  * spec autorise explicitement de revalider un fichier corrigé plusieurs fois, seule l'application
  * (`POST /imports/{id}/appliquer`) refuse un doublon déjà `applied`.
  */
-final class Version20260831220000 extends AbstractMigration
+final class Version20260901040000 extends AbstractMigration
 {
     public function getDescription(): string
     {

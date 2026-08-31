@@ -15,7 +15,7 @@ use Doctrine\Migrations\AbstractMigration;
  * `target_id` est volontairement sans FK (D2, polymorphe par construction — une seule table sert N
  * types de cibles dans N modules).
  */
-final class Version20260831220100 extends AbstractMigration
+final class Version20260901040100 extends AbstractMigration
 {
     public function getDescription(): string
     {
