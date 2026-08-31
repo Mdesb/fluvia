@@ -31,6 +31,32 @@ git fetch origin && git merge --no-edit origin/main
 
 Le second doit être vert AVANT que tu commences, sinon tu hériteras d'un rouge qui n'est pas le tien.
 
+### ⚠ La chaîne NF525 de la préprod rend « intacte: false », et c'est NORMAL
+
+`POST /api/nf525/verifier-chaine` répond, sur la préprod :
+
+    "intacte": false, "anomalies": [{ "sequence": 1, "probleme": "signature invalide" }, …]
+
+**Ce n'est pas une panne, et il n'y a rien à réparer.** Les clés de scellement ont été régénérées le
+31/08 (décision de Maxime : une clé par installation). Les opérations scellées AVANT portent une
+signature calculée avec l'ancienne clé.
+
+⚠ **Lis le type d'anomalie, pas le booléen.** Deux mots différents, deux gravités opposées :
+
+| ce que dit l'anomalie | ce que ça veut dire |
+|---|---|
+| `signature invalide` | la clé a changé depuis le scellement — attendu ici |
+| `empreinte incohérente` | **la donnée a été altérée** — ça, c'est grave |
+
+L'empreinte ne dépend d'aucune clé (`hash(payload + empreinte précédente)`) ; seule la signature en
+dépend (`hash_hmac(empreinte, clé)`). La chaîne est donc toujours vérifiable, et le contrôle le dit
+correctement : zéro `empreinte incohérente` sur les 14 opérations.
+
+**En production, ce ne sera jamais normal** — les clés y seront générées au premier déploiement et
+ne changeront plus jamais.
+
+---
+
 ### ⚠ Une suite verte ne dit RIEN de ce que le web sert
 
 `opcache.validate_timestamps=0` : **FPM ne relit jamais les fichiers.** Il sert le code tel qu'il
