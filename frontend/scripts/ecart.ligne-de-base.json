@@ -29,14 +29,14 @@
         "Le script REFUSE de le relever. Un plafond qui remonte n est plus un cliquet, c est un",
         "compteur."
     ],
-    "plafond": 635,
+    "plafond": 631,
     "releve": {
         "exposees": 1161,
         "sansEcran": 1,
         "attendues": 1160,
-        "appelees": 533,
-        "atteignables": 525,
-        "inatteignables": 635,
+        "appelees": 537,
+        "atteignables": 529,
+        "inatteignables": 631,
         "orphelins": [
             "etatSynchroAcces  (back-office)",
             "grilleTarifaires  (back-office)",
@@ -62,8 +62,8 @@
         "parFront": [
             {
                 "nom": "back-office",
-                "appelees": 509,
-                "atteignables": 501
+                "appelees": 513,
+                "atteignables": 505
             },
             {
                 "nom": "boutique en ligne",
@@ -101,6 +101,10 @@
                 14
             ],
             [
+                "compta",
+                14
+            ],
+            [
                 "personnel",
                 13
             ],
@@ -114,10 +118,6 @@
             ],
             [
                 "ventes",
-                11
-            ],
-            [
-                "compta",
                 11
             ],
             [
@@ -317,10 +317,6 @@
                 3
             ],
             [
-                "mapping",
-                3
-            ],
-            [
                 "grille",
                 3
             ],
@@ -330,6 +326,10 @@
             ],
             [
                 "parametres-facturation",
+                3
+            ],
+            [
+                "mapping",
                 3
             ],
             [
@@ -370,6 +370,10 @@
             ],
             [
                 "export",
+                2
+            ],
+            [
+                "bordereau",
                 2
             ],
             [
@@ -498,10 +502,6 @@
             ],
             [
                 "vente",
-                1
-            ],
-            [
-                "bordereau",
                 1
             ],
             [
