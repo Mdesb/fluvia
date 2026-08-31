@@ -58,6 +58,30 @@ log "Construction / démarrage des conteneurs"
 "${COMPOSE[@]}" build
 "${COMPOSE[@]}" up -d
 
+# ⚠ CE QUI SUIT RETIRE PHPUNIT, ET TUE TOUTE SUITE EN COURS.
+#
+# `composer install --no-dev` supprime les paquets de developpement du `vendor/` que les conteneurs
+# de test partagent par montage. Une suite qui tourne meurt alors en plein milieu, avec un message
+# qui accuse l'operateur de ne pas avoir reinstalle -- alors qu'il l'avait fait.
+#
+# Constate le 31/08 : deux sessions, quarante secondes d'ecart, une suite complete perdue.
+#
+# On AVERTIT sans bloquer. Bloquer transformerait une gene en panne : la suite complete dure des
+# heures et personne ne pourrait livrer pendant ce temps. Ce qui manquait n'etait pas un verrou,
+# c'etait de SAVOIR.
+if ls /tmp/suite-en-cours-* >/dev/null 2>&1; then
+    echo
+    echo "  ⚠  Une suite de tests tourne en ce moment :"
+    for m in /tmp/suite-en-cours-*; do
+        echo "       $(cat "$m" 2>/dev/null || basename "$m")"
+    done
+    echo
+    echo "     Ce déploiement va retirer phpunit et la faire mourir en plein milieu."
+    echo "     Elle rendra un message qui accuse l'opérateur, pas ce déploiement."
+    echo "     Préviens, ou attends — puis « ./infra/reinstaller-dev.sh » et relance-la."
+    echo
+fi
+
 log "Dépendances Composer (sans les paquets de dev)"
 "${COMPOSE[@]}" exec -T php composer install --no-dev --optimize-autoloader --no-interaction
 
