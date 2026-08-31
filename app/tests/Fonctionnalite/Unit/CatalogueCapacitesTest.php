@@ -19,6 +19,24 @@ final class CatalogueCapacitesTest extends TestCase
         'casiers', 'location_materiel', 'poss', 'acces_nocturne', 'encadrants', 'boutique_en_ligne',
     ];
 
+    /**
+     * Ajoutées le 01/09/2026. Nommées ici une par une, et pas seulement comptées : un test qui
+     * vérifierait « au moins quinze codes » resterait vert si l'une des trois était remplacée par
+     * une autre.
+     */
+    private const CODES_AJOUTES = ['comptabilite', 'stock', 'agenda'];
+
+    public function testLesTroisCapacitesAjouteesSontAuCatalogue(): void
+    {
+        $catalogue = new CatalogueCapacites();
+        $codes = array_map(static fn ($d) => $d->code, $catalogue->toutes());
+
+        foreach (self::CODES_AJOUTES as $code) {
+            self::assertContains($code, $codes, sprintf('la capacité « %s » doit être au catalogue', $code));
+            self::assertTrue($catalogue->existe($code));
+        }
+    }
+
     public function testCatalogueContientAuMoinsLesDouzeCapacitesImposeesParLaSpec(): void
     {
         $catalogue = new CatalogueCapacites();
