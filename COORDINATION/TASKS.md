@@ -46,6 +46,23 @@ Le second doit être vert AVANT que tu commences, sinon tu hériteras d'un rouge
 **Pour prendre un lot :** ajoute ton nom dans la colonne « tenu par » du tableau §3, commite ce seul
 changement, et pousse-le **avant** de commencer. Un lot pris sans être poussé n'est pas pris.
 
+### Ce qui peut être ajouté ici, et par qui
+
+⚠ **Tout constat MESURÉ se pose par celui qui l'a mesuré**, sans passer par personne — avec ses
+chiffres **et la commande qui les produit**, pour qu'un autre puisse les refaire.
+
+    un lot manquant que tu as mesuré        pose-le, avec la mesure
+    une ligne de ce fichier qui est fausse  corrige-la, en disant ce qui l'était
+    la structure du fichier                 voie de Jarvis
+
+**Pourquoi cette règle existe :** `allaccess-89` a mesuré quatre modules construits sans écran et
+n'a pas posé la ligne, parce que §3 ne l'y autorisait pas. Il a bien fait de respecter la règle —
+c'est la règle qui était mauvaise.
+
+Et dans le même échange, il a relevé qu'une de mes lignes était fausse : « 6 fichiers sur 118 »
+comptait des **fichiers** et concluait à une **couverture**. Un fichier qui fait autorité et qu'une
+seule session peut corriger n'est pas auto-suffisant : c'est un goulot qui se trompe aussi.
+
 ---
 
 ## 3. Prêt à prendre
