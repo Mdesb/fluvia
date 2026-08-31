@@ -363,7 +363,14 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
                   {(items || []).map((c) => (
                     <tr key={c.id} className="row-click" onClick={() => ouvrirFiche(c.id)}>
                       <td>
-                        <span className="nm">{nomClient(c)}</span>
+                        {/* ⚠ C'ÉTAIT LE SEUL CHEMIN VERS LA FICHE, ET IL PASSAIT PAR LA SOURIS.
+                            Les boutons de la ligne font autre chose — Devis, Échange. Un
+                            utilisateur au clavier ne pouvait donc pas ouvrir un client, sur
+                            l'écran principal du CRM. Le clic sur `<tr>` reste ; le nom devient
+                            un vrai bouton. */}
+                        <button type="button" className="lnk nm" onClick={() => ouvrirFiche(c.id)}>
+                          {nomClient(c)}
+                        </button>
                         {c.estMineur && <span className="badge warn" style={{ marginLeft: 6 }}>mineur</span>}
                       </td>
                       <td>{c.type === 'morale' ? 'Personne morale' : 'Particulier'}</td>

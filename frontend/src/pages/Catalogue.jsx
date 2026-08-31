@@ -514,7 +514,12 @@ function OngletOptions() {
                       onClick={() => setSelId(g.id)}
                       className={`row-click${selId === g.id ? ' row-active' : ''}`}
                     >
-                      <td><span className="nm">{g.libelle}</span></td>
+                      <td>
+                        {/* Le clic sur la ligne reste ; le clavier a besoin d'une cible réelle. */}
+                        <button type="button" className="lnk nm" onClick={() => setSelId(g.id)}>
+                          {g.libelle}
+                        </button>
+                      </td>
                       <td><span className="badge mut">{g.modeSelection === 'multiple' ? 'multiple' : 'unique'}</span></td>
                       <td>
                         <button
