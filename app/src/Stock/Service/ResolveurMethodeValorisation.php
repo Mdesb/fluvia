@@ -17,6 +17,7 @@ final class ResolveurMethodeValorisation
 {
     public function __construct(
         private readonly EntityManagerInterface $em,
+        private readonly StockSettingsProvider $reglages,
     ) {
     }
 
@@ -31,8 +32,8 @@ final class ResolveurMethodeValorisation
             return MethodeValorisation::Fifo;
         }
 
-        $parametrage = $this->em->getRepository(ParametrageStock::class)->findOneBy(['etablissement' => $etablissement->getId()]);
-
-        return $parametrage instanceof ParametrageStock ? $parametrage->getMethodeValorisationDefaut() : MethodeValorisation::Fifo;
+        // Le repli FIFO est desormais declare une seule fois, dans `StockSettings` (D52) : ce service
+        // ne decide plus ce que signifie l'absence de parametrage, il la lit.
+        return $this->reglages->forEstablishment($etablissement)->valuationMethod();
     }
 }

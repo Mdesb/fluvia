@@ -40,6 +40,7 @@ final class InventaireRegularisationHandler
         private readonly ResolveurMethodeValorisation $resolveur,
         private readonly DisponibiliteStockHandler $disponibilite,
         private readonly LoggerInterface $logger,
+        private readonly StockSettingsProvider $reglages,
     ) {
     }
 
@@ -62,10 +63,16 @@ final class InventaireRegularisationHandler
         $articles = $qb->getQuery()->getResult();
         foreach ($articles as $article) {
             \assert($article instanceof ArticleStock);
-            $theorique = (string) ($article->getProduit()?->getStock()?->disponibiliteEffective() ?? 0);
-
+            // **Le theorique vient des lots, plus du compteur produit.** Il en venait, et un article
+            // non rattache a un produit avait donc un theorique de zero pendant que ses lots portaient
+            // la quantite reelle : compter 47 unites reellement presentes fabriquait un ecart de +47
+            // qui n'existait pas, et le regulariser creait un mouvement de correction contre rien —
+            // mouvement, lui, bien reel et date.
+            //
+            // Au passage, la valeur gagne en precision : le compteur M1 est un entier, les quantites
+            // du module sont au millieme (RG-STOCK-08, kg et litres fractionnables).
             $ligne = new LigneInventaire();
-            $ligne->setArticleStock($article)->setQuantiteTheorique($theorique . '.000');
+            $ligne->setArticleStock($article)->setQuantiteTheorique($article->getQuantiteDisponible());
             $inventaire->addLigne($ligne);
             $this->em->persist($ligne);
         }
@@ -197,13 +204,8 @@ final class InventaireRegularisationHandler
             ]);
         }
 
-        $etablissement = $article->getEtablissement();
-        $negatifAutorise = false;
-        if ($etablissement !== null) {
-            $parametrage = $this->em->getRepository(ParametrageStock::class)->findOneBy(['etablissement' => $etablissement->getId()]);
-            $negatifAutorise = $parametrage instanceof ParametrageStock && $parametrage->isAutoriserStockNegatif();
-        }
-        $this->disponibilite->decrementer($article, $quantiteAbs, $negatifAutorise);
+        $reglages = $this->reglages->forEstablishment($article->getEtablissement());
+        $this->disponibilite->decrementer($article, $quantiteAbs, $reglages->allowsNegativeStock());
 
         return $mouvement;
     }
@@ -211,21 +213,32 @@ final class InventaireRegularisationHandler
     private function estSignificatif(LigneInventaire $ligne, string $ecart): bool
     {
         $article = $ligne->getArticleStock();
-        $etablissement = $article?->getEtablissement();
-        if ($etablissement === null) {
-            return false;
-        }
-        $parametrage = $this->em->getRepository(ParametrageStock::class)->findOneBy(['etablissement' => $etablissement->getId()]);
-        if (!$parametrage instanceof ParametrageStock) {
-            return false;
+        if ($article === null) {
+            // Sans article on ne sait rien de l'ecart : on ne desactive pas le controle pour autant.
+            return true;
         }
 
         $ecartAbsMilli = abs(ArithmetiqueDecimale::versEntier($ecart, 3));
         if ($ecartAbsMilli === 0) {
+            // Un ecart nul n'est pas un ecart. C'est le seul `false` qui ne soit pas un repli.
             return false;
         }
 
-        $seuilPourcentage = $parametrage->getSeuilEcartSignificatifPourcentage();
+        $reglages = $this->reglages->forEstablishment($article->getEtablissement());
+
+        // **Le defaut corrige (D52).** Auparavant, l'absence de parametrage rendait tout ecart non
+        // significatif : le droit `stock.valider_ecart` ne se declenchait jamais, et n'importe qui
+        // pouvant regulariser une ligne pouvait regulariser n'importe quel montant. Un seuil non regle
+        // ne veut pas dire « tout passe », il veut dire que personne n'a decide — et le repli sur d'un
+        // controle est de controler.
+        //
+        // La condition couvre aussi le cas le plus frequent en pratique : un parametrage cree pour
+        // choisir la valorisation, dont les deux seuils sont restes vides.
+        if ($reglages->noThresholdConfigured()) {
+            return true;
+        }
+
+        $seuilPourcentage = $reglages->significanceThresholdPercentage();
         if ($seuilPourcentage !== null) {
             $theoriqueMilli = ArithmetiqueDecimale::versEntier($ligne->getQuantiteTheorique(), 3);
             if ($theoriqueMilli > 0) {
@@ -237,7 +250,7 @@ final class InventaireRegularisationHandler
             }
         }
 
-        $seuilMontant = $parametrage->getSeuilEcartSignificatifMontant();
+        $seuilMontant = $reglages->significanceThresholdAmount();
         if ($seuilMontant !== null) {
             $cout = $this->moteur->coutDerniereCoucheActive($article) ?? $article->getPrixAchatHT();
             $montantEcart = ArithmetiqueDecimale::multiplierVersMontant(ArithmetiqueDecimale::versDecimal($ecartAbsMilli, 3), $cout);
