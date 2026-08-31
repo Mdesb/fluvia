@@ -57,6 +57,37 @@ ne changeront plus jamais.
 
 ---
 
+### ⚠ Un changement de schéma doit tenir avec les DEUX versions du code
+
+`deploy-preprod.sh` applique les migrations **avant** de redémarrer FPM. Entre les deux, le schéma
+est neuf et le code est ancien. La fenêtre dure quelques secondes en temps normal — **elle a duré
+deux heures le 31/08**, parce que j'ai migré sans déployer dans la foulée.
+
+Ce qui s'est passé :
+
+    base          `adresse JSON NOT NULL`, aucun défaut
+    PHP servi     une classe qui ne connaît pas ce champ (21 commits de retard)
+
+Un `POST /api/profil_exploitants` aurait omis une colonne obligatoire sans défaut : **erreur SQL,
+500**, sur un chemin exposé. Relevé par `b8`.
+
+⚠ **Inverser l'ordre ne résout rien** : du code neuf sur un schéma ancien casse tout autant. La
+seule forme qui tient est un changement compatible avec les **deux** versions.
+
+**En pratique, pour toute migration :**
+
+- une colonne neuve `NOT NULL` porte un **`DEFAULT`** — l'ancien code ne l'écrit pas, la base la
+  remplit ; le nouveau l'écrit, et le défaut ne sert plus ;
+- le `DEFAULT` se déclare **aussi au mapping** (`options: ['default' => …]`), sinon le garde-fou D32
+  refuse un défaut que la base porte et que le mapping ignore ;
+- retirer une colonne se fait en **deux temps** : le code cesse de l'écrire, on déploie, puis on la
+  supprime.
+
+**Et après avoir migré, déploie.** Une migration appliquée sans déploiement laisse la fenêtre
+ouverte aussi longtemps que personne ne s'en aperçoit.
+
+---
+
 ### ⚠ Une suite verte ne dit RIEN de ce que le web sert
 
 `opcache.validate_timestamps=0` : **FPM ne relit jamais les fichiers.** Il sert le code tel qu'il
