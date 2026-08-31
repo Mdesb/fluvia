@@ -50,10 +50,71 @@ const RACINE_MIGRATIONS = 'app/migrations';
 const LIGNE_DE_BASE = 'bin/drop-migrations.ligne-de-base.json';
 
 const MOTIF_SQL = '/addSql\(\s*(?:\'((?:[^\'\\\\]|\\\\.)*)\'|"((?:[^"\\\\]|\\\\.)*)")/s';
+/** Corps d'un heredoc : `addSql(<<<SQL ... SQL)` ou `addSql(<<<'SQL' ... SQL)`. */
+const MOTIF_SQL_HEREDOC = '/addSql\(\s*<<<[\'"]?(\w+)[\'"]?\R(.*?)\R\s*\1/s';
 const MOTIF_ANNOTATION = '/@drop-voulu\s*:\s*\S/';
 
 /** Les mots-clés qui suivent `DROP` sans désigner un objet supprimé. */
 const NON_OBJETS = ['INDEX', 'FOREIGN', 'PRIMARY', 'CONSTRAINT', 'COLUMN', 'IF'];
+
+/**
+ * Tout le SQL d'une migration, quelle que soit la forme d'ecriture.
+ *
+ * Le depot en emploie quatre : chaine simple, chaine double, heredoc, et concatenation de fragments.
+ * L'extraction initiale n'en lisait qu'une seule — la premiere chaine litterale suivant `addSql(`.
+ * Consequence mesuree : sur une base batie par les migrations, Doctrine proposait **71 renommages**
+ * d'index la ou ce garde-fou en voyait **19**, et les deux ensembles etaient DISJOINTS. Deux
+ * populations qui ne se recoupent pas, c'est le signe qu'on ne lit pas la meme chose.
+ *
+ * On lit donc l'argument COMPLET de chaque `addSql`, parentheses equilibrees, puis on en tire le
+ * texte. Une seule lecture plutot qu'une pile de motifs : les formes a venir sont couvertes d'avance.
+ *
+ * @return list<string>
+ */
+function sqlDeLaMigration(string $source): array
+{
+    $requetes = [];
+    $decalage = 0;
+
+    while (($debut = strpos($source, 'addSql(', $decalage)) !== false) {
+        $i = $debut + strlen('addSql(');
+        $profondeur = 1;
+        $longueur = strlen($source);
+
+        while ($i < $longueur && $profondeur > 0) {
+            $c = $source[$i];
+            if ($c === '(') {
+                ++$profondeur;
+            } elseif ($c === ')') {
+                --$profondeur;
+            }
+            ++$i;
+        }
+
+        $argument = substr($source, $debut + strlen('addSql('), $i - $debut - strlen('addSql(') - 1);
+        $decalage = $i;
+
+        // Heredoc : le corps est tout ce qui separe la ligne d'ouverture du marqueur de fermeture.
+        if (preg_match('/^\s*<<<[\'"]?(\w+)[\'"]?\R(.*?)\R\s*\1/s', $argument, $h) === 1) {
+            $requetes[] = $h[2];
+            continue;
+        }
+
+        // Chaines et concatenations : on recolle tous les fragments litteraux de l'argument. Un
+        // fragment interpole (`{$var}`) laisse un trou, ce qui est sans effet ici — on ne cherche que
+        // des noms de tables, de colonnes et d'index, jamais des valeurs.
+        preg_match_all('/\'((?:[^\'\\\\]|\\\\.)*)\'|"((?:[^"\\\\]|\\\\.)*)"/s', $argument, $f, PREG_SET_ORDER);
+        $morceaux = '';
+        foreach ($f as $fragment) {
+            $morceaux .= ($fragment[1] ?? '') !== '' ? $fragment[1] : ($fragment[2] ?? '');
+        }
+        if (trim($morceaux) !== '') {
+            $requetes[] = $morceaux;
+        }
+    }
+
+    return $requetes;
+}
 
 /**
  * @return array<string, array{migration: string, type: string, objet: string}>
@@ -74,14 +135,15 @@ function dropsDansUp(string $racine): array
         // ⚠ `up()` seulement. Un DROP dans `down()` annule le `up()` de la même migration.
         $up = explode('public function down(', $source)[0];
 
-        if (preg_match_all(MOTIF_SQL, $up, $requetes, PREG_SET_ORDER) === 0) {
+        $requetes = sqlDeLaMigration($up);
+        if ($requetes === []) {
             continue;
         }
 
         // Ce que la migration crée elle-même : le supprimer ensuite est son affaire.
         $creees = [];
         foreach ($requetes as $requete) {
-            $sql = $requete[1] !== '' ? $requete[1] : ($requete[2] ?? '');
+            $sql = $requete;
             preg_match_all('/CREATE TABLE (\w+)/i', $sql, $m);
             foreach ($m[1] as $table) {
                 $creees[strtolower($table)] = true;
@@ -89,7 +151,7 @@ function dropsDansUp(string $racine): array
         }
 
         foreach ($requetes as $requete) {
-            $sql = $requete[1] !== '' ? $requete[1] : ($requete[2] ?? '');
+            $sql = $requete;
             if ($sql === '') {
                 continue;
             }
