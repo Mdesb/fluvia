@@ -144,6 +144,32 @@ log "Droits sur var/"
 
 # opcache tourne avec validate_timestamps=0 (cf. docker/php/conf.d/zz-opcache.ini) :
 # sans redémarrage du master FPM, le code servi resterait celui d'avant le déploiement.
+# ── LE MARQUEUR QUE PHP CHARGERA ────────────────────────────────────────────────────────────────
+#
+# ⚠ ECRIT AVANT LE REDEMARRAGE, et c'est tout l'interet : FPM le chargera au demarrage suivant. Si
+# quelqu'un modifie du code sans redemarrer, la constante restera celle d'avant -- exactement comme
+# le code servi. L'instrument herite du defaut qu'il mesure.
+#
+# `version.json` ne dit que la moitie frontale du produit : il voyage avec le `rsync`. Celui-ci dit
+# la moitie serveur, et il est le seul a pouvoir la dire.
+log "Marqueur de version pour PHP"
+
+# ⚠ ECRIT DANS LE CONTENEUR, PAS SUR L'HOTE.
+#
+#     - ../app:/app          l'arbre est partage
+#     - app_var:/app/var     SAUF var/, volume nomme qui MASQUE celui de l'hote
+#
+# Un `printf > app/var/...` depuis l'hote ecrit dans un repertoire que le conteneur ne voit pas.
+# Constate le 31/08 : fichier present sur l'hote, `is_file()` faux dans le conteneur.
+#
+# Les valeurs passent par l'environnement : une chaine imbriquee dans un `sh -c` dans un `exec`
+# ajoute un niveau de guillemets a chaque etage, et le shell finit par evaluer ce qu'on voulait
+# ecrire.
+"${COMPOSE[@]}" exec -T \
+    -e MARQUEUR_COMMIT="$(git rev-parse --short HEAD)" \
+    -e MARQUEUR_ECRIT="$(date -Is)" \
+    php sh -c 'mkdir -p /app/var && printf "<?php\n\nreturn [\"commit\" => \"%s\", \"ecrit\" => \"%s\"];\n" "$MARQUEUR_COMMIT" "$MARQUEUR_ECRIT" > /app/var/build-version.php' 
+
 log "Redémarrage de PHP-FPM (opcache)"
 "${COMPOSE[@]}" restart php
 
@@ -242,6 +268,32 @@ URL_PUBLIQUE="${URL_PUBLIQUE:-https://smartaccess.hector-conseil.com}"
 # s'arreter avant de l'avoir dite.
 SERVI="$(curl -sf -H 'Accept: application/json' "$URL_PUBLIQUE/version.json" 2>/dev/null \
     | sed -n 's/.*"commit":"\([^"]*\)".*/\1/p' || true)"
+
+# ── LA SECONDE BOUCLE : CE QUE PHP A CHARGE ────────────────────────────────────────────────────
+#
+# La boucle ci-dessus interroge `version.json`, un fichier statique servi par nginx. Elle prouve que
+# le FRONTAL est arrive. Elle ne dit rien du serveur : le 31/08, un correctif de cloisonnement etait
+# sur le disque et hors d'opcache pendant treize minutes, sans que rien ne le signale.
+#
+# ⚠ Cette lecture-ci traverse PHP. Elle ne peut donc pas repondre juste si PHP sert du code d'avant.
+CHARGE="$(curl -sf -H 'Accept: application/json' "$URL_PUBLIQUE/api/plateforme/version-chargee" 2>/dev/null \
+    | sed -n 's/.*"commit":"\([^"]*\)".*/\1/p' || true)"
+
+if [ "$CHARGE" != "$COMMIT_DEPLOYE" ]; then
+    echo
+    echo "✗ PHP ne sert pas le code qu'on vient de déployer."
+    echo "    déployé ici          : $COMMIT_DEPLOYE"
+    echo "    chargé par PHP       : ${CHARGE:-<rien ou illisible>}"
+    echo
+    echo '  opcache.validate_timestamps=0 : FPM ne relit jamais les fichiers. Il sert le code tel'
+    echo "  qu'il était à son dernier démarrage."
+    echo
+    echo "  ⚠ Lire le fichier dans le conteneur ne prouve rien : le volume est monté, donc le"
+    echo "    fichier est frais, et opcache sert quand même une image figée."
+    echo
+    echo "      docker compose -p billetterie-preprod restart php"
+    echo
+fi
 
 if [ "$SERVI" != "$COMMIT_DEPLOYE" ]; then
     echo

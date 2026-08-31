@@ -17,6 +17,7 @@ use App\Securite\Entity\Utilisateur;
 use App\Securite\Service\ContexteEtablissement;
 use App\Vente\Entity\Avoir;
 use App\Vente\Entity\CardRejection;
+use App\Vente\Nf525\Entity\OperationScellee;
 use App\Vente\Entity\Vente;
 use App\Vente\Nf525\Entity\DailyClosure;
 use Doctrine\ORM\QueryBuilder;
@@ -52,6 +53,23 @@ final class PerimetreVenteExtension implements QueryCollectionExtensionInterface
         // d'affaires jour par jour.
         CardRejection::class => '{root}.etablissement',
         DailyClosure::class => '{root}.etablissement',
+
+        // ⚠ AJOUTEE LE 31/08 : LE TROISIEME OUBLI DE CETTE MEME LISTE, ET LE PLUS GRAVE.
+        //
+        // Le commentaire ci-dessus a ete ecrit le 28/08 en ajoutant les deux precedentes. La lecon
+        // etait juste, elle a ete appliquee a deux cas, et le troisieme est reste dehors trois jours
+        // de plus. C'est le propre d'une liste blanche : elle ne protege que ce qu'on a pense a y
+        // ecrire, et rien ne signale ce qu'on a oublie.
+        //
+        // Ce que la fuite exposait n'est pas un identifiant : `payloadCanonique` est LE CONTENU
+        // CANONIQUE DE CHAQUE TRANSACTION, fige au scellement. Un agent d'un autre client, muni de
+        // `caisse.lire`, lisait la collection entiere.
+        //
+        // Prouve par execution avant correctif : `testUneOperationScelleeNeSeLitPasDUnEtablissementALAutre`
+        // recevait la collection complete, temoin compris. Signale par allaccess-b8.
+        //
+        // Elle passe par le point de vente, comme `Caisse` -- d'ou la jointure plus bas.
+        OperationScellee::class => 'pdvScelle.etablissement',
     ];
 
     public function __construct(
@@ -100,6 +118,11 @@ final class PerimetreVenteExtension implements QueryCollectionExtensionInterface
         // Jointures intermédiaires éventuelles (caisse → pdv, mouvement/cloture → session).
         if ($resourceClass === Caisse::class) {
             $queryBuilder->innerJoin($rootAlias . '.pointDeVente', 'pdv');
+        } elseif ($resourceClass === OperationScellee::class) {
+            // Alias distinct de `pdv` : les deux jointures ne coexistent jamais dans la meme
+            // requete, mais un alias partage est le genre de detail qui se met a compter le jour
+            // ou quelqu'un ajoute une troisieme classe passant par le point de vente.
+            $queryBuilder->innerJoin($rootAlias . '.pointDeVente', 'pdvScelle');
         } elseif ($resourceClass === MouvementCaisse::class || $resourceClass === ClotureZ::class) {
             $queryBuilder->innerJoin($rootAlias . '.session', 'sess');
         }
