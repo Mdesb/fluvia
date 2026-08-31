@@ -278,6 +278,7 @@ final class BoutiqueFixtures extends Fixture implements DependentFixtureInterfac
         // --- Compte client de démonstration (US-L8-04/10) ---
         $clientDemo = (new Client())->setType(TypeClient::Physique)->setNom('Martin')->setPrenom('Camille')
             ->setEmail(self::CLIENT_EMAIL)->setDateNaissance(new \DateTimeImmutable('1992-03-14'))
+            ->setAdresse(['rue' => '8 avenue du Stade', 'cp' => '75012', 'ville' => 'Paris', 'pays' => 'FR'])
             ->setStatut(StatutClient::Actif)->setEtablissementCreation($etabA)->setGroupe($etabA->getRegion()?->getGroupe());
         $manager->persist($clientDemo);
 

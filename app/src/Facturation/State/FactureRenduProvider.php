@@ -119,7 +119,18 @@ final class FactureRenduProvider implements ProviderInterface
             'totalTVA' => $facture->getTotalTVA(),
             'totalTTC' => $facture->getTotalTTC(),
             'conditionsReglement' => $facture->getConditionsReglement(),
-            'mentionAcquittee' => $facture->isMentionAcquittee(),
+            // ⚠ DEDUITE, PAS LUE. Maxime, 31/08 : « toute facture soldee doit porter la mention
+            // acquittee, mais on ne peut pas modifier une facture. » Les deux moities ne s'excluent
+            // que si on suppose que la mention doit etre ECRITE.
+            //
+            // Le champ stocke n'etait pose que par deux handlers (avoir, facture justificative). Une
+            // facture ordinaire soldee par lettrage restait a `false` — FA-2026-00001 est `payee` et
+            // son document ne la portait pas.
+            //
+            // On prend le plus favorable des deux : le stocke reste vrai dans ses cas legitimes — une
+            // justificative est acquittee par construction — et la deduction couvre tous les autres.
+            // Le stocke devient un cas particulier de la deduction, jamais son contradicteur.
+            'mentionAcquittee' => $facture->isMentionAcquittee() || $this->estSoldeeParLesReglements($facture),
             'acquitteeLe' => $facture->getAcquitteeLe()?->format(\DATE_ATOM),
             'acquitteeMoyen' => $facture->getAcquitteeMoyen(),
             'acquitteeReference' => $facture->getAcquitteeReference(),
@@ -155,6 +166,39 @@ final class FactureRenduProvider implements ProviderInterface
         }
 
         return $taux;
+    }
+
+
+    /**
+     * La facture est-elle SOLDEE par ses reglements ?
+     *
+     * Comparaison en CENTIMES et non en flottants : `0.1 + 0.2 !== 0.3` en virgule flottante, et une
+     * mention legale ne peut pas dependre d'un arrondi. Les montants sont des chaines decimales en
+     * base, precisement pour cette raison.
+     *
+     * ⚠ On accepte le SURPAIEMENT comme soldant. Un client qui a paye plus que du a bel et bien
+     * acquitte sa facture ; le trop-percu est un autre sujet, qui se traite par remboursement et non
+     * en refusant de reconnaitre le paiement.
+     *
+     * Une facture dont le total est nul n'est pas « acquittee » faute de reglement : elle n'a rien a
+     * acquitter. On exige donc au moins un reglement.
+     */
+    private function estSoldeeParLesReglements(Facture $facture): bool
+    {
+        $reglements = $facture->getReglements();
+
+        if ($reglements->isEmpty()) {
+            return false;
+        }
+
+        $verseCentimes = 0;
+        foreach ($reglements as $reglement) {
+            $verseCentimes += (int) round(((float) $reglement->getMontant()) * 100);
+        }
+
+        $duCentimes = (int) round(((float) $facture->getTotalTTC()) * 100);
+
+        return $duCentimes > 0 && $verseCentimes >= $duCentimes;
     }
 
 }
