@@ -1522,6 +1522,17 @@ export const api = {
   //
   // Operations API Platform STANDARD (pas d'`uriTemplate`) : elles deserialisent, donc `ld: true`,
   // et les relations partent en IRI.
+  // ⚠ LA LECTURE AUTOMATIQUE D'UN DOCUMENT — elle existait cote serveur et personne ne l'appelait.
+  //
+  // Le contrat : `{ content: <base64>, mimeType }`. Elle rend le fournisseur, le numero, la date,
+  // les montants HT/TTC, la TVA et son taux — plus un SCORE DE CONFIANCE, qui est la seule chose
+  // qui distingue une suggestion d'une saisie.
+  extraireFactureFournisseur: (content, mimeType) =>
+    request('/api/finance/supplier-invoices/extract', {
+      method: 'POST',
+      body: { content, mimeType },
+      ld: true,
+    }),
   creerFactureFournisseur: (corps) =>
     request('/api/supplier_invoices', { method: 'POST', body: corps, ld: true }),
   // Modification libre TANT QUE brouillon : le serveur repond 409 << Facture scellee >> au-dela.
