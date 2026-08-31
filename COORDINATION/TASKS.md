@@ -132,7 +132,7 @@ Ne touche pas un chemin déjà en `WIP` par une autre instance.
 | UI-5 | Informations client : champs supplementaires, dont moyen de paiement prefere (**ajout serveur**, nexiste pas) | `app/src/Crm/**`, `frontend/**` | *a assigner* | CLAIM | 25/08 |
 | ACT-5 | Categories automatiques par verticale : un produit daffutage doit tomber dans les bons axes sans saisie | `app/src/Offre/**` | **claude-A** | FAIT 27/08 | 25/08 |
 | ACT-6 | Jauge propre aux cours (padel, tennis) — le modele la portait deja (`Ressource.capacitePropre`), elle etait juste modifiable NULLE PART | `app/src/Reservation/**` | **claude-A** | FAIT 27/08 | 25/08 |
-| VTE-1 | `Vente` : ajouter OrderFilter sur la date, DateFilter, SearchFilter sur le client — bloque lhistorique des ventes | `app/src/Vente/**` | *a assigner* | CLAIM | 25/08 |
+| VTE-1 | `Vente` : ajouter OrderFilter sur la date, DateFilter, SearchFilter sur le client — bloque lhistorique des ventes | `app/src/Vente/**` | **claude-B** | WIP | 27/08 |
 | PER-1 | `personnel:traiter-echeances-sortie` exige un agentEmail : decider quelle identite porte un traitement automatique dans laudit | `app/src/Personnel/**` | *a assigner* | CLAIM | 25/08 |
 
 | CMP-0 | Spec SDD du module de campagnes — frontiere avec Revenue Recovery, audience, consentement, attribution | `specs/campagnes/**` | **claude-A** | REVIEW | 25/08 |
