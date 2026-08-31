@@ -5,6 +5,7 @@ import Tabs from '../components/Tabs.jsx'
 import PlanningOuvertureSection from '../components/PlanningOuvertureSection.jsx'
 import Modal from '../components/Modal.jsx'
 import ReferentielEditable from '../components/ReferentielEditable.jsx'
+import TauxTvaLegaux from '../components/TauxTvaLegaux.jsx'
 import PretAVendre from '../components/PretAVendre.jsx'
 import RolesSection from '../components/RolesSection.jsx'
 import EtablissementsSection from '../components/EtablissementsSection.jsx'
@@ -578,6 +579,18 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
             descripteur={descripteurTva(api, profils)}
             onEcrit={referentielEcrit}
             peutEcrire={aLeDroit(droits, 'compta.gerer')}
+          />
+          {/* JUSTE SOUS LA LISTE QU'IL ALIMENTE, ET PAS AILLEURS.
+              « Les taux de TVA sont definis par les lois, un utilisateur n'a pas besoin de le
+              creer » — mais tant que le referentiel vit dans un autre onglet, on continue de
+              saisir a la main sans savoir qu'il existe. Le mettre ici met la reponse a cote de la
+              question : la liste vide qu'on s'apprete a remplir, et la loi qui la remplit deja.
+              `version` le fait relire apres une reprise, pour que « Deja repris » soit vrai tout
+              de suite plutot qu'au prochain chargement de la page. */}
+          <TauxTvaLegaux
+            peutModifier={aLeDroit(droits, 'compta.gerer')}
+            version={versionReferentiels}
+            onRepris={referentielEcrit}
           />
 
           <div className="fiche-sec" style={{ margin: '24px 0 10px' }}>Pour aller plus loin</div>
