@@ -64,6 +64,7 @@ Ordonné par ce que ça débloque, pas par difficulté.
 | **T8** | **Notion de pays** — champ, devise configurable, TVA par pays | Aujourd'hui : aucun champ pays, `EUR` en dur, e-reporting indexé sur le SIREN. Vendre hors de France demande ça d'abord | *(libre)* |
 | **T9** | **Accessibilité** — `alt`, `lang`, rôles | 6 fichiers sur 118 portent un `alt=`, un seul un `lang=`. L'European Accessibility Act vise le commerce en ligne aux consommateurs | *(libre)* |
 | **T10** | **Vingt tâches planifiées à démarrer**, une par une | 2 sur 22 tournent. Chacune demande de vérifier `safeOnFirstRun` et de la voir mordre **et épargner** | *(libre)* |
+| **T18** | **La boutique en ligne est en boucle fermée** — remboursement et souscription | ⚠ L'exploitant peut **accepter et refuser** des demandes de remboursement qui **ne peuvent pas naître** : `POST /boutique/demandes-remboursement` n'est appelée par personne, et `grep remboursement frontend/src/public/` ne rend rien. Et l'écran lui affirme « un client qui demande un remboursement apparaît ici ». Second manque du même parcours : `/boutique/abonnements/souscrire` n'est appelée nulle part — **aucun abonnement ne se vend en ligne**, alors que la vente au guichet existe depuis le 29/08. Mesuré par `b8` | **allaccess-c2** |
 
 ---
 
@@ -111,13 +112,36 @@ d'autre.
 
 ⚠ **`reservation:no-show:basculer` NE DÉMARRE PAS** (D95). Mesuré : 6 réservations, 0 présence
 confirmée, aucun écran n'écrit le drapeau. La lancer facturerait une absence à des gens venus.
-**Condition de levée :** un écran appelle `/emarger` et une présence confirmée existe en base.
+**Condition de levée : la première moitié est remplie depuis le 31/08, la seconde ne l'est pas.**
+
+    un écran appelle `/emarger`          ✓ fait — la liste des inscrits d'un créneau, dans Réservation
+    une présence confirmée existe en base  ⚠ À MESURER, ce n'est pas un écran mais un fait
+
+⚠ **Ne pas lire la première coche comme une levée.** Tant que personne n'a réellement émargé, tout
+créneau passé bascule encore en absence facturée — l'écran ne change rien tant qu'on ne s'en sert
+pas. Et le second chemin prévu, `SourcePresence::PassageAcces`, n'est produit par personne : la
+chaîne `Passage → DroitAcces → reservationRef → Reservation` existe en entier, il manque un écouteur.
+Un contrôle d'accès qui remonterait la présence rendrait la condition vraie toute seule.
 
 ⚠ **Ne jamais ajouter une tâche à `infra/ordonnanceur.sh` sans vérifier `safeOnFirstRun`.** L'option
 `--only` **contourne** cette garde : elle considère qu'un appel nommé est supervisé.
 
 ⚠ **`vente:cloture:journee` scelle.** Un premier passage sur trois semaines d'arriéré produirait
 vingt et un arrêtés irréversibles.
+
+⚠ **LA GARDE MFA SUR L'AFFECTATION EST SUSPENDUE, ET SON PARCOURS EXISTE DÉSORMAIS.**
+`AffectationProcessor::MFA_EXIGE_POUR_ROLE_A_PRIVILEGES = false` depuis le 31/08 — décision de
+Maxime, « lever maintenant, construire ensuite ». Sans elle, on ne pouvait nommer **aucun**
+administrateur, chez aucun client : 6 rôles à privilèges, 0 compte avec MFA actif, et aucun écran
+pour l'activer.
+
+Le « ensuite » est fait : activation avec QR, secret et codes de récupération ; confirmation ;
+second facteur à la connexion ; désactivation ; réinitialisation par un administrateur.
+
+**Ce qui reste, et ce n'est pas à une session de le décider seule :** remettre la constante à `true`
+rebloque la nomination d'administrateurs tant que chacun n'a pas activé son MFA — et **aucun humain
+n'a encore parcouru ces écrans**. La question est posée à Maxime ; ne pas rétablir sans sa réponse,
+et ne pas reconstruire les écrans, qui existent.
 
 ---
 
