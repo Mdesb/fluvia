@@ -1123,6 +1123,22 @@ function Lecteurs({ equipements, controleurs, espaces, peutGerer, chargement, on
     })
   }, [equipements, controleurs, espaces])
 
+  // @lecture-locale: controleur.itboxRef — résolu depuis `api.controleursAcces()`, l. 1120.
+  //
+  // ⚠ CE MARQUEUR N'EST PAS NÉCESSAIRE AUJOURD'HUI, ET C'EST EXACTEMENT POURQUOI IL EST LÀ.
+  //
+  // Le garde-fou n°32 refuse une lecture `.controleur.x` quand aucune relation nommée `controleur`
+  // ne porte `x` dans ses groupes de sérialisation. Ici l'objet n'est PAS une relation : il vient
+  // d'un `Map` construit sur la collection complète (`GET /api/controleurs`, groupe
+  // `controleur:read`, qui porte bien `itboxRef` — vérifié sur `/api/contexts/Controleur`, le
+  // contrat que le serveur publie).
+  //
+  // Le contrôle ne comprend pas cette résolution locale. Il se tait pour une autre raison : un
+  // homonyme, `SynchronisationAcces::$controleurs`, entre dans ses origines plausibles. **Correct
+  // par conservatisme, pas par compréhension** — le jour où cet homonyme disparaît, cet écran est
+  // réaccusé, et quelqu'un ira chercher un défaut qui n'existe pas.
+  //
+  // Une ligne aujourd'hui contre une enquête plus tard.
   const filtrees = useMemo(() => {
     const q = recherche.trim().toLowerCase()
     if (!q) return lignes
