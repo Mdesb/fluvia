@@ -1185,6 +1185,43 @@ export const api = {
   majSaison: (id, corps) => request(`/api/saisons/${id}`, { method: 'PATCH', body: corps }),
   supprimerSaison: (id) => request(`/api/saisons/${id}`, { method: 'DELETE' }),
   tauxTvas: () => request('/api/taux_tvas', { query: { itemsPerPage: 100 } }),
+
+  // LE CATALOGUE DES TAUX LÉGAUX — ce que la loi fixe, par opposition à `tauxTvas` qui est ce que
+  // CET exploitant emploie. Les deux cohabitent à l'écran et ne se remplacent pas : le premier se
+  // consulte, le second se possède.
+  //
+  // ⚠ UNE SEULE LECTURE, ET ELLE REND AUSSI LES MASQUAGES. Le croisement « quels taux sont masqués
+  // pour moi » se fait côté serveur, où le profil comptable est connu : le laisser à l'écran, c'est
+  // deux requêtes qui peuvent échouer séparément et un croisement à refaire dans chaque écran qui
+  // affichera un jour cette liste.
+  catalogueTauxTva: (pays) =>
+    request('/api/compta/vat-rate-catalog', { query: pays ? { country: pays } : undefined }),
+
+  // « Reprendre » : on n'envoie qu'un identifiant. Le serveur lit le libellé, la valeur et le profil
+  // comptable à la source — l'écran n'a pas à les connaître, et ne peut donc pas les recopier de
+  // travers. Il rend le catalogue à jour, ce qui évite une seconde requête pendant laquelle l'écran
+  // afficherait l'inverse de ce qui vient de se passer.
+  reprendreTauxLegal: (idTauxLegal) =>
+    request('/api/compta/vat-rate-catalog/adopt', {
+      method: 'POST',
+      body: { legalVatRateId: idTauxLegal },
+      ld: true,
+    }),
+  // Masquer et démasquer par le MÊME identifiant, tous deux en POST sur la vue. Le référentiel
+  // n'étant pas une ressource exposée, il n'a pas d'IRI à donner — et la symétrie a un second
+  // mérite : l'écran n'a aucune ligne de préférence à retenir entre deux chargements.
+  masquerTauxLegal: (idTauxLegal) =>
+    request('/api/compta/vat-rate-catalog/hide', {
+      method: 'POST',
+      body: { legalVatRateId: idTauxLegal },
+      ld: true,
+    }),
+  demasquerTauxLegal: (idTauxLegal) =>
+    request('/api/compta/vat-rate-catalog/unhide', {
+      method: 'POST',
+      body: { legalVatRateId: idTauxLegal },
+      ld: true,
+    }),
   creerTauxTva: (corps) => request('/api/taux_tvas', { method: 'POST', body: corps, ld: true }),
   majTauxTva: (id, corps) => request(`/api/taux_tvas/${id}`, { method: 'PATCH', body: corps }),
 

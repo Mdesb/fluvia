@@ -46,6 +46,11 @@ final class ScellementEcritureHandler
         $ecriture->setEmpreinte($empreinte);
         $ecriture->setSignature($this->signer($empreinte));
 
+        // ⚠ L'INSTANTANÉ EST CONSERVÉ, PLUS RECONSTRUIT — même raison que côté factures : le payload
+        // lit `$ligne->getTauxTva()?->getTaux()`, donc un taux corrigé faisait dériver l'empreinte
+        // recalculée de toute écriture scellée avec lui.
+        $ecriture->setPayloadCanonique($payload);
+
         return $ecriture;
     }
 
@@ -93,9 +98,28 @@ final class ScellementEcritureHandler
                 $anomalies[] = ['sequence' => $seq, 'probleme' => 'chaînage rompu : empreinte précédente incohérente'];
             }
 
-            $empreinteRecalculee = $this->calculerEmpreinte($this->payloadCanonique($e), $e->getEmpreintePrecedente());
+            // ⚠ DEUX CAS QUE L'ANCIEN CODE CONFONDAIT. Avec l'instantané stocké, un écart PROUVE
+            // une altération. Sans lui, on ne compare qu'à une reconstruction, et un référentiel qui
+            // a bougé depuis suffit à la faire différer — sans que rien n'ait été touché.
+            $instantane = $e->getPayloadCanonique();
+            $empreinteRecalculee = $this->calculerEmpreinte($instantane ?? $this->payloadCanonique($e), $e->getEmpreintePrecedente());
+
+            // ⚠ SECONDE GARANTIE, INDEPENDANTE DE LA PREMIERE — même raison que côté factures :
+            // l'empreinte recalculée depuis l'instantané ne voit pas une ligne touchée en base.
+            if ($instantane !== null && !$this->instantaneDecritEncore($instantane, $e)) {
+                $anomalies[] = [
+                    'sequence' => $seq,
+                    'probleme' => 'la donnée a été altérée depuis le scellement : l\'écriture en base ne correspond plus à ce qui a été scellé',
+                ];
+            }
+
             if (!hash_equals($empreinteRecalculee, $e->getEmpreinte())) {
-                $anomalies[] = ['sequence' => $seq, 'probleme' => 'empreinte incohérente : la donnée a été altérée'];
+                $anomalies[] = [
+                    'sequence' => $seq,
+                    'probleme' => $instantane !== null
+                        ? 'empreinte incohérente : la donnée a été altérée'
+                        : 'non vérifiable : ce document a été scellé avant que l\'instantané ne soit conservé, et sa reconstruction ne redonne pas l\'empreinte — un référentiel a pu changer depuis',
+                ];
             } elseif (!hash_equals($this->signer($e->getEmpreinte()), $e->getSignature())) {
                 $anomalies[] = ['sequence' => $seq, 'probleme' => 'signature invalide'];
             }
@@ -170,4 +194,77 @@ final class ScellementEcritureHandler
 
         return $valeur;
     }
+
+    /**
+     * REPREND L'INSTANTANÉ D'UN DOCUMENT SCELLÉ AVANT QU'ON NE LE CONSERVE — SI ET SEULEMENT SI ON
+     * PEUT PROUVER QUE C'EST BIEN LE SIEN.
+     *
+     * ⚠ La condition n'est pas une précaution, elle sépare une reprise d'une fabrication de preuve.
+     *
+     * Si l'instantané recalculé aujourd'hui redonne EXACTEMENT l'empreinte scellée hier, il est
+     * démontré que c'est celui d'origine : une empreinte sha256 ne se retrouve pas par hasard. La
+     * coïncidence est la preuve.
+     *
+     * Sinon, on ne sait pas si un référentiel a bougé ou si la donnée a été touchée. Écrire un
+     * instantané dans ce cas fabriquerait la preuve qu'on prétend conserver — c'est précisément le
+     * geste qu'un contrôle reprocherait. On laisse donc `null`, et la vérification dit
+     * « non vérifiable » au lieu d'accuser.
+     *
+     * Arbitré par Maxime le 31/08.
+     *
+     * @return bool vrai si le document porte désormais son instantané
+     */
+    public function reprendreInstantane(EcritureComptable $ecriture): bool
+    {
+        if ($ecriture->getPayloadCanonique() !== null) {
+            return true;
+        }
+
+        if ($ecriture->getEmpreinte() === '') {
+            return false;
+        }
+
+        $instantane = $this->payloadCanonique($ecriture);
+        $recalculee = $this->calculerEmpreinte($instantane, $ecriture->getEmpreintePrecedente());
+
+        if (!hash_equals($recalculee, $ecriture->getEmpreinte())) {
+            return false;
+        }
+
+        $ecriture->setPayloadCanonique($instantane);
+
+        return true;
+    }
+
+
+    /**
+     * L'instantané décrit-il ENCORE le document ? Question distincte de « l'empreinte tient-elle ».
+     *
+     * ⚠ Vérifier l'empreinte contre l'instantané stocké supprime les fausses accusations — mais
+     * cesse aussi de voir une ligne altérée en base : l'empreinte se recalcule alors depuis une
+     * copie que personne n'a touchée, donc elle correspond toujours. Les deux garanties sont
+     * indépendantes et il faut les deux.
+     *
+     * **Seul `taux` est neutralisé**, parce qu'il vient d'un référentiel PARTAGÉ que l'exploitant a
+     * le droit de corriger. Tout le reste appartient au document — montants, désignations,
+     * quantités, numéro, dates, destinataire — et le garde d'inaltérabilité en interdit la
+     * modification. Un écart sur eux EST une altération, et le mot est mérité.
+     *
+     * @param array<string, mixed> $instantane
+     */
+    private function instantaneDecritEncore(array $instantane, EcritureComptable $ecriture): bool
+    {
+        $vivant = $this->payloadCanonique($ecriture);
+
+        // Le taux est recopié depuis l'instantané : c'est la seule valeur dont on accepte qu'elle
+        // ait bougé sans que le document n'ait été touché.
+        foreach ($vivant['lignes'] as $index => $ligne) {
+            if (isset($instantane['lignes'][$index]['taux'])) {
+                $vivant['lignes'][$index]['taux'] = $instantane['lignes'][$index]['taux'];
+            }
+        }
+
+        return $vivant == $instantane;
+    }
+
 }

@@ -15,6 +15,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\Uid\Uuid;
+use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
 /**
  * GET /factures/verifier-chaine?profilExploitant=... (CA-7, intégrité NF525 propre à Facturation).
@@ -44,11 +45,33 @@ final class VerifierChaineFactureProvider implements ProviderInterface
             $profil = $this->comptes->profilPour($etablissement);
         }
 
+        // ⚠ UNE ABSENCE DE PERIMETRE N'EST PAS UNE CHAINE INTACTE.
+        //
+        // Ce point rendait `['intacte' => true, 'nbDocuments' => 0]` quand le profil ne se resolvait
+        // pas : une verification de conformite qui affirme que tout va bien sans avoir rien
+        // verifie. C'est la reponse qu'un controleur lirait, et elle serait fausse.
         if (!$profil instanceof ProfilExploitant) {
-            return new JsonResponse(['intacte' => true, 'nbDocuments' => 0, 'anomalies' => []]);
+            throw new UnprocessableEntityHttpException(
+                'La chaine n\'a PAS ete verifiee : aucun profil exploitant pour cet etablissement. '
+                .'Precisez `?profilExploitant=` ou choisissez un etablissement rattache a un profil.'
+            );
         }
 
-        $factures = $this->em->getRepository(Facture::class)->findBy(['profilExploitant' => $profil->getId()]);
+        // ⚠ SEULS LES DOCUMENTS SCELLES SONT DANS LA CHAINE.
+        //
+        // `findBy` sur le seul profil ramenait aussi les BROUILLONS — `numeroSequence = 0`, aucune
+        // empreinte. Trie en premier, un brouillon decalait toute la sequence et produisait trois
+        // anomalies sur une chaine saine : « trou de sequence : attendu 1, trouve 0 », puis
+        // « non verifiable » sur lui-meme, puis « chainage rompu » sur le document suivant.
+        //
+        // Meme critere que `ScellementFactureHandler::dernierMaillon()`, qui filtre deja ainsi.
+        $factures = $this->em->getRepository(Facture::class)->createQueryBuilder('f')
+            ->andWhere('IDENTITY(f.profilExploitant) = :profil')
+            ->andWhere('f.numeroSequence > 0')
+            ->setParameter('profil', $profil->getId(), 'uuid')
+            ->orderBy('f.numeroSequence', 'ASC')
+            ->getQuery()
+            ->getResult();
         $rapport = $this->scellement->verifieChaine($factures);
 
         return new JsonResponse($rapport);
