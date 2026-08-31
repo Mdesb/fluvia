@@ -43,9 +43,9 @@ export default function DocumentationApi() {
             </a>
           </div>
           <iframe
+            className="api-frame"
             title="Documentation de l’API (Swagger UI)"
             src={urlSwagger}
-            style={{ width: '100%', height: '70vh', border: '1px solid var(--bordure, #ddd)', borderRadius: 8, marginTop: 16 }}
           />
         </div>
       </div>
