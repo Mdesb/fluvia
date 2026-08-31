@@ -308,6 +308,14 @@ while read -r ancien nouveau ref; do
         lancer garde-fou-routes-editeur.php
     fi
 
+    # Une lecture frontale qui vaut toujours `undefined`. La propriete lue n'est dans aucun groupe
+    # que porte la relation : le serveur n'envoie qu'un identifiant, et l'ecran affiche le mot
+    # « undefined ». Aucun test n'echoue la-dessus — une chaine interpolee ne leve pas.
+    if [ -f "$ARBRE/bin/garde-fou-relations-nues.php" ]; then
+        echo "── Lectures indéfinies"
+        lancer garde-fou-relations-nues.php
+    fi
+
     # Une entite ne doit pas laisser ecrire son propre etablissement (D41). Ecrit par claude-C, qui a
     # au passage corrige mon compte : 49 entites concernees et non 35. Vingt-deux d'entre elles ne
     # declarent AUCUN `denormalizationContext` — c'est l'absence de declaration qui expose, et une

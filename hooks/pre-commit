@@ -92,6 +92,11 @@ lancer_gf garde-fou-cloisonnement.php || ECHEC=1
 # d'heriter de l'apparence de surete sans la surete.
 [ -f "$RACINE/bin/garde-fou-routes-editeur.php" ] && { lancer_gf garde-fou-routes-editeur.php || ECHEC=1; }
 
+# Une lecture frontale qui vaut toujours `undefined` : la propriete lue n'est dans aucun groupe que
+# porte la relation, donc le serveur n'envoie qu'un identifiant. Cliquet — la dette du jour est
+# gelee, son augmentation refusee.
+[ -f "$RACINE/bin/garde-fou-relations-nues.php" ] && { lancer_gf garde-fou-relations-nues.php || ECHEC=1; }
+
 # Événements du catalogue (D2/D22) : abonné inerte, émission hors contrat, cliquet.
 [ -f "$RACINE/bin/garde-fou-evenements-orphelins.php" ] && { lancer_gf garde-fou-evenements-orphelins.php || ECHEC=1; }
 

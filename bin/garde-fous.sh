@@ -297,6 +297,20 @@ executer "Filtres déclarés" php_racine bin/garde-fou-filtres-declares.php
 # besoin -- mais devient un geste ecrit dans `EXCEPTIONS`, donc relu.
 executer "Routes éditeur" php_racine bin/garde-fou-routes-editeur.php
 
+# Un frontal qui lit une propriete que le serveur n'envoie jamais.
+#
+# `Reservation::$ressourceAffectee` porte `reservation:read` ; `Ressource::$libelle` porte
+# `ressource:read` et `creneau:read`, pas celui-la. La relation ne rend donc qu'un identifiant, et
+# l'ecran affichait « Affectée : undefined » — sur l'ecran qui sert justement a savoir quelle
+# chambre a ete donnee. Le champ existe, la relation existe, le groupe existe : c'est la
+# COMBINAISON qui manque, et aucune des trois pieces n'est fautive isolement.
+#
+# La question se pose du FRONTAL vers le serveur, sinon elle n'est pas decidable : partir du serveur
+# demandait d'inferer le type d'un objet en JavaScript (essai fait, 327 resultats presque tous faux).
+# Retournee, elle se tranche par un quantificateur universel — si AUCUNE source possible d'une
+# propriete nommee X ne rend Y lisible, la lecture vaut `undefined` quelle que soit son origine.
+executer "Lectures indéfinies" php_racine bin/garde-fou-relations-nues.php
+
 if [ -n "${REFERENCE:-}" ]; then
     executer "Établissement écrivable (D41)" php_racine bin/garde-fou-etablissement-ecrivable.php "--contre=$REFERENCE"
 else
