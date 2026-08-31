@@ -379,6 +379,11 @@ while read -r ancien nouveau ref; do
         lancer garde-fou-filtres-muets.php
     fi
 
+    if [ -f "$ARBRE/bin/garde-fou-appels-dans-le-vide.php" ]; then
+        echo "── Filtres muets"
+        lancer garde-fou-appels-dans-le-vide.php
+    fi
+
     # ⚠ FILET DE COMPLÉTUDE — la leçon du 24/08, et elle a coûté cher.
     #
     # Ce hook n'appelle pas `bin/garde-fous.sh` : il doit calculer les fichiers ajoutés sur
