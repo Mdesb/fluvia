@@ -100,10 +100,16 @@ sont déjà référencés ailleurs, et l'arbitrage revient à l'intégrateur. Si
 
 | # | lot | routes servies, appels du frontal | tenu par |
 |---|---|---|---|
-| **T18** | **Fusion de clients** — fusionner, prévisualiser, défusionner | `/api/crm/fusions` ×3 · **0 appel** | **allaccess-89** |
+| ~~**T18**~~ | ~~**Fusion de clients**~~ — **FAIT** (`623f323`) : prévisualisation, arbitrage champ par champ, défusion. ⚠ La fusion et la défusion elles-mêmes ne sont **pas observées** — les éprouver abîmerait les fiches de démonstration pour prouver qu'elles se restaurent | `/api/crm/fusions` ×3 · 4 appels | allaccess-89 |
 | **T19** | **Trésorerie** — comptes bancaires, import de relevés, rapprochement | `/api/bank_accounts`, `/api/bank_statement_imports`, `/api/bank_statement_lines` · **0 appel** | *(libre)* |
-| **T20** | **Personnel** — créneaux de travail, badges | `/api/creneau_travails` · **0 appel** ; `/api/badge_staffs` · 1 appel seulement | *(libre)* |
+| **T20** | **Personnel** — créneaux de travail, badges, suspension | `/api/creneau_travails` · **0 appel** ; `/api/badge_staffs` · 1 appel seulement | **allaccess-89** |
 | **T21** | **Comptabilité** — lettrage groupé, écriture manuelle | `/api/compta/lettrages/groupe` · **0 appel** | *(libre)* ⚠ `8e` tient `App\Compta` |
+
+⚠ **T20 avant T19 et T21, pour une raison mesurée et non par préférence :** `/api/employes` rend
+**0 employé sur les deux établissements**. Or une note de frais exige un salarié
+(`employee`, `JoinColumn(nullable: false)`), et un badge de service aussi. L'écran des notes de
+frais livré en `a719568` est donc **inutilisable tant que T20 n'est pas fait** — il l'annonce
+lui-même et renvoie vers Personnel. Un lot qui débloque un lot déjà livré passe devant.
 
 Relevés par `allaccess-89`, qui les tenait de `34`. Deux autres de la même liste sont **faits et
 poussés depuis** : le porte-monnaie virtuel et les notes de frais.
