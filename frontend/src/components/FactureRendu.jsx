@@ -57,6 +57,25 @@ export default function FactureRendu({ facture, onClose }) {
   // vide se remet par mégarde.
   const sansDestinataire = Boolean(rendu) && !String(dest?.denomination || '').trim()
 
+  // ⚠ L'ADRESSE DU DESTINATAIRE EST AUSSI UNE MENTION OBLIGATOIRE, ET JE NE LA MARQUAIS PAS.
+  //
+  // La premiere version de cet ecran signalait un nom manquant et laissait passer une adresse
+  // absente en silence -- donc un document tout aussi irrecevable, mais sans rien qui le dise.
+  // Signale par `allaccess-b8`, verifie ici : sur Piscine A, les DEUX destinataires ont
+  // `adresse: []`. Aucune des factures existantes ne porte l'adresse de son destinataire.
+  const adresseDest = dest?.adresse
+  const sansAdresse = Boolean(rendu)
+    && (Array.isArray(adresseDest) ? adresseDest.filter(Boolean).length === 0 : !adresseDest)
+
+  // ⚠ SOLDEE MAIS SANS MENTION ACQUITTEE. `mentionAcquittee` n'est pose qu'a l'emission d'une
+  // facture justificative ou sur un avoir : une facture ordinaire payee par lettrage garde `false`,
+  // et son document ne porte donc rien. Maxime a tranche que toute facture soldee doit porter la
+  // mention, sans que la facture soit modifiee -- la deduire au rendu est du ressort du serveur.
+  // En attendant, l'ecran le SIGNALE plutot que de laisser croire que le document est complet.
+  const soldeeSansMention = Boolean(rendu)
+    && facture?.statut === 'payee'
+    && !rendu.mentionAcquittee
+
   return (
     <Modal open={Boolean(facture)} onClose={onClose} titre={`Facture ${facture?.numero || ''}`} taille="lg">
       {chargement ? (
@@ -78,10 +97,23 @@ export default function FactureRendu({ facture, onClose }) {
             conditions de règlement.
           </div>
 
-          {sansDestinataire && (
+          {(sansDestinataire || sansAdresse) && (
             <div className="banner banner-error fact-noprint">
-              <b>Ce document n’a pas de destinataire nommé.</b> Une facture doit désigner qui doit
-              payer&nbsp;: corrigez la fiche du destinataire avant de la remettre.
+              <b>Ce document est incomplet et ne doit pas être remis en l’état&nbsp;:</b>{' '}
+              {[
+                sansDestinataire ? 'le destinataire n’est pas nommé' : null,
+                sansAdresse ? 'son adresse est absente' : null,
+              ].filter(Boolean).join(', ')}. Une facture doit désigner qui doit payer et où&nbsp;:
+              corrigez la fiche du destinataire, puis rouvrez ce document.
+            </div>
+          )}
+
+          {soldeeSansMention && (
+            <div className="banner banner-warn fact-noprint">
+              Cette facture est <b>soldée</b>, mais le document ne porte pas la mention
+              «&nbsp;acquittée&nbsp;». Le serveur ne la pose qu’à l’émission d’une facture
+              justificative ou sur un avoir&nbsp;; un règlement encaissé ensuite ne la déclenche
+              pas. Si vous remettez ce document comme preuve de paiement, elle y manquera.
             </div>
           )}
 
@@ -102,7 +134,9 @@ export default function FactureRendu({ facture, onClose }) {
                     ? <span className="fact-manque">[destinataire non renseigné]</span>
                     : dest.denomination}
                 </div>
-                <AdresseBloc adresse={dest?.adresse} />
+                {sansAdresse
+                  ? <div className="fact-manque">[adresse non renseignée]</div>
+                  : <AdresseBloc adresse={adresseDest} />}
                 {dest?.siret && <div className="fact-ligne-info">SIRET {dest.siret}</div>}
                 {dest?.tvaIntracommunautaire && (
                   <div className="fact-ligne-info">TVA {dest.tvaIntracommunautaire}</div>
