@@ -35,6 +35,18 @@ final class ModifierOccurrenceProcessor implements ProcessorInterface
             throw new ConflictHttpException('Conflit de ressource : la nouvelle fenêtre chevauche un autre créneau (RG-M5-03).');
         }
 
+        // ⚠ ON A LA PREUVE QUE LE CONFLIT A DISPARU, DONC ON LEVE LE DRAPEAU.
+        //
+        // Le contrôle ci-dessus vient d'établir que la nouvelle fenêtre est libre sur cette
+        // ressource. Si la séance attendait un arbitrage, la raison même du drapeau n'existe plus.
+        //
+        // Sans cette ligne, l'exploitant qui déplace la séance hors du conflit obtient une séance
+        // libre et pourtant toujours bloquée, et il lui faudrait ensuite cliquer « confirmer telle
+        // quelle » — un libellé qui dit « j'assume le chevauchement » alors qu'il n'y en a plus.
+        // C'était sans conséquence tant que rien ne posait ce drapeau ; ça ne l'est plus depuis que
+        // la création le pose.
+        $data->setEnAttenteArbitrage(false);
+
         if ($data->getRecurrence() !== null) {
             $data->setOccurrenceModifiee(true);
         }
