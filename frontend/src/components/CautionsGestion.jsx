@@ -268,7 +268,15 @@ function Cautions({ cautions, totaux, mouvementsParCaution, grillesParId, ouvert
                             `typeCible` + `referenceCible` (ex. `piscine.casier` + un UUID), sans
                             jointure. On ne peut donc PAS afficher « casier n°14 » — l'API ne le sait
                             pas. On montre le type en clair et la référence tronquée en `mono`. */}
-                        <span className="nm">{mot(c.typeCible)}</span>
+                        {/* Voir `OuvrirStructure.jsx` : le clic sur la ligne reste un confort de
+                            souris, et le clavier a désormais une cible réelle. */}
+                        <button
+                          type="button"
+                          className="lnk nm"
+                          onClick={() => onOuvrir(deployee ? null : c.id)}
+                        >
+                          {mot(c.typeCible)}
+                        </button>
                         <div className="sub mono">{String(c.referenceCible || '').slice(0, 8) || '—'}</div>
                       </td>
                       <td className="num">{euroCentimes(c.montantCentimes)}</td>

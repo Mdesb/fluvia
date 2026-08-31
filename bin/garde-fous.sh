@@ -450,6 +450,14 @@ fi
 # ⚠ Neuf boutons `↻` etaient dans ce cas. La ligne T9 du tableau annoncait « 6 fichiers sur 118
 # portent un alt » — vrai et trompeur : seuls six fichiers contiennent une image, et AUCUNE ne
 # manque d'`alt`. Ce qui manquait etait ailleurs, et personne ne l'avait compte.
+# Un element non interactif rendu cliquable : la souris l atteint, le clavier jamais. Cinq lignes
+# de tableau etaient dans ce cas, dont la seule porte vers la fiche d un client.
+if [ -f "$RACINE/frontend/scripts/verifier-clic-clavier.mjs" ]; then
+    if [ -d "$RACINE/frontend/node_modules" ]; then
+        executer "Clic au clavier" sh -c "cd '$RACINE/frontend' && node scripts/verifier-clic-clavier.mjs"
+    fi
+fi
+
 if [ -f "$RACINE/frontend/scripts/verifier-boutons-nommes.mjs" ]; then
     if [ -d "$RACINE/frontend/node_modules" ]; then
         executer "Boutons nommés" sh -c "cd '$RACINE/frontend' && node scripts/verifier-boutons-nommes.mjs"

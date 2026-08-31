@@ -354,6 +354,9 @@ export default function AppShell({
 
   return (
     <div className={`app${navOpen ? ' nav-open' : ''}`}>
+      {/* @clic-souris-seul: nav-backdrop  ferme le menu au clic a cote ; au clavier, le bouton ☰
+          le referme deja. Le rendre focusable ajouterait un arret muet dans l ordre de tabulation,
+          a franchir a chaque passage, pour un geste qui a deja son equivalent. */}
       <div className="nav-backdrop" onClick={() => setNavOpen(false)} />
 
       <aside className="sidebar">

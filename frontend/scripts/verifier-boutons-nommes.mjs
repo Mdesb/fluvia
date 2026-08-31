@@ -79,7 +79,7 @@ for (const chemin of fichiers(RACINE)) {
 
   // ⚠ ON NE LIT PAS LES COMMENTAIRES. Un exemple de code dans une explication n'est pas du code —
   // une sonde qui lit ses propres explications confirme tout ce qu'on y écrit.
-  const propre = src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(?<![:\w])\/\/.*$/gm, '')
+  const propre = src.replace(/\/\*[\s\S]*?\*\//g, (c) => c.replace(/[^\n]/g, ' ')).replace(/(?<![:\w])\/\/.*$/gm, '')
 
   const re = /<button\b([^>]*)>([\s\S]*?)<\/button>/g
   let m
