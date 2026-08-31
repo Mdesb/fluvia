@@ -26,6 +26,7 @@
 | 26/08 13:20 | **D41 clos et verifie** : Padel 24, Patinoire 30, Sport 31, Platform 62 — toutes vertes. Aucune operation ne dependait de la denormalisation par defaut, c-etait le risque reel du lot. Pile demontee, worktree rendu. | Plus rien d-assigne. | Rien. |
 | 26/08 23:40 | Session fermee par Maxime. Rien en cours, rien a moitie ecrit, aucune pile de test, worktree VPS rendu a `claude-I`. | **Deux taches assignees non commencees** : le preavis SEPA de `Sport` (prioritaire) et `AlertePresenceIsolee` (en troisieme, sur ta consigne). | **69 commits a moi non fusionnes dans `main`.** |
 | 31/08 23:30 | Session rouverte apres cinq jours. **Je prends T6** (fixtures rejouables en preproduction) — Maxime me l-a attribuee explicitement, hors de mon perimetre habituel. Mes deux taches assignees sont **sans objet**, preuves ci-dessous. | Mesure empirique : rejouer reellement un chargement complet, deux fois. | Rien. |
+| 01/09 00:20 | **T6 : le libelle de la tache etait perime.** Les fixtures sont **deja** rejouables — mesure sur les 329 tables, deux chargements successifs, zero difference. Le vrai manque etait le second : la commande n-existe pas en preproduction. Livre : bundle en production, `app:demo:charger`, et **la purge refusee hors dev/test**. | Verification de non-regression du harnais. | Rien. |
 
 ---
 
@@ -773,3 +774,62 @@ Autrement dit, la partie que la flotte a corrigee a la main est finie. **Ce qui 
 mesurable au grep** : une fixture peut echouer au rechargement sur n-importe quelle autre contrainte
 d-unicite. Je passe donc a la seule preuve qui vaille — **rejouer un chargement complet, deux fois**,
 et corriger ce qui tombe. Je te dirai ce que ca donne, y compris si ca ne tombe pas.
+
+---
+
+## 2026-09-01 00:20 · T6 — ce que la mesure a corrige dans l-enonce
+
+**La tache disait : « 38 classes decrivent la demo et ne peuvent pas etre rejouees ».** Elles sont 37,
+et **elles peuvent**. Je l-ai mesure plutot que suppose : chargement neuf, comptage des 329 tables,
+rechargement additif, recomptage. **Zero difference.** Ni echec, ni doublon, ni derive silencieuse.
+
+Le travail d-idempotence de la flotte — ton `SocleFixtures`, mes cinq verticales, et les autres — a
+donc deja ferme cette moitie, y compris les cas de D52 qui ne levent aucune erreur. Personne ne
+l-avait verifie de bout en bout ; c-est fait, et c-est desormais reproductible.
+
+**Le manque reel etait l-autre moitie de la ligne** : `doctrine:fixtures:load` est absente en
+preproduction. `doctrine/doctrine-fixtures-bundle` etait en `require-dev` et actif seulement en
+`dev`/`test` ; la preproduction tourne en `prod` avec `composer install --no-dev`. Les 37 classes n-y
+etaient donc ni chargeables **ni meme autochargeables** — elles etendent `Fixture`, qui vient du bundle.
+
+### Ce que j-ai livre
+
+1. **Le bundle passe en production** (`require` + `['all' => true]`), avec `doctrine/data-fixtures`
+   que ton garde-fou n20 m-a signale et que j-avais rate — il est distinct et lui aussi en dev.
+2. **`app:demo:charger`** : charge en mode additif, ne purge jamais, dit ce qu-il a fait.
+3. **La purge est refusee hors `dev`/`test`**, avec un message qui nomme l-incident du 24/08 et
+   indique la commande a utiliser.
+
+**Le point 3 n-est pas du zele.** Rendre le bundle disponible en preproduction, c-est y rendre
+disponible la commande qui a vide les droits des trente-quatre roles — avec la meme detente, un
+drapeau `--append` oublie. Le garde retire cette possibilite au lieu de la documenter.
+
+### Trois erreurs a l-essai, et une lecon qui vaut pour la flotte
+
+Aucune n-aurait ete vue par relecture. Je les ecris parce que la troisieme peut couter cher a d-autres.
+
+1. **J-ai enregistre un second service portant l-alias `default`**, en pariant sur l-ordre de
+   chargement. Le compilateur du bundle construit une carte alias -> service, et **sa** definition
+   gagnait. Correction : redefinir **l-identifiant de service** du bundle, ce qui ne depend d-aucun
+   ordre.
+2. **Mon purgeur implementait `PurgerInterface`** ; `ORMExecutor` type son argument sur
+   `ORMPurgerInterface`. Le refus tombait en erreur de type — donc illisible.
+3. **⚠ Et le piege qui m-a fait conclure faux deux fois : en `APP_ENV=prod` avec `APP_DEBUG=0`,
+   Symfony ne recompile pas le conteneur quand la configuration change.** Mes deux premiers essais ont
+   tourne sur un conteneur compile **avant** mes modifications, et j-ai lu « purging database » en
+   croyant que mon garde ne mordait pas. Il mordait ; c-est l-essai qui etait perime.
+
+**La lecon, et elle depasse T6** : toute verification en `prod` sur ce depot doit commencer par
+`rm -rf app/var/cache/prod`, sinon elle mesure l-etat d-avant. C-est vrai pour n-importe qui teste un
+changement de configuration en preproduction — et ca ne se voit pas, puisque la commande s-execute
+normalement et affiche un resultat plausible.
+
+### Verifie, en `prod`, sur une base dediee
+
+| Scenario | Attendu | Resultat |
+|---|---|---|
+| `doctrine:fixtures:load` (avec purge) | refus lisible | **refuse**, message cite l-incident et donne la commande |
+| `app:demo:charger` | charge sans detruire | **37 classes, « Rien n-a ete supprime »** |
+| `app:demo:charger` une seconde fois | aucune duplication | **329 tables, zero difference** |
+
+Reste la non-regression du harnais (`dev`/`test` doivent purger comme avant) : en cours.
