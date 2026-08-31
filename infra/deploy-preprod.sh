@@ -55,6 +55,26 @@ if [ "$TETE_LOCALE" != "$TETE_MAIN" ]; then
 fi
 
 log "Construction / démarrage des conteneurs"
+# ── GENERATION DES CLES DE CHIFFREMENT ET DE SCELLEMENT ─────────────────────────────────────────
+#
+# ⚠ UNE CLE PAR INSTALLATION (decision de Maxime, 31/08). Elles vivaient dans `app/.env`, VERSIONNE :
+# toute installation qui suivait la procedure heritait des cles du depot, et un chiffrement au repos
+# ne protege alors de rien contre quiconque a acces au depot.
+#
+# ⚠ GENEREES UNE FOIS, JAMAIS REGENEREES. Les changer rend indechiffrable ce qui a ete chiffre
+# avant, et inverifiables les signatures deja posees -- exactement comme regenerer les cles JWT
+# invaliderait tous les jetons emis. On n'ecrit donc QUE ce qui manque.
+#
+# 32 octets base64 : ces valeurs passent par `base64_decode()` et doivent faire exactement 32 octets
+# une fois decodees. `openssl rand -hex 32` produirait une cle que le code refuse (RG-DMS-25).
+log "Cles de chiffrement (generation au premier deploiement)"
+for cle in DMS_ENCRYPTION_KEY MFA_ENCRYPTION_KEY SEPA_IBAN_KEY OCR_API_KEY_ENCRYPTION_KEY SOCIAL_TOKEN_ENCRYPTION_KEY NF525_SEAL_KEY NF525_COMPTA_SEAL_KEY NF525_FACTURATION_SEAL_KEY; do
+    if ! grep -q "^${cle}=." infra/.env.preprod 2>/dev/null; then
+        echo "  + $cle (absente, generee)"
+        printf '%s=%s\n' "$cle" "$(openssl rand -base64 32)" >> infra/.env.preprod
+    fi
+done
+
 "${COMPOSE[@]}" build
 "${COMPOSE[@]}" up -d
 

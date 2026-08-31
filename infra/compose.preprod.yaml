@@ -35,6 +35,27 @@ services:
       # Phrase secrète protégeant la clé privée JWT. Propre à la préprod : celle
       # de app/.env est une valeur de développement, publique dans le dépôt.
       JWT_PASSPHRASE: ${JWT_PASSPHRASE:?JWT_PASSPHRASE manquant dans .env.preprod}
+      # ── CLES DE CHIFFREMENT ET DE SCELLEMENT ───────────────────────────────────────────────
+      #
+      # ⚠ `:?` ET NON UNE VALEUR PAR DEFAUT. Une valeur par defaut ferait demarrer le conteneur
+      # sans qu'on apprenne jamais qu'il manque un secret -- c'est exactement comme ca que les cles
+      # du depot se sont propagees. Ici l'absence est BRUYANTE.
+      # Documents de la GED, chiffres au repos.
+      DMS_ENCRYPTION_KEY: ${DMS_ENCRYPTION_KEY:?DMS_ENCRYPTION_KEY manquante dans .env.preprod}
+      # Second facteur d'authentification.
+      MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:?MFA_ENCRYPTION_KEY manquante dans .env.preprod}
+      # Coordonnees bancaires (mandats SEPA).
+      SEPA_IBAN_KEY: ${SEPA_IBAN_KEY:?SEPA_IBAN_KEY manquante dans .env.preprod}
+      # Cles d'API tierces confiees par le client.
+      OCR_API_KEY_ENCRYPTION_KEY: ${OCR_API_KEY_ENCRYPTION_KEY:?OCR_API_KEY_ENCRYPTION_KEY manquante dans .env.preprod}
+      # Jetons des comptes de reseaux sociaux.
+      SOCIAL_TOKEN_ENCRYPTION_KEY: ${SOCIAL_TOKEN_ENCRYPTION_KEY:?SOCIAL_TOKEN_ENCRYPTION_KEY manquante dans .env.preprod}
+      # Signature du scellement Vente.
+      NF525_SEAL_KEY: ${NF525_SEAL_KEY:?NF525_SEAL_KEY manquante dans .env.preprod}
+      # Signature du scellement Compta.
+      NF525_COMPTA_SEAL_KEY: ${NF525_COMPTA_SEAL_KEY:?NF525_COMPTA_SEAL_KEY manquante dans .env.preprod}
+      # Signature du scellement Facturation.
+      NF525_FACTURATION_SEAL_KEY: ${NF525_FACTURATION_SEAL_KEY:?NF525_FACTURATION_SEAL_KEY manquante dans .env.preprod}
     depends_on:
       db:
         condition: service_healthy
@@ -78,6 +99,27 @@ services:
       APP_SECRET: ${APP_SECRET:?APP_SECRET manquant dans .env.preprod}
       DATABASE_URL: "mysql://${DB_USER}:${DB_PASSWORD}@db:3306/${DB_NAME}?serverVersion=11.4.2-MariaDB&charset=utf8mb4"
       JWT_PASSPHRASE: ${JWT_PASSPHRASE:?JWT_PASSPHRASE manquant dans .env.preprod}
+      # ── CLES DE CHIFFREMENT ET DE SCELLEMENT ───────────────────────────────────────────────
+      #
+      # ⚠ `:?` ET NON UNE VALEUR PAR DEFAUT. Une valeur par defaut ferait demarrer le conteneur
+      # sans qu'on apprenne jamais qu'il manque un secret -- c'est exactement comme ca que les cles
+      # du depot se sont propagees. Ici l'absence est BRUYANTE.
+      # Documents de la GED, chiffres au repos.
+      DMS_ENCRYPTION_KEY: ${DMS_ENCRYPTION_KEY:?DMS_ENCRYPTION_KEY manquante dans .env.preprod}
+      # Second facteur d'authentification.
+      MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:?MFA_ENCRYPTION_KEY manquante dans .env.preprod}
+      # Coordonnees bancaires (mandats SEPA).
+      SEPA_IBAN_KEY: ${SEPA_IBAN_KEY:?SEPA_IBAN_KEY manquante dans .env.preprod}
+      # Cles d'API tierces confiees par le client.
+      OCR_API_KEY_ENCRYPTION_KEY: ${OCR_API_KEY_ENCRYPTION_KEY:?OCR_API_KEY_ENCRYPTION_KEY manquante dans .env.preprod}
+      # Jetons des comptes de reseaux sociaux.
+      SOCIAL_TOKEN_ENCRYPTION_KEY: ${SOCIAL_TOKEN_ENCRYPTION_KEY:?SOCIAL_TOKEN_ENCRYPTION_KEY manquante dans .env.preprod}
+      # Signature du scellement Vente.
+      NF525_SEAL_KEY: ${NF525_SEAL_KEY:?NF525_SEAL_KEY manquante dans .env.preprod}
+      # Signature du scellement Compta.
+      NF525_COMPTA_SEAL_KEY: ${NF525_COMPTA_SEAL_KEY:?NF525_COMPTA_SEAL_KEY manquante dans .env.preprod}
+      # Signature du scellement Facturation.
+      NF525_FACTURATION_SEAL_KEY: ${NF525_FACTURATION_SEAL_KEY:?NF525_FACTURATION_SEAL_KEY manquante dans .env.preprod}
     depends_on:
       db:
         condition: service_healthy
