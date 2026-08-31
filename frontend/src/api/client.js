@@ -462,17 +462,32 @@ export const api = {
   // Corps : { numeroEngagement?, serviceExecutant? } -- exiges par certains donneurs d'ordre publics.
   deposerFactureChorus: (id, corps) =>
     request(`/api/factures/${id}/chorus`, { method: 'POST', body: corps }),
-  // ⚠ DEUX ROUTES DECLAREES QUE JE NE BRANCHE PAS, ET CHACUNE POUR SA RAISON.
+  // INTEGRITE DE LA CHAINE DES FACTURES (NF525).
   //
-  // `/factures/verifier-chaine` REPOND 404. Declaree en `GetCollection` avec ce `uriTemplate`, elle
-  // est captee par l'operation d'item `/factures/{id}` qui lit << verifier-chaine >> comme un
-  // identifiant : le serveur repond << Invalid uri variables >>. Mesure contre la preprod le 29/08 :
-  //     /api/factures?itemsPerPage=1   200
-  //     /api/factures/verifier-chaine  404
-  //     /api/mes-factures              200
-  // Le bouton etait ecrit ; je l'ai retire plutot que d'en livrer un qui echoue. Signale au serveur.
-  // C'est la meme famille que le GET du padel sur une route POST : << la route existe >> ne veut pas
-  // dire << elle repond >>.
+  // ⚠ CE COMMENTAIRE A TENU LE BOUTON DEBRANCHE DEUX JOURS APRES LA CORRECTION DU DEFAUT QU'IL
+  // DECRIT. Il disait, et c'etait vrai le 29/08 :
+  //
+  //     « `/factures/verifier-chaine` REPOND 404. Declaree en `GetCollection` avec ce
+  //       `uriTemplate`, elle est captee par l'operation d'item `/factures/{id}` qui lit
+  //       "verifier-chaine" comme un identifiant. […] Le bouton etait ecrit ; je l'ai retire
+  //       plutot que d'en livrer un qui echoue. Signale au serveur. »
+  //
+  // Il a ete signale, il a ete corrige, et personne n'est revenu rebrancher le bouton. La phrase
+  // est restee juste dans sa date et fausse dans le present -- et rien ne reliait les deux. On
+  // garde la date et la raison, on retire la conclusion. Signale par `allaccess-b8`.
+  //
+  // Remesure le 31/08, authentifie, avec DEUX TEMOINS NEGATIFS dans la meme passe :
+  //     /api/factures/verifier-chaine                    200   { intacte, nbDocuments, anomalies }
+  //     /api/factures/00000000-0000-4000-8000-0000…      404   temoin : identifiant inconnu
+  //     /api/factures/route-inexistante                  404   temoin : rien ici
+  // Le routeur declare desormais la route litterale AVANT le motif `{id}` : la collision n'a
+  // plus lieu.
+  //
+  // ⚠ Sans les temoins, un 200 ne prouverait rien : `Accept` mal negocie rend 406 sur TOUT, y
+  // compris sur les routes qui marchent. C'est le piege qui a failli tromper b8.
+  verifierChaineFactures: () => request('/api/factures/verifier-chaine'),
+  //
+  // L'AUTRE ROUTE RESTE DEBRANCHEE, ET POUR UNE RAISON QUI N'A PAS CHANGE :
   //
   // `/factures/depuis-vente` fonctionne, mais son geste appartient a l'historique des ventes -- on
   // emet une facture justificative EN REGARDANT une vente, pas en regardant la liste des factures.
