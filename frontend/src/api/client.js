@@ -1431,6 +1431,22 @@ export const api = {
   //
   // Les lettrages existants : c'est ce qui permet de distinguer une ligne SOLDEE d'une ligne qui
   // reste due. Sans cette liste, un ecran de lettrage proposerait de relettrer ce qui l'est deja.
+  // ── SAISIE MANUELLE D'ECRITURE (US-L4-11, RG-M6-11) ───────────────────────────────────────────
+  //
+  // Corps : { businessProfile, journal, date, label, lines: [{ account, vatRate, debit|credit, label? }] }
+  //
+  // ⚠ QUATRE REFUS DU SERVEUR, MESURES EN LISANT `SaisirEcritureManuelleHandler` :
+  //  1. debit != credit  -> 422. L'ECRAN BLOQUE, contrairement au lettrage qui tolere un partiel.
+  //  2. une ligne portant a la fois un debit et un credit, ou aucun des deux -> 422.
+  //  3. un compte inactif -> 422 (`actif` est lisible : on ne propose que les comptes actifs).
+  //  4. `vatRate` absent -> 422. Le taux est OBLIGATOIRE sur chaque ligne, meme une OD.
+  //
+  // ⚠ ET UN CINQUIEME QUI NE VIENT PAS DU HANDLER : la periode doit exister ET etre ouverte. C'est
+  // `DirectLedgerEntryBuilder` qui refuse, via `estOuverte()` — chercher le mot « Cloturee » ne le
+  // trouve pas, le garde-fou est ecrit a l'endroit et non a l'envers.
+  saisirEcritureManuelle: (corps) =>
+    request('/api/compta/journal-entries/manual', { method: 'POST', body: corps }),
+
   lettragesEcritures: () =>
     request('/api/lettrage_ecritures', { query: { itemsPerPage: 500 } }),
 
