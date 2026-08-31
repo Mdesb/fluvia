@@ -23,15 +23,21 @@ import { useMemo } from 'react'
 const JOURS_COURTS = ['LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM', 'DIM']
 const HAUTEUR_HEURE = 44
 
+// ⚠ LES VALEURS SONT DES NOMS DE CLASSE, PAS DES LIBELLES — et elles doivent donc s'écrire comme
+//    `styles.css` les définit, c'est-à-dire en anglais. Cette table les traduisait en français
+//    (`travail`, `reunion`, `intervention`…) : aucune des sept règles ne s'appliquait, et le
+//    calendrier n'avait de couleur que pour les réservations, par coïncidence de graphie entre
+//    les deux langues. Ni le JSX ni la feuille n'avait tort seul ; c'est le raccord qui n'avait
+//    jamais été éprouvé, et rien dans l'outillage ne le disait.
 const COULEURS = {
-  opening: 'ouverture',
+  opening: 'opening',
   reservation: 'reservation',
-  shift: 'travail',
-  meeting: 'reunion',
-  maintenance: 'intervention',
-  training: 'formation',
-  unavailability: 'indispo',
-  other: 'autre',
+  shift: 'shift',
+  meeting: 'meeting',
+  maintenance: 'maintenance',
+  training: 'training',
+  unavailability: 'unavailability',
+  other: 'other',
 }
 
 function lundiDe(date) {
@@ -168,7 +174,7 @@ function VueMois({ debut, ancre, blocs, vacances, onOuvrir }) {
               <button
                 key={b.id}
                 type="button"
-                className={`cal-puce ${COULEURS[b.type] || 'autre'}`}
+                className={`cal-puce ${COULEURS[b.type] || 'other'}`}
                 onClick={() => onOuvrir?.(b)}
                 title={b.title}
               >
@@ -253,7 +259,7 @@ function VueGrille({ jours, blocs, vacances, onOuvrir }) {
                 <button
                   key={b.id}
                   type="button"
-                  className={`cal-bloc ${COULEURS[b.type] || 'autre'}${fond ? ' fond' : ''}`}
+                  className={`cal-bloc ${COULEURS[b.type] || 'other'}${fond ? ' fond' : ''}`}
                   style={{ top: dessus, height: hauteur }}
                   onClick={() => onOuvrir?.(b)}
                   title={`${hhmm(b.d1)} – ${hhmm(b.d2)} · ${b.title}`}

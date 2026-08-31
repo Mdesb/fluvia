@@ -388,6 +388,13 @@ while read -r ancien nouveau ref; do
         lancer garde-fou-appels-dans-le-vide.php
     fi
 
+    # ⚠ Contrairement au precedent, celui-ci NE S'ABSTIENT PAS ici : il ne lit que des fichiers de
+    # `frontend/src`, sans `vendor/` ni noyau Symfony. L'arbre de reception lui suffit.
+    if [ -f "$ARBRE/bin/garde-fou-classes-fantomes.php" ]; then
+        echo "── Classes fantomes (n°37)"
+        lancer garde-fou-classes-fantomes.php
+    fi
+
     # ⚠ FILET DE COMPLÉTUDE — la leçon du 24/08, et elle a coûté cher.
     #
     # Ce hook n'appelle pas `bin/garde-fous.sh` : il doit calculer les fichiers ajoutés sur
