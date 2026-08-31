@@ -132,6 +132,10 @@ lancer_gf garde-fou-cloisonnement.php || ECHEC=1
 # source qui dise ce que le serveur sert vraiment. Il porte lui-meme son environnement et sa memoire.
 [ -f "$RACINE/bin/garde-fou-appels-dans-le-vide.php" ] && { lancer_gf garde-fou-appels-dans-le-vide.php || ECHEC=1; }
 
+# Classes fantomes (n°37) : une classe CSS citee par un ecran et definie dans aucune feuille. Pas
+# de dependance, pas de noyau -- une lecture de fichiers, donc il tourne partout.
+[ -f "$RACINE/bin/garde-fou-classes-fantomes.php" ] && { lancer_gf garde-fou-classes-fantomes.php || ECHEC=1; }
+
 # Nommage : sur les fichiers **indexés** et ajoutés. `--cached` est ce qui sera réellement commité,
 # et c'est aussi ce qui évite de dépendre d'une révision de référence inexistante à ce stade.
 if [ -f "$RACINE/bin/garde-fou-nommage-anglais.php" ]; then

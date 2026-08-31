@@ -888,6 +888,9 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 .cal-puce.maintenance, .cal-bloc.maintenance { border-left-color: var(--crit); background: var(--crit-bg); }
 .cal-puce.training, .cal-bloc.training { border-left-color: var(--warn); background: var(--warn-bg); }
 .cal-puce.unavailability, .cal-bloc.unavailability { border-left-color: var(--ink-faint); background: var(--panel-2); }
+/* ⚠ `opening` n'avait de règle sous AUCUN des deux noms : ni `.opening` ici, ni `.ouverture` que
+   la carte produisait. Une ouverture de site s'affichait donc comme un événement sans type. */
+.cal-puce.opening, .cal-bloc.opening { border-left-color: var(--accent-2); background: var(--accent-soft); }
 .cal-puce.other, .cal-bloc.other { border-left-color: var(--ink-faint); }
 
 /* ---- Vue mois ---- */
