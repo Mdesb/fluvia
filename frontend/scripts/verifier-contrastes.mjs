@@ -81,7 +81,15 @@ const PAIRES = [
   ['line', 'panel', 3, 'filet — compte seulement s’il porte une information', false],
 ]
 
-const PLAFOND = Number(process.env.CONTRASTES_PLAFOND ?? '7')
+// ⚠ ZERO, ET C EST UN INVARIANT, PLUS UN CLIQUET.
+//
+// Le plafond a valu 7 le temps d une decision : la palette appartient au produit, et corriger neuf
+// teintes avant que l identite soit tranchee aurait ete defaire ensuite. Maxime a tranche le 31/08
+// — « tout, y compris le turquoise » — et les sept sont corrigees.
+//
+// On ne bouge donc plus une teinte vers le bas. La variable d environnement reste pour eprouver le
+// controle sans toucher au fichier.
+const PLAFOND = Number(process.env.CONTRASTES_PLAFOND ?? '0')
 
 let echecs = 0
 const lignes = []

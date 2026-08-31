@@ -4,9 +4,9 @@
    ========================================================================= */
 :root {
   --bg: #eef2f4; --panel: #ffffff; --panel-2: #f4f7f8; --line: #dbe4e7;
-  --ink: #122229; --ink-soft: #51666f; --ink-faint: #80939b;
-  --accent: #0d7d88; --accent-2: #0a5b64; --accent-soft: #e2f1f2;
-  --warm: #d9702f; --good: #2f9e68; --good-bg: #e4f3ea; --warn: #b7860a; --warn-bg: #f7efd7; --crit: #cf4636; --crit-bg: #f8e2de;
+  --ink: #122229; --ink-soft: #51666f; --ink-faint: #64777f;
+  --accent: #0d7983; --accent-2: #0a5b64; --accent-soft: #e2f1f2;
+  --warm: #b85b22; --good: #247b51; --good-bg: #e4f3ea; --warn: #8b6608; --warn-bg: #f7efd7; --crit: #ba3b2c; --crit-bg: #f8e2de;
   --side-bg: #0e2a30; --side-ink: #cfe3e6; --side-ink-soft: #7fa2a8; --side-active: #0d7d88; --side-line: #1c3d44;
   --shadow: 0 1px 2px rgba(18, 34, 41, .05), 0 8px 24px rgba(18, 34, 41, .06);
   --radius: 12px;
@@ -14,7 +14,7 @@
 :root:not([data-theme="light"]) {
   @media (prefers-color-scheme: dark) {
     --bg: #0a1215; --panel: #111d21; --panel-2: #16262b; --line: #22383e;
-    --ink: #e7eef0; --ink-soft: #9db0b7; --ink-faint: #6d848b;
+    --ink: #e7eef0; --ink-soft: #9db0b7; --ink-faint: #6f878e;
     --accent: #37b4be; --accent-2: #63c9d1; --accent-soft: #123339;
     --warm: #ef9459; --good: #46b884; --good-bg: #152f26; --warn: #e0ad3d; --warn-bg: #2f2913; --crit: #e86a58; --crit-bg: #331d19;
     --side-bg: #081619; --side-ink: #bcd6da; --side-ink-soft: #6f9298; --side-active: #0d7d88; --side-line: #152b30;
@@ -23,7 +23,7 @@
 }
 :root[data-theme="dark"] {
   --bg: #0a1215; --panel: #111d21; --panel-2: #16262b; --line: #22383e;
-  --ink: #e7eef0; --ink-soft: #9db0b7; --ink-faint: #6d848b;
+  --ink: #e7eef0; --ink-soft: #9db0b7; --ink-faint: #6f878e;
   --accent: #37b4be; --accent-2: #63c9d1; --accent-soft: #123339;
   --warm: #ef9459; --good: #46b884; --good-bg: #152f26; --warn: #e0ad3d; --warn-bg: #2f2913; --crit: #e86a58; --crit-bg: #331d19;
   --side-bg: #081619; --side-ink: #bcd6da; --side-ink-soft: #6f9298; --side-active: #0d7d88; --side-line: #152b30;
