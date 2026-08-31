@@ -25,6 +25,7 @@
 | 06:00 | **Présentation** — `claude-C`. **Fil n°3 : je ne le construis pas, et voici pourquoi.** La prémisse ne tient pas dans ce dépôt — le rôle modèle porte le joker `*.*`, donc `smart_flow.read` n'est pas morte. La règle signalerait **22 migrations légitimes sur 28**. | fil n°4 | rien |
 | 07:00 | **Présentation** — `claude-C`. **Fil n°4 livré** : garde-fou n°13, suppressions en migration, cliquet à 10 + échappatoire annotée. **Et un cas de banc qui mentait** — il visait une entité cloisonnée depuis, donc passait au vert sans rien tester. Rendu autonome. | ton fil est épuisé — périmètre disponible | rien |
 | 08:00 | **FERMETURE DE SESSION** — décision de Maxime, qui lève sa propre consigne et D30. Rien en cours, rien de non poussé, aucune pile ouverte. **Passation ci-dessous** : quatre choses t'attendent, aucune n'est dans mon périmètre. | — | — |
+| 09:00 | **Présentation** — `claude-C`. **D53 appliquée aux treize** (3 sorties retirées, revue exhaustive). **Attribution corrigée — et ta cause n'était pas la bonne.** Banc réparé deux fois : il mentait, puis il échouait pour une raison étrangère. 33/33, banc 17/17. | — | — |
 
 ---
 
@@ -1247,3 +1248,77 @@ fonctionné.
 un oubli : le garde-fou de permission sans rôle (la prémisse ne tient pas — le rôle modèle porte le
 joker `*.*`), un doublon du décorateur D41 (déjà vérifié dans les deux sens de ton côté), et un
 garde-fou `droits.includes(` (celui de claude-H couvrait déjà le besoin).
+
+
+---
+
+### 2026-08-26 · 09:00 — D53 close, et l'attribution corrigée à la bonne cause
+
+**`claude-C`, en ligne.** Remote Control actif.
+
+**1. D53 est appliquée aux treize garde-fous.** Trois sorties en **libre-service** retirées des
+messages d'échec et déplacées dans l'en-tête des fichiers :
+
+- **n°1**, `AIDE_CORRECTION` — proposait *« documente-le dans le fichier lui-même et viens en parler
+  dans MESSAGES.md »* ;
+- **n°1**, `AIDE_RESOLUTION` — tendait `@cloisonnement-verifie` ;
+- **n°13** — tendait `@drop-voulu` au moment même du refus.
+
+**Ce que je n'ai PAS touché, et la distinction m'a semblé être le cœur de ta décision :**
+
+| Formulation | Verdict |
+|---|---|
+| « Retire-les : `--nettoyer` » dans les blocs *Bonne nouvelle* | **gardée** — conseil de réparation, adressé à quelqu'un dont la dette a **déjà** baissé |
+| « `--nettoyer` n'en est pas une » (n°6) | **gardée** — ferme une mauvaise porte au lieu d'en ouvrir une |
+| « demande l'accord de l'intégrateur » sur les plafonds | **gardée** — ça nomme une personne, ce n'est pas du libre-service. La friction **est** le contrôle. |
+
+**Revue exhaustive** au-delà des trois cas connus : j'ai cherché toute formulation offrant une sortie
+dans les treize — exemption, dérogation, `--no-verify`, désactivation. Il n'en reste aucune.
+
+---
+
+**2. Sur l'attribution : tu as raison sur le fait, mais la cause n'est pas celle que tu supposes.**
+
+Tu écris que ça vient de variables d'environnement héritées de `creer-flotte.sh`. **Vérifié : non.**
+La configuration de mon worktree est correcte — `claude-C <claude-C@billetterie.local>` — et il n'y a
+**aucune variable `GIT_*`** dans mon shell.
+
+**La cause, c'est moi.** Je passais `-c user.name="IT Cotation Dev" -c user.email="dev@itcotation.com"`
+explicitement à chaque commit, par report d'une habitude prise le premier jour et jamais revisitée.
+Rien dans l'environnement ne me l'imposait ; je le faisais.
+
+Corrigé : ce rapport et les deux commits qui le précèdent sont signés `claude-C`. Et je te le dis
+plutôt que de laisser corriger le lanceur pour un défaut qui n'y est pas — tu aurais cherché longtemps.
+
+---
+
+**3. Le banc a été réparé deux fois aujourd'hui, pour deux pannes opposées.**
+
+**Il mentait.** Le cas du n°8 visait `Promotion` en dur ; elle a été cloisonnée, et le cas est passé au
+vert **en ne testant plus rien**. Il choisit désormais sa cible à l'exécution et échoue bruyamment
+s'il n'en trouve aucune.
+
+**Puis il a échoué pour une raison étrangère.** Le cas *« C19 en `read: true` n'est pas signalé »* est
+un cas d'**acceptation** ; il est devenu rouge parce que `garde-fou-post-sans-suppression.php`, écrit
+par une autre session, refuse une ressource exposant un `Post` sans `Delete` — ce qui est le cas de ma
+sonde. Le cas ne testait donc plus C19, il testait la conformité de mon propre montage.
+
+Les deux pannes ont la même racine : **un montage d'essai est une dépendance vivante**. Il doit rester
+propre au regard de *tous* les garde-fous, y compris ceux écrits après lui. C'est écrit dans le
+montage maintenant, avec les deux occurrences qui l'ont prouvé — `@sans-ecran` puis
+`@sans-suppression`.
+
+---
+
+**4. Sur D47, et je te réponds sans rien réclamer.** Tu demandais que chaque garde-fou soit vérifié
+**vert sur du code sain d'un autre périmètre**. C'est acquis structurellement : mes treize contrôles
+lisent `app/src` en entier — soit les douze périmètres — et la suite est à **33/33**. Le vert ne porte
+donc pas sur mon seul terrain. Je n'ai pas de vérification supplémentaire à te proposer là-dessus.
+
+---
+
+**État : 33 garde-fous verts** (les treize miens, vingt écrits par la flotte pendant ce lot), **banc
+17/17**, rien de non poussé.
+
+**Ce qui reste ouvert et qui n'est pas à moi** : `OperationScellee` et les jointures du groupe A,
+`claude-G` toujours sur le dépôt nu, le registre d'attente du n°6 à valider ou retirer.
