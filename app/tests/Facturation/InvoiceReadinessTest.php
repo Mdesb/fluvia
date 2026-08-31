@@ -9,16 +9,17 @@ use App\Facturation\Einvoicing\InvoiceReadiness;
 use App\Facturation\Entity\DestinataireFacturation;
 use App\Facturation\Entity\Facture;
 use App\Facturation\Entity\LigneFacture;
+use App\Compta\Entity\ProfilExploitant;
 use App\Facturation\Enum\StatutFacture;
 use PHPUnit\Framework\TestCase;
 
 /**
  * `InvoiceReadiness` — ce qui manque pour émettre au format européen EN 16931.
  *
- * ⚠ **CE CONTRÔLE REFUSE TOUT AUJOURD'HUI, ET C'EST JUSTE.** L'identité du vendeur n'existe pas
- * dans le modèle de données : `ProfilExploitant` ne porte qu'un SIREN, `Etablissement` aucune
- * adresse. Un contrôle qui refuse tout est pourtant le plus difficile à tester : ses refus sont
- * vrais pour la mauvaise raison dès qu'on se trompe quelque part.
+ * ⚠ **UN CONTRÔLE QUI REFUSE BEAUCOUP EST LE PLUS DIFFICILE À TESTER** : ses refus sont vrais pour
+ * la mauvaise raison dès qu'on se trompe quelque part. C'est arrivé ici même — voir le commentaire
+ * de `testUnVendeurCompletNeProduitAucunManqueCoteVendeur`, qui remplace un cliquet resté vert
+ * alors qu'il devait mordre.
  *
  * D'où la forme de ce fichier : **on teste surtout ce qui doit PASSER**. Un acheteur complet ne doit
  * produire aucun manque côté acheteur ; un brouillon ne doit pas se voir reprocher son absence de
@@ -101,21 +102,24 @@ final class InvoiceReadinessTest extends TestCase
     }
 
     /**
-     * ⚠ **CE TEST DOIT DEVENIR ROUGE LE JOUR OÙ QUELQU'UN MODÉLISE LE VENDEUR — c'est son but.**
+     * ⚠ **LE CAS QUI DOIT PASSER, ET QUI REMPLACE UN CLIQUET QUI NE MORDAIT PAS.**
      *
-     * `ProfilExploitant` ne porte qu'un SIREN, `Etablissement` aucune adresse. Tant que c'est vrai,
-     * `InvoiceReadiness` déclare ces termes absents sans même les chercher — on ne peut pas lire un
-     * champ qui n'existe pas.
+     * La version précédente de ce fichier affirmait « les six termes vendeur sont signalés », et
+     * prétendait devenir rouge le jour où le modèle porterait les champs. Elle est restée verte :
+     * la facture de test n'avait aucun profil, donc le contrôle prenait la branche « profil absent »
+     * et signalait les mêmes termes. **Le test mesurait « des termes sont signalés », pas « le
+     * modèle ne les porte pas »** — deux choses qui coïncidaient.
      *
-     * Le jour où les champs arrivent, ce test échouera et forcera à remplacer la déclaration par
-     * une vraie lecture. Sans lui, le contrôle continuerait de réclamer des champs désormais
-     * remplis, et personne ne le saurait avant de lire le rapport.
+     * Celui-ci ne peut pas être vert par accident : il exige que la lecture fonctionne.
      */
-    public function testLeVendeurEstDeclareAbsentTantQuIlNEstPasModelise(): void
+    public function testUnVendeurCompletNeProduitAucunManqueCoteVendeur(): void
     {
-        $termes = $this->termes($this->factureAvecAcheteurComplet());
+        $facture = $this->factureAvecAcheteurComplet()->setProfilExploitant($this->vendeurComplet());
+
+        $termes = $this->termes($facture);
 
         foreach ([
+            BusinessTerm::SellerLegalIdentifier,
             BusinessTerm::SellerName,
             BusinessTerm::SellerVatIdentifier,
             BusinessTerm::SellerStreet,
@@ -123,12 +127,42 @@ final class InvoiceReadinessTest extends TestCase
             BusinessTerm::SellerCity,
             BusinessTerm::SellerCountryCode,
         ] as $terme) {
-            self::assertContains($terme, $termes, sprintf(
-                '%s n’est pas modélisé — si ce test échoue, les champs existent enfin : '
-                . 'remplace la déclaration par une lecture dans InvoiceReadiness.',
+            self::assertNotContains($terme, $termes, sprintf(
+                '%s est renseigné sur le profil : le contrôle ne doit pas le réclamer.',
                 $terme->libelle(),
             ));
         }
+    }
+
+    /** Et son jumeau : un profil vide est signalé champ par champ, pas en bloc. */
+    public function testUnProfilSansIdentiteLegaleEstSignaleChampParChamp(): void
+    {
+        $profil = $this->vendeurComplet()
+            ->setRaisonSociale(null)
+            ->setAdresse(['rue' => '2 rue du Port', 'cp' => '', 'ville' => 'Sète', 'pays' => 'FR']);
+
+        $termes = $this->termes($this->factureAvecAcheteurComplet()->setProfilExploitant($profil));
+
+        self::assertContains(BusinessTerm::SellerName, $termes);
+        self::assertContains(BusinessTerm::SellerPostcode, $termes);
+        // Ceux qui SONT renseignés ne sont pas réclamés : un contrôle qui signale tout dès qu'il
+        // signale quelque chose ne dit pas où chercher.
+        self::assertNotContains(BusinessTerm::SellerStreet, $termes);
+        self::assertNotContains(BusinessTerm::SellerCity, $termes);
+        self::assertNotContains(BusinessTerm::SellerVatIdentifier, $termes);
+    }
+
+    /**
+     * Sans profil du tout, les sept termes sont nommés — pas un seul, qui ferait chercher au
+     * mauvais endroit.
+     */
+    public function testUneFactureSansProfilNommeTousLesTermesVendeur(): void
+    {
+        $termes = $this->termes($this->factureAvecAcheteurComplet());
+
+        self::assertContains(BusinessTerm::SellerName, $termes);
+        self::assertContains(BusinessTerm::SellerCountryCode, $termes);
+        self::assertContains(BusinessTerm::SellerLegalIdentifier, $termes);
     }
 
     public function testAucuneFactureNEstEmettableAujourdHui(): void
@@ -148,6 +182,15 @@ final class InvoiceReadinessTest extends TestCase
             static fn (array $m): BusinessTerm => $m['terme'],
             $this->readiness->manques($facture),
         );
+    }
+
+    private function vendeurComplet(): ProfilExploitant
+    {
+        return (new ProfilExploitant())
+            ->setSiren('130025265')
+            ->setRaisonSociale('Régie des Eaux de Test')
+            ->setTvaIntracommunautaire('FR12130025265')
+            ->setAdresse(['rue' => '2 rue du Port', 'cp' => '34200', 'ville' => 'Sète', 'pays' => 'FR']);
     }
 
     private function factureAvecAcheteurComplet(): Facture

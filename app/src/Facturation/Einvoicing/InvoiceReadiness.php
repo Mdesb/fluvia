@@ -16,15 +16,18 @@ use App\Facturation\Enum\StatutFacture;
  * Un sérialiseur qui écrit du XML avec des champs vides produit un fichier qui *ressemble* à une
  * facture et qu'aucune plateforme n'acceptera. Pire : il donne l'impression que le format est fait.
  *
- * ⚠ **MESURE DU 31/08, ET ELLE CHANGE L'ORDRE DES TRAVAUX.** L'identité du VENDEUR n'existe pas
- * dans ce modèle de données :
+ * **CE QUE LA PREMIÈRE MESURE A TROUVÉ, ET QUI EST CORRIGÉ DEPUIS.** Le 31/08 au matin, l'identité
+ * du vendeur n'existait pas : `ProfilExploitant` ne portait qu'un SIREN, `Etablissement` aucune
+ * adresse. Aucune facture n'était émettable — et ce n'était pas un manque de connecteur, c'était un
+ * manque de **donnée**, qu'aucun raccordement n'aurait comblé.
  *
- *     ProfilExploitant   ne porte qu'un SIREN — ni raison sociale, ni adresse, ni n° de TVA
- *     Etablissement      ne porte AUCUNE adresse (nom, région, fuseau horaire, et c'est tout)
+ * `ProfilExploitant` porte désormais `raisonSociale`, `tvaIntracommunautaire` et l'adresse du siège
+ * (migration `Version20260831180000`). Ce contrôle les **lit** au lieu de les déclarer absents.
  *
- * Aucune facture conforme n'est donc émettable aujourd'hui — ni en France, ni en Espagne, ni
- * ailleurs. Ce n'est pas un manque de connecteur : c'est un manque de donnée, et aucun connecteur
- * ne le comblera.
+ * ⚠ Les champs sont nullables : les profils existants sont vides. Le rapport dit donc encore qu'il
+ * manque quelque chose — mais il désigne maintenant une **saisie à faire**, plus un modèle à
+ * changer. Les deux ne se corrigent pas au même endroit, et les confondre ferait chercher au
+ * mauvais.
  *
  * Ce contrôle existe pour que ça se dise en une commande, avec les codes `BT-xx` qu'un comptable ou
  * un intégrateur reconnaît, plutôt qu'après un refus de dépôt.
@@ -76,15 +79,44 @@ final class InvoiceReadiness
         // champ inexistant produirait un `null` qu'on lirait comme « pas renseigné » — alors que
         // c'est « pas modélisé », et les deux ne se corrigent pas au même endroit.
         $profil = $facture->getProfilExploitant();
-        if ($profil === null || $profil->getSiren() === '') {
-            $ajouter(BusinessTerm::SellerLegalIdentifier, 'ProfilExploitant::siren');
+
+        if ($profil === null) {
+            // Sans profil, aucun des six termes ne peut être renseigné : on les nomme tous plutôt
+            // que de rendre un seul manque qui ferait chercher au mauvais endroit.
+            foreach ([
+                BusinessTerm::SellerLegalIdentifier,
+                BusinessTerm::SellerName,
+                BusinessTerm::SellerVatIdentifier,
+                BusinessTerm::SellerStreet,
+                BusinessTerm::SellerPostcode,
+                BusinessTerm::SellerCity,
+                BusinessTerm::SellerCountryCode,
+            ] as $terme) {
+                $ajouter($terme, 'Facture::profilExploitant absent');
+            }
+        } else {
+            if ($profil->getSiren() === '') {
+                $ajouter(BusinessTerm::SellerLegalIdentifier, 'ProfilExploitant::siren');
+            }
+            if (trim($profil->getRaisonSociale() ?? '') === '') {
+                $ajouter(BusinessTerm::SellerName, 'ProfilExploitant::raisonSociale');
+            }
+            if (trim($profil->getTvaIntracommunautaire() ?? '') === '') {
+                $ajouter(BusinessTerm::SellerVatIdentifier, 'ProfilExploitant::tvaIntracommunautaire');
+            }
+
+            $siege = $profil->getAdresse();
+            foreach ([
+                ['rue', BusinessTerm::SellerStreet],
+                ['cp', BusinessTerm::SellerPostcode],
+                ['ville', BusinessTerm::SellerCity],
+                ['pays', BusinessTerm::SellerCountryCode],
+            ] as [$cle, $terme]) {
+                if (!isset($siege[$cle]) || trim((string) $siege[$cle]) === '') {
+                    $ajouter($terme, sprintf('ProfilExploitant::adresse[%s]', $cle));
+                }
+            }
         }
-        $ajouter(BusinessTerm::SellerName, 'ProfilExploitant — champ à créer');
-        $ajouter(BusinessTerm::SellerVatIdentifier, 'ProfilExploitant — champ à créer');
-        $ajouter(BusinessTerm::SellerStreet, 'Etablissement — aucune adresse');
-        $ajouter(BusinessTerm::SellerPostcode, 'Etablissement — aucune adresse');
-        $ajouter(BusinessTerm::SellerCity, 'Etablissement — aucune adresse');
-        $ajouter(BusinessTerm::SellerCountryCode, 'Etablissement — aucune adresse');
 
         // ── Acheteur ───────────────────────────────────────────────────────────────────────────
         $destinataire = $facture->getDestinataire();
