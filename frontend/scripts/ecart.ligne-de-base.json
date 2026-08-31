@@ -29,22 +29,24 @@
         "Le script REFUSE de le relever. Un plafond qui remonte n est plus un cliquet, c est un",
         "compteur."
     ],
-    "plafond": 661,
+    "plafond": 647,
     "releve": {
         "exposees": 1159,
         "sansEcran": 0,
         "attendues": 1159,
-        "appelees": 504,
-        "atteignables": 498,
-        "inatteignables": 661,
+        "appelees": 520,
+        "atteignables": 512,
+        "inatteignables": 647,
         "orphelins": [
             "etatSynchroAcces  (back-office)",
             "grilleTarifaires  (back-office)",
             "majFactureFournisseur  (back-office)",
+            "majNoteDeFrais  (back-office)",
             "padelTournois  (back-office)",
             "pieceCommerciale  (back-office)",
             "planningOuverture  (back-office)",
-            "rattacherDroitAccesAbonnement  (back-office)"
+            "rattacherDroitAccesAbonnement  (back-office)",
+            "supprimerLigneFrais  (back-office)"
         ],
         "appelsSansServeur": [],
         "marqueursPerimes": [],
@@ -54,8 +56,8 @@
         "parFront": [
             {
                 "nom": "back-office",
-                "appelees": 482,
-                "atteignables": 476
+                "appelees": 498,
+                "atteignables": 490
             },
             {
                 "nom": "boutique en ligne",
@@ -105,6 +107,10 @@
                 11
             ],
             [
+                "factures",
+                10
+            ],
+            [
                 "marketing",
                 10
             ],
@@ -113,12 +119,12 @@
                 10
             ],
             [
-                "opening",
+                "finance",
                 10
             ],
             [
-                "factures",
-                9
+                "opening",
+                10
             ],
             [
                 "utilisateurs",
@@ -149,7 +155,19 @@
                 6
             ],
             [
+                "crm",
+                6
+            ],
+            [
+                "clients",
+                6
+            ],
+            [
                 "roles",
+                6
+            ],
+            [
+                "expense",
                 6
             ],
             [
@@ -165,19 +183,11 @@
                 5
             ],
             [
-                "clients",
-                5
-            ],
-            [
                 "segments",
                 5
             ],
             [
                 "loyalty",
-                5
-            ],
-            [
-                "finance",
                 5
             ],
             [
@@ -242,10 +252,6 @@
             ],
             [
                 "moyen",
-                3
-            ],
-            [
-                "crm",
                 3
             ],
             [
@@ -385,6 +391,10 @@
                 1
             ],
             [
+                "journal",
+                1
+            ],
+            [
                 "demandes-rgpd",
                 1
             ],
@@ -458,10 +468,6 @@
             ],
             [
                 "periode",
-                1
-            ],
-            [
-                "expense",
                 1
             ],
             [

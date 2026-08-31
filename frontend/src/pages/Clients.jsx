@@ -10,6 +10,7 @@ import { mot } from '../api/vocabulaire.js'
 import ClientEditionModal from '../components/ClientEditionModal.jsx'
 import DevisModal from '../components/DevisModal.jsx'
 import PassagesClient from '../components/PassagesClient.jsx'
+import FusionClients from '../components/FusionClients.jsx'
 
 // Nom d'affichage d'un client (physique ou personne morale).
 function nomClient(c) {
@@ -304,6 +305,15 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
       </div>
 
       {erreur && <div className="banner banner-error">{erreur}</div>}
+
+      {/* LA FUSION EST SOUS LA LISTE, PAS DANS LA FICHE — et c'est un choix.
+          Une fusion porte sur DEUX fiches : la poser dans la fiche ouverte laisserait croire
+          qu'elle concerne celle-là, et ferait choisir la survivante par accident. On la place là
+          où l'on voit les doublons, c'est-à-dire devant la liste. */}
+      <FusionClients
+        droits={droits}
+        onFusionFaite={() => { rechercher(); if (selId) chargerFiche(selId) }}
+      />
 
       <section className="card">
         <div className="card-b">

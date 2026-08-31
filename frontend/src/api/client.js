@@ -548,6 +548,43 @@ export const api = {
   // CRM.
   rechercheClients: (params) => request('/api/crm/clients/recherche', { query: params }),
   ficheClient: (id) => request(`/api/clients/${id}/fiche-360`),
+
+  // ─── FUSION DE FICHES CLIENTS ────────────────────────────────────────────────────────────
+  //
+  // Trois operations servies, zero appel. Tout deploiement reel accumule des doublons -- meme
+  // personne saisie deux fois au guichet, une fois en ligne -- et deux fiches pour un client
+  // signifient deux historiques, deux soldes, deux abonnements qu'on ne voit pas ensemble.
+  //
+  // ⚠ QUELQU'UN A CONCU CECI AVEC SOIN, ET CA SE VOIT A DEUX CHOSES : la PREVISUALISATION (on
+  // voit ce qui diverge avant de decider) et la DEFUSION (on revient en arriere). Ecrire une
+  // defusion coute cher ; sa presence dit que le geste a ete pense comme reversible, ce qui est
+  // rare dans ce depot ou la plupart des ecritures sont definitives.
+  //
+  // ⚠ TROIS PIEGES DE ROUTAGE, MESURES LE 31/08 CONTRE LA PREPROD :
+  //
+  //   1. LA COLLECTION N'EST PAS SOUS `/crm/fusions`. Le `POST` occupe ce chemin ; le
+  //      `GetCollection` n'a pas d'`uriTemplate` et vit donc sous le nom derive de l'entite.
+  //          GET /api/crm/fusions      -> 405 Method Not Allowed   (et non 404)
+  //          GET /api/journal_fusions  -> 200
+  //      Un 405 se lit << mauvaise methode >>, pas << mauvais chemin >> : le lecteur suivant
+  //      cherchera longtemps.
+  //
+  //   2. LA PREVISUALISATION PREND DES UUID, LA FUSION PREND DES IRI. Le provider lit
+  //      `?maitre=<uuid>&sources[]=<uuid>` dans la requete ; le processeur lit `{ maitre: iri,
+  //      sources: [iri] }` dans le corps. Les deux formes dans le meme geste.
+  //
+  //   3. LES DEUX `POST` SONT EN `input: false` : ils lisent le corps BRUT. Pas de `ld: true`.
+  fusions: () => request('/api/journal_fusions', { query: { itemsPerPage: 100 } }),
+  previsualiserFusion: (maitreId, sourceIds) =>
+    request('/api/crm/fusions/previsualiser', {
+      // ⚠ `sources` SANS CROCHETS : `qs()` les ajoute lui-meme pour un tableau. Ecrire
+      // `'sources[]'` produirait `sources[][]=…`, que le serveur ne lit pas.
+      query: { maitre: maitreId, sources: sourceIds },
+    }),
+  fusionnerClients: (corps) =>
+    request('/api/crm/fusions', { method: 'POST', body: corps }),
+  defusionner: (journalId) =>
+    request(`/api/crm/fusions/${journalId}/defusionner`, { method: 'POST', body: {} }),
   // La fiche 360 ne porte qu'un sous-ensemble des champs : pour modifier, il faut le client entier.
   client: (id) => request(`/api/clients/${id}`),
   majClient: (id, corps) => request(`/api/clients/${id}`, { method: 'PATCH', body: corps }),
