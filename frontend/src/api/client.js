@@ -1313,11 +1313,6 @@ export const api = {
   creerRegion: (corps) => request('/api/regions', { method: 'POST', body: corps, ld: true }),
   majRegion: (id, corps) => request(`/api/regions/${id}`, { method: 'PATCH', body: corps }),
   categories: () => request('/api/categories', { query: { itemsPerPage: 200 } }),
-  // LES CORRESPONDANCES COMPTABLES : quelle catégorie s'impute sur quel compte de produit.
-  // Exposées depuis le début, appelées par aucun écran. Sans elles, impossible de dire à
-  // l'exploitant si la catégorie qu'il choisit sur une ligne de facture change quoi que ce soit —
-  // et `ResolveurComptesFacturation` se replie silencieusement sur le compte par défaut.
-  mappingsComptables: () => request('/api/mapping_comptables', { query: { itemsPerPage: 200 } }),
   creerCategorie: (corps) => request('/api/categories', { method: 'POST', body: corps, ld: true }),
   majCategorie: (id, corps) => request(`/api/categories/${id}`, { method: 'PATCH', body: corps }),
   supprimerCategorie: (id) => request(`/api/categories/${id}`, { method: 'DELETE' }),
@@ -1646,6 +1641,29 @@ export const api = {
   verserRegie: (idRegie, corps) =>
     request(`/api/compta/regies/${idRegie}/versements`, { method: 'POST', body: corps }),
 
+  // ── IMPAYES DE REGIE (RG-M6-09) ───────────────────────────────────────────────────────────────
+  //
+  // Corps : { motif?: string }. Sans motif, le serveur enregistre « Recette de regie » — ce qui ne
+  // dira rien a qui relira la ligne dans six mois, donc l'ecran encourage a le remplir.
+  //
+  // ⚠ Refus du serveur : 409 si la vente est DEJA marquee. L'ecran ne peut prevenir que dans un
+  // sens — trouvee dans la liste chargee => deja marquee ; l'absence ne prouve rien, la liste est
+  // paginee.
+  marquerImpayeeRegie: (idVente, corps) =>
+    request(`/api/compta/ventes/${idVente}/marquer-impayee-regie`, { method: 'POST', body: corps }),
+
+  // ── ENCAISSEMENTS PAYFIP ──────────────────────────────────────────────────────────────────────
+  //
+  // Le referentiel entier n'avait aucune trace dans l'interface. Un bordereau bloque en
+  // `en_attente` etait invisible de partout.
+  //
+  // ⚠ IL N'Y A PAS D'APPEL DE REJEU ICI, ET C'EST DELIBERE. `rejouer()` n'incremente qu'un compteur
+  // de tentatives : il n'interroge pas la DGFiP et ne change aucun statut. L'exposer donnerait
+  // l'illusion d'avoir relance. Le vrai rejeu depend de la signature des rappels du Tresor —
+  // bloqueur externe E-7.
+  bordereauxPayFip: () =>
+    request('/api/bordereau_pay_fi_ps', { query: { itemsPerPage: 100 } }),
+
   bordereauxVersement: () =>
     request('/api/bordereau_versements', { query: { itemsPerPage: 100 } }),
   comptesComptables: () =>
@@ -1657,6 +1675,12 @@ export const api = {
   // pas comptabilisées du tout — elles ressortent en anomalie à la génération (`MappingComptableGuard`
   // puis `GenerateurEcrituresHandler`, qui saute la vente). Ce n'est pas un repli sur un compte
   // par défaut : c'est une écriture qui n'existe pas.
+  //
+  // ⚠ Côté FACTURE en revanche, `ResolveurComptesFacturation` se replie bel et bien en silence sur
+  // le compte par défaut — deux comportements opposés pour la même donnée absente, selon le chemin.
+  // (Enseignement d'une seconde définition de cette clé, retirée le 31/08 : elle était en double
+  // dans cet objet, produite par une fusion sans conflit, et la dernière gagnait en silence.)
+  mappingsComptables: () => request('/api/mapping_comptables', { query: { itemsPerPage: 200 } }),
   creerMappingComptable: (corps) =>
     request('/api/mapping_comptables', { method: 'POST', body: corps, ld: true }),
   majMappingComptable: (id, corps) =>

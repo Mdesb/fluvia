@@ -33,7 +33,7 @@ final class CloisonnementParametresEtSeriesTest extends FacturationApiTestCase
 {
     public function testParametresFacturationCloisonnesParEtablissement(): void
     {
-        $this->creerProfilEtParametrePourB();
+        $profilB = $this->creerProfilEtParametrePourB();
 
         $client = static::createClient();
         $token = $this->jeton($client, SocleFixtures::LECTEUR_EMAIL, SocleFixtures::LECTEUR_MDP);
@@ -43,11 +43,28 @@ final class CloisonnementParametresEtSeriesTest extends FacturationApiTestCase
         $reponse = $client->request('GET', '/api/parametres-facturation', $enteteA);
         self::assertResponseIsSuccessful();
         $donnees = $reponse->toArray();
-        $sirets = array_map(static fn (array $p): mixed => $p['mentionsLegalesEmetteur']['siret'] ?? null, $donnees['member'] ?? $donnees);
+        // ⚠ LE TEMOIN EST L'AXE DE CLOISONNEMENT, PAS UN CHAMP DECORATIF.
+        //
+        // Ce test lisait `mentionsLegalesEmetteur.siret` pour distinguer A de B. Ce n'est pas ce
+        // qu'il teste — il teste le CLOISONNEMENT — c'était un marqueur commode, et il est tombé le
+        // jour où l'identité légale a déménagé vers `ProfilExploitant` (01/09).
+        //
+        // Le profil EST l'axe : un test qui se prouve sur son propre axe ne tombe pas parce qu'un
+        // champ voisin a bougé.
+        $profils = array_map(
+            static fn (array $p): mixed => $p['profilExploitant'] ?? null,
+            $donnees['member'] ?? $donnees,
+        );
 
-        $siretA = ComptaFixtures::PROFIL_SIREN . '00012';
-        self::assertContains($siretA, $sirets, 'Le paramétrage de A (fixtures) doit rester visible au lecteur affecté à A.');
-        self::assertNotContains('99999999900099', $sirets, 'Le paramétrage de B (autre établissement) ne doit pas fuiter vers le lecteur affecté à A seule.');
+        // Témoin : la liste n'est pas vide. Sans lui, « ne contient pas B » serait vrai pour rien —
+        // une collection vide ne contient rien, y compris ce qu'on cherche.
+        self::assertNotEmpty($profils, 'Le lecteur affecté à A doit voir au moins son propre paramétrage.');
+
+        self::assertNotContains(
+            '/api/profil_exploitants/' . $profilB->getId(),
+            $profils,
+            'Le paramétrage de B ne doit pas fuiter vers le lecteur affecté à A seule.',
+        );
     }
 
     public function testSeriesNumerotationCloisonneesParEtablissement(): void

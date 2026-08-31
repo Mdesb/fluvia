@@ -434,6 +434,21 @@ if [ -f "$RACINE/frontend/scripts/verifier-imports.mjs" ]; then
     fi
 fi
 
+# n37 — une cle definie deux fois dans le meme objet. C'est ce que produit une FUSION GIT SANS
+# CONFLIT : deux sessions ajoutent leur appel dans le meme objet `api`, Git concatene, et l'un des
+# deux cesse silencieusement d'exister. Quatre occurrences en deux jours, rapportees par trois
+# sessions. Ni le build ni le linteur ne le voient : `{ a: 1, a: 2 }` est du JavaScript legal.
+if [ -f "$RACINE/frontend/scripts/verifier-cles-doubles.mjs" ]; then
+    if command -v node >/dev/null 2>&1; then
+        executer "Cles en double (n37)" sh -c "cd '$RACINE/frontend' && node scripts/verifier-cles-doubles.mjs"
+    else
+        echo "─────────────────────────────────────────────────────────────"
+        echo "▶ Cles en double"
+        echo "─────────────────────────────────────────────────────────────"
+        echo "· IGNORÉ — « node » indisponible ici. Le contrôle n'a PAS tourné."
+    fi
+fi
+
 if [ -f "$RACINE/frontend/scripts/verifier-formats.mjs" ]; then
     if command -v node >/dev/null 2>&1; then
         executer "Formats d'écriture (n°11)" sh -c "cd '$RACINE/frontend' && node scripts/verifier-formats.mjs"
