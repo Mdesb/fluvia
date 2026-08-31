@@ -916,6 +916,33 @@ export const api = {
   annulerReservation: (id) =>
     request(`/api/reservation/reservations/${id}/annuler`, { method: 'POST', body: {} }),
 
+  // ── ANNULER UN CRENEAU (le geste de l'exploitant, pas du client) ──────────────────────────────
+  //
+  // ⚠ CE N'EST PAS UNE ANNULATION DE RESERVATION EN GROS. `AnnulerCreneauProcessor` bascule TOUTES
+  // les reservations en `annulee_libre` — aucun no-show, aucun frais, le credit restitue — parce
+  // que c'est l'exploitant qui annule et que le client n'y est pour rien. La regle du delai franc
+  // ne s'applique pas : il n'y a rien a arbitrer, la seance revient toujours.
+  //
+  // C'est la difference qui compte a l'ecran : le meme mot « annuler » designe deux gestes dont
+  // l'un facture et l'autre jamais.
+  annulerCreneau: (id) =>
+    request(`/api/reservation/creneaux/${id}/annuler`, { method: 'POST', body: {} }),
+
+  // ── AFFECTER UNE INSTANCE A UNE RESERVATION FAITE SUR UN TYPE (ACT-1, D16) ────────────────────
+  //
+  // « Personne ne reserve la chambre 214 : on reserve une chambre double. » L'instance s'affecte
+  // apres coup. Corps : { ressource }.
+  //
+  // Le serveur refuse trois choses, et la troisieme protege un client reel : une instance qui n'est
+  // pas un enfant du type reserve, une instance d'un autre etablissement (404, pas 403), et une
+  // instance DEJA affectee a une reservation qui chevauche. Sans ce dernier refus, deux personnes
+  // recoivent la chambre 214 pour la meme nuit et personne ne s'en apercoit avant l'arrivee.
+  affecterRessource: (idReservation, idRessource) =>
+    request(`/api/reservation/reservations/${idReservation}/affecter`, {
+      method: 'POST',
+      body: { ressource: idRessource },
+    }),
+
   // ── LISTE D'ATTENTE ───────────────────────────────────────────────────────────────────────────
   //
   // Les inscriptions, tous creneaux confondus. Le rang est calcule par le serveur a l'inscription ;

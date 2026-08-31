@@ -129,6 +129,7 @@ export default function Reservation({ etabActif, droits = [], session }) {
   // Ajouter un participant et encaisser sa part demandent tous deux `reservation.reserver` côté
   // serveur : c'est un acte de comptoir, pas une administration.
   const peutPartager = aLeDroit(droits, 'reservation.reserver')
+  const peutGererCreneau = aLeDroit(droits, 'reservation.gerer_creneau')
 
   const [listesAttente, setListesAttente] = useState([])
   const [attentePour, setAttentePour] = useState(null) // id du créneau dont on ouvre la liste d'attente
@@ -188,6 +189,42 @@ export default function Reservation({ etabActif, droits = [], session }) {
     }
     return m
   }, [reservations])
+
+  // Les instances d'un type de ressource — « la chambre 214 » sous « chambre double ».
+  //
+  // ⚠ CALCULÉ ICI ET NON DEMANDÉ AU SERVEUR : la liste des ressources est déjà chargée, et
+  // `ressourceMere` y figure. Une requête de plus par réservation affichée aurait multiplié les
+  // appels sans rien apprendre de neuf.
+  const instancesParType = useMemo(() => {
+    const m = {}
+    for (const r of ressources) {
+      const mere = idDepuisIri(r.ressourceMere)
+      if (mere) (m[mere] ||= []).push(r)
+    }
+    return m
+  }, [ressources])
+
+  // ⚠ LE LIBELLÉ D'UNE RESSOURCE AFFECTÉE NE VIENT PAS DE LA RÉSERVATION, ET C'EST MESURÉ.
+  //
+  // `Ressource::$libelle` est dans les groupes `ressource:read` et `creneau:read` — pas dans
+  // `reservation:read`. La ressource affectée, sérialisée sous ce groupe-là, ne porte donc que son
+  // identifiant : écrire `r.ressourceAffectee.libelle` affichait « Affectée : undefined », sur
+  // l'écran qui sert précisément à savoir quelle chambre a été donnée.
+  //
+  // Aucun garde-fou n'attrape ça : le champ existe, la relation existe, le groupe existe. C'est la
+  // combinaison qui manque, et elle ne se voit qu'à l'affichage.
+  //
+  // On résout donc depuis la liste des ressources, déjà chargée par cette page. L'autre sortie —
+  // ajouter `reservation:read` aux groupes de `libelle` — alourdirait la charge utile de TOUTES les
+  // lectures de réservation, partout, pour un seul écran.
+  const libelleRessource = useCallback(
+    (reference) => {
+      const id = idDepuisIri(reference)
+      if (!id) return null
+      return ressources.find((r) => r.id === id)?.libelle || null
+    },
+    [ressources],
+  )
 
   // Les inscriptions en attente d'un créneau, dans l'ordre du rang — celui que le SERVEUR a posé.
   //
@@ -290,6 +327,57 @@ export default function Reservation({ etabActif, droits = [], session }) {
       await recharger()
     } catch (e) {
       setErreur(e.message || 'L’annulation n’a pas abouti.')
+    } finally {
+      setGesteEnCours(null)
+    }
+  }
+
+  // ── ANNULER UN CRÉNEAU ─────────────────────────────────────────────────────────────────────
+  //
+  // ⚠ LA CONFIRMATION DIT COMBIEN DE PERSONNES SONT CONCERNÉES, et c'est tout son intérêt. Un
+  // `confirm()` qui demande « Annuler ce créneau ? » ne dit rien : on répond oui parce qu'on vient
+  // de cliquer. Ce qu'il faut savoir avant de trancher, c'est qu'il y a onze réservations derrière.
+  //
+  // Le geste lui-même est sans frais pour personne : c'est l'exploitant qui annule, donc toutes les
+  // réservations passent en `annulee_libre`, crédit restitué. Rien à voir avec l'annulation d'une
+  // réservation, qui peut être facturée hors délai franc — même mot, deux gestes.
+  async function annulerCreneau(creneau) {
+    const concernees = (inscritsParCreneau[creneau.id] ?? []).filter((r) => STATUTS_QUI_OCCUPENT.has(r.statut))
+    const phrase = concernees.length === 0
+      ? 'Annuler ce créneau ? Aucune réservation n’est concernée.'
+      : concernees.length === 1
+        ? 'Annuler ce créneau ? 1 réservation sera annulée, sans frais, et le crédit rendu.'
+        : `Annuler ce créneau ? ${concernees.length} réservations seront annulées, sans frais, et les crédits rendus.`
+    if (!window.confirm(phrase)) return
+
+    setGesteEnCours(creneau.id)
+    setErreur(null)
+    setSucces(null)
+    try {
+      await api.annulerCreneau(creneau.id)
+      setSucces('Créneau annulé. Les réservations sont annulées sans frais.')
+      await recharger()
+    } catch (e) {
+      setErreur(e.message || 'L’annulation du créneau n’a pas abouti.')
+    } finally {
+      setGesteEnCours(null)
+    }
+  }
+
+  // ── AFFECTER UNE INSTANCE ──────────────────────────────────────────────────────────────────
+  async function affecter(reservation, idRessource) {
+    if (!idRessource) return
+    setGesteEnCours(reservation.id)
+    setErreur(null)
+    setSucces(null)
+    try {
+      await api.affecterRessource(reservation.id, idRessource)
+      setSucces('Instance affectée.')
+      await recharger()
+    } catch (e) {
+      // Le refus le plus utile arrive ici : « déjà affectée à une réservation qui chevauche ». On
+      // affiche le message du serveur tel quel — il nomme l'instance et le conflit.
+      setErreur(e.message || 'L’affectation n’a pas abouti.')
     } finally {
       setGesteEnCours(null)
     }
@@ -550,6 +638,22 @@ export default function Reservation({ etabActif, droits = [], session }) {
                           </button>
                         )}
 
+                        {/* Annuler le créneau : geste de l'exploitant, distinct de l'annulation
+                            d'une réservation. Caché sur un créneau déjà annulé — le serveur
+                            l'accepterait, mais proposer d'annuler ce qui l'est se lit comme une
+                            incertitude de l'écran sur l'état qu'il affiche juste au-dessus. */}
+                        {peutGererCreneau && annulable && (
+                          <button
+                            type="button"
+                            className="btn ghost sm"
+                            disabled={gesteEnCours === c.id}
+                            onClick={() => annulerCreneau(c)}
+                            title="Annule le créneau et toutes ses réservations, sans frais pour les clients."
+                          >
+                            Annuler le créneau
+                          </button>
+                        )}
+
                         {/* ⚠ « COMPLET » ÉTAIT UN CUL-DE-SAC, ET C'EST LÀ QUE LA LISTE D'ATTENTE
                             SERT. Le bouton se grisait, et l'exploitant n'avait rien d'autre à
                             proposer — alors que tout le mécanisme existe : rang, quantité attendue,
@@ -675,6 +779,34 @@ export default function Reservation({ etabActif, droits = [], session }) {
                                     )}
                                   </div>
                                   {r.quantity > 1 && <div className="hint">{r.quantity} places</div>}
+
+                                  {/* ── AFFECTER UNE INSTANCE (ACT-1, D16) ────────────────────
+                                      N'apparaît que si le créneau porte un TYPE, c'est-à-dire une
+                                      ressource qui a des enfants. Sur un créneau réservé
+                                      directement sur l'instance — la ligne d'eau 1, le court 3 —
+                                      il n'y a rien à choisir, et un sélecteur vide serait une
+                                      question sans réponse possible. */}
+                                  {peutPartager && occupe && (instancesParType[c.ressource?.id]?.length ?? 0) > 0 && (
+                                    <div className="resa-part-form">
+                                      <span className="hint">
+                                        {libelleRessource(r.ressourceAffectee)
+                                          ? `Affectée : ${libelleRessource(r.ressourceAffectee)}`
+                                          : 'Aucune instance affectée'}
+                                      </span>
+                                      <select
+                                        className="select"
+                                        value=""
+                                        onChange={(e) => affecter(r, e.target.value)}
+                                        disabled={gesteEnCours === r.id}
+                                        aria-label="Affecter une instance à cette réservation"
+                                      >
+                                        <option value="">{libelleRessource(r.ressourceAffectee) ? 'Changer…' : 'Affecter…'}</option>
+                                        {instancesParType[c.ressource.id].map((i) => (
+                                          <option key={i.id} value={i.id}>{i.libelle}</option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                  )}
 
                                   {/* Les gestes ne s'affichent que tant que la réservation occupe
                                       une place : émarger une réservation annulée n'a pas de sens, et

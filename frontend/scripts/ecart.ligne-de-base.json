@@ -29,14 +29,14 @@
         "Le script REFUSE de le relever. Un plafond qui remonte n est plus un cliquet, c est un",
         "compteur."
     ],
-    "plafond": 670,
+    "plafond": 668,
     "releve": {
         "exposees": 1155,
         "sansEcran": 0,
         "attendues": 1155,
-        "appelees": 491,
-        "atteignables": 485,
-        "inatteignables": 670,
+        "appelees": 493,
+        "atteignables": 487,
+        "inatteignables": 668,
         "orphelins": [
             "etatSynchroAcces  (back-office)",
             "grilleTarifaires  (back-office)",
@@ -54,8 +54,8 @@
         "parFront": [
             {
                 "nom": "back-office",
-                "appelees": 470,
-                "atteignables": 464
+                "appelees": 472,
+                "atteignables": 466
             },
             {
                 "nom": "boutique en ligne",
@@ -74,7 +74,7 @@
             ],
             [
                 "reservation",
-                22
+                24
             ],
             [
                 "patinoire",
