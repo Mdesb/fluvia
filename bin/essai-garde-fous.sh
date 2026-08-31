@@ -213,6 +213,13 @@ use App\Offre\State\BancSansLectureProcessor;
  * ⚠ SONDE DE BANC : elle n'aura JAMAIS d'ecran, et ce n'est pas une dette.
  *
  * @sans-ecran: sonde du banc d'essai des garde-fous, jamais appelee par une interface.
+ * @sans-suppression: sonde du banc, aucune donnee reelle n'est creee, rien a supprimer.
+ *
+ * ⚠ CES DECLARATIONS SONT UNE DEPENDANCE VIVANTE, pas une formalite. Le montage doit rester propre
+ * au regard de TOUS les garde-fous, y compris ceux ecrits par d'autres sessions apres ce cas.
+ * Sinon un cas d'ACCEPTATION vire au rouge pour une raison etrangere a ce qu'il teste, et il masque
+ * alors exactement ce qu'il devait prouver. C'est arrive deux fois : `@sans-ecran` pour le cliquet
+ * d'ecart, puis `@sans-suppression` pour le garde-fou des creations irreversibles.
  *
  * Sans cette declaration, le cliquet d'ecart n15 -- gele a la valeur courante -- compte cette
  * operation comme une inatteignable de plus et fait ECHOUER le cas, quel que soit le garde-fou que
@@ -258,6 +265,13 @@ use App\Offre\State\BancSansLectureProcessor;
  * ⚠ SONDE DE BANC : elle n'aura JAMAIS d'ecran, et ce n'est pas une dette.
  *
  * @sans-ecran: sonde du banc d'essai des garde-fous, jamais appelee par une interface.
+ * @sans-suppression: sonde du banc, aucune donnee reelle n'est creee, rien a supprimer.
+ *
+ * ⚠ CES DECLARATIONS SONT UNE DEPENDANCE VIVANTE, pas une formalite. Le montage doit rester propre
+ * au regard de TOUS les garde-fous, y compris ceux ecrits par d'autres sessions apres ce cas.
+ * Sinon un cas d'ACCEPTATION vire au rouge pour une raison etrangere a ce qu'il teste, et il masque
+ * alors exactement ce qu'il devait prouver. C'est arrive deux fois : `@sans-ecran` pour le cliquet
+ * d'ecart, puis `@sans-suppression` pour le garde-fou des creations irreversibles.
  *
  * Sans cette declaration, le cliquet d'ecart n15 -- gele a la valeur courante -- compte cette
  * operation comme une inatteignable de plus et fait ECHOUER le cas, quel que soit le garde-fou que
