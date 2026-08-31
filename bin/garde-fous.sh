@@ -152,6 +152,20 @@ if [ -x "$RACINE/bin/garde-fou-topologie.sh" ]; then
     fi
 fi
 
+# Avant les contrôles eux-mêmes : `vendor/` suit-il le verrou ?
+#
+# Ce n'est pas un garde-fou et il ne refuse rien — un `vendor/` en retard est un défaut de l'arbre
+# local, pas du code qu'on pousse. Mais il fait MENTIR ce qui suit : PHPUnit échoue sur une classe
+# absente, et l'erreur affichée désigne le code testé, jamais l'installation. On cherche alors dans
+# le code un défaut qui n'y est pas.
+#
+# Mesuré le 01/09 : trois des quatre arbres de la flotte, `wt/main` compris, n'avaient pas
+# `symfony/rate-limiter` alors qu'il était verrouillé. Il parle donc en premier, pour que le reste
+# se lise correctement.
+if [ -f "$RACINE/bin/verifier-vendor.php" ]; then
+    php_racine bin/verifier-vendor.php || true
+fi
+
 # 1. Cloisonnement (D3/D8) — le garde-fou n°1.
 if [ -n "$REFERENCE" ]; then
     executer "Cloisonnement (D3/D8)" php_racine bin/garde-fou-cloisonnement.php "--contre=$REFERENCE"
