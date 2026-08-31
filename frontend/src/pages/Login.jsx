@@ -67,7 +67,23 @@ export default function Login({ onConnecte, sousTitre = 'Accédez à la caisse e
       const data = await api.login(email.trim(), motDePasse)
 
       // Cas MFA en attente : l'API renvoie un jeton intermédiaire à confirmer.
-      if (data?.mfaEnAttente || data?.mfa_en_attente || data?.mfaRequired) {
+      //
+      // ⚠ CE GESTIONNAIRE NE S'EST JAMAIS DÉCLENCHÉ. Il testait `mfaEnAttente`, `mfa_en_attente` et
+      // `mfaRequired` — trois orthographes, et aucune n'est celle du serveur. `MfaVerifierAction`
+      // répond `{mfaRequis: true, jetonPreAuth}` ; `mfaEnAttente` est le nom du CLAIM porté par le
+      // jeton intermédiaire, pas du champ de la réponse.
+      //
+      // Conséquence : un compte avec MFA actif ne voyait pas le message ci-dessous, qui explique.
+      // Il tombait sur « Réponse inattendue de l'API (jeton manquant) », une erreur technique qui
+      // envoie chercher une panne. Même famille qu'un `grep` sensible à la casse sur un en-tête en
+      // capitales : une chaîne qui ne correspond jamais se lit comme une absence.
+      //
+      // Les trois anciennes sont conservées — elles ne coûtent rien, et rien ne dit qu'aucun dérivé
+      // de l'API ne les emploie. Ce qui manquait était la vraie.
+      //
+      // ⚠ CECI N'IMPLÉMENTE PAS LE MFA : le second facteur à la connexion reste à construire, et
+      // c'est pourquoi le message dit d'appeler l'administrateur plutôt que de proposer un code.
+      if (data?.mfaRequis || data?.mfaEnAttente || data?.mfa_en_attente || data?.mfaRequired) {
         setInfo(
           "Authentification à deux facteurs requise. Cette étape n'est pas encore gérée par cette interface — contactez l'administrateur.",
         )
