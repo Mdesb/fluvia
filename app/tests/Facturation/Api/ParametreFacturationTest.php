@@ -76,6 +76,81 @@ final class ParametreFacturationTest extends FacturationApiTestCase
     }
 
     /**
+     * LA CREATION — LE CHEMIN QUE L'ECRAN EMPRUNTE QUAND RIEN N'EXISTE ENCORE.
+     *
+     * ⚠ CE TEST COMBLE UN TROU DANS MA PROPRE COUVERTURE. Les autres font des PATCH sur la ligne
+     * des fixtures. Mais `ParametresFacturation.jsx` appelle `creerParametreFacturation` des que
+     * `parametre?.id` est absent — c'est-a-dire chez tout exploitant qui n'a jamais ouvert cette
+     * page. Le POST etait donc le cas COURANT, et le seul que je ne mesurais pas.
+     *
+     * C'est aussi la seule raison d'etre de `BillingSettingsStampProcessor` : avant lui, un POST
+     * sans `profilExploitant` rendait un 500 « Column profil_exploitant_id cannot be null », et le
+     * champ n'etant plus accepte du client, personne ne pouvait le fournir. Sans ce test, le
+     * processeur pourrait cesser de poser le profil sans que rien ne vire au rouge.
+     *
+     * ⚠ ON RETIRE D'ABORD LA LIGNE DES FIXTURES. `uniq_facturation_parametre_profil` interdit le
+     * second parametrage : sans ce nettoyage, le POST echouerait sur la contrainte d'unicite et le
+     * test rendrait rouge pour une raison qui n'a rien a voir avec ce qu'il mesure.
+     */
+    public function testLaChargeExacteDeLEcranCreeUnParametrage(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+
+        foreach ($em->getRepository(ParametreFacturationEtablissement::class)->findAll() as $existant) {
+            $em->remove($existant);
+        }
+        $em->flush();
+        $em->clear();
+
+        // La charge EXACTE de l'ecran : aucun `profilExploitant`. Le composer a la main avec un
+        // profil en plus prouverait que l'API marche, pas que l'ecran marche.
+        $client->request('POST', '/api/parametres-facturation', [
+            'auth_bearer' => $entete['auth_bearer'],
+            'headers' => $entete['headers'] + ['Content-Type' => 'application/ld+json'],
+            'json' => [
+                'conditionsReglementDefaut' => 'Paiement a 30 jours date de facture.',
+                'delaiPaiementDefautJours' => 30,
+                'tauxPenaliteRetard' => '10.00',
+                'indemniteForfaitaireRecouvrement' => '40.00',
+                'chorusProActif' => false,
+            ],
+        ]);
+
+        self::assertResponseStatusCodeSame(
+            201,
+            'l\'ecran cree un parametrage sans fournir de profil : si cette charge est refusee, '
+            . 'personne ne peut en poser un depuis l\'interface',
+        );
+
+        $rendu = $client->getResponse()->toArray();
+
+        // ⚠ ET LE PROFIL DOIT AVOIR ETE POSE. Un 201 dit qu'on a accepte ; il ne dit pas que le
+        // rattachement est le bon. Une ligne posee sur un autre profil serait invisible en lecture
+        // — l'extension de perimetre la filtrerait — et l'exploitant croirait son reglage perdu.
+        $em->clear();
+        $creee = $em->getRepository(ParametreFacturationEtablissement::class)->find($rendu['id']);
+        self::assertInstanceOf(ParametreFacturationEtablissement::class, $creee);
+        self::assertNotNull(
+            $creee->getProfilExploitant(),
+            'le processeur doit poser le profil comptable depuis l\'etablissement actif',
+        );
+
+        // Et la ligne doit se relire par l'API, pas seulement exister en base : c'est la lecture
+        // cloisonnee qui dit si le rattachement est le bon.
+        $client->request('GET', '/api/parametres-facturation', $entete);
+        $liste = $client->getResponse()->toArray();
+        $membres = $liste['member'] ?? $liste['hydra:member'] ?? [];
+        self::assertCount(
+            1,
+            $membres,
+            'le parametrage cree doit etre relu par son auteur : sinon il a ete rattache ailleurs',
+        );
+    }
+
+    /**
      * ⚠ LE PROFIL N'EST PLUS ACCEPTE DU CLIENT, ET CE TEST GARDE CETTE PORTE FERMEE.
      *
      * Il portait le groupe d'ecriture : un profil etranger dans le corps aurait ecrit le parametrage
