@@ -123,6 +123,35 @@ commiter() {
 
 # ─────────────────────────────────────────────────────────── préparation
 
+# —— `main` porte-t-il des garde-fous que cet arbre n'a pas ? —————————————————————————
+#
+# C'est la première cause des échecs de masse de ce banc, constatée trois fois. Le filet de
+# complétude refuse alors la poussée, et TOUS les cas d'acceptation tombent — « commit anodin sur
+# un dépôt sain » compris. On cherche le défaut dans le code qu'on vient d'écrire ; il n'y est pas.
+#
+# La condition ne se mesure pas en nombre de commits de retard — on peut en avoir vingt sans
+# conséquence. Elle se vérifie : un garde-fou présent sur `main` et absent ici.
+if git rev-parse --verify -q origin/main >/dev/null 2>&1; then
+    ABSENTS="$(comm -23         <(git ls-tree --name-only origin/main bin/ | grep -E "bin/garde-fou-" | xargs -r -n1 basename | sort)         <(git ls-tree --name-only HEAD bin/       | grep -E "bin/garde-fou-" | xargs -r -n1 basename | sort))"
+    if [ -n "$ABSENTS" ]; then
+        echo
+        printf '
+  [31m⚠ Cet arbre est en retard sur `main`, et ça suffit à faire tomber le banc.[0m
+
+'
+        echo
+        echo "  \`main\` déclare des garde-fous que tu n'as pas :"
+        printf "    %s
+" $ABSENTS
+        echo
+        echo "  Le filet de complétude refusera la poussée, et les cas d'ACCEPTATION tomberont pour"
+        echo "  cette raison-là — pas à cause de ce que tu viens d'écrire. Ne cherche pas dans ton code."
+        echo
+        echo "    git fetch origin && git merge --no-edit origin/main"
+        echo
+    fi
+fi
+
 echo "Banc d'essai des garde-fous — clone jetable, le dépôt vivant n'est pas touché."
 echo
 
