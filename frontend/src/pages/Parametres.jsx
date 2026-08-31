@@ -1701,8 +1701,19 @@ const METIERS = [
 //
 // Trois capacités commandent une entrée du menu de gauche (`components/AppShell.jsx`). Les autres
 // ouvrent des surfaces serveur (souscription, OCR, séjours, trésorerie) sans effet visible immédiat
-// dans cette application. On nomme les trois qu'on peut montrer, et on se tait sur les autres
-// plutôt que de promettre un effet qu'on n'a pas constaté.
+// dans cette application.
+//
+// ⚠ ON NE SE TAIT PLUS SUR LES AUTRES, ET LE SILENCE ÉTAIT LE DÉFAUT. Ne rien dire évitait de
+// promettre un effet non constaté — c'était le bon réflexe — mais laissait l'exploitant basculer
+// l'interrupteur, lire « en service », et ne rien voir apparaître. Il en conclut qu'il n'a pas
+// compris, ou que c'est cassé. « Activable, sans effet visible ici » est vrai, court, et ne promet
+// rien. Relevé par allaccess-b8.
+//
+// ⚠ UNE SEULE LISTE, ET LA PHRASE SE DÉDUIT. Une seconde liste des capacités « sans écran » ferait
+// deux listes à tenir, et la seconde deviendrait fausse le jour où quelqu'un construit l'écran des
+// séjours — sans que rien ne relie la phrase au travail qui l'a rendue fausse. C'est la légende de
+// tri de Supervision, encore. Présente ici → on dit l'effet ; absente → on dit qu'il n'y en a pas.
+// Ajouter la ligne le jour venu rend les deux phrases justes ensemble.
 const EFFET_VISIBLE = {
   controle_acces: 'Fait apparaître « Supervision » et « Badges & terminaux » dans le menu.',
   reservation: 'Fait apparaître « Réservation » dans le menu.',
@@ -1854,7 +1865,10 @@ function Capacites({ etabActif, onCapacitesChangees }) {
                       <td style={{ width: '32%' }}>
                         <span className="nm">{c.libelle || c.code}</span>
                         <div className="sub">{c.description || ''}</div>
-                        {EFFET_VISIBLE[c.code] && <div className="sub">{EFFET_VISIBLE[c.code]}</div>}
+                        <div className="sub">
+                          {EFFET_VISIBLE[c.code]
+                            ?? 'Ouvre une surface serveur ; aucun écran dédié dans cette application pour l’instant.'}
+                        </div>
                       </td>
                       <td style={{ width: 120 }}>
                         <span className={`badge ${c.active ? 'good' : 'mut'}`}>{c.active ? 'en service' : 'hors service'}</span>

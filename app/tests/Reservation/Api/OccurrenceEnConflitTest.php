@@ -260,6 +260,58 @@ final class OccurrenceEnConflitTest extends ReservationApiTestCase
         );
     }
 
+    /**
+     * ⚠ DÉPLACER LA SÉANCE HORS DU CONFLIT LA DÉBLOQUE — sinon elle reste bloquée pour toujours.
+     *
+     * Le cul-de-sac serait subtil et durable : l'exploitant déplace la séance à une heure où plus
+     * personne n'occupe la ressource, le serveur accepte, la séance ne chevauche plus rien — et
+     * elle reste non réservable. Il lui faudrait ensuite « confirmer telle quelle », un libellé qui
+     * dit « j'assume le chevauchement » alors qu'il n'y en a plus.
+     *
+     * C'était sans conséquence tant que rien ne posait ce drapeau. Ça ne l'est plus.
+     */
+    public function testDeplacerLaSeanceHorsDuConflitLaDebloque(): void
+    {
+        [$client, $entete] = $this->gestionnaireSurA();
+        $client->disableReboot();
+        $terrain = '/api/reservation_ressources/'.$this->idRessource(ReservationFixtures::RESSOURCE_TERRAIN_LIBELLE);
+
+        $client->request('POST', '/api/reservation/creneaux', $entete + [
+            'json' => ['ressource' => $terrain, 'debut' => '2027-01-11T10:00:00+00:00', 'fin' => '2027-01-11T11:00:00+00:00', 'capacite' => 4],
+        ]);
+        self::assertResponseIsSuccessful();
+
+        $client->request('POST', '/api/reservation/creneaux', $entete + [
+            'json' => [
+                'ressource' => $terrain,
+                'debut' => '2027-01-04T10:00:00+00:00',
+                'fin' => '2027-01-04T11:00:00+00:00',
+                'capacite' => 4,
+                'recurrence' => ['motif' => 'hebdomadaire', 'finRecurrence' => '2027-01-11', 'joursSemaine' => [1]],
+            ],
+        ]);
+        self::assertResponseIsSuccessful();
+
+        $marque = $this->creneauDu('2027-01-11T10:00:00+00:00', true);
+        self::assertInstanceOf(Creneau::class, $marque);
+        self::assertTrue($marque->isEnAttenteArbitrage(), 'témoin : sans marquage, le déblocage ne prouve rien.');
+
+        // Même jour, 16 h : personne n'occupe la ressource à cette heure-là.
+        $client->request('PATCH', '/api/reservation/creneaux/'.$marque->getId(), $this->entetePatch($entete) + [
+            'json' => ['debut' => '2027-01-11T16:00:00+00:00', 'fin' => '2027-01-11T17:00:00+00:00'],
+        ]);
+        self::assertResponseIsSuccessful();
+
+        $apres = $this->creneauDu('2027-01-11T16:00:00+00:00', true);
+        self::assertInstanceOf(Creneau::class, $apres);
+        self::assertFalse(
+            $apres->isEnAttenteArbitrage(),
+            'La séance déplacée hors du conflit reste bloquée : elle est libre et pourtant non '
+            .'réservable, et le seul geste qui la débloquerait affirme un chevauchement inexistant.',
+        );
+        self::assertTrue($apres->isOccurrenceModifiee(), 'La séance déplacée doit se distinguer de sa série.');
+    }
+
     // ── Outillage ────────────────────────────────────────────────────────────────────────────────
 
     /**

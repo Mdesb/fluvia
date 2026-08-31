@@ -51,9 +51,26 @@ declare(strict_types=1);
  *     **Non réparable sans analyse de flot** : `l.controleur?.itboxRef` et
  *     `r.ressourceAffectee.libelle` ont exactement la même allure.
  *
+ *   · **La collection de premier niveau.** Généralisation des deux précédents, relevée par
+ *     `allaccess-73` : le quantificateur parcourt les RELATIONS nommées X, et un objet peut venir
+ *     d'une collection chargée directement — où la ressource expose bien davantage, sous son propre
+ *     groupe. Deux des trois premières entrées étaient de ce type.
+ *
  * D'où le marqueur `@lecture-locale: <relation>.<propriété>` — que `allaccess-73` avait proposé et
  * que j'avais écarté en croyant le contrôle exact. Leur avertissement visait juste avant que le
  * défaut n'existe : « sinon il refusera des choses justes et finira désactivé ».
+ *
+ * ⚠ **LE PLAFOND NE DIT PAS COMBIEN DE DÉFAUTS RESTENT, ET IL NE FAUT PAS LE LIRE AINSI.** Il a
+ * valu 3 alors que deux des trois étaient des accusations fausses. Ce qu'il compte, ce sont des
+ * lectures que le contrôle **n'a pas su innocenter** — ce qui est autre chose. Chaque entrée se
+ * vérifie à la main avant d'être crue, et la façon de le faire est celle qu'ont employée `73` et
+ * `8e` : remonter d'où l'objet vient dans l'écran, et lire le contrat que le serveur publie
+ * (`/api/contexts/<Ressource>`, avec un témoin négatif sur un nom inexistant).
+ *
+ * ⚠ **ET UN CONTRÔLE QUI A RAISON POUR LA MAUVAISE RAISON AURA TORT LE JOUR OÙ ELLE DISPARAÎT.**
+ * `TopologieAcces.jsx` cesse d'être accusé parce qu'un homonyme — `SynchronisationAcces::$controleurs`,
+ * un champ libre de DTO — entre dans les origines plausibles. Correct par conservatisme, pas par
+ * compréhension. Le marqueur y est posé pour cette raison précise.
  *
  * ── CE QUE LE CONTRÔLE AFFIRME, ET CE QU'IL N'AFFIRME PAS ─────────────────────────────────────
  *
