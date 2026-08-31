@@ -142,6 +142,25 @@ export default function ProduitFiche({
   // L'onglet vit en état local et non dans l'URL : c'est une vue d'un même objet, pas une
   // navigation. Le retour au catalogue et l'adresse de la fiche, eux, sont dans l'URL.
   const [vueFiche, setVueFiche] = useState('vitrine')
+
+  // ALLER A UNE SECTION DEPUIS LA LIGNE COMPACTE.
+  //
+  // ⚠ LES DEUX CIBLES VIVENT DANS L'ONGLET « CONFIGURATION » : il faut basculer d'abord, et le
+  // defilement doit attendre que React ait RENDU l'onglet — avant, l'ancre n'existe pas dans le
+  // document et `getElementById` rend `null`. Deux `requestAnimationFrame` imbriques garantissent
+  // qu'on passe apres la validation du rendu.
+  //
+  // Les deux sections visees sont rendues sans condition dans cet onglet : le raccourci mene donc
+  // toujours quelque part. S'il ne trouvait rien, il ne fait rien plutot que de sauter au hasard.
+  function allerA(ancre) {
+    setVueFiche('config')
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const cible = document.getElementById(ancre)
+      if (!cible) return
+      const doux = !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      cible.scrollIntoView({ behavior: doux ? 'smooth' : 'auto', block: 'start' })
+    }))
+  }
   const [detail, setDetail] = useState(null)
   // Référentiels du bloc Diffusion. Chargés une fois par fiche, et leur absence n'empêche pas de
   // modifier le reste : `Promise.allSettled`, jamais `all`.
@@ -713,34 +732,71 @@ export default function ProduitFiche({
         )}
       </div>
 
-      {/* Ce que l'exploitant cherche en premier : combien, où, et combien il en reste. */}
-      <div className="fiche-stats">
-        <div>
-          <div className="st-lib">Tarif indicatif</div>
-          <div className="st-val num">{euros(base)}</div>
-          {/* UN TIRET N'EST PAS UNE EXPLICATION. `euros(null)` rend « — », qui se lit « prix non
-              renseigné pour l'instant » alors que la conséquence est totale : sans grille, le
-              produit ne peut être vendu nulle part, y compris publié et ouvert à tous les canaux.
-              On le dit à côté du tiret, là où on le lit. */}
-          {p?.statut === 'publie' && sansTarifConnu(p) === true && (
-            <div className="hint">
-              Aucun tarif : ce produit est publié mais invendable. Ajoutez une grille dans
-              <b> Tarifs</b>, plus bas.
-            </div>
+      {/* ── LA LIGNE COMPACTE ────────────────────────────────────────────────────────────────
+          Trois tuiles hautes remplacees par une ligne de sous-titre. Deux des trois valeurs se
+          modifiaient PLUS BAS — `Tarif` dans la section Tarifs, `Vendu` dans Diffusion — et le
+          bandeau le disait lui-meme (« ajoutez une grille dans Tarifs, plus bas »). On lisait, on
+          descendait, on relisait, on modifiait : c'est ca, « faire deux fois ».
+
+          Elles restent lisibles d'un coup d'oeil, mais elles MENENT desormais a leur section au
+          lieu d'y renvoyer par une phrase.
+
+          ⚠ L'ETAT N'EST PAS ICI, ET C'EST VOULU. Le badge de la ligne d'identite le porte deja —
+          `statutProduit()` le passe en orange quand un produit publie n'a aucun tarif. Le remettre
+          ici recreerait le doublon qu'on supprime, deplace d'un cran. */}
+      <div className="fiche-ligne">
+        <span className="fl-item">
+          <span className="fl-lib">Tarif</span>
+          {/* ⚠ `sansTarifConnu` rend `null` quand les grilles ne sont pas chargees, et on ne
+              conclut RIEN d'un `null` : on n'ecrit « invendable » que sur un `true` franc. */}
+          {p?.statut === 'publie' && sansTarifConnu(p) === true ? (
+            <button
+              type="button"
+              className="fl-val alerte"
+              onClick={() => allerA('prod-tarifs')}
+              aria-label="Aucun tarif, produit invendable — aller à la section Tarifs"
+            >
+              aucun — invendable
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="fl-val"
+              onClick={() => allerA('prod-tarifs')}
+              aria-label={`Tarif indicatif ${euros(base)} — aller à la section Tarifs`}
+            >
+              {euros(base)}
+            </button>
           )}
-        </div>
-        <div>
-          <div className="st-lib" title="Les endroits où ce produit peut être vendu.">Vendu</div>
-          <div className="st-val">{(p.canaux || []).map(mot).join(', ') || '—'}</div>
-        </div>
-        <div>
-          <div className="st-lib" title="Quantité disponible à la vente, tenue par le module Stock.">
+        </span>
+
+        <span className="fl-sep" aria-hidden="true">·</span>
+
+        <span className="fl-item">
+          <span className="fl-lib">Vendu</span>
+          <button
+            type="button"
+            className="fl-val"
+            onClick={() => allerA('prod-diffusion')}
+            aria-label="Canaux de vente — aller à la section Diffusion"
+          >
+            {(p.canaux || []).map(mot).join(', ') || 'aucun canal'}
+          </button>
+        </span>
+
+        <span className="fl-sep" aria-hidden="true">·</span>
+
+        {/* ⚠ NI SOULIGNE NI CLIQUABLE. Aucune section de cette fiche ne porte le stock — le module
+            Stock le tient de son cote. Il n'y a donc nulle part ou aller, et un faux raccourci
+            coute plus cher qu'une valeur sans raccourci. */}
+        <span className="fl-item">
+          <span className="fl-lib" title="Quantité disponible à la vente, tenue par le module Stock.">
             Stock
-          </div>
-          <div className="st-val num">
-            {p.stock && typeof p.stock.disponibilite === 'number' ? p.stock.disponibilite : 'Non suivi'}
-          </div>
-        </div>
+          </span>
+          <span className="fl-val muet">
+            {p.stock && typeof p.stock.disponibilite === 'number' ? p.stock.disponibilite : 'non suivi'}
+          </span>
+        </span>
       </div>
 
       <Tabs
@@ -804,7 +860,7 @@ export default function ProduitFiche({
 
       {vueFiche === 'config' && (
       <>
-      <Section titre="Tarifs" aide="Le prix de ce produit, par type de tarif et par période.">
+      <Section titre="Tarifs" ancre="prod-tarifs" aide="Le prix de ce produit, par type de tarif et par période.">
         <TarifsProduit
           produit={p}
           grilles={grilles}
@@ -856,7 +912,7 @@ export default function ProduitFiche({
         )}
       </Section>
 
-      <Section titre="Diffusion">
+      <Section titre="Diffusion" ancre="prod-diffusion">
         {/* ⚠ << — >> SE LIT << AUCUN >>, ET LA VALEUR SIGNIFIE << TOUS >>. C'est la liste qui
             restreint : un produit sans site coche est du socle, partage par tous les
             etablissements. Afficher un tiret ici faisait croire a un rattachement manquant, et
@@ -1172,9 +1228,11 @@ function calculExemple(liaisons, valeurs, prixBase) {
 
 /* ------------------------------------------------------------------ Petits blocs */
 
-function Section({ titre, aide, children }) {
+function Section({ titre, aide, children, ancre }) {
   return (
-    <div style={{ marginTop: 'var(--esp-large)' }}>
+    // `ancre` est facultative : seules les sections vers lesquelles la ligne compacte renvoie en
+    // portent une. En donner une a toutes creerait des identifiants que rien n'utilise.
+    <div id={ancre} style={{ marginTop: 'var(--esp-large)' }}>
       <div className="fiche-sec" title={aide}>{titre}</div>
       {children}
     </div>

@@ -83,7 +83,10 @@ final class FactureRenduProvider implements ProviderInterface
         $emetteur = $profil === null ? null : array_filter([
             'denomination' => $profil->getRaisonSociale(),
             'adresse' => $profil->getAdresse() !== [] ? $profil->getAdresse() : null,
-            'siret' => $profil->getSiren() !== '' ? $profil->getSiren() : null,
+            // ⚠ LE SIRET, PAS LE SIREN. Cette ligne a publie `getSiren()` pendant deux heures :
+            // neuf chiffres sous une cle qui en promet quatorze. Le SIRET porte en plus le NIC de
+            // l'etablissement — la partie qui dit QUEL site facture, et la seule qui manquait.
+            'siret' => $profil->getSiret(),
             'tvaIntra' => $profil->getTvaIntracommunautaire(),
         ], static fn (mixed $v): bool => $v !== null);
 

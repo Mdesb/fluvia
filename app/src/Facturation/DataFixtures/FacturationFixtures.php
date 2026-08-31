@@ -84,6 +84,9 @@ final class FacturationFixtures extends Fixture implements DependentFixtureInter
         // Ecrire les deux ferait exactement ce qu'on vient de refermer : deux sources pour le meme
         // fait sur un document opposable.
         $profil->setRaisonSociale('Régie piscine A');
+        // ⚠ LE SIRET, PAS LE SIREN : les 9 chiffres du SIREN plus le NIC a 5 chiffres qui designe
+        // l'etablissement. C'est cette partie-la qui dit QUEL site facture.
+        $profil->setSiret($profil->getSiren() . '00012');
         $profil->setTvaIntracommunautaire('FR00' . $profil->getSiren());
         $profil->setAdresse([
             'rue' => '1 rue de la Piscine',

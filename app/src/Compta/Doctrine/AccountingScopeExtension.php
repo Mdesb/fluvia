@@ -14,6 +14,7 @@ use App\Compta\Entity\CompteComptable;
 use App\Compta\Entity\DeclarationEReporting;
 use App\Compta\Entity\EcritureComptable;
 use App\Compta\Entity\EtalementPca;
+use App\Compta\Entity\FactureB2G;
 use App\Compta\Entity\HiddenLegalVatRate;
 use App\Compta\Entity\ExpenseAccountMapping;
 use App\Compta\Entity\ExportComptable;
@@ -31,6 +32,7 @@ use App\Compta\Entity\TauxTva;
 use App\Compta\Entity\VenteImpayeeRegie;
 use App\Securite\Entity\Utilisateur;
 use App\Securite\Service\ContexteEtablissement;
+use App\Facturation\Entity\Facture;
 use App\Vente\Entity\Vente;
 use Doctrine\ORM\QueryBuilder;
 use Symfony\Bundle\SecurityBundle\Security;
@@ -75,10 +77,18 @@ use Symfony\Bundle\SecurityBundle\Security;
  * urgente, c'est que les écrans qui les REMPLISSENT venaient d'être livrés (T28, T30) — le défaut
  * naissait avec la première ligne écrite, pas avant.
  *
- * Les trois autres restent hors de cette extension et le motif tient pour elles : `MoyenPaiement` et
- * `QualificationEquipement` sont des référentiels ; `FactureB2G` porte un `clientRef` dont le chemin
- * n'a **pas** été mesuré — ne pas le traiter au jugé est exactement la prudence que cette note
- * réclamait, et elle reste valable là où la mesure manque.
+ * **Puis la quatrième, le 01/09 — et le motif visait encore le mauvais champ.** La note disait de
+ * `FactureB2G` qu'elle « porte un `clientRef`, autre chemin ». C'est exact et sans issue : ce champ
+ * vient du destinataire, avec un `Uuid::v4()` **en repli** quand il n'en a pas — un identifiant qui
+ * ne désigne rien. Mais le chemin n'était pas là : `Facture::$factureB2G` pointe **vers** le
+ * bordereau, et `Facture` porte son établissement en direct. Une sous-requête à l'envers suffit.
+ *
+ * Deux fois de suite, la note a cherché un chemin *depuis* l'entité et conclu qu'il n'y en avait
+ * pas. Chercher aussi ce qui pointe **vers** elle aurait donné la réponse dans les deux cas.
+ *
+ * Les deux dernières restent hors de cette extension et le motif tient pour elles : `MoyenPaiement`
+ * et `QualificationEquipement` sont des référentiels — un moyen de paiement est le même pour tout le
+ * monde, et le cloisonner reviendrait à en donner une copie par établissement.
  *
  * ── ⚠ SOUS-REQUÊTE AUTONOME, JAMAIS DE JOINTURE ────────────────────────────────────────────────
  *
@@ -192,6 +202,21 @@ final class AccountingScopeExtension implements QueryCollectionExtensionInterfac
                 'SELECT 1 FROM %s v_scope WHERE v_scope.id = %s.venteOrigine'
                 .' AND IDENTITY(v_scope.etablissement) = :accounting_scope_actif',
                 Vente::class,
+                $racine,
+            ),
+            // ⚠ A L'ENVERS, ET C'EST LE SEUL SENS QUI EXISTE. `FactureB2G` ne porte aucune
+            // relation vers la facture ; c'est `Facture::$factureB2G` qui pointe vers elle. Le
+            // docblock cherchait un chemin depuis `clientRef` — champ qui vient du destinataire
+            // avec un `Uuid::v4()` EN REPLI, donc un identifiant qui ne designe rien. Le chemin
+            // etait de l'autre cote, et `Facture` porte son etablissement en direct.
+            //
+            // Aucun orphelin a craindre : `DepotChorusProHandler`, seul createur, rattache le
+            // bordereau a sa facture dans le meme flush.
+            FactureB2G::class => sprintf(
+                'SELECT 1 FROM %s f_scope'
+                .' WHERE IDENTITY(f_scope.factureB2G) = %s.id'
+                .' AND IDENTITY(f_scope.etablissement) = :accounting_scope_actif',
+                Facture::class,
                 $racine,
             ),
             // Deux sauts : la ligne porte l'écriture, l'écriture porte le profil exploitant — le

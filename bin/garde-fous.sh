@@ -341,6 +341,8 @@ if [ -n "${REFERENCE:-}" ]; then
     executer "Creations irreversibles" php_racine bin/garde-fou-post-sans-suppression.php
     executer "Filtres muets" php_racine bin/garde-fou-filtres-muets.php
     executer "Appels du frontal dans le vide (n°33)" php_racine bin/garde-fou-appels-dans-le-vide.php
+    executer "Classes fantômes (n°37)" php_racine bin/garde-fou-classes-fantomes.php
+    executer "Marqueurs de conflit (n°38)" "$RACINE/bin/garde-fou-marqueurs-de-conflit.sh"
 else
     executer "Liaisons d'objet (D58)" php_racine bin/garde-fou-liaisons-objet.php
     executer "Nullable sur colonne non nulle" php_racine bin/garde-fou-nullable-non-nul.php
@@ -350,6 +352,8 @@ else
     executer "Creations irreversibles" php_racine bin/garde-fou-post-sans-suppression.php
     executer "Filtres muets" php_racine bin/garde-fou-filtres-muets.php
     executer "Appels du frontal dans le vide (n°33)" php_racine bin/garde-fou-appels-dans-le-vide.php
+    executer "Classes fantômes (n°37)" php_racine bin/garde-fou-classes-fantomes.php
+    executer "Marqueurs de conflit (n°38)" "$RACINE/bin/garde-fou-marqueurs-de-conflit.sh"
 fi
 
 # 5. i18n : pas de chaîne d'UI en dur — SANS OBJET tant que la couche i18n n'existe pas (aucun
@@ -427,6 +431,21 @@ if [ -f "$RACINE/frontend/scripts/verifier-imports.mjs" ]; then
     else
         echo "─────────────────────────────────────────────────────────────"
         echo "▶ Imports manquants"
+        echo "─────────────────────────────────────────────────────────────"
+        echo "· IGNORÉ — « node » indisponible ici. Le contrôle n'a PAS tourné."
+    fi
+fi
+
+# n37 — une cle definie deux fois dans le meme objet. C'est ce que produit une FUSION GIT SANS
+# CONFLIT : deux sessions ajoutent leur appel dans le meme objet `api`, Git concatene, et l'un des
+# deux cesse silencieusement d'exister. Quatre occurrences en deux jours, rapportees par trois
+# sessions. Ni le build ni le linteur ne le voient : `{ a: 1, a: 2 }` est du JavaScript legal.
+if [ -f "$RACINE/frontend/scripts/verifier-cles-doubles.mjs" ]; then
+    if command -v node >/dev/null 2>&1; then
+        executer "Cles en double (n37)" sh -c "cd '$RACINE/frontend' && node scripts/verifier-cles-doubles.mjs"
+    else
+        echo "─────────────────────────────────────────────────────────────"
+        echo "▶ Cles en double"
         echo "─────────────────────────────────────────────────────────────"
         echo "· IGNORÉ — « node » indisponible ici. Le contrôle n'a PAS tourné."
     fi

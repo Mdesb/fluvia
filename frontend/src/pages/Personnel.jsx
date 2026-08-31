@@ -285,7 +285,7 @@ function MotifBadge({ demande, busy, onFermer, onConfirmer }) {
       taille="sm"
     >
       <div style={{ display: 'grid', gap: 12 }}>
-        <div className={revoque || incident ? 'alert crit' : 'alert warn'}>
+        <div className={revoque || incident ? 'banner banner-error' : 'banner banner-warn'}>
           {revoque
             ? 'La révocation est définitive : ce badge ne pourra pas être réactivé, il faudra en émettre un nouveau.'
             : incident

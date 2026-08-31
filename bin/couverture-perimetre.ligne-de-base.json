@@ -44,32 +44,10 @@
     ],
     "scelle": {
         "gelee_le": "2026-08-28",
-        "plafond": 15,
+        "plafond": 14,
         "reference": "MESSAGES.md — claude-A, 28/08 : le garde-fou tenait « porte un champ etablissement » pour « est cloisonne ». Les 11 entrees ajoutees ce jour-la sont ce que la premisse cachait."
     },
     "entrees": {
-        "Compta/Entity/FactureB2G.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Compta",
-            "operations": [
-                "Get",
-                "GetCollection",
-                "Post"
-            ],
-            "permissions": [
-                "compta.gerer",
-                "compta.lire"
-            ],
-            "sensibilite": "argent",
-            "traitement": {
-                "groupe": "C",
-                "chemin": "",
-                "cible": "",
-                "note": "Facture Chorus Pro sans rattachement. Migration."
-            }
-        },
         "Compta/Entity/MoyenPaiement.php": {
             "depuis": "2026-08-23",
             "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",

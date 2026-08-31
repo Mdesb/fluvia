@@ -127,10 +127,10 @@ export default function FacturesFournisseur({ etabActif, droits }) {
         </div>
       )}
 
-      {/* « ou importée » promettait un chemin qui n'existe pas : la voie OCR
-          (`POST /finance/supplier-invoices/extract`) n'est appelée par aucun écran, et le module
-          `Ocr` n'a aucune occurrence dans le client. Un mot qui annonce une capacité absente fait
-          chercher un bouton d'import pendant dix minutes. On dit la seule entrée qui existe. */}
+      {/* ⚠ CE COMMENTAIRE DISAIT « la voie OCR n'est appelée par aucun écran ». C'est faux depuis
+          le 01/09 : `SaisieFactureModal` dépose le document et pré-remplit le formulaire. La phrase
+          a été corrigée en même temps que le code — une phrase qui décrit un manque devient un
+          mensonge le jour où on le comble, et rien ne relie les deux. */}
       <TableauFactures
         fournisseurs={fournisseurs}
         titre="À approuver"
@@ -262,6 +262,9 @@ function SaisieFactureModal({ open, fournisseurs, etabActif, onClose, onFait }) 
   const [dateFacture, setDateFacture] = useState('')
   const [echeance, setEcheance] = useState('')
   const [lignes, setLignes] = useState([{ ...LIGNE_FOURNISSEUR_VIDE }])
+  // Le dépôt de document : `null` tant qu'on n'a rien déposé, puis le résultat de la lecture.
+  const [lecture, setLecture] = useState(null)
+  const [lectureEnCours, setLectureEnCours] = useState(false)
   const [erreur, setErreur] = useState(null)
   const [envoi, setEnvoi] = useState(false)
 
@@ -336,6 +339,47 @@ function SaisieFactureModal({ open, fournisseurs, etabActif, onClose, onFait }) 
     }
   }
 
+  // ⚠ ON PRE-REMPLIT, ON NE SOUMET PAS. Une facture fournisseur engage un paiement : l'extraction
+  // est une SUGGESTION que l'exploitant relit. Et un champ déjà renseigné n'est jamais écrasé — il
+  // a été saisi exprès.
+  const deposerDocument = useCallback(async (fichier) => {
+    if (!fichier) return
+    setLectureEnCours(true)
+    setLecture(null)
+    setErreur(null)
+    try {
+      const base64 = await new Promise((resoudre, rejeter) => {
+        const lecteur = new FileReader()
+        lecteur.onerror = () => rejeter(new Error('Le fichier n’a pas pu être lu.'))
+        // `readAsDataURL` rend « data:<mime>;base64,<contenu> » — le serveur attend le contenu seul.
+        lecteur.onload = () => resoudre(String(lecteur.result).split(',')[1] ?? '')
+        lecteur.readAsDataURL(fichier)
+      })
+
+      const r = await api.extraireFactureFournisseur(base64, fichier.type || 'application/pdf')
+      setLecture(r)
+
+      if (!numero && r.documentNumber) setNumero(r.documentNumber)
+      if (!dateFacture && r.documentDate) setDateFacture(r.documentDate)
+
+      // Le fournisseur se rapproche par le nom, sans jamais en inventer un : si rien ne
+      // correspond, on le dit plutôt que de choisir le premier de la liste.
+      if (!fournisseur && r.supplierName) {
+        const cible = r.supplierName.trim().toLowerCase()
+        const trouve = fournisseursActifs.find(
+          (f) => (f.raisonSociale || f.nom || '').trim().toLowerCase() === cible,
+        )
+        if (trouve) setFournisseur(trouve.id)
+      }
+    } catch (e) {
+      // ⚠ UN ECHEC SE DIT. Un formulaire resté vide après un dépôt se lit comme « le document
+      // n'avait rien dedans » — une conclusion que cet écran n'a pas mesurée.
+      setLecture({ status: 'echec', detail: e?.message || 'La lecture du document a échoué.' })
+    } finally {
+      setLectureEnCours(false)
+    }
+  }, [numero, dateFacture, fournisseur, fournisseursActifs])
+
   return (
     <Modal open={open} onClose={onClose} titre="Enregistrer une facture fournisseur" taille="lg">
       <form onSubmit={soumettre}>
@@ -345,6 +389,51 @@ function SaisieFactureModal({ open, fournisseurs, etabActif, onClose, onFait }) 
           <div className="banner banner-warn">
             Aucun fournisseur n’est enregistré sur cet établissement. Une facture appartient à un
             fournisseur : créez-le d’abord dans <b>Stock › Achats</b>.
+          </div>
+        )}
+
+        <div className="field" style={{ marginBottom: 'var(--esp-large)' }}>
+          <label htmlFor="sf-doc">Lire une facture (PDF ou image)</label>
+          <input
+            id="sf-doc"
+            className="input"
+            type="file"
+            accept="application/pdf,image/*"
+            disabled={lectureEnCours}
+            onChange={(e) => deposerDocument(e.target.files?.[0])}
+          />
+          <div className="sub">
+            Facultatif. Les champs lus sont <b>proposés</b> — relisez-les avant d’enregistrer.
+          </div>
+        </div>
+
+        {lectureEnCours && <div className="banner">Lecture du document en cours…</div>}
+
+        {lecture && lecture.status === 'echec' && (
+          <div className="banner banner-error">
+            <b>Le document n’a pas pu être lu.</b> {lecture.detail} Les champs restent vides&nbsp;:
+            cet écran ne sait pas ce que contenait le fichier. Saisissez la facture à la main.
+          </div>
+        )}
+
+        {lecture && lecture.status !== 'echec' && (
+          <div className={lecture.confidenceScore != null && lecture.confidenceScore < 0.8 ? 'banner banner-warn' : 'banner'}>
+            <b>Document lu{lecture.provider ? ` par ${lecture.provider}` : ''}.</b>{' '}
+            {lecture.confidenceScore != null ? (
+              <>Confiance <b>{Math.round(lecture.confidenceScore * 100)}%</b>. </>
+            ) : (
+              <>Aucun score de confiance rendu&nbsp;: rien ne dit à quel point s’y fier. </>
+            )}
+            {lecture.supplierName && !fournisseur && (
+              <>Le fournisseur lu — <b>{lecture.supplierName}</b> — ne correspond à aucun fournisseur
+              enregistré ici&nbsp;: choisissez-le, ou créez-le dans <b>Stock&nbsp;› Achats</b>. </>
+            )}
+            {lecture.amountInclTax && (
+              <>Total TTC lu&nbsp;: <b>{lecture.amountInclTax}</b>
+              {lecture.vatAmount ? <> dont <b>{lecture.vatAmount}</b> de TVA</> : null}
+              {' '}— à reporter sur les lignes ci-dessous, que la lecture ne détaille pas encore. </>
+            )}
+            Relisez chaque champ&nbsp;: une lecture est une proposition, pas une saisie vérifiée.
           </div>
         )}
 
