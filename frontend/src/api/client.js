@@ -1745,6 +1745,35 @@ export const api = {
   emettreBadgeStaff: (employeId) =>
     request(`/api/personnel/employes/${employeId}/badges`, { method: 'POST', body: {}, ld: true }),
 
+  // ─── LE PLANNING, LA SORTIE, L'INCIDENT ──────────────────────────────────────────────────
+  //
+  // L'ecran savait declarer un employe, ses absences et emettre ses badges. Il ne savait ni le
+  // PLANIFIER, ni le faire SORTIR, ni signaler un badge perdu. Quatre gestes servis, zero appel.
+  //
+  // ⚠ `POST /personnel/creneaux-travail` LIT LE CORPS BRUT (pas de `ld: true`), et son
+  // `etablissement` est un UUID ou une IRI recoupe cote serveur. Contraintes COMPTEES dans
+  // l'entite, pas survolees -- `libellePoste` NotBlank, `debut` et `fin` NotNull, `effectifRequis`
+  // >= 1 -- plus un validateur de CLASSE, `TopologieTravailCoherente`, qui exige en outre
+  // `fin > debut` et un etablissement resolu. C'est lui qui produirait le 422 surprenant.
+  creneauxTravail: (params) =>
+    request('/api/creneau_travails', { query: { itemsPerPage: 200, ...(params || {}) } }),
+  creerCreneauTravail: (corps) =>
+    request('/api/personnel/creneaux-travail', { method: 'POST', body: corps }),
+  annulerCreneauTravail: (id) =>
+    request(`/api/personnel/creneaux-travail/${id}/annuler`, { method: 'POST', body: {} }),
+
+  // ⚠ SUSPENDRE UN EMPLOYE SUSPEND AUSSI SES BADGES. Le processeur le fait en cascade
+  // (« Suspension de l'employe »), et la reactivation les remet. Ce n'est pas un detail : la
+  // personne perd ses acces physiques a l'instant du clic. L'ecran le dit avant, pas apres.
+  suspendreEmploye: (id) =>
+    request(`/api/personnel/employes/${id}/suspendre`, { method: 'POST', body: {} }),
+  reactiverEmploye: (id) =>
+    request(`/api/personnel/employes/${id}/reactiver`, { method: 'POST', body: {} }),
+
+  // Perte ou vol : le serveur exige un `motif` non vide, et lui seul est lu au corps.
+  declarerIncidentBadge: (id, motif) =>
+    request(`/api/personnel/badges/${id}/declarer-incident`, { method: 'POST', body: { motif } }),
+
   // --- Verticales (routes explicites privilégiées) ---
   // Piscine
   bassins: () => request('/api/bassins', { query: { itemsPerPage: 100 } }),

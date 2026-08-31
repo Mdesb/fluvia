@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import AbsencesSection from '../components/AbsencesSection.jsx'
 import Liste, { dateFr, dateHeureFr, jourLocal } from '../components/Liste.jsx'
+import PlanningTravail from '../components/PlanningTravail.jsx'
 import Modal from '../components/Modal.jsx'
 import Tabs from '../components/Tabs.jsx'
 import { api } from '../api/client.js'
@@ -47,6 +48,7 @@ export default function Personnel({ etabActif, droits = [] }) {
       <Tabs
         onglets={[
           ['employes', 'Employés'],
+          ['planning', 'Planning'],
           ['roster', 'Roster'],
           ['badges', 'Badges staff'],
         ]}
@@ -56,6 +58,13 @@ export default function Personnel({ etabActif, droits = [] }) {
 
       {sousOnglet === 'employes' && (
         <ListeEmployes etabActif={etabActif} droits={droits} onBadgeEmis={() => setSousOnglet('badges')} />
+      )}
+
+      {/* LE PLANNING AVANT LE ROSTER, ET C'EST L'ORDRE DU RAISONNEMENT : le créneau dit ce qu'il
+          faut couvrir, le roster dit si ça l'est. Sans le premier, le second ne peut rien
+          affirmer — il comparait un besoin qu'aucun écran ne savait exprimer. */}
+      {sousOnglet === 'planning' && (
+        <PlanningTravail etabActif={etabActif} droits={droits} />
       )}
 
       {sousOnglet === 'roster' && (
@@ -200,6 +209,23 @@ function GestionBadges({ etabActif, droits = [] }) {
             >
               Révoquer
             </button>
+            {/* PERTE OU VOL — UN TROISIÈME GESTE, ET PAS UN SYNONYME DES DEUX AUTRES.
+                Suspendre dit « ce badge ne doit plus ouvrir pour l'instant ». Révoquer dit « ce
+                badge est mort ». Déclarer un incident dit « ce badge est DEHORS, entre les mains
+                de quelqu'un qui n'est pas son titulaire » — c'est un fait sur le monde physique,
+                pas une décision d'administration, et il se consigne pour être retrouvé. La route
+                s'ouvre d'ailleurs aussi à `acces.bloquer_support`, donc à quelqu'un du contrôle
+                d'accès qui n'administre pas le personnel. */}
+            <button
+              className="btn ghost sm"
+              type="button"
+              disabled={busy}
+              style={{ padding: '1px 8px', fontSize: 11.5 }}
+              title="Perte ou vol : consigne l'incident et bloque le badge."
+              onClick={() => setDemande({ badge: r, geste: 'incident' })}
+            >
+              Perte ou vol
+            </button>
           </div>
         )
       },
@@ -228,7 +254,9 @@ function GestionBadges({ etabActif, droits = [] }) {
           setDemande(null)
           agir(() => (geste === 'revoquer'
             ? api.revoquerBadgeStaff(badge.id, motif)
-            : api.suspendreBadgeStaff(badge.id, motif)))
+            : geste === 'incident'
+              ? api.declarerIncidentBadge(badge.id, motif)
+              : api.suspendreBadgeStaff(badge.id, motif)))
         }}
       />
     </div>
@@ -245,6 +273,7 @@ function GestionBadges({ etabActif, droits = [] }) {
 function MotifBadge({ demande, busy, onFermer, onConfirmer }) {
   const [motif, setMotif] = useState('')
   const revoque = demande?.geste === 'revoquer'
+  const incident = demande?.geste === 'incident'
 
   useEffect(() => { setMotif('') }, [demande])
 
@@ -252,14 +281,18 @@ function MotifBadge({ demande, busy, onFermer, onConfirmer }) {
     <Modal
       open={!!demande}
       onClose={onFermer}
-      titre={revoque ? 'Révoquer le badge' : 'Suspendre le badge'}
+      titre={revoque ? 'Révoquer le badge' : incident ? 'Déclarer une perte ou un vol' : 'Suspendre le badge'}
       taille="sm"
     >
       <div style={{ display: 'grid', gap: 12 }}>
-        <div className={revoque ? 'alert crit' : 'alert warn'}>
+        <div className={revoque || incident ? 'alert crit' : 'alert warn'}>
           {revoque
             ? 'La révocation est définitive : ce badge ne pourra pas être réactivé, il faudra en émettre un nouveau.'
-            : 'La suspension se lève : le badge pourra être réactivé quand la personne le retrouvera.'}
+            : incident
+              ? 'Un badge perdu ou volé est DEHORS : quelqu’un d’autre peut s’en servir pour entrer. '
+                + 'La déclaration le bloque et consigne l’incident — c’est ce qui permettra de comprendre '
+                + 'un passage anormal si l’on en trouve un.'
+              : 'La suspension se lève : le badge pourra être réactivé quand la personne le retrouvera.'}
         </div>
 
         <label style={{ display: 'grid', gap: 4 }}>
@@ -269,11 +302,19 @@ function MotifBadge({ demande, busy, onFermer, onConfirmer }) {
             type="text"
             maxLength={255}
             value={motif}
-            placeholder={revoque ? 'Ex. fin de contrat le 31/08' : 'Ex. badge égaré, déclaré le 27/08'}
+            placeholder={revoque
+              ? 'Ex. fin de contrat le 31/08'
+              : incident
+                ? 'Ex. perdu au vestiaire le 31/08, signalé par l’agent d’accueil'
+                : 'Ex. badge égaré, déclaré le 27/08'}
             onChange={(e) => setMotif(e.target.value)}
           />
           <span className="sub" style={{ fontSize: 12.5 }}>
-            C’est la seule chose que lira celui qui rouvrira cette ligne dans six mois.
+            {incident
+              ? 'Obligatoire pour une perte ou un vol : le serveur refuse sans. Les circonstances '
+                + 'décident de la suite — un badge perdu sur place et un badge volé dehors n’appellent '
+                + 'pas la même réaction.'
+              : 'C’est la seule chose que lira celui qui rouvrira cette ligne dans six mois.'}
           </span>
         </label>
 
@@ -285,7 +326,7 @@ function MotifBadge({ demande, busy, onFermer, onConfirmer }) {
             disabled={busy || motif.trim() === ''}
             onClick={() => onConfirmer(motif.trim())}
           >
-            {revoque ? 'Révoquer' : 'Suspendre'}
+            {revoque ? 'Révoquer' : incident ? 'Déclarer la perte' : 'Suspendre'}
           </button>
         </div>
       </div>
@@ -354,6 +395,64 @@ function ListeEmployes({ etabActif, droits = [], onBadgeEmis }) {
               }}
             >
               Émettre un badge
+            </button>
+          </div>
+        )
+      },
+    })
+  }
+
+  // LA SORTIE D'UN SALARIÉ — le geste qui manquait après l'embauche.
+  //
+  // ⚠ SUSPENDRE UN EMPLOYÉ SUSPEND AUSSI SES BADGES, en cascade côté serveur. La personne perd
+  // ses accès physiques à l'instant du clic : c'est le comportement voulu pour un départ, et c'est
+  // exactement pourquoi il faut le dire AVANT. Un exploitant qui suspend « pour mettre à jour une
+  // fiche » ne s'attend pas à couper l'entrée du personnel.
+  //
+  // Et c'est réversible : `reactiver` remet les badges. On ne propose donc pas de confirmation
+  // pour la réactivation — un geste réversible qui demande « êtes-vous sûr ? » apprend à cliquer
+  // « oui » sans lire, et ce réflexe se transporte ensuite sur les gestes qui ne le sont pas.
+  if (peutGererEmploye) {
+    colonnes.push({
+      cle: 'sortie',
+      entete: '',
+      rendu: (r) => {
+        const statut = String(r.statut || '').toLowerCase()
+        if (statut === 'sorti') return null
+        const suspendu = statut === 'suspendu'
+        return (
+          <div style={{ textAlign: 'right' }}>
+            <button
+              className="btn ghost sm"
+              type="button"
+              disabled={busy}
+              style={{ padding: '1px 8px', fontSize: 11.5 }}
+              title={suspendu
+                ? 'Rétablit le salarié et ses badges de service.'
+                : 'Suspend le salarié ET ses badges de service : il perd ses accès physiques.'}
+              onClick={async () => {
+                if (!suspendu && !window.confirm(
+                  `Suspendre ${[r.prenom, r.nom].filter(Boolean).join(' ') || 'ce salarié'} ?\n\n`
+                  + 'Ses badges de service seront suspendus en même temps : il perdra ses accès '
+                  + 'physiques immédiatement.\n\nLe geste est réversible.',
+                )) return
+                setBusy(true)
+                setErreur(null)
+                try {
+                  if (suspendu) await api.reactiverEmploye(r.id)
+                  else await api.suspendreEmploye(r.id)
+                  // ⚠ PAS `onBadgeEmis` : ce rappel BASCULE vers l'onglet des badges. L'appeler
+                  // ici enverrait l'utilisateur ailleurs apres une suspension, ce qui se lit
+                  // comme un bug. Le compteur recharge la liste sans bouger d'ecran.
+                  setRechargement((k) => k + 1)
+                } catch (e) {
+                  setErreur(e.message || 'Le changement de statut a échoué.')
+                } finally {
+                  setBusy(false)
+                }
+              }}
+            >
+              {suspendu ? 'Réactiver' : 'Suspendre'}
             </button>
           </div>
         )
