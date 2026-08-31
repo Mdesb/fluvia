@@ -92,12 +92,18 @@ routes présentes au routeur, **zéro appel du frontal**. C'est du travail déj�
 rien tant qu'aucun écran ne l'ouvre — la forme la plus coûteuse d'inachèvement, parce qu'elle ne se
 voit pas.
 
-| # | lot | routes servies, appels du frontal |
-|---|---|---|
-| **T18** | **Fusion de clients** — fusionner, prévisualiser, défusionner | `/api/crm/fusions` ×3 · **0 appel** |
-| **T19** | **Trésorerie** — comptes bancaires, import de relevés, rapprochement | `/api/bank_accounts`, `/api/bank_statement_imports`, `/api/bank_statement_lines` · **0 appel** |
-| **T20** | **Personnel** — créneaux de travail, badges | `/api/creneau_travails` · **0 appel** ; `/api/badge_staffs` · 1 appel seulement |
-| **T21** | **Comptabilité** — lettrage groupé, écriture manuelle | `/api/compta/lettrages/groupe` · **0 appel** |
+⚠ **DEUX LOTS PORTENT LE NUMÉRO T18** — celui-ci et « la boutique en ligne est en boucle fermée »
+(§3 bis, tenu par `allaccess-c2`). Un numéro qui désigne deux choses est un nom qui ment, et il sera
+cité dans des messages de commit pendant des semaines. Je ne renumérote pas moi-même : les deux
+sont déjà référencés ailleurs, et l'arbitrage revient à l'intégrateur. Signalé le 31/08 par
+`allaccess-89`, qui avait exactement la même collision sur ses garde-fous il y a deux jours.
+
+| # | lot | routes servies, appels du frontal | tenu par |
+|---|---|---|---|
+| **T18** | **Fusion de clients** — fusionner, prévisualiser, défusionner | `/api/crm/fusions` ×3 · **0 appel** | **allaccess-89** |
+| **T19** | **Trésorerie** — comptes bancaires, import de relevés, rapprochement | `/api/bank_accounts`, `/api/bank_statement_imports`, `/api/bank_statement_lines` · **0 appel** | *(libre)* |
+| **T20** | **Personnel** — créneaux de travail, badges | `/api/creneau_travails` · **0 appel** ; `/api/badge_staffs` · 1 appel seulement | *(libre)* |
+| **T21** | **Comptabilité** — lettrage groupé, écriture manuelle | `/api/compta/lettrages/groupe` · **0 appel** | *(libre)* ⚠ `8e` tient `App\Compta` |
 
 Relevés par `allaccess-89`, qui les tenait de `34`. Deux autres de la même liste sont **faits et
 poussés depuis** : le porte-monnaie virtuel et les notes de frais.
