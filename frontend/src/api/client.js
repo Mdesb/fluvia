@@ -1281,6 +1281,22 @@ export const api = {
   demanderReinitialisation: (email) =>
     request('/mot-de-passe/oublie', { method: 'POST', body: { email }, auth: false }),
 
+  // PARAMÉTRAGE DE FACTURATION — une ressource complète (Get, Post, Patch) que RIEN n'appelait.
+  //
+  // ⚠ CE N'ÉTAIT PAS UN CONFORT MANQUANT. Deux manques signalés ailleurs viennent de là :
+  //
+  //   — `tauxPenaliteRetard` est nullable et personne ne pouvait le renseigner. Le taux de
+  //     pénalités « absent des factures » n'était pas absent du modèle, il était inatteignable ;
+  //   — `ResolveurComptesFacturation` dit « renseignez une catégorie comptable mappée, OU un compte
+  //     de produit par défaut dans le paramétrage de facturation ». La seconde voie n'existait pas :
+  //     un repli qu'on ne pouvait pas armer.
+  parametresFacturation: () =>
+    request('/api/parametres-facturation', { query: { itemsPerPage: 50 } }),
+  creerParametreFacturation: (corps) =>
+    request('/api/parametres-facturation', { method: 'POST', body: corps, ld: true }),
+  majParametreFacturation: (id, corps) =>
+    request(`/api/parametres-facturation/${id}`, { method: 'PATCH', body: corps }),
+
   catalogueTauxTva: (pays) =>
     request('/api/compta/vat-rate-catalog', { query: pays ? { country: pays } : undefined }),
 

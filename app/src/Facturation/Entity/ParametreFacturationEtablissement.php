@@ -12,6 +12,7 @@ use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\Compta\Entity\CompteComptable;
 use App\Compta\Entity\ProfilExploitant;
+use App\Facturation\State\BillingSettingsStampProcessor;
 use App\Facturation\Service\Montant;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
@@ -42,11 +43,13 @@ use Symfony\Component\Uid\Uuid;
             security: "is_granted('PERM', 'facturation.lire')",
         ),
         new Post(
+            processor: BillingSettingsStampProcessor::class,
             uriTemplate: '/parametres-facturation',
             security: "is_granted('PERM', 'facturation.gerer')",
             denormalizationContext: ['groups' => ['parametre_facturation:write']],
         ),
         new Patch(
+            processor: BillingSettingsStampProcessor::class,
             uriTemplate: '/parametres-facturation/{id}',
             security: "is_granted('PERM', 'facturation.gerer')",
             denormalizationContext: ['groups' => ['parametre_facturation:write']],
@@ -61,9 +64,24 @@ class ParametreFacturationEtablissement
     #[Groups(['parametre_facturation:read'])]
     private Uuid $id;
 
+    /**
+     * ⚠ SORTI DU GROUPE D'ECRITURE LE 31/08 : le serveur le pose, le client ne le choisit pas.
+     *
+     * Il portait `parametre_facturation:write` et `nullable: false`, sans que rien ne le pose cote
+     * serveur. Deux consequences, mesurees sur une base jetable :
+     *
+     *   — un POST sans ce champ rendait un 500 « Column profil_exploitant_id cannot be null », pas
+     *     un refus propre. La ressource etait donc inutilisable, ce qui explique qu'aucun ecran ne
+     *     l'ait jamais appelee ;
+     *   — un POST AVEC un profil etranger aurait ecrit le parametrage de facturation du voisin —
+     *     ses conditions de reglement, son taux de penalites. Le symptome aurait ete un reglage qui
+     *     change tout seul chez quelqu'un d'autre, ce qu'on n'impute jamais a une requete etrangere.
+     *
+     * `BillingSettingsStampProcessor` le resout depuis l'etablissement actif.
+     */
     #[ORM\ManyToOne(targetEntity: ProfilExploitant::class)]
     #[ORM\JoinColumn(nullable: false)]
-    #[Groups(['parametre_facturation:read', 'parametre_facturation:write'])]
+    #[Groups(['parametre_facturation:read'])]
     private ?ProfilExploitant $profilExploitant = null;
 
     /** @var array<string, mixed> {denomination, adresse, siret, tvaIntra} */
