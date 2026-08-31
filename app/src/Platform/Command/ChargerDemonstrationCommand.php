@@ -6,7 +6,7 @@ namespace App\Platform\Command;
 
 use Doctrine\Bundle\FixturesBundle\Loader\SymfonyFixturesLoader;
 use Doctrine\Common\DataFixtures\Executor\ORMExecutor;
-use Doctrine\Common\DataFixtures\Purger\PurgerInterface;
+use Doctrine\Common\DataFixtures\Purger\ORMPurgerInterface;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -64,7 +64,11 @@ final class ChargerDemonstrationCommand extends Command
 
         // Purgeur inerte **et** mode additif : deux verrous pour un seul risque, parce que celui-ci a
         // déjà coûté une préproduction. L'exécuteur exige un purgeur même quand il ne s'en sert pas.
-        $executeur = new ORMExecutor($this->em, new class implements PurgerInterface {
+        $executeur = new ORMExecutor($this->em, new class implements ORMPurgerInterface {
+            public function setEntityManager(EntityManagerInterface $em): void
+            {
+            }
+
             public function purge(): void
             {
             }
