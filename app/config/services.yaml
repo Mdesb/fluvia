@@ -363,6 +363,18 @@ services:
 # app/tests/Boutique/Support/MailCollector.php) — écoute `Symfony\Component\Mailer\Event\MessageEvent`,
 # dispatché par `AbstractTransport::send()` indépendamment du DSN (`null://null` en test), sans
 # nécessiter le profiler (non installé dans ce dépôt).
+    # T6 — le purgeur de `doctrine:fixtures:load` refuse de vider une base hors `dev`/`test`.
+    #
+    # Le bundle enregistre son propre facteur sous l'alias `default`. Le compilateur construit une carte
+    # alias -> service ; la configuration de l'application etant chargee apres les extensions de bundle,
+    # cette definition ecrase la sienne. Ce n'est pas une subtilite a deviner : c'est verifie par un
+    # essai reel — un chargement AVEC purge en environnement `prod` doit refuser, et il refuse.
+    App\Platform\DataFixtures\PurgeurInterditHorsDeveloppement:
+        arguments:
+            $environnement: '%kernel.environment%'
+        tags:
+            - { name: 'doctrine.fixtures.purger_factory', alias: 'default' }
+
 when@test:
     services:
         App\Tests\Boutique\Support\MailCollector:
