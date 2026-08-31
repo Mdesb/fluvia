@@ -161,7 +161,8 @@ final class CrmFixtures extends Fixture implements DependentFixtureInterface
             ->setPrenom('Jean')
             ->setEmail(self::PAYEUR_EMAIL)
             ->setTelephone('0601020304')
-            ->setDateNaissance(new \DateTimeImmutable('-42 years'));
+            ->setDateNaissance(new \DateTimeImmutable('-42 years'))
+            ->setAdresse(['rue' => '12 rue des Lilas', 'cp' => '75011', 'ville' => 'Paris', 'pays' => 'FR']);
         $manager->persist($payeur);
 
         $enfant = (new Client())
@@ -170,7 +171,8 @@ final class CrmFixtures extends Fixture implements DependentFixtureInterface
             ->setEtablissementCreation($etabA)
             ->setNom('Dupont')
             ->setPrenom(self::ENFANT_PRENOM)
-            ->setDateNaissance(new \DateTimeImmutable('-10 years'));
+            ->setDateNaissance(new \DateTimeImmutable('-10 years'))
+            ->setAdresse(['rue' => '12 rue des Lilas', 'cp' => '75011', 'ville' => 'Paris', 'pays' => 'FR']);
         $manager->persist($enfant);
 
         $conjoint = (new Client())
@@ -180,7 +182,8 @@ final class CrmFixtures extends Fixture implements DependentFixtureInterface
             ->setNom('Dupont')
             ->setPrenom(self::CONJOINT_PRENOM)
             ->setEmail('marie.dupont@example.test')
-            ->setDateNaissance(new \DateTimeImmutable('-40 years'));
+            ->setDateNaissance(new \DateTimeImmutable('-40 years'))
+            ->setAdresse(['rue' => '12 rue des Lilas', 'cp' => '75011', 'ville' => 'Paris', 'pays' => 'FR']);
         $manager->persist($conjoint);
 
         $famille = (new Famille())->setGroupe($groupeA)->setLibelle(self::FAMILLE_LIBELLE)->setPayeurPrincipal($payeur);

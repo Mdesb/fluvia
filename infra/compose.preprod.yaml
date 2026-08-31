@@ -82,6 +82,43 @@ services:
       db:
         condition: service_healthy
 
+  # ── SAUVEGARDE DE LA BASE ───────────────────────────────────────────────────────────────────
+  #
+  # Il n'y en avait AUCUNE. Mesure du 31/08 : pas de dump, pas de tache qui en fasse, et
+  # `doctrine:fixtures:load` absente en preprod — `composer install --no-dev` retire le paquet. Les
+  # 38 classes de fixtures decrivent tout le jeu de demonstration et ne peuvent pas etre rejouees.
+  #
+  # Le volume `db_data` est persistant : c'est de la DURABILITE, pas de la RECUPERABILITE. Il
+  # survit a un redemarrage, pas a un DELETE. Deux ecritures irreversibles ont eu lieu le meme jour,
+  # sans operation inverse dans l'API.
+  #
+  # ⚠ PAS DE PROFIL, contrairement a l'ordonnanceur : une sauvegarde qu'il faut penser a demarrer
+  # est une sauvegarde qui n'existera pas le jour ou elle servirait. L'ordonnanceur revoque des
+  # droits — c'est un effet, il se demande. Celle-ci ne fait que lire.
+  #
+  # La destination est HORS DU DEPOT : un dump contient des donnees personnelles, meme de
+  # demonstration, et n'a rien a faire dans un arbre git.
+  #
+  # Restauration — ecrite ici parce qu'une sauvegarde dont personne ne connait la commande n'en est
+  # pas une :
+  #     gunzip -c /home/debian/sauvegardes-billetterie/<fichier>.sql.gz \
+  #       | docker exec -i billetterie-preprod-db-1 mariadb -u root -p<motdepasse> <base>
+  sauvegarde:
+    image: mariadb:11.4
+    restart: unless-stopped
+    mem_limit: 256m
+    entrypoint: ["/bin/sh", "/infra/sauvegarde-base.sh"]
+    volumes:
+      - ../infra:/infra:ro
+      - /home/debian/sauvegardes-billetterie:/sauvegardes
+    environment:
+      DB_NAME: ${DB_NAME}
+      DB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD manquant dans .env.preprod}
+      SAUVEGARDE_RETENTION_JOURS: "14"
+    depends_on:
+      db:
+        condition: service_healthy
+
   web:
     image: nginx:1.27-alpine
     restart: unless-stopped

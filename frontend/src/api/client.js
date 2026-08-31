@@ -930,6 +930,23 @@ export const api = {
   annulerReservation: (id) =>
     request(`/api/reservation/reservations/${id}/annuler`, { method: 'POST', body: {} }),
 
+  // ── ARBITRER UN CONFLIT DE RECURRENCE (RG-M5-11) ──────────────────────────────────────────────
+  //
+  // Une occurrence de recurrence qui chevauche une autre occupation est desormais CREEE, marquee
+  // `enAttenteArbitrage`, et non reservable — au lieu d'etre perdue en silence. Decision de Maxime
+  // du 31/08 : « ne jamais deplacer tout seul ».
+  //
+  // Deux gestes, un seul appel : avec `idRessource`, on deplace la seance ; sans, on la confirme
+  // telle quelle. Dans les deux cas le drapeau tombe et la seance devient reservable.
+  //
+  // ⚠ LE SERVEUR REFUSE UNE RESSOURCE OCCUPEE (409) : arbitrer ne peut pas deplacer le conflit
+  // ailleurs. On affiche son message tel quel — il nomme la ressource.
+  arbitrerCreneau: (id, idRessource) =>
+    request(`/api/reservation/creneaux/${id}/arbitrer`, {
+      method: 'POST',
+      body: idRessource ? { ressource: idRessource } : {},
+    }),
+
   // ── ANNULER UN CRENEAU (le geste de l'exploitant, pas du client) ──────────────────────────────
   //
   // ⚠ CE N'EST PAS UNE ANNULATION DE RESERVATION EN GROS. `AnnulerCreneauProcessor` bascule TOUTES
@@ -1208,6 +1225,17 @@ export const api = {
   // pour moi » se fait côté serveur, où le profil comptable est connu : le laisser à l'écran, c'est
   // deux requêtes qui peuvent échouer séparément et un croisement à refaire dans chaque écran qui
   // affichera un jour cette liste.
+  // MOT DE PASSE OUBLIÉ — la seule route du produit appelée SANS être authentifié.
+  //
+  // `auth: false` est indispensable : le transport pose sinon un en-tête `Authorization` vide, et
+  // le serveur répond 401 sur une route qui doit justement servir à quelqu'un qui n'a pas de jeton.
+  //
+  // ⚠ La réponse porte `envoiCourrielBranche`. C'est le seul moyen pour cet écran de connaître ce
+  // fait : `/me` ne lui a rien rendu, puisque personne n'est connecté. Le déduire d'une constante
+  // reproduirait exactement le défaut qu'on corrige.
+  demanderReinitialisation: (email) =>
+    request('/mot-de-passe/oublie', { method: 'POST', body: { email }, auth: false }),
+
   catalogueTauxTva: (pays) =>
     request('/api/compta/vat-rate-catalog', { query: pays ? { country: pays } : undefined }),
 
