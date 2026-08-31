@@ -106,7 +106,7 @@ final class EinvoicingReadinessCommand extends Command
             }
 
             $output->writeln($vendeur
-                ? '  ── VENDEUR — non modélisé, donc AUCUNE facture n’est émettable ─────────────'
+                ? '  ── VENDEUR — non renseigné, donc AUCUNE facture n’est émettable ────────────'
                 : '  ── AUTRES TERMES ──────────────────────────────────────────────────────────');
             $output->writeln('');
 
@@ -124,8 +124,16 @@ final class EinvoicingReadinessCommand extends Command
             $output->writeln('');
         }
 
-        $output->writeln('  ⚠ Ce n’est pas un manque de connecteur, c’est un manque de DONNÉE : aucun');
-        $output->writeln('    raccordement à Chorus, à une PDP, à VeriFactu ou à SdI ne le comblera.');
+        // ⚠ CETTE PHRASE A CHANGÉ AVEC LE MODÈLE, ET C'ÉTAIT LE PIÈGE.
+        //
+        // Elle disait « manque de DONNÉE, aucun connecteur ne le comblera » — vrai le 31/08 au
+        // matin, quand les champs n'existaient pas. La migration `Version20260831180000` les a
+        // créés : ce qui manque désormais est une SAISIE, pas un modèle. Les deux ne se corrigent
+        // pas au même endroit, et confondre les deux fait chercher un développeur là où il faut un
+        // gestionnaire.
+        $output->writeln('  Les champs existent (migration du 31/08) : ce qui manque ici est une SAISIE.');
+        $output->writeln('  ⚠ Aucun raccordement à Chorus, à une PDP, à VeriFactu ou à SdI ne remplacera');
+        $output->writeln('    une identité de vendeur non renseignée.');
         $output->writeln('');
 
         return Command::SUCCESS;
