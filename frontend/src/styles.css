@@ -1085,6 +1085,21 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 .resa-part { display: flex; align-items: center; gap: var(--esp-serre); flex-wrap: wrap; }
 .resa-part-form { display: flex; align-items: center; gap: var(--esp-serre); flex-wrap: wrap; }
 
+/* Le bloc d activation de la double authentification : le QR, le secret, et les codes. */
+/* Une carte separee de la precedente. Declaree plutot que recopiee en style en ligne : le cliquet
+   des espacements refuse toute nouvelle litterale, et un jeton suit l echelle quand elle bouge. */
+.card-espacee { margin-top: var(--esp-bloc); }
+
+.mfa-secret { display: flex; flex-direction: column; gap: var(--esp-normal); align-items: flex-start; }
+/* Les codes de recuperation, en grille : on les recopie a la main, donc ils doivent se lire un par
+   un sans que l oeil saute une ligne. */
+.mfa-codes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: var(--esp-serre);
+  margin-top: var(--esp-serre);
+}
+
 /* La file d attente d un creneau. Meme decalage que les parts : elle appartient au creneau. */
 .resa-attente {
   display: flex;
