@@ -297,6 +297,10 @@ final class ProvisioningServiceTest extends SocleApiTestCase
             ->setNom('Martin')
             ->setPrenom('Claire')
             ->setRaisonSociale($raisonSociale)
+            // Un client d'abonnement est une entreprise ou une collectivite : SIRET et adresse sont
+            // des mentions legales obligatoires sur la facture (RG-FACT-08).
+            ->setSiret('12345678900011')
+            ->setAdresse(['rue' => '9 rue des Abonnes', 'cp' => '75016', 'ville' => 'Paris', 'pays' => 'FR'])
             ->setEmail($email);
 
         $this->em()->persist($prospect);

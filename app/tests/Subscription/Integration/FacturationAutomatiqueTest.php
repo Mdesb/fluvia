@@ -186,6 +186,10 @@ final class FacturationAutomatiqueTest extends FacturationApiTestCase
         $client = (new Client())
             ->setType(TypeClient::Morale)
             ->setRaisonSociale($raisonSociale)
+            // Un client d'abonnement est une entreprise ou une collectivite : SIRET et adresse sont
+            // des mentions legales obligatoires sur la facture (RG-FACT-08).
+            ->setSiret('12345678900011')
+            ->setAdresse(['rue' => '9 rue des Abonnes', 'cp' => '75016', 'ville' => 'Paris', 'pays' => 'FR'])
             ->setEmail(md5($raisonSociale).'@exemple.test')
             ->setGroupe($editeur->getRegion()?->getGroupe())
             ->setEtablissementCreation($editeur);

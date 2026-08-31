@@ -3314,3 +3314,56 @@ dans une consigne.
 **Forme exigée :** une constante nommée, refusée à la création d'une vitrine, avec un message qui
 dit pourquoi. Pas un contrôle dispersé, pas une convention orale. Ça coûte une constante aujourd'hui
 et évite un incident de production plus tard.
+
+---
+
+## D107 — On n'émet pas une facture sans savoir à qui, et la règle ne porte pas sur le montant
+
+**Décidé le 31/08.** RG-FACT-08 existait depuis l'origine, écrite et juste, et n'avait **aucun
+appelant** — relevé avec témoin par `allaccess-b8` : une définition, zéro appel.
+
+### Pourquoi pas le seuil de la facture simplifiée
+
+Le droit admet une facture **simplifiée** en B2C sous un certain seuil. On aurait pu y adosser la
+garde. ⚠ **On ne l'a pas fait, délibérément :** ce serait faire dépendre une mention légale d'un
+nombre qu'on ne peut pas vérifier depuis le code et qui bouge avec les textes.
+
+La règle porte donc sur **qui est le destinataire**, jamais sur combien il doit :
+
+    personne morale · organisme public   raison sociale + SIRET + adresse, toujours, sans seuil
+    particulier nommé                    adresse exigée — nommer quelqu'un, c'est pouvoir l'atteindre
+    aucun destinataire                   ce n'est pas une facture, c'est un ticket
+
+**C'est le troisième cas qui débloquait tout.** Neuf tests facturaient une vente **sans dire à qui**.
+Ce n'est pas une facture simplifiée : aucune lecture du droit n'appelle ça une facture. Et le point
+d'entrée accepte déjà un destinataire — c'est le geste du guichet : le client demande une facture,
+l'agent lui demande son nom et son adresse.
+
+### ⚠ Ce que la garde a révélé, et qui n'était pas un défaut de test
+
+`SubscriptionInvoicer::destinataire()` recopiait le nom, le prénom et la raison sociale depuis la
+fiche client — **mais ni le SIRET ni l'adresse**, que la fiche porte pourtant.
+
+**Les factures d'abonnement de Fluvia à ses propres clients n'auraient comporté ni SIRET ni adresse
+du destinataire.** Notre propre facturation n'était pas conforme, et personne ne le voyait parce que
+rien ne demandait jamais si une facture était complète.
+
+C'est la même famille que tout ce qu'on a trouvé cette nuit : **la donnée existait, le code ne la
+portait pas.**
+
+### Le coût, assumé
+
+Aujourd'hui on peut facturer une vente anonyme, demain non. C'est un vrai changement de
+comportement, pas un durcissement cosmétique. Il est défendable parce qu'une facture sans
+destinataire identifiable n'a jamais été une facture.
+
+## D108 — `fluvia-app.com` est un choix contraint, pas un oubli
+
+`fluvia.com` et `fluvia.fr` **ne sont pas disponibles** (vérifié par Maxime le 31/08). La vitrine
+marketing ira donc sur `fluvia-app.com`, malgré le « app » dans un domaine qui sert d'abord à
+présenter le produit.
+
+⚠ **C'est écrit ici pour que personne ne rouvre le sujet en croyant à une inadvertance.** Si l'un des
+deux se libère un jour, le déplacement se fera — et il coûtera d'autant plus cher qu'il y aura de
+liens en circulation. C'est une raison de plus pour que les clients aient leur propre sous-domaine
+(D104) : leurs liens à eux ne dépendent pas du nôtre.

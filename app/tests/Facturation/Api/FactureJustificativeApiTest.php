@@ -34,7 +34,7 @@ final class FactureJustificativeApiTest extends FacturationApiTestCase
             ->select('COUNT(e.id)')->getQuery()->getSingleScalarResult();
 
         $reponse = $client->request('POST', '/api/factures/depuis-vente', $entete + [
-            'json' => ['vente' => '/api/ventes/' . $vente['id']],
+            'json' => ['vente' => '/api/ventes/' . $vente['id'], 'destinataire' => ['type' => 'personne_morale', 'raisonSociale' => 'Client de test', 'siret' => '12345678900011', 'adresse' => ['rue' => '1 rue de Test', 'cp' => '75000', 'ville' => 'Paris', 'pays' => 'FR']]],
         ]);
 
         self::assertSame(201, $reponse->getStatusCode());
@@ -55,11 +55,11 @@ final class FactureJustificativeApiTest extends FacturationApiTestCase
         $vente = $this->creerVenteValidee($client, $entete);
 
         $premiere = $client->request('POST', '/api/factures/depuis-vente', $entete + [
-            'json' => ['vente' => '/api/ventes/' . $vente['id']],
+            'json' => ['vente' => '/api/ventes/' . $vente['id'], 'destinataire' => ['type' => 'personne_morale', 'raisonSociale' => 'Client de test', 'siret' => '12345678900011', 'adresse' => ['rue' => '1 rue de Test', 'cp' => '75000', 'ville' => 'Paris', 'pays' => 'FR']]],
         ])->toArray();
 
         $seconde = $client->request('POST', '/api/factures/depuis-vente', $entete + [
-            'json' => ['vente' => '/api/ventes/' . $vente['id']],
+            'json' => ['vente' => '/api/ventes/' . $vente['id'], 'destinataire' => ['type' => 'personne_morale', 'raisonSociale' => 'Client de test', 'siret' => '12345678900011', 'adresse' => ['rue' => '1 rue de Test', 'cp' => '75000', 'ville' => 'Paris', 'pays' => 'FR']]],
         ])->toArray();
 
         self::assertSame($premiere['id'], $seconde['id'], 'CA-2 : même document renvoyé, aucune nouvelle facture.');
@@ -78,7 +78,7 @@ final class FactureJustificativeApiTest extends FacturationApiTestCase
         $vente = $this->creerVenteValidee($client, $entete);
 
         $client->request('POST', '/api/factures/depuis-vente', $entete + [
-            'json' => ['vente' => '/api/ventes/' . $vente['id']],
+            'json' => ['vente' => '/api/ventes/' . $vente['id'], 'destinataire' => ['type' => 'personne_morale', 'raisonSociale' => 'Client de test', 'siret' => '12345678900011', 'adresse' => ['rue' => '1 rue de Test', 'cp' => '75000', 'ville' => 'Paris', 'pays' => 'FR']]],
         ]);
 
         /** @var EntityManagerInterface $em */
