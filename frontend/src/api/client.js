@@ -538,6 +538,20 @@ export const api = {
   majClient: (id, corps) => request(`/api/clients/${id}`, { method: 'PATCH', body: corps }),
   // Relevé de mouvements du porte-monnaie virtuel (US-L5-04). Renvoie { mouvements: [...] }.
   pmvMouvements: (id) => request(`/api/clients/${id}/pmv/mouvements`),
+  // RECHARGER UN PORTE-MONNAIE — le geste qui manquait pour que le solde puisse remonter.
+  //
+  // `Caisse.jsx` accepte `pmv` comme moyen de paiement depuis toujours ; le seul appel PMV du
+  // frontal etait la lecture des mouvements. Un client qui verse 50 EUR au comptoir n'avait aucun
+  // chemin : les soldes se vidaient sans jamais remonter.
+  //
+  // ⚠ CONTRAT MESURE CONTRE L'API, PAS SUPPOSE -- et paye : voir le message de commit.
+  //   `montant` est REQUIS et doit etre STRICTEMENT POSITIF (0 et -10 rendent 422).
+  //   La reponse porte { mouvement, montant, soldeApres, dateEcheance, statutPmv, motif }.
+  //   ⚠ DEUX EFFETS, PAS UN : l'operation credite le solde ET REPOUSSE L'ECHEANCE du
+  //   porte-monnaie. L'ecran doit donc reafficher les deux, sinon il montre une moitie de verite.
+  //   Le mouvement cree porte `canal: "caisse"` : c'est un encaissement, pas un ajustement.
+  rechargerPmv: (id, corps) =>
+    request(`/api/clients/${id}/pmv/recharger`, { method: 'POST', body: corps, ld: true }),
   // Création rapide d'une fiche client (US-L5-02). L'établissement de création / le groupe sont
   // fixés côté back depuis l'établissement actif (en-tête X-Etablissement).
   creerClient: (corps) => request('/api/clients', { method: 'POST', body: corps, ld: true }),

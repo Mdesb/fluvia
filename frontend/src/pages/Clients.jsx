@@ -95,6 +95,8 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
 
   const [fiche, setFiche] = useState(null)
   const [mouvements, setMouvements] = useState(null) // null = non chargé, [] = vide
+  // Troisième état : lu et refusé. Distinct de « vide », qui est une affirmation.
+  const [mouvementsIllisibles, setMouvementsIllisibles] = useState(false)
   const [ficheLoading, setFicheLoading] = useState(false)
   const [ficheErr, setFicheErr] = useState(null)
   const [fidelite, setFidelite] = useState(null)
@@ -170,11 +172,24 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
         try {
           const mv = await api.pmvMouvements(id)
           setMouvements(mv?.mouvements || [])
+          setMouvementsIllisibles(false)
         } catch {
+          // ⚠ `catch { setMouvements([]) }` ANNULAIT LA GARDE QUI EXISTAIT DEJA AU RENDU.
+          //
+          // `mouvements` distingue bien `null` (en cours) de `[]` (vide) vingt lignes plus bas --
+          // mais l'echec posait `[]`, donc le releve affichait << Aucun mouvement enregistre >>.
+          // Sur un solde d'argent, c'est la pire des trois phrases possibles : le client demande
+          // ou est passe son argent, et l'ecran repond qu'il n'y a jamais rien eu.
+          //
+          // La garde etait posee a un bout et defaite a l'autre. C'est la troisieme fois que je
+          // rencontre cette forme : un rendu qui sait distinguer trois etats, alimente par un
+          // chargeur qui n'en produit que deux.
           setMouvements([])
+          setMouvementsIllisibles(true)
         }
       } else {
         setMouvements([])
+        setMouvementsIllisibles(false)
       }
     } catch (e) {
       setFicheErr(e.message || 'Fiche indisponible.')
@@ -237,9 +252,11 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
             <FicheContenu
               fiche={fiche}
               mouvements={mouvements}
+              mouvementsIllisibles={mouvementsIllisibles}
               fidelite={fidelite}
               droits={droits}
               onMouvement={() => rechargerFidelite(selId)}
+              onPmvRecharge={() => chargerFiche(selId)}
             />
           </div></section>
         ) : null}
@@ -470,7 +487,8 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
   )
 }
 
-function FicheContenu({ fiche, mouvements, fidelite, droits, onMouvement }) {
+function FicheContenu({ fiche, mouvements, mouvementsIllisibles, fidelite, droits, onMouvement, onPmvRecharge }) {
+  const [recharge, setRecharge] = useState(false)
   const c = fiche.client || {}
   const [devis, setDevis] = useState(false)
   const historique = fiche.historique || []
@@ -611,7 +629,25 @@ function FicheContenu({ fiche, mouvements, fidelite, droits, onMouvement }) {
                   {fiche.pmv.dateEcheance ? ` · échéance ${dateFr(fiche.pmv.dateEcheance)}` : ''}
                 </div>
               </div>
+              {aLeDroit(droits, 'crm.pmv_recharger') && (
+                <button
+                  className="btn sm"
+                  type="button"
+                  style={{ marginLeft: 'auto' }}
+                  onClick={() => setRecharge(true)}
+                >
+                  Recharger
+                </button>
+              )}
             </div>
+
+            <RechargePmvModal
+              open={recharge}
+              client={c}
+              pmv={fiche.pmv}
+              onClose={() => setRecharge(false)}
+              onFait={() => { setRecharge(false); onPmvRecharge?.() }}
+            />
             {mouvements === null ? (
               <div className="center" style={{ minHeight: 80 }}><div className="spinner" /></div>
             ) : mouvements.length > 0 ? (
@@ -634,6 +670,12 @@ function FicheContenu({ fiche, mouvements, fidelite, droits, onMouvement }) {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            ) : mouvementsIllisibles ? (
+              <div className="banner banner-error">
+                Le relevé du porte-monnaie n’a pas pu être lu. <b>Ce n’est pas un porte-monnaie
+                sans mouvement</b>&nbsp;: la lecture a échoué, et le solde affiché ci-dessus vient
+                d’une autre lecture.
               </div>
             ) : (
               <div className="empty" style={{ padding: 12 }}>Aucun mouvement enregistré.</div>
@@ -1032,5 +1074,107 @@ function BlocParrainage({ clientId, droits, onMouvement }) {
         </div>
       )}
     </div>
+  )
+}
+
+
+// RECHARGER LE PORTE-MONNAIE — un ENCAISSEMENT, pas un ajustement de solde.
+//
+// Le mouvement créé porte `canal: "caisse"` : c'est de l'argent qui entre. L'écran le dit, parce
+// que quelqu'un qui clique « Recharger » sans avoir encaissé crée un avoir qui n'a pas de
+// contrepartie — et personne ne s'en aperçoit avant le rapprochement.
+//
+// ⚠ DEUX EFFETS, ET LE SECOND SURPREND. Recharger crédite le solde ET REPOUSSE L'ÉCHÉANCE du
+// porte-monnaie. Mesuré : une recharge sur un porte-monnaie qui expirait le 17/08/2027 l'a
+// reporté au 31/08/2027. La modale l'annonce AVANT le geste, parce qu'un exploitant qui recharge
+// pour dépanner un client ne s'attend pas à prolonger la validité de son solde.
+function RechargePmvModal({ open, client, pmv, onClose, onFait }) {
+  const [montant, setMontant] = useState('')
+  const [motif, setMotif] = useState('')
+  const [erreur, setErreur] = useState(null)
+  const [envoi, setEnvoi] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    setMontant('')
+    setMotif('')
+    setErreur(null)
+  }, [open])
+
+  // Le serveur exige un montant STRICTEMENT positif : la garde locale dit la même chose, pour que
+  // le refus arrive avant l'aller-retour et non après.
+  const valeur = Number(String(montant).replace(',', '.'))
+  const pret = Number.isFinite(valeur) && valeur > 0
+
+  async function soumettre(e) {
+    e.preventDefault()
+    setErreur(null)
+    setEnvoi(true)
+    try {
+      await api.rechargerPmv(client.id, {
+        montant: valeur,
+        ...(motif.trim() ? { motif: motif.trim() } : {}),
+      })
+      onFait()
+    } catch (err) {
+      setErreur(err.message || 'La recharge n’a pas abouti.')
+    } finally {
+      setEnvoi(false)
+    }
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} titre="Recharger le porte-monnaie">
+      <form onSubmit={soumettre}>
+        {erreur && <div className="banner banner-error">{erreur}</div>}
+
+        <div className="hint" style={{ marginTop: 0 }}>
+          Solde actuel&nbsp;: <b>{euros(pmv?.solde)}</b>
+          {pmv?.dateEcheance ? <> · échéance actuelle <b>{dateFr(pmv.dateEcheance)}</b></> : null}
+        </div>
+
+        <div className="field">
+          <label htmlFor="pmv-montant">Montant encaissé *</label>
+          <input
+            id="pmv-montant"
+            className="input"
+            type="number"
+            step="0.01"
+            min="0.01"
+            value={montant}
+            onChange={(ev) => setMontant(ev.target.value)}
+          />
+          <span className="hint">
+            Strictement positif. Ce montant doit correspondre à ce que le client vient de vous
+            remettre&nbsp;: la recharge est un <b>encaissement</b>, elle n’ajuste pas un solde.
+          </span>
+        </div>
+
+        <div className="field">
+          <label htmlFor="pmv-motif">Motif</label>
+          <input
+            id="pmv-motif"
+            className="input"
+            value={motif}
+            maxLength={120}
+            placeholder="Recharge au comptoir, espèces…"
+            onChange={(ev) => setMotif(ev.target.value)}
+          />
+          <span className="hint">Facultatif — il apparaît dans le relevé, à côté du mouvement.</span>
+        </div>
+
+        <div className="banner banner-warn">
+          ⚠ Recharger <b>repousse aussi l’échéance</b> du porte-monnaie. Un solde qui allait expirer
+          redevient valable pour toute une période&nbsp;: ce n’est pas seulement un crédit.
+        </div>
+
+        <div className="r">
+          <button type="button" className="btn ghost" onClick={onClose}>Annuler</button>
+          <button type="submit" className="btn primary" disabled={envoi || !pret}>
+            {envoi ? 'Recharge…' : 'Recharger'}
+          </button>
+        </div>
+      </form>
+    </Modal>
   )
 }
