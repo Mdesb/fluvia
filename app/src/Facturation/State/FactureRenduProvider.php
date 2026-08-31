@@ -71,13 +71,28 @@ final class FactureRenduProvider implements ProviderInterface
 
         $destinataire = $facture->getDestinataire();
 
+        // ⚠ LE TAUX VIENT DE L'INSTANTANE SCELLE, PAS DU REFERENTIEL VIVANT.
+        //
+        // Ce tableau melangeait deux temps : `tauxTva` etait relu en direct pendant que les trois
+        // montants restaient figes. Apres un changement de taux, un client recevait une facture
+        // montrant 5,5 % en face de 20 € de TVA sur 100 € HT.
+        //
+        // Il n'en conclut pas que le referentiel a bouge : il conclut que la facture est fausse — et
+        // un document qui ne s'additionne pas EST faux. C'est le seul defaut de cette famille qu'un
+        // client voit.
+        //
+        // Les montants sont deja figes en base et proteges par le garde d'inalterabilite. Le taux
+        // etait la SEULE valeur derivee d'un referentiel ici, donc la seule a pouvoir contredire les
+        // autres.
+        $tauxScelle = $this->tauxParLigne($facture);
+
         $lignes = [];
         foreach ($facture->getLignes() as $ligne) {
             $lignes[] = [
                 'designation' => $ligne->getDesignation(),
                 'quantite' => $ligne->getQuantite(),
                 'prixUnitaireHT' => $ligne->getPrixUnitaireHT(),
-                'tauxTva' => $ligne->getTauxTvaValeur(),
+                'tauxTva' => $tauxScelle[(string) $ligne->getId()] ?? $ligne->getTauxTvaValeur(),
                 'montantHT' => $ligne->getMontantHT(),
                 'montantTva' => $ligne->getMontantTva(),
                 'montantTTC' => $ligne->getMontantTTC(),
@@ -104,10 +119,86 @@ final class FactureRenduProvider implements ProviderInterface
             'totalTVA' => $facture->getTotalTVA(),
             'totalTTC' => $facture->getTotalTTC(),
             'conditionsReglement' => $facture->getConditionsReglement(),
-            'mentionAcquittee' => $facture->isMentionAcquittee(),
+            // ⚠ DEDUITE, PAS LUE. Maxime, 31/08 : « toute facture soldee doit porter la mention
+            // acquittee, mais on ne peut pas modifier une facture. » Les deux moities ne s'excluent
+            // que si on suppose que la mention doit etre ECRITE.
+            //
+            // Le champ stocke n'etait pose que par deux handlers (avoir, facture justificative). Une
+            // facture ordinaire soldee par lettrage restait a `false` — FA-2026-00001 est `payee` et
+            // son document ne la portait pas.
+            //
+            // On prend le plus favorable des deux : le stocke reste vrai dans ses cas legitimes — une
+            // justificative est acquittee par construction — et la deduction couvre tous les autres.
+            // Le stocke devient un cas particulier de la deduction, jamais son contradicteur.
+            'mentionAcquittee' => $facture->isMentionAcquittee() || $this->estSoldeeParLesReglements($facture),
             'acquitteeLe' => $facture->getAcquitteeLe()?->format(\DATE_ATOM),
             'acquitteeMoyen' => $facture->getAcquitteeMoyen(),
             'acquitteeReference' => $facture->getAcquitteeReference(),
         ]);
     }
+
+    /**
+     * Le taux tel qu'il a ete SCELLE, par identifiant de ligne.
+     *
+     * On lit l'instantane conserve au scellement plutot que d'ajouter une colonne : un seul endroit
+     * dit ce qui a ete scelle, et le rendu s'y adosse au lieu d'en faire une seconde copie qui
+     * divergerait au premier correctif.
+     *
+     * ⚠ Vide quand le document a ete scelle AVANT qu'on ne conserve l'instantane, ou quand il n'est
+     * pas encore scelle. L'appelant retombe alors sur la valeur vivante : on ne peut pas inventer ce
+     * qu'on n'a pas garde, et une degradation dite vaut mieux qu'une valeur fabriquee.
+     *
+     * @return array<string, string>
+     */
+    private function tauxParLigne(Facture $facture): array
+    {
+        $instantane = $facture->getPayloadCanonique();
+
+        if (!\is_array($instantane) || !\is_array($instantane['lignes'] ?? null)) {
+            return [];
+        }
+
+        $taux = [];
+        foreach ($instantane['lignes'] as $ligne) {
+            if (\is_array($ligne) && isset($ligne['id'], $ligne['taux'])) {
+                $taux[(string) $ligne['id']] = (string) $ligne['taux'];
+            }
+        }
+
+        return $taux;
+    }
+
+
+    /**
+     * La facture est-elle SOLDEE par ses reglements ?
+     *
+     * Comparaison en CENTIMES et non en flottants : `0.1 + 0.2 !== 0.3` en virgule flottante, et une
+     * mention legale ne peut pas dependre d'un arrondi. Les montants sont des chaines decimales en
+     * base, precisement pour cette raison.
+     *
+     * ⚠ On accepte le SURPAIEMENT comme soldant. Un client qui a paye plus que du a bel et bien
+     * acquitte sa facture ; le trop-percu est un autre sujet, qui se traite par remboursement et non
+     * en refusant de reconnaitre le paiement.
+     *
+     * Une facture dont le total est nul n'est pas « acquittee » faute de reglement : elle n'a rien a
+     * acquitter. On exige donc au moins un reglement.
+     */
+    private function estSoldeeParLesReglements(Facture $facture): bool
+    {
+        $reglements = $facture->getReglements();
+
+        if ($reglements->isEmpty()) {
+            return false;
+        }
+
+        $verseCentimes = 0;
+        foreach ($reglements as $reglement) {
+            $verseCentimes += (int) round(((float) $reglement->getMontant()) * 100);
+        }
+
+        $duCentimes = (int) round(((float) $facture->getTotalTTC()) * 100);
+
+        return $duCentimes > 0 && $verseCentimes >= $duCentimes;
+    }
+
 }

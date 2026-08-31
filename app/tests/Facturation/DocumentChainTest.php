@@ -211,7 +211,11 @@ final class DocumentChainTest extends FacturationApiTestCase
 
         $destinataire = (new DestinataireFacturation())
             ->setType(TypeDestinataire::PersonneMorale)
-            ->setRaisonSociale('Club de Padel');
+            ->setRaisonSociale('Club de Padel')
+            // ⚠ SIRET et adresse : une facture B2B sans eux n'est pas conforme (RG-FACT-08), sans
+            // seuil ni exception. Le test modelisait un document qui n'aurait jamais ete legal.
+            ->setSiret('12345678900011')
+            ->setAdresse(['rue' => '4 allee du Padel', 'cp' => '75015', 'ville' => 'Paris', 'pays' => 'FR']);
         $this->em()->persist($destinataire);
 
         $quote = (new CommercialDocument())

@@ -135,7 +135,7 @@ final class DocumentApiTest extends FacturationApiTestCase
         [$client, $entete] = $this->adminSurA();
 
         $client->request('POST', '/api/billing/documents', $entete + [
-            'json' => ['destinataire' => ['raisonSociale' => 'Club de Padel'], 'lignes' => []],
+            'json' => ['destinataire' => ['raisonSociale' => 'Club de Padel', 'siret' => '12345678900011', 'adresse' => ['rue' => '4 allee du Padel', 'cp' => '75015', 'ville' => 'Paris', 'pays' => 'FR']], 'lignes' => []],
         ]);
 
         self::assertResponseStatusCodeSame(422);
@@ -155,7 +155,7 @@ final class DocumentApiTest extends FacturationApiTestCase
 
         $client->request('POST', '/api/billing/documents', $entete + [
             'json' => [
-                'destinataire' => ['raisonSociale' => 'Club de Padel'],
+                'destinataire' => ['raisonSociale' => 'Club de Padel', 'siret' => '12345678900011', 'adresse' => ['rue' => '4 allee du Padel', 'cp' => '75015', 'ville' => 'Paris', 'pays' => 'FR']],
                 'lignes' => [['designation' => 'Stage', 'quantite' => 1, 'prixUnitaireHT' => '10.00', 'tauxTva' => $etranger]],
             ],
         ]);
@@ -171,7 +171,7 @@ final class DocumentApiTest extends FacturationApiTestCase
 
         $devis = $client->request('POST', '/api/billing/documents', $entete + [
             'json' => [
-                'destinataire' => ['raisonSociale' => 'Club de Padel'],
+                'destinataire' => ['raisonSociale' => 'Club de Padel', 'siret' => '12345678900011', 'adresse' => ['rue' => '4 allee du Padel', 'cp' => '75015', 'ville' => 'Paris', 'pays' => 'FR']],
                 'lignes' => [['designation' => 'Stage', 'quantite' => 1, 'prixUnitaireHT' => '10.00', 'tauxTva' => $this->idTauxTva('Taux normal 20 %')]],
             ],
         ])->toArray();
@@ -279,7 +279,7 @@ final class DocumentApiTest extends FacturationApiTestCase
     {
         return $client->request('POST', '/api/billing/documents', $entete + [
             'json' => [
-                'destinataire' => ['raisonSociale' => 'Club de Padel'],
+                'destinataire' => ['raisonSociale' => 'Club de Padel', 'siret' => '12345678900011', 'adresse' => ['rue' => '4 allee du Padel', 'cp' => '75015', 'ville' => 'Paris', 'pays' => 'FR']],
                 'lignes' => [
                     ['designation' => 'Stage de padel', 'quantite' => 8, 'prixUnitaireHT' => '45.00', 'tauxTva' => $this->idTauxTva('Taux normal 20 %')],
                 ],

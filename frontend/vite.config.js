@@ -22,7 +22,24 @@ export default defineConfig(({ mode }) => {
   // téléchargement de la GED rendait la page de connexion. Le bloc nginx de la préprod a été
   // corrigé en miroir (`^/(api|auth|me|reporting|media|dms|sepa)`) ; les deux doivent rester
   // alignés, sinon le dev et la préprod ne se comportent pas pareil.
-  for (const path of ['/auth', '/me', '/api', '/reporting', '/media', '/dms', '/sepa']) {
+  // ⚠ CETTE LISTE AVAIT DÉRIVÉ DE CINQ PRÉFIXES PAR RAPPORT À NGINX, ET LE COMMENTAIRE CI-DESSUS
+  // DEMANDAIT DÉJÀ QU'ELLES RESTENT ALIGNÉES.
+  //
+  // Relevé le 31/08 dans `infra/nginx/billetterie-preprod.conf` :
+  //
+  //     location ~ ^/(api|auth|me|reporting|media|dms|sepa|audit|calendar|health|mot-de-passe|utilisateurs)(/|$)
+  //
+  // Manquaient ici : audit, calendar, health, mot-de-passe, utilisateurs. Conséquence exacte de ce
+  // que décrit le paragraphe précédent — en développement, ces routes ne sont pas relayées et c'est
+  // le SPA qui répond. Trouvé en construisant le parcours « mot de passe oublié » : la préprod
+  // répondait 202, le poste de développement 404, sur le même code. Une différence de comportement
+  // entre dev et préprod fait chercher un défaut dans le code applicatif pendant des heures.
+  //
+  // Les deux listes doivent bouger ensemble. Si tu ajoutes un préfixe ici, ajoute-le là-bas.
+  for (const path of [
+    '/auth', '/me', '/api', '/reporting', '/media', '/dms', '/sepa',
+    '/audit', '/calendar', '/health', '/mot-de-passe', '/utilisateurs',
+  ]) {
     proxy[path] = { target, changeOrigin: true, secure: false }
   }
   return {

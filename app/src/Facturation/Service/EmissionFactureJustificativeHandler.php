@@ -46,6 +46,7 @@ final class EmissionFactureJustificativeHandler
         private readonly CompteLookupService $lookup,
         private readonly GenerateurNumeroFacture $generateur,
         private readonly ScellementFactureHandler $scellement,
+        private readonly RecipientCompletenessGuard $destinataires,
     ) {
     }
 
@@ -97,7 +98,17 @@ final class EmissionFactureJustificativeHandler
             $facture->setProfilExploitant($profil);
             $facture->setPeriode($periode);
             $facture->setCreePar($auteur);
-            $facture->setDestinataire($this->construireDestinataire($vente, $destinataireDonnees));
+            // ⚠ RG-FACT-08, SUR LE SECOND CHEMIN D'EMISSION.
+            //
+            // Celui-ci ne passe pas par `EmettreFactureDirecteHandler` : il construit sa facture
+            // dans sa propre transaction. Oublier le garde ici laisserait la regle a moitie posee —
+            // et une regle a moitie posee se lit comme une regle posee.
+            //
+            // Le destinataire est derive du client de la vente : les manques viennent donc de la
+            // fiche client, et le message doit les nommer pour qu'on sache ou aller les corriger.
+            $destinataire = $this->construireDestinataire($vente, $destinataireDonnees);
+            $this->destinataires->assertComplete($destinataire);
+            $facture->setDestinataire($destinataire);
 
             foreach ($vente->getLignes() as $ligneVente) {
                 $facture->addLigne($this->ligneDepuisVente($ligneVente, $profil));

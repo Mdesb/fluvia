@@ -155,6 +155,7 @@ final class PadelFixtures extends Fixture implements DependentFixtureInterface
                 ->setNom('Joueur')
                 ->setPrenom('Padel ' . $i)
                 ->setEmail(self::JOUEUR_EMAIL_PREFIX . $i . self::JOUEUR_DOMAINE)
+                ->setAdresse(['rue' => '3 chemin des Courts', 'cp' => '75013', 'ville' => 'Paris', 'pays' => 'FR'])
                 ->setDateNaissance(new \DateTimeImmutable('-30 years'));
             $manager->persist($client);
             if ($i === 1) {
