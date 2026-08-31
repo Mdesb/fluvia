@@ -44,6 +44,10 @@ use Symfony\Component\Validator\Constraints as Assert;
 // fiche, elle est là pour être GROUPÉE. Sans index, un `GROUP BY` sur la table des clients devient
 // un balayage complet, et la colonne perd l'avantage qui l'a fait préférer au calcul à la volée.
 #[ORM\Index(name: 'idx_client_region_geographique', columns: ['region_geographique'])]
+// Colonne posée par la reprise initiale (`App\Import`, plan-import-i1.md §0.6/§1) : existe pour être
+// FILTRÉE (COUNT/DELETE par lot lors de `POST /imports/{id}/annuler`), pas pour être affichée sur une
+// fiche — sans index, chaque annulation balaierait la table entière.
+#[ORM\Index(name: 'idx_client_import_batch_ref', columns: ['import_batch_ref'])]
 #[ApiResource(
     shortName: 'Client',
     operations: [
@@ -238,6 +242,18 @@ class Client
     #[ORM\Column(length: 180, nullable: true)]
     #[Groups(['client:read'])]
     private ?string $majPar = null;
+
+    /**
+     * `?Uuid` **nu** — pas de relation Doctrine (D2 littéral, plan-import-i1.md §0.6). Posé **une seule
+     * fois** par `App\Import\Service\CustomerRowImporter` à la création d'un client par reprise initiale,
+     * jamais réécrit par une mise à jour ultérieure : c'est ce qui rend `ImportBatch::countCreated()`/
+     * `isReferenced()`/`revert()` exacts (une mise à jour n'est jamais comptée comme une création, une
+     * annulation ne supprime jamais un client seulement mis à jour par le lot).
+     *
+     * Aucun `#[Groups]` : détail d'implémentation de la reprise, pas une donnée qu'une fiche affiche.
+     */
+    #[ORM\Column(name: 'import_batch_ref', type: UuidType::NAME, nullable: true)]
+    private ?Uuid $importBatchRef = null;
 
     public function __construct()
     {
@@ -544,6 +560,18 @@ class Client
     public function getMajPar(): ?string
     {
         return $this->majPar;
+    }
+
+    public function getImportBatchRef(): ?Uuid
+    {
+        return $this->importBatchRef;
+    }
+
+    public function setImportBatchRef(?Uuid $importBatchRef): self
+    {
+        $this->importBatchRef = $importBatchRef;
+
+        return $this;
     }
 
     public function setMajPar(?string $majPar): self

@@ -330,3 +330,16 @@ le processor en est pleinement responsable, testé).
    pas couverts. Pas mon lot, mais une classe D41 rouverte, à signaler à qui tient le garde-fou (claude-C ?).
 
 Implémentation I1 en cours ; je teste en local dès qu'elle rend.
+
+## 01/09 — Import I1 IMPLÉMENTÉ + VERT (module `App\Import`)
+
+Framework `ImportBatch` (deux temps `POST /imports` valide-sans-écrire → `/appliquer` en 1 transaction →
+`/annuler`) + type `customers`. `ImportedEntityRef` (correspondance `externalRef` générique), `CsvImportParser`
+(port, XLSX ajoutable), `RowImporterRegistry`, `CustomerRowImporter` (upsert par externalRef, écriture
+cross-module assumée vers `Crm\Client`), `ReverseReferenceChecker` (annulation refuse si une ligne a servi),
+cloisonnement, établissement estampillé serveur (D41), `Client.importBatchRef` (colonne nue). 3 migrations.
+**`tests/Import`+`tests/Crm` = 95 tests / 521 assertions, 0 échec.** 2 bugs corrigés en revue de test :
+`setCreatedAt` inexistant (createdAt posé au constructeur) et échec-fermé 404 sur apply/revert (piège
+`read:true` + provider filtré → `null`, même famille que SmartFlow/RevenueRecovery). Questions ouvertes déjà
+routées à toi (cross-module Import→Crm, RGPD rétention `content`, trou D41 `getEstablishment` anglais).
+Prochains incréments : types `products`, `tariffs`, `subscribers`, `card_credits` (rapprochement total), `staff`.
