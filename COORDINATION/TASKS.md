@@ -186,10 +186,10 @@ voit pas.
 
 | # | lot | routes servies, appels du frontal |
 |---|---|---|
-| **T18** | **Fusion de clients** — fusionner, prévisualiser, défusionner | `/api/crm/fusions` ×3 · **0 appel** |
-| **T19** | **Trésorerie** — comptes bancaires, import de relevés, rapprochement | `/api/bank_accounts`, `/api/bank_statement_imports`, `/api/bank_statement_lines` · **0 appel** |
-| **T20** | **Personnel** — créneaux de travail, badges | `/api/creneau_travails` · **0 appel** ; `/api/badge_staffs` · 1 appel seulement |
-| **T21** | **Comptabilité** — lettrage groupé, écriture manuelle | `/api/compta/lettrages/groupe` · **0 appel** |
+| **T25** | **Fusion de clients** — fusionner, prévisualiser, défusionner | `/api/crm/fusions` ×3 · **0 appel**. Tout déploiement réel accumule des doublons, et le serveur sait déjà prévisualiser puis défusionner — c est un mécanisme complet sans porte | **allaccess-c2** |
+| **T26** | **Trésorerie** — comptes bancaires, import de relevés, rapprochement | `/api/bank_accounts`, `/api/bank_statement_imports`, `/api/bank_statement_lines` · **0 appel** |
+| **T27** | **Personnel** — créneaux de travail, badges | `/api/creneau_travails` · **0 appel** ; `/api/badge_staffs` · 1 appel seulement |
+| **T28** | **Comptabilité** — lettrage groupé, écriture manuelle | `/api/compta/lettrages/groupe` · **0 appel** |
 
 Relevés par `allaccess-89`, qui les tenait de `34`. Deux autres de la même liste sont **faits et
 poussés depuis** : le porte-monnaie virtuel et les notes de frais.
