@@ -1427,6 +1427,24 @@ export const api = {
     request(`/api/compta/ecritures/${id}/valider`, { method: 'POST', body: {} }),
   extournerEcriture: (id) =>
     request(`/api/compta/ecritures/${id}/extourne`, { method: 'POST', body: {} }),
+  // ── LETTRAGE (US-L4-14, RG-M6-14) ─────────────────────────────────────────────────────────────
+  //
+  // Les lettrages existants : c'est ce qui permet de distinguer une ligne SOLDEE d'une ligne qui
+  // reste due. Sans cette liste, un ecran de lettrage proposerait de relettrer ce qui l'est deja.
+  lettragesEcritures: () =>
+    request('/api/lettrage_ecritures', { query: { itemsPerPage: 500 } }),
+
+  // Lettrer un groupe de lignes. Corps : { lines: [id, ...] } — au moins deux.
+  //
+  // ⚠ LE SERVEUR N'EXIGE PAS L'EQUILIBRE, et c'est mesure en le lisant. Il verifie deux lignes
+  // minimum, un profil exploitant commun, et le cloisonnement de chacune. Un lettrage partiel est un
+  // geste comptable legitime — solder un reglement en plusieurs fois — donc l'ecran AFFICHE l'ecart
+  // sans jamais bloquer.
+  //
+  // Un identifiant nu suffit : `idDepuisReference` accepte l'IRI comme l'UUID.
+  lettrerGroupe: (idsLignes) =>
+    request('/api/compta/lettrages/groupe', { method: 'POST', body: { lines: idsLignes } }),
+
   verifierChaineEcritures: (journalId) =>
     request('/api/compta/ecritures/verifier-chaine', { query: { journal: journalId } }),
   cloturerPeriode: (id) =>
