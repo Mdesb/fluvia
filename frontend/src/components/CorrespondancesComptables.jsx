@@ -184,7 +184,7 @@ export default function CorrespondancesComptables({ etabActif, droits = [] }) {
           <span className="badge crit">{sansCorrespondance} catégorie(s) sans correspondance active</span>
         )}
         <div className="r" style={{ marginLeft: 'auto' }}>
-          <button className="btn ghost sm" onClick={charger} disabled={chargement}>↻</button>
+          <button title="Actualiser" className="btn ghost sm" onClick={charger} disabled={chargement}>↻</button>
         </div>
       </div>
 
