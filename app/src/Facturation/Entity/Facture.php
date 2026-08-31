@@ -66,6 +66,27 @@ use Symfony\Component\Uid\Uuid;
     shortName: 'Facture',
     operations: [
         new GetCollection(security: "is_granted('PERM', 'facturation.lire')"),
+        // ⚠ DECLAREE AVANT `Get /factures/{id}`, ET C'EST LA SEULE RAISON POUR LAQUELLE ELLE
+        // FONCTIONNE.
+        //
+        // Le routeur enregistre les operations DANS L'ORDRE DE DECLARATION. Placee apres, cette
+        // route etait captee par `/factures/{id}` — « verifier-chaine » pris pour un identifiant,
+        // qui n'est pas un UUID, d'ou un 404 « Invalid uri variables ».
+        //
+        // Elle n'a donc JAMAIS ete atteignable, et le message ne designait pas la cause : il se lit
+        // comme un mauvais parametre, pas comme un ordre de declaration. Mesure du 31/08.
+        //
+        // Sa jumelle `/compta/ecritures/verifier-chaine` fonctionnait par hasard — il n'existe pas de
+        // `GET /compta/ecritures/{id}` pour la capter. Une des deux marchait, l'autre non, et rien ne
+        // disait laquelle.
+        //
+        // REGLE GENERALE : un chemin litteral se declare avant le chemin parametre qui pourrait le
+        // capter.
+        new GetCollection(
+            security: "is_granted('PERM', 'facturation.lire')",
+            uriTemplate: '/factures/verifier-chaine',
+            provider: VerifierChaineFactureProvider::class,
+        ),
         new Get(security: "is_granted('PERM', 'facturation.lire') or (is_granted('PERM', 'facturation.lire_soi') and object.estLieA(user))"),
         new GetCollection(
             uriTemplate: '/mes-factures',
@@ -81,11 +102,6 @@ use Symfony\Component\Uid\Uuid;
             uriTemplate: '/factures/{id}/rendu',
             security: "is_granted('PERM', 'facturation.lire') or is_granted('PERM', 'facturation.lire_soi')",
             provider: FactureRenduProvider::class,
-        ),
-        new GetCollection(
-            uriTemplate: '/factures/verifier-chaine',
-            security: "is_granted('PERM', 'facturation.lire')",
-            provider: VerifierChaineFactureProvider::class,
         ),
         new Post(
             uriTemplate: '/factures',
@@ -307,6 +323,23 @@ class Facture
     #[ORM\Column(length: 512, options: ['default' => ''])]
     #[Groups(['facture:read', 'nf525:read'])]
     private string $signature = '';
+
+    /**
+     * L'INSTANTANE EXACT SUR LEQUEL L'EMPREINTE A ETE CALCULEE.
+     *
+     * Sans lui, la verification reconstruit le payload depuis les entites VIVANTES : un taux de TVA
+     * corrige, un destinataire retype, et l'empreinte recalculee ne correspond plus — alors que rien
+     * n'a ete altere. Meme patron que `App\Vente\Nf525\Entity\OperationScellee`, la seule des
+     * trois chaines qui faisait bien.
+     *
+     * ⚠ `null` = scelle AVANT la conservation de l'instantane. Ce n'est pas un vide, c'est une date :
+     * la verification ne peut alors que reconstruire, et elle doit le DIRE au lieu d'accuser.
+     *
+     * @var array<string, mixed>|null
+     */
+    #[ORM\Column(type: 'json', nullable: true)]
+    #[Groups(['nf525:read'])]
+    private ?array $payloadCanonique = null;
 
     /** @var Collection<int, LigneFacture> */
     #[ORM\OneToMany(targetEntity: LigneFacture::class, mappedBy: 'facture', cascade: ['persist', 'remove'], orphanRemoval: true)]
@@ -858,4 +891,19 @@ class Facture
     {
         return number_format($centimes / 100, 2, '.', '');
     }
+
+    /** @return array<string, mixed>|null null = scelle avant la conservation de l'instantane */
+    public function getPayloadCanonique(): ?array
+    {
+        return $this->payloadCanonique;
+    }
+
+    /** @param array<string, mixed>|null $payloadCanonique */
+    public function setPayloadCanonique(?array $payloadCanonique): self
+    {
+        $this->payloadCanonique = $payloadCanonique;
+
+        return $this;
+    }
+
 }

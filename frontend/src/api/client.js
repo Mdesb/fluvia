@@ -6,6 +6,11 @@
 const TOKEN_KEY = 'billetterie.token'
 const ETAB_KEY = 'billetterie.etablissement'
 
+// ⚠ `sessionStorage`, PAS `localStorage` — voir `supportStore` ci-dessous. Le nom diffère du
+// préfixe des deux autres clés pour qu'une inspection du stockage distingue d'un coup d'œil ce qui
+// est partagé entre onglets de ce qui ne l'est pas.
+const SUPPORT_KEY = 'fluvia.support.onglet'
+
 let onUnauthorized = null
 export function setUnauthorizedHandler(fn) {
   onUnauthorized = fn
@@ -17,8 +22,59 @@ export const tokenStore = {
   clear: () => localStorage.removeItem(TOKEN_KEY),
 }
 
+// ── MODE SUPPORT : LE CONTEXTE D'UN SEUL ONGLET ──────────────────────────────────────────────
+//
+// Un agent de l'éditeur bascule chez un client ; Maxime a choisi que cela ouvre un NOUVEL ONGLET,
+// pour pouvoir répondre au ticket dans le premier pendant qu'on regarde chez le client dans le
+// second.
+//
+// ⚠ ET C'EST EXACTEMENT LÀ QUE `localStorage` PIÈGE : il est PARTAGÉ entre tous les onglets d'une
+// même origine. Poser l'établissement du client dans `localStorage` aurait changé l'établissement
+// actif de l'onglet principal — l'agent y serait revenu, se serait retrouvé chez le client sans
+// l'avoir demandé, sans bandeau, sans rien qui le dise. Il aurait encaissé chez quelqu'un d'autre.
+//
+// `sessionStorage` est PAR ONGLET. C'est la seule propriété qui rend le choix de Maxime tenable.
+//
+// On y garde le nom en plus de l'identifiant : le bandeau doit pouvoir se dessiner AVANT que la
+// liste des établissements soit revenue du serveur. Un bandeau qui apparaît une seconde après le
+// reste de l'écran est un bandeau qu'on peut ne pas voir.
+export const supportStore = {
+  get: () => {
+    try {
+      const brut = sessionStorage.getItem(SUPPORT_KEY)
+      return brut ? JSON.parse(brut) : null
+    } catch {
+      // Onglet privé, stockage refusé, JSON corrompu : pas de mode support, et l'onglet se comporte
+      // comme un onglet ordinaire. Le repli d'un mécanisme d'accès est de ne pas ouvrir.
+      return null
+    }
+  },
+  set: (contexte) => {
+    try {
+      sessionStorage.setItem(SUPPORT_KEY, JSON.stringify(contexte))
+    } catch {
+      // Ignoré volontairement : voir ci-dessus.
+    }
+  },
+  clear: () => {
+    try {
+      sessionStorage.removeItem(SUPPORT_KEY)
+    } catch {
+      // Ignoré volontairement : voir ci-dessus.
+    }
+  },
+}
+
 export const etablissementStore = {
-  get: () => localStorage.getItem(ETAB_KEY),
+  // ⚠ LE CONTEXTE DE SUPPORT L'EMPORTE, et c'est ce qui rend le mode support automatique : toute
+  // requête de cet onglet part avec l'établissement du client, sans qu'aucun écran n'ait à le
+  // savoir ni à être modifié.
+  get: () => supportStore.get()?.etablissementId || localStorage.getItem(ETAB_KEY),
+
+  // ⚠ `set` ET `clear` NE TOUCHENT PAS AU CONTEXTE DE SUPPORT, DÉLIBÉRÉMENT. Un onglet de support
+  // est épinglé sur son client, et on en sort par le bandeau — un geste explicite. Si le sélecteur
+  // d'établissement pouvait écrire ici, l'onglet dériverait hors du client pendant que le bandeau
+  // continuerait de le nommer : l'écran dirait une chose, l'en-tête une autre.
   set: (id) => localStorage.setItem(ETAB_KEY, id),
   clear: () => localStorage.removeItem(ETAB_KEY),
 }
@@ -842,6 +898,98 @@ export const api = {
   creneauxLibres: (params) => request('/api/reservation/creneaux-libres', { query: params }),
   creerCreneau: (corps) =>
     request('/api/reservation/creneaux', { method: 'POST', body: corps }),
+  // ── ANNULER UNE RESERVATION ───────────────────────────────────────────────────────────────────
+  //
+  // ⚠ L'ECRAN N'A RIEN A DECIDER : tout vit dans `AnnulerReservationProcessor`. Dans le delai franc
+  // porte par `dateLimiteAnnulation`, l'annulation est libre — la place est rendue, le credit
+  // restitue, un avoir emis si la vente etait validee, et la liste d'attente promue. Hors delai, le
+  // serveur REFUSE en libre-service et seul un agent portant `reservation.annuler` peut qualifier
+  // l'issue en annulation tardive facturee (RG-M5-09).
+  //
+  // Le message de refus est formule par le serveur ; on l'affiche tel quel plutot que d'en ecrire
+  // un second qui divergerait le jour ou la regle bouge.
+  //
+  // ⚠ ET C'EST LA CONDITION D'ENTREE D'UNE PROTECTION DEJA ECRITE. `BasculerNoShowCommand` ne
+  // bascule que les reservations encore `Confirmee` : une reservation annulee en sort. Mais tant
+  // qu'aucun ecran n'annule, l'exploitant note sur un carnet, la reservation reste `Confirmee`, et
+  // la protection ne se declenche jamais. Elle est la ; rien ne l'atteignait.
+  annulerReservation: (id) =>
+    request(`/api/reservation/reservations/${id}/annuler`, { method: 'POST', body: {} }),
+
+  // ── ANNULER UN CRENEAU (le geste de l'exploitant, pas du client) ──────────────────────────────
+  //
+  // ⚠ CE N'EST PAS UNE ANNULATION DE RESERVATION EN GROS. `AnnulerCreneauProcessor` bascule TOUTES
+  // les reservations en `annulee_libre` — aucun no-show, aucun frais, le credit restitue — parce
+  // que c'est l'exploitant qui annule et que le client n'y est pour rien. La regle du delai franc
+  // ne s'applique pas : il n'y a rien a arbitrer, la seance revient toujours.
+  //
+  // C'est la difference qui compte a l'ecran : le meme mot « annuler » designe deux gestes dont
+  // l'un facture et l'autre jamais.
+  annulerCreneau: (id) =>
+    request(`/api/reservation/creneaux/${id}/annuler`, { method: 'POST', body: {} }),
+
+  // ── AFFECTER UNE INSTANCE A UNE RESERVATION FAITE SUR UN TYPE (ACT-1, D16) ────────────────────
+  //
+  // « Personne ne reserve la chambre 214 : on reserve une chambre double. » L'instance s'affecte
+  // apres coup. Corps : { ressource }.
+  //
+  // Le serveur refuse trois choses, et la troisieme protege un client reel : une instance qui n'est
+  // pas un enfant du type reserve, une instance d'un autre etablissement (404, pas 403), et une
+  // instance DEJA affectee a une reservation qui chevauche. Sans ce dernier refus, deux personnes
+  // recoivent la chambre 214 pour la meme nuit et personne ne s'en apercoit avant l'arrivee.
+  affecterRessource: (idReservation, idRessource) =>
+    request(`/api/reservation/reservations/${idReservation}/affecter`, {
+      method: 'POST',
+      body: { ressource: idRessource },
+    }),
+
+  // ── LISTE D'ATTENTE ───────────────────────────────────────────────────────────────────────────
+  //
+  // Les inscriptions, tous creneaux confondus. Le rang est calcule par le serveur a l'inscription ;
+  // l'ecran ne le pose jamais lui-meme — deux personnes inscrites au meme instant depuis deux
+  // postes obtiendraient le meme rang si le client le calculait.
+  reservationListesAttente: () =>
+    request('/api/reservation_liste_attentes', { query: { itemsPerPage: 200 } }),
+
+  // S'inscrire sur un creneau. Corps : { beneficiaire, quantity? }.
+  //
+  // ⚠ `quantity` COMPTE : on attend pour N unites, pas pour « une place ». Une table de huit qui
+  // s'inscrirait pour une seule serait promue sur une place libre et ne pourrait pas s'asseoir.
+  inscrireListeAttente: (idCreneau, corps) =>
+    request(`/api/reservation/creneaux/${idCreneau}/liste-attente`, { method: 'POST', body: corps }),
+
+  // ── PAIEMENT PARTAGE ──────────────────────────────────────────────────────────────────────────
+  //
+  // Ajouter un participant a une reservation. Corps : { personne, estOrganisateur?, partMontant? }.
+  // `personne` accepte un UUID ou une IRI ; a defaut de `partMontant`, le serveur repartit le
+  // `montantDu` restant a parts egales entre les participants deja declares et le nouveau.
+  //
+  // ⚠ LE BENEFICIAIRE PASSE PAR LE CONTROLE DE PERIMETRE (D3/D8). Sans lui, on ajoutait a sa propre
+  // reservation la fiche de n'importe qui — elle apparait ensuite dans la liste des participants,
+  // avec son identite et sa part. Le serveur rend le meme message pour « inconnu » et « hors
+  // perimetre », volontairement : les distinguer offrirait un oracle d'enumeration sur les fiches
+  // clients. L'ecran affiche donc ce message tel quel, sans chercher a preciser.
+  ajouterParticipant: (idReservation, corps) =>
+    request(`/api/reservation/reservations/${idReservation}/participants`, { method: 'POST', body: corps }),
+
+  // Marquer une part encaissee. `{id}` est celui du PARTICIPANT, pas de la reservation.
+  payerPartParticipant: (idParticipant) =>
+    request(`/api/reservation/participants/${idParticipant}/payer`, { method: 'POST', body: {} }),
+
+  // ── EMARGER ───────────────────────────────────────────────────────────────────────────────────
+  //
+  // Corps : { statut: 'present' | 'absent', compteRendu? }. `input: false` cote serveur, donc JSON
+  // simple et pas de `ld: true`.
+  //
+  // ⚠ SEUL ECRIVAIN DE `presenceConfirmee` DANS TOUT LE DEPOT — voir l'en-tete de ce fichier de
+  // correctif. Sans cet appel, la branche `Honoree` de la bascule no-show n'est atteignable par
+  // aucun chemin, et tout client qui s'est presente serait facture pour son absence.
+  emargerReservation: (id, statut, compteRendu) =>
+    request(`/api/reservation/reservations/${id}/emarger`, {
+      method: 'POST',
+      body: compteRendu ? { statut, compteRendu } : { statut },
+    }),
+
   reservations: () => request('/api/reservations', { query: { itemsPerPage: 200 } }),
   // No-show (D27) : les deux operations existaient et n'etaient appelees de nulle part.
   facturationsNoShow: () => request('/api/reservation_facturation_no_shows', { query: { itemsPerPage: 100 } }),
@@ -1037,6 +1185,43 @@ export const api = {
   majSaison: (id, corps) => request(`/api/saisons/${id}`, { method: 'PATCH', body: corps }),
   supprimerSaison: (id) => request(`/api/saisons/${id}`, { method: 'DELETE' }),
   tauxTvas: () => request('/api/taux_tvas', { query: { itemsPerPage: 100 } }),
+
+  // LE CATALOGUE DES TAUX LÉGAUX — ce que la loi fixe, par opposition à `tauxTvas` qui est ce que
+  // CET exploitant emploie. Les deux cohabitent à l'écran et ne se remplacent pas : le premier se
+  // consulte, le second se possède.
+  //
+  // ⚠ UNE SEULE LECTURE, ET ELLE REND AUSSI LES MASQUAGES. Le croisement « quels taux sont masqués
+  // pour moi » se fait côté serveur, où le profil comptable est connu : le laisser à l'écran, c'est
+  // deux requêtes qui peuvent échouer séparément et un croisement à refaire dans chaque écran qui
+  // affichera un jour cette liste.
+  catalogueTauxTva: (pays) =>
+    request('/api/compta/vat-rate-catalog', { query: pays ? { country: pays } : undefined }),
+
+  // « Reprendre » : on n'envoie qu'un identifiant. Le serveur lit le libellé, la valeur et le profil
+  // comptable à la source — l'écran n'a pas à les connaître, et ne peut donc pas les recopier de
+  // travers. Il rend le catalogue à jour, ce qui évite une seconde requête pendant laquelle l'écran
+  // afficherait l'inverse de ce qui vient de se passer.
+  reprendreTauxLegal: (idTauxLegal) =>
+    request('/api/compta/vat-rate-catalog/adopt', {
+      method: 'POST',
+      body: { legalVatRateId: idTauxLegal },
+      ld: true,
+    }),
+  // Masquer et démasquer par le MÊME identifiant, tous deux en POST sur la vue. Le référentiel
+  // n'étant pas une ressource exposée, il n'a pas d'IRI à donner — et la symétrie a un second
+  // mérite : l'écran n'a aucune ligne de préférence à retenir entre deux chargements.
+  masquerTauxLegal: (idTauxLegal) =>
+    request('/api/compta/vat-rate-catalog/hide', {
+      method: 'POST',
+      body: { legalVatRateId: idTauxLegal },
+      ld: true,
+    }),
+  demasquerTauxLegal: (idTauxLegal) =>
+    request('/api/compta/vat-rate-catalog/unhide', {
+      method: 'POST',
+      body: { legalVatRateId: idTauxLegal },
+      ld: true,
+    }),
   creerTauxTva: (corps) => request('/api/taux_tvas', { method: 'POST', body: corps, ld: true }),
   majTauxTva: (id, corps) => request(`/api/taux_tvas/${id}`, { method: 'PATCH', body: corps }),
 
@@ -1620,6 +1805,27 @@ export const api = {
   // Fiche client de l'éditeur (ED-6). La collection ne rend QUE les clients du CRM de l'éditeur :
   // les clients finaux des exploitants vivent dans la même table et n'ont rien à faire ici.
   editorCustomers: () => request('/api/editor/customers'),
+
+  // ── ACCES D'ASSISTANCE ────────────────────────────────────────────────────────────────────────
+  //
+  // Les accès encore ouverts, tous agents confondus. Sert au bandeau — un accès qu'on ne voit nulle
+  // part est un accès que personne ne referme.
+  editorSupportAccesses: () => request('/api/editor/support-accesses'),
+
+  // Ouvrir un accès. Corps : { granteeId, establishmentId, reason, hours? }
+  //
+  // ⚠ `input: false` côté serveur : le processeur lit le corps lui-même, donc JSON simple et
+  // surtout PAS de `ld: true` — une écriture en ld+json sur une opération sans input part et ne
+  // pose rien, sans erreur.
+  //
+  // `hours` est plafonné à 8 par le serveur, et vaut 2 par défaut. Le motif est obligatoire et
+  // sera lu par le client s'il le demande : ce n'est pas un champ de formulaire, c'est la trace.
+  ouvrirAccesAssistance: (corps) =>
+    request('/api/editor/support-accesses', { method: 'POST', body: corps }),
+
+  // Refermer avant le terme. L'entrée reste : c'est l'historique de qui a pu voir quoi.
+  revoquerAccesAssistance: (id) =>
+    request(`/api/editor/support-accesses/${id}/revoke`, { method: 'POST', body: {} }),
   editorCustomer: (id) => request(`/api/editor/customers/${id}`),
 
   // Facturation des abonnements (ED-7). La collection remonte en tête ce qui n'a PAS été facturé :

@@ -13,6 +13,7 @@ use App\Compta\Entity\CompteComptable;
 use App\Compta\Entity\DeclarationEReporting;
 use App\Compta\Entity\EcritureComptable;
 use App\Compta\Entity\EtalementPca;
+use App\Compta\Entity\HiddenLegalVatRate;
 use App\Compta\Entity\ExpenseAccountMapping;
 use App\Compta\Entity\ExportComptable;
 use App\Compta\Entity\Journal;
@@ -66,6 +67,11 @@ final class AccountingScopeExtension implements QueryCollectionExtensionInterfac
         DeclarationEReporting::class => 'profilExploitant',
         EcritureComptable::class => 'profilExploitant',
         EtalementPca::class => 'profilExploitant',
+        // Le MASQUAGE est propre a un exploitant : ce que la piscine municipale ne veut pas
+        // voir ne regarde pas le musee voisin. Le REFERENTIEL, lui, n'est pas ici — un taux
+        // legal est le meme pour tout le monde, et le cloisonner reviendrait a en donner une
+        // copie par etablissement, donc a recreer la proliferation qu'il corrige.
+        HiddenLegalVatRate::class => 'profilExploitant',
         ExpenseAccountMapping::class => 'businessProfile',
         ExportComptable::class => 'profilExploitant',
         Journal::class => 'profilExploitant',

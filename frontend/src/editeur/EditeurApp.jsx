@@ -3,6 +3,8 @@ import { api, membres, tokenStore, etablissementStore, setUnauthorizedHandler } 
 import Login from '../pages/Login.jsx'
 import { aUnDesDroits } from '../api/droits.js'
 import AppShell from '../components/AppShell.jsx'
+import BasculeSupport from './BasculeSupport.jsx'
+import AccesAssistance from './pages/AccesAssistance.jsx'
 import InstallerSurLeTelephone from '../components/InstallerSurLeTelephone.jsx'
 import Agenda from '../pages/Agenda.jsx'
 import Documents from '../pages/Documents.jsx'
@@ -128,7 +130,7 @@ export default function EditeurApp() {
   // rien — et c'est voulu : un filtre d'affichage qui rattrape une garde manquante la fait oublier.
   // Les cinq ecrans qui n'existent que pour l'editeur. Le reste — agenda, assistance, documents… —
   // sont les outils communs du produit, employes ici comme partout ailleurs.
-  const EDITEUR = new Set(['abonnements', 'offres', 'clients', 'facturation', 'reglements'])
+  const EDITEUR = new Set(['abonnements', 'offres', 'clients', 'facturation', 'reglements', 'acces-support'])
 
   const onglets = [
     { id: 'abonnements', ic: '≡', label: 'Abonnements', perms: ['editor.read_subscription'] },
@@ -136,6 +138,12 @@ export default function EditeurApp() {
     { id: 'clients', ic: '●', label: 'Clients', perms: ['editor.read_customer'] },
     { id: 'facturation', ic: '€', label: 'Facturation', perms: ['editor.read_billing'] },
     { id: 'reglements', ic: '⇄', label: 'Règlements', perms: ['editor.read_billing'] },
+    // ⚠ LE PENDANT DU BOUTON « BASCULER EN MODE SUPPORT ». Ouvrir un accès était possible ; savoir
+    // combien étaient ouverts, chez qui et depuis quand, ne l'était pas — et un accès que personne
+    // ne voit finit par ne plus se refermer. C'est aussi le SEUL endroit d'où l'on révoque :
+    // depuis l'onglet ouvert chez le client, l'établissement actif n'est plus l'éditeur et la
+    // route rend 404.
+    { id: 'acces-support', ic: '◈', label: 'Accès support', perms: ['editor.support_access'] },
   ]
     // ⚠ HORS DE L'ÉDITEUR, CES ÉCRANS RENDENT 404. Quand un accès d'assistance ouvre le site d'un
     // client, l'établissement actif n'est plus l'éditeur et `EditorOnly` refuse les sept
@@ -225,6 +233,14 @@ export default function EditeurApp() {
       onLogout={deconnexion}
       droits={droits}
       nav={sections}
+      /* « Un bouton juste pour nous en haut a droite » — Maxime, 31/08. `actionsBarre` existe pour
+         ca : la barre du back-office reste inchangee, seule celle de l'editeur porte ce bouton, et
+         le code n'est meme pas telecharge par les autres applications. */
+      /* ⚠ DERRIERE SON DROIT. `POST /editor/support-accesses` exige `editor.support_access` : sans
+         ce filtre, un agent qui ne l'a pas voyait le bouton, choisissait un client, ecrivait son
+         motif et recevait un 403 a la fin. Un bouton qui refuse au clic fait chercher une panne la
+         ou il manque une permission. */
+      actionsBarre={aUnDesDroits(droits, ['editor.support_access']) ? <BasculeSupport /> : null}
     >
 
       {/*
@@ -261,6 +277,7 @@ export default function EditeurApp() {
             {onglet === 'clients' && <Clients onRefus={() => setRefuse(true)} />}
             {onglet === 'facturation' && <Facturation onRefus={() => setRefuse(true)} />}
             {onglet === 'reglements' && <Reglements onRefus={() => setRefuse(true)} />}
+            {onglet === 'acces-support' && <AccesAssistance onRefus={() => setRefuse(true)} />}
             {/*
               Les deux écrans de l'application client, tels quels : leur API est cadrée sur
               l'établissement, et l'éditeur en est un. Les recopier en « version éditeur » aurait

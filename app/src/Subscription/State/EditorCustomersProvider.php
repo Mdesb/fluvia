@@ -132,6 +132,14 @@ final class EditorCustomersProvider implements ProviderInterface
                 'provisioningStatus' => $demande?->getStatus()->value,
                 'provisioningFailure' => $demande?->getFailureReason(),
                 'establishmentName' => $etablissement?->getNom(),
+
+                // ⚠ L'IDENTIFIANT, ET PAS SEULEMENT LE NOM. Sans lui, l'écran qui choisit chez quel
+                // client basculer peut afficher l'établissement et ne peut pas ouvrir l'accès :
+                // `POST /editor/support-accesses` attend un `establishmentId`, et cette fiche est la
+                // seule source qui l'ait. Le seul contournement possible serait de retrouver
+                // l'établissement par son NOM — qui n'est pas unique, et qui ferait donc ouvrir un
+                // accès chez le mauvais client une fois de temps en temps.
+                'establishmentId' => $etablissement?->getId()->toRfc4122(),
             ];
         }
 

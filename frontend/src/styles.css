@@ -974,6 +974,127 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
   .pwa-bandeau { margin: 12px 14px 0; }
 }
 
+/* ── MODE SUPPORT ─────────────────────────────────────────────────────────────────────────────
+   Un agent de l'éditeur travaille chez un client, avec les droits d'un administrateur, sur un écran
+   RIGOUREUSEMENT identique au sien. Ces quelques règles sont ce qui distingue les deux situations —
+   et la seule chose qui empêche d'encaisser une vente chez quelqu'un d'autre.
+
+   Couleur d'avertissement, pas d'accent : ce bandeau ne met pas en valeur, il alerte. */
+.sup-bandeau {
+  display: flex;
+  align-items: center;
+  gap: var(--esp-normal);
+  flex-wrap: wrap;
+  padding: var(--esp-serre) var(--esp-bloc);
+  background: var(--warn-bg);
+  border-bottom: 2px solid var(--warn);
+}
+.sup-ic { font-size: 18px; color: var(--warn); line-height: 1; }
+.sup-txt { flex: 1; min-width: 220px; font-size: 13.5px; color: var(--ink); }
+
+/* La fin d'accès BLOQUE l'écran, elle ne le décore pas. L'onglet ne peut plus rien lire chez le
+   client : laisser voir le back-office derrière, figé sur des données qu'on n'a plus le droit de
+   consulter, ferait croire à une panne et pousserait à recharger. */
+.sup-fin {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--esp-bloc);
+  background: var(--bg);
+}
+.sup-fin-boite { max-width: 520px; }
+
+.sup-liste {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-serre);
+  max-height: 320px;
+  overflow-y: auto;
+  margin-bottom: var(--esp-bloc);
+}
+.sup-ligne {
+  display: flex;
+  align-items: center;
+  gap: var(--esp-normal);
+  width: 100%;
+  padding: var(--esp-serre) var(--esp-normal);
+  text-align: left;
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.sup-ligne:hover { border-color: var(--accent); }
+/* Bordure ET fond : la seule bordure ne se voit pas assez pour qu'on soit sûr, au moment de
+   cliquer « Ouvrir l'accès », de chez qui on parle. */
+.sup-ligne-on { border-color: var(--accent); background: var(--accent-soft); }
+.sup-ligne-nom { flex: 1; font-weight: 600; color: var(--ink); }
+
+/* Une ligne par acces ouvert. Encadree et espacee : ces lignes se lisent une par une — « qui, chez
+   qui, pourquoi, jusqu'a quand » — et non en balayant une colonne. */
+.sup-acces {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-serre);
+  align-items: flex-start;
+  padding: var(--esp-normal);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin-bottom: var(--esp-serre);
+}
+.sup-acces-t { display: flex; align-items: center; gap: var(--esp-normal); }
+
+/* ── INSCRITS D'UN CRÉNEAU ────────────────────────────────────────────────────────────────────
+   Dépliée sous le créneau, au moment d'émarger ou d'annuler. Bordure haute plutôt qu'un cadre :
+   la liste APPARTIENT au créneau au-dessus, elle n'est pas un bloc voisin. */
+.resa-inscrits {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-serre);
+  margin-top: var(--esp-serre);
+  padding-top: var(--esp-serre);
+  border-top: 1px solid var(--line);
+}
+.resa-inscrit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-serre);
+  padding: var(--esp-serre);
+  background: var(--bg-soft);
+  border-radius: 8px;
+}
+.resa-inscrit-h { display: flex; align-items: center; gap: var(--esp-serre); flex-wrap: wrap; }
+/* Les gestes passent à la ligne plutôt que de rétrécir : « Absent » à moitié coupé se clique à la
+   place de « Présent », et les deux ne se rattrapent pas de la même façon. */
+.resa-inscrit-act { display: flex; gap: var(--esp-serre); flex-wrap: wrap; }
+
+/* Les parts de paiement partagé, dépliées sous une réservation. Décalées vers la droite : elles
+   appartiennent à la réservation au-dessus, et l'œil doit voir d'un coup où finit une réservation
+   et où commence la suivante — c'est la liste qu'on lit quand on encaisse à quatre au comptoir. */
+.resa-parts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-serre);
+  margin-left: var(--esp-bloc);
+  padding-left: var(--esp-normal);
+  border-left: 2px solid var(--line);
+}
+.resa-part { display: flex; align-items: center; gap: var(--esp-serre); flex-wrap: wrap; }
+.resa-part-form { display: flex; align-items: center; gap: var(--esp-serre); flex-wrap: wrap; }
+
+/* La file d attente d un creneau. Meme decalage que les parts : elle appartient au creneau. */
+.resa-attente {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-serre);
+  margin-top: var(--esp-serre);
+  padding-top: var(--esp-serre);
+  border-top: 1px dashed var(--line);
+}
+
 /* Les boutons d'une modale, alignés à droite.
    ⚠ DÉCLARÉE plutôt que recopiée en style en ligne : les modales voisines alignent leurs boutons
    avec `style={{ display:'flex', gap:8, justifyContent:'flex-end', marginTop:12 }}`, et le cliquet

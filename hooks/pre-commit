@@ -92,6 +92,11 @@ lancer_gf garde-fou-cloisonnement.php || ECHEC=1
 # d'heriter de l'apparence de surete sans la surete.
 [ -f "$RACINE/bin/garde-fou-routes-editeur.php" ] && { lancer_gf garde-fou-routes-editeur.php || ECHEC=1; }
 
+# Une lecture frontale qui vaut toujours `undefined` : la propriete lue n'est dans aucun groupe que
+# porte la relation, donc le serveur n'envoie qu'un identifiant. Cliquet — la dette du jour est
+# gelee, son augmentation refusee.
+[ -f "$RACINE/bin/garde-fou-relations-nues.php" ] && { lancer_gf garde-fou-relations-nues.php || ECHEC=1; }
+
 # Événements du catalogue (D2/D22) : abonné inerte, émission hors contrat, cliquet.
 [ -f "$RACINE/bin/garde-fou-evenements-orphelins.php" ] && { lancer_gf garde-fou-evenements-orphelins.php || ECHEC=1; }
 
@@ -132,36 +137,48 @@ if [ -f "$RACINE/bin/garde-fou-nommage-anglais.php" ]; then
     fi
 fi
 
-# Droits du frontend (D39), ecrit par claude-H. Sur l'hote : node n'est pas dans l'image PHP.
-if [ -f "$RACINE/frontend/scripts/verifier-droits.mjs" ]; then
-    if command -v node >/dev/null 2>&1; then
-        ( cd "$RACINE/frontend" && node scripts/verifier-droits.mjs ) || ECHEC=1
-    else
-        echo "· Droits du frontend IGNORÉ — « node » indisponible. Le contrôle n'a PAS tourné."
-    fi
-fi
-
-# Cache du service worker (n°18) : aucune réponse métier ne peut être servie depuis le cache.
+# ⚠ UN SEUL BLOC, HUIT APPELANTS — ET C'EST LA COPIE QUI AVAIT FAIT LE TROU.
 #
-# Branché ici et pas seulement dans `pre-receive` : les commits d'intégration sur `main` ne passent
-# jamais par `pre-receive`, et c'est justement `main` qui part en déploiement. Un service worker qui
-# ment n'y serait rattrapé nulle part.
-if [ -f "$RACINE/frontend/scripts/verifier-cache.mjs" ]; then
-    if command -v node >/dev/null 2>&1; then
-        ( cd "$RACINE/frontend" && node scripts/verifier-cache.mjs ) || ECHEC=1
-    else
-        echo "· Cache du service worker IGNORÉ — « node » indisponible. Le contrôle n'a PAS tourné."
-    fi
-fi
+# Trois contrôles frontaux étaient câblés ici par trois copies du même bloc de sept lignes. Les cinq
+# autres ne l'étaient pas : ajouter un contrôle demandait de recopier une quatrième fois, et cinq
+# fois personne ne l'a fait. Mesuré le 31/08, en fusionnant `verifier-dates-locales.mjs` — câblé
+# dans `bin/garde-fous.sh` et `hooks/pre-receive`, absent d'ici.
+#
+# Rien ne passait pour autant, `pre-receive` les porte tous les huit. Ce qui se perdait est le
+# MOMENT du retour : au push au lieu du commit, donc après plusieurs commits empilés, donc avec la
+# tentation du `--no-verify` pour ne pas tout refaire.
+#
+# `node` n'est pas dans l'image PHP : sur l'hôte, on le dit plutôt que de faire silence — un
+# contrôle sauté sans un mot se lit comme un contrôle passé.
+FRONT_LANCES=""
 
-# Écart client/serveur (n°15) : une opération neuve a un écran, ou déclare `@sans-ecran:`.
-if [ -f "$RACINE/frontend/scripts/garde-fou-ecart.mjs" ]; then
-    if command -v node >/dev/null 2>&1; then
-        ( cd "$RACINE/frontend" && node scripts/garde-fou-ecart.mjs ) || ECHEC=1
-    else
-        echo "· Écart client/serveur IGNORÉ — « node » indisponible. Le contrôle n'a PAS tourné."
+lancer_front() {
+    script="$1"
+    libelle="$2"
+
+    # Enregistré AVANT toute sortie anticipée : le filet de complétude vérifie que ce hook CONNAÎT
+    # le contrôle, pas qu'il a pu le lancer. Un script absent de l'arbre ou un `node` manquant sont
+    # des circonstances ; un script que le hook ignore est un défaut.
+    FRONT_LANCES="$FRONT_LANCES $script"
+
+    [ -f "$RACINE/frontend/scripts/$script" ] || return 0
+
+    if ! command -v node >/dev/null 2>&1; then
+        echo "· $libelle IGNORÉ — « node » indisponible. Le contrôle n'a PAS tourné."
+        return 0
     fi
-fi
+
+    ( cd "$RACINE/frontend" && node "scripts/$script" ) || ECHEC=1
+}
+
+lancer_front verifier-droits.mjs        "Droits du frontend (D39)"
+lancer_front verifier-cache.mjs         "Cache du service worker (n°18)"
+lancer_front garde-fou-ecart.mjs        "Écart client/serveur (n°15)"
+lancer_front verifier-formats.mjs       "Formats d'écriture (n°11)"
+lancer_front verifier-imports.mjs       "Imports manquants (n°10)"
+lancer_front verifier-classes.mjs       "Classes CSS déclarées (n°16)"
+lancer_front verifier-dates-locales.mjs "Dates locales"
+lancer_front verifier-profil-charge.mjs "Profil chargé avant le rendu"
 
 # ⚠ FILET DE COMPLÉTUDE — même leçon que `pre-receive`, même remède.
 #
@@ -183,6 +200,30 @@ for chemin in "$RACINE"/bin/garde-fou-*.php; do
         *)
             echo "✗ Garde-fou présent dans l'arbre mais jamais lancé par ce hook : $nom"
             echo "  Ajoute son appel dans hooks/pre-commit."
+            ECHEC=1
+            ;;
+    esac
+done
+
+# ⚠ ET LE MEME FILET POUR LES CONTRÔLES FRONTAUX, QUI N'EN AVAIENT AUCUN.
+#
+# Celui du dessus ratisse `bin/garde-fou-*.php` et rien d'autre. Un contrôle frontal neuf pouvait
+# donc être ajouté sans qu'aucun crochet ne s'en aperçoive — c'est précisément ce qui est arrivé à
+# cinq d'entre eux, et personne ne l'a vu jusqu'à ce qu'on compte les trois listes à la main.
+#
+# Le nom distingue les deux familles du répertoire, et c'est délibérément lisible :
+#
+#     verifier-*.mjs · garde-fou-*.mjs   des CONTRÔLES, ils doivent tourner
+#     mesurer-*.mjs                      des SONDES, lancées à la main quand on cherche quelque chose
+for chemin in "$RACINE"/frontend/scripts/verifier-*.mjs "$RACINE"/frontend/scripts/garde-fou-*.mjs; do
+    [ -f "$chemin" ] || continue
+    nom="$(basename "$chemin")"
+    case " $FRONT_LANCES " in
+        *" $nom "*) ;;
+        *)
+            echo "✗ Contrôle frontal présent dans l'arbre mais jamais lancé par ce hook : $nom"
+            echo "  Ajoute une ligne « lancer_front $nom » dans hooks/pre-commit,"
+            echo "  et vérifie les deux autres listes : bin/garde-fous.sh et hooks/pre-receive."
             ECHEC=1
             ;;
     esac

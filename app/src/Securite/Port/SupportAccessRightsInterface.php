@@ -27,13 +27,26 @@ use App\Securite\Entity\Utilisateur;
  * pratique.** Requalification due à `claude-D`, qui avait d'abord signalé « un garde appelé par rien »
  * et a compris en le rouvrant que ce n'était pas une serrure manquante mais **une porte manquante**.
  *
- * **Ce que ce port accorde, et rien d'autre : `*.lire`.**
+ * **Ce que ce port accorde : `*.*` — les droits d'un administrateur.**
  *
- * Un accès d'assistance sert à **comprendre**, jamais à agir. On ne peut pas diagnostiquer ce qu'on ne
- * voit pas, d'où la lecture sur tous les modules — y compris ceux qui n'existent pas encore, ce qui est
- * la propriété du joker et ici la bonne. Mais aucune écriture, aucune suppression, aucune validation :
- * un agent d'assistance qui corrige lui-même une donnée du client remplace un problème constaté par un
- * problème invisible.
+ * ⚠ CE PARAGRAPHE DISAIT « `*.lire`, et rien d'autre », avec son raisonnement : une assistance sert à
+ * comprendre, jamais à agir, et un agent qui corrige lui-même une donnée du client remplace un
+ * problème constaté par un problème invisible. C'était le contrat tant que personne n'implémentait le
+ * port. **Maxime a tranché le 31/08 : tout, comme un administrateur**, et l'unique implémentation rend
+ * le joker complet. La phrase a survécu à la décision qui l'a rendue fausse.
+ *
+ * Sa raison, et elle tient : une assistance en lecture seule ne dépanne pas. Elle permet de dire au
+ * client quoi cliquer, ce qu'un appel téléphonique fait déjà. Le jour où sa caisse ne s'ouvre pas,
+ * quelqu'un doit pouvoir corriger.
+ *
+ * **L'objection ci-dessus n'a pas disparu pour autant** : un agent de l'éditeur peut encaisser,
+ * supprimer et modifier des données comptables chez un client. Ce qui l'encadre n'est pas une limite
+ * de droits — c'est la TRACE, journalisée contre l'établissement DU CLIENT, avec le nom de l'agent et
+ * le motif, et que le client voit dans son propre journal. Contrepartie énoncée avant le choix, et
+ * seconde décision du même jour.
+ *
+ * Le jour où l'on voudra revenir à la lecture seule, c'est `SupportAccessRights` qu'on change — un
+ * seul endroit — et c'est ici qu'on réécrit ce paragraphe.
  *
  * **L'implémentation trace l'usage.** Savoir qui *pouvait* regarder n'est pas savoir qui a regardé.
  *
