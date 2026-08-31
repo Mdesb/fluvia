@@ -242,8 +242,20 @@ done
 if [ "$ECHEC" -ne 0 ]; then
     echo
     echo "✗ Commit refusé : au moins un garde-fou a échoué."
-    echo "  Reproduis : ./bin/garde-fous.sh"
-    echo "  Si tu dois vraiment passer outre : git commit --no-verify, et dis pourquoi dans MESSAGES.md."
+    echo
+    echo "  Le message du contrôle qui a échoué, plus haut, dit ce qui est cassé."
+    echo "  Reproduis-le autant de fois qu'il faut :  ./bin/garde-fous.sh"
+    echo
+    echo "  Chacun de ces contrôles existe parce que le défaut qu'il refuse est déjà arrivé,"
+    echo "  et qu'il n'avait produit aucun symptôme visible."
+    # ⚠ D53 : ON N'ECRIT PAS LE CONTOURNEMENT ICI.
+    #
+    # Cette sortie disait « si tu dois vraiment passer outre : git commit --no-verify ». C'est le
+    # cas exact que D53 refuse : « un garde-fou qui propose son propre contournement transforme une
+    # question technique en question de caractere -- et le caractere cede un vendredi soir ».
+    #
+    # Le contournement est documente dans l'en-tete de ce fichier, ou celui qui le cherche le
+    # trouvera. Celui qui est presse ne tombera pas dessus.
     exit 1
 fi
 
