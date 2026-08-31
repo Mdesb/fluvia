@@ -711,7 +711,7 @@ function MoyensPaiement({ etabActif }) {
         <span className="sub">éditable</span>
         <div className="r" style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
           <button className="btn sm" onClick={() => { setMsg(null); setErreur(null); setEdition({ moyen: null }) }}>+ Ajouter</button>
-          <button className="btn ghost sm" onClick={charger} disabled={chargement}>↻</button>
+          <button title="Actualiser" className="btn ghost sm" onClick={charger} disabled={chargement}>↻</button>
         </div>
       </div>
       <div className="card-b" style={{ overflowX: 'auto' }}>
@@ -855,7 +855,7 @@ function CaissesSection({ etabActif, peutGerer, onEcrit }) {
             <button className="btn sm" type="button" onClick={() => { setMsg(null); setErreur(null); setEdition({ creation: true }) }}>
               ＋ Ajouter
             </button>
-            <button className="btn ghost sm" type="button" onClick={charger} disabled={chargement}>↻</button>
+            <button title="Actualiser" className="btn ghost sm" type="button" onClick={charger} disabled={chargement}>↻</button>
           </div>
         )}
       </div>
@@ -1365,7 +1365,7 @@ function ComptesDroits({ etabActif, etablissements, droits = [], me = null }) {
           <span className="sub">{utilisateurs.length} compte(s)</span>
           <div className="r" style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
             <button className="btn sm" onClick={() => { setMsg(null); setErreur(null); setModalInvit(true) }}>+ Inviter un utilisateur</button>
-            <button className="btn ghost sm" onClick={charger}>↻</button>
+            <button title="Actualiser" className="btn ghost sm" onClick={charger}>↻</button>
           </div>
         </div>
         <div className="card-b" style={{ overflowX: 'auto' }}>
@@ -1667,7 +1667,7 @@ function MatriceDroits({ roles, etabActif, affectations = [], utilisateurs = [] 
       <div className="card-h">
         <h3>Qui a le droit de quoi</h3>
         <span className="sub">{utilisateurs.length} compte(s) · {roles.length} rôle(s)</span>
-        <button className="btn ghost sm" style={{ marginLeft: 'auto' }} onClick={charger} disabled={chargement}>↻</button>
+        <button title="Actualiser" className="btn ghost sm" style={{ marginLeft: 'auto' }} onClick={charger} disabled={chargement}>↻</button>
       </div>
       <div className="card-b" style={{ overflowX: 'auto' }}>
         {chargement ? (
@@ -2036,7 +2036,7 @@ function Capacites({ etabActif, onCapacitesChangees }) {
       <div className="card-h">
         <h3>Ce que fait votre établissement</h3>
         <span className="sub">{actives} sur {items.length} en service</span>
-        <button className="btn ghost sm" style={{ marginLeft: 'auto' }} onClick={charger} disabled={chargement}>↻</button>
+        <button title="Actualiser" className="btn ghost sm" style={{ marginLeft: 'auto' }} onClick={charger} disabled={chargement}>↻</button>
       </div>
       <div className="card-b" style={{ overflowX: 'auto' }}>
         {msg && <div className="banner banner-ok" style={{ margin: '0 0 12px' }}>{msg}</div>}

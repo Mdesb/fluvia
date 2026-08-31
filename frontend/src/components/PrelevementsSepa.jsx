@@ -443,7 +443,15 @@ function Remises({ remises, lignesParRemise, mandatsParId, lignesRejetees, peutG
                     onClick={() => setOuverte(deployee ? null : r.id)}
                   >
                     <td>
-                      <span className="mono">{r.messageId || '—'}</span>
+                      {/* Voir `OuvrirStructure.jsx` : le clic sur la ligne reste un confort de
+                          souris, et le clavier a désormais une cible réelle. */}
+                      <button
+                        type="button"
+                        className="lnk mono"
+                        onClick={() => setOuverte(deployee ? null : r.id)}
+                      >
+                        {r.messageId || '—'}
+                      </button>
                       <div className="sub">créée le {dateFr(r.dateCreation)}</div>
                     </td>
                     <td>{dateFr(r.dateCollecte)}</td>

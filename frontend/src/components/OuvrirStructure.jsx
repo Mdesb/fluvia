@@ -146,7 +146,19 @@ export default function OuvrirStructure({ ouvert, onFermer, onOuverte }) {
                       className="row-click"
                       onClick={() => { setChoisie(e); setNomCommercial(e.denomination); setMetier(NAF_VERS_METIER[e.codeNaf] || '') }}
                     >
-                      <td><span className="nm">{e.denomination}</span></td>
+                      <td>
+                        {/* ⚠ UN VRAI BOUTON, PAS UN `role` SUR LA LIGNE. Le clic sur `<tr>` reste,
+                            mais il ne peut pas être le seul chemin : au clavier, il n'existe pas.
+                            Poser `role="button"` sur la ligne casserait la structure du tableau
+                            qu'un lecteur d'écran annonce. */}
+                        <button
+                          type="button"
+                          className="lnk nm"
+                          onClick={() => { setChoisie(e); setNomCommercial(e.denomination); setMetier(NAF_VERS_METIER[e.codeNaf] || '') }}
+                        >
+                          {e.denomination}
+                        </button>
+                      </td>
                       <td className="num">{e.siren}</td>
                       <td>{e.adresse || '—'}</td>
                     </tr>

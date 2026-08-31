@@ -43,7 +43,16 @@ set -eu
 #   autorisation:escalades:expirer    5 min · une élévation accordée pour une opération reste ouverte
 #
 # Le catalogue le dit sans détour : « ne pas tourner ici n'est pas un retard, c'est une faille ».
-TACHES_AUTORISEES="securite:delegations:expirer autorisation:escalades:expirer"
+# Chaque tache entre ici APRES avoir ete vue mordre ET epargner. Une tache planifiee tourne sans
+# personne devant l'ecran : son sur-declenchement ne se voit que chez le client qu'elle a leve.
+#
+#   securite:delegations:expirer      une delegation de droits qui n'expire jamais
+#   autorisation:escalades:expirer    une elevation temporaire qui ne se termine jamais
+#   boutique:liberer-paniers-expires  un panier abandonne retient sa place indefiniment ; les
+#                                     billets qu'il bloque ne sont vendus a personne.
+#                                     Epargne prouvee le 31/08 : borne temporelle retiree ->
+#                                     `testElleEpargneUnPanierEncoreValide` echoue seul.
+TACHES_AUTORISEES="securite:delegations:expirer autorisation:escalades:expirer boutique:liberer-paniers-expires"
 
 INTERVALLE="${ORDONNANCEUR_INTERVALLE:-60}"
 

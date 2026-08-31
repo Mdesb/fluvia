@@ -35,6 +35,20 @@ export default function PublicApp() {
 
   const langue = vitrine?.langues?.[0] || catalogue?.langues?.[0] || 'fr'
 
+  // ⚠ LE DOCUMENT DOIT ANNONCER LA LANGUE QU'IL REND, ET `index.html` PORTE `fr` EN DUR.
+  //
+  // Une vitrine qui déclare `en` rend un contenu anglais dans un document annoncé français : une
+  // synthèse vocale le lit avec la prononciation française. Le texte est juste, la voix est
+  // inintelligible — et c'est un défaut qu'on n'entend jamais en relisant du code.
+  //
+  // On pose l'attribut sur l'élément racine plutôt que sur un conteneur : c'est celui que les
+  // technologies d'assistance consultent, et le seul qui vaille pour la page entière.
+  useEffect(() => {
+    if (typeof document !== 'undefined' && langue) {
+      document.documentElement.lang = langue
+    }
+  }, [langue])
+
   // Métadonnées produits (libellé, timed-entry…) indexées par id, pour enrichir panier & tunnel.
   const metaProduits = useMemo(() => {
     const m = {}
