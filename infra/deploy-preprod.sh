@@ -276,8 +276,22 @@ SERVI="$(curl -sf -H 'Accept: application/json' "$URL_PUBLIQUE/version.json" 2>/
 # sur le disque et hors d'opcache pendant treize minutes, sans que rien ne le signale.
 #
 # ⚠ Cette lecture-ci traverse PHP. Elle ne peut donc pas repondre juste si PHP sert du code d'avant.
-CHARGE="$(curl -sf -H 'Accept: application/json' "$URL_PUBLIQUE/api/plateforme/version-chargee" 2>/dev/null \
-    | sed -n 's/.*"commit":"\([^"]*\)".*/\1/p' || true)"
+# ⚠ FPM N'ECOUTE PAS ENCORE QUAND `restart` REND LA MAIN.
+#
+# La premiere version de ce bloc interrogeait aussitot, lisait vide, et annoncait un echec a CHAQUE
+# deploiement -- alors que le point d'entree rendait le bon commit quelques secondes plus tard.
+#
+# Un controle qui crie pour rien apprend a tout le monde a le sauter, et use la confiance des
+# autres controles avec lui. On reessaie donc, BORNE : l'echec apres N tentatives reste un vrai
+# echec, on ne remplace pas un faux positif par une patience infinie.
+TENTATIVES_CHARGE=10
+CHARGE=""
+for _ in $(seq 1 "$TENTATIVES_CHARGE"); do
+    CHARGE="$(curl -sf -H 'Accept: application/json' "$URL_PUBLIQUE/api/plateforme/version-chargee" 2>/dev/null \
+        | sed -n 's/.*"commit":"\([^"]*\)".*/\1/p' || true)"
+    [ -n "$CHARGE" ] && break
+    sleep 2
+done
 
 if [ "$CHARGE" != "$COMMIT_DEPLOYE" ]; then
     echo
