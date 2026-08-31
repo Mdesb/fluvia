@@ -5,6 +5,7 @@ import NotesDeFrais from '../components/NotesDeFrais.jsx'
 import ComptesBancaires from '../components/ComptesBancaires.jsx'
 import ImportReleve from '../components/ImportReleve.jsx'
 import RapprochementBancaire from '../components/RapprochementBancaire.jsx'
+import TresorerieDashboard from '../components/TresorerieDashboard.jsx'
 
 // Achats & trésorerie — soixante opérations exposées, sept atteignables jusqu'ici.
 //
@@ -21,9 +22,10 @@ import RapprochementBancaire from '../components/RapprochementBancaire.jsx'
 //
 // Comptes bancaires, import de relevés et rapprochement existaient côté serveur — droits compris
 // (`finance.treasury_manage_account`, `_import_statement`, `_reconcile`) — et AUCUN écran ne les
-// ouvrait : du travail payé qui ne servait à rien. Trois onglets de plus, et le titre ne promet plus
-// que ce qu'il rend. La position/l'échéancier/la prévision (providers `/finance/treasury/*`) restent
-// à visualiser — un lot suivant, dit plutôt que tu.
+// ouvrait : du travail payé qui ne servait à rien. Quatre onglets de plus, et le titre ne promet plus
+// que ce qu'il rend. Le dernier, « Position & prévision », ouvre les quatre lectures live du serveur
+// (`/finance/treasury/position|payment-schedule|cashflow-forecast|discrepancies`) — position, prévision,
+// échéancier, écarts — qui n'avaient elles non plus aucun écran.
 export default function Finance({ etabActif, droits }) {
   const [onglet, setOnglet] = useState('fournisseurs')
 
@@ -33,8 +35,8 @@ export default function Finance({ etabActif, droits }) {
         <div className="ttl">
           <h1>Achats &amp; trésorerie</h1>
           <p>
-            Factures fournisseur, notes de frais, comptes bancaires, import de relevés et
-            rapprochement.
+            Factures fournisseur, notes de frais, comptes bancaires, import de relevés,
+            rapprochement, position et prévision de trésorerie.
           </p>
         </div>
       </div>
@@ -48,6 +50,7 @@ export default function Finance({ etabActif, droits }) {
           ['comptes', 'Comptes bancaires'],
           ['import', 'Import de relevés'],
           ['rapprochement', 'Rapprochement'],
+          ['position', 'Position & prévision'],
         ]}
       />
 
@@ -56,6 +59,7 @@ export default function Finance({ etabActif, droits }) {
       {onglet === 'comptes' && <ComptesBancaires etabActif={etabActif} droits={droits} />}
       {onglet === 'import' && <ImportReleve etabActif={etabActif} droits={droits} />}
       {onglet === 'rapprochement' && <RapprochementBancaire etabActif={etabActif} droits={droits} />}
+      {onglet === 'position' && <TresorerieDashboard />}
     </div>
   )
 }

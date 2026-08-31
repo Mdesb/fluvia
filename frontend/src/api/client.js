@@ -1617,6 +1617,11 @@ export const api = {
     request(`/api/finance/treasury/statement-lines/${id}/reconcile`, { method: 'POST', body: corps }),
   ignorerLigneReleve: (id, corps) =>
     request(`/api/finance/treasury/statement-lines/${id}/ignore`, { method: 'POST', body: corps }),
+  // Tableaux de bord (fournisseurs `provide()` → JSON brut, PAS une collection Hydra : pas de membres()).
+  positionTresorerie: (params) => request('/api/finance/treasury/position', { query: params }),
+  echeancierTresorerie: (params) => request('/api/finance/treasury/payment-schedule', { query: params }),
+  previsionTresorerie: (params) => request('/api/finance/treasury/cashflow-forecast', { query: params }),
+  ecartsTresorerie: () => request('/api/finance/treasury/discrepancies'),
 
   // Recouvrement : les deux gestes qui closent un impaye, et le compteur d'acces bloques.
   tableauBordRecouvrement: () => request('/api/recouvrement/tableau-bord'),
