@@ -9,9 +9,11 @@ use ApiPlatform\State\ProcessorInterface;
 use App\Reservation\Entity\Creneau;
 use App\Reservation\Entity\Reservation;
 use App\Reservation\Entity\Ressource;
+use App\Reservation\Service\ChevauchementCreneauGuard;
 use App\Reservation\Port\NotificationReservationInterface;
 use App\Vente\Service\LecteurCorps;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Uid\Uuid;
 
@@ -27,6 +29,7 @@ final class ArbitrerConflitRecurrenceProcessor implements ProcessorInterface
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly LecteurCorps $lecteur,
+        private readonly ChevauchementCreneauGuard $chevauchement,
         private readonly NotificationReservationInterface $notification,
     ) {
     }
@@ -51,6 +54,27 @@ final class ArbitrerConflitRecurrenceProcessor implements ProcessorInterface
                 if (!$ressource instanceof Ressource
                     || (string) $ressource->getEtablissement()?->getId() !== (string) $data->getEtablissement()?->getId()) {
                     throw new NotFoundHttpException('Ressource introuvable.');
+                }
+
+                // ⚠ ET ELLE DOIT ETRE LIBRE. Sans ce controle, arbitrer DEPLACE le conflit au
+                // lieu de le resoudre : le creneau quitte un chevauchement pour un autre, le
+                // drapeau tombe, et l'ecran annonce « arbitre ». Deux personnes recevraient la meme
+                // ressource a la meme heure — ce que RG-M5-03 interdit a la creation, obtenu par la
+                // porte de derriere.
+                //
+                // Le trou etait inatteignable tant que rien ne produisait d'etat « en attente
+                // d'arbitrage ». Il devient atteignable dans le meme lot que l'ecran qui arbitre :
+                // on le ferme donc avant d'ouvrir la porte.
+                //
+                // Meme garde que la creation, deliberement : une seconde regle ecrite ici finirait
+                // par diverger de celle qui fait foi. Le creneau s'exclut lui-meme, sinon il se
+                // verrait comme son propre conflit.
+                if ($this->chevauchement->enConflit($ressource, $data->getDebut(), $data->getFin(), $data->getId())) {
+                    throw new ConflictHttpException(sprintf(
+                        'La ressource « %s » est déjà occupée sur cette fenêtre : l\'arbitrage '
+                        .'déplacerait le conflit au lieu de le résoudre (RG-M5-03).',
+                        $ressource->getLibelle(),
+                    ));
                 }
 
                 $data->setRessource($ressource);
