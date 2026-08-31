@@ -163,6 +163,10 @@ export const boutique = {
   // Liste publique des vitrines ouvertes (sans auth) : sert d'écran de choix quand aucune
   // vitrine n'est passée dans l'URL (?vitrine=<id>).
   vitrinesPubliques: () => request('/api/boutique/vitrines-publiques'),
+  // D104 : la boutique designee par l'HOTE (`piscine-ville.fluvia-app.com`). Rend 404 quand l'hote
+  // n'est pas un sous-domaine client connu -- ce qui est le cas en developpement et en preprod, ou
+  // l'on tombe alors sur les formes d'URL existantes.
+  vitrineCourante: () => request('/api/boutique/vitrine-courante'),
   vitrine: (id) => request(`/api/boutique/vitrines/${id}`),
   catalogue: (id) => request(`/api/boutique/vitrines/${id}/catalogue`),
   creneaux: (produitId) => request(`/api/boutique/produits/${produitId}/creneaux`),

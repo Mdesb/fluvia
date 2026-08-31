@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Boutique\Service;
 
+use App\Boutique\Config\ReservedHostnames;
 use App\Boutique\Entity\Vitrine;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\String\Slugger\AsciiSlugger;
@@ -32,9 +33,95 @@ use Symfony\Component\Uid\Uuid;
  */
 final class VitrineResolver
 {
+    /**
+     * @param string $domaineDePlateforme le domaine sous lequel vivent les sous-domaines clients
+     *                                    (D104 : `fluvia-app.com`), lie depuis `PLATFORM_BASE_DOMAIN`
+     */
     public function __construct(
         private readonly EntityManagerInterface $em,
+        private readonly string $domaineDePlateforme = 'fluvia-app.com',
     ) {
+    }
+
+    /**
+     * LA VITRINE DESIGNEE PAR L'HOTE : `piscine-ville.fluvia-app.com` -> la vitrine `piscine-ville`.
+     *
+     * D104, decide par Maxime le 31/08 : une boutique par sous-domaine, resolue depuis l'hote.
+     * *« Ajouter cela maintenant coute peu ; le retro-adapter quand vingt clients ont des liens en
+     * circulation coute cher. »*
+     *
+     * ── AUCUNE COLONNE N'EST NECESSAIRE ICI, ET C'EST LE POINT ────────────────────────────────
+     *
+     * L'etiquette du sous-domaine EST le slug. Le domaine propre a un client
+     * (`billetterie.ville-x.fr`) en demanderait une -- mais D104 le repousse explicitement au
+     * premier client qui le demande, et il lui faudrait d'abord un parcours de preuve de
+     * propriete : un champ librement ecrivable laisserait un client capter le trafic d'un autre.
+     *
+     * ── QUATRE REFUS, ET CHACUN FERME UN CHEMIN REEL ──────────────────────────────────────────
+     *
+     * L'en-tete `Host` est fourni par l'appelant, et aucun `trusted_hosts` n'est declare dans ce
+     * depot. Tout ce qui n'est pas reconnu doit donc rendre `null`, jamais une vitrine par defaut.
+     *
+     *   1. Le suffixe est teste AVEC SON POINT (`.fluvia-app.com`). Sans le point,
+     *      `mechantfluvia-app.com` -- un domaine que n'importe qui peut acheter -- passerait.
+     *   2. Une etiquette qui contient un point est refusee : `a.b.fluvia-app.com` ne doit pas
+     *      chercher la vitrine nommee `a.b`.
+     *   3. Une etiquette reservee (D106) ne resout jamais, meme si une vitrine ancienne en portait
+     *      le nom. `pro.` sert le back-office ; il ne doit pas AUSSI servir une boutique.
+     *   4. Le port est retire : `piscine-a.fluvia-app.com:8443` designe le meme hote.
+     */
+    public function resoudreParHote(?string $hote): ?Vitrine
+    {
+        if ($hote === null || $hote === '') {
+            return null;
+        }
+
+        $hote = mb_strtolower(trim($hote));
+
+        // `piscine-a.fluvia-app.com:8443` designe le meme hote que sans le port.
+        if (str_contains($hote, ':')) {
+            $hote = (string) strstr($hote, ':', true);
+        }
+
+        // ⚠ AVEC LE POINT. Sans lui, `mechantfluvia-app.com` satisferait `str_ends_with`.
+        $suffixe = '.' . mb_strtolower($this->domaineDePlateforme);
+        if (!str_ends_with($hote, $suffixe)) {
+            return null;
+        }
+
+        $etiquette = substr($hote, 0, -\strlen($suffixe));
+
+        // Une etiquette a un seul niveau. `a.b.fluvia-app.com` ne designe pas la vitrine « a.b ».
+        if ($etiquette === '' || str_contains($etiquette, '.')) {
+            return null;
+        }
+
+        // D106 : `pro.` sert le back-office. Il ne sert jamais AUSSI une boutique.
+        if (ReservedHostnames::isReserved($etiquette)) {
+            return null;
+        }
+
+        $vitrine = $this->em->getRepository(Vitrine::class)->findOneBy(['slug' => $etiquette]);
+
+        return $vitrine instanceof Vitrine ? $vitrine : null;
+    }
+
+    /**
+     * UNE VITRINE EST-ELLE VISIBLE D'UN VISITEUR PUBLIC ? (RG-M3-01)
+     *
+     * ⚠ Cette regle vivait uniquement dans `VitrinesPubliquesProvider`. La resolution par hote en a
+     * besoin AUSSI -- et l'avoir recopiee aurait laisse un hote servir une vitrine depubliee le jour
+     * ou l'une des deux copies aurait bouge. Un seul calcul, deux appelants.
+     */
+    public function estVisibleDuPublic(Vitrine $vitrine): bool
+    {
+        $etablissement = $vitrine->getEtablissement();
+
+        if ($etablissement === null || !$etablissement->isActif()) {
+            return false;
+        }
+
+        return \in_array('en_ligne', $vitrine->getCanauxActifs(), true);
     }
 
     /**
@@ -99,6 +186,16 @@ final class VitrineResolver
 
         if ($slug === '') {
             return 'boutique-' . substr(bin2hex(random_bytes(4)), 0, 6);
+        }
+
+        // ⚠ UN ETABLISSEMENT NOMME « Pro » PRODUIRAIT L'HOTE DU BACK-OFFICE (D106).
+        //
+        // Le refus pose sur l'entite ne suffit pas ici : `EstablishmentStampProcessor` appelle
+        // cette fabrique depuis un *processor*, donc APRES la validation. Ce chemin-la ne passe
+        // devant aucun `Assert`, et c'est celui que personne ne regarde -- l'exploitant ne saisit
+        // rien, le nom apparait tout seul.
+        if (ReservedHostnames::isReserved($slug)) {
+            $slug .= '-boutique';
         }
 
         return mb_substr($slug, 0, 70);

@@ -31,6 +31,47 @@ git fetch origin && git merge --no-edit origin/main
 
 Le second doit être vert AVANT que tu commences, sinon tu hériteras d'un rouge qui n'est pas le tien.
 
+### ⚠ Déployer tue toute suite en cours — la tienne comme celle des autres
+
+`./infra/deploy-preprod.sh` lance `composer install --no-dev`, qui **retire phpunit** du `vendor/`
+**de l'arbre d'où part le déploiement**. Une suite qui tourne sur cet arbre meurt alors en plein
+milieu, et son message accuse l'opérateur de ne pas avoir réinstallé — alors qu'il l'avait fait.
+
+⚠ **Les worktrees ne sont PAS concernés, et ma première version disait le contraire.** `git worktree`
+partage le `.git`, pas le `vendor/` : chaque worktree a le sien (deux inodes distincts, mesuré par
+`8e` puis vérifié). Il y a **dix worktrees** ici — avertir pour les dix apprenait à tout le monde à
+sauter la ligne, ce que j'ai fait moi-même une heure après l'avoir écrite. Le déploiement lit
+désormais le **montage** des conteneurs de test, pas un fichier, et ne nomme que les suites du même
+arbre.
+
+Constaté le 31/08 : déploiement à 12:04:32, déploiement d'une autre session à 12:05:50, suite
+complète perdue **sans qu'un seul test soit exécuté**. La notification de tâche annonçait « exit
+code 0 ».
+
+**Ce n'est la faute de personne : c'est structurel.** Toute session qui déploie casse toute session
+qui teste, et la flotte s'agrandit à d'autres comptes.
+
+On ne supprime pas la collision, et c'est délibéré : le garde-fou n°20 existe parce que
+`symfony/http-client` était déclaré en `require-dev` alors que huit classes de production
+l'utilisaient — un défaut *invisible partout où on le cherche, et visible seulement sur la machine
+déployée*. La préprod sans dépendances de dev est le seul endroit où cette classe se voit.
+
+Donc la collision est rendue **bruyante**, pas supprimée :
+
+- `test-stack.sh run` pose `/tmp/suite-en-cours-<jeton>`, retiré par `trap` — il dit qu'une suite
+  tourne, y compris entre deux conteneurs.
+- `deploy-preprod.sh` lit le montage `/repo` des conteneurs `*-run` et ne nomme que ceux montés sur
+  **son propre** arbre. Un montage ne peut pas devenir périmé ; un marqueur survit à un processus tué.
+- **Il avertit, il ne bloque pas.** Bloquer transformerait une gêne en panne : la suite complète
+  dure des heures et personne ne pourrait livrer pendant ce temps.
+
+**Ce qu'on te demande :** lis l'avertissement. S'il liste un jeton qui n'est pas le tien, préviens
+avant de déployer. Et si ta suite meurt sur « phpunit est absent », ce n'est pas toi :
+
+```
+./infra/reinstaller-dev.sh
+```
+
 ---
 
 ## 2. Qui tient quoi au 31/08
@@ -73,8 +114,8 @@ Ordonné par ce que ça débloque, pas par difficulté.
 |---|---|---|---|
 | **T1** | **L'API publique pour les tiers** — clés délivrables, webhooks sortants, versions | ⚠ **Commande trois des quatre autres axes** (D102). Sans elle, l'appli mobile, les agrégateurs et les machines connectées produisent trois couplages privés au lieu d'une surface | *(libre)* |
 | **T2** | **Reprise initiale d'un client** — `ImportBatch`, deux temps, `externalRef` | Bloque une signature : sans elle un client ressaisit son fichier d'abonnés et les crédits de ses cartes. Spec écrite : `COORDINATION/specs/import/` | *(libre)* |
-| **T3** | **Résoudre la boutique depuis l'HÔTE** et non le slug d'URL | Petit maintenant, gros plus tard (D104). Condition de la marque blanche | *(libre)* |
-| **T4** | **Noms de sous-domaines réservés** (`pro`, `api`, `www`…) | Une constante, un refus à la création de vitrine (D106). Empêche une collision qu'on ne verra qu'en production | *(libre)* |
+| **T22** | **Garde-fou n°34 — la validation s'exécute AVANT les processeurs** | Deux sessions s'y sont cassées le même jour, dans les deux sens (voir §3 quinquies). ⚠ **Détecteur écrit, mais il rate son propre témoin positif** : il trouve 31 candidats et ne voit pas `Vitrine::$slug`, que je sais être un cas. Les trois composants marchent isolément (processeur désigné, `setSlug` présent, propriété lue) ; assemblés, non. Script sur le VPS : `/tmp/jarvis-gf34c.py`. **Ne pas geler les 31 comme dette avant d'avoir un témoin qui passe** | *(libre)* |
+| **T23** | **Le frontal public bascule sur la résolution par hôte** | Le serveur sait le faire depuis T3 (`GET /boutique/vitrine-courante`, D104) et `PublicApp.jsx` l'appelle déjà en repli. Reste : servir le front sous `<slug>.fluvia-app.com` (nginx + joker TLS), et faire du chemin `/b/<slug>` une redirection plutôt qu'une forme parallèle | *(libre)* |
 | **T5** | **Catégorie comptable sur les 7 produits publiés par les semis** | Les fixtures publient dans un état que l'API refuse (RG-M1-05). ⚠ Le choix du compte est une décision comptable — demander à Maxime avant | *(libre)* |
 | **T6** | **Fixtures rejouables en préproduction** | `doctrine:fixtures:load` est absente (`--no-dev`). 38 classes décrivent la démo et ne peuvent pas être rejouées : la démonstration dérive | *(libre)* |
 | **T7** | **Format de facture électronique** — Factur-X / EN 16931 | Aucun format n'existe. Chorus Pro et l'e-reporting REFUSENT désormais au lieu de mentir (D94), mais ne transmettent toujours rien | *(libre)* |
@@ -126,6 +167,16 @@ reprendre.
 | **T15** | **Refonte graphique aux couleurs de Fluvia** | Les écrans portent aujourd'hui une identité par défaut. ⚠ À faire **avant** T11 : une appli en marque blanche décline une identité — s'il n'y en a pas, elle décline le vide |
 | **T16** | **Site vitrine** sur `fluvia-app.com` | Aucune vitrine n'existe. Hôte séparé du back-office (D103) : elle porte des traceurs, il porte des sessions |
 | **T17** | **Accueil d'un nouveau client (onboarding)** | ⚠ **Ce n'est PAS T2.** T2 reprend les données d'un client ; T17 est tout le chemin de la signature à une installation qui marche : créer le locataire, semer les référentiels, poser les types de produits et leurs comptes, le premier utilisateur, la formation. **T2 en est une étape.** Les confondre les ferait faire deux fois |
+
+---
+
+## 3 quinquies. Mesuré en passant, pas corrigé — à prendre par qui tient la zone
+
+| ce qui a été mesuré | comment le revoir | pourquoi ça compte |
+|---|---|---|
+| **Aucun `trusted_hosts` déclaré.** L'`Host` vient de l'appelant. La résolution par hôte (D104) n'est pas concernée — elle échoue fermée — mais **tout ce qui fabrique une URL depuis la requête** l'est : liens de courriel, redirections | `grep -rn trusted config/packages/` rend zéro | Un lien de réinitialisation de mot de passe pointant vers un hôte choisi par l'appelant |
+| **La validation s'exécute AVANT les processeurs**, et deux sessions s'y sont cassées le même jour. Chez moi : `EstablishmentStampProcessor` pose le slug d'une vitrine *après* la validation — un établissement nommé « Pro » aurait traversé l'`Assert` sans être vu. Chez `8e` : un `Assert\NotNull` sur un champ posé par un processeur refusait la requête avant qu'il puisse le compléter (création de région impossible, 422, sur un écran qui dit « créez-en une avant votre premier établissement ») | — | Le correctif est juste, invisible, et **vert nulle part**. Garde-fou n°34 à écrire : toute propriété écrite par un processeur ET porteuse d'une contrainte de non-vacuité |
+| **`/tmp` est partagé entre les sessions.** J'ai écrasé mon propre message de commit avec celui d'une autre session, en écrivant dans `/tmp/msg2.txt` | — | Préfixe tes fichiers de travail par ton nom : `/tmp/<session>-…` |
 
 ---
 
