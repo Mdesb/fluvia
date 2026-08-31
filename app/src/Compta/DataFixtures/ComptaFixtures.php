@@ -173,7 +173,19 @@ final class ComptaFixtures extends Fixture implements DependentFixtureInterface
             ['differe', 'Paiement différé', false, false, true],
             ['payfip', 'PayFiP (DGFiP)', false, true, false],
         ];
+        // ⚠ Chercher avant de créer, et pas seulement parce qu'un rechargement doublonnerait : la
+        // migration `Version20260814231600` **insère déjà ces onze lignes** (`INSERT IGNORE`). Sur toute
+        // base construite par les migrations — donc toute préproduction — elles sont présentes avant
+        // qu'aucune fixture n'ait tourné, et `uniq_moyen_code` faisait échouer le chargement dès le
+        // premier code. La garde d'entrée de cette classe ne protégeait pas ce cas : elle teste le
+        // profil exploitant, que la migration ne pose pas — un témoin présent ne garantit pas que tout
+        // le bloc qu'il est censé représenter le soit.
+        $depot = $manager->getRepository(MoyenPaiement::class);
         foreach ($moyens as [$code, $libelle, $rendu, $reference, $differe]) {
+            if ($depot->findOneBy(['code' => $code]) instanceof MoyenPaiement) {
+                continue;
+            }
+
             $manager->persist((new MoyenPaiement())
                 ->setCode($code)->setLibelle($libelle)
                 ->setAutoriseRendu($rendu)->setExigeReference($reference)->setAutoriseDiffere($differe));
