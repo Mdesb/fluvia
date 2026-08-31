@@ -218,5 +218,17 @@ export const boutique = {
     request('/auth', { method: 'POST', body: { email, motDePasse } }),
   moiCompte: () => request('/api/boutique/comptes/me', { auth: true }),
   mesCommandes: () => request('/api/boutique/comptes/me/commandes', { auth: true }),
+
+  // Demander le remboursement d'une commande. Corps : { vente, ligne?, motif, piecesJustificatives? }
+  //
+  // ⚠ AUCUN REMBOURSEMENT N'EST AUTOMATIQUE : la demande est deposee, motivee, et un humain tranche
+  // (RG-M3-15). Le serveur refuse une commande qui n'appartient pas au compte connecte, et exige un
+  // motif non vide.
+  //
+  // ⚠ ET LE CLIENT NE PEUT PAS LISTER SES DEMANDES : la collection est reservee a l'exploitant
+  // (`boutique.lire`), seule la lecture d'UNE demande lui est ouverte. L'ecran ne peut donc pas
+  // afficher « demande en cours » apres un rechargement — il le dit plutot que de le laisser croire.
+  deposerDemandeRemboursement: (corps) =>
+    request('/api/boutique/demandes-remboursement', { method: 'POST', body: corps, auth: true }),
   mesBillets: () => request('/api/boutique/comptes/me/billets', { auth: true }),
 }
