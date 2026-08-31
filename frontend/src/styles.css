@@ -784,7 +784,7 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 .pat-tuile .pat-dispo { font-size: 30px; font-weight: 800; line-height: 1.05; color: var(--good);
   font-variant-numeric: tabular-nums; }
 .pat-tuile .pat-detail { font-size: 11px; color: var(--ink-faint); }
-.pat-tuile.vide { background: var(--bg-soft, var(--panel)); border-style: dashed; }
+.pat-tuile.vide { background: var(--panel-2); border-style: dashed; }
 .pat-tuile.vide .pat-dispo { color: var(--crit); }
 .pat-tuile .pat-att { position: absolute; top: -7px; right: -5px; font-size: 10px; }
 
@@ -1082,7 +1082,7 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
   width: 100%;
   padding: var(--esp-serre) var(--esp-normal);
   text-align: left;
-  background: var(--bg-soft);
+  background: var(--panel-2);
   border: 1px solid var(--line);
   border-radius: 8px;
   cursor: pointer;
@@ -1123,7 +1123,7 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
   flex-direction: column;
   gap: var(--esp-serre);
   padding: var(--esp-serre);
-  background: var(--bg-soft);
+  background: var(--panel-2);
   border-radius: 8px;
 }
 .resa-inscrit-h { display: flex; align-items: center; gap: var(--esp-serre); flex-wrap: wrap; }
@@ -1210,7 +1210,7 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 .fact-totaux div { display: flex; justify-content: space-between; padding: 3px 0; }
 .fact-totaux .fact-ttc { border-top: 1px solid var(--line); margin-top: 4px; padding-top: 6px; font-weight: 700; font-size: 15px; }
 .fact-cond { margin-top: 24px; font-size: 12.5px; color: var(--ink-soft); }
-.fact-acquittee { margin-top: 12px; font-weight: 600; color: var(--ok, var(--ink)); }
+.fact-acquittee { margin-top: 12px; font-weight: 600; color: var(--good); }
 /* Le destinataire manquant est marque DANS le document : un bloc vide se remet par megarde. */
 .fact-manque { color: var(--crit); font-weight: 600; }
 
