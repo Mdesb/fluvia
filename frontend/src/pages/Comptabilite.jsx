@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import Liste, { euroCentimes, dateFr } from '../components/Liste.jsx'
 import Tabs from '../components/Tabs.jsx'
+import LettrageEcritures from '../components/LettrageEcritures.jsx'
 import CorrespondancesComptables from '../components/CorrespondancesComptables.jsx'
 import { api } from '../api/client.js'
 import ClotureComptable from '../components/ClotureComptable.jsx'
@@ -40,6 +41,7 @@ export default function Comptabilite({ etabActif, droits }) {
           ['cloture', 'Clôture'],
           ['correspondances', 'Correspondances'],
           ['journaux', 'Journaux & écritures'],
+          ['lettrage', 'Lettrage'],
           ['regie', 'Régie & versements'],
           ['sepa', 'SEPA'],
           ['impayes', 'Impayés'],
@@ -57,6 +59,10 @@ export default function Comptabilite({ etabActif, droits }) {
       {sousOnglet === 'correspondances' && (
         <CorrespondancesComptables etabActif={etabActif} droits={droits} />
       )}
+
+      {/* Apres les journaux, parce qu'on lettre ce qu'on vient d'y lire — et avant les listes de
+          consultation, parce que c'est un des rares onglets de ce module qui porte un TRAVAIL. */}
+      {sousOnglet === 'lettrage' && <LettrageEcritures etabActif={etabActif} droits={droits} />}
 
       {sousOnglet === 'journaux' && (
         <div className="resa-grid">

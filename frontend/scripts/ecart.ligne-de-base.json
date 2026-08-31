@@ -29,14 +29,14 @@
         "Le script REFUSE de le relever. Un plafond qui remonte n est plus un cliquet, c est un",
         "compteur."
     ],
-    "plafond": 660,
+    "plafond": 651,
     "releve": {
-        "exposees": 1159,
-        "sansEcran": 0,
-        "attendues": 1159,
-        "appelees": 505,
-        "atteignables": 499,
-        "inatteignables": 660,
+        "exposees": 1161,
+        "sansEcran": 1,
+        "attendues": 1160,
+        "appelees": 515,
+        "atteignables": 509,
+        "inatteignables": 651,
         "orphelins": [
             "etatSynchroAcces  (back-office)",
             "grilleTarifaires  (back-office)",
@@ -48,19 +48,25 @@
         ],
         "appelsSansServeur": [],
         "marqueursPerimes": [],
-        "declares": [],
+        "declares": [
+            {
+                "fichier": "app/src/Platform/ApiResource/LoadedBuild.php",
+                "operations": 1,
+                "raison": "consommée par le déploiement pour vérifier que FPM a chargé le code livré, jamais par une interface."
+            }
+        ],
         "marqueursSansRaison": [],
         "clientsNonDeclares": [],
         "parFront": [
             {
                 "nom": "back-office",
-                "appelees": 482,
-                "atteignables": 476
+                "appelees": 491,
+                "atteignables": 485
             },
             {
                 "nom": "boutique en ligne",
-                "appelees": 23,
-                "atteignables": 23
+                "appelees": 24,
+                "atteignables": 24
             }
         ],
         "parPrefixe": [
@@ -70,7 +76,7 @@
             ],
             [
                 "boutique",
-                28
+                29
             ],
             [
                 "reservation",
@@ -105,11 +111,11 @@
                 11
             ],
             [
-                "marketing",
-                10
+                "compta",
+                11
             ],
             [
-                "compta",
+                "marketing",
                 10
             ],
             [
@@ -146,6 +152,10 @@
             ],
             [
                 "etablissements",
+                6
+            ],
+            [
+                "crm",
                 6
             ],
             [
@@ -245,10 +255,6 @@
                 3
             ],
             [
-                "crm",
-                3
-            ],
-            [
                 "demande",
                 3
             ],
@@ -314,6 +320,10 @@
             ],
             [
                 "taux",
+                3
+            ],
+            [
+                "parametres-facturation",
                 3
             ],
             [
@@ -405,6 +415,10 @@
                 1
             ],
             [
+                "journal",
+                1
+            ],
+            [
                 "reservations",
                 1
             ],
@@ -458,6 +472,10 @@
             ],
             [
                 "periode",
+                1
+            ],
+            [
+                "lettrage",
                 1
             ],
             [

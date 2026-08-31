@@ -916,6 +916,36 @@ export const api = {
   annulerReservation: (id) =>
     request(`/api/reservation/reservations/${id}/annuler`, { method: 'POST', body: {} }),
 
+  // ── FUSION DE FICHES CLIENTS (US-L5-08, RG-M4-06) ─────────────────────────────────────────────
+  //
+  // ⚠ TROIS TEMPS, ET LE PREMIER EST CE QUI REND LE GESTE PRATICABLE. On ne fusionne pas a
+  // l'aveugle : on demande d'abord CE QUI DIVERGE entre les fiches, on tranche champ par champ, et
+  // seulement ensuite on ecrit. Sans cette etape, fusionner reviendrait a ecraser des donnees qu'on
+  // n'a pas regardees.
+  //
+  // Rend `{ maitre, sources, champsDivergents: { champ: { maitre, sources: { id: valeur } } } }`.
+  // Un objet vide signifie que les fiches ne se contredisent nulle part — la fusion est alors sans
+  // arbitrage.
+  previsualiserFusion: (maitre, sources) =>
+    request('/api/crm/fusions/previsualiser', { query: { maitre, 'sources[]': sources } }),
+
+  // Corps : { portee: 'client', sources: [iri], maitre: iri, champsArbitres?: {...}, motif?: '…' }
+  //
+  // ⚠ `champsArbitres` NE PORTE QUE CE QU'ON A TRANCHE. Un champ absent garde la valeur du maitre :
+  // c'est le defaut sur, et il evite qu'un ecran distrait impose une valeur qu'il n'a pas montree.
+  fusionnerClients: (corps) =>
+    request('/api/crm/fusions', { method: 'POST', body: corps }),
+
+  // ⚠ CE QUI REND LA FUSION ACCEPTABLE : elle se defait. Les fiches sources sont restaurees a
+  // l'identique. Sans ce retour en arriere, personne de sense ne fusionnerait deux fiches d'un
+  // client qui reclame.
+  defusionner: (idJournal) =>
+    request(`/api/crm/fusions/${idJournal}/defusionner`, { method: 'POST', body: {} }),
+
+  // Le journal des fusions : c'est lui qui rend la defusion atteignable, et qui dit qui a fusionne
+  // quoi, quand, et pourquoi.
+  journalFusions: () => request('/api/journal_fusions', { query: { itemsPerPage: 50 } }),
+
   // ── DOUBLE AUTHENTIFICATION (§2.3 plan-backoffice.md) ─────────────────────────────────────────
   //
   // Cinq points d'entree, tous serves et tous eprouves par `MfaTest` — et aucun n'etait appele.
@@ -1397,6 +1427,24 @@ export const api = {
     request(`/api/compta/ecritures/${id}/valider`, { method: 'POST', body: {} }),
   extournerEcriture: (id) =>
     request(`/api/compta/ecritures/${id}/extourne`, { method: 'POST', body: {} }),
+  // ── LETTRAGE (US-L4-14, RG-M6-14) ─────────────────────────────────────────────────────────────
+  //
+  // Les lettrages existants : c'est ce qui permet de distinguer une ligne SOLDEE d'une ligne qui
+  // reste due. Sans cette liste, un ecran de lettrage proposerait de relettrer ce qui l'est deja.
+  lettragesEcritures: () =>
+    request('/api/lettrage_ecritures', { query: { itemsPerPage: 500 } }),
+
+  // Lettrer un groupe de lignes. Corps : { lines: [id, ...] } — au moins deux.
+  //
+  // ⚠ LE SERVEUR N'EXIGE PAS L'EQUILIBRE, et c'est mesure en le lisant. Il verifie deux lignes
+  // minimum, un profil exploitant commun, et le cloisonnement de chacune. Un lettrage partiel est un
+  // geste comptable legitime — solder un reglement en plusieurs fois — donc l'ecran AFFICHE l'ecart
+  // sans jamais bloquer.
+  //
+  // Un identifiant nu suffit : `idDepuisReference` accepte l'IRI comme l'UUID.
+  lettrerGroupe: (idsLignes) =>
+    request('/api/compta/lettrages/groupe', { method: 'POST', body: { lines: idsLignes } }),
+
   verifierChaineEcritures: (journalId) =>
     request('/api/compta/ecritures/verifier-chaine', { query: { journal: journalId } }),
   cloturerPeriode: (id) =>
