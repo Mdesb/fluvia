@@ -1,162 +1,150 @@
-# TASKS — tableau de claim
+# TASKS — ce qui reste, et qui le tient
 
-> ## ⚠ État du 30/08, 18 h — lisez ceci avant le tableau
+> **Refait le 31/08 par Jarvis (intégrateur).** Le tableau précédent datait du 22–25/08 et ne disait
+> plus la vérité : 55 lignes sur 85 étaient en `CLAIM` sans nom. Un `CLAIM` sans instance n'est pas
+> une réservation — c'est une intention que personne n'a reprise.
 >
-> **Le tableau ci-dessous date du 22–25/08 et il ne dit plus la vérité.** `allaccess-8e` s'en est
-> méfiée à juste titre : sur 85 lignes, **55 sont en `CLAIM` sans aucune instance**. Un `CLAIM` sans
-> nom n'est pas une réservation — c'est une intention que personne n'a reprise. Ne considérez pas ces
-> lignes comme prises, et ne considérez pas non plus qu'elles restent à faire : beaucoup ont été
-> faites sans que la ligne soit mise à jour.
->
-> **La vérité du jour se lit dans trois endroits, dans cet ordre :**
->
-> 1. `COORDINATION/DECISIONS.md` — ce que Maxime a tranché, avec la raison et la contrepartie.
->    Vingt-trois décisions le 30/08 (D68 → D90).
-> 2. `COORDINATION/MESSAGES.md` — ce que chaque session a trouvé et corrigé, daté.
-> 3. `git log origin/main` — ce qui est réellement parti. ⚠ Pas un `main` local : j'ai annoncé deux
->    fois du travail « poussé » qui vivait encore sur ma machine, et `8e` l'a mesuré avant de bâtir
->    dessus. **« J'ai poussé » désigne un geste ; « `origin/main` contient X » désigne un état.**
->
-> ### Qui est sur quoi au 30/08, 18 h
->
-> | session | en cours | ne pas toucher |
-> |---|---|---|
-> | **claude-A** (moi, intégrateur) | garde-fous `bin/`, `main`, `CONTRACT/`, le pont vente→accès | `bin/**`, `app/src/Acces/Adapter/SaleAccessPairingAdapter.php`, `app/config/services.yaml` |
-> | **allaccess-8e** | `DroitAcces::ouvre()` strict (D87) + outil de scan, D74 sur les cartes | `app/src/Acces/**` |
-> | **allaccess-c2** | D84 livré ; références libres, doublon de campagnes, puis `ProduitFiche` + API de `ComplementaryProduct` | `app/src/Recouvrement/**`, `frontend/src/pages/Parametres.jsx` |
-> | **allaccess-34** | conversion de l'espacement au fil des écrans rouverts | `frontend/src/styles.css`, les écrans qu'elle ouvre |
->
-> ### Trois choses à savoir avant de lancer quoi que ce soit
->
-> - ⚠ **Deux `run` sur le même jeton de test se corrompent en silence** — ils partagent la base et le
->   harnais fait un TRUNCATE par classe. `run` refuse désormais un homonyme, et `down` dit ce qu'il
->   n'a pas pu supprimer au lieu de l'avaler. Prenez un jeton à vous.
-> - ⚠ **N'éditez pas un script shell pendant qu'il tourne.** Bash lit par décalage d'octets : une
->   suite de 53 minutes a repris sa lecture au milieu d'un mot, et l'erreur désignait une ligne
->   parfaitement valide sur le disque.
-> - ⚠ **Tout antislash ou accent grave passe par un fichier écrit puis copié**, jamais par un heredoc
->   à travers `ssh`. Douze occurrences à ce jour, dont deux aujourd'hui en connaissant la règle : un
->   mot a disparu d'un commentaire et `bash` a tenté de l'exécuter.
->
-> ### Deux garde-fous neufs qui peuvent refuser votre commit
->
-> - **n°27, espacement en ligne** — le nombre de déclarations d'espacement écrites à la main ne peut
->   plus remonter (756, plafond 756). Il nomme le fichier qui a monté. L'échelle est dans
->   `styles.css` : `--esp-serre` à `--esp-section`. Non comptés : `0`, `auto`, et les composites.
-> - **n°28, champ de cloisonnement** — compare le champ que chaque extension de périmètre *filtre* à
->   celui que l'entité *déclare*, segments du chemin de jointure compris. ⚠ Deux règles de nommage
->   cohabitent : les **segments** sont des propriétés d'entité, donc anglais (D5) ; le **champ final**
->   est écrit en dur par l'extension, donc français. Les confondre produit l'erreur inverse.
+> ⚠ **Ce fichier est le SEUL canal entre les sessions qui ne partagent pas la même machine.** Écris
+> ici ce qu'une session neuve doit savoir sans pouvoir te le demander.
 
-Avant de démarrer un chantier, ajoute une ligne ici avec ton instance + statut. Statuts :
-`CLAIM` (réservé) · `WIP` (en cours) · `REVIEW` (en revue de cohérence) · `DONE` · `BLOCKED`.
-Ne touche pas un chemin déjà en `WIP` par une autre instance.
+---
 
-| # | Tâche | Chemins | Instance | Statut | Maj |
-|---|---|---|---|---|---|
-| C1 | Contrat de plateforme v0 (noyau, manifeste, événements) | `COORDINATION/CONTRACT/**` | **claude-A** | DONE | 20/08 |
-| C2 | Échafaudage de coordination (ce dossier) | `COORDINATION/**` | claude (billetterie) | DONE | 19/08 |
-| C3 | Spec SDD Suite Finance & Compta | `specs/finance/**` | claude (billetterie) | DONE | 19/08 |
-| C6 | Suite Finance FIN-0 (OCR) + FIN-1 (Compta) | `app/src/{Ocr,Compta}/**` | **claude-B** | DONE | 21/08 |
-| C4 | Garde-fous CI : cloisonnement, nommage, secrets — i18n et CSRF sans objet | `bin/` | **claude-C** | DONE | 22/08 |
-| C5 | Bus d'événements + registre de modules (impl core) | `app/src/Platform/**` | **claude-A** | DONE | 20/08 |
-| C7 | Harnais de test executable (stack isolee, DDL hors mapping) | `infra/test-stack.sh`, `app/tests/DdlHorsMapping.php` | **claude-A** | DONE | 19/08 |
-| C8 | CA-11 Support : l agent ne voit pas les 2 messages du fil (TicketSupportApiTest:109) | `app/src/Support/State/MessageTicketProvider.php` | **claude-A** | DONE | 19/08 |
-| C9 | Decouverte des ressources API : identifier le mecanisme reel, rendre la configuration explicite, PUIS exclure les entites des services | `app/config/{services,packages/api_platform}.yaml` | **claude-A** | BLOCKED | 20/08 |
-| C10 | Suite Finance FIN-2, FIN-3, FIN-4 - bloc complet | `app/src/Finance/**` | **claude-B** | DONE | 21/08 |
+## 1. Avant de toucher quoi que ce soit
 
-| C11 | Tests de non-regression IDOR Caisse/SEPA (etendre CaisseClotureRoleFixtures : caisse.mouvement absente des fixtures) | `app/tests/Caisse`, `app/src/Caisse/DataFixtures` | **claude-B** | DONE | 24/08 |
-| C12 | Porter letablissement sur AccesRedevableChangeEvent pour quil soit pontable (RG-PLAT-03) | `app/src/Recouvrement/Event` | **claude-B** | DONE | 24/08 |
-| C13 | Retirer LegacyEventBridge quand chaque module publiera lui-meme son DomainEvent | `app/src/Platform/Event/Legacy` | *a assigner* | CLAIM | 20/08 |
-| ED-0 | Spec administration editeur + tunnel de souscription (SDD) | `specs/editeur/**` | **claude-A** | REVIEW | 20/08 |
-| ED-1 | Catalogue doffres : Plan, PlanOption adossees aux capabilities | `app/src/Editeur/**` | **claude-A** | DONE | 20/08 |
-| ED-2 | Abonnement : cycle de vie, prorata, mecanisme de suspension | `app/src/Subscription/**` | **claude-A** | DONE | 20/08 |
-| ED-3 | Tunnel de souscription SEPA + provisioning idempotent | `app/src/Editeur/**` | **claude-A** | WIP | 20/08 |
-| ED-4 | Acces dassistance borne et audite (RG-ED-07) | `app/src/Editeur/**`, `app/src/Audit/**` | *a assigner* | CLAIM | 20/08 |
-| C14 | Declarer au mapping ORM les index ecrits en SQL brut, pour que migrations:diff cesse de proposer leur suppression | `app/src/*/Entity`, `app/migrations` | *a assigner* | CLAIM | 20/08 |
-| C15 | NF525 : cle de scellement en dur dans ScellementEcritureHandler (conformite legale) | `app/src/Compta/Nf525` | **claude-B** | DONE | 20/08 |
-| C16 | Declencheur : hook pre-receive installe sur le bare, garde-fous actifs | `hooks/` | **claude-C** | DONE | 22/08 |
-| D7-bis | Asynchrone : messenger + transport Doctrine, worker systemd, transport dechec | `app/config`, `infra/` | **claude-A** | DONE | 21/08 |
-| SOC-0 | Spec SDD du module de publication sociale | `specs/social/**` | **claude-A** | CLAIM | 21/08 |
-| SOC-1 | Modele post/publications + coffre a jetons chiffre et cloisonne | `app/src/Social/**` | **claude-H** | DONE | 21/08 |
-| SOC-2 | Adaptateur reseau ouvert (Mastodon/Bluesky) + file, reprises, quotas | `app/src/Social/**` | **claude-H** | CLAIM | 21/08 |
-| SOC-3 | Collecte planifiee des statistiques : instantanes + charge brute conservee | `app/src/Social/**` | **claude-H** | CLAIM | 21/08 |
-| SOC-4 | Adaptateurs Meta (Page + Instagram), apres verification dentreprise et revue applicative | `app/src/Social/**` | *a assigner* | EXTERNE | 21/08 |
-| DMS-0 | GED : spec SDD (cloisonnement, URL signees expirantes, retention legale, versionnement) | `specs/dms/**` | **claude-B** | DONE | 21/08 |
-| DMS-1 | GED : implementation du stockage, des versions et des acces — **selon spec arbitree D18** | `app/src/Dms/**` | **claude-B** | DONE | 24/08 |
-| C17 | NF525 : troisieme chaine (Facturation) — cle obligatoire depuis lenvironnement | `app/src/Facturation/Nf525` | **claude-A** | DONE | 22/08 |
-| ACT-0 | Spec SDD : composition dactivites, format de paquet verticale, remplacement de Metier | `specs/activites/**` | **claude-A** | CLAIM | 22/08 |
-| ACT-1 | Reservation : quantite consommee, reservation par type, quota de second niveau | `app/src/Reservation/**` | *a assigner* | CLAIM | 22/08 |
-| ACT-2 | Module hebergement : nuitee, calendrier doccupation, arrivee et depart | `app/src/Lodging/**` | *a assigner* | CLAIM | 22/08 |
-| ACT-3 | Concept de sejour : compte unique sur place, regle une fois au depart | `app/src/Stay/**` | *a assigner* | CLAIM | 22/08 |
-| ACT-4 | Module restauration : service a table, addition, envoi cuisine | `app/src/Dining/**` | *a assigner* | CLAIM | 22/08 |
-| ACC-0 | Declaration de capacites des pilotes dacces (decision, revocation, encodage, passages) | `app/src/Acces/Port/**` | **claude-A** | DONE | 22/08 |
-| ACC-1 | Echec explicite sur operation non declaree + restitution a lexploitant | `app/src/Acces/**` | *libre — deblocage ACC-0* | CLAIM | 22/08 |
-| ACC-2 | Second port : encodage dune autorisation sur un medium (distinct de lappairage) | `app/src/Acces/Port/**` | *a assigner* | CLAIM | 22/08 |
-| ACC-3 | Projection reelle : une reservation ouvre un acces (remplace le no-op documente) | `app/src/Reservation/ProjectionAcces**` | *a assigner* | CLAIM | 22/08 |
-| C18 | Tests : afficher le detail des 5 notices PHPUnit (config actuelle ne donne que le compte) | `app/phpunit.dist.xml` | **claude-C** | DONE | 22/08 |
-| C19 | Garde-fou : detecter les find()/findOneBy() directs en Processor non confrontes au perimetre (angle mort revele par lIDOR dappairage) | `bin/garde-fou-cloisonnement.php` | **claude-C** | DONE | 22/08 |
-| C20 | IDOR appairage corrige — test de non-regression a ecrire (agent scope B vs droit de A = 404) | `app/tests/Acces/**` | **claude-B** (verif) | DONE | 24/08 |
-| C21 | Performance : verifier US-L3-03 et RG-ACC-01 hors suite fonctionnelle (materiel representatif, a chaud, percentile) | `infra/**` | *a assigner* | CLAIM | 22/08 |
-| C22 | OCR mode degrade : assertion sur labsence dappel reseau plutot que sur le chronometre | `app/tests/Ocr/**` | **claude-B** (verif) | DONE | 24/08 |
-| C23 | Tests : remplacer les createMock() sans attente par createStub() (5 notices, meme famille) | `app/tests/**` | **claude-C** | DONE | 22/08 |
-| RR-1 | **PREALABLE** — emettre les evenements declencheurs manquants (panier abandonne, facture echue, devis expire, client inactif) | `app/src/{Boutique,Facturation,Crm}/**` | **claude-E** | CLAIM | 23/08 |
-| SF-1 | **PREALABLE** — emettre booking.cancelled, booking.no_show, access.recorded | `app/src/{Reservation,Acces}/**` | **claude-E** | CLAIM | 23/08 |
-| RR-0 | Spec SDD Revenue Recovery — trancher dabord : etendre Recouvrement ou module neuf | `specs/revenue-recovery/**` | **claude-E** | CLAIM | 23/08 |
-| SF-0 | Spec SDD Smart Flow — retards, creneaux liberes, liste dattente, affluence | `specs/smart-flow/**` | **claude-E** | REVIEW | 24/08 |
-| RR-2 | Moteur de relance pilote par evenements (apres RR-0 et RR-1) | `app/src/RevenueRecovery/**` | **claude-E** | CLAIM | 23/08 |
-| SF-2 | Creneau libere, liste dattente, revente du creneau (apres SF-0 et SF-1) | `app/src/SmartFlow/**` | **claude-E** | CLAIM | 23/08 |
-| CQ-0 | **PREALABLE** — rattacher un DroitAcces a un porteur (facultatif : la carte au porteur reste possible) | `app/src/{Acces,Crm}/**` | **claude-C** | CLAIM | 23/08 |
-| CQ-1 | Recharge dune carte multi-entrees : increment du droit existant, bascule versionMaj, vente rattachee | `app/src/Acces/**` | **claude-B** | DONE | 24/08 |
-| CQ-2 | Consultation du solde en lecture seule (ne consomme rien) + modale de caisse avec ajout rapide | `app/src/Acces/**` | **claude-A** | CLAIM | 23/08 |
-| CQ-3 | Carte de N reservations : ouvrir creditRestant sur les droits de type Booking | `app/src/Reservation/**` | *a assigner* | CLAIM | 23/08 |
-| CQ-4 | propositionRecharge : ne designer que des canaux reellement implementes | `app/src/Acces/State/PassageIngestionProcessor.php` | **claude-B** | DONE | 24/08 |
-| CQ-5 | No-show : issue sur le credit (decompte / restitue / restitue avec report), orthogonale a la facturation | `app/src/Reservation/**` | **claude-B** | DONE | 24/08 |
-| CQ-6 | Carte de seances nominative : quota de STOCK, distinct du quota periodique des formules | `app/src/{Reservation,Acces}/**` | *a assigner* | CLAIM | 23/08 |
-| CQ-7 | Parametres de recharge : la validite apres recharge se configure (conserver / prolonger) | `app/src/Offre/**` | **claude-G** | DONE | 24/08 |
-| ACC-4 | Resolution du pilote dacces **par etablissement** — lalias DI unique rend les capacites globales et vide D17 dune partie de son sens | `app/src/Acces/**` | *a assigner* | CLAIM | 23/08 |
-| CQ-8 | **ARGENT** — vendre N cartes en une ligne facture N et nemet quune seule chargee (defaut preexistant, revele par CQ-1) | `app/src/Vente/Service/ValiderVenteService.php` | **claude-B** | REVIEW | 24/08 |
-| C24 | Le hook installe compare son contenu a la version poussee et avertit sil est perime (D28) | `hooks/pre-receive` | **claude-C** | CLAIM | 24/08 |
-<!-- Ajouter les nouvelles tâches au-dessus de cette ligne. -->
+**Lis dans cet ordre, ça prend dix minutes et évite une journée refaite :**
 
-| CLI-0 | Spec SDD de l'application client final — web et native (D38) | `specs/client/**` | **claude-A** | CLAIM | 25/08 |
-| CLI-1 | Authentification et espace personnel du client : inscription, connexion, « mon compte » | `app/src/Boutique/**` | *a assigner* | CLAIM | 25/08 |
-| CLI-2 | Mes reservations, mes billets, mes commandes — lecture cloisonnee par les droits `_soi` | `client/**` | *a assigner* | CLAIM | 25/08 |
-| CLI-3 | Ma carte et mon solde : porte-monnaie, cartes multi-entrees, recharge | `client/**` | *a assigner* | CLAIM | 25/08 |
-| CLI-4 | Coquille native (iOS/Android) — **non publiable avant immatriculation, cf. SOC-4** | `client-natif/**` | *a assigner* | EXTERNE | 25/08 |
+1. `COORDINATION/DECISIONS.md` — ce que Maxime a tranché, avec la raison ET la contrepartie.
+   108 décisions. Les huit dernières (D101→D108) portent la feuille de route.
+2. `COORDINATION/BLOQUEURS-EXTERNES.md` — sept blocages qui ne dépendent pas de nous.
+3. `git log origin/main` — ce qui est **réellement** parti.
 
-| UI-1 | **Modifier un prix** — `GrilleTarifaire` expose Post et Patch, le front ne fait que lire. Plainte directe de Maxime | `frontend/**` | **claude-H** | CLAIM | 25/08 |
-| UI-2 | Options produit : le chantier entier — creation, valeurs, rattachement, apercu caisse | `frontend/**`, `app/src/OptionProduit/**` | *a assigner* | CLAIM | 25/08 |
-| UI-3 | Vue rapide du billet : produit, type, entrees restantes, ou dates si abonnement | `frontend/**` | *a assigner* | CLAIM | 25/08 |
-| UI-4 | Vue calendrier type agenda : ajout et suppression rapides d evenements | `frontend/**` | *a assigner* | CLAIM | 25/08 |
-| UI-5 | Informations client : champs supplementaires, dont moyen de paiement prefere (**ajout serveur**, nexiste pas) | `app/src/Crm/**`, `frontend/**` | *a assigner* | CLAIM | 25/08 |
-| ACT-5 | Categories automatiques par verticale : un produit daffutage doit tomber dans les bons axes sans saisie | `app/src/Offre/**` | **claude-A** | FAIT 27/08 | 25/08 |
-| ACT-6 | Jauge propre aux cours (padel, tennis) — le modele la portait deja (`Ressource.capacitePropre`), elle etait juste modifiable NULLE PART | `app/src/Reservation/**` | **claude-A** | FAIT 27/08 | 25/08 |
-| VTE-1 | `Vente` : ajouter OrderFilter sur la date, DateFilter, SearchFilter sur le client — bloque lhistorique des ventes | `app/src/Vente/**` | *a assigner* | CLAIM | 25/08 |
-| PER-1 | `personnel:traiter-echeances-sortie` exige un agentEmail : decider quelle identite porte un traitement automatique dans laudit | `app/src/Personnel/**` | *a assigner* | CLAIM | 25/08 |
+⚠ **`main` local n'est pas `origin/main`.** « J'ai poussé » désigne un geste ; « `origin/main`
+contient X » désigne un état. Et « poussé » n'est pas « servi » : la préproduction n'a que ce que
+`./infra/deploy-preprod.sh` y a mis. Vérifie avec `curl .../version.json`.
 
-| CMP-0 | Spec SDD du module de campagnes — frontiere avec Revenue Recovery, audience, consentement, attribution | `specs/campagnes/**` | **claude-A** | REVIEW | 25/08 |
-| CMP-1 | **PREALABLE** — remonter `ClientNotificationInterface` de SmartFlow vers Platform (trois modules en dependent) | `app/src/Platform/**`, `app/src/SmartFlow/**` | **claude-A** | CLAIM | 25/08 |
-| CMP-2 | Audience : definition dun segment sur les donnees de comportement, previsualisation du nombre de personnes touchees | `app/src/Campagne/**` | *a assigner* | CLAIM | 25/08 |
-| CMP-3 | Message et canaux, **avec le consentement rendu incontournable a lenvoi** — pas verifie, impossible a contourner | `app/src/Campagne/**` | *a assigner* | CLAIM | 25/08 |
-| CMP-4 | Planification : ponctuelle, recurrente, ou declenchee par un evenement de domaine (anniversaire, abonnement a echeance, carte a une entree) | `app/src/Campagne/**` | *a assigner* | CLAIM | 25/08 |
-| CMP-5 | **ATTRIBUTION** — qui est revenu, ce quil a achete, combien ca a rapporte. Cest le seul avantage quun outil generaliste ne peut pas copier | `app/src/Campagne/**` | *a assigner* | CLAIM | 25/08 |
-| CMP-6 | Adaptateur denvoi reel (courriel, SMS) — **EXTERNE : exige un prestataire, donc un contrat, donc limmatriculation** | `app/src/Campagne/**` | *a assigner* | EXTERNE | 25/08 |
+**Puis, avant ta première ligne de code :**
 
-| PAY-0 | Spec du parcours de paiement : recueil conjoint carte + mandat, bascule sur rejet, explication au client | `specs/paiement/**` | **claude-A** | CLAIM | 25/08 |
-| PAY-1 | Recueil conjoint au guichet : carte par le terminal (**jamais de numero saisi dans lapplication**), mandat signe | `app/src/{Vente,Sepa}/**` | *a assigner* | CLAIM | 25/08 |
-| PAY-2 | Bascule automatique carte -> prelevement sur rejet, avec preavis au client avant tout prelevement | `app/src/{Sepa,Facturation}/**` | *a assigner* | CLAIM | 25/08 |
-| PAY-3 | Rejet CARTE : lentite nexiste pas, seul le rejet SEPA est modelise | `app/src/Vente/**` | *a assigner* | CLAIM | 25/08 |
-| PAY-4 | Explication du double recueil dans le parcours client — une phrase avant la saisie, pas une note de bas de page | `frontend/**`, `vitrine/**` | *a assigner* | CLAIM | 25/08 |
-| PAY-5 | Prestataire bancaire : jeton recurrent, champs heberges en ligne, lecture des retours pain.002 | `app/src/{Vente,Sepa}/**` | *a assigner* | EXTERNE | 25/08 |
+```
+git fetch origin && git merge --no-edit origin/main
+./bin/garde-fous.sh
+```
 
-| UI-6 | **Choix du tarif au guichet** — lAPI laccepte deja, lecran choisit tout seul. Cause probable de la proliferation de produits (D44) | `frontend/**` | **claude-H** | CLAIM | 25/08 |
-| VTE-2 | Vente directe sans session de caisse, **sans especes**, ouverte par une PERMISSION (tranche par Maxime, D45-bis) | `app/src/{Vente,Caisse}/**` | *a assigner* | CLAIM | 25/08 |
+Le second doit être vert AVANT que tu commences, sinon tu hériteras d'un rouge qui n'est pas le tien.
 
-| VTE-3 | Correction de reglement : ecriture compensatoire datee du jour du geste, rattachee a la vente, scellee (D45) | `app/src/{Vente,Caisse}/**` | *a assigner* | CLAIM | 25/08 |
-| VTE-4 | Permission dediee a la correction de reglement, distincte de caisse.gerer, tracee a laudit | `app/src/Securite/**` | **claude-A** | CLAIM | 25/08 |
-| FAC-1 | Devis, bon de commande, bon de livraison : la chaine complete jusqua la facture existante | `app/src/Facturation/**` | *a assigner* | CLAIM | 25/08 |
+---
 
-| VTE-5 | Attente de paiement **et debiteur** portes par le CANAL, exiges a la construction — six canaux, dont OTA ou le debiteur nest pas le client (D46-bis) | `app/src/{Offre,Vente}/**` | *a assigner* | CLAIM | 25/08 |
-| VTE-6 | Date de modification sur vente et facture, et **affichage en ecart** et non en dates brutes | `app/src/{Vente,Facturation}/**`, `frontend/**` | *a assigner* | CLAIM | 25/08 |
-| CAI-1 | Une correction de reglement peut pointer lAlerteEcartCaisse quelle explique — un ecart explique cesse detre un ecart | `app/src/Caisse/**` | *a assigner* | CLAIM | 25/08 |
+## 2. Qui tient quoi au 31/08
+
+| session | voie | ne pas toucher |
+|---|---|---|
+| **Jarvis** (intégrateur) | `main`, `bin/**`, `hooks/**`, `infra/**`, `COORDINATION/**`, NF525 | les garde-fous, les crochets, la pile |
+| **allaccess-8e** | référentiel de TVA légale, `App\Compta\**` | `app/src/Compta/**` tant que son lot n'est pas poussé |
+| **allaccess-c2** | module Réservation, écrans et contrôles frontaux | `app/src/Reservation/**`, `frontend/scripts/**` |
+| **allaccess-89** | écrans repris de `34`, facture rendue, destinataires | `frontend/src/pages/**` qu'il ouvre |
+| **allaccess-b8** | mesure et diagnostic, relais vers Maxime | — (il ne pose pas de code) |
+
+**Pour prendre un lot :** ajoute ton nom dans la colonne « tenu par » du tableau §3, commite ce seul
+changement, et pousse-le **avant** de commencer. Un lot pris sans être poussé n'est pas pris.
+
+---
+
+## 3. Prêt à prendre
+
+Ordonné par ce que ça débloque, pas par difficulté.
+
+| # | lot | pourquoi maintenant | tenu par |
+|---|---|---|---|
+| **T1** | **L'API publique pour les tiers** — clés délivrables, webhooks sortants, versions | ⚠ **Commande trois des quatre autres axes** (D102). Sans elle, l'appli mobile, les agrégateurs et les machines connectées produisent trois couplages privés au lieu d'une surface | *(libre)* |
+| **T2** | **Reprise initiale d'un client** — `ImportBatch`, deux temps, `externalRef` | Bloque une signature : sans elle un client ressaisit son fichier d'abonnés et les crédits de ses cartes. Spec écrite : `COORDINATION/specs/import/` | *(libre)* |
+| **T3** | **Résoudre la boutique depuis l'HÔTE** et non le slug d'URL | Petit maintenant, gros plus tard (D104). Condition de la marque blanche | *(libre)* |
+| **T4** | **Noms de sous-domaines réservés** (`pro`, `api`, `www`…) | Une constante, un refus à la création de vitrine (D106). Empêche une collision qu'on ne verra qu'en production | *(libre)* |
+| **T5** | **Catégorie comptable sur les 7 produits publiés par les semis** | Les fixtures publient dans un état que l'API refuse (RG-M1-05). ⚠ Le choix du compte est une décision comptable — demander à Maxime avant | *(libre)* |
+| **T6** | **Fixtures rejouables en préproduction** | `doctrine:fixtures:load` est absente (`--no-dev`). 38 classes décrivent la démo et ne peuvent pas être rejouées : la démonstration dérive | *(libre)* |
+| **T7** | **Format de facture électronique** — Factur-X / EN 16931 | Aucun format n'existe. Chorus Pro et l'e-reporting REFUSENT désormais au lieu de mentir (D94), mais ne transmettent toujours rien | *(libre)* |
+| **T8** | **Notion de pays** — champ, devise configurable, TVA par pays | Aujourd'hui : aucun champ pays, `EUR` en dur, e-reporting indexé sur le SIREN. Vendre hors de France demande ça d'abord | *(libre)* |
+| **T9** | **Accessibilité** — `alt`, `lang`, rôles | 6 fichiers sur 118 portent un `alt=`, un seul un `lang=`. L'European Accessibility Act vise le commerce en ligne aux consommateurs | *(libre)* |
+| **T10** | **Vingt tâches planifiées à démarrer**, une par une | 2 sur 22 tournent. Chacune demande de vérifier `safeOnFirstRun` et de la voir mordre **et épargner** | *(libre)* |
+
+---
+
+## 3 bis. Après l'API — les quatre axes de la feuille de route
+
+⚠ **Ces quatre lots consomment l'API. Les commencer avant T1 produirait quatre couplages privés au
+lieu d'une surface publique** (D102) — et rendrait la place de marché impossible à ouvrir sans tout
+reprendre.
+
+| # | lot | ce qu'il exige d'abord |
+|---|---|---|
+| **T11** | **Appli mobile adhérent, en marque blanche** — une appli commune qui prend les couleurs du club, plus une publication dédiée vendue en option (D105) | T1, et T15 pour l'identité visuelle. ⚠ Les deux versions doivent rester **identiques fonctionnellement** : le jour où la commune devient la parente pauvre, on maintient autant d'applis qu'on a de clients |
+| **T12** | **Agrégateurs — et pas seulement fitness** | T1. C'est là que le multi-activités devient un avantage : une plateforme qui agrège piscines, patinoires et musées n'a pas d'équivalent |
+| **T13** | **Balances et machines connectées** | T1, et le même port que le contrôle d'accès : un pilote qui **déclare ce qu'il sait faire** et échoue explicitement sur le reste (D17) |
+| **T14** | **Assistant IA** | T1 et les trois autres. Il a besoin de données à lire et d'actions à déclencher — le construire en premier n'aurait rien à quoi se brancher |
+
+---
+
+## 3 ter. Le produit vu du dehors
+
+| # | lot | pourquoi |
+|---|---|---|
+| **T15** | **Refonte graphique aux couleurs de Fluvia** | Les écrans portent aujourd'hui une identité par défaut. ⚠ À faire **avant** T11 : une appli en marque blanche décline une identité — s'il n'y en a pas, elle décline le vide |
+| **T16** | **Site vitrine** sur `fluvia-app.com` | Aucune vitrine n'existe. Hôte séparé du back-office (D103) : elle porte des traceurs, il porte des sessions |
+| **T17** | **Accueil d'un nouveau client (onboarding)** | ⚠ **Ce n'est PAS T2.** T2 reprend les données d'un client ; T17 est tout le chemin de la signature à une installation qui marche : créer le locataire, semer les référentiels, poser les types de produits et leurs comptes, le premier utilisateur, la formation. **T2 en est une étape.** Les confondre les ferait faire deux fois |
+
+---
+
+## 4. Bloqué dehors — ne l'attends pas, prends autre chose
+
+Sept blocages ne dépendent pas de nous (`BLOQUEURS-EXTERNES.md`). Les plus lourds :
+
+    E-2  SEPA réel          contrat bancaire et ICS          Maxime
+    E-3  encaissement carte  choix d'un prestataire           Maxime
+    E-4  matériel d'accès    spécification IT Cotation        fournisseur
+    E-7  rappels PayFiP      schéma de signature DGFiP        DGFiP
+
+⚠ **Consigne, et elle a coûté cher :** un blocage externe se consigne et **on change de module**.
+Aucune session n'attend. Une attente non écrite se transforme en travail refait par quelqu'un
+d'autre.
+
+---
+
+## 5. Interdictions en vigueur
+
+⚠ **`reservation:no-show:basculer` NE DÉMARRE PAS** (D95). Mesuré : 6 réservations, 0 présence
+confirmée, aucun écran n'écrit le drapeau. La lancer facturerait une absence à des gens venus.
+**Condition de levée :** un écran appelle `/emarger` et une présence confirmée existe en base.
+
+⚠ **Ne jamais ajouter une tâche à `infra/ordonnanceur.sh` sans vérifier `safeOnFirstRun`.** L'option
+`--only` **contourne** cette garde : elle considère qu'un appel nommé est supervisé.
+
+⚠ **`vente:cloture:journee` scelle.** Un premier passage sur trois semaines d'arriéré produirait
+vingt et un arrêtés irréversibles.
+
+---
+
+## 6. Les six règles qui coûtent le plus quand on les oublie
+
+1. **Un zéro se soupçonne.** Avant de conclure d'une absence, exige un témoin positif : montre que
+   ta mesure sait trouver quelque chose. Quatre zéros faux en une heure le 31/08, dont un parce que
+   le répertoire cherché n'existait pas.
+2. **Un contrôle de syntaxe n'est pas un contrôle de justesse.** `php -l` a dit « OK » sur deux
+   fichiers dont un script avait supprimé la ligne essentielle.
+3. **Écris le cas qui doit PASSER.** Un contrôle trop large est invisible à ses propres tests de
+   refus : il les fait passer *mieux*. C'est le cas légitime qui distingue une garde d'un blocage.
+4. **Casse ton filet une minute.** Un test qui n'a jamais échoué rend un vert qui ressemble à tous
+   les autres.
+5. **Avant de chercher POURQUOI un test échoue, établis À QUI il appartient.** `git stash`, relance :
+   trente secondes contre une nuit.
+6. **Aucun antislash, aucun `$`, aucun accent grave ne passe par le shell.** Outil d'édition puis
+   `scp`. Dix-sept occurrences pour moi, dont trois le 31/08.
+
+---
+
+## 7. Ce qui tourne désormais tout seul
+
+    sauvegarde de la base   quotidienne, rétention 14 j, vérifiée par témoin
+                            restauration : infra/verifier-restauration.sh
+    ordonnanceur            2 tâches sur 22, sous profil « ordonnanceur »
+    33 garde-fous           bin/garde-fous.sh · hooks/pre-commit · hooks/pre-receive
+
+⚠ **Un garde-fou neuf doit être câblé dans les TROIS listes**, sinon le commit qui l'ajoute est
+refusé — c'est voulu. Idem pour les contrôles frontaux (`frontend/scripts/verifier-*.mjs`).
