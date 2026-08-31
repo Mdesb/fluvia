@@ -215,6 +215,7 @@ routes présentes au routeur, **zéro appel du frontal**. C'est du travail déj�
 rien tant qu'aucun écran ne l'ouvre — la forme la plus coûteuse d'inachèvement, parce qu'elle ne se
 voit pas.
 
+<<<<<<< HEAD
 ⚠ **DEUX SESSIONS ONT ÉCRIT L'ÉCRAN DE FUSION LE MÊME JOUR, SANS SE VOIR** (`c2` et
 `allaccess-89`). Les branches étaient indépendantes : ni l'une ni l'autre n'a « repris » le travail
 de l'autre, elles l'ont fait deux fois. Résolu à la fusion en gardant **la version de `c2`**, sur
@@ -246,6 +247,27 @@ qu'ils ont coûté du temps aux deux sessions : `GET /api/crm/fusions` rend **40
 collection vit sous `/api/journal_fusions`) ; la prévisualisation prend des **UUID** quand la
 fusion prend des **IRI** ; et `qs()` ajoute lui-même les crochets d'un tableau, donc écrire
 `'sources[]'` produit `sources[][]=…` que le serveur ne lit pas.
+=======
+| # | lot | routes servies, appels du frontal |
+|---|---|---|
+| **T25** | **Fusion de clients** — fusionner, prévisualiser, défusionner | `/api/crm/fusions` ×3 · **0 appel**. Tout déploiement réel accumule des doublons, et le serveur sait déjà prévisualiser puis défusionner — c est un mécanisme complet sans porte | **fait** — `c2`, 31/08. Prévisualisation champ par champ avant toute écriture, arbitrage, motif au journal. ⚠ **Le journal des fusions est livré avec** : sans lui la défusion serait inatteignable, et on aurait donné le pouvoir d écraser deux fiches sans celui de revenir |
+| **T26** | **Trésorerie** — comptes bancaires, import de relevés, rapprochement | `/api/bank_accounts`, `/api/bank_statement_imports`, `/api/bank_statement_lines` · **0 appel** |
+| **T27** | **Personnel** — créneaux de travail, badges | `/api/creneau_travails` · **0 appel** ; `/api/badge_staffs` · 1 appel seulement |
+| **T28** | **Comptabilité** — lettrage groupé **et saisie manuelle** | **fait** — `c2`, 31/08. Onglet « Lettrage » : les lignes non soldées, le solde de la sélection affiché en permanence. ⚠ **Le serveur n exige PAS l équilibre** — mesuré, et c est défendable (un lettrage partiel solde un règlement en plusieurs fois), donc l écran montre l écart sans jamais bloquer. ⚠ Et si la liste des lettrages existants ne se charge pas, l écran s arrête au lieu de proposer de tout lettrer : sans elle on ne distingue plus le soldé du dû. **Seconde moitié faite** — `c2`, 31/08 : onglet « Saisie manuelle ». ⚠ **Ici l'équilibre EST imposé** (422 du serveur) : l'inverse du lettrage, mesuré et non déduit de l'écran voisin. Le taux de TVA est obligatoire sur chaque ligne, les comptes inactifs ne sont pas proposés, et la période est vérifiée avant le clic. ⚠ J'ai failli ajouter un verrou qui existait : chercher `Cloturee` ne trouve rien, c'est `DirectLedgerEntryBuilder::estOuverte()` qui refuse |
+| **T29** | **Comptabilité — verser une régie** : `POST /compta/regies/{id}/versements` · **0 appel** | ⚠ **Ce n'est pas un écran manquant, c'est une CLÔTURE BLOQUÉE.** `ClotureHandler` refuse la clôture quand une régie dépasse son plafond d'encaisse sans versement — vu en vrai dans la sortie des tests. `ClotureComptable.jsx` affiche le refus tel quel (« versement requis ») et **aucun écran ne verse** : l'onglet Régie ne fait que lister les bordereaux. Le champ « versement » de `SessionCaisse` est la clôture Z d'une caisse, autre opération — vérifié. Témoin positif pris avant de conclure à l'absence. **Fait** — 31/08 : l'onglet Régie verse au lieu de seulement lister. Il nomme la conséquence (« la clôture est refusée tant que… ») et le minimum qui en sort (`solde - plafond`), anticipe les deux refus du serveur (montant nul → 422, montant > encaisse → 409), et annonce que l'écriture comptable est générée automatiquement — sans quoi on la saisirait une seconde fois dans l'onglet voisin | `c2` |
+
+### Signalements de `allaccess-b8`, 31/08 — inscrits pour que la décision existe
+
+⚠ Aucun n'est pris. Ils sont ici parce qu'un signalement qui ne vit que dans un fil de messages
+disparaît avec la session qui l'a reçu.
+
+| # | ce qui a été mesuré | ce que j'ai vérifié en plus | urgence réelle |
+|---|---|---|---|
+| **S1** | `Crm/Command/AppliquerConservationCommand` sélectionne sur `dateCreation` — **l'ancienneté de l'inscription, pas l'inactivité**. Une règle à 36 mois anonymiserait d'abord les clients les plus fidèles, irréversiblement. Le bon champ existe : `Client::dateDerniereVisite` | ⚠ **Le correctif de b8 ne suffit pas.** `dateDerniereVisite` n'est écrite que par `EnrichissementClientSubscriber`, sur une **vente validée** — et **rien dans `Sepa` ni `Subscription` ne produit de vente validée** (mesuré). Donc un adhérent prélevé chaque mois, qui vient tous les jours, a sa « dernière visite » figée au jour de sa souscription. Il faut au minimum protéger aussi tout client portant un `AbonnementFitness` dont le statut n'est pas `resilie` — dont **`impaye`** : anonymiser un débiteur effacerait la créance. `Acces/Entity/Passage` ne porte pas de client, donc la porte n'est pas un signal exploitable en l'état | **latente** : zéro règle posée, et la tâche planifiée ne tourne pas. Deux raisons indépendantes. Mais elle s'exécute en une passe le jour où Maxime pose sa première règle RGPD |
+| **S2** | Modèle de conservation trop pauvre : `RegleConservation` porte une durée et **aucun déclencheur** (codé en dur dans la commande). `categorieDonnee` est une chaîne libre comparée en dur à `'identite'` — une règle posée avec une autre valeur est **inerte en silence**. Le patron existe côté `Dms` : échéance stockée par enregistrement, base légale portée par la règle | non vérifié par moi | après S1 |
+| **S3** | **14 écritures publiques dans `Boutique/`, un seul limiteur** (`TentativeIdentificationLimiter`, sur l'identification). Créer un panier et y ajouter des lignes **consomme du stock** pendant 15 min, sans frein : l'inventaire d'un exploitant se gèle en continu, anonymement. Et `CreationCompteHandler` est un **oracle d'énumération** (409 explicite, anonyme, sans cadence) : on déduit qui fréquente quelle piscine | non vérifié par moi | **réelle mais bornée** : `boutique:liberer-paniers-expires` tourne depuis le 31/08, fenêtre ~20 min |
+| **S4** | Sans vitrine dans l'URL, la boutique publie **la liste des exploitants** (`vitrinesPubliques`) à tout visiteur | non vérifié par moi | **disparaît avec D104** (une boutique par sous-domaine). ⚠ Ne pas supprimer la **saisie manuelle d'identifiant** en repli, qui reste légitime |
+>>>>>>> origin/main
 
 Relevés par `allaccess-89`, qui les tenait de `34`. Deux autres de la même liste sont **faits et
 poussés depuis** : le porte-monnaie virtuel et les notes de frais.

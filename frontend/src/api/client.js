@@ -1313,11 +1313,6 @@ export const api = {
   creerRegion: (corps) => request('/api/regions', { method: 'POST', body: corps, ld: true }),
   majRegion: (id, corps) => request(`/api/regions/${id}`, { method: 'PATCH', body: corps }),
   categories: () => request('/api/categories', { query: { itemsPerPage: 200 } }),
-  // LES CORRESPONDANCES COMPTABLES : quelle catégorie s'impute sur quel compte de produit.
-  // Exposées depuis le début, appelées par aucun écran. Sans elles, impossible de dire à
-  // l'exploitant si la catégorie qu'il choisit sur une ligne de facture change quoi que ce soit —
-  // et `ResolveurComptesFacturation` se replie silencieusement sur le compte par défaut.
-  mappingsComptables: () => request('/api/mapping_comptables', { query: { itemsPerPage: 200 } }),
   creerCategorie: (corps) => request('/api/categories', { method: 'POST', body: corps, ld: true }),
   majCategorie: (id, corps) => request(`/api/categories/${id}`, { method: 'PATCH', body: corps }),
   supprimerCategorie: (id) => request(`/api/categories/${id}`, { method: 'DELETE' }),
@@ -1478,6 +1473,22 @@ export const api = {
   //
   // Les lettrages existants : c'est ce qui permet de distinguer une ligne SOLDEE d'une ligne qui
   // reste due. Sans cette liste, un ecran de lettrage proposerait de relettrer ce qui l'est deja.
+  // ── SAISIE MANUELLE D'ECRITURE (US-L4-11, RG-M6-11) ───────────────────────────────────────────
+  //
+  // Corps : { businessProfile, journal, date, label, lines: [{ account, vatRate, debit|credit, label? }] }
+  //
+  // ⚠ QUATRE REFUS DU SERVEUR, MESURES EN LISANT `SaisirEcritureManuelleHandler` :
+  //  1. debit != credit  -> 422. L'ECRAN BLOQUE, contrairement au lettrage qui tolere un partiel.
+  //  2. une ligne portant a la fois un debit et un credit, ou aucun des deux -> 422.
+  //  3. un compte inactif -> 422 (`actif` est lisible : on ne propose que les comptes actifs).
+  //  4. `vatRate` absent -> 422. Le taux est OBLIGATOIRE sur chaque ligne, meme une OD.
+  //
+  // ⚠ ET UN CINQUIEME QUI NE VIENT PAS DU HANDLER : la periode doit exister ET etre ouverte. C'est
+  // `DirectLedgerEntryBuilder` qui refuse, via `estOuverte()` — chercher le mot « Cloturee » ne le
+  // trouve pas, le garde-fou est ecrit a l'endroit et non a l'envers.
+  saisirEcritureManuelle: (corps) =>
+    request('/api/compta/journal-entries/manual', { method: 'POST', body: corps }),
+
   lettragesEcritures: () =>
     request('/api/lettrage_ecritures', { query: { itemsPerPage: 500 } }),
 
@@ -1615,6 +1626,21 @@ export const api = {
   regieRecettes: () => request('/api/regie_recettes', { query: { itemsPerPage: 100 } }),
   ventesImpayeesRegie: () =>
     request('/api/vente_impayee_regies', { query: { itemsPerPage: 100 } }),
+  // ── VERSER UNE REGIE (US-L4-02, CA-5) ─────────────────────────────────────────────────────────
+  //
+  // Corps : { montant: '123.45', justificatifs?: ['ref', ...] }
+  //
+  // ⚠ CE N'EST PAS UN CONFORT : `ClotureGuard` refuse la cloture d'une periode tant qu'une regie
+  // depasse son plafond d'encaisse. Sans cet appel, le comptable lisait « versement requis » sans
+  // aucun endroit ou verser — une obligation legale sans sortie.
+  //
+  // Deux refus du serveur, anticipes par l'ecran : montant <= 0 -> 422, montant > solde -> 409.
+  //
+  // Le handler genere l'ecriture comptable du versement dans la foulee : elle ne se saisit pas a la
+  // main dans l'onglet voisin.
+  verserRegie: (idRegie, corps) =>
+    request(`/api/compta/regies/${idRegie}/versements`, { method: 'POST', body: corps }),
+
   bordereauxVersement: () =>
     request('/api/bordereau_versements', { query: { itemsPerPage: 100 } }),
   comptesComptables: () =>
@@ -1626,6 +1652,11 @@ export const api = {
   // pas comptabilisées du tout — elles ressortent en anomalie à la génération (`MappingComptableGuard`
   // puis `GenerateurEcrituresHandler`, qui saute la vente). Ce n'est pas un repli sur un compte
   // par défaut : c'est une écriture qui n'existe pas.
+  //
+  // ⚠ Côté FACTURE en revanche, `ResolveurComptesFacturation` se replie bel et bien en silence sur
+  // le compte par défaut — deux comportements opposés pour la même donnée absente, selon le chemin.
+  // (Enseignement d'une seconde définition de cette clé, retirée le 31/08 : elle était en double
+  // dans cet objet, produite par une fusion sans conflit, et la dernière gagnait en silence.)
   mappingsComptables: () => request('/api/mapping_comptables', { query: { itemsPerPage: 200 } }),
   creerMappingComptable: (corps) =>
     request('/api/mapping_comptables', { method: 'POST', body: corps, ld: true }),
