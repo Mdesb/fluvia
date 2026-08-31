@@ -186,7 +186,7 @@ voit pas.
 
 | # | lot | routes servies, appels du frontal |
 |---|---|---|
-| **T25** | **Fusion de clients** — fusionner, prévisualiser, défusionner | `/api/crm/fusions` ×3 · **0 appel**. Tout déploiement réel accumule des doublons, et le serveur sait déjà prévisualiser puis défusionner — c est un mécanisme complet sans porte | **allaccess-c2** |
+| **T25** | **Fusion de clients** — fusionner, prévisualiser, défusionner | `/api/crm/fusions` ×3 · **0 appel**. Tout déploiement réel accumule des doublons, et le serveur sait déjà prévisualiser puis défusionner — c est un mécanisme complet sans porte | **fait** — `c2`, 31/08. Prévisualisation champ par champ avant toute écriture, arbitrage, motif au journal. ⚠ **Le journal des fusions est livré avec** : sans lui la défusion serait inatteignable, et on aurait donné le pouvoir d écraser deux fiches sans celui de revenir |
 | **T26** | **Trésorerie** — comptes bancaires, import de relevés, rapprochement | `/api/bank_accounts`, `/api/bank_statement_imports`, `/api/bank_statement_lines` · **0 appel** |
 | **T27** | **Personnel** — créneaux de travail, badges | `/api/creneau_travails` · **0 appel** ; `/api/badge_staffs` · 1 appel seulement |
 | **T28** | **Comptabilité** — lettrage groupé, écriture manuelle | `/api/compta/lettrages/groupe` · **0 appel** |
