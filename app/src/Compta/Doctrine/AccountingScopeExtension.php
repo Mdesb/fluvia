@@ -17,6 +17,7 @@ use App\Compta\Entity\HiddenLegalVatRate;
 use App\Compta\Entity\ExpenseAccountMapping;
 use App\Compta\Entity\ExportComptable;
 use App\Compta\Entity\Journal;
+use App\Compta\Entity\LettrageEcriture;
 use App\Compta\Entity\MappingComptable;
 use App\Compta\Entity\MouvementPca;
 use App\Compta\Entity\PeriodeComptable;
@@ -107,6 +108,14 @@ final class AccountingScopeExtension implements QueryCollectionExtensionInterfac
     private const VIA_RELATION = [
         BordereauVersement::class => 'regie',
         MouvementPca::class => 'ecritureLiee',
+
+        // ⚠ DEUX SAUTS, ET C'EST POURQUOI ELLE MANQUAIT. `LettrageEcriture` porte une `ligne`, qui
+        // porte une `ecriture`, qui porte le profil. La carte ne savait exprimer qu'un saut ; le
+        // point separe desormais les segments, et chacun devient une jointure.
+        //
+        // Ce que la fuite exposait : quelles ecritures d'un exploitant ont ete rapprochees, quand et
+        // par qui. Mesure du 31/08, `CloisonnementLettrageTest`.
+        LettrageEcriture::class => 'ligne.ecriture',
     ];
 
     public function __construct(
@@ -156,9 +165,16 @@ final class AccountingScopeExtension implements QueryCollectionExtensionInterfac
             $queryBuilder->innerJoin($racine . '.' . self::VIA_PROFIL[$resourceClass], 'pe_scope');
             $chemin = 'pe_scope.etablissementPrincipal';
         } elseif (isset(self::VIA_RELATION[$resourceClass])) {
-            $queryBuilder
-                ->innerJoin($racine . '.' . self::VIA_RELATION[$resourceClass], 'rel_scope')
-                ->innerJoin('rel_scope.profilExploitant', 'pe_scope');
+            // ⚠ LE CHEMIN PEUT COMPTER PLUSIEURS SAUTS. Un point separe les segments ; chacun
+            // devient une jointure, la derniere portant le `profilExploitant`. Les entrees a un
+            // seul saut passent par le meme code sans cas particulier.
+            $precedent = $racine;
+            foreach (explode('.', self::VIA_RELATION[$resourceClass]) as $rang => $segment) {
+                $alias = 'rel_scope' . $rang;
+                $queryBuilder->innerJoin($precedent . '.' . $segment, $alias);
+                $precedent = $alias;
+            }
+            $queryBuilder->innerJoin($precedent . '.profilExploitant', 'pe_scope');
             $chemin = 'pe_scope.etablissementPrincipal';
         } elseif (isset(self::VIA_ESPACE[$resourceClass])) {
             // L'espace porte l'etablissement sans passer par un profil : un seul saut, et l'axe
