@@ -13,7 +13,7 @@ import { aLeDroit } from '../api/droits.js'
 // filtres. `useEtatUrl` (api/url.js) est ecrit pour servir aux deux plutot que recopie ici.
 const DEFAUTS = { tab: 'produits', q: '', statut: '', type: '', fiche: '' }
 
-export default function Catalogue({ etabActif, cible = null, onCibleConsommee, droits = [] }) {
+export default function Catalogue({ etabActif, cible = null, onCibleConsommee, droits = [], capacites = [] }) {
   const [params, majParams] = useEtatUrl('catalogue', DEFAUTS)
   const tab = params.tab
   const setTab = (v) => majParams({ tab: v, fiche: '' })
@@ -221,6 +221,7 @@ function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = []
           peutModifier={aLeDroit(droits, 'offre.modifier') || aLeDroit(droits, 'offre.gerer')}
           peutModifierCompta={aLeDroit(droits, 'offre.modifier_compta') || aLeDroit(droits, 'offre.gerer')}
           droits={droits}
+          capacites={capacites}
           onModifie={recharger}
         />
       </>
