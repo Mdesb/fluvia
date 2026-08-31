@@ -98,8 +98,63 @@ final class RecalculFenetreBadgeHandlerTest extends KernelTestCase
         self::assertEquals($fin, $droitApres->getFenetreFin());
     }
 
-    private function emettreBadgeShiftsUniquement(Employe $employe, Etablissement $etablissement): BadgeStaff
+    /**
+     * ⚠ **CE QUE LE CRON APPELLE, ET QUE RIEN NE TESTAIT.**
+     *
+     * `personnel:recalculer-fenetres-badges` appelle `recalculerTous()`, qui prend **tous** les
+     * badges actifs — pas seulement ceux en `shifts_uniquement`, malgré ce que dit son commentaire.
+     * Le tri se fait dans `recalculer()`, dans une branche qu'aucun test ne traversait.
+     *
+     * Si elle cassait, un badge **permanent** — un responsable de site, la sécurité — verrait sa
+     * fenêtre fermée sur un instant passé. Toutes les cinq minutes, en silence, et le symptôme
+     * serait quelqu'un qui ne peut plus entrer sans que rien n'ait changé pour lui.
+     *
+     * **Les deux badges passent dans le MÊME appel.** Sans le témoin mordant, « le permanent est
+     * intact » serait aussi vrai d'un `recalculerTous()` qui ne ferait rien du tout.
+     */
+    public function testRecalculerTousFermeUnShiftsSansCreneauEtEpargneUnPermanent(): void
     {
+        $etablissement = $this->creerEtablissement();
+
+        $surShifts = (new Employe())->setNom('Sur')->setPrenom('Shifts')->setPoste('Agent')
+            ->setTypeContrat(TypeContrat::Cdi)->setDateEntree(new \DateTimeImmutable('2024-01-01'));
+        $permanent = (new Employe())->setNom('Perm')->setPrenom('Anent')->setPoste('Responsable')
+            ->setTypeContrat(TypeContrat::Cdi)->setDateEntree(new \DateTimeImmutable('2024-01-01'));
+        $this->em->persist($surShifts);
+        $this->em->persist($permanent);
+        $this->em->flush();
+
+        $badgeShifts = $this->emettreBadgeShiftsUniquement($surShifts, $etablissement);
+        $badgePermanent = $this->emettreBadgeShiftsUniquement($permanent, $etablissement, ModeHoraireBadge::Permanent);
+
+        // La fenêtre du permanent commence bornée : si elle est nulle dès le départ, « toujours
+        // nulle après » ne prouverait rien.
+        $borne = new \DateTimeImmutable('2024-01-01 08:00:00');
+        $badgePermanent->getDroitAcces()->setFenetreDebut($borne)->setFenetreFin($borne);
+        $this->em->flush();
+
+        $idShifts = $badgeShifts->getDroitAcces()->getId();
+        $idPermanent = $badgePermanent->getDroitAcces()->getId();
+
+        static::getContainer()->get(RecalculFenetreBadgeHandler::class)->recalculerTous();
+        $this->em->clear();
+
+        // Témoin : il a bien agi sur celui qu'il doit traiter (aucun créneau -> fenêtre fermée).
+        $droitShifts = $this->em->getRepository(DroitAcces::class)->find($idShifts);
+        self::assertNotNull($droitShifts->getFenetreFin(), 'Témoin : un badge `shifts_uniquement` est traité.');
+        self::assertLessThan(new \DateTimeImmutable(), $droitShifts->getFenetreFin());
+
+        // Et il a épargné le permanent : fenêtre non bornée = toujours valide.
+        $droitPermanent = $this->em->getRepository(DroitAcces::class)->find($idPermanent);
+        self::assertNull($droitPermanent->getFenetreDebut(), 'Un badge permanent n’est jamais borné dans le temps.');
+        self::assertNull($droitPermanent->getFenetreFin(), 'Un badge permanent n’est jamais borné dans le temps.');
+    }
+
+    private function emettreBadgeShiftsUniquement(
+        Employe $employe,
+        Etablissement $etablissement,
+        ModeHoraireBadge $mode = ModeHoraireBadge::ShiftsUniquement,
+    ): BadgeStaff {
         $droit = new DroitAcces();
         $droit->setSourceType(TypeDroitAcces::Personnel)->setEtablissement($etablissement)
             ->setMargeAvanceDefaut(15)->setMargeRetardDefaut(15);
@@ -114,7 +169,7 @@ final class RecalculFenetreBadgeHandlerTest extends KernelTestCase
         $this->em->persist($badge);
 
         $portee = new PorteeAccesEmploye();
-        $portee->setBadgeStaff($badge)->setModeHoraire(ModeHoraireBadge::ShiftsUniquement)->setMargeAvantApres(15);
+        $portee->setBadgeStaff($badge)->setModeHoraire($mode)->setMargeAvantApres(15);
         $this->em->persist($portee);
 
         $this->em->flush();
