@@ -52,7 +52,17 @@ set -eu
 #                                     billets qu'il bloque ne sont vendus a personne.
 #                                     Epargne prouvee le 31/08 : borne temporelle retiree ->
 #                                     `testElleEpargneUnPanierEncoreValide` echoue seul.
-TACHES_AUTORISEES="securite:delegations:expirer autorisation:escalades:expirer boutique:liberer-paniers-expires"
+#   personnel:recalculer-fenetres-badges  la fenetre de validite d'un badge staff ne suit plus les
+#                                     shifts : un agent garde un acces qu'il n'a plus, ou perd
+#                                     celui qu'il devrait avoir.
+#                                     ⚠ Le cron appelle `recalculerTous()`, qui prend TOUS les
+#                                     badges actifs -- le tri des modes se fait dedans, dans une
+#                                     branche que rien ne testait. Un badge PERMANENT s'y serait
+#                                     retrouve borne dans le passe : quelqu'un qui ne peut plus
+#                                     entrer dans le batiment, toutes les cinq minutes, en silence.
+#                                     Epargne prouvee le 31/08 : branche `Permanent` neutralisee
+#                                     -> le test neuf echoue seul.
+TACHES_AUTORISEES="securite:delegations:expirer autorisation:escalades:expirer boutique:liberer-paniers-expires personnel:recalculer-fenetres-badges"
 
 INTERVALLE="${ORDONNANCEUR_INTERVALLE:-60}"
 
