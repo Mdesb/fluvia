@@ -66,11 +66,34 @@ TACHES_AUTORISEES="securite:delegations:expirer autorisation:escalades:expirer b
 
 INTERVALLE="${ORDONNANCEUR_INTERVALLE:-60}"
 
+# ⚠ LA LISTE QUE CE SHELL PORTE N'EST PAS FORCEMENT CELLE DU FICHIER.
+#
+# L'affectation ci-dessus s'evalue une fois, au demarrage. La boucle tourne ensuite sur la variable.
+# Ajouter une tache au fichier ne change donc RIEN tant que le conteneur n'a pas redemarre -- et le
+# journal continue d'afficher un succes par tache de l'ancienne liste, ce qui se lit exactement
+# comme un ordonnanceur en bonne sante.
+#
+# Le 31/08, `personnel:recalculer-fenetres-badges` est resté inerte neuf heures pour cette raison,
+# pendant que le journal disait « ok » trois fois par minute.
+#
+# On fige donc ce que ce shell porte, et on le compare au fichier a chaque cycle. La divergence
+# devient une ERREUR repetee, pas un silence.
+LISTE_AU_DEMARRAGE="$TACHES_AUTORISEES"
+
+liste_du_fichier() {
+    # L'affectation est sur une seule ligne, entre guillemets doubles. On prend la premiere.
+    sed -n 's/^TACHES_AUTORISEES="\(.*\)"$/\1/p' "$0" | head -1
+}
+
 if [ "${1:-}" = "--lister" ]; then
     echo "Tâches autorisées dans cet ordonnanceur :"
     for t in $TACHES_AUTORISEES; do
         echo "  · $t"
     done
+    echo
+    echo "⚠ Cette liste est celle du FICHIER. Un conteneur déjà démarré porte la sienne, figée à"
+    echo "  son démarrage : il faut le redémarrer pour qu'un ajout prenne effet. La boucle le crie"
+    echo "  à chaque cycle quand les deux divergent."
     echo
     echo "Ce qui a réellement tourné :"
     echo "  php bin/console platform:scheduler:run --status"
@@ -91,6 +114,17 @@ for t in $TACHES_AUTORISEES; do
 done
 
 while true; do
+    # ── LA LISTE A-T-ELLE BOUGE SOUS NOS PIEDS ? ────────────────────────────────────────────────
+    # Ce controle ne repare rien : il refuse seulement que l'ecart reste muet. Il coute un `sed` par
+    # cycle, contre neuf heures d'une tache que tout le monde croyait active.
+    au_fichier="$(liste_du_fichier)"
+    if [ -n "$au_fichier" ] && [ "$au_fichier" != "$LISTE_AU_DEMARRAGE" ]; then
+        echo "[ordonnanceur] ✗ LISTE PERIMEE — ce conteneur exécute $(echo "$LISTE_AU_DEMARRAGE" | wc -w) tâche(s), le fichier en déclare $(echo "$au_fichier" | wc -w)." >&2
+        echo "[ordonnanceur]   porté par ce shell : $LISTE_AU_DEMARRAGE" >&2
+        echo "[ordonnanceur]   déclaré au dépôt   : $au_fichier" >&2
+        echo "[ordonnanceur]   Tant que ce conteneur n'a pas redémarré, l'écart ne tourne PAS." >&2
+    fi
+
     for tache in $TACHES_AUTORISEES; do
         # `set -e` est actif : sans cette forme, l'échec d'une tâche tuerait la boucle et arrêterait
         # les autres. Les tâches sont indépendantes — laisser la première en échec empêcher la
