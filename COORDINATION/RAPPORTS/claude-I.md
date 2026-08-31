@@ -27,6 +27,7 @@
 | 26/08 23:40 | Session fermee par Maxime. Rien en cours, rien a moitie ecrit, aucune pile de test, worktree VPS rendu a `claude-I`. | **Deux taches assignees non commencees** : le preavis SEPA de `Sport` (prioritaire) et `AlertePresenceIsolee` (en troisieme, sur ta consigne). | **69 commits a moi non fusionnes dans `main`.** |
 | 31/08 23:30 | Session rouverte apres cinq jours. **Je prends T6** (fixtures rejouables en preproduction) — Maxime me l-a attribuee explicitement, hors de mon perimetre habituel. Mes deux taches assignees sont **sans objet**, preuves ci-dessous. | Mesure empirique : rejouer reellement un chargement complet, deux fois. | Rien. |
 | 01/09 00:20 | **T6 : le libelle de la tache etait perime.** Les fixtures sont **deja** rejouables — mesure sur les 329 tables, deux chargements successifs, zero difference. Le vrai manque etait le second : la commande n-existe pas en preproduction. Livre : bundle en production, `app:demo:charger`, et **la purge refusee hors dev/test**. | Verification de non-regression du harnais. | Rien. |
+| 01/09 00:05 | **T6 termine et verifie.** `tests/Platform` 84/422 vert (mon test de garde en fait partie), `Piscine` 35/213 vert. `Sport` a 4 echecs — **preexistants** : meme resultat au caractere pres sur `origin/main`, verifie et non suppose. Pile demontee, base de verification supprimee, worktree rendu. | Plus rien. | Rien. |
 
 ---
 
@@ -833,3 +834,49 @@ normalement et affiche un resultat plausible.
 | `app:demo:charger` une seconde fois | aucune duplication | **329 tables, zero difference** |
 
 Reste la non-regression du harnais (`dev`/`test` doivent purger comme avant) : en cours.
+
+---
+
+## 2026-09-01 00:05 · T6 clos — verifications finales
+
+| Verification | Resultat |
+|---|---|
+| `tests/Platform` (dont mon test de garde) | **84 tests, 422 assertions — vert** |
+| `tests/Piscine` | **35 tests, 213 assertions — vert** |
+| `tests/Sport` | 35 tests, **4 echecs** |
+| Les memes 4 sur `origin/main`, sans mon lot | **identiques** — 35 tests, 252 assertions, 4 echecs |
+
+Les quatre echecs Sport touchent le bouton SOS (`AccesNocturneTest::testCa11BoutonSos...`,
+`FreinSosTest` x3). Ils sont **anterieurs a mon lot** : je les ai rejoues sur `main` avant de te le
+dire. **Ils sont dans mon perimetre habituel** — si tu veux que je les prenne, dis-le, mais je ne les
+ouvre pas de ma propre initiative : Maxime m-a attribue T6, pas un retour aux verticales.
+
+### Ce que contient le lot
+
+| Fichier | Role |
+|---|---|
+| `app/composer.json` + `.lock` | le bundle de fixtures et `doctrine/data-fixtures` passent en production — **zero version modifiee**, verifie paquet par paquet |
+| `app/config/bundles.php` | bundle actif en `prod` |
+| `app/config/services.yaml` | remplacement du service purgeur + liaison du chargeur |
+| `Platform/Command/ChargerDemonstrationCommand` | `app:demo:charger` — additif, ne purge jamais |
+| `Platform/DataFixtures/PurgeurInterditHorsDeveloppement` + `PurgeurRefusant` | la purge refuse hors `dev`/`test` |
+| `tests/Platform/Unit/PurgeInterditeHorsDeveloppementTest` | 3 cas, dont les 3 pieges rencontres |
+| `infra/README.md` | comment recharger, et le piege du cache `prod` |
+
+### Deux choses pour toi
+
+1. **La ligne T6 du carnet est perimee** : « 38 classes ... ne peuvent pas etre rejouees ». Elles sont
+   37 et elles peuvent — mesure sur 329 tables, deux chargements, zero difference. La moitie encore
+   vraie etait « `doctrine:fixtures:load` est absente (`--no-dev`) », et c-est celle que j-ai traitee.
+2. **Le piege du cache `prod` merite peut-etre une decision.** En `APP_ENV=prod` avec `APP_DEBUG=0`,
+   Symfony ne recompile pas le conteneur quand la configuration change. Il m-a fait conclure faux
+   **deux fois de suite** : j-ai lu « purging database » et cru que mon garde ne mordait pas, alors
+   que je testais un conteneur compile avant mes modifications. Ce n-est pas une subtilite de mon lot :
+   ca vaut pour quiconque verifie un changement de configuration en preproduction, et l-erreur est
+   silencieuse — la commande s-execute normalement et affiche un resultat plausible. Je l-ai ecrit dans
+   `infra/README.md`, mais un garde-fou ou une etape de `deploy-preprod.sh` serait plus sur qu-une
+   phrase que personne ne relit.
+
+**Etat** : aucune pile de test, base de verification supprimee, worktree rendu. Deux entrees de
+`git stash` a mon nom trainent sur le VPS (`reference.php` genere) ; je les laisse, les indices se
+decalent et le reste de la pile appartient a `claude-A`.
