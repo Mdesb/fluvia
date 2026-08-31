@@ -898,6 +898,38 @@ export const api = {
   creneauxLibres: (params) => request('/api/reservation/creneaux-libres', { query: params }),
   creerCreneau: (corps) =>
     request('/api/reservation/creneaux', { method: 'POST', body: corps }),
+  // ── ANNULER UNE RESERVATION ───────────────────────────────────────────────────────────────────
+  //
+  // ⚠ L'ECRAN N'A RIEN A DECIDER : tout vit dans `AnnulerReservationProcessor`. Dans le delai franc
+  // porte par `dateLimiteAnnulation`, l'annulation est libre — la place est rendue, le credit
+  // restitue, un avoir emis si la vente etait validee, et la liste d'attente promue. Hors delai, le
+  // serveur REFUSE en libre-service et seul un agent portant `reservation.annuler` peut qualifier
+  // l'issue en annulation tardive facturee (RG-M5-09).
+  //
+  // Le message de refus est formule par le serveur ; on l'affiche tel quel plutot que d'en ecrire
+  // un second qui divergerait le jour ou la regle bouge.
+  //
+  // ⚠ ET C'EST LA CONDITION D'ENTREE D'UNE PROTECTION DEJA ECRITE. `BasculerNoShowCommand` ne
+  // bascule que les reservations encore `Confirmee` : une reservation annulee en sort. Mais tant
+  // qu'aucun ecran n'annule, l'exploitant note sur un carnet, la reservation reste `Confirmee`, et
+  // la protection ne se declenche jamais. Elle est la ; rien ne l'atteignait.
+  annulerReservation: (id) =>
+    request(`/api/reservation/reservations/${id}/annuler`, { method: 'POST', body: {} }),
+
+  // ── EMARGER ───────────────────────────────────────────────────────────────────────────────────
+  //
+  // Corps : { statut: 'present' | 'absent', compteRendu? }. `input: false` cote serveur, donc JSON
+  // simple et pas de `ld: true`.
+  //
+  // ⚠ SEUL ECRIVAIN DE `presenceConfirmee` DANS TOUT LE DEPOT — voir l'en-tete de ce fichier de
+  // correctif. Sans cet appel, la branche `Honoree` de la bascule no-show n'est atteignable par
+  // aucun chemin, et tout client qui s'est presente serait facture pour son absence.
+  emargerReservation: (id, statut, compteRendu) =>
+    request(`/api/reservation/reservations/${id}/emarger`, {
+      method: 'POST',
+      body: compteRendu ? { statut, compteRendu } : { statut },
+    }),
+
   reservations: () => request('/api/reservations', { query: { itemsPerPage: 200 } }),
   // No-show (D27) : les deux operations existaient et n'etaient appelees de nulle part.
   facturationsNoShow: () => request('/api/reservation_facturation_no_shows', { query: { itemsPerPage: 100 } }),

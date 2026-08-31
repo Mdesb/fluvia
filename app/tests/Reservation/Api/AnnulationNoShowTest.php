@@ -139,7 +139,31 @@ final class AnnulationNoShowTest extends ReservationApiTestCase
         self::assertNotEmpty($facturations, 'CA-9 : une FacturationNoShow est créée.');
     }
 
-    public function testCa10PassageAccesValideConfirmePresence(): void
+    /**
+     * ⚠ CE TEST NE PROUVE PAS CE QUE SON ANCIEN NOM ANNONÇAIT.
+     *
+     * Il s'appelait `testCa10PassageAccesValideConfirmePresence`. Or il **simule** le passage en
+     * appelant `confirmerPresence()` depuis le test lui-même, quelques lignes plus bas. Ce qu'il
+     * établit réellement — et qui est vrai, utile, et vaut d'être gardé — c'est qu'une présence
+     * portant la source `passage_acces` mène à `honoree` plutôt qu'à une facture d'absence.
+     *
+     * Ce qu'il n'établit pas : que le contrôle d'accès confirme la présence. **Rien ne le fait.**
+     * `SourcePresence::PassageAcces` n'est produit nulle part dans `app/src` — la chaîne
+     * `Passage → DroitAcces → reservationRef → Reservation` existe pourtant en entier, et un droit
+     * d'accès de type `booking` porte déjà une réservation en base (mesuré par allaccess-b8). Il
+     * manque un écouteur, pas une structure.
+     *
+     * ⚠ ET C'EST CE TEST QUI A RENDU LE DÉFAUT INVISIBLE. Le critère CA-10 avait l'air couvert : un
+     * test vert, nommé exactement comme la question qu'on se pose. Personne ne relit un test vert
+     * dont le nom dit ce qu'on cherchait à savoir — et pendant ce temps, `presenceConfirmee` restait
+     * faux pour toute réservation ayant jamais existé, faute d'écran d'émargement.
+     *
+     * Le chemin manuel, lui, est désormais éprouvé de bout en bout par `EmargementTest`.
+     *
+     * ⚠ Les assertions ne changent pas : le défaut était le nom, pas le test. Le renommer est tout
+     * ce qu'il fallait — et c'était suffisant pour que le trou se voie.
+     */
+    public function testUnePresenceDeSourcePassageAccesMeneAHonoree(): void
     {
         [$client, $entete] = $this->adminSurA();
         $client->disableReboot();

@@ -1047,6 +1047,30 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 }
 .sup-acces-t { display: flex; align-items: center; gap: var(--esp-normal); }
 
+/* ── INSCRITS D'UN CRÉNEAU ────────────────────────────────────────────────────────────────────
+   Dépliée sous le créneau, au moment d'émarger ou d'annuler. Bordure haute plutôt qu'un cadre :
+   la liste APPARTIENT au créneau au-dessus, elle n'est pas un bloc voisin. */
+.resa-inscrits {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-serre);
+  margin-top: var(--esp-serre);
+  padding-top: var(--esp-serre);
+  border-top: 1px solid var(--line);
+}
+.resa-inscrit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-serre);
+  padding: var(--esp-serre);
+  background: var(--bg-soft);
+  border-radius: 8px;
+}
+.resa-inscrit-h { display: flex; align-items: center; gap: var(--esp-serre); flex-wrap: wrap; }
+/* Les gestes passent à la ligne plutôt que de rétrécir : « Absent » à moitié coupé se clique à la
+   place de « Présent », et les deux ne se rattrapent pas de la même façon. */
+.resa-inscrit-act { display: flex; gap: var(--esp-serre); flex-wrap: wrap; }
+
 /* Les boutons d'une modale, alignés à droite.
    ⚠ DÉCLARÉE plutôt que recopiée en style en ligne : les modales voisines alignent leurs boutons
    avec `style={{ display:'flex', gap:8, justifyContent:'flex-end', marginTop:12 }}`, et le cliquet
