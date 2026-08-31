@@ -3,6 +3,15 @@
 declare(strict_types=1);
 
 /**
+ * L'entité `Etablissement`, désignée par son nom PLEINEMENT QUALIFIÉ.
+ *
+ * ⚠ Vingt noms de classes sont partagés dans ce dépôt. Comparer un nom court reviendrait à espérer
+ * qu'il n'y en ait jamais deux — une justesse qui tient à une absence, donc qui tombe le jour où
+ * quelqu'un ajoute la seconde.
+ */
+const ETABLISSEMENT_FQCN = 'App\\Organisation\\Entity\\Etablissement';
+
+/**
  * Garde-fou n°28 — l'extension filtre sur un nom de champ que l'entité ne porte pas.
  *
  * ── LE DÉFAUT, TROUVÉ PAR `allaccess-c2` EN APPLIQUANT UNE AUTRE RÈGLE ─────────────────────────
@@ -90,7 +99,23 @@ foreach ($fichiers as $chemin) {
     $fqcn = trim($ns[1]) . '\\' . $cl[1];
 
     // Une relation vers Etablissement, quel que soit le nom de la propriété.
-    if (preg_match_all('/targetEntity:\s*Etablissement::class[\s\S]{0,400}?private\s+\??\w+\s+\$(\w+)/', $contenu, $props)) {
+    //
+    // ⚠ LE NOM COURT NE SUFFIT PAS, ET IL AVAIT RAISON PAR CHANCE.
+    //
+    // Ce dépôt porte VINGT noms de classes partagés — `TypeSupport`, `MoyenPaiement`,
+    // `Qualification`, `DocumentStatus`… Il n'existe aujourd'hui qu'un seul `Etablissement`, donc
+    // apparier le littéral marchait. Le jour où un module définit le sien — ce que D2 rend
+    // plausible, aucun module ne devant dépendre d'un autre — ce contrôle rapprocherait deux
+    // classes différentes sans le dire.
+    //
+    // La faute serait invisible DANS LES DEUX SENS : accuser une entité saine, ou laisser passer
+    // une entité fautive. Seul le premier se voit. On résout donc par les `use` du fichier, déjà
+    // collectés plus haut, et on n'accepte que la vraie.
+    $cible = $imports['Etablissement'] ?? null;
+    $viseLEtablissement = $cible === ETABLISSEMENT_FQCN
+        || ($cible === null && $espaceCourant . '\\Etablissement' === ETABLISSEMENT_FQCN);
+
+    if ($viseLEtablissement && preg_match_all('/targetEntity:\s*Etablissement::class[\s\S]{0,400}?private\s+\??\w+\s+\$(\w+)/', $contenu, $props)) {
         $champParEntite[$fqcn] = array_values(array_unique($props[1]));
     }
 
@@ -165,7 +190,18 @@ foreach ($fichiers as $chemin) {
     $carte = [];
     if (preg_match_all("/(\\w+)::class\\s*=>\\s*['\"](\\w+)['\"]/", $contenu, $paires, PREG_SET_ORDER)) {
         foreach ($paires as $paire) {
-            $carte[$paire[1]] = $paire[2];
+            // ⚠ INDEXEE PAR LE NOM PLEINEMENT QUALIFIE, PAS PAR LE NOM COURT.
+            //
+            // Trois noms de cette carte sont partages par deux classes dans ce depot —
+            // `AllocationQuotaOTA` et `PartenaireOTA` (Boutique et Musee), `GrilleRetenue`
+            // (Caution et Patinoire). Indexer court laissait la derniere extension lue ecraser la
+            // premiere.
+            //
+            // C'est benin aujourd'hui : les homonymes attendent la meme valeur, et l'un n'est meme
+            // pas une entite Doctrine. Correct PAR COINCIDENCE — donc faux le jour ou deux
+            // homonymes divergent, et invisible dans les deux sens.
+            $cleCarte = $imports[$paire[1]] ?? $paire[1];
+            $carte[$cleCarte] = $paire[2];
         }
     }
 
@@ -247,7 +283,10 @@ foreach ($fichiers as $chemin) {
         $declares = $champParEntite[$complet];
 
         // La carte, si elle designe cette classe, remplace la liste globale du fichier.
-        $attendus = isset($carte[$court]) ? [$carte[$court]] : $champs;
+        // Le nom pleinement qualifie d'abord ; le nom court reste accepte pour les cas ou
+        // l'extension designe une classe qu'elle n'importe pas.
+        $valeurCarte = $carte[$complet] ?? $carte[$court] ?? null;
+        $attendus = $valeurCarte !== null ? [$valeurCarte] : $champs;
 
         // ⚠ LE PLURIEL EST UNE COLLECTION JOINTE, PAS UN ECART. `Produit` declare `etablissements`
         // (ManyToMany) la ou l'extension filtre `etablissement` : elle joint la collection. Exiger

@@ -123,6 +123,14 @@ final class CatalogueVitrineProvider implements ProviderInterface
                 'disponibilite' => $this->disponibilite->disponibilitePourProduit($produit),
                 'visuel' => $this->visuel($produit),
                 'prix' => $prix,
+
+                // ⚠ LE FAIT, PAS LA STRUCTURE. La boutique n'a pas besoin de savoir ce qu'est une
+                // formule ni une facette SEPA : elle a besoin de savoir si ce produit **se
+                // souscrit**. `SouscriptionAbonnementEnLigneHandler` refuse tout produit dont la
+                // formule ne porte pas la facette — sans ce champ, un bouton « s'abonner »
+                // apparaîtrait sur tout et refuserait au clic, ce qui fait chercher une panne là
+                // où il n'y a qu'un produit qui ne s'abonne pas.
+                'abonnement' => $produit->getFormule()?->isSepaActif() === true,
             ];
         }
 
