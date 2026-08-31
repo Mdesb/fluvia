@@ -916,6 +916,24 @@ export const api = {
   annulerReservation: (id) =>
     request(`/api/reservation/reservations/${id}/annuler`, { method: 'POST', body: {} }),
 
+  // ── PAIEMENT PARTAGE ──────────────────────────────────────────────────────────────────────────
+  //
+  // Ajouter un participant a une reservation. Corps : { personne, estOrganisateur?, partMontant? }.
+  // `personne` accepte un UUID ou une IRI ; a defaut de `partMontant`, le serveur repartit le
+  // `montantDu` restant a parts egales entre les participants deja declares et le nouveau.
+  //
+  // ⚠ LE BENEFICIAIRE PASSE PAR LE CONTROLE DE PERIMETRE (D3/D8). Sans lui, on ajoutait a sa propre
+  // reservation la fiche de n'importe qui — elle apparait ensuite dans la liste des participants,
+  // avec son identite et sa part. Le serveur rend le meme message pour « inconnu » et « hors
+  // perimetre », volontairement : les distinguer offrirait un oracle d'enumeration sur les fiches
+  // clients. L'ecran affiche donc ce message tel quel, sans chercher a preciser.
+  ajouterParticipant: (idReservation, corps) =>
+    request(`/api/reservation/reservations/${idReservation}/participants`, { method: 'POST', body: corps }),
+
+  // Marquer une part encaissee. `{id}` est celui du PARTICIPANT, pas de la reservation.
+  payerPartParticipant: (idParticipant) =>
+    request(`/api/reservation/participants/${idParticipant}/payer`, { method: 'POST', body: {} }),
+
   // ── EMARGER ───────────────────────────────────────────────────────────────────────────────────
   //
   // Corps : { statut: 'present' | 'absent', compteRendu? }. `input: false` cote serveur, donc JSON

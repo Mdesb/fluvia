@@ -1071,6 +1071,20 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
    place de « Présent », et les deux ne se rattrapent pas de la même façon. */
 .resa-inscrit-act { display: flex; gap: var(--esp-serre); flex-wrap: wrap; }
 
+/* Les parts de paiement partagé, dépliées sous une réservation. Décalées vers la droite : elles
+   appartiennent à la réservation au-dessus, et l'œil doit voir d'un coup où finit une réservation
+   et où commence la suivante — c'est la liste qu'on lit quand on encaisse à quatre au comptoir. */
+.resa-parts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-serre);
+  margin-left: var(--esp-bloc);
+  padding-left: var(--esp-normal);
+  border-left: 2px solid var(--line);
+}
+.resa-part { display: flex; align-items: center; gap: var(--esp-serre); flex-wrap: wrap; }
+.resa-part-form { display: flex; align-items: center; gap: var(--esp-serre); flex-wrap: wrap; }
+
 /* Les boutons d'une modale, alignés à droite.
    ⚠ DÉCLARÉE plutôt que recopiée en style en ligne : les modales voisines alignent leurs boutons
    avec `style={{ display:'flex', gap:8, justifyContent:'flex-end', marginTop:12 }}`, et le cliquet

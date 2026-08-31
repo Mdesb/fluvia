@@ -117,6 +117,13 @@ export default function Reservation({ etabActif, droits = [], session }) {
   // que le serveur tient dans sa règle de sécurité.
   const peutEmarger = aLeDroit(droits, 'reservation.emarger')
   const peutAnnuler = aLeDroit(droits, 'reservation.annuler')
+  // Ajouter un participant et encaisser sa part demandent tous deux `reservation.reserver` côté
+  // serveur : c'est un acte de comptoir, pas une administration.
+  const peutPartager = aLeDroit(droits, 'reservation.reserver')
+
+  const [partsPour, setPartsPour] = useState(null) // id de la réservation dont on ouvre les parts
+  const [nouvellePersonne, setNouvellePersonne] = useState('')
+  const [nouvellePart, setNouvellePart] = useState('')
   const [organisateur, setOrganisateur] = useState('')
   const [enCours, setEnCours] = useState(false)
 
@@ -249,6 +256,62 @@ export default function Reservation({ etabActif, droits = [], session }) {
       await recharger()
     } catch (e) {
       setErreur(e.message || 'L’annulation n’a pas abouti.')
+    } finally {
+      setGesteEnCours(null)
+    }
+  }
+
+  // ── PAIEMENT PARTAGÉ (RG-M5-10) ────────────────────────────────────────────────────────────
+  //
+  // ⚠ LA PART EST FACULTATIVE, ET LA LAISSER VIDE EST LE CAS COURANT. À défaut, le serveur
+  // répartit le `montantDu` restant à parts égales entre les participants déjà déclarés et le
+  // nouveau — c'est ce qu'on veut quand quatre personnes partagent un terrain. On n'envoie donc le
+  // champ que s'il a été saisi : envoyer `0.00` par défaut poserait une part nulle et rendrait
+  // l'organisateur solidaire de tout, silencieusement.
+  async function ajouterParticipant(reservation) {
+    if (!nouvellePersonne) return
+    setGesteEnCours(reservation.id)
+    setErreur(null)
+    setSucces(null)
+    try {
+      const corps = { personne: nouvellePersonne }
+      if (nouvellePart.trim() !== '') corps.partMontant = nouvellePart.trim()
+      await api.ajouterParticipant(reservation.id, corps)
+      setNouvellePersonne('')
+      setNouvellePart('')
+      setSucces('Participant ajouté.')
+      await recharger()
+    } catch (e) {
+      // Le serveur rend le même message pour « bénéficiaire inconnu » et « hors périmètre »,
+      // délibérément : les distinguer offrirait un oracle d'énumération sur les fiches clients. On
+      // l'affiche tel quel plutôt que d'en déduire lequel des deux c'était.
+      setErreur(e.message || 'Le participant n’a pas pu être ajouté.')
+    } finally {
+      setGesteEnCours(null)
+    }
+  }
+
+  // ⚠ CE GESTE N'ENCAISSE RIEN, ET LE LIBELLÉ DOIT LE DIRE.
+  //
+  // `PayerPartProcessor` fait trois lignes, et son propre docblock est net : « la référence M2 de
+  // l'encaissement effectif de la part est hors périmètre de ce processor — ce processor matérialise
+  // la part comme réglée ». Aucune Vente, aucun mouvement de caisse, aucun effet sur le `montantDu`
+  // de la réservation.
+  //
+  // D'où « Marquer réglée » et non « Encaisser ». Dans un logiciel de caisse, un bouton qui dit
+  // « encaisser » promet la caisse : l'agent qui clique croit avoir pris l'argent, la somme manque
+  // à la clôture, et il la cherchera partout sauf ici — parce que l'écran lui a dit que c'était
+  // fait.
+  async function payerPart(participant) {
+    setGesteEnCours(participant.id)
+    setErreur(null)
+    setSucces(null)
+    try {
+      await api.payerPartParticipant(participant.id)
+      setSucces('Part notée comme réglée. L’encaissement se fait à la caisse.')
+      await recharger()
+    } catch (e) {
+      setErreur(e.message || 'L’encaissement de la part n’a pas abouti.')
     } finally {
       setGesteEnCours(null)
     }
@@ -472,6 +535,92 @@ export default function Reservation({ etabActif, droits = [], session }) {
                                       une place : émarger une réservation annulée n'a pas de sens, et
                                       le serveur refuserait — un bouton qui refuse au clic fait
                                       chercher une panne là où il n'y a qu'un état. */}
+                                  {/* ── PARTS DE PAIEMENT ───────────────────────────────────
+                                      Repliées : la plupart des réservations n'ont qu'un payeur, et
+                                      déplier systématiquement noierait l'émargement, qui est le
+                                      geste courant.
+
+                                      ⚠ AFFICHÉ MÊME À ZÉRO PARTICIPANT quand il reste quelque chose
+                                      à payer. C'est précisément là qu'on veut pouvoir partager, et
+                                      un bloc qui n'apparaît qu'une fois le premier participant
+                                      ajouté serait invisible tant qu'on n'a rien fait — donc
+                                      toujours. */}
+                                  {peutPartager && occupe && ((r.participants?.length ?? 0) > 0 || Number(r.montantDu) > 0) && (
+                                    <button
+                                      type="button"
+                                      className="btn ghost sm"
+                                      onClick={() => {
+                                        setPartsPour(partsPour === r.id ? null : r.id)
+                                        setNouvellePersonne('')
+                                        setNouvellePart('')
+                                      }}
+                                    >
+                                      {(r.participants?.length ?? 0) > 0
+                                        ? `Parts (${r.participants.length})`
+                                        : 'Partager le paiement'}
+                                    </button>
+                                  )}
+
+                                  {partsPour === r.id && (
+                                    <div className="resa-parts">
+                                      {(r.participants ?? []).map((p) => (
+                                        <div key={p.id} className="resa-part">
+                                          <span className="nm">{labelBeneficiaire(p.personne) || court(p.id)}</span>
+                                          {p.estOrganisateur && <span className="badge">organisateur</span>}
+                                          <span className="mono">{euros(p.partMontant)}</span>
+                                          <span className={`badge ${p.statutPaiement === 'paye' ? 'good' : 'mut'}`}>
+                                            {p.statutPaiement === 'paye' ? 'Payé' : 'En attente'}
+                                          </span>
+                                          {p.statutPaiement !== 'paye' && (
+                                            <button
+                                              type="button"
+                                              className="btn sm"
+                                              disabled={gesteEnCours === p.id}
+                                              onClick={() => payerPart(p)}
+                                              title="Note que cette part a été réglée. L’encaissement lui-même passe par la caisse : ce bouton ne prend pas d’argent. L’organisateur reste solidaire de ce qui n’est pas réglé."
+                                            >
+                                              Marquer réglée
+                                            </button>
+                                          )}
+                                        </div>
+                                      ))}
+
+                                      <div className="resa-part-form">
+                                        <select
+                                          className="select"
+                                          value={nouvellePersonne}
+                                          onChange={(e) => setNouvellePersonne(e.target.value)}
+                                          aria-label="Personne à ajouter"
+                                        >
+                                          <option value="">Ajouter une personne…</option>
+                                          {beneficiaires.map((b) => (
+                                            <option key={b.id} value={b.id}>{labelBeneficiaire(b)}</option>
+                                          ))}
+                                        </select>
+                                        <input
+                                          className="input"
+                                          value={nouvellePart}
+                                          onChange={(e) => setNouvellePart(e.target.value)}
+                                          placeholder="Part (à parts égales si vide)"
+                                          aria-label="Part de cette personne, en euros"
+                                          inputMode="decimal"
+                                        />
+                                        <button
+                                          type="button"
+                                          className="btn"
+                                          disabled={!nouvellePersonne || gesteEnCours === r.id}
+                                          onClick={() => ajouterParticipant(r)}
+                                        >
+                                          Ajouter
+                                        </button>
+                                      </div>
+                                      <p className="hint">
+                                        Part laissée vide : le reste à payer est réparti à parts égales.
+                                        Ce qui n’est pas encaissé reste dû par l’organisateur.
+                                      </p>
+                                    </div>
+                                  )}
+
                                   {occupe && (
                                     <div className="resa-inscrit-act">
                                       {peutEmarger && (
