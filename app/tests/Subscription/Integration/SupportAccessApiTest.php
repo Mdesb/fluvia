@@ -156,6 +156,76 @@ final class SupportAccessApiTest extends SocleApiTestCase
         self::assertSame(404, $reponse->getStatusCode(), (string) $reponse->getContent(false));
     }
 
+    /**
+     * ⚠ **OUVRIR un accès est l'opération qui franchit le cloisonnement. Rien ne la prouvait.**
+     *
+     * Seul le `GET` était couvert. Le `POST` — celui qui distribue réellement le passe-droit — et la
+     * révocation ne l'étaient par rien. Trois opérations, une seule preuve.
+     *
+     * **Le test dit par quel chemin le 404 arrive.** Un 404 peut venir du routage, du cloisonnement,
+     * ou d'`assertEditor`. Un test qui se contente de l'attendre resterait vert si la ressource se
+     * fermait pour une tout autre raison — y compris parce qu'elle aurait cessé d'exister. On envoie
+     * donc **la même charge utile** dans les deux rôles : refusée au client, acceptée à l'éditeur.
+     * C'est l'égalité des charges qui fait dire au test « seul le QUI change ».
+     *
+     * La garde déclarative de cette ressource n'exige qu'être connecté ; le verrou réel est
+     * `assertEditor('editor.support_access')` à l'intérieur du provider et des deux processeurs, et
+     * `bin/garde-fou-routes-editeur.php` exige qu'il y soit. Ce test mesure l'effet, pas la forme.
+     */
+    public function testUnCompteClientNePeutPasOuvrirUnAcces(): void
+    {
+        $charge = [
+            'establishmentId' => $this->idEtablissementClient(),
+            'reason' => 'Tentative depuis un compte client, ticket inexistant.',
+            'hours' => 2,
+        ];
+
+        [$clientOrdinaire, $enteteClient] = $this->clientOrdinaire();
+        $refuse = $clientOrdinaire->request('POST', '/api/editor/support-accesses', $enteteClient + [
+            'json' => $charge,
+        ]);
+        self::assertSame(404, $refuse->getStatusCode(), (string) $refuse->getContent(false));
+
+        // Témoin : la MÊME charge passe pour l'éditeur. Sans lui, le 404 ci-dessus pourrait venir
+        // d'une charge invalide, d'une route disparue, ou de n'importe quoi d'autre.
+        [$editeur, $enteteEditeur] = $this->editeur();
+        $editeur->request('POST', '/api/editor/support-accesses', $enteteEditeur + ['json' => $charge]);
+        self::assertResponseIsSuccessful('La charge est valide : seul le rôle de l’appelant change.');
+    }
+
+    /**
+     * La révocation aussi : c'est une opération d'écriture sur le même mécanisme.
+     *
+     * ⚠ On révoque un accès **qui existe**, ouvert par l'éditeur juste avant. Révoquer un
+     * identifiant inventé rendrait 404 pour une raison qui n'a rien à voir — et le test serait vert
+     * sans rien mesurer.
+     */
+    public function testUnCompteClientNePeutPasRevoquerUnAcces(): void
+    {
+        [$editeur, $enteteEditeur] = $this->editeur();
+        $ouvert = $editeur->request('POST', '/api/editor/support-accesses', $enteteEditeur + [
+            'json' => [
+                'establishmentId' => $this->idEtablissementClient(),
+                'reason' => 'Ouvert par l’éditeur pour éprouver la révocation.',
+                'hours' => 2,
+            ],
+        ])->toArray();
+
+        [$clientOrdinaire, $enteteClient] = $this->clientOrdinaire();
+        $refuse = $clientOrdinaire->request(
+            'POST',
+            '/api/editor/support-accesses/' . $ouvert['id'] . '/revoke',
+            $enteteClient
+        );
+        self::assertSame(404, $refuse->getStatusCode(), (string) $refuse->getContent(false));
+
+        // Témoin : l'accès est toujours ouvert — le refus n'a rien révoqué au passage.
+        $liste = $editeur->request('GET', '/api/editor/support-accesses', $enteteEditeur)->toArray();
+        $membres = $liste['member'] ?? $liste['hydra:member'] ?? [];
+        self::assertCount(1, $membres, 'Le refus ne doit pas avoir révoqué.');
+        self::assertSame($ouvert['id'], $membres[0]['id']);
+    }
+
     // ---------------------------------------------------------------- montage
 
     protected function setUp(): void
