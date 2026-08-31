@@ -18,6 +18,7 @@ use App\Vente\Entity\Vente;
 use App\Reservation\Entity\Recurrence;
 use App\Tests\Marketing\MarketingApiTestCase;
 use App\Vente\Entity\CardRejection;
+use App\Vente\Nf525\Entity\OperationScellee;
 
 /**
  * CE QUE LE GARDE-FOU N°4 CACHAIT — vérifié une entité à la fois.
@@ -146,6 +147,43 @@ final class CloisonnementResiduelTest extends MarketingApiTestCase
      * prouverait rien — une collection vide passe aussi bien quand le filtre marche que quand la
      * table est vide.
      */
+    /**
+     * **Le scellement NF525** — troisième oubli de la même liste blanche, et le plus grave.
+     *
+     * `PerimetreVenteExtension` a reçu `CardRejection` et `DailyClosure` le 28/08, avec la leçon
+     * écrite juste au-dessus : *« une liste blanche ne protège que ce qu'on a pensé à y écrire, et
+     * son oubli ne se voit pas — la collection rend simplement des lignes de plus »*.
+     *
+     * ⚠ `OperationScellee` porte `pointDeVente`, n'était nommée par aucune extension, et sort en
+     * `GetCollection` derrière la seule permission `caisse.lire`. Ce qui fuyait n'est pas un
+     * identifiant : `payloadCanonique` est **le contenu canonique de chaque transaction**, figé au
+     * scellement.
+     *
+     * Le témoin est placé dans `empreinte` ET dans `payloadCanonique` : si un seul des deux
+     * champs sortait du groupe de sérialisation un jour, le test continuerait de mesurer l'autre.
+     */
+    public function testUneOperationScelleeNeSeLitPasDUnEtablissementALAutre(): void
+    {
+        $em = $this->em();
+        $vente = $this->venteSurA();
+
+        $operation = (new OperationScellee())
+            ->setPointDeVente($vente->getPointDeVente())
+            ->setCibleType('vente')
+            ->setCibleId($vente->getId())
+            ->setNumeroSequence(999001)
+            ->setEmpreinte('temoin_nf525_groupe_a')
+            ->setSignature('signature-temoin')
+            ->setPayloadCanonique(['temoin' => 'temoin_nf525_groupe_a']);
+        $em->persist($operation);
+        $em->flush();
+
+        // Sans ce droit, le test mesurerait l'absence de permission, pas le cloisonnement.
+        $this->accorderALAgentB('caisse', 'lire');
+
+        $this->refuse('/api/operation_scellees', 'temoin_nf525_groupe_a');
+    }
+
     private function refuse(string $url, string $temoin): void
     {
         [$clientB, $enteteB] = $this->agentSurGroupeB();

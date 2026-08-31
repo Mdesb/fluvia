@@ -43,7 +43,26 @@ set -eu
 #   autorisation:escalades:expirer    5 min · une élévation accordée pour une opération reste ouverte
 #
 # Le catalogue le dit sans détour : « ne pas tourner ici n'est pas un retard, c'est une faille ».
-TACHES_AUTORISEES="securite:delegations:expirer autorisation:escalades:expirer"
+# Chaque tache entre ici APRES avoir ete vue mordre ET epargner. Une tache planifiee tourne sans
+# personne devant l'ecran : son sur-declenchement ne se voit que chez le client qu'elle a leve.
+#
+#   securite:delegations:expirer      une delegation de droits qui n'expire jamais
+#   autorisation:escalades:expirer    une elevation temporaire qui ne se termine jamais
+#   boutique:liberer-paniers-expires  un panier abandonne retient sa place indefiniment ; les
+#                                     billets qu'il bloque ne sont vendus a personne.
+#                                     Epargne prouvee le 31/08 : borne temporelle retiree ->
+#                                     `testElleEpargneUnPanierEncoreValide` echoue seul.
+#   personnel:recalculer-fenetres-badges  la fenetre de validite d'un badge staff ne suit plus les
+#                                     shifts : un agent garde un acces qu'il n'a plus, ou perd
+#                                     celui qu'il devrait avoir.
+#                                     ⚠ Le cron appelle `recalculerTous()`, qui prend TOUS les
+#                                     badges actifs -- le tri des modes se fait dedans, dans une
+#                                     branche que rien ne testait. Un badge PERMANENT s'y serait
+#                                     retrouve borne dans le passe : quelqu'un qui ne peut plus
+#                                     entrer dans le batiment, toutes les cinq minutes, en silence.
+#                                     Epargne prouvee le 31/08 : branche `Permanent` neutralisee
+#                                     -> le test neuf echoue seul.
+TACHES_AUTORISEES="securite:delegations:expirer autorisation:escalades:expirer boutique:liberer-paniers-expires personnel:recalculer-fenetres-badges"
 
 INTERVALLE="${ORDONNANCEUR_INTERVALLE:-60}"
 

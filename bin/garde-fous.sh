@@ -432,6 +432,21 @@ if [ -f "$RACINE/frontend/scripts/verifier-imports.mjs" ]; then
     fi
 fi
 
+# n37 — une cle definie deux fois dans le meme objet. C'est ce que produit une FUSION GIT SANS
+# CONFLIT : deux sessions ajoutent leur appel dans le meme objet `api`, Git concatene, et l'un des
+# deux cesse silencieusement d'exister. Quatre occurrences en deux jours, rapportees par trois
+# sessions. Ni le build ni le linteur ne le voient : `{ a: 1, a: 2 }` est du JavaScript legal.
+if [ -f "$RACINE/frontend/scripts/verifier-cles-doubles.mjs" ]; then
+    if command -v node >/dev/null 2>&1; then
+        executer "Cles en double (n37)" sh -c "cd '$RACINE/frontend' && node scripts/verifier-cles-doubles.mjs"
+    else
+        echo "─────────────────────────────────────────────────────────────"
+        echo "▶ Cles en double"
+        echo "─────────────────────────────────────────────────────────────"
+        echo "· IGNORÉ — « node » indisponible ici. Le contrôle n'a PAS tourné."
+    fi
+fi
+
 if [ -f "$RACINE/frontend/scripts/verifier-formats.mjs" ]; then
     if command -v node >/dev/null 2>&1; then
         executer "Formats d'écriture (n°11)" sh -c "cd '$RACINE/frontend' && node scripts/verifier-formats.mjs"
@@ -440,6 +455,37 @@ if [ -f "$RACINE/frontend/scripts/verifier-formats.mjs" ]; then
         echo "▶ Formats d'écriture"
         echo "─────────────────────────────────────────────────────────────"
         echo "· IGNORÉ — « node » indisponible ici. Le contrôle n'a PAS tourné."
+    fi
+fi
+
+# Un bouton dont le contenu est un symbole et qui ne porte ni `aria-label`, ni `aria-labelledby`,
+# ni `title` : un lecteur d'ecran annonce « bouton » et rien d'autre, et le seul moyen de savoir ce
+# qu'il declenche est de l'essayer.
+#
+# ⚠ Neuf boutons `↻` etaient dans ce cas. La ligne T9 du tableau annoncait « 6 fichiers sur 118
+# portent un alt » — vrai et trompeur : seuls six fichiers contiennent une image, et AUCUNE ne
+# manque d'`alt`. Ce qui manquait etait ailleurs, et personne ne l'avait compte.
+# Un element non interactif rendu cliquable : la souris l atteint, le clavier jamais. Cinq lignes
+# de tableau etaient dans ce cas, dont la seule porte vers la fiche d un client.
+# Les contrastes de la palette, dans les deux themes. Sept paires sous le seuil WCAG, dont les
+# trois badges d etat du theme clair — celles qu on lit d un coup d oeil sans les lire.
+# ⚠ Cliquet et non correction : T15 refondra la palette, et choisir une teinte est une decision de
+# marque. Ce controle en devient le critere d acceptation.
+if [ -f "$RACINE/frontend/scripts/verifier-contrastes.mjs" ]; then
+    if [ -d "$RACINE/frontend/node_modules" ]; then
+        executer "Contrastes" sh -c "cd '$RACINE/frontend' && node scripts/verifier-contrastes.mjs"
+    fi
+fi
+
+if [ -f "$RACINE/frontend/scripts/verifier-clic-clavier.mjs" ]; then
+    if [ -d "$RACINE/frontend/node_modules" ]; then
+        executer "Clic au clavier" sh -c "cd '$RACINE/frontend' && node scripts/verifier-clic-clavier.mjs"
+    fi
+fi
+
+if [ -f "$RACINE/frontend/scripts/verifier-boutons-nommes.mjs" ]; then
+    if [ -d "$RACINE/frontend/node_modules" ]; then
+        executer "Boutons nommés" sh -c "cd '$RACINE/frontend' && node scripts/verifier-boutons-nommes.mjs"
     fi
 fi
 

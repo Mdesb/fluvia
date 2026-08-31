@@ -10,6 +10,7 @@ use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
+use App\Organisation\State\RegionGroupScopeProcessor;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
@@ -28,8 +29,8 @@ use Symfony\Component\Validator\Constraints as Assert;
     operations: [
         new GetCollection(security: "is_granted('IS_AUTHENTICATED_FULLY')"),
         new Get(security: "is_granted('IS_AUTHENTICATED_FULLY')"),
-        new Post(security: "is_granted('PERM', 'organisation.gerer')"),
-        new Patch(security: "is_granted('PERM', 'organisation.gerer')"),
+        new Post(security: "is_granted('PERM', 'organisation.gerer')", processor: RegionGroupScopeProcessor::class),
+        new Patch(security: "is_granted('PERM', 'organisation.gerer')", processor: RegionGroupScopeProcessor::class),
         new Delete(security: "is_granted('PERM', 'organisation.gerer')"),
     ],
     normalizationContext: ['groups' => ['region:read']],
@@ -49,7 +50,10 @@ class Region
 
     #[ORM\ManyToOne(targetEntity: Groupe::class, inversedBy: 'regions')]
     #[ORM\JoinColumn(nullable: false)]
-    #[Assert\NotNull]
+    // Pas de `Assert\NotNull` : la validation passe AVANT les processeurs, et ce champ est
+    // pose par `RegionGroupScopeProcessor` depuis l'etablissement actif. La contrainte
+    // refusait donc la charge de l'ecran (`nom` seul) avant qu'on puisse la completer.
+    // L'integrite tient par `nullable: false` et par le processeur, qui pose ou refuse.
     #[Groups(['region:read', 'region:write'])]
     private ?Groupe $groupe = null;
 

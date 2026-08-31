@@ -88,10 +88,18 @@ final class PayFipTest extends ComptaApiTestCase
     {
         [$client, $entete] = $this->adminSurA();
 
+        // ⚠ UNE VRAIE VENTE, COMME LE PREMIER TEST DE CE FICHIER. Il portait `Uuid::v4()` — une
+        // vente qui n'existe pas — et a ete corrige le 23/08 ; celui-ci etait le reste. Depuis que
+        // `BordereauPayFiP` est cloisonne par la vente d'origine (31/08), un bordereau orphelin
+        // n'est visible d'aucun etablissement : il ne peut etre rattache a aucun, donc le montrer
+        // a tous serait la fuite. Le propos du test — un retour manquant reste `en_attente` et
+        // reste rejouable — est inchange.
+        $vente = $this->creerVenteValidee($client, $entete);
+
         /** @var EntityManagerInterface $em */
         $em = static::getContainer()->get('doctrine')->getManager();
         $bordereau = new BordereauPayFiP();
-        $bordereau->setVenteOrigine(Uuid::v4());
+        $bordereau->setVenteOrigine(Uuid::fromString($vente['id']));
         $bordereau->setReferenceTransaction('PAYFIP-TEST-002');
         $em->persist($bordereau);
         $em->flush();

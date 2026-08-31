@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import RechercheGlobale from './RechercheGlobale.jsx'
 import { aLeDroit, aUnDesDroits } from '../api/droits.js'
@@ -331,6 +331,25 @@ export default function AppShell({
 
   const [theme, setTheme] = useState(() => document.documentElement.getAttribute('data-theme') || '')
   const [navOpen, setNavOpen] = useState(false)
+
+  // ⚠ LE FOCUS SUIT L'ECRAN, SINON IL RESTE SUR LE MENU.
+  //
+  // Dans une application d'une seule page, changer d'onglet remplace le contenu et ne bouge pas le
+  // focus : il reste sur l'entree de menu qu'on vient d'activer. Au clavier, il faut alors
+  // retraverser la trentaine d'entrees pour atteindre ce qu'on a demande — a chaque navigation.
+  //
+  // ⚠ MAIS PAS AU PREMIER RENDU. Prendre le focus au chargement le volerait a qui n'a rien
+  // demande, et ferait sauter la page sous les yeux de tout le monde. `premierRendu` garde donc le
+  // tout premier passage.
+  const contenuRef = useRef(null)
+  const premierRendu = useRef(true)
+  useEffect(() => {
+    if (premierRendu.current) {
+      premierRendu.current = false
+      return
+    }
+    contenuRef.current?.focus?.()
+  }, [onglet])
   const profondeur = useProfondeur()
 
   useEffect(() => {
@@ -359,6 +378,9 @@ export default function AppShell({
 
   return (
     <div className={`app${navOpen ? ' nav-open' : ''}`}>
+      {/* @clic-souris-seul: nav-backdrop  ferme le menu au clic a cote ; au clavier, le bouton ☰
+          le referme deja. Le rendre focusable ajouterait un arret muet dans l ordre de tabulation,
+          a franchir a chaque passage, pour un geste qui a deja son equivalent. */}
       <div className="nav-backdrop" onClick={() => setNavOpen(false)} />
 
       <aside className="sidebar">
@@ -437,6 +459,12 @@ export default function AppShell({
       </aside>
 
       <div className="main">
+        {/* ⚠ LE LIEN D'EVITEMENT, PREMIER ELEMENT FOCUSABLE DE LA PAGE.
+            Invisible tant qu'on ne l'atteint pas au clavier, il apparait au focus. Sans lui, la
+            premiere tabulation d'un chargement entre dans une colonne de trente entrees qu'il faut
+            traverser en entier pour lire le contenu. La boutique publique en a un depuis toujours
+            (`PublicHeader.jsx`) ; le back-office n'en avait pas. */}
+        <a className="lien-evitement" href="#contenu-principal">Aller au contenu</a>
         {/* Au-dessus de la barre, donc au-dessus de tout : un bandeau qu'on peut faire defiler hors
             de l'ecran n'est pas un bandeau permanent. */}
         {bandeau}
@@ -527,7 +555,16 @@ export default function AppShell({
             verrait. Elle ne s'affiche que quand le navigateur dit que l'installation est possible,
             et un refus l'eteint pour de bon. */}
         <InstallerSurLeTelephone />
-        {children}
+        {/* ⚠ `tabIndex={-1}` REND CE BLOC FOCUSABLE PAR PROGRAMME SANS L'AJOUTER A L'ORDRE DE
+            TABULATION. C'est ce qui permet au lien d'evitement d'y deposer le focus, et a l'effet
+            ci-dessus de l'y ramener a chaque changement d'ecran, sans creer un arret muet de plus
+            pour ceux qui tabulent normalement.
+
+            Un `<div>` et non un `<main>` : l'application de l'editeur en rend deja un plus bas, et
+            deux reperes principaux imbriques ne veulent rien dire pour un lecteur d'ecran. */}
+        <div id="contenu-principal" ref={contenuRef} tabIndex={-1}>
+          {children}
+        </div>
       </div>
     </div>
   )

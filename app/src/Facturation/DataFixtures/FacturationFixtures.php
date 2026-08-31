@@ -74,14 +74,30 @@ final class FacturationFixtures extends Fixture implements DependentFixtureInter
 
         $compteProduit = $manager->getRepository(CompteComptable::class)->findOneBy(['profilExploitant' => $profil, 'numero' => '706100']);
 
+        // ⚠ L'IDENTITE LEGALE VIT SUR LE PROFIL, PAS DANS LE PARAMETRAGE.
+        //
+        // Elle etait posee dans `ParametreFacturationEtablissement::mentionsLegalesEmetteur`, un
+        // tableau JSON libre. Depuis le 01/09 c'est le profil qui fait foi -- champs structures,
+        // parce qu'EN 16931 exige des termes distincts (BT-27, BT-31, BT-35/37/38/40) qu'une
+        // plateforme controle un par un.
+        //
+        // Ecrire les deux ferait exactement ce qu'on vient de refermer : deux sources pour le meme
+        // fait sur un document opposable.
+        $profil->setRaisonSociale('Régie piscine A');
+        // ⚠ LE SIRET, PAS LE SIREN : les 9 chiffres du SIREN plus le NIC a 5 chiffres qui designe
+        // l'etablissement. C'est cette partie-la qui dit QUEL site facture.
+        $profil->setSiret($profil->getSiren() . '00012');
+        $profil->setTvaIntracommunautaire('FR00' . $profil->getSiren());
+        $profil->setAdresse([
+            'rue' => '1 rue de la Piscine',
+            'cp' => '75000',
+            'ville' => 'Paris',
+            'pays' => 'FR',
+        ]);
+        $manager->persist($profil);
+
         $parametre = new ParametreFacturationEtablissement();
         $parametre->setProfilExploitant($profil);
-        $parametre->setMentionsLegalesEmetteur([
-            'denomination' => 'Régie piscine A',
-            'adresse' => ['rue' => '1 rue de la Piscine', 'cp' => '75000', 'ville' => 'Paris', 'pays' => 'FR'],
-            'siret' => $profil->getSiren() . '00012',
-            'tvaIntra' => 'FR00' . $profil->getSiren(),
-        ]);
         $parametre->setConditionsReglementDefaut('Paiement à 30 jours date de facture.');
         $parametre->setDelaiPaiementDefautJours(30);
         $parametre->setCompteProduitDefaut($compteProduit);

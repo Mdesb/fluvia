@@ -12,6 +12,7 @@ use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\Compta\Entity\CompteComptable;
 use App\Compta\Entity\ProfilExploitant;
+use App\Facturation\State\BillingSettingsStampProcessor;
 use App\Facturation\Service\Montant;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
@@ -42,11 +43,13 @@ use Symfony\Component\Uid\Uuid;
             security: "is_granted('PERM', 'facturation.lire')",
         ),
         new Post(
+            processor: BillingSettingsStampProcessor::class,
             uriTemplate: '/parametres-facturation',
             security: "is_granted('PERM', 'facturation.gerer')",
             denormalizationContext: ['groups' => ['parametre_facturation:write']],
         ),
         new Patch(
+            processor: BillingSettingsStampProcessor::class,
             uriTemplate: '/parametres-facturation/{id}',
             security: "is_granted('PERM', 'facturation.gerer')",
             denormalizationContext: ['groups' => ['parametre_facturation:write']],
@@ -61,14 +64,49 @@ class ParametreFacturationEtablissement
     #[Groups(['parametre_facturation:read'])]
     private Uuid $id;
 
+    /**
+     * ⚠ SORTI DU GROUPE D'ECRITURE LE 31/08 : le serveur le pose, le client ne le choisit pas.
+     *
+     * Il portait `parametre_facturation:write` et `nullable: false`, sans que rien ne le pose cote
+     * serveur. Deux consequences, mesurees sur une base jetable :
+     *
+     *   — un POST sans ce champ rendait un 500 « Column profil_exploitant_id cannot be null », pas
+     *     un refus propre. La ressource etait donc inutilisable, ce qui explique qu'aucun ecran ne
+     *     l'ait jamais appelee ;
+     *   — un POST AVEC un profil etranger aurait ecrit le parametrage de facturation du voisin —
+     *     ses conditions de reglement, son taux de penalites. Le symptome aurait ete un reglage qui
+     *     change tout seul chez quelqu'un d'autre, ce qu'on n'impute jamais a une requete etrangere.
+     *
+     * `BillingSettingsStampProcessor` le resout depuis l'etablissement actif.
+     */
     #[ORM\ManyToOne(targetEntity: ProfilExploitant::class)]
     #[ORM\JoinColumn(nullable: false)]
-    #[Groups(['parametre_facturation:read', 'parametre_facturation:write'])]
+    #[Groups(['parametre_facturation:read'])]
     private ?ProfilExploitant $profilExploitant = null;
 
-    /** @var array<string, mixed> {denomination, adresse, siret, tvaIntra} */
+    /**
+     * ⚠ **OBSOLETE DEPUIS LE 01/09 — CETTE COLONNE NE FAIT PLUS FOI.**
+     *
+     * L'identite legale du vendeur vit desormais sur `ProfilExploitant` : `raisonSociale`,
+     * `tvaIntracommunautaire`, `adresse`. Champs structures, parce qu'EN 16931 exige des termes
+     * distincts (BT-27, BT-31, BT-35/37/38/40) qu'une plateforme controle un par un -- ce qu'un
+     * tableau JSON libre ne permet pas.
+     *
+     * Les valeurs ont ete recopiees vers le profil (`Version20260901000000`), et
+     * `FactureRenduProvider` lit le profil. Cette colonne est conservee **le temps d'un
+     * deploiement** : retirer une colonne se fait en deux temps -- le code cesse de l'ecrire, on
+     * deploie, puis on la supprime.
+     *
+     * ⚠ **NE PAS LA RENSEIGNER.** Deux sources pour le meme fait sur un document opposable, c'est
+     * exactement le defaut qu'on vient de refermer : pendant quelques heures, le rendu affichait
+     * une identite et le controle de completude en reclamait une autre.
+     *
+     * @var array<string, mixed> {denomination, adresse, siret, tvaIntra}
+     *
+     * @deprecated Lire `ProfilExploitant` — voir Version20260901000000.
+     */
     #[ORM\Column]
-    #[Groups(['parametre_facturation:read', 'parametre_facturation:write'])]
+    #[Groups(['parametre_facturation:read'])]
     private array $mentionsLegalesEmetteur = [];
 
     #[ORM\Column(type: 'text')]

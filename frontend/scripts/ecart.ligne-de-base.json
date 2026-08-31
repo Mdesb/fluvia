@@ -29,38 +29,46 @@
         "Le script REFUSE de le relever. Un plafond qui remonte n est plus un cliquet, c est un",
         "compteur."
     ],
-    "plafond": 666,
+    "plafond": 631,
     "releve": {
-        "exposees": 1159,
-        "sansEcran": 0,
-        "attendues": 1159,
-        "appelees": 499,
-        "atteignables": 493,
-        "inatteignables": 666,
+        "exposees": 1161,
+        "sansEcran": 1,
+        "attendues": 1160,
+        "appelees": 537,
+        "atteignables": 529,
+        "inatteignables": 631,
         "orphelins": [
             "etatSynchroAcces  (back-office)",
             "grilleTarifaires  (back-office)",
             "majFactureFournisseur  (back-office)",
+            "majNoteDeFrais  (back-office)",
             "padelTournois  (back-office)",
             "pieceCommerciale  (back-office)",
             "planningOuverture  (back-office)",
-            "rattacherDroitAccesAbonnement  (back-office)"
+            "rattacherDroitAccesAbonnement  (back-office)",
+            "supprimerLigneFrais  (back-office)"
         ],
         "appelsSansServeur": [],
         "marqueursPerimes": [],
-        "declares": [],
+        "declares": [
+            {
+                "fichier": "app/src/Platform/ApiResource/LoadedBuild.php",
+                "operations": 1,
+                "raison": "consommée par le déploiement pour vérifier que FPM a chargé le code livré, jamais par une interface."
+            }
+        ],
         "marqueursSansRaison": [],
         "clientsNonDeclares": [],
         "parFront": [
             {
                 "nom": "back-office",
-                "appelees": 478,
-                "atteignables": 472
+                "appelees": 513,
+                "atteignables": 505
             },
             {
                 "nom": "boutique en ligne",
-                "appelees": 21,
-                "atteignables": 21
+                "appelees": 24,
+                "atteignables": 24
             }
         ],
         "parPrefixe": [
@@ -69,11 +77,11 @@
                 30
             ],
             [
-                "reservation",
-                26
+                "boutique",
+                29
             ],
             [
-                "boutique",
+                "reservation",
                 26
             ],
             [
@@ -93,6 +101,14 @@
                 14
             ],
             [
+                "compta",
+                14
+            ],
+            [
+                "personnel",
+                13
+            ],
+            [
                 "musee",
                 12
             ],
@@ -105,11 +121,15 @@
                 11
             ],
             [
+                "factures",
+                10
+            ],
+            [
                 "marketing",
                 10
             ],
             [
-                "compta",
+                "finance",
                 10
             ],
             [
@@ -117,15 +137,11 @@
                 10
             ],
             [
-                "factures",
+                "utilisateurs",
                 9
             ],
             [
                 "billing",
-                8
-            ],
-            [
-                "personnel",
                 8
             ],
             [
@@ -145,7 +161,19 @@
                 6
             ],
             [
+                "crm",
+                6
+            ],
+            [
+                "clients",
+                6
+            ],
+            [
                 "roles",
+                6
+            ],
+            [
+                "expense",
                 6
             ],
             [
@@ -161,23 +189,11 @@
                 5
             ],
             [
-                "clients",
-                5
-            ],
-            [
                 "segments",
                 5
             ],
             [
                 "loyalty",
-                5
-            ],
-            [
-                "utilisateurs",
-                5
-            ],
-            [
-                "finance",
                 5
             ],
             [
@@ -245,10 +261,6 @@
                 3
             ],
             [
-                "crm",
-                3
-            ],
-            [
                 "demande",
                 3
             ],
@@ -305,15 +317,19 @@
                 3
             ],
             [
-                "mapping",
-                3
-            ],
-            [
                 "grille",
                 3
             ],
             [
                 "taux",
+                3
+            ],
+            [
+                "parametres-facturation",
+                3
+            ],
+            [
+                "mapping",
                 3
             ],
             [
@@ -357,6 +373,10 @@
                 2
             ],
             [
+                "bordereau",
+                2
+            ],
+            [
                 "compte",
                 2
             ],
@@ -370,6 +390,10 @@
             ],
             [
                 "employes",
+                2
+            ],
+            [
+                "creneau",
                 2
             ],
             [
@@ -402,6 +426,10 @@
             ],
             [
                 "projets",
+                1
+            ],
+            [
+                "journal",
                 1
             ],
             [
@@ -461,7 +489,7 @@
                 1
             ],
             [
-                "expense",
+                "lettrage",
                 1
             ],
             [
@@ -474,10 +502,6 @@
             ],
             [
                 "vente",
-                1
-            ],
-            [
-                "bordereau",
                 1
             ],
             [
@@ -510,10 +534,6 @@
             ],
             [
                 "badge",
-                1
-            ],
-            [
-                "creneau",
                 1
             ],
             [

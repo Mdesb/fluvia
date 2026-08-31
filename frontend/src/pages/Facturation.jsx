@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import ParametresFacturation from '../components/ParametresFacturation.jsx'
 import Modal from '../components/Modal.jsx'
 import Tabs from '../components/Tabs.jsx'
 import { useEtatUrl } from '../api/url.js'
@@ -120,6 +121,9 @@ export default function Facturation({ etabActif, droits, onNaviguer }) {
   // La facture dont on regarde le document. Un brouillon n'a pas de numero et ne se remet pas :
   // le bouton n'apparait donc que sur une facture emise.
   const [documentPour, setDocumentPour] = useState(null)
+  // Le rapport d'intégrité : `null` tant qu'on n'a pas demandé, jamais un état par défaut.
+  const [chaine, setChaine] = useState(null)
+  const [chaineEnCours, setChaineEnCours] = useState(false)
   const [brouillonEdite, setBrouillonEdite] = useState(null)
 
   const peutGerer = aLeDroit(droits, 'facturation.gerer')
@@ -216,12 +220,18 @@ export default function Facturation({ etabActif, droits, onNaviguer }) {
         onglets={[
           ['factures', `Factures${factures?.length ? ` (${factures.length})` : ''}`],
           ['devis', `Devis & pièces${pieces?.length ? ` (${pieces.length})` : ''}`],
+          // Le paramétrage vit ici et non dans Paramètres : ce qu'il règle — délai, pénalités,
+          // mentions — ne se comprend qu'en regardant une facture. On le met à côté de ce qu'il
+          // gouverne, pas dans un hub d'administration où personne ne le cherche.
+          ['reglages', 'Paramétrage'],
         ]}
         actif={params.tab}
         onChange={(v) => majParams({ tab: v })}
       />
 
-      {params.tab === 'factures' ? (
+      {params.tab === 'reglages' ? (
+        <ParametresFacturation peutModifier={peutGerer} />
+      ) : params.tab === 'factures' ? (
         <>
           {/* Trois chiffres bornés, qui appellent une décision : ils restent sur la page.
               La liste, elle, peut grandir sans limite — d'où le tableau filtrable en dessous. */}
@@ -502,6 +512,89 @@ export default function Facturation({ etabActif, droits, onNaviguer }) {
       {documentPour && (
         <FactureRendu facture={documentPour} onClose={() => setDocumentPour(null)} />
       )}
+
+      {/* L'INTÉGRITÉ DE LA CHAÎNE — ce qu'on montre à un expert-comptable ou à un contrôle.
+          La chaîne des ÉCRITURES était déjà vérifiable depuis Comptabilité ; celle des FACTURES
+          répondait sans que rien ne l'appelle. Deux chaînes scellées, une seule qu'on pouvait
+          prouver. */}
+      <section className="card" style={{ marginTop: 'var(--esp-bloc)' }}>
+        <div className="card-h">
+          <h3>Intégrité de la chaîne des factures</h3>
+          <span className="sub">contrôle NF525</span>
+          <div className="r">
+            <button
+              className="btn"
+              type="button"
+              disabled={chaineEnCours}
+              onClick={async () => {
+                setChaineEnCours(true)
+                setChaine(null)
+                try {
+                  setChaine(await api.verifierChaineFactures())
+                } catch (e) {
+                  // ⚠ UN CONTRÔLE QUI ÉCHOUE N'EST PAS UN CONTRÔLE QUI PASSE. On ne rend surtout
+                  // pas un rapport vide, qui se lirait « rien à signaler ».
+                  setChaine({ __echec: e.message || 'Le contrôle n’a pas pu être exécuté.' })
+                } finally {
+                  setChaineEnCours(false)
+                }
+              }}
+            >
+              {chaineEnCours ? 'Vérification…' : 'Vérifier la chaîne'}
+            </button>
+          </div>
+        </div>
+        <div className="card-b">
+          <div className="hint" style={{ marginTop: 0 }}>
+            Chaque facture émise est scellée et chaînée à la précédente. Ce contrôle recalcule la
+            chaîne&nbsp;: il détecte un trou de séquence, un chaînage rompu ou une donnée altérée
+            après coup. À lancer avant une clôture, et lors d’un contrôle.
+          </div>
+
+          {chaine?.__echec ? (
+            <div className="banner banner-error">
+              <b>Le contrôle n’a pas pu être exécuté.</b> Ce n’est pas un résultat&nbsp;:
+              n’en concluez rien sur l’état de la chaîne.
+              <div className="sub">{chaine.__echec}</div>
+            </div>
+          ) : chaine?.intacte ? (
+            <div className="banner banner-ok">
+              Chaîne intacte&nbsp;: {chaine.nbDocuments} document
+              {chaine.nbDocuments > 1 ? 's' : ''} vérifié{chaine.nbDocuments > 1 ? 's' : ''},
+              aucune anomalie.
+            </div>
+          ) : chaine ? (
+            <>
+              <div className="banner banner-error">
+                <b>{(chaine.anomalies || []).length} anomalie
+                {(chaine.anomalies || []).length > 1 ? 's' : ''} sur la chaîne des factures.</b>{' '}
+                Une chaîne rompue signifie qu’une facture scellée a été modifiée, supprimée ou
+                insérée après coup. Ce n’est pas un incident d’affichage&nbsp;: conservez ce
+                rapport et faites-le remonter.
+              </div>
+              {(chaine.anomalies || []).length > 0 && (
+                <table className="tbl">
+                  <thead>
+                    <tr><th>Document</th><th>Problème</th></tr>
+                  </thead>
+                  <tbody>
+                    {/* ⚠ ON AFFICHE LE LIBELLÉ DU SERVEUR, JAMAIS UNE REFORMULATION. Le serveur
+                        type ses anomalies — trou de séquence, chaînage rompu, empreinte
+                        incohérente, signature invalide. Deux formulations d'une même anomalie
+                        divergeraient le jour où l'une des deux évolue. */}
+                    {(chaine.anomalies || []).map((a, i) => (
+                      <tr key={i}>
+                        <td>{a.numero || a.sequence || a.document || '—'}</td>
+                        <td>{a.probleme || a.message || JSON.stringify(a)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </>
+          ) : null}
+        </div>
+      </section>
     </div>
   )
 }

@@ -47,31 +47,33 @@ $racine = \dirname(__DIR__);
 $app = $racine . '/app';
 $front = $racine . '/frontend/src';
 
-// ── ABSTENTION SI LES DÉPENDANCES SONT ABSENTES ─────────────────────────────────────────────────
-//
-// Le hook `pre-receive` extrait l'arbre poussé par `git archive` : il n'a donc PAS `vendor/`
-// (gitignoré). Or ce contrôle a besoin de `bin/console debug:router`, donc de l'autoloader Composer.
-// Sans lui, le noyau ne démarre pas, la table de routes ressort vide, et une table vide ferait
-// déclarer TOUS les appels du frontal orphelins — le contraire d'un contrôle.
-//
-// Le hook le dit déjà en toutes lettres (« Le contrôle s'abstient ici faute de vendor/ — il tourne au
-// commit et dans bin/garde-fous.sh »), mais cette abstention n'était écrite NULLE PART : le contrôle
-// échouait donc à la poussée (« INSTRUMENT MORT ») et bloquait toute la flotte. On l'écrit ici, à sa
-// vraie place. `vendor/` présent mais table quand même vide reste un vrai défaut : on ne s'abstient
-// que faute de dépendances, et l'échec « instrument mort » plus bas garde tout son sens.
-if (!is_file($app . '/vendor/autoload.php')) {
-    echo "Appels dans le vide : abstention — `vendor/` absent (dépendances non installées).\n";
-    echo "  Ce contrôle exige `bin/console debug:router`, donc l'autoloader Composer. Il tourne au\n";
-    echo "  commit et dans `bin/garde-fous.sh` — jamais dans un arbre `git archive` sans dépendances.\n";
-    exit(0);
-}
-
 // ── LA TABLE DE ROUTES, ET SON TÉMOIN ───────────────────────────────────────────────────────────
 //
 // ⚠ UN ZÉRO SE SOUPÇONNE. Une commande absente, un noyau qui ne démarre pas, un `2>/dev/null` de
 // trop : tous rendent une liste vide, et une liste vide de routes ferait déclarer TOUS les appels
 // orphelins. Le seuil est donc haut et volontairement grossier — on sait qu'il y a plus de mille
 // routes ; en trouver moins de cinq cents veut dire qu'on n'a pas mesuré.
+// ⚠ SANS DEPENDANCES INSTALLEES, ON S'ABSTIENT — ON NE CONCLUT PAS.
+//
+// `hooks/pre-receive` extrait main dans un `mktemp -d` depuis git, et `app/vendor/` est ignore par
+// git : cet arbre-la n'a aucune dependance, `bin/console` ne demarre pas, et la garde « instrument
+// mort » ci-dessous refusait le push. Elle avait raison sur le fond — une table vide declarerait
+// TOUS les appels orphelins — mais le resultat etait que PERSONNE ne pouvait pousser sur main.
+//
+// S'abstenir n'est pas conclure zero, et c'est precisement la distinction que cette garde defend.
+// On le dit, on sort en succes, et le controle continue de tourner la ou un arbre complet existe :
+// `./bin/garde-fous.sh` et `hooks/pre-commit`, tous deux dans un worktree — ou il lit 887 routes.
+//
+// Il reste cable dans `pre-receive` : le jour ou le depot nu disposera des dependances, il
+// reprendra son travail sans que personne ait a s'en souvenir. Un controle retire d'une liste ne
+// revient jamais.
+if (!is_file($app . '/vendor/autoload.php')) {
+    echo "Appels dans le vide : non exécuté — pas de dépendances installées dans cet arbre.\n";
+    echo "  `debug:router` ne peut pas démarrer sans `vendor/`, et une table vide déclarerait tous\n";
+    echo "  les appels orphelins. Le contrôle tourne dans `./bin/garde-fous.sh` et en pre-commit.\n";
+    exit(0);
+}
+
 $sortie = [];
 $code = 0;
 // ⚠ LE CONTRÔLE PORTE SES PROPRES EXIGENCES, IL N'EN IMPOSE PAS À L'APPELANT.

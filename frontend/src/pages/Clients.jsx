@@ -3,15 +3,91 @@ import Modal from '../components/Modal.jsx'
 import { useEtatUrl, allerA } from '../api/url.js'
 import ActivitesClient, { SaisieEchange } from '../components/ActivitesClient.jsx'
 import ContactsClient from '../components/ContactsClient.jsx'
-import { api } from '../api/client.js'
+import { api, membres } from '../api/client.js'
 import { euros } from '../api/produit.js'
 import { aLeDroit } from '../api/droits.js'
+import FusionClients from '../components/FusionClients.jsx'
 import { mot } from '../api/vocabulaire.js'
 import ClientEditionModal from '../components/ClientEditionModal.jsx'
 import DevisModal from '../components/DevisModal.jsx'
 import PassagesClient from '../components/PassagesClient.jsx'
 
 // Nom d'affichage d'un client (physique ou personne morale).
+/**
+ * LE JOURNAL DES FUSIONS — qui a fusionne quoi, quand, pourquoi, et comment revenir.
+ *
+ * ⚠ IL N'EST PAS UN CONFORT D'AUDIT : c'est le seul chemin vers `defusionner`. Sans lui, la fusion
+ * serait irreversible en pratique meme si le serveur sait la defaire, et personne de sense ne
+ * fusionnerait les deux fiches d'un client qui reclame.
+ *
+ * Une fusion defaite RESTE au journal : c'est l'historique de ce qui a ete tente, et il vaut autant
+ * que celui de ce qui a tenu.
+ */
+function JournalDesFusions() {
+  const [entrees, setEntrees] = useState(null)
+  const [erreur, setErreur] = useState(null)
+  const [busy, setBusy] = useState(null)
+
+  const charger = useCallback(() => {
+    api.journalFusions()
+      .then((r) => setEntrees(membres(r)))
+      .catch((e) => setErreur(e.message || 'Le journal des fusions n’a pas pu être lu.'))
+  }, [])
+
+  useEffect(charger, [charger])
+
+  async function defaire(entree) {
+    if (!window.confirm(
+      'Défusionner ? Les fiches absorbées sont restaurées à l’identique, et cette opération reste '
+      + 'au journal.',
+    )) return
+    setBusy(entree.id)
+    setErreur(null)
+    try {
+      await api.defusionner(entree.id)
+      charger()
+    } catch (e) {
+      setErreur(e.message || 'La défusion n’a pas abouti.')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  if (entrees !== null && entrees.length === 0) return null
+
+  return (
+    <section className="card card-espacee">
+      <div className="card-h"><h3>Fusions effectuées</h3></div>
+      <div className="card-b">
+        {erreur && <div className="banner banner-error">{erreur}</div>}
+        {entrees === null && !erreur && <div className="empty">Chargement…</div>}
+        {(entrees ?? []).map((e) => (
+          <div key={e.id} className="sup-acces">
+            <div className="sup-acces-t">
+              <span className="mono">{String(e.id).slice(0, 8)}</span>
+              <span className="badge">{e.portee || 'client'}</span>
+              {e.defusionneLe && <span className="badge mut">défusionnée</span>}
+            </div>
+            <div className="hint">{e.motif || 'sans motif'}</div>
+            <div className="hint">{dateHeureFr(e.dateFusion)}</div>
+            {!e.defusionneLe && (
+              <button
+                type="button"
+                className="btn ghost sm"
+                disabled={busy === e.id}
+                onClick={() => defaire(e)}
+                title="Restaure les fiches absorbées à l’identique. L’opération reste au journal."
+              >
+                {busy === e.id ? 'Restauration…' : 'Défusionner'}
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 function nomClient(c) {
   if (!c) return '—'
   if (c.raisonSociale) return c.raisonSociale
@@ -95,6 +171,8 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
 
   const [fiche, setFiche] = useState(null)
   const [mouvements, setMouvements] = useState(null) // null = non chargé, [] = vide
+  // Troisième état : lu et refusé. Distinct de « vide », qui est une affirmation.
+  const [mouvementsIllisibles, setMouvementsIllisibles] = useState(false)
   const [ficheLoading, setFicheLoading] = useState(false)
   const [ficheErr, setFicheErr] = useState(null)
   const [fidelite, setFidelite] = useState(null)
@@ -170,11 +248,24 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
         try {
           const mv = await api.pmvMouvements(id)
           setMouvements(mv?.mouvements || [])
+          setMouvementsIllisibles(false)
         } catch {
+          // ⚠ `catch { setMouvements([]) }` ANNULAIT LA GARDE QUI EXISTAIT DEJA AU RENDU.
+          //
+          // `mouvements` distingue bien `null` (en cours) de `[]` (vide) vingt lignes plus bas --
+          // mais l'echec posait `[]`, donc le releve affichait << Aucun mouvement enregistre >>.
+          // Sur un solde d'argent, c'est la pire des trois phrases possibles : le client demande
+          // ou est passe son argent, et l'ecran repond qu'il n'y a jamais rien eu.
+          //
+          // La garde etait posee a un bout et defaite a l'autre. C'est la troisieme fois que je
+          // rencontre cette forme : un rendu qui sait distinguer trois etats, alimente par un
+          // chargeur qui n'en produit que deux.
           setMouvements([])
+          setMouvementsIllisibles(true)
         }
       } else {
         setMouvements([])
+        setMouvementsIllisibles(false)
       }
     } catch (e) {
       setFicheErr(e.message || 'Fiche indisponible.')
@@ -208,6 +299,9 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
   const peutModifier = aLeDroit(droits, 'crm.modifier')
   const peutCreer = aLeDroit(droits, 'crm.creer')
   const peutFacturer = aLeDroit(droits, 'facturation.gerer')
+  // Le droit de l'API, et lui seul : `crm.fusionner` garde les trois operations.
+  const peutFusionner = aLeDroit(droits, 'crm.fusionner')
+  const [fusionPour, setFusionPour] = useState(null)
 
   // ---------------------------------------------------------------- La fiche, en page
   if (selId) {
@@ -237,9 +331,11 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
             <FicheContenu
               fiche={fiche}
               mouvements={mouvements}
+              mouvementsIllisibles={mouvementsIllisibles}
               fidelite={fidelite}
               droits={droits}
               onMouvement={() => rechargerFidelite(selId)}
+              onPmvRecharge={() => chargerFiche(selId)}
             />
           </div></section>
         ) : null}
@@ -363,7 +459,14 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
                   {(items || []).map((c) => (
                     <tr key={c.id} className="row-click" onClick={() => ouvrirFiche(c.id)}>
                       <td>
-                        <span className="nm">{nomClient(c)}</span>
+                        {/* ⚠ C'ÉTAIT LE SEUL CHEMIN VERS LA FICHE, ET IL PASSAIT PAR LA SOURIS.
+                            Les boutons de la ligne font autre chose — Devis, Échange. Un
+                            utilisateur au clavier ne pouvait donc pas ouvrir un client, sur
+                            l'écran principal du CRM. Le clic sur `<tr>` reste ; le nom devient
+                            un vrai bouton. */}
+                        <button type="button" className="lnk nm" onClick={() => ouvrirFiche(c.id)}>
+                          {nomClient(c)}
+                        </button>
                         {c.estMineur && <span className="badge warn" style={{ marginLeft: 6 }}>mineur</span>}
                       </td>
                       <td>{c.type === 'morale' ? 'Personne morale' : 'Particulier'}</td>
@@ -382,6 +485,14 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
                         )}
                         {peutModifier && (
                           <button className="btn sm" type="button" onClick={() => setEchange(c)}>Échange</button>
+                        )}
+                        {/* ⚠ FUSIONNER EST UN GESTE D'EXPLOITATION COURANT, PAS UNE OPERATION RARE.
+                            Le meme adherent inscrit deux fois — une fois en ligne par lui-meme, une
+                            fois au guichet par un agent qui n'a pas trouve sa fiche — produit deux
+                            cartes, deux soldes, deux historiques. Tout deploiement reel en accumule,
+                            et rien ne les resorbe sans ce bouton. */}
+                        {peutFusionner && (
+                          <button className="btn sm" type="button" onClick={() => setFusionPour(c)}>Fusionner</button>
                         )}
                       </td>
                     </tr>
@@ -436,6 +547,12 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
         </div>
       </section>
 
+      {/* ⚠ LE CHEMIN DU RETOUR, DANS LE MEME LOT QUE LE BOUTON QUI FUSIONNE.
+          Le serveur sait defaire une fusion — les fiches sources sont restaurees a l'identique —
+          mais sans cet ecran, personne ne saurait ou cliquer. On aurait donne le pouvoir d'ecraser
+          deux fiches en une sans donner celui de revenir, ce qui est pire que de ne rien livrer. */}
+      {peutFusionner && <JournalDesFusions />}
+
       <ClientEditionModal
         open={!!edition}
         clientId={edition?.id || null}
@@ -454,6 +571,13 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
         onCree={() => setDevisPour(null)}
       />
 
+      <FusionClients
+        open={!!fusionPour}
+        client={fusionPour}
+        onClose={() => setFusionPour(null)}
+        onFusionnee={() => { setFusionPour(null); rechercher() }}
+      />
+
       <Modal open={!!echange} onClose={() => setEchange(null)} titre={`Noter un échange — ${nomClient(echange)}`}>
         {echange && (
           <SaisieEchange
@@ -470,7 +594,8 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
   )
 }
 
-function FicheContenu({ fiche, mouvements, fidelite, droits, onMouvement }) {
+function FicheContenu({ fiche, mouvements, mouvementsIllisibles, fidelite, droits, onMouvement, onPmvRecharge }) {
+  const [recharge, setRecharge] = useState(false)
   const c = fiche.client || {}
   const [devis, setDevis] = useState(false)
   const historique = fiche.historique || []
@@ -611,7 +736,25 @@ function FicheContenu({ fiche, mouvements, fidelite, droits, onMouvement }) {
                   {fiche.pmv.dateEcheance ? ` · échéance ${dateFr(fiche.pmv.dateEcheance)}` : ''}
                 </div>
               </div>
+              {aLeDroit(droits, 'crm.pmv_recharger') && (
+                <button
+                  className="btn sm"
+                  type="button"
+                  style={{ marginLeft: 'auto' }}
+                  onClick={() => setRecharge(true)}
+                >
+                  Recharger
+                </button>
+              )}
             </div>
+
+            <RechargePmvModal
+              open={recharge}
+              client={c}
+              pmv={fiche.pmv}
+              onClose={() => setRecharge(false)}
+              onFait={() => { setRecharge(false); onPmvRecharge?.() }}
+            />
             {mouvements === null ? (
               <div className="center" style={{ minHeight: 80 }}><div className="spinner" /></div>
             ) : mouvements.length > 0 ? (
@@ -634,6 +777,12 @@ function FicheContenu({ fiche, mouvements, fidelite, droits, onMouvement }) {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            ) : mouvementsIllisibles ? (
+              <div className="banner banner-error">
+                Le relevé du porte-monnaie n’a pas pu être lu. <b>Ce n’est pas un porte-monnaie
+                sans mouvement</b>&nbsp;: la lecture a échoué, et le solde affiché ci-dessus vient
+                d’une autre lecture.
               </div>
             ) : (
               <div className="empty" style={{ padding: 12 }}>Aucun mouvement enregistré.</div>
@@ -1032,5 +1181,107 @@ function BlocParrainage({ clientId, droits, onMouvement }) {
         </div>
       )}
     </div>
+  )
+}
+
+
+// RECHARGER LE PORTE-MONNAIE — un ENCAISSEMENT, pas un ajustement de solde.
+//
+// Le mouvement créé porte `canal: "caisse"` : c'est de l'argent qui entre. L'écran le dit, parce
+// que quelqu'un qui clique « Recharger » sans avoir encaissé crée un avoir qui n'a pas de
+// contrepartie — et personne ne s'en aperçoit avant le rapprochement.
+//
+// ⚠ DEUX EFFETS, ET LE SECOND SURPREND. Recharger crédite le solde ET REPOUSSE L'ÉCHÉANCE du
+// porte-monnaie. Mesuré : une recharge sur un porte-monnaie qui expirait le 17/08/2027 l'a
+// reporté au 31/08/2027. La modale l'annonce AVANT le geste, parce qu'un exploitant qui recharge
+// pour dépanner un client ne s'attend pas à prolonger la validité de son solde.
+function RechargePmvModal({ open, client, pmv, onClose, onFait }) {
+  const [montant, setMontant] = useState('')
+  const [motif, setMotif] = useState('')
+  const [erreur, setErreur] = useState(null)
+  const [envoi, setEnvoi] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    setMontant('')
+    setMotif('')
+    setErreur(null)
+  }, [open])
+
+  // Le serveur exige un montant STRICTEMENT positif : la garde locale dit la même chose, pour que
+  // le refus arrive avant l'aller-retour et non après.
+  const valeur = Number(String(montant).replace(',', '.'))
+  const pret = Number.isFinite(valeur) && valeur > 0
+
+  async function soumettre(e) {
+    e.preventDefault()
+    setErreur(null)
+    setEnvoi(true)
+    try {
+      await api.rechargerPmv(client.id, {
+        montant: valeur,
+        ...(motif.trim() ? { motif: motif.trim() } : {}),
+      })
+      onFait()
+    } catch (err) {
+      setErreur(err.message || 'La recharge n’a pas abouti.')
+    } finally {
+      setEnvoi(false)
+    }
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} titre="Recharger le porte-monnaie">
+      <form onSubmit={soumettre}>
+        {erreur && <div className="banner banner-error">{erreur}</div>}
+
+        <div className="hint" style={{ marginTop: 0 }}>
+          Solde actuel&nbsp;: <b>{euros(pmv?.solde)}</b>
+          {pmv?.dateEcheance ? <> · échéance actuelle <b>{dateFr(pmv.dateEcheance)}</b></> : null}
+        </div>
+
+        <div className="field">
+          <label htmlFor="pmv-montant">Montant encaissé *</label>
+          <input
+            id="pmv-montant"
+            className="input"
+            type="number"
+            step="0.01"
+            min="0.01"
+            value={montant}
+            onChange={(ev) => setMontant(ev.target.value)}
+          />
+          <span className="hint">
+            Strictement positif. Ce montant doit correspondre à ce que le client vient de vous
+            remettre&nbsp;: la recharge est un <b>encaissement</b>, elle n’ajuste pas un solde.
+          </span>
+        </div>
+
+        <div className="field">
+          <label htmlFor="pmv-motif">Motif</label>
+          <input
+            id="pmv-motif"
+            className="input"
+            value={motif}
+            maxLength={120}
+            placeholder="Recharge au comptoir, espèces…"
+            onChange={(ev) => setMotif(ev.target.value)}
+          />
+          <span className="hint">Facultatif — il apparaît dans le relevé, à côté du mouvement.</span>
+        </div>
+
+        <div className="banner banner-warn">
+          ⚠ Recharger <b>repousse aussi l’échéance</b> du porte-monnaie. Un solde qui allait expirer
+          redevient valable pour toute une période&nbsp;: ce n’est pas seulement un crédit.
+        </div>
+
+        <div className="r">
+          <button type="button" className="btn ghost" onClick={onClose}>Annuler</button>
+          <button type="submit" className="btn primary" disabled={envoi || !pret}>
+            {envoi ? 'Recharge…' : 'Recharger'}
+          </button>
+        </div>
+      </form>
+    </Modal>
   )
 }

@@ -256,7 +256,7 @@ while read -r ancien nouveau ref; do
             # le nom COMPLET du fichier dans ce hook. Ecrits sans `.mjs`, les deux controles
             # seraient declares « appeles par aucun hook » et feraient refuser toute poussee. Le
             # filet se refermerait sur ce qu'il protege.
-            for script in verifier-droits.mjs verifier-formats.mjs verifier-imports.mjs verifier-classes.mjs verifier-cache.mjs verifier-dates-locales.mjs verifier-profil-charge.mjs garde-fou-ecart.mjs; do
+            for script in verifier-droits.mjs verifier-formats.mjs verifier-imports.mjs verifier-cles-doubles.mjs verifier-classes.mjs verifier-cache.mjs verifier-dates-locales.mjs verifier-profil-charge.mjs verifier-boutons-nommes.mjs verifier-clic-clavier.mjs verifier-contrastes.mjs garde-fou-ecart.mjs; do
                 [ -f "$ARBRE/frontend/scripts/$script" ] || continue
                 if docker run --rm --network none \
                         -u "$(id -u):$(id -g)" \
@@ -379,8 +379,12 @@ while read -r ancien nouveau ref; do
         lancer garde-fou-filtres-muets.php
     fi
 
+    # Un chemin qu'aucune route ne sert rend un 404, que le `catch` de l'ecran transforme en liste
+    # vide : le defaut ne se voit JAMAIS a l'ecran. Le controle s'abstient ici faute de `vendor/` --
+    # il tourne au commit et dans `bin/garde-fous.sh` -- mais il reste cable pour le jour ou l'arbre
+    # de reception aura ses dependances. Un controle retire d'une liste ne revient jamais.
     if [ -f "$ARBRE/bin/garde-fou-appels-dans-le-vide.php" ]; then
-        echo "── Filtres muets"
+        echo "── Appels du frontal dans le vide (n°33)"
         lancer garde-fou-appels-dans-le-vide.php
     fi
 

@@ -4,9 +4,9 @@
    ========================================================================= */
 :root {
   --bg: #eef2f4; --panel: #ffffff; --panel-2: #f4f7f8; --line: #dbe4e7;
-  --ink: #122229; --ink-soft: #51666f; --ink-faint: #80939b;
-  --accent: #0d7d88; --accent-2: #0a5b64; --accent-soft: #e2f1f2;
-  --warm: #d9702f; --good: #2f9e68; --good-bg: #e4f3ea; --warn: #b7860a; --warn-bg: #f7efd7; --crit: #cf4636; --crit-bg: #f8e2de;
+  --ink: #122229; --ink-soft: #51666f; --ink-faint: #64777f;
+  --accent: #0d7983; --accent-2: #0a5b64; --accent-soft: #e2f1f2;
+  --warm: #b85b22; --good: #247b51; --good-bg: #e4f3ea; --warn: #8b6608; --warn-bg: #f7efd7; --crit: #ba3b2c; --crit-bg: #f8e2de;
   --side-bg: #0e2a30; --side-ink: #cfe3e6; --side-ink-soft: #7fa2a8; --side-active: #0d7d88; --side-line: #1c3d44;
   --shadow: 0 1px 2px rgba(18, 34, 41, .05), 0 8px 24px rgba(18, 34, 41, .06);
   --radius: 12px;
@@ -14,7 +14,7 @@
 :root:not([data-theme="light"]) {
   @media (prefers-color-scheme: dark) {
     --bg: #0a1215; --panel: #111d21; --panel-2: #16262b; --line: #22383e;
-    --ink: #e7eef0; --ink-soft: #9db0b7; --ink-faint: #6d848b;
+    --ink: #e7eef0; --ink-soft: #9db0b7; --ink-faint: #6f878e;
     --accent: #37b4be; --accent-2: #63c9d1; --accent-soft: #123339;
     --warm: #ef9459; --good: #46b884; --good-bg: #152f26; --warn: #e0ad3d; --warn-bg: #2f2913; --crit: #e86a58; --crit-bg: #331d19;
     --side-bg: #081619; --side-ink: #bcd6da; --side-ink-soft: #6f9298; --side-active: #0d7d88; --side-line: #152b30;
@@ -23,7 +23,7 @@
 }
 :root[data-theme="dark"] {
   --bg: #0a1215; --panel: #111d21; --panel-2: #16262b; --line: #22383e;
-  --ink: #e7eef0; --ink-soft: #9db0b7; --ink-faint: #6d848b;
+  --ink: #e7eef0; --ink-soft: #9db0b7; --ink-faint: #6f878e;
   --accent: #37b4be; --accent-2: #63c9d1; --accent-soft: #123339;
   --warm: #ef9459; --good: #46b884; --good-bg: #152f26; --warn: #e0ad3d; --warn-bg: #2f2913; --crit: #e86a58; --crit-bg: #331d19;
   --side-bg: #081619; --side-ink: #bcd6da; --side-ink-soft: #6f9298; --side-active: #0d7d88; --side-line: #152b30;
@@ -471,6 +471,25 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .bq-skip { position: absolute; left: 8px; top: -48px; z-index: 100; background: var(--accent); color: #fff; padding: 9px 14px; border-radius: 9px; font-weight: 600; text-decoration: none; transition: top .15s ease; }
 .bq-skip:focus { top: 8px; }
+
+/* Le lien d evitement du back-office. Invisible tant qu on ne l atteint pas au clavier, il
+   apparait au focus — la seule facon de servir ceux qui tabulent sans encombrer ceux qui voient.
+   Meme mecanique que `.bq-skip` de la boutique, declaree a part parce que le prefixe `bq-` designe
+   la boutique et qu un nom qui ment sur son perimetre finit copie au mauvais endroit. */
+.lien-evitement {
+  position: absolute;
+  left: var(--esp-normal);
+  top: -48px;
+  z-index: 100;
+  background: var(--accent);
+  color: #fff;
+  padding: var(--esp-normal) var(--esp-large);
+  border-radius: 9px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: top .15s ease;
+}
+.lien-evitement:focus { top: var(--esp-normal); }
 .bq a:focus-visible, .bq button:focus-visible, .bq input:focus-visible, .bq select:focus-visible, .bq [tabindex]:focus-visible {
   outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 6px;
 }
@@ -516,6 +535,17 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 .bq-view-head h1 { font-size: 26px; }
 .bq-view-head > div:first-child { margin-right: auto; }
 .bq-sub { color: var(--ink-soft); font-size: 14.5px; margin: 6px 0 0; }
+
+/* Le bloc de souscription d un abonnement. En colonne : on y lit une phrase, puis on remplit des
+   champs bancaires — ce n est pas une barre d actions, et l aligner en ligne ferait cliquer avant
+   d avoir lu ce qu on signe. */
+.bq-abo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-normal);
+  align-items: stretch;
+  margin-top: var(--esp-bloc);
+}
 .bq-narrow { max-width: 560px; margin: 0 auto; }
 
 /* ---- Filtres ---- */
@@ -1086,6 +1116,21 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 }
 .resa-part { display: flex; align-items: center; gap: var(--esp-serre); flex-wrap: wrap; }
 .resa-part-form { display: flex; align-items: center; gap: var(--esp-serre); flex-wrap: wrap; }
+
+/* Le bloc d activation de la double authentification : le QR, le secret, et les codes. */
+/* Une carte separee de la precedente. Declaree plutot que recopiee en style en ligne : le cliquet
+   des espacements refuse toute nouvelle litterale, et un jeton suit l echelle quand elle bouge. */
+.card-espacee { margin-top: var(--esp-bloc); }
+
+.mfa-secret { display: flex; flex-direction: column; gap: var(--esp-normal); align-items: flex-start; }
+/* Les codes de recuperation, en grille : on les recopie a la main, donc ils doivent se lire un par
+   un sans que l oeil saute une ligne. */
+.mfa-codes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: var(--esp-serre);
+  margin-top: var(--esp-serre);
+}
 
 /* La file d attente d un creneau. Meme decalage que les parts : elle appartient au creneau. */
 .resa-attente {

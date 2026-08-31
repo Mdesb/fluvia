@@ -97,7 +97,7 @@ export default function Liste({
         {sous && <span className="sub">{sous}</span>}
         <div className="r" style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
           {actions}
-          <button className="btn ghost sm" onClick={recharger} disabled={chargement}>↻</button>
+          <button title="Actualiser" className="btn ghost sm" onClick={recharger} disabled={chargement}>↻</button>
         </div>
       </div>
       <div className="card-b" style={{ overflowX: 'auto' }}>

@@ -179,7 +179,7 @@ export default function DonneesPersonnelles({ etabActif, droits }) {
             >
               ＋ Enregistrer une demande
             </button>
-            <button className="btn ghost" type="button" onClick={recharger} disabled={chargement}>↻</button>
+            <button title="Actualiser" className="btn ghost" type="button" onClick={recharger} disabled={chargement}>↻</button>
           </div>
         )}
       </div>

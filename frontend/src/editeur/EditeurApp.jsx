@@ -293,7 +293,7 @@ export default function EditeurApp() {
             {onglet === 'agenda' && <Agenda droits={droits} etabActif={etabActif} />}
             {onglet === 'pilotage' && <Pilotage droits={droits} etabActif={etabActif} etablissements={etablissements} />}
             {onglet === 'assistance' && <Support droits={droits} etabActif={etabActif} me={me} />}
-            {onglet === 'parametres' && <Parametres droits={droits} etabActif={etabActif} etablissements={etablissements} estEditeur={me?.estEditeur === true} />}
+            {onglet === 'parametres' && <Parametres droits={droits} etabActif={etabActif} etablissements={etablissements} estEditeur={me?.estEditeur === true} me={me} />}
             {onglet === 'legal' && <MentionsLegales droits={droits} etabActif={etabActif} />}
           </>
         )}

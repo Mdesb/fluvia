@@ -8,6 +8,7 @@ import ReferentielEditable from '../components/ReferentielEditable.jsx'
 import TauxTvaLegaux from '../components/TauxTvaLegaux.jsx'
 import PretAVendre from '../components/PretAVendre.jsx'
 import RolesSection from '../components/RolesSection.jsx'
+import Qr from '../components/Qr.jsx'
 import EtablissementsSection from '../components/EtablissementsSection.jsx'
 import RegionsSection from '../components/RegionsSection.jsx'
 import OuvrirStructure from '../components/OuvrirStructure.jsx'
@@ -439,7 +440,7 @@ function descripteurPointsDeVente(api, etabActif, moyens = []) {
  * Valeur par defaut `false` : tant que le profil n'est pas charge, on CACHE. Montrer puis cacher
  * ferait apparaitre une fraction de seconde, a un client, ce qu'on veut precisement lui epargner.
  */
-export default function Parametres({ etabActif, etablissements, droits = [], onCapacitesChangees, estEditeur = false }) {
+export default function Parametres({ etabActif, etablissements, droits = [], onCapacitesChangees, estEditeur = false, me = null, envoiCourriel = false }) {
   const [ouvertureStructure, setOuvertureStructure] = useState(false)
   const [sousOnglet, setSousOnglet] = useState('entites')
 
@@ -623,7 +624,7 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
       )}
 
       {sousOnglet === 'droits' && (
-        <ComptesDroits etabActif={etabActif} etablissements={etablissements} droits={droits} />
+        <ComptesDroits etabActif={etabActif} etablissements={etablissements} droits={droits} me={me} />
       )}
 
       {sousOnglet === 'capacites' && <Capacites etabActif={etabActif} onCapacitesChangees={onCapacitesChangees} />}
@@ -710,7 +711,7 @@ function MoyensPaiement({ etabActif }) {
         <span className="sub">éditable</span>
         <div className="r" style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
           <button className="btn sm" onClick={() => { setMsg(null); setErreur(null); setEdition({ moyen: null }) }}>+ Ajouter</button>
-          <button className="btn ghost sm" onClick={charger} disabled={chargement}>↻</button>
+          <button title="Actualiser" className="btn ghost sm" onClick={charger} disabled={chargement}>↻</button>
         </div>
       </div>
       <div className="card-b" style={{ overflowX: 'auto' }}>
@@ -854,7 +855,7 @@ function CaissesSection({ etabActif, peutGerer, onEcrit }) {
             <button className="btn sm" type="button" onClick={() => { setMsg(null); setErreur(null); setEdition({ creation: true }) }}>
               ＋ Ajouter
             </button>
-            <button className="btn ghost sm" type="button" onClick={charger} disabled={chargement}>↻</button>
+            <button title="Actualiser" className="btn ghost sm" type="button" onClick={charger} disabled={chargement}>↻</button>
           </div>
         )}
       </div>
@@ -1125,7 +1126,171 @@ function ModalMoyenPaiement({ edition, onClose, onEnregistre }) {
 
 // --- Comptes & droits (M8) : création/invitation, cycle de vie des comptes, matrice vivante des
 // droits. Écriture gardée par `securite.gerer` côté back. ---
-function ComptesDroits({ etabActif, etablissements, droits = [] }) {
+/**
+ * MA DOUBLE AUTHENTIFICATION — le parcours qui manquait, et dont l'absence a coûté une garde.
+ *
+ * ── CE QUE SON ABSENCE A COÛTÉ ─────────────────────────────────────────────────────────────────
+ *
+ * `AffectationProcessor` exigeait le MFA du bénéficiaire avant d'affecter un rôle à privilèges.
+ * Comme aucun écran ne l'activait, **on ne pouvait nommer aucun administrateur, chez aucun client**
+ * — 6 rôles à privilèges, 0 compte avec MFA actif. La garde est suspendue depuis le 31/08 par
+ * décision de Maxime, « lever maintenant, construire ensuite ». Ceci est le « ensuite », et c'est
+ * ce qui permettra de remettre `MFA_EXIGE_POUR_ROLE_A_PRIVILEGES` à `true`.
+ *
+ * ── ⚠ LE SECRET ET LES CODES NE SONT RENDUS QU'UNE FOIS ───────────────────────────────────────
+ *
+ * Le serveur ne conserve que leur forme chiffrée ou hachée. Un écran qui ne les montre pas à
+ * l'instant de l'activation les perd définitivement — et un compte sans code de récupération est un
+ * compte qu'un téléphone perdu enferme dehors. D'où l'insistance de l'écran à ce moment précis :
+ * c'est la seule occasion.
+ *
+ * ── L'ORDRE DES ÉTAPES N'EST PAS COSMÉTIQUE ────────────────────────────────────────────────────
+ *
+ * Activer POSE un secret sans rendre `mfaActif` vrai ; seule la confirmation par un code l'active.
+ * Quelqu'un qui abandonne en cours de route n'est donc pas enfermé dehors : son compte fonctionne
+ * comme avant, et il pourra recommencer.
+ */
+function MonMfa({ moi, actif, onChange }) {
+  const [etape, setEtape] = useState('repos') // repos | secret
+  const [secret, setSecret] = useState(null)
+  const [code, setCode] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [erreur, setErreur] = useState(null)
+  const [msg, setMsg] = useState(null)
+
+  if (!moi?.id) return null
+
+  async function activer() {
+    setBusy(true); setErreur(null); setMsg(null)
+    try {
+      setSecret(await api.mfaActiver(moi.id))
+      setEtape('secret')
+      setCode('')
+    } catch (e) {
+      setErreur(e.message || 'L’activation n’a pas abouti.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function confirmer() {
+    setBusy(true); setErreur(null)
+    try {
+      await api.mfaConfirmer(moi.id, code.trim())
+      setEtape('repos'); setSecret(null); setCode('')
+      setMsg('Double authentification activée. Un code vous sera demandé à chaque connexion.')
+      onChange?.()
+    } catch (e) {
+      setErreur(e.message || 'Code refusé.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function desactiver() {
+    setBusy(true); setErreur(null)
+    try {
+      await api.mfaDesactiver(moi.id, code.trim())
+      setCode('')
+      setMsg('Double authentification désactivée.')
+      onChange?.()
+    } catch (e) {
+      // ⚠ LE SERVEUR REFUSE SI LE COMPTE DÉTIENT UN RÔLE À PRIVILÈGES, et son message le dit. On ne
+      // le reformule pas : la règle vit là-bas, et deux formulations divergeraient.
+      setErreur(e.message || 'La désactivation n’a pas abouti.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <section className="card card-espacee">
+      <div className="card-h">
+        <h3>Ma double authentification</h3>
+        <span className={`badge ${actif ? 'good' : 'mut'}`}>{actif ? 'active' : 'inactive'}</span>
+      </div>
+      <div className="card-b">
+        {erreur && <div className="banner banner-error">{erreur}</div>}
+        {msg && <div className="banner banner-ok">{msg}</div>}
+
+        {etape === 'secret' && secret && (
+          <div className="mfa-secret">
+            <p>
+              Scannez ce code avec votre application d’authentification, puis saisissez le code
+              qu’elle affiche.
+            </p>
+            <Qr value={secret.uriProvisionnement} size={160} title="Configuration de la double authentification" />
+            <p className="hint">
+              Saisie manuelle : <span className="mono">{secret.secret}</span>
+            </p>
+
+            {/* ⚠ LES CODES DE RÉCUPÉRATION NE SERONT PLUS JAMAIS AFFICHÉS. Le serveur n'en garde
+                que le haché. C'est ici, et seulement ici, qu'on peut les noter — et sans eux, un
+                téléphone perdu enferme le compte dehors. */}
+            <div className="banner banner-warn">
+              <strong>Notez ces codes de récupération maintenant.</strong> Ils ne seront plus jamais
+              affichés, et chacun ne sert qu’une fois. Sans eux, un téléphone perdu vous ferme
+              l’accès jusqu’à ce qu’un administrateur réinitialise votre double authentification.
+              <div className="mfa-codes">
+                {(secret.codesRecuperation || []).map((c) => <span key={c} className="mono">{c}</span>)}
+              </div>
+            </div>
+
+            <div className="resa-part-form">
+              <input
+                className="input"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                placeholder="Code à six chiffres"
+                inputMode="numeric"
+                aria-label="Code de confirmation"
+              />
+              <button className="btn" disabled={busy || !code.trim()} onClick={confirmer}>
+                {busy ? 'Vérification…' : 'Confirmer l’activation'}
+              </button>
+              <button className="btn ghost" disabled={busy} onClick={() => { setEtape('repos'); setSecret(null) }}>
+                Abandonner
+              </button>
+            </div>
+            <p className="hint">
+              Tant que vous n’avez pas confirmé, rien ne change : votre compte se connecte comme
+              avant.
+            </p>
+          </div>
+        )}
+
+        {etape === 'repos' && !actif && (
+          <>
+            <p className="hint">
+              Un code à usage unique vous sera demandé à chaque connexion, en plus de votre mot de
+              passe. Nécessaire pour détenir un rôle à privilèges.
+            </p>
+            <button className="btn" disabled={busy} onClick={activer}>
+              {busy ? 'Préparation…' : 'Activer la double authentification'}
+            </button>
+          </>
+        )}
+
+        {etape === 'repos' && actif && (
+          <div className="resa-part-form">
+            <input
+              className="input"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              placeholder="Code actuel ou code de récupération"
+              aria-label="Code pour désactiver"
+            />
+            <button className="btn ghost" disabled={busy || !code.trim()} onClick={desactiver}>
+              Désactiver
+            </button>
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
+function ComptesDroits({ etabActif, etablissements, droits = [], me = null }) {
   const [utilisateurs, setUtilisateurs] = useState([])
   const [roles, setRoles] = useState([])
   const [affectations, setAffectations] = useState([])
@@ -1200,7 +1365,7 @@ function ComptesDroits({ etabActif, etablissements, droits = [] }) {
           <span className="sub">{utilisateurs.length} compte(s)</span>
           <div className="r" style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
             <button className="btn sm" onClick={() => { setMsg(null); setErreur(null); setModalInvit(true) }}>+ Inviter un utilisateur</button>
-            <button className="btn ghost sm" onClick={charger}>↻</button>
+            <button title="Actualiser" className="btn ghost sm" onClick={charger}>↻</button>
           </div>
         </div>
         <div className="card-b" style={{ overflowX: 'auto' }}>
@@ -1228,6 +1393,22 @@ function ComptesDroits({ etabActif, etablissements, droits = [] }) {
                         {st === 'invite' && (
                           <button className="btn ghost sm" disabled={busy === u.id + 'réinviter'} onClick={() => action(api.reinviterUtilisateur, u.id, 'réinviter')}>Réinviter</button>
                         )}
+                        {/* ⚠ LA SEULE ISSUE D'UN APPAREIL PERDU AVEC DES CODES DE RÉCUPÉRATION
+                            ÉPUISÉS. Sans elle, le compte est fermé pour de bon — et la route
+                            existait depuis l'origine sans que rien ne l'appelle. Réservée à
+                            `securite.gerer`, et tracée dans le journal d'audit avec l'état avant
+                            et après. On ne la propose pas sur les comptes sans MFA : il n'y aurait
+                            rien à réinitialiser. */}
+                        {u.mfaActif && aLeDroit(droits, 'securite.gerer') && (
+                          <button
+                            className="btn ghost sm"
+                            disabled={busy === u.id + 'réinitialiser le MFA'}
+                            onClick={() => action(api.mfaReinitialiser, u.id, 'réinitialiser le MFA')}
+                            title="Efface la double authentification de ce compte : il pourra se reconnecter avec son seul mot de passe, puis la réactiver."
+                          >
+                            Réinitialiser le MFA
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -1238,6 +1419,12 @@ function ComptesDroits({ etabActif, etablissements, droits = [] }) {
           </table>
         </div>
       </section>
+
+      <MonMfa
+        moi={me}
+        actif={utilisateurs.find((u) => u.id === me?.id)?.mfaActif === true}
+        onChange={charger}
+      />
 
       <RolesSection droits={droits} peutGerer={aLeDroit(droits, 'securite.gerer')} onChange={charger} />
 
@@ -1265,6 +1452,7 @@ function ComptesDroits({ etabActif, etablissements, droits = [] }) {
       </section>
 
       <ModalInvitation
+        envoiCourriel={envoiCourriel}
         open={modalInvit}
         roles={roles}
         etablissements={etablissements}
@@ -1298,9 +1486,23 @@ function ComptesDroits({ etabActif, etablissements, droits = [] }) {
           // ⚠ ON NE REDIT PAS LE MOT DE PASSE ICI. Il a ete saisi une fois, il est hache cote
           // serveur, et le reafficher dans un bandeau le laisserait sur l'ecran d'un poste
           // partage — souvent une caisse en libre-service.
+          // ⚠ CETTE PHRASE ÉTAIT ÉCRITE EN DUR, ET ELLE SERAIT DEVENUE FAUSSE SANS PRÉVENIR.
+          //
+          // « aucun envoi de courriel n'est branché » était vrai à l'écriture. Le jour où Maxime
+          // configure un expéditeur, elle annoncerait une invitation non partie alors qu'elle
+          // serait partie — et rien ne relierait la phrase à ce qui l'a rendue fausse. C'est le
+          // défaut qu'on a passé la nuit à retirer d'ailleurs ; il n'y a pas de raison de le
+          // laisser ici.
+          //
+          // `envoiCourriel` vient de `/me` (`ExpediteurCourriel::estBranche()`), donc la phrase
+          // suit l'état réel de l'instance et se corrigera toute seule.
           setMsg(payload.motDePasse
             ? `Compte créé pour ${payload.email}. Communiquez-lui son mot de passe de vive voix.`
-            : `Compte créé pour ${payload.email} — invitation NON envoyée, aucun envoi de courriel n’est branché.`)
+            : envoiCourriel
+              ? `Compte créé pour ${payload.email} — une invitation lui a été envoyée par courriel.`
+              : `Compte créé pour ${payload.email} — invitation NON envoyée : cette instance n’a pas `
+                + `d’expéditeur de courriel. Posez-lui un mot de passe depuis sa fiche, ou `
+                + `recréez-le en choisissant « Je pose un mot de passe maintenant ».`)
           await charger()
         }}
       />
@@ -1465,7 +1667,7 @@ function MatriceDroits({ roles, etabActif, affectations = [], utilisateurs = [] 
       <div className="card-h">
         <h3>Qui a le droit de quoi</h3>
         <span className="sub">{utilisateurs.length} compte(s) · {roles.length} rôle(s)</span>
-        <button className="btn ghost sm" style={{ marginLeft: 'auto' }} onClick={charger} disabled={chargement}>↻</button>
+        <button title="Actualiser" className="btn ghost sm" style={{ marginLeft: 'auto' }} onClick={charger} disabled={chargement}>↻</button>
       </div>
       <div className="card-b" style={{ overflowX: 'auto' }}>
         {chargement ? (
@@ -1552,7 +1754,7 @@ function MatriceDroits({ roles, etabActif, affectations = [], utilisateurs = [] 
   )
 }
 
-function ModalInvitation({ open, roles, etablissements, etabActif, onClose, onInvite }) {
+function ModalInvitation({ open, roles, etablissements, etabActif, onClose, onInvite, envoiCourriel = false }) {
   const [email, setEmail] = useState('')
   const [nom, setNom] = useState('')
   const [roleId, setRoleId] = useState('')
@@ -1622,8 +1824,23 @@ function ModalInvitation({ open, roles, etablissements, etabActif, onClose, onIn
           <label htmlFor="inv-voie">Comment cette personne se connectera</label>
           <select id="inv-voie" className="select" value={voie} onChange={(e) => setVoie(e.target.value)}>
             <option value="motdepasse">Je pose un mot de passe maintenant</option>
-            <option value="invitation">Le compte reçoit une invitation par courriel</option>
+            {/* ⚠ ON NE DÉSACTIVE PAS CE CHOIX, ON DIT CE QU'IL FAIT AUJOURD'HUI.
+                L'invitation par courriel est le bon parcours et redeviendra le parcours normal dès
+                qu'un expéditeur sera configuré. La désactiver obligerait à s'en souvenir ce jour-là
+                — et personne ne repasse sur un `disabled` posé six mois plus tôt. Le libellé, lui,
+                suit `/me` et se corrige tout seul. */}
+            <option value="invitation">
+              {envoiCourriel
+                ? 'Le compte reçoit une invitation par courriel'
+                : 'Invitation par courriel — aucun expéditeur configuré, rien ne partira'}
+            </option>
           </select>
+          {!envoiCourriel && (
+            <span className="hint">
+              Cette instance n’envoie aucun courriel. Le compte sera créé et restera « invité »
+              jusqu’à ce qu’un mot de passe lui soit posé — préférez le premier choix.
+            </span>
+          )}
         </div>
 
         {voie === 'motdepasse' ? (
@@ -1819,7 +2036,7 @@ function Capacites({ etabActif, onCapacitesChangees }) {
       <div className="card-h">
         <h3>Ce que fait votre établissement</h3>
         <span className="sub">{actives} sur {items.length} en service</span>
-        <button className="btn ghost sm" style={{ marginLeft: 'auto' }} onClick={charger} disabled={chargement}>↻</button>
+        <button title="Actualiser" className="btn ghost sm" style={{ marginLeft: 'auto' }} onClick={charger} disabled={chargement}>↻</button>
       </div>
       <div className="card-b" style={{ overflowX: 'auto' }}>
         {msg && <div className="banner banner-ok" style={{ margin: '0 0 12px' }}>{msg}</div>}

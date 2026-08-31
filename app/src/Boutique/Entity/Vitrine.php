@@ -16,6 +16,7 @@ use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
 use Symfony\Component\Uid\Uuid;
+use App\Boutique\Config\ReservedHostnames;
 use Symfony\Component\Validator\Constraints as Assert;
 use Symfony\Component\Validator\Context\ExecutionContextInterface;
 
@@ -254,6 +255,55 @@ class Vitrine
      * finale, ne correspond a rien -- l'iframe reste blanche et l'exploitant conclut que la
      * fonctionnalite ne marche pas. On refuse a la saisie, la ou la faute se corrige.
      */
+    /**
+     * LE NOM DANS L'URL : reserve interdit, format impose.
+     *
+     * ── POURQUOI UN FORMAT, ALORS QUE T4 NE DEMANDAIT QUE LES NOMS RESERVES ──────────────────
+     *
+     * En cherchant ou poser le refus, j'ai trouve que ce champ est `vitrine:write` -- l'exploitant
+     * ecrit SON adresse -- et qu'il ne portait aucune contrainte : pas de `Regex`, pas de
+     * `Length`, aucun validateur ailleurs. Les noms FABRIQUES sont surs, parce qu'`AsciiSlugger`
+     * les nettoie. Les noms ECRITS ne passaient par rien.
+     *
+     * Un nom ecrit avec une espace, une majuscule ou un `/` produit une URL `/b/<nom>` qui ne
+     * designe rien, et le seul endroit ou ca se voit est le navigateur d'un client.
+     *
+     * ⚠ La borne est 80 et pas 70 : la colonne accepte 80, et `fabriquerSlug()` s'arrete a 70.
+     * Valider plus large que la colonne ferait remonter une violation d'integrite Doctrine au lieu
+     * d'un message lisible ; valider a 70 refuserait un nom que la base accepte.
+     */
+    #[Assert\Callback]
+    public function validerNomDUrl(ExecutionContextInterface $context): void
+    {
+        if ($this->slug === null || $this->slug === '') {
+            return;
+        }
+
+        if (ReservedHostnames::isReserved($this->slug)) {
+            $context->buildViolation('« {{ valeur }} » est un nom technique réservé (back-office, API, courriel). Choisis-en un autre : il entrerait en collision avec un hôte de la plateforme.')
+                ->setParameter('{{ valeur }}', $this->slug)
+                ->atPath('slug')
+                ->addViolation();
+
+            return;
+        }
+
+        if (preg_match('/^[a-z0-9]+(-[a-z0-9]+)*$/', $this->slug) !== 1) {
+            $context->buildViolation('« {{ valeur }} » n’est pas un nom d’URL valide. Attendu : minuscules, chiffres et tirets simples (ex. piscine-municipale).')
+                ->setParameter('{{ valeur }}', $this->slug)
+                ->atPath('slug')
+                ->addViolation();
+
+            return;
+        }
+
+        if (mb_strlen($this->slug) > 80) {
+            $context->buildViolation('Ce nom d’URL dépasse 80 caractères.')
+                ->atPath('slug')
+                ->addViolation();
+        }
+    }
+
     #[Assert\Callback]
     public function validerDomainesIntegration(ExecutionContextInterface $context): void
     {
