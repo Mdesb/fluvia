@@ -9,7 +9,9 @@ use ApiPlatform\State\ProcessorInterface;
 use App\Acces\Entity\EspaceAcces;
 use App\Acces\Entity\Support;
 use App\Sport\Entity\EvenementSOS;
+use App\Sport\Security\SosRateLimiter;
 use App\Sport\Service\DeclencherSosHandler;
+use Symfony\Component\HttpFoundation\RequestStack;
 use App\Vente\Service\LecteurCorps;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -27,6 +29,8 @@ final class DeclencherSosProcessor implements ProcessorInterface
         private readonly EntityManagerInterface $em,
         private readonly LecteurCorps $lecteur,
         private readonly DeclencherSosHandler $handler,
+        private readonly SosRateLimiter $frein,
+        private readonly RequestStack $requetes,
     ) {
     }
 
@@ -37,6 +41,19 @@ final class DeclencherSosProcessor implements ProcessorInterface
         if (!$espace instanceof EspaceAcces) {
             throw new NotFoundHttpException('Espace d\'accès introuvable.');
         }
+
+        // ⚠ LE FREIN VIENT ICI : APRES L'ESPACE, AVANT LE DECLENCHEMENT.
+        //
+        // Avant, on ne saurait pas sur quel espace freiner ; apres, l'alerte serait deja creee et le
+        // frein ne freinerait rien.
+        //
+        // Il ne perd jamais un premier appel — voir `SosRateLimiter` : un espace silencieux depuis
+        // un quart d'heure passe quoi qu'il arrive. Ce qu'on jette est le vingtieme appel en trois
+        // minutes, jamais le premier.
+        $this->frein->assertNotExceeded(
+            $espace,
+            $this->requetes->getCurrentRequest()?->getClientIp(),
+        );
 
         $corps = $this->lecteur->corps();
         $supportId = $this->uuid($corps['support'] ?? null);
