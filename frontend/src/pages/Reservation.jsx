@@ -81,6 +81,15 @@ const LIBELLE_SOURCE = {
 
 // La valeur brute (`annulee_tardive_facturee`) est un identifiant, pas une phrase : affichée telle
 // quelle au comptoir, elle se lit comme un défaut de l'écran.
+// Le statut d'une inscription en liste d'attente. `promue` est le seul qui demande un geste : une
+// place a été proposée, et la fenêtre d'acceptation court.
+const LIBELLE_ATTENTE = {
+  en_attente: 'En attente',
+  promue: 'Place proposée',
+  expiree: 'Proposition expirée',
+  annulee: 'Annulée',
+}
+
 const LIBELLE_STATUT = {
   confirmee: 'Confirmée',
   liste_attente: 'Liste d’attente',
@@ -121,6 +130,11 @@ export default function Reservation({ etabActif, droits = [], session }) {
   // serveur : c'est un acte de comptoir, pas une administration.
   const peutPartager = aLeDroit(droits, 'reservation.reserver')
 
+  const [listesAttente, setListesAttente] = useState([])
+  const [attentePour, setAttentePour] = useState(null) // id du créneau dont on ouvre la liste d'attente
+  const [attenteBeneficiaire, setAttenteBeneficiaire] = useState('')
+  const [attenteQuantite, setAttenteQuantite] = useState('1')
+
   const [partsPour, setPartsPour] = useState(null) // id de la réservation dont on ouvre les parts
   const [nouvellePersonne, setNouvellePersonne] = useState('')
   const [nouvellePart, setNouvellePart] = useState('')
@@ -131,16 +145,18 @@ export default function Reservation({ etabActif, droits = [], session }) {
     setChargement(true)
     setErreur(null)
     try {
-      const [rc, cc, rvc, bc] = await Promise.all([
+      const [rc, cc, rvc, bc, lac] = await Promise.all([
         api.reservationRessources(),
         api.reservationCreneaux(),
         api.reservations(),
         api.beneficiaires(),
+        api.reservationListesAttente(),
       ])
       setRessources(membres(rc))
       setCreneaux(membres(cc))
       setReservations(membres(rvc))
       setBeneficiaires(membres(bc))
+      setListesAttente(membres(lac))
     } catch (e) {
       setErreur(e.message || 'Chargement du planning impossible.')
       setRessources(null)
@@ -172,6 +188,24 @@ export default function Reservation({ etabActif, droits = [], session }) {
     }
     return m
   }, [reservations])
+
+  // Les inscriptions en attente d'un créneau, dans l'ordre du rang — celui que le SERVEUR a posé.
+  //
+  // ⚠ ON N'AFFICHE QUE CE QUI ATTEND OU A ÉTÉ PROMU. Une inscription expirée ou annulée reste en
+  // base, et c'est bien — c'est l'historique de qui a demandé quoi. Mais la faire figurer dans la
+  // file donnerait un rang à quelqu'un qui n'attend plus, et l'exploitant appellerait quelqu'un qui
+  // a déjà renoncé.
+  const attenteParCreneau = useMemo(() => {
+    const m = {}
+    for (const l of listesAttente) {
+      if (l.statut !== 'en_attente' && l.statut !== 'promue') continue
+      const cid = idDepuisIri(l.creneau)
+      if (!cid) continue
+      ;(m[cid] ||= []).push(l)
+    }
+    for (const file of Object.values(m)) file.sort((a, b) => a.rang - b.rang)
+    return m
+  }, [listesAttente])
 
   // Les réservations d'un créneau, du plus ancien au plus récent — l'ordre d'inscription est celui
   // qu'on suit quand on émarge une liste à l'entrée.
@@ -256,6 +290,35 @@ export default function Reservation({ etabActif, droits = [], session }) {
       await recharger()
     } catch (e) {
       setErreur(e.message || 'L’annulation n’a pas abouti.')
+    } finally {
+      setGesteEnCours(null)
+    }
+  }
+
+  // ── LISTE D'ATTENTE ────────────────────────────────────────────────────────────────────────
+  //
+  // ⚠ LE RANG VIENT DU SERVEUR, JAMAIS D'ICI. `InscrireListeAttenteProcessor` prend le maximum
+  // existant et ajoute un, dans la même transaction que l'insertion. Deux inscriptions faites au
+  // même instant depuis deux postes obtiendraient le même rang si le client le calculait — et deux
+  // personnes se croiraient premières.
+  async function inscrireEnAttente(creneau) {
+    if (!attenteBeneficiaire) return
+    setGesteEnCours(creneau.id)
+    setErreur(null)
+    setSucces(null)
+    try {
+      await api.inscrireListeAttente(creneau.id, {
+        beneficiaire: attenteBeneficiaire,
+        // ACT-1 : on attend pour N unités. Une table de huit inscrite pour une seule place serait
+        // promue sur une place libre et ne pourrait pas s'asseoir.
+        quantity: Math.max(1, Number(attenteQuantite) || 1),
+      })
+      setAttenteBeneficiaire('')
+      setAttenteQuantite('1')
+      setSucces('Inscription en liste d’attente enregistrée.')
+      await recharger()
+    } catch (e) {
+      setErreur(e.message || 'L’inscription en liste d’attente n’a pas abouti.')
     } finally {
       setGesteEnCours(null)
     }
@@ -485,6 +548,88 @@ export default function Reservation({ etabActif, droits = [], session }) {
                           >
                             {complet ? 'Complet' : !annulable ? 'Indisponible' : '＋ Réserver'}
                           </button>
+                        )}
+
+                        {/* ⚠ « COMPLET » ÉTAIT UN CUL-DE-SAC, ET C'EST LÀ QUE LA LISTE D'ATTENTE
+                            SERT. Le bouton se grisait, et l'exploitant n'avait rien d'autre à
+                            proposer — alors que tout le mécanisme existe : rang, quantité attendue,
+                            promotion automatique dès qu'une place se libère, fenêtre d'acceptation.
+
+                            Il tournait à vide pour une raison circulaire : la promotion se
+                            déclenche à l'annulation, qui n'était pas possible non plus. Créneau
+                            plein, quelqu'un annule, la place se libère — et personne à promouvoir,
+                            parce que personne n'a jamais pu s'inscrire. */}
+                        {peutPartager && annulable && (complet || (attenteParCreneau[c.id]?.length ?? 0) > 0) && (
+                          <button
+                            type="button"
+                            className="btn ghost sm"
+                            onClick={() => {
+                              setAttentePour(attentePour === c.id ? null : c.id)
+                              setAttenteBeneficiaire('')
+                              setAttenteQuantite('1')
+                            }}
+                          >
+                            {(attenteParCreneau[c.id]?.length ?? 0) > 0
+                              ? `Liste d’attente (${attenteParCreneau[c.id].length})`
+                              : 'Liste d’attente'}
+                          </button>
+                        )}
+
+                        {attentePour === c.id && (
+                          <div className="resa-attente">
+                            {(attenteParCreneau[c.id] ?? []).map((l) => (
+                              <div key={l.id} className="resa-part">
+                                <span className="mono">#{l.rang}</span>
+                                <span className="nm">{labelBeneficiaire(l.beneficiaire) || court(l.id)}</span>
+                                {l.quantity > 1 && <span className="hint">{l.quantity} places</span>}
+                                <span className={`badge ${l.statut === 'promue' ? 'good' : 'mut'}`}>
+                                  {LIBELLE_ATTENTE[l.statut] || l.statut}
+                                </span>
+                                {/* La fenêtre d'acceptation est portée par le serveur et refermée
+                                    par `smart-flow:waitlist:expirer`. On l'affiche parce que c'est
+                                    l'information qui décide s'il faut appeler tout de suite. */}
+                                {l.statut === 'promue' && l.dateExpirationPromotion && (
+                                  <span className="hint">à confirmer avant {heure(l.dateExpirationPromotion)}</span>
+                                )}
+                              </div>
+                            ))}
+                            {(attenteParCreneau[c.id]?.length ?? 0) === 0 && (
+                              <p className="hint">Personne n’attend sur ce créneau.</p>
+                            )}
+
+                            <div className="resa-part-form">
+                              <select
+                                className="select"
+                                value={attenteBeneficiaire}
+                                onChange={(e) => setAttenteBeneficiaire(e.target.value)}
+                                aria-label="Personne à inscrire en liste d’attente"
+                              >
+                                <option value="">Inscrire une personne…</option>
+                                {beneficiaires.map((b) => (
+                                  <option key={b.id} value={b.id}>{labelBeneficiaire(b)}</option>
+                                ))}
+                              </select>
+                              <input
+                                className="input"
+                                value={attenteQuantite}
+                                onChange={(e) => setAttenteQuantite(e.target.value)}
+                                aria-label="Nombre de places attendues"
+                                inputMode="numeric"
+                              />
+                              <button
+                                type="button"
+                                className="btn"
+                                disabled={!attenteBeneficiaire || gesteEnCours === c.id}
+                                onClick={() => inscrireEnAttente(c)}
+                              >
+                                Inscrire
+                              </button>
+                            </div>
+                            <p className="hint">
+                              Dès qu’une place se libère, la première inscription est promue
+                              automatiquement et une fenêtre d’acceptation s’ouvre.
+                            </p>
+                          </div>
                         )}
 
                         {/* LA LISTE DES INSCRITS, DÉPLIABLE.

@@ -1085,6 +1085,16 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 .resa-part { display: flex; align-items: center; gap: var(--esp-serre); flex-wrap: wrap; }
 .resa-part-form { display: flex; align-items: center; gap: var(--esp-serre); flex-wrap: wrap; }
 
+/* La file d attente d un creneau. Meme decalage que les parts : elle appartient au creneau. */
+.resa-attente {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-serre);
+  margin-top: var(--esp-serre);
+  padding-top: var(--esp-serre);
+  border-top: 1px dashed var(--line);
+}
+
 /* Les boutons d'une modale, alignés à droite.
    ⚠ DÉCLARÉE plutôt que recopiée en style en ligne : les modales voisines alignent leurs boutons
    avec `style={{ display:'flex', gap:8, justifyContent:'flex-end', marginTop:12 }}`, et le cliquet

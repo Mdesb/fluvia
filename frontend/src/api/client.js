@@ -916,6 +916,21 @@ export const api = {
   annulerReservation: (id) =>
     request(`/api/reservation/reservations/${id}/annuler`, { method: 'POST', body: {} }),
 
+  // ── LISTE D'ATTENTE ───────────────────────────────────────────────────────────────────────────
+  //
+  // Les inscriptions, tous creneaux confondus. Le rang est calcule par le serveur a l'inscription ;
+  // l'ecran ne le pose jamais lui-meme — deux personnes inscrites au meme instant depuis deux
+  // postes obtiendraient le meme rang si le client le calculait.
+  reservationListesAttente: () =>
+    request('/api/reservation_liste_attentes', { query: { itemsPerPage: 200 } }),
+
+  // S'inscrire sur un creneau. Corps : { beneficiaire, quantity? }.
+  //
+  // ⚠ `quantity` COMPTE : on attend pour N unites, pas pour « une place ». Une table de huit qui
+  // s'inscrirait pour une seule serait promue sur une place libre et ne pourrait pas s'asseoir.
+  inscrireListeAttente: (idCreneau, corps) =>
+    request(`/api/reservation/creneaux/${idCreneau}/liste-attente`, { method: 'POST', body: corps }),
+
   // ── PAIEMENT PARTAGE ──────────────────────────────────────────────────────────────────────────
   //
   // Ajouter un participant a une reservation. Corps : { personne, estOrganisateur?, partMontant? }.
