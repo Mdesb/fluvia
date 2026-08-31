@@ -42,6 +42,16 @@ use App\Platform\State\LoadedBuildProvider;
     operations: [
         new Get(
             uriTemplate: '/plateforme/version-chargee',
+            // ⚠ LES DEUX FORMATS, ET C'EST LE DEPLOIEMENT QUI L'EXIGE.
+            //
+            // Par defaut cette API ne sert que `application/ld+json`. Un script qui demande
+            // `Accept: application/json` recevait 406, `curl -f` echouait, et la boucle du
+            // deploiement lisait une reponse vide -- qu'elle interpretait comme « PHP sert du code
+            // d'avant ». Un faux positif a chaque deploiement, sur le controle meme qui doit
+            // detecter un mensonge.
+            //
+            // Un point d'entree consomme par un script parle le JSON que les scripts parlent.
+            formats: ['jsonld' => ['application/ld+json'], 'json' => ['application/json']],
             security: "is_granted('PUBLIC_ACCESS')",
             provider: LoadedBuildProvider::class,
         ),
