@@ -193,6 +193,11 @@ const NAV = [
       // elles engagent l'exploitant, pas la vitrine, et un exploitant qui n'a pas encore ouvert
       // sa boutique doit pouvoir les preparer.
       { id: 'legal', ic: '§', label: 'Mentions legales', perms: ['organisation.gerer', 'boutique.gerer_vitrine'] },
+      // La documentation vivante de l'API REST (OpenAPI). `admin: true` et pas une permission metier :
+      // ce n'est pas un ecran d'exploitation mais une porte d'integration (bornes ITBOX, developpements
+      // tiers). Elle ne montre rien de plus que le contrat deja servi a `/api/docs` ; l'onglet le rend
+      // seulement visible depuis le menu, au lieu d'une URL a connaitre par coeur.
+      { id: 'api', ic: '⧉', label: 'API', admin: true },
     ],
   },
 ]
