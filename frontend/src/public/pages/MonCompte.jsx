@@ -218,13 +218,56 @@ function EspaceClient({ onDeconnexion, onNaviguer }) {
   )
 }
 
+/**
+ * MES COMMANDES — et le geste qui n'existait nulle part : demander un remboursement.
+ *
+ * ⚠ L'ÉCRAN DE L'EXPLOITANT PROMETTAIT CE CHEMIN DEPUIS TOUJOURS. Il dit, mot pour mot : « Un client
+ * qui demande un remboursement depuis la boutique en ligne apparaît ici, et y reste tant que
+ * personne n'a répondu. » Or rien, dans la boutique publique, n'appelait
+ * `POST /boutique/demandes-remboursement`.
+ *
+ * L'exploitant pouvait donc **accepter et refuser des demandes qui ne pouvaient pas naître**, sur
+ * une file qui ne pouvait pas se remplir. Il lisait « aucune demande en attente » comme « personne
+ * ne réclame », alors que cela voulait dire « personne ne peut réclamer ». Relevé par allaccess-b8.
+ *
+ * ⚠ CE QUE CET ÉCRAN NE PEUT PAS FAIRE, ET QU'IL DIT. La collection des demandes est réservée à
+ * l'exploitant ; le client ne peut relire qu'une demande dont il a l'identifiant. Après un
+ * rechargement, cet écran ne sait donc plus qu'une demande est en cours — il l'annonce au lieu de
+ * laisser croire qu'il suit le dossier.
+ */
 function Commandes({ commandes }) {
+  const [pour, setPour] = useState(null)
+  const [motif, setMotif] = useState('')
+  const [envoi, setEnvoi] = useState(false)
+  const [erreur, setErreur] = useState(null)
+  const [deposees, setDeposees] = useState({})
+
   if (!commandes || commandes.length === 0) {
     return <Vide titre="Aucune commande" texte="Vos commandes payées apparaîtront ici." />
   }
+
+  async function demander(commande) {
+    if (!motif.trim()) return
+    setEnvoi(true)
+    setErreur(null)
+    try {
+      await boutique.deposerDemandeRemboursement({ vente: commande.vente, motif: motif.trim() })
+      setDeposees((d) => ({ ...d, [commande.vente]: true }))
+      setPour(null)
+      setMotif('')
+    } catch (e) {
+      // Le serveur refuse une commande qui n'appartient pas au compte, et un motif vide. On affiche
+      // son message : il nomme la raison mieux qu'une phrase générique.
+      setErreur(e?.message || 'La demande n’a pas pu être envoyée.')
+    } finally {
+      setEnvoi(false)
+    }
+  }
+
   return (
     <div className="card">
       <div className="card-b" style={{ overflowX: 'auto' }}>
+        {erreur && <div className="banner banner-error" role="alert">{erreur}</div>}
         <table className="tbl">
           <caption className="sr-only">Historique de mes commandes</caption>
           <thead>
@@ -233,6 +276,7 @@ function Commandes({ commandes }) {
               <th scope="col">Date</th>
               <th scope="col">Montant</th>
               <th scope="col">Statut</th>
+              <th scope="col">Remboursement</th>
             </tr>
           </thead>
           <tbody>
@@ -244,10 +288,56 @@ function Commandes({ commandes }) {
                 <td>
                   <span className="badge info">{c.statutTunnel || c.statut}</span>
                 </td>
+                <td>
+                  {deposees[c.vente] ? (
+                    <span className="badge">Demande envoyée</span>
+                  ) : pour === c.vente ? (
+                    <div className="field">
+                      <label className="sr-only" htmlFor={`motif-${c.vente}`}>
+                        Motif de votre demande de remboursement
+                      </label>
+                      <input
+                        id={`motif-${c.vente}`}
+                        className="input"
+                        value={motif}
+                        onChange={(e) => setMotif(e.target.value)}
+                        placeholder="Pourquoi demandez-vous un remboursement ?"
+                      />
+                      <button
+                        type="button"
+                        className="btn primary"
+                        disabled={envoi || !motif.trim()}
+                        onClick={() => demander(c)}
+                      >
+                        {envoi ? 'Envoi…' : 'Envoyer'}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn"
+                        onClick={() => { setPour(null); setMotif(''); setErreur(null) }}
+                      >
+                        Annuler
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => { setPour(c.vente); setMotif(''); setErreur(null) }}
+                    >
+                      Demander un remboursement
+                    </button>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
+        <p className="bq-sub">
+          Aucun remboursement n’est automatique : votre demande est transmise à l’établissement, qui
+          y répond. Elle n’apparaîtra plus sur cette page après rechargement — conservez le message
+          de confirmation.
+        </p>
       </div>
     </div>
   )
