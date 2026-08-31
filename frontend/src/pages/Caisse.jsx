@@ -54,6 +54,14 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   const [client, setClient] = useState(null)
   const [pickerOuvert, setPickerOuvert] = useState(false)
   const [besoinClient, setBesoinClient] = useState(false)
+  // ⚠ LE SOLDE DU PORTE-MONNAIE, QUE CET ECRAN NE LISAIT PAS.
+  //
+  // `null` = pas de porte-monnaie, ou pas encore lu. La caisse proposait `pmv` comme moyen de
+  // paiement en testant UNIQUEMENT la capacite `porte_monnaie` de l'etablissement -- jamais le
+  // client, jamais son solde. Un caissier pouvait donc choisir << porte-monnaie >> sans client
+  // rattache (il n'y a alors aucun porte-monnaie a debiter) ou sur un solde vide, et decouvrir le
+  // refus au moment de valider, devant la personne.
+  const [pmvClient, setPmvClient] = useState(null)
 
   // Phase de paiement (encaissement scindé sur une vente ouverte).
   const [vente, setVente] = useState(null) // { id, reste }
@@ -76,6 +84,7 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
     setVente(null)
     setPaiements([])
     setClient(null)
+    setPmvClient(null)
     setBesoinClient(false)
     Promise.all([api.produits(), api.moyensPaiement(), api.pointDeVentes()])
       .then(([pc, mc, dc]) => {
@@ -112,14 +121,25 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
     const pdv = pdvActif
     const autorises = pdv?.moyensAutorises || []
     let liste = moyens.filter((m) => autorises.length === 0 || autorises.includes(m.code))
-    // PMV : uniquement si la capacité porte-monnaie est active sur l'établissement.
-    if (!capacites.includes('porte_monnaie')) liste = liste.filter((m) => m.code !== 'pmv')
+    // PMV : trois conditions, et l'écran n'en vérifiait qu'une.
+    //
+    //   1. la capacité `porte_monnaie` est active sur l'établissement  ← seule vérifiée avant
+    //   2. un client est rattaché à la vente — sans lui, aucun porte-monnaie à débiter
+    //   3. ce client a un porte-monnaie actif avec un solde strictement positif
+    //
+    // Proposer un moyen de paiement qui sera refusé n'est pas neutre : le caissier le découvre en
+    // validant, devant la personne, et doit tout reprendre.
+    const pmvUtilisable = capacites.includes('porte_monnaie')
+      && Boolean(client?.id)
+      && pmvClient?.statut === 'actif'
+      && Number(pmvClient?.solde || 0) > 0
+    if (!pmvUtilisable) liste = liste.filter((m) => m.code !== 'pmv')
     return liste.sort((a, b) => {
       const ia = ORDRE_MOYENS.indexOf(a.code)
       const ib = ORDRE_MOYENS.indexOf(b.code)
       return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib)
     })
-  }, [moyens, pdvActif, capacites])
+  }, [moyens, pdvActif, capacites, client, pmvClient])
 
   // LES FAVORIS SONT CEUX DU COMPTOIR, PAS CEUX DU CAISSIER — et il faut le dire.
   //
@@ -589,6 +609,17 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
     setPickerOuvert(false)
     setBesoinClient(false)
     if (besoinClient) setErreur(null)
+    // Un appel de plus, sur un geste EXPLICITE du caissier : on lit le porte-monnaie du client
+    // qu'il vient de rattacher. `fiche-360` porte deja `pmv: { solde, devise, statut,
+    // dateEcheance }` -- rien a ajouter cote serveur.
+    setPmvClient(null)
+    if (c?.id) {
+      api.ficheClient(c.id)
+        .then((f) => setPmvClient(f?.pmv || null))
+        // ⚠ ON NE DEDUIT RIEN D'UN ECHEC. Sans solde lu, `pmv` reste indisponible et l'ecran le
+        // dit : mieux vaut un moyen de paiement absent qu'un moyen propose sur une supposition.
+        .catch(() => setPmvClient(null))
+    }
   }
 
   // Modale d'ouverture / clôture Z, déclenchée depuis l'écran Caisse. Réutilise SessionCaisse

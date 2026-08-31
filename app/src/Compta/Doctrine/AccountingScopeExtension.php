@@ -8,6 +8,7 @@ use ApiPlatform\Doctrine\Orm\Extension\QueryCollectionExtensionInterface;
 use ApiPlatform\Doctrine\Orm\Extension\QueryItemExtensionInterface;
 use ApiPlatform\Doctrine\Orm\Util\QueryNameGeneratorInterface;
 use ApiPlatform\Metadata\Operation;
+use App\Compta\Entity\BordereauPayFiP;
 use App\Compta\Entity\BordereauVersement;
 use App\Compta\Entity\CompteComptable;
 use App\Compta\Entity\DeclarationEReporting;
@@ -18,6 +19,7 @@ use App\Compta\Entity\ExpenseAccountMapping;
 use App\Compta\Entity\ExportComptable;
 use App\Compta\Entity\Journal;
 use App\Compta\Entity\LettrageEcriture;
+use App\Compta\Entity\LigneEcriture;
 use App\Compta\Entity\MappingComptable;
 use App\Compta\Entity\MouvementPca;
 use App\Compta\Entity\PeriodeComptable;
@@ -26,8 +28,10 @@ use App\Compta\Entity\QualificationEquipement;
 use App\Compta\Entity\Rad;
 use App\Compta\Entity\RegieRecettes;
 use App\Compta\Entity\TauxTva;
+use App\Compta\Entity\VenteImpayeeRegie;
 use App\Securite\Entity\Utilisateur;
 use App\Securite\Service\ContexteEtablissement;
+use App\Vente\Entity\Vente;
 use Doctrine\ORM\QueryBuilder;
 use Symfony\Bundle\SecurityBundle\Security;
 
@@ -48,13 +52,40 @@ use Symfony\Bundle\SecurityBundle\Security;
  * `EcritureComptable::getEtablissement()` résolvait de longue date par
  * `profilExploitant.etablissementPrincipal`. C'était un oubli, pas une impasse de conception.
  *
- * **Ce qui est couvert, et ce qui ne l'est pas.** Les quinze entités ci-dessous ont un chemin
- * **vérifié** vers l'établissement. Six autres entités exposées du module n'en ont pas d'évident —
- * `BordereauPayFiP`, `FactureB2G`, `LettrageEcriture`, `MoyenPaiement`, `QualificationEquipement`,
- * `VenteImpayeeRegie` — et ne sont **délibérément pas** traitées ici : certaines sont probablement
- * globales à dessein (un moyen de paiement, une qualification d'équipement), et claude-C a établi que
- * `VenteImpayeeRegie` l'est par conception. Inventer un chemin non vérifié produirait un cloisonnement
- * qui filtre à côté — pire qu'une absence de filtre, parce qu'il rassure.
+ * **Ce qui est couvert, et ce qui ne l'est pas.** Les quinze entités de `VIA_PROFIL`/`VIA_RELATION`
+ * ont un chemin **vérifié** vers l'établissement par le profil exploitant.
+ *
+ * ── ⚠ TROIS ENTITÉS AJOUTÉES LE 31/08, ET LA RAISON QUI LES EXCLUAIT ÉTAIT FAUSSE ───────────────
+ *
+ * Cette note disait de six entités qu'elles n'avaient « pas de chemin évident » et que
+ * `VenteImpayeeRegie` était globale par conception. Trois de ces six en ont un, mesuré :
+ *
+ *   `Vente::$etablissement`            relation DIRECTE — donc `venteOrigine`, pourtant un `Uuid`
+ *                                      nu, mène à l'établissement par une sous-requête
+ *   `LigneEcriture::$ecriture`         mène au `profilExploitant` que quinze entités empruntent déjà
+ *
+ * Ce n'était donc pas une impasse de conception mais une lecture incomplète, et le prix de l'erreur
+ * n'est pas symétrique : la barrière restante était `compta.lire`, que **tous** les comptables de
+ * **tous** les établissements portent. Un `BordereauPayFiP` porte la référence de transaction d'une
+ * vente ; un `VenteImpayeeRegie` porte un `motif` en texte libre — donc ce qu'un régisseur écrit
+ * vraiment : le nom d'un client, un chèque sans provision, une contestation. Ce n'est pas une fuite
+ * d'identifiants, c'est une fuite de contenu entre clients d'un même SaaS.
+ *
+ * **Aucune fuite n'avait eu lieu** : les trois tables étaient vides. Ce qui a rendu la correction
+ * urgente, c'est que les écrans qui les REMPLISSENT venaient d'être livrés (T28, T30) — le défaut
+ * naissait avec la première ligne écrite, pas avant.
+ *
+ * Les trois autres restent hors de cette extension et le motif tient pour elles : `MoyenPaiement` et
+ * `QualificationEquipement` sont des référentiels ; `FactureB2G` porte un `clientRef` dont le chemin
+ * n'a **pas** été mesuré — ne pas le traiter au jugé est exactement la prudence que cette note
+ * réclamait, et elle reste valable là où la mesure manque.
+ *
+ * ── ⚠ SOUS-REQUÊTE AUTONOME, JAMAIS DE JOINTURE ────────────────────────────────────────────────
+ *
+ * `FilterEagerLoadingExtension` reconstruit la requête et **perd silencieusement** les jointures
+ * libres ajoutées par une extension ; un `EXISTS` autonome y survit. Le piège est documenté par
+ * `MarketingScopeExtension`, et sa disparition ne se verrait qu'aux lignes en trop — c'est-à-dire à
+ * la fuite qu'on croyait avoir fermée.
  */
 final class AccountingScopeExtension implements QueryCollectionExtensionInterface, QueryItemExtensionInterface
 {
@@ -109,13 +140,6 @@ final class AccountingScopeExtension implements QueryCollectionExtensionInterfac
         BordereauVersement::class => 'regie',
         MouvementPca::class => 'ecritureLiee',
 
-        // ⚠ DEUX SAUTS, ET C'EST POURQUOI ELLE MANQUAIT. `LettrageEcriture` porte une `ligne`, qui
-        // porte une `ecriture`, qui porte le profil. La carte ne savait exprimer qu'un saut ; le
-        // point separe desormais les segments, et chacun devient une jointure.
-        //
-        // Ce que la fuite exposait : quelles ecritures d'un exploitant ont ete rapprochees, quand et
-        // par qui. Mesure du 31/08, `CloisonnementLettrageTest`.
-        LettrageEcriture::class => 'ligne.ecriture',
     ];
 
     public function __construct(
@@ -149,10 +173,72 @@ final class AccountingScopeExtension implements QueryCollectionExtensionInterfac
         $this->restreindre($queryBuilder, $resourceClass);
     }
 
+    /**
+     * Cloisonne les trois entités dont le rattachement ne passe pas par une relation joignable
+     * depuis la racine. Rend `true` quand elle a traité la classe — auquel cas l'appelant s'arrête.
+     *
+     * ⚠ `EXISTS` autonome et non `innerJoin` : voir l'en-tête de classe. Une jointure libre est
+     * perdue par `FilterEagerLoadingExtension` **sans erreur**, et le filtre disparu ne se voit
+     * qu'aux lignes en trop.
+     */
+    private function restreindreParSousRequete(QueryBuilder $queryBuilder, string $resourceClass): bool
+    {
+        $racine = $queryBuilder->getRootAliases()[0];
+
+        $sousRequete = match ($resourceClass) {
+            // `venteOrigine` est un `Uuid` NU, pas une relation : rien à joindre, mais
+            // `Vente::$etablissement` est direct, donc le chemin existe bel et bien.
+            BordereauPayFiP::class, VenteImpayeeRegie::class => sprintf(
+                'SELECT 1 FROM %s v_scope WHERE v_scope.id = %s.venteOrigine'
+                .' AND IDENTITY(v_scope.etablissement) = :accounting_scope_actif',
+                Vente::class,
+                $racine,
+            ),
+            // Deux sauts : la ligne porte l'écriture, l'écriture porte le profil exploitant — le
+            // même axe que les quinze autres entités, seulement plus long.
+            LettrageEcriture::class => sprintf(
+                'SELECT 1 FROM %s l_scope'
+                .' JOIN l_scope.ecriture e_scope'
+                .' JOIN e_scope.profilExploitant p_scope'
+                .' WHERE l_scope.id = IDENTITY(%s.ligne)'
+                .' AND IDENTITY(p_scope.etablissementPrincipal) = :accounting_scope_actif',
+                LigneEcriture::class,
+                $racine,
+            ),
+            default => null,
+        };
+
+        if ($sousRequete === null) {
+            return false;
+        }
+
+        // Échec fermé, comme la suite de `restreindre` : sans établissement actif on ne rend rien,
+        // jamais tout.
+        $actif = $this->contexte->idActif();
+        if ($actif === null) {
+            $queryBuilder->andWhere('1 = 0');
+
+            return true;
+        }
+
+        $queryBuilder
+            ->andWhere(sprintf('EXISTS (%s)', $sousRequete))
+            ->setParameter('accounting_scope_actif', $actif, 'uuid');
+
+        return true;
+    }
+
     private function restreindre(QueryBuilder $queryBuilder, string $resourceClass): void
     {
         $utilisateur = $this->security->getUser();
         if (!$utilisateur instanceof Utilisateur) {
+            return;
+        }
+
+        // Les trois entités sans relation directe au profil exploitant : traitées par sous-requête
+        // autonome, en amont, parce que leur condition ne se réduit pas au `$chemin` unique
+        // qu'applique la suite.
+        if ($this->restreindreParSousRequete($queryBuilder, $resourceClass)) {
             return;
         }
 
@@ -165,16 +251,9 @@ final class AccountingScopeExtension implements QueryCollectionExtensionInterfac
             $queryBuilder->innerJoin($racine . '.' . self::VIA_PROFIL[$resourceClass], 'pe_scope');
             $chemin = 'pe_scope.etablissementPrincipal';
         } elseif (isset(self::VIA_RELATION[$resourceClass])) {
-            // ⚠ LE CHEMIN PEUT COMPTER PLUSIEURS SAUTS. Un point separe les segments ; chacun
-            // devient une jointure, la derniere portant le `profilExploitant`. Les entrees a un
-            // seul saut passent par le meme code sans cas particulier.
-            $precedent = $racine;
-            foreach (explode('.', self::VIA_RELATION[$resourceClass]) as $rang => $segment) {
-                $alias = 'rel_scope' . $rang;
-                $queryBuilder->innerJoin($precedent . '.' . $segment, $alias);
-                $precedent = $alias;
-            }
-            $queryBuilder->innerJoin($precedent . '.profilExploitant', 'pe_scope');
+            $queryBuilder
+                ->innerJoin($racine . '.' . self::VIA_RELATION[$resourceClass], 'rel_scope')
+                ->innerJoin('rel_scope.profilExploitant', 'pe_scope');
             $chemin = 'pe_scope.etablissementPrincipal';
         } elseif (isset(self::VIA_ESPACE[$resourceClass])) {
             // L'espace porte l'etablissement sans passer par un profil : un seul saut, et l'axe
