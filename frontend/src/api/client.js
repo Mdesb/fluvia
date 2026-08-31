@@ -916,6 +916,66 @@ export const api = {
   annulerReservation: (id) =>
     request(`/api/reservation/reservations/${id}/annuler`, { method: 'POST', body: {} }),
 
+  // ── ANNULER UN CRENEAU (le geste de l'exploitant, pas du client) ──────────────────────────────
+  //
+  // ⚠ CE N'EST PAS UNE ANNULATION DE RESERVATION EN GROS. `AnnulerCreneauProcessor` bascule TOUTES
+  // les reservations en `annulee_libre` — aucun no-show, aucun frais, le credit restitue — parce
+  // que c'est l'exploitant qui annule et que le client n'y est pour rien. La regle du delai franc
+  // ne s'applique pas : il n'y a rien a arbitrer, la seance revient toujours.
+  //
+  // C'est la difference qui compte a l'ecran : le meme mot « annuler » designe deux gestes dont
+  // l'un facture et l'autre jamais.
+  annulerCreneau: (id) =>
+    request(`/api/reservation/creneaux/${id}/annuler`, { method: 'POST', body: {} }),
+
+  // ── AFFECTER UNE INSTANCE A UNE RESERVATION FAITE SUR UN TYPE (ACT-1, D16) ────────────────────
+  //
+  // « Personne ne reserve la chambre 214 : on reserve une chambre double. » L'instance s'affecte
+  // apres coup. Corps : { ressource }.
+  //
+  // Le serveur refuse trois choses, et la troisieme protege un client reel : une instance qui n'est
+  // pas un enfant du type reserve, une instance d'un autre etablissement (404, pas 403), et une
+  // instance DEJA affectee a une reservation qui chevauche. Sans ce dernier refus, deux personnes
+  // recoivent la chambre 214 pour la meme nuit et personne ne s'en apercoit avant l'arrivee.
+  affecterRessource: (idReservation, idRessource) =>
+    request(`/api/reservation/reservations/${idReservation}/affecter`, {
+      method: 'POST',
+      body: { ressource: idRessource },
+    }),
+
+  // ── LISTE D'ATTENTE ───────────────────────────────────────────────────────────────────────────
+  //
+  // Les inscriptions, tous creneaux confondus. Le rang est calcule par le serveur a l'inscription ;
+  // l'ecran ne le pose jamais lui-meme — deux personnes inscrites au meme instant depuis deux
+  // postes obtiendraient le meme rang si le client le calculait.
+  reservationListesAttente: () =>
+    request('/api/reservation_liste_attentes', { query: { itemsPerPage: 200 } }),
+
+  // S'inscrire sur un creneau. Corps : { beneficiaire, quantity? }.
+  //
+  // ⚠ `quantity` COMPTE : on attend pour N unites, pas pour « une place ». Une table de huit qui
+  // s'inscrirait pour une seule serait promue sur une place libre et ne pourrait pas s'asseoir.
+  inscrireListeAttente: (idCreneau, corps) =>
+    request(`/api/reservation/creneaux/${idCreneau}/liste-attente`, { method: 'POST', body: corps }),
+
+  // ── PAIEMENT PARTAGE ──────────────────────────────────────────────────────────────────────────
+  //
+  // Ajouter un participant a une reservation. Corps : { personne, estOrganisateur?, partMontant? }.
+  // `personne` accepte un UUID ou une IRI ; a defaut de `partMontant`, le serveur repartit le
+  // `montantDu` restant a parts egales entre les participants deja declares et le nouveau.
+  //
+  // ⚠ LE BENEFICIAIRE PASSE PAR LE CONTROLE DE PERIMETRE (D3/D8). Sans lui, on ajoutait a sa propre
+  // reservation la fiche de n'importe qui — elle apparait ensuite dans la liste des participants,
+  // avec son identite et sa part. Le serveur rend le meme message pour « inconnu » et « hors
+  // perimetre », volontairement : les distinguer offrirait un oracle d'enumeration sur les fiches
+  // clients. L'ecran affiche donc ce message tel quel, sans chercher a preciser.
+  ajouterParticipant: (idReservation, corps) =>
+    request(`/api/reservation/reservations/${idReservation}/participants`, { method: 'POST', body: corps }),
+
+  // Marquer une part encaissee. `{id}` est celui du PARTICIPANT, pas de la reservation.
+  payerPartParticipant: (idParticipant) =>
+    request(`/api/reservation/participants/${idParticipant}/payer`, { method: 'POST', body: {} }),
+
   // ── EMARGER ───────────────────────────────────────────────────────────────────────────────────
   //
   // Corps : { statut: 'present' | 'absent', compteRendu? }. `input: false` cote serveur, donc JSON
