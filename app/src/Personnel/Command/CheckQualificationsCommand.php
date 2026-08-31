@@ -40,10 +40,26 @@ use Symfony\Component\Console\Output\OutputInterface;
  * Autrement dit : l'information existe, elle est juste, et **elle n'atteint personne**. Un responsable
  * ne le découvrira ni le jour même ni le lendemain — mais lors d'un contrôle, ou d'un accident.
  *
- * Relevé par `claude-H` en instrumentant les signaux muets du produit : `RosterHebdomadaire` publie
- * `qualificationManquanteOuExpiree`, et aucun écran ne l'affiche. Sa remarque sur la piscine décide de
- * la gravité — *le seuil POSS compte des baigneurs, celui-ci compte des surveillants qui n'ont pas le
- * droit de surveiller.*
+ * Relevé par `claude-H` en instrumentant les signaux muets du produit. Sa remarque sur la piscine
+ * décide de la gravité — *le seuil POSS compte des baigneurs, celui-ci compte des surveillants qui
+ * n'ont pas le droit de surveiller.*
+ *
+ * ⚠ **CE PARAGRAPHE DISAIT « ET AUCUN ÉCRAN NE L'AFFICHE ». C'EST FAUX DEPUIS LE 31/08.**
+ * `Personnel.jsx` rend un badge « manquante ou périmée » avec le libellé de la qualification
+ * requise. La phrase a survécu à sa propre correction, et elle servait d'argument à cette commande :
+ * une phrase qui décrit un défaut devient un mensonge le jour où on le corrige, et rien ne relie les
+ * deux fichiers.
+ *
+ * ── ⚠ NE PAS PLANIFIER CETTE COMMANDE EN L'ÉTAT ────────────────────────────────────────────────
+ *
+ * Elle n'écrit rien : elle **imprime**. La planifier la ferait tourner dans les journaux d'un
+ * conteneur que personne ne lit — « la tâche tourne » pendant que l'information n'atteint toujours
+ * personne. Ce serait la promesse creuse que ce fichier dénonce, sous une autre forme.
+ *
+ * Son argument reste entier : un écran ne montre que ce qu'on ouvre, et le cas dangereux est un
+ * planning monté il y a trois semaines que plus personne ne rouvre. Ce qui manque n'est pas la
+ * commande, c'est sa **destination** — une notification, une alerte, une ligne dans un tableau de
+ * bord qu'on regarde sans l'avoir cherchée.
  *
  * **Pourquoi une commande et pas seulement un écran.** Un écran ne montre que ce qu'on ouvre. Le cas
  * dangereux est celui d'un planning monté il y a trois semaines que plus personne ne rouvre — la
