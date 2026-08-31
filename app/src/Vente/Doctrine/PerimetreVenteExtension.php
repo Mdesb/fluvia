@@ -69,7 +69,10 @@ final class PerimetreVenteExtension implements QueryCollectionExtensionInterface
         // recevait la collection complete, temoin compris. Signale par allaccess-b8.
         //
         // Elle passe par le point de vente, comme `Caisse` -- d'ou la jointure plus bas.
-        OperationScellee::class => 'pdvScelle.etablissement',
+        // ⚠ CHEMIN VIDE, ET C'EST VOULU : cette classe est filtrée par un `EXISTS` autonome, pas
+        // par un chemin d'alias. Voir le bloc dédié plus bas — un `innerJoin` ne survit pas à
+        // `FilterEagerLoadingExtension`.
+        OperationScellee::class => '',
     ];
 
     public function __construct(
@@ -118,11 +121,6 @@ final class PerimetreVenteExtension implements QueryCollectionExtensionInterface
         // Jointures intermédiaires éventuelles (caisse → pdv, mouvement/cloture → session).
         if ($resourceClass === Caisse::class) {
             $queryBuilder->innerJoin($rootAlias . '.pointDeVente', 'pdv');
-        } elseif ($resourceClass === OperationScellee::class) {
-            // Alias distinct de `pdv` : les deux jointures ne coexistent jamais dans la meme
-            // requete, mais un alias partage est le genre de detail qui se met a compter le jour
-            // ou quelqu'un ajoute une troisieme classe passant par le point de vente.
-            $queryBuilder->innerJoin($rootAlias . '.pointDeVente', 'pdvScelle');
         } elseif ($resourceClass === MouvementCaisse::class || $resourceClass === ClotureZ::class) {
             $queryBuilder->innerJoin($rootAlias . '.session', 'sess');
         }
@@ -146,6 +144,29 @@ final class PerimetreVenteExtension implements QueryCollectionExtensionInterface
             // Fermeture par défaut : sans établissement actif, rien. Une liste vide se remarque ;
             // une liste inter-établissements a seulement l'air plus longue.
             $queryBuilder->andWhere('1 = 0');
+
+            return;
+        }
+
+        // ── LE SCELLEMENT SE FILTRE PAR UN `EXISTS`, PAS PAR UNE JOINTURE ──────────────────────
+        //
+        // ⚠ `FilterEagerLoadingExtension` reconstruit la requête et perd SILENCIEUSEMENT les
+        // jointures libres ajoutées par une extension — documenté dans `MarketingScopeExtension`.
+        // Un `EXISTS` autonome y survit ; un `innerJoin` non, et sa disparition ne se voit qu'aux
+        // lignes en trop, c'est-à-dire À LA FUITE QU'ON CROYAIT FERMÉE.
+        //
+        // Le premier correctif de cette fuite posait un `innerJoin`. Les tests passaient, et ils
+        // auraient continué de passer avec la jointure perdue en production. Signalé par `c2`, qui
+        // a rencontré le même choix sur `FactureB2G`.
+        if ($resourceClass === OperationScellee::class) {
+            $queryBuilder
+                ->andWhere(sprintf(
+                    'EXISTS (SELECT 1 FROM %s nf525_pdv WHERE nf525_pdv.id = IDENTITY(%s.pointDeVente)'
+                    . ' AND IDENTITY(nf525_pdv.etablissement) = :perimetre_vente_actif)',
+                    PointDeVente::class,
+                    $rootAlias,
+                ))
+                ->setParameter('perimetre_vente_actif', $actif, 'uuid');
 
             return;
         }
