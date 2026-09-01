@@ -52,6 +52,12 @@ use Symfony\Component\Uid\Uuid;
  * D13 demande de n'ouvrir un écran que pour une raison nommée — un écran posé sur un mécanisme qui
  * n'a jamais tourné se refait. Il viendra quand on saura qui accueille les premiers clients ; ce
  * point-là reste à Maxime, pas à moi.
+ *
+ * @sans-suppression: un lot est une trace, pas une donnée de travail. Le supprimer détruirait le
+ * fichier source que la spécification conserve précisément pour rejuger un import contesté six mois
+ * plus tard — sans lui on n'a que le résultat, jamais ce qui l'a produit. Ce que le lot a créé se
+ * défait par `POST /imports/{id}/revert`, qui laisse la trace en place et refuse dès qu'une ligne a
+ * servi. Effacer le lot lui-même reviendrait à effacer la preuve avec l'erreur.
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'import_batch')]
