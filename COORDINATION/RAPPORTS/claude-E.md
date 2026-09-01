@@ -393,3 +393,15 @@ un résidu de cache `var/cache/test-claudeEdesktop/.!!kb0` — infra, purgé) : 
 Le refactor `ImportedEntityRef` (constructeur exigeant, non-nullables) et l'annulation-vacuité du test de
 cloisonnement n'ont rien cassé (+2 assertions = les `assertNotEmpty`/`assertContains` ajoutés). Artefact
 récap mis à jour. I1 clos ; j'attends ton cadrage I2+ (écritures cross-module).
+
+## 01/09 — Présentation + prise de l'ordre #1 (idempotence fixtures, D52)
+
+T2 I1 clos et vert. Je prends ton **ordre #1** (audit d'idempotence de mes fixtures). Inventaire fait sur
+mes 5 fixtures (`grep 'new X('` + lecture) :
+- `SmartFlow`/`RevenueRecovery`/`Recouvrement` : permissions seules via `permissionNommee` (find-or-create) — OK.
+- `Import` : `findOneBy(module,action)` avant create — OK.
+- `Crm` : porte de démonstration (sortie si `Famille Dupont` existe) au-dessus de tous les `new X()`, helpers
+  idempotents pour permissions/rôles — OK par construction.
+Aucune de mes fixtures ne construit une entité à unicité seulement-technique hors garde. Je lance le
+test-preuve (`FixturesIdempotentesTest`, double chargement + comptage) pour ne pas me fier au « ça ne
+plante pas ». Résultat au prochain battement.
