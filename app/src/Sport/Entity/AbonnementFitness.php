@@ -139,7 +139,21 @@ class AbonnementFitness
     #[Groups(['abonnement:read'])]
     private int $preavisResiliationJours = 30;
 
-    #[ORM\OneToOne(targetEntity: MandatSepa::class)]
+    /**
+     * ⚠ `ManyToOne` ET NON `OneToOne` : un même mandat porte plusieurs abonnements.
+     *
+     * Un adulte et son enfant, deux formules dans la même famille — le payeur donne son IBAN une
+     * fois. Deux mandats pour le même débiteur chez le même créancier ne sont pas la logique SEPA :
+     * un mandat autorise à prélever, il n'est pas attaché à ce qu'on facture. Le mandat était déjà
+     * générique de son côté (rattaché au client et à l'établissement) ; c'est ce lien-ci qui
+     * imposait l'unicité.
+     *
+     * ⚠ ET CE CHANGEMENT SEUL SERAIT UN DÉFAUT. `DemanderResiliationHandler::executerEffet()`
+     * révoquait le mandat sans condition, ce qui était correct tant qu'il n'appartenait qu'à un
+     * abonnement. La révocation conditionnelle est partie dans le même commit : les séparer aurait
+     * arrêté les prélèvements du second abonnement sans erreur ni message.
+     */
+    #[ORM\ManyToOne(targetEntity: MandatSepa::class)]
     #[ORM\JoinColumn(name: 'mandat_sepa_id', nullable: false)]
     #[Groups(['abonnement:read'])]
     private ?MandatSepa $mandatSepa = null;
