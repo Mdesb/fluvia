@@ -42,6 +42,18 @@ COMPOSE=(docker compose -f infra/compose.preprod.yaml --env-file infra/.env.prep
 echo "==> Dépendances de développement (PHPUnit pour les autres sessions)"
 "${COMPOSE[@]}" exec -T php composer install --no-interaction
 
+# ⚠ COMPOSER TOURNE EN ROOT, ET CE SCRIPT NE RENDAIT PAS LES DROITS.
+#
+# `composer install` declenche les `auto-scripts` de Flex, dont `cache:clear` — en root. Les
+# fichiers reecrits appartiennent alors a root, et PHP-FPM, qui tourne en www-data, ne peut plus les
+# REECRIRE. Il peut encore les lire : l'API repond, jusqu'au premier defaut de cache. Puis 500.
+#
+# C'est le meme defaut que celui qui a mis la preproduction a terre le 01/09, dans le script cense
+# suivre celui qui l'a cause. `deploy-preprod.sh` faisait ce chown depuis toujours ; celui-ci, non.
+echo "==> Droits sur var/ — composer a tourne en root"
+docker compose -f infra/compose.preprod.yaml --env-file infra/.env.preprod     exec -T php chown -R www-data:www-data /app/var
+./infra/verifier-droits-var.sh
+
 echo "==> Redémarrage de PHP-FPM — SANS LUI, FPM sert l'autoloader d'avant (opcache)"
 "${COMPOSE[@]}" restart php
 

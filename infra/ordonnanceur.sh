@@ -113,6 +113,12 @@ for t in $TACHES_AUTORISEES; do
     echo "[ordonnanceur]   · $t"
 done
 
+# ⚠ DECLARES AVANT LA BOUCLE : `set -u` est actif, une variable jamais initialisee tue le shell au
+# premier cycle. L'ordonnanceur mourrait alors en silence, et le symptome serait « les taches ne
+# tournent plus » — c'est-a-dire l'absence meme que ce fichier a ete ecrit pour supprimer.
+DROITS_EN_ECART=0
+DROITS_CYCLES=0
+
 while true; do
     # ── LA LISTE A-T-ELLE BOUGE SOUS NOS PIEDS ? ────────────────────────────────────────────────
     # Ce controle ne repare rien : il refuse seulement que l'ecart reste muet. Il coute un `sed` par
@@ -123,6 +129,34 @@ while true; do
         echo "[ordonnanceur]   porté par ce shell : $LISTE_AU_DEMARRAGE" >&2
         echo "[ordonnanceur]   déclaré au dépôt   : $au_fichier" >&2
         echo "[ordonnanceur]   Tant que ce conteneur n'a pas redémarré, l'écart ne tourne PAS." >&2
+    fi
+
+    # ── LES DROITS SUR /app/var ─────────────────────────────────────────────────────────────
+    #
+    # ⚠ CE CONTROLE N'A PAS SA PLACE AU DEPLOIEMENT : la derive se produit ENTRE deux deploiements.
+    # Chaque `bin/console` lance en root dans le conteneur laisse des entrees root dans le pool de
+    # cache. Elles ne cassent RIEN tant que FPM n'a qu'a les lire — l'API repond, tout parait sain.
+    # Au premier defaut de cache, FPM doit reecrire, ne peut pas, et rend 500 sur TOUTE l'API.
+    #
+    # C'est arrive le 01/09, pendant environ quarante minutes. Comme la liste perimee ci-dessus, ce
+    # controle ne repare rien : reparer en silence effacerait la trace qu'une commande a ete lancee
+    # hors du script, et personne n'apprendrait que le geste manquait.
+    #
+    # ⚠ IL NE CRIE PAS A CHAQUE CYCLE. Une alarme qui parle toutes les 60 s s'apprend a sauter — et
+    # c'est le jour ou elle a raison qu'on l'aura sautee. Bascule, puis rappel toutes les 30 min.
+    if [ -x /infra/verifier-droits-var.sh ]; then
+        if /infra/verifier-droits-var.sh >/dev/null 2>&1; then
+            DROITS_EN_ECART=0
+            DROITS_CYCLES=0
+        else
+            if [ "$DROITS_EN_ECART" -eq 0 ] || [ "$DROITS_CYCLES" -ge 30 ]; then
+                echo "[ordonnanceur] ✗ DROITS SUR /app/var — l'API repond encore, mais elle est amorcee." >&2
+                /infra/verifier-droits-var.sh 2>&1 | sed 's/^/[ordonnanceur]   /' >&2
+                DROITS_CYCLES=0
+            fi
+            DROITS_EN_ECART=1
+            DROITS_CYCLES=$((DROITS_CYCLES + 1))
+        fi
     fi
 
     for tache in $TACHES_AUTORISEES; do
