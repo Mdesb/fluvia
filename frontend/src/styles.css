@@ -174,7 +174,10 @@ a { color: var(--accent); }
 .side-nav { padding: 6px 10px; display: flex; flex-direction: column; gap: 2px; }
 .side-sec { font-size: var(--txt-mini); letter-spacing: .12em; text-transform: uppercase; color: var(--side-ink-soft); padding: 14px 12px 6px; font-weight: 700; }
 .side-link { display: flex; align-items: center; gap: 11px; padding: 9px 12px; border-radius: 9px; color: var(--side-ink); text-decoration: none; font-size: var(--txt-normal); cursor: pointer; border: none; background: none; width: 100%; text-align: left; font-family: inherit; }
-.side-link .ic { width: 18px; text-align: center; flex: none; opacity: .9; }
+/* La puce est desormais un SVG et non un glyphe : `text-align` n'a plus d'effet, et un SVG est en
+   ligne par defaut — donc pose sur la ligne de base, avec un espace sous lui qui decalait le
+   libelle d'un pixel. `display: block` le supprime. */
+.side-link .ic { width: 18px; height: 18px; display: block; flex: none; opacity: .9; }
 .side-link:hover { background: rgba(255, 255, 255, .05); }
 .side-link.active { background: var(--side-active); color: var(--sur-accent); font-weight: 600; }
 .side-foot { margin-top: auto; padding: 14px; border-top: 1px solid var(--side-line); font-size: var(--txt-petit); color: var(--side-ink-soft); display: flex; align-items: center; gap: 10px; }
