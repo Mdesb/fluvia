@@ -31,7 +31,35 @@
 
 import { readFileSync } from 'node:fs'
 
-const CSS = readFileSync('src/styles.css', 'utf8')
+// ⚠ DEUX FICHIERS, PAS UN. Ce script ne lisait que `src/styles.css`. `vitrine/styles.css` porte sa
+// propre palette et cinq paires sous le seuil que RIEN ne mesurait — pas un faux vert : aucune
+// mesure du tout, ce qui ne laisse aucune prise. Signale par `allaccess-8e` le 01/09.
+//
+// La vitrine n'est pas servie aujourd'hui. C'est exactement pour ca qu'elle doit etre mesuree
+// maintenant : le jour ou quelqu'un la publie, personne ne repassera par ici.
+//
+// ⚠ `horsPerimetre` EST UNE PORTE, ET ELLE EST GARDEE. Une paire n'y entre que si le fichier ne
+// porte AUCUN de ses deux jetons — c'est verifie plus bas, et declarer hors perimetre une paire
+// mesurable est un echec. Sans cette garde, « ca ne s'applique pas ici » serait la facon la plus
+// simple de faire taire un vrai defaut, sans laisser la moindre trace dans la sortie.
+const FICHIERS = [
+  {
+    nom: 'produit',
+    chemin: 'src/styles.css',
+    horsPerimetre: {},
+  },
+  {
+    nom: 'vitrine',
+    chemin: '../vitrine/styles.css',
+    horsPerimetre: {
+      'warn/warn-bg': "la vitrine n'affiche aucun badge d'alerte",
+      'crit/crit-bg': "la vitrine n'affiche aucun badge d'alerte",
+      'side-ink/side-bg': "la vitrine n'a pas de menu de gauche",
+      'side-ink-soft/side-bg': "la vitrine n'a pas de menu de gauche",
+      'sur-accent/accent': "la vitrine n'a pas de bouton d'accent plein",
+    },
+  },
+]
 
 function jetons(bloc) {
   const m = {}
@@ -93,31 +121,60 @@ function blocsRacine(css, selecteur) {
   return blocs
 }
 
-const clair = {}
-for (const bloc of blocsRacine(CSS, ':root {')) Object.assign(clair, jetons(bloc))
-const clairResolu = resoudre(clair)
-
-// Le theme sombre HERITE du clair : il ne redefinit que ce qu'il change. Partir du seul bloc sombre
-// ferait sortir en « absent » tout jeton commun aux deux themes — `--sur-accent`, par exemple.
-const sombre = { ...clair }
-for (const bloc of blocsRacine(CSS, ':root[data-theme="dark"]')) Object.assign(sombre, jetons(bloc))
-const sombreResolu = resoudre(sombre)
-
-// ⚠ TEMOIN : L'EXTRACTION A-T-ELLE LU LA PALETTE, OU UN BLOC QUELCONQUE ?
+// ⚠ ON SEPARE LES DEUX THEMES AVANT D'EXTRAIRE, PARCE QU'ILS PARTAGENT PARFOIS LE SELECTEUR.
 //
-// C'est la question que personne ne posait, et elle a coute le controle pendant un commit. Un
-// selecteur qui glisse rend un objet non vide — il rend les MAUVAIS jetons. On exige donc que les
-// deux themes portent les fonds et les encres, sans quoi on ne mesure pas : on refuse.
-for (const [nom, palette] of [['clair', clairResolu], ['sombre', sombreResolu]]) {
-  const manquants = ['bg', 'panel', 'ink', 'accent'].filter((j) => !palette[j])
-  if (manquants.length > 0) {
-    console.error(`\n=== ÉCHEC — le thème ${nom} n'a pas pu être lu ===\n`)
-    console.error(`Jetons fondamentaux introuvables : ${manquants.join(', ')}.`)
-    console.error('\nL\'extraction ne désigne plus la palette de `src/styles.css`. Tant que ce')
-    console.error('témoin est rouge, ce garde-fou ne mesure RIEN — et un vert serait un mensonge.')
-    process.exit(1)
+// `src/styles.css` ecrit son sombre en `:root[data-theme="dark"]` et
+// `:root:not([data-theme="light"])` — deux selecteurs qui ne matchent pas `':root {'`.
+// `vitrine/styles.css` l'ecrit en `:root { ... }` DANS une `@media (prefers-color-scheme: dark)` :
+// meme selecteur que le clair.
+//
+// Fusionner sans distinguer donnerait, pour la vitrine, un theme unique melant les deux — un objet
+// bien rempli, parfaitement faux, sur lequel le temoin des jetons fondamentaux passerait sans
+// broncher. C'est le piege que `allaccess-8e` a nomme avant que j'y tombe.
+function scinderMediaSombre(css) {
+  const MARQUEUR = '@media (prefers-color-scheme: dark)'
+  let hors = ''
+  let sombre = ''
+  let i = 0
+
+  for (;;) {
+    const debut = css.indexOf(MARQUEUR, i)
+    if (debut === -1) { hors += css.slice(i); break }
+
+    hors += css.slice(i, debut)
+
+    // Comptage d'accolades : une `@media` contient des blocs, s'arreter au premier `}` la couperait.
+    let profondeur = 0
+    let j = css.indexOf('{', debut)
+    const ouvrante = j
+    for (; j < css.length; j += 1) {
+      if (css[j] === '{') profondeur += 1
+      else if (css[j] === '}' && (profondeur -= 1) === 0) break
+    }
+    sombre += css.slice(ouvrante + 1, j)
+    i = j + 1
   }
+
+  return { hors, sombre }
 }
+
+function palettes(css) {
+  const { hors, sombre: dansMedia } = scinderMediaSombre(css)
+
+  const clair = {}
+  for (const bloc of blocsRacine(hors, ':root {')) Object.assign(clair, jetons(bloc))
+
+  // Le sombre HERITE du clair : il ne redefinit que ce qu'il change. Deux sources, dans l'ordre de
+  // la cascade — le `:root` nu d'une @media sombre (vitrine), puis le `[data-theme="dark"]`
+  // explicite (produit), qui l'emporte parce qu'un choix de l'utilisateur bat une preference systeme.
+  const sombre = { ...clair }
+  for (const bloc of blocsRacine(dansMedia, ':root {')) Object.assign(sombre, jetons(bloc))
+  for (const bloc of blocsRacine(css, ':root[data-theme="dark"]')) Object.assign(sombre, jetons(bloc))
+
+  return { clair: resoudre(clair), sombre: resoudre(sombre) }
+}
+
+
 
 function canal(v) {
   const c = v / 255
@@ -180,9 +237,46 @@ const PLAFOND = Number(process.env.CONTRASTES_PLAFOND ?? '0')
 let echecs = 0
 const lignes = []
 
-for (const [nom, palette] of [['clair', clairResolu], ['sombre', sombreResolu]]) {
-  lignes.push(`\n── thème ${nom} ──`)
-  for (const [av, ar, seuil, quoi, compte] of PAIRES) {
+for (const fichier of FICHIERS) {
+  const css = readFileSync(fichier.chemin, 'utf8')
+  const { clair: clairResolu, sombre: sombreResolu } = palettes(css)
+
+  // ⚠ TEMOIN : L'EXTRACTION A-T-ELLE LU LA PALETTE, OU UN BLOC QUELCONQUE ?
+  //
+  // C'est la question que personne ne posait, et elle a coute le controle pendant un commit. Un
+  // selecteur qui glisse rend un objet non vide — il rend les MAUVAIS jetons. On exige donc que les
+  // deux themes portent les fonds et les encres, sans quoi on ne mesure pas : on refuse.
+  for (const [theme, palette] of [['clair', clairResolu], ['sombre', sombreResolu]]) {
+    const manquants = ['bg', 'panel', 'ink', 'accent'].filter((j) => !palette[j])
+    if (manquants.length > 0) {
+      console.error(`\n=== ÉCHEC — ${fichier.nom} : le thème ${theme} n'a pas pu être lu ===\n`)
+      console.error(`Jetons fondamentaux introuvables : ${manquants.join(', ')}.`)
+      console.error(`\nL'extraction ne désigne plus la palette de \`${fichier.chemin}\`. Tant que ce`)
+      console.error('témoin est rouge, ce garde-fou ne mesure RIEN — et un vert serait un mensonge.')
+      process.exit(1)
+    }
+  }
+
+  lignes.push(`\n════ ${fichier.nom} — ${fichier.chemin} ════`)
+
+  // ⚠ LA DECLARATION HORS PERIMETRE EST ELLE-MEME VERIFIEE. Exempter une paire dont les deux jetons
+  // existent, c'est faire taire une mesure possible — la porte ne s'ouvre que sur du vide.
+  for (const [cle, raison] of Object.entries(fichier.horsPerimetre)) {
+    const [av, ar] = cle.split('/')
+    if (clairResolu[av] && clairResolu[ar]) {
+      console.error(`\n=== ÉCHEC — ${fichier.nom} : « ${cle} » est déclarée hors périmètre ===\n`)
+      console.error(`Raison invoquée : ${raison}`)
+      console.error('Or les deux jetons EXISTENT dans ce fichier : la paire est mesurable.')
+      console.error('Une exemption ne peut porter que sur ce qui est absent, jamais sur ce qui gêne.')
+      process.exit(1)
+    }
+    lignes.push(`  ·  ${cle} — hors périmètre : ${raison}`)
+  }
+
+  for (const [theme, palette] of [['clair', clairResolu], ['sombre', sombreResolu]]) {
+    lignes.push(`\n── thème ${theme} ──`)
+    for (const [av, ar, seuil, quoi, compte] of PAIRES) {
+    if (fichier.horsPerimetre[`${av}/${ar}`]) continue
     const a = palette[av]
     const b = palette[ar]
     // ⚠ UNE PAIRE QU'ON NE PEUT PAS MESURER EST UN ECHEC, PAS UNE ABSTENTION.
@@ -203,6 +297,7 @@ for (const [nom, palette] of [['clair', clairResolu], ['sombre', sombreResolu]])
     if (!ok && compte) echecs += 1
     const marque = ok ? '✓' : compte ? '✗' : '·'
     lignes.push(`  ${marque}  ${r.toFixed(2)}:1  (min ${seuil})  ${av} sur ${ar} — ${quoi}`)
+    }
   }
 }
 

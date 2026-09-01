@@ -144,6 +144,44 @@ final class TermeAbonnementTest extends SportApiTestCase
         self::assertEquals($finAvant, $abonnement->getDateFinEngagement());
     }
 
+    /**
+     * LE CONTRAT QUE L'ECRAN SPORT LIT — ET QU'IL LISAIT DE TRAVERS.
+     *
+     * `Sport.jsx` lisait `a.dateFin` et `a.dateDebut` : des noms que cette collection n'envoie pas.
+     * La colonne « Echeance » affichait donc « sans terme » sur TOUS les abonnements depuis
+     * toujours, et un engagement de trois ans se lisait comme un abonnement sans terme.
+     *
+     * ⚠ RIEN NE POUVAIT L'ATTRAPER. `undefined` n'est pas une erreur en JavaScript : il prend
+     * simplement la branche de repli, qui affichait une phrase parfaitement plausible. Aucun test
+     * n'echoue, aucun garde-fou ne crie, et l'ecran a l'air de marcher.
+     *
+     * ⚠ ET UNE RECHERCHE PAR NOM SE SERAIT TROMPEE : `dateFin` EXISTE dans ce depot -- sur les
+     * pauses. La question decidable est « CETTE collection sert-elle ce champ », pas « ce nom
+     * existe-t-il ».
+     */
+    public function testLaCollectionSertBienLesChampsQueLEcranLit(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+
+        // `adminSurA()` rend le tableau d'OPTIONS complet (`auth_bearer` + `headers`), pas un jeu
+        // d'en-tetes : le re-imbriquer dans `headers` perdait le jeton et rendait 401.
+        $reponse = $client->request('GET', '/api/abonnement_fitnesses', $entete);
+        self::assertSame(200, $reponse->getStatusCode());
+
+        $membres = $reponse->toArray()['member'] ?? $reponse->toArray()['hydra:member'] ?? [];
+        self::assertNotEmpty($membres, "Aucun abonnement servi : ce test ne mesure alors que lui-meme.");
+
+        $premier = $membres[0];
+
+        self::assertArrayHasKey('dateFinEngagement', $premier);
+        self::assertArrayHasKey('dateDebutEngagement', $premier);
+        self::assertArrayHasKey('statut', $premier);
+
+        // Le temoin negatif : le nom que l'ecran lisait n'existe PAS ici, et c'est tout le defaut.
+        self::assertArrayNotHasKey('dateFin', $premier);
+        self::assertArrayNotHasKey('dateDebut', $premier);
+    }
+
     // ── Fabrique ────────────────────────────────────────────────────────────────────────────────
 
     private function abonnementAuTerme(?TermRenewalMode $mode): AbonnementFitness
