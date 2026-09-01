@@ -767,6 +767,30 @@ export const api = {
   versionsDocument: () => request('/api/document_versions', { query: { itemsPerPage: 300 } }),
   urlTelechargementDocument: (id) => `/dms/documents/${id}/download`,
 
+  // REPRISE INITIALE (App\Import) -- quatre routes serveur, aucun appelant jusqu'ici. Le shortName
+  // API est `Import`, donc la collection vit sous /api/imports.
+  //
+  // UN IMPORT EST UN OBJET, PAS UNE ACTION : il porte le fichier (base64, conserve), son verdict, et
+  // ce qu'il a cree. DEUX TEMPS STRICTS (D98) :
+  //   POST /imports            valide TOUT sans rien ecrire en base metier -- il rend l'objet avec
+  //                            status `validated` (rowCount lignes) ou `rejected` (+ `errors`,
+  //                            ligne -> message, la liste ENTIERE). Un rejet est un 201 comme un
+  //                            succes : le verdict est dans l'objet, pas dans le code HTTP.
+  //   POST /imports/{id}/appliquer  ecrit en une transaction (status `applied`).
+  //   POST /imports/{id}/annuler    defait ce que CE lot a cree (status `reverted`), et REFUSE en
+  //                            409 si une ligne creee a servi depuis (« on corrige par un second
+  //                            import, on ne defait pas ce qui a servi »).
+  //
+  // `POST /imports` est une operation API Platform STANDARD : elle deserialise le corps (groupe
+  // import_batch:write -- type, content base64, fileName, mimeType, expectedTotal), d'ou `ld: true`,
+  // comme creerClient. Les deux gestes portent un uriTemplate et `input: false` cote serveur : pas de
+  // corps, pas de `ld: true`, tout est dans la route -- meme patron que publierProduit.
+  imports: (params) => request('/api/imports', { query: { itemsPerPage: 100, ...(params || {}) } }),
+  detailImport: (id) => request(`/api/imports/${id}`),
+  creerImport: (corps) => request('/api/imports', { method: 'POST', body: corps, ld: true }),
+  appliquerImport: (id) => request(`/api/imports/${id}/appliquer`, { method: 'POST' }),
+  annulerImport: (id) => request(`/api/imports/${id}/annuler`, { method: 'POST' }),
+
   // PUBLICATION SOCIALE -- onze operations, aucun appelant jusqu'ici.
   //
   // Les publications sont chargees SEPAREMENT des messages : c'est le detail par compte qui distingue

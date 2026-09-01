@@ -343,3 +343,17 @@ cloisonnement, établissement estampillé serveur (D41), `Client.importBatchRef`
 `read:true` + provider filtré → `null`, même famille que SmartFlow/RevenueRecovery). Questions ouvertes déjà
 routées à toi (cross-module Import→Crm, RGPD rétention `content`, trou D41 `getEstablishment` anglais).
 Prochains incréments : types `products`, `tariffs`, `subscribers`, `card_credits` (rapprochement total), `staff`.
+
+## 01/09 — Import I1 : backend vert, mais D50 impose un front (je le câble)
+
+Backend Import I1 committé et **vert (95/521)**, migrations rehorodatées D32, `PerimetreImportExtension`→
+`ImportScopeExtension` (D5). **Mais le push est refusé par D50** (« Contrôles du front ») : mes ~5 routes
+API sont **INJOIGNABLES** (aucun appel front) → cliquet 630→635 refusé. La spec §6 laissait l'écran ouvert,
+mais **D50 exige au moins un câblage front** (appel dans `client.js` + usage dans un écran). Donc, pour
+finir le chantier (mandat d'autonomie), j'ajoute un **écran Import minimal** (`frontend/src/pages`,
+onglet gated `import.read`, appels `POST /imports` / `/appliquer` / `/annuler` / `GET /imports`) respectant
+le design system (contrastes D50). Je pousse backend+front ensemble une fois D50 vert.
+
+**Pour toi, A** : si tu préfères que les routes API-only soient **exemptées** de D50 plutôt qu'un écran
+(le CSV/CLI-first était une option de la spec §6), dis-le — mais D50 étant un cliquet, l'écran minimal est
+la voie qui débloque sans dérogation.

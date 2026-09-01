@@ -60,6 +60,10 @@ const TopologieAcces = lazy(() => import('./pages/TopologieAcces.jsx'))
 // Differe : une demande d'effacement se traite quelques fois par an. L'ecran ne doit peser sur
 // le premier chargement de personne -- mais il doit exister, ce qui n'etait pas le cas.
 const DonneesPersonnelles = lazy(() => import('./pages/DonneesPersonnelles.jsx'))
+// Differe : une reprise initiale se fait a la mise en route d'un site, pas tous les jours. L'ecran
+// ne doit peser sur aucun premier chargement -- mais il doit exister, sans quoi ses quatre routes
+// serveur restent injoignables.
+const Imports = lazy(() => import('./pages/Imports.jsx'))
 
 import { lireHash, ecrireHash } from './api/url.js'
 
@@ -453,6 +457,7 @@ export default function App() {
       {onglet === 'campagnes' && <Campagnes etabActif={etabActif} droits={droits} />}
       {onglet === 'projets' && <Projets etabActif={etabActif} droits={droits} />}
       {onglet === 'documents' && <Documents etabActif={etabActif} droits={droits} />}
+      {onglet === 'imports' && <Imports etabActif={etabActif} droits={droits} />}
       {onglet === 'social' && <Social etabActif={etabActif} droits={droits} />}
       {onglet === 'sport' && <Sport etabActif={etabActif} droits={droits} />}
       {onglet === 'pilotage' && (
