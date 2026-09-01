@@ -16,11 +16,25 @@
    d'imposer un thème à quelqu'un qui n'est pas encore client.
 */
 
+/* ⚠ CINQ TEINTES ONT ETE CORRIGEES LE 01/09, ET CE N'ETAIT PAS UN CHOIX ESTHETIQUE.
+   Cette palette est l'ANCETRE de celle du produit : elle portait encore les valeurs d'avant
+   l'arbitrage de Maxime du 31/08 sur les contrastes. Cinq paires rendaient moins de 4,5:1 --
+   jusqu'a 2,95:1 sur le badge « bon » -- et AUCUN garde-fou ne les mesurait : le controle ne
+   lisait que `frontend/src/styles.css`. Signale par `allaccess-8e`.
+
+   Les valeurs posees sont celles du produit, portees a l'identique. On n'a rien invente : arbitrer
+   une seconde fois, differemment, la meme question aurait fait diverger les deux surfaces.
+
+   ⚠ `--accent` N'EST PLUS LA COULEUR DE MARQUE, ET C'EST DELIBERE. `#0d7d88` (manifeste PWA,
+   `--side-active`) rend 4,33:1 sur ce fond : bonne comme FOND, insuffisante comme ENCRE. Le texte
+   utilise donc `#0d7983`. Si l'identite tranche autrement, elle devra nommer cette scission --
+   sans quoi quelqu'un « rectifiera » cette valeur en croyant reparer une faute de frappe.
+*/
 :root {
   --bg: #eef2f4; --panel: #ffffff; --panel-2: #f4f7f8; --line: #dbe4e7;
-  --ink: #122229; --ink-soft: #51666f; --ink-faint: #80939b;
-  --accent: #0d7d88; --accent-2: #0a5b64; --accent-soft: #e2f1f2;
-  --warm: #d9702f; --good: #2f9e68; --good-bg: #e4f3ea;
+  --ink: #122229; --ink-soft: #51666f; --ink-faint: #64777f;
+  --accent: #0d7983; --accent-2: #0a5b64; --accent-soft: #e2f1f2;
+  --warm: #b85b22; --good: #247b51; --good-bg: #e4f3ea;
   --shadow: 0 1px 2px rgba(18, 34, 41, .05), 0 8px 24px rgba(18, 34, 41, .06);
   --radius: 12px;
 
@@ -31,7 +45,7 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #0a1215; --panel: #111d21; --panel-2: #16262b; --line: #22383e;
-    --ink: #e7eef0; --ink-soft: #9db0b7; --ink-faint: #6d848b;
+    --ink: #e7eef0; --ink-soft: #9db0b7; --ink-faint: #6f878e;
     --accent: #37b4be; --accent-2: #63c9d1; --accent-soft: #123339;
     --warm: #ef9459; --good: #46b884; --good-bg: #152f26;
     --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 28px rgba(0, 0, 0, .3);

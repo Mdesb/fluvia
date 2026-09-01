@@ -11,7 +11,15 @@
     <!-- Colore la barre systeme d'Android une fois l'application installee. Sans elle, un bandeau
          blanc coupe l'ecran en haut, et l'application a l'air d'une page web dans un cadre. -->
     <meta name="theme-color" content="#0d7d88" />
-    <!-- iOS ignore le manifeste : c'est cette balise qui donne l'icone de l'ecran d'accueil. -->
+    <!-- ⚠ TROIS CHEMINS, TROIS BALISES — ET LE PREMIER MANQUAIT.
+         L'onglet du navigateur, la barre de favoris et l'historique lisent `rel="icon"`, que ce
+         fichier ne declarait pas : ils affichaient l'icone par defaut. Les deux autres balises
+         donnaient l'impression que le sujet etait traite.
+         Le SVG est prefere au PNG : une favicon est redessinee a une dizaine de tailles selon
+         l'ecran et le contexte, et un vecteur les rend toutes nettes. -->
+    <link rel="icon" type="image/png" href="/fluvia-512.png" />
+    <!-- iOS ignore le manifeste ET ignore les favicons SVG : c'est cette balise, en PNG, qui donne
+         l'icone de l'ecran d'accueil. -->
     <link rel="apple-touch-icon" href="/fluvia-192.png" />
     <meta name="apple-mobile-web-app-title" content="Fluvia" />
   </head>

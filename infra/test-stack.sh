@@ -181,7 +181,12 @@ run)
         exit 1
     fi
 
-    # ⚠ UN MARQUEUR TANT QUE LA SUITE TOURNE, POUR QUE LE DEPLOIEMENT PUISSE LE VOIR.
+    # ⚠ UN MARQUEUR TANT QUE LA SUITE TOURNE — ET LE DEPLOIEMENT NE LE LIT PAS.
+    #
+    # Cette phrase disait « pour que le deploiement puisse le voir ». C'est faux, et ce n'est pas un
+    # manque : `deploy-preprod.sh` detecte les suites en lisant les MONTAGES des conteneurs, ce qui
+    # est meilleur — un marqueur survit a un processus tue, un conteneur non. Le marqueur reste utile
+    # a un humain qui cherche ce qui tourne ; il n'est le contrat de personne.
     #
     # `deploy-preprod.sh` retire phpunit (`composer install --no-dev`). Une suite en cours meurt
     # alors en plein milieu, avec un message qui accuse l'operateur de ne pas avoir reinstalle --
