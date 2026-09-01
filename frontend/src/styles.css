@@ -63,19 +63,25 @@
 }
 
 :root {
-  --bg: #eef2f4; --panel: #ffffff; --panel-2: #f4f7f8; --line: #dbe4e7;
-  --ink: #122229; --ink-soft: #51666f; --ink-faint: #64777f;
-  --accent: #0d7983; --accent-2: #0a5b64; --accent-soft: #e2f1f2;
+  --bg: #f4f6fc; --panel: #ffffff; --panel-2: #f1f4fb; --line: #dde3f0;
+  --ink: #0b1020; --ink-soft: #4b5675; --ink-faint: #5e6884;
+  /* Indigo, et non le bleu ni le cyan de la marque : ce sont les seuls arrets du degrade qui
+     puissent porter du TEXTE sur un fond clair. Cyan 1,76:1 et bleu 3,51:1 sur blanc — ils sont
+     des surfaces, pas des encres. */
+  --accent: #3755e8; --accent-2: #2b3fb8; --accent-soft: #e8ecfd;
   --warm: #b85b22; --good: #247b51; --good-bg: #e4f3ea; --warn: #8b6608; --warn-bg: #f7efd7; --crit: #ba3b2c; --crit-bg: #f8e2de;
-  --side-bg: #0e2a30; --side-ink: #cfe3e6; --side-ink-soft: #7fa2a8; --side-active: #0d7d88; --side-line: #1c3d44;
+  --side-bg: #050914; --side-ink: #d3dcf0; --side-ink-soft: #8e9bbc; --side-active: var(--accent); --side-line: #1a2338;
   --shadow: 0 1px 2px rgba(18, 34, 41, .05), 0 8px 24px rgba(18, 34, 41, .06);
   --radius: 12px;
 }
 :root:not([data-theme="light"]) {
   @media (prefers-color-scheme: dark) {
-    --bg: #0a1215; --panel: #111d21; --panel-2: #16262b; --line: #22383e;
-    --ink: #e7eef0; --ink-soft: #9db0b7; --ink-faint: #6f878e;
-    --accent: #37b4be; --accent-2: #63c9d1; --accent-soft: #123339;
+    --bg: #070c1a; --panel: #0f1626; --panel-2: #16203a; --line: #232e4a;
+    --ink: #e7ecf7; --ink-soft: #a3aec8; --ink-faint: #8b96b2;
+    /* Cyan ici, indigo en clair : c'est la scission mesuree. Le cyan rend 11,29:1 sur le navy et
+       1,76:1 sur du blanc ; l'indigo l'inverse. Aucun arret du degrade ne passe sur les deux
+       fonds — un accent unique pour les deux themes est impossible, pas seulement inelegant. */
+    --accent: #27d9d0; --accent-2: #5fe6dd; --accent-soft: #10312f;
   /* ⚠ LE BLANC NE TIENT PAS SUR CE CYAN. `--sur-accent` valait #ffffff pour les deux themes :
      5,15:1 sur l'accent clair, mais 2,49:1 ici — la moitie du seuil, sur les boutons primaires,
      les pastilles, les bulles de message et les selections de calendrier. C'est le defaut que le
@@ -83,14 +89,17 @@
      livre. On ecrit donc le fond de marque, qui rend 6,06:1. */
   --sur-accent: var(--marque-nuit);
     --warm: #ef9459; --good: #46b884; --good-bg: #152f26; --warn: #e0ad3d; --warn-bg: #2f2913; --crit: #e86a58; --crit-bg: #331d19;
-    --side-bg: #081619; --side-ink: #bcd6da; --side-ink-soft: #6f9298; --side-active: #0d7d88; --side-line: #152b30;
+    --side-bg: #050914; --side-ink: #c8d3ea; --side-ink-soft: #8794b5; --side-active: var(--accent); --side-line: #16203a;
     --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 28px rgba(0, 0, 0, .3);
   }
 }
 :root[data-theme="dark"] {
-  --bg: #0a1215; --panel: #111d21; --panel-2: #16262b; --line: #22383e;
-  --ink: #e7eef0; --ink-soft: #9db0b7; --ink-faint: #6f878e;
-  --accent: #37b4be; --accent-2: #63c9d1; --accent-soft: #123339;
+  --bg: #070c1a; --panel: #0f1626; --panel-2: #16203a; --line: #232e4a;
+  --ink: #e7ecf7; --ink-soft: #a3aec8; --ink-faint: #8b96b2;
+  /* Cyan ici, indigo en clair : c'est la scission mesuree. Le cyan rend 11,29:1 sur le navy et
+     1,76:1 sur du blanc ; l'indigo l'inverse. Aucun arret du degrade ne passe sur les deux
+     fonds — un accent unique pour les deux themes est impossible, pas seulement inelegant. */
+  --accent: #27d9d0; --accent-2: #5fe6dd; --accent-soft: #10312f;
   /* ⚠ LE BLANC NE TIENT PAS SUR CE CYAN. `--sur-accent` valait #ffffff pour les deux themes :
      5,15:1 sur l'accent clair, mais 2,49:1 ici — la moitie du seuil, sur les boutons primaires,
      les pastilles, les bulles de message et les selections de calendrier. C'est le defaut que le
@@ -98,7 +107,7 @@
      livre. On ecrit donc le fond de marque, qui rend 6,06:1. */
   --sur-accent: var(--marque-nuit);
   --warm: #ef9459; --good: #46b884; --good-bg: #152f26; --warn: #e0ad3d; --warn-bg: #2f2913; --crit: #e86a58; --crit-bg: #331d19;
-  --side-bg: #081619; --side-ink: #bcd6da; --side-ink-soft: #6f9298; --side-active: #0d7d88; --side-line: #152b30;
+  --side-bg: #050914; --side-ink: #c8d3ea; --side-ink-soft: #8794b5; --side-active: var(--accent); --side-line: #16203a;
   --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 28px rgba(0, 0, 0, .3);
 }
 
@@ -130,7 +139,7 @@ a { color: var(--accent); }
 .side-link { display: flex; align-items: center; gap: 11px; padding: 9px 12px; border-radius: 9px; color: var(--side-ink); text-decoration: none; font-size: 14px; cursor: pointer; border: none; background: none; width: 100%; text-align: left; font-family: inherit; }
 .side-link .ic { width: 18px; text-align: center; flex: none; opacity: .9; }
 .side-link:hover { background: rgba(255, 255, 255, .05); }
-.side-link.active { background: var(--side-active); color: #fff; font-weight: 600; }
+.side-link.active { background: var(--side-active); color: var(--sur-accent); font-weight: 600; }
 .side-foot { margin-top: auto; padding: 14px; border-top: 1px solid var(--side-line); font-size: 12px; color: var(--side-ink-soft); display: flex; align-items: center; gap: 10px; }
 .side-foot .av { width: 30px; height: 30px; border-radius: 50%; background: #2a4c53; color: #cfe3e6; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; flex: none; }
 .side-foot .logout { margin-left: auto; background: none; border: none; color: var(--side-ink-soft); cursor: pointer; font-family: inherit; font-size: 16px; padding: 4px 6px; border-radius: 7px; }
@@ -597,7 +606,9 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
   top: -48px;
   z-index: 100;
   background: var(--accent);
-  color: #fff;
+  /* Pas de blanc en dur : `--accent` est un cyan clair en theme sombre, ou le blanc rend
+     1,9:1. Le lien d evitement est l affordance d accessibilite elle-meme. */
+  color: var(--sur-accent);
   padding: var(--esp-normal) var(--esp-large);
   border-radius: 9px;
   font-weight: 600;
