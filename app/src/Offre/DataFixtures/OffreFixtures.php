@@ -175,6 +175,9 @@ final class OffreFixtures extends Fixture implements DependentFixtureInterface
             $formule = (new Formule())
                 ->setPeriodicite(PeriodiciteFormule::Mensuel)
                 ->setDroitAcces(['mode' => 'illimite'])
+                // Voir `ModelePiscineTypeGenerator` : un abonnement mensuel vendu avec un mandat
+                // SEPA porte la facette, sans quoi la boutique refuse de le vendre.
+                ->setSepaActif(true)
                 ->setRenouvellement(['auto' => true, 'prix' => 'fixe']);
             $service = (new ServiceInclus())
                 ->setActiviteRef(Uuid::v4())

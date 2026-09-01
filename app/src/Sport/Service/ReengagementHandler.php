@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Sport\Service;
 
+use App\Offre\Enum\Canal;
+use App\Offre\Service\SubscriptionPriceResolver;
 use App\Sepa\Entity\MandatSepa;
 use App\Sepa\Enum\StatutMandatSepa;
 use App\Sepa\Port\TokenisationIbanInterface;
@@ -27,6 +29,7 @@ final class ReengagementHandler
         private readonly TokenisationIbanInterface $tokenisation,
         private readonly ChiffreurIbanInterface $chiffreur,
         private readonly GenerateurEcheancierHandler $echeancier,
+        private readonly SubscriptionPriceResolver $resolveurTarif,
     ) {
     }
 
@@ -34,7 +37,6 @@ final class ReengagementHandler
         AbonnementFitness $ancien,
         \DateTimeImmutable $dateReengagement,
         int $dureeEngagementMois,
-        int $montantCentimes,
         string $ibanClair,
         string $titulaireMandat,
         ?int $montantPremiereCentimes = null,
@@ -74,6 +76,32 @@ final class ReengagementHandler
 
         $nouvel->setMandatSepa($nouveauMandat);
         $this->em->persist($nouvel);
+
+        // ── LA SECONDE PORTE TRAVERSE LE MEME PASSAGE ────────────────────────────────────────
+        //
+        // ⚠ Ce handler créait un mandat NEUF et un échéancier complet — douze prélèvements — avec
+        //    un montant reçu en champ libre, sans lire la facette SEPA et sans résoudre aucun
+        //    tarif. Exactement la forme de la souscription au guichet.
+        //
+        //    **Raccorder la souscription sans raccorder celui-ci aurait rouvert le trou**, et sur
+        //    les adhérents qui reviennent. C'est pourquoi les deux appellent le même résolveur au
+        //    lieu de recevoir deux copies de la même règle : la quatrième divergence n'apparaîtra
+        //    pas au prochain ajout.
+        //
+        // ⚠ Résolu à la date de RÉENGAGEMENT : c'est ce jour-là que le contrat se renoue, donc le
+        //    tarif applicable est celui en vigueur à ce moment — pas celui de l'abonnement d'avant,
+        //    qui peut dater d'un an.
+        $tarif = $this->resolveurTarif->forFormula($ancien->getFormule(), Canal::Guichet, $dateReengagement);
+        $montantCentimes = $tarif->priceCents();
+
+        if ($montantPremiereCentimes !== null && $montantPremiereCentimes > $montantCentimes) {
+            throw new UnprocessableEntityHttpException(sprintf(
+                'La première échéance (%d c) ne peut pas dépasser le tarif résolu (%d c) : '
+                . 'un prorata retranche, il ne fixe pas un prix.',
+                $montantPremiereCentimes,
+                $montantCentimes,
+            ));
+        }
 
         $nouvel->setMontantCentimes($montantCentimes);
 
