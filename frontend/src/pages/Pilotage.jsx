@@ -168,7 +168,11 @@ export default function Pilotage({ etabActif, etablissements, droits }) {
         />
       </div>
 
-      <div className="grid g2" style={{ marginBottom: 16 }}>
+      {/* ⚠ `g4` ET NON `g2` : ces deux indicateurs sont SECONDAIRES, et une rangée de deux
+          colonnes leur donnait 555 px chacun contre 270 aux quatre principaux — deux fois la
+          surface, donc deux fois le poids lu. Même module, deux cellules vides à droite.
+          Même correction que sur le tableau de bord, où le défaut était identique. */}
+      <div className="grid g4" style={{ marginBottom: 16 }}>
         <Kpi label="Jauges en alerte" valeur={enAlerte} accent={enAlerte ? 'var(--crit)' : 'var(--good)'} />
         <Kpi label="Espaces suivis" valeur={jauges.length} />
       </div>
