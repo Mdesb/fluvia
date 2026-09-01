@@ -2,6 +2,17 @@
 #
 # Remet les dépendances de DÉVELOPPEMENT sur la préproduction, et redémarre PHP-FPM.
 #
+# ── ⚠ IL SALIT UN FICHIER SUIVI, ET `git add -A` LE COMMITERAIT ────────────────────────────────
+#
+# `composer install` avec les dependances de dev regenere `app/config/reference.php` en y ajoutant
+# une section `when@inspection` qui n'existe QUE dans cet environnement. Le fichier est suivi : un
+# `git add -A` apres ce script l'emporte dans le commit, et le prochain deploiement en `--no-dev` la
+# retire — le fichier oscille d'un commit a l'autre sans que personne ne l'ait voulu.
+#
+# Constate le 02/09 : rattrape avant le commit, par hasard, en relisant `git status`.
+#
+#     git restore app/config/reference.php
+#
 # ── POURQUOI CE SCRIPT EXISTE ───────────────────────────────────────────────────────────────────
 #
 # `deploy-preprod.sh` installe en `--no-dev`, ce qui retire PHPUnit : les autres sessions ne peuvent
