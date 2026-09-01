@@ -86,10 +86,12 @@ function analyser(string $racine): array
     }
 
     $trouvailles = [];
+    $GLOBALS['fichiersLus'] = 0;
     $iterateur = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($racine, FilesystemIterator::SKIP_DOTS));
 
     /** @var SplFileInfo $fichier */
     foreach ($iterateur as $fichier) {
+        // Compte ce qui a VRAIMENT ete lu : un verdict vert doit pouvoir le prouver.
         if (!$fichier->isFile() || $fichier->getExtension() !== 'php') {
             continue;
         }
@@ -105,6 +107,7 @@ function analyser(string $racine): array
         $source = (string) file_get_contents($fichier->getPathname());
         $vus = [];
 
+        ++$GLOBALS['fichiersLus'];
         foreach ([MOTIF_DEFAUT => 'valeur par défaut', MOTIF_REPLI => 'repli ??'] as $motif => $genre) {
             if (preg_match_all($motif, $source, $correspondances, PREG_SET_ORDER | PREG_OFFSET_CAPTURE) === false) {
                 continue;
@@ -261,7 +264,12 @@ if (in_array('--liste', array_slice($argv, 1), true)) {
 }
 
 if ($trouvailles === []) {
-    echo "Secrets : OK — aucune clé cryptographique en valeur par défaut.\n";
+    printf(
+        "Secrets : OK — aucune clé cryptographique en valeur par défaut. "
+        . "(%d fichier(s) lu(s), %d fichier(s) d'environnement.)\n",
+        $GLOBALS['fichiersLus'] ?? 0,
+        count(FICHIERS_ENV)
+    );
     exit(0);
 }
 
