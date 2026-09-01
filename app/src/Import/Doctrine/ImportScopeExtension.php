@@ -15,20 +15,18 @@ use Doctrine\ORM\QueryBuilder;
 use Symfony\Bundle\SecurityBundle\Security;
 
 /**
- * Cloisonnement des lots de reprise (D3/D8), sur le patron de `Stay\Doctrine\StayScopeExtension`.
+ * Cloisonnement multi-entités d'`App\Import` (D3/D8, plan-import-i1.md §3 point 1) — copie du patron
+ * `App\Dms\Doctrine\DmsScopeExtension`/`App\Finance\Treasury\Doctrine\PerimetreFinanceExtension`
+ * (`establishment` **direct**, aucune jointure nécessaire pour `ImportBatch`). `ImportedEntityRef`
+ * n'apparaît volontairement pas ici : elle n'est pas une `#[ApiResource]` (§2 point 4 du plan).
  *
- * **Un lot d'import est plus sensible que ce qu'il crée.** Il conserve le fichier source — des noms,
- * des dates de naissance, des courriels, parfois plusieurs milliers de personnes. Une lecture non
- * cloisonnée ne fuiterait pas quelques lignes : elle fuiterait le fichier d'abonnés entier d'un
- * autre exploitant.
- *
- * L'axe est **l'établissement actif**, comme partout ailleurs : le périmètre dit ce qu'on a le droit
- * de voir, l'actif dit ce qu'on regarde.
+ * Échec fermé : sans établissement actif, la collection est vide plutôt qu'inter-établissements (une
+ * liste vide se remarque, une liste trop longue non).
  */
 final class ImportScopeExtension implements QueryCollectionExtensionInterface, QueryItemExtensionInterface
 {
     /** @var array<class-string, list<string>> Relations à joindre depuis la racine jusqu'à « establishment ». */
-    public const CHAINS = [
+    private const CHAINES = [
         ImportBatch::class => [],
     ];
 
@@ -38,7 +36,6 @@ final class ImportScopeExtension implements QueryCollectionExtensionInterface, Q
     ) {
     }
 
-    /** @param array<string, mixed> $context */
     public function applyToCollection(
         QueryBuilder $queryBuilder,
         QueryNameGeneratorInterface $queryNameGenerator,
@@ -46,7 +43,7 @@ final class ImportScopeExtension implements QueryCollectionExtensionInterface, Q
         ?Operation $operation = null,
         array $context = [],
     ): void {
-        $this->restrict($queryBuilder, $resourceClass);
+        $this->restreindre($queryBuilder, $resourceClass);
     }
 
     /**
@@ -61,33 +58,37 @@ final class ImportScopeExtension implements QueryCollectionExtensionInterface, Q
         ?Operation $operation = null,
         array $context = [],
     ): void {
-        $this->restrict($queryBuilder, $resourceClass);
+        $this->restreindre($queryBuilder, $resourceClass);
     }
 
-    private function restrict(QueryBuilder $queryBuilder, string $resourceClass): void
+    private function restreindre(QueryBuilder $queryBuilder, string $resourceClass): void
     {
-        if (!isset(self::CHAINS[$resourceClass])) {
+        if (!isset(self::CHAINES[$resourceClass])) {
             return;
         }
 
-        if (!$this->security->getUser() instanceof Utilisateur) {
+        $utilisateur = $this->security->getUser();
+        if (!$utilisateur instanceof Utilisateur) {
             return;
         }
 
         $alias = $queryBuilder->getRootAliases()[0];
+        foreach (self::CHAINES[$resourceClass] as $i => $relation) {
+            $nouvelAlias = 'import_perimetre_' . $i;
+            $queryBuilder->innerJoin($alias . '.' . $relation, $nouvelAlias);
+            $alias = $nouvelAlias;
+        }
 
         $actif = $this->contexte->idActif();
         if ($actif === null) {
-            // Fermeture par défaut : une liste vide se remarque, une liste inter-établissements a
-            // seulement l'air plus longue.
             $queryBuilder->andWhere('1 = 0');
 
             return;
         }
 
         $queryBuilder
-            ->andWhere(sprintf('IDENTITY(%s.establishment) = :scope_import_actif', $alias))
-            ->setParameter('scope_import_actif', $actif, 'uuid')
+            ->andWhere(sprintf('IDENTITY(%s.establishment) = :import_perimetre_actif', $alias))
+            ->setParameter('import_perimetre_actif', $actif, 'uuid')
             ->distinct();
     }
 }

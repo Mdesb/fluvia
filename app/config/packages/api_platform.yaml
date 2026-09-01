@@ -115,6 +115,9 @@ api_platform:
             # Agenda (28/08). Meme regle que ci-dessus : les dossiers existent avant leur ligne.
             - '%kernel.project_dir%/src/Calendar/Entity'
             - '%kernel.project_dir%/src/Calendar/ApiResource'
+            # Reprise initiale (`App\Import`, plan-import-i1.md, C9) — dossier créé dans le même commit
+            # que les entités (`ImportBatch`) : la règle fail-hard est respectée par construction.
+            - '%kernel.project_dir%/src/Import/Entity'
     defaults:
         stateless: true
         cache_headers:

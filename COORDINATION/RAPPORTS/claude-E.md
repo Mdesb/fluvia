@@ -287,3 +287,211 @@ touche `App\Crm` (UI-5, champ `preferredPaymentMethodCode` sur `Client`) et `App
 retrait de `etablissement` d'un groupe d'écriture sur `PolitiqueRecouvrement`). Si tu me vois dans ces
 deux modules, c'est **autorisé par Maxime**, pas un franchissement. Je m'en tiens strictement à ces deux
 points, rien d'autre dans Crm/Recouvrement.
+
+## 26/08 — CLAIM T2 (Reprise initiale / import client) — périmètre `App\Import` assigné par Maxime
+
+Mes 2 modules (SmartFlow, RevenueRecovery) + UI-5 + D41 sont livrés/intégrés. **Maxime m'assigne T2** (spec
+`COORDINATION/specs/import/SPEC-REPRISE-INITIALE.md`). Nouveau module **`App\Import`** (n'existe pas ;
+seul `BankStatementImport` existe — je généralise son patron, je n'en invente pas un second, §2 spec).
+
+**Découpage (SDD, incrémental) :**
+- **I1** — framework `ImportBatch` (deux temps `POST /imports` valide-sans-écrire → `/appliquer` en 1
+  transaction, refuse-tout avec liste des lignes, `contentHash` anti-doublon, `externalRef` obligatoire+
+  unique (établissement,type), établissement estampillé serveur D41, `importBatchRef` Uuid nu D2,
+  `/annuler` qui refuse si une ligne a servi) **+ le type `customers`** (la racine).
+- **I2+** — types `products`, `tariffs`, `subscribers`, `card_credits` (rapprochement d'un total annoncé
+  avant application — argent), `staff`, sur le même framework.
+
+**Questions ouvertes (§6) — routées à toi, A ; je ne bloque pas, je procède sur le défaut le plus sûr :**
+- **Format** : je fais **CSV d'abord** (la spec dit « le CSV suffit techniquement ») ; XLSX en incrément
+  suivant si Maxime le veut. Le parseur est derrière un port, l'ajout d'XLSX ne touchera pas le cœur.
+- **Écran vs CLI** : je livre l'**API** (le cœur défini par la spec) ; écran/CLI ensuite selon qui
+  accueille les premiers clients (§6).
+Si l'un de ces choix te gêne, dis-le dans `ORDRES/claude-E.md` ; d'ici là j'avance.
+
+## 26/08 — Plan Import I1 livré (`specs/import/plan-import-i1.md`) — 3 questions pour A (je procède sans bloquer)
+
+Plan technique I1 = framework `ImportBatch` + type `customers`. Décisions structurantes : table de
+correspondance générique `ImportedEntityRef` (`(establishment,type,externalRef)` unique) pour `externalRef`
+plutôt qu'une colonne par module ; `importBatchRef` (Uuid nu) sur l'entité cible ; upsert par `externalRef`
+(D100) ; annulation par scan de métadonnées Doctrine (`ReverseReferenceChecker`, générique) refusant si une
+ligne a servi ; établissement estampillé serveur (le décorateur global D41 ne s'applique pas à ce chemin →
+le processor en est pleinement responsable, testé).
+
+**Questions à trancher (je procède sur le défaut du plan, je ne bloque pas — mandat d'autonomie de Maxime) :**
+1. **[le plus important] Écriture cross-module directe `App\Import → App\Crm\Entity\Client`** — contredit
+   la lettre de D2, mais importer des clients crée forcément des `Client`, et le refus-tout exige la garantie
+   transactionnelle qu'un événement async ne porte pas. Je procède (documenté). Si tu veux une exception
+   actée au manifeste ou une autre lecture de D2, dis-le — la refonte serait mécanique.
+2. **RGPD** : `ImportBatch.content` conserve le fichier nominatif (spec §2, valeur probatoire) **sans purge**.
+   Je le livre tel que spécifié ; à statuer avant prod réelle (durée de rétention/purge ? patron `Dms`).
+3. **Constat hors périmètre** : le garde-fou global D41 `EstablishmentScopeWriteGuard` ne teste que
+   `getEtablissement()` (français) — `Project`/`Legal`/`Marketing` (en `getEstablishment()` anglais) ne sont
+   pas couverts. Pas mon lot, mais une classe D41 rouverte, à signaler à qui tient le garde-fou (claude-C ?).
+
+Implémentation I1 en cours ; je teste en local dès qu'elle rend.
+
+## 01/09 — Import I1 IMPLÉMENTÉ + VERT (module `App\Import`)
+
+Framework `ImportBatch` (deux temps `POST /imports` valide-sans-écrire → `/appliquer` en 1 transaction →
+`/annuler`) + type `customers`. `ImportedEntityRef` (correspondance `externalRef` générique), `CsvImportParser`
+(port, XLSX ajoutable), `RowImporterRegistry`, `CustomerRowImporter` (upsert par externalRef, écriture
+cross-module assumée vers `Crm\Client`), `ReverseReferenceChecker` (annulation refuse si une ligne a servi),
+cloisonnement, établissement estampillé serveur (D41), `Client.importBatchRef` (colonne nue). 3 migrations.
+**`tests/Import`+`tests/Crm` = 95 tests / 521 assertions, 0 échec.** 2 bugs corrigés en revue de test :
+`setCreatedAt` inexistant (createdAt posé au constructeur) et échec-fermé 404 sur apply/revert (piège
+`read:true` + provider filtré → `null`, même famille que SmartFlow/RevenueRecovery). Questions ouvertes déjà
+routées à toi (cross-module Import→Crm, RGPD rétention `content`, trou D41 `getEstablishment` anglais).
+Prochains incréments : types `products`, `tariffs`, `subscribers`, `card_credits` (rapprochement total), `staff`.
+
+## 01/09 — Import I1 : backend vert, mais D50 impose un front (je le câble)
+
+Backend Import I1 committé et **vert (95/521)**, migrations rehorodatées D32, `PerimetreImportExtension`→
+`ImportScopeExtension` (D5). **Mais le push est refusé par D50** (« Contrôles du front ») : mes ~5 routes
+API sont **INJOIGNABLES** (aucun appel front) → cliquet 630→635 refusé. La spec §6 laissait l'écran ouvert,
+mais **D50 exige au moins un câblage front** (appel dans `client.js` + usage dans un écran). Donc, pour
+finir le chantier (mandat d'autonomie), j'ajoute un **écran Import minimal** (`frontend/src/pages`,
+onglet gated `import.read`, appels `POST /imports` / `/appliquer` / `/annuler` / `GET /imports`) respectant
+le design system (contrastes D50). Je pousse backend+front ensemble une fois D50 vert.
+
+**Pour toi, A** : si tu préfères que les routes API-only soient **exemptées** de D50 plutôt qu'un écran
+(le CSV/CLI-first était une option de la spec §6), dis-le — mais D50 étant un cliquet, l'écran minimal est
+la voie qui débloque sans dérogation.
+
+## 01/09 — Import I1 INTÉGRÉ sur claude-E (backend + front, tous garde-fous verts)
+
+`git push … 904407d6 → claude-E` **accepté**. Le blocage D50 est levé : écran `Reprise initiale`
+(`frontend/src/pages/Imports.jsx`, onglet gated `import.read`) câble les **4 routes** (`GET /imports`,
+`GET /imports/{id}`, `POST /imports`, `.../appliquer`, `.../annuler`) — dépôt CSV base64 côté client,
+verdict `validated`/`rejected` + liste ENTIÈRE des erreurs, boutons Appliquer/Annuler (409 remonté tel quel).
+Écart client/serveur ramené à 630/630, contrastes 0 sous seuil.
+
+Au passage, 4 garde-fous neufs franchis proprement (pas de dérogation) :
+- **Créations irréversibles** : `ImportBatch` déclaré `@sans-suppression` (un lot est ANNULÉ/`reverted`,
+  jamais effacé — `content` persiste pour rejuger un import contesté).
+- **Espacement en ligne** : `gap:6` → jeton `var(--esp-serre)`.
+- **Nullable sur colonne NOT NULL** : `ImportedEntityRef` passe à un **constructeur exigeant**
+  (establishment/type/externalRef/targetId/importBatchRef non-nullables — entité interne, jamais
+  désérialisée) ; `ImportBatch::$type` annoté `@rempli-au-serveur` (exigé 422 avant tout flush).
+- **Vacuité des tests** : `CloisonnementImportTest` dépose désormais un lot sur B et
+  `assertNotEmpty`/`assertContains` avant `assertNotContains` (l'assertion ne peut plus passer sur vide).
+
+**État T2** : I1 (customers) livré de bout en bout. Je relance la suite Import en local pour reconfirmer
+le vert après le refactor de constructeur (D28), puis je produis l'artefact récap demandé par Maxime.
+
+**Question I2+ (blocante, pour toi A)** : les types restants écrivent **hors de mon périmètre** —
+`products`→Boutique, `tariffs`→Boutique/Tarification, `subscribers`+`card_credits`→Abonnement/Accès,
+`staff`→Sécurité. Chaque `RowImporter` serait une **écriture cross-module** dans un module tenu par une
+autre session. Je ne les attaque pas unilatéralement (D2, cloisonnement, règle 2 : seul Maxime déplace un
+périmètre). Dis-moi comment tu veux orchestrer : soit tu m'ouvres une écriture cadrée (comme Import→Crm),
+soit chaque module owner expose un point d'entrée que j'appelle. En attendant, I1 est autoportant.
+
+## 01/09 — Vert reconfirmé après refactor (D28)
+
+Suite `tests/Import`+`tests/Crm` relancée sur stack Docker (token `claudeEdesktop`, 1er passage buté sur
+un résidu de cache `var/cache/test-claudeEdesktop/.!!kb0` — infra, purgé) : **OK (95 tests, 523 assertions)**.
+Le refactor `ImportedEntityRef` (constructeur exigeant, non-nullables) et l'annulation-vacuité du test de
+cloisonnement n'ont rien cassé (+2 assertions = les `assertNotEmpty`/`assertContains` ajoutés). Artefact
+récap mis à jour. I1 clos ; j'attends ton cadrage I2+ (écritures cross-module).
+
+## 01/09 — Présentation + prise de l'ordre #1 (idempotence fixtures, D52)
+
+T2 I1 clos et vert. Je prends ton **ordre #1** (audit d'idempotence de mes fixtures). Inventaire fait sur
+mes 5 fixtures (`grep 'new X('` + lecture) :
+- `SmartFlow`/`RevenueRecovery`/`Recouvrement` : permissions seules via `permissionNommee` (find-or-create) — OK.
+- `Import` : `findOneBy(module,action)` avant create — OK.
+- `Crm` : porte de démonstration (sortie si `Famille Dupont` existe) au-dessus de tous les `new X()`, helpers
+  idempotents pour permissions/rôles — OK par construction.
+Aucune de mes fixtures ne construit une entité à unicité seulement-technique hors garde. Je lance le
+test-preuve (`FixturesIdempotentesTest`, double chargement + comptage) pour ne pas me fier au « ça ne
+plante pas ». Résultat au prochain battement.
+
+## 01/09 — Ordre #1 CLOS : fixtures idempotentes, prouvé par comptage
+
+`FixturesIdempotentesTest` (double `doctrine:fixtures:load` + comptage de lignes hors journaux) :
+**OK — 1 test, 4 assertions, aucune dérive de lignes** au second chargement. Le graphe complet (donc mes
+5 fixtures incluses) est idempotent. Pas de « ça ne plante pas » : c'est le comptage qui le dit.
+Ordre #1 clos côté claude-E.
+
+Observation hors périmètre (pour toi/claude-D) : le test déclenche 1 déprécation Doctrine —
+`Connection::quoteIdentifier` (deprecated) à `FixturesIdempotentesTest.php:143`, à remplacer par
+`quoteSingleIdentifier`. Fichier partagé de claude-D, je ne le touche pas sans ton feu.
+
+J'enchaîne sur ton **ordre #2 — SF-2** (D27 : une session signalée que rien n'émet). J'analyse d'abord
+qui devrait émettre l'événement et si ça reste dans mon périmètre SmartFlow.
+
+## 01/09 — Ordres #2 (SF-2) et #3 (SF-1/RR-1, côté consommateur) : résolus par convergence, prouvés
+
+Vérifié plutôt que reconstruit. Ces ordres datent de 4 jours ; les deux bouts ont convergé depuis.
+
+**SF-2 — no-show → report (D27).** Bouclé de bout en bout :
+- Émetteur : `Reservation\Command\BasculerNoShowCommand` publie `booking.reschedule_requested`
+  (uniquement si issue = `RestoredWithReschedule` ∧ crédit actionné ∧ restitué) avec la charge
+  `{customerId, reservationRef, slotId, droitId}`.
+- Consommateur (mien) : `SmartFlow\EventListener\RescheduleRequestedListener` lit **exactement** cette
+  charge → `RescheduleProposal` (searching → proposed si créneau compatible) + notification via le port
+  transverse. Best-effort D7 (jamais fait échouer le constat de no-show).
+- Preuve : `tests/SmartFlow/Api/RescheduleFlowEndToEndTest` (searching→proposed→confirmed, décline→expired,
+  409 sur double-accept / accept-sur-searching, notification D37). **Suite SmartFlow+RR : OK 63 tests / 434.**
+
+**SF-1 / RR-1 — déclencheurs.** `RevenueRecoveryEventSubscriber` consomme `booking.cancelled`,
+`booking.no_show`, `payment.failed`, `payment.incident_reopened`, résolution sur `payment.succeeded` ;
+`booking.*` émis par Réservation, payloads alignés. Le moteur de relance a désormais ses appelants.
+
+**Ce qui reste — et n'est PAS dans mon périmètre, à toi de trancher :**
+1. **Planifier `BasculerNoShowCommand` (D36).** L'émetteur existe mais rien ne le déclenche
+   périodiquement : sans ordonnanceur, le no-show ne bascule jamais en prod → SF-2 ne se déclenche
+   jamais en vrai. C'est la couche batch de Réservation/plateforme.
+2. **Lever la dégradation D27 côté Réservation.** `FacturationNoShow` porte encore un signal « report
+   promis mais SF-2 absent » (RG-CQ5-09) et `IssueCreditNoShow` un commentaire « SF-2 absent » : SF-2
+   existe maintenant, l'exploitant peut être informé qu'un report part réellement. Fichiers de Réservation.
+3. **Types de déclencheurs sans émetteur** (`cart_abandoned`, `quote_expired`, `invoice_overdue`,
+   `customer_inactive`) : présents dans `RecoveryTriggerType` mais non consommés par le subscriber —
+   relèvent d'incréments RR I2+ (souvent batch, pas événementiel). À prioriser si tu veux.
+
+Dis-moi lesquels tu m'ouvres (périmètre) ou si je passe à autre chose. En attendant je prends la suite
+de ta liste faute d'un chantier in-périmètre restant.
+
+## 01/09 — En attendant ta réponse : je prends T24 (garde-fou n°35) du backlog
+
+Ordre le plus récent de toi = 26/08 (exécuté). Ma question du 01/09 n'a pas encore de réponse. Plutôt
+que d'attendre inactif, je prends un chantier *libre* du backlog dans ma zone de compétence :
+**T24 — garde-fou n°35** (entité rattachable absente de la liste blanche de son extension de module).
+Sécurité/cloisonnement, repo-local, calibrable sur les 3 témoins (`CardRejection`, `DailyClosure`,
+`OperationScellee`). Proposé par b8, mais b8 est sur la purge service worker — pas de collision.
+Je n'installe rien dans `pre-receive` moi-même (D28, c'est toi) : je livre le script + sa ligne de base
+gelée + exclusions motivées, et je te le remets pour câblage. Si tu voulais que ce soit un autre, dis-le.
+
+## 01/09 — T24 livré : garde-fou n°35 (liste blanche de cloisonnement)
+
+`bin/garde-fou-liste-blanche-cloisonnement.php` + ligne de base + câblage `garde-fous.sh` et les DEUX
+hooks (`pre-receive`, `pre-commit`). Poussé `efe1f9bb`, garde-fous verts.
+
+**Ce qu'il attrape** (complément exact du n°28) : { entités d'un module portant une relation directe
+vers une ancre — Etablissement, PointDeVente, ProfilExploitant, Groupe — ET exposées `#[ApiResource]` }
+moins { celles que ses extensions nomment } moins { couvertes en bloc-namespace ou par interface }.
+C'est l'angle mort d'`OperationScellee` : liste blanche qui paraît complète, entité oubliée, collection
+tous établissements confondus, zéro erreur.
+
+**Calibration (rejouée, pas déduite)** — script courant contre l'arbre d'AVANT chaque correctif :
+- parent de `db20a777` (fix OperationScellee) → ressort `OperationScellee`, elle seule ;
+- parent de `24b6df68` (« les onze entités ») → ressort `CardRejection` + `DailyClosure` +
+  `OperationScellee` + `ParametrePmvEtablissement` + `Recurrence`, toutes corrigées depuis ;
+- arbre actuel → **0**. Les 3 témoins ressortent avant, aucun après.
+
+**Décisions de conception, pour ta revue :**
+- Filtre « exposée » (comme le n°5) : une entité interne jamais servie ne fuit pas par collection —
+  sinon 13 candidats dont 5 internes (traces/paramètres). Ramené à 8, tous couverts en bloc.
+- Bloc-namespace détecté par `str_starts_with($resourceClass, …)` **quel que soit** le porteur du
+  préfixe (littéral OU constante `self::NAMESPACE_MODULE`) : Marketing filtre par constante, se fier au
+  littéral le signalait à tort.
+- **Naît à ZÉRO dette** (cliquet pur) : aucune exclusion nécessaire sur l'arbre actuel. Le fichier de
+  ligne de base est en place, vide, prêt à recevoir une exclusion motivée si un référentiel global
+  légitime apparaît.
+
+**⚠ Pour toi (D28)** : le hook installé sur le dépôt nu doit être réinstallé (`bin/reinstaller-hooks.sh`)
+pour que le n°35 tourne réellement à la poussée. Tant que non, il est câblé (filet de complétude
+satisfait) mais dormant — exactement le trou du 24/08 que tu as documenté. Je ne réinstalle pas moi-même.
+
+Je reste dispo : si tu veux que je transforme les 2 vraies fuites redécouvertes en tickets, ou que je
+prenne un autre item du backlog, dis-le.

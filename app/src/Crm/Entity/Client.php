@@ -51,6 +51,10 @@ use Symfony\Component\Validator\Constraints as Assert;
 // adherent entrer deux fois, une fois par site — exactement la duplication que cette section de
 // la specification existe pour empecher. On sert son intention plutot que sa formulation.
 #[ORM\UniqueConstraint(name: 'uniq_client_groupe_external_ref', columns: ['groupe_id', 'external_ref'])]
+// Colonne posée par la reprise initiale (`App\Import`, plan-import-i1.md §0.6/§1) : existe pour être
+// FILTRÉE (COUNT/DELETE par lot lors de `POST /imports/{id}/annuler`), pas pour être affichée sur une
+// fiche — sans index, chaque annulation balaierait la table entière.
+#[ORM\Index(name: 'idx_client_import_batch_ref', columns: ['import_batch_ref'])]
 #[ApiResource(
     shortName: 'Client',
     operations: [
@@ -245,6 +249,26 @@ class Client
     #[ORM\Column(length: 180, nullable: true)]
     #[Groups(['client:read'])]
     private ?string $majPar = null;
+
+    /**
+     * `?Uuid` **nu** — pas de relation Doctrine (D2 littéral, plan-import-i1.md §0.6). Posé **une seule
+     * fois** par `App\Import\Service\CustomerRowImporter` à la création d'un client par reprise initiale,
+     * jamais réécrit par une mise à jour ultérieure : c'est ce qui rend `ImportBatch::countCreated()`/
+     * `isReferenced()`/`revert()` exacts (une mise à jour n'est jamais comptée comme une création, une
+     * annulation ne supprime jamais un client seulement mis à jour par le lot).
+     *
+     * ⚠ UN `?Uuid` NU, JAMAIS UNE RELATION DOCTRINE (D2). Le garder hors relation evite que `Crm`
+     * depende du module d'import, qui ne sert qu'une fois dans la vie d'un client.
+     *
+     * ⚠ CETTE PROPRIETE A ETE DECLAREE DEUX FOIS JUSQU'AU 01/09. Les deux sessions qui ont ecrit le
+     * module Import l'ont chacune ajoutee, a 380 lignes d'ecart — git a fusionne sans conflit, et PHP
+     * a refuse de charger la classe. Le symptome ne nommait pas la cause : le garde-fou qui tombait
+     * annonçait une table de routes inexploitable, parce que `debug:router` charge les entites.
+     *
+     * Aucun `#[Groups]` : détail d'implémentation de la reprise, pas une donnée qu'une fiche affiche.
+     */
+    #[ORM\Column(name: 'import_batch_ref', type: UuidType::NAME, nullable: true)]
+    private ?Uuid $importBatchRef = null;
 
     public function __construct()
     {
@@ -553,6 +577,18 @@ class Client
         return $this->majPar;
     }
 
+    public function getImportBatchRef(): ?Uuid
+    {
+        return $this->importBatchRef;
+    }
+
+    public function setImportBatchRef(?Uuid $importBatchRef): self
+    {
+        $this->importBatchRef = $importBatchRef;
+
+        return $this;
+    }
+
     public function setMajPar(?string $majPar): self
     {
         $this->majPar = $majPar;
@@ -611,16 +647,6 @@ class Client
     #[ORM\Column(length: 128, nullable: true)]
     private ?string $externalRef = null;
 
-    /**
-     * Le lot de reprise qui a cree ce client — un `?Uuid` nu, **jamais une relation Doctrine** (D2).
-     *
-     * C'est ce qui rend l'annulation possible : sans lui, defaire un import demanderait de deviner
-     * ce qu'il avait cree. Le garder hors relation evite que `Crm` depende du module d'import, qui
-     * ne sert qu'une fois dans la vie d'un client.
-     */
-    #[ORM\Column(type: UuidType::NAME, nullable: true)]
-    private ?Uuid $importBatchRef = null;
-
     public function getExternalRef(): ?string
     {
         return $this->externalRef;
@@ -629,18 +655,6 @@ class Client
     public function setExternalRef(?string $externalRef): self
     {
         $this->externalRef = $externalRef;
-
-        return $this;
-    }
-
-    public function getImportBatchRef(): ?Uuid
-    {
-        return $this->importBatchRef;
-    }
-
-    public function setImportBatchRef(?Uuid $importBatchRef): self
-    {
-        $this->importBatchRef = $importBatchRef;
 
         return $this;
     }

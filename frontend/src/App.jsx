@@ -64,6 +64,10 @@ const DonneesPersonnelles = lazy(() => import('./pages/DonneesPersonnelles.jsx')
 // Differe : la documentation de l'API ne s'ouvre qu'a l'occasion d'une integration, jamais en
 // exploitation courante. Elle n'a pas a peser sur le premier chargement.
 const DocumentationApi = lazy(() => import('./pages/DocumentationApi.jsx'))
+// Differe : une reprise initiale se fait a la mise en route d'un site, pas tous les jours. L'ecran
+// ne doit peser sur aucun premier chargement -- mais il doit exister, sans quoi ses quatre routes
+// serveur restent injoignables.
+const Imports = lazy(() => import('./pages/Imports.jsx'))
 
 import { lireHash, ecrireHash } from './api/url.js'
 
@@ -461,6 +465,7 @@ export default function App() {
       {onglet === 'campagnes' && <Campagnes etabActif={etabActif} droits={droits} />}
       {onglet === 'projets' && <Projets etabActif={etabActif} droits={droits} />}
       {onglet === 'documents' && <Documents etabActif={etabActif} droits={droits} />}
+      {onglet === 'imports' && <Imports etabActif={etabActif} droits={droits} />}
       {onglet === 'social' && <Social etabActif={etabActif} droits={droits} />}
       {onglet === 'sport' && <Sport etabActif={etabActif} droits={droits} />}
       {onglet === 'pilotage' && (

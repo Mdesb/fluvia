@@ -150,6 +150,11 @@ const NAV = [
       // Ouvert le 27/08 : quinze operations, aucun ecran. Un contrat depose par l'API existait,
       // et personne ne pouvait le relire.
       { id: 'documents', ic: 'documents', label: 'Documents', perms: ['dms.read', 'dms.write'] },
+      { id: 'documents', ic: '🗎', label: 'Documents', perms: ['dms.read', 'dms.write'] },
+      // Reprise initiale (App\Import) : deposer un CSV de clients, le VALIDER, puis l'APPLIQUER en
+      // un second geste. L'entree est gardee par `import.read` -- la lecture ; l'ecran ne montre les
+      // gestes d'ecriture (valider, appliquer, annuler) qu'a qui porte import.create/apply/revert.
+      { id: 'imports', ic: '⇪', label: 'Reprise initiale', perm: 'import.read' },
       // Ouvert le 27/08. L'ecran existe pour un etat precis : `partially_failed` -- un message
       // parti sur deux comptes, passe sur l'un, echoue sur l'autre. Sans le detail par compte,
       // on republie partout pour rattraper un seul echec.

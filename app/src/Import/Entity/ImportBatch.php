@@ -4,106 +4,89 @@ declare(strict_types=1);
 
 namespace App\Import\Entity;
 
+use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
+use ApiPlatform\Metadata\ApiFilter;
 use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Post;
-use App\Import\Enum\ImportStatus;
+use App\Import\Enum\ImportBatchStatus;
 use App\Import\Enum\ImportType;
-use App\Import\State\AnalyseImportProcessor;
-use App\Import\State\ApplyImportProcessor;
-use App\Import\State\RevertImportProcessor;
+use App\Import\State\ApplyImportBatchProcessor;
+use App\Import\State\RevertImportBatchProcessor;
+use App\Import\State\ValidateImportBatchProcessor;
 use App\Organisation\Entity\Etablissement;
 use App\Securite\Entity\Utilisateur;
+use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
 use Symfony\Component\Uid\Uuid;
 
 /**
- * Un lot de reprise initiale (SPEC-REPRISE-INITIALE §2).
+ * Lot de reprise initiale (`App\Import`, plan-import-i1.md §0/§1, SPEC-REPRISE-INITIALE.md §2) — un
+ * import est un OBJET, pas une action : il porte le fichier, son verdict, et ce qu'il a créé.
  *
- * ── UN IMPORT EST UN OBJET, PAS UNE ACTION ──────────────────────────────────────────────────────
+ * Généralise `App\Finance\Treasury\Entity\BankStatementImport` (`contentHash`, statut enum, message(s)
+ * d'erreur porté par l'objet) avec **deux écarts assumés** (§0.1/§0.2 du plan) :
+ * 1. `content` est ici **persisté** (LONGTEXT, base64) — le précédent le rend transitoire. Un import
+ *    contesté six mois plus tard doit pouvoir se rejuger sur ce qui l'a produit, pas seulement son
+ *    résultat.
+ * 2. Deux temps stricts (D98) : `POST /imports` valide TOUT sans écrire en base métier
+ *    (`status = validated|rejected`) ; `POST /imports/{id}/appliquer` écrit, en une transaction
+ *    (`status = applied`) ; `POST /imports/{id}/annuler` défait exactement ce que CE lot a créé
+ *    (`status = reverted`).
  *
- * C'est ce qui rend tenables d'un seul coup les trois décisions de la spécification : refuser un
- * fichier en entier, le prévisualiser avant d'écrire, et pouvoir revenir en arrière. Une action ne
- * porte rien entre deux appels ; un objet porte le fichier, son verdict et ce qu'il a créé.
+ * `establishment` n'apparaît **jamais** dans un groupe d'écriture (D41, §0.7) : les trois opérations
+ * d'écriture sont chacune un `Processor` dédié qui appelle lui-même `persist()`/`flush()` — le
+ * décorateur global `EstablishmentScopeWriteGuard` ne s'applique donc pas ici, et n'a de toute façon
+ * rien à ignorer puisqu'aucune valeur cliente n'existe pour ce champ.
  *
- * **On généralise `Finance\Treasury\Entity\BankStatementImport`, on n'invente pas un second
- * patron.** Il portait déjà l'empreinte, le contenu, le statut et son message d'erreur ; la seule
- * chose qu'il n'avait pas est la liste complète des lignes fautives, que la décision « tout
- * refuser » rend indispensable — refuser sans dire quelles lignes obligerait l'exploitant à
- * chercher à l'aveugle dans un fichier de plusieurs milliers de lignes.
+ * `content` est exclu de la collection (métadonnées seules) et inclus uniquement sur `Get` et sur
+ * `.../appliquer` (groupe `import_batch:read_content`, §2 du plan) — un fichier de reprise complet
+ * n'a pas sa place dans une liste.
  *
- * ── LE FICHIER SOURCE EST CONSERVÉ ──────────────────────────────────────────────────────────────
- *
- * Sans lui, un import contesté six mois plus tard ne se rejuge pas : on n'aurait que le résultat,
- * jamais ce qui l'a produit. `contentHash` rend le doublon reconnaissable — deux dépôts du même
- * fichier se voient.
- *
- * ── L'ÉTABLISSEMENT NE VIENT JAMAIS DU FICHIER (D41) ────────────────────────────────────────────
- *
- * Il est estampillé au serveur. ⚠ Une colonne qui désignerait où écrire serait une porte ouverte
- * chez le voisin, et le symptôme — une ligne **en trop** chez quelqu'un d'autre — n'est jamais
- * remonté à un import par celui qui le subit.
- *
- * @sans-ecran: la reprise se pilote en API et en ligne de commande le temps qu'elle fasse ses
- * preuves. La spécification laisse ouvert « écran de reprise, ou ligne de commande d'abord », et
- * D13 demande de n'ouvrir un écran que pour une raison nommée — un écran posé sur un mécanisme qui
- * n'a jamais tourné se refait. Il viendra quand on saura qui accueille les premiers clients ; ce
- * point-là reste à Maxime, pas à moi.
- *
- * @sans-suppression: un lot est une trace, pas une donnée de travail. Le supprimer détruirait le
- * fichier source que la spécification conserve précisément pour rejuger un import contesté six mois
- * plus tard — sans lui on n'a que le résultat, jamais ce qui l'a produit. Ce que le lot a créé se
- * défait par `POST /imports/{id}/revert`, qui laisse la trace en place et refuse dès qu'une ligne a
- * servi. Effacer le lot lui-même reviendrait à effacer la preuve avec l'erreur.
+ * @sans-suppression: un lot n'est jamais effacé, il est ANNULÉ (`.../annuler` → `status = reverted`,
+ * qui défait ses lignes tout en gardant la trace). Le supprimer retirerait la preuve de ce qu'une
+ * reprise a créé — or `content` est persisté précisément pour rejuger un import contesté (§0.1).
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'import_batch')]
-#[ORM\Index(columns: ['establishment_id', 'status'], name: 'IDX_IMPORT_BATCH_ETAB_STATUS')]
-#[ORM\Index(columns: ['establishment_id', 'type'], name: 'IDX_IMPORT_BATCH_ETAB_TYPE')]
-#[ORM\UniqueConstraint(name: 'UNIQ_IMPORT_BATCH_ETAB_HASH', columns: ['establishment_id', 'content_hash'])]
+#[ORM\Index(columns: ['establishment_id'], name: 'idx_import_batch_establishment')]
+#[ORM\Index(columns: ['establishment_id', 'content_hash'], name: 'idx_import_batch_hash')]
+#[ORM\Index(columns: ['status'], name: 'idx_import_batch_status')]
 #[ApiResource(
-    shortName: 'ImportBatch',
+    shortName: 'Import',
     operations: [
         new GetCollection(security: "is_granted('PERM', 'import.read')"),
-        new Get(security: "is_granted('PERM', 'import.read')"),
-
-        // Premier temps : analyser et valider. **N'écrit rien en base métier.**
-        new Post(
-            uriTemplate: '/imports',
-            read: false,
-            input: false,
-            security: "is_granted('PERM', 'import.manage')",
-            processor: AnalyseImportProcessor::class,
+        new Get(
+            security: "is_granted('PERM', 'import.read')",
+            normalizationContext: ['groups' => ['import_batch:read', 'import_batch:read_content']],
         ),
-
-        // Second temps : appliquer, en UNE transaction.
         new Post(
-            uriTemplate: '/imports/{id}/apply',
+            security: "is_granted('PERM', 'import.create')",
+            processor: ValidateImportBatchProcessor::class,
+        ),
+        new Post(
+            uriTemplate: '/imports/{id}/appliquer',
             read: true,
             input: false,
-            security: "is_granted('PERM', 'import.manage')",
-            processor: ApplyImportProcessor::class,
+            security: "is_granted('PERM', 'import.apply')",
+            processor: ApplyImportBatchProcessor::class,
+            normalizationContext: ['groups' => ['import_batch:read', 'import_batch:read_content']],
         ),
-
-        // Défaire exactement ce que ce lot a créé — et refuser dès qu'une ligne a servi.
         new Post(
-            uriTemplate: '/imports/{id}/revert',
+            uriTemplate: '/imports/{id}/annuler',
             read: true,
             input: false,
-            security: "is_granted('PERM', 'import.manage')",
-            processor: RevertImportProcessor::class,
+            security: "is_granted('PERM', 'import.revert')",
+            processor: RevertImportBatchProcessor::class,
         ),
     ],
     normalizationContext: ['groups' => ['import_batch:read']],
-    // Fermeture déclarée de la dénormalisation : aucune propriété ne porte `import_batch:write`.
-    // Les trois opérations lisent le corps brut et sont en `input: false` ; déclarer la fermeture
-    // plutôt que de la laisser dépendre de cette option la rend visible sur l'entité, et lisible
-    // par le garde-fou n°12 — qui ne sait pas lire les options d'opération.
     denormalizationContext: ['groups' => ['import_batch:write']],
 )]
+#[ApiFilter(SearchFilter::class, properties: ['type' => 'exact', 'status' => 'exact', 'contentHash' => 'exact'])]
 class ImportBatch
 {
     #[ORM\Id]
@@ -111,113 +94,80 @@ class ImportBatch
     #[Groups(['import_batch:read'])]
     private Uuid $id;
 
+    /** Estampillé serveur par `ValidateImportBatchProcessor`, jamais depuis le corps (D41, §0.7). */
     #[ORM\ManyToOne(targetEntity: Etablissement::class)]
     #[ORM\JoinColumn(name: 'establishment_id', nullable: false)]
     #[Groups(['import_batch:read'])]
     private ?Etablissement $establishment = null;
 
-    #[ORM\Column(length: 32, enumType: ImportType::class)]
-    #[Groups(['import_batch:read'])]
-    private ImportType $type = ImportType::Customers;
+    /**
+     * @rempli-au-serveur : désérialisé du groupe `import_batch:write` à la création du lot, puis EXIGÉ
+     * (422 « type est obligatoire ») par `ValidateImportBatchProcessor` ET `ApplyImportBatchProcessor`
+     * avant le moindre flush — un lot sans type n'atteint jamais la colonne NOT NULL.
+     */
+    #[ORM\Column(length: 20, enumType: ImportType::class)]
+    #[Groups(['import_batch:read', 'import_batch:write'])]
+    private ?ImportType $type = null;
 
-    #[ORM\Column(length: 16, enumType: ImportStatus::class)]
-    #[Groups(['import_batch:read'])]
-    private ImportStatus $status = ImportStatus::Pending;
+    #[ORM\Column(name: 'file_name', length: 255, nullable: true)]
+    #[Groups(['import_batch:read', 'import_batch:write'])]
+    private ?string $fileName = null;
 
-    #[ORM\Column(length: 255)]
-    #[Groups(['import_batch:read'])]
-    private string $fileName = '';
+    #[ORM\Column(name: 'mime_type', length: 100, nullable: true)]
+    #[Groups(['import_batch:read', 'import_batch:write'])]
+    private ?string $mimeType = null;
 
-    #[ORM\Column(length: 128)]
-    #[Groups(['import_batch:read'])]
-    private string $mimeType = 'text/csv';
-
-    #[ORM\Column]
+    #[ORM\Column(name: 'file_size', type: Types::INTEGER, options: ['default' => 0])]
     #[Groups(['import_batch:read'])]
     private int $fileSize = 0;
 
-    /** Empreinte du contenu : deux dépôts du même fichier se reconnaissent. */
-    #[ORM\Column(length: 64)]
+    #[ORM\Column(name: 'content_hash', length: 64, nullable: true)]
     #[Groups(['import_batch:read'])]
-    private string $contentHash = '';
+    private ?string $contentHash = null;
 
     /**
-     * Le fichier source, conservé.
-     *
-     * Pas exposé en lecture d'API : il peut peser plusieurs mégaoctets et porte des données
-     * personnelles. On le garde pour rejuger un import contesté, pas pour l'afficher.
+     * Fichier source, base64, **conservé** (§0.1, écart assumé face à `BankStatementImport`) — `text`
+     * (`Types::TEXT`, la plateforme MariaDB/Doctrine matérialise systématiquement en `LONGTEXT`, jamais
+     * un `TEXT` nu limité à 64 Ko — vérifié sur la migration générée, D32).
      */
-    #[ORM\Column(type: 'text')]
+    #[ORM\Column(type: Types::TEXT)]
+    #[Groups(['import_batch:read_content', 'import_batch:write'])]
     private string $content = '';
 
-    #[ORM\Column]
+    /** Total annoncé par le client — réservé à `card_credits` (I2+), ignoré par `customers` (I1). */
+    #[ORM\Column(name: 'expected_total', type: Types::DECIMAL, precision: 14, scale: 2, nullable: true)]
+    #[Groups(['import_batch:read', 'import_batch:write'])]
+    private ?string $expectedTotal = null;
+
+    #[ORM\Column(length: 10, enumType: ImportBatchStatus::class, options: ['default' => 'pending'])]
+    #[Groups(['import_batch:read'])]
+    private ImportBatchStatus $status = ImportBatchStatus::Pending;
+
+    #[ORM\Column(name: 'row_count', type: Types::INTEGER, options: ['default' => 0])]
     #[Groups(['import_batch:read'])]
     private int $rowCount = 0;
 
-    /**
-     * Ligne → message, **la liste entière**.
-     *
-     * ⚠ Pas la première erreur. Refuser un fichier en nommant une seule ligne condamne l'exploitant
-     * à autant d'allers-retours qu'il a de fautes ; c'est ce qui fait renoncer à la reprise et
-     * ressaisir à la main.
-     *
-     * @var array<int, string>
-     */
-    #[ORM\Column(type: 'json')]
+    /** @var array<int,string>|null ligne => message, la liste ENTIÈRE, jamais tronquée (D98). */
+    #[ORM\Column(nullable: true)]
     #[Groups(['import_batch:read'])]
-    private array $errors = [];
+    private ?array $errors = null;
 
-    #[ORM\Column]
+    #[ORM\Column(name: 'created_at', type: Types::DATETIME_IMMUTABLE)]
     #[Groups(['import_batch:read'])]
     private \DateTimeImmutable $createdAt;
 
     #[ORM\ManyToOne(targetEntity: Utilisateur::class)]
-    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
+    #[ORM\JoinColumn(name: 'created_by_id', nullable: true)]
     #[Groups(['import_batch:read'])]
     private ?Utilisateur $createdBy = null;
 
-    #[ORM\Column(nullable: true)]
+    #[ORM\Column(name: 'applied_at', type: Types::DATETIME_IMMUTABLE, nullable: true)]
     #[Groups(['import_batch:read'])]
     private ?\DateTimeImmutable $appliedAt = null;
 
-    /** Nombre de lignes réellement créées à l'application. Zéro tant que le lot n'est pas appliqué. */
-    #[ORM\Column]
-    #[Groups(['import_batch:read'])]
-    private int $createdRows = 0;
-
-    /**
-     * Total annoncé par le client, pour les types qui portent de l'argent (SPEC §4).
-     *
-     * ⚠ **C'est le seul garde-fou d'une dette.** Un crédit restant est de l'argent déjà payé : le
-     * client a réglé dix entrées, en a consommé quatre, on lui en doit six. Rien dans le fichier ne
-     * permet de vérifier ce total — il faut donc que quelqu'un l'annonce, et qu'on refuse au moindre
-     * écart. **On ne devine pas une dette.**
-     *
-     * Une erreur ici ne se voit pas à la reprise ; elle se voit au guichet, six semaines plus tard,
-     * devant la personne à qui il manque des entrées.
-     *
-     * `null` pour les types qui ne portent pas d'argent — les clients, le catalogue, le personnel.
-     */
-    #[ORM\Column(nullable: true)]
-    #[Groups(['import_batch:read'])]
-    private ?int $announcedTotal = null;
-
-    public function getAnnouncedTotal(): ?int
-    {
-        return $this->announcedTotal;
-    }
-
-    public function setAnnouncedTotal(?int $announcedTotal): self
-    {
-        $this->announcedTotal = $announcedTotal;
-
-        return $this;
-    }
-
-
     public function __construct()
     {
-        $this->id = Uuid::v7();
+        $this->id = Uuid::v4();
         $this->createdAt = new \DateTimeImmutable();
     }
 
@@ -238,48 +188,36 @@ class ImportBatch
         return $this;
     }
 
-    public function getType(): ImportType
+    public function getType(): ?ImportType
     {
         return $this->type;
     }
 
-    public function setType(ImportType $type): self
+    public function setType(?ImportType $type): self
     {
         $this->type = $type;
 
         return $this;
     }
 
-    public function getStatus(): ImportStatus
-    {
-        return $this->status;
-    }
-
-    public function setStatus(ImportStatus $status): self
-    {
-        $this->status = $status;
-
-        return $this;
-    }
-
-    public function getFileName(): string
+    public function getFileName(): ?string
     {
         return $this->fileName;
     }
 
-    public function setFileName(string $fileName): self
+    public function setFileName(?string $fileName): self
     {
         $this->fileName = $fileName;
 
         return $this;
     }
 
-    public function getMimeType(): string
+    public function getMimeType(): ?string
     {
         return $this->mimeType;
     }
 
-    public function setMimeType(string $mimeType): self
+    public function setMimeType(?string $mimeType): self
     {
         $this->mimeType = $mimeType;
 
@@ -298,12 +236,12 @@ class ImportBatch
         return $this;
     }
 
-    public function getContentHash(): string
+    public function getContentHash(): ?string
     {
         return $this->contentHash;
     }
 
-    public function setContentHash(string $contentHash): self
+    public function setContentHash(?string $contentHash): self
     {
         $this->contentHash = $contentHash;
 
@@ -322,6 +260,30 @@ class ImportBatch
         return $this;
     }
 
+    public function getExpectedTotal(): ?string
+    {
+        return $this->expectedTotal;
+    }
+
+    public function setExpectedTotal(?string $expectedTotal): self
+    {
+        $this->expectedTotal = $expectedTotal;
+
+        return $this;
+    }
+
+    public function getStatus(): ImportBatchStatus
+    {
+        return $this->status;
+    }
+
+    public function setStatus(ImportBatchStatus $status): self
+    {
+        $this->status = $status;
+
+        return $this;
+    }
+
     public function getRowCount(): int
     {
         return $this->rowCount;
@@ -334,14 +296,14 @@ class ImportBatch
         return $this;
     }
 
-    /** @return array<int, string> */
-    public function getErrors(): array
+    /** @return array<int,string>|null */
+    public function getErrors(): ?array
     {
         return $this->errors;
     }
 
-    /** @param array<int, string> $errors */
-    public function setErrors(array $errors): self
+    /** @param array<int,string>|null $errors */
+    public function setErrors(?array $errors): self
     {
         $this->errors = $errors;
 
@@ -373,18 +335,6 @@ class ImportBatch
     public function setAppliedAt(?\DateTimeImmutable $appliedAt): self
     {
         $this->appliedAt = $appliedAt;
-
-        return $this;
-    }
-
-    public function getCreatedRows(): int
-    {
-        return $this->createdRows;
-    }
-
-    public function setCreatedRows(int $createdRows): self
-    {
-        $this->createdRows = $createdRows;
 
         return $this;
     }
