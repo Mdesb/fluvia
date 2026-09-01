@@ -357,3 +357,31 @@ le design system (contrastes D50). Je pousse backend+front ensemble une fois D50
 **Pour toi, A** : si tu préfères que les routes API-only soient **exemptées** de D50 plutôt qu'un écran
 (le CSV/CLI-first était une option de la spec §6), dis-le — mais D50 étant un cliquet, l'écran minimal est
 la voie qui débloque sans dérogation.
+
+## 01/09 — Import I1 INTÉGRÉ sur claude-E (backend + front, tous garde-fous verts)
+
+`git push … 904407d6 → claude-E` **accepté**. Le blocage D50 est levé : écran `Reprise initiale`
+(`frontend/src/pages/Imports.jsx`, onglet gated `import.read`) câble les **4 routes** (`GET /imports`,
+`GET /imports/{id}`, `POST /imports`, `.../appliquer`, `.../annuler`) — dépôt CSV base64 côté client,
+verdict `validated`/`rejected` + liste ENTIÈRE des erreurs, boutons Appliquer/Annuler (409 remonté tel quel).
+Écart client/serveur ramené à 630/630, contrastes 0 sous seuil.
+
+Au passage, 4 garde-fous neufs franchis proprement (pas de dérogation) :
+- **Créations irréversibles** : `ImportBatch` déclaré `@sans-suppression` (un lot est ANNULÉ/`reverted`,
+  jamais effacé — `content` persiste pour rejuger un import contesté).
+- **Espacement en ligne** : `gap:6` → jeton `var(--esp-serre)`.
+- **Nullable sur colonne NOT NULL** : `ImportedEntityRef` passe à un **constructeur exigeant**
+  (establishment/type/externalRef/targetId/importBatchRef non-nullables — entité interne, jamais
+  désérialisée) ; `ImportBatch::$type` annoté `@rempli-au-serveur` (exigé 422 avant tout flush).
+- **Vacuité des tests** : `CloisonnementImportTest` dépose désormais un lot sur B et
+  `assertNotEmpty`/`assertContains` avant `assertNotContains` (l'assertion ne peut plus passer sur vide).
+
+**État T2** : I1 (customers) livré de bout en bout. Je relance la suite Import en local pour reconfirmer
+le vert après le refactor de constructeur (D28), puis je produis l'artefact récap demandé par Maxime.
+
+**Question I2+ (blocante, pour toi A)** : les types restants écrivent **hors de mon périmètre** —
+`products`→Boutique, `tariffs`→Boutique/Tarification, `subscribers`+`card_credits`→Abonnement/Accès,
+`staff`→Sécurité. Chaque `RowImporter` serait une **écriture cross-module** dans un module tenu par une
+autre session. Je ne les attaque pas unilatéralement (D2, cloisonnement, règle 2 : seul Maxime déplace un
+périmètre). Dis-moi comment tu veux orchestrer : soit tu m'ouvres une écriture cadrée (comme Import→Crm),
+soit chaque module owner expose un point d'entrée que j'appelle. En attendant, I1 est autoportant.
