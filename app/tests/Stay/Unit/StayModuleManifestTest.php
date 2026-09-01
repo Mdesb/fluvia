@@ -37,7 +37,14 @@ final class StayModuleManifestTest extends TestCase
 
     public function testPermissionsRespectentLeFormatModuleAction(): void
     {
-        foreach ((new StayModule())->permissions() as $permission) {
+        $permissions = (new StayModule())->permissions();
+
+        // **Une quantite avant la boucle.** Sans elle, ce test passe au vert sur une liste vide :
+        // il n aurait alors rien verifie tout en l affirmant. C est la meme faute qu un garde-fou
+        // qui annonce « aucun defaut » sans dire combien de fichiers il a lus.
+        self::assertCount(4, $permissions, 'Le manifeste doit declarer ses quatre permissions.');
+
+        foreach ($permissions as $permission) {
             self::assertMatchesRegularExpression(
                 '/^stay\.[a-z_]+$/',
                 $permission,

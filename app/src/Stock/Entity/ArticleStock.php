@@ -19,6 +19,9 @@ use App\Stock\Enum\Unite;
 use App\Stock\State\DetacherProduitProcessor;
 use App\Stock\State\RattacherProduitProcessor;
 use App\Stock\Validator\CodeEanValide;
+use App\Stock\Service\ArithmetiqueDecimale;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use App\Stock\Validator as AppAssert;
@@ -140,8 +143,21 @@ class ArticleStock
     #[Groups(['article:read'])]
     private \DateTimeImmutable $modifieLe;
 
+    /**
+     * Les lots de cet article — la **source de verite** des quantites du module.
+     *
+     * La relation n'existait pas : `LotStock` pointait vers l'article, jamais l'inverse. Sans elle, la
+     * quantite reelle n'etait accessible qu'en agregeant les lots a la main, ce que l'ecran a du faire
+     * — au prix de refuser d'afficher un total des que la pagination tronquait la liste.
+     *
+     * @var Collection<int, LotStock>
+     */
+    #[ORM\OneToMany(mappedBy: 'articleStock', targetEntity: LotStock::class)]
+    private Collection $lots;
+
     public function __construct()
     {
+        $this->lots = new ArrayCollection();
         $this->id = Uuid::v4();
         $this->creeLe = new \DateTimeImmutable();
         $this->modifieLe = new \DateTimeImmutable();
@@ -299,5 +315,39 @@ class ArticleStock
         $this->modifieLe = new \DateTimeImmutable();
 
         return $this;
+    }
+
+    /**
+     * La quantite reellement disponible, agregee depuis les lots (RG-STOCK-08).
+     *
+     * **Pourquoi un getter calcule et non une colonne.** Un compteur entretenu a la main diverge des
+     * lots des la premiere reception annulee ou le premier ajustement, et personne ne s'en apercoit
+     * avant un inventaire. Recalcule, il ne peut pas mentir — c'est l'argument retenu pour
+     * `ParcPatins::getQuantiteDisponible()`, et il vaut ici pour la meme raison.
+     *
+     * **Ce que ca debloque.** Le premier ecran de stock devait agreger les lots cote client, et donc
+     * desactiver « Corriger » des que la pagination tronquait la liste : un agent qui voit « il reste
+     * 12 », corrige a 14 alors qu'il en restait 47 sur des lots non charges, detruit son stock avec la
+     * benediction du logiciel. Ce getter permet de retirer l'agregation **et** ce garde-fou.
+     *
+     * **Cout.** Une lecture charge les lots de l'article. Sur une liste, c'est un N+1 — acceptable
+     * ici (quelques dizaines de lots par article, une reception en cree un), a surveiller si le parc
+     * grossit : la sortie serait alors une requete agregee, pas un compteur stocke.
+     */
+    #[Groups(['article:read'])]
+    public function getQuantiteDisponible(): string
+    {
+        $total = '0.000';
+        foreach ($this->lots as $lot) {
+            $total = ArithmetiqueDecimale::additionner($total, $lot->getQuantiteRestante(), 3);
+        }
+
+        return $total;
+    }
+
+    /** @return Collection<int, LotStock> */
+    public function getLots(): Collection
+    {
+        return $this->lots;
     }
 }

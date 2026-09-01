@@ -36,6 +36,7 @@ final class AjustementStockHandler
         private readonly ResolveurMethodeValorisation $resolveur,
         private readonly DisponibiliteStockHandler $disponibilite,
         private readonly LoggerInterface $logger,
+        private readonly StockSettingsProvider $reglages,
     ) {
     }
 
@@ -118,6 +119,46 @@ final class AjustementStockHandler
 
     private function creerMouvementSortie(ArticleStock $article, TypeMouvementStock $type, string $quantite, string $motif, ?Utilisateur $auteur, ResultatConsommation $resultat): MouvementStock
     {
+        // **La garde de disponibilite du module, et elle manquait pour toute une famille d'articles.**
+        //
+        // Jusqu'ici, le seul refus de sortie vivait dans `DisponibiliteStockHandler::decrementer()`,
+        // qui n'agit que sur le compteur M1 `off_stock`. Or ce compteur n'existe que pour un article
+        // **rattache a un produit** : pour les autres, la methode rendait la main en silence et le
+        // refus etait donc **inatteignable**. On pouvait sortir indefiniment un article non catalogue,
+        // sans jamais rencontrer d'erreur et sans que la disponibilite ne baisse, puisqu'elle n'etait
+        // jamais ecrite. Le controle est desormais porte par la source de verite du module, les lots.
+        //
+        // **Mais il ne s'applique pas a toutes les sorties, et la ligne de partage compte :**
+        //
+        //   on refuse ce qui pretend FAIRE SORTIR de la marchandise ;
+        //   on n'empeche jamais de CONSTATER qu'elle n'est plus la.
+        //
+        // Une vente ou un retour fournisseur presupposent qu'on detient le bien : les refuser quand
+        // les lots ne couvrent pas est la seule reponse juste. Un ajustement negatif ou une perte
+        // constatee, au contraire, enregistrent un fait deja survenu — les refuser laisserait les
+        // livres durablement faux et obligerait l'exploitant a mentir sur la quantite pour pouvoir
+        // declarer sa perte. C'est ce que verifie `JournalisationRuptureCouchesTest` avec son
+        // scenario « Perte constatee », et il a raison.
+        //
+        // `SortieTransfert` tombe logiquement du cote des refus, mais elle vit dans
+        // `TransfertStockHandler` et porte son propre test de non-blocage : je la signale a
+        // l'integrateur plutot que de la trancher dans un lot qui ne la vise pas.
+        //
+        // Placee **avant** le moindre `persist()` et avant l'ecriture DBAL du compteur M1 : refuser
+        // apres avoir ecrit obligerait a compter sur un rollback pour rester coherent.
+        // `SortieVente` **ne transite jamais par ce handler** — verifie : `ajuster()` ne l'accepte pas,
+        // et une vente est deja refusee en amont par `App\Vente\Service\DecrementStockHandler`, dont
+        // l'UPDATE conditionnel rend 422 sur rupture. L'inclure ici aurait fait croire a une protection
+        // qui n'existe pas a cet endroit. Reste le retour fournisseur, qui presuppose bien la detention.
+        $presupposeLaDetention = TypeMouvementStock::RetourFournisseur === $type;
+
+        if ($presupposeLaDetention && $resultat->quantiteNonCouverte !== null && !$this->negatifAutorise($article)) {
+            throw new UnprocessableEntityHttpException(sprintf(
+                'Stock insuffisant pour ce mouvement (RG-STOCK-16) : les lots ne couvrent pas %s unite(s).',
+                $resultat->quantiteNonCouverte,
+            ));
+        }
+
         $mouvement = new MouvementStock();
         $mouvement->setArticleStock($article)
             ->setEtablissement($article->getEtablissement())
@@ -138,8 +179,10 @@ final class AjustementStockHandler
             $this->em->persist($ligneImputation);
         }
 
-        // §2.1 du plan : rupture de couches FIFO/LIFO — imputation partielle, non bloquante, mais
-        // journalisée (ne doit pas passer silencieusement inaperçue).
+        // §2.1 du plan : rupture de couches FIFO/LIFO — imputation partielle. Depuis la garde
+        // posee en tete de cette methode, ce cas ne survit que lorsque le stock negatif est
+        // **autorise** : la journalisation garde donc tout son sens, mais elle ne couvre plus une
+        // sortie a decouvert subie, seulement une sortie a decouvert assumee.
         if ($resultat->quantiteNonCouverte !== null) {
             $this->logger->warning('stock.consommation.rupture_couches', [
                 'articleStock' => (string) $article->getId(),
@@ -167,12 +210,8 @@ final class AjustementStockHandler
 
     private function negatifAutorise(ArticleStock $article): bool
     {
-        $etablissement = $article->getEtablissement();
-        if ($etablissement === null) {
-            return false;
-        }
-        $parametrage = $this->em->getRepository(ParametrageStock::class)->findOneBy(['etablissement' => $etablissement->getId()]);
-
-        return $parametrage instanceof ParametrageStock && $parametrage->isAutoriserStockNegatif();
+        // Le stock negatif est une PERMISSION : sans decision explicite, elle n'est pas accordee.
+        // La regle est declaree dans `StockSettings`, plus improvisee ici (D52).
+        return $this->reglages->forEstablishment($article->getEtablissement())->allowsNegativeStock();
     }
 }
