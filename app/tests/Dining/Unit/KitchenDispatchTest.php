@@ -6,8 +6,10 @@ namespace App\Tests\Dining\Unit;
 
 use App\Dining\Domain\CourseRef;
 use App\Dining\Domain\KitchenDispatch;
-use App\Dining\Domain\LineStatus;
-use App\Dining\Domain\OrderLine;
+use App\Dining\Entity\DiningOrder;
+use App\Dining\Entity\DiningOrderLine;
+use App\Dining\Enum\LineStatus;
+use App\Organisation\Entity\Etablissement;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -19,10 +21,21 @@ final class KitchenDispatchTest extends TestCase
     private const PLAT = ['plat', 2];
     private const DESSERT = ['dessert', 3];
 
-    /** @param array{0: string, 1: int} $service */
-    private function ligne(array $service, string $libelle): OrderLine
+    private function addition(): DiningOrder
     {
-        return new OrderLine(CourseRef::of($service[0], $service[1]), $libelle, 1, '12.00');
+        return new DiningOrder(
+            $this->createStub(Etablissement::class),
+            'ADD-0001',
+            '12',
+            4,
+            new \DateTimeImmutable('2026-09-01 12:00:00'),
+        );
+    }
+
+    /** @param array{0: string, 1: int} $service */
+    private function ligne(array $service, string $libelle): DiningOrderLine
+    {
+        return new DiningOrderLine($this->addition(), CourseRef::of($service[0], $service[1]), $libelle, 1, '12.00');
     }
 
     private function service(array $s): CourseRef
@@ -44,9 +57,9 @@ final class KitchenDispatchTest extends TestCase
         $partis = (new KitchenDispatch())->fire($this->service(self::ENTREE), [$entree1, $entree2, $plat], $this->midi());
 
         self::assertCount(2, $partis, 'Les deux entrees partent ensemble.');
-        self::assertSame(LineStatus::Fired, $entree1->status());
-        self::assertSame(LineStatus::Fired, $entree2->status());
-        self::assertSame(LineStatus::Draft, $plat->status(), 'Le plat attend son tour.');
+        self::assertSame(LineStatus::Fired, $entree1->getStatus());
+        self::assertSame(LineStatus::Fired, $entree2->getStatus());
+        self::assertSame(LineStatus::Draft, $plat->getStatus(), 'Le plat attend son tour.');
     }
 
     public function testOnNEnvoiePasLesPlatsQuandLesEntreesAttendentEncore(): void
@@ -69,7 +82,7 @@ final class KitchenDispatchTest extends TestCase
         $partis = (new KitchenDispatch())->fire($this->service(self::PLAT), [$entree, $plat], $this->midi());
 
         self::assertCount(1, $partis);
-        self::assertSame(LineStatus::Fired, $plat->status());
+        self::assertSame(LineStatus::Fired, $plat->getStatus());
     }
 
     public function testUnEnvoiVideLeDitPlutotQueDeNeRienFaire(): void
@@ -91,6 +104,6 @@ final class KitchenDispatchTest extends TestCase
         $partis = (new KitchenDispatch())->fire($this->service(self::DESSERT), [$fromage, $dessert], $this->midi());
 
         self::assertCount(1, $partis);
-        self::assertSame(LineStatus::Draft, $fromage->status());
+        self::assertSame(LineStatus::Draft, $fromage->getStatus());
     }
 }

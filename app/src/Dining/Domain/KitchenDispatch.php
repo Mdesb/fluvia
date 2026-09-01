@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Dining\Domain;
 
+use App\Dining\Entity\DiningOrderLine;
+use App\Dining\Enum\LineStatus;
 /**
  * L'envoi en cuisine : quelles lignes partent, ensemble, et dans quel ordre (ACT-4, D16).
  *
@@ -24,19 +26,19 @@ final class KitchenDispatch
      * On ne contrôle **que** les brouillons antérieurs : un service déjà envoyé n'empêche rien, c'est
      * même le déroulement normal du repas.
      *
-     * @param list<OrderLine> $lignes toutes les lignes de la table
+     * @param list<DiningOrderLine> $lignes toutes les lignes de la table
      *
-     * @return list<OrderLine> les lignes qui partiront, dans l'ordre de saisie
+     * @return list<DiningOrderLine> les lignes qui partiront, dans l'ordre de saisie
      *
      * @throws \LogicException si un service antérieur n'a pas été envoyé
      */
     public function prepare(CourseRef $service, array $lignes): array
     {
         foreach ($lignes as $ligne) {
-            if (LineStatus::Draft === $ligne->status() && $ligne->course->precedes($service)) {
+            if (LineStatus::Draft === $ligne->getStatus() && $ligne->getCourse()->precedes($service)) {
                 throw new \LogicException(sprintf(
                     'Le service « %s » attend encore au brouillon : l\'envoyer après « %s » ferait sortir les plats avant les entrées.',
-                    $ligne->course->code,
+                    $ligne->getCourse()->code,
                     $service->code,
                 ));
             }
@@ -44,7 +46,7 @@ final class KitchenDispatch
 
         $aEnvoyer = [];
         foreach ($lignes as $ligne) {
-            if (LineStatus::Draft === $ligne->status() && $ligne->course->equals($service)) {
+            if (LineStatus::Draft === $ligne->getStatus() && $ligne->getCourse()->equals($service)) {
                 $aEnvoyer[] = $ligne;
             }
         }
@@ -59,9 +61,9 @@ final class KitchenDispatch
      * ne voit rien se passer appuiera une seconde fois, puis ira voir en cuisine. Mieux vaut lui dire
      * qu'il n'y avait rien à envoyer.
      *
-     * @param list<OrderLine> $lignes
+     * @param list<DiningOrderLine> $lignes
      *
-     * @return list<OrderLine> les lignes effectivement parties
+     * @return list<DiningOrderLine> les lignes effectivement parties
      */
     public function fire(CourseRef $service, array $lignes, \DateTimeImmutable $at): array
     {

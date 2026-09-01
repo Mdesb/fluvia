@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace App\Tests\Dining\Unit;
 
 use App\Dining\Domain\CourseRef;
+use App\Dining\Entity\DiningOrder;
+use App\Dining\Entity\DiningOrderLine;
+use App\Organisation\Entity\Etablissement;
 use App\Dining\Domain\DiningBill;
-use App\Dining\Domain\OrderLine;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -14,9 +16,20 @@ use PHPUnit\Framework\TestCase;
  */
 final class DiningBillTest extends TestCase
 {
-    private function ligne(string $libelle, int $quantite, string $prix): OrderLine
+    private function addition(): DiningOrder
     {
-        return new OrderLine(CourseRef::of('plat', 2), $libelle, $quantite, $prix);
+        return new DiningOrder(
+            $this->createStub(Etablissement::class),
+            'ADD-0001',
+            '12',
+            4,
+            new \DateTimeImmutable('2026-09-01 12:00:00'),
+        );
+    }
+
+    private function ligne(string $libelle, int $quantite, string $prix): DiningOrderLine
+    {
+        return new DiningOrderLine($this->addition(), CourseRef::of('plat', 2), $libelle, $quantite, $prix);
     }
 
     private function midi(): \DateTimeImmutable

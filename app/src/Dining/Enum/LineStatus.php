@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Dining\Domain;
+namespace App\Dining\Enum;
 
 /**
  * Le cycle de vie d'une ligne d'addition (ACT-4, D16).

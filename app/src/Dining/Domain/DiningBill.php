@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Dining\Domain;
 
+use App\Dining\Entity\DiningOrderLine;
+use App\Dining\Enum\LineStatus;
 /**
  * L'addition d'une table (ACT-4, D16).
  *
@@ -20,7 +22,7 @@ namespace App\Dining\Domain;
  */
 final class DiningBill
 {
-    /** @param list<OrderLine> $lignes */
+    /** @param list<DiningOrderLine> $lignes */
     public function __construct(private readonly array $lignes)
     {
     }
@@ -28,7 +30,7 @@ final class DiningBill
     /** Ce que le client doit — les lignes annulées en sont sorties. */
     public function total(): string
     {
-        return $this->sommer(static fn (OrderLine $l): bool => $l->isBillable());
+        return $this->sommer(static fn (DiningOrderLine $l): bool => $l->isBillable());
     }
 
     /**
@@ -38,14 +40,14 @@ final class DiningBill
      */
     public function consomme(): string
     {
-        return $this->sommer(static fn (OrderLine $l): bool => $l->hasConsumed());
+        return $this->sommer(static fn (DiningOrderLine $l): bool => $l->hasConsumed());
     }
 
     /** Ce que le service a coûté sans être facturé — la perte du coup de feu. */
     public function perte(): string
     {
         return $this->sommer(
-            static fn (OrderLine $l): bool => $l->hasConsumed() && !$l->isBillable(),
+            static fn (DiningOrderLine $l): bool => $l->hasConsumed() && !$l->isBillable(),
         );
     }
 
@@ -55,7 +57,7 @@ final class DiningBill
         $centimes = 0;
         foreach ($this->lignes as $ligne) {
             if ($retenir($ligne)) {
-                $centimes += $ligne->quantity * self::enCentimes($ligne->unitAmount);
+                $centimes += $ligne->getQuantity() * self::enCentimes($ligne->getUnitAmount());
             }
         }
 
