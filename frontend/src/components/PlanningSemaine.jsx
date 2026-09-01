@@ -124,6 +124,15 @@ export default function PlanningSemaine({ creneaux, occupation, ressources, onCr
         </select>
       </div>
 
+      {/* ⚠ AU-DESSUS DE LA GRILLE, PAS EN DESSOUS. Ce message existait déjà, mais après le
+          conteneur : la grille couvre 08 h – 20 h, soit environ 700 px, et il tombait sous la ligne
+          de flottaison. On voyait un planning vide sans jamais apprendre qu'il l'était exprès. Un
+          état vide qu'il faut chercher ne sert pas. */}
+      {visibles.length === 0 && (
+        <div className="empty">
+          Aucun créneau cette semaine{ressourceId ? ' pour cette ressource' : ''}.
+        </div>
+      )}
       <div style={{ overflowX: 'auto' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '54px repeat(7, minmax(120px, 1fr))', minWidth: 900 }}>
           {/* En-têtes */}
@@ -252,11 +261,6 @@ export default function PlanningSemaine({ creneaux, occupation, ressources, onCr
         </div>
       </div>
 
-      {visibles.length === 0 && (
-        <div className="empty">
-          Aucun créneau cette semaine{ressourceId ? ' pour cette ressource' : ''}.
-        </div>
-      )}
     </div>
   )
 }
