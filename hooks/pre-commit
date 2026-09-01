@@ -150,6 +150,11 @@ fi
 
 # Nommage : sur les fichiers **indexés** et ajoutés. `--cached` est ce qui sera réellement commité,
 # et c'est aussi ce qui évite de dépendre d'une révision de référence inexistante à ce stade.
+# Capacites de module (n°41) : porte sur TOUT l'arbre, pas sur les fichiers indexes. Un manifeste
+# peut devenir inaccessible parce qu'on a retire un cas de l'enum ailleurs — le fautif n'est alors
+# dans aucun des deux fichiers modifies.
+[ -f "$RACINE/bin/garde-fou-capacites-de-module.php" ] && { lancer_gf garde-fou-capacites-de-module.php || ECHEC=1; }
+
 if [ -f "$RACINE/bin/garde-fou-nommage-anglais.php" ]; then
     AJOUTES="$(git diff --cached --diff-filter=A --name-only -- 'app/src' 'app/migrations' | paste -sd, -)"
     if [ -n "$AJOUTES" ]; then
@@ -207,6 +212,7 @@ lancer_front verifier-profil-charge.mjs "Profil chargé avant le rendu"
 lancer_front verifier-boutons-nommes.mjs "Boutons nommés"
 lancer_front verifier-clic-clavier.mjs   "Clic au clavier"
 lancer_front verifier-contrastes.mjs     "Contrastes"
+lancer_front verifier-encre-sur-fond.mjs "Encre sur fond"
 
 # ⚠ FILET DE COMPLÉTUDE — même leçon que `pre-receive`, même remède.
 #

@@ -65,6 +65,9 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
 
   // Phase de paiement (encaissement scindé sur une vente ouverte).
   const [vente, setVente] = useState(null) // { id, reste }
+  // La popup d'appairage : `null` tant qu'elle n'a pas lieu d'etre, sinon ce qu'il faut pour
+  // valider ensuite sans relire un etat qui aura change.
+  const [appairageEnAttente, setAppairageEnAttente] = useState(null)
   const [paiements, setPaiements] = useState([]) // règlements acceptés
   const [moyenSel, setMoyenSel] = useState('especes')
   const [montant, setMontant] = useState('')
@@ -351,6 +354,23 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
     else setChoixTarif({ produit, grilles })
   }
 
+  // CE QU'UNE CARTE SCANNEE PEUT REJOINDRE.
+  //
+  // Deux conditions, et la seconde vient du serveur : `carte` non nulle sur le produit, et quantite
+  // egale a 1 (RG-CQ8-02 — un identifiant explicite ne peut designer qu'un support, la contrainte
+  // d'unicite globale interdit le reste). On rend les deux familles : celles qu'on peut proposer,
+  // et celles qu'on doit NOMMER comme hors de portee plutot que de les taire.
+  function trierAppairables(lignes) {
+    const proposables = []
+    const horsPortee = []
+    for (const l of lignes) {
+      if (!l.produit?.carte) continue
+      if (l.quantite === 1 && l.ligneServeurId) proposables.push(l)
+      else horsPortee.push(l)
+    }
+    return { proposables, horsPortee }
+  }
+
   function changerQte(cle, delta) {
     setPanier((p) =>
       p.map((l) => (l.cle === cle ? { ...l, quantite: l.quantite + delta } : l)).filter((l) => l.quantite > 0),
@@ -405,20 +425,43 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
       // existe, il n'a plus aucune raison de le faire.
       const lignesServeur = courant?.lignes || []
       if (lignesServeur.length > 0) {
+        // ⚠ ON CONSOMME LE VIVIER, ON NE LE RELIT PAS.
+        //
+        // `find()` rendait toujours la PREMIERE ligne serveur du couple (produit, tarif) : deux
+        // lignes de panier portant le même produit au même tarif — ce qui arrive dès qu'on choisit
+        // des options différentes — recevaient toutes les deux le prix de la première.
+        //
+        // Sur un prix, le défaut se voit. Sur un identifiant de carte, il ne se verrait pas : on
+        // appairerait la carte scannée à la mauvaise ligne, et le client repartirait avec une carte
+        // rattachée au mauvais produit. Chaque ligne serveur n'est donc prise qu'une fois.
+        const vivier = [...lignesServeur]
+        const prendre = (l) => {
+          const exact = vivier.findIndex(
+            (x) => String(x.produit) === String(l.produit?.id)
+              && String(x.typeTarif || '') === String(l.typeTarifId || ''),
+          )
+          const i = exact !== -1
+            ? exact
+            : vivier.findIndex((x) => String(x.produit) === String(l.produit?.id))
+          return i === -1 ? null : vivier.splice(i, 1)[0]
+        }
+
         setPanier((p) =>
           p.map((l) => {
-            const ls = lignesServeur.find(
-              (x) => String(x.produit) === String(l.produit?.id)
-                && String(x.typeTarif || '') === String(l.typeTarifId || ''),
-            ) || lignesServeur.find((x) => String(x.produit) === String(l.produit?.id))
-            return ls?.prixUnitaire != null ? { ...l, prix: ls.prixUnitaire } : l
+            const ls = prendre(l)
+            if (!ls) return l
+            // L'id de ligne SERVEUR : c'est par lui que `valider` indexe les supports.
+            const enrichie = { ...l, ligneServeurId: ls.id ?? null }
+            return ls.prixUnitaire != null ? { ...enrichie, prix: ls.prixUnitaire } : enrichie
           }),
         )
       }
 
       const totalServeur = courant?.total ?? total.toFixed(2)
       const resteServeur = courant?.resteAPayer ?? totalServeur
-      setVente({ id: v.id, reste: resteServeur, total: totalServeur })
+      // Le numero est porte pour un seul usage : pouvoir NOMMER la vente si son annulation
+      // echoue. Un identifiant technique ne se retrouve pas dans un journal de caisse.
+      setVente({ id: v.id, numero: v.numero ?? null, reste: resteServeur, total: totalServeur })
       setPaiements([])
       setMoyenSel(moyensDispo[0]?.code || 'especes')
       setMontant(parseFloat(resteServeur) > 0 ? parseFloat(resteServeur).toFixed(2) : '')
@@ -443,6 +486,9 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
     setBusy(true)
     setErreur(null)
     setAvis(null)
+    // Renseigne uniquement si CE règlement solde la vente ; consommé après le bloc ci-dessous, hors
+    // de son `catch`, pour qu'un échec de validation ne se dise jamais « règlement refusé ».
+    let aSolde = null
     try {
       const corps = { moyen: moyenCourant.code }
       const m = parseFloat(montant)
@@ -462,10 +508,41 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
       const nouveauReste = res.resteAPayer ?? '0.00'
       setVente((v) => ({ ...v, reste: nouveauReste }))
       setMontant(parseFloat(nouveauReste) > 0 ? parseFloat(nouveauReste).toFixed(2) : '')
+
+      // ── LE RESTE EST A ZERO : PLUS RIEN A DECIDER, SAUF S'IL Y A UNE CARTE ─────────────────
+      //
+      // Un reglement qui solde la vente ne laisse aucune autre issue que valider. Le clic de
+      // confirmation n'apprenait donc rien — sauf quand une carte est en jeu, et c'est precisement
+      // la que la popup s'intercale. Un paiement PARTIEL garde les deux etapes.
+      //
+      // ⚠ ON NOTE, ON N'AGIT PAS ENCORE. Enchaîner ici mettrait la validation dans le `try` de ce
+      // règlement — dont le `catch` annonce « Règlement refusé ». Or à cet instant l'argent EST
+      // encaissé : le caissier lirait un refus sur une vente payée et réencaisserait le client.
+      if (parseFloat(nouveauReste) <= 0) {
+        aSolde = [
+          ...paiements,
+          { moyen: res.moyen, libelle: moyenCourant.libelle, montant: res.montant, rendu: res.rendu, statutTPE: res.statutTPE },
+        ]
+      }
     } catch (e) {
       setErreur(e.message || 'Règlement refusé.')
+      return
     } finally {
       setBusy(false)
+    }
+
+    // ── HORS DU `catch` DU REGLEMENT ────────────────────────────────────────────────────────
+    //
+    // La validation porte son propre message d'échec — « Échec de la validation » — qui est vrai et
+    // qui n'invite pas à réencaisser. Le `return` du `catch` ci-dessus garantit qu'on n'arrive ici
+    // que si le règlement a réellement abouti.
+    if (!aSolde) return
+
+    const { proposables, horsPortee } = trierAppairables(panier)
+    if (proposables.length > 0 || horsPortee.length > 0) {
+      setAppairageEnAttente({ venteId: vente.id, reglements: aSolde, proposables, horsPortee })
+    } else {
+      await validerVente(null, { venteId: vente.id, paiements: aSolde })
     }
   }
 
@@ -553,13 +630,23 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
 }
 
 // Finalise : valide la vente et édite le ticket.
-  async function validerVente() {
-    if (!vente) return
+  // ⚠ LES ARGUMENTS EXPLICITES NE SONT PAS UNE COQUETTERIE.
+  //
+  // Cette fonction est desormais appelee DEPUIS `reglerUnMoyen`, dans la meme passe que les
+  // `setVente`/`setPaiements` qui la precedent. `vente` et `paiements` y sont encore les valeurs du
+  // rendu precedent : lire l'etat produirait un ticket sans le dernier reglement -- celui qui vient
+  // justement de solder la vente. On passe donc ce qu'on sait, et l'etat ne sert que de repli pour
+  // l'appel manuel.
+  async function validerVente(supports = null, ctx = {}) {
+    const venteId = ctx.venteId ?? vente?.id
+    const reglements = ctx.paiements ?? paiements
+    if (!venteId) return
     setBusy(true)
     setErreur(null)
+    setAppairageEnAttente(null)
     try {
-      const venteValidee = await api.valider(vente.id)
-      const infoTicket = await api.ticket(vente.id, 'imprimer')
+      const venteValidee = await api.valider(venteId, supports)
+      const infoTicket = await api.ticket(venteId, 'imprimer')
       // Code de support signé (HMAC) émis à la validation : 1er support porteur d'un identifiant.
       const support = (venteValidee.supports || []).find((s) => s.identifiantSupport)
 
@@ -572,7 +659,7 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
       // du seuil, avec un client rattache, le renvoi a un sens).
       //
       // Trois situations, trois comportements — et un seul jusqu'a aujourd'hui.
-      const t = construireTicket(infoTicket, paiements, support, true)
+      const t = construireTicket(infoTicket, reglements, support, true)
       if (infoTicket.impressionAutomatique) setTicket(t)
       else setFinVente({ info: infoTicket, ticket: t })
       setPanier([])
@@ -591,10 +678,25 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
   async function abandonner() {
     if (!vente) return
     setBusy(true)
+    const abandonnee = vente
     try {
-      await api.annulerVente(vente.id)
-    } catch {
-      /* on réinitialise l'UI quoi qu'il arrive */
+      await api.annulerVente(abandonnee.id)
+      setErreur(null)
+    } catch (e) {
+      // ⚠ CE `catch` AVALAIT L'ECHEC, ET LA CAISSE REDEVENAIT PROPRE.
+      //
+      // Le serveur refuse, la vente reste OUVERTE et numérotée, et le caissier n'a aucun moyen de
+      // le savoir. Treize ventes se sont accumulées ainsi sur la préproduction en deux semaines,
+      // dont huit à total zéro. Chez un exploitant, c'est un fond de caisse qui ne tombe jamais
+      // juste — et personne qui sache pourquoi. Mesuré par `allaccess-b8`.
+      //
+      // On réinitialise quand même l'écran : bloquer la caisse sur un échec d'annulation serait
+      // pire, le client suivant attend. Ce qui manquait n'était pas le geste, c'était de le dire.
+      setErreur(
+        `La vente ${abandonnee.numero ? `n° ${abandonnee.numero} ` : ''}n'a PAS pu être annulée `
+        + `(${e.message || 'refus du serveur'}). Elle reste ouverte côté serveur : signalez-la, `
+        + `elle ne se fermera pas d'elle-même. La caisse est libre pour la vente suivante.`,
+      )
     } finally {
       setVente(null)
       setPaiements([])
@@ -711,6 +813,25 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
           du nouveau. */}
       <ScansEnDirect key={etabActif} droits={droits} etabActif={etabActif} />
       <RechercheBilletModal open={verifBillet} onClose={() => setVerifBillet(false)} droits={droits} />
+
+      {/* Elle s'ouvre seule : `appairageEnAttente` n'est renseigné que par un règlement qui solde
+          la vente alors qu'une ligne porte une carte. */}
+      <AppairageModal
+        etat={appairageEnAttente}
+        busy={busy}
+        onValider={(supports) =>
+          validerVente(supports, {
+            venteId: appairageEnAttente.venteId,
+            paiements: appairageEnAttente.reglements,
+          })
+        }
+        onIgnorer={() =>
+          validerVente(null, {
+            venteId: appairageEnAttente.venteId,
+            paiements: appairageEnAttente.reglements,
+          })
+        }
+      />
 
       <div className="caisse-grid">
         <aside style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -987,6 +1108,82 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
       {modaleSession}
       {modaleClient}
     </div>
+  )
+}
+
+// ── LA MODALE D'APPAIRAGE ──────────────────────────────────────────────────────────────────
+//
+// Elle s'ouvre SEULE, une fois la vente soldée, quand une ligne porte une carte multi-entrées.
+// Elle ne bloque rien : fermer émet un support à code généré, exactement comme avant.
+function AppairageModal({ etat, onValider, onIgnorer, busy }) {
+  const [saisies, setSaisies] = useState({})
+
+  if (!etat) return null
+
+  const supports = etat.proposables
+    .map((l) => ({ ligne: l.ligneServeurId, identifiant: (saisies[l.ligneServeurId] || '').trim() }))
+    .filter((s) => s.identifiant !== '')
+
+  return (
+    <Modal open onClose={onIgnorer} titre="Appairer une carte" taille="md">
+      <p className="sub" style={{ marginTop: 0 }}>
+        Le paiement est encaissé. Scannez ou saisissez le numéro de la carte physique remise au
+        client — ou fermez cette fenêtre.
+      </p>
+
+      {etat.proposables.map((l) => (
+        <div className="field" key={l.ligneServeurId}>
+          <label htmlFor={`app-${l.ligneServeurId}`}>{libelleProduit(l.produit)}</label>
+          <input
+            id={`app-${l.ligneServeurId}`}
+            className="input"
+            autoFocus={etat.proposables[0] === l}
+            autoComplete="off"
+            placeholder="Numéro de la carte"
+            value={saisies[l.ligneServeurId] || ''}
+            onChange={(e) => setSaisies((s) => ({ ...s, [l.ligneServeurId]: e.target.value }))}
+          />
+        </div>
+      ))}
+
+      {/* ⚠ DEUX OPERATIONS DIFFERENTES, ET SEUL L'IDENTIFIANT LES DISTINGUE. Le caissier doit
+          savoir laquelle il déclenche avant de la déclencher : recharger la carte d'un client
+          n'est pas lui en vendre une neuve, et ça ne se rattrape pas d'un clic. */}
+      <div className="banner">
+        <b>Une carte déjà connue est rechargée</b>, pas réémise&nbsp;: son solde d'entrées augmente
+        et le client garde son support. Un numéro inédit crée une carte neuve portant ce numéro.
+      </div>
+
+      {etat.horsPortee.length > 0 && (
+        <div className="banner banner-warn">
+          <b>Non appairable ici&nbsp;:</b>{' '}
+          {etat.horsPortee.map((l) => libelleProduit(l.produit)).join(', ')}. Un numéro de carte ne
+          peut désigner qu'un seul support&nbsp;: séparez la ligne en quantités de 1 pour scanner
+          chaque carte.
+        </div>
+      )}
+
+      <div className="row" style={{ justifyContent: 'flex-end', gap: 'var(--esp-moyen)' }}>
+        <button className="btn ghost" type="button" onClick={onIgnorer} disabled={busy}>
+          Sans carte physique
+        </button>
+        <button
+          className="btn primary"
+          type="button"
+          disabled={busy || supports.length === 0}
+          onClick={() => onValider(supports)}
+        >
+          {busy ? 'Validation…' : 'Appairer et valider'}
+        </button>
+      </div>
+
+      {/* ⚠ UNE FERMETURE N'ANNULE RIEN, ET IL FAUT LE DIRE. Un caissier qui ferme une fenêtre
+          sans explication suppose avoir perdu la vente et la ressaisit — en double. */}
+      <p className="sub" style={{ marginBottom: 0 }}>
+        Fermer ne perd rien&nbsp;: la vente est validée et un support à code généré est émis, comme
+        pour une vente sans carte physique.
+      </p>
+    </Modal>
   )
 }
 

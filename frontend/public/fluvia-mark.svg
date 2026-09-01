@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="640" viewBox="224 4 640 640" fill="none" role="img" aria-label="Fluvia">
+<!--
+  DERIVE DE `marque/FLUVIA_Icon_Color.svg` — SEUL LE `viewBox` DIFFERE, ET C'EST UNE CORRECTION.
+
+  Le pack livre declare `viewBox="0 0 600 600"`, alors que les traces, une fois elargis de la
+  demi-epaisseur (`stroke-width="62"`, terminaisons rondes) et transformes par le groupe, occupent
+  [256,41]-[832,607]. Le mark deborde donc de 232 unites a droite sur un cadre de 600 : pres de
+  40 % de sa largeur est hors champ.
+
+  Ce n'est pas une deduction : les deux PNG du pack — `FLUVIA_AppIcon_1024.png` et
+  `FLUVIA_Favicon_512.png` — montrent le meme « F » ampute a droite, et ils ont ete rendus depuis
+  ce fichier. Les quatre variantes « Icon » sont touchees ; les quatre variantes « Logo » tiennent.
+
+  Le cadre est ici recentre sur l'emprise reelle, avec 32 unites de marge de chaque cote. Les
+  traces, le degrade et ses quatre arrets sont INCHANGES — le degrade est en `userSpaceOnUse` dans
+  l'espace des traces, donc il suit sans retouche.
+
+  ⚠ LE PACK N'EST PAS MODIFIE. Il reste la source de reference, telle que livree, et le defaut est
+  remonte pour correction a la source. Ce fichier est un derive de l'application, et il disparait
+  le jour ou le pack est corrige.
+-->
+<defs>
+  <linearGradient id="fluviaGradient" x1="360" y1="120" x2="720" y2="520" gradientUnits="userSpaceOnUse">
+    <stop offset="0%" stop-color="#27D9D0"/>
+    <stop offset="45%" stop-color="#168CEB"/>
+    <stop offset="75%" stop-color="#3755E8"/>
+    <stop offset="100%" stop-color="#7A2EE6"/>
+  </linearGradient>
+</defs>
+<g transform="translate(-165,-60) scale(1.28)">
+  <path d="M360 470V220 C360 155 412 110 478 110 H670 C720 110 748 140 748 185 C748 230 720 258 670 258 H525 C482 258 455 286 455 330 V470"
+        stroke="url(#fluviaGradient)" stroke-width="62" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M455 355H590 C638 355 666 384 666 425 C666 466 638 490 590 490 H505"
+        stroke="url(#fluviaGradient)" stroke-width="62" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+</svg>

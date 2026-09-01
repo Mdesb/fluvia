@@ -26,6 +26,35 @@ import { libelleProduit } from '../api/produit.js'
  * L'ordre du reste suit la même logique : ce qui demande une action avant ce qui informe.
  */
 
+// ── CE QU'UN TERME RACONTE, ET QUE LA SEULE DATE NE DIT PAS ────────────────────────────────────
+//
+// Une date d'echeance affichee nue oblige chaque lecteur a faire la soustraction dans sa tete, tous
+// les jours, sur chaque ligne. C'est exactement le calcul que personne ne fait -- et c'est pour ca
+// qu'un abonnement au terme pouvait rester des mois sans que quiconque le remarque.
+const JOUR_MS = 24 * 60 * 60 * 1000
+
+function etatDuTerme(iso) {
+  if (!iso) return null
+  const fin = new Date(iso)
+  if (Number.isNaN(fin.getTime())) return null
+
+  const jours = Math.ceil((fin.getTime() - Date.now()) / JOUR_MS)
+
+  if (jours < 0) return { classe: 'err', texte: `au terme depuis ${-jours} j`, urgent: true }
+  if (jours === 0) return { classe: 'err', texte: "au terme aujourd'hui", urgent: true }
+  if (jours <= 30) return { classe: 'warn', texte: `dans ${jours} j`, urgent: true }
+  return { classe: 'mut', texte: `dans ${Math.round(jours / 30)} mois`, urgent: false }
+}
+
+// Le statut ne se lit pas pareil selon ce qu'il implique : « echu » veut dire que l'acces est
+// coupe, et un badge gris comme les autres le noierait dans la liste.
+function tonStatut(statut) {
+  if (statut === 'echu') return 'err'
+  if (statut === 'resilie' || statut === 'impaye') return 'warn'
+  if (statut === 'actif') return 'ok'
+  return 'mut'
+}
+
 function quandHeure(v) {
   if (!v) return '—'
   const d = new Date(v)
@@ -292,21 +321,38 @@ export default function Sport({ etabActif, droits = [] }) {
                 </tr>
               </thead>
               <tbody>
-                {abonnements.map((a) => (
-                  <tr key={a.id}>
-                    <td>
-                      <span className="nm">
-                        {a.client?.raisonSociale
-                          || [a.client?.prenom, a.client?.nom].filter(Boolean).join(' ')
-                          || a.beneficiaire?.id
-                          || '—'}
-                      </span>
-                    </td>
-                    <td><span className="badge mut">{a.statut || '—'}</span></td>
-                    <td className="num">{a.dateDebut ? quandHeure(a.dateDebut) : '—'}</td>
-                    <td className="num">{a.dateFin ? quandHeure(a.dateFin) : <span className="sub">sans terme</span>}</td>
-                  </tr>
-                ))}
+                {abonnements.map((a) => {
+                  /* ⚠ `dateFinEngagement`, PAS `dateFin`. L'écran lisait `a.dateFin` — un nom que
+                     l'API n'envoie jamais — donc la colonne affichait « sans terme » sur TOUS les
+                     abonnements depuis toujours. Un engagement de trois ans et un abonnement sans
+                     terme se lisaient à l'identique. */
+                  const terme = etatDuTerme(a.dateFinEngagement)
+                  return (
+                    <tr key={a.id}>
+                      <td>
+                        <span className="nm">
+                          {a.client?.raisonSociale
+                            || [a.client?.prenom, a.client?.nom].filter(Boolean).join(' ')
+                            || a.beneficiaire?.id
+                            || '—'}
+                        </span>
+                      </td>
+                      <td><span className={`badge ${tonStatut(a.statut)}`}>{a.statut || '—'}</span></td>
+                      <td className="num">
+                        {a.dateDebutEngagement ? quandHeure(a.dateDebutEngagement) : '—'}
+                      </td>
+                      <td className="num">
+                        {a.dateFinEngagement ? quandHeure(a.dateFinEngagement) : '—'}
+                        {terme && (
+                          <>
+                            {' '}
+                            <span className={`badge ${terme.classe}`}>{terme.texte}</span>
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>

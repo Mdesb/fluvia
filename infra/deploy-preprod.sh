@@ -121,6 +121,13 @@ if [ -n "$CONCERNEES" ]; then
     echo
 fi
 
+# ⚠ ON RETIENT, PARCE QUE L'AVERTISSEMENT CI-DESSUS AURA DEFILE.
+#
+# Il est imprime a une centaine de lignes de la fin et formule au futur. Le deploiement en imprime
+# des centaines d'autres apres lui : au moment ou l'operateur lit la derniere, il ne sait plus qu'il
+# a tue quelque chose. On garde donc la liste pour la redire A LA FIN, au passe, quand c'est un fait.
+SUITE_TUEE="$CONCERNEES"
+
 log "Dépendances Composer (sans les paquets de dev)"
 "${COMPOSE[@]}" exec -T php composer install --no-dev --optimize-autoloader --no-interaction
 
@@ -401,5 +408,21 @@ fi
 
 log "État de la stack"
 "${COMPOSE[@]}" ps
+
+# ⚠ AU PASSE, ET EN DERNIER. Ce n'est plus une prevision : la suite est morte, et la personne qui
+# la relancera lira « phpunit est absent » — un message qui accuse l'operateur d'avoir oublie de
+# reinstaller, alors que c'est CE deploiement qui l'a retire.
+if [ -n "${SUITE_TUEE:-}" ]; then
+    echo
+    echo "  ⚠  CE DÉPLOIEMENT VIENT DE TUER UNE SUITE DE TESTS :"
+    for conteneur in $SUITE_TUEE; do
+        echo "       $conteneur"
+    done
+    echo
+    echo "     Elle rendra des erreurs de « template introuvable », ou « phpunit est absent »."
+    echo "     Ce n'est pas une régression du code : c'est ce déploiement."
+    echo "     Préviens la session concernée, puis : ./infra/reinstaller-dev.sh"
+    echo
+fi
 
 log "Déploiement terminé - $REPO_ROOT"

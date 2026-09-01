@@ -46,10 +46,18 @@ final class StayModule implements ModuleManifest
 
     /**
      * Le séjour est **vendu et activable par établissement** : ce n'est pas un service transverse, il
-     * n'a de sens que pour un exploitant qui héberge. Le code `stay` doit être enregistré au catalogue
-     * de capacités (`App\Fonctionnalite`), qui est le périmètre de `claude-A` — sans quoi
-     * `ModuleAccess::hasModule()` répondra toujours `false` et le module sera présent mais inaccessible.
-     * Demande posée dans `RAPPORTS/claude-F.md`.
+     * n'a de sens que pour un exploitant qui héberge.
+     *
+     * ⚠ CE DOCBLOC DISAIT VRAI, ET C'EST CE QUI REND SON HISTOIRE INSTRUCTIVE. Il annonçait que
+     * `stay` devait être enregistré au catalogue « sans quoi `hasModule()` répondra toujours
+     * `false` et le module sera présent mais inaccessible » — et posait la demande à un autre
+     * périmètre. C'était exact, et le module est resté inaccessible : **un commentaire juste
+     * n'échoue pas**, donc personne n'a eu de raison d'agir. Quatre verticales voisines affirmaient
+     * l'inverse et étaient dans le même état ; rien ne distinguait les deux cas à la lecture.
+     *
+     * Enregistré le 01/09/2026, avec les huit autres capacités de module. Vérifié par le garde-fou n°41, qui refuse
+     * tout manifeste dont la capacité manque au catalogue : la phrase ci-dessus n'est plus une
+     * affirmation, elle est contrôlée à chaque commit.
      */
     public function capability(): ?string
     {

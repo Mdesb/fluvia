@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="500" viewBox="0 0 1200 500">
+<rect width="1200" height="500" fill="#FFFFFF"/>
+<text x="60" y="80" font-family="Arial" font-size="40" fill="#0B1020" font-weight="700">FLUVIA — PALETTE</text>
+<g font-family="Arial" font-size="20" fill="#0B1020">
+<rect x="60" y="130" width="170" height="170" rx="24" fill="#050914"/><text x="60" y="335">Navy #050914</text>
+<rect x="270" y="130" width="170" height="170" rx="24" fill="#27D9D0"/><text x="270" y="335">Cyan #27D9D0</text>
+<rect x="480" y="130" width="170" height="170" rx="24" fill="#168CEB"/><text x="480" y="335">Blue #168CEB</text>
+<rect x="690" y="130" width="170" height="170" rx="24" fill="#3755E8"/><text x="690" y="335">Indigo #3755E8</text>
+<rect x="900" y="130" width="170" height="170" rx="24" fill="#7A2EE6"/><text x="900" y="335">Purple #7A2EE6</text>
+</g></svg>

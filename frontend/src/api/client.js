@@ -540,8 +540,24 @@ export const api = {
     request(`/api/ventes/${venteId}/paiements`, { method: 'POST', body: corps, headers, timeoutMs: 45000 }),
   annulerVente: (venteId) =>
     request(`/api/ventes/${venteId}/annuler`, { method: 'POST', body: {}, timeoutMs: 20000 }),
-  valider: (venteId) =>
-    request(`/api/ventes/${venteId}/valider`, { method: 'POST', body: {}, timeoutMs: 30000 }),
+  // ⚠ LE CORPS N'EST PLUS VIDE, ET IL NE L'AURAIT JAMAIS DU ETRE.
+  //
+  // `ValiderVenteProcessor` lit `supports` depuis toujours, et `ValiderVenteService` en tire deux
+  // comportements distincts (RG-CQ1-01) :
+  //
+  //   identifiant inedit    -> emission d'un support neuf portant cet identifiant
+  //   identifiant deja connu -> RECHARGE de la carte existante, au lieu d'une emission
+  //
+  // Le second est le geste le plus courant d'un exploitant qui vend des cartes, et il etait
+  // inatteignable : cet appel envoyait `{}`. La contrainte de quantite (RG-CQ8-02 : un identifiant
+  // explicite impose une quantite de 1) est appliquee par l'ECRAN avant d'appeler, pour que le
+  // caissier voie pourquoi une ligne n'est pas appairable au lieu de se prendre un 422.
+  valider: (venteId, supports = null) =>
+    request(`/api/ventes/${venteId}/valider`, {
+      method: 'POST',
+      body: supports?.length ? { supports } : {},
+      timeoutMs: 30000,
+    }),
   ticket: (venteId, mode = 'imprimer') =>
     request(`/api/ventes/${venteId}/ticket`, { method: 'POST', body: { mode } }),
 
@@ -1441,6 +1457,17 @@ export const api = {
   // `organisation.gerer`, contrôlé sur l'établissement DU CHEMIN et non sur l'établissement actif
   // (RG-SOCLE-05) : c'est pour ça que l'identifiant est dans l'URL et pas dans un en-tête.
   catalogueCapacites: () => request('/api/fonctionnalites/catalogue'),
+
+  // CE QUI EST VENDABLE, ET A QUEL PRIX.
+  //
+  // ⚠ LE PREFIXE `/editor/` NE VEUT PAS DIRE « RESERVE A L'EDITEUR ». Il dit A QUI APPARTIENT le
+  // catalogue — c'est celui de Fluvia, pas celui de l'exploitant. La ressource est declaree
+  // `is_granted('PUBLIC_ACCESS')` : n'importe quel client peut lire ce qu'on lui vend, et c'est
+  // exactement ce qu'il faut pour une boutique.
+  //
+  // Rend `{ capability, label, monthlyPriceCents }`. La liste est VIDE tant que l'editeur n'a cree
+  // aucune option — auquel cas l'ecran le dit, plutot que d'afficher des modules a 0 €.
+  optionsVendables: () => request('/api/editor/plan-options'),
   fonctionnalitesEtablissement: (id) => request(`/api/etablissements/${id}/fonctionnalites`),
   // Corps : { capaciteCode, active, parametres? }.
   majFonctionnalite: (id, corps) =>
