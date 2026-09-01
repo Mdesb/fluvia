@@ -309,6 +309,7 @@ function TerrainsSection({ etabActif, droits }) {
 
       <RejoindreModal
         ressources={ressources}
+        reservationsCoeur={reservationsCoeur}
         terrains={terrains || []}
         partie={rejoindre}
         beneficiaires={beneficiaires}
@@ -454,7 +455,7 @@ function ReservationModal({ terrain, ressources, terrains, beneficiaires, onClos
   )
 }
 
-function RejoindreModal({ partie, ressources, terrains, beneficiaires, onClose, onFait, onErreur }) {
+function RejoindreModal({ partie, ressources, terrains, beneficiaires, reservationsCoeur, onClose, onFait, onErreur }) {
   const [joueur, setJoueur] = useState('')
   const [enCours, setEnCours] = useState(false)
 
