@@ -1,0 +1,25 @@
+{
+  "_lisez_moi": [
+    "Ligne de base GELEE du garde-fou n40 — identifiants utilises hors de leur portee.",
+    "",
+    "Chaque entree est un ecran qui casse AU RENDU : le build ne le voit pas, Vite ne faisant",
+    "pas d analyse de portee sur le JSX. Ce ne sont pas des avertissements, ce sont des defauts.",
+    "",
+    "Ils sont geles parce qu ils precedent le controle et vivent dans des modules varies. Le",
+    "controle refuse tout NOUVEAU ; ce nombre ne doit que descendre.",
+    "",
+    "Cle = fichier:identifiant, sans numero de ligne : une ligne ajoutee au-dessus ne doit pas",
+    "faire ressortir un defaut gele comme neuf.",
+    "",
+    "Pour retirer ceux qui ont ete corriges :  node scripts/verifier-portee.mjs --geler"
+  ],
+  "gelees": [
+    "src/components/AchatsStock.jsx:articles",
+    "src/components/AchatsStock.jsx:fournisseurs",
+    "src/components/VitrinesBoutique.jsx:charger",
+    "src/pages/Documents.jsx:charger",
+    "src/pages/Padel.jsx:reservationsCoeur",
+    "src/pages/Parametres.jsx:envoiCourriel",
+    "src/pages/Stock.jsx:articles"
+  ]
+}

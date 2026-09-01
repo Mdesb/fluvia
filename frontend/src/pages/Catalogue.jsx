@@ -226,8 +226,10 @@ function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = []
       setProduits(membres(pc))
       setTotal(pc?.totalItems ?? pc?.['hydra:totalItems'] ?? membres(pc).length)
       const t = membres(tc)
+      // ⚠ Plus de preselection de type : elle servait le formulaire de creation, qui n'existe
+      // plus. `NouveauProduit` ouvre son choix sur « Choisir… », ce qui vaut mieux qu'un type
+      // impose que personne n'a regarde.
       setTypes(t)
-      setTypeId((prev) => prev || (t.length ? t[0].id : ''))
     } catch (e) {
       setErreur(e.message)
     } finally {
