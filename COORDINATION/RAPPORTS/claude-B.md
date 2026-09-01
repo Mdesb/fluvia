@@ -38,3 +38,36 @@ complet** unique passe (emails distincts entre fixtures) ; un **rechargement** s
 échouera au premier utilisateur. Si l'objectif inclut la régénération préprod sans purge préalable,
 il faut décider à l'échelle de la flotte si `creerUtilisateur` doit devenir idempotent lui aussi.
 Décision de périmètre → à toi, je ne tranche pas.
+
+| 01/09 — | **Chantier Trésorerie FIN-4 « Alertes de trésorerie proactives » : LIVRÉ ET POUSSÉ** (`1b28bf8e`, branche claude-B). Entité `TreasuryCashAlert` (API lecture seule, `finance.read`) + enum `CashAlertStatus`, anti-répétition **garantie base** (colonne générée virtuelle + index unique : au plus 1 alerte `open`/établissement, MariaDB), commande planifiée `finance:treasury:verifier-seuils` (classe `CheckThresholdsCommand`, une transaction par établissement), service `ThresholdBreachProjectionCalculator`, événement `treasury.threshold_breached` au catalogue → notification **Warning** écran finance, 2 migrations **additives** (`Version20260901090000` ALTER TreasurySettings, `Version20260901090100` CREATE table). 15 tests seuils (203 assertions) + cloisonnement inter-établissements, tous verts. **Tous les garde-fous du dépôt verts au push.** | Artefact récap livré à l'utilisateur. Points de revue non bloquants pour toi ⬇️. En attente d'assignation. | — |
+
+## Signalements à claude-A — 01/09 (chantier alertes trésorerie, non bloquants)
+
+**1. Migrations à jouer à l'intégration.** Deux migrations **additives** attendent
+`doctrine:migrations:migrate` sur la base de dev partagée : `Version20260901090000`
+(colonnes `cash_alert_threshold_cents` nullable + `cash_alert_horizon_days` défaut 30 sur
+TreasurySettings) et `Version20260901090100` (table `finance_treasury_cash_alert` avec la colonne
+générée `open_establishment_id` + index unique). Aucune donnée existante touchée. Le schéma de test
+est construit depuis les métadonnées ORM (`SchemaDuHarnais`) + un listener qui ajoute la colonne
+générée, donc les tests ne dépendent pas de la migration ; la prod/préprod si.
+
+**2. Gravité et périmètre de la notification — à confirmer en revue (déjà annoté dans le code).**
+J'ai posé `treasury.threshold_breached` en **Warning** / écran+droit `finance/read`. La règle voisine
+`treasury.discrepancy_detected` est en **Critical** / `compta/lire`. Choix délibéré (un franchissement
+*projeté* laisse des marges ; un écart *constaté* non), mais les deux règles trésorerie divergent sur
+le couple module/droit. Si la flotte a tranché « tout Trésorerie sous `compta/lire` », je réaligne en
+une ligne. Commentaire laissé au-dessus de la règle (`NotificationRule.php`).
+
+**3. Deux commandes-sœurs absentes du `ScheduleCatalog` (bug préexistant, hors mon chantier).**
+En ajoutant `finance:treasury:verifier-seuils` au catalogue de planification, j'ai constaté que
+`finance:treasury:detecter-ecarts` et `...suggerer-rapprochements` (commandes déjà en place) n'y
+figurent pas : elles existent mais ne sont planifiées nulle part. À qui revient leur périmètre de
+décider s'il faut les y inscrire. Je ne touche pas au travail d'un autre sans ton feu vert.
+
+**4. Numérotation RG-TRE/US-TRE qui se recouvre entre les 3 specs d'évolution trésorerie.**
+Les specs `spec-treasury-{business-reconciliation,cash-alerts,auto-reconciliation}.md` (proposées,
+poussées) réutilisent des plages RG-TRE/US-TRE qui se chevauchent. Sans importance tant qu'une seule
+est implémentée (les alertes), mais à renuméroter proprement avant d'attaquer les deux autres, pour
+éviter des références ambiguës. Les directions « rapprochement par flux métier » et « rapprochement
+automatique » restent spécifiées et **attendent l'arbitrage de l'utilisateur** (la première est
+bloquée sur des décisions PayFiP/M2 + comptabilisation contrepartie SEPA).
