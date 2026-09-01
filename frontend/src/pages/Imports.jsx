@@ -136,6 +136,18 @@ export default function Imports({ etabActif, droits = [] }) {
     }
   }
 
+  async function voirDetail(lot) {
+    // Le détail complet (contenu + liste ENTIÈRE des erreurs) vit sur l'item `GET /imports/{id}`,
+    // pas sur la collection : on recharge le lot par son id pour ouvrir la fiche à jour. Repli sur
+    // l'objet déjà en liste si la relecture échoue — le détail reste ouvrable hors ligne.
+    try {
+      const frais = await api.detailImport(lot.id)
+      setDetail(frais)
+    } catch {
+      setDetail(lot)
+    }
+  }
+
   async function appliquer(lot) {
     setBusy(true)
     setErreur(null)
@@ -261,7 +273,7 @@ export default function Imports({ etabActif, droits = [] }) {
                             <button
                               className="btn ghost sm"
                               type="button"
-                              onClick={() => setDetail(lot)}
+                              onClick={() => voirDetail(lot)}
                             >
                               {nbErreurs} erreur{nbErreurs > 1 ? 's' : ''}
                             </button>
