@@ -578,6 +578,12 @@ if [ -f "$RACINE/frontend/scripts/verifier-encre-sur-fond.mjs" ]; then
     fi
 fi
 
+if [ -f "$RACINE/frontend/scripts/verifier-icones-menu.mjs" ]; then
+    if [ -d "$RACINE/frontend/node_modules" ]; then
+        executer "Icones du menu (n45)" sh -c "cd '$RACINE/frontend' && node scripts/verifier-icones-menu.mjs"
+    fi
+fi
+
 if [ -f "$RACINE/frontend/scripts/verifier-clic-clavier.mjs" ]; then
     if [ -d "$RACINE/frontend/node_modules" ]; then
         executer "Clic au clavier" sh -c "cd '$RACINE/frontend' && node scripts/verifier-clic-clavier.mjs"
