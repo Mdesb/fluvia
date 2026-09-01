@@ -220,7 +220,9 @@ export default function Reservation({ etabActif, droits = [], session }) {
   // appels sans rien apprendre de neuf.
   const instancesParType = useMemo(() => {
     const m = {}
-    for (const r of ressources) {
+    // `|| []` comme pour `creneaux` : `ressources` vaut `null` tant que la lecture n'a pas
+    // abouti, et un `useMemo` execute son corps des le premier rendu.
+    for (const r of ressources || []) {
       const mere = idDepuisIri(r.ressourceMere)
       if (mere) (m[mere] ||= []).push(r)
     }
@@ -244,7 +246,8 @@ export default function Reservation({ etabActif, droits = [], session }) {
     (reference) => {
       const id = idDepuisIri(reference)
       if (!id) return null
-      return ressources.find((r) => r.id === id)?.libelle || null
+      // Appele pendant le rendu des lignes : `ressources` peut encore valoir `null`.
+      return ressources?.find((r) => r.id === id)?.libelle || null
     },
     [ressources],
   )
@@ -258,7 +261,9 @@ export default function Reservation({ etabActif, droits = [], session }) {
   // remplacements que personne n'a jugés équivalents.
   const ressourcesEquivalentes = useMemo(() => {
     const m = {}
-    for (const source of ressources) {
+    // Meme garde : `ressources` est `null` avant la premiere lecture. Le `.filter` interne
+    // n'en a pas besoin — il ne s'execute que si la boucle tourne.
+    for (const source of ressources || []) {
       m[source.id] = ressources.filter(
         (r) =>
           r.id !== source.id
