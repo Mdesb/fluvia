@@ -461,3 +461,37 @@ Sécurité/cloisonnement, repo-local, calibrable sur les 3 témoins (`CardReject
 `OperationScellee`). Proposé par b8, mais b8 est sur la purge service worker — pas de collision.
 Je n'installe rien dans `pre-receive` moi-même (D28, c'est toi) : je livre le script + sa ligne de base
 gelée + exclusions motivées, et je te le remets pour câblage. Si tu voulais que ce soit un autre, dis-le.
+
+## 01/09 — T24 livré : garde-fou n°35 (liste blanche de cloisonnement)
+
+`bin/garde-fou-liste-blanche-cloisonnement.php` + ligne de base + câblage `garde-fous.sh` et les DEUX
+hooks (`pre-receive`, `pre-commit`). Poussé `efe1f9bb`, garde-fous verts.
+
+**Ce qu'il attrape** (complément exact du n°28) : { entités d'un module portant une relation directe
+vers une ancre — Etablissement, PointDeVente, ProfilExploitant, Groupe — ET exposées `#[ApiResource]` }
+moins { celles que ses extensions nomment } moins { couvertes en bloc-namespace ou par interface }.
+C'est l'angle mort d'`OperationScellee` : liste blanche qui paraît complète, entité oubliée, collection
+tous établissements confondus, zéro erreur.
+
+**Calibration (rejouée, pas déduite)** — script courant contre l'arbre d'AVANT chaque correctif :
+- parent de `db20a777` (fix OperationScellee) → ressort `OperationScellee`, elle seule ;
+- parent de `24b6df68` (« les onze entités ») → ressort `CardRejection` + `DailyClosure` +
+  `OperationScellee` + `ParametrePmvEtablissement` + `Recurrence`, toutes corrigées depuis ;
+- arbre actuel → **0**. Les 3 témoins ressortent avant, aucun après.
+
+**Décisions de conception, pour ta revue :**
+- Filtre « exposée » (comme le n°5) : une entité interne jamais servie ne fuit pas par collection —
+  sinon 13 candidats dont 5 internes (traces/paramètres). Ramené à 8, tous couverts en bloc.
+- Bloc-namespace détecté par `str_starts_with($resourceClass, …)` **quel que soit** le porteur du
+  préfixe (littéral OU constante `self::NAMESPACE_MODULE`) : Marketing filtre par constante, se fier au
+  littéral le signalait à tort.
+- **Naît à ZÉRO dette** (cliquet pur) : aucune exclusion nécessaire sur l'arbre actuel. Le fichier de
+  ligne de base est en place, vide, prêt à recevoir une exclusion motivée si un référentiel global
+  légitime apparaît.
+
+**⚠ Pour toi (D28)** : le hook installé sur le dépôt nu doit être réinstallé (`bin/reinstaller-hooks.sh`)
+pour que le n°35 tourne réellement à la poussée. Tant que non, il est câblé (filet de complétude
+satisfait) mais dormant — exactement le trou du 24/08 que tu as documenté. Je ne réinstalle pas moi-même.
+
+Je reste dispo : si tu veux que je transforme les 2 vraies fuites redécouvertes en tickets, ou que je
+prenne un autre item du backlog, dis-le.
