@@ -221,6 +221,15 @@ a { color: var(--accent); }
 .btn.primary:hover:not(:disabled) { background: var(--accent-2); }
 .btn.sm { padding: 6px 10px; font-size: var(--txt-petit); }
 
+/* ⚠ LE VERDICT D'UN CONTROLE A L'ENTREE SE LIT D'UN COUP D'OEIL, OU IL NE SERT PAS.
+   Il etait rendu a 14 px — la taille du texte courant, celle du libelle « Code du billet ». Un
+   agent au portique, tablette a bout de bras et file d'attente derriere, devait LIRE une phrase
+   pour savoir s'il laisse passer.
+   `display: block` met le mot seul sur sa ligne et renvoie le detail dessous : « Refusé », puis
+   « Support inconnu ». La couleur reste celle de la banniere, dont le contraste est deja mesure —
+   et un texte plus grand ne peut que rendre ce contraste plus confortable, jamais moins. */
+.cb-verdict { display: block; font-size: var(--txt-fort); line-height: 1.15; }
+
 /* ⚠ UN PRIMAIRE DANS UN TABLEAU N'EST PAS LE PRIMAIRE DE L'ECRAN.
    Le catalogue rendait SEPT boutons pleins d'accent dans ses lignes contre UN seul en dehors —
    « Nouveau produit », la vraie action de l'ecran. Sept appels a l'action qui se disputent

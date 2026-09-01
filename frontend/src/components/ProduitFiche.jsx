@@ -63,6 +63,22 @@ function valeursModifiables(p) {
     etablissements: (p?.etablissements || []).map(idDeRef).filter(Boolean),
     categories: (p?.categories || []).map(idDeRef).filter(Boolean),
     jours: joursDepuisIntervalle(p?.dureeValidite),
+    // ⚠ `null` QUAND L'OBJET N'EXISTE PAS, et pas un objet vide : c'est ce qui distingue « ce
+    // produit n'a pas de formule » de « il en a une, toute vide ». Le bloc ne s'affiche que sur
+    // un objet present, et l'enregistrement n'envoie rien sur un `null`.
+    formule: p?.formule ? {
+      periodicite: p.formule.periodicite || '',
+      sepaActif: !!p.formule.sepaActif,
+      jourPrelevement: p.formule.jourPrelevement ?? '',
+      renouvellementAuto: p.formule.renouvellement?.auto !== false,
+      renouvellementPrix: p.formule.renouvellement?.prix || 'fixe',
+      modeAcces: p.formule.droitAcces?.mode || 'illimite',
+    } : null,
+    carte: p?.carte ? {
+      nbPaye: p.carte.nbPaye ?? '',
+      nbCredite: p.carte.nbCredite ?? '',
+      rechargeValidityMode: p.carte.rechargeValidityMode || 'extend',
+    } : null,
   }
 }
 
@@ -408,13 +424,26 @@ export default function ProduitFiche({
     libelle: 'Présentation', description: 'Présentation',
     canaux: 'Vente', etablissements: 'Vente', categories: 'Vente', jours: 'Vente',
     couleurCaisse: 'Caisse',
+    formule: 'Vente', carte: 'Vente',
     noteInterne: 'Comptabilité',
   }
   const changements = useMemo(() => {
     if (!edition || !reference) return []
-    const memes = (a, b) => (Array.isArray(a) || Array.isArray(b)
-      ? JSON.stringify([...(a || [])].sort()) === JSON.stringify([...(b || [])].sort())
-      : String(a ?? '') === String(b ?? ''))
+    // Une valeur peut être une chaîne, un tableau (canaux, catégories) ou un objet (formule,
+    // carte). Les trois se comparent différemment, et se tromper de comparaison ne lève rien :
+    // ça rend simplement la barre aveugle à un champ entier.
+    const stable = (v) => {
+      if (v === null || v === undefined) return ''
+      if (Array.isArray(v)) return JSON.stringify([...v].sort())
+      if (typeof v === 'object') {
+        // Clés triées : `JSON.stringify` suit l'ordre d'insertion, et le brouillon recompose ses
+        // objets à chaque frappe. Sans le tri, un même contenu écrit dans un autre ordre passerait
+        // pour une modification.
+        return JSON.stringify(Object.keys(v).sort().map((k) => [k, stable(v[k])]))
+      }
+      return String(v)
+    }
+    const memes = (a, b) => stable(a) === stable(b)
     return Object.keys(ONGLET_DU_CHAMP).filter((c) => !memes(edition[c], reference[c]))
   }, [edition, reference])
 
@@ -446,6 +475,34 @@ export default function ProduitFiche({
         // Le serveur rend la durée en forme développée (`P0Y0M1DT0H0M0S`) et accepte la forme
         // courte : on renvoie `P<n>D`, ou `null` pour « sans limite ».
         dureeValidite: edition.jours === '' ? null : `P${Number(edition.jours)}D`,
+        // ⚠ ON N'ENVOIE LA FORMULE QUE SI ELLE EXISTE. Envoyer `formule: null` la SUPPRIMERAIT ;
+        // ne rien envoyer la laisse intacte. La difference tient a un champ absent, pas a une
+        // valeur nulle — et c'est exactement le genre d'ecart qui efface des donnees en silence.
+        ...(edition.formule ? {
+          formule: {
+            periodicite: edition.formule.periodicite || null,
+            sepaActif: !!edition.formule.sepaActif,
+            jourPrelevement: edition.formule.jourPrelevement === '' ? null : Number(edition.formule.jourPrelevement),
+            // Les deux sous-objets sont recomposes ENTIERS : le serveur les stocke en JSON, donc
+            // un envoi partiel remplacerait l'objet et perdrait les cles qu'on n'a pas montrees.
+            renouvellement: {
+              ...(p.formule?.renouvellement && typeof p.formule.renouvellement === 'object' ? p.formule.renouvellement : {}),
+              auto: !!edition.formule.renouvellementAuto,
+              prix: edition.formule.renouvellementPrix,
+            },
+            droitAcces: {
+              ...(p.formule?.droitAcces && typeof p.formule.droitAcces === 'object' ? p.formule.droitAcces : {}),
+              mode: edition.formule.modeAcces,
+            },
+          },
+        } : {}),
+        ...(edition.carte ? {
+          carte: {
+            nbPaye: edition.carte.nbPaye === '' ? null : Number(edition.carte.nbPaye),
+            nbCredite: edition.carte.nbCredite === '' ? null : Number(edition.carte.nbCredite),
+            rechargeValidityMode: edition.carte.rechargeValidityMode,
+          },
+        } : {}),
       })
       const rafraichi = await api.produit(produitId)
       setDetail(rafraichi)
@@ -901,6 +958,144 @@ export default function ProduitFiche({
           </div>
         )}
       </div>
+      {/* ⚠ N'APPARAIT QUE SI LA FORMULE EXISTE. On ne propose pas d'en creer une : donner une
+          formule d'abonnement a un produit de boutique demanderait de decider ce que ca veut
+          dire, et un ecran qui propose une operation sans sens defini produit des donnees que
+          personne ne sait relire. */}
+      {edition.formule && (
+        <Section titre="Formule d'abonnement" aide="Ce qui règle la périodicité, le prélèvement et le renouvellement.">
+          <div className="field">
+            <label htmlFor="fo-per">Périodicité</label>
+            <select
+              id="fo-per"
+              className="select"
+              value={edition.formule.periodicite}
+              onChange={(e) => setEdition((s) => ({ ...s, formule: { ...s.formule, periodicite: e.target.value } }))}
+            >
+              <option value="">—</option>
+              <option value="mensuel">Mensuelle</option>
+              <option value="annuel">Annuelle</option>
+              <option value="personnalise">Personnalisée</option>
+            </select>
+          </div>
+
+          <div className="field">
+            <label htmlFor="fo-acces">Ce que l'abonnement ouvre</label>
+            <select
+              id="fo-acces"
+              className="select"
+              value={edition.formule.modeAcces}
+              onChange={(e) => setEdition((s) => ({ ...s, formule: { ...s.formule, modeAcces: e.target.value } }))}
+            >
+              <option value="illimite">Accès illimité</option>
+              <option value="quota_passages">Un quota de passages</option>
+              <option value="plage_horaire">Une plage horaire</option>
+            </select>
+            <div className="hint">
+              Le nombre de passages et les horaires eux-mêmes ne se règlent pas encore ici.
+            </div>
+          </div>
+
+          <div className="field">
+            <label>Prélèvement SEPA</label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--esp-serre)', fontWeight: 400 }}>
+              <input
+                type="checkbox"
+                checked={edition.formule.sepaActif}
+                onChange={(e) => setEdition((s) => ({ ...s, formule: { ...s.formule, sepaActif: e.target.checked } }))}
+              />
+              Prélever automatiquement
+            </label>
+          </div>
+
+          {edition.formule.sepaActif && (
+            <div className="field">
+              <label htmlFor="fo-jour">Jour du prélèvement</label>
+              <input
+                id="fo-jour"
+                className="input num"
+                type="number"
+                min="1"
+                max="28"
+                value={edition.formule.jourPrelevement}
+                onChange={(e) => setEdition((s) => ({ ...s, formule: { ...s.formule, jourPrelevement: e.target.value } }))}
+              />
+              {/* ⚠ 28 ET PAS 31 : un prélèvement au 30 ne partirait pas en février. Le plafond
+                  évite de créer un abonnement qui saute un mois sur douze sans le dire. */}
+              <div className="hint">Entre 1 et 28 — au-delà, le mois de février n'a pas le jour.</div>
+            </div>
+          )}
+
+          <div className="field">
+            <label>Renouvellement</label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--esp-serre)', fontWeight: 400 }}>
+              <input
+                type="checkbox"
+                checked={edition.formule.renouvellementAuto}
+                onChange={(e) => setEdition((s) => ({ ...s, formule: { ...s.formule, renouvellementAuto: e.target.checked } }))}
+              />
+              Se renouvelle tout seul à l'échéance
+            </label>
+            <select
+              className="select"
+              style={{ marginTop: 'var(--esp-serre)' }}
+              value={edition.formule.renouvellementPrix}
+              onChange={(e) => setEdition((s) => ({ ...s, formule: { ...s.formule, renouvellementPrix: e.target.value } }))}
+              aria-label="Prix au renouvellement"
+            >
+              <option value="fixe">Au même prix</option>
+              <option value="evolutif">Au tarif en vigueur</option>
+            </select>
+          </div>
+        </Section>
+      )}
+
+      {edition.carte && (
+        <Section titre="Carte multi-entrées" aide="Combien d'entrées la carte donne, et pour combien on la paie.">
+          <div className="row" style={{ gap: 'var(--esp-normal)', flexWrap: 'wrap' }}>
+            <div className="field" style={{ flex: '1 1 10rem' }}>
+              <label htmlFor="ca-paye">Entrées payées</label>
+              <input
+                id="ca-paye"
+                className="input num"
+                type="number"
+                min="1"
+                value={edition.carte.nbPaye}
+                onChange={(e) => setEdition((s) => ({ ...s, carte: { ...s.carte, nbPaye: e.target.value } }))}
+              />
+            </div>
+            <div className="field" style={{ flex: '1 1 10rem' }}>
+              <label htmlFor="ca-cred">Entrées créditées</label>
+              <input
+                id="ca-cred"
+                className="input num"
+                type="number"
+                min="1"
+                value={edition.carte.nbCredite}
+                onChange={(e) => setEdition((s) => ({ ...s, carte: { ...s.carte, nbCredite: e.target.value } }))}
+              />
+            </div>
+          </div>
+          {/* Ce que « 10 = 12 » veut dire, écrit plutôt que sous-entendu. */}
+          <div className="hint">
+            On paie {edition.carte.nbPaye || '?'} entrées, on en reçoit {edition.carte.nbCredite || '?'}.
+          </div>
+
+          <div className="field">
+            <label htmlFor="ca-rech">Quand on recharge la carte</label>
+            <select
+              id="ca-rech"
+              className="select"
+              value={edition.carte.rechargeValidityMode}
+              onChange={(e) => setEdition((s) => ({ ...s, carte: { ...s.carte, rechargeValidityMode: e.target.value } }))}
+            >
+              <option value="extend">La validité repart de la recharge</option>
+              <option value="keep">La validité d'origine est conservée</option>
+            </select>
+          </div>
+        </Section>
+      )}
+
       <Section titre="Diffusion" ancre="prod-diffusion">
         {/* ⚠ << — >> SE LIT << AUCUN >>, ET LA VALEUR SIGNIFIE << TOUS >>. C'est la liste qui
             restreint : un produit sans site coche est du socle, partage par tous les
