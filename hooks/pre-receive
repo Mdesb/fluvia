@@ -326,6 +326,17 @@ while read -r ancien nouveau ref; do
         lancer garde-fou-etablissement-ecrivable.php "--contre=$BASE"
     fi
 
+    # La validation s'execute ENTRE la deserialisation et le processeur : une contrainte posee sur un
+    # champ que le processeur fabrique ne verra jamais cette valeur. Deux symptomes opposes — 422 a la
+    # creation dans un sens, valeur non controlee dans l'autre — et deux sessions s'y sont cassees le
+    # meme jour. Le detecteur d'origine ratait son propre temoin positif : il indexait les processeurs
+    # par nom court, et neuf classes s'appellent `EstablishmentStampProcessor`. Meme defaut que le
+    # n°32. Ce garde-fou porte donc ses deux temoins et refuse de rendre un avis s'il les perd.
+    if [ -f "$ARBRE/bin/garde-fou-validation-avant-processeur.php" ]; then
+        echo "── Validation avant processeur (n°34)"
+        lancer garde-fou-validation-avant-processeur.php "--contre=$BASE"
+    fi
+
     # Une suppression dans un up() de migration doit etre voulue et le dire (D32).
     if [ -f "$ARBRE/bin/garde-fou-drop-migrations.php" ]; then
         echo "── Suppressions en migration (D32)"

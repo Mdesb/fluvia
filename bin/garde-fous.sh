@@ -340,6 +340,15 @@ else
     executer "Établissement écrivable (D41)" php_racine bin/garde-fou-etablissement-ecrivable.php
 fi
 
+# 12 bis. La validation s'exécute AVANT les processeurs : une contrainte posée sur un champ que le
+#         processeur fabrique ne verra jamais cette valeur. Le détecteur porte ses deux témoins et
+#         refuse de rendre un avis s'il cesse de les reconnaître — son prototype ratait le sien.
+if [ -n "$REFERENCE" ]; then
+    executer "Validation avant processeur (n°34)" php_racine bin/garde-fou-validation-avant-processeur.php "--contre=$REFERENCE"
+else
+    executer "Validation avant processeur (n°34)" php_racine bin/garde-fou-validation-avant-processeur.php
+fi
+
 # 13. Une suppression dans un `up()` de migration doit être voulue, et le dire (D32).
 #     `migrations:diff` compare les métadonnées à la base ENTIÈRE : il ramasse la dérive des
 #     autres sessions et la présente comme le travail de l'auteur. Préventif — aucun DROP de
