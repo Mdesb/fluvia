@@ -44,6 +44,8 @@ final class SouscriptionAbonnementHandler
         int $montantCentimes,
         string $ibanClair,
         string $titulaireMandat,
+        // Le demi-mois d'une souscription en cours de période. `null` : toutes au même montant.
+        ?int $montantPremiereCentimes = null,
     ): AbonnementFitness {
         $abonnement = new AbonnementFitness();
         $abonnement->setAdherent($adherent)
@@ -80,7 +82,11 @@ final class SouscriptionAbonnementHandler
         $abonnement->setMandatSepa($mandat);
         $this->em->persist($abonnement);
 
-        $this->echeancier->generer($abonnement, $montantCentimes);
+        // ⚠ LE MONTANT COURANT VA SUR L'ABONNEMENT, LE PRORATA N'Y VA PAS. L'abonnement porte ce
+        //    qu'on facturera la prochaine fois — un demi-mois d'entrée ne dit rien du prix.
+        $abonnement->setMontantCentimes($montantCentimes);
+
+        $this->echeancier->generer($abonnement, $montantCentimes, $montantPremiereCentimes);
 
         $statutAcces = new StatutAccesFitness();
         $statutAcces->setAbonnement($abonnement)->setActif(true);

@@ -23,6 +23,7 @@ use Symfony\Component\Uid\Uuid;
  * POST /sport/abonnements/souscrire (US-SPORT-01, CA-1). Corps :
  *   { "adherent": iri|uuid, "payeur": iri|uuid, "formule": iri|uuid, "periodicite": "mensuel"|"hebdomadaire",
  *     "dateSouscription"?: "AAAA-MM-JJ", "dureeEngagementMois": int, "montantCentimes": int,
+ *     "montantPremiereEcheanceCentimes"?: int,  // prorata d’entree ; 0 accepte (mois offert)
  *     "iban": string, "titulaireMandat": string }
  * L'IBAN en clair transite uniquement ici (jamais mappé Doctrine, tokenisé avant persistance, §4 du plan).
  *
@@ -74,6 +75,24 @@ final class SouscrireAbonnementProcessor implements ProcessorInterface
             throw new UnprocessableEntityHttpException('« montantCentimes » doit être strictement positif.');
         }
 
+        // ── LE PRORATA D'ENTRÉE, FACULTATIF ───────────────────────────────────────────────────
+        //
+        // Une souscription en cours de période fait payer un demi-mois d'abord, puis le plein tarif.
+        // C'est un MONTANT fourni, jamais un calcul fait ici : au prorata de quoi, arrondi comment,
+        // à partir de quelle date sont des décisions commerciales, et une règle inventée
+        // s'appliquerait en silence à toutes les souscriptions.
+        //
+        // ⚠ ZÉRO EST ACCEPTÉ, ET C'EST DÉLIBÉRÉ : le premier mois offert est une pratique courante.
+        //    Seul un montant NÉGATIF est refusé — il n'y a pas de prélèvement négatif, et le laisser
+        //    passer produirait une remise que la banque rejetterait, longtemps après la vente.
+        $montantPremiereCentimes = null;
+        if (isset($corps['montantPremiereEcheanceCentimes'])) {
+            $montantPremiereCentimes = (int) $corps['montantPremiereEcheanceCentimes'];
+            if ($montantPremiereCentimes < 0) {
+                throw new UnprocessableEntityHttpException('« montantPremiereEcheanceCentimes » ne peut pas être négatif.');
+            }
+        }
+
         return $this->handler->souscrire(
             $adherent,
             $payeur,
@@ -85,6 +104,7 @@ final class SouscrireAbonnementProcessor implements ProcessorInterface
             $montantCentimes,
             $iban,
             $titulaire,
+            $montantPremiereCentimes,
         );
     }
 

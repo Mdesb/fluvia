@@ -37,6 +37,7 @@ final class ReengagementHandler
         int $montantCentimes,
         string $ibanClair,
         string $titulaireMandat,
+        ?int $montantPremiereCentimes = null,
     ): Reengagement {
         if ($ancien->getStatut() !== StatutAbonnementFitness::Resilie) {
             throw new UnprocessableEntityHttpException('Seul un abonnement résilié peut être réengagé.');
@@ -74,7 +75,9 @@ final class ReengagementHandler
         $nouvel->setMandatSepa($nouveauMandat);
         $this->em->persist($nouvel);
 
-        $this->echeancier->generer($nouvel, $montantCentimes);
+        $nouvel->setMontantCentimes($montantCentimes);
+
+        $this->echeancier->generer($nouvel, $montantCentimes, $montantPremiereCentimes);
 
         $statutAcces = new StatutAccesFitness();
         $statutAcces->setAbonnement($nouvel)->setActif(true);
