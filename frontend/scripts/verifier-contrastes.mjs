@@ -221,6 +221,11 @@ const PAIRES = [
   //
   // C'est aussi le seul point d'entree de la marque blanche (T11) : un club repeint `--accent`, et
   // cette paire est ce qui l'empeche de rendre ses propres boutons illisibles.
+  // Quatre regles ecrivent `--accent-2` sur un fond `--accent-soft` : `.badge.info`,
+  // `.banner-info`, `.fiche-avatar`, `.bq-nav-link.on`. La paire passait deja avant le
+  // repeint (6,72 et 6,93) — elle est ajoutee pour qu'elle ne puisse plus se degrader sans
+  // que rien ne le dise, pas pour corriger un defaut.
+  ['accent-2', 'accent-soft', 4.5, 'texte sur un fond d’accent doux', true],
   ['sur-accent', 'accent', 4.5, 'texte sur un bouton d’accent — point d’entrée marque blanche', true],
 ]
 
