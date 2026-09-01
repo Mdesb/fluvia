@@ -287,7 +287,11 @@ export default function ProduitFiche({
     let annule = false
 
     setDetail(null)
-    setEdition(null)
+    // ⚠ PAS `null` : les champs des onglets lisent le brouillon a chaque rendu, et un brouillon nul
+    // faisait echouer l'affichage de toute la fiche. On repart des valeurs du produit qu'on ouvre —
+    // l'ebauche suffit, le detail complet les remplacera des son arrivee.
+    setEdition(valeursModifiables(produit))
+    setReference(valeursModifiables(produit))
     setLiaisons([])
     setValeurs({})
     setHorsSite(false)
