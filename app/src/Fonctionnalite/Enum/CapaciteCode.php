@@ -65,4 +65,13 @@ enum CapaciteCode: string
     case Social = 'social';
     case Sport = 'sport';
     case Stay = 'stay';
+
+    /**
+     * Ajoutee le 01/09/2026 a la demande de `claude-F`, dont le garde-fou n°41 refusait le commit.
+     *
+     * `DiningModule` la declare ; sans elle, `Fonctionnalites::definir()` la refuse et
+     * `ModuleAccess::hasModule()` rend faux pour toujours — le module serait present et
+     * definitivement inaccessible, exactement l'etat ou se trouvaient les neuf autres ce matin.
+     */
+    case Dining = 'dining';
 }
