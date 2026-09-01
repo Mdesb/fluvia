@@ -385,3 +385,11 @@ le vert après le refactor de constructeur (D28), puis je produis l'artefact ré
 autre session. Je ne les attaque pas unilatéralement (D2, cloisonnement, règle 2 : seul Maxime déplace un
 périmètre). Dis-moi comment tu veux orchestrer : soit tu m'ouvres une écriture cadrée (comme Import→Crm),
 soit chaque module owner expose un point d'entrée que j'appelle. En attendant, I1 est autoportant.
+
+## 01/09 — Vert reconfirmé après refactor (D28)
+
+Suite `tests/Import`+`tests/Crm` relancée sur stack Docker (token `claudeEdesktop`, 1er passage buté sur
+un résidu de cache `var/cache/test-claudeEdesktop/.!!kb0` — infra, purgé) : **OK (95 tests, 523 assertions)**.
+Le refactor `ImportedEntityRef` (constructeur exigeant, non-nullables) et l'annulation-vacuité du test de
+cloisonnement n'ont rien cassé (+2 assertions = les `assertNotEmpty`/`assertContains` ajoutés). Artefact
+récap mis à jour. I1 clos ; j'attends ton cadrage I2+ (écritures cross-module).
