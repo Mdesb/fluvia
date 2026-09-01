@@ -1457,6 +1457,17 @@ export const api = {
   // `organisation.gerer`, contrôlé sur l'établissement DU CHEMIN et non sur l'établissement actif
   // (RG-SOCLE-05) : c'est pour ça que l'identifiant est dans l'URL et pas dans un en-tête.
   catalogueCapacites: () => request('/api/fonctionnalites/catalogue'),
+
+  // CE QUI EST VENDABLE, ET A QUEL PRIX.
+  //
+  // ⚠ LE PREFIXE `/editor/` NE VEUT PAS DIRE « RESERVE A L'EDITEUR ». Il dit A QUI APPARTIENT le
+  // catalogue — c'est celui de Fluvia, pas celui de l'exploitant. La ressource est declaree
+  // `is_granted('PUBLIC_ACCESS')` : n'importe quel client peut lire ce qu'on lui vend, et c'est
+  // exactement ce qu'il faut pour une boutique.
+  //
+  // Rend `{ capability, label, monthlyPriceCents }`. La liste est VIDE tant que l'editeur n'a cree
+  // aucune option — auquel cas l'ecran le dit, plutot que d'afficher des modules a 0 €.
+  optionsVendables: () => request('/api/editor/plan-options'),
   fonctionnalitesEtablissement: (id) => request(`/api/etablissements/${id}/fonctionnalites`),
   // Corps : { capaciteCode, active, parametres? }.
   majFonctionnalite: (id, corps) =>

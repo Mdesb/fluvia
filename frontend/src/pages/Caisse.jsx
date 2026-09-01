@@ -459,7 +459,9 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
 
       const totalServeur = courant?.total ?? total.toFixed(2)
       const resteServeur = courant?.resteAPayer ?? totalServeur
-      setVente({ id: v.id, reste: resteServeur, total: totalServeur })
+      // Le numero est porte pour un seul usage : pouvoir NOMMER la vente si son annulation
+      // echoue. Un identifiant technique ne se retrouve pas dans un journal de caisse.
+      setVente({ id: v.id, numero: v.numero ?? null, reste: resteServeur, total: totalServeur })
       setPaiements([])
       setMoyenSel(moyensDispo[0]?.code || 'especes')
       setMontant(parseFloat(resteServeur) > 0 ? parseFloat(resteServeur).toFixed(2) : '')
@@ -676,10 +678,25 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
   async function abandonner() {
     if (!vente) return
     setBusy(true)
+    const abandonnee = vente
     try {
-      await api.annulerVente(vente.id)
-    } catch {
-      /* on réinitialise l'UI quoi qu'il arrive */
+      await api.annulerVente(abandonnee.id)
+      setErreur(null)
+    } catch (e) {
+      // ⚠ CE `catch` AVALAIT L'ECHEC, ET LA CAISSE REDEVENAIT PROPRE.
+      //
+      // Le serveur refuse, la vente reste OUVERTE et numérotée, et le caissier n'a aucun moyen de
+      // le savoir. Treize ventes se sont accumulées ainsi sur la préproduction en deux semaines,
+      // dont huit à total zéro. Chez un exploitant, c'est un fond de caisse qui ne tombe jamais
+      // juste — et personne qui sache pourquoi. Mesuré par `allaccess-b8`.
+      //
+      // On réinitialise quand même l'écran : bloquer la caisse sur un échec d'annulation serait
+      // pire, le client suivant attend. Ce qui manquait n'était pas le geste, c'était de le dire.
+      setErreur(
+        `La vente ${abandonnee.numero ? `n° ${abandonnee.numero} ` : ''}n'a PAS pu être annulée `
+        + `(${e.message || 'refus du serveur'}). Elle reste ouverte côté serveur : signalez-la, `
+        + `elle ne se fermera pas d'elle-même. La caisse est libre pour la vente suivante.`,
+      )
     } finally {
       setVente(null)
       setPaiements([])

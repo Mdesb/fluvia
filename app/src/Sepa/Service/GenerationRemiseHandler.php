@@ -136,9 +136,29 @@ final class GenerationRemiseHandler
         $referenceTransmission = $this->collecteur->transmettre($remise);
         $remise->setReferenceTransmission($referenceTransmission)->setStatut(StatutRemiseSepa::Transmise);
 
-        foreach ($remise->getLignes() as $ligne) {
-            $ligne->getMandat()?->incrementerCollectesReussies();
-        }
+        // ⚠ LE COMPTEUR DE COLLECTES NE BOUGE PLUS ICI, ET C'EST DELIBERE.
+        //
+        // Cette boucle appelait `incrementerCollectesReussies()` sur chaque mandat, en lisant le
+        // retour du port comme un accuse de reception. Il n'en est pas un — et il ne le serait
+        // toujours pas avec une vraie banque : transmettre un pain.008 n'est pas collecter. La
+        // collecte se confirme des jours plus tard, par l'absence de rejet ou par un credit CAMT.
+        //
+        // ⚠ CE QUE CE COMPTEUR DECIDE : `SeqTpResolver` en deduit `RCUR` des qu'il depasse zero,
+        // `FRST` sinon. Un mandat compte a tort partait en RCUR a son PREMIER prelevement reel —
+        // motif de rejet bancaire, sur de l'argent, mandat par mandat.
+        //
+        // ⚠ ET RIEN NE LE DECREMENTAIT. `DeclarerRejetSepaProcessor` — la saisie manuelle d'un
+        // rejet, qui existe et a un ecran — lit le mandat sans toucher au compteur. Un mandat
+        // rejete restait donc compte comme collecte : le defaut etait atteignable AUJOURD'HUI, et
+        // pas seulement le jour d'un raccordement.
+        //
+        // CONSEQUENCE ASSUMEE : plus rien n'incremente, donc tout part en FRST jusqu'a ce qu'un
+        // vrai collecteur confirme des collectes. C'est le sens SUR de l'erreur — un FRST presente
+        // a tort est generalement accepte, un RCUR presente a tort est rejete.
+        //
+        // RESTE A FAIRE au raccordement, et pas dans ce lot : incrementer a la CONFIRMATION de
+        // collecte, et decrementer sur rejet. Les deux ensemble, sinon on reconstruit le meme
+        // defaut dans l'autre sens.
         $this->em->flush();
 
         $source->marquerCollectees($remise, $referencesOrigine);

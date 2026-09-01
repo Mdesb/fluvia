@@ -13,6 +13,7 @@ import Login from './pages/Login.jsx'
 import AppShell, { ongletsConnus } from './components/AppShell.jsx'
 import FrontiereErreur from './components/FrontiereErreur.jsx'
 import Dashboard from './pages/Dashboard.jsx'
+import Modules from './pages/Modules.jsx'
 import BandeauSupport from './components/BandeauSupport.jsx'
 import ControleBillet from './components/ControleBillet.jsx'
 import Caisse from './pages/Caisse.jsx'
@@ -421,6 +422,9 @@ export default function App() {
       {onglet === 'dashboard' && estAdmin && (
         <Dashboard etabActif={etabActif} etablissements={etablissements} droits={droits} onNav={naviguer} />
       )}
+      {/* La boutique de modules. Meme garde `estAdmin` que l'entree de menu : Maxime a arbitre
+          « achat ouvert a qui administre l'etablissement ». */}
+      {onglet === 'modules' && estAdmin && <Modules capacites={capacites} me={me} />}
       {onglet === 'caisse' && (
         <Caisse
           me={me}

@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900" fill="none">
+<defs>
+  <linearGradient id="fluviaGradient" x1="360" y1="120" x2="720" y2="520" gradientUnits="userSpaceOnUse">
+    <stop offset="0%" stop-color="#27D9D0"/>
+    <stop offset="45%" stop-color="#168CEB"/>
+    <stop offset="75%" stop-color="#3755E8"/>
+    <stop offset="100%" stop-color="#7A2EE6"/>
+  </linearGradient>
+</defs>
+
+
+<g>
+  <path d="M360 470V220 C360 155 412 110 478 110 H670 C720 110 748 140 748 185 C748 230 720 258 670 258 H525 C482 258 455 286 455 330 V470"
+        stroke="url(#fluviaGradient)" stroke-width="62" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M455 355H590 C638 355 666 384 666 425 C666 466 638 490 590 490 H505"
+        stroke="url(#fluviaGradient)" stroke-width="62" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g stroke="#0B1020" stroke-width="20" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M250 690V805 M250 690H330 M250 745H315"/>
+  <path d="M390 690V805H470"/>
+  <path d="M530 690V775 C530 815 590 815 590 775V690"/>
+  <path d="M650 690L705 805L760 690"/>
+  <path d="M820 690V805"/>
+  <path d="M880 805L935 690L990 805 M902 760H968"/>
+</g>
+</svg>

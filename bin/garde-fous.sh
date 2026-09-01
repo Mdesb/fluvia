@@ -511,13 +511,24 @@ fi
 # manque d'`alt`. Ce qui manquait etait ailleurs, et personne ne l'avait compte.
 # Un element non interactif rendu cliquable : la souris l atteint, le clavier jamais. Cinq lignes
 # de tableau etaient dans ce cas, dont la seule porte vers la fiche d un client.
-# Les contrastes de la palette, dans les deux themes. Sept paires sous le seuil WCAG, dont les
-# trois badges d etat du theme clair — celles qu on lit d un coup d oeil sans les lire.
-# ⚠ Cliquet et non correction : T15 refondra la palette, et choisir une teinte est une decision de
-# marque. Ce controle en devient le critere d acceptation.
+# Les contrastes de la palette, dans les deux themes. Le plafond a valu 7, puis 0 : les sept paires
+# sous le seuil ont ete corrigees le 31/08, et T15 a repeint la palette le 01/09 en faisant MIEUX
+# sur presque toutes — c'etait le critere d acceptation que ce controle s etait fixe.
+# ⚠ Le plafond est desormais un INVARIANT, plus un cliquet. On ne descend plus une teinte.
 if [ -f "$RACINE/frontend/scripts/verifier-contrastes.mjs" ]; then
     if [ -d "$RACINE/frontend/node_modules" ]; then
         executer "Contrastes" sh -c "cd '$RACINE/frontend' && node scripts/verifier-contrastes.mjs"
+    fi
+fi
+
+# ⚠ CE QUE LE CONTROLE PRECEDENT NE PEUT PAS VOIR. Il mesure des JETONS entre eux — que
+# `--sur-accent` se lise sur `--accent`. Il ne verifie pas qu une REGLE utilise le jeton. Une paire
+# de jetons irreprochable et une regle qui l ignore rendent exactement le meme vert.
+# `.lien-evitement` ecrivait `color: #fff` sur `background: var(--accent)` : le lien d evitement au
+# clavier, donc l affordance d accessibilite elle-meme, a 2,49:1 en theme sombre.
+if [ -f "$RACINE/frontend/scripts/verifier-encre-sur-fond.mjs" ]; then
+    if [ -d "$RACINE/frontend/node_modules" ]; then
+        executer "Encre sur fond" sh -c "cd '$RACINE/frontend' && node scripts/verifier-encre-sur-fond.mjs"
     fi
 fi
 
