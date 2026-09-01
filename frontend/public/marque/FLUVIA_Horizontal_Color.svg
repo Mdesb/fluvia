@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="500" viewBox="0 0 1400 500" fill="none">
+<defs>
+  <linearGradient id="fluviaGradient" x1="360" y1="120" x2="720" y2="520" gradientUnits="userSpaceOnUse">
+    <stop offset="0%" stop-color="#27D9D0"/>
+    <stop offset="45%" stop-color="#168CEB"/>
+    <stop offset="75%" stop-color="#3755E8"/>
+    <stop offset="100%" stop-color="#7A2EE6"/>
+  </linearGradient>
+</defs>
+<rect width="100%" height="100%" fill="#050914"/>
+
+<g transform="translate(70,140)">
+  <g transform="translate(-250,-70) scale(0.78)">
+    <path d="M360 470V220 C360 155 412 110 478 110 H670 C720 110 748 140 748 185 C748 230 720 258 670 258 H525 C482 258 455 286 455 330 V470"
+          stroke="url(#fluviaGradient)" stroke-width="62" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M455 355H590 C638 355 666 384 666 425 C666 466 638 490 590 490 H505"
+          stroke="url(#fluviaGradient)" stroke-width="62" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="300" y="255" fill="#F8FAFC" font-family="Arial, Helvetica, sans-serif" font-size="150" font-weight="500" letter-spacing="20">FLUVIA</text>
+</g>
+</svg>
