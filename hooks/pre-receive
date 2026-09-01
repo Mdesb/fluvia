@@ -150,6 +150,11 @@ while read -r ancien nouveau ref; do
     echo "── Cloisonnement (D3/D8)"
     lancer garde-fou-cloisonnement.php "--contre=$BASE"
 
+    # Capacites de module (n°41) — voir l'en-tete du script.
+    if [ -f "$ARBRE/bin/garde-fou-capacites-de-module.php" ]; then
+        lancer garde-fou-capacites-de-module.php
+    fi
+
     if [ -f "$ARBRE/bin/garde-fou-nommage-anglais.php" ]; then
         echo "── Nommage anglais (D5)"
 
@@ -256,7 +261,7 @@ while read -r ancien nouveau ref; do
             # le nom COMPLET du fichier dans ce hook. Ecrits sans `.mjs`, les deux controles
             # seraient declares « appeles par aucun hook » et feraient refuser toute poussee. Le
             # filet se refermerait sur ce qu'il protege.
-            for script in verifier-droits.mjs verifier-formats.mjs verifier-imports.mjs verifier-cles-doubles.mjs verifier-classes.mjs verifier-cache.mjs verifier-dates-locales.mjs verifier-profil-charge.mjs verifier-boutons-nommes.mjs verifier-clic-clavier.mjs verifier-contrastes.mjs garde-fou-ecart.mjs; do
+            for script in verifier-droits.mjs verifier-formats.mjs verifier-imports.mjs verifier-cles-doubles.mjs verifier-portee.mjs verifier-classes.mjs verifier-cache.mjs verifier-dates-locales.mjs verifier-profil-charge.mjs verifier-boutons-nommes.mjs verifier-clic-clavier.mjs verifier-contrastes.mjs verifier-encre-sur-fond.mjs garde-fou-ecart.mjs; do
                 [ -f "$ARBRE/frontend/scripts/$script" ] || continue
                 if docker run --rm --network none \
                         -u "$(id -u):$(id -g)" \
@@ -386,6 +391,20 @@ while read -r ancien nouveau ref; do
     if [ -f "$ARBRE/bin/garde-fou-appels-dans-le-vide.php" ]; then
         echo "── Appels du frontal dans le vide (n°33)"
         lancer garde-fou-appels-dans-le-vide.php
+    fi
+
+    # ⚠ Contrairement au precedent, celui-ci NE S'ABSTIENT PAS ici : il ne lit que des fichiers de
+    # `frontend/src`, sans `vendor/` ni noyau Symfony. L'arbre de reception lui suffit.
+    # Le seul controle du lot qui n'a besoin ni de `vendor/` ni de `node_modules` : il lit
+    # l'index git, rien d'autre. Il tourne donc ici sans condition.
+    if [ -x "$ARBRE/bin/garde-fou-marqueurs-de-conflit.sh" ]; then
+        echo "── Marqueurs de conflit (n°38)"
+        (cd "$ARBRE" && ./bin/garde-fou-marqueurs-de-conflit.sh) || ECHEC=1
+    fi
+
+    if [ -f "$ARBRE/bin/garde-fou-classes-fantomes.php" ]; then
+        echo "── Classes fantomes (n°37)"
+        lancer garde-fou-classes-fantomes.php
     fi
 
     # ⚠ FILET DE COMPLÉTUDE — la leçon du 24/08, et elle a coûté cher.

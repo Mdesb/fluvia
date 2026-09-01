@@ -8,7 +8,7 @@
   "scope": "/",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#0e2a30",
+  "background_color": "#000213",
   "theme_color": "#0d7d88",
   "categories": ["business", "productivity"],
   "icons": [
@@ -25,7 +25,7 @@
       "purpose": "any"
     },
     {
-      "src": "/fluvia-512.png",
+      "src": "/fluvia-512-maskable.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"

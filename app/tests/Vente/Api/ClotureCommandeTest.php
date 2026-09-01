@@ -102,10 +102,44 @@ final class ClotureCommandeTest extends VenteApiTestCase
 
         self::assertStringContainsString('premier passage', $sortie);
         self::assertStringContainsString('vente:cloture:journee', $sortie);
+
+        // ⚠ CE TEST EXIGEAIT `--only=vente:cloture:journee` JUSQU'AU 01/09/2026, et son message
+        // disait pourquoi : « sinon il est un mur ». L'exigence est juste — un refus qui ne donne
+        // aucune suite EST un mur — mais D53 a tranche depuis : la suite offerte ne doit pas etre
+        // le contournement lui-meme. Et ici la porte nommee etait precisement celle qui s'ouvrait
+        // toute seule a chaque cycle de l'ordonnanceur (D109).
+        //
+        // On garde donc l'exigence d'actionnabilite, portee sur ce que D53 autorise : l'INSPECTION.
         self::assertStringContainsString(
-            '--only=vente:cloture:journee',
+            '--dry-run',
             $sortie,
-            'Le refus doit donner la commande qui la lance sous supervision, sinon il est un mur.',
+            "Le refus doit dire ce qu'on peut regarder, sinon il est un mur.",
+        );
+        self::assertStringContainsString(
+            '--status',
+            $sortie,
+            'Le refus doit dire ou lire ce qui a deja tourne.',
+        );
+        self::assertStringContainsString(
+            'D109',
+            $sortie,
+            'Le refus doit renvoyer a la decision qui decrit la levee, faute de la nommer lui-meme.',
+        );
+
+        // ── LE TEMOIN NEGATIF, ET C'EST LUI QUI FAIT DE CE TEST UNE GARDE DE D53 ────────────────
+        //
+        // Sans ces deux lignes, ce test redeviendrait vert le jour ou quelqu'un remettrait la porte
+        // de sortie dans le message « pour aider ». C'est exactement ce qui s'est passe la premiere
+        // fois : la phrase avait ete ecrite avec les meilleures intentions.
+        self::assertStringNotContainsString(
+            '--only=',
+            $sortie,
+            "Un message d'echec ne met pas en avant son propre contournement (D53).",
+        );
+        self::assertStringNotContainsString(
+            '--supervise',
+            $sortie,
+            "Un message d'echec ne nomme pas la levee : elle vit dans la documentation (D53).",
         );
     }
 

@@ -274,6 +274,22 @@ final class ScheduleCatalog
                 15,
                 "Une partie de padel incomplète n'est jamais relancée vers les joueurs.",
             ),
+            // ⚠ LE PREMIER VRAI CLIENT DU VERROU DE PREMIER PASSAGE (D109).
+            //
+            // Son premier passage traite D'UN COUP tous les abonnements deja au terme : sur un parc
+            // reel, des dizaines d'engagements reconduits ou d'acces coupes, en une fois, sans que
+            // personne ait vu la liste. `safeOnFirstRun: false` n'est donc pas une precaution de
+            // forme -- et jusqu'a ce matin le verrou qui devait la retenir etait court-circuite.
+            //
+            // Le premier passage se regarde avec `--dry-run` avant d'etre lance.
+            new ScheduledTask(
+                command: 'sport:abonnements:traiter-terme',
+                everyMinutes: 1440,
+                why: "Sans elle, un abonnement au terme reste « actif » pendant que ses echeances "
+                    . "s'arretent : le prelevement cesse, l'acces reste valide, et l'adherent "
+                    . "continue d'entrer GRATUITEMENT jusqu'a ce qu'un humain s'en apercoive.",
+                safeOnFirstRun: false,
+            ),
             new ScheduledTask(
                 'padel:eclairage:commander',
                 5,

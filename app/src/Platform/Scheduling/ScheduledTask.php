@@ -39,8 +39,14 @@ final readonly class ScheduledTask
          * c'est exactement le genre d'affirmation qui a produit les défauts de cette semaine.
          *
          * Conséquence : une tâche jamais exécutée n'est **pas** lancée automatiquement. Elle attend un
-         * passage supervisé — `--premier-passage`, ou `--only` — où quelqu'un regarde ce qu'elle fait.
-         * Après quoi elle se planifie normalement.
+         * passage où quelqu'un regarde vraiment ce qu'elle fait, après quoi elle se planifie
+         * normalement.
+         *
+         * ⚠ CETTE PHRASE DISAIT « `--premier-passage`, ou `--only` » JUSQU'AU 01/09/2026, et c'était
+         * devenu faux le matin même. `--only` ne vaut plus supervision : l'ordonnanceur l'émet pour
+         * chaque tâche à chaque cycle, si bien que le verrou décrit ici était court-circuité en
+         * permanence depuis sa naissance (D109). La levée vit désormais en D109 et nulle part
+         * ailleurs — une phrase qui nomme une porte de sortie lui survit rarement.
          *
          * `true` se déclare quand on a **lu la commande** et vérifié qu'elle borne son travail dans le
          * temps au lieu de rattraper l'historique.

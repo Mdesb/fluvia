@@ -59,16 +59,46 @@ final class PresetVerticale
             CapaciteCode::Encadrants->value,
         ],
         // Musée : billetterie/créneaux de visite, vente à distance ; pas de casiers/SEPA par défaut.
+        // `agenda` : SEULE verticale où un produit daté existe déjà dans le modèle — une
+        // `Musee\Entity\Exposition` porte un produit, une date de début, une date de fin et une
+        // jauge. Ailleurs, le daté vit dans la Réservation, qui ne référence aucun produit.
         'musee' => [
             CapaciteCode::ControleAcces->value,
             CapaciteCode::Reservation->value,
             CapaciteCode::BoutiqueEnLigne->value,
+            CapaciteCode::Agenda->value,
         ],
+    ];
+
+    /**
+     * Capacités communes à TOUTES les verticales, ajoutées à chaque preset.
+     *
+     * ⚠ POURQUOI `comptabilite` ET `stock` SONT ICI ET PAS DANS CHAQUE LISTE. Tout exploitant tient
+     * des comptes et vend des marchandises : les omettre d'une verticale ne décrirait pas un métier,
+     * ça retirerait un module qui fonctionne aujourd'hui chez tout le monde.
+     *
+     * ⚠ ET C'EST LE POINT DE PRUDENCE PRINCIPAL. Ces deux modules sont visibles de tous
+     * aujourd'hui parce que rien ne les garde. Le jour où un écran s'adossera à ces capacités, un
+     * établissement qui ne les porte pas perdra ce qu'il utilisait la veille — il faudra donc
+     * accorder les capacités à l'existant AVANT de brancher quoi que ce soit.
+     *
+     * `agenda` n'est pas commun : il décrit une offre datée, ce que la plupart des verticales
+     * n'ont pas dans leur catalogue.
+     *
+     * @var list<string>
+     */
+    private const COMMUNES = [
+        CapaciteCode::Comptabilite->value,
+        CapaciteCode::Stock->value,
     ];
 
     /** @return list<string> */
     public static function capacites(Metier $metier): array
     {
-        return self::CAPACITES[$metier->value] ?? [];
+        $propres = self::CAPACITES[$metier->value] ?? [];
+
+        // `array_values` + `array_unique` : une verticale qui listerait déjà une commune ne doit
+        // pas la recevoir deux fois — un doublon ferait échouer l'insertion, pas la lecture.
+        return array_values(array_unique([...$propres, ...self::COMMUNES]));
     }
 }

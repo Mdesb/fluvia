@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useMemo, useEffect, useRef, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { libelleProduit, prixIndicatif, euros, statutProduit, sansTarifConnu } from '../api/produit.js'
 import Modal from './Modal.jsx'
@@ -48,6 +48,24 @@ const REGLES_PCA = {
 // desormais au-dessus d'une page, ce qui est le cas normal.
 // Une relation sérialisée arrive tantôt en IRI nu, tantôt en objet réduit. Les deux formes se
 // présentent selon l'opération : on lit l'une et l'autre plutôt que de parier.
+// LES VALEURS MODIFIABLES D'UN PRODUIT.
+//
+// Au niveau module, et pas dans le composant : elle sert a l'initialisation PARESSEUSE de l'etat,
+// qui s'execute avant que quoi que ce soit du composant n'existe. C'est ce qui garantit que le
+// brouillon n'est jamais nul — donc qu'aucun champ ne lit dans le vide au premier rendu.
+function valeursModifiables(p) {
+  return {
+    libelle: libelleProduit(p || {}),
+    canaux: Array.isArray(p?.canaux) ? [...p.canaux] : [],
+    couleurCaisse: p?.couleurCaisse || '',
+    noteInterne: p?.noteInterne || '',
+    description: descriptionFr(p || {}),
+    etablissements: (p?.etablissements || []).map(idDeRef).filter(Boolean),
+    categories: (p?.categories || []).map(idDeRef).filter(Boolean),
+    jours: joursDepuisIntervalle(p?.dureeValidite),
+  }
+}
+
 function idDeRef(ref) {
   if (!ref) return null
   if (typeof ref === 'string') return ref.split('/').pop()
@@ -128,8 +146,19 @@ export default function ProduitFiche({
   // Les zones d'accès ne se règlent pas avec les droits de l'Offre : ouvrir une porte n'est pas
   // modifier un prix. La section porte donc ses propres droits (`acces.lire` / `acces.gerer`).
   droits = [],
+  // Les capacités ACTIVES de l'établissement (`me.capacitesActives`), qui décident des onglets.
+  //
+  // ⚠ Le défaut est la liste VIDE, donc le jeu minimal : Présentation et Vente. Un défaut
+  // « tout afficher » aurait rendu la composition invisible tant qu'aucun appelant ne passe la
+  // prop — l'écran aurait paru marcher, et n'aurait rien composé.
+  capacites = [],
 }) {
-  const [edition, setEdition] = useState(null)
+  // ⚠ INITIALISATION PARESSEUSE, PAS `null`. Les champs des onglets lisent `edition.libelle` des
+  // le premier rendu : un etat nul les ferait lire dans le vide, et l'ecran ne s'afficherait pas.
+  const [edition, setEdition] = useState(() => valeursModifiables(produit))
+  // ⚠ L'INSTANTANE DES VALEURS CHARGEES. Sans lui, la barre ne pourrait annoncer que « des
+  // modifications » — et on enregistrerait six onglets sans savoir ce qu'on emporte.
+  const [reference, setReference] = useState(() => valeursModifiables(produit))
   const [editionCompta, setEditionCompta] = useState(null)
   const [enregistrement, setEnregistrement] = useState(false)
   // LA FICHE PORTE DEUX MÉTIERS, ET ILS NE SE LISENT PAS DANS LE MÊME ÉTAT D'ESPRIT.
@@ -142,6 +171,52 @@ export default function ProduitFiche({
   // L'onglet vit en état local et non dans l'URL : c'est une vue d'un même objet, pas une
   // navigation. Le retour au catalogue et l'adresse de la fiche, eux, sont dans l'URL.
   const [vueFiche, setVueFiche] = useState('vitrine')
+
+  // ── LES ONGLETS SE COMPOSENT, ILS NE SONT PAS UNE LISTE FIXE ─────────────────────────────────
+  //
+  // Le controle d'acces, la comptabilite et le stock sont trois MODULES SEPARES : un exploitant
+  // peut n'en avoir aucun, ou les trois. Un onglet fixe « Acces & comptabilite » serait a moitie
+  // vide chez qui n'a que l'un des deux, et mentirait sur ce que le produit sait faire.
+  //
+  // ⚠ ABSENT, JAMAIS GRISE. Un onglet grise fait chercher ce qui manque et invite a « debloquer »
+  // ce qui n'est pas bloque ; un onglet absent ne pose aucune question. Meme regle que les actions
+  // de statut, plus haut dans ce module.
+  const onglets = useMemo(() => {
+    const liste = [['vitrine', 'Présentation'], ['vente', 'Vente']]
+    // La caisse n'est pas une capacite : tout exploitant vend au guichet. L'onglet est donc
+    // toujours la, et il porte ce qui ne concerne QUE le guichet.
+    liste.push(['caisse', 'Caisse'])
+    if (capacites.includes('agenda')) liste.push(['agenda', 'Agenda'])
+    if (capacites.includes('controle_acces')) liste.push(['acces', 'Accès'])
+    if (capacites.includes('stock')) liste.push(['stock', 'Stock'])
+    if (capacites.includes('comptabilite')) liste.push(['compta', 'Comptabilité'])
+    return liste
+  }, [capacites])
+
+  // ⚠ SANS CE REPLI, LA FICHE PEUT SE RENDRE VIDE. `capacitesActives` depend de l'etablissement
+  // ACTIF : en changer pendant qu'on est sur « Comptabilité » laisserait `vueFiche` sur un onglet
+  // qui n'existe plus, et aucun bloc ne rendrait rien — un ecran blanc, sans erreur.
+  const vueConnue = onglets.some(([cle]) => cle === vueFiche)
+  const vue = vueConnue ? vueFiche : 'vitrine'
+
+  // ALLER A UNE SECTION DEPUIS LA LIGNE COMPACTE. Les deux cibles vivent dans l'onglet « Vente ».
+  //
+  // ⚠ LE DEFILEMENT ATTEND QUE REACT AIT RENDU L'ONGLET : avant la validation du rendu, l'ancre
+  // n'existe pas dans le document et `getElementById` rend `null`. Deux `requestAnimationFrame`
+  // imbriques garantissent qu'on passe apres.
+  //
+  // ⚠ Et `scroll-margin-top` (styles.css) decale l'arret sous la barre collante de 62 px — sans
+  // elle, la section visee arrive DESSOUS. Trouve en cliquant, pas en lisant.
+  function allerA(ancre) {
+    setVueFiche('vente')
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const cible = document.getElementById(ancre)
+      if (!cible) return
+      const doux = !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      cible.scrollIntoView({ behavior: doux ? 'smooth' : 'auto', block: 'start' })
+    }))
+  }
+
   const [detail, setDetail] = useState(null)
   // Référentiels du bloc Diffusion. Chargés une fois par fiche, et leur absence n'empêche pas de
   // modifier le reste : `Promise.allSettled`, jamais `all`.
@@ -303,31 +378,46 @@ export default function ProduitFiche({
   const grilles = p.grilles || []
   const base = prixIndicatif(p)
 
-  function ouvrirEdition() {
-    setEdition({
-      libelle: libelleProduit(p),
-      canaux: Array.isArray(p.canaux) ? [...p.canaux] : [],
-      couleurCaisse: p.couleurCaisse || '',
-      noteInterne: p.noteInterne || '',
-      // LE BLOC DIFFUSION ÉTAIT AFFICHÉ ET RIEN NE LE CHANGEAIT.
-      //
-      // Conséquence exacte, relevée sur l'audioguide : la fiche affiche « Ce produit n'est pas
-      // commercialisé sur l'établissement actif : le guichet ne l'affichera pas ici, options
-      // comprises » — et l'écran qui énonce le problème ne porte pas le geste qui le résout.
-      // Les trois champs sont pourtant en écriture côté serveur (`produit:write`), vérifié par un
-      // aller-retour réel avant d'écrire ce formulaire.
-      description: descriptionFr(p),
-      // `produitsAssocies` n'est plus edite ici : remplace par les complements, qui sont des
-      // entites a part. Le champ reste en base jusqu'a son retrait par allaccess-73.
+  // ⚠ IL DEPEND DU DETAIL, PAS DE L'IDENTIFIANT. Le catalogue monte d'abord la fiche avec une
+  // ebauche `{ id }`, puis le detail complet arrive. Un effet qui ne suivrait que l'identifiant ne
+  // se rejouerait jamais : le brouillon resterait sur des valeurs vides, et le premier
+  // enregistrement les AURAIT ECRITES — description, canaux et categories effaces sans un mot.
+  useEffect(() => {
+    if (!detail) return
+    setEdition(valeursModifiables(detail))
+    setReference(valeursModifiables(detail))
+  }, [detail])
 
-      etablissements: (p.etablissements || []).map(idDeRef).filter(Boolean),
-      categories: (p.categories || []).map(idDeRef).filter(Boolean),
-      jours: joursDepuisIntervalle(p.dureeValidite),
-    })
+  // Le bouton « Annuler » de la barre : on repart des valeurs enregistrees.
+  function reinitialiserBrouillon() {
+    setEdition(valeursModifiables(detail || produit))
   }
 
+
+  // CE QUI A CHANGE, ET DANS QUEL ONGLET.
+  //
+  // ⚠ LA COMPARAISON EST FAITE SUR LE CONTENU, PAS SUR L'IDENTITE. `canaux` et `categories` sont
+  // des tableaux : `!==` serait vrai a chaque frappe puisqu'on en recree un a chaque changement.
+  // On compare donc leur forme triee — sinon la barre annoncerait des modifications imaginaires,
+  // et on s'habituerait a l'ignorer.
+  const ONGLET_DU_CHAMP = {
+    libelle: 'Présentation', description: 'Présentation',
+    canaux: 'Vente', etablissements: 'Vente', categories: 'Vente', jours: 'Vente',
+    couleurCaisse: 'Caisse',
+    noteInterne: 'Comptabilité',
+  }
+  const changements = useMemo(() => {
+    if (!edition || !reference) return []
+    const memes = (a, b) => (Array.isArray(a) || Array.isArray(b)
+      ? JSON.stringify([...(a || [])].sort()) === JSON.stringify([...(b || [])].sort())
+      : String(a ?? '') === String(b ?? ''))
+    return Object.keys(ONGLET_DU_CHAMP).filter((c) => !memes(edition[c], reference[c]))
+  }, [edition, reference])
+
+  const ongletsModifies = [...new Set(changements.map((c) => ONGLET_DU_CHAMP[c]))]
+
   async function enregistrer(e) {
-    e.preventDefault()
+    e?.preventDefault?.()
     setErreur(null)
     setEnregistrement(true)
     try {
@@ -355,341 +445,15 @@ export default function ProduitFiche({
       })
       const rafraichi = await api.produit(produitId)
       setDetail(rafraichi)
-      setEdition(null)
+      // ⚠ ON NE REMET PLUS `edition` A `null` : cela refermait la fiche. La reference prend les
+      // valeurs enregistrees, donc la barre disparait d'elle-meme — plus rien ne differe.
+      setReference(edition)
       onModifie?.()
     } catch (err) {
       setErreur(err.message || "L'enregistrement n'a pas abouti.")
     } finally {
       setEnregistrement(false)
     }
-  }
-
-  if (edition) {
-    return (
-      <section className="card"><div className="card-h"><h3>Modifier — {libelleProduit(p)}</h3></div><div className="card-b">
-        {erreur && <div className="banner banner-error">{erreur}</div>}
-        <form onSubmit={enregistrer}>
-          <div className="field">
-            <label htmlFor="pr-lib">Nom du produit *</label>
-            <input
-              id="pr-lib"
-              className="input"
-              required
-              value={edition.libelle}
-              onChange={(e) => setEdition((s) => ({ ...s, libelle: e.target.value }))}
-            />
-            <div className="hint">C'est ce que verront le vendeur en caisse et le client en ligne.</div>
-          </div>
-
-          <div className="field">
-            <label>Où ce produit est vendu</label>
-            <div style={{ display: 'flex', gap: 'var(--esp-large)', flexWrap: 'wrap' }}>
-              {CANAUX_PRODUIT.map((c) => (
-                <label key={c.valeur} style={{ display: 'flex', alignItems: 'center', gap: 'var(--esp-serre)', fontWeight: 400 }}>
-                  <input
-                    type="checkbox"
-                    checked={edition.canaux.includes(c.valeur)}
-                    onChange={(ev) =>
-                      setEdition((s) => ({
-                        ...s,
-                        canaux: ev.target.checked
-                          ? [...s.canaux, c.valeur]
-                          : s.canaux.filter((x) => x !== c.valeur),
-                      }))
-                    }
-                  />
-                  {c.libelle}
-                </label>
-              ))}
-            </div>
-            <div className="hint">
-              Si vous ne cochez rien, le produit ne sera vendable nulle part, même une fois publié.
-            </div>
-          </div>
-
-          <div className="field">
-            <label htmlFor="pr-coul">Couleur en caisse</label>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--esp-normal)' }}>
-              <input
-                id="pr-coul"
-                type="color"
-                value={edition.couleurCaisse || '#cccccc'}
-                onChange={(e) => setEdition((s) => ({ ...s, couleurCaisse: e.target.value }))}
-                style={{ width: 48, height: 34, padding: 2 }}
-              />
-              {edition.couleurCaisse && (
-                <button
-                  className="btn ghost sm"
-                  type="button"
-                  onClick={() => setEdition((s) => ({ ...s, couleurCaisse: '' }))}
-                >
-                  Retirer la couleur
-                </button>
-              )}
-            </div>
-            <div className="hint">Aide le vendeur à repérer le produit d'un coup d'œil. Facultatif.</div>
-          </div>
-
-          <div className="field">
-            <label htmlFor="pr-note">Note interne</label>
-            <textarea
-              id="pr-note"
-              className="input"
-              rows={3}
-              value={edition.noteInterne}
-              onChange={(e) => setEdition((s) => ({ ...s, noteInterne: e.target.value }))}
-            />
-            <div className="hint">Visible de votre équipe seulement. Jamais affichée au client.</div>
-          </div>
-
-          <div className="fiche-sec" style={{ marginTop: 'var(--esp-bloc)' }}>Vitrine</div>
-
-          <div className="field">
-            <label htmlFor="pr-desc">Description</label>
-            <textarea
-              id="pr-desc"
-              className="input"
-              rows={6}
-              value={edition.description}
-              placeholder="Ce qu’on voit, ce qu’on fait, combien de temps ça dure."
-              onChange={(e) => setEdition((st) => ({ ...st, description: e.target.value }))}
-            />
-            {/* ⚠ MISE EN FORME LÉGÈRE, ET SURTOUT PAS DE HTML.
-                Le texte est saisi par l'exploitant, donc « de confiance » — sauf que la confiance
-                porte sur la PERSONNE, pas sur le CONTENU : un passage collé depuis un traitement
-                de texte ou une IA transporte du balisage que personne n'a voulu. Le rendu produit
-                des éléments React (`public/components/Markdown.jsx`) et n'interprète jamais de
-                HTML : l'injection devient structurellement impossible au lieu d'être improbable.
-                On ne l'assainit pas, on ne se pose pas la question. */}
-            <p className="hint">
-              Mise en forme légère&nbsp;: <code>**gras**</code>, <code>*italique*</code>, listes
-              avec un tiret, titres avec <code>#</code>. Le HTML n’est pas interprété — il
-              s’afficherait tel quel.
-            </p>
-            {edition.description.trim() && (
-              <div className="card" style={{ marginTop: 'var(--esp-normal)' }}>
-                <div className="card-b">
-                  <div className="sub" style={{ marginBottom: 'var(--esp-serre)' }}>Aperçu</div>
-                  <Markdown texte={edition.description} />
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* ⚠ LES COMPLÉMENTS S'ENREGISTRENT IMMÉDIATEMENT, pas au « Enregistrer » de la fiche.
-              Ce sont des entités à part, avec leurs propres routes. Mélanger les deux temps ferait
-              qu'un lien ajouté puis « annulé » resterait posé — un bouton qui ne défait pas ce
-              qu'il annonce. */}
-          <div className="field">
-            <label htmlFor="pr-complements">Produits complémentaires</label>
-            {complements.length === 0 ? (
-              <div className="empty">
-                Aucun complément. C’est ce qui permet de proposer le casier avec l’entrée, ou
-                l’audioguide avec la visite.
-              </div>
-            ) : (
-              <table className="tbl" id="pr-complements">
-                <thead>
-                  <tr>
-                    <th>Produit proposé</th>
-                    <th>Comment</th>
-                    <th className="num">Qté</th>
-                    <th className="num">Retirer</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {complements.map((c) => (
-                    <tr key={c.id}>
-                      <td>{nomProduitAssocie(c.complement, tousProduits)}</td>
-                      <td>{libelleMode(c.mode)}</td>
-                      <td className="num">{c.defaultQuantity}</td>
-                      <td className="num">
-                        <button
-                          className="btn ghost sm"
-                          type="button"
-                          onClick={() => retirerLeComplement(c)}
-                        >
-                          Retirer
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-
-            <div className="field">
-              <label htmlFor="pr-comp-ajout">Ajouter un complément</label>
-              <select
-                id="pr-comp-ajout"
-                className="select"
-                value={ajoutComplement.produit}
-                onChange={(ev) => setAjoutComplement((st) => ({ ...st, produit: ev.target.value }))}
-              >
-                <option value="">Choisir un produit…</option>
-                {tousProduits
-                  .filter((x) => String(x.id) !== String(produitId))
-                  .filter((x) => !complements.some((c) => idDeRef(c.complement) === String(x.id)))
-                  .map((x) => (
-                    <option key={x.id} value={x.id}>{libelleProduit(x)}</option>
-                  ))}
-              </select>
-              <select
-                className="select"
-                aria-label="Comment le proposer"
-                value={ajoutComplement.mode}
-                onChange={(ev) => setAjoutComplement((st) => ({ ...st, mode: ev.target.value }))}
-              >
-                <option value="optional">Proposé — l’agent le voit, il choisit</option>
-                <option value="suggested">Suggéré — coché d’avance, l’agent peut retirer</option>
-                <option value="required">Obligatoire — la vente refuse sans lui</option>
-              </select>
-              <input
-                className="input"
-                type="number"
-                min="1"
-                aria-label="Quantité proposée par défaut"
-                value={ajoutComplement.quantite}
-                onChange={(ev) => setAjoutComplement((st) => ({ ...st, quantite: Number(ev.target.value) || 1 }))}
-              />
-              <button
-                className="btn"
-                type="button"
-                disabled={!ajoutComplement.produit}
-                onClick={ajouterLeComplement}
-              >
-                Ajouter
-              </button>
-              <div className="hint">
-                ⚠ « Obligatoire » refuse la vente du produit tant que le complément n’est pas
-                vendable — s’il passe en rupture, c’est ce produit-ci qu’on ne peut plus vendre.
-              </div>
-            </div>
-
-            <p className="hint">
-              Un complément est un produit entier : il fait sa propre ligne, avec sa TVA et son
-              tarif. Pour un simple supplément sans TVA propre, utilisez plutôt une option.
-            </p>
-          </div>
-
-          <div className="fiche-sec" style={{ marginTop: 'var(--esp-bloc)' }}>Diffusion</div>
-
-          <div className="field">
-            <label htmlFor="pr-etabs">Sites de commercialisation</label>
-            <div id="pr-etabs" style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
-              {etablissements.map((e) => (
-                <label key={e.id} style={{ display: 'flex', gap: 'var(--esp-normal)', alignItems: 'center' }}>
-                  <input
-                    type="checkbox"
-                    checked={edition.etablissements.includes(e.id)}
-                    onChange={(ev) => setEdition((st) => ({
-                      ...st,
-                      etablissements: ev.target.checked
-                        ? [...st.etablissements, e.id]
-                        : st.etablissements.filter((x) => x !== e.id),
-                    }))}
-                  />
-                  <span>{e.nom || e.libelle || e.id}</span>
-                </label>
-              ))}
-            </div>
-            {/* C'EST CE CHAMP QUI REND SOLUBLE LE MESSAGE AFFICHÉ PLUS HAUT.
-                « Ce produit n'est pas commercialisé sur l'établissement actif » n'avait aucun
-                geste correspondant : on constatait, on ne pouvait pas agir. */}
-            <div className="hint">
-              Un produit ne s’affiche au guichet que sur les sites cochés ici. <b>Aucun site coché
-              signifie qu’il reste visible partout</b> : c’est la liste qui restreint, pas
-              l’inverse. C’est ce que dit le message d’avertissement de la fiche, et c’est ici qu’il
-              se corrige.
-            </div>
-            {/* ⚠ COCHER DES SITES SANS Y METTRE LE SIEN FAIT DISPARAÎTRE LA FICHE À L'ENREGISTREMENT.
-                Mesuré, pas supposé : en attachant l'audioguide à GI-ONE depuis Piscine A, le PATCH
-                rend 200 et la relecture qui suit rend 404 — l'extension de périmètre a exclu le
-                produit dans l'intervalle. L'écran affichait « Not Found », un message qui ne dit ni
-                ce qui s'est passé ni que l'enregistrement a RÉUSSI.
-                On prévient donc avant, plutôt que d'expliquer après : la fiche ne sera plus
-                joignable depuis cet établissement, et il faudra basculer sur l'un des sites cochés
-                pour y revenir. */}
-            {edition.etablissements.length > 0 && etabActif
-              && !edition.etablissements.includes(etabActif) && (
-              <div className="banner banner-warn">
-                <b>Vous n’avez pas coché l’établissement où vous êtes.</b> L’enregistrement
-                réussira, puis ce produit sortira de votre périmètre&nbsp;: la fiche ne sera plus
-                accessible d’ici, et il faudra basculer sur l’un des sites cochés pour la rouvrir.
-              </div>
-            )}
-          </div>
-
-          <div className="field">
-            <label htmlFor="pr-cats">Catégories</label>
-            <div id="pr-cats" style={{ display: 'grid', gap: 'var(--esp-normal)' }}>
-              {AXES.map(([axe, libelleAxe]) => {
-                const duAxe = categories.filter((c) => c.axe === axe)
-                if (duAxe.length === 0) return null
-                const choisie = edition.categories.find((id) => duAxe.some((c) => c.id === id)) || ''
-                return (
-                  <label key={axe} style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
-                    <span className="sub">{libelleAxe}</span>
-                    <select
-                      className="input"
-                      value={choisie}
-                      onChange={(ev) => setEdition((st) => ({
-                        ...st,
-                        // UNE SEULE VALEUR PAR AXE (RG-M1-05) : choisir remplace la précédente du
-                        // même axe au lieu de s'y ajouter. Un produit à deux catégories comptables
-                        // s'imputerait sur deux comptes.
-                        categories: [
-                          ...st.categories.filter((id) => !duAxe.some((c) => c.id === id)),
-                          ...(ev.target.value ? [ev.target.value] : []),
-                        ],
-                      }))}
-                    >
-                      <option value="">— aucune —</option>
-                      {duAxe.map((c) => <option key={c.id} value={c.id}>{c.libelle || c.nom}</option>)}
-                    </select>
-                  </label>
-                )
-              })}
-            </div>
-            <div className="hint">
-              Une seule catégorie par axe. L’axe <b>comptable</b> décide du compte de produit :
-              sans lui, la vente n’est pas comptabilisée et ressort en anomalie à la clôture.
-            </div>
-          </div>
-
-          <div className="field">
-            <label htmlFor="pr-duree">Durée de validité (jours)</label>
-            <input
-              id="pr-duree"
-              className="input"
-              type="number"
-              min="0"
-              value={edition.jours}
-              placeholder="sans limite"
-              onChange={(e) => setEdition((st) => ({ ...st, jours: e.target.value }))}
-            />
-            {dureeNonExprimableEnJours(p.dureeValidite) ? (
-              <div className="banner banner-warn">
-                La durée enregistrée (<code>{p.dureeValidite}</code>) n’est pas exprimable en jours.
-                Ce champ est resté vide pour ne pas l’écraser par erreur — <b>enregistrer avec un
-                nombre de jours la remplacera</b>, et le laisser vide la supprimera.
-              </div>
-            ) : (
-              <div className="hint">
-                Combien de temps le billet reste utilisable après l’achat. Vide = sans limite.
-              </div>
-            )}
-          </div>
-
-          <div style={{ display: 'flex', gap: 'var(--esp-normal)', justifyContent: 'flex-end', marginTop: 'var(--esp-large)' }}>
-            <button className="btn" type="button" onClick={() => setEdition(null)}>Annuler</button>
-            <button className="btn primary" type="submit" disabled={enregistrement}>
-              {enregistrement ? 'Enregistrement…' : 'Enregistrer'}
-            </button>
-          </div>
-        </form>
-      </div></section>
-    )
   }
 
   return (
@@ -706,105 +470,241 @@ export default function ProduitFiche({
         <span className={`badge ${st.ton}`} title={st.aide} style={{ marginLeft: 'auto' }}>
           {st.libelle}
         </span>
-        {peutModifier && (
-          <button className="btn ghost sm" type="button" onClick={ouvrirEdition} style={{ marginLeft: 'var(--esp-normal)' }}>
-            Modifier
-          </button>
-        )}
       </div>
 
-      {/* Ce que l'exploitant cherche en premier : combien, où, et combien il en reste. */}
-      <div className="fiche-stats">
-        <div>
-          <div className="st-lib">Tarif indicatif</div>
-          <div className="st-val num">{euros(base)}</div>
-          {/* UN TIRET N'EST PAS UNE EXPLICATION. `euros(null)` rend « — », qui se lit « prix non
-              renseigné pour l'instant » alors que la conséquence est totale : sans grille, le
-              produit ne peut être vendu nulle part, y compris publié et ouvert à tous les canaux.
-              On le dit à côté du tiret, là où on le lit. */}
-          {p?.statut === 'publie' && sansTarifConnu(p) === true && (
-            <div className="hint">
-              Aucun tarif : ce produit est publié mais invendable. Ajoutez une grille dans
-              <b> Tarifs</b>, plus bas.
-            </div>
+      {/* ── LA LIGNE COMPACTE ────────────────────────────────────────────────────────────────
+          Trois tuiles hautes remplacees par une ligne de sous-titre. Deux des trois valeurs se
+          modifiaient PLUS BAS — `Tarif` dans la section Tarifs, `Vendu` dans Diffusion — et le
+          bandeau le disait lui-meme (« ajoutez une grille dans Tarifs, plus bas »). On lisait, on
+          descendait, on relisait, on modifiait : c'est ca, « faire deux fois ».
+
+          Elles restent lisibles d'un coup d'oeil, mais elles MENENT desormais a leur section au
+          lieu d'y renvoyer par une phrase.
+
+          ⚠ L'ETAT N'EST PAS ICI, ET C'EST VOULU. Le badge de la ligne d'identite le porte deja —
+          `statutProduit()` le passe en orange quand un produit publie n'a aucun tarif. Le remettre
+          ici recreerait le doublon qu'on supprime, deplace d'un cran. */}
+      <div className="fiche-ligne">
+        <span className="fl-item">
+          <span className="fl-lib">Tarif</span>
+          {/* ⚠ `sansTarifConnu` rend `null` quand les grilles ne sont pas chargees, et on ne
+              conclut RIEN d'un `null` : on n'ecrit « invendable » que sur un `true` franc. */}
+          {p?.statut === 'publie' && sansTarifConnu(p) === true ? (
+            <button
+              type="button"
+              className="fl-val alerte"
+              onClick={() => allerA('prod-tarifs')}
+              aria-label="Aucun tarif, produit invendable — aller à la section Tarifs"
+            >
+              aucun — invendable
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="fl-val"
+              onClick={() => allerA('prod-tarifs')}
+              aria-label={`Tarif indicatif ${euros(base)} — aller à la section Tarifs`}
+            >
+              {euros(base)}
+            </button>
           )}
-        </div>
-        <div>
-          <div className="st-lib" title="Les endroits où ce produit peut être vendu.">Vendu</div>
-          <div className="st-val">{(p.canaux || []).map(mot).join(', ') || '—'}</div>
-        </div>
-        <div>
-          <div className="st-lib" title="Quantité disponible à la vente, tenue par le module Stock.">
+        </span>
+
+        <span className="fl-sep" aria-hidden="true">·</span>
+
+        <span className="fl-item">
+          <span className="fl-lib">Vendu</span>
+          <button
+            type="button"
+            className="fl-val"
+            onClick={() => allerA('prod-diffusion')}
+            aria-label="Canaux de vente — aller à la section Diffusion"
+          >
+            {(p.canaux || []).map(mot).join(', ') || 'aucun canal'}
+          </button>
+        </span>
+
+        <span className="fl-sep" aria-hidden="true">·</span>
+
+        {/* ⚠ NI SOULIGNE NI CLIQUABLE. Aucune section de cette fiche ne porte le stock — le module
+            Stock le tient de son cote. Il n'y a donc nulle part ou aller, et un faux raccourci
+            coute plus cher qu'une valeur sans raccourci. */}
+        <span className="fl-item">
+          <span className="fl-lib" title="Quantité disponible à la vente, tenue par le module Stock.">
             Stock
-          </div>
-          <div className="st-val num">
-            {p.stock && typeof p.stock.disponibilite === 'number' ? p.stock.disponibilite : 'Non suivi'}
-          </div>
-        </div>
+          </span>
+          <span className="fl-val muet">
+            {p.stock && typeof p.stock.disponibilite === 'number' ? p.stock.disponibilite : 'non suivi'}
+          </span>
+        </span>
       </div>
 
       <Tabs
-        onglets={[['vitrine', 'Vitrine'], ['config', 'Configuration']]}
+        onglets={onglets}
         actif={vueFiche}
         onChange={setVueFiche}
       />
 
-      {vueFiche === 'vitrine' && (
+      {vue === 'vitrine' && (
         <>
+      <div className="field">
+        <label htmlFor="pr-lib">Nom du produit *</label>
+        <input
+          id="pr-lib"
+          className="input"
+          required
+          value={edition.libelle}
+          onChange={(e) => setEdition((s) => ({ ...s, libelle: e.target.value }))}
+        />
+        <div className="hint">C'est ce que verront le vendeur en caisse et le client en ligne.</div>
+      </div>
+
           {/* LA PHOTO REMONTE EN PREMIER. Elle était en dernier, après le taux de TVA et la règle
               de comptabilisation — c'est-à-dire après tout ce qu'un client ne verra jamais. */}
           <PhotosProduit produitId={p.id} peutModifier={peutModifier} />
 
-          <Section
-            titre="Description"
-            aide="Le texte que le visiteur lit avant d'acheter."
-          >
-            {descriptionFr(p) ? (
-              <Markdown texte={descriptionFr(p)} />
-            ) : (
-              <div className="empty">
-                Aucune description. C’est le texte qui donne envie&nbsp;: ce qu’on voit, ce qu’on
-                fait, combien de temps ça dure.
+          <Section titre="Description" aide="Le texte que le visiteur lit avant d'acheter.">
+        <div className="field">
+          <label htmlFor="pr-desc">Description</label>
+          <textarea
+            id="pr-desc"
+            className="input"
+            rows={6}
+            value={edition.description}
+            placeholder="Ce qu’on voit, ce qu’on fait, combien de temps ça dure."
+            onChange={(e) => setEdition((st) => ({ ...st, description: e.target.value }))}
+          />
+          {/* ⚠ MISE EN FORME LÉGÈRE, ET SURTOUT PAS DE HTML.
+              Le texte est saisi par l'exploitant, donc « de confiance » — sauf que la confiance
+              porte sur la PERSONNE, pas sur le CONTENU : un passage collé depuis un traitement
+              de texte ou une IA transporte du balisage que personne n'a voulu. Le rendu produit
+              des éléments React (`public/components/Markdown.jsx`) et n'interprète jamais de
+              HTML : l'injection devient structurellement impossible au lieu d'être improbable.
+              On ne l'assainit pas, on ne se pose pas la question. */}
+          <p className="hint">
+            Mise en forme légère&nbsp;: <code>**gras**</code>, <code>*italique*</code>, listes
+            avec un tiret, titres avec <code>#</code>. Le HTML n’est pas interprété — il
+            s’afficherait tel quel.
+          </p>
+          {edition.description.trim() && (
+            <div className="card" style={{ marginTop: 'var(--esp-normal)' }}>
+              <div className="card-b">
+                <div className="sub" style={{ marginBottom: 'var(--esp-serre)' }}>Aperçu</div>
+                <Markdown texte={edition.description} />
               </div>
-            )}
-            {/* ⚠ ELLE N'EST AFFICHÉE NULLE PART AUJOURD'HUI, ET LE TAIRE SERAIT LE PIRE.
-                `Produit::$description` est en lecture et en écriture depuis le début, et la
-                boutique publique ne la lit pas — vérifié : le mot n'apparaît dans `src/public`
-                que dans l'extraction d'un message d'erreur. Quelqu'un qui écrirait une belle
-                description sans le savoir travaillerait pour personne. */}
-            <p className="hint">
-              <b>La boutique en ligne n’affiche pas encore ce texte.</b> Il est enregistré et
-              s’affichera dès que la fiche publique le reprendra — mais aujourd’hui, personne ne le
-              lit hors de cet écran.
-            </p>
+            </div>
+          )}
+        </div>
+
+        {/* ⚠ LES COMPLÉMENTS S'ENREGISTRENT IMMÉDIATEMENT, pas au « Enregistrer » de la fiche.
+            Ce sont des entités à part, avec leurs propres routes. Mélanger les deux temps ferait
+            qu'un lien ajouté puis « annulé » resterait posé — un bouton qui ne défait pas ce
+            qu'il annonce. */}
           </Section>
 
-          <Section
-            titre="Produits complémentaires"
-            aide="Ce qu'on propose avec : le casier avec l'entrée piscine."
-          >
-            {complements.length === 0 ? (
-              <div className="empty">
-                Aucun complément. C’est ce qui permet de proposer le casier avec l’entrée, ou
-                l’audioguide avec la visite.
-              </div>
-            ) : (
-              <ul>
+          <Section titre="Produits complémentaires" aide="Ce qu'on propose avec — le casier avec l'entrée.">
+        <div className="field">
+          <label htmlFor="pr-complements">Produits complémentaires</label>
+          {complements.length === 0 ? (
+            <div className="empty">
+              Aucun complément. C’est ce qui permet de proposer le casier avec l’entrée, ou
+              l’audioguide avec la visite.
+            </div>
+          ) : (
+            <table className="tbl" id="pr-complements">
+              <thead>
+                <tr>
+                  <th>Produit proposé</th>
+                  <th>Comment</th>
+                  <th className="num">Qté</th>
+                  <th className="num">Retirer</th>
+                </tr>
+              </thead>
+              <tbody>
                 {complements.map((c) => (
-                  <li key={c.id}>
-                    {nomProduitAssocie(c.complement, tousProduits)} — {libelleMode(c.mode)}
-                    {c.defaultQuantity > 1 ? ` (×${c.defaultQuantity})` : ''}
-                  </li>
+                  <tr key={c.id}>
+                    <td>{nomProduitAssocie(c.complement, tousProduits)}</td>
+                    <td>{libelleMode(c.mode)}</td>
+                    <td className="num">{c.defaultQuantity}</td>
+                    <td className="num">
+                      <button
+                        className="btn ghost sm"
+                        type="button"
+                        onClick={() => retirerLeComplement(c)}
+                      >
+                        Retirer
+                      </button>
+                    </td>
+                  </tr>
                 ))}
-              </ul>
-            )}
+              </tbody>
+            </table>
+          )}
+          <div className="field">
+            <label htmlFor="pr-comp-ajout">Ajouter un complément</label>
+            <select
+              id="pr-comp-ajout"
+              className="select"
+              value={ajoutComplement.produit}
+              onChange={(ev) => setAjoutComplement((st) => ({ ...st, produit: ev.target.value }))}
+            >
+              <option value="">Choisir un produit…</option>
+              {tousProduits
+                .filter((x) => String(x.id) !== String(produitId))
+                .filter((x) => !complements.some((c) => idDeRef(c.complement) === String(x.id)))
+                .map((x) => (
+                  <option key={x.id} value={x.id}>{libelleProduit(x)}</option>
+                ))}
+            </select>
+            <select
+              className="select"
+              aria-label="Comment le proposer"
+              value={ajoutComplement.mode}
+              onChange={(ev) => setAjoutComplement((st) => ({ ...st, mode: ev.target.value }))}
+            >
+              <option value="optional">Proposé — l’agent le voit, il choisit</option>
+              <option value="suggested">Suggéré — coché d’avance, l’agent peut retirer</option>
+              <option value="required">Obligatoire — la vente refuse sans lui</option>
+            </select>
+            <input
+              className="input"
+              type="number"
+              min="1"
+              aria-label="Quantité proposée par défaut"
+              value={ajoutComplement.quantite}
+              onChange={(ev) => setAjoutComplement((st) => ({ ...st, quantite: Number(ev.target.value) || 1 }))}
+            />
+            <button
+              className="btn"
+              type="button"
+              disabled={!ajoutComplement.produit}
+              onClick={ajouterLeComplement}
+            >
+              Ajouter
+            </button>
+            <div className="hint">
+              ⚠ « Obligatoire » refuse la vente du produit tant que le complément n’est pas
+              vendable — s’il passe en rupture, c’est ce produit-ci qu’on ne peut plus vendre.
+            </div>
+          </div>
+
+          <p className="hint">
+            Un complément est un produit entier : il fait sa propre ligne, avec sa TVA et son
+            tarif. Pour un simple supplément sans TVA propre, utilisez plutôt une option.
+          </p>
+        </div>
+
+        <div className="fiche-sec" style={{ marginTop: 'var(--esp-bloc)' }}>Diffusion</div>
           </Section>
         </>
       )}
 
-      {vueFiche === 'config' && (
+      {/* VENTE, premier bloc. Le second (Diffusion) est plus bas : entre les deux vivent les
+          sections d'acces, qui ne rendent rien quand on est sur Vente — a l'ecran, Tarifs et
+          Diffusion se suivent donc bien. */}
+      {vue === 'vente' && (
       <>
-      <Section titre="Tarifs" aide="Le prix de ce produit, par type de tarif et par période.">
+      <Section titre="Tarifs" ancre="prod-tarifs" aide="Le prix de ce produit, par type de tarif et par période.">
         <TarifsProduit
           produit={p}
           grilles={grilles}
@@ -816,6 +716,12 @@ export default function ProduitFiche({
         />
       </Section>
 
+      </>
+      )}
+
+      {/* ACCES — n'existe que si l'etablissement porte la capacite `controle_acces`. */}
+      {vue === 'acces' && (
+      <>
       <Section
         titre="Zones d'accès"
         aide="Les zones que ce produit ouvre aux tourniquets. Aucune zone déclarée = il les ouvre toutes."
@@ -856,7 +762,142 @@ export default function ProduitFiche({
         )}
       </Section>
 
-      <Section titre="Diffusion">
+      </>
+      )}
+
+      {/* VENTE, second bloc — voir le commentaire du premier. */}
+      {vue === 'vente' && (
+      <>
+      <div className="field">
+        <label>Où ce produit est vendu</label>
+        <div style={{ display: 'flex', gap: 'var(--esp-large)', flexWrap: 'wrap' }}>
+          {CANAUX_PRODUIT.map((c) => (
+            <label key={c.valeur} style={{ display: 'flex', alignItems: 'center', gap: 'var(--esp-serre)', fontWeight: 400 }}>
+              <input
+                type="checkbox"
+                checked={edition.canaux.includes(c.valeur)}
+                onChange={(ev) =>
+                  setEdition((s) => ({
+                    ...s,
+                    canaux: ev.target.checked
+                      ? [...s.canaux, c.valeur]
+                      : s.canaux.filter((x) => x !== c.valeur),
+                  }))
+                }
+              />
+              {c.libelle}
+            </label>
+          ))}
+        </div>
+        <div className="hint">
+          Si vous ne cochez rien, le produit ne sera vendable nulle part, même une fois publié.
+        </div>
+      </div>
+      <div className="field">
+        <label htmlFor="pr-etabs">Sites de commercialisation</label>
+        <div id="pr-etabs" style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
+          {etablissements.map((e) => (
+            <label key={e.id} style={{ display: 'flex', gap: 'var(--esp-normal)', alignItems: 'center' }}>
+              <input
+                type="checkbox"
+                checked={edition.etablissements.includes(e.id)}
+                onChange={(ev) => setEdition((st) => ({
+                  ...st,
+                  etablissements: ev.target.checked
+                    ? [...st.etablissements, e.id]
+                    : st.etablissements.filter((x) => x !== e.id),
+                }))}
+              />
+              <span>{e.nom || e.libelle || e.id}</span>
+            </label>
+          ))}
+        </div>
+        {/* C'EST CE CHAMP QUI REND SOLUBLE LE MESSAGE AFFICHÉ PLUS HAUT.
+            « Ce produit n'est pas commercialisé sur l'établissement actif » n'avait aucun
+            geste correspondant : on constatait, on ne pouvait pas agir. */}
+        <div className="hint">
+          Un produit ne s’affiche au guichet que sur les sites cochés ici. <b>Aucun site coché
+          signifie qu’il reste visible partout</b> : c’est la liste qui restreint, pas
+          l’inverse. C’est ce que dit le message d’avertissement de la fiche, et c’est ici qu’il
+          se corrige.
+        </div>
+        {/* ⚠ COCHER DES SITES SANS Y METTRE LE SIEN FAIT DISPARAÎTRE LA FICHE À L'ENREGISTREMENT.
+            Mesuré, pas supposé : en attachant l'audioguide à GI-ONE depuis Piscine A, le PATCH
+            rend 200 et la relecture qui suit rend 404 — l'extension de périmètre a exclu le
+            produit dans l'intervalle. L'écran affichait « Not Found », un message qui ne dit ni
+            ce qui s'est passé ni que l'enregistrement a RÉUSSI.
+            On prévient donc avant, plutôt que d'expliquer après : la fiche ne sera plus
+            joignable depuis cet établissement, et il faudra basculer sur l'un des sites cochés
+            pour y revenir. */}
+        {edition.etablissements.length > 0 && etabActif
+          && !edition.etablissements.includes(etabActif) && (
+          <div className="banner banner-warn">
+            <b>Vous n’avez pas coché l’établissement où vous êtes.</b> L’enregistrement
+            réussira, puis ce produit sortira de votre périmètre&nbsp;: la fiche ne sera plus
+            accessible d’ici, et il faudra basculer sur l’un des sites cochés pour la rouvrir.
+          </div>
+        )}
+      </div>
+      <div className="field">
+        <label htmlFor="pr-cats">Catégories</label>
+        <div id="pr-cats" style={{ display: 'grid', gap: 'var(--esp-normal)' }}>
+          {AXES.map(([axe, libelleAxe]) => {
+            const duAxe = categories.filter((c) => c.axe === axe)
+            if (duAxe.length === 0) return null
+            const choisie = edition.categories.find((id) => duAxe.some((c) => c.id === id)) || ''
+            return (
+              <label key={axe} style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
+                <span className="sub">{libelleAxe}</span>
+                <select
+                  className="input"
+                  value={choisie}
+                  onChange={(ev) => setEdition((st) => ({
+                    ...st,
+                    // UNE SEULE VALEUR PAR AXE (RG-M1-05) : choisir remplace la précédente du
+                    // même axe au lieu de s'y ajouter. Un produit à deux catégories comptables
+                    // s'imputerait sur deux comptes.
+                    categories: [
+                      ...st.categories.filter((id) => !duAxe.some((c) => c.id === id)),
+                      ...(ev.target.value ? [ev.target.value] : []),
+                    ],
+                  }))}
+                >
+                  <option value="">— aucune —</option>
+                  {duAxe.map((c) => <option key={c.id} value={c.id}>{c.libelle || c.nom}</option>)}
+                </select>
+              </label>
+            )
+          })}
+        </div>
+        <div className="hint">
+          Une seule catégorie par axe. L’axe <b>comptable</b> décide du compte de produit :
+          sans lui, la vente n’est pas comptabilisée et ressort en anomalie à la clôture.
+        </div>
+      </div>
+      <div className="field">
+        <label htmlFor="pr-duree">Durée de validité (jours)</label>
+        <input
+          id="pr-duree"
+          className="input"
+          type="number"
+          min="0"
+          value={edition.jours}
+          placeholder="sans limite"
+          onChange={(e) => setEdition((st) => ({ ...st, jours: e.target.value }))}
+        />
+        {dureeNonExprimableEnJours(p.dureeValidite) ? (
+          <div className="banner banner-warn">
+            La durée enregistrée (<code>{p.dureeValidite}</code>) n’est pas exprimable en jours.
+            Ce champ est resté vide pour ne pas l’écraser par erreur — <b>enregistrer avec un
+            nombre de jours la remplacera</b>, et le laisser vide la supprimera.
+          </div>
+        ) : (
+          <div className="hint">
+            Combien de temps le billet reste utilisable après l’achat. Vide = sans limite.
+          </div>
+        )}
+      </div>
+      <Section titre="Diffusion" ancre="prod-diffusion">
         {/* ⚠ << — >> SE LIT << AUCUN >>, ET LA VALEUR SIGNIFIE << TOUS >>. C'est la liste qui
             restreint : un produit sans site coche est du socle, partage par tous les
             etablissements. Afficher un tiret ici faisait croire a un rattachement manquant, et
@@ -882,6 +923,27 @@ export default function ProduitFiche({
           que ça existe et conclut que le logiciel ne le permet pas. Maxime l'a vu de lui-même.
           Bouton séparé, parce que le DROIT est séparé : `offre.modifier_compta` n'est pas
           `offre.modifier`. Qui peut renommer un produit ne peut pas forcément changer son compte. */}
+      </>
+      )}
+
+      {/* COMPTABILITE — n'existe que si l'etablissement tient ses comptes ici. La note interne la
+          suit : c'est le seul autre endroit de la fiche qui ne regarde ni le client ni la vente. */}
+      {vue === 'compta' && (
+      <>
+      <div className="field">
+        <label htmlFor="pr-note">Note interne</label>
+        <textarea
+          id="pr-note"
+          className="input"
+          rows={3}
+          value={edition.noteInterne}
+          onChange={(e) => setEdition((s) => ({ ...s, noteInterne: e.target.value }))}
+        />
+        <div className="hint">Visible de votre équipe seulement. Jamais affichée au client.</div>
+      </div>
+
+      <div className="fiche-sec" style={{ marginTop: 'var(--esp-bloc)' }}>Vitrine</div>
+
       <Section titre="Comptabilité">
         {chargement && !detail ? (
           <div className="hint">Chargement…</div>
@@ -919,6 +981,104 @@ export default function ProduitFiche({
         </Section>
       )}
       </>
+      )}
+
+      {/* STOCK — n'existe que si l'etablissement suit ses stocks. Ces valeurs n'etaient visibles
+          nulle part ailleurs sur la fiche : la ligne du haut n'en montre que le nombre. */}
+      {/* CAISSE — ce qui ne concerne que le guichet. La couleur etait perdue dans l'ancien
+          formulaire, entre la duree de validite et les categories. */}
+      {vue === 'caisse' && edition && (
+        <Section titre="Caisse" aide="Ce qui distingue ce produit sur la grille du guichet.">
+        <div className="field">
+          <label htmlFor="pr-coul">Couleur en caisse</label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--esp-normal)' }}>
+            <input
+              id="pr-coul"
+              type="color"
+              value={edition.couleurCaisse || '#cccccc'}
+              onChange={(e) => setEdition((s) => ({ ...s, couleurCaisse: e.target.value }))}
+              style={{ width: 48, height: 34, padding: 2 }}
+            />
+            {edition.couleurCaisse && (
+              <button
+                className="btn ghost sm"
+                type="button"
+                onClick={() => setEdition((s) => ({ ...s, couleurCaisse: '' }))}
+              >
+                Retirer la couleur
+              </button>
+            )}
+          </div>
+          <div className="hint">Aide le vendeur à repérer le produit d'un coup d'œil. Facultatif.</div>
+        </div>
+        </Section>
+      )}
+
+      {vue === 'stock' && (
+        <Section titre="Stock" aide="Quantité disponible à la vente, tenue par le module Stock.">
+          {!p.stock ? (
+            <div className="hint">
+              Ce produit n’est pas suivi en stock : il peut être vendu sans limite de quantité.
+            </div>
+          ) : (
+            <>
+              <Ligne
+                libelle="Type de stock"
+                valeur={p.stock.type === 'pool' ? 'Partagé (pool)' : 'Dédié à ce produit'}
+                aide="Un stock dédié n'appartient qu'à ce produit ; un pool est partagé entre plusieurs."
+              />
+              <Ligne libelle="Disponible" valeur={String(p.stock.disponibilite ?? '—')} />
+              {/* ⚠ ON NE LIT `pool.libelle` QUE SI LE POOL EST LA. `pool` est nullable, et une
+                  lecture en profondeur sur `null` rendrait `undefined` — un tiret qui ne dirait
+                  pas s'il n'y a pas de pool ou si on n'a pas su le lire. */}
+              {p.stock.pool && (
+                <>
+                  <Ligne libelle="Pool" valeur={p.stock.pool.libelle || '—'} />
+                  <Ligne
+                    libelle="Disponible dans le pool"
+                    valeur={String(p.stock.pool.disponibilite ?? '—')}
+                    aide="Ce que le pool a en tout, tous produits confondus."
+                  />
+                </>
+              )}
+            </>
+          )}
+        </Section>
+      )}
+
+      {/* AGENDA — n'existe que si l'etablissement vend du date. */}
+      {vue === 'agenda' && <AgendaProduit produitId={produitId} />}
+
+      {/* ── UN SEUL ENREGISTREMENT POUR TOUTE LA FICHE ─────────────────────────────────────
+          Demande de Maxime : « naviguer entre les onglets pour modifier les parametres puis avoir
+          un seul bouton enregistrer ».
+
+          ⚠ ELLE DIT DANS QUELS ONGLETS. Enregistrer six onglets d'un coup sans savoir ce qu'on
+          emporte serait pire que six boutons. Et elle n'apparait que s'il y a quelque chose a
+          enregistrer : une barre permanente devient un meuble qu'on ne lit plus. */}
+      {peutModifier && changements.length > 0 && (
+        <div className="barre-enregistrement">
+          <span className="be-compte">
+            {changements.length === 1 ? '1 modification' : `${changements.length} modifications`}
+            {' — '}{ongletsModifies.join(', ')}
+          </span>
+          <button
+            type="button"
+            className="btn ghost"
+            onClick={reinitialiserBrouillon}
+            disabled={enregistrement}
+          >
+            Annuler
+          </button>
+          <button
+            type="button"
+            className="btn primary"
+            onClick={enregistrer}
+            disabled={enregistrement}
+          >
+            {enregistrement ? 'Enregistrement…' : 'Enregistrer'}
+          </button>
+        </div>
       )}
 
       <ComptaProduitModal
@@ -1172,9 +1332,88 @@ function calculExemple(liaisons, valeurs, prixBase) {
 
 /* ------------------------------------------------------------------ Petits blocs */
 
-function Section({ titre, aide, children }) {
+/**
+ * LES DATES AUXQUELLES CE PRODUIT EST PROPOSE.
+ *
+ * ⚠ « DATE » N'EST PAS UNE PROPRIETE DU PRODUIT. Un produit porte une `dureeValidite` — combien de
+ * temps le billet reste utilisable — et rien qui ressemble a une date. Ce qui date un produit,
+ * c'est ce qui POINTE VERS LUI : une `Exposition` (produit + dates + jauge). La Reservation, elle,
+ * ne reference aucun produit — verifie, temoin positif a l'appui.
+ *
+ * Cet ecran MONTRE donc ces dates ; il n'en cree pas. En creer supposerait de decider ou vit la
+ * date, ce qui est une decision de modele et pas d'ecran.
+ *
+ * ⚠ ET IL DISTINGUE TROIS SILENCES. « Aucune date », « je n'ai pas le droit de savoir » et « la
+ * lecture a echoue » se ressemblent tous les trois a l'ecran s'ils rendent une liste vide — et le
+ * premier est le seul qui soit une reponse.
+ */
+function AgendaProduit({ produitId }) {
+  const [dates, setDates] = useState(null)
+  const [refus, setRefus] = useState(false)
+  const [erreur, setErreur] = useState(null)
+
+  useEffect(() => {
+    let vivant = true
+    api.expositionsDuProduit(produitId)
+      .then((r) => { if (vivant) setDates(membres(r)) })
+      .catch((e) => {
+        if (!vivant) return
+        // 403 : la lecture des expositions demande `musee.lire`, que ce lecteur n'a pas.
+        if (e?.statut === 403 || /403/.test(String(e?.message))) setRefus(true)
+        else setErreur(e?.message || 'Les dates n’ont pas pu être lues.')
+      })
+    return () => { vivant = false }
+  }, [produitId])
+
+  if (refus) {
+    return (
+      <Section titre="Agenda">
+        <div className="hint">
+          Vous n’avez pas le droit de lire l’agenda de ce produit — il peut en avoir un. Ce droit
+          est celui du module Musée, pas celui du catalogue.
+        </div>
+      </Section>
+    )
+  }
+
+  if (erreur) {
+    return (
+      <Section titre="Agenda">
+        <div className="banner banner-error">{erreur}</div>
+      </Section>
+    )
+  }
+
   return (
-    <div style={{ marginTop: 'var(--esp-large)' }}>
+    <Section titre="Agenda" aide="Les dates auxquelles ce produit est proposé.">
+      {dates === null && <div className="hint">Chargement…</div>}
+      {dates !== null && dates.length === 0 && (
+        <div className="hint">
+          Ce produit n’est proposé à aucune date : il est vendable en permanence.
+        </div>
+      )}
+      {(dates ?? []).map((d) => (
+        <Ligne
+          key={d.id}
+          libelle={`${dateFr(d.dateDebut)} → ${dateFr(d.dateFin)}`}
+          valeur={d.aJauge ? `jauge ${d.jaugeGlobale ?? '—'}` : 'sans jauge'}
+        />
+      ))}
+    </Section>
+  )
+}
+
+function dateFr(valeur) {
+  const s = String(valeur || '').slice(0, 10)
+  const [a, m, j] = s.split('-')
+  return j ? `${j}/${m}/${a}` : '—'
+}
+
+function Section({ titre, aide, children, ancre }) {
+  return (
+    // `ancre` est facultative : seules les sections vers lesquelles la ligne compacte renvoie en
+    // portent une. En donner une a toutes creerait des identifiants que rien n'utilise.
+    <div id={ancre} style={{ marginTop: 'var(--esp-large)' }}>
       <div className="fiche-sec" title={aide}>{titre}</div>
       {children}
     </div>
@@ -1391,7 +1630,7 @@ function PhotosProduit({ produitId, peutModifier }) {
                   height: 92,
                   objectFit: 'cover',
                   display: 'block',
-                  border: '1px solid var(--bord, #ddd)',
+                  border: '1px solid var(--line)',
                 }}
               />
               <figcaption className="sub" style={{ marginTop: 'var(--esp-serre)', lineHeight: 1.3 }}>

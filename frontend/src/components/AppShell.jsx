@@ -50,6 +50,10 @@ const NAV = [
     section: 'Exploitation',
     items: [
       { id: 'dashboard', ic: '⌂', label: 'Tableau de bord', admin: true },
+      // La boutique de modules. `admin: true` parce que Maxime a arbitre le 01/09 : « achat ouvert
+      // a qui administre l'etablissement » — pas une permission de module, puisqu'il s'agit
+      // justement d'acquerir des modules qu'on n'a pas encore.
+      { id: 'modules', ic: '◧', label: 'Modules', admin: true },
       // La caisse sert le caissier comme le responsable : encaisser, ouvrir une session, consulter.
       // Exiger le seul `caisse.lire` retirerait l'écran à un caissier qui n'a que les droits de vente.
       { id: 'caisse', ic: '▤', label: 'Caisse', perms: ['caisse.lire', 'caisse.ouvrir', 'vente.creer', 'vente.encaisser'] },
@@ -384,7 +388,7 @@ export default function AppShell({
       <div className="nav-backdrop" onClick={() => setNavOpen(false)} />
 
       <aside className="sidebar">
-        <div className="side-brand"><span className="logo">◈</span> Fluvia</div>
+        <div className="side-brand"><img className="logo" src="/fluvia-mark.svg" alt="" width="28" height="28" /> Fluvia</div>
         {/* LE SOUS-TITRE ANNONÇAIT UN MODULE QUE L'ÉTABLISSEMENT N'A PAS.
             « Billetterie · Contrôle d'accès » était écrit en dur sous le nom du site. Sur un
             établissement dont la capacité `controle_acces` est hors service — le cas de GI-ONE

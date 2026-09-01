@@ -132,8 +132,19 @@ lancer_gf garde-fou-cloisonnement.php || ECHEC=1
 # source qui dise ce que le serveur sert vraiment. Il porte lui-meme son environnement et sa memoire.
 [ -f "$RACINE/bin/garde-fou-appels-dans-le-vide.php" ] && { lancer_gf garde-fou-appels-dans-le-vide.php || ECHEC=1; }
 
+# Classes fantomes (n°37) : une classe CSS citee par un ecran et definie dans aucune feuille. Pas
+# de dependance, pas de noyau -- une lecture de fichiers, donc il tourne partout.
+[ -f "$RACINE/bin/garde-fou-classes-fantomes.php" ] && { lancer_gf garde-fou-classes-fantomes.php || ECHEC=1; }
+# ⚠ Un .md casse se lit comme si de rien n'etait : aucun compilateur ne le voit.
+[ -x "$RACINE/bin/garde-fou-marqueurs-de-conflit.sh" ] && { echo "── Marqueurs de conflit (n°38)"; "$RACINE/bin/garde-fou-marqueurs-de-conflit.sh" || ECHEC=1; }
+
 # Nommage : sur les fichiers **indexés** et ajoutés. `--cached` est ce qui sera réellement commité,
 # et c'est aussi ce qui évite de dépendre d'une révision de référence inexistante à ce stade.
+# Capacites de module (n°41) : porte sur TOUT l'arbre, pas sur les fichiers indexes. Un manifeste
+# peut devenir inaccessible parce qu'on a retire un cas de l'enum ailleurs — le fautif n'est alors
+# dans aucun des deux fichiers modifies.
+[ -f "$RACINE/bin/garde-fou-capacites-de-module.php" ] && { lancer_gf garde-fou-capacites-de-module.php || ECHEC=1; }
+
 if [ -f "$RACINE/bin/garde-fou-nommage-anglais.php" ]; then
     AJOUTES="$(git diff --cached --diff-filter=A --name-only -- 'app/src' 'app/migrations' | paste -sd, -)"
     if [ -n "$AJOUTES" ]; then
@@ -184,12 +195,14 @@ lancer_front garde-fou-ecart.mjs        "Écart client/serveur (n°15)"
 lancer_front verifier-formats.mjs       "Formats d'écriture (n°11)"
 lancer_front verifier-imports.mjs       "Imports manquants (n°10)"
 lancer_front verifier-cles-doubles.mjs  "Clés en double (n°37)"
+lancer_front verifier-portee.mjs        "Portée des identifiants (n°40)"
 lancer_front verifier-classes.mjs       "Classes CSS déclarées (n°16)"
 lancer_front verifier-dates-locales.mjs "Dates locales"
 lancer_front verifier-profil-charge.mjs "Profil chargé avant le rendu"
 lancer_front verifier-boutons-nommes.mjs "Boutons nommés"
 lancer_front verifier-clic-clavier.mjs   "Clic au clavier"
 lancer_front verifier-contrastes.mjs     "Contrastes"
+lancer_front verifier-encre-sur-fond.mjs "Encre sur fond"
 
 # ⚠ FILET DE COMPLÉTUDE — même leçon que `pre-receive`, même remède.
 #

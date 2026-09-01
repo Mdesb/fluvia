@@ -24,6 +24,8 @@ use App\Offre\Entity\TypeTarif;
 use App\Platform\Scoping\ScopedReferenceQuery;
 use App\Securite\Service\ContexteEtablissement;
 use App\Offre\Entity\Saison;
+use App\OptionProduit\Entity\GroupeOption;
+use App\OptionProduit\Entity\ValeurOption;
 use App\Offre\Entity\TrancheQuotientFamilial;
 
 /**
@@ -163,6 +165,34 @@ final class PerimetreProduitExtension implements QueryCollectionExtensionInterfa
     private const REFERENTIELS_CLOISONNES = [
         Saison::class,
         TrancheQuotientFamilial::class,
+
+        // ⚠ AJOUTE LE 31/08. `GroupeOption` ne portait aucune relation sortante : il etait
+        // atteint depuis le pivot `OptionProduit`, jamais l'inverse — donc aucune carte de
+        // chemins ne pouvait l'exprimer. La colonne `etablissement` posee par la migration
+        // `Version20260831220000` lui donne enfin un proprietaire, et il rejoint le patron
+        // que son propre en-tete revendiquait deja (« comme TypeTarif/Saison en M1 »).
+        //
+        // Mesure : un groupe cree sur un etablissement etait visible depuis l'autre, et
+        // `ValeurOption` expose l'impact tarifaire de chaque option. `OptionsPartageesTest`.
+        GroupeOption::class,
+    ];
+
+    /**
+     * ⚠ REFERENTIELS CLOISONNES PAR LA RELATION QU'ILS PORTENT, ET NON PAR UNE COLONNE.
+     *
+     * `ValeurOption` n'a pas d'etablissement : elle appartient a son groupe, qui en a un depuis le
+     * 31/08. Le garde-fou « ecriture transfrontiere » a signale ce cas des que `GroupeOption` a ete
+     * cloisonne — avant, il n'y avait pas de frontiere a traverser.
+     *
+     * ⚠ PAR LE GROUPE, PAS PAR `articleStock`. Elle porte les deux, et `ArticleStock` est cloisonne
+     * — la jointure serait donc tentante. Mais une valeur d'option n'appartient pas a l'article de
+     * stock qu'elle consomme : elle appartient au groupe qui la contient. Cloisonner par le stock
+     * rendrait invisibles toutes les valeurs sans article, qui sont la majorite.
+     *
+     * @var array<class-string, string>
+     */
+    private const REFERENTIELS_CLOISONNES_VIA = [
+        ValeurOption::class => 'groupeOption',
     ];
 
     private function restreindre(QueryBuilder $queryBuilder, string $resourceClass): void
@@ -189,6 +219,25 @@ final class PerimetreProduitExtension implements QueryCollectionExtensionInterfa
             $queryBuilder
                 ->andWhere(sprintf('IDENTITY(%s.etablissement) = :perimetre_ref_cloisonne', $alias))
                 ->setParameter('perimetre_ref_cloisonne', $actif, 'uuid');
+
+            return;
+        }
+
+        if (isset(self::REFERENTIELS_CLOISONNES_VIA[$resourceClass])) {
+            $actif = $this->contexte->idActif();
+            $alias = $queryBuilder->getRootAliases()[0];
+
+            if ($actif === null) {
+                // Meme fermeture par defaut que ci-dessus : rien plutot que tout.
+                $queryBuilder->andWhere('1 = 0');
+
+                return;
+            }
+
+            $queryBuilder
+                ->innerJoin($alias . '.' . self::REFERENTIELS_CLOISONNES_VIA[$resourceClass], 'ref_via')
+                ->andWhere('IDENTITY(ref_via.etablissement) = :perimetre_ref_via')
+                ->setParameter('perimetre_ref_via', $actif, 'uuid');
 
             return;
         }

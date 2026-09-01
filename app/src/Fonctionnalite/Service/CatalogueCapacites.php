@@ -101,11 +101,89 @@ final class CatalogueCapacites
                 'Suivi des qualifications des encadrants (MNS/BNSSA, coachs).',
                 'securite',
             ),
+            CapaciteCode::Comptabilite => new DescripteurCapacite(
+                $code->value,
+                'Comptabilité',
+                'Journaux, écritures, lettrage et clôture tenus ici plutôt que dans un logiciel tiers.',
+                'finance',
+            ),
+            CapaciteCode::Stock => new DescripteurCapacite(
+                $code->value,
+                'Suivi de stock',
+                'Quantités disponibles, réassort et rupture sur les produits vendus à l\'unité.',
+                'vente',
+            ),
+            CapaciteCode::Agenda => new DescripteurCapacite(
+                $code->value,
+                'Produits datés',
+                'Séances, expositions et créneaux proposés à une date plutôt qu\'en permanence.',
+                'planning',
+            ),
             CapaciteCode::BoutiqueEnLigne => new DescripteurCapacite(
                 $code->value,
                 'Boutique en ligne',
                 "Vente à distance de produits/abonnements via l'application ou le site client.",
                 'vente',
+            ),
+
+            // ── Les neuf capacites de MODULE ────────────────────────────────────────────────
+            //
+            // Categorie « metier » : ce sont des verticales entieres, pas des fonctionnalites
+            // transverses. Un exploitant en prend une ou deux, jamais les neuf — c'est ce qui les
+            // distingue des douze ci-dessus, dont la plupart valent pour tout le monde.
+            CapaciteCode::Finance => new DescripteurCapacite(
+                $code->value,
+                'Finance',
+                'Factures fournisseurs, notes de frais, trésorerie et rapprochement bancaire.',
+                'metier',
+            ),
+            CapaciteCode::Lodging => new DescripteurCapacite(
+                $code->value,
+                'Hébergement',
+                'Chambres et couchages : attribution, occupation et facturation du séjour.',
+                'metier',
+            ),
+            CapaciteCode::Musee => new DescripteurCapacite(
+                $code->value,
+                'Musée',
+                'Expositions, visites guidées et billetterie datée par créneau de visite.',
+                'metier',
+            ),
+            CapaciteCode::Padel => new DescripteurCapacite(
+                $code->value,
+                'Padel',
+                'Terrains, parties ouvertes à compléter, niveaux de joueurs et éclairage.',
+                'metier',
+            ),
+            CapaciteCode::Patinoire => new DescripteurCapacite(
+                $code->value,
+                'Patinoire',
+                'Séances de glace, location de patins et cautions sur le matériel prêté.',
+                'metier',
+            ),
+            CapaciteCode::Piscine => new DescripteurCapacite(
+                $code->value,
+                'Piscine',
+                'Bassins, fréquentation instantanée et plan d\'organisation de la surveillance.',
+                'metier',
+            ),
+            CapaciteCode::Social => new DescripteurCapacite(
+                $code->value,
+                'Réseaux sociaux',
+                'Publication programmée des actualités de l\'établissement sur ses comptes.',
+                'metier',
+            ),
+            CapaciteCode::Sport => new DescripteurCapacite(
+                $code->value,
+                'Salle de sport',
+                'Abonnements, accès en autonomie et encadrement des séances collectives.',
+                'metier',
+            ),
+            CapaciteCode::Stay => new DescripteurCapacite(
+                $code->value,
+                'Séjours',
+                'Formules à la semaine mêlant hébergement, activités et restauration.',
+                'metier',
             ),
         };
     }

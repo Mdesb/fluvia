@@ -109,6 +109,31 @@ verifier_numeros_uniques() {
 
 LIBELLES=""
 
+# ⚠ UN CONTROLE SAUTE N'EST PAS UN CONTROLE VERT. Dix endroits de ce script renoncent a lancer un
+# controle quand son outil manque (`phpunit` retire par un deploiement `--no-dev`, `node` absent de
+# la machine). C'est le bon comportement -- mais tant que le saut ne touchait aucun compteur, le
+# verdict final disait « ✓ N garde-fou(s) OK » avec un N simplement plus petit, et personne ne
+# compare N avec celui d'hier.
+#
+# Mesure du 01/09 : 39 puis 38 a vingt minutes d'intervalle, sans un seul echec affiche.
+IGNORES=0
+IGNORES_NOMS=""
+
+ignorer() {
+    local nom="$1"; shift
+    local raison="$1"; shift
+    IGNORES=$((IGNORES + 1))
+    IGNORES_NOMS="$IGNORES_NOMS|$nom"
+    echo "─────────────────────────────────────────────────────────────"
+    echo "▶ $nom"
+    echo "─────────────────────────────────────────────────────────────"
+    echo "· NON EXÉCUTÉ — $raison"
+    local ligne
+    for ligne in "$@"; do
+        echo "  $ligne"
+    done
+}
+
 executer() {
     local nom="$1"; shift
     LIBELLES="$LIBELLES|$nom"
@@ -165,18 +190,25 @@ if [ -f app/vendor/bin/phpunit ]; then
     executer "Manifeste vs catalogue (RG-PLAT-06)" \
         php_app vendor/bin/phpunit --filter ManifestCatalogueTest
 else
-    echo "─────────────────────────────────────────────────────────────"
-    echo "▶ Manifeste vs catalogue (RG-PLAT-06)"
-    echo "─────────────────────────────────────────────────────────────"
-    echo "IGNORÉ : phpunit absent (dépendances de dev retirées par le dernier déploiement)."
-    echo "  Ce contrôle n'a PAS tourné. Pour le lancer : ./infra/reinstaller-dev.sh"
-    echo "         ./infra/test-stack.sh up <token>"
+    ignorer "Manifeste vs catalogue (RG-PLAT-06)" \
+        "phpunit absent (dépendances de dev retirées par le dernier déploiement)." \
+        "Pour le lancer : ./infra/reinstaller-dev.sh" \
+        "                 ./infra/test-stack.sh up <token>"
 fi
 
 # 3. Nommage anglais (D5) — uniquement sur les fichiers AJOUTÉS : l'existant est français et le
 #    reste jusqu'au retrofit. Contrairement au n°1, celui-ci n'a pas eu besoin de ligne de base :
 #    il ne trouve rien sur le neuf existant, donc il s'installe au vert.
 executer "Nommage anglais (D5)" php_racine bin/garde-fou-nommage-anglais.php "--contre=$REFERENCE_NOMMAGE"
+
+# CAPACITES DE MODULE (n°41) — un module dont la capacite manque au catalogue est PRESENT ET
+# DEFINITIVEMENT INACCESSIBLE : `Fonctionnalites::definir()` refuse tout code inconnu, donc aucune
+# ligne d'activation ne peut exister, donc `hasModule()` repond faux pour toujours. Sans erreur ni
+# journal : l'ecran est simplement absent, et on cherche le defaut cote frontal.
+#
+# Neuf modules sur quatorze etaient dans cet etat le 01/09 — et CINQ affirmaient le contraire dans
+# leur propre docblock. Une phrase ne verifie rien.
+executer "Capacites de module (n°41)" php_racine bin/garde-fou-capacites-de-module.php
 
 # 4. Aucun secret cryptographique en valeur par défaut.
 #    Contrairement au n°1, celui-ci n'a pas de ligne de base et n'en aura pas : une clé en dur n'est
@@ -341,6 +373,8 @@ if [ -n "${REFERENCE:-}" ]; then
     executer "Creations irreversibles" php_racine bin/garde-fou-post-sans-suppression.php
     executer "Filtres muets" php_racine bin/garde-fou-filtres-muets.php
     executer "Appels du frontal dans le vide (n°33)" php_racine bin/garde-fou-appels-dans-le-vide.php
+    executer "Classes fantômes (n°37)" php_racine bin/garde-fou-classes-fantomes.php
+    executer "Marqueurs de conflit (n°38)" "$RACINE/bin/garde-fou-marqueurs-de-conflit.sh"
 else
     executer "Liaisons d'objet (D58)" php_racine bin/garde-fou-liaisons-objet.php
     executer "Nullable sur colonne non nulle" php_racine bin/garde-fou-nullable-non-nul.php
@@ -350,6 +384,8 @@ else
     executer "Creations irreversibles" php_racine bin/garde-fou-post-sans-suppression.php
     executer "Filtres muets" php_racine bin/garde-fou-filtres-muets.php
     executer "Appels du frontal dans le vide (n°33)" php_racine bin/garde-fou-appels-dans-le-vide.php
+    executer "Classes fantômes (n°37)" php_racine bin/garde-fou-classes-fantomes.php
+    executer "Marqueurs de conflit (n°38)" "$RACINE/bin/garde-fou-marqueurs-de-conflit.sh"
 fi
 
 # 5. i18n : pas de chaîne d'UI en dur — SANS OBJET tant que la couche i18n n'existe pas (aucun
@@ -369,10 +405,7 @@ if [ -f "$RACINE/frontend/scripts/verifier-droits.mjs" ]; then
     if command -v node >/dev/null 2>&1; then
         executer "Droits du frontend (D39)" sh -c "cd '$RACINE/frontend' && node scripts/verifier-droits.mjs"
     else
-        echo "─────────────────────────────────────────────────────────────"
-        echo "▶ Droits du frontend (D39)"
-        echo "─────────────────────────────────────────────────────────────"
-        echo "· IGNORÉ — « node » indisponible ici. Le contrôle n'a PAS tourné."
+        ignorer "Droits du frontend (D39)" "« node » indisponible ici."
     fi
 fi
 
@@ -400,10 +433,7 @@ if [ -f "$RACINE/frontend/scripts/verifier-profil-charge.mjs" ]; then
     if command -v node >/dev/null 2>&1; then
         executer "Profil chargé avant le rendu" sh -c "cd '$RACINE/frontend' && node scripts/verifier-profil-charge.mjs"
     else
-        echo "─────────────────────────────────────────────────────────────"
-        echo "▶ Profil chargé avant le rendu"
-        echo "─────────────────────────────────────────────────────────────"
-        echo "· IGNORÉ — « node » indisponible ici. Le contrôle n'a PAS tourné."
+        ignorer "Profil chargé avant le rendu" "« node » indisponible ici."
     fi
 fi
 
@@ -425,10 +455,7 @@ if [ -f "$RACINE/frontend/scripts/verifier-imports.mjs" ]; then
     if command -v node >/dev/null 2>&1; then
         executer "Imports manquants (n°10)" sh -c "cd '$RACINE/frontend' && node scripts/verifier-imports.mjs"
     else
-        echo "─────────────────────────────────────────────────────────────"
-        echo "▶ Imports manquants"
-        echo "─────────────────────────────────────────────────────────────"
-        echo "· IGNORÉ — « node » indisponible ici. Le contrôle n'a PAS tourné."
+        ignorer "Imports manquants" "« node » indisponible ici."
     fi
 fi
 
@@ -436,14 +463,25 @@ fi
 # CONFLIT : deux sessions ajoutent leur appel dans le meme objet `api`, Git concatene, et l'un des
 # deux cesse silencieusement d'exister. Quatre occurrences en deux jours, rapportees par trois
 # sessions. Ni le build ni le linteur ne le voient : `{ a: 1, a: 2 }` est du JavaScript legal.
+# n40 — un identifiant utilise hors de sa portee. Le build ne le voit PAS : Vite ne fait pas
+# d'analyse de portee sur le JSX, et le n10 ne controle que les IMPORTS manquants. Deux ecrans
+# casses en production le 01/09 par des variables declarees un composant trop haut.
+if [ -f "$RACINE/frontend/scripts/verifier-portee.mjs" ]; then
+    if command -v node >/dev/null 2>&1; then
+        executer "Portee des identifiants (n40)" sh -c "cd '$RACINE/frontend' && node scripts/verifier-portee.mjs"
+    else
+        echo "─────────────────────────────────────────────────────────────"
+        echo "▶ Portee des identifiants"
+        echo "─────────────────────────────────────────────────────────────"
+        echo "· IGNORÉ — « node » indisponible ici. Le contrôle n'a PAS tourné."
+    fi
+fi
+
 if [ -f "$RACINE/frontend/scripts/verifier-cles-doubles.mjs" ]; then
     if command -v node >/dev/null 2>&1; then
         executer "Cles en double (n37)" sh -c "cd '$RACINE/frontend' && node scripts/verifier-cles-doubles.mjs"
     else
-        echo "─────────────────────────────────────────────────────────────"
-        echo "▶ Cles en double"
-        echo "─────────────────────────────────────────────────────────────"
-        echo "· IGNORÉ — « node » indisponible ici. Le contrôle n'a PAS tourné."
+        ignorer "Cles en double" "« node » indisponible ici."
     fi
 fi
 
@@ -451,10 +489,7 @@ if [ -f "$RACINE/frontend/scripts/verifier-formats.mjs" ]; then
     if command -v node >/dev/null 2>&1; then
         executer "Formats d'écriture (n°11)" sh -c "cd '$RACINE/frontend' && node scripts/verifier-formats.mjs"
     else
-        echo "─────────────────────────────────────────────────────────────"
-        echo "▶ Formats d'écriture"
-        echo "─────────────────────────────────────────────────────────────"
-        echo "· IGNORÉ — « node » indisponible ici. Le contrôle n'a PAS tourné."
+        ignorer "Formats d'écriture" "« node » indisponible ici."
     fi
 fi
 
@@ -467,13 +502,24 @@ fi
 # manque d'`alt`. Ce qui manquait etait ailleurs, et personne ne l'avait compte.
 # Un element non interactif rendu cliquable : la souris l atteint, le clavier jamais. Cinq lignes
 # de tableau etaient dans ce cas, dont la seule porte vers la fiche d un client.
-# Les contrastes de la palette, dans les deux themes. Sept paires sous le seuil WCAG, dont les
-# trois badges d etat du theme clair — celles qu on lit d un coup d oeil sans les lire.
-# ⚠ Cliquet et non correction : T15 refondra la palette, et choisir une teinte est une decision de
-# marque. Ce controle en devient le critere d acceptation.
+# Les contrastes de la palette, dans les deux themes. Le plafond a valu 7, puis 0 : les sept paires
+# sous le seuil ont ete corrigees le 31/08, et T15 a repeint la palette le 01/09 en faisant MIEUX
+# sur presque toutes — c'etait le critere d acceptation que ce controle s etait fixe.
+# ⚠ Le plafond est desormais un INVARIANT, plus un cliquet. On ne descend plus une teinte.
 if [ -f "$RACINE/frontend/scripts/verifier-contrastes.mjs" ]; then
     if [ -d "$RACINE/frontend/node_modules" ]; then
         executer "Contrastes" sh -c "cd '$RACINE/frontend' && node scripts/verifier-contrastes.mjs"
+    fi
+fi
+
+# ⚠ CE QUE LE CONTROLE PRECEDENT NE PEUT PAS VOIR. Il mesure des JETONS entre eux — que
+# `--sur-accent` se lise sur `--accent`. Il ne verifie pas qu une REGLE utilise le jeton. Une paire
+# de jetons irreprochable et une regle qui l ignore rendent exactement le meme vert.
+# `.lien-evitement` ecrivait `color: #fff` sur `background: var(--accent)` : le lien d evitement au
+# clavier, donc l affordance d accessibilite elle-meme, a 2,49:1 en theme sombre.
+if [ -f "$RACINE/frontend/scripts/verifier-encre-sur-fond.mjs" ]; then
+    if [ -d "$RACINE/frontend/node_modules" ]; then
+        executer "Encre sur fond" sh -c "cd '$RACINE/frontend' && node scripts/verifier-encre-sur-fond.mjs"
     fi
 fi
 
@@ -493,10 +539,7 @@ if [ -f "$RACINE/frontend/scripts/verifier-classes.mjs" ]; then
     if command -v node >/dev/null 2>&1; then
         executer "Classes CSS déclarées (n°16)" sh -c "cd '$RACINE/frontend' && node scripts/verifier-classes.mjs"
     else
-        echo "─────────────────────────────────────────────────────────────"
-        echo "▶ Classes CSS déclarées (n°16)"
-        echo "─────────────────────────────────────────────────────────────"
-        echo "· IGNORÉ — « node » indisponible ici. Le contrôle n'a PAS tourné."
+        ignorer "Classes CSS déclarées (n°16)" "« node » indisponible ici."
     fi
 fi
 
@@ -528,10 +571,7 @@ if [ -f "$RACINE/frontend/scripts/verifier-dates-locales.mjs" ]; then
     if command -v node >/dev/null 2>&1; then
         executer "Dates locales (n°31)" sh -c "cd '$RACINE/frontend' && node scripts/verifier-dates-locales.mjs"
     else
-        echo "─────────────────────────────────────────────────────────────"
-        echo "▶ Dates locales (n°31)"
-        echo "─────────────────────────────────────────────────────────────"
-        echo "· IGNORÉ — « node » indisponible ici. Le contrôle n'a PAS tourné."
+        ignorer "Dates locales (n°31)" "« node » indisponible ici."
     fi
 fi
 
@@ -539,10 +579,7 @@ if [ -f "$RACINE/frontend/scripts/verifier-cache.mjs" ]; then
     if command -v node >/dev/null 2>&1; then
         executer "Cache du service worker (n°18)" sh -c "cd '$RACINE/frontend' && node scripts/verifier-cache.mjs"
     else
-        echo "─────────────────────────────────────────────────────────────"
-        echo "▶ Cache du service worker (n°18)"
-        echo "─────────────────────────────────────────────────────────────"
-        echo "· IGNORÉ — « node » indisponible ici. Le contrôle n'a PAS tourné."
+        ignorer "Cache du service worker (n°18)" "« node » indisponible ici."
     fi
 fi
 
@@ -557,10 +594,7 @@ if [ -f "$RACINE/frontend/scripts/garde-fou-ecart.mjs" ]; then
     if command -v node >/dev/null 2>&1; then
         executer "Écart client/serveur (n°15)" sh -c "cd '$RACINE/frontend' && node scripts/garde-fou-ecart.mjs"
     else
-        echo "─────────────────────────────────────────────────────────────"
-        echo "▶ Écart client/serveur (n°15)"
-        echo "─────────────────────────────────────────────────────────────"
-        echo "· IGNORÉ — « node » indisponible ici. Le contrôle n'a PAS tourné."
+        ignorer "Écart client/serveur (n°15)" "« node » indisponible ici."
     fi
 fi
 
@@ -627,8 +661,25 @@ if ! verifier_numeros_uniques $(printf '%s' "$LIBELLES" | tr '|' ' '); then
 fi
 
 echo "─────────────────────────────────────────────────────────────"
+
+# ⚠ LE SAUT EST DIT ICI, PAS SEULEMENT LA OU IL A LIEU. Il l'etait deja la-bas, a la 18e ligne
+# d'une sortie qui en fait des centaines -- et le verdict, la seule ligne que tout le monde lit,
+# n'en portait aucune trace. Un total qui baisse sans echec se lit comme « tout va bien ».
+if [ "$IGNORES" -gt 0 ]; then
+    echo "⚠ $IGNORES garde-fou(s) NON EXÉCUTÉ(S) — leur outil manquait sur cette machine :"
+    printf '%s' "$IGNORES_NOMS" | tr '|' '\n' | sed '/^$/d;s/^/    · /'
+    echo ""
+    echo "  Ce qui suit ne porte QUE sur les $TOTAL qui ont tourné."
+    echo "─────────────────────────────────────────────────────────────"
+fi
+
 if [ "$ECHECS" -gt 0 ]; then
     echo "✗ $ECHECS garde-fou(s) en échec sur $TOTAL."
     exit 1
 fi
-echo "✓ $TOTAL garde-fou(s) OK."
+
+if [ "$IGNORES" -gt 0 ]; then
+    echo "✓ $TOTAL garde-fou(s) OK, $IGNORES NON EXÉCUTÉ(S)."
+else
+    echo "✓ $TOTAL garde-fou(s) OK."
+fi

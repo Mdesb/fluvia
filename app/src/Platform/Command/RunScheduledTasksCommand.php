@@ -53,7 +53,14 @@ final class RunScheduledTasksCommand extends Command
         $this
             ->addOption('status', null, InputOption::VALUE_NONE, "N'exécute rien : dit ce qui a tourné et quand.")
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Dit ce qui serait exécuté, sans le faire.')
-            ->addOption('only', null, InputOption::VALUE_REQUIRED, 'Ne traite que cette commande.');
+            ->addOption('only', null, InputOption::VALUE_REQUIRED, 'Ne traite que cette commande.')
+            // La supervision se REVENDIQUE, elle ne s'infere pas de la forme de l'appel (D91).
+            ->addOption(
+                'supervise',
+                null,
+                InputOption::VALUE_NONE,
+                "Atteste qu'un humain regarde ce passage. Absent par defaut.",
+            );
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -83,17 +90,36 @@ final class RunScheduledTasksCommand extends Command
             }
 
             $premierPassage = $trace->getLastFinishedAt() === null;
-            $supervise = \is_string($only) && $only !== '';
+
+            // ⚠ CE N'ETAIT PAS CA. La ligne disait `$supervise = is_string($only) && $only !== ''`,
+            // c'est-a-dire « lance avec --only » = « regarde par un humain ». Or `infra/ordonnanceur.sh`
+            // appelle --only pour chaque tache a chaque cycle : $supervise etait toujours vrai, et le
+            // verrou ci-dessous n'a jamais retenu une seule execution depuis qu'il existe.
+            // Mesure de `allaccess-b8`, 01/09. Voir D91.
+            $supervise = (bool) $input->getOption('supervise');
 
             if ($premierPassage && !$task->safeOnFirstRun && !$supervise) {
                 // Une commande qui n'a jamais tourné peut rattraper tout l'historique d'un coup — et
                 // certaines pilotent du matériel. Tant que personne n'a regardé ce qu'elle fait, on ne
-                // la lance pas toute seule. Ce n'est pas un blocage : `--premier-passage` ou `--only`
-                // la lancent sous supervision, et elle se planifie normalement ensuite.
+                // la lance pas toute seule.
+                //
+                // ⚠ CE MESSAGE NE DIT PLUS COMMENT PASSER OUTRE (D53). Il disait « lancer sous
+                // supervision : --only=<tache> » — et cette porte-la etait justement celle qui
+                // s'ouvrait toute seule a chaque cycle. Un message d'echec dit ce qui est bloque et
+                // ce qu'on peut regarder ; la levee vit dans la documentation, pas dans la sortie.
+                // ⚠ CE MESSAGE A ETE VU S'AFFICHER, PAS SEULEMENT RELU.
+                //
+                // Sa premiere version portait « Ce qu'ette execution ferait » : une apostrophe
+                // evitee par un `%s` avait mange le mot. Et elle renvoyait a « D91 » alors que la
+                // decision a ete renumerotee D109 le meme jour -- D91 existe et parle d'autre
+                // chose, donc la reference ne menait pas nulle part, elle menait ailleurs.
+                //
+                // La chaine est desormais en guillemets doubles : plus d'apostrophe a contourner.
                 $io->writeln(sprintf(
-                    '  <comment>premier passage</comment> %s — lancer sous supervision : '
-                    . 'bin/console platform:scheduler:run --only=%s',
-                    $task->command,
+                    "  <comment>premier passage</comment> %s — jamais exécutée, et non marquée sûre "
+                    . "au premier passage : elle rattraperait tout son retard en une fois. "
+                    . "Ce que cette exécution ferait : --dry-run. Ce qui a déjà tourné : --status. "
+                    . "La levée est décrite en D109.",
                     $task->command,
                 ));
                 ++$attente;
@@ -113,7 +139,7 @@ final class RunScheduledTasksCommand extends Command
         if ($attente > 0) {
             $io->note(sprintf(
                 "%d tâche(s) attendent un premier passage supervisé. Tant qu'il n'a pas eu lieu, "
-                . "elles ne tournent pas — voir `--only` ci-dessus.",
+                . "elles ne tournent pas, et c'est voulu — voir D109.",
                 $attente,
             ));
         }
