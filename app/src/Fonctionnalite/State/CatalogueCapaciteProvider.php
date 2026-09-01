@@ -32,6 +32,7 @@ final class CatalogueCapaciteProvider implements ProviderInterface
         $item->libelle = $descripteur->libelle;
         $item->description = $descripteur->description;
         $item->categorie = $descripteur->categorie;
+        $item->estVerticale = $descripteur->estVerticale;
 
         return $item;
     }

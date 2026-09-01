@@ -6,6 +6,7 @@ namespace App\Fonctionnalite\Service;
 
 use App\Fonctionnalite\Dto\DescripteurCapacite;
 use App\Fonctionnalite\Enum\CapaciteCode;
+use App\Fonctionnalite\Enum\Metier;
 
 /**
  * Registre de référence des capacités connues du socle (`GET /fonctionnalites/catalogue`). Source de
@@ -32,9 +33,25 @@ final class CatalogueCapacites
         return $enum === null ? null : self::descripteur($enum);
     }
 
+    /**
+     * Une capacite qui porte le nom d'un metier EST ce metier — on ne recopie pas la liste.
+     *
+     * `Metier` est la source de verite : cinq verticales d'activite (piscine, sport, padel,
+     * patinoire, musee), chacune associee par `PresetVerticale` a un JEU de capacites. Deriver
+     * plutot que recopier garantit qu'une sixieme verticale ajoutee demain sera exclue de la
+     * boutique sans que personne y pense.
+     */
+    private static function estVerticale(CapaciteCode $code): bool
+    {
+        return Metier::tryFrom($code->value) !== null;
+    }
+
     private static function descripteur(CapaciteCode $code): DescripteurCapacite
     {
-        return match ($code) {
+        // ⚠ LE `match` NE PORTE PAS `estVerticale`, ET C'EST DELIBERE. Le passer aux vingt-cinq
+        // appels ferait vingt-cinq occasions de se tromper, et vingt-cinq endroits a corriger le
+        // jour ou une sixieme verticale arrive. Il se derive de l'enum `Metier`, une fois, ici.
+        $base = match ($code) {
             CapaciteCode::ControleAcces => new DescripteurCapacite(
                 $code->value,
                 "Contrôle d'accès",
@@ -192,5 +209,13 @@ final class CatalogueCapacites
                 'metier',
             ),
         };
+
+        return new DescripteurCapacite(
+            $base->code,
+            $base->libelle,
+            $base->description,
+            $base->categorie,
+            self::estVerticale($code),
+        );
     }
 }
