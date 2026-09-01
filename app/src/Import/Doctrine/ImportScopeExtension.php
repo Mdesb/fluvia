@@ -23,7 +23,7 @@ use Symfony\Bundle\SecurityBundle\Security;
  * Échec fermé : sans établissement actif, la collection est vide plutôt qu'inter-établissements (une
  * liste vide se remarque, une liste trop longue non).
  */
-final class PerimetreImportExtension implements QueryCollectionExtensionInterface, QueryItemExtensionInterface
+final class ImportScopeExtension implements QueryCollectionExtensionInterface, QueryItemExtensionInterface
 {
     /** @var array<class-string, list<string>> Relations à joindre depuis la racine jusqu'à « establishment ». */
     private const CHAINES = [

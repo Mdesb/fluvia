@@ -26,7 +26,7 @@ use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
  * `contentHash` et est `applied` (§0.9, seul moment où « déjà importé » bloque).
  *
  * Revérification D8 explicite (§3 point 2 du plan) : l'`ImportBatch` est déjà résolu par le provider
- * d'item standard (filtré par `PerimetreImportExtension`), mais on compare quand même
+ * d'item standard (filtré par `ImportScopeExtension`), mais on compare quand même
  * `batch.establishment` à l'établissement actif — 404, jamais 403 (ne pas confirmer l'existence d'un lot
  * hors périmètre).
  *
@@ -44,7 +44,7 @@ final class ApplyImportBatchProcessor implements ProcessorInterface
 
     public function process(mixed $data, Operation $operation, array $uriVariables = [], array $context = []): ImportBatch
     {
-        // `read: true` + POST : un lot hors périmètre est filtré par `PerimetreImportExtension`, le
+        // `read: true` + POST : un lot hors périmètre est filtré par `ImportScopeExtension`, le
         // provider renvoie alors `null` et API Platform appelle quand même ce processor (sémantique POST).
         // Échec fermé D8 : 404, jamais un 500 d'assertion (ni une fuite d'existence hors périmètre).
         if (!$data instanceof ImportBatch) {

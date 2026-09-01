@@ -7,7 +7,7 @@ namespace App\Tests\Import\Api;
 use App\Tests\Import\ImportApiTestCase;
 
 /**
- * D8 (plan-import-i1.md §3) — `PerimetreImportExtension` (point 1, lecture) et revérification
+ * D8 (plan-import-i1.md §3) — `ImportScopeExtension` (point 1, lecture) et revérification
  * explicite dans `ApplyImportBatchProcessor` (point 2).
  */
 final class CloisonnementImportTest extends ImportApiTestCase
