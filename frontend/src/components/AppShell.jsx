@@ -50,6 +50,10 @@ const NAV = [
     section: 'Exploitation',
     items: [
       { id: 'dashboard', ic: '⌂', label: 'Tableau de bord', admin: true },
+      // La boutique de modules. `admin: true` parce que Maxime a arbitre le 01/09 : « achat ouvert
+      // a qui administre l'etablissement » — pas une permission de module, puisqu'il s'agit
+      // justement d'acquerir des modules qu'on n'a pas encore.
+      { id: 'modules', ic: '◧', label: 'Modules', admin: true },
       // La caisse sert le caissier comme le responsable : encaisser, ouvrir une session, consulter.
       // Exiger le seul `caisse.lire` retirerait l'écran à un caissier qui n'a que les droits de vente.
       { id: 'caisse', ic: '▤', label: 'Caisse', perms: ['caisse.lire', 'caisse.ouvrir', 'vente.creer', 'vente.encaisser'] },
