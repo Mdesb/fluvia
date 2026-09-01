@@ -345,7 +345,7 @@ export default function Facturation({ etabActif, droits, onNaviguer }) {
                               : solde > 0 ? <b>{euros(solde)}</b> : <span className="sub">soldée</span>}
                           </td>
                           <td><span className={`badge ${st.ton}`}>{st.libelle}</span></td>
-                          <td className="row" style={{ justifyContent: 'flex-end', gap: 6 }}>
+                          <td className="row actions" style={{ justifyContent: 'flex-end', gap: 6 }}>
                             {peutEmettre && brouillon && (
                               <>
                                 {/* UN BROUILLON ERRONE ETAIT DEFINITIF. `Facture` n'expose aucune

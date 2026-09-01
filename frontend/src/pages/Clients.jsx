@@ -479,7 +479,7 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
                       </td>
                       {/* `stopPropagation` : sans lui, chaque action rapide ouvrirait AUSSI la
                           fiche derrière la modale qu'elle vient d'ouvrir. */}
-                      <td className="row" style={{ justifyContent: 'flex-end', gap: 6 }} onClick={(e) => e.stopPropagation()}>
+                      <td className="row actions" style={{ justifyContent: 'flex-end', gap: 6 }} onClick={(e) => e.stopPropagation()}>
                         {/* ⚠ L'`aria-label` NOMME LA CIBLE, PAS SEULEMENT LE VERBE.
                             Ces trois boutons se repetent sur chaque ligne : au clavier ou au lecteur
                             d'ecran, la liste des controles etait « Devis, Echange, Fusionner » quinze

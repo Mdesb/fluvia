@@ -306,7 +306,7 @@ export default function Acces({ etabActif, droits }) {
                           produitsParId={produitsParId}
                         />
                       </td>
-                      <td className="row" style={{ justifyContent: 'flex-end', gap: 6 }}>
+                      <td className="row actions" style={{ justifyContent: 'flex-end', gap: 6 }}>
                         {peutBloquer && s.statut === 'actif' && (
                           <button className="btn sm" onClick={() => setABloquer(s)}>Bloquer</button>
                         )}
@@ -393,7 +393,7 @@ export default function Acces({ etabActif, droits }) {
                         <span className="badge crit">Badge bloqué</span>
                       )}
                     </td>
-                    <td className="row" style={{ justifyContent: 'flex-end' }}>
+                    <td className="row actions" style={{ justifyContent: 'flex-end' }}>
                       {peutBloquer && !d.annulee && (
                         <button
                           className="btn sm"
@@ -464,7 +464,7 @@ export default function Acces({ etabActif, droits }) {
                         <span className="sub">jamais appelé</span>
                       )}
                     </td>
-                    <td className="row" style={{ justifyContent: 'flex-end', gap: 6 }}>
+                    <td className="row actions" style={{ justifyContent: 'flex-end', gap: 6 }}>
                       {peutGerer && t.statut === 'actif' && (
                         <>
                           <button

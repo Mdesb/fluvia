@@ -421,6 +421,13 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 .lnk:hover { text-decoration: underline; }
 .row { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
 .row > * { flex: 1; min-width: 90px; }
+/* ⚠ UNE CELLULE D'ACTIONS N'EST PAS UNE LIGNE DE FORMULAIRE. `.row > * { flex: 1 }` fait grandir
+   chaque enfant jusqu'à remplir la ligne : deux champs côte à côte se partagent la largeur, ce qui
+   est juste pour un formulaire et faux pour des boutons. Mesuré sur Badges & terminaux : le même
+   bouton « Bloquer » faisait 219 px seul et 106 px accompagné, et « Détacher le droit » se coupait
+   en deux lignes faute de place — la ligne du tableau grandissant avec lui.
+   Ici les boutons font la taille de leur libellé et se collent à droite. */
+.row.actions > * { flex: 0 0 auto; min-width: 0; }
 .demo-note { background: var(--warn-bg); color: var(--warn); border-radius: 9px; padding: 8px 12px; font-size: var(--txt-petit); font-weight: 600; display: inline-flex; gap: 7px; align-items: center; }
 
 /* ---- Bannières ---- */
