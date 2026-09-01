@@ -11,6 +11,7 @@ use App\Import\Enum\ImportType;
 use App\Import\Port\ImportTypeHandler;
 use App\Organisation\Entity\Etablissement;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\DependencyInjection\Attribute\AutowireIterator;
 
 /**
  * Premier temps de la reprise : juger un fichier **sans rien écrire en base métier**.
@@ -33,6 +34,7 @@ final class ImportAnalyser
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly CsvReader $reader,
+        #[AutowireIterator('import.type_handler')]
         private readonly iterable $handlers,
     ) {
     }
