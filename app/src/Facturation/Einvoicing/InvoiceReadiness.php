@@ -67,10 +67,17 @@ final class InvoiceReadiness
             $ajouter(BusinessTerm::IssueDate, 'Facture::dateEmission');
         }
 
-        // ⚠ LA DEVISE N'EXISTE NULLE PART. `EUR` est implicite dans tout le dépôt. Tant qu'on ne
-        // vend qu'en France ça ne se voit pas ; c'est le premier mur d'une vente hors zone euro, et
-        // EN 16931 exige BT-5 explicitement.
-        $ajouter(BusinessTerm::CurrencyCode, 'aucun champ — `EUR` est implicite partout');
+        // BT-5 — POSÉE LE 02/09. Elle n'existait nulle part : `EUR` était implicite dans tout le
+        // dépôt, et EN 16931 exige BT-5 explicitement.
+        //
+        // ⚠ ON LA VÉRIFIE QUAND MÊME, ET CE N'EST PAS DE LA PARANOÏA. La colonne est `NOT NULL` avec
+        // un défaut, donc elle porte toujours quelque chose — mais « toujours remplie » n'est pas
+        // « toujours valide ». Trois caractères ISO 4217 est la seule forme qu'un validateur
+        // européen accepte ; une chaîne vide ou `eur` en minuscules passerait la contrainte de base
+        // et serait refusée à l'arrivée.
+        if (preg_match('/^[A-Z]{3}$/', $facture->getCurrency()) !== 1) {
+            $ajouter(BusinessTerm::CurrencyCode, 'Facture::currency — code ISO 4217 attendu');
+        }
 
         // ── Vendeur ────────────────────────────────────────────────────────────────────────────
         //
@@ -161,10 +168,10 @@ final class InvoiceReadiness
             if ($ligne->getTauxTva() === null) {
                 $ajouter(BusinessTerm::LineVatRate, $ou . '::tauxTva');
             }
-            // ⚠ L'UNITÉ DE MESURE N'EXISTE PAS. `quantite` est un entier sans unité. EN 16931 exige
-            // un code UN/ECE Rec 20 (`C62` pour « unité », `HUR` pour une heure…). Sans lui, une
-            // ligne « 3 » ne dit pas trois de quoi.
-            $ajouter(BusinessTerm::LineUnitCode, $ou . ' — aucune unité de mesure');
+            // BT-130 — POSÉE LE 02/09. `quantite` était un entier sans unité : une ligne « 3 » ne
+            // disait pas trois de quoi. Le champ porte désormais un code UN/ECE Rec 20, et le type
+            // énuméré garantit qu'il en est un — il n'y a donc rien à vérifier ici, seulement à ne
+            // plus déclarer le terme manquant.
         }
 
         return $manques;

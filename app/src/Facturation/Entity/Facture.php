@@ -39,6 +39,7 @@ use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
 use Symfony\Component\Uid\Uuid;
+use Symfony\Component\Validator\Constraints as Assert;
 
 /**
  * Facture (`plan-facturation.md` §1.1, `spec-facturation.md` §5) : document commercial opposable,
@@ -248,6 +249,38 @@ class Facture
     #[ORM\Column(type: 'text', nullable: true)]
     #[Groups(['facture:read'])]
     private ?string $conditionsReglement = null;
+
+    /**
+     * BT-5 — la devise de la facture, en ISO 4217.
+     *
+     * ⚠ ELLE N'EXISTAIT NULLE PART. `EUR` etait implicite dans tout le depot : aucun autre code n'y
+     * apparaissait, et aucun champ ne le disait. Un montant sans devise n'est pas un montant — et
+     * EN 16931 refuse la facture sans BT-5.
+     *
+     * Le defaut `EUR` explicite ce qui etait deja vrai, il n'invente rien (D66-ter). Le jour ou une
+     * facture sera libellee autrement, ce sera parce que quelqu'un l'aura choisi.
+     *
+     * ⚠ ET ELLE NE REND PAS LE PRODUIT MULTIDEVISE. Les totaux restent calcules sans conversion, et
+     * rien ne verifie qu'une facture en USD porte des prix en USD. Ce champ dit ce que la facture
+     * DECLARE ; T8 devra dire ce que le produit SAIT faire.
+     */
+    #[ORM\Column(length: 3, options: ['default' => 'EUR'])]
+    // ⚠ PAS `#[Assert\Currency]` — ELLE EXIGE `symfony/intl`, QUI N'EST PAS INSTALLE.
+    //
+    // Mesure du 02/09 : le paquet n'est qu'une SUGGESTION d'autres dependances, absent du `vendor`.
+    // La contrainte a fait tomber 56 tests de Facturation d'un coup, avec un message qui parle de
+    // routes API — « The Intl component is required to use the Currency constraint », leve a la
+    // construction du conteneur. La preproduction repondait encore : son cache etait chaud, et elle
+    // aurait rendu 500 a la premiere ECRITURE sur une facture.
+    //
+    // Le remede n'est pas d'installer ICU pour un champ de trois caracteres. On verifie la FORME —
+    // trois majuscules — et on dit ce qu'on ne verifie pas : qu'`XYZ` n'est pas un code ISO 4217
+    // reel. Un code bien forme mais inexistant sera refuse par le validateur europeen, la ou la
+    // liste officielle fait autorite. Verifier a moitie et le dire vaut mieux que verifier
+    // entierement et casser.
+    #[Assert\Regex(pattern: '/^[A-Z]{3}$/', message: 'Le code devise doit etre trois majuscules (ISO 4217).')]
+    #[Groups(['facture:read'])]
+    private string $currency = 'EUR';
 
     #[ORM\Column(type: 'decimal', precision: 10, scale: 2, options: ['default' => '0.00'])]
     #[Groups(['facture:read'])]
@@ -543,6 +576,18 @@ class Facture
     public function setConditionsReglement(?string $conditionsReglement): self
     {
         $this->conditionsReglement = $conditionsReglement;
+
+        return $this;
+    }
+
+    public function getCurrency(): string
+    {
+        return $this->currency;
+    }
+
+    public function setCurrency(string $currency): self
+    {
+        $this->currency = strtoupper($currency);
 
         return $this;
     }

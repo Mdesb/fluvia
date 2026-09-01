@@ -236,6 +236,7 @@ executer "Nommage anglais (D5)" php_racine bin/garde-fou-nommage-anglais.php "--
 # Neuf modules sur quatorze etaient dans cet etat le 01/09 — et CINQ affirmaient le contraire dans
 # leur propre docblock. Une phrase ne verifie rien.
 executer "Capacites de module (n°41)" php_racine bin/garde-fou-capacites-de-module.php
+executer "Numeros de decision (n°46)" php_racine bin/garde-fou-numeros-de-decision.php
 
 # 4. Aucun secret cryptographique en valeur par défaut.
 #    Contrairement au n°1, celui-ci n'a pas de ligne de base et n'en aura pas : une clé en dur n'est

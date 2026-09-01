@@ -157,6 +157,7 @@ fi
 # peut devenir inaccessible parce qu'on a retire un cas de l'enum ailleurs — le fautif n'est alors
 # dans aucun des deux fichiers modifies.
 [ -f "$RACINE/bin/garde-fou-capacites-de-module.php" ] && { lancer_gf garde-fou-capacites-de-module.php || ECHEC=1; }
+[ -f "$RACINE/bin/garde-fou-numeros-de-decision.php" ] && { lancer_gf garde-fou-numeros-de-decision.php || ECHEC=1; }
 
 if [ -f "$RACINE/bin/garde-fou-nommage-anglais.php" ]; then
     AJOUTES="$(git diff --cached --diff-filter=A --name-only -- 'app/src' 'app/migrations' | paste -sd, -)"
