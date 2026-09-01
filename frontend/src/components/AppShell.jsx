@@ -379,7 +379,7 @@ export default function AppShell({
       <div className="nav-backdrop" onClick={() => setNavOpen(false)} />
 
       <aside className="sidebar">
-        <div className="side-brand"><span className="logo">◈</span> Fluvia</div>
+        <div className="side-brand"><img className="logo" src="/fluvia-mark.svg" alt="" width="28" height="28" /> Fluvia</div>
         {/* LE SOUS-TITRE ANNONÇAIT UN MODULE QUE L'ÉTABLISSEMENT N'A PAS.
             « Billetterie · Contrôle d'accès » était écrit en dur sous le nom du site. Sur un
             établissement dont la capacité `controle_acces` est hors service — le cas de GI-ONE

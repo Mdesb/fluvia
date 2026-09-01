@@ -164,7 +164,7 @@ export default function Login({ onConnecte, sousTitre = 'Accédez à la caisse e
       <div className="login-wrap">
         <form className="login-card" onSubmit={verifierSecondFacteur}>
           <div className="side-brand">
-            <span className="logo">◈</span> Fluvia
+            <img className="logo" src="/fluvia-favicon.svg" alt="" width="28" height="28" /> Fluvia
           </div>
           <h1>Vérification en deux étapes</h1>
           <p className="login-sub">Votre compte est protégé par une double authentification.</p>
@@ -209,7 +209,7 @@ export default function Login({ onConnecte, sousTitre = 'Accédez à la caisse e
     <div className="login-wrap">
       <form className="login-card" onSubmit={soumettre}>
         <div className="side-brand">
-          <span className="logo">◈</span> Fluvia
+          <img className="logo" src="/fluvia-favicon.svg" alt="" width="28" height="28" /> Fluvia
         </div>
         <h1>Connexion</h1>
         <p className="login-sub">{sousTitre}</p>

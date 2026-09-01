@@ -108,7 +108,9 @@ a { color: var(--accent); }
 .app { display: grid; grid-template-columns: 246px 1fr; min-height: 100vh; }
 .sidebar { background: var(--side-bg); color: var(--side-ink); display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
 .side-brand { display: flex; align-items: center; gap: 10px; padding: 18px 18px 14px; font-weight: 800; font-size: 18px; color: #fff; letter-spacing: -.02em; }
-.side-brand .logo { width: 28px; height: 28px; border-radius: 8px; background: var(--marque-degrade); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 15px; flex: none; }
+/* Le mark porte son propre degrade : la boite ne pose plus de fond, elle cadre et arrondit.
+   `--marque-degrade` reste defini et sert encore au repli de la boutique (`.bq-brand-mark`). */
+.side-brand .logo { width: 28px; height: 28px; border-radius: 8px; display: block; flex: none; }
 .side-tenant { margin: 0 14px 12px; padding: 8px 10px; border: 1px solid var(--side-line); border-radius: 9px; font-size: 12.5px; color: var(--side-ink-soft); }
 .side-tenant b { color: var(--side-ink); display: block; font-size: 13px; }
 .side-nav { padding: 6px 10px; display: flex; flex-direction: column; gap: 2px; }
