@@ -126,11 +126,14 @@ export default function Dashboard({ etabActif, etablissements, droits = [], onNa
           label="Fréquentation (jour)"
           valeur={dash ? Number(dash.entreesJour || 0).toLocaleString('fr-FR') : 'n/d'}
         />
-        <Kpi
-          label="Sessions de caisse ouvertes"
-          valeur={sessionsOuvertes.length}
-          accent={sessionsOuvertes.length ? 'var(--good)' : undefined}
-        />
+        {/* ⚠ AUCUNE COULEUR ICI, ET C'EST DELIBERE. Cette carte portait `--good` des qu'une
+            session etait ouverte. Or le vert sert deja, sur la carte voisine, a dire « rien ne
+            reclame d'attention » : il disait donc deux choses sur une meme rangee, et un lecteur
+            ne pouvait se fier a aucune des deux.
+
+            Une session ouverte n'est ni bonne ni mauvaise — c'est un fait, et son compte le dit
+            entierement. Le vert ne veut plus qu'une chose sur cet ecran. */}
+        <Kpi label="Sessions de caisse ouvertes" valeur={sessionsOuvertes.length} />
         <Kpi
           label="Alertes"
           valeur={nbAlertes}
@@ -139,7 +142,10 @@ export default function Dashboard({ etabActif, etablissements, droits = [], onNa
         />
       </div>
 
-      <div className="grid g2" style={{ marginBottom: 16 }}>
+      {/* ⚠ `g4` ET NON `g2` : ces deux indicateurs sont SECONDAIRES, et une rangee de deux
+            colonnes leur donnait 563 px chacun contre 274 aux quatre principaux — deux fois la
+            surface, donc deux fois le poids lu. Meme module, deux cellules vides a droite. */}
+      <div className="grid g4" style={{ marginBottom: 16 }}>
         <Kpi label="Fond de caisse théorique" valeur={dash ? euros(dash.fondDeCaisse) : 'n/d'} />
         <Kpi label="Espaces suivis (FMI)" valeur={jauges.length} />
       </div>
