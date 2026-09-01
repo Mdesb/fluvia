@@ -47,8 +47,11 @@ jobs:
         working-directory: app
         run: composer install --no-interaction --no-scripts --no-progress
 
+      # `--exiger-tout` : ici, un contrôle sauté faute d'outillage doit ÉCHOUER. Le lanceur les
+      # compte et l'affiche, mais sort en 0 — raisonnable sur un poste, faux en CI, où un job vert
+      # n'est pas relu. C'est le « vert au nom de contrôles non exécutés » que ce fichier refuse.
       - name: Tous les garde-fous
-        run: ./bin/garde-fous.sh "origin/${{ github.base_ref || 'main' }}"
+        run: ./bin/garde-fous.sh "origin/${{ github.base_ref || 'main' }}" --exiger-tout
 
   # Le banc d'essai des garde-fous eux-mêmes : ils sont du code qui juge du code, et deux faux
   # négatifs silencieux y ont déjà été trouvés. Il tourne sur un clone jetable du dépôt courant.
@@ -65,6 +68,20 @@ jobs:
         with:
           php-version: '8.4'
           coverage: none
+
+      # ⚠ SANS CETTE IMAGE, CE JOB ÉCHOUE ENTIÈREMENT — et il l'aurait fait au premier essai.
+      #
+      # Le banc pousse dans un dépôt nu dont le `pre-receive` lance les garde-fous dans un conteneur.
+      # Sur un runner GitHub docker existe, mais cette image-là n'y est pas, et le hook REFUSE plutôt
+      # que de laisser passer sans contrôle. Tous les cas d'acceptation tombent alors.
+      #
+      # Mesuré le 01/09 en pointant le banc sur une image inexistante : 5 échecs sur 17 — et, avant
+      # que les cas de refus ne vérifient leur motif, les onze autres restaient faussement verts.
+      #
+      # On construit depuis le Dockerfile du dépôt plutôt que de prendre un `php:8.4-cli` : une CI
+      # qui ne tourne pas sur l'image de production valide autre chose que ce qui sera livré.
+      - name: Image PHP, celle de la préproduction
+        run: docker build -t billetterie-preprod-php docker/php
 
       - name: Les garde-fous refusent-ils vraiment ce qu'ils prétendent refuser ?
         env:

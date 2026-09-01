@@ -10,7 +10,20 @@
 
 set -uo pipefail
 
-REFERENCE="${1:-}"
+# `--exiger-tout` : un controle NON EXECUTE devient un echec.
+#
+# En local, sauter un controle faute d outillage est raisonnable — un poste sans node ne doit pas
+# etre bloque, et la sortie le dit. En CI c est l inverse : personne ne lit les journaux d un job
+# vert, donc « non execute » y devient un vert au nom d un controle qui n a pas eu lieu. C est
+# exactement ce que l en-tete de .github/workflows/garde-fous.yml dit vouloir eviter.
+EXIGER_TOUT=0
+REFERENCE=""
+for argument in "$@"; do
+    case "$argument" in
+        --exiger-tout) EXIGER_TOUT=1 ;;
+        *) [ -z "$REFERENCE" ] && REFERENCE="$argument" ;;
+    esac
+done
 
 # Référence du contrôle de nommage. `origin/main` n'existe pas partout : un worktree du dépôt nu
 # — `/home/debian/wt/main`, là où se font les intégrations — n'a aucun remote. Le garde-fou
@@ -687,6 +700,13 @@ if [ "$ECHECS" -gt 0 ]; then
 fi
 
 if [ "$IGNORES" -gt 0 ]; then
+    if [ "$EXIGER_TOUT" -eq 1 ]; then
+        echo "✗ $TOTAL garde-fou(s) OK, mais $IGNORES NON EXÉCUTÉ(S) — et --exiger-tout est posé."
+        echo "  Un contrôle non exécuté n'est pas un contrôle vert. Ici, personne ne lira ce journal"
+        echo "  s'il finit au vert : l'outillage manquant doit être corrigé, pas contourné."
+        echo "  Non exécuté(s) :$(printf '%s' "$IGNORES_NOMS" | tr '|' ' ')"
+        exit 1
+    fi
     echo "✓ $TOTAL garde-fou(s) OK, $IGNORES NON EXÉCUTÉ(S)."
 else
     echo "✓ $TOTAL garde-fou(s) OK."
