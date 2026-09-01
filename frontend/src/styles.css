@@ -27,11 +27,23 @@
  * Le seul point d'entree d'une declinaison en marque blanche (T11). Un club change ces deux
  * valeurs ; tout le reste suit.
  *
- * ⚠ `--sur-accent` EXISTE PARCE QUE LE BLANC N'EST PAS UNE CONSTANTE. Dix regles ecrivaient
- * `color: #fff` sur un fond `var(--accent)`. Tant que l'accent est sombre, le blanc tient ; le jour
- * ou un club choisit un accent clair, le texte devient illisible sur ses propres boutons — et rien
- * ne le signale, puisque le blanc etait en dur. Le nommer rend la question posable a un seul
- * endroit : qu'ecrit-on sur l'accent ?
+ * ⚠ `--sur-accent` EXISTE PARCE QUE LE BLANC N'EST PAS UNE CONSTANTE — ET CE N'ETAIT PAS UNE
+ * PRECAUTION. Huit regles ecrivent `color: var(--sur-accent)` sur un fond `var(--accent)` :
+ * `.btn.primary`, `.pay-chip.on`, `.bq-skip`, `.bq-cart-count`, `.msgr-b.moi` et trois selections
+ * de calendrier. Elles ecrivaient `#fff` en dur.
+ *
+ * Ce commentaire a d'abord dit « tant que l'accent est sombre, le blanc tient ; le jour ou un club
+ * choisira un accent clair... ». Les deux moities etaient fausses. L'accent N'ETAIT PAS sombre
+ * partout : en theme sombre il vaut `#37b4be`, un cyan clair, et le blanc y rendait **2,49:1** —
+ * la moitie du seuil de 4,5. Le defaut n'attendait aucun client en marque blanche, il etait livre.
+ *
+ * Et « rien ne le signale » etait vrai, ce qui etait ma part : decrire un controle manquant n'est
+ * pas le poser. La paire `sur-accent` / `accent` est desormais mesuree dans
+ * `verifier-contrastes.mjs`, dans les deux themes, et elle compte.
+ *
+ * D'ou la redefinition du jeton dans les blocs sombres — voir plus bas. La question que ce nom
+ * rend posable a un seul endroit reste la meme : qu'ecrit-on sur l'accent ? La reponse, elle,
+ * depend du theme.
  */
 :root {
   --accent-marque: var(--marque-bleu);
@@ -52,6 +64,12 @@
     --bg: #0a1215; --panel: #111d21; --panel-2: #16262b; --line: #22383e;
     --ink: #e7eef0; --ink-soft: #9db0b7; --ink-faint: #6f878e;
     --accent: #37b4be; --accent-2: #63c9d1; --accent-soft: #123339;
+  /* ⚠ LE BLANC NE TIENT PAS SUR CE CYAN. `--sur-accent` valait #ffffff pour les deux themes :
+     5,15:1 sur l'accent clair, mais 2,49:1 ici — la moitie du seuil, sur les boutons primaires,
+     les pastilles, les bulles de message et les selections de calendrier. C'est le defaut que le
+     commentaire de la couche 2 annoncait pour un futur client en marque blanche ; il etait deja
+     livre. On ecrit donc le fond de marque, qui rend 6,06:1. */
+  --sur-accent: var(--marque-nuit);
     --warm: #ef9459; --good: #46b884; --good-bg: #152f26; --warn: #e0ad3d; --warn-bg: #2f2913; --crit: #e86a58; --crit-bg: #331d19;
     --side-bg: #081619; --side-ink: #bcd6da; --side-ink-soft: #6f9298; --side-active: #0d7d88; --side-line: #152b30;
     --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 28px rgba(0, 0, 0, .3);
@@ -61,6 +79,12 @@
   --bg: #0a1215; --panel: #111d21; --panel-2: #16262b; --line: #22383e;
   --ink: #e7eef0; --ink-soft: #9db0b7; --ink-faint: #6f878e;
   --accent: #37b4be; --accent-2: #63c9d1; --accent-soft: #123339;
+  /* ⚠ LE BLANC NE TIENT PAS SUR CE CYAN. `--sur-accent` valait #ffffff pour les deux themes :
+     5,15:1 sur l'accent clair, mais 2,49:1 ici — la moitie du seuil, sur les boutons primaires,
+     les pastilles, les bulles de message et les selections de calendrier. C'est le defaut que le
+     commentaire de la couche 2 annoncait pour un futur client en marque blanche ; il etait deja
+     livre. On ecrit donc le fond de marque, qui rend 6,06:1. */
+  --sur-accent: var(--marque-nuit);
   --warm: #ef9459; --good: #46b884; --good-bg: #152f26; --warn: #e0ad3d; --warn-bg: #2f2913; --crit: #e86a58; --crit-bg: #331d19;
   --side-bg: #081619; --side-ink: #bcd6da; --side-ink-soft: #6f9298; --side-active: #0d7d88; --side-line: #152b30;
   --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 28px rgba(0, 0, 0, .3);

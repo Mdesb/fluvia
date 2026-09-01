@@ -35,8 +35,30 @@ const CSS = readFileSync('src/styles.css', 'utf8')
 
 function jetons(bloc) {
   const m = {}
-  for (const [, nom, valeur] of bloc.matchAll(/--([\w-]+):\s*(#[0-9a-fA-F]{3,8})/g)) m[nom] = valeur
+  // Les hexadecimaux ecrits en dur, ET les alias `--x: var(--y)`. Un alias n'est pas un cas
+  // marginal : c'est la forme meme du point d'entree marque blanche (`--accent-marque:
+  // var(--marque-bleu)`). Sans lui, un jeton parfaitement defini sortirait « absent » — donc en
+  // echec, depuis que l'absence est bruyante.
+  for (const [, nom, valeur] of bloc.matchAll(/--([\w-]+):\s*(#[0-9a-fA-F]{3,8}|var\(\s*--[\w-]+\s*\))/g)) {
+    m[nom] = valeur
+  }
   return m
+}
+
+// ⚠ ON RESOUT CE QUE LE NAVIGATEUR CALCULE, PAS CE QUI EST ECRIT. Une chaine d'alias se suit
+// jusqu'a l'hexadecimal. La borne a 10 sauts n'est pas de la prudence decorative : un cycle
+// `--a: var(--b); --b: var(--a)` est du CSS syntaxiquement valide, et il ferait tourner ce script
+// indefiniment au lieu de rendre un verdict.
+function resoudre(palette) {
+  const sortie = {}
+  for (const nom of Object.keys(palette)) {
+    let v = palette[nom]
+    for (let saut = 0; saut < 10 && v && v.startsWith('var('); saut += 1) {
+      v = palette[v.slice(v.indexOf('--') + 2, v.lastIndexOf(')')).trim()]
+    }
+    if (v && v.startsWith('#')) sortie[nom] = v
+  }
+  return sortie
 }
 
 // ⚠ TOUS LES BLOCS `:root` NUS, PAS LE PREMIER — ET C'EST UN DEFAUT VECU.
@@ -73,18 +95,20 @@ function blocsRacine(css, selecteur) {
 
 const clair = {}
 for (const bloc of blocsRacine(CSS, ':root {')) Object.assign(clair, jetons(bloc))
+const clairResolu = resoudre(clair)
 
 // Le theme sombre HERITE du clair : il ne redefinit que ce qu'il change. Partir du seul bloc sombre
 // ferait sortir en « absent » tout jeton commun aux deux themes — `--sur-accent`, par exemple.
 const sombre = { ...clair }
 for (const bloc of blocsRacine(CSS, ':root[data-theme="dark"]')) Object.assign(sombre, jetons(bloc))
+const sombreResolu = resoudre(sombre)
 
 // ⚠ TEMOIN : L'EXTRACTION A-T-ELLE LU LA PALETTE, OU UN BLOC QUELCONQUE ?
 //
 // C'est la question que personne ne posait, et elle a coute le controle pendant un commit. Un
 // selecteur qui glisse rend un objet non vide — il rend les MAUVAIS jetons. On exige donc que les
 // deux themes portent les fonds et les encres, sans quoi on ne mesure pas : on refuse.
-for (const [nom, palette] of [['clair', clair], ['sombre', sombre]]) {
+for (const [nom, palette] of [['clair', clairResolu], ['sombre', sombreResolu]]) {
   const manquants = ['bg', 'panel', 'ink', 'accent'].filter((j) => !palette[j])
   if (manquants.length > 0) {
     console.error(`\n=== ÉCHEC — le thème ${nom} n'a pas pu être lu ===\n`)
@@ -130,6 +154,17 @@ const PAIRES = [
   ['side-ink-soft', 'side-bg', 4.5, 'menu de gauche, secondaire', true],
   ['warm', 'panel', 4.5, 'accent chaud sur une carte', true],
   ['line', 'panel', 3, 'filet — compte seulement s’il porte une information', false],
+  // ⚠ CETTE PAIRE MANQUAIT, ET `styles.css` ANNONCAIT SON ABSENCE.
+  //
+  // Le commentaire de `--sur-accent` dit : « le jour ou un club choisit un accent clair, le texte
+  // devient illisible sur ses propres boutons — et rien ne le signale ». C'etait exact, y compris
+  // sur le « rien ne le signale » : le controle n'existait pas. Huit regles ecrivent
+  // `color: var(--sur-accent)` sur `background: var(--accent)` — `.btn.primary`, `.pay-chip.on`,
+  // `.bq-skip`, `.bq-cart-count`, `.msgr-b.moi` et trois selections de calendrier.
+  //
+  // C'est aussi le seul point d'entree de la marque blanche (T11) : un club repeint `--accent`, et
+  // cette paire est ce qui l'empeche de rendre ses propres boutons illisibles.
+  ['sur-accent', 'accent', 4.5, 'texte sur un bouton d’accent — point d’entrée marque blanche', true],
 ]
 
 // ⚠ ZERO, ET C EST UN INVARIANT, PLUS UN CLIQUET.
@@ -145,7 +180,7 @@ const PLAFOND = Number(process.env.CONTRASTES_PLAFOND ?? '0')
 let echecs = 0
 const lignes = []
 
-for (const [nom, palette] of [['clair', clair], ['sombre', sombre]]) {
+for (const [nom, palette] of [['clair', clairResolu], ['sombre', sombreResolu]]) {
   lignes.push(`\n── thème ${nom} ──`)
   for (const [av, ar, seuil, quoi, compte] of PAIRES) {
     const a = palette[av]
