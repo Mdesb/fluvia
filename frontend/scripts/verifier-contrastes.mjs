@@ -225,6 +225,10 @@ const PAIRES = [
   // `.banner-info`, `.fiche-avatar`, `.bq-nav-link.on`. La paire passait deja avant le
   // repeint (6,72 et 6,93) — elle est ajoutee pour qu'elle ne puisse plus se degrader sans
   // que rien ne le dise, pas pour corriger un defaut.
+  // `--ink` sur `--accent-soft` : la tuile de produit selectionnee en caisse, la ligne de
+  // tableau active, la zone de depot survolee, l'encadre de moyen de paiement. Quatre
+  // emplois, aucun mesure jusqu'ici.
+  ['ink', 'accent-soft', 4.5, 'texte courant sur un fond d’accent doux', true],
   ['accent-2', 'accent-soft', 4.5, 'texte sur un fond d’accent doux', true],
   ['sur-accent', 'accent', 4.5, 'texte sur un bouton d’accent — point d’entrée marque blanche', true],
 ]

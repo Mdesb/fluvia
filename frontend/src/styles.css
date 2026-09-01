@@ -443,13 +443,22 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 .prodtile:hover:not(:disabled) { background: var(--panel-2); border-color: var(--accent); }
 /* Option retenue : la bordure ET le fond changent. Une seule des deux ne se voit pas sur un
    ecran de caisse eclaire par une vitrine. */
-.prodtile.actif { border-color: var(--accent); background: var(--panel-2); box-shadow: inset 3px 0 0 var(--accent); }
-.prodtile:disabled { opacity: .55; cursor: not-allowed; }
+/* Le fond de selection valait `--panel-2`, qui est aussi celui du survol ET celui d'une
+   tuile desactivee : trois etats, une seule teinte. Il prend le fond d'accent doux, qui
+   n'appartient qu'a la selection. */
+.prodtile.actif { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+/* ⚠ CETTE REGLE ETAIT ECRITE DEUX FOIS, a .55 puis a .5 — la seconde gagnait, la premiere
+   ne servait a rien et laissait croire que le reglage etait ailleurs. Une seule, et le fond
+   passe en `--panel-2` : un produit indisponible doit se lire comme une surface inerte,
+   pas comme une tuile normale qu'on aurait ternie. */
+.prodtile:disabled { opacity: .55; cursor: not-allowed; background: var(--panel-2); }
 .prodtile:active:not(:disabled) { transform: scale(.98); }
-.prodtile:disabled { opacity: .5; cursor: not-allowed; }
 .prodtile .pn { font-weight: 600; font-size: var(--txt-normal); }
 .prodtile .pc { color: var(--ink-faint); font-size: var(--txt-mini); }
-.prodtile .pp { color: var(--ink-soft); font-size: var(--txt-petit); margin-top: auto; padding-top: 6px; font-weight: 600; }
+/* Le prix etait a 12,5 px en encre secondaire — plus petit que le nom du produit, sur
+   l'ecran ou l'on encaisse. Il passe a l'encre principale et a la taille courante : c'est
+   la donnee qu'un agent lit le plus souvent. */
+.prodtile .pp { color: var(--ink); font-size: var(--txt-normal); margin-top: auto; padding-top: 6px; font-weight: 700; }
 .prodtile .pw { color: var(--crit); font-size: var(--txt-mini); margin-top: auto; padding-top: 6px; font-weight: 600; }
 
 /* ---- Caisse : panier ---- */
@@ -462,6 +471,10 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 .cline .qty span { min-width: 18px; text-align: center; font-weight: 600; }
 .cline .rm { border: none; background: none; color: var(--ink-faint); font-size: var(--txt-grand); line-height: 1; cursor: pointer; }
 .cart-total { font-weight: 800; font-size: var(--txt-normal); border-top: 2px solid var(--line); margin-top: 6px; padding-top: 10px; }
+/* ⚠ SEUL LE MONTANT GRANDIT, PAS LE MOT « TOTAL ». Agrandir toute la ligne ferait deux
+   elements de meme poids et ne trancherait rien : c'est le NOMBRE qu'on annonce au client
+   et qu'il verifie, pas l'etiquette. Il avait la taille du nom d'un produit. */
+.cart-total .num { font-size: var(--txt-grand); }
 
 /* ---- Ticket ---- */
 .ticket { background: var(--panel); border: 1px solid var(--accent); border-radius: var(--radius); box-shadow: var(--shadow); }
