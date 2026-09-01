@@ -139,8 +139,12 @@ final class FixturesIdempotentesTest extends KernelTestCase
                 continue;
             }
 
+            // ⚠ `quoteIdentifier()` est deprecie en DBAL 4 et disparait en 5. Le remplacant nomme
+            // par le message est `quoteSingleIdentifier()`, et la substitution est exacte ICI parce
+            // que `$table` est un identifiant SIMPLE — un nom de table sans schema ni prefixe. Sur
+            // un nom qualifie, les deux ne font pas la meme chose.
             $compte = (int) $connexion->fetchOne(
-                sprintf('SELECT COUNT(*) FROM %s', $connexion->quoteIdentifier($table)),
+                sprintf('SELECT COUNT(*) FROM %s', $connexion->quoteSingleIdentifier($table)),
             );
 
             if ($compte > 0) {

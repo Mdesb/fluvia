@@ -3,15 +3,23 @@
 declare(strict_types=1);
 
 /*
- * ⚠ RENUMEROTEE DE 050000 A 060000 A L'INTEGRATION, LE 01/09.
+ * ⚠ RENUMEROTEE DE 040000 A 070000 A L'INTEGRATION, LE 01/09.
  *
- * Deux migrations differentes portaient `Version20260901050000` : celle-ci et celle de `37`
- * (montant courant sur l'abonnement fitness). Doctrine identifie une migration par son NOM DE
- * CLASSE — deux contenus sous un nom, c'est un seul enregistrement en base.
+ * Deux migrations differentes portaient `Version20260901040000` : celle-ci et celle de `37`
+ * (index sur `sport_abonnement_fitness.mandat_sepa_id`). Doctrine identifie une migration par son
+ * nom de classe ; celle de `37` etait deja appliquee sur la preproduction.
  *
- * Celle de `37` etait DEJA APPLIQUEE sur la preproduction au moment de l'integration. La garder
- * sous ce nom-ci aurait fait croire a Doctrine que CELLE-CI l'etait aussi : `acces_droit_acces`
- * n'aurait jamais recu ses colonnes, sans erreur et sans trace.
+ * Garder ce contenu sous ce nom-la aurait fait croire a Doctrine qu'il etait execute : `crm_client`
+ * n'aurait jamais recu `external_ref` ni `import_batch_ref`, sans erreur ni trace.
+ *
+ * ⚠ L'ORDRE DE CES DEUX MIGRATIONS A ETE INVERSE PUIS RETABLI LE 01/09.
+ *
+ * Renumerotees toutes deux a l'integration (collision avec les migrations de `37`, deja
+ * appliquees), elles l'ont ete dans l'ordre ou les conflits se presentaient -- ce qui a inverse
+ * leur ordre relatif. `import_batch` etait alors ALTEREE avant d'etre CREEE, et la preproduction
+ * rendait des 500 partout ou `Client` est joint.
+ *
+ * Renumeroter un jeu de migrations, c'est deplacer une SUITE, pas des elements independants.
  *
  * Le contenu est inchange, seul le numero bouge.
  */
@@ -22,50 +30,92 @@ use Doctrine\DBAL\Schema\Schema;
 use Doctrine\Migrations\AbstractMigration;
 
 /**
- * REPRISE DES CRÉDITS DE CARTES (T2, seconde tranche) — trois colonnes, pas une de plus.
+ * REPRISE INITIALE D'UN CLIENT (T2) — la table des lots, et les deux colonnes qui rendent la
+ * reprise réversible.
  *
- * Écrite à la main (D32). Aucun `DROP` que le `down()` ne défasse.
+ * ── ÉCRITE À LA MAIN, ET C'EST LA CONSIGNE (D32) ───────────────────────────────────────────────
  *
- * ── `acces_droit_acces.external_ref` ET `import_batch_ref` ─────────────────────────────────────
+ * `migrations:diff` compare les métadonnées à la base **entière** : il ramasse la dérive des autres
+ * et la met dans le fichier de celui qui la génère. Le brouillon de `claude-D` contenait 104
+ * instructions dont 6 à elle, et faisait tomber la file de messages et la recherche d'aide. Ce
+ * fichier ne contient donc que ce que mon lot a provoqué — trois objets, nommés un par un.
  *
- * La spécification l'exige nommément : *« chaque crédit repris porte son externalRef et son
- * ImportBatch, pour qu'une contestation remonte au fichier d'origine »*. Sans elles, « il me restait
- * six entrées » se discute de mémoire, six semaines après la reprise, au guichet, devant la
- * personne.
+ * ── LES DEUX COLONNES DE `crm_client` ──────────────────────────────────────────────────────────
  *
- * `import_batch_ref` est un identifiant nu, **pas une clé étrangère** (D2) : le module d'accès n'a
- * pas à dépendre d'un module de reprise qui ne sert qu'une fois.
+ * `external_ref` porte la clé du client dans le logiciel d'où il vient. C'est elle qui remplace
+ * toute heuristique de rapprochement : ni « nom + prénom », ni « nom + date de naissance », qui
+ * marchent sur 98 % des lignes et se trompent précisément sur les familles nombreuses, les
+ * homonymes et les fratries — les clients d'une piscine municipale.
  *
- * ⚠ **`external_ref` n'est pas unique ici, contrairement à `crm_client`.** Une même carte physique
- * peut être reprise, épuisée, puis rechargée sous une nouvelle référence ; et un exploitant qui
- * reprend deux sites d'enseignes différentes peut recevoir deux fichiers dont les références se
- * chevauchent. Le doublon dans UN fichier est déjà refusé par l'analyse ; forcer l'unicité en base
- * ferait échouer un second import légitime au lieu de le laisser passer.
+ * `import_batch_ref` est un identifiant nu, **pas une clé étrangère** (D2). Il permet de savoir ce
+ * qu'un lot a créé, donc de le défaire, sans faire dépendre `Crm` d'un module qui ne sert qu'une
+ * fois dans la vie d'un client.
  *
- * ── `import_batch.announced_total` ─────────────────────────────────────────────────────────────
+ * ⚠ **L'unicité porte sur `(groupe_id, external_ref)`, pas sur l'établissement.** Le fichier client
+ * suit l'enseigne : un client appartient au groupe, pas à l'un de ses sites. Une unicité par
+ * établissement laisserait le même adhérent entrer deux fois, une fois par site — exactement la
+ * duplication que cette reprise existe pour empêcher. C'est un écart assumé à la lettre de la
+ * spécification, qui écrit « unique par (établissement, type) », et signalé comme tel.
  *
- * Le total annoncé par le client, contre lequel la somme des crédits est rapprochée avant toute
- * écriture. Nullable : les types qui ne portent pas d'argent — clients, catalogue, personnel — n'ont
- * rien à annoncer.
+ * Les deux colonnes sont **nullables** : tous les clients déjà en base ont été créés dans
+ * l'application, pas repris. Les rendre obligatoires demanderait d'inventer une référence pour des
+ * gens qui n'en ont pas.
+ *
+ * ── AUCUN `DROP` ───────────────────────────────────────────────────────────────────────────────
+ *
+ * Cette migration n'en contient pas, et c'est vérifiable ligne à ligne : elle crée une table et
+ * ajoute deux colonnes. Le `down()` défait exactement cela.
  */
 final class Version20260901060000 extends AbstractMigration
 {
     public function getDescription(): string
     {
-        return 'Reprise des crédits de cartes : traçabilité du droit repris, et total annoncé du lot.';
+        return 'Reprise initiale : table des lots d\'import, et rattachement des clients repris.';
     }
 
     public function up(Schema $schema): void
     {
-        $this->addSql('ALTER TABLE acces_droit_acces ADD external_ref VARCHAR(128) DEFAULT NULL, ADD import_batch_ref BINARY(16) DEFAULT NULL');
-        $this->addSql('CREATE INDEX idx_droit_acces_import_batch ON acces_droit_acces (import_batch_ref)');
-        $this->addSql('ALTER TABLE import_batch ADD announced_total INT DEFAULT NULL');
+        $this->addSql(<<<'SQL'
+            CREATE TABLE import_batch (
+                id BINARY(16) NOT NULL,
+                establishment_id BINARY(16) NOT NULL,
+                created_by_id BINARY(16) DEFAULT NULL,
+                type VARCHAR(32) NOT NULL,
+                status VARCHAR(16) NOT NULL,
+                file_name VARCHAR(255) NOT NULL,
+                mime_type VARCHAR(128) NOT NULL,
+                file_size INT NOT NULL,
+                content_hash VARCHAR(64) NOT NULL,
+                content LONGTEXT NOT NULL,
+                row_count INT NOT NULL,
+                errors JSON NOT NULL,
+                created_at DATETIME NOT NULL COMMENT '(DC2Type:datetime_immutable)',
+                applied_at DATETIME DEFAULT NULL COMMENT '(DC2Type:datetime_immutable)',
+                created_rows INT NOT NULL,
+                INDEX IDX_IMPORT_BATCH_ETAB_STATUS (establishment_id, status),
+                INDEX IDX_IMPORT_BATCH_ETAB_TYPE (establishment_id, type),
+                INDEX IDX_IMPORT_BATCH_CREATED_BY (created_by_id),
+                UNIQUE INDEX UNIQ_IMPORT_BATCH_ETAB_HASH (establishment_id, content_hash),
+                PRIMARY KEY(id)
+            ) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci` ENGINE = InnoDB
+            SQL);
+
+        $this->addSql(<<<'SQL'
+            ALTER TABLE import_batch
+                ADD CONSTRAINT FK_IMPORT_BATCH_ETAB FOREIGN KEY (establishment_id) REFERENCES org_etablissement (id),
+                ADD CONSTRAINT FK_IMPORT_BATCH_CREATED_BY FOREIGN KEY (created_by_id) REFERENCES sec_utilisateur (id) ON DELETE SET NULL
+            SQL);
+
+        $this->addSql('ALTER TABLE crm_client ADD external_ref VARCHAR(128) DEFAULT NULL, ADD import_batch_ref BINARY(16) DEFAULT NULL');
+        $this->addSql('CREATE UNIQUE INDEX uniq_client_groupe_external_ref ON crm_client (groupe_id, external_ref)');
     }
 
     public function down(Schema $schema): void
     {
-        $this->addSql('ALTER TABLE import_batch DROP announced_total');
-        $this->addSql('DROP INDEX idx_droit_acces_import_batch ON acces_droit_acces');
-        $this->addSql('ALTER TABLE acces_droit_acces DROP external_ref, DROP import_batch_ref');
+        $this->addSql('DROP INDEX uniq_client_groupe_external_ref ON crm_client');
+        $this->addSql('ALTER TABLE crm_client DROP external_ref, DROP import_batch_ref');
+        $this->addSql('ALTER TABLE import_batch DROP FOREIGN KEY FK_IMPORT_BATCH_ETAB');
+        $this->addSql('ALTER TABLE import_batch DROP FOREIGN KEY FK_IMPORT_BATCH_CREATED_BY');
+        $this->addSql('DROP TABLE import_batch');
     }
 }

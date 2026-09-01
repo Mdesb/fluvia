@@ -40,13 +40,26 @@ final class BadgeStaffTest extends PersonnelApiTestCase
         self::assertNotNull($droit->getFenetreDebut());
         self::assertLessThan(new \DateTimeImmutable(), $droit->getFenetreFin());
 
+        // ⚠ UN CRENEAU RELATIF A MAINTENANT, PAS UNE DATE EN DUR.
+        //
+        // Ce test portait `2026-09-01T08:00 -> 12:00` en litteral. `RecalculFenetreBadgeHandler`
+        // cherche le creneau EN COURS OU PROCHAIN a partir de l'instant present : le 01/09 a 11 h ce
+        // creneau etait en cours et le test passait ; a 18 h il etait passe, le handler ecrivait
+        // `INSTANT_PASSE` (1970-01-01) — son refus deliberé, hors de tout shift — et le test
+        // echouait. Vert le matin, rouge l'apres-midi, sans qu'une ligne ait bouge.
+        //
+        // Une suite dont le resultat depend de l'heure n'est pas une suite verte : c'est une suite
+        // dont on ne connait pas le resultat (D20).
+        $demain = (new \DateTimeImmutable('tomorrow', new \DateTimeZone('UTC')))->setTime(8, 0);
+        $finDemain = $demain->setTime(12, 0);
+
         // Un shift confirmé pousse la fenêtre sur sa propre plage (± marge appliquée par ResolveurMarges).
         $creneau = $clientPlanning->request('POST', '/api/personnel/creneaux-travail', $entetePlanning + [
             'json' => [
                 'etablissement' => '/api/etablissements/' . $this->idEtablissementA(),
                 'libellePoste' => 'Accueil',
-                'debut' => '2026-09-01T08:00:00+00:00',
-                'fin' => '2026-09-01T12:00:00+00:00',
+                'debut' => $demain->format(\DATE_ATOM),
+                'fin' => $finDemain->format(\DATE_ATOM),
             ],
         ])->toArray()['id'];
 
@@ -56,8 +69,8 @@ final class BadgeStaffTest extends PersonnelApiTestCase
         self::assertResponseIsSuccessful();
 
         $droitApres = $this->droitDuBadge($badge['id']);
-        self::assertEquals(new \DateTimeImmutable('2026-09-01T08:00:00+00:00'), $droitApres->getFenetreDebut());
-        self::assertEquals(new \DateTimeImmutable('2026-09-01T12:00:00+00:00'), $droitApres->getFenetreFin());
+        self::assertEquals($demain, $droitApres->getFenetreDebut());
+        self::assertEquals($finDemain, $droitApres->getFenetreFin());
         self::assertSame(15, $droitApres->getMargeAvanceDefaut());
         self::assertSame(15, $droitApres->getMargeRetardDefaut());
     }

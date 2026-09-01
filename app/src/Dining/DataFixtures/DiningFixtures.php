@@ -68,15 +68,38 @@ final class DiningFixtures extends Fixture implements DependentFixtureInterface
 
         // Une ligne au brouillon sur A : une addition vide ne distingue pas « rien commande » de
         // « lignes invisibles ».
+        //
+        // ⚠ CHERCHER AVANT DE CREER, ET ICI RIEN NE L'IMPOSE. `dining_order_line` ne porte aucune
+        // contrainte d'unicite : un second chargement ne levait pas d'erreur, il ajoutait
+        // simplement une seconde entrecote. C'est le cas silencieux, celui que
+        // `FixturesIdempotentesTest` designe comme le plus dangereux — la duplication ne se voit
+        // qu'a l'addition du client.
+        //
+        // On cherche sur ce qui fait l'IDENTITE METIER de la ligne (l'addition et son libelle),
+        // pas sur un identifiant technique. Patron : `affectationUnique()` de `SocleFixtures`.
+        $this->ligneUnique($manager, $additionA, 'Entrecote');
+
+        $manager->flush();
+    }
+
+    private function ligneUnique(ObjectManager $manager, DiningOrder $addition, string $libelle): void
+    {
+        $existante = $manager->getRepository(DiningOrderLine::class)->findOneBy([
+            'diningOrder' => $addition,
+            'label' => $libelle,
+        ]);
+
+        if ($existante instanceof DiningOrderLine) {
+            return;
+        }
+
         $manager->persist(new DiningOrderLine(
-            $additionA,
+            $addition,
             CourseRef::of('plat', 2),
-            'Entrecote',
+            $libelle,
             2,
             '24.50',
         ));
-
-        $manager->flush();
     }
 
     private function addition(
@@ -86,6 +109,19 @@ final class DiningFixtures extends Fixture implements DependentFixtureInterface
         string $table,
         int $couverts,
     ): DiningOrder {
+        // ⚠ CHERCHER AVANT DE CREER. `UNIQ_DINING_ORDER_ETAB_REFERENCE` porte sur
+        // (etablissement, reference) : sans cette lecture, un second chargement des fixtures leve
+        // une violation de contrainte et `FixturesIdempotentesTest` echoue. C'est le patron
+        // `roleNomme()` de `SocleFixtures`, applique a l'identique.
+        $existante = $manager->getRepository(DiningOrder::class)->findOneBy([
+            'establishment' => $etablissement,
+            'reference' => $reference,
+        ]);
+
+        if ($existante instanceof DiningOrder) {
+            return $existante;
+        }
+
         $addition = new DiningOrder(
             $etablissement,
             $reference,
