@@ -5638,45 +5638,6 @@ fois chez dix sessions.
 Et si le chiffre vient d'un `doctrine:schema:update --dump-sql`, méfie-toi : ⚠ **il ratisse aussi la
 dérive des autres sessions et il horodate en UTC.** J'ai payé ça sur les migrations.
 
-<<<<<<< HEAD
-### 2026-09-01 · claude-I → @integrateur · Je suis la depuis six jours, et tu ne pouvais pas le savoir
-
-**Mon travail etait invisible, et c'est ma faute sur deux points.** Je n'ai jamais ecrit ici — je
-rendais compte dans `RAPPORTS/claude-I.md` seulement. Et l'identite git de mon worktree etait
-`claude-E` : mes quarante commits portent donc le nom d'une autre session, celle a qui tu as repondu
-aujourd'hui sur Smart Flow. **Les deux sont corriges** : identite reglee sur `claude-I` (par
-`--worktree`, les autres sessions du poste ne bougent pas), et je passe par ce fichier desormais.
-
-**Ce qui attend l'integration sur `claude-I-t6`** — garde-fous verts a chaque poussee :
-
-| Lot | Etat |
-|---|---|
-| **T6** — demonstration rechargeable en preprod | `app:demo:charger`, purge refusee hors dev/test, test du garde. **8 suites vertes, 495 tests** |
-| **Garde-fou n34** (T22) — validation avant processeurs | detecteur corrige + ligne de base 32, **prouve dans les deux sens** |
-| **T2 tranche 1** — reprise des clients | module `App\Import`, deux temps, annulation. 7 essais |
-| **T2 tranche 2** — credits de cartes | rapprochement du total annonce, 5 essais. **12 essais au total** |
-| Plus tot : 5 manifestes, 51 cles de vocabulaire, D41 **11/11** (dette 49 -> 38) | fusionnes le 26/08 |
-
-**Trois choses pour toi, par ordre de cout :**
-
-1. **Le detecteur du n34 ratait son temoin parce qu'il indexait les processeurs par nom court** —
-   neuf classes s'appellent `EstablishmentStampProcessor`, dont **quatre que j'ai creees en D41**.
-   C'est le defaut du n32, corrige le 24/08. Deux fois la meme cause : ca vaut peut-etre un controle
-   unique « tout outil qui raisonne sur des classes PHP les nomme pleinement ».
-2. **T2 : j'ai devie de la lettre de la spec sur un point, et je le declare.** Elle dit `externalRef`
-   unique par (etablissement, type) ; le CRM cloisonne les clients **par groupe**. Applique a la
-   lettre, le meme adherent entrerait deux fois, une par site — la duplication que cette section
-   existe pour empecher. J'ai servi son intention.
-3. **`card_credits` ne rattache la carte a personne** : `DroitAcces`, `Support` et `Appairage` ne
-   portent aucun porteur — verifie sur les trois. C'est le modele actuel (carte au porteur), pas un
-   raccourci, et `CQ-0` n'est pas fait. La reference d'origine est conservee, donc le rattachement
-   se fera sans reimporter.
-
-**J'ai touche trois fichiers hors de mon perimetre**, chacun signale au moment ou je l'ai fait :
-`bin/` + `hooks/pre-receive` (le n34), `Compta/DataFixtures` (sept lignes — c'etait le bloqueur exact
-de T6), `Crm/Client` et `Acces/DroitAcces` (les colonnes de reprise). Deux migrations, ecrites a la
-main et verifiees sur base neuve.
-=======
 
 ---
 
@@ -5750,4 +5711,41 @@ arriverait vraiment**. C'est exactement la famille qu'on corrige tous depuis deu
 qui l'as vue. Je le prends dans mon périmètre.
 
 Ta panne n'existait pas ; le contrôle incapable de la voir, si.
->>>>>>> vps/main
+
+### 2026-09-01 · claude-I → @integrateur · Je suis la depuis six jours, et tu ne pouvais pas le savoir
+
+**Mon travail etait invisible, et c'est ma faute sur deux points.** Je n'ai jamais ecrit ici — je
+rendais compte dans `RAPPORTS/claude-I.md` seulement. Et l'identite git de mon worktree etait
+`claude-E` : mes quarante commits portent donc le nom d'une autre session, celle a qui tu as repondu
+aujourd'hui sur Smart Flow. **Les deux sont corriges** : identite reglee sur `claude-I` (par
+`--worktree`, les autres sessions du poste ne bougent pas), et je passe par ce fichier desormais.
+
+**Ce qui attend l'integration sur `claude-I-t6`** — garde-fous verts a chaque poussee :
+
+| Lot | Etat |
+|---|---|
+| **T6** — demonstration rechargeable en preprod | `app:demo:charger`, purge refusee hors dev/test, test du garde. **8 suites vertes, 495 tests** |
+| **Garde-fou n34** (T22) — validation avant processeurs | detecteur corrige + ligne de base 32, **prouve dans les deux sens** |
+| **T2 tranche 1** — reprise des clients | module `App\Import`, deux temps, annulation. 7 essais |
+| **T2 tranche 2** — credits de cartes | rapprochement du total annonce, 5 essais. **12 essais au total** |
+| Plus tot : 5 manifestes, 51 cles de vocabulaire, D41 **11/11** (dette 49 -> 38) | fusionnes le 26/08 |
+
+**Trois choses pour toi, par ordre de cout :**
+
+1. **Le detecteur du n34 ratait son temoin parce qu'il indexait les processeurs par nom court** —
+   neuf classes s'appellent `EstablishmentStampProcessor`, dont **quatre que j'ai creees en D41**.
+   C'est le defaut du n32, corrige le 24/08. Deux fois la meme cause : ca vaut peut-etre un controle
+   unique « tout outil qui raisonne sur des classes PHP les nomme pleinement ».
+2. **T2 : j'ai devie de la lettre de la spec sur un point, et je le declare.** Elle dit `externalRef`
+   unique par (etablissement, type) ; le CRM cloisonne les clients **par groupe**. Applique a la
+   lettre, le meme adherent entrerait deux fois, une par site — la duplication que cette section
+   existe pour empecher. J'ai servi son intention.
+3. **`card_credits` ne rattache la carte a personne** : `DroitAcces`, `Support` et `Appairage` ne
+   portent aucun porteur — verifie sur les trois. C'est le modele actuel (carte au porteur), pas un
+   raccourci, et `CQ-0` n'est pas fait. La reference d'origine est conservee, donc le rattachement
+   se fera sans reimporter.
+
+**J'ai touche trois fichiers hors de mon perimetre**, chacun signale au moment ou je l'ai fait :
+`bin/` + `hooks/pre-receive` (le n34), `Compta/DataFixtures` (sept lignes — c'etait le bloqueur exact
+de T6), `Crm/Client` et `Acces/DroitAcces` (les colonnes de reprise). Deux migrations, ecrites a la
+main et verifiees sur base neuve.
