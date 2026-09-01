@@ -97,9 +97,33 @@ essai_sans_avertissement() { # essai_sans_avertissement <libellé> <motif qui ne
 
 # Le push qui échoue EST le comportement attendu dans la moitié des cas : on capture son code sans
 # laisser `set -e` interrompre le banc — sinon le premier refus, qui est une réussite, arrête tout.
-essai() { # essai <libellé> <refus|acceptation>
+essai() { # essai <libellé> <refus|acceptation> [fragment attendu dans le refus]
     local code=0
-    git push "$BARE" main >/dev/null 2>&1 || code=$?
+    local sortie="$ESSAI/sortie-essai.txt"
+    git push "$BARE" main >"$sortie" 2>&1 || code=$?
+
+    # ── Un refus ne prouve rien tant qu'on ne sait pas POURQUOI il a eu lieu ────────────────────
+    #
+    # Mesure du 01/09 : avec une image docker inexistante, le hook refuse TOUT — et les onze cas de
+    # refus de ce banc restaient verts. Ils ne prouvaient pas que le garde-fou visé avait mordu,
+    # seulement que quelque chose avait refusé. Le banc lui-même donnait un faux vert.
+    if [ "${BANC_MOTIFS:-0}" = "1" ] && [ "$2" = "refus" ]; then
+        echo "  ── $1"
+        grep -E "✗|refus" "$sortie" | head -3 | sed 's/^/       /'
+    fi
+
+    if [ "$2" = "refus" ] && [ "$code" -ne 0 ] && [ -n "${3:-}" ]; then
+        if ! grep -qF "$3" "$sortie"; then
+            printf '  \033[31m✗\033[0m %-52s refusé, mais PAS pour la bonne raison\n' "$1"
+            echo "       attendu dans la sortie : « $3 »"
+            KO=$((KO + 1))
+            git fetch -q "$BARE" main
+            git reset -q --hard FETCH_HEAD
+            git clean -qfd
+            return
+        fi
+    fi
+
     verdict "$1" "$2" "$code"
 
     # Chaque cas repart de l'état réel du dépôt, quelle que soit l'issue du précédent. Sans ça, un cas
