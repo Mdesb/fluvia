@@ -107,13 +107,20 @@ final class RunScheduledTasksCommand extends Command
                 // supervision : --only=<tache> » — et cette porte-la etait justement celle qui
                 // s'ouvrait toute seule a chaque cycle. Un message d'echec dit ce qui est bloque et
                 // ce qu'on peut regarder ; la levee vit dans la documentation, pas dans la sortie.
+                // ⚠ CE MESSAGE A ETE VU S'AFFICHER, PAS SEULEMENT RELU.
+                //
+                // Sa premiere version portait « Ce qu'ette execution ferait » : une apostrophe
+                // evitee par un `%s` avait mange le mot. Et elle renvoyait a « D91 » alors que la
+                // decision a ete renumerotee D109 le meme jour -- D91 existe et parle d'autre
+                // chose, donc la reference ne menait pas nulle part, elle menait ailleurs.
+                //
+                // La chaine est desormais en guillemets doubles : plus d'apostrophe a contourner.
                 $io->writeln(sprintf(
-                    '  <comment>premier passage</comment> %s — jamais exécutée, et non marquée sûre '
-                    . 'au premier passage : elle rattraperait tout son retard en une fois. '
-                    . 'Ce qu%sette exécution ferait : --dry-run. Ce qui a déjà tourné : --status. '
-                    . 'La levée est décrite en D91.',
+                    "  <comment>premier passage</comment> %s — jamais exécutée, et non marquée sûre "
+                    . "au premier passage : elle rattraperait tout son retard en une fois. "
+                    . "Ce que cette exécution ferait : --dry-run. Ce qui a déjà tourné : --status. "
+                    . "La levée est décrite en D109.",
                     $task->command,
-                    "'",
                 ));
                 ++$attente;
                 continue;
@@ -132,7 +139,7 @@ final class RunScheduledTasksCommand extends Command
         if ($attente > 0) {
             $io->note(sprintf(
                 "%d tâche(s) attendent un premier passage supervisé. Tant qu'il n'a pas eu lieu, "
-                . "elles ne tournent pas, et c'est voulu — voir D91.",
+                . "elles ne tournent pas, et c'est voulu — voir D109.",
                 $attente,
             ));
         }
