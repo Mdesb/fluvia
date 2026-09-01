@@ -263,6 +263,36 @@ lit un UUID. C'est ce qui a laissé passer `sources[][]` jusqu'au premier clic d
 
 ### T33 — Vente d'abonnement : quatre lots, dans cet ordre
 
+⚠ **ARBITRAGE DE MAXIME, 01/09 : « IL NE DOIT PAS Y AVOIR DE PRIX LIBRE. »** Confirmé directement,
+pas seulement relayé. C'est donc **le guichet qui s'aligne sur l'en ligne**, et pas l'inverse : le
+prix se résout depuis la grille tarifaire du produit, des deux côtés.
+
+Ce que ça change, lot par lot :
+
+| lot | avant | après l'arbitrage |
+|---|---|---|
+| **T33-2** *(fait)* | `montantCentimes` **saisi** dans le corps de la requête, exigé strictement positif | Le champ posé sur `AbonnementFitness` **garde tout son sens** : il devient le montant **résolu et mémorisé**, non le montant saisi. ⚠ Mais `SouscrireAbonnementProcessor:72` l'exige encore du corps — **c'est cette exigence qui est à retirer**, au profit d'une résolution de tarif |
+| **T33-3** | « copier le chemin en ligne » | Le chemin en ligne résout le prix depuis le type de tarif et **refuse le produit s'il n'en a pas** (`SouscriptionAbonnementEnLigneHandler:132`). Le guichet doit faire pareil, donc échouer explicitement sur un produit sans tarif au lieu d'accepter n'importe quel montant |
+
+⚠ **LA RÈGLE DE PRÉSÉANCE NE CHANGE PAS** : l'échéance fait foi, l'abonnement porte le montant
+courant. L'arbitrage déplace la SOURCE du prix (grille au lieu de saisie), pas l'autorité entre
+l'abonnement et l'échéance.
+
+⚠ **ET IL RÈGLE LA TROISIÈME SOURCE PAR LE HAUT.** Puisque le prix vient de la grille tarifaire,
+`Formule` n'a **pas** besoin d'un prix — la proposition « faire de la formule la source du défaut »
+tombe d'elle-même. La formule reste périodicité, engagement, droits, services. Le prix vit dans la
+grille, où il est déjà historisé.
+
+⚠ **CE QUI RESTE OUVERT ET N'EST PAS TRANCHÉ : le prorata.** Sans prix libre, une première échéance
+réduite ne peut plus être **saisie** — il faut la **calculer**. C'est une règle commerciale à écrire
+(au prorata de quoi, arrondi comment, à partir de quelle date), pas un champ à remplir.
+⚠ Un calcul existe et est éprouvé — `App\Subscription\Service\ProrationCalculator`, en centimes
+entiers, journée d'entrée due en entier — mais il vit dans la facturation **de la plateforme
+Fluvia**, pas des adhérents. L'arithmétique est neutre, l'emplacement ne l'est pas : l'extraire dans
+un endroit partagé, ou le réutiliser en dépendance croisée, se décide. **Le dupliquer est la seule
+option clairement mauvaise** — trois lignes qui décident d'un prélèvement, et deux copies
+divergeront sur la borne de février avant que quiconque s'en aperçoive.
+
 Mesuré par `allaccess-b8`, arbitré avec `c2`, inscrit ici par le worktree `claude-A` **sans le
 prendre** — un lot qui ne vit que dans un fil de messages meurt avec la session qui l'a lu.
 
