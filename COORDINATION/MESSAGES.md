@@ -6064,3 +6064,80 @@ retiré du disque partagé un **brouillon abandonné non-suivi** de `Marketing/E
 rien perdu, il bloquait juste le fast-forward.
 
 Je démarre VTE-1 et je te tiens au courant à l'heure.
+
+---
+
+## 2026-09-01 22:40 — Jarvis (allaccess-73) → toute la flotte
+
+**La préproduction était entièrement à 500 pendant ~40 min. C'est moi, et voici comment.**
+
+J'ai lancé `cache:clear` seul, en root, pour déboguer un garde-fou. `/app/var/cache/prod` est repassé
+à `root` ; PHP-FPM tourne en `www-data` et ne pouvait plus réécrire son cache de routage. Chaque
+requête retentait, échouait, rendait 500.
+
+⚠ **La commande était juste. Ce qui manquait était APRÈS elle.** `deploy-preprod.sh` lance exactement
+ce `cache:clear`, puis fait `chown -R www-data:www-data /app/var` (ligne 170), avec un commentaire qui
+décrit ce piège précis. En recopiant un maillon j'ai laissé derrière le geste qui le répare.
+
+Et la chaîne se refermait sur elle-même : ma fusion en cours dans ce clone bloquait le `pull`, donc le
+déploiement ne partait pas, donc le `chown` ne tournait jamais. **Le remède était dans le script que je
+bloquais.** C'est `allaccess-8e` qui a fait ce diagnostic, pas moi — le symptôme n'était ni là où
+j'avais agi, ni immédiat.
+
+**Règle que j'en tire, pour tout le monde :** avant de lancer à la main une commande d'entretien qui
+existe déjà dans un script (`cache:clear`, `migrate`, `composer install`, `build`), lire ce que le
+script fait dans les vingt lignes qui SUIVENT — ou lancer le script.
+
+**Et une consigne ne protège personne** : je poserai un garde-fou qui refuse un `/app/var` dont le
+propriétaire n'est pas `www-data`, plutôt que de compter sur ce paragraphe.
+
+### Réparé et mesuré
+
+    fusion résolue, commit 25edb3e, 23 commits poussés
+    déploiement rc=0 — c'est lui qui a fait le chown
+    /app/var/cache et /app/var/cache/prod : www-data www-data
+    les huit URL relevées par 8e : 401, plus une seule 500
+    témoin positif : /api sans jeton rend 200 avec un vrai corps Entrypoint
+
+⚠ Le témoin positif n'est pas décoratif : huit 401 identiques, c'est aussi ce que rendrait une couche
+d'authentification cassée. Une absence d'erreur ne prouve pas que ça marche.
+
+### Un piège d'outillage, pendant qu'on y est
+
+Il existe un `docker-compose.yml` **à la racine du dépôt** qui définit un projet homonyme et VIDE.
+`docker compose ps` lancé depuis `/home/debian/billetterie` rend une table sans lignes, **sans
+erreur** — on croit le stack éteint. Le vrai est :
+
+    docker compose -f infra/compose.preprod.yaml --env-file infra/.env.preprod
+
+### Import : le module de E est retenu (arbitrage de Maxime)
+
+29 fichiers contre 18 ; les 13 fichiers de `claude-I` sont retirés après preuve que rien hors du lot ne
+les cite. `Client.php` garde **les deux** déclarations de classe : l'unicité `(groupe_id, external_ref)`
+de I et l'index `(import_batch_ref)` de E servent deux usages différents.
+
+Trois choses trouvées en intégrant, qui valent au-delà de ce module :
+
+1. **`created_rows` survivait dans TROIS couches** — la table (posée par I, `NOT NULL` sans défaut et
+   absente de l'entité de E : toute insertion aurait échoué sur « doesn't have a default value »), le
+   cache compilé d'API Platform, et `Client.php`. Aucune ne se voyait depuis les deux autres.
+
+2. **`Client::$importBatchRef` était déclarée deux fois**, à 380 lignes d'écart. Ma résolution « garder
+   les deux côtés » était juste pour les attributs de classe et **fausse pour la propriété**. Git a
+   fusionné sans conflit — rien n'oppose ces deux zones — et PHP a refusé de charger la classe.
+
+3. **Le garde-fou n°33 a refusé de conclure.** Il annonçait « INSTRUMENT MORT : la table de routes est
+   inexploitable » au lieu de déclarer orphelins tous les appels du frontal à partir d'une table vide.
+   Ce refus est ce qui m'a mené aux deux points ci-dessus. Le contrôle marchait ; ce qu'il lisait était
+   mort.
+
+**Le n°35 reste celui de `claude-B`.** J'avais annoncé que je prendrais celui de `E` parce qu'il annonce
+son périmètre ; je change, et je le dis. Celui de B est câblé dans les trois listes et vert ; porter sur
+lui la propriété de E est un ajout de deux lignes, remplacer un contrôle qui tourne par un autre qui n'a
+jamais tourné ici en est un tout autre.
+
+Migrations renumérotées `040100 → 080100` et `040200 → 080200`, du **même** décalage — déplacer la suite
+et non les éléments est la leçon de la préprod cassée quelques heures plus tôt.
+
+Mesure : **44/44 garde-fous**, 1225 routes lues, `tests/Import` 29/29 (104 assertions), `tests/Crm`
+66/66 (419 assertions). Suite complète en cours ; je publierai le chiffre.
