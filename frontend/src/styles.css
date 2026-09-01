@@ -418,6 +418,14 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
  *
  * ⚠ CE QUI EST CLIQUABLE EST SOULIGNE, CE QUI NE L'EST PAS NE L'EST PAS (`.muet`). Un soulignement
  * qui ne mene nulle part se paie a chaque clic decu. */
+/* L'APERCU INERTE DE LA FICHE VIERGE — ce qu'on pourra remplir quand le produit existera.
+ *
+ * Ni cache ni actif : cache, la fiche paraitrait pauvre ; actif, on saisirait des valeurs qui ne
+ * partiraient nulle part, faute de produit auquel les attacher. `pointer-events: none` rend
+ * l'inertie reelle et pas seulement visuelle — un bloc qui a l'air eteint mais repond au clic est
+ * pire qu'un bloc actif. */
+.fiche-endormie { opacity: .42; pointer-events: none; user-select: none; margin-top: var(--esp-large); }
+
 .fiche-ligne {
   display: flex; flex-wrap: wrap; align-items: baseline;
   gap: 4px 14px;
