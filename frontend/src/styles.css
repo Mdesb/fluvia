@@ -220,6 +220,21 @@ a { color: var(--accent); }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--sur-accent); }
 .btn.primary:hover:not(:disabled) { background: var(--accent-2); }
 .btn.sm { padding: 6px 10px; font-size: var(--txt-petit); }
+
+/* ⚠ UN PRIMAIRE DANS UN TABLEAU N'EST PAS LE PRIMAIRE DE L'ECRAN.
+   Le catalogue rendait SEPT boutons pleins d'accent dans ses lignes contre UN seul en dehors —
+   « Nouveau produit », la vraie action de l'ecran. Sept appels a l'action qui se disputent
+   l'attention n'en font aucun, et le primaire de la page se noyait parmi les actions de ligne.
+
+   Le descripteur (`api/produit.js`) a raison de marquer « Publier » comme le ton principal d'un
+   brouillon : c'est l'action principale DE LA LIGNE. C'est son rendu a l'echelle du tableau qui
+   changeait de sens, pas son rang.
+
+   ⚠ Le survol est explicite et non herite : `.btn.primary:hover` pose `background: var(--accent-2)`,
+   ce qui rendrait le libelle invisible sur son propre fond des lors que l'encre vaut `--accent-2`.
+   La promotion vers le bouton plein sert alors d'affordance. */
+.tbl .btn.primary { background: var(--accent-soft); border-color: var(--accent-soft); color: var(--accent-2); }
+.tbl .btn.primary:hover:not(:disabled) { background: var(--accent); border-color: var(--accent); color: var(--sur-accent); }
 /* Plus petit que `sm` : le bouton d'action d'une cellule de tableau, la ou une rangee en
  * porte trois et ou `sm` fait deborder la colonne. Ecrit six fois en ligne dans Campagnes
  * avant d'etre nomme — un padding en ligne repete est une classe qui manque, pas un
