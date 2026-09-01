@@ -444,7 +444,9 @@ function SouscriptionModal({ open, onClose, onFait }) {
   const [produit, setProduit] = useState('')
   const [periodicite, setPeriodicite] = useState('mensuel')
   const [duree, setDuree] = useState('12')
-  const [montant, setMontant] = useState('')
+  // ⚠ PLUS DE MONTANT SAISI. Arbitrage de Maxime du 01/09 : « il ne doit pas y avoir de prix
+  //    libre. » Le serveur résout désormais depuis la grille tarifaire et REFUSE le champ s'il est
+  //    envoyé — l'écran doit donc cesser de le poser, sinon chaque souscription rendrait 422.
   const [iban, setIban] = useState('')
   const [titulaire, setTitulaire] = useState('')
   const [erreur, setErreur] = useState(null)
@@ -453,7 +455,7 @@ function SouscriptionModal({ open, onClose, onFait }) {
   useEffect(() => {
     if (!open) return
     setAdherent(''); setPayeur(''); setProduit(''); setPeriodicite('mensuel')
-    setDuree('12'); setMontant(''); setIban(''); setTitulaire(''); setErreur(null)
+    setDuree('12'); setIban(''); setTitulaire(''); setErreur(null)
     Promise.allSettled([api.beneficiaires(), api.rechercheClients({ itemsPerPage: 100 }), api.produits()])
       .then(([b, c, p]) => {
         setBeneficiaires(b.status === 'fulfilled' ? membres(b.value) : [])
@@ -463,9 +465,18 @@ function SouscriptionModal({ open, onClose, onFait }) {
   }, [open])
 
   const formules = produits.filter((p) => p.formule?.id)
-  const centimes = Math.round(Number(String(montant).replace(',', '.')) * 100)
+  // Le tarif du produit choisi, tel que le catalogue le porte. On l'AFFICHE : c'est ce que le
+  // serveur résoudra, et le montrer avant permet de s'apercevoir qu'il manque avant de valider.
+  const produitChoisi = formules.find((p) => p.id === produit)
+  const grilleTarif = (produitChoisi?.grilles || []).find((g) => g && g.prix !== null && g.prix !== undefined && g.prix !== '')
+  const tarifAffiche = grilleTarif
+    ? Number(grilleTarif.prix).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })
+    : null
   const pret = adherent && payeur && produit && periodicite
-    && Number(duree) > 0 && centimes > 0 && iban.trim() && titulaire.trim()
+    // ⚠ `tarifAffiche` REMPLACE `centimes > 0` dans la garde : sans tarif au catalogue, le
+    //    serveur refusera la souscription. Bloquer ici évite un aller-retour et une erreur
+    //    technique là où la cause est un produit sans prix.
+    && Number(duree) > 0 && tarifAffiche && iban.trim() && titulaire.trim()
 
   async function soumettre(e) {
     e.preventDefault()
@@ -479,7 +490,6 @@ function SouscriptionModal({ open, onClose, onFait }) {
         formule: choisi.formule.id,
         periodicite,
         dureeEngagementMois: Number(duree),
-        montantCentimes: centimes,
         iban: iban.trim(),
         titulaireMandat: titulaire.trim(),
       })
@@ -556,10 +566,20 @@ function SouscriptionModal({ open, onClose, onFait }) {
               onChange={(e) => setDuree(e.target.value)} />
           </div>
           <div className="field" style={{ flex: '1 1 160px' }}>
-            <label htmlFor="ab-montant">Montant par échéance (€) *</label>
-            <input id="ab-montant" className="input" type="text" inputMode="decimal" value={montant}
-              placeholder="39,90" onChange={(e) => setMontant(e.target.value)} />
-            <span className="hint">C’est ce qui sera prélevé à chaque échéance.</span>
+            <label htmlFor="ab-montant">Montant par échéance</label>
+            {/* ⚠ AFFICHÉ, PLUS SAISI. Le laisser modifiable ferait croire qu'on fixe le prix
+                alors que le serveur applique le tarif — un écart qui ne se verrait qu'au relevé
+                bancaire. Sans tarif au catalogue, on le dit et on bloque : le serveur refuserait
+                de toute façon, et une erreur technique n'aurait pas nommé la cause. */}
+            <input id="ab-montant" className="input" value={tarifAffiche || ''} readOnly
+              placeholder="—" aria-describedby="ab-montant-aide" />
+            <span className="hint" id="ab-montant-aide">
+              {!produit
+                ? 'Choisissez une formule : son tarif s’affichera ici.'
+                : tarifAffiche
+                  ? 'Tarif du catalogue. C’est ce qui sera prélevé à chaque échéance.'
+                  : 'Ce produit n’a aucun tarif au catalogue : la souscription sera refusée. Ajoutez un tarif sur sa fiche produit.'}
+            </span>
           </div>
         </div>
 

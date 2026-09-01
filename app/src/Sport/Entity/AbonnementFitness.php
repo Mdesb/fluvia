@@ -139,7 +139,54 @@ class AbonnementFitness
     #[Groups(['abonnement:read'])]
     private int $preavisResiliationJours = 30;
 
-    #[ORM\OneToOne(targetEntity: MandatSepa::class)]
+    /**
+     * LE MONTANT COURANT DE L'ABONNEMENT, EN CENTIMES.
+     *
+     * ── ⚠ ET L'ÉCHÉANCE FAIT FOI, PAS CE CHAMP ────────────────────────────────────────────────
+     *
+     * Le prix vivait DÉJÀ quelque part avant ce champ : `GenerateurEcheancierHandler` l'estampille
+     * sur chaque `EcheanceSepa` au moment de la souscription, et il n'est jamais relu ensuite.
+     * Poser un montant ici crée donc une SECONDE source pour le même fait, et il faut dire laquelle
+     * gagne avant qu'elles ne divergent — sans quoi personne ne saura laquelle est fausse le jour
+     * d'un changement de tarif.
+     *
+     * **L'échéance fait foi.** Elle est datée, émise, et opposable : c'est elle qui sera prélevée.
+     * Ce champ ne porte que le montant COURANT — ce qu'on facturera la prochaine fois, ce qu'un
+     * écran affiche quand on demande « combien coûte cet abonnement », et ce qu'on compare pour
+     * décider d'un changement de tarif. Il ne réécrit jamais une échéance déjà générée.
+     *
+     * ⚠ CONSÉQUENCE À TENIR : changer ce montant ne change PAS les échéances futures déjà posées.
+     * Le jour où un écran le modifiera, il devra régénérer explicitement ce qui n'est pas encore
+     * remis en banque — et ce geste-là se décide, il ne se déduit pas d'une écriture de champ.
+     *
+     * ⚠ `DEFAULT` DÉCLARÉ AU MAPPING, et pas seulement dans la migration : le déploiement migre
+     * avant de redémarrer PHP, donc il existe une fenêtre où le schéma porte la colonne et où le
+     * code ancien insère sans la renseigner. Sans défaut, cette fenêtre rend des erreurs SQL.
+     *
+     * ⚠ ET LA FORMULE NE PROPOSE RIEN, aujourd'hui : `Offre\Entity\Formule` ne porte AUCUN prix —
+     * ni champ, ni relation vers un tarif. Le montant est donc entièrement à la charge de
+     * l'appelant, comme il l'était déjà. Faire de la formule la source du défaut demanderait de
+     * lui ajouter un prix, ce qui est une décision distincte et une troisième source.
+     */
+    #[ORM\Column(options: ['default' => 0])]
+    #[Groups(['abonnement:read'])]
+    private int $montantCentimes = 0;
+
+    /**
+     * ⚠ `ManyToOne` ET NON `OneToOne` : un même mandat porte plusieurs abonnements.
+     *
+     * Un adulte et son enfant, deux formules dans la même famille — le payeur donne son IBAN une
+     * fois. Deux mandats pour le même débiteur chez le même créancier ne sont pas la logique SEPA :
+     * un mandat autorise à prélever, il n'est pas attaché à ce qu'on facture. Le mandat était déjà
+     * générique de son côté (rattaché au client et à l'établissement) ; c'est ce lien-ci qui
+     * imposait l'unicité.
+     *
+     * ⚠ ET CE CHANGEMENT SEUL SERAIT UN DÉFAUT. `DemanderResiliationHandler::executerEffet()`
+     * révoquait le mandat sans condition, ce qui était correct tant qu'il n'appartenait qu'à un
+     * abonnement. La révocation conditionnelle est partie dans le même commit : les séparer aurait
+     * arrêté les prélèvements du second abonnement sans erreur ni message.
+     */
+    #[ORM\ManyToOne(targetEntity: MandatSepa::class)]
     #[ORM\JoinColumn(name: 'mandat_sepa_id', nullable: false)]
     #[Groups(['abonnement:read'])]
     private ?MandatSepa $mandatSepa = null;
@@ -269,6 +316,18 @@ class AbonnementFitness
     public function setPreavisResiliationJours(int $preavisResiliationJours): self
     {
         $this->preavisResiliationJours = $preavisResiliationJours;
+
+        return $this;
+    }
+
+    public function getMontantCentimes(): int
+    {
+        return $this->montantCentimes;
+    }
+
+    public function setMontantCentimes(int $montantCentimes): self
+    {
+        $this->montantCentimes = $montantCentimes;
 
         return $this;
     }

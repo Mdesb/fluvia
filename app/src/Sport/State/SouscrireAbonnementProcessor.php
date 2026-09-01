@@ -22,7 +22,8 @@ use Symfony\Component\Uid\Uuid;
 /**
  * POST /sport/abonnements/souscrire (US-SPORT-01, CA-1). Corps :
  *   { "adherent": iri|uuid, "payeur": iri|uuid, "formule": iri|uuid, "periodicite": "mensuel"|"hebdomadaire",
- *     "dateSouscription"?: "AAAA-MM-JJ", "dureeEngagementMois": int, "montantCentimes": int,
+ *     "dateSouscription"?: "AAAA-MM-JJ", "dureeEngagementMois": int,
+ *     "montantPremiereEcheanceCentimes"?: int,  // prorata d’entree ; 0 accepte (mois offert)
  *     "iban": string, "titulaireMandat": string }
  * L'IBAN en clair transite uniquement ici (jamais mappé Doctrine, tokenisé avant persistance, §4 du plan).
  *
@@ -69,9 +70,37 @@ final class SouscrireAbonnementProcessor implements ProcessorInterface
             ? new \DateTimeImmutable($corps['dateSouscription'])
             : new \DateTimeImmutable('today');
         $dureeEngagementMois = isset($corps['dureeEngagementMois']) ? (int) $corps['dureeEngagementMois'] : 12;
-        $montantCentimes = isset($corps['montantCentimes']) ? (int) $corps['montantCentimes'] : 0;
-        if ($montantCentimes <= 0) {
-            throw new UnprocessableEntityHttpException('« montantCentimes » doit être strictement positif.');
+        // ⚠ `montantCentimes` N'EST PLUS LU, ET SON ENVOI EST REFUSÉ PLUTÔT QU'IGNORÉ.
+        //
+        // Arbitrage de Maxime du 01/09 : « il ne doit pas y avoir de prix libre. » Le prix vient
+        // désormais de la grille tarifaire du produit, comme sur la boutique.
+        //
+        // L'accepter en silence serait pire que de le refuser : un appelant continuerait de
+        // l'envoyer, croirait fixer le prix, et le tarif s'appliquerait à sa place — sans erreur,
+        // sans message, et sur un prélèvement.
+        if (isset($corps['montantCentimes'])) {
+            throw new UnprocessableEntityHttpException(
+                '« montantCentimes » n\'est plus accepté : le prix est résolu depuis la grille '
+                . 'tarifaire du produit qui porte cette formule. Retirez ce champ.',
+            );
+        }
+
+        // ── LE PRORATA D'ENTRÉE, FACULTATIF ───────────────────────────────────────────────────
+        //
+        // Une souscription en cours de période fait payer un demi-mois d'abord, puis le plein tarif.
+        // C'est un MONTANT fourni, jamais un calcul fait ici : au prorata de quoi, arrondi comment,
+        // à partir de quelle date sont des décisions commerciales, et une règle inventée
+        // s'appliquerait en silence à toutes les souscriptions.
+        //
+        // ⚠ ZÉRO EST ACCEPTÉ, ET C'EST DÉLIBÉRÉ : le premier mois offert est une pratique courante.
+        //    Seul un montant NÉGATIF est refusé — il n'y a pas de prélèvement négatif, et le laisser
+        //    passer produirait une remise que la banque rejetterait, longtemps après la vente.
+        $montantPremiereCentimes = null;
+        if (isset($corps['montantPremiereEcheanceCentimes'])) {
+            $montantPremiereCentimes = (int) $corps['montantPremiereEcheanceCentimes'];
+            if ($montantPremiereCentimes < 0) {
+                throw new UnprocessableEntityHttpException('« montantPremiereEcheanceCentimes » ne peut pas être négatif.');
+            }
         }
 
         return $this->handler->souscrire(
@@ -82,9 +111,9 @@ final class SouscrireAbonnementProcessor implements ProcessorInterface
             $periodicite,
             $dateSouscription,
             $dureeEngagementMois,
-            $montantCentimes,
             $iban,
             $titulaire,
+            $montantPremiereCentimes,
         );
     }
 

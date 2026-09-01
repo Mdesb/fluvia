@@ -30,15 +30,32 @@ export default function Modules({ capacites = [], me }) {
   const [catalogue, setCatalogue] = useState(null)
   const [vendables, setVendables] = useState(null)
   const [erreur, setErreur] = useState(null)
+  // Renseigné quand les tarifs n'ont pas pu être lus : « aucun prix » et « aucune réponse » ne se
+  // disent pas pareil, et la seconde ne doit jamais s'afficher comme la première.
+  const [optionsIndisponibles, setOptionsIndisponibles] = useState(null)
   const [panier, setPanier] = useState([])
 
   useEffect(() => {
     let annule = false
-    Promise.all([api.catalogueCapacites(), api.optionsVendables().catch(() => ({ member: [] }))])
+    // ⚠ ON DISTINGUE « RIEN A VENDRE » DE « JE N'AI PAS PU DEMANDER ».
+    //
+    // Ce `catch` rendait `{ member: [] }`, donc l'écran affichait « aucun module n'est proposé à la
+    // vente » quand l'appel échouait. Vingt options existent en base et il aurait affirmé qu'il n'y
+    // en a aucune. Une liste vide n'est pas une réponse : c'est l'absence de réponse.
+    Promise.all([
+      api.catalogueCapacites(),
+      api.optionsVendables().catch((e) => ({ __echec: e?.message || 'appel refusé' })),
+    ])
       .then(([cat, opt]) => {
         if (annule) return
         setCatalogue(cat?.member || cat?.['hydra:member'] || [])
-        setVendables(opt?.member || opt?.['hydra:member'] || [])
+        if (opt?.__echec) {
+          setOptionsIndisponibles(opt.__echec)
+          setVendables([])
+        } else {
+          setOptionsIndisponibles(null)
+          setVendables(opt?.member || opt?.['hydra:member'] || [])
+        }
       })
       .catch((e) => {
         if (!annule) setErreur(e.message || 'Le catalogue des modules n’a pas pu être chargé.')
@@ -56,12 +73,23 @@ export default function Modules({ capacites = [], me }) {
     const actifs = []
     const disponibles = []
     const pasEncore = []
+    const verticales = []
     for (const c of catalogue || []) {
+      // ⚠ UNE VERTICALE N'EST PAS UN MODULE, ET NE SE VEND PAS A LA CARTE.
+      //
+      // `padel`, `piscine`, `sport`, `patinoire`, `musee` sont des valeurs de l'énumération
+      // `Metier` : chacune est un PRESET qui active un jeu de capacités. C'est ce qu'un
+      // établissement EST, pas ce qu'il ajoute. Le serveur le déclare (`estVerticale`) ; on ne le
+      // redérive pas ici à partir de la catégorie, qui n'est qu'une étiquette d'affichage.
+      if (c.estVerticale) {
+        verticales.push({ ...c, actif: capacites.includes(c.code) })
+        continue
+      }
       if (capacites.includes(c.code)) actifs.push(c)
       else if (prixParCode[c.code] > 0) disponibles.push({ ...c, prix: prixParCode[c.code] })
       else pasEncore.push(c)
     }
-    return { actifs, disponibles, pasEncore }
+    return { actifs, disponibles, pasEncore, verticales }
   }, [catalogue, capacites, prixParCode])
 
   const total = panier.reduce((s, c) => s + (prixParCode[c] || 0), 0)
@@ -87,7 +115,9 @@ export default function Modules({ capacites = [], me }) {
       <h2>Modules</h2>
       <p className="sub" style={{ maxWidth: '68ch' }}>
         Ce que votre établissement utilise aujourd’hui, et ce que vous pouvez y ajouter. Un module
-        activé apparaît immédiatement dans le menu.
+        activé apparaît immédiatement dans le menu. Votre <b>activité</b> — piscine, padel, musée… —
+        n’est pas un module&nbsp;: elle est en bas de page, et elle active d’un coup les fonctions
+        qui vont avec.
       </p>
 
       {/* ⚠ ON NOMME CE QUI EST ACTIF AVANT CE QUI SE VEND. Une boutique qui ouvre sur ce qu'on n'a
@@ -105,9 +135,11 @@ export default function Modules({ capacites = [], me }) {
       <Groupe
         titre="Disponibles"
         vide={
-          (vendables || []).length === 0
-            ? "Aucun module n’est proposé à la vente pour le moment : l’éditeur n’a créé aucune option tarifaire."
-            : 'Tous les modules proposés à la vente sont déjà actifs ici.'
+          optionsIndisponibles
+            ? `⚠ Les tarifs n’ont pas pu être chargés (${optionsIndisponibles}). Cet écran ne sait donc PAS ce qui est en vente — ne concluez pas qu’il n’y a rien.`
+            : (vendables || []).length === 0
+              ? "Aucun module n’est proposé à la vente pour le moment : l’éditeur n’a créé aucune option tarifaire."
+              : 'Tous les modules proposés à la vente sont déjà actifs ici.'
         }
         items={groupes.disponibles}
         rendu={(c) => (
@@ -133,6 +165,35 @@ export default function Modules({ capacites = [], me }) {
         items={groupes.pasEncore}
         rendu={() => <span className="sub">tarif à définir</span>}
       />
+
+      {/* ⚠ LES VERTICALES SONT MONTREES, PAS VENDUES. Les cacher ferait chercher « ou est le
+          padel ? » ; les mettre en rayon ferait croire qu'on l'achete a la carte. On les nomme pour
+          ce qu'elles sont — l'activite de l'etablissement — et on dit par ou ca se change. */}
+      {groupes.verticales.length > 0 && (
+        <section style={{ marginTop: 'var(--esp-bloc)' }}>
+          <h3>Votre activité <span className="sub">({groupes.verticales.filter((v) => v.actif).length} sur {groupes.verticales.length})</span></h3>
+          <p className="sub" style={{ maxWidth: '68ch' }}>
+            Ce que votre établissement <b>est</b>. Une activité n’est pas un module qu’on ajoute au
+            panier&nbsp;: elle active d’un coup l’ensemble des fonctions qui vont avec. Elle se
+            change avec Fluvia, pas depuis cette page.
+          </p>
+          <div className="grid">
+            {groupes.verticales.map((v) => (
+              <div className="card" key={v.code}>
+                <div className="card-b">
+                  <div className="row" style={{ justifyContent: 'space-between', gap: 'var(--esp-normal)' }}>
+                    <b>{v.libelle}</b>
+                    {v.actif
+                      ? <span className="badge good">votre activité</span>
+                      : <span className="badge">non</span>}
+                  </div>
+                  <p className="sub">{v.description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {panier.length > 0 && (
         <div className="card" style={{ marginTop: 'var(--esp-bloc)' }}>

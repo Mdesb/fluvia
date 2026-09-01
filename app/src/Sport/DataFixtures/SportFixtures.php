@@ -155,7 +155,9 @@ final class SportFixtures extends Fixture implements DependentFixtureInterface
             PeriodiciteAbonnementFitness::Mensuel,
             new \DateTimeImmutable('-1 month'),
             12,
-            self::MONTANT_MENSUEL_CENTIMES,
+            // ⚠ PLUS DE MONTANT ICI : il est resolu depuis la grille tarifaire du produit qui
+            //    porte cette formule. `MONTANT_MENSUEL_CENTIMES` reste declaree pour les tests qui
+            //    verifient le montant attendu, mais elle ne le DECIDE plus.
             self::ADHERENT_IBAN_DEMO,
             self::ADHERENT_TITULAIRE,
         );

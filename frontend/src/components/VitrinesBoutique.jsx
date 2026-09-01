@@ -85,7 +85,10 @@ export default function VitrinesBoutique({ droits = [] }) {
         onFait={(nom) => {
           setCreation(false)
           setSucces(`Boutique en ligne ouverte à l’adresse /b/${nom}.`)
-          charger()
+          // ⚠ `recharger`, pas `charger` : la fonction n'a jamais porté ce nom-là. L'appel levait
+          //    une ReferenceError APRÈS la création réussie — la boutique était bien ouverte, et
+          //    l'écran mourait en voulant se rafraîchir.
+          recharger()
         }}
         onErreur={setErreur}
       />

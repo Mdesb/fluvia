@@ -296,6 +296,11 @@ final class MuseeFixtures extends Fixture implements DependentFixtureInterface
         if ($payeur instanceof Client && $typeAbo instanceof TypeProduit) {
             $beneficiairePayeur = $manager->getRepository(Beneficiaire::class)->findOneBy(['client' => $payeur]);
             if ($beneficiairePayeur instanceof Beneficiaire) {
+                // ⚠ PAS DE `setSepaActif(true)` ICI, ET C'EST DÉLIBÉRÉ. Un pass ANNUEL se paie
+                //    une fois, au comptoir ou en ligne, et se matérialise par un `PassAnnuel` — il
+                //    n'y a ni mandat, ni échéancier, ni prélèvement. Les trois autres formules du
+                //    dépôt ont reçu la facette le 01/09 parce qu'elles sont mensuelles ; celle-ci
+                //    ne doit pas la recevoir, et son absence n'est pas un oubli.
                 $formule = (new Formule())->setPeriodicite(PeriodiciteFormule::Annuel)
                     ->setDroitAcces(['mode' => 'illimite'])->setRenouvellement(['auto' => true, 'prix' => 'fixe']);
                 $produitPass = (new Produit())->setType($typeAbo)->setLibelle(['fr' => 'Pass annuel Amis du musée'])

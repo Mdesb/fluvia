@@ -42,6 +42,78 @@ final class MandatTest extends SportApiTestCase
         self::assertSame('revoque', $client->getResponse()->toArray()['statut'], 'Visible révoqué sur l\'écran de gestion des mandats.');
     }
 
+    /**
+     * ⚠ CE TEST NAIT AVEC LE PARTAGE DU MANDAT, ET IL EST LA MOITIE QUI MANQUAIT.
+     *
+     * `AbonnementFitness.mandatSepa` est passe de `OneToOne` a `ManyToOne` pour qu'un payeur ne
+     * donne son IBAN qu'une fois. Ce changement SEUL rendait faux
+     * `DemanderResiliationHandler::executerEffet()`, qui revoquait le mandat sans condition :
+     * resilier le premier abonnement aurait arrete les prelevements du second SANS ERREUR ET SANS
+     * MESSAGE -- l'adherent gardant son acces, puisque SON abonnement reste actif.
+     *
+     * Les deux assertions ne valent qu'ensemble :
+     *   - la premiere seule passerait si l'on ne revoquait plus JAMAIS rien ;
+     *   - la seconde seule est deja couverte par `testCa12`, sur un mandat non partage.
+     */
+    public function testResilierUnAbonnementNeRevoquePasLeMandatQuUnAutreEmploie(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        /** @var DemanderResiliationHandler $handler */
+        $handler = static::getContainer()->get(DemanderResiliationHandler::class);
+
+        $premier = $this->abonnementDemo();
+        $mandat = $premier->getMandatSepa();
+        $mandatId = (string) $mandat->getId();
+
+        // Un SECOND abonnement sur LE MEME mandat : le cas du parent qui inscrit son enfant.
+        // ⚠ Date de souscription POSTERIEURE, delibere : `abonnementDemo()` trie par
+        //    `dateSouscription ASC`, donc une date egale rendrait le choix -- et le test -- instable.
+        $second = (new AbonnementFitness())
+            ->setAdherent($premier->getAdherent())
+            ->setPayeur($premier->getPayeur())
+            ->setFormule($premier->getFormule())
+            ->setEtablissement($premier->getEtablissement())
+            ->setMandatSepa($mandat)
+            ->setPeriodicite($premier->getPeriodicite())
+            ->setDateSouscription($premier->getDateSouscription()->modify('+1 day'))
+            ->setDateDebutEngagement($premier->getDateDebutEngagement())
+            ->setDateFinEngagement($premier->getDateFinEngagement())
+            ->setPreavisResiliationJours($premier->getPreavisResiliationJours());
+        $em->persist($second);
+        $em->flush();
+
+        // ── Resiliation du PREMIER : le mandat doit SURVIVRE, le second en a besoin.
+        $r1 = $handler->demander($premier, $premier->getDateFinEngagement()->modify('+1 day'), 'Test', false, null);
+        $handler->executerEffet($r1);
+        $em->clear();
+
+        $client->request('GET', '/api/mandat_sepas/' . $mandatId, $entete);
+        self::assertResponseIsSuccessful();
+        self::assertSame(
+            'actif',
+            $client->getResponse()->toArray()['statut'],
+            'Un autre abonnement s appuie encore sur ce mandat : le revoquer arreterait ses '
+            . 'prelevements sans erreur ni message.',
+        );
+
+        // ── Resiliation du SECOND : plus personne, le mandat doit alors etre revoque.
+        $secondRelu = $em->getRepository(AbonnementFitness::class)->find($second->getId());
+        $r2 = $handler->demander($secondRelu, $secondRelu->getDateFinEngagement()->modify('+1 day'), 'Test', false, null);
+        $handler->executerEffet($r2);
+        $em->clear();
+
+        $client->request('GET', '/api/mandat_sepas/' . $mandatId, $entete);
+        self::assertResponseIsSuccessful();
+        self::assertSame(
+            'revoque',
+            $client->getResponse()->toArray()['statut'],
+            'Plus aucun abonnement vivant : la revocation doit toujours avoir lieu.',
+        );
+    }
+
     public function testIbanJamaisExposeSurLesReponsesMandat(): void
     {
         [$client, $entete] = $this->adminSurA();

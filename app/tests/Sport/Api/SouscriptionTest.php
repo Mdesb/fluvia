@@ -44,7 +44,7 @@ final class SouscriptionTest extends SportApiTestCase
                 'formule' => '/api/formules/' . $produitGold->getFormule()->getId(),
                 'periodicite' => 'mensuel',
                 'dureeEngagementMois' => 12,
-                'montantCentimes' => 3990,
+                // montant retire : le prix est resolu depuis la grille tarifaire (arbitrage 01/09).
                 'iban' => 'FR7630006000011234567890189',
                 'titulaireMandat' => 'Jean Dupont',
             ],

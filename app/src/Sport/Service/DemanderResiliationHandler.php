@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Sport\Service;
 
 use App\Securite\Entity\Utilisateur;
+use App\Sepa\Entity\MandatSepa;
 use App\Sepa\Enum\StatutMandatSepa;
 use App\Sport\Entity\AbonnementFitness;
 use App\Sport\Entity\Resiliation;
@@ -79,11 +80,48 @@ final class DemanderResiliationHandler
         $abonnement = $resiliation->getAbonnement();
         $abonnement->setStatut(StatutAbonnementFitness::Resilie);
 
+        // ⚠ ON NE RÉVOQUE QUE SI PLUS AUCUN AUTRE ABONNEMENT N'EN A BESOIN.
+        //
+        // Depuis que `mandatSepa` est un `ManyToOne`, un mandat peut porter plusieurs abonnements.
+        // La révocation inconditionnelle qui vivait ici arrêterait les prélèvements du second sans
+        // erreur et sans message : l'adhérent garderait son accès, puisque SON abonnement reste
+        // actif, et cesserait simplement d'être facturé. Personne ne le verrait avant le
+        // rapprochement bancaire.
         $mandat = $abonnement->getMandatSepa();
-        $mandat?->setStatut(StatutMandatSepa::Revoque);
+        if ($mandat !== null && !$this->autreAbonnementVivantSur($mandat, $abonnement)) {
+            $mandat->setStatut(StatutMandatSepa::Revoque);
+        }
 
         $this->em->flush();
 
         $this->propagation->desactiver($abonnement, MotifInactiviteAccesFitness::Resiliation);
+    }
+
+    /**
+     * Un autre abonnement s'appuie-t-il encore sur ce mandat ?
+     *
+     * ⚠ `Impaye` et `Pause` COMPTENT COMME VIVANTS, et c'est le point le plus facile à rater. Un
+     * abonnement impayé est exactement celui dont on veut continuer à prélever ; révoquer son
+     * mandat effacerait le moyen de recouvrer la créance. Seul `Resilie` libère le mandat.
+     *
+     * ⚠ L'UUID EST LIÉ AVEC SON TYPE (`'uuid'`), pas passé en objet. Doctrine lie alors
+     * l'identifiant SANS son type : la requête reste valide et **compte zéro** — donc on
+     * révoquerait toujours, et le garde-fou n°16 existe précisément pour cette forme-là.
+     */
+    private function autreAbonnementVivantSur(MandatSepa $mandat, AbonnementFitness $exclu): bool
+    {
+        $nombre = (int) $this->em->createQueryBuilder()
+            ->select('COUNT(a.id)')
+            ->from(AbonnementFitness::class, 'a')
+            ->where('a.mandatSepa = :mandat')
+            ->andWhere('a.id != :exclu')
+            ->andWhere('a.statut != :resilie')
+            ->setParameter('mandat', $mandat->getId(), 'uuid')
+            ->setParameter('exclu', $exclu->getId(), 'uuid')
+            ->setParameter('resilie', StatutAbonnementFitness::Resilie->value)
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        return $nombre > 0;
     }
 }

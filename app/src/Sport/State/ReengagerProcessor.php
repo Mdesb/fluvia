@@ -14,7 +14,7 @@ use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
 /**
  * POST /sport/abonnements/{id}/reengager (US-SPORT-04, CA-4). Corps :
- *   { "dureeEngagementMois"?: int, "montantCentimes": int, "iban": string, "titulaireMandat": string,
+ *   { "dureeEngagementMois"?: int, "iban": string, "titulaireMandat": string,
  *     "dateReengagement"?: "AAAA-MM-JJ" }
  * **Nouveau mandat SEPA obligatoire** (décision actée), même si un ancien mandat non révoqué existait.
  *
@@ -39,9 +39,13 @@ final class ReengagerProcessor implements ProcessorInterface
             throw new UnprocessableEntityHttpException('« iban » et « titulaireMandat » sont requis pour le nouveau mandat SEPA.');
         }
 
-        $montantCentimes = isset($corps['montantCentimes']) ? (int) $corps['montantCentimes'] : 0;
-        if ($montantCentimes <= 0) {
-            throw new UnprocessableEntityHttpException('« montantCentimes » doit être strictement positif.');
+        // ⚠ REFUSÉ, PAS IGNORÉ — même raison que sur la souscription : un appelant qui continue
+        //    d'envoyer un montant croirait fixer le prix, et le tarif s'appliquerait à sa place.
+        if (isset($corps['montantCentimes'])) {
+            throw new UnprocessableEntityHttpException(
+                '« montantCentimes » n\'est plus accepté : le prix est résolu depuis la grille '
+                . 'tarifaire du produit qui porte cette formule. Retirez ce champ.',
+            );
         }
 
         $dureeEngagementMois = isset($corps['dureeEngagementMois']) ? (int) $corps['dureeEngagementMois'] : 12;
@@ -49,6 +53,6 @@ final class ReengagerProcessor implements ProcessorInterface
             ? new \DateTimeImmutable($corps['dateReengagement'])
             : new \DateTimeImmutable('today');
 
-        return $this->handler->reengager($data, $dateReengagement, $dureeEngagementMois, $montantCentimes, $iban, $titulaire);
+        return $this->handler->reengager($data, $dateReengagement, $dureeEngagementMois, $iban, $titulaire);
     }
 }

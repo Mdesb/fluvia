@@ -369,16 +369,68 @@ export default function FactureRendu({ facture, onClose }) {
   )
 }
 
-// L'adresse arrive en tableau de lignes libres, ou en objet structuré, ou vide. On ne devine pas
-// un format : on rend ce qui est là, dans l'ordre où il est là.
+// ── L'ADRESSE EST UNE COLONNE LIBRE, ELLE AUSSI ───────────────────────────────────────────────
+//
+// Le commentaire qui vivait ici disait « on rend ce qui est là, dans l'ordre où il est là ». C'était
+// vrai de la branche TABLEAU et faux de la branche OBJET, qui piochait quatre clés fixes — `rue`,
+// `cp`, `ville`, `pays`.
+//
+// ⚠ OR LA COLONNE EN DÉCLARE CINQ. Le docbloc de `DestinataireFacturation::$adresse` écrit
+// `{rue, complement, cp, ville, pays}` : **`complement` était jeté en silence**. C'est la ligne qui
+// porte « Bâtiment B », « 3e étage », « BP 42 » ou « Service facturier » — sur une facture, celle
+// qui décide si le pli arrive au bon bureau. Et pour une collectivité, le service facturier est
+// souvent la seule mention qui compte.
+//
+// Ça ne mord pas AUJOURD'HUI : mesuré le 01/09, aucune adresse n'est renseignée sur la préprod, et
+// la facture affiche « [adresse non renseignée] ». Le défaut est entier le jour où quelqu'un en
+// saisit une.
+//
+// Même famille que le bloc émetteur plus haut, dans le même fichier : un écran qui rend une PARTIE
+// CHOISIE d'une source sans schéma, et dont le commentaire affirme l'inverse.
+//
+// L'ordre suit la norme postale française : le complément d'adresse (bâtiment, étage, service) se
+// place AVANT la voie, pas après.
+const ADRESSE_CONNUES = ['complement', 'rue', 'cp', 'ville', 'pays']
+
 function AdresseBloc({ adresse }) {
   if (!adresse) return null
-  const lignes = Array.isArray(adresse)
-    ? adresse
-    : [adresse.rue, [adresse.cp, adresse.ville].filter(Boolean).join(' '), adresse.pays]
-  return lignes.filter(Boolean).map((l, i) => (
-    <div className="fact-ligne-info" key={`${l}-${i}`}>{l}</div>
-  ))
+
+  if (Array.isArray(adresse)) {
+    return adresse.filter(Boolean).map((l, i) => (
+      <div className="fact-ligne-info" key={`${l}-${i}`}>{l}</div>
+    ))
+  }
+
+  const lignes = []
+  if (imprimable(adresse.complement)) lignes.push(String(adresse.complement))
+  if (imprimable(adresse.rue)) lignes.push(String(adresse.rue))
+  const ville = [adresse.cp, adresse.ville].filter(imprimable).map(String).join(' ')
+  if (ville) lignes.push(ville)
+  if (imprimable(adresse.pays)) lignes.push(String(adresse.pays))
+
+  // Toute clé que ce fichier ne connaît pas s'imprime quand même, à la fin : une ligne d'adresse
+  // maladroitement placée se corrige en la lisant, une ligne disparue ne se voit jamais.
+  const autres = Object.keys(adresse).filter((c) => !ADRESSE_CONNUES.includes(c))
+  autres.filter((c) => imprimable(adresse[c])).forEach((c) => lignes.push(String(adresse[c])))
+
+  // ⚠ Une valeur non affichable ne se pose pas sur le document — mais elle est NOMMÉE à l'écran,
+  //    hors impression. Muet est le seul état interdit.
+  const nonRendues = autres.filter(
+    (c) => !imprimable(adresse[c]) && adresse[c] !== null && adresse[c] !== undefined && adresse[c] !== '',
+  )
+
+  return (
+    <>
+      {lignes.map((l, i) => (
+        <div className="fact-ligne-info" key={`${l}-${i}`}>{l}</div>
+      ))}
+      {nonRendues.length > 0 && (
+        <div className="fact-ligne-info fact-noprint">
+          ⚠ Non imprimé&nbsp;: {nonRendues.join(', ')} — valeur qui n’est pas un texte simple.
+        </div>
+      )}
+    </>
+  )
 }
 
 // Les montants arrivent en CHAÎNES décimales : on les met en forme sans jamais les additionner.

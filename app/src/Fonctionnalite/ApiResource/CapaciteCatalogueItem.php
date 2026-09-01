@@ -41,4 +41,17 @@ final class CapaciteCatalogueItem
 
     #[Groups(['capacite_catalogue:read'])]
     public string $categorie = '';
+
+    /**
+     * ⚠ CETTE CAPACITE EST-ELLE UNE VERTICALE D'ACTIVITE PLUTOT QU'UN MODULE ACHETABLE ?
+     *
+     * « Padel, ce n'est pas un module » — Maxime, 01/09. `padel`, `piscine`, `sport`, `patinoire`
+     * et `musee` sont des valeurs de l'enum `Metier` : des PRESETS qui activent chacun un jeu de
+     * capacites. C'est ce qu'un etablissement EST, pas ce qu'il ajoute a la carte.
+     *
+     * Le serveur le dit pour que la boutique n'ait pas a le deviner. Filtrer cote frontal sur la
+     * categorie « metier » reconstruirait une regle metier a partir d'une etiquette decorative.
+     */
+    #[Groups(['capacite_catalogue:read'])]
+    public bool $estVerticale = false;
 }

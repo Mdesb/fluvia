@@ -622,7 +622,8 @@ function RepriseCatalogue({ info, tauxChoisi, onPrix, onTaux }) {
       {info.grilles.length === 0 ? (
         <p>
           <b>{info.nom}</b> n’a aucun tarif au catalogue. ⚠ « Non commercialisé » n’est pas
-          « gratuit » : si vous facturez ce produit, le prix se décide ici.
+          « gratuit » : si vous facturez ce produit, le prix se décide ici. Pour qu’il en porte un
+          la prochaine fois, ajoutez un tarif sur la fiche du produit.
         </p>
       ) : (
         info.grilles.map((g) => {
@@ -660,7 +661,11 @@ function RepriseCatalogue({ info, tauxChoisi, onPrix, onTaux }) {
 
       {/* ── LE TAUX ──────────────────────────────────────────────────────────────────────── */}
       {info.tauxProduit === null ? (
-        <p>Ce produit ne porte pas de taux de TVA au catalogue : le taux se choisit ici.</p>
+        <p>
+          Ce produit ne porte pas de taux de TVA au catalogue : le taux se choisit ici. Pour qu’il
+          le porte la prochaine fois, renseignez-le sur la fiche du produit, section
+          «&nbsp;Comptabilité&nbsp;».
+        </p>
       ) : info.candidats.length === 0 ? (
         <p>
           ⚠ Le produit porte <b>{pourcent(info.tauxProduit)}</b>, et <b>aucun taux actif de l’exploitant

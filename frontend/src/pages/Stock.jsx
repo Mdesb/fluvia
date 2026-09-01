@@ -192,7 +192,9 @@ export default function Stock({ etabActif, droits }) {
             onFait={apres}
           />
 
-          <JournalSection mouvements={mouvements} />
+          {/* ⚠ `articles || []` et non `articles` : la liste vaut `null` tant que la lecture
+              n'a pas abouti, et le journal doit rendre une colonne vide plutôt que tomber. */}
+          <JournalSection mouvements={mouvements} articles={articles || []} />
         </>
       )}
 
@@ -835,7 +837,7 @@ function RegleEcart({ parametrage, lu, droits }) {
 // --------------------------------------------------------------------------------------------
 // Une correction sans trace visible est ce qui rend les corrections effrayantes. Le journal est donc
 // sur le même écran que le bouton qui les crée, et non dans un module de rapports.
-function JournalSection({ mouvements }) {
+function JournalSection({ mouvements, articles = [] }) {
   return (
     <section className="card" style={{ marginTop: 16 }}>
       <div className="card-h">
