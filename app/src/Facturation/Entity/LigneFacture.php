@@ -11,6 +11,7 @@ use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Validator\Constraints as Assert;
+use App\Facturation\Enum\UnitCode;
 
 /**
  * Ligne d'une facture (`plan-facturation.md` §1.2, `spec-facturation.md` §5).
@@ -52,6 +53,20 @@ class LigneFacture
     #[Assert\Positive]
     #[Groups(['facture:read'])]
     private int $quantite = 1;
+
+    /**
+     * BT-130 — l'unite de mesure de la quantite ci-dessus.
+     *
+     * ⚠ ELLE N'EXISTAIT PAS, ET `quantite` SEULE NE VEUT RIEN DIRE. « 3 » ne dit pas trois heures,
+     * trois entrees ou trois mois. EN 16931 refuse une ligne sans BT-130, et un client qui relit sa
+     * facture n'a pas plus d'information que le validateur.
+     *
+     * Le defaut `C62` — « one » dans la recommandation 20 de l'UN/ECE — explicite ce qui etait deja
+     * vrai : une quantite sans unite comptait des CHOSES. Il n'invente rien (D66-ter).
+     */
+    #[ORM\Column(length: 3, enumType: UnitCode::class, options: ['default' => 'C62'])]
+    #[Groups(['facture:read'])]
+    private UnitCode $unitCode = UnitCode::Piece;
 
     #[ORM\Column(type: 'decimal', precision: 10, scale: 2, options: ['default' => '0.00'])]
     #[Groups(['facture:read'])]
@@ -128,6 +143,18 @@ class LigneFacture
     public function setCategorieComptable(?Uuid $categorieComptable): self
     {
         $this->categorieComptable = $categorieComptable;
+
+        return $this;
+    }
+
+    public function getUnitCode(): UnitCode
+    {
+        return $this->unitCode;
+    }
+
+    public function setUnitCode(UnitCode $unitCode): self
+    {
+        $this->unitCode = $unitCode;
 
         return $this;
     }

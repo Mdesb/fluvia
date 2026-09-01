@@ -173,6 +173,51 @@ final class InvoiceReadinessTest extends TestCase
         );
     }
 
+    // ── BT-5 et BT-130, poses le 02/09 ─────────────────────────────────────────────────────────
+
+    /**
+     * ⚠ CES DEUX TERMES N'AVAIENT AUCUN CHAMP JUSQU'AU 02/09.
+     *
+     * `facturation:einvoicing:etat` les nommait « aucun champ » : sur les 28 termes obligatoires
+     * d'EN 16931, c'etaient les deux SEULS qui manquaient au modele. Tout le reste relevait d'une
+     * saisie. Ces tests gardent la modelisation, pas la saisie.
+     */
+    public function testLaDeviseEtLUniteNeManquentPlus(): void
+    {
+        $termes = $this->termes($this->factureAvecAcheteurComplet());
+
+        self::assertNotContains(BusinessTerm::CurrencyCode, $termes, 'BT-5 est desormais porte par Facture::currency.');
+        self::assertNotContains(BusinessTerm::LineUnitCode, $termes, 'BT-130 est desormais porte par LigneFacture::unitCode.');
+    }
+
+    /**
+     * Les deux defauts explicitent ce qui etait deja vrai, ils n'inventent rien (D66-ter).
+     *
+     * `EUR` etait implicite dans tout le depot ; `C62` (« one ») est ce que comptait deja une
+     * quantite sans unite. Si ces defauts changeaient, des factures existantes changeraient de sens
+     * sans que personne ne l'ait decide.
+     */
+    public function testLesDefautsSontEurEtC62(): void
+    {
+        self::assertSame('EUR', (new Facture())->getCurrency());
+        self::assertSame('C62', (new LigneFacture())->getUnitCode()->value);
+    }
+
+    /**
+     * ⚠ LE TEMOIN : « toujours remplie » n'est pas « toujours valide ».
+     *
+     * La colonne est `NOT NULL` avec defaut, donc elle porte toujours quelque chose. Sans ce test,
+     * `testLaDeviseEtLUniteNeManquentPlus` passerait aussi si le controle de BT-5 avait ete retire :
+     * il ne prouverait alors que l'existence du champ, pas sa verification.
+     */
+    public function testUneDeviseMalFormeeEstSignalee(): void
+    {
+        $facture = $this->factureAvecAcheteurComplet();
+        $facture->setCurrency('e');
+
+        self::assertContains(BusinessTerm::CurrencyCode, $this->termes($facture));
+    }
+
     // ---------------------------------------------------------------- montage
 
     /** @return list<BusinessTerm> */
