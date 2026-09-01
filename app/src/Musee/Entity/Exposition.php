@@ -43,7 +43,10 @@ use Symfony\Component\Validator\Constraints as Assert;
     normalizationContext: ['groups' => ['expo:read']],
     denormalizationContext: ['groups' => ['expo:write']],
 )]
-#[ApiFilter(SearchFilter::class, properties: ['etablissement' => 'exact', 'aJauge' => 'exact'])]
+// `produit` ajoute le 01/09 : sans lui, on ne pouvait pas demander « les dates de ce produit », et
+// l'onglet Agenda de la fiche produit n'aurait eu que le vide a montrer. Les deux autres filtres
+// repondaient a « les expositions de cet etablissement », pas a celle-la.
+#[ApiFilter(SearchFilter::class, properties: ['etablissement' => 'exact', 'aJauge' => 'exact', 'produit' => 'exact'])]
 #[ApiFilter(BooleanFilter::class, properties: ['aJauge'])]
 #[ApiFilter(DateFilter::class, properties: ['dateDebut', 'dateFin'])]
 class Exposition

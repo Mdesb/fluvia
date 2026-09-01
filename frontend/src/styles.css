@@ -418,6 +418,14 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
  *
  * ⚠ CE QUI EST CLIQUABLE EST SOULIGNE, CE QUI NE L'EST PAS NE L'EST PAS (`.muet`). Un soulignement
  * qui ne mene nulle part se paie a chaque clic decu. */
+/* L'APERCU INERTE DE LA FICHE VIERGE — ce qu'on pourra remplir quand le produit existera.
+ *
+ * Ni cache ni actif : cache, la fiche paraitrait pauvre ; actif, on saisirait des valeurs qui ne
+ * partiraient nulle part, faute de produit auquel les attacher. `pointer-events: none` rend
+ * l'inertie reelle et pas seulement visuelle — un bloc qui a l'air eteint mais repond au clic est
+ * pire qu'un bloc actif. */
+.fiche-endormie { opacity: .42; pointer-events: none; user-select: none; margin-top: var(--esp-large); }
+
 .fiche-ligne {
   display: flex; flex-wrap: wrap; align-items: baseline;
   gap: 4px 14px;
@@ -435,6 +443,14 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 }
 .fiche-ligne .fl-val.alerte { color: var(--crit); }
 .fiche-ligne .fl-val.muet { color: var(--ink-soft); font-weight: 500; text-decoration: none; cursor: default; }
+
+/* ⚠ LA BARRE COLLANTE MANGEAIT LA CIBLE. `.topbar` est en `position: sticky; top: 0` et mesure
+ * 62 px ; `scrollIntoView({ block: 'start' })` amene la section au bord haut du CADRE, donc
+ * dessous. `scroll-margin-top` decale l'arret du defilement sans deplacer l'element.
+ *
+ * Trouve en cliquant, et seulement comme ca : sur la fiche d'essai le defilement saturait avant
+ * d'y arriver, et le defaut restait invisible. */
+#prod-tarifs, #prod-diffusion { scroll-margin-top: 78px; }
 
 .stat-tile { background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
 .stat-tile .st-val { font-size: 17px; font-weight: 800; color: var(--ink); letter-spacing: -.01em; }
