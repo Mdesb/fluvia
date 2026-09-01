@@ -897,13 +897,18 @@ export default function TopologieAcces({ etabActif, droits, onNav }) {
                     </div>
                     <div className="card-b">
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
-                        <span className={`badge ${espace.seuilFmi > 0 ? 'warn' : 'mut'}`}>
+                        {/* ⚠ `mut` DANS LES DEUX CAS : c'est un RÉGLAGE, pas un état. L'ambre servait ici à dire
+                            « un seuil est configuré » — ce qui va bien — alors que sur ce même écran il signale
+                            aussi qu'un contrôleur ne donne plus signe de vie. Une teinte qui dit les deux ne dit
+                            plus « regarde ». Le texte du badge suffit à distinguer les deux cas. */}
+                        <span className="badge mut">
                           {espace.seuilFmi > 0
                             ? `Seuil ${espace.seuilFmi} · ${MODE_SEUIL[espace.modeSeuil] || espace.modeSeuil}`
                             : 'Aucun seuil de fréquentation'}
                         </span>
                         {espace.preAlertePct ? <span className="badge mut">Pré-alerte à {espace.preAlertePct} %</span> : null}
-                        <span className={`badge ${espace.antiPassbackActif ? 'good' : 'mut'}`}>
+                        {/* Même raison : le vert est réservé à « le contrôleur répond ». */}
+                        <span className="badge mut">
                           {espace.antiPassbackActif
                             ? `Anti-passback ${duree(espace.antiPassbackDelai)}`
                             : 'Anti-passback désactivé'}
