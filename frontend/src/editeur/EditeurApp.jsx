@@ -133,17 +133,17 @@ export default function EditeurApp() {
   const EDITEUR = new Set(['abonnements', 'offres', 'clients', 'facturation', 'reglements', 'acces-support'])
 
   const onglets = [
-    { id: 'abonnements', ic: '≡', label: 'Abonnements', perms: ['editor.read_subscription'] },
-    { id: 'offres', ic: '▥', label: 'Offres', perms: ['editor.manage_offer'] },
-    { id: 'clients', ic: '●', label: 'Clients', perms: ['editor.read_customer'] },
-    { id: 'facturation', ic: '€', label: 'Facturation', perms: ['editor.read_billing'] },
-    { id: 'reglements', ic: '⇄', label: 'Règlements', perms: ['editor.read_billing'] },
+    { id: 'abonnements', ic: 'subscriptions', label: 'Abonnements', perms: ['editor.read_subscription'] },
+    { id: 'offres', ic: 'offers', label: 'Offres', perms: ['editor.manage_offer'] },
+    { id: 'clients', ic: 'customers', label: 'Clients', perms: ['editor.read_customer'] },
+    { id: 'facturation', ic: 'invoicing', label: 'Facturation', perms: ['editor.read_billing'] },
+    { id: 'reglements', ic: 'settlements', label: 'Règlements', perms: ['editor.read_billing'] },
     // ⚠ LE PENDANT DU BOUTON « BASCULER EN MODE SUPPORT ». Ouvrir un accès était possible ; savoir
     // combien étaient ouverts, chez qui et depuis quand, ne l'était pas — et un accès que personne
     // ne voit finit par ne plus se refermer. C'est aussi le SEUL endroit d'où l'on révoque :
     // depuis l'onglet ouvert chez le client, l'établissement actif n'est plus l'éditeur et la
     // route rend 404.
-    { id: 'acces-support', ic: '◈', label: 'Accès support', perms: ['editor.support_access'] },
+    { id: 'acces-support', ic: 'support-access', label: 'Accès support', perms: ['editor.support_access'] },
   ]
     // ⚠ HORS DE L'ÉDITEUR, CES ÉCRANS RENDENT 404. Quand un accès d'assistance ouvre le site d'un
     // client, l'établissement actif n'est plus l'éditeur et `EditorOnly` refuse les sept
@@ -163,17 +163,17 @@ export default function EditeurApp() {
   // chez l'éditeur voit ses affaires, un autre ne voit pas l'onglet. Aucune permission neuve n'est
   // nécessaire — c'est ce que l'éditeur gagne à être un établissement comme un autre.
   const ongletsMetier = [
-    { id: 'affaires', ic: '◨', label: 'Affaires', perms: ['crm.lire', 'crm.creer', 'crm.modifier'] },
-    { id: 'projets', ic: '◱', label: 'Projets', perms: ['personnel.lire', 'personnel.gerer', 'organisation.gerer'] },
-    { id: 'finance', ic: '€', label: 'Achats & trésorerie', perms: ['finance.read'] },
-    { id: 'sepa', ic: '⇄', label: 'Prélèvements SEPA', perms: ['sepa.lire', 'compta.lire'] },
-    { id: 'documents', ic: '🗎', label: 'Documents', perms: ['dms.read', 'dms.write'] },
-    { id: 'social', ic: '◎', label: 'Publication sociale', perms: ['social.read_post', 'social.publish', 'social.read_account'] },
-    { id: 'agenda', ic: '▤', label: 'Agenda' },
-    { id: 'pilotage', ic: '◨', label: 'Reporting', perms: ['reporting.lire', 'reporting.configurer', 'reporting.planifier'] },
-    { id: 'assistance', ic: '?', label: 'Assistance', perms: ['support.lire', 'support.ouvrir_ticket', 'support.lire_ticket_soi', 'support.traiter_ticket_n1', 'support.traiter_ticket_n2', 'support.administrer'] },
-    { id: 'parametres', ic: '⚙', label: 'Paramètres', perms: ['securite.gerer', 'securite.lire', 'organisation.gerer', 'offre.gerer', 'caisse.gerer', 'crm.parametrer'] },
-    { id: 'legal', ic: '§', label: 'Mentions légales', perms: ['organisation.gerer', 'boutique.gerer_vitrine'] },
+    { id: 'affaires', ic: 'deals', label: 'Affaires', perms: ['crm.lire', 'crm.creer', 'crm.modifier'] },
+    { id: 'projets', ic: 'projects', label: 'Projets', perms: ['personnel.lire', 'personnel.gerer', 'organisation.gerer'] },
+    { id: 'finance', ic: 'purchases', label: 'Achats & trésorerie', perms: ['finance.read'] },
+    { id: 'sepa', ic: 'sepa', label: 'Prélèvements SEPA', perms: ['sepa.lire', 'compta.lire'] },
+    { id: 'documents', ic: 'documents', label: 'Documents', perms: ['dms.read', 'dms.write'] },
+    { id: 'social', ic: 'social', label: 'Publication sociale', perms: ['social.read_post', 'social.publish', 'social.read_account'] },
+    { id: 'agenda', ic: 'agenda', label: 'Agenda' },
+    { id: 'pilotage', ic: 'reporting', label: 'Reporting', perms: ['reporting.lire', 'reporting.configurer', 'reporting.planifier'] },
+    { id: 'assistance', ic: 'support', label: 'Assistance', perms: ['support.lire', 'support.ouvrir_ticket', 'support.lire_ticket_soi', 'support.traiter_ticket_n1', 'support.traiter_ticket_n2', 'support.administrer'] },
+    { id: 'parametres', ic: 'settings', label: 'Paramètres', perms: ['securite.gerer', 'securite.lire', 'organisation.gerer', 'offre.gerer', 'caisse.gerer', 'crm.parametrer'] },
+    { id: 'legal', ic: 'legal', label: 'Mentions légales', perms: ['organisation.gerer', 'boutique.gerer_vitrine'] },
   ].filter((o) => !o.perms || aUnDesDroits(droits, o.perms))
   const nomEtabActif = etablissements.find((e) => e.id === etabActif)?.nom || ''
   const visibles = [...onglets, ...ongletsMetier]
