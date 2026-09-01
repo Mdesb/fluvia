@@ -471,7 +471,11 @@ function ListeEmployes({ etabActif, droits = [], onBadgeEmis }) {
         vide="Aucun employé déclaré. Sans effectif, ni planning, ni absence, ni badge de service."
         colonnes={colonnes}
         actions={peutGererEmploye ? (
-          <button className="btn sm" type="button" onClick={() => setCreation(true)}>
+          /* ⚠ `primary`, comme « Déclarer une absence » du panneau voisin. Ce bouton était le seul
+             des deux en contour, alors que l'état vide juste au-dessous dit la dépendance : « sans
+             effectif, ni planning, ni absence, ni badge de service ». Le seul bouton plein de
+             l'écran désignait donc l'action qui ne peut pas aboutir. */
+          <button className="btn primary sm" type="button" onClick={() => setCreation(true)}>
             ＋ Déclarer un employé
           </button>
         ) : null}
