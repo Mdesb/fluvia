@@ -45,6 +45,10 @@ use Symfony\Component\Uid\Uuid;
  * `content` est exclu de la collection (métadonnées seules) et inclus uniquement sur `Get` et sur
  * `.../appliquer` (groupe `import_batch:read_content`, §2 du plan) — un fichier de reprise complet
  * n'a pas sa place dans une liste.
+ *
+ * @sans-suppression: un lot n'est jamais effacé, il est ANNULÉ (`.../annuler` → `status = reverted`,
+ * qui défait ses lignes tout en gardant la trace). Le supprimer retirerait la preuve de ce qu'une
+ * reprise a créé — or `content` est persisté précisément pour rejuger un import contesté (§0.1).
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'import_batch')]

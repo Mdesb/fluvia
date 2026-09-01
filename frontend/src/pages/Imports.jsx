@@ -268,7 +268,7 @@ export default function Imports({ etabActif, droits = [] }) {
                       <td className="num">{lot.rowCount}</td>
                       <td className="num">{quand(lot.createdAt)}</td>
                       <td>
-                        <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                        <div style={{ display: 'flex', gap: 'var(--esp-serre)', justifyContent: 'flex-end' }}>
                           {nbErreurs > 0 && (
                             <button
                               className="btn ghost sm"
