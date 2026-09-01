@@ -7,6 +7,8 @@ namespace App\Sport\Service;
 use App\Crm\Entity\Beneficiaire;
 use App\Crm\Entity\Client;
 use App\Offre\Entity\Formule;
+use App\Offre\Enum\Canal;
+use App\Offre\Service\SubscriptionPriceResolver;
 use App\Organisation\Entity\Etablissement;
 use App\Sepa\Entity\MandatSepa;
 use App\Sepa\Enum\StatutMandatSepa;
@@ -17,6 +19,7 @@ use App\Sport\Entity\StatutAccesFitness;
 use App\Sport\Enum\PeriodiciteAbonnementFitness;
 use App\Sport\Enum\StatutAbonnementFitness;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
 /**
  * Souscription d'un abonnement fitness (US-SPORT-01, CA-1). Crée l'abonnement, tokenise l'IBAN
@@ -30,6 +33,7 @@ final class SouscriptionAbonnementHandler
         private readonly TokenisationIbanInterface $tokenisation,
         private readonly ChiffreurIbanInterface $chiffreur,
         private readonly GenerateurEcheancierHandler $echeancier,
+        private readonly SubscriptionPriceResolver $resolveurTarif,
     ) {
     }
 
@@ -41,10 +45,41 @@ final class SouscriptionAbonnementHandler
         PeriodiciteAbonnementFitness $periodicite,
         \DateTimeImmutable $dateSouscription,
         int $dureeEngagementMois,
-        int $montantCentimes,
         string $ibanClair,
         string $titulaireMandat,
+        // Le demi-mois d'une souscription en cours de période. `null` : toutes au même montant.
+        ?int $montantPremiereCentimes = null,
     ): AbonnementFitness {
+        // ── LE PRIX VIENT DU TARIF, PLUS DE L'APPELANT ────────────────────────────────────────
+        //
+        // ⚠ ARBITRAGE DE MAXIME, 01/09 : « il ne doit pas y avoir de prix libre. » Le guichet
+        //    recevait `montantCentimes` en champ libre et strictement positif ; il résout
+        //    désormais depuis la grille tarifaire, exactement comme la boutique.
+        //
+        // ⚠ RÉSOLU À LA DATE DE SOUSCRIPTION, ET NON À MAINTENANT — c'est une différence assumée
+        //    avec le chemin en ligne, où la vente EST maintenant et où aucune autre date n'existe.
+        //    Ici la date du contrat est connue et c'est elle qui fait foi : le tarif applicable est
+        //    celui en vigueur quand l'adhérent signe, pas celui du jour où on saisit.
+        $tarif = $this->resolveurTarif->forFormula($formule, Canal::Guichet, $dateSouscription);
+        $montantCentimes = $tarif->priceCents();
+
+        // ⚠ LE PRORATA RESTE FOURNI, MAIS IL NE PEUT PLUS ÊTRE UN PRIX. Borné au tarif résolu, il
+        //    ne sait qu'en RETRANCHER — un demi-mois, un mois offert. Au-delà, ce serait un prix
+        //    libre déguisé en première échéance, ce que l'arbitrage refuse.
+        //
+        //    ⚠ Ce que ça ne règle PAS, et qui reste à décider : le prorata devrait être CALCULÉ,
+        //    pas saisi. `App\Subscription\Service\ProrationCalculator` sait le faire — en
+        //    centimes entiers, journée d'entrée due en entier — mais il vit dans la facturation de
+        //    la plateforme, pas des adhérents. L'extraire, le réutiliser ou le dupliquer se décide ;
+        //    le dupliquer est la seule option clairement mauvaise.
+        if ($montantPremiereCentimes !== null && $montantPremiereCentimes > $montantCentimes) {
+            throw new UnprocessableEntityHttpException(sprintf(
+                'La première échéance (%d c) ne peut pas dépasser le tarif résolu (%d c) : '
+                . 'un prorata retranche, il ne fixe pas un prix.',
+                $montantPremiereCentimes,
+                $montantCentimes,
+            ));
+        }
         $abonnement = new AbonnementFitness();
         $abonnement->setAdherent($adherent)
             ->setPayeur($payeur)
@@ -80,7 +115,11 @@ final class SouscriptionAbonnementHandler
         $abonnement->setMandatSepa($mandat);
         $this->em->persist($abonnement);
 
-        $this->echeancier->generer($abonnement, $montantCentimes);
+        // ⚠ LE MONTANT COURANT VA SUR L'ABONNEMENT, LE PRORATA N'Y VA PAS. L'abonnement porte ce
+        //    qu'on facturera la prochaine fois — un demi-mois d'entrée ne dit rien du prix.
+        $abonnement->setMontantCentimes($montantCentimes);
+
+        $this->echeancier->generer($abonnement, $montantCentimes, $montantPremiereCentimes);
 
         $statutAcces = new StatutAccesFitness();
         $statutAcces->setAbonnement($abonnement)->setActif(true);

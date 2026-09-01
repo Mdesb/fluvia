@@ -13,13 +13,5 @@
     "",
     "Pour retirer ceux qui ont ete corriges :  node scripts/verifier-portee.mjs --geler"
   ],
-  "gelees": [
-    "src/components/AchatsStock.jsx:articles",
-    "src/components/AchatsStock.jsx:fournisseurs",
-    "src/components/VitrinesBoutique.jsx:charger",
-    "src/pages/Documents.jsx:charger",
-    "src/pages/Padel.jsx:reservationsCoeur",
-    "src/pages/Parametres.jsx:envoiCourriel",
-    "src/pages/Stock.jsx:articles"
-  ]
+  "gelees": []
 }

@@ -624,7 +624,7 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
       )}
 
       {sousOnglet === 'droits' && (
-        <ComptesDroits etabActif={etabActif} etablissements={etablissements} droits={droits} me={me} />
+        <ComptesDroits etabActif={etabActif} etablissements={etablissements} droits={droits} me={me} envoiCourriel={envoiCourriel} />
       )}
 
       {sousOnglet === 'capacites' && <Capacites etabActif={etabActif} onCapacitesChangees={onCapacitesChangees} />}
@@ -1290,7 +1290,7 @@ function MonMfa({ moi, actif, onChange }) {
   )
 }
 
-function ComptesDroits({ etabActif, etablissements, droits = [], me = null }) {
+function ComptesDroits({ etabActif, etablissements, droits = [], me = null, envoiCourriel = false }) {
   const [utilisateurs, setUtilisateurs] = useState([])
   const [roles, setRoles] = useState([])
   const [affectations, setAffectations] = useState([])

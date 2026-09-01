@@ -125,6 +125,13 @@ final class ModelePiscineTypeGenerator
             $formule = (new Formule())
                 ->setPeriodicite(PeriodiciteFormule::Mensuel)
                 ->setDroitAcces(['mode' => 'illimite'])
+                // ⚠ SANS CETTE LIGNE, LE MODÈLE PRODUISAIT UN ABONNEMENT INVENDABLE EN LIGNE.
+                //    Le produit déclare `canaux: ['guichet', 'en_ligne']`, et
+                //    `SouscriptionAbonnementEnLigneHandler` refuse toute formule sans facette SEPA
+                //    (RG-M3-17) : la boutique refusait de vendre ce que le modèle annonçait, pour
+                //    chaque piscine créée. Le guichet, lui, ne lisait rien et le vendait — d'où un
+                //    échéancier de prélèvement sur une formule déclarant ne pas prélever.
+                ->setSepaActif(true)
                 ->setRenouvellement(['auto' => true, 'prix' => 'fixe']);
             $produit = (new Produit())
                 ->setType($typeAbonnement)
@@ -144,6 +151,13 @@ final class ModelePiscineTypeGenerator
             $formule = (new Formule())
                 ->setPeriodicite(PeriodiciteFormule::Mensuel)
                 ->setDroitAcces(['mode' => 'illimite'])
+                // ⚠ SANS CETTE LIGNE, LE MODÈLE PRODUISAIT UN ABONNEMENT INVENDABLE EN LIGNE.
+                //    Le produit déclare `canaux: ['guichet', 'en_ligne']`, et
+                //    `SouscriptionAbonnementEnLigneHandler` refuse toute formule sans facette SEPA
+                //    (RG-M3-17) : la boutique refusait de vendre ce que le modèle annonçait, pour
+                //    chaque piscine créée. Le guichet, lui, ne lisait rien et le vendait — d'où un
+                //    échéancier de prélèvement sur une formule déclarant ne pas prélever.
+                ->setSepaActif(true)
                 ->setRenouvellement(['auto' => true, 'prix' => 'fixe']);
             $produit = (new Produit())
                 ->setType($typeAbonnement)

@@ -234,6 +234,7 @@ export default function AchatsStock({ articles, droits, etabActif, onErreur, onF
       {receptions.length > 0 && (
         <ReceptionsSection
           receptions={receptions}
+          fournisseurs={fournisseurs}
           peutReceptionner={peutReceptionner}
           onValider={async (r) => {
             try {
@@ -300,8 +301,12 @@ export default function AchatsStock({ articles, droits, etabActif, onErreur, onF
         onErreur={onErreur}
       />
 
+      {/* ⚠ `articles` était lu par `ReceptionModal` sans jamais lui être passé : la modale de
+          réception mourait à l'ouverture. `CompositionModal`, juste au-dessus, fait la même
+          résolution et le reçoit — c'est la copie qui a perdu la prop. */}
       <ReceptionModal
         etat={reception}
+        articles={articles}
         onClose={() => setReception(null)}
         onFait={async (m) => {
           setReception(null)
@@ -529,7 +534,7 @@ function CompositionModal({ commande, lignes, articles, onClose, onChange, onErr
 // La réception se crée en brouillon avec ses lignes, puis se VALIDE. C'est la validation qui fait
 // entrer la marchandise en stock — et l'écran le dit, parce qu'une réception saisie et jamais validée
 // est un stock qui n'existe que sur le quai.
-function ReceptionModal({ etat, onClose, onFait, onErreur }) {
+function ReceptionModal({ etat, articles, onClose, onFait, onErreur }) {
   const [bl, setBl] = useState('')
   const [quantites, setQuantites] = useState({})
   const [enCours, setEnCours] = useState(false)
@@ -647,7 +652,7 @@ function ReceptionModal({ etat, onClose, onFait, onErreur }) {
   )
 }
 
-function ReceptionsSection({ receptions, peutReceptionner, onValider }) {
+function ReceptionsSection({ receptions, fournisseurs, peutReceptionner, onValider }) {
   const brouillons = receptions.filter((r) => r.statut === 'brouillon')
   const validees = receptions.filter((r) => r.statut !== 'brouillon')
 

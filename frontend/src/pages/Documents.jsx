@@ -320,7 +320,13 @@ export default function Documents({ etabActif, droits = [] }) {
       <RenommerDocument
         document={aRenommer}
         onFermer={() => setARenommer(null)}
-        onRenomme={async (message) => { setARenommer(null); setSucces(message); await charger() }}
+        onRenomme={async (message) => {
+          setARenommer(null)
+          setSucces(message)
+          // ⚠ `recharger`, pas `charger` : renommage inachevé. Le document était bien renommé, et
+          //    l'écran mourait juste après, en se rafraîchissant.
+          await recharger()
+        }}
         onErreur={setErreur}
       />
 
