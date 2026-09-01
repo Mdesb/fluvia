@@ -33,6 +33,7 @@
 | 01/09 02:20 | **Je prends T22** (garde-fou n34). Le detecteur ratait son temoin positif : **il indexe les processeurs par nom court, et neuf classes s-appellent `EstablishmentStampProcessor`** — dont quatre que j-ai creees en D41. Indexe par nom pleinement qualifie : temoin positif **signale**, temoin negatif **epargne**, 32 suspects. | Transformer le prototype en garde-fou. | Rien. |
 | 01/09 02:50 | **T22 livre : garde-fou n34.** Detecteur corrige (indexation par nom pleinement qualifie), cable dans le hook et le lanceur, ligne de base a **32 collisions** gelees. **Prouve dans les deux sens** : aveugle -> il refuse de rendre un avis ; collision neuve -> il la nomme. | Rien. | Rien. |
 | 01/09 03:10 | **Je prends T2** — reprise initiale d-un client, que le carnet dit bloquante pour une signature, et dont **rien n-est construit**. La spec est tranchee ; je decoupe et je declare mes deux hypotheses ci-dessous. | Tranche 1 : l-objet d-import et son cycle en deux temps, type `customers`. | Rien. |
+| 01/09 04:00 | **T2 tranche 1 livree** : module `App\Import`, objet de lot, deux temps, type `customers`, migration ecrite a la main et verifiee sur base neuve. **7 essais, 60 assertions.** Non-regression : Crm 66, Platform 92, Boutique 89, Sepa 58 — vertes. Vente a **1 echec preexistant sur `main`**, verifie. | Tranche 2 : `card_credits`, seule. | Rien. |
 
 ---
 
@@ -1165,3 +1166,60 @@ noms.
 l-annonce avant de le faire**, et j-ecrirai la migration **a la main** — D32 : un fichier genere
 n-est jamais committe tel quel, et le brouillon de `claude-D` contenait 104 instructions dont 6 a
 elle.
+
+---
+
+## 2026-09-01 04:00 · T2 — premiere tranche livree
+
+### Ce qui marche, et qui est eprouve par un essai
+
+| Essai | Ce qu-il protege |
+|---|---|
+| un fichier bon est valide **sans creer un seul client** | le premier temps n-ecrit rien : c-est ce qui rend « tout refuser » possible |
+| un fichier fautif est refuse **en nommant les trois lignes** | nommer une seule ligne condamne l-exploitant a autant d-allers-retours qu-il a de fautes |
+| appliquer cree les clients et **rattache chaque ligne a son lot** | sans ce rattachement, l-annulation devrait deviner ce qu-elle defait |
+| rejouer le fichier corrige entier ne cree que la ligne neuve | personne ne decoupe un fichier de quatre mille lignes a la main sans se tromper |
+| le meme fichier depose deux fois est refuse | deux lots identiques rendraient l-annulation ambigue : lequel a cree quoi ? |
+| annuler rend la base a son etat d-avant | c-est ce qui rend la reprise **essayable** — qui sait pouvoir revenir ose lancer |
+| un lot ne s-applique pas deux fois | |
+
+**7 essais, 60 assertions.** Migration ecrite a la main (D32) et verifiee sur une base repartie de
+zero : table creee, deux colonnes posees, aucun `DROP` qui ne soit dans le `down()`.
+
+### Deux ecarts que je declare plutot que de les glisser
+
+**1. L-unicite porte sur le GROUPE, pas sur l-etablissement.** La spec ecrit « unique par
+(etablissement, type) ». Mais `PerimetreCrmExtension` est explicite : *le fichier client suit
+l-enseigne, un client appartient au groupe, pas a l-un de ses sites*. Appliquee a la lettre, la
+regle laisserait le meme adherent entrer deux fois — une fois par site — c-est-a-dire exactement la
+duplication que cette section de la spec existe pour empecher. **J-ai servi son intention plutot que
+sa formulation**, et c-est ecrit dans le code, dans la migration et ici.
+
+**2. L-annulation n-enumere pas ce qui « emploie » un client.** Douze entites referencent `Client`
+aujourd-hui ; une treizieme arrivera, et une liste ecrite a la main ne la connaitrait pas —
+l-annulation supprimerait alors un client qui a servi, **en silence**. J-interroge le mapping
+Doctrine, qui sait toujours qui pointe vers `Client` parce qu-il est la source de la base. C-est
+exactement le defaut que ton garde-fou n35 vise ; je ne voulais pas le reproduire le jour ou tu le
+poses.
+
+### Deux garde-fous m-ont arretee, et ils avaient raison
+
+- **n15, ecart client/serveur** : mes cinq operations n-ont pas d-ecran. J-ai declare
+  `@sans-ecran:` avec sa raison — la spec laisse « ecran ou ligne de commande » a Maxime, et D13
+  demande de n-ouvrir un ecran que pour un motif nomme.
+- **Creations irreversibles** : un `POST` que rien ne rattrape. J-ai declare `@sans-suppression:` —
+  **un lot est une trace**. Le supprimer detruirait le fichier source que la spec conserve pour
+  rejuger un import conteste ; ses effets se defont par `revert`, qui laisse la trace en place.
+
+### Ce que je n-ai pas fait, et pourquoi
+
+`card_credits` reste entier pour la tranche suivante. Un credit restant est **une dette envers le
+client**, l-erreur ne se voit pas a la reprise mais au guichet six semaines plus tard, et le type
+exige un rapprochement avec un total annonce. Le livrer colle au socle, c-etait le livrer moins bien.
+
+### Un echec qui n-est pas de moi
+
+`Vente\Api\ClotureCommandeTest::testLePlanificateurRefuseDeLaLancerSeuleAuPremierPassage` echoue.
+**Rejoue sur `origin/main` sans ma branche : meme echec.** Il est anterieur. Au passage, le message
+attendu contient une coquille — « ce qu-ette execution ferait » — que je ne corrige pas, ce n-est
+ni mon perimetre ni mon lot.
