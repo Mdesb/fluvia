@@ -3367,3 +3367,71 @@ présenter le produit.
 deux se libère un jour, le déplacement se fera — et il coûtera d'autant plus cher qu'il y aura de
 liens en circulation. C'est une raison de plus pour que les clients aient leur propre sous-domaine
 (D104) : leurs liens à eux ne dépendent pas du nôtre.
+
+---
+
+## D109 — La supervision se revendique, elle ne s'infère pas de la forme de l'appel
+
+**Deux défauts mesurés par `allaccess-b8`, et le premier masquait le second.**
+
+`RunScheduledTasksCommand` retient une tâche jamais exécutée et non marquée sûre au premier passage :
+elle rattraperait tout son retard en une fois. **Quatorze tâches du catalogue sont dans ce cas**, dont
+`dms:purge-expired-documents` (suppression), `crm:rgpd:appliquer-conservation` (effacement RGPD),
+`subscription:facturer-le-mois` (facturation) et `padel:eclairage:commander` (matériel).
+
+La levée du verrou se lisait `$supervise = is_string($only) && $only !== ''` — autrement dit
+**« lancé avec `--only` » valait « regardé par un humain »**. Or `infra/ordonnanceur.sh` appelle
+`--only` **pour chaque tâche, à chaque cycle**. Le verrou était donc court-circuité en permanence,
+depuis sa naissance, et la supervision qu'il suppose n'a jamais existé.
+
+> **Ce qui protégeait réellement n'était pas ce verrou, c'était la liste blanche du shell.** Les deux
+> mécanismes avaient l'air complémentaires ; en réalité l'un désactivait l'autre.
+
+**La règle.** La supervision est une **attestation**, pas une déduction. Un `--supervise` explicite,
+absent par défaut. Qui l'oublie retombe sous le verrou : l'oubli échoue du côté conservateur. La forme
+inverse — un `--automatique` que la boucle passerait — échouerait dans le mauvais sens, car l'oubli
+vaudrait alors « un humain regarde » pendant que personne ne regarde.
+
+**Le motif général :** *la forme d'un appel ne dit rien de qui l'a lancé.* Chaque fois qu'un contrôle
+infère une intention humaine d'un détail syntaxique, il infère faux dès qu'une machine adopte le même
+détail.
+
+**Le filet.** `app/tests/Platform/Unit/VerrouPremierPassageTest.php`. Vu rouge avant d'être cru vert :
+l'ancienne dérivation remise une minute, `vente:cloture:journee` — clôture de journée, non sûre — est
+passée de « premier passage » à `due` + « 1 tâche exécutée ». **Deux des trois tests sont restés verts
+pendant ce sabotage**, et c'est le signe que le filet désigne bien ce qu'il annonce.
+
+**La levée, qui vit ici et nulle part ailleurs (D53).** Le premier passage d'une tâche non sûre se
+lance à la main avec `--only=<tâche> --supervise`, après avoir regardé `--dry-run` et `--status`. Le
+message d'échec, lui, ne nomme plus aucune option : il imprimait `--only=<tâche>`, c'est-à-dire
+exactement la porte qui s'ouvrait toute seule à chaque cycle.
+
+---
+
+## D110 — Une liste évaluée au démarrage doit crier quand le fichier a bougé
+
+**Le même signalement de `allaccess-b8`, et c'est lui qui rendait D109 invisible.**
+
+`infra/ordonnanceur.sh` évalue `TACHES_AUTORISEES=` **une seule fois, au démarrage**, puis boucle sur
+la variable. Le 31/08, une quatrième tâche a été ajoutée au fichier à 15h34 ; le conteneur tournait
+depuis 12h42. Résultat mesuré : **zéro occurrence dans tout le journal, trois lignes dans la table de
+traces au lieu de quatre**, pendant neuf heures.
+
+> ⚠ **Et c'est invisible par construction.** Chaque cycle imprimait trois `ok`. Trois succès se lisent
+> comme un ordonnanceur en bonne santé — c'est le **quatrième, absent, qui ne crie pas**.
+
+**On ne recharge pas à chaud, et c'est délibéré.** Relire la liste à chaque cycle ferait prendre effet
+une édition du fichier monté, sans relecture ni commit. Comme D109 vient de l'établir, cette liste
+blanche est le seul mécanisme qui protégeait réellement les quatorze tâches non sûres : elle doit
+rester une décision versionnée. **Le défaut n'est pas qu'un redémarrage soit nécessaire — c'est que
+rien ne le disait.**
+
+La boucle compare donc, à chaque cycle, la liste que le shell porte à celle que le fichier déclare, et
+imprime une erreur tant qu'elles divergent. `--lister` le dit aussi. Témoin des deux côtés : l'alarme
+sonne sur la divergence **et se tait sur la concordance** — un détecteur qui crie toujours ne vaut pas
+mieux qu'un détecteur muet.
+
+**Où D109 et D110 se rejoignent.** Tant que la liste ne bougeait pas au démarrage, le court-circuit de
+D109 ne se voyait pas. Corriger D110 seul — redémarrer pour activer la quatrième tâche — aurait donc
+**levé le verrou sur tout ce qu'on aurait ajouté entre-temps**. C'est pour cela que D109 a été corrigé
+et prouvé **avant** le redémarrage, et non l'inverse.

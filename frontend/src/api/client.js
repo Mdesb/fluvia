@@ -1489,6 +1489,18 @@ export const api = {
   saisirEcritureManuelle: (corps) =>
     request('/api/compta/journal-entries/manual', { method: 'POST', body: corps }),
 
+  // ── LES DATES D'UN PRODUIT (onglet Agenda de la fiche) ────────────────────────────────────────
+  //
+  // Une `Exposition` porte produit + date de debut + date de fin + jauge. C'est le seul objet du
+  // depot qui date un produit du catalogue — la Reservation, elle, ne reference aucun produit.
+  //
+  // ⚠ GARDEE PAR `musee.lire`, PAS PAR `offre.lire`. Qui peut lire un produit ne peut pas
+  // forcement lire les expositions : un 403 doit se dire, pas se rendre en liste vide.
+  expositionsDuProduit: (idProduit) =>
+    request('/api/musee_expositions', {
+      query: { produit: `/api/produits/${idProduit}`, itemsPerPage: 50, 'order[dateDebut]': 'asc' },
+    }),
+
   lettragesEcritures: () =>
     request('/api/lettrage_ecritures', { query: { itemsPerPage: 500 } }),
 
