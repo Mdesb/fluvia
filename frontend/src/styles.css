@@ -221,6 +221,16 @@ a { color: var(--accent); }
 .btn.primary:hover:not(:disabled) { background: var(--accent-2); }
 .btn.sm { padding: 6px 10px; font-size: var(--txt-petit); }
 
+/* La liste des incidents de la supervision. Sans puces — la bannière porte déjà sa couleur d'état,
+   et un disque rouge de plus n'ajoute rien — mais chaque incident sur sa ligne.
+   ⚠ `tabular-nums` aligne les heures QUAND elles existent : un refus rend « HH:MM:SS — motif »,
+   un dépassement de jauge rend « message (lieu) ». On ne met donc pas l'heure en colonne : une
+   colonne à moitié vide dirait que l'information manque, alors qu'elle n'existe pas pour ces
+   formes-là. */
+.sup-incidents { margin: 6px 0 0; padding: 0; list-style: none; font-variant-numeric: tabular-nums; }
+.sup-incidents li { padding: 2px 0; }
+.sup-incidents-reste { margin-top: 4px; }
+
 /* ⚠ LE VERDICT D'UN CONTROLE A L'ENTREE SE LIT D'UN COUP D'OEIL, OU IL NE SERT PAS.
    Il etait rendu a 14 px — la taille du texte courant, celle du libelle « Code du billet ». Un
    agent au portique, tablette a bout de bras et file d'attente derriere, devait LIRE une phrase

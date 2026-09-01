@@ -296,10 +296,20 @@ export default function Supervision({ etabActif, droits = [] }) {
 
           {incidents.length > 0 && (
             <div className="banner banner-error">
-              <div>
-                {incidents.length} incident(s) : {incidents.slice(0, 6).map(phraseIncident).join(' · ')}
-                {incidents.length > 6 ? ` … et ${incidents.length - 6} autre(s)` : ''}
-              </div>
+              {/* ⚠ UNE LISTE, PAS UNE PHRASE. Huit incidents joints par « · » faisaient 287
+                  caractères dans un seul nœud de texte : pour savoir s'il s'est passé quelque chose
+                  vers 20 h 40, il fallait lire la phrase entière. Et surtout, la prose CACHE les
+                  rafales — quatre refus du même motif à 03:30, 03:31, 04:01 et 04:02 sont un
+                  événement, pas quatre, et cela ne se voit qu'alignés. */}
+              <div><b>{incidents.length} incident(s)</b></div>
+              <ul className="sup-incidents">
+                {incidents.slice(0, 6).map((i, n) => (
+                  <li key={`inc-${n}`}>{phraseIncident(i)}</li>
+                ))}
+              </ul>
+              {incidents.length > 6 && (
+                <div className="sup-incidents-reste">… et {incidents.length - 6} autre(s)</div>
+              )}
               {refus.length > 0 && (
                 <div className="hint" style={{ margin: '6px 0 0' }}>
                   Les {refus.length} refus listés ici ne sont pas cloisonnés par établissement côté
