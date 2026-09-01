@@ -18,12 +18,17 @@ final class CloisonnementImportTest extends ImportApiTestCase
         $import = $this->deposerImport($clientA, $enteteA, $this->csvClientsValides(1));
 
         [$clientB, $enteteB] = $this->adminSurB();
+        // Un lot bien à B : sans lui la collection de B pourrait être vide, et `assertNotContains`
+        // passerait sans avoir rien regardé. On prouve d'abord qu'il y avait quelque chose à voir.
+        $importB = $this->deposerImport($clientB, $enteteB, $this->csvClientsValides(1));
 
         $reponseItem = $clientB->request('GET', '/api/imports/' . $import['id'], $enteteB);
         self::assertSame(404, $reponseItem->getStatusCode(), 'Lot hors périmètre -> 404 (introuvable).');
 
         $collection = $clientB->request('GET', '/api/imports', $enteteB)->toArray();
         $ids = array_map(static fn (array $i): string => $i['id'] ?? '', $collection['member'] ?? []);
+        self::assertNotEmpty($ids, 'La collection de B doit contenir au moins son propre lot.');
+        self::assertContains($importB['id'], $ids, 'Le lot de B est bien visible depuis B.');
         self::assertNotContains($import['id'], $ids, 'Lot hors périmètre absent de la collection.');
     }
 

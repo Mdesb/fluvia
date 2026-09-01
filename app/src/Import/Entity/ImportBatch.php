@@ -100,6 +100,11 @@ class ImportBatch
     #[Groups(['import_batch:read'])]
     private ?Etablissement $establishment = null;
 
+    /**
+     * @rempli-au-serveur : désérialisé du groupe `import_batch:write` à la création du lot, puis EXIGÉ
+     * (422 « type est obligatoire ») par `ValidateImportBatchProcessor` ET `ApplyImportBatchProcessor`
+     * avant le moindre flush — un lot sans type n'atteint jamais la colonne NOT NULL.
+     */
     #[ORM\Column(length: 20, enumType: ImportType::class)]
     #[Groups(['import_batch:read', 'import_batch:write'])]
     private ?ImportType $type = null;

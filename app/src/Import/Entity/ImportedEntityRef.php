@@ -35,24 +35,24 @@ class ImportedEntityRef
 
     #[ORM\ManyToOne(targetEntity: Etablissement::class)]
     #[ORM\JoinColumn(name: 'establishment_id', nullable: false)]
-    private ?Etablissement $establishment = null;
+    private Etablissement $establishment;
 
     #[ORM\Column(length: 20, enumType: ImportType::class)]
-    private ?ImportType $type = null;
+    private ImportType $type;
 
     #[ORM\Column(name: 'external_ref', length: 190)]
-    private string $externalRef = '';
+    private string $externalRef;
 
     /** Id de l'entité cible (`Client.id` pour I1) — pas de FK (D2, polymorphe, cf. docblock). */
     #[ORM\Column(name: 'target_id', type: UuidType::NAME)]
-    private ?Uuid $targetId = null;
+    private Uuid $targetId;
 
     /**
      * Dernier lot qui a créé **ou** mis à jour cette ligne (informatif) — distinct de
      * `Client.importBatchRef`, posé une seule fois à la création et jamais réécrit (§0.6 du plan).
      */
     #[ORM\Column(name: 'import_batch_ref', type: UuidType::NAME)]
-    private ?Uuid $importBatchRef = null;
+    private Uuid $importBatchRef;
 
     #[ORM\Column(name: 'created_at', type: 'datetime_immutable')]
     private \DateTimeImmutable $createdAt;
@@ -60,10 +60,25 @@ class ImportedEntityRef
     #[ORM\Column(name: 'updated_at', type: 'datetime_immutable', nullable: true)]
     private ?\DateTimeImmutable $updatedAt = null;
 
-    public function __construct()
-    {
+    /**
+     * Tout ce qui adosse une colonne NON NULL est exigé ici : une correspondance interne n'existe pas
+     * à moitié (établissement, type, référence externe, cible, lot d'origine sont tous connus au moment
+     * où on la crée). Aucune désérialisation ne construit cette entité — seul `CustomerRowImporter`.
+     */
+    public function __construct(
+        Etablissement $establishment,
+        ImportType $type,
+        string $externalRef,
+        Uuid $targetId,
+        Uuid $importBatchRef,
+    ) {
         $this->id = Uuid::v4();
         $this->createdAt = new \DateTimeImmutable();
+        $this->establishment = $establishment;
+        $this->type = $type;
+        $this->externalRef = $externalRef;
+        $this->targetId = $targetId;
+        $this->importBatchRef = $importBatchRef;
     }
 
     public function getId(): Uuid
@@ -71,28 +86,14 @@ class ImportedEntityRef
         return $this->id;
     }
 
-    public function getEstablishment(): ?Etablissement
+    public function getEstablishment(): Etablissement
     {
         return $this->establishment;
     }
 
-    public function setEstablishment(?Etablissement $establishment): self
-    {
-        $this->establishment = $establishment;
-
-        return $this;
-    }
-
-    public function getType(): ?ImportType
+    public function getType(): ImportType
     {
         return $this->type;
-    }
-
-    public function setType(?ImportType $type): self
-    {
-        $this->type = $type;
-
-        return $this;
     }
 
     public function getExternalRef(): string
@@ -100,31 +101,17 @@ class ImportedEntityRef
         return $this->externalRef;
     }
 
-    public function setExternalRef(string $externalRef): self
-    {
-        $this->externalRef = $externalRef;
-
-        return $this;
-    }
-
-    public function getTargetId(): ?Uuid
+    public function getTargetId(): Uuid
     {
         return $this->targetId;
     }
 
-    public function setTargetId(?Uuid $targetId): self
-    {
-        $this->targetId = $targetId;
-
-        return $this;
-    }
-
-    public function getImportBatchRef(): ?Uuid
+    public function getImportBatchRef(): Uuid
     {
         return $this->importBatchRef;
     }
 
-    public function setImportBatchRef(?Uuid $importBatchRef): self
+    public function setImportBatchRef(Uuid $importBatchRef): self
     {
         $this->importBatchRef = $importBatchRef;
 

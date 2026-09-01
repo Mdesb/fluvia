@@ -123,12 +123,13 @@ final class CustomerRowImporter implements RowImporterInterface
                 $this->hydrater($client, $row);
                 $this->em->persist($client);
 
-                $ref = new ImportedEntityRef();
-                $ref->setEstablishment($establishment);
-                $ref->setType(ImportType::Customers);
-                $ref->setExternalRef($externalRef);
-                $ref->setTargetId($client->getId());
-                $ref->setImportBatchRef($batch->getId());
+                $ref = new ImportedEntityRef(
+                    $establishment,
+                    ImportType::Customers,
+                    $externalRef,
+                    $client->getId(),
+                    $batch->getId(),
+                );
                 $this->em->persist($ref);
 
                 ++$created;
