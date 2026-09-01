@@ -201,6 +201,15 @@ fi
 #    il ne trouve rien sur le neuf existant, donc il s'installe au vert.
 executer "Nommage anglais (D5)" php_racine bin/garde-fou-nommage-anglais.php "--contre=$REFERENCE_NOMMAGE"
 
+# CAPACITES DE MODULE (n°41) — un module dont la capacite manque au catalogue est PRESENT ET
+# DEFINITIVEMENT INACCESSIBLE : `Fonctionnalites::definir()` refuse tout code inconnu, donc aucune
+# ligne d'activation ne peut exister, donc `hasModule()` repond faux pour toujours. Sans erreur ni
+# journal : l'ecran est simplement absent, et on cherche le defaut cote frontal.
+#
+# Neuf modules sur quatorze etaient dans cet etat le 01/09 — et CINQ affirmaient le contraire dans
+# leur propre docblock. Une phrase ne verifie rien.
+executer "Capacites de module (n°41)" php_racine bin/garde-fou-capacites-de-module.php
+
 # 4. Aucun secret cryptographique en valeur par défaut.
 #    Contrairement au n°1, celui-ci n'a pas de ligne de base et n'en aura pas : une clé en dur n'est
 #    pas une dette qu'on étale, c'est un secret publié. Il est ROUGE tant que
