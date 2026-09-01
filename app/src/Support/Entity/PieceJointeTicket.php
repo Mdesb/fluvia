@@ -10,6 +10,7 @@ use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Post;
+use App\Support\State\PieceJointeTicketCollectionProvider;
 use App\Support\State\PieceJointeTicketProcessor;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
@@ -27,7 +28,16 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ApiResource(
     shortName: 'PieceJointeTicket',
     operations: [
-        new GetCollection(security: "is_granted('PERM', 'support.ouvrir_ticket') or is_granted('PERM', 'support.lire_ticket_etablissement') or is_granted('PERM', 'support.traiter_ticket_n1') or is_granted('PERM', 'support.traiter_ticket_n2') or is_granted('PERM', 'support.administrer')"),
+        // ⚠ LA GARDE NE SUFFIT PAS, ET ELLE NE L'A JAMAIS FAIT. Elle demande cinq permissions
+        // « ou » dont `support.ouvrir_ticket`, la plus basique du cote client : elle dit QUI
+        // peut lire des pieces jointes, jamais LESQUELLES. Sans fournisseur, la collection
+        // rendait celles de tous les tickets de tous les clients — avec leur `url`.
+        // `MessageTicket`, la ressource voisine portant la meme donnee, avait deja son
+        // fournisseur ; celle-ci non. Mesure du 31/08 : `CloisonnementPiecesJointesTest`.
+        new GetCollection(
+            security: "is_granted('PERM', 'support.ouvrir_ticket') or is_granted('PERM', 'support.lire_ticket_etablissement') or is_granted('PERM', 'support.traiter_ticket_n1') or is_granted('PERM', 'support.traiter_ticket_n2') or is_granted('PERM', 'support.administrer')",
+            provider: PieceJointeTicketCollectionProvider::class,
+        ),
         new Get(security: "is_granted('PERM', 'support.ouvrir_ticket') or is_granted('PERM', 'support.lire_ticket_etablissement') or is_granted('PERM', 'support.traiter_ticket_n1') or is_granted('PERM', 'support.traiter_ticket_n2') or is_granted('PERM', 'support.administrer')"),
         new Post(security: "is_granted('PERM', 'support.ouvrir_ticket') or is_granted('PERM', 'support.traiter_ticket_n1') or is_granted('PERM', 'support.traiter_ticket_n2')", processor: PieceJointeTicketProcessor::class),
     ],
