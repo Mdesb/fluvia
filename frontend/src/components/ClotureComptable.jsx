@@ -539,12 +539,29 @@ function ChaineSection({ journaux, rapport, onVerifier, onFermer }) {
               chaîne : il détecte un trou de séquence, un chaînage rompu ou une donnée altérée après
               coup. À lancer avant une clôture, et lors d'un contrôle.
             </div>
+            {/* ⚠ LE VERBE UNE FOIS, PAS DIX. Chaque bouton portait « Vérifier « Journal des … » »
+                — dix libellés de 43 caractères dont les trente premiers étaient identiques, et le
+                mot qui distingue arrivait à la fin. Trouver un journal demandait de lire jusqu'au
+                bout, dix fois.
+                L'`aria-label` garde la phrase entière : au lecteur d'écran, cette amorce visuelle
+                n'est pas le contexte du contrôle, et un bouton nommé « Journal des ventes » ne
+                dirait plus ce qu'il fait. */}
+            <div className="cc-verifier-amorce">Vérifier la chaîne de&nbsp;:</div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {(journaux || []).map((j) => (
-                <button key={j.id} className="btn" type="button" onClick={() => onVerifier(j)}>
-                  Vérifier « {j.libelle || j.code || 'journal'} »
-                </button>
-              ))}
+              {(journaux || []).map((j) => {
+                const nomJournal = j.libelle || j.code || 'journal'
+                return (
+                  <button
+                    key={j.id}
+                    className="btn"
+                    type="button"
+                    aria-label={`Vérifier la chaîne de ${nomJournal}`}
+                    onClick={() => onVerifier(j)}
+                  >
+                    {nomJournal}
+                  </button>
+                )
+              })}
             </div>
           </>
         )}
