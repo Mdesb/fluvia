@@ -555,7 +555,7 @@ function ChaineSection({ journaux, rapport, onVerifier, onFermer }) {
                     key={j.id}
                     className="btn"
                     type="button"
-                    aria-label={`Vérifier la chaîne de ${nomJournal}`}
+                    aria-label={`Vérifier la chaîne de « ${nomJournal} »`}
                     onClick={() => onVerifier(j)}
                   >
                     {nomJournal}
