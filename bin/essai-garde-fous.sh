@@ -107,11 +107,6 @@ essai() { # essai <libellé> <refus|acceptation> [fragment attendu dans le refus
     # Mesure du 01/09 : avec une image docker inexistante, le hook refuse TOUT — et les onze cas de
     # refus de ce banc restaient verts. Ils ne prouvaient pas que le garde-fou visé avait mordu,
     # seulement que quelque chose avait refusé. Le banc lui-même donnait un faux vert.
-    if [ "${BANC_MOTIFS:-0}" = "1" ] && [ "$2" = "refus" ]; then
-        echo "  ── $1"
-        grep -E "✗|refus" "$sortie" | head -3 | sed 's/^/       /'
-    fi
-
     if [ "$2" = "refus" ] && [ "$code" -ne 0 ] && [ -n "${3:-}" ]; then
         if ! grep -qF "$3" "$sortie"; then
             printf '  \033[31m✗\033[0m %-52s refusé, mais PAS pour la bonne raison\n' "$1"
@@ -223,7 +218,7 @@ final class BancRegleUnProcessor
 }
 PHP
 commiter "banc : règle 1"
-essai "cloisonnement — aucun contrôle de périmètre" refus
+essai "cloisonnement — aucun contrôle de périmètre" refus "résolution par identifiant client sans contrôle de périmètre"
 
 # Règle n°2 (C19) — un marqueur de périmètre EXISTE, mais il ne porte pas sur l'entité résolue.
 # C'est le motif exact de l'IDOR d'appairage du 22/08 : la règle n°1 accepte ce fichier.
@@ -248,7 +243,7 @@ final class BancRegleDeuxProcessor
 }
 PHP
 commiter "banc : règle 2"
-essai "C19 — contrôle non lié à l'entité résolue" refus
+essai "C19 — contrôle non lié à l'entité résolue" refus "le contrôle de périmètre ne porte pas sur l'entité résolue"
 
 # C19, croisement avec la déclaration de l'opération. Quand celle-ci est `read: false`, `$data` vient
 # du corps de la requête et non du provider Doctrine : il redevient une entrée client. Les deux cas
@@ -304,7 +299,7 @@ final class BancSansLectureProcessor
 }
 PHP
 commiter "banc : C19 read false"
-essai "C19 — \$data d'une opération read: false" refus
+essai "C19 — \$data d'une opération read: false" refus "le contrôle de périmètre ne porte pas sur l'entité résolue"
 
 mkdir -p app/src/Offre/Entity app/src/Offre/State
 cat > app/src/Offre/Entity/BancSondeResource.php <<'PHP'
@@ -368,7 +363,7 @@ final class BancFactureRemiseProcessor
 }
 PHP
 commiter "banc : nommage"
-essai "nommage — identifiant français dans un fichier ajouté" refus
+essai "nommage — identifiant français dans un fichier ajouté" refus "identifiant français dans un fichier nouvellement ajouté"
 
 # Secrets — une clé en valeur par défaut.
 mkdir -p app/src/Offre/Service
@@ -382,7 +377,7 @@ final class BancSignataire
 }
 PHP
 commiter "banc : secret"
-essai "secrets — clé cryptographique en valeur par défaut" refus
+essai "secrets — clé cryptographique en valeur par défaut" refus "secret cryptographique en valeur par défaut"
 
 # Couverture de perimetre : une entite exposee que rien ne peut filtrer. C'est le trou par lequel
 # `GET /ecritures-comptables` renvoyait le grand livre de tous les etablissements.
@@ -404,7 +399,7 @@ class BancSansTenant
 }
 PHP
 commiter "banc : entite sans tenant"
-essai "couverture — entité exposée sans cloisonnement possible" refus
+essai "couverture — entité exposée sans cloisonnement possible" refus "entité exposée sans cloisonnement possible"
 
 # --- garde-fou n°6, règle A : un abonné que rien ne déclenchera -------------------------------
 # `sale.completed` est au catalogue et figure dans la ligne de base des orphelins : personne ne
@@ -428,7 +423,7 @@ final class BancAbonneInerte
 }
 PHP
 commiter "banc : abonne a un fait que personne n emet"
-essai "événements — abonné à un fait que personne n'émet" refus
+essai "événements — abonné à un fait que personne n'émet" refus "abonné qui ne se déclenchera jamais"
 
 # --- garde-fou n°6, règle C : un fait publié hors du contrat -----------------------------------
 mkdir -p app/src/Offre/Service
@@ -446,7 +441,7 @@ final class BancEmetteurHorsContrat
 }
 PHP
 commiter "banc : fait publie hors du catalogue"
-essai "événements — fait publié hors du catalogue" refus
+essai "événements — fait publié hors du catalogue" refus "événement publié hors du contrat"
 
 # --- garde-fou n°7 : charge utile qui ne respecte pas le contrat -------------------------------
 # `sale.completed` EST au catalogue (donc la règle C se taît) et y annonce « amount, lines,
@@ -468,7 +463,7 @@ final class BancChargeHorsContrat
 }
 PHP
 commiter "banc : charge utile hors contrat"
-essai "charges utiles — clé absente du contrat" refus
+essai "charges utiles — clé absente du contrat" refus "charge utile émise hors contrat"
 
 # --- garde-fou n°8 : écriture qui traverse la frontière ----------------------------------------
 #
@@ -508,7 +503,7 @@ sys.stderr.write("  plus rien. Choisis une autre forme de cas plutot que de le l
 sys.exit(1)
 PY
 commiter "banc : relation ecrivable vers du cloisonne"
-essai "écriture transfrontière — relation écrivable vers du cloisonné" refus
+essai "écriture transfrontière — relation écrivable vers du cloisonné" refus "écriture qui traverse la frontière"
 
 # --- le filet de complétude lui-même ----------------------------------------------------------
 # C'est le mécanisme qui protège tous les autres : un garde-fou ajouté sans être appelé par le
@@ -522,7 +517,7 @@ declare(strict_types=1);
 exit(0);
 PHP
 commiter "banc : garde-fou ajoute sans appel dans le hook"
-essai "filet — garde-fou présent mais jamais lancé" refus
+essai "filet — garde-fou présent mais jamais lancé" refus "présent dans l'arbre mais appelé par aucun hook"
 
 # ─────────────────────────────────────────────────────────── remise en état
 
