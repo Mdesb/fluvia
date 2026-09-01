@@ -480,11 +480,19 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
                       {/* `stopPropagation` : sans lui, chaque action rapide ouvrirait AUSSI la
                           fiche derrière la modale qu'elle vient d'ouvrir. */}
                       <td className="row" style={{ justifyContent: 'flex-end', gap: 6 }} onClick={(e) => e.stopPropagation()}>
+                        {/* ⚠ L'`aria-label` NOMME LA CIBLE, PAS SEULEMENT LE VERBE.
+                            Ces trois boutons se repetent sur chaque ligne : au clavier ou au lecteur
+                            d'ecran, la liste des controles etait « Devis, Echange, Fusionner » quinze
+                            fois de suite, sans jamais dire de quelle fiche. Le texte visible ne bouge
+                            pas — la ligne se lit de gauche a droite et dit deja de qui il s'agit ;
+                            c'est exactement ce que la navigation par controles perd.
+                            Le garde-fou des boutons nommes ne pouvait pas le voir : il verifie qu'un
+                            nom EXISTE, pas qu'il designe. */}
                         {peutFacturer && (
-                          <button className="btn sm" type="button" onClick={() => setDevisPour(c)}>Devis</button>
+                          <button className="btn sm" type="button" aria-label={`Devis pour ${nomClient(c)}`} onClick={() => setDevisPour(c)}>Devis</button>
                         )}
                         {peutModifier && (
-                          <button className="btn sm" type="button" onClick={() => setEchange(c)}>Échange</button>
+                          <button className="btn sm" type="button" aria-label={`Échange pour ${nomClient(c)}`} onClick={() => setEchange(c)}>Échange</button>
                         )}
                         {/* ⚠ FUSIONNER EST UN GESTE D'EXPLOITATION COURANT, PAS UNE OPERATION RARE.
                             Le meme adherent inscrit deux fois — une fois en ligne par lui-meme, une
@@ -492,7 +500,7 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
                             cartes, deux soldes, deux historiques. Tout deploiement reel en accumule,
                             et rien ne les resorbe sans ce bouton. */}
                         {peutFusionner && (
-                          <button className="btn sm" type="button" onClick={() => setFusionPour(c)}>Fusionner</button>
+                          <button className="btn sm" type="button" aria-label={`Fusionner la fiche de ${nomClient(c)}`} onClick={() => setFusionPour(c)}>Fusionner</button>
                         )}
                       </td>
                     </tr>
