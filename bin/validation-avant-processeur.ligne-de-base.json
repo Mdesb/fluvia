@@ -1,35 +1,335 @@
 {
-    "_lisez-moi": "Garde-fou n°34 — contraintes qui ne verront jamais la valeur du processeur. Le plafond ne monte pas tout seul : une entrée de plus est un refus. Les quatre gelées sont dans des modules qui ne sont pas les miens ; elles sont signalées à leurs porteurs, pas corrigées ici.",
-    "_mesure": "32 écarts bruts pour l'énoncé large de T22, dont 25 écrivables par le client — donc légitimes. Geler les 32 aurait figé ces 25 non-défauts. Seuls les 4 ci-dessous sont décidables sans lire l'intention d'un processeur.",
+    "_lisez_moi": [
+        "Chaque entrée est un champ portant une contrainte de validation ET posé par un processeur",
+        "désigné sur la même ressource. La validation s'exécutant AVANT le processeur, la contrainte",
+        "ne s'applique QU'À la valeur du client, jamais à celle que le processeur fabrique.",
+        "Ce n'est pas forcément une faute — c'est une question à poser au propriétaire du module."
+    ],
     "scelle": {
-        "plafond": 4,
-        "date": "2026-09-01",
-        "par": "claude-C"
+        "gelee_le": "2026-09-01",
+        "plafond": 32
     },
-    "entrees": [
-        {
-            "cle": "app/src/Boutique/Entity/AllocationQuotaOTA.php::quotaConsomme",
-            "contrainte": "PositiveOrZero",
-            "defaut": "0",
-            "raison": "Non exposée en écriture, défaut 0 qui satisfait PositiveOrZero. IngestionVenteOtaProcessor calcule la valeur réelle après la validation : une consommation négative issue d'une ingestion fautive ne serait pas vue."
+    "entrees": {
+        "Boutique/Entity/AllocationQuotaOTA.php::$quotaConsomme": {
+            "depuis": "2026-09-01",
+            "contraintes": [
+                "PositiveOrZero"
+            ],
+            "poseurs": [
+                "App\\Boutique\\State\\IngestionVenteOtaProcessor"
+            ],
+            "raison": "Antérieur au gel. Collision mesurée, non arbitrée : le propriétaire du module doit dire si la contrainte protège encore quelque chose."
         },
-        {
-            "cle": "app/src/Musee/Entity/BasculeAudioguide.php::tauxRemise",
-            "contrainte": "Range",
-            "defaut": "'0.00'",
-            "raison": "Non exposée en écriture, défaut '0.00' dans la plage. CreerBasculeAudioguideProcessor pose le taux réel ensuite : un taux hors bornes ne serait pas refusé."
+        "Boutique/Entity/Vitrine.php::$slug": {
+            "depuis": "2026-09-01",
+            "contraintes": [
+                "Callback"
+            ],
+            "poseurs": [
+                "App\\Boutique\\State\\EstablishmentStampProcessor"
+            ],
+            "raison": "Antérieur au gel. Collision mesurée, non arbitrée : le propriétaire du module doit dire si la contrainte protège encore quelque chose."
         },
-        {
-            "cle": "app/src/Patinoire/Entity/RetenueCaution.php::montantRetenu",
-            "contrainte": "PositiveOrZero",
-            "defaut": "'0.00'",
-            "raison": "Non exposée en écriture, défaut '0.00'. ValiderRetenueProcessor calcule le montant : une retenue négative traverserait. Sujet d'argent, à regarder en premier des quatre."
+        "Calendar/Entity/CalendarEvent.php::$end": {
+            "depuis": "2026-09-01",
+            "contraintes": [
+                "NotNull"
+            ],
+            "poseurs": [
+                "App\\Calendar\\State\\CalendarEventProcessor"
+            ],
+            "raison": "Antérieur au gel. Collision mesurée, non arbitrée : le propriétaire du module doit dire si la contrainte protège encore quelque chose."
         },
-        {
-            "cle": "app/src/Reservation/Entity/Reservation.php::quantity",
-            "contrainte": "Positive",
-            "defaut": "1",
-            "raison": "Non exposée en écriture, défaut 1 qui satisfait Positive. ReserverProcessor pose la quantité demandée : une quantité nulle ou négative ne serait pas refusée par cette contrainte-là."
+        "Calendar/Entity/CalendarEvent.php::$start": {
+            "depuis": "2026-09-01",
+            "contraintes": [
+                "NotNull"
+            ],
+            "poseurs": [
+                "App\\Calendar\\State\\CalendarEventProcessor"
+            ],
+            "raison": "Antérieur au gel. Collision mesurée, non arbitrée : le propriétaire du module doit dire si la contrainte protège encore quelque chose."
+        },
+        "Marketing/Entity/LoyaltyEntry.php::$points": {
+            "depuis": "2026-09-01",
+            "contraintes": [
+                "NotEqualTo"
+            ],
+            "poseurs": [
+                "App\\Marketing\\State\\LoyaltyMovementProcessor"
+            ],
+            "raison": "Antérieur au gel. Collision mesurée, non arbitrée : le propriétaire du module doit dire si la contrainte protège encore quelque chose."
+        },
+        "Musee/Entity/BasculeAudioguide.php::$audioguide": {
+            "depuis": "2026-09-01",
+            "contraintes": [
+                "NotNull"
+            ],
+            "poseurs": [
+                "App\\Musee\\State\\CreerBasculeAudioguideProcessor"
+            ],
+            "raison": "Antérieur au gel. Collision mesurée, non arbitrée : le propriétaire du module doit dire si la contrainte protège encore quelque chose."
+        },
+        "Musee/Entity/BasculeAudioguide.php::$beneficiaire": {
+            "depuis": "2026-09-01",
+            "contraintes": [
+                "NotNull"
+            ],
+            "poseurs": [
+                "App\\Musee\\State\\CreerBasculeAudioguideProcessor"
+            ],
+            "raison": "Antérieur au gel. Collision mesurée, non arbitrée : le propriétaire du module doit dire si la contrainte protège encore quelque chose."
+        },
+        "Musee/Entity/BasculeAudioguide.php::$tauxRemise": {
+            "depuis": "2026-09-01",
+            "contraintes": [
+                "Range"
+            ],
+            "poseurs": [
+                "App\\Musee\\State\\CreerBasculeAudioguideProcessor"
+            ],
+            "raison": "Antérieur au gel. Collision mesurée, non arbitrée : le propriétaire du module doit dire si la contrainte protège encore quelque chose."
+        },
+        "Musee/Entity/DossierGroupeScolaire.php::$accompagnateurs": {
+            "depuis": "2026-09-01",
+            "contraintes": [
+                "PositiveOrZero"
+            ],
+            "poseurs": [
+                "App\\Musee\\State\\CreerDossierGroupeProcessor"
+            ],
+            "raison": "Antérieur au gel. Collision mesurée, non arbitrée : le propriétaire du module doit dire si la contrainte protège encore quelque chose."
+        },
+        "Musee/Entity/DossierGroupeScolaire.php::$creneauEntree": {
+            "depuis": "2026-09-01",
+            "contraintes": [
+                "NotNull"
+            ],
+            "poseurs": [
+                "App\\Musee\\State\\CreerDossierGroupeProcessor"
+            ],
+            "raison": "Antérieur au gel. Collision mesurée, non arbitrée : le propriétaire du module doit dire si la contrainte protège encore quelque chose."
+        },
+        "Musee/Entity/DossierGroupeScolaire.php::$effectif": {
+            "depuis": "2026-09-01",
+            "contraintes": [
+                "Positive"
+            ],
+            "poseurs": [
+                "App\\Musee\\State\\CreerDossierGroupeProcessor"
+            ],
+            "raison": "Antérieur au gel. Collision mesurée, non arbitrée : le propriétaire du module doit dire si la contrainte protège encore quelque chose."
+        },
+        "Musee/Entity/DossierGroupeScolaire.php::$etablissementScolaire": {
+            "depuis": "2026-09-01",
+            "contraintes": [
+                "NotBlank"
+            ],
+            "poseurs": [
+                "App\\Musee\\State\\CreerDossierGroupeProcessor"
+            ],
+            "raison": "Antérieur au gel. Collision mesurée, non arbitrée : le propriétaire du module doit dire si la contrainte protège encore quelque chose."
+        },
+        "Musee/Entity/VisiteGuidee.php::$langue": {
+            "depuis": "2026-09-01",
+            "contraintes": [
+                "NotBlank"
+            ],
+            "poseurs": [
+                "App\\Musee\\State\\CreerVisiteGuideeProcessor"
+            ],
+            "raison": "Antérieur au gel. Collision mesurée, non arbitrée : le propriétaire du module doit dire si la contrainte protège encore quelque chose."
+        },
+        "Musee/Entity/VisiteGuidee.php::$pointRDV": {
+            "depuis": "2026-09-01",
+            "contraintes": [
+                "NotBlank"
+            ],
+            "poseurs": [
+                "App\\Musee\\State\\CreerVisiteGuideeProcessor"
+            ],
+            "raison": "Antérieur au gel. Collision mesurée, non arbitrée : le propriétaire du module doit dire si la contrainte protège encore quelque chose."
+        },
+        "Musee/Entity/VisiteGuidee.php::$theme": {
+            "depuis": "2026-09-01",
+            "contraintes": [
+                "NotBlank"
+            ],
+            "poseurs": [
+                "App\\Musee\\State\\CreerVisiteGuideeProcessor"
+            ],
+            "raison": "Antérieur au gel. Collision mesurée, non arbitrée : le propriétaire du module doit dire si la contrainte protège encore quelque chose."
+        },
+        "Offre/Entity/Produit.php::$libelle": {
+            "depuis": "2026-09-01",
+            "contraintes": [
+                "NotBlank"
+            ],
+            "poseurs": [
+                "App\\Offre\\State\\DupliquerProcessor"
+            ],
+            "raison": "Antérieur au gel. Collision mesurée, non arbitrée : le propriétaire du module doit dire si la contrainte protège encore quelque chose."
+        },
+        "Offre/Entity/Produit.php::$type": {
+            "depuis": "2026-09-01",
+            "contraintes": [
+                "NotNull"
+            ],
+            "poseurs": [
+                "App\\Offre\\State\\ConvertirProcessor",
+                "App\\Offre\\State\\DupliquerProcessor"
+            ],
+            "raison": "Antérieur au gel. Collision mesurée, non arbitrée : le propriétaire du module doit dire si la contrainte protège encore quelque chose."
+        },
+        "Patinoire/Entity/RetenueCaution.php::$montantRetenu": {
+            "depuis": "2026-09-01",
+            "contraintes": [
+                "PositiveOrZero"
+            ],
+            "poseurs": [
+                "App\\Patinoire\\State\\ValiderRetenueProcessor"
+            ],
+            "raison": "Antérieur au gel. Collision mesurée, non arbitrée : le propriétaire du module doit dire si la contrainte protège encore quelque chose."
+        },
+        "Personnel/Entity/Absence.php::$debut": {
+            "depuis": "2026-09-01",
+            "contraintes": [
+                "NotNull"
+            ],
+            "poseurs": [
+                "App\\Personnel\\State\\DeclarerAbsenceProcessor"
+            ],
+            "raison": "Antérieur au gel. Collision mesurée, non arbitrée : le propriétaire du module doit dire si la contrainte protège encore quelque chose."
+        },
+        "Personnel/Entity/Absence.php::$employe": {
+            "depuis": "2026-09-01",
+            "contraintes": [
+                "NotNull"
+            ],
+            "poseurs": [
+                "App\\Personnel\\State\\DeclarerAbsenceProcessor"
+            ],
+            "raison": "Antérieur au gel. Collision mesurée, non arbitrée : le propriétaire du module doit dire si la contrainte protège encore quelque chose."
+        },
+        "Personnel/Entity/Absence.php::$fin": {
+            "depuis": "2026-09-01",
+            "contraintes": [
+                "NotNull"
+            ],
+            "poseurs": [
+                "App\\Personnel\\State\\DeclarerAbsenceProcessor"
+            ],
+            "raison": "Antérieur au gel. Collision mesurée, non arbitrée : le propriétaire du module doit dire si la contrainte protège encore quelque chose."
+        },
+        "Personnel/Entity/Absence.php::$type": {
+            "depuis": "2026-09-01",
+            "contraintes": [
+                "NotNull"
+            ],
+            "poseurs": [
+                "App\\Personnel\\State\\DeclarerAbsenceProcessor"
+            ],
+            "raison": "Antérieur au gel. Collision mesurée, non arbitrée : le propriétaire du module doit dire si la contrainte protège encore quelque chose."
+        },
+        "Personnel/Entity/AffectationTravail.php::$creneauTravail": {
+            "depuis": "2026-09-01",
+            "contraintes": [
+                "NotNull"
+            ],
+            "poseurs": [
+                "App\\Personnel\\State\\AffecterEmployeProcessor"
+            ],
+            "raison": "Antérieur au gel. Collision mesurée, non arbitrée : le propriétaire du module doit dire si la contrainte protège encore quelque chose."
+        },
+        "Personnel/Entity/AffectationTravail.php::$employe": {
+            "depuis": "2026-09-01",
+            "contraintes": [
+                "NotNull"
+            ],
+            "poseurs": [
+                "App\\Personnel\\State\\AffecterEmployeProcessor"
+            ],
+            "raison": "Antérieur au gel. Collision mesurée, non arbitrée : le propriétaire du module doit dire si la contrainte protège encore quelque chose."
+        },
+        "Personnel/Entity/CreneauTravail.php::$debut": {
+            "depuis": "2026-09-01",
+            "contraintes": [
+                "NotNull"
+            ],
+            "poseurs": [
+                "App\\Personnel\\State\\CreerCreneauTravailProcessor"
+            ],
+            "raison": "Antérieur au gel. Collision mesurée, non arbitrée : le propriétaire du module doit dire si la contrainte protège encore quelque chose."
+        },
+        "Personnel/Entity/CreneauTravail.php::$effectifRequis": {
+            "depuis": "2026-09-01",
+            "contraintes": [
+                "GreaterThanOrEqual"
+            ],
+            "poseurs": [
+                "App\\Personnel\\State\\CreerCreneauTravailProcessor"
+            ],
+            "raison": "Antérieur au gel. Collision mesurée, non arbitrée : le propriétaire du module doit dire si la contrainte protège encore quelque chose."
+        },
+        "Personnel/Entity/CreneauTravail.php::$fin": {
+            "depuis": "2026-09-01",
+            "contraintes": [
+                "NotNull"
+            ],
+            "poseurs": [
+                "App\\Personnel\\State\\CreerCreneauTravailProcessor"
+            ],
+            "raison": "Antérieur au gel. Collision mesurée, non arbitrée : le propriétaire du module doit dire si la contrainte protège encore quelque chose."
+        },
+        "Personnel/Entity/CreneauTravail.php::$libellePoste": {
+            "depuis": "2026-09-01",
+            "contraintes": [
+                "NotBlank"
+            ],
+            "poseurs": [
+                "App\\Personnel\\State\\CreerCreneauTravailProcessor"
+            ],
+            "raison": "Antérieur au gel. Collision mesurée, non arbitrée : le propriétaire du module doit dire si la contrainte protège encore quelque chose."
+        },
+        "Reservation/Entity/Reservation.php::$quantity": {
+            "depuis": "2026-09-01",
+            "contraintes": [
+                "Positive"
+            ],
+            "poseurs": [
+                "App\\Reservation\\State\\ReserverProcessor"
+            ],
+            "raison": "Antérieur au gel. Collision mesurée, non arbitrée : le propriétaire du module doit dire si la contrainte protège encore quelque chose."
+        },
+        "Securite/Entity/DelegationDroit.php::$delegant": {
+            "depuis": "2026-09-01",
+            "contraintes": [
+                "NotNull"
+            ],
+            "poseurs": [
+                "App\\Securite\\State\\DelegationDroitProcessor"
+            ],
+            "raison": "Antérieur au gel. Collision mesurée, non arbitrée : le propriétaire du module doit dire si la contrainte protège encore quelque chose."
+        },
+        "Securite/Entity/Role.php::$nom": {
+            "depuis": "2026-09-01",
+            "contraintes": [
+                "NotBlank"
+            ],
+            "poseurs": [
+                "App\\Securite\\State\\DuplicationRoleProcessor"
+            ],
+            "raison": "Antérieur au gel. Collision mesurée, non arbitrée : le propriétaire du module doit dire si la contrainte protège encore quelque chose."
+        },
+        "Social/Entity/SocialAccount.php::$host": {
+            "depuis": "2026-09-01",
+            "contraintes": [
+                "Url"
+            ],
+            "poseurs": [
+                "App\\Social\\State\\SocialAccountProcessor"
+            ],
+            "raison": "Antérieur au gel. Collision mesurée, non arbitrée : le propriétaire du module doit dire si la contrainte protège encore quelque chose."
         }
-    ]
+    }
 }

@@ -1,0 +1,35 @@
+{
+    "_lisez-moi": "Garde-fou n°34 — contraintes qui ne verront jamais la valeur du processeur. Le plafond ne monte pas tout seul : une entrée de plus est un refus. Les quatre gelées sont dans des modules qui ne sont pas les miens ; elles sont signalées à leurs porteurs, pas corrigées ici.",
+    "_mesure": "32 écarts bruts pour l'énoncé large de T22, dont 25 écrivables par le client — donc légitimes. Geler les 32 aurait figé ces 25 non-défauts. Seuls les 4 ci-dessous sont décidables sans lire l'intention d'un processeur.",
+    "scelle": {
+        "plafond": 4,
+        "date": "2026-09-01",
+        "par": "claude-C"
+    },
+    "entrees": [
+        {
+            "cle": "app/src/Boutique/Entity/AllocationQuotaOTA.php::quotaConsomme",
+            "contrainte": "PositiveOrZero",
+            "defaut": "0",
+            "raison": "Non exposée en écriture, défaut 0 qui satisfait PositiveOrZero. IngestionVenteOtaProcessor calcule la valeur réelle après la validation : une consommation négative issue d'une ingestion fautive ne serait pas vue."
+        },
+        {
+            "cle": "app/src/Musee/Entity/BasculeAudioguide.php::tauxRemise",
+            "contrainte": "Range",
+            "defaut": "'0.00'",
+            "raison": "Non exposée en écriture, défaut '0.00' dans la plage. CreerBasculeAudioguideProcessor pose le taux réel ensuite : un taux hors bornes ne serait pas refusé."
+        },
+        {
+            "cle": "app/src/Patinoire/Entity/RetenueCaution.php::montantRetenu",
+            "contrainte": "PositiveOrZero",
+            "defaut": "'0.00'",
+            "raison": "Non exposée en écriture, défaut '0.00'. ValiderRetenueProcessor calcule le montant : une retenue négative traverserait. Sujet d'argent, à regarder en premier des quatre."
+        },
+        {
+            "cle": "app/src/Reservation/Entity/Reservation.php::quantity",
+            "contrainte": "Positive",
+            "defaut": "1",
+            "raison": "Non exposée en écriture, défaut 1 qui satisfait Positive. ReserverProcessor pose la quantité demandée : une quantité nulle ou négative ne serait pas refusée par cette contrainte-là."
+        }
+    ]
+}

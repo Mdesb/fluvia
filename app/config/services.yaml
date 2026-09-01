@@ -363,6 +363,31 @@ services:
 # app/tests/Boutique/Support/MailCollector.php) — écoute `Symfony\Component\Mailer\Event\MessageEvent`,
 # dispatché par `AbstractTransport::send()` indépendamment du DSN (`null://null` en test), sans
 # nécessiter le profiler (non installé dans ce dépôt).
+    # T6 — le chargeur de fixtures n'est pas auto-cablable : le bundle l'enregistre sous l'identifiant
+    # `doctrine.fixtures.loader`, pas sous son nom de classe. Symfony le dit lui-meme dans son message
+    # d'erreur, ce qui evite d'avoir a le deviner.
+    App\Platform\Command\ChargerDemonstrationCommand:
+        arguments:
+            $chargeur: '@doctrine.fixtures.loader'
+
+    # T6 — le purgeur de `doctrine:fixtures:load` refuse de vider une base hors `dev`/`test`.
+    #
+    # ⚠ On redefinit **l'identifiant de service du bundle**, pas un service de plus portant le meme
+    # alias. La premiere version faisait l'inverse et ne mordait pas : le compilateur du bundle
+    # construit une carte alias -> service, et c'est sa definition qui gagnait. Mesure, pas deduction —
+    # le chargement en `prod` affichait « purging database ». Redefinir l'identifiant remplace la
+    # definition d'origine, ce qui ne depend d'aucun ordre.
+    #
+    # ⚠ Le repli de `LoadDataFixturesDoctrineCommand` (ligne 115) instancie un `ORMPurgerFactory` en dur
+    # quand l'alias demande est introuvable. On garde donc l'alias `default` : le supprimer rouvrirait
+    # la purge par ce chemin, sans rien dire.
+    doctrine.fixtures.purger.orm_purger_factory:
+        class: App\Platform\DataFixtures\PurgeurInterditHorsDeveloppement
+        arguments:
+            $environnement: '%kernel.environment%'
+        tags:
+            - { name: 'doctrine.fixtures.purger_factory', alias: 'default' }
+
 when@test:
     services:
         App\Tests\Boutique\Support\MailCollector:

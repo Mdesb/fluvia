@@ -25,6 +25,16 @@
 | 26/08 13:10 | **D41 termine chez moi : 11 resorbees sur 11.** Dette globale 49 -> 38. Voie A (6) par processeur de rattachement, voie B (5) par `input: false` **plus** fermeture declaree. | Verification des suites — le risque est qu-une operation dependait de la denormalisation par defaut. | Un angle mort de ton garde-fou n12, ci-dessous. |
 | 26/08 13:20 | **D41 clos et verifie** : Padel 24, Patinoire 30, Sport 31, Platform 62 — toutes vertes. Aucune operation ne dependait de la denormalisation par defaut, c-etait le risque reel du lot. Pile demontee, worktree rendu. | Plus rien d-assigne. | Rien. |
 | 26/08 23:40 | Session fermee par Maxime. Rien en cours, rien a moitie ecrit, aucune pile de test, worktree VPS rendu a `claude-I`. | **Deux taches assignees non commencees** : le preavis SEPA de `Sport` (prioritaire) et `AlertePresenceIsolee` (en troisieme, sur ta consigne). | **69 commits a moi non fusionnes dans `main`.** |
+| 31/08 23:30 | Session rouverte apres cinq jours. **Je prends T6** (fixtures rejouables en preproduction) — Maxime me l-a attribuee explicitement, hors de mon perimetre habituel. Mes deux taches assignees sont **sans objet**, preuves ci-dessous. | Mesure empirique : rejouer reellement un chargement complet, deux fois. | Rien. |
+| 01/09 00:20 | **T6 : le libelle de la tache etait perime.** Les fixtures sont **deja** rejouables — mesure sur les 329 tables, deux chargements successifs, zero difference. Le vrai manque etait le second : la commande n-existe pas en preproduction. Livre : bundle en production, `app:demo:charger`, et **la purge refusee hors dev/test**. | Verification de non-regression du harnais. | Rien. |
+| 01/09 00:05 | **T6 termine et verifie.** `tests/Platform` 84/422 vert (mon test de garde en fait partie), `Piscine` 35/213 vert. `Sport` a 4 echecs — **preexistants** : meme resultat au caractere pres sur `origin/main`, verifie et non suppose. Pile demontee, base de verification supprimee, worktree rendu. | Plus rien. | Rien. |
+| 01/09 01:10 | **CORRECTION IMPORTANTE : mes « 4 echecs Sport preexistants » etaient faux.** Mon vendor datait du 24/08 — une semaine de retard. Sport est **vert** (35/262). Et en reverifiant T6 avec un vendor a jour, j-ai trouve le vrai bloqueur : **la demonstration ne se chargeait pas du tout** sur une base construite par migrations. Corrige, verifie. | Suites de non-regression. | Rien. |
+| 01/09 00:45 | **T6 reellement clos.** Huit suites vertes (**495 tests**) apres le correctif de `ComptaFixtures`. Chargement verifie sur base construite par migrations : premier, second, et 331 tables sans derive. Bases de verification supprimees, aucun conteneur, worktree rendu. | Plus rien. | Rien. |
+| 01/09 02:20 | **Je prends T22** (garde-fou n34). Le detecteur ratait son temoin positif : **il indexe les processeurs par nom court, et neuf classes s-appellent `EstablishmentStampProcessor`** — dont quatre que j-ai creees en D41. Indexe par nom pleinement qualifie : temoin positif **signale**, temoin negatif **epargne**, 32 suspects. | Transformer le prototype en garde-fou. | Rien. |
+| 01/09 02:50 | **T22 livre : garde-fou n34.** Detecteur corrige (indexation par nom pleinement qualifie), cable dans le hook et le lanceur, ligne de base a **32 collisions** gelees. **Prouve dans les deux sens** : aveugle -> il refuse de rendre un avis ; collision neuve -> il la nomme. | Rien. | Rien. |
+| 01/09 03:10 | **Je prends T2** — reprise initiale d-un client, que le carnet dit bloquante pour une signature, et dont **rien n-est construit**. La spec est tranchee ; je decoupe et je declare mes deux hypotheses ci-dessous. | Tranche 1 : l-objet d-import et son cycle en deux temps, type `customers`. | Rien. |
+| 01/09 04:00 | **T2 tranche 1 livree** : module `App\Import`, objet de lot, deux temps, type `customers`, migration ecrite a la main et verifiee sur base neuve. **7 essais, 60 assertions.** Non-regression : Crm 66, Platform 92, Boutique 89, Sepa 58 — vertes. Vente a **1 echec preexistant sur `main`**, verifie. | Tranche 2 : `card_credits`, seule. | Rien. |
+| 01/09 14:15 | **T2 tranche 2 livree** : credits de cartes, rapprochement du total annonce, 12 essais / 98 assertions. Non-regression **Acces 141, Reservation 121, Platform 92, Crm 66, Sport 42 — toutes vertes**. | **Deux corrections de fond sur ma facon de travailler**, ci-dessous. | Rien. |
 
 ---
 
@@ -727,3 +737,528 @@ sept) · la restitution de l-arbitrage OTA (credit, acces, jauge) · fixtures id
 
 **Environnement** : aucune pile de test, aucun conteneur, worktree `/home/debian/wt/claude-I` rendu a sa
 branche. Rien a nettoyer apres moi.
+
+---
+
+## 2026-08-31 23:30 · Mes deux taches assignees sont sans objet — et je prends T6
+
+Cinq jours d-arret de mon cote. Reprise, et d-abord le menage sur ce que tu m-avais confie.
+
+### 1. « `Sport` preleve sans prevenir personne » — reglee en amont, pas par moi
+
+`GenererRemiseSepaHandler` ne fait que **deleguer** a `GenerationRemiseHandler`, qui porte desormais
+le controle de couverture livre par `claude-D`. Sport herite de la correction sans avoir ete touche.
+Le `preavisPour()` ajoute au test n-est pas un test rafistole : c-est la mise en situation, puisqu-en
+production c-est la tache planifiee qui emet les preavis. Ton avertissement etait juste, il ne
+s-applique simplement plus.
+
+### 2. « `AlertePresenceIsolee` ne peut que grandir » — la premisse est fausse
+
+Ton ordre dit qu-elle « porte un statut de chose a traiter ». **Elle n-en porte aucun.** Quatre
+proprietes : `id`, `espaceAcces`, `horodatage`, `nbPersonnesDetectees`. Pas de trait, pas de classe
+parente, **zero occurrence** de statut/traite/resolu dans tout le fichier.
+
+Or `claude-H` donne lui-meme le critere dans le meme ordre : *une collection sans champ de statut est
+un journal, pas une file d-attente, et un journal qui grandit se comporte correctement.*
+
+Et l-entite voisine, `EvenementSOS`, qui **a** un statut (`ouverte`/`traitee`), **a deja son geste de
+cloture** : `POST /sport/sos/{id}/traiter`. Le defaut cherche n-existe ni chez l-une ni chez l-autre.
+
+D55 reste juste ; c-est son application a cette entite qui ne tient pas. **Je ne l-implemente pas** —
+lui poser un statut pour pouvoir le clore serait fabriquer le probleme afin de le resoudre.
+
+### 3. Je prends T6 — sur attribution explicite de Maxime
+
+Hors de mon perimetre, donc je le dis clairement : **c-est Maxime qui l-a deplace**, pas moi et pas
+toi. Je m-y suis proposee parce que j-ai deja rendu cinq fixtures idempotentes et que je connais le
+piege exact.
+
+**Premiere mesure, et elle corrige le libelle de la tache.** Sur les **37** classes (pas 38), l-axe
+roles/permissions est **entierement traite** : mon balayage ne trouve que deux candidats, et les deux
+sont des faux positifs — ce sont les methodes de garde elles-memes, dans `SocleFixtures` et
+`L11Fixtures`.
+
+Autrement dit, la partie que la flotte a corrigee a la main est finie. **Ce qui reste n-est pas
+mesurable au grep** : une fixture peut echouer au rechargement sur n-importe quelle autre contrainte
+d-unicite. Je passe donc a la seule preuve qui vaille — **rejouer un chargement complet, deux fois**,
+et corriger ce qui tombe. Je te dirai ce que ca donne, y compris si ca ne tombe pas.
+
+---
+
+## 2026-09-01 00:20 · T6 — ce que la mesure a corrige dans l-enonce
+
+**La tache disait : « 38 classes decrivent la demo et ne peuvent pas etre rejouees ».** Elles sont 37,
+et **elles peuvent**. Je l-ai mesure plutot que suppose : chargement neuf, comptage des 329 tables,
+rechargement additif, recomptage. **Zero difference.** Ni echec, ni doublon, ni derive silencieuse.
+
+Le travail d-idempotence de la flotte — ton `SocleFixtures`, mes cinq verticales, et les autres — a
+donc deja ferme cette moitie, y compris les cas de D52 qui ne levent aucune erreur. Personne ne
+l-avait verifie de bout en bout ; c-est fait, et c-est desormais reproductible.
+
+**Le manque reel etait l-autre moitie de la ligne** : `doctrine:fixtures:load` est absente en
+preproduction. `doctrine/doctrine-fixtures-bundle` etait en `require-dev` et actif seulement en
+`dev`/`test` ; la preproduction tourne en `prod` avec `composer install --no-dev`. Les 37 classes n-y
+etaient donc ni chargeables **ni meme autochargeables** — elles etendent `Fixture`, qui vient du bundle.
+
+### Ce que j-ai livre
+
+1. **Le bundle passe en production** (`require` + `['all' => true]`), avec `doctrine/data-fixtures`
+   que ton garde-fou n20 m-a signale et que j-avais rate — il est distinct et lui aussi en dev.
+2. **`app:demo:charger`** : charge en mode additif, ne purge jamais, dit ce qu-il a fait.
+3. **La purge est refusee hors `dev`/`test`**, avec un message qui nomme l-incident du 24/08 et
+   indique la commande a utiliser.
+
+**Le point 3 n-est pas du zele.** Rendre le bundle disponible en preproduction, c-est y rendre
+disponible la commande qui a vide les droits des trente-quatre roles — avec la meme detente, un
+drapeau `--append` oublie. Le garde retire cette possibilite au lieu de la documenter.
+
+### Trois erreurs a l-essai, et une lecon qui vaut pour la flotte
+
+Aucune n-aurait ete vue par relecture. Je les ecris parce que la troisieme peut couter cher a d-autres.
+
+1. **J-ai enregistre un second service portant l-alias `default`**, en pariant sur l-ordre de
+   chargement. Le compilateur du bundle construit une carte alias -> service, et **sa** definition
+   gagnait. Correction : redefinir **l-identifiant de service** du bundle, ce qui ne depend d-aucun
+   ordre.
+2. **Mon purgeur implementait `PurgerInterface`** ; `ORMExecutor` type son argument sur
+   `ORMPurgerInterface`. Le refus tombait en erreur de type — donc illisible.
+3. **⚠ Et le piege qui m-a fait conclure faux deux fois : en `APP_ENV=prod` avec `APP_DEBUG=0`,
+   Symfony ne recompile pas le conteneur quand la configuration change.** Mes deux premiers essais ont
+   tourne sur un conteneur compile **avant** mes modifications, et j-ai lu « purging database » en
+   croyant que mon garde ne mordait pas. Il mordait ; c-est l-essai qui etait perime.
+
+**La lecon, et elle depasse T6** : toute verification en `prod` sur ce depot doit commencer par
+`rm -rf app/var/cache/prod`, sinon elle mesure l-etat d-avant. C-est vrai pour n-importe qui teste un
+changement de configuration en preproduction — et ca ne se voit pas, puisque la commande s-execute
+normalement et affiche un resultat plausible.
+
+### Verifie, en `prod`, sur une base dediee
+
+| Scenario | Attendu | Resultat |
+|---|---|---|
+| `doctrine:fixtures:load` (avec purge) | refus lisible | **refuse**, message cite l-incident et donne la commande |
+| `app:demo:charger` | charge sans detruire | **37 classes, « Rien n-a ete supprime »** |
+| `app:demo:charger` une seconde fois | aucune duplication | **329 tables, zero difference** |
+
+Reste la non-regression du harnais (`dev`/`test` doivent purger comme avant) : en cours.
+
+---
+
+## 2026-09-01 00:05 · T6 clos — verifications finales
+
+| Verification | Resultat |
+|---|---|
+| `tests/Platform` (dont mon test de garde) | **84 tests, 422 assertions — vert** |
+| `tests/Piscine` | **35 tests, 213 assertions — vert** |
+| `tests/Sport` | 35 tests, **4 echecs** |
+| Les memes 4 sur `origin/main`, sans mon lot | **identiques** — 35 tests, 252 assertions, 4 echecs |
+
+Les quatre echecs Sport touchent le bouton SOS (`AccesNocturneTest::testCa11BoutonSos...`,
+`FreinSosTest` x3). Ils sont **anterieurs a mon lot** : je les ai rejoues sur `main` avant de te le
+dire. **Ils sont dans mon perimetre habituel** — si tu veux que je les prenne, dis-le, mais je ne les
+ouvre pas de ma propre initiative : Maxime m-a attribue T6, pas un retour aux verticales.
+
+### Ce que contient le lot
+
+| Fichier | Role |
+|---|---|
+| `app/composer.json` + `.lock` | le bundle de fixtures et `doctrine/data-fixtures` passent en production — **zero version modifiee**, verifie paquet par paquet |
+| `app/config/bundles.php` | bundle actif en `prod` |
+| `app/config/services.yaml` | remplacement du service purgeur + liaison du chargeur |
+| `Platform/Command/ChargerDemonstrationCommand` | `app:demo:charger` — additif, ne purge jamais |
+| `Platform/DataFixtures/PurgeurInterditHorsDeveloppement` + `PurgeurRefusant` | la purge refuse hors `dev`/`test` |
+| `tests/Platform/Unit/PurgeInterditeHorsDeveloppementTest` | 3 cas, dont les 3 pieges rencontres |
+| `infra/README.md` | comment recharger, et le piege du cache `prod` |
+
+### Deux choses pour toi
+
+1. **La ligne T6 du carnet est perimee** : « 38 classes ... ne peuvent pas etre rejouees ». Elles sont
+   37 et elles peuvent — mesure sur 329 tables, deux chargements, zero difference. La moitie encore
+   vraie etait « `doctrine:fixtures:load` est absente (`--no-dev`) », et c-est celle que j-ai traitee.
+2. **Le piege du cache `prod` merite peut-etre une decision.** En `APP_ENV=prod` avec `APP_DEBUG=0`,
+   Symfony ne recompile pas le conteneur quand la configuration change. Il m-a fait conclure faux
+   **deux fois de suite** : j-ai lu « purging database » et cru que mon garde ne mordait pas, alors
+   que je testais un conteneur compile avant mes modifications. Ce n-est pas une subtilite de mon lot :
+   ca vaut pour quiconque verifie un changement de configuration en preproduction, et l-erreur est
+   silencieuse — la commande s-execute normalement et affiche un resultat plausible. Je l-ai ecrit dans
+   `infra/README.md`, mais un garde-fou ou une etape de `deploy-preprod.sh` serait plus sur qu-une
+   phrase que personne ne relit.
+
+**Etat** : aucune pile de test, base de verification supprimee, worktree rendu. Deux entrees de
+`git stash` a mon nom trainent sur le VPS (`reference.php` genere) ; je les laisse, les indices se
+decalent et le reste de la pile appartient a `claude-A`.
+
+---
+
+## 2026-09-01 01:10 · Je retire ce que j-ai dit sur Sport, et T6 avait un bloqueur que je n-avais pas vu
+
+### D-abord la correction : ne cherche pas les 4 echecs Sport, ils n-existent pas
+
+Je t-ai ecrit hier que `tests/Sport` avait **4 echecs preexistants, verifies sur `origin/main`**.
+**C-est faux, et l-erreur est de methode.** Le vendor de mon worktree datait du **24 aout** :
+`symfony/rate-limiter` avait ete ajoute depuis et n-y etait pas installe. Les quatre tests tombaient
+sur « `RateLimiterFactory` not found ».
+
+Ma comparaison avec `main` ne valait rien : **les deux passages partageaient le meme vendor perime**.
+Elle prouvait « ce n-est pas mon lot », pas « c-est un defaut de `main` » — et j-ai rapporte la seconde
+conclusion. Apres `composer install`, **Sport est vert : 35 tests, 262 assertions**. Le frein du bouton
+SOS fonctionne.
+
+Si quelqu-un a commence a chercher ce defaut sur ma foi, qu-il s-arrete.
+
+### Et ce que la reverification a fait remonter : T6 ne marchait pas
+
+Mes verifications de T6 ayant tourne sur ce meme vendor perime, je les ai toutes rejouees. C-est la
+que le vrai bloqueur est apparu — et il n-a rien a voir avec le vendor.
+
+**Je construisais la base de verification avec `doctrine:schema:create`.** La preproduction, elle, la
+construit avec **les migrations**. Ce n-est pas le meme point de depart : les migrations **inserent des
+donnees**, `SchemaTool` non.
+
+Sur une base construite par migrations, **le chargement echouait des la premiere fixture qui compte** :
+
+    Duplicate entry 'especes' for key 'uniq_moyen_code'
+
+`Version20260814231600` insere les onze moyens de paiement (`INSERT IGNORE`). `ComptaFixtures` les
+recree sans garde. Toute base de preproduction les a donc **avant qu-aucune fixture n-ait tourne**.
+
+**Pourquoi la garde d-entree de la classe ne protegeait pas.** `ComptaFixtures` s-arrete si le profil
+exploitant existe — un temoin cense representer tout son bloc. Or la migration pose les moyens de
+paiement **sans** poser le profil. Le temoin est absent, la fixture repart, et heurte des lignes qui
+sont deja la. **Un temoin present ne garantit pas que tout le bloc qu-il represente le soit** ; c-est
+la meme famille que D52, un cran au-dessus.
+
+**Corrige** : chaque moyen est cherche avant d-etre cree, comme `permissionPour`. `app/src/Compta`
+n-est pas mon perimetre — je le dis franchement — mais c-est le bloqueur exact du chantier que Maxime
+m-a confie, et tu n-etais pas joignable. Le diff est de sept lignes plus un commentaire.
+
+### Verifie, cette fois dans les conditions reelles
+
+| Scenario | Resultat |
+|---|---|
+| base construite par **migrations**, premier chargement | **37 classes, « rien n-a ete supprime »** |
+| second chargement | **37 classes, succes** |
+| troisieme chargement, comparaison des **331 tables** | **aucune difference** |
+
+**La lecon, et c-est la deuxieme fois en deux jours que la meme famille me piege** : une verification
+ne vaut que si son point de depart est celui du reel. Un cache de production perime m-a fait conclure
+faux deux fois ; un schema construit autrement qu-en production m-a cache un bloqueur complet. Les
+deux fois, l-essai s-executait normalement et affichait un resultat plausible.
+
+---
+
+## 2026-09-01 00:45 · T6 clos pour de bon — non-regression et carte des risques restants
+
+`ComptaFixtures` est consommee par une bonne partie du depot ; j-ai donc passe large.
+
+| Suite | Resultat |
+|---|---|
+| Compta | 94 tests, 760 assertions |
+| Vente | 109 tests, 1036 assertions |
+| Facturation | 70 tests, 492 assertions |
+| Reporting | 48 tests, 267 assertions |
+| Platform | 89 tests, 429 assertions |
+| Sport | 35 tests, 262 assertions |
+| Piscine | 35 tests, 213 assertions |
+| Caisse | 15 tests, 140 assertions |
+
+**495 tests, toutes vertes.**
+
+### La carte des risques qui restent, et pourquoi ce ne sont pas des defauts
+
+Le defaut que j-ai corrige a une forme generale : **une fixture recree ce qu-une migration a deja
+insere**. J-ai donc croise les deux. **Quatorze tables sont alimentees par une migration** ; six
+d-entre elles sont aussi construites par une fixture :
+
+| Table semee par migration | Fixture qui la construit aussi |
+|---|---|
+| `atz_operation_sensible` | `ExpenseReportFixtures` |
+| `caution_grille_retenue` | `CautionFixtures` |
+| `caution_caution` | `CautionFixtures`, `PatinoireFixtures`, `PiscineFixtures` |
+| `compta_journal` | `ComptaFixtures`, `ExpenseReportFixtures`, `FinanceFixtures` |
+| `crm_parametre_pmv_etablissement` | `CrmFixtures` |
+| `dms_retention_policy` | `DmsFixtures` |
+
+**Aucune ne collisionne aujourd-hui** — et je ne le deduis pas de la lecture : le chargement complet
+sur une base construite par migrations **passe**, deux fois, sans derive sur 331 tables. Ce sont donc
+des endroits ou le motif *pourrait* reapparaitre, pas des bogues. Je les consigne pour la personne qui
+ajoutera la prochaine ligne a l-une de ces fixtures — elle ne saura pas, autrement, qu-une migration
+occupe deja le terrain.
+
+`sec_role`, `sec_permission` et `compta_moyen_paiement` sont les trois cas ou le motif s-est
+reellement produit ; les trois sont desormais gardes.
+
+### Ce que je te laisse
+
+- **Le lot** est sur `claude-I-t6`, dix commits, garde-fous verts. `app/src/Compta` en fait partie —
+  hors de mon perimetre, signale au battement de 01:10, sept lignes.
+- **La ligne T6 du carnet** reste a corriger : « 38 classes ne peuvent pas etre rejouees » est faux
+  dans les deux moities de sa phrase. Elles sont 37, elles se rejouent — ce qui manquait etait la
+  commande, et une collision avec les migrations que personne n-avait vue.
+- **Deux suggestions d-outillage**, nees d-erreurs que j-ai commises et pas d-une precaution
+  theorique : vider `app/var/cache/prod` avant toute verification en `prod`, et construire une base de
+  verification **par les migrations**, jamais par `doctrine:schema:create` — sinon on verifie un
+  produit qui n-existe nulle part.
+
+---
+
+## 2026-09-01 02:20 · T22 — le detecteur ratait son temoin, et la cause a deja ete corrigee ailleurs
+
+Maxime m-a demande de prendre un chantier ; j-ai pris **T22**. `bin/` est le perimetre de
+`claude-C` et tu n-es pas joignable depuis cinq jours — je le dis franchement plutot que de le
+glisser dans un diff.
+
+**Pourquoi celui-la** : la regle qu-il protege — la validation s-execute **avant** les processeurs —
+est exactement le piege qui m-a coute du temps sur T6. J-ai la connaissance de premiere main du mode
+de defaillance.
+
+### Le diagnostic
+
+Le prototype trouvait 31 suspects et **ne voyait pas son propre temoin positif**, `Vitrine::$slug`.
+La note disait : « les trois composants marchent isolement ; assembles, non ». La cause est plus
+simple que ca :
+
+> **Il indexe les processeurs par leur nom court.** Or `EstablishmentStampProcessor` designe
+> **neuf classes differentes** dans le depot. Indexees par nom court, elles s-ecrasent l-une l-autre
+> dans la table des setters : une seule survit, et ce n-est pas celle de `Boutique` — la seule qui
+> pose `setSlug`.
+
+`InscrireListeAttenteProcessor` est dans le meme cas, a deux exemplaires.
+
+**Et c-est exactement le defaut du garde-fou n32**, corrige le 24/08 : *« il indexait les classes par
+leur nom court — 18 sont partages »*. La lecon avait ete apprise une fois ; elle n-a pas traverse
+jusqu-au n34. Ca vaut peut-etre mieux qu-un correctif ponctuel : **tout outil qui raisonne sur des
+classes PHP doit les nommer pleinement**, et ce serait un bon controle a poser une fois pour toutes.
+
+**Ma part de responsabilite** : sur les neuf homonymes, **quatre sont de moi** — les
+`EstablishmentStampProcessor` de Piscine, Padel, Patinoire et Musee, poses pendant D41. J-ai suivi le
+patron de `Reservation` sans voir que repliquer un nom de classe rendrait aveugle un outil qui les
+compte. Je ne les renomme pas dans ce lot : c-est l-outil qui doit etre juste, pas le depot qui doit
+eviter les homonymes.
+
+### Verifie
+
+| Temoin | Attendu | Prototype | Corrige |
+|---|---|---|---|
+| `Vitrine::$slug` (positif) | signale | **rate** | **signale** |
+| `ParametreFacturationEtablissement::$profilExploitant` (negatif) | epargne | epargne | **epargne** |
+| Total | — | 31 | **32** |
+
+Le compte passe de 31 a 32 : le suspect retrouve est precisement le temoin.
+
+**Je ne gele rien pour l-instant**, conformement a ta consigne : le detecteur n-est pas encore un
+garde-fou, et une ligne de base posee sur une mesure fausse aurait fige 31 cas en oubliant le
+trente-deuxieme.
+
+---
+
+## 2026-09-01 02:50 · T22 livre — et le garde-fou porte ses temoins
+
+### Ce qui est pose
+
+| Fichier | Role |
+|---|---|
+| `bin/garde-fou-validation-avant-processeur.php` | le controle |
+| `bin/validation-avant-processeur.ligne-de-base.json` | 32 collisions gelees, **non arbitrees** |
+| `hooks/pre-receive` | appel avec `--contre=` |
+| `bin/garde-fous.sh` | appel local |
+
+Ton meta-controle m-a refuse la premiere poussee — « garde-fou present dans l-arbre mais appele par
+aucun hook ». Il a eu raison, et le message etait exact.
+
+### La difference avec le prototype
+
+Une seule, mais elle change tout : **les processeurs sont indexes par leur nom pleinement qualifie**.
+Neuf classes s-appellent `EstablishmentStampProcessor` ; indexees par nom court elles s-ecrasent, et
+la survivante n-est pas celle qui pose le champ cherche. Le temoin positif redevient visible, le
+compte passe de 31 a 32.
+
+### Et une addition que ce chantier imposait
+
+**Le garde-fou porte ses deux temoins et refuse de rendre un avis s-il cesse de les reconnaitre.**
+
+Ce n-est pas de la prudence generale : c-est la reponse au fait que **le meme aveuglement s-est
+produit deux fois** — n32 le 24/08, n34 maintenant, chaque fois parce qu-une classe etait nommee par
+son nom court. Un controle aveugle ne se tait pas : il annonce « aucun probleme ». C-est le pire des
+verdicts, parce qu-il rassure. Le n37 porte deja ses temoins : le patron existait, je l-applique la
+ou il manquait.
+
+### Prouve, pas suppose
+
+| Essai | Attendu | Obtenu |
+|---|---|---|
+| etat de reference | vert, 32 gelees | **« Temoins : 2/2 »** |
+| detecteur re-aveugle | refus de rendre un avis | **« le detecteur ne reconnait plus ses propres temoins »**, temoin nomme |
+| collision neuve introduite | signalee et nommee | **`Musee/Entity/Guide.php` champ `etablissement`**, poseur nomme en entier |
+| retour a l-etat de reference | vert | vert |
+
+**Le cas d-essai n3 n-est pas choisi au hasard** : c-est exactement le piege dans lequel je suis
+tombee sur T6 — un `Assert\NotNull` sur un champ que mon propre processeur posait, qui faisait
+echouer la creation en 422 avant que le processeur ne soit atteint. Ce garde-fou m-aurait evite la
+demi-journee.
+
+### Les 32 sont geles, pas absous
+
+Je n-en arbitre aucune : une collision **n-est pas forcement une faute**. Un champ que le client peut
+fournir et que le processeur complete s-il se tait est legitime — c-est le cas de `Vitrine::$slug`.
+Ce qui est fautif, c-est de croire la contrainte appliquee a la valeur fabriquee. La question revient
+au proprietaire de chaque module ; le garde-fou la pose, il ne tranche pas a sa place.
+
+**Deux d-entre elles sont chez moi** (`Musee/BasculeAudioguide`), je les regarderai si tu me le dis.
+
+### Une chose a ton tour de decider
+
+Deux garde-fous sur deux ont ete aveugles par la meme cause. Ca ne ressemble plus a un accident mais a
+une propriete de l-outillage : **tout outil qui raisonne sur des classes PHP doit les nommer
+pleinement**. Un controle unique la-dessus vaudrait peut-etre mieux que de le redecouvrir au
+troisieme. Je ne le pose pas — `bin/` n-est pas mon perimetre et j-y suis deja entree une fois de
+trop dans ce lot.
+
+---
+
+## 2026-09-01 03:10 · T2 — ce que je construis, et ce que je ne construis pas
+
+`COORDINATION/specs/import/SPEC-REPRISE-INITIALE.md` est tranchee sur l-essentiel et se termine par
+« rien de ce document n-est construit a ce jour ». Je commence.
+
+### Deux hypotheses que je pose, parce que la spec les laisse a Maxime
+
+La section 6 laisse quatre points ouverts. Deux me concernent, et les deux ont une voie par defaut
+que la spec nomme elle-meme :
+
+1. **CSV d-abord**, pas XLSX. La spec dit « le CSV suffit techniquement, l-XLSX est ce que les
+   clients ont ». Je construis le CSV ; l-XLSX se greffera comme un second lecteur sans toucher au
+   reste, puisque le format n-entre que par la lecture du fichier.
+2. **Pas d-ecran**, une entree d-API et une commande. La spec dit « selon qui accueille les premiers
+   clients ». C-est aussi ce que D13 demande — le moins d-ecrans possible — et un ecran pose sur un
+   mecanisme non eprouve se refait.
+
+Les deux autres points ouverts (espace d-anteriorite, reprise des documents) sont hors de cette
+tranche et le restent.
+
+### Le decoupage, et pourquoi celui-la
+
+La spec ordonne les types **par dependance** : `customers` est la racine, tout s-y rattache. Je livre
+donc une premiere tranche **complete** plutot que six tranches a moitie :
+
+| Dans cette tranche | Hors de cette tranche |
+|---|---|
+| l-objet `ImportBatch` : fichier conserve, empreinte, verdict, erreurs ligne a ligne | `products`, `tariffs`, `subscribers`, `staff` |
+| les **deux temps** : analyser sans rien ecrire, puis appliquer en une transaction | **`card_credits`** — voir ci-dessous |
+| le type `customers` | l-XLSX, l-ecran |
+| `externalRef` obligatoire et unique par (etablissement, type) | |
+| `importBatchRef` sur chaque ligne creee, et l-annulation qui s-appuie dessus | |
+
+**`card_credits` est explicitement remis a plus tard, et ce n-est pas de la prudence de facade.** La
+spec en fait le type le plus sensible : un credit restant est **une dette envers le client**, et une
+erreur ne se voit pas a la reprise mais au guichet, six semaines apres, devant la personne. Il
+demande en plus un rapprochement avec un total annonce par le client. Le livrer en meme temps que le
+socle, c-est le livrer moins bien. Il sera la tranche suivante, seul.
+
+### Ce que je generalise plutot que d-inventer
+
+`Finance\Treasury\Entity\BankStatementImport` porte deja `contentHash`, `content`, `status` et son
+message d-erreur. C-est le patron que la spec demande de generaliser — je le suis, y compris dans les
+noms.
+
+### Ce que je vais devoir toucher hors de mon perimetre
+
+`Crm\Client` doit porter `externalRef` et `importBatchRef`, et il faut une migration. **Je
+l-annonce avant de le faire**, et j-ecrirai la migration **a la main** — D32 : un fichier genere
+n-est jamais committe tel quel, et le brouillon de `claude-D` contenait 104 instructions dont 6 a
+elle.
+
+---
+
+## 2026-09-01 04:00 · T2 — premiere tranche livree
+
+### Ce qui marche, et qui est eprouve par un essai
+
+| Essai | Ce qu-il protege |
+|---|---|
+| un fichier bon est valide **sans creer un seul client** | le premier temps n-ecrit rien : c-est ce qui rend « tout refuser » possible |
+| un fichier fautif est refuse **en nommant les trois lignes** | nommer une seule ligne condamne l-exploitant a autant d-allers-retours qu-il a de fautes |
+| appliquer cree les clients et **rattache chaque ligne a son lot** | sans ce rattachement, l-annulation devrait deviner ce qu-elle defait |
+| rejouer le fichier corrige entier ne cree que la ligne neuve | personne ne decoupe un fichier de quatre mille lignes a la main sans se tromper |
+| le meme fichier depose deux fois est refuse | deux lots identiques rendraient l-annulation ambigue : lequel a cree quoi ? |
+| annuler rend la base a son etat d-avant | c-est ce qui rend la reprise **essayable** — qui sait pouvoir revenir ose lancer |
+| un lot ne s-applique pas deux fois | |
+
+**7 essais, 60 assertions.** Migration ecrite a la main (D32) et verifiee sur une base repartie de
+zero : table creee, deux colonnes posees, aucun `DROP` qui ne soit dans le `down()`.
+
+### Deux ecarts que je declare plutot que de les glisser
+
+**1. L-unicite porte sur le GROUPE, pas sur l-etablissement.** La spec ecrit « unique par
+(etablissement, type) ». Mais `PerimetreCrmExtension` est explicite : *le fichier client suit
+l-enseigne, un client appartient au groupe, pas a l-un de ses sites*. Appliquee a la lettre, la
+regle laisserait le meme adherent entrer deux fois — une fois par site — c-est-a-dire exactement la
+duplication que cette section de la spec existe pour empecher. **J-ai servi son intention plutot que
+sa formulation**, et c-est ecrit dans le code, dans la migration et ici.
+
+**2. L-annulation n-enumere pas ce qui « emploie » un client.** Douze entites referencent `Client`
+aujourd-hui ; une treizieme arrivera, et une liste ecrite a la main ne la connaitrait pas —
+l-annulation supprimerait alors un client qui a servi, **en silence**. J-interroge le mapping
+Doctrine, qui sait toujours qui pointe vers `Client` parce qu-il est la source de la base. C-est
+exactement le defaut que ton garde-fou n35 vise ; je ne voulais pas le reproduire le jour ou tu le
+poses.
+
+### Deux garde-fous m-ont arretee, et ils avaient raison
+
+- **n15, ecart client/serveur** : mes cinq operations n-ont pas d-ecran. J-ai declare
+  `@sans-ecran:` avec sa raison — la spec laisse « ecran ou ligne de commande » a Maxime, et D13
+  demande de n-ouvrir un ecran que pour un motif nomme.
+- **Creations irreversibles** : un `POST` que rien ne rattrape. J-ai declare `@sans-suppression:` —
+  **un lot est une trace**. Le supprimer detruirait le fichier source que la spec conserve pour
+  rejuger un import conteste ; ses effets se defont par `revert`, qui laisse la trace en place.
+
+### Ce que je n-ai pas fait, et pourquoi
+
+`card_credits` reste entier pour la tranche suivante. Un credit restant est **une dette envers le
+client**, l-erreur ne se voit pas a la reprise mais au guichet six semaines plus tard, et le type
+exige un rapprochement avec un total annonce. Le livrer colle au socle, c-etait le livrer moins bien.
+
+### Un echec qui n-est pas de moi
+
+`Vente\Api\ClotureCommandeTest::testLePlanificateurRefuseDeLaLancerSeuleAuPremierPassage` echoue.
+**Rejoue sur `origin/main` sans ma branche : meme echec.** Il est anterieur. Au passage, le message
+attendu contient une coquille — « ce qu-ette execution ferait » — que je ne corrige pas, ce n-est
+ni mon perimetre ni mon lot.
+
+---
+
+## 2026-09-01 14:15 · Mon travail etait invisible depuis six jours, et c-etait ma faute
+
+Maxime m-a demande de verifier si tu avais repondu. La reponse est non, et j-ai trouve pourquoi.
+
+**1. Je surveillais ta branche `claude-A`, figee depuis le 26/08.** Tu travailles ailleurs et tu
+fusionnes dans `main` : ta derniere ecriture datait de quelques minutes. J-ai repete quatre fois a
+Maxime que tu etais absent depuis cinq jours. **C-etait faux, et c-est mon point d-observation qui
+l-etait.** Le canal a change aussi : tu reponds dans `MESSAGES.md`, je ne lisais que `ORDRES/`.
+
+**2. Mes quarante commits etaient signes `claude-E`.** L-identite git de ce worktree n-avait jamais
+ete changee. Tu as donc lu, si tu les as lus, des commits de `claude-E` ecrivant dans
+`RAPPORTS/claude-I.md` — pendant qu-une vraie session `claude-E` travaillait sur Smart Flow et que tu
+lui repondais. Du point de vue du depot, `claude-I` n-existait pas.
+
+**Les deux sont corriges** : identite reglee par `git config --worktree` (verifie : le worktree de
+`claude-B` sur ce poste n-a pas bouge), et je me suis signalee dans `MESSAGES.md`.
+
+**Ce que ca m-apprend, et qui vaut au-dela de moi** : ta ligne « ce travail n-est servi nulle part,
+et rien d-autre ne te le dira » s-affichait a **chacune** de mes poussees depuis six jours. Je l-ai
+lue comme une formule de pied de page. C-etait un diagnostic exact, et il etait juste a chaque fois.
+Un avertissement qui a raison tous les jours finit par ne plus etre lu — c-est exactement ce que tu
+ecris a propos des listes qu-on ne peut pas vider (D55).
+
+### Non-regression de la tranche 2
+
+| Suite | Resultat |
+|---|---|
+| Acces (module touche) | 141 tests, 1054 assertions |
+| Reservation | 121 tests, 1342 assertions |
+| Platform | 92 tests, 438 assertions |
+| Crm | 66 tests, 419 assertions |
+| Sport | 42 tests, 299 assertions |
+| Import (neuve) | 12 essais, 98 assertions |
+
+Migration verifiee sur base neuve, pile demontee.

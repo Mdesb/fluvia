@@ -249,11 +249,14 @@ if [ -f "$RACINE/bin/garde-fou-unique-entity.php" ]; then
     executer "UniqueEntity sur champ non écrivable (n°40)" php_racine bin/garde-fou-unique-entity.php
 fi
 
-# 34. Une contrainte posee sur une propriete que le processeur ECRIT ne verra jamais la valeur
-#     finale : la validation s'execute avant lui. Inerte tant que le fichier est gare.
-if [ -f "$RACINE/bin/garde-fou-validation-avant-processeur.php" ]; then
-    executer "Validation avant processeur (n°34)" php_racine bin/garde-fou-validation-avant-processeur.php
-fi
+# 34. LE CABLAGE VIT PLUS BAS, PAS ICI.
+#
+# Deux sessions ont pose ce controle a deux endroits differents, et la fusion du 01/09 a garde les
+# deux : le meme numero designait alors deux appels, et le controle d'unicite des numeros a refuse.
+#
+# Celui-ci disait « inerte tant que le fichier est gare » — vrai quand le script vivait dans
+# `bin/en-attente/`, faux depuis qu'il en est sorti. La forme conservee est celle qui passe
+# `--contre=$REFERENCE` et qui documente ses deux temoins.
 
 executer "Secrets en dur" php_racine bin/garde-fou-secrets.php
 
@@ -388,6 +391,15 @@ if [ -n "${REFERENCE:-}" ]; then
     executer "Établissement écrivable (D41)" php_racine bin/garde-fou-etablissement-ecrivable.php "--contre=$REFERENCE"
 else
     executer "Établissement écrivable (D41)" php_racine bin/garde-fou-etablissement-ecrivable.php
+fi
+
+# 12 bis. La validation s'exécute AVANT les processeurs : une contrainte posée sur un champ que le
+#         processeur fabrique ne verra jamais cette valeur. Le détecteur porte ses deux témoins et
+#         refuse de rendre un avis s'il cesse de les reconnaître — son prototype ratait le sien.
+if [ -n "$REFERENCE" ]; then
+    executer "Validation avant processeur (n°34)" php_racine bin/garde-fou-validation-avant-processeur.php "--contre=$REFERENCE"
+else
+    executer "Validation avant processeur (n°34)" php_racine bin/garde-fou-validation-avant-processeur.php
 fi
 
 # 13. Une suppression dans un `up()` de migration doit être voulue, et le dire (D32).

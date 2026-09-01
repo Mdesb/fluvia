@@ -143,6 +143,30 @@ le paquet Debian).
 ./infra/deploy-preprod.sh
 ```
 
+### 6. Recharger les données de démonstration
+
+La démonstration dérive au fil des essais. Les 37 classes de `DataFixtures` décrivent l'état voulu et
+peuvent être rejouées sur la préprod :
+
+```bash
+docker compose exec php php bin/console app:demo:charger
+```
+
+Elle **complète** : chaque fixture cherche avant de créer, donc rien n'est écrasé ni dupliqué. Deux
+chargements successifs laissent des comptes identiques sur les 329 tables — mesuré, pas supposé.
+
+⚠ **Ce qu'elle ne fait pas** : remettre à zéro. Un objet de démonstration modifié à la main reste
+modifié. Repartir d'une base propre est un geste de `dev` sur une base jetable, jamais un geste de
+préprod.
+
+⚠ **Et n'utilisez pas `doctrine:fixtures:load`** : elle **purge la base avant d'écrire**. C'est ce qui
+a mis les trente-quatre rôles de la préprod à zéro droit le 24/08. Elle refuse désormais de purger hors
+`dev`/`test` — mais autant ne pas la taper.
+
+⚠ **Si vous vérifiez un changement de configuration en préprod** : `APP_ENV=prod` avec `APP_DEBUG=0` ne
+recompile pas le conteneur de services. Sans `rm -rf app/var/cache/prod` au préalable, vous mesurez
+l'état d'avant — et la commande s'exécute normalement, en affichant un résultat plausible.
+
 ## Points de vigilance
 
 - **Données** : jamais de données clients réelles en préprod (RGPD). Dump anonymisé

@@ -44,6 +44,13 @@ use Symfony\Component\Validator\Constraints as Assert;
 // fiche, elle est là pour être GROUPÉE. Sans index, un `GROUP BY` sur la table des clients devient
 // un balayage complet, et la colonne perd l'avantage qui l'a fait préférer au calcul à la volée.
 #[ORM\Index(name: 'idx_client_region_geographique', columns: ['region_geographique'])]
+// UNE UNICITE QUI PORTE SUR LE GROUPE, PAS SUR L'ETABLISSEMENT — ecart assume a la lettre de
+// SPEC-REPRISE-INITIALE §3, qui ecrit « unique par (etablissement, type) ». Le fichier client
+// suit l'enseigne : un client appartient au groupe, pas a l'un de ses sites
+// (`PerimetreCrmExtension`). Rendre la reference unique par etablissement laisserait le meme
+// adherent entrer deux fois, une fois par site — exactement la duplication que cette section de
+// la specification existe pour empecher. On sert son intention plutot que sa formulation.
+#[ORM\UniqueConstraint(name: 'uniq_client_groupe_external_ref', columns: ['groupe_id', 'external_ref'])]
 #[ApiResource(
     shortName: 'Client',
     operations: [
@@ -589,5 +596,52 @@ class Client
         if ($this->type === TypeClient::Morale && ($this->raisonSociale === null || trim($this->raisonSociale) === '')) {
             $context->buildViolation('La raison sociale est requise pour un client moral.')->atPath('raisonSociale')->addViolation();
         }
+    }
+    /**
+     * Reference de ce client dans le logiciel d'ou il a ete repris (SPEC-REPRISE-INITIALE §3).
+     *
+     * **C'est ce qui remplace toute heuristique de rapprochement.** Ni « nom + prenom », ni « nom +
+     * date de naissance », ni score de similarite : ils marchent sur 98 % des lignes, et les 2 %
+     * restants sont les familles nombreuses, les homonymes et les fratries — c'est-a-dire les
+     * clients d'une piscine municipale. Une mauvaise reponse fusionne deux personnes ou en duplique
+     * une, et les deux se decouvrent des mois plus tard, par une reclamation.
+     *
+     * `null` pour tout client cree dans l'application : la reference ne vaut que pour un repris.
+     */
+    #[ORM\Column(length: 128, nullable: true)]
+    private ?string $externalRef = null;
+
+    /**
+     * Le lot de reprise qui a cree ce client — un `?Uuid` nu, **jamais une relation Doctrine** (D2).
+     *
+     * C'est ce qui rend l'annulation possible : sans lui, defaire un import demanderait de deviner
+     * ce qu'il avait cree. Le garder hors relation evite que `Crm` depende du module d'import, qui
+     * ne sert qu'une fois dans la vie d'un client.
+     */
+    #[ORM\Column(type: UuidType::NAME, nullable: true)]
+    private ?Uuid $importBatchRef = null;
+
+    public function getExternalRef(): ?string
+    {
+        return $this->externalRef;
+    }
+
+    public function setExternalRef(?string $externalRef): self
+    {
+        $this->externalRef = $externalRef;
+
+        return $this;
+    }
+
+    public function getImportBatchRef(): ?Uuid
+    {
+        return $this->importBatchRef;
+    }
+
+    public function setImportBatchRef(?Uuid $importBatchRef): self
+    {
+        $this->importBatchRef = $importBatchRef;
+
+        return $this;
     }
 }
