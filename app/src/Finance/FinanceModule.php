@@ -110,6 +110,10 @@ final class FinanceModule implements ModuleManifest
             // `finance:treasury:detecter-ecarts` (acteur `null`, comme `expense_report.approved`).
             'treasury.reconciliation_completed',
             'treasury.discrepancy_detected',
+            // Addendum FIN-4 (alertes de trésorerie proactives, `plan-treasury-cash-alerts.md` §0.7) —
+            // tenant toujours dérivé de `TreasuryCashAlert.establishment`, jamais du contexte HTTP (D6) ;
+            // émis par la commande planifiée `finance:treasury:verifier-seuils` (acteur `null`, système).
+            'treasury.threshold_breached',
         ];
     }
 

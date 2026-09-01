@@ -2,6 +2,10 @@ import { useState } from 'react'
 import Tabs from '../components/Tabs.jsx'
 import FacturesFournisseur from '../components/FacturesFournisseur.jsx'
 import NotesDeFrais from '../components/NotesDeFrais.jsx'
+import ComptesBancaires from '../components/ComptesBancaires.jsx'
+import ImportReleve from '../components/ImportReleve.jsx'
+import RapprochementBancaire from '../components/RapprochementBancaire.jsx'
+import TresorerieDashboard from '../components/TresorerieDashboard.jsx'
 
 // Achats & trésorerie — soixante opérations exposées, sept atteignables jusqu'ici.
 //
@@ -14,10 +18,14 @@ import NotesDeFrais from '../components/NotesDeFrais.jsx'
 // endroit du module où quelqu'un attend — un salarié qui a avancé de l'argent. Un remboursement
 // qu'on ne peut pas tracer se règle de travers, puis se discute après coup.
 //
-// ⚠ CE QUI RESTE SANS ÉCRAN, ET QUI SE DIT PLUTÔT QUE DE SE TAIRE : la trésorerie proprement dite
-// — comptes bancaires, rapprochement, position, échéancier, prévision. Tout existe côté serveur,
-// droits compris (`finance.treasury_manage_account`, `_import_statement`, `_reconcile`). Le titre
-// de cet écran promet donc encore plus qu'il ne rend, et le sous-titre le dit maintenant.
+// ── LA TRÉSORERIE A ENFIN SES ÉCRANS (T26) ───────────────────────────────────────────────────────
+//
+// Comptes bancaires, import de relevés et rapprochement existaient côté serveur — droits compris
+// (`finance.treasury_manage_account`, `_import_statement`, `_reconcile`) — et AUCUN écran ne les
+// ouvrait : du travail payé qui ne servait à rien. Quatre onglets de plus, et le titre ne promet plus
+// que ce qu'il rend. Le dernier, « Position & prévision », ouvre les quatre lectures live du serveur
+// (`/finance/treasury/position|payment-schedule|cashflow-forecast|discrepancies`) — position, prévision,
+// échéancier, écarts — qui n'avaient elles non plus aucun écran.
 export default function Finance({ etabActif, droits }) {
   const [onglet, setOnglet] = useState('fournisseurs')
 
@@ -27,8 +35,8 @@ export default function Finance({ etabActif, droits }) {
         <div className="ttl">
           <h1>Achats &amp; trésorerie</h1>
           <p>
-            Factures fournisseur, notes de frais et circuit de paiement — la trésorerie
-            (comptes, rapprochement, prévision) n’a pas encore d’écran.
+            Factures fournisseur, notes de frais, comptes bancaires, import de relevés,
+            rapprochement, position et prévision de trésorerie.
           </p>
         </div>
       </div>
@@ -39,14 +47,19 @@ export default function Finance({ etabActif, droits }) {
         onglets={[
           ['fournisseurs', 'Factures fournisseur'],
           ['frais', 'Notes de frais'],
+          ['comptes', 'Comptes bancaires'],
+          ['import', 'Import de relevés'],
+          ['rapprochement', 'Rapprochement'],
+          ['position', 'Position & prévision'],
         ]}
       />
 
-      {onglet === 'fournisseurs' ? (
-        <FacturesFournisseur etabActif={etabActif} droits={droits} />
-      ) : (
-        <NotesDeFrais etabActif={etabActif} droits={droits} />
-      )}
+      {onglet === 'fournisseurs' && <FacturesFournisseur etabActif={etabActif} droits={droits} />}
+      {onglet === 'frais' && <NotesDeFrais etabActif={etabActif} droits={droits} />}
+      {onglet === 'comptes' && <ComptesBancaires etabActif={etabActif} droits={droits} />}
+      {onglet === 'import' && <ImportReleve etabActif={etabActif} droits={droits} />}
+      {onglet === 'rapprochement' && <RapprochementBancaire etabActif={etabActif} droits={droits} />}
+      {onglet === 'position' && <TresorerieDashboard />}
     </div>
   )
 }

@@ -393,6 +393,16 @@ while read -r ancien nouveau ref; do
         lancer garde-fou-champ-cloisonnement.php
     fi
 
+    # Une entite RATTACHABLE (relation vers etablissement/pointDeVente/profilExploitant/groupe) et
+    # exposee par #[ApiResource], que l'extension de son module N'ENUMERE PAS. Le n°5 la voyait mais
+    # la gelait en vrac avec les referentiels globaux ; celui-ci isole le rattachement, qui prouve
+    # que ce n'est pas un global mais un oubli de liste blanche. Trois fuites en une semaine
+    # (CardRejection, DailyClosure, OperationScellee) avant qu'il n'existe.
+    if [ -f "$ARBRE/bin/garde-fou-entite-rattachable-hors-liste.php" ]; then
+        echo "── Entités rattachables hors liste (n°35)"
+        lancer garde-fou-entite-rattachable-hors-liste.php "--contre=$BASE"
+    fi
+
     # Une creation qu'aucun Delete ne rattrape doit dire pourquoi. La ligne de base est une LISTE,
     # pas un compteur : deux mesures independantes du meme defaut ont rendu des nombres differents,
     # et un cliquet sur un compteur aurait fige ce desaccord.

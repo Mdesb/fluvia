@@ -401,6 +401,35 @@ PHP
 commiter "banc : entite sans tenant"
 essai "couverture — entité exposée sans cloisonnement possible" refus "entité exposée sans cloisonnement possible"
 
+# Garde-fou n°35 : une entite RATTACHABLE (relation vers un ancrage) exposee, que l'extension de son
+# module n'enumere pas. C'est le cas d'`OperationScellee` — le n°5 l'avait gelee en vrac, le n°35 la
+# refuse parce que le rattachement prouve qu'elle DOIT etre filtree. Offre porte une extension a liste
+# (`PerimetreProduitExtension`) ; cette entite n'y figure pas.
+mkdir -p app/src/Offre/Entity
+cat > app/src/Offre/Entity/BancRattachableHorsListe.php <<'PHP'
+<?php
+declare(strict_types=1);
+namespace App\Offre\Entity;
+use ApiPlatform\Metadata\ApiResource;
+use ApiPlatform\Metadata\GetCollection;
+use App\Organisation\Entity\Etablissement;
+use Doctrine\ORM\Mapping as ORM;
+#[ORM\Entity]
+#[ApiResource(operations: [new GetCollection(security: "is_granted('PERM', 'offre.lire')")])]
+class BancRattachableHorsListe
+{
+    #[ORM\Id]
+    #[ORM\Column]
+    private int $id = 0;
+
+    #[ORM\ManyToOne(targetEntity: Etablissement::class)]
+    #[ORM\JoinColumn(nullable: false)]
+    private ?Etablissement $etablissement = null;
+}
+PHP
+commiter "banc : entite rattachable hors liste blanche"
+essai "rattachable — exposée, absente de la liste blanche du module" refus
+
 # --- garde-fou n°6, règle A : un abonné que rien ne déclenchera -------------------------------
 # `sale.completed` est au catalogue et figure dans la ligne de base des orphelins : personne ne
 # l'émet. Un fichier qui l'écoute est donc du code mort silencieux.
@@ -524,7 +553,7 @@ essai "filet — garde-fou présent mais jamais lancé" refus "présent dans l'a
 echo
 echo "Et il doit laisser passer ce qui est propre :"
 echo "// banc encore" >> README.md; commiter "banc : commit propre"
-essai "commit propre après neuf refus" acceptation
+essai "commit propre après la série de refus" acceptation
 
 # --- D28 : le hook installé doit signaler qu'il n'est plus celui de main ------------------------
 # On périme volontairement le hook INSTALLÉ sur le bare. La poussée doit être acceptée — refuser

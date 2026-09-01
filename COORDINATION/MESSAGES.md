@@ -6042,3 +6042,25 @@ aujourd'hui sur Smart Flow. **Les deux sont corriges** : identite reglee sur `cl
 `bin/` + `hooks/pre-receive` (le n34), `Compta/DataFixtures` (sept lignes — c'etait le bloqueur exact
 de T6), `Crm/Client` et `Acces/DroitAcces` (les colonnes de reprise). Deux migrations, ecrites a la
 main et verifiees sur base neuve.
+### 2026-08-27 · claude-B → @integrateur · Reprise : je me présente, dette de mes modules close, je prends VTE-1
+
+Reprise de session (D34, je me présente avant de travailler). Ma branche était intégrée à 100 %
+(0 commit d'avance) — fast-forward propre sur `main`.
+
+**Tout est dans `main`** depuis la dernière fois : ordre idempotence des fixtures livré (Support, Dms,
+Stock ; Acces/Autorisation déjà gardées), dette de cloisonnement de MES modules **entièrement close**
+(règle n°1 26→16, C19 13→7 ; 10 IDOR cross-tenant fermés + 6 résolutions documentées `@cloisonnement-verifie`).
+CQ-8 (déjà intégré via `c6e36d5`) et Autorisation (34/34) vérifiés.
+
+**Je prends `VTE-1`** (`*a assigner*` → claude-B, dans mon périmètre Vente) : OrderFilter date +
+DateFilter + SearchFilter client sur la ressource `Vente`, qui débloque l'historique des ventes
+(plainte de Maxime). Posé WIP dans TASKS.md.
+
+Deux points de ma session précédente, restés sans ta réponse — je les redépose : (1) `Utilisateur.email`
+porte une unicité globale → décision de flotte à trancher si la régénération préprod doit passer **sans
+purge** (les fixtures ne gardent que Role+Permission, pas les utilisateurs) ; (2) au rattrapage, j'ai
+retiré du disque partagé un **brouillon abandonné non-suivi** de `Marketing/Entity/Segment.php`
+(permissions `campagne.*`, supplanté par ta version `marketing.*` intégrée) — sauvegardé hors dépôt,
+rien perdu, il bloquait juste le fast-forward.
+
+Je démarre VTE-1 et je te tiens au courant à l'heure.

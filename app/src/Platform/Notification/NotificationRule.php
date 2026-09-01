@@ -118,6 +118,29 @@ final class NotificationRule
                 'Une facture fournisseur est contestée',
                 'Une facture a été mise en litige. Le fournisseur attend une réponse, et le règlement est suspendu jusque-là.',
             ),
+            // Addendum FIN-4 (alertes de trésorerie proactives, §0.8 de `plan-treasury-cash-alerts.md`).
+            // Gravité `Warning` (« se planifie », pas `Critical` : un franchissement projeté laisse par
+            // construction au moins un jour d'anticipation, sinon la situation serait déjà là).
+            //
+            // ⚠ Couple `module`/`action` DIFFÉRENT de la règle voisine `treasury.discrepancy_detected`
+            // ci-dessus (`compta`/`lire`) : celle-ci cible `finance`/`read`, comme l'exige littéralement
+            // §4.5 de `spec-treasury-cash-alerts.md` (« ceux qui peuvent consulter la trésorerie de cet
+            // établissement »). Écart constaté et non corrigé — signalé pour qu'un futur agent ne
+            // s'étonne pas de voir deux couples différents sur deux règles `treasury.*` voisines ; à
+            // confirmer en revue si les deux règles devraient converger (§7 point 3 du plan).
+            new self(
+                'treasury.threshold_breached',
+                NotificationSeverity::Warning,
+                'finance',
+                'read',
+                'finance',
+                'alert',
+                'Seuil de trésorerie bientôt franchi',
+                'Le solde projeté passerait sous le seuil configuré avant l’échéance connue. Consultez la '
+                .'position et l’échéancier pour décider : relancer, décaler un paiement, ou prévenir la '
+                .'collectivité.',
+                'projected_breach_date',
+            ),
         ];
 
         // ── `expense_report.submitted` A ÉTÉ RETIRÉ, ET CE N'EST PAS UN OUBLI ───────────────────

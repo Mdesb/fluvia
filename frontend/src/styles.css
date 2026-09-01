@@ -351,6 +351,8 @@ a { color: var(--accent); }
 .card-h .sub { color: var(--ink-faint); font-size: var(--txt-petit); }
 .card-h .r { margin-left: auto; display: flex; gap: 8px; align-items: center; }
 .card-b { padding: 16px; }
+/* Cadre d'intégration de la documentation OpenAPI (onglet API). Espacement par jeton, pas de littéral inline. */
+.api-frame { width: 100%; height: 70vh; border: 1px solid var(--line); border-radius: var(--radius); margin-top: var(--esp-bloc); }
 
 .grid { display: grid; gap: 16px; }
 .g2 { grid-template-columns: repeat(2, 1fr); } .g3 { grid-template-columns: repeat(3, 1fr); } .g4 { grid-template-columns: repeat(4, 1fr); }

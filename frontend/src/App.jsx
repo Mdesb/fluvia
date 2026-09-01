@@ -61,6 +61,9 @@ const TopologieAcces = lazy(() => import('./pages/TopologieAcces.jsx'))
 // Differe : une demande d'effacement se traite quelques fois par an. L'ecran ne doit peser sur
 // le premier chargement de personne -- mais il doit exister, ce qui n'etait pas le cas.
 const DonneesPersonnelles = lazy(() => import('./pages/DonneesPersonnelles.jsx'))
+// Differe : la documentation de l'API ne s'ouvre qu'a l'occasion d'une integration, jamais en
+// exploitation courante. Elle n'a pas a peser sur le premier chargement.
+const DocumentationApi = lazy(() => import('./pages/DocumentationApi.jsx'))
 
 import { lireHash, ecrireHash } from './api/url.js'
 
@@ -304,7 +307,7 @@ export default function App() {
       // droit de les lire -- le piege decrit deux lignes plus bas, et paye une fois deja.
       // Le filtrage se fait donc la ou il sait exprimer un OU : les `perms` du menu (`AppShell`).
     }
-    if (onglet === 'dashboard' && me && !estAdministrateur(me)) setOnglet('caisse')
+    if ((onglet === 'dashboard' || onglet === 'api') && me && !estAdministrateur(me)) setOnglet('caisse')
     else if (capRequise[onglet] && !caps.includes(capRequise[onglet])) setOnglet('caisse')
     // Meme piege, consequence differente et plus penible : un porteur de joker etait RENVOYE a la
     // caisse depuis n'importe quel ecran protege, sans explication et sans moyen d'y rester.
@@ -453,6 +456,7 @@ export default function App() {
       {onglet === 'support' && <Support droits={droits} etabActif={etabActif} me={me} />}
       {onglet === 'autorisations' && <Autorisations droits={droits} etabActif={etabActif} />}
       {onglet === 'legal' && <MentionsLegales etabActif={etabActif} droits={droits} />}
+      {onglet === 'api' && <DocumentationApi />}
       {onglet === 'affaires' && <Pipeline etabActif={etabActif} droits={droits} onNaviguer={naviguer} />}
       {onglet === 'campagnes' && <Campagnes etabActif={etabActif} droits={droits} />}
       {onglet === 'projets' && <Projets etabActif={etabActif} droits={droits} />}

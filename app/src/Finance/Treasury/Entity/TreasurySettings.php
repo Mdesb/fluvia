@@ -49,6 +49,8 @@ class TreasurySettings
 {
     public const DEFAULT_UNMATCHED_ALERT_DELAY_DAYS = 15;
     public const DEFAULT_MATCHING_WINDOW_DAYS = 5;
+    /** RG-TRE-10 (addendum FIN-4, alertes de trésorerie proactives) — §0.2 du plan. */
+    public const DEFAULT_CASH_ALERT_HORIZON_DAYS = 30;
 
     #[ORM\Id]
     #[ORM\Column(type: UuidType::NAME, unique: true)]
@@ -74,6 +76,22 @@ class TreasurySettings
     #[Assert\PositiveOrZero]
     #[Groups(['treasury_settings:read', 'treasury_settings:write'])]
     private int $matchingWindowDays = self::DEFAULT_MATCHING_WINDOW_DAYS;
+
+    /**
+     * RG-TRE-10 (addendum FIN-4) — solde plancher en centimes, `null` = alerte désactivée pour cet
+     * établissement (opt-in explicite, §0.2 du plan). **Aucune** contrainte de signe : une régie peut
+     * disposer d'une autorisation de découvert et vouloir être alertée seulement en deçà d'un seuil
+     * négatif (§4.1 de la spec, ⚠ hypothèse non retranchée par ce lot).
+     */
+    #[ORM\Column(name: 'cash_alert_threshold_cents', type: 'integer', nullable: true)]
+    #[Groups(['treasury_settings:read', 'treasury_settings:write'])]
+    private ?int $cashAlertThresholdCents = null;
+
+    /** RG-TRE-10 — fenêtre d'anticipation en jours ; `0` = alerte seulement si le seuil est déjà franchi aujourd'hui. */
+    #[ORM\Column(name: 'cash_alert_horizon_days', type: 'integer', options: ['default' => self::DEFAULT_CASH_ALERT_HORIZON_DAYS])]
+    #[Assert\PositiveOrZero]
+    #[Groups(['treasury_settings:read', 'treasury_settings:write'])]
+    private int $cashAlertHorizonDays = self::DEFAULT_CASH_ALERT_HORIZON_DAYS;
 
     public function __construct()
     {
@@ -117,6 +135,30 @@ class TreasurySettings
     public function setMatchingWindowDays(int $matchingWindowDays): self
     {
         $this->matchingWindowDays = $matchingWindowDays;
+
+        return $this;
+    }
+
+    public function getCashAlertThresholdCents(): ?int
+    {
+        return $this->cashAlertThresholdCents;
+    }
+
+    public function setCashAlertThresholdCents(?int $cashAlertThresholdCents): self
+    {
+        $this->cashAlertThresholdCents = $cashAlertThresholdCents;
+
+        return $this;
+    }
+
+    public function getCashAlertHorizonDays(): int
+    {
+        return $this->cashAlertHorizonDays;
+    }
+
+    public function setCashAlertHorizonDays(int $cashAlertHorizonDays): self
+    {
+        $this->cashAlertHorizonDays = $cashAlertHorizonDays;
 
         return $this;
     }

@@ -197,6 +197,15 @@ const NAV = [
       // elles engagent l'exploitant, pas la vitrine, et un exploitant qui n'a pas encore ouvert
       // sa boutique doit pouvoir les preparer.
       { id: 'legal', ic: 'legal', label: 'Mentions legales', perms: ['organisation.gerer', 'boutique.gerer_vitrine'] },
+      // La documentation vivante de l'API REST (OpenAPI). `admin: true` et pas une permission metier :
+      // ce n'est pas un ecran d'exploitation mais une porte d'integration (bornes ITBOX, developpements
+      // tiers). Elle ne montre rien de plus que le contrat deja servi a `/api/docs` ; l'onglet le rend
+      // seulement visible depuis le menu, au lieu d'une URL a connaitre par coeur.
+      //
+      // ⚠ `ic: 'api'` ET NON LE GLYPHE '⧉' DE LA BRANCHE. Les icones du menu sont devenues des NOMS
+      // resolus par `Icon.jsx` ; la branche de `claude-B` precede cette refonte. Le nom est ajoute
+      // a la table dans le meme lot — sans quoi l'entree afficherait un `<svg>` vide, sans erreur.
+      { id: 'api', ic: 'api', label: 'API', admin: true },
     ],
   },
 ]

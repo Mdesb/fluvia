@@ -259,6 +259,54 @@ const ICONS = {
       <path d="M12 17.4v.1" />
     </>
   ),
+  // ── Ajoutees le 01/09 : cinq entrees de menu pointaient vers un dessin inexistant ──────────
+  //
+  // ⚠ `ICONS[name]` rend `undefined` pour une cle absente, et le `<svg>` sort VIDE — aux bonnes
+  // dimensions, sans erreur, sans avertissement, avec un build vert. Quatre entrees etaient dans
+  // ce cas, dont le TABLEAU DE BORD, la premiere du menu.
+  //
+  // Rien ici ne garde contre le retour du defaut : ajouter une entree de menu sans son dessin
+  // reste silencieux. C'est un controle a poser.
+  dashboard: (
+    <>
+      <rect x="3" y="3" width="7" height="9" rx="1" />
+      <rect x="14" y="3" width="7" height="5" rx="1" />
+      <rect x="14" y="12" width="7" height="9" rx="1" />
+      <rect x="3" y="16" width="7" height="5" rx="1" />
+    </>
+  ),
+  legal: (
+    <>
+      <path d="M12 3v18" />
+      <path d="M5 7h14" />
+      <path d="M7 7l-3 6a3 3 0 0 0 6 0z" />
+      <path d="M17 7l-3 6a3 3 0 0 0 6 0z" />
+      <path d="M8 21h8" />
+    </>
+  ),
+  'personal-data': (
+    <>
+      <circle cx="12" cy="8" r="3.2" />
+      <path d="M5.5 20a6.5 6.5 0 0 1 13 0" />
+      <path d="M15.5 12.5l2 2 3.5-3.5" />
+    </>
+  ),
+  social: (
+    <>
+      <circle cx="6" cy="12" r="2.4" />
+      <circle cx="17" cy="6.5" r="2.4" />
+      <circle cx="17" cy="17.5" r="2.4" />
+      <path d="M8.1 10.9l6.8-3.3" />
+      <path d="M8.1 13.1l6.8 3.3" />
+    </>
+  ),
+  api: (
+    <>
+      <path d="M8.5 7.5L4 12l4.5 4.5" />
+      <path d="M15.5 7.5L20 12l-4.5 4.5" />
+      <path d="M13.5 4.5l-3 15" />
+    </>
+  ),
   settings: (
     <>
       <path d="M12 8.6a3.4 3.4 0 1 0 0 6.8 3.4 3.4 0 0 0 0-6.8z" />

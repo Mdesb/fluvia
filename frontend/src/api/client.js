@@ -1649,6 +1649,34 @@ export const api = {
   annulerFactureFournisseur: (id) =>
     request(`/api/finance/supplier-invoices/${id}/cancel`, { method: 'POST', body: {} }),
 
+  // ── Trésorerie (T26) : comptes bancaires, import de relevés, rapprochement ──────────────────────
+  // Cloisonnement et en-tête X-Etablissement posés par `request()` ; jamais à répéter ici.
+  comptesBancaires: (params) => request('/api/bank_accounts', { query: params }),
+  // Créations standard → `ld: true` (application/ld+json), la convention du frontal (D50).
+  creerCompteBancaire: (corps) =>
+    request('/api/bank_accounts', { method: 'POST', body: corps, ld: true }),
+  majCompteBancaire: (id, corps) =>
+    request(`/api/bank_accounts/${id}`, { method: 'PATCH', body: corps }),
+  // Import : corps JSON avec `content` en base64 — PAS de multipart (le serveur déchiffre puis vide).
+  importsReleve: (params) => request('/api/bank_statement_imports', { query: params }),
+  importerReleve: (corps) =>
+    request('/api/bank_statement_imports', { method: 'POST', body: corps, ld: true }),
+  // Lignes de relevé + rapprochement. Filtres : `statementImport`, `statementImport.bankAccount`, `status`.
+  lignesReleve: (params) => request('/api/bank_statement_lines', { query: params }),
+  ajouterLigneReleve: (corps) =>
+    request('/api/bank_statement_lines', { method: 'POST', body: corps, ld: true }),
+  suggestionsLigneReleve: (id) =>
+    request(`/api/finance/treasury/statement-lines/${id}/suggestions`),
+  rapprocherLigneReleve: (id, corps) =>
+    request(`/api/finance/treasury/statement-lines/${id}/reconcile`, { method: 'POST', body: corps }),
+  ignorerLigneReleve: (id, corps) =>
+    request(`/api/finance/treasury/statement-lines/${id}/ignore`, { method: 'POST', body: corps }),
+  // Tableaux de bord (fournisseurs `provide()` → JSON brut, PAS une collection Hydra : pas de membres()).
+  positionTresorerie: (params) => request('/api/finance/treasury/position', { query: params }),
+  echeancierTresorerie: (params) => request('/api/finance/treasury/payment-schedule', { query: params }),
+  previsionTresorerie: (params) => request('/api/finance/treasury/cashflow-forecast', { query: params }),
+  ecartsTresorerie: () => request('/api/finance/treasury/discrepancies'),
+
   // Recouvrement : les deux gestes qui closent un impaye, et le compteur d'acces bloques.
   tableauBordRecouvrement: () => request('/api/recouvrement/tableau-bord'),
 
