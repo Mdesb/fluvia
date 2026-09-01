@@ -806,11 +806,19 @@ export default function Reservation({ etabActif, droits = [], session }) {
                         {/* Annuler le créneau : geste de l'exploitant, distinct de l'annulation
                             d'une réservation. Caché sur un créneau déjà annulé — le serveur
                             l'accepterait, mais proposer d'annuler ce qui l'est se lit comme une
-                            incertitude de l'écran sur l'état qu'il affiche juste au-dessus. */}
+                            incertitude de l'écran sur l'état qu'il affiche juste au-dessus.
+
+                            ⚠ TON `danger` ET NON `ghost`. Ce bouton annule le créneau ET TOUTES SES
+                            RÉSERVATIONS — son propre libellé d'aide le dit. En `ghost`, il était
+                            identique au pixel près à « Voir les 4 inscrit(s) » : même encre, même
+                            taille, ni fond ni bordure. Rien ne distinguait le geste qui détruit de
+                            celui qui montre. `danger` n'était employé qu'une fois dans toute
+                            l'application, pour l'effacement RGPD : c'est un ton réservé aux gestes
+                            lourds, et le placer ici ne le dilue pas. */}
                         {peutGererCreneau && annulable && (
                           <button
                             type="button"
-                            className="btn ghost sm"
+                            className="btn danger sm"
                             disabled={gesteEnCours === c.id}
                             onClick={() => annulerCreneau(c)}
                             title="Annule le créneau et toutes ses réservations, sans frais pour les clients."

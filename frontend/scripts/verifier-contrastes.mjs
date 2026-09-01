@@ -54,6 +54,7 @@ const FICHIERS = [
     horsPerimetre: {
       'warn/warn-bg': "la vitrine n'affiche aucun badge d'alerte",
       'crit/crit-bg': "la vitrine n'affiche aucun badge d'alerte",
+      'crit/panel': "la vitrine n'offre aucun geste destructeur, et ne declare aucun jeton --crit",
       'side-ink/side-bg': "la vitrine n'a pas de menu de gauche",
       'side-ink-soft/side-bg': "la vitrine n'a pas de menu de gauche",
       'sur-accent/accent': "la vitrine n'a pas de bouton d'accent plein",
@@ -228,6 +229,10 @@ const PAIRES = [
   // `--ink` sur `--accent-soft` : la tuile de produit selectionnee en caisse, la ligne de
   // tableau active, la zone de depot survolee, l'encadre de moyen de paiement. Quatre
   // emplois, aucun mesure jusqu'ici.
+  // `--crit` sur `--panel` : `.btn.danger`, le seul ton reserve aux gestes lourds — effacement
+  // RGPD, et desormais l'annulation d'un creneau avec ses reservations. Un bouton dont la
+  // seule marque est sa couleur doit etre lisible, et cette paire ne l'etait pas.
+  ['crit', 'panel', 4.5, 'bouton d’un geste lourd, dont la couleur est la seule marque', true],
   ['ink', 'accent-soft', 4.5, 'texte courant sur un fond d’accent doux', true],
   ['accent-2', 'accent-soft', 4.5, 'texte sur un fond d’accent doux', true],
   ['sur-accent', 'accent', 4.5, 'texte sur un bouton d’accent — point d’entrée marque blanche', true],
