@@ -463,6 +463,20 @@ fi
 # CONFLIT : deux sessions ajoutent leur appel dans le meme objet `api`, Git concatene, et l'un des
 # deux cesse silencieusement d'exister. Quatre occurrences en deux jours, rapportees par trois
 # sessions. Ni le build ni le linteur ne le voient : `{ a: 1, a: 2 }` est du JavaScript legal.
+# n40 — un identifiant utilise hors de sa portee. Le build ne le voit PAS : Vite ne fait pas
+# d'analyse de portee sur le JSX, et le n10 ne controle que les IMPORTS manquants. Deux ecrans
+# casses en production le 01/09 par des variables declarees un composant trop haut.
+if [ -f "$RACINE/frontend/scripts/verifier-portee.mjs" ]; then
+    if command -v node >/dev/null 2>&1; then
+        executer "Portee des identifiants (n40)" sh -c "cd '$RACINE/frontend' && node scripts/verifier-portee.mjs"
+    else
+        echo "─────────────────────────────────────────────────────────────"
+        echo "▶ Portee des identifiants"
+        echo "─────────────────────────────────────────────────────────────"
+        echo "· IGNORÉ — « node » indisponible ici. Le contrôle n'a PAS tourné."
+    fi
+fi
+
 if [ -f "$RACINE/frontend/scripts/verifier-cles-doubles.mjs" ]; then
     if command -v node >/dev/null 2>&1; then
         executer "Cles en double (n37)" sh -c "cd '$RACINE/frontend' && node scripts/verifier-cles-doubles.mjs"
