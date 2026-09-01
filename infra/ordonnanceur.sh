@@ -68,10 +68,23 @@ set -eu
 # fenetre nocturne refuse en dehors de 02h00-05h00 LOCALES, et une seule fois par nuit. La boucle les
 # appelle quand meme toutes les minutes ; c'est le catalogue qui tranche, pas cette liste.
 #
-# ⚠ ET `sepa:preavis:annoncer` N'Y EST PAS, BIEN QUE MAXIME AIT DIT « active-les ». Son passage a
-# blanc annonce 26 preavis, dont des echeances datees d'OCTOBRE 2025 : `SportEcheanceSepaSource`
-# filtre sur `dateProgrammee <= :date` sans borne basse. Un preavis doit PRECEDER le prelevement, et
-# annoncer ces echeances les rendrait collectables dans la remise du 03/09. Signale plutot que fait.
+#   sepa:preavis:annoncer             un creancier doit informer le debiteur du montant et de la
+#                                     date AVANT chaque prelevement ; sans elle aucune echeance
+#                                     n'est couverte et la collecte s'arrete entierement.
+#                                     Autorisee par Maxime le 01/09 — mais ENTREE SEULEMENT APRES
+#                                     CORRECTION. Son passage a blanc annoncait 26 preavis, dont des
+#                                     echeances d'octobre 2025 : la commande n'avait aucune borne
+#                                     basse, et annoncer une echeance la rend collectable dans une
+#                                     remise. Elle aurait verse onze mois d'arriere dans celle du
+#                                     03/09. Borne posee dans la commande (pas dans la source, que
+#                                     `GenerationRemiseHandler` partage : une echeance en retard doit
+#                                     rester COLLECTABLE). Passage supervise ensuite : ZERO.
+#
+# ⚠ L'ORDRE DE CETTE LISTE N'EST PAS L'ORDRE D'EXECUTION DECLARE. La boucle appelle `--only` tache
+# par tache, dans l'ordre ci-dessus ; le rang du catalogue (`ScheduledTask::$order`) ne s'applique
+# qu'a un appel nu. Les deux doivent dire la meme chose, et c'est pour ca que le renouvellement est
+# ecrit avant le preavis, lui-meme avant la facturation : le premier CREE les echeances que le
+# deuxieme annonce et que le troisieme encaisse.
 #
 #   personnel:recalculer-fenetres-badges  la fenetre de validite d'un badge staff ne suit plus les
 #                                     shifts : un agent garde un acces qu'il n'a plus, ou perd
@@ -83,7 +96,7 @@ set -eu
 #                                     entrer dans le batiment, toutes les cinq minutes, en silence.
 #                                     Epargne prouvee le 31/08 : branche `Permanent` neutralisee
 #                                     -> le test neuf echoue seul.
-TACHES_AUTORISEES="securite:delegations:expirer autorisation:escalades:expirer boutique:liberer-paniers-expires personnel:recalculer-fenetres-badges sport:abonnements:traiter-terme subscription:facturer-le-mois"
+TACHES_AUTORISEES="securite:delegations:expirer autorisation:escalades:expirer boutique:liberer-paniers-expires personnel:recalculer-fenetres-badges sport:abonnements:traiter-terme sepa:preavis:annoncer subscription:facturer-le-mois"
 
 INTERVALLE="${ORDONNANCEUR_INTERVALLE:-60}"
 

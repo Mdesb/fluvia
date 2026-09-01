@@ -93,6 +93,7 @@ final class PreNotifyUpcomingDebitsCommand extends Command
         $annonces = 0;
         $deja = 0;
         $refus = [];
+        $passees = 0;
 
         foreach ($configs as $config) {
             $etablissement = $config->getEtablissement();
@@ -104,6 +105,21 @@ final class PreNotifyUpcomingDebitsCommand extends Command
             $dateExecution = $maintenant->modify(sprintf('+%d days', $delai));
 
             foreach ($this->source->echeancesDues($etablissement, $dateExecution) as $due) {
+                // ⚠ ON N'ANNONCE PAS UNE ECHEANCE DEJA PASSEE.
+                //
+                // La source n'a pas de borne basse — `dateProgrammee <= :date` — et c'est juste pour
+                // elle : `GenerationRemiseHandler` l'appelle aussi, et une echeance en retard doit
+                // rester COLLECTABLE. Le plancher appartient ici, ou le mot « preavis » a un sens :
+                // prevenir apres le prelevement n'est pas prevenir.
+                //
+                // Mesure du 01/09, avant ce filtre : 26 preavis a envoyer, dont des echeances du
+                // 03/10/2025. Et annoncer une echeance la rend collectable dans une remise — un
+                // premier passage aurait donc verse onze mois d'arriere dans la remise suivante.
+                if ($due->dateEcheance < $maintenant->setTime(0, 0)) {
+                    ++$passees;
+                    continue;
+                }
+
                 $mandat = $this->em->getRepository(MandatSepa::class)->find($due->mandatId);
                 if (!$mandat instanceof MandatSepa) {
                     continue;
@@ -144,6 +160,18 @@ final class PreNotifyUpcomingDebitsCommand extends Command
                     $refus[] = $refus_->getMessage();
                 }
             }
+        }
+
+        // ⚠ CE QUI EST ECARTE SE DIT. Une echeance passee encore au statut « a venir » est un etat
+        // COINCE : jamais annoncee, donc jamais collectee, et rien ne l'aurait signale. Le filtre
+        // ci-dessus evite d'annoncer n'importe quoi ; il ne resout pas ce que ces echeances font la.
+        if ($passees > 0) {
+            $io->warning(sprintf(
+                "%d echeance(s) sont encore « a venir » alors que leur date est PASSEE : elles ne "
+                . "seront ni annoncees ni collectees, et rien d'autre ne le signale. Ce filtre les "
+                . "ecarte, il ne les explique pas — il faut decider ce qu'elles deviennent.",
+                $passees,
+            ));
         }
 
         $io->success(sprintf(

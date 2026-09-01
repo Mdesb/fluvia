@@ -152,7 +152,66 @@ final class PreNotifyCommandTest extends SepaApiTestCase
     // ---------------------------------------------------------------- montage
 
     /** @return array{0: PreNotifyUpcomingDebitsCommand, 1: NotifierLivrant, 2: DebitPreNotifier, 3: MandatSepa, 4: SourceEcheanceStub} */
-    private function commande(int $montantCentimes): array
+    /**
+     * ⚠ UN PREAVIS NE S'ANNONCE PAS APRES COUP, ET RIEN NE L'EMPECHAIT.
+     *
+     * Trouve le 01/09 en lancant `--dry-run` avant d'activer la tache planifiee : 26 preavis a
+     * envoyer, dont des echeances datees d'octobre, novembre et decembre 2025.
+     *
+     * La source n'a pas de borne basse — `dateProgrammee <= :date` — et c'est JUSTE pour elle :
+     * `GenerationRemiseHandler` l'appelle aussi, et une echeance en retard doit rester COLLECTABLE.
+     * Le plancher appartient a la commande, ou le mot « preavis » a un sens.
+     *
+     * Ce que ca aurait coute : annoncer une echeance la rend collectable dans une remise. Un premier
+     * passage aurait donc verse onze mois d'arriere dans la remise suivante — celle qu'un exploitant
+     * declenche en croyant collecter le mois courant.
+     *
+     * La date est FIXE et dans le passe (D20) : le test ne lit pas l'horloge, et 2020 restera passe.
+     */
+    public function testElleNAnnoncePasUneEcheanceDejaPassee(): void
+    {
+        [$commande, $espion] = $this->commande(4990, new \DateTimeImmutable('2020-01-15'));
+
+        $testeur = new CommandTester($commande);
+        $testeur->execute([]);
+
+        self::assertStringContainsString('0 préavis envoyés', $testeur->getDisplay());
+        self::assertNull($espion->dernier(), 'aucun envoi ne doit partir pour une echeance passee');
+    }
+
+    /**
+     * Le temoin qui prouve que le test ci-dessus mesure la DATE, et non le stub.
+     *
+     * Sans lui, `testElleNAnnoncePasUneEcheanceDejaPassee` passerait aussi si le stub avait cesse de
+     * rendre quoi que ce soit — et il ne dirait alors rien du plancher.
+     */
+    public function testLeMemeMontageAnnonceQuandLaDateEstAVenir(): void
+    {
+        [$commande, $espion] = $this->commande(4990, new \DateTimeImmutable('+30 days'));
+
+        (new CommandTester($commande))->execute([]);
+
+        self::assertNotNull($espion->dernier(), 'le meme montage doit annoncer une echeance future');
+    }
+
+    /**
+     * ⚠ ET CE QUI EST ECARTE DOIT SE VOIR.
+     *
+     * Une echeance passee encore au statut « a venir » est un etat COINCE : jamais annoncee, donc
+     * jamais collectee. Un filtre muet la ferait disparaitre de l'ecran sans la retirer de la base —
+     * on echangerait un defaut visible contre un defaut invisible.
+     */
+    public function testElleSignaleLesEcheancesPasseesQuElleEcarte(): void
+    {
+        [$commande] = $this->commande(4990, new \DateTimeImmutable('2020-01-15'));
+
+        $testeur = new CommandTester($commande);
+        $testeur->execute([]);
+
+        self::assertStringContainsString('date est PASSEE', $testeur->getDisplay());
+    }
+
+    private function commande(int $montantCentimes, ?\DateTimeImmutable $dateEcheance = null): array
     {
         $em = $this->em();
 
@@ -171,7 +230,7 @@ final class PreNotifyCommandTest extends SepaApiTestCase
         $espion = new NotifierLivrant();
         $preNotifier = new DebitPreNotifier($em, $espion);
 
-        $source = new SourceEcheanceStub($mandat->getId(), $montantCentimes);
+        $source = new SourceEcheanceStub($mandat->getId(), $montantCentimes, $dateEcheance);
 
         return [new PreNotifyUpcomingDebitsCommand($em, $preNotifier, $source), $espion, $preNotifier, $mandat, $source];
     }
@@ -191,6 +250,15 @@ final class SourceEcheanceStub implements EcheanceSepaSource
     public function __construct(
         private readonly \Symfony\Component\Uid\Uuid $mandatId,
         public int $montantCentimes,
+        /**
+         * Force la date d'echeance au lieu de suivre `$dateExecution`.
+         *
+         * ⚠ C'EST CE QUE FAIT LA SOURCE REELLE. `SportEcheanceSepaSource` filtre sur
+         * `dateProgrammee <= :date` SANS BORNE BASSE : elle rend donc aussi les echeances dont la
+         * date est passee depuis des mois, tant qu'elles sont au statut « a venir ». Ce stub ne
+         * reproduisait que le cas facile.
+         */
+        public ?\DateTimeImmutable $dateForcee = null,
     ) {
     }
 
@@ -201,7 +269,7 @@ final class SourceEcheanceStub implements EcheanceSepaSource
             mandatId: $this->mandatId,
             montantCentimes: $this->montantCentimes,
             libelle: 'Abonnement de test',
-            dateEcheance: $dateExecution,
+            dateEcheance: $this->dateForcee ?? $dateExecution,
         )];
     }
 
