@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useMemo, useEffect, useRef, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { libelleProduit, prixIndicatif, euros, statutProduit, sansTarifConnu } from '../api/produit.js'
 import Modal from './Modal.jsx'
@@ -128,6 +128,12 @@ export default function ProduitFiche({
   // Les zones d'accès ne se règlent pas avec les droits de l'Offre : ouvrir une porte n'est pas
   // modifier un prix. La section porte donc ses propres droits (`acces.lire` / `acces.gerer`).
   droits = [],
+  // Les capacités ACTIVES de l'établissement (`me.capacitesActives`), qui décident des onglets.
+  //
+  // ⚠ Le défaut est la liste VIDE, donc le jeu minimal : Présentation et Vente. Un défaut
+  // « tout afficher » aurait rendu la composition invisible tant qu'aucun appelant ne passe la
+  // prop — l'écran aurait paru marcher, et n'aurait rien composé.
+  capacites = [],
 }) {
   const [edition, setEdition] = useState(null)
   const [editionCompta, setEditionCompta] = useState(null)
@@ -143,17 +149,40 @@ export default function ProduitFiche({
   // navigation. Le retour au catalogue et l'adresse de la fiche, eux, sont dans l'URL.
   const [vueFiche, setVueFiche] = useState('vitrine')
 
-  // ALLER A UNE SECTION DEPUIS LA LIGNE COMPACTE.
+  // ── LES ONGLETS SE COMPOSENT, ILS NE SONT PAS UNE LISTE FIXE ─────────────────────────────────
   //
-  // ⚠ LES DEUX CIBLES VIVENT DANS L'ONGLET « CONFIGURATION » : il faut basculer d'abord, et le
-  // defilement doit attendre que React ait RENDU l'onglet — avant, l'ancre n'existe pas dans le
-  // document et `getElementById` rend `null`. Deux `requestAnimationFrame` imbriques garantissent
-  // qu'on passe apres la validation du rendu.
+  // Le controle d'acces, la comptabilite et le stock sont trois MODULES SEPARES : un exploitant
+  // peut n'en avoir aucun, ou les trois. Un onglet fixe « Acces & comptabilite » serait a moitie
+  // vide chez qui n'a que l'un des deux, et mentirait sur ce que le produit sait faire.
   //
-  // Les deux sections visees sont rendues sans condition dans cet onglet : le raccourci mene donc
-  // toujours quelque part. S'il ne trouvait rien, il ne fait rien plutot que de sauter au hasard.
+  // ⚠ ABSENT, JAMAIS GRISE. Un onglet grise fait chercher ce qui manque et invite a « debloquer »
+  // ce qui n'est pas bloque ; un onglet absent ne pose aucune question. Meme regle que les actions
+  // de statut, plus haut dans ce module.
+  const onglets = useMemo(() => {
+    const liste = [['vitrine', 'Présentation'], ['vente', 'Vente']]
+    if (capacites.includes('agenda')) liste.push(['agenda', 'Agenda'])
+    if (capacites.includes('controle_acces')) liste.push(['acces', 'Accès'])
+    if (capacites.includes('stock')) liste.push(['stock', 'Stock'])
+    if (capacites.includes('comptabilite')) liste.push(['compta', 'Comptabilité'])
+    return liste
+  }, [capacites])
+
+  // ⚠ SANS CE REPLI, LA FICHE PEUT SE RENDRE VIDE. `capacitesActives` depend de l'etablissement
+  // ACTIF : en changer pendant qu'on est sur « Comptabilité » laisserait `vueFiche` sur un onglet
+  // qui n'existe plus, et aucun bloc ne rendrait rien — un ecran blanc, sans erreur.
+  const vueConnue = onglets.some(([cle]) => cle === vueFiche)
+  const vue = vueConnue ? vueFiche : 'vitrine'
+
+  // ALLER A UNE SECTION DEPUIS LA LIGNE COMPACTE. Les deux cibles vivent dans l'onglet « Vente ».
+  //
+  // ⚠ LE DEFILEMENT ATTEND QUE REACT AIT RENDU L'ONGLET : avant la validation du rendu, l'ancre
+  // n'existe pas dans le document et `getElementById` rend `null`. Deux `requestAnimationFrame`
+  // imbriques garantissent qu'on passe apres.
+  //
+  // ⚠ Et `scroll-margin-top` (styles.css) decale l'arret sous la barre collante de 62 px — sans
+  // elle, la section visee arrive DESSOUS. Trouve en cliquant, pas en lisant.
   function allerA(ancre) {
-    setVueFiche('config')
+    setVueFiche('vente')
     requestAnimationFrame(() => requestAnimationFrame(() => {
       const cible = document.getElementById(ancre)
       if (!cible) return
@@ -161,6 +190,7 @@ export default function ProduitFiche({
       cible.scrollIntoView({ behavior: doux ? 'smooth' : 'auto', block: 'start' })
     }))
   }
+
   const [detail, setDetail] = useState(null)
   // Référentiels du bloc Diffusion. Chargés une fois par fiche, et leur absence n'empêche pas de
   // modifier le reste : `Promise.allSettled`, jamais `all`.
@@ -800,12 +830,12 @@ export default function ProduitFiche({
       </div>
 
       <Tabs
-        onglets={[['vitrine', 'Vitrine'], ['config', 'Configuration']]}
+        onglets={onglets}
         actif={vueFiche}
         onChange={setVueFiche}
       />
 
-      {vueFiche === 'vitrine' && (
+      {vue === 'vitrine' && (
         <>
           {/* LA PHOTO REMONTE EN PREMIER. Elle était en dernier, après le taux de TVA et la règle
               de comptabilisation — c'est-à-dire après tout ce qu'un client ne verra jamais. */}
@@ -858,7 +888,10 @@ export default function ProduitFiche({
         </>
       )}
 
-      {vueFiche === 'config' && (
+      {/* VENTE, premier bloc. Le second (Diffusion) est plus bas : entre les deux vivent les
+          sections d'acces, qui ne rendent rien quand on est sur Vente — a l'ecran, Tarifs et
+          Diffusion se suivent donc bien. */}
+      {vue === 'vente' && (
       <>
       <Section titre="Tarifs" ancre="prod-tarifs" aide="Le prix de ce produit, par type de tarif et par période.">
         <TarifsProduit
@@ -872,6 +905,12 @@ export default function ProduitFiche({
         />
       </Section>
 
+      </>
+      )}
+
+      {/* ACCES — n'existe que si l'etablissement porte la capacite `controle_acces`. */}
+      {vue === 'acces' && (
+      <>
       <Section
         titre="Zones d'accès"
         aide="Les zones que ce produit ouvre aux tourniquets. Aucune zone déclarée = il les ouvre toutes."
@@ -912,6 +951,12 @@ export default function ProduitFiche({
         )}
       </Section>
 
+      </>
+      )}
+
+      {/* VENTE, second bloc — voir le commentaire du premier. */}
+      {vue === 'vente' && (
+      <>
       <Section titre="Diffusion" ancre="prod-diffusion">
         {/* ⚠ << — >> SE LIT << AUCUN >>, ET LA VALEUR SIGNIFIE << TOUS >>. C'est la liste qui
             restreint : un produit sans site coche est du socle, partage par tous les
@@ -938,6 +983,13 @@ export default function ProduitFiche({
           que ça existe et conclut que le logiciel ne le permet pas. Maxime l'a vu de lui-même.
           Bouton séparé, parce que le DROIT est séparé : `offre.modifier_compta` n'est pas
           `offre.modifier`. Qui peut renommer un produit ne peut pas forcément changer son compte. */}
+      </>
+      )}
+
+      {/* COMPTABILITE — n'existe que si l'etablissement tient ses comptes ici. La note interne la
+          suit : c'est le seul autre endroit de la fiche qui ne regarde ni le client ni la vente. */}
+      {vue === 'compta' && (
+      <>
       <Section titre="Comptabilité">
         {chargement && !detail ? (
           <div className="hint">Chargement…</div>
@@ -976,6 +1028,43 @@ export default function ProduitFiche({
       )}
       </>
       )}
+
+      {/* STOCK — n'existe que si l'etablissement suit ses stocks. Ces valeurs n'etaient visibles
+          nulle part ailleurs sur la fiche : la ligne du haut n'en montre que le nombre. */}
+      {vue === 'stock' && (
+        <Section titre="Stock" aide="Quantité disponible à la vente, tenue par le module Stock.">
+          {!p.stock ? (
+            <div className="hint">
+              Ce produit n’est pas suivi en stock : il peut être vendu sans limite de quantité.
+            </div>
+          ) : (
+            <>
+              <Ligne
+                libelle="Type de stock"
+                valeur={p.stock.type === 'pool' ? 'Partagé (pool)' : 'Dédié à ce produit'}
+                aide="Un stock dédié n'appartient qu'à ce produit ; un pool est partagé entre plusieurs."
+              />
+              <Ligne libelle="Disponible" valeur={String(p.stock.disponibilite ?? '—')} />
+              {/* ⚠ ON NE LIT `pool.libelle` QUE SI LE POOL EST LA. `pool` est nullable, et une
+                  lecture en profondeur sur `null` rendrait `undefined` — un tiret qui ne dirait
+                  pas s'il n'y a pas de pool ou si on n'a pas su le lire. */}
+              {p.stock.pool && (
+                <>
+                  <Ligne libelle="Pool" valeur={p.stock.pool.libelle || '—'} />
+                  <Ligne
+                    libelle="Disponible dans le pool"
+                    valeur={String(p.stock.pool.disponibilite ?? '—')}
+                    aide="Ce que le pool a en tout, tous produits confondus."
+                  />
+                </>
+              )}
+            </>
+          )}
+        </Section>
+      )}
+
+      {/* AGENDA — n'existe que si l'etablissement vend du date. */}
+      {vue === 'agenda' && <AgendaProduit produitId={produitId} />}
 
       <ComptaProduitModal
         edition={editionCompta}
@@ -1228,6 +1317,83 @@ function calculExemple(liaisons, valeurs, prixBase) {
 
 /* ------------------------------------------------------------------ Petits blocs */
 
+/**
+ * LES DATES AUXQUELLES CE PRODUIT EST PROPOSE.
+ *
+ * ⚠ « DATE » N'EST PAS UNE PROPRIETE DU PRODUIT. Un produit porte une `dureeValidite` — combien de
+ * temps le billet reste utilisable — et rien qui ressemble a une date. Ce qui date un produit,
+ * c'est ce qui POINTE VERS LUI : une `Exposition` (produit + dates + jauge). La Reservation, elle,
+ * ne reference aucun produit — verifie, temoin positif a l'appui.
+ *
+ * Cet ecran MONTRE donc ces dates ; il n'en cree pas. En creer supposerait de decider ou vit la
+ * date, ce qui est une decision de modele et pas d'ecran.
+ *
+ * ⚠ ET IL DISTINGUE TROIS SILENCES. « Aucune date », « je n'ai pas le droit de savoir » et « la
+ * lecture a echoue » se ressemblent tous les trois a l'ecran s'ils rendent une liste vide — et le
+ * premier est le seul qui soit une reponse.
+ */
+function AgendaProduit({ produitId }) {
+  const [dates, setDates] = useState(null)
+  const [refus, setRefus] = useState(false)
+  const [erreur, setErreur] = useState(null)
+
+  useEffect(() => {
+    let vivant = true
+    api.expositionsDuProduit(produitId)
+      .then((r) => { if (vivant) setDates(membres(r)) })
+      .catch((e) => {
+        if (!vivant) return
+        // 403 : la lecture des expositions demande `musee.lire`, que ce lecteur n'a pas.
+        if (e?.statut === 403 || /403/.test(String(e?.message))) setRefus(true)
+        else setErreur(e?.message || 'Les dates n’ont pas pu être lues.')
+      })
+    return () => { vivant = false }
+  }, [produitId])
+
+  if (refus) {
+    return (
+      <Section titre="Agenda">
+        <div className="hint">
+          Vous n’avez pas le droit de lire l’agenda de ce produit — il peut en avoir un. Ce droit
+          est celui du module Musée, pas celui du catalogue.
+        </div>
+      </Section>
+    )
+  }
+
+  if (erreur) {
+    return (
+      <Section titre="Agenda">
+        <div className="banner banner-error">{erreur}</div>
+      </Section>
+    )
+  }
+
+  return (
+    <Section titre="Agenda" aide="Les dates auxquelles ce produit est proposé.">
+      {dates === null && <div className="hint">Chargement…</div>}
+      {dates !== null && dates.length === 0 && (
+        <div className="hint">
+          Ce produit n’est proposé à aucune date : il est vendable en permanence.
+        </div>
+      )}
+      {(dates ?? []).map((d) => (
+        <Ligne
+          key={d.id}
+          libelle={`${dateFr(d.dateDebut)} → ${dateFr(d.dateFin)}`}
+          valeur={d.aJauge ? `jauge ${d.jaugeGlobale ?? '—'}` : 'sans jauge'}
+        />
+      ))}
+    </Section>
+  )
+}
+
+function dateFr(valeur) {
+  const s = String(valeur || '').slice(0, 10)
+  const [a, m, j] = s.split('-')
+  return j ? `${j}/${m}/${a}` : '—'
+}
+
 function Section({ titre, aide, children, ancre }) {
   return (
     // `ancre` est facultative : seules les sections vers lesquelles la ligne compacte renvoie en
@@ -1449,7 +1615,7 @@ function PhotosProduit({ produitId, peutModifier }) {
                   height: 92,
                   objectFit: 'cover',
                   display: 'block',
-                  border: '1px solid var(--bord, #ddd)',
+                  border: '1px solid var(--line)',
                 }}
               />
               <figcaption className="sub" style={{ marginTop: 'var(--esp-serre)', lineHeight: 1.3 }}>

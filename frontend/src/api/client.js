@@ -1489,6 +1489,18 @@ export const api = {
   saisirEcritureManuelle: (corps) =>
     request('/api/compta/journal-entries/manual', { method: 'POST', body: corps }),
 
+  // ── LES DATES D'UN PRODUIT (onglet Agenda de la fiche) ────────────────────────────────────────
+  //
+  // Une `Exposition` porte produit + date de debut + date de fin + jauge. C'est le seul objet du
+  // depot qui date un produit du catalogue — la Reservation, elle, ne reference aucun produit.
+  //
+  // ⚠ GARDEE PAR `musee.lire`, PAS PAR `offre.lire`. Qui peut lire un produit ne peut pas
+  // forcement lire les expositions : un 403 doit se dire, pas se rendre en liste vide.
+  expositionsDuProduit: (idProduit) =>
+    request('/api/musee_expositions', {
+      query: { produit: `/api/produits/${idProduit}`, itemsPerPage: 50, 'order[dateDebut]': 'asc' },
+    }),
+
   lettragesEcritures: () =>
     request('/api/lettrage_ecritures', { query: { itemsPerPage: 500 } }),
 
@@ -1687,10 +1699,23 @@ export const api = {
   // puis `GenerateurEcrituresHandler`, qui saute la vente). Ce n'est pas un repli sur un compte
   // par défaut : c'est une écriture qui n'existe pas.
   //
-  // ⚠ Côté FACTURE en revanche, `ResolveurComptesFacturation` se replie bel et bien en silence sur
-  // le compte par défaut — deux comportements opposés pour la même donnée absente, selon le chemin.
-  // (Enseignement d'une seconde définition de cette clé, retirée le 31/08 : elle était en double
-  // dans cet objet, produite par une fusion sans conflit, et la dernière gagnait en silence.)
+  // ⚠ ET LA FACTURATION, ELLE, SE REPLIE — CE N'EST PAS LE MÊME CHEMIN.
+  //
+  // Mesuré dans `ResolveurComptesFacturation::compteProduit()` :
+  //
+  //   1. `MappingComptable` résolu depuis la catégorie comptable de la ligne ;
+  //   2. à défaut, `ParametreFacturationEtablissement::compteProduitDefaut` — repli SILENCIEUX ;
+  //   3. à défaut des deux, un 422 explicite qui nomme les deux sorties.
+  //
+  // Donc deux comportements opposés pour la même donnée absente, selon le chemin. Et le repli de
+  // la facturation est silencieux quand il RÉUSSIT, jamais quand il échoue : dire l'un sans
+  // l'autre laisse croire qu'une ligne sans compte passe toujours.
+  //
+  // ⚠ CE COMMENTAIRE EST NÉ D'UN DOUBLON, ET LE MÉCANISME VAUT D'ÊTRE RETENU. Cette clé était
+  // déclarée DEUX FOIS dans cet objet, avec deux commentaires qui se lisaient comme une
+  // contradiction — produits par une fusion SANS conflit, la dernière définition gagnant en
+  // silence. Aucun des deux n'était faux ; aucun ne nommait son périmètre. C'est ce qui les
+  // faisait se contredire.
   mappingsComptables: () => request('/api/mapping_comptables', { query: { itemsPerPage: 200 } }),
   creerMappingComptable: (corps) =>
     request('/api/mapping_comptables', { method: 'POST', body: corps, ld: true }),

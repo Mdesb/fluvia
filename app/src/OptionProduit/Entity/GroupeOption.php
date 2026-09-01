@@ -12,6 +12,8 @@ use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\OptionProduit\Enum\ModeSelectionOption;
+use App\Offre\State\TenantReferenceProcessor;
+use App\Organisation\Entity\Etablissement;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
@@ -33,7 +35,11 @@ use Symfony\Component\Validator\Constraints as Assert;
     operations: [
         new GetCollection(security: "is_granted('PERM', 'offre.lire')"),
         new Get(security: "is_granted('PERM', 'offre.lire')"),
-        new Post(security: "is_granted('PERM', 'offre.modifier')"),
+        // ⚠ L'ETABLISSEMENT EST POSE ICI, PAS DEMANDE AU CLIENT. Meme patron que `Saison` :
+        // le champ est hors du groupe d'ecriture, et `TenantReferenceProcessor` le renseigne
+        // depuis l'etablissement actif. Le demander au client reintroduirait exactement la
+        // fuite qu'on ferme — il suffirait d'en designer un autre.
+        new Post(security: "is_granted('PERM', 'offre.modifier')", processor: TenantReferenceProcessor::class),
         new Patch(security: "is_granted('PERM', 'offre.modifier')"),
     ],
     normalizationContext: ['groups' => ['groupe_option:read']],
@@ -58,6 +64,25 @@ class GroupeOption
     private ?ModeSelectionOption $modeSelection = null;
 
     /** @var Collection<int, ValeurOption> */
+    /**
+     * ⚠ LE PROPRIETAIRE, AJOUTE LE 31/08 — CETTE ENTITE N'EN AVAIT AUCUN.
+     *
+     * Elle ne portait AUCUNE relation sortante : elle etait atteinte depuis le pivot
+     * `OptionProduit`, jamais l'inverse. Aucune extension Doctrine ne peut cloisonner ce qui ne
+     * pointe vers rien — d'ou une colonne plutot qu'une entree dans une carte.
+     *
+     * Mesure du 31/08 : un groupe cree sur un etablissement etait visible depuis l'autre, et
+     * `ValeurOption` expose l'impact tarifaire de chaque option. Voir `OptionsPartageesTest`.
+     *
+     * Nullable et hors du groupe d'ecriture, comme `Saison` : c'est `TenantReferenceProcessor` qui
+     * le pose au POST. Une ligne sans etablissement n'est visible de personne — la migration
+     * `Version20260831220000` les rattache toutes depuis leurs produits.
+     */
+    #[ORM\ManyToOne(targetEntity: Etablissement::class)]
+    #[ORM\JoinColumn(nullable: true)]
+    #[Groups(['groupe_option:read'])]
+    private ?Etablissement $etablissement = null;
+
     #[ORM\OneToMany(targetEntity: ValeurOption::class, mappedBy: 'groupeOption')]
     #[Groups(['groupe_option:read'])]
     private Collection $valeurs;
@@ -85,6 +110,18 @@ class GroupeOption
     public function getId(): Uuid
     {
         return $this->id;
+    }
+
+    public function getEtablissement(): ?Etablissement
+    {
+        return $this->etablissement;
+    }
+
+    public function setEtablissement(?Etablissement $etablissement): self
+    {
+        $this->etablissement = $etablissement;
+
+        return $this;
     }
 
     public function getLibelle(): string

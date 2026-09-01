@@ -174,7 +174,11 @@ function EtapeIdentification({ panier, onConnexionClient, onOk }) {
 
         {mode === 'invite' && (
           <div className="field">
-            <label htmlFor="bq-id-email">Adresse e-mail (pour recevoir vos billets)</label>
+            {/* ⚠ CETTE ETIQUETTE PROMETTAIT « pour recevoir vos billets ». Aucun courriel ne part de
+                cette instance et aucun n'a jamais pu partir : MAILER_DSN vaut le transport nul, qui
+                accepte tout, jette tout, et rend un succes. On annonce la contrepartie qu'on rend
+                vraiment -- l'adresse identifie l'invite et permet de retrouver la commande. */}
+            <label htmlFor="bq-id-email">Adresse e-mail (pour retrouver votre commande)</label>
             <input
               id="bq-id-email"
               className="input"
@@ -590,7 +594,11 @@ function EtapeConfirmation({ resultat, infoBillets, connecte, onNaviguer }) {
   useEffect(() => {
     // Les billets à QR sont désormais accessibles à l'invité via X-Panier-Token (GET
     // /boutique/paniers/{id}/billets) — plus besoin de compte. En cas d'échec ou de liste vide,
-    // le rendu bascule sur le repli « billets envoyés par e-mail ».
+    // le rendu bascule sur un repli qui dit l'échec et donne la référence à présenter à l'accueil.
+    //
+    // ⚠ CE REPLI RENVOYAIT VERS UN COURRIEL, jusqu'au 01/09. Il ne s'affiche que lorsque le seul
+    // chemin qui marche vient d'échouer — c'est le pire endroit où envoyer quelqu'un vers une
+    // boîte aux lettres qui ne recevra rien.
     if (!infoBillets?.panierId) return
     let annule = false
     setChargement(true)
@@ -651,13 +659,27 @@ function EtapeConfirmation({ resultat, infoBillets, connecte, onNaviguer }) {
             ))}
           </ul>
         ) : (
-          <div className="card">
-            <div className="card-b">
-              <p style={{ margin: 0 }}>
-                Vos billets à présenter (QR) vous ont été envoyés par e-mail.
-                {!connecte && ' Créez un compte pour les retrouver à tout moment dans votre espace.'}
+          /* ⚠ CETTE BRANCHE DISAIT « vos billets vous ont ete envoyes par e-mail », au passe et a
+             l'affirmative. Elle ne s'affiche QUE lorsque l'affichage des billets vient d'echouer --
+             donc elle renvoyait le client vers une boite aux lettres ou rien n'arrivera, au moment
+             precis ou il n'a plus rien d'autre. On dit ce qui est vrai et ce qu'il peut faire. */
+          <div className="banner banner-warn" role="alert">
+            <p style={{ margin: 0 }}>
+              <b>Vos billets n’ont pas pu s’afficher.</b> Votre paiement est bien enregistré — c’est
+              l’affichage qui a échoué, pas la commande. Rechargez cette page&nbsp;: ils
+              réapparaîtront.
+            </p>
+            {resultat?.referenceTransaction && (
+              <p style={{ marginBottom: 0 }}>
+                Si l’affichage échoue encore, présentez cette référence à l’accueil&nbsp;:{' '}
+                <span className="mono">{resultat.referenceTransaction}</span>
               </p>
-            </div>
+            )}
+            {!connecte && (
+              <p style={{ marginBottom: 0 }}>
+                Créez un compte pour retrouver vos billets à tout moment dans votre espace.
+              </p>
+            )}
           </div>
         )}
       </section>

@@ -97,9 +97,59 @@ CLIENTS = [
     os.path.join(RACINE, "frontend", "src", "public", "api", "boutiqueClient.js"),
 ]
 
-APPEL = re.compile(r"request\(\s*[`'\"]([^`'\"]+)[`'\"]([^\n]*)")
+# ⚠ LE VERBE N'EST PAS SUR LA LIGNE DE L'APPEL, ET PAS TOUJOURS ENTRE APOSTROPHES.
+#
+# Ces deux expressions cherchaient `method: 'VERBE'` en apostrophes simples, sur le reste de la
+# LIGNE seulement. Le client ecrit couramment le verbe deux lignes plus bas : l'outil retombait
+# alors sur GET, et le couple (GET, chemin) n'appariait jamais la route POST correspondante.
+# Quinze operations etaient declarees sans ecran alors qu'un ecran monte les appelle.
+#
+# ⚠ ET LA BORNE COMPTE AUTANT QUE L'ELARGISSEMENT. Sans elle, un appel SANS methode ramasserait le
+# `method:` de l'appel SUIVANT : un GET deviendrait un POST, et l'instrument mentirait dans l'autre
+# sens. Un sur-comptage se voit moins qu'une absence -- le cliquet se mettrait a accepter du travail
+# qui n'existe pas.
+#
+# C'est mot pour mot ce que `frontend/scripts/lib/ecart.mjs` fait DEPUIS LE 30/08. Les deux fichiers
+# mesurent la meme chose ; celui-la avait ete repare, celui-ci non, et c'est celui-ci qu'on citait.
+# Toute modification ici doit etre reportee la-bas, et reciproquement.
+APPEL = re.compile(r"request\(\s*[`'\"]([^`'\"]+)[`'\"]")
 INTERPOLATION = re.compile(r"\$\{[^}]*\}")
-METHODE = re.compile(r"method:\s*'([A-Z]+)'")
+METHODE = re.compile(r"method:\s*['\"]([A-Z]+)['\"]")
+
+
+def verbe_de(source, depart):
+    """Le verbe de l'appel commence a `depart`, cherche jusqu'au prochain `request(`."""
+    restant = source[depart:]
+    prochain_appel = restant.find("request(", 8)
+    corps = restant if prochain_appel == -1 else restant[:prochain_appel]
+    trouve = METHODE.search(corps)
+    return trouve.group(1) if trouve else "GET"
+
+
+# ⚠ TEMOIN DE L'INSTRUMENT, PAS DU DEPOT.
+#
+# Il porte sur la CAPACITE A VOIR, jamais sur un chemin precis du client : un temoin tire d'un cas
+# vivant tombe le jour ou quelqu'un renomme la route, et declare mort un instrument sain. On donne
+# donc a l'apparieur une source fabriquee ici, dont on connait la reponse.
+#
+# Les deux sens sont necessaires. Sans le second, une expression qui rendrait POST pour tout
+# passerait le premier -- et on aurait remplace la sous-estimation par une sur-estimation.
+_T_ECRITURE = "  a: (id) =>\n    request(`/api/x/${id}/agir`, {\n      method: 'POST',\n    }),\n"
+_T_LECTURE = "  b: () =>\n    request('/api/y'),\n\n  c: () =>\n    request('/api/z', {\n      method: 'PUT',\n    }),\n"
+
+if verbe_de(_T_ECRITURE, _T_ECRITURE.index("request(")) != "POST":
+    raise SystemExit(
+        "✗ L'apparieur ne voit pas un `method:` place a la ligne suivante.\n"
+        "  Il rendrait GET pour toute ecriture, et declarerait sans ecran des operations\n"
+        "  qu'un ecran appelle. Ne pas se fier au rapport."
+    )
+
+if verbe_de(_T_LECTURE, _T_LECTURE.index("request(")) != "GET":
+    raise SystemExit(
+        "✗ L'apparieur ramasse le `method:` de l'appel SUIVANT.\n"
+        "  Il rendrait une ecriture pour une lecture, et l'ecart serait sous-estime --\n"
+        "  ce qui se voit moins qu'une absence. Ne pas se fier au rapport."
+    )
 
 appeles = set()
 for chemin_client in CLIENTS:
@@ -111,8 +161,7 @@ for chemin_client in CLIENTS:
         chemin = INTERPOLATION.sub("{id}", m.group(1))
         if not chemin.startswith("/api/"):
             continue
-        suite = METHODE.search(m.group(2))
-        appeles.add(((suite.group(1) if suite else "GET"), chemin))
+        appeles.add((verbe_de(source, m.start()), chemin))
 
 # ── 3. LA SOUSTRACTION ──────────────────────────────────────────────────────────────────────────
 #
