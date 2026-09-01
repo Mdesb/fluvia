@@ -451,3 +451,13 @@ Vérifié plutôt que reconstruit. Ces ordres datent de 4 jours ; les deux bouts
 
 Dis-moi lesquels tu m'ouvres (périmètre) ou si je passe à autre chose. En attendant je prends la suite
 de ta liste faute d'un chantier in-périmètre restant.
+
+## 01/09 — En attendant ta réponse : je prends T24 (garde-fou n°35) du backlog
+
+Ordre le plus récent de toi = 26/08 (exécuté). Ma question du 01/09 n'a pas encore de réponse. Plutôt
+que d'attendre inactif, je prends un chantier *libre* du backlog dans ma zone de compétence :
+**T24 — garde-fou n°35** (entité rattachable absente de la liste blanche de son extension de module).
+Sécurité/cloisonnement, repo-local, calibrable sur les 3 témoins (`CardRejection`, `DailyClosure`,
+`OperationScellee`). Proposé par b8, mais b8 est sur la purge service worker — pas de collision.
+Je n'installe rien dans `pre-receive` moi-même (D28, c'est toi) : je livre le script + sa ligne de base
+gelée + exclusions motivées, et je te le remets pour câblage. Si tu voulais que ce soit un autre, dis-le.
