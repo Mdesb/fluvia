@@ -11,9 +11,116 @@ import { aLeDroit } from '../api/droits.js'
 // MEME MOTIF QUE CLIENTS, PARCE QUE MAXIME A DEMANDE LA MEME CHOSE : « je pense que pour le produit
 // on devrait faire pareil que pour le client. » Liste large, fiche en page, retour qui rend les
 // filtres. `useEtatUrl` (api/url.js) est ecrit pour servir aux deux plutot que recopie ici.
-const DEFAUTS = { tab: 'produits', q: '', statut: '', type: '', fiche: '' }
+// `nouveau` vit dans l'URL comme `fiche` : recharger la page ne doit pas faire perdre le formulaire
+// commence, et le bouton « precedent » du navigateur doit ramener au catalogue.
+const DEFAUTS = { tab: 'produits', q: '', statut: '', type: '', fiche: '', nouveau: '' }
 
-export default function Catalogue({ etabActif, cible = null, onCibleConsommee, droits = [] }) {
+/**
+ * LA FICHE VIERGE — ce qu'on voit apres « Nouveau produit », avant que le produit n'existe.
+ *
+ * ⚠ LES DEUX CHAMPS PRENNENT LA PLACE DU TITRE : c'est le titre, en cours d'ecriture. Une fois le
+ * produit cree, le titre les remplace et on n'a pas change d'ecran.
+ *
+ * ⚠ RIEN N'EST ECRIT AVANT LE CLIC. Creer des que les deux champs sont remplis paraissait plus
+ * fluide, mais un aller-retour aurait laisse des produits fantomes dans le catalogue — et aucun
+ * bouton ne permet aujourd'hui d'en supprimer un.
+ *
+ * ⚠ LES SECTIONS SONT MONTREES ESTOMPEES, NI CACHEES NI ACTIVES. Un tarif s'attache a un produit :
+ * tant qu'il n'existe pas, il n'y a rien a quoi l'attacher. Les cacher laisserait croire que la
+ * fiche est pauvre ; les activer ferait saisir des valeurs qui ne partiraient nulle part.
+ */
+function NouveauProduit({ types = [], onAnnule, onCree }) {
+  const [libelle, setLibelle] = useState('')
+  const [typeId, setTypeId] = useState('')
+  const [enCours, setEnCours] = useState(false)
+  const [erreur, setErreur] = useState(null)
+
+  const pret = libelle.trim() !== '' && typeId !== ''
+
+  async function creer() {
+    setEnCours(true)
+    setErreur(null)
+    try {
+      await onCree({
+        libelle: { fr: libelle.trim() },
+        type: `/api/type_produits/${typeId}`,
+        canaux: ['guichet'],
+      })
+    } catch (e) {
+      setErreur(e?.message || 'La création n’a pas abouti.')
+      setEnCours(false)
+    }
+  }
+
+  return (
+    <>
+      <button
+        className="btn ghost sm"
+        type="button"
+        style={{ marginBottom: 'var(--esp-normal)' }}
+        onClick={onAnnule}
+      >
+        ← Retour au catalogue
+      </button>
+
+      {erreur && <div className="banner banner-error">{erreur}</div>}
+
+      <div className="row" style={{ gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <div className="field" style={{ margin: 0, flex: '2 1 260px' }}>
+          <label htmlFor="np-lib">Libellé *</label>
+          <input
+            id="np-lib"
+            className="input"
+            value={libelle}
+            onChange={(e) => setLibelle(e.target.value)}
+            placeholder="Ex. Entrée adulte"
+            autoFocus
+          />
+        </div>
+        <div className="field" style={{ margin: 0, flex: '1 1 180px' }}>
+          <label htmlFor="np-type">Type *</label>
+          <select id="np-type" className="select" value={typeId} onChange={(e) => setTypeId(e.target.value)}>
+            <option value="">Choisir…</option>
+            {types.map((t) => (
+              <option key={t.id} value={t.id}>{t.libelle}</option>
+            ))}
+          </select>
+        </div>
+        <span className="badge mut">Nouveau</span>
+      </div>
+
+      <div className="banner" style={{ marginTop: 'var(--esp-normal)' }}>
+        Donnez-lui un nom et un type : le produit sera créé, et tout le reste de cette fiche
+        deviendra modifiable. Il naîtra en <b>brouillon</b> — invisible du guichet et de la boutique
+        tant que vous ne l’aurez pas publié.
+      </div>
+
+      <div className="row" style={{ gap: 10, marginTop: 'var(--esp-normal)' }}>
+        <button className="btn primary" type="button" disabled={!pret || enCours} onClick={creer}>
+          {enCours ? 'Création…' : 'Créer le produit'}
+        </button>
+        <button className="btn ghost" type="button" onClick={onAnnule}>Annuler</button>
+      </div>
+
+      {/* ⚠ APERCU INERTE, ET IL EST MARQUE COMME TEL. `aria-hidden` le retire de la lecture d'un
+          lecteur d'ecran : annoncer « Photos, Description » a quelqu'un qui ne peut rien y faire
+          serait la version sonore du formulaire qui ment. */}
+      <div className="fiche-endormie" aria-hidden="true">
+        <div className="fiche-sec">Photos</div>
+        <div className="hint">La première est celle qu’affiche la boutique en ligne.</div>
+        <div className="fiche-sec">Description</div>
+        <div className="hint">Ce qu’on voit, ce qu’on fait, combien de temps ça dure.</div>
+        <div className="fiche-sec">Produits complémentaires</div>
+        <div className="hint">Le casier avec l’entrée, l’audioguide avec la visite.</div>
+      </div>
+    </>
+  )
+}
+
+export default function Catalogue({ etabActif, cible = null, onCibleConsommee, droits = [], capacites = [] }) {
+  // Le droit de l'API, et lui seul : sans `offre.creer`, le bouton n'existe pas — absent plutot
+  // que grise, comme les actions de statut plus bas.
+  const peutCreer = aLeDroit(droits, 'offre.creer') || aLeDroit(droits, 'offre.gerer')
   const [params, majParams] = useEtatUrl('catalogue', DEFAUTS)
   const tab = params.tab
   const setTab = (v) => majParams({ tab: v, fiche: '' })
@@ -91,9 +198,6 @@ function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = []
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
 
-  const [libelle, setLibelle] = useState('')
-  const [typeId, setTypeId] = useState('')
-  const [enCours, setEnCours] = useState(false)
 
   const [produitOptions, setProduitOptions] = useState(null) // produit dont on gère les options
   const [actionEnCours, setActionEnCours] = useState(null) // id du produit dont une action tourne
@@ -150,30 +254,6 @@ function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = []
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cible])
 
-  async function creer(e) {
-    e.preventDefault()
-    setErreur(null)
-    setSucces(null)
-    if (!libelle.trim() || !typeId) return
-    setEnCours(true)
-    try {
-      // Le code produit est généré automatiquement côté back : il n'est plus saisi ni envoyé.
-      await api.creerProduit({
-        libelle: { fr: libelle.trim() },
-        type: `/api/type_produits/${typeId}`,
-        canaux: ['guichet'],
-        etablissements: etabActif ? [`/api/etablissements/${etabActif}`] : [],
-      })
-      setSucces(`Produit « ${libelle.trim()} » créé.`)
-      setLibelle('')
-      await recharger()
-    } catch (err) {
-      setErreur(err.message || 'Échec de la création du produit.')
-    } finally {
-      setEnCours(false)
-    }
-  }
-
   // Appels de cycle de vie, dans l'ordre exact des actions déclarées par `actionsStatut`.
   const APPELS = {
     publier: api.publierProduit,
@@ -221,9 +301,30 @@ function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = []
           peutModifier={aLeDroit(droits, 'offre.modifier') || aLeDroit(droits, 'offre.gerer')}
           peutModifierCompta={aLeDroit(droits, 'offre.modifier_compta') || aLeDroit(droits, 'offre.gerer')}
           droits={droits}
+          capacites={capacites}
           onModifie={recharger}
         />
       </>
+    )
+  }
+
+  // ── LA FICHE VIERGE ─────────────────────────────────────────────────────────────────────────
+  //
+  // Elle prend la page entiere, comme une fiche ordinaire : c'est le meme geste, au meme endroit,
+  // et on n'a pas change d'ecran quand le produit existe.
+  if (params.nouveau === '1') {
+    return (
+      <NouveauProduit
+        types={types}
+        onAnnule={() => majParams({ nouveau: '' }, { pousser: true })}
+        onCree={async (corps) => {
+          const cree = await api.creerProduit(corps)
+          await recharger()
+          // On enchaine sur la vraie fiche : le produit existe, il a son code, et on reste au
+          // meme endroit — seul le titre remplace les deux champs.
+          majParams({ nouveau: '', fiche: String(cree.id) }, { pousser: true })
+        }}
+      />
     )
   }
 
@@ -276,39 +377,19 @@ function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = []
         </div>
       </section>
 
-      <form className="card" onSubmit={creer} style={{ marginBottom: 16 }}>
-        <div className="card-h"><h3>Nouveau produit</h3></div>
-        <div className="card-b">
-          <div
-            style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto', gap: 12, alignItems: 'end' }}
-            className="cat-form-row"
-          >
-            <div className="field" style={{ margin: 0 }}>
-              <label htmlFor="lib">Libellé *</label>
-              <input
-                id="lib"
-                className="input"
-                value={libelle}
-                onChange={(e) => setLibelle(e.target.value)}
-                placeholder="Ex. Entrée adulte"
-                required
-              />
-            </div>
-            <div className="field" style={{ margin: 0 }}>
-              <label htmlFor="type">Type *</label>
-              <select id="type" className="select" value={typeId} onChange={(e) => setTypeId(e.target.value)}>
-                {types.map((t) => (
-                  <option key={t.id} value={t.id}>{t.libelle}</option>
-                ))}
-              </select>
-            </div>
-            <button className="btn primary" type="submit" disabled={enCours}>
-              {enCours ? 'Création…' : '＋ Créer'}
-            </button>
-          </div>
-          <div className="hint">Le code produit est généré automatiquement.</div>
-        </div>
-      </form>
+      {/* ⚠ LE FORMULAIRE EST DEVENU UN BOUTON. Pose entre les filtres et la liste qu'ils
+          filtrent, il separait les deux et cessait d'etre utile des la deuxieme visite. En bouton,
+          la liste remonte et le catalogue redevient ce qu'on vient y chercher. */}
+      {peutCreer && (
+        <button
+          className="btn primary"
+          type="button"
+          style={{ marginBottom: 'var(--esp-bloc)' }}
+          onClick={() => majParams({ nouveau: '1' }, { pousser: true })}
+        >
+          ＋ Nouveau produit
+        </button>
+      )}
 
       <div className="card">
         {chargement ? (
