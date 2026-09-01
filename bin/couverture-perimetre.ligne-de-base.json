@@ -44,7 +44,7 @@
     ],
     "scelle": {
         "gelee_le": "2026-08-28",
-        "plafond": 17,
+        "plafond": 14,
         "reference": "MESSAGES.md — claude-A, 28/08 : le garde-fou tenait « porte un champ etablissement » pour « est cloisonne ». Les 11 entrees ajoutees ce jour-la sont ce que la premisse cachait."
     },
     "entrees": {
@@ -69,29 +69,6 @@
                 "chemin": "",
                 "cible": "",
                 "note": "Definition de moyen de paiement (code, autorise le rendu, exige une reference). Referentiel. Doute leve le 24/08 par lecture des champs. NON CONFIRME par l'integrateur — tant que ce mot manque, l'entree reste comptee."
-            }
-        },
-        "Compta/Entity/QualificationEquipement.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "Compta",
-            "operations": [
-                "Get",
-                "GetCollection",
-                "Patch",
-                "Post"
-            ],
-            "permissions": [
-                "compta.gerer",
-                "compta.lire"
-            ],
-            "sensibilite": "argent",
-            "traitement": {
-                "groupe": "B",
-                "chemin": "",
-                "cible": "",
-                "note": "Referentiel presume global. NON CONFIRME par l'integrateur au 24/08 — tant que ce mot manque, l'entree reste comptee."
             }
         },
         "Autorisation/Entity/OperationSensible.php": {
@@ -339,52 +316,6 @@
                 "cible": "",
                 "note": "Referentiel presume global. NON CONFIRME par l'integrateur au 24/08 — tant que ce mot manque, l'entree reste comptee."
             }
-        },
-        "OptionProduit/Entity/GroupeOption.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "OptionProduit",
-            "operations": [
-                "Get",
-                "GetCollection",
-                "Patch",
-                "Post"
-            ],
-            "permissions": [
-                "offre.lire",
-                "offre.modifier"
-            ],
-            "sensibilite": "autre",
-            "traitement": {
-                "groupe": "B",
-                "chemin": "",
-                "cible": "",
-                "note": "Referentiel presume global. NON CONFIRME par l'integrateur au 24/08 — tant que ce mot manque, l'entree reste comptee."
-            }
-        },
-        "OptionProduit/Entity/ValeurOption.php": {
-            "depuis": "2026-08-23",
-            "accorde_par": "claude-C — depistage du 23/08, verifie sur EcritureComptable",
-            "raison": "Exposee par ApiResource sans champ etablissement ni extension Perimetre. N'est PAS une derogation : la collection est lisible d'un etablissement a l'autre tant que ce n'est pas corrige. Certaines entrees sont peut-etre globales a dessein — a trancher module par module, pas en bloc.",
-            "module": "OptionProduit",
-            "operations": [
-                "Get",
-                "GetCollection",
-                "Patch",
-                "Post"
-            ],
-            "permissions": [
-                "offre.lire",
-                "offre.modifier"
-            ],
-            "sensibilite": "autre",
-            "traitement": {
-                "groupe": "A",
-                "chemin": "articleStock",
-                "cible": "ArticleStock"
-            },
-            "risque_ecriture": "ManyToOne ArticleStock ecrivable : on rattache une valeur d'option a l'article de stock d'un autre etablissement."
         },
         "Reporting/Entity/AxeAnalytique.php": {
             "depuis": "2026-08-23",

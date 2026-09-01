@@ -2,6 +2,42 @@
    Système de design « Fluvia » — porté depuis demo-produit.html
    Tokens clair + sombre (theme-aware via prefers-color-scheme et [data-theme])
    ========================================================================= */
+/* ── COUCHE 1 · L'IDENTITE FLUVIA — NE SE REPEINT JAMAIS ────────────────────────────────────────
+ *
+ * Les trois arrets du degrade du mark (cyan -> bleu -> violet) et le bleu nuit de son fond. Ils
+ * portent aujourd'hui les valeurs EXISTANTES : l'identite reelle n'est pas encore confirmee, et la
+ * nommer avant de la connaitre serait l'inventer. Quand le SVG et les hexadecimaux arriveront, ce
+ * bloc est le seul a remplacer.
+ *
+ * ⚠ CE QUI EST DEJA VRAI, QUELLE QUE SOIT LA PALETTE : la geometrie du mark tient en aplat — trait
+ * d'epaisseur constante, terminaisons arrondies — donc elle survit a la favicon, a l'impression en
+ * noir et au repeint d'un client. Le degrade, lui, ne survit a aucun des trois. L'identite vit donc
+ * dans la forme et le mot-symbole ; la couleur n'en est que l'habillage.
+ */
+:root {
+  --marque-cyan: #38b7c0;
+  --marque-bleu: #0d7983;
+  --marque-violet: #0a5b64;
+  --marque-nuit: #0e2a30;
+  --marque-degrade: linear-gradient(135deg, var(--marque-bleu), var(--marque-cyan));
+}
+
+/* ── COUCHE 2 · CE QU'UN CLIENT REPEINT ─────────────────────────────────────────────────────────
+ *
+ * Le seul point d'entree d'une declinaison en marque blanche (T11). Un club change ces deux
+ * valeurs ; tout le reste suit.
+ *
+ * ⚠ `--sur-accent` EXISTE PARCE QUE LE BLANC N'EST PAS UNE CONSTANTE. Dix regles ecrivaient
+ * `color: #fff` sur un fond `var(--accent)`. Tant que l'accent est sombre, le blanc tient ; le jour
+ * ou un club choisit un accent clair, le texte devient illisible sur ses propres boutons — et rien
+ * ne le signale, puisque le blanc etait en dur. Le nommer rend la question posable a un seul
+ * endroit : qu'ecrit-on sur l'accent ?
+ */
+:root {
+  --accent-marque: var(--marque-bleu);
+  --sur-accent: #ffffff;
+}
+
 :root {
   --bg: #eef2f4; --panel: #ffffff; --panel-2: #f4f7f8; --line: #dbe4e7;
   --ink: #122229; --ink-soft: #51666f; --ink-faint: #64777f;
@@ -48,7 +84,7 @@ a { color: var(--accent); }
 .app { display: grid; grid-template-columns: 246px 1fr; min-height: 100vh; }
 .sidebar { background: var(--side-bg); color: var(--side-ink); display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
 .side-brand { display: flex; align-items: center; gap: 10px; padding: 18px 18px 14px; font-weight: 800; font-size: 18px; color: #fff; letter-spacing: -.02em; }
-.side-brand .logo { width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(135deg, var(--accent), #38b7c0); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 15px; flex: none; }
+.side-brand .logo { width: 28px; height: 28px; border-radius: 8px; background: var(--marque-degrade); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 15px; flex: none; }
 .side-tenant { margin: 0 14px 12px; padding: 8px 10px; border: 1px solid var(--side-line); border-radius: 9px; font-size: 12.5px; color: var(--side-ink-soft); }
 .side-tenant b { color: var(--side-ink); display: block; font-size: 13px; }
 .side-nav { padding: 6px 10px; display: flex; flex-direction: column; gap: 2px; }
@@ -94,7 +130,7 @@ a { color: var(--accent); }
 .btn { display: inline-flex; align-items: center; gap: 7px; border-radius: 9px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); padding: 9px 14px; font-size: 13.5px; font-weight: 600; cursor: pointer; font-family: inherit; text-decoration: none; }
 .btn:hover:not(:disabled) { background: var(--panel-2); }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
-.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--sur-accent); }
 .btn.primary:hover:not(:disabled) { background: var(--accent-2); }
 .btn.sm { padding: 6px 10px; font-size: 12.5px; }
 /* Plus petit que `sm` : le bouton d'action d'une cellule de tableau, la ou une rangee en
@@ -368,7 +404,7 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 .pay-moyens { display: flex; flex-wrap: wrap; gap: 6px; }
 .pay-chip { border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 8px; padding: 7px 12px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
 .pay-chip:hover { background: var(--panel-2); }
-.pay-chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.pay-chip.on { background: var(--accent); border-color: var(--accent); color: var(--sur-accent); }
 
 /* ---- Session / Clôture Z ---- */
 .deflist { margin: 0; display: flex; flex-direction: column; gap: 0; }
@@ -510,7 +546,7 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 
 /* Accessibilite : texte reserve aux lecteurs d'ecran + lien d'evitement. */
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-.bq-skip { position: absolute; left: 8px; top: -48px; z-index: 100; background: var(--accent); color: #fff; padding: 9px 14px; border-radius: 9px; font-weight: 600; text-decoration: none; transition: top .15s ease; }
+.bq-skip { position: absolute; left: 8px; top: -48px; z-index: 100; background: var(--accent); color: var(--sur-accent); padding: 9px 14px; border-radius: 9px; font-weight: 600; text-decoration: none; transition: top .15s ease; }
 .bq-skip:focus { top: 8px; }
 
 /* Le lien d evitement du back-office. Invisible tant qu on ne l atteint pas au clavier, il
@@ -540,13 +576,13 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 .bq-header-in { max-width: 1180px; margin: 0 auto; padding: 12px 20px; display: flex; align-items: center; gap: 16px; }
 .bq-brand { display: inline-flex; align-items: center; gap: 10px; background: none; border: none; cursor: pointer; font-family: inherit; color: var(--ink); font-weight: 800; font-size: 17px; letter-spacing: -.02em; padding: 4px; }
 .bq-brand-logo { width: 34px; height: 34px; border-radius: 8px; object-fit: contain; background: #fff; }
-.bq-brand-mark { width: 34px; height: 34px; border-radius: 8px; background: linear-gradient(135deg, var(--accent), #38b7c0); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 17px; }
+.bq-brand-mark { width: 34px; height: 34px; border-radius: 8px; background: var(--marque-degrade); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 17px; }
 .bq-nav { margin-left: auto; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .bq-nav-link { background: none; border: 1px solid transparent; border-radius: 9px; padding: 8px 13px; font-size: 14px; font-weight: 600; color: var(--ink-soft); cursor: pointer; font-family: inherit; }
 .bq-nav-link:hover { background: var(--panel-2); color: var(--ink); }
 .bq-nav-link.on { color: var(--accent-2); background: var(--accent-soft); }
 .bq-cart { display: inline-flex; align-items: center; gap: 7px; }
-.bq-cart-count { min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: #fff; font-size: 12px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; }
+.bq-cart-count { min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: var(--sur-accent); font-size: 12px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; }
 
 /* ---- Corps + pied ---- */
 .bq-main { flex: 1; width: 100%; max-width: 1180px; margin: 0 auto; padding: 26px 20px 60px; outline: none; }
@@ -800,7 +836,7 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 .pat-tuile .pat-dispo { font-size: 30px; font-weight: 800; line-height: 1.05; color: var(--good);
   font-variant-numeric: tabular-nums; }
 .pat-tuile .pat-detail { font-size: 11px; color: var(--ink-faint); }
-.pat-tuile.vide { background: var(--bg-soft, var(--panel)); border-style: dashed; }
+.pat-tuile.vide { background: var(--panel-2); border-style: dashed; }
 .pat-tuile.vide .pat-dispo { color: var(--crit); }
 .pat-tuile .pat-att { position: absolute; top: -7px; right: -5px; font-size: 10px; }
 
@@ -882,7 +918,7 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
    `max-width` a 72 % : une bulle pleine largeur ne se distingue plus d'un paragraphe, et le fil
    redevient la liste de cartes qu'il remplace. */
 .msgr-b { max-width: 72%; align-self: flex-start; background: var(--panel-2); border-radius: 14px 14px 14px 4px; padding: 10px 13px; }
-.msgr-b.moi { align-self: flex-end; background: var(--accent); color: #fff; border-radius: 14px 14px 4px 14px; }
+.msgr-b.moi { align-self: flex-end; background: var(--accent); color: var(--sur-accent); border-radius: 14px 14px 4px 14px; }
 .msgr-b.moi .msgr-b-t { color: rgba(255, 255, 255, .75); }
 /* La note interne ne se distingue pas par une etiquette qu'on peut manquer : elle change de fond
    ET de bordure. C'est un texte que le demandeur ne doit jamais voir, et l'agent doit le savoir
@@ -947,7 +983,7 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 /* Les jours des mois voisins restent VISIBLES et attenues : les masquer casserait la grille de six
    semaines, et un lundi 30 qui disparait fait croire a un trou dans le planning. */
 .cal-mois-c.hors { background: var(--panel-2); opacity: .55; }
-.cal-mois-c.on .cal-mois-n { background: var(--accent); color: #fff; }
+.cal-mois-c.on .cal-mois-n { background: var(--accent); color: var(--sur-accent); }
 .cal-mois-n { align-self: flex-start; font-size: 12px; font-weight: 700; min-width: 22px; height: 22px;
   display: grid; place-items: center; border-radius: 50%; }
 .cal-puce { display: block; width: 100%; border-radius: 6px; padding: 2px 6px; font-size: 11.5px;
@@ -962,7 +998,7 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 .cal-grille-j { display: block; font-size: 11px; font-weight: 700; letter-spacing: .04em; color: var(--ink-faint); }
 .cal-grille-d { display: inline-grid; place-items: center; min-width: 24px; height: 24px; border-radius: 50%;
   font-size: 13px; font-weight: 700; }
-.cal-grille-h.on .cal-grille-d { background: var(--accent); color: #fff; }
+.cal-grille-h.on .cal-grille-d { background: var(--accent); color: var(--sur-accent); }
 .cal-heures { border-right: 1px solid var(--line); }
 .cal-heure { font-size: 11px; color: var(--ink-faint); padding: 2px 6px; text-align: right;
   border-bottom: 1px solid var(--line); }
@@ -1027,7 +1063,7 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 .cal-jour.ferme { background: var(--crit-bg); color: var(--crit); }
 /* Une ouverture exceptionnelle BORDE : meme force de decision, sens inverse. */
 .cal-jour.special { box-shadow: inset 0 0 0 2px var(--good); }
-.cal-jour.on .cal-jour-n { background: var(--accent); color: #fff; min-width: 24px; height: 24px;
+.cal-jour.on .cal-jour-n { background: var(--accent); color: var(--sur-accent); min-width: 24px; height: 24px;
   border-radius: 50%; display: grid; place-items: center; }
 /* LE FERIE EST UNE PASTILLE, PAS UN FOND. C'est une proposition, pas un etat : lui donner un fond
    le ferait lire comme une fermeture, et un exploitant conclurait qu'il ferme le 14 juillet alors
@@ -1098,7 +1134,7 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
   width: 100%;
   padding: var(--esp-serre) var(--esp-normal);
   text-align: left;
-  background: var(--bg-soft);
+  background: var(--panel-2);
   border: 1px solid var(--line);
   border-radius: 8px;
   cursor: pointer;
@@ -1139,7 +1175,7 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
   flex-direction: column;
   gap: var(--esp-serre);
   padding: var(--esp-serre);
-  background: var(--bg-soft);
+  background: var(--panel-2);
   border-radius: 8px;
 }
 .resa-inscrit-h { display: flex; align-items: center; gap: var(--esp-serre); flex-wrap: wrap; }
@@ -1226,7 +1262,7 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 .fact-totaux div { display: flex; justify-content: space-between; padding: 3px 0; }
 .fact-totaux .fact-ttc { border-top: 1px solid var(--line); margin-top: 4px; padding-top: 6px; font-weight: 700; font-size: 15px; }
 .fact-cond { margin-top: 24px; font-size: 12.5px; color: var(--ink-soft); }
-.fact-acquittee { margin-top: 12px; font-weight: 600; color: var(--ok, var(--ink)); }
+.fact-acquittee { margin-top: 12px; font-weight: 600; color: var(--good); }
 /* Le destinataire manquant est marque DANS le document : un bloc vide se remet par megarde. */
 .fact-manque { color: var(--crit); font-weight: 600; }
 

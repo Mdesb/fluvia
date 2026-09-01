@@ -127,7 +127,7 @@ export default function ChoixOptions({
             <div key={groupe.groupeOption} style={{ display: 'grid', gap: 6 }}>
               <div style={{ fontWeight: 620, fontSize: 14 }}>
                 {groupe.libelle}
-                {groupe.obligatoire && <span style={{ color: 'var(--danger)' }}> · obligatoire</span>}
+                {groupe.obligatoire && <span style={{ color: 'var(--crit)' }}> · obligatoire</span>}
                 {groupe.modeSelection === 'multiple' && (
                   <span className="hint" style={{ marginLeft: 8 }}>plusieurs choix possibles</span>
                 )}
