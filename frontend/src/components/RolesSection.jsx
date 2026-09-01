@@ -250,8 +250,15 @@ export default function RolesSection({ droits, peutGerer, onChange }) {
                             <button className="btn ghost sm" type="button" onClick={() => ouvrir(r)}>Modifier</button>
                           )}
                           <button className="btn ghost sm" type="button" onClick={() => dupliquer(r)}>Dupliquer</button>
+                          {/* ⚠ TON `danger`, ET LA CONFIRMATION DIT POURQUOI : « tous les
+                              comptes qui le portent perdront ces droits immédiatement, sans
+                              préavis et sans qu'on puisse dire lesquels étaient concernés après
+                              coup ». En `ghost`, ce bouton était identique au pixel près à
+                              « Modifier » et « Dupliquer » — même encre, même taille, ni fond ni
+                              bordure. Rien ne séparait le geste dont on revient de celui dont on
+                              ne revient pas. */}
                           {!r.estModele && (
-                            <button className="btn ghost sm" type="button" onClick={() => supprimer(r)}>Supprimer</button>
+                            <button className="btn danger sm" type="button" onClick={() => supprimer(r)}>Supprimer</button>
                           )}
                         </div>
                       </td>
