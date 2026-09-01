@@ -15,11 +15,23 @@
  * dans la forme et le mot-symbole ; la couleur n'en est que l'habillage.
  */
 :root {
-  --marque-cyan: #38b7c0;
-  --marque-bleu: #0d7983;
-  --marque-violet: #0a5b64;
-  --marque-nuit: #0e2a30;
-  --marque-degrade: linear-gradient(135deg, var(--marque-bleu), var(--marque-cyan));
+  /* Palette declaree par `public/marque/README.txt` et `FLUVIA_Palette.svg`, deux sources du pack
+     qui concordent. Les valeurs precedentes etaient celles du PRODUIT sous des noms de marque —
+     turquoise la ou l'identite est bleu-violet — posees faute de mieux et annoncees comme telles. */
+  --marque-navy: #050914;
+  --marque-cyan: #27d9d0;
+  --marque-bleu: #168ceb;
+  --marque-indigo: #3755e8;
+  --marque-violet: #7a2ee6;
+
+  /* Alias conserve : `--sur-accent` le lit dans les deux blocs sombres. */
+  --marque-nuit: var(--marque-navy);
+
+  /* QUATRE arrets, aux positions declarees dans les SVG du pack — pas deux. Un degrade a deux
+     arrets entre le meme cyan et le meme violet passerait par un mauve qui n'existe pas dans la
+     marque : les arrets intermediaires ne sont pas un raffinement, ils sont le chemin. */
+  --marque-degrade: linear-gradient(135deg,
+    var(--marque-cyan) 0%, var(--marque-bleu) 45%, var(--marque-indigo) 75%, var(--marque-violet) 100%);
 }
 
 /* ── COUCHE 2 · CE QU'UN CLIENT REPEINT ─────────────────────────────────────────────────────────
@@ -602,7 +614,13 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 .bq-header-in { max-width: 1180px; margin: 0 auto; padding: 12px 20px; display: flex; align-items: center; gap: 16px; }
 .bq-brand { display: inline-flex; align-items: center; gap: 10px; background: none; border: none; cursor: pointer; font-family: inherit; color: var(--ink); font-weight: 800; font-size: 17px; letter-spacing: -.02em; padding: 4px; }
 .bq-brand-logo { width: 34px; height: 34px; border-radius: 8px; object-fit: contain; background: #fff; }
-.bq-brand-mark { width: 34px; height: 34px; border-radius: 8px; background: var(--marque-degrade); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 17px; }
+/* ⚠ REPLI DE LA BOUTIQUE DU CLIENT — PAS UN EMPLACEMENT DE MARQUE FLUVIA.
+   Affiche quand l'etablissement n'a pas de logo ; le libelle a cote dit « Billetterie ». Il portait
+   `--marque-degrade`, ce qui brandait la vitrine d'un client aux couleurs de son fournisseur — et
+   le degrade Fluvia, a quatre arrets, est bien plus reconnaissable que l'aplat d'avant. Il prend
+   donc l'accent du locataire, que la marque blanche repeint, et `--sur-accent` par-dessus : le
+   blanc en dur y rendait 2,49:1 en theme sombre, comme partout ailleurs. */
+.bq-brand-mark { width: 34px; height: 34px; border-radius: 8px; background: var(--accent); color: var(--sur-accent); display: inline-flex; align-items: center; justify-content: center; font-size: 17px; }
 .bq-nav { margin-left: auto; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .bq-nav-link { background: none; border: 1px solid transparent; border-radius: 9px; padding: 8px 13px; font-size: 14px; font-weight: 600; color: var(--ink-soft); cursor: pointer; font-family: inherit; }
 .bq-nav-link:hover { background: var(--panel-2); color: var(--ink); }
