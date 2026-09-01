@@ -39,10 +39,61 @@ function jetons(bloc) {
   return m
 }
 
-const iClair = CSS.indexOf(':root {')
-const clair = jetons(CSS.slice(iClair, CSS.indexOf('}', iClair)))
-const iSombre = CSS.indexOf(':root[data-theme="dark"]')
-const sombre = jetons(CSS.slice(iSombre, CSS.indexOf('}', iSombre)))
+// ⚠ TOUS LES BLOCS `:root` NUS, PAS LE PREMIER — ET C'EST UN DEFAUT VECU.
+//
+// Ce fichier lisait `CSS.indexOf(':root {')`, donc le premier bloc rencontre. Le 01/09, deux blocs
+// d'identite (les jetons `--marque-*`, puis `--accent-marque` / `--sur-accent`) ont ete poses AVANT
+// la palette : l'index a cesse de designer la palette, et le theme clair n'a plus ete mesure. Rien
+// ne l'a signale — voir la note sur l'absence, plus bas.
+//
+// On modelise donc la cascade telle que le navigateur l'applique : la valeur effective d'un jeton
+// est la DERNIERE declaration parmi tous les blocs `:root` nus. Aucun ordre d'ecriture ne peut plus
+// rendre ce controle aveugle.
+//
+// `:root[data-theme="dark"]` et `:root:not([data-theme="light"])` ne matchent pas `':root {'` —
+// l'un porte un crochet, l'autre deux points — donc seuls les blocs nus sont fusionnes ici.
+function blocsRacine(css, selecteur) {
+  const blocs = []
+  let i = css.indexOf(selecteur)
+  while (i !== -1) {
+    // Comptage d'accolades plutot que le premier `}` : un bloc peut contenir une `@media`
+    // imbriquee, et s'arreter a la premiere fermeture couperait la palette en deux.
+    let profondeur = 0
+    let j = css.indexOf('{', i)
+    const debut = j
+    for (; j < css.length; j += 1) {
+      if (css[j] === '{') profondeur += 1
+      else if (css[j] === '}' && (profondeur -= 1) === 0) break
+    }
+    blocs.push(css.slice(debut, j))
+    i = css.indexOf(selecteur, j)
+  }
+  return blocs
+}
+
+const clair = {}
+for (const bloc of blocsRacine(CSS, ':root {')) Object.assign(clair, jetons(bloc))
+
+// Le theme sombre HERITE du clair : il ne redefinit que ce qu'il change. Partir du seul bloc sombre
+// ferait sortir en « absent » tout jeton commun aux deux themes — `--sur-accent`, par exemple.
+const sombre = { ...clair }
+for (const bloc of blocsRacine(CSS, ':root[data-theme="dark"]')) Object.assign(sombre, jetons(bloc))
+
+// ⚠ TEMOIN : L'EXTRACTION A-T-ELLE LU LA PALETTE, OU UN BLOC QUELCONQUE ?
+//
+// C'est la question que personne ne posait, et elle a coute le controle pendant un commit. Un
+// selecteur qui glisse rend un objet non vide — il rend les MAUVAIS jetons. On exige donc que les
+// deux themes portent les fonds et les encres, sans quoi on ne mesure pas : on refuse.
+for (const [nom, palette] of [['clair', clair], ['sombre', sombre]]) {
+  const manquants = ['bg', 'panel', 'ink', 'accent'].filter((j) => !palette[j])
+  if (manquants.length > 0) {
+    console.error(`\n=== ÉCHEC — le thème ${nom} n'a pas pu être lu ===\n`)
+    console.error(`Jetons fondamentaux introuvables : ${manquants.join(', ')}.`)
+    console.error('\nL\'extraction ne désigne plus la palette de `src/styles.css`. Tant que ce')
+    console.error('témoin est rouge, ce garde-fou ne mesure RIEN — et un vert serait un mensonge.')
+    process.exit(1)
+  }
+}
 
 function canal(v) {
   const c = v / 255
@@ -99,8 +150,17 @@ for (const [nom, palette] of [['clair', clair], ['sombre', sombre]]) {
   for (const [av, ar, seuil, quoi, compte] of PAIRES) {
     const a = palette[av]
     const b = palette[ar]
+    // ⚠ UNE PAIRE QU'ON NE PEUT PAS MESURER EST UN ECHEC, PAS UNE ABSTENTION.
+    //
+    // Ce bloc disait « on ne conclut pas » et passait au suivant. Le 01/09, les quatorze paires du
+    // theme clair sont sorties ainsi — et la ligne finale a quand meme annonce « 0 paire(s) sous le
+    // seuil, plafond 0 ». Un controle qui s'abstient en silence rend le meme vert qu'un controle
+    // qui a mesure. C'est la forme la plus couteuse du faux vert : le cliquet etait a zero depuis
+    // l'arbitrage du 31/08, et il ne retenait plus rien.
     if (!a || !b) {
-      lignes.push(`  ?  ${av} / ${ar} — jeton absent, on ne conclut pas`)
+      const absents = [!a && av, !b && ar].filter(Boolean).join(', ')
+      lignes.push(`  ✗  ${av} / ${ar} — NON MESURÉE : jeton absent (${absents})`)
+      if (compte) echecs += 1
       continue
     }
     const r = ratio(a, b)
