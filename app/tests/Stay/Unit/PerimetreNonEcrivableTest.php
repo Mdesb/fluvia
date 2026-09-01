@@ -99,11 +99,17 @@ final class PerimetreNonEcrivableTest extends TestCase
 
     public function testAucuneOperationNeDeserialiseVersUneEntiteDeMesModules(): void
     {
+        $miennes = 0;
+
         foreach (self::entites() as $classe) {
             $mien = false;
             foreach (self::MODULES_A_MOI as $module) {
                 $mien = $mien || str_starts_with($classe, sprintf('App\%s\Entity', $module));
             }
+            if ($mien) {
+                ++$miennes;
+            }
+
             if (!$mien) {
                 // `Boutique`, `Stock` et `Caution` sont antérieurs et exposent légitimement des
                 // contextes d'écriture sur d'autres champs. Ce qui vaut pour eux, c'est le test
@@ -127,5 +133,14 @@ final class PerimetreNonEcrivableTest extends TestCase
                 }
             }
         }
+
+        // **La quantite qui empeche le vert vide.** Si `MODULES_A_MOI` cessait de correspondre
+        // a quoi que ce soit — un module renomme, une faute de frappe — la boucle ci-dessus ne
+        // tournerait pas, et ce test affirmerait une conformite qu il n aurait pas regardee.
+        self::assertGreaterThanOrEqual(
+            3,
+            $miennes,
+            'Aucune entite de mes modules inspectee : le vert ne prouverait rien.',
+        );
     }
 }
