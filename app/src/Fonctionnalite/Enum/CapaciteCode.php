@@ -56,11 +56,6 @@ enum CapaciteCode: string
     // `ModuleManifest::capability()` rend, sinon on ajoute neuf codes qui n'allument rien. C'est
     // pourquoi `lodging` et `stay` sont en anglais au milieu de douze codes francais : c'est subi.
     // Le garde-fou n°40 verifie desormais cette correspondance dans les deux sens.
-    // Ajoute par claude-F : `DiningModule::capability()` rend « dining », que le garde-fou n°41
-    // refusait faute de cas ici. Incursion minimale et assumee dans le perimetre de
-    // l integrateur : le garde-fou refuse le COMMIT, pas seulement la poussee, donc signaler
-    // sans corriger aurait arrete la session — voir RAPPORTS/claude-F.md du 01/09.
-    case Dining = 'dining';
     case Finance = 'finance';
     case Lodging = 'lodging';
     case Musee = 'musee';

@@ -137,12 +137,6 @@ final class CatalogueCapacites
                 'Factures fournisseurs, notes de frais, trésorerie et rapprochement bancaire.',
                 'metier',
             ),
-            CapaciteCode::Dining => new DescripteurCapacite(
-                $code->value,
-                'Restauration',
-                'Service a table : commande, envoi en cuisine et addition par couvert.',
-                'metier',
-            ),
             CapaciteCode::Lodging => new DescripteurCapacite(
                 $code->value,
                 'Hébergement',
