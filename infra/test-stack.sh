@@ -198,7 +198,45 @@ run)
     printf '%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ) jeton=$TOKEN" > "$MARQUEUR_SUITE"
     trap 'rm -f "$MARQUEUR_SUITE"' EXIT INT TERM
 
-    php_run vendor/bin/phpunit "$@"
+    # ⚠ ON REVERIFIE L'OUTILLAGE **APRES** LA COURSE, ET C'EST LE POINT DE CE BLOC.
+    #
+    # Le controle plus haut regarde avant de partir. Il ne dit rien du cas ou les dependances de dev
+    # disparaissent PENDANT — et c'est exactement ce qui est arrive le 01/09 : suite lancee a 22h42,
+    # `autoload_psr4.php` reecrit a 22h44 par un deploiement d'une autre session.
+    #
+    # La suite n'est pas morte. Elle a continue d'afficher des points pendant vingt minutes, et
+    # `class_exists("App\Tests\...")` rendait deja 0. Elle allait rendre un verdict — chiffre,
+    # detaille, credible — sur un arbre dont l'autochargeur de test n'existait plus.
+    #
+    # C'est la forme la plus couteuse d'instrument menteur : pas une panne, un RESULTAT. Un rouge
+    # qu'on va debuguer pendant une heure, ou un vert qu'on va croire.
+    #
+    # ⚠ ON NE REPARE PAS ET ON NE RELANCE PAS. On refuse de conclure, et on le dit. Relancer tout
+    # seul masquerait qu'un deploiement et une suite se sont marches dessus — `deploy-preprod.sh`
+    # AVERTIT deja quand il tue une suite (deliberement : bloquer ferait d'une gene une panne).
+    # C'est cet avertissement qu'il faut lire, et ce bloc-ci dit qu'il a ete saute.
+    code=0
+    php_run vendor/bin/phpunit "$@" || code=$?
+
+    if [ ! -x "$APP/vendor/bin/phpunit" ]         || ! grep -q "App..Tests" "$APP/vendor/composer/autoload_psr4.php" 2>/dev/null; then
+        echo >&2
+        echo "═════════════════════════════════════════════════════════════════════" >&2
+        echo "✗ LE VERDICT EST NUL : l'outillage de test a disparu PENDANT la course." >&2
+        echo >&2
+        echo "  phpunit executable        : $([ -x "$APP/vendor/bin/phpunit" ] && echo oui || echo NON)" >&2
+        echo "  autochargeur App\Tests    : $(grep -qs "App..Tests" "$APP/vendor/composer/autoload_psr4.php" && echo present || echo ABSENT)" >&2
+        echo >&2
+        echo "  Un deploiement a lance « composer install --no-dev » sur cet arbre pendant que la" >&2
+        echo "  suite tournait. Elle a continue d'afficher des points : les tests deja charges" >&2
+        echo "  s'executent, les suivants ne se chargent plus. Le chiffre ci-dessus, quel qu'il" >&2
+        echo "  soit, ne mesure PAS le code — ni en vert ni en rouge." >&2
+        echo >&2
+        echo "      ./infra/reinstaller-dev.sh   puis relancer la suite" >&2
+        echo "═════════════════════════════════════════════════════════════════════" >&2
+        exit 3
+    fi
+
+    exit "$code"
     ;;
 
 down)

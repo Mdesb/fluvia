@@ -261,12 +261,29 @@ const ICONS = {
   ),
   // ── Ajoutees le 01/09 : cinq entrees de menu pointaient vers un dessin inexistant ──────────
   //
-  // ⚠ `ICONS[name]` rend `undefined` pour une cle absente, et le `<svg>` sort VIDE — aux bonnes
-  // dimensions, sans erreur, sans avertissement, avec un build vert. Quatre entrees etaient dans
-  // ce cas, dont le TABLEAU DE BORD, la premiere du menu.
+  // Mesure : 35 dessins definis, 36 entrees de menu, quatre noms sans dessin — `dashboard`,
+  // `legal`, `personal-data`, `social` — dont le TABLEAU DE BORD, la premiere du menu. Plus `api`,
+  // arrivee avec l'entree de `claude-B`, qui aurait rejoint les quatre.
   //
-  // Rien ici ne garde contre le retour du defaut : ajouter une entree de menu sans son dessin
-  // reste silencieux. C'est un controle a poser.
+  // ⚠ CORRECTION DU 01/09, 23h. J'AVAIS ECRIT ICI QUE LE `<svg>` SORTAIT VIDE. C'EST FAUX.
+  //
+  // Le `FALLBACK` ci-dessus — un carre barre — etait la depuis 14h07, plusieurs heures avant que
+  // j'ecrive cette phrase, et il est DELIBERE : son auteur voulait un repli BRUYANT, parce qu'une
+  // icone qui ne dessine rien laisse une ligne de menu sans sa puce, l'alignement tient toujours,
+  // et personne ne le remarque. Un nom absent rendait donc un carre barre, VISIBLE, pas un trou.
+  //
+  // Le comptage etait mesure ; la consequence a l'ecran, elle, etait INFEREE de
+  // `ICONS[name] === undefined` sans que je regarde ce que le composant en fait deux ecrans plus
+  // bas. J'ai decrit le code que j'imaginais, pas celui qui etait la.
+  //
+  // ⚠ ET J'AVAIS ECRIT ICI QUE C'ETAIT « claude-A ». C'est un nom d'AUTEUR GIT, pas une session :
+  // les dix sessions partagent la meme identite. `git log` ne dit jamais qui a ecrit quoi ici. Le
+  // repli est d'`allaccess-8e`, qui me l'a signale — je n'aurais pas pu le savoir en lisant `%an`,
+  // et j'ai lu ce champ comme s'il designait quelqu'un.
+  //
+  // Ce que ca change : le defaut n'etait pas silencieux, il etait laid. Ce que ca ne change pas :
+  // rien n'empeche une entree de menu de partir sans son dessin. Le controle reste a poser — mais
+  // ce qu'il evite est un carre barre sur « Tableau de bord », pas une absence invisible.
   dashboard: (
     <>
       <rect x="3" y="3" width="7" height="9" rx="1" />
@@ -305,6 +322,15 @@ const ICONS = {
       <path d="M8.5 7.5L4 12l4.5 4.5" />
       <path d="M15.5 7.5L20 12l-4.5 4.5" />
       <path d="M13.5 4.5l-3 15" />
+    </>
+  ),
+  // Reprise initiale : une fleche qui ENTRE dans un contenant. Le sens compte — la meme fleche
+  // retournee dirait « exporter », et les deux gestes ne se defont pas de la meme facon.
+  import: (
+    <>
+      <path d="M12 3v10" />
+      <path d="M8.5 9.5L12 13l3.5-3.5" />
+      <path d="M4 15v3.5a1.5 1.5 0 0 0 1.5 1.5h13a1.5 1.5 0 0 0 1.5-1.5V15" />
     </>
   ),
   settings: (

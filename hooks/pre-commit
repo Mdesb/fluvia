@@ -214,6 +214,7 @@ lancer_front verifier-dates-locales.mjs "Dates locales"
 lancer_front verifier-profil-charge.mjs "Profil chargé avant le rendu"
 lancer_front verifier-boutons-nommes.mjs "Boutons nommés"
 lancer_front verifier-clic-clavier.mjs   "Clic au clavier"
+lancer_front verifier-icones-menu.mjs    "Icones du menu (n45)"
 lancer_front verifier-contrastes.mjs     "Contrastes"
 lancer_front verifier-encre-sur-fond.mjs "Encre sur fond"
 

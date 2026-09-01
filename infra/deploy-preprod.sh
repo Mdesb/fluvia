@@ -169,6 +169,11 @@ log "Préchauffage du cache Symfony"
 log "Droits sur var/"
 "${COMPOSE[@]}" exec -T php chown -R www-data:www-data /app/var
 
+# ⚠ ET ON VERIFIE QU'IL A FAIT CE QU'IL ANNONCE. Un chown qui echoue en silence laisse exactement
+# l'etat qui a mis toute l'API a 500 le 01/09 — pendant que le deploiement, lui, reste vert. Un
+# geste qui repare sans temoin est une esperance, pas une garantie.
+./infra/verifier-droits-var.sh
+
 # opcache tourne avec validate_timestamps=0 (cf. docker/php/conf.d/zz-opcache.ini) :
 # sans redémarrage du master FPM, le code servi resterait celui d'avant le déploiement.
 # ── LE MARQUEUR QUE PHP CHARGERA ────────────────────────────────────────────────────────────────
