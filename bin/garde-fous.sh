@@ -201,6 +201,15 @@ fi
 #    il ne trouve rien sur le neuf existant, donc il s'installe au vert.
 executer "Nommage anglais (D5)" php_racine bin/garde-fou-nommage-anglais.php "--contre=$REFERENCE_NOMMAGE"
 
+# CAPACITES DE MODULE (n°41) — un module dont la capacite manque au catalogue est PRESENT ET
+# DEFINITIVEMENT INACCESSIBLE : `Fonctionnalites::definir()` refuse tout code inconnu, donc aucune
+# ligne d'activation ne peut exister, donc `hasModule()` repond faux pour toujours. Sans erreur ni
+# journal : l'ecran est simplement absent, et on cherche le defaut cote frontal.
+#
+# Neuf modules sur quatorze etaient dans cet etat le 01/09 — et CINQ affirmaient le contraire dans
+# leur propre docblock. Une phrase ne verifie rien.
+executer "Capacites de module (n°41)" php_racine bin/garde-fou-capacites-de-module.php
+
 # 4. Aucun secret cryptographique en valeur par défaut.
 #    Contrairement au n°1, celui-ci n'a pas de ligne de base et n'en aura pas : une clé en dur n'est
 #    pas une dette qu'on étale, c'est un secret publié. Il est ROUGE tant que
@@ -454,6 +463,20 @@ fi
 # CONFLIT : deux sessions ajoutent leur appel dans le meme objet `api`, Git concatene, et l'un des
 # deux cesse silencieusement d'exister. Quatre occurrences en deux jours, rapportees par trois
 # sessions. Ni le build ni le linteur ne le voient : `{ a: 1, a: 2 }` est du JavaScript legal.
+# n40 — un identifiant utilise hors de sa portee. Le build ne le voit PAS : Vite ne fait pas
+# d'analyse de portee sur le JSX, et le n10 ne controle que les IMPORTS manquants. Deux ecrans
+# casses en production le 01/09 par des variables declarees un composant trop haut.
+if [ -f "$RACINE/frontend/scripts/verifier-portee.mjs" ]; then
+    if command -v node >/dev/null 2>&1; then
+        executer "Portee des identifiants (n40)" sh -c "cd '$RACINE/frontend' && node scripts/verifier-portee.mjs"
+    else
+        echo "─────────────────────────────────────────────────────────────"
+        echo "▶ Portee des identifiants"
+        echo "─────────────────────────────────────────────────────────────"
+        echo "· IGNORÉ — « node » indisponible ici. Le contrôle n'a PAS tourné."
+    fi
+fi
+
 if [ -f "$RACINE/frontend/scripts/verifier-cles-doubles.mjs" ]; then
     if command -v node >/dev/null 2>&1; then
         executer "Cles en double (n37)" sh -c "cd '$RACINE/frontend' && node scripts/verifier-cles-doubles.mjs"

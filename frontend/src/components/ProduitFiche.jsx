@@ -1615,7 +1615,7 @@ function PhotosProduit({ produitId, peutModifier }) {
                   height: 92,
                   objectFit: 'cover',
                   display: 'block',
-                  border: '1px solid var(--bord, #ddd)',
+                  border: '1px solid var(--line)',
                 }}
               />
               <figcaption className="sub" style={{ marginTop: 'var(--esp-serre)', lineHeight: 1.3 }}>

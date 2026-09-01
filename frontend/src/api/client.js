@@ -540,8 +540,24 @@ export const api = {
     request(`/api/ventes/${venteId}/paiements`, { method: 'POST', body: corps, headers, timeoutMs: 45000 }),
   annulerVente: (venteId) =>
     request(`/api/ventes/${venteId}/annuler`, { method: 'POST', body: {}, timeoutMs: 20000 }),
-  valider: (venteId) =>
-    request(`/api/ventes/${venteId}/valider`, { method: 'POST', body: {}, timeoutMs: 30000 }),
+  // ⚠ LE CORPS N'EST PLUS VIDE, ET IL NE L'AURAIT JAMAIS DU ETRE.
+  //
+  // `ValiderVenteProcessor` lit `supports` depuis toujours, et `ValiderVenteService` en tire deux
+  // comportements distincts (RG-CQ1-01) :
+  //
+  //   identifiant inedit    -> emission d'un support neuf portant cet identifiant
+  //   identifiant deja connu -> RECHARGE de la carte existante, au lieu d'une emission
+  //
+  // Le second est le geste le plus courant d'un exploitant qui vend des cartes, et il etait
+  // inatteignable : cet appel envoyait `{}`. La contrainte de quantite (RG-CQ8-02 : un identifiant
+  // explicite impose une quantite de 1) est appliquee par l'ECRAN avant d'appeler, pour que le
+  // caissier voie pourquoi une ligne n'est pas appairable au lieu de se prendre un 422.
+  valider: (venteId, supports = null) =>
+    request(`/api/ventes/${venteId}/valider`, {
+      method: 'POST',
+      body: supports?.length ? { supports } : {},
+      timeoutMs: 30000,
+    }),
   ticket: (venteId, mode = 'imprimer') =>
     request(`/api/ventes/${venteId}/ticket`, { method: 'POST', body: { mode } }),
 
@@ -1699,10 +1715,23 @@ export const api = {
   // puis `GenerateurEcrituresHandler`, qui saute la vente). Ce n'est pas un repli sur un compte
   // par défaut : c'est une écriture qui n'existe pas.
   //
-  // ⚠ Côté FACTURE en revanche, `ResolveurComptesFacturation` se replie bel et bien en silence sur
-  // le compte par défaut — deux comportements opposés pour la même donnée absente, selon le chemin.
-  // (Enseignement d'une seconde définition de cette clé, retirée le 31/08 : elle était en double
-  // dans cet objet, produite par une fusion sans conflit, et la dernière gagnait en silence.)
+  // ⚠ ET LA FACTURATION, ELLE, SE REPLIE — CE N'EST PAS LE MÊME CHEMIN.
+  //
+  // Mesuré dans `ResolveurComptesFacturation::compteProduit()` :
+  //
+  //   1. `MappingComptable` résolu depuis la catégorie comptable de la ligne ;
+  //   2. à défaut, `ParametreFacturationEtablissement::compteProduitDefaut` — repli SILENCIEUX ;
+  //   3. à défaut des deux, un 422 explicite qui nomme les deux sorties.
+  //
+  // Donc deux comportements opposés pour la même donnée absente, selon le chemin. Et le repli de
+  // la facturation est silencieux quand il RÉUSSIT, jamais quand il échoue : dire l'un sans
+  // l'autre laisse croire qu'une ligne sans compte passe toujours.
+  //
+  // ⚠ CE COMMENTAIRE EST NÉ D'UN DOUBLON, ET LE MÉCANISME VAUT D'ÊTRE RETENU. Cette clé était
+  // déclarée DEUX FOIS dans cet objet, avec deux commentaires qui se lisaient comme une
+  // contradiction — produits par une fusion SANS conflit, la dernière définition gagnant en
+  // silence. Aucun des deux n'était faux ; aucun ne nommait son périmètre. C'est ce qui les
+  // faisait se contredire.
   mappingsComptables: () => request('/api/mapping_comptables', { query: { itemsPerPage: 200 } }),
   creerMappingComptable: (corps) =>
     request('/api/mapping_comptables', { method: 'POST', body: corps, ld: true }),
