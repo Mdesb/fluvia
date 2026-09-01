@@ -364,6 +364,13 @@ while read -r ancien nouveau ref; do
         lancer garde-fou-champ-cloisonnement.php
     fi
 
+    # Le complement du precedent : une entite rattachable EXPOSEE que la liste blanche de son module
+    # oublie. n°28 verifie le nom du champ des entites nommees ; n°35 celles qui manquent a la liste.
+    if [ -f "$ARBRE/bin/garde-fou-liste-blanche-cloisonnement.php" ]; then
+        echo "── Liste blanche de cloisonnement (n°35)"
+        lancer garde-fou-liste-blanche-cloisonnement.php
+    fi
+
     # Une creation qu'aucun Delete ne rattrape doit dire pourquoi. La ligne de base est une LISTE,
     # pas un compteur : deux mesures independantes du meme defaut ont rendu des nombres differents,
     # et un cliquet sur un compteur aurait fige ce desaccord.
