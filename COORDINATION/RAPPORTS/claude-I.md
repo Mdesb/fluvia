@@ -31,6 +31,7 @@
 | 01/09 01:10 | **CORRECTION IMPORTANTE : mes « 4 echecs Sport preexistants » etaient faux.** Mon vendor datait du 24/08 — une semaine de retard. Sport est **vert** (35/262). Et en reverifiant T6 avec un vendor a jour, j-ai trouve le vrai bloqueur : **la demonstration ne se chargeait pas du tout** sur une base construite par migrations. Corrige, verifie. | Suites de non-regression. | Rien. |
 | 01/09 00:45 | **T6 reellement clos.** Huit suites vertes (**495 tests**) apres le correctif de `ComptaFixtures`. Chargement verifie sur base construite par migrations : premier, second, et 331 tables sans derive. Bases de verification supprimees, aucun conteneur, worktree rendu. | Plus rien. | Rien. |
 | 01/09 02:20 | **Je prends T22** (garde-fou n34). Le detecteur ratait son temoin positif : **il indexe les processeurs par nom court, et neuf classes s-appellent `EstablishmentStampProcessor`** — dont quatre que j-ai creees en D41. Indexe par nom pleinement qualifie : temoin positif **signale**, temoin negatif **epargne**, 32 suspects. | Transformer le prototype en garde-fou. | Rien. |
+| 01/09 02:50 | **T22 livre : garde-fou n34.** Detecteur corrige (indexation par nom pleinement qualifie), cable dans le hook et le lanceur, ligne de base a **32 collisions** gelees. **Prouve dans les deux sens** : aveugle -> il refuse de rendre un avis ; collision neuve -> il la nomme. | Rien. | Rien. |
 
 ---
 
@@ -1045,3 +1046,67 @@ Le compte passe de 31 a 32 : le suspect retrouve est precisement le temoin.
 **Je ne gele rien pour l-instant**, conformement a ta consigne : le detecteur n-est pas encore un
 garde-fou, et une ligne de base posee sur une mesure fausse aurait fige 31 cas en oubliant le
 trente-deuxieme.
+
+---
+
+## 2026-09-01 02:50 · T22 livre — et le garde-fou porte ses temoins
+
+### Ce qui est pose
+
+| Fichier | Role |
+|---|---|
+| `bin/garde-fou-validation-avant-processeur.php` | le controle |
+| `bin/validation-avant-processeur.ligne-de-base.json` | 32 collisions gelees, **non arbitrees** |
+| `hooks/pre-receive` | appel avec `--contre=` |
+| `bin/garde-fous.sh` | appel local |
+
+Ton meta-controle m-a refuse la premiere poussee — « garde-fou present dans l-arbre mais appele par
+aucun hook ». Il a eu raison, et le message etait exact.
+
+### La difference avec le prototype
+
+Une seule, mais elle change tout : **les processeurs sont indexes par leur nom pleinement qualifie**.
+Neuf classes s-appellent `EstablishmentStampProcessor` ; indexees par nom court elles s-ecrasent, et
+la survivante n-est pas celle qui pose le champ cherche. Le temoin positif redevient visible, le
+compte passe de 31 a 32.
+
+### Et une addition que ce chantier imposait
+
+**Le garde-fou porte ses deux temoins et refuse de rendre un avis s-il cesse de les reconnaitre.**
+
+Ce n-est pas de la prudence generale : c-est la reponse au fait que **le meme aveuglement s-est
+produit deux fois** — n32 le 24/08, n34 maintenant, chaque fois parce qu-une classe etait nommee par
+son nom court. Un controle aveugle ne se tait pas : il annonce « aucun probleme ». C-est le pire des
+verdicts, parce qu-il rassure. Le n37 porte deja ses temoins : le patron existait, je l-applique la
+ou il manquait.
+
+### Prouve, pas suppose
+
+| Essai | Attendu | Obtenu |
+|---|---|---|
+| etat de reference | vert, 32 gelees | **« Temoins : 2/2 »** |
+| detecteur re-aveugle | refus de rendre un avis | **« le detecteur ne reconnait plus ses propres temoins »**, temoin nomme |
+| collision neuve introduite | signalee et nommee | **`Musee/Entity/Guide.php` champ `etablissement`**, poseur nomme en entier |
+| retour a l-etat de reference | vert | vert |
+
+**Le cas d-essai n3 n-est pas choisi au hasard** : c-est exactement le piege dans lequel je suis
+tombee sur T6 — un `Assert\NotNull` sur un champ que mon propre processeur posait, qui faisait
+echouer la creation en 422 avant que le processeur ne soit atteint. Ce garde-fou m-aurait evite la
+demi-journee.
+
+### Les 32 sont geles, pas absous
+
+Je n-en arbitre aucune : une collision **n-est pas forcement une faute**. Un champ que le client peut
+fournir et que le processeur complete s-il se tait est legitime — c-est le cas de `Vitrine::$slug`.
+Ce qui est fautif, c-est de croire la contrainte appliquee a la valeur fabriquee. La question revient
+au proprietaire de chaque module ; le garde-fou la pose, il ne tranche pas a sa place.
+
+**Deux d-entre elles sont chez moi** (`Musee/BasculeAudioguide`), je les regarderai si tu me le dis.
+
+### Une chose a ton tour de decider
+
+Deux garde-fous sur deux ont ete aveugles par la meme cause. Ca ne ressemble plus a un accident mais a
+une propriete de l-outillage : **tout outil qui raisonne sur des classes PHP doit les nommer
+pleinement**. Un controle unique la-dessus vaudrait peut-etre mieux que de le redecouvrir au
+troisieme. Je ne le pose pas — `bin/` n-est pas mon perimetre et j-y suis deja entree une fois de
+trop dans ce lot.
