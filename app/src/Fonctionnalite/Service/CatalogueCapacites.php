@@ -185,6 +185,12 @@ final class CatalogueCapacites
                 'Formules à la semaine mêlant hébergement, activités et restauration.',
                 'metier',
             ),
+            CapaciteCode::Dining => new DescripteurCapacite(
+                $code->value,
+                'Restauration',
+                'Carte, services et additions : ce qui se consomme sur place et se règle à table.',
+                'metier',
+            ),
         };
     }
 }

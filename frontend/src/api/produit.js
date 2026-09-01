@@ -133,6 +133,27 @@ export function actionsStatut(statut) {
           aide: 'Met le produit en vente sur ses canaux. Exige un tarif et un site de commercialisation.',
           confirme: 'produit publié.',
         },
+        // ⚠ ABSENT JUSQU'AU 01/09, ET LE SERVEUR L'ACCEPTAIT DEPUIS TOUJOURS.
+        //
+        // `TransitionProduitHandler::archiver()` n'exige aucun statut de départ. Sans cette entrée,
+        // retirer un brouillon abandonné de la liste imposait de le PUBLIER d'abord — donc de le
+        // mettre en vente — puis de l'archiver. Ce n'était pas une règle métier, c'était une ligne
+        // manquante ici.
+        //
+        // Le bouton « Nouveau produit » rend la création immédiate : une hésitation laisse une
+        // ligne, et il fallait un chemin pour l'enlever qui ne passe pas par la vitrine.
+        {
+          id: 'archiver',
+          libelle: 'Archiver',
+          ton: 'ghost',
+          aide: "Retire le produit de la liste courante. Rien n'est supprimé, et il se réactive.",
+          // ⚠ PAS LE MEME TEXTE QUE POUR UN PRODUIT PUBLIE. Celui-là dit « il sortira de la
+          // vente » — dit d'un brouillon, il annonce une conséquence qui n'existe pas, puisqu'un
+          // brouillon n'est en vente nulle part. Un message qui décrit autre chose que ce qui se
+          // passe apprend à ne plus lire les messages.
+          confirmation: 'Archiver « %s » ? Ce brouillon sortira de la liste courante ; vous pourrez le réactiver.',
+          confirme: 'brouillon archivé.',
+        },
       ]
     case 'publie':
       return [
