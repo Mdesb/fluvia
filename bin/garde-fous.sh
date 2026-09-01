@@ -361,6 +361,7 @@ if [ -n "${REFERENCE:-}" ]; then
     executer "Vacuite des tests de cloisonnement" php_racine bin/garde-fou-vacuite-tests.php
     executer "Espacement en ligne" php_racine bin/garde-fou-espacement-en-ligne.php
     executer "Champ de cloisonnement" php_racine bin/garde-fou-champ-cloisonnement.php
+    executer "Liste blanche de cloisonnement (n°35)" php_racine bin/garde-fou-liste-blanche-cloisonnement.php
     executer "Creations irreversibles" php_racine bin/garde-fou-post-sans-suppression.php
     executer "Filtres muets" php_racine bin/garde-fou-filtres-muets.php
     executer "Appels du frontal dans le vide (n°33)" php_racine bin/garde-fou-appels-dans-le-vide.php
@@ -372,6 +373,7 @@ else
     executer "Vacuite des tests de cloisonnement" php_racine bin/garde-fou-vacuite-tests.php
     executer "Espacement en ligne" php_racine bin/garde-fou-espacement-en-ligne.php
     executer "Champ de cloisonnement" php_racine bin/garde-fou-champ-cloisonnement.php
+    executer "Liste blanche de cloisonnement (n°35)" php_racine bin/garde-fou-liste-blanche-cloisonnement.php
     executer "Creations irreversibles" php_racine bin/garde-fou-post-sans-suppression.php
     executer "Filtres muets" php_racine bin/garde-fou-filtres-muets.php
     executer "Appels du frontal dans le vide (n°33)" php_racine bin/garde-fou-appels-dans-le-vide.php
