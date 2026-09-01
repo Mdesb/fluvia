@@ -32,6 +32,7 @@
 | 01/09 00:45 | **T6 reellement clos.** Huit suites vertes (**495 tests**) apres le correctif de `ComptaFixtures`. Chargement verifie sur base construite par migrations : premier, second, et 331 tables sans derive. Bases de verification supprimees, aucun conteneur, worktree rendu. | Plus rien. | Rien. |
 | 01/09 02:20 | **Je prends T22** (garde-fou n34). Le detecteur ratait son temoin positif : **il indexe les processeurs par nom court, et neuf classes s-appellent `EstablishmentStampProcessor`** — dont quatre que j-ai creees en D41. Indexe par nom pleinement qualifie : temoin positif **signale**, temoin negatif **epargne**, 32 suspects. | Transformer le prototype en garde-fou. | Rien. |
 | 01/09 02:50 | **T22 livre : garde-fou n34.** Detecteur corrige (indexation par nom pleinement qualifie), cable dans le hook et le lanceur, ligne de base a **32 collisions** gelees. **Prouve dans les deux sens** : aveugle -> il refuse de rendre un avis ; collision neuve -> il la nomme. | Rien. | Rien. |
+| 01/09 03:10 | **Je prends T2** — reprise initiale d-un client, que le carnet dit bloquante pour une signature, et dont **rien n-est construit**. La spec est tranchee ; je decoupe et je declare mes deux hypotheses ci-dessous. | Tranche 1 : l-objet d-import et son cycle en deux temps, type `customers`. | Rien. |
 
 ---
 
@@ -1110,3 +1111,57 @@ une propriete de l-outillage : **tout outil qui raisonne sur des classes PHP doi
 pleinement**. Un controle unique la-dessus vaudrait peut-etre mieux que de le redecouvrir au
 troisieme. Je ne le pose pas — `bin/` n-est pas mon perimetre et j-y suis deja entree une fois de
 trop dans ce lot.
+
+---
+
+## 2026-09-01 03:10 · T2 — ce que je construis, et ce que je ne construis pas
+
+`COORDINATION/specs/import/SPEC-REPRISE-INITIALE.md` est tranchee sur l-essentiel et se termine par
+« rien de ce document n-est construit a ce jour ». Je commence.
+
+### Deux hypotheses que je pose, parce que la spec les laisse a Maxime
+
+La section 6 laisse quatre points ouverts. Deux me concernent, et les deux ont une voie par defaut
+que la spec nomme elle-meme :
+
+1. **CSV d-abord**, pas XLSX. La spec dit « le CSV suffit techniquement, l-XLSX est ce que les
+   clients ont ». Je construis le CSV ; l-XLSX se greffera comme un second lecteur sans toucher au
+   reste, puisque le format n-entre que par la lecture du fichier.
+2. **Pas d-ecran**, une entree d-API et une commande. La spec dit « selon qui accueille les premiers
+   clients ». C-est aussi ce que D13 demande — le moins d-ecrans possible — et un ecran pose sur un
+   mecanisme non eprouve se refait.
+
+Les deux autres points ouverts (espace d-anteriorite, reprise des documents) sont hors de cette
+tranche et le restent.
+
+### Le decoupage, et pourquoi celui-la
+
+La spec ordonne les types **par dependance** : `customers` est la racine, tout s-y rattache. Je livre
+donc une premiere tranche **complete** plutot que six tranches a moitie :
+
+| Dans cette tranche | Hors de cette tranche |
+|---|---|
+| l-objet `ImportBatch` : fichier conserve, empreinte, verdict, erreurs ligne a ligne | `products`, `tariffs`, `subscribers`, `staff` |
+| les **deux temps** : analyser sans rien ecrire, puis appliquer en une transaction | **`card_credits`** — voir ci-dessous |
+| le type `customers` | l-XLSX, l-ecran |
+| `externalRef` obligatoire et unique par (etablissement, type) | |
+| `importBatchRef` sur chaque ligne creee, et l-annulation qui s-appuie dessus | |
+
+**`card_credits` est explicitement remis a plus tard, et ce n-est pas de la prudence de facade.** La
+spec en fait le type le plus sensible : un credit restant est **une dette envers le client**, et une
+erreur ne se voit pas a la reprise mais au guichet, six semaines apres, devant la personne. Il
+demande en plus un rapprochement avec un total annonce par le client. Le livrer en meme temps que le
+socle, c-est le livrer moins bien. Il sera la tranche suivante, seul.
+
+### Ce que je generalise plutot que d-inventer
+
+`Finance\Treasury\Entity\BankStatementImport` porte deja `contentHash`, `content`, `status` et son
+message d-erreur. C-est le patron que la spec demande de generaliser — je le suis, y compris dans les
+noms.
+
+### Ce que je vais devoir toucher hors de mon perimetre
+
+`Crm\Client` doit porter `externalRef` et `importBatchRef`, et il faut une migration. **Je
+l-annonce avant de le faire**, et j-ecrirai la migration **a la main** — D32 : un fichier genere
+n-est jamais committe tel quel, et le brouillon de `claude-D` contenait 104 instructions dont 6 a
+elle.
