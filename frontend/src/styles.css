@@ -221,6 +221,11 @@ a { color: var(--accent); }
 .btn.primary:hover:not(:disabled) { background: var(--accent-2); }
 .btn.sm { padding: 6px 10px; font-size: var(--txt-petit); }
 
+/* L'amorce qui porte le verbe des boutons de vérification de chaîne comptable. Elle existe parce
+   que le verbe a été retiré des libellés : dix boutons le répétaient, et il repoussait à la fin le
+   seul mot qui les distingue. */
+.cc-verifier-amorce { margin: 10px 0 6px; font-size: var(--txt-petit); color: var(--ink-soft); font-weight: 600; }
+
 /* La liste des incidents de la supervision. Sans puces — la bannière porte déjà sa couleur d'état,
    et un disque rouge de plus n'ajoute rien — mais chaque incident sur sa ligne.
    ⚠ `tabular-nums` aligne les heures QUAND elles existent : un refus rend « HH:MM:SS — motif »,
