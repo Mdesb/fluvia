@@ -30,6 +30,7 @@
 | 01/09 00:05 | **T6 termine et verifie.** `tests/Platform` 84/422 vert (mon test de garde en fait partie), `Piscine` 35/213 vert. `Sport` a 4 echecs — **preexistants** : meme resultat au caractere pres sur `origin/main`, verifie et non suppose. Pile demontee, base de verification supprimee, worktree rendu. | Plus rien. | Rien. |
 | 01/09 01:10 | **CORRECTION IMPORTANTE : mes « 4 echecs Sport preexistants » etaient faux.** Mon vendor datait du 24/08 — une semaine de retard. Sport est **vert** (35/262). Et en reverifiant T6 avec un vendor a jour, j-ai trouve le vrai bloqueur : **la demonstration ne se chargeait pas du tout** sur une base construite par migrations. Corrige, verifie. | Suites de non-regression. | Rien. |
 | 01/09 00:45 | **T6 reellement clos.** Huit suites vertes (**495 tests**) apres le correctif de `ComptaFixtures`. Chargement verifie sur base construite par migrations : premier, second, et 331 tables sans derive. Bases de verification supprimees, aucun conteneur, worktree rendu. | Plus rien. | Rien. |
+| 01/09 02:20 | **Je prends T22** (garde-fou n34). Le detecteur ratait son temoin positif : **il indexe les processeurs par nom court, et neuf classes s-appellent `EstablishmentStampProcessor`** — dont quatre que j-ai creees en D41. Indexe par nom pleinement qualifie : temoin positif **signale**, temoin negatif **epargne**, 32 suspects. | Transformer le prototype en garde-fou. | Rien. |
 
 ---
 
@@ -994,3 +995,53 @@ reellement produit ; les trois sont desormais gardes.
   theorique : vider `app/var/cache/prod` avant toute verification en `prod`, et construire une base de
   verification **par les migrations**, jamais par `doctrine:schema:create` — sinon on verifie un
   produit qui n-existe nulle part.
+
+---
+
+## 2026-09-01 02:20 · T22 — le detecteur ratait son temoin, et la cause a deja ete corrigee ailleurs
+
+Maxime m-a demande de prendre un chantier ; j-ai pris **T22**. `bin/` est le perimetre de
+`claude-C` et tu n-es pas joignable depuis cinq jours — je le dis franchement plutot que de le
+glisser dans un diff.
+
+**Pourquoi celui-la** : la regle qu-il protege — la validation s-execute **avant** les processeurs —
+est exactement le piege qui m-a coute du temps sur T6. J-ai la connaissance de premiere main du mode
+de defaillance.
+
+### Le diagnostic
+
+Le prototype trouvait 31 suspects et **ne voyait pas son propre temoin positif**, `Vitrine::$slug`.
+La note disait : « les trois composants marchent isolement ; assembles, non ». La cause est plus
+simple que ca :
+
+> **Il indexe les processeurs par leur nom court.** Or `EstablishmentStampProcessor` designe
+> **neuf classes differentes** dans le depot. Indexees par nom court, elles s-ecrasent l-une l-autre
+> dans la table des setters : une seule survit, et ce n-est pas celle de `Boutique` — la seule qui
+> pose `setSlug`.
+
+`InscrireListeAttenteProcessor` est dans le meme cas, a deux exemplaires.
+
+**Et c-est exactement le defaut du garde-fou n32**, corrige le 24/08 : *« il indexait les classes par
+leur nom court — 18 sont partages »*. La lecon avait ete apprise une fois ; elle n-a pas traverse
+jusqu-au n34. Ca vaut peut-etre mieux qu-un correctif ponctuel : **tout outil qui raisonne sur des
+classes PHP doit les nommer pleinement**, et ce serait un bon controle a poser une fois pour toutes.
+
+**Ma part de responsabilite** : sur les neuf homonymes, **quatre sont de moi** — les
+`EstablishmentStampProcessor` de Piscine, Padel, Patinoire et Musee, poses pendant D41. J-ai suivi le
+patron de `Reservation` sans voir que repliquer un nom de classe rendrait aveugle un outil qui les
+compte. Je ne les renomme pas dans ce lot : c-est l-outil qui doit etre juste, pas le depot qui doit
+eviter les homonymes.
+
+### Verifie
+
+| Temoin | Attendu | Prototype | Corrige |
+|---|---|---|---|
+| `Vitrine::$slug` (positif) | signale | **rate** | **signale** |
+| `ParametreFacturationEtablissement::$profilExploitant` (negatif) | epargne | epargne | **epargne** |
+| Total | — | 31 | **32** |
+
+Le compte passe de 31 a 32 : le suspect retrouve est precisement le temoin.
+
+**Je ne gele rien pour l-instant**, conformement a ta consigne : le detecteur n-est pas encore un
+garde-fou, et une ligne de base posee sur une mesure fausse aurait fige 31 cas en oubliant le
+trente-deuxieme.
