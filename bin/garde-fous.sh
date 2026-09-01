@@ -10,7 +10,20 @@
 
 set -uo pipefail
 
-REFERENCE="${1:-}"
+# `--exiger-tout` : un controle NON EXECUTE devient un echec.
+#
+# En local, sauter un controle faute d outillage est raisonnable — un poste sans node ne doit pas
+# etre bloque, et la sortie le dit. En CI c est l inverse : personne ne lit les journaux d un job
+# vert, donc « non execute » y devient un vert au nom d un controle qui n a pas eu lieu. C est
+# exactement ce que l en-tete de .github/workflows/garde-fous.yml dit vouloir eviter.
+EXIGER_TOUT=0
+REFERENCE=""
+for argument in "$@"; do
+    case "$argument" in
+        --exiger-tout) EXIGER_TOUT=1 ;;
+        *) [ -z "$REFERENCE" ] && REFERENCE="$argument" ;;
+    esac
+done
 
 # Référence du contrôle de nommage. `origin/main` n'existe pas partout : un worktree du dépôt nu
 # — `/home/debian/wt/main`, là où se font les intégrations — n'a aucun remote. Le garde-fou
@@ -177,6 +190,20 @@ if [ -x "$RACINE/bin/garde-fou-topologie.sh" ]; then
     fi
 fi
 
+# Avant les contrôles eux-mêmes : `vendor/` suit-il le verrou ?
+#
+# Ce n'est pas un garde-fou et il ne refuse rien — un `vendor/` en retard est un défaut de l'arbre
+# local, pas du code qu'on pousse. Mais il fait MENTIR ce qui suit : PHPUnit échoue sur une classe
+# absente, et l'erreur affichée désigne le code testé, jamais l'installation. On cherche alors dans
+# le code un défaut qui n'y est pas.
+#
+# Mesuré le 01/09 : trois des quatre arbres de la flotte, `wt/main` compris, n'avaient pas
+# `symfony/rate-limiter` alors qu'il était verrouillé. Il parle donc en premier, pour que le reste
+# se lise correctement.
+if [ -f "$RACINE/bin/verifier-vendor.php" ]; then
+    php_racine bin/verifier-vendor.php || true
+fi
+
 # 1. Cloisonnement (D3/D8) — le garde-fou n°1.
 if [ -n "$REFERENCE" ]; then
     executer "Cloisonnement (D3/D8)" php_racine bin/garde-fou-cloisonnement.php "--contre=$REFERENCE"
@@ -214,6 +241,20 @@ executer "Capacites de module (n°41)" php_racine bin/garde-fou-capacites-de-mod
 #    Contrairement au n°1, celui-ci n'a pas de ligne de base et n'en aura pas : une clé en dur n'est
 #    pas une dette qu'on étale, c'est un secret publié. Il est ROUGE tant que
 #    Facturation/Nf525/ScellementFactureHandler n'est pas passé à #[Autowire(env:)] — c'est voulu.
+# 40. Un champ cite par `UniqueEntity` doit etre ecrivable, sinon la contrainte ne tombe pas : elle
+#     DISPARAIT. Trouve par claude-F sur ArticleStock (RG-STOCK-02) en fermant la faille D41.
+# ⚠ Inerte tant que le fichier est garé dans bin/en-attente/ (voir son LISEZ-MOI) : appeler un
+#   fichier absent compterait un échec qui n'en est pas un.
+if [ -f "$RACINE/bin/garde-fou-unique-entity.php" ]; then
+    executer "UniqueEntity sur champ non écrivable (n°40)" php_racine bin/garde-fou-unique-entity.php
+fi
+
+# 34. Une contrainte posee sur une propriete que le processeur ECRIT ne verra jamais la valeur
+#     finale : la validation s'execute avant lui. Inerte tant que le fichier est gare.
+if [ -f "$RACINE/bin/garde-fou-validation-avant-processeur.php" ]; then
+    executer "Validation avant processeur (n°34)" php_racine bin/garde-fou-validation-avant-processeur.php
+fi
+
 executer "Secrets en dur" php_racine bin/garde-fou-secrets.php
 
 # 20. Le code de production ne dépend d'aucun paquet de développement.
@@ -679,6 +720,13 @@ if [ "$ECHECS" -gt 0 ]; then
 fi
 
 if [ "$IGNORES" -gt 0 ]; then
+    if [ "$EXIGER_TOUT" -eq 1 ]; then
+        echo "✗ $TOTAL garde-fou(s) OK, mais $IGNORES NON EXÉCUTÉ(S) — et --exiger-tout est posé."
+        echo "  Un contrôle non exécuté n'est pas un contrôle vert. Ici, personne ne lira ce journal"
+        echo "  s'il finit au vert : l'outillage manquant doit être corrigé, pas contourné."
+        echo "  Non exécuté(s) :$(printf '%s' "$IGNORES_NOMS" | tr '|' ' ')"
+        exit 1
+    fi
     echo "✓ $TOTAL garde-fou(s) OK, $IGNORES NON EXÉCUTÉ(S)."
 else
     echo "✓ $TOTAL garde-fou(s) OK."

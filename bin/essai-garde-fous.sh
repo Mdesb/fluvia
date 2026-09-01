@@ -97,9 +97,28 @@ essai_sans_avertissement() { # essai_sans_avertissement <libellé> <motif qui ne
 
 # Le push qui échoue EST le comportement attendu dans la moitié des cas : on capture son code sans
 # laisser `set -e` interrompre le banc — sinon le premier refus, qui est une réussite, arrête tout.
-essai() { # essai <libellé> <refus|acceptation>
+essai() { # essai <libellé> <refus|acceptation> [fragment attendu dans le refus]
     local code=0
-    git push "$BARE" main >/dev/null 2>&1 || code=$?
+    local sortie="$ESSAI/sortie-essai.txt"
+    git push "$BARE" main >"$sortie" 2>&1 || code=$?
+
+    # ── Un refus ne prouve rien tant qu'on ne sait pas POURQUOI il a eu lieu ────────────────────
+    #
+    # Mesure du 01/09 : avec une image docker inexistante, le hook refuse TOUT — et les onze cas de
+    # refus de ce banc restaient verts. Ils ne prouvaient pas que le garde-fou visé avait mordu,
+    # seulement que quelque chose avait refusé. Le banc lui-même donnait un faux vert.
+    if [ "$2" = "refus" ] && [ "$code" -ne 0 ] && [ -n "${3:-}" ]; then
+        if ! grep -qF "$3" "$sortie"; then
+            printf '  \033[31m✗\033[0m %-52s refusé, mais PAS pour la bonne raison\n' "$1"
+            echo "       attendu dans la sortie : « $3 »"
+            KO=$((KO + 1))
+            git fetch -q "$BARE" main
+            git reset -q --hard FETCH_HEAD
+            git clean -qfd
+            return
+        fi
+    fi
+
     verdict "$1" "$2" "$code"
 
     # Chaque cas repart de l'état réel du dépôt, quelle que soit l'issue du précédent. Sans ça, un cas
@@ -122,6 +141,35 @@ commiter() {
 }
 
 # ─────────────────────────────────────────────────────────── préparation
+
+# —— `main` porte-t-il des garde-fous que cet arbre n'a pas ? —————————————————————————
+#
+# C'est la première cause des échecs de masse de ce banc, constatée trois fois. Le filet de
+# complétude refuse alors la poussée, et TOUS les cas d'acceptation tombent — « commit anodin sur
+# un dépôt sain » compris. On cherche le défaut dans le code qu'on vient d'écrire ; il n'y est pas.
+#
+# La condition ne se mesure pas en nombre de commits de retard — on peut en avoir vingt sans
+# conséquence. Elle se vérifie : un garde-fou présent sur `main` et absent ici.
+if git rev-parse --verify -q origin/main >/dev/null 2>&1; then
+    ABSENTS="$(comm -23         <(git ls-tree --name-only origin/main bin/ | grep -E "bin/garde-fou-" | xargs -r -n1 basename | sort)         <(git ls-tree --name-only HEAD bin/       | grep -E "bin/garde-fou-" | xargs -r -n1 basename | sort))"
+    if [ -n "$ABSENTS" ]; then
+        echo
+        printf '
+  [31m⚠ Cet arbre est en retard sur `main`, et ça suffit à faire tomber le banc.[0m
+
+'
+        echo
+        echo "  \`main\` déclare des garde-fous que tu n'as pas :"
+        printf "    %s
+" $ABSENTS
+        echo
+        echo "  Le filet de complétude refusera la poussée, et les cas d'ACCEPTATION tomberont pour"
+        echo "  cette raison-là — pas à cause de ce que tu viens d'écrire. Ne cherche pas dans ton code."
+        echo
+        echo "    git fetch origin && git merge --no-edit origin/main"
+        echo
+    fi
+fi
 
 echo "Banc d'essai des garde-fous — clone jetable, le dépôt vivant n'est pas touché."
 echo
@@ -170,7 +218,7 @@ final class BancRegleUnProcessor
 }
 PHP
 commiter "banc : règle 1"
-essai "cloisonnement — aucun contrôle de périmètre" refus
+essai "cloisonnement — aucun contrôle de périmètre" refus "résolution par identifiant client sans contrôle de périmètre"
 
 # Règle n°2 (C19) — un marqueur de périmètre EXISTE, mais il ne porte pas sur l'entité résolue.
 # C'est le motif exact de l'IDOR d'appairage du 22/08 : la règle n°1 accepte ce fichier.
@@ -195,7 +243,7 @@ final class BancRegleDeuxProcessor
 }
 PHP
 commiter "banc : règle 2"
-essai "C19 — contrôle non lié à l'entité résolue" refus
+essai "C19 — contrôle non lié à l'entité résolue" refus "le contrôle de périmètre ne porte pas sur l'entité résolue"
 
 # C19, croisement avec la déclaration de l'opération. Quand celle-ci est `read: false`, `$data` vient
 # du corps de la requête et non du provider Doctrine : il redevient une entrée client. Les deux cas
@@ -213,6 +261,13 @@ use App\Offre\State\BancSansLectureProcessor;
  * ⚠ SONDE DE BANC : elle n'aura JAMAIS d'ecran, et ce n'est pas une dette.
  *
  * @sans-ecran: sonde du banc d'essai des garde-fous, jamais appelee par une interface.
+ * @sans-suppression: sonde du banc, aucune donnee reelle n'est creee, rien a supprimer.
+ *
+ * ⚠ CES DECLARATIONS SONT UNE DEPENDANCE VIVANTE, pas une formalite. Le montage doit rester propre
+ * au regard de TOUS les garde-fous, y compris ceux ecrits par d'autres sessions apres ce cas.
+ * Sinon un cas d'ACCEPTATION vire au rouge pour une raison etrangere a ce qu'il teste, et il masque
+ * alors exactement ce qu'il devait prouver. C'est arrive deux fois : `@sans-ecran` pour le cliquet
+ * d'ecart, puis `@sans-suppression` pour le garde-fou des creations irreversibles.
  *
  * Sans cette declaration, le cliquet d'ecart n15 -- gele a la valeur courante -- compte cette
  * operation comme une inatteignable de plus et fait ECHOUER le cas, quel que soit le garde-fou que
@@ -244,7 +299,7 @@ final class BancSansLectureProcessor
 }
 PHP
 commiter "banc : C19 read false"
-essai "C19 — \$data d'une opération read: false" refus
+essai "C19 — \$data d'une opération read: false" refus "le contrôle de périmètre ne porte pas sur l'entité résolue"
 
 mkdir -p app/src/Offre/Entity app/src/Offre/State
 cat > app/src/Offre/Entity/BancSondeResource.php <<'PHP'
@@ -258,6 +313,13 @@ use App\Offre\State\BancSansLectureProcessor;
  * ⚠ SONDE DE BANC : elle n'aura JAMAIS d'ecran, et ce n'est pas une dette.
  *
  * @sans-ecran: sonde du banc d'essai des garde-fous, jamais appelee par une interface.
+ * @sans-suppression: sonde du banc, aucune donnee reelle n'est creee, rien a supprimer.
+ *
+ * ⚠ CES DECLARATIONS SONT UNE DEPENDANCE VIVANTE, pas une formalite. Le montage doit rester propre
+ * au regard de TOUS les garde-fous, y compris ceux ecrits par d'autres sessions apres ce cas.
+ * Sinon un cas d'ACCEPTATION vire au rouge pour une raison etrangere a ce qu'il teste, et il masque
+ * alors exactement ce qu'il devait prouver. C'est arrive deux fois : `@sans-ecran` pour le cliquet
+ * d'ecart, puis `@sans-suppression` pour le garde-fou des creations irreversibles.
  *
  * Sans cette declaration, le cliquet d'ecart n15 -- gele a la valeur courante -- compte cette
  * operation comme une inatteignable de plus et fait ECHOUER le cas, quel que soit le garde-fou que
@@ -301,7 +363,7 @@ final class BancFactureRemiseProcessor
 }
 PHP
 commiter "banc : nommage"
-essai "nommage — identifiant français dans un fichier ajouté" refus
+essai "nommage — identifiant français dans un fichier ajouté" refus "identifiant français dans un fichier nouvellement ajouté"
 
 # Secrets — une clé en valeur par défaut.
 mkdir -p app/src/Offre/Service
@@ -315,7 +377,7 @@ final class BancSignataire
 }
 PHP
 commiter "banc : secret"
-essai "secrets — clé cryptographique en valeur par défaut" refus
+essai "secrets — clé cryptographique en valeur par défaut" refus "secret cryptographique en valeur par défaut"
 
 # Couverture de perimetre : une entite exposee que rien ne peut filtrer. C'est le trou par lequel
 # `GET /ecritures-comptables` renvoyait le grand livre de tous les etablissements.
@@ -337,7 +399,7 @@ class BancSansTenant
 }
 PHP
 commiter "banc : entite sans tenant"
-essai "couverture — entité exposée sans cloisonnement possible" refus
+essai "couverture — entité exposée sans cloisonnement possible" refus "entité exposée sans cloisonnement possible"
 
 # --- garde-fou n°6, règle A : un abonné que rien ne déclenchera -------------------------------
 # `sale.completed` est au catalogue et figure dans la ligne de base des orphelins : personne ne
@@ -361,7 +423,7 @@ final class BancAbonneInerte
 }
 PHP
 commiter "banc : abonne a un fait que personne n emet"
-essai "événements — abonné à un fait que personne n'émet" refus
+essai "événements — abonné à un fait que personne n'émet" refus "abonné qui ne se déclenchera jamais"
 
 # --- garde-fou n°6, règle C : un fait publié hors du contrat -----------------------------------
 mkdir -p app/src/Offre/Service
@@ -379,7 +441,7 @@ final class BancEmetteurHorsContrat
 }
 PHP
 commiter "banc : fait publie hors du catalogue"
-essai "événements — fait publié hors du catalogue" refus
+essai "événements — fait publié hors du catalogue" refus "événement publié hors du contrat"
 
 # --- garde-fou n°7 : charge utile qui ne respecte pas le contrat -------------------------------
 # `sale.completed` EST au catalogue (donc la règle C se taît) et y annonce « amount, lines,
@@ -401,7 +463,7 @@ final class BancChargeHorsContrat
 }
 PHP
 commiter "banc : charge utile hors contrat"
-essai "charges utiles — clé absente du contrat" refus
+essai "charges utiles — clé absente du contrat" refus "charge utile émise hors contrat"
 
 # --- garde-fou n°8 : écriture qui traverse la frontière ----------------------------------------
 #
@@ -441,7 +503,7 @@ sys.stderr.write("  plus rien. Choisis une autre forme de cas plutot que de le l
 sys.exit(1)
 PY
 commiter "banc : relation ecrivable vers du cloisonne"
-essai "écriture transfrontière — relation écrivable vers du cloisonné" refus
+essai "écriture transfrontière — relation écrivable vers du cloisonné" refus "écriture qui traverse la frontière"
 
 # --- le filet de complétude lui-même ----------------------------------------------------------
 # C'est le mécanisme qui protège tous les autres : un garde-fou ajouté sans être appelé par le
@@ -455,7 +517,7 @@ declare(strict_types=1);
 exit(0);
 PHP
 commiter "banc : garde-fou ajoute sans appel dans le hook"
-essai "filet — garde-fou présent mais jamais lancé" refus
+essai "filet — garde-fou présent mais jamais lancé" refus "présent dans l'arbre mais appelé par aucun hook"
 
 # ─────────────────────────────────────────────────────────── remise en état
 

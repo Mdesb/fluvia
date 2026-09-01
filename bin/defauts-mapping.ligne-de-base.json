@@ -17,12 +17,12 @@
         "plafond": 1
     },
     "entrees": {
-        "index:support_ft_article_recherche": {
-            "table": "support_article_aide",
-            "colonne": "INDEX support_ft_article_recherche",
-            "valeur": "(non déclaré au mapping)",
-            "migration": "Version20260817205431.php",
-            "entite": "Support/Entity/ArticleAide.php"
+        "sepa_config_creancier.prenotification_delay_days": {
+            "table": "sepa_config_creancier",
+            "colonne": "prenotification_delay_days",
+            "valeur": "14",
+            "migration": "Version20260826141500.php",
+            "entite": "Sepa/Entity/ConfigCreancierSepa.php"
         }
     }
 }

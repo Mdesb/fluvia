@@ -27,7 +27,10 @@ set -uo pipefail
 BARE="$(pwd)"                       # git place le hook dans le répertoire du dépôt bare
 BRANCHE_REFERENCE="refs/heads/main"
 ZERO="0000000000000000000000000000000000000000"
-IMAGE="billetterie-preprod-php"
+# Surchargeable comme dans `bin/essai-garde-fous.sh`, qui l'etait deja : sans ca, le banc peut
+# recevoir la consigne d'utiliser une autre image et le hook qu'il installe l'ignore. Deux
+# fichiers du meme dispositif qui ne lisent pas le meme reglage.
+IMAGE="${IMAGE:-billetterie-preprod-php}"
 # Les controles du front tournent dans l'image du deploiement, sans dependances ni reseau.
 IMAGE_NODE="node:20-alpine"
 
@@ -149,6 +152,16 @@ while read -r ancien nouveau ref; do
 
     echo "── Cloisonnement (D3/D8)"
     lancer garde-fou-cloisonnement.php "--contre=$BASE"
+
+    if [ -f "$ARBRE/bin/garde-fou-validation-avant-processeur.php" ]; then
+        echo "── Validation avant processeur (n°34)"
+        lancer garde-fou-validation-avant-processeur.php
+    fi
+
+    if [ -f "$ARBRE/bin/garde-fou-unique-entity.php" ]; then
+        echo "── UniqueEntity sur champ non écrivable (n°40)"
+        lancer garde-fou-unique-entity.php
+    fi
 
     # Capacites de module (n°41) — voir l'en-tete du script.
     if [ -f "$ARBRE/bin/garde-fou-capacites-de-module.php" ]; then

@@ -5,6 +5,18 @@ declare(strict_types=1);
 /**
  * Garde-fou n°10 — un `DEFAULT` posé en migration doit être déclaré au mapping (D32).
  *
+ * ── UNE RÈGLE RETIRÉE, ET POURQUOI ─────────────────────────────────────────────────────────────
+ *
+ * Ce garde-fou a porté un temps une seconde règle : « un index nommé à la main doit être déclaré au
+ * mapping ». Elle est **retirée**, mesure à l'appui. Une base bâtie par les migrations propose
+ * **71 renommages** d'index ; la lecture statique, une fois ses quatre formes d'écriture corrigées,
+ * en signalait **220** — dont 61 seulement parmi les 71 réels. Un cliquet à 220 aurait gelé environ
+ * cent cinquante non-défauts, et le signal de résorption n'aurait plus rien voulu dire.
+ *
+ * La cause n'est pas un motif de plus à écrire : la question « cet index dérive-t-il ? » se décide
+ * contre une **base**, pas contre un fichier — le nom que Doctrine calcule dépend de son propre
+ * algorithme et du mapping résolu. `bin/verifier-derive-schema.sh` fait cette mesure-là.
+ *
  * ── LE DÉFAUT ───────────────────────────────────────────────────────────────────────────────────
  *
  * Une colonne créée avec `DEFAULT 'x'` en migration, dont l'entité ne déclare pas
@@ -63,6 +75,8 @@ const LIGNE_DE_BASE = 'bin/defauts-mapping.ligne-de-base.json';
 
 /** Argument complet d'un `addSql`, quelle que soit sa délimitation. */
 const MOTIF_SQL = '/addSql\(\s*(?:\'((?:[^\'\\\\]|\\\\.)*)\'|"((?:[^"\\\\]|\\\\.)*)")/s';
+/** Corps d'un heredoc : `addSql(<<<SQL ... SQL)` ou `addSql(<<<'SQL' ... SQL)`. */
+const MOTIF_SQL_HEREDOC = '/addSql\(\s*<<<[\'"]?(\w+)[\'"]?\R(.*?)\R\s*\1/s';
 const MOTIF_CREATE = '/CREATE TABLE (\w+) \((.*)\)\s*DEFAULT CHARACTER SET/s';
 const MOTIF_ALTER = '/ALTER TABLE (\w+) (.*)/s';
 const MOTIF_COLONNE = '/\b(\w+) [A-Z]+(?:\([\d, ]*\))? DEFAULT (\'(?:[^\']*)\'|\d+)/';
@@ -74,10 +88,23 @@ const RESERVES = ['KEY', 'INDEX', 'PRIMARY', 'UNIQUE', 'CONSTRAINT', 'TABLE'];
 const MOTIF_INDEX_INLINE = '/\b(?:UNIQUE )?INDEX (\w+) \(/i';
 const MOTIF_INDEX_CREATE = '/CREATE (?:UNIQUE |FULLTEXT )?INDEX (\w+) ON (\w+)/i';
 const MOTIF_INDEX_ALTER  = '/ALTER TABLE (\w+) ADD (?:UNIQUE |FULLTEXT )?INDEX (\w+)/i';
+/** MySQL cree un index portant le nom de la contrainte : `CONSTRAINT fk_x FOREIGN KEY ...`. */
+const MOTIF_INDEX_CONTRAINTE = '/CONSTRAINT (\w+) FOREIGN KEY/i';
 const MOTIF_INDEX_MAPPE  = '/(?:Index|UniqueConstraint)\(name:\s*\'([^\']+)\'/';
 
-/** Doctrine génère `IDX_`/`UNIQ_` lui-même : ils ne se déclarent pas et ne dérivent jamais. */
-const MOTIF_INDEX_AUTO = '/^(IDX|UNIQ|PRIMARY|FK)_/i';
+/**
+ * Un nom réellement généré par Doctrine : préfixe en MAJUSCULES suivi d'hexadécimal, et rien d'autre —
+ * `IDX_936C17166C1129CD`. Ceux-là ne se déclarent pas au mapping et ne dérivent jamais.
+ *
+ * ⚠ Le motif était `/^(IDX|UNIQ|PRIMARY|FK)_/i`, insensible à la casse. Il écartait donc
+ * `idx_prenotification_mandate`, `fk_..._etab`, `uniq_scheduled_task_run_command` — **soixante et onze
+ * index écrits à la main**, c'est-à-dire exactement la dérive recherchée. La mesure statique donnait 1
+ * là où une base bâtie par les migrations en proposait 71 au renommage.
+ *
+ * Un nom lisible n'est jamais auto-généré, quelle que soit sa casse : `IDX_access_product_zone_product`
+ * commence par le préfixe mais poursuit en mots, il est écrit à la main lui aussi.
+ */
+const MOTIF_INDEX_AUTO = '/^(IDX|UNIQ|FK)_[0-9A-F]+$/';
 
 function camel(string $snake): string
 {
@@ -85,6 +112,65 @@ function camel(string $snake): string
     $tete = array_shift($morceaux);
 
     return $tete . implode('', array_map('ucfirst', $morceaux));
+}
+
+/**
+ * Tout le SQL d'une migration, quelle que soit la forme d'ecriture.
+ *
+ * Le depot en emploie quatre : chaine simple, chaine double, heredoc, et concatenation de fragments.
+ * L'extraction initiale n'en lisait qu'une seule — la premiere chaine litterale suivant `addSql(`.
+ * Consequence mesuree : sur une base batie par les migrations, Doctrine proposait **71 renommages**
+ * d'index la ou ce garde-fou en voyait **19**, et les deux ensembles etaient DISJOINTS. Deux
+ * populations qui ne se recoupent pas, c'est le signe qu'on ne lit pas la meme chose.
+ *
+ * On lit donc l'argument COMPLET de chaque `addSql`, parentheses equilibrees, puis on en tire le
+ * texte. Une seule lecture plutot qu'une pile de motifs : les formes a venir sont couvertes d'avance.
+ *
+ * @return list<string>
+ */
+function sqlDeLaMigration(string $source): array
+{
+    $requetes = [];
+    $decalage = 0;
+
+    while (($debut = strpos($source, 'addSql(', $decalage)) !== false) {
+        $i = $debut + strlen('addSql(');
+        $profondeur = 1;
+        $longueur = strlen($source);
+
+        while ($i < $longueur && $profondeur > 0) {
+            $c = $source[$i];
+            if ($c === '(') {
+                ++$profondeur;
+            } elseif ($c === ')') {
+                --$profondeur;
+            }
+            ++$i;
+        }
+
+        $argument = substr($source, $debut + strlen('addSql('), $i - $debut - strlen('addSql(') - 1);
+        $decalage = $i;
+
+        // Heredoc : le corps est tout ce qui separe la ligne d'ouverture du marqueur de fermeture.
+        if (preg_match('/^\s*<<<[\'"]?(\w+)[\'"]?\R(.*?)\R\s*\1/s', $argument, $h) === 1) {
+            $requetes[] = $h[2];
+            continue;
+        }
+
+        // Chaines et concatenations : on recolle tous les fragments litteraux de l'argument. Un
+        // fragment interpole (`{$var}`) laisse un trou, ce qui est sans effet ici — on ne cherche que
+        // des noms de tables, de colonnes et d'index, jamais des valeurs.
+        preg_match_all('/\'((?:[^\'\\\\]|\\\\.)*)\'|"((?:[^"\\\\]|\\\\.)*)"/s', $argument, $f, PREG_SET_ORDER);
+        $morceaux = '';
+        foreach ($f as $fragment) {
+            $morceaux .= ($fragment[1] ?? '') !== '' ? $fragment[1] : ($fragment[2] ?? '');
+        }
+        if (trim($morceaux) !== '') {
+            $requetes[] = $morceaux;
+        }
+    }
+
+    return $requetes;
 }
 
 /**
@@ -100,12 +186,13 @@ function defautsDesMigrations(string $racine): array
         // Seulement `up()` : un DEFAULT dans `down()` annule le `up()` de la même migration.
         $up = explode('public function down(', $source)[0];
 
-        if (preg_match_all(MOTIF_SQL, $up, $requetes, PREG_SET_ORDER) === 0) {
+        $requetes = sqlDeLaMigration($up);
+        if ($requetes === []) {
             continue;
         }
 
         foreach ($requetes as $requete) {
-            $sql = $requete[1] !== '' ? $requete[1] : ($requete[2] ?? '');
+            $sql = $requete;
             if ($sql === '') {
                 continue;
             }
@@ -177,12 +264,13 @@ function indexNommes(string $racine): array
     foreach (glob($racine . '/*.php') ?: [] as $chemin) {
         $up = explode('public function down(', (string) file_get_contents($chemin))[0];
 
-        if (preg_match_all(MOTIF_SQL, $up, $requetes, PREG_SET_ORDER) === 0) {
+        $requetes = sqlDeLaMigration($up);
+        if ($requetes === []) {
             continue;
         }
 
         foreach ($requetes as $requete) {
-            $sql = $requete[1] !== '' ? $requete[1] : ($requete[2] ?? '');
+            $sql = $requete;
             if ($sql === '') {
                 continue;
             }
@@ -195,6 +283,15 @@ function indexNommes(string $racine): array
             preg_match_all(MOTIF_INDEX_ALTER, $sql, $m, PREG_SET_ORDER);
             foreach ($m as $t) {
                 $index[$t[2]] = ['table' => $t[1], 'migration' => basename($chemin)];
+            }
+
+            // MySQL indexe toute contrainte de cle etrangere sous le nom de la contrainte : c'est un
+            // index nomme a la main comme un autre, et le diff propose de le renommer.
+            if (preg_match('/(?:CREATE TABLE|ALTER TABLE) (\w+)/i', $sql, $mt) === 1) {
+                preg_match_all(MOTIF_INDEX_CONTRAINTE, $sql, $m, PREG_SET_ORDER);
+                foreach ($m as $t) {
+                    $index[$t[1]] ??= ['table' => $mt[1], 'migration' => basename($chemin)];
+                }
             }
 
             if (preg_match('/(?:CREATE TABLE|ALTER TABLE) (\w+)/i', $sql, $mt) === 1) {
@@ -277,21 +374,6 @@ foreach ($defauts as $cle => $defaut) {
         'valeur' => $defaut['valeur'],
         'migration' => $defaut['migration'],
         'entite' => $tables[$defaut['table']]['chemin'],
-    ];
-}
-
-// --- RÈGLE 2 : un index nommé à la main doit être déclaré au mapping (cause n°3 de D32) ---------
-$declares = indexDeclares(RACINE_SRC);
-foreach (indexNommes(RACINE_MIGRATIONS) as $nom => $detail) {
-    if (in_array($nom, $declares, true)) {
-        continue;
-    }
-    $ecarts['index:' . $nom] = [
-        'table' => $detail['table'],
-        'colonne' => 'INDEX ' . $nom,
-        'valeur' => '(non déclaré au mapping)',
-        'migration' => $detail['migration'],
-        'entite' => $tables[$detail['table']]['chemin'] ?? '(aucune entité)',
     ];
 }
 
@@ -379,13 +461,10 @@ TXT;
 $echec = false;
 $nouveaux = array_values(array_diff(array_keys($ecarts), array_keys($base['entrees'])));
 
-$nouveauxDefauts = array_values(array_filter($nouveaux, static fn (string $c): bool => !str_starts_with($c, 'index:')));
-$nouveauxIndex = array_values(array_filter($nouveaux, static fn (string $c): bool => str_starts_with($c, 'index:')));
-
-if ($nouveauxDefauts !== []) {
+if ($nouveaux !== []) {
     $echec = true;
     echo "\n=== ÉCHEC — DEFAULT posé en migration, absent du mapping ===\n\n";
-    foreach ($nouveauxDefauts as $cle) {
+    foreach ($nouveaux as $cle) {
         $e = $ecarts[$cle];
         echo sprintf("  %s.%s  DEFAULT %s\n", $e['table'], $e['colonne'], $e['valeur']);
         echo sprintf("      migration : %s\n", $e['migration']);
@@ -394,17 +473,6 @@ if ($nouveauxDefauts !== []) {
     echo AIDE_DEFAUT . "\n";
 }
 
-if ($nouveauxIndex !== []) {
-    $echec = true;
-    echo "\n=== ÉCHEC — index nommé à la main, absent du mapping ===\n\n";
-    foreach ($nouveauxIndex as $cle) {
-        $e = $ecarts[$cle];
-        echo sprintf("  %s  sur %s\n", substr($cle, strlen('index:')), $e['table']);
-        echo sprintf("      migration : %s\n", $e['migration']);
-        echo sprintf("      entité    : %s\n", $e['entite']);
-    }
-    echo AIDE_INDEX . "\n";
-}
 
 if (count($ecarts) > $plafond) {
     $echec = true;
@@ -422,7 +490,7 @@ if ($echec) {
 
 $resorbes = count($base['entrees']) - count($ecarts);
 echo sprintf(
-    "Défauts au mapping : OK — aucun DEFAULT ni index non déclaré au mapping. Gelés : %d, plafond %d. (%d DEFAULT lus, %d ignorés faute de mapping.)%s\n",
+    "Défauts au mapping : OK — aucun DEFAULT non déclaré au mapping. Gelés : %d, plafond %d. (%d DEFAULT lus, %d ignorés faute de mapping.)%s\n",
     count($ecarts),
     $plafond,
     count($defauts),
