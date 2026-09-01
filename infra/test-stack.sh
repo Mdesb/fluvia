@@ -13,6 +13,31 @@
 #   obtient alors « Base table or view already exists » au premier setUp. Le symptôme ressemble à une
 #   régression du code ; ce n'en est pas une. `up` remet la base à plat en une vingtaine de secondes.
 #
+# ── ⚠ UNE SUITE LONGUE SE LANCE DANS UN WORKTREE, JAMAIS DANS LE CLONE DE DEPLOIEMENT ──────────
+#
+# `/home/debian/billetterie` est le clone que lit le deploiement, et celui ou toutes les sessions
+# fusionnent. Une suite complete y dure plus d'une heure ; sur ce depot, une heure sans que personne
+# ne pousse ni ne deploie n'arrive pas.
+#
+# Mesure du 01/09 : TROIS suites completes perdues en une soiree, chacune pour une raison differente
+# et aucune annoncee comme un echec.
+#
+#   1. un deploiement d'une autre session a lance `composer install --no-dev` a 22h44 : la suite
+#      lancee a 22h42 a continue d'afficher des points pendant vingt minutes, `App\Tests` n'etant
+#      plus autochargeable. Elle allait rendre un verdict credible sur un arbre vide.
+#   2. et 3. j'ai du fusionner `origin/main` pour ne pas bloquer le deploiement — ce qui change
+#      `app/` SOUS phpunit. J'ai coupe a 11 % les deux fois, parce qu'un verdict sur un arbre en
+#      train de bouger ne vaut rien.
+#
+# Un worktree a son propre `app/`, son propre `vendor/`, et ne bouge que quand on l'y invite :
+#
+#     git worktree add --detach /home/debian/wt/jarvis main
+#     cd /home/debian/wt/jarvis/app && composer install
+#     cd /home/debian/wt/jarvis && ./infra/test-stack.sh up monjeton && ./infra/test-stack.sh run monjeton
+#
+# ⚠ CREER LE WORKTREE DEPUIS LE CLONE DE TRAVAIL, JAMAIS DEPUIS LE DEPOT NU. Un worktree cree sur
+# `billetterie.git` n'a pas d'`origin` et contourne les garde-fous de `pre-receive`.
+#
 # Le worktree courant est déduit de l'emplacement du script — pas de chemin en dur, le script marche
 # à l'identique depuis /home/debian/wt/claude-A, .../claude-B, etc.
 

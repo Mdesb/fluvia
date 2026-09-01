@@ -52,6 +52,27 @@ set -eu
 #                                     billets qu'il bloque ne sont vendus a personne.
 #                                     Epargne prouvee le 31/08 : borne temporelle retiree ->
 #                                     `testElleEpargneUnPanierEncoreValide` echoue seul.
+#   sport:abonnements:traiter-terme   un abonnement au terme reste « actif » pendant que ses
+#                                     echeances s'arretent : le prelevement cesse, l'acces reste
+#                                     valide, et l'adherent entre GRATUITEMENT jusqu'a ce qu'un
+#                                     humain s'en apercoive.
+#                                     Autorisee par Maxime le 01/09. Passage supervise le meme jour :
+#                                     ZERO abonnement au terme — l'arriere etait vide, donc le verrou
+#                                     de premier passage a ete leve sans rien traiter d'un coup.
+#   subscription:facturer-le-mois     les abonnements du mois ne sont pas factures : le client
+#                                     utilise le logiciel sans payer et rien ne le signale.
+#                                     Autorisee par Maxime le 01/09. Passage supervise : ZERO
+#                                     abonnement a facturer sur 09/2026.
+#
+# ⚠ CES DEUX-LA NE TOURNENT PAS A CHAQUE CYCLE. Elles portent `nightlyAt: '02:00'` au catalogue : la
+# fenetre nocturne refuse en dehors de 02h00-05h00 LOCALES, et une seule fois par nuit. La boucle les
+# appelle quand meme toutes les minutes ; c'est le catalogue qui tranche, pas cette liste.
+#
+# ⚠ ET `sepa:preavis:annoncer` N'Y EST PAS, BIEN QUE MAXIME AIT DIT « active-les ». Son passage a
+# blanc annonce 26 preavis, dont des echeances datees d'OCTOBRE 2025 : `SportEcheanceSepaSource`
+# filtre sur `dateProgrammee <= :date` sans borne basse. Un preavis doit PRECEDER le prelevement, et
+# annoncer ces echeances les rendrait collectables dans la remise du 03/09. Signale plutot que fait.
+#
 #   personnel:recalculer-fenetres-badges  la fenetre de validite d'un badge staff ne suit plus les
 #                                     shifts : un agent garde un acces qu'il n'a plus, ou perd
 #                                     celui qu'il devrait avoir.
@@ -62,7 +83,7 @@ set -eu
 #                                     entrer dans le batiment, toutes les cinq minutes, en silence.
 #                                     Epargne prouvee le 31/08 : branche `Permanent` neutralisee
 #                                     -> le test neuf echoue seul.
-TACHES_AUTORISEES="securite:delegations:expirer autorisation:escalades:expirer boutique:liberer-paniers-expires personnel:recalculer-fenetres-badges"
+TACHES_AUTORISEES="securite:delegations:expirer autorisation:escalades:expirer boutique:liberer-paniers-expires personnel:recalculer-fenetres-badges sport:abonnements:traiter-terme subscription:facturer-le-mois"
 
 INTERVALLE="${ORDONNANCEUR_INTERVALLE:-60}"
 
