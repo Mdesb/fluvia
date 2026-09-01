@@ -419,3 +419,35 @@ Observation hors périmètre (pour toi/claude-D) : le test déclenche 1 dépréc
 
 J'enchaîne sur ton **ordre #2 — SF-2** (D27 : une session signalée que rien n'émet). J'analyse d'abord
 qui devrait émettre l'événement et si ça reste dans mon périmètre SmartFlow.
+
+## 01/09 — Ordres #2 (SF-2) et #3 (SF-1/RR-1, côté consommateur) : résolus par convergence, prouvés
+
+Vérifié plutôt que reconstruit. Ces ordres datent de 4 jours ; les deux bouts ont convergé depuis.
+
+**SF-2 — no-show → report (D27).** Bouclé de bout en bout :
+- Émetteur : `Reservation\Command\BasculerNoShowCommand` publie `booking.reschedule_requested`
+  (uniquement si issue = `RestoredWithReschedule` ∧ crédit actionné ∧ restitué) avec la charge
+  `{customerId, reservationRef, slotId, droitId}`.
+- Consommateur (mien) : `SmartFlow\EventListener\RescheduleRequestedListener` lit **exactement** cette
+  charge → `RescheduleProposal` (searching → proposed si créneau compatible) + notification via le port
+  transverse. Best-effort D7 (jamais fait échouer le constat de no-show).
+- Preuve : `tests/SmartFlow/Api/RescheduleFlowEndToEndTest` (searching→proposed→confirmed, décline→expired,
+  409 sur double-accept / accept-sur-searching, notification D37). **Suite SmartFlow+RR : OK 63 tests / 434.**
+
+**SF-1 / RR-1 — déclencheurs.** `RevenueRecoveryEventSubscriber` consomme `booking.cancelled`,
+`booking.no_show`, `payment.failed`, `payment.incident_reopened`, résolution sur `payment.succeeded` ;
+`booking.*` émis par Réservation, payloads alignés. Le moteur de relance a désormais ses appelants.
+
+**Ce qui reste — et n'est PAS dans mon périmètre, à toi de trancher :**
+1. **Planifier `BasculerNoShowCommand` (D36).** L'émetteur existe mais rien ne le déclenche
+   périodiquement : sans ordonnanceur, le no-show ne bascule jamais en prod → SF-2 ne se déclenche
+   jamais en vrai. C'est la couche batch de Réservation/plateforme.
+2. **Lever la dégradation D27 côté Réservation.** `FacturationNoShow` porte encore un signal « report
+   promis mais SF-2 absent » (RG-CQ5-09) et `IssueCreditNoShow` un commentaire « SF-2 absent » : SF-2
+   existe maintenant, l'exploitant peut être informé qu'un report part réellement. Fichiers de Réservation.
+3. **Types de déclencheurs sans émetteur** (`cart_abandoned`, `quote_expired`, `invoice_overdue`,
+   `customer_inactive`) : présents dans `RecoveryTriggerType` mais non consommés par le subscriber —
+   relèvent d'incréments RR I2+ (souvent batch, pas événementiel). À prioriser si tu veux.
+
+Dis-moi lesquels tu m'ouvres (périmètre) ou si je passe à autre chose. En attendant je prends la suite
+de ta liste faute d'un chantier in-périmètre restant.
