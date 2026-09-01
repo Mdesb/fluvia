@@ -1467,7 +1467,11 @@ export const api = {
   //
   // Rend `{ capability, label, monthlyPriceCents }`. La liste est VIDE tant que l'editeur n'a cree
   // aucune option — auquel cas l'ecran le dit, plutot que d'afficher des modules a 0 €.
-  optionsVendables: () => request('/api/editor/plan-options'),
+  //
+  // ⚠ `ld: true` N'EST PAS FACULTATIF ICI. Cette ressource n'expose que `application/ld+json` : sans
+  // ce drapeau elle rend un 406, que l'ecran transformait en « aucun module propose a la vente »
+  // alors que vingt options existent. Verifie en interrogeant la route dans les deux formats.
+  optionsVendables: () => request('/api/editor/plan-options', { ld: true }),
   fonctionnalitesEtablissement: (id) => request(`/api/etablissements/${id}/fonctionnalites`),
   // Corps : { capaciteCode, active, parametres? }.
   majFonctionnalite: (id, corps) =>

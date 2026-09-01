@@ -30,15 +30,32 @@ export default function Modules({ capacites = [], me }) {
   const [catalogue, setCatalogue] = useState(null)
   const [vendables, setVendables] = useState(null)
   const [erreur, setErreur] = useState(null)
+  // Renseigné quand les tarifs n'ont pas pu être lus : « aucun prix » et « aucune réponse » ne se
+  // disent pas pareil, et la seconde ne doit jamais s'afficher comme la première.
+  const [optionsIndisponibles, setOptionsIndisponibles] = useState(null)
   const [panier, setPanier] = useState([])
 
   useEffect(() => {
     let annule = false
-    Promise.all([api.catalogueCapacites(), api.optionsVendables().catch(() => ({ member: [] }))])
+    // ⚠ ON DISTINGUE « RIEN A VENDRE » DE « JE N'AI PAS PU DEMANDER ».
+    //
+    // Ce `catch` rendait `{ member: [] }`, donc l'écran affichait « aucun module n'est proposé à la
+    // vente » quand l'appel échouait. Vingt options existent en base et il aurait affirmé qu'il n'y
+    // en a aucune. Une liste vide n'est pas une réponse : c'est l'absence de réponse.
+    Promise.all([
+      api.catalogueCapacites(),
+      api.optionsVendables().catch((e) => ({ __echec: e?.message || 'appel refusé' })),
+    ])
       .then(([cat, opt]) => {
         if (annule) return
         setCatalogue(cat?.member || cat?.['hydra:member'] || [])
-        setVendables(opt?.member || opt?.['hydra:member'] || [])
+        if (opt?.__echec) {
+          setOptionsIndisponibles(opt.__echec)
+          setVendables([])
+        } else {
+          setOptionsIndisponibles(null)
+          setVendables(opt?.member || opt?.['hydra:member'] || [])
+        }
       })
       .catch((e) => {
         if (!annule) setErreur(e.message || 'Le catalogue des modules n’a pas pu être chargé.')
@@ -118,9 +135,11 @@ export default function Modules({ capacites = [], me }) {
       <Groupe
         titre="Disponibles"
         vide={
-          (vendables || []).length === 0
-            ? "Aucun module n’est proposé à la vente pour le moment : l’éditeur n’a créé aucune option tarifaire."
-            : 'Tous les modules proposés à la vente sont déjà actifs ici.'
+          optionsIndisponibles
+            ? `⚠ Les tarifs n’ont pas pu être chargés (${optionsIndisponibles}). Cet écran ne sait donc PAS ce qui est en vente — ne concluez pas qu’il n’y a rien.`
+            : (vendables || []).length === 0
+              ? "Aucun module n’est proposé à la vente pour le moment : l’éditeur n’a créé aucune option tarifaire."
+              : 'Tous les modules proposés à la vente sont déjà actifs ici.'
         }
         items={groupes.disponibles}
         rendu={(c) => (
