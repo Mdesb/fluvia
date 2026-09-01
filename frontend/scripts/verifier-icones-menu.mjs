@@ -13,8 +13,10 @@
 //
 // `Icon` fait `{drawing || FALLBACK}` : un nom inconnu rend un carre barre. J'avais ecrit dans
 // `Icon.jsx` que le `<svg>` sortait vide — infere de `ICONS[name] === undefined`, sans lire ce que
-// le composant en fait deux ecrans plus bas. `claude-A` avait pose ce FALLBACK a 14h07, des heures
-// avant ma phrase. Le comptage etait mesure ; la consequence a l'ecran etait inventee.
+// le composant en fait deux ecrans plus bas. Ce FALLBACK etait la depuis 14h07, des heures avant ma
+// phrase, et il est delibere : un repli BRUYANT, parce qu'une icone qui ne dessine rien laisse une
+// ligne sans sa puce sans que l'alignement bouge — donc sans que personne le voie. Le comptage
+// etait mesure ; la consequence a l'ecran etait inventee.
 //
 // Ce que ce controle evite est donc un CARRE BARRE sur « Tableau de bord » — laid et visible, pas
 // silencieux. Le build reste vert, aucun test ne tombe, et personne ne l'a signale pendant des

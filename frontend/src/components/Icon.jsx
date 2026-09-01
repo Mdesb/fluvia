@@ -267,11 +267,19 @@ const ICONS = {
   //
   // ⚠ CORRECTION DU 01/09, 23h. J'AVAIS ECRIT ICI QUE LE `<svg>` SORTAIT VIDE. C'EST FAUX.
   //
-  // `claude-A` avait pose le `FALLBACK` ci-dessus a 14h07 — un carre barre — plusieurs heures
-  // avant que j'ecrive cette phrase. Un nom absent rendait donc un carre barre, VISIBLE, pas un
-  // trou. Le comptage etait mesure ; la consequence a l'ecran, elle, etait INFEREE de
+  // Le `FALLBACK` ci-dessus — un carre barre — etait la depuis 14h07, plusieurs heures avant que
+  // j'ecrive cette phrase, et il est DELIBERE : son auteur voulait un repli BRUYANT, parce qu'une
+  // icone qui ne dessine rien laisse une ligne de menu sans sa puce, l'alignement tient toujours,
+  // et personne ne le remarque. Un nom absent rendait donc un carre barre, VISIBLE, pas un trou.
+  //
+  // Le comptage etait mesure ; la consequence a l'ecran, elle, etait INFEREE de
   // `ICONS[name] === undefined` sans que je regarde ce que le composant en fait deux ecrans plus
   // bas. J'ai decrit le code que j'imaginais, pas celui qui etait la.
+  //
+  // ⚠ ET J'AVAIS ECRIT ICI QUE C'ETAIT « claude-A ». C'est un nom d'AUTEUR GIT, pas une session :
+  // les dix sessions partagent la meme identite. `git log` ne dit jamais qui a ecrit quoi ici. Le
+  // repli est d'`allaccess-8e`, qui me l'a signale — je n'aurais pas pu le savoir en lisant `%an`,
+  // et j'ai lu ce champ comme s'il designait quelqu'un.
   //
   // Ce que ca change : le defaut n'etait pas silencieux, il etait laid. Ce que ca ne change pas :
   // rien n'empeche une entree de menu de partir sans son dessin. Le controle reste a poser — mais
