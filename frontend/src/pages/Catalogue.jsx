@@ -118,9 +118,6 @@ function NouveauProduit({ types = [], onAnnule, onCree }) {
 }
 
 export default function Catalogue({ etabActif, cible = null, onCibleConsommee, droits = [], capacites = [] }) {
-  // Le droit de l'API, et lui seul : sans `offre.creer`, le bouton n'existe pas — absent plutot
-  // que grise, comme les actions de statut plus bas.
-  const peutCreer = aLeDroit(droits, 'offre.creer') || aLeDroit(droits, 'offre.gerer')
   const [params, majParams] = useEtatUrl('catalogue', DEFAUTS)
   const tab = params.tab
   const setTab = (v) => majParams({ tab: v, fiche: '' })
@@ -177,6 +174,7 @@ export default function Catalogue({ etabActif, cible = null, onCibleConsommee, d
           cible={cible}
           onCibleConsommee={onCibleConsommee}
           droits={droits}
+          capacites={capacites}
           params={params}
           majParams={majParams}
         />
@@ -189,7 +187,11 @@ export default function Catalogue({ etabActif, cible = null, onCibleConsommee, d
 
 /* ------------------------------------------------------------------ Produits */
 
-function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = [], params, majParams }) {
+function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = [], capacites = [], params, majParams }) {
+  // ⚠ DECLARE ICI, ET PAS DANS `Catalogue`. La liste, le formulaire et la fiche vivent dans CE
+  // composant ; une declaration dans le parent est invisible d'ici, et le build ne le dit pas —
+  // seul le rendu le dit, en cassant l'ecran.
+  const peutCreer = aLeDroit(droits, 'offre.creer') || aLeDroit(droits, 'offre.gerer')
   const [produits, setProduits] = useState([])
   const [total, setTotal] = useState(0)
   const [saisie, setSaisie] = useState(params.q)
