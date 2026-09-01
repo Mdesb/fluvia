@@ -5,6 +5,7 @@ import { aLeDroit, aUnDesDroits } from '../api/droits.js'
 import { profondeurHistorique } from '../api/url.js'
 import Cloche from './Cloche.jsx'
 import InstallerSurLeTelephone from './InstallerSurLeTelephone.jsx'
+import Icon from './Icon.jsx'
 
 // `cap` = capacité requise (capacitesActives de /me) ; `perm` = permission requise (droits de /me) ;
 // `perms` = liste dont AU MOINS UNE suffit — pour les écrans qui servent plusieurs métiers, où
@@ -49,40 +50,40 @@ const NAV = [
   {
     section: 'Exploitation',
     items: [
-      { id: 'dashboard', ic: '⌂', label: 'Tableau de bord', admin: true },
+      { id: 'dashboard', ic: 'dashboard', label: 'Tableau de bord', admin: true },
       // La boutique de modules. `admin: true` parce que Maxime a arbitre le 01/09 : « achat ouvert
       // a qui administre l'etablissement » — pas une permission de module, puisqu'il s'agit
       // justement d'acquerir des modules qu'on n'a pas encore.
-      { id: 'modules', ic: '◧', label: 'Modules', admin: true },
+      { id: 'modules', ic: 'modules', label: 'Modules', admin: true },
       // La caisse sert le caissier comme le responsable : encaisser, ouvrir une session, consulter.
       // Exiger le seul `caisse.lire` retirerait l'écran à un caissier qui n'a que les droits de vente.
-      { id: 'caisse', ic: '▤', label: 'Caisse', perms: ['caisse.lire', 'caisse.ouvrir', 'vente.creer', 'vente.encaisser'] },
+      { id: 'caisse', ic: 'register', label: 'Caisse', perms: ['caisse.lire', 'caisse.ouvrir', 'vente.creer', 'vente.encaisser'] },
       // ⚠ SON PROPRE DROIT, ET C'EST TOUT L'INTERET DE CETTE ENTREE. Composter un billet n'est pas
       // un geste de caisse : un guide qui controle l'entree d'une visite n'a aucune raison d'avoir
       // acces au tiroir-caisse. Le mettre dans « Caisse » obligeait a donner ce droit pour une
       // raison qui n'est pas la sienne — et personne ne pense a retirer un droit donne de biais.
-      { id: 'composter', ic: '✓', label: 'Composter', perm: 'acces.controler' },
-      { id: 'catalogue', ic: '▥', label: 'Catalogue', perms: ['offre.lire', 'offre.gerer', 'offre.creer', 'offre.modifier'] },
-      { id: 'reservation', ic: '◷', label: 'Réservation', cap: 'reservation' },
+      { id: 'composter', ic: 'validate', label: 'Composter', perm: 'acces.controler' },
+      { id: 'catalogue', ic: 'catalog', label: 'Catalogue', perms: ['offre.lire', 'offre.gerer', 'offre.creer', 'offre.modifier'] },
+      { id: 'reservation', ic: 'booking', label: 'Réservation', cap: 'reservation' },
       // Écran métier de l'établissement (une seule entrée visible selon le type de site).
-      { id: 'piscine', ic: '≈', label: 'Piscine', perm: 'piscine.lire' },
-      { id: 'patinoire', ic: '❆', label: 'Patinoire', perm: 'patinoire.lire' },
-      { id: 'padel', ic: '◍', label: 'Padel', perm: 'padel.lire' },
-      { id: 'musee', ic: '⛫', label: 'Musée', perm: 'musee.lire' },
+      { id: 'piscine', ic: 'pool', label: 'Piscine', perm: 'piscine.lire' },
+      { id: 'patinoire', ic: 'rink', label: 'Patinoire', perm: 'patinoire.lire' },
+      { id: 'padel', ic: 'padel', label: 'Padel', perm: 'padel.lire' },
+      { id: 'musee', ic: 'museum', label: 'Musée', perm: 'musee.lire' },
       // Ouvert le 27/08, et pas pour les abonnements : `EvenementSOS` portait un statut
       // << ouverte >> et une operation << traiter >> SANS AUCUN ECRAN. Une alarme qu'aucune
       // interface ne montre cree la croyance qu'on serait prevenu.
-      { id: 'sport', ic: '⬤', label: 'Sport & fitness', perms: ['sport.lire', 'sport.gerer', 'sport.superviser_nocturne'] },
+      { id: 'sport', ic: 'fitness', label: 'Sport & fitness', perms: ['sport.lire', 'sport.gerer', 'sport.superviser_nocturne'] },
     ],
   },
   {
     section: 'Contrôle d’accès',
     items: [
-      { id: 'supervision', ic: '◉', label: 'Supervision', cap: 'controle_acces' },
+      { id: 'supervision', ic: 'supervision', label: 'Supervision', cap: 'controle_acces' },
       // Regarder ne suffisait pas : dix-huit operations exposees, deux atteignables. Bloquer un
       // badge perdu et appairer une carte sont les deux gestes les plus frequents d'un exploitant,
       // et aucun des deux n'etait possible depuis l'application.
-      { id: 'acces', ic: '▭', label: 'Badges & terminaux', cap: 'controle_acces', perms: ['acces.lire', 'acces.appairer', 'acces.bloquer_support', 'acces.gerer'] },
+      { id: 'acces', ic: 'badges', label: 'Badges & terminaux', cap: 'controle_acces', perms: ['acces.lire', 'acces.appairer', 'acces.bloquer_support', 'acces.gerer'] },
       // L'installation du contrôle d'accès : le plan du site, les lecteurs, et le journal complet.
       // Même garde que ses deux voisines — la capacité DIT ce que le site a acheté, les permissions
       // disent ce que ce compte a le droit d'en faire.
@@ -92,38 +93,38 @@ const NAV = [
       // caché l'écran à celui-là même qui vient d'installer ses tourniquets. Ce n'est plus vrai
       // depuis que Paramètres › Modules en service permet la mise en service — l'entrée rejoint donc
       // ses voisines, et une topologie invisible se corrige là où elle doit l'être.
-      { id: 'topologie_acces', ic: '⛬', label: 'Topologie & passages', cap: 'controle_acces', perms: ['acces.lire', 'acces.gerer', 'acces.superviser'] },
+      { id: 'topologie_acces', ic: 'topology', label: 'Topologie & passages', cap: 'controle_acces', perms: ['acces.lire', 'acces.gerer', 'acces.superviser'] },
     ],
   },
   {
     section: 'Gestion',
     items: [
-      { id: 'clients', ic: '☺', label: 'Clients', perms: ['crm.lire', 'crm.creer', 'crm.modifier'] },
+      { id: 'clients', ic: 'customers', label: 'Clients', perms: ['crm.lire', 'crm.creer', 'crm.modifier'] },
       // Juste sous Clients, parce qu'une demande d'effacement porte sur une fiche client et se
       // traite en la relisant. Pas dans Parametres : ce n'est pas un reglage, c'est une file
       // d'attente avec un delai legal d'un mois.
-      { id: 'rgpd', ic: '⛊', label: 'Données personnelles', perms: ['crm.rgpd_gerer', 'crm.rgpd_demander'] },
+      { id: 'rgpd', ic: 'personal-data', label: 'Données personnelles', perms: ['crm.rgpd_gerer', 'crm.rgpd_demander'] },
       // Une entree propre plutot qu'un onglet dans Clients : un commercial cherche << ses
       // affaires >>, pas un onglet dans un annuaire. Et le pipeline se lit tous les jours,
       // alors qu'une fiche client s'ouvre a l'occasion.
-      { id: 'affaires', ic: '◨', label: 'Affaires', perms: ['crm.lire', 'crm.creer', 'crm.modifier'] },
+      { id: 'affaires', ic: 'deals', label: 'Affaires', perms: ['crm.lire', 'crm.creer', 'crm.modifier'] },
       // Sous Gestion, juste apres les affaires : une campagne se decide comme une affaire, et
       // s'adresse aux memes gens. Pas sous Pilotage -- on ne l'observe pas, on la lance.
       //
       // Le droit `campagne.*` est distinct de `crm.*` a dessein : construire une audience n'est pas
       // modifier un client, et le droit de contacter mille personnes ne doit pas emporter celui d'en
       // corriger une.
-      { id: 'campagnes', ic: '◈', label: 'Campagnes', perms: ['campagne.lire', 'campagne.gerer'] },
-      { id: 'comptabilite', ic: '▧', label: 'Comptabilité', perm: 'compta.lire' },
-      { id: 'boutique', ic: '▦', label: 'Boutique en ligne', cap: 'boutique_en_ligne' },
-      { id: 'personnel', ic: '☰', label: 'Personnel', perm: 'personnel.lire' },
+      { id: 'campagnes', ic: 'campaigns', label: 'Campagnes', perms: ['campagne.lire', 'campagne.gerer'] },
+      { id: 'comptabilite', ic: 'accounting', label: 'Comptabilité', perm: 'compta.lire' },
+      { id: 'boutique', ic: 'shop', label: 'Boutique en ligne', cap: 'boutique_en_ligne' },
+      { id: 'personnel', ic: 'staff', label: 'Personnel', perm: 'personnel.lire' },
       // Sous Gestion et a cote du Personnel : un projet se distribue a des gens, et c'est la
       // qu'on va chercher qui fait quoi. Pas sous Pilotage -- un projet se conduit, il ne
       // s'observe pas.
-      { id: 'projets', ic: '◱', label: 'Projets', perms: ['personnel.lire', 'personnel.gerer', 'organisation.gerer'] },
-      { id: 'stock', ic: '▣', label: 'Stock', perm: 'stock.lire' },
-      { id: 'facturation', ic: '▤', label: 'Facturation', perm: 'facturation.lire' },
-      { id: 'finance', ic: '€', label: 'Achats & trésorerie', perm: 'finance.read' },
+      { id: 'projets', ic: 'projects', label: 'Projets', perms: ['personnel.lire', 'personnel.gerer', 'organisation.gerer'] },
+      { id: 'stock', ic: 'stock', label: 'Stock', perm: 'stock.lire' },
+      { id: 'facturation', ic: 'invoicing', label: 'Facturation', perm: 'facturation.lire' },
+      { id: 'finance', ic: 'purchases', label: 'Achats & trésorerie', perm: 'finance.read' },
       // LES TROIS DERNIERES PORTES CONDAMNEES SONT OUVERTES (28/08), ET L'OBJECTION QUI LES
       // FERMAIT A ETE TRAITEE PLUTOT QU'IGNOREE.
       //
@@ -143,16 +144,16 @@ const NAV = [
       //    l'entree. Une file rangee au quatrieme onglet ne se regarde que quand on y pense.
       //  - Les cautions sont transversales : elles naissent a la piscine, au padel et a la
       //    patinoire, et le solde consigne est unique. On ne pose pas la question trois fois.
-      { id: 'sepa', ic: '⇄', label: 'Prélèvements SEPA', perms: ['sepa.lire', 'compta.lire'] },
-      { id: 'recouvrement', ic: '⚠', label: 'Recouvrement', perms: ['recouvrement.lire', 'recouvrement.piloter', 'compta.lire'] },
-      { id: 'caution', ic: '⛨', label: 'Cautions', perms: ['caution.lire', 'caution.piloter'] },
+      { id: 'sepa', ic: 'sepa', label: 'Prélèvements SEPA', perms: ['sepa.lire', 'compta.lire'] },
+      { id: 'recouvrement', ic: 'collections', label: 'Recouvrement', perms: ['recouvrement.lire', 'recouvrement.piloter', 'compta.lire'] },
+      { id: 'caution', ic: 'deposits', label: 'Cautions', perms: ['caution.lire', 'caution.piloter'] },
       // Ouvert le 27/08 : quinze operations, aucun ecran. Un contrat depose par l'API existait,
       // et personne ne pouvait le relire.
-      { id: 'documents', ic: '🗎', label: 'Documents', perms: ['dms.read', 'dms.write'] },
+      { id: 'documents', ic: 'documents', label: 'Documents', perms: ['dms.read', 'dms.write'] },
       // Ouvert le 27/08. L'ecran existe pour un etat precis : `partially_failed` -- un message
       // parti sur deux comptes, passe sur l'un, echoue sur l'autre. Sans le detail par compte,
       // on republie partout pour rattraper un seul echec.
-      { id: 'social', ic: '◎', label: 'Publication sociale', perms: ['social.read_post', 'social.publish', 'social.read_account'] },
+      { id: 'social', ic: 'social', label: 'Publication sociale', perms: ['social.read_post', 'social.publish', 'social.read_account'] },
       // AUCUNE PERMISSION EXIGÉE, ET C'EST DÉLIBÉRÉ.
       //
       // « Moi » n'est pas une fonctionnalité qu'on achète : tout compte rattaché à un établissement
@@ -162,20 +163,20 @@ const NAV = [
       // personnel d'un tiers n'est lisible par personne, pas même par un administrateur.
       //
       // Ouvrir la porte n'ouvre aucun droit : c'est la même règle que pour « Assistance ».
-      { id: 'agenda', ic: '▤', label: 'Agenda' },
+      { id: 'agenda', ic: 'agenda', label: 'Agenda' },
     ],
   },
   {
     section: 'Pilotage',
     items: [
-      { id: 'pilotage', ic: '◨', label: 'Reporting', perms: ['reporting.lire', 'reporting.configurer', 'reporting.planifier'] },
+      { id: 'pilotage', ic: 'reporting', label: 'Reporting', perms: ['reporting.lire', 'reporting.configurer', 'reporting.planifier'] },
       // `absent: true` a tenu jusqu'au 27/08 sur un module qui expose ONZE operations de tickets
       // et sept d'articles d'aide. La porte etait dessinee et condamnee ; c'est le motif le plus
       // couteux du depot -- 815 operations sans porte pour 234 atteignables.
       //
       // Les droits fins restent ceux du serveur : l'entree exige `support.lire`, et l'ecran ne
       // montre les gestes d'agent qu'a qui les possede. Ouvrir la porte n'ouvre aucun droit.
-      { id: 'support', ic: '?', label: 'Assistance', perms: ['support.lire', 'support.ouvrir_ticket', 'support.lire_ticket_soi', 'support.traiter_ticket_n1', 'support.traiter_ticket_n2', 'support.administrer'] },
+      { id: 'support', ic: 'support', label: 'Assistance', perms: ['support.lire', 'support.ouvrir_ticket', 'support.lire_ticket_soi', 'support.traiter_ticket_n1', 'support.traiter_ticket_n2', 'support.administrer'] },
     ],
   },
   {
@@ -183,8 +184,7 @@ const NAV = [
     items: [
       {
         id: 'parametres',
-        ic: '⚙',
-        label: 'Paramètres',
+        ic: 'settings', label: 'Paramètres',
         perms: ['securite.gerer', 'securite.lire', 'organisation.gerer', 'offre.gerer', 'caisse.gerer', 'crm.parametrer'],
       },
       // Ouvert le 27/08. Voir le commentaire de l'entree << Assistance >> : meme motif, meme cout.
@@ -192,11 +192,11 @@ const NAV = [
       // qui-a-le-droit-de-quoi vit dans Paramètres › Utilisateurs & droits. Cet écran porte les
       // demandes d'escalade et les plafonds de montant — ce n'est pas la même question.
       // Arbitré par Maxime à la revue : on renomme, on ne déplace pas les droits.
-      { id: 'autorisations', ic: '⚿', label: 'Escalades & plafonds', perms: ['autorisation.lire', 'autorisation.approuver', 'autorisation.gerer'] },
+      { id: 'autorisations', ic: 'escalations', label: 'Escalades & plafonds', perms: ['autorisation.lire', 'autorisation.approuver', 'autorisation.gerer'] },
       // Les mentions obligatoires d'un site marchand. Sous Administration et non sous Boutique :
       // elles engagent l'exploitant, pas la vitrine, et un exploitant qui n'a pas encore ouvert
       // sa boutique doit pouvoir les preparer.
-      { id: 'legal', ic: '§', label: 'Mentions legales', perms: ['organisation.gerer', 'boutique.gerer_vitrine'] },
+      { id: 'legal', ic: 'legal', label: 'Mentions legales', perms: ['organisation.gerer', 'boutique.gerer_vitrine'] },
     ],
   },
 ]
@@ -412,7 +412,7 @@ export default function AppShell({
                   }
                   style={it.disabled ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
                 >
-                  <span className="ic">{it.ic}</span> {it.label}
+                  <Icon name={it.ic} className="ic" /> {it.label}
                   {it.disabled && (
                     <span className="badge mut" style={{ marginLeft: 'auto', fontSize: 10 }}>
                       {it.absent ? 'sans écran' : 'bientôt'}
@@ -445,7 +445,7 @@ export default function AppShell({
                     title={`${it.label} : le module existe côté serveur, son écran n'est pas encore construit.`}
                     style={{ opacity: 0.5, cursor: 'not-allowed', paddingLeft: 26 }}
                   >
-                    <span className="ic">{it.ic}</span> {it.label}
+                    <Icon name={it.ic} className="ic" /> {it.label}
                   </button>
                 ))}
             </div>
