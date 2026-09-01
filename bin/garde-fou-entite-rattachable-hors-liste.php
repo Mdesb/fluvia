@@ -113,6 +113,10 @@ function couverturesDesExtensions(string $racine): array
             continue;
         }
 
+        // Compte ce que le controle a REELLEMENT lu, pour que son perimetre soit annonce avec son
+        // verdict — un controle qui retrecit en silence rend un vert qui ne mesure plus rien.
+        $GLOBALS['lues_extensions'] = ($GLOBALS['lues_extensions'] ?? 0) + 1;
+
         $source = (string) file_get_contents($fichier->getPathname());
 
         // Un module peut être couvert par PRÉFIXE de namespace (`MarketingScopeExtension`) plutôt que
@@ -233,6 +237,8 @@ function violations(string $racine, array $exclusions): array
         if (preg_match(MOTIF_ENTITE, $source) !== 1 || preg_match(MOTIF_EXPOSEE, $source) !== 1) {
             continue;
         }
+
+        $GLOBALS['lues_entites'] = ($GLOBALS['lues_entites'] ?? 0) + 1;
         if (preg_match(MOTIF_CLASSE, $source, $classe) !== 1) {
             continue;
         }
@@ -418,10 +424,46 @@ if ($echec) {
     exit(1);
 }
 
+$lues = (int) ($GLOBALS['lues_entites'] ?? 0);
+$ext = (int) ($GLOBALS['lues_extensions'] ?? 0);
+
+// PERIMETRE EFFONDRE — ON REFUSE DE CONCLURE.
+//
+// Ce controle rend « OK — aucune nouvelle » quand il n'a trouve aucune entite fautive. Il rend
+// EXACTEMENT LA MEME PHRASE quand il n'a trouve aucune entite du tout : un motif qui cesse de
+// correspondre, un dossier deplace, un `MOTIF_EXPOSEE` desaccorde d'une evolution d'API Platform,
+// et le verdict reste vert sur une mesure vide.
+//
+// ⚠ LES DEUX DIRECTIONS NE SONT PAS SYMETRIQUES. Zero extension lue ferait paraitre TOUTES les
+// entites hors liste : un echec bruyant, genant mais honnete. Zero entite lue rend un vert parfait.
+// Le plancher porte donc la ou l'effondrement MENT.
+//
+// Le seuil est bas volontairement : il ne suit pas la croissance du produit — il faudrait le regler
+// a chaque module — il distingue « peu » de « rien ».
+if ($lues < 50) {
+    fwrite(STDERR, "
+=== INSTRUMENT MORT — perimetre effondre ===
+
+");
+    fwrite(STDERR, sprintf("  entites exposees lues : %d (moins de 50 = on n'a pas mesure)
+", $lues));
+    fwrite(STDERR, sprintf("  extensions lues       : %d
+
+", $ext));
+    fwrite(STDERR, "  Aucun chiffre ne vaut : ce controle rend le meme vert quand il n'a rien trouve
+");
+    fwrite(STDERR, "  de fautif et quand il n'a RIEN LU. Un motif qui cesse de correspondre suffit.
+
+");
+    exit(1);
+}
+
 echo sprintf(
     "Entités rattachables hors liste : OK — aucune nouvelle. Dette gelée : %d, plafond %d. Exclusions nommées : %d.\n",
     count($entrees),
     $plafond,
     count($exclusions),
 );
+echo sprintf("  (%d entite(s) exposee(s) lue(s), %d extension(s) de cloisonnement.)
+", $lues, $ext);
 exit(0);
