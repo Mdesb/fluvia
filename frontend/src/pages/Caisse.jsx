@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api, membres } from '../api/client.js'
-import ControleBillet from '../components/ControleBillet.jsx'
 import { aLeDroit } from '../api/droits.js'
 import Qr from '../components/Qr.jsx'
 // `texte` lit un libelle multilingue : le serveur rend `{ fr: '...' }`, pas une chaine.
