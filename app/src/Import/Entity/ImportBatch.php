@@ -46,6 +46,12 @@ use Symfony\Component\Uid\Uuid;
  * Il est estampillé au serveur. ⚠ Une colonne qui désignerait où écrire serait une porte ouverte
  * chez le voisin, et le symptôme — une ligne **en trop** chez quelqu'un d'autre — n'est jamais
  * remonté à un import par celui qui le subit.
+ *
+ * @sans-ecran: la reprise se pilote en API et en ligne de commande le temps qu'elle fasse ses
+ * preuves. La spécification laisse ouvert « écran de reprise, ou ligne de commande d'abord », et
+ * D13 demande de n'ouvrir un écran que pour une raison nommée — un écran posé sur un mécanisme qui
+ * n'a jamais tourné se refait. Il viendra quand on saura qui accueille les premiers clients ; ce
+ * point-là reste à Maxime, pas à moi.
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'import_batch')]
