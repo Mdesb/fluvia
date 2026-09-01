@@ -405,3 +405,17 @@ mes 5 fixtures (`grep 'new X('` + lecture) :
 Aucune de mes fixtures ne construit une entité à unicité seulement-technique hors garde. Je lance le
 test-preuve (`FixturesIdempotentesTest`, double chargement + comptage) pour ne pas me fier au « ça ne
 plante pas ». Résultat au prochain battement.
+
+## 01/09 — Ordre #1 CLOS : fixtures idempotentes, prouvé par comptage
+
+`FixturesIdempotentesTest` (double `doctrine:fixtures:load` + comptage de lignes hors journaux) :
+**OK — 1 test, 4 assertions, aucune dérive de lignes** au second chargement. Le graphe complet (donc mes
+5 fixtures incluses) est idempotent. Pas de « ça ne plante pas » : c'est le comptage qui le dit.
+Ordre #1 clos côté claude-E.
+
+Observation hors périmètre (pour toi/claude-D) : le test déclenche 1 déprécation Doctrine —
+`Connection::quoteIdentifier` (deprecated) à `FixturesIdempotentesTest.php:143`, à remplacer par
+`quoteSingleIdentifier`. Fichier partagé de claude-D, je ne le touche pas sans ton feu.
+
+J'enchaîne sur ton **ordre #2 — SF-2** (D27 : une session signalée que rien n'émet). J'analyse d'abord
+qui devrait émettre l'événement et si ça reste dans mon périmètre SmartFlow.
