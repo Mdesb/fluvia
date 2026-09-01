@@ -42,6 +42,13 @@ final class PatinoireModule implements ModuleManifest
      * Vendue et activable par établissement. Le code `patinoire` existe déjà au catalogue de capacités
      * (`App\Fonctionnalite\Enum\CapaciteCode`), donc `ModuleAccess::hasModule()` peut répondre vrai —
      * contrairement à un code inventé, qui rendrait le module présent et définitivement inaccessible.
+     *
+     * ⚠ CETTE PHRASE ÉTAIT FAUSSE JUSQU'AU 01/09/2026. Le code n'était PAS au catalogue, et ce
+     * module était donc exactement dans l'état qu'elle décrit comme évité : présent et
+     * définitivement inaccessible. Quatre autres verticales portaient la même phrase.
+     * Vérifié par le garde-fou n°41, qui refuse
+     * tout manifeste dont la capacité manque au catalogue : la phrase ci-dessus n'est plus une
+     * affirmation, elle est contrôlée à chaque commit.
      */
     public function capability(): ?string
     {

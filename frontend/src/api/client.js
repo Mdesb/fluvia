@@ -540,8 +540,24 @@ export const api = {
     request(`/api/ventes/${venteId}/paiements`, { method: 'POST', body: corps, headers, timeoutMs: 45000 }),
   annulerVente: (venteId) =>
     request(`/api/ventes/${venteId}/annuler`, { method: 'POST', body: {}, timeoutMs: 20000 }),
-  valider: (venteId) =>
-    request(`/api/ventes/${venteId}/valider`, { method: 'POST', body: {}, timeoutMs: 30000 }),
+  // ⚠ LE CORPS N'EST PLUS VIDE, ET IL NE L'AURAIT JAMAIS DU ETRE.
+  //
+  // `ValiderVenteProcessor` lit `supports` depuis toujours, et `ValiderVenteService` en tire deux
+  // comportements distincts (RG-CQ1-01) :
+  //
+  //   identifiant inedit    -> emission d'un support neuf portant cet identifiant
+  //   identifiant deja connu -> RECHARGE de la carte existante, au lieu d'une emission
+  //
+  // Le second est le geste le plus courant d'un exploitant qui vend des cartes, et il etait
+  // inatteignable : cet appel envoyait `{}`. La contrainte de quantite (RG-CQ8-02 : un identifiant
+  // explicite impose une quantite de 1) est appliquee par l'ECRAN avant d'appeler, pour que le
+  // caissier voie pourquoi une ligne n'est pas appairable au lieu de se prendre un 422.
+  valider: (venteId, supports = null) =>
+    request(`/api/ventes/${venteId}/valider`, {
+      method: 'POST',
+      body: supports?.length ? { supports } : {},
+      timeoutMs: 30000,
+    }),
   ticket: (venteId, mode = 'imprimer') =>
     request(`/api/ventes/${venteId}/ticket`, { method: 'POST', body: { mode } }),
 

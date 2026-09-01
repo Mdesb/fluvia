@@ -150,6 +150,11 @@ while read -r ancien nouveau ref; do
     echo "── Cloisonnement (D3/D8)"
     lancer garde-fou-cloisonnement.php "--contre=$BASE"
 
+    # Capacites de module (n°41) — voir l'en-tete du script.
+    if [ -f "$ARBRE/bin/garde-fou-capacites-de-module.php" ]; then
+        lancer garde-fou-capacites-de-module.php
+    fi
+
     if [ -f "$ARBRE/bin/garde-fou-nommage-anglais.php" ]; then
         echo "── Nommage anglais (D5)"
 
