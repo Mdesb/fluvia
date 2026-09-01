@@ -1,0 +1,11 @@
+{
+    "_lisez_moi": [
+        "Ligne de base GELEE du garde-fou n°35 (liste blanche de cloisonnement).",
+        "gelees   : entites rattachables absentes de la liste de leur module, TOLEREES le temps",
+        "           de les ajouter a la liste blanche. Ce compteur ne doit que DECROITRE.",
+        "exclusions: entites legitimement hors liste (referentiel global, cloisonnement autre),",
+        "           chacune avec sa RAISON ECRITE — sans quoi le garde-fou crie sur du travail sain."
+    ],
+    "gelees": [],
+    "exclusions": {}
+}
