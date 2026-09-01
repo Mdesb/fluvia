@@ -29,7 +29,7 @@ import { api } from '../api/client.js'
  * D'où la conséquence sur cet écran : **l'heure du contrôle précédent doit être visible**, sinon on
  * lui retire le seul élément sur lequel il peut fonder son jugement.
  */
-export default function ControleBillet() {
+export default function ControleBillet({ ecranEntier = false }) {
   const [code, setCode] = useState('')
   const [verdict, setVerdict] = useState(null)
   const [erreur, setErreur] = useState(null)
@@ -76,7 +76,7 @@ export default function ControleBillet() {
   const dejaControle = verdict?.codeMotif === 'deja_consomme'
   const creditEpuise = verdict?.codeMotif === 'credit_epuise'
 
-  return (
+  const carte = (
     <section className="card">
       <div className="card-h">
         <h3>Contrôler un billet</h3>
@@ -110,7 +110,7 @@ export default function ControleBillet() {
             }
             role="status"
           >
-            <b>{dejaControle ? 'Déjà contrôlé' : refuse ? 'Refusé' : 'Valide'}</b>
+            <b className="cb-verdict">{dejaControle ? 'Déjà contrôlé' : refuse ? 'Refusé' : 'Valide'}</b>
             {verdict.libelleMotif ? ` — ${verdict.libelleMotif}` : ''}
 
             {/* ⚠ L'HEURE DU CONTRÔLE PRÉCÉDENT EST LA DONNÉE QUI PERMET DE DÉCIDER. Sans elle,
@@ -162,5 +162,22 @@ export default function ControleBillet() {
         </div>
       </div>
     </section>
+  )
+
+  // ⚠ LE TITRE N'APPARAIT QUE LA OU CE COMPOSANT EST L'ECRAN. Il est aussi inclus dans la page de
+  // caisse, qui porte deja son propre `h1` — en poser un ici sans condition en mettrait deux dans
+  // la meme page, ce qui casse la navigation par titres au lieu de la reparer.
+  if (!ecranEntier) return carte
+
+  return (
+    <div className="view">
+      <div className="view-head">
+        <div className="ttl">
+          <h1>Composter</h1>
+          <p>Contrôle des billets à l’entrée, sans matériel</p>
+        </div>
+      </div>
+      {carte}
+    </div>
   )
 }
