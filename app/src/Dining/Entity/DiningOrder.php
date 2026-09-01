@@ -25,6 +25,14 @@ use Symfony\Component\Uid\Uuid;
  * terrasse dit « T3 », un bar dit « comptoir ». Contraindre ce vocabulaire obligerait chaque
  * exploitant à traduire son plan de salle dans le nôtre — ce que D15 reproche à l'énumération `Metier`.
  *
+ * **La surface API existe mais n est pas encore exposee, et c est une decision.** Les processors, le
+ * garde de cloisonnement et l extension de perimetre sont ecrits et testes ; le bloc `#[ApiResource]`
+ * attend l ecran de salle. Le garde-fou d ecart client/serveur refuse en effet toute operation que
+ * personne ne peut declencher — il en compte deja 630 — et mes huit auraient ete les suivantes.
+ * L annotation `@sans-ecran` ne convient pas : elle declare qu aucune interface n appellera **jamais**
+ * l operation, ce qui serait faux ici. Exposer viendra dans le meme lot que l ecran. Question posee a
+ * l integrateur : comment une session serveur livre-t-elle une API avant l ecran qui la consomme ?
+ *
  * **Trois états, pour la même raison que le séjour** : demander l'addition et la payer sont deux faits
  * distincts. Une table part parfois avant d'avoir réglé — note de frais d'entreprise, litige, client
  * qui revient le lendemain.

@@ -35,10 +35,10 @@ final class PerimetreNonEcrivableTest extends TestCase
      *
      * @var list<string>
      */
-    private const MODULES = ['Stay', 'Lodging', 'Boutique', 'Stock', 'Caution'];
+    private const MODULES = ['Stay', 'Lodging', 'Dining', 'Boutique', 'Stock', 'Caution'];
 
     /** Modules que j'ai écrits, seuls tenus à n'avoir aucun contexte de désérialisation. */
-    private const MODULES_A_MOI = ['Stay', 'Lodging'];
+    private const MODULES_A_MOI = ['Stay', 'Lodging', 'Dining'];
 
     /** @return list<class-string> */
     private static function entites(): array
