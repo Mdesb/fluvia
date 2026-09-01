@@ -59,6 +59,24 @@ final class MessageTicketProvider implements ProviderInterface
             return [];
         }
 
+        // ⚠ L'AGENT N'EST AGENT QUE LA OU IL EXERCE.
+        //
+        // `codesEffectifs()` calcule les droits pour l'etablissement ACTIF, mais le ticket, lui, est
+        // charge par identifiant sans aucun filtre. Sans cette comparaison, un agent du site A
+        // lisait les messages d'un ticket du site B — droits calcules pour l'un, objet appartenant
+        // a l'autre, et les deux ne se rencontrant jamais.
+        //
+        // Le demandeur n'est PAS soumis a cette borne : son lien au ticket est une identite, pas un
+        // perimetre. La lui imposer lui retirerait son propre ticket des qu'il change de site dans
+        // le selecteur.
+        if ($estAgent && !$estDemandeur) {
+            $etablissement = $ticket->getEtablissement();
+            $actif = $this->contexte->idActif();
+            if (null === $actif || null === $etablissement || !$etablissement->getId()->equals($actif)) {
+                return [];
+            }
+        }
+
         $qb = $this->em->getRepository(MessageTicket::class)->createQueryBuilder('m')
             ->andWhere('m.ticket = :ticket')
             ->setParameter('ticket', $ticket->getId(), 'uuid')
