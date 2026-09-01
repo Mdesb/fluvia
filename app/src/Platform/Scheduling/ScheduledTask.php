@@ -52,6 +52,44 @@ final readonly class ScheduledTask
          * temps au lieu de rattraper l'historique.
          */
         public bool $safeOnFirstRun = false,
+        /**
+         * L'heure LOCALE d'ouverture de la fenetre nocturne (`HH:MM`), ou `null` pour une tache qui
+         * se contente de son intervalle.
+         *
+         * Arbitre par Maxime le 01/09 : les taches d'argent tournent la nuit, a partir de 02h00,
+         * dans un ordre declare. Deux raisons, et la seconde n'est pas la charge machine :
+         *
+         *   - le VOLUME. Plus il y a d'adherents, plus ces taches durent ; les faire tourner en
+         *     journee met un pic de base de donnees au milieu des ventes au comptoir.
+         *   - la VISIBILITE. Une facturation, un preavis SEPA, un renouvellement ont un effet au
+         *     dehors. Personne ne veut voir partir trois cents preavis a 14h20 un mardi.
+         *
+         * ⚠ QUAND CE CHAMP EST POSE, `everyMinutes` NE DECIDE PLUS RIEN. La fenetre est une garde
+         * « une fois par nuit locale », pas un intervalle. Laisser les deux se prononcer donnerait
+         * deux verites contradictoires sur la meme tache, et la plus permissive gagnerait au premier
+         * desaccord.
+         *
+         * ⚠ ET 02H00 EST L'HEURE DU CHANGEMENT D'HEURE EN EUROPE/PARIS. Elle n'existe pas la nuit de
+         * mars, elle arrive deux fois celle d'octobre. Toute la resolution vit dans `NightlyWindow`,
+         * dont les tests couvrent les deux nuits sans attendre le dernier dimanche du mois.
+         *
+         * @var non-empty-string|null
+         */
+        public ?string $nightlyAt = null,
+        /**
+         * L'ordre d'execution a l'interieur d'un cycle. Petit = tot.
+         *
+         * Maxime a demande « les taches d'argent d'abord ». L'ordre n'est pas cosmetique : le
+         * renouvellement CREE les echeances que le preavis annonce et que la facturation encaisse.
+         * A l'envers, le preavis porterait sur une echeance qui n'existe pas encore — donc aucun
+         * preavis, sans erreur, et un prelevement non annonce le mois suivant.
+         *
+         * ⚠ CE CHAMP NE GARANTIT PAS L'ORDRE A LUI SEUL. `infra/ordonnanceur.sh` appelle `--only`
+         * tache par tache, dans l'ordre de SA liste blanche. Tant qu'il fait ainsi, c'est cette
+         * liste qui decide, et ce rang ne s'applique qu'a un appel nu de `platform:scheduler:run`.
+         * Les deux doivent dire la meme chose ; ce fichier est la reference.
+         */
+        public int $order = 500,
     ) {
     }
 }

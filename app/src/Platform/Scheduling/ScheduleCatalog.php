@@ -110,6 +110,12 @@ final class ScheduleCatalog
                 // quand meme inacceptable : personne ne veut decouvrir trois cents preavis partis
                 // ensemble. `--dry-run` montre ce qui partirait avant que quiconque decide.
                 safeOnFirstRun: false,
+                // Fenetre nocturne, arbitree par Maxime le 01/09 : les taches d'argent
+                // tournent la nuit, a partir de 02h00 LOCALES. Quand ce champ est pose,
+                // `everyMinutes` ne decide plus rien — voir `NightlyWindow`.
+                nightlyAt: '02:00',
+                // Rang 20 : le preavis annonce ce que le renouvellement vient de creer.
+                order: 20,
             ),
             // Addendum FIN-4 (alertes de trésorerie proactives, §0.9 de `plan-treasury-cash-alerts.md`,
             // RG-TRE-16). ⚠ Constat repris de la spec, non corrigé ici : `finance:treasury:
@@ -137,6 +143,12 @@ final class ScheduleCatalog
                 . "payer, et rien ne le signale. C'est le défaut des options de mi-mois — corrigé "
                 . "depuis — mais à l'échelle du mois entier et de tous les clients.",
                 critical: true,
+                // Fenetre nocturne, arbitree par Maxime le 01/09 : les taches d'argent
+                // tournent la nuit, a partir de 02h00 LOCALES. Quand ce champ est pose,
+                // `everyMinutes` ne decide plus rien — voir `NightlyWindow`.
+                nightlyAt: '02:00',
+                // Rang 30 : la facturation encaisse ce qui a ete annonce.
+                order: 30,
             ),
             new ScheduledTask(
                 'boutique:liberer-paniers-expires',
@@ -289,6 +301,12 @@ final class ScheduleCatalog
                     . "s'arretent : le prelevement cesse, l'acces reste valide, et l'adherent "
                     . "continue d'entrer GRATUITEMENT jusqu'a ce qu'un humain s'en apercoive.",
                 safeOnFirstRun: false,
+                // Fenetre nocturne, arbitree par Maxime le 01/09 : les taches d'argent
+                // tournent la nuit, a partir de 02h00 LOCALES. Quand ce champ est pose,
+                // `everyMinutes` ne decide plus rien — voir `NightlyWindow`.
+                nightlyAt: '02:00',
+                // Rang 10 : le renouvellement CREE les echeances des deux suivantes.
+                order: 10,
             ),
             new ScheduledTask(
                 'padel:eclairage:commander',
