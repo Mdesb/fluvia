@@ -14,6 +14,7 @@ use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Validator\Constraints as Assert;
+use App\Compta\Enum\VatCategory;
 
 /**
  * Taux de TVA (RG-TVA-06). Le taux réduit 2025 (point EXPERT #2) est créé `actif=false` par défaut ;
@@ -52,6 +53,26 @@ class TauxTva
     #[Assert\PositiveOrZero]
     #[Groups(['taux:read', 'taux:write', 'mapping:read', 'ligne:read'])]
     private string $taux = '0.00';
+
+    /**
+     * BT-151 — la categorie de TVA au sens d'EN 16931 (liste UNTDID 5305).
+     *
+     * ⚠ ELLE N'EST PAS LE TAUX, ET NE S'EN DEDUIT PAS QUAND IL VAUT ZERO. Mesure du 02/09 sur la
+     * preproduction : six taux a 0 %, tous libelles « Hors champ (operation non commerciale) ».
+     * Hors champ, c'est `O` — pas `Z` (taux zero), pas `E` (exonere). Les trois se ressemblent sur
+     * une facture, se distinguent au controle fiscal, et n'appellent pas les memes mentions.
+     *
+     * ⚠ NULLABLE, ET C'EST LE POINT. Un defaut `S` aurait ete faux pour ces six taux — une migration
+     * ne fabrique pas de donnee fiscale (D66-ter). Un taux sans categorie rend simplement ses
+     * factures non emettables au format europeen, et `facturation:einvoicing:etat` le nomme. Le
+     * manque reste visible au lieu d'etre rempli d'une supposition.
+     *
+     * La migration a pose `S` sur les taux POSITIFS seulement : la, il n'y a pas d'ambiguite, reduit
+     * comme normal. C'est le taux qui distingue 5,5 % de 20 %, pas la categorie.
+     */
+    #[ORM\Column(length: 4, enumType: VatCategory::class, nullable: true)]
+    #[Groups(['taux:read', 'taux:write'])]
+    private ?VatCategory $vatCategory = null;
 
     #[ORM\Column(length: 80)]
     #[Assert\NotBlank]
@@ -112,6 +133,18 @@ class TauxTva
     public function getEtablissement(): ?\App\Organisation\Entity\Etablissement
     {
         return $this->profilExploitant?->getEtablissementPrincipal();
+    }
+
+    public function getVatCategory(): ?VatCategory
+    {
+        return $this->vatCategory;
+    }
+
+    public function setVatCategory(?VatCategory $vatCategory): self
+    {
+        $this->vatCategory = $vatCategory;
+
+        return $this;
     }
 
     public function getTaux(): string

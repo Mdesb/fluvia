@@ -173,6 +173,65 @@ final class InvoiceReadinessTest extends TestCase
         );
     }
 
+    /**
+     * ⚠ UN TERME DECLARE OBLIGATOIRE ET JAMAIS VERIFIE EST UN FAUX VERT EN ATTENTE.
+     *
+     * Mesure du 02/09 : `BusinessTerm` declarait 28 termes obligatoires, `InvoiceReadiness` n'en
+     * verifiait que 18. Le rapport disait vrai — « 0 emettable » — mais pour d'autres raisons. Le
+     * jour ou les quatre adresses acheteur manquantes auraient ete saisies, il aurait annonce
+     * « emettable » avec NEUF termes obligatoires jamais controles.
+     *
+     * C'est la forme la plus couteuse : pas une erreur, un feu vert. Et rien ne reliait les deux
+     * fichiers — ajouter un cas a l'enumeration ne demandait pas de le verifier.
+     *
+     * ⚠ DEUX EXCEPTIONS ASSUMEES, ET ELLES SONT NOMMEES ICI PLUTOT QUE TUES. Un terme dont le TYPE
+     * garantit la valeur n'a rien a verifier : le controler produirait une branche morte qu'on
+     * lirait comme une couverture.
+     */
+    public function testChaqueTermeObligatoireEstVerifieOuExplicitementExempte(): void
+    {
+        // Les termes qu'un type enumere ou un invariant rend impossibles a manquer.
+        $exemptes = [
+            // `LigneFacture::$unitCode` est un `UnitCode` : le type garantit un code Rec 20.
+            BusinessTerm::LineUnitCode,
+            // `Facture::$nature` est un `NatureFacture` toujours pose : le code UNTDID 1001 s'en
+            // deduit sans ambiguite (380 facture, 381 avoir, 386 acompte). Il ne peut pas manquer.
+            BusinessTerm::TypeCode,
+            // `LigneFacture::$quantite` est un `int` non nul avec `Assert\Positive` et un defaut a 1.
+            BusinessTerm::LineQuantity,
+        ];
+
+        // ⚠ PAR REFLEXION, PAS PAR CHEMIN RELATIF. `dirname(__DIR__, 3)` supposait une profondeur
+        // d'arborescence : il rendait `/repo/src/...` au lieu de `/repo/app/src/...`, donc `false`,
+        // donc un test qui echouait pour une raison qui n'avait rien a voir avec ce qu'il mesure.
+        // La reflexion demande au moteur ou la classe habite ; elle ne peut pas se tromper de niveau.
+        $fichier = (new \ReflectionClass(InvoiceReadiness::class))->getFileName();
+        self::assertIsString($fichier, 'la classe doit avoir un fichier');
+
+        $source = file_get_contents($fichier);
+        self::assertIsString($source);
+
+        $jamaisVerifies = [];
+        foreach (BusinessTerm::cases() as $terme) {
+            if (in_array($terme, $exemptes, true)) {
+                continue;
+            }
+            if (!str_contains($source, 'BusinessTerm::' . $terme->name)) {
+                $jamaisVerifies[] = $terme->name . ' (' . $terme->value . ')';
+            }
+        }
+
+        self::assertSame(
+            [],
+            $jamaisVerifies,
+            "Ces termes sont declares obligatoires et ne sont jamais verifies : le rapport peut donc
+"
+            . "annoncer « emettable » sans les avoir regardes.
+  " . implode("
+  ", $jamaisVerifies),
+        );
+    }
+
     // ── BT-5 et BT-130, poses le 02/09 ─────────────────────────────────────────────────────────
 
     /**

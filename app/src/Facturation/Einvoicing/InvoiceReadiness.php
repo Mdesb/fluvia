@@ -168,13 +168,104 @@ final class InvoiceReadiness
             if ($ligne->getTauxTva() === null) {
                 $ajouter(BusinessTerm::LineVatRate, $ou . '::tauxTva');
             }
+
+            // BT-131 — le montant net de la ligne. Il existe toujours ; ce qui peut manquer, c'est
+            // sa COHERENCE avec la quantite et le prix unitaire. Une ligne dont le montant ne suit
+            // pas ses propres facteurs est refusee par le validateur europeen (BR-24), et se lit
+            // comme une erreur de saisie chez le client bien avant.
+            $attendu = self::centimes($ligne->getPrixUnitaireHT()) * $ligne->getQuantite();
+            if (self::centimes($ligne->getMontantHT()) !== $attendu) {
+                $ajouter(
+                    BusinessTerm::LineNetAmount,
+                    sprintf('%s::montantHT — %s au lieu de %s', $ou, $ligne->getMontantHT(), self::decimal($attendu)),
+                );
+            }
+
+            // BT-151 — LA CATEGORIE, PORTEE PAR LE TAUX DEPUIS LE 02/09.
+            //
+            // ⚠ ON NE LA DEDUIT PAS QUAND LE TAUX VAUT ZERO, ET LA MESURE LE JUSTIFIE. Six taux a
+            // 0 % existent en base, tous libelles « Hors champ (operation non commerciale) » : c'est
+            // `O`, pas `Z` (taux zero) ni `E` (exonere). Les trois se ressemblent sur une facture,
+            // se distinguent au controle fiscal, et n'appellent pas les memes mentions. « 0 % donc
+            // Z » aurait ete faux pour les six.
+            //
+            // Un taux sans categorie n'est donc pas un defaut du code : c'est un arbitrage fiscal
+            // qui n'a pas ete rendu. Le rapport le nomme au lieu de le remplir.
+            $taux = $ligne->getTauxTva();
+            if ($taux !== null && $taux->getVatCategory() === null) {
+                $ajouter(
+                    BusinessTerm::LineVatCategoryCode,
+                    sprintf('%s — le taux « %s » n a pas de categorie EN 16931', $ou, $taux->getLibelle()),
+                );
+            }
             // BT-130 — POSÉE LE 02/09. `quantite` était un entier sans unité : une ligne « 3 » ne
             // disait pas trois de quoi. Le champ porte désormais un code UN/ECE Rec 20, et le type
             // énuméré garantit qu'il en est un — il n'y a donc rien à vérifier ici, seulement à ne
             // plus déclarer le terme manquant.
         }
 
+        // ── Totaux ─────────────────────────────────────────────────────────────────────────────
+        //
+        // ⚠ ON NE VERIFIE PAS LEUR PRESENCE, ON VERIFIE LEURS EGALITES. Ces colonnes sont `NOT NULL`
+        // avec un defaut `0.00` : elles valent toujours quelque chose. Un controle de presence
+        // produirait une branche morte qu'on lirait comme une couverture.
+        //
+        // EN 16931 impose les egalites (BR-12 a BR-15). Une facture dont les totaux ne suivent pas
+        // ses lignes est refusee a l'arrivee — et pour le client, c'est une facture fausse.
+        $sommeLignes = 0;
+        foreach ($lignes as $ligne) {
+            \assert($ligne instanceof LigneFacture);
+            $sommeLignes += self::centimes($ligne->getMontantHT());
+        }
+
+        $ht = self::centimes($facture->getTotalHT());
+        $tva = self::centimes($facture->getTotalTVA());
+        $ttc = self::centimes($facture->getTotalTTC());
+
+        if ($sommeLignes !== $ht) {
+            $ajouter(
+                BusinessTerm::SumOfLineNetAmounts,
+                sprintf('Facture::totalHT — %s, somme des lignes %s', $facture->getTotalHT(), self::decimal($sommeLignes)),
+            );
+        }
+
+        // BT-109 porte la meme valeur que BT-106 tant qu'il n'y a ni remise ni frais au niveau du
+        // document. Le jour ou ces niveaux existeront, l'egalite cessera d'etre vraie et il faudra
+        // la reecrire — c'est ecrit ici pour qu'on le sache alors.
+        if ($ht !== $sommeLignes) {
+            $ajouter(BusinessTerm::TotalWithoutVat, 'Facture::totalHT — incoherent avec les lignes');
+        }
+
+        if ($ttc !== $ht + $tva) {
+            $ajouter(
+                BusinessTerm::TotalVatAmount,
+                sprintf('Facture::totalTTC (%s) != totalHT + totalTVA', $facture->getTotalTTC()),
+            );
+            $ajouter(BusinessTerm::TotalWithVat, 'Facture::totalTTC — incoherent avec HT + TVA');
+        }
+
+        // BT-115 — le montant restant du. `getSoldeDu()` le calcule ; ce qui se verifie est qu'il ne
+        // soit pas NEGATIF, cas qu'EN 16931 ne prevoit pas sur une facture (un trop-percu se traite
+        // par un avoir, pas par un montant du negatif).
+        if (self::centimes($facture->getSoldeDu()) < 0) {
+            $ajouter(
+                BusinessTerm::AmountDueForPayment,
+                sprintf('Facture::soldeDu — %s, negatif : un trop-percu se traite par un avoir', $facture->getSoldeDu()),
+            );
+        }
+
         return $manques;
+    }
+
+    /** Centimes entiers depuis une decimale a deux chiffres, sans passer par un flottant. */
+    private static function centimes(string $decimal): int
+    {
+        return (int) round(((float) $decimal) * 100);
+    }
+
+    private static function decimal(int $centimes): string
+    {
+        return number_format($centimes / 100, 2, '.', '');
     }
 
     /** Une facture est-elle émettable au format européen ? */
