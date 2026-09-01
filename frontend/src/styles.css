@@ -507,6 +507,33 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
  * partiraient nulle part, faute de produit auquel les attacher. `pointer-events: none` rend
  * l'inertie reelle et pas seulement visuelle — un bloc qui a l'air eteint mais repond au clic est
  * pire qu'un bloc actif. */
+/* LA BARRE D'ENREGISTREMENT DE LA FICHE PRODUIT.
+ *
+ * Un seul enregistrement pour six onglets : la barre doit donc rester visible pendant qu'on
+ * navigue entre eux, d'ou `position: sticky` en bas du cadre.
+ *
+ * ⚠ ELLE N'APPARAIT QUE S'IL Y A QUELQUE CHOSE A ENREGISTRER. Une barre permanente devient un
+ * meuble : on cesse de la voir, et le jour ou elle porte un vrai changement, personne ne la lit.
+ *
+ * ⚠ ET ELLE EST OPAQUE. Posee en `sticky` au-dessus du contenu qui defile, un fond translucide
+ * laisserait passer le texte par-dessous — un bouton « Enregistrer » qu'on lit a travers une ligne
+ * de tableau n'inspire pas la confiance qu'on lui demande.
+ *
+ * Aucune teinte neuve : le plafond de contrastes est a zero, et ces jetons y sont deja mesures. */
+.barre-enregistrement {
+  position: sticky; bottom: 0; z-index: 5;
+  display: flex; align-items: center; gap: var(--esp-normal); flex-wrap: wrap;
+  margin-top: var(--esp-large);
+  padding: var(--esp-normal) var(--esp-large);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+/* Le compte pousse les boutons a droite et porte la couleur d'attention : ce n'est pas une
+   information neutre, c'est du travail non enregistre. */
+.barre-enregistrement .be-compte { flex: 1 1 auto; font-size: 13px; font-weight: 600; color: var(--warn); }
+
 .fiche-endormie { opacity: .42; pointer-events: none; user-select: none; margin-top: var(--esp-large); }
 
 .fiche-ligne {
