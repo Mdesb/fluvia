@@ -101,7 +101,20 @@ final class RunScheduledTasksCommand extends Command
             // Une tache nocturne est due « une fois par nuit locale, dans sa fenetre ». Laisser
             // `everyMinutes` se prononcer aussi donnerait deux verites sur la meme tache, et la plus
             // permissive gagnerait au premier desaccord.
-            $due = $task->nightlyAt === null
+            // ⚠ ET LA SUPERVISION PRIME SUR L'HEURE.
+            //
+            // Trouve en executant, pas par les tests : le premier passage supervise d'une tache
+            // nocturne etait IMPOSSIBLE hors de la fenetre. A 23h50, `--supervise` ne produisait
+            // aucune sortie — la fenetre refusait avant que le verrou de premier passage ait son
+            // mot a dire. On demandait donc a un humain d'attester qu'il regarde, entre 02h00 et
+            // 05h00, une nuit ou il est reveille.
+            //
+            // La fenetre protege de deux choses : le pic de base en pleine journee, et l'effet
+            // visible au dehors a une heure ou personne ne l'attend. Quelqu'un qui lance la tache a
+            // la main accepte les deux explicitement. C'est le sens meme de `--supervise`.
+            $supervisionExplicite = (bool) $input->getOption('supervise');
+
+            $due = $task->nightlyAt === null || $supervisionExplicite
                 ? $trace->isDue($now, $task->everyMinutes)
                 : NightlyWindow::isOpen($now, $task->nightlyAt, $trace->getLastFinishedAt());
 
