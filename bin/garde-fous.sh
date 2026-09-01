@@ -219,6 +219,20 @@ executer "Nommage anglais (D5)" php_racine bin/garde-fou-nommage-anglais.php "--
 #    Contrairement au n°1, celui-ci n'a pas de ligne de base et n'en aura pas : une clé en dur n'est
 #    pas une dette qu'on étale, c'est un secret publié. Il est ROUGE tant que
 #    Facturation/Nf525/ScellementFactureHandler n'est pas passé à #[Autowire(env:)] — c'est voulu.
+# 40. Un champ cite par `UniqueEntity` doit etre ecrivable, sinon la contrainte ne tombe pas : elle
+#     DISPARAIT. Trouve par claude-F sur ArticleStock (RG-STOCK-02) en fermant la faille D41.
+# ⚠ Inerte tant que le fichier est garé dans bin/en-attente/ (voir son LISEZ-MOI) : appeler un
+#   fichier absent compterait un échec qui n'en est pas un.
+if [ -f "$RACINE/bin/garde-fou-unique-entity.php" ]; then
+    executer "UniqueEntity sur champ non écrivable (n°40)" php_racine bin/garde-fou-unique-entity.php
+fi
+
+# 34. Une contrainte posee sur une propriete que le processeur ECRIT ne verra jamais la valeur
+#     finale : la validation s'execute avant lui. Inerte tant que le fichier est gare.
+if [ -f "$RACINE/bin/garde-fou-validation-avant-processeur.php" ]; then
+    executer "Validation avant processeur (n°34)" php_racine bin/garde-fou-validation-avant-processeur.php
+fi
+
 executer "Secrets en dur" php_racine bin/garde-fou-secrets.php
 
 # 20. Le code de production ne dépend d'aucun paquet de développement.

@@ -150,6 +150,16 @@ while read -r ancien nouveau ref; do
     echo "── Cloisonnement (D3/D8)"
     lancer garde-fou-cloisonnement.php "--contre=$BASE"
 
+    if [ -f "$ARBRE/bin/garde-fou-validation-avant-processeur.php" ]; then
+        echo "── Validation avant processeur (n°34)"
+        lancer garde-fou-validation-avant-processeur.php
+    fi
+
+    if [ -f "$ARBRE/bin/garde-fou-unique-entity.php" ]; then
+        echo "── UniqueEntity sur champ non écrivable (n°40)"
+        lancer garde-fou-unique-entity.php
+    fi
+
     if [ -f "$ARBRE/bin/garde-fou-nommage-anglais.php" ]; then
         echo "── Nommage anglais (D5)"
 
