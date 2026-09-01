@@ -11,6 +11,7 @@ use ApiPlatform\Metadata\Operation;
 use App\Finance\Treasury\Entity\BankAccount;
 use App\Finance\Treasury\Entity\BankStatementImport;
 use App\Finance\Treasury\Entity\BankStatementLine;
+use App\Finance\Treasury\Entity\TreasuryCashAlert;
 use App\Finance\Treasury\Entity\TreasurySettings;
 use App\Securite\Entity\Utilisateur;
 use App\Securite\Service\ContexteEtablissement;
@@ -29,6 +30,10 @@ use Symfony\Bundle\SecurityBundle\Security;
  * `TreasurySettings` est ici un `establishment` **direct** (contrairement à `ReconciliationSettings` de
  * FIN-2, qui n'a qu'un `businessProfile`) — pas de patron `RESOURCES_VIA_PROFIL` nécessaire (§0.2 point
  * 2 du plan).
+ *
+ * `TreasuryCashAlert` (addendum FIN-4, alertes de trésorerie proactives) — **5ᵉ** ressource de cette
+ * extension, `establishment` direct comme `BankAccount`/`TreasurySettings` (§3 du plan
+ * `plan-treasury-cash-alerts.md`).
  */
 final class PerimetreFinanceExtension implements QueryCollectionExtensionInterface, QueryItemExtensionInterface
 {
@@ -38,6 +43,7 @@ final class PerimetreFinanceExtension implements QueryCollectionExtensionInterfa
         BankStatementImport::class => ['bankAccount'],
         BankStatementLine::class => ['statementImport', 'bankAccount'],
         TreasurySettings::class => [],
+        TreasuryCashAlert::class => [],
     ];
 
     public function __construct(

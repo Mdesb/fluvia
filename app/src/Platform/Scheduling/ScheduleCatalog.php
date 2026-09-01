@@ -111,6 +111,25 @@ final class ScheduleCatalog
                 // ensemble. `--dry-run` montre ce qui partirait avant que quiconque decide.
                 safeOnFirstRun: false,
             ),
+            // Addendum FIN-4 (alertes de trésorerie proactives, §0.9 de `plan-treasury-cash-alerts.md`,
+            // RG-TRE-16). ⚠ Constat repris de la spec, non corrigé ici : `finance:treasury:
+            // detecter-ecarts`/`finance:treasury:suggerer-rapprochements` (déjà codées et livrées) sont
+            // toujours ABSENTES de ce catalogue — hors périmètre de cet addendum, mais la commande
+            // ci-dessous ne doit pas reproduire cet oubli.
+            new ScheduledTask(
+                'finance:treasury:verifier-seuils',
+                1440,
+                "Un seuil de tresorerie configure n'est jamais verifie. Un exploitant qui active l'alerte "
+                . "decouvre alors son decouvert le jour ou il survient, exactement le defaut que cette "
+                . "alerte proactive existe pour corriger.",
+                critical: true,
+                // JAMAIS SÛR AU PREMIER PASSAGE — effet visible au dehors (cas 3, comme
+                // sepa:preavis:annoncer) : la commande notifie une personne reelle. Un premier passage
+                // sur un parc ou le seuil serait active apres coup, sur des etablissements deja en
+                // tension, enverrait une salve d'alertes simultanees a superviser, pas a lancer en
+                // silence (RG-TRE-16).
+                safeOnFirstRun: false,
+            ),
             new ScheduledTask(
                 'subscription:facturer-le-mois',
                 1440,

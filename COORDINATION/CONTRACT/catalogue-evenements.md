@@ -60,6 +60,7 @@ The first-class events published on the bus by the core and the modules. An even
 | `expense_report.submitted` | Expenses | employee, amount | Authorization, Accounting |
 | `treasury.reconciliation_completed` | Treasury | statement, matched_count | Accounting, Reporting |
 | `treasury.discrepancy_detected` | Treasury | amount, statement | Accounting, Supervision |
+| `treasury.threshold_breached` | Treasury | threshold_cents, projected_breach_date, projected_balance_cents, horizon_days, cause_source, cause_source_id, cause_amount_cents | Accounting, Supervision |
 | `expense_report.approved` | Expenses | report, amount | Accounting |
 | `expense_report.reimbursed` | Expenses | report, amount, method | Accounting, Treasury |
 | `feasibility.assessed` | Pre-sales | outcome (go/no-go) | Quote, Sales |
