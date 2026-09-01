@@ -122,6 +122,9 @@ lancer_gf garde-fou-cloisonnement.php || ECHEC=1
 [ -f "$RACINE/bin/garde-fou-vacuite-tests.php" ] && { lancer_gf garde-fou-vacuite-tests.php || ECHEC=1; }
 [ -f "$RACINE/bin/garde-fou-espacement-en-ligne.php" ] && { lancer_gf garde-fou-espacement-en-ligne.php || ECHEC=1; }
 [ -f "$RACINE/bin/garde-fou-champ-cloisonnement.php" ] && { lancer_gf garde-fou-champ-cloisonnement.php || ECHEC=1; }
+# Entite rattachable exposee que l'extension de son module n'enumere pas (n°35). Le n°5 la gelait en
+# vrac avec les referentiels ; le rattachement prouve que c'est un oubli de liste blanche, pas un global.
+[ -f "$RACINE/bin/garde-fou-entite-rattachable-hors-liste.php" ] && { lancer_gf garde-fou-entite-rattachable-hors-liste.php || ECHEC=1; }
 [ -f "$RACINE/bin/garde-fou-post-sans-suppression.php" ] && { lancer_gf garde-fou-post-sans-suppression.php || ECHEC=1; }
 [ -f "$RACINE/bin/garde-fou-filtres-muets.php" ] && { lancer_gf garde-fou-filtres-muets.php || ECHEC=1; }
 
