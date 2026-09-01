@@ -148,6 +148,47 @@ class DroitAcces
     #[Groups(['droit:read'])]
     private ?\DateTimeImmutable $synchroniseLe = null;
 
+    /**
+     * Reference de cette carte dans le logiciel d'ou elle a ete reprise (T2, SPEC §4).
+     *
+     * ⚠ **Exigence propre aux credits de cartes** : un credit restant est une dette envers le
+     * client, et une contestation doit pouvoir remonter au fichier d'origine. Sans cette reference,
+     * « il me restait six entrees » se discute de memoire, six semaines apres, au guichet.
+     *
+     * `null` pour toute carte emise dans l'application : elle ne vaut que pour une reprise.
+     */
+    #[ORM\Column(length: 128, nullable: true)]
+    private ?string $externalRef = null;
+
+    /** Le lot de reprise qui a cree ce droit — un `?Uuid` nu, jamais une relation Doctrine (D2). */
+    #[ORM\Column(type: UuidType::NAME, nullable: true)]
+    private ?Uuid $importBatchRef = null;
+
+    public function getExternalRef(): ?string
+    {
+        return $this->externalRef;
+    }
+
+    public function setExternalRef(?string $externalRef): self
+    {
+        $this->externalRef = $externalRef;
+
+        return $this;
+    }
+
+    public function getImportBatchRef(): ?Uuid
+    {
+        return $this->importBatchRef;
+    }
+
+    public function setImportBatchRef(?Uuid $importBatchRef): self
+    {
+        $this->importBatchRef = $importBatchRef;
+
+        return $this;
+    }
+
+
     public function __construct()
     {
         $this->authorisedSpaces = new ArrayCollection();

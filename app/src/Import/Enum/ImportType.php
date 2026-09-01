@@ -28,7 +28,7 @@ enum ImportType: string
     /**
      * Crédits restants sur les cartes.
      *
-     * ⚠ **Le plus sensible des six, et il n'est pas encore implémenté.** Un crédit restant est une
+     * ⚠ **Le plus sensible des six.** Un crédit restant est une
      * **dette envers le client** : il a payé dix entrées, en a consommé quatre, on lui en doit six.
      * Une erreur ne se voit pas à la reprise — elle se voit au guichet, six semaines plus tard,
      * devant la personne. Ce type exige en plus un rapprochement avec un total annoncé par le
@@ -50,7 +50,7 @@ enum ImportType: string
      */
     public static function implemented(): array
     {
-        return [self::Customers];
+        return [self::Customers, self::CardCredits];
     }
 
     public function isImplemented(): bool

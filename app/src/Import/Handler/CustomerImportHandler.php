@@ -38,6 +38,20 @@ final class CustomerImportHandler implements ImportTypeHandler
     }
 
     /**
+     * Rien à vérifier au niveau du fichier : une reprise de clients ne porte pas d'argent, donc
+     * aucun total à rapprocher. Les doublons de référence sont déjà attrapés par l'analyseur, qui
+     * les voit pour tous les types.
+     *
+     * @param list<array{line: int, data: array<string, string>}> $rows
+     *
+     * @return array<int, string>
+     */
+    public function validateFile(array $rows, ImportBatch $batch): array
+    {
+        return [];
+    }
+
+    /**
      * @param array<string, string> $row
      *
      * @return list<string>

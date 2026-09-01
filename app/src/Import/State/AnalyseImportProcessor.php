@@ -90,7 +90,11 @@ final class AnalyseImportProcessor implements ProcessorInterface
             ->setFileSize(\strlen($contenu))
             ->setContentHash($empreinte)
             ->setContent($contenu)
-            ->setCreatedBy($utilisateur instanceof Utilisateur ? $utilisateur : null);
+            ->setCreatedBy($utilisateur instanceof Utilisateur ? $utilisateur : null)
+            // Le total annoncé par le client, pour les types qui portent de l'argent. Absent ici,
+            // il fera refuser le lot à l'analyse — c'est le handler qui décide s'il en a besoin,
+            // pas ce processeur : lui ne sait pas quels types portent une dette.
+            ->setAnnouncedTotal(\is_int($corps['announcedTotal'] ?? null) ? $corps['announcedTotal'] : null);
 
         $this->analyser->analyse($batch, $etablissement);
 

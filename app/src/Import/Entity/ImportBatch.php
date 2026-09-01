@@ -185,6 +185,36 @@ class ImportBatch
     #[Groups(['import_batch:read'])]
     private int $createdRows = 0;
 
+    /**
+     * Total annoncé par le client, pour les types qui portent de l'argent (SPEC §4).
+     *
+     * ⚠ **C'est le seul garde-fou d'une dette.** Un crédit restant est de l'argent déjà payé : le
+     * client a réglé dix entrées, en a consommé quatre, on lui en doit six. Rien dans le fichier ne
+     * permet de vérifier ce total — il faut donc que quelqu'un l'annonce, et qu'on refuse au moindre
+     * écart. **On ne devine pas une dette.**
+     *
+     * Une erreur ici ne se voit pas à la reprise ; elle se voit au guichet, six semaines plus tard,
+     * devant la personne à qui il manque des entrées.
+     *
+     * `null` pour les types qui ne portent pas d'argent — les clients, le catalogue, le personnel.
+     */
+    #[ORM\Column(nullable: true)]
+    #[Groups(['import_batch:read'])]
+    private ?int $announcedTotal = null;
+
+    public function getAnnouncedTotal(): ?int
+    {
+        return $this->announcedTotal;
+    }
+
+    public function setAnnouncedTotal(?int $announcedTotal): self
+    {
+        $this->announcedTotal = $announcedTotal;
+
+        return $this;
+    }
+
+
     public function __construct()
     {
         $this->id = Uuid::v7();

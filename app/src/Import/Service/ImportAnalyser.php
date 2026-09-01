@@ -68,6 +68,11 @@ final class ImportAnalyser
             return $this->verdict($batch, count($lu['rows']), $erreurs);
         }
 
+        // Le jugement du fichier ENTIER — la somme des crédits contre le total annoncé — avant
+        // toute lecture ligne à ligne : un fichier dont le total ne tombe pas juste n'a pas à être
+        // détaillé, il a à être refusé.
+        $erreurs += $handler->validateFile($lu['rows'], $batch);
+
         $vuesDansLeFichier = [];
         $dejaEnBase = $this->referencesConnues($establishment);
 

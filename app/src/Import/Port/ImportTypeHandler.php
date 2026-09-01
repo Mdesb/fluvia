@@ -34,6 +34,22 @@ interface ImportTypeHandler
     public function requiredColumns(): array;
 
     /**
+     * Juge le fichier DANS SON ENSEMBLE, ce qu'aucune lecture ligne à ligne ne peut faire.
+     *
+     * **Ce n'est pas une commodité, c'est ce qui protège une dette.** Les crédits de cartes doivent
+     * être rapprochés d'un total annoncé par le client avant application : un écart, même d'une
+     * unité, refuse le lot. Cette vérification porte sur la somme, donc sur le fichier — une ligne
+     * seule ne peut rien en dire.
+     *
+     * La plupart des types n'en ont pas besoin et rendent une liste vide.
+     *
+     * @param list<array{line: int, data: array<string, string>}> $rows
+     *
+     * @return array<int, string> ligne → message ; la clé `0` désigne le fichier lui-même
+     */
+    public function validateFile(array $rows, ImportBatch $batch): array;
+
+    /**
      * Juge une ligne. **N'écrit rien.**
      *
      * @param array<string, string> $row
