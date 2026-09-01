@@ -6,6 +6,7 @@ namespace App\Platform\Command;
 
 use App\Platform\Entity\ScheduledTaskRun;
 use App\Platform\Scheduling\ScheduleCatalog;
+use App\Platform\Scheduling\NightlyWindow;
 use App\Platform\Scheduling\ScheduledTask;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -78,14 +79,33 @@ final class RunScheduledTasksCommand extends Command
         $echouees = 0;
         $attente = 0;
 
-        foreach ($this->catalog->all() as $task) {
+        // ⚠ L'ORDRE EST DECLARE, PAS CELUI DU CATALOGUE. Le renouvellement cree les echeances que
+        // le preavis annonce et que la facturation encaisse : les lancer dans le desordre ferait
+        // annoncer un preavis sur une echeance inexistante — donc rien, sans erreur.
+        //
+        // `usort` est stable depuis PHP 8.0 : deux taches de meme rang gardent l'ordre du catalogue.
+        // C'est ce qu'on veut — le rang exprime une dependance, pas un classement total, et la
+        // plupart des taches n'en ont aucune.
+        $taches = $this->catalog->all();
+        usort($taches, static fn (ScheduledTask $a, ScheduledTask $b): int => $a->order <=> $b->order);
+
+        foreach ($taches as $task) {
             if (\is_string($only) && $only !== '' && $task->command !== $only) {
                 continue;
             }
 
             $trace = $this->traceFor($task->command);
 
-            if (!$trace->isDue($now, $task->everyMinutes)) {
+            // ⚠ LA FENETRE REMPLACE L'INTERVALLE, ELLE NE S'Y AJOUTE PAS.
+            //
+            // Une tache nocturne est due « une fois par nuit locale, dans sa fenetre ». Laisser
+            // `everyMinutes` se prononcer aussi donnerait deux verites sur la meme tache, et la plus
+            // permissive gagnerait au premier desaccord.
+            $due = $task->nightlyAt === null
+                ? $trace->isDue($now, $task->everyMinutes)
+                : NightlyWindow::isOpen($now, $task->nightlyAt, $trace->getLastFinishedAt());
+
+            if (!$due) {
                 continue;
             }
 
@@ -192,6 +212,39 @@ final class RunScheduledTasksCommand extends Command
         return $code;
     }
 
+    /**
+     * Combien de fenetres nocturnes se sont ouvertes et refermees depuis la derniere execution ?
+     *
+     * ⚠ ON COMPTE LES NUITS, PAS LES MINUTES. Une tache nocturne qui n'a pas tourne depuis trois
+     * jours n'est pas « en retard de 4320 minutes » : elle a manque trois nuits, et chacune est un
+     * mois de facturation, un lot de preavis ou un renouvellement qui n'a pas eu lieu. Le nombre de
+     * minutes ne se traduit pas en tete ; le nombre de nuits, si.
+     *
+     * La nuit EN COURS ne compte pas comme manquee : elle n'est pas encore passee.
+     */
+    private function nuitsManquees(
+        \DateTimeImmutable $now,
+        string $nightlyAt,
+        \DateTimeImmutable $lastFinishedAt,
+    ): int {
+        $zone = new \DateTimeZone(NightlyWindow::TIMEZONE);
+        $depuis = $lastFinishedAt->setTimezone($zone)->setTime(0, 0);
+        $jusqu = $now->setTimezone($zone)->setTime(0, 0);
+
+        $jours = (int) $depuis->diff($jusqu)->days;
+
+        // Elle a tourne cette nuit (meme date locale) : rien de manque.
+        if ($jours <= 0) {
+            return 0;
+        }
+
+        // Si la fenetre de cette nuit n'est pas encore ouverte, la nuit en cours n'est pas manquee.
+        $ouverte = NightlyWindow::isOpen($now, $nightlyAt, null);
+        $fermee = !$ouverte && $now->setTimezone($zone)->format('H:i') > $nightlyAt;
+
+        return $ouverte || $fermee ? $jours : $jours - 1;
+    }
+
     private function showStatus(SymfonyStyle $io, \DateTimeImmutable $now): int
     {
         $lignes = [];
@@ -202,9 +255,28 @@ final class RunScheduledTasksCommand extends Command
             $trace = $this->traceFor($task->command);
             $fin = $trace->getLastFinishedAt();
 
+            // ⚠ L'ETAT DOIT ETRE CALCULE COMME LA DECISION D'EXECUTION, PAS AUTREMENT.
+            //
+            // Une tache nocturne n'est pas « en retard » a 14h00 parce que 1440 minutes se sont
+            // ecoulees : elle attend sa fenetre, et c'est normal. Lire l'intervalle ici ferait
+            // afficher « en retard » a toute heure du jour sur des taches parfaitement a l'heure —
+            // un tableau de bord rouge en permanence s'apprend a ne plus se lire.
+            //
+            // La contrepartie est qu'une nuit REELLEMENT manquee doit se voir. On la compte en
+            // NUITS, pas en minutes : « 4320 minutes de retard » ne dit rien, « 3 nuits sautees »
+            // se lit.
             if ($fin === null) {
                 $etat = 'JAMAIS';
                 ++$jamais;
+            } elseif ($task->nightlyAt !== null) {
+                $nuits = $this->nuitsManquees($now, $task->nightlyAt, $fin);
+
+                if ($nuits > 0) {
+                    $etat = sprintf('%d nuit(s) manquee(s)', $nuits);
+                    ++$enRetard;
+                } else {
+                    $etat = 'à jour';
+                }
             } elseif ($trace->isDue($now, $task->everyMinutes)) {
                 $etat = 'en retard';
                 ++$enRetard;
@@ -215,7 +287,7 @@ final class RunScheduledTasksCommand extends Command
             $lignes[] = [
                 $task->critical ? '⚠' : '',
                 $task->command,
-                sprintf('%d min', $task->everyMinutes),
+                $task->nightlyAt !== null ? sprintf('nuit %s', $task->nightlyAt) : sprintf('%d min', $task->everyMinutes),
                 $etat,
                 $fin?->format('d/m H:i') ?? '—',
                 $trace->getFailureCount() > 0 ? sprintf('%d échec(s)', $trace->getFailureCount()) : '',
