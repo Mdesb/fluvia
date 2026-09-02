@@ -22,7 +22,9 @@ use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
  */
 final class VatRateCatalogProvider implements ProviderInterface
 {
-    private const PAYS_PAR_DEFAUT = 'FR';
+    // ⚠ `PAYS_PAR_DEFAUT` A ETE RETIREE LE 02/09. Elle faisait passer une SUPPOSITION pour un
+    // reglage : un etablissement sans pays connu recevait les taux francais. Le pays est desormais
+    // une donnee de l'etablissement, avec son propre defaut en base — ou il se voit et se corrige.
 
     public function __construct(
         private readonly LegalVatRateRepository $taux,
@@ -39,8 +41,20 @@ final class VatRateCatalogProvider implements ProviderInterface
             throw new UnprocessableEntityHttpException('Etablissement actif requis (en-tete X-Etablissement).');
         }
 
+        // ⚠ LE PAYS VIENT DE L'ETABLISSEMENT, PLUS D'UNE CONSTANTE.
+        //
+        // Cette methode retombait sur `PAYS_PAR_DEFAUT = 'FR'` quand la requete ne disait rien. Un
+        // etablissement espagnol se voyait donc proposer les taux FRANCAIS, avec leurs libelles et
+        // leurs dates de validite — et rien ne le signalait, puisque la reponse etait pleine.
+        //
+        // Un mauvais taux de TVA ne se decouvre pas a l'ecran : il se decouvre au controle fiscal.
+        //
+        // Le parametre `?country=` reste accepte : il sert a EXPLORER le catalogue d'un autre pays
+        // (« combien vaut le taux reduit en Belgique ? ») sans changer d'etablissement. Ce qui change
+        // est le defaut : ce n'est plus une constante, c'est une donnee.
         $requete = $this->requetes->getCurrentRequest();
-        $pays = strtoupper((string) ($requete?->query->get('country') ?? self::PAYS_PAR_DEFAUT));
+        $demande = $requete?->query->get('country');
+        $pays = strtoupper((string) ($demande ?? $etablissement->getPays()));
 
         // ⚠ ON N'ACCEPTE QU'UN CODE ISO A DEUX LETTRES, ET ON REFUSE LE RESTE PLUTOT QUE DE LE
         // NORMALISER.

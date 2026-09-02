@@ -85,6 +85,31 @@ class Etablissement
     private bool $actif = true;
 
     /**
+     * Le pays de l'etablissement, en ISO 3166-1 alpha-2.
+     *
+     * ⚠ C'EST L'ANCRE DE TOUT LE RESTE, ET ELLE MANQUAIT. Le pays commande le catalogue de TVA
+     * applicable, les mentions obligatoires de la facture, et le profil de facturation electronique
+     * (Chorus/PDP en France, SdI en Italie, XRechnung en Allemagne).
+     *
+     * `LegalVatRate` porte deja `country` et `VatRateCatalogProvider` sert deja les taux par pays :
+     * ce qui manquait n'etait pas le catalogue, c'etait ce qui DESIGNE le pays d'un etablissement.
+     * Sans lui, le fournisseur retombait sur une constante `PAYS_PAR_DEFAUT = 'FR'` — un
+     * etablissement espagnol se serait vu proposer les taux francais, sans que rien ne le signale.
+     *
+     * ⚠ LE DEFAUT `FR` EXPLICITE CE QUI EST DEJA VRAI, IL N'INVENTE RIEN (D66-ter). Le produit n'est
+     * commercialise qu'en France a ce jour, et le seul jeu de taux legaux amorce est le francais
+     * (`SeedLegalVatRatesCommand`, quatre entrees, toutes `FR`). Le jour ou un etablissement sera
+     * ailleurs, quelqu'un l'aura choisi.
+     *
+     * A ne pas confondre avec `fuseauHoraire`, qui repond a une autre question : un etablissement
+     * francais aux Antilles est en `FR` et en `America/Guadeloupe`.
+     */
+    #[ORM\Column(length: 2, options: ['default' => 'FR'])]
+    #[Assert\Regex(pattern: '/^[A-Z]{2}$/', message: 'Le pays doit etre un code ISO 3166-1 a deux lettres.')]
+    #[Groups(['etablissement:read', 'etablissement:write'])]
+    private string $pays = 'FR';
+
+    /**
      * Le fuseau dans lequel cet établissement vit sa journée.
      *
      * **Pourquoi ça n'est pas un détail de confort.** La clôture journalière NF525 arrête une journée
@@ -133,6 +158,18 @@ class Etablissement
     /** @var Collection<int, Espace> */
     #[ORM\OneToMany(targetEntity: Espace::class, mappedBy: 'etablissement')]
     private Collection $espaces;
+
+    public function getPays(): string
+    {
+        return $this->pays;
+    }
+
+    public function setPays(string $pays): self
+    {
+        $this->pays = strtoupper($pays);
+
+        return $this;
+    }
 
     public function __construct()
     {
