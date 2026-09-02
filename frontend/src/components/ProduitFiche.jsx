@@ -74,6 +74,14 @@ function valeursModifiables(p) {
       renouvellementPrix: p.formule.renouvellement?.prix || 'fixe',
       modeAcces: p.formule.droitAcces?.mode || 'illimite',
     } : null,
+    // Meme regle que la formule : `null` quand le lecteur n'a pas le droit comptable, un objet
+    // quand il l'a. L'enregistrement n'envoie rien sur un `null`, donc un utilisateur sans le
+    // droit ne peut pas ecraser ces trois champs en enregistrant le reste.
+    compta: {
+      tauxTva: p?.tauxTva != null ? String(p.tauxTva) : '',
+      compteComptable: p?.compteComptable || '',
+      reglePca: p?.reglePca || 'aucune',
+    },
     carte: p?.carte ? {
       nbPaye: p.carte.nbPaye ?? '',
       nbCredite: p.carte.nbCredite ?? '',
@@ -175,7 +183,22 @@ export default function ProduitFiche({
   // ⚠ L'INSTANTANE DES VALEURS CHARGEES. Sans lui, la barre ne pourrait annoncer que « des
   // modifications » — et on enregistrerait six onglets sans savoir ce qu'on emporte.
   const [reference, setReference] = useState(() => valeursModifiables(produit))
-  const [editionCompta, setEditionCompta] = useState(null)
+  // Le referentiel des taux, charge ici plutot que dans une modale : les trois champs comptables
+  // vivent desormais dans l'onglet, et l'onglet est monte avec la fiche.
+  //
+  // /!\ UN REFERENTIEL ILLISIBLE NE FERME PAS LA SAISIE. Sans droit comptable la liste revient
+  // vide ; le champ reste, en saisie libre. Un ecran qui disparait sur un refus de lecture fait
+  // conclure que la fonction n'existe pas.
+  const [tauxTva, setTauxTva] = useState([])
+
+  useEffect(() => {
+    if (!peutModifierCompta) return undefined
+    let annule = false
+    api.tauxTvas()
+      .then((r) => { if (!annule) setTauxTva(membres(r).filter((t) => t.actif !== false)) })
+      .catch(() => { if (!annule) setTauxTva([]) })
+    return () => { annule = true }
+  }, [peutModifierCompta])
   const [enregistrement, setEnregistrement] = useState(false)
   // LA FICHE PORTE DEUX MÉTIERS, ET ILS NE SE LISENT PAS DANS LE MÊME ÉTAT D'ESPRIT.
   //
@@ -449,6 +472,21 @@ export default function ProduitFiche({
 
   const ongletsModifies = [...new Set(changements.map((c) => ONGLET_DU_CHAMP[c]))]
 
+  // Vrai si l'un des trois champs comptables a bouge. On compare des CHAINES des deux cotes :
+  // `p.tauxTva` revient en nombre et le champ rend une chaine, donc `5` et `'5'` sont le meme
+  // taux -- une comparaison stricte aurait declenche une seconde requete a chaque enregistrement.
+  function comptaModifiee() {
+    if (!peutModifierCompta) return false
+    const avant = {
+      tauxTva: p?.tauxTva != null ? String(p.tauxTva) : '',
+      compteComptable: p?.compteComptable || '',
+      reglePca: p?.reglePca || 'aucune',
+    }
+    return avant.tauxTva !== String(edition.compta.tauxTva)
+      || avant.compteComptable !== edition.compta.compteComptable.trim()
+      || avant.reglePca !== edition.compta.reglePca
+  }
+
   async function enregistrer(e) {
     e?.preventDefault?.()
     setErreur(null)
@@ -504,6 +542,23 @@ export default function ProduitFiche({
           },
         } : {}),
       })
+
+      // ⚠ SECONDE REQUETE, ET C'EST UN DETAIL D'IMPLEMENTATION QUE L'ECRAN NE MONTRE PAS.
+      //
+      // Les trois champs comptables passent par `PATCH /produits/{id}/compta`, protege par
+      // `offre.modifier_compta` -- un droit distinct de `offre.modifier`. C'est la raison pour
+      // laquelle ils vivaient dans une modale a part, et c'est une raison de SERVEUR : l'utilisateur,
+      // lui, tape dans un onglet comme dans les six autres et enregistre une fois.
+      //
+      // On n'appelle que si l'un des trois a change : sans cette garde, tout enregistrement de la
+      // fiche exigerait le droit comptable, et qui peut renommer un produit ne l'a pas forcement.
+      if (comptaModifiee()) {
+        await api.majComptaProduit(produitId, {
+          tauxTva: edition.compta.tauxTva === '' ? null : String(edition.compta.tauxTva),
+          compteComptable: edition.compta.compteComptable.trim() || null,
+          reglePca: edition.compta.reglePca,
+        })
+      }
       const rafraichi = await api.produit(produitId)
       setDetail(rafraichi)
       // ⚠ ON NE REMET PLUS `edition` A `null` : cela refermait la fiche. La reference prend les
@@ -1148,26 +1203,86 @@ export default function ProduitFiche({
           <div className="hint">Chargement…</div>
         ) : (
           <>
-            <Ligne libelle="Compte comptable" valeur={p.compteComptable || '—'} />
-            <Ligne libelle="Taux de TVA" valeur={p.tauxTva != null ? `${p.tauxTva} %` : '—'} />
-            <Ligne
-              libelle="Règle PCA"
-              valeur={REGLES_PCA[p.reglePca] || p.reglePca || '—'}
-              aide="Produit constaté d'avance : comment le chiffre d'affaires est étalé dans le temps."
-            />
-            {peutModifierCompta && (
-              <button
-                className="btn ghost sm"
-                type="button"
-                style={{ marginTop: 'var(--esp-normal)' }}
-                onClick={() => setEditionCompta({
-                  tauxTva: p.tauxTva != null ? String(p.tauxTva) : '',
-                  compteComptable: p.compteComptable || '',
-                  reglePca: p.reglePca || 'aucune',
-                })}
-              >
-                Modifier la comptabilité
-              </button>
+            {!peutModifierCompta ? (
+              <>
+                <Ligne libelle="Compte comptable" valeur={p.compteComptable || '—'} />
+                <Ligne libelle="Taux de TVA" valeur={p.tauxTva != null ? `${p.tauxTva} %` : '—'} />
+                <Ligne
+                  libelle="Règle PCA"
+                  valeur={REGLES_PCA[p.reglePca] || p.reglePca || '—'}
+                  aide="Produit constaté d'avance : comment le chiffre d'affaires est étalé dans le temps."
+                />
+              </>
+            ) : (
+              <>
+                <div className="field">
+                  <label htmlFor="pr-tva">Taux de TVA</label>
+                  {/* LE TAUX DE TVA EST UNE VALEUR, PAS UNE RELATION, ET CA CHANGE L'ENVOI.
+                      `Produit::$tauxTva` est une colonne `decimal(5,2)` nullable — pas une cle
+                      vers `TauxTva`. Le produit ne « pointe » donc pas le referentiel : il en
+                      recopie un pourcentage. On propose quand meme la liste declaree, parce que
+                      saisir 20 a la main quand l'etablissement a declare 20,00 est le meilleur
+                      moyen de creer deux verites ; mais on envoie la VALEUR, en CHAINE — le
+                      deserialiseur refuse un entier, et c'est le defaut qui rendait la creation
+                      d'un taux impossible. */}
+                  <select
+                    id="pr-tva"
+                    className="input"
+                    value={edition.compta.tauxTva}
+                    onChange={(e) => setEdition((s) => ({ ...s, compta: { ...s.compta, tauxTva: e.target.value } }))}
+                  >
+                    <option value="">Aucun taux</option>
+                    {tauxTva.map((t) => (
+                      <option key={t.id} value={String(t.taux)}>{t.libelle} — {t.taux} %</option>
+                    ))}
+                    {/* Un produit peut porter un taux retire du referentiel depuis. L'omettre de
+                        la liste lui ferait perdre sa valeur au premier enregistrement. */}
+                    {edition.compta.tauxTva !== '' &&
+                      !tauxTva.some((t) => String(t.taux) === String(edition.compta.tauxTva)) && (
+                        <option value={edition.compta.tauxTva}>{edition.compta.tauxTva} % (hors référentiel)</option>
+                      )}
+                  </select>
+                  <p className="hint">
+                    {tauxTva.length === 0
+                      ? 'Aucun taux n’est déclaré pour cet établissement : renseignez-les dans Paramètres › Catalogue & référentiels.'
+                      : 'Le taux facturé sur ce produit, et celui qui remontera en comptabilité.'}
+                  </p>
+                </div>
+
+                <div className="field">
+                  <label htmlFor="pr-compte">Compte comptable</label>
+                  <input
+                    id="pr-compte"
+                    className="input mono"
+                    maxLength={32}
+                    placeholder="706100"
+                    value={edition.compta.compteComptable}
+                    onChange={(e) => setEdition((s) => ({ ...s, compta: { ...s.compta, compteComptable: e.target.value } }))}
+                  />
+                  <p className="hint">
+                    Le compte de produit sur lequel les ventes de cet article seront imputées.
+                    Saisie libre : le plan comptable n’est pas exposé à cet écran.
+                  </p>
+                </div>
+
+                <div className="field">
+                  <label htmlFor="pr-pca">Règle de produit constaté d’avance</label>
+                  <select
+                    id="pr-pca"
+                    className="input"
+                    value={edition.compta.reglePca}
+                    onChange={(e) => setEdition((s) => ({ ...s, compta: { ...s.compta, reglePca: e.target.value } }))}
+                  >
+                    {Object.entries(REGLES_PCA).map(([v, l]) => (
+                      <option key={v} value={v}>{l}</option>
+                    ))}
+                  </select>
+                  <p className="hint">
+                    Décide du moment où l’argent encaissé devient du chiffre d’affaires. Un
+                    abonnement annuel vendu en janvier ne se gagne pas en janvier.
+                  </p>
+                </div>
+              </>
             )}
           </>
         )}
@@ -1280,147 +1395,10 @@ export default function ProduitFiche({
         </div>
       )}
 
-      <ComptaProduitModal
-        edition={editionCompta}
-        onClose={() => setEditionCompta(null)}
-        onEnregistre={async (corps) => {
-          await api.majComptaProduit(produitId, corps)
-          setDetail(await api.produit(produitId))
-          setEditionCompta(null)
-          onModifie?.()
-        }}
-      />
     </>
   )
 }
 
-// LE TAUX DE TVA D'UN PRODUIT EST UNE VALEUR, PAS UNE RELATION, ET ÇA CHANGE LE FORMULAIRE.
-//
-// `Produit::$tauxTva` est une colonne `decimal(5,2)` nullable — pas une clé vers `TauxTva`. Le
-// produit ne « pointe » donc pas le référentiel : il recopie un pourcentage. On propose quand même
-// la liste des taux déclarés, parce que saisir 20 à la main quand l'établissement a déclaré 20,00
-// est le meilleur moyen de créer deux vérités ; mais on envoie bien la valeur, pas un identifiant.
-//
-// Et on part en CHAÎNE : la colonne est décimale, et le désérialiseur refuse un entier — c'est
-// exactement le défaut qui rendait la création d'un taux de TVA impossible.
-function ComptaProduitModal({ edition, onClose, onEnregistre }) {
-  const [taux, setTaux] = useState([])
-  const [valeurs, setValeurs] = useState(null)
-  const [erreur, setErreur] = useState(null)
-  const [envoi, setEnvoi] = useState(false)
-
-  useEffect(() => {
-    if (!edition) return
-    setValeurs(edition)
-    setErreur(null)
-  }, [edition])
-
-  useEffect(() => {
-    if (!edition) return undefined
-    let annule = false
-    api.tauxTvas()
-      // Un référentiel illisible (droits comptables absents) ne doit pas fermer le formulaire :
-      // la liste disparaît, la saisie libre reste.
-      .then((r) => { if (!annule) setTaux(membres(r).filter((t) => t.actif !== false)) })
-      .catch(() => { if (!annule) setTaux([]) })
-    return () => { annule = true }
-  }, [edition])
-
-  async function soumettre(e) {
-    e.preventDefault()
-    setErreur(null)
-    setEnvoi(true)
-    try {
-      await onEnregistre({
-        tauxTva: valeurs.tauxTva === '' ? null : String(valeurs.tauxTva),
-        compteComptable: valeurs.compteComptable.trim() || null,
-        reglePca: valeurs.reglePca,
-      })
-    } catch (err) {
-      setErreur(err.message || "L'enregistrement n'a pas abouti.")
-    } finally {
-      setEnvoi(false)
-    }
-  }
-
-  return (
-    <Modal open={!!edition} onClose={onClose} titre="Comptabilité du produit" taille="md">
-      {valeurs && (
-        <form onSubmit={soumettre}>
-          {erreur && <div className="banner banner-error">{erreur}</div>}
-
-          <div className="field">
-            <label htmlFor="pc-tva">Taux de TVA</label>
-            <select
-              id="pc-tva"
-              className="input"
-              value={valeurs.tauxTva}
-              onChange={(e) => setValeurs((s) => ({ ...s, tauxTva: e.target.value }))}
-            >
-              <option value="">Aucun taux</option>
-              {taux.map((t) => (
-                <option key={t.id} value={String(t.taux)}>
-                  {t.libelle} — {t.taux} %
-                </option>
-              ))}
-              {/* Un produit peut porter un taux qui n'est plus au référentiel (masqué depuis).
-                  Le retirer de la liste ferait perdre la valeur au premier enregistrement. */}
-              {valeurs.tauxTva !== '' && !taux.some((t) => String(t.taux) === String(valeurs.tauxTva)) && (
-                <option value={valeurs.tauxTva}>{valeurs.tauxTva} % (taux retiré du référentiel)</option>
-              )}
-            </select>
-            <p className="hint">
-              {taux.length === 0
-                ? 'Aucun taux n’est déclaré pour cet établissement : renseignez-les dans Paramètres › Catalogue & référentiels.'
-                : 'Le taux facturé sur ce produit, et celui qui remontera en comptabilité.'}
-            </p>
-          </div>
-
-          <div className="field">
-            <label htmlFor="pc-compte">Compte comptable</label>
-            <input
-              id="pc-compte"
-              className="input mono"
-              maxLength={32}
-              value={valeurs.compteComptable}
-              placeholder="706100"
-              onChange={(e) => setValeurs((s) => ({ ...s, compteComptable: e.target.value }))}
-            />
-            <p className="hint">
-              Le compte de produit sur lequel les ventes de cet article seront imputées. Saisie
-              libre : le plan comptable n’est pas exposé à cet écran.
-            </p>
-          </div>
-
-          <div className="field">
-            <label htmlFor="pc-pca">Règle de produit constaté d’avance</label>
-            <select
-              id="pc-pca"
-              className="input"
-              value={valeurs.reglePca}
-              onChange={(e) => setValeurs((s) => ({ ...s, reglePca: e.target.value }))}
-            >
-              {Object.entries(REGLES_PCA).map(([v, l]) => (
-                <option key={v} value={v}>{l}</option>
-              ))}
-            </select>
-            <p className="hint">
-              Décide du moment où l’argent encaissé devient du chiffre d’affaires. Un abonnement
-              annuel vendu en janvier ne se gagne pas en janvier.
-            </p>
-          </div>
-
-          <div className="row" style={{ justifyContent: 'flex-end', gap: 'var(--esp-normal)', marginTop: 'var(--esp-large)' }}>
-            <button type="button" className="btn" onClick={onClose}>Annuler</button>
-            <button type="submit" className="btn primary" disabled={envoi}>
-              {envoi ? 'Enregistrement…' : 'Enregistrer'}
-            </button>
-          </div>
-        </form>
-      )}
-    </Modal>
-  )
-}
 
 /* ------------------------------------------------------------------ Aperçu caisse */
 
