@@ -176,16 +176,116 @@ final class SeedLegalVatRatesCommand extends Command
             'source' => 'CGI art. 296, 1° b',
         ],
 
-        // ⚠ LA CORSE N'Y EST PAS, ET C'EST DELIBERE.
+        // Outre-mer, le taux de la presse. TEDB : « The super reduced rate in Martinique,
+        // Guadeloupe and Reunion is 1.05% (for the press) ».
+        [
+            'country' => 'FR',
+            'territory' => 'DOM',
+            'category' => VatRateCategory::SuperReduced,
+            'rate' => '1.05',
+            'label' => 'Taux particulier presse — Guadeloupe, Martinique, Reunion',
+            'from' => '2014-01-01',
+            'until' => null,
+            'source' => 'CGI art. 298 septies (taux applicable dans les DOM)',
+        ],
+
+        // ── LES QUATRE LIMITROPHES ──────────────────────────────────────────────────────────────
         //
-        // Ses taux particuliers (CGI art. 297) ne forment pas un bareme alternatif : ce sont des
-        // taux attaches a des OPERATIONS precises — 0,90 % sur les premieres representations,
-        // 2,10 % sur certains travaux, 13 % sur les produits petroliers — par-dessus le bareme
-        // metropolitain qui continue de s'appliquer partout ailleurs.
+        // ⚠ CE QUI SUIT NE VIENT PAS DE MA CONNAISSANCE : chaque valeur est celle de l'export
+        // TEDB, et chaque `source` est le texte que TEDB cite lui-meme dans son champ `comments`,
+        // taux par taux. Ce que l'import automatique ne pouvait pas faire, c'est CHOISIR entre deux
+        // valeurs partageant la cle `Reduced rate` — c'est fait ici, en lisant ce qui les separe.
         //
-        // Notre modele range un taux par categorie et par territoire. Y faire entrer la Corse
-        // demanderait de choisir lequel de ses taux est « le reduit », ce qui n'a pas de sens.
-        // C'est un besoin de modele (un taux attache a une operation), pas une ligne a semer.
+        // L'Allemagne et l'Espagne ne figurent pas dans cette liste : leurs cles ne rendent qu'une
+        // valeur chacune, donc `vat:import-tedb` les a deja posees sans ambiguite (DE 19/7,
+        // ES 21/10/4). Rien a semer a la main la ou la source suffit.
+
+        // Belgique — deux tableaux distincts de l'arrete royal n°20, donc deux taux distincts.
+        [
+            'country' => 'BE',
+            'territory' => '',
+            'category' => VatRateCategory::Reduced,
+            'rate' => '12.00',
+            'label' => 'Taux reduit — tableau B (margarine, charbon, logement social)',
+            'from' => '2014-01-01',
+            'until' => null,
+            'source' => 'Arrete royal n° 20, tableau B (cite par TEDB)',
+        ],
+        [
+            'country' => 'BE',
+            'territory' => '',
+            'category' => VatRateCategory::SecondReduced,
+            'rate' => '6.00',
+            'label' => 'Taux reduit — tableau A (alimentation, livres, transport, medicaments)',
+            'from' => '2014-01-01',
+            'until' => null,
+            'source' => 'Arrete royal n° 20, tableau A (cite par TEDB)',
+        ],
+
+        // Italie — deux parties distinctes de la Tabella A, donc deux taux distincts. Le 4 % est
+        // deja pose par l'import : sa cle `Super-reduced rate` ne rend qu'une valeur.
+        [
+            'country' => 'IT',
+            'territory' => '',
+            'category' => VatRateCategory::Reduced,
+            'rate' => '10.00',
+            'label' => 'Aliquota ridotta — Tabella A parte III (electricite, restauration, tourisme)',
+            'from' => '2014-01-01',
+            'until' => null,
+            'source' => 'DPR 633/1972, Tabella A parte III (cite par TEDB)',
+        ],
+        [
+            'country' => 'IT',
+            'territory' => '',
+            'category' => VatRateCategory::SecondReduced,
+            'rate' => '5.00',
+            'label' => 'Aliquota ridotta — Tabella A parte II-bis (services sociaux, diagnostic)',
+            'from' => '2014-01-01',
+            'until' => null,
+            'source' => 'DPR 633/1972, Tabella A parte II-bis (cite par TEDB)',
+        ],
+
+        // Luxembourg. ⚠ SON 14 % N'EST PAS UN TAUX REDUIT, ET TEDB LE DIT DANS SON PROPRE
+        // COMMENTAIRE — « Parking rate Solid mineral fuels; mineral oils » — alors qu'il le range
+        // sous la cle `Reduced rate`. L'import l'a deja pose comme parking, via la cle
+        // `Parking rate` qui rend la meme valeur. On ne le repose donc pas ici : ce serait un
+        // second 14 % luxembourgeois, dans une autre categorie, pour le meme taux reel.
+        [
+            'country' => 'LU',
+            'territory' => '',
+            'category' => VatRateCategory::Reduced,
+            'rate' => '8.00',
+            'label' => 'Taux reduit — gaz, electricite, travaux de logement',
+            'from' => '2014-01-01',
+            'until' => null,
+            'source' => 'Loi TVA du 12 fevrier 1979, art. 40 (cite par TEDB)',
+        ],
+        [
+            'country' => 'LU',
+            'territory' => '',
+            'category' => VatRateCategory::SuperReduced,
+            'rate' => '3.00',
+            'label' => 'Taux super-reduit — alimentation, livres, transport, restauration',
+            'from' => '2014-01-01',
+            'until' => null,
+            'source' => 'Loi TVA du 12 fevrier 1979, art. 40 (cite par TEDB)',
+        ],
+
+        // ⚠ LA CORSE N'Y EST PAS, ET LA RAISON EST MAINTENANT CHIFFREE.
+        //
+        // Un territoire declare son BAREME COMPLET (voir `LegalVatRateRepository::baremeComplet()`).
+        // Celui de la Corse compte SIX taux : 20 % (droit commun, art. 278), 13 % (produits
+        // petroliers), 10 % (travaux, materiel agricole), 5,5 % (droit commun), 2,10 % (certaines
+        // operations) et 0,90 % (premieres representations, ventes d'animaux vivants) — CGI
+        // art. 297, et TEDB les rend tous les six sous la meme cle `Reduced rate`.
+        //
+        // Notre modele offre CINQ cases par territoire : standard, parking, reduit, second reduit,
+        // super reduit. Six valeurs n'y entrent pas. En laisser une dehors serait choisir laquelle
+        // disparait, et le catalogue corse aurait l'air complet sans l'etre.
+        //
+        // Ce n'est donc pas une ligne a semer mais un besoin de MODELE : un taux attache a une
+        // operation, pas a une categorie. Consigne ici plutot qu'ailleurs parce que c'est ici qu'on
+        // viendra chercher « pourquoi la Corse manque ».
     ];
 
     public function __construct(private readonly EntityManagerInterface $em)
