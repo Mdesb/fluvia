@@ -325,6 +325,21 @@ for _ in $(seq 1 "$TENTATIVES_CHARGE"); do
     sleep 2
 done
 
+# ⚠ UN SUCCES MUET EST INDISCERNABLE D'UN CONTROLE SAUTE.
+#
+# Les deux blocs ci-dessous ne parlaient QUE pour echouer. Leur silence voulait dire « passe » — mais
+# il ressemble trait pour trait a un bloc qu'une modification aurait rendu inatteignable. L'en-tete de
+# ce fichier dit deja la moitie de la regle : « une garde contre les echecs muets qui echoue muette
+# ne vaut rien ». L'autre moitie est ici.
+#
+# On nomme donc les deux commits compares, meme quand ils concordent : c'est ce qui permet de lire
+# un journal de deploiement et de savoir que la verification a EU LIEU.
+if [ "$CHARGE" = "$COMMIT_DEPLOYE" ] && [ "$SERVI" = "$COMMIT_DEPLOYE" ]; then
+    echo "  ✓ les deux boucles ont bouclé sur $COMMIT_DEPLOYE"
+    echo "      servi par $URL_PUBLIQUE : $SERVI"
+    echo "      chargé par PHP          : $CHARGE"
+fi
+
 if [ "$CHARGE" != "$COMMIT_DEPLOYE" ]; then
     echo
     echo "✗ PHP ne sert pas le code qu'on vient de déployer."
