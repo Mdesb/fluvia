@@ -233,7 +233,11 @@ N_AVERT="$(grep -c "<warning" "$TRAVAIL/mustang.txt" || true)"
 if [ "${N_AVERT:-0}" != "0" ]; then
     echo
     echo "  ⚠ ${N_AVERT} avertissement(s) du profil FRANÇAIS — non bloquants ici, à traiter avant un dépôt réel :"
-    grep -oE "BR-FR-[0-9]+/BT-[0-9]+ : [^[]*" "$TRAVAIL/mustang.txt" | sort -u | head -8 | sed "s/^/      /"
+    # ⚠ `|| true` : ce grep ECHOUE quand il ne trouve plus aucune regle francaise — c'est-a-dire
+    # quand tout va bien. Sous `set -e`, le script sortait en erreur au moment precis ou il
+    # n'avait plus rien a reprocher : une garde qui meurt de son propre succes.
+    grep -oE "BR-FR-[0-9]+/BT-[0-9]+ : [^[]*" "$TRAVAIL/mustang.txt" | sort -u | head -8 | sed "s/^/      /" || true
+    grep -oE "PEPPOL-EN16931-R[0-9]+" "$TRAVAIL/mustang.txt" | sort -u | head -4 | sed "s/^/      /" || true
 fi
 
 echo

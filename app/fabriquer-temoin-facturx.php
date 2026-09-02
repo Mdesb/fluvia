@@ -19,6 +19,7 @@ use App\Compta\Entity\TauxTva;
 use App\Compta\Enum\VatCategory;
 use App\Facturation\Einvoicing\CiiSerializer;
 use App\Facturation\Einvoicing\FacturXAssembler;
+use App\Facturation\Einvoicing\InvoiceMentions;
 use App\Facturation\Einvoicing\InvoiceReadiness;
 use App\Facturation\Entity\DestinataireFacturation;
 use App\Facturation\Entity\Facture;
@@ -30,11 +31,13 @@ $profil = (new ProfilExploitant())
     ->setRaisonSociale('Regie des Sports')
     ->setSiren('130025265')
     ->setTvaIntracommunautaire('FR12130025265')
-    ->setAdresse(['rue' => '2 rue du Port', 'cp' => '34200', 'ville' => 'Sete', 'pays' => 'FR']);
+    ->setAdresse(['rue' => '2 rue du Port', 'cp' => '34200', 'ville' => 'Sete', 'pays' => 'FR'])
+    ->setElectronicAddress('facturation@regie-des-sports.test');
 
 $destinataire = (new DestinataireFacturation())
     ->setRaisonSociale('Commune de Test')
-    ->setAdresse(['rue' => '1 rue de la Mairie', 'cp' => '75001', 'ville' => 'Paris', 'pays' => 'FR']);
+    ->setAdresse(['rue' => '1 rue de la Mairie', 'cp' => '75001', 'ville' => 'Paris', 'pays' => 'FR'])
+    ->setElectronicAddress('compta@commune-de-test.test');
 
 $taux = (new TauxTva())
     ->setLibelle('Taux normal 20 %')
@@ -67,7 +70,28 @@ $html = '<html><head><meta charset="utf-8"><style>body{font-family:DejaVu Sans,s
     . '<p>Total HT 75,00 &mdash; TVA 15,00 &mdash; Total TTC 90,00</p>'
     . '</body></html>';
 
-$assembleur = new FacturXAssembler(new CiiSerializer(new InvoiceReadiness()));
+/*
+ * ⚠ LES TROIS MENTIONS PORTENT UN TEXTE VISIBLEMENT DE DEMONSTRATION.
+ *
+ * BR-FR-05 exige trois notes (PMT, PMD, AAB). Ce temoin doit prouver que le serialiseur les EMET,
+ * pas fournir une redaction. Les phrases ci-dessous disent explicitement qu'elles sont a rediger :
+ * si ce fichier finissait par erreur devant un client, il se denoncerait lui-meme.
+ *
+ * En production, ces textes viennent de `ParametreFacturationEtablissement`, ecrits par l'exploitant.
+ */
+$mentions = new class implements InvoiceMentions {
+    public function pour(Facture $facture): array
+    {
+        return [
+            'PMT' => 'TEXTE DE DEMONSTRATION — la mention des frais de recouvrement reste a rediger par l exploitant.',
+            'PMD' => 'TEXTE DE DEMONSTRATION — la mention des penalites de retard reste a rediger par l exploitant.',
+            'AAB' => 'TEXTE DE DEMONSTRATION — la mention d escompte reste a rediger par l exploitant.',
+        ];
+    }
+};
+
+$serialiseur = new CiiSerializer(new InvoiceReadiness(), $mentions);
+$assembleur = new FacturXAssembler($serialiseur);
 
 $sortie = $argv[1] ?? '/tmp/temoin-facturx.pdf';
 file_put_contents($sortie, $assembleur->assemble($html, $facture));
@@ -76,6 +100,6 @@ printf("%s ecrit (%d octets)%s", $sortie, filesize($sortie), PHP_EOL);
 
 // Le XML seul, pour le schematron.
 $xmlSortie = preg_replace('/\.pdf$/', '.xml', $sortie) ?? $sortie . '.xml';
-file_put_contents($xmlSortie, (new CiiSerializer(new InvoiceReadiness()))->serialize($facture));
+file_put_contents($xmlSortie, $serialiseur->serialize($facture));
 
 printf("%s ecrit (%d octets)%s", $xmlSortie, filesize($xmlSortie), PHP_EOL);

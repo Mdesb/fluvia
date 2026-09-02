@@ -9,6 +9,7 @@ use App\Compta\Entity\TauxTva;
 use App\Compta\Enum\VatCategory;
 use App\Facturation\Einvoicing\CiiSerializer;
 use App\Facturation\Einvoicing\InvoiceNotEmittableException;
+use App\Facturation\Einvoicing\InvoiceMentions;
 use App\Facturation\Einvoicing\InvoiceReadiness;
 use App\Facturation\Entity\DestinataireFacturation;
 use App\Facturation\Entity\Facture;
@@ -215,6 +216,113 @@ final class CiiSerializerTest extends TestCase
         $noeuds = $xpath->query('//ram:SellerTradeParty/ram:Name');
         self::assertNotFalse($noeuds);
         self::assertSame('Dupont & Fils <SARL>', $noeuds->item(0)?->nodeValue);
+    }
+
+    // ── BG-1 : les trois mentions du profil francais ────────────────────────────────────────────
+
+    /**
+     * ⚠ SANS FOURNISSEUR, AUCUNE NOTE — ET C'EST LE COMPORTEMENT VOULU.
+     *
+     * Le serialiseur marche sans acces a la base : ses tests assemblent une facture en memoire. Une
+     * note vide satisferait la presence de la balise et affirmerait au client des conditions
+     * blanches ; l'absence, elle, se voit dans le rapport de validation.
+     */
+    public function testSansFournisseurAucuneNoteNEstEcrite(): void
+    {
+        $xpath = $this->xpath($this->serialiseur->serialize($this->factureComplete()));
+
+        $notes = $xpath->query('//rsm:ExchangedDocument/ram:IncludedNote');
+        self::assertNotFalse($notes);
+        self::assertSame(0, $notes->length);
+    }
+
+    /**
+     * BR-FR-05 / BT-22 — les trois notes, chacune avec son code sujet.
+     *
+     * Mesure du 02/09 : sans elles, le validateur Factur-X rendait trois avertissements du profil
+     * francais. Avec, il n'en rend plus aucun.
+     */
+    public function testLesTroisMentionsSortentAvecLeurCodeSujet(): void
+    {
+        $serialiseur = new CiiSerializer(new InvoiceReadiness(), $this->mentions([
+            'PMT' => 'Frais de recouvrement : texte de test.',
+            'PMD' => 'Penalites de retard : texte de test.',
+            'AAB' => 'Escompte : texte de test.',
+        ]));
+
+        $xpath = $this->xpath($serialiseur->serialize($this->factureComplete()));
+
+        $codes = [];
+        $noeuds = $xpath->query('//rsm:ExchangedDocument/ram:IncludedNote/ram:SubjectCode');
+        self::assertNotFalse($noeuds);
+        foreach ($noeuds as $n) {
+            $codes[] = trim((string) $n->nodeValue);
+        }
+
+        self::assertSame(['PMT', 'PMD', 'AAB'], $codes);
+    }
+
+    /**
+     * ⚠ UNE MENTION VIDE N'EST PAS UNE MENTION.
+     *
+     * Sans ce test, `testLesTroisMentionsSortent…` passerait aussi si le serialiseur ecrivait une
+     * note pour chaque cle, remplie ou non — et le client recevrait une facture affirmant des
+     * conditions blanches. C'est la difference entre « la balise est la » et « quelque chose est
+     * dit ».
+     */
+    public function testUneMentionVideNeProduitAucuneNote(): void
+    {
+        $serialiseur = new CiiSerializer(new InvoiceReadiness(), $this->mentions([
+            'PMT' => 'Seule celle-ci est redigee.',
+            'PMD' => '',
+            'AAB' => null,
+        ]));
+
+        $xpath = $this->xpath($serialiseur->serialize($this->factureComplete()));
+
+        $notes = $xpath->query('//rsm:ExchangedDocument/ram:IncludedNote');
+        self::assertNotFalse($notes);
+        self::assertSame(1, $notes->length, 'une chaine vide et un null ne sont pas des mentions');
+    }
+
+    /**
+     * ⚠ L'ORDRE DANS LA SEQUENCE : les notes viennent APRES la date d'emission.
+     *
+     * CII est une syntaxe a sequence. Une note ecrite plus haut produit un fichier que le SCHEMA
+     * refuse, avant meme le schematron — et les tests de contenu passeraient quand meme.
+     */
+    public function testLesNotesViennentApresLaDateDEmission(): void
+    {
+        $serialiseur = new CiiSerializer(new InvoiceReadiness(), $this->mentions(['PMT' => 'x']));
+        $xpath = $this->xpath($serialiseur->serialize($this->factureComplete()));
+
+        $doc = $xpath->query('//rsm:ExchangedDocument')?->item(0);
+        self::assertNotNull($doc);
+
+        $noms = [];
+        foreach ($doc->childNodes as $enfant) {
+            if ($enfant instanceof \DOMElement) {
+                $noms[] = $enfant->localName;
+            }
+        }
+
+        self::assertSame(['ID', 'TypeCode', 'IssueDateTime', 'IncludedNote'], $noms);
+    }
+
+    /** @param array<string, string|null> $textes */
+    private function mentions(array $textes): InvoiceMentions
+    {
+        return new class($textes) implements InvoiceMentions {
+            /** @param array<string, string|null> $textes */
+            public function __construct(private readonly array $textes)
+            {
+            }
+
+            public function pour(Facture $facture): array
+            {
+                return $this->textes;
+            }
+        };
     }
 
     // ---------------------------------------------------------------- montage

@@ -22,7 +22,36 @@ import { api, membres } from '../api/client.js'
 // crée s'il n'y a rien. Proposer un sélecteur de profil sur un écran de réglages ferait porter à
 // l'exploitant une question dont il n'a pas les éléments — et permettrait de régler le voisin.
 
+// LES TROIS MENTIONS QUE LE PROFIL FRANCAIS EXIGE SUR CHAQUE FACTURE ELECTRONIQUE.
+//
+// BR-FR-05 (XP Z12-012) impose trois notes : frais de recouvrement, penalites de retard, escompte.
+// Mesure du 02/09 : sans elles, le validateur Factur-X rend trois avertissements — non bloquants
+// pour lui, bloquants pour un depot reel.
+//
+// ⚠ LES EXEMPLES CI-DESSOUS SONT DES SUGGESTIONS AFFICHEES, PAS DES VALEURS ENREGISTREES.
+//
+// Un defaut stocke partirait sur de vraies factures sans que personne l'ait lu — une clause
+// opposable ecrite par le logiciel. Le placeholder montre la formulation d'usage et laisse
+// l'exploitant la reprendre ou ecrire la sienne. La difference tient a un geste : il faut la valider.
 const CHAMPS_TEXTE = [
+  {
+    nom: 'mentionRecouvrement',
+    libelle: 'Mention — frais de recouvrement',
+    aide: 'Obligatoire sur la facture electronique (code PMT). Sans elle, la facture est refusee au depot.',
+    exemple: 'Tout retard de paiement entraine une indemnite forfaitaire pour frais de recouvrement de 40 €.',
+  },
+  {
+    nom: 'mentionPenalitesRetard',
+    libelle: 'Mention — penalites de retard',
+    aide: 'Obligatoire (code PMD). Le taux se regle plus bas ; ici on ecrit la phrase qui parait sur la facture.',
+    exemple: 'En cas de retard de paiement, des penalites sont exigibles sans qu un rappel soit necessaire.',
+  },
+  {
+    nom: 'mentionEscompte',
+    libelle: 'Mention — escompte',
+    aide: 'Obligatoire (code AAB), y compris pour dire qu il n y en a pas.',
+    exemple: 'Aucun escompte n est accorde pour paiement anticipe.',
+  },
   {
     nom: 'conditionsReglementDefaut',
     libelle: 'Conditions de règlement',
@@ -86,6 +115,9 @@ export default function ParametresFacturation({ peutModifier }) {
         tauxPenaliteRetard: valeurs.tauxPenaliteRetard === '' ? null : String(valeurs.tauxPenaliteRetard),
         indemniteForfaitaireRecouvrement: String(valeurs.indemniteForfaitaireRecouvrement),
         mentionTvaSpecifique: valeurs.mentionTvaSpecifique === '' ? null : valeurs.mentionTvaSpecifique,
+        mentionRecouvrement: valeurs.mentionRecouvrement === '' ? null : valeurs.mentionRecouvrement,
+        mentionPenalitesRetard: valeurs.mentionPenalitesRetard === '' ? null : valeurs.mentionPenalitesRetard,
+        mentionEscompte: valeurs.mentionEscompte === '' ? null : valeurs.mentionEscompte,
         chorusProActif: !!valeurs.chorusProActif,
       }
 
@@ -242,6 +274,11 @@ function depuis(p) {
     tauxPenaliteRetard: p?.tauxPenaliteRetard ?? '',
     indemniteForfaitaireRecouvrement: p?.indemniteForfaitaireRecouvrement ?? '40.00',
     mentionTvaSpecifique: p?.mentionTvaSpecifique ?? '',
+    // ⚠ Aucune valeur par defaut : une clause non ecrite reste VIDE, et le rapport de
+    // validation la reclame. Un defaut partirait sur de vraies factures sans relecture.
+    mentionRecouvrement: p?.mentionRecouvrement ?? '',
+    mentionPenalitesRetard: p?.mentionPenalitesRetard ?? '',
+    mentionEscompte: p?.mentionEscompte ?? '',
     chorusProActif: !!p?.chorusProActif,
   }
 }

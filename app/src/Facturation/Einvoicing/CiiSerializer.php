@@ -56,6 +56,15 @@ final class CiiSerializer
 
     public function __construct(
         private readonly InvoiceReadiness $readiness,
+        /**
+         * D'ou viennent les trois mentions obligatoires du profil francais.
+         *
+         * ⚠ NULLABLE, ET LE SERIALISEUR MARCHE SANS. Les tests unitaires construisent une facture en
+         * memoire, sans base : exiger un fournisseur ici les obligerait a monter un conteneur pour
+         * verifier une concatenation XML. Sans fournisseur, les notes sont absentes — et le
+         * validateur le signale, ce qui est le bon comportement.
+         */
+        private readonly ?InvoiceMentions $mentions = null,
     ) {
     }
 
@@ -114,7 +123,48 @@ final class CiiSerializer
         $emission->appendChild($date);
         $doc->appendChild($emission);
 
+        // ── BG-1 : LES NOTES, ET LEUR ORDRE DANS LA SEQUENCE ────────────────────────────────────
+        //
+        // ⚠ APRES `IssueDateTime`, JAMAIS AVANT. CII est une syntaxe a sequence ; une note placee
+        // plus haut produit un fichier que le schema refuse, avant meme le schematron.
+        //
+        // Le profil francais (BR-FR-05) exige trois notes identifiees par leur code sujet : PMT pour
+        // les frais de recouvrement, PMD pour les penalites de retard, AAB pour l'escompte ou son
+        // absence. Chacune est absente tant que l'exploitant n'a pas ecrit SON texte — le produit
+        // fournit le vehicule, pas la formulation d'une clause qui engage.
+        foreach ($this->notes($facture) as [$code, $texte]) {
+            $note = $dom->createElementNS(self::NS_RAM, 'ram:IncludedNote');
+            $note->appendChild($this->texte($dom, 'ram:Content', $texte));
+            $note->appendChild($dom->createElementNS(self::NS_RAM, 'ram:SubjectCode', $code));
+            $doc->appendChild($note);
+        }
+
         return $doc;
+    }
+
+    /**
+     * Les mentions renseignees, avec leur code sujet.
+     *
+     * ⚠ ON N'EMET QUE CE QUI EST ECRIT. Une note vide satisferait la presence de la balise et ne
+     * dirait rien au lecteur — le client recevrait une facture affirmant des conditions blanches.
+     * L'absence reste visible dans le rapport de validation, ou elle nomme ce qu'il faut rediger.
+     *
+     * @return list<array{0: string, 1: string}>
+     */
+    private function notes(Facture $facture): array
+    {
+        if ($this->mentions === null) {
+            return [];
+        }
+
+        $notes = [];
+        foreach ($this->mentions->pour($facture) as $code => $texte) {
+            if (is_string($texte) && trim($texte) !== '') {
+                $notes[] = [$code, trim($texte)];
+            }
+        }
+
+        return $notes;
     }
 
     /**
@@ -247,6 +297,10 @@ final class CiiSerializer
 
         $vendeur->appendChild($this->adresse($dom, (array) $profil?->getAdresse()));
 
+        // ⚠ BT-34 — ENTRE L'ADRESSE POSTALE ET L'ENREGISTREMENT DE TVA. CII est une sequence :
+        // l'ecrire ailleurs produit un fichier que le schema refuse, avant meme le schematron.
+        $this->adresseElectronique($dom, $vendeur, $profil?->getElectronicAddress());
+
         $tva = $dom->createElementNS(self::NS_RAM, 'ram:SpecifiedTaxRegistration');
         $idTva = $dom->createElementNS(self::NS_RAM, 'ram:ID', (string) $profil?->getTvaIntracommunautaire());
         $idTva->setAttribute('schemeID', 'VA');
@@ -259,9 +313,35 @@ final class CiiSerializer
         $acheteur = $dom->createElementNS(self::NS_RAM, 'ram:BuyerTradeParty');
         $acheteur->appendChild($this->texte($dom, 'ram:Name', (string) $destinataire?->getRaisonSociale()));
         $acheteur->appendChild($this->adresse($dom, (array) $destinataire?->getAdresse()));
+        // BT-49 — meme regle de sequence que pour le vendeur.
+        $this->adresseElectronique($dom, $acheteur, $destinataire?->getElectronicAddress());
         $accord->appendChild($acheteur);
 
         return $accord;
+    }
+
+    /**
+     * BT-34 / BT-49 — l'adresse a laquelle la facture electronique est ROUTEE.
+     *
+     * ⚠ ON N'ECRIT RIEN QUAND ELLE MANQUE, ET C'EST DELIBERE. Une balise `ram:URIID` vide
+     * satisferait la presence de l'element et serait refusee a l'arrivee : une adresse de routage
+     * vide n'achemine rien. L'absence reste visible dans le rapport de validation, ou elle nomme ce
+     * qu'il faut saisir — plutot que d'etre remplacee par une coquille qui a l'air remplie.
+     *
+     * `EM` designe une adresse de courriel dans la liste des schemas d'identifiants.
+     */
+    private function adresseElectronique(\DOMDocument $dom, \DOMElement $partie, ?string $adresse): void
+    {
+        if ($adresse === null || trim($adresse) === '') {
+            return;
+        }
+
+        $noeud = $dom->createElementNS(self::NS_RAM, 'ram:URIUniversalCommunication');
+        $uri = $dom->createElementNS(self::NS_RAM, 'ram:URIID');
+        $uri->setAttribute('schemeID', 'EM');
+        $uri->appendChild($dom->createTextNode($adresse));
+        $noeud->appendChild($uri);
+        $partie->appendChild($noeud);
     }
 
     /** @param array<string, mixed> $adresse */

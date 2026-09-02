@@ -74,6 +74,37 @@ class DestinataireFacturation
     #[Groups(['facture:read', 'destinataire:read', 'destinataire:write'])]
     private bool $estOrganismePublic = false;
 
+    /**
+     * BT-49 — l'adresse electronique de l'acheteur, au sens d'EN 16931.
+     *
+     * ⚠ LE PROFIL FRANCAIS L'EXIGE, ET AUCUN CHAMP NE LA PORTAIT. Mesure du 02/09 avec le validateur
+     * Factur-X : « BR-FR-12/BT-49 : Le BT-49 est obligatoire. Valeur actuelle : "" ». Ce n'etait pas
+     * un defaut du serialiseur — la donnee n'existait nulle part dans le modele.
+     *
+     * ⚠ NULLABLE, ET SANS DEFAUT. Une adresse electronique ne se devine pas : ni depuis le courriel
+     * d'un utilisateur, ni depuis un nom de domaine. La poser vide laisse le manque VISIBLE dans le
+     * rapport de validation, la ou un defaut plausible le ferait taire (D66-ter).
+     *
+     * C'est l'adresse a laquelle la facture electronique est ROUTEE — pas forcement celle d'un
+     * humain qui lit ses courriels.
+     */
+    #[ORM\Column(length: 255, nullable: true)]
+    #[Assert\Email]
+    #[Groups(['facture:read'])]
+    private ?string $electronicAddress = null;
+
+    public function getElectronicAddress(): ?string
+    {
+        return $this->electronicAddress;
+    }
+
+    public function setElectronicAddress(?string $electronicAddress): self
+    {
+        $this->electronicAddress = $electronicAddress;
+
+        return $this;
+    }
+
     public function __construct()
     {
         $this->id = Uuid::v4();
