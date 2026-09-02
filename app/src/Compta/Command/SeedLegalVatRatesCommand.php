@@ -268,13 +268,28 @@ final class SeedLegalVatRatesCommand extends Command
             $deja,
         ));
 
-        // ⚠ On le dit a chaque execution, et pas seulement dans la documentation : quelqu'un qui
+        // ⚠ ON LE DIT A CHAQUE EXECUTION, et pas seulement dans la documentation : quelqu'un qui
         // lance cette commande croira le referentiel complet s'il n'entend pas le contraire.
-        $io->warning(
-            'Seule la France est semee. Les autres Etats membres demandent une source verifiee : '
-            . 'un taux legal faux se reprend en confiance et finit sur des factures, alors qu\'un '
-            . 'taux absent se saisit a la main comme aujourd\'hui.'
-        );
+        //
+        // ⚠ ET CE MESSAGE SE CALCULE, IL NE SE RECITE PAS. Il disait « Seule la France est semee »
+        // — vrai le 01/09, faux le 02/09 des que l'Espagne et les DOM ont ete ajoutes, et rien
+        // n'aurait signale le decalage : une phrase qui DECRIT un etat devient un mensonge le jour
+        // ou l'etat change, et personne ne relit un avertissement qu'il a deja lu dix fois.
+        $paysSemes = array_values(array_unique(array_map(
+            static fn (array $l): string => $l['country'] . ($l['territory'] === '' ? '' : '/' . $l['territory']),
+            self::RATES,
+        )));
+        sort($paysSemes);
+
+        $io->warning(sprintf(
+            'Cette commande ne seme que : %s. Les autres Etats membres n en font PAS partie et '
+            . 'demandent une source verifiee — un taux legal faux se reprend en confiance et finit '
+            . 'sur des factures, alors qu un taux absent se saisit a la main.',
+            implode(', ', $paysSemes),
+        ));
+
+        $io->writeln('  Les taux STANDARD des 27 Etats membres s importent separement, depuis un');
+        $io->writeln('  export officiel : <info>./infra/recuperer-taux-tva-ue.sh</info> puis <info>vat:import-tedb</info>.');
 
         return Command::SUCCESS;
     }
