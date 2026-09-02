@@ -347,6 +347,17 @@ function Mandats({ mandats, peutGerer, onCreer }) {
             La « prochaine séquence » est ce que la banque lira dans le fichier : une première
             collecte (FRST) et une suivante (RCUR) ne suivent pas le même circuit de contrôle, et
             c&rsquo;est le serveur qui la calcule — elle ne se corrige pas à la main.
+            {/* ⚠ SANS CETTE PHRASE, LE ZÉRO DE « COLLECTES » SE LIT COMME UN ÉCHEC.
+                Un mandat présenté dans une remise transmise affiche quand même 0, parce que
+                transmettre un pain.008 n'est pas collecter : la collecte se confirme des jours plus
+                tard, par l'absence de rejet ou par un crédit CAMT. Rien n'incrémente donc ce
+                compteur tant qu'aucun collecteur réel n'est raccordé — vérifié, aucun appel dans le
+                dépôt. Le jour du raccordement, cette phrase deviendra fausse, et c'est voulu :
+                elle nomme ce qui la périmera. */}
+            <br />
+            « Collectes » ne compte que les prélèvements <em>confirmés</em> par la banque. Aucun
+            collecteur n&rsquo;étant raccordé, il reste à zéro même après l&rsquo;envoi d&rsquo;une
+            remise — transmettre n&rsquo;est pas encaisser.
           </div>
         )}
       </div>
