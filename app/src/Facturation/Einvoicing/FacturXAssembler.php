@@ -72,9 +72,82 @@ final class FacturXAssembler
      */
     public const NOM_EMBARQUE = 'factur-x.xml';
 
+    /**
+     * L'espace de noms de l'extension XMP Factur-X.
+     *
+     * ⚠ Il ne se choisit pas plus que le nom du fichier : le validateur cherche exactement celui-ci.
+     */
+    private const NS_FACTURX = 'urn:factur-x:pdfa:CrossIndustryDocument:invoice:1p0#';
+
     public function __construct(
         private readonly CiiSerializer $serialiseur,
     ) {
+    }
+
+    /**
+     * Le bloc XMP de Factur-X : ce que le fichier embarqué EST, et la déclaration qui l'autorise.
+     *
+     * ⚠ DEUX DESCRIPTIONS, ET OUBLIER LA SECONDE CASSE LE PDF/A — MESURÉ.
+     *
+     * La première (`fx:`) dit le type, le nom du fichier, la version et le niveau de conformité :
+     * sans elle, le validateur Factur-X rend HUIT erreurs. Je l'ai posée seule, et veraPDF est passé
+     * de `PASS` à `FAIL` :
+     *
+     *     « All properties specified in XMP form shall use either the predefined schemas […]
+     *       or […] be described in an extension schema »
+     *
+     * PDF/A interdit une propriété XMP d'un espace de noms inconnu si rien ne la DÉCRIT. La seconde
+     * description (`pdfaExtension`) est cette déclaration : elle dit au lecteur d'archive ce que
+     * `fx:DocumentType` signifie, sans quoi le document n'est plus auto-descriptif — ce qui est la
+     * raison d'être de PDF/A.
+     *
+     * ⚠ C'est le cas d'école de deux validateurs qui ne posent pas la même question. Satisfaire l'un
+     * a cassé l'autre, et un seul des deux l'aurait laissé passer en silence.
+     */
+    /**
+     * ⚠ PUBLIQUE POUR ETRE TESTABLE, ET C'EST UN CHOIX ASSUME.
+     *
+     * Le XMP finit dans un flux COMPRESSE du PDF : `assertStringContainsString('fx:DocumentType')`
+     * sur les octets du fichier echoue, meme quand le bloc est bien la. Un test qui decompresserait
+     * le flux deviendrait un lecteur de PDF — beaucoup de code pour prouver une concatenation.
+     *
+     * On teste donc la CONSTRUCTION ici, et l'INJECTION dans `infra/valider-facturx.sh`, ou un vrai
+     * validateur lit le PDF fini. Deux moities, deux preuves, chacune par le chemin qui convient.
+     */
+    public function xmpFacturX(): string
+    {
+        $proprietes = '';
+        foreach ([
+            'DocumentType' => 'INVOICE, ORDER, …',
+            'DocumentFileName' => 'nom du fichier XML embarque',
+            'Version' => 'version de la specification Factur-X',
+            'ConformanceLevel' => 'profil : MINIMUM, BASIC, EN 16931, EXTENDED',
+        ] as $nom => $description) {
+            $proprietes .= '<rdf:li rdf:parseType="Resource">'
+                . '<pdfaProperty:name>' . $nom . '</pdfaProperty:name>'
+                . '<pdfaProperty:valueType>Text</pdfaProperty:valueType>'
+                . '<pdfaProperty:category>external</pdfaProperty:category>'
+                . '<pdfaProperty:description>' . $description . '</pdfaProperty:description>'
+                . '</rdf:li>';
+        }
+
+        return '<rdf:Description rdf:about=""'
+            . ' xmlns:pdfaExtension="http://www.aiim.org/pdfa/ns/extension/"'
+            . ' xmlns:pdfaSchema="http://www.aiim.org/pdfa/ns/schema#"'
+            . ' xmlns:pdfaProperty="http://www.aiim.org/pdfa/ns/property#">'
+            . '<pdfaExtension:schemas><rdf:Bag><rdf:li rdf:parseType="Resource">'
+            . '<pdfaSchema:schema>Factur-X PDFA Extension Schema</pdfaSchema:schema>'
+            . '<pdfaSchema:namespaceURI>' . self::NS_FACTURX . '</pdfaSchema:namespaceURI>'
+            . '<pdfaSchema:prefix>fx</pdfaSchema:prefix>'
+            . '<pdfaSchema:property><rdf:Seq>' . $proprietes . '</rdf:Seq></pdfaSchema:property>'
+            . '</rdf:li></rdf:Bag></pdfaExtension:schemas>'
+            . '</rdf:Description>'
+            . '<rdf:Description xmlns:fx="' . self::NS_FACTURX . '" rdf:about="">'
+            . '<fx:DocumentType>INVOICE</fx:DocumentType>'
+            . '<fx:DocumentFileName>' . self::NOM_EMBARQUE . '</fx:DocumentFileName>'
+            . '<fx:Version>1.0</fx:Version>'
+            . '<fx:ConformanceLevel>EN 16931</fx:ConformanceLevel>'
+            . '</rdf:Description>';
     }
 
     /**
@@ -135,6 +208,26 @@ final class FacturXAssembler
             file_put_contents($chemin, $xml);
 
             $cpdf = $canevas->get_cpdf();
+
+            // ⚠ L'EXTENSION XMP FACTUR-X — SANS ELLE, LE PDF EST REFUSE.
+            //
+            // Le PDF/A-3 pose son propre XMP (`pdfaid:part=3`), et ca ne suffit pas : Factur-X exige
+            // en plus un bloc `fx:` qui dit CE QUE le fichier embarque est. Mesure du 02/09 avec le
+            // validateur Factur-X, avant ce bloc : HUIT erreurs, toutes ici —
+            //
+            //     XMP Metadata: ConformanceLevel not found / contains invalid value
+            //     XMP Metadata: DocumentType not found / invalid
+            //     XMP Metadata: DocumentFileName not found / contains invalid value
+            //     XMP Metadata: Version not found / contains invalid value
+            //
+            // ⚠ Et veraPDF disait PASS pendant ce temps. Les deux outils ne repondent pas a la meme
+            // question : « ce PDF est-il un PDF/A-3 conforme ? » et « ce PDF/A-3 est-il un
+            // Factur-X ? ». Un vert sur la premiere ne dit rien de la seconde.
+            //
+            // Le nom du fichier declare ici DOIT etre celui reellement embarque : une plateforme lit
+            // ce champ pour savoir quoi extraire.
+            $cpdf->setAdditionalXmpRdf($this->xmpFacturX());
+
             $cpdf->addEmbeddedFile(
                 $chemin,
                 self::NOM_EMBARQUE,

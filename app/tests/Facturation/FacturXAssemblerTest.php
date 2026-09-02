@@ -111,6 +111,56 @@ final class FacturXAssemblerTest extends TestCase
         self::assertStringNotContainsString('/OutputIntents', $nu);
     }
 
+    /**
+     * ⚠ LES DEUX BLOCS XMP, ET L'UN SANS L'AUTRE CASSE TOUT. MESURE, PAS DEDUIT.
+     *
+     * Le 02/09, le validateur Factur-X rendait HUIT erreurs sur les metadonnees XMP. J'ai pose le
+     * bloc `fx:` qui les nomme — et veraPDF est passe de `PASS` a `FAIL` :
+     *
+     *     « All properties specified in XMP form shall use either the predefined schemas
+     *       […] or […] be described in an extension schema »
+     *
+     * PDF/A interdit une propriete XMP d'un espace de noms inconnu si rien ne la DECRIT. Il faut donc
+     * les deux : `fx:` qui dit ce que le fichier embarque est, et `pdfaExtension` qui declare ce
+     * qu'est `fx:`.
+     *
+     * ⚠ DEUX VALIDATEURS QUI NE POSENT PAS LA MEME QUESTION, ET UN SEUL DES DEUX AURAIT LAISSE
+     * PASSER. C'est la raison d'etre des trois couches d'`infra/valider-facturx.sh`.
+     */
+    public function testLesDeuxBlocsXmpSontPresents(): void
+    {
+        // ⚠ ON LIT LE BLOC CONSTRUIT, PAS LES OCTETS DU PDF. Le XMP finit dans un flux COMPRESSE :
+        // chercher `fx:DocumentType` dans le fichier fini echoue meme quand il y est. L'INJECTION
+        // est prouvee ailleurs, par un vrai validateur — `infra/valider-facturx.sh`.
+        $xmp = $this->assembleur->xmpFacturX();
+
+        self::assertStringContainsString('fx:DocumentType', $xmp, 'le bloc fx: dit ce que le fichier embarque est');
+        self::assertStringContainsString('fx:DocumentFileName', $xmp);
+        self::assertStringContainsString('fx:ConformanceLevel', $xmp);
+
+        self::assertStringContainsString(
+            'pdfaExtension:schemas',
+            $xmp,
+            'sans le schema d extension, PDF/A refuse le bloc fx: — mesure le 02/09',
+        );
+        self::assertStringContainsString('Factur-X PDFA Extension Schema', $xmp);
+    }
+
+    /**
+     * Le nom declare dans le XMP doit etre celui reellement embarque.
+     *
+     * ⚠ Une plateforme lit `fx:DocumentFileName` pour savoir QUOI extraire du PDF. Les deux valeurs
+     * viennent de la meme constante ; ce test garde qu'elles ne divergent pas le jour ou quelqu'un
+     * ecrira l'une des deux en dur.
+     */
+    public function testLeNomDeclareEstCeluiEmbarque(): void
+    {
+        self::assertStringContainsString(
+            '<fx:DocumentFileName>' . FacturXAssembler::NOM_EMBARQUE . '</fx:DocumentFileName>',
+            $this->assembleur->xmpFacturX(),
+        );
+    }
+
     // ---------------------------------------------------------------- montage
 
     private function html(): string

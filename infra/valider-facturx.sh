@@ -169,10 +169,72 @@ fi
 echo "  ✓ EN 16931 : aucune règle enfreinte, et les deux témoins se comportent comme attendu."
 
 echo
-echo "── Couche 3 : Factur-X (FNFE) — NON EXÉCUTÉE ──"
-echo
-echo "  ⚠ Le COUPLE n'a pas été soumis au validateur de la FNFE. Les deux couches ci-dessus disent"
-echo "    que l'enveloppe est un PDF/A-3B conforme et que le XML respecte EN 16931 ; elles ne disent"
-echo "    pas que le profil Factur-X français les accepte ensemble."
+echo "── Couche 3 : Factur-X (Mustangproject 2.26.0) ──"
+
+MUSTANG="$VALIDATEURS/Mustang-CLI-2.26.0.jar"
+
+if [ ! -f "$MUSTANG" ]; then
+    echo "  ✗ NON EXÉCUTÉE — $MUSTANG absent."
+    echo "    Le contrôle n'a PAS tourné : ne pas lire l'absence de rouge comme un vert."
+    exit 1
+fi
+
+cp "$TRAVAIL/facturx.pdf" "$VALIDATEURS/a-valider.pdf"
+cp "$TRAVAIL/temoin-negatif.pdf" "$VALIDATEURS/temoin-negatif.pdf"
+
+mustang() {
+    docker run --rm --network none -v "$VALIDATEURS:/v" -w /v "$JRE"         java -jar /v/Mustang-CLI-2.26.0.jar --action validate --source "/v/$1" 2>&1
+}
+
+# ⚠ ON LIT LES VERDICTS PAR SECTION, JAMAIS LE RÉSUMÉ GLOBAL.
+#
+# Mesuré le 02/09 : le rapport rendait `<summary status="valid"/>` au niveau document alors que sa
+# section `<pdf>` disait `invalid` avec huit erreurs. Un outil peut mentir comme un test peut mentir ;
+# on interroge la partie qui répond à la question qu'on pose.
+section() {
+    python3 "$RACINE/infra/lire-verdict-facturx.py" "$1"
+}
+
+
+# ⚠ `|| true` EST INDISPENSABLE, ET IL A ETE APPRIS EN CASSANT CE SCRIPT. Le validateur sort en
+# ERREUR pour un fichier invalide — ce qui est exactement ce qu'on lui demande sur le temoin. Sous
+# `set -euo pipefail`, cet echec ATTENDU tuait le script avant la moindre ligne de verdict, et la
+# couche 3 s'arretait juste apres son titre. Une garde qui meurt de ce qu'elle mesure ne mesure rien.
+mustang a-valider.pdf > "$TRAVAIL/mustang.txt" || true
+mustang temoin-negatif.pdf > "$TRAVAIL/mustang-temoin.txt" || true
+
+PDF_NOTRE="$(section < "$TRAVAIL/mustang.txt" pdf)"
+XML_NOTRE="$(section < "$TRAVAIL/mustang.txt" xml)"
+PDF_TEMOIN="$(section < "$TRAVAIL/mustang-temoin.txt" pdf)"
+
+echo "  NOTRE facture  : pdf=${PDF_NOTRE:-?}  xml=${XML_NOTRE:-?}"
+echo "  témoin (PDF nu): pdf=${PDF_TEMOIN:-?}   ← doit être invalid"
+
+if [ "$PDF_TEMOIN" != "invalid" ]; then
+    echo
+    echo "✗ INSTRUMENT MORT : un PDF ordinaire est déclaré valide comme Factur-X."
+    echo "  Le verdict sur notre facture est ANNULÉ."
+    exit 1
+fi
+
+if [ "$PDF_NOTRE" != "valid" ] || [ "$XML_NOTRE" != "valid" ]; then
+    echo
+    echo "✗ Le Factur-X est refusé :"
+    grep -oE "ERROR [^\"]*" "$TRAVAIL/mustang.txt" | head -10 | sed "s/^/    /"
+    exit 1
+fi
+
+echo "  ✓ Factur-X : les deux sections valides, et un PDF ordinaire est bien refusé."
+
+# ⚠ LES AVERTISSEMENTS NE SONT PAS DU BRUIT : c'est le profil FRANÇAIS (BR-FR, XP Z12-012).
+# Ils ne bloquent pas ce validateur aujourd'hui et bloqueront un dépôt réel. Les taire ferait croire
+# qu'il ne reste rien à faire.
+N_AVERT="$(grep -c "<warning" "$TRAVAIL/mustang.txt" || true)"
+if [ "${N_AVERT:-0}" != "0" ]; then
+    echo
+    echo "  ⚠ ${N_AVERT} avertissement(s) du profil FRANÇAIS — non bloquants ici, à traiter avant un dépôt réel :"
+    grep -oE "BR-FR-[0-9]+/BT-[0-9]+ : [^[]*" "$TRAVAIL/mustang.txt" | sort -u | head -8 | sed "s/^/      /"
+fi
+
 echo
 echo "  Fichiers conservés : $TRAVAIL et $VALIDATEURS"
