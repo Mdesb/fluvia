@@ -118,30 +118,83 @@ final class ImportTedbVatRatesCommandTest extends ComptaApiTestCase
     }
 
     /**
-     * **Les taux réduits ne sont pas importés, et ce silence est compté.**
+     * **LA SOURCE CLASSE LES TAUX, ET C'EST ELLE QU'ON SUIT.**
      *
-     * TEDB donne jusqu'à six taux réduits pour un pays sans dire lequel est le second réduit, le
-     * super réduit ou le taux parking. Notre énumération distingue ces cases ; l'export, non. Les
-     * ranger par ordre décroissant appliquerait la convention **française** (10 %, 5,5 %, 2,1 %) à
-     * l'Autriche.
-     *
-     * Le risque ici n'est pas de mal ranger : c'est de livrer un référentiel de vingt-neuf pays,
-     * d'apparence complète, dont personne ne sait qu'il n'a aucun taux réduit.
+     * Chaque taux de l'export porte une clé : `Reduced rate`, `Super-reduced rate`, `Parking rate`.
+     * Une clé qui rend UNE valeur pour un pays s'importe dans la catégorie correspondante, sans
+     * aucune inférence de notre part.
      */
-    public function testLesTauxReduitsSontEcartesEtComptes(): void
+    public function testUnTauxSuperReduitEstClasseParLaCleDeLaSource(): void
     {
         $affichage = $this->importer([
-            $this->bloc('AT', 'STANDARD', [20.0]),
-            $this->bloc('AT', 'REDUCED', [13.0, 10.0, 5.0]),
+            $this->bloc('IT', 'STANDARD', [22.0]),
+            $this->bloc('IT', 'REDUCED', [4.0], 'Super-reduced rate'),
+            $this->bloc('IT', 'REDUCED', [12.0], 'Parking rate'),
+        ]);
+
+        $superReduits = $this->lire('IT', VatRateCategory::SuperReduced);
+        self::assertCount(1, $superReduits, 'La clé « Super-reduced rate » n a pas été suivie.');
+        self::assertSame('4.00', number_format((float) $superReduits[0]->getRate(), 2, '.', ''));
+
+        self::assertCount(1, $this->lire('IT', VatRateCategory::Parking));
+        // Le total inclut le remplissage ; c'est le compte PAR PAYS qui porte le sens.
+        self::assertStringContainsString('IT:3', $affichage);
+    }
+
+    /**
+     * **Deux valeurs sous la même clé : on n'en choisit toujours aucune — et la cause est ailleurs.**
+     *
+     * ⚠ CE TEST GARDE UNE CORRECTION, PAS SEULEMENT UN COMPORTEMENT.
+     *
+     * J'ai d'abord écarté tous les taux réduits en écrivant que « TEDB ne dit pas lequel est le
+     * second réduit ». C'était faux — la clé le dit. Ce qui reste vrai, mesuré ensuite, est plus
+     * précis et plus intéressant : quand plusieurs valeurs partagent une clé, ce sont le plus
+     * souvent des **territoires aplatis**. La France sort six « Reduced rate » — 13 et 0,9 pour la
+     * Corse, 8,5 et 1,05 pour les DOM, 10 et 5,5 pour la métropole — sans un mot sur le territoire.
+     *
+     * Les ranger par ordre décroissant donnerait « second réduit = 8,5 % » pour la France, ce qui
+     * est le taux normal de la Guadeloupe.
+     */
+    public function testDeuxValeursSousLaMemeCleNeSontPasImportees(): void
+    {
+        $affichage = $this->importer([
+            $this->bloc('BE', 'STANDARD', [21.0]),
+            $this->bloc('BE', 'REDUCED', [12.0, 6.0], 'Reduced rate'),
         ]);
 
         self::assertNotEmpty(
-            $this->lire('AT', VatRateCategory::Standard),
-            "L'import n'a rien écrit du tout : l'absence des taux réduits ne prouve rien.",
+            $this->lire('BE', VatRateCategory::Standard),
+            "L'import n'a rien écrit du tout : l'absence des réduits ne prouve rien.",
         );
 
-        self::assertSame([], $this->lire('AT', VatRateCategory::Reduced));
-        self::assertStringContainsString('3 taux REDUITS ecartes', $affichage);
+        self::assertSame([], $this->lire('BE', VatRateCategory::Reduced));
+        self::assertStringContainsString('BE reduced : 6.00 / 12.00', $affichage);
+    }
+
+    /**
+     * **`Exempted` n'est pas importé, et c'est la décision la plus délicate de la commande.**
+     *
+     * TEDB range sous ce mot DEUX choses que notre référentiel sépare à dessein : l'exonération
+     * AVEC droit à déduction (notre `Zero`) et l'exonération SANS (notre `Exempt`). Les deux rendent
+     * zéro euro de TVA sur la facture du client, et elles changent ce que l'exploitant peut
+     * RÉCUPÉRER — une différence qui ne se voit nulle part avant la déclaration.
+     */
+    public function testLesExonerationsSontEcarteesEtComptees(): void
+    {
+        $affichage = $this->importer([
+            $this->bloc('DE', 'STANDARD', [19.0]),
+            $this->bloc('DE', 'REDUCED', [0.0], 'Exempted'),
+            $this->bloc('DE', 'REDUCED', [0.0], 'Out of scope'),
+        ]);
+
+        self::assertNotEmpty(
+            $this->lire('DE', VatRateCategory::Standard),
+            "L'import n'a rien écrit du tout : l'absence des exonérations ne prouve rien.",
+        );
+
+        self::assertSame([], $this->lire('DE', VatRateCategory::Zero));
+        self::assertSame([], $this->lire('DE', VatRateCategory::Exempt));
+        self::assertStringContainsString('2 taux NON CLASSABLES ecartes', $affichage);
     }
 
     /**
@@ -217,14 +270,18 @@ final class ImportTedbVatRatesCommandTest extends ComptaApiTestCase
      *
      * @return array<string, mixed>
      */
-    private function bloc(string $pays, string $type, array $valeurs): array
+    private function bloc(string $pays, string $type, array $valeurs, ?string $cle = null): array
     {
         return [
             'isoCode' => $pays,
             'countryName' => $pays,
             'type' => $type,
             'rates' => array_map(
-                static fn (float $v): array => ['value' => $v, 'situationOn' => '2026/07/01'],
+                // ⚠ `key` EST LE CHAMP QUI CLASSE, et il m'avait échappé. Je lisais le `type` du
+                // bloc — `STANDARD` / `REDUCED` — et j'en avais conclu que la source ne distinguait
+                // pas le second réduit du super réduit ni du parking. Elle les distingue, taux par
+                // taux, et cette conclusion fausse a servi à écarter 1 114 taux pendant deux heures.
+                static fn (float $v): array => ['value' => $v, 'situationOn' => '2026/07/01', 'key' => $cle],
                 $valeurs,
             ),
         ];

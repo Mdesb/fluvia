@@ -102,7 +102,7 @@ final class ImportTedbVatRatesCommand extends Command
         $deja = 0;
         $ignores = 0;
         $parPays = [];
-        $reduitsEcartes = [];
+        $nonClassables = [];
         $ambigus = [];
         $divergences = [];
 
@@ -110,22 +110,34 @@ final class ImportTedbVatRatesCommand extends Command
         //
         // ⚠ LA BASE IMPOSE (pays, categorie, date) UNIQUE, ET LA SOURCE NE LE RESPECTE PAS.
         //
-        // Deux surprises, dans cet ordre, chacune revelee par une violation de contrainte :
+        // ⚠⚠ CORRECTION DU 02/09, ET ELLE PORTE SUR CE QUI ETAIT ECRIT ICI MEME.
         //
-        //   1. l'Autriche a SIX taux reduits — TEDB ne dit pas lequel est le second reduit, le
-        //      super reduit ou le parking ; notre enumeration distingue ces cases, l'export non ;
-        //   2. l'Espagne a DEUX taux STANDARD a la meme date, 7 % et 21 % — les Canaries et la
-        //      peninsule, sous un seul code ISO.
+        // Ce commentaire affirmait : « TEDB ne dit pas lequel est le second reduit, le super
+        // reduit ou le parking ». C'est FAUX, et cette phrase a servi a justifier l'exclusion de
+        // 1 114 taux reduits pendant deux heures.
         //
-        // Meme le taux « sans ambiguite » ne l'est donc pas partout. On construit la liste complete
-        // avant d'ecrire quoi que ce soit, et on n'importe que ce qui rend UNE valeur. Le reste est
-        // compte et nomme : un import qui choisirait pour nous produirait un referentiel plein,
-        // plausible, et faux la ou ca compte — sur des taux qui finissent sur des factures.
+        // TEDB le dit : chaque taux porte un champ `key` — `Reduced rate`, `Super-reduced rate`,
+        // `Parking rate`, `Exempted`, `Not applicable`, `Out of scope`. Je lisais le `type` du BLOC
+        // (`STANDARD` / `REDUCED`), qui est grossier, et je n'ai jamais ouvert la cle de chaque
+        // taux. J'ai conclu « la source ne le dit pas » d'une lecture partielle de la source.
+        //
+        // Ce qui reste vrai apres correction, et qui est mesure :
+        //
+        //   — 20 paires (pays, cle) rendent UNE valeur : elles s'importent, classees par la source ;
+        //   — 22 en rendent PLUSIEURS sous la meme cle. Et la cause n'est pas un manque de
+        //     classement : ce sont des TERRITOIRES aplatis. La France sort six « Reduced rate » —
+        //     13 et 0,9 pour la Corse, 8,5 et 1,05 pour les DOM, 10 et 5,5 pour la metropole — sans
+        //     un mot sur le territoire. Le Portugal sort 22 et 16, qui sont Madere et les Acores.
+        //   — l'Espagne garde ses DEUX taux STANDARD a la meme date, 7 % et 21 % : les Canaries et
+        //     la peninsule, sous un seul code ISO.
+        //
+        // On construit donc la liste complete avant d'ecrire quoi que ce soit, et on n'importe que
+        // ce qui rend UNE valeur. Le reste est compte et nomme : un import qui choisirait pour nous
+        // produirait un referentiel plein, plausible, et faux la ou ca compte.
         $groupes = [];
 
         foreach ($resultats as $bloc) {
             $pays = strtoupper((string) ($bloc['isoCode'] ?? ''));
-            $categorie = self::categorie((string) ($bloc['type'] ?? ''));
 
             // ⚠ DEUX CARACTERES, SINON L'IMPORT ENTIER MEURT AU FLUSH. `country` est un
             // VARCHAR(2) : un code plus long ne provoque pas une ligne rejetee, il provoque un
@@ -137,12 +149,19 @@ final class ImportTedbVatRatesCommand extends Command
                 continue;
             }
 
-            if ($categorie === null) {
-                $reduitsEcartes[$pays] = ($reduitsEcartes[$pays] ?? 0) + \count($bloc['rates'] ?? []);
-                continue;
-            }
-
             foreach ($bloc['rates'] ?? [] as $taux) {
+                $categorie = self::categoriePourTaux(
+                    \is_string($taux['key'] ?? null) ? $taux['key'] : null,
+                    (string) ($bloc['type'] ?? ''),
+                );
+
+                // ⚠ CE QU'ON LAISSE DEHORS SE COMPTE ET SE DIT. Un import silencieux donnerait un
+                // referentiel qui a l'air complet, et personne ne saurait ce qui n'y est pas.
+                if ($categorie === null) {
+                    $nonClassables[$pays] = ($nonClassables[$pays] ?? 0) + 1;
+                    continue;
+                }
+
                 $valeur = $taux['value'] ?? null;
                 $depuis = self::date((string) ($taux['situationOn'] ?? ''));
 
@@ -307,26 +326,32 @@ final class ImportTedbVatRatesCommand extends Command
             $io->writeln('');
         }
 
-        if ($reduitsEcartes !== []) {
-            ksort($reduitsEcartes);
+        if ($nonClassables !== []) {
+            ksort($nonClassables);
             $io->warning(sprintf(
-                '%d taux REDUITS ecartes, sur %d pays — ils ne sont PAS dans le referentiel.',
-                array_sum($reduitsEcartes),
-                \count($reduitsEcartes),
+                '%d taux NON CLASSABLES ecartes, sur %d pays — ils ne sont PAS dans le referentiel.',
+                array_sum($nonClassables),
+                \count($nonClassables),
             ));
             $io->writeln('  ' . implode('  ', array_map(
                 static fn (string $p, int $n): string => sprintf('%s:%d', $p, $n),
-                array_keys($reduitsEcartes),
-                $reduitsEcartes,
+                array_keys($nonClassables),
+                $nonClassables,
             )));
             $io->writeln('');
-            $io->writeln("  ⚠ Le referentiel n'accepte qu'UN taux reduit par pays et par date, et TEDB en");
-            $io->writeln('    donne plusieurs sans dire lequel est le second reduit, le super reduit ou le');
-            $io->writeln("    taux parking. Les ranger par ordre decroissant appliquerait une convention");
-            $io->writeln('    FRANCAISE au reste de l Europe — plausible, et faux sur des factures.');
+            $io->writeln('  ⚠ Ce sont les cles `Exempted`, `Not applicable` et `Out of scope`.');
             $io->writeln('');
-            $io->writeln("    C'est un arbitrage a rendre pays par pays, pas un import.");
+            $io->writeln('    `Exempted` range sous un seul mot DEUX choses que notre referentiel separe a');
+            $io->writeln("    dessein : l'exoneration AVEC droit a deduction et l'exoneration SANS. Les deux");
+            $io->writeln('    rendent zero euro de TVA sur la facture du client, et elles changent ce que');
+            $io->writeln("    l'exploitant peut RECUPERER. Les distinguer demanderait de lire un commentaire");
+            $io->writeln('    en texte libre, redige pays par pays — et se tromper produirait un taux qui a');
+            $io->writeln("    l'air juste et fait perdre de la deduction sans que rien ne le signale.");
+            $io->writeln('');
+            $io->writeln("    `Not applicable` et `Out of scope` ne sont pas des taux.");
+            $io->writeln('');
         }
+
         $io->writeln('  ⚠ Les taux francais poses par `vat:seed-legal-rates` citent le CGI article par');
         $io->writeln('    article — une source meilleure. Ils ne sont jamais reecrits.');
 
@@ -338,27 +363,40 @@ final class ImportTedbVatRatesCommand extends Command
      * dans la categorie la plus proche : une correspondance approximative sur un referentiel fiscal
      * produit une affirmation que personne n'a verifiee.
      */
-    private static function categorie(string $type): ?VatRateCategory
+    /**
+     * LA CLASSIFICATION VIENT DE `rates[].key`, PAS DU `type` DU BLOC.
+     *
+     * Le bloc ne dit que `STANDARD` ou `REDUCED` — grossier. Chaque taux, lui, porte sa cle :
+     * `Reduced rate`, `Super-reduced rate`, `Parking rate`, `Exempted`, `Not applicable`,
+     * `Out of scope`, et rien (le taux normal). C'est le champ que je n'avais pas ouvert, et dont
+     * l'absence supposee a servi a ecarter 1 114 taux.
+     *
+     * ── ⚠ `Exempted` N'EST PAS IMPORTE, ET C'EST LA DECISION LA PLUS DELICATE DE CETTE METHODE ──
+     *
+     * TEDB range sous cette cle DEUX choses que notre enumeration separe a dessein : l'exoneration
+     * AVEC droit a deduction (notre `Zero`) et l'exoneration SANS (notre `Exempt`). Les journaux
+     * belges y figurent avec le commentaire « Exemption with deduction right » ; d'autres lignes
+     * n'ont pas cette mention.
+     *
+     * Les deux rendent zero euro de TVA sur la facture du client. Elles changent ce que
+     * l'exploitant peut RECUPERER. Trancher entre elles demanderait de lire un champ de commentaire
+     * en texte libre, en anglais, redige pays par pays — et se tromper produirait un taux qui a
+     * l'air juste et fait perdre de la deduction sans que rien ne le signale.
+     *
+     * `Not applicable` et `Out of scope` sont ecartes pour une raison plus simple : ce ne sont pas
+     * des taux.
+     */
+    private static function categoriePourTaux(?string $cle, string $type): ?VatRateCategory
     {
-        return match (strtoupper($type)) {
-            'STANDARD' => VatRateCategory::Standard,
-            // ⚠ `REDUCED` N'EST PLUS IMPORTE, ET C'EST LA BASE QUI L'A TRANCHE.
-            //
-            // Le referentiel porte une contrainte d'unicite sur (pays, categorie, date de debut) :
-            // un pays n'a qu'UN taux reduit par date. Mon premier import a fait
-            //
-            //     Duplicate entry 'AT-reduced-2026-07-01' for key 'uniq_legal_vat_rate'
-            //
-            // parce que TEDB donne SIX taux reduits pour l'Autriche — sans dire lequel est le
-            // « second reduit », lequel le « super reduit », lequel le « parking ». Notre enumeration
-            // distingue ces cases ; l'export, non.
-            //
-            // Les ranger par ordre decroissant serait une convention FRANCAISE (10 %, 5,5 %, 2,1 %)
-            // appliquee a l'Autriche. Ca produirait un referentiel plein, plausible, et faux la ou
-            // ca compte — sur des taux qui finissent sur des factures.
-            //
-            // On importe donc le taux STANDARD, qui est unique par pays et sans ambiguite. Les taux
-            // reduits attendent une decision de classement qui ne peut pas venir de cet export.
+        if ($cle === null || $cle === '') {
+            // Pas de cle : c'est le taux normal, et seulement si le bloc l'annonce.
+            return strtoupper($type) === 'STANDARD' ? VatRateCategory::Standard : null;
+        }
+
+        return match ($cle) {
+            'Reduced rate' => VatRateCategory::Reduced,
+            'Super-reduced rate' => VatRateCategory::SuperReduced,
+            'Parking rate' => VatRateCategory::Parking,
             default => null,
         };
     }
