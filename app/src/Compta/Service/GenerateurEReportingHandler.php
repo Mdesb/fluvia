@@ -12,6 +12,7 @@ use App\Compta\Enum\NatureOperation;
 use App\Compta\Enum\StatutEnvoi;
 use App\Compta\Regime\RegimeComptableResolver;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
 /**
  * e-reporting agrégé (US-L4-08, RG-M6-07/08/09) : agrège les `LigneEcriture` du journal ventes
@@ -28,6 +29,25 @@ final class GenerateurEReportingHandler
 
     public function preparer(ProfilExploitant $profil, \DateTimeImmutable $debut, \DateTimeImmutable $fin): DeclarationEReporting
     {
+        // ── ⚠ L'E-REPORTING EST UNE OBLIGATION FRANCAISE, ET IL S'ARRETE A LA FRONTIERE ────────
+        //
+        // La declaration part a la DGFiP et s'indexe sur le SIREN. Preparee pour un exploitant
+        // belge, elle declarerait de la TVA belge a l'administration francaise sous un SIREN qui,
+        // depuis que la validation le refuse hors de France, serait vide.
+        //
+        // Le resultat n'aurait pas l'air d'une panne : une declaration, des agregats justes, un
+        // statut « prepare ». Seul le destinataire est faux. On refuse donc tot et en le disant,
+        // plutot que de produire un document credible qui n'aurait jamais du exister.
+        $paysExploitant = strtoupper($profil->getEtablissementPrincipal()?->getPays() ?? 'FR');
+
+        if ($paysExploitant !== 'FR') {
+            throw new UnprocessableEntityHttpException(sprintf(
+                'e-reporting refuse : cette declaration part a la DGFiP et ne concerne que les '
+                . 'exploitants francais. Cet exploitant est situe en %s (RG-M6-07).',
+                $paysExploitant,
+            ));
+        }
+
         $regime = $this->resolver->pour($profil);
         $journalVentes = $regime->journalPour($profil, NatureOperation::Ventes);
         $compteTva = $regime->compteTvaCollectee($profil);
