@@ -10,26 +10,37 @@ chantier attribué :** ce sont des sujets que Maxime veut rouvrir avec nous.
 
 ---
 
-## Ce que la mesure dit de chacun, au 30/08
+## Ce que la mesure dit de chacun — rafraichi le 02/09 au soir
 
-Comptés sur `app/src`, `app/tests` et `frontend/src`. Le nombre d'écrans est approximatif — il compte
-les fichiers du frontal qui nomment le module, ce qui ramasse aussi les mentions.
+Comptés sur `app/src` et `app/tests`. Le nombre d'écrans est approximatif — il compte les fichiers du
+frontal qui nomment le module, ce qui ramasse aussi les simples mentions.
 
-| module | entités | écrans | tests |
-|---|---|---|---|
-| **Compta** | 24 | 27 | 34 |
-| **Crm** (affaires) | 13 | 8 | 21 |
-| **Marketing** (campagnes) | 11 | 4 | 7 |
-| **Facturation** | 9 | 10 | 18 |
-| **Project** (projet) | 2 | 5 | **0** |
+| module | entités | tests | écrans~ | écart depuis le 30/08 |
+|---|---|---|---|---|
+| **Compta** | 26 | 41 | 18 | +2 entités, +7 tests |
+| **Vente** | 7 | 34 | 16 | — |
+| **Facturation** | 9 | 27 | 5 | +9 tests (Factur-X, devise, pays) |
+| **Crm** (affaires) | 13 | 23 | 4 | +2 tests |
+| **Sport** | 10 | 18 | 8 | +6 tests (annulation d'échéance) |
+| **Offre** | 17 | 17 | 9 | — |
+| **Marketing** (campagnes) | 11 | 6 | 2 | — |
+| **Project** (projet) | 2 | **0** | 2 | — |
+| **Legal** | 2 | **0** | 1 | — |
 
-⚠ **`Project` n'a aucun test, et `Legal` non plus.** Ce sont les deux seuls modules du dépôt dans ce
-cas — 41 des 43 en ont. Vérifié avec un témoin positif : la recherche trouve bien des tests pour les
-autres, et les seules correspondances sur « projet » sont des `Projection*` appartenant à d'autres
-modules.
+⚠ **`Project` ET `Legal` N'ONT TOUJOURS AUCUN TEST**, et j'ai failli écrire le contraire.
 
-Ça ne dit pas que le code est faux. Ça dit qu'**aucun filet ne le tient**, et que la revue de ce
-module ne pourra s'appuyer sur rien.
+Une recherche par NOM de fichier (`find -ipath '*Project*'`) rend six résultats — mais ce sont six
+`Projection*` appartenant à Finance, Reservation et Acces. Le « test Legal » qu'elle trouve est
+`Compta/Api/LegalVatRateTest.php`, qui teste `LegalVatRate` et n'a rien à voir avec le module Legal.
+
+**La mesure qui tranche est la recherche par NAMESPACE**, parce qu'un test appartient au module dont
+il importe les classes, pas à celui dont le nom lui ressemble :
+
+    grep -rln 'App..Project..' app/tests --include=*Test.php   → 0
+    grep -rln 'App..Legal..'   app/tests --include=*Test.php   → 0
+
+Ça ne dit pas que le code est faux. Ça dit qu'**aucun filet ne le tient**, et que la revue de ces deux
+modules ne pourra s'appuyer sur rien.
 
 ---
 
