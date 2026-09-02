@@ -57,6 +57,53 @@ final class LegalVatRateTest extends ComptaApiTestCase
      * resserre jamais tout seul. Rouvrir `#[ApiResource]` dessus « pour simplifier l'ecran » se
      * verrait ici.
      */
+    /**
+     * ⚠ SANS `?country=`, LE PAYS VIENT DE L'ETABLISSEMENT — PLUS D'UNE CONSTANTE.
+     *
+     * Le fournisseur retombait sur `PAYS_PAR_DEFAUT = 'FR'`. Un etablissement espagnol se voyait
+     * donc proposer les taux FRANCAIS, avec leurs libelles et leurs dates — et rien ne le
+     * signalait, puisque la reponse etait pleine. Un mauvais taux de TVA ne se decouvre pas a
+     * l'ecran : il se decouvre au controle fiscal.
+     */
+    public function testSansParametreLeCatalogueSuitLePaysDeLEtablissement(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $etablissement = $em->getRepository(Etablissement::class)->find($this->idEtablissement(SocleFixtures::ETAB_A_NOM));
+        self::assertNotNull($etablissement);
+        $etablissement->setPays('BE');
+        $em->flush();
+
+        $client->request('GET', '/api/compta/vat-rate-catalog', $entete);
+
+        self::assertResponseIsSuccessful();
+        self::assertSame('BE', $client->getResponse()->toArray()['country']);
+    }
+
+    /**
+     * Le temoin : le parametre explicite l'emporte toujours.
+     *
+     * ⚠ Sans lui, le test precedent passerait aussi si le fournisseur avait cesse de lire
+     * `?country=` — et on aurait perdu la possibilite d'explorer le catalogue d'un autre pays sans
+     * changer d'etablissement.
+     */
+    public function testLeParametreExpliciteLEmporteSurLePaysDeLEtablissement(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $etablissement = $em->getRepository(Etablissement::class)->find($this->idEtablissement(SocleFixtures::ETAB_A_NOM));
+        self::assertNotNull($etablissement);
+        $etablissement->setPays('BE');
+        $em->flush();
+
+        $client->request('GET', '/api/compta/vat-rate-catalog', $entete + ['query' => ['country' => 'FR']]);
+
+        self::assertResponseIsSuccessful();
+        self::assertSame('FR', $client->getResponse()->toArray()['country']);
+    }
+
     public function testLEntiteDuReferentielNEstPasUneRessourceExposee(): void
     {
         [$client, $entete] = $this->adminSurA();

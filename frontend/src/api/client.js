@@ -1508,6 +1508,17 @@ export const api = {
   // --- Comptabilité / Régie (M6) ---
   journaux: () => request('/api/journals', { query: { itemsPerPage: 100 } }),
   profilsExploitant: () => request('/api/profil_exploitants', { query: { itemsPerPage: 20 } }),
+
+  // L'IDENTITE LEGALE DU VENDEUR — LUE DEPUIS TOUJOURS, JAMAIS ECRITE.
+  //
+  // ⚠ L'API acceptait `Post` et `Patch` depuis le debut, et les cinq champs d'identite sont dans le
+  // groupe `profil:write`. Ce qui manquait etait ici : aucun appel d'ecriture, donc aucun ecran
+  // possible. Mesure du 02/09 : `facturation:einvoicing:etat` reclamait une identite vendeur qu'AUCUN
+  // ecran ne permettait de saisir — un rapport qui demande de remplir un formulaire qui n'existe pas.
+  creerProfilExploitant: (corps) =>
+    request('/api/profil_exploitants', { method: 'POST', body: corps, ld: true }),
+  majProfilExploitant: (id, corps) =>
+    request(`/api/profil_exploitants/${id}`, { method: 'PATCH', body: corps }),
   periodesComptables: () =>
     request('/api/periode_comptables', { query: { itemsPerPage: 100, 'order[dateDebut]': 'desc' } }),
   exportsComptables: () => request('/api/export_comptables', { query: { itemsPerPage: 50 } }),

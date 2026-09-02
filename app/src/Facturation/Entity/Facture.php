@@ -517,6 +517,21 @@ class Facture
     {
         $this->etablissement = $etablissement;
 
+        // ⚠ LA FACTURE PREND LA DEVISE DE SON ETABLISSEMENT ICI, ET PAS DANS LES SIX ENDROITS QUI
+        // CREENT DES FACTURES.
+        //
+        // Mesure du 02/09 : `new Facture()` apparait a SIX endroits — abonnements, facture directe,
+        // chaine documentaire, avoir, acompte, facture justificative. Demander a chacun de poser la
+        // devise serait une consigne, et le septieme l'oublierait. Une consigne ne protege personne.
+        //
+        // ⚠ ON N'ECRASE PAS UN CHOIX EXPLICITE. Si quelqu'un a deja pose une autre devise sur cette
+        // facture, la rattacher a un etablissement ne doit pas la lui reprendre : le rattachement
+        // repond a « qui facture », pas a « dans quelle unite ». D'ou la garde sur la valeur par
+        // defaut.
+        if ($etablissement !== null && $this->currency === 'EUR') {
+            $this->currency = $etablissement->getDevise();
+        }
+
         return $this;
     }
 

@@ -128,6 +128,57 @@ class ParametreFacturationEtablissement
     private string $indemniteForfaitaireRecouvrement = '40.00';
 
     /**
+     * BT-22 / PMT — la mention relative aux frais de recouvrement, imposee par le profil francais.
+     *
+     * L'indemnite forfaitaire pour frais de recouvrement. `indemniteForfaitaireRecouvrement` en porte le MONTANT ; ce champ en porte la PHRASE.
+     *
+     * ⚠ LE TEXTE N'EST PAS COMPOSE PAR LE PRODUIT, ET C'EST UN CHOIX. Une clause de ce type ENGAGE :
+     * elle se relit, elle se negocie, et elle differe d'une regie municipale a une salle privee.
+     * Composer la phrase depuis un taux configure mettrait des mots dans la bouche de l'exploitant
+     * sur un document opposable.
+     *
+     * Vide = la mention manque, et le rapport de validation le dit. C'est preferable a une phrase
+     * plausible que personne n'a approuvee.
+     */
+    #[ORM\Column(type: 'text', nullable: true)]
+    #[Groups(['parametre_facturation:read', 'parametre_facturation:write'])]
+    private ?string $mentionRecouvrement = null;
+
+    /**
+     * BT-22 / PMD — la mention relative aux penalites de retard, imposee par le profil francais.
+     *
+     * Les penalites applicables en cas de retard. `tauxPenaliteRetard` en porte le TAUX ; ce champ en porte la PHRASE.
+     *
+     * ⚠ LE TEXTE N'EST PAS COMPOSE PAR LE PRODUIT, ET C'EST UN CHOIX. Une clause de ce type ENGAGE :
+     * elle se relit, elle se negocie, et elle differe d'une regie municipale a une salle privee.
+     * Composer la phrase depuis un taux configure mettrait des mots dans la bouche de l'exploitant
+     * sur un document opposable.
+     *
+     * Vide = la mention manque, et le rapport de validation le dit. C'est preferable a une phrase
+     * plausible que personne n'a approuvee.
+     */
+    #[ORM\Column(type: 'text', nullable: true)]
+    #[Groups(['parametre_facturation:read', 'parametre_facturation:write'])]
+    private ?string $mentionPenalitesRetard = null;
+
+    /**
+     * BT-22 / AAB — la mention relative aux escompte, imposee par le profil francais.
+     *
+     * L'escompte pour paiement anticipe, OU son absence. Aucun autre champ ne le porte : ne rien ecrire ici laisse la mention manquante, ce que le validateur signale.
+     *
+     * ⚠ LE TEXTE N'EST PAS COMPOSE PAR LE PRODUIT, ET C'EST UN CHOIX. Une clause de ce type ENGAGE :
+     * elle se relit, elle se negocie, et elle differe d'une regie municipale a une salle privee.
+     * Composer la phrase depuis un taux configure mettrait des mots dans la bouche de l'exploitant
+     * sur un document opposable.
+     *
+     * Vide = la mention manque, et le rapport de validation le dit. C'est preferable a une phrase
+     * plausible que personne n'a approuvee.
+     */
+    #[ORM\Column(type: 'text', nullable: true)]
+    #[Groups(['parametre_facturation:read', 'parametre_facturation:write'])]
+    private ?string $mentionEscompte = null;
+
+    /**
      * Le taux de TVA applicable aux abonnements de la plateforme.
      *
      * **Volontairement `null` par défaut, et ce n'est pas un oubli.** Un exploitant français porte
@@ -163,6 +214,42 @@ class ParametreFacturationEtablissement
     #[ORM\JoinColumn(nullable: true)]
     #[Groups(['parametre_facturation:read', 'parametre_facturation:write'])]
     private ?CompteComptable $compteProduitDefaut = null;
+
+    public function getMentionRecouvrement(): ?string
+    {
+        return $this->mentionRecouvrement;
+    }
+
+    public function setMentionRecouvrement(?string $valeur): self
+    {
+        $this->mentionRecouvrement = $valeur;
+
+        return $this;
+    }
+
+    public function getMentionPenalitesRetard(): ?string
+    {
+        return $this->mentionPenalitesRetard;
+    }
+
+    public function setMentionPenalitesRetard(?string $valeur): self
+    {
+        $this->mentionPenalitesRetard = $valeur;
+
+        return $this;
+    }
+
+    public function getMentionEscompte(): ?string
+    {
+        return $this->mentionEscompte;
+    }
+
+    public function setMentionEscompte(?string $valeur): self
+    {
+        $this->mentionEscompte = $valeur;
+
+        return $this;
+    }
 
     public function __construct()
     {

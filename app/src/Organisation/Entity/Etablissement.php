@@ -85,6 +85,51 @@ class Etablissement
     private bool $actif = true;
 
     /**
+     * Le pays de l'etablissement, en ISO 3166-1 alpha-2.
+     *
+     * ⚠ C'EST L'ANCRE DE TOUT LE RESTE, ET ELLE MANQUAIT. Le pays commande le catalogue de TVA
+     * applicable, les mentions obligatoires de la facture, et le profil de facturation electronique
+     * (Chorus/PDP en France, SdI en Italie, XRechnung en Allemagne).
+     *
+     * `LegalVatRate` porte deja `country` et `VatRateCatalogProvider` sert deja les taux par pays :
+     * ce qui manquait n'etait pas le catalogue, c'etait ce qui DESIGNE le pays d'un etablissement.
+     * Sans lui, le fournisseur retombait sur une constante `PAYS_PAR_DEFAUT = 'FR'` — un
+     * etablissement espagnol se serait vu proposer les taux francais, sans que rien ne le signale.
+     *
+     * ⚠ LE DEFAUT `FR` EXPLICITE CE QUI EST DEJA VRAI, IL N'INVENTE RIEN (D66-ter). Le produit n'est
+     * commercialise qu'en France a ce jour, et le seul jeu de taux legaux amorce est le francais
+     * (`SeedLegalVatRatesCommand`, quatre entrees, toutes `FR`). Le jour ou un etablissement sera
+     * ailleurs, quelqu'un l'aura choisi.
+     *
+     * A ne pas confondre avec `fuseauHoraire`, qui repond a une autre question : un etablissement
+     * francais aux Antilles est en `FR` et en `America/Guadeloupe`.
+     */
+    #[ORM\Column(length: 2, options: ['default' => 'FR'])]
+    #[Assert\Regex(pattern: '/^[A-Z]{2}$/', message: 'Le pays doit etre un code ISO 3166-1 a deux lettres.')]
+    #[Groups(['etablissement:read', 'etablissement:write'])]
+    private string $pays = 'FR';
+
+    /**
+     * La devise dans laquelle cet etablissement facture, en ISO 4217.
+     *
+     * ⚠ ELLE NE SE DEDUIT PAS DU PAYS, ET C'EST POURQUOI ELLE A SON PROPRE CHAMP. Une table
+     * pays -> devise paraitrait economique : elle serait a maintenir, fausse pour les pays a
+     * plusieurs devises d'usage, et muette sur le cas d'un exploitant francais qui facture en francs
+     * suisses une clientele frontaliere. Deux questions, deux champs.
+     *
+     * ⚠ ET ELLE NE REND PAS LE PRODUIT MULTIDEVISE. Les montants restent calcules sans conversion :
+     * ce champ dit dans quelle unite l'etablissement COMPTE, il ne convertit rien. Poser `CHF` sur
+     * un etablissement dont les tarifs sont saisis en euros produirait des factures fausses — c'est
+     * un reglage de mise en service, pas un bouton d'exploitation.
+     *
+     * Le defaut `EUR` explicite ce qui etait deja implicite dans tout le depot (D66-ter).
+     */
+    #[ORM\Column(length: 3, options: ['default' => 'EUR'])]
+    #[Assert\Regex(pattern: '/^[A-Z]{3}$/', message: 'La devise doit etre un code ISO 4217 a trois lettres.')]
+    #[Groups(['etablissement:read', 'etablissement:write'])]
+    private string $devise = 'EUR';
+
+    /**
      * Le fuseau dans lequel cet établissement vit sa journée.
      *
      * **Pourquoi ça n'est pas un détail de confort.** La clôture journalière NF525 arrête une journée
@@ -133,6 +178,30 @@ class Etablissement
     /** @var Collection<int, Espace> */
     #[ORM\OneToMany(targetEntity: Espace::class, mappedBy: 'etablissement')]
     private Collection $espaces;
+
+    public function getDevise(): string
+    {
+        return $this->devise;
+    }
+
+    public function setDevise(string $devise): self
+    {
+        $this->devise = strtoupper($devise);
+
+        return $this;
+    }
+
+    public function getPays(): string
+    {
+        return $this->pays;
+    }
+
+    public function setPays(string $pays): self
+    {
+        $this->pays = strtoupper($pays);
+
+        return $this;
+    }
 
     public function __construct()
     {
