@@ -95,14 +95,23 @@ fi
 echo
 echo "  ✓ Fichier écrit."
 echo
-# ⚠ LE CONTENEUR NE VOIT QUE `app/`. Il monte `../app:/app` et rien d'autre : la commande
-# `vat:import-tedb /home/debian/validateurs/…` répondrait « Fichier introuvable », ce qui se lit
-# comme un export raté alors que l'export est parfait. On passe donc par `app/var/`, qui est ignoré
-# par git — un export de cinq mégaoctets n'a pas sa place dans l'historique.
+# ── ⚠ DEUX PIEGES, ET J'AI PRIS LES DEUX LE 02/09 ───────────────────────────────────
+#
+# 1. LE CHEMIN. Le conteneur monte `../app:/app` — mais AUSSI `app_var:/app/var`, un volume Docker
+#    qui RECOUVRE le `app/var` de l'hôte. Un fichier déposé dans `app/var/` depuis l'hôte y est
+#    donc INVISIBLE, et la commande répond « Fichier introuvable » : ça se lit comme un export
+#    raté alors que l'export est parfait. D'où `app/imports/`, monté et ignoré par git — cinq
+#    mégaoctets n'ont pas leur place dans l'historique.
+#
+# 2. L'UTILISATEUR. `exec php bin/console` tourne en ROOT, et tout ce qu'il écrit dans
+#    `/app/var/cache` cesse d'appartenir à `www-data`. PHP-FPM peut encore LIRE ces entrées, donc
+#    l'API répond tant que le cache est complet : la préprod est armée, pas cassée, et le premier
+#    défaut de cache rend 500. C'est arrivé, quarante minutes. D'où `-u www-data`.
+#    Le contrôle : `./infra/verifier-droits-var.sh`, qui répare avec `--reparer`.
 echo "  L'importer, en le rendant d'abord visible du conteneur :"
-echo "      cp $SORTIE /home/debian/billetterie/app/var/tva-ue.json"
+echo "      cp $SORTIE /home/debian/billetterie/app/imports/tva-ue.json"
 echo "      docker compose -f infra/compose.preprod.yaml --env-file infra/.env.preprod \\"
-echo "        exec -T php php bin/console vat:import-tedb /app/var/tva-ue.json --a-blanc"
+echo "        exec -T -u www-data php php bin/console vat:import-tedb /app/imports/tva-ue.json --a-blanc"
 echo
 echo "  ⚠ CE QUI SERA IMPORTÉ EST PLUS ÉTROIT QUE CE FICHIER, à dessein :"
 echo "      — seuls les taux STANDARD. TEDB donne jusqu'à six taux réduits par pays sans dire"
