@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import IdentiteVendeur from '../components/IdentiteVendeur.jsx'
 import ParametresFacturation from '../components/ParametresFacturation.jsx'
 import Modal from '../components/Modal.jsx'
 import Tabs from '../components/Tabs.jsx'
@@ -230,7 +231,14 @@ export default function Facturation({ etabActif, droits, onNaviguer }) {
       />
 
       {params.tab === 'reglages' ? (
-        <ParametresFacturation peutModifier={peutGerer} />
+        <>
+          {/* ⚠ L'IDENTITE AVANT LE PARAMETRAGE, ET CE N'EST PAS UN ORDRE ESTHETIQUE.
+              Sans raison sociale ni SIREN, aucune facture ne part au format electronique — les
+              conditions de reglement et les comptes par defaut sont des reglages de confort a cote.
+              Ce qui bloque doit se voir en premier. */}
+          <IdentiteVendeur peutModifier={peutGerer} />
+          <ParametresFacturation peutModifier={peutGerer} />
+        </>
       ) : params.tab === 'factures' ? (
         <>
           {/* Trois chiffres bornés, qui appellent une décision : ils restent sur la page.
