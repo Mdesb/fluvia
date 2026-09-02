@@ -115,24 +115,83 @@ final class CiiSerializerTest extends TestCase
     }
 
     /**
-     * ⚠ SEUL `TaxTotalAmount` PORTE `currencyID`, ET C'EST LA SYNTAXE QUI L'EXIGE.
+     * ⚠ UN SEUL ELEMENT DU DOCUMENT PORTE `currencyID`, ET C'EST `TaxTotalAmount`.
      *
-     * En ajouter partout « pour être sûr » ferait refuser le fichier. Ce test garde la règle dans
-     * les deux sens : présent là où il le faut, absent partout ailleurs.
+     * ── LA VERSION PRECEDENTE DE CE TEST ETAIT TROP ETROITE, ET C'EST CE QUI A LAISSE PASSER ────
+     *
+     * Elle verifiait l'absence de `currencyID` sur les totaux d'EN-TETE, un par un. Le serialiseur
+     * en posait un sur le total de LIGNE, que ce chemin XPath ne regardait pas. Le schematron
+     * officiel a refuse le fichier : « [CII-DT-031] - currencyID should not be present ».
+     *
+     * La regle etait juste ; sa PORTEE ne l'etait pas. On l'exprime donc universellement — « un seul
+     * dans tout le document, et c'est celui-la » — au lieu d'enumerer les endroits ou on a pense a
+     * regarder. Un quantificateur universel ne peut pas oublier un cas.
      */
-    public function testSeulLeTotalDeTvaPorteLaDevise(): void
+    public function testUnSeulElementDuDocumentPorteLaDevise(): void
     {
         $xpath = $this->xpath($this->serialiseur->serialize($this->factureComplete()));
 
-        $avec = $xpath->query('//ram:TaxTotalAmount/@currencyID');
-        self::assertNotFalse($avec);
-        self::assertSame(1, $avec->length, 'TaxTotalAmount doit porter currencyID');
+        $tous = $xpath->query('//*[@currencyID]');
+        self::assertNotFalse($tous);
+        self::assertSame(1, $tous->length, 'un seul element doit porter currencyID dans tout le document');
+        self::assertSame('TaxTotalAmount', $tous->item(0)?->localName);
+    }
 
-        foreach (['LineTotalAmount', 'TaxBasisTotalAmount', 'GrandTotalAmount', 'DuePayableAmount'] as $nom) {
-            $sans = $xpath->query(sprintf('//ram:SpecifiedTradeSettlementHeaderMonetarySummation/ram:%s/@currencyID', $nom));
-            self::assertNotFalse($sans);
-            self::assertSame(0, $sans->length, $nom . ' ne doit PAS porter currencyID');
+    /**
+     * BG-23 — LA VENTILATION DE TVA, QUI MANQUAIT ENTIEREMENT.
+     *
+     * Le schematron l'a reclamee trois fois : `BR-CO-18` (au moins un groupe), `BR-S-01` (une ligne
+     * au taux standard exige un groupe de sa categorie) et `BR-CO-14` (le total de TVA doit egaler
+     * la somme des groupes). Aucun de mes tests ne l'avait vue manquer : ils verifiaient que ce que
+     * j'ecrivais etait au bon endroit, pas que rien ne manquait.
+     */
+    public function testLaVentilationDeTvaEstPresenteEtChiffree(): void
+    {
+        $xpath = $this->xpath($this->serialiseur->serialize($this->factureComplete()));
+
+        $groupes = $xpath->query('//ram:ApplicableHeaderTradeSettlement/ram:ApplicableTradeTax');
+        self::assertNotFalse($groupes);
+        self::assertSame(1, $groupes->length, 'une facture a un seul taux doit avoir un seul groupe');
+
+        foreach ([
+            'ram:CalculatedAmount' => '15.00',
+            'ram:TypeCode' => 'VAT',
+            'ram:BasisAmount' => '75.00',
+            'ram:CategoryCode' => 'S',
+            'ram:RateApplicablePercent' => '20.00',
+        ] as $nom => $attendu) {
+            $n = $xpath->query('//ram:ApplicableHeaderTradeSettlement/ram:ApplicableTradeTax/' . $nom);
+            self::assertNotFalse($n);
+            self::assertSame($attendu, trim((string) $n->item(0)?->nodeValue), $nom);
         }
+    }
+
+    /**
+     * ⚠ L'ORDRE DES ENFANTS N'EST PAS LIBRE DANS CII.
+     *
+     * C'est une syntaxe a sequence : `CalculatedAmount`, `TypeCode`, `BasisAmount`, `CategoryCode`,
+     * `RateApplicablePercent`. Les memes elements dans un autre ordre produisent un fichier refuse
+     * par le SCHEMA, avant meme le schematron — et `testLaVentilationDeTvaEstPresenteEtChiffree`
+     * passerait quand meme, puisqu'il interroge chaque nom separement.
+     */
+    public function testLOrdreDeLaVentilationSuitLaSequenceCii(): void
+    {
+        $xpath = $this->xpath($this->serialiseur->serialize($this->factureComplete()));
+
+        $groupe = $xpath->query('//ram:ApplicableHeaderTradeSettlement/ram:ApplicableTradeTax')?->item(0);
+        self::assertNotNull($groupe);
+
+        $noms = [];
+        foreach ($groupe->childNodes as $enfant) {
+            if ($enfant instanceof \DOMElement) {
+                $noms[] = $enfant->localName;
+            }
+        }
+
+        self::assertSame(
+            ['CalculatedAmount', 'TypeCode', 'BasisAmount', 'CategoryCode', 'RateApplicablePercent'],
+            $noms,
+        );
     }
 
     /**

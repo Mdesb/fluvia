@@ -138,7 +138,7 @@ final class CiiSerializer
 
         foreach ($facture->getLignes() as $i => $ligne) {
             \assert($ligne instanceof LigneFacture);
-            $transaction->appendChild($this->ligne($dom, $ligne, $i + 1, $facture->getCurrency()));
+            $transaction->appendChild($this->ligne($dom, $ligne, $i + 1));
         }
 
         $transaction->appendChild($this->parties($dom, $facture));
@@ -150,7 +150,7 @@ final class CiiSerializer
     }
 
     /** BT-126, BT-153, BT-129/130, BT-131, BT-151/152. */
-    private function ligne(\DOMDocument $dom, LigneFacture $ligne, int $rang, string $devise): \DOMElement
+    private function ligne(\DOMDocument $dom, LigneFacture $ligne, int $rang): \DOMElement
     {
         $item = $dom->createElementNS(self::NS_RAM, 'ram:IncludedSupplyChainTradeLineItem');
 
@@ -192,9 +192,15 @@ final class CiiSerializer
         $reglement->appendChild($taxe);
 
         $total = $dom->createElementNS(self::NS_RAM, 'ram:SpecifiedTradeSettlementLineMonetarySummation');
-        $montant = $dom->createElementNS(self::NS_RAM, 'ram:LineTotalAmount', $ligne->getMontantHT());
-        $montant->setAttribute('currencyID', $devise);
-        $total->appendChild($montant);
+        // ⚠ PAS DE `currencyID` ICI — REGLE CII-DT-031, ET J'AVAIS FAIT L'INVERSE.
+        //
+        // Le schematron officiel a refuse notre fichier avec « [CII-DT-031] - currencyID should not
+        // be present » sur ce total de ligne. L'exemple officiel du paquet CEN n'en porte QUE sur le
+        // `TaxTotalAmount` d'en-tete, nulle part ailleurs.
+        //
+        // Mon test le verifiait deja... sur les totaux d'EN-TETE uniquement. La regle etait juste,
+        // sa PORTEE etait trop etroite, et c'est la portee qui l'a laissee passer.
+        $total->appendChild($dom->createElementNS(self::NS_RAM, 'ram:LineTotalAmount', $ligne->getMontantHT()));
         $reglement->appendChild($total);
 
         $item->appendChild($reglement);
@@ -253,6 +259,20 @@ final class CiiSerializer
         $reglement = $dom->createElementNS(self::NS_RAM, 'ram:ApplicableHeaderTradeSettlement');
         $reglement->appendChild($dom->createElementNS(self::NS_RAM, 'ram:InvoiceCurrencyCode', $devise));
 
+        // ── BG-23 : LA VENTILATION DE TVA, QUI MANQUAIT ENTIEREMENT ────────────────────────────
+        //
+        // Le schematron a refuse notre fichier trois fois pour son absence : `BR-CO-18` (« shall at
+        // least have one VAT breakdown group »), `BR-S-01` (une ligne au taux standard exige un
+        // groupe de sa categorie) et `BR-CO-14` (le total de TVA doit egaler la somme des groupes).
+        //
+        // ⚠ ON GROUPE PAR (CATEGORIE, TAUX), PAS PAR TAUX SEUL. `Facture::getVentilationTva()`
+        // groupe par taux — suffisant pour la comptabilite, faux pour EN 16931 : deux categories au
+        // meme taux (un 0 % « exonere » et un 0 % « hors champ ») fusionneraient en un seul groupe,
+        // et la facture affirmerait une nature fiscale qu'elle n'a pas.
+        foreach ($this->ventilation($facture) as $groupe) {
+            $reglement->appendChild($this->groupeDeTva($dom, $groupe));
+        }
+
         $totaux = $dom->createElementNS(self::NS_RAM, 'ram:SpecifiedTradeSettlementHeaderMonetarySummation');
 
         foreach ([
@@ -275,6 +295,65 @@ final class CiiSerializer
         $reglement->appendChild($totaux);
 
         return $reglement;
+    }
+
+    /**
+     * Les groupes de TVA, par (catégorie, taux).
+     *
+     * @return list<array{categorie: string, taux: string, base: int, tva: int}>
+     */
+    private function ventilation(Facture $facture): array
+    {
+        $groupes = [];
+
+        foreach ($facture->getLignes() as $ligne) {
+            \assert($ligne instanceof LigneFacture);
+            $taux = $ligne->getTauxTva();
+            $categorie = (string) $taux?->getVatCategory()?->value;
+            $pourcent = (string) $ligne->getTauxTvaValeur();
+            $cle = $categorie . '|' . $pourcent;
+
+            if (!isset($groupes[$cle])) {
+                $groupes[$cle] = ['categorie' => $categorie, 'taux' => $pourcent, 'base' => 0, 'tva' => 0];
+            }
+
+            $groupes[$cle]['base'] += self::centimes($ligne->getMontantHT());
+            $groupes[$cle]['tva'] += self::centimes($ligne->getMontantTva());
+        }
+
+        return array_values($groupes);
+    }
+
+    /**
+     * BT-116 (base), BT-117 (montant), BT-118 (catégorie), BT-119 (taux).
+     *
+     * ⚠ L'ORDRE DES ENFANTS N'EST PAS LIBRE. CII est une syntaxe à séquence : `CalculatedAmount`,
+     * `TypeCode`, `BasisAmount`, `CategoryCode`, puis `RateApplicablePercent`. Les écrire dans un
+     * autre ordre produit un fichier que le schéma refuse — avant même le schematron.
+     *
+     * @param array{categorie: string, taux: string, base: int, tva: int} $groupe
+     */
+    private function groupeDeTva(\DOMDocument $dom, array $groupe): \DOMElement
+    {
+        $taxe = $dom->createElementNS(self::NS_RAM, 'ram:ApplicableTradeTax');
+        $taxe->appendChild($dom->createElementNS(self::NS_RAM, 'ram:CalculatedAmount', self::decimal($groupe['tva'])));
+        $taxe->appendChild($dom->createElementNS(self::NS_RAM, 'ram:TypeCode', 'VAT'));
+        $taxe->appendChild($dom->createElementNS(self::NS_RAM, 'ram:BasisAmount', self::decimal($groupe['base'])));
+        $taxe->appendChild($dom->createElementNS(self::NS_RAM, 'ram:CategoryCode', $groupe['categorie']));
+        $taxe->appendChild($dom->createElementNS(self::NS_RAM, 'ram:RateApplicablePercent', $groupe['taux']));
+
+        return $taxe;
+    }
+
+    /** Centimes entiers depuis une décimale, sans passer par un flottant. */
+    private static function centimes(string $decimal): int
+    {
+        return (int) round(((float) $decimal) * 100);
+    }
+
+    private static function decimal(int $centimes): string
+    {
+        return number_format($centimes / 100, 2, '.', '');
     }
 
     /**
