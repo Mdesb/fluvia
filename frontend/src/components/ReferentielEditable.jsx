@@ -190,8 +190,14 @@ export default function ReferentielEditable({ descripteur, peutEcrire, onEcrit }
         ) : lignes.length === 0 ? (
           <div className="empty" style={{ padding: 18 }}>
             <div style={{ marginBottom: 10 }}>{siVide}</div>
+            {/* ⚠ PAS `primary` : l'en-tete du panneau porte deja « ＋ Ajouter », qui appelle le
+                MEME `ouvrirCreation`, et les deux sont visibles ensemble quand la liste est vide —
+                mesures a 141 px l'un de l'autre. Deux controles de meme poids pour un seul geste
+                divisent l'attention sans rien ajouter.
+                C'est celui-ci qu'on attenue et non l'autre : l'en-tete existe dans les deux etats,
+                donc sa position s'apprend ; celui-ci disparait des la premiere ligne creee. */}
             {peutEcrire && creer && (
-              <button className="btn primary sm" type="button" onClick={ouvrirCreation}>
+              <button className="btn sm" type="button" onClick={ouvrirCreation}>
                 ＋ Créer le premier
               </button>
             )}
