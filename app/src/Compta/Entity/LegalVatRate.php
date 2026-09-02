@@ -61,8 +61,8 @@ use Symfony\Component\Uid\Uuid;
  */
 #[ORM\Entity(repositoryClass: LegalVatRateRepository::class)]
 #[ORM\Table(name: 'accounting_legal_vat_rate')]
-#[ORM\UniqueConstraint(name: 'uniq_legal_vat_rate', columns: ['country', 'category', 'valid_from'])]
-#[ORM\Index(name: 'idx_legal_vat_rate_country', columns: ['country'])]
+#[ORM\UniqueConstraint(name: 'uniq_legal_vat_rate', columns: ['country', 'territory', 'category', 'valid_from'])]
+#[ORM\Index(name: 'idx_legal_vat_rate_country', columns: ['country', 'territory'])]
 class LegalVatRate
 {
     #[ORM\Id]
@@ -79,6 +79,38 @@ class LegalVatRate
     #[ORM\Column(length: 2)]
     #[Groups(['legal_vat:read'])]
     private string $country = '';
+
+    /**
+     * LE TERRITOIRE FISCAL, A L'INTERIEUR DU PAYS. `''` = le regime de droit commun.
+     *
+     * ⚠ POURQUOI CE CHAMP EXISTE : UN CODE PAYS NE SUFFIT PAS A DESIGNER UN REGIME.
+     *
+     * L'import TEDB du 02/09 l'a montre par une violation de contrainte : l'Espagne rend `7,00` ET
+     * `21,00` a la meme date. Ce ne sont pas deux versions du meme taux — ce sont les Canaries et la
+     * peninsule, deux regimes distincts sous un seul `ES`. Le referentiel n'ayant qu'une place par
+     * (pays, categorie, date), l'Espagne n'a pas pu etre importee du tout.
+     *
+     * Le cas n'a rien d'exotique et nous concerne directement : la Corse et les DOM ont leurs
+     * propres taux, Madere et les Acores les leurs, Aland les siens. Un exploitant francais aux
+     * Antilles est en `FR` — le champ `pays` de son etablissement le dit deja — et il ne facture pas
+     * a 20 %.
+     *
+     * ── ⚠ NON NUL, ET `''` PLUTOT QUE `NULL` : CE N'EST PAS UN DETAIL DE STYLE ──────────────────
+     *
+     * MariaDB traite deux `NULL` comme DISTINCTS dans un index unique. Un `territory` nullable
+     * aurait donc laisse coexister deux lignes « droit commun » identiques pour un meme pays, une
+     * meme categorie et une meme date — la contrainte aurait cesse de proteger exactement le cas
+     * courant, celui qu'elle protege aujourd'hui, et sans rien dire.
+     *
+     * ── CE QUE LE CODE VAUT, ET CE QU'IL NE VAUT PAS ────────────────────────────────────────────
+     *
+     * C'est un code court et interne (`IC` pour les Canaries, `CORSE`, `DOM`), pas une norme : ISO
+     * 3166-2 decoupe des SUBDIVISIONS administratives, qui ne coincident pas avec les territoires
+     * FISCAUX. Pretendre le contraire ferait chercher une correspondance qui n'existe pas.
+     */
+    #[ORM\Column(length: 20, options: ['default' => ''])]
+    #[Groups(['legal_vat:read'])]
+    private string $territory = '';
 
     #[ORM\Column(length: 20, enumType: VatRateCategory::class)]
     #[Groups(['legal_vat:read'])]
@@ -231,5 +263,17 @@ class LegalVatRate
         }
 
         return null === $this->validUntil || $date <= $this->validUntil;
+    }
+
+    public function getTerritory(): string
+    {
+        return $this->territory;
+    }
+
+    public function setTerritory(string $territory): self
+    {
+        $this->territory = strtoupper(trim($territory));
+
+        return $this;
     }
 }

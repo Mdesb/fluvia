@@ -102,6 +102,17 @@ final class VatRateCatalog
     public string $country = '';
 
     /**
+     * Le territoire fiscal effectivement lu. `''` = le regime de droit commun du pays.
+     *
+     * ⚠ IL EST RENDU MEME QUAND IL EST VIDE, et c'est voulu : un ecran qui ne verrait pas ce champ
+     * ne saurait pas SI la question s'est posee. « Territoire : (droit commun) » et « ce logiciel
+     * ignore les territoires » se ressemblent a l'oeil, et ne veulent pas du tout dire la meme
+     * chose quand on facture depuis la Guadeloupe.
+     */
+    #[Groups(['vat_catalog:read'])]
+    public string $territory = '';
+
+    /**
      * Les taux en vigueur, du plus eleve au plus bas.
      *
      * @var list<array<string, mixed>>

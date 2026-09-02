@@ -48,11 +48,12 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 final class SeedLegalVatRatesCommand extends Command
 {
     /**
-     * @var list<array{country: string, category: VatRateCategory, rate: string, label: string, from: string, until: ?string, source: string}>
+     * @var list<array{country: string, territory: string, category: VatRateCategory, rate: string, label: string, from: string, until: ?string, source: string}>
      */
     private const RATES = [
         [
             'country' => 'FR',
+            'territory' => '',
             'category' => VatRateCategory::Standard,
             'rate' => '20.00',
             'label' => 'Taux normal — la plupart des biens et services',
@@ -62,6 +63,7 @@ final class SeedLegalVatRatesCommand extends Command
         ],
         [
             'country' => 'FR',
+            'territory' => '',
             'category' => VatRateCategory::Reduced,
             'rate' => '10.00',
             'label' => 'Taux reduit — restauration, transport de voyageurs, travaux de renovation',
@@ -71,6 +73,7 @@ final class SeedLegalVatRatesCommand extends Command
         ],
         [
             'country' => 'FR',
+            'territory' => '',
             'category' => VatRateCategory::SecondReduced,
             'rate' => '5.50',
             'label' => 'Taux reduit — produits alimentaires, livres, abonnements gaz et electricite',
@@ -80,6 +83,7 @@ final class SeedLegalVatRatesCommand extends Command
         ],
         [
             'country' => 'FR',
+            'territory' => '',
             'category' => VatRateCategory::SuperReduced,
             'rate' => '2.10',
             'label' => 'Taux particulier — medicaments remboursables, presse, certains spectacles',
@@ -87,6 +91,101 @@ final class SeedLegalVatRatesCommand extends Command
             'until' => null,
             'source' => 'CGI art. 281 quater et suivants',
         ],
+
+        // ── TERRITOIRES ────────────────────────────────────────────────────────────────────────
+        //
+        // ⚠ CES TAUX SE SEMENT A LA MAIN, ET C'EST LE SEUL MOYEN HONNETE.
+        //
+        // L'export TEDB rend `7,00` et `21,00` sous un seul `ES`, sans un mot sur le territoire :
+        // ranger le 7 dans les Canaries serait exact, et ce serait MA connaissance, pas celle de la
+        // source. Ici chaque ligne porte son texte, comme les taux francais du CGI.
+        //
+        // ⚠ ET UN TERRITOIRE QUI PORTE DES TAUX REND UNIQUEMENT LES SIENS (voir
+        // `LegalVatRateRepository::baremeComplet()`). Ces jeux doivent donc etre COMPLETS pour leur
+        // territoire, pas seulement porter les differences.
+
+        // Espagne — peninsule et Baleares. Ce qui manquait pour que l'Espagne existe : son
+        // catalogue etait VIDE depuis l'import, faute de pouvoir distinguer 21 % de 7 %.
+        [
+            'country' => 'ES',
+            'territory' => '',
+            'category' => VatRateCategory::Standard,
+            'rate' => '21.00',
+            'label' => 'Tipo general — peninsule et Baleares',
+            'from' => '2012-09-01',
+            'until' => null,
+            'source' => 'Ley 37/1992 del IVA, art. 90 (modifie par le RDL 20/2012)',
+        ],
+
+        // Canaries. ⚠ CE N'EST PAS DE LA TVA, ET LE LIBELLE LE DIT.
+        //
+        // Les Canaries sont hors du territoire TVA de l'Union : l'impot qui s'y applique est
+        // l'IGIC, un impot distinct. On le range ici parce que c'est ce qui figure sur une facture
+        // canarienne a la place de la TVA — mais appeler « TVA » ce qui n'en est pas une, sans le
+        // dire, ferait ecrire des mentions fausses.
+        //
+        // L'IGIC connait d'autres types (0 %, 9,5 %, 15 %) qui ne correspondent a aucune de nos
+        // categories. Les forcer dans « super reduit » ou « parking » serait la meme inference que
+        // celle refusee a l'import.
+        [
+            'country' => 'ES',
+            'territory' => 'IC',
+            'category' => VatRateCategory::Standard,
+            'rate' => '7.00',
+            'label' => 'IGIC tipo general — Canaries (impot distinct de la TVA)',
+            'from' => '2020-01-01',
+            'until' => null,
+            'source' => 'Ley 20/1991 (IGIC), tipo general porte a 7 % au 1er janvier 2020',
+        ],
+        [
+            'country' => 'ES',
+            'territory' => 'IC',
+            'category' => VatRateCategory::Reduced,
+            'rate' => '3.00',
+            'label' => 'IGIC tipo reducido — Canaries (impot distinct de la TVA)',
+            'from' => '2020-01-01',
+            'until' => null,
+            'source' => 'Ley 20/1991 (IGIC), tipo reducido',
+        ],
+
+        // France d'outre-mer — Guadeloupe, Martinique, Reunion. DEUX taux, et deux seulement :
+        // c'est precisement ce qui a fait abandonner la fusion categorie par categorie, laquelle y
+        // faisait apparaitre le 5,5 % metropolitain.
+        //
+        // ⚠ GUYANE ET MAYOTTE N'Y SONT PAS : la TVA n'y est PAS APPLICABLE (CGI art. 294, 1).
+        // Ce n'est pas un taux a zero, c'est une absence d'impot — et notre modele n'a pas de mot
+        // pour ca. Un `DOM` unique les aurait fait facturer a 8,5 %.
+        [
+            'country' => 'FR',
+            'territory' => 'DOM',
+            'category' => VatRateCategory::Standard,
+            'rate' => '8.50',
+            'label' => 'Taux normal — Guadeloupe, Martinique, Reunion',
+            'from' => '2014-01-01',
+            'until' => null,
+            'source' => 'CGI art. 296, 1° a',
+        ],
+        [
+            'country' => 'FR',
+            'territory' => 'DOM',
+            'category' => VatRateCategory::Reduced,
+            'rate' => '2.10',
+            'label' => 'Taux reduit — Guadeloupe, Martinique, Reunion',
+            'from' => '2014-01-01',
+            'until' => null,
+            'source' => 'CGI art. 296, 1° b',
+        ],
+
+        // ⚠ LA CORSE N'Y EST PAS, ET C'EST DELIBERE.
+        //
+        // Ses taux particuliers (CGI art. 297) ne forment pas un bareme alternatif : ce sont des
+        // taux attaches a des OPERATIONS precises — 0,90 % sur les premieres representations,
+        // 2,10 % sur certains travaux, 13 % sur les produits petroliers — par-dessus le bareme
+        // metropolitain qui continue de s'appliquer partout ailleurs.
+        //
+        // Notre modele range un taux par categorie et par territoire. Y faire entrer la Corse
+        // demanderait de choisir lequel de ses taux est « le reduit », ce qui n'a pas de sens.
+        // C'est un besoin de modele (un taux attache a une operation), pas une ligne a semer.
     ];
 
     public function __construct(private readonly EntityManagerInterface $em)
@@ -116,8 +215,12 @@ final class SeedLegalVatRatesCommand extends Command
             // On interroge exactement la cle metier de CETTE entree. Un test du genre « ce pays
             // a-t-il deja des taux ? » rendrait vrai des la premiere ligne et ferait sauter les
             // trois suivantes en silence — le semis paraitrait complet en ayant pose un quart.
+            // ⚠ LE TERRITOIRE FAIT PARTIE DE LA CLE DEPUIS QU'IL EXISTE. Sans lui, le taux
+            // canarien a 7 % et le taux espagnol a 21 % se confondent : le second serait vu
+            // « deja present » et ne serait jamais pose, ou l'inverse — selon l'ordre du tableau.
             $existant = $depot->findOneBy([
                 'country' => $ligne['country'],
+                'territory' => $ligne['territory'],
                 'category' => $ligne['category'],
                 'validFrom' => $from,
             ]);
@@ -129,8 +232,9 @@ final class SeedLegalVatRatesCommand extends Command
 
             if ($simulation) {
                 $io->text(sprintf(
-                    'a creer : %s %s %% — %s (depuis le %s)',
+                    'a creer : %s%s %s %% — %s (depuis le %s)',
                     $ligne['country'],
+                    $ligne['territory'] === '' ? '' : '/' . $ligne['territory'],
                     $ligne['rate'],
                     $ligne['label'],
                     $from->format('d/m/Y'),
@@ -141,6 +245,7 @@ final class SeedLegalVatRatesCommand extends Command
 
             $taux = (new LegalVatRate())
                 ->setCountry($ligne['country'])
+                ->setTerritory($ligne['territory'])
                 ->setCategory($ligne['category'])
                 ->setRate($ligne['rate'])
                 ->setLabel($ligne['label'])

@@ -151,7 +151,17 @@ final class ImportTedbVatRatesCommand extends Command
                     continue;
                 }
 
-                $cle = $pays . '|' . $categorie->value . '|' . $depuis->format('Y-m-d');
+                // ⚠ LE TERRITOIRE RESTE VIDE, ET L'AMBIGUITE ESPAGNOLE DEMEURE.
+                //
+                // Le referentiel sait desormais distinguer les Canaries de la peninsule — mais
+                // l'export TEDB, lui, ne le dit toujours pas : il rend `7,00` et `21,00` sous un
+                // seul `ES`, sans un mot sur le territoire. Ranger le 7 dans `IC` serait exact,
+                // et ce serait MA connaissance, pas celle de la source.
+                //
+                // L'import continue donc de signaler l'Espagne au lieu de la trancher. Les taux
+                // territoriaux se posent a la main, avec leur texte legal, comme les taux francais
+                // du CGI — c'est le seul endroit ou une telle affirmation a une reference.
+                $cle = $pays . '||' . $categorie->value . '|' . $depuis->format('Y-m-d');
                 $groupes[$cle]['pays'] = $pays;
                 $groupes[$cle]['categorie'] = $categorie;
                 $groupes[$cle]['depuis'] = $depuis;
@@ -187,7 +197,9 @@ final class ImportTedbVatRatesCommand extends Command
             // reference a une base de donnees, en silence, sur la meme valeur.
             //
             // On regarde donc TOUTES les lignes de la (pays, categorie), pas celle du jour.
-            $existantes = $depot->findBy(['country' => $g['pays'], 'category' => $g['categorie']]);
+            // Le droit commun seulement : un taux des Canaries ne doit ni empecher l'import du
+            // taux espagnol de droit commun, ni etre compte comme « deja present » pour lui.
+            $existantes = $depot->findBy(['country' => $g['pays'], 'territory' => '', 'category' => $g['categorie']]);
 
             if ($existantes !== []) {
                 $memeValeur = false;
