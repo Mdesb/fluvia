@@ -39,19 +39,28 @@ use Dompdf\Options;
  * validateur l'accepte. Les deux phrases se ressemblent et ne disent pas la même chose — la seconde
  * demande un outil qu'on n'a pas.
  *
- * ── ⚠ UNE OBSERVATION À TRANCHER AVEC UN VALIDATEUR, PAS ICI ───────────────────────────────────
+ * ── ✓ LE PDF/A-3B EST VALIDÉ — ET UNE INQUIÉTUDE DE MA PART ÉTAIT INFONDÉE ─────────────────────
  *
- * Sonde du 02/09 sur un PDF produit par cette classe : la chaîne `pdfaid` n'apparaît **pas en
- * clair**, `/Metadata` deux fois, `FlateDecode` cinq fois. Le XMP de niveau document est donc écrit
- * dans un flux **compressé**.
+ * Verdict de **veraPDF**, l'implémentation de référence, le 02/09 sur un fichier produit par cette
+ * classe :
  *
- * Or la norme PDF/A demande — sauf erreur de ma part, et c'est bien le problème — que ce flux reste
- * non compressé, pour qu'un outil d'archive puisse le lire sans décodeur. Si c'est exact, ce fichier
- * n'est **pas conforme** malgré une structure par ailleurs correcte.
+ *     PASS /data/temoin-facturx.pdf 3b
  *
- * Je ne peux pas en décider : je n'ai ni le texte de la norme ni veraPDF. C'est écrit ici pour que
- * la question soit posée au premier passage de validation, et non redécouverte par un refus de
- * plateforme. Une incertitude nommée coûte moins qu'une conformité supposée.
+ * ⚠ Et le validateur discrimine : le même appel sur un PDF ordinaire rend `FAIL` avec rc=1. Un
+ * « PASS » d'un outil qui ne chargerait aucune règle vaudrait zéro ; celui-ci sait refuser.
+ *
+ * ⚠ J'AVAIS ÉCRIT ICI QUE LE XMP COMPRESSÉ CASSAIT PEUT-ÊTRE LA CONFORMITÉ. C'est faux. J'avais
+ * observé, à raison, que `pdfaid` n'apparaît pas en clair et que le flux est `FlateDecode` ; j'en
+ * avais tiré, de mémoire et à tort, que la norme l'interdisait. L'observation était bonne,
+ * l'inférence ne l'était pas — et c'est exactement pour ça que je l'avais posée comme une QUESTION
+ * plutôt que comme un défaut. Une incertitude nommée se lève en une commande ; un défaut affirmé à
+ * tort se propage.
+ *
+ * `infra/valider-facturx.sh` rejoue cette validation, témoin négatif compris.
+ *
+ * ⚠ CE QUI RESTE NON VALIDÉ : le XML contre le schematron d'EN 16931 (les ~100 règles `BR-xx`), et
+ * le couple contre le validateur Factur-X de la FNFE. PDF/A-3B dit que l'ENVELOPPE est conforme ;
+ * il ne dit rien du CONTENU de la facture.
  */
 final class FacturXAssembler
 {

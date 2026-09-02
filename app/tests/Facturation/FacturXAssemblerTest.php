@@ -79,10 +79,11 @@ final class FacturXAssemblerTest extends TestCase
         // presence du flux ; son contenu demanderait de le decompresser, ce qui ferait de ce test un
         // lecteur de PDF au lieu d'un test de notre assemblage.
         //
-        // ⚠ ET CETTE COMPRESSION EST A VERIFIER AVEC UN VALIDATEUR. La norme demande, sauf erreur,
-        // que le XMP de niveau document reste non compresse. Si c'est le cas, le fichier n'est pas
-        // conforme malgre une structure correcte — et personne ici ne peut en decider : c'est
-        // exactement la question a laquelle veraPDF repond. Consigne plutot qu'affirme.
+        // ⚠ CETTE COMPRESSION NE CASSE RIEN, ET JE M'ETAIS INQUIETE A TORT. veraPDF rend
+        // « PASS ... 3b » sur un fichier produit par l'assembleur (02/09), et « FAIL » sur un PDF
+        // ordinaire — il sait donc refuser. J'avais infere de memoire que la norme interdisait un
+        // XMP compresse ; l'observation etait juste, l'inference non. Rejouable :
+        // `infra/valider-facturx.sh`.
         self::assertStringContainsString('/Metadata', $pdf, 'le PDF doit porter un flux XMP');
         self::assertStringContainsString('factur-x.xml', $pdf, 'le fichier embarque doit porter le nom impose');
         self::assertStringContainsString('/AFRelationship', $pdf, 'le fichier doit etre relie au document');
