@@ -182,30 +182,27 @@ final class FacturXAssembler
         // cas la meme exception remonte, avec son message, et c'est le gabarit qu'il faut corriger.
         $options->setDefaultFont('DejaVu Sans');
 
-        // ⚠ UN CACHE DE POLICES A NOUS, PARCE QUE CELUI DE `vendor/` REND LE RESULTAT DEPENDANT DE
-        // L'ENVIRONNEMENT.
+        // ⚠ UN CACHE DE POLICES CORROMPU FAIT ECHOUER LE PDF/A, ET J'AI CRU POUVOIR LE DEPLACER.
         //
-        // Par defaut, Dompdf ecrit ses metriques de police DANS `vendor/dompdf/dompdf/lib/fonts/`.
-        // Ce repertoire n'est pas dans le meme etat partout : sur le clone de deploiement il
-        // appartient a root et reste tel qu'installe (40 fichiers) ; dans un worktree ou l'on teste,
-        // il est inscriptible et se remplit au fil des executions (45 fichiers, dont des metriques
-        // `Times-*`).
+        // Dompdf ecrit ses metriques dans `vendor/dompdf/dompdf/lib/fonts/`. Un run INTERROMPU y
+        // laisse un `.ufm.json` tronque ; DejaVu devient alors inutilisable, la resolution retombe
+        // sur Times — police de base, sans fichier binaire, non embarquable — et PDF/A refuse :
         //
-        // Mesure du 02/09 : les memes tests PASSAIENT sur le clone et ECHOUAIENT dans le worktree,
-        // sur « A fully embeddable font must be used ». La resolution de « DejaVu Sans » retombait
-        // sur Times — une police de base, sans fichier binaire, donc non embarquable, donc refusee
-        // par PDF/A. Supprimer les caches generes faisait repasser au vert.
+        //     « A fully embeddable font must be used when generating a document in PDF/A mode »
         //
-        // ⚠ ET LA SUITE CIBLEE NE POUVAIT PAS LE VOIR : elle tournait la ou le defaut ne se produit
-        // pas. C'est la suite complete, dans le worktree, qui l'a trouve.
+        // C'est arrive dans le worktree ou j'avais tue plusieurs suites completes ; le clone de
+        // deploiement, lui, restait vert. Le meme code, deux verdicts.
         //
-        // On sort donc le cache de `vendor/` : un repertoire a nous, cree si besoin, dont l'etat ne
-        // depend que de nous. Il se reconstruit tout seul s'il disparait.
-        $cachePolices = sys_get_temp_dir() . '/fluvia-dompdf-fonts';
-        if (!is_dir($cachePolices) && !mkdir($cachePolices, 0o775, true) && !is_dir($cachePolices)) {
-            throw new \RuntimeException(sprintf('Impossible de creer le cache de polices « %s ».', $cachePolices));
-        }
-        $options->setFontCache($cachePolices);
+        // ⚠ MA PREMIERE CORRECTION ETAIT FAUSSE, ET PIRE QUE LE MAL. J'ai pointe `setFontCache` vers
+        // un repertoire a nous, en croyant n'y deplacer que des metriques. Ce repertoire porte aussi
+        // le REGISTRE des polices : vide, Dompdf ne trouvait plus DejaVu du tout —
+        // « Unable to find a suitable font replacement for: 'DejaVu Sans' ». Trois tests au lieu de
+        // deux. Je l'ai retiree.
+        //
+        // Le remede, quand ca arrive : supprimer les caches generes, que Dompdf reconstruit.
+        //
+        //     rm -f app/vendor/dompdf/dompdf/lib/fonts/*.ufm.json
+        //     rm -f app/vendor/dompdf/dompdf/lib/fonts/*.afm.json
 
         $dompdf = new Dompdf($options);
         $dompdf->loadHtml($html, 'UTF-8');
