@@ -110,6 +110,27 @@ class Etablissement
     private string $pays = 'FR';
 
     /**
+     * LE TERRITOIRE FISCAL DANS LE PAYS. `''` = le regime de droit commun.
+     *
+     * C'est le champ qui manquait pour que la phrase ci-dessus — « un etablissement francais aux
+     * Antilles est en `FR` et en `America/Guadeloupe` » — soit complete : il est aussi en `DOM`, et
+     * il ne facture pas a 20 %.
+     *
+     * Le catalogue de TVA lit ce champ : un territoire qui porte des taux rend UNIQUEMENT les
+     * siens — il declare son bareme complet, il ne complete pas celui du pays. La raison est ecrite
+     * dans `LegalVatRateRepository::baremeComplet()` : la regle inverse faisait apparaitre le
+     * 5,5 % metropolitain dans un catalogue guadeloupeen, ou il n'existe pas.
+     *
+     * ⚠ VIDE PAR DEFAUT, ET C'EST LA BONNE VALEUR : la quasi-totalite des etablissements relevent du
+     * droit commun de leur pays. Un defaut « FR-METRO » aurait fait porter a chacun une affirmation
+     * que personne n'a saisie.
+     */
+    #[ORM\Column(length: 20, options: ['default' => ''])]
+    #[Assert\Regex(pattern: '/^[A-Z0-9-]{0,20}$/', message: 'Le territoire fiscal s ecrit en majuscules, chiffres et tirets.')]
+    #[Groups(['etablissement:read', 'etablissement:write'])]
+    private string $fiscalTerritory = '';
+
+    /**
      * La devise dans laquelle cet etablissement facture, en ISO 4217.
      *
      * ⚠ ELLE NE SE DEDUIT PAS DU PAYS, ET C'EST POURQUOI ELLE A SON PROPRE CHAMP. Une table
@@ -307,6 +328,18 @@ class Etablissement
         }
 
         $this->fuseauHoraire = $fuseauHoraire;
+
+        return $this;
+    }
+
+    public function getFiscalTerritory(): string
+    {
+        return $this->fiscalTerritory;
+    }
+
+    public function setFiscalTerritory(string $fiscalTerritory): self
+    {
+        $this->fiscalTerritory = strtoupper(trim($fiscalTerritory));
 
         return $this;
     }

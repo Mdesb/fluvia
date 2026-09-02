@@ -10,6 +10,7 @@ use App\Facturation\Entity\DestinataireFacturation;
 use App\Facturation\Entity\Facture;
 use App\Facturation\Entity\LigneFacture;
 use App\Compta\Entity\ProfilExploitant;
+use App\Organisation\Entity\Etablissement;
 use App\Facturation\Enum\StatutFacture;
 use PHPUnit\Framework\TestCase;
 
@@ -286,6 +287,76 @@ final class InvoiceReadinessTest extends TestCase
             static fn (array $m): BusinessTerm => $m['terme'],
             $this->readiness->manques($facture),
         );
+    }
+
+    /**
+     * ⚠ UN VENDEUR BELGE N'A PAS DE SIREN, ET NE DOIT PAS SE L'ENTENDRE REPROCHER.
+     *
+     * BT-30 — l'identifiant légal du vendeur — n'est pas universel : le SIREN vient du répertoire
+     * SIRENE, qui est français. Le contrôle le réclamait à tout le monde. Sur un profil belge
+     * complet et parfaitement conforme, l'écran aurait affiché « identifiant légal du vendeur :
+     * manquant » indéfiniment, sans qu'aucune valeur ne puisse jamais le satisfaire.
+     *
+     * Une exigence impossible à satisfaire ne se lit pas comme un défaut du logiciel : elle se lit
+     * comme un dossier incomplet, et l'utilisateur cherche ce qu'il a oublié.
+     */
+    public function testUnVendeurHorsDeFranceNeSeVoitPasReclamerDeSiren(): void
+    {
+        $facture = $this->factureAvecAcheteurComplet()->setProfilExploitant($this->vendeurBelge());
+
+        $termes = $this->termes($facture);
+
+        self::assertNotContains(BusinessTerm::SellerLegalIdentifier, $termes);
+
+        // ⚠ TÉMOIN : le contrôle vendeur n'a pas été désarmé en même temps. Sans cette ligne, un
+        // `return` prématuré dans la branche vendeur rendrait le test ci-dessus vert.
+        self::assertNotContains(BusinessTerm::SellerName, $termes);
+        self::assertNotContains(BusinessTerm::SellerVatIdentifier, $termes);
+    }
+
+    /**
+     * Et son jumeau, sans lequel le précédent ne prouverait rien : hors de France, c'est BT-31 —
+     * le numéro de TVA intracommunautaire — qui porte l'identité, et il reste exigé.
+     *
+     * Si le contrôle avait été relâché pour les vendeurs étrangers plutôt que redirigé, ce test
+     * serait le seul à le dire.
+     */
+    public function testUnVendeurHorsDeFranceDoitToutDeMemePorterUnNumeroDeTva(): void
+    {
+        $profil = $this->vendeurBelge()->setTvaIntracommunautaire(null);
+
+        $termes = $this->termes($this->factureAvecAcheteurComplet()->setProfilExploitant($profil));
+
+        self::assertContains(BusinessTerm::SellerVatIdentifier, $termes);
+        self::assertNotContains(BusinessTerm::SellerLegalIdentifier, $termes);
+    }
+
+    /**
+     * ⚠ ET LE VENDEUR FRANÇAIS, LUI, DOIT TOUJOURS SON SIREN.
+     *
+     * C'est le cas qui démasque une condition de pays trop large. Les deux tests ci-dessus
+     * resteraient verts si BT-30 n'était plus réclamé à personne.
+     */
+    public function testUnVendeurFrancaisSansSirenEstToujoursSignale(): void
+    {
+        $profil = $this->vendeurComplet()->setSiren('');
+
+        $termes = $this->termes($this->factureAvecAcheteurComplet()->setProfilExploitant($profil));
+
+        self::assertContains(BusinessTerm::SellerLegalIdentifier, $termes);
+    }
+
+    /** Le même vendeur complet, mais dont l'établissement principal est en Belgique. */
+    private function vendeurBelge(): ProfilExploitant
+    {
+        $siege = (new Etablissement())->setNom('Fluvia Belgique')->setPays('BE');
+
+        return (new ProfilExploitant())
+            ->setEtablissementPrincipal($siege)
+            ->setSiren('')
+            ->setRaisonSociale('Fluvia Belgique SRL')
+            ->setTvaIntracommunautaire('BE0123456789')
+            ->setAdresse(['rue' => '12 rue Neuve', 'cp' => '1000', 'ville' => 'Bruxelles', 'pays' => 'BE']);
     }
 
     private function vendeurComplet(): ProfilExploitant

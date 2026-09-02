@@ -52,6 +52,21 @@ final class CiiSerializer
      * nommant Chorus reviendrait à affirmer qu'on respecte ses restrictions supplémentaires — ce que
      * personne n'a vérifié. Un profil déclaré et non tenu est pire qu'un profil générique.
      */
+    /**
+     * Les registres d'identification d'entreprise dont nous connaissons le code ISO 6523.
+     *
+     * ⚠ UNE SEULE ENTREE, ET C'EST HONNETE. Le produit n'est commercialise qu'en France ; `0002` est
+     * le repertoire SIRENE, et c'est le seul que nous puissions soutenir. Ajouter des codes de
+     * memoire pour les autres pays produirait des affirmations plausibles et FAUSSES sur un document
+     * opposable.
+     *
+     * Chaque entree ajoutee ici doit venir d'une source verifiee, comme les taux legaux qui portent
+     * leur `source`. Une table de correspondances dont on ignore l'origine est une table d'opinions.
+     */
+    private const REGISTRES_CONNUS = [
+        'FR' => '0002',
+    ];
+
     private const SPECIFICATION = 'urn:cen.eu:en16931:2017';
 
     public function __construct(
@@ -290,9 +305,37 @@ final class CiiSerializer
         // Mesure du 02/09 : le validateur Factur-X reclamait un SIREN que nous posions deja. Un
         // identifiant sans son referentiel n'identifie rien — c'est un nombre.
         $legal = $dom->createElementNS(self::NS_RAM, 'ram:SpecifiedLegalOrganization');
-        $siren = $dom->createElementNS(self::NS_RAM, 'ram:ID', (string) $profil?->getSiren());
-        $siren->setAttribute('schemeID', '0002');
-        $legal->appendChild($siren);
+        $identifiant = $dom->createElementNS(self::NS_RAM, 'ram:ID', (string) $profil?->getSiren());
+
+        // ⚠ ON NE DECLARE UN REGISTRE QUE QUAND ON LE CONNAIT.
+        //
+        // J'avais fige `schemeID="0002"` — le repertoire SIRENE, FRANCAIS. Pour un etablissement
+        // belge ou allemand, ce fichier aurait affirme « ce numero vient de SIRENE » en portant un
+        // numero d'entreprise belge. Un identifiant sans son referentiel n'identifie rien ; un
+        // identifiant avec le MAUVAIS referentiel ment.
+        //
+        // La liste ISO 6523 compte des centaines de codes. En inventer d'autres de memoire
+        // produirait des affirmations plausibles et fausses sur un document opposable — exactement
+        // ce que le champ `source` des taux legaux existe pour empecher ailleurs.
+        //
+        // On declare donc le registre pour les pays dont on le connait, et on OMET l'attribut pour
+        // les autres. Un identifiant sans `schemeID` reste lisible ; il ne revendique simplement pas
+        // une origine qu'on ne peut pas soutenir. Le profil francais (BR-FR-10) exige `0002` — il ne
+        // s'applique qu'aux factures francaises, ou nous le posons.
+        // ⚠ LE PAYS VIENT DE L'ETABLISSEMENT DE LA FACTURE, PAS DE CELUI DU PROFIL.
+        //
+        // Un profil comptable peut couvrir plusieurs etablissements ; c'est celui qui EMET
+        // qui determine le registre a declarer. Ma premiere version lisait le profil, et le
+        // temoin Factur-X — dont le profil n'a pas d'etablissement — a fait revenir BR-FR-10 :
+        // le registre n'etait plus declare du tout. Le repli sur le profil reste, pour le cas
+        // ou la facture n'aurait pas encore son etablissement.
+        $emetteur = $facture->getEtablissement() ?? $profil?->getEtablissement();
+        $pays = strtoupper((string) ($emetteur?->getPays() ?? ''));
+        if (isset(self::REGISTRES_CONNUS[$pays])) {
+            $identifiant->setAttribute('schemeID', self::REGISTRES_CONNUS[$pays]);
+        }
+
+        $legal->appendChild($identifiant);
         $vendeur->appendChild($legal);
 
         $vendeur->appendChild($this->adresse($dom, (array) $profil?->getAdresse()));

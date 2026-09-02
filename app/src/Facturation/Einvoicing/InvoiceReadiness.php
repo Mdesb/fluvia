@@ -102,7 +102,14 @@ final class InvoiceReadiness
                 $ajouter($terme, 'Facture::profilExploitant absent');
             }
         } else {
-            if ($profil->getSiren() === '') {
+            // ⚠ BT-30 N'EST RECLAME QU'AUX VENDEURS FRANCAIS. Reclamer un SIREN a un vendeur belge
+            // ferait apparaitre « identifiant legal du vendeur : manquant » sur un profil complet et
+            // conforme, indefiniment : il n'existe aucune valeur qui satisfasse ce controle. C'est
+            // BT-31, le numero de TVA intracommunautaire, qui porte l'identite hors de France — il
+            // est reclame juste en dessous, a tout le monde.
+            $paysVendeur = strtoupper($profil->getEtablissementPrincipal()?->getPays() ?? 'FR');
+
+            if ($paysVendeur === 'FR' && $profil->getSiren() === '') {
                 $ajouter(BusinessTerm::SellerLegalIdentifier, 'ProfilExploitant::siren');
             }
             if (trim($profil->getRaisonSociale() ?? '') === '') {

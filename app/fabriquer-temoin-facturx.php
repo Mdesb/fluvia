@@ -26,6 +26,7 @@ use App\Facturation\Entity\Facture;
 use App\Facturation\Entity\LigneFacture;
 use App\Facturation\Enum\StatutFacture;
 use App\Facturation\Enum\UnitCode;
+use App\Organisation\Entity\Etablissement;
 
 $profil = (new ProfilExploitant())
     ->setRaisonSociale('Regie des Sports')
@@ -48,6 +49,10 @@ $facture = (new Facture())
     ->setStatut(StatutFacture::Emise)
     ->setNumero('FA-2026-0007')
     ->setDateEmission(new DateTimeImmutable('2026-08-31'))
+    // ⚠ L'ETABLISSEMENT EMETTEUR PORTE LE PAYS, ET LE PAYS DETERMINE LE REGISTRE DECLARE.
+    // Sans lui, l'attribut schemeID du SIREN n'est pas ecrit, et le profil francais (BR-FR-10) le
+    // reclame. C'est le comportement voulu : on ne declare pas un registre qu'on ne connait pas.
+    ->setEtablissement((new Etablissement())->setPays('FR')->setDevise('EUR'))
     ->setProfilExploitant($profil)
     ->setDestinataire($destinataire);
 

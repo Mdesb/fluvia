@@ -203,6 +203,18 @@ final class FacturXAssembler
         //
         //     rm -f app/vendor/dompdf/dompdf/lib/fonts/*.ufm.json
         //     rm -f app/vendor/dompdf/dompdf/lib/fonts/*.afm.json
+        //
+        // ⚠ SURTOUT PAS `rm -f .../fonts/*.json`. Ce motif emporte AUSSI
+        // `installed-fonts.dist.json` — le REGISTRE, celui qui declare quelles polices existent.
+        // Sans lui, plus rien ne se resout, pas meme `serif` :
+        //
+        //     Dompdf\Exception: Unable to find a suitable font replacement for: 'serif'
+        //
+        // Je l'ai fait dans un worktree de test, et la suite complete a rendu 15 echecs — dont trois
+        // sur la generation des billets, qui n'a rien a voir avec Factur-X. J'ai lu ce rouge comme
+        // une regression du code pendant plusieurs minutes.
+        //
+        // Le registre se restaure en le recopiant depuis un autre arbre, ou par `composer install`.
 
         $dompdf = new Dompdf($options);
         $dompdf->loadHtml($html, 'UTF-8');

@@ -13,6 +13,7 @@ use App\Sport\Enum\StatutEcheanceSepa;
 use App\Sport\Recouvrement\AbonnementFitnessRedevablePort;
 use App\Vente\Service\LecteurCorps;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
 /**
@@ -37,7 +38,22 @@ final class SimulerRejetProcessor implements ProcessorInterface
 
     public function process(mixed $data, Operation $operation, array $uriVariables = [], array $context = []): IncidentImpaye
     {
-        \assert($data instanceof EcheanceSepa);
+        // ── ⚠ `assert()` ICI RENDAIT UN 500, ET LE CAS N'EST PAS THEORIQUE ────────────────────
+        //
+        // Quand l'echeance visee est hors du perimetre de l'etablissement actif, le fournisseur
+        // d'API Platform rend `null` — le cloisonnement fait son travail — et ce `null` arrive
+        // jusqu'ici. Un `assert()` le transforme en `AssertionError`, donc en **500 « Internal
+        // Server Error »** : le logiciel s'accuse lui-meme d'etre casse alors qu'il vient
+        // precisement de proteger la donnee d'un autre exploitant.
+        //
+        // Mesure du 02/09 : decouvert en ecrivant le test de cloisonnement de l'annulation, qui
+        // attendait 403 ou 404 et a lu 500.
+        //
+        // 404 est aussi la bonne reponse du point de vue de la confidentialite : « introuvable »
+        // ne dit pas si la ressource existe ailleurs, la ou « interdit » l'avouerait.
+        if (!$data instanceof EcheanceSepa) {
+            throw new NotFoundHttpException('Echeance introuvable dans le perimetre de l etablissement actif.');
+        }
 
         $corps = $this->lecteur->corps();
         $code = \is_string($corps['codeRetour'] ?? null) ? $corps['codeRetour'] : '';

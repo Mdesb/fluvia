@@ -68,8 +68,25 @@ final class VatRateCatalogProvider implements ProviderInterface
             );
         }
 
+        // ⚠ LE TERRITOIRE SUIT LA MEME REGLE QUE LE PAYS : il vient de l'etablissement, et le
+        // parametre ne sert qu'a EXPLORER. Un exploitant guadeloupeen est en `FR` — son pays ne dit
+        // donc rien de son regime — et c'est ce champ qui porte la difference entre 20 % et 8,5 %.
+        $territoireDemande = $requete?->query->get('territory');
+        $territoire = strtoupper(trim((string) ($territoireDemande ?? $etablissement->getFiscalTerritory())));
+
+        // On refuse une forme inattendue plutot que de la normaliser en silence : « canaries » ou
+        // « IC ! » rendraient le catalogue de droit commun, c'est-a-dire les taux de la peninsule
+        // sur une facture des Canaries, sans qu'aucun message ne le dise.
+        if (1 !== preg_match('/^[A-Z0-9-]{0,20}$/', $territoire)) {
+            throw new UnprocessableEntityHttpException(
+                'Le territoire fiscal s ecrit en majuscules, chiffres et tirets (IC, CORSE, DOM) : « '
+                . $territoire . ' » n\'en est pas un.'
+            );
+        }
+
         $vue = new VatRateCatalog();
         $vue->country = $pays;
+        $vue->territory = $territoire;
 
         // La date est « aujourd'hui » ici, et c'est le seul endroit ou ce choix se fait. Le depot,
         // lui, prend une date en parametre : expliquer une facture de 2025 demande les taux de 2025,
@@ -77,11 +94,15 @@ final class VatRateCatalogProvider implements ProviderInterface
         // des le premier decret.
         $aujourdhui = new \DateTimeImmutable('today');
 
-        foreach ($this->taux->inForce($pays, $aujourdhui) as $t) {
+        foreach ($this->taux->inForce($pays, $aujourdhui, $territoire) as $t) {
             $vue->rates[] = [
                 'id' => (string) $t->getId(),
                 'rate' => $t->getRate(),
                 'category' => $t->getCategory()->value,
+                // Le territoire de la LIGNE, qui n'est pas forcement celui demande : un taux de
+                // droit commun retenu faute de taux territorial rend `''`, et l'ecran peut alors
+                // dire « taux national » plutot que de laisser croire a un taux local.
+                'territory' => $t->getTerritory(),
                 'label' => $t->getLabel(),
                 'validFrom' => $t->getValidFrom()->format('Y-m-d'),
                 'validUntil' => $t->getValidUntil()?->format('Y-m-d'),

@@ -1,6 +1,10 @@
 # Application (Symfony)
 /app/vendor/
 /app/var/
+# Exports d import (TEDB, referentiels tiers) : volumineux, dates, jamais versionnes.
+# ⚠ PAS `app/var/` : un volume Docker (`app_var:/app/var`) le RECOUVRE dans le conteneur,
+#   donc un fichier depose la depuis l hote y est invisible.
+/app/imports/
 /app/.env.local
 /app/.env.*.local
 /app/public/bundles/

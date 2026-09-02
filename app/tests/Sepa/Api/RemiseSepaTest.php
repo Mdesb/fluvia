@@ -10,6 +10,8 @@ use App\Sepa\Entity\MandatSepa;
 use App\Sepa\Entity\RemiseSepa;
 use App\Tests\Sepa\SepaApiTestCase;
 use Doctrine\ORM\EntityManagerInterface;
+use App\Organisation\Entity\Etablissement;
+use App\DataFixtures\SocleFixtures;
 
 /**
  * `RemiseSepa` (plan-sepa.md §2/§6/§8) : la remise **régie** de démonstration (fixtures, générée via
@@ -69,6 +71,74 @@ final class RemiseSepaTest extends SepaApiTestCase
         // La remise appartient à l'établissement A (régie) : accès refusé depuis le contexte B.
         $clientB->request('GET', '/sepa/remises/' . $remise->getId() . '/pain008', $enteteB);
         self::assertResponseStatusCodeSame(403);
+    }
+
+    /**
+     * ⚠ SEPA EST UN DISPOSITIF EN EUROS. UN ETABLISSEMENT QUI COMPTE AUTREMENT NE PEUT PAS PRELEVER.
+     *
+     * `Pain008Generator` ecrit `Ccy="EUR"` sans condition, et c'est JUSTE : le prelevement SEPA ne
+     * connait que l'euro. Ce qui serait faux, c'est de laisser passer un etablissement qui compte
+     * dans une autre unite : ses montants partiraient tels quels, ETIQUETES EUR, et la banque
+     * prelverait ce nombre-la en euros sur de vrais comptes.
+     *
+     * ⚠ CE CAS N'ETAIT PAS ATTEIGNABLE HIER. Il l'est depuis que l'etablissement porte une devise —
+     * une capacite neuve ouvre une porte que rien ne gardait.
+     */
+    public function testUnEtablissementQuiNeComptePasEnEurosNePeutPasPrelever(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $etablissement = $em->getRepository(Etablissement::class)->find($this->idEtablissement(SocleFixtures::ETAB_A_NOM));
+        self::assertNotNull($etablissement);
+        $etablissement->setDevise('CHF');
+        $em->flush();
+
+        $client->request('POST', '/api/sepa/remises/generer', $entete + ['json' => []]);
+
+        self::assertResponseStatusCodeSame(422);
+        self::assertStringContainsString(
+            'CHF',
+            $client->getResponse()->getContent(false),
+            'le refus doit NOMMER la devise en cause, sinon il envoie chercher au hasard',
+        );
+    }
+
+    /**
+     * ⚠ LE TEMOIN : EN EUROS, CE REFUS-LA NE SE PRODUIT PAS.
+     *
+     * Un 422 ne dit pas POURQUOI a lui seul, et la generation peut echouer pour d'autres raisons
+     * parfaitement legitimes — « aucune echeance due pour cette date » en est une. Ce test ne
+     * demande donc pas que la remise reussisse : il demande que le refus de DEVISE soit absent.
+     *
+     * ⚠ Ma premiere version exigeait un succes. Elle etait fausse : l'etablissement de ce jeu de
+     * test n'a pas d'echeance due, et j'avais suppose le contraire au lieu de le mesurer. Un temoin
+     * bati sur une premisse fausse ne prouve rien — il rougit pour une raison etrangere a ce qu'il
+     * mesure, et on corrige le code au lieu du test.
+     */
+    public function testEnEurosLeRefusDeDeviseNeSeProduitPas(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+
+        $client->request('POST', '/api/sepa/remises/generer', $entete + ['json' => []]);
+
+        $corps = $client->getResponse()->getContent(false);
+
+        // ⚠ ETABLIR D'ABORD QU'IL Y AVAIT QUELQUE CHOSE A VOIR.
+        //
+        // Le garde-fou des assertions de non-appartenance a signale ce test : chercher l'ABSENCE
+        // d'une chaine dans une reponse VIDE passe sans rien mesurer. C'est le mensonge du zero, et
+        // je venais de l'ecrire dans un temoin.
+        //
+        // On exige donc une reponse qui dit quelque chose, avant de constater qu'elle ne dit pas
+        // CA.
+        self::assertNotEmpty($corps, 'temoin de non-vacuite : sans reponse, l assertion suivante ne prouve rien');
+
+        self::assertStringNotContainsString(
+            'n existe qu en euros',
+            $corps,
+            'un etablissement en euros ne doit jamais rencontrer le refus de devise',
+        );
     }
 
     public function testGenererRemiseSansEcheanceDueRenvoie422(): void

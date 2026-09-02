@@ -118,6 +118,50 @@ final class ConfigCreancierSepaTest extends SepaApiTestCase
         self::assertSame(VarianteCreancierSepa::Prive, $resultat2->getVariante());
     }
 
+    /**
+     * UN SECOND POST SUR LE MEME ETABLISSEMENT REND UN CONFLIT LISIBLE, PAS UN 500.
+     *
+     * La table porte `uniq_config_creancier_etablissement`. Sans controle dans le processeur, la
+     * demande remonte jusqu'au flush et la contrainte la refuse en `UniqueConstraintViolationException`
+     * — qu'API Platform rend en **500 « Internal Server Error »**, un corps sans un mot sur la cause.
+     *
+     * Mesure du 02/09 : j'ai lu ce 500 comme une panne du serveur et je suis alle chercher dans les
+     * journaux du conteneur pour apprendre ce que la reponse aurait pu me dire. Un 500 annonce « le
+     * logiciel est casse » ; ici rien n'est casse, la demande est refusee pour une raison que
+     * l'appelant peut corriger seul — il voulait un PATCH.
+     */
+    public function testUnSecondPostSurUnEtablissementDejaUneConfigRendUnConflit(): void
+    {
+        [$client, $entete] = $this->adminSurA();
+
+        $etabA = $this->entite(Etablissement::class, ['nom' => \App\DataFixtures\SocleFixtures::ETAB_A_NOM]);
+
+        // ⚠ TEMOIN DE LA PRECONDITION. Sans lui, ce test passerait aussi bien si l'etablissement A
+        // n'avait AUCUNE configuration : le POST reussirait, on lirait 201, et l'assertion sur 409
+        // serait la seule a tomber — en accusant le processeur au lieu de la fixture.
+        self::assertNotNull(
+            $this->entite(ConfigCreancierSepa::class, ['etablissement' => $etabA]),
+            "L'etablissement A n'a pas de configuration : ce test ne mesure pas un doublon.",
+        );
+
+        $client->request('POST', '/api/config_creancier_sepas', $entete + ['json' => [
+            'etablissement' => '/api/etablissements/' . $etabA->getId(),
+            'ics' => 'FR00ZZZ777777',
+            'creancierNom' => 'DOUBLON',
+            'creancierBic' => 'BDFEFRPPCCT',
+        ]]);
+
+        self::assertResponseStatusCodeSame(409);
+
+        $corps = $client->getResponse()->toArray(false);
+        $detail = (string) ($corps['detail'] ?? $corps['description'] ?? '');
+
+        // Le message doit fermer la mauvaise piste et ouvrir la bonne : nommer la configuration qui
+        // existe, et dire par quel geste la modifier.
+        self::assertStringContainsString('deja une configuration', $detail);
+        self::assertStringContainsString('PATCH', $detail);
+    }
+
     private static function operationBidon(): \ApiPlatform\Metadata\Post
     {
         return new \ApiPlatform\Metadata\Post();
