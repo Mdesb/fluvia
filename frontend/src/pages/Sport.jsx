@@ -83,6 +83,32 @@ function etatEcheance(statut) {
   return ETAT_ECHEANCE[statut] || { mot: statut || '—', classe: 'mut' }
 }
 
+// ⚠ `adherent` ET `payeur` — PAS `beneficiaire` NI `client`.
+//
+// L'écran lisait `a.client` et `a.beneficiaire` : deux noms que l'API n'envoie jamais. La colonne
+// « Adhérent » affichait donc « — » sur TOUS les abonnements, depuis toujours. C'est le défaut
+// jumeau de celui déjà corrigé deux colonnes plus loin (`dateFinEngagement`, pas `dateFin`).
+//
+// Et le bon nom ne suffit pas : `adherent` revient en IRI nue, parce que ni `Beneficiaire` ni
+// `Client` ne portent le groupe `abonnement:read`. On recoupe donc contre `GET /api/beneficiaires`,
+// où `Client::$nom` et `$prenom` sont exposés (groupe `beneficiaire:read`) — plutôt que d'élargir
+// la sérialisation pour un besoin qu'un appel existant couvre déjà.
+function nomAdherent(abonnement, beneficiaires) {
+  if (!abonnement) return <span className="sub">—</span>
+
+  // ⚠ `null` = la liste n'a pas été lue (403 sans `crm.lire`, par exemple). Rendre « — » ferait
+  // lire « cet abonnement n'a pas d'adhérent » là où on n'a simplement pas regardé.
+  if (beneficiaires === null) {
+    return <span className="sub">nom non lu — les bénéficiaires n’ont pas été obtenus</span>
+  }
+
+  const benef = resoudre(abonnement.adherent, beneficiaires)
+  const nom = benef && benef.client ? nomOuAbsence(benef.client, '') : ''
+  if (nom) return <span className="nm">{nom}</span>
+
+  return <span className="sub">adhérent — nom non transmis</span>
+}
+
 function quandHeure(v) {
   if (!v) return '—'
   const d = new Date(v)
@@ -117,6 +143,7 @@ export default function Sport({ etabActif, droits = [] }) {
   const peutGererAbonnement = aLeDroit(droits, 'sport.gerer_abonnement')
   const [souscription, setSouscription] = useState(false)
   const [echeances, setEcheances] = useState(null)
+  const [beneficiaires, setBeneficiaires] = useState(null)
   const [annulation, setAnnulation] = useState(null)
 
   // ⚠ `null` VEUT DIRE << PAS LU >>, `[]` VEUT DIRE << LU ET VIDE >>. SUR CET ECRAN, LA
@@ -153,12 +180,15 @@ export default function Sport({ etabActif, droits = [] }) {
       // `sos:read`, vérifié dans l'entité. La carte affichait donc « Espace inconnu » sur CHAQUE
       // alerte, y compris celles dont l'espace est parfaitement enregistré. Sur un écran où l'on
       // court, ce n'est pas une colonne vide : c'est l'information qui dit où courir.
-      const [s, a, ab, es, ec] = await Promise.all([
+      const [s, a, ab, es, ec, bf] = await Promise.all([
         api.evenementsSOS(),
         api.alertesPresenceIsolee().catch(() => null),
         api.abonnementsFitness().catch(() => null),
         api.espaces().catch(() => null),
         api.echeancesSepaSport().catch(() => null),
+        // Le nom de l'adhérent n'est nulle part ailleurs : `abonnement.adherent` est une IRI nue.
+        // `crm.lire` peut manquer — d'où le `.catch` et le `null` conservé.
+        api.beneficiaires().catch(() => null),
       ])
       setSos(membres(s))
       // ⚠ `a ? … : []` TRANSFORMAIT UN ECHEC EN LISTE VIDE. Les trois lectures tolerees rendent
@@ -170,6 +200,7 @@ export default function Sport({ etabActif, droits = [] }) {
       // Meme regle que les trois au-dessus : `null` reste `null`. Un echeancier illisible qui
       // s'afficherait « aucune echeance » dirait a l'exploitant que personne n'est prelevable.
       setEcheances(ec ? membres(ec) : null)
+      setBeneficiaires(bf ? membres(bf) : null)
     } catch (e) {
       setErreur(e.message || 'Le module n’a pas pu être chargé.')
       // On ne garde rien de partiel : un decompte a moitie lu a l'air normal.
@@ -177,6 +208,7 @@ export default function Sport({ etabActif, droits = [] }) {
       setAlertes(null)
       setAbonnements(null)
       setEcheances(null)
+      setBeneficiaires(null)
     } finally {
       setChargement(false)
     }
@@ -364,14 +396,7 @@ export default function Sport({ etabActif, droits = [] }) {
                   const terme = etatDuTerme(a.dateFinEngagement)
                   return (
                     <tr key={a.id}>
-                      <td>
-                        <span className="nm">
-                          {a.client?.raisonSociale
-                            || [a.client?.prenom, a.client?.nom].filter(Boolean).join(' ')
-                            || a.beneficiaire?.id
-                            || '—'}
-                        </span>
-                      </td>
+                      <td>{nomAdherent(a, beneficiaires)}</td>
                       <td><span className={`badge ${tonStatut(a.statut)}`}>{a.statut || '—'}</span></td>
                       <td className="num">
                         {a.dateDebutEngagement ? quandHeure(a.dateDebutEngagement) : '—'}
@@ -407,6 +432,7 @@ export default function Sport({ etabActif, droits = [] }) {
       <Echeancier
         echeances={echeances}
         abonnements={abonnements}
+        beneficiaires={beneficiaires}
         peutGerer={peutGererAbonnement}
         onAnnuler={setAnnulation}
       />
@@ -474,7 +500,7 @@ export default function Sport({ etabActif, droits = [] }) {
 // laisse passer ces 38 echeances : des lignes « a venir » d'apparence normale. Le bandeau compte
 // celles dont la date est passee et nomme la plus ancienne — c'est le fait qu'on ne peut pas voir
 // en lisant ligne a ligne.
-function Echeancier({ echeances, abonnements, peutGerer, onAnnuler }) {
+function Echeancier({ echeances, abonnements, beneficiaires, peutGerer, onAnnuler }) {
   const aujourdhui = new Date()
   aujourdhui.setHours(0, 0, 0, 0)
 
@@ -489,13 +515,12 @@ function Echeancier({ echeances, abonnements, peutGerer, onAnnuler }) {
   // Le talon `{ id }` se recoupe avec les abonnements deja charges par la page. Si CETTE liste-la
   // n'a pas pu etre lue, on ne remplace pas le nom par un tiret muet : on le dit.
   function adherent(echeance) {
-    const abo = resoudre(echeance.abonnement, abonnements || [])
-    if (!abo || !abo.client) {
-      return abonnements === null
-        ? <span className="sub">nom non résolu — la liste des abonnements n’a pas été lue</span>
-        : <span className="sub">—</span>
+    // Deux sauts : l'échéance porte un talon d'abonnement, l'abonnement porte une IRI d'adhérent.
+    // Si la première liste manque, on le dit — c'est elle qui manque, pas l'adhérent.
+    if (abonnements === null) {
+      return <span className="sub">nom non lu — la liste des abonnements n’a pas été obtenue</span>
     }
-    return <span className="nm">{nomOuAbsence(abo.client, '—')}</span>
+    return nomAdherent(resoudre(echeance.abonnement, abonnements), beneficiaires)
   }
 
   return (
