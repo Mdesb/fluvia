@@ -26,6 +26,13 @@ use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
  */
 final class GenerationRemiseHandler
 {
+    /**
+     * SEPA ne connait que l'euro — ce n'est pas un reglage, c'est la definition du dispositif.
+     *
+     * La constante existe pour que la comparaison ci-dessous se lise, pas pour qu'on la change.
+     */
+    private const DEVISE_SEPA = 'EUR';
+
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly SeqTpResolver $seqTpResolver,
@@ -37,9 +44,34 @@ final class GenerationRemiseHandler
 
     public function generer(Etablissement $etablissement, \DateTimeImmutable $dateExecution, EcheanceSepaSource $source): RemiseSepa
     {
+        // ⚠ SEPA EST UN DISPOSITIF EN EUROS. UNE REMISE DANS UNE AUTRE DEVISE N'EXISTE PAS.
+        //
+        // `Pain008Generator` ecrit `Ccy="EUR"` sans condition — et c'est JUSTE : le prelevement SEPA
+        // ne connait que l'euro. Ce qui serait faux, c'est de laisser passer un etablissement qui
+        // compte dans une autre unite : ses montants partiraient tels quels, ETIQUETES EUR, et la
+        // banque prelverait ce nombre-la en euros, sur de vrais comptes.
+        //
+        // Ce cas n'etait pas atteignable hier. Il l'est depuis que l'etablissement porte une devise :
+        // une capacite neuve ouvre une porte que rien ne gardait.
+        //
+        // ⚠ EN PREMIER, AVANT MEME DE CHERCHER LA CONFIGURATION CREANCIER. Ma premiere version etait
+        // posee apres, et surtout APRES UN `throw` : elle vivait donc dans la branche « pas de
+        // config » et ne s'executait que quand la fonction avait deja renonce. Le code compilait, les
+        // 68 tests SEPA restaient verts, et le controle n'existait que dans son commentaire.
+        //
+        // C'est le test que j'ai ecrit ENSUITE qui l'a dit — pas la relecture.
+        if ($etablissement->getDevise() !== self::DEVISE_SEPA) {
+            throw new UnprocessableEntityHttpException(sprintf(
+                'Le prelevement SEPA n existe qu en euros : cet etablissement compte en %s. '
+                . 'Generer la remise etiquetterait ses montants EUR et prelverait le mauvais montant.',
+                $etablissement->getDevise(),
+            ));
+        }
+
         $config = $this->em->getRepository(ConfigCreancierSepa::class)->findOneBy(['etablissement' => $etablissement]);
         if (!$config instanceof ConfigCreancierSepa) {
             throw new UnprocessableEntityHttpException('Aucune configuration créancier SEPA (« ConfigCreancierSepa ») pour cet établissement.');
+
         }
 
         $dues = $source->echeancesDues($etablissement, $dateExecution);
