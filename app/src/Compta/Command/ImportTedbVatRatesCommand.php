@@ -197,7 +197,32 @@ final class ImportTedbVatRatesCommand extends Command
             // ⚠ PLUSIEURS VALEURS POUR UNE MEME CLE : ON N'EN CHOISIT AUCUNE.
             if (\count($valeurs) !== 1) {
                 sort($valeurs);
-                $ambigus[] = sprintf('%s %s : %s', $g['pays'], $g['categorie']->value, implode(' / ', $valeurs));
+
+                // ⚠ « AUCUNE N'A ETE IMPORTEE » NE VEUT PAS DIRE « LE REFERENTIEL N'EN A PAS ».
+                //
+                // Cette liste se lisait « la Belgique n'a pas de taux reduit », alors que le sien
+                // est en base depuis qu'il a ete seme a la main avec son texte (arrete royal n°20).
+                // Un rapport qui enumere ce QU'IL n'a pas fait, sans dire ce qui est deja la, fait
+                // conclure a un trou qui n'existe pas — et quelqu'un ira le combler deux fois.
+                $enPlace = $depot->findBy([
+                    'country' => $g['pays'],
+                    'territory' => '',
+                    'category' => $g['categorie'],
+                ]);
+
+                $ambigus[] = sprintf(
+                    '%s %s : %s%s',
+                    $g['pays'],
+                    $g['categorie']->value,
+                    implode(' / ', $valeurs),
+                    $enPlace === [] ? '' : sprintf(
+                        '   → deja pose a la main : %s',
+                        implode(' / ', array_map(
+                            static fn ($e): string => number_format((float) $e->getRate(), 2, '.', ''),
+                            $enPlace,
+                        )),
+                    ),
+                );
                 continue;
             }
 
@@ -319,6 +344,9 @@ final class ImportTedbVatRatesCommand extends Command
             foreach ($ambigus as $a) {
                 $io->writeln('      ' . $a);
             }
+            $io->writeln('');
+            $io->writeln('  Une fleche « deja pose a la main » signale les cles dont le referentiel porte');
+            $io->writeln('  deja la valeur, semee avec son texte legal : il n y a alors rien a combler.');
             $io->writeln('');
             $io->writeln("  ⚠ L'Espagne en est l'exemple : 7 % et 21 % a la meme date, les Canaries et la");
             $io->writeln('    peninsule sous un seul code ISO. Le referentiel n accepte qu une valeur par');
