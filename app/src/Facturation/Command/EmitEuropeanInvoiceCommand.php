@@ -15,6 +15,8 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
+use App\Facturation\Einvoicing\FacturXAssembler;
+use App\Facturation\Einvoicing\InvoiceHtmlRenderer;
 
 /**
  * ÉMETTRE LE FICHIER EUROPÉEN D'UNE FACTURE — ou dire précisément pourquoi c'est impossible.
@@ -44,6 +46,8 @@ final class EmitEuropeanInvoiceCommand extends Command
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly CiiSerializer $serialiseur,
+        private readonly FacturXAssembler $assembleur,
+        private readonly InvoiceHtmlRenderer $renduHtml,
     ) {
         parent::__construct();
     }
@@ -52,7 +56,12 @@ final class EmitEuropeanInvoiceCommand extends Command
     {
         $this
             ->addArgument('numero', InputArgument::REQUIRED, 'Le numéro de la facture (ex. FA-2026-0001).')
-            ->addOption('vers', null, InputOption::VALUE_REQUIRED, 'Écrire dans ce fichier au lieu de la sortie standard.');
+            ->addOption('vers', null, InputOption::VALUE_REQUIRED, 'Écrire dans ce fichier au lieu de la sortie standard.')
+            // ⚠ `--facturx` EXIGE UN FICHIER, et ce n'est pas une facilité manquante : un PDF est
+            // binaire. L'écrire sur la sortie standard produirait un terminal illisible et, pire, un
+            // fichier corrompu dès qu'on le redirige à travers quoi que ce soit qui touche aux
+            // sauts de ligne.
+            ->addOption('facturx', null, InputOption::VALUE_REQUIRED, 'Écrire le Factur-X (PDF/A-3 + XML) dans ce fichier.');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -70,7 +79,13 @@ final class EmitEuropeanInvoiceCommand extends Command
             return Command::FAILURE;
         }
 
+        $facturx = $input->getOption('facturx');
+
         try {
+            if (\is_string($facturx) && $facturx !== '') {
+                return $this->ecrireFacturX($io, $facture, $facturx);
+            }
+
             $xml = $this->serialiseur->serialize($facture);
         } catch (InvoiceNotEmittableException $refus) {
             // ⚠ LE REFUS N'EST PAS UN INCIDENT D'EXÉCUTION, C'EST LE RÉSULTAT DE LA MESURE.
@@ -102,6 +117,31 @@ final class EmitEuropeanInvoiceCommand extends Command
         }
 
         $output->writeln($xml);
+
+        return Command::SUCCESS;
+    }
+
+    /**
+     * Le couple complet : le PDF que l'humain lit, le XML que la machine dépouille.
+     *
+     * ⚠ LE RENDU VISUEL PASSE PAR LE MÊME GABARIT QUE LA FACTURE ORDINAIRE. Un Factur-X dont le PDF
+     * ne ressemble pas à la facture envoyée par ailleurs serait deux documents pour une créance —
+     * et c'est le PDF qui fait foi pour le client.
+     */
+    private function ecrireFacturX(SymfonyStyle $io, Facture $facture, string $chemin): int
+    {
+        $pdf = $this->assembleur->assemble($this->renduHtml->render($facture), $facture);
+
+        if (file_put_contents($chemin, $pdf) === false) {
+            $io->error(sprintf('Impossible d écrire dans « %s ».', $chemin));
+
+            return Command::FAILURE;
+        }
+
+        $io->success(sprintf('%s écrit (%d octets) — PDF/A-3 portant %s.', $chemin, \strlen($pdf), FacturXAssembler::NOM_EMBARQUE));
+        $io->writeln('  ⚠ Ce fichier n a été soumis à AUCUN validateur : ni veraPDF pour le PDF/A-3,');
+        $io->writeln('    ni celui de la FNFE pour le Factur-X, ni le schematron pour le XML.');
+        $io->writeln('    La structure attendue est présente ; la conformité n est pas prouvée.');
 
         return Command::SUCCESS;
     }

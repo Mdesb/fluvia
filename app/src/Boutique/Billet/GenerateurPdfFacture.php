@@ -9,7 +9,7 @@ use App\Vente\Entity\Vente;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 use Doctrine\ORM\EntityManagerInterface;
-use Twig\Environment;
+use App\Facturation\Einvoicing\InvoiceHtmlRenderer;
 
 /**
  * Facture PDF **best-effort**, jointe à l'e-mail de confirmation quand elle est disponible
@@ -27,7 +27,7 @@ use Twig\Environment;
 final class GenerateurPdfFacture
 {
     public function __construct(
-        private readonly Environment $twig,
+        private readonly InvoiceHtmlRenderer $renduHtml,
         private readonly EntityManagerInterface $em,
     ) {
     }
@@ -39,29 +39,13 @@ final class GenerateurPdfFacture
             return null;
         }
 
-        $destinataire = $facture->getDestinataire();
-        $lignes = [];
-        foreach ($facture->getLignes() as $ligne) {
-            $lignes[] = [
-                'designation' => $ligne->getDesignation(),
-                'quantite' => $ligne->getQuantite(),
-                'prixUnitaireHT' => $ligne->getPrixUnitaireHT(),
-                'montantTTC' => $ligne->getMontantTTC(),
-            ];
-        }
-
-        $html = $this->twig->render('boutique/billet/facture_pdf.html.twig', [
-            'numero' => $facture->getNumero(),
-            'dateEmission' => $facture->getDateEmission(),
-            'destinataire' => $destinataire?->denomination(),
-            'lignes' => $lignes,
-            'totalHT' => $facture->getTotalHT(),
-            'totalTVA' => $facture->getTotalTVA(),
-            'totalTTC' => $facture->getTotalTTC(),
-            'mentionAcquittee' => $facture->isMentionAcquittee(),
-        ]);
-
-        return $this->rendrePdf($html);
+        // ⚠ LA CORRESPONDANCE GABARIT <- FACTURE VIT DESORMAIS DANS `InvoiceHtmlRenderer`.
+        //
+        // Elle etait ici, et la commande d'emission europeenne ne pouvait pas l'appeler : ce
+        // generateur part d'une `Vente`, or une facture DIRECTE n'en a pas. La recopier aurait cree
+        // deux verites sur le meme gabarit — et le jour ou l'une gagne une colonne, l'autre l'ignore
+        // en silence.
+        return $this->rendrePdf($this->renduHtml->render($facture));
     }
 
     private function rendrePdf(string $html): string
