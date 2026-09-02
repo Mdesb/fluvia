@@ -129,6 +129,27 @@ export default function PrelevementsSepa({ etabActif, droits }) {
     [rejets],
   )
 
+  async function revoquerMandat(m) {
+    // La confirmation dit les deux choses que l'ecran ne montre pas : ce que la revocation change
+    // sur la PROCHAINE REMISE, et qu'elle ne se defait pas.
+    const ok = window.confirm(
+      `Révoquer le mandat ${m.rum || ''} de ${m.debiteurNom || 'ce débiteur'} ?\n\n`
+      + 'Le débiteur retire son autorisation de prélèvement. Ses échéances à venir seront écartées '
+      + 'de la prochaine remise, avec le motif « mandat non actif » — elles ne seront pas perdues, '
+      + 'elles ne seront plus collectées par prélèvement.\n\n'
+      + "C'est définitif : un mandat révoqué ne se réactive pas. Prélever ce client à nouveau "
+      + 'exigera un NOUVEAU mandat signé, portant un nouveau RUM et repartant en séquence FRST.',
+    )
+    if (!ok) return
+    try {
+      await api.revoquerMandatSepa(m.id)
+      apresEcriture(`Mandat ${m.rum || ''} révoqué. Ses échéances n’entreront plus dans une remise.`)
+    } catch (err) {
+      setSucces(null)
+      setErreur(err.message || "Le mandat n'a pas pu être révoqué.")
+    }
+  }
+
   function apresEcriture(message) {
     setSucces(message)
     setErreur(null)
@@ -197,6 +218,7 @@ export default function PrelevementsSepa({ etabActif, droits }) {
               mandats={mandats}
               peutGerer={peutGerer}
               onCreer={() => setCreationMandat(true)}
+              onRevoquer={revoquerMandat}
             />
           )}
 
@@ -264,7 +286,7 @@ export default function PrelevementsSepa({ etabActif, droits }) {
 
 // --- Mandats -----------------------------------------------------------------------------------
 
-function Mandats({ mandats, peutGerer, onCreer }) {
+function Mandats({ mandats, peutGerer, onCreer, onRevoquer }) {
   const actifs = (mandats || []).filter((m) => m.statut !== 'revoque')
 
   return (
@@ -304,6 +326,7 @@ function Mandats({ mandats, peutGerer, onCreer }) {
                 <th>Prochaine séquence</th>
                 <th className="num">Collectes</th>
                 <th>Statut</th>
+                {peutGerer && <th aria-label="Actions" />}
               </tr>
             </thead>
             <tbody>
@@ -337,6 +360,20 @@ function Mandats({ mandats, peutGerer, onCreer }) {
                   <td>
                     <span className={`badge ${m.statut === 'actif' ? 'good' : 'mut'}`}>{mot(m.statut)}</span>
                   </td>
+                  {/* ⚠ TON `danger` : LE CRITÈRE DU DÉPÔT EST « LES GESTES DONT ON NE REVIENT PAS ».
+                      Une révocation n'a pas de chemin inverse — reprélever ce client exigera un
+                      nouveau mandat signé, avec un nouveau RUM, reparti en séquence FRST. Le bouton
+                      ne s'affiche que sur un mandat actif : proposer de révoquer ce qui l'est déjà
+                      ferait attendre une action que le serveur refuse. */}
+                  {peutGerer && (
+                    <td>
+                      {m.statut === 'actif' && (
+                        <button className="btn danger sm" type="button" onClick={() => onRevoquer(m)}>
+                          Révoquer
+                        </button>
+                      )}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

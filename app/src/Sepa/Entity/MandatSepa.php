@@ -13,6 +13,7 @@ use App\Organisation\Entity\Etablissement;
 use App\Sepa\Enum\SeqTpSepa;
 use App\Sepa\Enum\StatutMandatSepa;
 use App\Sepa\State\CreerMandatSepaProcessor;
+use App\Sepa\State\RevoquerMandatSepaProcessor;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
@@ -45,6 +46,18 @@ use Symfony\Component\Uid\Uuid;
             input: false,
             security: "is_granted('PERM', 'sepa.gerer')",
             processor: CreerMandatSepaProcessor::class,
+        ),
+        // Révocation : la transition manquante vers `StatutMandatSepa::Revoque`, un état déclaré
+        // depuis l'origine qu'aucune ligne du dépôt ne posait.
+        // ⚠ `read: true` et AUCUN `provider:` — le cloisonnement par établissement vient de
+        // `PerimetreSepaExtension::applyToItem`, qui s'applique au provider par défaut. Un provider
+        // sur mesure, même trivial, rendrait révocable le mandat d'un autre établissement.
+        new Post(
+            uriTemplate: '/sepa/mandats/{id}/revoquer',
+            read: true,
+            input: false,
+            security: "is_granted('PERM', 'sepa.gerer')",
+            processor: RevoquerMandatSepaProcessor::class,
         ),
     ],
     normalizationContext: ['groups' => ['mandat_sepa:read']],

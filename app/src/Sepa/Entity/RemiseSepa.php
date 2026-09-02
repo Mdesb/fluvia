@@ -108,7 +108,11 @@ class RemiseSepa
     }
 
     /**
-     * Combien d'échéances dues ont été écartées faute de préavis, et pourquoi (PAY-2).
+     * Combien d'échéances dues ont été écartées de la remise, et pourquoi (PAY-2).
+     *
+     * Deux causes aujourd'hui : un préavis absent ou non délivré, et un mandat non actif. Cette
+     * ligne disait « faute de préavis » du temps où c'était la seule ; le motif porte le détail,
+     * et c'est lui qu'il faut lire plutôt que de supposer la cause.
      *
      * **Porté par la remise et non journalisé ailleurs.** Une remise à zéro ligne parce que tout a été
      * exclu n'est pas une remise à zéro ligne parce qu'il n'y avait rien à collecter. Si les deux se

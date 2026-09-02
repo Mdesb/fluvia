@@ -1842,6 +1842,10 @@ export const api = {
   // sans lui API Platform répond 415 et la déclaration de rejet échoue. Je l'avais écrite sans le
   // drapeau ; c'est `scripts/verifier-formats.mjs` qui l'a arrêtée, pas une relecture.
   creerMandatSepa: (corps) => request('/api/sepa/mandats', { method: 'POST', body: corps }),
+  // Revocation : POST sans corps, meme forme que l'avoir de facture (`body: {}`, le serveur declare
+  // `input: false`). Operation SUR MESURE — `uriTemplate` dedie — donc pas de `ld: true`, qui est le
+  // drapeau des operations standard.
+  revoquerMandatSepa: (id) => request(`/api/sepa/mandats/${id}/revoquer`, { method: 'POST', body: {} }),
   genererRemiseSepa: (dateExecution) =>
     request('/api/sepa/remises/generer', {
       method: 'POST',

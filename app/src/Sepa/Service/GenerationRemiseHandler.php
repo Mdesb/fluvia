@@ -10,6 +10,7 @@ use App\Sepa\Entity\LigneRemiseSepa;
 use App\Sepa\Entity\MandatSepa;
 use App\Sepa\Entity\RemiseSepa;
 use App\Sepa\Enum\SeqTpSepa;
+use App\Sepa\Enum\StatutMandatSepa;
 use App\Sepa\Enum\StatutRemiseSepa;
 use App\Sepa\Port\CollecteurSepaInterface;
 use App\Sepa\Port\EcheanceSepaSource;
@@ -71,6 +72,29 @@ final class GenerationRemiseHandler
                 continue;
             }
 
+            // ⚠ CE FILTRE N'EST PAS PRÉVENTIF : IL CORRIGE UN PRÉLÈVEMENT SUR MANDAT RÉVOQUÉ.
+            //
+            // `DemanderResiliationHandler` passe le mandat à `Revoque` quand un adhérent résilie et
+            // qu'aucun autre abonnement ne s'y appuie. Rien n'annule ses échéances restantes — les
+            // seules sorties de `StatutEcheanceSepa::AVenir` dans tout le dépôt sont `Prelevee`,
+            // `Rejetee` et `Gelee`, et le seul écouteur sur `Resiliation` est l'audit. Or
+            // `SportEcheanceSepaSource` JOINT le mandat (`->join('a.mandatSepa', 'm')`) pour en tirer
+            // l'identifiant, sans jamais filtrer dessus. L'adhérent qui résiliait était donc prélevé
+            // sur un mandat révoqué, à la remise suivante.
+            //
+            // Ne pas retirer ces lignes comme du code mort : l'état est atteint tous les jours par la
+            // résiliation. `CardDebitFallback` gardait déjà la bascule carte, et
+            // `ReservationEcheanceSepaSource` filtre `['statut' => Actif]` — le chemin principal était
+            // le seul à ne rien regarder.
+            //
+            // L'exclusion est comptée et nommée comme celle du préavis, plutôt que de faire échouer
+            // toute la remise : les échéances en règle partent, et ce qui est retenu s'explique.
+            if (StatutMandatSepa::Actif !== $mandat->getStatut()) {
+                ++$nbExclues;
+                $motifsExclusion[sprintf('mandat non actif (%s)', $mandat->getStatut()->value)] = true;
+                continue;
+            }
+
             // PAY-2 — on ne prélève pas quelqu'un qu'on n'a pas prévenu. L'échéance non couverte sort
             // de la remise au lieu de la faire échouer : celles qui sont en règle partent, et ce qui
             // est retenu est compté et expliqué plus bas. Un tout-ou-rien retiendrait aussi les
@@ -113,9 +137,15 @@ final class GenerationRemiseHandler
             // Les confondre ferait chercher un défaut de mandat là où il manque un préavis.
             if ($nbExclues > 0) {
                 throw new UnprocessableEntityHttpException(sprintf(
-                    'Aucun prélèvement n\'est autorisé : %d échéance(s) due(s) sur %d écartée(s) faute de préavis (%s). '
-                    .'Prévenir le débiteur du montant et de la date est ce qui rend le prélèvement licite ; '
-                    .'tant que le préavis ne part pas, rien ne peut être collecté.',
+                    // ⚠ CE MESSAGE NE NOMME PLUS UNE SEULE CAUSE. Il disait « écartée(s) faute de
+                    // préavis » quand le défaut de préavis était la seule exclusion possible ; depuis
+                    // le filtre sur le statut du mandat, il y en a deux, et affirmer la première
+                    // enverrait chercher un préavis manquant là où un mandat est révoqué. Les motifs
+                    // réels sont déjà collectés — le message les rend, il ne les devine pas.
+                    'Aucun prélèvement n\'est autorisé : %d échéance(s) due(s) sur %d écartée(s). Motif(s) : %s. '
+                    .'Un prélèvement suppose deux choses : un mandat actif, et un préavis parti — le '
+                    .'débiteur doit connaître le montant et la date. Tant que l\'une manque, rien ne '
+                    .'peut être collecté.',
                     $nbExclues,
                     \count($dues),
                     implode(' ; ', array_keys($motifsExclusion)),
