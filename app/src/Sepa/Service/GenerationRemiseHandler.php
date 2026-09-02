@@ -107,9 +107,11 @@ final class GenerationRemiseHandler
             // ⚠ CE FILTRE N'EST PAS PRÉVENTIF : IL CORRIGE UN PRÉLÈVEMENT SUR MANDAT RÉVOQUÉ.
             //
             // `DemanderResiliationHandler` passe le mandat à `Revoque` quand un adhérent résilie et
-            // qu'aucun autre abonnement ne s'y appuie. Rien n'annule ses échéances restantes — les
-            // seules sorties de `StatutEcheanceSepa::AVenir` dans tout le dépôt sont `Prelevee`,
-            // `Rejetee` et `Gelee`, et le seul écouteur sur `Resiliation` est l'audit. Or
+            // qu'aucun autre abonnement ne s'y appuie. Rien n'annule ses échéances restantes : les
+            // sorties de `StatutEcheanceSepa::AVenir` sont `Prelevee`, `Rejetee`, `Gelee` et
+            // `Annulee` — et cette dernière n'est posée que par un geste MANUEL
+            // (`POST /sport/echeances/{id}/annuler`, `CancelScheduledDebitProcessor`), jamais par la
+            // résiliation. Le seul écouteur sur `Resiliation` est l'audit. Or
             // `SportEcheanceSepaSource` JOINT le mandat (`->join('a.mandatSepa', 'm')`) pour en tirer
             // l'identifiant, sans jamais filtrer dessus. L'adhérent qui résiliait était donc prélevé
             // sur un mandat révoqué, à la remise suivante.

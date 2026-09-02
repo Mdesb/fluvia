@@ -24,9 +24,11 @@ use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
  * Ce test ne décrit pas une protection future : il cloue un défaut qui prenait de l'argent.
  *
  * `DemanderResiliationHandler::executerEffet()` passe le mandat à `Revoque` quand plus aucun
- * abonnement ne s'y appuie. Mais **rien n'annule les échéances restantes** — vérifié sur tout le
- * dépôt, les seules sorties de `StatutEcheanceSepa::AVenir` sont `Prelevee`, `Rejetee` et `Gelee`,
- * et le seul écouteur sur `Resiliation` est le journal d'audit. Or `SportEcheanceSepaSource` JOINT
+ * abonnement ne s'y appuie. Mais **rien n'annule les échéances restantes**. Les sorties de
+ * `StatutEcheanceSepa::AVenir` sont `Prelevee`, `Rejetee`, `Gelee` et `Annulee` ; cette dernière
+ * n'est posée que par un geste MANUEL (`POST /sport/echeances/{id}/annuler`), jamais par la
+ * résiliation, et le seul écouteur sur `Resiliation` est le journal d'audit. Or
+ * `SportEcheanceSepaSource` JOINT
  * le mandat (`->join('a.mandatSepa', 'm')`) pour en tirer l'identifiant, sans jamais filtrer dessus.
  *
  * L'adhérent qui résiliait voyait donc son autorisation retirée, et son compte débité à la remise
