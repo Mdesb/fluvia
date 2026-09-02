@@ -11,6 +11,7 @@ use ApiPlatform\Metadata\Post;
 use App\Recouvrement\Entity\IncidentImpaye;
 use App\Sepa\Entity\RemiseSepa;
 use App\Sport\Enum\StatutEcheanceSepa;
+use App\Sport\State\CancelScheduledDebitProcessor;
 use App\Sport\State\SimulerRejetProcessor;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
@@ -34,6 +35,13 @@ use Symfony\Component\Validator\Constraints as Assert;
             processor: SimulerRejetProcessor::class,
             output: IncidentImpaye::class,
             normalizationContext: ['groups' => ['incident:read']],
+        ),
+        new Post(
+            uriTemplate: '/sport/echeances/{id}/annuler',
+            read: true,
+            input: false,
+            security: "is_granted('PERM', 'sport.gerer_abonnement')",
+            processor: CancelScheduledDebitProcessor::class,
         ),
     ],
     normalizationContext: ['groups' => ['echeance:read']],
@@ -71,6 +79,24 @@ class EcheanceSepa
     #[ORM\Column(type: 'datetime_immutable', nullable: true)]
     #[Groups(['echeance:read'])]
     private ?\DateTimeImmutable $dateExecutionReelle = null;
+
+    /**
+     * Pourquoi cette échéance a été abandonnée.
+     *
+     * ⚠ EXIGÉ À L'ÉCRITURE, PAS PROPOSÉ. Une échéance annulée est une somme que le club
+     * n'encaissera jamais ; la seule question posée six mois plus tard sera « pourquoi ? », et un
+     * état sans motif y répond « on ne sait pas ». Le contrôle vit dans
+     * `CancelScheduledDebitProcessor`, seul chemin qui pose `Annulee`.
+     *
+     * Nullable parce que les échéances qui ne sont pas annulées n'en ont pas.
+     */
+    #[ORM\Column(length: 200, nullable: true)]
+    #[Groups(['echeance:read'])]
+    private ?string $cancellationReason = null;
+
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    #[Groups(['echeance:read'])]
+    private ?\DateTimeImmutable $cancelledAt = null;
 
     public function __construct()
     {
@@ -150,6 +176,30 @@ class EcheanceSepa
     public function setDateExecutionReelle(?\DateTimeImmutable $dateExecutionReelle): self
     {
         $this->dateExecutionReelle = $dateExecutionReelle;
+
+        return $this;
+    }
+
+    public function getCancellationReason(): ?string
+    {
+        return $this->cancellationReason;
+    }
+
+    public function setCancellationReason(?string $cancellationReason): self
+    {
+        $this->cancellationReason = $cancellationReason;
+
+        return $this;
+    }
+
+    public function getCancelledAt(): ?\DateTimeImmutable
+    {
+        return $this->cancelledAt;
+    }
+
+    public function setCancelledAt(?\DateTimeImmutable $cancelledAt): self
+    {
+        $this->cancelledAt = $cancelledAt;
 
         return $this;
     }
