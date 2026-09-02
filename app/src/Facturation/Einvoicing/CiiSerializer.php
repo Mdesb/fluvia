@@ -142,7 +142,20 @@ final class CiiSerializer
         }
 
         $transaction->appendChild($this->parties($dom, $facture));
-        // Vide, mais OBLIGATOIRE dans la syntaxe : une livraison non renseignée reste une balise.
+        // ⚠ VIDE, ET OBLIGATOIRE — MESURE, PAS SUPPOSITION.
+        //
+        // PEPPOL-EN16931-R008 avertit : « Document MUST not contain empty elements ». J'ai donc
+        // essaye de le retirer. Le validateur Factur-X a REFUSE le fichier : cet element fait partie
+        // de la sequence CII, et son ABSENCE est une erreur la ou sa VACUITE n'est qu'un
+        // avertissement. Les deux ne se valent pas.
+        //
+        // La sortie propre serait de lui donner du contenu — `ActualDeliverySupplyChainEvent`
+        // (BT-72, date de livraison reelle). Nous ne stockons aucune date de livraison, et la
+        // deduire de la date d'emission affirmerait que la prestation a ete rendue ce jour-la : une
+        // donnee metier inventee, sur un document opposable.
+        //
+        // On garde donc l'avertissement, qui est VRAI, plutot qu'une valeur fausse qui le ferait
+        // taire.
         $transaction->appendChild($dom->createElementNS(self::NS_RAM, 'ram:ApplicableHeaderTradeDelivery'));
         $transaction->appendChild($this->reglement($dom, $facture));
 
@@ -217,8 +230,19 @@ final class CiiSerializer
         $vendeur = $dom->createElementNS(self::NS_RAM, 'ram:SellerTradeParty');
         $vendeur->appendChild($this->texte($dom, 'ram:Name', (string) $profil?->getRaisonSociale()));
 
+        // ⚠ BT-30 — LE `schemeID` N'EST PAS DECORATIF : SANS LUI, LE SIREN EST LU VIDE.
+        //
+        // Le profil francais (BR-FR-10, XP Z12-012) cherche exactement
+        // `SpecifiedLegalOrganization/ram:ID[@schemeID = '0002']` — `0002` designe le repertoire
+        // SIRENE dans la liste ISO 6523. Nous ecrivions l'identifiant sans l'attribut : la valeur
+        // etait la, au bon endroit, et la regle rendait « Valeur actuelle : "" ».
+        //
+        // Mesure du 02/09 : le validateur Factur-X reclamait un SIREN que nous posions deja. Un
+        // identifiant sans son referentiel n'identifie rien — c'est un nombre.
         $legal = $dom->createElementNS(self::NS_RAM, 'ram:SpecifiedLegalOrganization');
-        $legal->appendChild($dom->createElementNS(self::NS_RAM, 'ram:ID', (string) $profil?->getSiren()));
+        $siren = $dom->createElementNS(self::NS_RAM, 'ram:ID', (string) $profil?->getSiren());
+        $siren->setAttribute('schemeID', '0002');
+        $legal->appendChild($siren);
         $vendeur->appendChild($legal);
 
         $vendeur->appendChild($this->adresse($dom, (array) $profil?->getAdresse()));
