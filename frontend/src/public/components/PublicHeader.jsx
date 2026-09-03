@@ -38,7 +38,12 @@ export default function PublicHeader({ vitrine, nbArticles, connecte, onNaviguer
               ◈
             </span>
           )}
-          <span>Billetterie</span>
+          {/* ⚠ LE NOM DE LA BOUTIQUE, PAS CELUI DU LOGICIEL. Ce libellé était la chaîne
+              « Billetterie » en dur : Piscine A, Patinoire B et le musée s'annonçaient tous
+              pareil, sur la page même où le client paie. CA-1 demande l'inverse — chaque vitrine
+              porte sa propre identité, sans marque éditeur commune.
+              Le repli subsiste pour une boutique sans nom, mais ce n'est plus la seule issue. */}
+          <span>{vitrine?.nom || 'Billetterie'}</span>
         </button>
 
         <nav className="bq-nav" aria-label="Navigation principale">

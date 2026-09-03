@@ -144,6 +144,16 @@ final class CatalogueVitrineProvider implements ProviderInterface
             // legales publiees. Le deduire cote client demanderait un second appel pour une donnee que
             // le serveur a deja en main.
             'etablissement' => (string) $etablissement?->getId(),
+            // A QUI PAIE-T-ON ? La facade publique n'avait pas la reponse.
+            //
+            // L'en-tete de la boutique affichait « Billetterie » en dur, faute de nom a lire : ce
+            // catalogue ne portait que des identifiants. CA-1 demande pourtant l'inverse — chaque
+            // vitrine porte sa propre identite, sans marque editeur commune — et un meme mot sur
+            // toutes les boutiques EST cette marque commune.
+            //
+            // Meme source que `VitrinesPubliquesProvider`, qui rend deja ce nom sans authentification :
+            // on n'expose rien de neuf, on cesse de le retenir sur le chemin ou il sert.
+            'nom' => $etablissement?->getNom(),
             'logo' => $vitrine->getLogo(),
             'couleurs' => $vitrine->getCouleurs(),
             'langues' => $vitrine->getLangues(),

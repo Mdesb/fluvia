@@ -84,7 +84,10 @@ export default function PublicApp() {
       // Le catalogue fait foi pour l'identite visuelle ; l'appel item n'ajoute que ce qu'il est seul
       // a porter. Sans ce repli, une boutique ouverte sur `/b/piscine-a` perdrait son logo et ses
       // couleurs -- elle s'afficherait en blanc, sans erreur, et personne ne saurait pourquoi.
-      setVitrine(v || (cat ? { logo: cat.logo, couleurs: cat.couleurs, langues: cat.langues, slug: cat.slug } : null))
+      // ⚠ `nom` FAIT PARTIE DE L'IDENTITE, ET IL ETAIT LE SEUL A NE PAS ETRE REPRIS ICI.
+      // Sans lui, l'en-tete n'avait rien a lire et affichait « Billetterie » sur toutes les
+      // boutiques — la « marque editeur commune » que CA-1 interdit explicitement.
+      setVitrine(v || (cat ? { nom: cat.nom, logo: cat.logo, couleurs: cat.couleurs, langues: cat.langues, slug: cat.slug } : null))
       setCatalogue(cat)
     } catch (e) {
       setErreur(e?.message || "Cette boutique est introuvable ou indisponible.")
