@@ -5,6 +5,7 @@ import { dateHeureFr, resoudre } from '../components/Liste.jsx'
 import { api, membres } from '../api/client.js'
 import { aLeDroit, aUnDesDroits } from '../api/droits.js'
 import { mot } from '../api/vocabulaire.js'
+import { libelleProduit } from '../api/produit.js'
 
 // Padel — cinquante-six opérations exposées, une seule appelée jusqu'ici.
 //
@@ -608,8 +609,18 @@ function MaterielSection({ etabActif, droits }) {
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
   const [retour, setRetour] = useState(null)
+  const [sortie, setSortie] = useState(false)
 
-  const peutGerer = aUnDesDroits(droits, ['padel.gerer_materiel', 'padel.gerer'])
+  // ⚠ CE BLOC ETAIT GARDE PAR DEUX CODES QUI N'EXISTENT PAS.
+  //
+  // `padel.gerer_materiel` et `padel.gerer` ne sont declares nulle part cote serveur : les mots
+  // etaient inverses. Les codes reels sont `padel.materiel` (lire) et `padel.materiel_gerer`
+  // (gerer), et c'est le second qui garde les routes de sortie et de retour.
+  //
+  // Le test etait donc TOUJOURS FAUX pour un role reel. Seul un porteur de joker (`padel.*`) voyait
+  // ce bloc — c'est-a-dire personne dont c'est le metier. Un droit mal orthographie ne rend pas
+  // l'ecran bruyant : il le rend vide, et un ecran vide se lit comme un ecran sans donnees.
+  const peutGerer = aLeDroit(droits, 'padel.materiel_gerer')
 
   const recharger = useCallback(async () => {
     setChargement(true)
@@ -633,10 +644,27 @@ function MaterielSection({ etabActif, droits }) {
       {erreur && <div className="banner banner-error">{erreur}</div>}
       {succes && <div className="banner banner-ok">{succes}</div>}
 
+      <SortieMateriel
+        open={sortie}
+        onClose={() => setSortie(false)}
+        onFait={(message) => { setSortie(false); setSucces(message); recharger() }}
+        onErreur={setErreur}
+      />
+
       <section className="card">
         <div className="card-h">
           <h3>Matériel sorti</h3>
           <span className="sub">{dehors.length} prêt{dehors.length > 1 ? 's' : ''} en cours</span>
+          {peutGerer && (
+            <button
+              className="btn primary sm"
+              type="button"
+              style={{ marginLeft: 'auto' }}
+              onClick={() => setSortie(true)}
+            >
+              Sortir du matériel
+            </button>
+          )}
         </div>
         <div className="card-b">
           {chargement ? (
@@ -878,6 +906,157 @@ function TerrainModal({ open, terrains, onClose, onFait }) {
           </button>
         </div>
       </form>
+    </Modal>
+  )
+}
+
+
+/**
+ * SORTIR DU MATERIEL — l'ecran savait le rendre, jamais le louer.
+ *
+ * `POST /padel/locations` existe depuis l'origine. Sans bouton, l'inventaire du materiel ne pouvait
+ * que DIMINUER : on rendait des raquettes que rien n'avait sorties.
+ *
+ * ⚠ LE MATERIEL EST UN PRODUIT DU CATALOGUE, PAS UNE ENTITE DE STOCK. Le processeur attend un uuid
+ * de reference catalogue (M1). On ne propose donc pas tout le catalogue : seuls les produits dont
+ * le type porte la facette `stock` sont du materiel suivi — `type.facettes` est expose dans
+ * `produit:read`. Proposer une place de tournoi ou un abonnement dans cette liste ferait chercher
+ * longtemps ce qui ne s'y trouvera jamais.
+ *
+ * ⚠ ET LA LOCATION EST RATTACHEE A UNE RESERVATION, pas a un client. C'est ce qui permet de savoir
+ * QUI a la raquette : le serveur refuse (422) si l'appelant n'est ni l'organisateur de la
+ * reservation ni un agent.
+ */
+function SortieMateriel({ open, onClose, onFait, onErreur }) {
+  const [articles, setArticles] = useState(null)
+  const [reservations, setReservations] = useState(null)
+  const [article, setArticle] = useState('')
+  const [reservation, setReservation] = useState('')
+  const [quantite, setQuantite] = useState('1')
+  const [caution, setCaution] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    setArticle(''); setReservation(''); setQuantite('1'); setCaution('')
+    let annule = false
+    // ⚠ `null` = pas lu ; `[]` = lu et vide. Un catalogue illisible qui s'afficherait « aucun
+    // materiel » ferait conclure qu'il n'y a rien a louer, alors qu'on n'a pas su regarder.
+    setArticles(null)
+    setReservations(null)
+    api.produits()
+      .then((r) => {
+        if (annule) return
+        setArticles(membres(r).filter((p) => (p?.type?.facettes || []).includes('stock')))
+      })
+      .catch(() => { if (!annule) setArticles(undefined) })
+    api.padelReservations()
+      .then((r) => { if (!annule) setReservations(membres(r)) })
+      .catch(() => { if (!annule) setReservations(undefined) })
+    return () => { annule = true }
+  }, [open])
+
+  const pret = article !== '' && reservation !== '' && Number(quantite) >= 1
+
+  async function envoyer() {
+    setBusy(true)
+    onErreur(null)
+    try {
+      const corps = { article, reservation, quantite: Number(quantite) }
+      if (caution.trim() !== '') corps.caution = caution.trim()
+      await api.padelLouerMateriel(corps)
+      onFait('Matériel sorti.')
+    } catch (e) {
+      onErreur(e.message || 'Le matériel n’a pas pu être sorti.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} titre="Sortir du matériel" taille="sm">
+      <div style={{ display: 'grid', gap: 'var(--esp-large)' }}>
+        <div className="sub">
+          Le prêt est rattaché à une réservation : c’est ce qui permet de savoir qui a la raquette,
+          et de la réclamer si elle ne revient pas.
+        </div>
+
+        <label style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
+          <span className="sub">Matériel</span>
+          {articles === null && <span className="sub">lecture du catalogue…</span>}
+          {articles === undefined && (
+            <span className="sub">
+              Le catalogue n’a pas pu être lu. Ce n’est pas « aucun matériel disponible ».
+            </span>
+          )}
+          {Array.isArray(articles) && (
+            <select className="select" value={article} onChange={(e) => setArticle(e.target.value)}>
+              <option value="">— choisir —</option>
+              {articles.map((p) => (
+                <option key={p.id} value={p.id}>{libelleProduit(p)}</option>
+              ))}
+            </select>
+          )}
+          {Array.isArray(articles) && articles.length === 0 && (
+            <span className="sub">
+              Aucun produit du catalogue n’est suivi en stock : il n’y a rien à prêter tant qu’un
+              article de matériel n’a pas été créé.
+            </span>
+          )}
+        </label>
+
+        <label style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
+          <span className="sub">Réservation</span>
+          {reservations === null && <span className="sub">lecture des réservations…</span>}
+          {reservations === undefined && (
+            <span className="sub">Les réservations n’ont pas pu être lues.</span>
+          )}
+          {Array.isArray(reservations) && (
+            <select
+              className="select"
+              value={reservation}
+              onChange={(e) => setReservation(e.target.value)}
+            >
+              <option value="">— choisir —</option>
+              {reservations.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.debut ? new Date(r.debut).toLocaleString('fr-FR') : r.id}
+                </option>
+              ))}
+            </select>
+          )}
+        </label>
+
+        <label style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
+          <span className="sub">Quantité</span>
+          <input
+            className="input"
+            type="number"
+            min="1"
+            value={quantite}
+            onChange={(e) => setQuantite(e.target.value)}
+          />
+        </label>
+
+        <label style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
+          <span className="sub">Caution — facultative</span>
+          <input
+            className="input"
+            inputMode="decimal"
+            placeholder="0,00"
+            value={caution}
+            onChange={(e) => setCaution(e.target.value)}
+          />
+          <span className="sub">Laissée vide, aucune caution n’est consignée.</span>
+        </label>
+
+        <div style={{ display: 'flex', gap: 'var(--esp-normal)', justifyContent: 'flex-end' }}>
+          <button className="btn ghost" type="button" onClick={onClose}>Annuler</button>
+          <button className="btn primary" type="button" disabled={busy || !pret} onClick={envoyer}>
+            {busy ? 'Sortie…' : 'Sortir le matériel'}
+          </button>
+        </div>
+      </div>
     </Modal>
   )
 }
