@@ -72,6 +72,24 @@ function quandDe(reference, reservations) {
   return <span className="sub">horaire non chargé</span>
 }
 
+// Le sport et la surface, en clair. ⚠ PAS DANS `mot()` : ce n'est pas du vocabulaire local
+// (« adhérent » vs « membre »), c'est le nom de la chose. Laisser un club renommer « terre battue »
+// rendrait deux clubs incomparables pour rien.
+const SPORTS_TERRAIN = {
+  padel: 'Padel',
+  tennis: 'Tennis',
+  squash: 'Squash',
+  badminton: 'Badminton',
+}
+
+const SURFACES_TERRAIN = {
+  clay: 'Terre battue',
+  hard: 'Résine (dur)',
+  artificial_grass: 'Gazon synthétique',
+  concrete: 'Béton poreux',
+  carpet: 'Moquette',
+}
+
 function TerrainsSection({ etabActif, droits }) {
   // Le droit exige par `POST /padel/terrains`, et lui seul.
   const peutGererTerrain = aLeDroit(droits, 'padel.gerer_terrain')
@@ -255,7 +273,9 @@ function TerrainsSection({ etabActif, droits }) {
               <thead>
                 <tr>
                   <th>Terrain</th>
+                  <th>Sport</th>
                   <th>Type</th>
+                  <th>Surface</th>
                   <th>Durées</th>
                   {(peutReserver || peutForcerEclairage) && <th />}
                 </tr>
@@ -264,7 +284,12 @@ function TerrainsSection({ etabActif, droits }) {
                 {(terrains || []).map((t) => (
                   <tr key={t.id}>
                     <td><span className="nm">{nomTerrain(t, ressources, terrains)}</span></td>
+                    <td>{SPORTS_TERRAIN[t.sport] || t.sport || '—'}</td>
                     <td>{t.type ? mot(t.type) : '—'}</td>
+                    {/* ⚠ UN TIRET DIT « ON NE SAIT PAS », ET C'EST EXACT : la surface des terrains
+                        déclarés avant aujourd'hui n'a jamais été relevée. Afficher « Résine » par
+                        défaut ferait lire une mesure là où il n'y en a aucune. */}
+                    <td>{SURFACES_TERRAIN[t.surface] || '—'}</td>
                     <td>
                       {(t.dureesAutoriseesMinutes || []).map((d) => `${d} min`).join(' · ') || '—'}
                     </td>
@@ -791,6 +816,9 @@ function nomTerrain(t, ressources, terrains) {
 function TerrainModal({ open, terrains, onClose, onFait }) {
   const [libelle, setLibelle] = useState('')
   const [type, setType] = useState('indoor')
+  const [sport, setSport] = useState('padel')
+  // '' = non relevée. ⚠ Distinct d'une surface choisie : l'ignorance se dit, elle ne se devine pas.
+  const [surface, setSurface] = useState('')
   const [durees, setDurees] = useState('60, 90')
   const [erreur, setErreur] = useState(null)
   const [envoi, setEnvoi] = useState(false)
@@ -799,6 +827,8 @@ function TerrainModal({ open, terrains, onClose, onFait }) {
     if (!open) return
     setLibelle('')
     setType('indoor')
+    setSport('padel')
+    setSurface('')
     setDurees('60, 90')
     setErreur(null)
   }, [open])
@@ -821,6 +851,11 @@ function TerrainModal({ open, terrains, onClose, onFait }) {
       await api.creerTerrainPadel({
         libelle: libelle.trim(),
         type,
+        sport,
+        // ⚠ ON N'ENVOIE PAS UNE SURFACE VIDE. `''` n'appartient pas à l'énumération : le sérialiseur
+        // la refuserait en 400 avant même d'atteindre le processeur. Omettre la clé laisse la
+        // colonne à `null`, qui est précisément ce qu'on veut dire.
+        ...(surface === '' ? {} : { surface }),
         dureesAutoriseesMinutes: listeDurees,
       })
       onFait()
@@ -859,6 +894,31 @@ function TerrainModal({ open, terrains, onClose, onFait }) {
               <option value="outdoor">Découvert</option>
             </select>
             <p className="hint">Un terrain découvert dépend de la météo ; c’est ce qui justifie une annulation.</p>
+          </div>
+          <div className="field" style={{ flex: '1 1 180px' }}>
+            <label htmlFor="tp-sport">Sport *</label>
+            <select id="tp-sport" className="input" value={sport} onChange={(e) => setSport(e.target.value)}>
+              {Object.entries(SPORTS_TERRAIN).map(([cle, nom]) => (
+                <option key={cle} value={cle}>{nom}</option>
+              ))}
+            </select>
+            <p className="hint">
+              Un terrain, un créneau, une grille tarifaire : la mécanique est la même pour tous.
+              Le sport change ce que le joueur lit et ce qu’on compare d’un club à l’autre.
+            </p>
+          </div>
+          <div className="field" style={{ flex: '1 1 180px' }}>
+            <label htmlFor="tp-surface">Surface</label>
+            <select id="tp-surface" className="input" value={surface} onChange={(e) => setSurface(e.target.value)}>
+              <option value="">Non relevée</option>
+              {Object.entries(SURFACES_TERRAIN).map(([cle, nom]) => (
+                <option key={cle} value={cle}>{nom}</option>
+              ))}
+            </select>
+            <p className="hint">
+              Facultative, et « non relevée » est une réponse : mieux vaut un blanc honnête qu’une
+              surface supposée que personne n’a vérifiée.
+            </p>
           </div>
           <div className="field" style={{ flex: '1 1 220px' }}>
             <label htmlFor="tp-durees">Durées de partie (minutes) *</label>

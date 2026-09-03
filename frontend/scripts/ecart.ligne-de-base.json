@@ -29,14 +29,14 @@
         "Le script REFUSE de le relever. Un plafond qui remonte n est plus un cliquet, c est un",
         "compteur."
     ],
-    "plafond": 611,
+    "plafond": 602,
     "releve": {
         "exposees": 1170,
         "sansEcran": 1,
         "attendues": 1169,
-        "appelees": 567,
-        "atteignables": 558,
-        "inatteignables": 611,
+        "appelees": 576,
+        "atteignables": 567,
+        "inatteignables": 602,
         "orphelins": [
             "ajouterLigneReleve  (back-office)",
             "etatSynchroAcces  (back-office)",
@@ -63,8 +63,8 @@
         "parFront": [
             {
                 "nom": "back-office",
-                "appelees": 543,
-                "atteignables": 534
+                "appelees": 552,
+                "atteignables": 543
             },
             {
                 "nom": "boutique en ligne",
@@ -86,11 +86,11 @@
                 26
             ],
             [
-                "editor",
-                18
+                "finance",
+                19
             ],
             [
-                "finance",
+                "editor",
                 18
             ],
             [
@@ -146,12 +146,24 @@
                 8
             ],
             [
+                "sport",
+                8
+            ],
+            [
                 "padel",
                 8
             ],
             [
                 "legal",
                 8
+            ],
+            [
+                "clients",
+                7
+            ],
+            [
+                "documents",
+                7
             ],
             [
                 "bank",
@@ -167,14 +179,6 @@
             ],
             [
                 "crm",
-                6
-            ],
-            [
-                "clients",
-                6
-            ],
-            [
-                "sport",
                 6
             ],
             [
@@ -219,10 +223,6 @@
             ],
             [
                 "campaigns",
-                4
-            ],
-            [
-                "documents",
                 4
             ],
             [
@@ -426,7 +426,15 @@
                 1
             ],
             [
+                "consentements",
+                1
+            ],
+            [
                 "demandes-rgpd",
+                1
+            ],
+            [
+                "retention",
                 1
             ],
             [
