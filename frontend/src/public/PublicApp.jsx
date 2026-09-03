@@ -180,7 +180,11 @@ export default function PublicApp() {
       setPanier(maj)
       return maj
     },
-    [panier, vitrineId],
+    // ⚠ `vitrine` EST INDISPENSABLE ICI. Sans lui, ce callback se referme sur la valeur du rendu
+    // où `vitrineId` a changé pour la dernière fois — donc avant le chargement du catalogue, donc
+    // `null`. `vitrine?.id` valait alors `undefined` et l'ouverture de panier retombait sur le
+    // slug, que le serveur refuse (422). Le correctif de la ligne ci-dessus était juste et inerte.
+    [panier, vitrineId, vitrine],
   )
 
   const retirerLigne = useCallback(
