@@ -14,6 +14,47 @@
  * noir et au repeint d'un client. Le degrade, lui, ne survit a aucun des trois. L'identite vit donc
  * dans la forme et le mot-symbole ; la couleur n'en est que l'habillage.
  */
+/* ── PUBLIC SANS, AUTO-HÉBERGÉE ─────────────────────────────────────────────────────────────────
+ *
+ * Le produit tournait sur la pile système : le même écran n'avait pas la même apparence sous
+ * Windows et sous macOS. Servie depuis nos propres fichiers, jamais depuis un tiers — le secteur
+ * public l'exige souvent, et c'est une dépendance de moins.
+ *
+ * ⚠ POURQUOI CELLE-CI. Mesuré sur quatre familles ouvertes : ce fichier emploie le poids 800 dans
+ * 29 règles, 700 dans 38, 600 dans 40. `IBM Plex Sans` s'arrête à 700 — le navigateur aurait
+ * fabriqué un faux 800 sur le prix des billets et la marque. `Atkinson Hyperlegible` manque 500,
+ * 600 et 800, soit 71 règles. Restaient Public Sans (44 Ko) et Source Sans 3 (86 Ko).
+ *
+ * ⚠ DEUX FICHIERS, PAS HUIT, ET C'EST UNE CORRECTION. J'avais d'abord sommé les fichiers
+ * téléchargés sans vérifier qu'ils étaient distincts, et annoncé 176 Ko. Ces familles sont
+ * VARIABLES : un seul fichier par sous-ensemble couvre tout l'axe. Vérifié par empreinte —
+ * 8 téléchargements, 2 fichiers distincts.
+ *
+ * `font-weight: 400 800` déclare l'axe. Écrire quatre règles pointant le même fichier
+ * fonctionnerait, mais décrirait quatre graisses là où il y en a une infinité.
+ *
+ * Les `unicode-range` sont copiées de la feuille servie, jamais approximées : elles décident de ce
+ * que le navigateur télécharge. Une page sans caractère latin étendu ne charge que 26 Ko.
+ *
+ * Licence SIL Open Font 1.1 — `public/fonts/LICENSE-public-sans.txt`.
+ */
+@font-face {
+  font-family: 'Public Sans';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url('/fonts/public-sans-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Public Sans';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url('/fonts/public-sans-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
 :root {
   /* Palette declaree par `public/marque/README.txt` et `FLUVIA_Palette.svg`, deux sources du pack
      qui concordent. Les valeurs precedentes etaient celles du PRODUIT sous des noms de marque —
@@ -154,7 +195,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: 'Public Sans', ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
