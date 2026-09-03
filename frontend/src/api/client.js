@@ -857,6 +857,13 @@ export const api = {
   // `ld: true`, qui est le drapeau des operations standard.
   annulerEcheanceSepa: (id, motif) =>
     request(`/api/sport/echeances/${id}/annuler`, { method: 'POST', body: { motif } }),
+  // LA DETECTION A LA DEMANDE — la route existait, aucun bouton ne l'appelait.
+  //
+  // ⚠ ELLE EST PAR ESPACE, pas globale. L'appelant doit donc boucler, et surtout COMPTER ce qu'il
+  // a balaye : conclure « aucune presence isolee » apres avoir interroge zero espace serait une
+  // absence jamais mesuree.
+  detecterPresenceIsolee: (idEspace) =>
+    request(`/api/sport/espaces/${idEspace}/detecter-presence-isolee`, { method: 'POST', body: {} }),
   alertesPresenceIsolee: () => request('/api/alerte_presence_isolees', { query: { itemsPerPage: 100 } }),
   // ⚠ LA ROUTE ETAIT AU SINGULIER, ET ELLE RENDAIT 404 DEPUIS TOUJOURS.
   //
