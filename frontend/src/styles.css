@@ -880,6 +880,8 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 .bq-panier-info { flex: 1; min-width: 140px; }
 .bq-panier-nom { font-weight: 600; margin: 0 0 2px; }
 .bq-panier-cr { font-size: var(--txt-petit); color: var(--ink-soft); margin: 0 0 4px; }
+.bq-panier-echeance { margin: 0 0 14px; padding: 10px 12px; border-radius: var(--radius);
+  background: var(--warn-bg); color: var(--warn); font-size: var(--txt-petit); }
 .bq-panier-pu { font-size: var(--txt-petit); color: var(--ink-soft); margin: 0 0 4px; }
 .bq-panier-montant { font-weight: 800; font-variant-numeric: tabular-nums; margin: 0; min-width: 72px; text-align: right; }
 .bq-panier-qty { display: inline-flex; align-items: center; gap: 8px; }
