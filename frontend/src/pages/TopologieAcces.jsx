@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Modal from '../components/Modal.jsx'
 import { jourLocal } from '../components/Liste.jsx'
 import Tabs from '../components/Tabs.jsx'
+import TerminauxAcces from '../components/TerminauxAcces.jsx'
 import { api, membres } from '../api/client.js'
 import { allerA } from '../api/url.js'
 import { aLeDroit } from '../api/droits.js'
@@ -89,6 +90,11 @@ const ONGLETS = [
   ['plan', 'Plan du site'],
   ['lecteurs', 'Lecteurs'],
   ['reseaux', 'Sous-réseaux'],
+  // ⚠ VENU DE « BADGES & TERMINAUX » (R20). Un terminal est le PREMIER MAILLON de la chaîne que
+  // cet écran décrit déjà : le boîtier ITBOX héberge des contrôleurs, qui commandent des
+  // équipements. En dernier onglet parce qu'on l'enrôle une fois, avant tout le reste — puis on
+  // n'y revient que pour une panne ou une rotation de jeton.
+  ['terminaux', 'Terminaux'],
 ]
 
 // L'identifiant d'une relation, qu'elle arrive en objet (`{ '@id', id, … }`) ou en IRI nue
@@ -1060,6 +1066,8 @@ export default function TopologieAcces({ etabActif, droits, onNav }) {
           onChange={() => charger(true)}
         />
       )}
+
+      {onglet === 'terminaux' && <TerminauxAcces etabActif={etabActif} peutGerer={peutGerer} />}
 
 
       {edition && (
