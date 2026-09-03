@@ -54,6 +54,7 @@ const Agenda = lazy(() => import('./pages/Agenda.jsx'))
 // financière qu'un caissier n'ouvrira jamais n'ont pas à peser sur le premier chargement.
 const Sepa = lazy(() => import('./pages/Sepa.jsx'))
 const Recouvrement = lazy(() => import('./pages/Recouvrement.jsx'))
+const JournalPassages = lazy(() => import('./pages/JournalPassages.jsx'))
 const Cautions = lazy(() => import('./pages/Cautions.jsx'))
 // Differe pour la meme raison : un caissier n'enrole pas de terminal et ne bloque pas de badge.
 const Acces = lazy(() => import('./pages/Acces.jsx'))
@@ -491,6 +492,7 @@ export default function App() {
       {onglet === 'comptabilite' && <Comptabilite etabActif={etabActif} droits={droits} />}
       {onglet === 'sepa' && <Sepa etabActif={etabActif} droits={droits} />}
       {onglet === 'recouvrement' && <Recouvrement etabActif={etabActif} droits={droits} />}
+      {onglet === 'journal_passages' && <JournalPassages etabActif={etabActif} />}
       {onglet === 'caution' && <Cautions etabActif={etabActif} droits={droits} />}
       {onglet === 'facturation' && <Facturation etabActif={etabActif} droits={droits} onNaviguer={naviguer} />}
       {onglet === 'clients' && <Clients etabActif={etabActif} cible={cible} onCibleConsommee={() => setCible(null)} droits={droits} />}
