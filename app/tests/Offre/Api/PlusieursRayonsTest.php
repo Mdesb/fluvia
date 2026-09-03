@@ -88,6 +88,58 @@ final class PlusieursRayonsTest extends OffreApiTestCase
     }
 
     /**
+     * ⚠ LE CONTRAT DONT LA CAISSE DÉPEND POUR RANGER SES TUILES.
+     *
+     * Elle groupe par rayon en lisant, sur chaque produit de la COLLECTION, ses catégories
+     * embarquées avec leur `axe` et leur `libelle`. Si la collection ne rendait que des IRI nues —
+     * ou si `axe` quittait le groupe `produit:read` — la barre des rayons deviendrait vide **en
+     * silence** : aucune erreur, aucune tuile manquante, juste un rangement qui cesse d'exister.
+     *
+     * Rien ne gardait ce contrat entre deux modules.
+     */
+    public function testLaCollectionEmbarqueLAxeEtLeLibelleDesCategories(): void
+    {
+        [$http, $jeton, $idA] = $this->adminSurA();
+        [$boissons] = $this->deuxRayons();
+        $produit = $this->idProduit(OffreFixtures::PRODUIT_ENTREE);
+
+        $http->request('PATCH', '/api/produits/' . $produit, [
+            'auth_bearer' => $jeton,
+            'headers' => [ContexteEtablissement::HEADER => $idA, 'Content-Type' => 'application/merge-patch+json'],
+            'json' => ['categories' => ['/api/categories/' . $boissons]],
+        ]);
+        self::assertResponseIsSuccessful();
+
+        $collection = $http->request('GET', '/api/produits?itemsPerPage=200', [
+            'auth_bearer' => $jeton,
+            'headers' => [ContexteEtablissement::HEADER => $idA],
+        ])->toArray();
+
+        $lignes = $collection['member'] ?? $collection['hydra:member'] ?? [];
+        $laLigne = null;
+        foreach ($lignes as $ligne) {
+            if (basename((string) ($ligne['@id'] ?? '')) === $produit) {
+                $laLigne = $ligne;
+                break;
+            }
+        }
+        self::assertNotNull($laLigne, 'témoin : le produit est bien dans la collection');
+
+        $rayons = array_values(array_filter(
+            $laLigne['categories'] ?? [],
+            static fn (mixed $cat): bool => \is_array($cat) && ($cat['axe'] ?? null) === 'rayon',
+        ));
+
+        self::assertCount(
+            1,
+            $rayons,
+            'la collection doit embarquer les catégories en OBJETS avec leur axe — des IRI nues '
+            . 'videraient la barre des rayons de la caisse sans le moindre signe',
+        );
+        self::assertSame('Boissons', $rayons[0]['libelle'] ?? null, 'et leur libellé, qui est le texte du bouton');
+    }
+
+    /**
      * Les identifiants des catégories que le produit porte, telles que l'API les rend.
      *
      * Une relation arrive tantôt en objet (`{ '@id': … }`), tantôt en IRI nue, selon les groupes
