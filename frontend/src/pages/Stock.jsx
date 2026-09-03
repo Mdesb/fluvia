@@ -118,7 +118,11 @@ export default function Stock({ etabActif, droits }) {
     // c'est le decompte `total` -- laisse a `null` -- qui dit pourquoi.
     if (!q) return articles || []
     return (articles || []).filter(
-      (a) => (a.libelle || '').toLowerCase().includes(q) || (a.codeEAN || '').toLowerCase().includes(q),
+      // ⚠ L'EMPLACEMENT EST CHERCHABLE, sinon il ne sert qu'à être lu une ligne à la fois :
+      // « qu'est-ce qu'il y a en réserve » est la question qu'on pose devant un inventaire.
+      (a) => (a.libelle || '').toLowerCase().includes(q)
+        || (a.codeEAN || '').toLowerCase().includes(q)
+        || (a.storageLocation || '').toLowerCase().includes(q),
     )
   }, [articles, recherche])
 
@@ -503,6 +507,15 @@ function ArticlesEdition({ onChange }) {
         aide: 'La quantité à laquelle on veut remonter. C’est elle qui calcule ce qu’il faut commander.',
       },
       {
+        nom: 'storageLocation',
+        libelle: 'Où il est rangé',
+        type: 'text',
+        exemple: 'Réserve · étagère B',
+        aide:
+          'Le lieu PHYSIQUE, celui où on va le chercher. À ne pas confondre avec le rayon de '
+          + 'caisse, qui range l’écran de vente et dont un produit peut avoir plusieurs.',
+      },
+      {
         nom: 'actif',
         libelle: 'En service',
         type: 'bool',
@@ -515,6 +528,7 @@ function ArticlesEdition({ onChange }) {
     colonnes: [
       { cle: 'libelle', titre: 'Article', rendu: (r) => <span className="nm">{r.libelle || '—'}</span> },
       { cle: 'codeEAN', titre: 'Code-barres', rendu: (r) => <span className="mono">{r.codeEAN || '—'}</span> },
+      { cle: 'storageLocation', titre: 'Rangé', rendu: (r) => r.storageLocation || '—' },
       { cle: 'seuilMin', titre: 'Seuil', rendu: (r) => nombre(r.seuilMin) },
       {
         cle: 'actif',
