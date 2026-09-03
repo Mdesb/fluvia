@@ -583,6 +583,24 @@ export const api = {
   client: (id) => request(`/api/clients/${id}`),
   majClient: (id, corps) => request(`/api/clients/${id}`, { method: 'PATCH', body: corps }),
   // Relevé de mouvements du porte-monnaie virtuel (US-L5-04). Renvoie { mouvements: [...] }.
+  // LES CONSENTEMENTS — les deux moities, lecture et ecriture.
+  //
+  // ⚠ `SearchFilter` sur `client` est DECLARE en `exact` (verifie dans l'entite) : `?client=<IRI>`
+  // filtre vraiment. Sans cette verification, un filtre non declare serait accepte et IGNORE, et
+  // la fiche afficherait les consentements du voisin sans qu'aucune erreur ne le dise.
+  consentementsClient: (idClient) =>
+    request('/api/consentements', {
+      query: {
+        client: `/api/clients/${idClient}`,
+        itemsPerPage: 100,
+        'order[dateRecueil]': 'desc',
+      },
+    }),
+  // ⚠ `canal` ET `etat` SONT REQUIS (422 sinon), et un consentement ACCORDE pour un MINEUR exige
+  // `recueilliParRepresentant` — RG-M4-10. L'ecran porte la regle ; ce commentaire dit pourquoi
+  // elle n'est pas une coquetterie d'interface.
+  enregistrerConsentement: (idClient, corps) =>
+    request(`/api/clients/${idClient}/consentements`, { method: 'POST', body: corps }),
   pmvMouvements: (id) => request(`/api/clients/${id}/pmv/mouvements`),
   // RECHARGER UN PORTE-MONNAIE — le geste qui manquait pour que le solde puisse remonter.
   //
