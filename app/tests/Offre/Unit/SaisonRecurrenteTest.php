@@ -94,6 +94,41 @@ final class SaisonRecurrenteTest extends TestCase
     }
 
     /**
+     * ⚠ LE TÉMOIN QUE MES QUATRE ROUGES NE DONNAIENT PAS : deux saisons DATÉES ne se chevauchent pas.
+     *
+     * Casser `contient()` ou `chevauche()` fait tomber des tests — donc le mécanisme ATTRAPE. Aucun
+     * ne prouvait qu'il ÉPARGNE. Si le mois-jour s'appliquait à toutes les saisons, en oubliant la
+     * garde `$this->recurrenceAnnuelle || $autre->recurrenceAnnuelle`, une promotion de juillet 2027
+     * serait déclarée en conflit avec celle de juillet 2026 : deux saisons qui ne partagent pas un
+     * seul jour. `SaisonSansChevauchementValidator` refuserait l'enregistrement, et l'exploitant
+     * n'aurait aucun moyen de comprendre pourquoi.
+     *
+     * ⚠ ET TOUS LES AUTRES TESTS SERAIENT RESTÉS VERTS. Un contrôle trop large est invisible à ses
+     * tests de refus : le seul cas qui le démasque est celui qu'il doit AUTORISER. Signalé par
+     * `allaccess-c0` en relisant le correctif.
+     */
+    public function testDeuxSaisonsDATEESDAnneesDifferentesNeSeChevauchentPas(): void
+    {
+        $promo2026 = $this->saison('2026-07-01', '2026-08-31', false);
+        $promo2027 = $this->saison('2027-07-01', '2027-08-31', false);
+
+        self::assertFalse(
+            $promo2026->chevauche($promo2027),
+            'même période, deux années : elles ne partagent aucun jour',
+        );
+        self::assertFalse($promo2027->chevauche($promo2026), 'et la relation est symétrique');
+
+        // ⚠ LE TÉMOIN DU TÉMOIN : deux saisons datées qui SE RECOUVRENT VRAIMENT doivent, elles,
+        // être vues. Sans ça, un `chevauche()` qui rendrait toujours `false` passerait le test
+        // ci-dessus — et le validateur cesserait de protéger quoi que ce soit.
+        $promoJuillet = $this->saison('2026-07-15', '2026-09-15', false);
+        self::assertTrue(
+            $promo2026->chevauche($promoJuillet),
+            'témoin : deux saisons datées qui se recouvrent sont bien vues',
+        );
+    }
+
+    /**
      * Une saison fixe de plus d'un an couvre tous les mois-jours.
      *
      * Sans ce cas, elle serait réduite à son mois-jour de départ et cesserait de chevaucher une

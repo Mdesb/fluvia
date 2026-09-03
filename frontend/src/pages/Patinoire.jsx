@@ -241,11 +241,11 @@ function ParcSection({ parc, attente, beneficiaires, nommer, peutLouer, peutAtte
     <section className="card">
       <div className="card-h">
         <h3>Parc de patins</h3>
-        <span className="sub">ce qui est louable, pointure par pointure</span>
+        <span className="sub">ce qui est louable, {mot('pointure').toLowerCase()} par {mot('pointure').toLowerCase()}</span>
         {peutConfigurer && (
           <div className="actions" style={{ marginLeft: 'auto' }}>
             <button className="btn sm" type="button" onClick={() => setCreation(true)}>
-              ＋ Déclarer une pointure
+              ＋ Déclarer une {mot('pointure').toLowerCase()}
             </button>
           </div>
         )}
@@ -1470,13 +1470,18 @@ function ParcPatinsModal({ open, parc, onClose, onFait, onErreur }) {
   }
 
   return (
-    <Modal open={open} onClose={onClose} titre="Déclarer une pointure">
+    // ⚠ LE MOT VIENT DE L'ÉTABLISSEMENT (R12). Par défaut « Pointure » — `humaniser` le rend tel
+    // quel — mais un loueur de combinaisons écrit « Taille » et un loueur de skis « Longueur ».
+    <Modal open={open} onClose={onClose} titre={`Déclarer une ${mot('pointure').toLowerCase()}`}>
       <form onSubmit={soumettre}>
         {erreur && <div className="banner banner-error" style={{ marginBottom: 'var(--esp-large)' }}>{erreur}</div>}
 
-        <div className="row" style={{ display: 'flex', gap: 'var(--esp-large)' }}>
+        {/* ⚠ `row-champs` ALIGNE PAR LE HAUT. Sans elle, `.row` aligne par le bas et les deux
+            champs se décalent de 52 px — le champ de gauche n'a d'aide que par intermittence, et
+            la mise en page saute de 90 px quand elle apparaît sous les doigts (R11). */}
+        <div className="row row-champs">
           <div className="field" style={{ flex: 1 }}>
-            <label htmlFor="pp-pointure">Pointure *</label>
+            <label htmlFor="pp-pointure">{mot('pointure')} *</label>
             <input
               id="pp-pointure"
               className="input"

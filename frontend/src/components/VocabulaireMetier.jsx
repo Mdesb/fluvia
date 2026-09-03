@@ -34,6 +34,10 @@ const TERMES = [
   ['beneficiaire', 'Bénéficiaire', 'client, adhérent, élève…'],
   ['reservation', 'Réservation', 'rendez-vous, inscription…'],
   ['support', 'Support', 'carte, bracelet, badge…'],
+  // ⚠ LE PRÊT D'ÉQUIPEMENT À LA TAILLE (R12). Le parc de la patinoire est déjà un stock indexé
+  // par taille — seul l'affûtage y est propre au patin. Ce qui l'attachait au patin, c'était le
+  // mot. Un loueur de combinaisons dit « taille », un loueur de skis « longueur ».
+  ['pointure', 'Pointure', 'taille de combinaison, longueur de ski, tour de tête…'],
 ]
 
 export default function VocabulaireMetier({ etabActif, peutEcrire }) {

@@ -112,6 +112,52 @@ final class DebitPreNotifierTest extends SepaApiTestCase
     }
 
     /**
+     * ⚠ LA BORNE EXACTE DU DÉLAI, ET ELLE EST INCLUSIVE.
+     *
+     * `reasonNotCovered` refuse quand `sentAt > executionDate - délai` — STRICTEMENT supérieur. Un
+     * préavis envoyé exactement `délai` jours avant est donc COUVERT. Le test voisin
+     * (`testUnPreavisTropTardifNeCouvrePas`) prouve qu'un préavis trop tardif est refusé, mais
+     * aucun ne disait où passe la ligne.
+     *
+     * ⚠ CE N'EST PAS DE LA PRÉCISION POUR LA PRÉCISION : un contrôle est à écrire qui refusera une
+     * configuration où le délai de préavis dépasse la période d'un abonnement — sans quoi la
+     * première échéance créée par chaque reconduction serait écartée de la remise. Écrit avec `>=`
+     * au lieu de `>`, il refuserait une configuration qui MARCHE, et tous ses tests de refus
+     * resteraient verts. Le seul cas qui le démasque est celui qu'il doit autoriser : le voici.
+     *
+     * Défaut latent relevé par `allaccess-c0` ; borne mesurée ici plutôt que déduite.
+     */
+    public function testUnPreavisEnvoyeExactementLeDelaiAvantCouvre(): void
+    {
+        [$notifier] = $this->service(NotificationOutcome::Envoyee);
+        $mandat = $this->mandat();
+        $prelevement = new \DateTimeImmutable('2026-09-15');
+
+        // Le délai par défaut est de 14 jours : le 1er septembre, c'est exactement 14 jours avant.
+        $notifier->announce($mandat, 'echeance-borne', 4990, $prelevement, PreNotificationReason::Schedule, new \DateTimeImmutable('2026-09-01'));
+
+        self::assertTrue(
+            $notifier->covers($mandat, 'echeance-borne', 4990, $prelevement),
+            'exactement le délai : la borne est INCLUSIVE, le prélèvement est couvert',
+        );
+    }
+
+    /** Et un seul jour de moins ne passe plus : la ligne est bien là où on vient de la poser. */
+    public function testUnJourDeMoinsQueLeDelaiNeCouvrePas(): void
+    {
+        [$notifier] = $this->service(NotificationOutcome::Envoyee);
+        $mandat = $this->mandat();
+        $prelevement = new \DateTimeImmutable('2026-09-15');
+
+        $notifier->announce($mandat, 'echeance-borne', 4990, $prelevement, PreNotificationReason::Schedule, new \DateTimeImmutable('2026-09-02'));
+
+        self::assertFalse(
+            $notifier->covers($mandat, 'echeance-borne', 4990, $prelevement),
+            'treize jours : un de moins que le délai, et ça ne couvre plus',
+        );
+    }
+
+    /**
      * **Annoncer trente euros puis en prélever trois cents n'est pas un préavis.**
      *
      * C'est le cas qui distingue un contrôle réel d'un contrôle de présence : sans la comparaison du
