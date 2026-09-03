@@ -95,10 +95,6 @@ const NAV = [
     section: 'Gestion',
     items: [
       { id: 'clients', ic: 'customers', label: 'Clients', perms: ['crm.lire', 'crm.creer', 'crm.modifier'] },
-      // Juste sous Clients, parce qu'une demande d'effacement porte sur une fiche client et se
-      // traite en la relisant. Pas dans Parametres : ce n'est pas un reglage, c'est une file
-      // d'attente avec un delai legal d'un mois.
-      { id: 'rgpd', ic: 'personal-data', label: 'Données personnelles', perms: ['crm.rgpd_gerer', 'crm.rgpd_demander'] },
       // Une entree propre plutot qu'un onglet dans Clients : un commercial cherche << ses
       // affaires >>, pas un onglet dans un annuaire. Et le pipeline se lit tous les jours,
       // alors qu'une fiche client s'ouvre a l'occasion.
@@ -117,6 +113,10 @@ const NAV = [
       // qu'on va chercher qui fait quoi. Pas sous Pilotage -- un projet se conduit, il ne
       // s'observe pas.
       { id: 'projets', ic: 'projects', label: 'Projets', perms: ['personnel.lire', 'personnel.gerer', 'organisation.gerer'] },
+      // ⚠ SOUS GESTION ET PAS SOUS PISCINE (R10). Un parc de casiers se gere comme un parc de
+      // materiel : on attribue, on encaisse une caution, on rend une cle. Surveiller un bassin,
+      // a cote, est une exploitation continue. Deux rythmes, deux entrees.
+      { id: 'casiers', ic: 'stock', label: 'Casiers', cap: 'casiers', perms: ['piscine.lire', 'piscine.gerer_casier', 'piscine.gerer'] },
       { id: 'stock', ic: 'stock', label: 'Stock', perm: 'stock.lire' },
       { id: 'facturation', ic: 'invoicing', label: 'Facturation', perm: 'facturation.lire' },
       { id: 'finance', ic: 'purchases', label: 'Achats & trésorerie', perm: 'finance.read' },
@@ -212,6 +212,19 @@ const NAV = [
       // entree de menu pour le moment, on pourra toujours le bouger ».
       { id: 'journal_passages', ic: 'topology', label: 'Journal des passages', cap: 'controle_acces', perms: ['acces.lire', 'acces.superviser'] },
       { id: 'topologie_acces', ic: 'topology', label: 'Topologie & lecteurs', cap: 'controle_acces', perms: ['acces.lire', 'acces.gerer', 'acces.superviser'] },
+      // ⚠ SOUS ADMINISTRATION DEPUIS LE 03/09 (R27), ET LE RAISONNEMENT QUI LA TENAIT SOUS
+      // CLIENTS ETAIT JUSTE. Il disait : « une demande d'effacement porte sur une fiche client et
+      // se traite en la relisant ; pas dans Parametres, ce n'est pas un reglage, c'est une file
+      // d'attente avec un delai legal d'un mois ». C'est exact — et Maxime pose l'autre critere,
+      // celui de R21 : « ce n'est pas gere au quotidien ». Elle quitte donc la liste quotidienne
+      // SANS entrer dans Parametres : elle reste une file, a un clic, pas un reglage.
+      //
+      // ⚠ ET LE DELAI LEGAL N'EST RAPPELE PAR RIEN. Mesure du 03/09 : huit minuteurs systemd
+      // tournent sur ce serveur, tous du systeme ; aucun ne lance `RunScheduledTasksCommand`, et
+      // aucun conteneur ne porte de cron. Une file qu'on deplace hors de vue et qu'aucune alarme
+      // ne surveille peut depasser son mois sans que personne le voie. Le compteur qui manque est
+      // signale a Maxime plutot que bricole ici.
+      { id: 'rgpd', ic: 'personal-data', label: 'Données personnelles', perms: ['crm.rgpd_gerer', 'crm.rgpd_demander'] },
       { id: 'autorisations', ic: 'escalations', label: 'Escalades & plafonds', perms: ['autorisation.lire', 'autorisation.approuver', 'autorisation.gerer'] },
       // Les mentions obligatoires d'un site marchand. Sous Administration et non sous Boutique :
       // elles engagent l'exploitant, pas la vitrine, et un exploitant qui n'a pas encore ouvert

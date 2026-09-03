@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import Liste, { texte } from '../components/Liste.jsx'
-import Tabs from '../components/Tabs.jsx'
 import Modal from '../components/Modal.jsx'
-import CasiersPiscine from '../components/CasiersPiscine.jsx'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 
@@ -31,7 +29,6 @@ function heure(v) {
 // CHOISIT donc un espace existant au lieu d'en inventer un, et ne propose que ceux de type
 // « bassin » : les autres ne sont pas des lieux de baignade.
 export default function Piscine({ etabActif, droits }) {
-  const [onglet, setOnglet] = useState('bassins')
   const [creation, setCreation] = useState(false)
   // Incrementé après une création : `Liste` recharge sur ses `deps`, sans que l'écran ait à
   // connaître son état interne.
@@ -49,24 +46,15 @@ export default function Piscine({ etabActif, droits }) {
 
       <SurveillancePoss etabActif={etabActif} />
 
-      <Tabs
-        onglets={[
-          ['bassins', 'Bassins & créneaux'],
-          ['casiers', 'Casiers'],
-        ]}
-        actif={onglet}
-        onChange={setOnglet}
-      />
-
-      {onglet === 'casiers' && <CasiersPiscine etabActif={etabActif} droits={droits} />}
-
       <BassinModal
         open={creation}
         onClose={() => setCreation(false)}
         onCree={() => { setCreation(false); setRechargement((n) => n + 1) }}
       />
 
-      <div className="resa-grid" style={{ display: onglet === 'bassins' ? undefined : 'none' }}>
+      {/* Plus de barre d'onglets : les casiers ont leur propre ecran (R10), il ne restait qu'un
+          seul contenu. Un onglet unique se lit comme un choix, alors qu'il n'y en a plus. */}
+      <div className="resa-grid">
         <Liste
           titre="Bassins"
           sous="capacité &amp; occupation"
@@ -118,8 +106,9 @@ export default function Piscine({ etabActif, droits }) {
 // dépasser n'est pas « chargé » : c'est hors du plan déclaré. Le serveur calcule `presents`,
 // `seuilPoss`, la pré-alerte et les places réservées restantes — et personne ne l'affichait.
 //
-// Il est donc en haut de l'écran, avant les onglets, et visible quel que soit l'onglet ouvert : on
-// ne range pas une limite de sécurité derrière un clic.
+// Il est donc en haut de l'écran, avant tout le reste : on ne range pas une limite de sécurité
+// derrière un clic. La phrase disait « avant les onglets » ; il n'y en a plus depuis que les
+// casiers ont leur propre écran (R10), mais la raison, elle, n'a pas bougé.
 //
 // Le rafraîchissement est manuel et daté. Un compteur de sécurité qui change tout seul pendant
 // qu'on le lit ne se cite pas à voix haute — et c'est exactement ce qu'un maître-nageur fait avec.
