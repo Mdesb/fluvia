@@ -19,11 +19,25 @@ use App\Fonctionnalite\Enum\Metier;
  * sait pas ce qu'est un pain.008 ; il sait ce qu'est « ne plus faire repasser ses adhérents en
  * caisse tous les mois ». Réécrites le 03/09 du côté de celui qui achète (R7 / C6).
  *
- * ⚠ AUCUNE PHRASE NE PROMET UN EFFET AUTOMATIQUE, ET C'EST UNE CONTRAINTE MESURÉE, PAS UN STYLE.
- * Le 03/09 : huit minuteurs systemd tournent sur le VPS, tous du système (man-db, certbot, apt,
- * fstrim) ; aucun ne lance `RunScheduledTasksCommand`, et aucun conteneur ne porte de cron. Le
- * catalogue de tâches planifiées existe, rien ne le déclenche. « Relance automatique »,
- * « publication programmée », « vous êtes prévenu » auraient été faux le jour de leur affichage.
+ * ⚠ AUCUNE PHRASE NE PROMET UN EFFET AUTOMATIQUE, ET LA RAISON ÉCRITE ICI ÉTAIT FAUSSE.
+ *
+ * J'avais écrit : « aucun conteneur ne porte de cron, rien ne déclenche le catalogue de tâches ».
+ * C'est FAUX. `billetterie-preprod-scheduler-1` tourne depuis 29 heures et exécute
+ * `infra/ordonnanceur.sh` — une boucle de 60 s qui appelle `platform:scheduler:run --only=` sur
+ * SEPT tâches en liste blanche. J'avais cherché des NOMS (cron, systemd) au lieu de demander ce
+ * qui fait arriver les choses à heure fixe ; et `TASKS.md` le disait déjà, ligne T10.
+ *
+ * Ce que dit la mesure corrigée, et qui suffit à justifier la prudence des textes : les sept
+ * tâches autorisées sont `securite:delegations:expirer`, `autorisation:escalades:expirer`,
+ * `boutique:liberer-paniers-expires`, `personnel:recalculer-fenetres-badges`,
+ * `sport:abonnements:traiter-terme`, `sepa:preavis:annoncer`, `subscription:facturer-le-mois`.
+ * NI la relance de recouvrement NI la publication sociale n'y sont — donc « relance automatique »
+ * et « publication programmée » restent bien des promesses creuses. C'est la portée de la liste
+ * blanche qui l'établit, pas une absence d'ordonnanceur.
+ *
+ * ⚠ ET C'EST UNE LISTE, DONC ELLE BOUGE. Vérifier avant d'écrire une promesse d'automatisme :
+ * `./infra/ordonnanceur.sh --lister` dit ce qui est autorisé, et
+ * `php bin/console platform:scheduler:run --status` dit ce qui a réellement tourné.
  *
  * ⚠ TROIS MODULES SONT VENDUS SANS POUVOIR SERVIR, et leur description le dit maintenant. Mesuré
  * contre `Padel` pris comme témoin (20 ressources API, 36 entités, des écrans) : `Lodging` a ZÉRO

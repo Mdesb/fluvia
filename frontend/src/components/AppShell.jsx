@@ -219,11 +219,17 @@ const NAV = [
       // celui de R21 : « ce n'est pas gere au quotidien ». Elle quitte donc la liste quotidienne
       // SANS entrer dans Parametres : elle reste une file, a un clic, pas un reglage.
       //
-      // ⚠ ET LE DELAI LEGAL N'EST RAPPELE PAR RIEN. Mesure du 03/09 : huit minuteurs systemd
-      // tournent sur ce serveur, tous du systeme ; aucun ne lance `RunScheduledTasksCommand`, et
-      // aucun conteneur ne porte de cron. Une file qu'on deplace hors de vue et qu'aucune alarme
-      // ne surveille peut depasser son mois sans que personne le voie. Le compteur qui manque est
-      // signale a Maxime plutot que bricole ici.
+      // ⚠ ET LE DELAI LEGAL N'EST RAPPELE PAR RIEN — mais pas pour la raison que j'avais ecrite.
+      //
+      // J'avais note « aucun conteneur ne porte de cron ». C'est FAUX : `infra/ordonnanceur.sh`
+      // tourne en continu et execute sept taches en liste blanche toutes les minutes. Ce qui est
+      // vrai, et qui suffit, c'est qu'AUCUNE DES SEPT ne regarde les demandes RGPD : la liste
+      // contient les expirations de droits, les paniers, les fenetres de badges, le terme des
+      // abonnements, le preavis SEPA et la facturation mensuelle. Rien sur le delai d'un mois.
+      //
+      // Une file qu'on deplace hors de vue et qu'aucune alarme ne surveille peut donc depasser son
+      // mois sans que personne le voie. Le compteur qui manque est signale a Maxime plutot que
+      // bricole ici. ⚠ `./infra/ordonnanceur.sh --lister` dit l'etat de cette liste, qui bouge.
       { id: 'rgpd', ic: 'personal-data', label: 'Données personnelles', perms: ['crm.rgpd_gerer', 'crm.rgpd_demander'] },
       { id: 'autorisations', ic: 'escalations', label: 'Escalades & plafonds', perms: ['autorisation.lire', 'autorisation.approuver', 'autorisation.gerer'] },
       // Les mentions obligatoires d'un site marchand. Sous Administration et non sous Boutique :
