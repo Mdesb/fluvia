@@ -498,8 +498,26 @@ dans le décodeur QR. Elle passe seule (200 MB de pointe).
 n'y a ni `FAILURES!` ni `ERRORS!`, juste un `Fatal error` au milieu du flot. Le verdict se lit sur
 le CODE DE SORTIE et sur le total, jamais sur l'absence de rouge.
 
-Quelques dizaines de tests de plus et **plus personne ne peut lancer la suite entière**. Le remède
-n'est pas de monter le plafond sans savoir : il faut d'abord savoir ce qui accumule.
+**⚠ ET C'EST ARRIVÉ LE JOUR MÊME.** Sept tests ajoutés quelques heures plus tard (Accès, CRM) ont
+fait tomber la suite : morte à `244/2291`. Ils trient AVANT `Boutique`, donc leur part s'ajoutait
+juste avant le pic.
+
+**Ce qui accumule, mesuré** — parce que « monter le plafond sans savoir » n'est pas un remède :
+
+    GenerateurImageQrTest, SEUL     4 tests · pointe 200,51 Mo
+    les 244 tests qui le précèdent  ~330 Mo, soit 1,35 Mo par test d'API — normal
+
+Ce n'est pas une fuite diffuse : c'est **un appel de bibliothèque qui demande 200 Mo à lui seul**
+(`khanamiryan/qrcode-detector-decoder`, qui décode l'image d'un QR), posé sur une accumulation
+ordinaire.
+
+**Levé le 03/09** : `infra/test-stack.sh` lance phpunit avec `php -d memory_limit=1G`.
+⚠ `docker/php/conf.d/zz-memory.ini` n'est **pas** touché — il est monté aussi dans le FPM de la
+préproduction, où 1 Go par processus web serait une décision toute différente. Vérifié :
+`1G` par le chemin de phpunit, `512M` partout ailleurs.
+
+**Reste ouvert** : les 200 Mo du décodeur. Tant qu'ils sont là, le plafond suivra la croissance de
+la suite au lieu de la contenir.
 
 ### 8.3 — `idDe` est dupliqué dix fois dans le frontal
 
