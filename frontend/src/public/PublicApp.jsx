@@ -87,7 +87,13 @@ export default function PublicApp() {
       // ⚠ `nom` FAIT PARTIE DE L'IDENTITE, ET IL ETAIT LE SEUL A NE PAS ETRE REPRIS ICI.
       // Sans lui, l'en-tete n'avait rien a lire et affichait « Billetterie » sur toutes les
       // boutiques — la « marque editeur commune » que CA-1 interdit explicitement.
-      setVitrine(v || (cat ? { nom: cat.nom, logo: cat.logo, couleurs: cat.couleurs, langues: cat.langues, slug: cat.slug } : null))
+      // ⚠ `id` EST L'IDENTIFIANT REEL, ET SON ABSENCE RENDAIT LA BOUTIQUE INACHETABLE.
+      // Le catalogue porte `vitrine` : l'UUID. Sans lui dans cet objet, l'ouverture de panier
+      // retombait sur ce que porte l'URL — le SLUG sur `/b/piscine-a` — et le serveur, qui resout
+      // par cle primaire, rendait 422 « vitrine est requise et doit referencer une vitrine
+      // existante ». Constate sur la preprod : impossible d'ajouter quoi que ce soit au panier
+      // depuis l'adresse meme qu'on imprime sur les affiches.
+      setVitrine(v || (cat ? { id: cat.vitrine, nom: cat.nom, logo: cat.logo, couleurs: cat.couleurs, langues: cat.langues, slug: cat.slug } : null))
       setCatalogue(cat)
     } catch (e) {
       setErreur(e?.message || "Cette boutique est introuvable ou indisponible.")
@@ -156,7 +162,12 @@ export default function PublicApp() {
     async (corps, creneauMeta) => {
       let courant = panier
       if (!courant) {
-        const ouvert = await boutique.ouvrirPanier(vitrineId)
+        // ⚠ L'IDENTIFIANT DE LA VITRINE, PAS CE QUE PORTE L'URL. `OuvrirPanierProcessor`
+        // resout par cle primaire (`->find()`), et son contrat dit `iri|uuid` : un slug rend 422.
+        // `vitrine.id` vaut l'UUID dans les deux cas — l'appel item quand il aboutit, le champ
+        // `vitrine` du catalogue sinon. On ne retombe sur `vitrineId` que s'il n'y a pas de
+        // vitrine du tout, auquel cas l'erreur du serveur est la bonne reponse.
+        const ouvert = await boutique.ouvrirPanier(vitrine?.id || vitrineId)
         // Le jeton en clair n'est renvoyé qu'ici (X-Panier-Token pour les appels suivants).
         panierStore.set(ouvert.id, ouvert.jetonSession)
         courant = ouvert
@@ -169,7 +180,11 @@ export default function PublicApp() {
       setPanier(maj)
       return maj
     },
-    [panier, vitrineId],
+    // ⚠ `vitrine` EST INDISPENSABLE ICI. Sans lui, ce callback se referme sur la valeur du rendu
+    // où `vitrineId` a changé pour la dernière fois — donc avant le chargement du catalogue, donc
+    // `null`. `vitrine?.id` valait alors `undefined` et l'ouverture de panier retombait sur le
+    // slug, que le serveur refuse (422). Le correctif de la ligne ci-dessus était juste et inerte.
+    [panier, vitrineId, vitrine],
   )
 
   const retirerLigne = useCallback(
