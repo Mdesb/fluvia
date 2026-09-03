@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
-import { resoudre, nomOuAbsence, euroCentimes, dateFr } from '../components/Liste.jsx'
+import { resoudre, nomOuAbsence, euroCentimes, dateFr, jourLocal } from '../components/Liste.jsx'
 import Modal from '../components/Modal.jsx'
 import { libelleProduit } from '../api/produit.js'
 
@@ -501,11 +501,14 @@ export default function Sport({ etabActif, droits = [] }) {
 // celles dont la date est passee et nomme la plus ancienne — c'est le fait qu'on ne peut pas voir
 // en lisant ligne a ligne.
 function Echeancier({ echeances, abonnements, beneficiaires, peutGerer, onAnnuler }) {
-  const aujourdhui = new Date()
-  aujourdhui.setHours(0, 0, 0, 0)
+  // ⚠ COMPARAISON PAR JOUR LOCAL, PAS PAR INSTANT. Le garde-fou n°31 documente la famille :
+  // une date envoyee a minuit UTC tombe du mauvais cote d'un seuil calcule autrement, et le
+  // defaut ne se voit que quelques heures par jour — donc jamais en relecture. `jourLocal()` rend
+  // `AAAA-MM-JJ` en heure locale ; deux de ces chaines se comparent directement.
+  const aujourdhui = jourLocal()
 
   const enRetard = (echeances || []).filter(
-    (e) => e.statut === 'a_venir' && e.dateProgrammee && new Date(e.dateProgrammee) < aujourdhui,
+    (e) => e.statut === 'a_venir' && e.dateProgrammee && jourLocal(e.dateProgrammee) < aujourdhui,
   )
   const plusAncienne = enRetard.reduce(
     (min, e) => (min === null || e.dateProgrammee < min ? e.dateProgrammee : min),
