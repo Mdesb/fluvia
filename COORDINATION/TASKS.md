@@ -532,3 +532,38 @@ ne regarde les demandes RGPD (`crm:rgpd:appliquer-conservation` n'est **pas** da
 blanche). L'entrée « Données personnelles » a quitté le menu quotidien le 03/09 (R27) : elle est
 donc moins vue, et toujours pas surveillée. Un compteur sur l'entrée de menu répondrait ; le menu
 n'a pas ce mécanisme. Arbitrage posé à Maxime.
+
+### ⚠ 8.5 — Un délai de préavis SEPA plus long que la période d'abonnement écarte chaque échéance
+
+**Latent, pas cassé** — et la distinction compte : zéro abonnement hebdomadaire en base, quatre
+créanciers à 14 jours. Mesuré par `allaccess-c0` le 03/09.
+
+La reconduction crée la première échéance neuve **une période** après la dernière
+(`SubscriptionTermHandler` : `+1 month` ou `+1 week`). Si le délai de préavis du créancier dépasse
+cette période, l'échéance tombe trop tôt pour être couverte : `GenerationRemiseHandler` l'écarte de
+la remise. ⚠ **Elle n'est pas perdue** — elle est comptée, le motif est enregistré, et elle reste
+collectable. Elle glisse, elle ne disparaît pas.
+
+**Deux façons de l'armer**, et la seconde est annoncée par le code lui-même :
+
+    un premier abonnement HEBDOMADAIRE      7 jours < 14  →  chaque reconduction glisse
+    un créancier à plus de 30 jours          `ConfigCreancierSepa:121` dit « les collectivités
+                                             négocient souvent plus long » — à 30+, le mensuel casse
+
+**⚠ LA BORNE EST INCLUSIVE, ET C'EST MESURÉ** (`fada41fd`, `DebitPreNotifierTest`) :
+`reasonNotCovered` refuse quand `sentAt > executionDate - délai`, **strictement** supérieur. Un
+préavis envoyé exactement `délai` jours avant est COUVERT.
+
+Le contrôle à écrire refuse donc `délai > période`, **jamais `>=`**. Un `>=` refuserait une
+configuration qui marche — et tous ses tests de refus resteraient verts, plus verts qu'avant :
+un contrôle trop large est invisible à ses refus, seul le cas qu'il doit AUTORISER le démasque.
+
+**Ce qui reste à trancher : où vit le contrôle.** Les deux directions sont réelles et aucune ne
+couvre l'autre :
+
+  · côté `ConfigCreancierSepa` — refuser un délai qui dépasse la période du plus court abonnement
+    du site (attrape le créancier à 30 jours) ;
+  · côté abonnement — refuser une période plus courte que le délai du créancier (attrape le premier
+    hebdomadaire).
+
+N'en poser qu'un laisserait une porte ouverte en croyant le trou fermé.
