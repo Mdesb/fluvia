@@ -151,4 +151,28 @@ class TerrainPadel
     {
         return $this->ressource?->getEtablissement();
     }
+
+    /**
+     * LE NOM DU TERRAIN, LU SUR SA RESSOURCE — parce que l'ecran n'en avait aucun.
+     *
+     * ⚠ UN TERRAIN CREE S'AFFICHAIT SANS NOM, ET LA CREATION PASSAIT POUR CASSEE.
+     *
+     * `TerrainPadel` ne porte pas de libelle : il vit sur la `Ressource` du socle, que
+     * `CreerTerrainProcessor` cree en cascade. Mais l'API rend `ressource` comme une IRI, pas comme
+     * un objet — et l'ecran lisait `t.ressource?.libelle || t.libelle || ''`, donc la chaine vide
+     * dans tous les cas.
+     *
+     * Mesure du 03/09 : un terrain cree par POST est bien en base, l'API le rend, et sa ligne
+     * s'affiche vide. Maxime a signale « creer un terrain ne marche pas » — la creation marchait,
+     * c'est son resultat qui etait invisible. Les deux se ressemblent beaucoup vu de l'ecran.
+     *
+     * ⚠ EN LECTURE SEULE, ET DELIBEREMENT. Le nom appartient a la ressource : l'exposer en ecriture
+     * ici donnerait deux chemins pour renommer un terrain, dont un qui contourne le socle. Le
+     * renommage passe par la ressource, ou pas du tout.
+     */
+    #[Groups(['terrain:read'])]
+    public function getLibelle(): ?string
+    {
+        return $this->ressource?->getLibelle();
+    }
 }
