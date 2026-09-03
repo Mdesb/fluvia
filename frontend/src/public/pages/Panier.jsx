@@ -1,4 +1,4 @@
-import { libelleProduit, libelleCreneau, iriId, euros } from '../lib/format.js'
+import { libelleProduit, libelleCreneau, iriId, euros, heureLocale } from '../lib/format.js'
 import { Erreur, Vide } from '../components/Etats.jsx'
 
 // Panier : récap des lignes, modification de quantité, retrait, total.
@@ -36,6 +36,23 @@ export default function Panier({
     <section aria-labelledby="bq-panier-titre">
       <h1 id="bq-panier-titre">Votre panier</h1>
       <p className="bq-sub">{nbArticles} article(s)</p>
+
+      {/* ⚠ LE PANIER EXPIRE, ET LE CLIENT NE L'APPRENAIT QU'EN LE TROUVANT VIDE.
+          `boutique:liberer-paniers-expires` tourne réellement — vérifié dans les journaux de
+          l'ordonnanceur — et vide les paniers dont la date est passée, en relâchant les places
+          qu'ils retenaient.
+          Le délai NE REPART PAS à chaque ajout : `setDateExpiration` n'est appelé qu'à l'ouverture
+          du panier, vérifié sur tout `src/`. Quelqu'un qui met quatorze minutes à choisir n'a plus
+          qu'une minute pour payer — c'est le fait le moins devinable de cet écran, donc celui
+          qu'il faut écrire. */}
+      {panier?.dateExpiration && (
+        <p className="bq-panier-echeance">
+          Vos places sont gardées jusqu&rsquo;à <strong>{heureLocale(panier.dateExpiration)}</strong>.
+          Passé ce délai le panier se vide et les places repartent à la vente. Le compte à rebours a
+          commencé à l&rsquo;ouverture du panier&nbsp;: il ne repart pas quand vous ajoutez un
+          article.
+        </p>
+      )}
 
       <Erreur message={erreur} />
 

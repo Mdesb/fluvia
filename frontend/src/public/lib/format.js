@@ -75,6 +75,16 @@ export function dateCourte(iso) {
   }
 }
 
+// Heure locale « 09:42 » — pour une echeance que le client doit pouvoir comparer a sa montre.
+export function heureLocale(iso) {
+  if (!iso) return ''
+  try {
+    return new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+  } catch {
+    return ''
+  }
+}
+
 // Nom lisible d'un bénéficiaire (structure simple invité).
 export function nomBeneficiaire(b) {
   if (!b) return ''
