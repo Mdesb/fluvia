@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api/client.js'
+import { centimes } from '../api/produit.js'
 
 /**
  * LA BOUTIQUE DE MODULES — demande de Maxime le 01/09.
@@ -93,7 +94,6 @@ export default function Modules({ capacites = [], me }) {
   }, [catalogue, capacites, prixParCode])
 
   const total = panier.reduce((s, c) => s + (prixParCode[c] || 0), 0)
-  const euros = (cents) => (cents / 100).toFixed(2).replace('.', ',') + ' €'
 
   function basculer(code) {
     setPanier((p) => (p.includes(code) ? p.filter((x) => x !== code) : [...p, code]))
@@ -144,7 +144,7 @@ export default function Modules({ capacites = [], me }) {
         items={groupes.disponibles}
         rendu={(c) => (
           <>
-            <span className="num">{euros(c.prix)}<span className="sub"> / mois</span></span>
+            <span className="num">{centimes(c.prix)}<span className="sub"> / mois</span></span>
             <button
               className={panier.includes(c.code) ? 'btn sm' : 'btn primary sm'}
               type="button"
@@ -204,13 +204,13 @@ export default function Modules({ capacites = [], me }) {
                 const c = (catalogue || []).find((x) => x.code === code)
                 return (
                   <li key={code}>
-                    {c?.libelle || code} — <span className="num">{euros(prixParCode[code] || 0)}</span> / mois
+                    {c?.libelle || code} — <span className="num">{centimes(prixParCode[code] || 0)}</span> / mois
                   </li>
                 )
               })}
             </ul>
             <p>
-              <b>Total&nbsp;: <span className="num">{euros(total)}</span> par mois</b>, qui s’ajoutent
+              <b>Total&nbsp;: <span className="num">{centimes(total)}</span> par mois</b>, qui s’ajoutent
               à votre abonnement en cours.
             </p>
 

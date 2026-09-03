@@ -4,6 +4,7 @@ import { dateHeureFr } from './Liste.jsx'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import { mot } from '../api/vocabulaire.js'
+import { centimes } from '../api/produit.js'
 
 // Les impayés, et les deux gestes qui les closent.
 //
@@ -1014,8 +1015,3 @@ function redevableDe(representation, incidentsParId) {
   return incident.referenceRedevable || incident.typeRedevable || '—'
 }
 
-function centimes(v) {
-  const n = Number(v)
-  if (!Number.isFinite(n)) return '—'
-  return `${(n / 100).toFixed(2).replace('.', ',')} €`
-}
