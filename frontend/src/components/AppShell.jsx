@@ -11,7 +11,7 @@ import Icon from './Icon.jsx'
 // `perms` = liste dont AU MOINS UNE suffit — pour les écrans qui servent plusieurs métiers, où
 // exiger un droit unique retirerait l'écran à quelqu'un qui s'en sert légitimement ;
 // `admin` = réservé aux profils administrateur (droits d'administration du socle). Sans contrainte,
-// l'entrée est toujours visible. `disabled` = présente mais grisée, avec la raison en infobulle.
+// l'entrée est toujours visible.
 //
 // POURQUOI DES ENTRÉES GRISÉES POUR DES ÉCRANS QUI N'EXISTENT PAS.
 //
@@ -25,9 +25,21 @@ import Icon from './Icon.jsx'
 // personne ne pouvait constater qu'ils manquaient, pas même en regardant l'écran attentivement. Un
 // menu incomplet se lit comme un produit complet.
 //
-// Ces entrées ne livrent aucune fonctionnalité. Elles rendent le manque VISIBLE et donc arbitrable :
-// on voit ce qui reste à construire, et dans quel ordre le demander. Chacune disparaîtra de cette
-// liste le jour où son écran existera — c'est le seul entretien qu'elles demandent.
+// Ces entrées ne livraient aucune fonctionnalité. Elles rendaient le manque VISIBLE et donc
+// arbitrable : on voyait ce qui restait à construire, et dans quel ordre le demander. Le
+// commentaire d'origine finissait par « chacune disparaîtra de cette liste le jour où son écran
+// existera — c'est le seul entretien qu'elles demandent ».
+//
+// ⚠ C'EST ARRIVÉ, ET C'EST POURQUOI IL N'EN RESTE RIEN DANS LE CODE (03/09). Les treize ont eu leur
+// écran. Le drapeau `disabled` n'était plus posé nulle part — lu en cinq endroits, affecté en aucun
+// — et le retirer était l'aboutissement de la phrase ci-dessus, pas son abandon. Mesuré avant de
+// toucher : la nav n'est construite que dans ce fichier, et aucune entrée n'y porte de drapeau.
+//
+// ⚠ CE QUI SURVEILLE MAINTENANT N'EST PAS UNE ENTRÉE DE MENU, C'EST UN GARDE-FOU. L'écart
+// client/serveur compte les opérations qu'aucun écran n'appelle et refuse de laisser ce nombre
+// monter. Il voit ce qu'un menu ne peut pas voir : un module PRÉSENT dont seule une partie des
+// gestes est atteignable. C'était précisément l'angle mort du 24/08 — Stock était affiché, donc on
+// le croyait traité, pendant que onze de ses opérations n'avaient aucun bouton.
 //
 // Ne figurent pas ici les services transverses sans usage direct (OCR, Audit) : ils sont consommés
 // par d'autres modules et n'ont pas vocation à un écran propre. Une entrée pour eux serait une
@@ -484,10 +496,7 @@ export default function AppShell({
                 <button
                   key={it.id}
                   className={`side-link${onglet === it.id ? ' active' : ''}`}
-                  onClick={() => !it.disabled && aller(it.id)}
-                  disabled={it.disabled}
-                  title={it.disabled ? 'Bientôt disponible' : undefined}
-                  style={it.disabled ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
+                  onClick={() => aller(it.id)}
                 >
                   <Icon name={it.ic} className="ic" /> {it.label}
                   {/* ⚠ LE BADGE NE S'AFFICHE QUE S'IL Y A QUELQUE CHOSE À MONTRER. `> 0`, jamais
@@ -503,11 +512,6 @@ export default function AppShell({
                       }
                     >
                       {compteurRgpd.enAttente}
-                    </span>
-                  )}
-                  {it.disabled && (
-                    <span className="badge mut" style={{ marginLeft: 'auto', fontSize: 10 }}>
-                      bientôt
                     </span>
                   )}
                 </button>
