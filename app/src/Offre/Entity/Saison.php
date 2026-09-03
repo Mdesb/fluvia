@@ -190,6 +190,23 @@ class Saison
             return false;
         }
 
+        // ⚠ « CHAQUE ANNEE » ETAIT COCHABLE, S'ENREGISTRAIT, ET PERSONNE NE LA LISAIT.
+        //
+        // L'ecran de parametres propose la case depuis toujours, avec son aide : « Evite de recreer
+        // la meme saison chaque annee ». Le champ partait bien en base. Et AUCUN code ne le lisait —
+        // `contient()` comparait deux dates completes, un point c'est tout.
+        //
+        // Une promesse creuse, longtemps sans consequence. Puis la reconduction s'est mise a relire
+        // le prix dans les saisons (03/09) : un exploitant qui FAIT CE QUE L'ECRAN LUI DIT — cocher
+        // et ne rien recreer — voit desormais ses reconductions s'arreter au premier jour hors de
+        // l'intervalle. La phrase d'aide lui a dit de ne rien faire.
+        //
+        // Arbitrage de Maxime le 03/09 : « prolonger la derniere saison ». Signale par
+        // `allaccess-c0`, qui a mesure la promesse creuse avant que quiconque s'y fie.
+        if ($this->recurrenceAnnuelle) {
+            return self::dansSegments(self::moisJour($date), self::segmentsMoisJour($this->dateDebut, $this->dateFin));
+        }
+
         return $date >= $this->dateDebut && $date <= $this->dateFin;
     }
 
@@ -201,7 +218,87 @@ class Saison
             return false;
         }
 
+        // ⚠ SI `contient()` HONORE LA RECURRENCE ET PAS `chevauche()`, LE VALIDATEUR DEVIENT AVEUGLE.
+        //
+        // `SaisonSansChevauchementValidator` empeche deux saisons de meme priorite de se recouvrir.
+        // Tant qu'aucune des deux methodes ne lisait `recurrenceAnnuelle`, elles etaient d'accord
+        // entre elles — deux defauts qui s'annulent. Corriger la premiere seule aurait laisse le
+        // validateur passer VERT sur un vrai conflit : une saison recurrente cesserait d'etre vue
+        // comme chevauchant une saison fixe de l'annee suivante, alors qu'elle la recouvre bel et
+        // bien.
+        //
+        // Signale par `allaccess-c0` avant que la premiere ligne soit ecrite. C'est le genre de
+        // paire qu'on ne voit qu'en cherchant ce que l'absence du geste manquant protegeait.
+        if ($this->recurrenceAnnuelle || $autre->recurrenceAnnuelle) {
+            foreach (self::segmentsMoisJour($this->dateDebut, $this->dateFin, !$this->recurrenceAnnuelle) as $a) {
+                foreach (self::segmentsMoisJour($autre->dateDebut, $autre->dateFin, !$autre->recurrenceAnnuelle) as $b) {
+                    if ($a[0] <= $b[1] && $b[0] <= $a[1]) {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
         return $this->dateDebut <= $autre->dateFin && $autre->dateDebut <= $this->dateFin;
+    }
+
+    /**
+     * Le couple mois-jour d'une date, comme entier comparable : 15 decembre -> 1215.
+     *
+     * ⚠ ON NE RECONSTRUIT PAS DE DATE. Rapporter le 29 fevrier d'une saison recurrente sur une annee
+     * non bissextile donnerait le 1er mars, ou leverait, selon la methode. Un entier mois*100+jour
+     * se compare sans jamais avoir besoin d'une annee, donc sans jamais rencontrer ce cas.
+     */
+    private static function moisJour(\DateTimeImmutable $date): int
+    {
+        return ((int) $date->format('n')) * 100 + (int) $date->format('j');
+    }
+
+    /**
+     * Les segments mois-jour couverts, en 1 ou 2 morceaux.
+     *
+     * ⚠ UNE SAISON QUI ENJAMBE LE NOUVEL AN SE COUPE EN DEUX, ET C'EST LE PIEGE PRINCIPAL.
+     *
+     * Des vacances du 15 decembre au 15 janvier donnent `debut = 1215` et `fin = 0115`. La
+     * comparaison naturelle `debut <= date <= fin` est alors FAUSSE TOUTE L'ANNEE : elle exige
+     * d'etre a la fois apres decembre et avant janvier. Le cas s'inverse — il faut lire
+     * `date >= debut OU date <= fin` — ce qu'on obtient en rendant deux segments.
+     *
+     * @return list<array{int, int}>
+     */
+    private static function segmentsMoisJour(?\DateTimeImmutable $debut, ?\DateTimeImmutable $fin, bool $fixe = false): array
+    {
+        if ($debut === null || $fin === null) {
+            return [];
+        }
+
+        // ⚠ UNE SAISON FIXE DE PLUS D'UN AN COUVRE TOUS LES MOIS-JOURS. Sans ce cas, elle serait
+        // reduite a son mois-jour de depart et cesserait de chevaucher une recurrente qu'elle
+        // contient pourtant en entier.
+        if ($fixe && $debut->diff($fin)->days >= 366) {
+            return [[101, 1231]];
+        }
+
+        $d = self::moisJour($debut);
+        $f = self::moisJour($fin);
+
+        return $d <= $f ? [[$d, $f]] : [[$d, 1231], [101, $f]];
+    }
+
+    /**
+     * @param list<array{int, int}> $segments
+     */
+    private static function dansSegments(int $moisJour, array $segments): bool
+    {
+        foreach ($segments as [$debut, $fin]) {
+            if ($moisJour >= $debut && $moisJour <= $fin) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function getEtablissement(): ?Etablissement
