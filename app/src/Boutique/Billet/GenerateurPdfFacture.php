@@ -6,6 +6,7 @@ namespace App\Boutique\Billet;
 
 use App\Facturation\Entity\Facture;
 use App\Vente\Entity\Vente;
+use App\Platform\Pdf\PoliceDeclaree;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 use Doctrine\ORM\EntityManagerInterface;
@@ -55,7 +56,7 @@ final class GenerateurPdfFacture
         $options->setChroot(\sys_get_temp_dir());
 
         $dompdf = new Dompdf($options);
-        $dompdf->loadHtml($html, 'UTF-8');
+        $dompdf->loadHtml(PoliceDeclaree::dans($html, PoliceDeclaree::BASE), 'UTF-8');
         $dompdf->setPaper('A4', 'portrait');
         $dompdf->render();
 

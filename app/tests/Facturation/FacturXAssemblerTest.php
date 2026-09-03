@@ -16,6 +16,8 @@ use App\Facturation\Entity\Facture;
 use App\Facturation\Entity\LigneFacture;
 use App\Facturation\Enum\StatutFacture;
 use App\Facturation\Enum\UnitCode;
+use Dompdf\Dompdf;
+use Dompdf\Options;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -51,6 +53,36 @@ final class FacturXAssemblerTest extends TestCase
 
         $this->expectException(InvoiceNotEmittableException::class);
         $this->assembleur->assemble('<p>peu importe</p>', $facture);
+    }
+
+    /**
+     * ⚠ CE TEST PORTE SUR LE CABLAGE, PAS SUR LE MECANISME.
+     *
+     * `PoliceDeclareeTest` prouve que declarer la police resout la pollution du cache statique de
+     * `Dompdf\FontMetrics::getFont()`. Il ne prouve pas que CET assembleur le fait : on pourrait
+     * retirer l'appel a `PoliceDeclaree::dans()` de `FacturXAssembler` sans qu'aucun de ses tests
+     * ne tombe.
+     *
+     * Celui-ci passe par l'assembleur reel, et se pollue lui-meme — il ne depend donc d'aucun
+     * ordre. C'est ce qui manquait : le defaut n'etait visible que sur les 2233 tests de la suite
+     * complete, `Boutique` precedant `Facturation` dans l'ordre alphabetique, et invisible sur les
+     * 99 de ce module.
+     */
+    public function testElleResisteAUnDompdfAnterieurSansPoliceParDefaut(): void
+    {
+        // Exactement ce que fait `GenerateurPdfBillet` avant correction : aucun `setDefaultFont`,
+        // donc `serif` -> Times, mis en cache sous la cle partagee `0`.
+        $pollueur = new Dompdf(new Options());
+        $pollueur->loadHtml('<p>Un billet, rendu avant nous.</p>', 'UTF-8');
+        $pollueur->render();
+        $pollueur->output();
+
+        $pdf = $this->assembleur->assemble($this->html(), $this->factureComplete());
+        self::assertStringStartsWith(
+            '%PDF-',
+            $pdf,
+            'Un PDF rendu ailleurs dans le processus a impose sa police a Factur-X, et PDF/A l a refusee.',
+        );
     }
 
     public function testElleProduitUnPdf(): void

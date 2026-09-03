@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Facturation\Einvoicing;
 
 use App\Facturation\Entity\Facture;
+use App\Platform\Pdf\PoliceDeclaree;
 use Dompdf\Adapter\CPDF;
 use Dompdf\Dompdf;
 use Dompdf\Options;
@@ -182,6 +183,16 @@ final class FacturXAssembler
         // cas la meme exception remonte, avec son message, et c'est le gabarit qu'il faut corriger.
         $options->setDefaultFont('DejaVu Sans');
 
+        // ⚠ CETTE EXCEPTION A DEUX CAUSES, ET LA SECONDE N'A RIEN A VOIR AVEC LE CACHE DISQUE.
+        //
+        // Celle decrite plus bas — un `.ufm.json` tronque — est reelle et a ete observee. Mais le
+        // meme message remonte quand un AUTRE Dompdf du processus a deja rempli le cache statique
+        // de `FontMetrics::getFont()` : voir `App\Platform\Pdf\PoliceDeclaree`, qui porte la
+        // mesure et le remede. Les fichiers de police, eux, sont alors parfaitement sains.
+        //
+        // Avant de supprimer quoi que ce soit dans `lib/fonts/`, verifier que les `.ufm.json`
+        // presents sont bien du JSON invalide. S'ils sont valides, ce n'est pas cette cause-la.
+
         // ⚠ UN CACHE DE POLICES CORROMPU FAIT ECHOUER LE PDF/A, ET J'AI CRU POUVOIR LE DEPLACER.
         //
         // Dompdf ecrit ses metriques dans `vendor/dompdf/dompdf/lib/fonts/`. Un run INTERROMPU y
@@ -217,7 +228,7 @@ final class FacturXAssembler
         // Le registre se restaure en le recopiant depuis un autre arbre, ou par `composer install`.
 
         $dompdf = new Dompdf($options);
-        $dompdf->loadHtml($html, 'UTF-8');
+        $dompdf->loadHtml(PoliceDeclaree::dans($html, PoliceDeclaree::DEJAVU), 'UTF-8');
         $dompdf->setPaper('A4', 'portrait');
         $dompdf->render();
 
