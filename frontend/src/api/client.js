@@ -1740,6 +1740,13 @@ export const api = {
     request(`/api/finance/supplier-invoices/${id}/dispute`, { method: 'POST', body: corps }),
   resoudreLitigeFactureFournisseur: (id, corps) =>
     request(`/api/finance/supplier-invoices/${id}/resolve-dispute`, { method: 'POST', body: corps }),
+  // L'AVOIR — la route existait, aucun bouton ne l'appelait.
+  //
+  // ⚠ `amount` ABSENT VAUT AVOIR TOTAL (§0.9 du plan). Ce n'est donc PAS un champ optionnel qu'on
+  // peut omettre par commodite : l'omettre est une decision comptable. L'appelant doit avoir
+  // tranche avant, et l'ecran le lui demande explicitement.
+  avoirFactureFournisseur: (id, corps) =>
+    request(`/api/finance/supplier-invoices/${id}/credit-note`, { method: 'POST', body: corps }),
   annulerFactureFournisseur: (id) =>
     request(`/api/finance/supplier-invoices/${id}/cancel`, { method: 'POST', body: {} }),
 
