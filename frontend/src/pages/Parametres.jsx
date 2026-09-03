@@ -11,6 +11,7 @@ import PretAVendre from '../components/PretAVendre.jsx'
 import RolesSection from '../components/RolesSection.jsx'
 import Qr from '../components/Qr.jsx'
 import EtablissementsSection from '../components/EtablissementsSection.jsx'
+import GroupesSection from '../components/GroupesSection.jsx'
 import RegionsSection from '../components/RegionsSection.jsx'
 import OuvrirStructure from '../components/OuvrirStructure.jsx'
 import { aLeDroit } from '../api/droits.js'
@@ -554,6 +555,10 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
           {/* « Regions » reste : Maxime a nomme « Nouveau client » et « etablissement », pas les
               regions. Il regardait un ecran, pas une liste exhaustive — la question lui est posee
               plutot que tranchee ici. En attendant, on ne masque que ce qu'il a nomme. */}
+          {/* Au-dessus des régions, parce que la hiérarchie se lit de haut en bas :
+              Groupe → Région → Établissement. Les deux du dessous avaient leur section, le sommet
+              n'en avait aucune (R18). */}
+          <GroupesSection peutEcrire={aLeDroit(droits, 'organisation.gerer')} />
           <RegionsSection peutEcrire={aLeDroit(droits, 'organisation.gerer')} />
           {/* ⚠ ON NE RETIRE QUE LA GESTION, PAS L'ACCES. Un exploitant multi-sites continue de voir
               ses etablissements et d'en changer : le selecteur vit dans la barre du haut

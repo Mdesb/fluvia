@@ -29,15 +29,16 @@
         "Le script REFUSE de le relever. Un plafond qui remonte n est plus un cliquet, c est un",
         "compteur."
     ],
-    "plafond": 630,
+    "plafond": 611,
     "releve": {
-        "exposees": 1161,
+        "exposees": 1170,
         "sansEcran": 1,
-        "attendues": 1160,
-        "appelees": 538,
-        "atteignables": 530,
-        "inatteignables": 630,
+        "attendues": 1169,
+        "appelees": 567,
+        "atteignables": 558,
+        "inatteignables": 611,
         "orphelins": [
+            "ajouterLigneReleve  (back-office)",
             "etatSynchroAcces  (back-office)",
             "grilleTarifaires  (back-office)",
             "majFactureFournisseur  (back-office)",
@@ -62,8 +63,8 @@
         "parFront": [
             {
                 "nom": "back-office",
-                "appelees": 514,
-                "atteignables": 506
+                "appelees": 543,
+                "atteignables": 534
             },
             {
                 "nom": "boutique en ligne",
@@ -85,11 +86,15 @@
                 26
             ],
             [
-                "patinoire",
-                17
+                "editor",
+                18
             ],
             [
-                "editor",
+                "finance",
+                18
+            ],
+            [
+                "patinoire",
                 17
             ],
             [
@@ -121,10 +126,6 @@
                 11
             ],
             [
-                "finance",
-                11
-            ],
-            [
                 "factures",
                 10
             ],
@@ -153,6 +154,10 @@
                 8
             ],
             [
+                "bank",
+                7
+            ],
+            [
                 "recouvrement",
                 7
             ],
@@ -166,6 +171,10 @@
             ],
             [
                 "clients",
+                6
+            ],
+            [
+                "sport",
                 6
             ],
             [
@@ -194,6 +203,10 @@
             ],
             [
                 "loyalty",
+                5
+            ],
+            [
+                "imports",
                 5
             ],
             [
@@ -273,10 +286,6 @@
                 3
             ],
             [
-                "sport",
-                3
-            ],
-            [
                 "opportunities",
                 3
             ],
@@ -329,7 +338,15 @@
                 3
             ],
             [
+                "profil",
+                3
+            ],
+            [
                 "mapping",
+                3
+            ],
+            [
+                "sepa",
                 3
             ],
             [
@@ -354,6 +371,10 @@
             ],
             [
                 "projects",
+                2
+            ],
+            [
+                "groupes",
                 2
             ],
             [
@@ -382,10 +403,6 @@
             ],
             [
                 "rejet",
-                2
-            ],
-            [
-                "sepa",
                 2
             ],
             [
@@ -418,6 +435,10 @@
             ],
             [
                 "evenement",
+                1
+            ],
+            [
+                "echeance",
                 1
             ],
             [
@@ -478,10 +499,6 @@
             ],
             [
                 "journals",
-                1
-            ],
-            [
-                "profil",
                 1
             ],
             [
