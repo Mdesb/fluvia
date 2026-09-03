@@ -835,7 +835,7 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
    blanc. En fond avec une encre calculee, la meme couleur donne 9,8:1. Les replis rendent le
    comportement d'avant quand aucune couleur n'est appliquee.
    Espacement en jetons : le cliquet des litteraux est a son plafond. */
-.bq-carte-prix { font-size: var(--txt-normal); font-weight: 800; color: var(--bq-sur-secondaire, var(--accent-2)); background: var(--bq-secondaire, transparent); margin: 0; display: inline-block; border-radius: 999px; padding: var(--esp-serre) var(--esp-normal); }
+.bq-carte-prix { font-size: var(--txt-normal); font-weight: 800; color: var(--bq-sur-secondaire, var(--accent-2)); background: var(--bq-secondaire, transparent); margin: 0; display: inline-block; align-self: flex-start; border-radius: 999px; padding: var(--esp-serre) var(--esp-normal); }
 .bq-carte-tags { display: flex; gap: 6px; flex-wrap: wrap; }
 .bq-carte-cta { margin-top: auto; justify-content: center; }
 
