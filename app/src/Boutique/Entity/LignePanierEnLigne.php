@@ -74,7 +74,7 @@ class LignePanierEnLigne
 
     /**
      * Prix unitaire public résolu (`App\Boutique\Service\PanierTarificationHandler`, moteur
-     * `ResolveurPrix` M1 réutilisé) — transitoire, calculé à la lecture du panier, jamais persisté
+     * `ResolveurPrix` M1 réutilisé) — transitoire, calculé à chaque sortie du panier, jamais persisté
      * (même patron que `PanierEnLigne::jetonSession`).
      */
     #[Groups(['panier:read'])]

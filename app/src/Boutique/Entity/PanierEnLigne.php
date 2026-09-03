@@ -222,9 +222,15 @@ class PanierEnLigne
     private ?string $jetonSession = null;
 
     /**
-     * Total du panier — transitoire, calculé à la lecture (`GET /boutique/paniers/{id}`) par
+     * Total du panier — transitoire, calculé à CHAQUE sortie du panier (lecture et mutations) par
      * `App\Boutique\Service\PanierTarificationHandler` (moteur `ResolveurPrix`/`PanierCalculateur`
      * M1/M2 réutilisé, aucun prix recodé), jamais persisté.
+     *
+     * ⚠ « À CHAQUE SORTIE », ET PAS SEULEMENT À LA LECTURE. Ce commentaire disait « à la lecture »,
+     * ce qui décrivait fidèlement le défaut : les huit processeurs qui rendent un panier ne
+     * tarifaient pas, donc l'écran perdait tous ses montants dès qu'un client changeait une
+     * quantité, jusqu'au rechargement suivant. `PanierTarifeTest` cloue l'invariant, y compris pour
+     * les processeurs à venir.
      */
     #[Groups(['panier:read'])]
     private ?string $total = null;
