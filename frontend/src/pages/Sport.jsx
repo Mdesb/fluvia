@@ -152,6 +152,47 @@ export default function Sport({ etabActif, droits = [] }) {
   const peutTraiter = aLeDroit(droits, 'sport.superviser_nocturne')
   // Le droit exige par `POST /sport/abonnements/souscrire`, et lui seul.
   const peutGererAbonnement = aLeDroit(droits, 'sport.gerer_abonnement')
+
+  /**
+   * DETECTER MAINTENANT, ESPACE PAR ESPACE.
+   *
+   * ⚠ LE COMPTE-RENDU NOMME CE QUI A ETE BALAYE, PAS SEULEMENT CE QUI A ETE TROUVE. La route est
+   * par espace : sans espace, il n'y a rien a interroger, et annoncer « aucune presence isolee »
+   * serait affirmer une absence qu'on n'a pas mesuree. `espaces` retombe a `[]` quand sa lecture
+   * echoue — le cas se produit vraiment, il n'est pas theorique.
+   *
+   * ⚠ ET LES ECHECS PARTIELS SE DISENT. Un espace peut refuser (droit, cloisonnement) pendant que
+   * les autres repondent. Taire ces refus ferait passer une detection incomplete pour complete.
+   */
+  async function detecterMaintenant() {
+    const cibles = Array.isArray(espaces) ? espaces.filter((e) => e && e.id) : []
+    if (cibles.length === 0) {
+      setCompteRendu({
+        grave: true,
+        texte: 'Aucun espace à interroger : la liste des espaces est vide ou n’a pas pu être lue. '
+          + 'La détection n’a rien mesuré — ce n’est pas la même chose que « rien trouvé ».',
+      })
+      return
+    }
+    setDetection(true)
+    setCompteRendu(null)
+    const resultats = await Promise.allSettled(cibles.map((e) => api.detecterPresenceIsolee(e.id)))
+    const refuses = resultats.filter((r) => r.status === 'rejected').length
+    const aboutis = resultats.length - refuses
+    try {
+      await recharger()
+    } catch {
+      // Le rechargement peut echouer sans que la detection ait echoue. On ne le confond pas.
+    }
+    setCompteRendu({
+      grave: refuses > 0,
+      texte: refuses === 0
+        ? `${aboutis} espace(s) interrogé(s). La liste ci-dessous est à jour.`
+        : `${aboutis} espace(s) interrogé(s), ${refuses} refusé(s). La liste ci-dessous ne couvre `
+          + 'donc pas tous les espaces : ceux qui ont refusé n’ont pas été vérifiés.',
+    })
+    setDetection(false)
+  }
   const [souscription, setSouscription] = useState(false)
   const [echeances, setEcheances] = useState(null)
   const [beneficiaires, setBeneficiaires] = useState(null)
@@ -173,6 +214,10 @@ export default function Sport({ etabActif, droits = [] }) {
   // manquant.
   const [sos, setSos] = useState(null)
   const [alertes, setAlertes] = useState(null)
+  const [detection, setDetection] = useState(false)
+  // Le compte-rendu de la derniere detection. Il porte TOUJOURS le nombre d'espaces interroges :
+  // sans lui, « rien trouve » et « rien cherche » se lisent pareil.
+  const [compteRendu, setCompteRendu] = useState(null)
   const [abonnements, setAbonnements] = useState(null)
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
@@ -336,7 +381,26 @@ export default function Sport({ etabActif, droits = [] }) {
       </section>
 
       <section className="card" style={{ marginBottom: 14 }}>
-        <div className="card-h"><span>Présences isolées détectées</span></div>
+        <div className="card-h">
+          <span>Présences isolées détectées</span>
+          {peutTraiter && (
+            <button
+              className="btn ghost sm"
+              type="button"
+              style={{ marginLeft: 'auto' }}
+              disabled={detection}
+              title="Interroge chaque espace maintenant, sans attendre le prochain passage automatique."
+              onClick={detecterMaintenant}
+            >
+              {detection ? 'Détection…' : 'Détecter maintenant'}
+            </button>
+          )}
+        </div>
+        {compteRendu && (
+          <div className={compteRendu.grave ? 'banner banner-warn' : 'banner'} style={{ margin: 'var(--esp-large)' }}>
+            {compteRendu.texte}
+          </div>
+        )}
         {alertes === null ? (
           <div className="banner banner-error" style={{ margin: 'var(--esp-large)' }}>
             Les présences isolées n’ont pas pu être lues. Il y en a peut-être une en cours&nbsp;:
