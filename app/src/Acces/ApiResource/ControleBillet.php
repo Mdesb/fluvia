@@ -72,7 +72,20 @@ final class ControleBillet
     #[Groups(['controle_billet:read'])]
     public string $libelleMotif = '';
 
-    /** @var array{produit: ?string, porteur: ?string}|null */
+    /**
+     * Ce que l'agent doit pouvoir lire sans le demander au porteur (R19).
+     *
+     * ⚠ `produit` RENDAIT L'ENUM DE SOURCE (« billet », « abonnement ») ET NON UN NOM, et `porteur`
+     * valait `null` EN DUR — alors que l'ecran avait deja le code pour l'afficher. Les deux se
+     * lisent maintenant sur la ligne de vente, ou le libelle est FIGE au moment de l'achat : un
+     * produit renomme six mois plus tard ne change pas ce qu'un billet d'hier affirme.
+     *
+     * ⚠ `porteur` N'EST RENSEIGNE QUE POUR UN TITRE NOMINATIF — c'est-a-dire quand la ligne de
+     * vente porte un beneficiaire. Arbitrage de Maxime : afficher le nom de quelqu'un sur un ecran
+     * de controle l'expose a qui passe derriere l'agent, et un billet anonyme n'a personne a nommer.
+     *
+     * @var array{produit: ?string, tarif: ?string, prix: ?string, porteur: ?string, validite: array{debut: ?string, fin: ?string}}|null
+     */
     #[Groups(['controle_billet:read'])]
     public ?array $billet = null;
 
