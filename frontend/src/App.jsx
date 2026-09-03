@@ -70,7 +70,6 @@ const DEMENAGES = {
 const Cautions = lazy(() => import('./pages/Cautions.jsx'))
 // Differe pour la meme raison : un caissier n'enrole pas de terminal et ne bloque pas de badge.
 const Acces = lazy(() => import('./pages/Acces.jsx'))
-const TopologieAcces = lazy(() => import('./pages/TopologieAcces.jsx'))
 // Differe : une demande d'effacement se traite quelques fois par an. L'ecran ne doit peser sur
 // le premier chargement de personne -- mais il doit exister, ce qui n'etait pas le cas.
 const DonneesPersonnelles = lazy(() => import('./pages/DonneesPersonnelles.jsx'))
@@ -504,9 +503,6 @@ export default function App() {
       {/* Même raison qu'à la caisse : on remonte l'écran plutôt que de le remettre à zéro. */}
       {onglet === 'supervision' && <Supervision key={etabActif} etabActif={etabActif} droits={droits} />}
       {onglet === 'acces' && <Acces etabActif={etabActif} droits={droits} />}
-      {onglet === 'topologie_acces' && (
-        <TopologieAcces etabActif={etabActif} droits={droits} onNav={naviguer} />
-      )}
       {onglet === 'agenda' && <Agenda droits={droits} etabActif={etabActif} />}
       {/* `me` porte l'identifiant du lecteur, et c'est ce qui donne un CÔTÉ aux bulles : sans lui
           la messagerie ne sait pas lesquelles sont les siennes et les aligne toutes à gauche. */}
