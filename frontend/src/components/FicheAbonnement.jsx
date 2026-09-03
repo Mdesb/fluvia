@@ -63,31 +63,33 @@ export default function FicheAbonnement({ abonnement, nomAdherent, nomPayeur, on
     if (!a?.id) return undefined
     let annule = false
     setEcheances(null)
-    // ⚠ ON NE FILTRE PAS AU SERVEUR, ET CE N'EST PAS UN OUBLI.
+    // Le filtre serveur existe depuis `37473e7` : `SearchFilter` en `exact` sur `abonnement`.
     //
-    // `EcheanceSepa` ne déclare AUCUN `ApiFilter`. Passer `?abonnement=<id>` serait accepté et
-    // IGNORÉ en silence : la réponse porterait les échéances de tous les abonnements, et cette
-    // fiche afficherait l'échéancier du voisin sans qu'aucune erreur ne le dise. Un filtre non
-    // déclaré est le pire des deux mondes — il a l'air de marcher.
+    // Cet ecran lisait auparavant TOUTE la collection et triait ici, parce que l'entite ne
+    // declarait aucun filtre -- `?abonnement=` etait alors accepte et IGNORE EN SILENCE, ce qui est
+    // le pire des deux mondes : ca a l'air de marcher. Le tri local disparait avec sa cause.
     //
-    // On lit donc la collection et on trie ici, sur l'IRI de la relation. 61 échéances en base
-    // aujourd'hui, plafond de lecture à 200 : au-delà, la fiche n'en verrait qu'une partie, et
-    // c'est ce que dit l'avertissement plus bas plutôt que de laisser croire à un échéancier
-    // complet. Le vrai remède est un filtre déclaré côté serveur — hors de cet écran.
+    // ⚠ LE FILTRE EST PROUVE PAR UNE EXCLUSION, pas par la justesse de ce qu'il rend. Son test
+    // fabrique un voisin, exige que la collection entiere porte au moins deux abonnements, puis
+    // que la liste filtree soit STRICTEMENT plus courte. Une liste vide ou une liste inchangee
+    // le font tomber -- sans ces deux temoins, un filtre qui efface tout aurait l'air de marcher.
     api
-      .echeancesSepaSport({ 'order[dateProgrammee]': 'asc' })
-      // ⚠ `null` reste `null` sur un refus : la liste vide dirait « aucune échéance » là où on n'a
-      // pas pu lire. Un compte sans droit comptable reçoit un 403 sur ce référentiel.
+      .echeancesSepaSport({
+        abonnement: `/api/abonnement_fitnesses/${a.id}`,
+        'order[dateProgrammee]': 'asc',
+      })
+      // ⚠ TROIS ETATS, ET LA DIFFERENCE N'EST PAS COSMETIQUE. `null` = on lit encore ; `undefined`
+      // = on n'a PAS PU lire (un compte sans droit comptable recoit un 403 sur ce referentiel) ;
+      // une liste vide = on a lu, il n'y a rien. Confondre les deux derniers ferait dire a l'ecran
+      // « aucune echeance » la ou il n'a rien mesure.
       .then((r) => {
         if (annule) return
-        const tout = membres(r)
-        const miennes = tout.filter((e) => {
-          const ref = e.abonnement
-          const id = typeof ref === 'string' ? ref.split('/').pop() : ref?.id
-          return id === a.id
-        })
+        const miennes = membres(r)
         setEcheances(miennes)
-        setTronque(tout.length >= 200)
+        // Le plafond porte desormais sur UN abonnement : 200 mensualites, c'est plus de seize ans.
+        // L'avertissement reste -- un plafond muet est un mensonge -- mais le cas cesse d'etre
+        // courant, alors qu'il etait atteignable des 200 echeances toutes formules confondues.
+        setTronque(miennes.length >= 200)
       })
       .catch(() => { if (!annule) setEcheances(undefined) })
     return () => { annule = true }
@@ -224,8 +226,8 @@ export default function FicheAbonnement({ abonnement, nomAdherent, nomPayeur, on
           )}
           {tronque && (
             <div className="banner banner-warn">
-              La lecture des échéances s’arrête à 200 lignes, tous abonnements confondus, et le
-              serveur ne sait pas filtrer par abonnement. Cet échéancier peut donc être incomplet.
+              Cet echeancier s’arrete a 200 lignes pour ce seul abonnement — plus de seize ans de
+              mensualites. S’il s’affiche, la liste ci-dessous est incomplete.
             </div>
           )}
           {Array.isArray(echeances) && echeances.length > 0 && (
