@@ -181,7 +181,7 @@ export default function Modules({ capacites = [], me }) {
             panier&nbsp;: elle active d’un coup l’ensemble des fonctions qui vont avec. Elle se
             change avec Fluvia, pas depuis cette page.
           </p>
-          <div className="grid">
+          <div className="modules-grille">
             {groupes.verticales.map((v) => (
               <div className="card" key={v.code}>
                 <div className="card-b">
@@ -245,7 +245,7 @@ function Groupe({ titre, items, vide, rendu }) {
       {items.length === 0 ? (
         <p className="sub">{vide}</p>
       ) : (
-        <div className="grid">
+        <div className="modules-grille">
           {items.map((c) => (
             <div className="card" key={c.code}>
               <div className="card-b">
