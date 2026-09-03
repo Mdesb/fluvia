@@ -234,7 +234,7 @@ function nombreOuNul(v) {
   return Number.isFinite(n) ? n : null
 }
 
-export default function TopologieAcces({ etabActif, droits, onNav }) {
+export default function TopologieAcces({ etabActif, droits, onNav, imbrique = false }) {
   const [onglet, setOnglet] = useState('plan')
   // ALLER DU MATÉRIEL À SES PASSAGES SANS REFAIRE LA RECHERCHE.
   //
@@ -744,12 +744,19 @@ export default function TopologieAcces({ etabActif, droits, onNav }) {
   const muets = controleurs.filter((c) => signeDeVie(c).suspect).length
 
   return (
-    <div className="view">
+    // ⚠ PAS DE `view` QUAND ON EST IMBRIQUE : Paramètres en pose déjà un, et deux enveloppes de
+    // page l'une dans l'autre ajoutent une marge que personne n'a demandée.
+    <div className={imbrique ? undefined : 'view'}>
       <div className="view-head">
-        <div className="ttl">
-          <h1>Topologie &amp; passages</h1>
-          <p>Le plan du contrôle d’accès — espaces, contrôleurs, équipements — et le journal complet</p>
-        </div>
+        {/* Le titre disparaît quand cet écran est un onglet de Paramètres : la page a déjà le sien,
+            et deux `<h1>` sur un même écran n'ont pas de sens pour un lecteur d'écran. Les actions,
+            elles, restent — c'est ici qu'on rafraîchit. */}
+        {!imbrique && (
+          <div className="ttl">
+            <h1>Topologie &amp; lecteurs</h1>
+            <p>Le plan du contrôle d’accès : espaces, contrôleurs, équipements et terminaux</p>
+          </div>
+        )}
         <div className="actions">
           <span className="hint" style={{ margin: 0 }}>{maj ? `Actualisé à ${maj.toLocaleTimeString('fr-FR')}` : ''}</span>
           <button className={`btn${auto ? ' primary' : ''}`} onClick={() => setAuto((v) => !v)} disabled={sessionPerdue}>

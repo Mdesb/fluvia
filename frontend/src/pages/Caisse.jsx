@@ -46,6 +46,9 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
 
   const [panier, setPanier] = useState([]) // { produit, quantite }
   const [ticket, setTicket] = useState(null)
+  // Le billet remis sans ticket de caisse (R5). Distinct de `ticket` : ce n'est pas le meme
+  // document, et les afficher tous les deux serait remettre deux papiers pour une seule vente.
+  const [billetSeul, setBilletSeul] = useState(null)
   // Ce que le serveur a decide de ce ticket, et ce qu'il reste a demander au client.
   const [finVente, setFinVente] = useState(null)
 
@@ -82,6 +85,7 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
     setErreur(null)
     setPanier([])
     setTicket(null)
+    setBilletSeul(null)
     setFinVente(null)
     setVente(null)
     setPaiements([])
@@ -256,6 +260,7 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
    */
   async function ajouter(produit, grille, options = [], devisConnu = null) {
     setTicket(null)
+    setBilletSeul(null)
     setFinVente(null)
     const g = grille || grillesVendables(produit)[0]
     if (!g) return
@@ -402,6 +407,7 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
     setAvis(null)
     setBesoinClient(false)
     setTicket(null)
+    setBilletSeul(null)
     setFinVente(null)
     try {
       const v = await api.creerVente({ session: session.id })
@@ -982,11 +988,13 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
             <FinDeVente
               info={finVente.info}
               onAfficher={() => { setTicket(finVente.ticket); setFinVente(null) }}
+              onBillet={() => { setBilletSeul(finVente.ticket); setFinVente(null) }}
               onSansTicket={() => setFinVente(null)}
             />
           )}
 
           {ticket && <TicketVente ticket={ticket} />}
+          {billetSeul && <BilletSeul ticket={billetSeul} />}
 
         </aside>
 
@@ -1336,7 +1344,7 @@ function PanneauPaiement({
 // mensonge le plus cher du lot : le client repart sans rien, le caissier croit l'avoir servi, et
 // personne ne s'en apercoit avant la reclamation. On garde les boutons — Maxime les a demandes, et
 // les effacer ferait oublier la demande — mais ils disent leur etat.
-function FinDeVente({ info, onAfficher, onSansTicket }) {
+function FinDeVente({ info, onAfficher, onBillet, onSansTicket }) {
   // Une vente a zero euro ne sort pas de ticket, et ce n'est pas une question de seuil : une entree
   // offerte ou un lot d'invitations faisait sortir un ticket a 0 € que le client jette.
   if (info.venteGratuite) {
@@ -1348,7 +1356,13 @@ function FinDeVente({ info, onAfficher, onSansTicket }) {
             Le total est de 0 € : il n’y a rien à justifier au client. La vente est bien
             enregistrée et comptabilisée — c’est le papier qu’on ne sort pas, pas l’opération.
           </p>
-          <button className="btn ghost sm" type="button" onClick={onSansTicket}>Fermer</button>
+          {/* ⚠ PAS DE TICKET NE VEUT PAS DIRE RIEN À REMETTRE (R5). Un ticket justifie un
+              PAIEMENT ; un billet ouvre un ACCÈS. Une entrée offerte n'a rien à justifier, et le
+              client a quand même besoin de quoi passer la porte. */}
+          <div className="ticket-actions">
+            <button className="btn primary sm" type="button" onClick={onBillet}>Afficher le billet</button>
+            <button className="btn ghost sm" type="button" onClick={onSansTicket}>Fermer</button>
+          </div>
         </div>
       </div>
     )
@@ -1365,7 +1379,10 @@ function FinDeVente({ info, onAfficher, onSansTicket }) {
 
         <div className="row" style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
           <button className="btn primary" type="button" onClick={onAfficher}>Afficher le ticket</button>
-          <button className="btn ghost" type="button" onClick={onSansTicket}>Sans ticket</button>
+          {/* « Sans ticket » fermait sans rien remettre. Le client repart quand même avec son
+              accès : c'est le billet, sans aucun montant dessus (R5). */}
+          <button className="btn" type="button" onClick={onBillet}>Le billet seul</button>
+          <button className="btn ghost" type="button" onClick={onSansTicket}>Ni l’un ni l’autre</button>
         </div>
 
         {info.renvoiPropose ? (
@@ -1389,6 +1406,66 @@ function FinDeVente({ info, onAfficher, onSansTicket }) {
         )}
       </div>
     </div>
+  )
+}
+
+// LE BILLET SEUL — ce qu'on remet quand il n'y a pas de ticket de caisse (R5).
+//
+// ⚠ AUCUN MONTANT N'Y FIGURE, ET C'EST LE POINT. Un ticket de caisse justifie un paiement ; un
+// billet ouvre un accès. Y remettre les prix en ferait un ticket dégradé — deux documents qui se
+// ressemblent, dont un seul est opposable, et personne pour savoir lequel fait foi.
+//
+// Il porte donc ce qu'il faut pour entrer : le produit, le numéro, le code du support.
+function BilletSeul({ ticket }) {
+  // ⚠ UNE VENTE PEUT N'OUVRIR AUCUN ACCÈS — une boisson, un article de boutique. Il n'y a alors
+  // pas de billet à remettre, et le dire vaut mieux que de tendre un papier vide. On ne montre pas
+  // un cadre avec un trou à la place du code.
+  if (!ticket?.codeSupport) {
+    return (
+      <div className="card">
+        <div className="card-b">
+          <div className="nm">Aucun billet à remettre</div>
+          <p className="hint">
+            Cette vente n’ouvre aucun accès&nbsp;: il n’y a pas de billet à imprimer. La vente est
+            enregistrée, et le ticket reste éditable depuis l’historique des ventes.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <>
+      <div className="ticket doc-imprimer">
+        <div className="th">
+          <span className="ok">✓</span>
+          <div>
+            <b>Billet</b>
+            <div className="tnum">{ticket.numero}</div>
+          </div>
+        </div>
+        <div className="tb">
+          {ticket.lignes.map((l, i) => (
+            <div className="trow" key={i}>
+              {/* La quantité et le libellé, jamais le prix. */}
+              <span>{l.quantite} × {l.libelle}</span>
+            </div>
+          ))}
+          <div className="tqr">
+            <Qr value={ticket.codeSupport} size={84} title={`QR billet ${ticket.numero}`} />
+            <div>
+              <span className="mono" style={{ fontSize: 10.5, wordBreak: 'break-all' }}>{ticket.codeSupport}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="ticket-actions noprint">
+        <button className="btn ghost sm" type="button" onClick={() => window.print()}>
+          Imprimer le billet
+        </button>
+      </div>
+    </>
   )
 }
 

@@ -56,10 +56,20 @@ const Sepa = lazy(() => import('./pages/Sepa.jsx'))
 const Recouvrement = lazy(() => import('./pages/Recouvrement.jsx'))
 const JournalPassages = lazy(() => import('./pages/JournalPassages.jsx'))
 const Casiers = lazy(() => import('./pages/Casiers.jsx'))
+
+// Les ecrans qui ont change d'adresse, et ou ils sont partis. Une entree ici vaut mieux qu'un
+// « cet ecran n'existe pas » servi a quelqu'un dont le favori designait quelque chose de reel.
+const DEMENAGES = {
+  topologie_acces: {
+    libelle: 'Topologie & lecteurs',
+    ou: 'Paramètres › Contrôle d’accès',
+    vers: 'parametres',
+    params: { sousOnglet: 'acces' },
+  },
+}
 const Cautions = lazy(() => import('./pages/Cautions.jsx'))
 // Differe pour la meme raison : un caissier n'enrole pas de terminal et ne bloque pas de badge.
 const Acces = lazy(() => import('./pages/Acces.jsx'))
-const TopologieAcces = lazy(() => import('./pages/TopologieAcces.jsx'))
 // Differe : une demande d'effacement se traite quelques fois par an. L'ecran ne doit peser sur
 // le premier chargement de personne -- mais il doit exister, ce qui n'etait pas le cas.
 const DonneesPersonnelles = lazy(() => import('./pages/DonneesPersonnelles.jsx'))
@@ -71,7 +81,7 @@ const DocumentationApi = lazy(() => import('./pages/DocumentationApi.jsx'))
 // serveur restent injoignables.
 const Imports = lazy(() => import('./pages/Imports.jsx'))
 
-import { lireHash, ecrireHash } from './api/url.js'
+import { allerA, ecrireHash, lireHash } from './api/url.js'
 
 // Un compte est « administrateur » s'il porte l'un des droits d'administration du socle sur
 // l'établissement actif (matérialisés dans `me.droits`). Gouverne l'atterrissage sur le tableau
@@ -429,7 +439,30 @@ export default function App() {
           pour toujours.
           ON NE REDIRIGE PAS EN SILENCE : ça donnerait l'impression que le lien a marché, et la
           personne chercherait ailleurs pourquoi elle n'a pas ce qu'elle demandait. */}
-      {!ongletsConnus().has(onglet) && (
+      {/* ⚠ UN ECRAN QUI A DEMENAGE N'EST PAS UN ECRAN QUI N'EXISTE PLUS, et le message generique
+          ci-dessous dirait « cet écran n'existe pas » d'un écran qui existe toujours. On le nomme,
+          on dit où il est parti, et on propose d'y aller — SANS rediriger : voir la note du bloc
+          suivant, qui explique pourquoi une redirection muette est pire que le panneau. */}
+      {!ongletsConnus().has(onglet) && DEMENAGES[onglet] && (
+        <div className="view">
+          <div className="empty">
+            <b>« {DEMENAGES[onglet].libelle} » a déménagé.</b>
+            <p className="hint">
+              Cet écran est devenu un onglet de <b>{DEMENAGES[onglet].ou}</b>. Votre lien n’est pas
+              cassé — il pointe l’ancienne adresse, <code>#{onglet}</code>.
+            </p>
+            <button
+              className="btn primary"
+              type="button"
+              onClick={() => allerA(DEMENAGES[onglet].vers, DEMENAGES[onglet].params)}
+            >
+              Aller à {DEMENAGES[onglet].ou}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!ongletsConnus().has(onglet) && !DEMENAGES[onglet] && (
         <div className="view">
           <div className="empty">
             <b>Cet écran n’existe pas, ou il a été renommé.</b>
@@ -470,9 +503,6 @@ export default function App() {
       {/* Même raison qu'à la caisse : on remonte l'écran plutôt que de le remettre à zéro. */}
       {onglet === 'supervision' && <Supervision key={etabActif} etabActif={etabActif} droits={droits} />}
       {onglet === 'acces' && <Acces etabActif={etabActif} droits={droits} />}
-      {onglet === 'topologie_acces' && (
-        <TopologieAcces etabActif={etabActif} droits={droits} onNav={naviguer} />
-      )}
       {onglet === 'agenda' && <Agenda droits={droits} etabActif={etabActif} />}
       {/* `me` porte l'identifiant du lecteur, et c'est ce qui donne un CÔTÉ aux bulles : sans lui
           la messagerie ne sait pas lesquelles sont les siennes et les aligne toutes à gauche. */}

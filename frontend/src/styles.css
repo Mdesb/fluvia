@@ -568,6 +568,7 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 .field-lbl { font-size: var(--txt-petit); font-weight: 600; color: var(--ink-soft); display: block; margin-bottom: 8px; }
 .cz-row { display: grid; grid-template-columns: 1fr 130px auto; gap: 8px; align-items: center; margin-bottom: 8px; }
 .cz-row .rm { border: none; background: none; color: var(--ink-faint); font-size: var(--txt-grand); cursor: pointer; }
+.tqr { display: flex; align-items: center; gap: var(--esp-large); margin-top: var(--esp-bloc); padding-top: var(--esp-bloc); border-top: 1px solid var(--line); }
 .ticket-actions { display: flex; gap: var(--esp-normal); margin-top: var(--esp-normal); flex-wrap: wrap; }
 .ticket-ok { width: 26px; height: 26px; border-radius: 50%; background: var(--good-bg); color: var(--good); display: inline-flex; align-items: center; justify-content: center; font-weight: 800; flex: none; }
 
