@@ -7,7 +7,11 @@ import { centimes } from '../api/produit.js'
  *
  * ── CE QUI EXISTAIT DEJA, ET QUE PERSONNE N'APPELAIT ─────────────────────────────────────────────
  *
- *   GET /api/fonctionnalites/catalogue   24 fiches : code, libelle, description, categorie
+ *   GET /api/fonctionnalites/catalogue   25 fiches : code, libelle, description, categorie
+ *
+ * Le compte disait 24 : `CapaciteCode` en porte 25, et le `match` de `CatalogueCapacites`
+ * est exhaustif, donc les deux ne peuvent pas diverger. C'est le COMMENTAIRE qui avait pris
+ * du retard sur une capacite ajoutee. Recompte le 03/09.
  *   GET /api/editor/plan-options         ce qui est vendable, avec son prix
  *   /me capacitesActives                 ce que cet etablissement porte deja
  *   /editeur -> Offres                   l'ecran ou l'editeur saisit les prix, deja servi
