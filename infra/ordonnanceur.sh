@@ -96,7 +96,21 @@ set -eu
 #                                     entrer dans le batiment, toutes les cinq minutes, en silence.
 #                                     Epargne prouvee le 31/08 : branche `Permanent` neutralisee
 #                                     -> le test neuf echoue seul.
-TACHES_AUTORISEES="securite:delegations:expirer autorisation:escalades:expirer boutique:liberer-paniers-expires personnel:recalculer-fenetres-badges sport:abonnements:traiter-terme sepa:preavis:annoncer subscription:facturer-le-mois"
+#   crm:rgpd:alerter-delai            une demande RGPD depasse le delai legal d'UN MOIS sans que
+#                                     personne le sache. Le delai est opposable, et l'ecran qui
+#                                     porte ces demandes a quitte le menu quotidien le 03/09 (R27) :
+#                                     plus rien ne le met sous les yeux. Aucun geste ne fera
+#                                     remarquer le depassement — c'est le temps qui passe.
+#                                     Autorisee par Maxime le 03/09 : « on met une notification et
+#                                     un badge sur le menu ».
+#                                     ⚠ SURE AU PREMIER PASSAGE, MESURE AVANT DE L'INSCRIRE : 2
+#                                     demandes en base, 1 en attente, ZERO au-dela du mois. Elle ne
+#                                     signalera rien a son premier reveil. Et elle n'a aucun effet
+#                                     au dehors : un evenement interne, une date posee.
+#                                     ⚠ Elle porte `nightlyAt: '02:00'` — comme les deux ci-dessus,
+#                                     c'est le catalogue qui refuse hors fenetre, pas cette liste.
+#
+TACHES_AUTORISEES="securite:delegations:expirer autorisation:escalades:expirer boutique:liberer-paniers-expires personnel:recalculer-fenetres-badges sport:abonnements:traiter-terme sepa:preavis:annoncer subscription:facturer-le-mois crm:rgpd:alerter-delai"
 
 INTERVALLE="${ORDONNANCEUR_INTERVALLE:-60}"
 

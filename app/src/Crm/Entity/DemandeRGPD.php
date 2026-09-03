@@ -89,6 +89,22 @@ class DemandeRGPD
     #[Groups(['rgpd:read'])]
     private \DateTimeImmutable $dateDemande;
 
+    /**
+     * Quand le depassement du delai legal a ete SIGNALE — jamais quand il a eu lieu.
+     *
+     * ⚠ SANS CETTE COLONNE, LA TACHE NOCTURNE RE-NOTIFIERAIT CHAQUE NUIT. Une demande en retard le
+     * reste jusqu'a son traitement : la meme alerte reviendrait tous les matins, et une cloche qui
+     * repete s'apprend a ne plus se lire — le defaut meme qu'on corrige, reintroduit par le remede.
+     *
+     * ⚠ ELLE N'EST PAS DANS `rgpd:write` : c'est une trace de mecanisme, pas une saisie. Personne ne
+     * doit pouvoir faire taire une alerte en la posant a la main depuis l'API.
+     *
+     * Nom anglais (D5) : le champ est ajoute apres la decision du 19/08.
+     */
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    #[Groups(['rgpd:read'])]
+    private ?\DateTimeImmutable $deadlineAlertedAt = null;
+
     #[ORM\Column(type: 'datetime_immutable', nullable: true)]
     #[Groups(['rgpd:read'])]
     private ?\DateTimeImmutable $dateTraitement = null;
@@ -171,6 +187,18 @@ class DemandeRGPD
     public function setTraitePar(?Utilisateur $traitePar): self
     {
         $this->traitePar = $traitePar;
+
+        return $this;
+    }
+
+    public function getDeadlineAlertedAt(): ?\DateTimeImmutable
+    {
+        return $this->deadlineAlertedAt;
+    }
+
+    public function setDeadlineAlertedAt(?\DateTimeImmutable $deadlineAlertedAt): self
+    {
+        $this->deadlineAlertedAt = $deadlineAlertedAt;
 
         return $this;
     }

@@ -18,8 +18,9 @@ use App\Platform\Enum\NotificationSeverity;
  * - `access.denied` se produit plusieurs fois par minute à l'ouverture des portes, et personne
  *   n'agit sur un refus isolé. Il n'entre pas.
  *
- * ⚠ CE N'EST PAS UNE LISTE À FAIRE GROSSIR. Vingt-sept événements sont réellement émis par ce dépôt ;
- * cinq entrent ici. Une cloche qui sonne pour tout ne se lit plus, et le jour où elle porte un vrai
+ * ⚠ CE N'EST PAS UNE LISTE À FAIRE GROSSIR. Vingt-huit événements sont réellement émis par ce
+ * dépôt ; SIX entrent ici — le sixième posé le 03/09, sur arbitrage de Maxime, pour un délai
+ * légal qu'aucun geste ne ferait remarquer. Une cloche qui sonne pour tout ne se lit plus, et le jour où elle porte un vrai
  * problème personne ne le voit — c'est exactement ce qui arrive à un bandeau permanent qui répète
  * « tout va bien ».
  *
@@ -74,6 +75,26 @@ final class NotificationRule
     private static function table(): array
     {
         $regles = [
+            // ⚠ LE SEUL EVENEMENT DE CETTE TABLE QUI NE VIENT PAS D'UN GESTE, MAIS DU TEMPS.
+            //
+            // Les cinq autres reagissent a quelque chose que quelqu'un a fait — un paiement rejete,
+            // un ecart constate. Celui-ci se produit parce qu'un mois a passe sans que personne
+            // n'agisse, et c'est precisement pour ca qu'il merite une notification : il n'y a aucun
+            // geste au bout duquel quelqu'un le verrait.
+            //
+            // Il satisfait le critere d'admission : il APPELLE le geste d'une personne (traiter la
+            // demande), et il est RARE (une demande RGPD depasse rarement le mois).
+            new self(
+                'privacy_request.deadline_breached',
+                NotificationSeverity::Critical,
+                'crm',
+                'rgpd_gerer',
+                'rgpd',
+                'demande',
+                'Une demande RGPD a dépassé le délai légal',
+                'Le délai d’un mois pour répondre est écoulé. Ce délai est opposable : ouvrez les données personnelles et traitez la demande, ou consignez le motif d’un refus.',
+                'request_type',
+            ),
             new self(
                 'payment.failed',
                 NotificationSeverity::Warning,
