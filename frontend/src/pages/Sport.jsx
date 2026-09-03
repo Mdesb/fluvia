@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, membres } from '../api/client.js'
+import FicheAbonnement from '../components/FicheAbonnement.jsx'
 import { aLeDroit } from '../api/droits.js'
 import { resoudre, nomOuAbsence, euroCentimes, dateFr, jourLocal } from '../components/Liste.jsx'
 import Modal from '../components/Modal.jsx'
@@ -93,6 +94,16 @@ function etatEcheance(statut) {
 // `Client` ne portent le groupe `abonnement:read`. On recoupe donc contre `GET /api/beneficiaires`,
 // où `Client::$nom` et `$prenom` sont exposés (groupe `beneficiaire:read`) — plutôt que d'élargir
 // la sérialisation pour un besoin qu'un appel existant couvre déjà.
+// Le PAYEUR est un `Client`, pas un `Beneficiaire` : deux types, parce qu'ils repondent a deux
+// questions differentes -- qui entre, et qui regle. L'API rend la relation embarquee ou en IRI
+// selon le groupe ; on couvre les deux plutot que de supposer.
+function nomPayeur(abonnement) {
+  const p = abonnement?.payeur
+  if (!p) return '—'
+  if (typeof p === 'string') return 'client rattaché'
+  return nomOuAbsence(p, '') || 'client rattaché'
+}
+
 function nomAdherent(abonnement, beneficiaires) {
   if (!abonnement) return <span className="sub">—</span>
 
@@ -144,6 +155,7 @@ export default function Sport({ etabActif, droits = [] }) {
   const [souscription, setSouscription] = useState(false)
   const [echeances, setEcheances] = useState(null)
   const [beneficiaires, setBeneficiaires] = useState(null)
+  const [abonnementOuvert, setAbonnementOuvert] = useState(null)
   const [annulation, setAnnulation] = useState(null)
 
   // ⚠ `null` VEUT DIRE << PAS LU >>, `[]` VEUT DIRE << LU ET VIDE >>. SUR CET ECRAN, LA
@@ -396,7 +408,19 @@ export default function Sport({ etabActif, droits = [] }) {
                   const terme = etatDuTerme(a.dateFinEngagement)
                   return (
                     <tr key={a.id}>
-                      <td>{nomAdherent(a, beneficiaires)}</td>
+                      <td>
+                        {/* Le nom ouvre la fiche : c'est la colonne que l'oeil vise, et un bouton
+                            « Voir » de plus ferait une colonne pour un geste que la ligne porte
+                            deja. Meme patron que le catalogue. */}
+                        <button
+                          type="button"
+                          className="lnk"
+                          onClick={() => setAbonnementOuvert(a)}
+                          title="Ouvrir la fiche de l’abonnement"
+                        >
+                          {nomAdherent(a, beneficiaires)}
+                        </button>
+                      </td>
                       <td><span className={`badge ${tonStatut(a.statut)}`}>{a.statut || '—'}</span></td>
                       <td className="num">
                         {a.dateDebutEngagement ? quandHeure(a.dateDebutEngagement) : '—'}
@@ -417,9 +441,19 @@ export default function Sport({ etabActif, droits = [] }) {
             </table>
           </div>
         )}
+        {abonnementOuvert && (
+          <FicheAbonnement
+            abonnement={abonnementOuvert}
+            nomAdherent={nomAdherent(abonnementOuvert, beneficiaires)}
+            nomPayeur={nomPayeur(abonnementOuvert)}
+            onFerme={() => setAbonnementOuvert(null)}
+            onModifie={recharger}
+          />
+        )}
+
         <div className="hint">
-          Pause, résiliation et réengagement passent encore par l&rsquo;API : cet écran les montre,
-          il ne les édite pas. La souscription, elle, se fait ici.
+          Le réengagement d&rsquo;un abonnement résilié exige un mandat SEPA neuf : il passe par la
+          souscription, pas par la fiche.
         </div>
 
         <SouscriptionModal
