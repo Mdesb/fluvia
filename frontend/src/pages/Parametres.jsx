@@ -2,7 +2,9 @@ import { useEffect, useState, useCallback } from 'react'
 import VocabulaireMetier from '../components/VocabulaireMetier.jsx'
 import Liste, { texte, dateHeureFr } from '../components/Liste.jsx'
 import Tabs from '../components/Tabs.jsx'
+import { lireHash } from '../api/url.js'
 import CorrespondancesComptables from '../components/CorrespondancesComptables.jsx'
+import TopologieAcces from './TopologieAcces.jsx'
 import PlanningOuvertureSection from '../components/PlanningOuvertureSection.jsx'
 import Modal from '../components/Modal.jsx'
 import ReferentielEditable from '../components/ReferentielEditable.jsx'
@@ -34,6 +36,11 @@ const SOUS = [
   // « Capacités activables » était le nom interne d'un mécanisme, pas celui d'un réglage. Maxime,
   // à la revue : « je ne sais pas ce que c'est ».
   ['capacites', 'Modules en service'],
+  // ⚠ VENU DE SON PROPRE ECRAN, ET C'EST L'ARBITRAGE DE MAXIME. R21 disait « topologie et passage,
+  // c'est du parametrage » ; je l'avais posee A COTE de Parametres, sous Administration, en lui
+  // demandant s'il la voulait DEDANS. Reponse : dedans. Le prix est une seconde rangee d'onglets —
+  // plan, lecteurs, sous-reseaux, terminaux — et il etait annonce dans la question.
+  ['acces', 'Contrôle d’accès'],
   // Les horaires d'ouverture sont une CONFIGURATION du site, pas un écran de consultation : ils se
   // saisissent deux fois par an. Ils portent surtout la case qui fait refuser un passage à la
   // porte — elle n'a rien à faire dans un agenda qu'on ouvre pour regarder sa semaine.
@@ -469,7 +476,13 @@ function descripteurPointsDeVente(api, etabActif, moyens = []) {
  */
 export default function Parametres({ etabActif, etablissements, droits = [], onCapacitesChangees, estEditeur = false, me = null, envoiCourriel = false }) {
   const [ouvertureStructure, setOuvertureStructure] = useState(false)
-  const [sousOnglet, setSousOnglet] = useState('entites')
+  // ⚠ L'ONGLET D'ARRIVEE SE LIT DANS L'URL, pas dans une prop. Deux raisons : un lien vers
+  // « Paramètres › Contrôle d'accès » devient PARTAGEABLE — il ne l'était pas —, et le panneau de
+  // déménagement de l'ancien `#topologie_acces` peut y déposer qui le cherchait.
+  //
+  // Lu UNE FOIS au démarrage : ensuite c'est l'écran qui commande ses onglets. Le relire à chaque
+  // rendu ferait revenir l'onglet d'arrivée sous les doigts de qui vient d'en choisir un autre.
+  const [sousOnglet, setSousOnglet] = useState(() => lireHash().params.sousOnglet || 'entites')
 
   // LES MOYENS DE PAIEMENT DU REFERENTIEL, POUR POUVOIR LES COCHER PAR POINT DE VENTE.
   //
@@ -522,6 +535,9 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
       <PretAVendre etabActif={etabActif} droits={droits} onAller={setSousOnglet} version={versionReferentiels} />
 
       {sousOnglet === 'ouverture' && <PlanningOuvertureSection droits={droits} etabActif={etabActif} />}
+
+      {/* `imbrique` retire l'enveloppe de page et le titre : Paramètres pose déjà les deux. */}
+      {sousOnglet === 'acces' && <TopologieAcces etabActif={etabActif} droits={droits} imbrique />}
 
       {/* Le composant porte ses propres gardes (`compta.lire` / `compta.gerer`) : quelqu'un qui a
           acces aux parametres sans droit comptable voit son refus, pas ses donnees. */}

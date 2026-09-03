@@ -191,27 +191,6 @@ const NAV = [
       // qui-a-le-droit-de-quoi vit dans Paramètres › Utilisateurs & droits. Cet écran porte les
       // demandes d'escalade et les plafonds de montant — ce n'est pas la même question.
       // Arbitré par Maxime à la revue : on renomme, on ne déplace pas les droits.
-      // L'installation du contrôle d'accès : le plan du site, les lecteurs et les sous-réseaux.
-      //
-      // ⚠ SOUS ADMINISTRATION DEPUIS LE 03/09, ET C'EST LE CRITÈRE DE R21 : « fait une fois au
-      // début, on n'y touche plus ». Elle a vécu à côté de Supervision et des badges, qui se
-      // regardent tous les jours. Le journal des passages, qui était le seul morceau quotidien
-      // de cet écran, a pris sa propre entrée (R23) — il ne reste ici qu'une installation.
-      // Même garde que ses deux voisines — la capacité DIT ce que le site a acheté, les permissions
-      // disent ce que ce compte a le droit d'en faire.
-      //
-      // Cette entrée a d'abord été posée sans `cap`, parce que la capacité était inactive sur tous
-      // les tenants et que l'écran des modules ne permettait pas de l'activer : la garder aurait
-      // caché l'écran à celui-là même qui vient d'installer ses tourniquets. Ce n'est plus vrai
-      // depuis que Paramètres › Modules en service permet la mise en service — l'entrée rejoint donc
-      // ses voisines, et une topologie invisible se corrige là où elle doit l'être.
-      // ⚠ SA PROPRE ENTREE, PARCE QU'IL N'A PAS LE RYTHME DE SES VOISINES (R23).
-      // Le journal se relit chaque fois qu'un client dit « mon billet ne passe pas » ; la
-      // topologie s'installe une fois. Il vivait dans un onglet de celle-ci, donc il fallait
-      // traverser un ecran de parametrage pour l'atteindre. Arbitrage de Maxime : « sa propre
-      // entree de menu pour le moment, on pourra toujours le bouger ».
-      { id: 'journal_passages', ic: 'topology', label: 'Journal des passages', cap: 'controle_acces', perms: ['acces.lire', 'acces.superviser'] },
-      { id: 'topologie_acces', ic: 'topology', label: 'Topologie & lecteurs', cap: 'controle_acces', perms: ['acces.lire', 'acces.gerer', 'acces.superviser'] },
       // ⚠ SOUS ADMINISTRATION DEPUIS LE 03/09 (R27), ET LE RAISONNEMENT QUI LA TENAIT SOUS
       // CLIENTS ETAIT JUSTE. Il disait : « une demande d'effacement porte sur une fiche client et
       // se traite en la relisant ; pas dans Parametres, ce n'est pas un reglage, c'est une file

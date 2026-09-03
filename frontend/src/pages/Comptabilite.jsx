@@ -8,9 +8,12 @@ import MarquerImpayeeRegie from '../components/MarquerImpayeeRegie.jsx'
 import BordereauxPayFip from '../components/BordereauxPayFip.jsx'
 import { api } from '../api/client.js'
 import ClotureComptable from '../components/ClotureComptable.jsx'
-import PrelevementsSepa from '../components/PrelevementsSepa.jsx'
 
-// Comptabilité / Régie (M6). Consultation multi-onglets.
+// Comptabilité / Régie (M6) : clôture, journaux, saisie manuelle, lettrage, régie.
+//
+// Ce qui est parti d'ici, et où : les correspondances comptables vers Paramètres (un réglage,
+// pas un geste quotidien) ; SEPA, impayés et cautions vers leurs propres entrées de menu, qui
+// existaient déjà. Voir le bloc ci-dessous pour le raisonnement.
 //
 // ⚠ CE BLOC DISAIT L'INVERSE, ET LE RAISONNEMENT ÉTAIT JUSTE — C'EST LE CRITÈRE QUI A CHANGÉ.
 //
@@ -24,8 +27,9 @@ import PrelevementsSepa from '../components/PrelevementsSepa.jsx'
 // écran qu'on ouvre tous les matins ne doit pas contenir une seconde rangée d'onglets vers des
 // écrans qui ont déjà leur porte. Les deux qu'il a nommés partent.
 //
-// ⚠ SEPA RESTE, ET C'EST DÉLIBÉRÉ : il est dans exactement la même situation, mais Maxime a nommé
-// deux onglets, pas trois. La question lui est posée plutôt que tranchée ici.
+// ⚠ SEPA EST PARTI AUSSI. Ce bloc disait « il reste, Maxime a nommé deux onglets, pas trois — la
+// question lui est posée plutôt que tranchée ici ». Elle lui a été posée, et il a répondu « le
+// retirer aussi ». Les trois portes en double sont donc fermées, et il n'en reste aucune.
 //
 // `Correspondances` part ailleurs : vers Paramètres › Correspondances comptables. Associer une
 // catégorie de produit à un compte se règle une fois — c'est le critère de R21, pas du quotidien.
@@ -46,7 +50,7 @@ export default function Comptabilite({ etabActif, droits }) {
       <div className="view-head">
         <div className="ttl">
           <h1>Comptabilité / Régie</h1>
-          <p>Journaux, écritures, régie &amp; SEPA</p>
+          <p>Clôture, journaux, écritures et régie</p>
         </div>
       </div>
 
@@ -57,7 +61,6 @@ export default function Comptabilite({ etabActif, droits }) {
           ['saisie', 'Saisie manuelle'],
           ['lettrage', 'Lettrage'],
           ['regie', 'Régie & versements'],
-          ['sepa', 'SEPA'],
         ]}
         actif={sousOnglet}
         onChange={setSousOnglet}
@@ -134,8 +137,6 @@ export default function Comptabilite({ etabActif, droits }) {
           <BordereauxPayFip etabActif={etabActif} />
         </div>
       )}
-
-      {sousOnglet === 'sepa' && <PrelevementsSepa etabActif={etabActif} droits={droits} />}
 
     </div>
   )
