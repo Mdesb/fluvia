@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { boutique, panierStore, clientTokenStore, vitrineStore } from './api/boutiqueClient.js'
+import { jetonsDeVitrine } from './lib/couleurs.js'
 import PublicHeader from './components/PublicHeader.jsx'
 import PublicFooter from './components/PublicFooter.jsx'
 import PageLegale from './pages/PageLegale.jsx'
@@ -364,8 +365,14 @@ export default function PublicApp() {
 }
 
 function Cadre({ vitrine, etablissementId, nbArticles, connecte, vue, onNaviguer, children }) {
+  // ⚠ LES COULEURS DE LA BOUTIQUE, ET SEULEMENT CELLES QUI PASSENT LE SEUIL. `jetonsDeVitrine` rend
+  // un objet vide quand la couleur configuree rendrait du texte illisible — voir `lib/couleurs.js`,
+  // qui porte les mesures. Poser les jetons ici les fait descendre dans les 131 regles `.bq-*` sans
+  // en toucher une seule.
+  const { variables } = jetonsDeVitrine(vitrine?.couleurs)
+
   return (
-    <div className="bq">
+    <div className="bq" style={variables}>
       <PublicHeader
         vitrine={vitrine}
         nbArticles={nbArticles}

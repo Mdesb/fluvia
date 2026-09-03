@@ -829,7 +829,12 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 .bq-carte-b { padding: 15px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
 .bq-carte-t { font-size: var(--txt-grand); font-weight: 700; }
 .bq-carte-code { font-size: var(--txt-petit); color: var(--ink-faint); margin: 0; }
-.bq-carte-prix { font-size: var(--txt-normal); font-weight: 800; color: var(--accent-2); margin: 0; }
+/* ⚠ LA COULEUR SECONDAIRE DE LA BOUTIQUE, EN FOND ET JAMAIS EN TEXTE.
+   Les deux secondaires de demonstration sont sous le seuil comme texte — #F4A300 rend 2,08:1 sur
+   blanc. En fond avec une encre calculee, la meme couleur donne 9,8:1. Les replis rendent le
+   comportement d'avant quand aucune couleur n'est appliquee.
+   Espacement en jetons : le cliquet des litteraux est a son plafond. */
+.bq-carte-prix { font-size: var(--txt-normal); font-weight: 800; color: var(--bq-sur-secondaire, var(--accent-2)); background: var(--bq-secondaire, transparent); margin: 0; display: inline-block; border-radius: 999px; padding: var(--esp-serre) var(--esp-normal); }
 .bq-carte-tags { display: flex; gap: 6px; flex-wrap: wrap; }
 .bq-carte-cta { margin-top: auto; justify-content: center; }
 
