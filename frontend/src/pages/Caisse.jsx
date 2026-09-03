@@ -1356,7 +1356,15 @@ function FinDeVente({ info, onAfficher, onSansTicket }) {
 
 function TicketVente({ ticket }) {
   return (
-    <div className="ticket">
+    <>
+      {/* ⚠ `doc-imprimer` FAIT SORTIR CE TICKET SEUL SUR LA FEUILLE, et sans lui il ne sortait
+          RIEN DU TOUT : la regle `@media print` de `styles.css` masquait tout l'ecran et ne
+          revelait que la facture. Un ticket affiche, un Ctrl+P, une feuille blanche — sans erreur.
+
+          ⚠ CE N'EST PAS UN SECOND FORMAT. Le papier A4 porte exactement ce bloc, c'est-a-dire ce
+          que `TicketProcessor` a rendu : memes lignes, meme numero, meme mention DUPLICATA. Il n'y
+          a pas de gabarit A4 separe qui pourrait diverger en silence du format contraint NF525. */}
+      <div className="ticket doc-imprimer">
       <div className="th">
         <span className="ok">✓</span>
         <h3>Vente encaissée</h3>
@@ -1430,7 +1438,16 @@ function TicketVente({ ticket }) {
             )}
           </div>
         </div>
+        </div>
       </div>
-    </div>
+
+      {/* Les commandes vivent HORS du `.doc-imprimer` : dedans, elles s'imprimeraient avec lui.
+          `noprint` est une ceinture de plus, pour le cas ou ce bloc migrerait un jour. */}
+      <div className="ticket-actions noprint">
+        <button className="btn ghost sm" type="button" onClick={() => window.print()}>
+          Imprimer le ticket
+        </button>
+      </div>
+    </>
   )
 }

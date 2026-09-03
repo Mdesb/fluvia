@@ -563,6 +563,7 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 .field-lbl { font-size: var(--txt-petit); font-weight: 600; color: var(--ink-soft); display: block; margin-bottom: 8px; }
 .cz-row { display: grid; grid-template-columns: 1fr 130px auto; gap: 8px; align-items: center; margin-bottom: 8px; }
 .cz-row .rm { border: none; background: none; color: var(--ink-faint); font-size: var(--txt-grand); cursor: pointer; }
+.ticket-actions { display: flex; gap: var(--esp-normal); margin-top: var(--esp-normal); flex-wrap: wrap; }
 .ticket-ok { width: 26px; height: 26px; border-radius: 50%; background: var(--good-bg); color: var(--good); display: inline-flex; align-items: center; justify-content: center; font-weight: 800; flex: none; }
 
 /* ---- Clients / Fiche 360 ---- */
@@ -1449,13 +1450,44 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 /* Le destinataire manquant est marque DANS le document : un bloc vide se remet par megarde. */
 .fact-manque { color: var(--crit); font-weight: 600; }
 
+/* ⚠ IMPRIMER N'IMPORTE QUEL ECRAN SAUF UNE FACTURE RENDAIT UNE FEUILLE BLANCHE.
+   Ce bloc posait `body * { visibility: hidden }` — globalement, puisque cette feuille est chargee
+   par `main.jsx` — et ne revelait QUE `.fact-doc`, qui n'existe que dans `FactureRendu.jsx`. Sur
+   tous les autres ecrans, y compris LE TICKET DE CAISSE, rien n'etait revele : la feuille sortait
+   vide, sans erreur et sans que rien ne le signale.
+
+   Mesure du 03/09, faite en demandant au moteur et non en lisant le fichier : les six regles de ce
+   bloc ont ete lues par le CSSOM, puis testees par `element.matches()` sur un ticket, une facture
+   et une liste. Verdict : ticket `hidden`, liste `hidden`, facture `visible`. La premiere version
+   du banc a rendu « 3 sur 3 sortent » ALORS QU'ELLE AVAIT LU ZERO REGLE (feuille non chargee) —
+   d'ou le compteur de regles, qui refuse desormais de conclure sur un zero.
+
+   Le remede tient en deux temps : la coquille ne s'imprime jamais, et un document declare
+   `doc-imprimer` sort seul quand il y en a un a l'ecran. Sinon, l'ecran courant sort tel quel.
+   Moche, et c'est assume : R4 demande de pouvoir VERIFIER ce qui sort, pas d'avoir un beau papier.
+
+   ⚠ CE N'EST PAS UN SECOND FORMAT DE TICKET. Le ticket imprime ici porte EXACTEMENT le contenu
+   rendu par `TicketProcessor` — meme DOM, memes mots, meme numero. Seul le papier change. Un
+   second gabarit A4 aurait pu diverger en silence du format contraint NF525 ; il n'y en a pas. */
 @media print {
-  /* On masque tout sans defaire la mise en page, puis on revele le document seul. */
-  body * { visibility: hidden; }
-  .fact-doc, .fact-doc * { visibility: visible; }
-  .fact-doc { position: absolute; left: 0; top: 0; width: 100%; padding: 0; background: #fff; color: #000; }
-  .fact-noprint { display: none !important; }
+  /* 1. La coquille n'apprend rien sur papier, et sa colonne de menu mangeait 246 mm de grille. */
+  .app { grid-template-columns: 1fr; }
+  .sidebar, .topbar, .nav-backdrop, .noprint, .fact-noprint { display: none !important; }
+
+  /* 2. Quand l'ecran porte un document imprimable, il sort SEUL — c'est l'ancien comportement de
+        la facture, rendu general. `:has()` fait la difference entre « il y a un document » et
+        « il n'y en a pas », ce que l'ancienne regle ne savait pas exprimer. */
+  body:has(.doc-imprimer) * { visibility: hidden; }
+  body:has(.doc-imprimer) .doc-imprimer, body:has(.doc-imprimer) .doc-imprimer * { visibility: visible; }
+  .doc-imprimer { position: absolute; left: 0; top: 0; background: #fff; color: #000; border: 0; box-shadow: none; }
+
+  /* 3. Sinon : l'ecran courant, en pleine page. Plus jamais de feuille blanche. */
+  #contenu-principal { position: static; width: 100%; }
+
+  .fact-doc { width: 100%; padding: 0; }
   .fact-tbl th, .fact-tbl td { border-color: #999; }
   .fact-tbl tr, .fact-totaux { break-inside: avoid; }
+  .ticket { width: 100%; }
+  .ticket .th, .ticket .tb, .card { break-inside: avoid; }
   @page { margin: 16mm; }
 }
