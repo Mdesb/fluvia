@@ -6,6 +6,7 @@ namespace App\Padel\State;
 
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
+use App\Caisse\Entity\SessionCaisse;
 use App\Crm\Entity\Beneficiaire;
 use App\Padel\Entity\ReservationPadel;
 use App\Padel\Entity\TerrainPadel;
@@ -22,11 +23,14 @@ use App\Reservation\Enum\StatutReservation;
 use App\Reservation\Service\ChevauchementCreneauGuard;
 use App\Reservation\Service\ProjectionAccesReservationHandler;
 use App\Reservation\Service\ResolveurRegleAnnulation;
+use App\Reservation\Service\VenteReservationHandler;
 use App\Securite\Entity\Utilisateur;
+use App\Securite\Service\ContexteEtablissement;
 use App\Vente\Service\LecteurCorps;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\Uid\Uuid;
 
@@ -53,6 +57,8 @@ final class ReserverTerrainProcessor implements ProcessorInterface
         private readonly CalculateurTarifTerrainHandler $calculateur,
         private readonly ResolveurRegleAnnulation $resolveurRegle,
         private readonly ProjectionAccesReservationHandler $projectionAcces,
+        private readonly VenteReservationHandler $venteHandler,
+        private readonly ContexteEtablissement $contexte,
     ) {
     }
 
@@ -121,8 +127,12 @@ final class ReserverTerrainProcessor implements ProcessorInterface
 
         $tarif = $this->calculateur->resoudre($terrain, $organisateur, $debut, $dureeMinutes);
         $prix = (float) $tarif->prix;
+        // ⚠ LE PARAMÉTRAGE EST RÉSOLU DANS TOUS LES CAS, ET PLUS SEULEMENT AVEC UN COACH. Il porte
+        // aussi `produitTerrainRef`, le produit du catalogue sous lequel le créneau se vend : le
+        // laisser dans le `if` ci-dessous rendait la vente impossible pour une partie sans coach,
+        // c'est-à-dire pour la quasi-totalité d'entre elles.
+        $parametrage = $this->calculateur->parametrage($terrain);
         if ($avecCoach) {
-            $parametrage = $this->calculateur->parametrage($terrain);
             $prix += (float) ($parametrage?->getMajorationCoachMontant() ?? '0.00');
         }
         $montantDu = number_format($prix, 2, '.', '');
@@ -142,6 +152,27 @@ final class ReserverTerrainProcessor implements ProcessorInterface
             ->setEtablissement($ressource->getEtablissement())
             ->setModeDecompte($prix > 0.0 ? ModeDecompteReservation::VenteUnite : ModeDecompteReservation::Gratuit)
             ->setMontantDu($montantDu);
+
+        // ⚠ LE CRÉNEAU DEVIENT UNE LIGNE COMPTABLE — c'était tout l'objet de R15. Sans ce bloc, la
+        // réservation portait `VenteUnite` et un montant dû, et RIEN ne les transformait jamais en
+        // écriture : ni ici, ni au paiement d'une part (`PayerPartProcessor` ne fait qu'un
+        // changement de statut, par conception documentée).
+        //
+        // Le produit vient de `ParametragePadel::$produitTerrainRef`, qui existait déjà et que
+        // personne ne lisait. Sans lui, `VenteReservationHandler` tire un `Uuid::v4()` au hasard :
+        // une ligne qui désigne un produit inexistant, donc sans catégorie comptable, donc
+        // invisible à la ventilation.
+        $session = $this->sessionOptionnelle($corps['session'] ?? null);
+        if ($session !== null && $prix > 0.0) {
+            $vente = $this->venteHandler->creerVente(
+                $session,
+                $montantDu,
+                $organisateur->getClient()?->getId(),
+                'Réservation terrain ' . (string) $creneau->getId(),
+                $parametrage?->getProduitTerrainRef(),
+            );
+            $reservation->setVenteRattachee($vente);
+        }
 
         $regle = $this->resolveurRegle->resoudre($creneau);
         if ($regle !== null) {
@@ -244,5 +275,44 @@ final class ReserverTerrainProcessor implements ProcessorInterface
         } catch (\Exception) {
             throw new UnprocessableEntityHttpException('Champ « debut » invalide (datetime ISO-8601 attendu).');
         }
+    }
+
+    /**
+     * La session de caisse fournie par l'appelant, ou `null` si aucune n'accompagne la réservation.
+     *
+     * ⚠ D8 — QUATRIÈME PORTE DE LA MÊME FAMILLE, ET ELLE S'OUVRAIT EN AJOUTANT CE PARAMÈTRE.
+     * L'établissement de la session détermine celui de la vente créée. Résoudre par un `find()` nu
+     * ne donnerait pas seulement accès à la session d'un autre établissement : cela y créerait une
+     * écriture. Les trois autres portes (`ReserverProcessor`, `MouvementCaisseProcessor`,
+     * `EmettreVenteNoShowProcessor`) ont été fermées les 19 et 23/08 ; celle-ci naît fermée.
+     *
+     * Échec en 404 et non en 403 : un 403 confirmerait que la session existe ailleurs.
+     *
+     * ⚠ ET LA SESSION DOIT ÊTRE OUVERTE (RG-M2-01). `VenteDiffereeAgentStrategie` le vérifie,
+     * `ReserverProcessor` ne le fait pas — on suit ici le plus strict des deux : encaisser sur une
+     * session close produirait une vente qu'aucune clôture ne rattraperait.
+     */
+    private function sessionOptionnelle(mixed $reference): ?SessionCaisse
+    {
+        $uuid = $this->uuid($reference);
+        if ($uuid === null) {
+            return null;
+        }
+
+        $session = $this->em->getRepository(SessionCaisse::class)->find($uuid);
+        if ($session === null) {
+            throw new NotFoundHttpException('Session introuvable.');
+        }
+
+        $actif = $this->contexte->etablissementActif();
+        if ((string) $session->getEtablissement()?->getId() !== (string) $actif?->getId()) {
+            throw new NotFoundHttpException('Session introuvable.');
+        }
+
+        if (!$session->estOuverte()) {
+            throw new UnprocessableEntityHttpException('La session de caisse fournie n\'est pas ouverte (RG-M2-01).');
+        }
+
+        return $session;
     }
 }
