@@ -583,6 +583,24 @@ export const api = {
   client: (id) => request(`/api/clients/${id}`),
   majClient: (id, corps) => request(`/api/clients/${id}`, { method: 'PATCH', body: corps }),
   // Relevé de mouvements du porte-monnaie virtuel (US-L5-04). Renvoie { mouvements: [...] }.
+  // LES CONSENTEMENTS — les deux moities, lecture et ecriture.
+  //
+  // ⚠ `SearchFilter` sur `client` est DECLARE en `exact` (verifie dans l'entite) : `?client=<IRI>`
+  // filtre vraiment. Sans cette verification, un filtre non declare serait accepte et IGNORE, et
+  // la fiche afficherait les consentements du voisin sans qu'aucune erreur ne le dise.
+  consentementsClient: (idClient) =>
+    request('/api/consentements', {
+      query: {
+        client: `/api/clients/${idClient}`,
+        itemsPerPage: 100,
+        'order[dateRecueil]': 'desc',
+      },
+    }),
+  // ⚠ `canal` ET `etat` SONT REQUIS (422 sinon), et un consentement ACCORDE pour un MINEUR exige
+  // `recueilliParRepresentant` — RG-M4-10. L'ecran porte la regle ; ce commentaire dit pourquoi
+  // elle n'est pas une coquetterie d'interface.
+  enregistrerConsentement: (idClient, corps) =>
+    request(`/api/clients/${idClient}/consentements`, { method: 'POST', body: corps }),
   pmvMouvements: (id) => request(`/api/clients/${id}/pmv/mouvements`),
   // RECHARGER UN PORTE-MONNAIE — le geste qui manquait pour que le solde puisse remonter.
   //
@@ -855,6 +873,17 @@ export const api = {
   // bureaucratie — une echeance annulee est une somme que le club n'encaissera jamais, et la seule
   // question posee six mois plus tard sera « pourquoi ». Operation SUR MESURE, donc pas de
   // `ld: true`, qui est le drapeau des operations standard.
+  // ENREGISTRER UN RETOUR BANQUE DE REJET.
+  //
+  // ⚠ LA ROUTE S'APPELLE `simuler-rejet` ET NE SIMULE RIEN. Son processeur passe l'echeance en
+  // `Rejetee` et cree un `IncidentImpaye` reel via le moteur de recouvrement partage. En
+  // production ce fait viendrait de `CollecteurSepaInterface::releverRetours()` ; cette route est
+  // le point d'entree operationnel equivalent. Le nom de la fonction cliente dit ce qu'elle FAIT,
+  // pas ce que la route s'appelle — c'est l'appelant qu'il faut ne pas tromper.
+  //
+  // `codeRetour` est REQUIS (code retour SEPA, ex. AM04) : 422 sans lui.
+  enregistrerRejetEcheance: (id, corps) =>
+    request(`/api/sport/echeances/${id}/simuler-rejet`, { method: 'POST', body: corps }),
   annulerEcheanceSepa: (id, motif) =>
     request(`/api/sport/echeances/${id}/annuler`, { method: 'POST', body: { motif } }),
   // LA DETECTION A LA DEMANDE — la route existait, aucun bouton ne l'appelait.
