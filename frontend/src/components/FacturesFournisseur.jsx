@@ -38,6 +38,7 @@ export default function FacturesFournisseur({ etabActif, droits }) {
   const [succes, setSucces] = useState(null)
   const [approbation, setApprobation] = useState(null)
   const [contestation, setContestation] = useState(null)
+  const [avoir, setAvoir] = useState(null)
   const [resolution, setResolution] = useState(null)
 
   const peutApprouver = aLeDroit(droits, 'finance.supplier_invoice_approve')
@@ -174,7 +175,18 @@ export default function FacturesFournisseur({ etabActif, droits }) {
       )}
 
       {aPayer.length > 0 && (
-        <TableauFactures fournisseurs={fournisseurs} titre="À payer" sous="approuvées, en attente de règlement" factures={aPayer} />
+        <TableauFactures
+          fournisseurs={fournisseurs}
+          titre="À payer"
+          sous="approuvées, en attente de règlement"
+          factures={aPayer}
+          actions={(f) =>
+            peutApprouver && (
+              <button className="btn ghost sm" type="button" onClick={() => setAvoir(f)}>
+                Émettre un avoir
+              </button>
+            )}
+        />
       )}
 
       {closes.length > 0 && (
@@ -186,6 +198,13 @@ export default function FacturesFournisseur({ etabActif, droits }) {
         fournisseurs={fournisseurs}
         onClose={() => setApprobation(null)}
         onFait={(m) => { setApprobation(null); setSucces(m); recharger() }}
+        onErreur={setErreur}
+      />
+
+      <AvoirFournisseur
+        facture={avoir}
+        onClose={() => setAvoir(null)}
+        onFait={async (message) => { setAvoir(null); setSucces(message); await recharger() }}
         onErreur={setErreur}
       />
 
@@ -849,6 +868,117 @@ function MotifModal({
           </div>
         </form>
       )}
+    </Modal>
+  )
+}
+
+
+/**
+ * L'AVOIR FOURNISSEUR — et le choix qu'on ne deduit pas d'un champ vide.
+ *
+ * Le serveur lit `{ amount?, reason }`, et `amount` ABSENT vaut AVOIR TOTAL (§0.9 du plan). Un
+ * champ montant qu'on laisse vide par distraction crediterait donc la facture entiere, en silence
+ * et sans rien qui le dise.
+ *
+ * ⚠ LA FENETRE DEMANDE DONC LE CHOIX, ELLE NE L'INFERE PAS. Aucune des deux options n'est
+ * pre-selectionnee : tant que l'un des deux n'est pas coche, le bouton reste inerte. C'est la
+ * difference entre << il n'a rien saisi >> et << il a decide de tout crediter >>, et seule la
+ * seconde est une instruction.
+ *
+ * Le MOTIF est exige par le serveur (422 sans lui), et ce n'est pas de la bureaucratie : un avoir
+ * modifie une piece comptable deja approuvee, et la seule question posee au controle sera pourquoi.
+ */
+function AvoirFournisseur({ facture, onClose, onFait, onErreur }) {
+  const [portee, setPortee] = useState('')
+  const [montant, setMontant] = useState('')
+  const [motif, setMotif] = useState('')
+  const [enCours, setEnCours] = useState(false)
+
+  useEffect(() => { setPortee(''); setMontant(''); setMotif('') }, [facture])
+
+  const pret = motif.trim() !== '' && (portee === 'total' || (portee === 'partiel' && montant.trim() !== ''))
+
+  async function envoyer() {
+    setEnCours(true)
+    onErreur(null)
+    try {
+      await api.avoirFactureFournisseur(facture.id, portee === 'total'
+        // On n'envoie PAS `amount: null` : le serveur teste la presence de la cle. Un `null`
+        // explicite et une cle absente ne se valent pas forcement, et on ne le suppose pas.
+        ? { reason: motif.trim() }
+        : { reason: motif.trim(), amount: montant.trim() })
+      await onFait(portee === 'total' ? 'Avoir total enregistré.' : 'Avoir partiel enregistré.')
+    } catch (e) {
+      onErreur(e.message || 'L’avoir n’a pas pu être enregistré.')
+    } finally {
+      setEnCours(false)
+    }
+  }
+
+  return (
+    <Modal open={!!facture} onClose={onClose} titre="Émettre un avoir" taille="sm">
+      <div style={{ display: 'grid', gap: 'var(--esp-large)' }}>
+        <div className="sub">
+          Facture <b>{facture?.supplierInvoiceNumber || '—'}</b>, {euros(facture?.amountInclTax)} TTC.
+          Un avoir réduit ce que vous devez : il ne supprime pas la facture, il la corrige.
+        </div>
+
+        <div style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
+          <span className="sub">Portée de l’avoir</span>
+          <label style={{ display: 'flex', gap: 'var(--esp-normal)', alignItems: 'baseline' }}>
+            <input
+              type="radio"
+              name="portee-avoir"
+              checked={portee === 'total'}
+              onChange={() => setPortee('total')}
+            />
+            <span>Avoir <b>total</b> — la totalité de {euros(facture?.amountInclTax)} est créditée</span>
+          </label>
+          <label style={{ display: 'flex', gap: 'var(--esp-normal)', alignItems: 'baseline' }}>
+            <input
+              type="radio"
+              name="portee-avoir"
+              checked={portee === 'partiel'}
+              onChange={() => setPortee('partiel')}
+            />
+            <span>Avoir <b>partiel</b> — vous saisissez le montant</span>
+          </label>
+        </div>
+
+        {portee === 'partiel' && (
+          <label style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
+            <span className="sub">Montant de l’avoir</span>
+            <input
+              className="input"
+              inputMode="decimal"
+              placeholder="0,00"
+              value={montant}
+              onChange={(e) => setMontant(e.target.value)}
+            />
+          </label>
+        )}
+
+        <label style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
+          <span className="sub">Motif — obligatoire</span>
+          <textarea
+            className="input"
+            rows={3}
+            placeholder="Marchandise retournée, erreur de tarif, remise commerciale…"
+            value={motif}
+            onChange={(e) => setMotif(e.target.value)}
+          />
+          <span className="sub">
+            C’est ce texte qu’on relira au contrôle, quand plus personne ne se souviendra du dossier.
+          </span>
+        </label>
+
+        <div style={{ display: 'flex', gap: 'var(--esp-normal)', justifyContent: 'flex-end' }}>
+          <button className="btn ghost" type="button" onClick={onClose}>Annuler</button>
+          <button className="btn primary" type="button" disabled={enCours || !pret} onClick={envoyer}>
+            {enCours ? 'Enregistrement…' : 'Émettre l’avoir'}
+          </button>
+        </div>
+      </div>
     </Modal>
   )
 }

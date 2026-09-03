@@ -499,6 +499,50 @@ class Produit
         return $this->categories;
     }
 
+    /**
+     * ⚠ CE SETTER EXISTE PARCE QUE SANS LUI, `categories` NE S'ECRIT PAS DU TOUT PAR L'API.
+     *
+     * Le PropertyAccessor de Symfony ecrit une collection par un couple `addX`/`removeX` construit
+     * sur le SINGULIER ANGLAIS du nom de propriete. Mesure :
+     *
+     *     singularize('categories')      -> ['category']       <- l'entite offre `addCategorie`
+     *     singularize('etablissements')  -> ['etablissement']  <- l'entite offre `addEtablissement`
+     *
+     * « categories » tombe sur la regle `ies -> y`. Aucun couple ne correspond, et API Platform
+     * SAUTE LE CHAMP SANS RIEN DIRE : `PATCH` repondait 200, rendait les anciennes categories, et
+     * n'ecrivait rien. Le selecteur de la fiche produit ecrivait dans le vide.
+     *
+     * ⚠ Le contraste est la preuve : `etablissements`, sur la MEME entite, dans le MEME groupe,
+     * s'ecrivait tres bien — parce que son pluriel anglais retombe sur son adder.
+     *
+     * Un setter explicite prend le pas sur cette recherche et ne depend plus d'aucune regle de
+     * langue. On remplace le contenu sans changer d'instance de collection : Doctrine suit les
+     * ajouts et retraits de CELLE-CI, et lui en substituer une autre lui ferait perdre le fil.
+     *
+     * @param iterable<Categorie> $categories
+     */
+    public function setCategories(iterable $categories): self
+    {
+        $voulues = [];
+        foreach ($categories as $categorie) {
+            $voulues[(string) $categorie->getId()] = $categorie;
+        }
+
+        foreach ($this->categories->toArray() as $presente) {
+            if (!isset($voulues[(string) $presente->getId()])) {
+                $this->categories->removeElement($presente);
+            }
+        }
+
+        foreach ($voulues as $categorie) {
+            if (!$this->categories->contains($categorie)) {
+                $this->categories->add($categorie);
+            }
+        }
+
+        return $this;
+    }
+
     public function addCategorie(Categorie $categorie): self
     {
         if (!$this->categories->contains($categorie)) {

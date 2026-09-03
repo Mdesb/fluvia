@@ -778,6 +778,23 @@ export const api = {
   documentsDms: (params) => request('/api/documents', { query: { itemsPerPage: 100, ...(params || {}) } }),
   televerserDocument: (formData) => request('/api/documents', { method: 'POST', formData }),
   majDocumentDms: (id, corps) => request(`/api/documents/${id}`, { method: 'PATCH', body: corps }),
+  // LES TROIS GESTES QUE LE MODULE SAIT FAIRE ET QU'AUCUN BOUTON NE DECLENCHAIT.
+  //
+  // ⚠ CES TROIS OPERATIONS PORTENT `input: false` ET LISENT POURTANT UN CORPS. Dans ce depot,
+  // `input: false` marque une operation SUR MESURE, pas une operation sans entree : les champs
+  // ci-dessous sont ceux que les PROCESSEURS lisent (`SetRetentionProcessor`,
+  // `IssuePublicLinkProcessor`), verifies dans leur code. Se fier a l'attribut aurait produit des
+  // POST vides, donc des 422.
+  politiquesRetention: () => request('/api/retention_policies', { query: { itemsPerPage: 100 } }),
+  // `retentionPolicyCode: null` + `retainUntilOverride: null` = LEVER la politique. Les deux
+  // absents = 422 : le processeur refuse une demande qui ne dit rien.
+  poserRetentionDocument: (id, corps) =>
+    request(`/api/documents/${id}/retention`, { method: 'POST', body: corps }),
+  emettreLienPublicDocument: (id, corps) =>
+    request(`/api/documents/${id}/public-links`, { method: 'POST', body: corps }),
+  // ⚠ SUPPRESSION LOGIQUE, et REFUSEE (409) si une conservation court encore — RG-DMS-13. Ce n'est
+  // pas un cas d'erreur a masquer : c'est la regle qui protege une piece que la loi oblige a garder.
+  supprimerDocumentDms: (id) => request(`/api/documents/${id}`, { method: 'DELETE' }),
   remplacerVersionDocument: (id, formData) =>
     request(`/api/documents/${id}/replace-version`, { method: 'POST', formData }),
   versionsDocument: () => request('/api/document_versions', { query: { itemsPerPage: 300 } }),
@@ -840,6 +857,13 @@ export const api = {
   // `ld: true`, qui est le drapeau des operations standard.
   annulerEcheanceSepa: (id, motif) =>
     request(`/api/sport/echeances/${id}/annuler`, { method: 'POST', body: { motif } }),
+  // LA DETECTION A LA DEMANDE — la route existait, aucun bouton ne l'appelait.
+  //
+  // ⚠ ELLE EST PAR ESPACE, pas globale. L'appelant doit donc boucler, et surtout COMPTER ce qu'il
+  // a balaye : conclure « aucune presence isolee » apres avoir interroge zero espace serait une
+  // absence jamais mesuree.
+  detecterPresenceIsolee: (idEspace) =>
+    request(`/api/sport/espaces/${idEspace}/detecter-presence-isolee`, { method: 'POST', body: {} }),
   alertesPresenceIsolee: () => request('/api/alerte_presence_isolees', { query: { itemsPerPage: 100 } }),
   // ⚠ LA ROUTE ETAIT AU SINGULIER, ET ELLE RENDAIT 404 DEPUIS TOUJOURS.
   //
@@ -1716,6 +1740,13 @@ export const api = {
     request(`/api/finance/supplier-invoices/${id}/dispute`, { method: 'POST', body: corps }),
   resoudreLitigeFactureFournisseur: (id, corps) =>
     request(`/api/finance/supplier-invoices/${id}/resolve-dispute`, { method: 'POST', body: corps }),
+  // L'AVOIR — la route existait, aucun bouton ne l'appelait.
+  //
+  // ⚠ `amount` ABSENT VAUT AVOIR TOTAL (§0.9 du plan). Ce n'est donc PAS un champ optionnel qu'on
+  // peut omettre par commodite : l'omettre est une decision comptable. L'appelant doit avoir
+  // tranche avant, et l'ecran le lui demande explicitement.
+  avoirFactureFournisseur: (id, corps) =>
+    request(`/api/finance/supplier-invoices/${id}/credit-note`, { method: 'POST', body: corps }),
   annulerFactureFournisseur: (id) =>
     request(`/api/finance/supplier-invoices/${id}/cancel`, { method: 'POST', body: {} }),
 

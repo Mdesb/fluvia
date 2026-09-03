@@ -587,3 +587,40 @@ le haut.
 hauteur. Deux champs sans aide restent alignés par hasard. Les balayer en aveugle changerait la
 mise en page de douze écrans sans que personne les ait regardés — il faut les voir une par une,
 avec un banc qui rend le vrai `styles.css`.
+
+### ⚠ 8.7 — Une collection française en `-ies` ne s'écrit pas, et personne n'est prévenu
+
+`Produit::$categories` acceptait un `PATCH`, répondait **200**, et n'écrivait **rien**. Le sélecteur
+de catégorie de la fiche produit écrivait dans le vide depuis toujours. Corrigé le 03/09
+(`267a735b`) par un `setCategories()` explicite.
+
+**La cause, et elle se reproduira :**
+
+    EnglishInflector::singularize('categories')      ->  ['category']
+    EnglishInflector::singularize('etablissements')  ->  ['etablissement']
+
+Le `PropertyAccessor` de Symfony écrit une collection par un couple `addX`/`removeX` construit sur
+le **singulier anglais** du nom de propriété. Un mot français en `-ies` tombe sur la règle `ies → y`
+et ne retombe jamais sur son adder français. **API Platform saute alors le champ sans rien dire.**
+
+⚠ Le contraste est ce qui rend le diagnostic sûr : `etablissements`, sur la MÊME entité et dans le
+MÊME groupe, s'écrit très bien.
+
+**Balayage fait le 03/09, tout le dépôt :**
+
+    Produit::$categories          en écriture   ->  CORRIGÉ
+    TicketSupport::$articlesLies  `ticket:read` ->  sain (non écrivable)
+
+**La recette, pour la prochaine fois** — une propriété de collection dont le nom finit par `-ies`,
+`-aux` ou `-eux` et qui figure dans un groupe d'écriture :
+
+    grep -rnE 'private Collection \$[A-Za-z]+(ies|aux|eux);' app/src
+
+Le remède est un setter explicite : il prend le pas sur la recherche d'adder/remover et ne dépend
+d'aucune règle de langue. ⚠ Il doit remplacer le CONTENU sans changer d'instance de collection —
+Doctrine suit les ajouts et retraits de celle-ci, et lui en substituer une autre lui fait perdre le
+fil.
+
+**Un garde-fou serait possible** (comparer chaque collection écrivable à son adder après
+singularisation) et n'a pas été posé : le balayage ne laisse aucun cas ouvert, et un garde-fou pour
+zéro occurrence coûte trois listes à câbler. À reprendre le jour où un deuxième cas apparaît.

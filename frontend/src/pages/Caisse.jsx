@@ -49,6 +49,9 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   // Le billet remis sans ticket de caisse (R5). Distinct de `ticket` : ce n'est pas le meme
   // document, et les afficher tous les deux serait remettre deux papiers pour une seule vente.
   const [billetSeul, setBilletSeul] = useState(null)
+  // Le rayon choisi, ou '' pour « tous ». Purement d'affichage : il ne touche ni au panier ni à
+  // ce qui est vendable.
+  const [rayonActif, setRayonActif] = useState('')
   // Ce que le serveur a decide de ce ticket, et ce qu'il reste a demander au client.
   const [finVente, setFinVente] = useState(null)
 
@@ -171,14 +174,48 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   // ⚠ ON NE FILTRE PAS SUR `enPaiement`. La tuile est desactivee par `estVendable(p) &&
   // !enPaiement` : pendant un encaissement, TOUS les produits le sont. Reprendre cette expression
   // ici aurait vide la grille au milieu de chaque paiement.
-  const { produitsAffiches, produitsMasques } = useMemo(() => {
+  //
+  // ⚠ ET LE RAYON EST UN FILTRE D'AFFICHAGE, COMPTÉ À PART. `produitsMasques` dit « il leur manque
+  // un tarif au guichet, ou ils sont en rupture ». Y ajouter ceux qu'un rayon écarte ferait
+  // annoncer un problème de TARIF à propos d'un simple filtre, et enverrait le caissier corriger
+  // un catalogue qui va très bien.
+  const { produitsAffiches, produitsMasques, rayons } = useMemo(() => {
     const tous = produits || []
     const vendables = tous.filter(estVendable)
     const masques = tous.length - vendables.length
-    if (favoris.length === 0) return { produitsAffiches: vendables, produitsMasques: masques }
+
+    // Les rayons réellement portés par ce qui est vendable ici. Proposer un rayon vide ferait
+    // cliquer sur une grille vide — la collection rend `axe` et `libelle` embarqués, on n'a rien
+    // d'autre à demander au serveur.
+    const parId = new Map()
+    for (const p of vendables) {
+      for (const cat of p.categories || []) {
+        if (cat && cat.axe === 'rayon' && cat.id) parId.set(cat.id, cat)
+      }
+    }
+    const rayonsPresents = [...parId.values()].sort((a, b) => (a.libelle || '').localeCompare(b.libelle || ''))
+
+    const dansLeRayon = rayonActif === ''
+      ? vendables
+      : vendables.filter((p) => (p.categories || []).some((cat) => cat && cat.id === rayonActif))
+
+    if (favoris.length === 0) {
+      return { produitsAffiches: dansLeRayon, produitsMasques: masques, rayons: rayonsPresents }
+    }
     const rang = (p) => (favoris.includes(p.id) ? 0 : 1)
-    return { produitsAffiches: [...vendables].sort((a, b) => rang(a) - rang(b)), produitsMasques: masques }
-  }, [produits, favoris.join(',')])
+    return {
+      produitsAffiches: [...dansLeRayon].sort((a, b) => rang(a) - rang(b)),
+      produitsMasques: masques,
+      rayons: rayonsPresents,
+    }
+  }, [produits, favoris.join(','), rayonActif])
+
+  // ⚠ UN RAYON QUI DISPARAÎT NE DOIT PAS LAISSER UNE GRILLE VIDE SANS EXPLICATION. Si le rayon
+  // choisi n'existe plus — catalogue rechargé, produit dépublié — on revient à « tous » plutôt que
+  // de montrer un écran vide dont le caissier ne verrait pas la cause.
+  useEffect(() => {
+    if (rayonActif !== '' && !rayons.some((r) => r.id === rayonActif)) setRayonActif('')
+  }, [rayons, rayonActif])
 
   async function basculerFavori(produitId) {
     if (!pdvActif) return
@@ -1025,6 +1062,31 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
               </div>
             ) : (
               <>
+              {/* ⚠ LA BARRE N'APPARAÎT QUE S'IL Y A DES RAYONS. Aujourd'hui il n'y en a aucun en
+                  base : une barre à un seul bouton « Tous » prendrait de la place et n'apprendrait
+                  rien. Elle se crée toute seule le jour où l'exploitant déclare son premier rayon
+                  dans Paramètres › Catalogue & référentiels. */}
+              {rayons.length > 0 && (
+                <div className="row caisse-rayons">
+                  <button
+                    type="button"
+                    className={`btn sm${rayonActif === '' ? ' primary' : ' ghost'}`}
+                    onClick={() => setRayonActif('')}
+                  >
+                    Tous
+                  </button>
+                  {rayons.map((r) => (
+                    <button
+                      key={r.id}
+                      type="button"
+                      className={`btn sm${rayonActif === r.id ? ' primary' : ' ghost'}`}
+                      onClick={() => setRayonActif(r.id)}
+                    >
+                      {r.libelle}
+                    </button>
+                  ))}
+                </div>
+              )}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10 }}>
                 {produitsAffiches.map((p) => {
                   const vendable = estVendable(p) && !enPaiement
@@ -1071,6 +1133,18 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
                   )
                 })}
               </div>
+              {/* ⚠ « AUCUN PRODUIT DANS CE RAYON » N'EST PAS « AUCUN PRODUIT ». La grille vide
+                  d'un filtre se lit comme un catalogue vide si on ne dit pas laquelle des deux
+                  choses on regarde. */}
+              {produitsAffiches.length === 0 && rayonActif !== '' && (
+                <div className="empty">
+                  Aucun produit vendable dans ce rayon.{' '}
+                  <button type="button" className="lnk" onClick={() => setRayonActif('')}>
+                    Voir tous les produits
+                  </button>
+                </div>
+              )}
+
               {produitsMasques > 0 && (
                 /* ⚠ RENDRE L'ABSENCE BRUYANTE. Sans cette ligne, un produit retire faute de tarif
                    se lit « il n'existe pas » — et le caissier va le chercher la ou il n'est pas. */
