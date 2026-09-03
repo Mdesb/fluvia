@@ -383,7 +383,6 @@ export default function AppShell({
   // aucun moyen d'en sortir ni de comprendre pourquoi. Un menu trop permissif, lui, se corrige tout
   // seul — l'API refuse, et le refus est lisible. Entre les deux erreurs possibles, celle-ci est la
   // moins coûteuse, et c'est exactement celle que j'ai commise en production ce soir.
-  const [sansEcranOuvert, setSansEcranOuvert] = useState(false)
 
   const navFinale = nav.length > 0
     ? nav
@@ -394,13 +393,23 @@ export default function AppShell({
         }))
         .filter((grp) => grp.items.length > 0)
 
-  // On separe ce qui mene quelque part de ce qui informe : melanges, les onze modules sans ecran
+  // ── CE QUI A DISPARU ICI, ET POURQUOI L'HISTOIRE RESTE ─────────────────────────────────────
+  //
+  // Le menu se separait en deux : ce qui mene quelque part, et un repli << Sans ecran >> pour les
+  // modules qui existaient cote serveur sans avoir d'interface. Melanges, les onze de l'epoque
   // allongeaient le menu de moitie et obligeaient a faire defiler pour atteindre Parametres — pour
-  // des entrees sur lesquelles on ne peut meme pas cliquer.
-  const navAvecEcran = navFinale
-    .map((grp) => ({ ...grp, items: grp.items.filter((it) => !it.absent) }))
-    .filter((grp) => grp.items.length > 0)
-  const sansEcran = navFinale.flatMap((grp) => grp.items.filter((it) => it.absent))
+  // des entrees sur lesquelles on ne pouvait meme pas cliquer.
+  //
+  // Le drapeau `absent` qui alimentait cette separation n'est plus pose nulle part : les 38 entrees
+  // du menu ont toutes un ecran (38 entrees, 39 identifiants routes, 0 sans route — mesure du
+  // 03/09). Le repli etait donc devenu un bloc qui ne pouvait plus s'afficher, et sa presence
+  // laissait croire au lecteur que le produit avait encore des modules sans interface.
+  //
+  // ⚠ LE MECANISME PART, PAS LA RAISON QUI L'A FAIT NAITRE. Ce qui empeche les modules sans ecran
+  // de redevenir invisibles n'est pas ce repli — c'est le garde-fou d'ecart client/serveur, qui
+  // COMPTE les operations qu'aucun ecran n'appelle et refuse de laisser ce nombre monter. Voir
+  // aussi le commentaire de tete sur les douze modules absents, et celui plus bas sur les onze
+  // operations de tickets restees derriere un `absent: true` jusqu'au 27/08.
 
   const [theme, setTheme] = useState(() => document.documentElement.getAttribute('data-theme') || '')
   const [navOpen, setNavOpen] = useState(false)
@@ -468,7 +477,7 @@ export default function AppShell({
             pas (caisse et catalogue existent partout) ; le reste se lit dans les capacités. */}
         <div className="side-tenant"><b>{nomEtab}</b>{sousTitreDe(capacites)}</div>
         <nav className="side-nav">
-          {navAvecEcran.map((grp) => (
+          {navFinale.map((grp) => (
             <div key={grp.section}>
               <div className="side-sec">{grp.section}</div>
               {grp.items.map((it) => (
@@ -477,13 +486,7 @@ export default function AppShell({
                   className={`side-link${onglet === it.id ? ' active' : ''}`}
                   onClick={() => !it.disabled && aller(it.id)}
                   disabled={it.disabled}
-                  title={
-                    it.absent
-                      ? `${it.label} : le module existe côté serveur, son écran n'est pas encore construit.`
-                      : it.disabled
-                        ? 'Bientôt disponible'
-                        : undefined
-                  }
+                  title={it.disabled ? 'Bientôt disponible' : undefined}
                   style={it.disabled ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
                 >
                   <Icon name={it.ic} className="ic" /> {it.label}
@@ -504,41 +507,13 @@ export default function AppShell({
                   )}
                   {it.disabled && (
                     <span className="badge mut" style={{ marginLeft: 'auto', fontSize: 10 }}>
-                      {it.absent ? 'sans écran' : 'bientôt'}
+                      bientôt
                     </span>
                   )}
                 </button>
               ))}
             </div>
           ))}
-
-          {/* Les modules qui existent cote serveur et n'ont pas encore d'ecran. Replies : ils
-              informent sans encombrer, et le compte suffit a savoir ou en est le produit. */}
-          {sansEcran.length > 0 && (
-            <div>
-              <button
-                className="side-link"
-                onClick={() => setSansEcranOuvert((v) => !v)}
-                aria-expanded={sansEcranOuvert}
-                title="Ces modules fonctionnent deja cote serveur ; leur ecran n'est pas encore construit."
-              >
-                <span className="ic">{sansEcranOuvert ? '▾' : '▸'}</span> Sans écran
-                <span className="badge mut" style={{ marginLeft: 'auto', fontSize: 10 }}>{sansEcran.length}</span>
-              </button>
-              {sansEcranOuvert &&
-                sansEcran.map((it) => (
-                  <button
-                    key={it.id}
-                    className="side-link"
-                    disabled
-                    title={`${it.label} : le module existe côté serveur, son écran n'est pas encore construit.`}
-                    style={{ opacity: 0.5, cursor: 'not-allowed', paddingLeft: 26 }}
-                  >
-                    <Icon name={it.ic} className="ic" /> {it.label}
-                  </button>
-                ))}
-            </div>
-          )}
         </nav>
         {/* L'identité et la déconnexion sont remontées dans la barre du haut : le bas de la colonne
             de gauche est l'endroit qu'on regarde le moins, pour une information qu'on veut sous les
