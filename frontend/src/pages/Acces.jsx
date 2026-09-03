@@ -429,7 +429,7 @@ export default function Acces({ etabActif, droits }) {
             <span className="sub">les lecteurs qui interrogent le serveur</span>
             {peutGerer && (
               <div className="actions" style={{ marginLeft: 'auto' }}>
-                <button className="btn primary" onClick={() => setEnroler(true)}>Enrôler un terminal</button>
+                <button className="btn primary" onClick={() => setEnroler(true)}>Enrôler un terminal d’accès</button>
               </div>
             )}
           </div>
@@ -437,7 +437,7 @@ export default function Acces({ etabActif, droits }) {
             <table className="tbl">
               <thead>
                 <tr>
-                  <th>Terminal</th>
+                  <th>Terminal d’accès</th>
                   <th>Référence ITBOX</th>
                   <th>État</th>
                   <th>Dernier appel</th>

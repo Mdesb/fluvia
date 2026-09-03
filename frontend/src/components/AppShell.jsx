@@ -83,7 +83,12 @@ const NAV = [
       // Regarder ne suffisait pas : dix-huit operations exposees, deux atteignables. Bloquer un
       // badge perdu et appairer une carte sont les deux gestes les plus frequents d'un exploitant,
       // et aucun des deux n'etait possible depuis l'application.
-      { id: 'acces', ic: 'badges', label: 'Badges & terminaux', cap: 'controle_acces', perms: ['acces.lire', 'acces.appairer', 'acces.bloquer_support', 'acces.gerer'] },
+      // ⚠ « D'ACCES » N'EST PAS UN ORNEMENT. « Terminal » designe deux objets qui n'ont pas un
+      // champ en commun : le controleur ITBOX enrole ici, et le TERMINAL DE PAIEMENT bancaire
+      // (`PointDeVente::$tpe`), regle dans Parametres et utilise en caisse. Sans qualificatif,
+      // cette entree attire l'exploitant qui cherche son TPE et lui montre des tourniquets.
+      // Les deux ecrans qui parlent du TPE se qualifiaient deja ; celui-ci, non (R22).
+      { id: 'acces', ic: 'badges', label: 'Badges & terminaux d’accès', cap: 'controle_acces', perms: ['acces.lire', 'acces.appairer', 'acces.bloquer_support', 'acces.gerer'] },
       // L'installation du contrôle d'accès : le plan du site, les lecteurs, et le journal complet.
       // Même garde que ses deux voisines — la capacité DIT ce que le site a acheté, les permissions
       // disent ce que ce compte a le droit d'en faire.

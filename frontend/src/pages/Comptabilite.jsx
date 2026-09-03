@@ -6,22 +6,29 @@ import SaisieEcritureManuelle from '../components/SaisieEcritureManuelle.jsx'
 import VersementRegie from '../components/VersementRegie.jsx'
 import MarquerImpayeeRegie from '../components/MarquerImpayeeRegie.jsx'
 import BordereauxPayFip from '../components/BordereauxPayFip.jsx'
-import CorrespondancesComptables from '../components/CorrespondancesComptables.jsx'
 import { api } from '../api/client.js'
 import ClotureComptable from '../components/ClotureComptable.jsx'
-import ImpayesRecouvrement from '../components/ImpayesRecouvrement.jsx'
 import PrelevementsSepa from '../components/PrelevementsSepa.jsx'
-import CautionsGestion from '../components/CautionsGestion.jsx'
 
-// Comptabilité / Régie (M6) + SEPA + impayés + cautions. Consultation multi-onglets.
+// Comptabilité / Régie (M6). Consultation multi-onglets.
 //
-// LES TROIS DERNIERS ONGLETS NE SONT PLUS ÉCRITS ICI, ET C'EST TOUT L'INTÉRÊT.
+// ⚠ CE BLOC DISAIT L'INVERSE, ET LE RAISONNEMENT ÉTAIT JUSTE — C'EST LE CRITÈRE QUI A CHANGÉ.
 //
-// SEPA, impayés et cautions ont désormais chacun leur entrée de menu. L'objection qui les tenait
-// fermées était juste : deux portes vers la même liste, c'est deux endroits à corriger et personne
-// qui sache lequel fait foi. Elle ne tient plus dès lors que les deux portes ouvrent sur le MÊME
-// COMPOSANT — `PrelevementsSepa`, `ImpayesRecouvrement`, `CautionsGestion`. Il n'y a qu'une
-// implémentation ; elle ne peut pas diverger d'elle-même.
+// Il défendait de garder ici les onglets SEPA, Impayés et Cautions alors qu'ils ont chacun leur
+// entrée de menu : « les deux portes ouvrent sur le MÊME COMPOSANT, il n'y a qu'une
+// implémentation, elle ne peut pas diverger d'elle-même ». C'est exact, et ça répondait à
+// l'objection de la DIVERGENCE.
+//
+// Maxime en a posé une autre à la revue du 02/09 (R29, R30), qui ne parle pas de divergence mais
+// d'ENCOMBREMENT : « il existe des menus spécifiques, donc pas besoin de les mettre ici ». Un
+// écran qu'on ouvre tous les matins ne doit pas contenir une seconde rangée d'onglets vers des
+// écrans qui ont déjà leur porte. Les deux qu'il a nommés partent.
+//
+// ⚠ SEPA RESTE, ET C'EST DÉLIBÉRÉ : il est dans exactement la même situation, mais Maxime a nommé
+// deux onglets, pas trois. La question lui est posée plutôt que tranchée ici.
+//
+// `Correspondances` part ailleurs : vers Paramètres › Correspondances comptables. Associer une
+// catégorie de produit à un compte se règle une fois — c'est le critère de R21, pas du quotidien.
 //
 // Les trois onglets restent donc là, où l'exploitant a l'habitude de les chercher, et ils montrent
 // exactement l'écran de l'entrée de menu. Le prix payé est une seconde rangée d'onglets à
@@ -39,34 +46,24 @@ export default function Comptabilite({ etabActif, droits }) {
       <div className="view-head">
         <div className="ttl">
           <h1>Comptabilité / Régie</h1>
-          <p>Journaux, écritures, régie, SEPA &amp; impayés</p>
+          <p>Journaux, écritures, régie &amp; SEPA</p>
         </div>
       </div>
 
       <Tabs
         onglets={[
           ['cloture', 'Clôture'],
-          ['correspondances', 'Correspondances'],
           ['journaux', 'Journaux & écritures'],
           ['saisie', 'Saisie manuelle'],
           ['lettrage', 'Lettrage'],
           ['regie', 'Régie & versements'],
           ['sepa', 'SEPA'],
-          ['impayes', 'Impayés'],
-          ['cautions', 'Cautions'],
         ]}
         actif={sousOnglet}
         onChange={setSousOnglet}
       />
 
       {sousOnglet === 'cloture' && <ClotureComptable etabActif={etabActif} droits={droits} />}
-
-      {/* Juste après la clôture, et avant les listes : c'est à la clôture qu'on découvre qu'une
-          catégorie n'était rattachée à rien, et c'est le seul onglet de ce module — avec elle —
-          qui porte un travail plutôt qu'une consultation. */}
-      {sousOnglet === 'correspondances' && (
-        <CorrespondancesComptables etabActif={etabActif} droits={droits} />
-      )}
 
       {/* Apres les journaux, parce qu'on lettre ce qu'on vient d'y lire — et avant les listes de
           consultation, parce que c'est un des rares onglets de ce module qui porte un TRAVAIL. */}
@@ -140,9 +137,6 @@ export default function Comptabilite({ etabActif, droits }) {
 
       {sousOnglet === 'sepa' && <PrelevementsSepa etabActif={etabActif} droits={droits} />}
 
-      {sousOnglet === 'impayes' && <ImpayesRecouvrement etabActif={etabActif} droits={droits} />}
-
-      {sousOnglet === 'cautions' && <CautionsGestion etabActif={etabActif} droits={droits} />}
     </div>
   )
 }
