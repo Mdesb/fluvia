@@ -173,6 +173,7 @@ a { color: var(--accent); }
 .side-tenant b { color: var(--side-ink); display: block; font-size: var(--txt-petit); }
 .side-nav { padding: 6px 10px; display: flex; flex-direction: column; gap: 2px; }
 .side-sec { font-size: var(--txt-mini); letter-spacing: .12em; text-transform: uppercase; color: var(--side-ink-soft); padding: 14px 12px 6px; font-weight: 700; }
+.side-compteur { margin-left: auto; font-size: var(--txt-petit); }
 .side-link { display: flex; align-items: center; gap: 11px; padding: 9px 12px; border-radius: 9px; color: var(--side-ink); text-decoration: none; font-size: var(--txt-normal); cursor: pointer; border: none; background: none; width: 100%; text-align: left; font-family: inherit; }
 /* La puce est desormais un SVG et non un glyphe : `text-align` n'a plus d'effet, et un SVG est en
    ligne par defaut — donc pose sur la ligne de base, avec un espace sous lui qui decalait le

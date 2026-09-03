@@ -313,6 +313,53 @@ export default function AppShell({
     }
   }, [droits, etabActif, onglet])
 
+  // LES DEMANDES RGPD EN ATTENTE, ET CELLES QUI ONT DÉPASSÉ LE MOIS.
+  //
+  // ⚠ CE COMPTEUR EXISTE PARCE QUE J'AI SORTI CET ÉCRAN DU MENU QUOTIDIEN (R27), et qu'une demande
+  // d'effacement porte un délai légal d'un mois, opposable. Aucune des sept tâches planifiées ne le
+  // surveille : sans badge, l'écran était moins vu ET toujours pas surveillé. Arbitrage de Maxime.
+  //
+  // ⚠ DEUX COMPTES, PAS UN. « En attente » dit le travail ; « en retard » dit le RISQUE. Un badge
+  // unique ferait lire « 3 » de la même façon pour trois demandes arrivées ce matin et pour trois
+  // qui dépassent le mois.
+  //
+  // ⚠ `null` N'EST PAS `0`. « Je n'ai pas pu lire » et « il n'y en a pas » sont deux états, et seul
+  // le second s'affiche : un badge « 0 » sur une lecture ratée affirmerait une absence qu'on n'a
+  // pas mesurée. L'appel reste silencieux — une barre de navigation ne doit jamais faire échouer
+  // une page.
+  const [compteurRgpd, setCompteurRgpd] = useState(null)
+  useEffect(() => {
+    if (!aUnDesDroits(droits, ['crm.rgpd_gerer', 'crm.rgpd_demander']) || !etabActif) {
+      setCompteurRgpd(null)
+      return undefined
+    }
+    let annule = false
+    // Le délai légal court à partir de la réception : un mois plus tard, la demande est en retard.
+    const seuil = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString()
+    const compte = (r) => r?.totalItems ?? r?.['hydra:totalItems'] ?? null
+    Promise.all([
+      // ⚠ LA CLÉ S'ÉCRIT SANS CROCHETS : `qs()` les ajoute lui-même pour un tableau. Les écrire
+      // ici donnait `statut[][]=recue`, un paramètre qu'aucun filtre ne connaît — donc ignoré en
+      // silence, donc un compte égal à TOUTES les demandes. Le badge aurait montré un nombre
+      // plausible et faux, plus grand que le vrai.
+      api.demandesRgpd({ statut: ['recue', 'en_cours'], itemsPerPage: 1 }),
+      api.demandesRgpd({ statut: ['recue', 'en_cours'], 'dateDemande[before]': seuil, itemsPerPage: 1 }),
+    ])
+      .then(([tout, retard]) => {
+        if (annule) return
+        const enAttente = compte(tout)
+        // ⚠ SI LE SERVEUR NE DIT PAS LE TOTAL, ON N'INVENTE PAS. Sans `totalItems`, on ne sait pas
+        // combien il y en a — et surtout pas qu'il n'y en a aucune.
+        setCompteurRgpd(enAttente === null ? null : { enAttente, enRetard: compte(retard) ?? 0 })
+      })
+      .catch(() => {
+        if (!annule) setCompteurRgpd(null)
+      })
+    return () => {
+      annule = true
+    }
+  }, [droits, etabActif, onglet])
+
   // Filtre les entrées selon les capacités actives, les droits effectifs de l'établissement courant
   // et le statut administrateur.
   const navSource = navFournie ?? NAV
@@ -440,6 +487,21 @@ export default function AppShell({
                   style={it.disabled ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
                 >
                   <Icon name={it.ic} className="ic" /> {it.label}
+                  {/* ⚠ LE BADGE NE S'AFFICHE QUE S'IL Y A QUELQUE CHOSE À MONTRER. `> 0`, jamais
+                      `!= null` : un « 0 » permanent sur une entrée de menu s'apprend à ne plus
+                      voir, et le jour où il porte un vrai chiffre personne ne le lit. */}
+                  {it.id === 'rgpd' && compteurRgpd?.enAttente > 0 && (
+                    <span
+                      className={`badge ${compteurRgpd.enRetard > 0 ? 'crit' : 'warn'} side-compteur`}
+                      title={
+                        compteurRgpd.enRetard > 0
+                          ? `${compteurRgpd.enAttente} demande(s) en attente, dont ${compteurRgpd.enRetard} au-delà du délai légal d'un mois.`
+                          : `${compteurRgpd.enAttente} demande(s) en attente. Le délai légal est d'un mois.`
+                      }
+                    >
+                      {compteurRgpd.enAttente}
+                    </span>
+                  )}
                   {it.disabled && (
                     <span className="badge mut" style={{ marginLeft: 'auto', fontSize: 10 }}>
                       {it.absent ? 'sans écran' : 'bientôt'}

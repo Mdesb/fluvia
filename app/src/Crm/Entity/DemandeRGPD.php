@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Crm\Entity;
 
+use ApiPlatform\Doctrine\Orm\Filter\DateFilter;
 use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
 use ApiPlatform\Metadata\ApiFilter;
 use App\Platform\Filter\UuidReferenceFilter;
@@ -46,6 +47,15 @@ use Symfony\Component\Uid\Uuid;
     denormalizationContext: ['groups' => ['rgpd:write']],
 )]
 #[ApiFilter(SearchFilter::class, properties: ['statut' => 'exact'])]
+// ⚠ LE DELAI LEGAL D'UN MOIS N'ETAIT INTERROGEABLE PAR PERSONNE.
+//
+// Aucun filtre ne portait sur `dateDemande` : ni compteur, ni tache, ni ecran ne pouvait demander
+// « lesquelles ont depasse le mois ». Il fallait tout charger et comparer a la main — sur une
+// collection PAGINEE, donc avec un compte faux des la 31e demande, et faux dans le sens rassurant.
+//
+// `dateDemande[before]=<iso>` repond maintenant, et c'est ce qui permet au menu de porter un
+// compteur (arbitrage de Maxime le 03/09 : « on met une notification et un badge sur le menu »).
+#[ApiFilter(DateFilter::class, properties: ['dateDemande'])]
 // ⚠ `client` A QUITTE LE `SearchFilter` : il rendait TOUJOURS une liste vide.
 //
 // Mesure sur une collection contenant deux demandes du meme client : `?statut=recue` rendait
@@ -78,6 +88,22 @@ class DemandeRGPD
     #[ORM\Column(type: 'datetime_immutable')]
     #[Groups(['rgpd:read'])]
     private \DateTimeImmutable $dateDemande;
+
+    /**
+     * Quand le depassement du delai legal a ete SIGNALE — jamais quand il a eu lieu.
+     *
+     * ⚠ SANS CETTE COLONNE, LA TACHE NOCTURNE RE-NOTIFIERAIT CHAQUE NUIT. Une demande en retard le
+     * reste jusqu'a son traitement : la meme alerte reviendrait tous les matins, et une cloche qui
+     * repete s'apprend a ne plus se lire — le defaut meme qu'on corrige, reintroduit par le remede.
+     *
+     * ⚠ ELLE N'EST PAS DANS `rgpd:write` : c'est une trace de mecanisme, pas une saisie. Personne ne
+     * doit pouvoir faire taire une alerte en la posant a la main depuis l'API.
+     *
+     * Nom anglais (D5) : le champ est ajoute apres la decision du 19/08.
+     */
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    #[Groups(['rgpd:read'])]
+    private ?\DateTimeImmutable $deadlineAlertedAt = null;
 
     #[ORM\Column(type: 'datetime_immutable', nullable: true)]
     #[Groups(['rgpd:read'])]
@@ -161,6 +187,18 @@ class DemandeRGPD
     public function setTraitePar(?Utilisateur $traitePar): self
     {
         $this->traitePar = $traitePar;
+
+        return $this;
+    }
+
+    public function getDeadlineAlertedAt(): ?\DateTimeImmutable
+    {
+        return $this->deadlineAlertedAt;
+    }
+
+    public function setDeadlineAlertedAt(?\DateTimeImmutable $deadlineAlertedAt): self
+    {
+        $this->deadlineAlertedAt = $deadlineAlertedAt;
 
         return $this;
     }

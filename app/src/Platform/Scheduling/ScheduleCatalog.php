@@ -69,6 +69,25 @@ final class ScheduleCatalog
                 // visible contre un oubli invisible, et tout le monde croirait que c'est fait.
                 safeOnFirstRun: false,
             ),
+            new ScheduledTask(
+                'crm:rgpd:alerter-delai',
+                1440,
+                "Une demande RGPD depasse le delai legal d'un mois sans que personne le sache. Le "
+                . "delai est opposable, et l'ecran qui porte ces demandes a quitte le menu quotidien "
+                . "le 03/09 : plus rien ne le met sous les yeux. Aucun geste ne fera remarquer le "
+                . "depassement — c'est le temps qui passe, et le temps ne declenche rien tout seul.",
+                critical: true,
+                // ⚠ SÛRE AU PREMIER PASSAGE, ET C'EST MESURÉ, PAS SUPPOSÉ. Elle ne fait qu'émettre
+                // un événement et poser une date ; rien d'irréversible, rien qui parte au dehors.
+                // Et l'arriéré est nul : préproduction du 03/09, 2 demandes, 1 en attente, ZÉRO
+                // au-delà du mois. Un premier passage ne signale rien.
+                //
+                // ⚠ Sur un parc où beaucoup seraient déjà en retard, il en signalerait autant —
+                // voulu : une demande hors délai EST un incident. `--plafond` existe pour découvrir
+                // l'ampleur avant d'ouvrir les vannes.
+                safeOnFirstRun: true,
+                nightlyAt: '02:00',
+            ),
             // --- Sécurité : ne pas tourner ici n'est pas un retard, c'est une faille ---------------
             new ScheduledTask(
                 'securite:delegations:expirer',
