@@ -1474,7 +1474,10 @@ function ParcPatinsModal({ open, parc, onClose, onFait, onErreur }) {
       <form onSubmit={soumettre}>
         {erreur && <div className="banner banner-error" style={{ marginBottom: 'var(--esp-large)' }}>{erreur}</div>}
 
-        <div className="row" style={{ display: 'flex', gap: 'var(--esp-large)' }}>
+        {/* ⚠ `row-champs` ALIGNE PAR LE HAUT. Sans elle, `.row` aligne par le bas et les deux
+            champs se décalent de 52 px — le champ de gauche n'a d'aide que par intermittence, et
+            la mise en page saute de 90 px quand elle apparaît sous les doigts (R11). */}
+        <div className="row row-champs">
           <div className="field" style={{ flex: 1 }}>
             <label htmlFor="pp-pointure">Pointure *</label>
             <input

@@ -434,6 +434,13 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
    en deux lignes faute de place — la ligne du tableau grandissant avec lui.
    Ici les boutons font la taille de leur libellé et se collent à droite. */
 .row.actions > * { flex: 0 0 auto; min-width: 0; }
+/* ⚠ UNE RANGÉE DE FORMULAIRE S'ALIGNE PAR LE HAUT, PAS PAR LE BAS. `.row` aligne sur `flex-end`,
+   ce qui est juste pour une rangée d'actions — un bouton doit venir au niveau du bas du champ
+   voisin. Dans un formulaire, deux champs n'ont presque jamais la même hauteur : l'un porte une
+   aide, l'autre pas, ou une aide plus longue. Alignés par le bas, leurs libellés et leurs champs
+   se décalent — mesuré à 52 px sur « Déclarer une pointure », et le décalage SAUTE de 90 px quand
+   une aide conditionnelle apparaît pendant la saisie (R11). */
+.row-champs { align-items: flex-start; gap: var(--esp-large); }
 .demo-note { background: var(--warn-bg); color: var(--warn); border-radius: 9px; padding: 8px 12px; font-size: var(--txt-petit); font-weight: 600; display: inline-flex; gap: 7px; align-items: center; }
 
 /* ---- Bannières ---- */

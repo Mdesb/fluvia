@@ -567,3 +567,23 @@ couvre l'autre :
     hebdomadaire).
 
 N'en poser qu'un laisserait une porte ouverte en croyant le trou fermé.
+
+### 8.6 — Seize autres rangées de formulaire alignées par le bas
+
+`.row { align-items: flex-end }` est JUSTE pour une rangée d'actions — un bouton doit venir au
+niveau du bas du champ voisin. Dans un formulaire, deux champs n'ont presque jamais la même
+hauteur, et alignés par le bas leurs libellés se décalent.
+
+Mesuré sur « Déclarer une pointure » (R11) : **52 px de décalage**, et un **saut de 90 px** quand
+une aide conditionnelle apparaît pendant la saisie. Corrigé là par `.row-champs`, qui aligne par
+le haut.
+
+**Dix-sept rangées de deux champs ou plus partagent le motif, dans douze fichiers :**
+
+    Personnel 3 · FacturesFournisseur 3 · Catalogue 2 · Piscine · Clients · Sport · Padel
+    PlanningTravail · TresorerieDashboard · ProduitFiche · ComptesBancaires · RapprochementBancaire
+
+⚠ **Elles ne sont pas toutes cassées** : le décalage n'apparaît que si les deux champs diffèrent en
+hauteur. Deux champs sans aide restent alignés par hasard. Les balayer en aveugle changerait la
+mise en page de douze écrans sans que personne les ait regardés — il faut les voir une par une,
+avec un banc qui rend le vrai `styles.css`.
