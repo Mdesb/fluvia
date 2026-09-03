@@ -146,6 +146,10 @@ function nomProduitAssocie(assoc, catalogue) {
 // par axe. L'axe comptable est le seul qui ait un effet sur les écritures.
 const AXES = [['comptable', 'Axe comptable'], ['marketing', 'Axe marketing'], ['rayon', 'Rayon']]
 
+// ⚠ LES AXES OÙ UN PRODUIT PEUT ÊTRE DANS PLUSIEURS CASES. Une liste et non un `=== 'rayon'` :
+// le jour où un second axe d'affichage arrive, il s'ajoute ici et nulle part ailleurs.
+const AXES_MULTIPLES = ['rayon']
+
 /**
  * Le mode, en mots de l'utilisateur.
  *
@@ -960,6 +964,41 @@ export default function ProduitFiche({
           {AXES.map(([axe, libelleAxe]) => {
             const duAxe = categories.filter((c) => c.axe === axe)
             if (duAxe.length === 0) return null
+
+            // ⚠ LE RAYON EST LE SEUL AXE OÙ UN PRODUIT PEUT ÊTRE DANS PLUSIEURS CASES (R3).
+            //
+            // Un rayon de caisse est un rangement d'AFFICHAGE : une canette est légitimement dans
+            // « Boissons » ET dans « Snacks », et c'est tout l'intérêt. L'écran n'offrait qu'un
+            // `<select>` par axe — c'est lui, pas le modèle, qui l'interdisait : `categories` est
+            // un ManyToMany et aucun validateur n'impose la règle.
+            //
+            // ⚠ LES DEUX AUTRES AXES RESTENT UNIQUES, et la raison est celle écrite plus bas pour
+            // le comptable : un produit à deux catégories comptables s'imputerait sur deux
+            // comptes. Elle ne vaut pas pour un rangement d'écran.
+            if (AXES_MULTIPLES.includes(axe)) {
+              const cochees = edition.categories.filter((id) => duAxe.some((c) => c.id === id))
+              return (
+                <div key={axe} style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
+                  <span className="sub">{libelleAxe}</span>
+                  {duAxe.map((c) => (
+                    <label key={c.id} className="row" style={{ gap: 'var(--esp-serre)' }}>
+                      <input
+                        type="checkbox"
+                        checked={cochees.includes(c.id)}
+                        onChange={() => setEdition((st) => ({
+                          ...st,
+                          categories: cochees.includes(c.id)
+                            ? st.categories.filter((id) => id !== c.id)
+                            : [...st.categories, c.id],
+                        }))}
+                      />
+                      <span>{c.libelle || c.nom}</span>
+                    </label>
+                  ))}
+                </div>
+              )
+            }
+
             const choisie = edition.categories.find((id) => duAxe.some((c) => c.id === id)) || ''
             return (
               <label key={axe} style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
@@ -986,8 +1025,10 @@ export default function ProduitFiche({
           })}
         </div>
         <div className="hint">
-          Une seule catégorie par axe. L’axe <b>comptable</b> décide du compte de produit :
-          sans lui, la vente n’est pas comptabilisée et ressort en anomalie à la clôture.
+          Une seule catégorie pour l’axe marketing et pour l’axe comptable&nbsp;; <b>plusieurs
+          rayons</b> possibles, parce qu’un rayon range un écran et qu’un article peut tenir à
+          deux endroits. L’axe <b>comptable</b> décide du compte de produit&nbsp;: sans lui, la
+          vente n’est pas comptabilisée et ressort en anomalie à la clôture.
         </div>
       </div>
       <div className="field">
