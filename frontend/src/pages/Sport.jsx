@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
-import { resoudre, nomOuAbsence } from '../components/Liste.jsx'
+import { resoudre, nomOuAbsence, euroCentimes, dateFr, jourLocal } from '../components/Liste.jsx'
 import Modal from '../components/Modal.jsx'
 import { libelleProduit } from '../api/produit.js'
 
@@ -48,11 +48,65 @@ function etatDuTerme(iso) {
 
 // Le statut ne se lit pas pareil selon ce qu'il implique : « echu » veut dire que l'acces est
 // coupe, et un badge gris comme les autres le noierait dans la liste.
+// ⚠ CETTE FONCTION RENDAIT `ok` ET `err`, QUI NE SONT PAS DES CLASSES.
+//
+// `styles.css` ne declare que `.badge.good`, `.warn`, `.crit`, `.info` et `.mut` (ligne 371,
+// enumeration complete). `badge ok` et `badge err` ne peignaient donc RIEN : un abonnement `actif`
+// et un abonnement `echu` s'affichaient a l'identique, sans couleur, pendant que seul
+// « resilie/impaye » etait colore. La distinction la plus importante du tableau ne portait rien.
+//
+// Le garde-fou des classes CSS ne pouvait pas l'attraper : il lit les litteraux, et ici le nom est
+// calcule (`badge ${tonStatut(...)}`).
 function tonStatut(statut) {
-  if (statut === 'echu') return 'err'
+  if (statut === 'echu') return 'crit'
   if (statut === 'resilie' || statut === 'impaye') return 'warn'
-  if (statut === 'actif') return 'ok'
+  if (statut === 'actif') return 'good'
   return 'mut'
+}
+
+// ⚠ « EN PAUSE » ET « ANNULEE » NE DOIVENT JAMAIS SE RESSEMBLER.
+//
+// `Gelee` veut dire que l'adherent a demande une suspension : l'echeance REVIENDRA a la reprise.
+// `Annulee` veut dire qu'elle ne sera jamais collectee. Les afficher pareil ferait croire qu'un
+// abonne en pause a perdu son echeancier. Elles different donc par la couleur ET par le mot — on
+// ecrit « en pause », jamais « gelee », parce que le mot du modele ne dit pas au lecteur ce qui
+// va se passer.
+const ETAT_ECHEANCE = {
+  a_venir: { mot: 'à venir', classe: 'info' },
+  prelevee: { mot: 'prélevée', classe: 'good' },
+  rejetee: { mot: 'rejetée', classe: 'crit' },
+  gelee: { mot: 'en pause', classe: 'warn' },
+  annulee: { mot: 'annulée', classe: 'mut' },
+}
+
+function etatEcheance(statut) {
+  return ETAT_ECHEANCE[statut] || { mot: statut || '—', classe: 'mut' }
+}
+
+// ⚠ `adherent` ET `payeur` — PAS `beneficiaire` NI `client`.
+//
+// L'écran lisait `a.client` et `a.beneficiaire` : deux noms que l'API n'envoie jamais. La colonne
+// « Adhérent » affichait donc « — » sur TOUS les abonnements, depuis toujours. C'est le défaut
+// jumeau de celui déjà corrigé deux colonnes plus loin (`dateFinEngagement`, pas `dateFin`).
+//
+// Et le bon nom ne suffit pas : `adherent` revient en IRI nue, parce que ni `Beneficiaire` ni
+// `Client` ne portent le groupe `abonnement:read`. On recoupe donc contre `GET /api/beneficiaires`,
+// où `Client::$nom` et `$prenom` sont exposés (groupe `beneficiaire:read`) — plutôt que d'élargir
+// la sérialisation pour un besoin qu'un appel existant couvre déjà.
+function nomAdherent(abonnement, beneficiaires) {
+  if (!abonnement) return <span className="sub">—</span>
+
+  // ⚠ `null` = la liste n'a pas été lue (403 sans `crm.lire`, par exemple). Rendre « — » ferait
+  // lire « cet abonnement n'a pas d'adhérent » là où on n'a simplement pas regardé.
+  if (beneficiaires === null) {
+    return <span className="sub">nom non lu — les bénéficiaires n’ont pas été obtenus</span>
+  }
+
+  const benef = resoudre(abonnement.adherent, beneficiaires)
+  const nom = benef && benef.client ? nomOuAbsence(benef.client, '') : ''
+  if (nom) return <span className="nm">{nom}</span>
+
+  return <span className="sub">adhérent — nom non transmis</span>
 }
 
 function quandHeure(v) {
@@ -88,6 +142,9 @@ export default function Sport({ etabActif, droits = [] }) {
   // Le droit exige par `POST /sport/abonnements/souscrire`, et lui seul.
   const peutGererAbonnement = aLeDroit(droits, 'sport.gerer_abonnement')
   const [souscription, setSouscription] = useState(false)
+  const [echeances, setEcheances] = useState(null)
+  const [beneficiaires, setBeneficiaires] = useState(null)
+  const [annulation, setAnnulation] = useState(null)
 
   // ⚠ `null` VEUT DIRE << PAS LU >>, `[]` VEUT DIRE << LU ET VIDE >>. SUR CET ECRAN, LA
   // DIFFERENCE EST UNE QUESTION DE SECURITE.
@@ -123,11 +180,15 @@ export default function Sport({ etabActif, droits = [] }) {
       // `sos:read`, vérifié dans l'entité. La carte affichait donc « Espace inconnu » sur CHAQUE
       // alerte, y compris celles dont l'espace est parfaitement enregistré. Sur un écran où l'on
       // court, ce n'est pas une colonne vide : c'est l'information qui dit où courir.
-      const [s, a, ab, es] = await Promise.all([
+      const [s, a, ab, es, ec, bf] = await Promise.all([
         api.evenementsSOS(),
         api.alertesPresenceIsolee().catch(() => null),
         api.abonnementsFitness().catch(() => null),
         api.espaces().catch(() => null),
+        api.echeancesSepaSport().catch(() => null),
+        // Le nom de l'adhérent n'est nulle part ailleurs : `abonnement.adherent` est une IRI nue.
+        // `crm.lire` peut manquer — d'où le `.catch` et le `null` conservé.
+        api.beneficiaires().catch(() => null),
       ])
       setSos(membres(s))
       // ⚠ `a ? … : []` TRANSFORMAIT UN ECHEC EN LISTE VIDE. Les trois lectures tolerees rendent
@@ -136,12 +197,18 @@ export default function Sport({ etabActif, droits = [] }) {
       setAlertes(a ? membres(a) : null)
       setAbonnements(ab ? membres(ab) : null)
       setEspaces(es ? membres(es) : [])
+      // Meme regle que les trois au-dessus : `null` reste `null`. Un echeancier illisible qui
+      // s'afficherait « aucune echeance » dirait a l'exploitant que personne n'est prelevable.
+      setEcheances(ec ? membres(ec) : null)
+      setBeneficiaires(bf ? membres(bf) : null)
     } catch (e) {
       setErreur(e.message || 'Le module n’a pas pu être chargé.')
       // On ne garde rien de partiel : un decompte a moitie lu a l'air normal.
       setSos(null)
       setAlertes(null)
       setAbonnements(null)
+      setEcheances(null)
+      setBeneficiaires(null)
     } finally {
       setChargement(false)
     }
@@ -329,14 +396,7 @@ export default function Sport({ etabActif, droits = [] }) {
                   const terme = etatDuTerme(a.dateFinEngagement)
                   return (
                     <tr key={a.id}>
-                      <td>
-                        <span className="nm">
-                          {a.client?.raisonSociale
-                            || [a.client?.prenom, a.client?.nom].filter(Boolean).join(' ')
-                            || a.beneficiaire?.id
-                            || '—'}
-                        </span>
-                      </td>
+                      <td>{nomAdherent(a, beneficiaires)}</td>
                       <td><span className={`badge ${tonStatut(a.statut)}`}>{a.statut || '—'}</span></td>
                       <td className="num">
                         {a.dateDebutEngagement ? quandHeure(a.dateDebutEngagement) : '—'}
@@ -368,6 +428,20 @@ export default function Sport({ etabActif, droits = [] }) {
           onFait={() => { setSouscription(false); recharger() }}
         />
       </section>
+
+      <Echeancier
+        echeances={echeances}
+        abonnements={abonnements}
+        beneficiaires={beneficiaires}
+        peutGerer={peutGererAbonnement}
+        onAnnuler={setAnnulation}
+      />
+
+      <AnnulationEcheanceModal
+        echeance={annulation}
+        onClose={() => setAnnulation(null)}
+        onFait={() => { setAnnulation(null); recharger() }}
+      />
 
       {/* « 2 APPELS DÉJÀ TRAITÉS » N'EST PAS UN REGISTRE, C'EST UN COMPTEUR.
           `EvenementSOS` porte `traitePar` et `dateTraitement` — QUI est intervenu et QUAND — et
@@ -411,6 +485,217 @@ export default function Sport({ etabActif, droits = [] }) {
         </section>
       )}
     </div>
+  )
+}
+
+// L'ECHEANCIER — LA VUE QUI MANQUAIT, ET SANS LAQUELLE `annulee` N'ATTEIGNAIT PERSONNE.
+//
+// L'etat « annulee » et son operation d'API ont ete poses par une autre session, qui a refuse
+// l'ecran en le disant : « il n'y a pas un bouton a ajouter, il y a une vue a construire ». Sa
+// fiche donne la mesure du manque — 38 echeances d'essai annulees par un script appelant l'API une
+// par une, faute d'ecran. Un exploitant n'a pas ce recours : chez lui, une echeance abandonnee
+// reste « a venir » indefiniment, en se presentant comme due.
+//
+// ⚠ LE BANDEAU EST LA MOITIE UTILE DE CET ECRAN. Une liste seule montrerait exactement ce qui a
+// laisse passer ces 38 echeances : des lignes « a venir » d'apparence normale. Le bandeau compte
+// celles dont la date est passee et nomme la plus ancienne — c'est le fait qu'on ne peut pas voir
+// en lisant ligne a ligne.
+function Echeancier({ echeances, abonnements, beneficiaires, peutGerer, onAnnuler }) {
+  // ⚠ COMPARAISON PAR JOUR LOCAL, PAS PAR INSTANT. Le garde-fou n°31 documente la famille :
+  // une date envoyee a minuit UTC tombe du mauvais cote d'un seuil calcule autrement, et le
+  // defaut ne se voit que quelques heures par jour — donc jamais en relecture. `jourLocal()` rend
+  // `AAAA-MM-JJ` en heure locale ; deux de ces chaines se comparent directement.
+  const aujourdhui = jourLocal()
+
+  const enRetard = (echeances || []).filter(
+    (e) => e.statut === 'a_venir' && e.dateProgrammee && jourLocal(e.dateProgrammee) < aujourdhui,
+  )
+  const plusAncienne = enRetard.reduce(
+    (min, e) => (min === null || e.dateProgrammee < min ? e.dateProgrammee : min),
+    null,
+  )
+
+  // Le talon `{ id }` se recoupe avec les abonnements deja charges par la page. Si CETTE liste-la
+  // n'a pas pu etre lue, on ne remplace pas le nom par un tiret muet : on le dit.
+  function adherent(echeance) {
+    // Deux sauts : l'échéance porte un talon d'abonnement, l'abonnement porte une IRI d'adhérent.
+    // Si la première liste manque, on le dit — c'est elle qui manque, pas l'adhérent.
+    if (abonnements === null) {
+      return <span className="sub">nom non lu — la liste des abonnements n’a pas été obtenue</span>
+    }
+    return nomAdherent(resoudre(echeance.abonnement, abonnements), beneficiaires)
+  }
+
+  return (
+    <section className="card">
+      <div className="card-h">
+        <span>Échéancier des prélèvements</span>
+        {/* Pas de marge en ligne : `.card-h` porte déjà `gap: 10px`. */}
+        <span className="sub">
+          {echeances === null ? '—' : echeances.length}
+        </span>
+      </div>
+
+      {echeances === null ? (
+        <div className="banner banner-error">
+          L’échéancier n’a pas pu être lu. <b>N’en concluez pas qu’aucune échéance n’est
+          programmée</b>&nbsp;: cette liste n’a pas été obtenue.
+        </div>
+      ) : echeances.length === 0 ? (
+        <div className="empty">
+          Aucune échéance. Un échéancier naît d’une souscription&nbsp;: tant qu’aucun abonnement
+          n’est signé, il n’y a rien à prélever.
+        </div>
+      ) : (
+        <>
+          {enRetard.length > 0 && (
+            <div className="banner banner-warn">
+              <b>{enRetard.length} échéance{enRetard.length > 1 ? 's' : ''} « à venir » dont la date
+              est passée</b>, la plus ancienne du {dateFr(plusAncienne)}. Elles se présentent comme
+              dues et ne partiront pas&nbsp;: une remise écarte ce qui n’a pas de préavis, et
+              désormais aussi ce dont le mandat est révoqué. Si l’abonnement correspondant est
+              terminé, annulez-les avec leur motif — sinon elles resteront là indéfiniment.
+            </div>
+          )}
+          <div style={{ overflowX: 'auto' }}>
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>Adhérent</th>
+                  <th>Programmée le</th>
+                  <th className="num">Montant</th>
+                  <th>Statut</th>
+                  <th>Ce qui s’est passé</th>
+                  {peutGerer && <th aria-label="Actions" />}
+                </tr>
+              </thead>
+              <tbody>
+                {echeances.map((e) => {
+                  const etat = etatEcheance(e.statut)
+                  return (
+                    <tr key={e.id}>
+                      <td>{adherent(e)}</td>
+                      <td>{dateFr(e.dateProgrammee)}</td>
+                      <td className="num">{euroCentimes(e.montantCentimes)}</td>
+                      <td><span className={`badge ${etat.classe}`}>{etat.mot}</span></td>
+                      <td>
+                        {/* ⚠ C'EST ICI QUE « EN PAUSE » ET « ANNULEE » SE SEPARENT POUR DE BON.
+                            Le badge donne la couleur ; cette colonne donne la suite. Une pause
+                            reviendra, une annulation non — et une annulation sans son motif est un
+                            trou : la seule question posee plus tard sera « pourquoi ». */}
+                        {e.statut === 'annulee' ? (
+                          <>
+                            <span className="nm">{e.cancellationReason || 'motif non transmis'}</span>
+                            {e.cancelledAt && (
+                              <div className="sub">annulée le {dateFr(e.cancelledAt)}</div>
+                            )}
+                          </>
+                        ) : e.statut === 'gelee' ? (
+                          <span className="sub">en pause — elle reviendra à la reprise</span>
+                        ) : e.statut === 'prelevee' ? (
+                          <span className="sub">
+                            {e.dateExecutionReelle
+                              ? `présentée le ${dateFr(e.dateExecutionReelle)}`
+                              : 'présentée à la banque'}
+                          </span>
+                        ) : e.statut === 'rejetee' ? (
+                          <span className="sub">rejetée par la banque — voir Recouvrement</span>
+                        ) : (
+                          <span className="sub">—</span>
+                        )}
+                      </td>
+                      {peutGerer && (
+                        <td>
+                          {/* Le serveur refuse (422) toute échéance qui n'est pas « à venir », en
+                              nommant son état. On n'affiche donc pas un bouton qui serait refusé :
+                              un contrôle proposé puis refusé apprend au lecteur à s'en méfier. */}
+                          {e.statut === 'a_venir' && (
+                            <button className="btn danger sm" type="button" onClick={() => onAnnuler(e)}>
+                              Annuler
+                            </button>
+                          )}
+                        </td>
+                      )}
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+      <div className="hint">
+        Annuler une échéance l’abandonne définitivement&nbsp;: elle ne sera jamais collectée et ne
+        se remet pas « à venir ». C’est différent d’une pause, qui la rend à la reprise. Seule une
+        échéance « à venir » s’annule — une échéance prélevée correspond à un mouvement bancaire
+        réel, et une rejetée a ouvert un incident d’impayé.
+      </div>
+    </section>
+  )
+}
+
+// ANNULER UNE ECHEANCE — ET LE MOTIF N'EST PAS UN CHAMP DE POLITESSE.
+//
+// Le serveur rend 422 sur un motif blanc, et il a raison : une echeance annulee est une somme que
+// le club n'encaissera jamais. La modale l'exige donc aussi, plutot que de laisser partir un appel
+// qui reviendra en erreur — et elle dit POURQUOI, sinon l'obligation passe pour une tracasserie.
+function AnnulationEcheanceModal({ echeance, onClose, onFait }) {
+  const [motif, setMotif] = useState('')
+  const [erreur, setErreur] = useState(null)
+  const [envoi, setEnvoi] = useState(false)
+
+  useEffect(() => {
+    if (echeance) { setMotif(''); setErreur(null) }
+  }, [echeance])
+
+  async function envoyer(e) {
+    e.preventDefault()
+    setEnvoi(true)
+    setErreur(null)
+    try {
+      await api.annulerEcheanceSepa(echeance.id, motif.trim())
+      onFait()
+    } catch (err) {
+      setErreur(err.message || "L’échéance n’a pas pu être annulée.")
+    } finally {
+      setEnvoi(false)
+    }
+  }
+
+  return (
+    <Modal open={Boolean(echeance)} onClose={onClose} titre="Annuler une échéance">
+      <form onSubmit={envoyer}>
+        {erreur && <div className="banner banner-error">{erreur}</div>}
+        <p className="sub">
+          Échéance du {dateFr(echeance?.dateProgrammee)} pour {euroCentimes(echeance?.montantCentimes)}.
+          Elle ne sera jamais collectée, et elle ne se remet pas « à venir ».
+        </p>
+        <div className="field">
+          <label htmlFor="motif-annulation">Pourquoi cette échéance ne sera-t-elle pas encaissée ? *</label>
+          <textarea
+            id="motif-annulation"
+            className="input"
+            rows={3}
+            required
+            value={motif}
+            placeholder="Adhérent résilié, échéancier refait…"
+            onChange={(ev) => setMotif(ev.target.value)}
+          />
+          <div className="hint">
+            Obligatoire. Dans six mois, la seule question posée sur cette ligne sera
+            «&nbsp;pourquoi n’a-t-elle pas été encaissée&nbsp;?&nbsp;», et un état sans motif y
+            répond «&nbsp;on ne sait pas&nbsp;».
+          </div>
+        </div>
+        {/* Pas de marge en ligne : le `.field` au-dessus porte déjà `margin-bottom: 14px`. */}
+        <div className="row actions">
+          <button className="btn" type="button" onClick={onClose}>Fermer</button>
+          <button className="btn danger" type="submit" disabled={envoi || motif.trim() === ''}>
+            {envoi ? 'Annulation…' : 'Annuler l’échéance'}
+          </button>
+        </div>
+      </form>
+    </Modal>
   )
 }
 

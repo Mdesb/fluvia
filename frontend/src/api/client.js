@@ -829,6 +829,17 @@ export const api = {
   // desormais dans `debug:router`, jamais par deduction depuis le nom de la classe.
   evenementsSOS: () => request('/api/evenement_s_o_s', { query: { itemsPerPage: 100 } }),
   traiterSOS: (id) => request(`/api/sport/sos/${id}/traiter`, { method: 'POST', body: {} }),
+  // ECHEANCIER SEPA du fitness. `abonnement` n'arrive qu'en talon `{ id }` sous le groupe
+  // `echeance:read` (verifie dans l'entite) : le nom de l'adherent se recoupe avec la liste des
+  // abonnements de l'ecran, jamais avec cette reponse.
+  echeancesSepaSport: (params = {}) =>
+    request('/api/echeance_sepas', { query: { itemsPerPage: 200, ...params } }),
+  // LE MOTIF EST EXIGE PAR LE SERVEUR : blanc ou vide, il rend 422. Ce n'est pas de la
+  // bureaucratie — une echeance annulee est une somme que le club n'encaissera jamais, et la seule
+  // question posee six mois plus tard sera « pourquoi ». Operation SUR MESURE, donc pas de
+  // `ld: true`, qui est le drapeau des operations standard.
+  annulerEcheanceSepa: (id, motif) =>
+    request(`/api/sport/echeances/${id}/annuler`, { method: 'POST', body: { motif } }),
   alertesPresenceIsolee: () => request('/api/alerte_presence_isolees', { query: { itemsPerPage: 100 } }),
   // ⚠ LA ROUTE ETAIT AU SINGULIER, ET ELLE RENDAIT 404 DEPUIS TOUJOURS.
   //
