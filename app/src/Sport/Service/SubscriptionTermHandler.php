@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Sport\Service;
 
+use App\Offre\Enum\Canal;
+use App\Offre\Service\SubscriptionPriceResolver;
 use App\Sport\Entity\AbonnementFitness;
 use App\Sport\Entity\EcheanceSepa;
 use App\Sport\Enum\MotifInactiviteAccesFitness;
@@ -12,6 +14,7 @@ use App\Sport\Enum\StatutAbonnementFitness;
 use App\Sport\Enum\StatutEcheanceSepa;
 use App\Sport\Enum\TermRenewalMode;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
 /**
  * CE QUI ARRIVE A UN ABONNEMENT LE JOUR OU SON ENGAGEMENT SE TERMINE.
@@ -36,6 +39,7 @@ final class SubscriptionTermHandler
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly PropagationAccesFitnessHandler $propagation,
+        private readonly SubscriptionPriceResolver $resolveurTarif,
     ) {
     }
 
@@ -62,16 +66,55 @@ final class SubscriptionTermHandler
             return 'suspendu';
         }
 
-        // ⚠ LE MONTANT VIENT DES ECHEANCES, ET ON REFUSE PLUTOT QUE DE LE DEVINER.
+        // ⚠ ON A TOUJOURS BESOIN DE LA DERNIERE ECHEANCE — POUR LA DATE, PLUS POUR LE PRIX.
         //
-        // Prolonger exige un montant. La seule source honnete est ce que cet abonnement a
-        // reellement porte. Un abonnement sans aucune echeance ne permet pas de l'etablir : on
-        // s'arrete et on le NOMME dans le rapport. Inventer un prix -- celui de la formule
-        // aujourd'hui, par exemple -- preleverait un montant que personne n'a signe.
+        // Elle sert desormais uniquement de point de reprise de l'echeancier (voir la garde
+        // d'idempotence plus bas). Un abonnement sans aucune echeance ne permet pas de savoir OU
+        // reprendre : on s'arrete et on le NOMME dans le rapport.
         $derniere = $this->derniereEcheance($abonnement);
 
         if ($derniere === null) {
             return 'sans-montant';
+        }
+
+        // ── LE PRIX SE RELIT AU TARIF EN VIGUEUR, LA DUREE NON — ET CE N'EST PAS UNE INCOHERENCE ──
+        //
+        // Arbitrage de Maxime, le 03/09 : « reconduction au tarif en vigueur ». Il partait d'un cas
+        // concret : « ils font une augmentation de tarifs, ils doivent pouvoir mettre la date a
+        // laquelle le nouveau tarif va s'appliquer ». Le mecanisme de date existe deja — une saison
+        // neuve et une grille dessus — mais il n'atteignait jamais un abonnement en cours.
+        //
+        // ⚠ LE COMMENTAIRE PRECEDENT DISAIT L'INVERSE, ET IL AVAIT RAISON POUR SON EPOQUE : « inventer
+        // un prix -- celui de la formule aujourd'hui -- preleverait un montant que personne n'a
+        // signe ». Ce qui a change n'est pas le raisonnement, c'est la decision produit : reconduire,
+        // c'est accepter le tarif publie au jour de la reconduction.
+        //
+        // ⚠ ET LA DUREE, ELLE, NE SE RELIT TOUJOURS PAS DANS LA FORMULE (voir `dureeEngagement()`).
+        // La distinction tient en une phrase, et sans elle quelqu'un alignera l'un sur l'autre dans
+        // six mois : LA DUREE EST CONTRACTUELLE — l'adherent a signe douze mois, la formule a pu
+        // passer a vingt-quatre depuis ; LE PRIX EST PUBLIE — l'exploitant le revise, et c'est
+        // precisement ce qu'une grille tarifaire datee sert a faire.
+        //
+        // Resolu a la date de reconduction, canal Guichet : meme choix que `ReengagementHandler`,
+        // pour la meme raison — c'est ce jour-la que le contrat se renoue.
+        try {
+            $montantCentimes = $this->resolveurTarif
+                ->forFormula($abonnement->getFormule(), Canal::Guichet, $maintenant)
+                ->priceCents();
+        } catch (UnprocessableEntityHttpException) {
+            // ⚠ ON RATTRAPE, ET C'EST LE POINT LE PLUS IMPORTANT DE CE BLOC.
+            //
+            // `SubscriptionPriceResolver` LEVE quand rien ne resout : formule sans produit porteur,
+            // produit sans facette SEPA, ou aucune saison ne couvrant la date. Or ce handler tourne
+            // dans `sport:abonnements:traiter-terme`, qui traite TOUS les abonnements arrivant a
+            // terme. Une exception non rattrapee sur un seul abonnement mal tarife arreterait le
+            // lot : les suivants ne seraient pas reconduits, et personne ne le saurait avant le
+            // releve bancaire.
+            //
+            // Un abonne dont le tarif n'existe plus est un cas REEL — le produit a pu etre retire
+            // de la vente. Il doit produire une ligne de rapport, pas une panne. C'est l'idiome que
+            // ce handler emploie deja avec `suspendu` et `sans-montant`.
+            return 'sans-tarif';
         }
 
         $increment = $abonnement->getPeriodicite() === PeriodiciteAbonnementFitness::Mensuel
@@ -98,7 +141,7 @@ final class SubscriptionTermHandler
             $echeance = new EcheanceSepa();
             $echeance->setAbonnement($abonnement)
                 ->setDateProgrammee($date)
-                ->setMontantCentimes($derniere->getMontantCentimes())
+                ->setMontantCentimes($montantCentimes)
                 ->setStatut(StatutEcheanceSepa::AVenir);
             $this->em->persist($echeance);
             ++$creees;

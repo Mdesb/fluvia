@@ -136,6 +136,20 @@ export default function App() {
   // se reconnecte et on retombe sur l'écran qu'on avait sous les yeux, filtres compris, au lieu de
   // tout refaire. Voir `api/url.js`.
   const [onglet, setOngletBrut] = useState(() => lireHash().onglet || 'caisse')
+
+  // ⚠ CE QUE L'ADRESSE DEMANDAIT AVANT QUE NOUS N'Y TOUCHIONS, ET POURQUOI IL FAUT LE CAPTURER ICI.
+  //
+  // L'atterrissage sur le tableau de bord (plus bas) teste `!lireHash().onglet` pour ne pas ecraser
+  // un lien profond. Mais l'effet de montage qui pose la premiere entree d'historique ecrit
+  // `#onglet=caisse` AVANT que `/me` n'ait repondu : quand l'atterrissage s'execute, l'adresse dit
+  // toujours `caisse`, et la bascule ne se declenche JAMAIS. Pour personne, depuis toujours.
+  //
+  // Maxime, en revue : « avec le compte administrateur socle regisseur j'arrive directement sur la
+  // caisse ». Le code faisait deja ce qu'il voulait ; il se faisait devancer par lui-meme.
+  //
+  // Un initialiseur de `useState` s'execute pendant le PREMIER RENDU, donc avant tout effet. C'est
+  // le seul endroit ou l'adresse est encore celle du navigateur et pas la notre.
+  const [ongletDemandeAuChargement] = useState(() => lireHash().onglet || null)
   // CHANGER D’ÉCRAN EMPILE UNE ENTRÉE D’HISTORIQUE, ET C’EST TOUT LE SUJET.
   //
   // Maxime : « quand on clique sur le bouton retour du navigateur, on change carrément de page ».
@@ -280,10 +294,13 @@ export default function App() {
     if (me && !landingApplique) {
       // Une URL qui nomme un écran l'emporte sur l'atterrissage par défaut : sans cette garde, on
       // ouvre un lien vers une fiche client et on arrive sur le tableau de bord.
-      if (estAdministrateur(me) && !lireHash().onglet) setOnglet('dashboard')
+      //
+      // ⚠ ON LIT LA CAPTURE, PAS L'ADRESSE COURANTE. `lireHash()` ici rendait toujours un onglet —
+      // celui que l'effet de montage venait d'ecrire — donc la condition etait toujours fausse.
+      if (estAdministrateur(me) && !ongletDemandeAuChargement) setOnglet('dashboard')
       setLandingApplique(true)
     }
-  }, [me, landingApplique])
+  }, [me, landingApplique, ongletDemandeAuChargement])
 
   // Si l'onglet courant dépend d'une capacité ou d'une permission désormais absente, retour Caisse.
   useEffect(() => {

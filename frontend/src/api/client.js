@@ -848,6 +848,19 @@ export const api = {
   // avalait l'echec (`.catch(() => null)`) et affichait « Aucun abonnement fitness » — un vide qui
   // ressemblait a une absence de donnees et qui etait une adresse fausse.
   abonnementsFitness: () => request('/api/abonnement_fitnesses', { query: { itemsPerPage: 200 } }),
+  // LES DEUX GESTES QUE L'ECRAN AVOUAIT NE PAS FAIRE.
+  //
+  // Les routes existent depuis l'origine du module ; aucune fonction cliente ne les appelait, donc
+  // aucun bouton ne pouvait exister. Operations SUR MESURE (`input: false` cote serveur), donc pas
+  // de `ld: true` -- ce drapeau est celui des operations standard.
+  //
+  // ⚠ Le MOTIF de resiliation est exige par le serveur : vide, il rend 422. Ce n'est pas de la
+  // bureaucratie -- une resiliation revoque le mandat, et la seule question posee six mois plus
+  // tard sera « pourquoi ».
+  pauserAbonnement: (id, corps) =>
+    request(`/api/sport/abonnements/${id}/pauses`, { method: 'POST', body: corps }),
+  resilierAbonnement: (id, corps) =>
+    request(`/api/sport/abonnements/${id}/resiliations`, { method: 'POST', body: corps }),
   // SOUSCRIRE : le premier pas de la chaine souscription -> echeance -> prelevement -> rejet ->
   // impaye -> recouvrement. Tout l'aval avait ete construit ; l'entree, non.
   // `input: false` cote serveur, le processeur lit le corps brut : pas de `ld: true`.

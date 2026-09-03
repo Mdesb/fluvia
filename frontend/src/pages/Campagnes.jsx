@@ -5,6 +5,7 @@ import Modal from '../components/Modal.jsx'
 import Tabs from '../components/Tabs.jsx'
 import { useEtatUrl } from '../api/url.js'
 import { jourLocal } from '../components/Liste.jsx'
+import { euros } from '../api/produit.js'
 
 /**
  * CAMPAGNES — première étape : les segments, et l'effectif avant l'envoi.
@@ -1002,7 +1003,6 @@ function Attribution({ attribution }) {
 
   const { contactes, temoins, fenetre } = attribution
   const nb = (v) => Number(v).toLocaleString('fr-FR')
-  const euros = (v) => `${Number(v).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`
   const pct = (v) => `${Number(v).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} %`
   const signe = (v) => (v > 0 ? '+' : '') + Number(v).toLocaleString('fr-FR', { maximumFractionDigits: 1 })
 

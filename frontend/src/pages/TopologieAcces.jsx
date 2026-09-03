@@ -62,16 +62,22 @@ import {
 //    d'établissement actif, collection vide, appel en échec — se disent donc avec trois phrases
 //    différentes.
 //
-// ⚠ LE SERVEUR NE SAIT PAS TRIER LES PASSAGES, ET IL NE LE DIT PAS.
+// ⚠ LE TRI DES PASSAGES A ÉTÉ CORRIGÉ CÔTÉ SERVEUR, ET CET ÉCRAN A MIS CINQ JOURS À LE SAVOIR.
 //
-// `Passage` déclare un `SearchFilter` et un `DateFilter` — mais AUCUN `OrderFilter`. Le paramètre
-// `order[horodatage]=desc` que tout le front envoie depuis l'origine est donc **silencieusement
-// ignoré** : la collection sort dans l'ordre d'insertion, c'est-à-dire du plus ANCIEN au plus
-// récent. Vérifié le 29/08 contre la préprod, en comparant l'ordre demandé et l'ordre reçu.
+// Ce bloc disait : « `Passage` ne déclare aucun `OrderFilter`, donc `order[horodatage]=desc` est
+// silencieusement ignoré ; une liste paginée montre les PREMIERS passages de l'histoire du site ».
+// C'était vrai, mesuré le 29/08 — et le filtre a été ajouté le même jour, par
+// `04e7d86 Zone d acces, garde-fou de vacuite, tri des passages, retrait d espace`.
 //
-// Conjugué à la pagination, cela veut dire qu'une liste de passages montre les PREMIERS passages
-// de l'histoire du site, jamais les derniers. On trie donc ce qu'on a reçu, faute de pouvoir
-// choisir ce qu'on reçoit — et on le dit là où ça se voit.
+// L'écran a donc continué de trier localement, ET d'ANNONCER À L'EXPLOITANT que le serveur ne
+// savait pas trier, pendant cinq jours. La phrase était visible dans un bandeau ; rien ne la
+// reliait au correctif, et le correctif n'avait aucune raison de la connaître.
+//
+// ⚠ C'EST LE COÛT D'UNE PHRASE QUI DÉCRIT UN DÉFAUT : elle devient un mensonge le jour où on le
+// corrige. Quand le défaut est visible par l'utilisateur, le mensonge l'est aussi.
+//
+// Le tri est désormais demandé au serveur — vérifié par HTTP, pas déduit de la présence de
+// l'attribut : `desc` rend le plus récent d'abord, `asc` le plus ancien.
 //
 // LE VOCABULAIRE GLOBAL NE SERT PAS ICI. `mot('valide')` rend « Accepté », qui qualifie le résultat
 // d'un passage ; `mot('caisse')` rend « Espèces au guichet ». Aucun de ces sens n'est celui des
@@ -1529,10 +1535,19 @@ function JournalPassages({ espaces, equipements, etabActif, cible }) {
       // la pire réponse possible à un client qui affirme le contraire. D'où le libellé du champ et
       // la phrase du résultat vide.
       if (filtres.billet.trim()) query['support.identifiant'] = filtres.billet.trim()
+      // ⚠ LE TRI EST DEMANDÉ AU SERVEUR, ET IL SAIT LE FAIRE DEPUIS LE 29/08.
+      //
+      // Ce fichier a longtemps trié ce qu'il recevait, faute de pouvoir choisir ce qu'il recevait :
+      // `Passage` ne déclarait aucun `OrderFilter`, donc `order[horodatage]=desc` était ignoré en
+      // silence et la pagination rendait les plus ANCIENS. Le filtre a été ajouté le 29/08 —
+      // et pendant cinq jours cet écran a continué de trier localement en l'annonçant à
+      // l'exploitant.
+      //
+      // La requête demandait DÉJÀ ce tri (voir `query` plus haut) : seul le tri local était de
+      // trop. Vérifié par HTTP avant de le retirer — `desc` rend le plus récent d'abord, `asc` le
+      // plus ancien. Le serveur trie vraiment ; ce n'est pas déduit de la présence de l'attribut.
       const reponse = await api.journalPassages(query)
-      // Voir la note en tête de fichier : le tri demandé au serveur est ignoré, on trie ce qu'on a.
-      const recus = membres(reponse).sort((a, b) => (a.horodatage < b.horodatage ? 1 : -1))
-      setLignes(recus)
+      setLignes(membres(reponse))
       setTotal(reponse?.totalItems ?? reponse?.['hydra:totalItems'] ?? null)
     } catch (e) {
       setErreur(e.message || 'Journal indisponible.')
@@ -1634,7 +1649,7 @@ function JournalPassages({ espaces, equipements, etabActif, cible }) {
         {total !== null && lignes.length < total && (
           <span
             className="badge warn"
-            title="Cette liste est arrivée incomplète, et le serveur ne sait pas la trier : ce sont les plus anciennes."
+            title="Cette liste est tronquée par la pagination : ce sont les plus récentes des passages qui répondent à ces filtres."
           >
             {lignes.length} sur {total}
           </span>
@@ -1714,10 +1729,9 @@ function JournalPassages({ espaces, equipements, etabActif, cible }) {
         {info && <div className="banner banner-ok">{info}</div>}
         {total !== null && lignes.length < total && (
           <div className="banner" style={{ background: 'var(--warn-bg)', color: 'var(--warn)' }}>
-            Cette liste est arrivée incomplète, et le serveur ne sait pas la trier : ce sont les{' '}
-            <strong>{lignes.length} plus anciennes</strong> des {total} qui répondent à ces filtres, et
-            non les plus récentes. Restreignez la période pour voir ce qui vous intéresse — l’export,
-            lui, porte bien sur la totalité.
+            Cette liste est tronquée par la pagination : ce sont les{' '}
+            <strong>{lignes.length} plus récentes</strong> des {total} qui répondent à ces filtres.
+            Restreignez la période pour voir le reste — l’export, lui, porte bien sur la totalité.
           </div>
         )}
 

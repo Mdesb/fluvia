@@ -9,6 +9,7 @@ import { aLeDroit } from '../api/droits.js'
 import DevisModal from '../components/DevisModal.jsx'
 import FactureRendu from '../components/FactureRendu.jsx'
 import { mot } from '../api/vocabulaire.js'
+import { euros } from '../api/produit.js'
 
 const NATURE_BADGE = { quote: 'info', sales_order: 'warn', delivery_note: 'mut' }
 const STATUT_BADGE = {
@@ -39,8 +40,6 @@ const DROIT_GESTE = {
   invoice: 'facturation.emettre_directe',
 }
 
-const euros = (montant) =>
-  new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(Number(montant || 0))
 
 const idDe = (ressource) => {
   const brut = ressource?.id || ''

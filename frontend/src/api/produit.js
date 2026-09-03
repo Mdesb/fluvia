@@ -50,6 +50,29 @@ export function raisonNonVendable(p) {
   return null
 }
 
+/**
+ * Un montant en CENTIMES, formate en euros.
+ *
+ * ⚠ CETTE FONCTION EXISTE PARCE QUE CINQ ECRANS LA REECRIVAIENT CHACUN A SA FACON.
+ *
+ * Trois d'entre eux rendaient `(c / 100).toFixed(2).replace('.', ',') + ' €'` : pas de separateur
+ * de milliers (`12345,60 €` au lieu de `12 345,60 €`), et surtout `0,00 €` pour un montant NUL,
+ * `NaN €` pour un montant ABSENT. Or « je ne sais pas » et « c'est zero » ne veulent pas du tout
+ * dire la meme chose sur un impaye — et se ressemblent a l'oeil.
+ *
+ * Le tiret cadratin de `euros()` dit l'inconnu. On delegue donc, plutot que de le reecrire.
+ *
+ * ⚠ ET L'UNITE EST DANS LE NOM. `euros(1234)` et `centimes(1234)` rendent deux montants differents
+ * d'un facteur cent ; le seul moyen de ne pas s'y tromper est que l'appelant lise l'unite au moment
+ * ou il choisit la fonction.
+ */
+export function centimes(c) {
+  if (c == null || c === '') return '—'
+  const n = typeof c === 'number' ? c : parseFloat(c)
+  if (Number.isNaN(n)) return '—'
+  return euros(n / 100)
+}
+
 export function euros(v) {
   if (v == null || v === '') return '—'
   const n = typeof v === 'number' ? v : parseFloat(v)

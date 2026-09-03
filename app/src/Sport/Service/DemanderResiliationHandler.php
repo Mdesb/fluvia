@@ -8,9 +8,11 @@ use App\Securite\Entity\Utilisateur;
 use App\Sepa\Entity\MandatSepa;
 use App\Sepa\Enum\StatutMandatSepa;
 use App\Sport\Entity\AbonnementFitness;
+use App\Sport\Entity\EcheanceSepa;
 use App\Sport\Entity\Resiliation;
 use App\Sport\Enum\MotifInactiviteAccesFitness;
 use App\Sport\Enum\StatutAbonnementFitness;
+use App\Sport\Enum\StatutEcheanceSepa;
 use App\Sport\Enum\StatutResiliation;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
@@ -92,9 +94,61 @@ final class DemanderResiliationHandler
             $mandat->setStatut(StatutMandatSepa::Revoque);
         }
 
+        $this->annulerEcheancesRestantes($resiliation, $abonnement);
+
         $this->em->flush();
 
         $this->propagation->desactiver($abonnement, MotifInactiviteAccesFitness::Resiliation);
+    }
+
+    /**
+     * LES ÉCHÉANCES POSTÉRIEURES À L'EFFET S'ANNULENT — sinon elles restent « à venir » pour toujours.
+     *
+     * ── ⚠ CE QUE LA RÉSILIATION NE FAISAIT PAS, ET QUI SE VOYAIT À L'ÉCRAN ─────────────────────
+     *
+     * `claude-A` a corrigé le 02/09 le prélèvement sur mandat révoqué : un adhérent qui résiliait
+     * était encore débité, parce que la génération de remise ne regardait pas le statut du mandat.
+     * Le filtre pose le bon état — plus rien ne part — mais il ne touche pas aux échéances.
+     *
+     * Elles restaient donc `AVenir` indéfiniment, et l'écran continuait de les présenter comme dues.
+     * L'exploitant croyait avoir de l'argent à encaisser sur quelqu'un qui était parti. Mesure du
+     * 03/09 : 38 échéances dans cet état en préproduction, la plus ancienne de septembre 2025.
+     *
+     * L'état `Annulee` existe depuis le 02/09 ; il n'était posé que par un geste MANUEL
+     * (`POST /sport/echeances/{id}/annuler`). C'est ce geste qui manquait ici.
+     *
+     * ── ⚠ SEULEMENT CE QUI EST APRÈS LA DATE D'EFFET, ET C'EST TOUT LE PIÈGE ──────────────────
+     *
+     * Une résiliation porte un préavis : l'effet arrive des semaines après la demande. Une échéance
+     * datée AVANT cet effet correspond à une période que l'adhérent a réellement utilisée — c'est
+     * une somme due, pas un reliquat. L'annuler effacerait une créance légitime, et personne ne le
+     * verrait : ni erreur, ni trace, juste de l'argent qui cesse d'être réclamé.
+     *
+     * On ne touche donc qu'à ce qui vient APRÈS. Ce qui reste dû reste dû, et se recouvre par les
+     * chemins habituels.
+     */
+    private function annulerEcheancesRestantes(Resiliation $resiliation, AbonnementFitness $abonnement): void
+    {
+        $effet = $resiliation->getDateEffet();
+        $motif = sprintf('Résiliation effective du %s', $effet->format('d/m/Y'));
+        $maintenant = new \DateTimeImmutable();
+
+        /** @var list<EcheanceSepa> $restantes */
+        $restantes = $this->em->getRepository(EcheanceSepa::class)->createQueryBuilder('e')
+            ->andWhere('e.abonnement = :abonnement')
+            ->andWhere('e.statut = :aVenir')
+            ->andWhere('e.dateProgrammee > :effet')
+            ->setParameter('abonnement', $abonnement->getId(), 'uuid')
+            ->setParameter('aVenir', StatutEcheanceSepa::AVenir)
+            ->setParameter('effet', $effet, 'date_immutable')
+            ->getQuery()
+            ->getResult();
+
+        foreach ($restantes as $echeance) {
+            $echeance->setStatut(StatutEcheanceSepa::Annulee)
+                ->setCancellationReason($motif)
+                ->setCancelledAt($maintenant);
+        }
     }
 
     /**

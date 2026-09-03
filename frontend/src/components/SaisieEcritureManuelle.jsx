@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
+import { centimes as afficherCentimes } from '../api/produit.js'
 
 // SAISIR UNE ÉCRITURE MANUELLE — la seconde moitié de T28, et la plus contrainte.
 //
@@ -340,12 +341,12 @@ export default function SaisieEcritureManuelle({ etabActif, droits = [] }) {
             débit ≠ crédit, et un formulaire qui laisserait cliquer transformerait une erreur de
             saisie visible en un refus incompréhensible après coup. */}
         <div className="resa-part-form">
-          <span className="mono num">Débit {euros(totalDebit)}</span>
-          <span className="mono num">Crédit {euros(totalCredit)}</span>
+          <span className="mono num">Débit {afficherCentimes(totalDebit)}</span>
+          <span className="mono num">Crédit {afficherCentimes(totalCredit)}</span>
           <span className={ecart === 0 ? 'hint' : 'nm'}>
             {ecart === 0
               ? totalDebit > 0 ? 'Écriture équilibrée.' : 'Saisissez les montants.'
-              : `Écart de ${euros(Math.abs(ecart))} — une écriture déséquilibrée est refusée.`}
+              : `Écart de ${afficherCentimes(Math.abs(ecart))} — une écriture déséquilibrée est refusée.`}
           </span>
           {peutSaisir && (
             <button
@@ -389,14 +390,24 @@ function idDe(reference) {
   return reference.id ?? null
 }
 
+/**
+ * ⚠ CE `centimes()` CONVERTIT, IL N'AFFICHE PAS — et un homonyme partage fait l'inverse.
+ *
+ * Ici : des euros saisis a l'ecran vers des centimes entiers, pour additionner. Dans
+ * `api/produit.js` : des centimes vers « 1 234,50 € », pour montrer. Les deux sont legitimes et le
+ * mot est le meme.
+ *
+ * Le 03/09, un remplacement global de `euros(` par `centimes(` a fait appeler le convertisseur sur
+ * trois sites d'affichage. Le build l'a refuse pour collision de symbole — par chance : sans elle,
+ * l'ecran aurait montre un nombre nu la ou on attend un montant, sans erreur.
+ *
+ * L'affichage passe donc par `afficherCentimes`, importe sous un nom qui ne se confond pas.
+ */
 function centimes(valeur) {
   const n = Number.parseFloat(String(valeur).replace(',', '.'))
   return Number.isFinite(n) && n > 0 ? Math.round(n * 100) : 0
 }
 
-function euros(c) {
-  return `${(c / 100).toFixed(2).replace('.', ',')} €`
-}
 
 function dateFr(valeur) {
   const s = String(valeur).slice(0, 10)
