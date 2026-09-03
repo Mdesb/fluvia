@@ -155,10 +155,25 @@ export default function Caisse({ me, etabActif, etablissements, session, capacit
   // Les épinglés d'abord, le reste dans son ordre d'origine. Un tri qui remonterait aussi par
   // fréquence de vente serait plus malin et beaucoup moins prévisible : le caissier apprend la
   // place de ses boutons, il ne la relit pas.
-  const produitsAffiches = useMemo(() => {
-    if (favoris.length === 0) return produits || []
+  // ⚠ CE QUI N'EST PAS VENDABLE NE S'AFFICHE PLUS (R2), ET LE NOMBRE MASQUE EST DIT.
+  //
+  // Un produit sans tarif au guichet, ou en rupture, invitait le caissier a cliquer puis a
+  // expliquer au client, devant la file, pourquoi ca ne marche pas. Il n'a plus sa tuile.
+  //
+  // ⚠ MAIS UNE ABSENCE MUETTE EST UN AUTRE DEFAUT. Un caissier qui cherche « Entree adulte » et ne
+  // la voit pas conclut qu'elle n'existe pas — alors qu'elle existe et qu'il lui manque un tarif.
+  // Le compte des masques est donc affiche sous la grille, avec la raison et ou aller la corriger.
+  //
+  // ⚠ ON NE FILTRE PAS SUR `enPaiement`. La tuile est desactivee par `estVendable(p) &&
+  // !enPaiement` : pendant un encaissement, TOUS les produits le sont. Reprendre cette expression
+  // ici aurait vide la grille au milieu de chaque paiement.
+  const { produitsAffiches, produitsMasques } = useMemo(() => {
+    const tous = produits || []
+    const vendables = tous.filter(estVendable)
+    const masques = tous.length - vendables.length
+    if (favoris.length === 0) return { produitsAffiches: vendables, produitsMasques: masques }
     const rang = (p) => (favoris.includes(p.id) ? 0 : 1)
-    return [...(produits || [])].sort((a, b) => rang(a) - rang(b))
+    return { produitsAffiches: [...vendables].sort((a, b) => rang(a) - rang(b)), produitsMasques: masques }
   }, [produits, favoris.join(',')])
 
   async function basculerFavori(produitId) {
@@ -990,7 +1005,18 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
               </div>
             ) : produits.length === 0 ? (
               <div className="empty">Aucun produit disponible.</div>
+            ) : produitsAffiches.length === 0 ? (
+              /* ⚠ « AUCUN PRODUIT » ET « AUCUN PRODUIT VENDABLE » NE SE DISENT PAS PAREIL. Le
+                 catalogue existe, il est lu, et rien n'y est vendable a ce comptoir : c'est un
+                 probleme de tarifs, pas un catalogue vide. Les confondre enverrait le caissier
+                 chercher au mauvais endroit. */
+              <div className="banner banner-warn">
+                <b>Le catalogue contient {produits.length} produit{produits.length > 1 ? 's' : ''}, mais aucun n’est vendable ici.</b>
+                {' '}Il leur manque un tarif au guichet, ou ils sont en rupture. Cela se corrige dans
+                Catalogue&nbsp;: ce n’est pas la caisse qui est en panne.
+              </div>
             ) : (
+              <>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10 }}>
                 {produitsAffiches.map((p) => {
                   const vendable = estVendable(p) && !enPaiement
@@ -1037,6 +1063,18 @@ function construireTicket(infoTicket, paiements, support, premiereEdition = fals
                   )
                 })}
               </div>
+              {produitsMasques > 0 && (
+                /* ⚠ RENDRE L'ABSENCE BRUYANTE. Sans cette ligne, un produit retire faute de tarif
+                   se lit « il n'existe pas » — et le caissier va le chercher la ou il n'est pas. */
+                <p className="hint">
+                  {produitsMasques} produit{produitsMasques > 1 ? 's' : ''} du catalogue
+                  {produitsMasques > 1 ? ' ne sont pas affichés' : ' n’est pas affiché'} ici&nbsp;:
+                  {produitsMasques > 1 ? ' il leur manque' : ' il lui manque'} un tarif au guichet,
+                  ou {produitsMasques > 1 ? 'ils sont' : 'il est'} en rupture de stock. Cela se
+                  règle dans Catalogue.
+                </p>
+              )}
+              </>
             )}
             <div className="hint">
               {enPaiement ? 'Encaissement en cours — finalisez ou abandonnez la vente.' : 'Cliquez un produit pour l\'ajouter · paiement scindé et rendu à l\'encaissement'}
@@ -1356,7 +1394,15 @@ function FinDeVente({ info, onAfficher, onSansTicket }) {
 
 function TicketVente({ ticket }) {
   return (
-    <div className="ticket">
+    <>
+      {/* ⚠ `doc-imprimer` FAIT SORTIR CE TICKET SEUL SUR LA FEUILLE, et sans lui il ne sortait
+          RIEN DU TOUT : la regle `@media print` de `styles.css` masquait tout l'ecran et ne
+          revelait que la facture. Un ticket affiche, un Ctrl+P, une feuille blanche — sans erreur.
+
+          ⚠ CE N'EST PAS UN SECOND FORMAT. Le papier A4 porte exactement ce bloc, c'est-a-dire ce
+          que `TicketProcessor` a rendu : memes lignes, meme numero, meme mention DUPLICATA. Il n'y
+          a pas de gabarit A4 separe qui pourrait diverger en silence du format contraint NF525. */}
+      <div className="ticket doc-imprimer">
       <div className="th">
         <span className="ok">✓</span>
         <h3>Vente encaissée</h3>
@@ -1430,7 +1476,16 @@ function TicketVente({ ticket }) {
             )}
           </div>
         </div>
+        </div>
       </div>
-    </div>
+
+      {/* Les commandes vivent HORS du `.doc-imprimer` : dedans, elles s'imprimeraient avec lui.
+          `noprint` est une ceinture de plus, pour le cas ou ce bloc migrerait un jour. */}
+      <div className="ticket-actions noprint">
+        <button className="btn ghost sm" type="button" onClick={() => window.print()}>
+          Imprimer le ticket
+        </button>
+      </div>
+    </>
   )
 }

@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import VocabulaireMetier from '../components/VocabulaireMetier.jsx'
 import Liste, { texte, dateHeureFr } from '../components/Liste.jsx'
 import Tabs from '../components/Tabs.jsx'
+import CorrespondancesComptables from '../components/CorrespondancesComptables.jsx'
 import PlanningOuvertureSection from '../components/PlanningOuvertureSection.jsx'
 import Modal from '../components/Modal.jsx'
 import ReferentielEditable from '../components/ReferentielEditable.jsx'
@@ -10,6 +11,7 @@ import PretAVendre from '../components/PretAVendre.jsx'
 import RolesSection from '../components/RolesSection.jsx'
 import Qr from '../components/Qr.jsx'
 import EtablissementsSection from '../components/EtablissementsSection.jsx'
+import GroupesSection from '../components/GroupesSection.jsx'
 import RegionsSection from '../components/RegionsSection.jsx'
 import OuvrirStructure from '../components/OuvrirStructure.jsx'
 import { aLeDroit } from '../api/droits.js'
@@ -22,6 +24,12 @@ const SOUS = [
   // n'a aucune raison de les connaître, et ils n'apportaient rien à ceux qui les connaissent.
   ['referentiels', 'Catalogue & référentiels'],
   ['caisse', 'Caisse & moyens de paiement'],
+  // ⚠ VENU DE L'ECRAN COMPTABILITE, ET C'EST LE CRITERE DE R21 QUI L'A DEPLACE : associer une
+  // categorie de produit a un compte comptable se regle une fois, puis le jour ou une categorie
+  // arrive. Ce n'est pas un geste quotidien, donc ce n'est pas sa place dans un ecran qu'un
+  // comptable ouvre tous les matins. Juste apres la caisse, parce que c'est ce qui y est encaisse
+  // qui tombe dans ces comptes.
+  ['correspondances', 'Correspondances comptables'],
   ['droits', 'Utilisateurs & droits'],
   // « Capacités activables » était le nom interne d'un mécanisme, pas celui d'un réglage. Maxime,
   // à la revue : « je ne sais pas ce que c'est ».
@@ -292,14 +300,18 @@ function descripteurSaisons(api) {
         libelle: 'Du',
         type: 'date',
         requis: true,
-        aide: 'Premier jour où les prix de cette saison s’appliquent.',
+        aide:
+          'Premier jour où les prix de cette saison s’appliquent. Si « Chaque année » est coché, '
+          + 'seuls le jour et le mois sont retenus.',
       },
       {
         nom: 'dateFin',
         libelle: 'Au',
         type: 'date',
         requis: true,
-        aide: 'Dernier jour inclus.',
+        aide:
+          'Dernier jour inclus. Il peut tomber avant le premier : une saison récurrente a le droit '
+          + 'd’enjamber le nouvel an (du 15/12 au 15/01).',
       },
       {
         nom: 'priorite',
@@ -316,7 +328,11 @@ function descripteurSaisons(api) {
         type: 'bool',
         defaut: false,
         libelleCase: 'Cette période revient tous les ans',
-        aide: 'Évite de recréer la même saison chaque année.',
+        aide:
+          'Seuls le jour et le mois des deux dates comptent : l’année saisie est ignorée, et la '
+          + 'période revient à l’identique tous les ans, avant comme après. Pour changer les prix '
+          + 'une année donnée, laissez cette saison en place et créez une saison datée de priorité '
+          + 'supérieure : elle passera devant, pour cette année-là seulement.',
       },
       {
         nom: 'actif',
@@ -334,7 +350,18 @@ function descripteurSaisons(api) {
         rendu: (r) => {
           const d = (r.dateDebut || '').slice(0, 10)
           const f = (r.dateFin || '').slice(0, 10)
-          return d && f ? `${d} → ${f}` : '—'
+          if (!d || !f) return '—'
+          // ⚠ L’ANNÉE D’UNE SAISON RÉCURRENTE NE VEUT RIEN DIRE, ET L’AFFICHER EST UN MENSONGE.
+          //
+          // Le moteur ne lit que le jour et le mois quand la case est cochée. Une saison saisie
+          // « du 15/12/2026 au 15/01/2027 » s’applique aussi en 2031 — et en 2024. Montrer les
+          // millésimes ferait croire à une période qui se termine, alors qu’elle ne se termine
+          // jamais. Les découper ici ne coûte rien : les chaînes sont déjà en ISO, on ne
+          // reconstruit aucune date, donc aucun décalage de fuseau possible (garde-fou n°31).
+          if (r.recurrenceAnnuelle) {
+            return `${d.slice(8, 10)}/${d.slice(5, 7)} → ${f.slice(8, 10)}/${f.slice(5, 7)}, chaque année`
+          }
+          return `${d} → ${f}`
         },
       },
       { cle: 'priorite', titre: 'Priorité', num: true, rendu: (r) => r.priorite ?? '—' },
@@ -496,6 +523,12 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
 
       {sousOnglet === 'ouverture' && <PlanningOuvertureSection droits={droits} etabActif={etabActif} />}
 
+      {/* Le composant porte ses propres gardes (`compta.lire` / `compta.gerer`) : quelqu'un qui a
+          acces aux parametres sans droit comptable voit son refus, pas ses donnees. */}
+      {sousOnglet === 'correspondances' && (
+        <CorrespondancesComptables etabActif={etabActif} droits={droits} />
+      )}
+
       {sousOnglet === 'entites' && (
         <div className="resa-grid">
           {/* ⚠ RESERVE A L'EDITEUR. Ouvrir une structure, c'est creer un client de Fluvia : un
@@ -522,6 +555,10 @@ export default function Parametres({ etabActif, etablissements, droits = [], onC
           {/* « Regions » reste : Maxime a nomme « Nouveau client » et « etablissement », pas les
               regions. Il regardait un ecran, pas une liste exhaustive — la question lui est posee
               plutot que tranchee ici. En attendant, on ne masque que ce qu'il a nomme. */}
+          {/* Au-dessus des régions, parce que la hiérarchie se lit de haut en bas :
+              Groupe → Région → Établissement. Les deux du dessous avaient leur section, le sommet
+              n'en avait aucune (R18). */}
+          <GroupesSection peutEcrire={aLeDroit(droits, 'organisation.gerer')} />
           <RegionsSection peutEcrire={aLeDroit(droits, 'organisation.gerer')} />
           {/* ⚠ ON NE RETIRE QUE LA GESTION, PAS L'ACCES. Un exploitant multi-sites continue de voir
               ses etablissements et d'en changer : le selecteur vit dans la barre du haut

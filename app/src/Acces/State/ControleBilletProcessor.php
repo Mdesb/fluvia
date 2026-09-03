@@ -8,6 +8,9 @@ use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
 use App\Acces\ApiResource\ControleBillet;
 use App\Acces\Entity\DroitAcces;
+use App\Crm\Entity\Beneficiaire;
+use App\Vente\Entity\BilletSupport;
+use App\Vente\Entity\LigneVente;
 use App\Acces\Entity\Passage;
 use App\Acces\Entity\Support;
 use App\Acces\Enum\CodeMotifRefus;
@@ -169,16 +172,90 @@ final class ControleBilletProcessor implements ProcessorInterface
         );
     }
 
-    /** @return array{produit: ?string, porteur: ?string}|null */
+    /**
+     * @return array{produit: ?string, tarif: ?string, prix: ?string, porteur: ?string, validite: array{debut: ?string, fin: ?string}}|null
+     */
     private function billet(?DroitAcces $droit): ?array
     {
         if (!$droit instanceof DroitAcces) {
             return null;
         }
 
+        $ligne = $this->ligneDeVente($droit);
+
         return [
-            'produit' => $droit->getSourceType()->value,
-            'porteur' => null,
+            // ⚠ LE LIBELLE FIGE A LA VENTE, PAS LE NOM ACTUEL DU PRODUIT. Meme regle que le ticket
+            // de caisse : un produit renomme six mois plus tard ne change pas ce qu'un billet
+            // d'hier affirme. Repli sur le type de source quand la ligne est introuvable — c'est ce
+            // que cette methode rendait TOUJOURS avant, donc on ne perd rien.
+            'produit' => $this->texte($ligne?->getLibelleProduit()) ?? $droit->getSourceType()->value,
+            'tarif' => $ligne?->getLibelleTypeTarif(),
+            'prix' => $ligne?->getPrixUnitaire(),
+            'porteur' => $this->porteurNominatif($ligne),
+            'validite' => [
+                'debut' => $droit->getFenetreDebut()?->format(DATE_ATOM),
+                'fin' => $droit->getFenetreFin()?->format(DATE_ATOM),
+            ],
         ];
+    }
+
+    /** La ligne de vente d'ou vient ce droit, quand il vient d'une vente. */
+    private function ligneDeVente(DroitAcces $droit): ?LigneVente
+    {
+        $ref = $droit->getBilletSupportRef();
+        if (!$ref instanceof Uuid) {
+            return null;
+        }
+
+        return $this->em->find(BilletSupport::class, $ref)?->getLigne();
+    }
+
+    /**
+     * Le nom du porteur, UNIQUEMENT pour un titre nominatif.
+     *
+     * ⚠ AFFICHER UN NOM SUR UN ECRAN DE CONTROLE L'EXPOSE A QUI PASSE DERRIERE L'AGENT. C'est une
+     * donnee personnelle sur un ecran tourne vers une file d'attente. Arbitrage de Maxime :
+     * « seulement pour les titres nominatifs ». La presence d'un `beneficiaire` sur la ligne EST ce
+     * marqueur : un billet vendu au comptoir n'en a pas, un abonnement nominatif en a un. La regle
+     * existe deja en base — il n'y en a pas de nouvelle a inventer, ni de case a cocher.
+     */
+    private function porteurNominatif(?LigneVente $ligne): ?string
+    {
+        $ref = $ligne?->getBeneficiaire();
+        if (!$ref instanceof Uuid) {
+            return null;
+        }
+
+        $client = $this->em->find(Beneficiaire::class, $ref)?->getClient();
+        if ($client === null) {
+            return null;
+        }
+
+        $nom = trim(($client->getPrenom() ?? '') . ' ' . ($client->getNom() ?? ''));
+
+        return $nom === '' ? null : $nom;
+    }
+
+    /**
+     * Un libelle traduit, ramene a une chaine.
+     *
+     * `LigneVente::$libelleProduit` est un tableau par langue (`LineLabelStamper` y recopie
+     * `Produit::getLibelle()`). L'ecran de controle est un bandeau d'une ligne : il lui faut un
+     * texte, pas une structure. On prend le francais, sinon la premiere valeur non vide — plutot
+     * que de rendre `null` et d'afficher un blanc la ou il y a un nom.
+     */
+    private function texte(?array $libelle): ?string
+    {
+        if ($libelle === null) {
+            return null;
+        }
+
+        foreach ([$libelle['fr'] ?? null, ...array_values($libelle)] as $valeur) {
+            if (\is_string($valeur) && trim($valeur) !== '') {
+                return trim($valeur);
+            }
+        }
+
+        return null;
     }
 }

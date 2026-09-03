@@ -203,7 +203,7 @@ Ordonné par ce que ça débloque, pas par difficulté.
 | **T7** | **Format de facture électronique** — EN 16931 | Aucun format n'existe. Chorus Pro et l'e-reporting REFUSENT désormais au lieu de mentir (D94), mais ne transmettent toujours rien. ⚠ **Le modèle sémantique EN 16931 est COMMUN** à la France, l'Espagne, l'Italie et l'Allemagne : le construire une fois sert les quatre. Les plateformes nationales (Chorus/PDP, VeriFactu, SdI, XRechnung) ne sont que des transports par-dessus. Mesuré le 31/08 : 0 fichier pour chacune, et « Factur-X » n'apparaît que dans les commentaires de deux bouchons | **Jarvis — 02/09 : les 28 termes obligatoires sont MODELISES.** `facturation:einvoicing:etat` mesurait 3 trous structurels ; il n'en reste aucun. BT-5 devise (`EUR` etait implicite partout), BT-130 unite de mesure (`quantite` etait un entier nu, code UN/ECE Rec 20), BT-151 categorie de TVA (portee par le TAUX, pas par la ligne). ⚠ **La categorie NE SE DEDUIT PAS du taux** : 6 taux a 0 % en base sont « hors champ » (`O`), pas `Z` ni `E` — la colonne est nullable et la migration n'a pose `S` que sur les 25 taux positifs, ou il n'y a pas d'ambiguite. Les 6 restent sans categorie et leurs factures non emettables : c'est un arbitrage fiscal a rendre, pas un defaut de code (D66-ter). ⚠ **Et 9 termes sur 28 n'etaient JAMAIS verifies** : le rapport aurait annonce « emettable » sans les regarder des que les adresses acheteur auraient ete saisies. `testChaqueTermeObligatoireEstVerifieOuExplicitementExempte` ferme le trou par construction. **Reste** : (1) la SAISIE — identite vendeur et adresse acheteur, aucun raccordement ne la remplacera ; (2) le SERIALISEUR CII/Factur-X, qui n'existe pas ; (3) la conformite, qui se prouve contre le schematron officiel et celui de chaque CIUS national — porter les termes rend *emettable*, pas *conforme*. |
 | **T8** | **Notion de pays** — champ, devise configurable, TVA par pays | ⚠ **LA DESCRIPTION PRECEDENTE ETAIT PERIMEE, MESURE DU 02/09.** Elle disait « aucun champ pays, `EUR` en dur, e-reporting indexe sur le SIREN ». En realite : `LegalVatRate` porte DEJA `country` avec ses dates de validite et sa source ; `VatRateCatalogProvider` sert DEJA les taux par pays ; et trois entites portent une devise (`Facture`, `PorteMonnaieVirtuel`, `Mesure`). **Une fiche perimee fait rebatir ce qui existe** — c'est la deuxieme fois aujourd'hui, apres les deux taches annoncees libres alors qu'elles etaient faites. | **Jarvis — 02/09, ETAT AU 02/09 AU SOIR : les quatre restes sont traites, trois par du code et un par un refus.** (1) **Les taux legaux ne sont plus seulement francais** : 28 pays en base, taux standard, depuis un export TEDB (Commission europeenne, DG TAXUD) recupere par `infra/recuperer-taux-tva-ue.sh` et lu par `vat:import-tedb`. ⚠ **CORRIGE LE 02/09 AU SOIR, ET LA CORRECTION PORTE SUR CE QUE J AVAIS ECRIT ICI.** J affirmais que « TEDB ne dit pas lequel est le second reduit, le super reduit ou le parking », et cette phrase a servi a ecarter 1 114 taux. **C est faux** : chaque taux porte un champ `rates[].key` (`Reduced rate`, `Super-reduced rate`, `Parking rate`, `Exempted`). Je lisais le `type` du BLOC, grossier, et je n ai jamais ouvert la cle de chaque taux — j ai conclu « la source ne le dit pas » d une lecture partielle de la source. Apres correction : **55 taux en base** (31 standard, 10 reduits, 8 super-reduits, 5 parking), classes PAR LA SOURCE. Ce qui reste ecarte, et pourquoi : (a) **22 paires (pays, cle) rendent plusieurs valeurs**, et la cause n est pas un manque de classement mais des **territoires aplatis** — la France sort six « Reduced rate » : 13 et 0,9 (Corse), 8,5 et 1,05 (DOM), 10 et 5,5 (metropole) ; le Portugal sort 22 et 16, qui sont Madere et les Acores ; (b) l **Espagne** (7 % et 21 % a la meme date : Canaries et peninsule) ; (c) les cles `Exempted` / `Not applicable` / `Out of scope` — `Exempted` melange l exoneration AVEC et SANS droit a deduction, distinction invisible sur la facture et decisive pour ce que l exploitant recupere. (2) **La devise de la facture est desormais POSEE** : `Facture::setEtablissement()` en herite. Il n y a toujours **aucune conversion**, et c est le seul vrai reste de T8. (3) **`Pain008Generator` fige toujours `Ccy="EUR"`, et c est JUSTE** : `GenerationRemiseHandler` refuse un etablissement non-EUR AVANT de l appeler, et c est son unique appelant (verifie). Etiqueter des montants etrangers en EUR prelverait le mauvais montant. (4) **L e-reporting n est plus indexe sur le SIREN pour tout le monde** — et le defaut trouve en ouvrant ce point etait plus large : `ProfilExploitant::$siren` portait `NotBlank` + 9 chiffres SANS CONDITION, donc **un exploitant belge ne pouvait pas etre enregistre du tout**. Aucun test ne pouvait rougir : les fixtures sont francaises et `Etablissement::pays` vaut `FR` par defaut. La validation suit maintenant le pays ; hors de France un SIREN est REFUSE (il partirait en BT-30 `schemeID 0002` comme un identifiant SIRENE — faux et opposable) ; `InvoiceReadiness` ne reclame BT-30 qu aux vendeurs francais et BT-31 a tous ; l e-reporting refuse un exploitant hors de France. **RESTE OUVERT** : (a) aucune conversion de devise ; (b) quel identifiant legal demander a un exploitant etranger (BE : numero d entreprise, DE : Handelsregister) et sous quel `schemeID` ISO 6523 le publier — mesure du 02/09 : seule la France prescrit un code de repertoire que nous puissions soutenir, d ou `REGISTRES_CONNUS = [FR => 0002]` dans `CiiSerializer`. C est un arbitrage a rendre quand un client etranger arrivera, pas avant. **ETAT FINAL DU 02/09 (62 taux en base).** Les quatre pays limitrophes sont complets, chaque valeur citant le texte que TEDB donne dans son champ `comments` : BE 21/12(parking)/12/6 (arrete royal n°20, tableaux A et B), IT 22/10/5/4 (DPR 633/1972, Tabella A parties III, II-bis et II), LU 17/14(parking)/8/3 (loi TVA du 12/02/1979 art. 40), DE 19/7 et ES 21/10/4 poses par l import seul. Territoires : `ES/IC` (IGIC 7 et 3, impot distinct de la TVA) et `FR/DOM` (8,50 / 2,10 / 1,05). ⚠ **LE 14 % LUXEMBOURGEOIS** est range par TEDB sous la cle `Reduced rate` alors que son propre commentaire dit « Parking rate » : le prendre au mot aurait cree un second 14 % pour le meme taux reel. ⚠ **LA CORSE RESTE DEHORS, ET C EST UN BESOIN DE MODELE, PAS UN OUBLI** : son bareme compte SIX taux (20 / 13 / 10 / 5,5 / 2,10 / 0,90, CGI art. 297) et un territoire n a que CINQ cases (standard, parking, reduit, second reduit, super reduit). Il faudrait un taux attache a une OPERATION, pas a une categorie. Meme famille : Guyane et Mayotte, ou la TVA n est PAS APPLICABLE (CGI art. 294) — une absence d impot, pas un taux a zero, et notre modele n a pas de mot pour ca. |
 | **T9** | **Accessibilité — la navigation au clavier** | ⚠ **Ma première mesure était fausse** : « 6 fichiers sur 118 portent un `alt=` » comptait des FICHIERS et concluait à une couverture. Recompté : **7 balises `<img>`, aucune sans alternative**, et `lang="fr"` est bien déclaré dans `index.html`. Ce qui est mince, c'est le clavier — **2 `tabIndex` et 5 `onKeyDown` sur 115 fichiers**, contre 308 `htmlFor` et 72 `aria-label`. Le lot est donc : parcours au clavier, gestion du focus, contrastes.<br>⚠ **Un troisième manque que ni l'un ni l'autre n'avait compté, et qui est fait** : **neuf boutons `↻` sans nom accessible** — un symbole n'est pas prononçable, un lecteur d'écran annonçait « bouton » et rien d'autre, sur des écrans qui en comptent trente. Nommés, et `frontend/scripts/verifier-boutons-nommes.mjs` les compte désormais tous (666 lus, invariant à zéro, pas de cliquet). Fait aussi : `lang` suit la langue de la vitrine — `index.html` portait `fr` en dur, et une vitrine en anglais était lue avec la prononciation française. ⚠ **Et « 2 `tabIndex` sur 115 fichiers » ne se lit pas non plus comme un déficit** : `<button>`, `<a href>` et `<input>` reçoivent le focus sans qu'on écrive rien, et ajouter `tabIndex` est le plus souvent le signe qu'on a rendu cliquable ce qui ne l'était pas. Le vrai défaut se comptait autrement — **sept éléments inertes rendus cliquables, dont cinq sans aucun chemin au clavier**, parmi lesquels le seul accès à la fiche d'un client. Corrigés par un vrai bouton dans la cellule identifiante (et **non** par `role="button"` sur un `<tr>`, qui casse la structure annoncée par les lecteurs d'écran). Garde-fou : `verifier-clic-clavier.mjs`.<br>⚠ **Les contrastes non plus n'etaient pas la ou on croyait** : sept paires sous le seuil WCAG, **toutes dans le theme clair sauf une**, et les pires etaient les trois pastilles d'etat (« attention » a 2,84 pour 4,5 requis) — celles qu'on lit d'un coup d'oeil sans les lire. Corrigees sur decision de Maxime en **deplacant leur clarte** et non en choisissant des couleurs : teinte et saturation gardees, pas de 1 %, arret au premier passage. Le turquoise bouge de quatre unites. Garde-fou : `verifier-contrastes.mjs`, plafond a **zero**, invariant.<br>Enfin le focus : le back-office n'avait **ni lien d'evitement ni deplacement du focus au changement d'ecran** — soixante tabulations pour lire trois ecrans, la colonne de gauche comptant trente entrees. La boutique publique avait les deux depuis toujours. **Fait.**<br><br>⚠ **CE QU'IL FAUT RETENIR DE CE LOT** : les TROIS chiffres qui le decrivaient — `alt`, `lang`, `tabIndex` — etaient vrais et trompeurs, chacun comptant une chose pour une autre. Les trois vrais defauts (boutons anonymes, lignes inatteignables, pastilles illisibles) n'etaient dans aucun des trois. Une tache mal mesuree ne coute pas du temps : elle donne l'impression d'avoir couvert le sujet quand on a corrige ce qu'elle nommait. | **fait** — `c2`, 31/08 |
-| **T10** | **Dix-huit tâches planifiées à démarrer**, une par une | **4 sur 22 tournent** (`securite:delegations:expirer`, `autorisation:escalades:expirer`, `boutique:liberer-paniers-expires`, `personnel:recalculer-fenetres-badges`). ⚠ **`personnel:qualifications:verifier` est à NE PAS planifier en l'état** : elle n'écrit rien, elle **imprime**. La planifier la ferait tourner dans les journaux d'un conteneur que personne ne lit — « la tâche tourne » pendant que l'information n'atteint personne. Il lui faut d'abord une **destination**. ⚠ Et son en-tête affirmait « aucun écran ne l'affiche », ce qui est **faux depuis que `Personnel.jsx` rend le badge** : corrigé le 31/08. ⚠ `social:collect-metrics` appelle des API tierces — effet au dehors, pas à planifier sans arbitrage. Chacune des autres demande de vérifier `safeOnFirstRun` et de la voir mordre Chacune demande de vérifier `safeOnFirstRun` et de la voir mordre **et épargner** | *(libre)* |
+| **T10** | **Dix-sept tâches planifiées à démarrer**, une par une | **7 sur 24 tournent au 03/09** — `securite:delegations:expirer`, `autorisation:escalades:expirer`, `boutique:liberer-paniers-expires`, `personnel:recalculer-fenetres-badges`, `sport:abonnements:traiter-terme`, `sepa:preavis:annoncer`, `subscription:facturer-le-mois`. ⚠ **NE RECOPIE PAS CE CHIFFRE, RELANCE `./infra/ordonnanceur.sh --lister`** : il a dit « 4 sur 22 » pendant deux jours, et le 03/09 j'ai conclu de MA propre mesure — `systemctl list-timers` et `/etc/cron.d`, tous deux muets — que **rien** ne tournait. J'ai cherché des NOMS au lieu du cas d'usage « qu'est-ce qui fait arriver les choses à heure fixe » ; l'ordonnanceur est une boucle `while true` dans le conteneur `billetterie-preprod-scheduler-1`, qui ne répond à aucun de ces deux noms. Cette ligne disait vrai et je ne l'ai pas crue. *(ancien texte : « 4 sur 22 tournent »)* — ancien détail : (`securite:delegations:expirer`, `autorisation:escalades:expirer`, `boutique:liberer-paniers-expires`, `personnel:recalculer-fenetres-badges`). ⚠ **`personnel:qualifications:verifier` est à NE PAS planifier en l'état** : elle n'écrit rien, elle **imprime**. La planifier la ferait tourner dans les journaux d'un conteneur que personne ne lit — « la tâche tourne » pendant que l'information n'atteint personne. Il lui faut d'abord une **destination**. ⚠ Et son en-tête affirmait « aucun écran ne l'affiche », ce qui est **faux depuis que `Personnel.jsx` rend le badge** : corrigé le 31/08. ⚠ `social:collect-metrics` appelle des API tierces — effet au dehors, pas à planifier sans arbitrage. Chacune des autres demande de vérifier `safeOnFirstRun` et de la voir mordre Chacune demande de vérifier `safeOnFirstRun` et de la voir mordre **et épargner** | *(libre)* |
 | **T18** | **La boutique en ligne est en boucle fermée** — remboursement et souscription | ⚠ L'exploitant peut **accepter et refuser** des demandes de remboursement qui **ne peuvent pas naître** : `POST /boutique/demandes-remboursement` n'est appelée par personne, et `grep remboursement frontend/src/public/` ne rend rien. Et l'écran lui affirme « un client qui demande un remboursement apparaît ici ». Second manque du même parcours : `/boutique/abonnements/souscrire` n'est appelée nulle part — **aucun abonnement ne se vend en ligne**, alors que la vente au guichet existe depuis le 29/08. Mesuré par `b8` | **fait** — `c2`, 31/08. Le client demande depuis ses commandes ; l abonnement se souscrit depuis la fiche produit, avec mandat. ⚠ Deux restes : aucun contrôle de délai de rétractation côté serveur, et le client ne peut pas LISTER ses demandes (collection réservée à l exploitant) — donc l écran ne peut pas afficher « demande en cours » après rechargement, et il le dit |
 
 ---
@@ -453,8 +453,82 @@ et ne pas reconstruire les écrans, qui existent.
 
     sauvegarde de la base   quotidienne, rétention 14 j, vérifiée par témoin
                             restauration : infra/verifier-restauration.sh
-    ordonnanceur            2 tâches sur 22, sous profil « ordonnanceur »
-    33 garde-fous           bin/garde-fous.sh · hooks/pre-commit · hooks/pre-receive
+    ordonnanceur            7 tâches sur 24, sous profil « ordonnanceur »  (recompté le 03/09)
+    46 garde-fous           bin/garde-fous.sh · hooks/pre-commit · hooks/pre-receive
+
+⚠ **CES TROIS COMPTES SE PÉRIMENT, ET LE PREMIER M'A FAIT ÉCRIRE DEUX FAUSSETÉS.** Ils disaient
+« 2 tâches sur 22 » et « 33 garde-fous » : justes le jour où ils ont été écrits, faux le 03/09. Ne
+pas les citer — les **remesurer** :
+
+    ./infra/ordonnanceur.sh --lister                   ce qui est AUTORISÉ (état du fichier)
+    php bin/console platform:scheduler:run --status    ce qui a RÉELLEMENT tourné
+    ./bin/garde-fous.sh                                 le compte est sur sa dernière ligne
 
 ⚠ **Un garde-fou neuf doit être câblé dans les TROIS listes**, sinon le commit qui l'ajoute est
 refusé — c'est voulu. Idem pour les contrôles frontaux (`frontend/scripts/verifier-*.mjs`).
+
+---
+
+## 8. Relevé du 03/09 — quatre faits mesurés pendant la revue produit
+
+Aucun n'est une tâche : ce sont des constats qui changent ce qu'on a le droit d'écrire ailleurs.
+
+### ⚠ 8.1 — Trois modules sont vendus dans la boutique sans pouvoir servir
+
+Mesuré contre `Padel` pris comme témoin positif (20 ressources API, 36 entités, des écrans) :
+
+    Hébergement (`Lodging`)   0 ressource API   0 ENTITÉ    0 écran
+    Séjours     (`Stay`)      4 ressources      9 entités   0 écran
+    Restauration (`Dining`)   2 ressources      9 entités   0 écran
+
+`Lodging` ne peut pas enregistrer une seule chambre : ses cinq fichiers sont des classes de domaine
+pures. Les trois sont **activables et facturés au mois**. Leur description dans
+`CatalogueCapacites` le dit désormais en une phrase, à l'endroit où l'exploitant décide. **Les
+retirer de la vitrine est un arbitrage produit : posé à Maxime, pas pris.**
+
+### ⚠ 8.2 — La suite de tests tient à 5 % de son plafond mémoire
+
+`Tests: 2278, Time: 01:03:11, Memory: 484.50 MB` — pour un `memory_limit` de **512 M**.
+
+Conséquence immédiate, éprouvée le 03/09 : **deux suites lancées en même temps sur la même machine
+et la seconde MEURT** — `Allowed memory size of 536870912 bytes exhausted`, à 244 tests sur 2284,
+dans le décodeur QR. Elle passe seule (200 MB de pointe).
+
+⚠ **Et une suite qui meurt ne se présente pas comme un échec** : le total tombe de 2284 à 244, il
+n'y a ni `FAILURES!` ni `ERRORS!`, juste un `Fatal error` au milieu du flot. Le verdict se lit sur
+le CODE DE SORTIE et sur le total, jamais sur l'absence de rouge.
+
+**⚠ ET C'EST ARRIVÉ LE JOUR MÊME.** Sept tests ajoutés quelques heures plus tard (Accès, CRM) ont
+fait tomber la suite : morte à `244/2291`. Ils trient AVANT `Boutique`, donc leur part s'ajoutait
+juste avant le pic.
+
+**Ce qui accumule, mesuré** — parce que « monter le plafond sans savoir » n'est pas un remède :
+
+    GenerateurImageQrTest, SEUL     4 tests · pointe 200,51 Mo
+    les 244 tests qui le précèdent  ~330 Mo, soit 1,35 Mo par test d'API — normal
+
+Ce n'est pas une fuite diffuse : c'est **un appel de bibliothèque qui demande 200 Mo à lui seul**
+(`khanamiryan/qrcode-detector-decoder`, qui décode l'image d'un QR), posé sur une accumulation
+ordinaire.
+
+**Levé le 03/09** : `infra/test-stack.sh` lance phpunit avec `php -d memory_limit=1G`.
+⚠ `docker/php/conf.d/zz-memory.ini` n'est **pas** touché — il est monté aussi dans le FPM de la
+préproduction, où 1 Go par processus web serait une décision toute différente. Vérifié :
+`1G` par le chemin de phpunit, `512M` partout ailleurs.
+
+**Reste ouvert** : les 200 Mo du décodeur. Tant qu'ils sont là, le plafond suivra la croissance de
+la suite au lieu de la contenir.
+
+### 8.3 — `idDe` est dupliqué dix fois dans le frontal
+
+Dix fonctions du même nom ou presque (`idDe`, `idDeClient`, `idDepuisIri`), dans dix fichiers, avec
+des corps qui **ne sont pas identiques**. Les fondre demande de prouver l'égalité de la SORTIE des
+dix, une par une — c'est un chantier à soi seul. Signalé, pas fait.
+
+### 8.4 — Le délai légal RGPD n'est surveillé par rien
+
+Une demande d'effacement a un délai d'un mois, opposable. Aucune des sept tâches de l'ordonnanceur
+ne regarde les demandes RGPD (`crm:rgpd:appliquer-conservation` n'est **pas** dans la liste
+blanche). L'entrée « Données personnelles » a quitté le menu quotidien le 03/09 (R27) : elle est
+donc moins vue, et toujours pas surveillée. Un compteur sur l'entrée de menu répondrait ; le menu
+n'a pas ce mécanisme. Arbitrage posé à Maxime.

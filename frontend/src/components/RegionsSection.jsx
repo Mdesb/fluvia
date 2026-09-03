@@ -22,7 +22,7 @@ export default function RegionsSection({ peutEcrire, onChange }) {
   const descripteur = {
     titre: 'Régions',
     aQuoiCaSert:
-      'Le groupe auquel vos sites appartiennent. Chaque établissement en exige une — c’est par elle '
+      'L’échelon entre le groupe et vos sites. Chaque établissement en exige une — c’est par elle '
       + 'que les tableaux de bord regroupent plusieurs sites.',
     siVide:
       'Aucune région. Créez-en une avant votre premier établissement : un site ne peut pas exister '

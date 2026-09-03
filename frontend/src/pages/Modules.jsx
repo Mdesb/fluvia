@@ -7,7 +7,11 @@ import { centimes } from '../api/produit.js'
  *
  * ── CE QUI EXISTAIT DEJA, ET QUE PERSONNE N'APPELAIT ─────────────────────────────────────────────
  *
- *   GET /api/fonctionnalites/catalogue   24 fiches : code, libelle, description, categorie
+ *   GET /api/fonctionnalites/catalogue   25 fiches : code, libelle, description, categorie
+ *
+ * Le compte disait 24 : `CapaciteCode` en porte 25, et le `match` de `CatalogueCapacites`
+ * est exhaustif, donc les deux ne peuvent pas diverger. C'est le COMMENTAIRE qui avait pris
+ * du retard sur une capacite ajoutee. Recompte le 03/09.
  *   GET /api/editor/plan-options         ce qui est vendable, avec son prix
  *   /me capacitesActives                 ce que cet etablissement porte deja
  *   /editeur -> Offres                   l'ecran ou l'editeur saisit les prix, deja servi
@@ -177,7 +181,7 @@ export default function Modules({ capacites = [], me }) {
             panier&nbsp;: elle active d’un coup l’ensemble des fonctions qui vont avec. Elle se
             change avec Fluvia, pas depuis cette page.
           </p>
-          <div className="grid">
+          <div className="modules-grille">
             {groupes.verticales.map((v) => (
               <div className="card" key={v.code}>
                 <div className="card-b">
@@ -241,7 +245,7 @@ function Groupe({ titre, items, vide, rendu }) {
       {items.length === 0 ? (
         <p className="sub">{vide}</p>
       ) : (
-        <div className="grid">
+        <div className="modules-grille">
           {items.map((c) => (
             <div className="card" key={c.code}>
               <div className="card-b">

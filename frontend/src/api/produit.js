@@ -36,15 +36,30 @@ export function typeTarifId(p) {
 }
 
 // Un produit est vendable au guichet s'il a une grille tarifaire et n'est pas en rupture.
+// ⚠ ON DEMANDE UNE GRILLE *EXPLOITABLE*, PAS UN `typeTarif` QUI TRAINE.
+//
+// Ces deux fonctions testaient `typeTarifId(p)`, qui passe par `premiereGrille` — laquelle SE
+// REPLIE sur `grilles[0]` quand aucune grille ne porte a la fois un type et un prix. Un produit
+// dont l'unique tarif n'a pas de prix etait donc declare VENDABLE : sa tuile s'affichait avec
+// « — » a la place du montant, et le caissier pouvait cliquer dessus.
+//
+// Trouve en EXECUTANT la fonction sur sept formes de produit, pas en la relisant. Zero cas en base
+// le 03/09 (les 16 grilles de la preprod portent un prix) : le defaut etait LATENT, et il suffisait
+// d'une grille sans prix pour le reveiller — d'autant plus depuis que la caisse MASQUE ce qui n'est
+// pas vendable (R2), ou une erreur de ce cote fait reapparaitre un produit qu'on croyait ecarte.
+//
+// `grillesVendables` dit deja « typeTarif ET prix ». Les deux fonctions s'appuient dessus, donc
+// elles ne peuvent plus se contredire. `premiereGrille` et `prixIndicatif` gardent leur repli :
+// il sert a afficher « — » plutot que rien, et ils ont d'autres appelants.
 export function estVendable(p) {
-  if (!typeTarifId(p)) return false
+  if (grillesVendables(p).length === 0) return false
   const stock = p?.stock
   if (stock && typeof stock.disponibilite === 'number' && stock.disponibilite <= 0) return false
   return true
 }
 
 export function raisonNonVendable(p) {
-  if (!typeTarifId(p)) return 'Pas de tarif au guichet'
+  if (grillesVendables(p).length === 0) return 'Pas de tarif au guichet'
   const stock = p?.stock
   if (stock && typeof stock.disponibilite === 'number' && stock.disponibilite <= 0) return 'Rupture de stock'
   return null

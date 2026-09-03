@@ -241,7 +241,21 @@ run)
     # AVERTIT deja quand il tue une suite (deliberement : bloquer ferait d'une gene une panne).
     # C'est cet avertissement qu'il faut lire, et ce bloc-ci dit qu'il a ete saute.
     code=0
-    php_run vendor/bin/phpunit "$@" || code=$?
+    # ⚠ 1 Go POUR PHPUNIT SEUL, ET C'EST MESURE, PAS PRUDENT.
+    #
+    # La suite entiere pointait a 464,50 Mo sur 2284 tests — 91 % du plafond de 512 Mo. Sept tests
+    # ajoutes le 03/09 l'ont fait tomber : mort a 244/2291, « Allowed memory size exhausted », dans
+    # `GenerateurImageQrTest`. Ce test SEUL pointe a 200,51 Mo : le decodeur de QR
+    # (`khanamiryan/qrcode-detector-decoder`) demande 200 Mo pour une image. Le reste — 1,35 Mo par
+    # test d'API qui demarre un noyau — est normal.
+    #
+    # ⚠ ET UNE SUITE QUI MEURT AINSI NE SE PRESENTE PAS COMME UN ECHEC : le total tombe de 2291 a
+    # 244, sans `FAILURES!` ni `ERRORS!`. Le verdict se lit sur le CODE DE SORTIE et sur le TOTAL.
+    #
+    # ⚠ `docker/php/conf.d/zz-memory.ini` N'EST PAS TOUCHE : il est monte aussi dans le FPM de la
+    # preproduction, ou 1 Go par processus web serait une decision toute differente. Seul l'appel
+    # ci-dessous est releve, en passant par `php -d` plutot que par le shebang de phpunit.
+    php_run php -d memory_limit=1G vendor/bin/phpunit "$@" || code=$?
 
     if [ ! -x "$APP/vendor/bin/phpunit" ]         || ! grep -q "App..Tests" "$APP/vendor/composer/autoload_psr4.php" 2>/dev/null; then
         echo >&2

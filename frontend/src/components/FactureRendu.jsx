@@ -241,7 +241,7 @@ export default function FactureRendu({ facture, onClose }) {
             </div>
           )}
 
-          <div className="fact-doc">
+          <div className="fact-doc doc-imprimer">
             <div className="fact-tete">
               <div className="fact-bloc">
                 <div className="fact-bloc-titre">Émetteur</div>

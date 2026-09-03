@@ -143,7 +143,14 @@ function formatAdresse(a) {
 // colonnes rendrait des cases vides sur toutes les lignes — le défaut le plus fréquent de ce dépôt.
 // Le CA cumulé et le solde du porte-monnaie, eux, ne vivent que dans la fiche 360 : une colonne
 // coûterait une requête PAR LIGNE. On affiche donc ce que la recherche rend, et rien d'autre.
-const DEFAUTS = { q: '', statut: '', pmv: '', mineur: '', carte: '', page: '1', fiche: '' }
+const DEFAUTS = { q: '', statut: '', inclure: '', pmv: '', mineur: '', carte: '', page: '1', fiche: '' }
+
+// Ce qu'on peut redemander a voir, une case par statut ecarte par defaut (R26).
+const INCLUABLES = [
+  ['archive', 'Archivées'],
+  ['anonymise', 'Anonymisées'],
+  ['fusionne', 'Fusionnées'],
+]
 
 const STATUTS = [
   ['', 'Tous les statuts'],
@@ -163,6 +170,8 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
 
   const [items, setItems] = useState([])
   const [total, setTotal] = useState(0)
+  // `null` = le serveur ne l'a pas dit. Voir la note au moment de la pose.
+  const [masques, setMasques] = useState(null)
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
 
@@ -189,7 +198,17 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
       const res = await api.rechercheClients({
         q: params.q || '',
         carte: params.carte || '',
-        statut: params.statut || '',
+        // ⚠ TROIS CAS, ET LE TROISIEME EST LE DEFAUT DU SERVEUR.
+        //
+        //   selecteur rempli  -> ce statut SEUL (« montrer uniquement les anonymisees »)
+        //   cases cochees     -> les vivants PLUS ce qu'on redemande
+        //   ni l'un ni l'autre-> on n'envoie RIEN, et le serveur ecarte archive/anonymise/fusionne
+        //
+        // Ne rien envoyer plutot que recopier `['actif','inactif']` : le defaut n'a qu'un seul
+        // endroit ou il est ecrit, donc les deux ne peuvent pas diverger.
+        statut: params.statut
+          ? params.statut
+          : (params.inclure ? ['actif', 'inactif', ...params.inclure.split(',').filter(Boolean)] : ''),
         // `avecPmv` et `mineur` sont des booléens côté serveur : une chaîne vide ne veut pas dire
         // « faux », elle veut dire « ne filtre pas ». `qs()` retire les valeurs vides, donc le
         // paramètre n'est pas envoyé du tout — ce qui est exactement le sens voulu.
@@ -200,6 +219,9 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
       })
       setItems(res.items || [])
       setTotal(res.total ?? (res.items || []).length)
+      // ⚠ `?? null` ET NON `?? 0`. Un serveur qui ne rend pas ce champ ne dit pas « rien n'est
+      // masque » : il ne dit rien. Ecrire zero a sa place inventerait une reponse.
+      setMasques(res.masquesParStatut ?? null)
     } catch (e) {
       setErreur(e.message)
       // ⚠ `null` = PAS LU. L'ecran annoncait << 0 fiche(s) >> puis << Aucun client enregistre.
@@ -207,10 +229,11 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
       // servi a quelqu'un dont le fichier client existe et n'a pas pu etre lu.
       setItems(null)
       setTotal(null)
+      setMasques(null)
     } finally {
       setChargement(false)
     }
-  }, [params.q, params.carte, params.statut, params.pmv, params.mineur, page])
+  }, [params.q, params.carte, params.statut, params.inclure, params.pmv, params.mineur, page])
 
   useEffect(() => { rechercher() }, [rechercher, etabActif])
 
@@ -432,11 +455,43 @@ export default function Clients({ etabActif, cible = null, onCibleConsommee, dro
             </div>
           </div>
 
-          {/* Les fiches fusionnées sont masquées par défaut CÔTÉ SERVEUR, sauf demande explicite.
-              Le dire ici évite de chercher pourquoi un doublon connu n'apparaît pas. */}
-          {params.statut === '' && (
+          {/* ⚠ CETTE PHRASE NE PARLAIT QUE DES FUSIONNEES, ET LE SERVEUR EN ECARTE TROIS DEPUIS
+              R24/R25. Elle est remplacee par les cases elles-memes — qui disent ce qui est ecarte
+              en le proposant — et par le COMPTE, qui dit combien. Une phrase qui enumere se perime
+              a la premiere valeur ajoutee ; un compte rendu par le serveur, non. */}
+          <div className="row" style={{ gap: 'var(--esp-normal)', flexWrap: 'wrap' }}>
+            <span className="sub">Afficher aussi&nbsp;:</span>
+            {INCLUABLES.map(([code, libelle]) => {
+              const coches = (params.inclure || '').split(',').filter(Boolean)
+              const actif = coches.includes(code)
+              return (
+                <label key={code} className="row" style={{ gap: 'var(--esp-serre)' }}>
+                  <input
+                    type="checkbox"
+                    checked={actif}
+                    disabled={params.statut !== ''}
+                    onChange={() => filtre(
+                      'inclure',
+                      (actif ? coches.filter((x) => x !== code) : [...coches, code]).join(','),
+                    )}
+                  />
+                  <span>{libelle}</span>
+                </label>
+              )
+            })}
+            {params.statut !== '' && (
+              <span className="sub">— sans effet tant qu’un statut unique est choisi ci-dessus.</span>
+            )}
+          </div>
+
+          {/* ⚠ « MONTRER MOINS » N'EST PAS « DIRE QU'ON CACHE ». Une liste plus courte se lit
+              « il y a moins de clients ». Le compte vient du serveur, qui seul sait ce qu'il a
+              ecarte — le calculer ici, sur une page paginee, aurait donne un chiffre faux. */}
+          {masques > 0 && (
             <p className="hint" style={{ marginTop: 0 }}>
-              Les fiches fusionnées sont masquées ; choisissez « Fusionnés » pour les voir.
+              <b>{masques} fiche{masques > 1 ? 's' : ''} masquée{masques > 1 ? 's' : ''}</b> par le
+              filtre de statut — archivées, anonymisées ou fusionnées. Cochez ci-dessus pour
+              {masques > 1 ? ' les' : ' la'} revoir.
             </p>
           )}
 

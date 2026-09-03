@@ -130,8 +130,32 @@ export default function ControleBillet({ ecranEntier = false }) {
 
             {verdict.billet && (
               <div>
-                {verdict.billet.produit}
+                <b>{verdict.billet.produit}</b>
+                {verdict.billet.tarif ? ` · ${verdict.billet.tarif}` : ''}
+                {/* ⚠ LE NOM N'ARRIVE QUE POUR UN TITRE NOMINATIF, ET C'EST LE SERVEUR QUI TRANCHE.
+                    Cette branche existait deja ici — mais `porteur` valait `null` EN DUR cote
+                    serveur : elle n'a jamais pu s'executer. Le nom est une donnee personnelle sur
+                    un ecran tourne vers une file d'attente ; Maxime a arbitre « seulement pour les
+                    titres nominatifs », et la presence d'un beneficiaire sur la vente est ce
+                    marqueur. L'ecran n'a aucune regle a appliquer : il affiche ce qu'il recoit. */}
                 {verdict.billet.porteur ? ` — ${verdict.billet.porteur}` : ''}
+              </div>
+            )}
+
+            {/* ⚠ LA VALIDITE EST CE QUI TRANCHE UN LITIGE A LA PORTE. « Votre billet etait pour
+                hier » ne se dit pas de memoire. On n'affiche que ce qu'on a : une borne absente
+                veut dire « pas de limite de ce cote », pas « je ne sais pas ». */}
+            {verdict.billet && (verdict.billet.validite?.debut || verdict.billet.validite?.fin) && (
+              <div>
+                Valable{' '}
+                {verdict.billet.validite.debut
+                  ? `du ${new Date(verdict.billet.validite.debut).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}`
+                  : 'sans date de debut'}
+                {' '}
+                {verdict.billet.validite.fin
+                  ? `au ${new Date(verdict.billet.validite.fin).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}`
+                  : 'sans date de fin'}
+                .
               </div>
             )}
 
@@ -139,6 +163,10 @@ export default function ControleBillet({ ecranEntier = false }) {
                 unique — et rien d'autre : mesuré côté serveur, la colonne est nullable et aucun
                 chemin ne fait échouer le calcul. On n'affiche donc rien plutôt qu'un « — ». */}
             {verdict.credit && <div>Crédit restant : {verdict.credit.restant}</div>}
+
+            {/* En dernier : le prix est ecrit sur le billet que l'agent tient. Il sert a lever un
+                doute (« ce n'est pas le bon tarif »), pas a decider d'ouvrir. */}
+            {verdict.billet?.prix && <div className="sub">Payé : {verdict.billet.prix} €</div>}
 
             {/* Le geste, nommé — parce que c'est là que les deux refus divergent. */}
             {dejaControle && (

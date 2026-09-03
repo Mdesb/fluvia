@@ -83,27 +83,18 @@ const NAV = [
       // Regarder ne suffisait pas : dix-huit operations exposees, deux atteignables. Bloquer un
       // badge perdu et appairer une carte sont les deux gestes les plus frequents d'un exploitant,
       // et aucun des deux n'etait possible depuis l'application.
-      { id: 'acces', ic: 'badges', label: 'Badges & terminaux', cap: 'controle_acces', perms: ['acces.lire', 'acces.appairer', 'acces.bloquer_support', 'acces.gerer'] },
-      // L'installation du contrôle d'accès : le plan du site, les lecteurs, et le journal complet.
-      // Même garde que ses deux voisines — la capacité DIT ce que le site a acheté, les permissions
-      // disent ce que ce compte a le droit d'en faire.
-      //
-      // Cette entrée a d'abord été posée sans `cap`, parce que la capacité était inactive sur tous
-      // les tenants et que l'écran des modules ne permettait pas de l'activer : la garder aurait
-      // caché l'écran à celui-là même qui vient d'installer ses tourniquets. Ce n'est plus vrai
-      // depuis que Paramètres › Modules en service permet la mise en service — l'entrée rejoint donc
-      // ses voisines, et une topologie invisible se corrige là où elle doit l'être.
-      { id: 'topologie_acces', ic: 'topology', label: 'Topologie & passages', cap: 'controle_acces', perms: ['acces.lire', 'acces.gerer', 'acces.superviser'] },
+      // ⚠ « D'ACCES » N'EST PAS UN ORNEMENT. « Terminal » designe deux objets qui n'ont pas un
+      // champ en commun : le controleur ITBOX enrole ici, et le TERMINAL DE PAIEMENT bancaire
+      // (`PointDeVente::$tpe`), regle dans Parametres et utilise en caisse. Sans qualificatif,
+      // cette entree attire l'exploitant qui cherche son TPE et lui montre des tourniquets.
+      // Les deux ecrans qui parlent du TPE se qualifiaient deja ; celui-ci, non (R22).
+      { id: 'acces', ic: 'badges', label: 'Badges & terminaux d’accès', cap: 'controle_acces', perms: ['acces.lire', 'acces.appairer', 'acces.bloquer_support', 'acces.gerer'] },
     ],
   },
   {
     section: 'Gestion',
     items: [
       { id: 'clients', ic: 'customers', label: 'Clients', perms: ['crm.lire', 'crm.creer', 'crm.modifier'] },
-      // Juste sous Clients, parce qu'une demande d'effacement porte sur une fiche client et se
-      // traite en la relisant. Pas dans Parametres : ce n'est pas un reglage, c'est une file
-      // d'attente avec un delai legal d'un mois.
-      { id: 'rgpd', ic: 'personal-data', label: 'Données personnelles', perms: ['crm.rgpd_gerer', 'crm.rgpd_demander'] },
       // Une entree propre plutot qu'un onglet dans Clients : un commercial cherche << ses
       // affaires >>, pas un onglet dans un annuaire. Et le pipeline se lit tous les jours,
       // alors qu'une fiche client s'ouvre a l'occasion.
@@ -122,6 +113,10 @@ const NAV = [
       // qu'on va chercher qui fait quoi. Pas sous Pilotage -- un projet se conduit, il ne
       // s'observe pas.
       { id: 'projets', ic: 'projects', label: 'Projets', perms: ['personnel.lire', 'personnel.gerer', 'organisation.gerer'] },
+      // ⚠ SOUS GESTION ET PAS SOUS PISCINE (R10). Un parc de casiers se gere comme un parc de
+      // materiel : on attribue, on encaisse une caution, on rend une cle. Surveiller un bassin,
+      // a cote, est une exploitation continue. Deux rythmes, deux entrees.
+      { id: 'casiers', ic: 'stock', label: 'Casiers', cap: 'casiers', perms: ['piscine.lire', 'piscine.gerer_casier', 'piscine.gerer'] },
       { id: 'stock', ic: 'stock', label: 'Stock', perm: 'stock.lire' },
       { id: 'facturation', ic: 'invoicing', label: 'Facturation', perm: 'facturation.lire' },
       { id: 'finance', ic: 'purchases', label: 'Achats & trésorerie', perm: 'finance.read' },
@@ -196,6 +191,46 @@ const NAV = [
       // qui-a-le-droit-de-quoi vit dans Paramètres › Utilisateurs & droits. Cet écran porte les
       // demandes d'escalade et les plafonds de montant — ce n'est pas la même question.
       // Arbitré par Maxime à la revue : on renomme, on ne déplace pas les droits.
+      // L'installation du contrôle d'accès : le plan du site, les lecteurs et les sous-réseaux.
+      //
+      // ⚠ SOUS ADMINISTRATION DEPUIS LE 03/09, ET C'EST LE CRITÈRE DE R21 : « fait une fois au
+      // début, on n'y touche plus ». Elle a vécu à côté de Supervision et des badges, qui se
+      // regardent tous les jours. Le journal des passages, qui était le seul morceau quotidien
+      // de cet écran, a pris sa propre entrée (R23) — il ne reste ici qu'une installation.
+      // Même garde que ses deux voisines — la capacité DIT ce que le site a acheté, les permissions
+      // disent ce que ce compte a le droit d'en faire.
+      //
+      // Cette entrée a d'abord été posée sans `cap`, parce que la capacité était inactive sur tous
+      // les tenants et que l'écran des modules ne permettait pas de l'activer : la garder aurait
+      // caché l'écran à celui-là même qui vient d'installer ses tourniquets. Ce n'est plus vrai
+      // depuis que Paramètres › Modules en service permet la mise en service — l'entrée rejoint donc
+      // ses voisines, et une topologie invisible se corrige là où elle doit l'être.
+      // ⚠ SA PROPRE ENTREE, PARCE QU'IL N'A PAS LE RYTHME DE SES VOISINES (R23).
+      // Le journal se relit chaque fois qu'un client dit « mon billet ne passe pas » ; la
+      // topologie s'installe une fois. Il vivait dans un onglet de celle-ci, donc il fallait
+      // traverser un ecran de parametrage pour l'atteindre. Arbitrage de Maxime : « sa propre
+      // entree de menu pour le moment, on pourra toujours le bouger ».
+      { id: 'journal_passages', ic: 'topology', label: 'Journal des passages', cap: 'controle_acces', perms: ['acces.lire', 'acces.superviser'] },
+      { id: 'topologie_acces', ic: 'topology', label: 'Topologie & lecteurs', cap: 'controle_acces', perms: ['acces.lire', 'acces.gerer', 'acces.superviser'] },
+      // ⚠ SOUS ADMINISTRATION DEPUIS LE 03/09 (R27), ET LE RAISONNEMENT QUI LA TENAIT SOUS
+      // CLIENTS ETAIT JUSTE. Il disait : « une demande d'effacement porte sur une fiche client et
+      // se traite en la relisant ; pas dans Parametres, ce n'est pas un reglage, c'est une file
+      // d'attente avec un delai legal d'un mois ». C'est exact — et Maxime pose l'autre critere,
+      // celui de R21 : « ce n'est pas gere au quotidien ». Elle quitte donc la liste quotidienne
+      // SANS entrer dans Parametres : elle reste une file, a un clic, pas un reglage.
+      //
+      // ⚠ ET LE DELAI LEGAL N'EST RAPPELE PAR RIEN — mais pas pour la raison que j'avais ecrite.
+      //
+      // J'avais note « aucun conteneur ne porte de cron ». C'est FAUX : `infra/ordonnanceur.sh`
+      // tourne en continu et execute sept taches en liste blanche toutes les minutes. Ce qui est
+      // vrai, et qui suffit, c'est qu'AUCUNE DES SEPT ne regarde les demandes RGPD : la liste
+      // contient les expirations de droits, les paniers, les fenetres de badges, le terme des
+      // abonnements, le preavis SEPA et la facturation mensuelle. Rien sur le delai d'un mois.
+      //
+      // Une file qu'on deplace hors de vue et qu'aucune alarme ne surveille peut donc depasser son
+      // mois sans que personne le voie. Le compteur qui manque est signale a Maxime plutot que
+      // bricole ici. ⚠ `./infra/ordonnanceur.sh --lister` dit l'etat de cette liste, qui bouge.
+      { id: 'rgpd', ic: 'personal-data', label: 'Données personnelles', perms: ['crm.rgpd_gerer', 'crm.rgpd_demander'] },
       { id: 'autorisations', ic: 'escalations', label: 'Escalades & plafonds', perms: ['autorisation.lire', 'autorisation.approuver', 'autorisation.gerer'] },
       // Les mentions obligatoires d'un site marchand. Sous Administration et non sous Boutique :
       // elles engagent l'exploitant, pas la vitrine, et un exploitant qui n'a pas encore ouvert

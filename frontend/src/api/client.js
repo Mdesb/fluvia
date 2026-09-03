@@ -893,6 +893,17 @@ export const api = {
     request(`/api/ventes/${venteId}/client`, { method: 'POST', body: corps, timeoutMs: 20000 }),
 
   // --- Options produits (App\OptionProduit) ---
+  // ⚠ LE SOMMET DE LA HIÉRARCHIE `Groupe > Région > Établissement > Espace` (RG-SOCLE-01), qui
+  // n'avait AUCUN appel client alors que l'API expose cinq opérations. Les deux niveaux du dessous
+  // avaient chacun leur section dans Paramètres.
+  //
+  // ⚠ NI CRÉATION NI SUPPRESSION, ET C'EST DÉLIBÉRÉ. `StructureOnboarding` (« Ouvrir une
+  // structure ») et `ProvisioningService` (l'abonnement) créent déjà le groupe AVEC sa région et
+  // son établissement, d'un seul geste : un second chemin divergerait. Et supprimer un groupe
+  // couperait le rattachement de sites entiers.
+  groupes: () => request('/api/groupes', { query: { itemsPerPage: 100 } }),
+  majGroupe: (id, corps) => request(`/api/groupes/${id}`, { method: 'PATCH', body: corps }),
+
   // Groupes d'options (choix unique/multiple) — référentiel réutilisable (RG-OPT-01).
   groupeOptions: () => request('/api/groupe_options', { query: { itemsPerPage: 200 } }),
   creerGroupeOption: (corps) => request('/api/groupe_options', { method: 'POST', body: corps, ld: true }),
