@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Crm\Entity;
 
+use ApiPlatform\Doctrine\Orm\Filter\DateFilter;
 use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
 use ApiPlatform\Metadata\ApiFilter;
 use App\Platform\Filter\UuidReferenceFilter;
@@ -46,6 +47,15 @@ use Symfony\Component\Uid\Uuid;
     denormalizationContext: ['groups' => ['rgpd:write']],
 )]
 #[ApiFilter(SearchFilter::class, properties: ['statut' => 'exact'])]
+// ⚠ LE DELAI LEGAL D'UN MOIS N'ETAIT INTERROGEABLE PAR PERSONNE.
+//
+// Aucun filtre ne portait sur `dateDemande` : ni compteur, ni tache, ni ecran ne pouvait demander
+// « lesquelles ont depasse le mois ». Il fallait tout charger et comparer a la main — sur une
+// collection PAGINEE, donc avec un compte faux des la 31e demande, et faux dans le sens rassurant.
+//
+// `dateDemande[before]=<iso>` repond maintenant, et c'est ce qui permet au menu de porter un
+// compteur (arbitrage de Maxime le 03/09 : « on met une notification et un badge sur le menu »).
+#[ApiFilter(DateFilter::class, properties: ['dateDemande'])]
 // ⚠ `client` A QUITTE LE `SearchFilter` : il rendait TOUJOURS une liste vide.
 //
 // Mesure sur une collection contenant deux demandes du meme client : `?statut=recue` rendait
