@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Sport\Entity;
 
+use ApiPlatform\Metadata\ApiFilter;
 use ApiPlatform\Metadata\ApiResource;
+use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Post;
@@ -22,6 +24,24 @@ use Symfony\Component\Validator\Constraints as Assert;
 /** Échéance de l'échéancier SEPA d'un abonnement (§1.2 du plan). */
 #[ORM\Entity]
 #[ORM\Table(name: 'sport_echeance_sepa')]
+/**
+ * ⚠ SANS CE FILTRE, `?abonnement=<id>` ETAIT ACCEPTE ET IGNORE EN SILENCE.
+ *
+ * API Platform ne refuse pas un parametre de requete inconnu : il le laisse passer et rend la
+ * collection ENTIERE. Une fiche d'abonnement qui demandait « les echeances de celui-ci » recevait
+ * donc celles de tout le monde, sans erreur, sans avertissement, et avec un code 200.
+ *
+ * Signale par `allaccess-c0` le 03/09 en construisant la fiche d'abonnement : elle a du trier cote
+ * ecran sur l'IRI, ce qui marche tant que la page rend tout — et cesse de marcher des que la
+ * pagination coupe. Son bandeau le disait ; ce filtre le rend inutile.
+ *
+ * ⚠ C'EST LA FAMILLE DES ECRITURES ACCEPTEES QUI N'ENREGISTRENT RIEN, VUE COTE LECTURE. Le
+ * garde-fou « filtres declares » surveille l'inverse (un filtre declare sur une propriete qui
+ * n'existe pas) ; celui-ci manquait tout court, et rien ne le signalait.
+ *
+ * `exact` et pas `partial` : un identifiant se compare, il ne se cherche pas.
+ */
+#[ApiFilter(SearchFilter::class, properties: ['abonnement' => 'exact', 'statut' => 'exact'])]
 #[ApiResource(
     shortName: 'EcheanceSepa',
     operations: [
