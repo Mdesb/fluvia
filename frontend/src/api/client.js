@@ -778,6 +778,23 @@ export const api = {
   documentsDms: (params) => request('/api/documents', { query: { itemsPerPage: 100, ...(params || {}) } }),
   televerserDocument: (formData) => request('/api/documents', { method: 'POST', formData }),
   majDocumentDms: (id, corps) => request(`/api/documents/${id}`, { method: 'PATCH', body: corps }),
+  // LES TROIS GESTES QUE LE MODULE SAIT FAIRE ET QU'AUCUN BOUTON NE DECLENCHAIT.
+  //
+  // ⚠ CES TROIS OPERATIONS PORTENT `input: false` ET LISENT POURTANT UN CORPS. Dans ce depot,
+  // `input: false` marque une operation SUR MESURE, pas une operation sans entree : les champs
+  // ci-dessous sont ceux que les PROCESSEURS lisent (`SetRetentionProcessor`,
+  // `IssuePublicLinkProcessor`), verifies dans leur code. Se fier a l'attribut aurait produit des
+  // POST vides, donc des 422.
+  politiquesRetention: () => request('/api/retention_policies', { query: { itemsPerPage: 100 } }),
+  // `retentionPolicyCode: null` + `retainUntilOverride: null` = LEVER la politique. Les deux
+  // absents = 422 : le processeur refuse une demande qui ne dit rien.
+  poserRetentionDocument: (id, corps) =>
+    request(`/api/documents/${id}/retention`, { method: 'POST', body: corps }),
+  emettreLienPublicDocument: (id, corps) =>
+    request(`/api/documents/${id}/public-links`, { method: 'POST', body: corps }),
+  // ⚠ SUPPRESSION LOGIQUE, et REFUSEE (409) si une conservation court encore — RG-DMS-13. Ce n'est
+  // pas un cas d'erreur a masquer : c'est la regle qui protege une piece que la loi oblige a garder.
+  supprimerDocumentDms: (id) => request(`/api/documents/${id}`, { method: 'DELETE' }),
   remplacerVersionDocument: (id, formData) =>
     request(`/api/documents/${id}/replace-version`, { method: 'POST', formData }),
   versionsDocument: () => request('/api/document_versions', { query: { itemsPerPage: 300 } }),

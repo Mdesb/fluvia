@@ -55,12 +55,21 @@ function quand(v) {
 
 export default function Documents({ etabActif, droits = [] }) {
   const peutEcrire = aLeDroit(droits, 'dms.write')
+  // Trois droits DISTINCTS, et pas `dms.write` : poser une conservation, publier un lien vers
+  // l'exterieur et supprimer une piece ne sont pas le meme pouvoir. Un bouton absent ne pose aucune
+  // question ; un bouton grise en pose une a qui ne peut pas y repondre.
+  const peutConserver = aLeDroit(droits, 'dms.manage_retention')
+  const peutPartager = aLeDroit(droits, 'dms.manage_public_link')
+  const peutSupprimer = aLeDroit(droits, 'dms.delete')
 
   // ⚠ `null` = PAS LU.
   const [documents, setDocuments] = useState(null)
   const [versions, setVersions] = useState([])
   const [historique, setHistorique] = useState(null)
   const [aRenommer, setARenommer] = useState(null)
+  const [aConserver, setAConserver] = useState(null)
+  const [aPartager, setAPartager] = useState(null)
+  const [aSupprimer, setASupprimer] = useState(null)
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [succes, setSucces] = useState(null)
@@ -307,6 +316,37 @@ export default function Documents({ etabActif, droits = [] }) {
                             </button>
                           </>
                         )}
+                        {peutConserver && (
+                          <button
+                            className="btn ghost sm"
+                            type="button"
+                            disabled={busy}
+                            onClick={() => setAConserver(d)}
+                          >
+                            Conservation
+                          </button>
+                        )}
+                        {peutPartager && (
+                          <button
+                            className="btn ghost sm"
+                            type="button"
+                            disabled={busy}
+                            onClick={() => setAPartager(d)}
+                          >
+                            Lien public
+                          </button>
+                        )}
+                        {peutSupprimer && (
+                          <button
+                            className="btn ghost sm"
+                            type="button"
+                            disabled={busy}
+                            style={{ color: 'var(--crit)' }}
+                            onClick={() => setASupprimer(d)}
+                          >
+                            Supprimer
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -327,6 +367,27 @@ export default function Documents({ etabActif, droits = [] }) {
           //    l'écran mourait juste après, en se rafraîchissant.
           await recharger()
         }}
+        onErreur={setErreur}
+      />
+
+      <ConservationDocument
+        document={aConserver}
+        onFermer={() => setAConserver(null)}
+        onFait={async (message) => { setAConserver(null); setSucces(message); await recharger() }}
+        onErreur={setErreur}
+      />
+
+      <LienPublicDocument
+        document={aPartager}
+        onFermer={() => setAPartager(null)}
+        onFait={(message) => { setSucces(message) }}
+        onErreur={setErreur}
+      />
+
+      <SuppressionDocument
+        document={aSupprimer}
+        onFermer={() => setASupprimer(null)}
+        onFait={async (message) => { setASupprimer(null); setSucces(message); await recharger() }}
         onErreur={setErreur}
       />
 
@@ -478,6 +539,223 @@ function RenommerDocument({ document: doc, onFermer, onRenomme, onErreur }) {
           <button className="btn primary" type="button" onClick={enregistrer} disabled={busy || titre.trim() === ''}>
             Enregistrer
           </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+
+/**
+ * LA CONSERVATION - attacher, prolonger ou LEVER une politique (RG-DMS-16).
+ *
+ * Deux facons de la poser, et le processeur refuse qu'on ne dise ni l'une ni l'autre :
+ *   - un CODE de politique : la date se calcule (aujourd'hui + duree de la politique) ;
+ *   - une DATE choisie a la main, qui prend le pas.
+ *
+ * ⚠ ET LEVER UNE CONSERVATION SE DIT EN ENVOYANT LES DEUX A `null`. Ce n'est pas un champ vide
+ * qu'on oublie : c'est une demande explicite, et l'ecran doit l'offrir - sans elle, une piece
+ * placee par erreur sous conservation devient indestructible et personne ne sait pourquoi.
+ */
+function ConservationDocument({ document: doc, onFermer, onFait, onErreur }) {
+  const [politiques, setPolitiques] = useState([])
+  const [code, setCode] = useState('')
+  const [dateLimite, setDateLimite] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    if (!doc) return
+    setCode('')
+    setDateLimite(doc.retainUntil ? String(doc.retainUntil).slice(0, 10) : '')
+    let annule = false
+    api.politiquesRetention()
+      .then((r) => { if (!annule) setPolitiques(membres(r)) })
+      // Le catalogue n'est pas indispensable : sans lui on garde la date a la main. On n'affiche
+      // donc pas d'erreur - on retire l'option qui ne peut pas marcher.
+      .catch(() => { if (!annule) setPolitiques([]) })
+    return () => { annule = true }
+  }, [doc])
+
+  async function poser(lever) {
+    setBusy(true)
+    onErreur(null)
+    try {
+      await api.poserRetentionDocument(doc.id, lever
+        ? { retentionPolicyCode: null, retainUntilOverride: null }
+        : { retentionPolicyCode: code || null, retainUntilOverride: dateLimite || null })
+      await onFait(lever ? 'Conservation levée.' : 'Conservation enregistrée.')
+    } catch (e) {
+      onErreur(e.message || 'La conservation n’a pas pu être enregistrée.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const rien = !code && !dateLimite
+
+  return (
+    <Modal open={!!doc} onClose={onFermer} titre="Conservation du document" taille="sm">
+      <div style={{ display: 'grid', gap: 'var(--esp-large)' }}>
+        <div className="sub">
+          {doc?.retainUntil
+            ? <>Ce document est conservé jusqu’au <b>{quand(doc.retainUntil)}</b> : il ne peut pas être supprimé d’ici là.</>
+            : <>Ce document n’est sous aucune conservation : il peut être supprimé.</>}
+        </div>
+
+        {politiques.length > 0 && (
+          <label style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
+            <span className="sub">Politique</span>
+            <select className="select" value={code} onChange={(e) => setCode(e.target.value)}>
+              <option value="">— choisir —</option>
+              {politiques.map((p) => (
+                <option key={p.id} value={p.code}>{p.code} · {p.durationMonths} mois</option>
+              ))}
+            </select>
+          </label>
+        )}
+
+        <label style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
+          <span className="sub">Ou une date précise</span>
+          <input
+            className="input"
+            type="date"
+            value={dateLimite}
+            onChange={(e) => setDateLimite(e.target.value)}
+          />
+          <span className="sub">Si les deux sont renseignés, c’est la date qui compte.</span>
+        </label>
+
+        <div style={{ display: 'flex', gap: 'var(--esp-normal)', justifyContent: 'space-between', marginTop: 'var(--esp-serre)' }}>
+          {doc?.retainUntil ? (
+            <button className="btn ghost" type="button" disabled={busy} onClick={() => poser(true)}>
+              Lever la conservation
+            </button>
+          ) : <span />}
+          <button className="btn" type="button" disabled={busy || rien} onClick={() => poser(false)}>
+            Enregistrer
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+/**
+ * LE LIEN PUBLIC - une adresse qui sort de l'application et que personne n'aura a authentifier.
+ *
+ * ⚠ ON L'AFFICHE UNE FOIS, ET ON LE DIT. Le jeton n'est pas relisible : la reponse le porte, et
+ * l'ecran est le seul endroit ou il passera. Fermer la fenetre sans le copier oblige a en emettre
+ * un second - ce qui est sans gravite, a condition de le savoir AVANT de fermer.
+ */
+function LienPublicDocument({ document: doc, onFermer, onFait, onErreur }) {
+  const [jours, setJours] = useState('7')
+  const [busy, setBusy] = useState(false)
+  const [lien, setLien] = useState(null)
+
+  useEffect(() => { setJours('7'); setLien(null) }, [doc])
+
+  async function emettre() {
+    setBusy(true)
+    onErreur(null)
+    try {
+      const r = await api.emettreLienPublicDocument(doc.id, {
+        documentId: String(doc.id),
+        expiresInDays: Number(jours),
+        // La version courante est celle que l'ecran montre. Ne rien envoyer laisserait le serveur
+        // choisir, et « le lien ne pointe pas sur ce que je regardais » est un defaut invisible.
+        versionId: doc.currentVersion?.id ? String(doc.currentVersion.id) : null,
+      })
+      // ⚠ On ne devine pas le nom du champ : on prend le premier qui ressemble a une adresse, et on
+      // le DIT quand il n'y en a pas, plutot que d'afficher une chaine vide victorieuse.
+      const url = r?.url || r?.publicUrl || r?.link || r?.token || null
+      setLien(url)
+      onFait(url ? 'Lien émis.' : 'Lien émis — le serveur n’en a pas rendu l’adresse.')
+    } catch (e) {
+      onErreur(e.message || 'Le lien n’a pas pu être émis.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal open={!!doc} onClose={onFermer} titre="Émettre un lien public" taille="sm">
+      <div style={{ display: 'grid', gap: 'var(--esp-large)' }}>
+        <div className="sub">
+          Ce lien donne accès au document <b>sans connexion</b>, à qui le possède. Il expire tout
+          seul, et peut être révoqué avant.
+        </div>
+
+        {lien === null ? (
+          <>
+            <label style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
+              <span className="sub">Valable</span>
+              <select className="select" value={jours} onChange={(e) => setJours(e.target.value)}>
+                <option value="1">1 jour</option>
+                <option value="7">7 jours</option>
+                <option value="30">30 jours</option>
+                <option value="90">90 jours</option>
+              </select>
+            </label>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button className="btn" type="button" disabled={busy} onClick={emettre}>Émettre</button>
+            </div>
+          </>
+        ) : (
+          <>
+            <label style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
+              <span className="sub">L’adresse — copiez-la maintenant, elle ne se relit pas</span>
+              <input className="input" readOnly value={lien} onFocus={(e) => e.target.select()} />
+            </label>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button className="btn ghost" type="button" onClick={onFermer}>Fermer</button>
+            </div>
+          </>
+        )}
+      </div>
+    </Modal>
+  )
+}
+
+/**
+ * LA SUPPRESSION - logique, et refusee si une conservation court (RG-DMS-13).
+ *
+ * La fenetre dit CE QUI VA SE PASSER plutot que "etes-vous sur", patron repris de
+ * `ImpayesRecouvrement`. Et elle nomme d'avance le refus possible : un 409 sur un document sous
+ * conservation n'est pas une panne, c'est la regle qui fonctionne.
+ */
+function SuppressionDocument({ document: doc, onFermer, onFait, onErreur }) {
+  const [busy, setBusy] = useState(false)
+  const retenu = !!doc?.retainUntil
+
+  async function supprimer() {
+    setBusy(true)
+    onErreur(null)
+    try {
+      await api.supprimerDocumentDms(doc.id)
+      await onFait('Document supprimé.')
+    } catch (e) {
+      onErreur(e.message || 'Le document n’a pas pu être supprimé.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal open={!!doc} onClose={onFermer} titre="Supprimer le document" taille="sm">
+      <div style={{ display: 'grid', gap: 'var(--esp-large)' }}>
+        <div>
+          <b>{doc?.title}</b> sortira des listes et ne sera plus téléchargeable. Ses versions restent
+          en base : la suppression est réversible par l’administrateur, elle n’efface rien du disque.
+        </div>
+        {retenu && (
+          <div className="banner banner-warn">
+            Ce document est conservé jusqu’au <b>{quand(doc.retainUntil)}</b>. Le serveur refusera la
+            suppression tant que cette date n’est pas passée — levez d’abord la conservation.
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 'var(--esp-normal)', justifyContent: 'flex-end' }}>
+          <button className="btn ghost" type="button" onClick={onFermer}>Annuler</button>
+          <button className="btn" type="button" disabled={busy} onClick={supprimer}>Supprimer</button>
         </div>
       </div>
     </Modal>
