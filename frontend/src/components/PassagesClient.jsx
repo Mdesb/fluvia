@@ -46,7 +46,7 @@ function dateHeure(v) {
   return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString('fr-FR')
 }
 
-export default function PassagesClient({ clientId, droits = [] }) {
+export default function PassagesClient({ clientId, droits = [], surDernierPassage }) {
   const [etat, setEtat] = useState({ chargement: true, passages: [], total: null, numeros: 0, ventesTronquees: false })
   const [erreur, setErreur] = useState(null)
 
@@ -75,6 +75,7 @@ export default function PassagesClient({ clientId, droits = [] }) {
 
       if (numeros.length === 0) {
         setEtat({ chargement: false, passages: [], total: 0, numeros: 0, ventesTronquees })
+        surDernierPassage?.(null)
         return
       }
 
@@ -85,6 +86,10 @@ export default function PassagesClient({ clientId, droits = [] }) {
       const passages = membres(reponse)
       const total = reponse?.totalItems ?? reponse?.['hydra:totalItems'] ?? passages.length
       setEtat({ chargement: false, passages, total, numeros: numeros.length, ventesTronquees })
+      // Les passages arrivent tries en desc : le premier est le plus recent. `null` quand il n'y
+      // en a aucun — l'appelant distingue « aucun passage » de « lecture impossible », qui reste
+      // signale par l'absence d'appel dans la branche d'erreur.
+      surDernierPassage?.(passages[0]?.horodatage ?? null)
     } catch (e) {
       // Un compte CRM sans droit sur les accès reçoit un 403 : ce n'est pas une panne, c'est une
       // frontière. On le dit dans ces mots-là.

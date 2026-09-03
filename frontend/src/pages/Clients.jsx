@@ -606,6 +606,10 @@ function FicheContenu({ fiche, mouvements, mouvementsIllisibles, fidelite, droit
   const [recharge, setRecharge] = useState(false)
   const c = fiche.client || {}
   const [devis, setDevis] = useState(false)
+  // `undefined` tant que `PassagesClient` n'a pas repondu ou n'a pas pu lire ;
+  // `null` quand il a lu et n'a rien trouve. La tuile distingue les deux.
+  const [dernierPassage, setDernierPassage] = useState(undefined)
+
   const historique = fiche.historique || []
   const famille = fiche.famille || []
   const consentements = fiche.consentements || []
@@ -684,9 +688,21 @@ function FicheContenu({ fiche, mouvements, mouvementsIllisibles, fidelite, droit
           <div className="st-val num">{historique.length}</div>
           <div className="st-lbl">Achats</div>
         </div>
+        {/* ⚠ CETTE DATE EST CELLE DU DERNIER ACHAT, ET SON ANCIEN LIBELLE DISAIT « visite ».
+            `Client::$dateDerniereVisite` n'a qu'un ecrivain — `EnrichissementClientSubscriber` —
+            et il ne part QUE sur la transition d'une vente vers « validee ». Un abonne qui entre
+            chaque jour sans rien acheter ne la fait jamais bouger : on lisait « derniere visite :
+            il y a trois semaines » d'un client venu le matin meme. Le nom du champ garde sa dette,
+            le libelle ne la propage plus. */}
         <div className="stat-tile">
           <div className="st-val">{dateFr(c.dateDerniereVisite)}</div>
-          <div className="st-lbl">Dernière visite</div>
+          <div className="st-lbl">Dernier achat</div>
+        </div>
+        {/* Le vrai passage, et « — » quand on ne sait pas : un compte sans droit sur les acces
+            recoit un 403, et une tuile a zero ferait conclure qu'il n'est jamais venu. */}
+        <div className="stat-tile">
+          <div className="st-val">{dernierPassage === undefined ? '—' : dateFr(dernierPassage)}</div>
+          <div className="st-lbl">Dernier passage</div>
         </div>
         <div className="stat-tile">
           <div className="st-val num">{fiche.pmv ? euros(fiche.pmv.solde) : '—'}</div>
@@ -861,7 +877,7 @@ function FicheContenu({ fiche, mouvements, mouvementsIllisibles, fidelite, droit
       {/* La fiche savait ce que le client a ACHETÉ, jamais s'il est ENTRÉ. Les deux questions du
           comptoir sont pourtant celles-là : « a-t-il utilisé sa carte ? » et « il dit que la borne
           l'a refusé hier ». Le bloc ne s'affiche pas pour un compte sans droit sur les accès. */}
-      <PassagesClient clientId={c.id} droits={droits} />
+      <PassagesClient clientId={c.id} droits={droits} surDernierPassage={setDernierPassage} />
     </div>
   )
 }
