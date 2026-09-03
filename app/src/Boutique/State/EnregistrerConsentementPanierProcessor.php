@@ -14,6 +14,7 @@ use App\Crm\Entity\Consentement;
 use App\Crm\Enum\CanalConsentement;
 use App\Crm\Enum\EtatConsentement;
 use App\Vente\Service\LecteurCorps;
+use App\Boutique\Service\PanierTarificationHandler;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Uid\Uuid;
 
@@ -29,6 +30,7 @@ final class EnregistrerConsentementPanierProcessor implements ProcessorInterface
 {
     public function __construct(
         private readonly EntityManagerInterface $em,
+        private readonly PanierTarificationHandler $tarification,
         private readonly LecteurCorps $lecteur,
         private readonly PanierProprietaireGuard $guard,
         private readonly ConfirmerCommandeHandler $confirmerCommande,
@@ -78,6 +80,15 @@ final class EnregistrerConsentementPanierProcessor implements ProcessorInterface
         }
 
         $this->em->flush();
+
+        // ⚠ LE PANIER REPART AVEC SES PRIX. Sans cette ligne, la réponse d'une mutation ne
+        // porte ni `total` ni `prixUnitaire` — seul `PanierAvecTotalProvider` (le GET) enrichit —
+        // et le frontal, qui garde cette réponse en état, affichait un panier sans aucun montant
+        // jusqu'au prochain rechargement. Mesuré à l'écran : « Total 8,00 € » disparaissait au
+        // premier clic sur « − », remplacé par « le montant total sera calculé à l'étape de
+        // paiement », qui se lit comme une politique et non comme un raté.
+        // `calculer()` est pur : les trois champs sont transitoires, sans `#[ORM\Column]`.
+        $this->tarification->calculer($data);
 
         return $data;
     }

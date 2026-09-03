@@ -12,6 +12,7 @@ use App\Boutique\Enum\StatutPanier;
 use App\Boutique\Security\PanierProprietaireGuard;
 use App\Boutique\Service\DisponibiliteAffichageHandler;
 use App\Vente\Service\LecteurCorps;
+use App\Boutique\Service\PanierTarificationHandler;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -31,6 +32,7 @@ final class ModifierQuantiteLignePanierProcessor implements ProcessorInterface
 {
     public function __construct(
         private readonly EntityManagerInterface $em,
+        private readonly PanierTarificationHandler $tarification,
         private readonly LecteurCorps $lecteur,
         private readonly PanierProprietaireGuard $guard,
         private readonly DisponibiliteAffichageHandler $disponibilite,
@@ -80,6 +82,15 @@ final class ModifierQuantiteLignePanierProcessor implements ProcessorInterface
         $ligne->setQuantite($quantite);
         $this->em->flush();
 
+        // ⚠ LE PANIER REPART AVEC SES PRIX. Sans cette ligne, la réponse d'une mutation ne
+        // porte ni `total` ni `prixUnitaire` — seul `PanierAvecTotalProvider` (le GET) enrichit —
+        // et le frontal, qui garde cette réponse en état, affichait un panier sans aucun montant
+        // jusqu'au prochain rechargement. Mesuré à l'écran : « Total 8,00 € » disparaissait au
+        // premier clic sur « − », remplacé par « le montant total sera calculé à l'étape de
+        // paiement », qui se lit comme une politique et non comme un raté.
+        // `calculer()` est pur : les trois champs sont transitoires, sans `#[ORM\Column]`.
+        $this->tarification->calculer($panier);
+
         return $panier;
     }
 
@@ -90,6 +101,15 @@ final class ModifierQuantiteLignePanierProcessor implements ProcessorInterface
         if (!$panier instanceof PanierEnLigne) {
             throw new NotFoundHttpException('Panier introuvable.');
         }
+
+        // ⚠ LE PANIER REPART AVEC SES PRIX. Sans cette ligne, la réponse d'une mutation ne
+        // porte ni `total` ni `prixUnitaire` — seul `PanierAvecTotalProvider` (le GET) enrichit —
+        // et le frontal, qui garde cette réponse en état, affichait un panier sans aucun montant
+        // jusqu'au prochain rechargement. Mesuré à l'écran : « Total 8,00 € » disparaissait au
+        // premier clic sur « − », remplacé par « le montant total sera calculé à l'étape de
+        // paiement », qui se lit comme une politique et non comme un raté.
+        // `calculer()` est pur : les trois champs sont transitoires, sans `#[ORM\Column]`.
+        $this->tarification->calculer($panier);
 
         return $panier;
     }
