@@ -247,7 +247,14 @@ function Cautions({ cautions, totaux, mouvementsParCaution, grillesParId, ouvert
                   <th className="num">Déposé</th>
                   <th className="num">Retenu</th>
                   <th className="num">À rendre</th>
-                  <th>Encaissé par</th>
+                  {/* ⚠ « MOYEN », PAS « ENCAISSÉ PAR ». Cette colonne lit `moyenEncaissement`,
+                      qui vaut « empreinte CB », « espèces » ou « PMV » — un moyen de paiement, pas
+                      une personne. Le titre précédent promettait le QUI et affichait le COMMENT ;
+                      il ne s'est jamais fait prendre parce que la colonne est vide dans le jeu de
+                      démonstration.
+                      Le QUI existe, mais ailleurs : `MouvementCaution::$agent`, lisible dans le
+                      journal — ce que le pied de ce tableau explique déjà. */}
+                  <th>Moyen</th>
                   <th>Depuis</th>
                   <th>Statut</th>
                 </tr>

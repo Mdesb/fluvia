@@ -11,6 +11,7 @@ import { mot } from '../api/vocabulaire.js'
 import ClientEditionModal from '../components/ClientEditionModal.jsx'
 import DevisModal from '../components/DevisModal.jsx'
 import PassagesClient from '../components/PassagesClient.jsx'
+import ConsentementsClient from '../components/ConsentementsClient.jsx'
 
 // Nom d'affichage d'un client (physique ou personne morale).
 /**
@@ -933,6 +934,10 @@ function FicheContenu({ fiche, mouvements, mouvementsIllisibles, fidelite, droit
           comptoir sont pourtant celles-là : « a-t-il utilisé sa carte ? » et « il dit que la borne
           l'a refusé hier ». Le bloc ne s'affiche pas pour un compte sans droit sur les accès. */}
       <PassagesClient clientId={c.id} droits={droits} surDernierPassage={setDernierPassage} />
+
+      {/* Ce que ce client accepte de recevoir. La fiche l'ignorait completement : on pouvait
+          l'ecrire par l'API, jamais le relire — donc jamais savoir qu'on allait le contredire. */}
+      <ConsentementsClient client={c} droits={droits} />
     </div>
   )
 }

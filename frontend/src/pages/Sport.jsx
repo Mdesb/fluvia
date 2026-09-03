@@ -152,6 +152,10 @@ export default function Sport({ etabActif, droits = [] }) {
   const peutTraiter = aLeDroit(droits, 'sport.superviser_nocturne')
   // Le droit exige par `POST /sport/abonnements/souscrire`, et lui seul.
   const peutGererAbonnement = aLeDroit(droits, 'sport.gerer_abonnement')
+  // ⚠ UN DROIT DISTINCT, et pas `sport.gerer_abonnement` : enregistrer un retour banque declenche
+  // du recouvrement sur un adherent. Le serveur exige `recouvrement.piloter` — le bouton apparait
+  // donc exactement quand il marchera.
+  const peutPiloterRecouvrement = aLeDroit(droits, 'recouvrement.piloter')
 
   /**
    * DETECTER MAINTENANT, ESPACE PAR ESPACE.
@@ -195,6 +199,7 @@ export default function Sport({ etabActif, droits = [] }) {
   }
   const [souscription, setSouscription] = useState(false)
   const [echeances, setEcheances] = useState(null)
+  const [rejet, setRejet] = useState(null)
   const [beneficiaires, setBeneficiaires] = useState(null)
   const [abonnementOuvert, setAbonnementOuvert] = useState(null)
   const [annulation, setAnnulation] = useState(null)
@@ -533,6 +538,14 @@ export default function Sport({ etabActif, droits = [] }) {
         beneficiaires={beneficiaires}
         peutGerer={peutGererAbonnement}
         onAnnuler={setAnnulation}
+        peutPiloterRecouvrement={peutPiloterRecouvrement}
+        onRejet={setRejet}
+      />
+
+      <RejetEcheanceModal
+        echeance={rejet}
+        onClose={() => setRejet(null)}
+        onFait={() => { setRejet(null); recharger() }}
       />
 
       <AnnulationEcheanceModal
@@ -598,7 +611,10 @@ export default function Sport({ etabActif, droits = [] }) {
 // laisse passer ces 38 echeances : des lignes « a venir » d'apparence normale. Le bandeau compte
 // celles dont la date est passee et nomme la plus ancienne — c'est le fait qu'on ne peut pas voir
 // en lisant ligne a ligne.
-function Echeancier({ echeances, abonnements, beneficiaires, peutGerer, onAnnuler }) {
+function Echeancier({
+  echeances, abonnements, beneficiaires, peutGerer, onAnnuler,
+  peutPiloterRecouvrement = false, onRejet,
+}) {
   // ⚠ COMPARAISON PAR JOUR LOCAL, PAS PAR INSTANT. Le garde-fou n°31 documente la famille :
   // une date envoyee a minuit UTC tombe du mauvais cote d'un seuil calcule autrement, et le
   // defaut ne se voit que quelques heures par jour — donc jamais en relecture. `jourLocal()` rend
@@ -664,7 +680,7 @@ function Echeancier({ echeances, abonnements, beneficiaires, peutGerer, onAnnule
                   <th className="num">Montant</th>
                   <th>Statut</th>
                   <th>Ce qui s’est passé</th>
-                  {peutGerer && <th aria-label="Actions" />}
+                  {(peutGerer || peutPiloterRecouvrement) && <th aria-label="Actions" />}
                 </tr>
               </thead>
               <tbody>
@@ -702,12 +718,29 @@ function Echeancier({ echeances, abonnements, beneficiaires, peutGerer, onAnnule
                           <span className="sub">—</span>
                         )}
                       </td>
-                      {peutGerer && (
+                      {(peutGerer || peutPiloterRecouvrement) && (
                         <td>
+                          {/* ⚠ LE REJET NE S'AFFICHE QUE SUR UNE ÉCHÉANCE PRÉLEVÉE. Le processeur,
+                              lui, ne refuse aucun état : il passe l'échéance en « rejetée » quoi
+                              qu'il arrive. Proposer le geste sur une échéance « à venir »
+                              inviterait à déclarer le rejet d'un prélèvement qui n'est jamais
+                              parti, et l'impayé qui en naîtrait serait parfaitement imaginaire.
+                              Même règle que le bouton d'à côté, pour une raison différente : lui
+                              serait refusé par le serveur, celui-ci serait accepté à tort. */}
+                          {peutPiloterRecouvrement && e.statut === 'prelevee' && (
+                            <button
+                              className="btn ghost sm"
+                              type="button"
+                              onClick={() => onRejet(e)}
+                              title="La banque a retourné ce prélèvement impayé."
+                            >
+                              Rejet bancaire
+                            </button>
+                          )}
                           {/* Le serveur refuse (422) toute échéance qui n'est pas « à venir », en
                               nommant son état. On n'affiche donc pas un bouton qui serait refusé :
                               un contrôle proposé puis refusé apprend au lecteur à s'en méfier. */}
-                          {e.statut === 'a_venir' && (
+                          {peutGerer && e.statut === 'a_venir' && (
                             <button className="btn danger sm" type="button" onClick={() => onAnnuler(e)}>
                               Annuler
                             </button>
@@ -998,6 +1031,152 @@ function SouscriptionModal({ open, onClose, onFait }) {
           <button type="button" className="btn ghost" onClick={onClose}>Annuler</button>
           <button type="submit" className="btn" disabled={envoi || !pret}>
             {envoi ? 'Souscription…' : 'Souscrire'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+
+// Les codes retour SEPA que l'exploitant lit sur son releve. Ce sont des codes ISO 20022 : la
+// banque en donne un, l'ecran le traduit — personne ne devrait avoir a retenir qu'AM04 veut dire
+// « provision insuffisante ». La saisie libre reste possible pour les codes plus rares.
+const CODES_RETOUR = [
+  ['AM04', 'Provision insuffisante'],
+  ['AC01', 'Compte inexistant'],
+  ['AC04', 'Compte clôturé'],
+  ['AC06', 'Compte bloqué'],
+  ['AG01', 'Opération interdite sur ce compte'],
+  ['MD01', 'Mandat inexistant ou non valide'],
+  ['MD06', 'Remboursement demandé par le débiteur'],
+  ['MS02', 'Refus du débiteur'],
+  ['MS03', 'Motif non communiqué'],
+  ['SL01', 'Filtrage demandé par le débiteur'],
+]
+
+/**
+ * ENREGISTRER UN RETOUR BANQUE — et dire ce qui va REELLEMENT se passer.
+ *
+ * ⚠ Le moteur anti-impayes est pilote par `PolitiqueRecouvrement.momentRefusAcces`. La creation
+ * d'un incident ne coupe RIEN par defaut : la politique par defaut est
+ * `apres_representation_echouee`. Annoncer « l'acces sera coupe » serait donc faux dans le cas
+ * courant, et « rien ne se passe » serait faux dans les autres.
+ *
+ * La fenetre LIT la politique de l'etablissement et nomme la consequence. Quand elle n'a pas pu la
+ * lire, elle le dit — plutot que d'afficher la version rassurante par defaut.
+ */
+function RejetEcheanceModal({ echeance, onClose, onFait }) {
+  const [code, setCode] = useState('AM04')
+  const [codeLibre, setCodeLibre] = useState('')
+  const [libelle, setLibelle] = useState('')
+  const [dateRejet, setDateRejet] = useState('')
+  const [politique, setPolitique] = useState(null)
+  const [envoi, setEnvoi] = useState(false)
+  const [erreur, setErreur] = useState(null)
+
+  useEffect(() => {
+    if (!echeance) return
+    setCode('AM04'); setCodeLibre(''); setLibelle(''); setDateRejet(''); setErreur(null)
+    let annule = false
+    setPolitique(null)
+    api.politiquesRecouvrement()
+      .then((r) => { if (!annule) setPolitique(membres(r)[0] ?? undefined) })
+      .catch(() => { if (!annule) setPolitique(undefined) })
+    return () => { annule = true }
+  }, [echeance])
+
+  const codeFinal = code === 'autre' ? codeLibre.trim().toUpperCase() : code
+  const pret = codeFinal !== ''
+
+  async function envoyer(e) {
+    e.preventDefault()
+    setEnvoi(true)
+    setErreur(null)
+    try {
+      const corps = { codeRetour: codeFinal }
+      if (libelle.trim() !== '') corps.libelleRetour = libelle.trim()
+      if (dateRejet !== '') corps.dateRejet = dateRejet
+      await api.enregistrerRejetEcheance(echeance.id, corps)
+      onFait()
+    } catch (err) {
+      setErreur(err.message || 'Le rejet n’a pas pu être enregistré.')
+    } finally {
+      setEnvoi(false)
+    }
+  }
+
+  return (
+    <Modal open={!!echeance} onClose={onClose} titre="Enregistrer un rejet bancaire" taille="sm">
+      <form onSubmit={envoyer} style={{ display: 'grid', gap: 'var(--esp-large)' }}>
+        <div className="banner banner-warn">
+          <b>Ce geste n’est pas un essai.</b> L’échéance passe en « rejetée » et un impayé est ouvert
+          au nom de l’adhérent. Ne l’enregistrez que si la banque a réellement retourné ce
+          prélèvement.
+        </div>
+
+        <div className="sub">
+          {politique === null && 'Lecture de la politique de recouvrement…'}
+          {politique === undefined && (
+            <>La politique de recouvrement n’a pas pu être lue : cet écran ne peut pas dire si
+            l’accès de l’adhérent sera refusé. Ce n’est pas la même chose que « il ne le sera pas ».</>
+          )}
+          {politique && (
+            <>Selon la politique en vigueur (<b>{politique.momentRefusAcces || 'non renseignée'}</b>),
+            {politique.momentRefusAcces === 'immediat'
+              ? ' l’accès de l’adhérent sera refusé dès l’enregistrement.'
+              : ' l’accès n’est pas refusé tout de suite — il le sera au moment que la politique désigne.'}</>
+          )}
+        </div>
+
+        <label style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
+          <span className="sub">Code retour de la banque</span>
+          <select className="select" value={code} onChange={(ev) => setCode(ev.target.value)}>
+            {CODES_RETOUR.map(([v, l]) => <option key={v} value={v}>{v} — {l}</option>)}
+            <option value="autre">Autre code…</option>
+          </select>
+        </label>
+
+        {code === 'autre' && (
+          <label style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
+            <span className="sub">Code — tel qu’il figure sur le relevé</span>
+            <input
+              className="input"
+              value={codeLibre}
+              onChange={(ev) => setCodeLibre(ev.target.value)}
+              maxLength={8}
+              placeholder="RR04"
+            />
+          </label>
+        )}
+
+        <label style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
+          <span className="sub">Libellé de la banque — facultatif</span>
+          <input
+            className="input"
+            value={libelle}
+            onChange={(ev) => setLibelle(ev.target.value)}
+            maxLength={140}
+            placeholder="tel que le relevé le formule"
+          />
+        </label>
+
+        <label style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
+          <span className="sub">Date du rejet — facultative</span>
+          <input
+            className="input"
+            type="date"
+            value={dateRejet}
+            onChange={(ev) => setDateRejet(ev.target.value)}
+          />
+        </label>
+
+        {erreur && <div className="banner banner-error">{erreur}</div>}
+
+        <div style={{ display: 'flex', gap: 'var(--esp-normal)', justifyContent: 'flex-end' }}>
+          <button className="btn ghost" type="button" onClick={onClose}>Annuler</button>
+          <button className="btn danger" type="submit" disabled={envoi || !pret}>
+            {envoi ? 'Enregistrement…' : 'Enregistrer le rejet'}
           </button>
         </div>
       </form>
