@@ -3,6 +3,7 @@ import { api, membres } from '../api/client.js'
 import Modal from './Modal.jsx'
 import Tabs from './Tabs.jsx'
 import { jourLocal } from './Liste.jsx'
+import { libelleProduit } from '../api/produit.js'
 
 // LA FICHE D'UN ABONNEMENT — l'écran qui manquait, et que la liste avouait ne pas avoir.
 //
@@ -56,6 +57,10 @@ export default function FicheAbonnement({ abonnement, nomAdherent, nomPayeur, on
   const [echeances, setEcheances] = useState(null)
   const [geste, setGeste] = useState(null)
   const [tronque, setTronque] = useState(false)
+  // ⚠ TROIS ETATS, comme pour l'echeancier. `undefined` = pas lu ou refuse ; `null` = lu, aucun
+  // produit ne porte cette formule ; une chaine = le libelle. Un « — » a la place d'un refus ferait
+  // croire a un abonnement sans formule, alors que le champ est NON NULLABLE en base.
+  const [formuleNom, setFormuleNom] = useState(undefined)
 
   const a = abonnement
 
@@ -94,6 +99,29 @@ export default function FicheAbonnement({ abonnement, nomAdherent, nomPayeur, on
       .catch(() => { if (!annule) setEcheances(undefined) })
     return () => { annule = true }
   }, [a?.id])
+
+  // LE NOM DE LA FORMULE, PAR LE CATALOGUE.
+  //
+  // `Formule` n'est pas une ressource independante -- c'est une facette de `Produit` -- donc aucune
+  // IRI ne peut pointer dessus. L'abonnement expose l'IDENTIFIANT (`getFormuleId`, groupe
+  // `abonnement:read`) et le catalogue expose l'objet (`Produit::$formule`, groupe `produit:read`,
+  // avec son `id`). Le rapprochement se fait donc ici, exactement comme `Sport.jsx:786` le fait deja
+  // pour la souscription.
+  useEffect(() => {
+    const fid = a?.formuleId
+    if (!fid) { setFormuleNom(null); return }
+    let annule = false
+    setFormuleNom(undefined)
+    api
+      .produits()
+      .then((r) => {
+        if (annule) return
+        const p = membres(r).find((x) => x?.formule?.id === fid)
+        setFormuleNom(p ? libelleProduit(p) : null)
+      })
+      .catch(() => { if (!annule) setFormuleNom(undefined) })
+    return () => { annule = true }
+  }, [a?.formuleId])
 
   const prochaine = useMemo(() => {
     if (!Array.isArray(echeances)) return null
@@ -170,9 +198,11 @@ export default function FicheAbonnement({ abonnement, nomAdherent, nomPayeur, on
           </Champ>
           <Champ
             libelle="Formule"
-            aide="L’API ne rend pas encore cette relation : la formule est liée à l’abonnement en base, mais elle n’est pas exposée en lecture."
+            aide="La formule est une facette du produit : son nom vient du catalogue, rapproché par identifiant."
           >
-            <span className="sub">non rendue par l’API</span>
+            {formuleNom === undefined
+              ? <span className="sub">catalogue non lu</span>
+              : formuleNom || <span className="sub">introuvable au catalogue</span>}
           </Champ>
 
           <div className="card-h">
