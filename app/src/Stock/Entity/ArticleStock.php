@@ -28,6 +28,7 @@ use App\Stock\Validator as AppAssert;
 use Symfony\Component\Serializer\Attribute\Groups;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Validator\Constraints as Assert;
+use Symfony\Component\Validator\Context\ExecutionContextInterface;
 
 /**
  * Article de stock (US-STOCK-01, RG-STOCK-01/02) : code-barres EAN, unité, prix d'achat, méthode de
@@ -349,5 +350,41 @@ class ArticleStock
     public function getLots(): Collection
     {
         return $this->lots;
+    }
+
+    /**
+     * LE SEUIL MINIMUM NE PEUT PAS DEPASSER LE MAXIMUM — ET CETTE REGLE N'EXISTAIT QU'EN BASE.
+     *
+     * ⚠ CE CONTROLE REMPLACE UN « 500 INTERNAL SERVER ERROR ».
+     *
+     * La contrainte `chk_article_seuils` (migration du 17/08) vit dans MariaDB depuis toujours, et
+     * rien ne la precedait cote application. Un exploitant qui saisissait un minimum de 40 pour un
+     * maximum de 5 ne lisait donc pas ce qu'il avait mal saisi : il lisait « erreur interne », qui
+     * l'envoie chercher une panne du logiciel.
+     *
+     * Mesure du 03/09 : en remplissant le stock du compte de test, six articles sur quatre cents ont
+     * echoue — exactement les six aux seuils incoherents, et le journal du conteneur portait
+     * `CONSTRAINT chk_article_seuils failed`. La reponse HTTP, elle, ne disait rien.
+     *
+     * ── UNE REGLE TENUE SEULEMENT PAR LA BASE SORT TOUJOURS EN 500 ──────────────────────────────
+     *
+     * C'est la troisieme occurrence du meme motif trouvee dans la nuit du 02 au 03/09 : un doublon
+     * de configuration creancier SEPA, une ressource hors du perimetre de l'etablissement actif, et
+     * ces seuils. La base est le dernier rempart, pas le premier : ce qu'elle refuse doit avoir ete
+     * refuse plus tot, avec des mots.
+     */
+    #[Assert\Callback]
+    public function validerSeuils(ExecutionContextInterface $contexte): void
+    {
+        if ((float) $this->seuilMin > (float) $this->seuilMax) {
+            $contexte->buildViolation(
+                'Le seuil minimum (%min%) ne peut pas depasser le seuil maximum (%max%) : '
+                . 'le minimum declenche le reassort, le maximum le plafonne.',
+            )
+                ->setParameter('%min%', $this->seuilMin)
+                ->setParameter('%max%', $this->seuilMax)
+                ->atPath('seuilMin')
+                ->addViolation();
+        }
     }
 }

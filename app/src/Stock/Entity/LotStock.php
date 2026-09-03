@@ -12,6 +12,8 @@ use ApiPlatform\Metadata\GetCollection;
 use App\Organisation\Entity\Etablissement;
 use App\Stock\Enum\OrigineLotStock;
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Component\Validator\Constraints as Assert;
+use Symfony\Component\Validator\Context\ExecutionContextInterface;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
 use Symfony\Component\Uid\Uuid;
@@ -195,5 +197,30 @@ class LotStock
         $this->referenceOrigineId = $referenceOrigineId;
 
         return $this;
+    }
+
+    /**
+     * IL NE PEUT PAS RESTER PLUS QUE CE QU'ON A RECU — deuxieme regle qui n'existait qu'en base.
+     *
+     * `chk_lot_quantite_restante` (migration du 17/08) le refuse au niveau de MariaDB. Sans controle
+     * applicatif devant, la reponse HTTP est un « 500 Internal Server Error » : le logiciel s'accuse
+     * d'etre casse au moment ou il protege un inventaire.
+     *
+     * Trouvee en corrigeant sa jumelle sur les seuils d'article — les deux contraintes CHECK ont ete
+     * posees par la meme migration, et ni l'une ni l'autre n'avait de garde devant.
+     */
+    #[Assert\Callback]
+    public function validerQuantites(ExecutionContextInterface $contexte): void
+    {
+        if ((float) $this->quantiteRestante > (float) $this->quantiteInitiale) {
+            $contexte->buildViolation(
+                'La quantite restante (%reste%) depasse la quantite initiale (%initiale%) : '
+                . 'un lot ne peut pas rendre plus que ce qu il a recu.',
+            )
+                ->setParameter('%reste%', $this->quantiteRestante)
+                ->setParameter('%initiale%', $this->quantiteInitiale)
+                ->atPath('quantiteRestante')
+                ->addViolation();
+        }
     }
 }
