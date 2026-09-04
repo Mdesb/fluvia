@@ -440,6 +440,39 @@ function LigneModal({ note, natures, onClose, onFait }) {
   const [description, setDescription] = useState('')
   const [erreur, setErreur] = useState(null)
   const [envoi, setEnvoi] = useState(false)
+  // `null` = rien lu ; un objet = le serveur a repondu (y compris `status: failed`).
+  const [lecture, setLecture] = useState(null)
+  const [lectureEnCours, setLectureEnCours] = useState(false)
+
+  /**
+   * ⚠ `readAsDataURL` REND « data:<mime>;base64,<contenu> » — LE SERVEUR ATTEND LE CONTENU SEUL.
+   * Envoyer le préfixe rend 422, et c'est un défaut qui ne se voit qu'à l'exécution. Même découpe
+   * que l'extraction de facture fournisseur, pour la même raison.
+   */
+  async function lireJustificatif(fichier) {
+    setLectureEnCours(true)
+    setLecture(null)
+    setErreur(null)
+    try {
+      const base64 = await new Promise((resoudre, rejeter) => {
+        const lecteur = new FileReader()
+        lecteur.onerror = () => rejeter(new Error('Le fichier n’a pas pu être lu.'))
+        lecteur.onload = () => resoudre(String(lecteur.result).split(',')[1] ?? '')
+        lecteur.readAsDataURL(fichier)
+      })
+      const r = await api.extraireJustificatifFrais(base64, fichier.type || 'application/pdf')
+      setLecture(r)
+      // ⚠ ON NE REMPLIT QUE LE VIDE. Un champ déjà saisi l'a été exprès : l'écraser par une lecture
+      // automatique ferait perdre une correction sans que personne ne le voie.
+      if (!date && r.documentDate) setDate(r.documentDate)
+      if (!montant && r.amountInclTax) setMontant(String(r.amountInclTax))
+      if (!description && r.supplierName) setDescription(r.supplierName)
+    } catch (err) {
+      setErreur(err.message || 'Le justificatif n’a pas pu être lu.')
+    } finally {
+      setLectureEnCours(false)
+    }
+  }
 
   useEffect(() => {
     if (!note) return
@@ -482,6 +515,53 @@ function LigneModal({ note, natures, onClose, onFait }) {
           <div className="banner banner-warn">
             <b>Aucune nature de dépense n’est paramétrée</b> (ou leur référentiel n’a pas pu être
             lu). Sans nature imputable, la note ne pourra pas passer en comptabilité.
+          </div>
+        )}
+
+        {/* ⚠ ON PRE-REMPLIT, ON NE SOUMET PAS — même discipline que l'extraction de facture
+            fournisseur, et le serveur la confirme (RG-EXP-03 : aucune création automatique de
+            ligne). Un champ déjà saisi n'est jamais écrasé : il a été saisi exprès. */}
+        <div className="field">
+          <label htmlFor="nf-justif">Lire un justificatif</label>
+          <input
+            id="nf-justif"
+            className="input"
+            type="file"
+            accept="image/*,application/pdf"
+            disabled={lectureEnCours || envoi}
+            onChange={(e) => {
+              const f = e.target.files?.[0]
+              e.target.value = ''
+              if (f) lireJustificatif(f)
+            }}
+          />
+          <span className="hint">
+            Photo du ticket ou PDF. Les valeurs lues remplissent les champs vides ci-dessous&nbsp;;
+            relisez-les, elles ne sont pas enregistrées telles quelles.
+          </span>
+        </div>
+
+        {lectureEnCours && <div className="banner">Lecture du justificatif…</div>}
+
+        {lecture && lecture.status === 'failed' && (
+          <div className="banner banner-warn">
+            <b>Le justificatif n’a pas pu être lu.</b> La lecture automatique n’est pas disponible
+            sur cette installation, ou ce document lui résiste. La saisie à la main ci-dessous
+            fonctionne normalement — ce n’est pas une panne de l’écran.
+          </div>
+        )}
+
+        {lecture && lecture.status !== 'failed' && (
+          <div className="banner">
+            Justificatif lu{lecture.supplierName ? <> — <b>{lecture.supplierName}</b></> : null}
+            {lecture.confidenceScore != null && (
+              <> · fiabilité annoncée&nbsp;: {Math.round(Number(lecture.confidenceScore) * 100)}%</>
+            )}
+            .{' '}
+            {/* ⚠ LA NATURE N'EST JAMAIS EXTRAITE, et ce n'est pas un manque de l'OCR : c'est le
+                référentiel d'imputation qui décide sur quel compte la dépense tombe. Sans cette
+                phrase, on croit que tout a été rempli et on valide une ligne sans imputation. */}
+            <b>La nature de la dépense n’est pas lue</b> : choisissez-la ci-dessous.
           </div>
         )}
 
