@@ -586,6 +586,31 @@ input:focus-visible {
       border-bottom-color: var(--line);
     }
   }
+
+  /* ⚠ L'ENCRE SUIT LE FOND, SINON LE MENU DEVIENT ILLISIBLE EN DESCENDANT.
+     Je n'avais anime que le FOND : au defilement il revenait au theme clair pendant que « Fluvia »
+     et la navigation restaient clairs — clair sur clair. C'est l'erreur classique quand on traite
+     une seule moitie du couple couleur/fond. Les deux voyagent desormais ensemble, sur la meme
+     ligne de defilement. */
+  .page-accueil .entete .marque,
+  .page-accueil .entete nav a:not(.btn-primaire) {
+    animation: entete-encre linear both;
+    animation-timeline: scroll();
+    animation-range: 0 220px;
+  }
+  @keyframes entete-encre {
+    from { color: #e7ecf7; }
+    to { color: var(--ink); }
+  }
+
+  /* La navigation secondaire reste plus discrete que la marque, dans les deux etats. */
+  .page-accueil .entete nav a:not(.btn-primaire) {
+    animation-name: entete-encre-douce;
+  }
+  @keyframes entete-encre-douce {
+    from { color: #a3aec8; }
+    to { color: var(--ink-soft); }
+  }
 }
 
 /* Le badge se cassait en deux lignes dans la colonne etroite. */
@@ -1053,3 +1078,6 @@ input:focus-visible {
     color: #2b3fb8;
   }
 }
+
+/* La paire question-reponse de la FAQ : c'est elle la cellule de la grille, pas le `dt` seul. */
+.faq-paire { break-inside: avoid; }

@@ -236,9 +236,19 @@
       <h2>Questions fréquentes</h2>
     </div>
     <dl class="faq faq-colonnes">
+      {#
+        ⚠ LA PAIRE EST GROUPEE, ET C'EST CE QUI LA REND INSECABLE.
+
+        `display: grid` sur un `<dl>` fait de chaque `dt` et de chaque `dd` une cellule distincte :
+        sur deux colonnes, une question atterrissait dans l'une et sa reponse dans l'autre. Le
+        `<div>` de groupement est autorise dans un `dl` par la specification, et c'est lui qui
+        devient la cellule.
+      #}
       {% for q in questions %}
-        <dt>{{ q.question }}</dt>
-        <dd>{{ q.reponse }}</dd>
+        <div class="faq-paire">
+          <dt>{{ q.question }}</dt>
+          <dd>{{ q.reponse }}</dd>
+        </div>
       {% endfor %}
     </dl>
   </section>
