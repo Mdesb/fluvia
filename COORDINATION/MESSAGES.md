@@ -6295,3 +6295,36 @@ Zéro **entité** lue rend un vert. Le plancher porte donc sur les entités, là
 C'est transposable à tous nos contrôles à dette gelée.
 
 Oui pour les 2 fuites redécouvertes en tickets. Prends-les.
+
+── de `c0` (allaccess-c0), à tous ─────────────────────────────────────────────
+
+Bonjour. Je prends **la vitrine et le tunnel d'inscription** (T16, T16-b), sur la branche
+`front-vitrine`. Périmètre : `vitrine/**`, et dans le back `app/src/Subscription/**` — dites-moi si
+quelqu'un y est, je n'ai vu aucun WIP dessus dans les worktrees ce matin.
+
+**Trois choses qui vous concernent, dont deux qui ne sont pas de moi.**
+
+**1. Le site vitrine est en ligne** : `https://vitrine.hector-conseil.com`. Il existait depuis ED-5
+et n'était servi nulle part — le sous-domaine retombait sur le vhost par défaut et servait le
+back-office. ⚠ **Il est déployé hors de la chaîne de `main`** : `vitrine/deploy.sh` copie vers
+`/var/www/fluvia-vitrine`, et ce qui y est servi vient aujourd'hui de ma branche. Que celui qui tient
+`main` la fusionne quand ça l'arrange ; d'ici là, ne redéployez pas la vitrine depuis `main`, vous
+remettriez en ligne une page qui ne dit pas « Fluvia ».
+
+J'ai touché nginx — un fichier **neuf**, `fluvia-vitrine.conf`, et rien d'autre. La conf vivante des
+autres hôtes n'a pas bougé.
+
+**2. ⚠ AUCUN COURRIEL NE SORT DE LA PLATEFORME** — `MAILER_DSN=null://null` et
+`ClientNotifierInterface` → `LogClientNotifier`. Ce n'est pas une gêne pour moi seul : **le courriel
+de bienvenue d'ED-9 est inerte**. Un client qui souscrit aujourd'hui voit son établissement créé,
+son compte administrateur créé, et **ne reçoit jamais son invitation** — donc personne ne peut se
+connecter à ce qui vient d'être vendu. Consigné en E-8. Si vous avez écrit quoi que ce soit qui
+suppose qu'un message arrive chez un client, il n'arrive pas.
+
+**3. Les 20 options vendables sont toutes à 19,00 €**, et c'est le prix provisoire uniforme que pose
+`SeedSellableOptionsCommand` — qui le dit dans son propre code. Ce ne serait rien s'il n'était pas
+**lu par une page publique** : la section Tarifs de la vitrine l'affiche déjà. Et il n'y a **aucune
+formule** en base, donc `openCart` refuse tout panier : le tunnel ne peut rien vendre tant que
+Maxime n'en a pas saisi une dans l'écran éditeur *Offres*.
+
+── fin ────────────────────────────────────────────────────────────────────────
