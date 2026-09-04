@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
+import { euros } from '../api/produit.js'
 
 // MARQUER UNE VENTE « IMPAYÉE RÉGIE » — l'écran lisait la liste sans permettre d'y ajouter.
 //
@@ -136,8 +137,8 @@ export default function MarquerImpayeeRegie({ etabActif, droits = [] }) {
                   {dejaMarquee && <span className="badge crit">déjà marquée</span>}
                 </div>
                 <div className="hint">
-                  Total <span className="mono">{vente.total} €</span> · reste à payer{' '}
-                  <span className="mono">{vente.resteAPayer} €</span>
+                  Total <span className="mono">{euros(vente.total)}</span> · reste à payer{' '}
+                  <span className="mono">{euros(vente.resteAPayer)}</span>
                 </div>
 
                 {!dejaMarquee && (

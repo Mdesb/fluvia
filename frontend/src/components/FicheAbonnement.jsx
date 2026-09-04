@@ -4,6 +4,7 @@ import Modal from './Modal.jsx'
 import Tabs from './Tabs.jsx'
 import { jourLocal } from './Liste.jsx'
 import { libelleProduit } from '../api/produit.js'
+import { euros } from '../api/produit.js'
 
 // LA FICHE D'UN ABONNEMENT — l'écran qui manquait, et que la liste avouait ne pas avoir.
 //
@@ -31,9 +32,13 @@ import { libelleProduit } from '../api/produit.js'
 
 const TONS = { actif: 'good', pause: 'warn', impaye: 'crit', resilie: 'mut' }
 
-function euros(centimes) {
+// ⚠ CE NOM MENTAIT : la fonction prend des CENTIMES, et tous ses appelants lui en passent.
+// Elle reimplementait aussi `euros()` a la main — virgule oui, mais ni separateur de milliers ni
+// espace insecable : `125000` rendait « 1250,00 € » au lieu de « 1 250,00 € ». Elle delegue
+// desormais, et porte le nom que la boutique donne deja au meme calcul.
+function eurosCentimes(centimes) {
   if (centimes == null) return '—'
-  return `${(centimes / 100).toFixed(2).replace('.', ',')} €`
+  return euros(centimes / 100)
 }
 
 function jour(iso) {
@@ -163,7 +168,7 @@ export default function FicheAbonnement({ abonnement, nomAdherent, nomPayeur, on
       <div className="card-b">
         <div className="fiche-stats">
           <div className="stat-tile">
-            <div className="st-val num">{euros(a.montantCentimes)}</div>
+            <div className="st-val num">{eurosCentimes(a.montantCentimes)}</div>
             <div className="st-lbl">Montant courant</div>
           </div>
           <div className="stat-tile">
@@ -274,7 +279,7 @@ export default function FicheAbonnement({ abonnement, nomAdherent, nomPayeur, on
                   {echeances.map((e) => (
                     <tr key={e.id}>
                       <td className="num">{jour(e.dateProgrammee)}</td>
-                      <td className="num">{euros(e.montantCentimes)}</td>
+                      <td className="num">{eurosCentimes(e.montantCentimes)}</td>
                       <td><span className="badge mut">{e.statut || '—'}</span></td>
                     </tr>
                   ))}

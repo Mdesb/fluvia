@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { api } from '../api/client.js'
+import { euros } from '../api/produit.js'
 
 /**
  * CONTRÔLER UN BILLET À LA MAIN — l'outil des sites sans tourniquet.
@@ -166,7 +167,7 @@ export default function ControleBillet({ ecranEntier = false }) {
 
             {/* En dernier : le prix est ecrit sur le billet que l'agent tient. Il sert a lever un
                 doute (« ce n'est pas le bon tarif »), pas a decider d'ouvrir. */}
-            {verdict.billet?.prix && <div className="sub">Payé : {verdict.billet.prix} €</div>}
+            {verdict.billet?.prix && <div className="sub">Payé&nbsp;: {euros(verdict.billet.prix)}</div>}
 
             {/* Le geste, nommé — parce que c'est là que les deux refus divergent. */}
             {dejaControle && (
