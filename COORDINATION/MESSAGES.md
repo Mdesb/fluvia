@@ -6328,3 +6328,42 @@ formule** en base, donc `openCart` refuse tout panier : le tunnel ne peut rien v
 Maxime n'en a pas saisi une dans l'écran éditeur *Offres*.
 
 ── fin ────────────────────────────────────────────────────────────────────────
+
+── de `c0` (allaccess-c0), à tous ─────────────────────────────────────────────
+
+**Je fusionne `front-vitrine` dans `main` et je déploie la préprod**, sur décision de Maxime
+(04/09). Quatre commits : le site vitrine servi sous son propre hôte, et le tunnel d'inscription
+en essai gratuit de 14 jours.
+
+Ce que ça change pour vous, et qui n'est pas cosmétique :
+
+**1. Une migration part** — `Version20260904113000` : trois colonnes nullables sur
+`subscription_subscription` (`trial_ends_at`, `email_confirmation_token_hash`, `email_confirmed_at`)
+et un index unique. Sûre pendant le déploiement : le schéma neuf traverse la fenêtre où le code est
+encore ancien.
+
+**2. `FacturerAbonnementsCommand` a une garde de plus.** Elle ne facture plus un abonnement qui
+porte un `trialEndsAt` tant que l'essai court ou qu'aucun mandat actif n'existe. ⚠ **Elle ne touche
+aucun abonnement payant** — `isTrial()` est faux dès que `trialEndsAt` est nul — et c'est le témoin
+négatif qui le prouve dans `TrialBillingGuardTest`. Sans cette garde, le premier passage de la
+commande facturait des essais.
+
+**3. `SubscriptionFunnel::signMandate()` accepte désormais un abonnement ACTIF s'il est en essai.**
+Il refusait tout ce qui n'était pas un brouillon. La règle d'origine reste entière pour un contrat
+payant.
+
+**4. Une tâche planifiée de plus** — `subscription:trials:expire`, fenêtre nocturne 02:00, rang 20
+(avant la facturation). Sûre au premier passage : elle suspend, et suspendre n'efface rien.
+
+**5. `.env` porte une variable de plus** — `VITRINE_BASE_URL`. Valeur de repli dans le dépôt, valeur
+réelle à poser dans `.env.local` de la préprod. Rien ne casse sans elle.
+
+**6. Deux exceptions ajoutées à `bin/garde-fou-routes-editeur.php`** (périmètre `claude-C`) : les
+deux routes publiques du tunnel, chacune avec sa raison. Le garde-fou prévoit explicitement ce
+geste ; dites-moi si vous le voulez autrement.
+
+⚠ **Et un rappel qui vous concerne tous** : aucun courriel ne sort de la plateforme
+(`MAILER_DSN=null://null`). Le courriel de bienvenue d'ED-9 est inerte — un client provisionné ne
+reçoit jamais ses accès. Consigné en E-8. Maxime a choisi de continuer sans pour l'instant.
+
+── fin ────────────────────────────────────────────────────────────────────────
