@@ -1488,6 +1488,14 @@ export const api = {
     request('/reporting/explorateur', {
       query: { indicateur, niveau, entiteId, periodeDebut, periodeFin },
     }),
+  // Objectifs d'indicateur (M7, CA-3 << ecart vs objectifs >>). Contrat eprouve par un POST reel
+  // avant d'ecrire le formulaire : `indicateur` est une IRI, la periode des dates `Y-m-d`, et le
+  // rattachement suit le triplet niveau + une seule FK.
+  objectifsIndicateur: () => request('/api/objectif_indicateurs', { query: { itemsPerPage: 200 } }),
+  creerObjectif: (corps) =>
+    request('/api/objectif_indicateurs', { method: 'POST', body: corps, ld: true }),
+  supprimerObjectif: (id) =>
+    request(`/api/objectif_indicateurs/${id}`, { method: 'DELETE' }),
 
   // --- Paramètres (référentiels, lecture) ---
   espaces: () => request('/api/espaces', { query: { itemsPerPage: 200 } }),
