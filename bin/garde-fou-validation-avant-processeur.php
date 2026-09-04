@@ -5,6 +5,14 @@ declare(strict_types=1);
 /**
  * Garde-fou n°34 — la validation s'exécute AVANT les processeurs.
  *
+ * ⚠ IL A UN VOISIN DEPUIS LE 04/09 : `bin/garde-fou-validee-avant-posee.php` (n°48). Celui-ci
+ * signale une COLLISION et gèle 32 cas ; l'autre signale l'ÉCHEC CERTAIN — contraint, **non
+ * écrivable par le client**, sans défaut, sur une opération qui **désérialise** — et rend zéro.
+ *
+ * Le n°48 voit ce que ce cliquet ne peut pas voir : si l'une des 32 collisions gelées ici sort du
+ * groupe d'écriture, ce compte reste à 32 et reste vert, alors que le cas est devenu un 422
+ * permanent. Les deux sont nécessaires, et se citent pour qu'on n'en écrive pas un troisième.
+ *
  * ── LA RÈGLE ────────────────────────────────────────────────────────────────────────────────────
  *
  * API Platform valide **entre** la désérialisation et le processeur. La validation voit donc la
