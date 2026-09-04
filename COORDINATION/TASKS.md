@@ -1184,9 +1184,35 @@ ouverte — le cas exact qui rendait 422 :
     ligne.activite   = null        correct : une réservation de terrain n'a pas d'`Activite`
     24 lignes en base, 1 avec ressource   les 23 anciennes intactes — D66-ter tenu
 
-**Ce qui reste, et qui n'est PAS un blocage** : `produitTarifReference` est dans `activite:write`
-mais **aucun écran ne le propose**, et il n'existe aucun écran de création d'activité. Un exploitant
-ne peut donc pas refaire par l'interface ce que je viens de faire par l'API. À planifier.
+~~**Ce qui reste** : aucun écran ne propose `produitTarifReference`~~ — **FAUX, ET JE L'AI ÉCRIT
+SANS REGARDER.** `frontend/src/components/ActivitesReservation.jsx` existe, il est monté dans
+`pages/Reservation.jsx:681`, et il offre la création ET la modification d'une activité avec son
+sélecteur de produit de référence. **Vérifié à l'écran** le 04/09, sur la préproduction servie :
+l'onglet « Activités » de Réservation liste les trois activités avec leur produit, affiche un
+avertissement pour celle qui n'en a pas, et « Nouvelle activité » ouvre le formulaire complet.
+
+⚠ **J'AI POSÉ UNE QUESTION D'ARBITRAGE À MAXIME SUR UNE PRÉMISSE FAUSSE.** Il a répondu « construire
+l'écran complet » — pour un écran déjà construit. La phrase venait du registre, que je venais
+pourtant de corriger dans l'autre sens ; je l'ai recopiée au lieu de la mesurer. **Une question mal
+fondée coûte plus qu'une mesure : elle fait décider dans le vide.**
+
+⚠ **ET L'ÉCRAN M'A MONTRÉ UNE FAUSSE DONNÉE QUE J'AVAIS POSÉE.** « Visite guidée musée » pointait sur
+**« Location de terrain »** — je le lui avais assigné le matin même pour que la chaîne passe. La
+ventilation comptable se fait sur la catégorie du PRODUIT : la recette du musée serait sortie en
+« Locations ». C'est exactement ce que le constat ci-dessous disait vouloir éviter.
+
+    Visite guidée musée   →  Visite guidée (créneau)   catégorie comptable : Billetterie (7061)
+    Padel 90 min          →  Location de terrain       catégorie comptable : Locations
+    Créneau libre bassin  →  aucun produit             0,00 € — aucune vente n'est créée
+
+⚠ **ET EN LA CORRIGEANT J'EN AI CASSÉ UNE AUTRE, PAR LA MÊME ERREUR.** J'ai lu `categorie` sur le
+produit — un champ qui n'existe pas, le vrai est `categories` (collection, une valeur par axe). La
+lecture a rendu `None`, j'en ai conclu « aucune catégorie comptable », et j'ai **écrasé une
+catégorie correcte**. Restaurée dans la minute, vérifiée par relecture.
+
+**Trois fois le même défaut dans la journée : interroger un nom qui n'existe pas rend une absence,
+et une absence se lit comme une information.** Le `PATCH` a d'ailleurs répondu **200** en n'écrivant
+rien — la famille de §8.7, une heure après l'avoir documentée.
 
 <details><summary>Le constat d'origine, gardé</summary>
 
