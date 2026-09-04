@@ -8,6 +8,7 @@ import Tabs from '../components/Tabs.jsx'
 import { euros } from '../api/produit.js'
 import { aLeDroit } from '../api/droits.js'
 import NoShowSection from '../components/NoShowSection.jsx'
+import ActivitesReservation from '../components/ActivitesReservation.jsx'
 import { idDe as idDepuisIri } from '../api/iri'
 
 // --- Helpers de lecture (structures API Platform / module Réservation) ---
@@ -663,6 +664,7 @@ export default function Reservation({ etabActif, droits = [], session }) {
             ['liste', 'Liste par jour'],
             ['rdv', 'Prendre un rendez-vous'],
             ['horaires', 'Horaires et absences'],
+            ['activites', 'Activités'],
           ]}
           actif={vue}
           onChange={setVue}
@@ -674,6 +676,8 @@ export default function Reservation({ etabActif, droits = [], session }) {
         <div className="center" style={{ minHeight: 200 }}><div className="spinner" /></div>
       ) : vue === 'rdv' ? (
         <PriseRendezVous onReserve={recharger} />
+      ) : vue === 'activites' ? (
+        <ActivitesReservation droits={droits} />
       ) : vue === 'horaires' ? (
         <Disponibilites droits={droits} />
       ) : vue === 'semaine' ? (

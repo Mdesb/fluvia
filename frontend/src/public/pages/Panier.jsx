@@ -11,6 +11,7 @@ export default function Panier({
   langue,
   busy,
   erreur,
+  nonRelu,
   onRetirer,
   onVider,
   onModifier,
@@ -24,7 +25,16 @@ export default function Panier({
     return (
       <section aria-labelledby="bq-panier-titre">
         <h1 id="bq-panier-titre">Votre panier</h1>
-        <Vide titre="Votre panier est vide" texte="Parcourez la boutique pour ajouter des billets." />
+        {nonRelu ? (
+          // ⚠ « Votre panier est vide » serait un mensonge : on n'a pas pu le lire. Et le client
+          // est le seul a pouvoir juger — il sait, lui, s'il avait mis des billets dedans.
+          <Vide
+            titre="Votre panier n’a pas pu être relu"
+            texte="Il n’est pas perdu : nous n’avons pas réussi à le récupérer à l’instant. Rechargez la page dans un moment."
+          />
+        ) : (
+          <Vide titre="Votre panier est vide" texte="Parcourez la boutique pour ajouter des billets." />
+        )}
         <button type="button" className="btn primary" onClick={() => onNaviguer({ vue: 'vitrine' })}>
           Voir les billets
         </button>

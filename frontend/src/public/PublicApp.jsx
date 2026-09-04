@@ -29,6 +29,9 @@ export default function PublicApp() {
   const [panier, setPanier] = useState(null)
   const [busyPanier, setBusyPanier] = useState(false)
   const [erreurPanier, setErreurPanier] = useState(null)
+  // ⚠ PAS `erreurPanier` : `onNaviguer` le remet a `null` a chaque changement de vue, donc le
+  // message serait efface par le clic meme qui mene au panier. Celui-ci survit a la navigation.
+  const [panierNonRelu, setPanierNonRelu] = useState(false)
   const [metaCreneaux, setMetaCreneaux] = useState({})
 
   const [connecte, setConnecte] = useState(!!clientTokenStore.get())
@@ -140,6 +143,19 @@ export default function PublicApp() {
     }
   }, [vitrineId])
 
+  // ⚠ OUBLIER UN PANIER EST DEFINITIF, DONC CA NE SE DECIDE PAS SUR UN ECHEC DE LECTURE.
+  //
+  // Le jeton de session ne se retrouve pas : une fois efface, le panier reste `ouvert` en base et
+  // son proprietaire ne peut plus jamais y revenir. On ne l'oublie donc que sur une reponse qui
+  // AFFIRME qu'il n'est plus la.
+  //
+  // Mesure sur la preprod : panier vide reel + jeton faux -> le serveur rend 403 (il existe, il
+  // refuse de le rendre) ; l'ancien `catch(() => panierStore.clear())` effacait quand meme les
+  // deux cles. Verifie au rechargement : `panierId` et `panierToken` a `null`.
+  //
+  // `status` vient de `ApiError` : 0 pour un reseau coupe ou un delai depasse, sinon le code HTTP.
+  const panierDefinitivementPerdu = (e) => e?.status === 404 || e?.status === 410
+
   // Restaure un panier en cours (id + jeton conservés en local) au démarrage.
   useEffect(() => {
     const id = panierStore.getId()
@@ -152,7 +168,17 @@ export default function PublicApp() {
         if (p?.statut === 'ouvert') setPanier(p)
         else panierStore.clear()
       })
-      .catch(() => panierStore.clear())
+      .catch((e) => {
+        if (annule) return
+        if (panierDefinitivementPerdu(e)) {
+          panierStore.clear()
+          return
+        }
+        // Reseau, delai, 403, 429, 5xx : le panier existe peut-etre encore. On GARDE le jeton —
+        // sans lui il est irrecuperable — et on le dira si le client ouvre son panier, plutot que
+        // de lui montrer un panier vide qui ne l'est pas.
+        setPanierNonRelu(true)
+      })
     return () => {
       annule = true
     }
@@ -301,6 +327,7 @@ export default function PublicApp() {
           langue={langue}
           busy={busyPanier}
           erreur={erreurPanier}
+          nonRelu={panierNonRelu}
           onRetirer={retirerLigne}
           onModifier={modifierQuantite}
           onVider={viderPanier}

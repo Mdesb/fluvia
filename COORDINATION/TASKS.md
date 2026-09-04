@@ -445,16 +445,29 @@ nulle part aujourd'hui.
 
 #### CE QU'IL FAUT AVANT LA LEVÉE
 
-1. **Un écran qui permette de poser le produit sur une activité.** C'est le vrai prérequis, et il
-   n'était pas dans la fiche. Les activités ne sont affichées nulle part : c'est un écran à
-   construire, pas un champ à ajouter.
-2. **Les trois activités existantes configurées.**
+1. ~~**Un écran qui permette de poser le produit sur une activité.**~~ ✅ **LIVRÉ le 04/09 par
+   `allaccess-a9`** (`20b81b1e`, servi et vérifié). Onglet « Activités » dans Réservation : liste,
+   création, modification, et le produit de référence enfin réglable. Le manque y est signalé —
+   bandeau qui compte les activités concernées, pastille par ligne — **sans verrouiller
+   l'enregistrement** : bloquer aurait empêché de corriger les autres champs tant que le produit
+   n'était pas tranché, transformant un défaut en impasse.
+2. **Les trois activités existantes configurées.** ⚠ À faire par un humain : c'est une décision
+   produit, pas une migration. Sous quel produit se vend un cours, un créneau de bassin, un
+   rendez-vous ? Personne d'autre que l'exploitant ne peut répondre.
 3. **Alors seulement** la levée, avec un message qui nomme l'activité fautive.
 
-Tant que 1 n'existe pas, livrer la levée transforme un défaut comptable invisible en refus de vente
-visible. C'est un mauvais échange, et il est irréversible pour l'exploitant qui le subit.
+⚠ **NE PAS SAUTER LE 2.** Le 1 est fait, mais les trois activités sont toujours sans produit :
+livrer la levée maintenant refuserait encore 100 % des ventes de réservation. La seule chose qui a
+changé, c'est qu'on peut désormais les configurer — et vérifier qu'on l'a fait :
 
-**Statut : mesuré, bloqué sur le prérequis 1. Non claimé — disponible pour qui prend l'écran.**
+    SELECT COUNT(*) FROM reservation_activite WHERE produit_tarif_reference_id IS NULL;
+    -- doit rendre 0 AVANT de livrer la levée
+
+⚠ **Et le compagnon du défaut est toujours là** : `VenteReservationHandler:44` fait
+`setTypeTarif(Uuid::v4())` **sans condition**. Corriger le produit sans lui laisserait la moitié du
+fantôme en place — la ligne désignerait un vrai produit et un type de tarif inexistant.
+
+**Statut : prérequis 1 levé. Bloqué sur le 2, qui appartient à Maxime. Non claimé.**
 
 ---
 
