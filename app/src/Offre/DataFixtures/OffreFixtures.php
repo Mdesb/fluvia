@@ -100,6 +100,12 @@ final class OffreFixtures extends Fixture implements DependentFixtureInterface
         $typeEntree->addTypeCompatible($typeCarte);
         $typeCarte->addTypeCompatible($typeEntree);
 
+        // entree_unitaire ↔ prestation (Version20260904234500) : la même chose vendue à l'unité,
+        // avec ou sans billet émis. ⚠ Le sens qui compte est celui qui PERD le billet — y compris
+        // pour une vente au comptoir du même produit, car le type gouverne le produit, pas le canal.
+        $typeEntree->addTypeCompatible($typePrestation);
+        $typePrestation->addTypeCompatible($typeEntree);
+
         // --- Référentiels tarifaires ---
         $tarifPlein = $this->parNom($manager, TypeTarif::class, self::TARIF_PLEIN);
         $tarifPlein->setVisibiliteCanal([]);
