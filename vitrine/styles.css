@@ -743,3 +743,34 @@ input:focus-visible {
   grid-template-columns: repeat(auto-fit, minmax(300px, 380px));
   justify-content: center;
 }
+
+/* ⚠ UNE PROSE CENTREE AU-DESSUS D'UNE GRILLE PLEINE LARGEUR NE S'ALIGNE SUR RIEN.
+   `.mesure` centre un bloc de 68ch dans la page. Tant que toute la section etait etroite, ca se
+   voyait a peine. Depuis que les options et le tunnel prennent la largeur, le titre commencait
+   250 px a droite du premier module : deux bords gauches differents dans la meme section, ce que
+   l'oeil lit comme un defaut de fabrication. La prose garde sa mesure, mais s'aligne a gauche. */
+/* ⚠ ALIGNER N'EST PAS ELARGIR. En imposant le bord gauche ci-dessous, la prose a herite de la
+   largeur de page et une ligne courait sur 150 caracteres. Elle garde donc sa mesure de lecture —
+   c'est la MARGE qu'on voulait changer, pas la largeur. */
+#tarifs .mesure,
+#souscrire .mesure { margin-inline: 0; max-width: var(--mesure); }
+
+/* ⚠ ALIGNER PAR CONSTRUCTION, PAS EN CHERCHANT POURQUOI CA DECALE.
+   Prose et grilles heritaient de contraintes differentes — `.mesure` centre sur 68ch, `.options`
+   centre sur sa propre largeur, la grille de formules sur la sienne. Trois centrages differents
+   donnent trois bords gauches. On leur impose le meme : plus rien ne peut deriver. */
+#tarifs > *,
+#souscrire > * { margin-inline: 0; max-width: var(--page); }
+
+#tarifs-formules { justify-content: start; }
+
+/* ⚠ LE PRIX TOMBAIT A LA LIGNE, ET LES CARTES DEVENAIENT IRREGULIERES.
+   `.choix-texte` porte `flex-wrap: wrap` : des que le libelle etait long, le prix passait dessous.
+   Sur une grille, ca donne une carte sur trois avec deux lignes et une mise en page qui a l'air
+   ratee. Le libelle se coupe donc a l'interieur de sa propre colonne, le prix reste a sa place. */
+.choix-texte { flex-wrap: nowrap; }
+.choix-texte > :first-child { min-width: 0; }
+
+/* Un cran de plus par colonne : un libelle comme « Recouvrement des impayes » tient alors sur une
+   ligne dans la plupart des cas. */
+.choix-liste { grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); }
