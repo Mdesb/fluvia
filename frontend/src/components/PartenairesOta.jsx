@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import Modal from './Modal.jsx'
+import { libelleProduit } from '../api/produit.js'
 
 /**
  * LES PARTENAIRES DE REVENTE EN LIGNE — quatre routes, aucun écran.
@@ -21,6 +22,10 @@ export default function PartenairesOta({ etabActif, droits = [] }) {
   const [edition, setEdition] = useState(null)
   const [succes, setSucces] = useState(null)
   const [erreur, setErreur] = useState(null)
+  // `null` = on lit ; `undefined` = on n'a PAS PU lire ; un tableau = on a lu.
+  const [quotas, setQuotas] = useState(null)
+  const [produitsCatalogue, setProduitsCatalogue] = useState(null)
+  const [editionQuota, setEditionQuota] = useState(null)
 
   const peutGerer = aLeDroit(droits, 'boutique.gerer_connecteur_ota')
 
@@ -32,6 +37,19 @@ export default function PartenairesOta({ etabActif, droits = [] }) {
   }
 
   useEffect(charger, [etabActif])
+
+  function chargerQuotas() {
+    setQuotas(null)
+    api.quotasOta().then((r) => setQuotas(membres(r))).catch(() => setQuotas(undefined))
+  }
+
+  useEffect(chargerQuotas, [etabActif])
+
+  useEffect(() => {
+    api.produits({ itemsPerPage: 200 })
+      .then((r) => setProduitsCatalogue(membres(r)))
+      .catch(() => setProduitsCatalogue(undefined))
+  }, [etabActif])
 
   useEffect(() => {
     api.vitrines()
@@ -149,6 +167,24 @@ export default function PartenairesOta({ etabActif, droits = [] }) {
           </div>
         )}
       </div>
+
+      <QuotasOta
+        quotas={quotas}
+        partenaires={partenaires}
+        produits={produitsCatalogue}
+        peutGerer={peutGerer}
+        onEditer={setEditionQuota}
+        onNouveau={() => setEditionQuota({ partenaire: '', produit: '', quotaAlloue: '0' })}
+      />
+
+      <EditionQuota
+        valeurs={editionQuota}
+        partenaires={partenaires}
+        produits={produitsCatalogue}
+        onFermer={() => setEditionQuota(null)}
+        onFait={(m) => { setEditionQuota(null); setSucces(m); setErreur(null); chargerQuotas() }}
+        onErreur={setErreur}
+      />
 
       <EditionPartenaire
         valeurs={edition}
@@ -276,6 +312,247 @@ function EditionPartenaire({ valeurs, vitrines, onFermer, onFait, onErreur }) {
             disabled={busy || v.nom.trim() === ''}
             onClick={enregistrer}
           >
+            {busy ? 'Enregistrement…' : 'Enregistrer'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+
+/**
+ * LES QUOTAS ALLOUES — ce qui rend la revente possible.
+ *
+ * Un partenaire ne vend que ce qu'on lui a alloue. Sans quota, il n'a rien a proposer, et le
+ * reversement qu'on lui doit reste a zero sans que personne ne comprenne pourquoi.
+ *
+ * ⚠ LE CHIFFRE QUI COMPTE EST LE RESTANT. « 40 sur 50 » oblige a soustraire ; « il reste 10 » se
+ * lit d'un coup, et un quota epuise est exactement ce qu'on cherche quand un partenaire cesse
+ * brusquement de vendre.
+ */
+function QuotasOta({ quotas, partenaires, produits, peutGerer, onEditer, onNouveau }) {
+  function idDe(ref) {
+    if (!ref) return null
+    return typeof ref === 'string' ? String(ref).split('/').pop() : (ref.id ? String(ref.id) : null)
+  }
+
+  function nomDe(liste, ref, etiquette) {
+    const id = idDe(ref)
+    if (!id) return null
+    if (!Array.isArray(liste)) return undefined
+    const t = liste.find((x) => String(x.id) === id)
+    return t ? (etiquette(t)) : null
+  }
+
+  const epuises = Array.isArray(quotas)
+    ? quotas.filter((q) => (q.quotaAlloue || 0) - (q.quotaConsomme || 0) <= 0).length
+    : 0
+
+  return (
+    <section className="card" style={{ marginTop: 'var(--esp-bloc)' }}>
+      <div className="card-h">
+        <h3>Quotas alloués</h3>
+        <span className="sub">
+          {quotas === null ? 'lecture…' : quotas === undefined ? 'illisible' : `${quotas.length}`}
+        </span>
+        {peutGerer && (
+          <button className="btn primary sm" type="button" style={{ marginLeft: 'auto' }} onClick={onNouveau}>
+            Allouer un quota
+          </button>
+        )}
+      </div>
+
+      <div className="card-b">
+        <div className="sub" style={{ marginBottom: 'var(--esp-normal)' }}>
+          Un partenaire ne vend que ce qu’on lui alloue. Le consommé est tenu par le serveur, à
+          partir des ventes que la plateforme partenaire remonte&nbsp;: il ne se corrige pas ici.
+        </div>
+
+        {quotas === undefined && (
+          <div className="banner banner-warn">
+            Les quotas n’ont pas pu être lus. Cet écran ne sait donc pas ce que vos partenaires
+            peuvent encore vendre.
+          </div>
+        )}
+
+        {/* ⚠ UN QUOTA EPUISE EST LA RAISON POUR LAQUELLE UN PARTENAIRE CESSE DE VENDRE. Sans ce
+            compte en tête, on cherche la panne du côté du connecteur pendant des jours. */}
+        {epuises > 0 && (
+          <div className="banner banner-warn">
+            <b>{epuises} quota{epuises > 1 ? 's' : ''} épuisé{epuises > 1 ? 's' : ''}.</b>{' '}
+            Le partenaire concerné ne peut plus rien vendre sur ce produit tant que vous n’augmentez
+            pas son allocation.
+          </div>
+        )}
+
+        {quotas === null && <div className="empty">Lecture des quotas…</div>}
+
+        {Array.isArray(quotas) && quotas.length === 0 && (
+          <div className="empty">
+            Aucun quota alloué. Vos partenaires n’ont donc rien à revendre.
+          </div>
+        )}
+
+        {Array.isArray(quotas) && quotas.length > 0 && (
+          <div style={{ overflowX: 'auto' }}>
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>Partenaire</th>
+                  <th>Produit</th>
+                  <th className="num">Alloué</th>
+                  <th className="num">Vendu</th>
+                  <th>Reste</th>
+                  {peutGerer && <th />}
+                </tr>
+              </thead>
+              <tbody>
+                {quotas.map((q) => {
+                  const alloue = q.quotaAlloue || 0
+                  const vendu = q.quotaConsomme || 0
+                  const reste = alloue - vendu
+                  const nomP = nomDe(partenaires, q.partenaire, (x) => x.nom)
+                  const nomProd = nomDe(produits, q.produit, (x) => libelleProduit(x))
+                  return (
+                    <tr key={q.id}>
+                      <td>
+                        {nomP === undefined
+                          ? <span className="sub">partenaires non lus</span>
+                          : nomP || <span className="sub">partenaire inconnu</span>}
+                      </td>
+                      <td>
+                        {nomProd === undefined
+                          ? <span className="sub">catalogue non lu</span>
+                          : nomProd || <span className="sub">produit inconnu</span>}
+                        {q.creneau && <div className="sub">sur un créneau précis</div>}
+                      </td>
+                      <td className="num">{alloue}</td>
+                      <td className="num">{vendu}</td>
+                      <td>
+                        {reste <= 0
+                          ? <span className="badge crit">épuisé</span>
+                          : <span className={reste <= 5 ? 'badge warn' : ''}>il reste {reste}</span>}
+                      </td>
+                      {peutGerer && (
+                        <td>
+                          <button
+                            className="btn ghost sm"
+                            type="button"
+                            onClick={() => onEditer({
+                              id: q.id,
+                              partenaire: idDe(q.partenaire) || '',
+                              produit: idDe(q.produit) || '',
+                              quotaAlloue: String(alloue),
+                            })}
+                          >
+                            Modifier
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
+/**
+ * ⚠ ON N'ENVOIE JAMAIS `quotaConsomme`. C'est le compte du serveur, alimenté par les ventes que la
+ * plateforme partenaire remonte sur `/boutique/ota/ventes`. Offrir de le corriger à la main ferait
+ * diverger le registre de la réalité, et personne ne saurait plus lequel fait foi.
+ *
+ * Le créneau n'est pas proposé non plus : un quota peut viser une séance précise, mais l'écran ne
+ * lit pas les créneaux — offrir un choix vide vaut moins que ne rien offrir. Les quotas posés par
+ * l'API sur un créneau restent lisibles, et la ligne le signale.
+ */
+function EditionQuota({ valeurs, partenaires, produits, onFermer, onFait, onErreur }) {
+  const [v, setV] = useState(null)
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => { setV(valeurs) }, [valeurs])
+
+  if (!valeurs || !v) return null
+
+  const pret = v.partenaire !== '' && v.produit !== '' && Number(v.quotaAlloue) >= 0
+
+  async function enregistrer() {
+    setBusy(true)
+    onErreur(null)
+    try {
+      const corps = {
+        partenaire: `/api/boutique_partenaire_otas/${v.partenaire}`,
+        produit: `/api/produits/${v.produit}`,
+        quotaAlloue: Number(v.quotaAlloue) || 0,
+      }
+      if (v.id) await api.majQuotaOta(v.id, corps)
+      else await api.creerQuotaOta(corps)
+      await onFait(v.id ? 'Quota enregistré.' : 'Quota alloué.')
+    } catch (e) {
+      onErreur(e.message || 'Le quota n’a pas pu être enregistré.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal open onClose={onFermer} titre={v.id ? 'Modifier le quota' : 'Allouer un quota'} taille="sm">
+      <div style={{ display: 'grid', gap: 'var(--esp-large)' }}>
+        <label style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
+          <span className="sub">Partenaire *</span>
+          {partenaires === undefined ? (
+            <span className="sub">Les partenaires n’ont pas pu être lus.</span>
+          ) : (
+            <select
+              className="select"
+              value={v.partenaire}
+              onChange={(e) => setV((p) => ({ ...p, partenaire: e.target.value }))}
+            >
+              <option value="">— choisir —</option>
+              {(partenaires || []).map((x) => <option key={x.id} value={x.id}>{x.nom}</option>)}
+            </select>
+          )}
+        </label>
+
+        <label style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
+          <span className="sub">Produit *</span>
+          {produits === undefined ? (
+            <span className="sub">Le catalogue n’a pas pu être lu.</span>
+          ) : (
+            <select
+              className="select"
+              value={v.produit}
+              onChange={(e) => setV((p) => ({ ...p, produit: e.target.value }))}
+            >
+              <option value="">— choisir —</option>
+              {(produits || []).map((x) => <option key={x.id} value={x.id}>{libelleProduit(x)}</option>)}
+            </select>
+          )}
+        </label>
+
+        <label style={{ display: 'grid', gap: 'var(--esp-serre)' }}>
+          <span className="sub">Quantité allouée *</span>
+          <input
+            className="input"
+            type="number"
+            min="0"
+            value={v.quotaAlloue}
+            onChange={(e) => setV((p) => ({ ...p, quotaAlloue: e.target.value }))}
+          />
+          <span className="sub">
+            Le nombre déjà vendu n’est pas modifiable ici&nbsp;: il vient des ventes remontées par
+            le partenaire.
+          </span>
+        </label>
+
+        <div style={{ display: 'flex', gap: 'var(--esp-normal)', justifyContent: 'flex-end' }}>
+          <button className="btn ghost" type="button" onClick={onFermer}>Annuler</button>
+          <button className="btn primary" type="button" disabled={busy || !pret} onClick={enregistrer}>
             {busy ? 'Enregistrement…' : 'Enregistrer'}
           </button>
         </div>

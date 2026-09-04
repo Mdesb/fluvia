@@ -450,6 +450,14 @@ table.tbl tbody tr:hover { background: var(--panel-2); }
 
 .empty { color: var(--ink-faint); font-size: var(--txt-normal); padding: 20px; text-align: center; }
 .hint { font-size: var(--txt-petit); color: var(--ink-faint); margin-top: 8px; }
+/* ⚠ SUR UNE SURFACE TEINTEE, LA MENTION DISCRETE PASSE A `--ink-soft`. Mesure du rendu, theme
+   clair : `--ink-faint` sur `--crit-bg` rend 4,47:1, sous le seuil de 4,5 -- et il est marginal sur
+   les trois autres teintes (4,71 a 4,83). `--ink-soft` degage les huit combinaisons, dans les deux
+   themes (5,86 a 7,10). On ne touche pas au jeton : ca deplacerait toutes les mentions du produit,
+   alors que seules celles posees sur une teinte sont en cause.
+   Le garde-fou des contrastes ne pouvait pas le voir : il verifie des PAIRES DECLAREES, et personne
+   n'avait declare celle-la. */
+.banner .hint { color: var(--ink-soft); }
 
 /* DEUX CLASSES QUE LE JSX EMPLOIE ET QUE LE CSS N'AVAIT JAMAIS DECLAREES.
  *
