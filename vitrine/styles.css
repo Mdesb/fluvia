@@ -647,22 +647,12 @@ input:focus-visible {
 /* ⚠ ALIGNER N'EST PAS ELARGIR. En imposant le bord gauche ci-dessous, la prose a herite de la
    largeur de page et une ligne courait sur 150 caracteres. Elle garde donc sa mesure de lecture —
    c'est la MARGE qu'on voulait changer, pas la largeur. */
-#tarifs .mesure,
-#souscrire .mesure { margin-inline: 0; max-width: var(--mesure); }
 
 /* ⚠ ALIGNER PAR CONSTRUCTION, PAS EN CHERCHANT POURQUOI CA DECALE.
    Prose et grilles heritaient de contraintes differentes — `.mesure` centre sur 68ch, `.options`
    centre sur sa propre largeur, la grille de formules sur la sienne. Trois centrages differents
    donnent trois bords gauches. On leur impose le meme : plus rien ne peut deriver. */
-#tarifs > *,
-#souscrire > * { margin-inline: 0; max-width: var(--page); }
 
-/* ⚠ DEUX SYSTEMES D'ALIGNEMENT SUR UNE MEME PAGE, C'EST PIRE QU'UN SEUL MAUVAIS.
-   En calant les tarifs et le tunnel a gauche, j'ai laisse la FAQ, les modules et les metiers
-   centres : le regard changeait de bord en descendant. L'accueil partage donc un seul bord gauche,
-   celui du bandeau. Les AUTRES pages gardent leur prose centree — un article de blog n'a pas de
-   grille en face de lui, rien n'y justifie de casser le centrage. */
-.page-accueil .bande > * { margin-inline: 0; }
 
 #tarifs-formules { justify-content: start; }
 
@@ -677,9 +667,6 @@ input:focus-visible {
    ligne dans la plupart des cas. */
 .choix-liste { grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); }
 
-/* Les jetons de metiers etaient centres entre eux : la deuxieme ligne partait 70 px plus a droite
-   que la premiere, seule chose de la page a ne pas commencer au meme bord. */
-.page-accueil .jetons { justify-content: flex-start; }
 
 /* ══ LA PAGE D'ACCUEIL REFONDUE (05/09) ═══════════════════════════════════════════════════════
 
@@ -992,3 +979,16 @@ input:focus-visible {
 .famille-tarif { display: flex; flex-direction: column; gap: 12px; }
 .famille-tarif-tete { display: flex; align-items: center; gap: 10px; }
 .famille-tarif-tete h3 { margin: 0; font-size: 16px; font-weight: 500; }
+
+/* ⚠ UN CONTENEUR CENTRE, ET TOUT ALIGNE A GAUCHE DEDANS.
+   Hier j'ai corrige un defaut d'alignement en collant toute la page au bord gauche de l'ecran.
+   Maxime : « non, c'est pas bon comme ca » — et il avait raison : j'avais echange un defaut
+   d'alignement contre un defaut d'equilibre, avec un tiers d'ecran vide a droite.
+   La maquette validee tient les deux : un bloc centre, dont le contenu partage un seul bord. */
+.page-accueil .bande > * {
+  max-width: 1280px;
+  margin-inline: auto;
+}
+.page-accueil .bande > .mesure { max-width: 1280px; }
+.page-accueil .mesure > h2,
+.page-accueil .mesure > p { max-width: var(--mesure); }
