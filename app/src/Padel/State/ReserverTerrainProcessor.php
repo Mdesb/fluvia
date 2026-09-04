@@ -10,6 +10,7 @@ use App\Caisse\Entity\SessionCaisse;
 use App\Crm\Entity\Beneficiaire;
 use App\Padel\Entity\ReservationPadel;
 use App\Padel\Entity\TerrainPadel;
+use App\Padel\Enum\StatutJoueurTarif;
 use App\Padel\Enum\StatutPartieOuverte;
 use App\Padel\Service\CalculateurTarifTerrainHandler;
 use App\Reservation\Entity\Creneau;
@@ -188,6 +189,14 @@ final class ReserverTerrainProcessor implements ProcessorInterface
                 // le padel serait invisible dans les recettes — exactement la question posée.
                 null,
                 $ressource->getId(),
+                // ⚠ LE TYPE DE TARIF VIENT DU PARAMETRAGE, ET IL Y DORMAIT (§8.11).
+                // `typeTarifMembreRef` et `typeTarifNonMembreRef` existent depuis toujours, avec
+                // getters et setters, et personne ne les lisait — troisieme champ orphelin de la
+                // journee apres `produitTerrainRef`. Sans eux, la ligne portait un `Uuid::v4()` et
+                // le ticket sortait sans libelle de tarif.
+                $tarif->statutJoueur === StatutJoueurTarif::Membre
+                    ? $parametrage?->getTypeTarifMembreRef()
+                    : $parametrage?->getTypeTarifNonMembreRef(),
             );
             $reservation->setVenteRattachee($vente);
         }

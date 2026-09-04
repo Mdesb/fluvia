@@ -40,6 +40,16 @@ use Symfony\Component\Uid\Uuid;
  */
 final class VenteReservationTerrainTest extends PadelApiTestCase
 {
+    /**
+     * Le type de tarif « non-membre » posé au paramétrage padel.
+     *
+     * ⚠ Une constante et non un `Uuid::v4()` à la volée : le test doit pouvoir COMPARER ce qui
+     * ressort à ce qui a été posé. Un identifiant tiré dans chaque méthode rendrait la comparaison
+     * impossible, et le test se contenterait de « ce n'est pas nul » — ce qui passerait aussi avec
+     * le tirage au hasard qu'on vient de retirer.
+     */
+    private const TYPE_TARIF_NON_MEMBRE = 'bb5ffb70-0000-4000-8000-00000000ffff';
+
     public function testLaReservationRattacheSaVenteAvecLeProduitParametre(): void
     {
         [$client, $entete] = $this->adminSurA();
@@ -63,6 +73,17 @@ final class VenteReservationTerrainTest extends PadelApiTestCase
 
         $lignes = $vente->getLignes()->toArray();
         self::assertCount(1, $lignes, 'une réservation de terrain, une ligne');
+
+        // ⚠ LE TYPE DE TARIF EST CELUI DU PARAMÉTRAGE, PAS UN TIRAGE (§8.11). Son seul lecteur est
+        // `LineLabelStamper`, qui s'en sert pour figer le LIBELLÉ sur le ticket : une référence qui
+        // ne désigne rien laisse le client avec une ligne sans « Membre » ni « Plein tarif ».
+        self::assertSame(
+            self::TYPE_TARIF_NON_MEMBRE,
+            (string) $lignes[0]->getTypeTarif(),
+            'le type de tarif doit venir du paramétrage padel — un Uuid tiré au hasard laisserait '
+            . 'le ticket sans libellé de tarif, et ce test passerait si l’on vérifiait seulement '
+            . 'qu’il n’est pas nul',
+        );
 
         // ⚠ L'ORIGINE DE LA RECETTE (§8.12). Sans la ressource, « combien le padel a-t-il rapporté »
         // reste sans réponse : la ventilation comptable ne voit que la catégorie du produit, et un
@@ -223,6 +244,10 @@ final class VenteReservationTerrainTest extends PadelApiTestCase
 
         $produit = Uuid::v4();
         $parametrage->setProduitTerrainRef($produit);
+        // ⚠ ET LES TYPES DE TARIF, QUI DORMAIENT EUX AUSSI (§8.11). `typeTarifMembreRef` et
+        // `typeTarifNonMembreRef` existent depuis toujours et personne ne les lisait ; sans eux la
+        // ligne portait un `Uuid::v4()` et le ticket sortait sans libelle de tarif.
+        $parametrage->setTypeTarifNonMembreRef(Uuid::fromString(self::TYPE_TARIF_NON_MEMBRE));
         $em->flush();
 
         return $produit;

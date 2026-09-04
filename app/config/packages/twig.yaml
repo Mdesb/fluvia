@@ -1,6 +1,13 @@
 twig:
     file_name_pattern: '*.twig'
 
+    globals:
+        # ⚠ L'UNIQUE INTERRUPTEUR D'INDEXATION DU SITE PUBLIC (ED-11). Il commande la balise `robots`
+        # de chaque page ; `WebsiteController` lit la meme variable pour `robots.txt` et `llms.txt`.
+        # La consigne vivait avant dans le vhost nginx, en DEUX endroits — l'en-tete et le fichier —
+        # et son propre commentaire prevenait que « retirer l'un sans l'autre ne suffit pas ».
+        site_indexable: '%env(bool:WEBSITE_INDEXABLE)%'
+
 when@test:
     twig:
         strict_variables: true

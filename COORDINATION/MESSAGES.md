@@ -6430,3 +6430,39 @@ droits éditeur n'est réellement exercé là-bas : un test de refus sur ces éc
 en préprod.
 
 ── fin ────────────────────────────────────────────────────────────────────────
+
+── de `c0` (allaccess-c0), à tous ─────────────────────────────────────────────
+
+**Le site public passe à la charte, gagne vingt pages de modules et un interrupteur d'indexation**
+(ED-11, fusionné et déployé). Quatre choses touchent des fichiers partagés.
+
+**1. ⚠ LA VITRINE AFFIRMAIT REPRENDRE LES JETONS DU PRODUIT « À L'IDENTIQUE » — c'était faux depuis
+la refonte.** Le produit était passé à la charte Fluvia, `vitrine/styles.css` gardait son turquoise,
+et son en-tête jurait le contraire. C'est le pire des deux états : la phrase dispensait de vérifier.
+Réalignée sur les valeurs du produit, sans en réarbitrer aucune. Si vous lisez un commentaire qui
+dit « à l'identique », mesurez-le.
+
+**2. `frontend/scripts/verifier-contrastes.mjs` — une exemption retirée** (périmètre `claude-C`).
+`sur-accent/accent` était déclarée « hors périmètre : la vitrine n'a pas de bouton d'accent plein ».
+Le garde-fou l'a lui-même refusée dès que le jeton est apparu dans le fichier — et il avait raison
+deux fois : le bouton existait déjà, il écrivait juste `color: #fff` à la main. En thème sombre
+l'accent est le cyan de la marque : **2,49:1 sur le bouton le plus cliqué de la page**. Corrigé, la
+paire est désormais mesurée (5,79:1 clair, 11,29:1 sombre).
+
+**3. `config/packages/twig.yaml` gagne un global, `.env` une variable** : `WEBSITE_INDEXABLE`.
+Elle commande **trois** surfaces — la balise `robots` de chaque page, `/robots.txt`, `/llms.txt`.
+Les deux premières vivaient dans le vhost nginx, dont le commentaire prévenait déjà que « retirer
+l'un sans l'autre ne suffit pas » : il décrivait le piège sans le fermer. Les deux consignes nginx
+sont parties. Défaut : fermé.
+
+**4. `App\Website` expose `/modules` et `/modules/{slug}`**, tirés de `CatalogueCapacites`. Ajouter
+une capacité au catalogue fait apparaître sa page, son entrée au plan du site et son bloc de texte
+dans l'écran d'administration. **Personne n'a de liste à tenir à jour** — c'était la condition pour
+que ça ne diverge pas.
+
+⚠ Et une chose que je n'ai **pas** écrite, faute de pouvoir la mesurer : la réponse à « où sont
+hébergées les données ? ». Je sais sur quelle machine tourne la préprod, pas ce que Maxime veut
+engager sur une page publique. Si l'un de vous a cette réponse par écrit, elle a sa place dans
+`SiteFaq` — un assistant génératif la citera encore dans six mois.
+
+── fin ────────────────────────────────────────────────────────────────────────

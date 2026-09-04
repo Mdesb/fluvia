@@ -7,7 +7,12 @@ namespace App\Website\Service;
 use App\Website\Enum\BlockType;
 
 /**
- * La liste des blocs dont la page d'accueil est faite (ED-10).
+ * La liste des blocs de contenu que les gabarits attendent (ED-10, ED-11).
+ *
+ * Deux familles, et le groupe les sépare dans l'écran : les blocs de la PAGE D'ACCUEIL, déclarés
+ * un par un ci-dessous, et un corps rédigeable par MODULE, dérivé du catalogue technique. Les
+ * seconds ne sont pas écrits à la main : ajouter une capacité au produit fait apparaître son bloc,
+ * en retirer une le fait disparaître. Une liste recopiée aurait divergé au premier module ajouté.
  *
  * ⚠ **C'EST LE CODE QUI DÉCLARE LES BLOCS, ET LA BASE QUI PORTE LEUR VALEUR.** Le gabarit sait de
  * quoi la page est faite ; la base ne le sait pas. Inverser les deux — « les blocs sont ce que
@@ -21,12 +26,20 @@ use App\Website\Enum\BlockType;
  * que l'écran d'administration montre — l'écran dirait « vide », la page dirait un texte, et
  * personne ne saurait lequel des deux ment. Un bloc absent en base ne rend rien.
  */
-final class HomeBlocks
+final class SiteBlocks
 {
     /**
-     * @return list<array{key: string, type: BlockType, label: string, help: string, initialValue: array<int|string, mixed>}>
+     * @return list<array{key: string, type: BlockType, label: string, help: string, groupe: string, initialValue: array<int|string, mixed>}>
      */
     public static function all(): array
+    {
+        return array_merge(self::blocsDaccueil(), self::blocsDeModule());
+    }
+
+    /**
+     * @return list<array{key: string, type: BlockType, label: string, help: string, groupe: string, initialValue: array<int|string, mixed>}>
+     */
+    private static function blocsDaccueil(): array
     {
         return [
             self::bloc('home.hero.title', BlockType::Line, 'Titre principal',
@@ -119,7 +132,41 @@ final class HomeBlocks
     }
 
     /**
-     * @return array{key: string, type: BlockType, label: string, help: string, initialValue: array<int|string, mixed>}
+     * Un corps rédigeable par module, dérivé du catalogue (ED-11).
+     *
+     * ⚠ **VIDE À L'ORIGINE, ET C'EST VOULU.** `initialValue` est un corps vide : la page de module se
+     * rend déjà avec le libellé et la description du catalogue. Y semer un texte de remplissage
+     * ferait vingt pages qui se ressemblent — exactement ce qu'un moteur appelle du contenu mince, et
+     * ce qui fait descendre les vingt d'un coup.
+     *
+     * @return list<array{key: string, type: BlockType, label: string, help: string, groupe: string, initialValue: array<int|string, mixed>}>
+     */
+    private static function blocsDeModule(): array
+    {
+        // ⚠ INSTANCIÉ ICI PLUTÔT QU'INJECTÉ, parce que cette classe est une DÉCLARATION : elle doit
+        // rester lisible sans conteneur, en ligne de commande comme au démarrage. `CatalogueCapacites`
+        // se construit sans argument — c'est ce qui le permet, et c'est vérifié par ses propres tests.
+        $catalogue = new ModuleCatalog(new \App\Fonctionnalite\Service\CatalogueCapacites());
+
+        $blocs = [];
+
+        foreach ($catalogue->modules() as $module) {
+            $blocs[] = [
+                'key' => ModuleCatalog::cleDeBloc($module['code']),
+                'type' => BlockType::Rich,
+                'label' => $module['libelle'],
+                'help' => 'Le texte long de la page /modules/'.$module['slug'].'. La description courte vient du '
+                    .'catalogue et ne se saisit pas ici : elle doit rester celle du produit.',
+                'groupe' => 'modules',
+                'initialValue' => ['html' => ''],
+            ];
+        }
+
+        return $blocs;
+    }
+
+    /**
+     * @return array{key: string, type: BlockType, label: string, help: string, groupe: string, initialValue: array<int|string, mixed>}
      */
     private static function bloc(string $key, BlockType $type, string $label, string $help, array $initialValue): array
     {
@@ -128,6 +175,7 @@ final class HomeBlocks
             'type' => $type,
             'label' => $label,
             'help' => $help,
+            'groupe' => 'accueil',
             'initialValue' => $initialValue,
         ];
     }
