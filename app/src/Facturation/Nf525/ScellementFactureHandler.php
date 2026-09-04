@@ -135,7 +135,34 @@ final class ScellementFactureHandler
                         : 'non vérifiable : ce document a été scellé avant que l\'instantané ne soit conservé, et sa reconstruction ne redonne pas l\'empreinte — un référentiel a pu changer depuis',
                 ];
             } elseif (!hash_equals($this->signer($facture->getEmpreinte()), $facture->getSignature())) {
-                $anomalies[] = ['sequence' => $sequence, 'probleme' => 'signature invalide'];
+                // ⚠ ON N'ARRIVE ICI QUE SI LES DEUX CONTROLES PRECEDENTS SONT PASSES, ET CA CHANGE
+                // TOUT CE QU'ON PEUT DIRE.
+                //
+                // L'instantané décrit encore la facture : le contenu en base n'a pas bougé.
+                // L'empreinte recalculée égale la scellée : la chaîne est entière.
+                // Seule la signature diffère — or `signer()` est `hash_hmac(sha256, empreinte,
+                // clé)`, et l'empreinte vient d'être vérifiée identique. Les seules entrées qui
+                // peuvent différer sont donc LA CLÉ et la signature stockée.
+                //
+                // L'ancien message disait « signature invalide », et rien d'autre. Mesuré sur la
+                // préproduction : facture scellée le 28/08 à 22:57, fichier portant
+                // `NF525_FACTURATION_SEAL_KEY` modifié le 31/08 à 17:33 — une clé remplacée, et un
+                // message qui laissait craindre une falsification.
+                //
+                // ⚠ MAIS ON NE BASCULE PAS DANS L'ERREUR SYMÉTRIQUE. Quelqu'un qui altérerait la
+                // donnée ET recalculerait l'empreinte produirait exactement ce résultat, sans
+                // pouvoir forger la signature faute de clé. Les deux causes sont donc nommées, et
+                // celle qui se vérifie en une commande est désignée comme telle.
+                $anomalies[] = [
+                    'sequence' => $sequence,
+                    'probleme' => 'signature invalide, mais le contenu de ce document est intact : '
+                        . 'son empreinte se vérifie et la chaîne est entière. Seule la signature ne '
+                        . 'correspond pas. Deux causes possibles, et une seule se vérifie tout de '
+                        . 'suite : la clé de scellement n\'est plus celle qui a signé (remplacement '
+                        . 'ou restauration d\'environnement), ou la signature stockée a été touchée. '
+                        . 'Comparez `NF525_FACTURATION_SEAL_KEY` à celle en vigueur au '
+                        . 'scellement avant de conclure.',
+                ];
             }
 
             $empreintePrecedente = $facture->getEmpreinte();
