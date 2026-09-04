@@ -1,0 +1,17 @@
+[Unit]
+Description=Recupere les piles de test inactives (pool d'adresses Docker)
+Documentation=file:/home/debian/billetterie/infra/recuperer-piles-test.sh
+After=docker.service
+Requires=docker.service
+# ⚠ « FINISHED SUCCESSFULLY » ALORS QU'IL N'AVAIT RIEN TROUVE. La premiere version portait
+#   `ExecStart=-` pour ne pas crier si l'arbre n'etait pas la ; systemd avalait l'echec et
+#   annoncait une reussite. Un script absent devenait indiscernable d'un script qui a tourne.
+#   `ConditionPathExists` dit la verite : la tache est SAUTEE, et le journal l'ecrit.
+ConditionPathExists=/home/debian/billetterie/infra/recuperer-piles-test.sh
+
+[Service]
+Type=oneshot
+User=debian
+Group=debian
+WorkingDirectory=/home/debian/billetterie
+ExecStart=/home/debian/billetterie/infra/recuperer-piles-test.sh --pour-de-vrai
