@@ -1,0 +1,68 @@
+{% extends 'website/base.html.twig' %}
+
+{#
+  La liste des modules (ED-11).
+
+  ⚠ RIEN N'EST ÉCRIT ICI : libellés et descriptions viennent du catalogue technique, celui-là même
+  que le tunnel vend et que le produit expose. Une liste recopiée aurait divergé au premier module
+  ajouté — et c'est le prospect qui l'aurait relevé, en démonstration.
+#}
+
+{% block title %}Les modules de Fluvia — billetterie, réservation, accès, caisse, facturation{% endblock %}
+{% block description %}Tous les modules de Fluvia, activables séparément : contrôle d'accès, réservation de créneaux, caisse, boutique en ligne, prélèvement SEPA, comptabilité, stock. Vous ne payez que ce que vous activez.{% endblock %}
+{% block canonical %}<link rel="canonical" href="{{ url('website_modules') }}">{% endblock %}
+
+{% block body %}
+  <section class="bande hero">
+    <div class="mesure">
+      <p class="fil"><a href="{{ path('website_home') }}">Accueil</a> · Modules</p>
+      <h1>Les modules de Fluvia</h1>
+      <p class="chapo">
+        Le socle est toujours là — comptes, établissements, droits, journal, communication. Le reste
+        s'active à la demande, et ne se facture que s'il est activé. Un module éteint n'efface rien :
+        vos données restent, l'accès seul se ferme.
+      </p>
+    </div>
+  </section>
+
+  {% for rubrique in rubriques %}
+    <section class="bande{{ loop.index is odd ? '' : ' bande-creuse' }}">
+      <div class="mesure">
+        <h2 class="rubrique-titre">{{ rubrique.titre }}</h2>
+      </div>
+
+      <ul class="grille" role="list">
+        {% for module in rubrique.modules %}
+          <li class="carte">
+            <h3><a href="{{ path('website_module', {slug: module.slug}) }}">{{ module.libelle }}</a></h3>
+            <p>{{ module.description }}</p>
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endfor %}
+
+  {#
+    LES QUESTIONS SONT AFFICHÉES, PAS SEULEMENT BALISÉES. Un `FAQPage` dont les réponses ne sont pas
+    visibles est du contenu caché — c'est la faute la plus courante de ce format, et elle se paie.
+  #}
+  <section class="bande" id="questions">
+    <div class="mesure">
+      <h2>Questions fréquentes</h2>
+      <dl class="faq">
+        {% for q in questions %}
+          <dt>{{ q.question }}</dt>
+          <dd>{{ q.reponse }}</dd>
+        {% endfor %}
+      </dl>
+
+      <p class="actions">
+        <a class="btn btn-primaire btn-grand" href="{{ path('website_home') }}#souscrire">Essayer gratuitement 14 jours</a>
+      </p>
+    </div>
+  </section>
+{% endblock %}
+
+{% block footer %}
+  <p>Les modules affichés ici sont ceux que la plateforme sait livrer aujourd'hui.</p>
+{% endblock %}

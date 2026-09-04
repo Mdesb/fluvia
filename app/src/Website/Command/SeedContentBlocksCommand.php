@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Website\Command;
 
 use App\Website\Entity\ContentBlock;
-use App\Website\Service\HomeBlocks;
+use App\Website\Service\SiteBlocks;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -19,7 +19,7 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  *
  * **Pourquoi une commande et pas une migration.** Une migration de données recopierait ce texte dans
  * un fichier daté que personne ne relit, et le jour où l'on ajoute un bloc au gabarit, il faudrait
- * une seconde migration. Ici, ajouter un bloc à {@see HomeBlocks} et relancer la commande suffit.
+ * une seconde migration. Ici, ajouter un bloc à {@see SiteBlocks} et relancer la commande suffit.
  *
  * ⚠ **ELLE NE TOUCHE JAMAIS UN BLOC DÉJÀ RENSEIGNÉ.** C'est la seule propriété qui compte : sans
  * elle, un déploiement écraserait le texte que quelqu'un vient d'écrire par celui qui dort dans le
@@ -55,7 +55,19 @@ final class SeedContentBlocksCommand extends Command
         $poses = 0;
         $gardes = 0;
 
-        foreach (HomeBlocks::all() as $declare) {
+        foreach (SiteBlocks::all() as $declare) {
+            // ⚠ UN BLOC SANS VALEUR D'ORIGINE NE S'ÉCRIT PAS, ET CE N'EST PAS UNE OPTIMISATION.
+            //
+            // Les corps de pages de modules naissent vides, délibérément. Les écrire quand même
+            // rangerait en base une valeur vide — et l'écran, qui distingue « jamais rempli » de
+            // « rempli », les afficherait comme remplis. Le rédacteur perdrait le seul signal qui
+            // lui dit où il reste quelque chose à écrire, et il le perdrait sur les vingt pages à
+            // la fois.
+            if (self::estVide($declare['initialValue'])) {
+                ++$gardes;
+                continue;
+            }
+
             $existant = $this->em->getRepository(ContentBlock::class)->find($declare['key']);
 
             if (null !== $existant && !$force) {
@@ -87,5 +99,25 @@ final class SeedContentBlocksCommand extends Command
         ));
 
         return Command::SUCCESS;
+    }
+
+    /**
+     * Cette valeur d'origine a-t-elle quelque chose à dire ?
+     *
+     * @param array<int|string, mixed> $valeur
+     */
+    private static function estVide(array $valeur): bool
+    {
+        foreach ($valeur as $contenu) {
+            if (\is_array($contenu) && [] !== $contenu) {
+                return false;
+            }
+
+            if (\is_string($contenu) && '' !== trim($contenu)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }

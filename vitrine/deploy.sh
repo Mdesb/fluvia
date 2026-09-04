@@ -35,8 +35,18 @@ sudo rm -f "$CIBLE/index.html"
 
 FICHIERS=(styles.css tarifs.js tunnel.js confirmation.html confirmation.js)
 
+# LA MARQUE EST SERVIE PAR CET HOTE, PAS PAR CELUI DE L APPLICATION. Les deux sites sont sur des
+# domaines distincts : un logo charge depuis smartaccess ferait une requete tierce sur chaque page
+# publique, et disparaitrait le jour ou l application change d adresse.
+MARQUE=(FLUVIA_Icon_Color.svg FLUVIA_Logo_Color.svg FLUVIA_Favicon_512.png)
+
 for f in "${FICHIERS[@]}"; do
     sudo cp "$SOURCE/$f" "$CIBLE/$f"
+done
+
+sudo mkdir -p "$CIBLE/marque"
+for f in "${MARQUE[@]}"; do
+    sudo cp "$SOURCE/../frontend/public/marque/$f" "$CIBLE/marque/$f"
 done
 
 sudo chown -R www-data:www-data "$CIBLE"
@@ -46,14 +56,30 @@ sudo chown -R www-data:www-data "$CIBLE"
 # la copie.
 ECHECS=0
 
-for f in "${FICHIERS[@]}"; do
-    ATTENDU="$(sha256sum "$SOURCE/$f" | cut -d' ' -f1)"
-    SERVI="$(curl -fsS "$HOTE/$f" | sha256sum | cut -d' ' -f1)" || SERVI="<illisible>"
+verifier() {
+    local source="$1" adresse="$2"
+    local attendu servi
 
-    if [ "$ATTENDU" != "$SERVI" ]; then
-        echo "ÉCHEC : $f servi ne correspond pas à la source ($ATTENDU ≠ $SERVI)" >&2
+    attendu="$(sha256sum "$source" | cut -d' ' -f1)"
+    servi="$(curl -fsS "$HOTE/$adresse" | sha256sum | cut -d' ' -f1)" || servi="<illisible>"
+
+    if [ "$attendu" != "$servi" ]; then
+        echo "ÉCHEC : $adresse servi ne correspond pas à la source ($attendu ≠ $servi)" >&2
         ECHECS=$((ECHECS + 1))
     fi
+}
+
+for f in "${FICHIERS[@]}"; do
+    verifier "$SOURCE/$f" "$f"
+done
+
+# ⚠ LA MARQUE EST VÉRIFIÉE COMME LE RESTE, ET CE N'EST PAS DE LA SYMÉTRIE POUR LA SYMÉTRIE. La
+# première version de cette boucle ne parcourait que `FICHIERS` : un logo copié mais non servi —
+# droits, mauvais chemin, dossier absent — aurait laissé le site s'afficher SANS SON LOGO, avec un
+# déploiement qui se déclare réussi. Une image manquante ne casse rien : c'est exactement pour ça
+# qu'elle passe inaperçue.
+for f in "${MARQUE[@]}"; do
+    verifier "$SOURCE/../frontend/public/marque/$f" "marque/$f"
 done
 
 if [ "$ECHECS" -gt 0 ]; then
@@ -61,5 +87,5 @@ if [ "$ECHECS" -gt 0 ]; then
     exit 1
 fi
 
-echo "Déployé et vérifié sur $HOTE — ${#FICHIERS[@]} fichier(s), empreintes identiques."
+echo "Déployé et vérifié sur $HOTE — $(( ${#FICHIERS[@]} + ${#MARQUE[@]} )) fichier(s), empreintes identiques."
 echo "Rappel : la page d'accueil et le blog sont servis par l'application (infra/deploy-preprod.sh)."

@@ -13,9 +13,19 @@
         <changefreq>monthly</changefreq>
     </url>
     <url>
+        <loc>{{ url('website_modules') }}</loc>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
         <loc>{{ url('website_blog_index') }}</loc>
         <changefreq>weekly</changefreq>
     </url>
+{%- for module in modules %}
+    <url>
+        <loc>{{ url('website_module', {slug: module.slug}) }}</loc>
+        <changefreq>monthly</changefreq>
+    </url>
+{%- endfor %}
 {%- for rubrique in rubriques %}
     <url>
         <loc>{{ url('website_blog_category', {slug: rubrique.slug}) }}</loc>

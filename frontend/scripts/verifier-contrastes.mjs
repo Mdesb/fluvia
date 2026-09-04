@@ -57,7 +57,6 @@ const FICHIERS = [
       'crit/panel': "la vitrine n'offre aucun geste destructeur, et ne declare aucun jeton --crit",
       'side-ink/side-bg': "la vitrine n'a pas de menu de gauche",
       'side-ink-soft/side-bg': "la vitrine n'a pas de menu de gauche",
-      'sur-accent/accent': "la vitrine n'a pas de bouton d'accent plein",
     },
   },
 ]

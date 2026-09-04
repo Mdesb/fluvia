@@ -135,6 +135,7 @@ final class EditorWebsiteProvider implements ProviderInterface
             $bloc->type = $ligne['type'];
             $bloc->label = $ligne['label'];
             $bloc->help = $ligne['help'];
+            $bloc->groupe = $ligne['groupe'];
             $bloc->value = $ligne['value'];
 
             $lignes[] = $bloc;

@@ -2039,6 +2039,20 @@ export const api = {
   // demandes de remboursement (listables) et les comptes clients boutique.
   demandesRemboursement: () =>
     request('/api/boutique/demandes-remboursement', { query: { itemsPerPage: 100 } }),
+  // LES RETRAITS CLICK & COLLECT — deux routes, aucun ecran jusqu'ici.
+  //
+  // ⚠ `codeRetrait` ARRIVE DANS LA REPONSE : il est declare dans le groupe `retrait:read`. Le
+  // serveur le compare pourtant avec `hash_equals`, une comparaison en temps constant — celle
+  // qu'on reserve aux secrets. Les deux ne peuvent pas etre vrais en meme temps : ou bien le code
+  // est une preuve, et il ne doit pas etre lisible ; ou bien il ne l'est pas, et `hash_equals` est
+  // du decor. L'ecran ne l'affiche pas, mais ce n'est qu'un pansement : le correctif est de le
+  // retirer du groupe de lecture. Signale.
+  retraitsClickCollect: () =>
+    request('/api/retrait_click_collects', { query: { itemsPerPage: 200 } }),
+  // `codeRetrait` REQUIS et compare a l'identique (422 sinon).
+  // `identifiantSupportPhysique` facultatif.
+  validerRetraitClickCollect: (id, corps) =>
+    request(`/api/boutique/retraits/${id}/valider`, { method: 'POST', body: corps }),
   comptesClientBoutique: () =>
     request('/api/compte_clients', { query: { itemsPerPage: 100 } }),
   vitrines: () => request('/api/boutique/vitrines', { query: { itemsPerPage: 100 } }),

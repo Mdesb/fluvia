@@ -61,6 +61,14 @@ final class EditorContentBlock
     public string $help = '';
 
     /**
+     * `accueil` ou `modules` — ce qui permet à l'écran de les présenter séparément.
+     *
+     * Trente-quatre champs dans une seule liste, c'est une liste que personne ne parcourt : le
+     * groupe existe pour que le rédacteur trouve la page qu'il veut modifier, pas pour ranger.
+     */
+    public string $groupe = 'accueil';
+
+    /**
      * La valeur, dans la forme du type : `{text}`, `{items: [...]}` ou `{items: [{title, text}]}`.
      *
      * `null` signifie « jamais rempli » — et la page ne rend rien pour ce bloc. Elle n'invente aucun

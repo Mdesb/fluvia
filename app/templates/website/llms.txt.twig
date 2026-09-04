@@ -1,0 +1,52 @@
+{#-
+  `llms.txt` — ce que le site dit de lui-même aux assistants génératifs (ED-11).
+
+  Un assistant ne parcourt pas un site : il lit ce qu'il trouve vite et le résume. Ce fichier lui
+  donne de quoi citer juste — le nom, ce que fait le produit, la liste réelle des modules, les
+  réponses aux questions courantes — plutôt que de paraphraser une page de vente de travers.
+
+  ⚠ IL SUIT LE MÊME INTERRUPTEUR QUE `robots.txt`. Un site fermé aux moteurs qui tendrait un résumé
+  aux assistants dirait deux choses opposées, et la seconde est celle qui circulerait.
+
+  ⚠ ET IL NE PORTE AUCUN PRIX. Les tarifs vivent dans le catalogue et changent ; un chiffre écrit ici
+  serait celui qu'un assistant citerait encore dans six mois.
+-#}
+{% if not indexable -%}
+# Fluvia — site en préparation
+
+Ce site n'est pas encore ouvert à l'indexation ni à la citation. Merci de ne pas le reprendre.
+{%- else -%}
+# Fluvia
+
+> Plateforme de gestion pour les lieux qui accueillent du public : piscines, patinoires, salles de
+> sport, clubs de padel, musées, campings. Billetterie, réservation de créneaux, contrôle d'accès,
+> caisse, boutique en ligne, CRM et facturation, dans un seul outil dont chaque partie s'active
+> séparément.
+
+Facturation : abonnement mensuel, une formule plus les modules ajoutés à la carte. Jamais au billet
+vendu ni au visiteur. Sans engagement de durée. Quatorze jours d'essai gratuit, sans carte bancaire.
+
+## Modules
+{% for rubrique in rubriques %}
+### {{ rubrique.titre }}
+{% for module in rubrique.modules %}
+- [{{ module.libelle }}]({{ url('website_module', {slug: module.slug}) }}) : {{ module.description }}
+{%- endfor %}
+{% endfor %}
+## Questions fréquentes
+{% for q in questions %}
+### {{ q.question }}
+
+{{ q.reponse }}
+{% endfor %}
+{%- if articles|length > 0 %}
+## Articles
+{% for article in articles %}
+- [{{ article.title }}]({{ url('website_blog_post', {slug: article.slug}) }}) : {{ article.excerpt }}
+{%- endfor %}
+{% endif %}
+## Pages
+- [Accueil]({{ url('website_home') }})
+- [Modules]({{ url('website_modules') }})
+- [Blog]({{ url('website_blog_index') }})
+{%- endif %}

@@ -12,7 +12,7 @@ use Doctrine\ORM\EntityManagerInterface;
 /**
  * Lire et écrire les blocs de contenu de la page d'accueil (ED-10).
  *
- * ⚠ **UNE CLÉ NON DÉCLARÉE EST REFUSÉE.** {@see HomeBlocks} dit de quoi la page est faite ; accepter
+ * ⚠ **UNE CLÉ NON DÉCLARÉE EST REFUSÉE.** {@see SiteBlocks} dit de quoi la page est faite ; accepter
  * une clé inconnue rangerait en base un contenu que **rien ne rend** — écrit, enregistré, invisible.
  * Le rédacteur croirait avoir publié. Le refus est bruyant, l'oubli silencieux ne l'est pas.
  *
@@ -23,14 +23,16 @@ use Doctrine\ORM\EntityManagerInterface;
  */
 final readonly class ContentBlocks
 {
-    public function __construct(private EntityManagerInterface $em)
-    {
+    public function __construct(
+        private EntityManagerInterface $em,
+        private BodySanitizer $assainisseur,
+    ) {
     }
 
     /**
      * Les valeurs rangées en base, par clé.
      *
-     * ⚠ **Aucun repli sur les valeurs de `HomeBlocks::all()`.** Elles ne servent qu'au peuplement
+     * ⚠ **Aucun repli sur les valeurs de `SiteBlocks::all()`.** Elles ne servent qu'au peuplement
      * initial. Si le gabarit s'y repliait, la page afficherait un texte que l'écran d'administration
      * montre vide : deux vérités, et personne pour dire laquelle est servie.
      *
@@ -53,19 +55,20 @@ final readonly class ContentBlocks
      * C'est ici que se voit un bloc **jamais rempli** — il est dans la liste, sa valeur est nulle.
      * Une lecture qui partirait de la table ne l'aurait pas montré du tout.
      *
-     * @return list<array{key: string, type: string, label: string, help: string, value: array<int|string, mixed>|null}>
+     * @return list<array{key: string, type: string, label: string, help: string, groupe: string, value: array<int|string, mixed>|null}>
      */
     public function pourLAdministration(): array
     {
         $valeurs = $this->valeurs();
         $lignes = [];
 
-        foreach (HomeBlocks::all() as $declare) {
+        foreach (SiteBlocks::all() as $declare) {
             $lignes[] = [
                 'key' => $declare['key'],
                 'type' => $declare['type']->value,
                 'label' => $declare['label'],
                 'help' => $declare['help'],
+                'groupe' => $declare['groupe'],
                 'value' => $valeurs[$declare['key']] ?? null,
             ];
         }
@@ -80,7 +83,7 @@ final readonly class ContentBlocks
      */
     public function enregistrer(string $cle, array $valeur, \DateTimeImmutable $instant): ContentBlock
     {
-        $type = HomeBlocks::typeOf($cle);
+        $type = SiteBlocks::typeOf($cle);
 
         if (null === $type) {
             throw new UnknownBlockException(sprintf(
@@ -114,6 +117,10 @@ final readonly class ContentBlocks
     {
         return match ($type) {
             BlockType::Line, BlockType::Paragraph => ['text' => \is_string($valeur['text'] ?? null) ? trim($valeur['text']) : ''],
+
+            // Assaini À L'ÉCRITURE, comme le corps d'un article : ce que porte la colonne est déjà ce
+            // qui peut être servi, et le gabarit n'a rien à se rappeler.
+            BlockType::Rich => ['html' => $this->assainisseur->sanitize(\is_string($valeur['html'] ?? null) ? $valeur['html'] : '')],
 
             BlockType::Items => ['items' => array_values(array_filter(
                 array_map(
