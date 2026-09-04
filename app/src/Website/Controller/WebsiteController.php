@@ -58,6 +58,7 @@ final class WebsiteController extends AbstractController
          * trouve qu'un.
          */
         #[Autowire(env: 'bool:WEBSITE_INDEXABLE')] private readonly bool $indexable = false,
+        #[Autowire(env: 'VITRINE_BASE_URL')] private readonly string $baseUrl = '',
     ) {
     }
 
@@ -195,7 +196,7 @@ final class WebsiteController extends AbstractController
                 $this->donnees->filDariane([
                     ['nom' => 'Accueil', 'url' => $this->absolue('website_home')],
                     ['nom' => 'Métiers', 'url' => $this->absolue('website_metiers')],
-                    ['nom' => $metier['nom'], 'url' => $this->generateUrl('website_metier', ['slug' => $metier['slug']], UrlGeneratorInterface::ABSOLUTE_URL)],
+                    ['nom' => $metier['nom'], 'url' => $this->absolue('website_metier', ['slug' => $metier['slug']])],
                 ]),
             ],
         ]);
@@ -367,18 +368,26 @@ final class WebsiteController extends AbstractController
         ]);
     }
 
-    private function absolue(string $route): string
+    /**
+     * L'adresse publique d'une page — construite sur `VITRINE_BASE_URL`, jamais sur la requête.
+     *
+     * Voir {@see \App\Website\Service\StructuredData} pour le pourquoi : derrière le proxy,
+     * l'absolu tiré de la requête rendait `http://` sur un site servi en HTTPS.
+     *
+     * @param array<string, mixed> $parametres
+     */
+    private function absolue(string $route, array $parametres = []): string
     {
-        return $this->generateUrl($route, [], UrlGeneratorInterface::ABSOLUTE_URL);
+        return rtrim($this->baseUrl, '/').$this->generateUrl($route, $parametres);
     }
 
     private function urlModule(string $slug): string
     {
-        return $this->generateUrl('website_module', ['slug' => $slug], UrlGeneratorInterface::ABSOLUTE_URL);
+        return $this->absolue('website_module', ['slug' => $slug]);
     }
 
     private function urlArticle(string $slug): string
     {
-        return $this->generateUrl('website_blog_post', ['slug' => $slug], UrlGeneratorInterface::ABSOLUTE_URL);
+        return $this->absolue('website_blog_post', ['slug' => $slug]);
     }
 }
