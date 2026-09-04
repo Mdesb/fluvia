@@ -15,6 +15,7 @@ use App\Sepa\State\ConfigCreancierSepaProcessor;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
+use App\Sepa\Validator\NoticeDelayCoversPeriod;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Validator\Constraints as Assert;
 
@@ -46,6 +47,7 @@ use Symfony\Component\Validator\Constraints as Assert;
     normalizationContext: ['groups' => ['config_creancier:read']],
     denormalizationContext: ['groups' => ['config_creancier:write']],
 )]
+#[NoticeDelayCoversPeriod]
 class ConfigCreancierSepa
 {
     #[ORM\Id]

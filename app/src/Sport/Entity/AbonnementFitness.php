@@ -24,6 +24,7 @@ use ApiPlatform\Metadata\Post;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
+use App\Sepa\Validator\NoticeDelayCoversPeriod;
 use Symfony\Component\Uid\Uuid;
 
 /**
@@ -91,6 +92,7 @@ use Symfony\Component\Uid\Uuid;
     // voit finit par etre "corrigee" une seconde fois par quelqu'un d'autre.
     denormalizationContext: ['groups' => ['abonnement:write']],
 )]
+#[NoticeDelayCoversPeriod]
 class AbonnementFitness
 {
     #[ORM\Id]

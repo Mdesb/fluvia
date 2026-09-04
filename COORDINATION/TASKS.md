@@ -353,7 +353,34 @@ commencer, et **fusionnez `main` avant de claimer** — cette liste vieillit.
 
 ---
 
-### D-1 · La garde du délai de préavis SEPA (§8.5) — pour `allaccess-c0`
+### ~~D-1~~ · La garde du délai de préavis SEPA — **FAITE le 04/09 par `allaccess-bd`**
+
+Reprise faute de preneur. `App\Sepa\Validator\DelaiPreavisCouvreLaPeriode`, accrochée aux **deux**
+entités comme Maxime l'a tranché — `ConfigCreancierSepa` et `AbonnementFitness`.
+
+⚠ **LA COMPARAISON EST ÉCRITE À UN SEUL ENDROIT**, dans un validateur unique qui traite les deux
+classes. La dupliquer garantirait qu'un jour l'un des deux devienne `>=` sans que l'autre bouge.
+
+⚠ **ET LA MISE EN GARDE A ÉTÉ VÉRIFIÉE SUR LE CODE, PAS SEULEMENT CITÉE.** En remplaçant `<=` par
+`<` — c'est-à-dire en refusant l'égalité — **un seul test tombe** : celui qui AUTORISE. Les deux
+tests de refus restent verts, et celui de l'état actuel aussi. C'est exactement ce que la fiche
+annonçait : « tous ses tests de refus resteraient verts, plus verts qu'avant ».
+
+⚠ **UN MOIS VAUT 28 JOURS, PAS 30.** Prendre 30 laisserait passer un délai de 29, qui casserait en
+février : un défaut d'un cycle par an, que personne ne relierait au paramétrage. On prend le mois le
+plus court — ce qui passe ici passe toute l'année.
+
+⚠ **AUCUNE FIXTURE NE CRÉE D'ABONNEMENT FITNESS**, mesuré : mon premier jet en cherchait un et les
+quatre tests ont échoué sur leur témoin, ce qui est exactement ce qu'un témoin doit faire. Les cinq
+abonnements de la préproduction viennent de l'API, pas d'un jeu de données. Le test en construit un.
+
+État inchangé : 5 abonnements tous mensuels, 4 créanciers tous à 14 jours. **Le contrôle ne signale
+rien aujourd'hui, et un test le prouve** — s'il signalait, il refuserait la préproduction telle
+qu'elle tourne.
+
+*(énoncé d'origine ci-dessous)*
+
+### D-1 · La garde du délai de préavis SEPA (§8.5) — proposée à `allaccess-c0`
 
 C'est vous qui l'avez mesurée le 03/09. Arbitrage de Maxime : **les deux emplacements**, parce que
 les deux directions attrapent des cas différents et qu'aucune ne couvre l'autre.
@@ -374,7 +401,7 @@ verts**, plus verts qu'avant. Seul le cas qu'il doit AUTORISER démasque un cont
 
 ---
 
-### D-2 · Un produit obligatoire sur une vente de réservation (§8.8 c) — ⚠ **REPRIS PAR `allaccess-bd` le 04/09** (proposé à `allaccess-a9`, non claimé au bout d'une heure ; il touche la comptabilité, je ne le laisse pas dormir). `a9` : si tu l'avais commencé, dis-le et je te le rends.
+### ~~D-2~~ · Un produit obligatoire sur une vente de réservation — **FAIT le 04/09** — ⚠ **REPRIS PAR `allaccess-bd` le 04/09** (proposé à `allaccess-a9`, non claimé au bout d'une heure ; il touche la comptabilité, je ne le laisse pas dormir). `a9` : si tu l'avais commencé, dis-le et je te le rends.
 
 `VenteReservationHandler:42` fait `setProduit($produitRef ?? Uuid::v4())`. Sans produit fourni, la
 ligne désigne un produit **qui n'existe pas** : aucune catégorie comptable, donc absente de la
