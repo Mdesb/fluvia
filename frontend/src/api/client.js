@@ -2209,6 +2209,20 @@ export const api = {
   // avoir plusieurs (dates d'entree et couts d'achat differents). C'est pour ca que les deux listes
   // sont chargees ensemble et agregees a l'ecran.
   stockArticles: () => request('/api/article_stocks', { query: { itemsPerPage: 200 } }),
+  // LES TRANSFERTS ENTRE SITES — trois routes, aucun ecran jusqu'ici.
+  //
+  // ⚠ LE CLOISONNEMENT DU TRANSFERT EST UN « OU » : source OU destination = etablissement actif.
+  // On voit donc ses transferts DANS LES DEUX SENS, alors que les articles, eux, sont limites a
+  // l'etablissement actif. Un seul des deux articles d'un transfert est donc lisible — celui qui
+  // est chez soi — et c'est ce qui donne la direction.
+  stockTransferts: () =>
+    request('/api/stock_transferts', { query: { itemsPerPage: 200, 'order[dateDemande]': 'desc' } }),
+  // ⚠ 409 SI L'ETAT NE S'Y PRETE PAS : `expedier` exige `demande`, `recevoir` exige `expedie`.
+  // Et le serveur restreint l'un a l'etablissement SOURCE, l'autre a la DESTINATION (RG-STOCK-14).
+  expedierTransfertStock: (id) =>
+    request(`/api/stock/transferts/${id}/expedier`, { method: 'POST', body: {} }),
+  recevoirTransfertStock: (id) =>
+    request(`/api/stock/transferts/${id}/recevoir`, { method: 'POST', body: {} }),
   stockLots: () => request('/api/stock_lots', { query: { itemsPerPage: 500 } }),
   stockMouvements: () =>
     request('/api/stock_mouvements', { query: { itemsPerPage: 50, 'order[date]': 'desc' } }),
