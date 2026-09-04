@@ -2086,6 +2086,29 @@ export const api = {
   majPolitiqueRecouvrement: (id, corps) =>
     request(`/api/politique_recouvrements/${id}`, { method: 'PATCH', body: corps }),
 
+  // --- Relance des recettes (App\RevenueRecovery) ---
+  //
+  // A NE PAS CONFONDRE AVEC LE RECOUVREMENT CI-DESSUS, malgre la parente des noms. Le recouvrement
+  // traite des IMPAYES : representations bancaires, acces bloques, exemptions. La relance des
+  // recettes est un mecanisme EVENEMENTIEL : un no-show, une annulation, un paiement refuse ouvrent
+  // un dossier, et des courriels partent selon une politique. Les deux modules sont distincts cote
+  // serveur (`App\Recouvrement` et `App\RevenueRecovery`, repliques et jamais importes l'un dans
+  // l'autre) : ce sont deux ecrans, et ce doit rester deux jeux d'appels.
+  dossiersRelance: () => request('/api/revenue-recovery/cases', { query: { itemsPerPage: 100 } }),
+  // Le motif est FACULTATIF et n'a rien d'evident : la route est declaree `input: false`, mais son
+  // processeur lit le corps brut et y cherche `reason`. Sans cet appel-la, `stopReason` resterait
+  // vide sur tous les arrets manuels.
+  arreterDossierRelance: (id, reason) =>
+    request(`/api/revenue-recovery/cases/${id}/stop`, { method: 'POST', body: { reason } }),
+  tentativesRelance: () => request('/api/revenue-recovery/attempts', { query: { itemsPerPage: 200 } }),
+  politiquesRelance: () => request('/api/revenue-recovery/sequences', { query: { itemsPerPage: 100 } }),
+  // ⚠ `ld: true` OBLIGATOIRE ICI : l'operation desserialise le corps, donc elle n'accepte que
+  // `application/ld+json` et repondrait 415 a du JSON simple.
+  creerPolitiqueRelance: (corps) =>
+    request('/api/revenue-recovery/sequences', { method: 'POST', body: corps, ld: true }),
+  majPolitiqueRelance: (id, corps) =>
+    request(`/api/revenue-recovery/sequences/${id}`, { method: 'PATCH', body: corps }),
+
   // --- Boutique en ligne (M3, vue admin) ---
   // Les paniers en ligne ne sont pas listables (accès par id) : la vue admin s'appuie sur les
   // demandes de remboursement (listables) et les comptes clients boutique.
