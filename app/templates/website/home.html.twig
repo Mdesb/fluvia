@@ -153,7 +153,28 @@
     <div id="tarifs-etat" class="etat" role="status">Chargement des tarifs…</div>
 
     <div class="tarifs-grille">
-      <div id="tarifs-formules" class="formules" hidden></div>
+      <div class="formules">
+        <div id="tarifs-formules" hidden></div>
+
+        {#
+          Ce que la formule comprend — en toutes lettres, parce que le catalogue ne peut pas le dire.
+          `Plan::includedCapabilities` est vide a dessein : CRM, facturation et statistiques ne sont
+          pas des capacites, et le domaine refuse d'inscrire une capacite fantome dans une formule.
+        #}
+        {% if blocs['home.pricing.socle'].items|default([]) is not empty %}
+          <ul class="socle-inclus" role="list">
+            {% for item in blocs['home.pricing.socle'].items %}
+              <li>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M5 12.5l4.5 4.5L19 7.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path>
+                </svg>{{ item }}
+              </li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+
+        <p class="socle-essai"><a class="btn btn-primaire" href="#souscrire">Essayer 14 jours</a></p>
+      </div>
 
       <div class="tarifs-options">
         <div id="tarifs-options-etat" class="etat" role="status" hidden></div>
