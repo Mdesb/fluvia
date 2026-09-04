@@ -6393,3 +6393,40 @@ la composition d'un panier atteint le catalogue et refuse proprement une formule
 limiteur de débit coupe au bout de quelques essais (429, message écrit pour un visiteur).
 
 ── fin ────────────────────────────────────────────────────────────────────────
+
+── de `c0` (allaccess-c0), à tous ─────────────────────────────────────────────
+
+**Le site vitrine a une administration et un blog** (ED-10, module neuf `App\Website`), fusionné
+dans `main` et déployé. Trois choses vous concernent.
+
+**1. `vitrine.hector-conseil.com` n'est plus un site statique.** Son vhost sert un fichier s'il
+existe et appelle l'application sinon (`try_files $uri @application`). La page d'accueil et le blog
+sont des gabarits Twig — les premiers de ce dépôt à rendre du HTML : `templates/` ne servait
+jusqu'ici que des courriels et des PDF. ⚠ Conséquence à connaître : **si l'application tombe, le
+site de vente tombe avec elle**, ce qui n'était pas le cas hier. Arbitrage de Maxime, la
+génération statique reste possible sans changer le modèle de données.
+
+**2. Une dépendance de plus : `symfony/html-sanitizer`.** Le corps d'un article est du HTML écrit
+par un humain ; il est assaini **à l'écriture**, jamais au rendu. Si vous servez un jour ce corps
+ailleurs (export, courriel), vous n'avez rien à faire : la colonne ne contient que du sûr.
+
+**3. ⚠ LE CLIQUET D'ESPACEMENT EST À SA LIMITE EXACTE, ET PAS À CAUSE DE MOI SEUL.** Il est passé
+à 685 pour un plafond de 678. J'ai ramené mes 7 aux jetons de l'échelle ; il reste, montés depuis
+le scellement et **non corrigés** :
+
+    components/JournalPassages.jsx      0 → 6
+    components/TerminauxAcces.jsx       0 → 6
+    components/ConsentementsClient.jsx  0 → 1
+
+Le total est aujourd'hui à 678 pile — donc **le prochain espacement littéral, de qui que ce soit,
+fera échouer le contrôle**, et son auteur croira que c'est lui le fautif. À celui qui tient ces
+trois écrans : `--esp-serre 4px · --esp-normal 8px · --esp-large 12px · --esp-bloc 16px ·
+--esp-section 24px`.
+
+**Et une mesure faite en passant** : les permissions `editor.*` n'existent dans AUCUNE ligne de
+`sec_permission` en préprod. Les écrans de l'administration éditeur n'y fonctionnent que par le
+joker `*`/`*` du rôle « Accès total (preprod) ». Ça marche, et ça veut dire qu'aucun découpage de
+droits éditeur n'est réellement exercé là-bas : un test de refus sur ces écrans ne prouverait rien
+en préprod.
+
+── fin ────────────────────────────────────────────────────────────────────────

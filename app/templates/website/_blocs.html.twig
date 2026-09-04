@@ -1,0 +1,66 @@
+{#
+  Les quatre formes de bloc de contenu (ED-10).
+
+  ⚠ AUCUNE MACRO NE REND UN TEXTE DE REMPLACEMENT. Un bloc jamais rempli ne rend RIEN — pas un titre
+  vide, pas un « Lorem », pas la valeur d'origine du code. C'est la contrepartie de la règle posée
+  dans `ContentBlocks` : l'écran d'administration montre ce bloc comme non rempli, et la page montre
+  la même chose que l'écran. Deux vérités différentes — un texte sur la page, un champ vide dans
+  l'écran — ne peuvent coexister sans que l'une des deux mente.
+
+  ⚠ `split` PREND DES GUILLEMETS DOUBLES, ET CE N'EST PAS UN DÉTAIL DE STYLE. Twig n'interprète les
+  séquences d'échappement que dans les chaînes à guillemets doubles. Avec des apostrophes, on
+  couperait sur un antislash suivi d'un « n » — c'est-à-dire jamais — et toute la saisie sortirait en
+  un seul paragraphe. Rien n'échoue, la page s'affiche, et les paragraphes ont disparu.
+
+  ⚠ ET AUCUNE MACRO N'UTILISE `|raw`. Ces blocs sont du texte, jamais du HTML : Twig les échappe, et
+  `nl2br` transforme les retours à la ligne APRÈS échappement. Le seul HTML servi brut dans tout ce
+  site est le corps d'un article, et il est assaini à l'écriture.
+#}
+
+{% macro ligne(bloc) %}{% if bloc is not null and bloc.text|default('') is not empty %}{{ bloc.text }}{% endif %}{% endmacro %}
+
+{% macro paragraphes(bloc, classe) %}
+    {% if bloc is not null and bloc.text|default('') is not empty %}
+        {% for morceau in bloc.text|split("\n\n") %}
+            {% if morceau|trim is not empty %}
+                <p{% if classe %} class="{{ classe }}"{% endif %}>{{ morceau|trim|nl2br }}</p>
+            {% endif %}
+        {% endfor %}
+    {% endif %}
+{% endmacro %}
+
+{% macro items(bloc, classe) %}
+    {% if bloc is not null and bloc.items|default([]) is not empty %}
+        <ul class="{{ classe }}" role="list">
+            {% for item in bloc.items %}
+                <li>{{ item }}</li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+{% endmacro %}
+
+{% macro cartes(bloc) %}
+    {% if bloc is not null and bloc.items|default([]) is not empty %}
+        <ul class="grille" role="list">
+            {% for carte in bloc.items %}
+                <li class="carte">
+                    {% if carte.title|default('') is not empty %}<h3>{{ carte.title }}</h3>{% endif %}
+                    {% if carte.text|default('') is not empty %}<p>{{ carte.text }}</p>{% endif %}
+                </li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+{% endmacro %}
+
+{% macro etapes(bloc) %}
+    {% if bloc is not null and bloc.items|default([]) is not empty %}
+        <ol class="etapes">
+            {% for etape in bloc.items %}
+                <li>
+                    {% if etape.title|default('') is not empty %}<strong>{{ etape.title }}</strong>{% endif %}
+                    {{ etape.text|default('') }}
+                </li>
+            {% endfor %}
+        </ol>
+    {% endif %}
+{% endmacro %}

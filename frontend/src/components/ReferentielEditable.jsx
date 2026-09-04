@@ -325,6 +325,23 @@ export default function ReferentielEditable({ descripteur, peutEcrire, onEcrit }
                     />
                     {c.libelleCase || c.libelle}
                   </label>
+                ) : c.type === 'texte-long' ? (
+                  // AJOUTE POUR ED-10 (blog de l'editeur). Un chapo et un corps d'article ne
+                  // tiennent pas sur une ligne : dans un `<input>`, on ecrit a l'aveugle, sans voir
+                  // ce qu'on a deja tape ni pouvoir aller a la ligne. Le composant sert douze
+                  // referentiels — le type est donc ajoute ici plutot que dans un ecran, pour que
+                  // le prochain qui en a besoin le trouve.
+                  <textarea
+                    id={`ref-${c.nom}`}
+                    className="input"
+                    rows={c.lignes || 6}
+                    required={c.requis}
+                    value={edition.valeurs[c.nom]}
+                    placeholder={c.exemple}
+                    onChange={(e) =>
+                      setEdition((s) => ({ ...s, valeurs: { ...s.valeurs, [c.nom]: e.target.value } }))
+                    }
+                  />
                 ) : (
                   <input
                     id={`ref-${c.nom}`}

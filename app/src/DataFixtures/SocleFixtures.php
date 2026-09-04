@@ -110,7 +110,9 @@ final class SocleFixtures extends Fixture
         $permGererOffre = $this->permissionNommee($manager, 'editor', 'manage_offer');
         $permLireFactu = $this->permissionNommee($manager, 'editor', 'read_billing');
         $permAccesSupport = $this->permissionNommee($manager, 'editor', 'support_access');
-        foreach ([$permLireClient, $permLireAbo, $permGererOffre, $permLireFactu, $permAccesSupport] as $perm) {
+        // ED-10 : administrer le site public de l'editeur — sa page d'accueil et son blog.
+        $permGererSite = $this->permissionNommee($manager, 'editor', 'manage_website');
+        foreach ([$permLireClient, $permLireAbo, $permGererOffre, $permLireFactu, $permAccesSupport, $permGererSite] as $perm) {
             $manager->persist($perm);
         }
 
@@ -118,7 +120,7 @@ final class SocleFixtures extends Fixture
         // d'assistance sans lui montrer ce que gagne l'entreprise. `editor.read_billing` n'est
         // porté que par la direction et l'administratif.
         $roleEditeurDirection = $this->roleNomme($manager, 'Éditeur — Direction');
-        foreach ([$permLireClient, $permLireAbo, $permGererOffre, $permLireFactu, $permAccesSupport] as $perm) {
+        foreach ([$permLireClient, $permLireAbo, $permGererOffre, $permLireFactu, $permAccesSupport, $permGererSite] as $perm) {
             $roleEditeurDirection->addPermission($perm);
         }
         $manager->persist($roleEditeurDirection);
@@ -139,7 +141,7 @@ final class SocleFixtures extends Fixture
         // `read_customer` ne s'écrit pas `lire`. On les lui donne explicitement plutôt que de
         // renommer les permissions pour les faire entrer dans le joker — un droit accordé par
         // coïncidence de vocabulaire est un droit que personne n'a décidé.
-        foreach ([$permLireClient, $permLireAbo, $permGererOffre, $permLireFactu, $permAccesSupport] as $perm) {
+        foreach ([$permLireClient, $permLireAbo, $permGererOffre, $permLireFactu, $permAccesSupport, $permGererSite] as $perm) {
             $roleAdmin->addPermission($perm);
         }
 
