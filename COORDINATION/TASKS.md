@@ -916,6 +916,75 @@ Conséquence : ces réservations gardent `ModeDecompteReservation::VenteUnite` s
 équiper l'écran, ou un mode de décompte qui dise « dû, non encaissé » (les quatre cas actuels sont
 `QuotaFormule`, `CarteStock`, `VenteUnite`, `Gratuit` — aucun ne le dit).
 
+### ~~⚠ 8.13~~ — FAIT LE 04/09, EN TROIS PAS, ET LE DIAGNOSTIC D'ORIGINE ÉTAIT FAUX SUR UN POINT
+
+**Maxime a choisi « les trois étapes, dans l'ordre ».** Elles sont posées, chacune avec ses témoins
+et son commit : `35222826` (portée), `1594c99a` (commentaires), et celui-ci (élargissement).
+
+⚠ **LE PAS 2 NE PORTAIT PAS SUR CE QUE J'AVAIS ÉCRIT.** Cette fiche disait : « le `setParameter` de
+`CreateSlotWaitlistEntryProcessor:81` est TROIS LIGNES plus bas, le contrôle ne le voit pas ». En
+faisant nommer au garde-fou la ligne qu'il accuse — au lieu de la déduire — la réponse est autre :
+
+    ligne 82    establishment    comparaison DQL sans type explicite
+      // ⚠ D58 vaut aussi pour l'ASSOCIATION : `e.establishment = :establishment` avec
+
+**La ligne accusée est un COMMENTAIRE**, et ce commentaire EXPLIQUE le défaut que le code, cinq
+lignes plus bas, ne commet plus. La détection de proximité, elle, marchait déjà : le vrai `andWhere`
+et son `setParameter` typé sont dans la même chaîne fluide. **J'ai failli « corriger » un mécanisme
+sain**, sur la foi d'un diagnostic que j'avais écrit moi-même trois heures plus tôt.
+
+⚠ **ET DEUX DÉFAUTS SE CACHAIENT L'UN L'AUTRE.** La fenêtre de la chaîne fluide s'arrête au premier
+`;` — or ce même commentaire en porte un (« était juste ; sa liaison »). Même en accusant la bonne
+ligne, la fenêtre se serait refermée avant le `setParameter`. Le premier défaut empêchait le second
+de se voir. Les deux tombent ensemble parce qu'ils avaient la même cause.
+
+**LES TROIS PAS, ET CE QUE CHACUN A COÛTÉ OU RAPPORTÉ**
+
+    1. Portée par fichier      un `SearchFilter` se juge avec la déclaration DU MÊME fichier
+                               témoins : A (déclare + filtre) signalé · B (relation) épargné
+                               avant : les deux signalés — B était le faux positif
+    2. Commentaires blanchis   `token_get_all()`, l'autorité, pas une regex maison
+                               témoins : C (code) signalé · D (cité en commentaire) épargné
+                                         E (commentaire avec `;` dans la chaîne) épargné
+                               cliquet RESSERRÉ : 12 → 11, retrait seul, aucun ajout
+    3. Collecteur élargi       toutes les `?Uuid` nues, plus seulement les `*Ref`
+                               32 → 70 références libres collectées
+                               témoins : F (sans suffixe) signalé · G (`id`, `jeton`) épargné
+                               avant : F INVISIBLE — l'angle mort était réel
+
+⚠ **LES EXCLUSIONS SONT NOMMÉES ET VÉRIFIÉES NON SPÉCULATIVES.** `id` (318 déclarations, clé
+primaire que Doctrine convertit), `jeton` (1, un secret qui ne désigne rien), `cleIdempotence` (2,
+elle identifie une tentative d'appel, pas un objet). Une exclusion pour une propriété inexistante est
+du poids mort qui a l'air d'une précaution — et ce dépôt en porte déjà une dont la justification
+fausse s'était recopiée quatre fois.
+
+**CE QUE L'ÉLARGISSEMENT A TROUVÉ : QUATRE, PAS CINQUANTE-CINQ.** Les 55 de la tentative annulée
+étaient produits par les défauts que les pas 1 et 2 viennent de retirer. Les quatre qui restent sont
+tous de la même forme — un `SearchFilter` sur une colonne `uuid` nue, qui rend une liste vide en
+silence (D58) — et **tous dans le fichier qui déclare la propriété**, donc aucun n'est un faux :
+
+    Audit/Entity/EntreeAudit.php               etablissement    ⚠ PROUVÉ CASSÉ, PAS SUPPOSÉ
+    Compta/Entity/EcritureComptable.php        venteOrigine     latent (0 ligne renseignée)
+    SmartFlow/Entity/SlotWaitlistEntry.php     resourceId       latent (0 ligne renseignée)
+    SmartFlow/Entity/RescheduleProposal.php    customerId       latent (0 ligne renseignée)
+
+⚠ **« CASSÉ » ET « CASSERA » NE SE RELAIENT PAS PAREIL, donc je les ai séparés en le mesurant.**
+Pour l'audit, sur la préproduction, à travers l'API :
+
+    la base                                              22 entrées portent cet établissement
+    GET /api/entree_audits?etablissement=<le même>       totalItems : 0
+    GET /api/entree_audits (témoin, sans filtre)         totalItems : 29 990
+
+Le filtre existe, l'écran l'offre, et il répond « aucun résultat » sur une donnée qui est là. Les
+trois autres tomberont pareil **le jour où quelqu'un les remplira** — c'est-à-dire au premier usage.
+
+**LES QUATRE SONT GELÉES (plafond 11 → 15) ET DISTRIBUÉES À LEURS PROPRIÉTAIRES.** Elles ne sont pas
+de mon périmètre, et laisser le contrôle rouge bloquerait neuf sessions sur des défauts qui ne sont
+pas les leurs — un contrôle qui bloque tout le monde se contourne avant d'être corrigé. **Chaque
+entrée gelée reste un défaut réel**, pas une tolérance de style.
+
+<details><summary>Le diagnostic d'origine, gardé — il montre où le raisonnement a dérapé</summary>
+
 ### ⚠ 8.13 — Le garde-fou des références libres a un angle mort, et l'élargir tel quel fait du bruit
 
 **Tenté le 04/09, mesuré, et VOLONTAIREMENT ANNULÉ.** Le diagnostic tient ; le remède demande plus
@@ -960,6 +1029,10 @@ n'en sont pas s'apprend à sauter, et le jour où il en trouve un vrai, personne
 ⚠ **Et le scope DQL ne peut PAS être par fichier** : `CreateSlotWaitlistEntryProcessor` interroge
 `SlotWaitlistEntry.resourceId`, déclaré ailleurs. Les deux mécanismes demandent deux traitements —
 c'est ce qui rend le chantier plus gros qu'il n'en a l'air.
+
+*(Resté vrai : la portée par fichier n'a été posée que sur le `SearchFilter`, jamais sur le DQL.)*
+
+</details>
 
 ---
 

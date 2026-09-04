@@ -62,7 +62,27 @@ const RACINE = 'app/src';
  * par fichier (`analyser()`). Écrit deux fois, il dérive : le jour où l'un s'élargit, l'autre ne suit
  * pas, et un témoin écrit avec le second partagerait exactement l'angle mort du premier.
  */
-const MOTIF_REFERENCE_LIBRE = '/private\s+\??Uuid\s+\$(\w+Ref)\b/';
+const MOTIF_REFERENCE_LIBRE = '/private\s+\??Uuid\s+\$(\w+)\b/';
+
+/**
+ * Les propriétés `Uuid` qui NE SONT PAS des références vers un autre module.
+ *
+ * ⚠ CHAQUE EXCLUSION PORTE SA RAISON, ET CE N'EST PAS DE LA DÉCORATION. Le type ne distingue pas une
+ * référence d'une valeur — il faut le dire. Une exclusion sans raison écrite se recopie d'un contrôle
+ * à l'autre et finit par couvrir des cas que personne n'a jamais examinés ; ce dépôt en porte déjà
+ * une, dont la justification fausse s'était recopiée quatre fois avant qu'on la relise.
+ */
+const EXCLUSIONS_NOMMEES = [
+    // Clé primaire. Doctrine connaît son mapping et la convertit : la comparaison marche.
+    // ⚠ La sixième forme du contrôle (`alias.id IN (:liste)`) couvre déjà le seul cas où elle ne
+    //   marche pas — une LISTE, que `setParameter` ne convertit élément par élément dans aucun type.
+    'id',
+    // Un secret, pas une référence. Il ne désigne aucune entité d'un autre module ; il s'échange.
+    'jeton',
+    // Elle identifie une TENTATIVE D'APPEL, pas un objet métier. Deux appels identiques la partagent
+    // — c'est tout son intérêt — donc elle ne peut pas désigner une ligne.
+    'cleIdempotence',
+];
 
 /**
  * Le source, ses commentaires blanchis — NUMÉROS DE LIGNE INTACTS.
@@ -135,15 +155,27 @@ function referencesLibresDe(string $source): array
         return [];
     }
 
-    return array_values(array_unique($correspondances[1]));
+    return array_values(array_diff(array_unique($correspondances[1]), EXCLUSIONS_NOMMEES));
 }
 const LIGNE_DE_BASE = 'bin/references-libres.ligne-de-base.json';
 
 /**
- * Les propriétés qui suivent la convention : un `Uuid` nu, sans relation Doctrine.
+ * Les propriétés à `Uuid` nu, sans relation Doctrine — TOUTES, pas seulement les `*Ref`.
  *
- * On exige le suffixe `Ref` parce que c'est la convention du dépôt, et parce qu'elle évite d'attraper
- * les identifiants primaires — qui, eux, sont bien convertis puisque Doctrine connaît leur mapping.
+ * ⚠ LE SUFFIXE `Ref` N'A JAMAIS FAIT LE DÉFAUT, ET S'Y FIER EN CACHAIT SEIZE (§8.13, pas 3). Le
+ * contrôle n'acceptait que `private ?Uuid $xxxRef`, « parce que c'est la convention du dépôt ». Mais
+ * le défaut est produit par le TYPE : une colonne `uuid` que rien ne relie à une entité ne se
+ * convertit pas, que son nom finisse par `Ref` ou non.
+ *
+ * Et les contre-exemples sont les références libres les plus utilisées qui existent :
+ * `LigneVente::$produit`, `$typeTarif` et `$saison` ne suivent pas la convention.
+ *
+ * ⚠ UNE RELATION NE PEUT PAS ÊTRE PRISE PAR CE MOTIF : elle se déclare `private ?Etablissement
+ * $etablissement`, jamais `private ?Uuid`. Le type les sépare. La contamination par le NOM — un
+ * `SearchFilter` jugé sur une propriété déclarée dans un autre fichier — est réglée ailleurs, par la
+ * portée par fichier du pas 1 ; les deux corrections sont indépendantes et il fallait les deux.
+ *
+ * Ce qu'il faut dire à la place, c'est ce qui N'EST PAS une référence : cf. `EXCLUSIONS_NOMMEES`.
  *
  * @return array<string, string> nom de propriété => fichier qui la déclare
  */
