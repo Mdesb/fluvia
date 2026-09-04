@@ -26,11 +26,16 @@ Ce site n'est pas encore ouvert à l'indexation ni à la citation. Merci de ne p
 Facturation : abonnement mensuel, une formule plus les modules ajoutés à la carte. Jamais au billet
 vendu ni au visiteur. Sans engagement de durée. Quatorze jours d'essai gratuit, sans carte bancaire.
 
+## Métiers
+{% for metier in metiers %}
+- [{{ metier.nom }}]({{ site_base }}{{ path('website_metier', {slug: metier.slug}) }}) : {{ metier.chapo }}
+{%- endfor %}
+
 ## Modules
 {% for rubrique in rubriques %}
 ### {{ rubrique.titre }}
 {% for module in rubrique.modules %}
-- [{{ module.libelle }}]({{ url('website_module', {slug: module.slug}) }}) : {{ module.description }}
+- [{{ module.libelle }}]({{ site_base }}{{ path('website_module', {slug: module.slug}) }}) : {{ module.description }}
 {%- endfor %}
 {% endfor %}
 ## Questions fréquentes
@@ -42,11 +47,11 @@ vendu ni au visiteur. Sans engagement de durée. Quatorze jours d'essai gratuit,
 {%- if articles|length > 0 %}
 ## Articles
 {% for article in articles %}
-- [{{ article.title }}]({{ url('website_blog_post', {slug: article.slug}) }}) : {{ article.excerpt }}
+- [{{ article.title }}]({{ site_base }}{{ path('website_blog_post', {slug: article.slug}) }}) : {{ article.excerpt }}
 {%- endfor %}
 {% endif %}
 ## Pages
-- [Accueil]({{ url('website_home') }})
-- [Modules]({{ url('website_modules') }})
-- [Blog]({{ url('website_blog_index') }})
+- [Accueil]({{ site_base }}{{ path('website_home') }})
+- [Modules]({{ site_base }}{{ path('website_modules') }})
+- [Blog]({{ site_base }}{{ path('website_blog_index') }})
 {%- endif %}

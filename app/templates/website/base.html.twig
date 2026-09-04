@@ -31,7 +31,7 @@
 <meta property="og:title" content="{{ block('title') }}">
 <meta property="og:description" content="{{ block('description') }}">
 <meta property="og:locale" content="fr_FR">
-{% block og_image %}<meta property="og:image" content="{{ absolute_url('/marque/FLUVIA_Logo_Color.svg') }}">{% endblock %}
+{% block og_image %}<meta property="og:image" content="{{ site_base }}/marque/FLUVIA_Logo_Color.svg">{% endblock %}
 <meta name="twitter:card" content="summary">
 
 <link rel="icon" href="/marque/FLUVIA_Icon_Color.svg" type="image/svg+xml">
@@ -69,7 +69,7 @@
     </a>
     <nav aria-label="Navigation principale">
       <a href="{{ path('website_modules') }}">Modules</a>
-      <a href="/#metiers">Métiers</a>
+      <a href="{{ path('website_metiers') }}">Métiers</a>
       <a href="/#tarifs">Tarifs</a>
       <a href="{{ path('website_blog_index') }}">Blog</a>
       <a class="btn btn-primaire" href="/#souscrire">Essayer 14 jours</a>
@@ -85,6 +85,7 @@
   <div class="mesure">
     {% block footer %}{% endblock %}
     <p>
+      <a href="{{ path('website_metiers') }}">Métiers</a> ·
       <a href="{{ path('website_modules') }}">Tous les modules</a> ·
       <a href="{{ path('website_blog_index') }}">Blog</a> ·
       <a href="/blog/rss.xml">RSS</a>

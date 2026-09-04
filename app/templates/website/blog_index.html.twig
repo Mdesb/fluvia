@@ -10,7 +10,7 @@
 
 {% block title %}Le blog de Fluvia{% if rubrique %} — {{ rubrique.name }}{% endif %}{% endblock %}
 {% block description %}{% if rubrique and rubrique.description %}{{ rubrique.description }}{% else %}Ce qu'on apprend en équipant des piscines, des patinoires, des salles et des musées : gestion, billetterie, accès, facturation.{% endif %}{% endblock %}
-{% block canonical %}<link rel="canonical" href="{{ rubrique ? url('website_blog_category', {slug: rubrique.slug}) : url('website_blog_index') }}">{% endblock %}
+{% block canonical %}<link rel="canonical" href="{{ site_base }}{{ rubrique ? path('website_blog_category', {slug: rubrique.slug}) : path('website_blog_index') }}">{% endblock %}
 
 {% block body %}
   <section class="bande hero">

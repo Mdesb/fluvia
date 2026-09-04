@@ -1,0 +1,59 @@
+{% extends 'website/base.html.twig' %}
+
+{#
+  Les métiers (ED-12).
+
+  ⚠ CINQ PAGES, ET C'EST LE NOMBRE DE VERTICALES DU PRODUIT — pas un choix éditorial. L'énumération
+  `Metier` fait foi : une sixième verticale ajoutée au produit apparaît ici sans qu'on touche à ce
+  gabarit, et une verticale retirée disparaît. Une liste écrite à la main aurait vendu, un jour, un
+  métier que le produit ne prérègle plus.
+#}
+
+{% block title %}Fluvia par métier — piscine, salle de sport, padel, patinoire, musée{% endblock %}
+{% block description %}Fluvia s'adapte à votre activité : piscines et centres aquatiques, salles de sport, clubs de padel, patinoires, musées et sites de visite. Chaque métier a ses contraintes — et ses modules activés par défaut.{% endblock %}
+{% block canonical %}<link rel="canonical" href="{{ site_base }}{{ path('website_metiers') }}">{% endblock %}
+
+{% block body %}
+  <section class="bande hero">
+    <div class="mesure">
+      <p class="fil"><a href="{{ path('website_home') }}">Accueil</a> · Métiers</p>
+      <h1>Le même socle, votre métier</h1>
+      <p class="chapo">
+        Un créneau n'est pas la même chose partout : c'est une ligne d'eau à la piscine, un terrain au
+        padel, une salle au musée. Fluvia porte les objets de votre activité — pas une abstraction
+        dans laquelle il faudrait la faire entrer.
+      </p>
+    </div>
+  </section>
+
+  <section class="bande">
+    <ul class="grille" role="list">
+      {% for metier in metiers %}
+        <li class="carte">
+          <h2><a href="{{ path('website_metier', {slug: metier.slug}) }}">{{ metier.nom }}</a></h2>
+          <p>{{ metier.chapo }}</p>
+          <p class="note">{{ metier.modules|length }} modules activés par défaut</p>
+        </li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  <section class="bande bande-creuse">
+    <div class="mesure">
+      <h2>Votre activité n’est pas dans la liste ?</h2>
+      <p>
+        Le socle ne suppose aucune activité particulière : comptes, établissements, droits, journal et
+        communication sont là dans tous les cas. Ce qui change d'un métier à l'autre, ce sont les
+        modules activés — et ils se choisissent un par un.
+      </p>
+      <p class="actions">
+        <a class="btn btn-fantome btn-grand" href="{{ path('website_modules') }}">Voir tous les modules</a>
+        <a class="btn btn-primaire btn-grand" href="{{ path('website_home') }}#souscrire">Essayer 14 jours</a>
+      </p>
+    </div>
+  </section>
+{% endblock %}
+
+{% block footer %}
+  <p>Cinq métiers préréglés, et un socle qui n’en suppose aucun.</p>
+{% endblock %}

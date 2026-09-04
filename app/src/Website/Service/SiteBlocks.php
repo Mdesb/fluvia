@@ -33,7 +33,7 @@ final class SiteBlocks
      */
     public static function all(): array
     {
-        return array_merge(self::blocsDaccueil(), self::blocsDeModule());
+        return array_merge(self::blocsDaccueil(), self::blocsDeModule(), self::blocsDeMetier());
     }
 
     /**
@@ -129,6 +129,34 @@ final class SiteBlocks
         }
 
         return null;
+    }
+
+    /**
+     * Un corps rédigeable par métier, dérivé de l'énumération des verticales (ED-12).
+     *
+     * Même règle que pour les modules : la liste vient du produit, pas d'une saisie. Une sixième
+     * verticale ajoutée à `Metier` fait apparaître sa page ET son bloc, sans que personne ait à s'en
+     * souvenir.
+     *
+     * @return list<array{key: string, type: BlockType, label: string, help: string, groupe: string, initialValue: array<int|string, mixed>}>
+     */
+    private static function blocsDeMetier(): array
+    {
+        $blocs = [];
+
+        foreach (\App\Website\Service\MetierCatalog::codes() as $metier) {
+            $blocs[] = [
+                'key' => \App\Website\Service\MetierCatalog::cleDeBloc($metier['code']),
+                'type' => BlockType::Rich,
+                'label' => $metier['nom'],
+                'help' => 'Le texte long de la page /metiers/'.str_replace('_', '-', $metier['code'])
+                    .'. Le chapô, les spécificités et la liste des modules viennent du produit : ils ne se saisissent pas ici.',
+                'groupe' => 'metiers',
+                'initialValue' => ['html' => ''],
+            ];
+        }
+
+        return $blocs;
     }
 
     /**

@@ -2130,6 +2130,21 @@ export const api = {
   // l'entite, pas survolees -- `libellePoste` NotBlank, `debut` et `fin` NotNull, `effectifRequis`
   // >= 1 -- plus un validateur de CLASSE, `TopologieTravailCoherente`, qui exige en outre
   // `fin > debut` et un etablissement resolu. C'est lui qui produirait le 422 surprenant.
+  // L'AFFECTATION — le second geste que le planning annoncait ne pas faire.
+  //
+  // ⚠ LE SERVEUR REFUSE POUR CINQ RAISONS, et deux sont INVISIBLES a l'ecran : un conflit de
+  // planning sur un AUTRE etablissement (RG-PERSO-04) — le cloisonnement le cache par
+  // construction — et une absence validee (RG-PERSO-05). Les trois autres : creneau annule,
+  // creneau sans fenetre horaire, qualification manquante (CA-5).
+  //
+  // On ne pre-filtre donc pas les employes : on propose tout le monde, et on affiche le refus du
+  // serveur tel quel. Il nomme la regle mieux que n'importe quelle reformulation.
+  affectationsTravail: () =>
+    request('/api/affectation_travails', { query: { itemsPerPage: 300 } }),
+  affecterEmploye: (corps) =>
+    request('/api/personnel/affectations', { method: 'POST', body: corps }),
+  annulerAffectationTravail: (id) =>
+    request(`/api/personnel/affectations/${id}/annuler`, { method: 'POST', body: {} }),
   creneauxTravail: (params) =>
     request('/api/creneau_travails', { query: { itemsPerPage: 200, ...(params || {}) } }),
   creerCreneauTravail: (corps) =>

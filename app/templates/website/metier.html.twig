@@ -1,0 +1,95 @@
+{% extends 'website/base.html.twig' %}
+
+{#
+  La page d'un métier (ED-12).
+
+  TROIS SOURCES, ET AUCUNE N'EST UNE PROMESSE INVENTÉE.
+
+  1. `specificites` — ce que le produit porte réellement pour ce métier. Chaque ligne nomme une
+     entité du dépôt (`Piscine\Entity\Poss`, `Patinoire\Entity\Affutage`, `Musee\Entity\PartenaireOTA`) :
+     quiconque en doute peut ouvrir le fichier. C'est ce qui rend la page tenable en démonstration,
+     qui est le moment où le prospect la teste.
+  2. `modules` — le PRÉRÉGLAGE réel (`PresetVerticale`), celui qu'un établissement de ce métier
+     reçoit. La page dit « ce que nous activons par défaut », jamais « ce dont vous avez besoin ».
+  3. `corps` — le texte long, rédigé depuis l'écran. Facultatif : la page tient sans lui.
+
+  ⚠ `corps|raw` est sûr par construction : assaini À L'ÉCRITURE, comme le corps d'un article.
+#}
+
+{% block title %}{{ metier.titre }} — Fluvia{% endblock %}
+{% block description %}{{ metier.chapo|slice(0, 300) }}{% endblock %}
+{% block canonical %}<link rel="canonical" href="{{ site_base }}{{ path('website_metier', {slug: metier.slug}) }}">{% endblock %}
+
+{% block body %}
+  <article class="bande hero">
+    <div class="mesure">
+      <p class="fil">
+        <a href="{{ path('website_home') }}">Accueil</a> ·
+        <a href="{{ path('website_metiers') }}">Métiers</a> ·
+        {{ metier.nom }}
+      </p>
+
+      <h1>{{ metier.titre }}</h1>
+      <p class="chapo">{{ metier.chapo }}</p>
+    </div>
+  </article>
+
+  {% if metier.specificites|length > 0 %}
+    <section class="bande">
+      <div class="mesure">
+        <h2>Ce que Fluvia sait faire pour {{ metier.nom|lower }}</h2>
+      </div>
+
+      <ul class="grille" role="list">
+        {% for point in metier.specificites %}
+          <li class="carte">
+            <h3>{{ point.titre }}</h3>
+            <p>{{ point.texte }}</p>
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+
+  {% if corps is not empty %}
+    <section class="bande bande-creuse">
+      <div class="mesure corps-article">
+        {{ corps|raw }}
+      </div>
+    </section>
+  {% endif %}
+
+  {% if metier.modules|length > 0 %}
+    <section class="bande">
+      <div class="mesure">
+        <h2>Les modules activés par défaut</h2>
+        <p>
+          C'est le point de départ d'un établissement de ce métier, pas une liste figée : chaque
+          module s'ajoute ou se retire, et n'est facturé que s'il est activé.
+        </p>
+
+        <ul class="module-liste">
+          {% for module in metier.modules %}
+            <li>
+              <a href="{{ path('website_module', {slug: module.slug}) }}">{{ module.libelle }}</a> —
+              {{ module.description }}
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </section>
+  {% endif %}
+
+  <section class="bande bande-creuse">
+    <div class="mesure">
+      <p class="actions">
+        <a class="btn btn-primaire btn-grand" href="{{ path('website_home') }}#souscrire">Essayer gratuitement 14 jours</a>
+        <a class="btn btn-fantome btn-grand" href="{{ path('website_metiers') }}">Les autres métiers</a>
+      </p>
+    </div>
+  </section>
+{% endblock %}
+
+{% block footer %}
+  <p><a href="{{ path('website_metiers') }}">Fluvia par métier</a> · <a href="{{ path('website_modules') }}">Tous les modules</a></p>
+{% endblock %}
