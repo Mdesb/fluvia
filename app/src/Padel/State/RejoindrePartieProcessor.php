@@ -80,12 +80,21 @@ final class RejoindrePartieProcessor implements ProcessorInterface
             }
         }
 
+        // ⚠ LA PART EST INDICATIVE, PAS UNE CRÉANCE. Maxime a tranché : l'organisateur reste
+        // redevable du montant global, et le partage entre quatre est ce que les joueurs se
+        // racontent entre eux — pas ce que l'établissement réclame.
         $partBase = number_format((float) $reservation->getMontantDu() / 4, 2, '.', '');
         $participant = new ParticipantReservation();
         $participant->setPersonne($joueur)
             ->setEstOrganisateur(false)
             ->setPartMontant($partBase)
-            ->setStatutPaiement(StatutPaiementParticipant::Paye); // paiement à l'inscription (§4.3).
+            // ⚠ CETTE LIGNE POSAIT `Paye`, AVEC LE COMMENTAIRE « paiement à l'inscription (§4.3) ».
+            // Il n'y avait aucun paiement : ni `Vente`, ni écriture, ni encaissement. Un joueur
+            // apparaissait réglé sans qu'un centime soit entré, et la comptabilité ne voyait
+            // jamais cette recette.
+            //
+            // `ImputeOrganisateur` dit ce qui est vrai : ce joueur ne doit rien, l'organisateur si.
+            ->setStatutPaiement(StatutPaiementParticipant::ImputeOrganisateur);
         $reservation->addParticipant($participant);
         $this->em->persist($participant);
 

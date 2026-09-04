@@ -64,6 +64,8 @@ export default function Stock({ etabActif, droits }) {
   const [onglet, setOnglet] = useState('etat')
 
   const peutAjuster = aUnDesDroits(droits, ['stock.ajuster', 'stock.gerer'])
+  // Le meme couple que le serveur exige sur les trois routes de transfert.
+  const peutTransferer = aUnDesDroits(droits, ['stock.transferer', 'stock.gerer'])
   const peutGererArticle = aUnDesDroits(droits, ['stock.gerer_article', 'stock.gerer'])
   const peutValoriser = aUnDesDroits(droits, ['stock.lire_valorisation', 'stock.gerer'])
 
@@ -148,6 +150,7 @@ export default function Stock({ etabActif, droits }) {
         onglets={[
           ['etat', 'Ce qu’il reste'],
           ['achats', 'Achats'],
+          ['transferts', 'Transferts entre sites'],
           ...(peutValoriser ? [['valorisation', 'Valeur du stock']] : []),
         ]}
         actif={onglet}
@@ -158,6 +161,13 @@ export default function Stock({ etabActif, droits }) {
         <div className="center" style={{ minHeight: 160 }}><div className="spinner" /></div>
       ) : onglet === 'valorisation' && peutValoriser ? (
         <ValorisationStock etabActif={etabActif} onErreur={setErreur} />
+      ) : onglet === 'transferts' ? (
+        <TransfertsSection
+          articles={articles}
+          peutTransferer={peutTransferer}
+          onErreur={setErreur}
+          onFait={apres}
+        />
       ) : onglet === 'achats' ? (
         <AchatsStock
           articles={articles || []}
@@ -907,4 +917,180 @@ function nombre(v) {
   const n = typeof v === 'number' ? v : parseFloat(v)
   if (!Number.isFinite(n)) return '—'
   return String(Math.round(n * 1000) / 1000).replace('.', ',')
+}
+
+
+/**
+ * LES TRANSFERTS ENTRE SITES — trois routes serveur, aucun écran jusqu'ici.
+ *
+ * Un transfert demandé restait dans la base : personne ne pouvait l'expédier, le réceptionner, ni
+ * même savoir qu'il attendait. Du stock parti d'un site sans jamais arriver à l'autre ne se voit
+ * qu'à l'inventaire suivant, des semaines plus tard.
+ *
+ * ⚠ LA DIRECTION SE DÉDUIT DU CLOISONNEMENT, ET C'EST JUSTE. Les articles ne sont lisibles que pour
+ * l'établissement actif ; les transferts le sont dès que l'un de leurs deux articles nous
+ * appartient. Un seul des deux côtés est donc résoluble — celui de chez nous. Source résoluble =
+ * j'envoie ; destination résoluble = je reçois.
+ *
+ * Et ça tombe exactement sur ce que le serveur autorise : `expedier` est réservé à l'établissement
+ * SOURCE, `recevoir` à la DESTINATION (RG-STOCK-14). L'écran ne propose donc jamais un geste qui
+ * serait refusé.
+ */
+function TransfertsSection({ articles, peutTransferer, onErreur, onFait }) {
+  // `null` = pas encore lu ; `undefined` = lecture impossible ; un tableau = lu.
+  const [transferts, setTransferts] = useState(null)
+  const [enCours, setEnCours] = useState(null)
+
+  const charger = useCallback(() => {
+    setTransferts(null)
+    api.stockTransferts()
+      .then((r) => setTransferts(membres(r)))
+      .catch(() => setTransferts(undefined))
+  }, [])
+
+  useEffect(charger, [charger])
+
+  // Les articles de CHEZ NOUS, par identifiant. Ce qui n'est pas dedans est chez l'autre.
+  const miens = useMemo(() => {
+    const m = {}
+    for (const a of articles || []) m[String(a.id)] = a
+    return m
+  }, [articles])
+
+  function idDe(ref) {
+    if (!ref) return null
+    return typeof ref === 'string' ? ref.split('/').pop() : (ref.id ? String(ref.id) : null)
+  }
+
+  function nomArticle(ref) {
+    const a = miens[idDe(ref)]
+    if (a) return a.libelle || a.reference || a.designation || 'article'
+    return null
+  }
+
+  async function agir(t, geste) {
+    setEnCours(t.id)
+    onErreur(null)
+    try {
+      if (geste === 'expedier') await api.expedierTransfertStock(t.id)
+      else await api.recevoirTransfertStock(t.id)
+      charger()
+      onFait(geste === 'expedier' ? 'Transfert expédié.' : 'Transfert réceptionné.')
+    } catch (e) {
+      onErreur(e.message || 'Le transfert n’a pas pu être traité.')
+    } finally {
+      setEnCours(null)
+    }
+  }
+
+  return (
+    <section className="card" style={{ marginTop: 'var(--esp-bloc)' }}>
+      <div className="card-h">
+        <h3>Transferts entre sites</h3>
+        <span className="sub">
+          {transferts === null ? 'lecture…' : transferts === undefined ? 'illisible' : `${transferts.length}`}
+        </span>
+      </div>
+      <div className="card-b">
+        {/* ⚠ LA CRÉATION N'EST PAS OFFERTE, ET CE N'EST PAS UN OUBLI. Le serveur exige une source et
+            une destination dans des établissements DIFFÉRENTS (RG-STOCK-13), or les articles de
+            l'autre site ne sont pas lisibles d'ici. Une liste déroulante ne peut pas les proposer.
+            Le dire évite de chercher un bouton qui ne peut pas exister en l'état. */}
+        <div className="sub" style={{ marginBottom: 'var(--esp-normal)' }}>
+          Les transferts se demandent depuis le site qui expédie&nbsp;; cet écran les suit et permet
+          de les expédier ou de les réceptionner. La demande elle-même n’est pas encore possible
+          ici&nbsp;: elle exige de désigner un article de l’autre établissement, que le
+          cloisonnement ne laisse pas voir.
+        </div>
+
+        {transferts === undefined && (
+          <div className="banner banner-warn">
+            Les transferts n’ont pas pu être lus. Il y en a peut-être en attente&nbsp;: cet écran ne
+            le sait pas.
+          </div>
+        )}
+
+        {transferts === null && <div className="empty">Lecture des transferts…</div>}
+
+        {Array.isArray(transferts) && transferts.length === 0 && (
+          <div className="empty">Aucun transfert. Ceux qui partent d’ici ou qui y arrivent apparaîtront dans cette liste.</div>
+        )}
+
+        {Array.isArray(transferts) && transferts.length > 0 && (
+          <div style={{ overflowX: 'auto' }}>
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>Sens</th>
+                  <th>Article</th>
+                  <th className="num">Quantité</th>
+                  <th>Demandé le</th>
+                  <th>État</th>
+                  {peutTransferer && <th />}
+                </tr>
+              </thead>
+              <tbody>
+                {transferts.map((t) => {
+                  const source = nomArticle(t.articleStockSource)
+                  const destination = nomArticle(t.articleStockDestination)
+                  const sortant = source !== null
+                  const etat = t.statut
+                  return (
+                    <tr key={t.id}>
+                      <td>
+                        {sortant
+                          ? <span className="badge warn">sortant</span>
+                          : destination !== null
+                            ? <span className="badge good">entrant</span>
+                            : <span className="sub">—</span>}
+                      </td>
+                      <td>
+                        {source || destination || <span className="sub">article d’un autre site</span>}
+                        {/* On ne montre PAS le nom de l'autre côté : il n'est pas lisible d'ici, et
+                            inventer « site B » ferait croire qu'on sait lequel. */}
+                      </td>
+                      <td className="num">{t.quantite}</td>
+                      <td>{t.dateDemande ? new Date(t.dateDemande).toLocaleDateString('fr-FR') : '—'}</td>
+                      <td>
+                        <span className={`badge ${etat === 'recu' ? 'good' : etat === 'expedie' ? 'warn' : 'mut'}`}>
+                          {etat === 'recu' ? 'reçu' : etat === 'expedie' ? 'expédié' : 'demandé'}
+                        </span>
+                      </td>
+                      {peutTransferer && (
+                        <td>
+                          {/* ⚠ UN SEUL GESTE PAR LIGNE, celui que l'état ET le sens autorisent. Le
+                              serveur rend 409 sur une transition impossible et refuse le geste du
+                              mauvais côté : proposer l'un ou l'autre ferait cliquer pour rien. */}
+                          {sortant && etat === 'demande' && (
+                            <button
+                              className="btn sm"
+                              type="button"
+                              disabled={enCours === t.id}
+                              onClick={() => agir(t, 'expedier')}
+                            >
+                              {enCours === t.id ? 'Expédition…' : 'Expédier'}
+                            </button>
+                          )}
+                          {!sortant && destination !== null && etat === 'expedie' && (
+                            <button
+                              className="btn primary sm"
+                              type="button"
+                              disabled={enCours === t.id}
+                              onClick={() => agir(t, 'recevoir')}
+                            >
+                              {enCours === t.id ? 'Réception…' : 'Réceptionner'}
+                            </button>
+                          )}
+                        </td>
+                      )}
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </section>
+  )
 }

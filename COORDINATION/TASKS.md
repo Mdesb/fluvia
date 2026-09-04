@@ -344,6 +344,137 @@ poussés depuis** : le porte-monnaie virtuel et les notes de frais.
 
 ---
 
+
+## 3 sexies. Posé par `allaccess-bd` le 04/09 — trois tâches prêtes, une par session
+
+Maxime a demandé que ces trois-là partent en parallèle. Chacune est autoportante : tout ce qu'il
+faut pour agir est ici, aucune ne dépend d'une conversation. ⚠ Claimez en tête de ligne avant de
+commencer, et **fusionnez `main` avant de claimer** — cette liste vieillit.
+
+---
+
+### D-1 · La garde du délai de préavis SEPA (§8.5) — pour `allaccess-c0`
+
+C'est vous qui l'avez mesurée le 03/09. Arbitrage de Maxime : **les deux emplacements**, parce que
+les deux directions attrapent des cas différents et qu'aucune ne couvre l'autre.
+
+    côté ConfigCreancierSepa   refuser un délai qui dépasse la période du plus court abonnement
+                               du site  →  attrape le créancier à 30 jours
+    côté abonnement            refuser une période plus courte que le délai du créancier
+                               →  attrape le premier abonnement hebdomadaire
+
+⚠ **LA BORNE EST STRICTE, ET C'EST MESURÉ** (`fada41fd`, `DebitPreNotifierTest`) : `reasonNotCovered`
+refuse quand `sentAt > executionDate - délai`, **strictement** supérieur. Un préavis envoyé
+exactement `délai` jours avant est COUVERT. Le contrôle refuse donc `délai > période`, **jamais
+`>=`**. Un `>=` refuserait une configuration qui marche — et **tous ses tests de refus resteraient
+verts**, plus verts qu'avant. Seul le cas qu'il doit AUTORISER démasque un contrôle trop large :
+écrivez ce test-là en premier.
+
+État actuel : latent, rien de cassé. Quatre créanciers à 14 jours, zéro abonnement hebdomadaire.
+
+---
+
+### D-2 · Un produit obligatoire sur une vente de réservation (§8.8 c) — pour `allaccess-a9`
+
+`VenteReservationHandler:42` fait `setProduit($produitRef ?? Uuid::v4())`. Sans produit fourni, la
+ligne désigne un produit **qui n'existe pas** : aucune catégorie comptable, donc absente de la
+ventilation, et `LineLabelStamper` laisse le libellé nul — il le documente lui-même.
+
+Arbitrage de Maxime : **produit obligatoire**. Lever si absent.
+
+⚠ **NE PAS LEVER AVANT D'AVOIR ÉQUIPÉ LES DEUX APPELANTS QUI N'EN PASSENT PAS**, sinon vous cassez
+le no-show et le débit PMV :
+
+    ReserverProcessor:202          passe `$activite?->getProduitTarifReference()?->getId()`
+                                   ⚠ DEUX `?->` : il retombe sur `null` dès qu'une activité n'a
+                                   pas de produit-tarif. À traiter comme les deux autres.
+    DebitPmvStrategie:52           n'en passe aucun
+    VenteDiffereeAgentStrategie:52 n'en passe aucun
+
+⚠ **ET MESUREZ L'IMPACT AVANT DE CONCLURE** : trois sites d'appel ne sont pas trois défauts. Comptez
+combien de `LigneVente` existantes pointent vers un produit absent du catalogue — les occurrences
+d'une cause ne sont pas ses effets. Le chiffre décide si c'est une correction ou une reprise.
+
+Le patron à imiter existe : `ParametragePadel::$produitTerrainRef`, désormais lu par
+`ReserverTerrainProcessor` (commit `3be5fd2b`).
+
+#### ⛔ MESURÉ PAR `allaccess-a9` LE 04/09 — NE PAS LIVRER LA LEVÉE EN L'ÉTAT
+
+Deux choses ont changé depuis la rédaction, et la seconde renverse la conclusion.
+
+**1. Les deux appelants sont DÉJÀ équipés.** `DebitPmvStrategie:57` et
+`VenteDiffereeAgentStrategie:57` passent tous les deux
+`$reservation->getCreneau()?->getActivite()?->getProduitTarifReference()?->getId()`. La fiche disait
+« n'en passe aucun » ; c'était vrai à l'écriture. Les trois appelants convergent donc désormais sur
+la même source — et tous trois peuvent encore rendre `null` par leur chaîne de `?->`.
+
+**2. ⚠ MAIS AUCUNE ACTIVITÉ N'A DE PRODUIT, ET AUCUN ÉCRAN NE PERMET D'EN METTRE UN.**
+
+    reservation_activite                                   3 lignes
+    dont produit_tarif_reference_id IS NULL                3   ← toutes
+    `produitTarifReference` dans le groupe `activite:write` OUI, écrivable par l'API
+    mentions dans frontend/src/                            0   ← aucun écran
+    `api.reservationActivites()` existe (lecture)          mais Reservation.jsx n'affiche pas
+                                                            les activités du tout
+
+Lever aujourd'hui **bloquerait 100 % des ventes de réservation**, sans aucun moyen de débloquer
+depuis l'interface. Ce n'est pas un correctif latent : c'est une panne immédiate.
+
+**Et le zéro qui rassurait ne prouvait rien.** J'ai d'abord compté les dégâts existants :
+
+    vente_ligne                                            23 lignes
+    dont produit absent du catalogue                       0
+    dont type_tarif absent du catalogue                    0
+    dont libelle_produit vide                              0   (témoin : la jointure marche, 23/23)
+
+Zéro orpheline — non parce que le défaut est inoffensif, mais parce que **ce chemin n'a jamais
+produit de ligne persistée**. Une base propre ne dit pas qu'un code est sain, elle dit qu'il n'a pas
+servi.
+
+**⚠ Et le même défaut est juste en dessous, non mentionné par la fiche :**
+`VenteReservationHandler:44` fait `setTypeTarif(Uuid::v4())` **sans condition** — jamais fourni par
+personne, toujours fantôme. Le corriger demande une source pour le type de tarif, qui n'existe
+nulle part aujourd'hui.
+
+#### CE QU'IL FAUT AVANT LA LEVÉE
+
+1. **Un écran qui permette de poser le produit sur une activité.** C'est le vrai prérequis, et il
+   n'était pas dans la fiche. Les activités ne sont affichées nulle part : c'est un écran à
+   construire, pas un champ à ajouter.
+2. **Les trois activités existantes configurées.**
+3. **Alors seulement** la levée, avec un message qui nomme l'activité fautive.
+
+Tant que 1 n'existe pas, livrer la levée transforme un défaut comptable invisible en refus de vente
+visible. C'est un mauvais échange, et il est irréversible pour l'exploitant qui le subit.
+
+**Statut : mesuré, bloqué sur le prérequis 1. Non claimé — disponible pour qui prend l'écran.**
+
+---
+
+### D-3 · Le bundler avertit, personne ne lit (§ nouveau) — pour `allaccess-df`
+
+`npx vite build` signalait **quatre clés en double dans `Icon.jsx`** — `dashboard`,
+`personal-data`, `social`, `legal` — pendant que le garde-fou « Clés en double » annonçait
+« aucune ». Quatre icônes du menu n'étaient pas celles qu'on lisait dans le fichier.
+
+Corrigé le 04/09 (`ff5a00af`), et le garde-fou élargi. **Mais rien ne garantit le prochain** : le
+build passe avec des avertissements, et personne ne les regarde. Il y en a **zéro aujourd'hui** —
+c'est le bon moment pour poser le cliquet.
+
+À faire : un contrôle qui lit la sortie de `vite build` et **échoue sur tout avertissement**, avec
+une liste gelée à zéro. Câblé dans les trois listes (`bin/garde-fous.sh`, `hooks/pre-commit`,
+`hooks/pre-receive`) — le filet de complétude de `garde-fous.sh` glose `bin/garde-fou-*` et refuse
+un script non lancé, donc il vous le dira si vous en oubliez une.
+
+⚠ **UN DÉTECTEUR QUI REND ZÉRO DOIT PROUVER QU'IL SAIT TROUVER.** Posez un témoin : réintroduisez
+une clé en double dans un fichier de test, voyez-le crier, retirez-la. Sans ça vous livrez un
+contrôle que personne n'a jamais vu fonctionner.
+
+⚠ Et le repli honnête compte : si `node_modules` manque dans l'arbre, annoncez **NON EXÉCUTÉ**
+plutôt qu'un vert. Deux garde-fous font déjà exactement ça (n°47, n°48) — copiez leur forme.
+
+---
+
 ## 3 bis. Après l'API — les quatre axes de la feuille de route
 
 ⚠ **Ces quatre lots consomment l'API. Les commencer avant T1 produirait quatre couplages privés au
@@ -364,7 +495,8 @@ reprendre.
 | # | lot | pourquoi |
 |---|---|---|
 | **T15** | **Refonte graphique aux couleurs de Fluvia** | Les écrans portent aujourd'hui une identité par défaut. ⚠ À faire **avant** T11 : une appli en marque blanche décline une identité — s'il n'y en a pas, elle décline le vide |
-| **T16** | **Site vitrine** sur `fluvia-app.com` | Aucune vitrine n'existe. Hôte séparé du back-office (D103) : elle porte des traceurs, il porte des sessions |
+| **T16** | ~~**Site vitrine** sur `fluvia-app.com`~~ — **en ligne le 04/09**, sur `vitrine.hector-conseil.com` | ⚠ **« Aucune vitrine n'existe » était faux depuis ED-5** : `vitrine/` était dans le dépôt et n'était servi nulle part. Le sous-domaine retombait sur le vhost par défaut et servait **le back-office**. Posé : vhost + TLS + `/api` sur la même origine, et le nom **Fluvia** dans le titre, qui n'y était pas. Hôte séparé du back-office comme le veut D103. Reste : le domaine définitif, et E-9 (mentions légales) avant toute indexation — le site est en `noindex` | **fait** — `c0`, 04/09 |
+| **T16-b** | **Tunnel d'inscription en essai gratuit de 14 jours** (arbitré par Maxime le 04/09) | Le tunnel existe **au tiers** : `SubscriptionFunnel` code les trois étapes, mais seule la première a une route HTTP (`POST /editor/carts`). `signMandate` et `confirmPayment` ne sont appelés que par les tests — depuis un navigateur, le tunnel s'arrête après le panier.<br>⚠ **UN ESSAI « JUSTE ACTIVÉ » SERAIT FACTURÉ.** `FacturerAbonnementsCommand::abonnementsFacturables()` prend tout abonnement `active` ou `suspended`. Activer sans mandat produirait une facture mensuelle à un client qui n'a rien signé, puis une relance par `Recouvrement`. L'essai doit donc porter une marque que la facturation lit, pas seulement un état.<br>⚠ **ET `signMandate` REFUSE UN ABONNEMENT ACTIF** (`assertStillInCart`). Or la bascule payante décidée par Maxime suppose que le client signe **pendant** son essai, donc sur un abonnement actif. Les deux règles se contredisent : c'est à trancher dans le domaine, pas à contourner dans un écran.<br>⚠ **BLOQUÉ POUR L'OUVERTURE PAR E-8** : sans courriel qui part, la confirmation d'adresse est impossible, et elle est la seule garde contre la création d'établissements réels en boucle par n'importe qui. Le tunnel se développe et se prouve quand même — le jeton se lit dans le journal | `c0` — 04/09 |
 | **T17** | **Accueil d'un nouveau client (onboarding)** | ⚠ **Ce n'est PAS T2.** T2 reprend les données d'un client ; T17 est tout le chemin de la signature à une installation qui marche : créer le locataire, semer les référentiels, poser les types de produits et leurs comptes, le premier utilisateur, la formation. **T2 en est une étape.** Les confondre les ferait faire deux fois |
 
 ---
@@ -688,6 +820,42 @@ Conséquence : ces réservations gardent `ModeDecompteReservation::VenteUnite` s
 → Décider : une opération `encaisser` sur la réservation, ou rendre la session obligatoire et
 équiper l'écran, ou un mode de décompte qui dise « dû, non encaissé » (les quatre cas actuels sont
 `QuotaFormule`, `CarteStock`, `VenteUnite`, `Gratuit` — aucun ne le dit).
+
+### ⚠ 8.8 bis — Les quatre arbitrages de Maxime du 04/09
+
+**(a) L'encaissement hors comptoir → un système de CONFIRMATION.** Ses mots : « on met un système
+où il faut une confirmation de la réservation, par exemple 24 heures avant le début de la session,
+et lors de la confirmation il faut le paiement ; pour toutes les réservations de moins de 24 heures,
+le paiement est demandé dès le départ ».
+
+Deux précisions qu'il a données ensuite, et elles changent la forme de la chose :
+
+  · **le paiement se construit maintenant, le prestataire viendra après.** « On est sur un
+    environnement de préproduction, c'est normal qu'il n'y ait aucun mode de paiement. On peut faire
+    les mécanismes. Je te dirai quand on prendra le prestataire. » Donc : point d'accroche, pas de
+    branchement. E-3 reste externe.
+  · **⚠ CE QUI SE PASSE À L'EXPIRATION EST UN PARAMÈTRE, PAS UN CHOIX FIGÉ.** « Ces décisions sont
+    des décisions métier, il faut laisser le choix à l'exploitant. » Libérer le créneau, le garder
+    bloqué, ou le libérer en facturant : trois comportements à offrir, aucun à imposer.
+
+État : **à construire**. Un patron d'expiration à échéance existe déjà et se copie
+(`PromotionListeAttenteHandler::expirerPromotionsDepassees`). ⚠ Et la réservation naît aujourd'hui
+`StatutReservation::Confirmee` — il n'existe aucun état « à confirmer ».
+
+**(b) L'organisateur doit tout — FAIT le 04/09.** Ses mots : « un joueur qui rejoint rejoint la
+réservation GLOBALE… c'est le risque de ne pas avoir le montant global payé », puis, sur la portée :
+**l'organisateur doit tout**. On garde la partie ouverte ; les parts deviennent indicatives.
+
+⚠ **CA-3 est supersédé pour le padel**, et c'est une décision, pas une dérive. Le paiement partagé
+du socle (RG-M5-10, CA-13) n'est pas touché : `/payer` marche toujours.
+
+**(c) Produit obligatoire sur une vente de réservation.** Délégué à `allaccess-a9` (§3 sexies D-2).
+
+**(d) §8.5 — la garde du délai SEPA aux DEUX endroits.** Maxime ne voyait pas le périmètre ; il est
+étroit et latent : le prélèvement des abonnements, rien d'autre, et il s'arme au premier abonnement
+hebdomadaire ou au premier créancier au-delà de 30 jours. Délégué à `allaccess-c0` (§3 sexies D-1).
+
+### ⚠ Ce que (b) disait avant d'être corrigé
 
 **(b) `RejoindrePartieProcessor:88` marque un joueur `Paye` sans créer la moindre vente.**
 Le commentaire dit « paiement à l'inscription (§4.3) ». Il n'y a pas de paiement : juste un statut.

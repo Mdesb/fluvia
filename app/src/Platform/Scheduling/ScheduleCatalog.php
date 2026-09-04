@@ -156,6 +156,28 @@ final class ScheduleCatalog
                 safeOnFirstRun: false,
             ),
             new ScheduledTask(
+                'subscription:trials:expire',
+                1440,
+                "Un essai gratuit de quatorze jours ne se termine jamais. Le client garde une "
+                . "plateforme complete et gratuite indefiniment, et personne ne s en apercoit : rien "
+                . "n echoue, rien n alerte, la seule trace est une colonne `trial_ends_at` depassee "
+                . "que personne ne regarde. C est le defaut le plus discret d un essai libre-service.",
+                // Fenetre nocturne comme les autres taches d argent (arbitrage du 01/09), et AVANT
+                // la facturation : un essai echu doit avoir bascule ou etre suspendu quand elle passe.
+                nightlyAt: '02:00',
+                // Rang 20 : avant `subscription:facturer-le-mois` (rang 30).
+                order: 20,
+                // SÛRE AU PREMIER PASSAGE, et le raisonnement compte plus que la conclusion.
+                // Elle SUSPEND, et suspendre n efface rien (RG-ED-06) : l exposition se coupe, les
+                // donnees restent, la regularisation les reexpose. Ce n est donc ni le cas 2
+                // (destruction irreversible) ni le cas 3 (effet visible au dehors : aucun message ne
+                // part d ici). Un arriere traite d un coup ferme des acces qui auraient du l etre —
+                // c est exactement le rattrapage voulu.
+                // ⚠ Ce qu elle ne fait PAS, et qui rend son retard inoffensif cote argent : elle ne
+                // rend personne facturable. La facturation exclut seule tout essai sans mandat actif.
+                safeOnFirstRun: true,
+            ),
+            new ScheduledTask(
                 'subscription:facturer-le-mois',
                 1440,
                 "Les abonnements du mois ne sont pas facturés : le client utilise le logiciel sans "

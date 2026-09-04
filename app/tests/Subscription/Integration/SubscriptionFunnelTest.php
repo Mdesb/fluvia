@@ -32,6 +32,7 @@ use App\Subscription\Service\OfferCatalog;
 use App\Subscription\Service\ProvisioningService;
 use App\Subscription\Service\SubscriptionActivator;
 use App\Subscription\Service\SubscriptionFunnel;
+use App\Subscription\Service\SubscriptionMandates;
 use App\Tests\SocleApiTestCase;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -208,6 +209,8 @@ final class SubscriptionFunnelTest extends SocleApiTestCase
             $tokenisation,
             $chiffreur,
             new DemoConfiguration([]),
+            $bus,
+            new SubscriptionMandates($this->em()),
         );
     }
 
