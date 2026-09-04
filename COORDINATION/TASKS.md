@@ -454,6 +454,33 @@ nulle part aujourd'hui.
 2. **Les trois activités existantes configurées.** ⚠ À faire par un humain : c'est une décision
    produit, pas une migration. Sous quel produit se vend un cours, un créneau de bassin, un
    rendez-vous ? Personne d'autre que l'exploitant ne peut répondre.
+
+   ⚠ **ET LE TYPE DU PRODUIT DÉCIDE DE CE QUE LA VENTE FABRIQUE — mesuré le 04/09.**
+
+       ValiderVenteService::emetSupport()   billet OU carnet OU acces  →  un support est ÉMIS
+
+   Les quatre types existants : `abonnement` (formule+acces), `boutique_stock` (stock+consommateur),
+   `carte` (carnet+consommateur), `entree_unitaire` (billet+consommateur). **Aucun ne décrit un
+   service réservé**, et les trois premiers comme le quatrième émettent un support.
+
+   Rattacher une activité à `entree_unitaire` ferait donc émettre un billet à chaque réservation
+   vendue — y compris **quand on facture un no-show** (`DebitPmvStrategie` valide la vente) : un
+   ticket remis à quelqu'un pour ne pas être venu.
+
+   ⚠ **Le référentiel des types est FERMÉ À L'ÉCRITURE, délibérément** — `TypeProduit` n'expose que
+   `GetCollection` et `Get`, et son docblock le dit : « référentiel administré (pas d'écriture API
+   en L1) ». Ce n'est pas un écran qui manque. Seul `ModelePiscineTypeGenerator` en crée, par
+   `trouverOuCreerTypeProduit` — dont « Cours piscine » en `billet + consommateur`, ce qui est la
+   réponse que le dépôt s'est déjà donnée pour un cours.
+
+   **Statut : Maxime réfléchit au type à retenir (04/09). Ne rattachez PAS les activités à un type
+   existant en attendant** — une facette de trop change silencieusement ce que la vente fabrique, et
+   le défaut ne se voit ni à la caisse ni au ticket.
+
+   ⚠ **Au passage, ce qui explique le silence du défaut initial** : `ValiderVenteService:261` fait
+   `find($ligne->getProduit())` et **retourne `null` sans rien dire** quand le produit n'existe pas.
+   Pas de support, pas d'erreur, pas de trace. Un produit fantôme ne fait donc AUCUN bruit — c'est
+   ce qui lui a permis de vivre.
 3. **Alors seulement** la levée, avec un message qui nomme l'activité fautive.
 
 ⚠ **NE PAS SAUTER LE 2.** Le 1 est fait, mais les trois activités sont toujours sans produit :
