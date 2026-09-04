@@ -76,6 +76,9 @@ export default function ExplorateurIndicateurs({ etabActif, etablissements = [] 
   const [indicateursLus, setIndicateursLus] = useState(null)
   const indicateurs = indicateursLus || []
   const [groupesLus, setGroupesLus] = useState(null)
+  const [objectifsLus, setObjectifsLus] = useState(null)
+  const [cible, setCible] = useState('')
+  const [poseEnCours, setPoseEnCours] = useState(false)
 
   const [code, setCode] = useState('')
   const [niveau, setNiveau] = useState('etablissement')
@@ -96,7 +99,16 @@ export default function ExplorateurIndicateurs({ etabActif, etablissements = [] 
     api.groupes()
       .then((r) => { if (!annule) setGroupesLus(membres(r)) })
       .catch(() => { if (!annule) setGroupesLus(null) })
+    api.objectifsIndicateur()
+      .then((r) => { if (!annule) setObjectifsLus(membres(r)) })
+      .catch(() => { if (!annule) setObjectifsLus(null) })
     return () => { annule = true }
+  }, [])
+
+  const rechargerObjectifs = useCallback(() => {
+    api.objectifsIndicateur()
+      .then((r) => setObjectifsLus(membres(r)))
+      .catch(() => setObjectifsLus(null))
   }, [])
 
   // Le premier indicateur actif sert de choix par défaut, pour que l'écran ouvre sur quelque chose.
@@ -141,6 +153,61 @@ export default function ExplorateurIndicateurs({ etabActif, etablissements = [] 
   )
   const partiels = mesures.filter((p) => p.completude === 'partiel').length
   const absents = (points || []).filter((p) => p.etat === 'absent').length
+
+  // ⚠ UNE CIBLE NE JUGE QUE LA PERIODE QU'ELLE COUVRE. Un objectif de septembre ne dit rien d'une
+  // journee d'aout : on ne retient que celui dont la periode contient les jours regardes, au bon
+  // niveau et sur le bon indicateur.
+  const objectif = useMemo(() => {
+    if (!objectifsLus || !code || !entiteId || !points || points.length === 0) return null
+    const premier = points[0].jour
+    const dernier = points[points.length - 1].jour
+    return objectifsLus.find((o) => {
+      const codeO = o.indicateur?.code || o.indicateur?.['@id']
+      if (codeO !== code && o.indicateur?.code !== code) return false
+      if (o.niveau !== niveau) return false
+      const idO = (o[niveau] || '').toString()
+      if (!idO.includes(entiteId)) return false
+      const d = (o.periodeDebut || '').slice(0, 10)
+      const f = (o.periodeFin || '').slice(0, 10)
+      return d <= dernier && f >= premier
+    }) || null
+  }, [objectifsLus, code, niveau, entiteId, points])
+
+  // ⚠ LA MOYENNE NE PORTE QUE SUR LES JOURS MESURES. Compter un jour non agrege comme un zero
+  // tirerait l'ecart vers le bas et ferait croire a un objectif manque — le mensonge exact que cet
+  // ecran existe pour empecher.
+  const moyenneMesuree = mesures.length
+    ? mesures.reduce((s, p) => s + (Number(p.valeur) || 0), 0) / mesures.length
+    : null
+  const valeurCible = objectif ? Number(objectif.valeurCible) : null
+  const ecart = moyenneMesuree !== null && valeurCible !== null ? moyenneMesuree - valeurCible : null
+
+  async function poserObjectif(e) {
+    e.preventDefault()
+    const v = parseFloat(String(cible).replace(',', '.'))
+    if (Number.isNaN(v) || !indicateur || !entiteId) return
+    setPoseEnCours(true)
+    setErreur(null)
+    try {
+      const premier = points?.[0]?.jour || jourLocal(new Date())
+      const dernier = points?.[points.length - 1]?.jour || premier
+      await api.creerObjectif({
+        indicateur: indicateur['@id'],
+        periodeDebut: premier,
+        periodeFin: dernier,
+        granularite: 'jour',
+        valeurCible: v.toFixed(2),
+        niveau,
+        [niveau]: `/api/${niveau === 'etablissement' ? 'etablissements' : niveau === 'region' ? 'regions' : 'groupes'}/${entiteId}`,
+      })
+      setCible('')
+      rechargerObjectifs()
+    } catch (err) {
+      setErreur(err?.message || 'L’objectif n’a pas pu être posé.')
+    } finally {
+      setPoseEnCours(false)
+    }
+  }
 
   const niveauIndisponible = niveau !== 'etablissement' && !entiteId
 
@@ -200,8 +267,17 @@ export default function ExplorateurIndicateurs({ etabActif, etablissements = [] 
               <>
                 <div style={{
                   display: 'flex', alignItems: 'flex-end', gap: 'var(--esp-serre)', height: 120,
-                  marginTop: 'var(--esp-bloc)',
+                  marginTop: 'var(--esp-bloc)', position: 'relative',
                 }}>
+                  {/* La cible, posée sur la même échelle que les barres — sans quoi la comparer
+                      à l'œil ne voudrait rien dire. */}
+                  {valeurCible !== null && maxi > 0 && valeurCible <= maxi && (
+                    <div aria-hidden="true" style={{
+                      position: 'absolute', left: 0, right: 0,
+                      bottom: Math.round((valeurCible / maxi) * 108),
+                      borderTop: '2px dashed var(--accent-2)', pointerEvents: 'none',
+                    }} />
+                  )}
                   {points.map((p) => {
                     const v = Number(p.valeur) || 0
                     const h = p.etat === 'mesure' && maxi > 0 ? Math.max(2, Math.round((Math.abs(v) / maxi) * 108)) : 0
@@ -235,7 +311,46 @@ export default function ExplorateurIndicateurs({ etabActif, etablissements = [] 
                   <span>{mesures.length} jour(s) mesuré(s)</span>
                   {partiels > 0 && <span><b>{partiels} partiel(s)</b> — un site au moins n’a pas remonté</span>}
                   {absents > 0 && <span><b>{absents} sans mesure</b> — l’agrégation n’a pas couvert ces jours</span>}
+                  {valeurCible !== null && (
+                    <span>
+                      cible {formatValeur(valeurCible, indicateur?.unite)} ·{' '}
+                      <b style={{ color: ecart >= 0 ? 'var(--good)' : 'var(--crit)' }}>
+                        {ecart >= 0 ? '+' : ''}{formatValeur(ecart, indicateur?.unite)}
+                      </b>{' '}
+                      en moyenne sur {mesures.length} jour(s) mesuré(s)
+                      {absents > 0 && <> — les {absents} jours sans mesure ne comptent pas</>}
+                    </span>
+                  )}
                 </div>
+
+                {/* POSER UNE CIBLE. `ObjectifIndicateur` était la septième ressource du module sans
+                    aucun écran : un indicateur sans cible est un nombre, avec une cible il devient
+                    une distance. C'est le critère CA-3, « écart vs objectifs ». */}
+                <form onSubmit={poserObjectif} style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--esp-normal)', alignItems: 'flex-end', marginTop: 'var(--esp-bloc)' }}>
+                  <div className="field" style={{ margin: 0 }}>
+                    <label className="field-lbl" htmlFor="expl-cible">
+                      {objectif ? 'Remplacer la cible sur cette période' : 'Poser une cible sur cette période'}
+                    </label>
+                    <input
+                      id="expl-cible"
+                      className="input"
+                      type="text"
+                      inputMode="decimal"
+                      placeholder={valeurCible !== null ? String(valeurCible) : 'ex. 150'}
+                      value={cible}
+                      onChange={(ev) => setCible(ev.target.value)}
+                    />
+                  </div>
+                  <button className="btn" type="submit" disabled={poseEnCours || !cible.trim()}>
+                    {poseEnCours ? 'Enregistrement…' : 'Enregistrer la cible'}
+                  </button>
+                  {objectif && (
+                    <span className="hint">
+                      Cible actuelle&nbsp;: {formatValeur(objectif.valeurCible, indicateur?.unite)} du{' '}
+                      {(objectif.periodeDebut || '').slice(0, 10)} au {(objectif.periodeFin || '').slice(0, 10)}
+                    </span>
+                  )}
+                </form>
 
                 <div style={{ overflowX: 'auto', marginTop: 'var(--esp-bloc)' }}>
                   <table className="tbl">
