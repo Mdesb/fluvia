@@ -131,7 +131,11 @@ export default function EditeurApp() {
   // rien — et c'est voulu : un filtre d'affichage qui rattrape une garde manquante la fait oublier.
   // Les cinq ecrans qui n'existent que pour l'editeur. Le reste — agenda, assistance, documents… —
   // sont les outils communs du produit, employes ici comme partout ailleurs.
-  const EDITEUR = new Set(['abonnements', 'offres', 'clients', 'facturation', 'reglements', 'acces-support'])
+  // ⚠ DEUX LISTES, ET OUBLIER LA SECONDE NE CASSE RIEN — l'ecran apparait simplement dans le
+  // mauvais groupe. `onglets` dit ce qui existe, cet ensemble dit ce qui appartient a l'editeur.
+  // « Site vitrine » a passe une heure sous « OUTILS », entre l'agenda et l'assistance, faute
+  // d'etre ici : rien n'echouait, le menu etait juste faux. Vu en ouvrant l'ecran.
+  const EDITEUR = new Set(['abonnements', 'offres', 'clients', 'facturation', 'reglements', 'site', 'acces-support'])
 
   const onglets = [
     { id: 'abonnements', ic: 'subscriptions', label: 'Abonnements', perms: ['editor.read_subscription'] },

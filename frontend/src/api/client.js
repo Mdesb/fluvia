@@ -2404,12 +2404,18 @@ export const api = {
   // filtrer a moitie.
   editorArticles: () => request('/api/editor/website/posts'),
   editorArticle: (id) => request(`/api/editor/website/posts/${id}`),
-  creerEditorArticle: (corps) => request('/api/editor/website/posts', { method: 'POST', body: corps }),
+  // ⚠ `ld: true` : ces ressources n'exposent que `application/ld+json`. Sans lui, la creation
+  // part en `application/json` et le back repond 415 — et RIEN ne l'avait dit :
+  // `verifier-formats.mjs` saute deliberement les routes a `uriTemplate` sur mesure, parce qu'il
+  // ne peut pas savoir lesquelles ont `input: false` (ou ld+json est au contraire interdit).
+  // Trouve le 04/09 en ouvrant l'ecran : le formulaire affichait le message d'API Platform, en
+  // anglais, a la place de l'article qu'on venait d'ecrire.
+  creerEditorArticle: (corps) => request('/api/editor/website/posts', { method: 'POST', body: corps, ld: true }),
   majEditorArticle: (id, corps) => request(`/api/editor/website/posts/${id}`, { method: 'PATCH', body: corps }),
   supprimerEditorArticle: (id) => request(`/api/editor/website/posts/${id}`, { method: 'DELETE' }),
 
   editorRubriques: () => request('/api/editor/website/categories'),
-  creerEditorRubrique: (corps) => request('/api/editor/website/categories', { method: 'POST', body: corps }),
+  creerEditorRubrique: (corps) => request('/api/editor/website/categories', { method: 'POST', body: corps, ld: true }),
   majEditorRubrique: (id, corps) => request(`/api/editor/website/categories/${id}`, { method: 'PATCH', body: corps }),
   supprimerEditorRubrique: (id) => request(`/api/editor/website/categories/${id}`, { method: 'DELETE' }),
 
@@ -2418,7 +2424,7 @@ export const api = {
   // PUT et non PATCH : un bloc n'a qu'une valeur, et elle se remplace en entier. Une fusion
   // partielle sur une liste de cartes demanderait une semantique d'index que personne n'a demandee.
   enregistrerEditorBloc: (cle, corps) =>
-    request(`/api/editor/website/blocks/${encodeURIComponent(cle)}`, { method: 'PUT', body: corps }),
+    request(`/api/editor/website/blocks/${encodeURIComponent(cle)}`, { method: 'PUT', body: corps, ld: true }),
 
   editorPlans: () => request('/api/editor/catalog/plans'),
   creerEditorPlan: (corps) => request('/api/editor/catalog/plans', { method: 'POST', body: corps }),
