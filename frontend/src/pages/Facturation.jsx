@@ -568,12 +568,22 @@ export default function Facturation({ etabActif, droits, onNaviguer }) {
             </div>
           ) : chaine ? (
             <>
+              {/* ⚠ CE BANDEAU CONCLUAIT AVANT D'AVOIR LU. Il affirmait qu'une chaîne rompue
+                  « signifie qu'une facture a été modifiée, supprimée ou insérée après coup » —
+                  vrai d'un trou de séquence ou d'une donnée altérée, FAUX d'une signature qui ne
+                  correspond plus alors que l'empreinte se vérifie : là, le contenu est intact et
+                  la cause la plus probable est une clé de scellement remplacée.
+                  Mesuré sur la préproduction : la seule anomalie du jour est exactement celle-là.
+                  Le bandeau demandait pourtant de « faire remonter » — geste juste devant une
+                  falsification, disproportionné devant une clé d'environnement.
+                  Il dit désormais ce qui vaut pour TOUTES les anomalies, et renvoie au détail
+                  pour la gravité. Le tableau, lui, garde le libellé du serveur mot pour mot. */}
               <div className="banner banner-error">
                 <b>{(chaine.anomalies || []).length} anomalie
                 {(chaine.anomalies || []).length > 1 ? 's' : ''} sur la chaîne des factures.</b>{' '}
-                Une chaîne rompue signifie qu’une facture scellée a été modifiée, supprimée ou
-                insérée après coup. Ce n’est pas un incident d’affichage&nbsp;: conservez ce
-                rapport et faites-le remonter.
+                Ce n’est pas un incident d’affichage&nbsp;: la vérification a bien tourné et elle a
+                trouvé quelque chose. Lisez le détail ci-dessous avant de conclure — toutes les
+                anomalies n’ont pas la même gravité, et chacune dit ce qu’elle établit.
               </div>
               {(chaine.anomalies || []).length > 0 && (
                 <table className="tbl">
