@@ -91,6 +91,11 @@ fi
 # seul un filet qui les compare a l'inventaire reel le voit.
 [ -f "$RACINE/bin/garde-fou-references-libres.php" ] && { lancer_gf garde-fou-references-libres.php || ECHEC=1; }
 
+# Un module declare « ne peut rien servir » (§8.1) est retire de la vente. Le jour ou quelqu'un
+# le construit, cette declaration devient le CONTRAIRE du vrai et le module reste gratuit pour
+# toujours — sans qu'aucun test ne tombe : il marchera, il ne sera juste pas facture.
+[ -f "$RACINE/bin/garde-fou-modules-non-servables.php" ] && { lancer_gf garde-fou-modules-non-servables.php || ECHEC=1; }
+
 # Une propriete declaree dans un `#[ApiFilter]` doit EXISTER : API Platform ignore une propriete
 # inconnue en silence, et la collection sort ENTIERE. Contrairement aux filtres qui rendent une liste
 # vide, celui-ci ne remonte jamais en reclamation -- des donnees qui s'affichent n'intriguent personne.

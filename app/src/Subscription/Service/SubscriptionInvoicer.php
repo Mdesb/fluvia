@@ -216,6 +216,16 @@ final class SubscriptionInvoicer
                 continue;
             }
 
+            // ⚠ ON NE FACTURE PAS UN MODULE QUI NE PEUT RIEN SERVIR (§8.1). `OfferCatalog` empêche
+            //   désormais d'en acheter un ; cette garde couvre l'abonnement souscrit AVANT.
+            //
+            // ⚠ Aujourd'hui elle n'a rien à corriger : `subscription_item` ne porte aucune de ces
+            //   trois capacités (mesuré le 04/09). Elle est posée pour que la décision tienne des
+            //   deux côtés, pas parce qu'un cas vivant l'exige — et c'est dit plutôt que sous-entendu.
+            if ($this->capacites->trouve($item->getCapability())?->peutServir === false) {
+                continue;
+            }
+
             $depuis = $item->getActiveFrom();
             $partiel = $depuis > $mois;
 
