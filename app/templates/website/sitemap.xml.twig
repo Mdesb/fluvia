@@ -9,42 +9,42 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
-        <loc>{{ url('website_home') }}</loc>
+        <loc>{{ site_base }}{{ path('website_home') }}</loc>
         <changefreq>monthly</changefreq>
     </url>
     <url>
-        <loc>{{ url('website_modules') }}</loc>
+        <loc>{{ site_base }}{{ path('website_modules') }}</loc>
         <changefreq>monthly</changefreq>
     </url>
     <url>
-        <loc>{{ url('website_metiers') }}</loc>
+        <loc>{{ site_base }}{{ path('website_metiers') }}</loc>
         <changefreq>monthly</changefreq>
     </url>
 {%- for metier in metiers %}
     <url>
-        <loc>{{ url('website_metier', {slug: metier.slug}) }}</loc>
+        <loc>{{ site_base }}{{ path('website_metier', {slug: metier.slug}) }}</loc>
         <changefreq>monthly</changefreq>
     </url>
 {%- endfor %}
     <url>
-        <loc>{{ url('website_blog_index') }}</loc>
+        <loc>{{ site_base }}{{ path('website_blog_index') }}</loc>
         <changefreq>weekly</changefreq>
     </url>
 {%- for module in modules %}
     <url>
-        <loc>{{ url('website_module', {slug: module.slug}) }}</loc>
+        <loc>{{ site_base }}{{ path('website_module', {slug: module.slug}) }}</loc>
         <changefreq>monthly</changefreq>
     </url>
 {%- endfor %}
 {%- for rubrique in rubriques %}
     <url>
-        <loc>{{ url('website_blog_category', {slug: rubrique.slug}) }}</loc>
+        <loc>{{ site_base }}{{ path('website_blog_category', {slug: rubrique.slug}) }}</loc>
         <changefreq>weekly</changefreq>
     </url>
 {%- endfor %}
 {%- for article in articles %}
     <url>
-        <loc>{{ url('website_blog_post', {slug: article.slug}) }}</loc>
+        <loc>{{ site_base }}{{ path('website_blog_post', {slug: article.slug}) }}</loc>
         <lastmod>{{ article.updatedAt|date('Y-m-d') }}</lastmod>
     </url>
 {%- endfor %}

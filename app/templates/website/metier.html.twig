@@ -18,7 +18,7 @@
 
 {% block title %}{{ metier.titre }} — Fluvia{% endblock %}
 {% block description %}{{ metier.chapo|slice(0, 300) }}{% endblock %}
-{% block canonical %}<link rel="canonical" href="{{ url('website_metier', {slug: metier.slug}) }}">{% endblock %}
+{% block canonical %}<link rel="canonical" href="{{ site_base }}{{ path('website_metier', {slug: metier.slug}) }}">{% endblock %}
 
 {% block body %}
   <article class="bande hero">
