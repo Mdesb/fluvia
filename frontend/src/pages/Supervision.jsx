@@ -80,13 +80,18 @@ function phraseIncident(i) {
 export default function Supervision({ etabActif, droits = [] }) {
   const [sup, setSup] = useState(null)
   const [verifBillet, setVerifBillet] = useState(false)
-  const [passages, setPassages] = useState([])
+  // ⚠ `null` = PAS LU, `[]` = LU ET VIDE. Sous un refus PARTIEL — seul `/api/passages` echoue —
+  // ce tableau affichait « Aucun passage enregistre pour le moment. » et « 0 recents », sans
+  // bandeau, au milieu d'un ecran plein de donnees fraiches qui rendaient le zero credible.
+  const [passagesLus, setPassagesLus] = useState(null)
+  const passages = passagesLus || []
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [sessionPerdue, setSessionPerdue] = useState(false)
   const [maj, setMaj] = useState(null)
   const [auto, setAuto] = useState(true)
-  const [equipements, setEquipements] = useState([])
+  const [equipementsLus, setEquipementsLus] = useState(null)
+  const equipements = equipementsLus || []
   // { genre: 'manuel'|'comptage', equipement, sens, motif, erreur, enCours }
   const [geste, setGeste] = useState(null)
   const [succes, setSucces] = useState(null)
@@ -106,7 +111,9 @@ export default function Supervision({ etabActif, droits = [] }) {
         api.equipementsAcces().catch(() => null),
       ])
       setSup(s)
-      if (e) setEquipements(membres(e))
+      // ⚠ `e` vaut `null` quand la lecture a echoue : on le RETIENT au lieu de garder la liste
+      // precedente. Sans ca, les deux boutons restaient actifs sur un inventaire perime.
+      setEquipementsLus(e ? membres(e) : null)
       // ⚠ CE TRI EST UN FILET, PLUS UN CORRECTIF — ET LA DIFFÉRENCE A UNE DATE.
       //
       // Il a été posé le 29/08 à 01h32 parce que `Passage` n'avait aucun `OrderFilter` : le
@@ -120,7 +127,7 @@ export default function Supervision({ etabActif, droits = [] }) {
       // vingt-trois heures. **Une phrase qui décrit un défaut doit mourir avec le défaut** — le
       // commentaire vieillit dans le dépôt où seul un développeur le lit, la légende vieillit sous
       // les yeux de celui qui s'en sert.
-      if (p) setPassages(membres(p).sort((a, b) => (a.horodatage < b.horodatage ? 1 : -1)))
+      setPassagesLus(p ? membres(p).sort((a, b) => (a.horodatage < b.horodatage ? 1 : -1)) : null)
       setMaj(new Date())
       setErreur(null)
       setSessionPerdue(false)
@@ -240,12 +247,26 @@ export default function Supervision({ etabActif, droits = [] }) {
           </button>
           <button className="btn" onClick={() => setVerifBillet(true)}>Vérifier un billet</button>
           {peutOuvrir && (
-            <button className="btn" onClick={() => ouvrirGeste('manuel')} disabled={equipements.length === 0}>
+            <button
+              className="btn"
+              onClick={() => ouvrirGeste('manuel')}
+              disabled={equipements.length === 0}
+              title={equipementsLus === null
+                ? 'Indisponible : la liste des équipements n’a pas pu être lue. Ce n’est pas qu’il n’y en a aucun.'
+                : undefined}
+            >
               Ouvrir manuellement
             </button>
           )}
           {peutCompter && (
-            <button className="btn" onClick={() => ouvrirGeste('comptage')} disabled={equipements.length === 0}>
+            <button
+              className="btn"
+              onClick={() => ouvrirGeste('comptage')}
+              disabled={equipements.length === 0}
+              title={equipementsLus === null
+                ? 'Indisponible : la liste des équipements n’a pas pu être lue. Ce n’est pas qu’il n’y en a aucun.'
+                : undefined}
+            >
               +1 sans support
             </button>
           )}
@@ -405,7 +426,9 @@ export default function Supervision({ etabActif, droits = [] }) {
           {/* Derniers passages */}
           <section className="card" style={{ marginTop: 16 }}>
             <div className="card-h"><h3>Derniers passages</h3>
-              <span className="sub">{passages.length} récents</span></div>
+              <span className="sub">
+                {passagesLus === null ? 'journal non lu' : `${passages.length} récents`}
+              </span></div>
             <div className="card-b" style={{ overflowX: 'auto' }}>
               <table className="tbl">
                 <thead>
@@ -427,7 +450,11 @@ export default function Supervision({ etabActif, droits = [] }) {
                     </tr>
                   ))}
                   {passages.length === 0 && (
-                    <tr><td colSpan={6} className="empty">Aucun passage enregistré pour le moment.</td></tr>
+                    <tr><td colSpan={6} className="empty">
+                      {passagesLus === null
+                        ? 'Le journal des passages n’a pas pu être lu : ce tableau est vide parce que la lecture a échoué, pas parce que personne n’est passé. Le reste de cet écran, lui, est à jour.'
+                        : 'Aucun passage enregistré pour le moment.'}
+                    </td></tr>
                   )}
                 </tbody>
               </table>
