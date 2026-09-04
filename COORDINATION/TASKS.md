@@ -1517,10 +1517,23 @@ qu'il a validées font foi, **telles quelles**. Pas seulement leur habillage : l
 | Carte **Diffusion** : canaux de vente + visibilité publique | dispersé |
 | Actions en tête : *Dupliquer · Aperçu caisse* | absentes |
 
-⚠ **Comptabilité, Stock, Caisse et Agenda fusionnent dans « Gestion ».** C'est le point qui peut
-défaire du travail récent : je nommerai chaque bloc déplacé dans le message de commit, pour que rien
-ne disparaisse en silence. Si l'un de ces onglets a été construit pour une raison que la maquette
-ignore, **dites-le avant que je pousse** — c'est plus facile à discuter qu'à défaire.
+⚠ **CE PARAGRAPHE DISAIT L'INVERSE DE CE QUI A ÉTÉ DÉCIDÉ, et je le corrige plutôt que de le
+laisser.** Il annonçait « Comptabilité, Stock, Caisse et Agenda fusionnent dans *Gestion* ». J'ai
+signalé à Maxime que la maquette à 4 onglets contredisait les 7 construits la veille — lesquels
+répondaient à **sa propre demande** (« il doit y avoir une partie WYSIWYG et une autre config ») et
+se composent des capacités de l'établissement. Il a tranché : **« Garder les sept, faire le reste »**
+(04/09).
+
+**Donc : les sept onglets restent.** Un pair qui appliquerait le tableau ci-dessus à la lettre
+déferait sept onglets en croyant appliquer une maquette validée. Le tableau reste pour mémoire de
+l'écart mesuré, pas comme consigne.
+
+⚠ **Et l'écart réel n'était ni une refonte ni un habillage — j'ai cru aux deux, successivement, et
+les deux étaient faux.** Les jetons de design sont **identiques au pixel** entre les maquettes et le
+dépôt : les maquettes ont été dessinées à partir du code. Ce qui manquait vraiment, c'étaient **deux
+entrées que la colonne de gauche promettait et qui n'existaient nulle part** : *Promotions* (5 routes
+servies, zéro lecture frontale) et *Grilles tarifaires* (lecture déjà dans le client, appelée par
+personne). Les deux sont livrées et servies.
 
 ### Ce que je ne touche pas
 
@@ -1530,3 +1543,28 @@ qui perd une fonction est un échec, pas un compromis.
 
 **Ordre annoncé :** fiche produit d'abord (celle que Maxime a critiquée en premier), puis client,
 puis abonnement. Il regarde la première avant que j'enchaîne.
+
+
+## 3 nonies. `allaccess-a9` le 04/09 — la chaîne de revente en ligne, fermée
+
+Quatre écrans livrés et **vérifiés sur le frontal servi** (chunk récupéré en HTTP 200 depuis le
+domaine public, marqueurs présents, deux témoins négatifs à zéro) :
+
+    partenaires  →  QUOTAS  →  ventes remontées  →  reversements
+
+⚠ **`POST /boutique/ota/ventes` n'est pas un bouton et n'en aura jamais.** C'est la porte par
+laquelle la plateforme partenaire pousse ses ventes. Lui dessiner un formulaire ferait saisir à la
+main ce qu'une machine remonte déjà, et les deux chiffres divergeraient sans qu'on sache lequel fait
+foi. Elle est classée « porte de service », pas « geste manquant ».
+
+⚠ **`quotaConsomme` est en lecture seule et le restera.** C'est le compte du serveur. Le formulaire
+ne l'envoie jamais, et une garde du script de correctif refuse d'écrire si le mot apparaît en
+écriture. Si quelqu'un ouvre un jour ce champ à l'édition, il crée une seconde source pour le même
+chiffre.
+
+⚠ **`Produit` et `Creneau` n'ont AUCUN champ dans le groupe `allocation_ota:read`** — mesuré — et
+`PartenaireOTA` n'y rend que son identifiant. Tout arrive donc en référence nue et se résout depuis
+les catalogues. Si un écran futur affiche « produit inconnu » en masse, c'est le catalogue qui n'a
+pas été lu, pas le quota qui est cassé : les deux cas sont distingués à l'écran.
+
+Écart client/serveur : **600 → 570** inatteignables sur la journée.

@@ -6,6 +6,7 @@ import Tabs from '../components/Tabs.jsx'
 import ProduitOptionsModal from '../components/ProduitOptionsModal.jsx'
 import ProduitFiche from '../components/ProduitFiche.jsx'
 import PromotionsCatalogue from '../components/PromotionsCatalogue.jsx'
+import GrillesTarifaires from '../components/GrillesTarifaires.jsx'
 import { humaniser } from '../api/vocabulaire.js'
 import { aLeDroit } from '../api/droits.js'
 import { confirmer } from '../components/Confirmation.jsx'
@@ -163,7 +164,12 @@ export default function Catalogue({ etabActif, cible = null, onCibleConsommee, d
           </div>
 
           <Tabs
-            onglets={[['produits', 'Produits'], ['promotions', 'Promotions'], ['options', 'Options']]}
+            onglets={[
+              ['produits', 'Produits'],
+              ['grilles', 'Grilles tarifaires'],
+              ['promotions', 'Promotions'],
+              ['options', 'Options'],
+            ]}
             actif={tab}
             onChange={setTab}
           />
@@ -180,6 +186,8 @@ export default function Catalogue({ etabActif, cible = null, onCibleConsommee, d
           params={params}
           majParams={majParams}
         />
+      ) : tab === 'grilles' ? (
+        <GrillesTarifaires etabActif={etabActif} majParams={majParams} />
       ) : tab === 'promotions' ? (
         <PromotionsCatalogue etabActif={etabActif} droits={droits} />
       ) : (
