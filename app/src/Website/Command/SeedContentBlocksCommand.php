@@ -56,6 +56,18 @@ final class SeedContentBlocksCommand extends Command
         $gardes = 0;
 
         foreach (SiteBlocks::all() as $declare) {
+            // ⚠ UN BLOC SANS VALEUR D'ORIGINE NE S'ÉCRIT PAS, ET CE N'EST PAS UNE OPTIMISATION.
+            //
+            // Les corps de pages de modules naissent vides, délibérément. Les écrire quand même
+            // rangerait en base une valeur vide — et l'écran, qui distingue « jamais rempli » de
+            // « rempli », les afficherait comme remplis. Le rédacteur perdrait le seul signal qui
+            // lui dit où il reste quelque chose à écrire, et il le perdrait sur les vingt pages à
+            // la fois.
+            if (self::estVide($declare['initialValue'])) {
+                ++$gardes;
+                continue;
+            }
+
             $existant = $this->em->getRepository(ContentBlock::class)->find($declare['key']);
 
             if (null !== $existant && !$force) {
@@ -87,5 +99,25 @@ final class SeedContentBlocksCommand extends Command
         ));
 
         return Command::SUCCESS;
+    }
+
+    /**
+     * Cette valeur d'origine a-t-elle quelque chose à dire ?
+     *
+     * @param array<int|string, mixed> $valeur
+     */
+    private static function estVide(array $valeur): bool
+    {
+        foreach ($valeur as $contenu) {
+            if (\is_array($contenu) && [] !== $contenu) {
+                return false;
+            }
+
+            if (\is_string($contenu) && '' !== trim($contenu)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }
