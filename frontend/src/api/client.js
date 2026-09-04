@@ -364,6 +364,16 @@ export const api = {
   produits: (params) => request('/api/produits', { query: params }),
   // Le détail ajoute le groupe `produit:compta` (compte, TVA, règle PCA), absent de la collection.
   produit: (id) => request(`/api/produits/${id}`),
+  // DUPLIQUER — la route existe depuis l'origine, aucune fonction cliente ne l'appelait.
+  //
+  // La copie reprend type, grilles et categories, regenere un code unique, nait au statut
+  // BROUILLON quel que soit l'original, et son libelle est suffixe « – copie ». Elle est donc
+  // faite pour etre ouverte et modifiee tout de suite : l'appelant atterrit dessus.
+  //
+  // ⚠ Pas de `ld: true` : l'operation porte `input: false`, elle ne deserialise pas. Le drapeau y
+  // serait inerte, et l'ecrire ferait croire que l'appel est verifie alors qu'il ne l'est pas.
+  dupliquerProduit: (id) =>
+    request(`/api/produits/${id}/dupliquer`, { method: 'POST', body: {} }),
 
   // Controler un billet SANS materiel : ni equipement, ni espace, ni porte. C'est l'outil des sites
   // sans tourniquet, ou un billet vendu est aujourd'hui invendable en pratique faute de pouvoir le
