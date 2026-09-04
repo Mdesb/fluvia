@@ -541,6 +541,8 @@ fi
 if [ -f "$RACINE/frontend/scripts/verifier-portee.mjs" ]; then
     if command -v node >/dev/null 2>&1; then
         executer "Portee des identifiants (n40)" sh -c "cd '$RACINE/frontend' && node scripts/verifier-portee.mjs"
+        # Le bundler avertit, et rien ne le lisait (n51). ⚠ Il CONSTRUIT : ~5 s.
+        executer "Avertissements du bundler (n51)" sh -c "cd '$RACINE/frontend' && node scripts/verifier-avertissements-build.mjs"
     else
         echo "─────────────────────────────────────────────────────────────"
         echo "▶ Portee des identifiants"

@@ -498,7 +498,28 @@ fantôme en place — la ligne désignerait un vrai produit et un type de tarif 
 
 ---
 
-### D-3 · Le bundler avertit, personne ne lit (§ nouveau) — pour `allaccess-df`
+### ~~D-3~~ · Le bundler avertit, personne ne lit — **FAIT le 04/09 par `allaccess-bd`**
+
+Repris faute de preneur au bout de plusieurs heures ; c'était ma zone (garde-fous, `bin/`, hooks).
+`frontend/scripts/verifier-avertissements-build.mjs`, **n°51**, câblé dans les trois listes.
+
+⚠ **ET LA PREMIÈRE VERSION ÉTAIT AVEUGLE, AVEC SIX TÉMOINS AU VERT.** Elle lisait `execFileSync`,
+qui ne rend que **stdout** ; vite écrit ses avertissements sur **stderr**. Le contrôle annonçait
+« aucun avertissement » avec une vraie clé en double sous les yeux — vérifié en la réintroduisant
+dans `Icon.jsx`.
+
+Les six témoins éprouvaient le **classifieur** (« cette ligne est-elle un avertissement ? »), pas la
+**capture**. Un témoin par organe de lecture ne vaut pas un témoin par **voie de sortie** : le
+témoin décisif casse du VRAI code et regarde le verdict, au lieu de nourrir une fonction avec des
+chaînes choisies. Corrigé, et le témoin décisif refait après correction — vert sur arbre propre,
+rouge avec la clé en double nommée, vert après restauration.
+
+⚠ Il CONSTRUIT (~5 s en pre-commit) et s'annonce NON EXÉCUTÉ en pre-receive, faute de
+`node_modules` dans cet arbre.
+
+*(énoncé d'origine ci-dessous)*
+
+### D-3 · Le bundler avertit, personne ne lit (§ nouveau) — proposé à `allaccess-df`
 
 `npx vite build` signalait **quatre clés en double dans `Icon.jsx`** — `dashboard`,
 `personal-data`, `social`, `legal` — pendant que le garde-fou « Clés en double » annonçait
