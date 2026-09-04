@@ -1088,6 +1088,28 @@ export const api = {
     request(`/api/reservation_ressources/${id}`, { method: 'PATCH', body: corps }),
   reservationCreneaux: () => request('/api/reservation_creneaus', { query: { itemsPerPage: 200 } }),
 
+  // --- Sejours (App\Stay) ---
+  //
+  // La note d'un sejour : on l'ouvre pour un client, les lignes s'y accumulent, puis on cloture,
+  // puis on regle. Sept routes servies, aucune appelee jusqu'ici — et deux sejours ouverts en base
+  // que personne ne pouvait lire.
+  sejours: () => request('/api/stays', { query: { itemsPerPage: 200 } }),
+  // `customer` est un UUID NU, pas une IRI (`OpenStayProcessor` fait `Uuid::isValid()` dessus). La
+  // reference du sejour n'est PAS fournie : le serveur la fabrique, volontairement non sequentielle.
+  ouvrirSejour: (corps) => request('/api/stays', { method: 'POST', body: corps }),
+  // La note est une vue CALCULEE a chaque lecture, jamais un total entretenu : elle rend `balance`,
+  // `lineCount` et le detail des lignes.
+  noteSejour: (id) => request(`/api/stays/${id}/folio`),
+  // ⚠ `amount` EST UNE CHAINE, et le negatif est accepte : c'est ainsi que s'enregistre un
+  // reglement, faute d'un geste dedie. Un nombre JSON serait refuse (perte du centime).
+  ajouterLigneSejour: (id, corps) =>
+    request(`/api/stays/${id}/charges`, { method: 'POST', body: corps }),
+  // ⚠ CLOTURER EST SANS RETOUR. Un sejour clos n'accepte plus de ligne, et rien ne le rouvre :
+  // s'il reste un solde, il ne pourra plus jamais etre regle (le reglement EST une ligne).
+  cloturerSejour: (id) => request(`/api/stays/${id}/close`, { method: 'POST', body: {} }),
+  // Exige un sejour CLOS et un solde NUL, sinon 409.
+  reglerSejour: (id) => request(`/api/stays/${id}/settle`, { method: 'POST', body: {} }),
+
   // --- Places liberees (App\SmartFlow) ---
   //
   // La liste d'attente PAR RESSOURCE, a distinguer de `inscrireListeAttente` (par creneau precis,
