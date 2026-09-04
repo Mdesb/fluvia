@@ -395,14 +395,14 @@ function EditeurDeBlocs({ groupe, introduction }) {
   }
 
   if (erreur && blocs === null) {
-    return <p className="banner-error">{erreur}</p>
+    return <p className="banner banner-error">{erreur}</p>
   }
 
   return (
     <div>
       <p className="hint">{introduction}</p>
 
-      {erreur && <p className="banner-error">{erreur}</p>}
+      {erreur && <p className="banner banner-error">{erreur}</p>}
       {succes && <p className="ok">{succes}</p>}
 
       {(blocs || []).map((bloc) => (

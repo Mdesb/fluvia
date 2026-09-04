@@ -79,7 +79,7 @@ export default function Abonnements({ onRefus }) {
   const enSouffrance = triees.filter(estEnSouffrance).length
 
   if (erreur) {
-    return <div className="banner crit">Les abonnements n'ont pas pu être chargés.</div>
+    return <div className="banner banner-error">Les abonnements n'ont pas pu être chargés.</div>
   }
 
   if (!lignes) {
@@ -93,7 +93,7 @@ export default function Abonnements({ onRefus }) {
   return (
     <>
       {enSouffrance > 0 && (
-        <div className="banner crit">
+        <div className="banner banner-error">
           <strong>
             {enSouffrance === 1
               ? '1 client a payé sans obtenir sa plateforme.'

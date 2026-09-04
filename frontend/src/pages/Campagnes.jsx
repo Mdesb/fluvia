@@ -1333,7 +1333,7 @@ function PanneauParrainage({ programme, peutRegler, busy, onAgir }) {
       ) : (
         <div className="sub">
           {programme
-            ? `${programme.rewardPoints} points au parrain dès ${programme.minimumPurchase} € encaissés.`
+            ? `${programme.rewardPoints} points au parrain dès ${euros(programme.minimumPurchase)} encaissés.`
             : 'Aucun programme défini.'}
         </div>
       )}

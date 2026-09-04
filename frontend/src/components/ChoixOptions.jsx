@@ -167,7 +167,7 @@ export default function ChoixOptions({
             <div className="hint" style={{ margin: 0 }}>Ce produit n'a aucune option proposable ici.</div>
           )}
 
-          {erreur && <div className="banner-warn">{erreur}</div>}
+          {erreur && <div className="banner banner-warn">{erreur}</div>}
 
           <div
             style={{
