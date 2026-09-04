@@ -128,7 +128,7 @@ export default function CasiersPiscine({ etabActif, droits }) {
           ) : (casiers || []).length === 0 ? (
             <div className="empty">
               {casiersLu === null ? (
-                <b>La liste des casiers n’a pas pu être lue. Cette liste est vide parce que la lecture a échoué, pas parce qu’il n’y a rien.</b>
+                <b>La liste des casiers n’a pas pu être lue : elle est vide parce que la lecture a échoué, pas parce qu’il n’y a rien.</b>
               ) : (
                 <>
                   Aucun casier enregistré. Les casiers se créent dans le paramétrage de la piscine,

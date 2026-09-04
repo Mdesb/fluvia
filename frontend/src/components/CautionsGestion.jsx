@@ -245,7 +245,7 @@ function Cautions({ nonLu, cautions, totaux, mouvementsParCaution, grillesParId,
           {visibles.length === 0 ? (
             <div className="empty">
               {nonLu
-                ? <b>La liste des cautions n’a pas pu être lue. Cette liste est vide parce que la lecture a échoué, pas parce qu’il n’y a rien.</b>
+                ? <b>La liste des cautions n’a pas pu être lue : elle est vide parce que la lecture a échoué, pas parce qu’il n’y a rien.</b>
                 : filtre === 'ouvertes'
                 ? "Aucune caution en cours. Une caution apparaît ici dès qu'un support est remis contre dépôt — un casier à la piscine, du matériel au padel, des patins à la patinoire."
                 : 'Aucune caution dans cette sélection.'}

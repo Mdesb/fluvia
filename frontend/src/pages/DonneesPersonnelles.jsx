@@ -272,7 +272,7 @@ export default function DonneesPersonnelles({ etabActif, droits }) {
           ) : affichees.length === 0 ? (
             <div className="empty">
               {toutesLu === null
-                ? <b>La liste des demandes n’a pas pu être lue. Cette liste est vide parce que la lecture a échoué, pas parce qu’il n’y a rien. Un délai légal court : ne concluez pas qu’il n’y a rien à traiter.</b>
+                ? <b>La liste des demandes n’a pas pu être lue : elle est vide parce que la lecture a échoué, pas parce qu’il n’y a rien. Un délai légal court : ne concluez pas qu’il n’y a rien à traiter.</b>
                 : params.statut
                 ? 'Aucune demande dans cet état.'
                 : params.client

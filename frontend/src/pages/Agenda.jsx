@@ -204,7 +204,7 @@ function AVenir({ evenements, portee, nonLu }) {
           // Le message dit ce qui ferait apparaître une ligne, plutôt que « aucun élément ».
           <div className="empty">
             {nonLu
-              ? <b>L’agenda n’a pas pu être lu. Cette liste est vide parce que la lecture a échoué, pas parce qu’il n’y a rien à venir.</b>
+              ? <b>L’agenda n’a pas pu être lu : elle est vide parce que la lecture a échoué, pas parce qu’il n’y a rien à venir.</b>
               : portee === 'mine'
               ? 'Rien de programmé pour vous sur cette période. Vos créneaux de travail et vos événements personnels apparaîtront ici.'
               : 'Rien de programmé sur cette période. Les créneaux de réservation et les événements du site apparaîtront ici.'}

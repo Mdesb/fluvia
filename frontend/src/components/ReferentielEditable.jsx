@@ -202,7 +202,7 @@ export default function ReferentielEditable({ descripteur, peutEcrire, onEcrit }
         ) : (lignes || []).length === 0 ? (
           <div className="empty" style={{ padding: 18 }}>
             <div style={{ marginBottom: 10 }}>
-              {lignesLu === null ? <b>Cette liste n’a pas pu être lue. Cette liste est vide parce que la lecture a échoué, pas parce qu’il n’y a rien.</b> : siVide}
+              {lignesLu === null ? <b>Cette liste n’a pas pu être lue : elle est vide parce que la lecture a échoué, pas parce qu’il n’y a rien.</b> : siVide}
             </div>
             {/* ⚠ PAS `primary` : l'en-tete du panneau porte deja « ＋ Ajouter », qui appelle le
                 MEME `ouvrirCreation`, et les deux sont visibles ensemble quand la liste est vide —

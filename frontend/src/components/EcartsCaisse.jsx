@@ -101,7 +101,7 @@ export default function EcartsCaisse({ etabActif, droits }) {
           <div className="center" style={{ minHeight: 80 }}><div className="spinner" /></div>
         ) : ouvertes.length === 0 ? (
           <div className="empty">
-            {alertesLu === null ? <b>La liste des écarts n’a pas pu être lue. Cette liste est vide parce que la lecture a échoué, pas parce qu’il n’y a rien.</b> : <>
+            {alertesLu === null ? <b>La liste des écarts n’a pas pu être lue : elle est vide parce que la lecture a échoué, pas parce qu’il n’y a rien.</b> : <>
             Aucun écart inexpliqué. Une clôture dont le comptage ne tombe pas juste apparaît ici, et
             en repart dès qu'une correction de règlement dit ce qui s'est passé.
             </>}

@@ -145,7 +145,7 @@ export default function FacturesFournisseur({ etabActif, droits }) {
         sous={aTraiter.length === 0 ? 'aucune en attente' : `${aTraiter.length} en attente`}
         factures={aTraiter}
         vide={facturesLu === null
-          ? "La liste des factures n’a pas pu être lue. Cette liste est vide parce que la lecture a échoué, pas parce qu’il n’y a rien."
+          ? "La liste des factures n’a pas pu être lue : elle est vide parce que la lecture a échoué, pas parce qu’il n’y a rien."
           : "Aucune facture à approuver. Une facture enregistrée ici y arrive, et n'entre dans le circuit de paiement qu'une fois approuvée."}
         actions={(f) => (
           <>
