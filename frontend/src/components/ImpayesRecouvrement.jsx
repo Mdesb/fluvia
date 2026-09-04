@@ -5,6 +5,7 @@ import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import { mot } from '../api/vocabulaire.js'
 import { centimes } from '../api/produit.js'
+import { confirmer } from './Confirmation.jsx'
 
 // Les impayés, et les deux gestes qui les closent.
 //
@@ -107,7 +108,7 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
 
   async function retirerExemption(e) {
     if (
-      !window.confirm(
+      !await confirmer(
         'Retirer cette exemption ?\n\nLe client redeviendra bloquable, et si un impayé reste dû '
           + 'son accès sera coupé immédiatement.',
       )
@@ -126,7 +127,7 @@ export default function ImpayesRecouvrement({ etabActif, droits }) {
 
   async function resoudre(incident) {
     if (
-      !window.confirm(
+      !await confirmer(
         "Marquer cet impayé comme réglé ?\n\nL'accès du redevable est rouvert immédiatement. "
           + "Ne le faites que si l'encaissement est confirmé : si le paiement échoue à son tour, "
           + "l'accès aura été rendu pour rien.",

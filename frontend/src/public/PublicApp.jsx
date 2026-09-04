@@ -11,6 +11,7 @@ import FicheProduit from './pages/FicheProduit.jsx'
 import Panier from './pages/Panier.jsx'
 import Tunnel from './pages/Tunnel.jsx'
 import MonCompte from './pages/MonCompte.jsx'
+import { HoteConfirmation } from '../components/Confirmation.jsx'
 
 // Racine de la ZONE PUBLIQUE (front client final), totalement indépendante de l'app staff :
 // pas d'AppShell, pas de JWT staff, pas de X-Etablissement. Routage léger par état (`vue`),
@@ -400,6 +401,9 @@ function Cadre({ vitrine, etablissementId, nbArticles, connecte, vue, onNaviguer
 
   return (
     <div className="bq" style={variables}>
+      {/* La boutique a sa propre racine : sans cette ligne, ses confirmations retomberaient
+          sur la boite du navigateur — le repli est sur, mais ce n'est pas ce qu'on veut. */}
+      <HoteConfirmation />
       <PublicHeader
         vitrine={vitrine}
         nbArticles={nbArticles}

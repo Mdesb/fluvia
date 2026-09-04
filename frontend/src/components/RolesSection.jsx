@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import Modal from './Modal.jsx'
+import { confirmer } from './Confirmation.jsx'
 
 // Créer et modifier un rôle — sur l'écran qui s'appelle « Utilisateurs et droits » et où l'on ne
 // pouvait ni créer ni modifier un rôle.
@@ -130,7 +131,7 @@ export default function RolesSection({ droits, peutGerer, onChange }) {
 
   async function supprimer(role) {
     if (
-      !window.confirm(
+      !await confirmer(
         `Supprimer le rôle « ${role.nom} » ?\n\nTous les comptes qui le portent perdront ces droits `
           + `immédiatement, sans préavis et sans qu'on puisse dire lesquels étaient concernés après coup.`,
       )

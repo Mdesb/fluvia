@@ -3,6 +3,7 @@ import Modal from './Modal.jsx'
 import { dateHeureFr } from './Liste.jsx'
 import { api, membres } from '../api/client.js'
 import { aUnDesDroits } from '../api/droits.js'
+import { confirmer } from './Confirmation.jsx'
 
 // Le cycle d'inventaire : lancer, compter, régulariser, clôturer.
 //
@@ -175,7 +176,7 @@ function InventaireEnCours({
 
   async function cloturer() {
     if (
-      !window.confirm(
+      !await confirmer(
         'Clôturer cet inventaire ?\n\nLes lignes ne seront plus modifiables. Les écarts non '
           + "régularisés resteront tels quels : le stock gardera la valeur d'avant le comptage.",
       )

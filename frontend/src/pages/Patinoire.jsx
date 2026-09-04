@@ -5,6 +5,7 @@ import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import { mot } from '../api/vocabulaire.js'
 import { euros } from '../api/produit.js'
+import { confirmer } from '../components/Confirmation.jsx'
 
 // Patinoire — l'écran de guichet, et non plus la vitrine en lecture seule.
 //
@@ -730,7 +731,7 @@ function ListeAttenteSection({ attente, nommer, peutAttente, onFait, onErreur })
 
   async function annuler(l) {
     if (
-      !window.confirm(
+      !await confirmer(
         "Retirer cette personne de la liste d'attente ?\n\nElle perd son rang : si elle revient, elle "
           + 'repassera derrière celles inscrites entre-temps.',
       )

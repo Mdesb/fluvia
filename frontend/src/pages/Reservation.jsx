@@ -10,6 +10,7 @@ import { aLeDroit } from '../api/droits.js'
 import NoShowSection from '../components/NoShowSection.jsx'
 import ActivitesReservation from '../components/ActivitesReservation.jsx'
 import { idDe as idDepuisIri } from '../api/iri'
+import { confirmer } from '../components/Confirmation.jsx'
 
 // --- Helpers de lecture (structures API Platform / module Réservation) ---
 
@@ -417,7 +418,7 @@ export default function Reservation({ etabActif, droits = [], session }) {
       const phrase = inscrits.length === 1
         ? 'Déplacer cette séance ? 1 personne y est inscrite et ne sera PAS prévenue : prévenez-la vous-même.'
         : `Déplacer cette séance ? ${inscrits.length} personnes y sont inscrites et ne seront PAS prévenues : prévenez-les vous-même.`
-      if (!window.confirm(phrase)) return
+      if (!await confirmer(phrase)) return
     }
 
     const corps = {}
@@ -483,7 +484,7 @@ export default function Reservation({ etabActif, droits = [], session }) {
       : concernees.length === 1
         ? 'Annuler ce créneau ? 1 réservation sera annulée, sans frais, et le crédit rendu.'
         : `Annuler ce créneau ? ${concernees.length} réservations seront annulées, sans frais, et les crédits rendus.`
-    if (!window.confirm(phrase)) return
+    if (!await confirmer(phrase)) return
 
     setGesteEnCours(creneau.id)
     setErreur(null)

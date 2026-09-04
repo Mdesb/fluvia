@@ -7,6 +7,7 @@ import ProduitOptionsModal from '../components/ProduitOptionsModal.jsx'
 import ProduitFiche from '../components/ProduitFiche.jsx'
 import { humaniser } from '../api/vocabulaire.js'
 import { aLeDroit } from '../api/droits.js'
+import { confirmer } from '../components/Confirmation.jsx'
 
 // MEME MOTIF QUE CLIENTS, PARCE QUE MAXIME A DEMANDE LA MEME CHOSE : « je pense que pour le produit
 // on devrait faire pareil que pour le client. » Liste large, fiche en page, retour qui rend les
@@ -278,7 +279,7 @@ function OngletProduits({ etabActif, cible = null, onCibleConsommee, droits = []
   // « échec » générique : c'est lui qui dit ce qui manque, et c'est la seule chose sur laquelle
   // l'exploitant peut agir.
   async function agir(produit, action) {
-    if (action.confirmation && !window.confirm(action.confirmation.replace('%s', libelleProduit(produit)))) return
+    if (action.confirmation && !await confirmer(action.confirmation.replace('%s', libelleProduit(produit)))) return
     setErreur(null)
     setSucces(null)
     setActionEnCours(produit.id)

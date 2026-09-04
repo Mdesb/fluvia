@@ -7,6 +7,7 @@ import Tabs from '../components/Tabs.jsx'
 import { api } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import { mot } from '../api/vocabulaire.js'
+import { confirmer } from '../components/Confirmation.jsx'
 
 function heure(v) {
   if (!v) return '—'
@@ -431,7 +432,7 @@ function ListeEmployes({ etabActif, droits = [], onBadgeEmis }) {
                 ? 'Rétablit le salarié et ses badges de service.'
                 : 'Suspend le salarié ET ses badges de service : il perd ses accès physiques.'}
               onClick={async () => {
-                if (!suspendu && !window.confirm(
+                if (!suspendu && !await confirmer(
                   `Suspendre ${[r.prenom, r.nom].filter(Boolean).join(' ') || 'ce salarié'} ?\n\n`
                   + 'Ses badges de service seront suspendus en même temps : il perdra ses accès '
                   + 'physiques immédiatement.\n\nLe geste est réversible.',

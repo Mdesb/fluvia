@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { membres } from '../api/client.js'
 import Modal from './Modal.jsx'
+import { confirmer } from './Confirmation.jsx'
 
 // Éditeur de référentiel — un composant, N référentiels.
 //
@@ -162,7 +163,7 @@ export default function ReferentielEditable({ descripteur, peutEcrire, onEcrit }
 
   async function supprimerLigne(ligne) {
     const nom = ligne[champs[0].nom] || 'cet élément'
-    if (!window.confirm(`Supprimer « ${nom} » ?\n\n${consequenceSuppression}`)) return
+    if (!await confirmer(`Supprimer « ${nom} » ?\n\n${consequenceSuppression}`)) return
     setErreur(null)
     setSucces(null)
     setEnCours(true)
