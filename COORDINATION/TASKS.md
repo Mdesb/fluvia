@@ -814,8 +814,39 @@ ordinaire.
 préproduction, où 1 Go par processus web serait une décision toute différente. Vérifié :
 `1G` par le chemin de phpunit, `512M` partout ailleurs.
 
-**Reste ouvert** : les 200 Mo du décodeur. Tant qu'ils sont là, le plafond suivra la croissance de
-la suite au lieu de la contenir.
+~~**Reste ouvert** : les 200 Mo du décodeur~~ — **RETIRÉS DE LA POINTE, ET ÇA N'A PRESQUE RIEN
+CHANGÉ À LA SUITE. Mon hypothèse était fausse.**
+
+**Ce qui a été fait**, après avoir écarté deux remèdes par la mesure :
+
+    baisser l'échelle          ÉCARTÉ — le décodeur n'est PAS monotone : il échoue à l'échelle 4
+                               (« Endpoint lies outside the image ») et réussit à 3 et à 6. Choisir
+                               une échelle basse parce qu'elle passe aujourd'hui échangerait 200 Mo
+                               contre un test intermittent, et un test intermittent finit désactivé.
+    changer la représentation  ÉCARTÉ — `HybridBinarizer::calculateBlackPoints()` appelle
+                               `getMatrix()` et indexe le résultat : le tableau est matérialisé
+                               quoi qu'il arrive.
+    ISOLER le test             FAIT — `#[RunInSeparateProcess]` sur les trois méthodes qui décodent.
+
+    sans l'attribut   160,01 Mo   OK (4 tests, 14 assertions)
+    avec               22,00 Mo   OK (4 tests, 14 assertions)      -138 Mo
+
+⚠ **ET LA SUITE ENTIÈRE N'A BAISSÉ QUE DE 12 Mo** : `Memory: 472,50 MB` sur 2 380 tests, contre
+484,50 Mo sur 2 278 auparavant. Les 138 Mo n'ont pas quitté le total — **ils n'y étaient pas au
+moment du pic.** La pointe de la suite est fixée ailleurs, par une accumulation que ce correctif ne
+touche pas ; le décodeur ne faisait que s'ajouter à un instant qui n'était pas le maximum.
+
+**La mesure par fichier prouvait le mécanisme, pas le résultat**, et je l'avais écrit avant de
+connaître le chiffre — c'est la seule raison pour laquelle cette ligne dit « mon hypothèse était
+fausse » au lieu de « le correctif a marché ».
+
+**Ce que le correctif vaut quand même** : le pic de 200 Mo ne s'ajoute plus à ce qui l'entoure, donc
+il ne peut plus faire mourir une suite lancée en parallèle — c'était le symptôme éprouvé du 03/09.
+
+**Ce qui reste ouvert, et c'est autre chose que ce que cette fiche disait** : la suite consomme
+472 Mo par accumulation ordinaire sur 2 380 tests. Avec `memory_limit=1G` posé le 03/09, la marge
+est de 54 % et non plus de 5 %. Le sujet n'est donc plus « la suite meurt » mais « d'où vient
+l'accumulation », et ça demande un profilage par lot, pas un remède ponctuel.
 
 ### ~~8.3~~ — FAIT, PUIS RECOMPTÉ : la fermeture de ce matin comptait des NOMS
 
