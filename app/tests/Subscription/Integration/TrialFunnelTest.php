@@ -37,8 +37,12 @@ use App\Subscription\Service\ProvisioningService;
 use App\Subscription\Service\SubscriptionActivator;
 use App\Subscription\Service\SubscriptionFunnel;
 use App\Subscription\Service\SubscriptionMandates;
+use App\Subscription\Command\IssueTrialConfirmationLinkCommand;
+use App\Subscription\Service\TrialConfirmationLink;
 use App\Tests\SocleApiTestCase;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Tester\CommandTester;
 
 /**
  * ED-5 — l'essai gratuit de quatorze jours, de la demande a l'echeance.
@@ -221,6 +225,135 @@ final class TrialFunnelTest extends SocleApiTestCase
      * trois tests du chemin nominal echouaient sur une expiration qu'aucun vrai prospect ne peut
      * rencontrer. Memorise, pour que deux appels rendent la meme valeur.
      */
+    // ---------------------------------------------------------- l'outil de recette (E-8 non levé)
+
+    /**
+     * **FERMÉ PAR DÉFAUT, ET SANS RIEN ÉCRIRE.**
+     *
+     * Le drapeau absent, la commande doit refuser. Mais refuser d'afficher ne suffit pas : si elle
+     * frappait le jeton avant de refuser, elle invaliderait le lien déjà parti chez le prospect —
+     * une commande « sans effet » qui casse le parcours qu'elle prétend seulement observer.
+     *
+     * On vérifie donc les deux : le refus, ET que l'empreinte en base n'a pas bougé.
+     */
+    public function testLoutilDeRecetteRefuseEtNecritRienSansLeDrapeau(): void
+    {
+        $abonnement = $this->abonnementAuPanier();
+        $this->demanderEtCapturerLeJeton($abonnement);
+        $empreinteAvant = $abonnement->getEmailConfirmationTokenHash();
+        self::assertNotNull($empreinteAvant, 'témoin : une demande doit porter une empreinte avant ce test');
+
+        $testeur = new CommandTester(new IssueTrialConfirmationLinkCommand(
+            $this->em(),
+            new TrialConfirmationLink($this->em(), 'https://vitrine.exemple.test'),
+            false,
+        ));
+        $code = $testeur->execute(['demande' => $abonnement->getId()->toRfc4122()]);
+
+        self::assertSame(Command::FAILURE, $code);
+        self::assertStringContainsString('TRIAL_CONFIRMATION_BYPASS', $testeur->getDisplay());
+
+        $this->em()->refresh($abonnement);
+        self::assertSame(
+            $empreinteAvant,
+            $abonnement->getEmailConfirmationTokenHash(),
+            'la commande fermée ne doit pas frapper de jeton : elle invaliderait le lien du prospect',
+        );
+    }
+
+    /**
+     * **LE TÉMOIN QUI JUSTIFIE L'OUTIL : son lien ouvre vraiment l'essai.**
+     *
+     * On ne vérifie pas qu'il imprime quelque chose — on prend le lien qu'il rend et on le fait
+     * confirmer. S'il ouvre l'essai, l'outil emprunte le même chemin que le courriel du prospect.
+     * S'il ne l'ouvrait pas, il prouverait son propre chemin, donc rien : c'est exactement le risque
+     * qu'écarte le service partagé entre la commande et l'écouteur.
+     */
+    public function testLeLienDeLoutilOuvreReellementLessai(): void
+    {
+        $abonnement = $this->abonnementAuPanier();
+
+        $testeur = new CommandTester(new IssueTrialConfirmationLinkCommand(
+            $this->em(),
+            new TrialConfirmationLink($this->em(), 'https://vitrine.exemple.test'),
+            true,
+        ));
+        self::assertSame(Command::SUCCESS, $testeur->execute(['demande' => $abonnement->getId()->toRfc4122()]));
+
+        $affichage = $testeur->getDisplay();
+        self::assertStringContainsString('https://vitrine.exemple.test/confirmation.html?jeton=', $affichage);
+
+        $jeton = $this->jetonDuLien($affichage);
+        self::assertNotSame($jeton, $abonnement->getEmailConfirmationTokenHash(), 'la base ne doit jamais porter le jeton en clair');
+
+        $confirme = $this->funnel()->confirmEmailAndStartTrial($jeton, $this->at());
+
+        self::assertSame($abonnement->getId(), $confirme->getId());
+        self::assertNotNull($confirme->getEmailConfirmedAt(), 'le lien de l\'outil doit ouvrir l\'essai');
+    }
+
+    /**
+     * **IL DIT QUE LE LIEN EST DÉJÀ MORT, PLUTÔT QUE DE LAISSER CHERCHER.**
+     *
+     * La fenêtre se compte depuis la création de la demande — frapper un jeton neuf ne la rouvre
+     * pas. Sur une demande ancienne, l'outil rend donc un lien d'apparence normale qui répondra
+     * « expiré ». Sans l'avertissement, on chercherait le défaut dans le tunnel plutôt que dans
+     * l'âge de la demande.
+     */
+    public function testLoutilAvertitQuandLaFenetreEstDejaFermee(): void
+    {
+        $abonnement = $this->abonnementAuPanier();
+        $this->vieillirLaDemande($abonnement, SubscriptionFunnel::CONFIRMATION_HOURS + 1);
+
+        $testeur = new CommandTester(new IssueTrialConfirmationLinkCommand(
+            $this->em(),
+            new TrialConfirmationLink($this->em(), 'https://vitrine.exemple.test'),
+            true,
+        ));
+        $testeur->execute(['demande' => $abonnement->getId()->toRfc4122()]);
+
+        self::assertStringContainsString('DÉJÀ EXPIRÉ', $testeur->getDisplay());
+
+        // ⚠ ET LE LIEN EST BIEN MORT — l'avertissement doit décrire la réalité, pas la remplacer.
+        $this->expectException(ExpiredConfirmationLinkException::class);
+        $this->funnel()->confirmEmailAndStartTrial($this->jetonDuLien($testeur->getDisplay()), $this->at());
+    }
+
+    /** Le jeton en clair, tel qu'un prospect le lirait dans son message. */
+    private function jetonDuLien(string $affichage): string
+    {
+        self::assertSame(1, preg_match('/jeton=([0-9a-f]+)/', $affichage, $trouve), 'aucun lien dans la sortie');
+
+        return $trouve[1];
+    }
+
+    /** Recule la création de la demande, seule chose qui borne la validité du lien. */
+    private function vieillirLaDemande(Subscription $abonnement, int $heures): void
+    {
+        $this->em()->getConnection()->executeStatement(
+            'UPDATE subscription_subscription SET created_at = :quand WHERE id = :id',
+            [
+                'quand' => $this->at()->modify(sprintf('-%d hours', $heures))->format('Y-m-d H:i:s'),
+                'id' => $abonnement->getId()->toBinary(),
+            ],
+        );
+        $this->em()->refresh($abonnement);
+    }
+
+    /** Une demande d'essai au panier, montee comme les autres tests de ce fichier. */
+    private function abonnementAuPanier(): Subscription
+    {
+        $this->offre();
+
+        return $this->funnel()->openCart(
+            'Recette du tunnel',
+            self::EMAIL,
+            self::PLAN_CODE,
+            [self::COMPRISE],
+            $this->at(),
+        );
+    }
+
     private function at(): \DateTimeImmutable
     {
         return $this->instant ??= new \DateTimeImmutable();
@@ -246,7 +379,11 @@ final class TrialFunnelTest extends SocleApiTestCase
             }
         };
 
-        $abonne = new SendTrialConfirmationEmail($this->em(), $notifieur, 'https://vitrine.exemple.test');
+        $abonne = new SendTrialConfirmationEmail(
+            $this->em(),
+            $notifieur,
+            new TrialConfirmationLink($this->em(), 'https://vitrine.exemple.test'),
+        );
         $abonne(new DomainEvent(
             'subscription.trial_requested',
             new EventTenant($this->editeur()->getId()),
