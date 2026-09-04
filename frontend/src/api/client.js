@@ -364,6 +364,16 @@ export const api = {
   produits: (params) => request('/api/produits', { query: params }),
   // Le détail ajoute le groupe `produit:compta` (compte, TVA, règle PCA), absent de la collection.
   produit: (id) => request(`/api/produits/${id}`),
+  // LES PROMOTIONS — cinq routes servies, aucune appelee jusqu'ici.
+  //
+  // ⚠ `eligibilite.produits` VIDE = LA PROMOTION NE S'APPLIQUE A AUCUN PRODUIT. Pas a tous.
+  // `PriceQuoter` rend `false` des que la liste est vide ou absente, et le code le souligne parce
+  // que quelqu'un a failli le « corriger ». Les `canaux`, eux, suivent la regle INVERSE : vides,
+  // ils valent tous. Deux tableaux voisins qui se lisent a l'envers l'un de l'autre.
+  promotions: () => request('/api/promotions', { query: { itemsPerPage: 200 } }),
+  creerPromotion: (corps) => request('/api/promotions', { method: 'POST', body: corps, ld: true }),
+  majPromotion: (id, corps) => request(`/api/promotions/${id}`, { method: 'PATCH', body: corps }),
+  supprimerPromotion: (id) => request(`/api/promotions/${id}`, { method: 'DELETE' }),
   // DUPLIQUER — la route existe depuis l'origine, aucune fonction cliente ne l'appelait.
   //
   // La copie reprend type, grilles et categories, regenere un code unique, nait au statut
