@@ -868,35 +868,50 @@ Conséquence : ces réservations gardent `ModeDecompteReservation::VenteUnite` s
 équiper l'écran, ou un mode de décompte qui dise « dû, non encaissé » (les quatre cas actuels sont
 `QuotaFormule`, `CarteStock`, `VenteUnite`, `Gratuit` — aucun ne le dit).
 
-### ⚠ 8.13 — Le garde-fou des références libres indexe par NOM COURT, et confond les homonymes
+### ⚠ 8.13 — Le garde-fou des références libres a un angle mort, et l'élargir tel quel fait du bruit
 
-Trouvé le 04/09 en ajoutant deux références libres à `LigneVente` : le compte de propriétés
-surveillées est passé de **71 à 72** alors que j'en ajoutais **deux**. Une seule était vue.
+**Tenté le 04/09, mesuré, et VOLONTAIREMENT ANNULÉ.** Le diagnostic tient ; le remède demande plus
+que ce que j'ai essayé.
 
-**La cause**, `bin/garde-fou-references-libres.php` lignes 65 et 124 :
+**L'angle mort, réel.** `referencesLibres()` ne collecte que `private ?Uuid $xxxRef` — « parce que
+c'est la convention du dépôt ». Or `LigneVente::$produit`, `$typeTarif` et `$saison` ne la suivent
+pas, et ce sont les références libres les plus utilisées qui existent. Mesuré : **16 propriétés
+`?Uuid` sans suffixe `Ref` et sans relation Doctrine**, invisibles aux deux collecteurs.
 
-    @return array<string, string> nom de propriété => fichier qui la déclare
+⚠ **MON PREMIER DIAGNOSTIC ÉTAIT FAUX, ET LE SECOND AUSSI.**
 
-L'inventaire est indexé par **nom de propriété seul, à travers tout le dépôt**. `Creneau::$activite`
-(une relation) et `LigneVente::$activite` (une référence libre) occupent donc la **même case**, et
-seule la dernière parcourue survit — avec sa classification. Mes deux champs sont classés
-« relation » et **ne sont pas protégés** par ce contrôle.
+  1. J'ai d'abord accusé la clef de l'inventaire (`nom => fichier`, qui écrase les homonymes). Faux
+     comme cause des détections manquées : `analyser()` reçoit un ENSEMBLE DE NOMS et les cherche
+     dans le code — deux entités qui partagent un nom sont analysées pareil de toute façon.
+  2. Puis j'ai écrit que la collision n'était donc que cosmétique. **Faux aussi** : elle produit des
+     FAUX POSITIFS. `LimiteAutorisation::$etablissement` est une RELATION, et il ressort signalé
+     parce qu'un autre fichier déclare un `?Uuid $etablissement`. Le nom suffit à contaminer.
 
-⚠ **C'EST EXACTEMENT LE DÉFAUT DU PROTOTYPE DU n°34** (T22) : « il indexait les processeurs par leur
-nom court, et neuf classes du dépôt s'appellent `EstablishmentStampProcessor` — elles s'écrasaient
-l'une l'autre ». Le même piège, dans un autre garde-fou, trouvé le même jour.
+**Ce que l'élargissement a donné : 55 trouvailles, et les deux que j'ai ouvertes étaient fausses.**
 
-⚠ **Et le fichier fait DÉJÀ bien à un autre endroit** : ses *trouvailles* sont clefées
-`fichier:propriete:forme` (ligne 412). C'est l'inventaire qui est en cause, pas la logique.
+    LimiteAutorisation::$etablissement   c'est une relation, pas une référence libre
+    CreateSlotWaitlistEntryProcessor:81  son `setParameter(..., 'uuid')` est TROIS LIGNES plus bas ;
+                                         le contrôle regarde la ligne du `andWhere` et ne le voit pas
 
-**Ampleur, mesurée** : 192 noms de propriété distincts dans `app/src`, dont **44 déclarés sur
-plusieurs entités**. Tous ne sont pas dans le périmètre du contrôle (il ne regarde que les `?Uuid`
-et les relations), mais deux au moins le sont, démontrés.
+⚠ **Livrer ça aurait refait l'erreur que ce fichier documente lui-même** : « une première version
+suivait la profondeur d'accolades… elle signalait la même clé redéfinie sur des lignes consécutives
+— du bruit qui a l'air d'un résultat. **Elle a été jetée.** Un contrôle qui signale des doublons qui
+n'en sont pas s'apprend à sauter, et le jour où il en trouve un vrai, personne ne le lit. »
 
-**Le remède** : clefer l'inventaire par `fichier:propriete`, comme les trouvailles. ⚠ Ça fera
-apparaître des cas jusque-là masqués : il faudra les trier — geler ceux qui sont légitimes AVEC leur
-raison écrite, corriger les autres — et surtout **ne pas régénérer la ligne de base en bloc**, ce qui
-gèlerait la dérive au lieu de la montrer.
+**Ce que le remède demande, dans cet ordre :**
+
+  1. **Scoper les trouvailles `SearchFilter` par FICHIER.** Le filtre et la propriété vivent sur la
+     même entité : un `SearchFilter` sur `etablissement` ne doit être jugé qu'avec la déclaration de
+     `etablissement` DANS CE FICHIER. Ça tue toute la famille de faux positifs ci-dessus.
+  2. **Rendre la détection DQL sensible à la PROXIMITÉ.** Un `andWhere` se juge avec le
+     `setParameter` de la même chaîne de requête, pas sur sa seule ligne.
+  3. **Alors seulement élargir le collecteur**, avec une liste d'exclusions nommées — `id` (clé
+     primaire, Doctrine la convertit), `jeton` (un secret), `cleIdempotence` (elle identifie une
+     tentative d'appel). Le type ne distingue pas une référence d'une valeur ; il faut le dire.
+
+⚠ **Et le scope DQL ne peut PAS être par fichier** : `CreateSlotWaitlistEntryProcessor` interroge
+`SlotWaitlistEntry.resourceId`, déclaré ailleurs. Les deux mécanismes demandent deux traitements —
+c'est ce qui rend le chantier plus gros qu'il n'en a l'air.
 
 ---
 
