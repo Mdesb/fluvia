@@ -399,18 +399,52 @@ if [ "$DSN" = "null://null" ] || [ -z "$DSN" ]; then
     echo "  Une invitation qui ne part pas laisse le compte « invite » indefiniment."
 fi
 
+# ── ET LE LIEN DANS CE COURRIEL, IL POINTE OU ? ─────────────────────────────────────────────────
+#
+# `ReinitialisationMailer` et `InvitationMailer` construisent leurs liens depuis `FRONT_BASE_URL`,
+# et non depuis l'`Host` de la requete -- ce qui les met a l'abri d'un `Host` choisi par l'appelant,
+# mais les rend entierement dependants de cette variable.
+#
+# Mesure du 04/09 : elle n'etait declaree NULLE PART en preproduction. Symfony retombait sur
+# `app/.env`, soit `http://localhost:5173` -- la machine d'un developpeur.
+#
+# ⚠ LES DEUX DEFAUTS S'ANNULAIENT, ET C'EST LE PIEGE. Le transport nul avale tout : aucun lien mort
+# n'etait clique, donc rien ne signalait. Reparer le transport SEUL -- le geste que le bloc
+# ci-dessus recommande -- aurait fait partir des liens morts des la premiere invitation.
+FRONT_URL="$("${COMPOSE[@]}" exec -T php php bin/console debug:dotenv FRONT_BASE_URL 2>/dev/null | grep -oE 'https?://[^ ]+' | head -1)"
+case "${FRONT_URL:-}" in
+    *localhost*|*127.0.0.1*|'')
+        printf '\n\033[1;33m⚠ LES LIENS ENVOYÉS PAR COURRIEL POINTENT VERS UNE ADRESSE LOCALE.\033[0m\n'
+        echo "  FRONT_BASE_URL vaut « ${FRONT_URL:-<non définie>} » : c'est la machine d un développeur,"
+        echo "  pas cette instance. Concerne : mot de passe oublié, invitation d utilisateur."
+        if [ "$DSN" = "null://null" ] || [ -z "$DSN" ]; then
+            echo "  ⚠ Aujourd hui c est sans effet — le transport nul avale tout. MAIS RÉPARER LE"
+            echo "  TRANSPORT SEUL FERAIT PARTIR DES LIENS MORTS dès la première invitation."
+            echo "  Les deux se réparent ensemble : FRONT_BASE_URL dans app/.env.local, puis MAILER_DSN."
+        else
+            echo "  ⚠ ET LE TRANSPORT FONCTIONNE : chaque lien déjà envoyé est mort à l arrivée."
+            echo "  À corriger avant tout autre chose — un compte invité ne peut pas s activer."
+        fi
+        ;;
+esac
+
 # ── LES TACHES PLANIFIEES TOURNENT-ELLES ? ──────────────────────────────────────────────────────
 #
-# Ni crontab, ni timer systemd, ni conteneur worker ne lance `platform:scheduled-tasks:run` sur cette
-# machine. Vingt-et-une taches sont declarees et aucune ne s'execute.
+# ⚠ CE BLOC A DECRIT UN DEFAUT QUI N'EXISTE PLUS, ET LA PROSE A SURVECU AU CORRECTIF.
+# Il affirmait « ni crontab, ni timer systemd, ni conteneur worker » et « vingt-et-une taches, aucune
+# ne s'execute ». C'etait vrai quand il a ete ecrit. Depuis, `infra/ordonnanceur.sh` tourne dans
+# `billetterie-preprod-scheduler-1` et lance huit taches chaque minute, par liste blanche.
 #
-# Toutes ne sont pas critiques -- certaines ne font que marquer un enregistrement dont l'effet est
-# deja calcule a la lecture. Mais `sepa:preavis:annoncer` est le SEUL emetteur de preavis de
-# prelevement, et `GenerationRemiseHandler` exclut de la remise toute echeance non couverte par un
-# preavis delivre. Sans ordonnanceur, aucun prelevement ne peut partir.
+# Le CODE ci-dessous, lui, n'a jamais menti : il cherche un conteneur nomme `scheduler`, le trouve,
+# et l'avertissement ne sort pas. Seul le commentaire mentait -- et un commentaire qui decrit un
+# defaut corrige fait re-diagnostiquer ce qui va bien. Je m'y suis laisse prendre deux fois.
 #
-# On ne demarre rien ici : vingt-et-une taches qui rattrapent des semaines d'arriere d'un coup
-# meritent qu'on sache d'abord ce qu'elles feraient. On le DIT, c'est tout.
+# CE QUI RESTE VRAI, et qui justifie de garder le controle : `sepa:preavis:annoncer` est le SEUL
+# emetteur de preavis de prelevement, et `GenerationRemiseHandler` exclut de la remise toute echeance
+# non couverte par un preavis delivre. Si l'ordonnanceur s'arretait, aucun prelevement ne pourrait
+# plus partir -- en silence, et sans que rien d'autre ne le dise.
+#
+# On ne demarre rien ici. On le DIT, c'est tout.
 TACHES_LANCEES=0
 command -v crontab >/dev/null 2>&1 && crontab -l 2>/dev/null | grep -q 'scheduled-tasks' && TACHES_LANCEES=1
 systemctl list-timers --all 2>/dev/null | grep -q 'fluvia\|billetterie' && TACHES_LANCEES=1
