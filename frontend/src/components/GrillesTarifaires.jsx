@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { libelleProduit } from '../api/produit.js'
+import { idDe } from '../api/iri.js'
 
 /**
  * LES GRILLES TARIFAIRES, VUES D'ENSEMBLE — la lecture que personne n'appelait.
@@ -41,10 +42,10 @@ export default function GrillesTarifaires({ etabActif, majParams }) {
     return m
   }, [produits])
 
-  function idDe(ref) {
-    if (!ref) return null
-    return typeof ref === 'string' ? String(ref).split('/').pop() : (ref.id ? String(ref.id) : null)
-  }
+  // `idDe` vient d'`api/iri.js` (§8.3, garde-fou n°53). Cette page en avait posé une copie :
+  // `.split('/').pop()` rend la chaîne VIDE sur une référence terminée par un slash, là où la
+  // canonique filtre les segments vides. Même contrat de retour (`null` quand il n'y a rien),
+  // donc les trois appels ci-dessous n'ont pas bougé.
 
   const filtrees = useMemo(() => {
     if (!Array.isArray(grilles)) return []

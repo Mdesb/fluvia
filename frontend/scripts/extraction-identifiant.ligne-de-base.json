@@ -2,6 +2,7 @@
   "components/AchatsStock.jsx": 2,
   "components/ComptesBancaires.jsx": 1,
   "components/EcartsCaisse.jsx": 2,
+  "components/FicheAbonnement.jsx": 1,
   "components/ImpayesRecouvrement.jsx": 1,
   "components/InventaireStock.jsx": 3,
   "components/LettrageEcritures.jsx": 2,
