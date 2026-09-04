@@ -8,60 +8,92 @@ use Doctrine\DBAL\Schema\Schema;
 use Doctrine\Migrations\AbstractMigration;
 
 /**
- * D'OÙ VIENT LA RECETTE — §8.12.
+ * Le site public de l'éditeur : blog et blocs de la page d'accueil (ED-10).
  *
- * ── CE QUE LA MESURE A MONTRÉ ───────────────────────────────────────────────────────────────────
+ * ⚠ **AUCUNE DE CES TROIS TABLES NE PORTE D'ÉTABLISSEMENT, ET C'EST VOULU.** Elles décrivent le site
+ * de **l'éditeur** — celui qui vend la plateforme — pas les données d'un client. Une colonne
+ * `etablissement_id` ferait croire à un cloisonnement, et la question « quel établissement lit cet
+ * article ? » n'a pas de réponse : le lecteur est un inconnu sans compte. Ce qui protège l'écriture,
+ * c'est la garde `EditorOnly` sur `/editor/website/**`, pas une colonne.
  *
- * La ventilation comptable s'appuie sur la **catégorie** du produit, pas sur le produit
- * (`ProjectionVenteDoctrineAdapter:117`). Multiplier les produits — un par sport, un par durée —
- * ne changeait donc **rien** à la comptabilité : cela ne changeait que ce qu'on pourrait lire
- * ensuite. Et `vente_ligne` ne portait ni activité ni ressource : « combien le padel a-t-il
- * rapporté » était une question sans réponse possible, pour toujours, sur les ventes déjà émises.
+ * ⚠ **`ON DELETE SET NULL` SUR LA RUBRIQUE, JAMAIS `CASCADE`.** Supprimer une rubrique doit laisser
+ * ses articles en place, sans rubrique. Une cascade ferait disparaître des pages **publiées** — donc
+ * indexées, partagées, liées ailleurs — d'un clic dans un écran d'administration, sans que rien
+ * n'annonce que douze articles partaient avec.
  *
- * Arbitrage de Maxime : faire porter l'origine à la ligne, plutôt que de la reporter sur la
- * nomenclature produit.
- *
- * ── ⚠ DEUX COLONNES, ET LA SECONDE EST CELLE QUI SAUVE LE PADEL ─────────────────────────────────
- *
- * Maxime a dit « l'activité ». Mesure faite juste après : `ReserverTerrainProcessor` pose une
- * RESSOURCE et jamais d'activité. En préproduction : **5 créneaux, 4 sans activité, 5 avec
- * ressource**. L'activité seule laisserait 80 % des créneaux — et tout le padel — sans réponse.
- *
- *     activite    quelle PRESTATION a été vendue
- *     ressource   quel ÉQUIPEMENT a été occupé — et c'est elle qui mène au sport, via
- *                 `padel_terrain.sport`, posé le matin même
- *
- * ── ⚠ DES RÉFÉRENCES LIBRES (D58) ───────────────────────────────────────────────────────────────
- *
- * Comme `produit`, `type_tarif` et `saison` sur la même table : un identifiant nu, sans clé
- * étrangère. Elles ne se comparent NI par `IN` en DQL, NI par `SearchFilter` — les deux rendent une
- * liste vide, ce qui ressemble exactement à « il n'y a rien ». Le garde-fou des références libres
- * les comptera, et sa ligne de base est regelée délibérément dans le même commit.
- *
- * ⚠ D66-ter : aucune donnée métier fabriquée. Les 23 lignes existantes restent à `NULL` — on ne sait
- * pas d'où elles viennent, et c'est la vérité. Les reconstituer par jointure serait une invention.
- *
- * ⚠ Nullable, donc sûre pendant le déploiement : les migrations passent avant le redémarrage de FPM.
+ * ⚠ **SÛRE PENDANT LE DÉPLOIEMENT** : `deploy-preprod.sh` applique les migrations AVANT de redémarrer
+ * FPM. Entre les deux, le schéma est neuf et le code est ancien. Trois tables neuves qu'aucun code
+ * ancien n'interroge traversent cette fenêtre sans rien casser.
  */
 final class Version20260904160000 extends AbstractMigration
 {
     public function getDescription(): string
     {
-        return 'vente_ligne porte son activité et sa ressource : d\'où vient la recette (§8.12).';
+        return 'Crée le blog et les blocs de contenu du site vitrine de l’éditeur (ED-10).';
     }
 
     public function up(Schema $schema): void
     {
-        $this->addSql('ALTER TABLE vente_ligne ADD activite BINARY(16) DEFAULT NULL COMMENT \'(DC2Type:uuid)\'');
-        $this->addSql('ALTER TABLE vente_ligne ADD ressource BINARY(16) DEFAULT NULL COMMENT \'(DC2Type:uuid)\'');
+        $this->addSql(<<<'SQL'
+            CREATE TABLE website_blog_category (
+                id BINARY(16) NOT NULL,
+                slug VARCHAR(120) NOT NULL,
+                name VARCHAR(120) NOT NULL,
+                description LONGTEXT DEFAULT NULL,
+                UNIQUE INDEX uniq_website_blog_category_slug (slug),
+                PRIMARY KEY(id)
+            ) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci` ENGINE = InnoDB
+            SQL);
+
+        $this->addSql(<<<'SQL'
+            CREATE TABLE website_blog_post (
+                id BINARY(16) NOT NULL,
+                category_id BINARY(16) DEFAULT NULL,
+                slug VARCHAR(160) NOT NULL,
+                title VARCHAR(200) NOT NULL,
+                excerpt LONGTEXT NOT NULL,
+                body LONGTEXT NOT NULL,
+                cover_url VARCHAR(500) DEFAULT NULL,
+                cover_alt VARCHAR(200) DEFAULT NULL,
+                status VARCHAR(16) DEFAULT 'draft' NOT NULL,
+                published_at DATETIME DEFAULT NULL COMMENT '(DC2Type:datetime_immutable)',
+                author_name VARCHAR(120) DEFAULT NULL,
+                meta_description VARCHAR(300) DEFAULT NULL,
+                created_at DATETIME NOT NULL COMMENT '(DC2Type:datetime_immutable)',
+                updated_at DATETIME NOT NULL COMMENT '(DC2Type:datetime_immutable)',
+                UNIQUE INDEX uniq_website_blog_post_slug (slug),
+                INDEX idx_website_blog_post_publication (status, published_at),
+                INDEX IDX_WEBSITE_BLOG_POST_CATEGORY (category_id),
+                PRIMARY KEY(id)
+            ) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci` ENGINE = InnoDB
+            SQL);
+
+        $this->addSql(<<<'SQL'
+            ALTER TABLE website_blog_post
+                ADD CONSTRAINT FK_WEBSITE_BLOG_POST_CATEGORY FOREIGN KEY (category_id)
+                REFERENCES website_blog_category (id) ON DELETE SET NULL
+            SQL);
+
+        $this->addSql(<<<'SQL'
+            CREATE TABLE website_content_block (
+                block_key VARCHAR(80) NOT NULL,
+                block_value JSON NOT NULL,
+                updated_at DATETIME NOT NULL COMMENT '(DC2Type:datetime_immutable)',
+                PRIMARY KEY(block_key)
+            ) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci` ENGINE = InnoDB
+            SQL);
     }
 
     public function down(Schema $schema): void
     {
-        // @drop-voulu : les deux colonnes ajoutées par ce up(), et rien d'autre. Ce qu'elles portent
-        //   est une trace d'origine, reconstituable pour les ventes futures mais perdue pour celles
-        //   déjà émises — comme avant cette migration. Aucune autre donnée n'en dépend.
-        $this->addSql('ALTER TABLE vente_ligne DROP activite');
-        $this->addSql('ALTER TABLE vente_ligne DROP ressource');
+        // @drop-voulu : les trois tables créées par ce up(), et rien d'autre.
+        //   ⚠ Redescendre EFFACE LE CONTENU DU SITE : les articles publiés, leurs rubriques et le
+        //   texte de la page d'accueil. Rien ne les régénère — `website:blocks:seed` ne réécrit que
+        //   les blocs, avec le texte d'origine, et n'a jamais connu les articles. À ne redescendre
+        //   que sur une base dont on accepte de perdre le site.
+        $this->addSql('ALTER TABLE website_blog_post DROP FOREIGN KEY FK_WEBSITE_BLOG_POST_CATEGORY');
+        $this->addSql('DROP TABLE website_blog_post');
+        $this->addSql('DROP TABLE website_blog_category');
+        $this->addSql('DROP TABLE website_content_block');
     }
 }
