@@ -5,6 +5,7 @@ import { api, membres, ApiError } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import { mot } from '../api/vocabulaire.js'
 import { euros } from '../api/produit.js'
+import { confirmer } from './Confirmation.jsx'
 
 // Les factures fournisseur, et les gestes qui décident si on paie.
 //
@@ -81,7 +82,7 @@ export default function FacturesFournisseur({ etabActif, droits }) {
 
   async function annuler(f) {
     if (
-      !window.confirm(
+      !await confirmer(
         `Annuler la facture ${f.supplierInvoiceNumber} ?\n\nElle sort du circuit de paiement `
           + `définitivement. Si le désaccord porte sur le montant ou la livraison, contestez-la `
           + `plutôt : une contestation se résout, une annulation ne se reprend pas.`,

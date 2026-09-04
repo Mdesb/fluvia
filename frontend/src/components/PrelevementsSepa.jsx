@@ -7,6 +7,7 @@ import { api, membres, tokenStore, etablissementStore } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import { mot } from '../api/vocabulaire.js'
 import { idDe } from '../api/iri'
+import { confirmer } from './Confirmation.jsx'
 
 // LE PRÉLÈVEMENT SEPA, DE BOUT EN BOUT — ET IL N'EN EXISTAIT QUE LE MILIEU.
 //
@@ -133,7 +134,7 @@ export default function PrelevementsSepa({ etabActif, droits }) {
   async function revoquerMandat(m) {
     // La confirmation dit les deux choses que l'ecran ne montre pas : ce que la revocation change
     // sur la PROCHAINE REMISE, et qu'elle ne se defait pas.
-    const ok = window.confirm(
+    const ok = await confirmer(
       `Révoquer le mandat ${m.rum || ''} de ${m.debiteurNom || 'ce débiteur'} ?\n\n`
       + 'Le débiteur retire son autorisation de prélèvement. Ses échéances à venir seront écartées '
       + 'de la prochaine remise, avec le motif « mandat non actif » — elles ne seront pas perdues, '

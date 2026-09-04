@@ -12,6 +12,7 @@ import ClientEditionModal from '../components/ClientEditionModal.jsx'
 import DevisModal from '../components/DevisModal.jsx'
 import PassagesClient from '../components/PassagesClient.jsx'
 import ConsentementsClient from '../components/ConsentementsClient.jsx'
+import { confirmer } from '../components/Confirmation.jsx'
 
 // Nom d'affichage d'un client (physique ou personne morale).
 /**
@@ -38,7 +39,7 @@ function JournalDesFusions() {
   useEffect(charger, [charger])
 
   async function defaire(entree) {
-    if (!window.confirm(
+    if (!await confirmer(
       'Défusionner ? Les fiches absorbées sont restaurées à l’identique, et cette opération reste '
       + 'au journal.',
     )) return

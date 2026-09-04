@@ -6,6 +6,7 @@ import { profondeurHistorique } from '../api/url.js'
 import Cloche from './Cloche.jsx'
 import InstallerSurLeTelephone from './InstallerSurLeTelephone.jsx'
 import Icon from './Icon.jsx'
+import { HoteConfirmation } from './Confirmation.jsx'
 
 // `cap` = capacité requise (capacitesActives de /me) ; `perm` = permission requise (droits de /me) ;
 // `perms` = liste dont AU MOINS UNE suffit — pour les écrans qui servent plusieurs métiers, où
@@ -476,6 +477,9 @@ export default function AppShell({
           le referme deja. Le rendre focusable ajouterait un arret muet dans l ordre de tabulation,
           a franchir a chaque passage, pour un geste qui a deja son equivalent. */}
       <div className="nav-backdrop" onClick={() => setNavOpen(false)} />
+      {/* Monte une fois pour toute l'application : les appelants importent `confirmer`,
+          il n'y a rien a cabler par ecran, donc rien a oublier. */}
+      <HoteConfirmation />
 
       <aside className="sidebar">
         <div className="side-brand"><img className="logo" src="/fluvia-mark-192.png" alt="" width="28" height="28" /> Fluvia</div>

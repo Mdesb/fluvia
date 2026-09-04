@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { api, membres } from '../api/client.js'
 import { aLeDroit } from '../api/droits.js'
 import Modal from './Modal.jsx'
+import { confirmer } from './Confirmation.jsx'
 
 // Absences du personnel : déclarer, valider, refuser.
 //
@@ -66,7 +67,7 @@ export default function AbsencesSection({ etabActif, droits = [] }) {
 
   async function decider(l, accepte) {
     if (accepte && l.alerteCouverture) {
-      const ok = window.confirm(
+      const ok = await confirmer(
         `Accepter cette absence ?\n\nElle chevauche une affectation déjà confirmée : un poste ne sera `
           + `plus tenu sur la période. L'affectation n'est pas annulée automatiquement — c'est à vous `
           + `de la réorganiser.`,

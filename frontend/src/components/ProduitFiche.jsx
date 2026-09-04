@@ -11,6 +11,7 @@ import { humaniser, mot } from '../api/vocabulaire.js'
 import ZonesAccesProduit from './ZonesAccesProduit.jsx'
 import TarifsProduit from './TarifsProduit.jsx'
 import { idDe as idDeRef } from '../api/iri'
+import { confirmer } from './Confirmation.jsx'
 
 // Fiche produit détaillée — même niveau de détail que la fiche 360° client, en modale (D13 : la
 // modale est le défaut, créer un écran est l'exception ; consulter un produit depuis sa liste ne
@@ -289,7 +290,7 @@ export default function ProduitFiche({
     // On demande confirmation seulement pour « obligatoire » : c'est le seul mode dont le retrait
     // change ce qui peut etre vendu. Confirmer les trois habituerait a cliquer sans lire.
     if (lien.mode === 'required'
-      && !window.confirm(
+      && !await confirmer(
         'Retirer ce complément obligatoire ?\n\nLa vente du produit ne l’exigera plus.',
       )) {
       return

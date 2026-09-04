@@ -1,5 +1,6 @@
 import { libelleProduit, libelleCreneau, iriId, euros, heureLocale } from '../lib/format.js'
 import { Erreur, Vide } from '../components/Etats.jsx'
+import { confirmer } from '../../components/Confirmation.jsx'
 
 // Panier : récap des lignes, modification de quantité, retrait, total.
 // Le back enrichit désormais le panier : `total` (string) et, par ligne, `prixUnitaire` +
@@ -169,8 +170,8 @@ export default function Panier({
                 className="btn lg"
                 style={{ marginTop: 8 }}
                 disabled={busy}
-                onClick={() => {
-                  if (window.confirm('Vider le panier — tous les articles seront retirés. Continuer ?')) onVider()
+                onClick={async () => {
+                  if (await confirmer('Vider le panier — tous les articles seront retirés. Continuer ?')) onVider()
                 }}
               >
                 Vider le panier

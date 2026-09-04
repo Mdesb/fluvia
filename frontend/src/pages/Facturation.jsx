@@ -11,6 +11,7 @@ import FactureRendu from '../components/FactureRendu.jsx'
 import { mot } from '../api/vocabulaire.js'
 import { euros } from '../api/produit.js'
 import { idDe } from '../api/iri'
+import { confirmer } from '../components/Confirmation.jsx'
 
 const NATURE_BADGE = { quote: 'info', sales_order: 'warn', delivery_note: 'mut' }
 const STATUT_BADGE = {
@@ -391,8 +392,8 @@ export default function Facturation({ etabActif, droits, onNaviguer }) {
                                 className="btn sm"
                                 type="button"
                                 title="Émet un avoir total. Une facture ne se supprime pas : elle s'annule par un avoir."
-                                onClick={() => {
-                                  if (!window.confirm(
+                                onClick={async () => {
+                                  if (!await confirmer(
                                     `Émettre un avoir total sur la facture ${f.numero || ''} ?\n\n`
                                     + "Une facture émise est inaltérable : l'avoir est la seule façon de l'annuler, "
                                     + 'et il laisse les deux pièces dans la série.',

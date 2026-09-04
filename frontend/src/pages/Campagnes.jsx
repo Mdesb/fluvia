@@ -7,6 +7,7 @@ import { useEtatUrl } from '../api/url.js'
 import { jourLocal } from '../components/Liste.jsx'
 import { euros } from '../api/produit.js'
 import { idDe } from '../api/iri'
+import { confirmer } from '../components/Confirmation.jsx'
 
 /**
  * CAMPAGNES — première étape : les segments, et l'effectif avant l'envoi.
@@ -141,7 +142,7 @@ export default function Campagnes({ etabActif, droits = [] }) {
     } catch { /* l'aperçu est un confort : son échec ne doit pas empêcher de décider */ }
 
     const combien = effectif === null ? 'un nombre inconnu de' : effectif
-    if (!window.confirm(
+    if (!await confirmer(
       `Envoyer « ${campagne.label} » à ${combien} personne(s) ?\n\n`
       + 'Une campagne ne se rejoue pas : ceux qui la recevront ne pourront pas la « dé-recevoir ».',
     )) return
@@ -184,7 +185,7 @@ export default function Campagnes({ etabActif, droits = [] }) {
   }
 
   async function supprimer(segment) {
-    if (!window.confirm(`Supprimer le segment « ${segment.label} » ?`)) return
+    if (!await confirmer(`Supprimer le segment « ${segment.label} » ?`)) return
     setBusy(true)
     setErreur(null)
     try {

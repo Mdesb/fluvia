@@ -6,6 +6,7 @@ import { api, membres } from '../api/client.js'
 import { aUnDesDroits } from '../api/droits.js'
 import { mot } from '../api/vocabulaire.js'
 import { euros } from '../api/produit.js'
+import { confirmer } from './Confirmation.jsx'
 
 // Le cycle d'achat : fournisseur → commande → envoi → confirmation → réception → validation.
 //
@@ -209,8 +210,8 @@ export default function AchatsStock({ articles, droits, etabActif, onErreur, onF
                             <button
                               className="btn ghost sm"
                               type="button"
-                              onClick={() => {
-                                if (!window.confirm(
+                              onClick={async () => {
+                                if (!await confirmer(
                                   `Annuler cette commande ?\n\nElle ne pourra plus être envoyée ni reçue. `
                                     + `Ses lignes sont conservées pour mémoire.`,
                                 )) return

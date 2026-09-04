@@ -10,6 +10,7 @@ import { api, membres } from '../api/client.js'
 import { aUnDesDroits } from '../api/droits.js'
 import { mot } from '../api/vocabulaire.js'
 import { euros, libelleProduit } from '../api/produit.js'
+import { confirmer } from '../components/Confirmation.jsx'
 
 // Stock — soixante-trois opérations exposées, aucune appelée jusqu'ici.
 //
@@ -737,7 +738,7 @@ function RattachementModal({ article, onClose, onFait, onErreur }) {
 
   async function detacher() {
     if (
-      !window.confirm(
+      !await confirmer(
         `Détacher « ${article.libelle} » de son produit ?\n\nÀ partir de maintenant, vendre ce `
           + `produit ne fera plus descendre le stock de cet article. Les mouvements déjà enregistrés `
           + `sont conservés.`,
