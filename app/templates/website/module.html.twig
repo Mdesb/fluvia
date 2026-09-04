@@ -14,7 +14,7 @@
 
 {% block title %}{{ module.libelle }} — Fluvia{% endblock %}
 {% block description %}{{ module.description|slice(0, 300) }}{% endblock %}
-{% block canonical %}<link rel="canonical" href="{{ url('website_module', {slug: module.slug}) }}">{% endblock %}
+{% block canonical %}<link rel="canonical" href="{{ site_base }}{{ path('website_module', {slug: module.slug}) }}">{% endblock %}
 
 {% block body %}
   <article class="bande">
