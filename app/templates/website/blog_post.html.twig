@@ -1,0 +1,64 @@
+{% extends 'website/base.html.twig' %}
+
+{#
+  Un article (ED-10).
+
+  ⚠ `article.body|raw` EST LE SEUL `raw` DE TOUT CE SITE, ET IL EST SÛR PAR CONSTRUCTION. Le corps
+  est assaini à l'ÉCRITURE (`BodySanitizer`, liste blanche du W3C) : ce que porte la colonne est déjà
+  ce qui peut être servi. Assainir ici à la place aurait obligé le flux RSS, et tout futur export, à
+  s'en souvenir — et celui qui oublie ne voit rien échouer.
+#}
+
+{% block title %}{{ article.title }} — Fluvia{% endblock %}
+{% block description %}{{ article.metaDescription|default(article.excerpt)|slice(0, 300) }}{% endblock %}
+{% block canonical %}<link rel="canonical" href="{{ url('website_blog_post', {slug: article.slug}) }}">{% endblock %}
+{% block og_type %}article{% endblock %}
+{% block og_image %}{% if article.coverUrl %}<meta property="og:image" content="{{ article.coverUrl }}">{% endif %}{% endblock %}
+
+{% block body %}
+  <article class="bande">
+    <div class="mesure">
+      <p class="note"><a href="{{ path('website_blog_index') }}">← Tous les articles</a></p>
+
+      <h1>{{ article.title }}</h1>
+
+      <p class="note">
+        <time datetime="{{ article.publishedAt|date('Y-m-d') }}">{{ article.publishedAt|date('d/m/Y') }}</time>
+        {% if article.category %} · <a href="{{ path('website_blog_category', {slug: article.category.slug}) }}">{{ article.category.name }}</a>{% endif %}
+        {% if article.authorName %} · {{ article.authorName }}{% endif %}
+      </p>
+
+      <p class="chapo">{{ article.excerpt }}</p>
+    </div>
+
+    {% if article.coverUrl %}
+      <div class="mesure">
+        <img src="{{ article.coverUrl }}" alt="{{ article.coverAlt|default('') }}">
+      </div>
+    {% endif %}
+
+    <div class="mesure corps-article">
+      {{ article.body|raw }}
+    </div>
+  </article>
+
+  {% if suivants|length > 0 %}
+    <section class="bande bande-creuse">
+      <div class="mesure">
+        <h2>À lire ensuite</h2>
+      </div>
+      <ul class="grille" role="list">
+        {% for autre in suivants %}
+          <li class="carte">
+            <h3><a href="{{ path('website_blog_post', {slug: autre.slug}) }}">{{ autre.title }}</a></h3>
+            <p>{{ autre.excerpt }}</p>
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+{% endblock %}
+
+{% block footer %}
+  <p><a href="{{ path('website_blog_index') }}">Le blog de Fluvia</a> · <a href="/blog/rss.xml">Flux RSS</a></p>
+{% endblock %}

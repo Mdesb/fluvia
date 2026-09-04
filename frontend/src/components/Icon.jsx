@@ -278,6 +278,14 @@ const ICONS = {
       <path d="M15.5 12.5l2 2 3.5-3.5" />
     </>
   ),
+  website: (
+    <>
+      <rect x="3" y="4.5" width="18" height="15" rx="2" />
+      <path d="M3 9h18" />
+      <circle cx="6" cy="6.8" r="0.6" />
+      <circle cx="8.2" cy="6.8" r="0.6" />
+    </>
+  ),
   social: (
     <>
       <circle cx="6" cy="12" r="2.4" />

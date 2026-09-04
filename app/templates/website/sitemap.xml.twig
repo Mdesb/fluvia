@@ -1,0 +1,31 @@
+{#-
+  Le plan du site (ED-10).
+
+  ⚠ IL NE DÉCLARE QUE DU PUBLIÉ. C'est `BlogReader` qui le garantit, et c'est la raison pour laquelle
+  la règle « publié ET daté au passé » vit à un seul endroit : une copie de cette condition ici, qui
+  oublierait la date, déclarerait à Google les adresses des brouillons — et Google les demanderait.
+  Une page de brouillon indexée ne se retire pas d'un clic.
+-#}
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url>
+        <loc>{{ url('website_home') }}</loc>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
+        <loc>{{ url('website_blog_index') }}</loc>
+        <changefreq>weekly</changefreq>
+    </url>
+{%- for rubrique in rubriques %}
+    <url>
+        <loc>{{ url('website_blog_category', {slug: rubrique.slug}) }}</loc>
+        <changefreq>weekly</changefreq>
+    </url>
+{%- endfor %}
+{%- for article in articles %}
+    <url>
+        <loc>{{ url('website_blog_post', {slug: article.slug}) }}</loc>
+        <lastmod>{{ article.updatedAt|date('Y-m-d') }}</lastmod>
+    </url>
+{%- endfor %}
+</urlset>

@@ -1,0 +1,69 @@
+{#
+  Le gabarit du site public de Fluvia (ED-10).
+
+  ⚠ IL NE S'ÉTEND PAS DE `templates/base.html.twig`, qui est le squelette livré par Symfony : il
+  porte un favicon « sf », un titre « Welcome! » et deux scripts chargés depuis un CDN. Sur une page
+  de vente, un script tiers voit chaque visiteur et peut tout réécrire.
+
+  POURQUOI CE SITE EST RENDU PAR LE SERVEUR, alors que la vitrine était statique. Un blog qu'un robot
+  ne peut pas lire sans exécuter de JavaScript est un blog qu'on écrit pour personne — et c'est
+  exactement ce que la version statique évitait pour la page de vente. Le rendu serveur garde cette
+  propriété ET permet d'écrire depuis un écran.
+
+  ⚠ CE QUI RESTE STATIQUE, ET QUI EST SERVI PAR NGINX SANS TOUCHER PHP : `styles.css`, `tarifs.js`,
+  `tunnel.js`, `confirmation.html`. Le vhost sert un fichier s'il existe et n'appelle l'application
+  que sinon (`try_files $uri @application`).
+#}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Fluvia{% endblock %}</title>
+<meta name="description" content="{% block description %}{% endblock %}">
+{% block canonical %}{% endblock %}
+
+<meta property="og:type" content="{% block og_type %}website{% endblock %}">
+<meta property="og:site_name" content="Fluvia">
+<meta property="og:title" content="{{ block('title') }}">
+<meta property="og:description" content="{{ block('description') }}">
+<meta property="og:locale" content="fr_FR">
+{% block og_image %}{% endblock %}
+<meta name="twitter:card" content="summary">
+
+<link rel="stylesheet" href="/styles.css">
+<link rel="alternate" type="application/rss+xml" title="Le blog de Fluvia" href="/blog/rss.xml">
+</head>
+<body>
+
+<a class="saut" href="#contenu">Aller au contenu</a>
+
+<header class="entete">
+  <div class="bande bande-etroite entete-corps">
+    <a class="marque" href="/">
+      <span class="marque-point" aria-hidden="true"></span>
+      <span>Fluvia</span>
+    </a>
+    <nav aria-label="Navigation principale">
+      <a href="/#modules">Modules</a>
+      <a href="/#metiers">Métiers</a>
+      <a href="/#tarifs">Tarifs</a>
+      <a href="/blog">Blog</a>
+      <a class="btn btn-primaire" href="/#souscrire">Essayer 14 jours</a>
+    </nav>
+  </div>
+</header>
+
+<main id="contenu">
+{% block body %}{% endblock %}
+</main>
+
+<footer class="bande pied">
+  <div class="mesure">
+    {% block footer %}{% endblock %}
+  </div>
+</footer>
+
+{% block javascripts %}{% endblock %}
+</body>
+</html>
