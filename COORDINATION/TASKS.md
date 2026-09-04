@@ -821,6 +821,21 @@ Conséquence : ces réservations gardent `ModeDecompteReservation::VenteUnite` s
 équiper l'écran, ou un mode de décompte qui dise « dû, non encaissé » (les quatre cas actuels sont
 `QuotaFormule`, `CarteStock`, `VenteUnite`, `Gratuit` — aucun ne le dit).
 
+### ⚠ 8.10 — `reservation:no-show:basculer` n'est dans aucune liste blanche
+
+Vu en cherchant le patron d'une commande planifiée, le 04/09. `BasculerNoShowCommand` existe,
+porte CA-9, et **aucun ordonnanceur ne la lance** : la liste blanche d'`infra/ordonnanceur.sh` n'en
+contient pas le nom. Le passage automatique en no-show à l'issue d'un créneau ne se produit donc
+jamais.
+
+⚠ **NE PAS L'AJOUTER SANS ARBITRAGE.** Elle bascule des réservations en no-show et déclenche leur
+facturation : l'activer sur une base qui a des semaines d'arriéré facturerait des gens d'un coup.
+La commande accepte de tourner ; c'est la décision de la laisser tourner qui manque, pas le code.
+
+À trancher avec Maxime : est-ce que le no-show doit se déclencher tout seul, et à partir de quand.
+
+---
+
 ### ⚠ 8.8 bis — Les quatre arbitrages de Maxime du 04/09
 
 **(a) L'encaissement hors comptoir → un système de CONFIRMATION.** Ses mots : « on met un système

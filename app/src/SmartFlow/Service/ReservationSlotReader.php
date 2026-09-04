@@ -139,7 +139,7 @@ final class ReservationSlotReader
             ->andWhere('r.creneau = :creneau')
             ->andWhere('r.statut IN (:statuts)')
             ->setParameter('creneau', $creneau->getId(), 'uuid')
-            ->setParameter('statuts', [StatutReservation::Confirmee->value, StatutReservation::Honoree->value])
+            ->setParameter('statuts', [StatutReservation::AConfirmer->value, StatutReservation::Confirmee->value, StatutReservation::Honoree->value])
             ->getQuery()
             ->getSingleScalarResult();
 
